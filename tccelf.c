@@ -1954,6 +1954,21 @@ static int tcc_load_ldscript(TCCState *s1)
                     t = ld_next(s1, filename, sizeof(filename));
                 }
             }
+        } else if (!strcmp(cmd, "OUTPUT_FORMAT") ||
+                   !strcmp(cmd, "TARGET")) {
+            /* ignore some commands */
+            t = ld_next(s1, cmd, sizeof(cmd));
+            if (t != '(')
+                expect("(");
+            for(;;) {
+                t = ld_next(s1, filename, sizeof(filename));
+                if (t == LD_TOK_EOF) {
+                    error_noabort("unexpected end of file");
+                    return -1;
+                } else if (t == ')') {
+                    break;
+                }
+            }
         } else {
             return -1;
         }
