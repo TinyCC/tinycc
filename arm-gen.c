@@ -136,7 +136,8 @@ void o(unsigned long i)
 static unsigned long stuff_const(unsigned long op,unsigned long c)
 {
   int try_neg=0;
-  unsigned long nc,negop;
+  unsigned long nc = 0,negop = 0;
+
   switch(op&0x1F00000)
   {
     case 0x800000: //add
@@ -901,8 +902,8 @@ int gtst(int inv, int t)
 /* generate an integer binary operation */
 void gen_opi(int op)
 {
-  int c, func;
-  unsigned long opc,r,fr;
+  int c, func = 0;
+  unsigned long opc = 0,r,fr;
 
   c=0;
   switch(op) {
@@ -989,6 +990,7 @@ void gen_opi(int op)
     default:
       opc = 0x15;
       c=1;
+      break;
   }
   switch(c) {
     case 1:

@@ -448,9 +448,12 @@ static void relocate_section(TCCState *s1, Section *s)
     Section *sr;
     Elf32_Rel *rel, *rel_end, *qrel;
     Elf32_Sym *sym;
-    int type, sym_index, esym_index;
+    int type, sym_index;
     unsigned char *ptr;
     unsigned long val, addr;
+#if defined(TCC_TARGET_I386)
+    int esym_index;
+#endif
 
     sr = s->reloc;
     rel_end = (Elf32_Rel *)(sr->data + sr->data_offset);
@@ -662,10 +665,12 @@ static void put32(unsigned char *p, uint32_t val)
     p[3] = val >> 24;
 }
 
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM)
 static uint32_t get32(unsigned char *p)
 {
     return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
 }
+#endif
 
 static void build_got(TCCState *s1)
 {

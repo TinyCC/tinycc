@@ -1551,7 +1551,7 @@ void C67_SHR(int r, int v)
 /* load 'r' from value 'sv' */
 void load(int r, SValue * sv)
 {
-    int v, t, ft, fc, fr, size, element;
+    int v, t, ft, fc, fr, size = 0, element;
     BOOL Unsigned = false;
     SValue v1;
 
@@ -1873,7 +1873,7 @@ static void gcall_or_jmp(int is_jmp)
    context. Stack entry is popped */
 void gfunc_call(int nb_args)
 {
-    int i, r, size;
+    int i, r, size = 0;
     int args_sizes[NoCallArgsPassedOnStack];
 
     if (nb_args > NoCallArgsPassedOnStack) {
@@ -2518,12 +2518,14 @@ void gen_cvt_ftof(int t)
 
 	r = vtop->r;
 
-	if (r == TREG_EAX)	// make sure the paired reg is avail
+	if (r == TREG_EAX) {	// make sure the paired reg is avail
 	    r2 = get_reg(RC_ECX);
-	else if (r == TREG_EDX)
+	} else if (r == TREG_EDX) {
 	    r2 = get_reg(RC_ST0);
-	else
+	} else {
 	    ALWAYS_ASSERT(FALSE);
+            r2 = 0; /* avoid warning */
+        }
 
 	C67_SPDP(r, r);		// convert it to DP same register
 	C67_NOP(1);
