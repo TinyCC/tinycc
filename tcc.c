@@ -514,8 +514,6 @@ void *dlsym(void *handle, char *symbol)
 /* XXX: we suppose that the host compiler handles 'long long'. It
    would not be difficult to suppress this assumption */
 
-/* XXX: these functions are defined in libgcc. Should provide a
-   portable code too. */
 long long __divll(long long a, long long b)
 {
     return a / b;
@@ -2646,7 +2644,7 @@ void gen_opl(int op)
             gen_op('+');
             gen_op('+');
         } else if (op == '+' || op == '-') {
-            /* XXX: add non carry method too (for MIPS ?) */
+            /* XXX: add non carry method too (for MIPS or alpha) */
             if (op == '+')
                 op1 = TOK_ADDC1;
             else
@@ -2802,11 +2800,25 @@ void gen_opc(int op)
         case '^': v1->c.i ^= fc; break;
         case '|': v1->c.i |= fc; break;
         case '*': v1->c.i *= fc; break;
+
         case TOK_PDIV:
-        case '/': v1->c.i /= fc; break; /* XXX: zero case ? */
-        case '%': v1->c.i %= fc; break; /* XXX: zero case ? */
-        case TOK_UDIV: v1->c.i = (unsigned)v1->c.i / fc; break; /* XXX: zero case ? */
-        case TOK_UMOD: v1->c.i = (unsigned)v1->c.i % fc; break; /* XXX: zero case ? */
+        case '/':
+        case '%':
+        case TOK_UDIV:
+        case TOK_UMOD:
+            /* if division by zero, generate explicit division */
+            if (fc == 0) {
+                if (const_wanted)
+                    error("division by zero in constant");
+                goto general_case;
+            }
+            switch(op) {
+            default: v1->c.i /= fc; break;
+            case '%': v1->c.i %= fc; break;
+            case TOK_UDIV: v1->c.i = (unsigned)v1->c.i / fc; break;
+            case TOK_UMOD: v1->c.i = (unsigned)v1->c.i % fc; break;
+            }
+            break;
         case TOK_SHL: v1->c.i <<= fc; break;
         case TOK_SHR: v1->c.i = (unsigned)v1->c.i >> fc; break;
         case TOK_SAR: v1->c.i >>= fc; break;
@@ -2866,7 +2878,6 @@ void gen_opc(int op)
         } else {
         general_case:
             /* call low level op generator */
-            /* XXX: remove explicit registers */
             gen_opi(op);
         }
     }
@@ -4994,9 +5005,9 @@ void init_putv(int t, int r, int c,
     }
     
     if ((r & VT_VALMASK) == VT_CONST) {
-        /* XXX: do casting */
         /* XXX: not portable */
-        bt = vtop->t & VT_BTYPE;
+        gen_assign_cast(t);
+        bt = t & VT_BTYPE;
         switch(bt) {
         case VT_BYTE:
             *(char *)c = vtop->c.i;
@@ -5010,16 +5021,14 @@ void init_putv(int t, int r, int c,
         case VT_LDOUBLE:
             *(long double *)c = vtop->c.ld;
             break;
-#if 0
         case VT_LLONG:
             *(long long *)c = vtop->c.ll;
             break;
-#endif
         default:
             *(int *)c = vtop->c.i;
             break;
         }
-        vpop();
+        vtop--;
     } else {
         vset(t, r, c);
         vswap();
@@ -5034,7 +5043,7 @@ void init_putz(int t, int r, int c, int size)
     GFuncContext gf;
 
     if ((r & VT_VALMASK) == VT_CONST) {
-        /* nothing to do because global are already set to zero */
+        /* nothing to do because globals are already set to zero */
     } else {
         gfunc_start(&gf);
         vpushi(size);
@@ -5417,6 +5426,7 @@ void decl(int l)
                 }
                 funcname = ""; /* for safety */
                 func_vt = VT_VOID; /* for safety */
+                ind = 0; /* for safety */
                 break;
             } else {
                 if (b & VT_TYPEDEF) {
@@ -5745,10 +5755,10 @@ static void put_stabd(int type, int other, int desc)
 }
 
 /* output an ELF file (currently, only for testing) */
-/* XXX: better program header generation */
-/* XXX: handle realloc'ed sections (instead of mmaping them) */
 /* XXX: generate dynamic reloc info + DLL tables */
 /* XXX: generate startup code */
+/* XXX: better program header generation */
+/* XXX: handle realloc'ed sections (instead of mmaping them) */
 void build_exe(char *filename)
 { 
     Elf32_Ehdr ehdr;
@@ -6144,6 +6154,8 @@ int main(int argc, char **argv)
         } else if (r[1] == 'b') {
             if (!do_bounds_check) {
                 do_bounds_check = 1;
+                /* define symbol */
+                define_symbol("__BOUNDS_CHECKING_ON");
                 /* create bounds sections */
                 bounds_section = new_section(".bounds", 
                                              SHT_PROGBITS, SHF_ALLOC);
