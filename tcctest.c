@@ -16,6 +16,9 @@
 
 #endif
 
+/* deprecated and no longer supported in gcc 3.3 */
+//#define ACCEPT_CR_IN_STRINGS
+
 /* __VA_ARGS__ and __func__ support */
 #define C99_MACROS
 
@@ -1679,6 +1682,8 @@ ntf("aaa=%d\n", 3);
     pri\
 \
 ntf("min=%d\n", 4);
+
+#ifdef ACCEPT_CR_IN_STRINGS
     printf("len1=%d\n", strlen("
 "));
 #ifdef CORRECT_CR_HANDLING
@@ -1688,6 +1693,7 @@ ntf("min=%d\n", 4);
 #endif
     printf("len1=%d\n", strlen("a
 "));
+#endif /* ACCEPT_CR_IN_STRINGS */
 }
 
 int reltab[3] = { 1, 2, 3 };
