@@ -408,7 +408,8 @@ struct TCCState {
     int warn_write_strings;
     int warn_unsupported;
     int warn_error;
-    
+    int warn_none;
+
     /* error handling */
     void *error_opaque;
     void (*error_func)(void *opaque, const char *msg);
@@ -1237,6 +1238,9 @@ void warning(const char *fmt, ...)
 {
     TCCState *s1 = tcc_state;
     va_list ap;
+
+    if (s1->warn_none)
+        return;
 
     va_start(ap, fmt);
     error1(s1, 1, fmt, ap);
@@ -9551,16 +9555,6 @@ int tcc_set_warning(TCCState *s, const char *warning_name, int value)
 
 #if !defined(LIBTCC)
 
-static void tcc_reset_warnings(TCCState *s)
-{
-    int i;
-    const WarningDef *p;
-
-    for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
-        *(int *)((uint8_t *)s + p->offset) = 0;
-    }
-}
-
 /* extract the basename of a file */
 static const char *tcc_basename(const char *name)
 {
@@ -9872,7 +9866,7 @@ int main(int argc, char **argv)
                 }
                 break;
             case TCC_OPTION_w:
-                tcc_reset_warnings(s);
+                s->warn_none = 1;
                 break;
             case TCC_OPTION_rdynamic:
                 s->rdynamic = 1;
