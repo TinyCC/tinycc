@@ -97,6 +97,8 @@ typedef struct {
 FILE *file;
 int tok, tok1, tokc, rsym, anon_sym,
     prog, ind, loc, glo, vt, vc, const_wanted, line_num;
+int global_expr; /* true if compound literals must be allocated
+                    globally (used during initializers parsing */
 int tok_ident;
 TokenSym **table_ident;
 TokenSym *hash_ident[521];
@@ -267,6 +269,7 @@ void expr_eq();
 void expr();
 void decl();
 void decl_initializer(int t, int c, int first, int size_only);
+int decl_initializer_alloc(int t, int has_init);
 int gv();
 void move_reg();
 void save_reg();
@@ -2363,8 +2366,22 @@ void unary()
             if (t = ist()) {
                 ft = type_decl(&n, t, TYPE_ABSTRACT);
                 skip(')');
-                unary();
-                vt = (vt & VT_TYPEN) | ft;
+                /* check ISOC99 compound literal */
+                if (tok == '{') {
+                    /* data is allocated locally by default */
+                    if (global_expr)
+                        ft |= VT_CONST;
+                    else
+                        ft |= VT_LOCAL;
+                    /* all except arrays are lvalues */
+                    if (!(ft & VT_ARRAY))
+                        ft |= VT_LVAL;
+                    fc = decl_initializer_alloc(ft, 1);
+                    vset(ft, fc);
+                } else {
+                    unary();
+                    vt = (vt & VT_TYPEN) | ft;
+                }
             } else {
                 expr();
                 skip(')');
@@ -2993,9 +3010,16 @@ void decl_designator(int t, int c,
 
 void init_putv(int t, int c, int v, int is_expr)
 {
+    int saved_global_expr;
+
     if ((t & VT_VALMASK) == VT_CONST) {
-        if (is_expr)
+        if (is_expr) {
+            /* compound literals must be allocated globally in this case */
+            saved_global_expr = global_expr;
+            global_expr = 1;
             v = expr_const();
+            global_expr = saved_global_expr;
+        }
         if (t & VT_BYTE)
             *(char *)c = v;
         else if (t & VT_SHORT)
@@ -3054,14 +3078,20 @@ void decl_initializer(int t, int c, int first, int size_only)
         array_length = 0;
         t1 = pointed_type(t);
         size1 = type_size(t1, &align1);
-        if (tok == TOK_LSTR) {
-            if ((t1 & VT_TYPE & ~VT_UNSIGNED) != VT_INT)
-                error("invalid type");
-            goto str_init;
-        } else if (tok == TOK_STR) {
-            if (!(t1 & VT_BYTE))
-                error("invalid type");
-        str_init:
+
+        no_oblock = 1;
+        if ((first && tok != TOK_LSTR && tok != TOK_STR) || 
+            tok == '{') {
+            skip('{');
+            no_oblock = 0;
+        }
+
+        /* only parse strings here if correct type (otherwise: handle
+           them as ((w)char *) expressions */
+        if ((tok == TOK_LSTR && 
+             (t1 & VT_TYPE & ~VT_UNSIGNED) == VT_INT) ||
+            (tok == TOK_STR &&
+             (t1 & VT_TYPE & ~VT_UNSIGNED) == VT_BYTE)) {
             /* XXX: move multiple string parsing in parser ? */
             while (tok == TOK_STR || tok == TOK_LSTR) {
                 ts = (TokenSym *)tokc;
@@ -3089,11 +3119,6 @@ void decl_initializer(int t, int c, int first, int size_only)
                 array_length++;
             }
         } else {
-            no_oblock = 0;
-            if (!first && tok != '{')
-                no_oblock = 1;
-            else
-                skip('{');
             index = 0;
             while (tok != '}') {
                 decl_designator(t, c, &index, NULL, size_only);
@@ -3117,9 +3142,9 @@ void decl_initializer(int t, int c, int first, int size_only)
                     break;
                 skip(',');
             }
-            if (!no_oblock)
-                skip('}');
         }
+        if (!no_oblock)
+            skip('}');
         /* put zeros at the end */
         if (!size_only && n >= 0 && array_length < n) {
             init_putz(t1, c + array_length * size1, 
@@ -3178,12 +3203,91 @@ void decl_initializer(int t, int c, int first, int size_only)
     }
 }
 
+/* parse an initializer for type 't' if 'has_init' is true, and
+   allocate space in local or global data space. The allocated address
+   in returned */
+int decl_initializer_alloc(int t, int has_init)
+{
+    int size, align, addr, tok1;
+    int *init_str, init_len, level, *saved_macro_ptr;
+
+    size = type_size(t, &align);
+    /* If unknown size, we must evaluate it before
+       evaluating initializers because
+       initializers can generate global data too
+       (e.g. string pointers or ISOC99 compound
+       literals). It also simplifies local
+       initializers handling */
+    init_len = 0;
+    init_str = NULL;
+    saved_macro_ptr = NULL; /* avoid warning */
+    tok1 = 0;
+    if (size < 0) {
+        if (!has_init) 
+            error("unknown type size");
+        /* get all init string */
+        level = 0;
+        while (level > 0 || (tok != ',' && tok != ';')) {
+            if (tok < 0)
+                error("unexpect end of file in initializer");
+            tok_add2(&init_str, &init_len, tok, tokc);
+            if (tok == '{')
+                level++;
+            else if (tok == '}') {
+                if (level == 0)
+                    break;
+                level--;
+            }
+            next();
+        }
+        tok1 = tok;
+        tok_add(&init_str, &init_len, -1);
+        tok_add(&init_str, &init_len, 0);
+        
+        /* compute size */
+        saved_macro_ptr = macro_ptr;
+        macro_ptr = init_str;
+        next();
+        decl_initializer(t, 0, 1, 1);
+        /* prepare second initializer parsing */
+        macro_ptr = init_str;
+        next();
+        
+        /* if still unknown size, error */
+        size = type_size(t, &align);
+        if (size < 0) 
+            error("unknown type size");
+    }
+    if ((t & VT_VALMASK) == VT_LOCAL) {
+        loc = (loc - size) & -align;
+        addr = loc;
+    } else {
+        glo = (glo + align - 1) & -align;
+        addr = glo;
+        /* very important to increment global
+           pointer at this time because
+           initializers themselves can create new
+           initializers */
+        glo += size;
+    }
+    if (has_init) {
+        decl_initializer(t, addr, 1, 0);
+        /* restore parse state if needed */
+        if (init_str) {
+            free(init_str);
+            macro_ptr = saved_macro_ptr;
+            tok = tok1;
+        }
+    }
+    return addr;
+}
+
+
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(l)
 {
-    int *a, t, b, size, align, v, u, n, addr, tok1;
+    int *a, t, b, v, u, n, addr, has_init;
     Sym *sym;
-    int *init_str, init_len, level, *saved_macro_ptr;
     
     while (b = ist()) {
         if ((b & (VT_ENUM | VT_STRUCT)) && tok == ';') {
@@ -3250,79 +3354,10 @@ void decl(l)
                         if (t & VT_STATIC)
                             u = VT_CONST;
                         u |= t;
-                        size = type_size(t, &align);
-                        /* If unknown size, we must evaluate it before
-                           evaluating initializers because
-                           initializers can generate global data too
-                           (e.g. string pointers or ISOC99 compound
-                           literals). It also simplifies local
-                           initializers handling */
-                        init_len = 0;
-                        init_str = NULL;
-                        saved_macro_ptr = NULL; /* avoid warning */
-                        tok1 = 0;
-                        if (size < 0) {
-                            if (tok != '=') 
-                                error("unknown size for '%s'", get_tok_str(v, 0));
-                            tok_add2(&init_str, &init_len, tok, tokc);
+                        has_init = (tok == '=');
+                        if (has_init)
                             next();
-                            /* get all init string */
-                            level = 0;
-                            while (level > 0 || (tok != ',' && tok != ';')) {
-                                if (tok < 0)
-                                    error("unexpect end of file in initializer for '%s'",
-                                          get_tok_str(v, 0));
-                                tok_add2(&init_str, &init_len, tok, tokc);
-                                if (tok == '{')
-                                    level++;
-                                else if (tok == '}') {
-                                    if (level == 0)
-                                        break;
-                                    level--;
-                                }
-                                next();
-                            }
-                            tok1 = tok;
-                            tok_add(&init_str, &init_len, -1);
-                            tok_add(&init_str, &init_len, 0);
-
-                            /* compute size */
-                            saved_macro_ptr = macro_ptr;
-                            macro_ptr = init_str;
-                            next();
-                            skip('=');
-                            decl_initializer(u, 0, 1, 1);
-                            /* prepare second initializer parsing */
-                            macro_ptr = init_str;
-                            next();
-                            
-                            /* if still unknown size, error */
-                            size = type_size(t, &align);
-                            if (size < 0) 
-                                error("unknown size for '%s'", get_tok_str(v, 0));
-                        }
-                        if ((u & VT_VALMASK) == VT_LOCAL) {
-                            loc = (loc - size) & -align;
-                            addr = loc;
-                        } else {
-                            glo = (glo + align - 1) & -align;
-                            addr = glo;
-                            /* very important to increment global
-                               pointer at this time because
-                               initializers themselves can create new
-                               initializers */
-                            glo += size;
-                        }
-                        if (tok == '=') {
-                            next();
-                            decl_initializer(u, addr, 1, 0);
-                            /* restore parse state if needed */
-                            if (init_str) {
-                                free(init_str);
-                                macro_ptr = saved_macro_ptr;
-                                tok = tok1;
-                            }
-                        }
+                        addr = decl_initializer_alloc(u, has_init);
                         sym_push(v, u, addr);
                     }
                 }
