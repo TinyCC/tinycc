@@ -27,6 +27,7 @@ DEF(TOK___NORETURN__, "__noreturn__")
 /* builtin functions or variables */
 DEF(TOK_memcpy, "memcpy")
 DEF(TOK_memset, "memset")
+DEF(TOK_alloca, "alloca")
 DEF(TOK___divdi3, "__divdi3")
 DEF(TOK___moddi3, "__moddi3")
 DEF(TOK___udivdi3, "__udivdi3")
