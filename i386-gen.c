@@ -36,10 +36,10 @@
 
 /* pretty names for the registers */
 enum {
-    REG_EAX = 0,
-    REG_ECX,
-    REG_EDX,
-    REG_ST0,
+    TREG_EAX = 0,
+    TREG_ECX,
+    TREG_EDX,
+    TREG_ST0,
 };
 
 int reg_classes[NB_REGS] = {
@@ -50,9 +50,9 @@ int reg_classes[NB_REGS] = {
 };
 
 /* return registers for function */
-#define REG_IRET REG_EAX /* single word int return register */
-#define REG_LRET REG_EDX /* second word return register (for long long) */
-#define REG_FRET REG_ST0 /* float return register */
+#define REG_IRET TREG_EAX /* single word int return register */
+#define REG_LRET TREG_EDX /* second word return register (for long long) */
+#define REG_FRET TREG_ST0 /* float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS
@@ -647,12 +647,12 @@ void gen_opi(int op)
         r = vtop[-1].r;
         fr = vtop[0].r;
         vtop--;
-        save_reg(REG_EDX);
+        save_reg(TREG_EDX);
         if (op == TOK_UMULL) {
             o(0xf7); /* mul fr */
             o(0xe0 + fr);
-            vtop->r2 = REG_EDX;
-            r = REG_EAX;
+            vtop->r2 = TREG_EDX;
+            r = TREG_EAX;
         } else {
             if (op == TOK_UDIV || op == TOK_UMOD) {
                 o(0xf7d231); /* xor %edx, %edx, div fr, %eax */
@@ -662,9 +662,9 @@ void gen_opi(int op)
                 o(0xf8 + fr);
             }
             if (op == '%' || op == TOK_UMOD)
-                r = REG_EDX;
+                r = TREG_EDX;
             else
-                r = REG_EAX;
+                r = TREG_EAX;
         }
         vtop->r = r;
         break;
@@ -706,8 +706,8 @@ void gen_opf(int op)
     }
     if (op >= TOK_ULT && op <= TOK_GT) {
         /* load on stack second operand */
-        load(REG_ST0, vtop);
-        save_reg(REG_EAX); /* eax is used by FP comparison code */
+        load(TREG_ST0, vtop);
+        save_reg(TREG_EAX); /* eax is used by FP comparison code */
         if (op == TOK_GE || op == TOK_GT)
             swapped = !swapped;
         else if (op == TOK_EQ || op == TOK_NE)
@@ -736,7 +736,7 @@ void gen_opf(int op)
     } else {
         /* no memory reference possible for long double operations */
         if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-            load(REG_ST0, vtop);
+            load(TREG_ST0, vtop);
             swapped = !swapped;
         }
         
@@ -791,7 +791,7 @@ void gen_opf(int op)
    and 'long long' cases. */
 void gen_cvt_itof(int t)
 {
-    save_reg(REG_ST0);
+    save_reg(TREG_ST0);
     gv(RC_INT);
     if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
         /* signed long long to float/double/long double (unsigned case
@@ -814,7 +814,7 @@ void gen_cvt_itof(int t)
         o(0x2404db); /* fildl (%esp) */
         o(0x04c483); /* add $4, %esp */
     }
-    vtop->r = REG_ST0;
+    vtop->r = TREG_ST0;
 }
 
 /* convert fp to int 't' type */
@@ -902,7 +902,7 @@ void gen_bounded_ptr_add(void)
     oad(0xe8, -4);
     /* returned pointer is in eax */
     vtop++;
-    vtop->r = REG_EAX | VT_BOUNDED;
+    vtop->r = TREG_EAX | VT_BOUNDED;
     /* address of bounding function call point */
     vtop->c.ul = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel)); 
 }
