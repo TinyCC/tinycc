@@ -1523,7 +1523,7 @@ static Sym *sym_find2(Sym *s, int v)
 }
 
 /* structure lookup */
-static Sym *struct_find(int v)
+static inline Sym *struct_find(int v)
 {
     v -= TOK_IDENT;
     if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
@@ -5843,7 +5843,8 @@ static void struct_decl(CType *type, int u)
         v = tok;
         next();
         /* struct already defined ? return it */
-        /* XXX: check consistency */
+        if (v < TOK_IDENT)
+            expect("struct/union/enum name");
         s = struct_find(v);
         if (s) {
             if (s->type.t != a)
