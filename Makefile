@@ -15,7 +15,7 @@ CFLAGS+=-mpreferred-stack-boundary=2
 ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
-CFLAGS+=-march=i386 -falign-functions=0
+CFLAGS+=-march=i386 -falign-functions=0 -fno-strict-aliasing
 endif
 
 DISAS=objdump -d
