@@ -102,7 +102,10 @@ int isid(int c);
 #define B3 4
 #endif
 
-void macro_test()
+#define __INT64_C(c)	c ## LL
+#define INT64_MIN	(-__INT64_C(9223372036854775807)-1)
+
+void macro_test(void)
 {
     printf("macro:\n");
     pf("N=%d\n", N);
@@ -189,7 +192,7 @@ void macro_test()
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 185 "tcctest.c"
+#line 195 "tcctest.c"
     
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
@@ -202,6 +205,9 @@ void macro_test()
 
     /* gcc extension */
     printf("func='%s'\n", __FUNCTION__);
+
+    /* complicated macros in glibc */
+    printf("INT64_MIN=%Ld\n", INT64_MIN);
 }
 
 int op(a,b)
@@ -1352,10 +1358,19 @@ void llfloat(void)
 
 long long llfunc1(int a)
 {
-    return a;
+    return a * 2;
 }
 
-/* currently not supported, except for typing */
+struct S {
+    int id; 
+    char item;
+};
+
+long long int value(struct S *v)
+{
+    return ((long long int)v->item);
+}
+
 void longlong_test(void)
 {
     long long a, b, c;
@@ -1382,7 +1397,7 @@ void longlong_test(void)
     lloptest(-3, b);
     llshift(0x123, 5);
     llshift(-23, 5);
-    b = 0x72345678 << 10;
+    b = 0x72345678LL << 10;
     llshift(b, 47);
 
     llfloat();
@@ -1392,6 +1407,14 @@ void longlong_test(void)
     c = a + b;
     printf("%Lx\n", c);
 #endif
+
+    /* long long reg spill test */
+    {
+          struct S a;
+
+          a.item = 3;
+          printf("%lld\n", value(&a));
+    }
 }
 
 void vprintf1(const char *fmt, ...)
