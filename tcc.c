@@ -41,8 +41,12 @@ typedef struct Sym {
 #define SYM_STRUCT 0x40000000 /* struct/union/enum symbol space */
 #define SYM_FIELD  0x20000000 /* struct/union field symbol space */
 
+#define FUNC_NEW       1 /* ansi function prototype */
+#define FUNC_OLD       2 /* old function prototype */
+#define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
+
 typedef struct {
-    FILE *file; /* stdio file */
+    FILE *file;
     char *filename;
     int line_num;
 } IncludeFile;
@@ -139,12 +143,17 @@ IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 #define TOK_SIZEOF   289
 #define TOK_INCLUDE  290
 
-#define TOK_EQ 0x94 /* warning: depend on asm code */
-#define TOK_NE 0x95 /* warning: depend on asm code */
-#define TOK_LT 0x9c /* warning: depend on asm code */
-#define TOK_GE 0x9d /* warning: depend on asm code */
-#define TOK_LE 0x9e /* warning: depend on asm code */
-#define TOK_GT 0x9f /* warning: depend on asm code */
+/* warning: the following compare tokens depend on i386 asm code */
+#define TOK_ULT 0x92
+#define TOK_UGE 0x93
+#define TOK_EQ  0x94
+#define TOK_NE  0x95
+#define TOK_ULE 0x96
+#define TOK_UGT 0x97
+#define TOK_LT  0x9c
+#define TOK_GE  0x9d
+#define TOK_LE  0x9e
+#define TOK_GT  0x9f
 
 #define TOK_LAND  0xa0
 #define TOK_LOR   0xa1
@@ -197,28 +206,41 @@ int isnum(c)
 }
 
 #ifndef TINY
+
+void printline()
+{
+    IncludeFile *f;
+    for(f = include_stack; f < include_stack_ptr; f++)
+        printf("In file included from %s:%d:\n", f->filename, f->line_num);
+    printf("%s:%d: ", filename, line_num);
+}
+
 /* XXX: use stderr ? */
 void error(char *msg)
 {
-    printf("%s:%d: %s\n", filename, line_num, msg);
+    printline();
+    printf("%s\n", msg);
     exit(1);
 }
 
 void expect(char *msg)
 {
-    printf("%s:%d: %s expected\n", filename, line_num, msg);
+    printline();
+    printf("%s expected\n", msg);
     exit(1);
 }
 
 void warning(char *msg)
 {
-    printf("%s:%d: warning: %s\n", filename, line_num, msg);
+    printline();
+    printf("warning: %s\n", msg);
 }
 
 void skip(c)
 {
     if (tok != c) {
-        printf("%s:%d: '%c' expected\n", filename, line_num, c);
+        printline();
+        printf("'%c' expected\n", c);
         exit(1);
     }
     next();
@@ -1106,6 +1128,14 @@ void gen_op(op)
                 op = TOK_UDIV;
             else if (op == '%')
                 op = TOK_UMOD;
+            else if (op == TOK_LT)
+                op = TOK_ULT;
+            else if (op == TOK_GT)
+                op = TOK_UGT;
+            else if (op == TOK_LE)
+                op = TOK_ULE;
+            else if (op == TOK_GE)
+                op = TOK_UGE;
         }
         gen_opc(op);
     }
@@ -1335,31 +1365,31 @@ int ist()
     return t;
 }
 
-int post_type(u, t)
+int post_type(t)
 {
-    int p, n, pt, l;
+    int p, n, pt, l, a;
+    Sym *last, *s;
 
     if (tok == '(') {
         /* function declaration */
         next();
-        /* push a dummy symbol to force local symbol stack usage */
-        sym_push1(&local_stack, 0, 0, 0);
-        p = 4; 
+        a = 4; 
         l = 0;
+        last = NULL;
         while (tok != ')') {
             /* read param name and compute offset */
-            if (l != 2) {
+            if (l != FUNC_OLD) {
                 if (!(pt = ist())) {
                     if (l) {
                         error("invalid type");
                     } else {
-                        l = 2;
+                        l = FUNC_OLD;
                         goto old_proto;
                     }
                 }
                 if (pt & VT_VOID && tok == ')')
                     break;
-                l = 1;
+                l = FUNC_NEW;
                 pt = typ(&n, pt); /* XXX: should accept 
                                      both arg/non arg if v == 0 */
             } else {
@@ -1370,23 +1400,27 @@ int post_type(u, t)
             }
             /* array must be transformed to pointer according to ANSI C */
             pt &= ~VT_ARRAY;
-            p = p + 4;
-            sym_push(n, VT_LOCAL | VT_LVAL | pt, p);
+            /* XXX: size will be different someday */
+            a = a + 4;
+            s = sym_push(n | SYM_FIELD, VT_LOCAL | VT_LVAL | pt, a);
+            s->next = last;
+            last = s;
             if (tok == ',') {
                 next();
-                if (l == 1 && tok == TOK_DOTS) {
+                if (l == FUNC_NEW && tok == TOK_DOTS) {
+                    l = FUNC_ELLIPSIS;
                     next();
                     break;
                 }
             }
         }
         skip(')');
-        t = post_type(0, t); /* XXX: may be incorrect */
-        /* transform function pointer to 'char *' */
-        if (u)
-            t = u + VT_BYTE;
-        else
-            t = t | VT_FUNC;
+        t = post_type(t);
+        /* we push a anonymous symbol which will contain the function prototype */
+        p = anon_sym++;
+        s = sym_push(p, t, l);
+        s->next = last;
+        t = VT_FUNC | (p << VT_STRUCT_SHIFT);
     } else if (tok == '[') {
         /* array definition */
         next();
@@ -1398,7 +1432,7 @@ int post_type(u, t)
         }
         skip(']');
         /* parse next post type */
-        t = post_type(u, t);
+        t = post_type(t);
         
         /* we push a anonymous symbol which will contain the array
            element type */
@@ -1413,7 +1447,8 @@ int post_type(u, t)
    type. If v is true, then also put variable name in 'vc' */
 int typ(int *v, int t)
 {
-    int u;
+    int u, p;
+    Sym *s;
 
     t = t & -3; /* suppress the ored '2' */
     while (tok == '*') {
@@ -1435,13 +1470,26 @@ int typ(int *v, int t)
             next();
         }
     }
-    return post_type(u, t);
+    /* append t at the end of u */
+    t = post_type(t);
+    if (!u) 
+        return t;
+    p = u;
+    while(1) {
+        s = sym_find((unsigned)p >> VT_STRUCT_SHIFT);
+        p = s->t;
+        if (!p) {
+            s->t = t;
+            break;
+        }
+    }
+    return u;
 }
 
 /* define a new external reference to a function 'v' of type 'u' */
 Sym *external_func(v, u)
 {
-    int t, n;
+    int t, n, p;
     Sym *s;
     s = sym_find(v);
     if (!s) {
@@ -1589,7 +1637,10 @@ void unary()
                     error("undefined symbol");
                 /* for simple function calls, we tolerate undeclared
                    external reference */
-                s = external_func(t, VT_FUNC); /* int() function */
+                p = anon_sym++;        
+                sym_push1(&global_stack, p, 0, FUNC_OLD);
+                /* int() function */
+                s = external_func(t, VT_FUNC | (p << VT_STRUCT_SHIFT)); 
             }
             vset(s->t, s->c);
             /* if forward reference, we must point to s->c */
@@ -1678,16 +1729,15 @@ void unary()
                     *(int *)fc = psym(0xe8, *(int *)fc);
                 } else
                     oad(0xe8, fc - ind - 5);
-                /* return value is %eax, and take type from function proto */
-                vt = 0 | (ft & VT_TYPE & VT_FUNCN);
             } else {
                 oad(0x2494ff, t); /* call *xxx(%esp) */
                 t = t + 4;
-                /* return value is %eax, integer */
-                vt = 0;
             }
             if (t)
                 oad(0xc481, t);
+            /* get return type */
+            s = sym_find((unsigned)ft >> VT_STRUCT_SHIFT);
+            vt = s->t | 0; /* return register is eax */
         } else {
             break;
         }
@@ -1732,7 +1782,8 @@ void sum(l)
         while ((l == 0 & (tok == '*' | tok == '/' | tok == '%')) |
                (l == 1 & (tok == '+' | tok == '-')) |
                (l == 2 & (tok == TOK_SHL | tok == TOK_SAR)) |
-               (l == 3 & (tok >= TOK_LT & tok <= TOK_GT)) |
+               (l == 3 & ((tok >= TOK_ULE & tok <= TOK_GT) |
+                          tok == TOK_ULT | tok == TOK_UGE)) |
                (l == 4 & (tok == TOK_EQ | tok == TOK_NE)) |
                (l == 5 & tok == '&') |
                (l == 6 & tok == '^') |
@@ -2037,6 +2088,8 @@ void decl(l)
         while (1) { /* iterate thru each declaration */
             t = typ(&v, b);
             if (tok == '{') {
+                if (!(t & VT_FUNC))
+                    expect("function defintion");
                 /* patch forward references */
                 if ((sym = sym_find(v)) && (sym->t & VT_FORWARD)) {
                     gsym(sym->c);
@@ -2045,6 +2098,13 @@ void decl(l)
                 } else {
                     /* put function address */
                     sym_push1(&global_stack, v, VT_CONST | VT_LVAL | t, ind);
+                }
+                /* push a dummy symbol to enable local sym storage */
+                sym_push1(&local_stack, 0, 0, 0);
+                /* define parameters */
+                sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
+                while (sym = sym->next) {
+                    sym_push(sym->v & ~SYM_FIELD, sym->t, sym->c);
                 }
                 loc = 0;
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
