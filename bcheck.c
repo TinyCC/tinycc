@@ -56,14 +56,18 @@ void __bound_init(void);
 void __bound_new_region(void *p, unsigned long size);
 void __bound_delete_region(void *p);
 
-/* currently, tcc cannot compile that because we use GNUC extensions */
+/* currently, tcc cannot compile that because we use unsupported GNUC
+   extensions */
 #if !defined(__TINYC__)
 void *__bound_ptr_add(void *p, int offset) __attribute__((regparm(2)));
-char __bound_ptr_indir_b(void *p, int offset) __attribute__((regparm(2)));
-unsigned char __bound_ptr_indir_ub(void *p, int offset) __attribute__((regparm(2)));
-short __bound_ptr_indir_w(void *p, int offset) __attribute__((regparm(2)));
-unsigned short __bound_ptr_indir_uw(void *p, int offset) __attribute__((regparm(2)));
-int __bound_ptr_indir_i(void *p, int offset) __attribute((regparm(2)));
+void *__bound_ptr_indir1(void *p, int offset) __attribute__((regparm(2)));
+void *__bound_ptr_indir2(void *p, int offset) __attribute__((regparm(2)));
+void *__bound_ptr_indir4(void *p, int offset) __attribute__((regparm(2)));
+void *__bound_ptr_indir8(void *p, int offset) __attribute__((regparm(2)));
+void *__bound_ptr_indir12(void *p, int offset) __attribute__((regparm(2)));
+void *__bound_ptr_indir16(void *p, int offset) __attribute__((regparm(2)));
+void __bound_local_new(void *p) __attribute__((regparm(1)));
+void __bound_local_delete(void *p) __attribute__((regparm(1)));
 #endif
 
 void *__bound_malloc(size_t size, const void *caller);
@@ -137,7 +141,8 @@ static void bound_alloc_error(void)
 /* currently, tcc cannot compile that because we use GNUC extensions */
 #if !defined(__TINYC__)
 
-/* do: return (p + offset); */
+/* return '(p + offset)' for pointer arithmetic (a pointer can reach
+   the end of a region in this case */
 void *__bound_ptr_add(void *p, int offset)
 {
     unsigned long addr = (unsigned long)p;
@@ -161,9 +166,10 @@ void *__bound_ptr_add(void *p, int offset)
     return p + offset;
 }
 
-/* do: return *(type *)(p + offset); */
-#define BOUND_PTR_INDIR(suffix, type)                                   \
-type __bound_ptr_indir_ ## suffix (void *p, int offset)                 \
+/* return '(p + offset)' for pointer indirection (the resulting must
+   be strictly inside the region */
+#define BOUND_PTR_INDIR(dsize)                                          \
+void *__bound_ptr_indir ## dsize (void *p, int offset)                  \
 {                                                                       \
     unsigned long addr = (unsigned long)p;                              \
     BoundEntry *e;                                                      \
@@ -177,32 +183,82 @@ type __bound_ptr_indir_ ## suffix (void *p, int offset)                 \
         e = __bound_find_region(e, p);                                  \
         addr = (unsigned long)p - e->start;                             \
     }                                                                   \
-    addr += offset + sizeof(type);                                      \
+    addr += offset + dsize;                                             \
     if (addr > e->size)                                                 \
-        bound_error("dereferencing invalid pointer");                   \
-    return *(type *)(p + offset);                                       \
+        return INVALID_POINTER; /* return an invalid pointer */         \
+    return p + offset;                                                  \
+}
+
+#ifdef __i386__
+#define GET_CALLER_FP(fp)\
+{\
+    unsigned long *fp1;\
+    __asm__ __volatile__ ("movl %%ebp,%0" :"=g" (fp1));\
+    fp = fp1[0];\
+}
+#else
+#error put code to extract the calling frame pointer
+#endif
+
+/* called when entering a function to add all the local regions */
+void __bound_local_new(void *p1) 
+{
+    unsigned long addr, size, fp, *p = p1;
+    GET_CALLER_FP(fp);
+    for(;;) {
+        addr = p[0];
+        if (addr == 0)
+            break;
+        addr += fp;
+        size = p[1];
+        p += 2;
+        __bound_new_region((void *)addr, size);
+    }
+}
+
+/* called when leaving a function to delete all the local regions */
+void __bound_local_delete(void *p1) 
+{
+    unsigned long addr, fp, *p = p1;
+    GET_CALLER_FP(fp);
+    for(;;) {
+        addr = p[0];
+        if (addr == 0)
+            break;
+        addr += fp;
+        p += 2;
+        __bound_delete_region((void *)addr);
+    }
 }
 
 #else
+
+void __bound_local_new(void *p) 
+{
+}
+void __bound_local_delete(void *p) 
+{
+}
 
 void *__bound_ptr_add(void *p, int offset)
 {
     return p + offset;
 }
 
-#define BOUND_PTR_INDIR(suffix, type)                                   \
-type __bound_ptr_indir_ ## suffix (void *p, int offset)                 \
-{                                                                       \
-    return *(type *)(p + offset);                                       \
+#define BOUND_PTR_INDIR(dsize)                               \
+void *__bound_ptr_indir ## dsize (void *p, int offset)       \
+{                                                            \
+    return p + offset;                                       \
 }
 
 #endif
 
-BOUND_PTR_INDIR(b, char)
-BOUND_PTR_INDIR(ub, unsigned char)
-BOUND_PTR_INDIR(w, short)
-BOUND_PTR_INDIR(uw, unsigned short)
-BOUND_PTR_INDIR(i, int)
+BOUND_PTR_INDIR(1)
+BOUND_PTR_INDIR(2)
+BOUND_PTR_INDIR(4)
+BOUND_PTR_INDIR(8)
+BOUND_PTR_INDIR(12)
+BOUND_PTR_INDIR(16)
 
 static BoundEntry *__bound_new_page(void)
 {
