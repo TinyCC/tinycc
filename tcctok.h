@@ -111,7 +111,7 @@
      DEF(TOK___moddi3, "__moddi3")
      DEF(TOK___udivdi3, "__udivdi3")
      DEF(TOK___umoddi3, "__umoddi3")
-#ifdef TCC_TARGET_ARM
+#if defined(TCC_TARGET_ARM)
      DEF(TOK___divsi3, "__divsi3")
      DEF(TOK___modsi3, "__modsi3")
      DEF(TOK___udivsi3, "__udivsi3")
@@ -126,6 +126,16 @@
      DEF(TOK___fixsfdi, "__fixsfdi")
      DEF(TOK___fixdfdi, "__fixdfdi")
      DEF(TOK___fixxfdi, "__fixxfdi")
+#elif defined(TCC_TARGET_C67)
+     DEF(TOK__divi, "_divi")
+     DEF(TOK__divu, "_divu")
+     DEF(TOK__divf, "_divf")
+     DEF(TOK__divd, "_divd")
+     DEF(TOK__remi, "_remi")
+     DEF(TOK__remu, "_remu")
+     DEF(TOK___sardi3, "__sardi3")
+     DEF(TOK___shrdi3, "__shrdi3")
+     DEF(TOK___shldi3, "__shldi3")
 #else
      /* XXX: same names on i386 ? */
      DEF(TOK___sardi3, "__sardi3")

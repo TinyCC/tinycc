@@ -552,6 +552,24 @@ static void relocate_section(TCCState *s1, Section *s)
 	case R_C60_32:
 	    *(int *)ptr += val;
 	    break;
+        case R_C60LO16:
+            {
+                uint32_t orig;
+                
+                /* put the low 16 bits of the absolute address */
+                // add to what is already there
+                
+                orig  =   ((*(int *)(ptr  )) >> 7) & 0xffff;
+                orig |=  (((*(int *)(ptr+4)) >> 7) & 0xffff) << 16;
+                
+                //patch both at once - assumes always in pairs Low - High
+                
+                *(int *) ptr    = (*(int *) ptr    & (~(0xffff << 7)) ) |  (((val+orig)      & 0xffff) << 7);
+                *(int *)(ptr+4) = (*(int *)(ptr+4) & (~(0xffff << 7)) ) | ((((val+orig)>>16) & 0xffff) << 7);
+            }
+            break;
+        case R_C60HI16:
+            break;
         default:
 	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
                     type,addr,(unsigned int )ptr,val);
@@ -1536,6 +1554,9 @@ int tcc_output_file(TCCState *s1, const char *filename)
             ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
     }
 
+#ifdef TCC_TARGET_COFF
+    ret = tcc_output_coff(s1, filename);
+#else
     sort_syms(s1, symtab_section);
 
     /* align to 4 */
@@ -1629,6 +1650,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
     fclose(f);
 
     ret = 0;
+#endif
  the_end:
     tcc_free(s1->symtab_to_dynsym);
     tcc_free(section_order);

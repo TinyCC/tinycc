@@ -80,6 +80,11 @@
 #define CONFIG_TCC_ASM
 #endif
 
+/* object format selection */
+#if defined(TCC_TARGET_C67)
+#define TCC_TARGET_COFF
+#endif
+
 #if !defined(WIN32)
 #define FALSE 0
 #define false 0
@@ -764,6 +769,9 @@ static int tcc_add_dll(TCCState *s, const char *filename, int flags);
 #define AFF_PRINT_ERROR     0x0001 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
 static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
+
+/* tcccoff.c */
+int tcc_output_coff(TCCState *s1, const char *OutFile);
 
 /* tccasm.c */
 
@@ -5577,7 +5585,11 @@ static void gen_cast(CType *type)
                 }
             } else {
             do_itof:
+#if !defined(TCC_TARGET_ARM)
+                gen_cvt_itof1(dbt);
+#else
                 gen_cvt_itof(dbt);
+#endif
             }
         } else if (sf) {
             /* convert fp to int */
@@ -9003,6 +9015,10 @@ static void asm_instr(void)
 
 #include "tccelf.c"
 
+#ifdef TCC_TARGET_COFF
+#include "tcccoff.c"
+#endif
+
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
 static void rt_printline(unsigned long wanted_pc)
@@ -9545,7 +9561,7 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         } else if (ret != sizeof(ehdr)) {
             goto try_load_script;
         }
-        
+
         if (ehdr.e_ident[0] == ELFMAG0 &&
             ehdr.e_ident[1] == ELFMAG1 &&
             ehdr.e_ident[2] == ELFMAG2 &&
@@ -9572,7 +9588,13 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         } else if (memcmp((char *)&ehdr, ARMAG, 8) == 0) {
             file->line_num = 0; /* do not display line number if error */
             ret = tcc_load_archive(s1, fd);
-        } else {
+        } else 
+#ifdef TCC_TARGET_COFF
+        if (*(uint16_t *)(&ehdr) == COFF_C67_MAGIC) {
+            ret = tcc_load_coff(s1, fd);
+        } else
+#endif
+        {
             /* as GNU ld, consider it is an ld script if not recognized */
         try_load_script:
             ret = tcc_load_ldscript(s1);

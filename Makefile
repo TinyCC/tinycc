@@ -114,7 +114,7 @@ tcc_g: tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.
 tcc: tcc_g Makefile
 	strip -s -R .comment -R .note -o $@ $<
 
-c67-tcc: tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
+c67-tcc: tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c Makefile
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
 arm-tcc: tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile

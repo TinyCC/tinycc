@@ -18,7 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#define ASSEMBLY_LISTING_C67
+//#define ASSEMBLY_LISTING_C67
 
 /* number of available registers */
 #define NB_REGS            24
@@ -138,16 +138,6 @@ int NoOfCurFuncArgs;
 int TranslateStackToReg[NoCallArgsPassedOnStack];
 int ParamLocOnStack[NoCallArgsPassedOnStack];
 int TotalBytesPushedOnStack;
-
-// intrinsic functions
-
-TokenSym *ts_divi;
-TokenSym *ts_divu;
-TokenSym *ts_divf;
-TokenSym *ts_divd;
-TokenSym *ts_remi;
-TokenSym *ts_remu;
-
 
 /* defined if function parameters must be evaluated in reverse order */
 
@@ -2288,7 +2278,7 @@ void gen_opi(int op)
 	break;
 
     case '/':
-	t = ts_divi->tok;
+	t = TOK__divi;
       call_func:
 	vswap();
 	/* call generic idiv function */
@@ -2301,13 +2291,13 @@ void gen_opi(int op)
 	break;
     case TOK_UDIV:
     case TOK_PDIV:
-	t = ts_divu->tok;
+	t = TOK__divu;
 	goto call_func;
     case '%':
-	t = ts_remi->tok;
+	t = TOK__remi;
 	goto call_func;
     case TOK_UMOD:
-	t = ts_remu->tok;
+	t = TOK__remu;
 	goto call_func;
 
     default:
@@ -2423,7 +2413,7 @@ void gen_opf(int op)
 		// must call intrinsic DP floating point divide
 		vswap();
 		/* call generic idiv function */
-		vpush_global_sym(&func_old_type, ts_divd->tok);
+		vpush_global_sym(&func_old_type, TOK__divd);
 		vrott(3);
 		gfunc_call(2);
 		vpushi(0);
@@ -2434,7 +2424,7 @@ void gen_opf(int op)
 		// must call intrinsic SP floating point divide
 		vswap();
 		/* call generic idiv function */
-		vpush_global_sym(&func_old_type, ts_divf->tok);
+		vpush_global_sym(&func_old_type, TOK__divf);
 		vrott(3);
 		gfunc_call(2);
 		vpushi(0);
