@@ -955,8 +955,6 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 static void tcc_add_runtime(TCCState *s1)
 {
     char buf[1024];
-    int i;
-    Section *s;
 
     if (!s1->nostdlib) {
         snprintf(buf, sizeof(buf), "%s/%s", tcc_lib_path, "libtcc1.a");
@@ -1000,7 +998,17 @@ static void tcc_add_runtime(TCCState *s1)
     if (s1->output_type != TCC_OUTPUT_MEMORY && !s1->nostdlib) {
         tcc_add_file(s1, CONFIG_TCC_CRT_PREFIX "/crtn.o");
     }
-    /* add various standard linker symbols */
+}
+
+/* add various standard linker symbols (must be done after the
+   sections are filled (for example after allocating common
+   symbols)) */
+static void tcc_add_linker_symbols(TCCState *s1)
+{
+    char buf[1024];
+    int i;
+    Section *s;
+
     add_elf_sym(symtab_section, 
                 text_section->data_offset, 0,
                 ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
@@ -1059,6 +1067,28 @@ static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
 static char elf_interp[] = "/lib/ld-linux.so.2";
 #endif
 
+static void tcc_output_binary(TCCState *s1, FILE *f,
+                              const int *section_order)
+{
+    Section *s;
+    int i, offset, size;
+
+    offset = 0;
+    for(i=1;i<s1->nb_sections;i++) {
+        s = s1->sections[section_order[i]];
+        if (s->sh_type != SHT_NOBITS &&
+            (s->sh_flags & SHF_ALLOC)) {
+            while (offset < s->sh_offset) {
+                fputc(0, f);
+                offset++;
+            }
+            size = s->sh_size;
+            fwrite(s->data, 1, size, f);
+            offset += size;
+        }
+    }
+}
+
 /* output an ELF file */
 /* XXX: suppress unneeded sections */
 int tcc_output_file(TCCState *s1, const char *filename)
@@ -1082,8 +1112,6 @@ int tcc_output_file(TCCState *s1, const char *filename)
     s1->nb_errors = 0;
 
     if (file_type != TCC_OUTPUT_OBJ) {
-        relocate_common_syms();
-
         tcc_add_runtime(s1);
     }
 
@@ -1095,6 +1123,9 @@ int tcc_output_file(TCCState *s1, const char *filename)
     saved_dynamic_data_offset = 0; /* avoid warning */
     
     if (file_type != TCC_OUTPUT_OBJ) {
+        relocate_common_syms();
+
+        tcc_add_linker_symbols(s1);
 
         if (!s1->static_link) {
             const char *name;
@@ -1310,7 +1341,11 @@ int tcc_output_file(TCCState *s1, const char *filename)
     /* allocate program segment headers */
     phdr = tcc_mallocz(phnum * sizeof(Elf32_Phdr));
         
-    file_offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
+    if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
+        file_offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
+    } else {
+        file_offset = 0;
+    }
     if (phnum > 0) {
         /* compute section to program header mapping */
         if (s1->has_text_addr) { 
@@ -1413,10 +1448,18 @@ int tcc_output_file(TCCState *s1, const char *filename)
             ph->p_filesz = file_offset - ph->p_offset;
             ph->p_memsz = addr - ph->p_vaddr;
             ph++;
-            /* if in the middle of a page, we duplicate the page in
-               memory so that one copy is RX and the other is RW */
-            if ((addr & (ELF_PAGE_SIZE - 1)) != 0)
-                addr += ELF_PAGE_SIZE;
+            if (j == 0) {
+                if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
+                    /* if in the middle of a page, we duplicate the page in
+                       memory so that one copy is RX and the other is RW */
+                    if ((addr & (ELF_PAGE_SIZE - 1)) != 0)
+                        addr += ELF_PAGE_SIZE;
+                } else {
+                    addr = (addr + ELF_PAGE_SIZE - 1) & ~(ELF_PAGE_SIZE - 1);
+                    file_offset = (file_offset + ELF_PAGE_SIZE - 1) & 
+                        ~(ELF_PAGE_SIZE - 1);
+                }
+            }
         }
 
         /* if interpreter, then add corresponing program header */
@@ -1566,103 +1609,111 @@ int tcc_output_file(TCCState *s1, const char *filename)
             ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
     }
 
-#ifdef TCC_TARGET_COFF
-    ret = tcc_output_coff(s1, filename);
-#else
-    sort_syms(s1, symtab_section);
-
-    /* align to 4 */
-    file_offset = (file_offset + 3) & -4;
-    
-    /* fill header */
-    ehdr.e_ident[0] = ELFMAG0;
-    ehdr.e_ident[1] = ELFMAG1;
-    ehdr.e_ident[2] = ELFMAG2;
-    ehdr.e_ident[3] = ELFMAG3;
-    ehdr.e_ident[4] = ELFCLASS32;
-    ehdr.e_ident[5] = ELFDATA2LSB;
-    ehdr.e_ident[6] = EV_CURRENT;
-#ifdef __FreeBSD__
-    ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
-#endif
-#ifdef TCC_TARGET_ARM
-    ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
-#endif
-    switch(file_type) {
-    default:
-    case TCC_OUTPUT_EXE:
-        ehdr.e_type = ET_EXEC;
-        break;
-    case TCC_OUTPUT_DLL:
-        ehdr.e_type = ET_DYN;
-        break;
-    case TCC_OUTPUT_OBJ:
-        ehdr.e_type = ET_REL;
-        break;
-    }
-    ehdr.e_machine = EM_TCC_TARGET;
-    ehdr.e_version = EV_CURRENT;
-    ehdr.e_shoff = file_offset;
-    ehdr.e_ehsize = sizeof(Elf32_Ehdr);
-    ehdr.e_shentsize = sizeof(Elf32_Shdr);
-    ehdr.e_shnum = shnum;
-    ehdr.e_shstrndx = shnum - 1;
-    
     /* write elf file */
     if (file_type == TCC_OUTPUT_OBJ)
         mode = 0666;
     else
         mode = 0777;
-    fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode); 
+    fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode); 
     if (fd < 0) {
         error_noabort("could not write '%s'", filename);
         goto fail;
     }
-    f = fdopen(fd, "w");
-    fwrite(&ehdr, 1, sizeof(Elf32_Ehdr), f);
-    fwrite(phdr, 1, phnum * sizeof(Elf32_Phdr), f);
-    offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
-    for(i=1;i<s1->nb_sections;i++) {
-        s = s1->sections[section_order[i]];
-        if (s->sh_type != SHT_NOBITS) {
-            while (offset < s->sh_offset) {
-                fputc(0, f);
-                offset++;
-            }
-            size = s->sh_size;
-            fwrite(s->data, 1, size, f);
-            offset += size;
-        }
-    }
-    while (offset < ehdr.e_shoff) {
-        fputc(0, f);
-        offset++;
-    }
+    f = fdopen(fd, "wb");
+
+#ifdef TCC_TARGET_COFF
+    if (s1->output_format == TCC_OUTPUT_FORMAT_COFF) {
+        tcc_output_coff(s1, f);
+    } else
+#endif
+    if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
+        sort_syms(s1, symtab_section);
+        
+        /* align to 4 */
+        file_offset = (file_offset + 3) & -4;
     
-    /* output section headers */
-    for(i=0;i<s1->nb_sections;i++) {
-        sh = &shdr;
-        memset(sh, 0, sizeof(Elf32_Shdr));
-        s = s1->sections[i];
-        if (s) {
-            sh->sh_name = s->sh_name;
-            sh->sh_type = s->sh_type;
-            sh->sh_flags = s->sh_flags;
-            sh->sh_entsize = s->sh_entsize;
-            sh->sh_info = s->sh_info;
-            if (s->link)
-                sh->sh_link = s->link->sh_num;
-            sh->sh_addralign = s->sh_addralign;
-            sh->sh_addr = s->sh_addr;
-            sh->sh_offset = s->sh_offset;
-            sh->sh_size = s->sh_size;
+        /* fill header */
+        ehdr.e_ident[0] = ELFMAG0;
+        ehdr.e_ident[1] = ELFMAG1;
+        ehdr.e_ident[2] = ELFMAG2;
+        ehdr.e_ident[3] = ELFMAG3;
+        ehdr.e_ident[4] = ELFCLASS32;
+        ehdr.e_ident[5] = ELFDATA2LSB;
+        ehdr.e_ident[6] = EV_CURRENT;
+#ifdef __FreeBSD__
+        ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
+#endif
+#ifdef TCC_TARGET_ARM
+        ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
+#endif
+        switch(file_type) {
+        default:
+        case TCC_OUTPUT_EXE:
+            ehdr.e_type = ET_EXEC;
+            break;
+        case TCC_OUTPUT_DLL:
+            ehdr.e_type = ET_DYN;
+            break;
+        case TCC_OUTPUT_OBJ:
+            ehdr.e_type = ET_REL;
+            break;
         }
-        fwrite(sh, 1, sizeof(Elf32_Shdr), f);
+        ehdr.e_machine = EM_TCC_TARGET;
+        ehdr.e_version = EV_CURRENT;
+        ehdr.e_shoff = file_offset;
+        ehdr.e_ehsize = sizeof(Elf32_Ehdr);
+        ehdr.e_shentsize = sizeof(Elf32_Shdr);
+        ehdr.e_shnum = shnum;
+        ehdr.e_shstrndx = shnum - 1;
+        
+        fwrite(&ehdr, 1, sizeof(Elf32_Ehdr), f);
+        fwrite(phdr, 1, phnum * sizeof(Elf32_Phdr), f);
+        offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
+
+        for(i=1;i<s1->nb_sections;i++) {
+            s = s1->sections[section_order[i]];
+            if (s->sh_type != SHT_NOBITS) {
+                while (offset < s->sh_offset) {
+                    fputc(0, f);
+                    offset++;
+                }
+                size = s->sh_size;
+                fwrite(s->data, 1, size, f);
+                offset += size;
+            }
+        }
+
+        /* output section headers */
+        while (offset < ehdr.e_shoff) {
+            fputc(0, f);
+            offset++;
+        }
+    
+        for(i=0;i<s1->nb_sections;i++) {
+            sh = &shdr;
+            memset(sh, 0, sizeof(Elf32_Shdr));
+            s = s1->sections[i];
+            if (s) {
+                sh->sh_name = s->sh_name;
+                sh->sh_type = s->sh_type;
+                sh->sh_flags = s->sh_flags;
+                sh->sh_entsize = s->sh_entsize;
+                sh->sh_info = s->sh_info;
+                if (s->link)
+                    sh->sh_link = s->link->sh_num;
+                sh->sh_addralign = s->sh_addralign;
+                sh->sh_addr = s->sh_addr;
+                sh->sh_offset = s->sh_offset;
+                sh->sh_size = s->sh_size;
+            }
+            fwrite(sh, 1, sizeof(Elf32_Shdr), f);
+        }
+    } else {
+        tcc_output_binary(s1, f, section_order);
     }
     fclose(f);
 
     ret = 0;
-#endif
  the_end:
     tcc_free(s1->symtab_to_dynsym);
     tcc_free(section_order);
