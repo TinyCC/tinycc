@@ -40,7 +40,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
     switch(tok) {
     case TOK_PPNUM:
         p = tokc.cstr->data;
-        n = strtol(p, (char **)&p, 0);
+        n = strtoul(p, (char **)&p, 0);
         if (*p == 'b' || *p == 'f') {
             /* backward or forward label */
             label = asm_get_local_label_name(s1, n);
@@ -413,7 +413,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
             const char *p;
             int n;
             p = tokc.cstr->data;
-            n = strtol(p, (char **)&p, 10);
+            n = strtoul(p, (char **)&p, 10);
             if (*p != '\0')
                 expect("':'");
             /* new local label */
