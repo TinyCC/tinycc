@@ -1511,10 +1511,11 @@ static int tcc_load_object_file(TCCState *s1,
         if (sh->sh_type != SHT_NOBITS) {
             unsigned char *ptr;
             lseek(fd, file_offset + sh->sh_offset, SEEK_SET);
-            ptr = section_ptr(s, size);
+            ptr = section_ptr_add(s, size);
             read(fd, ptr, size);
+        } else {
+            s->data_offset += size;
         }
-        s->data_offset += size;
     }
 
     /* second short pass to update sh_link and sh_info fields of new

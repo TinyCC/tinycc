@@ -562,9 +562,10 @@ int expr_const(void);
 void expr_eq(void);
 void gexpr(void);
 void decl(int l);
-void decl_initializer(int t, Section *sec, unsigned long c, int first, int size_only);
-void decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
-                            int v, int scope);
+static void decl_initializer(int t, Section *sec, unsigned long c, 
+                             int first, int size_only);
+static void decl_initializer_alloc(int t, AttributeDef *ad, int r, 
+                                   int has_init, int v, int scope);
 int gv(int rc);
 void gv2(int rc1, int rc2);
 void move_reg(int r, int s);
@@ -607,7 +608,6 @@ static Sym *get_sym_ref(int t, Section *sec,
 
 /* section generation */
 static void section_realloc(Section *sec, unsigned long new_size);
-static void *section_ptr(Section *sec, unsigned long size);
 static void *section_ptr_add(Section *sec, unsigned long size);
 static void put_extern_sym(Sym *sym, Section *section, 
                            unsigned long value, unsigned long size);
@@ -873,17 +873,7 @@ static void section_realloc(Section *sec, unsigned long new_size)
 }
 
 /* reserve at least 'size' bytes in section 'sec' from
-   sec->data_offset. Optimized for speed */
-static inline void *section_ptr(Section *sec, unsigned long size)
-{
-    unsigned long offset, offset1;
-    offset = sec->data_offset;
-    offset1 = offset + size;
-    if (offset1 > sec->data_allocated)
-        section_realloc(sec, offset1);
-    return sec->data + offset;
-}
-
+   sec->data_offset. */
 static void *section_ptr_add(Section *sec, unsigned long size)
 {
     unsigned long offset, offset1;
@@ -5010,7 +5000,7 @@ void gfunc_param_typed(GFuncContext *gf, Sym *func, Sym *arg)
 
 void unary(void)
 {
-    int n, t, ft, fc, align, size, r, data_offset;
+    int n, t, ft, align, size, r;
     Sym *s;
     GFuncContext gf;
     AttributeDef ad;
@@ -5057,19 +5047,9 @@ void unary(void)
         /* string parsing */
         t = VT_BYTE;
     str_init:
-        type_size(t, &align);
-        data_offset = data_section->data_offset;
-        data_offset = (data_offset + align - 1) & -align;
-        fc = data_offset;
-        /* we must declare it as an array first to use initializer parser */
         t = VT_ARRAY | mk_pointer(t);
-        /* XXX: fix it */
-        section_ptr(data_section, 1024);
-        decl_initializer(t, data_section, data_offset, 1, 0);
-        size = type_size(t, &align);
-        data_offset += size;
-        vpush_ref(t, data_section, fc, size);
-        data_section->data_offset = data_offset;
+        memset(&ad, 0, sizeof(AttributeDef));
+        decl_initializer_alloc(t, &ad, VT_CONST, 2, 0, 0);
     } else {
         t = tok;
         next();
@@ -5794,9 +5774,9 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
    address. cur_index/cur_field is the pointer to the current
    value. 'size_only' is true if only size info is needed (only used
    in arrays) */
-void decl_designator(int t, Section *sec, unsigned long c, 
-                     int *cur_index, Sym **cur_field, 
-                     int size_only)
+static void decl_designator(int t, Section *sec, unsigned long c, 
+                            int *cur_index, Sym **cur_field, 
+                            int size_only)
 {
     Sym *s, *f;
     int notfirst, index, align, l;
@@ -5871,8 +5851,8 @@ void decl_designator(int t, Section *sec, unsigned long c,
 #define EXPR_ANY   2
 
 /* store a value or an expression directly in global data or in local array */
-void init_putv(int t, Section *sec, unsigned long c, 
-               int v, int expr_type)
+static void init_putv(int t, Section *sec, unsigned long c, 
+                      int v, int expr_type)
 {
     int saved_global_expr, bt;
     void *ptr;
@@ -5941,7 +5921,7 @@ void init_putv(int t, Section *sec, unsigned long c,
 }
 
 /* put zeros for variable based init */
-void init_putz(int t, Section *sec, unsigned long c, int size)
+static void init_putz(int t, Section *sec, unsigned long c, int size)
 {
     GFuncContext gf;
 
@@ -5965,7 +5945,8 @@ void init_putz(int t, Section *sec, unsigned long c, int size)
    allocation. 'first' is true if array '{' must be read (multi
    dimension implicit array init handling). 'size_only' is true if
    size only evaluation is wanted (only for arrays). */
-void decl_initializer(int t, Section *sec, unsigned long c, int first, int size_only)
+static void decl_initializer(int t, Section *sec, unsigned long c, 
+                             int first, int size_only)
 {
     int index, array_length, n, no_oblock, nb, parlevel, i;
     int t1, size1, align1, expr_type;
@@ -6118,14 +6099,15 @@ void decl_initializer(int t, Section *sec, unsigned long c, int first, int size_
     }
 }
 
-/* parse an initializer for type 't' if 'has_init' is true, and
+/* parse an initializer for type 't' if 'has_init' is non zero, and
    allocate space in local or global data space ('r' is either
    VT_LOCAL or VT_CONST). If 'v' is non zero, then an associated
    variable 'v' of scope 'scope' is declared before initializers are
    parsed. If 'v' is zero, then a reference to the new object is put
-   in the value stack. */
-void decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
-                            int v, int scope)
+   in the value stack. If 'has_init' is 2, a special parsing is done
+   to handle string constants. */
+static void decl_initializer_alloc(int t, AttributeDef *ad, int r, 
+                                   int has_init, int v, int scope)
 {
     int size, align, addr, data_offset;
     int level;
@@ -6145,19 +6127,27 @@ void decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
         if (!has_init) 
             error("unknown type size");
         /* get all init string */
-        level = 0;
-        while (level > 0 || (tok != ',' && tok != ';')) {
-            if (tok < 0)
-                error("unexpected end of file in initializer");
-            tok_str_add_tok(&init_str);
-            if (tok == '{')
-                level++;
-            else if (tok == '}') {
-                if (level == 0)
-                    break;
-                level--;
+        if (has_init == 2) {
+            /* only get strings */
+            while (tok == TOK_STR || tok == TOK_LSTR) {
+                tok_str_add_tok(&init_str);
+                next();
             }
-            next();
+        } else {
+            level = 0;
+            while (level > 0 || (tok != ',' && tok != ';')) {
+                if (tok < 0)
+                    error("unexpected end of file in initializer");
+                tok_str_add_tok(&init_str);
+                if (tok == '{')
+                    level++;
+                else if (tok == '}') {
+                    if (level == 0)
+                        break;
+                    level--;
+                }
+                next();
+            }
         }
         tok_str_add(&init_str, -1);
         tok_str_add(&init_str, 0);
@@ -7138,7 +7128,7 @@ int tcc_set_output_type(TCCState *s, int output_type)
 
 void help(void)
 {
-    printf("tcc version 0.9.10pre1 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.10 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
