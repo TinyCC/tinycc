@@ -132,7 +132,7 @@ void gsym(int t)
 #define psym oad
 
 /* instruction + 4 bytes data. Return the address of the data */
-int oad(int c, int s)
+static int oad(int c, int s)
 {
     int ind1;
 
@@ -147,26 +147,22 @@ int oad(int c, int s)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-void gen_addr32(int r, int c)
+static void gen_addr32(int r, Sym *sym, int c)
 {
-    if (!(r & VT_SYM)) {
-        gen_le32(c);
-    } else {
-        greloc(cur_text_section, 
-               (Sym *)c, ind, R_386_32);
-        gen_le32(0);
-    }
+    if (r & VT_SYM)
+        greloc(cur_text_section, sym, ind, R_386_32);
+    gen_le32(c);
 }
 
 /* generate a modrm reference. 'op_reg' contains the addtionnal 3
    opcode bits */
-void gen_modrm(int op_reg, int r, int c)
+static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 {
     op_reg = op_reg << 3;
     if ((r & VT_VALMASK) == VT_CONST) {
         /* constant memory reference */
         o(0x05 | op_reg);
-        gen_addr32(r, c);
+        gen_addr32(r, sym, c);
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
         /* currently, we use only ebp as base */
         if (c == (char)c) {
@@ -221,14 +217,14 @@ void load(int r, SValue *sv)
         } else {
             o(0x8b);     /* movl */
         }
-        gen_modrm(r, fr, fc);
+        gen_modrm(r, fr, sv->sym, fc);
     } else {
         if (v == VT_CONST) {
             o(0xb8 + r); /* mov $xx, r */
-            gen_addr32(fr, fc);
+            gen_addr32(fr, sv->sym, fc);
         } else if (v == VT_LOCAL) {
             o(0x8d); /* lea xxx(%ebp), r */
-            gen_modrm(r, VT_LOCAL, fc);
+            gen_modrm(r, VT_LOCAL, sv->sym, fc);
         } else if (v == VT_CMP) {
             oad(0xb8 + r, 0); /* mov $0, r */
             o(0x0f); /* setxx %br */
@@ -278,7 +274,7 @@ void store(int r, SValue *v)
     if (fr == VT_CONST ||
         fr == VT_LOCAL ||
         (v->r & VT_LVAL)) {
-        gen_modrm(r, v->r, fc);
+        gen_modrm(r, v->r, v->sym, fc);
     } else if (fr != r) {
         o(0xc0 + fr + r * 8); /* mov r, fr */
     }
@@ -362,9 +358,9 @@ void gfunc_call(GFuncContext *c)
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
-            greloc(cur_text_section, vtop->c.sym, 
+            greloc(cur_text_section, vtop->sym, 
                    ind + 1, R_386_PC32);
-            oad(0xe8, -4);
+            oad(0xe8, vtop->c.ul - 4);
         } else {
             oad(0xe8, vtop->c.ul - ind - 5);
         }
@@ -443,7 +439,7 @@ void gfunc_epilog(void)
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_sym(TOK___bound_local_new, func_old_type, 0);
+        sym = external_global_sym(TOK___bound_local_new, func_old_type, 0);
         greloc(cur_text_section, sym, 
                ind + 1, R_386_PC32);
         oad(0xe8, -4);
@@ -453,7 +449,7 @@ void gfunc_epilog(void)
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_sym(TOK___bound_local_delete, func_old_type, 0);
+        sym = external_global_sym(TOK___bound_local_delete, func_old_type, 0);
         greloc(cur_text_section, sym, 
                ind + 1, R_386_PC32);
         oad(0xe8, -4);
@@ -766,7 +762,7 @@ void gen_opf(int op)
                 o(0xdc);
             else
                 o(0xd8);
-            gen_modrm(a, r, fc);
+            gen_modrm(a, r, vtop->sym, fc);
         }
         vtop--;
     }
@@ -816,8 +812,8 @@ void gen_cvt_ftoi(int t)
         size = 4;
     
     o(0x2dd9); /* ldcw xxx */
-    sym = external_sym(TOK___tcc_int_fpu_control, 
-                       VT_SHORT | VT_UNSIGNED, VT_LVAL);
+    sym = external_global_sym(TOK___tcc_int_fpu_control, 
+                              VT_SHORT | VT_UNSIGNED, VT_LVAL);
     greloc(cur_text_section, sym, 
            ind, R_386_32);
     gen_le32(0);
@@ -829,8 +825,8 @@ void gen_cvt_ftoi(int t)
         o(0x3cdf); /* fistpll */
     o(0x24);
     o(0x2dd9); /* ldcw xxx */
-    sym = external_sym(TOK___tcc_fpu_control, 
-                       VT_SHORT | VT_UNSIGNED, VT_LVAL);
+    sym = external_global_sym(TOK___tcc_fpu_control, 
+                              VT_SHORT | VT_UNSIGNED, VT_LVAL);
     greloc(cur_text_section, sym, 
            ind, R_386_32);
     gen_le32(0);
@@ -871,7 +867,7 @@ void gen_bounded_ptr_add(void)
     vtop -= 2;
     save_regs(0);
     /* do a fast function call */
-    sym = external_sym(TOK___bound_ptr_add, func_old_type, 0);
+    sym = external_global_sym(TOK___bound_ptr_add, func_old_type, 0);
     greloc(cur_text_section, sym, 
            ind + 1, R_386_PC32);
     oad(0xe8, -4);
@@ -917,7 +913,7 @@ void gen_bounded_ptr_deref(void)
     /* patch relocation */
     /* XXX: find a better solution ? */
     rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.ul);
-    sym = external_sym(func, func_old_type, 0);
+    sym = external_global_sym(func, func_old_type, 0);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));

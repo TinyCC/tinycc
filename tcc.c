@@ -100,7 +100,6 @@ typedef union CValue {
     long long ll;
     unsigned long long ull;
     struct CString *cstr;
-    struct Sym *sym;
     void *ptr;
     int tab[1];
 } CValue;
@@ -112,6 +111,7 @@ typedef struct SValue {
     unsigned short r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
     CValue c;              /* constant, if VT_CONST */
+    struct Sym *sym;       /* symbol, if (VT_SYM | VT_CONST) */
 } SValue;
 
 /* symbol management */
@@ -548,7 +548,7 @@ static char *pstrcat(char *buf, int buf_size, const char *s);
 void sum(int l);
 void next(void);
 void next_nomacro(void);
-int expr_const(void);
+static int expr_const(void);
 void expr_eq(void);
 void gexpr(void);
 void decl(int l);
@@ -2895,8 +2895,9 @@ static void vpush_ref(int t, Section *sec, unsigned long offset, unsigned long s
 {
     CValue cval;
 
-    cval.sym = get_sym_ref(t, sec, offset, size);
+    cval.ul = 0;
     vsetc(t, VT_CONST | VT_SYM, &cval);
+    vtop->sym = get_sym_ref(t, sec, offset, size);
 }
 
 /* define a new external reference to a symbol 'v' of type 'u' */
@@ -2934,8 +2935,9 @@ static void vpush_global_sym(int t, int v)
     CValue cval;
 
     sym = external_global_sym(v, t, 0);
-    cval.sym = sym;
+    cval.ul = 0;
     vsetc(t, VT_CONST | VT_SYM, &cval);
+    vtop->sym = sym;
 }
 
 void vset(int t, int r, int v)
@@ -3160,7 +3162,8 @@ int gv(int rc)
                 ptr[i] = vtop->c.tab[i];
             sym = get_sym_ref(vtop->t, data_section, offset, size << 2);
             vtop->r |= VT_LVAL | VT_SYM;
-            vtop->c.sym = sym;
+            vtop->sym = sym;
+            vtop->c.ul = 0;
         }
 #ifdef CONFIG_TCC_BCHECK
         if (vtop->r & VT_MUSTBOUND) 
@@ -3675,6 +3678,14 @@ void gen_opic(int op)
                     op = TOK_SHR;
             }
             goto general_case;
+        } else if (c2 && (op == '+' || op == '-') &&
+                   (vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) == 
+                   (VT_CONST | VT_SYM)) {
+            /* symbol + constant case */
+            if (op == '-')
+                fc = -fc;
+            vtop--;
+            vtop->c.i += fc;
         } else {
         general_case:
             /* call low level op generator */
@@ -5189,8 +5200,10 @@ void unary(void)
             }
             vset(s->t, s->r, s->c);
             /* if forward reference, we must point to s */
-            if (vtop->r & VT_SYM)
-                vtop->c.sym = s;
+            if (vtop->r & VT_SYM) {
+                vtop->sym = s;
+                vtop->c.ul = 0;
+            }
         }
     }
     
@@ -5273,7 +5286,7 @@ void unary(void)
                         tok_str_new(&str);
                         parlevel = 0;
                         while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
-                               tok != -1) {
+                               tok != TOK_EOF) {
                             if (tok == '(')
                                 parlevel++;
                             else if (tok == ')')
@@ -5509,23 +5522,23 @@ void gexpr(void)
     }
 }
 
-/* parse a constant expression and return value in vtop */
-void expr_const1(void)
+/* parse a constant expression and return value in vtop.  */
+static void expr_const1(void)
 {
     int a;
     a = const_wanted;
     const_wanted = 1;
     expr_eq();
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST)
-        expect("constant");
     const_wanted = a;
 }
 
-/* parse an integer constant and return its value */
-int expr_const(void)
+/* parse an integer constant and return its value. */
+static int expr_const(void)
 {
     int c;
     expr_const1();
+    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
+        expect("constant expression");
     c = vtop->c.i;
     vpop();
     return c;
@@ -5899,6 +5912,9 @@ static void init_putv(int t, Section *sec, unsigned long c,
         global_expr = 1;
         expr_const1();
         global_expr = saved_global_expr;
+        /* NOTE: symbols are accepted */
+        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST)
+            error("initializer element is not constant");
         break;
     case EXPR_ANY:
         expr_eq();
@@ -5936,11 +5952,9 @@ static void init_putv(int t, Section *sec, unsigned long c,
             break;
         default:
             if (vtop->r & VT_SYM) {
-                greloc(sec, vtop->c.sym, c, R_DATA_32);
-                *(int *)ptr = 0;
-            } else {
-                *(int *)ptr = vtop->c.i;
+                greloc(sec, vtop->sym, c, R_DATA_32);
             }
+            *(int *)ptr = vtop->c.i;
             break;
         }
         vtop--;
@@ -6284,8 +6298,9 @@ static void decl_initializer_alloc(int t, AttributeDef *ad, int r,
 
             /* push global reference */
             sym = get_sym_ref(t, sec, addr, size);
-            cval.sym = sym;
+            cval.ul = 0;
             vsetc(t, VT_CONST | VT_SYM, &cval);
+            vtop->sym = sym;
         }
 
         /* handles bounds now because the symbol must be defined
