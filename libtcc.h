@@ -1,6 +1,10 @@
 #ifndef LIBTCC_H
 #define LIBTCC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct TCCState;
 
 typedef struct TCCState TCCState;
@@ -17,6 +21,9 @@ void tcc_enable_debug(TCCState *s);
 /* set error/warning display callback */
 void tcc_set_error_func(TCCState *s, void *error_opaque,
                         void (*error_func)(void *opaque, const char *msg));
+
+/* set/reset a warning */
+int tcc_set_warning(TCCState *s, const char *warning_name, int value);
 
 /*****************************/
 /* preprocessor */
@@ -78,5 +85,9 @@ int tcc_relocate(TCCState *s);
 
 /* return symbol value or error */
 void *tcc_get_symbol(TCCState *s, const char *name);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
