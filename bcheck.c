@@ -77,7 +77,6 @@ void *__bound_ptr_indir16(void *p, int offset) __attribute__((regparm(2)));
 void __bound_local_new(void *p) __attribute__((regparm(1)));
 void __bound_local_delete(void *p) __attribute__((regparm(1)));
 #endif
-static void *get_caller_pc(int n);
 
 void *__bound_malloc(size_t size, const void *caller);
 void *__bound_memalign(size_t size, size_t align, const void *caller);
@@ -100,8 +99,8 @@ extern char _end;
 
 /* TCC definitions */
 extern char __bounds_start; /* start of static bounds table */
-/* error function. if NULL, simply do abort() */
-void (*__bound_error_func)(unsigned long caller, const char *msg);
+/* error message, just for TCC */
+const char *__bound_error_msg;
 
 /* runtime error output */
 extern void rt_error(unsigned long pc, const char *fmt, ...);
@@ -143,16 +142,15 @@ static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
 }
 
 /* print a bound error message */
-static void bound_error(const void *caller, const char *fmt, ...)
+static void bound_error(const char *fmt, ...)
 {
-    if (!__bound_error_func)
-        abort();
-    __bound_error_func((unsigned long)caller, fmt);
+    __bound_error_msg = fmt;
+    *(int *)0 = 0; /* force a runtime error */
 }
 
 static void bound_alloc_error(void)
 {
-    bound_error(NULL, "not enough memory for bound checking code");
+    bound_error("not enough memory for bound checking code");
 }
 
 /* currently, tcc cannot compile that because we use GNUC extensions */
@@ -207,19 +205,6 @@ void *__bound_ptr_indir ## dsize (void *p, int offset)                  \
 }
 
 #ifdef __i386__
-
-/* return the PC of the N'th caller (N=1: first caller) */
-static void *get_caller_pc(int n)
-{
-    unsigned long fp;
-    int i;
-
-    __asm__ __volatile__ ("movl %%ebp,%0" :"=g" (fp));
-    for(i=0;i<n;i++)
-        fp = ((unsigned long *)fp)[0];
-    return ((void **)fp)[1];
-}
-
 /* return the frame pointer of the caller */
 #define GET_CALLER_FP(fp)\
 {\
@@ -280,11 +265,6 @@ void *__bound_ptr_add(void *p, int offset)
 void *__bound_ptr_indir ## dsize (void *p, int offset)       \
 {                                                            \
     return p + offset;                                       \
-}
-
-static void *get_caller_pc(int n)
-{
-    return 0;
 }
 #endif
 
@@ -751,7 +731,7 @@ void __bound_free(void *ptr, const void *caller)
     if (ptr == NULL)
         return;
     if (__bound_delete_region(ptr) != 0)
-        bound_error(caller, "freeing invalid region");
+        bound_error("freeing invalid region");
 
     libc_free(ptr);
 }
@@ -770,7 +750,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
             return ptr1;
         old_size = get_region_size(ptr);
         if (old_size == EMPTY_SIZE)
-            bound_error(caller, "realloc'ing invalid pointer");
+            bound_error("realloc'ing invalid pointer");
         memcpy(ptr1, ptr, old_size);
         __bound_free(ptr, caller);
         return ptr1;
@@ -826,7 +806,7 @@ static void __bound_check(const void *p, size_t size)
         return;
     p = __bound_ptr_add((void *)p, size);
     if (p == INVALID_POINTER)
-        bound_error(get_caller_pc(2), "invalid pointer");
+        bound_error("invalid pointer");
 }
 
 void *__bound_memcpy(void *dst, const void *src, size_t size)
@@ -835,7 +815,7 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
     __bound_check(src, size);
     /* check also region overlap */
     if (src >= dst && src < dst + size)
-        bound_error(get_caller_pc(1), "overlapping regions in memcpy()");
+        bound_error("overlapping regions in memcpy()");
     return memcpy(dst, src, size);
 }
 
@@ -862,7 +842,7 @@ int __bound_strlen(const char *s)
     for(;;) {
         p = __bound_ptr_indir1((char *)s, len);
         if (p == INVALID_POINTER)
-            bound_error(get_caller_pc(1), "bad pointer in strlen()");
+            bound_error("bad pointer in strlen()");
         if (*p == '\0')
             break;
         len++;
