@@ -122,7 +122,7 @@ void greloc_patch(Sym *s, int val)
         p = p1;
     }
     s->c = val;
-    s->t &= ~VT_FORWARD;
+    s->r &= ~VT_FORWARD;
 }
 
 /* output a symbol and patch all calls to it */

@@ -79,6 +79,7 @@ typedef struct SValue {
 typedef struct Sym {
     int v;    /* symbol token */
     int t;    /* associated type */
+    int r;    /* associated register */
     int c;    /* associated number */
     struct Sym *next; /* next related symbol */
     struct Sym *prev; /* prev symbol in stack */
@@ -165,49 +166,47 @@ int gnu_ext = 1;
 int tcc_ext = 1;
 
 /* The current value can be: */
-#define VT_VALMASK 0x000f
-#define VT_CONST   0x000a  /* constant in vc 
+#define VT_VALMASK 0x00ff
+#define VT_CONST   0x00f0  /* constant in vc 
                               (must be first non register value) */
-#define VT_LLOCAL  0x000b  /* lvalue, offset on stack */
-#define VT_LOCAL   0x000c  /* offset on stack */
-#define VT_CMP     0x000d  /* the value is stored in processor flags (in vc) */
-#define VT_JMP     0x000e  /* value is the consequence of jmp true */
-#define VT_JMPI    0x000f  /* value is the consequence of jmp false */
-#define VT_LVAL    0x0010  /* var is an lvalue */
-#define VT_LVALN   -17         /* ~VT_LVAL */
-#define VT_FORWARD 0x0020  /* value is forward reference 
-                              (only used for functions) */
-/* storage */
-#define VT_EXTERN  0x00000040  /* extern definition */
-#define VT_STATIC  0x00000080  /* static variable */
-#define VT_TYPEDEF 0x00000100  /* typedef definition */
+#define VT_LLOCAL  0x00f1  /* lvalue, offset on stack */
+#define VT_LOCAL   0x00f2  /* offset on stack */
+#define VT_CMP     0x00f3  /* the value is stored in processor flags (in vc) */
+#define VT_JMP     0x00f4  /* value is the consequence of jmp true (even) */
+#define VT_JMPI    0x00f5  /* value is the consequence of jmp false (odd) */
+#define VT_LVAL    0x0100  /* var is an lvalue */
+#define VT_FORWARD 0x0200  /* value is forward reference */
 
 /* types */
 #define VT_STRUCT_SHIFT 16   /* structure/enum name shift (16 bits left) */
 
-#define VT_BTYPE_SHIFT 9
-#define VT_INT        (0 << VT_BTYPE_SHIFT)  /* integer type */
-#define VT_BYTE       (1 << VT_BTYPE_SHIFT)  /* signed byte type */
-#define VT_SHORT      (2 << VT_BTYPE_SHIFT)  /* short type */
-#define VT_VOID       (3 << VT_BTYPE_SHIFT)  /* void type */
-#define VT_PTR        (4 << VT_BTYPE_SHIFT)  /* pointer increment */
-#define VT_ENUM       (5 << VT_BTYPE_SHIFT)  /* enum definition */
-#define VT_FUNC       (6 << VT_BTYPE_SHIFT)  /* function type */
-#define VT_STRUCT     (7 << VT_BTYPE_SHIFT)  /* struct/union definition */
-#define VT_FLOAT      (8 << VT_BTYPE_SHIFT)  /* IEEE float */
-#define VT_DOUBLE     (9 << VT_BTYPE_SHIFT)  /* IEEE double */
-#define VT_LDOUBLE   (10 << VT_BTYPE_SHIFT)  /* IEEE long double */
-#define VT_BOOL      (11 << VT_BTYPE_SHIFT)  /* ISOC99 boolean type */
-#define VT_LLONG     (12 << VT_BTYPE_SHIFT)  /* 64 bit integer */
-#define VT_LONG      (13 << VT_BTYPE_SHIFT)  /* long integer (NEVER
-                                                USED as type, only
-                                                during parsing) */
-#define VT_BTYPE      (0xf << VT_BTYPE_SHIFT) /* mask for basic type */
-#define VT_UNSIGNED   (0x10 << VT_BTYPE_SHIFT)  /* unsigned type */
-#define VT_ARRAY      (0x20 << VT_BTYPE_SHIFT)  /* array type (also has VT_PTR) */
-#define VT_BITFIELD   (0x40 << VT_BTYPE_SHIFT)  /* bitfield modifier */
+#define VT_INT        0  /* integer type */
+#define VT_BYTE       1  /* signed byte type */
+#define VT_SHORT      2  /* short type */
+#define VT_VOID       3  /* void type */
+#define VT_PTR        4  /* pointer increment */
+#define VT_ENUM       5  /* enum definition */
+#define VT_FUNC       6  /* function type */
+#define VT_STRUCT     7  /* struct/union definition */
+#define VT_FLOAT      8  /* IEEE float */
+#define VT_DOUBLE     9  /* IEEE double */
+#define VT_LDOUBLE   10  /* IEEE long double */
+#define VT_BOOL      11  /* ISOC99 boolean type */
+#define VT_LLONG     12  /* 64 bit integer */
+#define VT_LONG      13  /* long integer (NEVER USED as type, only
+                            during parsing) */
+#define VT_BTYPE      0x000f /* mask for basic type */
+#define VT_UNSIGNED   0x0010  /* unsigned type */
+#define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
+#define VT_BITFIELD   0x0040  /* bitfield modifier */
 
-#define VT_TYPE    0xfffffe00  /* type mask */
+/* storage */
+#define VT_EXTERN  0x00000080  /* extern definition */
+#define VT_STATIC  0x00000100  /* static variable */
+#define VT_TYPEDEF 0x00000200  /* typedef definition */
+
+/* type mask (except storage) */
+#define VT_TYPE    (~(VT_EXTERN | VT_STATIC | VT_TYPEDEF))
 
 /* token values */
 
@@ -339,8 +338,8 @@ int expr_const(void);
 void expr_eq(void);
 void gexpr(void);
 void decl(int l);
-void decl_initializer(int t, int c, int first, int size_only);
-int decl_initializer_alloc(int t, int has_init);
+void decl_initializer(int t, int r, int c, int first, int size_only);
+int decl_initializer_alloc(int t, int sec, int has_init);
 int gv(void);
 void move_reg(int r, int s);
 void save_reg(int r);
@@ -358,7 +357,7 @@ void vstore(void);
 int type_size(int t, int *a);
 int pointed_type(int t);
 int pointed_size(int t);
-int ist(void);
+int parse_btype(int *type_ptr);
 int type_decl(int *v, int t, int td);
 void error(const char *fmt, ...);
 void vset(int t, int r, int v);
@@ -668,12 +667,15 @@ Sym *sym_find(int v)
 }
 
 /* push a given symbol on the symbol stack */
-Sym *sym_push(int v, int t, int c)
+Sym *sym_push(int v, int t, int r, int c)
 {
+    Sym *s;
     if (local_stack.top)
-        return sym_push1(&local_stack, v, t, c);
+        s = sym_push1(&local_stack, v, t, c);
     else
-        return sym_push1(&global_stack, v, t, c);
+        s = sym_push1(&global_stack, v, t, c);
+    s->r = r;
+    return s;
 }
 
 /* pop symbols until top reaches 'b' */
@@ -2354,9 +2356,9 @@ void gen_cast(int t)
             do_ftoi:
                 gen_cvt_ftoi(dt1);
             }
-            if (dt1 == VT_INT && (t & (VT_TYPE | VT_UNSIGNED)) != dt1) {
+            if (dt1 == VT_INT && (t & (VT_BTYPE | VT_UNSIGNED)) != dt1) {
                 /* additionnal cast for char/short/bool... */
-                vtop->t = (vtop->t & ~VT_TYPE) | dt1;
+                vtop->t = dt1;
                 gen_cast(t);
             }
         } else if (dbt == VT_BOOL) {
@@ -2436,7 +2438,7 @@ int mk_pointer(int t)
 {
     int p;
     p = anon_sym++;
-    sym_push(p, t, -1);
+    sym_push(p, t, 0, -1);
     return VT_PTR | (p << VT_STRUCT_SHIFT) | (t & ~VT_TYPE);
 }
 
@@ -2744,7 +2746,7 @@ int struct_decl(int u)
     } else {
         v = anon_sym++;
     }
-    s = sym_push(v | SYM_STRUCT, a, 0);
+    s = sym_push(v | SYM_STRUCT, a, 0, 0);
     /* put struct/union/enum name in type */
  do_decl:
     u = u | (v << VT_STRUCT_SHIFT);
@@ -2768,12 +2770,12 @@ int struct_decl(int u)
                     c = expr_const();
                 }
                 /* enum symbols have static storage */
-                sym_push(v, VT_CONST | VT_STATIC, c);
+                sym_push(v, VT_STATIC | VT_INT, VT_CONST, c);
                 if (tok == ',')
                     next();
                 c++;
             } else {
-                b = ist();
+                parse_btype(&b);
                 while (1) {
                     bit_size = -1;
                     v = 0;
@@ -2858,7 +2860,7 @@ int struct_decl(int u)
                         }
                         printf("\n");
 #endif
-                        ss = sym_push(v | SYM_FIELD, t, offset);
+                        ss = sym_push(v | SYM_FIELD, t, 0, offset);
                         *ps = ss;
                         ps = &ss->next;
                     }
@@ -2880,13 +2882,13 @@ int struct_decl(int u)
 
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
-   XXX: A '2' is ored to ensure non zero return if int type.
  */
-int ist(void)
+int parse_btype(int *type_ptr)
 {
-    int t, u;
+    int t, u, type_found;
     Sym *s;
 
+    type_found = 0;
     t = 0;
     while(1) {
         switch(tok) {
@@ -2979,13 +2981,14 @@ int ist(void)
             next();
             break;
         }
-        t |= 2;
+        type_found = 1;
     }
 the_end:
     /* long is never used as type */
     if ((t & VT_BTYPE) == VT_LONG)
         t = (t & ~VT_BTYPE) | VT_INT;
-    return t;
+    *type_ptr = t;
+    return type_found;
 }
 
 int post_type(int t)
@@ -3002,7 +3005,7 @@ int post_type(int t)
         while (tok != ')') {
             /* read param name and compute offset */
             if (l != FUNC_OLD) {
-                if (!(pt = ist())) {
+                if (!parse_btype(&pt)) {
                     if (l) {
                         error("invalid type");
                     } else {
@@ -3024,7 +3027,7 @@ int post_type(int t)
             }
             /* array must be transformed to pointer according to ANSI C */
             pt &= ~VT_ARRAY;
-            s = sym_push(n | SYM_FIELD, pt, 0);
+            s = sym_push(n | SYM_FIELD, pt, 0, 0);
             *plast = s;
             plast = &s->next;
             if (tok == ',') {
@@ -3044,7 +3047,7 @@ int post_type(int t)
         t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN));
         /* we push a anonymous symbol which will contain the function prototype */
         p = anon_sym++;
-        s = sym_push(p, t, l);
+        s = sym_push(p, t, 0, l);
         s->next = first;
         t = t1 | VT_FUNC | (p << VT_STRUCT_SHIFT);
     } else if (tok == '[') {
@@ -3064,7 +3067,7 @@ int post_type(int t)
         /* we push a anonymous symbol which will contain the array
            element type */
         p = anon_sym++;
-        sym_push(p, t, n);
+        sym_push(p, t, 0, n);
         t = t1 | VT_ARRAY | VT_PTR | (p << VT_STRUCT_SHIFT);
     }
     return t;
@@ -3077,7 +3080,6 @@ int type_decl(int *v, int t, int td)
     int u, p;
     Sym *s;
 
-    t = t & -3; /* suppress the ored '2' */
     while (tok == '*') {
         next();
         while (tok == TOK_CONST || tok == TOK_VOLATILE || tok == TOK_RESTRICT)
@@ -3120,14 +3122,15 @@ int type_decl(int *v, int t, int td)
 }
 
 /* define a new external reference to a function 'v' of type 'u' */
-Sym *external_sym(int v, int u)
+Sym *external_sym(int v, int u, int r)
 {
     Sym *s;
     s = sym_find(v);
     if (!s) {
         /* push forward reference */
         s = sym_push1(&global_stack, 
-                      v, u | VT_CONST | VT_FORWARD, 0);
+                      v, u, 0);
+        s->r = r | VT_CONST | VT_FORWARD;
     }
     return s;
 }
@@ -3163,7 +3166,7 @@ void gfunc_param_typed(GFuncContext *gf, Sym *func, Sym *arg)
 
 void unary(void)
 {
-    int n, t, ft, fc, p, align, size;
+    int n, t, ft, fc, p, align, size, r;
     Sym *s;
     GFuncContext gf;
 
@@ -3197,8 +3200,8 @@ void unary(void)
         glo = (glo + align - 1) & -align;
         fc = glo;
         /* we must declare it as an array first to use initializer parser */
-        t = VT_CONST | VT_ARRAY | mk_pointer(t);
-        decl_initializer(t, glo, 1, 0);
+        t = VT_ARRAY | mk_pointer(t);
+        decl_initializer(t, VT_CONST, glo, 1, 0);
         glo += type_size(t, &align);
         /* put it as pointer */
         vset(t & ~VT_ARRAY, VT_CONST, fc);
@@ -3207,21 +3210,21 @@ void unary(void)
         next();
         if (t == '(') {
             /* cast ? */
-            if (t = ist()) {
+            if (parse_btype(&t)) {
                 ft = type_decl(&n, t, TYPE_ABSTRACT);
                 skip(')');
                 /* check ISOC99 compound literal */
                 if (tok == '{') {
                     /* data is allocated locally by default */
                     if (global_expr)
-                        ft |= VT_CONST;
+                        r = VT_CONST;
                     else
-                        ft |= VT_LOCAL;
+                        r = VT_LOCAL;
                     /* all except arrays are lvalues */
                     if (!(ft & VT_ARRAY))
-                        ft |= VT_LVAL;
-                    fc = decl_initializer_alloc(ft, 1);
-                    vset(ft & VT_TYPE, ft & (VT_VALMASK | VT_LVAL), fc);
+                        r |= VT_LVAL;
+                    fc = decl_initializer_alloc(ft, r, 1);
+                    vset(ft, r, fc);
                 } else {
                     unary();
                     gen_cast(ft);
@@ -3264,9 +3267,9 @@ void unary(void)
         if (t == TOK_SIZEOF) {
             if (tok == '(') {
                 next();
-                if (t = ist())
+                if (parse_btype(&t)) {
                     t = type_decl(&n, t, TYPE_ABSTRACT);
-                else {
+                } else {
                     /* XXX: some code could be generated: add eval
                        flag */
                     gexpr();
@@ -3299,10 +3302,9 @@ void unary(void)
                 p = anon_sym++;        
                 sym_push1(&global_stack, p, 0, FUNC_OLD);
                 /* int() function */
-                s = external_sym(t, VT_FUNC | (p << VT_STRUCT_SHIFT)); 
+                s = external_sym(t, VT_FUNC | (p << VT_STRUCT_SHIFT), 0); 
             }
-            vset(s->t & VT_TYPE, 
-                 s->t & (VT_VALMASK | VT_LVAL | VT_FORWARD), s->c);
+            vset(s->t, s->r, s->c);
             /* if forward reference, we must point to s */
             if (vtop->r & VT_FORWARD)
                 vtop->c.sym = s;
@@ -3880,7 +3882,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
    address. cur_index/cur_field is the pointer to the current
    value. 'size_only' is true if only size info is needed (only used
    in arrays) */
-void decl_designator(int t, int c, 
+void decl_designator(int t, int r, int c, 
                      int *cur_index, Sym **cur_field, 
                      int size_only)
 {
@@ -3949,25 +3951,36 @@ void decl_designator(int t, int c,
             c += f->c;
         }
     }
-    decl_initializer(t, c, 0, size_only);
+    decl_initializer(t, r, c, 0, size_only);
 }
 
-/* store a value or an expression directly in global data or in local array */
+#define EXPR_VAL   0
+#define EXPR_CONST 1
+#define EXPR_ANY   2
 
-void init_putv(int t, int c, int v, int is_expr)
+/* store a value or an expression directly in global data or in local array */
+void init_putv(int t, int r, int c, 
+               int v, int expr_type)
 {
     int saved_global_expr, bt;
 
-    if ((t & VT_VALMASK) == VT_CONST) {
-        if (is_expr) {
-            /* compound literals must be allocated globally in this case */
-            saved_global_expr = global_expr;
-            global_expr = 1;
-            expr_const1();
-            global_expr = saved_global_expr;
-        } else {
-            vpushi(v);
-        }
+    switch(expr_type) {
+    case EXPR_VAL:
+        vpushi(v);
+        break;
+    case EXPR_CONST:
+        /* compound literals must be allocated globally in this case */
+        saved_global_expr = global_expr;
+        global_expr = 1;
+        expr_const1();
+        global_expr = saved_global_expr;
+        break;
+    case EXPR_ANY:
+        expr_eq();
+        break;
+    }
+    
+    if ((r & VT_VALMASK) == VT_CONST) {
         /* XXX: do casting */
         /* XXX: not portable */
         bt = vtop->t & VT_BTYPE;
@@ -3995,22 +4008,19 @@ void init_putv(int t, int c, int v, int is_expr)
         }
         vpop();
     } else {
-        vset(t & VT_TYPE, t & (VT_VALMASK | VT_LVAL | VT_FORWARD), c);
-        if (is_expr)
-            expr_eq();
-        else
-            vpushi(v);
+        vset(t, r, c);
+        vswap();
         vstore();
         vpop();
     }
 }
 
 /* put zeros for variable based init */
-void init_putz(int t, int c, int size)
+void init_putz(int t, int r, int c, int size)
 {
     GFuncContext gf;
 
-    if ((t & VT_VALMASK) == VT_CONST) {
+    if ((r & VT_VALMASK) == VT_CONST) {
         /* nothing to do because global are already set to zero */
     } else {
         gfunc_start(&gf);
@@ -4029,10 +4039,10 @@ void init_putz(int t, int c, int size)
    object. 'first' is true if array '{' must be read (multi dimension
    implicit array init handling). 'size_only' is true if size only
    evaluation is wanted (only for arrays). */
-void decl_initializer(int t, int c, int first, int size_only)
+void decl_initializer(int t, int r, int c, int first, int size_only)
 {
     int index, array_length, n, no_oblock, nb, parlevel, i;
-    int t1, size1, align1;
+    int t1, size1, align1, expr_type;
     Sym *s, *f;
     TokenSym *ts;
 
@@ -4067,8 +4077,8 @@ void decl_initializer(int t, int c, int first, int size_only)
                     if (ts->len > nb)
                         warning("initializer-string for array is too long");
                     for(i=0;i<nb;i++) {
-                        init_putv(t1, c + (array_length + i) * size1, 
-                                  ts->str[i], 0);
+                        init_putv(t1, r, c + (array_length + i) * size1, 
+                                  ts->str[i], EXPR_VAL);
                     }
                 }
                 array_length += nb;
@@ -4078,20 +4088,20 @@ void decl_initializer(int t, int c, int first, int size_only)
                warning in this case since it is standard) */
             if (n < 0 || array_length < n) {
                 if (!size_only) {
-                    init_putv(t1, c + (array_length * size1), 0, 0);
+                    init_putv(t1, r, c + (array_length * size1), 0, EXPR_VAL);
                 }
                 array_length++;
             }
         } else {
             index = 0;
             while (tok != '}') {
-                decl_designator(t, c, &index, NULL, size_only);
+                decl_designator(t, r, c, &index, NULL, size_only);
                 if (n >= 0 && index >= n)
                     error("index too large");
                 /* must put zero in holes (note that doing it that way
                    ensures that it even works with designators) */
                 if (!size_only && array_length < index) {
-                    init_putz(t1, c + array_length * size1, 
+                    init_putz(t1, r, c + array_length * size1, 
                               (index - array_length) * size1);
                 }
                 index++;
@@ -4111,7 +4121,7 @@ void decl_initializer(int t, int c, int first, int size_only)
             skip('}');
         /* put zeros at the end */
         if (!size_only && n >= 0 && array_length < n) {
-            init_putz(t1, c + array_length * size1, 
+            init_putz(t1, r, c + array_length * size1, 
                       (n - array_length) * size1);
         }
         /* patch type size if needed */
@@ -4126,11 +4136,11 @@ void decl_initializer(int t, int c, int first, int size_only)
         index = 0;
         n = s->c;
         while (tok != '}') {
-            decl_designator(t, c, NULL, &f, size_only);
+            decl_designator(t, r, c, NULL, &f, size_only);
             /* fill with zero between fields */
             index = f->c;
             if (!size_only && array_length < index) {
-                init_putz(t, c + array_length, 
+                init_putz(t, r, c + array_length, 
                           index - array_length);
             }
             index = index + type_size(f->t, &align1);
@@ -4143,13 +4153,13 @@ void decl_initializer(int t, int c, int first, int size_only)
         }
         /* put zeros at the end */
         if (!size_only && array_length < n) {
-            init_putz(t, c + array_length, 
+            init_putz(t, r, c + array_length, 
                       n - array_length);
         }
         skip('}');
     } else if (tok == '{') {
         next();
-        decl_initializer(t, c, first, size_only);
+        decl_initializer(t, r, c, first, size_only);
         skip('}');
     } else if (size_only) {
         /* just skip expression */
@@ -4163,14 +4173,19 @@ void decl_initializer(int t, int c, int first, int size_only)
             next();
         }
     } else {
-        init_putv(t, c, 0, 1);
+        /* currently, we always use constant expression for globals
+           (may change for scripting case) */
+        expr_type = EXPR_CONST;
+        if ((r & VT_VALMASK) == VT_LOCAL)
+            expr_type = EXPR_ANY;
+        init_putv(t, r, c, 0, expr_type);
     }
 }
 
 /* parse an initializer for type 't' if 'has_init' is true, and
-   allocate space in local or global data space. The allocated address
-   in returned */
-int decl_initializer_alloc(int t, int has_init)
+   allocate space in local or global data space ('r' is either
+   VT_LOCAL or VT_CONST). The allocated address in returned */
+int decl_initializer_alloc(int t, int r, int has_init)
 {
     int size, align, addr, tok1;
     int *init_str, init_len, level, *saved_macro_ptr;
@@ -4212,7 +4227,7 @@ int decl_initializer_alloc(int t, int has_init)
         saved_macro_ptr = macro_ptr;
         macro_ptr = init_str;
         next();
-        decl_initializer(t, 0, 1, 1);
+        decl_initializer(t, r, 0, 1, 1);
         /* prepare second initializer parsing */
         macro_ptr = init_str;
         next();
@@ -4222,7 +4237,7 @@ int decl_initializer_alloc(int t, int has_init)
         if (size < 0) 
             error("unknown type size");
     }
-    if ((t & VT_VALMASK) == VT_LOCAL) {
+    if ((r & VT_VALMASK) == VT_LOCAL) {
         loc = (loc - size) & -align;
         addr = loc;
     } else {
@@ -4235,7 +4250,7 @@ int decl_initializer_alloc(int t, int has_init)
         glo += size;
     }
     if (has_init) {
-        decl_initializer(t, addr, 1, 0);
+        decl_initializer(t, r, addr, 1, 0);
         /* restore parse state if needed */
         if (init_str) {
             free(init_str);
@@ -4250,12 +4265,11 @@ int decl_initializer_alloc(int t, int has_init)
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(int l)
 {
-    int *a, t, b, v, u, addr, has_init, size, align;
+    int *a, t, b, v, addr, has_init, size, align, r, u;
     Sym *sym;
     
     while (1) {
-        b = ist();
-        if (!b) {
+        if (!parse_btype(&b)) {
             /* skip redundant ';' */
             /* XXX: find more elegant solution */
             if (tok == ';') {
@@ -4290,13 +4304,14 @@ void decl(int l)
                 if (!(t & VT_FUNC))
                     expect("function definition");
                 /* patch forward references */
-                if ((sym = sym_find(v)) && (sym->t & VT_FORWARD)) {
+                if ((sym = sym_find(v)) && (sym->r & VT_FORWARD)) {
                     greloc_patch(sym, ind);
-                    sym->t = VT_CONST | t;
+                    sym->t = t;
                 } else {
                     /* put function address */
-                    sym_push1(&global_stack, v, VT_CONST | t, ind);
+                    sym = sym_push1(&global_stack, v, t, ind);
                 }
+                sym->r = VT_CONST;
                 funcname = get_tok_str(v, NULL);
                 /* push a dummy symbol to enable local sym storage */
                 sym_push1(&local_stack, 0, 0, 0);
@@ -4314,9 +4329,8 @@ void decl(int l)
                 }
                 while (sym = sym->next) {
                     u = sym->t;
-                    sym_push(sym->v & ~SYM_FIELD, 
-                             u | VT_LOCAL | VT_LVAL, 
-                             addr);
+                    sym_push(sym->v & ~SYM_FIELD, u,
+                             VT_LOCAL | VT_LVAL, addr);
                     size = type_size(u, &align);
                     size = (size + 3) & ~3;
 #ifdef FUNC_STRUCT_PARAM_AS_PTR
@@ -4345,40 +4359,42 @@ void decl(int l)
                 if (b & VT_TYPEDEF) {
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
-                    sym_push(v, t | VT_TYPEDEF, 0);
+                    sym_push(v, t | VT_TYPEDEF, 0, 0);
                 } else if ((t & VT_BTYPE) == VT_FUNC) {
                     /* external function definition */
-                    external_sym(v, t);
+                    external_sym(v, t, 0);
                 } else {
                     /* not lvalue if array */
+                    r = 0;
                     if (!(t & VT_ARRAY))
-                        t |= VT_LVAL;
+                        r |= VT_LVAL;
                     if (b & VT_EXTERN) {
                         /* external variable */
-                        external_sym(v, t);
+                        external_sym(v, t, r);
                     } else {
-                        u = l;
                         if (t & VT_STATIC)
-                            u = VT_CONST;
-                        u |= t;
+                            r |= VT_CONST;
+                        else
+                            r |= l;
                         has_init = (tok == '=');
                         if (has_init)
                             next();
-                        addr = decl_initializer_alloc(u, has_init);
+                        addr = decl_initializer_alloc(t, r, 
+                                                      has_init);
                         if (l == VT_CONST) {
                             /* global scope: see if already defined */
                             sym = sym_find(v);
                             if (!sym)
                                 goto do_def;
-                            if (!is_compatible_types(sym->t, u))
+                            if (!is_compatible_types(sym->t, t))
                                 error("incompatible types for redefinition of '%s'", 
                                       get_tok_str(v, NULL));
-                            if (!(sym->t & VT_FORWARD))
+                            if (!(sym->r & VT_FORWARD))
                                 error("redefinition of '%s'", get_tok_str(v, NULL));
                             greloc_patch(sym, addr);
                         } else {
                         do_def:
-                            sym_push(v, u, addr);
+                            sym_push(v, t, r, addr);
                         }
                     }
                 }
@@ -4411,11 +4427,12 @@ void resolve_global_syms(void)
             ext_sym = sym_find1(&extern_stack, s->v);
             if (!ext_sym) {
                 /* if the symbol do not exist, we simply save it */
-                sym_push1(&extern_stack, s->v, s->t, s->c);
-            } else if (ext_sym->t & VT_FORWARD) {
+                ext_sym = sym_push1(&extern_stack, s->v, s->t, s->c);
+                ext_sym->r = s->r;
+            } else if (ext_sym->r & VT_FORWARD) {
                 /* external symbol already exists, but only as forward
                    definition */
-                if (!(s->t & VT_FORWARD)) {
+                if (!(s->r & VT_FORWARD)) {
                     /* s is not forward, so we can relocate all symbols */
                     greloc_patch(ext_sym, s->c);
                 } else {
@@ -4428,7 +4445,7 @@ void resolve_global_syms(void)
             } else {
                 /* external symbol already exists and is defined :
                    patch all references to it */
-                if (!(s->t & VT_FORWARD))
+                if (!(s->r & VT_FORWARD))
                     error("'%s' defined twice", get_tok_str(s->v, NULL));
                 greloc_patch(s, ext_sym->c);
             }
@@ -4497,7 +4514,7 @@ void resolve_extern_syms(void)
     s = extern_stack.top;
     while (s != NULL) {
         s1 = s->prev;
-        if (s->t & VT_FORWARD) {
+        if (s->r & VT_FORWARD) {
             /* if there is at least one relocation to do, then find it
                and patch it */
             if (s->c) {
@@ -4601,7 +4618,7 @@ int main(int argc, char **argv)
         return 0;
     } else {
         s = sym_find1(&extern_stack, TOK_MAIN);
-        if (!s || (s->t & VT_FORWARD))
+        if (!s || (s->r & VT_FORWARD))
             error("main() not defined");
         t = (int (*)())s->c;
         return (*t)(argc - optind, argv + optind);
