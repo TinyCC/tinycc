@@ -2,9 +2,12 @@ TODO list:
 
 Critical:
 
+- initializers
 - add hash tables for symbols (useful for long programs)
 - 0 is pointer - fix type compare
 - add message if external function or variable not found.
+- add float/double support (should be as small as possible while being
+  usable for RISC code generator too).
 
 Not critical:
 

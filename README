@@ -5,22 +5,20 @@ Features:
 --------
 
 - SMALL! You can compile and execute C code everywhere, for example on
-  rescue disks.
+  rescue disks (25KB for x86 executable).
 
 - FAST! tcc generates optimized x86 code. No byte code overhead.
 
 - UNLIMITED! Any C dynamic library can be used directly. TCC is
-  heading torwards full ANSI C compliance. TCC can of course compile
+  heading torward full ANSI C compliance. TCC can of course compile
   itself.
 
 - Compile and execute C source directly. No linking or assembly
   necessary. Full C preprocessor included.
 
 - C script supported : just add '#!/usr/local/bin/tcc' at the first
-  line of your C source, and execute it directly from the command line !
-
-- For adventurers, tcc is conceived to be able to generate code for
-  other targets.
+  line of your C source, and execute it directly from the command
+  line.
 
 Documentation:
 -------------
@@ -37,7 +35,7 @@ Type 'make install' to compile and install tcc in /usr/local and
 We assume here that you know ANSI C. Look at the example ex1.c to know
 what the programs look like.
 
-The main limitations of tcc are that you cannot use floats. 
+The main limitation of tcc is that you cannot use floats. 
 
 The include file <tcclib.h> can be used if you want a small basic libc
 include support (especially useful for floppy disks). Of course, you
@@ -116,6 +114,39 @@ Supported C extensions:
 
 - 'inline' keyword is ignored.
 
+
+Technical Description:
+---------------------
+
+This is not my first C compiler (see my 'fbcc' compiler) but it
+contains the first C preprocessor I wrote. The project started as a
+joke to make the smallest C compiler. Then I expanded it torward ANSI
+compliance. This C compiler is particular because each feature was
+added while trying to be as simple and compact as possible. For
+example, no intermediate structure is used to store code or
+expressions.
+
+The TCC code generator directly generates linked binary code. It is
+rather unusual these days (see gcc for example which generates text
+assembly), but it allows to be very fast and surprisingly not so
+complicated.
+
+The TCC code generator is register based. It means that it could even
+generate good code for RISC processors. On x86, three temporary
+registers are used. When more registers are needed, one register is
+flushed in a new local variable.
+
+Constant propagation is done for all operations. Multiplications and
+divisions are optimized to shifts when appropriate. Logical operators
+are optimized by maintaining a special cache for the processor
+flags. &&, || and ! are optimized by maintaining a special 'jmp
+target' value. No other jmp optimization is currently performed
+because it would require to store the code in a more abstract fashion.
+
+The types and values descriptions are stored in a single 'int'
+variable (see VT_xxx constants). It was choosen in the first stages of
+development when tcc was much simpler. Now, it may not be the best
+solution.
 
 License:
 -------
