@@ -60,6 +60,9 @@ void longlong_test(void);
 void stdarg_test(void);
 void whitespace_test(void);
 void relocation_test(void);
+void old_style_function(void);
+void sizeof_test(void);
+void typeof_test(void);
 
 int fib(int n);
 void num(int n);
@@ -192,7 +195,7 @@ void macro_test(void)
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 195 "tcctest.c"
+#line 198 "tcctest.c"
     
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
@@ -208,6 +211,14 @@ void macro_test(void)
 
     /* complicated macros in glibc */
     printf("INT64_MIN=%Ld\n", INT64_MIN);
+    {
+        int a;
+        a = 1;
+        glue(a+, +);
+        printf("a=%d\n", a);
+        glue(a <, <= 2);
+        printf("a=%d\n", a);
+    }
 }
 
 int op(a,b)
@@ -428,6 +439,9 @@ int main(int argc, char **argv)
     stdarg_test();
     whitespace_test();
     relocation_test();
+    old_style_function();
+    sizeof_test();
+    typeof_test();
     return 0; 
 }
 
@@ -466,12 +480,6 @@ void array_test(int a[4])
 
     printf("array:\n");
     printf("sizeof(a) = %d\n", sizeof(a));
-    printf("sizeof(int) = %d\n", sizeof(int));
-    printf("sizeof(unsigned int) = %d\n", sizeof(unsigned int));
-    printf("sizeof(short) = %d\n", sizeof(short));
-    printf("sizeof(unsigned short) = %d\n", sizeof(unsigned short));
-    printf("sizeof(char) = %d\n", sizeof(char));
-    printf("sizeof(unsigned char) = %d\n", sizeof(unsigned char));
     printf("sizeof(\"a\") = %d\n", sizeof("a"));
 #ifdef C99_MACROS
     printf("sizeof(__func__) = %d\n", sizeof(__func__));
@@ -1501,4 +1509,56 @@ void relocation_test(void)
 {
     printf("*rel1=%d\n", *rel1);
     printf("*rel2=%d\n", *rel2);
+}
+
+void old_style_f(a,b,c)
+     int a, b;
+     double c;
+{
+    printf("a=%d b=%d b=%f\n", a, b, c);
+}
+
+void old_style_function(void)
+{
+    old_style_f((void *)1, 2, 3.0);
+}
+
+void sizeof_test(void)
+{
+    int a;
+    int **ptr;
+
+    printf("sizeof(int) = %d\n", sizeof(int));
+    printf("sizeof(unsigned int) = %d\n", sizeof(unsigned int));
+    printf("sizeof(short) = %d\n", sizeof(short));
+    printf("sizeof(unsigned short) = %d\n", sizeof(unsigned short));
+    printf("sizeof(char) = %d\n", sizeof(char));
+    printf("sizeof(unsigned char) = %d\n", sizeof(unsigned char));
+    printf("sizeof(func) = %d\n", sizeof sizeof_test());
+    a = 1;
+    printf("sizeof(a++) = %d\n", sizeof a++);
+    printf("a=%d\n", a);
+    ptr = NULL;
+    printf("sizeof(**ptr) = %d\n", sizeof (**ptr));
+
+    /* some alignof tests */
+    printf("__alignof__(int) = %d\n", __alignof__(int));
+    printf("__alignof__(unsigned int) = %d\n", __alignof__(unsigned int));
+    printf("__alignof__(short) = %d\n", __alignof__(short));
+    printf("__alignof__(unsigned short) = %d\n", __alignof__(unsigned short));
+    printf("__alignof__(char) = %d\n", __alignof__(char));
+    printf("__alignof__(unsigned char) = %d\n", __alignof__(unsigned char));
+    printf("__alignof__(func) = %d\n", __alignof__ sizeof_test());
+}
+
+void typeof_test(void)
+{
+    double a;
+    typeof(a) b;
+    typeof(float) c;
+
+    a = 1.5;
+    b = 2.5;
+    c = 3.5;
+    printf("a=%f b=%f c=%f\n", a, b, c);
 }
