@@ -443,6 +443,10 @@ TokenSym *tok_alloc(char *str, int len)
             return ts;
         pts = &(ts->hash_next);
     }
+
+    if (tok_ident >= SYM_FIRST_ANOM) 
+        error("memory full");
+
     /* expand token table if needed */
     i = tok_ident - TOK_IDENT;
     if ((i % TOK_ALLOC_INCR) == 0) {
@@ -451,8 +455,9 @@ TokenSym *tok_alloc(char *str, int len)
             error("memory full");
         table_ident = ptable;
     }
+
     ts = malloc(sizeof(TokenSym) + len);
-    if (!ts || tok_ident >= SYM_FIRST_ANOM)
+    if (!ts)
         error("memory full");
     table_ident[i] = ts;
     ts->tok = tok_ident++;
@@ -1468,7 +1473,7 @@ void macro_subst(int **tok_str, int *tok_len,
 }
 
 /* return next token with macro substitution */
-void next()
+void next(void)
 {
     int len, *ptr;
     Sym *nested_list;
@@ -2413,46 +2418,87 @@ int struct_decl(int u)
  */
 int ist(void)
 {
-    int t;
+    int t, u;
     Sym *s;
 
     t = 0;
     while(1) {
-        if (tok == TOK_ENUM) {
-            t |= struct_decl(VT_ENUM);
-        } else if (tok == TOK_STRUCT || tok == TOK_UNION) {
-            t |= struct_decl(VT_STRUCT);
-        } else {
-            if (tok == TOK_CHAR) {
-                t |= VT_BYTE;
-            } else if (tok == TOK_VOID) {
-                t |= VT_VOID;
-            } else if (tok == TOK_SHORT) {
-                t |= VT_SHORT;
-            } else if (tok == TOK_INT |
-                       (tok >= TOK_CONST & tok <= TOK_INLINE)) {
-                /* ignored types */
-            } else if (tok == TOK_FLOAT || tok == TOK_DOUBLE) {
-                /* We allow that to compile standard headers */
-                //                warning("floats not supported");
-            } else if (tok == TOK_EXTERN) {
-                t |= VT_EXTERN;
-            } else if (tok == TOK_STATIC) {
-                t |= VT_STATIC;
-            } else if (tok == TOK_UNSIGNED) {
-                t |= VT_UNSIGNED;
-            } else if (tok == TOK_TYPEDEF) {
-                t |= VT_TYPEDEF;
-            } else {
-                s = sym_find(tok);
-                if (!s || !(s->t & VT_TYPEDEF))
-                    break;
-                t |= (s->t & ~VT_TYPEDEF);
-            }
+        switch(tok) {
+            /* basic types */
+        case TOK_CHAR:
+            u = VT_BYTE;
+        basic_type:
             next();
+        basic_type1:
+            if ((t & VT_BTYPE) != 0)
+                error("too many basic types %x", t);
+            t |= u;
+            break;
+        case TOK_VOID:
+            u = VT_VOID;
+            goto basic_type;
+        case TOK_SHORT:
+            u = VT_SHORT;
+            goto basic_type;
+        case TOK_INT:
+            next();
+            break;
+        case TOK_LONG:
+            /* XXX: add long type */
+            u = VT_INT;
+            goto basic_type;
+        case TOK_FLOAT:
+        case TOK_DOUBLE:
+            /* XXX: add float types */
+            u = VT_INT;
+            goto basic_type;
+        case TOK_ENUM:
+            u = struct_decl(VT_ENUM);
+            goto basic_type1;
+        case TOK_STRUCT:
+        case TOK_UNION:
+            u = struct_decl(VT_STRUCT);
+            goto basic_type1;
+
+            /* type modifiers */
+        case TOK_CONST:
+        case TOK_VOLATILE:
+        case TOK_REGISTER:
+        case TOK_SIGNED:
+        case TOK_AUTO:
+        case TOK_INLINE:
+        case TOK_RESTRICT:
+            next();
+            break;
+        case TOK_UNSIGNED:
+            t |= VT_UNSIGNED;
+            next();
+            break;
+
+            /* storage */
+        case TOK_EXTERN:
+            t |= VT_EXTERN;
+            next();
+            break;
+        case TOK_STATIC:
+            t |= VT_STATIC;
+            next();
+            break;
+        case TOK_TYPEDEF:
+            t |= VT_TYPEDEF;
+            next();
+            break;
+        default:
+            s = sym_find(tok);
+            if (!s || !(s->t & VT_TYPEDEF))
+                goto the_end;
+            t |= (s->t & ~VT_TYPEDEF);
+            next();
+            break;
         }
         t |= 2;
     }
+the_end:
     return t;
 }
 
@@ -3268,7 +3314,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         case_reg = gv();
         skip(')');
         a = 0;
-        b = 0;
+        b = gjmp(0); /* jump to first case */
         c = 0;
         block(&a, csym, &b, &c, case_reg);
         /* if no default, jmp after switch */
@@ -3284,12 +3330,15 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         a = expr_const();
         if (!case_sym)
             expect("switch");
+        /* since a case is like a label, we must skip it with a jmp */
+        b = gjmp(0);
         gsym(*case_sym);
         vset(case_reg, 0);
         vpush();
         vset(VT_CONST, a);
         gen_op(TOK_EQ);
         *case_sym = gtst(1, 0);
+        gsym(b);
         skip(':');
         block(bsym, csym, case_sym, def_sym, case_reg);
     } else 
