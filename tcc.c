@@ -1,7 +1,7 @@
 /*
  *  TCC - Tiny C Compiler
  * 
- *  Copyright (c) 2001 Fabrice Bellard
+ *  Copyright (c) 2001, 2002 Fabrice Bellard
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,7 +23,12 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/ucontext.h>
 #include <sys/mman.h>
+#include <elf.h>
+#include <stab.h>
 #ifndef CONFIG_TCC_STATIC
 #include <dlfcn.h>
 #endif
@@ -109,6 +114,11 @@ typedef struct Section {
     char name[64];           /* section name */
     unsigned char *data;     /* section data */
     unsigned char *data_ptr; /* current data pointer */
+    int sh_num;              /* elf section number */
+    int sh_type;             /* elf section type */
+    int sh_flags;            /* elf section flags */
+    int sh_entsize;          /* elf entry size */
+    struct Section *link;    /* link to another section */
     struct Section *next;
 } Section;
 
@@ -148,9 +158,13 @@ CValue tokc, tok1c;
 
 /* sections */
 Section *first_section;
+int section_num;
 Section *text_section, *data_section, *bss_section; /* predefined sections */
 Section *cur_text_section; /* current section where function code is
                               generated */
+Section *bounds_section; /* contains global data bound description */
+/* debug sections */
+Section *stab_section, *stabstr_section, *symtab_section, *strtab_section;
 
 /* loc : local variable index
    ind : output code index
@@ -163,6 +177,7 @@ int global_expr; /* true if compound literals must be allocated
                     globally (used during initializers parsing */
 int func_vt, func_vc; /* current function return type (used by
                          return instruction) */
+int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 int tok_ident;
 TokenSym **table_ident;
 TokenSym *hash_ident[TOK_HASH_SIZE];
@@ -178,6 +193,13 @@ IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
 char *include_paths[INCLUDE_PATHS_MAX];
 int nb_include_paths;
+int char_pointer_type;
+
+/* compile with debug symbol (and use them if error during execution) */
+int do_debug = 0;
+
+/* compile with built-in memory and bounds checker */
+int do_bounds_check = 0;
 
 /* use GNU C extensions */
 int gnu_ext = 1;
@@ -380,6 +402,7 @@ void decl_initializer(int t, int r, int c, int first, int size_only);
 int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init);
 int gv(int rc);
 void move_reg(int r, int s);
+void save_regs(void);
 void save_reg(int r);
 void vpop(void);
 void vswap(void);
@@ -407,9 +430,18 @@ int type_decl(int *v, int t, int td);
 void error(const char *fmt, ...);
 void vpushi(int v);
 void vset(int t, int r, int v);
-void greloc(Sym *s, int addr, int type);
 void type_to_str(char *buf, int buf_size, 
                  int t, const char *varstr);
+
+/* section generation */
+void greloc(Sym *s, int addr, int type);
+static int put_elf_str(Section *s, const char *sym);
+static void put_elf_sym(Section *s, 
+                        unsigned long value, unsigned long size,
+                        int info, int other, int shndx, const char *name);
+static void put_stabs(const char *str, int type, int other, int desc, int value);
+static void put_stabn(int type, int other, int desc, int value);
+static void put_stabd(int type, int other, int desc);
 
 /* true if float/double/long double type */
 static inline int is_float(int t)
@@ -418,6 +450,8 @@ static inline int is_float(int t)
     bt = t & VT_BTYPE;
     return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT;
 }
+
+#include "bcheck.c"
 
 #include "i386-gen.c"
 
@@ -571,7 +605,7 @@ char *pstrcat(char *buf, int buf_size, const char *s)
     return buf;
 }
 
-Section *new_section(const char *name)
+Section *new_section(const char *name, int sh_type, int sh_flags)
 {
     Section *sec, **psec;
     void *data;
@@ -579,7 +613,12 @@ Section *new_section(const char *name)
     sec = malloc(sizeof(Section));
     if (!sec)
         error("memory full");
+    memset(sec, 0, sizeof(Section));
     pstrcpy(sec->name, sizeof(sec->name), name);
+    sec->link = NULL;
+    sec->sh_num = ++section_num;
+    sec->sh_type = sh_type;
+    sec->sh_flags = sh_flags;
     data = mmap(NULL, SECTION_VSIZE, 
                 PROT_EXEC | PROT_READ | PROT_WRITE, 
                 MAP_PRIVATE | MAP_ANONYMOUS, 
@@ -606,7 +645,8 @@ Section *find_section(const char *name)
         if (!strcmp(name, sec->name)) 
             return sec;
     }
-    return new_section(name);
+    /* sections are created as PROGBITS */
+    return new_section(name, SHT_PROGBITS, SHF_ALLOC);
 }
 
 /* add a new relocation entry to symbol 's' */
@@ -936,6 +976,10 @@ int handle_eof(void)
 {
     if (include_stack_ptr == include_stack)
         return -1;
+    /* add end of include file debug info */
+    if (do_debug) {
+        put_stabd(N_EINCL, 0, 0);
+    }
     /* pop include stack */
     fclose(file);
     free(filename);
@@ -1288,6 +1332,10 @@ void preprocess(void)
         file = f;
         filename = strdup(buf1);
         line_num = 1;
+        /* add include file debug info */
+        if (do_debug) {
+            put_stabs(filename, N_BINCL, 0, 0, 0);
+        }
     } else if (tok == TOK_IFNDEF) {
         c = 1;
         goto do_ifdef;
@@ -2831,7 +2879,17 @@ void gen_op(int op)
             /* XXX: cast to int ? (long long case) */
             vpushi(pointed_size(vtop[-1].t));
             gen_op('*');
-            gen_opc(op);
+            if (do_bounds_check) {
+                /* if bounded pointers, we generate a special code to test bounds */
+                if (op == '-') {
+                    vpushi(0);
+                    vswap();
+                    gen_op('-');
+                }
+                gen_bounded_ptr_add();
+            } else {
+                gen_opc(op);
+            }
             /* put again type if gen_opc() swaped operands */
             vtop->t = t1;
         }
@@ -4184,7 +4242,7 @@ void unary(void)
             if (!s)
                 error("field not found");
             /* add field offset to pointer */
-            vtop->t = VT_INT; /* change type to int */
+            vtop->t = char_pointer_type; /* change type to 'char *' */
             vpushi(s->c);
             gen_op('+');
             /* change type to field type, and set to lvalue */
@@ -4523,6 +4581,14 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
 {
     int a, b, c, d;
     Sym *s;
+
+    /* generate line number info */
+    if (do_debug && 
+        (last_line_num != line_num || last_ind != ind)) {
+        put_stabn(N_SLINE, 0, line_num, ind - func_ind);
+        last_ind = ind;
+        last_line_num = line_num;
+    }
 
     if (tok == TOK_IF) {
         /* if test */
@@ -5138,6 +5204,17 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
            initializers themselves can create new
            initializers */
         data_offset += size;
+        /* handles bounds */
+        if (do_bounds_check) {
+            int *bounds_ptr;
+            /* first, we need to add at least one byte between each region */
+            data_offset++;
+            /* then add global data info */
+            bounds_ptr = (int *)bounds_section->data_ptr;
+            *bounds_ptr++ = addr;
+            *bounds_ptr++ = size;
+            bounds_section->data_ptr = (unsigned char *)bounds_ptr;
+        }
         sec->data_ptr = (unsigned char *)data_offset;
     }
     if (has_init) {
@@ -5150,6 +5227,28 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
         }
     }
     return addr;
+}
+
+void put_func_debug(int t)
+{
+    int bind;
+    char buf[512];
+
+    if (t & VT_STATIC)
+        bind = STB_LOCAL;
+    else
+        bind = STB_GLOBAL;
+    put_elf_sym(symtab_section, ind, 0, 
+                ELF32_ST_INFO(bind, STT_FUNC), 0, 
+                cur_text_section->sh_num, funcname);
+    /* stabs info */
+    /* XXX: we put here a dummy type */
+    snprintf(buf, sizeof(buf), "%s:%c1", 
+             funcname, t & VT_STATIC ? 'f' : 'F');
+    put_stabs(buf, N_FUN, 0, line_num, ind);
+    func_ind = ind;
+    last_ind = 0;
+    last_line_num = 0;
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
@@ -5213,6 +5312,9 @@ void decl(int l)
                 }
                 sym->r = VT_CONST;
                 funcname = get_tok_str(v, NULL);
+                /* put debug symbol */
+                if (do_debug)
+                    put_func_debug(t);
                 /* push a dummy symbol to enable local sym storage */
                 sym_push1(&local_stack, 0, 0, 0);
                 gfunc_prolog(t);
@@ -5224,6 +5326,10 @@ void decl(int l)
                 cur_text_section->data_ptr = (unsigned char *)ind;
                 sym_pop(&label_stack, NULL); /* reset label stack */
                 sym_pop(&local_stack, NULL); /* reset local stack */
+                /* end of function */
+                if (do_debug) {
+                    put_stabn(N_FUN, 0, 0, ind - func_ind);
+                }
                 funcname = ""; /* for safety */
                 func_vt = VT_VOID; /* for safety */
                 break;
@@ -5330,7 +5436,8 @@ void resolve_global_syms(void)
 int tcc_compile_file(const char *filename1)
 {
     Sym *define_start;
-
+    char buf[512];
+    
     line_num = 1;
     funcname = "";
     filename = (char *)filename1;
@@ -5343,7 +5450,18 @@ int tcc_compile_file(const char *filename1)
 
     vtop = vstack - 1;
     anon_sym = SYM_FIRST_ANOM; 
-    
+
+    /* file info: full path + filename */
+    if (do_debug) {
+        getcwd(buf, sizeof(buf));
+        pstrcat(buf, sizeof(buf), "/");
+        put_stabs(buf, N_SO, 0, 0, (unsigned long)text_section->data_ptr);
+        put_stabs(filename, N_SO, 0, 0, (unsigned long)text_section->data_ptr);
+    }
+    /* define common 'char *' type because it is often used internally
+       for arrays and struct dereference */
+    char_pointer_type = mk_pointer(VT_BYTE);
+
     define_start = define_stack.top;
     inp();
     ch = '\n'; /* needed to parse correctly first preprocessor command */
@@ -5352,6 +5470,11 @@ int tcc_compile_file(const char *filename1)
     if (tok != -1)
         expect("declaration");
     fclose(file);
+
+    /* end of translation unit info */
+    if (do_debug) {
+        put_stabn(N_SO, 0, 0, (unsigned long)text_section->data_ptr);
+    }
 
     /* reset define stack, but leave -Dsymbols (may be incorrect if
        they are undefined) */
@@ -5429,6 +5552,17 @@ void open_dll(char *libname)
         error((char *)dlerror());
 }
 
+static void *resolve_sym(const char *sym)
+{
+    void *ptr;
+    if (do_bounds_check) {
+        ptr = bound_resolve_sym(sym);
+        if (ptr)
+            return ptr;
+    }
+    return dlsym(NULL, sym);
+}
+
 void resolve_extern_syms(void)
 {
     Sym *s, *s1;
@@ -5443,7 +5577,7 @@ void resolve_extern_syms(void)
                and patch it */
             if (s->c) {
                 str = get_tok_str(s->v, NULL);
-                addr = (int)dlsym(NULL, str);
+                addr = (int)resolve_sym(str);
                 if (!addr)
                     error("unresolved external reference '%s'", str);
                 greloc_patch(s, addr);
@@ -5453,25 +5587,403 @@ void resolve_extern_syms(void)
     }
 }
 
-/* output a binary file (for testing) */
+static int put_elf_str(Section *s, const char *sym)
+{
+    int c, offset;
+    offset = s->data_ptr - s->data;
+    for(;;) {
+        c = *sym++;
+        *s->data_ptr++ = c;
+        if (c == '\0')
+            break;
+    }
+    return offset;
+}
+
+static void put_elf_sym(Section *s, 
+                       unsigned long value, unsigned long size,
+                       int info, int other, int shndx, const char *name)
+{
+    int name_offset;
+    Elf32_Sym *sym;
+
+    sym = (Elf32_Sym *)s->data_ptr;
+    if (name)
+        name_offset = put_elf_str(s->link, name);
+    else
+        name_offset = 0;
+    sym->st_name = name_offset;
+    sym->st_value = value;
+    sym->st_size = size;
+    sym->st_info = info;
+    sym->st_other = other;
+    sym->st_shndx = shndx;
+    s->data_ptr += sizeof(Elf32_Sym);
+}
+
+/* put stab debug information */
+
+typedef struct {
+    unsigned long n_strx;         /* index into string table of name */
+    unsigned char n_type;         /* type of symbol */
+    unsigned char n_other;        /* misc info (usually empty) */
+    unsigned short n_desc;        /* description field */
+    unsigned long n_value;        /* value of symbol */
+} Stab_Sym;
+
+static void put_stabs(const char *str, int type, int other, int desc, int value)
+{
+    Stab_Sym *sym;
+
+    sym = (Stab_Sym *)stab_section->data_ptr;
+    if (str) {
+        sym->n_strx = put_elf_str(stabstr_section, str);
+    } else {
+        sym->n_strx = 0;
+    }
+    sym->n_type = type;
+    sym->n_other = other;
+    sym->n_desc = desc;
+    sym->n_value = value;
+
+    stab_section->data_ptr += sizeof(Stab_Sym);
+}
+
+static void put_stabn(int type, int other, int desc, int value)
+{
+    put_stabs(NULL, type, other, desc, value);
+}
+
+static void put_stabd(int type, int other, int desc)
+{
+    put_stabs(NULL, type, other, desc, 0);
+}
+
+/* output an ELF file (currently, only for testing) */
 void build_exe(char *filename)
 { 
+    Elf32_Ehdr ehdr;
     FILE *f;
+    int shnum, i, phnum, file_offset, offset, size, j;
+    Section *sec, *strsec;
+    Elf32_Shdr *shdr, *sh;
+    Elf32_Phdr *phdr, *ph;
+
+    memset(&ehdr, 0, sizeof(ehdr));
+
+    /* we add a section for symbols */
+    strsec = new_section(".shstrtab", SHT_STRTAB, 0);
+    put_elf_str(strsec, "");
+    
+    /* count number of sections and compute number of program segments */
+    shnum = 1; /* section index zero is reserved */
+    phnum = 0;
+    for(sec = first_section; sec != NULL; sec = sec->next) {
+        shnum++;
+        if (sec->sh_flags & SHF_ALLOC)
+            phnum++;
+    }
+    /* allocate section headers */
+    shdr = malloc(shnum * sizeof(Elf32_Shdr));
+    if (!shdr)
+        error("memory full");
+    memset(shdr, 0, shnum * sizeof(Elf32_Shdr));
+    /* allocate program segment headers */
+    phdr = malloc(phnum * sizeof(Elf32_Phdr));
+    if (!phdr)
+        error("memory full");
+    memset(phdr, 0, phnum * sizeof(Elf32_Phdr));
+        
+    /* XXX: find correct load order */
+    file_offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
+    for(sec = first_section, i = 1; sec != NULL; sec = sec->next, i++) {
+        sh = &shdr[i];
+        sh->sh_name = put_elf_str(strsec, sec->name);
+        sh->sh_type = sec->sh_type;
+        sh->sh_flags = sec->sh_flags;
+        sh->sh_entsize = sec->sh_entsize;
+        if (sec->link)
+            sh->sh_link = sec->link->sh_num;
+        if (sh->sh_type == SHT_STRTAB) {
+            sh->sh_addralign = 1;
+        } else if (sh->sh_type == SHT_SYMTAB ||
+                   (sh->sh_flags & SHF_ALLOC) == 0) {
+            sh->sh_addralign = 4;
+        } else {
+            sh->sh_addr = (Elf32_Word)sec->data;
+            sh->sh_addralign = 4096;
+        }
+        sh->sh_size = (Elf32_Word)sec->data_ptr - (Elf32_Word)sec->data;
+        /* align to section start */
+        file_offset = (file_offset + sh->sh_addralign - 1) & 
+            ~(sh->sh_addralign - 1);
+        sh->sh_offset = file_offset;
+        file_offset += sh->sh_size;
+    }
+    /* build program headers (simplistic - not fully correct) */
+    j = 0;
+    for(i=1;i<shnum;i++) {
+        sh = &shdr[i];
+        if (sh->sh_type == SHT_PROGBITS &&
+            (sh->sh_flags & SHF_ALLOC) != 0) {
+            ph = &phdr[j++];
+            ph->p_type = PT_LOAD;
+            ph->p_offset = sh->sh_offset;
+            ph->p_vaddr = sh->sh_addr;
+            ph->p_paddr = ph->p_vaddr;
+            ph->p_filesz = sh->sh_size;
+            ph->p_memsz = sh->sh_size;
+            ph->p_flags = PF_R;
+            if (sh->sh_flags & SHF_WRITE)
+                ph->p_flags |= PF_W;
+            if (sh->sh_flags & SHF_EXECINSTR)
+                ph->p_flags |= PF_X;
+            ph->p_align = sh->sh_addralign;
+        }
+    }
+
+    /* align to 4 */
+    file_offset = (file_offset + 3) & -4;
+    
+    /* fill header */
+    ehdr.e_ident[0] = ELFMAG0;
+    ehdr.e_ident[1] = ELFMAG1;
+    ehdr.e_ident[2] = ELFMAG2;
+    ehdr.e_ident[3] = ELFMAG3;
+    ehdr.e_ident[4] = ELFCLASS32;
+    ehdr.e_ident[5] = ELFDATA2LSB;
+    ehdr.e_ident[6] = EV_CURRENT;
+    ehdr.e_type = ET_EXEC;
+    ehdr.e_machine = EM_386;
+    ehdr.e_version = EV_CURRENT;
+    ehdr.e_entry = 0; /* XXX: patch it */
+    ehdr.e_phoff = sizeof(Elf32_Ehdr);
+    ehdr.e_shoff = file_offset;
+    ehdr.e_ehsize = sizeof(Elf32_Ehdr);
+    ehdr.e_phentsize = sizeof(Elf32_Phdr);
+    ehdr.e_phnum = phnum;
+    ehdr.e_shentsize = sizeof(Elf32_Shdr);
+    ehdr.e_shnum = shnum;
+    ehdr.e_shstrndx = shnum - 1;
+    
+    /* write elf file */
     f = fopen(filename, "w");
-    fwrite(text_section->data, 1, text_section->data_ptr - text_section->data, f);
+    if (!f)
+        error("could not write '%s'", filename);
+    fwrite(&ehdr, 1, sizeof(Elf32_Ehdr), f);
+    fwrite(phdr, 1, phnum * sizeof(Elf32_Phdr), f);
+    offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
+    for(sec = first_section, i = 1; sec != NULL; sec = sec->next, i++) {
+        sh = &shdr[i];
+        while (offset < sh->sh_offset) {
+            fputc(0, f);
+            offset++;
+        }
+        size = sec->data_ptr - sec->data;
+        fwrite(sec->data, 1, size, f);
+        offset += size;
+    }
+    while (offset < ehdr.e_shoff) {
+        fputc(0, f);
+        offset++;
+    }
+    fwrite(shdr, 1, shnum * sizeof(Elf32_Shdr), f);
     fclose(f);
 }
+
+/* print the position in the source file of PC value 'pc' by reading
+   the stabs debug information */
+static void rt_printline(unsigned long wanted_pc)
+{
+    Stab_Sym *sym, *sym_end;
+    char func_name[128];
+    unsigned long func_addr, last_pc, pc;
+    const char *incl_files[INCLUDE_STACK_SIZE];
+    int incl_index, len, last_line_num, i;
+    const char *str, *p;
+
+    func_name[0] = '\0';
+    func_addr = 0;
+    incl_index = 0;
+    last_pc = 0xffffffff;
+    last_line_num = 1;
+    sym = (Stab_Sym *)stab_section->data + 1;
+    sym_end = (Stab_Sym *)stab_section->data_ptr;
+    while (sym < sym_end) {
+        switch(sym->n_type) {
+            /* function start or end */
+        case N_FUN:
+            if (sym->n_strx == 0) {
+                func_name[0] = '\0';
+                func_addr = 0;
+            } else {
+                str = stabstr_section->data + sym->n_strx;
+                p = strchr(str, ':');
+                if (!p) {
+                    pstrcpy(func_name, sizeof(func_name), str);
+                } else {
+                    len = p - str;
+                    if (len > sizeof(func_name) - 1)
+                        len = sizeof(func_name) - 1;
+                    memcpy(func_name, str, len);
+                    func_name[len] = '\0';
+                }
+                func_addr = sym->n_value;
+            }
+            break;
+            /* line number info */
+        case N_SLINE:
+            pc = sym->n_value + func_addr;
+            if (wanted_pc >= last_pc && wanted_pc < pc)
+                goto found;
+            last_pc = pc;
+            last_line_num = sym->n_desc;
+            break;
+            /* include files */
+        case N_BINCL:
+            str = stabstr_section->data + sym->n_strx;
+        add_incl:
+            if (incl_index < INCLUDE_STACK_SIZE) {
+                incl_files[incl_index++] = str;
+            }
+            break;
+        case N_EINCL:
+            if (incl_index > 1)
+                incl_index--;
+            break;
+        case N_SO:
+            if (sym->n_strx == 0) {
+                incl_index = 0; /* end of translation unit */
+            } else {
+                str = stabstr_section->data + sym->n_strx;
+                /* do not add path */
+                len = strlen(str);
+                if (len > 0 && str[len - 1] != '/')
+                    goto add_incl;
+            }
+            break;
+        }
+        sym++;
+    }
+    /* did not find line number info: */
+    fprintf(stderr, "(no debug info, pc=0x%08lx) ", wanted_pc);
+    return;
+ found:
+    for(i = 0; i < incl_index - 1; i++)
+        fprintf(stderr, "In file included from %s\n", 
+                incl_files[i]);
+    if (incl_index > 0) {
+        fprintf(stderr, "%s:%d: ", 
+                incl_files[incl_index - 1], last_line_num);
+    }
+    if (func_name[0] != '\0') {
+        fprintf(stderr, "in function '%s()': ", func_name);
+    }
+}
+
+
+/* signal handler for fatal errors */
+static void sig_error(int signum, siginfo_t *siginf, void *puc)
+{
+    struct ucontext *uc = puc;
+    unsigned long pc;
+
+#ifdef __i386__
+    pc = uc->uc_mcontext.gregs[14];
+#else
+#error please put the right sigcontext field    
+#endif
+
+    rt_printline(pc);
+
+    switch(signum) {
+    case SIGFPE:
+        switch(siginf->si_code) {
+        case FPE_INTDIV:
+        case FPE_FLTDIV:
+            fprintf(stderr, "division by zero\n");
+            break;
+        default:
+            fprintf(stderr, "floating point exception\n");
+            break;
+        }
+        break;
+    case SIGBUS:
+    case SIGSEGV:
+        fprintf(stderr, "dereferencing invalid pointer\n");
+        break;
+    case SIGILL:
+        fprintf(stderr, "illegal instruction\n");
+        break;
+    case SIGABRT:
+        fprintf(stderr, "abort() called\n");
+        break;
+    default:
+        fprintf(stderr, "signal %d\n", signum);
+        break;
+    }
+    exit(255);
+}
+
+/* launch the compiled program with the given arguments */
+int launch_exe(int argc, char **argv)
+{
+    Sym *s;
+    int (*t)();
+    struct sigaction sigact;
+
+    s = sym_find1(&extern_stack, TOK_MAIN);
+    if (!s || (s->r & VT_FORWARD))
+        error("main() not defined");
+    
+    if (do_debug) {
+        /* install TCC signal handlers to print debug info on fatal
+           runtime errors */
+        sigact.sa_flags = SA_SIGINFO | SA_ONESHOT;
+        sigact.sa_sigaction = sig_error;
+        sigemptyset(&sigact.sa_mask);
+        sigaction(SIGFPE, &sigact, NULL);
+        sigaction(SIGILL, &sigact, NULL);
+        sigaction(SIGSEGV, &sigact, NULL);
+        sigaction(SIGBUS, &sigact, NULL);
+        sigaction(SIGABRT, &sigact, NULL);
+    }
+
+    if (do_bounds_check) {
+        int *p, *p_end;
+        __bound_init();
+        /* add all known static regions */
+        p = (int *)bounds_section->data;
+        p_end = (int *)bounds_section->data_ptr;
+        while (p < p_end) {
+            __bound_new_region((void *)p[0], p[1]);
+            p += 2;
+        }
+    }
+
+    t = (int (*)())s->c;
+    return (*t)(argc, argv);
+}
+
 
 void help(void)
 {
     printf("tcc version 0.9.3 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
-           "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-i infile] infile [infile_args...]\n");
+           "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]\n"
+           "           [-i infile] infile [infile_args...]\n"
+           "\n"
+           "-Idir        : add include path 'dir'\n"
+           "-Dsym[=val]  : define 'sym' with value 'val'\n"
+           "-Usym        : undefine 'sym'\n"
+           "-llib        : link with dynamic library 'lib'\n"
+           "-g           : generate debug info\n"
+           "-b           : compile with built-in memory and bounds checker (implies -g)\n"
+           "-i infile    : compile infile\n"
+           );
 }
 
 int main(int argc, char **argv)
 {
-    Sym *s;
-    int (*t)();
     char *p, *r, *outfile;
     int optind;
 
@@ -5499,9 +6011,10 @@ int main(int argc, char **argv)
     define_symbol("__TINYC__");
     
     /* create standard sections */
-    text_section = new_section(".text");
-    data_section = new_section(".data");
-    bss_section = new_section(".bss");
+    text_section = new_section(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    /* XXX: should change type to SHT_NOBITS */
+    bss_section = new_section(".bss", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
 
     optind = 1;
     outfile = NULL;
@@ -5529,6 +6042,37 @@ int main(int argc, char **argv)
             if (optind >= argc)
                 goto show_help;
             tcc_compile_file(argv[optind++]);
+        } else if (r[1] == 'b') {
+            if (!do_bounds_check) {
+                do_bounds_check = 1;
+                /* create bounds section for global data */
+                bounds_section = new_section(".bounds", 
+                                             SHT_PROGBITS, SHF_ALLOC);
+                /* debug is implied */
+                goto debug_opt;
+            }
+        } else if (r[1] == 'g') {
+        debug_opt:
+            if (!do_debug) {
+                do_debug = 1;
+
+                /* stab symbols */
+                stab_section = new_section(".stab", SHT_PROGBITS, 0);
+                stab_section->sh_entsize = sizeof(Stab_Sym);
+                stabstr_section = new_section(".stabstr", SHT_STRTAB, 0);
+                put_elf_str(stabstr_section, "");
+                stab_section->link = stabstr_section;
+                /* put first entry */
+                put_stabs("", 0, 0, 0, 0);
+                
+                /* elf symbols */
+                symtab_section = new_section(".symtab", SHT_SYMTAB, 0);
+                symtab_section->sh_entsize = sizeof(Elf32_Sym);
+                strtab_section = new_section(".strtab", SHT_STRTAB, 0);
+                put_elf_str(strtab_section, "");
+                symtab_section->link = strtab_section;
+                put_elf_sym(symtab_section, 0, 0, 0, 0, 0, NULL);
+            }
         } else if (r[1] == 'o') {
             /* currently, only for testing, so not documented */
             if (optind >= argc)
@@ -5548,10 +6092,6 @@ int main(int argc, char **argv)
         build_exe(outfile);
         return 0;
     } else {
-        s = sym_find1(&extern_stack, TOK_MAIN);
-        if (!s || (s->r & VT_FORWARD))
-            error("main() not defined");
-        t = (int (*)())s->c;
-        return (*t)(argc - optind, argv + optind);
+        return launch_exe(argc - optind, argv + optind);
     }
 }
