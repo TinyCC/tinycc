@@ -18,8 +18,8 @@
 */
 int tok, *vac, *vat, *lsym, rsym, 
     prog, ind, loc, glo, file, vt, 
-    vc, *macro_stack, *macro_stack_ptr;
-char *idtable, *idptr, *idlast;
+    vc, *macro_stack, *macro_stack_ptr, line_num;
+char *idtable, *idptr, *idlast, *filename;
 
 /* The current value can be: */
 #define VT_CONST   0x0002  /* constant in vc */
@@ -95,18 +95,6 @@ char *idtable, *idptr, *idlast;
 #define expr_eq() expr()
 #endif
 
-#ifdef TEST
-void error(char *msg)
-{
-    printf("%d: %s\n", ftell(file), msg);
-    exit(1);
-}
-void warning(char *msg)
-{
-    printf("%d: warning: %s\n", ftell(file), msg);
-}
-#endif
-
 int inp()
 {
 #if 0
@@ -131,17 +119,39 @@ int isnum(c)
     return c >= '0' & c <= '9';
 }
 
-#ifdef TEST
+#ifndef TINY
+/* XXX: use stderr ? */
+void error(char *msg)
+{
+    printf("%s:%d: %s\n", filename, line_num, msg);
+    exit(1);
+}
+
+void warning(char *msg)
+{
+    printf("%s:%d: warning: %s\n", filename, line_num, msg);
+}
+
 void skip(c)
 {
     if (tok != c) {
-        fprintf(stderr, "%d: '%c' expected\n", ftell(file), c);
+        printf("%s:%d: '%c' expected\n", filename, line_num, c);
         exit(1);
     }
     next();
 }
+
+void test_lvalue()
+{
+    if (!(vt & VT_LVAL))
+        error("lvalue expected\n");
+}
+
 #else
+
 #define skip(c) next()
+#define test_lvalue() 
+
 #endif
 
 void next()
@@ -151,6 +161,34 @@ void next()
 
     while(1) {
         c = inp();
+#ifndef TINY
+        if (c == '/') {
+            /* comments */
+            c = inp();
+            if (c == '/') {
+                /* single line comments */
+                while (c != '\n')
+                    c = inp();
+            } else if (c == '*') {
+                /* comments */
+                while ((c = inp()) >= 0) {
+                    if (c == '*') {
+                        c = inp();
+                        if (c == '/') {
+                            c = ' ';
+                            break;
+                        } else if (c == '*')
+                            ungetc(c, file);
+                    } else if (c == '\n')
+                        line_num++;
+                }
+            } else {
+                ungetc(c, file);
+                c = '/';
+                break;
+            }
+        } else
+#endif
         if (c == 35) {
             /* preprocessor: we handle only define */
             next();
@@ -163,11 +201,14 @@ void next()
             /* ignore preprocessor or shell */
             while (c != '\n')
                 c = inp();
-        } else if (c == '\n') {
+        }
+        if (c == '\n') {
             /* end of line : check if we are in macro state. if so,
                pop new file position */
             if (macro_stack_ptr > macro_stack)
                 fseek(file, *--macro_stack_ptr, 0);
+            else
+                line_num++;
         } else if (c != ' ' & c != 9)
             break;
     }
@@ -357,10 +398,7 @@ int type_size(t)
 /* a defines POST/PRE add. c is the token ++ or -- */
 void inc(a, c)
 {
-#ifdef TEST
-    if (!(vt & VT_LVAL))
-        error("lvalue expected\n");
-#endif
+    test_lvalue();
     vt = vt & VT_LVALN;
     gv();
     o(0x018bc189); /* movl %eax, %ecx ; mov (%ecx), %eax */
@@ -493,12 +531,27 @@ int typ(v,t)
 /* read a number in base b */
 int getn(c, b)
 {
-    int n;
+    int n, t;
     n = 0;
+#ifndef TINY
+    while (1) {
+        if (c >= 'a')
+            t = c - 'a' + 10;
+        else if (c >= 'A')
+            t = c - 'A' + 10;
+        else
+            t = c - '0';
+        if (t < 0 | t >= b)
+            break;
+        n = n * b + t;
+        c = inp();
+    }
+#else
     while (isnum(c)) {
         n = n * b + c - '0';
         c = inp();
     }
+#endif
     ungetc(c, file);
     return n;
 }
@@ -527,7 +580,20 @@ void unary()
 
     if (isnum(tok)) {
         /* number */
+#ifndef TINY
+        t = 10;
+        if (tok == '0') {
+            t = 8;
+            tok = inp();
+            if (tok == 'x') {
+                t = 16;
+                tok = inp();
+            }
+        }
+        vset(VT_CONST, getn(tok, t));
+#else
         vset(VT_CONST, getn(tok, 10));
+#endif
         next();
     } else 
 #ifndef TINY
@@ -566,17 +632,14 @@ void unary()
             unary();
             if (vt & VT_LVAL)
                 gv();
-#ifdef TEST
+#ifndef TINY
             if (!(vt & VT_PTRMASK))
                 error("pointer expected");
 #endif
             vt = (vt - VT_PTRINC) | VT_LVAL;
         } else if (t == '&') {
             unary();
-#ifdef TEST
-            if (!(vt & VT_LVAL))
-                error("lvalue expected");
-#endif        
+            test_lvalue();
             vt = (vt & VT_LVALN) + VT_PTRINC;
         } else
 #ifndef TINY
@@ -631,7 +694,7 @@ void unary()
         next();
     } else 
     if (tok == '[') {
-#ifdef TEST
+#ifndef TINY
         if (!(vt & VT_PTRMASK))
             error("pointer expected");
 #endif
@@ -698,10 +761,7 @@ void uneq()
     
     unary();
     if (tok == '=') {
-#ifdef TEST
-        if (!(vt & VT_LVAL))
-            error("lvalue expected");
-#endif
+        test_lvalue();
         next();
         fc = vc;
         ft = vt;
@@ -709,7 +769,7 @@ void uneq()
         if (ft & VT_VAR)
             o(0x50); /* push %eax */
         expr_eq();
-#ifdef TEST
+#ifndef TINY
         if ((vt & VT_PTRMASK) != (ft & VT_PTRMASK))
             warning("incompatible type");
 #endif
@@ -968,7 +1028,14 @@ int main(int c, char **v)
         return 1;
     }
     v++;
-    file = fopen(*v, "r");
+    filename = *v;
+    file = fopen(filename, "r");
+#ifndef TINY
+    if (!file) {
+        perror(filename);
+        exit(1);
+    }
+#endif
 
     idtable = malloc(SYM_TABLE_SIZE);
 #ifdef TINY
@@ -988,6 +1055,7 @@ int main(int c, char **v)
     macro_stack = malloc(256);
     macro_stack_ptr = macro_stack;
     ind = prog;
+    line_num = 1;
     next();
     decl(VT_CONST);
 #ifdef TEST
@@ -1000,6 +1068,8 @@ int main(int c, char **v)
     }
 #else
     t = vac[TOK_MAIN];
+    if (!t)
+        error("main() not defined");
     return (*t)(c - 1, v);
 #endif
 }
