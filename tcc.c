@@ -32,11 +32,6 @@
 /* preprocessor debug */
 //#define PP_DEBUG
 
-/* these sizes are dummy for unix, because malloc() does not use
-   memory when the pages are not used */
-#define TEXT_SIZE           (4*1024*1024)
-#define DATA_SIZE           (4*1024*1024)
-
 /* amount of virtual memory associate to a section (currently, we do
    not realloc them) */
 #define SECTION_VSIZE       (1024 * 1024)
@@ -398,6 +393,8 @@ void gen_op(int op);
 void force_charshort_cast(int t);
 void gen_cast(int t);
 void vstore(void);
+Sym *sym_find(int v);
+Sym *sym_push(int v, int t, int r, int c);
 
 /* type handling */
 int type_size(int t, int *a);
@@ -546,7 +543,7 @@ unsigned long long __ldtoull(long double a)
 
 /********************************************************/
 
-/* copy a string and trucate it */
+/* copy a string and truncate it */
 char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
@@ -561,6 +558,16 @@ char *pstrcpy(char *buf, int buf_size, const char *s)
         *q++ = c;
     }
     *q = '\0';
+    return buf;
+}
+
+/* strcat and truncate */
+char *pstrcat(char *buf, int buf_size, const char *s)
+{
+    int len;
+    len = strlen(buf);
+    if (len < buf_size) 
+        pstrcpy(buf + len, buf_size - len, s);
     return buf;
 }
 
@@ -1235,8 +1242,7 @@ void preprocess(void)
             next();
             if (tok != TOK_STR)
                 error("#include syntax error");
-            /* XXX: buffer overflow */
-            strcpy(buf, get_tok_str(tok, &tokc));
+            pstrcpy(buf, sizeof(buf), get_tok_str(tok, &tokc));
             c = '\"';
         }
         /* eat all spaces and comments after include */
@@ -1248,14 +1254,15 @@ void preprocess(void)
             error("memory full");
         if (c == '\"') {
             /* first search in current dir if "header.h" */
-            /* XXX: buffer overflow */
             size = 0;
             p = strrchr(filename, '/');
             if (p) 
                 size = p + 1 - filename;
+            if (size > sizeof(buf1) - 1)
+                size = sizeof(buf1) - 1;
             memcpy(buf1, filename, size);
             buf1[size] = '\0';
-            strcat(buf1, buf);
+            pstrcat(buf1, sizeof(buf1), buf);
             f = fopen(buf1, "r");
             if (f)
                 goto found;
@@ -1850,13 +1857,12 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
             if (s) {
                 token_buf[0] = '\0';
                 st = (int *)s->c;
-                /* XXX: buffer overflow */
                 notfirst = 0;
                 while (*st) {
                     if (notfirst)
-                        strcat(token_buf, " ");
+                        pstrcat(token_buf, sizeof(token_buf), " ");
                     t = tok_get(&st, &cval);
-                    strcat(token_buf, get_tok_str(t, &cval));
+                    pstrcat(token_buf, sizeof(token_buf), get_tok_str(t, &cval));
                     notfirst = 1;
                 }
 #ifdef PP_DEBUG
@@ -1918,11 +1924,10 @@ int *macro_twosharps(int *macro_str)
                    ident + ident or ident + number */
                 if (tok >= TOK_IDENT && 
                     (t >= TOK_IDENT || t == TOK_CINT)) {
-                    /* XXX: buffer overflow */
                     p = get_tok_str(tok, &tokc);
-                    strcpy(token_buf, p);
+                    pstrcpy(token_buf, sizeof(token_buf), p);
                     p = get_tok_str(t, &cval);
-                    strcat(token_buf, p);
+                    pstrcat(token_buf, sizeof(token_buf), p);
                     ts = tok_alloc(token_buf, 0);
                     tok = ts->tok; /* modify current token */
                 } else {
@@ -3241,87 +3246,90 @@ int is_compatible_types(int t1, int t2)
    printed in the type */
 /* XXX: union */
 /* XXX: add array and function pointers */
-/* XXX: buffer overflows */
 void type_to_str(char *buf, int buf_size, 
                  int t, const char *varstr)
 {
     int bt, v;
     Sym *s, *sa;
     char buf1[256];
+    const char *tstr;
 
     t = t & VT_TYPE;
     bt = t & VT_BTYPE;
     buf[0] = '\0';
     if (t & VT_UNSIGNED)
-        strcat(buf, "unsigned ");
+        pstrcat(buf, buf_size, "unsigned ");
     switch(bt) {
     case VT_VOID:
-        strcat(buf, "void");
-        break;
+        tstr = "void";
+        goto add_tstr;
     case VT_BOOL:
-        strcat(buf, "_Bool");
-        break;
+        tstr = "_Bool";
+        goto add_tstr;
     case VT_BYTE:
-        strcat(buf, "char");
-        break;
+        tstr = "char";
+        goto add_tstr;
     case VT_SHORT:
-        strcat(buf, "short");
-        break;
+        tstr = "short";
+        goto add_tstr;
     case VT_INT:
-        strcat(buf, "int");
-        break;
+        tstr = "int";
+        goto add_tstr;
     case VT_LONG:
-        strcat(buf, "long");
-        break;
+        tstr = "long";
+        goto add_tstr;
     case VT_LLONG:
-        strcat(buf, "long long");
-        break;
+        tstr = "long long";
+        goto add_tstr;
     case VT_FLOAT:
-        strcat(buf, "float");
-        break;
+        tstr = "float";
+        goto add_tstr;
     case VT_DOUBLE:
-        strcat(buf, "double");
-        break;
+        tstr = "double";
+        goto add_tstr;
     case VT_LDOUBLE:
-        strcat(buf, "long double");
+        tstr = "long double";
+    add_tstr:
+        pstrcat(buf, buf_size, tstr);
         break;
     case VT_ENUM:
     case VT_STRUCT:
         if (bt == VT_STRUCT)
-            strcat(buf, "struct ");
+            tstr = "struct ";
         else
-            strcat(buf, "enum ");
+            tstr = "enum ";
+        pstrcat(buf, buf_size, tstr);
         v = (unsigned)t >> VT_STRUCT_SHIFT;
         if (v >= SYM_FIRST_ANOM)
-            strcat(buf, "<anonymous>");
+            pstrcat(buf, buf_size, "<anonymous>");
         else
-            strcat(buf, get_tok_str(v, NULL));
+            pstrcat(buf, buf_size, get_tok_str(v, NULL));
         break;
     case VT_FUNC:
         s = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
         type_to_str(buf, buf_size, s->t, varstr);
-        strcat(buf, "(");
+        pstrcat(buf, buf_size, "(");
         sa = s->next;
         while (sa != NULL) {
             type_to_str(buf1, sizeof(buf1), sa->t, NULL);
-            strcat(buf, buf1);
+            pstrcat(buf, buf_size, buf1);
             sa = sa->next;
             if (sa)
-                strcat(buf, ", ");
+                pstrcat(buf, buf_size, ", ");
         }
-        strcat(buf, ")");
+        pstrcat(buf, buf_size, ")");
         goto no_var;
     case VT_PTR:
         s = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
-        strcpy(buf1, "*");
+        pstrcpy(buf1, sizeof(buf1), "*");
         if (varstr)
-            strcat(buf1, varstr);
+            pstrcat(buf1, sizeof(buf1), varstr);
         type_to_str(buf, buf_size, s->t, buf1);
         goto no_var;
     }
     if (varstr) {
-        strcat(buf, " ");
-        strcat(buf, varstr);
+        pstrcat(buf, buf_size, " ");
+        pstrcat(buf, buf_size, varstr);
     }
  no_var: ;
 }
@@ -5147,7 +5155,7 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(int l)
 {
-    int *a, t, b, v, addr, has_init, size, align, r, u;
+    int t, b, v, addr, has_init, r;
     Sym *sym;
     AttributeDef ad;
 
@@ -5207,41 +5215,12 @@ void decl(int l)
                 funcname = get_tok_str(v, NULL);
                 /* push a dummy symbol to enable local sym storage */
                 sym_push1(&local_stack, 0, 0, 0);
-                /* define parameters */
-                sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
-                /* XXX: the following is x86 dependant -> move it to
-                   x86 code gen */
-                addr = 8;
-                /* if the function returns a structure, then add an
-                   implicit pointer parameter */
-                func_vt = sym->t;
-                if ((func_vt & VT_BTYPE) == VT_STRUCT) {
-                    func_vc = addr;
-                    addr += 4;
-                }
-                while ((sym = sym->next) != NULL) {
-                    u = sym->t;
-                    sym_push(sym->v & ~SYM_FIELD, u,
-                             VT_LOCAL | VT_LVAL, addr);
-                    size = type_size(u, &align);
-                    size = (size + 3) & ~3;
-#ifdef FUNC_STRUCT_PARAM_AS_PTR
-                    /* structs are passed as pointer */
-                    if ((u & VT_BTYPE) == VT_STRUCT) {
-                        size = 4;
-                    }
-#endif
-                    addr += size;
-                }
+                gfunc_prolog(t);
                 loc = 0;
-                o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
-                a = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
                 rsym = 0;
                 block(NULL, NULL, NULL, NULL, 0);
                 gsym(rsym);
-                o(0xc3c9); /* leave, ret */
-                *a = (-loc + 3) & -4; /* align local size to word & 
-                                         save local variables */
+                gfunc_epilog();
                 cur_text_section->data_ptr = (unsigned char *)ind;
                 sym_pop(&label_stack, NULL); /* reset label stack */
                 sym_pop(&local_stack, NULL); /* reset local stack */
@@ -5398,8 +5377,7 @@ void define_symbol(const char *sym)
 
     p = strchr(sym, '=');
     if (!p) {
-        /* XXX: buffer overflow */
-        strcpy(buf, sym);
+        pstrcpy(buf, sizeof(buf), sym);
         p = "1";
     } else {
         len = p - sym;

@@ -72,6 +72,8 @@ typedef struct GFuncContext {
 
 /******************************************************/
 
+static int *func_sub_sp_ptr;
+
 void g(int c)
 {
     *(char *)ind++ = c;
@@ -353,6 +355,48 @@ void gfunc_call(GFuncContext *c)
     if (c->args_size)
         oad(0xc481, c->args_size); /* add $xxx, %esp */
     vtop--;
+}
+
+/* generate function prolog of type 't' */
+void gfunc_prolog(int t)
+{
+    int addr, align, size, u;
+    Sym *sym;
+
+    sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
+    addr = 8;
+    /* if the function returns a structure, then add an
+       implicit pointer parameter */
+    func_vt = sym->t;
+    if ((func_vt & VT_BTYPE) == VT_STRUCT) {
+        func_vc = addr;
+        addr += 4;
+    }
+    /* define parameters */
+    while ((sym = sym->next) != NULL) {
+        u = sym->t;
+        sym_push(sym->v & ~SYM_FIELD, u,
+                 VT_LOCAL | VT_LVAL, addr);
+        size = type_size(u, &align);
+        size = (size + 3) & ~3;
+#ifdef FUNC_STRUCT_PARAM_AS_PTR
+        /* structs are passed as pointer */
+        if ((u & VT_BTYPE) == VT_STRUCT) {
+            size = 4;
+        }
+#endif
+        addr += size;
+    }
+    o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
+    func_sub_sp_ptr = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
+}
+
+/* generate function epilog */
+void gfunc_epilog(void)
+{
+    o(0xc3c9); /* leave, ret */
+    *func_sub_sp_ptr = (-loc + 3) & -4; /* align local size to word & 
+                                           save local variables */
 }
 
 int gjmp(int t)
