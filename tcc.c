@@ -80,6 +80,9 @@
 
 #define TOK_HASH_SIZE       2048 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
+#define TOK_STR_ALLOC_INCR_BITS 6
+#define TOK_STR_ALLOC_INCR (1 << TOK_STR_ALLOC_INCR_BITS)
+#define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -238,6 +241,7 @@ typedef struct ParseState {
 typedef struct TokenString {
     int *str;
     int len;
+    int allocated_len;
     int last_line_num;
 } TokenString;
 
@@ -1115,26 +1119,11 @@ void test_lvalue(void)
         expect("lvalue");
 }
 
-TokenSym *tok_alloc(const char *str, int len)
+/* allocate a new token */
+static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
 {
-    TokenSym *ts, **pts, **ptable;
+    TokenSym *ts, **ptable;
     int i;
-    unsigned int h;
-    
-    h = 1;
-    for(i=0;i<len;i++)
-        h = h * 263 +  ((unsigned char *)str)[i];
-    h &= (TOK_HASH_SIZE - 1);
-
-    pts = &hash_ident[h];
-    while (1) {
-        ts = *pts;
-        if (!ts)
-            break;
-        if (ts->len == len && !memcmp(ts->str, str, len))
-            return ts;
-        pts = &(ts->hash_next);
-    }
 
     if (tok_ident >= SYM_FIRST_ANOM) 
         error("memory full");
@@ -1161,6 +1150,33 @@ TokenSym *tok_alloc(const char *str, int len)
     ts->str[len] = '\0';
     *pts = ts;
     return ts;
+}
+
+#define TOK_HASH_INIT 1
+#define TOK_HASH_FUNC(h, c) ((h) * 263 + (c))
+
+/* find a token and add it if not found */
+static TokenSym *tok_alloc(const char *str, int len)
+{
+    TokenSym *ts, **pts;
+    int i;
+    unsigned int h;
+    
+    h = TOK_HASH_INIT;
+    for(i=0;i<len;i++)
+        h = TOK_HASH_FUNC(h, ((unsigned char *)str)[i]);
+    h &= (TOK_HASH_SIZE - 1);
+
+    pts = &hash_ident[h];
+    for(;;) {
+        ts = *pts;
+        if (!ts)
+            break;
+        if (ts->len == len && !memcmp(ts->str, str, len))
+            return ts;
+        pts = &(ts->hash_next);
+    }
+    return tok_alloc_new(pts, str, len);
 }
 
 /* CString handling */
@@ -1904,6 +1920,7 @@ static inline void tok_str_new(TokenString *s)
 {
     s->str = NULL;
     s->len = 0;
+    s->allocated_len = 0;
     s->last_line_num = -1;
 }
 
@@ -1915,19 +1932,56 @@ static void tok_str_free(int *str)
 
     p = str;
     for(;;) {
-        t = *p++;
+        t = *p;
+        /* NOTE: we test zero separately so that GCC can generate a
+           table for the following switch */
         if (t == 0)
             break;
-        if (t == TOK_STR || t == TOK_LSTR || t == TOK_PPNUM) {
+        switch(t) {
+        case TOK_CINT:
+        case TOK_CUINT:
+        case TOK_CCHAR:
+        case TOK_LCHAR:
+        case TOK_CFLOAT:
+        case TOK_LINENUM:
+            p += 2;
+            break;
+        case TOK_PPNUM:
+        case TOK_STR:
+        case TOK_LSTR:
             /* XXX: use a macro to be portable on 64 bit ? */
-            cstr = (CString *)(*p++);
+            cstr = (CString *)p[1];
             cstr_free(cstr);
             tcc_free(cstr);
-        } else {
-            p += tok_ext_size(t);
+            p += 2;
+            break;
+        case TOK_CDOUBLE:
+        case TOK_CLLONG:
+        case TOK_CULLONG:
+            p += 3;
+            break;
+        case TOK_CLDOUBLE:
+            p += 1 + (LDOUBLE_SIZE / 4);
+            break;
+        default:
+            p++;
+            break;
         }
     }
     tcc_free(str);
+}
+
+static int *tok_str_realloc(TokenString *s)
+{
+    int *str, len;
+
+    len = s->allocated_len + TOK_STR_ALLOC_INCR;
+    str = tcc_realloc(s->str, len * sizeof(int));
+    if (!str)
+        error("memory full");
+    s->allocated_len = len;
+    s->str = str;
+    return str;
 }
 
 static void tok_str_add(TokenString *s, int t)
@@ -1936,31 +1990,56 @@ static void tok_str_add(TokenString *s, int t)
 
     len = s->len;
     str = s->str;
-    if ((len & 63) == 0) {
-        str = tcc_realloc(str, (len + 64) * sizeof(int));
-        if (!str)
-            return;
-        s->str = str;
-    }
+    if (len >= s->allocated_len)
+        str = tok_str_realloc(s);
     str[len++] = t;
     s->len = len;
 }
 
 static void tok_str_add2(TokenString *s, int t, CValue *cv)
 {
-    int n, i;
-    CValue cv1;
+    int len, *str;
 
-    tok_str_add(s, t);
-    if (t == TOK_STR || t == TOK_LSTR || t == TOK_PPNUM) {
-        /* special case: need to duplicate string */
-        cv1.cstr = cstr_dup(cv->cstr);
-        tok_str_add(s, cv1.tab[0]);
-    } else {
-        n = tok_ext_size(t);
-        for(i=0;i<n;i++)
-            tok_str_add(s, cv->tab[i]);
+    len = s->len;
+    str = s->str;
+
+    /* allocate space for worst case */
+    if (len + TOK_MAX_SIZE > s->allocated_len)
+        str = tok_str_realloc(s);
+    str[len++] = t;
+    switch(t) {
+    case TOK_CINT:
+    case TOK_CUINT:
+    case TOK_CCHAR:
+    case TOK_LCHAR:
+    case TOK_CFLOAT:
+    case TOK_LINENUM:
+        str[len++] = cv->tab[0];
+        break;
+    case TOK_PPNUM:
+    case TOK_STR:
+    case TOK_LSTR:
+        str[len++] = (int)cstr_dup(cv->cstr);
+        break;
+    case TOK_CDOUBLE:
+    case TOK_CLLONG:
+    case TOK_CULLONG:
+        str[len++] = cv->tab[0];
+        str[len++] = cv->tab[1];
+        break;
+    case TOK_CLDOUBLE:
+#if LDOUBLE_SIZE == 12
+        str[len++] = cv->tab[0];
+        str[len++] = cv->tab[1];
+        str[len++] = cv->tab[2];
+#else
+#error add long double size support
+#endif
+        break;
+    default:
+        break;
     }
+    s->len = len;
 }
 
 /* add the current parse token in token string 's' */
@@ -1977,18 +2056,47 @@ static void tok_str_add_tok(TokenString *s)
     tok_str_add2(s, tok, &tokc);
 }
 
-/* get a token from an integer array and increment pointer accordingly */
-static int tok_get(int **tok_str, CValue *cv)
-{
-    int *p, t, n, i;
+#if LDOUBLE_SIZE == 12
+#define LDOUBLE_GET(p, cv)                      \
+        cv.tab[0] = p[0];                       \
+        cv.tab[1] = p[1];                       \
+        cv.tab[2] = p[2];
+#else
+#error add long double size support
+#endif
 
-    p = *tok_str;
-    t = *p++;
-    n = tok_ext_size(t);
-    for(i=0;i<n;i++)
-        cv->tab[i] = *p++;
-    *tok_str = p;
-    return t;
+
+/* get a token from an integer array and increment pointer
+   accordingly. we code it as a macro to avoid pointer aliasing. */
+#define TOK_GET(t, p, cv)                       \
+{                                               \
+    t = *p++;                                   \
+    switch(t) {                                 \
+    case TOK_CINT:                              \
+    case TOK_CUINT:                             \
+    case TOK_CCHAR:                             \
+    case TOK_LCHAR:                             \
+    case TOK_CFLOAT:                            \
+    case TOK_LINENUM:                           \
+    case TOK_STR:                               \
+    case TOK_LSTR:                              \
+    case TOK_PPNUM:                             \
+        cv.tab[0] = *p++;                       \
+        break;                                  \
+    case TOK_CDOUBLE:                           \
+    case TOK_CLLONG:                            \
+    case TOK_CULLONG:                           \
+        cv.tab[0] = p[0];                       \
+        cv.tab[1] = p[1];                       \
+        p += 2;                                 \
+        break;                                  \
+    case TOK_CLDOUBLE:                          \
+        LDOUBLE_GET(p, cv);                     \
+        p += LDOUBLE_SIZE / 4;                  \
+        break;                                  \
+    default:                                    \
+        break;                                  \
+    }                                           \
 }
 
 /* defines handling */
@@ -2059,7 +2167,7 @@ static Sym *label_push(int v, int flags)
 }
 
 /* eval an expression for #if/#elif */
-int expr_preprocess(void)
+static int expr_preprocess(void)
 {
     int c, t;
     TokenString str;
@@ -2096,13 +2204,13 @@ int expr_preprocess(void)
 }
 
 #if defined(PARSE_DEBUG) || defined(PP_DEBUG)
-void tok_print(int *str)
+static void tok_print(int *str)
 {
     int t;
     CValue cval;
 
     while (1) {
-        t = tok_get(&str, &cval);
+        TOK_GET(t, str, cval);
         if (!t)
             break;
         printf(" %s", get_tok_str(t, &cval));
@@ -2876,6 +2984,7 @@ static inline void next_nomacro1(void)
     int b, t, c;
     TokenSym *ts;
     uint8_t *p, *p1;
+    unsigned int h;
 
     p = file->buf_ptr;
  redo_no_start:
@@ -2944,10 +3053,10 @@ static inline void next_nomacro1(void)
         break;
 
     case '\n':
-        file->line_num++;
         if (return_linefeed) {
             tok = TOK_LINEFEED;
         } else {
+            file->line_num++;
             tok_flags |= TOK_FLAG_BOL;
             p++;
             goto redo_no_start;
@@ -2989,16 +3098,35 @@ static inline void next_nomacro1(void)
     case '_':
     parse_ident_fast:
         p1 = p;
+        h = TOK_HASH_INIT;
+        h = TOK_HASH_FUNC(h, c);
         p++;
         for(;;) {
             c = *p;
             if (!isid(c) && !isnum(c))
                 break;
+            h = TOK_HASH_FUNC(h, c);
             p++;
         }
         if (c != '\\') {
-            /* fast case : no stray found, so we have the full token */
-            ts = tok_alloc(p1, p - p1);
+            TokenSym **pts;
+            int len;
+
+            /* fast case : no stray found, so we have the full token
+               and we have already hashed it */
+            len = p - p1;
+            h &= (TOK_HASH_SIZE - 1);
+            pts = &hash_ident[h];
+            for(;;) {
+                ts = *pts;
+                if (!ts)
+                    break;
+                if (ts->len == len && !memcmp(ts->str, p1, len))
+                    goto token_found;
+                pts = &(ts->hash_next);
+            }
+            ts = tok_alloc_new(pts, p1, len);
+        token_found: ;
         } else {
             /* slower case */
             cstr_reset(&tokcstr);
@@ -3019,8 +3147,8 @@ static inline void next_nomacro1(void)
         tok = ts->tok;
         break;
     case 'L':
-        c = p[1];
-        if (c != '\\' && c != '\'' && c != '\"') {
+        t = p[1];
+        if (t != '\\' && t != '\'' && t != '\"') {
             /* fast case */
             goto parse_ident_fast;
         } else {
@@ -3268,7 +3396,7 @@ static void next_nomacro(void)
     redo:
         tok = *macro_ptr;
         if (tok) {
-            tok = tok_get(&macro_ptr, &tokc);
+            TOK_GET(tok, macro_ptr, tokc);
             if (tok == TOK_LINENUM) {
                 file->line_num = tokc.i;
                 goto redo;
@@ -3291,12 +3419,12 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
     tok_str_new(&str);
     last_tok = 0;
     while(1) {
-        t = tok_get(&macro_str, &cval);
+        TOK_GET(t, macro_str, cval);
         if (!t)
             break;
         if (t == '#') {
             /* stringize */
-            t = tok_get(&macro_str, &cval);
+            TOK_GET(t, macro_str, cval);
             if (!t)
                 break;
             s = sym_find2(args, t);
@@ -3307,7 +3435,7 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                 while (*st) {
                     if (notfirst)
                         cstr_ccat(&cstr, ' ');
-                    t = tok_get(&st, &cval);
+                    TOK_GET(t, st, cval);
                     cstr_cat(&cstr, get_tok_str(t, &cval));
                     notfirst = 1;
                 }
@@ -3348,7 +3476,7 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                         int t1;
                     add_var:
                         for(;;) {
-                            t1 = tok_get(&st, &cval);
+                            TOK_GET(t1, st, cval);
                             if (!t1)
                                 break;
                             tok_str_add2(&str, t1, &cval);
@@ -3392,7 +3520,7 @@ static int *macro_twosharps(void)
             macro_ptr1 = macro_ptr;
             t = *macro_ptr;
             if (t) {
-                t = tok_get(&macro_ptr, &cval);
+                TOK_GET(t, macro_ptr, cval);
 
                 /* We concatenate the two tokens if we have an
                    identifier or a preprocessing number */
