@@ -5,13 +5,13 @@ prefix=/usr/local
 
 CFLAGS=-O2 -g -Wall -Wno-parentheses -Wno-missing-braces -I.
 LIBS=-ldl
-#CFLAGS=-O2 -g -Wall -Wno-parentheses -I. -pg -static -DPROFILE
-#LIBS=
+CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
+LIBS_P=
 
 CFLAGS+=-m386 -malign-functions=0
 DISAS=objdump -D -b binary -m i386
 INSTALL=install
-VERSION=0.9.1
+VERSION=0.9.2
 
 all: tcc
 
@@ -21,7 +21,7 @@ test: test.ref test.out
 	@if diff -u test.ref test.out ; then echo "Auto Test OK"; fi
 
 prog.ref: prog.c 
-	gcc $(CFLAGS) -o $@ $<
+	gcc3 $(CFLAGS) -o $@ $<
 
 test.ref: prog.ref
 	./prog.ref > $@
@@ -33,12 +33,12 @@ run: tcc prog.c
 	./tcc -I. prog.c
 
 # iterated test2 (compile tcc then compile prog.c !)
-test2: tcc tcc.c prog.c
+test2: tcc tcc.c prog.c test.ref
 	./tcc -I. tcc.c -I. prog.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile prog.c !)
-test3: tcc tcc.c prog.c
+test3: tcc tcc.c prog.c test.ref
 	./tcc -I. tcc.c -I. tcc.c -I. prog.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
@@ -57,7 +57,7 @@ ex3: ex3.c
 
 # Tiny C Compiler
 
-tcc_g: tcc.c Makefile
+tcc_g: tcc.c i386-gen.c Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
 tcc: tcc_g
@@ -66,17 +66,24 @@ tcc: tcc_g
 install: tcc 
 	$(INSTALL) -m755 tcc $(prefix)/bin
 	mkdir -p $(prefix)/lib/tcc
-	$(INSTALL) -m644 stdarg.h stddef.h tcclib.h $(prefix)/lib/tcc
+	$(INSTALL) -m644 stdarg.h stddef.h float.h tcclib.h $(prefix)/lib/tcc
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g prog.ref *.bin *.i ex2 \
-           core gmon.out test.out test.ref a.out
+           core gmon.out test.out test.ref a.out tcc_p
+
+# profiling version
+tcc_p: tcc.c Makefile
+	gcc $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
 # target for development
 
 %.bin: %.c tcc
 	./tcc -o $@ -I. $<
 	$(DISAS) $@
+
+instr: instr.o
+	objdump -d instr.o
 
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
@@ -88,6 +95,9 @@ tar:
 	cp -r ../tcc /tmp/$(FILE)
 	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
           $(FILE)/Makefile $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
-          $(FILE)/tcc.c $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/tcclib.h \
+	  $(FILE)/Changelog $(FILE)/tcc-doc.html \
+          $(FILE)/tcc.c $(FILE)/i386-gen.c \
+          $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \
+          $(FILE)/tcclib.h \
           $(FILE)/ex*.c $(FILE)/prog.c )
 	rm -rf /tmp/$(FILE)

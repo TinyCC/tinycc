@@ -5,7 +5,7 @@ Features:
 --------
 
 - SMALL! You can compile and execute C code everywhere, for example on
-  rescue disks (29KB for x86 TCC executable).
+  rescue disks.
 
 - FAST! tcc generates optimized x86 code. No byte code
   overhead. Compiles, assemble and link about 7 times faster than 'gcc
@@ -27,7 +27,7 @@ Documentation:
 
 1) Installation
 
-***TCC currently only work on Linux x86***.
+***TCC currently only works on Linux x86***.
 
 Type 'make install' to compile and install tcc in /usr/local/bin and
 /usr/local/lib/tcc.
@@ -60,8 +60,8 @@ default ones are: /usr/include, /usr/lib/tcc, /usr/local/lib/tcc.
 libxxx.so. Standard library paths are checked, including those
 specificed with LD_LIBRARY_PATH.
 
-Only one source code can be compiled. If you have multiple source
-files, add one which includes all your sources.
+'-i file' : compile C source 'file' before main C source. With this
+command, multiple C files can be compiled and linked together.
 
 4) Examples
 
@@ -84,44 +84,9 @@ generator.
 prog.c: auto test for TCC which tests many subtle possible bugs. Used
 when doing 'make test'.
 
-Exact differences with ANSI C:
------------------------------
+5) Full Documentation
 
-- Preprocessor: the preprocessor tokens are the same as C. It means
-  that in some rare cases, preprocessed numbers are not handled
-  exactly as in ANSI C. This approach has the advantage of being
-  simpler and FAST!
-
-- Types: floating point numbers are not supported yet.
-
-- Bit fields are not supported.
-
-- Linking: extern variables must appear in a referenced dll and cannot
-  appear in current source.
-
-Supported ANSI C extensions:
----------------------------
-
-- 'inline' keyword is ignored (ISOC99).
-
-- 'restrict' keyword is ignored (ISOC99).
-
-- '__func__' is a string variable containing the current function name (ISOC99).
-
-- Variadic macros: __VA_ARGS__ can be used for function-like macros (ISOC99):
-   #define dprintf(level, __VA_ARGS__) printf(__VA_ARGS__).
-
-- Declarations can appear anywhere in a block (ISOC99).
-
-- Array and struct/union elements can be initialized in any order by
-  using designators (.e.g. { [0].x = 1 }) (ISOC99).
-
-- Compound initializers are supported (e.g. int *p = (int []){ 1, 2,
-  3}) (ISOC99).
-
-- '#!' at the start of a line is ignored to allow scripting.
-
-- Binary digits can be entered ('0b101' instead of '5').
+Please read tcc-doc.html to have all the features of TCC.
 
 Technical Description:
 ---------------------
@@ -162,7 +127,7 @@ License:
 TCC is distributed under the GNU General Public License (see COPYING
 file). 
 
-I accept only patches where you give your copyright explictely to me
+I accept only patches where you give your copyright explicitely to me
 to simplify licensing issues.
 
 Fabrice Bellard - Nov 17, 2001.

@@ -29,8 +29,8 @@ it was an executable.
 
 <h2>Exact differences with ANSI C</h2>
 
-TCC implements almost all the ANSI C standard, except floating point
-and long long numbers.
+TCC implements almost all the ANSI C standard, except floating points
+numbers.
 
 <ul>
  <li> The preprocessor tokens are the same as C. It means that in some

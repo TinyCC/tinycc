@@ -1,21 +1,21 @@
 TODO list:
 
 Critical:
-
-- add float/double support (should be as small as possible while being
-  usable for RISC code generator too).
+- finish float/double support. add function type convertion.
+- section generation and GNUC __attributte__ handling.
+- D option with '=' handling
 - 0 is pointer - fix type compare
-- add message if external function or variable not found.
 - To check: 'sizeof' may not work if too complex expression is given.
-- fix 'char' and 'short' casts (in function parameters and in assignment).
-- function pointers to forward reference (patch code generator).
+- fix 'char' and 'short' casts (only in function parameters and in
+  assignment).
 
 Not critical:
 
+- interactive mode
 - fix multiple compound literals inits in blocks (ISOC99 normative
   example - only relevant when using gotos! -> must add boolean
   variable to tell if compound literal was already initialized).
-- fix L"\x1234" wide string case (need to store them as ints ?) */
+- fix L"\x1234" wide string case (need to store them as utf8 ?)
 - fix preprocessor symbol redefinition
 - better constant opt (&&, ||, ?:)
 - add ELF executable and shared library output option (would be needed
