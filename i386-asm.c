@@ -364,7 +364,7 @@ static void gen_le16(int v)
 /* generate the modrm operand */
 static inline void asm_modrm(int reg, Operand *op)
 {
-    int mod, reg1, reg2;
+    int mod, reg1, reg2, sib_reg1;
 
     if (op->type & (OP_REG | OP_MMX | OP_SSE)) {
         g(0xc0 + (reg << 3) + op->reg);
@@ -373,8 +373,12 @@ static inline void asm_modrm(int reg, Operand *op)
         g(0x05 + (reg << 3));
         gen_expr32(&op->e);
     } else {
+        sib_reg1 = op->reg;
         /* fist compute displacement encoding */
-        if (op->e.v == 0 && !op->e.sym && op->reg != 5) {
+        if (sib_reg1 == -1) {
+            sib_reg1 = 5;
+            mod = 0x00;
+        } else if (op->e.v == 0 && !op->e.sym && op->reg != 5) {
             mod = 0x00;
         } else if (op->e.v == (int8_t)op->e.v && !op->e.sym) {
             mod = 0x40;
@@ -391,13 +395,13 @@ static inline void asm_modrm(int reg, Operand *op)
             reg2 = op->reg2;
             if (reg2 == -1)
                 reg2 = 4; /* indicate no index */
-            g((op->shift << 6) + (reg2 << 3) + op->reg);
+            g((op->shift << 6) + (reg2 << 3) + sib_reg1);
         }
 
         /* add offset */
         if (mod == 0x40) {
             g(op->e.v);
-        } else if (mod == 0x80) {
+        } else if (mod == 0x80 || op->reg == -1) {
             gen_expr32(&op->e);
         }
     }
@@ -517,7 +521,11 @@ static void asm_opcode(TCCState *s1, int opcode)
                 s = reg_to_size[ops[i].type & OP_REG];
         }
         if (s == 3) {
-            error("cannot infer opcode suffix");
+            if ((opcode == TOK_ASM_push || opcode == TOK_ASM_pop) && 
+                (ops[0].type & (OP_SEG | OP_IM8S | OP_IM32)))
+                s = 2;
+            else
+                error("cannot infer opcode suffix");
         }
     }
 
@@ -752,50 +760,56 @@ static const char *skip_constraint_modifiers(const char *p)
     return p;
 }
 
-static void asm_compute_constraints(uint8_t *regs_allocated,
-                                    ASMOperand *operands, 
-                                    int nb_operands1, int nb_outputs, 
-                                    int is_output,
-                                    uint8_t *input_regs_allocated)
+#define REG_OUT_MASK 0x01
+#define REG_IN_MASK  0x02
+
+#define is_reg_allocated(reg) (regs_allocated[reg] & reg_mask)
+
+static void asm_compute_constraints(ASMOperand *operands, 
+                                    int nb_operands, int nb_outputs, 
+                                    const uint8_t *clobber_regs,
+                                    int *pout_reg)
 {
     ASMOperand *op;
     int sorted_op[MAX_ASM_OPERANDS];
-    int i, j, k, p1, p2, tmp, reg, c, base, nb_operands;
+    int i, j, k, p1, p2, tmp, reg, c, reg_mask;
     const char *str;
+    uint8_t regs_allocated[NB_ASM_REGS];
     
-    if (is_output) {
-        base = 0;
-        nb_operands = nb_outputs;
-    } else {
-        base = nb_outputs;
-        nb_operands = nb_operands1 - nb_outputs;
+    /* init fields */
+    for(i=0;i<nb_operands;i++) {
+        op = &operands[i];
+        op->input_index = -1;
+        op->ref_index = -1;
+        op->reg = -1;
+        op->is_memory = 0;
+        op->is_rw = 0;
     }
-
     /* compute constraint priority and evaluate references to output
        constraints if input constraints */
     for(i=0;i<nb_operands;i++) {
-        j = base + i;
-        op = &operands[j];
+        op = &operands[i];
         str = op->constraint;
-        op->ref_index = -1;
-        op->reg = -1;
         str = skip_constraint_modifiers(str);
-        if (!is_output && (isnum(*str) || *str == '[')) {
+        if (isnum(*str) || *str == '[') {
             /* this is a reference to another constraint */
-            k = find_constraint(operands, nb_operands1, str, NULL);
-            if ((unsigned)k >= j)
+            k = find_constraint(operands, nb_operands, str, NULL);
+            if ((unsigned)k >= i || i < nb_outputs)
                 error("invalid reference in constraint %d ('%s')",
-                      j, str);
+                      i, str);
             op->ref_index = k;
-            str = operands[k].constraint;
-            str = skip_constraint_modifiers(str);
+            if (operands[k].input_index >= 0)
+                error("cannot reference twice the same operand");
+            operands[k].input_index = i;
+            op->priority = 5;
+        } else {
+            op->priority = constraint_priority(str);
         }
-        op->priority = constraint_priority(str);
     }
     
     /* sort operands according to their priority */
     for(i=0;i<nb_operands;i++)
-        sorted_op[i] = base + i;
+        sorted_op[i] = i;
     for(i=0;i<nb_operands - 1;i++) {
         for(j=i+1;j<nb_operands;j++) {
             p1 = operands[sorted_op[i]].priority; 
@@ -808,32 +822,55 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
         }
     }
 
-    memset(regs_allocated, 0, NB_ASM_REGS);
-    regs_allocated[4] = 1; /* esp cannot be used */
-    regs_allocated[5] = 1; /* ebp cannot be used yet */
-    
+    for(i = 0;i < NB_ASM_REGS; i++) {
+        if (clobber_regs[i])
+            regs_allocated[i] = REG_IN_MASK | REG_OUT_MASK;
+        else
+            regs_allocated[i] = 0;
+    }
+    /* esp cannot be used */
+    regs_allocated[4] = REG_IN_MASK | REG_OUT_MASK; 
+    /* ebp cannot be used yet */
+    regs_allocated[5] = REG_IN_MASK | REG_OUT_MASK; 
+
     /* allocate registers and generate corresponding asm moves */
     for(i=0;i<nb_operands;i++) {
         j = sorted_op[i];
         op = &operands[j];
         str = op->constraint;
-        
-        if (op->ref_index >= 0) {
-            str = operands[op->ref_index].constraint;
+        /* no need to allocate references */
+        if (op->ref_index >= 0)
+            continue;
+        /* select if register is used for output, input or both */
+        if (op->input_index >= 0) {
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+        } else if (j < nb_outputs) {
+            reg_mask = REG_OUT_MASK;
+        } else {
+            reg_mask = REG_IN_MASK;
         }
-
-        str = skip_constraint_modifiers(str);
     try_next:
         c = *str++;
         switch(c) {
+        case '=':
+            goto try_next;
+        case '+':
+            op->is_rw = 1;
+            /* FALL THRU */
+        case '&':
+            if (j >= nb_outputs)
+                error("'%c' modifier can only be applied to outputs", c);
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+            goto try_next;
         case 'A':
             /* allocate both eax and edx */
-            if (regs_allocated[TREG_EAX] || regs_allocated[TREG_EDX])
+            if (is_reg_allocated(TREG_EAX) || 
+                is_reg_allocated(TREG_EDX))
                 goto try_next;
             op->is_llong = 1;
             op->reg = TREG_EAX;
-            regs_allocated[TREG_EAX] = 1;
-            regs_allocated[TREG_EDX] = 1;
+            regs_allocated[TREG_EAX] |= reg_mask;
+            regs_allocated[TREG_EDX] |= reg_mask;
             break;
         case 'a':
             reg = TREG_EAX;
@@ -853,20 +890,20 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
         case 'D':
             reg = 7;
         alloc_reg:
-            if (regs_allocated[reg])
+            if (is_reg_allocated(reg))
                 goto try_next;
             goto reg_found;
         case 'q':
             /* eax, ebx, ecx or edx */
             for(reg = 0; reg < 4; reg++) {
-                if (!regs_allocated[reg])
+                if (!is_reg_allocated(reg))
                     goto reg_found;
             }
             goto try_next;
         case 'r':
             /* any general register */
             for(reg = 0; reg < 8; reg++) {
-                if (!regs_allocated[reg])
+                if (!is_reg_allocated(reg))
                     goto reg_found;
             }
             goto try_next;
@@ -874,7 +911,7 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
             /* now we can reload in the register */
             op->is_llong = 0;
             op->reg = reg;
-            regs_allocated[reg] = 1;
+            regs_allocated[reg] |= reg_mask;
             break;
         case 'i':
             if (!((op->vt->r & (VT_VALMASK | VT_LVAL)) == VT_CONST))
@@ -888,25 +925,27 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
             break;
         case 'm':
         case 'g':
-            /* nothing special to do because the operand is
-               already in memory */
+            /* nothing special to do because the operand is already in
+               memory, except if the pointer itself is stored in a
+               memory variable (VT_LLOCAL case) */
             /* XXX: fix constant case */
-            if (is_output) {
-                /* if it is a reference to a memory zone, it must lie
-                   in a register, so we reserve the register in the
-                   input registers and a load will be generated
-                   later */
+            /* if it is a reference to a memory zone, it must lie
+               in a register, so we reserve the register in the
+               input registers and a load will be generated
+               later */
+            if (j < nb_outputs || c == 'm') {
                 if ((op->vt->r & VT_VALMASK) == VT_LLOCAL) {
                     /* any general register */
                     for(reg = 0; reg < 8; reg++) {
-                        if (!input_regs_allocated[reg])
+                        if (!(regs_allocated[reg] & REG_IN_MASK))
                             goto reg_found1;
                     }
                     goto try_next;
                 reg_found1:
                     /* now we can reload in the register */
-                    input_regs_allocated[reg] = 1;
+                    regs_allocated[reg] |= REG_IN_MASK;
                     op->reg = reg;
+                    op->is_memory = 1;
                 }
             }
             break;
@@ -915,14 +954,34 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
                   j, op->constraint);
             break;
         }
+        /* if a reference is present for that operand, we assign it too */
+        if (op->input_index >= 0) {
+            operands[op->input_index].reg = op->reg;
+            operands[op->input_index].is_llong = op->is_llong;
+        }
     }
-
+    
+    /* compute out_reg. It is used to store outputs registers to memory
+       locations references by pointers (VT_LLOCAL case) */
+    *pout_reg = -1;
+    for(i=0;i<nb_operands;i++) {
+        op = &operands[i];
+        if (op->reg >= 0 && 
+            (op->vt->r & VT_VALMASK) == VT_LLOCAL  &&
+            !op->is_memory) {
+            for(reg = 0; reg < 8; reg++) {
+                if (!(regs_allocated[reg] & REG_OUT_MASK))
+                    goto reg_found2;
+            }
+            error("could not find free output register for reloading");
+        reg_found2:
+            *pout_reg = reg;
+            break;
+        }
+    }
+    
     /* print sorted constraints */
 #ifdef ASM_DEBUG
-    if (is_output)
-        printf("outputs=\n");
-    else
-        printf("inputs=\n");
     for(i=0;i<nb_operands;i++) {
         j = sorted_op[i];
         op = &operands[j];
@@ -933,6 +992,8 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
                op->vt->r,
                op->reg);
     }
+    if (*pout_reg >= 0)
+        printf("out_reg=%d\n", *pout_reg);
 #endif
 }
 
@@ -1019,7 +1080,8 @@ static void subst_asm_operand(CString *add_str,
 /* generate prolog and epilog code for asm statment */
 static void asm_gen_code(ASMOperand *operands, int nb_operands, 
                          int nb_outputs, int is_output,
-                         uint8_t *clobber_regs)
+                         uint8_t *clobber_regs,
+                         int out_reg)
 {
     uint8_t regs_allocated[NB_ASM_REGS];
     ASMOperand *op;
@@ -1042,39 +1104,52 @@ static void asm_gen_code(ASMOperand *operands, int nb_operands,
         }
 
         /* generate load code */
-        for(i = nb_outputs ; i < nb_operands; i++) {
+        for(i = 0; i < nb_operands; i++) {
             op = &operands[i];
             if (op->reg >= 0) {
-                load(op->reg, op->vt);
-                if (op->is_llong) {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL &&
+                    op->is_memory) {
+                    /* memory reference case (for both input and
+                       output cases) */
                     SValue sv;
                     sv = *op->vt;
-                    sv.c.ul += 4;
-                    load(TREG_EDX, &sv);
+                    sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
+                    load(op->reg, &sv);
+                } else if (i >= nb_outputs || op->is_rw) {
+                    /* load value in register */
+                    load(op->reg, op->vt);
+                    if (op->is_llong) {
+                        SValue sv;
+                        sv = *op->vt;
+                        sv.c.ul += 4;
+                        load(TREG_EDX, &sv);
+                    }
                 }
-            }
-        }
-        /* generate load code for output memory references */
-        for(i = 0 ; i < nb_outputs; i++) {
-            op = &operands[i];
-            if (op->reg >= 0 && ((op->vt->r & VT_VALMASK) == VT_LLOCAL)) {
-                SValue sv;
-                sv = *op->vt;
-                sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
-                load(op->reg, &sv);
             }
         }
     } else {
         /* generate save code */
         for(i = 0 ; i < nb_outputs; i++) {
             op = &operands[i];
-            if (op->reg >= 0 && ((op->vt->r & VT_VALMASK) != VT_LLOCAL)) {
-                store(op->reg, op->vt);
-                if (op->is_llong) {
-                    SValue sv;
-                    sv = *op->vt;
-                    sv.c.ul += 4;
-                    store(TREG_EDX, &sv);
+            if (op->reg >= 0) {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL) {
+                    if (!op->is_memory) {
+                        SValue sv;
+                        sv = *op->vt;
+                        sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
+                        load(out_reg, &sv);
+
+                        sv.r = (sv.r & ~VT_VALMASK) | out_reg;
+                        store(op->reg, &sv);
+                    }
+                } else {
+                    store(op->reg, op->vt);
+                    if (op->is_llong) {
+                        SValue sv;
+                        sv = *op->vt;
+                        sv.c.ul += 4;
+                        store(TREG_EDX, &sv);
+                    }
                 }
             }
         }
