@@ -55,6 +55,8 @@ libtcc_test
 p2.il
 short.prof
 tccp.c
-test1.out
-test2.out
-test3.out
+instr.S
+p.c
+p2.c
+tcctest[1234]
+test[1234].out
