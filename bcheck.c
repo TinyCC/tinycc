@@ -802,7 +802,7 @@ void *__bound_memmove(void *dst, const void *src, size_t size)
 void *__bound_memset(void *dst, int c, size_t size)
 {
     __bound_check(dst, size);
-    return memset(dst, 0, size);
+    return memset(dst, c, size);
 }
 
 /* resolve check check syms */
