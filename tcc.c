@@ -72,6 +72,7 @@ char *idtable, *idptr, *idlast;
 #define TOK_RETURN  263
 #define TOK_DEFINE  264
 #define TOK_MAIN    265
+#define TOK_FOR     266
 
 #define TOK_EQ 0x94 /* warning: depend on asm code */
 #define TOK_NE 0x95 /* warning: depend on asm code */
@@ -90,6 +91,10 @@ char *idtable, *idptr, *idlast;
 #define TOK_SHL  0xe0 /* warning: depend on asm code */
 #define TOK_SHR  0xf8 /* warning: depend on asm code */
   
+#ifdef TINY
+#define expr_eq() expr()
+#endif
+
 #ifdef TEST
 void error(char *msg)
 {
@@ -193,7 +198,11 @@ void next()
             next();
         }
     } else {
+#ifdef TINY
+        q = "<=\236>=\235!=\225++\244--\242==\224";
+#else
         q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\340>>\370";
+#endif
         /* two chars */
         v = inp();
         while (*q) {
@@ -399,8 +408,8 @@ void gen_op(op, l)
     }
 #endif
     else if (op == '/' | op == '%') {
-        o(0xd231);   /* xor %edx, %edx */
-        o(0xf9f791); /* xchg %ecx, %eax, idiv %ecx, %eax */
+        o(0x91);   /* xchg %ecx, %eax */
+        o(0xf9f799); /* cltd, idiv %ecx, %eax */
         if (op == '%')
             o(0x92); /* xchg %edx, %eax */
     } else {
@@ -527,13 +536,15 @@ void unary()
         skip('\''); 
     } else if (tok == '\"') {
         vset(VT_CONST | VT_PTRINC | VT_BYTE, glo);
-        while((n = inp()) != 34) {
-            *(char *)glo = getq(n);
-            glo++;
+        while (tok == '\"') {
+            while((n = inp()) != 34) {
+                *(char *)glo = getq(n);
+                glo++;
+            }
+            next();
         }
         *(char *)glo = 0;
         glo = (glo + 4) & -4; /* align heap */
-        next();
     } else {
         t = tok;
         next();
@@ -640,7 +651,7 @@ void unary()
         t = 0;
         while (tok != ')') {
             t = t + 4;
-            expr();
+            expr_eq();
             gv();
             o(0x50); /* push %eax */
             if (tok == ',')
@@ -692,7 +703,7 @@ void uneq()
         b = (vt & VT_TYPE) == VT_BYTE;
         if (ft & VT_VAR)
             o(0x50); /* push %eax */
-        expr();
+        expr_eq();
 #ifdef TEST
         if ((vt & VT_PTRMASK) != (ft & VT_PTRMASK))
             warning("incompatible type");
@@ -759,7 +770,7 @@ void eand()
     }
 }
 
-void expr()
+void eor()
 {
     int t, u;
 
@@ -778,6 +789,36 @@ void expr()
         eand();
     }
 }
+
+void expr_eq()
+{
+    int t, u;
+    
+    eor();
+    if (tok == '?') {
+        next();
+        t = gtst(1, 0);
+        expr();
+        gv();
+        skip(':');
+        u = psym(0xe9, 0);
+        gsym(t);
+        expr_eq();
+        gv();
+        gsym(u);
+    }
+}
+
+void expr()
+{
+    while (1) {
+        expr_eq();
+        if (tok != ',')
+            break;
+        next();
+    }
+}
+
 #endif
 
 void block()
@@ -831,7 +872,38 @@ void block()
         *lsym = psym(0xe9, *lsym);
         next();
         skip(';');
-    } else {
+    } else 
+#ifndef TINY
+    if (tok == TOK_FOR) {
+        int e;
+        next();
+        skip('(');
+        if (tok != ';')
+            expr();
+        skip(';');
+        d = ind;
+        c = ind;
+        a = 0;
+        if (tok != ';') {
+            expr();
+            a = gtst(1, 0);
+        }
+        *++lsym = a;
+        skip(';');
+        if (tok != ')') {
+            e = psym(0xe9, 0);
+            c = ind;
+            expr();
+            oad(0xe9, d - ind - 5); /* jmp */
+            gsym(e);
+        }
+        skip(')');
+        block();
+        oad(0xe9, c - ind - 5); /* jmp */
+        gsym(*lsym--);
+    } else 
+#endif
+    {
         if (tok != ';')
             expr();
         skip(';');
@@ -886,7 +958,6 @@ void decl(l)
 int main(int c, char **v)
 {
     int (*t)();
-
     if (c < 2) {
         printf("usage: tc src\n");
         return 1;
@@ -895,9 +966,15 @@ int main(int c, char **v)
     file = fopen(*v, "r");
 
     idtable = malloc(SYM_TABLE_SIZE);
+#ifdef TINY
     memcpy(idtable, 
            "int\0void\0char\0if\0else\0while\0break\0return\0define\0main", 53);
     idptr = idtable + 53;
+#else
+    memcpy(idtable, 
+           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for", 57);
+    idptr = idtable + 57;
+#endif
     glo = malloc(DATA_SIZE);
     prog = malloc(TEXT_SIZE);
     vac = malloc(VAR_TABLE_SIZE);
