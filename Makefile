@@ -3,31 +3,53 @@ all: test cvt
 test: prog.bin 
 	cmp -l prog.bin prog.bin.ref
 
-run: tc prog.c
-	./tc prog.c
+run: tcc prog.c
+	./tcc prog.c
 
-run2: tc tc1.c prog.c
-	./tc tc1.c prog.c
+run2: tcc tcc1.c prog.c
+	./tcc tcc1.c prog.c
 
-run3: tc tc1.c prog.c
-	./tc tc1.c tc1.c prog.c
+run3: tcc tcc1.c prog.c
+	./tcc tcc1.c tcc1.c prog.c
 
-prog.bin: prog.c tct
-	./tct prog.c $@
+prog.bin: prog.c tcc
+	./tc prog.c $@
 	ndisasm -b 32 $@
 
-p2.bin: p2.c tct
-	./tct $< $@
+p2.bin: p2.c tcc
+	./tcc $< $@
 	ndisasm -b 32 $@
 
-tct: tc.c
-	gcc -DTEST -O2 -g -o $@ $< -ldl
+# Tiny C Compiler
 
-tc: tc.c Makefile
+tcc: tcc.c
 	gcc -O2 -Wall -g -o $@ $< -ldl
 
-tc1: tc1.c
+tcc1: tcc1.c
 	gcc -O2 -Wall -g -o $@ $<
+
+tcc1.i: tcc.c Makefile
+	gcc -E -P -o $@ $<
+
+tcc1.c: tcc1.i cvt Makefile
+	./cvt -d $< $@
+	@ls -l $@
+
+# obfuscated C compiler
+otcc: otcc.c
+	gcc -O2 -Wall -g -o $@ $< -ldl
+
+otcc.i: otcc.c Makefile
+	gcc -E -P -DTINY -o $@ $<
+
+otcc1.c: otcc.i cvt Makefile
+	./cvt $< $@
+	@ls -l $@
+
+orun: otcc otcc1.c
+	./otcc otcc1.c ex1.c
+
+# misc
 
 cvt: cvt.c
 	gcc -O2 -Wall -g -o $@ $<
@@ -35,18 +57,5 @@ cvt: cvt.c
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
 
-tc.i: tc.c Makefile
-	gcc -E -P -DTINY -o $@ tc.c
-
-tc1.c: tc.i cvt Makefile
-	./cvt $< $@
-	@ls -l $@
-
-test2: tct tc1.c
-	./tct tc1.c tc2
-	ndisasm -b 32 tc2
-
-tc2: tc
-	./tct < tc1.c > tc2
-	ndisasm -b 32 tc2
-
+clean:
+	rm -f *~ *.o tcc tcc1 cvt 
