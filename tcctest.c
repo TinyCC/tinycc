@@ -204,7 +204,7 @@ void string_test()
     printf("wc=%C 0x%lx %C\n", L'a', L'\x1234', L'c');
     printf("wstring=%S\n", L"abc");
     printf("wstring=%S\n", L"abc" L"def" "ghi");
-    ps("test");
+    ps("test\n");
     b = 32;
     while ((b = b + 1) < 96) {
         printf("%c", b);
