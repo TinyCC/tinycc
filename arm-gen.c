@@ -710,6 +710,7 @@ void gfunc_prolog(CType *func_type)
     addr += size;
   }
   last_itod_magic=0;
+  loc = 0;
 }
 
 /* generate function epilog */

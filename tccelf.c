@@ -548,6 +548,14 @@ static void relocate_section(TCCState *s1, Section *s)
 	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
                     type,addr,(unsigned int )ptr,val);
             break;
+#elif defined(TCC_TARGET_C67)
+	case R_C60_32:
+	    *(int *)ptr += val;
+	    break;
+        default:
+	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
+                    type,addr,(unsigned int )ptr,val);
+            break;
 #else
 #error unsupported processor
 #endif
@@ -754,6 +762,8 @@ static void put_got_entry(TCCState *s1,
             if (s1->output_type == TCC_OUTPUT_EXE)
                 offset = plt->data_offset - 16;
         }
+#elif defined(TCC_TARGET_C67)
+        error("C67 got not implemented");
 #else
 #error unsupported CPU
 #endif
@@ -824,6 +834,25 @@ static void build_got_entries(TCCState *s1)
                         reloc_type = R_ARM_GLOB_DAT;
                     else
                         reloc_type = R_ARM_JUMP_SLOT;
+                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info, 
+                                  sym_index);
+                }
+                break;
+#elif defined(TCC_TARGET_C67)
+	    case R_C60_GOT32:
+            case R_C60_GOTOFF:
+            case R_C60_GOTPC:
+            case R_C60_PLT32:
+                if (!s1->got)
+                    build_got(s1);
+                if (type == R_C60_GOT32 || type == R_C60_PLT32) {
+                    sym_index = ELF32_R_SYM(rel->r_info);
+                    sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+                    /* look at the symbol got offset. If none, then add one */
+                    if (type == R_C60_GOT32)
+                        reloc_type = R_C60_GLOB_DAT;
+                    else
+                        reloc_type = R_C60_JMP_SLOT;
                     put_got_entry(s1, reloc_type, sym->st_size, sym->st_info, 
                                   sym_index);
                 }
@@ -1415,6 +1444,8 @@ int tcc_output_file(TCCState *s1, const char *filename)
 		        put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
 			p += 16;
 		    }
+#elif defined(TCC_TARGET_C67)
+                    /* XXX: TODO */
 #else
 #error unsupported CPU
 #endif

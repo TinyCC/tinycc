@@ -62,19 +62,30 @@
 /* target selection */
 //#define TCC_TARGET_I386   /* i386 code generator */
 //#define TCC_TARGET_ARM    /* ARMv4 code generator */
+//#define TCC_TARGET_C67    /* TMS320C67xx code generator */
 
 /* default target is I386 */
-#if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM)
+#if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
+    !defined(TCC_TARGET_C67)
 #define TCC_TARGET_I386
 #endif
 
-#if !defined(WIN32) && !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM)
+#if !defined(WIN32) && !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM) && \
+    !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
 
 /* define it to include assembler support */
-#if !defined(TCC_TARGET_ARM)
+#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_ASM
+#endif
+
+#if !defined(WIN32)
+#define FALSE 0
+#define false 0
+#define TRUE 1
+#define true 1
+typedef int BOOL;
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o. Only needed when generating
@@ -799,6 +810,10 @@ static inline int is_float(int t)
 
 #ifdef TCC_TARGET_ARM
 #include "arm-gen.c"
+#endif
+
+#ifdef TCC_TARGET_C67
+#include "c67-gen.c"
 #endif
 
 #ifdef CONFIG_TCC_STATIC
@@ -4614,6 +4629,11 @@ int gv(int rc)
             }
         }
         vtop->r = r;
+#ifdef TCC_TARGET_C67
+        /* uses register pairs for doubles */
+        if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) 
+            vtop->r2 = r+1;
+#endif
     }
     return r;
 }
@@ -4964,6 +4984,8 @@ void gen_opl(int op)
 #elif defined(TCC_TARGET_ARM)
 		b = ind;
 		o(0x1A000000 | encbranch(ind, 0, 1));
+#elif defined(TCC_TARGET_C67)
+                error("not implemented");
 #else
 #error not supported
 #endif
@@ -5624,7 +5646,11 @@ static int type_size(CType *type, int *a)
         *a = LDOUBLE_ALIGN;
         return LDOUBLE_SIZE;
     } else if (bt == VT_DOUBLE || bt == VT_LLONG) {
-        *a = 4; /* XXX: i386 specific */
+#ifdef TCC_TARGET_I386
+        *a = 4;
+#else
+        *a = 8;
+#endif
         return 8;
     } else if (bt == VT_INT || bt == VT_ENUM || bt == VT_FLOAT) {
         *a = 4;
@@ -8673,7 +8699,6 @@ static void decl(int l)
                 /* push a dummy symbol to enable local sym storage */
                 sym_push2(&local_stack, SYM_FIELD, 0, 0);
                 gfunc_prolog(&type);
-                loc = 0;
                 rsym = 0;
 #ifdef CONFIG_REG_VARS
                 macro_ptr = func_str.str;
