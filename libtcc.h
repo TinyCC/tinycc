@@ -83,8 +83,8 @@ int tcc_run(TCCState *s, int argc, char **argv);
    non zero if link error. */
 int tcc_relocate(TCCState *s);
 
-/* return symbol value or error */
-void *tcc_get_symbol(TCCState *s, const char *name);
+/* return symbol value. return 0 if OK, -1 if symbol not found */
+int tcc_get_symbol(TCCState *s, unsigned long *pval, const char *name);
 
 #ifdef __cplusplus
 }

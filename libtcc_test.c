@@ -35,7 +35,8 @@ int main(int argc, char **argv)
 {
     TCCState *s;
     int (*func)(int);
-
+    unsigned long val;
+    
     s = tcc_new();
     if (!s) {
         fprintf(stderr, "Could not create tcc state\n");
@@ -54,8 +55,9 @@ int main(int argc, char **argv)
     
     tcc_relocate(s);
 
-    func = tcc_get_symbol(s, "foo");
-    
+    tcc_get_symbol(s, &val, "foo");
+    func = (void *)val;
+
     func(32);
 
     tcc_delete(s);

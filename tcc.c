@@ -9115,7 +9115,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     if (tcc_relocate(s1) < 0)
         return -1;
 
-    prog_main = tcc_get_symbol(s1, "main");
+    prog_main = tcc_get_symbol_err(s1, "main");
     
     if (do_debug) {
 #ifdef WIN32
@@ -9140,10 +9140,11 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         void (*bound_init)(void);
 
         /* set error function */
-        rt_bound_error_msg = (void *)tcc_get_symbol(s1, "__bound_error_msg");
+        rt_bound_error_msg = (void *)tcc_get_symbol_err(s1, 
+                                                        "__bound_error_msg");
 
         /* XXX: use .init section so that it also work in binary ? */
-        bound_init = (void *)tcc_get_symbol(s1, "__bound_init");
+        bound_init = (void *)tcc_get_symbol_err(s1, "__bound_init");
         bound_init();
     }
 #endif

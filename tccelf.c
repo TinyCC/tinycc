@@ -154,16 +154,25 @@ static int find_elf_sym(Section *s, const char *name)
 }
 
 /* return elf symbol value or error */
-void *tcc_get_symbol(TCCState *s, const char *name)
+int tcc_get_symbol(TCCState *s, unsigned long *pval, const char *name)
 {
     int sym_index;
     Elf32_Sym *sym;
     
     sym_index = find_elf_sym(symtab_section, name);
     if (!sym_index)
-        error("%s not defined", name);
+        return -1;
     sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
-    return (void *)sym->st_value;
+    *pval = sym->st_value;
+    return 0;
+}
+
+void *tcc_get_symbol_err(TCCState *s, const char *name)
+{
+    unsigned long val;
+    if (tcc_get_symbol(s, &val, name) < 0)
+        error("%s not defined", name);
+    return (void *)val;
 }
 
 /* add an elf symbol : check if it is already defined and patch
@@ -1383,7 +1392,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
 
         /* get entry point address */
         if (file_type == TCC_OUTPUT_EXE)
-            ehdr.e_entry = (unsigned long)tcc_get_symbol(s1, "_start");
+            ehdr.e_entry = (unsigned long)tcc_get_symbol_err(s1, "_start");
         else
             ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
     }
