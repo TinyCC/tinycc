@@ -261,7 +261,6 @@ int oad(c, s)
     return s;
 }
 
-/* push to value stack */
 void vset(t, v)
 {
     vt = t;
@@ -530,11 +529,15 @@ void unary()
         /* number */
         vset(VT_CONST, getn(tok, 10));
         next();
-    } else if (tok == '\'') {
+    } else 
+#ifndef TINY
+    if (tok == '\'') {
         vset(VT_CONST, getq(inp()));
         next(); /* skip char */
         skip('\''); 
-    } else if (tok == '\"') {
+    } else 
+#endif
+    if (tok == '\"') {
         vset(VT_CONST | VT_PTRINC | VT_BYTE, glo);
         while (tok == '\"') {
             while((n = inp()) != 34) {
@@ -593,6 +596,9 @@ void unary()
                 o(0xd0f7);
             }
         } else 
+        if (t == '+') {
+            unary();
+        } else 
 #endif
         if (t == TOK_INC | t == TOK_DEC) {
             unary();
@@ -605,9 +611,8 @@ void unary()
                 gv();
                 o(0xd8f7); /* neg %eax */
             }
-        } else if (t == '+') {
-            unary();
-        } else {
+        } else 
+        {
             vset(vat[t], vac[t]);
             /* forward reference or external reference ? */
             if (vt == 0) {
