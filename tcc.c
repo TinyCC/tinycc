@@ -1068,7 +1068,7 @@ void skip_spaces(void)
 
 /* skip block of text until #else, #elif or #endif. skip also pairs of
    #if/#endif */
-void preprocess_skip()
+void preprocess_skip(void)
 {
     int a;
     a = 0;
