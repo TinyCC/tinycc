@@ -100,6 +100,8 @@
      DEF(TOK_STDCALL3, "__stdcall__")
      DEF(TOK_NORETURN1, "noreturn")
      DEF(TOK_NORETURN2, "__noreturn__")
+     DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")
+     DEF(TOK_builtin_constant_p, "__builtin_constant_p")
 
 /* builtin functions or variables */
      DEF(TOK_memcpy, "memcpy")

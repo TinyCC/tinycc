@@ -6593,6 +6593,17 @@ static void parse_expr_type(CType *type)
     skip(')');
 }
 
+static void parse_type(CType *type)
+{
+    AttributeDef ad;
+    int n;
+
+    if (!parse_btype(type, &ad)) {
+        expect("type");
+    }
+    type_decl(type, &ad, &n, TYPE_ABSTRACT);
+}
+
 static void vpush_tokc(int t)
 {
     CType type;
@@ -6777,7 +6788,36 @@ static void unary(void)
             vpushi(align);
         }
         break;
-        
+
+    case TOK_builtin_types_compatible_p:
+        {
+            CType type1, type2;
+            next();
+            skip('(');
+            parse_type(&type1);
+            skip(',');
+            parse_type(&type2);
+            skip(')');
+            type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
+            type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
+            vpushi(is_compatible_types(&type1, &type2));
+        }
+        break;
+    case TOK_builtin_constant_p:
+        {
+            int saved_nocode_wanted, res;
+            next();
+            skip('(');
+            saved_nocode_wanted = nocode_wanted;
+            nocode_wanted = 1;
+            gexpr();
+            res = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+            vpop();
+            nocode_wanted = saved_nocode_wanted;
+            skip(')');
+            vpushi(res);
+        }
+        break;
     case TOK_INC:
     case TOK_DEC:
         t = tok;
@@ -7274,14 +7314,14 @@ static void gexpr(void)
 /* parse an expression and return its type without any side effect. */
 static void expr_type(CType *type)
 {
-    int a;
+    int saved_nocode_wanted;
 
-    a = nocode_wanted;
+    saved_nocode_wanted = nocode_wanted;
     nocode_wanted = 1;
     gexpr();
     *type = vtop->type;
     vpop();
-    nocode_wanted = a;
+    nocode_wanted = saved_nocode_wanted;
 }
 
 /* parse a unary expression and return its type without any side
