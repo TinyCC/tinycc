@@ -14,49 +14,51 @@ Tiny C Compiler Reference Documentation
 
 <h2>Introduction</h2>
 
-TinyCC (aka TCC) is a small but very fast C compiler. Unlike other C
+TinyCC (aka TCC) is a small but hyper fast C compiler. Unlike other C
 compilers, it is meant to be self-suffisant: you do not need an
 external assembler or linker because TCC does that for you.
 <P>
-
-TCC compiles so fast that even for big projects <tt>Makefile</tt>s may
+TCC compiles so <em>fast</em> that even for big projects <tt>Makefile</tt>s may
 not be necessary. 
+<P>
+TCC not only supports ANSI C, but also most of the new ISO C99
+standard and many GNUC extensions.
 <P>
 TCC can also be used to make <I>C scripts</I>,
 i.e. pieces of C source that you run as a Perl or Python
 script. Compilation is so fast that your script will be as fast as if
 it was an executable.
+<P>
+TCC can also automatically generate <A HREF="#bounds">memory and bound
+checks</A> while allowing all C pointers operations. TCC can do these
+checks even if non patched libraries are used.
+</P>
 
-<h2>Exact differences with ANSI C</h2>
+<h2>Full ANSI C support</h2>
 
-TCC implements almost all the ANSI C standard, except floating points
-numbers.
+TCC implements all the ANSI C standard, including structure bit fields
+and floating point numbers (<tt>long double</tt>, <tt>double</tt>, and
+<tt>float</tt> fully supported). The following limitations are known:
 
 <ul>
  <li> The preprocessor tokens are the same as C. It means that in some
   rare cases, preprocessed numbers are not handled exactly as in ANSI
   C. This approach has the advantage of being simpler and FAST!
-
- <li> Floating point numbers are not fully supported yet (some
- implicit casts are missing).
-
- <li> Some typing errors are not signaled.
 </ul>
 
 <h2>ISOC99 extensions</h2>
 
 TCC implements many features of the new C standard: ISO C99. Currently
-missing items are: complex and imaginary numbers (will come with ANSI
-C floating point numbers), <tt>long long</tt>s and variable length
+missing items are: complex and imaginary numbers and variable length
 arrays.
 
 Currently implemented ISOC99 features:
 
 <ul>
 
-<li> <tt>'inline'</tt> keyword is ignored.
+<li> 64 bit <tt>'long long'</tt> types are fully supported.
 
-<li> <tt>'restrict'</tt> keyword is ignored.
+<li> The boolean type <tt>'_Bool'</tt> is supported.
 
 <li> <tt>'__func__'</tt> is a string variable containing the current
 function name.
@@ -68,7 +70,7 @@ function name.
 </PRE>
 <tt>dprintf</tt> can then be used with a variable number of parameters.
 
-<li> Declarations can appear anywhere in a block as in C++.
+<li> Declarations can appear anywhere in a block (as in C++).
 
 <li> Array and struct/union elements can be initialized in any order by
   using designators:
@@ -85,11 +87,6 @@ function name.
 to initialize a pointer pointing to an initialized array. The same
 works for structures and strings.
 
-<li> The boolean type <tt>'_Bool'</tt> is supported.
-
-<li> <tt>'long long'</tt> types not supported yet, except in type
- definition or <tt>'sizeof'</tt>.
-
 <li> Hexadecimal floating point constants are supported:
 <PRE>
           double d = 0x1234p10;
@@ -98,11 +95,15 @@ is the same as writing
 <PRE>
           double d = 4771840.0;
 </PRE>
+
+<li> <tt>'inline'</tt> keyword is ignored.
+
+<li> <tt>'restrict'</tt> keyword is ignored.
 </ul>
 
 <h2>GNU C extensions</h2>
 
-TCC implements some GNU C extensions which are found in many C sources:
+TCC implements some GNU C extensions:
 
 <ul>
 
@@ -122,6 +123,45 @@ instead of
 
 <li> <tt>'\e'</tt> is ASCII character 27.
 
+<li> case ranges : ranges can be used in <tt>case</tt>s:
+<PRE>
+    switch(a) {
+    case 1 ... 9:
+          printf("range 1 to 9\n");
+          break;
+    default:
+          printf("unexpected\n");
+          break;
+    }
+</PRE>
+
+<li> The keyword <tt>__attribute__</tt> is handled to specify variable or
+function attributes. The following attributes are supported:
+  <ul>
+  <li> <tt>aligned(n)</tt>: align data to n bytes (must be a power of two).
+
+  <li> <tt>section(name)</tt>: generate function or data in assembly
+  section name (name is a string containing the section name) instead
+  of the default section.
+
+  <li> <tt>unused</tt>: specify that the variable or the function is unused.
+  </ul>
+<BR>
+Here are some examples:
+<PRE>
+    int a __attribute__ ((aligned(8), section(".mysection")));
+</PRE>
+<BR>
+align variable <tt>'a'</tt> to 8 bytes and put it in section <tt>.mysection</tt>.
+
+<PRE>
+    int my_add(int a, int b) __attribute__ ((section(".mycodesection"))) 
+    {
+        return a + b;
+    }
+</PRE>
+<BR>
+generate function <tt>'my_add'</tt> in section <tt>.mycodesection</tt>.
 </ul>
 
 <h2>TinyCC extensions</h2>
@@ -138,35 +178,140 @@ indicate that you use TCC.
 <li> Binary digits can be entered (<tt>'0b101'</tt> instead of
 <tt>'5'</tt>).
 
+<li> <tt>__BOUNDS_CHECKING_ON</tt> is defined if bound checking is activated.
+
 </ul>
 
-<h2> Command line invokation </h2>
+<h2>TinyCC Memory and Bound checks</h2>
+<A NAME="bounds"></a>
+
+This feature is activated with the <A HREF="#invoke"><tt>'-b'</tt>
+option</A>.
+<P>
+Note that pointer size is <em>unchanged</em> and that code generated
+with bound checks is <em>fully compatible</em> with unchecked
+code. When a pointer comes from unchecked code, it is assumed to be
+valid. Even very obscure C code with casts should work correctly.
+</P>
+<P> To have more information about the ideas behind this method, <A
+HREF="http://www.doc.ic.ac.uk/~phjk/BoundsChecking.html">check
+here</A>.
+</P>
+<P>
+Here are some examples of catched errors:
+</P>
+<TABLE BORDER=1>
+<TR>
+<TD>
+<PRE>
+{
+    char tab[10];
+    memset(tab, 0, 11);
+}
+</PRE>
+</TD><TD VALIGN=TOP>Invalid range with standard string function</TD>
+
+<TR>
+<TD>
+<PRE>
+{
+    int tab[10];
+    for(i=0;i<11;i++) {
+        sum += tab[i];
+    }
+}
+</PRE>
+</TD><TD VALIGN=TOP>Bound error in global or local arrays</TD>
+
+<TR>
+<TD>
+<PRE>
+{
+    int *tab;
+    tab = malloc(20 * sizeof(int));
+    for(i=0;i<21;i++) {
+        sum += tab4[i];
+    }
+    free(tab);
+}
+</PRE>
+</TD><TD VALIGN=TOP>Bound error in allocated data</TD>
+
+<TR>
+<TD>
+<PRE>
+{
+    int *tab;
+    tab = malloc(20 * sizeof(int));
+    free(tab);
+    for(i=0;i<20;i++) {
+        sum += tab4[i];
+    }
+}
+</PRE>
+</TD><TD VALIGN=TOP>Access to a freed region</TD>
+
+<TR>
+<TD>
+<PRE>
+{
+    int *tab;
+    tab = malloc(20 * sizeof(int));
+    free(tab);
+    free(tab);
+}
+</PRE>
+</TD><TD VALIGN=TOP>Freeing an already freed region</TD>
+
+</TABLE>
+
+<h2> Command line invocation </h2>
+<A NAME="invoke"></a>
 
 <PRE>
-usage: tcc [-Idir] [-Dsym] [-llib] [-i infile] infile [infile_args...]
+usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]
+           [-i infile] infile [infile_args...]
 </PRE>
 
 <table>
 <tr><td>'-Idir'</td> 
-<td>specify an additionnal include path. The default ones are:
+<td>Specify an additionnal include path. The default ones are:
 /usr/include, /usr/lib/tcc, /usr/local/lib/tcc.</td>
 
-<tr><td>'-Dsym'</td>
-<td>define preprocessor symbol 'sym' to 1.</td>
+<tr><td>'-Dsym[=val]'</td> <td>Define preprocessor symbol 'sym' to
+val. If val is not present, its value is '1'. NOTE: currently, only
+integer and strings are supported as values</td>
+
+<tr><td>'-Usym'</td> <td>Undefine preprocessor symbol 'sym'.</td>
 
 <tr><td>'-lxxx'</td>
-<td>dynamically link your program with library
+<td>Dynamically link your program with library
 libxxx.so. Standard library paths are checked, including those
-specificed with LD_LIBRARY_PATH.</td>
+specified with LD_LIBRARY_PATH.</td>
+
+<tr><td>'-g'</td>
+<td>Generate run time debug information so that you get clear run time
+error messages: <tt> test.c:68: in function 'test5()': dereferencing
+invalid pointer</tt> instead of the laconic <tt>Segmentation
+fault</tt>.
+</td>
+
+<tr><td>'-b'</td> <td>Generate additionnal support code to check
+memory allocations and array/pointer bounds. '-g' is implied. Note
+that the generated code is slower and bigger in this case.
+</td>
 
 <tr><td>'-i file'</td>
-<td>compile C source 'file' before main C source. With this
+<td>Compile C source 'file' before main C source. With this
 command, multiple C files can be compiled and linked together.</td>
 </table>
+<br>
+Note: the <tt>'-o file'</tt> option to generate an ELF executable is
+currently unsupported.
 
 <hr>
-Copyright (c) 2001 Fabrice Bellard <hr>
-Fabrice Bellard - <em> fabrice.bellard at free.fr </em> - <A HREF="http://fabrice.bellard.free.fr/"> http://fabrice.bellard.free.fr/ </A> - <A HREF="http://www.tinycc.org/"> http://www.tinycc.org/ </A>
+Copyright (c) 2001, 2002 Fabrice Bellard <hr>
+Fabrice Bellard - <em> fabrice.bellard at free.fr </em> - <A HREF="http://bellard.org/"> http://bellard.org/ </A> - <A HREF="http://www.tinycc.org/"> http://www.tinycc.org/ </A>
 
 </body>
 </html>

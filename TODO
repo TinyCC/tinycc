@@ -1,25 +1,27 @@
 TODO list:
 
 Critical:
-- finish float/double support. add function type convertion.
-- section generation and GNUC __attributte__ handling.
-- D option with '=' handling
-- 0 is pointer - fix type compare
+- optimize slightly bound checking when doing addition + dereference.
+- better section generator (suppress some mmaps).
+- To check: bound checking and float/long long/struct copy code
 - To check: 'sizeof' may not work if too complex expression is given.
-- fix 'char' and 'short' casts (only in function parameters and in
-  assignment).
+- fix bound check code with '&' on local variables (currently done
+  only for local arrays).
 
 Not critical:
 
-- interactive mode
+- add PowerPC or ARM code generator and improve codegen for RISC (need
+  to suppress VT_LOCAL and use a base register instead).
+- interactive mode / integrated debugger
 - fix multiple compound literals inits in blocks (ISOC99 normative
   example - only relevant when using gotos! -> must add boolean
   variable to tell if compound literal was already initialized).
+- add more bounds checked functions (strcpy, ...)
 - fix L"\x1234" wide string case (need to store them as utf8 ?)
 - fix preprocessor symbol redefinition
 - better constant opt (&&, ||, ?:)
 - add ELF executable and shared library output option (would be needed
   for completness!).
-- add PowerPC code generator.
+- D option with all #define cases (needs C parser)
 - add portable byte code generator and interpreter for other
   unsupported architectures.

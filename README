@@ -15,6 +15,9 @@ Features:
   heading torward full ISOC99 compliance. TCC can of course compile
   itself.
 
+- SAFE! tcc includes an optional memory and bound checker. Bound
+  checked code can be mixed freely with standard code.
+
 - Compile and execute C source directly. No linking or assembly
   necessary. Full C preprocessor included. 
 
@@ -27,7 +30,7 @@ Documentation:
 
 1) Installation
 
-***TCC currently only works on Linux x86***.
+*** TCC currently only works on Linux x86 with glibc >= 2.1 ***.
 
 Type 'make install' to compile and install tcc in /usr/local/bin and
 /usr/local/lib/tcc.
@@ -49,21 +52,7 @@ launch the C code as a shell or perl script :-) The command line
 arguments are put in 'argc' and 'argv' of the main functions, as in
 ANSI C.
 
-3) Invokation
-
-'-Idir' : specify an additionnal include path. The
-default ones are: /usr/include, /usr/lib/tcc, /usr/local/lib/tcc.
-
-'-Dsym' : define preprocessor symbol 'sym' to 1.
-
-'-lxxx' : dynamically link your program with library
-libxxx.so. Standard library paths are checked, including those
-specificed with LD_LIBRARY_PATH.
-
-'-i file' : compile C source 'file' before main C source. With this
-command, multiple C files can be compiled and linked together.
-
-4) Examples
+3) Examples
 
 ex1.c: simplest example (hello world). Can also be launched directly
 as a script: './ex1.c'.
@@ -84,7 +73,7 @@ generator.
 prog.c: auto test for TCC which tests many subtle possible bugs. Used
 when doing 'make test'.
 
-5) Full Documentation
+4) Full Documentation
 
 Please read tcc-doc.html to have all the features of TCC.
 
@@ -105,7 +94,7 @@ assembly), but it allows to be very fast and surprisingly not so
 complicated.
 
 The TCC code generator is register based. It means that it could even
-generate good code for RISC processors. On x86, three temporary
+generate not so bad code for RISC processors. On x86, three temporary
 registers are used. When more registers are needed, one register is
 flushed in a new local variable.
 
@@ -113,13 +102,12 @@ Constant propagation is done for all operations. Multiplications and
 divisions are optimized to shifts when appropriate. Comparison
 operators are optimized by maintaining a special cache for the
 processor flags. &&, || and ! are optimized by maintaining a special
-'jmp target' value. No other jmp optimization is currently performed
+'jump target' value. No other jump optimization is currently performed
 because it would require to store the code in a more abstract fashion.
 
-The types and values descriptions are stored in a single 'int'
-variable (see VT_xxx constants). It was choosen in the first stages of
-development when tcc was much simpler. Now, it may not be the best
-solution.
+The types are stored in a single 'int' variable (see VT_xxx
+constants). It was choosen in the first stages of development when tcc
+was much simpler. Now, it may not be the best solution.
 
 License:
 -------
@@ -130,4 +118,4 @@ file).
 I accept only patches where you give your copyright explicitely to me
 to simplify licensing issues.
 
-Fabrice Bellard - Nov 17, 2001.
+Fabrice Bellard.
