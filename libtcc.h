@@ -14,6 +14,10 @@ void tcc_delete(TCCState *s);
 /* add debug information in the generated code */
 void tcc_enable_debug(TCCState *s);
 
+/* set error/warning display callback */
+void tcc_set_error_func(TCCState *s, void *error_opaque,
+                        void (*error_func)(void *opaque, const char *msg));
+
 /*****************************/
 /* preprocessor */
 
@@ -33,15 +37,12 @@ void tcc_undefine_symbol(TCCState *s, const char *sym);
 /* compiling */
 
 /* add a file (either a C file, dll, an object, a library or an ld
-   script */
-void tcc_add_file(TCCState *s, const char *filename);
+   script). Return -1 if error. */
+int tcc_add_file(TCCState *s, const char *filename);
 
 /* compile a string containing a C source. Return non zero if
    error. */
 int tcc_compile_string(TCCState *s, const char *buf);
-
-/* get last error */
-int tcc_get_error(TCCState *s, char *buf, int buf_size);
 
 /*****************************/
 /* linking commands */
@@ -63,14 +64,17 @@ int tcc_add_library(TCCState *s, const char *libraryname);
 /* add a symbol to the compiled program */
 int tcc_add_symbol(TCCState *s, const char *name, unsigned long val);
 
-/* output an executable, library or object file */
+/* output an executable, library or object file. DO NOT call
+   tcc_relocate() before. */
 int tcc_output_file(TCCState *s, const char *filename);
 
-/* link and run main() function and return its value */
+/* link and run main() function and return its value. DO NOT call
+   tcc_relocate() before. */
 int tcc_run(TCCState *s, int argc, char **argv);
 
-/* do all relocations (needed before using tcc_get_symbol()) */
-void tcc_relocate(TCCState *s);
+/* do all relocations (needed before using tcc_get_symbol()). Return
+   non zero if link error. */
+int tcc_relocate(TCCState *s);
 
 /* return symbol value or error */
 void *tcc_get_symbol(TCCState *s, const char *name);
