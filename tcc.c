@@ -27,6 +27,7 @@
 #define MACRO_STACK_SIZE    32
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
+#define VSTACK_SIZE         64
 
 #define NB_REGS             3
 
@@ -61,11 +62,11 @@ typedef struct {
 */
 FILE *file;
 int tok, tok1, tokc, rsym, anon_sym,
-    prog, ind, loc, glo, vt, *vstack, *vstack_ptr,
-    vc, line_num;
+    prog, ind, loc, glo, vt, vc, line_num;
 char *idtable, *idptr, *filename;
 Sym *define_stack, *global_stack, *local_stack, *label_stack;
 
+int vstack[VSTACK_SIZE], *vstack_ptr;
 char *macro_stack[MACRO_STACK_SIZE], **macro_stack_ptr, *macro_ptr;
 IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
@@ -541,7 +542,7 @@ void preprocess()
         /* now 'tok' is the macro symbol */
         /* a space is inserted after each macro */
         str = get_str(' ');
-        printf("define %s '%s'\n", get_tok_str(tok), str);
+        //        printf("define %s '%s'\n", get_tok_str(tok), str);
         sym_push1(&define_stack, tok, 0, (int)str);
     } else if (tok == TOK_INCLUDE) {
         skip_spaces();
@@ -1105,6 +1106,8 @@ int gvp(int *p)
 
 void vpush()
 {
+    if (vstack_ptr >= vstack + VSTACK_SIZE)
+        error("memory full");
     *vstack_ptr++ = vt;
     *vstack_ptr++ = vc;
     /* cannot let cpu flags if other instruction are generated */
@@ -2330,7 +2333,6 @@ int main(int c, char **v)
     glo = malloc(DATA_SIZE);
     memset((void *)glo, 0, DATA_SIZE);
     prog = malloc(TEXT_SIZE);
-    vstack = malloc(256);
     vstack_ptr = vstack;
     macro_stack_ptr = macro_stack;
     anon_sym = 1 << (31 - VT_STRUCT_SHIFT); 
