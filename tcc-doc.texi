@@ -17,7 +17,7 @@ TCC compiles so @emph{fast} that even for big projects @code{Makefile}s may
 not be necessary. 
 
 TCC not only supports ANSI C, but also most of the new ISO C99
-standard and many GNUC extensions.
+standard and many GNUC extensions including inline assembly.
 
 TCC can also be used to make @emph{C scripts}, i.e. pieces of C source
 that you run as a Perl or Python script. Compilation is so fast that
@@ -69,6 +69,14 @@ link a.o and b.o together and generate the executable myprog.
 
 @item tcc -c a.c
 Compile a.c and generate object file a.o
+
+@item tcc -c asmfile.S
+Preprocess with C preprocess and assemble asmfile.S and generate
+object file asmfile.o.
+
+@item tcc -c asmfile.s
+Assemble (but not preprocess) asmfile.s and generate object file
+asmfile.o.
 
 @item tcc -r -o ab.o a.c b.c
 Compile a.c and b.c, link them together and generate the object file ab.o.
@@ -332,6 +340,31 @@ to get the alignment of a type or an expression.
 @code{void *} on the goto label @code{label}. @code{goto *expr} can be
 used to jump on the pointer resulting from @code{expr}.
 
+@item Inline assembly with asm instruction:
+@example
+static inline void * my_memcpy(void * to, const void * from, size_t n)
+{
+int d0, d1, d2;
+__asm__ __volatile__(
+	"rep ; movsl\n\t"
+	"testb $2,%b4\n\t"
+	"je 1f\n\t"
+	"movsw\n"
+	"1:\ttestb $1,%b4\n\t"
+	"je 2f\n\t"
+	"movsb\n"
+	"2:"
+	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
+	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+	: "memory");
+return (to);
+}
+@end example
+
+TCC includes its own x86 inline assembler with a @code{gas}-like (GNU
+assembler) syntax. No intermediate files are generated. GCC 3.x named
+operands are supported.
+
 @end itemize
 
 @section TinyCC extensions
@@ -349,6 +382,98 @@ indicate that you use TCC.
 @item @code{__BOUNDS_CHECKING_ON} is defined if bound checking is activated.
 
 @end itemize
+
+@chapter TinyCC Assembler
+
+Since version 0.9.16, TinyCC integrates its own assembler. TinyCC
+assembler supports a gas-like syntax (GNU assembler). You can
+desactivate assembler support if you want a smaller TinyCC executable
+(the C compiler does not rely on the assembler).
+
+TinyCC Assembler is used to handle files with @file{.S} (C
+preprocessed assembler) and @file{.s} extensions. It is also used to
+handle the GNU inline assembler with the @code{asm} keyword.
+
+@section Syntax
+
+TinyCC Assembler supports most of the gas syntax. The tokens are the
+same as C.
+
+@itemize
+
+@item C and C++ comments are supported.
+
+@item Identifiers are the same as C, so you cannot use '.' or '$'.
+
+@item Only 32 bit integer numbers are supported.
+
+@end itemize
+
+@section Expressions
+
+@itemize
+
+@item Integers in decimal, octal and hexa are supported.
+
+@item Unary operators: +, -, ~.
+
+@item Binary operators in decreasing priority order:
+
+@enumerate
+@item *, /, %
+@item &, |, ^
+@item +, -
+@end enumerate
+
+@item A value is either an absolute number or a label plus an offset. 
+All operators accept absolute values except '+' and '-'. '+' or '-' can be
+used to add an offset to a label. '-' supports two labels only if they
+are the same or if they are both defined and in the same section.
+
+@end itemize
+
+@section Labels
+
+@itemize
+
+@item All labels are considered as local, except undefined ones.
+
+@item Numeric labels can be used as local @code{gas}-like labels. 
+They can be defined several times in the same source. Use 'b'
+(backward) or 'f' (forward) as suffix to reference them:
+
+@example
+ 1:
+      jmp 1b /* jump to '1' label before */
+      jmp 1f /* jump to '1' label after */
+ 1:
+@end example
+
+@end itemize
+
+@section Directives
+
+All directives are preceeded by a '.'. The following directives are
+supported:
+
+@itemize
+@item .align n[,value]
+@item .skip n[,value]
+@item .space n[,value]
+@item .byte value1[,value2...]
+@item .word value1[,value2...]
+@item .short value1[,value2...]
+@item .int value1[,value2...]
+@item .long value1[,value2...]
+@end itemize
+
+@section X86 Assembler
+
+All X86 opcodes are supported. Only ATT syntax is supported (source
+then destination operand order). If no size suffix is given, TinyCC
+tries to guess it from the operand sizes.
+
+Currently, MMX opcodes are supported but not SSE ones.
 
 @chapter TinyCC Linker
 

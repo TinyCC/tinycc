@@ -13,7 +13,7 @@ CFLAGS+=-m386 -malign-functions=0 -mpreferred-stack-boundary=2
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.15
+VERSION=0.9.16
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
@@ -103,7 +103,7 @@ ex3: ex3.c
 
 # Native Tiny C Compiler
 
-tcc_g: tcc.c i386-gen.c tccelf.c tcctok.h libtcc.h Makefile
+tcc_g: tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
 tcc: tcc_g
@@ -128,16 +128,8 @@ install: tcc libtcc1.o bcheck.o
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe iltcc iltcc_g tcc-doc.html \
+           *.exe tcc-doc.html \
            tcctest[1234] test[1234].out
-
-# IL TCC
-
-iltcc_g: tcc.c il-gen.c bcheck.c Makefile
-	gcc $(CFLAGS) -DTCC_TARGET_IL -o $@ $< $(LIBS)
-
-iltcc: iltcc_g
-	strip -s -R .comment -R .note -o $@ $<
 
 # win32 TCC
 tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
@@ -176,6 +168,22 @@ libtest: libtcc_test
 instr: instr.o
 	objdump -d instr.o
 
+# tiny assembler testing
+
+asmtest.ref: asmtest.S
+	gcc -c -o asmtest.ref.o asmtest.S
+	objdump -D asmtest.ref.o > $@
+
+# XXX: we compute tcc.c to go faster during development !
+asmtest.out: asmtest.S tcc
+#	./tcc tcc.c -c asmtest.S
+#asmtest.out: asmtest.S tcc
+	./tcc -c asmtest.S
+	objdump -D asmtest.o > $@
+
+asmtest: asmtest.out asmtest.ref
+	@if diff -u --ignore-matching-lines="file format" asmtest.ref asmtest.out ; then echo "ASM Auto Test OK"; fi
+
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
 
@@ -191,9 +199,8 @@ FILES= Makefile Makefile.uClibc \
        README TODO COPYING \
        Changelog tcc-doc.texi tcc-doc.html \
        tcc.1 \
-       tcc.c i386-gen.c tccelf.c tcctok.h \
+       tcc.c i386-gen.c tccelf.c tcctok.h tccasm.c  i386-asm.c i386-asm.h\
        bcheck.c libtcc1.c \
-       il-opcodes.h il-gen.c \
        elf.h stab.h stab.def \
        stddef.h stdarg.h stdbool.h float.h varargs.h \
        tcclib.h libtcc.h libtcc_test.c \

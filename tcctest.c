@@ -67,6 +67,9 @@ void relocation_test(void);
 void old_style_function(void);
 void sizeof_test(void);
 void typeof_test(void);
+void local_label_test(void);
+void statement_expr_test(void);
+void asm_test(void);
 
 int fib(int n);
 void num(int n);
@@ -200,7 +203,7 @@ void macro_test(void)
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 200 "tcctest.c"
+#line 206 "tcctest.c"
 
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
@@ -467,6 +470,9 @@ int main(int argc, char **argv)
     old_style_function();
     sizeof_test();
     typeof_test();
+    statement_expr_test();
+    local_label_test();
+    asm_test();
     return 0; 
 }
 
@@ -839,6 +845,16 @@ void bool_test()
         }
     }
 
+    /* test ? : GCC extension */
+    {
+        static int v1 = 34 ? : -1; /* constant case */
+        static int v2 = 0 ? : -1; /* constant case */
+        int a = 30;
+        
+        printf("%d %d\n", v1, v2);
+        printf("%d %d\n", a - 30 ? : a * 2, a + 1 ? : a * 2);
+    }
+
     /* again complex expression */
     for(i=0;i<256;i++) {
         if (toupper1 (i) != TOUPPER (i))
@@ -846,7 +862,13 @@ void bool_test()
     }
 }
 
+/* GCC accepts that */
+static int tab_reinit[];
+static int tab_reinit[10];
 
+//int cinit1; /* a global variable can be defined several times without error ! */
+int cinit1; 
+int cinit1; 
 int cinit1 = 0;
 int *cinit2 = (int []){3, 2, 1};
 
@@ -1072,6 +1094,12 @@ struct bar {
         "a2", 1
 };
 
+int sinit18[10] = {
+    [2 ... 5] = 20,
+    2,
+    [8] = 10,
+};
+
 void init_test(void)
 {
     int linit1 = 2;
@@ -1161,7 +1189,11 @@ void init_test(void)
     printf("sinit17=%s %d %s %d\n",
            sinit17[0].s, sinit17[0].len,
            sinit17[1].s, sinit17[1].len);
+    for(i=0;i<10;i++)
+        printf("%x ", sinit18[i]);
+    printf("\n");
 }
+
 
 void switch_test()
 {
@@ -1659,3 +1691,150 @@ void typeof_test(void)
     c = 3.5;
     printf("a=%f b=%f c=%f\n", a, b, c);
 }
+
+void statement_expr_test(void)
+{
+    int a, i;
+
+    a = 0;
+    for(i=0;i<10;i++) {
+        a += 1 + 
+            ( { int b, j; 
+                b = 0; 
+                for(j=0;j<5;j++) 
+                    b += j; b; 
+            } );
+    }
+    printf("a=%d\n", a);
+    
+}
+
+void local_label_test(void)
+{
+    int a;
+    goto l1;
+ l2:
+    a = 1 + ({
+        __label__ l1, l2, l3;
+        goto l4;
+    l5:
+        printf("aa1\n");
+        goto l1;
+    l2:
+        printf("aa3\n");
+        goto l3;
+    l1:
+        printf("aa2\n");
+        goto l2;
+    l3:;
+        1;
+    });
+    printf("a=%d\n", a);
+    return;
+ l1:
+    printf("bb1\n");
+    goto l2;
+ l4:
+    printf("bb2\n");
+    goto l5;
+}
+
+/* inline assembler test */
+#ifdef __i386__
+
+/* from linux kernel */
+static char * strncat1(char * dest,const char * src,size_t count)
+{
+int d0, d1, d2, d3;
+__asm__ __volatile__(
+	"repne\n\t"
+	"scasb\n\t"
+	"decl %1\n\t"
+	"movl %8,%3\n"
+	"1:\tdecl %3\n\t"
+	"js 2f\n\t"
+	"lodsb\n\t"
+	"stosb\n\t"
+	"testb %%al,%%al\n\t"
+	"jne 1b\n"
+	"2:\txorl %2,%2\n\t"
+	"stosb"
+	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
+	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
+	: "memory");
+return dest;
+}
+
+static inline void * memcpy1(void * to, const void * from, size_t n)
+{
+int d0, d1, d2;
+__asm__ __volatile__(
+	"rep ; movsl\n\t"
+	"testb $2,%b4\n\t"
+	"je 1f\n\t"
+	"movsw\n"
+	"1:\ttestb $1,%b4\n\t"
+	"je 2f\n\t"
+	"movsb\n"
+	"2:"
+	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
+	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+	: "memory");
+return (to);
+}
+
+static __inline__ void sigaddset1(unsigned int *set, int _sig)
+{
+	__asm__("btsl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
+}
+
+static __inline__ void sigdelset1(unsigned int *set, int _sig)
+{
+	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
+}
+
+static __inline__ __const__ unsigned int swab32(unsigned int x)
+{
+	__asm__("xchgb %b0,%h0\n\t"	/* swap lower bytes	*/
+		"rorl $16,%0\n\t"	/* swap words		*/
+		"xchgb %b0,%h0"		/* swap higher bytes	*/
+		:"=q" (x)
+		: "0" (x));
+	return x;
+}
+
+unsigned int set;
+
+void asm_test(void)
+{
+    char buf[128];
+    unsigned int val;
+
+    printf("inline asm:\n");
+    memcpy1(buf, "hello", 6);
+    strncat1(buf, " worldXXXXX", 3);
+    printf("%s\n", buf);
+
+    set = 0xff;
+    sigdelset1(&set, 2);
+    sigaddset1(&set, 16);
+    /* NOTE: we test here if C labels are correctly restored after the
+       asm statement */
+    goto label1;
+ label2:
+    __asm__("btsl %1,%0" : "=m"(set) : "Ir"(20) : "cc");
+    printf("set=0x%x\n", set);
+    val = 0x01020304;
+    printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));
+    return;
+ label1:
+    goto label2;
+}
+
+#else
+
+void asm_test(void)
+{
+}
+
+#endif

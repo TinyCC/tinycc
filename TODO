@@ -1,21 +1,33 @@
 TODO list:
 
-- add statment expressions (linux kernel compilation)
-- implement minimal 'asm' extension (linux kernel compilation)
-- handle static inline, then normal prototype.
+- fix asm without input/output (no % preprocessing)
+- handle inline functions as macros.
+- see transparent union pb in /urs/include/sys/socket.h
+- precise behaviour of typeof with arrays ? (__put_user macro)
+- #include_next support for /usr/include/limits ?
+  but should suffice for most cases)
+- handle '? x, y : z' in reversed function arguments or unsized
+  variable initialization (',' is considered incorrectly as separator
+  in preparser) : change func argument code generator ?
+- function pointers/lvalues in ? : (linux kernel net/core/dev.c)
+- add A x86 asm constraint (linux asm-i386/div64.h)
+- transform functions to function pointers in function parameters (net/ipv4/ip_output.c)
+- fix function pointer type display
+- fix bound exit on RedHat 7.3
+- fix static link on RedHat 7.3
+- check lcc test suite -> fix bitfield binary operations
+- check section alignment in C
+- fix invalid cast in comparison 'if (v == (int8_t)v)'
+- packed attribute
+- look at patches from Scott Lafferty
+- look at bugs from Jason Petrasko.
 - support link once trick (gcc 3.2 / glibc compilation issue)
 - finish varargs.h support (gcc 3.2 testsuite issue)
 - add alloca()
 - fix static functions declared inside block
-- fix bitfield binary operations
 - C99: add variable size arrays (gcc 3.2 testsuite issue)
 - C99: add complex types (gcc 3.2 testsuite issue)
-- ignore __extension__ keyword (see 20010328-1.c). 
-- Add __restrict keyword (20010611-1.c).
 - postfix compound literals (see 20010124-1.c)
-- handle '? x, y : z' in reversed function arguments or unsized
-  variable initialization (',' is considered incorrectly as separator
-  in preparser) : use a "record" parse mode ?
 - fix multiple unions init
 - test includes in libtcc_test.
 - look at GCC 3.2 compatibility problems.
