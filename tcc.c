@@ -88,9 +88,21 @@ char *idtable, *idptr, *idlast, *filename;
 #define TOK_MID  0xa3 /* inc/dec, to void constant */
 #define TOK_INC  0xa4
 
-#define TOK_SHL  0xe0 /* warning: depend on asm code */
-#define TOK_SHR  0xf8 /* warning: depend on asm code */
+#define TOK_SHL  0x01 
+#define TOK_SHR  0x02 
   
+/* assignement operators : normal operator or 0x80 */
+#define TOK_A_MOD 0xa5
+#define TOK_A_AND 0xa6
+#define TOK_A_MUL 0xaa
+#define TOK_A_ADD 0xab
+#define TOK_A_SUB 0xad
+#define TOK_A_DIV 0xaf
+#define TOK_A_XOR 0xde
+#define TOK_A_OR  0xfc
+#define TOK_A_SHL 0x81
+#define TOK_A_SHR 0x82
+
 #ifdef TINY
 #define expr_eq() expr()
 #endif
@@ -242,13 +254,20 @@ void next()
 #ifdef TINY
         q = "<=\236>=\235!=\225++\244--\242==\224";
 #else
-        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\340>>\370";
+        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374";
 #endif
         /* two chars */
         v = inp();
         while (*q) {
             if (*q == c & q[1] == v) {
                 tok = q[2] & 0xff;
+                if (tok == TOK_SHL | tok == TOK_SHR) {
+                    v = inp();
+                    if (v == '=')
+                        tok = tok | 0x80;
+                    else
+                        ungetc(v, file);
+                }
                 return;
             }
             q = q + 3;
@@ -416,8 +435,10 @@ void gen_op(op, l)
     t = vt;
     o(0x50); /* push %eax */
     next();
-    if (l < 0)
+    if (l == -1)
         expr();
+    else if (l == -2)
+        expr_eq();
     else
         sum(l);
     gv();
@@ -441,7 +462,10 @@ void gen_op(op, l)
 #ifndef TINY
     else if (op == TOK_SHL | op == TOK_SHR) {
         o(0xd391); /* xchg %ecx, %eax, shl/sar %cl, %eax */
-        o(op);
+        if (op == TOK_SHL) 
+            o(0xe0);
+        else
+            o(0xf8);
     }
 #endif
     else if (op == '/' | op == '%') {
@@ -760,20 +784,26 @@ void uneq()
     int ft, fc, b;
     
     unary();
-    if (tok == '=') {
+    if (tok == '=' | 
+        (tok >= TOK_A_MOD & TOK_A_DIV) |
+        tok == TOK_A_XOR | tok == TOK_A_OR | 
+        tok == TOK_A_SHL | tok == TOK_A_SHR) {
         test_lvalue();
-        next();
         fc = vc;
         ft = vt;
         b = (vt & VT_TYPE) == VT_BYTE;
         if (ft & VT_VAR)
             o(0x50); /* push %eax */
-        expr_eq();
+        if (tok == '=') {
+            next();
+            expr_eq();
 #ifndef TINY
-        if ((vt & VT_PTRMASK) != (ft & VT_PTRMASK))
-            warning("incompatible type");
+            if ((vt & VT_PTRMASK) != (ft & VT_PTRMASK))
+                warning("incompatible type");
 #endif
-        gv();  /* generate value */
+            gv();  /* generate value */
+        } else
+            gen_op(tok & 0x7f, -2); /* XXX: incorrect, must call expr_eq */
         
         if (ft & VT_VAR) {
             o(0x59); /* pop %ecx */
@@ -1068,8 +1098,10 @@ int main(int c, char **v)
     }
 #else
     t = vac[TOK_MAIN];
+#ifndef TINY
     if (!t)
         error("main() not defined");
+#endif
     return (*t)(c - 1, v);
 #endif
 }
