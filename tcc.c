@@ -316,6 +316,10 @@ enum {
     TOK_MAIN,
 };
 
+/* XXX: need to define this to use them in non ISOC99 context */
+extern float strtof (const char *__nptr, char **__endptr);
+extern long double strtold (const char *__nptr, char **__endptr);
+
 void sum(int l);
 void next(void);
 void next_nomacro(void);
@@ -894,7 +898,7 @@ int expr_preprocess(void)
     return c != 0;
 }
 
-#ifdef DEBUG
+#if defined(DEBUG)
 void tok_print(int *str)
 {
     int t;
@@ -1007,6 +1011,11 @@ void preprocess()
             strcpy(buf, get_tok_str(tok, &tokc));
             c = '\"';
         }
+        /* eat all spaces and comments after include */
+        /* XXX: slightly incorrect */
+        while (ch1 != '\n' && ch1 != -1)
+            inp();
+
         if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
             error("memory full");
         if (c == '\"') {
@@ -1389,12 +1398,10 @@ void parse_number(void)
             if (t == 'F') {
                 cinp();
                 tok = TOK_CFLOAT;
-                /* XXX: this is an ISOC99 function */
                 cval.f = strtof(token_buf, NULL);
             } else if (t == 'L') {
                 cinp();
                 tok = TOK_CLDOUBLE;
-                /* XXX: this is an ISOC99 function */
                 cval.ld = strtold(token_buf, NULL);
             } else {
                 tok = TOK_CDOUBLE;
@@ -1638,7 +1645,7 @@ int *macro_twosharps(int *macro_str)
         next_nomacro();
         if (tok == 0)
             break;
-        if (*macro_ptr == TOK_TWOSHARPS) {
+        while (*macro_ptr == TOK_TWOSHARPS) {
             macro_ptr++;
             macro_ptr1 = macro_ptr;
             t = *macro_ptr;
@@ -1654,15 +1661,15 @@ int *macro_twosharps(int *macro_str)
                     p = get_tok_str(t, &cval);
                     strcat(token_buf, p);
                     ts = tok_alloc(token_buf, 0);
-                    tok_add(&macro_str1, &macro_str1_len, ts->tok);
+                    tok = ts->tok; /* modify current token */
                 } else {
                     /* cannot merge tokens: skip '##' */
                     macro_ptr = macro_ptr1;
+                    break;
                 }
             }
-        } else {
-            tok_add2(&macro_str1, &macro_str1_len, tok, &tokc);
         }
+        tok_add2(&macro_str1, &macro_str1_len, tok, &tokc);
     }
     tok_add(&macro_str1, &macro_str1_len, 0);
     return macro_str1;
@@ -2842,7 +2849,19 @@ void unary(void)
     GFuncContext gf;
 
     if (tok == TOK_NUM || tok == TOK_CCHAR || tok == TOK_LCHAR) {
-        vset(VT_CONST, tokc.i);
+        vset(VT_CONST | VT_INT, tokc.i);
+        next();
+    } else if (tok == TOK_CFLOAT) {
+        /* currently, cannot do more */
+        vset(VT_CONST | VT_FLOAT, 0);
+        next();
+    } else if (tok == TOK_CDOUBLE) {
+        /* currently, cannot do more */
+        vset(VT_CONST | VT_DOUBLE, 0);
+        next();
+    } else if (tok == TOK_CLDOUBLE) {
+        /* currently, cannot do more */
+        vset(VT_CONST | VT_LDOUBLE, 0);
         next();
     } else if (tok == TOK___FUNC__) {
         /* special function name identifier */
