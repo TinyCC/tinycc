@@ -276,13 +276,14 @@ void gfunc_start(GFuncContext *c)
     c->args_size = 0;
 }
 
-/* push function parameter which is in (vt, vc) */
+/* push function parameter which is in (vtop->t, vtop->c). Stack entry
+   is then popped. */
 void gfunc_param(GFuncContext *c)
 {
-    int size, align, ft, fc, r;
+    int size, align, r;
 
-    if ((vt & (VT_BTYPE | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
-        size = type_size(vt, &align);
+    if ((vtop->t & (VT_BTYPE | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
+        size = type_size(vtop->t, &align);
         /* align to stack align size */
         size = (size + 3) & ~3;
         /* allocate the necessary size on stack */
@@ -291,21 +292,17 @@ void gfunc_param(GFuncContext *c)
         r = get_reg(REG_CLASS_INT);
         o(0x89); /* mov %esp, r */
         o(0xe0 + r);
-        ft = vt;
-        fc = vc;
         vset(VT_INT | r, 0);
-        vpush();
-        vt = ft;
-        vc = fc;
+        vswap();
         vstore();
         c->args_size += size;
-    } else if ((vt & VT_BTYPE) == VT_LDOUBLE ||
-               (vt & VT_BTYPE) == VT_DOUBLE ||
-               (vt & VT_BTYPE) == VT_FLOAT) {
+    } else if ((vtop->t & VT_BTYPE) == VT_LDOUBLE ||
+               (vtop->t & VT_BTYPE) == VT_DOUBLE ||
+               (vtop->t & VT_BTYPE) == VT_FLOAT) {
         gv(); /* only one float register */
-        if ((vt & VT_BTYPE) == VT_FLOAT)
+        if ((vtop->t & VT_BTYPE) == VT_FLOAT)
             size = 4;
-        else if ((vt & VT_BTYPE) == VT_DOUBLE)
+        else if ((vtop->t & VT_BTYPE) == VT_DOUBLE)
             size = 8;
         else
             size = 12;
@@ -324,21 +321,22 @@ void gfunc_param(GFuncContext *c)
         o(0x50 + r); /* push r */
         c->args_size += 4;
     }
+    vtop--;
 }
 
-/* generate function call with address in (vt, vc) and free function
-   context */
+/* generate function call with address in (vtop->t, vtop->c) and free function
+   context. Stack entry is popped */
 void gfunc_call(GFuncContext *c)
 {
     int r;
-    if ((vt & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    if ((vtop->t & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         /* constant case */
         /* forward reference */
-        if (vt & VT_FORWARD) {
-            greloc((Sym *)vc, ind + 1, RELOC_REL32);
+        if (vtop->t & VT_FORWARD) {
+            greloc((Sym *)vtop->c, ind + 1, RELOC_REL32);
             oad(0xe8, 0);
         } else {
-            oad(0xe8, vc - ind - 5);
+            oad(0xe8, vtop->c - ind - 5);
         }
     } else {
         /* otherwise, indirect call */
@@ -348,6 +346,7 @@ void gfunc_call(GFuncContext *c)
     }
     if (c->args_size)
         oad(0xc481, c->args_size); /* add $xxx, %esp */
+    vtop--;
 }
 
 int gjmp(int t)
@@ -355,31 +354,31 @@ int gjmp(int t)
     return psym(0xe9, t);
 }
 
-/* generate a test. set 'inv' to invert test */
+/* generate a test. set 'inv' to invert test. Stack entry is popped */
 int gtst(int inv, int t)
 {
     int v, *p;
-    v = vt & VT_VALMASK;
+    v = vtop->t & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
         g(0x0f);
-        t = psym((vc - 16) ^ inv, t);
+        t = psym((vtop->c - 16) ^ inv, t);
     } else if (v == VT_JMP || v == VT_JMPI) {
         /* && or || optimization */
         if ((v & 1) == inv) {
-            /* insert vc jump list in t */
-            p = &vc;
+            /* insert vtop->c jump list in t */
+            p = &vtop->c;
             while (*p != 0)
                 p = (int *)*p;
             *p = t;
-            t = vc;
+            t = vtop->c;
         } else {
             t = gjmp(t);
-            gsym(vc);
+            gsym(vtop->c);
         }
-    } else if ((vt & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    } else if ((vtop->t & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         /* constant jmp optimization */
-        if ((vc != 0) != inv) 
+        if ((vtop->c != 0) != inv) 
             t = gjmp(t);
     } else {
         /* XXX: floats */
@@ -389,14 +388,21 @@ int gtst(int inv, int t)
         g(0x0f);
         t = psym(0x85 ^ inv, t);
     }
+    vtop--;
     return t;
 }
 
-/* generate an integer binary operation 'v = r op fr' instruction and
-   modifies (vt,vc) if needed */
-void gen_opi(int op, int r, int fr)
+/* generate an integer binary operation */
+void gen_opi(int op)
 {
-    int t;
+    int t, r, fr;
+
+    vswap();
+    r = gv();
+    vswap();
+    fr = gv();
+    vtop--;
+
     if (op == '+') {
         o(0x01);
         o(0xc0 + r + fr * 8); 
@@ -433,7 +439,7 @@ void gen_opi(int op, int r, int fr)
             o(0xe8 + r);
         else
             o(0xf8 + r);
-        vt = (vt & VT_TYPE) | r;
+        vtop->t = (vtop->t & VT_TYPE) | r;
     } else if (op == '/' | op == TOK_UDIV | op == TOK_PDIV | 
                op == '%' | op == TOK_UMOD) {
         save_reg(2); /* save edx */
@@ -450,33 +456,32 @@ void gen_opi(int op, int r, int fr)
             r = 2;
         else
             r = 0;
-        vt = (vt & VT_TYPE) | r;
+        vtop->t = (vtop->t & VT_TYPE) | r;
     } else {
+        vtop--;
         o(0x39);
         o(0xc0 + r + fr * 8); /* cmp fr, r */
         vset(VT_CMP, op);
     }
 }
 
-/* generate a floating point operation 'v = t1 op t2' instruction and
-   modifies (vt,vc) if needed */
-/* NOTE: floats can only be lvalues */
+/* generate a floating point operation 'v = t1 op t2' instruction. The
+   two operands are guaranted to have the same floating point type */
+/* NOTE: currently floats can only be lvalues */
 void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
 
     /* must put at least one value in the floating point register */
-    if ((vstack_ptr[-4] & VT_LVAL) &&
-        (vstack_ptr[-2] & VT_LVAL)) {
+    if ((vtop[-1].t & VT_LVAL) &&
+        (vtop[0].t & VT_LVAL)) {
         vswap();
-        vpop(&vt, &vc);
         gv();
-        vpush();
         vswap();
     }
     if (op >= TOK_EQ && op <= TOK_GT) {
         /* load on stack second operand */
-        load(REG_ST0, vstack_ptr[-2], vstack_ptr[-1]);
+        load(REG_ST0, vtop->t, vtop->c);
         if (op == TOK_GE || op == TOK_GT)
             o(0xc9d9); /* fxch %st(1) */
         o(0xe9da); /* fucompp */
@@ -495,13 +500,14 @@ void gen_opf(int op)
             o(0x45c4f6); /* test $0x45, %ah */
             op = TOK_EQ;
         }
-        vstack_ptr[-4] = (vstack_ptr[-4] & VT_TYPE) | VT_CMP;
-        vstack_ptr[-3] = op;
+        vtop--;
+        vtop->t = (vtop->t & VT_TYPE) | VT_CMP;
+        vtop->c = op;
     } else {
         /* swap the stack if needed so that t1 is the register and t2 is
            the memory reference */
         swapped = 0;
-        if (vstack_ptr[-4] & VT_LVAL) {
+        if (vtop[-1].t & VT_LVAL) {
             vswap();
             swapped = 1;
         }
@@ -525,8 +531,8 @@ void gen_opf(int op)
                 a += 8;
             break;
         }
-        ft = vstack_ptr[-2];
-        fc = vstack_ptr[-1];
+        ft = vtop->t;
+        fc = vtop->c;
         if ((ft & VT_BTYPE) == VT_DOUBLE)
             o(0xdc);
         else
@@ -541,24 +547,24 @@ void gen_opf(int op)
         } else {
             g(0x00 + a + r);
         }
+        vtop--;
     }
-    vstack_ptr -= 2;
-    vpop(&vt, &vc);
 }
 
-/* convert integers to floating point (float or double) */
+/* convert integers to floating point 't' type (float/double/long
+   double) */
 void gen_cvtf(int t)
 {
-    if ((vt & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
+    if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
         g(0x00);
-        o(0x50 + (vt & VT_VALMASK)); /* push r */
+        o(0x50 + (vtop->t & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
     } else {
         /* int to float/double/long double */
-        o(0x50 + (vt & VT_VALMASK)); /* push r */
+        o(0x50 + (vtop->t & VT_VALMASK)); /* push r */
         o(0x2404db); /* fildl (%esp) */
         o(0x04c483); /* add $4, %esp */
     }
