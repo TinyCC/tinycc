@@ -1,17 +1,23 @@
 /*
  * TCC auto test program
  */
+#include "config.h"
+
+#if GCC_MAJOR >= 3
 
 /* Unfortunately, gcc version < 3 does not handle that! */
-//#define ALL_ISOC99
+#define ALL_ISOC99
 
 /* only gcc 3 handles _Bool correctly */
-//#define BOOL_ISOC99
-
-#define C99_MACROS
+#define BOOL_ISOC99
 
 /* gcc 2.95.3 does not handle correctly CR in strings or after strays */
-//#define CORRECT_CR_HANDLING
+#define CORRECT_CR_HANDLING
+
+#endif
+
+/* __VA_ARGS__ and __func__ support */
+#define C99_MACROS
 
 /* test various include syntaxes */
 
@@ -228,8 +234,21 @@ void macro_test(void)
         printf("a=%d\n", a);
     }
     
+    /* macro function with argument outside the macro string */
+#define MF_s MF_hello
+#define MF_hello(msg) printf("%s\n",msg)
+
+#define MF_t printf("tralala\n"); MF_hello
+
+    MF_s("hi");
+    MF_t("hi");
+    
     /* comment with stray handling *\
 /
+       /* this is a valid *\/ comment */
+       /* this is a valid comment *\*/
+    //  this is a valid\
+comment
 }
 
 int op(a,b)
@@ -258,6 +277,11 @@ void ps(char *s)
     }
 }
 
+const char foo1_string[] = "\
+bar\n\
+test\14\
+1";
+
 void string_test()
 {
     int b;
@@ -266,6 +290,7 @@ void string_test()
     printf("\x41\x42\x43\x3a\n");
     printf("c=%c\n", 'r');
     printf("wc=%C 0x%lx %C\n", L'a', L'\x1234', L'c');
+    printf("foo1_string='%s'\n", foo1_string);
 #if 0
     printf("wstring=%S\n", L"abc");
     printf("wstring=%S\n", L"abc" L"def" "ghi");
@@ -1647,9 +1672,22 @@ void old_style_f(a,b,c)
     printf("a=%d b=%d b=%f\n", a, b, c);
 }
 
+void decl_func1(int cmpfn())
+{
+    printf("cmpfn=%lx\n", (long)cmpfn);
+}
+
+void decl_func2(cmpfn)
+int cmpfn();
+{
+    printf("cmpfn=%lx\n", (long)cmpfn);
+}
+
 void old_style_function(void)
 {
     old_style_f((void *)1, 2, 3.0);
+    decl_func1(NULL);
+    decl_func2(NULL);
 }
 
 void sizeof_test(void)
