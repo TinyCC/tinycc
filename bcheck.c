@@ -54,9 +54,9 @@ typedef struct BoundEntry {
 /* external interface */
 void __bound_init(void);
 void __bound_new_region(void *p, unsigned long size);
-void __bound_delete_region(void *p);
+int __bound_delete_region(void *p);
 
-/* currently, tcc cannot compile that because we use unsupported GNUC
+/* currently, tcc cannot compile that because we use unsupported GNU C
    extensions */
 #if !defined(__TINYC__)
 void *__bound_ptr_add(void *p, int offset) __attribute__((regparm(2)));
@@ -69,6 +69,7 @@ void *__bound_ptr_indir16(void *p, int offset) __attribute__((regparm(2)));
 void __bound_local_new(void *p) __attribute__((regparm(1)));
 void __bound_local_delete(void *p) __attribute__((regparm(1)));
 #endif
+static void *get_caller_pc(int n);
 
 void *__bound_malloc(size_t size, const void *caller);
 void *__bound_memalign(size_t size, size_t align, const void *caller);
@@ -122,20 +123,16 @@ static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
         return __bound_empty_t2;
 }
 
-static void bound_error(const char *fmt, ...)
+/* print a bound error and recurse thru 'nb_callers' to get the error
+   position */
+static void bound_error(const void *caller, const char *fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "bounds check: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    exit(1);
-    va_end(ap);
+    rt_error((unsigned long)caller, "%s", fmt);
 }
 
 static void bound_alloc_error(void)
 {
-    bound_error("not enough memory for bound checking code\n");
+    bound_error(NULL, "not enough memory for bound checking code\n");
 }
 
 /* currently, tcc cannot compile that because we use GNUC extensions */
@@ -190,6 +187,20 @@ void *__bound_ptr_indir ## dsize (void *p, int offset)                  \
 }
 
 #ifdef __i386__
+
+/* return the PC of the N'th caller (N=1: first caller) */
+static void *get_caller_pc(int n)
+{
+    unsigned long fp;
+    int i;
+
+    __asm__ __volatile__ ("movl %%ebp,%0" :"=g" (fp));
+    for(i=0;i<n;i++)
+        fp = ((unsigned long *)fp)[0];
+    return ((void **)fp)[1];
+}
+
+/* return the frame pointer of the caller */
 #define GET_CALLER_FP(fp)\
 {\
     unsigned long *fp1;\
@@ -251,6 +262,10 @@ void *__bound_ptr_indir ## dsize (void *p, int offset)       \
     return p + offset;                                       \
 }
 
+static void *get_caller_pc(int n)
+{
+    return 0;
+}
 #endif
 
 BOUND_PTR_INDIR(1)
@@ -527,7 +542,8 @@ static inline void delete_region(BoundEntry *e,
 }
 
 /* WARNING: 'p' must be the starting point of the region. */
-void __bound_delete_region(void *p)
+/* return non zero if error */
+int __bound_delete_region(void *p)
 {
     unsigned long start, end, addr, size, empty_size;
     BoundEntry *page, *e, *e2;
@@ -546,7 +562,7 @@ void __bound_delete_region(void *p)
         e = __bound_find_region(e, p);
     /* test if invalid region */
     if (e->size == EMPTY_SIZE || (unsigned long)p != e->start) 
-        bound_error("freeing invalid region");
+        return -1;
     /* compute the size we put in invalid regions */
     if (e->is_invalid)
         empty_size = INVALID_SIZE;
@@ -599,6 +615,7 @@ void __bound_delete_region(void *p)
         }
         delete_region(e, p, empty_size);
     }
+    return 0;
 }
 
 /* return the size of the region starting at p, or EMPTY_SIZE if non
@@ -699,7 +716,8 @@ void __bound_free(void *ptr, const void *caller)
 {
     if (ptr == NULL)
         return;
-    __bound_delete_region(ptr);
+    if (__bound_delete_region(ptr) != 0)
+        bound_error(caller, "freeing invalid region");
 
     libc_free(ptr);
 }
@@ -718,7 +736,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
             return ptr1;
         old_size = get_region_size(ptr);
         if (old_size == EMPTY_SIZE)
-            bound_error("realloc'ing invalid pointer");
+            bound_error(caller, "realloc'ing invalid pointer");
         memcpy(ptr1, ptr, old_size);
         __bound_free(ptr, caller);
         return ptr1;
@@ -752,7 +770,41 @@ static void bound_dump(void)
 }
 #endif
 
-#if 0
+/* some useful checked functions */
+
+/* check that (p ... p + size - 1) lies inside 'p' region, if any */
+static void __bound_check(const void *p, ssize_t size)
+{
+    if (size == 0)
+        return;
+    p = __bound_ptr_add((void *)p, size);
+    if (p == INVALID_POINTER)
+        bound_error(get_caller_pc(2), "invalid pointer");
+}
+
+void *__bound_memcpy(void *dst, const void *src, size_t size)
+{
+    __bound_check(dst, size);
+    __bound_check(src, size);
+    /* check also region overlap */
+    if (src >= dst && src < dst + size)
+        bound_error(get_caller_pc(1), "memcpy: overlapping regions");
+    return memcpy(dst, src, size);
+}
+
+void *__bound_memmove(void *dst, const void *src, size_t size)
+{
+    __bound_check(dst, size);
+    __bound_check(src, size);
+    return memmove(dst, src, size);
+}
+
+void *__bound_memset(void *dst, int c, size_t size)
+{
+    __bound_check(dst, size);
+    return memset(dst, 0, size);
+}
+
 /* resolve check check syms */
 typedef struct BCSyms {
     char *str;
@@ -760,13 +812,14 @@ typedef struct BCSyms {
 } BCSyms;
 
 static BCSyms bcheck_syms[] = {
+    { "memcpy", __bound_memcpy },
+    { "memmove", __bound_memmove },
+    { "memset", __bound_memset },
     { NULL, NULL },
 };
-#endif
 
 static void *bound_resolve_sym(const char *sym)
 {
-#if 0
     BCSyms *p;
     p = bcheck_syms;
     while (p->str != NULL) {
@@ -774,6 +827,5 @@ static void *bound_resolve_sym(const char *sym)
             return p->ptr;
         p++;
     }
-#endif
     return NULL;
 }
