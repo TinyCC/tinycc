@@ -12,7 +12,7 @@ CFLAGS+=-m386 -malign-functions=0
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.8
+VERSION=0.9.10
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
@@ -45,6 +45,26 @@ test2: tcc tcc.c tcctest.c test.ref
 test3: tcc tcc.c tcctest.c test.ref
 	$(TCC) tcc.c -B. -I. tcc.c -B. -I. tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
+
+# binary output test
+test4: tcc test.ref
+# dynamic output
+	$(TCC) -o tcctest1 tcctest.c
+	./tcctest1 > test1.out
+	@if diff -u test.ref test1.out ; then echo "Dynamic Auto Test OK"; fi
+# static output
+	$(TCC) -static -o tcctest2 tcctest.c
+	./tcctest2 > test2.out
+	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
+# object + link output
+	$(TCC) -c -o tcctest3.o tcctest.c
+	$(TCC) -o tcctest3 tcctest3.o
+	./tcctest3 > test3.out
+	@if diff -u test.ref test3.out ; then echo "Object Auto Test OK"; fi
+# dynamic output + bound check
+	$(TCC) -b -o tcctest4 tcctest.c
+	./tcctest4 > test4.out
+	@if diff -u test.ref test4.out ; then echo "BCheck Auto Test OK"; fi
 
 # memory and bound check auto test
 BOUNDS_OK  = 1 4 8 10
@@ -82,7 +102,7 @@ ex3: ex3.c
 
 # Native Tiny C Compiler
 
-tcc_g: tcc.c i386-gen.c bcheck.c tcctok.h libtcc.h Makefile
+tcc_g: tcc.c i386-gen.c tccelf.c tcctok.h libtcc.h Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
 tcc: tcc_g
@@ -97,7 +117,7 @@ bcheck.o: bcheck.c
 
 install: tcc libtcc1.o bcheck.o
 	$(INSTALL) -m755 tcc $(prefix)/bin
-	$(INSTALL) tcc.1 $(prefix)/man/man1
+	$(INSTALL) tcc.1 $(prefix)/share/man/man1
 	mkdir -p $(prefix)/lib/tcc
 	mkdir -p $(prefix)/lib/tcc/include
 	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc
@@ -107,7 +127,8 @@ install: tcc libtcc1.o bcheck.o
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe iltcc iltcc_g
+           *.exe iltcc iltcc_g tcc-doc.html \
+           tcctest[1234] test[1234].out
 
 # IL TCC
 
@@ -168,7 +189,7 @@ tar:
           $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
 	  $(FILE)/Changelog $(FILE)/tcc-doc.texi $(FILE)/tcc-doc.html \
           $(FILE)/tcc.1 \
-          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/tcctok.h \
+          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/tccelf.c $(FILE)/tcctok.h \
           $(FILE)/bcheck.c $(FILE)/libtcc1.c \
           $(FILE)/il-opcodes.h $(FILE)/il-gen.c \
           $(FILE)/elf.h $(FILE)/stab.h $(FILE)/stab.def \
