@@ -1,5 +1,13 @@
 TODO list:
 
+- long long constant evaluation
+- configure --cc=tcc (still one bug in libtcc1.c)
+- disable-asm and disable-bcheck options
+- test binutils/gcc compile
+- add alloca(), __builtin_expect()
+- gcc '-E' option.
+- optimize VT_LOCAL + const
+- tci patch + argument.
 - '-b' bug.
 - atexit (Nigel Horne)
 - see -lxxx bug (Michael Charity).
@@ -8,31 +16,24 @@ TODO list:
 - precise behaviour of typeof with arrays ? (__put_user macro)
 - #include_next support for /usr/include/limits ?
   but should suffice for most cases)
-- handle '? x, y : z' in reversed function arguments or unsized
-  variable initialization (',' is considered incorrectly as separator
-  in preparser) : change func argument code generator ?
+- handle '? x, y : z' in unsized variable initialization (',' is
+  considered incorrectly as separator in preparser)
 - function pointers/lvalues in ? : (linux kernel net/core/dev.c)
 - transform functions to function pointers in function parameters (net/ipv4/ip_output.c)
 - fix function pointer type display
 - fix bound exit on RedHat 7.3
-- fix static link on RedHat 7.3
 - check lcc test suite -> fix bitfield binary operations
 - check section alignment in C
 - fix invalid cast in comparison 'if (v == (int8_t)v)'
 - packed attribute
-- look at patches from Scott Lafferty
-- look at bugs from Jason Petrasko.
 - support link once trick (gcc 3.2 / glibc compilation issue)
 - finish varargs.h support (gcc 3.2 testsuite issue)
-- add alloca()
 - fix static functions declared inside block
 - C99: add variable size arrays (gcc 3.2 testsuite issue)
 - C99: add complex types (gcc 3.2 testsuite issue)
 - postfix compound literals (see 20010124-1.c)
 - fix multiple unions init
-- test includes in libtcc_test.
 - look at GCC 3.2 compatibility problems.
-- add option for auto run
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
 - fix bound check code with '&' on local variables (currently done

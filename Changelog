@@ -13,6 +13,7 @@ version 0.9.19:
 - fixed macro argument substitution
 - fixed zero argument macro parsing
 - changed license to LGPL
+- added -rdynamic option support
 
 version 0.9.18:
 
