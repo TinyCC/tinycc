@@ -463,6 +463,7 @@ struct TCCState {
 #define TOK_ARROW    0xcb
 #define TOK_DOTS     0xcc /* three dots */
 #define TOK_SHR      0xcd /* unsigned shift right */
+#define TOK_PPNUM    0xce /* preprocessor number */
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
@@ -1029,10 +1030,10 @@ static inline int isoct(int c)
 
 static inline int toup(int c)
 {
-    if (ch >= 'a' && ch <= 'z')
-        return ch - 'a' + 'A';
+    if (c >= 'a' && c <= 'z')
+        return c - 'a' + 'A';
     else
-        return ch;
+        return c;
 }
 
 static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
@@ -1081,7 +1082,8 @@ void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
     } else {
         s1->error_func(s1->error_opaque, buf);
     }
-    s1->nb_errors++;
+    if (!is_warning)
+        s1->nb_errors++;
 }
 
 #ifdef LIBTCC
@@ -1313,6 +1315,12 @@ char *get_tok_str(int v, CValue *cv)
         add_char(&cstr_buf, cv->i);
         cstr_ccat(&cstr_buf, '\'');
         cstr_ccat(&cstr_buf, '\0');
+        break;
+    case TOK_PPNUM:
+        cstr = cv->cstr;
+        len = cstr->size - 1;
+        for(i=0;i<len;i++)
+            add_char(&cstr_buf, ((unsigned char *)cstr->data)[i]);
         break;
     case TOK_STR:
     case TOK_LSTR:
@@ -1724,6 +1732,7 @@ static inline int tok_ext_size(int t)
     case TOK_LSTR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
+    case TOK_PPNUM:
         return 1;
     case TOK_CDOUBLE:
     case TOK_CLLONG:
@@ -1756,7 +1765,7 @@ static void tok_str_free(int *str)
         t = *p++;
         if (t == 0)
             break;
-        if (t == TOK_STR || t == TOK_LSTR) {
+        if (t == TOK_STR || t == TOK_LSTR || t == TOK_PPNUM) {
             /* XXX: use a macro to be portable on 64 bit ? */
             cstr = (CString *)(*p++);
             cstr_free(cstr);
@@ -1791,7 +1800,7 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     CValue cv1;
 
     tok_str_add(s, t);
-    if (t == TOK_STR || t == TOK_LSTR) {
+    if (t == TOK_STR || t == TOK_LSTR || t == TOK_PPNUM) {
         /* special case: need to duplicate string */
         cstr1 = cv->cstr;
         cstr = tcc_malloc(sizeof(CString));
@@ -2325,42 +2334,32 @@ void bn_zero(unsigned int *bn)
     }
 }
 
-void parse_number(void)
+/* parse number in null terminated string 'p' and return it in the
+   current token */
+void parse_number(const char *p)
 {
-    int b, t, shift, frac_bits, s, exp_val;
+    int b, t, shift, frac_bits, s, exp_val, ch;
     char *q;
     unsigned int bn[BN_SIZE];
     double d;
 
     /* number */
     q = token_buf;
+    ch = *p++;
     t = ch;
-    cinp();
+    ch = *p++;
     *q++ = t;
     b = 10;
     if (t == '.') {
-        /* special dot handling */
-        if (ch >= '0' && ch <= '9') {
-            goto float_frac_parse;
-        } else if (ch == '.') {
-            cinp();
-            if (ch != '.')
-                expect("'.'");
-            cinp();
-            tok = TOK_DOTS;
-        } else {
-            /* dots */
-            tok = t;
-        }
-        return;
+        goto float_frac_parse;
     } else if (t == '0') {
         if (ch == 'x' || ch == 'X') {
             q--;
-            cinp();
+            ch = *p++;
             b = 16;
         } else if (tcc_ext && (ch == 'b' || ch == 'B')) {
             q--;
-            cinp();
+            ch = *p++;
             b = 2;
         }
     }
@@ -2382,7 +2381,7 @@ void parse_number(void)
             error("number too long");
         }
         *q++ = ch;
-        cinp();
+        ch = *p++;
     }
     if (ch == '.' ||
         ((ch == 'e' || ch == 'E') && b == 10) ||
@@ -2415,7 +2414,7 @@ void parse_number(void)
             }
             frac_bits = 0;
             if (ch == '.') {
-                cinp();
+                ch = *p++;
                 while (1) {
                     t = ch;
                     if (t >= 'a' && t <= 'f') {
@@ -2431,25 +2430,25 @@ void parse_number(void)
                         error("invalid digit");
                     bn_lshift(bn, shift, t);
                     frac_bits += shift;
-                    cinp();
+                    ch = *p++;
                 }
             }
             if (ch != 'p' && ch != 'P')
                 error("exponent expected");
-            cinp();
+            ch = *p++;
             s = 1;
             exp_val = 0;
             if (ch == '+') {
-                cinp();
+                ch = *p++;
             } else if (ch == '-') {
                 s = -1;
-                cinp();
+                ch = *p++;
             }
             if (ch < '0' || ch > '9')
                 error("exponent digits expected");
             while (ch >= '0' && ch <= '9') {
                 exp_val = exp_val * 10 + ch - '0';
-                cinp();
+                ch = *p++;
             }
             exp_val = exp_val * s;
             
@@ -2459,12 +2458,12 @@ void parse_number(void)
             d = ldexp(d, exp_val - frac_bits);
             t = toup(ch);
             if (t == 'F') {
-                cinp();
+                ch = *p++;
                 tok = TOK_CFLOAT;
                 /* float : should handle overflow */
                 tokc.f = (float)d;
             } else if (t == 'L') {
-                cinp();
+                ch = *p++;
                 tok = TOK_CLDOUBLE;
                 /* XXX: not large enough */
                 tokc.ld = (long double)d;
@@ -2478,25 +2477,25 @@ void parse_number(void)
                 if (q >= token_buf + STRING_MAX_SIZE)
                     goto num_too_long;
                 *q++ = ch;
-                cinp();
+                ch = *p++;
             float_frac_parse:
                 while (ch >= '0' && ch <= '9') {
                     if (q >= token_buf + STRING_MAX_SIZE)
                         goto num_too_long;
                     *q++ = ch;
-                    cinp();
+                    ch = *p++;
                 }
             }
             if (ch == 'e' || ch == 'E') {
                 if (q >= token_buf + STRING_MAX_SIZE)
                     goto num_too_long;
                 *q++ = ch;
-                cinp();
+                ch = *p++;
                 if (ch == '-' || ch == '+') {
                     if (q >= token_buf + STRING_MAX_SIZE)
                         goto num_too_long;
                     *q++ = ch;
-                    cinp();
+                    ch = *p++;
                 }
                 if (ch < '0' || ch > '9')
                     error("exponent digits expected");
@@ -2504,18 +2503,18 @@ void parse_number(void)
                     if (q >= token_buf + STRING_MAX_SIZE)
                         goto num_too_long;
                     *q++ = ch;
-                    cinp();
+                    ch = *p++;
                 }
             }
             *q = '\0';
             t = toup(ch);
             errno = 0;
             if (t == 'F') {
-                cinp();
+                ch = *p++;
                 tok = TOK_CFLOAT;
                 tokc.f = strtof(token_buf, NULL);
             } else if (t == 'L') {
-                cinp();
+                ch = *p++;
                 tok = TOK_CLDOUBLE;
                 tokc.ld = strtold(token_buf, NULL);
             } else {
@@ -2525,7 +2524,7 @@ void parse_number(void)
         }
     } else {
         unsigned long long n, n1;
-        int lcount;
+        int lcount, ucount;
 
         /* integer number */
         *q = '\0';
@@ -2552,6 +2551,7 @@ void parse_number(void)
             n1 = n;
             n = n * b + t;
             /* detect overflow */
+            /* XXX: this test is not reliable */
             if (n < n1)
                 error("integer constant overflow");
         }
@@ -2568,11 +2568,12 @@ void parse_number(void)
             tok = TOK_CINT;
         }
         lcount = 0;
+        ucount = 0;
         for(;;) {
             t = toup(ch);
             if (t == 'L') {
                 if (lcount >= 2)
-                    error("three 'l' in integer constant");
+                    error("three 'l's in integer constant");
                 lcount++;
                 if (lcount == 2) {
                     if (tok == TOK_CINT)
@@ -2580,13 +2581,16 @@ void parse_number(void)
                     else if (tok == TOK_CUINT)
                         tok = TOK_CULLONG;
                 }
-                cinp();
+                ch = *p++;
             } else if (t == 'U') {
+                if (ucount >= 1)
+                    error("two 'u's in integer constant");
+                ucount++;
                 if (tok == TOK_CINT)
                     tok = TOK_CUINT;
                 else if (tok == TOK_CLLONG)
                     tok = TOK_CULLONG;
-                cinp();
+                ch = *p++;
             } else {
                 break;
             }
@@ -2597,7 +2601,6 @@ void parse_number(void)
             tokc.ull = n;
     }
 }
-
 
 /* return next token without macro substitution */
 static inline void next_nomacro1(void)
@@ -2649,8 +2652,42 @@ static inline void next_nomacro1(void)
         *q = '\0';
         ts = tok_alloc(token_buf, q - token_buf);
         tok = ts->tok;
-    } else if (isnum(ch) || ch == '.') {
-        parse_number();
+    } else if (isnum(ch)) {
+        int t;
+        cstr_reset(&tokcstr);
+        /* after the first digit, accept digits, alpha, '.' or sign if
+           prefixed by 'eEpP' */
+    parse_num:
+        for(;;) {
+            t = ch;
+            cstr_ccat(&tokcstr, ch);
+            cinp();
+            if (!(isnum(ch) || isid(ch) || ch == '.' ||
+                  ((ch == '+' || ch == '-') && 
+                   (t == 'e' || t == 'E' || t == 'p' || t == 'P'))))
+                break;
+        }
+        /* We add a trailing '\0' to ease parsing */
+        cstr_ccat(&tokcstr, '\0');
+        tokc.cstr = &tokcstr;
+        tok = TOK_PPNUM;
+    } else if (ch == '.') {
+        /* special dot handling because it can also start a number */
+        cinp();
+        if (isnum(ch)) {
+            cstr_reset(&tokcstr);
+            cstr_ccat(&tokcstr, '.');
+            goto parse_num;
+        }
+        if (ch == '.') {
+            cinp();
+            if (ch != '.')
+                expect("'.'");
+            cinp();
+            tok = TOK_DOTS;
+        } else {
+            tok = '.';
+        }
     } else if (ch == '\'') {
         tok = TOK_CCHAR;
     char_const:
@@ -2824,13 +2861,6 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
     return str.str;
 }
 
-/* not inline to save space */
-static int is_tok_num(int t)
-{
-    return (t == TOK_CINT || t == TOK_CUINT || 
-            t == TOK_CLLONG || t == TOK_CULLONG);
-}
-
 /* handle the '##' operator */
 static int *macro_twosharps(void)
 {
@@ -2840,7 +2870,9 @@ static int *macro_twosharps(void)
     const char *p1, *p2;
     CValue cval;
     TokenString macro_str1;
-    
+    CString cstr;
+
+    cstr_new(&cstr);
     tok_str_new(&macro_str1);
     tok = 0;
     while (1) {
@@ -2853,49 +2885,86 @@ static int *macro_twosharps(void)
             t = *macro_ptr;
             if (t) {
                 t = tok_get(&macro_ptr, &cval);
-                /* XXX: not exact, but cannot do more without
-                   modifying the whole preprocessing architecture ! */
-                /* XXX: handle arbitrary size */
+
+                /* We concatenate the two tokens if we have an
+                   identifier or a preprocessing number */
+                cstr_reset(&cstr);
                 p1 = get_tok_str(tok, &tokc);
-                pstrcpy(token_buf, sizeof(token_buf), p1);
+                cstr_cat(&cstr, p1);
                 p2 = get_tok_str(t, &cval);
-                if (tok >= TOK_IDENT && 
-                    (t >= TOK_IDENT || is_tok_num(t))) {
-                    pstrcat(token_buf, sizeof(token_buf), p2);
-                    ts = tok_alloc(token_buf, strlen(token_buf));
-                    tok = ts->tok; /* modify current token */
-                } else if (is_tok_num(tok) && is_tok_num(t)) {
-                    unsigned long long n;
-                do_num:
-                    pstrcat(token_buf, sizeof(token_buf), p2);
-                    n = strtoull(token_buf, NULL, 10); 
-                    if ((n & 0xffffffff00000000LL) != 0) {
-                        if ((n >> 63) != 0)
-                            tok = TOK_CULLONG;
-                        else
-                            tok = TOK_CLLONG;
-                    } else if (n > 0x7fffffff) {
-                        tok = TOK_CUINT;
+                cstr_cat(&cstr, p2);
+                cstr_ccat(&cstr, '\0');
+                    
+                if ((tok >= TOK_IDENT || tok == TOK_PPNUM) && 
+                    (t >= TOK_IDENT || t == TOK_PPNUM)) {
+                    if (tok == TOK_PPNUM) {
+                        /* if number, then create a number token */
+                        /* NOTE: no need to allocate because
+                           tok_str_add2() does it */
+                        tokc.cstr = &cstr;
                     } else {
-                        tok = TOK_CINT;
+                        /* if identifier, we must do a test to
+                           validate we have a correct identifier */
+                        if (t == TOK_PPNUM) {
+                            const char *p;
+                            int c;
+
+                            p = p2;
+                            for(;;) {
+                                c = *p;
+                                if (c == '\0')
+                                    break;
+                                p++;
+                                if (!isnum(c) && !isid(c))
+                                    goto error_pasting;
+                            }
+                        }
+                        ts = tok_alloc(cstr.data, strlen(cstr.data));
+                        tok = ts->tok; /* modify current token */
                     }
-                    if (tok == TOK_CINT || tok == TOK_CUINT)
-                        tokc.ui = n;
-                    else
-                        tokc.ull = n;
-                } else if (is_tok_num(tok) && t >= TOK_IDENT) {
-                    /* incorrect, but suffisant for '1LL' case */
-                    goto do_num;
                 } else {
-                    warning("pasting \"%s\" and \"%s\" does not give a valid preprocessing token", token_buf, p2);
-                    /* cannot merge tokens: skip '##' */
-                    macro_ptr = macro_ptr1;
-                    break;
+                    const char *str = cstr.data;
+                    const unsigned char *q;
+
+                    /* we look for a valid token */
+                    /* XXX: do more extensive checks */
+                    if (!strcmp(str, ">>=")) {
+                        tok = TOK_A_SAR;
+                    } else if (!strcmp(str, "<<=")) {
+                        tok = TOK_A_SHL;
+                    } else if (strlen(str) == 2) {
+                        /* search in two bytes table */
+                        q = tok_two_chars;
+                        for(;;) {
+                            if (!*q)
+                                goto error_pasting;
+                            if (q[0] == str[0] && q[1] == str[1])
+                                break;
+                            q += 3;
+                        }
+                        tok = q[2];
+                    } else {
+                    error_pasting:
+                        /* NOTE: because get_tok_str use a static buffer,
+                           we must save it */
+                        cstr_reset(&cstr);
+                        p1 = get_tok_str(tok, &tokc);
+                        cstr_cat(&cstr, p1);
+                        cstr_ccat(&cstr, '\0');
+                        p2 = get_tok_str(t, &cval);
+                        warning("pasting \"%s\" and \"%s\" does not give a valid preprocessing token", cstr.data, p2);
+                        /* cannot merge tokens: just add them separately */
+                        tok_str_add2(&macro_str1, tok, &tokc);
+                        /* XXX: free associated memory ? */
+                        tok = t;
+                        tokc = cval;
+                    }
                 }
             }
         }
         tok_str_add2(&macro_str1, tok, &tokc);
     }
+    cstr_free(&cstr);
     tok_str_add(&macro_str1, 0);
     return macro_str1.str;
 }
@@ -3099,6 +3168,11 @@ void next(void)
                 macro_ptr = NULL;
                 goto redo;
             }
+        }
+
+        /* convert preprocessor tokens into C tokens */
+        if (tok == TOK_PPNUM) {
+            parse_number((char *)tokc.cstr->data);
         }
     }
 #if defined(DEBUG)
