@@ -553,7 +553,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 static char *pstrcpy(char *buf, int buf_size, const char *s);
 static char *pstrcat(char *buf, int buf_size, const char *s);
 
-static void sum(int l);
 static void next(void);
 static void next_nomacro(void);
 static void parse_expr_type(CType *type);
@@ -6478,39 +6477,130 @@ static void uneq(void)
     }
 }
 
-static void sum(int l)
+static void expr_prod(void)
 {
     int t;
 
-    if (l == 0)
+    uneq();
+    while (tok == '*' || tok == '/' || tok == '%') {
+        t = tok;
+        next();
         uneq();
-    else {
-        sum(--l);
-        while ((l == 0 && (tok == '*' || tok == '/' || tok == '%')) ||
-               (l == 1 && (tok == '+' || tok == '-')) ||
-               (l == 2 && (tok == TOK_SHL || tok == TOK_SAR)) ||
-               (l == 3 && ((tok >= TOK_ULE && tok <= TOK_GT) ||
-                          tok == TOK_ULT || tok == TOK_UGE)) ||
-               (l == 4 && (tok == TOK_EQ || tok == TOK_NE)) ||
-               (l == 5 && tok == '&') ||
-               (l == 6 && tok == '^') ||
-               (l == 7 && tok == '|') ||
-               (l == 8 && tok == TOK_LAND) ||
-               (l == 9 && tok == TOK_LOR)) {
-            t = tok;
-            next();
-            sum(l);
-            gen_op(t);
-       }
+        gen_op(t);
+    }
+}
+
+static void expr_sum(void)
+{
+    int t;
+
+    expr_prod();
+    while (tok == '+' || tok == '-') {
+        t = tok;
+        next();
+        expr_prod();
+        gen_op(t);
+    }
+}
+
+static void expr_shift(void)
+{
+    int t;
+
+    expr_sum();
+    while (tok == TOK_SHL || tok == TOK_SAR) {
+        t = tok;
+        next();
+        expr_sum();
+        gen_op(t);
+    }
+}
+
+static void expr_cmp(void)
+{
+    int t;
+
+    expr_shift();
+    while ((tok >= TOK_ULE && tok <= TOK_GT) ||
+           tok == TOK_ULT || tok == TOK_UGE) {
+        t = tok;
+        next();
+        expr_shift();
+        gen_op(t);
+    }
+}
+
+static void expr_cmpeq(void)
+{
+    int t;
+
+    expr_cmp();
+    while (tok == TOK_EQ || tok == TOK_NE) {
+        t = tok;
+        next();
+        expr_cmp();
+        gen_op(t);
+    }
+}
+
+static void expr_and(void)
+{
+    expr_cmpeq();
+    while (tok == '&') {
+        next();
+        expr_cmpeq();
+        gen_op('&');
+    }
+}
+
+static void expr_xor(void)
+{
+    expr_and();
+    while (tok == '^') {
+        next();
+        expr_and();
+        gen_op('^');
+    }
+}
+
+static void expr_or(void)
+{
+    expr_xor();
+    while (tok == '|') {
+        next();
+        expr_xor();
+        gen_op('|');
+    }
+}
+
+/* XXX: suppress this mess */
+static void expr_land_const(void)
+{
+    expr_or();
+    while (tok == TOK_LAND) {
+        next();
+        expr_or();
+        gen_op(TOK_LAND);
+    }
+}
+
+/* XXX: suppress this mess */
+static void expr_lor_const(void)
+{
+    expr_land_const();
+    while (tok == TOK_LOR) {
+        next();
+        expr_land_const();
+        gen_op(TOK_LOR);
     }
 }
 
 /* only used if non constant */
-static void eand(void)
+static void expr_land(void)
 {
     int t;
 
-    sum(8);
+    expr_or();
     t = 0;
     while (1) {
         if (tok != TOK_LAND) {
@@ -6522,15 +6612,15 @@ static void eand(void)
         }
         t = gtst(1, t);
         next();
-        sum(8);
+        expr_or();
     }
 }
 
-static void eor(void)
+static void expr_lor(void)
 {
     int t;
 
-    eand();
+    expr_land();
     t = 0;
     while (1) {
         if (tok != TOK_LOR) {
@@ -6542,7 +6632,7 @@ static void eor(void)
         }
         t = gtst(0, t);
         next();
-        eand();
+        expr_land();
     }
 }
 
@@ -6555,7 +6645,7 @@ static void expr_eq(void)
 
     if (const_wanted) {
         int c1, c;
-        sum(10);
+        expr_lor_const();
         if (tok == '?') {
             c = vtop->c.i;
             vpop();
@@ -6569,7 +6659,7 @@ static void expr_eq(void)
                 vtop->c.i = c1;
         }
     } else {
-        eor();
+        expr_lor();
         if (tok == '?') {
             next();
             save_regs(1); /* we need to save all registers here except
