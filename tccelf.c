@@ -825,7 +825,11 @@ static void tcc_add_runtime(TCCState *s1)
 }
 
 /* name of ELF interpreter */
+#ifdef __FreeBSD__
+static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
+#else
 static char elf_interp[] = "/lib/ld-linux.so.2";
+#endif
 
 #define ELF_START_ADDR 0x08048000
 #define ELF_PAGE_SIZE  0x1000
@@ -1165,6 +1169,10 @@ int tcc_output_file(TCCState *s1, const char *filename)
             ph->p_filesz = file_offset - ph->p_offset;
             ph->p_memsz = addr - ph->p_vaddr;
             ph++;
+            /* if in the middle of a page, we duplicate the page in
+               memory so that one copy is RX and the other is RW */
+            if ((addr & (ELF_PAGE_SIZE - 1)) != 0)
+                addr += ELF_PAGE_SIZE;
         }
 
         /* if interpreter, then add corresponing program header */
@@ -1324,6 +1332,9 @@ int tcc_output_file(TCCState *s1, const char *filename)
     ehdr.e_ident[4] = ELFCLASS32;
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
+#ifdef __FreeBSD__
+    ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
+#endif
     switch(file_type) {
     default:
     case TCC_OUTPUT_EXE:
