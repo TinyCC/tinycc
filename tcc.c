@@ -520,7 +520,8 @@ void expr_eq(void);
 void gexpr(void);
 void decl(int l);
 void decl_initializer(int t, int r, int c, int first, int size_only);
-int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init);
+int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
+                           int v, int scope);
 int gv(int rc);
 void gv2(int rc1, int rc2);
 void move_reg(int r, int s);
@@ -4670,7 +4671,7 @@ void unary(void)
                     if (!(ft & VT_ARRAY))
                         r |= lvalue_type(ft);
                     memset(&ad, 0, sizeof(AttributeDef));
-                    fc = decl_initializer_alloc(ft, &ad, r, 1);
+                    fc = decl_initializer_alloc(ft, &ad, r, 1, 0, 0);
                     vset(ft, r, fc);
                 } else {
                     unary();
@@ -5674,8 +5675,11 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
 
 /* parse an initializer for type 't' if 'has_init' is true, and
    allocate space in local or global data space ('r' is either
-   VT_LOCAL or VT_CONST). The allocated address in returned */
-int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
+   VT_LOCAL or VT_CONST). The allocated address in returned. If 'v' is
+   non zero, then an associated variable 'v' of scope 'scope' is
+   declared before initializers are parsed. */
+int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
+                           int v, int scope)
 {
     int size, align, addr, data_offset;
     int level;
@@ -5785,6 +5789,24 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
         }
         sec->data_ptr = (unsigned char *)data_offset;
     }
+    if (v) {
+        Sym *sym;
+        if (scope == VT_CONST) {
+            /* global scope: see if already defined */
+            sym = sym_find(v);
+            if (!sym)
+                goto do_def;
+            if (!is_compatible_types(sym->t, t))
+                error("incompatible types for redefinition of '%s'", 
+                      get_tok_str(v, NULL));
+            if (!(sym->r & VT_FORWARD))
+                error("redefinition of '%s'", get_tok_str(v, NULL));
+            greloc_patch(sym, addr);
+        } else {
+        do_def:
+            sym_push(v, t, r, addr);
+        }
+    }
     if (has_init) {
         decl_initializer(t, r, addr, 1, 0);
         /* restore parse state if needed */
@@ -5798,16 +5820,8 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init)
 
 void put_func_debug(int t)
 {
-    int bind;
     char buf[512];
 
-    if (t & VT_STATIC)
-        bind = STB_LOCAL;
-    else
-        bind = STB_GLOBAL;
-    put_elf_sym(symtab_section, ind, 0, 
-                ELF32_ST_INFO(bind, STT_FUNC), 0, 
-                cur_text_section->sh_num, funcname);
     /* stabs info */
     /* XXX: we put here a dummy type */
     snprintf(buf, sizeof(buf), "%s:%c1", 
@@ -5880,7 +5894,7 @@ void analyse_function(void)
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(int l)
 {
-    int t, b, v, addr, has_init, r;
+    int t, b, v, has_init, r, bind;
     Sym *sym;
     AttributeDef ad;
     
@@ -5972,6 +5986,15 @@ void decl(int l)
                 }
                 sym->r = VT_CONST;
                 funcname = get_tok_str(v, NULL);
+                /* add symbol info */
+                if (t & VT_STATIC)
+                    bind = STB_LOCAL;
+                else
+                    bind = STB_GLOBAL;
+                put_elf_sym(symtab_section, ind, 0, 
+                            ELF32_ST_INFO(bind, STT_FUNC), 0, 
+                            cur_text_section->sh_num, funcname);
+                
                 /* put debug symbol */
                 if (do_debug)
                     put_func_debug(t);
@@ -6027,23 +6050,8 @@ void decl(int l)
                         has_init = (tok == '=');
                         if (has_init)
                             next();
-                        addr = decl_initializer_alloc(t, &ad, r, 
-                                                      has_init);
-                        if (l == VT_CONST) {
-                            /* global scope: see if already defined */
-                            sym = sym_find(v);
-                            if (!sym)
-                                goto do_def;
-                            if (!is_compatible_types(sym->t, t))
-                                error("incompatible types for redefinition of '%s'", 
-                                      get_tok_str(v, NULL));
-                            if (!(sym->r & VT_FORWARD))
-                                error("redefinition of '%s'", get_tok_str(v, NULL));
-                            greloc_patch(sym, addr);
-                        } else {
-                        do_def:
-                            sym_push(v, t, r, addr);
-                        }
+                        decl_initializer_alloc(t, &ad, r, 
+                                               has_init, v, l);
                     }
                 }
                 if (tok != ',') {
@@ -6310,8 +6318,8 @@ static int put_elf_str(Section *s, const char *sym)
 }
 
 static void put_elf_sym(Section *s, 
-                       unsigned long value, unsigned long size,
-                       int info, int other, int shndx, const char *name)
+                        unsigned long value, unsigned long size,
+                        int info, int other, int shndx, const char *name)
 {
     int name_offset;
     Elf32_Sym *sym;
@@ -6393,7 +6401,8 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
     phnum = 0;
     for(sec = first_section; sec != NULL; sec = sec->next) {
         shnum++;
-        if (sec->sh_flags & SHF_ALLOC)
+        if ((sec->sh_flags & SHF_ALLOC) && 
+            file_type != TCC_FILE_OBJ)
             phnum++;
     }
     /* allocate section headers */
@@ -6401,6 +6410,7 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
     if (!shdr)
         error("memory full");
     memset(shdr, 0, shnum * sizeof(Elf32_Shdr));
+
     /* allocate program segment headers */
     phdr = malloc(phnum * sizeof(Elf32_Phdr));
     if (!phdr)
@@ -6434,24 +6444,26 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
         file_offset += sh->sh_size;
     }
     /* build program headers (simplistic - not fully correct) */
-    j = 0;
-    for(i=1;i<shnum;i++) {
-        sh = &shdr[i];
-        if (sh->sh_type == SHT_PROGBITS &&
-            (sh->sh_flags & SHF_ALLOC) != 0) {
-            ph = &phdr[j++];
-            ph->p_type = PT_LOAD;
-            ph->p_offset = sh->sh_offset;
-            ph->p_vaddr = sh->sh_addr;
-            ph->p_paddr = ph->p_vaddr;
-            ph->p_filesz = sh->sh_size;
-            ph->p_memsz = sh->sh_size;
-            ph->p_flags = PF_R;
-            if (sh->sh_flags & SHF_WRITE)
-                ph->p_flags |= PF_W;
-            if (sh->sh_flags & SHF_EXECINSTR)
-                ph->p_flags |= PF_X;
-            ph->p_align = sh->sh_addralign;
+    if (phnum > 0) {
+        j = 0;
+        for(i=1;i<shnum;i++) {
+            sh = &shdr[i];
+            if (sh->sh_type == SHT_PROGBITS &&
+                (sh->sh_flags & SHF_ALLOC) != 0) {
+                ph = &phdr[j++];
+                ph->p_type = PT_LOAD;
+                ph->p_offset = sh->sh_offset;
+                ph->p_vaddr = sh->sh_addr;
+                ph->p_paddr = ph->p_vaddr;
+                ph->p_filesz = sh->sh_size;
+                ph->p_memsz = sh->sh_size;
+                ph->p_flags = PF_R;
+                if (sh->sh_flags & SHF_WRITE)
+                    ph->p_flags |= PF_W;
+                if (sh->sh_flags & SHF_EXECINSTR)
+                    ph->p_flags |= PF_X;
+                ph->p_align = sh->sh_addralign;
+            }
         }
     }
 
@@ -6466,7 +6478,18 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
     ehdr.e_ident[4] = ELFCLASS32;
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
-    ehdr.e_type = ET_EXEC;
+    switch(file_type) {
+    default:
+    case TCC_FILE_EXE:
+        ehdr.e_type = ET_EXEC;
+        break;
+    case TCC_FILE_DLL:
+        ehdr.e_type = ET_DYN;
+        break;
+    case TCC_FILE_OBJ:
+        ehdr.e_type = ET_REL;
+        break;
+    }
     ehdr.e_machine = EM_386;
     ehdr.e_version = EV_CURRENT;
     ehdr.e_entry = 0; /* XXX: patch it */
@@ -6502,6 +6525,9 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
     }
     fwrite(shdr, 1, shnum * sizeof(Elf32_Shdr), f);
     fclose(f);
+
+    free(shdr);
+    free(phdr);
     return 0;
 }
 
@@ -6736,7 +6762,15 @@ TCCState *tcc_new(void)
     data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     /* XXX: should change type to SHT_NOBITS */
     bss_section = new_section(".bss", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-
+    
+    /* symbols are always generated for linking stage */
+    symtab_section = new_section(".symtab", SHT_SYMTAB, 0);
+    symtab_section->sh_entsize = sizeof(Elf32_Sym);
+    strtab_section = new_section(".strtab", SHT_STRTAB, 0);
+    put_elf_str(strtab_section, "");
+    symtab_section->link = strtab_section;
+    put_elf_sym(symtab_section, 0, 0, 0, 0, 0, NULL);
+    
     return s;
 }
 
@@ -6764,7 +6798,7 @@ void help(void)
 {
     printf("tcc version 0.9.8 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]\n"
-           "           [-i infile] infile [infile_args...]\n"
+           "           [-i infile] [-bench] infile [infile_args...]\n"
            "\n"
            "-Idir        : add include path 'dir'\n"
            "-Dsym[=val]  : define 'sym' with value 'val'\n"
@@ -6775,16 +6809,18 @@ void help(void)
            "-b           : compile with built-in memory and bounds checker (implies -g)\n"
 #endif
            "-i infile    : compile infile\n"
+           "-bench       : output compilation statistics\n"
            );
 }
 
 int main(int argc, char **argv)
 {
     char *r, *outfile;
-    int optind;
+    int optind, file_type;
     TCCState *s;
     
     s = tcc_new();
+    file_type = TCC_FILE_EXE;
 
     optind = 1;
     outfile = NULL;
@@ -6852,17 +6888,15 @@ int main(int argc, char **argv)
                 stab_section->link = stabstr_section;
                 /* put first entry */
                 put_stabs("", 0, 0, 0, 0);
-                
-                /* elf symbols */
-                symtab_section = new_section(".symtab", SHT_SYMTAB, 0);
-                symtab_section->sh_entsize = sizeof(Elf32_Sym);
-                strtab_section = new_section(".strtab", SHT_STRTAB, 0);
-                put_elf_str(strtab_section, "");
-                symtab_section->link = strtab_section;
-                put_elf_sym(symtab_section, 0, 0, 0, 0, 0, NULL);
             }
+        } else 
+        /* the following options are only for testing, so not
+           documented */
+        if (r[1] == 'c') {
+            file_type = TCC_FILE_OBJ;
+        } else if (!strcmp(r + 1, "shared")) {
+            file_type = TCC_FILE_DLL;
         } else if (r[1] == 'o') {
-            /* currently, only for testing, so not documented */
             if (optind >= argc)
                 goto show_help;
             outfile = argv[optind++];
@@ -6879,7 +6913,7 @@ int main(int argc, char **argv)
     }
 
     if (outfile) {
-        tcc_output_file(s, outfile, TCC_FILE_EXE);
+        tcc_output_file(s, outfile, file_type);
         return 0;
     } else {
         return tcc_run(s, argc - optind, argv + optind);
