@@ -3237,18 +3237,6 @@ int is_compatible_types(int t1, int t2)
     }
 }
 
-int check_assign_types(int t1, int t2)
-{
-    t1 &= VT_TYPE;
-    t2 &= VT_TYPE;
-    if ((t1 & VT_BTYPE) == VT_PTR && 
-        (t2 & VT_BTYPE) == VT_FUNC) {
-        return is_compatible_types(pointed_type(t1), t2);
-    } else {
-        return is_compatible_types(t1, t2);
-    }
-}
-
 /* print a type. If 'varstr' is not NULL, then the variable is also
    printed in the type */
 /* XXX: union */
@@ -3338,24 +3326,38 @@ void type_to_str(char *buf, int buf_size,
  no_var: ;
 }
 
-                 
-
-/* verify type compatibility to store vtop in 'st' type, and generate
+/* verify type compatibility to store vtop in 'dt' type, and generate
    casts if needed. */
 void gen_assign_cast(int dt)
 {
     int st;
     char buf1[256], buf2[256];
 
-    st = vtop->t; /* destination type */
-    if (!check_assign_types(dt, st)) {
+    st = vtop->t; /* source type */
+    if ((dt & VT_BTYPE) == VT_PTR) {
+        /* special cases for pointers */
+        /* a function is implicitely a function pointer */
+        if ((st & VT_BTYPE) == VT_FUNC) {
+            if (!is_compatible_types(pointed_type(dt), st))
+                goto error;
+            else
+                goto type_ok;
+        }
+        /* '0' can also be a pointer */
+        if ((st & VT_BTYPE) == VT_INT &&
+            ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) &&
+            vtop->c.i == 0)
+            goto type_ok;
+    }
+    if (!is_compatible_types(dt, st)) {
+    error:
         type_to_str(buf1, sizeof(buf1), st, NULL);
         type_to_str(buf2, sizeof(buf2), dt, NULL);
         error("cannot cast '%s' to '%s'", buf1, buf2);
     }
+ type_ok:
     gen_cast(dt);
 }
-
 
 /* store vtop in lvalue pushed on stack */
 void vstore(void)
