@@ -325,6 +325,7 @@ void loop_test()
 void goto_test()
 {
     int i;
+    static void *label_table[3] = { &&label1, &&label2, &&label3 };
 
     printf("goto:\n");
     i = 0;
@@ -336,6 +337,20 @@ void goto_test()
     goto s_loop;
  s_end:
     printf("\n");
+
+    /* we also test computed gotos (GCC extension) */
+    for(i=0;i<3;i++) {
+        goto *label_table[i];
+    label1:
+        printf("label1\n");
+        goto next;
+    label2:
+        printf("label2\n");
+        goto next;
+    label3:
+        printf("label3\n");
+    next: ;
+    }
 }
 
 enum {
