@@ -2314,7 +2314,7 @@ static inline void add_cached_include(TCCState *s1, int type,
 static void preprocess(int is_bof)
 {
     TCCState *s1 = tcc_state;
-    int size, i, c, n, line_num;
+    int size, i, c, n;
     char buf[1024], *q, *p;
     char buf1[1024];
     BufferedFile *f;
@@ -2529,7 +2529,7 @@ static void preprocess(int is_bof)
         next();
         if (tok != TOK_CINT)
             error("#line");
-        line_num = tokc.i;
+        file->line_num = tokc.i - 1; /* the line number will be incremented after */
         next();
         if (tok != TOK_LINEFEED) {
             if (tok != TOK_STR)
@@ -2537,8 +2537,6 @@ static void preprocess(int is_bof)
             pstrcpy(file->filename, sizeof(file->filename), 
                     (char *)tokc.cstr->data);
         }
-        /* NOTE: we do it there to avoid problems with linefeed */
-        file->line_num = line_num;
         break;
     case TOK_ERROR:
     case TOK_WARNING:
@@ -3044,7 +3042,6 @@ static inline void next_nomacro1(void)
                 tcc_close(file);
                 s1->include_stack_ptr--;
                 file = *s1->include_stack_ptr;
-                inp();
                 p = file->buf_ptr;
                 goto redo_no_start;
             }
