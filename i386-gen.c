@@ -822,27 +822,33 @@ void gen_cvt_ftof(int t)
 /* generate a bounded pointer addition */
 void gen_bounded_ptr_add(void)
 {
-    int addr;
+    Sym *sym;
+
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     /* save all temporary registers */
     vtop -= 2;
     save_regs(0);
     /* do a fast function call */
-    addr = ind;
-    oad(0xe8, (int)__bound_ptr_add - ind - 5);
+    sym = external_sym(TOK___bound_ptr_add, func_old_type, 0);
+    greloc(cur_text_section, sym, 
+           ind + 1 - (int)cur_text_section->data, R_386_PC32);
+    oad(0xe8, -4);
     /* returned pointer is in eax */
     vtop++;
     vtop->r = REG_EAX | VT_BOUNDED;
-    vtop->c.ul = addr; /* address of bounding function call point */
+    /* address of bounding function call point */
+    vtop->c.ptr = (cur_text_section->reloc->data_ptr - sizeof(Elf32_Rel)); 
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
    also tested */
 void gen_bounded_ptr_deref(void)
 {
-    void *func;
-    int size, align, addr;
+    int func;
+    int size, align;
+    Elf32_Rel *rel;
+    Sym *sym;
 
     size = 0;
     /* XXX: put that code in generic part of tcc */
@@ -855,20 +861,25 @@ void gen_bounded_ptr_deref(void)
     if (!size)
         size = type_size(vtop->t, &align);
     switch(size) {
-    case  1: func = __bound_ptr_indir1; break;
-    case  2: func = __bound_ptr_indir2; break;
-    case  4: func = __bound_ptr_indir4; break;
-    case  8: func = __bound_ptr_indir8; break;
-    case 12: func = __bound_ptr_indir12; break;
-    case 16: func = __bound_ptr_indir16; break;
+    case  1: func = TOK___bound_ptr_indir1; break;
+    case  2: func = TOK___bound_ptr_indir2; break;
+    case  4: func = TOK___bound_ptr_indir4; break;
+    case  8: func = TOK___bound_ptr_indir8; break;
+    case 12: func = TOK___bound_ptr_indir12; break;
+    case 16: func = TOK___bound_ptr_indir16; break;
     default:
         error("unhandled size when derefencing bounded pointer");
-        func = NULL;
+        func = 0;
         break;
     }
 
-    addr = vtop->c.ul;
-    *(int *)(addr + 1) = (int)func - addr - 5;
+    /* patch relocation */
+    /* XXX: find a better solution ? */
+    rel = vtop->c.ptr;
+    sym = external_sym(func, func_old_type, 0);
+    if (!sym->c)
+        put_extern_sym(sym, NULL, 0);
+    rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
 }
 #endif
 
