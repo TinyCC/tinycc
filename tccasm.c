@@ -361,6 +361,33 @@ static void asm_parse_directive(TCCState *s1)
         }
         ind += size;
         break;
+    case TOK_ASM_quad:
+        next();
+        for(;;) {
+            uint64_t vl;
+            const char *p;
+
+            p = tokc.cstr->data;
+            if (tok != TOK_PPNUM) {
+            error_constant:
+                error("64 bit constant");
+            }
+            vl = strtoll(p, (char **)&p, 0);
+            if (*p != '\0')
+                goto error_constant;
+            next();
+            if (sec->sh_type != SHT_NOBITS) {
+                /* XXX: endianness */
+                gen_le32(vl);
+                gen_le32(vl >> 32);
+            } else {
+                ind += 8;
+            }
+            if (tok != ',')
+                break;
+            next();
+        }
+        break;
     case TOK_ASM_byte:
         size = 1;
         goto asm_data;

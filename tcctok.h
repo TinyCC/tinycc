@@ -191,6 +191,7 @@
  DEF_ASM(previous)
  DEF_ASM(fill)
  DEF_ASM(org)
+ DEF_ASM(quad)
 
 #ifdef TCC_TARGET_I386
 
