@@ -710,12 +710,17 @@ static void asm_instr(void)
                             operands, nb_operands, nb_outputs, 1, 
                             input_regs_allocated);
 
-    /* substitute the operands in the asm string */
+    /* substitute the operands in the asm string. No substitution is
+       done if no operands (GCC behaviour) */
 #ifdef ASM_DEBUG
     printf("asm: \"%s\"\n", (char *)astr.data);
 #endif
-    subst_asm_operands(operands, nb_operands, nb_outputs, &astr1, &astr);
-    cstr_free(&astr);
+    if (nb_operands > 0) {
+        subst_asm_operands(operands, nb_operands, nb_outputs, &astr1, &astr);
+        cstr_free(&astr);
+    } else {
+        astr1 = astr;
+    }
 #ifdef ASM_DEBUG
     printf("subst_asm: \"%s\"\n", (char *)astr1.data);
 #endif
