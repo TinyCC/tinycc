@@ -3705,6 +3705,12 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
     return str.str;
 }
 
+static char const ab_month_name[12][4] =
+{
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
 /* do macro substitution of current token with macro 's' and add
    result to (tok_str,tok_len). 'nested_list' is the list of all
    macros we got inside to avoid recursing. Return non zero if no
@@ -3729,11 +3735,21 @@ static int macro_subst_tok(TokenString *tok_str,
         cstrval = file->filename;
         goto add_cstr;
         tok_str_add2(tok_str, TOK_STR, &cval);
-    } else if (tok == TOK___DATE__) {
-        cstrval = "Jan  1 2002";
-        goto add_cstr;
-    } else if (tok == TOK___TIME__) {
-        cstrval = "00:00:00";
+    } else if (tok == TOK___DATE__ || tok == TOK___TIME__) {
+        time_t ti;
+        struct tm *tm;
+        char buf[64];
+
+        time(&ti);
+        tm = localtime(&ti);
+        if (tok == TOK___DATE__) {
+            snprintf(buf, sizeof(buf), "%s %2d %d", 
+                     ab_month_name[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
+        } else {
+            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", 
+                     tm->tm_hour, tm->tm_min, tm->tm_sec);
+        }
+        cstrval = buf;
     add_cstr:
         cstr_new(&cstr);
         cstr_cat(&cstr, cstrval);
@@ -9380,17 +9396,17 @@ static int64_t getclock_us(void)
 void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
-           "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
+           "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
-           "           [--] infile1 [infile2... --] [infile_args...]\n"
+           "           [infile1 infile2...] [-run infile args...]\n"
            "\n"
            "General options:\n"
+           "  -v          display current version\n"
            "  -c          compile only - generate an object file\n"
            "  -o outfile  set output filename\n"
-           "  --          allows multiples input files if no -o option given. Also\n" 
-           "              separate input files from runtime arguments\n"
            "  -Bdir       set tcc internal library path\n"
            "  -bench      output compilation statistics\n"
+ 	   "  -run        run compiled source\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
@@ -9421,7 +9437,6 @@ typedef struct TCCOption {
 
 enum {
     TCC_OPTION_HELP,
-    TCC_OPTION_MARKER,
     TCC_OPTION_I,
     TCC_OPTION_D,
     TCC_OPTION_U,
@@ -9444,12 +9459,13 @@ enum {
     TCC_OPTION_nostdinc,
     TCC_OPTION_print_search_dirs,
     TCC_OPTION_rdynamic,
+    TCC_OPTION_run,
+    TCC_OPTION_v,
 };
 
 static const TCCOption tcc_options[] = {
     { "h", TCC_OPTION_HELP, 0 },
     { "?", TCC_OPTION_HELP, 0 },
-    { "-", TCC_OPTION_MARKER, 0 },
     { "I", TCC_OPTION_I, TCC_OPTION_HAS_ARG },
     { "D", TCC_OPTION_D, TCC_OPTION_HAS_ARG },
     { "U", TCC_OPTION_U, TCC_OPTION_HAS_ARG },
@@ -9466,6 +9482,7 @@ static const TCCOption tcc_options[] = {
     { "static", TCC_OPTION_static, 0 },
     { "shared", TCC_OPTION_shared, 0 },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
+    { "run", TCC_OPTION_run, 0 },
     { "rdynamic", TCC_OPTION_rdynamic, 0 }, /* currently ignored */
     { "r", TCC_OPTION_r, 0 },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -9474,6 +9491,7 @@ static const TCCOption tcc_options[] = {
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "nostdinc", TCC_OPTION_nostdinc, 0 },
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 }, 
+    { "v", TCC_OPTION_v, 0 },
     { NULL },
 };
 
@@ -9491,11 +9509,11 @@ int main(int argc, char **argv)
     int print_search_dirs;
 
     s = tcc_new();
-    output_type = TCC_OUTPUT_MEMORY;
+    output_type = TCC_OUTPUT_EXE;
 
     optind = 1;
     outfile = NULL;
-    multiple_files = 0;
+    multiple_files = 1;
     dminus = 0;
     files = NULL;
     nb_files = 0;
@@ -9556,15 +9574,6 @@ int main(int argc, char **argv)
             show_help:
                 help();
                 return 1;
-            case TCC_OPTION_MARKER:
-                /* '--' enables multiple files input and also ends several
-                   file input */
-                if (dminus && multiple_files) {
-                    optind--; /* argv[0] will be '--' */
-                    goto end_parse;
-                }
-                dminus = 1;
-                multiple_files = 1;
             case TCC_OPTION_I:
                 if (tcc_add_include_path(s, optarg) < 0)
                     error("too many include paths");
@@ -9635,12 +9644,18 @@ int main(int argc, char **argv)
             case TCC_OPTION_print_search_dirs:
                 print_search_dirs = 1;
                 break;
+            case TCC_OPTION_run:
+                multiple_files = 0;
+                output_type = TCC_OUTPUT_MEMORY;
+                break;
+            case TCC_OPTION_v:
+                printf("tcc version %s\n", TCC_VERSION);
+                return 0;
             default:
                 break;
             }
         }
     }
- end_parse:
     if (print_search_dirs) {
         /* enough for Linux kernel */
         printf("install: %s/\n", tcc_lib_path);
