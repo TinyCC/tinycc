@@ -128,7 +128,7 @@ int func_vt, func_vc; /* current function return type (used by
                          return instruction) */
 int tok_ident;
 TokenSym **table_ident;
-TokenSym *hash_ident[521];
+TokenSym *hash_ident[TOK_HASH_SIZE];
 char token_buf[STRING_MAX_SIZE + 1];
 char *filename, *funcname;
 /* contains global symbols which remain between each translation unit */
@@ -432,7 +432,7 @@ TokenSym *tok_alloc(char *str, int len)
     h = 1;
     for(i=0;i<len;i++)
         h = ((h << 8) | (str[i] & 0xff)) % TOK_HASH_SIZE;
-    
+
     pts = &hash_ident[h];
     while (1) {
         ts = *pts;
@@ -451,7 +451,7 @@ TokenSym *tok_alloc(char *str, int len)
         table_ident = ptable;
     }
     ts = malloc(sizeof(TokenSym) + len);
-    if (!ts)
+    if (!ts || tok_ident >= SYM_FIRST_ANOM)
         error("memory full");
     table_ident[i] = ts;
     ts->tok = tok_ident++;
@@ -1118,8 +1118,6 @@ void next_nomacro1()
         *q++ = ch;
         cinp();
         if (q[-1] == 'L') {
-            /* XXX: not supported entirely (needs different
-               preprocessor architecture) */
             if (ch == '\'') {
                 tok = TOK_LCHAR;
                 goto char_const;
@@ -1746,23 +1744,23 @@ void gfunc_param(GFuncContext *c)
     }
 }
 
-/* generate function call with address in (ft, fc) and free function */
-void gfunc_call(GFuncContext *c, int ft, int fc)
+/* generate function call with address in (vt, vc) and free function
+   context */
+void gfunc_call(GFuncContext *c)
 {
     int r;
-    r = ft & VT_VALMASK;
-    if (r == VT_CONST) {
+    if ((vt & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+        /* constant case */
         /* forward reference */
-        if (ft & VT_FORWARD) {
-            greloc((Sym *)fc, ind + 1, RELOC_REL32);
+        if (vt & VT_FORWARD) {
+            greloc((Sym *)vc, ind + 1, RELOC_REL32);
             oad(0xe8, 0);
         } else {
-            oad(0xe8, fc - ind - 5);
+            oad(0xe8, vc - ind - 5);
         }
-    } else if (r == VT_LOCAL) {
-        oad(0x95ff, fc); /* call *xxx(%ebp) */
     } else {
-        /* not actually used */
+        /* otherwise, indirect call */
+        r = gv();
         o(0xff); /* call *r */
         o(0xd0 + r);
     }
@@ -1776,7 +1774,7 @@ int gjmp(int t)
 }
 
 /* generate a test. set 'inv' to invert test */
-int gtst(inv, t)
+int gtst(int inv, int t)
 {
     int v, *p;
     v = vt & VT_VALMASK;
@@ -1813,7 +1811,7 @@ int gtst(inv, t)
 
 /* generate a binary operation 'v = r op fr' instruction and modifies
    (vt,vc) if needed */
-void gen_op1(op, r, fr)
+void gen_op1(int op, int r, int fr)
 {
     int t;
     if (op == '+') {
@@ -1990,6 +1988,7 @@ void vpush(void)
     *vstack_ptr++ = vt;
     *vstack_ptr++ = vc;
     /* cannot let cpu flags if other instruction are generated */
+    /* XXX: VT_JMP test too ? */
     if ((vt & VT_VALMASK) == VT_CMP)
         gvp(vstack_ptr - 2);
 }
@@ -2207,8 +2206,8 @@ int type_size(int t, int *a)
     } else if (t & VT_ARRAY) {
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
         return type_size(s->t, a) * s->c;
-    } else if ((t & VT_PTR) | 
-               (t & VT_TYPE) == 0 |
+    } else if ((t & VT_PTR) ||
+               (t & VT_TYPE & ~VT_UNSIGNED) == VT_INT ||
                (t & VT_ENUM)) {
         *a = 4;
         return 4;
@@ -2265,7 +2264,8 @@ void vstore(void)
         gfunc_param(&gf);
 
         save_regs();
-        gfunc_call(&gf, VT_CONST, (int)&memcpy);
+        vset(VT_CONST, (int)&memcpy);
+        gfunc_call(&gf);
 
         /* generate again current type */
         vt = ft;
@@ -2510,13 +2510,14 @@ int post_type(int t)
         }
         skip(']');
         /* parse next post type */
-        t = post_type(t);
+        t1 = t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
+        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN));
         
         /* we push a anonymous symbol which will contain the array
            element type */
         p = anon_sym++;
         sym_push(p, t, n);
-        t = VT_ARRAY | VT_PTR | (p << VT_STRUCT_SHIFT);
+        t = t1 | VT_ARRAY | VT_PTR | (p << VT_STRUCT_SHIFT);
     }
     return t;
 }
@@ -2669,7 +2670,7 @@ void unary(void)
         } else
         if (t == '!') {
             unary();
-            if ((vt & (VT_CONST | VT_LVAL)) == VT_CONST) 
+            if ((vt & (VT_VALMASK | VT_LVAL)) == VT_CONST) 
                 vc = !vc;
             else if ((vt & VT_VALMASK) == VT_CMP)
                 vc = vc ^ 1;
@@ -2780,13 +2781,14 @@ void unary(void)
                         goto error_func;
                 } else {
                 error_func:
-                    expect("function type");
+                    expect("function pointer");
                 }
+            } else {
+                vt &= ~VT_LVAL; /* no lvalue */
             }
+                
             /* get return type */
             s = sym_find((unsigned)vt >> VT_STRUCT_SHIFT);
-
-            vt &= ~VT_LVAL; /* no lvalue */
             vpush(); /* push function address */
             save_regs(); /* save used temporary registers */
             gfunc_start(&gf);
@@ -2865,8 +2867,8 @@ void unary(void)
             }
 #endif
             skip(')');
-            vpop(&ft, &fc);
-            gfunc_call(&gf, ft, fc);
+            vpop(&vt, &vc);
+            gfunc_call(&gf);
             /* return value */
             vt = rett;
             vc = retc;
@@ -2994,7 +2996,7 @@ void sum(l)
 }
 
 /* only used if non constant */
-void eand()
+void eand(void)
 {
     int t;
 
@@ -3014,7 +3016,7 @@ void eand()
     }
 }
 
-void eor()
+void eor(void)
 {
     int t;
 
@@ -3450,7 +3452,8 @@ void init_putz(int t, int c, int size)
         gfunc_param(&gf);
         vset(VT_LOCAL, c);
         gfunc_param(&gf);
-        gfunc_call(&gf, VT_CONST, (int)&memset);
+        vset(VT_CONST, (int)&memset);
+        gfunc_call(&gf);
     }
 }
 
