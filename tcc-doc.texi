@@ -58,6 +58,9 @@ these checks even if non patched libraries are used.
 With @code{libtcc}, you can use TCC as a backend for dynamic code
 generation (@pxref{Libtcc}).
 
+TCC mainly supports the i386 target. There are alpha ports for the ARM
+(@code{arm-tcc}) and the TMS320C67xx targets (@code{c67-tcc}).
+
 @node Invoke
 @chapter Command line invocation
 
@@ -211,6 +214,9 @@ Let the @code{char} type be unsigned.
 @item -fsigned-char
 Let the @code{char} type be signed.
 
+@item -fno-common
+Do not generate common symbols for uninitialized data.
+
 @end table
 
 Warning options:
@@ -271,6 +277,20 @@ opened with @code{dlopen()} needs to access executable symbols.
 @item -r
 Generate an object file combining all input files (@option{-o} option must
 also be given).
+
+@item -Wl,-Ttext,address
+Set the start of the .text section to @var{address}.
+
+@item -Wl,--oformat,fmt
+Use @var{fmt} as output format. The supported output formats are:
+@table @code
+@item elf32-i386
+ELF output format (default)
+@item binary
+Binary image (only for executable output)
+@item coff
+COFF output format (only for executable output for TMS320C67xx target)
+@end table
 
 @end table
 
@@ -628,6 +648,12 @@ supported:
 @item .text
 @item .data
 @item .bss
+@item .fill repeat[,size[,value]]
+@item .org n
+@item .previous
+@item .string string[,...]
+@item .asciz string[,...]
+@item .ascii string[,...]
 @end itemize
 
 @section X86 Assembler
