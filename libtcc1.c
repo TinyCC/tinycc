@@ -421,19 +421,58 @@ unsigned long long __umoddi3(unsigned long long u, unsigned long long v)
 /* XXX: fix tcc's code generator to do this instead */
 long long __sardi3(long long a, int b)
 {
+#ifdef __TINYC__
+    DWunion u;
+    u.ll = a;
+    if (b >= 32) {
+        u.s.low = u.s.high >> (b - 32);
+        u.s.high = u.s.high >> 31;
+    } else if (b != 0) {
+        u.s.low = ((unsigned)u.s.low >> b) | (u.s.high << (32 - b));
+        u.s.high = u.s.high >> b;
+    }
+    return u.ll;
+#else
     return a >> b;
+#endif
 }
 
 /* XXX: fix tcc's code generator to do this instead */
 unsigned long long __shrdi3(unsigned long long a, int b)
 {
+#ifdef __TINYC__
+    DWunion u;
+    u.ll = a;
+    if (b >= 32) {
+        u.s.low = (unsigned)u.s.high >> (b - 32);
+        u.s.high = 0;
+    } else if (b != 0) {
+        u.s.low = ((unsigned)u.s.low >> b) | (u.s.high << (32 - b));
+        u.s.high = (unsigned)u.s.high >> b;
+    }
+    return u.ll;
+#else
     return a >> b;
+#endif
 }
 
 /* XXX: fix tcc's code generator to do this instead */
 long long __shldi3(long long a, int b)
 {
+#ifdef __TINYC__
+    DWunion u;
+    u.ll = a;
+    if (b >= 32) {
+        u.s.high = (unsigned)u.s.low << (b - 32);
+        u.s.low = 0;
+    } else if (b != 0) {
+        u.s.high = ((unsigned)u.s.high << b) | (u.s.low >> (32 - b));
+        u.s.low = (unsigned)u.s.low << b;
+    }
+    return u.ll;
+#else
     return a << b;
+#endif
 }
 
 #if defined(__i386__)
