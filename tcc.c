@@ -1118,11 +1118,13 @@ void test_lvalue(void)
 TokenSym *tok_alloc(const char *str, int len)
 {
     TokenSym *ts, **pts, **ptable;
-    int h, i;
+    int i;
+    unsigned int h;
     
     h = 1;
     for(i=0;i<len;i++)
-        h = (h * 263 +  ((unsigned char *)str)[i]) & (TOK_HASH_SIZE - 1);
+        h = h * 263 +  ((unsigned char *)str)[i];
+    h &= (TOK_HASH_SIZE - 1);
 
     pts = &hash_ident[h];
     while (1) {
@@ -1522,7 +1524,12 @@ static int tcc_peekc_slow(BufferedFile *bf)
     /* only tries to read if really end of buffer */
     if (bf->buf_ptr >= bf->buf_end) {
         if (bf->fd != -1) {
-            len = read(bf->fd, bf->buffer, IO_BUF_SIZE);
+#if defined(PARSE_DEBUG)
+            len = 8;
+#else
+            len = IO_BUF_SIZE;
+#endif
+            len = read(bf->fd, bf->buffer, len);
             if (len < 0)
                 len = 0;
         } else {
@@ -1541,13 +1548,11 @@ static int tcc_peekc_slow(BufferedFile *bf)
     }
 }
 
-/* no need to put that inline */
-void handle_eob(void)
+/* return the current character, handling end of block if necessary
+   (but not stray) */
+static int handle_eob(void)
 {
-    /* no need to do anything if not at EOB */
-    if (file->buf_ptr < file->buf_end)
-        return;
-    ch = tcc_peekc_slow(file);
+    return tcc_peekc_slow(file);
 }
 
 /* read next char from current input file and handle end of input buffer */
@@ -1556,7 +1561,7 @@ static inline void inp(void)
     ch = *(++(file->buf_ptr));
     /* end of buffer/file handling */
     if (ch == CH_EOB)
-        handle_eob();
+        ch = handle_eob();
 }
 
 /* handle '\[\r]\n' */
@@ -1578,6 +1583,40 @@ static void handle_stray(void)
             error("stray '\\' in program");
         }
     }
+}
+
+/* skip the stray and handle the \\n case. Output an error if
+   incorrect char after the stray */
+static int handle_stray1(uint8_t *p)
+{
+    int c;
+
+    if (p >= file->buf_end) {
+        file->buf_ptr = p;
+        c = handle_eob();
+        p = file->buf_ptr;
+        if (c == '\\')
+            goto parse_stray;
+    } else {
+    parse_stray:
+        file->buf_ptr = p;
+        ch = *p;
+        handle_stray();
+        p = file->buf_ptr;
+        c = *p;
+    }
+    return c;
+}
+
+/* handle the complicated stray case */
+#define PEEKC(c, p)\
+{\
+    p++;\
+    c = *p;\
+    if (c == '\\') {\
+        c = handle_stray1(p);\
+        p = file->buf_ptr;\
+    }\
 }
 
 /* input with '\[\r]\n' handling. Note that this function cannot
@@ -1606,8 +1645,8 @@ static void parse_comment(void)
     int c;
     
     /* C comments */
-    minp();
     p = file->buf_ptr;
+    p++;
     for(;;) {
         /* fast skip loop */
         for(;;) {
@@ -1628,49 +1667,49 @@ static void parse_comment(void)
             p++;
             for(;;) {
                 c = *p;
-                if (c == '/') {
+                if (c == '*') {
+                    p++;
+                } else if (c == '/') {
                     goto end_of_comment;
                 } else if (c == '\\') {
-                    if (p >= file->buf_end) {
-                        file->buf_ptr = p;
-                        handle_eob();
-                        p = file->buf_ptr;
-                        if (p >= file->buf_end)
-                            goto eof_found;
-                        continue;
+                    file->buf_ptr = p;
+                    c = handle_eob();
+                    if (c == '\\') {
+                        /* skip '\\n', but if '\' followed but another
+                           char, behave asif a stray was parsed */
+                        ch = file->buf_ptr[0];
+                        while (ch == '\\') {
+                            inp();
+                            if (ch == '\n') {
+                                file->line_num++;
+                                inp();
+                            } else if (ch == '\r') {
+                                inp();
+                                if (ch == '\n') {
+                                    file->line_num++;
+                                    inp();
+                                }
+                            } else {
+                                p = file->buf_ptr;
+                                break;
+                            }
+                        }
                     }
-                    p++;
-                    c = *p;
-                    if (c == '\n') {
-                        file->line_num++;
-                        p++;
-                    } else if (c == '\r') {
-                        p++;
-                        c = *p;
-                        if (c != '\n')
-                            break;
-                        file->line_num++;
-                        p++;
-                    } else {
-                        break;
-                    }
-                } else if (c == '*') {
-                    p++;
+                    p = file->buf_ptr;
                 } else {
                     break;
                 }
             }
-        } else if (p >= file->buf_end) {
-            file->buf_ptr = p;
-            handle_eob();
-            p = file->buf_ptr;
-            if (p >= file->buf_end) {
-            eof_found:
-                error("unexpected end of file in comment");
-            }
         } else {
-            /* stray */
-            p++;
+            /* stray, eob or eof */
+            file->buf_ptr = p;
+            c = handle_eob();
+            p = file->buf_ptr;
+            if (c == CH_EOF) {
+                error("unexpected end of file in comment");
+            } else if (c == '\\') {
+                p++;
+            }
         }
     }
  end_of_comment:
@@ -1697,63 +1736,98 @@ static inline void skip_spaces(void)
    #if/#endif */
 void preprocess_skip(void)
 {
-    int a, start_of_line, sep;
-    
+    int a, start_of_line, sep, c;
+    uint8_t *p;
+
+    p = file->buf_ptr;
     start_of_line = 1;
     a = 0;
     for(;;) {
     redo_no_start:
-        switch(ch) {
+        c = *p;
+        switch(c) {
         case ' ':
         case '\t':
         case '\f':
         case '\v':
         case '\r':
-            inp();
+            p++;
             goto redo_no_start;
         case '\n':
             start_of_line = 1;
             file->line_num++;
-            inp();
+            p++;
             goto redo_no_start;
         case '\\':
-            handle_stray();
+            file->buf_ptr = p;
+            c = handle_eob();
+            if (c == CH_EOF) {
+                expect("#endif");
+            } else if (c == '\\') {
+                /* XXX: incorrect: should not give an error */
+                ch = file->buf_ptr[0];
+                handle_stray();
+            }
+            p = file->buf_ptr;
             goto redo_no_start;
             /* skip strings */
         case '\"':
         case '\'':
-            sep = ch;
-            inp();
-            while (ch != sep) {
-                /* XXX: better error message */
-                if (ch == TOK_EOF) {
-                    error("unterminated string");
-                } else if (ch == '\n') {
+            sep = c;
+            p++;
+            for(;;) {
+                c = *p;
+                if (c == sep) {
+                    break;
+                } else if (c == '\\') {
+                    file->buf_ptr = p;
+                    c = handle_eob();
+                    p = file->buf_ptr;
+                    if (c == CH_EOF) {
+                        /* XXX: better error message */
+                        error("unterminated string");
+                    } else if (c == '\\') {
+                        /* ignore next char */
+                        p++;
+                        c = *p;
+                        if (c == '\\') {
+                            file->buf_ptr = p;
+                            c = handle_eob();
+                            p = file->buf_ptr;
+                        }
+                        if (c == '\n')
+                            file->line_num++;
+                        else if (c != CH_EOF)
+                            p++;
+                    }
+                } else if (c == '\n') {
                     file->line_num++;
-                } else if (ch == '\\') {
-                    /* ignore next char */
-                    inp();
-                    if (ch == '\n')
-                        file->line_num++;
+                    p++;
+                } else {
+                    p++;
                 }
-                inp();
             }
-            minp();
+            p++;
             break;
             /* skip comments */
         case '/':
+            file->buf_ptr = p;
+            ch = *p;
             minp();
             if (ch == '*') {
                 parse_comment();
             } else if (ch == '/') {
                 parse_line_comment();
             }
+            p = file->buf_ptr;
             break;
 
         case '#':
-            minp();
+            p++;
             if (start_of_line) {
+                file->buf_ptr = p;
                 next_nomacro();
+                p = file->buf_ptr;
                 if (a == 0 && 
                     (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
                     goto the_end;
@@ -1763,16 +1837,14 @@ void preprocess_skip(void)
                     a--;
             }
             break;
-        case CH_EOF:
-            expect("#endif");
-            break;
         default:
-            inp();
+            p++;
             break;
         }
         start_of_line = 0;
     }
  the_end: ;
+    file->buf_ptr = p;
 }
 
 /* ParseState handling */
@@ -2040,10 +2112,10 @@ void tok_print(int *str)
 #endif
 
 /* parse after #define */
-void parse_define(void)
+static void parse_define(void)
 {
     Sym *s, *first, **ps;
-    int v, t, varg, is_vaargs;
+    int v, t, varg, is_vaargs, c;
     TokenString str;
     
     v = tok;
@@ -2053,7 +2125,10 @@ void parse_define(void)
     first = NULL;
     t = MACRO_OBJ;
     /* '(' must be just after macro definition for MACRO_FUNC */
-    if (ch == '(') {
+    c = file->buf_ptr[0];
+    if (c == '\\')
+        c = handle_stray1(file->buf_ptr);
+    if (c == '(') {
         next_nomacro();
         next_nomacro();
         ps = &first;
@@ -2156,6 +2231,8 @@ static void preprocess(int is_bof)
             define_undef(s);
         break;
     case TOK_INCLUDE:
+        ch = file->buf_ptr[0];
+        /* XXX: incorrect if comments : use next_nomacro with a special mode */
         skip_spaces();
         if (ch == '<') {
             c = '>';
@@ -2781,32 +2858,55 @@ void parse_number(const char *p)
     }
 }
 
+
+#define PARSE2(c1, tok1, c2, tok2)              \
+    case c1:                                    \
+        PEEKC(c, p);                            \
+        if (c == c2) {                          \
+            p++;                                \
+            tok = tok2;                         \
+        } else {                                \
+            tok = tok1;                         \
+        }                                       \
+        break;
+
 /* return next token without macro substitution */
 static inline void next_nomacro1(void)
 {
-    int b, t;
-    char *q;
+    int b, t, c;
     TokenSym *ts;
+    uint8_t *p, *p1;
 
+    p = file->buf_ptr;
  redo_no_start:
-    switch(ch) {
+    c = *p;
+    switch(c) {
     case ' ':
     case '\t':
     case '\f':
     case '\v':
     case '\r':
-        inp();
+        p++;
         goto redo_no_start;
         
     case '\\':
         /* first look if it is in fact an end of buffer */
-        handle_eob();
-        if (ch != '\\')
+        if (p >= file->buf_end) {
+            file->buf_ptr = p;
+            handle_eob();
+            p = file->buf_ptr;
+            if (p >= file->buf_end)
+                goto parse_eof;
+            else
+                goto redo_no_start;
+        } else {
+            file->buf_ptr = p;
+            ch = *p;
+            handle_stray();
+            p = file->buf_ptr;
             goto redo_no_start;
-        handle_stray();
-        goto redo_no_start;
-
-    case CH_EOF:
+        }
+    parse_eof:
         {
             TCCState *s1 = tcc_state;
 
@@ -2837,6 +2937,7 @@ static inline void next_nomacro1(void)
                 s1->include_stack_ptr--;
                 file = *s1->include_stack_ptr;
                 inp();
+                p = file->buf_ptr;
                 goto redo_no_start;
             }
         }
@@ -2848,19 +2949,22 @@ static inline void next_nomacro1(void)
             tok = TOK_LINEFEED;
         } else {
             tok_flags |= TOK_FLAG_BOL;
-            inp();
+            p++;
             goto redo_no_start;
         }
         break;
 
     case '#':
-        minp();
+        /* XXX: simplify */
+        PEEKC(c, p);
         if (tok_flags & TOK_FLAG_BOL) {
+            file->buf_ptr = p;
             preprocess(tok_flags & TOK_FLAG_BOF);
+            p = file->buf_ptr;
             goto redo_no_start;
         } else {
-            if (ch == '#') {
-                inp();
+            if (c == '#') {
+                p++;
                 tok = TOK_TWOSHARPS;
             } else {
                 tok = '#';
@@ -2883,34 +2987,57 @@ static inline void next_nomacro1(void)
     case 'U': case 'V': case 'W': case 'X':
     case 'Y': case 'Z': 
     case '_':
-        q = token_buf;
-        *q++ = ch;
-        cinp();
-    parse_ident:
-        while (isid(ch) || isnum(ch)) {
-            if (q >= token_buf + STRING_MAX_SIZE)
-                error("ident too long");
-            *q++ = ch;
-            cinp();
+    parse_ident_fast:
+        p1 = p;
+        p++;
+        for(;;) {
+            c = *p;
+            if (!isid(c) && !isnum(c))
+                break;
+            p++;
         }
-        *q = '\0';
-        ts = tok_alloc(token_buf, q - token_buf);
+        if (c != '\\') {
+            /* fast case : no stray found, so we have the full token */
+            ts = tok_alloc(p1, p - p1);
+        } else {
+            /* slower case */
+            cstr_reset(&tokcstr);
+
+            while (p1 < p) {
+                cstr_ccat(&tokcstr, *p1);
+                p1++;
+            }
+            p--;
+            PEEKC(c, p);
+        parse_ident_slow:
+            while (isid(c) || isnum(c)) {
+                cstr_ccat(&tokcstr, c);
+                PEEKC(c, p);
+            }
+            ts = tok_alloc(tokcstr.data, tokcstr.size);
+        }
         tok = ts->tok;
         break;
     case 'L':
-        minp();
-        if (ch == '\'') {
-            tok = TOK_LCHAR;
-            goto char_const;
+        c = p[1];
+        if (c != '\\' && c != '\'' && c != '\"') {
+            /* fast case */
+            goto parse_ident_fast;
+        } else {
+            PEEKC(c, p);
+            if (c == '\'') {
+                tok = TOK_LCHAR;
+                goto char_const; 
+            } else if (c == '\"') {
+                tok = TOK_LSTR;
+                goto str_const;
+            } else {
+                cstr_reset(&tokcstr);
+                cstr_ccat(&tokcstr, 'L');
+                goto parse_ident_slow;
+            }
         }
-        if (ch == '\"') {
-            tok = TOK_LSTR;
-            goto str_const;
-        }
-        q = token_buf;
-        *q++ = 'L';
-        goto parse_ident;
-
+        break;
     case '0': case '1': case '2': case '3':
     case '4': case '5': case '6': case '7':
     case '8': case '9':
@@ -2920,11 +3047,11 @@ static inline void next_nomacro1(void)
            prefixed by 'eEpP' */
     parse_num:
         for(;;) {
-            t = ch;
-            cstr_ccat(&tokcstr, ch);
-            cinp();
-            if (!(isnum(ch) || isid(ch) || ch == '.' ||
-                  ((ch == '+' || ch == '-') && 
+            t = c;
+            cstr_ccat(&tokcstr, c);
+            PEEKC(c, p);
+            if (!(isnum(c) || isid(c) || c == '.' ||
+                  ((c == '+' || c == '-') && 
                    (t == 'e' || t == 'E' || t == 'p' || t == 'P'))))
                 break;
         }
@@ -2935,17 +3062,16 @@ static inline void next_nomacro1(void)
         break;
     case '.':
         /* special dot handling because it can also start a number */
-        cinp();
-        if (isnum(ch)) {
+        PEEKC(c, p);
+        if (isnum(c)) {
             cstr_reset(&tokcstr);
             cstr_ccat(&tokcstr, '.');
             goto parse_num;
-        }
-        if (ch == '.') {
-            cinp();
-            if (ch != '.')
+        } else if (c == '.') {
+            PEEKC(c, p);
+            if (c != '.')
                 expect("'.'");
-            cinp();
+            PEEKC(c, p);
             tok = TOK_DOTS;
         } else {
             tok = '.';
@@ -2954,6 +3080,7 @@ static inline void next_nomacro1(void)
     case '\'':
         tok = TOK_CCHAR;
     char_const:
+        file->buf_ptr = p;
         inp();
         b = getq();
         /* this cast is needed if >= 128 */
@@ -2962,11 +3089,13 @@ static inline void next_nomacro1(void)
         tokc.i = b;
         if (ch != '\'')
             error("unterminated character constant");
-        inp();
+        p = file->buf_ptr;
+        p++;
         break;
     case '\"':
         tok = TOK_STR;
     str_const:
+        file->buf_ptr = p;
         inp();
         cstr_reset(&tokcstr);
         while (ch != '\"') {
@@ -2983,18 +3112,19 @@ static inline void next_nomacro1(void)
         else
             cstr_wccat(&tokcstr, '\0');
         tokc.cstr = &tokcstr;
-        inp();
+        p = file->buf_ptr;
+        p++;
         break;
 
     case '<':
-        cinp();
-        if (ch == '=') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '=') {
+            p++;
             tok = TOK_LE;
-        } else if (ch == '<') {
-            cinp();
-            if (ch == '=') {
-                cinp();
+        } else if (c == '<') {
+            PEEKC(c, p);
+            if (c == '=') {
+                p++;
                 tok = TOK_A_SHL;
             } else {
                 tok = TOK_SHL;
@@ -3005,14 +3135,14 @@ static inline void next_nomacro1(void)
         break;
         
     case '>':
-        cinp();
-        if (ch == '=') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '=') {
+            p++;
             tok = TOK_GE;
-        } else if (ch == '>') {
-            cinp();
-            if (ch == '=') {
-                cinp();
+        } else if (c == '>') {
+            PEEKC(c, p);
+            if (c == '=') {
+                p++;
                 tok = TOK_A_SAR;
             } else {
                 tok = TOK_SAR;
@@ -3022,113 +3152,82 @@ static inline void next_nomacro1(void)
         }
         break;
         
-    case '!':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
-            cinp();
-            tok = TOK_NE;
-        }
-        break;
-
-    case '=':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
-            cinp();
-            tok = TOK_EQ;
-        }
-        break;
-
     case '&':
-        tok = ch;
-        cinp();
-        if (ch == '&') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '&') {
+            p++;
             tok = TOK_LAND;
-        } else if (ch == '=') {
-            cinp();
+        } else if (c == '=') {
+            p++;
             tok = TOK_A_AND;
+        } else {
+            tok = '&';
         }
         break;
         
     case '|':
-        tok = ch;
-        cinp();
-        if (ch == '|') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '|') {
+            p++;
             tok = TOK_LOR;
-        } else if (ch == '=') {
-            cinp();
+        } else if (c == '=') {
+            p++;
             tok = TOK_A_OR;
+        } else {
+            tok = '|';
         }
         break;
 
     case '+':
-        tok = ch;
-        cinp();
-        if (ch == '+') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '+') {
+            p++;
             tok = TOK_INC;
-        } else if (ch == '=') {
-            cinp();
+        } else if (c == '=') {
+            p++;
             tok = TOK_A_ADD;
+        } else {
+            tok = '+';
         }
         break;
         
     case '-':
-        tok = ch;
-        cinp();
-        if (ch == '-') {
-            cinp();
+        PEEKC(c, p);
+        if (c == '-') {
+            p++;
             tok = TOK_DEC;
-        } else if (ch == '=') {
-            cinp();
+        } else if (c == '=') {
+            p++;
             tok = TOK_A_SUB;
-        } else if (ch == '>') {
-            cinp();
+        } else if (c == '>') {
+            p++;
             tok = TOK_ARROW;
+        } else {
+            tok = '-';
         }
         break;
 
-    case '*':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
-            cinp();
-            tok = TOK_A_MUL;
-        }
-        break;
-
-    case '%':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
-            cinp();
-            tok = TOK_A_MOD;
-        }
-        break;
+    PARSE2('!', '!', '=', TOK_NE)
+    PARSE2('=', '=', '=', TOK_EQ)
+    PARSE2('*', '*', '=', TOK_A_MUL)
+    PARSE2('%', '%', '=', TOK_A_MOD)
+    PARSE2('^', '^', '=', TOK_A_XOR)
         
-    case '^':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
-            cinp();
-            tok = TOK_A_XOR;
-        }
-        break;
-
         /* comments or operator */
     case '/':
-        minp();
-        if (ch == '*') {
+        PEEKC(c, p);
+        if (c == '*') {
+            file->buf_ptr = p;
             parse_comment();
+            p = file->buf_ptr;
             goto redo_no_start;
-        } else if (ch == '/') {
+        } else if (c == '/') {
+            file->buf_ptr = p;
             parse_line_comment();
+            p = file->buf_ptr;
             goto redo_no_start;
-        } else if (ch == '=') {
-            cinp();
+        } else if (c == '=') {
+            p++;
             tok = TOK_A_DIV;
         } else {
             tok = '/';
@@ -3147,13 +3246,14 @@ static inline void next_nomacro1(void)
     case ':':
     case '?':
     case '~':
-        tok = ch;
-        cinp();
+        tok = c;
+        p++;
         break;
     default:
-        error("unrecognized character \\x%02x", ch);
+        error("unrecognized character \\x%02x", c);
         break;
     }
+    file->buf_ptr = p;
     tok_flags = 0;
 #if defined(PARSE_DEBUG)
     printf("token = %s\n", get_tok_str(tok, &tokc));
@@ -3427,6 +3527,7 @@ static int macro_subst_tok(TokenString *tok_str,
                 t = *macro_ptr;
             } else {
                 /* XXX: incorrect with comments */
+                ch = file->buf_ptr[0];
                 while (is_space(ch) || ch == '\n')
                     cinp();
                 t = ch;
