@@ -84,10 +84,7 @@ Please read tcc-doc.html to have all the features of TCC.
 License:
 -------
 
-TCC is distributed under the GNU General Public License (see COPYING
-file). 
-
-License may be changed to LGPL or X11 style, so I would prefer that
-you indicate in submitted patches that you accept such a change.
+TCC is distributed under the GNU Lesser General Public License (see
+COPYING file).
 
 Fabrice Bellard.
