@@ -1,3 +1,13 @@
+version 0.9.22:
+
+- simple memory optimisations: kernel compilation is 30% faster
+- linker symbol definitions fixes
+- gcc 3.4 fixes
+- fixed value stack full error
+- 'packed' attribute support for variables and structure fields
+- ignore 'const' and 'volatile' in function prototypes
+- allow '_Bool' in bit fields
+
 version 0.9.21:
 
 - ARM target support (Daniel Glöckner)

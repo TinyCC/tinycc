@@ -4,6 +4,7 @@ TODO list:
     #define spin_lock(lock) do { } while (0)
     #define wq_spin_lock spin_lock
     #define TEST() wq_spin_lock(a)
+- typedefs can be structure fields
 - see bugfixes.diff + improvement.diff from Daniel Glockner
 - constructors
 - cast bug (Peter Wang)
