@@ -433,7 +433,7 @@ static void relocate_syms(TCCState *s1, int do_resolve)
     }
 }
 
-/* relocate a given section (CPU dependant) */
+/* relocate a given section (CPU dependent) */
 static void relocate_section(TCCState *s1, Section *s)
 {
     Section *sr;
@@ -581,12 +581,17 @@ static void put_got_offset(TCCState *s1, int index, unsigned long val)
 }
 
 /* XXX: suppress that */
-static void put32(unsigned char *p, unsigned int val)
+static void put32(unsigned char *p, uint32_t val)
 {
     p[0] = val;
     p[1] = val >> 8;
     p[2] = val >> 16;
     p[3] = val >> 24;
+}
+
+static uint32_t get32(unsigned char *p)
+{
+    return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
 }
 
 static void build_got(TCCState *s1)
@@ -632,10 +637,43 @@ static void put_got_entry(TCCState *s1,
         sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
         name = symtab_section->link->data + sym->st_name;
         offset = sym->st_value;
-        /* NOTE: we put temporarily the got offset */
         if (reloc_type == R_386_JMP_SLOT) {
-            s1->nb_plt_entries++;
-            offset = s1->got->data_offset;
+            Section *plt;
+            uint8_t *p;
+            int modrm;
+
+            /* if we build a DLL, we add a %ebx offset */
+            if (s1->output_type == TCC_OUTPUT_DLL)
+                modrm = 0xa3;
+            else
+                modrm = 0x25;
+
+            /* add a PLT entry */
+            plt = s1->plt;
+            if (plt->data_offset == 0) {
+                /* first plt entry */
+                p = section_ptr_add(plt, 16);
+                p[0] = 0xff; /* pushl got + 4 */
+                p[1] = modrm + 0x10;
+                put32(p + 2, 4);
+                p[6] = 0xff; /* jmp *(got + 8) */
+                p[7] = modrm;
+                put32(p + 8, 8);
+            }
+
+            p = section_ptr_add(plt, 16);
+            p[0] = 0xff; /* jmp *(got + x) */
+            p[1] = modrm;
+            put32(p + 2, s1->got->data_offset);
+            p[6] = 0x68; /* push $xxx */
+            put32(p + 7, (plt->data_offset - 32) >> 1);
+            p[11] = 0xe9; /* jmp plt_start */
+            put32(p + 12, -(plt->data_offset));
+
+            /* the symbol is modified so that it will be relocated to
+               the PLT */
+            if (s1->output_type == TCC_OUTPUT_EXE)
+                offset = plt->data_offset - 16;
         }
         index = put_elf_sym(s1->dynsym, offset, 
                             size, info, 0, sym->st_shndx, name);
@@ -847,7 +885,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
     Section *strsec, *s;
     Elf32_Shdr shdr, *sh;
     Elf32_Phdr *phdr, *ph;
-    Section *interp, *plt, *dynamic, *dynstr;
+    Section *interp, *dynamic, *dynstr;
     unsigned long saved_dynamic_data_offset;
     Elf32_Sym *sym;
     int type, file_type;
@@ -863,7 +901,6 @@ int tcc_output_file(TCCState *s1, const char *filename)
     section_order = NULL;
     interp = NULL;
     dynamic = NULL;
-    plt = NULL; /* avoid warning */
     dynstr = NULL; /* avoid warning */
     saved_dynamic_data_offset = 0; /* avoid warning */
     
@@ -898,8 +935,9 @@ int tcc_output_file(TCCState *s1, const char *filename)
             dynamic->sh_entsize = sizeof(Elf32_Dyn);
         
             /* add PLT */
-            plt = new_section(s1, ".plt", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
-            plt->sh_entsize = 4;
+            s1->plt = new_section(s1, ".plt", SHT_PROGBITS, 
+                                  SHF_ALLOC | SHF_EXECINSTR);
+            s1->plt->sh_entsize = 4;
 
             build_got(s1);
 
@@ -998,9 +1036,6 @@ int tcc_output_file(TCCState *s1, const char *filename)
 
             build_got_entries(s1);
         
-            /* update PLT/GOT sizes so that we can allocate their space */
-            plt->data_offset += 16 * (s1->nb_plt_entries + 1);
-
             /* add a list of needed dlls */
             for(i = 0; i < s1->nb_loaded_dlls; i++) {
                 DLLReference *dllref = s1->loaded_dlls[i];
@@ -1191,8 +1226,6 @@ int tcc_output_file(TCCState *s1, const char *filename)
         
         /* if dynamic section, then add corresponing program header */
         if (dynamic) {
-            int plt_offset;
-            unsigned char *p;
             Elf32_Sym *sym_end;
 
             ph = &phdr[phnum - 1];
@@ -1209,49 +1242,38 @@ int tcc_output_file(TCCState *s1, const char *filename)
             /* put GOT dynamic section address */
             put32(s1->got->data, dynamic->sh_addr);
 
-            /* compute the PLT */
-            plt->data_offset = 0;
-            
-            /* first plt entry */
-            p = section_ptr_add(plt, 16);
-            p[0] = 0xff; /* pushl got + 4 */
-            p[1] = 0x35;
-            put32(p + 2, s1->got->sh_addr + 4);
-            p[6] = 0xff; /* jmp *(got + 8) */
-            p[7] = 0x25;
-            put32(p + 8, s1->got->sh_addr + 8);
-            
-            /* relocation symbols in .dynsym and build PLT. */
-            plt_offset = 0;
+            /* relocate the PLT */
+            if (file_type == TCC_OUTPUT_EXE) {
+                uint8_t *p, *p_end;
+
+                p = s1->plt->data;
+                p_end = p + s1->plt->data_offset;
+                put32(p + 2, get32(p + 2) + s1->got->sh_addr);
+                put32(p + 8, get32(p + 8) + s1->got->sh_addr);
+                p += 16;
+                while (p < p_end) {
+                    put32(p + 2, get32(p + 2) + s1->got->sh_addr);
+                    p += 16;
+                }
+            }
+
+            /* relocate symbols in .dynsym */
             sym_end = (Elf32_Sym *)(s1->dynsym->data + s1->dynsym->data_offset);
             for(sym = (Elf32_Sym *)s1->dynsym->data + 1; 
                 sym < sym_end;
                 sym++) {
-                type = ELF32_ST_TYPE(sym->st_info);
                 if (sym->st_shndx == SHN_UNDEF) {
-                    if (type == STT_FUNC) {
-                        /* one more entry in PLT */
-                        p = section_ptr_add(plt, 16);
-                        p[0] = 0xff; /* jmp *(got + x) */
-                        p[1] = 0x25;
-                        put32(p + 2, s1->got->sh_addr + sym->st_value);
-                        p[6] = 0x68; /* push $xxx */
-                        put32(p + 7, plt_offset);
-                        p[11] = 0xe9; /* jmp plt_start */
-                        put32(p + 12, -(plt->data_offset));
-                        
-                        /* patch symbol value to point to plt */
-                        sym->st_value = plt->sh_addr + p - plt->data;
-                        
-                        plt_offset += 8;
-                    }
+                    /* relocate to the PLT if the symbol corresponds
+                       to a PLT entry */
+                    if (sym->st_value)
+                        sym->st_value += s1->plt->sh_addr;
                 } else if (sym->st_shndx < SHN_LORESERVE) {
                     /* do symbol relocation */
                     sym->st_value += s1->sections[sym->st_shndx]->sh_addr;
                 }
             }
-            /* put dynamic section entries */
 
+            /* put dynamic section entries */
             dynamic->data_offset = saved_dynamic_data_offset;
             put_dt(dynamic, DT_HASH, s1->dynsym->hash->sh_addr);
             put_dt(dynamic, DT_STRTAB, dynstr->sh_addr);
