@@ -50,7 +50,7 @@ The include file <tcclib.h> can be used if you want a small basic libc
 include support (especially useful for floppy disks). Of course, you
 can also use standard headers, although they are slower to compile.
 
-You can begin your C script with '#!/usr/local/bin/tcc' on the first
+You can begin your C script with '#!/usr/local/bin/tcc -run' on the first
 line and set its execute bits (chmod a+x your_script). Then, you can
 launch the C code as a shell or perl script :-) The command line
 arguments are put in 'argc' and 'argv' of the main functions, as in
