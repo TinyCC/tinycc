@@ -398,6 +398,11 @@ struct TCCState {
     /* if true, static linking is performed */
     int static_link;
 
+    /* warning switches */
+    int warn_write_strings;
+    int warn_unsupported;
+    int warn_error;
+    
     /* error handling */
     void *error_opaque;
     void (*error_func)(void *opaque, const char *msg);
@@ -438,8 +443,6 @@ struct TCCState {
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
 
 /* types */
-#define VT_STRUCT_SHIFT 12   /* structure/enum name shift (20 bits left) */
-
 #define VT_INT        0  /* integer type */
 #define VT_BYTE       1  /* signed byte type */
 #define VT_SHORT      2  /* short type */
@@ -459,12 +462,16 @@ struct TCCState {
 #define VT_UNSIGNED   0x0010  /* unsigned type */
 #define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
+#define VT_CONSTANT   0x0800  /* const modifier */
+#define VT_VOLATILE   0x1000  /* volatile modifier */
 
 /* storage */
 #define VT_EXTERN  0x00000080  /* extern definition */
 #define VT_STATIC  0x00000100  /* static variable */
 #define VT_TYPEDEF 0x00000200  /* typedef definition */
 #define VT_INLINE  0x00000400  /* inline definition */
+
+#define VT_STRUCT_SHIFT 16   /* shift for bitfield shift values */
 
 /* type mask (except storage) */
 #define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
@@ -530,6 +537,14 @@ struct TCCState {
 #define TOK_A_OR  0xfc
 #define TOK_A_SHL 0x81
 #define TOK_A_SAR 0x82
+
+#ifndef offsetof
+#define offsetof(type, field) ((size_t) &((type *)0)->field)
+#endif
+
+#ifndef countof
+#define countof(tab) (sizeof(tab) / sizeof((tab)[0]))
+#endif
 
 /* WARNING: the content of this string encodes token numbers */
 static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
@@ -678,9 +693,9 @@ static int type_size(CType *type, int *a);
 static inline CType *pointed_type(CType *type);
 static int pointed_size(CType *type);
 static int lvalue_type(int t);
-static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
+static int is_compatible_types(CType *type1, CType *type2);
 
 void error(const char *fmt, ...);
 void vpushi(int v);
@@ -1166,7 +1181,7 @@ void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
     } else {
         s1->error_func(s1->error_opaque, buf);
     }
-    if (!is_warning)
+    if (!is_warning || s1->warn_error)
         s1->nb_errors++;
 }
 
@@ -5085,20 +5100,66 @@ static int pointed_size(CType *type)
     return type_size(pointed_type(type), &align);
 }
 
-#if 0
-void check_pointer_types(SValue *p1, SValue *p2)
+static inline int is_null_pointer(SValue *p)
 {
-    char buf1[256], buf2[256];
-    int t1, t2;
-    t1 = p1->t;
-    t2 = p2->t;
-    if (!is_compatible_types(t1, t2)) {
-        type_to_str(buf1, sizeof(buf1), t1, NULL);
-        type_to_str(buf2, sizeof(buf2), t2, NULL);
-        error("incompatible pointers '%s' and '%s'", buf1, buf2);
+    if ((p->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
+        return 0;
+    return ((p->type.t & VT_BTYPE) == VT_INT && p->c.i == 0) ||
+        ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.ll == 0);
+}
+
+static inline int is_integer_btype(int bt)
+{
+    return (bt == VT_BYTE || bt == VT_SHORT || 
+            bt == VT_INT || bt == VT_LLONG);
+}
+
+/* check types for comparison or substraction of pointers */
+static void check_comparison_pointer_types(SValue *p1, SValue *p2, int op)
+{
+    CType *type1, *type2, tmp_type1, tmp_type2;
+    int bt1, bt2;
+    
+    /* null pointers are accepted for all comparisons as gcc */
+    if (is_null_pointer(p1) || is_null_pointer(p2))
+        return;
+    type1 = &p1->type;
+    type2 = &p2->type;
+    bt1 = type1->t & VT_BTYPE;
+    bt2 = type2->t & VT_BTYPE;
+    /* accept comparison between pointer and integer with a warning */
+    if ((is_integer_btype(bt1) || is_integer_btype(bt2)) && op != '-') {
+        warning("comparison between pointer and integer");
+        return;
+    }
+
+    /* both must be pointers or implicit function pointers */
+    if (bt1 == VT_PTR) {
+        type1 = pointed_type(type1);
+    } else if (bt1 != VT_FUNC) 
+        goto invalid_operands;
+
+    if (bt2 == VT_PTR) {
+        type2 = pointed_type(type2);
+    } else if (bt2 != VT_FUNC) { 
+    invalid_operands:
+        error("invalid operands to binary %s", get_tok_str(op, NULL));
+    }
+    if ((type1->t & VT_BTYPE) == VT_VOID || 
+        (type2->t & VT_BTYPE) == VT_VOID)
+        return;
+    tmp_type1 = *type1;
+    tmp_type2 = *type2;
+    tmp_type1.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+    tmp_type2.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+    if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
+        /* gcc-like error if '-' is used */
+        if (op == '-')
+            goto invalid_operands;
+        else
+            warning("comparison of distinct pointer types lacks a cast");
     }
 }
-#endif
 
 /* generic gen_op: handles types problems */
 void gen_op(int op)
@@ -5115,7 +5176,7 @@ void gen_op(int op)
         /* at least one operand is a pointer */
         /* relationnal op: must be both pointers */
         if (op >= TOK_ULT && op <= TOK_GT) {
-            //            check_pointer_types(vtop, vtop - 1);
+            check_comparison_pointer_types(vtop - 1, vtop, op);
             /* pointers are handled are unsigned */
             t = VT_INT | VT_UNSIGNED;
             goto std_op;
@@ -5124,7 +5185,7 @@ void gen_op(int op)
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
             if (op != '-')
                 error("cannot use pointers here");
-            //            check_pointer_types(vtop - 1, vtop);
+            check_comparison_pointer_types(vtop - 1, vtop, op);
             /* XXX: check that types are compatible */
             u = pointed_size(&vtop[-1].type);
             gen_opic(op);
@@ -5511,55 +5572,58 @@ static void mk_pointer(CType *type)
     type->ref = s;
 }
 
-static int is_compatible_types(CType *type1, CType *type2)
+/* compare function types. OLD functions match any new functions */
+static int is_compatible_func(CType *type1, CType *type2)
 {
     Sym *s1, *s2;
-    int bt1, bt2, t1, t2;
+
+    s1 = type1->ref;
+    s2 = type2->ref;
+    if (!is_compatible_types(&s1->type, &s2->type))
+        return 0;
+    /* XXX: not complete */
+    if (s1->c == FUNC_OLD || s2->c == FUNC_OLD)
+        return 1;
+    if (s1->c != s2->c)
+        return 0;
+    while (s1 != NULL) {
+        if (s2 == NULL)
+            return 0;
+        if (!is_compatible_types(&s1->type, &s2->type))
+            return 0;
+        s1 = s1->next;
+        s2 = s2->next;
+    }
+    if (s2)
+        return 0;
+    return 1;
+}
+
+/* return true if type1 and type2 are exactly the same (including
+   qualifiers). 
+
+   - enums are not checked as gcc __builtin_types_compatible_p () 
+ */
+static int is_compatible_types(CType *type1, CType *type2)
+{
+    int bt1, t1, t2;
 
     t1 = type1->t & VT_TYPE;
     t2 = type2->t & VT_TYPE;
+    /* XXX: bitfields ? */
+    if (t1 != t2)
+        return 0;
+    /* test more complicated cases */
     bt1 = t1 & VT_BTYPE;
-    bt2 = t2 & VT_BTYPE;
     if (bt1 == VT_PTR) {
         type1 = pointed_type(type1);
-        /* if function, then convert implicitely to function pointer */
-        if (bt2 != VT_FUNC) {
-            if (bt2 != VT_PTR)
-                return 0;
-            type2 = pointed_type(type2);
-        }
-        /* void matches everything */
-        /* XXX: not fully compliant */
-        if ((type1->t & VT_TYPE) == VT_VOID || (type2->t & VT_TYPE) == VT_VOID)
-            return 1;
+        type2 = pointed_type(type2);
         return is_compatible_types(type1, type2);
-    } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+    } else if (bt1 == VT_STRUCT) {
         return (type1->ref == type2->ref);
     } else if (bt1 == VT_FUNC) {
-        if (bt2 != VT_FUNC)
-            return 0;
-        s1 = type1->ref;
-        s2 = type2->ref;
-        if (!is_compatible_types(&s1->type, &s2->type))
-            return 0;
-        /* XXX: not complete */
-        if (s1->c == FUNC_OLD || s2->c == FUNC_OLD)
-            return 1;
-        if (s1->c != s2->c)
-            return 0;
-        while (s1 != NULL) {
-            if (s2 == NULL)
-                return 0;
-            if (!is_compatible_types(&s1->type, &s2->type))
-                return 0;
-            s1 = s1->next;
-            s2 = s2->next;
-        }
-        if (s2)
-            return 0;
-        return 1;
+        return is_compatible_func(type1, type2);
     } else {
-        /* XXX: not complete */
         return 1;
     }
 }
@@ -5579,6 +5643,10 @@ void type_to_str(char *buf, int buf_size,
     t = type->t & VT_TYPE;
     bt = t & VT_BTYPE;
     buf[0] = '\0';
+    if (t & VT_CONSTANT)
+        pstrcat(buf, buf_size, "const ");
+    if (t & VT_VOLATILE)
+        pstrcat(buf, buf_size, "volatile ");
     if (t & VT_UNSIGNED)
         pstrcat(buf, buf_size, "unsigned ");
     switch(bt) {
@@ -5660,45 +5728,72 @@ void type_to_str(char *buf, int buf_size,
    casts if needed. */
 static void gen_assign_cast(CType *dt)
 {
-    CType *st;
+    CType *st, *type1, *type2, tmp_type1, tmp_type2;
     char buf1[256], buf2[256];
     int dbt, sbt;
 
     st = &vtop->type; /* source type */
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
-    if (dbt == VT_PTR) {
+    if (dt->t & VT_CONSTANT)
+        warning("assignment of read-only location");
+    switch(dbt) {
+    case VT_PTR:
         /* special cases for pointers */
+        /* '0' can also be a pointer */
+        if (is_null_pointer(vtop))
+            goto type_ok;
+        /* accept implicit pointer to integer cast with warning */
+        if (is_integer_btype(sbt)) {
+            warning("assignment makes pointer from integer without a cast");
+            goto type_ok;
+        }
+        type1 = pointed_type(dt);
         /* a function is implicitely a function pointer */
         if (sbt == VT_FUNC) {
-            if (!is_compatible_types(pointed_type(dt), st))
+            if ((type1->t & VT_BTYPE) != VT_VOID &&
+                !is_compatible_types(pointed_type(dt), st))
                 goto error;
             else
                 goto type_ok;
         }
-        /* '0' can also be a pointer */
-        if (sbt == VT_INT &&
-            ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) &&
-            vtop->c.i == 0)
-            goto type_ok;
-        /* accept implicit pointer to integer cast with warning */
-        if (sbt == VT_BYTE || sbt == VT_SHORT || 
-            sbt == VT_INT || sbt == VT_LLONG) {
-            warning("assignment makes pointer from integer without a cast");
-            goto type_ok;
+        if (sbt != VT_PTR)
+            goto error;
+        type2 = pointed_type(st);
+        if ((type1->t & VT_BTYPE) == VT_VOID || 
+            (type2->t & VT_BTYPE) == VT_VOID) {
+            /* void * can match anything */
+        } else {
+            /* exact type match, except for unsigned */
+            tmp_type1 = *type1;
+            tmp_type2 = *type2;
+            tmp_type1.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+            tmp_type2.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+            if (!is_compatible_types(&tmp_type1, &tmp_type2))
+                goto error;
         }
-    } else if (dbt == VT_BYTE || dbt == VT_SHORT || 
-               dbt == VT_INT || dbt == VT_LLONG) {
+        /* check const and volatile */
+        if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT)) ||
+            (!(type1->t & VT_VOLATILE) && (type2->t & VT_VOLATILE)))
+            warning("assignment discards qualifiers from pointer target type");
+        break;
+    case VT_BYTE:
+    case VT_SHORT:
+    case VT_INT:
+    case VT_LLONG:
         if (sbt == VT_PTR || sbt == VT_FUNC) {
             warning("assignment makes integer from pointer without a cast");
-            goto type_ok;
         }
-    }
-    if (!is_compatible_types(dt, st)) {
-    error:
-        type_to_str(buf1, sizeof(buf1), st, NULL);
-        type_to_str(buf2, sizeof(buf2), dt, NULL);
-        error("cannot cast '%s' to '%s'", buf1, buf2);
+        /* XXX: more tests */
+        break;
+    case VT_STRUCT:
+        if (!is_compatible_types(dt, st)) {
+        error:
+            type_to_str(buf1, sizeof(buf1), st, NULL);
+            type_to_str(buf2, sizeof(buf2), dt, NULL);
+            error("cannot cast '%s' to '%s'", buf1, buf2);
+        }
+        break;
     }
  type_ok:
     gen_cast(dt);
@@ -5717,6 +5812,9 @@ void vstore(void)
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
         vtop->type.t = ft & VT_TYPE;
+        /* XXX: factorize */
+        if (ft & VT_CONSTANT)
+            warning("assignment of read-only location");
     } else {
         delayed_cast = 0;
         gen_assign_cast(&vtop[-1].type);
@@ -5899,7 +5997,8 @@ static void parse_attribute(AttributeDef *ad)
             ad->func_call = FUNC_STDCALL;
             break;
         default:
-            //            warning("'%s' attribute ignored", get_tok_str(t, NULL));
+            if (tcc_state->warn_unsupported)
+                warning("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
             /* XXX: skip parenthesis too */
             if (tok == '(') {
@@ -5946,7 +6045,9 @@ static void struct_decl(CType *type, int u)
         v = anon_sym++;
     }
     type1.t = a;
-    s = sym_push(v | SYM_STRUCT, &type1, 0, 0);
+    /* we put an undefined size for struct/union */
+    s = sym_push(v | SYM_STRUCT, &type1, 0, -1);
+    s->r = 0; /* default alignment is zero as gcc */
     /* put struct/union/enum name in type */
  do_decl:
     type->t = u;
@@ -5954,7 +6055,7 @@ static void struct_decl(CType *type, int u)
     
     if (tok == '{') {
         next();
-        if (s->c)
+        if (s->c != -1)
             error("struct/union/enum already defined");
         /* cannot be empty */
         c = 0;
@@ -6169,9 +6270,15 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
+            t |= VT_CONSTANT;
+            next();
+            break;
         case TOK_VOLATILE1:
         case TOK_VOLATILE2:
         case TOK_VOLATILE3:
+            t |= VT_VOLATILE;
+            next();
+            break;
         case TOK_REGISTER:
         case TOK_SIGNED1:
         case TOK_SIGNED2:
@@ -6303,7 +6410,9 @@ static void post_type(CType *type, AttributeDef *ad)
             l = FUNC_OLD;
         skip(')');
         t1 = type->t & VT_STORAGE;
-        type->t &= ~VT_STORAGE;
+        /* NOTE: const is ignored in returned type as it has a special
+           meaning in gcc / C++ */
+        type->t &= ~(VT_STORAGE | VT_CONSTANT); 
         post_type(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         s = sym_push(SYM_FIELD, type, ad->func_call, l);
@@ -6343,24 +6452,30 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
 {
     Sym *s;
     CType type1, *type2;
-
+    int qualifiers;
+    
     while (tok == '*') {
-        next();
+        qualifiers = 0;
     redo:
+        next();
         switch(tok) {
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
+            qualifiers |= VT_CONSTANT;
+            goto redo;
         case TOK_VOLATILE1:
         case TOK_VOLATILE2:
         case TOK_VOLATILE3:
+            qualifiers |= VT_VOLATILE;
+            goto redo;
         case TOK_RESTRICT1:
         case TOK_RESTRICT2:
         case TOK_RESTRICT3:
-            next();
             goto redo;
         }
         mk_pointer(type);
+        type->t |= qualifiers;
     }
     
     /* XXX: clarify attribute handling */
@@ -6557,6 +6672,8 @@ static void unary(void)
         /* string parsing */
         t = VT_BYTE;
     str_init:
+        if (tcc_state->warn_write_strings)
+            t |= VT_CONSTANT;
         type.t = t;
         mk_pointer(&type);
         type.t |= VT_ARRAY;
@@ -6652,10 +6769,13 @@ static void unary(void)
             unary_type(&type);
         }
         size = type_size(&type, &align);
-        if (t == TOK_SIZEOF)
+        if (t == TOK_SIZEOF) {
+            if (size < 0)
+                error("sizeof applied to an incomplete type");
             vpushi(size);
-        else
+        } else {
             vpushi(align);
+        }
         break;
         
     case TOK_INC:
@@ -7658,6 +7778,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
     int saved_global_expr, bt, bit_pos, bit_size;
     void *ptr;
     unsigned long long bit_mask;
+    CType dtype;
 
     switch(expr_type) {
     case EXPR_VAL:
@@ -7678,10 +7799,13 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         break;
     }
     
+    dtype = *type;
+    dtype.t &= ~VT_CONSTANT; /* need to do that to avoid false warning */
+
     if (sec) {
         /* XXX: not portable */
         /* XXX: generate error if incorrect relocation */
-        gen_assign_cast(type);
+        gen_assign_cast(&dtype);
         bt = type->t & VT_BTYPE;
         ptr = sec->data + c;
         /* XXX: make code faster ? */
@@ -7727,7 +7851,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         }
         vtop--;
     } else {
-        vset(type, VT_LOCAL, c);
+        vset(&dtype, VT_LOCAL, c);
         vswap();
         vstore();
         vpop();
@@ -7884,8 +8008,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (!parse_btype(&type1, &ad1))
                 expect("cast");
             type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
-            if (!is_compatible_types(type, &type1))
+#if 0
+            if (!is_assignable_types(type, &type1))
                 error("invalid type for cast");
+#endif
             skip(')');
         }
         no_oblock = 1;
@@ -8545,7 +8671,7 @@ static int tcc_compile(TCCState *s1)
         parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM;
         next();
         decl(VT_CONST);
-        if (tok != -1)
+        if (tok != TOK_EOF)
             expect("declaration");
 
         /* end of translation unit info */
@@ -9321,6 +9447,43 @@ int tcc_set_output_type(TCCState *s, int output_type)
     return 0;
 }
 
+#define WD_ALL 0x0001 /* warning is activated when using -Wall */
+
+typedef struct WarningDef {
+    int offset;
+    int flags;
+    const char *name;
+} WarningDef;
+
+static const WarningDef warning_defs[] = {
+    { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
+    { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
+    { offsetof(TCCState, warn_error), 0, "error" },
+};
+
+/* set/reset a warning */
+int tcc_set_warning(TCCState *s, const char *warning_name, int value)
+{
+    int i;
+    const WarningDef *p;
+    if (!strcmp(warning_name, "all")) {
+        for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
+            if (p->flags & WD_ALL)
+                *(int *)((uint8_t *)s + p->offset) = 1;
+        }
+    } else {
+        for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
+            if (!strcmp(warning_name, p->name))
+                goto found;
+        }
+        return -1;
+    found:
+        *(int *)((uint8_t *)s + p->offset) = value;
+    }
+    return 0;
+}
+
+
 #if !defined(LIBTCC)
 
 /* extract the basename of a file */
@@ -9354,9 +9517,9 @@ static int64_t getclock_us(void)
 
 void help(void)
 {
-    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2003 Fabrice Bellard\n"
            "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
-           "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
+           "           [-Wwarn] [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [infile1 infile2...] [-run infile args...]\n"
            "\n"
            "General options:\n"
@@ -9366,6 +9529,7 @@ void help(void)
            "  -Bdir       set tcc internal library path\n"
            "  -bench      output compilation statistics\n"
  	   "  -run        run compiled source\n"
+           "  -Wwarning   set or reset (with 'no-' prefix) 'warning'\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
@@ -9610,7 +9774,24 @@ int main(int argc, char **argv)
             case TCC_OPTION_v:
                 printf("tcc version %s\n", TCC_VERSION);
                 return 0;
+            case TCC_OPTION_W:
+                {
+                    const char *p = optarg;
+                    int value;
+                    value = 1;
+                    if (p[0] == 'n' && p[1] == 'o' && p[2] == '-') {
+                        p += 2;
+                        value = 0;
+                    }
+                    if (tcc_set_warning(s, p, value) < 0 && s->warn_unsupported)
+                        goto unsupported_option;
+                }
+                break;
             default:
+                if (s->warn_unsupported) {
+                unsupported_option:
+                    warning("unsupported option '%s'", r);
+                }
                 break;
             }
         }
