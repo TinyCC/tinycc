@@ -224,6 +224,7 @@ typedef struct TokenString {
 struct BufferedFile *file;
 int ch, ch1, tok, tok1;
 CValue tokc, tok1c;
+int return_linefeed; /* if true, line feed is returned as a token */
 
 /* sections */
 Section **sections;
@@ -426,7 +427,8 @@ struct TCCState {
 #define TOK_A_SHL 0x81
 #define TOK_A_SAR 0x82
 
-#define TOK_EOF   (-1)  /* end of file */
+#define TOK_EOF       (-1)  /* end of file */
+#define TOK_LINEFEED  10    /* line feed */
 
 /* all identificators and strings have token above that */
 #define TOK_IDENT 256
@@ -1409,10 +1411,7 @@ int expr_preprocess(void)
     TokenString str;
     
     tok_str_new(&str);
-    while (1) {
-        skip_spaces();
-        if (ch == '\n')
-            break;
+    while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         next(); /* do macro subst */
         if (tok == TOK_DEFINED) {
             next_nomacro();
@@ -1507,7 +1506,7 @@ void parse_define(void)
     tok_str_add(&str, 0);
 #ifdef PP_DEBUG
     printf("define %s %d: ", get_tok_str(v, NULL), t);
-    tok_print(str);
+    tok_print(str.str);
 #endif
     s = sym_push1(&define_stack, v, t, (int)str.str);
     s->next = first;
@@ -1521,6 +1520,7 @@ void preprocess(void)
     BufferedFile *f;
     Sym *s;
 
+    return_linefeed = 1; /* linefeed will be returned as a token */
     cinp();
     next_nomacro();
  redo:
@@ -1598,6 +1598,8 @@ void preprocess(void)
         if (do_debug) {
             put_stabs(file->filename, N_BINCL, 0, 0, 0);
         }
+        ch = '\n';
+        goto the_end;
     } else if (tok == TOK_IFNDEF) {
         c = 1;
         goto do_ifdef;
@@ -1659,8 +1661,10 @@ void preprocess(void)
         error("#error");
     }
     /* ignore other preprocess commands or #! for C scripts */
-    while (ch != '\n' && ch != -1)
-        cinp();
+    while (tok != TOK_LINEFEED && tok != TOK_EOF)
+        next_nomacro();
+ the_end:
+    return_linefeed = 0;
 }
 
 /* read a number in base b */
@@ -2043,6 +2047,11 @@ void next_nomacro1(void)
     /* skip spaces */
     while(1) {
         while (ch == '\n') {
+            /* during preprocessor parsing, '\n' is a token */
+            if (return_linefeed) {
+                tok = TOK_LINEFEED;
+                return;
+            }
             cinp();
             while (ch == ' ' || ch == '\t')
                 cinp();
@@ -2459,7 +2468,7 @@ void next(void)
         }
     }
 #if defined(DEBUG)
-    printf("token = %s\n", get_tok_str(tok, tokc));
+    printf("token = %s\n", get_tok_str(tok, &tokc));
 #endif
 }
 
