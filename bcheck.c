@@ -95,10 +95,14 @@ static void *saved_realloc_hook;
 static void *saved_memalign_hook;
 #endif
 
+/* linker definitions */
 extern char _end;
 
-/* TCC defines: */
+/* TCC definitions */
 extern char __bounds_start; /* start of static bounds table */
+/* error function. if NULL, simply do abort() */
+void (*__bound_error_func)(unsigned long caller, const char *msg);
+
 /* runtime error output */
 extern void rt_error(unsigned long pc, const char *fmt, ...);
 
@@ -141,7 +145,9 @@ static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
 /* print a bound error message */
 static void bound_error(const void *caller, const char *fmt, ...)
 {
-    rt_error((unsigned long)caller, "%s", fmt);
+    if (!__bound_error_func)
+        abort();
+    __bound_error_func((unsigned long)caller, fmt);
 }
 
 static void bound_alloc_error(void)
