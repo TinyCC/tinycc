@@ -443,9 +443,16 @@ void gfunc_epilog(void)
     *func_sub_sp_ptr = (-loc + 3) & -4; 
 }
 
+/* generate a jump to a label */
 int gjmp(int t)
 {
     return psym(0xe9, t);
+}
+
+/* generate a jump to a fixed address */
+void gjmp_addr(int a)
+{
+    oad(0xe9, a - ind - 5);
 }
 
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
