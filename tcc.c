@@ -2061,7 +2061,8 @@ static uint8_t *parse_pp_string(uint8_t *p,
         } else if (c == '\r') {
             PEEKC_EOB(c, p);
             if (c != '\n') {
-                cstr_ccat(str, '\r');
+                if (str)
+                    cstr_ccat(str, '\r');
             } else {
                 file->line_num++;
                 goto add_char;
@@ -6621,6 +6622,9 @@ the_end:
    function pointer) */
 static inline void convert_parameter_type(CType *pt)
 {
+    /* remove const and volatile qualifiers (XXX: const could be used
+       to indicate a const function parameter */
+    pt->t &= ~(VT_CONSTANT | VT_VOLATILE);
     /* array must be transformed to pointer according to ANSI C */
     pt->t &= ~VT_ARRAY;
     if ((pt->t & VT_BTYPE) == VT_FUNC) {
