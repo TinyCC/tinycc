@@ -44,7 +44,7 @@ test3: tcc tcc.c tcctest.c test.ref
 
 # memory and bound check auto test
 BOUNDS_OK  = 1 4 8 10
-BOUNDS_FAIL= 2 5 7 9 11 12
+BOUNDS_FAIL= 2 5 7 9 11 12 13
 
 btest: boundtest.c tcc
 	@for i in $(BOUNDS_OK); do \
@@ -76,7 +76,7 @@ ex2: ex2.c
 ex3: ex3.c
 	gcc $(CFLAGS) -o $@ $<
 
-# Tiny C Compiler
+# Native Tiny C Compiler
 
 tcc_g: tcc.c i386-gen.c bcheck.c Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
@@ -94,7 +94,15 @@ clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p
 
-# win32 version
+# IL TCC
+
+iltcc_g: tcc.c il-gen.c bcheck.c Makefile
+	gcc $(CFLAGS) -DTCC_TARGET_IL -o $@ $< $(LIBS)
+
+iltcc: iltcc_g
+	strip -s -R .comment -R .note -o $@ $<
+
+# win32 TCC
 tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
 	i386-mingw32msvc-gcc $(CFLAGS) -DCONFIG_TCC_STATIC -o $@ $<
 
