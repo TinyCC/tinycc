@@ -5233,7 +5233,7 @@ static int is_compatible_types(CType *type1, CType *type2)
             return 1;
         return is_compatible_types(type1, type2);
     } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
-        return (t2 == t1);
+        return (type1->ref == type2->ref);
     } else if (bt1 == VT_FUNC) {
         if (bt2 != VT_FUNC)
             return 0;
@@ -5357,26 +5357,41 @@ void type_to_str(char *buf, int buf_size,
 
 /* verify type compatibility to store vtop in 'dt' type, and generate
    casts if needed. */
-void gen_assign_cast(CType *dt)
+static void gen_assign_cast(CType *dt)
 {
     CType *st;
     char buf1[256], buf2[256];
+    int dbt, sbt;
 
     st = &vtop->type; /* source type */
-    if ((dt->t & VT_BTYPE) == VT_PTR) {
+    dbt = dt->t & VT_BTYPE;
+    sbt = st->t & VT_BTYPE;
+    if (dbt == VT_PTR) {
         /* special cases for pointers */
         /* a function is implicitely a function pointer */
-        if ((st->t & VT_BTYPE) == VT_FUNC) {
+        if (sbt == VT_FUNC) {
             if (!is_compatible_types(pointed_type(dt), st))
                 goto error;
             else
                 goto type_ok;
         }
         /* '0' can also be a pointer */
-        if ((st->t & VT_BTYPE) == VT_INT &&
+        if (sbt == VT_INT &&
             ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) &&
             vtop->c.i == 0)
             goto type_ok;
+        /* accept implicit pointer to integer cast with warning */
+        if (sbt == VT_BYTE || sbt == VT_SHORT || 
+            sbt == VT_INT || sbt == VT_LLONG) {
+            warning("assignment makes pointer from integer without a cast");
+            goto type_ok;
+        }
+    } else if (dbt == VT_BYTE || dbt == VT_SHORT || 
+               dbt == VT_INT || dbt == VT_LLONG) {
+        if (sbt == VT_PTR || sbt == VT_FUNC) {
+            warning("assignment makes integer from pointer without a cast");
+            goto type_ok;
+        }
     }
     if (!is_compatible_types(dt, st)) {
     error:
@@ -5641,6 +5656,8 @@ static void struct_decl(CType *type, int u)
         if (a == TOK_ENUM) {
             for(;;) {
                 v = tok;
+                if (v < TOK_UIDENT)
+                    expect("identifier");
                 next();
                 if (tok == '=') {
                     next();
@@ -5649,9 +5666,11 @@ static void struct_decl(CType *type, int u)
                 /* enum symbols have static storage */
                 ss = sym_push(v, &int_type, VT_CONST, c);
                 ss->type.t |= VT_STATIC;
-                if (tok == ',')
-                    next();
+                if (tok != ',')
+                    break;
+                next();
                 c++;
+                /* NOTE: we accept a trailing comma */
                 if (tok == '}')
                     break;
             }
