@@ -15,7 +15,7 @@
    prog: output code
    astk: arg position stack
 */
-int tok, *vac, *vat, rsym, 
+int tok, tok1, *vac, *vat, rsym, 
     prog, ind, loc, glo, file, vt, 
     vc, *macro_stack, *macro_stack_ptr, line_num;
 char *idtable, *idptr, *filename;
@@ -62,7 +62,10 @@ char *idtable, *idptr, *filename;
 #define VT_STATIC   0x10000   /* static variable */
 
 /* Special infos */
+#define VT_LABEL    0x40000  /* goto label symbol */
 #define VT_DEFINE   0x80000  /* special value for #defined symbols */
+#define VT_ENUM    0x100000  /* enum definition */
+#define VT_TYPEDEF 0x200000  /* typedef definition */
 
 /* token values */
 #define TOK_INT      256
@@ -97,8 +100,8 @@ char *idtable, *idptr, *filename;
 #define TOK_DOUBLE   281
 #define TOK_STRUCT   282
 #define TOK_UNION    283
-#define TOK_TYPEDEF  284
 
+#define TOK_TYPEDEF  284
 #define TOK_DEFAULT  285
 #define TOK_ENUM     286
 
@@ -213,6 +216,13 @@ void next()
 {
     int c, v;
     char *q, *p;
+
+    /* special 'ungettok' case for label parsing */
+    if (tok1) {
+        tok = tok1;
+        tok1 = 0;
+        return;
+    }
 
     while(1) {
         c = inp();
@@ -543,32 +553,72 @@ void gen_op(op, l)
     }
 }
 
+int expr_const()
+{
+    expr_eq();
+    if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST)
+        error("constant expected");
+    return vc;
+}
+
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
    XXX: A '2' is ored to ensure non zero return if int type.
  */
 int ist()
 {
-    int t;
+    int t, n, v;
+
     t = 0;
     while(1) {
-        if (tok == TOK_CHAR | tok == TOK_VOID) {
-            t |= VT_BYTE;
-        } else if (tok == TOK_INT |
-                   (tok >= TOK_CONST & tok <= TOK_SIGNED)) {
-            /* ignored types */
-        } else if (tok >= TOK_FLOAT & tok <= TOK_TYPEDEF) {
-            error("unsupported type");
-        } else if (tok == TOK_EXTERN) {
-            t |= VT_EXTERN;
-        } else if (tok == TOK_STATIC) {
-            t |= VT_STATIC;
-        } else if (tok == TOK_UNSIGNED) {
-            t |= VT_UNSIGNED;
+        if (tok == TOK_ENUM) {
+            next();
+            if (tok != '{')
+                next();
+            if (tok == '{') {
+                next();
+                n = 0;
+                while (tok != '}' & tok != -1) {
+                    v = tok;
+                    next();
+                    if (tok == '=') {
+                        next();
+                        n = expr_const();
+                    }
+                    vat[v] = VT_CONST;
+                    vac[v] = n;
+                    if (tok != ',')
+                        break;
+                    next();
+                    n++;
+                }
+                skip('}');
+            }
+            t |= VT_ENUM;
         } else {
-            break;
+            if (tok == TOK_CHAR | tok == TOK_VOID) {
+                t |= VT_BYTE;
+            } else if (tok == TOK_INT |
+                       (tok >= TOK_CONST & tok <= TOK_SIGNED)) {
+                /* ignored types */
+            } else if (tok >= TOK_FLOAT & tok <= TOK_UNION) {
+                error("unsupported type");
+            } else if (tok == TOK_EXTERN) {
+                t |= VT_EXTERN;
+            } else if (tok == TOK_STATIC) {
+                t |= VT_STATIC;
+            } else if (tok == TOK_UNSIGNED) {
+                t |= VT_UNSIGNED;
+            } else if (tok == TOK_TYPEDEF) {
+                t |= VT_TYPEDEF;
+            } else {
+                v = vat[tok];
+                if (!(v & VT_TYPEDEF))
+                    break;
+                t = v & ~VT_TYPEDEF;
+            }
+            next();
         }
-        next();
         t |= 2;
     }
     return t;
@@ -630,14 +680,13 @@ int typ(int *v, int t, int *array_size_ptr)
             if (t & VT_ARRAY) 
                 error("multi dimension arrays not supported");
             next();
-            vc = 0;
+            n = 0;
             if (tok != ']') {
-                expr();
+                n = expr_const();
                 if (array_size_ptr)
-                    *array_size_ptr = vc;
+                    *array_size_ptr = n;
             }
-            if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST | 
-                (vc <= 0 & array_size_ptr != 0))
+            if (n <= 0 & array_size_ptr != 0)
                 error("invalid array size");
             skip(']');
             t = (t + VT_PTRINC) | VT_ARRAY;
@@ -1030,7 +1079,7 @@ void expr()
 
 #endif
 
-void block(int *bsym, int *csym)
+void block(int *bsym, int *csym, int *case_sym, int *def_sym)
 {
     int a, b, c, d;
 
@@ -1041,13 +1090,13 @@ void block(int *bsym, int *csym)
         expr();
         skip(')');
         a = gtst(1, 0);
-        block(bsym, csym);
+        block(bsym, csym, case_sym, def_sym);
         c = tok;
         if (c == TOK_ELSE) {
             next();
             d = psym(0xe9, 0); /* jmp */
             gsym(a);
-            block(bsym, csym);
+            block(bsym, csym, case_sym, def_sym);
             gsym(d); /* patch else jmp */
         } else
             gsym(a);
@@ -1059,7 +1108,7 @@ void block(int *bsym, int *csym)
         skip(')');
         a = gtst(1, 0);
         b = 0;
-        block(&a, &b);
+        block(&a, &b, case_sym, def_sym);
         oad(0xe9, d - ind - 5); /* jmp */
         gsym(a);
         gsym_addr(b, d);
@@ -1068,7 +1117,7 @@ void block(int *bsym, int *csym)
         /* declarations */
         decl(VT_LOCAL);
         while (tok != '}')
-            block(bsym, csym);
+            block(bsym, csym, case_sym, def_sym);
         next();
     } else if (tok == TOK_RETURN) {
         next();
@@ -1118,7 +1167,7 @@ void block(int *bsym, int *csym)
             gsym(e);
         }
         skip(')');
-        block(&a, &b);
+        block(&a, &b, case_sym, def_sym);
         oad(0xe9, c - ind - 5); /* jmp */
         gsym(a);
         gsym_addr(b, c);
@@ -1128,7 +1177,7 @@ void block(int *bsym, int *csym)
         a = 0;
         b = 0;
         d = ind;
-        block(&a, &b);
+        block(&a, &b, case_sym, def_sym);
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
@@ -1138,11 +1187,91 @@ void block(int *bsym, int *csym)
         skip(')');
         gsym(a);
     } else
+    if (tok == TOK_SWITCH) {
+        next();
+        skip('(');
+        expr();
+        gv();
+        skip(')');
+        a = 0;
+        b = 0;
+        c = 0;
+        block(&a, csym, &b, &c);
+        /* if no default, jmp after switch */
+        if (c == 0)
+            c = ind;
+        /* default label */
+        gsym_addr(b, c);
+        /* break label */
+        gsym(a);
+    } else
+    if (tok == TOK_CASE) {
+        next();
+        a = expr_const();
+        if (!case_sym)
+            error("switch expected");
+        gsym(*case_sym);
+        oad(0x3d, a); /* cmp $xxx, %eax */
+        *case_sym = psym(0x850f, 0); /* jne xxx */
+        skip(':');
+        block(bsym, csym, case_sym, def_sym);
+    } else 
+    if (tok == TOK_DEFAULT) {
+        next();
+        skip(':');
+        if (!def_sym)
+            error("switch expected");
+        if (*def_sym)
+            error("too many 'default'");
+        *def_sym = ind;
+        block(bsym, csym, case_sym, def_sym);
+    } else
+    if (tok == TOK_GOTO) {
+        next();
+        a = vat[tok];
+        if (a == 0) {
+            /* put forward definition */
+            a = VT_LABEL | VT_FORWARD;
+            vat[tok] = a;
+            vac[tok] = 0;
+        } else if (!(a & VT_LABEL))
+            error("invalid label name");
+        /* label already defined */
+        if (a & VT_FORWARD) 
+            vac[tok] = psym(0xe9, vac[tok]); /* jmp xxx */
+        else
+            oad(0xe9, vac[tok] - ind - 5); /* jmp xxx */
+        next();
+        skip(';');
+    } else
 #endif
     {
-        if (tok != ';')
-            expr();
-        skip(';');
+        b = tok;
+        next();
+        if (tok == ':') {
+            next();
+            /* label case */
+            a = vat[b];
+            if (a != 0) {
+                if (!(a & VT_LABEL))
+                    error("invalid label name");
+                else if (!(a & VT_FORWARD))
+                    error("multiple defined label");
+                gsym(vac[b]);
+            }
+            vac[b] = ind;
+            vat[b] = VT_LABEL;
+            block(bsym, csym, case_sym, def_sym);
+        } else {
+            /* expression case: go backward of one token */
+            /* XXX: currently incorrect if number/string/char */
+            tok1 = tok;
+            tok = b;
+            if (tok != ';') {
+                expr();
+            }
+            skip(';');
+        }
     }
 }
 
@@ -1152,6 +1281,12 @@ void decl(l)
     int *a, t, b, s, align, v, u, n;
 
     while (b = ist()) {
+        if ((b & VT_ENUM) && tok == ';') {
+            /* we accept no variable after */
+            next();
+            continue;
+        }
+
         while (1) { /* iterate thru each declaration */
             s = 1;
             t = typ(&v, b, &s);
@@ -1166,14 +1301,16 @@ void decl(l)
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
                 a = oad(0xec81, 0); /* sub $xxx, %esp */
                 rsym = 0;
-                block(0, 0);
+                block(0, 0, 0, 0);
                 gsym(rsym);
                 o(0xc3c9); /* leave, ret */
                 *a = (-loc + 3) & -4; /* align local size to word & 
                                          save local variables */
                 break;
             } else {
-                if (t & VT_FUNC) {
+                if (t & VT_TYPEDEF) {
+                    vat[v] = t; /* save typedefed type */
+                } else if (t & VT_FUNC) {
                     /* external function definition */
                     external_func(v, t);
                 } else {
