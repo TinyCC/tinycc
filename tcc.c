@@ -613,23 +613,32 @@ void sym_pop(SymStack *st, Sym *b)
     st->top = b;
 }
 
+/* no need to put that inline */
+int handle_eof(void)
+{
+    if (include_stack_ptr == include_stack)
+        return -1;
+    /* pop include stack */
+    fclose(file);
+    free(filename);
+    include_stack_ptr--;
+    file = include_stack_ptr->file;
+    filename = include_stack_ptr->filename;
+    line_num = include_stack_ptr->line_num;
+    return 0;
+}
+
 /* read next char from current input file */
-void inp(void)
+static inline void inp(void)
 {
  redo:
     /* faster than fgetc */
     ch1 = getc_unlocked(file);
     if (ch1 == -1) {
-        if (include_stack_ptr == include_stack)
+        if (handle_eof() < 0)
             return;
-        /* pop include stack */
-        fclose(file);
-        free(filename);
-        include_stack_ptr--;
-        file = include_stack_ptr->file;
-        filename = include_stack_ptr->filename;
-        line_num = include_stack_ptr->line_num;
-        goto redo;
+        else
+            goto redo;
     }
     if (ch1 == '\n')
         line_num++;
@@ -637,9 +646,9 @@ void inp(void)
 }
 
 /* input with '\\n' handling */
-void minp()
+static inline void minp(void)
 {
-    redo:
+ redo:
     ch = ch1;
     inp();
     if (ch == '\\' && ch1 == '\n') {
@@ -649,8 +658,9 @@ void minp()
     //printf("ch=%c 0x%x\n", ch, ch);
 }
 
+
 /* same as minp, but also skip comments */
-void cinp()
+void cinp(void)
 {
     int c;
 
@@ -669,11 +679,11 @@ void cinp()
             while (ch1 != -1) {
                 c = ch1;
                 inp();
-                if (c == '*' && ch1 == '/') {
-                    inp();
-                    ch = ' '; /* return space */
-                    break;
-                }
+            if (c == '*' && ch1 == '/') {
+                inp();
+                ch = ' '; /* return space */
+                break;
+            }
             }
         } else {
             ch = '/';
@@ -683,7 +693,7 @@ void cinp()
     }
 }
 
-void skip_spaces()
+void skip_spaces(void)
 {
     while (ch == ' ' || ch == '\t')
         cinp();
