@@ -1943,3 +1943,13 @@ void builtin_test(void)
     printf("res = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res = %d\n", __builtin_constant_p(constant_p_var));
 }
+
+
+void const_func(const int a)
+{
+}
+
+void const_warn_test(void)
+{
+    const_func(1);
+}
