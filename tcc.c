@@ -4572,8 +4572,17 @@ void gen_opl(int op)
 #endif
             }
         }
-        /* compare low */
-        gen_op(op);
+        /* compare low. Always unsigned */
+        op1 = op;
+        if (op1 == TOK_LT)
+            op1 = TOK_ULT;
+        else if (op1 == TOK_LE)
+            op1 = TOK_ULE;
+        else if (op1 == TOK_GT)
+            op1 = TOK_UGT;
+        else if (op1 == TOK_GE)
+            op1 = TOK_UGE;
+        gen_op(op1);
         a = gtst(1, a);
         gsym(b);
         vseti(VT_JMPI, a);
@@ -6109,46 +6118,64 @@ static void unary(void)
     GFuncContext gf;
     AttributeDef ad;
 
-    if (tok == TOK_CINT || tok == TOK_CCHAR || tok == TOK_LCHAR) {
+    /* XXX: GCC 2.95.3 does not generate a table although it should be
+       better here */
+    switch(tok) {
+    case TOK_CINT:
+    case TOK_CCHAR: 
+    case TOK_LCHAR:
         vpushi(tokc.i);
         next();
-    } else if (tok == TOK_CUINT) {
+        break;
+    case TOK_CUINT:
         vpush_tokc(VT_INT | VT_UNSIGNED);
         next();
-    } else if (tok == TOK_CLLONG) {
+        break;
+    case TOK_CLLONG:
         vpush_tokc(VT_LLONG);
         next();
-    } else if (tok == TOK_CULLONG) {
+        break;
+    case TOK_CULLONG:
         vpush_tokc(VT_LLONG | VT_UNSIGNED);
         next();
-    } else if (tok == TOK_CFLOAT) {
+        break;
+    case TOK_CFLOAT:
         vpush_tokc(VT_FLOAT);
         next();
-    } else if (tok == TOK_CDOUBLE) {
+        break;
+    case TOK_CDOUBLE:
         vpush_tokc(VT_DOUBLE);
         next();
-    } else if (tok == TOK_CLDOUBLE) {
+        break;
+    case TOK_CLDOUBLE:
         vpush_tokc(VT_LDOUBLE);
         next();
-    } else if (tok == TOK___FUNC__ || (tok == TOK___FUNCTION__ && gnu_ext)) {
-        void *ptr;
-        int len;
-        /* special function name identifier */
-
-        len = strlen(funcname) + 1;
-        /* generate char[len] type */
-        type.t = VT_BYTE;
-        mk_pointer(&type);
-        type.t |= VT_ARRAY;
-        type.ref->c = len;
-        vpush_ref(&type, data_section, data_section->data_offset, len);
-        ptr = section_ptr_add(data_section, len);
-        memcpy(ptr, funcname, len);
-        next();
-    } else if (tok == TOK_LSTR) {
+        break;
+    case TOK___FUNCTION__:
+        if (!gnu_ext)
+            goto tok_identifier;
+        /* fall thru */
+    case TOK___FUNC__:
+        {
+            void *ptr;
+            int len;
+            /* special function name identifier */
+            len = strlen(funcname) + 1;
+            /* generate char[len] type */
+            type.t = VT_BYTE;
+            mk_pointer(&type);
+            type.t |= VT_ARRAY;
+            type.ref->c = len;
+            vpush_ref(&type, data_section, data_section->data_offset, len);
+            ptr = section_ptr_add(data_section, len);
+            memcpy(ptr, funcname, len);
+            next();
+        }
+        break;
+    case TOK_LSTR:
         t = VT_INT;
         goto str_init;
-    } else if (tok == TOK_STR) {
+    case TOK_STR:
         /* string parsing */
         t = VT_BYTE;
     str_init:
@@ -6157,120 +6184,148 @@ static void unary(void)
         type.t |= VT_ARRAY;
         memset(&ad, 0, sizeof(AttributeDef));
         decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
-    } else {
+        break;
+    case '(':
+        next();
+        /* cast ? */
+        if (parse_btype(&type, &ad)) {
+            type_decl(&type, &ad, &n, TYPE_ABSTRACT);
+            skip(')');
+            /* check ISOC99 compound literal */
+            if (tok == '{') {
+                    /* data is allocated locally by default */
+                if (global_expr)
+                    r = VT_CONST;
+                else
+                    r = VT_LOCAL;
+                /* all except arrays are lvalues */
+                if (!(type.t & VT_ARRAY))
+                    r |= lvalue_type(type.t);
+                memset(&ad, 0, sizeof(AttributeDef));
+                decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
+            } else {
+                unary();
+                gen_cast(&type);
+            }
+        } else {
+            gexpr();
+            skip(')');
+        }
+        break;
+    case '*':
+        next();
+        unary();
+        indir();
+        break;
+    case '&':
+        next();
+        unary();
+        /* functions names must be treated as function pointers,
+           except for unary '&' and sizeof. Since we consider that
+           functions are not lvalues, we only have to handle it
+           there and in function calls. */
+        /* arrays can also be used although they are not lvalues */
+        if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
+            !(vtop->type.t & VT_ARRAY))
+            test_lvalue();
+        mk_pointer(&vtop->type);
+        gaddrof();
+        break;
+    case '!':
+        next();
+        unary();
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
+            vtop->c.i = !vtop->c.i;
+        else if ((vtop->r & VT_VALMASK) == VT_CMP)
+            vtop->c.i = vtop->c.i ^ 1;
+        else
+            vseti(VT_JMP, gtst(1, 0));
+        break;
+    case '~':
+        next();
+        unary();
+        vpushi(-1);
+        gen_op('^');
+        break;
+    case '+':
+        next();
+        /* in order to force cast, we add zero */
+        unary();
+        if ((vtop->type.t & VT_BTYPE) == VT_PTR)
+            error("pointer not accepted for unary plus");
+        vpushi(0);
+        gen_op('+');
+        break;
+    case TOK_SIZEOF:
+    case TOK_ALIGNOF:
         t = tok;
         next();
-        if (t == '(') {
-            /* cast ? */
-            if (parse_btype(&type, &ad)) {
-                type_decl(&type, &ad, &n, TYPE_ABSTRACT);
-                skip(')');
-                /* check ISOC99 compound literal */
-                if (tok == '{') {
-                    /* data is allocated locally by default */
-                    if (global_expr)
-                        r = VT_CONST;
-                    else
-                        r = VT_LOCAL;
-                    /* all except arrays are lvalues */
-                    if (!(type.t & VT_ARRAY))
-                        r |= lvalue_type(type.t);
-                    memset(&ad, 0, sizeof(AttributeDef));
-                    decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
-                } else {
-                    unary();
-                    gen_cast(&type);
-                }
-            } else {
-                gexpr();
-                skip(')');
-            }
-        } else if (t == '*') {
-            unary();
-            indir();
-        } else if (t == '&') {
-            unary();
-            /* functions names must be treated as function pointers,
-               except for unary '&' and sizeof. Since we consider that
-               functions are not lvalues, we only have to handle it
-               there and in function calls. */
-            /* arrays can also be used although they are not lvalues */
-            if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
-                !(vtop->type.t & VT_ARRAY))
-                test_lvalue();
-            mk_pointer(&vtop->type);
-            gaddrof();
-        } else if (t == '!') {
-            unary();
-            if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
-                vtop->c.i = !vtop->c.i;
-            else if ((vtop->r & VT_VALMASK) == VT_CMP)
-                vtop->c.i = vtop->c.i ^ 1;
-            else
-                vseti(VT_JMP, gtst(1, 0));
-        } else if (t == '~') {
-            unary();
-            vpushi(-1);
-            gen_op('^');
-        } else if (t == '+') {
-            /* in order to force cast, we add zero */
-            unary();
-            if ((vtop->type.t & VT_BTYPE) == VT_PTR)
-                error("pointer not accepted for unary plus");
-            vpushi(0);
-            gen_op('+');
-        } else if (t == TOK_SIZEOF || t == TOK_ALIGNOF) {
-            if (tok == '(') {
-                parse_expr_type(&type);
-            } else {
-                unary_type(&type);
-            }
-            size = type_size(&type, &align);
-            if (t == TOK_SIZEOF)
-                vpushi(size);
-            else
-                vpushi(align);
-        } else if (t == TOK_INC || t == TOK_DEC) {
-            unary();
-            inc(0, t);
-        } else if (t == '-') {
-            vpushi(0);
-            unary();
-            gen_op('-');
-        } else if (t == TOK_LAND && gnu_ext) {
-            /* allow to take the address of a label */
-            if (tok < TOK_UIDENT)
-                expect("label identifier");
-            s = label_find(tok);
-            if (!s) {
-                s = label_push(tok, LABEL_FORWARD);
-            }
-            if (!s->type.t) {
-                s->type.t = VT_VOID;
-                mk_pointer(&s->type);
-                s->type.t |= VT_STATIC;
-            }
-            vset(&s->type, VT_CONST | VT_SYM, 0);
-            vtop->sym = s;
-            next();
+        if (tok == '(') {
+            parse_expr_type(&type);
         } else {
-            if (t < TOK_UIDENT)
-                expect("identifier");
-            s = sym_find(t);
-            if (!s) {
-                if (tok != '(')
-                    error("'%s' undeclared", get_tok_str(t, NULL));
-                /* for simple function calls, we tolerate undeclared
-                   external reference to int() function */
-                s = external_global_sym(t, &func_old_type, 0); 
-            }
-            vset(&s->type, s->r, s->c);
-            /* if forward reference, we must point to s */
-            if (vtop->r & VT_SYM) {
-                vtop->sym = s;
-                vtop->c.ul = 0;
-            }
+            unary_type(&type);
         }
+        size = type_size(&type, &align);
+        if (t == TOK_SIZEOF)
+            vpushi(size);
+        else
+            vpushi(align);
+        break;
+        
+    case TOK_INC:
+    case TOK_DEC:
+        t = tok;
+        next();
+        unary();
+        inc(0, t);
+        break;
+    case '-':
+        next();
+        vpushi(0);
+        unary();
+        gen_op('-');
+        break;
+    case TOK_LAND:
+        if (!gnu_ext)
+            goto tok_identifier;
+        next();
+        /* allow to take the address of a label */
+        if (tok < TOK_UIDENT)
+            expect("label identifier");
+        s = label_find(tok);
+        if (!s) {
+            s = label_push(tok, LABEL_FORWARD);
+        }
+        if (!s->type.t) {
+            s->type.t = VT_VOID;
+            mk_pointer(&s->type);
+            s->type.t |= VT_STATIC;
+        }
+        vset(&s->type, VT_CONST | VT_SYM, 0);
+        vtop->sym = s;
+        next();
+        break;
+    default:
+    tok_identifier:
+        t = tok;
+        next();
+        if (t < TOK_UIDENT)
+            expect("identifier");
+        s = sym_find(t);
+        if (!s) {
+            if (tok != '(')
+                error("'%s' undeclared", get_tok_str(t, NULL));
+            /* for simple function calls, we tolerate undeclared
+               external reference to int() function */
+            s = external_global_sym(t, &func_old_type, 0); 
+        }
+        vset(&s->type, s->r, s->c);
+        /* if forward reference, we must point to s */
+        if (vtop->r & VT_SYM) {
+            vtop->sym = s;
+            vtop->c.ul = 0;
+        }
+        break;
     }
     
     /* post operations */
