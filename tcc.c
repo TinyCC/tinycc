@@ -57,9 +57,13 @@ typedef struct Sym {
 #define FUNC_OLD       2 /* old function prototype */
 #define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
 
-/* field t for macros */
+/* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
 #define MACRO_FUNC     1 /* function like macro */
+
+/* type_decl() types */
+#define TYPE_ABSTRACT  1 /* type without variable */
+#define TYPE_DIRECT    2 /* type with variable */
 
 typedef struct {
     FILE *file;
@@ -244,7 +248,25 @@ int type_size(int t, int *a);
 int pointed_type(int t);
 int pointed_size(int t);
 int ist(void);
-int typ(int *v, int t);
+int type_decl(int *v, int t, int td);
+
+#ifdef PROFILE
+/* dummy function for profiling */
+void *dlopen(const char *filename, int flag)
+{
+    return (void *)1;
+}
+const char *dlerror(void)
+{
+    return "error";
+}
+
+void *dlsym(void *handle, char *symbol)
+{
+    return (void *)1;
+}
+
+#endif
 
 int isid(c)
 {
@@ -262,38 +284,37 @@ void printline()
 {
     IncludeFile *f;
     for(f = include_stack; f < include_stack_ptr; f++)
-        printf("In file included from %s:%d:\n", f->filename, f->line_num);
-    printf("%s:%d: ", filename, line_num);
+        fprintf(stderr, "In file included from %s:%d:\n", 
+                f->filename, f->line_num);
+    fprintf(stderr, "%s:%d: ", filename, line_num);
 }
 
-/* XXX: use stderr ? */
-void error(char *msg)
+void error(const char *fmt, ...)
 {
+    va_list ap;
+    va_start(ap, fmt);
     printline();
-    printf("%s\n", msg);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
     exit(1);
+    va_end(ap);
 }
 
-void expect(char *msg)
+void expect(const char *msg)
 {
-    printline();
-    printf("%s expected\n", msg);
-    exit(1);
+    error("%s expected", msg);
 }
 
-void warning(char *msg)
+void warning(const char *msg)
 {
     printline();
-    printf("warning: %s\n", msg);
+    fprintf(stderr, "warning: %s\n", msg);
 }
 
 void skip(c)
 {
-    if (tok != c) {
-        printline();
-        printf("'%c' expected\n", c);
-        exit(1);
-    }
+    if (tok != c)
+        error("'%c' expected", c);
     next();
 }
 
@@ -563,33 +584,6 @@ void preprocess_skip()
     }
 }
 
-/* parse until eol and add given char */
-char *get_str(c)
-{
-    char *str;
-    int size, n;
-
-    str = NULL;
-    size = 0;
-    n = 0;
-    while (1) {
-        if ((n + 1) >= size) {
-            size += 128;
-            str = realloc(str, size);
-            if (!str)
-                error("memory full");
-        }
-        if (ch == -1 || ch == '\n') {
-            str[n++] = c; 
-            str[n++] = '\0';
-            break;
-        }
-        str[n++] = ch;
-        cinp();
-    }
-    return str;
-}
-
 void tok_add(int **tok_str, int *tok_len, int t)
 {
     int len, *str;
@@ -616,7 +610,6 @@ void tok_add2(int **tok_str, int *tok_len, int t, int c)
 int expr_preprocess()
 {
     int *str, len, c, t;
-    int *saved_macro_ptr;
     
     str = NULL;
     len = 0;
@@ -645,11 +638,10 @@ int expr_preprocess()
     tok_add(&str, &len, -1); /* simulate end of file */
     tok_add(&str, &len, 0);
     /* now evaluate C constant expression */
-    saved_macro_ptr = macro_ptr;
     macro_ptr = str;
     next();
     c = expr_const();
-    macro_ptr = saved_macro_ptr;
+    macro_ptr = NULL;
     free(str);
     return c != 0;
 }
@@ -672,6 +664,20 @@ void tok_print(int *str)
 }
 #endif
 
+/* XXX: should be more factorized */
+void define_symbol(char *sym)
+{
+    TokenSym *ts;
+    int *str, len;
+
+    ts = tok_alloc(sym, strlen(sym));
+    str = NULL;
+    len = 0;
+    tok_add2(&str, &len, TOK_NUM, 1);
+    tok_add(&str, &len, 0);
+    sym_push1(&define_stack, ts->tok, MACRO_OBJ, (int)str);
+}
+
 void preprocess()
 {
     int size, i, c, v, t, *str, len;
@@ -687,8 +693,6 @@ void preprocess()
         next_nomacro();
         v = tok;
         /* XXX: should check if same macro (ANSI) */
-        if (sym_find1(define_stack, v))
-            warning("macro redefinition");
         first = NULL;
         t = MACRO_OBJ;
         /* '(' must be just after macro definition for MACRO_FUNC */
@@ -1874,18 +1878,20 @@ int struct_decl(u)
         if (s = sym_find(v | SYM_STRUCT)) {
             if (s->t != a)
                 error("invalid type");
-            u = u | (v << VT_STRUCT_SHIFT);
-            return u;
+            goto do_decl;
         }
     } else {
         v = anon_sym++;
     }
     s = sym_push(v | SYM_STRUCT, a, 0);
     /* put struct/union/enum name in type */
+ do_decl:
     u = u | (v << VT_STRUCT_SHIFT);
     
     if (tok == '{') {
         next();
+        if (s->c)
+            error("struct/union/enum already defined");
         /* cannot be empty */
         c = 0;
         maxalign = 0;
@@ -1905,7 +1911,7 @@ int struct_decl(u)
             } else {
                 b = ist();
                 while (1) {
-                    t = typ(&v, b);
+                    t = type_decl(&v, b, TYPE_DIRECT);
                     if (t & (VT_FUNC | VT_TYPEDEF))
                         error("invalid type");
                     /* XXX: align & correct type size */
@@ -1965,7 +1971,8 @@ int ist(void)
                        (tok >= TOK_CONST & tok <= TOK_INLINE)) {
                 /* ignored types */
             } else if (tok == TOK_FLOAT || tok == TOK_DOUBLE) {
-                warning("floats not supported");
+                /* We allow that to compile standard headers */
+                //                warning("floats not supported");
             } else if (tok == TOK_EXTERN) {
                 t |= VT_EXTERN;
             } else if (tok == TOK_STATIC) {
@@ -1978,7 +1985,7 @@ int ist(void)
                 s = sym_find(tok);
                 if (!s || !(s->t & VT_TYPEDEF))
                     break;
-                t = s->t & ~VT_TYPEDEF;
+                t |= (s->t & ~VT_TYPEDEF);
             }
             next();
         }
@@ -2012,8 +2019,7 @@ int post_type(t)
                 if (pt & VT_VOID && tok == ')')
                     break;
                 l = FUNC_NEW;
-                pt = typ(&n, pt); /* XXX: should accept 
-                                     both arg/non arg if v == 0 */
+                pt = type_decl(&n, pt, TYPE_DIRECT | TYPE_ABSTRACT);
             } else {
             old_proto:
                 n = tok;
@@ -2067,7 +2073,7 @@ int post_type(t)
 
 /* Read a type declaration (except basic type), and return the
    type. If v is true, then also put variable name in 'vc' */
-int typ(int *v, int t)
+int type_decl(int *v, int t, int td)
 {
     int u, p;
     Sym *s;
@@ -2075,6 +2081,8 @@ int typ(int *v, int t)
     t = t & -3; /* suppress the ored '2' */
     while (tok == '*') {
         next();
+        while (tok == TOK_CONST || tok == TOK_VOLATILE)
+            next();
         t = mk_pointer(t);
     }
     
@@ -2082,14 +2090,18 @@ int typ(int *v, int t)
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     if (tok == '(') {
         next();
-        u = typ(v, 0);
+        u = type_decl(v, 0, td);
         skip(')');
     } else {
         u = 0;
         /* type identifier */
-        if (v) {
+        if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
             *v = tok;
             next();
+        } else {
+            if (!(td & TYPE_ABSTRACT))
+                expect("identifier");
+            *v = 0;
         }
     }
     /* append t at the end of u */
@@ -2165,7 +2177,7 @@ void unary()
         if (t == '(') {
             /* cast ? */
             if (t = ist()) {
-                ft = typ(0, t);
+                ft = type_decl(&n, t, TYPE_ABSTRACT);
                 skip(')');
                 unary();
                 vt = (vt & VT_TYPEN) | ft;
@@ -2204,7 +2216,7 @@ void unary()
             if (tok == '(') {
                 next();
                 if (t = ist())
-                    vt = typ(0, t);
+                    vt = type_decl(&n, t, TYPE_ABSTRACT);
                 else
                     expr();
                 skip(')');
@@ -2699,7 +2711,7 @@ void decl(l)
             continue;
         }
         while (1) { /* iterate thru each declaration */
-            t = typ(&v, b);
+            t = type_decl(&v, b, TYPE_DIRECT);
             if (tok == '{') {
                 if (!(t & VT_FUNC))
                     expect("function defintion");
@@ -2743,7 +2755,7 @@ void decl(l)
                     /* not lvalue if array */
                     if (!(t & VT_ARRAY))
                         t |= VT_LVAL;
-                    if (t & VT_EXTERN) {
+                    if (b & VT_EXTERN) {
                         /* external variable */
                         /* XXX: factorize with external function def */
                         n = (int)dlsym(NULL, get_tok_str(v, 0));
@@ -2780,6 +2792,19 @@ void decl(l)
     }
 }
 
+/* open a dynamic library so that its symbol are available for
+   compiled programs */
+void open_dll(char *libname)
+{
+    char buf[1024];
+    void *h;
+
+    snprintf(buf, sizeof(buf), "lib%s.so", libname);
+    h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
+    if (!h)
+        error((char *)dlerror());
+}
+
 int main(int argc, char **argv)
 {
     Sym *s;
@@ -2801,10 +2826,16 @@ int main(int argc, char **argv)
         p = r;
     }
 
+    /* standard defines */
+    define_symbol("__STDC__");
+#ifdef __i386__
+    define_symbol("__i386__");
+#endif
+    
     optind = 1;
     while (1) {
         if (optind >= argc) {
-            printf("usage: tcc [-Idir] infile [infile_arg...]\n");
+            printf("usage: tcc [-Idir] [-Dsym] [-llib] infile [infile_arg...]\n");
             return 1;
         }
         r = argv[optind];
@@ -2814,8 +2845,13 @@ int main(int argc, char **argv)
             if (nb_include_paths >= INCLUDE_PATHS_MAX)
                 error("too many include paths");
             include_paths[nb_include_paths++] = r + 2;
+        } else if (r[1] == 'D') {
+            define_symbol(r + 2);
+        } else if (r[1] == 'l') {
+            open_dll(r + 2);
         } else {
-            error("invalid option");
+            fprintf(stderr, "invalid option -- '%s'\n", r);
+            exit(1);
         }
         optind++;
     }
@@ -2845,7 +2881,7 @@ int main(int argc, char **argv)
 #ifdef TEST
     { 
         FILE *f;
-        f = fopen(v[1], "w");
+        f = fopen(argv[optind + 1], "w");
         fwrite((void *)prog, 1, ind - prog, f);
         fclose(f);
         return 0;
@@ -2855,6 +2891,10 @@ int main(int argc, char **argv)
     if (!s)
         error("main() not defined");
     t = s->c;
+#ifdef PROFILE
+    return 1;
+#else
     return (*t)(argc - optind, argv + optind);
+#endif
 #endif
 }
