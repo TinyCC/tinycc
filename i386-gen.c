@@ -320,12 +320,14 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
+static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
+
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
 void gfunc_call(int nb_args)
 {
-    int size, align, r, args_size, i;
+    int size, align, r, args_size, i, func_call;
     Sym *func_sym;
     
     args_size = 0;
@@ -377,8 +379,21 @@ void gfunc_call(int nb_args)
     }
     save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
+    func_call = func_sym->r;
+    /* fast call case */
+    if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
+        int fastcall_nb_regs;
+        fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
+        for(i = 0;i < fastcall_nb_regs; i++) {
+            if (args_size <= 0)
+                break;
+            o(0x58 + fastcall_regs[i]); /* pop r */
+            /* XXX: incorrect for struct/floats */
+            args_size -= 4;
+        }
+    }
     gcall_or_jmp(0);
-    if (args_size && func_sym->r == FUNC_CDECL)
+    if (args_size && func_sym->r != FUNC_STDCALL)
         gadd_sp(args_size);
     vtop--;
 }
@@ -386,25 +401,37 @@ void gfunc_call(int nb_args)
 /* generate function prolog of type 't' */
 void gfunc_prolog(CType *func_type)
 {
-    int addr, align, size, func_call;
+    int addr, align, size, func_call, fastcall_nb_regs;
+    int param_index, param_addr;
     Sym *sym;
     CType *type;
 
     sym = func_type->ref;
     func_call = sym->r;
     addr = 8;
+    loc = 0;
+    if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
+        fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
+    } else {
+        fastcall_nb_regs = 0;
+    }
+    param_index = 0;
+
+    o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
+    func_sub_sp_offset = oad(0xec81, 0); /* sub $xxx, %esp */
+
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
+        /* XXX: fastcall case ? */
         func_vc = addr;
         addr += 4;
+        param_index++;
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
         type = &sym->type;
-        sym_push(sym->v & ~SYM_FIELD, type,
-                 VT_LOCAL | VT_LVAL, addr);
         size = type_size(type, &align);
         size = (size + 3) & ~3;
 #ifdef FUNC_STRUCT_PARAM_AS_PTR
@@ -413,21 +440,31 @@ void gfunc_prolog(CType *func_type)
             size = 4;
         }
 #endif
-        addr += size;
+        if (param_index < fastcall_nb_regs) {
+            /* save FASTCALL register */
+            loc -= 4;
+            o(0x89);     /* movl */
+            gen_modrm(fastcall_regs[param_index], VT_LOCAL, NULL, loc);
+            param_addr = loc;
+        } else {
+            param_addr = addr;
+            addr += size;
+        }
+        sym_push(sym->v & ~SYM_FIELD, type,
+                 VT_LOCAL | VT_LVAL, param_addr);
+        param_index++;
     }
     func_ret_sub = 0;
     /* pascal type call ? */
     if (func_call == FUNC_STDCALL)
         func_ret_sub = addr - 8;
-    o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
-    func_sub_sp_offset = oad(0xec81, 0); /* sub $xxx, %esp */
+
     /* leave some room for bound checking code */
     if (do_bounds_check) {
         oad(0xb8, 0); /* lbound section pointer */
         oad(0xb8, 0); /* call to function */
         func_bound_offset = lbounds_section->data_offset;
     }
-    loc = 0;
 }
 
 /* generate function epilog */
