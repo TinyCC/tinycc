@@ -331,6 +331,16 @@ void gfunc_param(GFuncContext *c)
     vtop--;
 }
 
+static void gadd_sp(int val)
+{
+    if (val == (char)val) {
+        o(0xc483);
+        g(val);
+    } else {
+        oad(0xc481, val); /* add $xxx, %esp */
+    }
+}
+
 /* generate function call with address in (vtop->t, vtop->c) and free function
    context. Stack entry is popped */
 void gfunc_call(GFuncContext *c)
@@ -353,7 +363,7 @@ void gfunc_call(GFuncContext *c)
         o(0xd0 + r);
     }
     if (c->args_size && c->func_call == FUNC_CDECL)
-        oad(0xc481, c->args_size); /* add $xxx, %esp */
+        gadd_sp(c->args_size);
     vtop--;
 }
 
@@ -409,6 +419,7 @@ void gfunc_epilog(void)
     if (do_bounds_check && func_bound_ptr != lbounds_section->data_ptr) {
         int saved_ind;
         int *bounds_ptr;
+        Sym *sym, *sym_data;
         /* add end of table info */
         bounds_ptr = (int *)lbounds_section->data_ptr;
         *bounds_ptr++ = 0;
@@ -416,13 +427,26 @@ void gfunc_epilog(void)
         /* generate bound local allocation */
         saved_ind = ind;
         ind = (int)func_sub_sp_ptr + 4;
-        oad(0xb8, (int)func_bound_ptr); /* mov %eax, xxx */
-        oad(0xe8, (int)__bound_local_new - ind - 5);
+        sym_data = get_sym_ref(char_pointer_type, lbounds_section, 
+                               func_bound_ptr - lbounds_section->data,
+                               lbounds_section->data_ptr - func_bound_ptr);
+        greloc(cur_text_section, sym_data,
+               ind + 1 - (int)cur_text_section->data, R_386_32);
+        oad(0xb8, 0); /* mov %eax, xxx */
+        sym = external_sym(TOK___bound_local_new, func_old_type, 0);
+        greloc(cur_text_section, sym, 
+               ind + 1 - (int)cur_text_section->data, R_386_PC32);
+        oad(0xe8, -4);
         ind = saved_ind;
         /* generate bound check local freeing */
         o(0x5250); /* save returned value, if any */
-        oad(0xb8, (int)func_bound_ptr); /* mov %eax, xxx */
-        oad(0xe8, (int)__bound_local_delete - ind - 5);
+        greloc(cur_text_section, sym_data,
+               ind + 1 - (int)cur_text_section->data, R_386_32);
+        oad(0xb8, 0); /* mov %eax, xxx */
+        sym = external_sym(TOK___bound_local_delete, func_old_type, 0);
+        greloc(cur_text_section, sym, 
+               ind + 1 - (int)cur_text_section->data, R_386_PC32);
+        oad(0xe8, -4);
         o(0x585a); /* restore returned value, if any */
     }
 #endif
@@ -738,12 +762,6 @@ void gen_opf(int op)
     }
 }
 
-/* FPU control word for rounding to nearest mode */
-/* XXX: should move that into tcc lib support code ! */
-static unsigned short __tcc_fpu_control = 0x137f;
-/* FPU control word for round to zero mode for int convertion */
-static unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
-
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
 void gen_cvt_itof(int t)
@@ -779,6 +797,7 @@ void gen_cvt_itof(int t)
 void gen_cvt_ftoi(int t)
 {
     int r, r2, size;
+    Sym *sym;
 
     gv(RC_FLOAT);
     if (t != VT_INT)
@@ -786,14 +805,26 @@ void gen_cvt_ftoi(int t)
     else 
         size = 4;
     
-    oad(0x2dd9, (int)&__tcc_int_fpu_control); /* ldcw xxx */
+    o(0x2dd9); /* ldcw xxx */
+    sym = external_sym(TOK___tcc_int_fpu_control, 
+                       VT_SHORT | VT_UNSIGNED, VT_LVAL);
+    greloc(cur_text_section, sym, 
+           ind - (int)cur_text_section->data, R_386_32);
+    gen_le32(0);
+    
     oad(0xec81, size); /* sub $xxx, %esp */
     if (size == 4)
         o(0x1cdb); /* fistpl */
     else
         o(0x3cdf); /* fistpll */
     o(0x24);
-    oad(0x2dd9, (int)&__tcc_fpu_control); /* ldcw xxx */
+    o(0x2dd9); /* ldcw xxx */
+    sym = external_sym(TOK___tcc_fpu_control, 
+                       VT_SHORT | VT_UNSIGNED, VT_LVAL);
+    greloc(cur_text_section, sym, 
+           ind - (int)cur_text_section->data, R_386_32);
+    gen_le32(0);
+
     r = get_reg(RC_INT);
     o(0x58 + r); /* pop r */
     if (size == 8) {
