@@ -6581,7 +6581,9 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
     } else if (arg == NULL) {
         error("too many arguments to function");
     } else {
-        gen_assign_cast(&arg->type);
+        type = arg->type;
+        type.t &= ~VT_CONSTANT; /* need to do that to avoid false warning */
+        gen_assign_cast(&type);
     }
 }
 
