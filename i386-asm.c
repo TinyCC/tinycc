@@ -710,19 +710,22 @@ static inline int constraint_priority(const char *str)
             break;
         str++;
         switch(c) {
+        case 'A':
+            pr = 0;
+            break;
         case 'a':
         case 'b':
         case 'c':
         case 'd':
         case 'S':
         case 'D':
-            pr = 0;
-        break;
-        case 'q':
             pr = 1;
             break;
-        case 'r':
+        case 'q':
             pr = 2;
+            break;
+        case 'r':
+            pr = 3;
             break;
         case 'N':
         case 'M':
@@ -730,7 +733,7 @@ static inline int constraint_priority(const char *str)
         case 'i':
         case 'm':
         case 'g':
-            pr = 3;
+            pr = 4;
             break;
         default:
             error("unknown constraint '%c'", c);
@@ -817,6 +820,15 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
     try_next:
         c = *str++;
         switch(c) {
+        case 'A':
+            /* allocate both eax and edx */
+            if (regs_allocated[TREG_EAX] || regs_allocated[TREG_EDX])
+                goto try_next;
+            op->is_llong = 1;
+            op->reg = TREG_EAX;
+            regs_allocated[TREG_EAX] = 1;
+            regs_allocated[TREG_EDX] = 1;
+            break;
         case 'a':
             reg = TREG_EAX;
             goto alloc_reg;
@@ -854,6 +866,7 @@ static void asm_compute_constraints(uint8_t *regs_allocated,
             goto try_next;
         reg_found:
             /* now we can reload in the register */
+            op->is_llong = 0;
             op->reg = reg;
             regs_allocated[reg] = 1;
             break;
@@ -1027,6 +1040,12 @@ static void asm_gen_code(ASMOperand *operands, int nb_operands,
             op = &operands[i];
             if (op->reg >= 0) {
                 load(op->reg, op->vt);
+                if (op->is_llong) {
+                    SValue sv;
+                    sv = *op->vt;
+                    sv.c.ul += 4;
+                    load(TREG_EDX, &sv);
+                }
             }
         }
         /* generate load code for output memory references */
@@ -1045,6 +1064,12 @@ static void asm_gen_code(ASMOperand *operands, int nb_operands,
             op = &operands[i];
             if (op->reg >= 0 && ((op->vt->r & VT_VALMASK) != VT_LLOCAL)) {
                 store(op->reg, op->vt);
+                if (op->is_llong) {
+                    SValue sv;
+                    sv = *op->vt;
+                    sv.c.ul += 4;
+                    store(TREG_EDX, &sv);
+                }
             }
         }
         /* generate reg restore code */
