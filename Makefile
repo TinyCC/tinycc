@@ -9,11 +9,11 @@ LIBS=-ldl
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
-CFLAGS+=-m386 -malign-functions=0
+CFLAGS+=-m386 -malign-functions=0 -mpreferred-stack-boundary=2
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.14
+VERSION=0.9.15
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
@@ -163,6 +163,9 @@ libtcc.a: libtcc.o
 
 libtcc_test: libtcc_test.c libtcc.a 
 	gcc $(CFLAGS) -I. -o $@ $< -L. -ltcc -ldl
+
+libtest: libtcc_test
+	./libtcc_test
 
 # targets for development
 

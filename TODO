@@ -1,12 +1,15 @@
 TODO list:
 
-- finish varargs.h support
+- add statment expressions (linux kernel compilation)
+- implement minimal 'asm' extension (linux kernel compilation)
+- handle static inline, then normal prototype.
+- support link once trick (gcc 3.2 / glibc compilation issue)
+- finish varargs.h support (gcc 3.2 testsuite issue)
 - add alloca()
 - fix static functions declared inside block
 - fix bitfield binary operations
-- C99: add variable size arrays
-- C99: add complex types
-- GCC: add statment expressions
+- C99: add variable size arrays (gcc 3.2 testsuite issue)
+- C99: add complex types (gcc 3.2 testsuite issue)
 - ignore __extension__ keyword (see 20010328-1.c). 
 - Add __restrict keyword (20010611-1.c).
 - postfix compound literals (see 20010124-1.c)
@@ -17,7 +20,6 @@ TODO list:
 - test includes in libtcc_test.
 - look at GCC 3.2 compatibility problems.
 - add option for auto run
-- implement minimal 'asm' extension
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
 - fix bound check code with '&' on local variables (currently done
