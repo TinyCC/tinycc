@@ -112,7 +112,7 @@ void greloc_patch(unsigned char *ptr,
         *(int *)ptr += val;
         break;
     case R_386_PC32:
-        *(int *)ptr += val - addr - 4;
+        *(int *)ptr += val - addr;
         break;
     }
 }
@@ -355,7 +355,7 @@ void gfunc_call(GFuncContext *c)
             /* relocation case */
             greloc(cur_text_section, vtop->c.sym, 
                    ind + 1 - (int)cur_text_section->data, R_386_PC32);
-            oad(0xe8, 0);
+            oad(0xe8, -4);
         } else {
             oad(0xe8, vtop->c.ul - ind - 5);
         }
