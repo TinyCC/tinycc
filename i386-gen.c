@@ -185,13 +185,13 @@ void load(int r, SValue *sv)
     SValue v1;
 
     fr = sv->r;
-    ft = sv->t;
+    ft = sv->type.t;
     fc = sv->c.ul;
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
         if (v == VT_LLOCAL) {
-            v1.t = VT_INT;
+            v1.type.t = VT_INT;
             v1.r = VT_LOCAL | VT_LVAL;
             v1.c.ul = fc;
             load(r, &v1);
@@ -248,7 +248,7 @@ void store(int r, SValue *v)
 {
     int fr, bt, ft, fc;
 
-    ft = v->t;
+    ft = v->type.t;
     fc = v->c.ul;
     fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
@@ -293,8 +293,8 @@ void gfunc_param(GFuncContext *c)
 {
     int size, align, r;
 
-    if ((vtop->t & VT_BTYPE) == VT_STRUCT) {
-        size = type_size(vtop->t, &align);
+    if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
+        size = type_size(&vtop->type, &align);
         /* align to stack align size */
         size = (size + 3) & ~3;
         /* allocate the necessary size on stack */
@@ -303,15 +303,15 @@ void gfunc_param(GFuncContext *c)
         r = get_reg(RC_INT);
         o(0x89); /* mov %esp, r */
         o(0xe0 + r);
-        vset(vtop->t, r | VT_LVAL, 0);
+        vset(&vtop->type, r | VT_LVAL, 0);
         vswap();
         vstore();
         c->args_size += size;
-    } else if (is_float(vtop->t)) {
+    } else if (is_float(vtop->type.t)) {
         gv(RC_FLOAT); /* only one float register */
-        if ((vtop->t & VT_BTYPE) == VT_FLOAT)
+        if ((vtop->type.t & VT_BTYPE) == VT_FLOAT)
             size = 4;
-        else if ((vtop->t & VT_BTYPE) == VT_DOUBLE)
+        else if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
             size = 8;
         else
             size = 12;
@@ -327,7 +327,7 @@ void gfunc_param(GFuncContext *c)
         /* simple type (currently always same size) */
         /* XXX: implicit cast ? */
         r = gv(RC_INT);
-        if ((vtop->t & VT_BTYPE) == VT_LLONG) {
+        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
             size = 8;
             o(0x50 + vtop->r2); /* push r */
         } else {
@@ -384,31 +384,32 @@ void gfunc_call(GFuncContext *c)
 }
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(int t)
+void gfunc_prolog(CType *func_type)
 {
-    int addr, align, size, u, func_call;
+    int addr, align, size, func_call;
     Sym *sym;
+    CType *type;
 
-    sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
+    sym = func_type->ref;
     func_call = sym->r;
     addr = 8;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    func_vt = sym->t;
-    if ((func_vt & VT_BTYPE) == VT_STRUCT) {
+    func_vt = sym->type;
+    if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
         func_vc = addr;
         addr += 4;
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
-        u = sym->t;
-        sym_push(sym->v & ~SYM_FIELD, u,
+        type = &sym->type;
+        sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, addr);
-        size = type_size(u, &align);
+        size = type_size(type, &align);
         size = (size + 3) & ~3;
 #ifdef FUNC_STRUCT_PARAM_AS_PTR
         /* structs are passed as pointer */
-        if ((u & VT_BTYPE) == VT_STRUCT) {
+        if ((type->t & VT_BTYPE) == VT_STRUCT) {
             size = 4;
         }
 #endif
@@ -442,12 +443,12 @@ void gfunc_epilog(void)
         /* generate bound local allocation */
         saved_ind = ind;
         ind = func_sub_sp_offset + 4;
-        sym_data = get_sym_ref(char_pointer_type, lbounds_section, 
+        sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
                                func_bound_offset, lbounds_section->data_offset);
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_new, func_old_type, 0);
+        sym = external_global_sym(TOK___bound_local_new, &func_old_type, 0);
         greloc(cur_text_section, sym, 
                ind + 1, R_386_PC32);
         oad(0xe8, -4);
@@ -457,7 +458,7 @@ void gfunc_epilog(void)
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_delete, func_old_type, 0);
+        sym = external_global_sym(TOK___bound_local_delete, &func_old_type, 0);
         greloc(cur_text_section, sym, 
                ind + 1, R_386_PC32);
         oad(0xe8, -4);
@@ -518,7 +519,7 @@ int gtst(int inv, int t)
             gsym(vtop->c.i);
         }
     } else {
-        if (is_float(vtop->t)) {
+        if (is_float(vtop->type.t)) {
             vpushi(0);
             gen_op(TOK_NE);
         }
@@ -572,8 +573,8 @@ void gen_opi(int op)
         }
         vtop--;
         if (op >= TOK_ULT && op <= TOK_GT) {
-            vtop--;
-            vset(VT_INT, VT_CMP, op);
+            vtop->r = VT_CMP;
+            vtop->c.i = op;
         }
         break;
     case '-':
@@ -731,7 +732,7 @@ void gen_opf(int op)
         vtop->c.i = op;
     } else {
         /* no memory reference possible for long double operations */
-        if ((vtop->t & VT_BTYPE) == VT_LDOUBLE) {
+        if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
             load(REG_ST0, vtop);
             swapped = !swapped;
         }
@@ -755,7 +756,7 @@ void gen_opf(int op)
                 a++;
             break;
         }
-        ft = vtop->t;
+        ft = vtop->type.t;
         fc = vtop->c.ul;
         if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             o(0xde); /* fxxxp %st, %st(1) */
@@ -766,7 +767,7 @@ void gen_opf(int op)
             if ((r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
                 r = get_reg(RC_INT);
-                v1.t = VT_INT;
+                v1.type.t = VT_INT;
                 v1.r = VT_LOCAL | VT_LVAL;
                 v1.c.ul = fc;
                 load(r, &v1);
@@ -789,14 +790,14 @@ void gen_cvt_itof(int t)
 {
     save_reg(REG_ST0);
     gv(RC_INT);
-    if ((vtop->t & VT_BTYPE) == VT_LLONG) {
+    if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
         /* signed long long to float/double/long double (unsigned case
            is handled generically) */
         o(0x50 + vtop->r2); /* push r2 */
         o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
-    } else if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == 
+    } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
                (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
@@ -819,6 +820,9 @@ void gen_cvt_ftoi(int t)
 {
     int r, r2, size;
     Sym *sym;
+    CType ushort_type;
+
+    ushort_type.t = VT_SHORT | VT_UNSIGNED;
 
     gv(RC_FLOAT);
     if (t != VT_INT)
@@ -828,7 +832,7 @@ void gen_cvt_ftoi(int t)
     
     o(0x2dd9); /* ldcw xxx */
     sym = external_global_sym(TOK___tcc_int_fpu_control, 
-                              VT_SHORT | VT_UNSIGNED, VT_LVAL);
+                              &ushort_type, VT_LVAL);
     greloc(cur_text_section, sym, 
            ind, R_386_32);
     gen_le32(0);
@@ -841,7 +845,7 @@ void gen_cvt_ftoi(int t)
     o(0x24);
     o(0x2dd9); /* ldcw xxx */
     sym = external_global_sym(TOK___tcc_fpu_control, 
-                              VT_SHORT | VT_UNSIGNED, VT_LVAL);
+                              &ushort_type, VT_LVAL);
     greloc(cur_text_section, sym, 
            ind, R_386_32);
     gen_le32(0);
@@ -889,7 +893,7 @@ void gen_bounded_ptr_add(void)
     vtop -= 2;
     save_regs(0);
     /* do a fast function call */
-    sym = external_global_sym(TOK___bound_ptr_add, func_old_type, 0);
+    sym = external_global_sym(TOK___bound_ptr_add, &func_old_type, 0);
     greloc(cur_text_section, sym, 
            ind + 1, R_386_PC32);
     oad(0xe8, -4);
@@ -911,14 +915,14 @@ void gen_bounded_ptr_deref(void)
 
     size = 0;
     /* XXX: put that code in generic part of tcc */
-    if (!is_float(vtop->t)) {
+    if (!is_float(vtop->type.t)) {
         if (vtop->r & VT_LVAL_BYTE)
             size = 1;
         else if (vtop->r & VT_LVAL_SHORT)
             size = 2;
     }
     if (!size)
-        size = type_size(vtop->t, &align);
+        size = type_size(&vtop->type, &align);
     switch(size) {
     case  1: func = TOK___bound_ptr_indir1; break;
     case  2: func = TOK___bound_ptr_indir2; break;
@@ -935,7 +939,7 @@ void gen_bounded_ptr_deref(void)
     /* patch relocation */
     /* XXX: find a better solution ? */
     rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.ul);
-    sym = external_global_sym(func, func_old_type, 0);
+    sym = external_global_sym(func, &func_old_type, 0);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
