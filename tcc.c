@@ -7213,16 +7213,18 @@ void help(void)
            "  -llib       link with dynamic or static library 'lib'\n"
            "  -shared     generate a shared library\n"
            "  -static     static linking\n"
+           "  -r          relocatable output\n"
            );
 }
 
 int main(int argc, char **argv)
 {
     char *r, *outfile;
-    int optind, output_type, multiple_files, i;
+    int optind, output_type, multiple_files, i, reloc_output;
     TCCState *s;
-    char **libraries;
-    int nb_libraries;
+    char **files;
+    int nb_files, nb_libraries, nb_objfiles;
+    char objfilename[1024];
     
     s = tcc_new();
     output_type = TCC_OUTPUT_MEMORY;
@@ -7230,23 +7232,37 @@ int main(int argc, char **argv)
     optind = 1;
     outfile = NULL;
     multiple_files = 0;
-    libraries = NULL;
+    files = NULL;
+    nb_files = 0;
     nb_libraries = 0;
+    reloc_output = 0;
     while (1) {
         if (optind >= argc) {
+            if (nb_files == 0)
+                goto show_help;
+            else
+                break;
+        }
+        r = argv[optind++];
+        if (r[0] != '-') {
+            /* add a new file */
+            dynarray_add((void ***)&files, &nb_files, r);
+            if (!multiple_files) {
+                optind--;
+                /* argv[0] will be this file */
+                break;
+            }
+        } else if (r[1] == '-') {
+            /* '--' enables multiple files input and also ends several file input */
+            if (multiple_files) {
+                optind--; /* argv[0] will be '--' */
+                break;
+            }
+            multiple_files = 1;
+        } else if (r[1] == 'h' || r[1] == '?') {
         show_help:
             help();
             return 1;
-        }
-        r = argv[optind];
-        if (r[0] != '-')
-            break;
-        optind++;
-        if (r[1] == '-') {
-            /* '--' enables multiple files input */
-            multiple_files = 1;
-        } else if (r[1] == 'h' || r[1] == '?') {
-            goto show_help;
         } else if (r[1] == 'I') {
             if (tcc_add_include_path(s, r + 2) < 0)
                 error("too many include paths");
@@ -7267,7 +7283,8 @@ int main(int argc, char **argv)
             /* set tcc utilities path (mainly for tcc development) */
             tcc_lib_path = r + 2;
         } else if (r[1] == 'l') {
-            dynarray_add((void ***)&libraries, &nb_libraries, r + 2);
+            dynarray_add((void ***)&files, &nb_files, r);
+            nb_libraries++;
         } else if (!strcmp(r + 1, "bench")) {
             do_bench = 1;
         } else 
@@ -7291,36 +7308,61 @@ int main(int argc, char **argv)
                 goto show_help;
             multiple_files = 1;
             outfile = argv[optind++];
+        } else if (r[1] == 'r') {
+            /* generate a .o merging several output files */
+            reloc_output = 1;
+            output_type = TCC_OUTPUT_OBJ;
         } else {
             error("invalid option -- '%s'", r);
         }
     }
 
+    nb_objfiles = nb_files - nb_libraries;
+
     /* if outfile provided without other options, we output an
        executable */
     if (outfile && output_type == TCC_OUTPUT_MEMORY)
         output_type = TCC_OUTPUT_EXE;
-    
-    tcc_set_output_type(s, output_type);
 
-    tcc_add_file(s, argv[optind]);
-    if (multiple_files) {
-        while ((optind + 1) < argc) {
-            optind++;
-            r = argv[optind];
-            if (r[0] == '-') {
-                if (r[1] != '-')
-                    error("'--' expected");
-                break;
-            }
-            tcc_add_file(s, r);
+    /* check -c consistency : only single file handled. XXX: checks file type */
+    if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
+        /* accepts only a single input file */
+        if (nb_objfiles != 1)
+            error("cannot specify multiple files with -c");
+        if (nb_libraries != 0)
+            error("cannot specify libraries with -c");
+    }
+    
+    /* compute default outfile name */
+    if (output_type != TCC_OUTPUT_MEMORY && !outfile) {
+        if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
+            char *ext;
+            /* add .o extension */
+            pstrcpy(objfilename, sizeof(objfilename) - 1, files[0]);
+            ext = strrchr(objfilename, '.');
+            if (!ext)
+                goto default_outfile;
+            strcpy(ext + 1, "o");
+        } else {
+        default_outfile:
+            pstrcpy(objfilename, sizeof(objfilename), "a.out");
         }
+        outfile = objfilename;
     }
 
-    /* add specified libraries */
-    for(i = 0; i < nb_libraries;i++) {
-        if (tcc_add_library(s, libraries[i]) < 0)
-                error("cannot find -l%s", libraries[i]);
+    tcc_set_output_type(s, output_type);
+
+    /* compile or add each files or library */
+    for(i = 0;i < nb_files; i++) {
+        const char *filename;
+
+        filename = files[i];
+        if (filename[0] == '-') {
+            if (tcc_add_library(s, filename + 2) < 0)
+                error("cannot find %s", filename);
+        } else {
+            tcc_add_file(s, filename);
+        }
     }
 
     if (do_bench) {
