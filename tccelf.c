@@ -1890,7 +1890,8 @@ static int tcc_load_ldscript(TCCState *s1)
     char filename[1024];
     int t;
     
-    inp();
+    ch = file->buf_ptr[0];
+    handle_eob();
     for(;;) {
         t = ld_next(s1, cmd, sizeof(cmd));
         if (t == LD_TOK_EOF)
