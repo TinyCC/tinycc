@@ -158,27 +158,28 @@ int gnu_ext = 1;
 #define VT_LVALN   -17         /* ~VT_LVAL */
 #define VT_FORWARD 0x0020  /* value is forward reference 
                               (only used for functions) */
+/* storage */
+#define VT_EXTERN  0x00000040  /* extern definition */
+#define VT_STATIC  0x00000080  /* static variable */
+#define VT_TYPEDEF 0x00000100  /* typedef definition */
 
 /* types */
-#define VT_INT      0
-#define VT_VOID     0x00040
-#define VT_BYTE     0x00080  /* signed byte type */
-#define VT_PTR      0x00100  /* pointer increment */
-#define VT_UNSIGNED 0x00200  /* unsigned type */
-#define VT_ARRAY    0x00400  /* array type (only used in parsing) */
-#define VT_ENUM     0x00800  /* enum definition */
-#define VT_FUNC     0x01000  /* function type */
-#define VT_STRUCT  0x002000  /* struct/union definition */
-#define VT_SHORT   0x004000  /* short type */
-#define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
+#define VT_STRUCT_SHIFT 15   /* structure/enum name shift (14 bits left) */
 
-#define VT_TYPE    0xfffc7fc0  /* type mask */
+#define VT_BTYPE_SHIFT 9
+#define VT_INT        (0 << VT_BTYPE_SHIFT)  /* integer type */
+#define VT_BYTE       (1 << VT_BTYPE_SHIFT)  /* signed byte type */
+#define VT_SHORT      (2 << VT_BTYPE_SHIFT)  /* short type */
+#define VT_VOID       (3 << VT_BTYPE_SHIFT)  /* void type */
+#define VT_PTR        (4 << VT_BTYPE_SHIFT)  /* pointer increment */
+#define VT_ENUM       (5 << VT_BTYPE_SHIFT)  /* enum definition */
+#define VT_FUNC       (6 << VT_BTYPE_SHIFT)  /* function type */
+#define VT_STRUCT     (7 << VT_BTYPE_SHIFT)  /* struct/union definition */
+#define VT_BTYPE      (0xf << VT_BTYPE_SHIFT) /* mask for basic type */
+#define VT_UNSIGNED   (0x10 << VT_BTYPE_SHIFT)  /* unsigned type */
+#define VT_ARRAY      (0x20 << VT_BTYPE_SHIFT)  /* array type (also has VT_PTR) */
 
-/* storage */
-#define VT_EXTERN  0x00008000  /* extern definition */
-#define VT_STATIC  0x00010000  /* static variable */
-#define VT_TYPEDEF 0x00020000  /* typedef definition */
-
+#define VT_TYPE    0xfffffe00  /* type mask */
 
 /* token values */
 
@@ -366,19 +367,19 @@ void *dlsym(void *handle, char *symbol)
 
 #endif
 
-inline int isid(c)
+inline int isid(int c)
 {
     return (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
         c == '_';
 }
 
-inline int isnum(c)
+inline int isnum(int c)
 {
     return c >= '0' & c <= '9';
 }
 
-void printline()
+void printline(void)
 {
     IncludeFile *f;
     for(f = include_stack; f < include_stack_ptr; f++)
@@ -409,14 +410,14 @@ void warning(const char *msg)
     fprintf(stderr, "warning: %s\n", msg);
 }
 
-void skip(c)
+void skip(int c)
 {
     if (tok != c)
         error("'%c' expected", c);
     next();
 }
 
-void test_lvalue()
+void test_lvalue(void)
 {
     if (!(vt & VT_LVAL))
         expect("lvalue");
@@ -1686,14 +1687,17 @@ void load(r, ft, fc)
 /* WARNING: r must not be allocated on the stack */
 void store(r, ft, fc)
 {
-    int fr, b;
+    int fr, bt;
 
     fr = ft & VT_VALMASK;
-    b = (ft & VT_TYPE) == VT_BYTE;
+    bt = ft & VT_BTYPE;
     /* XXX: incorrect if reg to reg */
-    if (ft & VT_SHORT)
+    if (bt == VT_SHORT)
         o(0x66);
-    o(0x89 - b);
+    if (bt == VT_BYTE)
+        o(0x88);
+    else
+        o(0x89);
     if (fr == VT_CONST) {
         o(0x05 + r * 8); /* mov r,xxx */
         gen_addr32(fc, ft);
@@ -1717,7 +1721,7 @@ void gfunc_param(GFuncContext *c)
 {
     int size, align, ft, fc, r;
 
-    if ((vt & (VT_STRUCT | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
+    if ((vt & (VT_BTYPE | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
         size = type_size(vt, &align);
         /* align to stack align size */
         size = (size + 3) & ~3;
@@ -2114,7 +2118,8 @@ void gen_op(int op)
     t1 = vstack_ptr[-4];
     t2 = vstack_ptr[-2];
     if (op == '+' | op == '-') {
-        if ((t1 & VT_PTR) && (t2 & VT_PTR)) {
+        if ((t1 & VT_BTYPE) == VT_PTR && 
+            (t2 & VT_BTYPE) == VT_PTR) {
             if (op != '-')
                 error("invalid type");
             /* XXX: check that types are compatible */
@@ -2124,8 +2129,9 @@ void gen_op(int op)
             vstack_ptr[-2] &= ~VT_TYPE; /* set to integer */
             vset(VT_CONST, u);
             gen_op(TOK_PDIV);
-        } else if ((t1 | t2) & VT_PTR) {
-            if (t2 & VT_PTR) {
+        } else if ((t1 & VT_BTYPE) == VT_PTR ||
+                   (t2 & VT_BTYPE) == VT_PTR) {
+            if ((t2 & VT_BTYPE) == VT_PTR) {
                 swap(vstack_ptr - 4, vstack_ptr - 2);
                 swap(vstack_ptr - 3, vstack_ptr - 1);
                 swap(&t1, &t2);
@@ -2142,7 +2148,9 @@ void gen_op(int op)
         }
     } else {
         /* XXX: test types and compute returned value */
-        if ((t1 | t2) & (VT_UNSIGNED | VT_PTR)) {
+        if ((t1 | t2) & VT_UNSIGNED ||
+            (t1 & VT_BTYPE) == VT_PTR ||
+            (t2 & VT_BTYPE) == VT_PTR) {
             if (op == TOK_SAR)
                 op = TOK_SHR;
             else if (op == '/')
@@ -2196,9 +2204,10 @@ void gen_cast(int t)
 int type_size(int t, int *a)
 {
     Sym *s;
+    int bt;
 
-    /* int, enum or pointer */
-    if (t & VT_STRUCT) {
+    bt = t & VT_BTYPE;
+    if (bt == VT_STRUCT) {
         /* struct/union */
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
         *a = 4; /* XXX: cannot store it yet. Doing that is safe */
@@ -2206,15 +2215,16 @@ int type_size(int t, int *a)
     } else if (t & VT_ARRAY) {
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
         return type_size(s->t, a) * s->c;
-    } else if ((t & VT_PTR) ||
-               (t & VT_TYPE & ~VT_UNSIGNED) == VT_INT ||
-               (t & VT_ENUM)) {
+    } else if (bt == VT_PTR ||
+               bt == VT_INT ||
+               bt == VT_ENUM) {
         *a = 4;
         return 4;
-    } else if (t & VT_SHORT) {
+    } else if (bt == VT_SHORT) {
         *a = 2;
         return 2;
     } else {
+        /* void or function */
         *a = 1;
         return 1;
     }
@@ -2242,7 +2252,7 @@ void vstore(void)
     int ft, fc, r, t, size, align;
     GFuncContext gf;
 
-    if (vt & VT_STRUCT) {
+    if ((vt & VT_BTYPE) == VT_STRUCT) {
         /* if structure, only generate pointer */
         /* structure assignment : generate memcpy */
         /* XXX: optimize if small size */
@@ -2362,7 +2372,8 @@ int struct_decl(int u)
                 b = ist();
                 while (1) {
                     t = type_decl(&v, b, TYPE_DIRECT);
-                    if (t & (VT_FUNC | VT_TYPEDEF))
+                    if ((t & VT_BTYPE) == VT_FUNC ||
+                        (t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN)))
                         error("invalid type");
                     /* XXX: align & correct type size */
                     v |= SYM_FIELD;
@@ -2467,7 +2478,7 @@ int post_type(int t)
                         goto old_proto;
                     }
                 }
-                if (pt & VT_VOID && tok == ')')
+                if ((pt & VT_BTYPE) == VT_VOID && tok == ')')
                     break;
                 l = FUNC_NEW;
                 pt = type_decl(&n, pt, TYPE_DIRECT | TYPE_ABSTRACT);
@@ -2588,7 +2599,7 @@ void indir(void)
 {
     if (vt & VT_LVAL)
         gv();
-    if (!(vt & VT_PTR))
+    if ((vt & VT_BTYPE) != VT_PTR)
         expect("pointer");
     vt = pointed_type(vt);
     if (!(vt & VT_ARRAY)) /* an array is never an lvalue */
@@ -2664,7 +2675,7 @@ void unary(void)
                except for unary '&' and sizeof. Since we consider that
                functions are not lvalues, we only have to handle it
                there and in function calls. */
-            if (!(vt & VT_FUNC))
+            if ((vt & VT_BTYPE) != VT_FUNC)
                 test_lvalue();
             vt = mk_pointer(vt & VT_LVALN);
         } else
@@ -2741,7 +2752,7 @@ void unary(void)
             vt &= VT_LVALN;
             next();
             /* expect pointer on structure */
-            if (!(vt & VT_STRUCT))
+            if ((vt & VT_BTYPE) != VT_STRUCT)
                 expect("struct or union");
             s = sym_find(((unsigned)vt >> VT_STRUCT_SHIFT) | SYM_STRUCT);
             /* find field */
@@ -2774,10 +2785,11 @@ void unary(void)
             int rett, retc;
 
             /* function call  */
-            if (!(vt & VT_FUNC)) {
-                if ((vt & (VT_PTR | VT_ARRAY)) == VT_PTR) {
+            if ((vt & VT_BTYPE) != VT_FUNC) {
+                /* pointer test (no array accepted) */
+                if ((vt & (VT_BTYPE | VT_ARRAY)) == VT_PTR) {
                     vt = pointed_type(vt);
-                    if (!(vt & VT_FUNC))
+                    if ((vt & VT_BTYPE) != VT_FUNC)
                         goto error_func;
                 } else {
                 error_func:
@@ -2844,7 +2856,7 @@ void unary(void)
             }
 #endif
             /* compute first implicit argument if a structure is returned */
-            if (s->t & VT_STRUCT) {
+            if ((s->t & VT_BTYPE) == VT_STRUCT) {
                 /* get some space for the returned structure */
                 size = type_size(s->t, &align);
                 loc = (loc - size) & -align;
@@ -2881,14 +2893,17 @@ void unary(void)
 int is_compatible_types(int t1, int t2)
 {
     Sym *s1, *s2;
+    int bt1, bt2;
 
     t1 &= VT_TYPE;
     t2 &= VT_TYPE;
-    if (t1 & VT_PTR) {
+    bt1 = t1 & VT_BTYPE;
+    bt2 = t2 & VT_BTYPE;
+    if (bt1 == VT_PTR) {
         t1 = pointed_type(t1);
         /* if function, then convert implictely to function pointer */
-        if (!(t2 & VT_FUNC)) {
-            if (!(t2 & VT_PTR))
+        if (bt2 != VT_FUNC) {
+            if (bt2 != VT_PTR)
                 return 0;
             t2 = pointed_type(t2);
         }
@@ -2898,10 +2913,10 @@ int is_compatible_types(int t1, int t2)
         if (t1 == VT_VOID || t2 == VT_VOID)
             return 1;
         return is_compatible_types(t1, t2);
-    } else if (t1 & VT_STRUCT) {
+    } else if (bt1 == VT_STRUCT) {
         return (t2 == t1);
-    } else if (t1 & VT_FUNC) {
-        if (!(t2 & VT_FUNC))
+    } else if (bt1 == VT_FUNC) {
+        if (bt2 != VT_FUNC)
             return 0;
         s1 = sym_find(((unsigned)t1 >> VT_STRUCT_SHIFT));
         s2 = sym_find(((unsigned)t2 >> VT_STRUCT_SHIFT));
@@ -2933,7 +2948,8 @@ int check_assign_types(int t1, int t2)
 {
     t1 &= VT_TYPE;
     t2 &= VT_TYPE;
-    if ((t1 & VT_PTR) && (t2 & VT_FUNC)) {
+    if ((t1 & VT_BTYPE) == VT_PTR && 
+        (t2 & VT_BTYPE) == VT_FUNC) {
         return is_compatible_types(pointed_type(t1), t2);
     } else {
         return is_compatible_types(t1, t2);
@@ -3168,7 +3184,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
     } else if (tok == TOK_RETURN) {
         next();
         if (tok != ';') {
-            if (func_vt & VT_STRUCT) {
+            if ((func_vt & VT_BTYPE) == VT_STRUCT) {
                 /* if returning structure, must copy it to implicit
                    first pointer arg location */
                 vset(mk_pointer(func_vt) | VT_LOCAL | VT_LVAL, func_vc);
@@ -3176,7 +3192,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
                 vpush();
             }
             expr();
-            if (func_vt & VT_STRUCT) {
+            if ((func_vt & VT_BTYPE) == VT_STRUCT) {
                 /* copy structure value to pointer */
                 vstore();
             } else {
@@ -3363,7 +3379,7 @@ void decl_designator(int t, int c,
             l = tok;
             next();
         struct_field:
-            if (!(t & VT_STRUCT))
+            if ((t & VT_BTYPE) != VT_STRUCT)
                 expect("struct/union type");
             s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
             l |= SYM_FIELD;
@@ -3419,9 +3435,9 @@ void init_putv(int t, int c, int v, int is_expr)
             v = expr_const();
             global_expr = saved_global_expr;
         }
-        if (t & VT_BYTE)
+        if ((t & VT_BTYPE) == VT_BYTE)
             *(char *)c = v;
-        else if (t & VT_SHORT)
+        else if ((t & VT_BTYPE) == VT_SHORT)
             *(short *)c = v;
         else
             *(int *)c = v;
@@ -3485,9 +3501,9 @@ void decl_initializer(int t, int c, int first, int size_only)
         /* only parse strings here if correct type (otherwise: handle
            them as ((w)char *) expressions */
         if ((tok == TOK_LSTR && 
-             (t1 & VT_TYPE & ~VT_UNSIGNED) == VT_INT) ||
+             (t1 & VT_BTYPE) == VT_INT) ||
             (tok == TOK_STR &&
-             (t1 & VT_TYPE & ~VT_UNSIGNED) == VT_BYTE)) {
+             (t1 & VT_BTYPE) == VT_BYTE)) {
             /* XXX: move multiple string parsing in parser ? */
             while (tok == TOK_STR || tok == TOK_LSTR) {
                 ts = (TokenSym *)tokc;
@@ -3549,7 +3565,7 @@ void decl_initializer(int t, int c, int first, int size_only)
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
-    } else if ((t & VT_STRUCT) && tok == '{') {
+    } else if ((t & VT_BTYPE) == VT_STRUCT && tok == '{') {
         /* XXX: union needs only one init */
         next();
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
@@ -3700,7 +3716,9 @@ void decl(int l)
                 break;
             b = VT_INT;
         }
-        if ((b & (VT_ENUM | VT_STRUCT)) && tok == ';') {
+        if (((b & VT_BTYPE) == VT_ENUM ||
+             (b & VT_BTYPE) == VT_STRUCT) && 
+            tok == ';') {
             /* we accept no variable after */
             next();
             continue;
@@ -3731,7 +3749,7 @@ void decl(int l)
                 /* if the function returns a structure, then add an
                    implicit pointer parameter */
                 func_vt = sym->t;
-                if (func_vt & VT_STRUCT) {
+                if ((func_vt & VT_BTYPE) == VT_STRUCT) {
                     func_vc = addr;
                     addr += 4;
                 }
@@ -3740,7 +3758,7 @@ void decl(int l)
                     sym_push(sym->v & ~SYM_FIELD, 
                              u | VT_LOCAL | VT_LVAL, 
                              addr);
-                    if (u & VT_STRUCT) {
+                    if ((u & VT_BTYPE) == VT_STRUCT) {
 #ifdef FUNC_STRUCT_PARAM_AS_PTR
                         /* structs are passed as pointer */
                         size = 4;
@@ -3775,7 +3793,7 @@ void decl(int l)
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
                     sym_push(v, t | VT_TYPEDEF, 0);
-                } else if (t & VT_FUNC) {
+                } else if ((t & VT_BTYPE) == VT_FUNC) {
                     /* external function definition */
                     external_sym(v, t);
                 } else {
