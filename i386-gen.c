@@ -21,11 +21,11 @@
 /* number of available registers */
 #define NB_REGS             4
 
-#define NB_REG_CLASSES      2
-
 /* a register can belong to several classes */
-#define REG_CLASS_INT    0x0001
-#define REG_CLASS_FLOAT  0x0002
+#define RC_INT     0x0001 /* generic integer register */
+#define RC_FLOAT   0x0002 /* generic float register */
+#define RC_IRET    0x0004 /* function returned integer register */
+#define RC_FRET    0x0008 /* function returned float register */
 
 /* pretty names for the registers */
 enum {
@@ -36,16 +36,15 @@ enum {
 };
 
 int reg_classes[NB_REGS] = {
-    REG_CLASS_INT,    /* eax */
-    REG_CLASS_INT,    /* ecx */
-    REG_CLASS_INT,    /* edx */
-    REG_CLASS_FLOAT,  /* st0 */
+    /* eax */ RC_INT | RC_IRET,
+    /* ecx */ RC_INT,
+    /* edx */ RC_INT,
+    /* st0 */ RC_FLOAT | RC_FRET,
 };
 
-/* integer return register for functions */
-#define FUNC_RET_REG        0 
-/* float return register for functions */
-#define FUNC_RET_FREG       3
+/* return registers for function */
+#define REG_IRET REG_EAX
+#define REG_FRET REG_ST0
 
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS
@@ -89,40 +88,17 @@ void gen_le32(int c)
     g(c >> 24);
 }
 
-/* add a new relocation entry to symbol 's' */
-void greloc(Sym *s, int addr, int type)
+/* patch relocation entry with value 'val' */
+void greloc_patch1(Reloc *p, int val)
 {
-    Reloc *p;
-    p = malloc(sizeof(Reloc));
-    if (!p)
-        error("memory full");
-    p->type = type;
-    p->addr = addr;
-    p->next = (Reloc *)s->c;
-    s->c = (int)p;
-}
-
-/* patch each relocation entry with value 'val' */
-void greloc_patch(Sym *s, int val)
-{
-    Reloc *p, *p1;
-
-    p = (Reloc *)s->c;
-    while (p != NULL) {
-        p1 = p->next;
-        switch(p->type) {
-        case RELOC_ADDR32:
-            *(int *)p->addr = val;
-            break;
-        case RELOC_REL32:
-            *(int *)p->addr = val - p->addr - 4;
-            break;
-        }
-        free(p);
-        p = p1;
+    switch(p->type) {
+    case RELOC_ADDR32:
+        *(int *)p->addr = val;
+        break;
+    case RELOC_REL32:
+        *(int *)p->addr = val - p->addr - 4;
+        break;
     }
-    s->c = val;
-    s->r &= ~VT_FORWARD;
 }
 
 /* output a symbol and patch all calls to it */
@@ -166,6 +142,30 @@ void gen_addr32(int r, int c)
     }
 }
 
+/* generate a modrm reference. 'op_reg' contains the addtionnal 3
+   opcode bits */
+void gen_modrm(int op_reg, int r, int c)
+{
+    op_reg = op_reg << 3;
+    if ((r & VT_VALMASK) == VT_CONST) {
+        /* constant memory reference */
+        o(0x05 | op_reg);
+        gen_addr32(r, c);
+    } else if ((r & VT_VALMASK) == VT_LOCAL) {
+        /* currently, we use only ebp as base */
+        if (c == (char)c) {
+            /* short reference */
+            o(0x45 | op_reg);
+            g(c);
+        } else {
+            oad(0x85 | op_reg, c);
+        }
+    } else {
+        g(0x00 | op_reg | (r & VT_VALMASK));
+    }
+}
+
+
 /* load 'r' from value 'sv' */
 void load(int r, SValue *sv)
 {
@@ -183,7 +183,7 @@ void load(int r, SValue *sv)
             v1.r = VT_LOCAL | VT_LVAL;
             v1.c.ul = fc;
             load(r, &v1);
-            v = r;
+            fr = r;
         }
         if ((ft & VT_BTYPE) == VT_FLOAT) {
             o(0xd9); /* flds */
@@ -204,22 +204,14 @@ void load(int r, SValue *sv)
             o(0xb70f);   /* movzwl */
         else
             o(0x8b);     /* movl */
-
-        if (v == VT_CONST) {
-            o(0x05 + r * 8); /* 0xXX, r */
-            gen_addr32(fr, fc);
-        } else if (v == VT_LOCAL) {
-            oad(0x85 + r * 8, fc); /* xx(%ebp), r */
-        } else {
-            g(0x00 + r * 8 + v); /* (v), r */
-        }
+        gen_modrm(r, fr, fc);
     } else {
         if (v == VT_CONST) {
             o(0xb8 + r); /* mov $xx, r */
             gen_addr32(fr, fc);
         } else if (v == VT_LOCAL) {
-            o(0x8d);
-            oad(0x85 + r * 8, fc); /* lea xxx(%ebp), r */
+            o(0x8d); /* lea xxx(%ebp), r */
+            gen_modrm(r, VT_LOCAL, fc);
         } else if (v == VT_CMP) {
             oad(0xb8 + r, 0); /* mov $0, r */
             o(0x0f); /* setxx %br */
@@ -247,8 +239,7 @@ void store(int r, SValue *v)
     fc = v->c.ul;
     fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
-    /* XXX: incorrect if reg to reg */
-    /* XXX: should not flush float stack */
+    /* XXX: incorrect if float reg to reg */
     if (bt == VT_FLOAT) {
         o(0xd9); /* fsts */
         r = 2;
@@ -267,13 +258,10 @@ void store(int r, SValue *v)
         else
             o(0x89);
     }
-    if (fr == VT_CONST) {
-        o(0x05 + r * 8); /* mov r,xxx */
-        gen_addr32(v->r, fc);
-    } else if (fr == VT_LOCAL) {
-        oad(0x85 + r * 8, fc); /* mov r,xxx(%ebp) */
-    } else if (v->r & VT_LVAL) {
-        g(fr + r * 8); /* mov r, (fr) */
+    if (fr == VT_CONST ||
+        fr == VT_LOCAL ||
+        (v->r & VT_LVAL)) {
+        gen_modrm(r, v->r, fc);
     } else if (fr != r) {
         o(0xc0 + fr + r * 8); /* mov r, fr */
     }
@@ -298,7 +286,7 @@ void gfunc_param(GFuncContext *c)
         /* allocate the necessary size on stack */
         oad(0xec81, size); /* sub $xxx, %esp */
         /* generate structure store */
-        r = get_reg(REG_CLASS_INT);
+        r = get_reg(RC_INT);
         o(0x89); /* mov %esp, r */
         o(0xe0 + r);
         vset(VT_INT, r, 0);
@@ -306,7 +294,7 @@ void gfunc_param(GFuncContext *c)
         vstore();
         c->args_size += size;
     } else if (is_float(vtop->t)) {
-        gv(); /* only one float register */
+        gv(RC_FLOAT); /* only one float register */
         if ((vtop->t & VT_BTYPE) == VT_FLOAT)
             size = 4;
         else if ((vtop->t & VT_BTYPE) == VT_DOUBLE)
@@ -324,7 +312,7 @@ void gfunc_param(GFuncContext *c)
     } else {
         /* simple type (currently always same size) */
         /* XXX: implicit cast ? */
-        r = gv();
+        r = gv(RC_INT);
         o(0x50 + r); /* push r */
         c->args_size += 4;
     }
@@ -347,7 +335,7 @@ void gfunc_call(GFuncContext *c)
         }
     } else {
         /* otherwise, indirect call */
-        r = gv();
+        r = gv(RC_INT);
         o(0xff); /* call *r */
         o(0xd0 + r);
     }
@@ -383,17 +371,22 @@ int gtst(int inv, int t)
             t = gjmp(t);
             gsym(vtop->c.i);
         }
-    } else if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-        /* constant jmp optimization */
-        if ((vtop->c.i != 0) != inv) 
-            t = gjmp(t);
     } else {
-        /* XXX: floats */
-        v = gv();
-        o(0x85);
-        o(0xc0 + v * 9);
-        g(0x0f);
-        t = psym(0x85 ^ inv, t);
+        if (is_float(vtop->t)) {
+            vpushi(0);
+            gen_op(TOK_NE);
+        }
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+            /* constant jmp optimization */
+            if ((vtop->c.i != 0) != inv) 
+                t = gjmp(t);
+        } else {
+            v = gv(RC_INT);
+            o(0x85);
+            o(0xc0 + v * 9);
+            g(0x0f);
+            t = psym(0x85 ^ inv, t);
+        }
     }
     vtop--;
     return t;
@@ -405,9 +398,9 @@ void gen_opi(int op)
     int t, r, fr;
 
     vswap();
-    r = gv();
+    r = gv(RC_INT);
     vswap();
-    fr = gv();
+    fr = gv(RC_INT);
     vtop--;
 
     if (op == '+') {
@@ -460,9 +453,9 @@ void gen_opi(int op)
             oad(0xbd, t);
         }
         if (op == '%' | op == TOK_UMOD)
-            r = 2;
+            r = REG_EDX;
         else
-            r = 0;
+            r = REG_EAX;
         vtop->r = r;
     } else {
         vtop--;
@@ -477,22 +470,22 @@ void gen_opi(int op)
 /* NOTE: currently floats can only be lvalues */
 void gen_opf(int op)
 {
-    int a, ft, fc, swapped, r;
+    int a, ft, fc, swapped;
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_CONST | VT_LVAL)) == VT_CONST) {
         vswap();
-        gv();
+        gv(RC_FLOAT);
         vswap();
     }
     if ((vtop[0].r & (VT_CONST | VT_LVAL)) == VT_CONST)
-        gv();
+        gv(RC_FLOAT);
 
     /* must put at least one value in the floating point register */
     if ((vtop[-1].r & VT_LVAL) &&
         (vtop[0].r & VT_LVAL)) {
         vswap();
-        gv();
+        gv(RC_FLOAT);
         vswap();
     }
     if (op >= TOK_EQ && op <= TOK_GT) {
@@ -520,12 +513,17 @@ void gen_opf(int op)
         vtop->r = VT_CMP;
         vtop->c.i = op;
     } else {
+        swapped = 0;
         /* swap the stack if needed so that t1 is the register and t2 is
            the memory reference */
-        swapped = 0;
         if (vtop[-1].r & VT_LVAL) {
             vswap();
             swapped = 1;
+        }
+        /* no memory reference possible for long double operations */
+        if ((vtop->t & VT_BTYPE) == VT_LDOUBLE) {
+            load(REG_ST0, vtop);
+            swapped = !swapped;
         }
         
         switch(op) {
@@ -534,34 +532,30 @@ void gen_opf(int op)
             a = 0;
             break;
         case '-':
-            a = 0x20;
+            a = 4;
             if (swapped)
-                a += 8;
+                a++;
             break;
         case '*':
-            a = 0x08;
+            a = 1;
             break;
         case '/':
-            a = 0x30;
+            a = 6;
             if (swapped)
-                a += 8;
+                a++;
             break;
         }
         ft = vtop->t;
         fc = vtop->c.ul;
-        if ((ft & VT_BTYPE) == VT_DOUBLE)
-            o(0xdc);
-        else
-            o(0xd8);
-        
-        r = vtop->r & VT_VALMASK;
-        if (r == VT_CONST) {
-            o(0x05 + a);
-            gen_addr32(vtop->r, fc);
-        } else if (r == VT_LOCAL) {
-            oad(0x85 + a, fc);
+        if ((ft & VT_BTYPE) == VT_LDOUBLE) {
+            o(0xde); /* fxxxp %st, %st(1) */
+            o(0xc1 + (a << 3));
         } else {
-            g(0x00 + a + r);
+            if ((ft & VT_BTYPE) == VT_DOUBLE)
+                o(0xdc);
+            else
+                o(0xd8);
+            gen_modrm(a, vtop->r, fc);
         }
         vtop--;
     }
@@ -570,7 +564,7 @@ void gen_opf(int op)
 /* convert integers to fp 't' type */
 void gen_cvt_itof(int t)
 {
-    gv();
+    gv(RC_INT);
     if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
@@ -599,7 +593,7 @@ void gen_cvt_ftoi(int t)
 {
     int r, size;
 
-    gv();
+    gv(RC_FLOAT);
     if (t == VT_INT | VT_UNSIGNED &&
         t == VT_LLONG | VT_UNSIGNED &&
         t == VT_LLONG)
@@ -607,7 +601,7 @@ void gen_cvt_ftoi(int t)
     else 
         size = 4;
 
-    r = get_reg(REG_CLASS_INT);
+    r = get_reg(RC_INT);
     oad(0x2dd9, (int)&__tcc_int_fpu_control); /* ldcw xxx */
     oad(0xec81, size); /* sub $xxx, %esp */
     if (size == 4)
@@ -626,7 +620,7 @@ void gen_cvt_ftoi(int t)
 void gen_cvt_ftof(int t)
 {
     /* all we have to do on i386 is to put the float in a register */
-    gv();
+    gv(RC_FLOAT);
 }
 
 /* pop stack value */

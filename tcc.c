@@ -340,7 +340,7 @@ void gexpr(void);
 void decl(int l);
 void decl_initializer(int t, int r, int c, int first, int size_only);
 int decl_initializer_alloc(int t, int sec, int has_init);
-int gv(void);
+int gv(int rc);
 void move_reg(int r, int s);
 void save_reg(int r);
 void vpop(void);
@@ -360,7 +360,9 @@ int pointed_size(int t);
 int parse_btype(int *type_ptr);
 int type_decl(int *v, int t, int td);
 void error(const char *fmt, ...);
+void vpushi(int v);
 void vset(int t, int r, int v);
+void greloc(Sym *s, int addr, int type);
 
 /* true if float/double/long double type */
 static inline int is_float(int t)
@@ -418,6 +420,36 @@ void *dlsym(void *handle, char *symbol)
 }
 
 #endif
+
+/* add a new relocation entry to symbol 's' */
+void greloc(Sym *s, int addr, int type)
+{
+    Reloc *p;
+    p = malloc(sizeof(Reloc));
+    if (!p)
+        error("memory full");
+    p->type = type;
+    p->addr = addr;
+    p->next = (Reloc *)s->c;
+    s->c = (int)p;
+}
+
+/* patch each relocation entry with value 'val' */
+void greloc_patch(Sym *s, int val)
+{
+    Reloc *p, *p1;
+
+    p = (Reloc *)s->c;
+    while (p != NULL) {
+        p1 = p->next;
+        greloc_patch1(p, val);
+        free(p);
+        p = p1;
+    }
+    s->c = val;
+    s->r &= ~VT_FORWARD;
+}
+
 
 static inline int isid(int c)
 {
@@ -1884,7 +1916,7 @@ void vsetc(int t, int r, CValue *vc)
     /* cannot let cpu flags if other instruction are generated */
     /* XXX: VT_JMP test too ? */
     if ((vtop->r & VT_VALMASK) == VT_CMP)
-        gv();
+        gv(RC_INT);
     vtop++;
     vtop->t = t;
     vtop->r = r;
@@ -2028,12 +2060,12 @@ void move_reg(int r, int s)
     }
 }
 
-/* convert a (vtop->t, vtop->c) in register. lvalues are converted as
-   values. Cannot be used if cannot be converted to register value
-   (such as structures). */
-int gv(void)
+/* store vtop a register belonging to class 'rc'. lvalues are
+   converted as values. Cannot be used if cannot be converted to
+   register value (such as structures). */
+int gv(int rc)
 {
-    int r, bit_pos, bit_size, rc, size, align, i;
+    int r, bit_pos, bit_size, size, align, i;
 
     /* NOTE: get_reg can modify vstack[] */
     if (vtop->t & VT_BITFIELD) {
@@ -2047,7 +2079,7 @@ int gv(void)
         vpushi(32 - bit_size);
         /* NOTE: transformed to SHR if unsigned */
         gen_op(TOK_SAR);
-        r = gv();
+        r = gv(rc);
     } else {
         if (is_float(vtop->t) && 
             (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
@@ -2064,14 +2096,16 @@ int gv(void)
             glo += size << 2;
         }
         r = vtop->r & VT_VALMASK;
-        if (r >= VT_CONST || (vtop->r & VT_LVAL)) {
-            if (is_float(vtop->t))
-                rc = REG_CLASS_FLOAT;
-            else
-                rc = REG_CLASS_INT;
+        /* need to reload if:
+           - constant
+           - lvalue (need to dereference pointer)
+           - already a register, but not in the right class */
+        if (r >= VT_CONST || 
+            (vtop->r & VT_LVAL) ||
+            !(reg_classes[r] & rc)) {
             r = get_reg(rc);
+            load(r, vtop);
         }
-        load(r, vtop);
         vtop->r = r;
     }
     return r;
@@ -2620,7 +2654,7 @@ void gen_assign_cast(int dt)
 /* store vtop in lvalue pushed on stack */
 void vstore(void)
 {
-    int ft, r, t, size, align, bit_size, bit_pos;
+    int ft, r, t, size, align, bit_size, bit_pos, rc;
     GFuncContext gf;
 
     ft = vtop[-1].t;
@@ -2675,11 +2709,14 @@ void vstore(void)
         /* store result */
         vstore();
     } else {
-        r = gv();  /* generate value */
+        rc = RC_INT;
+        if (is_float(ft))
+            rc = RC_FLOAT;
+        r = gv(rc);  /* generate value (XXX: move that to store code) */
         /* if lvalue was saved on stack, must read it */
         if ((vtop[-1].r & VT_VALMASK) == VT_LLOCAL) {
             SValue sv;
-            t = get_reg(REG_CLASS_INT);
+            t = get_reg(RC_INT);
             sv.t = VT_INT;
             sv.r = VT_LOCAL | VT_LVAL;
             sv.c.ul = vtop[-1].c.ul;
@@ -2696,19 +2733,24 @@ void vstore(void)
 /* post defines POST/PRE add. c is the token ++ or -- */
 void inc(int post, int c)
 {
-    int r, r1;
+    int r, r1, rc, t;
     SValue sv;
 
     test_lvalue();
     if (post)
         vdup(); /* room for returned value */
     vdup(); /* save lvalue */
-    r = gv();
     if (post) {
         /* duplicate value */
-        /* XXX: handle floats */
-        r1 = get_reg(REG_CLASS_INT);
+        rc = RC_INT;
         sv.t = VT_INT;
+        t = vtop->t & VT_TYPE;
+        if (is_float(t)) {
+            rc = RC_FLOAT;
+            sv.t = t;
+        }
+        r = gv(rc);
+        r1 = get_reg(rc);
         sv.r = r;
         sv.c.ul = 0;
         load(r1, &sv); /* move r to r1 */
@@ -3137,10 +3179,10 @@ Sym *external_sym(int v, int u, int r)
 
 void indir(void)
 {
-    if (vtop->r & VT_LVAL)
-        gv();
     if ((vtop->t & VT_BTYPE) != VT_PTR)
         expect("pointer");
+    if (vtop->r & VT_LVAL)
+        gv(RC_INT);
     vtop->t = pointed_type(vtop->t);
     if (!(vtop->t & VT_ARRAY)) /* an array is never an lvalue */
         vtop->r |= VT_LVAL;
@@ -3442,7 +3484,11 @@ void unary(void)
                 gfunc_param(&gf);
             } else {
                 ret.t = s->t; 
-                ret.r = FUNC_RET_REG; /* return in register */
+                /* return in register */
+                if (is_float(ret.t))
+                    ret.r = REG_FRET; 
+                else
+                    ret.r = REG_IRET;
                 ret.c.i = 0;
             }
 #ifndef INVERT_FUNC_PARAMS
@@ -3561,7 +3607,7 @@ void eor(void)
 /* XXX: better constant handling */
 void expr_eq(void)
 {
-    int t, u, c, r1, r2;
+    int t, u, c, r1, r2, rc;
 
     if (const_wanted) {
         sum(10);
@@ -3582,16 +3628,19 @@ void expr_eq(void)
         if (tok == '?') {
             next();
             t = gtst(1, 0);
-
             gexpr();
-            r1 = gv();
+            /* XXX: float handling ? */
+            rc = RC_INT;
+            if (is_float(vtop->t))
+                rc = RC_FLOAT;
+            r1 = gv(rc);
             vpop();
             skip(':');
             u = gjmp(0);
 
             gsym(t);
             expr_eq();
-            r2 = gv();
+            r2 = gv(rc);
             move_reg(r1, r2);
             vtop->r = r1;
             gsym(u);
@@ -3718,11 +3767,9 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
                 /* copy structure value to pointer */
                 vstore();
             } else if (is_float(func_vt)) {
-                /* move return value to float return register */
-                move_reg(FUNC_RET_FREG, gv());
+                gv(RC_FRET);
             } else {
-                /* move return value to standard return register */
-                move_reg(FUNC_RET_REG, gv());
+                gv(RC_IRET);
             }
             vpop();
         }
@@ -3794,7 +3841,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         next();
         skip('(');
         gexpr();
-        case_reg = gv();
+        case_reg = gv(RC_INT);
         vpop();
         skip(')');
         a = 0;
