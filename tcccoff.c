@@ -82,6 +82,7 @@ int tcc_output_coff(TCCState *s1, FILE *f)
     int CoffTextSectionNo, coff_nb_syms;
     FILHDR file_hdr;		/* FILE HEADER STRUCTURE              */
     Section *stext, *sdata, *sbss;
+    int i, NSectionsToOutput = 0;
 
     stext = FindSection(s1, ".text");
     sdata = FindSection(s1, ".data");
@@ -107,8 +108,6 @@ int tcc_output_coff(TCCState *s1, FILE *f)
 
 
     // create all the section headers
-
-    int i, NSectionsToOutput = 0;
 
     file_pointer = FILHSZ + sizeof(AOUTHDR);
 
