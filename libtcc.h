@@ -62,6 +62,10 @@ int tcc_compile_string(TCCState *s, const char *buf);
 #define TCC_OUTPUT_OBJ      3 /* object file */
 int tcc_set_output_type(TCCState *s, int output_type);
 
+#define TCC_OUTPUT_FORMAT_ELF    0 /* default output format: ELF */
+#define TCC_OUTPUT_FORMAT_BINARY 1 /* binary image output */
+#define TCC_OUTPUT_FORMAT_COFF   2 /* COFF */
+
 /* equivalent to -Lpath option */
 int tcc_add_library_path(TCCState *s, const char *pathname);
 
