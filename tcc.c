@@ -645,7 +645,7 @@ static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<
 
 #define TOK_ASM_int TOK_INT
 
-enum {
+enum tcc_token {
     TOK_LAST = TOK_IDENT - 1,
 #define DEF(id, str) id,
 #include "tcctok.h"
@@ -3808,26 +3808,27 @@ static int macro_subst_tok(TokenString *tok_str,
                            Sym **nested_list, Sym *s, int can_read_stream)
 {
     Sym *args, *sa, *sa1;
-    int mstr_allocated, parlevel, *mstr, t;
+    int mstr_allocated, parlevel, *mstr, t, t1;
     TokenString str;
     char *cstrval;
     CValue cval;
     CString cstr;
+    char buf[32];
             
     /* if symbol is a macro, prepare substitution */
 
     /* special macros */
     if (tok == TOK___LINE__) {
-        cval.i = file->line_num;
-        tok_str_add2(tok_str, TOK_CINT, &cval);
+        snprintf(buf, sizeof(buf), "%d", file->line_num);
+        cstrval = buf;
+        t1 = TOK_PPNUM;
+        goto add_cstr1;
     } else if (tok == TOK___FILE__) {
         cstrval = file->filename;
         goto add_cstr;
-        tok_str_add2(tok_str, TOK_STR, &cval);
     } else if (tok == TOK___DATE__ || tok == TOK___TIME__) {
         time_t ti;
         struct tm *tm;
-        char buf[64];
 
         time(&ti);
         tm = localtime(&ti);
@@ -3840,11 +3841,13 @@ static int macro_subst_tok(TokenString *tok_str,
         }
         cstrval = buf;
     add_cstr:
+        t1 = TOK_STR;
+    add_cstr1:
         cstr_new(&cstr);
         cstr_cat(&cstr, cstrval);
         cstr_ccat(&cstr, '\0');
         cval.cstr = &cstr;
-        tok_str_add2(tok_str, TOK_STR, &cval);
+        tok_str_add2(tok_str, t1, &cval);
         cstr_free(&cstr);
     } else {
         mstr = (int *)s->c;
