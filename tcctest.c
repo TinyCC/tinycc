@@ -240,8 +240,8 @@ void string_test()
     printf("wc=%C 0x%lx %C\n", L'a', L'\x1234', L'c');
     printf("wstring=%S\n", L"abc");
     printf("wstring=%S\n", L"abc" L"def" "ghi");
-    printf("'\\377'=%d '\xff'=%d\n", '\377', '\xff');
-    printf("L'\\377'=%d L'\xff'=%d\n", L'\377', L'\xff');
+    printf("'\\377'=%d '\\xff'=%d\n", '\377', '\xff');
+    printf("L'\\377'=%d L'\\xff'=%d\n", L'\377', L'\xff');
     ps("test\n");
     b = 32;
     while ((b = b + 1) < 96) {
@@ -703,7 +703,7 @@ typedef struct Sym {
 
 void bool_test()
 {
-    int *s, a, b;
+    int *s, a, b, t, f;
 
     a = 0;
     s = (void*)0;
@@ -738,6 +738,25 @@ void bool_test()
     a = (a + b) * ((a < b) ?
                    ((b - a) * (a - b)): a + b);
     printf("a=%d\n", a);
+
+    /* test complex || or && expressions */
+    t = 1;
+    f = 0;
+    a = 32;
+    printf("exp=%d\n", f == (32 <= a && a <= 3));
+    printf("r=%d\n", (t || f) + (t && f));
+
+    /* test ? : cast */
+    {
+        int aspect_on;
+        int aspect_native = 65536;
+        double bfu_aspect = 1.0;
+        int aspect;
+        for(aspect_on = 0; aspect_on < 2; aspect_on++) {
+            aspect=aspect_on?(aspect_native*bfu_aspect+0.5):65535UL;
+            printf("aspect=%d\n", aspect);
+        }
+    }
 }
 
 
