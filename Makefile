@@ -12,7 +12,7 @@ CFLAGS+=-m386 -malign-functions=0
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.10
+VERSION=0.9.11
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
@@ -117,7 +117,7 @@ bcheck.o: bcheck.c
 
 install: tcc libtcc1.o bcheck.o
 	$(INSTALL) -m755 tcc $(prefix)/bin
-	$(INSTALL) tcc.1 $(prefix)/share/man/man1
+	$(INSTALL) tcc.1 $(prefix)/man/man1
 	mkdir -p $(prefix)/lib/tcc
 	mkdir -p $(prefix)/lib/tcc/include
 	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc
@@ -179,21 +179,24 @@ instr.o: instr.S
 tcc-doc.html: tcc-doc.texi
 	texi2html -monolithic -number $<
 
+FILES= Makefile Makefile.uClibc \
+       README TODO COPYING \
+       Changelog tcc-doc.texi tcc-doc.html \
+       tcc.1 \
+       tcc.c i386-gen.c tccelf.c tcctok.h \
+       bcheck.c libtcc1.c \
+       il-opcodes.h il-gen.c \
+       elf.h stab.h stab.def \
+       stddef.h stdarg.h stdbool.h float.h \
+       tcclib.h libtcc.h libtcc_test.c \
+       ex1.c ex2.c ex3.c ex4.c ex5.c \
+       tcctest.c boundtest.c 
+
 FILE=tcc-$(VERSION)
 
 tar:
 	rm -rf /tmp/$(FILE)
-	cp -r ../tcc /tmp/$(FILE)
-	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
-          $(FILE)/Makefile $(FILE)/Makefile.uClibc \
-          $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
-	  $(FILE)/Changelog $(FILE)/tcc-doc.texi $(FILE)/tcc-doc.html \
-          $(FILE)/tcc.1 \
-          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/tccelf.c $(FILE)/tcctok.h \
-          $(FILE)/bcheck.c $(FILE)/libtcc1.c \
-          $(FILE)/il-opcodes.h $(FILE)/il-gen.c \
-          $(FILE)/elf.h $(FILE)/stab.h $(FILE)/stab.def \
-          $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \
-          $(FILE)/tcclib.h $(FILE)/libtcc.h $(FILE)/libtcc_test.c \
-          $(FILE)/ex*.c $(FILE)/tcctest.c $(FILE)/boundtest.c )
+	mkdir -p /tmp/$(FILE)
+	cp -P $(FILES) /tmp/$(FILE)
+	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz $(FILE) )
 	rm -rf /tmp/$(FILE)

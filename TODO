@@ -1,15 +1,18 @@
 TODO list:
 
-- add separate symbol/offset handling (= fix some constant
-  initialisation bugs)
-- setjmp is not supported properly in bound checking.
+- fix constant error msg
+- add alloca()
+- add typeof()
+- add checks for multiple including of same file (= compile even faster)
 - add 'CType' structure to optimize type handling (= compile even faster)
 - suppress unneeded hash table for Symbols (= compile even faster)
-- add checks for multiple including of same file (= compile even faster)
+- ignore at least asm extension
+- setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
 - fix bound check code with '&' on local variables (currently done
   only for local arrays).
-- To check: bound checking and float/long long/struct copy code
+- To check: bound checking and float/long long/struct copy code. bound
+  checking and symbol + offset optimization
 - To fix: 'sizeof' generate code if too complex expression is given.
 - free all allocated data and use longjmp for errors (useful for libtcc use)
 

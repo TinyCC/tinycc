@@ -67,8 +67,11 @@ Compile a.c and b.c, link them and generate the executable myprog.
 @item tcc -o myprog a.o b.o
 link a.o and b.o together and generate the executable myprog.
 
-@item tcc -c -o a.o a.c
+@item tcc -c a.c
 Compile a.c and generate object file a.o
+
+@item tcc -r -o ab.o a.c b.c
+Compile a.c and b.c, link them together and generate the object file ab.o.
 
 @end table
 
@@ -162,6 +165,10 @@ must also be given).
 @item -static
 Generate a statically linked executable (default is a shared linked
 executable) (@samp{-o} option must also be given).
+
+@item -r
+Generate an object file combining all input files (@samp{-o} option must
+also be given).
 
 @end table
 
@@ -308,6 +315,10 @@ generate function @code{'my_add'} in section @code{.mycodesection}.
     dprintf("no arg\n");
     dprintf("one arg %d\n", 1);
 @end example
+
+@item @code{__FUNCTION__} is interpreted as C99 @code{__func__} 
+(so it has not exactly the same semantics as string literal GNUC
+where it is a string literal).
 
 @end itemize
 
