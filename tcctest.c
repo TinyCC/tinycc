@@ -66,6 +66,16 @@ int isid(int c);
 #undef AAA
 #define AAA 4
 
+#if 1
+#define B3 1
+#elif 1
+#define B3 2
+#elif 0
+#define B3 3
+#else
+#define B3 4
+#endif
+
 void macro_test()
 {
     printf("macro:\n");
@@ -78,6 +88,7 @@ void macro_test()
     printf("s2=%s\n", xglue(HIGH, LOW));
     printf("s3=%s\n", str("c"));
     printf("s4=%s\n", str(a1));
+    printf("B3=%d\n", B3);
 
 #ifdef A
     printf("A defined\n");
