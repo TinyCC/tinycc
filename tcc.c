@@ -1823,19 +1823,27 @@ static uint8_t *parse_line_comment(uint8_t *p)
     p++;
     for(;;) {
         c = *p;
+    redo:
         if (c == '\n' || c == CH_EOF) {
             break;
         } else if (c == '\\') {
-            PEEKC_EOB(c, p);
-            if (c == '\n') {
-                file->line_num++;
-                PEEKC_EOB(c, p);
-            } else if (c == '\r') {
+            file->buf_ptr = p;
+            c = handle_eob();
+            p = file->buf_ptr;
+            if (c == '\\') {
                 PEEKC_EOB(c, p);
                 if (c == '\n') {
                     file->line_num++;
                     PEEKC_EOB(c, p);
+                } else if (c == '\r') {
+                    PEEKC_EOB(c, p);
+                    if (c == '\n') {
+                        file->line_num++;
+                        PEEKC_EOB(c, p);
+                    }
                 }
+            } else {
+                goto redo;
             }
         } else {
             p++;
@@ -5430,7 +5438,7 @@ void force_charshort_cast(int t)
     }
 }
 
-/* cast 'vtop' to 'type' */
+/* cast 'vtop' to 'type'. Casting to bitfields is forbidden. */
 static void gen_cast(CType *type)
 {
     int sbt, dbt, sf, df, c;
@@ -5442,7 +5450,12 @@ static void gen_cast(CType *type)
         vtop->r &= ~VT_MUSTCAST;
         force_charshort_cast(vtop->type.t);
     }
-    
+
+    /* bitfields first get cast to ints */
+    if (vtop->type.t & VT_BITFIELD) {
+        gv(RC_INT);
+    }
+
     dbt = type->t & (VT_BTYPE | VT_UNSIGNED);
     sbt = vtop->type.t & (VT_BTYPE | VT_UNSIGNED);
 
