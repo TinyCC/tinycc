@@ -36,7 +36,7 @@
 
 #define HAVE_MEMALIGN
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__dietlibc__)
 #warning Bound checking not fully supported on FreeBSD
 #undef CONFIG_TCC_MALLOC_HOOKS
 #undef HAVE_MEMALIGN
@@ -782,7 +782,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
 {
     void *ptr;
     size = size * nmemb;
-    ptr = __bound_malloc(size);
+    ptr = __bound_malloc(size, NULL);
     if (!ptr)
         return NULL;
     memset(ptr, 0, size);
