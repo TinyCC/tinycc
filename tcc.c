@@ -18,6 +18,8 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 #define _GNU_SOURCE
+#include "config.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -70,10 +72,6 @@
 
 /* define it to include assembler support */
 #define CONFIG_TCC_ASM
-
-#ifndef CONFIG_TCC_PREFIX
-#define CONFIG_TCC_PREFIX "/usr/local"
-#endif
 
 /* path to find crt1.o, crti.o and crtn.o. Only needed when generating
    executables or dlls */
@@ -332,7 +330,9 @@ static int do_debug = 0;
 static int do_bounds_check = 0;
 
 /* display benchmark infos */
+#if !defined(LIBTCC)
 static int do_bench = 0;
+#endif
 static int total_lines;
 static int total_bytes;
 
@@ -350,7 +350,7 @@ static const char **rt_bound_error_msg;
 static struct TCCState *tcc_state;
 
 /* give the path of the tcc libraries */
-static const char *tcc_lib_path = CONFIG_TCC_PREFIX "/lib/tcc";
+static const char *tcc_lib_path = CONFIG_TCC_LIBDIR "/tcc";
 
 struct TCCState {
     int output_type;
@@ -9379,7 +9379,7 @@ static int64_t getclock_us(void)
 
 void help(void)
 {
-    printf("tcc version 0.9.16 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
