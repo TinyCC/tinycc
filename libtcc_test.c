@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <libtcc.h>
+#include "libtcc.h"
 
 /* this function is called by the generated code */
 int add(int a, int b)

@@ -34,6 +34,7 @@
 #include <time.h>
 #ifdef WIN32
 #include <sys/timeb.h>
+#define CONFIG_TCC_STATIC
 #endif
 #ifndef WIN32
 #include <sys/time.h>
@@ -85,13 +86,11 @@
 #define TCC_TARGET_COFF
 #endif
 
-#if !defined(WIN32)
 #define FALSE 0
 #define false 0
 #define TRUE 1
 #define true 1
 typedef int BOOL;
-#endif
 
 /* path to find crt1.o, crti.o and crtn.o. Only needed when generating
    executables or dlls */

@@ -18,7 +18,7 @@ TMPS="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.S"
 TMPH="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.h"
 
 # default parameters
-prefix="/usr/local"
+prefix=""
 execprefix=""
 bindir=""
 libdir=""
@@ -56,10 +56,16 @@ case "$cpu" in
 esac
 gprof="no"
 bigendian="no"
+mingw32="no"
+LIBSUF=".a"
+EXESUF=""
 
 # OS specific
 targetos=`uname -s`
 case $targetos in
+MINGW32*)
+mingw32="yes"
+;;
 *) ;;
 esac
 
@@ -106,6 +112,8 @@ for opt do
   ;;
   --enable-gprof) gprof="yes"
   ;;
+  --enable-mingw32) mingw32="yes" ; cross_prefix="i386-mingw32-"
+  ;; 
   esac
 done
 
@@ -117,6 +125,11 @@ fi
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
+
+if test "$mingw32" = "yes" ; then
+    LIBSUF=".lib"
+    EXESUF=".exe"
+fi
 
 if test -z "$cross_prefix" ; then
 
@@ -188,26 +201,43 @@ echo ""
 exit 1
 fi
 
-if test x"$execprefix" = x""; then
-execprefix="${prefix}"
-fi
-if test x"$bindir" = x""; then
-bindir="${execprefix}/bin"
-fi
+if test "$mingw32" = "yes" ; then
+    if test -z "$prefix" ; then
+        prefix="/c/Program Files/tcc"
+    fi
+    execprefix="$prefix"
+    bindir="$prefix"
+    docdir="$prefix/doc"
+else
+    if test -z "$prefix" ; then
+        prefix="/usr/local"
+    fi
+    if test x"$execprefix" = x""; then
+        execprefix="${prefix}"
+    fi
+    if test x"$bindir" = x""; then
+        bindir="${execprefix}/bin"
+    fi
+    if test x"$docdir" = x""; then
+        docdir="$prefix/share/doc/qemu"
+    fi
+fi # mingw32
+
 if test x"$libdir" = x""; then
 libdir="${execprefix}/lib"
 fi
-if test x"$includedir" = x""; then
-includedir="${prefix}/include"
-fi
 if test x"$mandir" = x""; then
 mandir="${prefix}/man"
+fi
+if test x"$includedir" = x""; then
+includedir="${prefix}/include"
 fi
 
 echo "Binary  directory   $bindir"
 echo "Library directory   $libdir"
 echo "Include directory   $includedir"
-echo "Manual  directory   $mandir"
+echo "Manual directory    $mandir"
+echo "Doc directory       $docdir"
 echo "Source path      $source_path"
 echo "C compiler       $cc"
 echo "make             $make"
@@ -225,6 +255,7 @@ echo "bindir=$bindir" >> config.mak
 echo "libdir=$libdir" >> config.mak
 echo "includedir=$includedir" >> config.mak
 echo "mandir=$mandir" >> config.mak
+echo "docdir=$docdir" >> config.mak
 echo "#define CONFIG_TCC_LIBDIR \"$libdir\"" >> $TMPH
 echo "MAKE=$make" >> config.mak
 echo "CC=$cc" >> config.mak
@@ -235,6 +266,8 @@ echo "AR=$ar" >> config.mak
 echo "STRIP=$strip -s -R .comment -R .note" >> config.mak
 echo "CFLAGS=$CFLAGS" >> config.mak
 echo "LDFLAGS=$LDFLAGS" >> config.mak
+echo "LIBSUF=$LIBSUF" >> config.mak
+echo "EXESUF=$EXESUF" >> config.mak
 if test "$cpu" = "x86" ; then
   echo "ARCH=i386" >> config.mak
   echo "#define HOST_I386 1" >> $TMPH
@@ -256,6 +289,10 @@ elif test "$cpu" = "alpha" ; then
 else
   echo "Unsupported CPU"
   exit 1
+fi
+if test "$mingw32" = "yes" ; then
+  echo "CONFIG_WIN32=yes" >> config.mak
+  echo "#define CONFIG_WIN32 1" >> $TMPH
 fi
 if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> config.mak

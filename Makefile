@@ -4,7 +4,10 @@
 include config.mak
 
 CFLAGS=-O2 -g -Wall
+ifndef CONFIG_WIN32
 LIBS=-ldl
+BCHECK_O=bcheck.o
+endif
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
@@ -17,11 +20,13 @@ endif
 
 DISAS=objdump -d
 INSTALL=install
-
+PROGS=tcc$(EXESUF) c67-tcc$(EXESUF) arm-tcc$(EXESUF)
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
-all: tcc libtcc1.a bcheck.o tcc-doc.html tcc.1 libtcc.a libtcc_test
+all: $(PROGS) \
+     libtcc1$(LIBSUF) $(BCHECK_O) tcc-doc.html tcc.1 libtcc$(LIBSUF) \
+     libtcc_test$(EXESUF)
 
 Makefile: config.mak
 
@@ -108,23 +113,23 @@ ex3: ex3.c
 
 # Native Tiny C Compiler
 
-tcc_g: tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h Makefile
+tcc_g$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h Makefile
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-tcc: tcc_g Makefile
-	strip -s -R .comment -R .note -o $@ $<
+tcc$(EXESUF): tcc_g$(EXESUF) Makefile
+	$(STRIP) -o $@ $<
 
-c67-tcc: tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c Makefile
+c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c Makefile
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
-arm-tcc: tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
+arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
 	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
 
 # TinyCC runtime libraries
 libtcc1.o: libtcc1.c
 	$(CC) -O2 -Wall -c -o $@ $<
 
-libtcc1.a: libtcc1.o
+libtcc1$(LIBSUF): libtcc1.o
 	$(AR) rcs $@ $^
 
 bcheck.o: bcheck.c
@@ -132,52 +137,49 @@ bcheck.o: bcheck.c
 
 install: tcc_install libinstall
 
-tcc_install: tcc tcc.1 libtcc1.a bcheck.o
-	mkdir -p $(bindir)
-	$(INSTALL) -m755 tcc $(bindir)
-	mkdir -p $(mandir)/man1
-	$(INSTALL) tcc.1 $(mandir)/man1
-	mkdir -p $(libdir)/tcc
-	mkdir -p $(libdir)/tcc/include
-	$(INSTALL) -m644 libtcc1.a bcheck.o $(libdir)/tcc
+tcc_install: $(PROGS) tcc.1 libtcc1$(LIBSUF) $(BCHECK_O) tcc-doc.html tcc.1
+	mkdir -p "$(bindir)"
+	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
+ifndef CONFIG_WIN32
+	mkdir -p "$(mandir)/man1"
+	$(INSTALL) tcc.1 "$(mandir)/man1"
+endif
+	mkdir -p "$(libdir)/tcc"
+	mkdir -p "$(libdir)/tcc/include"
+	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(libdir)/tcc"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
-                   tcclib.h $(libdir)/tcc/include
+                   tcclib.h "$(libdir)/tcc/include"
+	mkdir -p "$(docdir)"
+	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe tcc-doc.html tcc.pod tcc.1 libtcc.a libtcc_test \
-           tcctest[1234] test[1234].out
+           *.exe tcc-doc.html tcc.pod tcc.1 libtcc$(LIBSUF) libtcc_test \
+           tcctest[1234] test[1234].out c67-tcc arm-tcc
 
 distclean: clean
 	rm -f config.h config.mak config.texi
-
-# win32 TCC
-tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
-	i386-mingw32msvc-gcc $(CFLAGS) -DCONFIG_TCC_STATIC -o $@ $<
-
-tcc.exe: tcc_g.exe
-	i386-mingw32msvc-strip -o $@ $<
 
 # profiling version
 tcc_p: tcc.c Makefile
 	$(CC) $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
 # libtcc generation and example
-libinstall: libtcc.a 
-	mkdir -p $(libdir)
-	$(INSTALL) -m644 libtcc.a $(libdir)
-	mkdir -p $(includedir)
-	$(INSTALL) -m644 libtcc.h $(includedir)
+libinstall: libtcc$(LIBSUF) 
+	mkdir -p "$(libdir)"
+	$(INSTALL) -m644 libtcc$(LIBSUF) "$(libdir)"
+	mkdir -p "$(includedir)"
+	$(INSTALL) -m644 libtcc.h "$(includedir)"
 
-libtcc.o: tcc.c i386-gen.c bcheck.c Makefile
+libtcc.o: tcc.c i386-gen.c Makefile
 	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
 
-libtcc.a: libtcc.o 
+libtcc$(LIBSUF): libtcc.o 
 	$(AR) rcs $@ $^
 
-libtcc_test: libtcc_test.c libtcc.a 
-	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltcc -ldl
+libtcc_test$(EXESUF): libtcc_test.c libtcc$(LIBSUF)
+	$(CC) $(CFLAGS) -o $@ $< libtcc$(LIBSUF) $(LIBS)
 
 libtest: libtcc_test
 	./libtcc_test
@@ -226,7 +228,9 @@ FILES= Makefile Makefile.uClibc configure VERSION \
        README TODO COPYING \
        Changelog tcc-doc.texi tcc-doc.html \
        tcc.1 \
-       tcc.c i386-gen.c tccelf.c tcctok.h tccasm.c  i386-asm.c i386-asm.h\
+       tcc.c tccelf.c tcctok.h tccasm.c i386-asm.c i386-asm.h \
+       tcccoff.c coff.h \
+       i386-gen.c c67-gen.c arm-gen.c \
        bcheck.c libtcc1.c \
        elf.h stab.h stab.def \
        stddef.h stdarg.h stdbool.h float.h varargs.h \
