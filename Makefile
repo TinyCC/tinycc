@@ -1,24 +1,30 @@
 #
 # Tiny C Compiler Makefile
 #
-prefix=/usr/local
-manpath=$(prefix)/man
+include config.mak
 
 CFLAGS=-O2 -g -Wall
 LIBS=-ldl
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
-CFLAGS+=-m386 -malign-functions=0 -mpreferred-stack-boundary=2
-CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
+CFLAGS+=-mpreferred-stack-boundary=2
+ifeq ($(GCC_MAJOR),2)
+CFLAGS+=-m386 -malign-functions=0
+else
+CFLAGS+=-march=i386 -falign-functions=0
+endif
+
+
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.16
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
-all: tcc libtcc1.o bcheck.o tcc-doc.html
+all: tcc libtcc1.o bcheck.o tcc-doc.html libtcc.a libtcc_test
+
+Makefile: config.mak
 
 # auto test
 
@@ -26,7 +32,7 @@ test: test.ref test.out
 	@if diff -u test.ref test.out ; then echo "Auto Test OK"; fi
 
 tcctest.ref: tcctest.c 
-	gcc $(CFLAGS) -I. -o $@ $<
+	$(CC) $(CFLAGS) -I. -o $@ $<
 
 test.ref: tcctest.ref
 	./tcctest.ref > $@
@@ -96,40 +102,45 @@ speed: tcc ex2 ex3
 	time ./tcc -I. ./ex3.c 35
 
 ex2: ex2.c
-	gcc $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $<
 
 ex3: ex3.c
-	gcc $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $<
 
 # Native Tiny C Compiler
 
 tcc_g: tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h Makefile
-	gcc $(CFLAGS) -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-tcc: tcc_g
+tcc: tcc_g Makefile
 	strip -s -R .comment -R .note -o $@ $<
 
 # TinyCC runtime libraries
 libtcc1.o: libtcc1.c
-	gcc -O2 -Wall -c -o $@ $<
+	$(CC) -O2 -Wall -c -o $@ $<
 
 bcheck.o: bcheck.c
-	gcc -O2 -Wall -c -o $@ $<
+	$(CC) -O2 -Wall -c -o $@ $<
 
-install: tcc libtcc1.o bcheck.o
-	$(INSTALL) -m755 tcc $(prefix)/bin
-	$(INSTALL) tcc.1 $(manpath)/man1
-	mkdir -p $(prefix)/lib/tcc
-	mkdir -p $(prefix)/lib/tcc/include
-	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc
+install: tcc_install libinstall
+
+tcc_install: tcc libtcc1.o bcheck.o
+	$(INSTALL) -m755 tcc $(bindir)
+	$(INSTALL) tcc.1 $(mandir)/man1
+	mkdir -p $(libdir)/tcc
+	mkdir -p $(libdir)/tcc/include
+	$(INSTALL) -m644 libtcc1.o bcheck.o $(libdir)/tcc
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
-                   tcclib.h $(prefix)/lib/tcc/include
+                   tcclib.h $(libdir)/tcc/include
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe tcc-doc.html \
+           *.exe tcc-doc.html libtcc.a libtcc_test \
            tcctest[1234] test[1234].out
+
+distclean: clean
+	rm -f config.h config.mak
 
 # win32 TCC
 tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
@@ -140,21 +151,21 @@ tcc.exe: tcc_g.exe
 
 # profiling version
 tcc_p: tcc.c Makefile
-	gcc $(CFLAGS_P) -o $@ $< $(LIBS_P)
+	$(CC) $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
 # libtcc generation and example
 libinstall: libtcc.a 
-	$(INSTALL) -m644 libtcc.a $(prefix)/lib
-	$(INSTALL) -m644 libtcc.h $(prefix)/include
+	$(INSTALL) -m644 libtcc.a $(libdir)
+	$(INSTALL) -m644 libtcc.h $(includedir)
 
 libtcc.o: tcc.c i386-gen.c bcheck.c Makefile
-	gcc $(CFLAGS) -DLIBTCC -c -o $@ $<
+	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
 
 libtcc.a: libtcc.o 
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 libtcc_test: libtcc_test.c libtcc.a 
-	gcc $(CFLAGS) -I. -o $@ $< -L. -ltcc -ldl
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltcc -ldl
 
 libtest: libtcc_test
 	./libtcc_test
@@ -171,7 +182,7 @@ instr: instr.o
 # tiny assembler testing
 
 asmtest.ref: asmtest.S
-	gcc -c -o asmtest.ref.o asmtest.S
+	$(CC) -c -o asmtest.ref.o asmtest.S
 	objdump -D asmtest.ref.o > $@
 
 # XXX: we compute tcc.c to go faster during development !
@@ -185,7 +196,7 @@ asmtest: asmtest.out asmtest.ref
 	@if diff -u --ignore-matching-lines="file format" asmtest.ref asmtest.out ; then echo "ASM Auto Test OK"; fi
 
 instr.o: instr.S
-	gcc -O2 -Wall -g -c -o $@ $<
+	$(CC) -O2 -Wall -g -c -o $@ $<
 
 cache: tcc_g
 	cachegrind ./tcc_g -o /tmp/linpack -lm bench/linpack.c
@@ -195,7 +206,7 @@ cache: tcc_g
 tcc-doc.html: tcc-doc.texi
 	texi2html -monolithic -number $<
 
-FILES= Makefile Makefile.uClibc \
+FILES= Makefile Makefile.uClibc configure VERSION \
        README TODO COPYING \
        Changelog tcc-doc.texi tcc-doc.html \
        tcc.1 \
