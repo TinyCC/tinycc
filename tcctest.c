@@ -9,7 +9,7 @@
 /* only gcc 3 handles _Bool correctly */
 //#define BOOL_ISOC99
 
-//#define C99_MACROS
+#define C99_MACROS
 
 void string_test();
 void expr_test();
