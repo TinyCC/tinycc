@@ -1,6 +1,10 @@
 version 0.9.21:
 
 - ARM target support (Daniel Glöckner)
+- added '-funsigned-char, '-fsigned-char' and
+  '-Wimplicit-function-declaration'.
+- fixed assignment of const struct in struct.
+- line comment fix (reported by Bertram Felgenhauer)
 
 version 0.9.20:
 
