@@ -5317,7 +5317,7 @@ void type_to_str(char *buf, int buf_size,
         else
             tstr = "enum ";
         pstrcat(buf, buf_size, tstr);
-        v = type->ref->v;
+        v = type->ref->v & ~SYM_STRUCT;
         if (v >= SYM_FIRST_ANOM)
             pstrcat(buf, buf_size, "<anonymous>");
         else
@@ -7428,9 +7428,17 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
-    } else if ((type->t & VT_BTYPE) == VT_STRUCT && tok == '{') {
+    } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
+               (sec || !first || tok == '{')) {
+        /* NOTE: the previous test is a specific case for automatic
+           struct/union init */
         /* XXX: union needs only one init */
-        next();
+        /* XXX: handle bit fields */
+        no_oblock = 1;
+        if (first || tok == '{') {
+            skip('{');
+            no_oblock = 0;
+        }
         s = type->ref;
         f = s->next;
         array_length = 0;
@@ -7438,6 +7446,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         n = s->c;
         while (tok != '}') {
             decl_designator(type, sec, c, NULL, &f, size_only);
+            /* XXX: bitfields ? */
             /* fill with zero between fields */
             index = f->c;
             if (!size_only && array_length < index) {
@@ -7447,6 +7456,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             index = index + type_size(&f->type, &align1);
             if (index > array_length)
                 array_length = index;
+            if (no_oblock && f->next == NULL)
+                break;
             if (tok == '}')
                 break;
             skip(',');
@@ -7457,7 +7468,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             init_putz(type, sec, c + array_length, 
                       n - array_length);
         }
-        skip('}');
+        if (!no_oblock)
+            skip('}');
     } else if (tok == '{') {
         next();
         decl_initializer(type, sec, c, first, size_only);
@@ -7746,7 +7758,7 @@ static void func_decl_list(Sym *func_sym)
     CType btype, type;
 
     /* parse each declaration */
-    while (tok != '{' && tok != ';' && tok != TOK_EOF) {
+    while (tok != '{' && tok != ';' && tok != ',' && tok != TOK_EOF) {
         if (!parse_btype(&btype, &ad)) 
             expect("declaration list");
         if (((btype.t & VT_BTYPE) == VT_ENUM ||
