@@ -21,7 +21,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#ifndef __FreeBSD__
 #include <malloc.h>
+#endif
 
 //#define BOUND_DEBUG
 
@@ -31,6 +33,14 @@
 
 /* use malloc hooks. Currently the code cannot be reliable if no hooks */
 #define CONFIG_TCC_MALLOC_HOOKS
+
+#define HAVE_MEMALIGN
+
+#ifdef __FreeBSD__
+#warning Bound checking not fully supported on FreeBSD
+#undef CONFIG_TCC_MALLOC_HOOKS
+#undef HAVE_MEMALIGN
+#endif
 
 #define BOUND_T1_BITS 13
 #define BOUND_T2_BITS 11
@@ -713,10 +723,20 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
 
     restore_malloc_hooks();
 
+#ifndef HAVE_MEMALIGN
+    if (align > 4) {
+        /* XXX: handle it ? */
+        ptr = NULL;
+    } else {
+        /* we suppose that malloc aligns to at least four bytes */
+        ptr = malloc(size + 1);
+    }
+#else
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
     ptr = memalign(size + 1, align);
+#endif
     
     install_malloc_hooks();
     
