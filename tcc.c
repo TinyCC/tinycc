@@ -2810,7 +2810,7 @@ static void preprocess(int is_bof)
 static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long)
 {
     int c, n;
-    const char *p;
+    const uint8_t *p;
 
     p = buf;
     for(;;) {
@@ -2890,7 +2890,11 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                 break;
             default:
             invalid_escape:
-                error("invalid escaped char");
+                if (c >= '!' && c <= '~')
+                    warning("unknown escape sequence: \'\\%c\'", c);
+                else
+                    warning("unknown escape sequence: \'\\x%x\'", c);
+                break;
             }
         }
         p++;
@@ -9084,6 +9088,8 @@ int tcc_relocate(TCCState *s1)
     
     tcc_add_runtime(s1);
 
+    build_got_entries(s1);
+    
     relocate_common_syms();
 
     /* compute relocation address : section are relocated in place. We
@@ -9315,7 +9321,7 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     Elf32_Ehdr ehdr;
     int fd, ret;
     BufferedFile *saved_file;
-    
+
     /* find source file type with extension */
     filename1 = strrchr(filename, '/');
     if (filename1)
@@ -9367,8 +9373,17 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             if (ehdr.e_type == ET_REL) {
                 ret = tcc_load_object_file(s1, fd, 0);
             } else if (ehdr.e_type == ET_DYN) {
-                ret = tcc_load_dll(s1, fd, filename, 
-                                   (flags & AFF_REFERENCED_DLL) != 0);
+                if (s1->output_type == TCC_OUTPUT_MEMORY) {
+                    void *h;
+                    h = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                    if (h)
+                        ret = 0;
+                    else
+                        ret = -1;
+                } else {
+                    ret = tcc_load_dll(s1, fd, filename, 
+                                       (flags & AFF_REFERENCED_DLL) != 0);
+                }
             } else {
                 error_noabort("unrecognized ELF file");
                 goto fail;
@@ -9430,23 +9445,12 @@ int tcc_add_library(TCCState *s, const char *libraryname)
 {
     char buf[1024];
     int i;
-    void *h;
     
     /* first we look for the dynamic library if not static linking */
     if (!s->static_link) {
         snprintf(buf, sizeof(buf), "lib%s.so", libraryname);
-        /* if we output to memory, then we simply we dlopen(). */
-        if (s->output_type == TCC_OUTPUT_MEMORY) {
-            /* Since the libc is already loaded, we don't need to load it again */
-            if (!strcmp(libraryname, "c"))
-                return 0;
-            h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
-            if (h)
-                return 0;
-        } else {
-            if (tcc_add_dll(s, buf, 0) == 0)
-                return 0;
-        }
+        if (tcc_add_dll(s, buf, 0) == 0)
+            return 0;
     }
 
     /* then we look for the static library */
@@ -9678,7 +9682,7 @@ static const TCCOption tcc_options[] = {
     { "static", TCC_OPTION_static, 0 },
     { "shared", TCC_OPTION_shared, 0 },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
-    { "run", TCC_OPTION_run, 0 },
+    { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -9693,31 +9697,49 @@ static const TCCOption tcc_options[] = {
     { NULL },
 };
 
-int main(int argc, char **argv)
+/* convert 'str' into an array of space separated strings */
+static int expand_args(char ***pargv, const char *str)
 {
-    char *r;
-    int optind, output_type, multiple_files, i, reloc_output;
-    TCCState *s;
-    char **files;
-    int nb_files, nb_libraries, nb_objfiles, dminus, ret;
-    char objfilename[1024];
-    int64_t start_time = 0;
+    const char *s1;
+    char **argv, *arg;
+    int argc, len;
+
+    argc = 0;
+    argv = NULL;
+    for(;;) {
+        while (is_space(*str))
+            str++;
+        if (*str == '\0')
+            break;
+        s1 = str;
+        while (*str != '\0' && !is_space(*str))
+            str++;
+        len = str - s1;
+        arg = tcc_malloc(len + 1);
+        memcpy(arg, s1, len);
+        arg[len] = '\0';
+        dynarray_add((void ***)&argv, &argc, arg);
+    }
+    *pargv = argv;
+    return argc;
+}
+
+static char **files;
+static int nb_files, nb_libraries;
+static int multiple_files;
+static int print_search_dirs;
+static int output_type;
+static int reloc_output;
+static const char *outfile;
+
+int parse_args(TCCState *s, int argc, char **argv)
+{
+    int optind;
     const TCCOption *popt;
-    const char *optarg, *p1, *r1, *outfile;
-    int print_search_dirs;
+    const char *optarg, *p1, *r1;
+    char *r;
 
-    s = tcc_new();
-    output_type = TCC_OUTPUT_EXE;
-
-    optind = 1;
-    outfile = NULL;
-    multiple_files = 1;
-    dminus = 0;
-    files = NULL;
-    nb_files = 0;
-    nb_libraries = 0;
-    reloc_output = 0;
-    print_search_dirs = 0;
+    optind = 0;
     while (1) {
         if (optind >= argc) {
             if (nb_files == 0 && !print_search_dirs)
@@ -9771,7 +9793,7 @@ int main(int argc, char **argv)
             case TCC_OPTION_HELP:
             show_help:
                 help();
-                return 1;
+                exit(1);
             case TCC_OPTION_I:
                 if (tcc_add_include_path(s, optarg) < 0)
                     error("too many include paths");
@@ -9846,12 +9868,20 @@ int main(int argc, char **argv)
                 print_search_dirs = 1;
                 break;
             case TCC_OPTION_run:
-                multiple_files = 0;
-                output_type = TCC_OUTPUT_MEMORY;
+                {
+                    int argc1;
+                    char **argv1;
+                    argc1 = expand_args(&argv1, optarg);
+                    if (argc1 > 0) {
+                        parse_args(s, argc1, argv1);
+                    }
+                    multiple_files = 0;
+                    output_type = TCC_OUTPUT_MEMORY;
+                }
                 break;
             case TCC_OPTION_v:
                 printf("tcc version %s\n", TCC_VERSION);
-                return 0;
+                exit(0);
             case TCC_OPTION_W:
                 {
                     const char *p = optarg;
@@ -9880,6 +9910,29 @@ int main(int argc, char **argv)
             }
         }
     }
+    return optind;
+}
+
+int main(int argc, char **argv)
+{
+    int i;
+    TCCState *s;
+    int nb_objfiles, ret, optind;
+    char objfilename[1024];
+    int64_t start_time = 0;
+
+    s = tcc_new();
+    output_type = TCC_OUTPUT_EXE;
+    outfile = NULL;
+    multiple_files = 1;
+    files = NULL;
+    nb_files = 0;
+    nb_libraries = 0;
+    reloc_output = 0;
+    print_search_dirs = 0;
+
+    optind = parse_args(s, argc - 1, argv + 1) + 1;
+
     if (print_search_dirs) {
         /* enough for Linux kernel */
         printf("install: %s/\n", tcc_lib_path);
