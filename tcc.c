@@ -398,6 +398,9 @@ struct TCCState {
     /* if true, static linking is performed */
     int static_link;
 
+    /* if true, only link in referenced objects from archive */
+    int alacarte_link;
+
     /* warning switches */
     int warn_write_strings;
     int warn_unsupported;
@@ -9207,6 +9210,7 @@ TCCState *tcc_new(void)
     s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE,
                                       ".dynstrtab", 
                                       ".dynhashtab", SHF_PRIVATE);
+    s->alacarte_link = 1;
     return s;
 }
 

@@ -1682,6 +1682,55 @@ typedef struct ArchiveHeader {
     char ar_fmag[2];		/* should contain ARFMAG */
 } ArchiveHeader;
 
+static int get_be32(const uint8_t *b)
+{
+    return b[3] | (b[2] << 8) | (b[1] << 16) | (b[0] << 24);
+}
+
+/* load only the objects which resolve undefined symbols */
+static int tcc_load_alacarte(TCCState *s1, int fd, int size)
+{
+    int i, bound, nsyms, sym_index, off, ret;
+    uint8_t *data;
+    const char *ar_names, *p;
+    const uint8_t *ar_index;
+    Elf32_Sym *sym;
+
+    data = tcc_malloc(size);
+    if (read(fd, data, size) != size)
+        goto fail;
+    nsyms = get_be32(data);
+    ar_index = data + 4;
+    ar_names = ar_index + nsyms * 4;
+
+    do {
+	bound = 0;
+	for(p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
+	    sym_index = find_elf_sym(symtab_section, p);
+	    if(sym_index) {
+		sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+		if(sym->st_shndx == SHN_UNDEF) {
+		    off = get_be32(ar_index + i * 4) + sizeof(ArchiveHeader);
+#if 0
+		    printf("%5d\t%s\t%08x\n", i, p, sym->st_shndx);
+#endif
+		    ++bound;
+		    lseek(fd, off, SEEK_SET);
+		    if(tcc_load_object_file(s1, fd, off) < 0) {
+                    fail:
+                        ret = -1;
+                        goto the_end;
+                    }
+		}
+	    }
+	}
+    } while(bound);
+    ret = 0;
+ the_end:
+    tcc_free(data);
+    return ret;
+}
+
 /* load a '.a' file */
 static int tcc_load_archive(TCCState *s1, int fd)
 {
@@ -1714,18 +1763,21 @@ static int tcc_load_archive(TCCState *s1, int fd)
         ar_name[i + 1] = '\0';
         //        printf("name='%s' size=%d %s\n", ar_name, size, ar_size);
         file_offset = lseek(fd, 0, SEEK_CUR);
-        if (!strcmp(ar_name, "/") ||
-            !strcmp(ar_name, "//") ||
-            !strcmp(ar_name, "__.SYMDEF") ||
-            !strcmp(ar_name, "__.SYMDEF/") ||
-            !strcmp(ar_name, "ARFILENAMES/")) {
+        /* align to even */
+        size = (size + 1) & ~1;
+        if (!strcmp(ar_name, "/")) {
+            /* coff symbol table : we handle it */
+	    if(s1->alacarte_link)
+		return tcc_load_alacarte(s1, fd, size);
+        } else if (!strcmp(ar_name, "//") ||
+                   !strcmp(ar_name, "__.SYMDEF") ||
+                   !strcmp(ar_name, "__.SYMDEF/") ||
+                   !strcmp(ar_name, "ARFILENAMES/")) {
             /* skip symbol table or archive names */
         } else {
             if (tcc_load_object_file(s1, fd, file_offset) < 0)
                 return -1;
         }
-        /* align to even */
-        size = (size + 1) & ~1;
         lseek(fd, file_offset + size, SEEK_SET);
     }
     return 0;
