@@ -44,6 +44,9 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    /* MUST BE CALLED before any compilation or file loading */
+    tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
+
     tcc_compile_string(s, my_program);
 
     /* as a test, we add a symbol that the compiled program can be
