@@ -434,6 +434,7 @@ int parse_btype(int *type_ptr, AttributeDef *ad);
 int type_decl(int *v, int t, int td);
 
 void error(const char *fmt, ...);
+void rt_error(unsigned long pc, const char *fmt, ...);
 void vpushi(int v);
 void vset(int t, int r, int v);
 void type_to_str(char *buf, int buf_size, 
@@ -5969,6 +5970,18 @@ static void rt_printline(unsigned long wanted_pc)
     }
 }
 
+/* emit a run time error at position 'pc' */
+void rt_error(unsigned long pc, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+
+    rt_printline(pc);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    exit(255);
+    va_end(ap);
+}
 
 /* signal handler for fatal errors */
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
@@ -5982,32 +5995,30 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 #error please put the right sigcontext field    
 #endif
 
-    rt_printline(pc);
-
     switch(signum) {
     case SIGFPE:
         switch(siginf->si_code) {
         case FPE_INTDIV:
         case FPE_FLTDIV:
-            fprintf(stderr, "division by zero\n");
+            rt_error(pc, "division by zero");
             break;
         default:
-            fprintf(stderr, "floating point exception\n");
+            rt_error(pc, "floating point exception");
             break;
         }
         break;
     case SIGBUS:
     case SIGSEGV:
-        fprintf(stderr, "dereferencing invalid pointer\n");
+        rt_error(pc, "dereferencing invalid pointer");
         break;
     case SIGILL:
-        fprintf(stderr, "illegal instruction\n");
+        rt_error(pc, "illegal instruction");
         break;
     case SIGABRT:
-        fprintf(stderr, "abort() called\n");
+        rt_error(pc, "abort() called");
         break;
     default:
-        fprintf(stderr, "caught signal %d\n", signum);
+        rt_error(pc, "caught signal %d", signum);
         break;
     }
     exit(255);
