@@ -1,12 +1,17 @@
 TODO list:
 
 Critical:
+- better local symbol handling (needed for other targets)
+- handle void (__attribute__() *ptr)()
 - optimize slightly bound checking when doing addition + dereference.
 - better section generator (suppress some mmaps).
 - To check: bound checking and float/long long/struct copy code
-- To check: 'sizeof' may not work if too complex expression is given.
+- To fix: 'sizeof' generate code if too complex expression is given.
 - fix bound check code with '&' on local variables (currently done
   only for local arrays).
+- win32: add __stdcall, __intxx. use resolve for bchecked malloc et
+  al. check GetModuleHandle for dlls. check exception code (exception
+  filter func).
 
 Not critical:
 
@@ -22,6 +27,5 @@ Not critical:
 - better constant opt (&&, ||, ?:)
 - add ELF executable and shared library output option (would be needed
   for completness!).
-- D option with all #define cases (needs C parser)
 - add portable byte code generator and interpreter for other
   unsupported architectures.
