@@ -20,6 +20,9 @@ void tcc_enable_debug(TCCState *s);
 /* add include path */
 int tcc_add_include_path(TCCState *s, const char *pathname);
 
+/* add in system include path */
+int tcc_add_sysinclude_path(TCCState *s, const char *pathname);
+
 /* define preprocessor symbol 'sym'. Can put optional value */
 void tcc_define_symbol(TCCState *s, const char *sym, const char *value);
 
@@ -43,7 +46,7 @@ int tcc_get_error(TCCState *s, char *buf, int buf_size);
 /*****************************/
 /* linking commands */
 
-/* set output type. Must be called before any compilation */
+/* set output type. MUST BE CALLED before any compilation */
 #define TCC_OUTPUT_MEMORY   0 /* output will be ran in memory (no
                                  output file) (default) */
 #define TCC_OUTPUT_EXE      1 /* executable file */
