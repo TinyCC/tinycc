@@ -6962,6 +6962,8 @@ static void tcc_add_runtime(TCCState *s1)
 {
     char buf[1024];
     unsigned long *ptr;
+    int i;
+    Section *s;
 
     snprintf(buf, sizeof(buf), "%s/%s", tcc_lib_path, "libtcc1.o");
     tcc_add_file(s1, buf);
@@ -6999,6 +7001,38 @@ static void tcc_add_runtime(TCCState *s1)
                 bss_section->data_offset, 0,
                 ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
                 bss_section->sh_num, "_end");
+    /* add start and stop symbols for sections whose name can be
+       expressed in C */
+    for(i = 1; i < nb_sections; i++) {
+        s = sections[i];
+        if (s->sh_type == SHT_PROGBITS &&
+            (s->sh_flags & SHF_ALLOC)) {
+            const char *p;
+            int ch;
+
+            /* check if section name can be expressed in C */
+            p = s->name;
+            for(;;) {
+                ch = *p;
+                if (!ch)
+                    break;
+                if (!isid(ch) && !isnum(ch))
+                    goto next_sec;
+                p++;
+            }
+            snprintf(buf, sizeof(buf), "__start_%s", s->name);
+            add_elf_sym(symtab_section, 
+                        0, 0,
+                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                        s->sh_num, buf);
+            snprintf(buf, sizeof(buf), "__stop_%s", s->name);
+            add_elf_sym(symtab_section,
+                        s->data_offset, 0,
+                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                        s->sh_num, buf);
+        }
+    next_sec:
+    }
 }
 
 /* add dynamic sections so that the executable is dynamically linked */
@@ -7115,13 +7149,11 @@ int tcc_output_file(TCCState *s1, const char *filename)
                             bss_section->data_offset = offset;
                         }
                     } else {
-                        /* STT_NOTYPE or STB_WEAK undefined symbols
-                           are accepted */
-                        /* XXX: STT_NOTYPE is only used to exclude the
-                           unreferenced '_fp_hw' symbol. need a better
-                           solution */
-                        if (ELF32_ST_TYPE(sym->st_info) == STT_NOTYPE ||
-                            ELF32_ST_BIND(sym->st_info) == STB_WEAK) {
+                        /* STB_WEAK undefined symbols are accepted */
+                        /* XXX: _fp_hw seems to be part of the ABI, so we ignore
+                           it */
+                        if (ELF32_ST_BIND(sym->st_info) == STB_WEAK ||
+                            !strcmp(name, "_fp_hw")) {
                         } else {
                             error("undefined symbol '%s'", name);
                         }
