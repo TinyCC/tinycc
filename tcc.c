@@ -87,8 +87,9 @@ typedef struct Reloc {
 #define RELOC_REL32  2  /* 32 bits relative relocation */
 
 
-#define SYM_STRUCT 0x40000000 /* struct/union/enum symbol space */
-#define SYM_FIELD  0x20000000 /* struct/union field symbol space */
+#define SYM_STRUCT     0x40000000 /* struct/union/enum symbol space */
+#define SYM_FIELD      0x20000000 /* struct/union field symbol space */
+#define SYM_FIRST_ANOM (1 << (31 - VT_STRUCT_SHIFT)) /* first anonymous sym */
 
 #define FUNC_NEW       1 /* ansi function prototype */
 #define FUNC_OLD       2 /* old function prototype */
@@ -130,6 +131,8 @@ TokenSym **table_ident;
 TokenSym *hash_ident[521];
 char token_buf[STRING_MAX_SIZE + 1];
 char *filename, *funcname;
+/* contains global symbols which remain between each translation unit */
+SymStack extern_stack;
 SymStack define_stack, global_stack, local_stack, label_stack;
 
 int vstack[VSTACK_SIZE], *vstack_ptr;
@@ -169,14 +172,13 @@ int gnu_ext = 1;
 #define VT_SHORT   0x004000  /* short type */
 #define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 
+#define VT_TYPE    0xfffc7fc0  /* type mask */
+
 /* storage */
 #define VT_EXTERN  0x00008000  /* extern definition */
 #define VT_STATIC  0x00010000  /* static variable */
 #define VT_TYPEDEF 0x00020000  /* typedef definition */
 
-#define VT_TYPE    0xfffc7fc0  /* type mask */
-#define VT_TYPEN   0x0000003f  /* ~VT_TYPE */
-#define VT_FUNCN   -4097       /* ~VT_FUNC */
 
 /* token values */
 
@@ -613,6 +615,21 @@ void sym_pop(SymStack *st, Sym *b)
     st->top = b;
 }
 
+/* undefined a hashed symbol (used for #undef). Its name is set to
+   zero */
+void sym_undef(SymStack *st, Sym *s)
+{
+    Sym **ss;
+    ss = &st->hash[s->v % SYM_HASH_SIZE];
+    while (*ss != NULL) {
+        if (*ss == s)
+            break;
+        ss = &(*ss)->hash_next;
+    }
+    *ss = s->hash_next;
+    s->v = 0;
+}
+
 /* no need to put that inline */
 int handle_eof(void)
 {
@@ -884,7 +901,7 @@ void preprocess()
         s = sym_find1(&define_stack, tok);
         /* undefine symbol by putting an invalid name */
         if (s)
-            s->v = 0;
+            sym_undef(&define_stack, s);
     } else if (tok == TOK_INCLUDE) {
         skip_spaces();
         if (ch == '<') {
@@ -934,7 +951,7 @@ void preprocess()
             if (f)
                 goto found;
         }
-        error("include file not found");
+        error("include file '%s' not found", buf1);
         f = NULL;
     found:
         /* push current file in stack */
@@ -1488,7 +1505,7 @@ void next()
             }
         }
     }
-#ifdef DEBUG
+#if defined(DEBUG)
     printf("token = %s\n", get_tok_str(tok, tokc));
 #endif
 }
@@ -2120,7 +2137,7 @@ void gen_op(int op)
             vpush();
             gen_opc(op);
             /* put again type if gen_opc() swaped operands */
-            vt = (vt & VT_TYPEN) | (t1 & VT_TYPE);
+            vt = (vt & ~VT_TYPE) | (t1 & VT_TYPE);
         } else {
             gen_opc(op);
         }
@@ -2173,7 +2190,7 @@ void gen_cast(int t)
         }
     }
  the_end:
-    vt = (vt & VT_TYPEN) | t;
+    vt = (vt & ~VT_TYPE) | t;
 }
 
 /* return type size. Put alignment at 'a' */
@@ -2209,7 +2226,7 @@ int pointed_type(int t)
 {
     Sym *s;
     s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
-    return s->t | (t & VT_TYPEN);
+    return s->t | (t & ~VT_TYPE);
 }
 
 int mk_pointer(int t)
@@ -2217,7 +2234,7 @@ int mk_pointer(int t)
     int p;
     p = anon_sym++;
     sym_push(p, t, -1);
-    return VT_PTR | (p << VT_STRUCT_SHIFT) | (t & VT_TYPEN);
+    return VT_PTR | (p << VT_STRUCT_SHIFT) | (t & ~VT_TYPE);
 }
 
 /* store value in lvalue pushed on stack */
@@ -2336,7 +2353,8 @@ int struct_decl(int u)
                     next();
                     c = expr_const();
                 }
-                sym_push(v, VT_CONST, c);
+                /* enum symbols have static storage */
+                sym_push(v, VT_CONST | VT_STATIC, c);
                 if (tok == ',')
                     next();
                 c++;
@@ -2427,9 +2445,9 @@ int ist(void)
     return t;
 }
 
-int post_type(t)
+int post_type(int t)
 {
-    int p, n, pt, l;
+    int p, n, pt, l, t1;
     Sym **plast, *s, *first;
 
     if (tok == '(') {
@@ -2474,12 +2492,13 @@ int post_type(t)
             }
         }
         skip(')');
-        t = post_type(t);
+        t1 = t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
+        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN));
         /* we push a anonymous symbol which will contain the function prototype */
         p = anon_sym++;
         s = sym_push(p, t, l);
         s->next = first;
-        t = VT_FUNC | (p << VT_STRUCT_SHIFT);
+        t = t1 | VT_FUNC | (p << VT_STRUCT_SHIFT);
     } else if (tok == '[') {
         /* array definition */
         next();
@@ -2590,6 +2609,7 @@ void unary(void)
         vset(VT_CONST | mk_pointer(VT_BYTE), glo);
         strcpy((void *)glo, funcname);
         glo += strlen(funcname) + 1;
+        next();
     } else if (tok == TOK_LSTR) {
         t = VT_INT;
         goto str_init;
@@ -2732,12 +2752,12 @@ void unary(void)
             if (!s)
                 error("field not found");
             /* add field offset to pointer */
-            vt = vt & VT_TYPEN; /* change type to int */
+            vt = (vt & ~VT_TYPE) | VT_INT; /* change type to int */
             vpush();
             vset(VT_CONST, s->c);
             gen_op('+');
             /* change type to field type, and set to lvalue */
-            vt = (vt & VT_TYPEN) | s->t;
+            vt = (vt & ~VT_TYPE) | s->t;
             /* an array is never an lvalue */
             if (!(vt & VT_ARRAY))
                 vt |= VT_LVAL;
@@ -2808,6 +2828,8 @@ void unary(void)
                     macro_ptr = (int *)args->c;
                     next();
                     expr_eq();
+                    if (tok != -1)
+                        expect("',' or ')'");
                     gfunc_param(&gf);
                     s1 = args->prev;
                     free((int *)args->c);
@@ -3353,7 +3375,7 @@ void decl_designator(int t, int c,
                 expect("field");
             if (!notfirst)
                 *cur_field = f;
-            t = f->t | (t & VT_TYPEN);
+            t = f->t | (t & ~VT_TYPE);
             c += f->c;
         }
         notfirst = 1;
@@ -3374,7 +3396,7 @@ void decl_designator(int t, int c,
             f = *cur_field;
             if (!f)
                 error("too many field init");
-            t = f->t | (t & VT_TYPEN);
+            t = f->t | (t & ~VT_TYPE);
             c += f->c;
         }
     }
@@ -3747,7 +3769,8 @@ void decl(int l)
                 break;
             } else {
                 if (b & VT_TYPEDEF) {
-                    /* save typedefed type */
+                    /* save typedefed type  */
+                    /* XXX: test storage specifiers ? */
                     sym_push(v, t | VT_TYPEDEF, 0);
                 } else if (t & VT_FUNC) {
                     /* external function definition */
@@ -3795,6 +3818,89 @@ void decl(int l)
     }
 }
 
+/* put all global symbols in the extern stack and do all the
+   resolving which can be done without using external symbols from DLLs */
+/* XXX: could try to verify types, but would not to save them in
+   extern_stack too */
+void resolve_global_syms(void)
+{
+    Sym *s, *s1, *ext_sym;
+    Reloc **p;
+
+    s = global_stack.top;
+    while (s != NULL) {
+        s1 = s->prev;
+        /* do not save static or typedefed symbols or types */
+        if (!(s->t & (VT_STATIC | VT_TYPEDEF)) && 
+            !(s->v & (SYM_FIELD | SYM_STRUCT)) &&
+            (s->v < SYM_FIRST_ANOM)) {
+            ext_sym = sym_find1(&extern_stack, s->v);
+            if (!ext_sym) {
+                /* if the symbol do not exist, we simply save it */
+                sym_push1(&extern_stack, s->v, s->t, s->c);
+            } else if (ext_sym->t & VT_FORWARD) {
+                /* external symbol already exists, but only as forward
+                   definition */
+                if (!(s->t & VT_FORWARD)) {
+                    /* s is not forward, so we can relocate all symbols */
+                    greloc_patch(ext_sym, s->c);
+                } else {
+                    /* the two symbols are forward: merge them */
+                    p = (Reloc **)&ext_sym->c;
+                    while (*p != NULL)
+                        p = &(*p)->next;
+                    *p = (Reloc *)s->c;
+                }
+            } else {
+                /* external symbol already exists and is defined :
+                   patch all references to it */
+                if (!(s->t & VT_FORWARD))
+                    error("'%s' defined twice", get_tok_str(s->v, 0));
+                greloc_patch(s, ext_sym->c);
+            }
+        } 
+        s = s1;
+    }
+}
+
+/* compile a C file. Return non zero if errors. */
+int tcc_compile_file(const char *filename1)
+{
+    Sym *define_start;
+
+    filename = (char *)filename1;
+
+    line_num = 1;
+    funcname = "";
+    file = fopen(filename, "r");
+    if (!file)
+        error("file '%s' not found", filename);
+    include_stack_ptr = include_stack;
+    ifdef_stack_ptr = ifdef_stack;
+
+    vstack_ptr = vstack;
+    anon_sym = SYM_FIRST_ANOM; 
+    
+    define_start = define_stack.top;
+    inp();
+    ch = '\n'; /* needed to parse correctly first preprocessor command */
+    next();
+    decl(VT_CONST);
+    if (tok != -1)
+        expect("declaration");
+    fclose(file);
+
+    /* reset define stack, but leave -Dsymbols (may be incorrect if
+       they are undefined) */
+    sym_pop(&define_stack, define_start); 
+    
+    resolve_global_syms();
+    
+    sym_pop(&global_stack, NULL);
+    
+    return 0;
+}
+
 /* open a dynamic library so that its symbol are available for
    compiled programs */
 void open_dll(char *libname)
@@ -3808,13 +3914,13 @@ void open_dll(char *libname)
         error((char *)dlerror());
 }
 
-void reloc_external_syms(void)
+void resolve_extern_syms(void)
 {
     Sym *s, *s1;
     char *str;
     int addr;
 
-    s = global_stack.top;
+    s = extern_stack.top;
     while (s != NULL) {
         s1 = s->prev;
         if (s->t & VT_FORWARD) {
@@ -3868,14 +3974,21 @@ int main(int argc, char **argv)
 #ifdef __i386__
     define_symbol("__i386__");
 #endif
+    /* tiny C specific defines */
+    define_symbol("__TINYC__");
     
+    glo = (int)malloc(DATA_SIZE);
+    memset((void *)glo, 0, DATA_SIZE);
+    prog = (int)malloc(TEXT_SIZE);
+    ind = prog;
+
     optind = 1;
     outfile = NULL;
     while (1) {
         if (optind >= argc) {
         show_help:
             printf("tcc version 0.9.1 - Tiny C Compiler - Copyright (C) 2001 Fabrice Bellard\n" 
-                   "usage: tcc [-Idir] [-Dsym] [-llib] infile [infile_arg...]\n");
+                   "usage: tcc [-Idir] [-Dsym] [-llib] [-i infile]... infile [infile_args...]\n");
             return 1;
         }
         r = argv[optind];
@@ -3890,6 +4003,10 @@ int main(int argc, char **argv)
             define_symbol(r + 2);
         } else if (r[1] == 'l') {
             open_dll(r + 2);
+        } else if (r[1] == 'i') {
+            if (optind >= argc)
+                goto show_help;
+            tcc_compile_file(argv[optind++]);
         } else if (r[1] == 'o') {
             /* currently, only for testing, so not documented */
             if (optind >= argc)
@@ -3901,36 +4018,16 @@ int main(int argc, char **argv)
         }
     }
     
-    filename = argv[optind];
-    line_num = 1;
-    funcname = "";
-    file = fopen(filename, "r");
-    if (!file) {
-        perror(filename);
-        exit(1);
-    }
-    include_stack_ptr = include_stack;
-    ifdef_stack_ptr = ifdef_stack;
+    tcc_compile_file(argv[optind]);
 
-    glo = (int)malloc(DATA_SIZE);
-    memset((void *)glo, 0, DATA_SIZE);
-    prog = (int)malloc(TEXT_SIZE);
-    vstack_ptr = vstack;
-    anon_sym = 1 << (31 - VT_STRUCT_SHIFT); 
-    ind = prog;
-    inp();
-    ch = '\n'; /* needed to parse correctly first preprocessor command */
-    next();
-    decl(VT_CONST);
-    if (tok != -1)
-        expect("declaration");
-    reloc_external_syms();
+    resolve_extern_syms();
+
     if (outfile) {
         build_exe(outfile);
         return 0;
     } else {
-        s = sym_find(TOK_MAIN);
-        if (!s)
+        s = sym_find1(&extern_stack, TOK_MAIN);
+        if (!s || (s->t & VT_FORWARD))
             error("main() not defined");
         t = (int (*)())s->c;
         return (*t)(argc - optind, argv + optind);
