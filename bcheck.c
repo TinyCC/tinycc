@@ -490,7 +490,7 @@ void __bound_new_region(void *p, unsigned long size)
             }
         }
         /* last page */
-        page = get_page(t2_end);
+        page = get_page(t1_end);
         e2 = (BoundEntry *)((char *)page + t2_end);
         for(e=page;e<e2;e++) {
             e->start = start;
@@ -795,7 +795,7 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
     __bound_check(src, size);
     /* check also region overlap */
     if (src >= dst && src < dst + size)
-        bound_error(get_caller_pc(1), "memcpy: overlapping regions");
+        bound_error(get_caller_pc(1), "overlapping regions in memcpy()");
     return memcpy(dst, src, size);
 }
 
@@ -812,6 +812,31 @@ void *__bound_memset(void *dst, int c, size_t size)
     return memset(dst, c, size);
 }
 
+/* XXX: could be optimized */
+int __bound_strlen(const char *s)
+{
+    const char *p;
+    int len;
+
+    len = 0;
+    for(;;) {
+        p = __bound_ptr_indir1((char *)s, len);
+        if (p == INVALID_POINTER)
+            bound_error(get_caller_pc(1), "bad pointer in strlen()");
+        if (*p == '\0')
+            break;
+        len++;
+    }
+    return len;
+}
+
+char *__bound_strcpy(char *dst, const char *src)
+{
+    int len;
+    len = __bound_strlen(src);
+    return __bound_memcpy(dst, src, len + 1);
+}
+
 /* resolve bound check syms */
 typedef struct BCSyms {
     char *str;
@@ -822,6 +847,8 @@ static BCSyms bcheck_syms[] = {
     { "memcpy", __bound_memcpy },
     { "memmove", __bound_memmove },
     { "memset", __bound_memset },
+    { "strlen", __bound_strlen },
+    { "strcpy", __bound_strcpy },
     { NULL, NULL },
 };
 
