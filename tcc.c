@@ -6147,6 +6147,17 @@ the_end:
     return type_found;
 }
 
+/* convert a function parameter type (array to pointer and function to
+   function pointer) */
+static inline void convert_parameter_type(CType *pt)
+{
+    /* array must be transformed to pointer according to ANSI C */
+    pt->t &= ~VT_ARRAY;
+    if ((pt->t & VT_BTYPE) == VT_FUNC) {
+        mk_pointer(pt);
+    }
+}
+
 static void post_type(CType *type, AttributeDef *ad)
 {
     int n, l, t1;
@@ -6183,8 +6194,7 @@ static void post_type(CType *type, AttributeDef *ad)
                 pt.t = VT_INT;
                 next();
             }
-            /* array must be transformed to pointer according to ANSI C */
-            pt.t &= ~VT_ARRAY;
+            convert_parameter_type(&pt);
             s = sym_push(n | SYM_FIELD, &pt, 0, 0);
             *plast = s;
             plast = &s->next;
@@ -8222,9 +8232,8 @@ static void func_decl_list(Sym *func_sym)
             found:
                 /* check that no storage specifier except 'register' was given */
                 if (type.t & VT_STORAGE)
-                    error("storage class specified for '%s'", get_tok_str(v, NULL));
-                /* array must be transformed to pointer according to ANSI C */
-                type.t &= ~VT_ARRAY;
+                    error("storage class specified for '%s'", get_tok_str(v, NULL)); 
+                convert_parameter_type(&type);
                 /* we can add the type (NOTE: it could be local to the function) */
                 s->type = type;
                 /* accept other parameters */
