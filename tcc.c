@@ -126,6 +126,7 @@ int nb_include_paths;
                               (only used for functions) */
 
 /* types */
+#define VT_INT      0
 #define VT_VOID     0x00040
 #define VT_BYTE     0x00080  /* signed byte type */
 #define VT_PTR      0x00100  /* pointer increment */
@@ -173,8 +174,9 @@ int nb_include_paths;
 #define TOK_NUM   0xb3 /* number in tokc */
 #define TOK_CCHAR 0xb4 /* char constant in tokc */
 #define TOK_STR   0xb5 /* pointer to string in tokc */
-
 #define TOK_TWOSHARPS 0xb6 /* ## preprocessing token */
+#define TOK_LCHAR 0xb7
+#define TOK_LSTR  0xb8
  
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
@@ -425,14 +427,14 @@ char *get_tok_str(int v, int c)
     if (v == TOK_NUM) {
         sprintf(buf, "%d", c);
         return buf;
-    } else if (v == TOK_CCHAR) {
+    } else if (v == TOK_CCHAR || v == TOK_LCHAR) {
         p = buf;
         *p++ = '\'';
         add_char(&p, c);
         *p++ = '\'';
         *p = '\0';
         return buf;
-    } else if (v == TOK_STR) {
+    } else if (v == TOK_STR || v == TOK_LSTR) {
         ts = (TokenSym *)c;
         p = buf;
         *p++ = '\"';
@@ -649,6 +651,13 @@ void preprocess_skip()
     }
 }
 
+inline int is_long_tok(int t)
+{
+    return (t == TOK_NUM || 
+            t == TOK_CCHAR || t == TOK_LCHAR ||
+            t == TOK_STR || t == TOK_LSTR);
+}
+
 void tok_add(int **tok_str, int *tok_len, int t)
 {
     int len, *str;
@@ -667,7 +676,7 @@ void tok_add(int **tok_str, int *tok_len, int t)
 void tok_add2(int **tok_str, int *tok_len, int t, int c)
 {
     tok_add(tok_str, tok_len, t);
-    if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+    if (is_long_tok(t))
         tok_add(tok_str, tok_len, c);
 }
 
@@ -721,7 +730,7 @@ void tok_print(int *str)
         if (!t)
             break;
         c = 0;
-        if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+        if (is_long_tok(t))
             c = *str++;
         printf(" %s", get_tok_str(t, c));
     }
@@ -1018,10 +1027,14 @@ void next_nomacro1()
         if (q[-1] == 'L') {
             /* XXX: not supported entirely (needs different
                preprocessor architecture) */
-            if (ch == '\'')
+            if (ch == '\'') {
+                tok = TOK_LCHAR;
                 goto char_const;
-            if (ch == '\"')
+            }
+            if (ch == '\"') {
+                tok = TOK_LSTR;
                 goto str_const;
+            }
         }
         while (isid(ch) | isnum(ch)) {
             if (q >= token_buf + STRING_MAX_SIZE)
@@ -1052,14 +1065,15 @@ void next_nomacro1()
             cinp();
         tok = TOK_NUM;
     } else if (ch == '\'') {
+        tok = TOK_CCHAR;
     char_const:
         minp();
         tokc = getq();
-        tok = TOK_CCHAR;
         if (ch != '\'')
             expect("\'");
         minp();
     } else if (ch == '\"') {
+        tok = TOK_STR;
     str_const:
         minp();
         q = token_buf;
@@ -1073,7 +1087,6 @@ void next_nomacro1()
         }
         *q = '\0';
         tokc = (int)tok_alloc(token_buf, q - token_buf);
-        tok = TOK_STR;
         minp();
     } else {
         q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\247..\250##\266";
@@ -1115,7 +1128,7 @@ void next_nomacro()
         tok = *macro_ptr;
         if (tok) {
             macro_ptr++;
-            if (tok == TOK_NUM || tok == TOK_CCHAR || tok == TOK_STR)
+            if (is_long_tok(tok))
                 tokc = *macro_ptr++;
         }
     } else {
@@ -1153,7 +1166,7 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                         strcat(token_buf, " ");
                     t = *st++;
                     c = 0;
-                    if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR) 
+                    if (is_long_tok(t)) 
                         c = *st++;
                     strcat(token_buf, get_tok_str(t, c));
                     notfirst = 1;
@@ -1167,7 +1180,7 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
             } else {
                 tok_add(&str, &len, t);
             }
-        } else if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR) {
+        } else if (is_long_tok(t)) {
             tok_add2(&str, &len, t, *macro_str++);
         } else {
             s = sym_find2(args, t);
@@ -1212,7 +1225,7 @@ int *macro_twosharps(int *macro_str)
             if (t) {
                 macro_ptr++;
                 c = 0;
-                if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+                if (is_long_tok(t))
                     c = *macro_ptr++;
                 /* XXX: we handle only most common cases: 
                    ident + ident or ident + number */
@@ -2314,10 +2327,10 @@ void indir()
 
 void unary()
 {
-    int n, t, ft, fc, p, r;
+    int n, t, ft, fc, p, r, align;
     Sym *s;
 
-    if (tok == TOK_NUM || tok == TOK_CCHAR) {
+    if (tok == TOK_NUM || tok == TOK_CCHAR || tok == TOK_LCHAR) {
         vset(VT_CONST, tokc);
         next();
     } else if (tok == TOK___FUNC__) {
@@ -2326,17 +2339,22 @@ void unary()
         vset(VT_CONST | mk_pointer(VT_BYTE), glo);
         strcpy((void *)glo, funcname);
         glo += strlen(funcname) + 1;
+    } else if (tok == TOK_LSTR) {
+        t = VT_INT;
+        goto str_init;
     } else if (tok == TOK_STR) {
-        TokenSym *ts;
-        /* generate (char *) type */
-        vset(VT_CONST | mk_pointer(VT_BYTE), glo);
-        while (tok == TOK_STR) {
-            ts = (TokenSym *)tokc;
-            memcpy((void *)glo, ts->str, ts->len);
-            glo += ts->len;
-            next();
-        }
-        *(char *)glo++ = 0;
+        /* string parsing */
+        t = VT_BYTE;
+    str_init:
+        type_size(t, &align);
+        glo = (glo + align - 1) & -align;
+        fc = glo;
+        /* we must declare it as an array first to use initializer parser */
+        t = VT_CONST | VT_ARRAY | mk_pointer(t);
+        decl_initializer(t, glo, 1, 0);
+        glo += type_size(t, &align);
+        /* put it as pointer */
+        vset(t & ~VT_ARRAY, fc);
     } else {
         t = tok;
         next();
@@ -2909,7 +2927,9 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
    address. cur_index/cur_field is the pointer to the current
    value. 'size_only' is true if only size info is needed (only used
    in arrays) */
-void decl_designator(int t, int c, int *cur_index, Sym **cur_field, int size_only)
+void decl_designator(int t, int c, 
+                     int *cur_index, Sym **cur_field, 
+                     int size_only)
 {
     Sym *s, *f;
     int notfirst, index, align;
@@ -2994,13 +3014,37 @@ void init_putv(int t, int c, int v, int is_expr)
     }
 }
 
+/* put zeros for variable based init */
+void init_putz(int t, int c, int size)
+{
+    int memset_addr, r;
+
+    if ((t & VT_VALMASK) == VT_CONST) {
+        /* nothing to do because global are already set to zero */
+    } else {
+        vset(VT_CONST, size);
+        r = gv();
+        o(0x50 + r);
+        vset(VT_CONST, 0);
+        r = gv();
+        o(0x50 + r);
+        vset(VT_LOCAL, c);
+        r = gv();
+        o(0x50 + r);
+        memset_addr = (int)&memset;
+        oad(0xe8, memset_addr - ind - 5);
+        oad(0xc481, 3 * 4);
+    }
+}
+
 /* 't' contains the type and storage info. c is the address of the
    object. 'first' is true if array '{' must be read (multi dimension
    implicit array init handling). 'size_only' is true if size only
    evaluation is wanted (only for arrays). */
 void decl_initializer(int t, int c, int first, int size_only)
 {
-    int index, array_length, t1, n, no_oblock, nb, parlevel, i;
+    int index, array_length, n, no_oblock, nb, parlevel, i;
+    int t1, size1, align1;
     Sym *s, *f;
     TokenSym *ts;
 
@@ -3008,12 +3052,18 @@ void decl_initializer(int t, int c, int first, int size_only)
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
         n = s->c;
         array_length = 0;
-        if (tok == TOK_STR) {
-            t1 = pointed_type(t);
+        t1 = pointed_type(t);
+        size1 = type_size(t1, &align1);
+        if (tok == TOK_LSTR) {
+            if ((t1 & VT_TYPE & ~VT_UNSIGNED) != VT_INT)
+                error("invalid type");
+            goto str_init;
+        } else if (tok == TOK_STR) {
             if (!(t1 & VT_BYTE))
                 error("invalid type");
+        str_init:
             /* XXX: move multiple string parsing in parser ? */
-            while (tok == TOK_STR) {
+            while (tok == TOK_STR || tok == TOK_LSTR) {
                 ts = (TokenSym *)tokc;
                 /* compute maximum number of chars wanted */
                 nb = ts->len;
@@ -3023,8 +3073,8 @@ void decl_initializer(int t, int c, int first, int size_only)
                     if (ts->len > nb)
                         warning("initializer-string for array is too long");
                     for(i=0;i<nb;i++) {
-                        init_putv(t1, c, ts->str[i], 0);
-                        c++;
+                        init_putv(t1, c + (array_length + i) * size1, 
+                                  ts->str[i], 0);
                     }
                 }
                 array_length += nb;
@@ -3034,8 +3084,7 @@ void decl_initializer(int t, int c, int first, int size_only)
                warning in this case since it is standard) */
             if (n < 0 || array_length < n) {
                 if (!size_only) {
-                    init_putv(t1, c, 0, 0);
-                    c++;
+                    init_putv(t1, c + (array_length * size1), 0, 0);
                 }
                 array_length++;
             }
@@ -3050,6 +3099,12 @@ void decl_initializer(int t, int c, int first, int size_only)
                 decl_designator(t, c, &index, NULL, size_only);
                 if (n >= 0 && index >= n)
                     error("index too large");
+                /* must put zero in holes (note that doing it that way
+                   ensures that it even works with designators) */
+                if (!size_only && array_length < index) {
+                    init_putz(t1, c + array_length * size1, 
+                              (index - array_length) * size1);
+                }
                 index++;
                 if (index > array_length)
                     array_length = index;
@@ -3065,6 +3120,11 @@ void decl_initializer(int t, int c, int first, int size_only)
             if (!no_oblock)
                 skip('}');
         }
+        /* put zeros at the end */
+        if (!size_only && n >= 0 && array_length < n) {
+            init_putz(t1, c + array_length * size1, 
+                      (n - array_length) * size1);
+        }
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
@@ -3073,13 +3133,34 @@ void decl_initializer(int t, int c, int first, int size_only)
         skip('{');
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
         f = s->next;
+        array_length = 0;
+        index = 0;
+        n = s->c;
         while (tok != '}') {
             decl_designator(t, c, NULL, &f, size_only);
+            /* fill with zero between fields */
+            index = f->c;
+            if (!size_only && array_length < index) {
+                init_putz(t, c + array_length, 
+                          index - array_length);
+            }
+            index = index + type_size(f->t, &align1);
+            if (index > array_length)
+                array_length = index;
             if (tok == '}')
                 break;
             skip(',');
             f = f->next;
         }
+        /* put zeros at the end */
+        if (!size_only && array_length < n) {
+            init_putz(t, c + array_length, 
+                      n - array_length);
+        }
+        skip('}');
+    } else if (tok == '{') {
+        next();
+        decl_initializer(t, c, first, size_only);
         skip('}');
     } else if (size_only) {
         /* just skip expression */
@@ -3091,7 +3172,7 @@ void decl_initializer(int t, int c, int first, int size_only)
             else if (tok == ')')
                 parlevel--;
             next();
-       }
+        }
     } else {
         init_putv(t, c, 0, 1);
     }
@@ -3114,7 +3195,7 @@ void decl(l)
             t = type_decl(&v, b, TYPE_DIRECT);
             if (tok == '{') {
                 if (!(t & VT_FUNC))
-                    expect("function defintion");
+                    expect("function definition");
                 /* patch forward references */
                 if ((sym = sym_find(v)) && (sym->t & VT_FORWARD)) {
                     gsym(sym->c);
@@ -3234,15 +3315,7 @@ void decl(l)
                         }
                         if (tok == '=') {
                             next();
-                            /* special case for non array types */
-                            n = 0;
-                            if (tok == '{' && (u & (VT_ARRAY | VT_STRUCT)) == 0) {
-                                n = 1;
-                                next();
-                            }
                             decl_initializer(u, addr, 1, 0);
-                            if (n)
-                                skip('}');
                             /* restore parse state if needed */
                             if (init_str) {
                                 free(init_str);
