@@ -63,10 +63,16 @@ int tcc_add_library(TCCState *s, const char *libraryname);
 /* add a symbol to the compiled program */
 int tcc_add_symbol(TCCState *s, const char *name, unsigned long val);
 
-/* output an executable file */
+/* output an executable, library or object file */
 int tcc_output_file(TCCState *s, const char *filename);
 
 /* link and run main() function and return its value */
 int tcc_run(TCCState *s, int argc, char **argv);
+
+/* do all relocations (needed before using tcc_get_symbol()) */
+void tcc_relocate(TCCState *s);
+
+/* return symbol value or error */
+void *tcc_get_symbol(TCCState *s, const char *name);
 
 #endif

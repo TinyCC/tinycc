@@ -23,10 +23,8 @@ char my_program[] =
 "        return fib(n-1) + fib(n-2);\n"
 "}\n"
 "\n"
-"int main(int argc, char **argv)\n"
+"int foo(int n)\n"
 "{\n"
-"    int n;\n"
-"    n = atoi(argv[1]);\n"
 "    printf(\"Hello World!\\n\");\n"
 "    printf(\"fib(%d) = %d\\n\", n, fib(n));\n"
 "    printf(\"add(%d, %d) = %d\\n\", n, 2 * n, add(n, 2 * n));\n"
@@ -36,7 +34,7 @@ char my_program[] =
 int main(int argc, char **argv)
 {
     TCCState *s;
-    char *args[3];
+    int (*func)(int);
 
     s = tcc_new();
     if (!s) {
@@ -54,11 +52,11 @@ int main(int argc, char **argv)
        with tcc_add_dll(() and using its symbols directly. */
     tcc_add_symbol(s, "add", (unsigned long)&add);
     
-    args[0] = "";
-    args[1] = "32";
-    args[2] = NULL;
+    tcc_relocate(s);
 
-    tcc_run(s, 2, args);
+    func = tcc_get_symbol(s, "foo");
+    
+    func(32);
 
     tcc_delete(s);
     return 0;

@@ -2,6 +2,7 @@
 # Tiny C Compiler Makefile
 #
 prefix=/usr/local
+manpath=$(prefix)/man
 
 CFLAGS=-O2 -g -Wall
 LIBS=-ldl
@@ -117,7 +118,7 @@ bcheck.o: bcheck.c
 
 install: tcc libtcc1.o bcheck.o
 	$(INSTALL) -m755 tcc $(prefix)/bin
-	$(INSTALL) tcc.1 $(prefix)/man/man1
+	$(INSTALL) tcc.1 $(manpath)/man1
 	mkdir -p $(prefix)/lib/tcc
 	mkdir -p $(prefix)/lib/tcc/include
 	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc

@@ -7070,11 +7070,10 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 }
 #endif
 
-/* launch the compiled program with the given arguments */
-int tcc_run(TCCState *s1, int argc, char **argv)
+/* do all relocations (needed before using tcc_get_symbol()) */
+void tcc_relocate(TCCState *s1)
 {
     Section *s;
-    int (*prog_main)(int, char **);
     int i;
 
     tcc_add_runtime(s1);
@@ -7104,8 +7103,16 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         if (s->reloc)
             relocate_section(s1, s);
     }
+}
 
-    prog_main = (void *)get_elf_sym_val("main");
+/* launch the compiled program with the given arguments */
+int tcc_run(TCCState *s1, int argc, char **argv)
+{
+    int (*prog_main)(int, char **);
+
+    tcc_relocate(s1);
+
+    prog_main = tcc_get_symbol(s1, "main");
     
     if (do_debug) {
 #ifdef WIN32
@@ -7131,11 +7138,11 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         void **bound_error_func;
 
         /* set error function */
-        bound_error_func = (void **)get_elf_sym_val("__bound_error_func");
+        bound_error_func = (void **)tcc_get_symbol(s1, "__bound_error_func");
         *bound_error_func = rt_error;
 
         /* XXX: use .init section so that it also work in binary ? */
-        bound_init = (void *)get_elf_sym_val("__bound_init");
+        bound_init = (void *)tcc_get_symbol(s1, "__bound_init");
         bound_init();
     }
 #endif
