@@ -1841,6 +1841,20 @@ static __inline__ __const__ unsigned int swab32(unsigned int x)
 	return x;
 }
 
+static __inline__ unsigned long long mul64(unsigned int a, unsigned int b)
+{
+    unsigned long long res;
+    __asm__("mull %2" : "=A" (res) : "a" (a), "r" (b));
+    return res;
+}
+
+static __inline__ unsigned long long inc64(unsigned long long a)
+{
+    unsigned long long res;
+    __asm__("addl $1, %%eax ; adcl $0, %%edx" : "=A" (res) : "A" (a));
+    return res;
+}
+
 unsigned int set;
 
 void asm_test(void)
@@ -1849,9 +1863,16 @@ void asm_test(void)
     unsigned int val;
 
     printf("inline asm:\n");
+    /* test the no operand case */
+    asm volatile ("xorl %eax, %eax");
+
     memcpy1(buf, "hello", 6);
     strncat1(buf, " worldXXXXX", 3);
     printf("%s\n", buf);
+
+    /* 'A' constraint test */
+    printf("mul64=0x%Lx\n", mul64(0x12345678, 0xabcd1234));
+    printf("inc64=0x%Lx\n", inc64(0x12345678ffffffff));
 
     set = 0xff;
     sigdelset1(&set, 2);

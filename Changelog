@@ -1,3 +1,11 @@
+version 0.9.18:
+
+- header fix (time.h)
+- fixed inline asm without operand case
+- fixed 'default:' or 'case x:' with '}' after (incorrect C construct accepted
+  by gcc)
+- added 'A' inline asm constraint.
+
 version 0.9.17:
 
 - PLT generation fix
