@@ -6204,12 +6204,13 @@ static void struct_decl(CType *type, int u)
  */
 static int parse_btype(CType *type, AttributeDef *ad)
 {
-    int t, u, type_found;
+    int t, u, type_found, typespec_found;
     Sym *s;
     CType type1;
 
     memset(ad, 0, sizeof(AttributeDef));
     type_found = 0;
+    typespec_found = 0;
     t = 0;
     while(1) {
         switch(tok) {
@@ -6227,6 +6228,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
             if ((t & VT_BTYPE) != 0)
                 error("too many basic types");
             t |= u;
+            typespec_found = 1;
             break;
         case TOK_VOID:
             u = VT_VOID;
@@ -6236,6 +6238,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
             goto basic_type;
         case TOK_INT:
             next();
+            typespec_found = 1;
             break;
         case TOK_LONG:
             next();
@@ -6287,10 +6290,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t |= VT_VOLATILE;
             next();
             break;
-        case TOK_REGISTER:
         case TOK_SIGNED1:
         case TOK_SIGNED2:
         case TOK_SIGNED3:
+            typespec_found = 1;
+        case TOK_REGISTER:
         case TOK_AUTO:
         case TOK_RESTRICT1:
         case TOK_RESTRICT2:
@@ -6300,6 +6304,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_UNSIGNED:
             t |= VT_UNSIGNED;
             next();
+            typespec_found = 1;
             break;
 
             /* storage */
@@ -6335,6 +6340,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
             parse_expr_type(&type1);
             goto basic_type2;
         default:
+            if (typespec_found)
+                goto the_end;
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
