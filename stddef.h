@@ -10,7 +10,7 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
 /* need to do that because of glibc 2.1 bug (should have a way to test
    presence of 'long long' without __GNUC__, or TCC should define
    __GNUC__ ? */
-#ifndef __int8_t_defined
+#if !defined(__int8_t_defined) && !defined(__dietlibc__)
 #define __int8_t_defined
 typedef	char int8_t;
 typedef	short int int16_t;

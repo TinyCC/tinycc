@@ -9076,15 +9076,19 @@ static int rt_get_caller_pc(unsigned long *paddr,
     int i;
 
     if (level == 0) {
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__)
         *paddr = uc->uc_mcontext.mc_eip;
+#elif defined(__dietlibc__)
+        *paddr = uc->uc_mcontext.eip;
 #else
         *paddr = uc->uc_mcontext.gregs[REG_EIP];
 #endif
         return 0;
     } else {
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) 
         fp = uc->uc_mcontext.mc_ebp;
+#elif defined(__dietlibc__)
+        fp = uc->uc_mcontext.ebp;
 #else
         fp = uc->uc_mcontext.gregs[REG_EBP];
 #endif
