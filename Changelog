@@ -1,3 +1,15 @@
+version 0.9.19:
+
+- "alacarte" linking (Dave Long)
+- simpler function call
+- more strict type checks
+- added 'const' and 'volatile' support and associated warnings
+- added -Werror, -Wunsupported, -Wwrite-strings, -Wall.
+- added __builtin_types_compatible_p() and __builtin_constant_p()
+- chars support in assembler (Dave Long)
+- .string, .globl, .section, .text, .data and .bss asm directive
+  support (Dave Long)
+
 version 0.9.18:
 
 - header fix (time.h)
