@@ -5,7 +5,7 @@ Features:
 --------
 
 - SMALL! You can compile and execute C code everywhere, for example on
-  rescue disks (27KB for x86 TCC executable).
+  rescue disks (29KB for x86 TCC executable).
 
 - FAST! tcc generates optimized x86 code. No byte code
   overhead. Compiles, assemble and link about 7 times faster than 'gcc
@@ -87,35 +87,17 @@ when doing 'make test'.
 Exact differences with ANSI C:
 -----------------------------
 
-1) Preprocessor
-
- - the preprocessor tokens are the same as C. It means that in some
-  rare cases, preprocessed numbers are not handled exactly as in ANSI
-  C. This approach has the advantage of being simpler and FAST!
-
-2) C language
-
-- Cannot pass struct/union as value. Cannot assign struct/union (use
-  memcpy instead).
+- Preprocessor: the preprocessor tokens are the same as C. It means
+  that in some rare cases, preprocessed numbers are not handled
+  exactly as in ANSI C. This approach has the advantage of being
+  simpler and FAST!
 
 - Types: floating point numbers are not supported yet.
 
-- (BUG) 'char' and 'short' casts do not truncate correctly.
+- Bit fields are not supported.
 
-- 'sizeof' may not work if too complex expression is given.
-
-- bit fields are not supported.
-
-- L'c' or L"string" for wide chars are parsed but not handled as wchar_t.
-
-- Cannot initialize auto (=local) arrays with implicit size
-  (workaround: specificy exact size in array declaration). Cannot
-  initialize auto arrays with strings.
-
-3) Linking
-
-- extern variables must appear in a referenced dll and cannot appear
-  in current source.
+- Linking: extern variables must appear in a referenced dll and cannot
+  appear in current source.
 
 Supported ANSI C extensions:
 ---------------------------
@@ -126,15 +108,20 @@ Supported ANSI C extensions:
 
 - '__func__' is a string variable containing the current function name (ISOC99).
 
-- variadic macros: __VA_ARGS__ can be used for function-like macros (ISOC99):
+- Variadic macros: __VA_ARGS__ can be used for function-like macros (ISOC99):
    #define dprintf(level, __VA_ARGS__) printf(__VA_ARGS__).
 
-- declarations can appear anywhere in a block (ISOC99).
+- Declarations can appear anywhere in a block (ISOC99).
 
-- array and struct/union elements can be initialized in any order by
-  using designators (.e. { [0].x = 1 }) (ISOC99).
+- Array and struct/union elements can be initialized in any order by
+  using designators (.e.g. { [0].x = 1 }) (ISOC99).
 
-- binary digits can be entered ('0b101' instead of '5').
+- Compound initializers are supported (e.g. int *p = (int []){ 1, 2,
+  3}) (ISOC99).
+
+- '#!' at the start of a line is ignored to allow scripting.
+
+- Binary digits can be entered ('0b101' instead of '5').
 
 Technical Description:
 ---------------------

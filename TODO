@@ -2,18 +2,21 @@ TODO list:
 
 Critical:
 
-- add structure assign.
-- fix 'char' and 'short' casts.
-- 0 is pointer - fix type compare
-- fix L'' and L"" wide chars
-- add message if external function or variable not found.
-- function pointers to forward reference (patch code generator).
 - add float/double support (should be as small as possible while being
   usable for RISC code generator too).
+- 0 is pointer - fix type compare
+- add message if external function or variable not found.
+- To check: 'sizeof' may not work if too complex expression is given.
+- fix 'char' and 'short' casts (in function parameters and in assignment).
+- function pointers to forward reference (patch code generator).
 
 Not critical:
 
-- fix preprocessor symbol redefinition 
+- fix multiple compound literals inits in blocks (ISOC99 normative
+  example - only relevant when using gotos! -> must add boolean
+  variable to tell if compound literal was already initialized).
+- fix L"\x1234" wide string case (need to store them as ints ?) */
+- fix preprocessor symbol redefinition
 - better constant opt (&&, ||, ?:)
 - add ELF executable and shared library output option (would be needed
   for completness!).

@@ -11,7 +11,7 @@ LIBS=-ldl
 CFLAGS+=-m386 -malign-functions=0
 DISAS=objdump -D -b binary -m i386
 INSTALL=install
-VERSION=0.9
+VERSION=0.9.1
 
 all: tcc
 
