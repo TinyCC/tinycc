@@ -26,6 +26,7 @@
 #define SYM_TABLE_SIZE      10000
 #define MACRO_STACK_SIZE    32
 #define INCLUDE_STACK_SIZE  32
+#define IFDEF_STACK_SIZE    64
 
 #define NB_REGS             3
 
@@ -67,6 +68,7 @@ Sym *define_stack, *global_stack, *local_stack, *label_stack;
 
 char *macro_stack[MACRO_STACK_SIZE], **macro_stack_ptr, *macro_ptr;
 IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
+int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
 
 /* The current value can be: */
 #define VT_VALMASK 0x000f
@@ -103,45 +105,6 @@ IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 /* Special infos */
 
 /* token values */
-#define TOK_INT      256
-#define TOK_VOID     257
-#define TOK_CHAR     258
-#define TOK_IF       259
-#define TOK_ELSE     260
-#define TOK_WHILE    261
-#define TOK_BREAK    262
-#define TOK_RETURN   263
-#define TOK_DEFINE   264
-#define TOK_MAIN     265
-#define TOK_FOR      266
-#define TOK_EXTERN   267
-#define TOK_STATIC   268
-#define TOK_UNSIGNED 269
-#define TOK_GOTO     270
-#define TOK_DO       271
-#define TOK_CONTINUE 272
-#define TOK_SWITCH   273
-#define TOK_CASE     274
-
-/* ignored types Must have contiguous values */
-#define TOK_CONST    275
-#define TOK_VOLATILE 276
-#define TOK_LONG     277
-#define TOK_REGISTER 278
-#define TOK_SIGNED   279
-#define TOK_AUTO     280
-#define TOK_INLINE   281
-
-#define TOK_FLOAT    282 /* unsupported */
-#define TOK_DOUBLE   283 /* unsupported */
-
-#define TOK_STRUCT   284
-#define TOK_UNION    285
-#define TOK_TYPEDEF  286
-#define TOK_DEFAULT  287
-#define TOK_ENUM     288
-#define TOK_SIZEOF   289
-#define TOK_INCLUDE  290
 
 /* warning: the following compare tokens depend on i386 asm code */
 #define TOK_ULT 0x92
@@ -184,8 +147,61 @@ IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 #define TOK_A_SHL 0x81
 #define TOK_A_SAR 0x82
 
+enum {
+    TOK_INT = 256,
+    TOK_VOID,
+    TOK_CHAR,
+    TOK_IF,
+    TOK_ELSE,
+    TOK_WHILE,
+    TOK_BREAK,
+    TOK_RETURN,
+    TOK_FOR,
+    TOK_EXTERN,
+    TOK_STATIC,
+    TOK_UNSIGNED,
+    TOK_GOTO,
+    TOK_DO,
+    TOK_CONTINUE,
+    TOK_SWITCH,
+    TOK_CASE,
+
+    /* ignored types Must have contiguous values */
+    TOK_CONST,
+    TOK_VOLATILE,
+    TOK_LONG,
+    TOK_REGISTER,
+    TOK_SIGNED,
+    TOK_AUTO,
+    TOK_INLINE,
+
+    /* unsupported type */
+    TOK_FLOAT,
+    TOK_DOUBLE,
+
+    TOK_STRUCT,
+    TOK_UNION,
+    TOK_TYPEDEF,
+    TOK_DEFAULT,
+    TOK_ENUM,
+    TOK_SIZEOF,
+
+    /* preprocessor only */
+    TOK_DEFINE,
+    TOK_INCLUDE,
+    TOK_IFDEF,
+    TOK_IFNDEF,
+    TOK_ELIF,
+    TOK_ENDIF,
+    TOK_DEFINED,
+
+    /* special identifiers */
+    TOK_MAIN,
+};
+
 void sum();
 void next();
+int expr_const();
 void expr_eq();
 void expr();
 void decl();
@@ -359,7 +375,7 @@ void inp()
     }
     if (ch1 == '\n')
         line_num++;
-    //    printf("ch1=%c\n", ch1);
+    //    printf("ch1=%c 0x%x\n", ch1, ch1);
 }
 
 /* input with '\\n' handling and macro subtitution if in macro state */
@@ -381,9 +397,11 @@ void minp()
             goto redo;
         }
     }
+    //    printf("ch=%c 0x%x\n", ch, ch);
 }
 
 /* same as minp, but also skip comments */
+/* XXX: skip strings & chars */
 void cinp()
 {
     int c;
@@ -423,6 +441,90 @@ void skip_spaces()
         cinp();
 }
 
+/* skip block of text until #else, #elif or #endif. skip also pairs of
+   #if/#endif */
+void preprocess_skip()
+{
+    int a;
+    a = 0;
+    while (1) {
+        while (ch != '\n') {
+            if (ch == -1)
+                expect("#endif");
+            cinp();
+        }
+        cinp();
+        skip_spaces();
+        if (ch == '#') {
+            cinp();
+            next();
+            if (a == 0 && 
+                (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
+                break;
+            if (tok == TOK_IF || tok == TOK_IFDEF || tok == TOK_IFNDEF)
+                a++;
+            else if (tok == TOK_ENDIF)
+                a--;
+        }
+    }
+}
+
+/* parse until eol and add given char */
+char *get_str(c)
+{
+    char *str;
+    int size, n;
+
+    str = NULL;
+    size = 0;
+    n = 0;
+    while (1) {
+        if ((n + 1) >= size) {
+            size += 128;
+            str = realloc(str, size);
+            if (!str)
+                error("memory full");
+        }
+        if (ch == -1 || ch == '\n') {
+            str[n++] = c; 
+            str[n++] = '\0';
+            break;
+        }
+        str[n++] = ch;
+        cinp();
+    }
+    return str;
+}
+
+/* return 1 if next token is defined, 0 otherwise. */
+int is_defined()
+{
+    Sym *s;
+    /* hack to avoid replacing id by defined value */
+    s = define_stack;
+    define_stack = 0;
+    next();
+    define_stack = s;
+    return sym_find1(define_stack, tok) != 0;
+}
+
+/* XXX: not correct yet (need to ensure it is constant) */
+int expr_preprocess()
+{
+    int c;
+
+    if ((macro_stack_ptr - macro_stack) >= MACRO_STACK_SIZE)
+        error("too many nested macros");
+    *macro_stack_ptr++ = (char *)'\n';
+    *macro_stack_ptr++ = macro_ptr;
+    macro_ptr = get_str(';');
+    cinp();
+    next();
+    c = expr_const();
+    ch = '\n';
+    return c != 0;
+}
+
 void preprocess()
 {
     char *str;
@@ -433,28 +535,13 @@ void preprocess()
 
     cinp();
     next(); /* XXX: should pass parameter to avoid macro subst */
+ redo:
     if (tok == TOK_DEFINE) {
         next(); /* XXX: should pass parameter to avoid macro subst */
         skip_spaces();
         /* now 'tok' is the macro symbol */
-        str = NULL;
-        size = 0;
-        n = 0;
-        while (1) {
-            if ((n + 1) >= size) {
-                size += 128;
-                str = realloc(str, size);
-                if (!str)
-                    error("memory full");
-            }
-            if (ch == -1 || ch == '\n') {
-                str[n++] = ' '; /* a space is inserted after each macro */
-                str[n++] = '\0';
-                break;
-            }
-            str[n++] = ch;
-            cinp();
-        }
+        /* a space is inserted after each macro */
+        str = get_str(' ');
         sym_push1(&define_stack, tok, 0, (int)str);
     } else if (tok == TOK_INCLUDE) {
         skip_spaces();
@@ -497,6 +584,7 @@ void preprocess()
                 error("include file not found");
         found:
             /* push current file in stack */
+            /* XXX: fix current line init */
             include_stack_ptr->file = file;
             include_stack_ptr->filename = filename;
             include_stack_ptr->line_num = line_num;
@@ -505,7 +593,41 @@ void preprocess()
             filename = strdup(buf1);
             line_num = 1;
         }
-
+    } else if (tok == TOK_IFNDEF) {
+        c = !is_defined();
+        goto do_ifdef;
+    } else if (tok == TOK_IF) {
+        /* XXX: incorrect constant parsing now */
+        c = expr_preprocess();
+        goto do_ifdef;
+    } else if (tok == TOK_IFDEF) {
+        c = is_defined();
+    do_ifdef:
+        if (ifdef_stack_ptr >= ifdef_stack + IFDEF_STACK_SIZE)
+            error("memory full");
+        *ifdef_stack_ptr++ = c;
+        goto test_skip;
+    } else if (tok == TOK_ELSE) {
+        if (ifdef_stack_ptr == ifdef_stack ||
+            (ifdef_stack_ptr[-1] & 2))
+            error("#else after #else");
+        c = (ifdef_stack_ptr[-1] ^= 3);
+        goto test_skip;
+    } else if (tok == TOK_ELIF) {
+        if (ifdef_stack_ptr == ifdef_stack ||
+            ifdef_stack_ptr[-1] > 1)
+            error("#elif after #else");
+        c = expr_preprocess();
+        ifdef_stack_ptr[-1] = c;
+    test_skip:
+        if (!(c & 1)) {
+            preprocess_skip();
+            goto redo;
+        }
+    } else if (tok == TOK_ENDIF) {
+        if (ifdef_stack_ptr == ifdef_stack)
+            expect("#if");
+        ifdef_stack_ptr--;
     }
     /* ignore other preprocess commands or #! for C scripts */
     while (ch != '\n' && ch != -1)
@@ -639,6 +761,7 @@ void next()
         else if (tok == '>')
             tok = TOK_GT;
     }
+    //    printf("tok=%x\n", tok);
 }
 
 void swap(int *p, int *q)
@@ -1121,7 +1244,8 @@ void gen_op(op)
             gen_opc(op);
         }
     } else {
-        if ((t1 | t2) & VT_UNSIGNED) {
+        /* XXX: test types and compute returned value */
+        if ((t1 | t2) & (VT_UNSIGNED | VT_PTR)) {
             if (op == TOK_SAR)
                 op = TOK_SHR;
             else if (op == '/')
@@ -1629,6 +1753,13 @@ void unary()
             vpush();
             unary();
             gen_op('-');
+        } else if (t == TOK_DEFINED) {
+            /* XXX: should only be used in preprocess expr parsing */
+            if (tok != '(')
+                expect("(");
+            vset(VT_CONST, is_defined());
+            next();
+            skip(')');
         } else 
         {
             s = sym_find(t);
@@ -2103,9 +2234,8 @@ void decl(l)
                 sym_push1(&local_stack, 0, 0, 0);
                 /* define parameters */
                 sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
-                while (sym = sym->next) {
+                while (sym = sym->next)
                     sym_push(sym->v & ~SYM_FIELD, sym->t, sym->c);
-                }
                 loc = 0;
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
                 a = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
@@ -2185,11 +2315,12 @@ int main(int c, char **v)
         exit(1);
     }
     include_stack_ptr = include_stack;
-    
+    ifdef_stack_ptr = ifdef_stack;
+
     idtable = malloc(SYM_TABLE_SIZE);
     memcpy(idtable, 
-           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0float\0double\0struct\0union\0typedef\0default\0enum\0sizeof\0include", 219);
-    idptr = idtable + 219;
+           "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0float\0double\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0main", 251);
+    idptr = idtable + 251;
 
     glo = malloc(DATA_SIZE);
     memset((void *)glo, 0, DATA_SIZE);
@@ -2203,6 +2334,8 @@ int main(int c, char **v)
     ch = '\n'; /* needed to parse correctly first preprocessor command */
     next();
     decl(VT_CONST);
+    if (tok != -1)
+        expect("declaration");
 #ifdef TEST
     { 
         FILE *f;
