@@ -592,9 +592,9 @@ void vset(int t, int r, int v);
 void type_to_str(char *buf, int buf_size, 
                  int t, const char *varstr);
 char *get_tok_str(int v, CValue *cv);
-Sym *external_sym(int v, int u, int r);
 static Sym *get_sym_ref(int t, Section *sec, 
                         unsigned long offset, unsigned long size);
+static Sym *external_global_sym(int v, int u, int r);
 
 /* section generation */
 static void section_realloc(Section *sec, unsigned long new_size);
@@ -2891,7 +2891,7 @@ static Sym *get_sym_ref(int t, Section *sec,
 }
 
 /* push a reference to a section offset by adding a dummy symbol */
-void vpush_ref(int t, Section *sec, unsigned long offset, unsigned long size)
+static void vpush_ref(int t, Section *sec, unsigned long offset, unsigned long size)
 {
     CValue cval;
 
@@ -2899,13 +2899,41 @@ void vpush_ref(int t, Section *sec, unsigned long offset, unsigned long size)
     vsetc(t, VT_CONST | VT_SYM, &cval);
 }
 
+/* define a new external reference to a symbol 'v' of type 'u' */
+static Sym *external_global_sym(int v, int u, int r)
+{
+    Sym *s;
+
+    s = sym_find(v);
+    if (!s) {
+        /* push forward reference */
+        s = sym_push1(&global_stack, 
+                      v, u | VT_EXTERN, 0);
+        s->r = r | VT_CONST | VT_SYM;
+    }
+    return s;
+}
+
+/* define a new external reference to a symbol 'v' of type 'u' */
+static Sym *external_sym(int v, int u, int r)
+{
+    Sym *s;
+
+    s = sym_find(v);
+    if (!s) {
+        /* push forward reference */
+        s = sym_push(v, u | VT_EXTERN, r | VT_CONST | VT_SYM, 0);
+    }
+    return s;
+}
+
 /* push a reference to global symbol v */
-void vpush_sym(int t, int v)
+static void vpush_global_sym(int t, int v)
 {
     Sym *sym;
     CValue cval;
 
-    sym = external_sym(v, t, 0);
+    sym = external_global_sym(v, t, 0);
     cval.sym = sym;
     vsetc(t, VT_CONST | VT_SYM, &cval);
 }
@@ -3363,7 +3391,7 @@ void gen_opl(int op)
         gfunc_start(&gf, FUNC_CDECL);
         gfunc_param(&gf);
         gfunc_param(&gf);
-        vpush_sym(func_old_type, func);
+        vpush_global_sym(func_old_type, func);
         gfunc_call(&gf);
         vpushi(0);
         vtop->r = REG_IRET;
@@ -3883,11 +3911,11 @@ void gen_cvt_itof1(int t)
         gfunc_start(&gf, FUNC_CDECL);
         gfunc_param(&gf);
         if (t == VT_FLOAT)
-            vpush_sym(func_old_type, TOK___ulltof);
+            vpush_global_sym(func_old_type, TOK___ulltof);
         else if (t == VT_DOUBLE)
-            vpush_sym(func_old_type, TOK___ulltod);
+            vpush_global_sym(func_old_type, TOK___ulltod);
         else
-            vpush_sym(func_old_type, TOK___ulltold);
+            vpush_global_sym(func_old_type, TOK___ulltold);
         gfunc_call(&gf);
         vpushi(0);
         vtop->r = REG_FRET;
@@ -3908,11 +3936,11 @@ void gen_cvt_ftoi1(int t)
         st = vtop->t & VT_BTYPE;
         gfunc_param(&gf);
         if (st == VT_FLOAT)
-            vpush_sym(func_old_type, TOK___fixunssfdi);
+            vpush_global_sym(func_old_type, TOK___fixunssfdi);
         else if (st == VT_DOUBLE)
-            vpush_sym(func_old_type, TOK___fixunsdfdi);
+            vpush_global_sym(func_old_type, TOK___fixunsdfdi);
         else
-            vpush_sym(func_old_type, TOK___fixunsxfdi);
+            vpush_global_sym(func_old_type, TOK___fixunsxfdi);
         gfunc_call(&gf);
         vpushi(0);
         vtop->r = REG_IRET;
@@ -4371,7 +4399,7 @@ void vstore(void)
         gfunc_param(&gf);
 
         save_regs(0);
-        vpush_sym(func_old_type, TOK_memcpy);
+        vpush_global_sym(func_old_type, TOK_memcpy);
         gfunc_call(&gf);
         /* leave source on stack */
     } else if (ft & VT_BITFIELD) {
@@ -4950,21 +4978,6 @@ int type_decl(AttributeDef *ad, int *v, int t, int td)
     return u;
 }
 
-/* define a new external reference to a symbol 'v' of type 'u' */
-Sym *external_sym(int v, int u, int r)
-{
-    Sym *s;
-
-    s = sym_find(v);
-    if (!s) {
-        /* push forward reference */
-        s = sym_push1(&global_stack, 
-                      v, u | VT_EXTERN, 0);
-        s->r = r | VT_CONST | VT_SYM;
-    }
-    return s;
-}
-
 /* compute the lvalue VT_LVAL_xxx needed to match type t. */
 static int lvalue_type(int t)
 {
@@ -5115,7 +5128,7 @@ void unary(void)
         } else
         if (t == '!') {
             unary();
-            if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) 
+            if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
                 vtop->c.i = !vtop->c.i;
             else if ((vtop->r & VT_VALMASK) == VT_CMP)
                 vtop->c.i = vtop->c.i ^ 1;
@@ -5172,7 +5185,7 @@ void unary(void)
                     error("'%s' undeclared", get_tok_str(t, NULL));
                 /* for simple function calls, we tolerate undeclared
                    external reference to int() function */
-                s = external_sym(t, func_old_type, 0); 
+                s = external_global_sym(t, func_old_type, 0); 
             }
             vset(s->t, s->r, s->c);
             /* if forward reference, we must point to s */
@@ -5954,7 +5967,7 @@ static void init_putz(int t, Section *sec, unsigned long c, int size)
         gfunc_param(&gf);
         vset(VT_INT, VT_LOCAL, c);
         gfunc_param(&gf);
-        vpush_sym(func_old_type, TOK_memset);
+        vpush_global_sym(func_old_type, TOK_memset);
         gfunc_call(&gf);
     }
 }
