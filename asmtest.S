@@ -43,6 +43,8 @@ movl $2, 0x100(%ebx,%edx,2)
 movl %eax, 0x100(%ebx,%edx,2)
 movl 0x100(%ebx,%edx,2), %edx
 movw %ax, 0x100(%ebx,%edx,2)
+
+mov %eax, 0x12(,%edx,2)
         
 mov %cr3, %edx
 mov %ecx, %cr3
@@ -520,6 +522,8 @@ int $0x10
     bts %edx, 0x1000
     btsl $2, 0x1000
 
+        
+        
     boundl %edx, 0x10000
     boundw %bx, 0x1000
     
@@ -540,3 +544,15 @@ int $0x10
     
     verr 0x1000
     verw 0x1000
+  
+    push %ds
+    pushw %ds
+    pushl %ds
+    pop %ds
+    popw %ds
+    popl %ds
+    fxsave 1(%ebx)
+    fxrstor 1(%ecx)
+    pushl $1
+    pushw $1
+    push $1
