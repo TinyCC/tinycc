@@ -80,10 +80,12 @@ static void libc_free(void *ptr);
 static void install_malloc_hooks(void);
 static void restore_malloc_hooks(void);
 
+#ifndef WIN32
 static void *saved_malloc_hook;
 static void *saved_free_hook;
 static void *saved_realloc_hook;
 static void *saved_memalign_hook;
+#endif
 
 extern char _end;
 
@@ -123,8 +125,7 @@ static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
         return __bound_empty_t2;
 }
 
-/* print a bound error and recurse thru 'nb_callers' to get the error
-   position */
+/* print a bound error message */
 static void bound_error(const void *caller, const char *fmt, ...)
 {
     rt_error((unsigned long)caller, "%s", fmt);
@@ -132,7 +133,7 @@ static void bound_error(const void *caller, const char *fmt, ...)
 
 static void bound_alloc_error(void)
 {
-    bound_error(NULL, "not enough memory for bound checking code\n");
+    bound_error(NULL, "not enough memory for bound checking code");
 }
 
 /* currently, tcc cannot compile that because we use GNUC extensions */
@@ -406,7 +407,7 @@ void __bound_init(void)
     size = BOUND_T23_SIZE;
     mark_invalid(start, size);
 
-#if !defined(__TINYC__)
+#if !defined(__TINYC__) && !defined(WIN32)
     /* malloc zone is also marked invalid */
     start = (unsigned long)&_end;
     size = 128 * 0x100000;
@@ -641,6 +642,7 @@ static unsigned long get_region_size(void *p)
 
 static void install_malloc_hooks(void)
 {
+#ifndef WIN32
     saved_malloc_hook = __malloc_hook;
     saved_free_hook = __free_hook;
     saved_realloc_hook = __realloc_hook;
@@ -649,14 +651,17 @@ static void install_malloc_hooks(void)
     __free_hook = __bound_free;
     __realloc_hook = __bound_realloc;
     __memalign_hook = __bound_memalign;
+#endif
 }
 
 static void restore_malloc_hooks(void)
 {
+#ifndef WIN32
     __malloc_hook = saved_malloc_hook;
     __free_hook = saved_free_hook;
     __realloc_hook = saved_realloc_hook;
     __memalign_hook = saved_memalign_hook;
+#endif
 }
 
 static void *libc_malloc(size_t size)
@@ -693,6 +698,7 @@ void *__bound_malloc(size_t size, const void *caller)
     return ptr;
 }
 
+#ifndef WIN32
 void *__bound_memalign(size_t size, size_t align, const void *caller)
 {
     void *ptr;
@@ -711,6 +717,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
     __bound_new_region(ptr, size);
     return ptr;
 }
+#endif
 
 void __bound_free(void *ptr, const void *caller)
 {
@@ -773,7 +780,7 @@ static void bound_dump(void)
 /* some useful checked functions */
 
 /* check that (p ... p + size - 1) lies inside 'p' region, if any */
-static void __bound_check(const void *p, ssize_t size)
+static void __bound_check(const void *p, size_t size)
 {
     if (size == 0)
         return;
@@ -805,7 +812,7 @@ void *__bound_memset(void *dst, int c, size_t size)
     return memset(dst, c, size);
 }
 
-/* resolve check check syms */
+/* resolve bound check syms */
 typedef struct BCSyms {
     char *str;
     void *ptr;
