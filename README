@@ -1,0 +1,49 @@
+Tiny C Compiler - Make the best x86 Linux C compiler in less than 8192 bytes.
+-----------------------------------------------------------------------------
+
+Differences with ANSI C:
+-----------------------
+
+- Preprocessor: only '#define xx yy' is supported. Recursive defined
+  supported. All other directives are not supported.
+
+- Types: int, char, void, pointers and functions are
+  supported. Function pointers are also supported. struct, union and
+  typedef not supported.
+
+- Operations: 'x=' not supported.
+
+- Keywords: the following keywords are supported: int void char if
+  else while break return for.
+
+- Symbol scope: local variables supported, but they cannot have the
+  same name as global variables.
+
+Features:
+--------
+
+- SMALL! You can compile and execute C code everywhere, for example on
+  rescue disks.
+
+- FAST! tcc generate x86 code. No byte code overhead.
+
+- Compile and execute C source directly. No linking necessary.
+
+- C script supported : just add '#!/usr/bin/tcc' at the first line of
+  your C source, and execute it directly from the command line !
+
+- All C library functions can be used via dynamic linking.
+
+-------------------------------------------------------------------------
+An even smaller compiler can be build from tcc by activating the
+define 'TINY'. The following changes from tcc:
+
+- Comments are not supported.
+
+- Parsing: No char constants. No '\r' and '\t' in strings. Only base
+  10 numbers are supported.
+
+- no 'for' loops.
+
+- Operations: '?:', ',', 'x=', shifts, '&&', '||', '!', '~' not supported.
+

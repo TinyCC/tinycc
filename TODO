@@ -1,6 +1,7 @@
 
+- static arrays
+- external symbols (vars)
+- continue/do while/switch/case/goto
 - 'x'=
-- shifts
-- conditionnal ?:
 - constant propagation for '+', '-' and [].
 - verify function types
