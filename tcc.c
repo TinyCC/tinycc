@@ -53,18 +53,23 @@
 
 //#define MEM_DEBUG
 
+/* assembler debug */
+//#define ASM_DEBUG
+
 /* target selection */
 //#define TCC_TARGET_I386   /* i386 code generator */
-//#define TCC_TARGET_IL     /* .NET CLI generator */
 
 /* default target is I386 */
-#if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_IL)
+#if !defined(TCC_TARGET_I386)
 #define TCC_TARGET_I386
 #endif
 
-#if !defined(WIN32) && !defined(TCC_UCLIBC) && !defined(TCC_TARGET_IL)
+#if !defined(WIN32) && !defined(TCC_UCLIBC)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
+
+/* define it to include assembler support */
+#define CONFIG_TCC_ASM
 
 #ifndef CONFIG_TCC_PREFIX
 #define CONFIG_TCC_PREFIX "/usr/local"
@@ -203,8 +208,10 @@ typedef struct AttributeDef {
 #define MACRO_OBJ      0 /* object like macro */
 #define MACRO_FUNC     1 /* function like macro */
 
-/* field 'Sym.r' for labels */
+/* field 'Sym.r' for C labels */
+#define LABEL_DEFINED  0 /* label is defined */
 #define LABEL_FORWARD  1 /* label is forward defined */
+#define LABEL_DECLARED 2 /* label is declared but never used */
 
 /* type_decl() types */
 #define TYPE_ABSTRACT  1 /* type without variable */
@@ -256,8 +263,8 @@ typedef struct CachedInclude {
 
 /* parser */
 static struct BufferedFile *file;
-static int ch, tok, tok1;
-static CValue tokc, tok1c;
+static int ch, tok;
+static CValue tokc;
 static CString tokcstr; /* current parsed string, if any */
 /* additionnal informations about token */
 static int tok_flags;
@@ -265,9 +272,17 @@ static int tok_flags;
 #define TOK_FLAG_BOF   0x0002 /* beginning of file before */
 #define TOK_FLAG_ENDIF 0x0004 /* a endif was found matching starting #ifdef */
 
-/* if true, line feed is returned as a token. line feed is also
-   returned at eof */
-static int return_linefeed; 
+static int *macro_ptr, *macro_ptr_allocated;
+static int *unget_saved_macro_ptr;
+static int unget_saved_buffer[TOK_MAX_SIZE + 1];
+static int unget_buffer_enabled;
+static int parse_flags;
+#define PARSE_FLAG_PREPROCESS 0x0001 /* activate preprocessing */
+#define PARSE_FLAG_TOK_NUM    0x0002 /* return numbers instead of TOK_PPNUM */
+#define PARSE_FLAG_LINEFEED   0x0004 /* line feed is returned as a
+                                        token. line feed is also
+                                        returned at eof */
+ 
 static Section *text_section, *data_section, *bss_section; /* predefined sections */
 static Section *cur_text_section; /* current section where function code is
                               generated */
@@ -302,12 +317,13 @@ static char token_buf[STRING_MAX_SIZE + 1];
 static char *funcname;
 static Sym *global_stack, *local_stack;
 static Sym *define_stack;
-static Sym *label_stack;
+static Sym *global_label_stack, *local_label_stack;
 
 static SValue vstack[VSTACK_SIZE], *vtop;
-static int *macro_ptr, *macro_ptr_allocated;
 /* some predefined types */
 static CType char_pointer_type, func_old_type, int_type;
+/* true if isid(c) || isnum(c) */
+static unsigned char isidnum_table[256];
 
 /* compile with debug symbol (and use them if error during execution) */
 static int do_debug = 0;
@@ -364,9 +380,9 @@ struct TCCState {
 
     /* got handling */
     Section *got;
+    Section *plt;
     unsigned long *got_offsets;
     int nb_got_offsets;
-    int nb_plt_entries;
     /* give the correspondance from symtab indexes to dynsym indexes */
     int *symtab_to_dynsym;
 
@@ -375,6 +391,9 @@ struct TCCState {
     /* exported dynamic symbol section */
     Section *dynsym;
 
+    /* if true, no standard headers are added */
+    int nostdinc;
+    
     /* if true, static linking is performed */
     int static_link;
 
@@ -384,6 +403,9 @@ struct TCCState {
     int error_set_jmp_enabled;
     jmp_buf error_jmp_buf;
     int nb_errors;
+
+    /* tiny assembler state */
+    Sym *asm_labels;
 
     /* see include_stack_ptr */
     BufferedFile *include_stack[INCLUDE_STACK_SIZE];
@@ -441,9 +463,11 @@ struct TCCState {
 #define VT_EXTERN  0x00000080  /* extern definition */
 #define VT_STATIC  0x00000100  /* static variable */
 #define VT_TYPEDEF 0x00000200  /* typedef definition */
+#define VT_INLINE  0x00000400  /* inline definition */
 
 /* type mask (except storage) */
-#define VT_TYPE    (~(VT_EXTERN | VT_STATIC | VT_TYPEDEF))
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
+#define VT_TYPE    (~(VT_STORAGE))
 
 /* token values */
 
@@ -515,6 +539,65 @@ static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<
 /* all identificators and strings have token above that */
 #define TOK_IDENT 256
 
+/* only used for i386 asm opcodes definitions */
+#define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
+
+#define DEF_BWL(x) \
+ DEF(TOK_ASM_ ## x ## b, #x "b") \
+ DEF(TOK_ASM_ ## x ## w, #x "w") \
+ DEF(TOK_ASM_ ## x ## l, #x "l") \
+ DEF(TOK_ASM_ ## x, #x)
+
+#define DEF_WL(x) \
+ DEF(TOK_ASM_ ## x ## w, #x "w") \
+ DEF(TOK_ASM_ ## x ## l, #x "l") \
+ DEF(TOK_ASM_ ## x, #x)
+
+#define DEF_FP1(x) \
+ DEF(TOK_ASM_ ## f ## x ## s, "f" #x "s") \
+ DEF(TOK_ASM_ ## fi ## x ## l, "fi" #x "l") \
+ DEF(TOK_ASM_ ## f ## x ## l, "f" #x "l") \
+ DEF(TOK_ASM_ ## fi ## x ## s, "fi" #x "s")
+
+#define DEF_FP(x) \
+ DEF(TOK_ASM_ ## f ## x, "f" #x ) \
+ DEF(TOK_ASM_ ## f ## x ## p, "f" #x "p") \
+ DEF_FP1(x)
+
+#define DEF_ASMTEST(x) \
+ DEF_ASM(x ## o) \
+ DEF_ASM(x ## no) \
+ DEF_ASM(x ## b) \
+ DEF_ASM(x ## c) \
+ DEF_ASM(x ## nae) \
+ DEF_ASM(x ## nb) \
+ DEF_ASM(x ## nc) \
+ DEF_ASM(x ## ae) \
+ DEF_ASM(x ## e) \
+ DEF_ASM(x ## z) \
+ DEF_ASM(x ## ne) \
+ DEF_ASM(x ## nz) \
+ DEF_ASM(x ## be) \
+ DEF_ASM(x ## na) \
+ DEF_ASM(x ## nbe) \
+ DEF_ASM(x ## a) \
+ DEF_ASM(x ## s) \
+ DEF_ASM(x ## ns) \
+ DEF_ASM(x ## p) \
+ DEF_ASM(x ## pe) \
+ DEF_ASM(x ## np) \
+ DEF_ASM(x ## po) \
+ DEF_ASM(x ## l) \
+ DEF_ASM(x ## nge) \
+ DEF_ASM(x ## nl) \
+ DEF_ASM(x ## ge) \
+ DEF_ASM(x ## le) \
+ DEF_ASM(x ## ng) \
+ DEF_ASM(x ## nle) \
+ DEF_ASM(x ## g)
+
+#define TOK_ASM_int TOK_INT
+
 enum {
     TOK_LAST = TOK_IDENT - 1,
 #define DEF(id, str) id,
@@ -522,7 +605,7 @@ enum {
 #undef DEF
 };
 
-static const char *tcc_keywords = 
+static const char tcc_keywords[] = 
 #define DEF(id, str) str "\0"
 #include "tcctok.h"
 #undef DEF
@@ -559,6 +642,8 @@ static void next_nomacro(void);
 static void parse_expr_type(CType *type);
 static void expr_type(CType *type);
 static void unary_type(CType *type);
+static void block(int *bsym, int *csym, int *case_sym, int *def_sym, 
+                  int case_reg, int is_expr);
 static int expr_const(void);
 static void expr_eq(void);
 static void gexpr(void);
@@ -578,7 +663,7 @@ void vdup(void);
 int get_reg(int rc);
 
 static void macro_subst(TokenString *tok_str, 
-                        Sym **nested_list, int *macro_str);
+                        Sym **nested_list, const int *macro_str);
 int save_reg_forced(int r);
 void gen_op(int op);
 void force_charshort_cast(int t);
@@ -632,6 +717,38 @@ static int tcc_add_dll(TCCState *s, const char *filename, int flags);
 #define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
 static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
 
+/* tccasm.c */
+
+#ifdef CONFIG_TCC_ASM
+
+typedef struct ExprValue {
+    uint32_t v;
+    Sym *sym;
+} ExprValue;
+
+#define MAX_ASM_OPERANDS 30
+
+typedef struct ASMOperand {
+    int id; /* GCC 3 optionnal identifier (0 if number only supported */
+    char *constraint;
+    char asm_str[16]; /* computed asm string for operand */
+    SValue *vt; /* C value of the expression */
+    int ref_index; /* if >= 0, gives reference to a output constraint */
+    int priority; /* priority, used to assign registers */
+    int reg; /* if >= 0, register number used for this operand */
+} ASMOperand;
+
+static void asm_expr(TCCState *s1, ExprValue *pe);
+static int asm_int_expr(TCCState *s1);
+static int find_constraint(ASMOperand *operands, int nb_operands, 
+                           const char *name, const char **pp);
+
+static int tcc_assemble(TCCState *s1, int do_preprocess);
+
+#endif
+
+static void asm_instr(void);
+
 /* true if float/double/long double type */
 static inline int is_float(int t)
 {
@@ -642,9 +759,6 @@ static inline int is_float(int t)
 
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
-#endif
-#ifdef TCC_TARGET_IL
-#include "il-gen.c"
 #endif
 
 #ifdef CONFIG_TCC_STATIC
@@ -1113,7 +1227,7 @@ void skip(int c)
     next();
 }
 
-void test_lvalue(void)
+static void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
         expect("lvalue");
@@ -2157,13 +2271,47 @@ static Sym *label_find(int v)
     return table_ident[v]->sym_label;
 }
 
-static Sym *label_push(int v, int flags)
+static Sym *label_push(Sym **ptop, int v, int flags)
 {
-    Sym *s;
-    s = sym_push2(&label_stack, v, 0, 0);
+    Sym *s, **ps;
+    s = sym_push2(ptop, v, 0, 0);
     s->r = flags;
-    table_ident[v - TOK_IDENT]->sym_label = s;
+    ps = &table_ident[v - TOK_IDENT]->sym_label;
+    if (ptop == &global_label_stack) {
+        /* modify the top most local identifier, so that
+           sym_identifier will point to 's' when popped */
+        while (*ps != NULL)
+            ps = &(*ps)->prev_tok;
+    }
+    s->prev_tok = *ps;
+    *ps = s;
     return s;
+}
+
+/* pop labels until element last is reached. Look if any labels are
+   undefined. Define symbols if '&&label' was used. */
+static void label_pop(Sym **ptop, Sym *slast)
+{
+    Sym *s, *s1;
+    for(s = *ptop; s != slast; s = s1) {
+        s1 = s->prev;
+        if (s->r == LABEL_DECLARED) {
+            warning("label '%s' declared but not used", get_tok_str(s->v, NULL));
+        } else if (s->r == LABEL_FORWARD) {
+                error("label '%s' used but not defined",
+                      get_tok_str(s->v, NULL));
+        } else {
+            if (s->c) {
+                /* define corresponding symbol. A size of
+                   1 is put. */
+                put_extern_sym(s, cur_text_section, (long)s->next, 1);
+            }
+        }
+        /* remove label */
+        table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
+        tcc_free(s);
+    }
+    *ptop = slast;
 }
 
 /* eval an expression for #if/#elif */
@@ -2315,15 +2463,16 @@ static inline void add_cached_include(TCCState *s1, int type,
 static void preprocess(int is_bof)
 {
     TCCState *s1 = tcc_state;
-    int size, i, c, n;
+    int size, i, c, n, saved_parse_flags;
     char buf[1024], *q, *p;
     char buf1[1024];
     BufferedFile *f;
     Sym *s;
     CachedInclude *e;
     
-    return_linefeed = 1; /* linefeed will be returned as a
-                            token. EOF is also returned as line feed */
+    saved_parse_flags = parse_flags;
+    parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | 
+        PARSE_FLAG_LINEFEED;
     next_nomacro();
  redo:
     switch(tok) {
@@ -2572,7 +2721,7 @@ static void preprocess(int is_bof)
     while (tok != TOK_LINEFEED)
         next_nomacro();
  the_end:
-    return_linefeed = 0;
+    parse_flags = saved_parse_flags;
 }
 
 /* read a number in base b */
@@ -3020,11 +3169,11 @@ static inline void next_nomacro1(void)
     parse_eof:
         {
             TCCState *s1 = tcc_state;
-
-            if (return_linefeed) {
+            if (parse_flags & PARSE_FLAG_LINEFEED) {
                 tok = TOK_LINEFEED;
-            } else if (s1->include_stack_ptr == s1->include_stack) {
-                /* no include left : end of file */
+            } else if (s1->include_stack_ptr == s1->include_stack ||
+                       !(parse_flags & PARSE_FLAG_PREPROCESS)) {
+                /* no include left : end of file. */
                 tok = TOK_EOF;
             } else {
                 /* pop include file */
@@ -3054,7 +3203,7 @@ static inline void next_nomacro1(void)
         break;
 
     case '\n':
-        if (return_linefeed) {
+        if (parse_flags & PARSE_FLAG_LINEFEED) {
             tok = TOK_LINEFEED;
         } else {
             file->line_num++;
@@ -3067,7 +3216,8 @@ static inline void next_nomacro1(void)
     case '#':
         /* XXX: simplify */
         PEEKC(c, p);
-        if (tok_flags & TOK_FLAG_BOL) {
+        if ((tok_flags & TOK_FLAG_BOL) && 
+            (parse_flags & PARSE_FLAG_PREPROCESS)) {
             file->buf_ptr = p;
             preprocess(tok_flags & TOK_FLAG_BOF);
             p = file->buf_ptr;
@@ -3104,7 +3254,7 @@ static inline void next_nomacro1(void)
         p++;
         for(;;) {
             c = *p;
-            if (!isid(c) && !isnum(c))
+            if (!isidnum_table[c])
                 break;
             h = TOK_HASH_FUNC(h, c);
             p++;
@@ -3139,7 +3289,7 @@ static inline void next_nomacro1(void)
             p--;
             PEEKC(c, p);
         parse_ident_slow:
-            while (isid(c) || isnum(c)) {
+            while (isidnum_table[c]) {
                 cstr_ccat(&tokcstr, c);
                 PEEKC(c, p);
             }
@@ -3375,6 +3525,7 @@ static inline void next_nomacro1(void)
     case ':':
     case '?':
     case '~':
+    case '$': /* only used in assembler */
         tok = c;
         p++;
         break;
@@ -3498,115 +3649,6 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
     return str.str;
 }
 
-/* handle the '##' operator */
-static int *macro_twosharps(void)
-{
-    TokenSym *ts;
-    int *macro_ptr1;
-    int t;
-    const char *p1, *p2;
-    CValue cval;
-    TokenString macro_str1;
-    CString cstr;
-
-    cstr_new(&cstr);
-    tok_str_new(&macro_str1);
-    tok = 0;
-    while (1) {
-        next_nomacro();
-        if (tok == 0)
-            break;
-        while (*macro_ptr == TOK_TWOSHARPS) {
-            macro_ptr++;
-            macro_ptr1 = macro_ptr;
-            t = *macro_ptr;
-            if (t) {
-                TOK_GET(t, macro_ptr, cval);
-
-                /* We concatenate the two tokens if we have an
-                   identifier or a preprocessing number */
-                cstr_reset(&cstr);
-                p1 = get_tok_str(tok, &tokc);
-                cstr_cat(&cstr, p1);
-                p2 = get_tok_str(t, &cval);
-                cstr_cat(&cstr, p2);
-                cstr_ccat(&cstr, '\0');
-                
-                if ((tok >= TOK_IDENT || tok == TOK_PPNUM) && 
-                    (t >= TOK_IDENT || t == TOK_PPNUM)) {
-                    if (tok == TOK_PPNUM) {
-                        /* if number, then create a number token */
-                        /* NOTE: no need to allocate because
-                           tok_str_add2() does it */
-                        tokc.cstr = &cstr;
-                    } else {
-                        /* if identifier, we must do a test to
-                           validate we have a correct identifier */
-                        if (t == TOK_PPNUM) {
-                            const char *p;
-                            int c;
-
-                            p = p2;
-                            for(;;) {
-                                c = *p;
-                                if (c == '\0')
-                                    break;
-                                p++;
-                                if (!isnum(c) && !isid(c))
-                                    goto error_pasting;
-                            }
-                        }
-                        ts = tok_alloc(cstr.data, strlen(cstr.data));
-                        tok = ts->tok; /* modify current token */
-                    }
-                } else {
-                    const char *str = cstr.data;
-                    const unsigned char *q;
-
-                    /* we look for a valid token */
-                    /* XXX: do more extensive checks */
-                    if (!strcmp(str, ">>=")) {
-                        tok = TOK_A_SAR;
-                    } else if (!strcmp(str, "<<=")) {
-                        tok = TOK_A_SHL;
-                    } else if (strlen(str) == 2) {
-                        /* search in two bytes table */
-                        q = tok_two_chars;
-                        for(;;) {
-                            if (!*q)
-                                goto error_pasting;
-                            if (q[0] == str[0] && q[1] == str[1])
-                                break;
-                            q += 3;
-                        }
-                        tok = q[2];
-                    } else {
-                    error_pasting:
-                        /* NOTE: because get_tok_str use a static buffer,
-                           we must save it */
-                        cstr_reset(&cstr);
-                        p1 = get_tok_str(tok, &tokc);
-                        cstr_cat(&cstr, p1);
-                        cstr_ccat(&cstr, '\0');
-                        p2 = get_tok_str(t, &cval);
-                        warning("pasting \"%s\" and \"%s\" does not give a valid preprocessing token", cstr.data, p2);
-                        /* cannot merge tokens: just add them separately */
-                        tok_str_add2(&macro_str1, tok, &tokc);
-                        /* XXX: free associated memory ? */
-                        tok = t;
-                        tokc = cval;
-                    }
-                }
-            }
-        }
-        tok_str_add2(&macro_str1, tok, &tokc);
-    }
-    cstr_free(&cstr);
-    tok_str_add(&macro_str1, 0);
-    return macro_str1.str;
-}
-
-
 /* do macro substitution of current token with macro 's' and add
    result to (tok_str,tok_len). 'nested_list' is the list of all
    macros we got inside to avoid recursing. Return non zero if no
@@ -3622,9 +3664,6 @@ static int macro_subst_tok(TokenString *tok_str,
     CString cstr;
             
     /* if symbol is a macro, prepare substitution */
-    /* if nested substitution, do nothing */
-    if (sym_find2(*nested_list, tok))
-        return -1;
 
     /* special macros */
     if (tok == TOK___LINE__) {
@@ -3735,37 +3774,180 @@ static int macro_subst_tok(TokenString *tok_str,
     return 0;
 }
 
+/* handle the '##' operator. Return NULL if no '##' seen. Otherwise
+   return the resulting string (which must be freed). */
+static inline int *macro_twosharps(const int *macro_str)
+{
+    TokenSym *ts;
+    const int *macro_ptr1, *start_macro_ptr, *ptr, *saved_macro_ptr;
+    int t;
+    const char *p1, *p2;
+    CValue cval;
+    TokenString macro_str1;
+    CString cstr;
+
+    start_macro_ptr = macro_str;
+    /* we search the first '##' */
+    for(;;) {
+        macro_ptr1 = macro_str;
+        TOK_GET(t, macro_str, cval);
+        /* nothing more to do if end of string */
+        if (t == 0)
+            return NULL;
+        if (*macro_str == TOK_TWOSHARPS)
+            break;
+    }
+
+    /* we saw '##', so we need more processing to handle it */
+    cstr_new(&cstr);
+    tok_str_new(&macro_str1);
+    tok = t;
+    tokc = cval;
+
+    /* add all tokens seen so far */
+    for(ptr = start_macro_ptr; ptr < macro_ptr1;) {
+        TOK_GET(t, ptr, cval);
+        tok_str_add2(&macro_str1, t, &cval);
+    }
+    saved_macro_ptr = macro_ptr;
+    /* XXX: suppress the use of macro_ptr here */
+    macro_ptr = (int *)macro_str;
+    for(;;) {
+        while (*macro_ptr == TOK_TWOSHARPS) {
+            macro_ptr++;
+            macro_ptr1 = macro_ptr;
+            t = *macro_ptr;
+            if (t) {
+                TOK_GET(t, macro_ptr, cval);
+                /* We concatenate the two tokens if we have an
+                   identifier or a preprocessing number */
+                cstr_reset(&cstr);
+                p1 = get_tok_str(tok, &tokc);
+                cstr_cat(&cstr, p1);
+                p2 = get_tok_str(t, &cval);
+                cstr_cat(&cstr, p2);
+                cstr_ccat(&cstr, '\0');
+                
+                if ((tok >= TOK_IDENT || tok == TOK_PPNUM) && 
+                    (t >= TOK_IDENT || t == TOK_PPNUM)) {
+                    if (tok == TOK_PPNUM) {
+                        /* if number, then create a number token */
+                        /* NOTE: no need to allocate because
+                           tok_str_add2() does it */
+                        tokc.cstr = &cstr;
+                    } else {
+                        /* if identifier, we must do a test to
+                           validate we have a correct identifier */
+                        if (t == TOK_PPNUM) {
+                            const char *p;
+                            int c;
+
+                            p = p2;
+                            for(;;) {
+                                c = *p;
+                                if (c == '\0')
+                                    break;
+                                p++;
+                                if (!isnum(c) && !isid(c))
+                                    goto error_pasting;
+                            }
+                        }
+                        ts = tok_alloc(cstr.data, strlen(cstr.data));
+                        tok = ts->tok; /* modify current token */
+                    }
+                } else {
+                    const char *str = cstr.data;
+                    const unsigned char *q;
+
+                    /* we look for a valid token */
+                    /* XXX: do more extensive checks */
+                    if (!strcmp(str, ">>=")) {
+                        tok = TOK_A_SAR;
+                    } else if (!strcmp(str, "<<=")) {
+                        tok = TOK_A_SHL;
+                    } else if (strlen(str) == 2) {
+                        /* search in two bytes table */
+                        q = tok_two_chars;
+                        for(;;) {
+                            if (!*q)
+                                goto error_pasting;
+                            if (q[0] == str[0] && q[1] == str[1])
+                                break;
+                            q += 3;
+                        }
+                        tok = q[2];
+                    } else {
+                    error_pasting:
+                        /* NOTE: because get_tok_str use a static buffer,
+                           we must save it */
+                        cstr_reset(&cstr);
+                        p1 = get_tok_str(tok, &tokc);
+                        cstr_cat(&cstr, p1);
+                        cstr_ccat(&cstr, '\0');
+                        p2 = get_tok_str(t, &cval);
+                        warning("pasting \"%s\" and \"%s\" does not give a valid preprocessing token", cstr.data, p2);
+                        /* cannot merge tokens: just add them separately */
+                        tok_str_add2(&macro_str1, tok, &tokc);
+                        /* XXX: free associated memory ? */
+                        tok = t;
+                        tokc = cval;
+                    }
+                }
+            }
+        }
+        tok_str_add2(&macro_str1, tok, &tokc);
+        next_nomacro();
+        if (tok == 0)
+            break;
+    }
+    macro_ptr = (int *)saved_macro_ptr;
+    cstr_free(&cstr);
+    tok_str_add(&macro_str1, 0);
+    return macro_str1.str;
+}
+
+
 /* do macro substitution of macro_str and add result to
    (tok_str,tok_len). 'nested_list' is the list of all macros we got
    inside to avoid recursing. */
 static void macro_subst(TokenString *tok_str,
-                        Sym **nested_list, int *macro_str)
+                        Sym **nested_list, const int *macro_str)
 {
     Sym *s;
-    int *saved_macro_ptr;
-    int *macro_str1;
+    int *saved_macro_ptr, *macro_str1;
+    const int *ptr;
+    int t, ret;
+    CValue cval;
 
-    saved_macro_ptr = macro_ptr;
-    macro_ptr = macro_str;
     /* first scan for '##' operator handling */
-    macro_str1 = macro_twosharps();
-    macro_ptr = macro_str1;
-
+    ptr = macro_str;
+    macro_str1 = macro_twosharps(ptr);
+    if (macro_str1) 
+        ptr = macro_str1;
     while (1) {
-        next_nomacro();
-        if (tok == 0)
+        TOK_GET(t, ptr, cval);
+        if (t == 0)
             break;
-        s = define_find(tok);
+        s = define_find(t);
         if (s != NULL) {
-            if (macro_subst_tok(tok_str, nested_list, s) != 0)
+            /* if nested substitution, do nothing */
+            if (sym_find2(*nested_list, t))
+                goto no_subst;
+            saved_macro_ptr = macro_ptr;
+            macro_ptr = (int *)ptr;
+            tok = t;
+            ret = macro_subst_tok(tok_str, nested_list, s);
+            ptr = (int *)macro_ptr;
+            macro_ptr = saved_macro_ptr;
+            if (ret != 0)
                 goto no_subst;
         } else {
         no_subst:
-            tok_str_add2(tok_str, tok, &tokc);
+            tok_str_add2(tok_str, t, &cval);
         }
     }
-    macro_ptr = saved_macro_ptr;
-    tok_str_free(macro_str1);
+    if (macro_str1)
+        tok_str_free(macro_str1);
 }
 
 /* return next token with macro substitution */
@@ -3774,47 +3956,67 @@ static void next(void)
     Sym *nested_list, *s;
     TokenString str;
 
-    /* special 'ungettok' case for label parsing */
-    if (tok1) {
-        tok = tok1;
-        tokc = tok1c;
-        tok1 = 0;
-    } else {
-    redo:
-        next_nomacro();
-        if (!macro_ptr) {
-            /* if not reading from macro substituted string, then try
-               to substitute macros */
-            if (tok >= TOK_IDENT) {
-                s = define_find(tok);
-                if (s) {
-                    /* we have a macro: we try to substitute */
-                    tok_str_new(&str);
-                    nested_list = NULL;
-                    if (macro_subst_tok(&str, &nested_list, s) == 0) {
-                        /* substitution done, NOTE: maybe empty */
-                        tok_str_add(&str, 0);
-                        macro_ptr = str.str;
-                        macro_ptr_allocated = str.str;
-                        goto redo;
-                    }
+ redo:
+    next_nomacro();
+    if (!macro_ptr) {
+        /* if not reading from macro substituted string, then try
+           to substitute macros */
+        if (tok >= TOK_IDENT &&
+            (parse_flags & PARSE_FLAG_PREPROCESS)) {
+            s = define_find(tok);
+            if (s) {
+                /* we have a macro: we try to substitute */
+                tok_str_new(&str);
+                nested_list = NULL;
+                if (macro_subst_tok(&str, &nested_list, s) == 0) {
+                    /* substitution done, NOTE: maybe empty */
+                    tok_str_add(&str, 0);
+                    macro_ptr = str.str;
+                    macro_ptr_allocated = str.str;
+                    goto redo;
                 }
             }
-        } else {
-            if (tok == 0) {
+        }
+    } else {
+        if (tok == 0) {
+            /* end of macro or end of unget buffer */
+            if (unget_buffer_enabled) {
+                macro_ptr = unget_saved_macro_ptr;
+                unget_buffer_enabled = 0;
+            } else {
                 /* end of macro string: free it */
                 tok_str_free(macro_ptr_allocated);
                 macro_ptr = NULL;
-                goto redo;
             }
-        }
-
-        /* convert preprocessor tokens into C tokens */
-        if (tok == TOK_PPNUM) {
-            parse_number((char *)tokc.cstr->data);
+            goto redo;
         }
     }
+    
+    /* convert preprocessor tokens into C tokens */
+    if (tok == TOK_PPNUM &&
+        (parse_flags & PARSE_FLAG_TOK_NUM)) {
+        parse_number((char *)tokc.cstr->data);
+    }
 }
+
+/* push back current token and set current token to 'last_tok'. Only
+   identifier case handled for labels. */
+static inline void unget_tok(int last_tok)
+{
+    int i, n;
+    int *q;
+    unget_saved_macro_ptr = macro_ptr;
+    unget_buffer_enabled = 1;
+    q = unget_saved_buffer;
+    macro_ptr = q;
+    *q++ = tok;
+    n = tok_ext_size(tok) - 1;
+    for(i=0;i<n;i++)
+        *q++ = tokc.tab[i];
+    *q = 0; /* end of token string */
+    tok = last_tok;
+}
+
 
 void swap(int *p, int *q)
 {
@@ -3903,6 +4105,10 @@ static Sym *external_sym(int v, CType *type, int r)
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
         s->type.t |= VT_EXTERN;
+    } else {
+        if (!is_compatible_types(&s->type, type))
+            error("incompatible types for redefinition of '%s'", 
+                  get_tok_str(v, NULL));
     }
     return s;
 }
@@ -5545,10 +5751,11 @@ void inc(int post, int c)
    - section(x) : generate data/code in this section.
    - unused : currently ignored, but may be used someday.
  */
-void parse_attribute(AttributeDef *ad)
+static void parse_attribute(AttributeDef *ad)
 {
     int t, n;
-
+    
+    while (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2) {
     next();
     skip('(');
     skip('(');
@@ -5558,8 +5765,8 @@ void parse_attribute(AttributeDef *ad)
         t = tok;
         next();
         switch(t) {
-        case TOK_SECTION:
-        case TOK___SECTION__:
+        case TOK_SECTION1:
+        case TOK_SECTION2:
             skip('(');
             if (tok != TOK_STR)
                 expect("section name");
@@ -5567,8 +5774,8 @@ void parse_attribute(AttributeDef *ad)
             next();
             skip(')');
             break;
-        case TOK_ALIGNED:
-        case TOK___ALIGNED__:
+        case TOK_ALIGNED1:
+        case TOK_ALIGNED2:
             if (tok == '(') {
                 next();
                 n = expr_const();
@@ -5580,28 +5787,28 @@ void parse_attribute(AttributeDef *ad)
             }
             ad->aligned = n;
             break;
-        case TOK_UNUSED:
-        case TOK___UNUSED__:
+        case TOK_UNUSED1:
+        case TOK_UNUSED2:
             /* currently, no need to handle it because tcc does not
                track unused objects */
             break;
-        case TOK_NORETURN:
-        case TOK___NORETURN__:
+        case TOK_NORETURN1:
+        case TOK_NORETURN2:
             /* currently, no need to handle it because tcc does not
                track unused objects */
             break;
-        case TOK_CDECL:
-        case TOK___CDECL:
-        case TOK___CDECL__:
+        case TOK_CDECL1:
+        case TOK_CDECL2:
+        case TOK_CDECL3:
             ad->func_call = FUNC_CDECL;
             break;
-        case TOK_STDCALL:
-        case TOK___STDCALL:
-        case TOK___STDCALL__:
+        case TOK_STDCALL1:
+        case TOK_STDCALL2:
+        case TOK_STDCALL3:
             ad->func_call = FUNC_STDCALL;
             break;
         default:
-            warning("'%s' attribute ignored", get_tok_str(t, NULL));
+            //            warning("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
             /* XXX: skip parenthesis too */
             if (tok == '(') {
@@ -5618,6 +5825,7 @@ void parse_attribute(AttributeDef *ad)
     }
     skip(')');
     skip(')');
+    }
 }
 
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
@@ -5695,7 +5903,7 @@ static void struct_decl(CType *type, int u)
                     if (tok != ':') {
                         type_decl(&type1, &ad, &v, TYPE_DIRECT);
                         if ((type1.t & VT_BTYPE) == VT_FUNC ||
-                            (type1.t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN)))
+                            (type1.t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN | VT_INLINE)))
                             error("invalid type for '%s'", 
                                   get_tok_str(v, NULL));
                     }
@@ -5804,6 +6012,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
     t = 0;
     while(1) {
         switch(tok) {
+        case TOK_EXTENSION:
+            /* currently, we really ignore extension */
+            next();
+            continue;
+
             /* basic types */
         case TOK_CHAR:
             u = VT_BYTE;
@@ -5861,15 +6074,20 @@ static int parse_btype(CType *type, AttributeDef *ad)
             goto basic_type2;
 
             /* type modifiers */
-        case TOK_CONST:
-        case TOK_VOLATILE:
+        case TOK_CONST1:
+        case TOK_CONST2:
+        case TOK_CONST3:
+        case TOK_VOLATILE1:
+        case TOK_VOLATILE2:
+        case TOK_VOLATILE3:
         case TOK_REGISTER:
-        case TOK_SIGNED:
-        case TOK___SIGNED__:
+        case TOK_SIGNED1:
+        case TOK_SIGNED2:
+        case TOK_SIGNED3:
         case TOK_AUTO:
-        case TOK_INLINE:
-        case TOK___INLINE__:
-        case TOK_RESTRICT:
+        case TOK_RESTRICT1:
+        case TOK_RESTRICT2:
+        case TOK_RESTRICT3:
             next();
             break;
         case TOK_UNSIGNED:
@@ -5890,12 +6108,22 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t |= VT_TYPEDEF;
             next();
             break;
+        case TOK_INLINE1:
+        case TOK_INLINE2:
+        case TOK_INLINE3:
+            t |= VT_INLINE;
+            next();
+            break;
+
             /* GNUC attribute */
-        case TOK___ATTRIBUTE__:
+        case TOK_ATTRIBUTE1:
+        case TOK_ATTRIBUTE2:
             parse_attribute(ad);
             break;
             /* GNUC typeof */
-        case TOK_TYPEOF:
+        case TOK_TYPEOF1:
+        case TOK_TYPEOF2:
+        case TOK_TYPEOF3:
             next();
             parse_expr_type(&type1);
             goto basic_type2;
@@ -5972,8 +6200,8 @@ static void post_type(CType *type, AttributeDef *ad)
         if (l == 0)
             l = FUNC_OLD;
         skip(')');
-        t1 = type->t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
-        type->t &= ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN);
+        t1 = type->t & VT_STORAGE;
+        type->t &= ~VT_STORAGE;
         post_type(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         s = sym_push(SYM_FIELD, type, ad->func_call, l);
@@ -5991,8 +6219,8 @@ static void post_type(CType *type, AttributeDef *ad)
         }
         skip(']');
         /* parse next post type */
-        t1 = type->t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
-        type->t &= ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN);
+        t1 = type->t & VT_STORAGE;
+        type->t &= ~VT_STORAGE;
         post_type(type, ad);
         
         /* we push a anonymous symbol which will contain the array
@@ -6016,11 +6244,27 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
 
     while (tok == '*') {
         next();
-        while (tok == TOK_CONST || tok == TOK_VOLATILE || tok == TOK_RESTRICT)
+    redo:
+        switch(tok) {
+        case TOK_CONST1:
+        case TOK_CONST2:
+        case TOK_CONST3:
+        case TOK_VOLATILE1:
+        case TOK_VOLATILE2:
+        case TOK_VOLATILE3:
+        case TOK_RESTRICT1:
+        case TOK_RESTRICT2:
+        case TOK_RESTRICT3:
             next();
+            goto redo;
+        }
         mk_pointer(type);
     }
     
+    /* XXX: clarify attribute handling */
+    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
+        parse_attribute(ad);
+
     /* recursive type */
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     type1.t = 0; /* XXX: same as int */
@@ -6028,7 +6272,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         next();
         /* XXX: this is not correct to modify 'ad' at this point, but
            the syntax is not clear */
-        if (tok == TOK___ATTRIBUTE__)
+        if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
             parse_attribute(ad);
         type_decl(&type1, ad, v, td);
         skip(')');
@@ -6044,7 +6288,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         }
     }
     post_type(type, ad);
-    if (tok == TOK___ATTRIBUTE__)
+    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
     if (!type1.t)
         return;
@@ -6154,7 +6398,11 @@ static void unary(void)
 
     /* XXX: GCC 2.95.3 does not generate a table although it should be
        better here */
+ tok_next:
     switch(tok) {
+    case TOK_EXTENSION:
+        next();
+        goto tok_next;
     case TOK_CINT:
     case TOK_CCHAR: 
     case TOK_LCHAR:
@@ -6241,6 +6489,13 @@ static void unary(void)
                 unary();
                 gen_cast(&type);
             }
+        } else if (tok == '{') {
+            /* save all registers */
+            save_regs(0); 
+            /* statement expression : we do not accept break/continue
+               inside as GCC does */
+            block(NULL, NULL, NULL, NULL, 0, 1);
+            skip(')');
         } else {
             gexpr();
             skip(')');
@@ -6291,7 +6546,8 @@ static void unary(void)
         gen_op('+');
         break;
     case TOK_SIZEOF:
-    case TOK_ALIGNOF:
+    case TOK_ALIGNOF1:
+    case TOK_ALIGNOF2:
         t = tok;
         next();
         if (tok == '(') {
@@ -6328,7 +6584,10 @@ static void unary(void)
             expect("label identifier");
         s = label_find(tok);
         if (!s) {
-            s = label_push(tok, LABEL_FORWARD);
+            s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+        } else {
+            if (s->r == LABEL_DECLARED)
+                s->r = LABEL_FORWARD;
         }
         if (!s->type.t) {
             s->type.t = VT_VOID;
@@ -6734,9 +6993,13 @@ static void expr_eq(void)
             c = vtop->c.i;
             vpop();
             next();
-            gexpr();
-            c1 = vtop->c.i;
-            vpop();
+            if (tok == ':' && gnu_ext) {
+                c1 = c;
+            } else {
+                gexpr();
+                c1 = vtop->c.i;
+                vpop();
+            }
             skip(':');
             expr_eq();
             if (c)
@@ -6756,8 +7019,13 @@ static void expr_eq(void)
                     gv(rc);
                     save_regs(1);
             }
-            tt = gtst(1, 0);
-            gexpr();
+            if (tok == ':' && gnu_ext) {
+                gv_dup();
+                tt = gtst(1, 0);
+            } else {
+                tt = gtst(1, 0);
+                gexpr();
+            }
             type1 = vtop->type;
             sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
@@ -6896,30 +7164,25 @@ static int expr_const(void)
    return zero */
 static int is_label(void)
 {
-    int t;
-    CValue c;
+    int last_tok;
 
     /* fast test first */
     if (tok < TOK_UIDENT)
         return 0;
-    /* no need to save tokc since we expect an identifier */
-    t = tok;
-    c = tokc;
+    /* no need to save tokc because tok is an identifier */
+    last_tok = tok;
     next();
     if (tok == ':') {
         next();
-        return t;
+        return last_tok;
     } else {
-        /* XXX: may not work in all cases (macros ?) */
-        tok1 = tok;
-        tok1c = tokc;
-        tok = t;
-        tokc = c;
+        unget_tok(last_tok);
         return 0;
     }
 }
 
-static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
+static void block(int *bsym, int *csym, int *case_sym, int *def_sym, 
+                  int case_reg, int is_expr)
 {
     int a, b, c, d;
     Sym *s;
@@ -6932,6 +7195,12 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         last_line_num = file->line_num;
     }
 
+    if (is_expr) {
+        /* default return value is (void) */
+        vpushi(0);
+        vtop->type.t = VT_VOID;
+    }
+
     if (tok == TOK_IF) {
         /* if test */
         next();
@@ -6939,13 +7208,13 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         gexpr();
         skip(')');
         a = gtst(1, 0);
-        block(bsym, csym, case_sym, def_sym, case_reg);
+        block(bsym, csym, case_sym, def_sym, case_reg, 0);
         c = tok;
         if (c == TOK_ELSE) {
             next();
             d = gjmp(0);
             gsym(a);
-            block(bsym, csym, case_sym, def_sym, case_reg);
+            block(bsym, csym, case_sym, def_sym, case_reg, 0);
             gsym(d); /* patch else jmp */
         } else
             gsym(a);
@@ -6957,19 +7226,43 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         skip(')');
         a = gtst(1, 0);
         b = 0;
-        block(&a, &b, case_sym, def_sym, case_reg);
+        block(&a, &b, case_sym, def_sym, case_reg, 0);
         gjmp_addr(d);
         gsym(a);
         gsym_addr(b, d);
     } else if (tok == '{') {
+        Sym *llabel;
+        
         next();
-        /* declarations */
+        /* record local declaration stack position */
         s = local_stack;
+        llabel = local_label_stack;
+        /* handle local labels declarations */
+        if (tok == TOK_LABEL) {
+            next();
+            for(;;) {
+                if (tok < TOK_UIDENT)
+                    expect("label identifier");
+                label_push(&local_label_stack, tok, LABEL_DECLARED);
+                next();
+                if (tok == ',') {
+                    next();
+                } else {
+                    skip(';');
+                    break;
+                }
+            }
+        }
         while (tok != '}') {
             decl(VT_LOCAL);
-            if (tok != '}')
-                block(bsym, csym, case_sym, def_sym, case_reg);
+            if (tok != '}') {
+                if (is_expr)
+                    vpop();
+                block(bsym, csym, case_sym, def_sym, case_reg, is_expr);
+            }
         }
+        /* pop locally defined labels */
+        label_pop(&local_label_stack, llabel);
         /* pop locally defined symbols */
         sym_pop(&local_stack, s);
         next();
@@ -7039,7 +7332,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
             gsym(e);
         }
         skip(')');
-        block(&a, &b, case_sym, def_sym, case_reg);
+        block(&a, &b, case_sym, def_sym, case_reg, 0);
         gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
@@ -7049,7 +7342,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         a = 0;
         b = 0;
         d = ind;
-        block(&a, &b, case_sym, def_sym, case_reg);
+        block(&a, &b, case_sym, def_sym, case_reg, 0);
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
@@ -7071,7 +7364,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         a = 0;
         b = gjmp(0); /* jump to first case */
         c = 0;
-        block(&a, csym, &b, &c, case_reg);
+        block(&a, csym, &b, &c, case_reg, 0);
         /* if no default, jmp after switch */
         if (c == 0)
             c = ind;
@@ -7111,7 +7404,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         }
         gsym(b);
         skip(':');
-        block(bsym, csym, case_sym, def_sym, case_reg);
+        block(bsym, csym, case_sym, def_sym, case_reg, 0);
     } else 
     if (tok == TOK_DEFAULT) {
         next();
@@ -7121,7 +7414,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
         if (*def_sym)
             error("too many 'default'");
         *def_sym = ind;
-        block(bsym, csym, case_sym, def_sym, case_reg);
+        block(bsym, csym, case_sym, def_sym, case_reg, 0);
     } else
     if (tok == TOK_GOTO) {
         next();
@@ -7136,7 +7429,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
             s = label_find(tok);
             /* put forward definition if needed */
             if (!s) {
-                s = label_push(tok, LABEL_FORWARD);
+                s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+            } else {
+                if (s->r == LABEL_DECLARED)
+                    s->r = LABEL_FORWARD;
             }
             /* label already defined */
             if (s->r & LABEL_FORWARD) 
@@ -7148,30 +7444,40 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
             expect("label identifier");
         }
         skip(';');
+    } else if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+        asm_instr();
     } else {
         b = is_label();
         if (b) {
             /* label case */
             s = label_find(b);
             if (s) {
-                if (!(s->r & LABEL_FORWARD))
-                    error("multiple defined label");
+                if (s->r == LABEL_DEFINED)
+                    error("duplicate label '%s'", get_tok_str(s->v, NULL));
                 gsym((long)s->next);
+                s->r = LABEL_DEFINED;
             } else {
-                s = label_push(b, 0);
+                s = label_push(&global_label_stack, b, LABEL_DEFINED);
             }
             s->next = (void *)ind;
-            s->r = 0;
             /* we accept this, but it is a mistake */
-            if (tok == '}') 
+            if (tok == '}') {
                 warning("deprecated use of label at end of compound statement");
-            else
-                block(bsym, csym, case_sym, def_sym, case_reg);
+            } else {
+                if (is_expr)
+                    vpop();
+                block(bsym, csym, case_sym, def_sym, case_reg, is_expr);
+            }
         } else {
             /* expression case */
             if (tok != ';') {
-                gexpr();
-                vpop();
+                if (is_expr) {
+                    vpop();
+                    gexpr();
+                } else {
+                    gexpr();
+                    vpop();
+                }
             }
             skip(';');
         }
@@ -7187,13 +7493,14 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
                             int size_only)
 {
     Sym *s, *f;
-    int notfirst, index, align, l;
+    int notfirst, index, index_last, align, l, nb_elems, elem_size;
     CType type1;
 
     notfirst = 0;
+    elem_size = 0;
+    nb_elems = 1;
     if (gnu_ext && (l = is_label()) != 0)
         goto struct_field;
-
     while (tok == '[' || tok == '.') {
         if (tok == '[') {
             if (!(type->t & VT_ARRAY))
@@ -7203,11 +7510,28 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             index = expr_const();
             if (index < 0 || (s->c >= 0 && index >= s->c))
                 expect("invalid index");
+            if (tok == TOK_DOTS && gnu_ext) {
+                next();
+                index_last = expr_const();
+                if (index_last < 0 || 
+                    (s->c >= 0 && index_last >= s->c) ||
+                    index_last < index)
+                    expect("invalid index");
+            } else {
+                index_last = index;
+            }
             skip(']');
             if (!notfirst)
-                *cur_index = index;
+                *cur_index = index_last;
             type = pointed_type(type);
-            c += index * type_size(type, &align);
+            elem_size = type_size(type, &align);
+            c += index * elem_size;
+            /* NOTE: we only support ranges for last designator */
+            nb_elems = index_last - index + 1;
+            if (nb_elems != 1) {
+                notfirst = 1;
+                break;
+            }
         } else {
             next();
             l = tok;
@@ -7259,6 +7583,25 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
         }
     }
     decl_initializer(type, sec, c, 0, size_only);
+
+    /* XXX: make it more general */
+    if (!size_only && nb_elems > 1) {
+        unsigned long c_end;
+        uint8_t *src, *dst;
+        int i;
+
+        if (!sec)
+            error("range init not supported yet for dynamic storage");
+        c_end = c + nb_elems * elem_size;
+        if (c_end > sec->data_allocated)
+            section_realloc(sec, c_end);
+        src = sec->data + c;
+        dst = src;
+        for(i = 1; i < nb_elems; i++) {
+            dst += elem_size;
+            memcpy(dst, src, elem_size);
+        }
+    }
 }
 
 #define EXPR_VAL   0
@@ -7482,9 +7825,32 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             s->c = array_length;
     } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
                (sec || !first || tok == '{')) {
+        int par_count;
+
         /* NOTE: the previous test is a specific case for automatic
            struct/union init */
         /* XXX: union needs only one init */
+
+        /* XXX: this test is incorrect for local initializers
+           beginning with ( without {. It would be much more difficult
+           to do it correctly (ideally, the expression parser should
+           be used in all cases) */
+        par_count = 0;
+        if (tok == '(') {
+            AttributeDef ad1;
+            CType type1;
+            next();
+            while (tok == '(') {
+                par_count++;
+                next();
+            }
+            if (!parse_btype(&type1, &ad1))
+                expect("cast");
+            type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
+            if (!is_compatible_types(type, &type1))
+                error("invalid type for cast");
+            skip(')');
+        }
         no_oblock = 1;
         if (first || tok == '{') {
             skip('{');
@@ -7519,6 +7885,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         if (!no_oblock)
             skip('}');
+        while (par_count) {
+            skip(')');
+            par_count--;
+        }
     } else if (tok == '{') {
         next();
         decl_initializer(type, sec, c, first, size_only);
@@ -7619,15 +7989,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         sec = NULL;
         if (do_bounds_check && (type->t & VT_ARRAY)) 
             loc--;
-#ifdef TCC_TARGET_IL
-        /* XXX: ugly patch to allocate local variables for IL, just
-           for testing */
-        addr = loc;
-        loc++;
-#else
         loc = (loc - size) & -align;
         addr = loc;
-#endif
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
@@ -7640,31 +8003,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             bounds_ptr[0] = addr;
             bounds_ptr[1] = size;
         }
-    } else {
-        /* compute section */
-        sec = ad->section;
-        if (!sec) {
-            if (has_init)
-                sec = data_section;
-            else
-                sec = bss_section;
-        }
-        data_offset = sec->data_offset;
-        data_offset = (data_offset + align - 1) & -align;
-        addr = data_offset;
-        /* very important to increment global pointer at this time
-           because initializers themselves can create new initializers */
-        data_offset += size;
-        /* add padding if bound check */
-        if (do_bounds_check)
-            data_offset++;
-        sec->data_offset = data_offset;
-        /* allocate section space to put the data */
-        if (sec->sh_type != SHT_NOBITS && 
-            data_offset > sec->data_allocated)
-            section_realloc(sec, data_offset);
-    }
-    if (!sec) {
         if (v) {
             /* local variable */
             sym_push(v, type, r, addr);
@@ -7674,24 +8012,76 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
     } else {
         Sym *sym;
-        
-        if (v) {
-            if (scope == VT_CONST) {
-                /* global scope: see if already defined */
-                sym = sym_find(v);
-                if (!sym)
-                    goto do_def;
+
+        sym = NULL;
+        if (v && scope == VT_CONST) {
+            /* see if the symbol was already defined */
+            sym = sym_find(v);
+            if (sym) {
                 if (!is_compatible_types(&sym->type, type))
                     error("incompatible types for redefinition of '%s'", 
                           get_tok_str(v, NULL));
-                if (!(sym->type.t & VT_EXTERN))
-                    error("redefinition of '%s'", get_tok_str(v, NULL));
-                sym->type.t &= ~VT_EXTERN;
+                if (sym->type.t & VT_EXTERN) {
+                    /* if the variable is extern, it was not allocated */
+                    sym->type.t &= ~VT_EXTERN;
+                } else {
+                    /* we accept several definitions of the same
+                       global variable. this is tricky, because we
+                       must play with the SHN_COMMON type of the symbol */
+                    /* XXX: should check if the variable was already
+                       initialized. It is incorrect to initialized it
+                       twice */
+                    /* no init data, we won't add more to the symbol */
+                    if (!has_init)
+                        goto no_alloc;
+                }
+            }
+        }
+
+        /* allocate symbol in corresponding section */
+        sec = ad->section;
+        if (!sec) {
+            if (has_init)
+                sec = data_section;
+        }
+        if (sec) {
+            data_offset = sec->data_offset;
+            data_offset = (data_offset + align - 1) & -align;
+            addr = data_offset;
+            /* very important to increment global pointer at this time
+               because initializers themselves can create new initializers */
+            data_offset += size;
+            /* add padding if bound check */
+            if (do_bounds_check)
+                data_offset++;
+            sec->data_offset = data_offset;
+            /* allocate section space to put the data */
+            if (sec->sh_type != SHT_NOBITS && 
+                data_offset > sec->data_allocated)
+                section_realloc(sec, data_offset);
+        } else {
+            addr = 0; /* avoid warning */
+        }
+
+        if (v) {
+            if (scope == VT_CONST) {
+                if (!sym)
+                    goto do_def;
             } else {
             do_def:
                 sym = sym_push(v, type, r | VT_SYM, 0);
             }
-            put_extern_sym(sym, sec, addr, size);
+            /* update symbol definition */
+            if (sec) {
+                put_extern_sym(sym, sec, addr, size);
+            } else {
+                Elf32_Sym *esym;
+                /* put a common area */
+                put_extern_sym(sym, NULL, align, size);
+                /* XXX: find a nicer way */
+                esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
+                esym->st_shndx = SHN_COMMON;
+            }
         } else {
             CValue cval;
 
@@ -7722,6 +8112,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             restore_parse_state(&saved_parse_state);
         }
     }
+ no_alloc: ;
 }
 
 void put_func_debug(Sym *sym)
@@ -7829,8 +8220,10 @@ static void func_decl_list(Sym *func_sym)
                       get_tok_str(v, NULL));
             found:
                 /* check that no storage specifier except 'register' was given */
-                if (type.t & (VT_EXTERN | VT_STATIC | VT_TYPEDEF))
+                if (type.t & VT_STORAGE)
                     error("storage class specified for '%s'", get_tok_str(v, NULL));
+                /* array must be transformed to pointer according to ANSI C */
+                type.t &= ~VT_ARRAY;
                 /* we can add the type (NOTE: it could be local to the function) */
                 s->type = type;
                 /* accept other parameters */
@@ -7902,6 +8295,9 @@ static void decl(int l)
                     error("cannot use local functions");
                 if (!(type.t & VT_FUNC))
                     expect("function definition");
+                /* XXX: cannot do better now: convert extern line to static inline */
+                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
+                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
 
 #ifdef CONFIG_REG_VARS
                 /* parse all function code and record it */
@@ -7965,31 +8361,11 @@ static void decl(int l)
                 macro_ptr = func_str.str;
                 next();
 #endif
-                block(NULL, NULL, NULL, NULL, 0);
+                block(NULL, NULL, NULL, NULL, 0, 0);
                 gsym(rsym);
                 gfunc_epilog();
                 cur_text_section->data_offset = ind;
-                /* look if any labels are undefined. Define symbols if
-                   '&&label' was used. */
-                {
-                    Sym *s, *s1;
-                    for(s = label_stack; s != NULL; s = s1) {
-                        s1 = s->prev;
-                        if (s->r & LABEL_FORWARD) {
-                            error("label '%s' used but not defined",
-                                  get_tok_str(s->v, NULL));
-                        }
-                        if (s->c) {
-                            /* define corresponding symbol. A size of
-                               1 is put. */
-                            put_extern_sym(s, cur_text_section, (long)s->next, 1);
-                        }
-                        /* remove label */
-                        table_ident[s->v - TOK_IDENT]->sym_label = NULL;
-                        tcc_free(s);
-                    }
-                    label_stack = NULL;
-                }
+                label_pop(&global_label_stack, NULL);
                 sym_pop(&local_stack, NULL); /* reset local stack */
                 /* end of function */
                 /* patch symbol size */
@@ -8021,15 +8397,20 @@ static void decl(int l)
                     r = 0;
                     if (!(type.t & VT_ARRAY))
                         r |= lvalue_type(type.t);
-                    if (btype.t & VT_EXTERN) {
+                    has_init = (tok == '=');
+                    if ((btype.t & VT_EXTERN) || 
+                        ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
+                         !has_init && l == VT_CONST && type.ref->c < 0)) {
                         /* external variable */
+                        /* NOTE: as GCC, uninitialized global static
+                           arrays of null size are considered as
+                           extern */
                         external_sym(v, &type, r);
                     } else {
                         if (type.t & VT_STATIC)
                             r |= VT_CONST;
                         else
                             r |= l;
-                        has_init = (tok == '=');
                         if (has_init)
                             next();
                         decl_initializer_alloc(&type, &ad, r, 
@@ -8046,6 +8427,20 @@ static void decl(int l)
     }
 }
 
+/* better than nothing, but needs extension to handle '-E' option
+   correctly too */
+static void preprocess_init(TCCState *s1)
+{
+    s1->include_stack_ptr = s1->include_stack;
+    /* XXX: move that before to avoid having to initialize
+       file->ifdef_stack_ptr ? */
+    s1->ifdef_stack_ptr = s1->ifdef_stack;
+    file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+
+    /* XXX: not ANSI compliant: bound checking says error */
+    vtop = vstack - 1;
+}
+
 /* compile the C file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s1)
 {
@@ -8056,15 +8451,9 @@ static int tcc_compile(TCCState *s1)
 #ifdef INC_DEBUG
     printf("%s: **** new file\n", file->filename);
 #endif
-    funcname = "";
-    s1->include_stack_ptr = s1->include_stack;
-    /* XXX: move that before to avoid having to initialize
-       file->ifdef_stack_ptr ? */
-    s1->ifdef_stack_ptr = s1->ifdef_stack;
-    file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+    preprocess_init(s1);
 
-    /* XXX: not ANSI compliant: bound checking says error */
-    vtop = vstack - 1;
+    funcname = "";
     anon_sym = SYM_FIRST_ANOM; 
 
     /* file info: full path + filename */
@@ -8117,6 +8506,7 @@ static int tcc_compile(TCCState *s1)
 
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+        parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM;
         next();
         decl(VT_CONST);
         if (tok != -1)
@@ -8133,9 +8523,9 @@ static int tcc_compile(TCCState *s1)
     /* reset define stack, but leave -Dsymbols (may be incorrect if
        they are undefined) */
     free_defines(define_start); 
-    
+
     sym_pop(&global_stack, NULL);
-    
+
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
@@ -8211,6 +8601,18 @@ void tcc_undefine_symbol(TCCState *s1, const char *sym)
     if (s)
         define_undef(s);
 }
+
+#ifdef CONFIG_TCC_ASM
+
+#include "i386-asm.c"
+#include "tccasm.c"
+
+#else
+static void asm_instr(void)
+{
+    error("inline asm() not supported");
+}
+#endif
 
 #include "tccelf.c"
 
@@ -8526,6 +8928,8 @@ TCCState *tcc_new(void)
 {
     const char *p, *r;
     TCCState *s;
+    TokenSym *ts;
+    int i, c;
 
     s = tcc_mallocz(sizeof(TCCState));
     if (!s)
@@ -8533,10 +8937,9 @@ TCCState *tcc_new(void)
     tcc_state = s;
     s->output_type = TCC_OUTPUT_MEMORY;
 
-    /* default include paths */
-    tcc_add_sysinclude_path(s, "/usr/local/include");
-    tcc_add_sysinclude_path(s, "/usr/include");
-    tcc_add_sysinclude_path(s, CONFIG_TCC_PREFIX "/lib/tcc/include");
+    /* init isid table */
+    for(i=0;i<256;i++)
+        isidnum_table[i] = isid(i) || isnum(i);
 
     /* add all tokens */
     table_ident = NULL;
@@ -8546,8 +8949,12 @@ TCCState *tcc_new(void)
     p = tcc_keywords;
     while (*p) {
         r = p;
-        while (*r++);
-        tok_alloc(p, r - p - 1);
+        for(;;) {
+            c = *r++;
+            if (c == '\0')
+                break;
+        }
+        ts = tok_alloc(p, r - p - 1);
         p = r;
     }
 
@@ -8564,6 +8971,7 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "__i386__", NULL);
 #endif
 #if defined(linux)
+    tcc_define_symbol(s, "__linux__", NULL);
     tcc_define_symbol(s, "linux", NULL);
 #endif
     /* tiny C specific defines */
@@ -8700,7 +9108,17 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     if (!ext || !strcmp(ext, "c")) {
         /* C file assumed */
         ret = tcc_compile(s1);
-    } else {
+    } else 
+#ifdef CONFIG_TCC_ASM
+    if (!strcmp(ext, "S")) {
+        /* preprocessed assembler */
+        ret = tcc_assemble(s1, 1);
+    } else if (!strcmp(ext, "s")) {
+        /* non preprocessed assembler */
+        ret = tcc_assemble(s1, 0);
+    } else 
+#endif
+    {
         fd = file->fd;
         /* assume executable format: auto guess file type */
         if (read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
@@ -8819,7 +9237,18 @@ int tcc_add_symbol(TCCState *s, const char *name, unsigned long val)
 
 int tcc_set_output_type(TCCState *s, int output_type)
 {
+    char buf[1024];
+
     s->output_type = output_type;
+
+    if (!s->nostdinc) {
+        /* default include paths */
+        /* XXX: reverse order needed if -isystem support */
+        tcc_add_sysinclude_path(s, "/usr/local/include");
+        tcc_add_sysinclude_path(s, "/usr/include");
+        snprintf(buf, sizeof(buf), "%s/include", tcc_lib_path);
+        tcc_add_sysinclude_path(s, buf);
+    }
 
     /* if bound checking, then add corresponding sections */
 #ifdef CONFIG_TCC_BCHECK
@@ -8873,7 +9302,7 @@ static int64_t getclock_us(void)
 
 void help(void)
 {
-    printf("tcc version 0.9.15 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.16 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
@@ -8904,16 +9333,86 @@ void help(void)
            );
 }
 
+#define TCC_OPTION_HAS_ARG 0x0001
+#define TCC_OPTION_NOSEP   0x0002 /* cannot have space before option and arg */
+
+typedef struct TCCOption {
+    const char *name;
+    uint16_t index;
+    uint16_t flags;
+} TCCOption;
+
+enum {
+    TCC_OPTION_HELP,
+    TCC_OPTION_MARKER,
+    TCC_OPTION_I,
+    TCC_OPTION_D,
+    TCC_OPTION_U,
+    TCC_OPTION_L,
+    TCC_OPTION_B,
+    TCC_OPTION_l,
+    TCC_OPTION_bench,
+    TCC_OPTION_bt,
+    TCC_OPTION_b,
+    TCC_OPTION_g,
+    TCC_OPTION_c,
+    TCC_OPTION_static,
+    TCC_OPTION_shared,
+    TCC_OPTION_o,
+    TCC_OPTION_r,
+    TCC_OPTION_W,
+    TCC_OPTION_O,
+    TCC_OPTION_m,
+    TCC_OPTION_f,
+    TCC_OPTION_nostdinc,
+    TCC_OPTION_print_search_dirs,
+    TCC_OPTION_rdynamic,
+};
+
+static const TCCOption tcc_options[] = {
+    { "h", TCC_OPTION_HELP, 0 },
+    { "?", TCC_OPTION_HELP, 0 },
+    { "-", TCC_OPTION_MARKER, 0 },
+    { "I", TCC_OPTION_I, TCC_OPTION_HAS_ARG },
+    { "D", TCC_OPTION_D, TCC_OPTION_HAS_ARG },
+    { "U", TCC_OPTION_U, TCC_OPTION_HAS_ARG },
+    { "L", TCC_OPTION_L, TCC_OPTION_HAS_ARG },
+    { "B", TCC_OPTION_B, TCC_OPTION_HAS_ARG },
+    { "l", TCC_OPTION_l, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "bench", TCC_OPTION_bench, 0 },
+    { "bt", TCC_OPTION_bt, TCC_OPTION_HAS_ARG },
+#ifdef CONFIG_TCC_BCHECK
+    { "b", TCC_OPTION_b, 0 },
+#endif
+    { "g", TCC_OPTION_g, 0 },
+    { "c", TCC_OPTION_c, 0 },
+    { "static", TCC_OPTION_static, 0 },
+    { "shared", TCC_OPTION_shared, 0 },
+    { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
+    { "rdynamic", TCC_OPTION_rdynamic, 0 }, /* currently ignored */
+    { "r", TCC_OPTION_r, 0 },
+    { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG },
+    { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "nostdinc", TCC_OPTION_nostdinc, 0 },
+    { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 }, 
+    { NULL },
+};
+
 int main(int argc, char **argv)
 {
-    char *r, *outfile;
+    char *r;
     int optind, output_type, multiple_files, i, reloc_output;
     TCCState *s;
     char **files;
     int nb_files, nb_libraries, nb_objfiles, dminus, ret;
     char objfilename[1024];
     int64_t start_time = 0;
-    
+    const TCCOption *popt;
+    const char *optarg, *p1, *r1, *outfile;
+    int print_search_dirs;
+
     s = tcc_new();
     output_type = TCC_OUTPUT_MEMORY;
 
@@ -8925,9 +9424,10 @@ int main(int argc, char **argv)
     nb_files = 0;
     nb_libraries = 0;
     reloc_output = 0;
+    print_search_dirs = 0;
     while (1) {
         if (optind >= argc) {
-            if (nb_files == 0)
+            if (nb_files == 0 && !print_search_dirs)
                 goto show_help;
             else
                 break;
@@ -8941,74 +9441,133 @@ int main(int argc, char **argv)
                 /* argv[0] will be this file */
                 break;
             }
-        } else if (r[1] == '-') {
-            /* '--' enables multiple files input and also ends several file input */
-            if (dminus && multiple_files) {
-                optind--; /* argv[0] will be '--' */
+        } else {
+            /* find option in table (match only the first chars */
+            popt = tcc_options;
+            for(;;) {
+                p1 = popt->name;
+                if (p1 == NULL)
+                    error("invalid option -- '%s'", r);
+                r1 = r + 1;
+                for(;;) {
+                    if (*p1 == '\0')
+                        goto option_found;
+                    if (*r1 != *p1)
+                        break;
+                    p1++;
+                    r1++;
+                }
+                popt++;
+            }
+        option_found:
+            if (popt->flags & TCC_OPTION_HAS_ARG) {
+                if (*r1 != '\0' || (popt->flags & TCC_OPTION_NOSEP)) {
+                    optarg = r1;
+                } else {
+                    if (optind >= argc)
+                        error("argument to '%s' is missing", r);
+                    optarg = argv[optind++];
+                }
+            } else {
+                if (*r1 != '\0')
+                    goto show_help;
+                optarg = NULL;
+            }
+                
+            switch(popt->index) {
+            case TCC_OPTION_HELP:
+            show_help:
+                help();
+                return 1;
+            case TCC_OPTION_MARKER:
+                /* '--' enables multiple files input and also ends several
+                   file input */
+                if (dminus && multiple_files) {
+                    optind--; /* argv[0] will be '--' */
+                    goto end_parse;
+                }
+                dminus = 1;
+                multiple_files = 1;
+            case TCC_OPTION_I:
+                if (tcc_add_include_path(s, optarg) < 0)
+                    error("too many include paths");
+                break;
+            case TCC_OPTION_D:
+                {
+                    char *sym, *value;
+                    sym = (char *)optarg;
+                    value = strchr(sym, '=');
+                    if (value) {
+                        *value = '\0';
+                        value++;
+                    }
+                    tcc_define_symbol(s, sym, value);
+                }
+                break;
+            case TCC_OPTION_U:
+                tcc_undefine_symbol(s, optarg);
+                break;
+            case TCC_OPTION_L:
+                tcc_add_library_path(s, optarg);
+                break;
+            case TCC_OPTION_B:
+                /* set tcc utilities path (mainly for tcc development) */
+                tcc_lib_path = optarg;
+                break;
+            case TCC_OPTION_l:
+                dynarray_add((void ***)&files, &nb_files, r);
+                nb_libraries++;
+                break;
+            case TCC_OPTION_bench:
+                do_bench = 1;
+                break;
+            case TCC_OPTION_bt:
+                num_callers = atoi(optarg);
+                break;
+#ifdef CONFIG_TCC_BCHECK
+            case TCC_OPTION_b:
+                do_bounds_check = 1;
+                do_debug = 1;
+                break;
+#endif
+            case TCC_OPTION_g:
+                do_debug = 1;
+                break;
+            case TCC_OPTION_c:
+                multiple_files = 1;
+                output_type = TCC_OUTPUT_OBJ;
+                break;
+            case TCC_OPTION_static:
+                s->static_link = 1;
+                break;
+            case TCC_OPTION_shared:
+                output_type = TCC_OUTPUT_DLL;
+                break;
+            case TCC_OPTION_o:
+                multiple_files = 1;
+                outfile = optarg;
+                break;
+            case TCC_OPTION_r:
+                /* generate a .o merging several output files */
+                reloc_output = 1;
+                output_type = TCC_OUTPUT_OBJ;
+                break;
+            case TCC_OPTION_nostdinc:
+                s->nostdinc = 1;
+                break;
+            case TCC_OPTION_print_search_dirs:
+                print_search_dirs = 1;
+                break;
+            default:
                 break;
             }
-            dminus = 1;
-            multiple_files = 1;
-        } else if (r[1] == 'h' || r[1] == '?') {
-        show_help:
-            help();
-            return 1;
-        } else if (r[1] == 'I') {
-            if (tcc_add_include_path(s, r + 2) < 0)
-                error("too many include paths");
-        } else if (r[1] == 'D') {
-            char *sym, *value;
-            sym = r + 2;
-            value = strchr(sym, '=');
-            if (value) {
-                *value = '\0';
-                value++;
-            }
-            tcc_define_symbol(s, sym, value);
-        } else if (r[1] == 'U') {
-            tcc_undefine_symbol(s, r + 2);
-        } else if (r[1] == 'L') {
-            tcc_add_library_path(s, r + 2);
-        } else if (r[1] == 'B') {
-            /* set tcc utilities path (mainly for tcc development) */
-            tcc_lib_path = r + 2;
-        } else if (r[1] == 'l') {
-            dynarray_add((void ***)&files, &nb_files, r);
-            nb_libraries++;
-        } else if (!strcmp(r + 1, "bench")) {
-            do_bench = 1;
-        } else if (!strcmp(r + 1, "bt")) {
-            num_callers = atoi(argv[optind++]);
-        } else
-#ifdef CONFIG_TCC_BCHECK
-        if (r[1] == 'b') {
-            do_bounds_check = 1;
-            do_debug = 1;
-        } else 
-#endif
-        if (r[1] == 'g') {
-            do_debug = 1;
-        } else if (r[1] == 'c') {
-            multiple_files = 1;
-            output_type = TCC_OUTPUT_OBJ;
-        } else if (!strcmp(r + 1, "static")) {
-            s->static_link = 1;
-        } else if (!strcmp(r + 1, "shared")) {
-            output_type = TCC_OUTPUT_DLL;
-        } else if (r[1] == 'o') {
-            if (optind >= argc)
-                goto show_help;
-            multiple_files = 1;
-            outfile = argv[optind++];
-        } else if (r[1] == 'r') {
-            /* generate a .o merging several output files */
-            reloc_output = 1;
-            output_type = TCC_OUTPUT_OBJ;
-        } else if (r[1] == 'W' || r[1] == 'O' || r[1] == 'm' || r[1] == 'f') {
-            /* ignore those options to be a drop-in replacement for gcc */
-        } else {
-            error("invalid option -- '%s'", r);
         }
+    }
+ end_parse:
+    if (print_search_dirs) {
+        /* enough for Linux kernel */
+        printf("install: %s/\n", tcc_lib_path);
+        return 0;
     }
 
     nb_objfiles = nb_files - nb_libraries;
