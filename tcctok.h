@@ -144,12 +144,17 @@
      DEF(TOK_strcpy, "strcpy")
 #endif
 
-/* Tiny Assembler for x86 */
+/* Tiny Assembler */
 
  DEF_ASM(byte)
  DEF_ASM(align)
  DEF_ASM(skip)
  DEF_ASM(space)
+ DEF_ASM(string)
+ DEF_ASM(globl)
+ DEF_ASM(text)
+ DEF_ASM(data)
+ DEF_ASM(bss)
 
 #ifdef TCC_TARGET_I386
 

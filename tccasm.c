@@ -85,6 +85,12 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         else
             pe->v = ~pe->v;
         break;
+    case TOK_CCHAR:
+    case TOK_LCHAR:
+	pe->v = tokc.i;
+	pe->sym = NULL;
+	next();
+	break;
     default:
         if (tok >= TOK_IDENT) {
             /* label case : if the label was not found, add one */
@@ -276,6 +282,15 @@ static void asm_free_labels(TCCState *st)
     st->asm_labels = NULL;
 }
 
+static void use_section(TCCState *s1, const char *name)
+{
+    Section *sec;
+    sec = find_section(s1, name);
+    cur_text_section->data_offset = ind;
+    cur_text_section = sec;
+    ind = cur_text_section->data_offset;
+}
+
 static void asm_parse_directive(TCCState *s1)
 {
     int n, offset, v, size, tok1;
@@ -346,8 +361,69 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+    case TOK_ASM_globl:
+	{ 
+            Sym *sym;
+
+            next();
+            sym = label_find(tok);
+            if (!sym) {
+                sym = label_push(&s1->asm_labels, tok, 0);
+                sym->type.t = VT_VOID;
+            }
+            sym->type.t &= ~VT_STATIC;
+            next();
+	}
+	break;
+    case TOK_ASM_string:
+        {
+            const uint8_t *p;
+            int i;
+
+            next();
+            if (tok != TOK_STR)
+                expect("string constant");
+            p = tokc.cstr->data;
+            for(i = 0; i < tokc.cstr->size; i++)
+                g(p[i]);
+            next();
+	}
+	break;
+    case TOK_ASM_text:
+    case TOK_ASM_data:
+    case TOK_ASM_bss:
+	{ 
+            char sname[64];
+            tok1 = tok;
+            n = 0;
+            next();
+            if (tok != ';' && tok != TOK_LINEFEED) {
+		n = asm_int_expr(s1);
+		next();
+            }
+            sprintf(sname, (n?".%s%d":".%s"), get_tok_str(tok1, NULL), n);
+            use_section(s1, sname);
+	}
+	break;
+    case TOK_SECTION1:
+        {
+            char sname[256];
+
+            /* XXX: support more options */
+            next();
+            sname[0] = '\0';
+            while (tok != ';' && tok != TOK_LINEFEED && tok != ',') {
+                if (tok == TOK_STR)
+                    pstrcat(sname, sizeof(sname), tokc.cstr->data);
+                else
+                    pstrcat(sname, sizeof(sname), get_tok_str(tok, NULL));
+                next();
+            }
+            use_section(s1, sname);
+        }
+        break;
     default:
-        error("unknown assembler directive .%s", get_tok_str(tok, NULL));
+        error("unknown assembler directive '.%s'", get_tok_str(tok, NULL));
         break;
     }
 }
