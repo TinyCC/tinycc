@@ -113,7 +113,7 @@ License:
 TCC is distributed under the GNU General Public License (see COPYING
 file). 
 
-I accept only patches where you give your copyright explicitely to me
-to simplify licensing issues.
+License may be changed to LGPL or X11 style, so I would prefer that
+you indicate in submitted patches that you accept such a change.
 
 Fabrice Bellard.
