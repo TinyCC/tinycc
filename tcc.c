@@ -969,6 +969,11 @@ static inline int isnum(int c)
     return c >= '0' && c <= '9';
 }
 
+static inline int isoct(int c)
+{
+    return c >= '0' && c <= '7';
+}
+
 static inline int toup(int c)
 {
     if (ch >= 'a' && ch <= 'z')
@@ -2039,14 +2044,14 @@ static int getq(void)
     c = ch;
     minp();
     if (c == '\\') {
-        if (isnum(ch)) {
+        if (isoct(ch)) {
             /* at most three octal digits */
             c = ch - '0';
             minp();
-            if (isnum(ch)) {
+            if (isoct(ch)) {
                 c = c * 8 + ch - '0';
                 minp();
-                if (isnum(ch)) {
+                if (isoct(ch)) {
                     c = c * 8 + ch - '0';
                     minp();
                 }
@@ -2692,9 +2697,6 @@ void macro_subst(TokenString *tok_str,
                 goto add_cstr;
             } else if (tok == TOK___TIME__) {
                 cstrval = "00:00:00";
-                goto add_cstr;
-            } else if (tok == TOK___FUNCTION__) {
-                cstrval = funcname;
             add_cstr:
                 cstr_new(&cstr);
                 cstr_cat(&cstr, cstrval);
@@ -3753,7 +3755,6 @@ void gen_opif(int op)
         gen_opf(op);
     }
 }
-
 
 int pointed_size(int t)
 {
@@ -5069,7 +5070,7 @@ void unary(void)
     } else if (tok == TOK_CLDOUBLE) {
         vsetc(VT_LDOUBLE, VT_CONST, &tokc);
         next();
-    } else if (tok == TOK___FUNC__) {
+    } else if (tok == TOK___FUNC__ || (tok == TOK___FUNCTION__ && gnu_ext)) {
         void *ptr;
         int len;
         /* special function name identifier */
@@ -5279,7 +5280,6 @@ void unary(void)
                 TokenString str;
                 
                 /* read each argument and store it on a stack */
-                /* XXX: merge it with macro args ? */
                 args = NULL;
                 if (tok != ')') {
                     for(;;) {
@@ -6607,9 +6607,21 @@ static int tcc_compile(TCCState *s)
     char_pointer_type = mk_pointer(VT_BYTE);
     /* define an old type function 'int func()' */
     p = anon_sym++;
-    sym = sym_push1(&global_stack, p, 0, FUNC_OLD);
-    sym->r = FUNC_CDECL;
+    sym = sym_push(p, 0, FUNC_CDECL, FUNC_OLD);
     func_old_type = VT_FUNC | (p << VT_STRUCT_SHIFT);
+#if 0
+    /* define 'void *alloca(unsigned int)' builtin function */
+    {
+        Sym *s1;
+
+        p = anon_sym++;
+        sym = sym_push(p, mk_pointer(VT_VOID), FUNC_CDECL, FUNC_NEW);
+        s1 = sym_push(0, VT_UNSIGNED | VT_INT, 0, 0);
+        s1->next = NULL;
+        sym->next = s1;
+        sym_push(TOK_alloca, VT_FUNC | (p << VT_STRUCT_SHIFT), VT_CONST, 0);
+    }
+#endif
 
     define_start = define_stack.top;
     inp();
@@ -6948,7 +6960,6 @@ TCCState *tcc_new(void)
     sym_push1(&define_stack, TOK___FILE__, MACRO_OBJ, 0);
     sym_push1(&define_stack, TOK___DATE__, MACRO_OBJ, 0);
     sym_push1(&define_stack, TOK___TIME__, MACRO_OBJ, 0);
-    sym_push1(&define_stack, TOK___FUNCTION__, MACRO_OBJ, 0);
 
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
@@ -7107,23 +7118,21 @@ int tcc_add_library(TCCState *s, const char *libraryname)
     int i;
     void *h;
     
-    /* if we output to memory, then we simply we dlopen(). */
-    if (s->output_type == TCC_OUTPUT_MEMORY) {
-        /* Since the libc is already loaded, we don't need to load it again */
-        if (!strcmp(libraryname, "c"))
-            return 0;
-        snprintf(buf, sizeof(buf), "lib%s.so", libraryname);
-        h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
-        if (!h)
-            return -1;
-        return 0;
-    }
-    
     /* first we look for the dynamic library if not static linking */
     if (!static_link) {
         snprintf(buf, sizeof(buf), "lib%s.so", libraryname);
-        if (tcc_add_dll(s, buf, 0) == 0)
-            return 0;
+        /* if we output to memory, then we simply we dlopen(). */
+        if (s->output_type == TCC_OUTPUT_MEMORY) {
+            /* Since the libc is already loaded, we don't need to load it again */
+            if (!strcmp(libraryname, "c"))
+                return 0;
+            h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
+            if (h)
+                return 0;
+        } else {
+            if (tcc_add_dll(s, buf, 0) == 0)
+                return 0;
+        }
     }
 
     /* then we look for the static library */
@@ -7187,7 +7196,7 @@ int tcc_set_output_type(TCCState *s, int output_type)
 
 void help(void)
 {
-    printf("tcc version 0.9.10 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.11 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
