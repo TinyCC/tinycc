@@ -89,7 +89,7 @@ int tok, tok1, tokc, rsym, anon_sym,
     prog, ind, loc, glo, vt, vc, const_wanted, line_num;
 TokenSym *first_ident;
 char token_buf[STRING_MAX_SIZE + 1];
-char *filename;
+char *filename, *funcname;
 Sym *define_stack, *global_stack, *local_stack, *label_stack;
 
 int vstack[VSTACK_SIZE], *vstack_ptr;
@@ -209,6 +209,7 @@ enum {
     TOK_SIGNED,
     TOK_AUTO,
     TOK_INLINE,
+    TOK_RESTRICT,
 
     /* unsupported type */
     TOK_FLOAT,
@@ -231,8 +232,14 @@ enum {
     TOK_ENDIF,
     TOK_DEFINED,
     TOK_UNDEF,
+    TOK_ERROR,
+    TOK___LINE__,
+    TOK___FILE__,
+    TOK___DATE__,
+    TOK___TIME__,
 
     /* special identifiers */
+    TOK___FUNC__,
     TOK_MAIN,
 };
 
@@ -334,6 +341,9 @@ TokenSym *tok_alloc(char *str, int len)
     TokenSym *ts, **pts;
     int t;
     
+    if (len <= 0)
+        len = strlen(str);
+
     t = TOK_IDENT;
     pts = &first_ident;
     while (1) {
@@ -674,7 +684,7 @@ void define_symbol(char *sym)
     TokenSym *ts;
     int *str, len;
 
-    ts = tok_alloc(sym, strlen(sym));
+    ts = tok_alloc(sym, 0);
     str = NULL;
     len = 0;
     tok_add2(&str, &len, TOK_NUM, 1);
@@ -828,6 +838,8 @@ void preprocess()
         if (ifdef_stack_ptr == ifdef_stack)
             expect("#if");
         ifdef_stack_ptr--;
+    } else if (tok == TOK_ERROR) {
+        error("#error");
     }
     /* ignore other preprocess commands or #! for C scripts */
     while (ch != '\n' && ch != -1)
@@ -1048,7 +1060,7 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                 printf("stringize: %s\n", token_buf);
 #endif
                 /* add string */
-                ts = tok_alloc(token_buf, strlen(token_buf));
+                ts = tok_alloc(token_buf, 0);
                 tok_add2(&str, &len, TOK_STR, (int)ts);
             } else {
                 tok_add(&str, &len, t);
@@ -1109,7 +1121,7 @@ int *macro_twosharps(int *macro_str)
                     strcpy(token_buf, p);
                     p = get_tok_str(t, c);
                     strcat(token_buf, p);
-                    ts = tok_alloc(token_buf, strlen(token_buf));
+                    ts = tok_alloc(token_buf, 0);
                     tok_add2(&macro_str1, &macro_str1_len, ts->tok, 0);
                 } else {
                     /* cannot merge tokens: skip '##' */
@@ -1150,9 +1162,20 @@ void macro_subst(int **tok_str, int *tok_len,
         next_nomacro();
         if (tok == 0)
             break;
-        /* if symbol is a macro, prepare substitution */
-        s = sym_find1(define_stack, tok);
-        if (s) {
+        /* special macros */
+        if (tok == TOK___LINE__) {
+            tok_add2(tok_str, tok_len, TOK_NUM, line_num);
+        } else if (tok == TOK___FILE__) {
+            tok_add2(tok_str, tok_len, TOK_STR, 
+                     (int)tok_alloc(filename, 0));
+        } else if (tok == TOK___DATE__) {
+            tok_add2(tok_str, tok_len, TOK_STR, 
+                     (int)tok_alloc("Jan  1 1970", 0));
+        } else if (tok == TOK___TIME__) {
+            tok_add2(tok_str, tok_len, TOK_STR, 
+                     (int)tok_alloc("00:00:00", 0));
+        } else if ((s = sym_find1(define_stack, tok)) != NULL) {
+            /* if symbol is a macro, prepare substitution */
             /* if nested substitution, do nothing */
             if (sym_find1(*nested_list, tok))
                 goto no_subst;
@@ -1214,9 +1237,6 @@ void macro_subst(int **tok_str, int *tok_len,
             sym_pop(nested_list, (*nested_list)->prev);
             if (mstr_allocated)
                 free(mstr);
-            /* only replace one macro while parsing input stream */
-            if (!macro_str)
-                return;
         } else {
         no_subst:
             /* no need to add if reading input stream */
@@ -1224,6 +1244,9 @@ void macro_subst(int **tok_str, int *tok_len,
                 return;
             tok_add2(tok_str, tok_len, tok, tokc);
         }
+        /* only replace one macro while parsing input stream */
+        if (!macro_str)
+            return;
     }
     macro_ptr = saved_macro_ptr;
     if (macro_str1)
@@ -2110,7 +2133,7 @@ int type_decl(int *v, int t, int td)
     t = t & -3; /* suppress the ored '2' */
     while (tok == '*') {
         next();
-        while (tok == TOK_CONST || tok == TOK_VOLATILE)
+        while (tok == TOK_CONST || tok == TOK_VOLATILE || tok == TOK_RESTRICT)
             next();
         t = mk_pointer(t);
     }
@@ -2189,6 +2212,12 @@ void unary()
     if (tok == TOK_NUM || tok == TOK_CCHAR) {
         vset(VT_CONST, tokc);
         next();
+    } else if (tok == TOK___FUNC__) {
+        /* special function name identifier */
+        /* generate (char *) type */
+        vset(VT_CONST | mk_pointer(VT_TYPE), glo);
+        strcpy((void *)glo, funcname);
+        glo += strlen(funcname) + 1;
     } else if (tok == TOK_STR) {
         TokenSym *ts;
         /* generate (char *) type */
@@ -2791,6 +2820,7 @@ void decl(l)
                     /* put function address */
                     sym_push1(&global_stack, v, VT_CONST | VT_LVAL | t, ind);
                 }
+                funcname = get_tok_str(v, 0);
                 /* push a dummy symbol to enable local sym storage */
                 sym_push1(&local_stack, 0, 0, 0);
                 /* define parameters */
@@ -2808,6 +2838,7 @@ void decl(l)
                                          save local variables */
                 sym_pop(&label_stack, 0); /* reset label stack */
                 sym_pop(&local_stack, 0); /* reset local stack */
+                funcname = "";
                 break;
             } else {
                 if (b & VT_TYPEDEF) {
@@ -2885,7 +2916,7 @@ int main(int argc, char **argv)
     nb_include_paths = 3;
 
     /* add all tokens */
-    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0float\0double\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0main\0";
+    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0restrict\0float\0double\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0error\0__LINE__\0__FILE__\0__DATE__\0__TIME__\0__func__\0main\0";
     while (*p) {
         r = p;
         while (*r++);
@@ -2926,6 +2957,7 @@ int main(int argc, char **argv)
     
     filename = argv[optind];
     line_num = 1;
+    funcname = "";
     file = fopen(filename, "r");
     if (!file) {
         perror(filename);
