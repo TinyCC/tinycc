@@ -222,7 +222,7 @@ FILES= Makefile Makefile.uClibc configure VERSION \
        stddef.h stdarg.h stdbool.h float.h varargs.h \
        tcclib.h libtcc.h libtcc_test.c \
        ex1.c ex2.c ex3.c ex4.c ex5.c \
-       tcctest.c boundtest.c gcctestsuite.sh
+       tcctest.c boundtest.c gcctestsuite.sh texi2pod.pl
 
 FILE=tcc-$(VERSION)
 
