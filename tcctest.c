@@ -253,6 +253,12 @@ void macro_test(void)
     /* test macro substituion inside args (should not eat stream) */
     printf("qq=%d\n", qq(qq)(2));
 
+    /* test zero argument case. NOTE: gcc 2.95.x does not accept a
+       null argument without a space. gcc 3.2 fixes that. */
+
+#define qq1(x) 1
+    printf("qq1=%d\n", qq1( ));
+
     /* comment with stray handling *\
 /
        /* this is a valid *\/ comment */

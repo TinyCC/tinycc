@@ -3812,7 +3812,7 @@ static int macro_subst_tok(TokenString *tok_str,
             /* NOTE: empty args are allowed, except if no args */
             for(;;) {
                 /* handle '()' case */
-                if (!args && tok == ')')
+                if (!args && !sa && tok == ')')
                     break;
                 if (!sa)
                     error("macro '%s' used with too many args",
