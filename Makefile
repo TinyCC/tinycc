@@ -117,6 +117,9 @@ tcc: tcc_g Makefile
 c67-tcc: tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
+arm-tcc: tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+
 # TinyCC runtime libraries
 libtcc1.o: libtcc1.c
 	$(CC) -O2 -Wall -c -o $@ $<

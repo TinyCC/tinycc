@@ -119,6 +119,13 @@
      DEF(TOK___sardi3, "__ashrdi3")
      DEF(TOK___shrdi3, "__lshrdi3")
      DEF(TOK___shldi3, "__ashldi3")
+     DEF(TOK___slltold, "__slltold")
+     DEF(TOK___fixunssfsi, "__fixunssfsi")
+     DEF(TOK___fixunsdfsi, "__fixunsdfsi")
+     DEF(TOK___fixunsxfsi, "__fixunsxfsi")
+     DEF(TOK___fixsfdi, "__fixsfdi")
+     DEF(TOK___fixdfdi, "__fixdfdi")
+     DEF(TOK___fixxfdi, "__fixxfdi")
 #else
      /* XXX: same names on i386 ? */
      DEF(TOK___sardi3, "__sardi3")

@@ -728,6 +728,8 @@ int ieee_finite(double d);
 void error(const char *fmt, ...);
 void vpushi(int v);
 void vrott(int n);
+void vnrott(int n);
+void lexpand_nr(void);
 static void vpush_global_sym(CType *type, int v);
 void vset(CType *type, int r, int v);
 void type_to_str(char *buf, int buf_size, 
@@ -4685,6 +4687,34 @@ void lexpand(void)
     vtop[-1].type.t = VT_INT | u;
 }
 
+#ifdef TCC_TARGET_ARM
+/* expand long long on stack */
+void lexpand_nr(void)
+{
+    int u,v;
+
+    u = vtop->type.t & VT_UNSIGNED;
+    vdup();
+    vtop->r2 = VT_CONST;
+    vtop->type.t = VT_INT | u;
+    v=vtop[-1].r & (VT_VALMASK | VT_LVAL);
+    if (v == VT_CONST) {
+      vtop[-1].c.ui = vtop->c.ull;
+      vtop->c.ui = vtop->c.ull >> 32;
+      vtop->r = VT_CONST;
+    } else if (v == (VT_LVAL|VT_CONST) || v == (VT_LVAL|VT_LOCAL)) {
+      vtop->c.ui += 4;
+      vtop->r = vtop[-1].r;
+    } else if (v > VT_CONST) {
+      vtop--;
+      lexpand();
+    } else
+      vtop->r = vtop[-1].r2;
+    vtop[-1].r2 = VT_CONST;
+    vtop[-1].type.t = VT_INT | u;
+}
+#endif
+
 /* build a long long from two ints */
 void lbuild(int t)
 {
@@ -4721,6 +4751,22 @@ void vrott(int n)
         vtop[-i] = vtop[-i - 1];
     vtop[-n + 1] = tmp;
 }
+
+#ifdef TCC_TARGET_ARM
+/* like vrott but in other direction
+   In ... I1 -> I(n-1) ... I1 In  [top is right]
+ */
+void vnrott(int n)
+{
+    int i;
+    SValue tmp;
+
+    tmp = vtop[-n + 1];
+    for(i = n - 1; i > 0; i--)
+        vtop[-i] = vtop[-i + 1];
+    vtop[0] = tmp;
+}
+#endif
 
 /* pop stack value */
 void vpop(void)
@@ -5531,11 +5577,7 @@ static void gen_cast(CType *type)
                 }
             } else {
             do_itof:
-#if !defined(TCC_TARGET_ARM)
-                gen_cvt_itof1(dbt);
-#else
                 gen_cvt_itof(dbt);
-#endif
             }
         } else if (sf) {
             /* convert fp to int */
