@@ -37,7 +37,7 @@ generation (@xref{libtcc}).
 
 @example
 usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
-           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]
+           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]
            [--] infile1 [infile2... --] [infile_args...]
 @end example
 
@@ -131,21 +131,6 @@ also be defined: @code{'-DF(a)=a+1'}
 Undefine preprocessor symbol 'sym'.
 @end table
 
-C compiler options:
-
-@table @samp
-@item -g
-Generate run time debug information so that you get clear run time
-error messages: @code{ test.c:68: in function 'test5()': dereferencing
-invalid pointer} instead of the laconic @code{Segmentation
-fault}.
-
-@item -b
-Generate additionnal support code to check
-memory allocations and array/pointer bounds. '-g' is implied. Note
-that the generated code is slower and bigger in this case.
-@end table
-
 Linker options:
 
 @table @samp
@@ -172,19 +157,36 @@ also be given).
 
 @end table
 
+Debugger options:
+
+@table @samp
+@item -g
+Generate run time debug information so that you get clear run time
+error messages: @code{ test.c:68: in function 'test5()': dereferencing
+invalid pointer} instead of the laconic @code{Segmentation
+fault}.
+
+@item -b
+Generate additionnal support code to check
+memory allocations and array/pointer bounds. @samp{-g} is implied. Note
+that the generated code is slower and bigger in this case.
+
+@item -bt N
+Display N callers in stack traces. This is useful with @samp{-g} or
+@samp{-b}.
+
+@end table
+
+Note: GCC options @samp{-Ox}, @samp{-Wx}, @samp{-fx} and @samp{-mx} are
+ignored.
+
 @chapter C language support
 
 @section ANSI C
 
 TCC implements all the ANSI C standard, including structure bit fields
 and floating point numbers (@code{long double}, @code{double}, and
-@code{float} fully supported). The following limitations are known:
-
-@itemize
- @item The preprocessor tokens are the same as C. It means that in some
-  rare cases, preprocessed numbers are not handled exactly as in ANSI
-  C. This approach has the advantage of being simpler and FAST!
-@end itemize
+@code{float} fully supported).
 
 @section ISOC99 extensions
 
@@ -319,6 +321,16 @@ generate function @code{'my_add'} in section @code{.mycodesection}.
 @item @code{__FUNCTION__} is interpreted as C99 @code{__func__} 
 (so it has not exactly the same semantics as string literal GNUC
 where it is a string literal).
+
+@item The @code{__alignof__} keyword can be used as @code{sizeof} 
+to get the alignment of a type or an expression.
+
+@item The @code{typeof(x)} returns the type of @code{x}. 
+@code{x} is an expression or a type.
+
+@item Computed gotos: @code{&&label} returns a pointer of type 
+@code{void *} on the goto label @code{label}. @code{goto *expr} can be
+used to jump on the pointer resulting from @code{expr}.
 
 @end itemize
 

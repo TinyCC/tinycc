@@ -1,20 +1,19 @@
 TODO list:
 
-- To fix: 'sizeof' generates code if too complex expression is given.
-- add gcc extension typeof()
-- add gcc extension __alignof__()
-- fix constant error msg
 - add 'CType' structure to optimize type handling (= compile even faster)
 - suppress unneeded hash table for Symbols (= compile even faster)
 - add alloca()
-- ignore at least asm extension
+- implement minimal 'asm' extension
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
 - fix bound check code with '&' on local variables (currently done
   only for local arrays).
-- To check: bound checking and float/long long/struct copy code. bound
+- sizeof, alignof, typeof can still generate code in some cases.
+- bound checking and float/long long/struct copy code. bound
   checking and symbol + offset optimization
-- free all allocated data and use longjmp for errors (useful for libtcc use)
+- Fix the remaining libtcc memory leaks.
+- make libtcc fully reentrant (except for the compilation stage itself).
+- '-MD' option
 
 Not critical:
 
