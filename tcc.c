@@ -23,15 +23,21 @@
 /* preprocessor debug */
 //#define PP_DEBUG
 
-#define TEXT_SIZE           50000
-#define DATA_SIZE           50000
+/* these sizes are dummy for unix, because malloc() does not use
+   memory when the pages are not used */
+#define TEXT_SIZE           (4*1024*1024)
+#define DATA_SIZE           (4*1024*1024)
+
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         64
 #define STRING_MAX_SIZE     1024
 #define INCLUDE_PATHS_MAX   32
 
+/* number of available temporary registers */
 #define NB_REGS             3
+/* defined if function parameters must be evaluated in revert order */
+#define INVERT_FUNC_PARAMS
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -107,8 +113,9 @@ int nb_include_paths;
 #define VT_FORWARD 0x0020  /* value is forward reference 
                               (only used for functions) */
 
+/* types */
 #define VT_VOID     0x00040
-#define VT_BYTE     0x00080  /* byte type */
+#define VT_BYTE     0x00080  /* signed byte type */
 #define VT_PTR      0x00100  /* pointer increment */
 #define VT_UNSIGNED 0x00200  /* unsigned type */
 #define VT_ARRAY    0x00400  /* array type (only used in parsing) */
@@ -116,16 +123,14 @@ int nb_include_paths;
 #define VT_FUNC     0x01000  /* function type */
 #define VT_STRUCT  0x002000  /* struct/union definition */
 #define VT_TYPEDEF 0x004000  /* typedef definition */
-#define VT_EXTERN  0x008000   /* extern definition */
-#define VT_STATIC  0x010000   /* static variable */
-#define VT_STRUCT_SHIFT 17   /* structure/enum name shift (12 bits lefts) */
+#define VT_EXTERN  0x008000  /* extern definition */
+#define VT_STATIC  0x010000  /* static variable */
+#define VT_SHORT   0x020000  /* short type */
+#define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 
 #define VT_TYPE    0xffffffc0  /* type mask */
 #define VT_TYPEN   0x0000003f  /* ~VT_TYPE */
 #define VT_FUNCN   -4097       /* ~VT_FUNC */
-
-
-/* Special infos */
 
 /* token values */
 
@@ -516,7 +521,6 @@ void minp()
 }
 
 /* same as minp, but also skip comments */
-/* XXX: skip strings & chars */
 void cinp()
 {
     int c;
@@ -1196,6 +1200,12 @@ void macro_subst(int **tok_str, int *tok_len,
                     expect(")");
                 /* now subst each arg */
                 mstr = macro_arg_subst(nested_list, mstr, args);
+                /* free memory */
+                sa = args;
+                while (sa) {
+                    free((int *)sa->c);
+                    sa = sa->prev;
+                }
                 sym_pop(&args, NULL);
                 mstr_allocated = 1;
             }
@@ -1335,6 +1345,12 @@ void load(r, ft, fc)
         }
         if ((ft & VT_TYPE) == VT_BYTE)
             o(0xbe0f);   /* movsbl */
+        else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED))
+            o(0xb60f);   /* movzbl */
+        else if ((ft & VT_TYPE) == VT_SHORT)
+            o(0xbf0f);   /* movswl */
+        else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED))
+            o(0xb70f);   /* movzwl */
         else
             o(0x8b);     /* movl */
         if (v == VT_CONST) {
@@ -1376,6 +1392,9 @@ void store(r, ft, fc)
 
     fr = ft & VT_VALMASK;
     b = (ft & VT_TYPE) == VT_BYTE;
+    /* XXX: incorrect if reg to reg */
+    if (ft & VT_SHORT)
+        o(0x66);
     o(0x89 - b);
     if (fr == VT_CONST) {
         oad(0x05 + r * 8, fc); /* mov r,xxx */
@@ -1386,6 +1405,11 @@ void store(r, ft, fc)
     } else if (fr != r) {
         o(0xc0 + fr + r * 8); /* mov r, fr */
     }
+}
+
+void gfunc_param(void)
+{
+    o(0x50 + gv()); /* push r */
 }
 
 int gjmp(t)
@@ -1797,6 +1821,9 @@ int type_size(int t, int *a)
                (t & VT_ENUM)) {
         *a = 4;
         return 4;
+    } else if (t & VT_SHORT) {
+        *a = 2;
+        return 2;
     } else {
         *a = 1;
         return 1;
@@ -1967,7 +1994,9 @@ int ist(void)
                 t |= VT_BYTE;
             } else if (tok == TOK_VOID) {
                 t |= VT_VOID;
-            } else if (tok == TOK_INT | tok == TOK_SHORT |
+            } else if (tok == TOK_SHORT) {
+                t |= VT_SHORT;
+            } else if (tok == TOK_INT |
                        (tok >= TOK_CONST & tok <= TOK_INLINE)) {
                 /* ignored types */
             } else if (tok == TOK_FLOAT || tok == TOK_DOUBLE) {
@@ -2308,28 +2337,64 @@ void unary()
             ft = vt;
             fc = vc;
             next();
+#ifdef INVERT_FUNC_PARAMS
+            {
+                int *str, len, parlevel, *saved_macro_ptr;
+                Sym *args;
+
+                /* read each argument and store it on a stack */
+                /* XXX: merge it with macro args ? */
+                args = NULL;
+                while (tok != ')') {
+                    len = 0;
+                    str = NULL;
+                    parlevel = 0;
+                    while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
+                           tok != -1) {
+                        if (tok == '(')
+                            parlevel++;
+                        else if (tok == ')')
+                            parlevel--;
+                        tok_add2(&str, &len, tok, tokc);
+                        next();
+                    }
+                    tok_add(&str, &len, -1); /* end of file added */
+                    tok_add(&str, &len, 0);
+                    sym_push1(&args, 0, 0, (int)str);
+                    if (tok != ',')
+                        break;
+                    next();
+                }
+                if (tok != ')')
+                    expect(")");
+                
+                /* now generate code in reverse order by reading the stack */
+                saved_macro_ptr = macro_ptr;
+                t = 0;
+                while (args) {
+                    t += 4;
+                    macro_ptr = (int *)args->c;
+                    next();
+                    expr_eq();
+                    gfunc_param();
+                    free((int *)args->c);
+                    sym_pop(&args, args->prev);
+                }
+                macro_ptr = saved_macro_ptr;
+                /* restore token */
+                tok = ')';
+            }
+#else
             t = 0;
             while (tok != ')') {
-                t = t + 4;
+                t += 4;
                 expr_eq();
-                r = gv();
-                o(0x50 + r); /* push r */
+                gfunc_param();
                 if (tok == ',')
                     next();
             }
+#endif
             skip(')');
-            /* horrible, but needed : convert to native ordering (could
-               parse parameters in reverse order, but would cost more
-               code) */
-            n = 0;
-            p = t - 4;
-            while (n < p) {
-                oad(0x24848b, p); /* mov x(%esp,1), %eax */
-                oad(0x248487, n); /* xchg   x(%esp,1), %eax */
-                oad(0x248489, p); /* mov %eax, x(%esp,1) */
-                n = n + 4;
-                p = p - 4;
-            }
             if ((ft & VT_VALMASK) == VT_CONST) {
                 /* forward reference */
                 if (ft & VT_FORWARD) {
@@ -2450,7 +2515,7 @@ void eor()
 /* XXX: better constant handling */
 void expr_eq()
 {
-    int t, u, c;
+    int t, u, c, r1, r2;
 
     if (const_wanted) {
         sum(10);
@@ -2470,12 +2535,14 @@ void expr_eq()
             next();
             t = gtst(1, 0);
             expr();
-            gv();
+            r1 = gv();
             skip(':');
             u = gjmp(0);
             gsym(t);
             expr_eq();
-            gv();
+            r2 = gv();
+            move_reg(r1, r2);
+            vt = (vt & VT_TYPE) | r1;
             gsym(u);
         }
     }
@@ -2835,7 +2902,8 @@ int main(int argc, char **argv)
     optind = 1;
     while (1) {
         if (optind >= argc) {
-            printf("usage: tcc [-Idir] [-Dsym] [-llib] infile [infile_arg...]\n");
+            printf("tcc version 0.9 - Tiny C Compiler - Copyright (C) 2001 Fabrice Bellard\n" 
+                   "usage: tcc [-Idir] [-Dsym] [-llib] infile [infile_arg...]\n");
             return 1;
         }
         r = argv[optind];
@@ -2890,7 +2958,7 @@ int main(int argc, char **argv)
     s = sym_find(TOK_MAIN);
     if (!s)
         error("main() not defined");
-    t = s->c;
+    t = (int (*)())s->c;
 #ifdef PROFILE
     return 1;
 #else
