@@ -271,9 +271,11 @@ int nb_library_paths;
    anon_sym: anonymous symbol index
 */
 int rsym, anon_sym,
-    prog, ind, loc, const_wanted;
-int global_expr; /* true if compound literals must be allocated
-                    globally (used during initializers parsing */
+    prog, ind, loc;
+/* expression generation modifiers */
+int const_wanted; /* true if constant wanted */
+int global_expr;  /* true if compound literals must be allocated
+                     globally (used during initializers parsing */
 int func_vt, func_vc; /* current function return type (used by
                          return instruction) */
 int last_line_num, last_ind, func_ind; /* debug last line number and pc */
@@ -921,11 +923,14 @@ static void put_extern_sym(Sym *sym, Section *section,
             /* if bound checking is activated, we change some function
                names by adding the "__bound" prefix */
             switch(sym->v) {
+#if 0
+            /* XXX: we rely only on malloc hooks */
             case TOK_malloc: 
             case TOK_free: 
             case TOK_realloc: 
             case TOK_memalign: 
             case TOK_calloc: 
+#endif
             case TOK_memcpy: 
             case TOK_memmove:
             case TOK_memset:
@@ -1901,7 +1906,7 @@ void preprocess(void)
         }
 
         if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
-            error("memory full");
+            error("#include recursion too deep");
         if (c == '\"') {
             /* first search in current dir if "header.h" */
             size = 0;
@@ -2857,12 +2862,18 @@ void swap(int *p, int *q)
 
 void vsetc(int t, int r, CValue *vc)
 {
+    int v;
+
     if (vtop >= vstack + VSTACK_SIZE)
         error("memory full");
-    /* cannot let cpu flags if other instruction are generated */
-    /* XXX: VT_JMP test too ? */
-    if ((vtop->r & VT_VALMASK) == VT_CMP)
-        gv(RC_INT);
+    /* cannot let cpu flags if other instruction are generated. Also
+       avoid leaving VT_JMP anywhere except on the top of the stack
+       because it would complicate the code generator. */
+    if (vtop >= vstack) {
+        v = vtop->r & VT_VALMASK;
+        if (v == VT_CMP || (v & ~1) == VT_JMP)
+            gv(RC_INT);
+    }
     vtop++;
     vtop->t = t;
     vtop->r = r;
@@ -3251,8 +3262,13 @@ int gv(int rc)
 /* generate vtop[-1] and vtop[0] in resp. classes rc1 and rc2 */
 void gv2(int rc1, int rc2)
 {
-    /* generate more generic register first */
-    if (rc1 <= rc2) {
+    int v;
+
+    /* generate more generic register first. But VT_JMP or VT_CMP
+       values must be generated first in all cases to avoid possible
+       reload errors */
+    v = vtop[0].r & VT_VALMASK;
+    if (v != VT_CMP && (v & ~1) != VT_JMP && rc1 <= rc2) {
         vswap();
         gv(rc1);
         vswap();
@@ -5239,8 +5255,12 @@ void unary(void)
             /* change type to field type, and set to lvalue */
             vtop->t = s->t;
             /* an array is never an lvalue */
-            if (!(vtop->t & VT_ARRAY))
+            if (!(vtop->t & VT_ARRAY)) {
                 vtop->r |= lvalue_type(vtop->t);
+                /* if bound checking, the referenced pointer must be checked */
+                if (do_bounds_check) 
+                    vtop->r |= VT_MUSTBOUND;
+            }
             next();
         } else if (tok == '[') {
             next();
@@ -5468,21 +5488,23 @@ void eor(void)
 /* XXX: better constant handling */
 void expr_eq(void)
 {
-    int t, u, c, r1, r2, rc;
+    int tt, u, r1, r2, rc, t1, t2, t, bt1, bt2;
+    SValue sv;
 
     if (const_wanted) {
+        int c1, c;
         sum(10);
         if (tok == '?') {
             c = vtop->c.i;
             vpop();
             next();
             gexpr();
-            t = vtop->c.i;
+            c1 = vtop->c.i;
             vpop();
             skip(':');
             expr_eq();
             if (c)
-                vtop->c.i = t;
+                vtop->c.i = c1;
         }
     } else {
         eor();
@@ -5490,23 +5512,76 @@ void expr_eq(void)
             next();
             save_regs(1); /* we need to save all registers here except
                              at the top because it is a branch point */
-            t = gtst(1, 0);
+            tt = gtst(1, 0);
             gexpr();
-            /* XXX: long long handling ? */
-            rc = RC_INT;
-            if (is_float(vtop->t))
-                rc = RC_FLOAT;
-            r1 = gv(rc);
+            t1 = vtop->t;
+            bt1 = t1 & VT_BTYPE;
+            sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
             u = gjmp(0);
 
-            gsym(t);
+            gsym(tt);
             expr_eq();
+            t2 = vtop->t;
+
+            bt2 = t2 & VT_BTYPE;
+            /* cast operands to correct type according to ISOC rules */
+            if (is_float(bt1) || is_float(bt2)) {
+                if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
+                    t = VT_LDOUBLE;
+                } else if (bt1 == VT_DOUBLE || bt2 == VT_DOUBLE) {
+                    t = VT_DOUBLE;
+                } else {
+                    t = VT_FLOAT;
+                }
+            } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
+                /* cast to biggest op */
+                t = VT_LLONG;
+                /* convert to unsigned if it does not fit in a long long */
+                if ((t1 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED) ||
+                    (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED))
+                    t |= VT_UNSIGNED;
+            } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
+                /* XXX: test pointer compatibility */
+                t = t1;
+            } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+                /* XXX: test structure compatibility */
+                t = t1;
+            } else if (bt1 == VT_VOID || bt2 == VT_VOID) {
+                /* NOTE: as an extension, we accept void on only one side */
+                t = VT_VOID;
+            } else {
+                /* integer operations */
+                t = VT_INT;
+                /* convert to unsigned if it does not fit in an integer */
+                if ((t1 & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED) ||
+                    (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED))
+                    t |= VT_UNSIGNED;
+            }
+                
+            /* now we convert second operand */
+            gen_cast(t);
+            rc = RC_INT;
+            if (is_float(t)) {
+                rc = RC_FLOAT;
+            } else if ((t & VT_BTYPE) == VT_LLONG) {
+                /* for long longs, we use fixed registers to avoid having
+                   to handle a complicated move */
+                rc = RC_IRET; 
+            }
             r2 = gv(rc);
-            move_reg(r1, r2);
-            vtop->r = r1;
+            /* this is horrible, but we must also convert first
+               operand */
+            tt = gjmp(0);
             gsym(u);
+            /* put again first value and cast it */
+            *vtop = sv;
+            gen_cast(t);
+            r1 = gv(rc);
+            move_reg(r2, r1);
+            vtop->r = r2;
+            gsym(tt);
         }
     }
 }
@@ -7196,7 +7271,7 @@ int tcc_set_output_type(TCCState *s, int output_type)
 
 void help(void)
 {
-    printf("tcc version 0.9.11 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.12 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
@@ -7232,7 +7307,7 @@ int main(int argc, char **argv)
     int optind, output_type, multiple_files, i, reloc_output;
     TCCState *s;
     char **files;
-    int nb_files, nb_libraries, nb_objfiles;
+    int nb_files, nb_libraries, nb_objfiles, dminus;
     char objfilename[1024];
     
     s = tcc_new();
@@ -7241,6 +7316,7 @@ int main(int argc, char **argv)
     optind = 1;
     outfile = NULL;
     multiple_files = 0;
+    dminus = 0;
     files = NULL;
     nb_files = 0;
     nb_libraries = 0;
@@ -7263,10 +7339,11 @@ int main(int argc, char **argv)
             }
         } else if (r[1] == '-') {
             /* '--' enables multiple files input and also ends several file input */
-            if (multiple_files) {
+            if (dminus && multiple_files) {
                 optind--; /* argv[0] will be '--' */
                 break;
             }
+            dminus = 1;
             multiple_files = 1;
         } else if (r[1] == 'h' || r[1] == '?') {
         show_help:
