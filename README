@@ -21,7 +21,7 @@ Features:
 - Compile and execute C source directly. No linking or assembly
   necessary. Full C preprocessor included. 
 
-- C script supported : just add '#!/usr/local/bin/tcc' at the first
+- C script supported : just add '#!/usr/local/bin/tcc -run' at the first
   line of your C source, and execute it directly from the command
   line.
 

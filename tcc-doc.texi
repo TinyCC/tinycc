@@ -4,11 +4,7 @@
 @settitle Tiny C Compiler Reference Documentation
 @c %**end of header
 
-@include version.texi
-
-@ifinfo
-Bla bla bla
-@end ifinfo
+@include config.texi
 
 @iftex
 @titlepage
@@ -20,11 +16,11 @@ Bla bla bla
 @headings double
 @end iftex
 
-@ifnothtml
+@c @ifhtml
 @contents
-@end ifnothtml
+@c @end ifhtml
 
-@ifnottex
+@ifnothtml
 @node Top, Introduction, (dir), (dir)
 @top Tiny C Compiler Reference Documentation
 
@@ -34,9 +30,9 @@ This manual documents version @value{VERSION} of the Tiny C Compiler.
 * Introduction::                Introduction to tcc.
 * Invoke::                      Invocation of tcc (command line, options).
 * Bounds::                      Automatic bounds-checking of C code.
-* Libtcc::                      bla bla bla.
+* Libtcc::                      The libtcc library.
 @end menu
-@end ifnottex
+@end ifnothtml
 
 @node Introduction
 @chapter Introduction
@@ -65,12 +61,14 @@ generation (@pxref{Libtcc}).
 @node Invoke
 @chapter Command line invocation
 
+[This manual documents version @value{VERSION} of the Tiny C Compiler]
+
 @section Quick start
 
 @example
-usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
+usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
            [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]
-           [--] infile1 [infile2... --] [infile_args...]
+           [infile1 infile2...] [-run infile args...]
 @end example
 
 @noindent
@@ -81,14 +79,14 @@ arguments.
 Here are some examples to understand the logic:
 
 @table @code
-@item @samp{tcc a.c}
+@item @samp{tcc -run a.c}
 Compile @file{a.c} and execute it directly
 
-@item @samp{tcc a.c arg1}
+@item @samp{tcc -run a.c arg1}
 Compile a.c and execute it directly. arg1 is given as first argument to
 the @code{main()} of a.c.
 
-@item @samp{tcc -- a.c b.c -- arg1}
+@item @samp{tcc a.c -run b.c arg1}
 Compile @file{a.c} and @file{b.c}, link them together and execute them. arg1 is given
 as first argument to the @code{main()} of the resulting program. Because
 multiple C files are specified, @option{--} are necessary to clearly separate the
@@ -119,7 +117,7 @@ Compile @file{a.c} and @file{b.c}, link them together and generate the object fi
 Scripting:
 
 TCC can be invoked from @emph{scripts}, just as shell scripts. You just
-need to add @code{#!/usr/local/bin/tcc} at the start of your C source:
+need to add @code{#!/usr/local/bin/tcc -run} at the start of your C source:
 
 @example
 #!/usr/local/bin/tcc
@@ -137,6 +135,9 @@ int main()
 General Options:
 
 @table @option
+@item -v
+Display current TCC version.
+
 @item -c
 Generate an object file (@option{-o} option must also be given).
 
@@ -149,6 +150,9 @@ Set the path where the tcc internal libraries can be found (default is
 
 @item -bench
 Output compilation statistics.
+
+@item -run
+Run compiled source.
 @end table
 
 Preprocessor options:

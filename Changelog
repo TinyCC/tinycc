@@ -9,6 +9,8 @@ version 0.9.17:
 - fixed comment parse (signaled by Damian M Gryski)
 - fixed macro function bug (signaled by Philippe Ribet)
 - added configure (initial patch by Mitchell N Charity)
+- added '-run' and '-v' options (initial patch by vlindos)
+- added real date report in __DATE__ and __TIME__ macros
 
 version 0.9.16:
 
