@@ -407,11 +407,15 @@ struct TCCState {
     /* if true, only link in referenced objects from archive */
     int alacarte_link;
 
+    /* C language options */
+    int char_is_unsigned;
+
     /* warning switches */
     int warn_write_strings;
     int warn_unsupported;
     int warn_error;
     int warn_none;
+    int warn_implicit_function_declaration;
 
     /* error handling */
     void *error_opaque;
@@ -6415,10 +6419,10 @@ static int parse_btype(CType *type, AttributeDef *ad)
 the_end:
     if ((t & (VT_SIGNED|VT_UNSIGNED)) == (VT_SIGNED|VT_UNSIGNED))
       error("signed and unsigned modifier");
-#ifdef CHAR_IS_UNSIGNED
-    if ((t & (VT_SIGNED|VT_UNSIGNED|VT_BTYPE)) == VT_BYTE)
-      t |= VT_UNSIGNED;
-#endif
+    if (tcc_state->char_is_unsigned) {
+        if ((t & (VT_SIGNED|VT_UNSIGNED|VT_BTYPE)) == VT_BYTE)
+            t |= VT_UNSIGNED;
+    }
     t &= ~VT_SIGNED;
 
     /* long is never used as type */
@@ -6951,6 +6955,9 @@ static void unary(void)
                 error("'%s' undeclared", get_tok_str(t, NULL));
             /* for simple function calls, we tolerate undeclared
                external reference to int() function */
+            if (tcc_state->warn_implicit_function_declaration)
+                warning("implicit declaration of function '%s'",
+                        get_tok_str(t, NULL));
             s = external_global_sym(t, &func_old_type, 0); 
         }
         vset(&s->type, s->r, s->c);
@@ -9286,9 +9293,6 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "arm", NULL);
     tcc_define_symbol(s, "__APCS_32__", NULL);
 #endif
-#ifdef CHAR_IS_UNSIGNED
-    tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
-#endif
 #if defined(linux)
     tcc_define_symbol(s, "__linux__", NULL);
     tcc_define_symbol(s, "linux", NULL);
@@ -9325,6 +9329,10 @@ TCCState *tcc_new(void)
                                       ".dynstrtab", 
                                       ".dynhashtab", SHF_PRIVATE);
     s->alacarte_link = 1;
+
+#ifdef CHAR_IS_UNSIGNED
+    s->char_is_unsigned = 1;
+#endif
     return s;
 }
 
@@ -9585,6 +9593,10 @@ int tcc_set_output_type(TCCState *s, int output_type)
     }
 #endif
 
+    if (s->char_is_unsigned) {
+        tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
+    }
+
     /* add debug sections */
     if (do_debug) {
         /* stab symbols */
@@ -9607,40 +9619,76 @@ int tcc_set_output_type(TCCState *s, int output_type)
     return 0;
 }
 
-#define WD_ALL 0x0001 /* warning is activated when using -Wall */
+#define WD_ALL    0x0001 /* warning is activated when using -Wall */
+#define FD_INVERT 0x0002 /* invert value before storing */
 
-typedef struct WarningDef {
-    int offset;
-    int flags;
+typedef struct FlagDef {
+    uint16_t offset;
+    uint16_t flags;
     const char *name;
-} WarningDef;
+} FlagDef;
 
-static const WarningDef warning_defs[] = {
+static const FlagDef warning_defs[] = {
     { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
     { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
     { offsetof(TCCState, warn_error), 0, "error" },
+    { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
+      "implicit-function-declaration" },
 };
+
+static int set_flag(TCCState *s, const FlagDef *flags, int nb_flags,
+                    const char *name, int value)
+{
+    int i;
+    const FlagDef *p;
+    const char *r;
+
+    r = name;
+    if (r[0] == 'n' && r[1] == 'o' && r[2] == '-') {
+        r += 3;
+        value = !value;
+    }
+    for(i = 0, p = flags; i < nb_flags; i++, p++) {
+        if (!strcmp(r, p->name))
+            goto found;
+    }
+    return -1;
+ found:
+    if (p->flags & FD_INVERT)
+        value = !value;
+    *(int *)((uint8_t *)s + p->offset) = value;
+    return 0;
+}
+
 
 /* set/reset a warning */
 int tcc_set_warning(TCCState *s, const char *warning_name, int value)
 {
     int i;
-    const WarningDef *p;
+    const FlagDef *p;
+
     if (!strcmp(warning_name, "all")) {
         for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
             if (p->flags & WD_ALL)
                 *(int *)((uint8_t *)s + p->offset) = 1;
         }
+        return 0;
     } else {
-        for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
-            if (!strcmp(warning_name, p->name))
-                goto found;
-        }
-        return -1;
-    found:
-        *(int *)((uint8_t *)s + p->offset) = value;
+        return set_flag(s, warning_defs, countof(warning_defs),
+                        warning_name, value);
     }
-    return 0;
+}
+
+static const FlagDef flag_defs[] = {
+    { offsetof(TCCState, char_is_unsigned), 0, "unsigned-char" },
+    { offsetof(TCCState, char_is_unsigned), FD_INVERT, "signed-char" },
+};
+
+/* set/reset a flag */
+int tcc_set_flag(TCCState *s, const char *flag_name, int value)
+{
+    return set_flag(s, flag_defs, countof(flag_defs),
+                    flag_name, value);
 }
 
 #if !defined(LIBTCC)
@@ -9688,7 +9736,8 @@ void help(void)
            "  -Bdir       set tcc internal library path\n"
            "  -bench      output compilation statistics\n"
  	   "  -run        run compiled source\n"
-           "  -Wwarning   set or reset (with 'no-' prefix) 'warning'\n"
+           "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
+           "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
@@ -9968,18 +10017,14 @@ int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_v:
                 printf("tcc version %s\n", TCC_VERSION);
                 exit(0);
+            case TCC_OPTION_f:
+                if (tcc_set_flag(s, optarg, 1) < 0 && s->warn_unsupported)
+                    goto unsupported_option;
+                break;
             case TCC_OPTION_W:
-                {
-                    const char *p = optarg;
-                    int value;
-                    value = 1;
-                    if (p[0] == 'n' && p[1] == 'o' && p[2] == '-') {
-                        p += 2;
-                        value = 0;
-                    }
-                    if (tcc_set_warning(s, p, value) < 0 && s->warn_unsupported)
-                        goto unsupported_option;
-                }
+                if (tcc_set_warning(s, optarg, 1) < 0 && 
+                    s->warn_unsupported)
+                    goto unsupported_option;
                 break;
             case TCC_OPTION_w:
                 s->warn_none = 1;

@@ -199,6 +199,20 @@ also be defined: @option{-DF(a)=a+1}
 Undefine preprocessor symbol @samp{sym}.
 @end table
 
+Compilation flags:
+
+Note: each of the following warning options has a negative form beginning with
+@option{-fno-}.
+
+@table @option
+@item -funsigned-char
+Let the @code{char} type be unsigned.
+
+@item -fsigned-char
+Let the @code{char} type be signed.
+
+@end table
+
 Warning options:
 
 @table @option
@@ -211,11 +225,14 @@ Note: each of the following warning options has a negative form beginning with
 @option{-Wno-}.
 
 @table @option
+@item -Wimplicit-function-declaration
+Warn about implicit function declaration.
+
 @item -Wunsupported
 Warn about unsupported GCC features that are ignored by TCC.
 
 @item -Wwrite-strings
-Make string constants being of type @code{const char *} intead of @code{char
+Make string constants be of type @code{const char *} instead of @code{char
 *}.
 
 @item -Werror
@@ -223,7 +240,7 @@ Abort compilation if warnings are issued.
 
 @item -Wall 
 Activate all warnings, except @option{-Werror}, @option{-Wunusupported} and
-@option{-Wwrite-strings} (currently not useful).
+@option{-Wwrite-strings}.
 
 @end table
 
