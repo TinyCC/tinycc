@@ -270,7 +270,7 @@ void expr();
 void decl();
 void decl_initializer(int t, int c, int first, int size_only);
 int decl_initializer_alloc(int t, int has_init);
-int gv();
+int gv(void);
 void move_reg();
 void save_reg();
 void macro_subst(int **tok_str, int *tok_len, 
@@ -1436,6 +1436,10 @@ void vset(t, v)
 /******************************************************/
 /* X86 code generator */
 
+typedef struct GFuncContext {
+    int nb_args;
+} GFuncContext;
+
 void g(c)
 {
     *(char *)ind++ = c;
@@ -1555,12 +1559,42 @@ void store(r, ft, fc)
     }
 }
 
-void gfunc_param(void)
+/* start function call and return function call context */
+void gfunc_start(GFuncContext *c)
 {
-    o(0x50 + gv()); /* push r */
+    c->nb_args = 0;
 }
 
-int gjmp(t)
+/* push function parameter which is in (vt, vc) */
+void gfunc_param(GFuncContext *c)
+{
+    o(0x50 + gv()); /* push r */
+    c->nb_args++;
+}
+
+/* generate function call with address in (ft, fc) and free function */
+void gfunc_call(GFuncContext *c, int ft, int fc)
+{
+    int r;
+    r = ft & VT_VALMASK;
+    if (r == VT_CONST) {
+        /* forward reference */
+        if (ft & VT_FORWARD) {
+            *(int *)fc = psym(0xe8, *(int *)fc);
+        } else
+            oad(0xe8, fc - ind - 5);
+    } else if (r == VT_LOCAL) {
+        oad(0x95ff, fc); /* call *xxx(%ebp) */
+    } else {
+        /* not actually used */
+        o(0xff); /* call *reg */
+        o(0xd0 + r);
+    }
+    if (c->nb_args)
+        oad(0xc481, c->nb_args * 4); /* addl $xxx, %esp */
+}
+
+int gjmp(int t)
 {
     return psym(0xe9, t);
 }
@@ -1758,13 +1792,16 @@ void move_reg(r, s)
     }
 }
 
-/* convert a stack entry in register */
+/* convert a stack entry in register. lvalues are converted as
+   values. Cannot be used if cannot be converted to register value
+   (such as structures). */
 int gvp(int *p)
 {
     int r;
     r = p[0] & VT_VALMASK;
     if (r >= VT_CONST || (p[0] & VT_LVAL))
         r = get_reg();
+    /* NOTE: get_reg can modify p[] */
     load(r, p[0], p[1]);
     p[0] = (p[0] & VT_TYPE) | r;
     return r;
@@ -1788,7 +1825,7 @@ void vpop(int *ft, int *fc)
 }
 
 /* generate a value in a register from vt and vc */
-int gv()
+int gv(void)
 {
     int r;
     vpush();
@@ -1997,19 +2034,50 @@ int mk_pointer(int t)
 /* store value in lvalue pushed on stack */
 void vstore()
 {
-    int ft, fc, r, t;
+    int ft, fc, r, t, size, align;
+    GFuncContext gf;
 
-    r = gv();  /* generate value */
-    vpush();
-    ft = vstack_ptr[-4];
-    fc = vstack_ptr[-3];
-    if ((ft & VT_VALMASK) == VT_LLOCAL) {
-        t = get_reg();
-        load(t, VT_LOCAL | VT_LVAL, fc);
-        ft = (ft & ~VT_VALMASK) | t;
+    if (vt & VT_STRUCT) {
+        /* if structure, only generate pointer */
+        /* structure assignment : generate memcpy */
+        /* XXX: optimize if small size */
+
+        gfunc_start(&gf);
+        /* type size */
+        ft = vt;
+        fc = vc;
+        size = type_size(vt, &align);
+        vset(VT_CONST, size);
+        gfunc_param(&gf);
+        /* source */
+        vt = ft & ~VT_LVAL;
+        vc = fc;
+        gfunc_param(&gf);
+        /* destination */
+        vpop(&vt, &vc);
+        vt &= ~VT_LVAL;
+        gfunc_param(&gf);
+
+        save_regs();
+        gfunc_call(&gf, VT_CONST, (int)&memcpy);
+
+        /* generate again current type */
+        vt = ft;
+        vc = fc;
+    } else {
+        r = gv();  /* generate value */
+        vpush();
+        ft = vstack_ptr[-4];
+        fc = vstack_ptr[-3];
+        /* if lvalue was saved on stack, must read it */
+        if ((ft & VT_VALMASK) == VT_LLOCAL) {
+            t = get_reg();
+            load(t, VT_LOCAL | VT_LVAL, fc);
+            ft = (ft & ~VT_VALMASK) | t;
+        }
+        store(r, ft, fc);
+        vstack_ptr -= 4;
     }
-    store(r, ft, fc);
-    vstack_ptr -= 4;
 }
 
 /* post defines POST/PRE add. c is the token ++ or -- */
@@ -2330,8 +2398,9 @@ void indir()
 
 void unary()
 {
-    int n, t, ft, fc, p, r, align;
+    int n, t, ft, fc, p, align;
     Sym *s;
+    GFuncContext gf;
 
     if (tok == TOK_NUM || tok == TOK_CCHAR || tok == TOK_LCHAR) {
         vset(VT_CONST, tokc);
@@ -2498,16 +2567,10 @@ void unary()
             skip(']');
         } else if (tok == '(') {
             /* function call  */
+            vt &= ~VT_LVAL; /* no lvalue */
+            vpush(); /* push function address */
             save_regs(); /* save used temporary registers */
-            /* lvalue is implied */
-            vt = vt & VT_LVALN;
-            if ((vt & VT_VALMASK) != VT_CONST) {
-                /* evaluate function address */
-                r = gv();
-                o(0x50 + r); /* push r */
-            }
-            ft = vt;
-            fc = vc;
+            gfunc_start(&gf);
             next();
 #ifdef INVERT_FUNC_PARAMS
             {
@@ -2542,13 +2605,11 @@ void unary()
                 
                 /* now generate code in reverse order by reading the stack */
                 saved_macro_ptr = macro_ptr;
-                t = 0;
                 while (args) {
-                    t += 4;
                     macro_ptr = (int *)args->c;
                     next();
                     expr_eq();
-                    gfunc_param();
+                    gfunc_param(&gf);
                     s1 = args->prev;
                     free((int *)args->c);
                     free(args);
@@ -2559,16 +2620,17 @@ void unary()
                 tok = ')';
             }
 #else
-            t = 0;
             while (tok != ')') {
-                t += 4;
                 expr_eq();
-                gfunc_param();
+                gfunc_param(&gf);
                 if (tok == ',')
                     next();
             }
 #endif
             skip(')');
+            vpop(&ft, &fc);
+            gfunc_call(&gf, ft, fc);
+#if 0
             if ((ft & VT_VALMASK) == VT_CONST) {
                 /* forward reference */
                 if (ft & VT_FORWARD) {
@@ -2581,6 +2643,7 @@ void unary()
             }
             if (t)
                 oad(0xc481, t);
+#endif
             /* get return type */
             s = sym_find((unsigned)ft >> VT_STRUCT_SHIFT);
             vt = s->t | 0; /* return register is eax */
@@ -3041,23 +3104,19 @@ void init_putv(int t, int c, int v, int is_expr)
 /* put zeros for variable based init */
 void init_putz(int t, int c, int size)
 {
-    int memset_addr, r;
+    GFuncContext gf;
 
     if ((t & VT_VALMASK) == VT_CONST) {
         /* nothing to do because global are already set to zero */
     } else {
+        gfunc_start(&gf);
         vset(VT_CONST, size);
-        r = gv();
-        o(0x50 + r);
+        gfunc_param(&gf);
         vset(VT_CONST, 0);
-        r = gv();
-        o(0x50 + r);
+        gfunc_param(&gf);
         vset(VT_LOCAL, c);
-        r = gv();
-        o(0x50 + r);
-        memset_addr = (int)&memset;
-        oad(0xe8, memset_addr - ind - 5);
-        oad(0xc481, 3 * 4);
+        gfunc_param(&gf);
+        gfunc_call(&gf, VT_CONST, (int)&memset);
     }
 }
 
