@@ -219,7 +219,7 @@ else
         bindir="${execprefix}/bin"
     fi
     if test x"$docdir" = x""; then
-        docdir="$prefix/share/doc/qemu"
+        docdir="$prefix/share/doc/tcc"
     fi
 fi # mingw32
 
