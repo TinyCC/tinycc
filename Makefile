@@ -11,7 +11,7 @@ LIBS_P=
 CFLAGS+=-m386 -malign-functions=0
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.6
+VERSION=0.9.7
 
 all: tcc
 
@@ -114,6 +114,20 @@ tcc.exe: tcc_g.exe
 tcc_p: tcc.c Makefile
 	gcc $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
+# libtcc generation and example
+libinstall: libtcc.a 
+	$(INSTALL) -m644 libtcc.a $(prefix)/lib
+	$(INSTALL) -m644 libtcc.h $(prefix)/include
+
+libtcc.o: tcc.c i386-gen.c bcheck.c Makefile
+	gcc $(CFLAGS) -DLIBTCC -c -o $@ $<
+
+libtcc.a: libtcc.o 
+	ar rcs $@ $^
+
+libtcc_test: libtcc_test.c libtcc.a 
+	gcc $(CFLAGS) -I. -o $@ $< -L. -ltcc -ldl
+
 # targets for development
 
 %.bin: %.c tcc
@@ -139,6 +153,6 @@ tar:
           $(FILE)/il-opcodes.h $(FILE)/il-gen.c \
           $(FILE)/elf.h $(FILE)/stab.h $(FILE)/stab.def \
           $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \
-          $(FILE)/tcclib.h \
+          $(FILE)/tcclib.h $(FILE)/libtcc.h $(FILE)/libtcc_test.c \
           $(FILE)/ex*.c $(FILE)/tcctest.c $(FILE)/boundtest.c )
 	rm -rf /tmp/$(FILE)
