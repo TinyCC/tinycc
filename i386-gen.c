@@ -360,10 +360,12 @@ void gfunc_call(GFuncContext *c)
             /* relocation case */
             greloc(cur_text_section, vtop->sym, 
                    ind + 1, R_386_PC32);
-            oad(0xe8, vtop->c.ul - 4);
         } else {
-            oad(0xe8, vtop->c.ul - ind - 5);
+            /* put an empty PC32 relocation */
+            put_elf_reloc(symtab_section, cur_text_section, 
+                          ind + 1, R_386_PC32, 0);
         }
+        oad(0xe8, vtop->c.ul - 4);
     } else {
         /* otherwise, indirect call */
         r = gv(RC_INT);
