@@ -11,7 +11,7 @@ LIBS_P=
 CFLAGS+=-m386 -malign-functions=0
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.4
+VERSION=0.9.5
 
 all: tcc
 
@@ -92,7 +92,8 @@ install: tcc
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
-           core gmon.out test.out test.ref a.out tcc_p
+           core gmon.out test.out test.ref a.out tcc_p \
+           *.exe iltcc iltcc_g
 
 # IL TCC
 
@@ -131,9 +132,12 @@ tar:
 	rm -rf /tmp/$(FILE)
 	cp -r ../tcc /tmp/$(FILE)
 	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
-          $(FILE)/Makefile $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
+          $(FILE)/Makefile $(FILE)/Makefile.uClibc \
+          $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
 	  $(FILE)/Changelog $(FILE)/tcc-doc.html \
           $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/bcheck.c \
+          $(FILE)/il-opcodes.h $(FILE)/il-gen.c \
+          $(FILE)/elf.h $(FILE)/stab.h $(FILE)/stab.def \
           $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \
           $(FILE)/tcclib.h \
           $(FILE)/ex*.c $(FILE)/tcctest.c $(FILE)/boundtest.c )

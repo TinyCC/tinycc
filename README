@@ -8,7 +8,7 @@ Features:
   rescue disks.
 
 - FAST! tcc generates optimized x86 code. No byte code
-  overhead. Compiles, assemble and link about 7 times faster than 'gcc
+  overhead. Compile, assemble and link about 7 times faster than 'gcc
   -O0'.
 
 - UNLIMITED! Any C dynamic library can be used directly. TCC is
@@ -39,8 +39,6 @@ Type 'make install' to compile and install tcc in /usr/local/bin and
 
 We assume here that you know ANSI C. Look at the example ex1.c to know
 what the programs look like.
-
-The main limitation of tcc is that you cannot use floats. 
 
 The include file <tcclib.h> can be used if you want a small basic libc
 include support (especially useful for floppy disks). Of course, you
