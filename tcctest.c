@@ -123,6 +123,12 @@ int isid(int c);
 #define __INT64_C(c)	c ## LL
 #define INT64_MIN	(-__INT64_C(9223372036854775807)-1)
 
+int qq(int x)
+{
+    return x + 40;
+}
+#define qq(x) x
+
 void macro_test(void)
 {
     printf("macro:\n");
@@ -210,7 +216,7 @@ void macro_test(void)
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 213 "tcctest.c"
+#line 220 "tcctest.c"
 
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
@@ -244,6 +250,9 @@ void macro_test(void)
     MF_s("hi");
     MF_t("hi");
     
+    /* test macro substituion inside args (should not eat stream) */
+    printf("qq=%d\n", qq(qq)(2));
+
     /* comment with stray handling *\
 /
        /* this is a valid *\/ comment */
