@@ -594,8 +594,8 @@ Read the @file{libtcc.h} to have an overview of the API. Read
 @file{libtcc_test.c} to have a very simple example.
 
 The idea consists in giving a C string containing the program you want
-to compile directly to @code{libtcc}. Then the @code{main()} function of
-the compiled string can be launched.
+to compile directly to @code{libtcc}. Then you can access to any global
+symbol (function or variable) defined.
 
 @chapter Developper's guide
 
@@ -715,8 +715,11 @@ for the global variables, functions and types.
 @item local_stack
 for the local variables, functions and types.
 
-@item label_stack
+@item global_label_stack
 for the local labels (for @code{goto}).
+
+@item label_stack
+for GCC block local labels (see the @code{__label__} keyword).
 
 @end table
 
