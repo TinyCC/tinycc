@@ -163,6 +163,7 @@
  DEF_ASM(space)
  DEF_ASM(string)
  DEF_ASM(globl)
+ DEF_ASM(global)
  DEF_ASM(text)
  DEF_ASM(data)
  DEF_ASM(bss)

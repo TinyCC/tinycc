@@ -362,6 +362,7 @@ static void asm_parse_directive(TCCState *s1)
         }
         break;
     case TOK_ASM_globl:
+    case TOK_ASM_global:
 	{ 
             Sym *sym;
 

@@ -603,6 +603,7 @@ They can be defined several times in the same source. Use 'b'
 @cindex .long
 @cindex .string
 @cindex .globl
+@cindex .global
 @cindex .section
 @cindex .text
 @cindex .data
@@ -621,6 +622,7 @@ supported:
 @item .int value1[,value2...]
 @item .long value1[,value2...]
 @item .string string
+@item .globl symbol
 @item .global symbol
 @item .section section
 @item .text
