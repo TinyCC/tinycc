@@ -42,7 +42,7 @@
 /* preprocessor debug */
 //#define PP_DEBUG
 
-/* amount of virtual memory associate to a section (currently, we do
+/* amount of virtual memory associated to a section (currently, we do
    not realloc them) */
 #define SECTION_VSIZE       (1024 * 1024)
 
@@ -1306,57 +1306,66 @@ void tok_print(int *str)
 }
 #endif
 
+/* parse after #define */
+void parse_define(void)
+{
+    Sym *s, *first, **ps;
+    int v, t, *str, len;
+
+    v = tok;
+    /* XXX: should check if same macro (ANSI) */
+    first = NULL;
+    t = MACRO_OBJ;
+    /* '(' must be just after macro definition for MACRO_FUNC */
+    if (ch == '(') {
+        next_nomacro();
+        next_nomacro();
+        ps = &first;
+        while (tok != ')') {
+            if (tok == TOK_DOTS) 
+                tok = TOK___VA_ARGS__;
+            s = sym_push1(&define_stack, tok | SYM_FIELD, 0, 0);
+            *ps = s;
+            ps = &s->next;
+            next_nomacro();
+            if (tok != ',')
+                break;
+            next_nomacro();
+        }
+        t = MACRO_FUNC;
+    }
+    str = NULL;
+    len = 0;
+    while (1) {
+        skip_spaces();
+        if (ch == '\n' || ch == -1)
+            break;
+        next_nomacro();
+        tok_add2(&str, &len, tok, &tokc);
+    }
+    tok_add(&str, &len, 0);
+#ifdef PP_DEBUG
+    printf("define %s %d: ", get_tok_str(v, NULL), t);
+    tok_print(str);
+#endif
+    s = sym_push1(&define_stack, v, t, (int)str);
+    s->next = first;
+}
+
 void preprocess(void)
 {
-    int size, i, c, v, t, *str, len;
+    int size, i, c;
     char buf[1024], *q, *p;
     char buf1[1024];
     BufferedFile *f;
-    Sym **ps, *first, *s;
+    Sym *s;
 
     cinp();
     next_nomacro();
  redo:
     if (tok == TOK_DEFINE) {
         next_nomacro();
-        v = tok;
-        /* XXX: should check if same macro (ANSI) */
-        first = NULL;
-        t = MACRO_OBJ;
-        /* '(' must be just after macro definition for MACRO_FUNC */
-        if (ch == '(') {
-            next_nomacro();
-            next_nomacro();
-            ps = &first;
-            while (tok != ')') {
-                if (tok == TOK_DOTS) 
-                    tok = TOK___VA_ARGS__;
-                s = sym_push1(&define_stack, tok | SYM_FIELD, 0, 0);
-                *ps = s;
-                ps = &s->next;
-                next_nomacro();
-                if (tok != ',')
-                    break;
-                next_nomacro();
-            }
-            t = MACRO_FUNC;
-        }
-        str = NULL;
-        len = 0;
-        while (1) {
-            skip_spaces();
-            if (ch == '\n' || ch == -1)
-                break;
-            next_nomacro();
-            tok_add2(&str, &len, tok, &tokc);
-        }
-        tok_add(&str, &len, 0);
-#ifdef PP_DEBUG
-        printf("define %s %d: ", get_tok_str(v, NULL), t);
-        tok_print(str);
-#endif
-        s = sym_push1(&define_stack, v, t, (int)str);
-        s->next = first;
+        parse_define();
     } else if (tok == TOK_UNDEF) {
         next_nomacro();
         s = sym_find1(&define_stack, tok);
@@ -5675,46 +5684,40 @@ int tcc_compile_file(const char *filename1)
    tcc parser, but would need a custom 'FILE *' */
 void define_symbol(const char *sym)
 {
-    TokenSym *ts;
-    int *str, len;
-    CValue cval;
-    const char *p;
-    char buf[256];
+    char *p;
+    BufferedFile bf1, *bf = &bf1;
 
-    p = strchr(sym, '=');
+    pstrcpy(bf->buffer, IO_BUF_SIZE, sym);
+    p = strchr(bf->buffer, '=');
     if (!p) {
-        pstrcpy(buf, sizeof(buf), sym);
-        p = "1";
+        /* default value */
+        pstrcat(bf->buffer, IO_BUF_SIZE, " 1");
     } else {
-        len = p - sym;
-        if (len > sizeof(buf) - 1)
-            len = sizeof(buf) - 1;
-        memcpy(buf, sym, len);
-        buf[len] = '\0';
-        p++;
+        *p = ' ';
     }
     
-    ts = tok_alloc(buf, 0);
-    str = NULL;
-    len = 0;
-    if (isnum(*p)) {
-        /* integer case */
-        cval.i = atoi(p);
-        tok_add2(&str, &len, TOK_CINT, &cval);
-    } else {
-        /* string case */
-        cval.ts = tok_alloc(p, 0);
-        tok_add2(&str, &len, TOK_STR, &cval);
-    }
-    tok_add(&str, &len, 0);
-    sym_push1(&define_stack, ts->tok, MACRO_OBJ, (int)str);
+    /* init file structure */
+    bf->fd = -1;
+    bf->buf_ptr = bf->buffer;
+    bf->buf_end = bf->buffer + strlen(bf->buffer);
+    bf->filename[0] = '\0';
+    bf->line_num = 1;
+    file = bf;
+    
+    include_stack_ptr = include_stack;
+
+    /* parse with define parser */
+    inp();
+    ch = '\n'; /* needed to parse correctly first preprocessor command */
+    next_nomacro();
+    parse_define();
+    file = NULL;
 }
 
 void undef_symbol(const char *sym)
 {
     TokenSym *ts;
     Sym *s;
-    printf("undef %s\n", sym);
     ts = tok_alloc(sym, 0);
     s = sym_find1(&define_stack, tok);
     /* undefine symbol by putting an invalid name */
