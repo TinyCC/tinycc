@@ -52,9 +52,9 @@
 #define STRING_MAX_SIZE     1024
 #define INCLUDE_PATHS_MAX   32
 
-#define TOK_HASH_SIZE       521
-#define TOK_ALLOC_INCR      256 /* must be a power of two */
-#define SYM_HASH_SIZE       263
+#define TOK_HASH_SIZE       2048 /* must be a power of two */
+#define TOK_ALLOC_INCR      512  /* must be a power of two */
+#define SYM_HASH_SIZE       1031
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -131,15 +131,21 @@ typedef struct Section {
 typedef struct AttributeDef {
     int aligned;
     Section *section;
+    unsigned char func_call; /* FUNC_CDECL or FUNC_STDCALL */
 } AttributeDef;
 
 #define SYM_STRUCT     0x40000000 /* struct/union/enum symbol space */
 #define SYM_FIELD      0x20000000 /* struct/union field symbol space */
 #define SYM_FIRST_ANOM (1 << (31 - VT_STRUCT_SHIFT)) /* first anonymous sym */
 
+/* stored in 'Sym.c' field */
 #define FUNC_NEW       1 /* ansi function prototype */
 #define FUNC_OLD       2 /* old function prototype */
 #define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
+
+/* stored in 'Sym.r' field */
+#define FUNC_CDECL     0 /* standard c call */
+#define FUNC_STDCALL   1 /* pascal c call */
 
 /* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
@@ -214,6 +220,11 @@ int do_debug = 0;
 
 /* compile with built-in memory and bounds checker */
 int do_bounds_check = 0;
+
+/* display benchmark infos */
+int do_bench = 0;
+int total_lines;
+int total_bytes;
 
 /* use GNU C extensions */
 int gnu_ext = 1;
@@ -405,7 +416,32 @@ enum {
     TOK___ALIGNED__,
     TOK_UNUSED,
     TOK___UNUSED__,
+    TOK_CDECL,
+    TOK___CDECL,
+    TOK___CDECL__,
+    TOK_STDCALL,
+    TOK___STDCALL,
+    TOK___STDCALL__,
+    TOK_NORETURN,
+    TOK___NORETURN__,
 };
+
+char *tcc_keywords = 
+"int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0"
+"unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0"
+"register\0signed\0__signed__\0auto\0inline\0__inline__\0restrict\0"
+"float\0double\0_Bool\0short\0struct\0union\0typedef\0default\0enum\0"
+"sizeof\0__attribute__\0"
+/* the following are not keywords. They are included to ease parsing */
+"define\0include\0ifdef\0ifndef\0elif\0endif\0"
+"defined\0undef\0error\0line\0"
+"__LINE__\0__FILE__\0__DATE__\0__TIME__\0__VA_ARGS__\0"
+"__func__\0main\0"
+/* attributes */
+"section\0__section__\0aligned\0__aligned__\0unused\0__unused__\0"
+"cdecl\0__cdecl\0__cdecl__\0stdcall\0__stdcall\0__stdcall__\0"
+"noreturn\0__noreturn__\0"
+;
 
 #ifdef WIN32
 #define snprintf _snprintf
@@ -459,7 +495,7 @@ int pointed_type(int t);
 int pointed_size(int t);
 int is_compatible_types(int t1, int t2);
 int parse_btype(int *type_ptr, AttributeDef *ad);
-int type_decl(int *v, int t, int td);
+int type_decl(AttributeDef *ad, int *v, int t, int td);
 
 void error(const char *fmt, ...);
 void rt_error(unsigned long pc, const char *fmt, ...);
@@ -800,7 +836,7 @@ TokenSym *tok_alloc(const char *str, int len)
         len = strlen(str);
     h = 1;
     for(i=0;i<len;i++)
-        h = ((h << 8) | (str[i] & 0xff)) % TOK_HASH_SIZE;
+        h = (h * 263 +  ((unsigned char *)str)[i]) & (TOK_HASH_SIZE - 1);
 
     pts = &hash_ident[h];
     while (1) {
@@ -1034,11 +1070,13 @@ BufferedFile *tcc_open(const char *filename)
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
     bf->line_num = 1;
+    //    printf("opening '%s'\n", filename);
     return bf;
 }
 
 void tcc_close(BufferedFile *bf)
 {
+    total_lines += bf->line_num;
     close(bf->fd);
     free(bf);
 }
@@ -1059,6 +1097,7 @@ int tcc_getc_slow(BufferedFile *bf)
         } else {
             len = 0;
         }
+        total_bytes += len;
         bf->buf_ptr = bf->buffer;
         bf->buf_end = bf->buffer + len;
         *bf->buf_end = CH_EOB;
@@ -1290,7 +1329,7 @@ int expr_preprocess(void)
     return c != 0;
 }
 
-#if defined(DEBUG)
+#if defined(DEBUG) || defined(PP_DEBUG)
 void tok_print(int *str)
 {
     int t;
@@ -1454,25 +1493,32 @@ void preprocess(void)
         *ifdef_stack_ptr++ = c;
         goto test_skip;
     } else if (tok == TOK_ELSE) {
-        if (ifdef_stack_ptr == ifdef_stack ||
-            (ifdef_stack_ptr[-1] & 2))
+        if (ifdef_stack_ptr == ifdef_stack)
+            error("#else without matching #if");
+        if (ifdef_stack_ptr[-1] & 2)
             error("#else after #else");
         c = (ifdef_stack_ptr[-1] ^= 3);
         goto test_skip;
     } else if (tok == TOK_ELIF) {
-        if (ifdef_stack_ptr == ifdef_stack ||
-            ifdef_stack_ptr[-1] > 1)
+        if (ifdef_stack_ptr == ifdef_stack)
+            error("#elif without matching #if");
+        c = ifdef_stack_ptr[-1];
+        if (c > 1)
             error("#elif after #else");
+        /* last #if/#elif expression was true: we skip */
+        if (c == 1)
+            goto skip;
         c = expr_preprocess();
         ifdef_stack_ptr[-1] = c;
     test_skip:
         if (!(c & 1)) {
+        skip:
             preprocess_skip();
             goto redo;
         }
     } else if (tok == TOK_ENDIF) {
         if (ifdef_stack_ptr == ifdef_stack)
-            expect("#if");
+            error("#endif without matching #if");
         ifdef_stack_ptr--;
     } else if (tok == TOK_LINE) {
         next();
@@ -1876,7 +1922,7 @@ void next_nomacro1(void)
     while(1) {
         while (ch == '\n') {
             cinp();
-            while (ch == ' ' || ch == 9)
+            while (ch == ' ' || ch == '\t')
                 cinp();
             if (ch == '#') {
                 /* preprocessor command if # at start of line after
@@ -2157,7 +2203,14 @@ void macro_subst(int **tok_str, int *tok_len,
                 next_nomacro();
                 args = NULL;
                 sa = s->next;
-                while (tok != ')' && sa) {
+                /* NOTE: empty args are allowed, except if no args */
+                for(;;) {
+                    /* handle '()' case */
+                    if (!args && tok == ')')
+                        break;
+                    if (!sa)
+                        error("macro '%s' used with too many args",
+                              get_tok_str(s->v, 0));
                     len = 0;
                     str = NULL;
                     parlevel = 0;
@@ -2175,13 +2228,17 @@ void macro_subst(int **tok_str, int *tok_len,
                     }
                     tok_add(&str, &len, 0);
                     sym_push2(&args, sa->v & ~SYM_FIELD, 0, (int)str);
-                    if (tok != ',')
+                    if (tok == ')')
                         break;
+                    if (tok != ',')
+                        expect(",");
                     next_nomacro();
                     sa = sa->next;
                 }
-                if (tok != ')')
-                    expect(")");
+                if (sa->next)
+                    error("macro '%s' used with too few args",
+                          get_tok_str(s->v, 0));
+
                 /* now subst each arg */
                 mstr = macro_arg_subst(nested_list, mstr, args);
                 /* free memory */
@@ -2232,7 +2289,7 @@ void next(void)
     } else {
     redo:
         if (!macro_ptr) {
-            /* if not reading from macro substuted string, then try to substitute */
+            /* if not reading from macro substituted string, then try to substitute */
             len = 0;
             ptr = NULL;
             nested_list = NULL;
@@ -2338,7 +2395,8 @@ void save_reg(int r)
             if (!saved) {
                 /* store register in the stack */
                 t = p->t;
-                if (!is_float(t) && (t & VT_BTYPE) != VT_LLONG)
+                if ((p->r & VT_LVAL) || 
+                    (!is_float(t) && (t & VT_BTYPE) != VT_LLONG))
                     t = VT_INT;
                 size = type_size(t, &align);
                 loc = (loc - size) & -align;
@@ -2690,7 +2748,7 @@ void gen_opl(int op)
         func = __modull;
     gen_func:
         /* call generic long long function */
-        gfunc_start(&gf);
+        gfunc_start(&gf, FUNC_CDECL);
         gfunc_param(&gf);
         gfunc_param(&gf);
         vpushi((int)func);
@@ -3139,7 +3197,7 @@ void gen_cvt_itof1(int t)
     if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == 
         (VT_LLONG | VT_UNSIGNED)) {
 
-        gfunc_start(&gf);
+        gfunc_start(&gf, FUNC_CDECL);
         gfunc_param(&gf);
         if (t == VT_FLOAT)
             vpushi((int)&__ulltof);
@@ -3163,7 +3221,7 @@ void gen_cvt_ftoi1(int t)
 
     if (t == (VT_LLONG | VT_UNSIGNED)) {
         /* not handled natively */
-        gfunc_start(&gf);
+        gfunc_start(&gf, FUNC_CDECL);
         st = vtop->t & VT_BTYPE;
         gfunc_param(&gf);
         if (st == VT_FLOAT)
@@ -3346,6 +3404,8 @@ void gen_cast(int t)
                 /* from long long: just take low order word */
                 lexpand();
                 vpop();
+            } else if (sbt == VT_PTR) {
+                /* ok to cast */
             } else if (vtop->r & VT_LVAL) {
                 /* if lvalue and single word type, nothing to do (XXX:
                    maybe incorrect for sizeof op) */
@@ -3616,7 +3676,7 @@ void vstore(void)
         /* XXX: optimize if small size */
 
         vdup();
-        gfunc_start(&gf);
+        gfunc_start(&gf, FUNC_CDECL);
         /* type size */
         size = type_size(vtop->t, &align);
         vpushi(size);
@@ -3759,6 +3819,21 @@ void parse_attribute(AttributeDef *ad)
             /* currently, no need to handle it because tcc does not
                track unused objects */
             break;
+        case TOK_NORETURN:
+        case TOK___NORETURN__:
+            /* currently, no need to handle it because tcc does not
+               track unused objects */
+            break;
+        case TOK_CDECL:
+        case TOK___CDECL:
+        case TOK___CDECL__:
+            ad->func_call = FUNC_CDECL;
+            break;
+        case TOK_STDCALL:
+        case TOK___STDCALL:
+        case TOK___STDCALL__:
+            ad->func_call = FUNC_STDCALL;
+            break;
         default:
             warning("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
@@ -3837,7 +3912,7 @@ int struct_decl(int u)
                     bit_size = -1;
                     v = 0;
                     if (tok != ':') {
-                        t = type_decl(&v, b, TYPE_DIRECT);
+                        t = type_decl(&ad, &v, b, TYPE_DIRECT);
                         if ((t & VT_BTYPE) == VT_FUNC ||
                             (t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN)))
                             error("invalid type for '%s'", 
@@ -4055,11 +4130,11 @@ the_end:
     return type_found;
 }
 
-int post_type(int t)
+int post_type(int t, AttributeDef *ad)
 {
     int p, n, pt, l, t1;
     Sym **plast, *s, *first;
-    AttributeDef ad;
+    AttributeDef ad1;
 
     if (tok == '(') {
         /* function declaration */
@@ -4070,7 +4145,7 @@ int post_type(int t)
         while (tok != ')') {
             /* read param name and compute offset */
             if (l != FUNC_OLD) {
-                if (!parse_btype(&pt, &ad)) {
+                if (!parse_btype(&pt, &ad1)) {
                     if (l) {
                         error("invalid type");
                     } else {
@@ -4081,7 +4156,7 @@ int post_type(int t)
                 l = FUNC_NEW;
                 if ((pt & VT_BTYPE) == VT_VOID && tok == ')')
                     break;
-                pt = type_decl(&n, pt, TYPE_DIRECT | TYPE_ABSTRACT);
+                pt = type_decl(&ad1, &n, pt, TYPE_DIRECT | TYPE_ABSTRACT);
                 if ((pt & VT_BTYPE) == VT_VOID)
                     error("parameter declared as void");
             } else {
@@ -4109,10 +4184,10 @@ int post_type(int t)
             l = FUNC_OLD;
         skip(')');
         t1 = t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
-        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN));
+        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN), ad);
         /* we push a anonymous symbol which will contain the function prototype */
         p = anon_sym++;
-        s = sym_push(p, t, 0, l);
+        s = sym_push(p, t, ad->func_call, l);
         s->next = first;
         t = t1 | VT_FUNC | (p << VT_STRUCT_SHIFT);
     } else if (tok == '[') {
@@ -4127,7 +4202,7 @@ int post_type(int t)
         skip(']');
         /* parse next post type */
         t1 = t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN);
-        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN));
+        t = post_type(t & ~(VT_TYPEDEF | VT_STATIC | VT_EXTERN), ad);
         
         /* we push a anonymous symbol which will contain the array
            element type */
@@ -4139,8 +4214,10 @@ int post_type(int t)
 }
 
 /* Read a type declaration (except basic type), and return the
-   type. If v is true, then also put variable name in 'vtop->c' */
-int type_decl(int *v, int t, int td)
+   type. 'td' is a bitmask indicating which kind of type decl is
+   expected. 't' should contain the basic type. 'ad' is the attribute
+   definition of the basic type. It can be modified by type_decl(). */
+int type_decl(AttributeDef *ad, int *v, int t, int td)
 {
     int u, p;
     Sym *s;
@@ -4156,7 +4233,11 @@ int type_decl(int *v, int t, int td)
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     if (tok == '(') {
         next();
-        u = type_decl(v, 0, td);
+        /* XXX: this is not correct to modify 'ad' at this point, but
+           the syntax is not clear */
+        if (tok == TOK___ATTRIBUTE__)
+            parse_attribute(ad);
+        u = type_decl(ad, v, 0, td);
         skip(')');
     } else {
         u = 0;
@@ -4171,8 +4252,10 @@ int type_decl(int *v, int t, int td)
         }
     }
     /* append t at the end of u */
-    t = post_type(t);
-    if (!u) 
+    t = post_type(t, ad);
+    if (tok == TOK___ATTRIBUTE__)
+        parse_attribute(ad);
+    if (!u)
         return t;
     p = u;
     while(1) {
@@ -4295,7 +4378,7 @@ void unary(void)
         if (t == '(') {
             /* cast ? */
             if (parse_btype(&t, &ad)) {
-                ft = type_decl(&n, t, TYPE_ABSTRACT);
+                ft = type_decl(&ad, &n, t, TYPE_ABSTRACT);
                 skip(')');
                 /* check ISOC99 compound literal */
                 if (tok == '{') {
@@ -4353,7 +4436,7 @@ void unary(void)
             if (tok == '(') {
                 next();
                 if (parse_btype(&t, &ad)) {
-                    t = type_decl(&n, t, TYPE_ABSTRACT);
+                    t = type_decl(&ad, &n, t, TYPE_ABSTRACT);
                 } else {
                     /* XXX: some code could be generated: add eval
                        flag */
@@ -4457,7 +4540,7 @@ void unary(void)
             /* get return type */
             s = sym_find((unsigned)vtop->t >> VT_STRUCT_SHIFT);
             save_regs(); /* save used temporary registers */
-            gfunc_start(&gf);
+            gfunc_start(&gf, s->r);
             next();
             sa = s->next; /* first parameter */
 #ifdef INVERT_FUNC_PARAMS
@@ -4682,7 +4765,7 @@ void expr_eq(void)
             if (is_float(vtop->t))
                 rc = RC_FLOAT;
             r1 = gv(rc);
-            vpop();
+            vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
             u = gjmp(0);
 
@@ -5143,7 +5226,7 @@ void init_putz(int t, int r, int c, int size)
     if ((r & VT_VALMASK) == VT_CONST) {
         /* nothing to do because globals are already set to zero */
     } else {
-        gfunc_start(&gf);
+        gfunc_start(&gf, FUNC_CDECL);
         vpushi(size);
         gfunc_param(&gf);
         vpushi(0);
@@ -5472,11 +5555,7 @@ void decl(int l)
             continue;
         }
         while (1) { /* iterate thru each declaration */
-            t = type_decl(&v, b, TYPE_DIRECT);
-            /* currently, we do not parse attribute in
-               type_decl(). May change if needed */
-            if (tok == TOK___ATTRIBUTE__)
-                parse_attribute(&ad);
+            t = type_decl(&ad, &v, b, TYPE_DIRECT);
 #if 0
             {
                 char buf[500];
@@ -6204,7 +6283,7 @@ int main(int argc, char **argv)
 
     /* add all tokens */
     tok_ident = TOK_IDENT;
-    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0__signed__\0auto\0inline\0__inline__\0restrict\0float\0double\0_Bool\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0__attribute__\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0error\0line\0__LINE__\0__FILE__\0__DATE__\0__TIME__\0__VA_ARGS__\0__func__\0main\0section\0__section__\0aligned\0__aligned__\0unused\0__unused__\0";
+    p = tcc_keywords;
     while (*p) {
         r = p;
         while (*r++);
@@ -6252,6 +6331,8 @@ int main(int argc, char **argv)
             if (optind >= argc)
                 goto show_help;
             tcc_compile_file(argv[optind++]);
+        } else if (!strcmp(r + 1, "bench")) {
+            do_bench = 1;
         } else if (r[1] == 'b') {
             if (!do_bounds_check) {
                 do_bounds_check = 1;
@@ -6299,6 +6380,11 @@ int main(int argc, char **argv)
     }
     
     tcc_compile_file(argv[optind]);
+
+    if (do_bench) {
+        printf("total: %d idents, %d lines, %d bytes\n", 
+               tok_ident - TOK_IDENT, total_lines, total_bytes);
+    }
 
     resolve_extern_syms();
 
