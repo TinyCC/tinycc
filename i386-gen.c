@@ -24,8 +24,12 @@
 /* a register can belong to several classes */
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
-#define RC_IRET    0x0004 /* function returned integer register */
-#define RC_FRET    0x0008 /* function returned float register */
+#define RC_EAX     0x0004
+#define RC_FRET    0x0008 /* function return: float register */
+#define RC_ECX     0x0010
+#define RC_EDX     0x0020
+#define RC_IRET    RC_EAX /* function return: integer register */
+#define RC_LRET    RC_EDX /* function return: second integer register */
 
 /* pretty names for the registers */
 enum {
@@ -37,14 +41,15 @@ enum {
 
 int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_IRET,
-    /* ecx */ RC_INT,
-    /* edx */ RC_INT,
+    /* ecx */ RC_INT | RC_ECX,
+    /* edx */ RC_INT | RC_EDX,
     /* st0 */ RC_FLOAT | RC_FRET,
 };
 
 /* return registers for function */
-#define REG_IRET REG_EAX
-#define REG_FRET REG_ST0
+#define REG_IRET REG_EAX /* single word int return register */
+#define REG_LRET REG_EDX /* second word return register (for long long) */
+#define REG_FRET REG_ST0 /* float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS
@@ -313,8 +318,14 @@ void gfunc_param(GFuncContext *c)
         /* simple type (currently always same size) */
         /* XXX: implicit cast ? */
         r = gv(RC_INT);
+        if ((vtop->t & VT_BTYPE) == VT_LLONG) {
+            size = 8;
+            o(0x50 + vtop->r2); /* push r */
+        } else {
+            size = 4;
+        }
         o(0x50 + r); /* push r */
-        c->args_size += 4;
+        c->args_size += size;
     }
     vtop--;
 }
@@ -395,73 +406,139 @@ int gtst(int inv, int t)
 /* generate an integer binary operation */
 void gen_opi(int op)
 {
-    int t, r, fr;
+    int r, fr, opc, c;
 
-    vswap();
-    r = gv(RC_INT);
-    vswap();
-    fr = gv(RC_INT);
-    vtop--;
-
-    if (op == '+') {
-        o(0x01);
-        o(0xc0 + r + fr * 8); 
-    } else if (op == '-') {
-        o(0x29);
-        o(0xc0 + r + fr * 8); 
-    } else if (op == '&') {
-        o(0x21);
-        o(0xc0 + r + fr * 8); 
-    } else if (op == '^') {
-        o(0x31);
-        o(0xc0 + r + fr * 8); 
-    } else if (op == '|') {
-        o(0x09);
-        o(0xc0 + r + fr * 8); 
-    } else if (op == '*') {
+    switch(op) {
+    case '+':
+    case TOK_ADDC1: /* add with carry generation */
+        opc = 0;
+    gen_op8:
+        vswap();
+        r = gv(RC_INT);
+        vswap();
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+            /* constant case */
+            c = vtop->c.i;
+            if (c == (char)c) {
+                /* XXX: generate inc and dec for smaller code ? */
+                o(0x83);
+                o(0xc0 | (opc << 3) | r);
+                g(c);
+            } else {
+                o(0x81);
+                oad(0xc0 | (opc << 3) | r, c);
+            }
+        } else {
+            fr = gv(RC_INT);
+            o((opc << 3) | 0x01);
+            o(0xc0 + r + fr * 8); 
+        }
+        vtop--;
+        if (op >= TOK_ULT && op <= TOK_GT) {
+            vtop--;
+            vset(VT_INT, VT_CMP, op);
+        }
+        break;
+    case '-':
+    case TOK_SUBC1: /* sub with carry generation */
+        opc = 5;
+        goto gen_op8;
+    case TOK_ADDC2: /* add with carry use */
+        opc = 2;
+        goto gen_op8;
+    case TOK_SUBC2: /* sub with carry use */
+        opc = 3;
+        goto gen_op8;
+    case '&':
+        opc = 4;
+        goto gen_op8;
+    case '^':
+        opc = 6;
+        goto gen_op8;
+    case '|':
+        opc = 1;
+        goto gen_op8;
+    case '*':
+        vswap();
+        r = gv(RC_INT);
+        vswap();
+        fr = gv(RC_INT);
+        vtop--;
         o(0xaf0f); /* imul fr, r */
         o(0xc0 + fr + r * 8);
-    } else if (op == TOK_SHL | op == TOK_SHR | op == TOK_SAR) {
-        /* op2 is %ecx */
-        if (fr != 1) {
-            if (r == 1) {
-                r = fr;
-                fr = 1;
-                o(0x87); /* xchg r, %ecx */
-                o(0xc1 + r * 8);
-            } else
-                move_reg(1, fr);
-        }
-        o(0xd3); /* shl/shr/sar %cl, r */
-        if (op == TOK_SHL) 
-            o(0xe0 + r);
-        else if (op == TOK_SHR)
-            o(0xe8 + r);
-        else
-            o(0xf8 + r);
-        vtop->r = r;
-    } else if (op == '/' | op == TOK_UDIV | op == TOK_PDIV | 
-               op == '%' | op == TOK_UMOD) {
-        save_reg(2); /* save edx */
-        t = save_reg_forced(fr); /* save fr and get op2 location */
-        move_reg(0, r); /* op1 is %eax */
-        if (op == TOK_UDIV | op == TOK_UMOD) {
-            o(0xf7d231); /* xor %edx, %edx, div t(%ebp), %eax */
-            oad(0xb5, t);
+        break;
+    case TOK_SHL:
+        opc = 4;
+        goto gen_shift;
+    case TOK_SHR:
+        opc = 5;
+        goto gen_shift;
+    case TOK_SAR:
+        opc = 7;
+    gen_shift:
+        vswap();
+        r = gv(RC_INT);
+        vswap();
+        opc = 0xc0 | (opc << 3);
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+            /* constant case */
+            c = vtop->c.i & 0x1f;
+            o(0xc1); /* shl/shr/sar $xxx, r */
+            o(opc | r);
+            g(c);
         } else {
-            o(0xf799); /* cltd, idiv t(%ebp), %eax */
-            oad(0xbd, t);
+            /* we generate the shift in ecx */
+            gv(RC_ECX);
+            /* the first op may have been spilled, so we reload it if
+               needed */
+            vswap();
+            r = gv(RC_INT);
+            vswap();
+            o(0xd3); /* shl/shr/sar %cl, r */
+            o(opc | r);
         }
-        if (op == '%' | op == TOK_UMOD)
-            r = REG_EDX;
-        else
-            r = REG_EAX;
-        vtop->r = r;
-    } else {
         vtop--;
-        o(0x39);
-        o(0xc0 + r + fr * 8); /* cmp fr, r */
-        vset(VT_INT, VT_CMP, op);
+        vtop->r = r;
+        break;
+    case '/':
+    case TOK_UDIV:
+    case TOK_PDIV:
+    case '%':
+    case TOK_UMOD:
+    case TOK_UMULL:
+        vswap();
+        r = gv(RC_EAX); /* first operand must be in eax */
+        vswap();
+        /* XXX: need better constraint */
+        fr = gv(RC_ECX); /* second operand in ecx */
+        vswap();
+        r = gv(RC_EAX); /* reload first operand if flushed */
+        vswap();
+        vtop--;
+        save_reg(REG_EDX);
+        if (op == TOK_UMULL) {
+            o(0xf7); /* mul fr */
+            o(0xe0 + fr);
+            vtop->r2 = REG_EDX;
+            r = REG_EAX;
+        } else {
+            if (op == TOK_UDIV || op == TOK_UMOD) {
+                o(0xf7d231); /* xor %edx, %edx, div fr, %eax */
+                o(0xf0 + fr);
+            } else {
+                o(0xf799); /* cltd, idiv fr, %eax */
+                o(0xf8 + fr);
+            }
+            if (op == '%' || op == TOK_UMOD)
+                r = REG_EDX;
+            else
+                r = REG_EAX;
+        }
+        vtop->r = r;
+        break;
+    default:
+        opc = 7;
+        goto gen_op8;
     }
 }
 
@@ -473,12 +550,12 @@ void gen_opf(int op)
     int a, ft, fc, swapped;
 
     /* convert constants to memory references */
-    if ((vtop[-1].r & (VT_CONST | VT_LVAL)) == VT_CONST) {
+    if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         vswap();
         gv(RC_FLOAT);
         vswap();
     }
-    if ((vtop[0].r & (VT_CONST | VT_LVAL)) == VT_CONST)
+    if ((vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST)
         gv(RC_FLOAT);
 
     /* must put at least one value in the floating point register */
@@ -488,7 +565,7 @@ void gen_opf(int op)
         gv(RC_FLOAT);
         vswap();
     }
-    if (op >= TOK_EQ && op <= TOK_GT) {
+    if (op >= TOK_ULT && op <= TOK_GT) {
         /* load on stack second operand */
         load(REG_ST0, vtop);
         if (op == TOK_GE || op == TOK_GT)
@@ -561,11 +638,26 @@ void gen_opf(int op)
     }
 }
 
-/* convert integers to fp 't' type */
+/* FPU control word for rounding to nearest mode */
+/* XXX: should move that into tcc lib support code ! */
+static unsigned short __tcc_fpu_control = 0x137f;
+/* FPU control word for round to zero mode for int convertion */
+static unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
+
+/* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
+   and 'long long' cases. */
 void gen_cvt_itof(int t)
 {
     gv(RC_INT);
-    if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
+    if ((vtop->t & VT_BTYPE) == VT_LLONG) {
+        /* signed long long to float/double/long double (unsigned case
+           is handled generically) */
+        o(0x50 + vtop->r2); /* push r2 */
+        o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
+        o(0x242cdf); /* fildll (%esp) */
+        o(0x08c483); /* add $8, %esp */
+    } else if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == 
+               (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
         g(0x00);
@@ -581,38 +673,38 @@ void gen_cvt_itof(int t)
     vtop->r = REG_ST0;
 }
 
-/* FPU control word for rounding to nearest mode */
-/* XXX: should move that into tcc lib support code ! */
-static unsigned short __tcc_fpu_control = 0x137f;
-/* FPU control word for round to zero mode for int convertion */
-static unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
-
 /* convert fp to int 't' type */
 /* XXX: handle long long case */
 void gen_cvt_ftoi(int t)
 {
-    int r, size;
+    int r, r2, size;
 
     gv(RC_FLOAT);
-    if (t == VT_INT | VT_UNSIGNED &&
-        t == VT_LLONG | VT_UNSIGNED &&
-        t == VT_LLONG)
+    if (t != VT_INT)
         size = 8;
     else 
         size = 4;
-
-    r = get_reg(RC_INT);
+    
     oad(0x2dd9, (int)&__tcc_int_fpu_control); /* ldcw xxx */
     oad(0xec81, size); /* sub $xxx, %esp */
     if (size == 4)
         o(0x1cdb); /* fistpl */
     else
-        o(0x3cdb); /* fistpll */
+        o(0x3cdf); /* fistpll */
     o(0x24);
     oad(0x2dd9, (int)&__tcc_fpu_control); /* ldcw xxx */
+    r = get_reg(RC_INT);
     o(0x58 + r); /* pop r */
-    if (size == 8) 
-        o(0x04c483); /* add $4, %esp */
+    if (size == 8) {
+        if (t == VT_LLONG) {
+            vtop->r = r; /* mark reg as used */
+            r2 = get_reg(RC_INT);
+            o(0x58 + r2); /* pop r2 */
+            vtop->r2 = r2;
+        } else {
+            o(0x04c483); /* add $4, %esp */
+        }
+    }
     vtop->r = r;
 }
 
@@ -622,18 +714,6 @@ void gen_cvt_ftof(int t)
     /* all we have to do on i386 is to put the float in a register */
     gv(RC_FLOAT);
 }
-
-/* pop stack value */
-void vpop(void)
-{
-    /* for x86, we need to pop the FP stack */
-    if ((vtop->r & VT_VALMASK) == REG_ST0) {
-        o(0xd9dd); /* fstp %st(1) */
-    }
-    vtop--;
-}
-
-
 
 /* end of X86 code generator */
 /*************************************************************/
