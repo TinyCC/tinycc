@@ -1,0 +1,204 @@
+version 0.9.17:
+
+- PLT generation fix
+- tcc doc fixes (Peter Lund)
+- struct parse fix (signaled by Pedro A. Aranda Gutierrez)
+- better _Bool lvalue support (signaled by Alex Measday)
+- function parameters must be converted to pointers (signaled by Neil Brown)
+- sanitized string and character constant parsing
+- fixed comment parse (signaled by Damian M Gryski)
+
+version 0.9.16:
+
+- added assembler language support
+- added GCC inline asm() support
+- fixed multiple variable definitions : uninitialized variables are
+  created as COMMON symbols.
+- optimized macro processing
+- added GCC statement expressions support
+- added GCC local labels support
+- fixed array declaration in old style function parameters
+- support casts in static structure initializations
+- added various __xxx[__] keywords for GCC compatibility
+- ignore __extension__ GCC in an expression or in a type (still not perfect)
+- added '? :' GCC extension support
+
+version 0.9.15:
+
+- compilation fixes for glibc 2.2, gcc 2.95.3 and gcc 3.2.
+- FreeBSD compile fixes. Makefile patches still missing (Carl Drougge).
+- fixed file type guessing if '.' is in the path.
+- fixed tcc_compile_string()
+- add a dummy page in ELF files to fix RX/RW accesses (pageexec at
+  freemail dot hu).
+
+version 0.9.14:
+
+- added #warning. error message if invalid preprocessing directive.
+- added CType structure to ease typing (faster parse).
+- suppressed secondary hash tables (faster parse).
+- rewrote parser by optimizing common cases (faster parse).
+- fixed signed long long comparisons.
+- fixed 'int a(), b();' declaration case.
+- fixed structure init without '{}'.
+- correct alignment support in structures.
+- empty structures support.
+- gcc testsuite now supported.
+- output only warning if implicit integer/pointer conversions.
+- added static bitfield init.
+
+version 0.9.13:
+
+- correct preprocessing token pasting (## operator) in all cases (added
+  preprocessing number token).
+- fixed long long register spill.
+- fixed signed long long '>>'.
+- removed memory leaks.
+- better error handling : processing can continue on link errors. A
+  custom callback can be added to display error messages. Most
+  errors do not call exit() now.
+- ignore -O, -W, -m and -f options
+- added old style function declarations
+- added GCC __alignof__ support.
+- added GCC typeof support.
+- added GCC computed gotos support.
+- added stack backtrace in runtime error message. Improved runtime
+  error position display.
+
+version 0.9.12:
+
+- more fixes for || and && handling.
+- improved '? :' type handling.
+- fixed bound checking generation with structures
+- force '#endif' to be in same file as matching '#if'
+- #include file optimization with '#ifndef #endif' construct detection
+- macro handling optimization
+- added tcc_relocate() and tcc_get_symbol() in libtcc.
+
+version 0.9.11:
+
+- stdarg.h fix for double type (thanks to Philippe Ribet).
+- correct white space characters and added MSDOS newline support.
+- fixed invalid implicit function call type declaration.
+- special macros such as __LINE__ are defined if tested with defined().
+- fixed '!' operator with relocated address.
+- added symbol + offset relocation (fixes some static variable initializers)
+- '-l' option can be specified anywhere. '-c' option yields default
+  output name. added '-r' option for relocatable output.
+- fixed '\nnn' octal parsing.
+- fixed local extern variables declarations.
+
+version 0.9.10:
+
+- fixed lvalue type when saved in local stack.
+- fixed '#include' syntax when using macros.
+- fixed '#line' bug.
+- removed size limit on strings. Unified string constants handling
+  with variable declarations.
+- added correct support for '\xX' in wchar_t strings.
+- added support for bound checking in generated executables
+- fixed -I include order.
+- fixed incorrect function displayed in runtime error.
+
+version 0.9.9:
+
+- fixed preprocessor expression parsing for #if/#elif.
+- relocated debug info (.stab section).
+- relocated bounds info (.bounds section).
+- fixed cast to char of char constants ('\377' is -1 instead of 255)
+- fixed implicit cast for unary plus.
+- strings and '__func__' have now 'char[]' type instead of 'char *'
+  (fixes sizeof() return value).
+- added __start_xxx and __stop_xxx symbols in linker.
+- better DLL creation support (option -shared begins to work).
+- ELF sections and hash tables are resized dynamically.
+- executables and DLLs are stripped by default.
+
+version 0.9.8:
+
+- First version of full ELF linking support (generate objects, static
+  executable, dynamic executable, dynamic libraries). Dynamic library
+  support is not finished (need PIC support in compiler and some
+  patches in symbol exporting).
+- First version of ELF loader for object (.o) and archive (.a) files.
+- Support of simple GNU ld scripts (GROUP and FILE commands)
+- Separated runtime library and bound check code from TCC (smaller
+  compiler core).
+- fixed register reload in float compare.
+- fixed implicit char/short to int casting.
+- allow array type for address of ('&') operator.
+- fixed unused || or && result.
+- added GCC style variadic macro support.
+- optimized bound checking code for array access.
+- tcc includes are now in $(prefix)/lib/tcc/include.
+- more command line options - more consistent handling of multiple
+  input files.
+- added tcc man page (thanks to Cyril Bouthors).
+- uClibc Makefile update
+- converted documentation to texinfo format.
+- added developper's guide in documentation.
+
+version 0.9.7:
+
+- added library API for easy dynamic compilation (see libtcc.h - first
+  draft).
+- fixed long long register spill bug.
+- fixed '? :' register spill bug.
+
+version 0.9.6:
+
+- added floating point constant propagation (fixes negative floating
+  point constants bug).
+
+version 0.9.5:
+
+ - uClibc patches (submitted by Alfonso Martone).
+ - error reporting fix
+ - added CONFIG_TCC_BCHECK to get smaller code if needed.
+
+version 0.9.4:
+
+ - windows port (currently cannot use -g, -b and dll functions).
+ - faster and simpler I/O handling.
+ - '-D' option works in all cases.
+ - preprocessor fixes (#elif and empty macro args)
+ - floating point fixes
+ - first code for CIL generation (does not work yet)
+
+version 0.9.3:
+
+ - better and smaller code generator.
+ - full ISOC99 64 bit 'long long' support.
+ - full 32 bit 'float', 64 bit 'double' and 96 bit 'long double' support.
+ - added '-U' option.
+ - added assembly sections support. 
+ - even faster startup time by mmaping sections instead of mallocing them.
+ - added GNUC __attribute__ keyword support (currently supports
+    'section' and 'aligned' attributes).
+ - added ELF file output (only usable for debugging now)
+ - added debug symbol generation (STAB format).
+ - added integrated runtime error analysis ('-g' option: print clear
+   run time error messages instead of "Segmentation fault").
+ - added first version of tiny memory and bound checker ('-b' option).
+
+version 0.9.2:
+
+ - even faster parsing.
+ - various syntax parsing fixes.
+ - fixed external relocation handling for variables or functions pointers.
+ - better function pointers type handling.
+ - can compile multiple files (-i option).
+ - ANSI C bit fields are supported.
+ - beginning of float/double/long double support.
+ - beginning of long long support.
+
+version 0.9.1:
+
+ - full ISOC99 initializers handling.
+ - compound literals.
+ - structures handle in assignments and as function param or return value.
+ - wide chars and strings.
+ - macro bug fix
+
+version 0.9:
+ - initial version.
