@@ -1508,7 +1508,8 @@ static void *load_data(int fd, unsigned long file_offset, unsigned long size)
 typedef struct SectionMergeInfo {
     Section *s;            /* corresponding existing section */
     unsigned long offset;  /* offset of the new section in the existing section */
-    int new_section;       /* true if section 's' was added */
+    uint8_t new_section;       /* true if section 's' was added */
+    uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
 
 /* load an object file and merge it with current files */
@@ -1595,8 +1596,19 @@ static int tcc_load_object_file(TCCState *s1,
         /* find corresponding section, if any */
         for(j = 1; j < s1->nb_sections;j++) {
             s = s1->sections[j];
-            if (!strcmp(s->name, sh_name))
-                goto found;
+            if (!strcmp(s->name, sh_name)) {
+                if (!strncmp(sh_name, ".gnu.linkonce", 
+                             sizeof(".gnu.linkonce") - 1)) {
+                    /* if a 'linkonce' section is already present, we
+                       do not add it again. It is a little tricky as
+                       symbols can still be defined in
+                       it. */
+                    sm_table[i].link_once = 1;
+                    goto next;
+                } else {
+                    goto found;
+                }
+            }
         }
         /* not found: create new section */
         s = new_section(s1, sh_name, sh->sh_type, sh->sh_flags);
@@ -1630,6 +1642,7 @@ static int tcc_load_object_file(TCCState *s1,
         } else {
             s->data_offset += size;
         }
+    next: ;
     }
 
     /* second short pass to update sh_link and sh_info fields of new
@@ -1657,6 +1670,18 @@ static int tcc_load_object_file(TCCState *s1,
         if (sym->st_shndx != SHN_UNDEF &&
             sym->st_shndx < SHN_LORESERVE) {
             sm = &sm_table[sym->st_shndx];
+            if (sm->link_once) {
+                /* if a symbol is in a link once section, we use the
+                   already defined symbol. It is very important to get
+                   correct relocations */
+                if (ELF32_ST_BIND(sym->st_info) != STB_LOCAL) {
+                    name = strtab + sym->st_name;
+                    sym_index = find_elf_sym(symtab_section, name);
+                    if (sym_index)
+                        old_to_new_syms[i] = sym_index;
+                }
+                continue;
+            }
             /* if no corresponding section added, no need to add symbol */
             if (!sm->s)
                 continue;
