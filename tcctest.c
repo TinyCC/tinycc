@@ -57,6 +57,9 @@ void bitfield_test(void);
 void c99_bool_test(void);
 void float_test(void);
 void longlong_test(void);
+void stdarg_test(void);
+void whitespace_test(void);
+void relocation_test(void);
 
 int fib(int n);
 void num(int n);
@@ -101,7 +104,7 @@ int isid(int c);
 
 void macro_test()
 {
-    printf("macro:\n");
+    printf("macro:\n");
     pf("N=%d\n", N);
     printf("aaa=%d\n", AAA);
 
@@ -174,6 +177,10 @@ void macro_test()
 
     MACRO_NOARGS();
 
+#ifdef __LINE__
+    printf("__LINE__ defined\n");
+#endif
+
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
 #line 200
@@ -192,6 +199,9 @@ void macro_test()
     dprintf1(1, "vaarg1\n");
     dprintf1(1, "vaarg1=%d\n", 2);
     dprintf1(1, "vaarg1=%d %d\n", 1, 2);
+
+    /* gcc extension */
+    printf("func='%s'\n", __FUNCTION__);
 }
 
 int op(a,b)
@@ -409,6 +419,9 @@ int main(int argc, char **argv)
     c99_bool_test();
     float_test();
     longlong_test();
+    stdarg_test();
+    whitespace_test();
+    relocation_test();
     return 0; 
 }
 
@@ -1362,3 +1375,88 @@ void longlong_test(void)
 #endif
 }
 
+void vprintf1(const char *fmt, ...)
+{
+    va_list ap;
+    const char *p;
+    int c, i;
+    double d;
+    long long ll;
+
+    va_start(ap, fmt);
+    
+    p = fmt;
+    for(;;) {
+        c = *p;
+        if (c == '\0')
+            break;
+        p++;
+        if (c == '%') {
+            c = *p;
+            switch(c) {
+            case '\0':
+                goto the_end;
+            case 'd':
+                i = va_arg(ap, int);
+                printf("%d", i);
+                break;
+            case 'f':
+                d = va_arg(ap, double);
+                printf("%f", d);
+                break;
+            case 'l':
+                ll = va_arg(ap, long long);
+                printf("%Ld", ll);
+                break;
+            }
+            p++;
+        } else {
+            putchar(c);
+        }
+    }
+ the_end:
+    va_end(ap);
+}
+
+
+void stdarg_test(void)
+{
+    vprintf1("%d %d %d\n", 1, 2, 3);
+    vprintf1("%f %d %f\n", 1.0, 2, 3.0);
+    vprintf1("%l %l %d %f\n", 1234567891234LL, 987654321986LL, 3, 1234.0);
+}
+
+void whitespace_test(void)
+{
+    char *str;
+
+#if 1
+    pri\
+ntf("whitspace:\n");
+#endif
+    pf("N=%d\n", 2);
+    pri\
+ntf("aaa=%d\n", 3);
+
+    pri\
+\
+ntf("min=%d\n", 4);
+    printf("len1=%d\n", strlen("
+"));
+    str = "
+";
+    printf("len1=%d str[0]=%d\n", strlen(str), str[0]);
+    printf("len1=%d\n", strlen("a
+"));
+}
+
+int reltab[3] = { 1, 2, 3 };
+
+int *rel1 = &reltab[1];
+int *rel2 = &reltab[2];
+
+void relocation_test(void)
+{
+    printf("*rel1=%d\n", *rel1);
+    printf("*rel2=%d\n", *rel2);
+}
