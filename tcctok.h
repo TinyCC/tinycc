@@ -1,3 +1,13 @@
+DEF(TOK___LINE__, "__LINE__")
+DEF(TOK___FILE__, "__FILE__")
+DEF(TOK___DATE__, "__DATE__")
+DEF(TOK___TIME__, "__TIME__")
+DEF(TOK___FUNCTION__, "__FUNCTION__")
+DEF(TOK___VA_ARGS__, "__VA_ARGS__")
+
+/* special identifiers */
+DEF(TOK___FUNC__, "__func__")
+
 /* attribute identifiers */
 DEF(TOK_SECTION, "section")
 DEF(TOK___SECTION__, "__section__")
@@ -51,5 +61,5 @@ DEF(TOK_memalign, "memalign")
 DEF(TOK_calloc, "calloc")
 DEF(TOK_memmove, "memmove")
 DEF(TOK_strlen, "strlen")
-DEF(TOK_strcpy, "strlen")
+DEF(TOK_strcpy, "strcpy")
 #endif
