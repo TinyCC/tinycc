@@ -1,0 +1,136 @@
+.TH TCC 1 "2002 Feb 6" TCC
+.SH NAME
+tcc \- tiny C compiler - the smallest ANSI C compiler
+.SH SYNOPSIS
+.B tcc
+[-\fBI\fP\fIdir\fP]
+[-\fBD\fP\fImacro\fP[=\fIdefn\fP]]
+[-\fBU\fP\fIsym\fP]
+[-\fBl\fP\fIlib\fP]
+[-\fBg\fP]
+[-\fBb\fP]
+[-\fBi\fP\fI<file>\fP]
+<file>
+[infile_args...]
+.SH DESCRIPTION
+
+\fItcc\fP (tiny C compiler) is small, fast, unlimited, and safe.  You
+can compile and execute C code everywhere (e.g., on rescue disks).  It
+generates optimized x86 code, and can compile, assemble, and link
+several times faster than 'gcc -O0'.  Any C dynamic library can be
+used directly.  It includes an optional memory and bounds checker, and
+bounds-checked code can be mixed freely with standard code.  C script
+is also supported--just add '#!/usr/bin/tcc' at the first line of your
+C source, and execute it directly from the command line.
+
+.TP
+.BI "\-I" "dir"
+Append directory \c
+.I dir\c
+\& to the list of directories searched for include files.
+.TP
+.BI \-D macro
+Define macro \c
+.I macro\c
+\& with the string `\|\c
+.B 1\c
+\&\|' as its definition.
+.TP
+.BI \-D macro = defn
+Define macro \c
+.I macro\c
+\& as \c
+.I defn\c
+\&.    All instances of `\|\c
+.B \-D\c
+\&\|' on
+the command line are processed before any `\|\c
+.B \-U\c
+\&\|' options.
+.TP
+.BI \-U macro
+Undefine macro \c
+.I macro\c
+\&.  `\|\c
+.B \-U\c
+\&\|' options are evaluated after all `\|\c
+.B \-D\c
+\&\|' options, but before any `\|\c
+.B \-include\c
+\&\|' and `\|\c
+.B \-imacros\c
+\&\|' options.
+.TP
+.BI \-l library
+Use the library named \c
+.I library\c
+\& when linking.
+
+
+.TP
+\fB\-l\fRlib
+link with dynamic library 'lib'
+.TP
+\fB\-g\f
+generate runtime debug info
+.TP
+\fB\-b\f
+compile with built-in memory and bounds checker (implies -g)
+.TP
+\fB\-i\fR <file>
+compile <file>
+.SH SEE ALSO
+\fIgcc\fP(1)
+.SH PROBLEMS AND BUGS
+We haven't found any bugs yet. Perhaps there are bugs but it's
+unlikely.
+
+If you have problems with `tcc' or think you've found a
+bug, please report it to the developers; we cannot promise to do
+anything but we might well want to fix it.
+
+Before reporting a bug, make sure you've actually found a real bug.
+Carefully reread the documentation and see if it really says you can
+do what you're trying to do.  If it's not clear whether you should be
+able to do something or not, report that too; it's a bug in the
+documentation!
+
+Before reporting a bug or trying to fix it yourself, try to isolate it
+to the smallest possible conditions that reproduces the problem.  Then
+send us the description and the exact results `tcc' gave
+you.  Also say what you expected to occur; this will help us decide
+whether the problem was really in the documentation.
+
+Once you've got a precise problem, please send electronic mail to:
+
+         Fabrice Bellard <fabrice.bellard@free.fr>
+
+Please include the version number of `tcc' you are using.
+Be sure also to include the type of machine and operating system you
+are using.
+.SH COPYRIGHT
+\fItcc\fP is Copyright \(co 2001, 2002 by Fabrice Bellard
+.PP
+Permission is granted to make and distribute verbatim copies of
+this manual page provided the copyright notice and this permission
+notice are preserved on all copies.
+.ig
+Permission is granted to process this file through troff and print the
+results, provided the printed document carries copying permission
+notice identical to this one except for the removal of this paragraph
+(this paragraph not being relevant to the printed manual page).
+..
+.PP
+Permission is granted to copy and distribute modified versions of this
+manual page under the conditions for verbatim copying, provided that
+the entire resulting derived work is distributed under the terms of a
+permission notice identical to this one.
+.PP
+Permission is granted to copy and distribute translations of this
+manual page into another language, under the above conditions for
+modified versions, except that this permission notice may be stated in
+a translation approved by the Foundation.
+.SH AUTHORS
+This program was written by Fabrice Bellard <fabrice.bellard@free.fr>.
+It may be freely distributed under the terms of the GNU General Public
+License.  There is ABSOLUTELY NO WARRANTY for this program.
