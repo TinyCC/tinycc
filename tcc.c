@@ -190,7 +190,7 @@ typedef struct AttributeDef {
 #define MACRO_OBJ      0 /* object like macro */
 #define MACRO_FUNC     1 /* function like macro */
 
-/* field 'Sym.t' for labels */
+/* field 'Sym.r' for labels */
 #define LABEL_FORWARD  1 /* label is forward defined */
 
 /* type_decl() types */
@@ -304,6 +304,10 @@ int gnu_ext = 1;
 
 /* use Tiny C extensions */
 int tcc_ext = 1;
+
+/* max number of callers shown if error */
+static int num_callers = 6;
+static const char **rt_bound_error_msg;
 
 /* XXX: suppress that ASAP */
 static struct TCCState *tcc_state;
@@ -572,7 +576,7 @@ int parse_btype(int *type_ptr, AttributeDef *ad);
 int type_decl(AttributeDef *ad, int *v, int t, int td);
 
 void error(const char *fmt, ...);
-void rt_error(unsigned long pc, const char *fmt, ...);
+void rt_error(struct ucontext *uc, const char *fmt, ...);
 void vpushi(int v);
 void vset(int t, int r, int v);
 void type_to_str(char *buf, int buf_size, 
@@ -910,6 +914,7 @@ static void put_extern_sym(Sym *sym, Section *section,
         name = get_tok_str(sym->v, NULL);
 #ifdef CONFIG_TCC_BCHECK
         if (do_bounds_check) {
+            /* XXX: avoid doing that for statics ? */
             /* if bound checking is activated, we change some function
                names by adding the "__bound" prefix */
             switch(sym->v) {
@@ -5475,8 +5480,7 @@ static void unary(void)
                 test_lvalue();
             vtop->t = mk_pointer(vtop->t);
             gaddrof();
-        } else
-        if (t == '!') {
+        } else if (t == '!') {
             unary();
             if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
                 vtop->c.i = !vtop->c.i;
@@ -5484,21 +5488,18 @@ static void unary(void)
                 vtop->c.i = vtop->c.i ^ 1;
             else
                 vset(VT_INT, VT_JMP, gtst(1, 0));
-        } else
-        if (t == '~') {
+        } else if (t == '~') {
             unary();
             vpushi(-1);
             gen_op('^');
-        } else 
-        if (t == '+') {
+        } else if (t == '+') {
             /* in order to force cast, we add zero */
             unary();
             if ((vtop->t & VT_BTYPE) == VT_PTR)
                 error("pointer not accepted for unary plus");
             vpushi(0);
             gen_op('+');
-        } else 
-        if (t == TOK_SIZEOF || t == TOK_ALIGNOF) {
+        } else if (t == TOK_SIZEOF || t == TOK_ALIGNOF) {
             if (tok == '(') {
                 ft = parse_expr_type();
             } else {
@@ -5509,16 +5510,28 @@ static void unary(void)
                 vpushi(size);
             else
                 vpushi(align);
-        } else
-        if (t == TOK_INC || t == TOK_DEC) {
+        } else if (t == TOK_INC || t == TOK_DEC) {
             unary();
             inc(0, t);
         } else if (t == '-') {
             vpushi(0);
             unary();
             gen_op('-');
-        } else 
-        {
+        } else if (t == TOK_LAND && gnu_ext) {
+            /* allow to take the address of a label */
+            if (tok < TOK_UIDENT)
+                expect("label identifier");
+            s = sym_find1(&label_stack, tok);
+            if (!s) {
+                s = sym_push1(&label_stack, tok, 0, 0);
+                s->r = LABEL_FORWARD;
+            }
+            if (!s->t)
+                s->t = mk_pointer(VT_VOID) | VT_STATIC;
+            vset(s->t, VT_CONST | VT_SYM, 0);
+            vtop->sym = s;
+            next();
+        } else {
             if (t < TOK_UIDENT)
                 expect("identifier");
             s = sym_find(t);
@@ -6200,16 +6213,29 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
     } else
     if (tok == TOK_GOTO) {
         next();
-        s = sym_find1(&label_stack, tok);
-        /* put forward definition if needed */
-        if (!s)
-            s = sym_push1(&label_stack, tok, LABEL_FORWARD, 0);
-        /* label already defined */
-        if (s->t & LABEL_FORWARD) 
-            s->c = gjmp(s->c);
-        else
-            gjmp_addr(s->c);
-        next();
+        if (tok == '*' && gnu_ext) {
+            /* computed goto */
+            next();
+            gexpr();
+            if ((vtop->t & VT_BTYPE) != VT_PTR)
+                expect("pointer");
+            ggoto();
+        } else if (tok >= TOK_UIDENT) {
+            s = sym_find1(&label_stack, tok);
+            /* put forward definition if needed */
+            if (!s) {
+                s = sym_push1(&label_stack, tok, 0, 0);
+                s->r = LABEL_FORWARD;
+            }
+            /* label already defined */
+            if (s->r & LABEL_FORWARD) 
+                s->next = (void *)gjmp((long)s->next);
+            else
+                gjmp_addr((long)s->next);
+            next();
+        } else {
+            expect("label identifier");
+        }
         skip(';');
     } else {
         b = is_label();
@@ -6217,14 +6243,14 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
             /* label case */
             s = sym_find1(&label_stack, b);
             if (s) {
-                if (!(s->t & LABEL_FORWARD))
+                if (!(s->r & LABEL_FORWARD))
                     error("multiple defined label");
-                gsym(s->c);
-                s->c = ind;
-                s->t = 0;
+                gsym((long)s->next);
             } else {
-                sym_push1(&label_stack, b, 0, ind);
+                s = sym_push1(&label_stack, b, 0, 0);
             }
+            s->next = (void *)ind;
+            s->r = 0;
             /* we accept this, but it is a mistake */
             if (tok == '}') 
                 warning("deprecated use of label at end of compound statement");
@@ -6997,6 +7023,22 @@ static void decl(int l)
                 gsym(rsym);
                 gfunc_epilog();
                 cur_text_section->data_offset = ind;
+                /* look if any labels are undefined. Define symbols if
+                   '&&label' was used. */
+                {
+                    Sym *s;
+                    for(s = label_stack.top; s != NULL; s = s->prev) {
+                        if (s->r & LABEL_FORWARD) {
+                            error("label '%s' used but not defined",
+                                  get_tok_str(s->v, NULL));
+                        }
+                        if (s->c) {
+                            /* define corresponding symbol. A size of
+                               1 is put. */
+                            put_extern_sym(s, cur_text_section, (long)s->next, 1);
+                        }
+                    }
+                }
                 sym_pop(&label_stack, NULL); /* reset label stack */
                 sym_pop(&local_stack, NULL); /* reset local stack */
                 /* end of function */
@@ -7234,6 +7276,8 @@ static void rt_printline(unsigned long wanted_pc)
     int incl_index, len, last_line_num, i;
     const char *str, *p;
 
+    fprintf(stderr, "0x%08lx:", wanted_pc);
+
     func_name[0] = '\0';
     func_addr = 0;
     incl_index = 0;
@@ -7247,6 +7291,10 @@ static void rt_printline(unsigned long wanted_pc)
             /* function start or end */
         case N_FUN:
             if (sym->n_strx == 0) {
+                /* we test if between last line and end of function */
+                pc = sym->n_value + func_addr;
+                if (wanted_pc >= last_pc && wanted_pc < pc)
+                    goto found;
                 func_name[0] = '\0';
                 func_addr = 0;
             } else {
@@ -7300,31 +7348,98 @@ static void rt_printline(unsigned long wanted_pc)
         }
         sym++;
     }
-    /* did not find line number info: */
-    fprintf(stderr, "(no debug info, pc=0x%08lx): ", wanted_pc);
+
+    /* second pass: we try symtab symbols (no line number info) */
+    incl_index = 0;
+    {
+        Elf32_Sym *sym, *sym_end;
+        int type;
+
+        sym_end = (Elf32_Sym *)(symtab_section->data + symtab_section->data_offset);
+        for(sym = (Elf32_Sym *)symtab_section->data + 1; 
+            sym < sym_end;
+            sym++) {
+            type = ELF32_ST_TYPE(sym->st_info);
+            if (type == STT_FUNC) {
+                if (wanted_pc >= sym->st_value &&
+                    wanted_pc < sym->st_value + sym->st_size) {
+                    pstrcpy(last_func_name, sizeof(last_func_name),
+                            strtab_section->data + sym->st_name);
+                    goto found;
+                }
+            }
+        }
+    }
+    /* did not find any info: */
+    fprintf(stderr, " ???\n");
     return;
  found:
-    for(i = 0; i < incl_index - 1; i++)
-        fprintf(stderr, "In file included from %s\n", 
-                incl_files[i]);
-    if (incl_index > 0) {
-        fprintf(stderr, "%s:%d: ", 
-                incl_files[incl_index - 1], last_line_num);
-    }
     if (last_func_name[0] != '\0') {
-        fprintf(stderr, "in function '%s()': ", last_func_name);
+        fprintf(stderr, " %s()", last_func_name);
     }
+    if (incl_index > 0) {
+        fprintf(stderr, " (%s:%d", 
+                incl_files[incl_index - 1], last_line_num);
+        for(i = incl_index - 2; i >= 0; i--)
+            fprintf(stderr, ", included from %s", incl_files[i]);
+        fprintf(stderr, ")");
+    }
+    fprintf(stderr, "\n");
 }
 
+#ifdef __i386__
+
+#ifndef EIP
+#define EIP 14
+#define EBP 6
+#endif
+
+/* return the PC at frame level 'level'. Return non zero if not found */
+static int rt_get_caller_pc(unsigned long *paddr, 
+                            struct ucontext *uc, int level)
+{
+    unsigned long fp;
+    int i;
+
+    if (level == 0) {
+        *paddr = uc->uc_mcontext.gregs[EIP];
+        return 0;
+    } else {
+        fp = uc->uc_mcontext.gregs[EBP];
+        for(i=1;i<level;i++) {
+            /* XXX: check address validity with program info */
+            if (fp <= 0x1000 || fp >= 0xc0000000)
+                return -1;
+            fp = ((unsigned long *)fp)[0];
+        }
+        *paddr = ((unsigned long *)fp)[1];
+        return 0;
+    }
+}
+#else
+#error add corresponding function
+#endif
+
 /* emit a run time error at position 'pc' */
-void rt_error(unsigned long pc, const char *fmt, ...)
+void rt_error(struct ucontext *uc, const char *fmt, ...)
 {
     va_list ap;
-    va_start(ap, fmt);
+    unsigned long pc;
+    int i;
 
-    rt_printline(pc);
+    va_start(ap, fmt);
+    fprintf(stderr, "Runtime error: ");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
+    for(i=0;i<num_callers;i++) {
+        if (rt_get_caller_pc(&pc, uc, i) < 0)
+            break;
+        if (i == 0)
+            fprintf(stderr, "at ");
+        else
+            fprintf(stderr, "by ");
+        rt_printline(pc);
+    }
     exit(255);
     va_end(ap);
 }
@@ -7334,38 +7449,34 @@ void rt_error(unsigned long pc, const char *fmt, ...)
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
 {
     struct ucontext *uc = puc;
-    unsigned long pc;
-
-#ifdef __i386__
-    pc = uc->uc_mcontext.gregs[14];
-#else
-#error please put the right sigcontext field    
-#endif
 
     switch(signum) {
     case SIGFPE:
         switch(siginf->si_code) {
         case FPE_INTDIV:
         case FPE_FLTDIV:
-            rt_error(pc, "division by zero");
+            rt_error(uc, "division by zero");
             break;
         default:
-            rt_error(pc, "floating point exception");
+            rt_error(uc, "floating point exception");
             break;
         }
         break;
     case SIGBUS:
     case SIGSEGV:
-        rt_error(pc, "dereferencing invalid pointer");
+        if (rt_bound_error_msg && *rt_bound_error_msg)
+            rt_error(uc, *rt_bound_error_msg);
+        else
+            rt_error(uc, "dereferencing invalid pointer");
         break;
     case SIGILL:
-        rt_error(pc, "illegal instruction");
+        rt_error(uc, "illegal instruction");
         break;
     case SIGABRT:
-        rt_error(pc, "abort() called");
+        rt_error(uc, "abort() called");
         break;
     default:
-        rt_error(pc, "caught signal %d", signum);
+        rt_error(uc, "caught signal %d", signum);
         break;
     }
     exit(255);
@@ -7440,11 +7551,9 @@ int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BCHECK
     if (do_bounds_check) {
         void (*bound_init)(void);
-        void **bound_error_func;
 
         /* set error function */
-        bound_error_func = (void **)tcc_get_symbol(s1, "__bound_error_func");
-        *bound_error_func = rt_error;
+        rt_bound_error_msg = (void *)tcc_get_symbol(s1, "__bound_error_msg");
 
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = (void *)tcc_get_symbol(s1, "__bound_init");
@@ -7782,9 +7891,9 @@ int tcc_set_output_type(TCCState *s, int output_type)
 
 void help(void)
 {
-    printf("tcc version 0.9.12 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.13 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
-           "           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]\n"
+           "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
            "\n"
            "General options:\n"
@@ -7798,17 +7907,18 @@ void help(void)
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
-           "C compiler options:\n"
-           "  -g          generate runtime debug info\n"
-#ifdef CONFIG_TCC_BCHECK
-           "  -b          compile with built-in memory and bounds checker (implies -g)\n"
-#endif
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
            "  -shared     generate a shared library\n"
            "  -static     static linking\n"
            "  -r          relocatable output\n"
+           "Debugger options:\n"
+           "  -g          generate runtime debug info\n"
+#ifdef CONFIG_TCC_BCHECK
+           "  -b          compile with built-in memory and bounds checker (implies -g)\n"
+#endif
+           "  -bt N       show N callers in stack traces\n"
            );
 }
 
@@ -7884,7 +7994,9 @@ int main(int argc, char **argv)
             nb_libraries++;
         } else if (!strcmp(r + 1, "bench")) {
             do_bench = 1;
-        } else 
+        } else if (!strcmp(r + 1, "bt")) {
+            num_callers = atoi(argv[optind++]);
+        } else
 #ifdef CONFIG_TCC_BCHECK
         if (r[1] == 'b') {
             do_bounds_check = 1;
@@ -7982,7 +8094,9 @@ int main(int argc, char **argv)
         ret = tcc_run(s, argc - optind, argv + optind);
     }
  the_end:
-    tcc_delete(s);
+    /* XXX: cannot do it with bound checking because of the malloc hooks */
+    if (!do_bounds_check)
+        tcc_delete(s);
 
 #ifdef MEM_DEBUG
     if (do_bench) {
