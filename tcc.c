@@ -1150,7 +1150,8 @@ TokenSym *tok_alloc(const char *str, int len)
     ts->sym_identifier = NULL;
     ts->len = len;
     ts->hash_next = NULL;
-    memcpy(ts->str, str, len + 1);
+    memcpy(ts->str, str, len);
+    ts->str[len] = '\0';
     *pts = ts;
     return ts;
 }
@@ -7557,24 +7558,35 @@ static int tcc_compile(TCCState *s1)
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
+#ifdef LIBTCC
 int tcc_compile_string(TCCState *s, const char *str)
 {
     BufferedFile bf1, *bf = &bf1;
-    int ret;
+    int ret, len;
+    char *buf;
 
     /* init file structure */
     bf->fd = -1;
-    bf->buf_ptr = (char *)str;
-    bf->buf_end = (char *)str + strlen(bf->buffer);
+    /* XXX: avoid copying */
+    len = strlen(str);
+    buf = tcc_malloc(len + 1);
+    if (!buf)
+        return -1;
+    buf[len] = CH_EOB;
+    bf->buf_ptr = buf;
+    bf->buf_end = buf + len;
     pstrcpy(bf->filename, sizeof(bf->filename), "<string>");
     bf->line_num = 1;
     file = bf;
     
     ret = tcc_compile(s);
     
+    tcc_free(buf);
+
     /* currently, no need to close */
     return ret;
 }
+#endif
 
 /* define a preprocessor symbol. A value can also be provided with the '=' operator */
 void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
