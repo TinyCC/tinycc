@@ -28,6 +28,7 @@ int test2(void)
     return sum;
 }
 
+/* actually, profiling test */
 int test3(void)
 {
     int sum;
@@ -73,6 +74,7 @@ int test5(void)
 }
 
 /* error */
+/* XXX: currently: bug */
 int test6(void)
 {
     int i, sum = 0;
