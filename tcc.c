@@ -111,7 +111,7 @@ typedef int BOOL;
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
-#define VSTACK_SIZE         64
+#define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
 
 #define TOK_HASH_SIZE       8192 /* must be a power of two */
@@ -4266,7 +4266,7 @@ void vsetc(CType *type, int r, CValue *vc)
 {
     int v;
 
-    if (vtop >= vstack + VSTACK_SIZE)
+    if (vtop >= vstack + (VSTACK_SIZE - 1))
         error("memory full");
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
@@ -4387,7 +4387,7 @@ void vswap(void)
 
 void vpushv(SValue *v)
 {
-    if (vtop >= vstack + VSTACK_SIZE)
+    if (vtop >= vstack + (VSTACK_SIZE - 1))
         error("memory full");
     vtop++;
     *vtop = *v;
