@@ -9588,6 +9588,7 @@ void help(void)
            "  -llib       link with dynamic or static library 'lib'\n"
            "  -shared     generate a shared library\n"
            "  -static     static linking\n"
+           "  -rdynamic   export all global symbols to dynamic linker\n"
            "  -r          relocatable output\n"
            "Debugger options:\n"
            "  -g          generate runtime debug info\n"
