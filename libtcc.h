@@ -29,10 +29,12 @@ void tcc_undefine_symbol(TCCState *s, const char *sym);
 /*****************************/
 /* compiling */
 
-/* compile a file. Return non zero if error. */
-int tcc_compile_file(TCCState *s, const char *filename);
+/* add a file (either a C file, dll, an object, a library or an ld
+   script */
+void tcc_add_file(TCCState *s, const char *filename);
 
-/* compile a string. Return non zero if error. */
+/* compile a string containing a C source. Return non zero if
+   error. */
 int tcc_compile_string(TCCState *s, const char *buf);
 
 /* get last error */
@@ -41,18 +43,25 @@ int tcc_get_error(TCCState *s, char *buf, int buf_size);
 /*****************************/
 /* linking commands */
 
-/* add a DYNAMIC library so that the compiled program can use its symbols */
-int tcc_add_dll(TCCState *s, const char *library_name);
+/* set output type. Must be called before any compilation */
+#define TCC_OUTPUT_MEMORY   0 /* output will be ran in memory (no
+                                 output file) (default) */
+#define TCC_OUTPUT_EXE      1 /* executable file */
+#define TCC_OUTPUT_DLL      2 /* dynamic library */
+#define TCC_OUTPUT_OBJ      3 /* object file */
+int tcc_set_output_type(TCCState *s, int output_type);
 
-/* define a global symbol */
-int tcc_add_symbol(TCCState *s, const char *name, void *value);
+/* equivalent to -Lpath option */
+int tcc_add_library_path(TCCState *s, const char *pathname);
 
-#define TCC_FILE_EXE  0 /* executable file */
-#define TCC_FILE_DLL  1 /* dynamic library */
-#define TCC_FILE_OBJ  2 /* object file */
+/* the library name is the same as the argument of the '-l' option */
+int tcc_add_library(TCCState *s, const char *libraryname);
+
+/* add a symbol to the compiled program */
+int tcc_add_symbol(TCCState *s, const char *name, unsigned long val);
 
 /* output an executable file */
-int tcc_output_file(TCCState *s, const char *filename, int file_type);
+int tcc_output_file(TCCState *s, const char *filename);
 
 /* link and run main() function and return its value */
 int tcc_run(TCCState *s, int argc, char **argv);
