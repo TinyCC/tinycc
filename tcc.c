@@ -398,6 +398,9 @@ struct TCCState {
     /* if true, static linking is performed */
     int static_link;
 
+    /* if true, all symbols are exported */
+    int rdynamic;
+
     /* if true, only link in referenced objects from archive */
     int alacarte_link;
 
@@ -9653,7 +9656,7 @@ static const TCCOption tcc_options[] = {
     { "shared", TCC_OPTION_shared, 0 },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
     { "run", TCC_OPTION_run, 0 },
-    { "rdynamic", TCC_OPTION_rdynamic, 0 }, /* currently ignored */
+    { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -9837,6 +9840,9 @@ int main(int argc, char **argv)
                     if (tcc_set_warning(s, p, value) < 0 && s->warn_unsupported)
                         goto unsupported_option;
                 }
+                break;
+            case TCC_OPTION_rdynamic:
+                s->rdynamic = 1;
                 break;
             default:
                 if (s->warn_unsupported) {
