@@ -3608,7 +3608,7 @@ int main(int argc, char **argv)
     while (1) {
         if (optind >= argc) {
         show_help:
-            printf("tcc version 0.9 - Tiny C Compiler - Copyright (C) 2001 Fabrice Bellard\n" 
+            printf("tcc version 0.9.1 - Tiny C Compiler - Copyright (C) 2001 Fabrice Bellard\n" 
                    "usage: tcc [-Idir] [-Dsym] [-llib] infile [infile_arg...]\n");
             return 1;
         }
