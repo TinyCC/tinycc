@@ -21,7 +21,7 @@ INSTALL=install
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
-all: tcc libtcc1.o bcheck.o tcc-doc.html libtcc.a libtcc_test
+all: tcc libtcc1.o bcheck.o tcc-doc.html tcc.1 libtcc.a libtcc_test
 
 Makefile: config.mak
 
@@ -123,7 +123,7 @@ bcheck.o: bcheck.c
 
 install: tcc_install libinstall
 
-tcc_install: tcc libtcc1.o bcheck.o
+tcc_install: tcc tcc.1 libtcc1.o bcheck.o
 	$(INSTALL) -m755 tcc $(bindir)
 	$(INSTALL) tcc.1 $(mandir)/man1
 	mkdir -p $(libdir)/tcc
@@ -135,7 +135,7 @@ tcc_install: tcc libtcc1.o bcheck.o
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe tcc-doc.html libtcc.a libtcc_test \
+           *.exe tcc-doc.html tcc.pod tcc.1 libtcc.a libtcc_test \
            tcctest[1234] test[1234].out
 
 distclean: clean
@@ -201,9 +201,13 @@ cache: tcc_g
 	cachegrind ./tcc_g -o /tmp/linpack -lm bench/linpack.c
 	vg_annotate tcc.c > /tmp/linpack.cache.log
 
-# documentation
+# documentation and man page
 tcc-doc.html: tcc-doc.texi
 	texi2html -monolithic -number $<
+
+tcc.1: tcc-doc.texi
+	./texi2pod.pl $< tcc.pod
+	pod2man --section=1 --center=" " --release=" " tcc.pod > $@
 
 FILES= Makefile Makefile.uClibc configure VERSION \
        README TODO COPYING \

@@ -66,12 +66,15 @@ generation (@pxref{Libtcc}).
 @section Quick start
 
 @example
-usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
-           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]
-           [infile1 infile2...] [-run infile args...]
+@c man begin SYNOPSIS
+usage: tcc [@option{-v}] [@option{-c}] [@option{-o}@var{outfile}] [@option{-B}@var{dir}] [@option{-bench}] [@option{-I}@var{dir}] [@option{-D}@var{sym[=val]}] [@option{-U}@var{sym}]
+           [@option{-g}] [@option{-b}] [@option{-bt}@var{N}] [@option{-L}@var{dir}] [@option{-l}@var{lib}] [@option{-shared}] [@option{-static}]
+           [@var{infile1} @var{infile2}@dots{}] [@option{run} @var{infile} @var{args}@dots{}]
+@c man end
 @end example
 
 @noindent
+@c man begin DESCRIPTION
 TCC options are a very much like gcc options. The main difference is that TCC
 can also execute directly the resulting program and give it runtime
 arguments.
@@ -120,7 +123,7 @@ TCC can be invoked from @emph{scripts}, just as shell scripts. You just
 need to add @code{#!/usr/local/bin/tcc -run} at the start of your C source:
 
 @example
-#!/usr/local/bin/tcc
+#!/usr/local/bin/tcc -run
 #include <stdio.h>
 
 int main() 
@@ -129,11 +132,13 @@ int main()
     return 0;
 @}
 @end example
+@c man end
 
 @section Option summary
 
 General Options:
 
+@c man begin OPTIONS
 @table @option
 @item -v
 Display current TCC version.
@@ -224,6 +229,22 @@ Display N callers in stack traces. This is useful with @option{-g} or
 
 Note: GCC options @option{-Ox}, @option{-Wx}, @option{-fx} and @option{-mx} are
 ignored.
+@c man end
+
+@ignore
+
+@setfilename tcc
+@settitle Tiny C Compiler
+
+@c man begin SEEALSO
+gcc(1)
+@c man end
+
+@c man begin AUTHOR
+Fabrice Bellard
+@c man end
+
+@end ignore
 
 @chapter C language support
 
