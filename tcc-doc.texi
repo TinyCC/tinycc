@@ -145,6 +145,11 @@ function attributes. The following attributes are supported:
   of the default section.
 
   <li> <tt>unused</tt>: specify that the variable or the function is unused.
+
+  <li> <tt>cdecl</tt>: use standard C calling convention.
+
+  <li> <tt>stdcall</tt>: use Pascal-like calling convention.
+
   </ul>
 <BR>
 Here are some examples:
@@ -279,8 +284,8 @@ usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]
 /usr/include, /usr/lib/tcc, /usr/local/lib/tcc.</td>
 
 <tr><td>'-Dsym[=val]'</td> <td>Define preprocessor symbol 'sym' to
-val. If val is not present, its value is '1'. NOTE: currently, only
-integer and strings are supported as values</td>
+val. If val is not present, its value is '1'. Function-like macros can
+also be defined: <tt>'-DF(a)=a+1'</tt></td>
 
 <tr><td>'-Usym'</td> <td>Undefine preprocessor symbol 'sym'.</td>
 
