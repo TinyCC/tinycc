@@ -672,6 +672,15 @@ unsigned long long __ldtoull(long double a)
 
 /********************************************************/
 
+/* we use our own 'finite' function to avoid potential problems with
+   non standard math libs */
+/* XXX: endianness dependant */
+int ieee_finite(double d)
+{
+    int *p = (int *)&d;
+    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+}
+
 /* copy a string and truncate it. */
 char *pstrcpy(char *buf, int buf_size, const char *s)
 {
@@ -3107,7 +3116,7 @@ void gen_opif(int op)
 
         /* NOTE: we only do constant propagation if finite number (not
            NaN or infinity) (ANSI spec) */
-        if (!finite(f1) || !finite(f2))
+        if (!ieee_finite(f1) || !ieee_finite(f2))
             goto general_case;
 
         switch(op) {
