@@ -334,7 +334,7 @@ int gtst(inv, t)
     return t;
 }
 
-/* return the size (in bytes) of a given type */
+/* return the size in bytes of a given type */
 int type_size(t)
 {
     if ((t & VT_PTRMASK) > VT_PTRINC | (t & VT_TYPE) == VT_PTRINC)
@@ -361,16 +361,24 @@ void inc(a, c)
     o(0x0189 | a); /* mov %eax/%edx, (%ecx) */
 }
 
-/* op is '-' or '+' (or 0) */
-/* t is the type of the first operand */
 /* XXX: handle ptr sub and 'int + ptr' case (only 'ptr + int' handled) */
-void gen_op(op, t)
+/* XXX: handle constant propagation (need to track live eax) */
+void gen_op(op, l)
 {
+    int t;
+    gv();
+    t = vt;
+    o(0x50); /* push %eax */
+    next();
+    if (l < 0)
+        expr();
+    else
+        sum(l);
     gv();
     o(0x59); /* pop %ecx */
     if (op == '+' | op == '-') {
         /* XXX: incorrect for short (futur!) */
-        if (type_size(t) != 1)
+        if (type_size(t) == 4)
             o(0x02e0c1); /* shl $2, %eax */
         if (op == '-') 
             o(0xd8f7); /* neg %eax */
@@ -384,10 +392,13 @@ void gen_op(op, t)
         o(0xc809);
     else if (op == '*')
         o(0xc1af0f); /* imul %ecx, %eax */
+#ifndef TINY
     else if (op == TOK_SHL | op == TOK_SHR) {
         o(0xd391); /* xchg %ecx, %eax, shl/sar %cl, %eax */
         o(op);
-    } else if (op == '/' | op == '%') {
+    }
+#endif
+    else if (op == '/' | op == '%') {
         o(0xd231);   /* xor %edx, %edx */
         o(0xf9f791); /* xchg %ecx, %eax, idiv %ecx, %eax */
         if (op == '%')
@@ -471,22 +482,33 @@ int typ(v,t)
     return t;
 }
 
+/* read a number in base b */
+int getn(c, b)
+{
+    int n;
+    n = 0;
+    while (isnum(c)) {
+        n = n * b + c - '0';
+        c = inp();
+    }
+    ungetc(c, file);
+    return n;
+}
+
 int getq(n)
 {
-    int c;
     if (n == '\\') {
         n = inp();
         if (n == 'n')
             n = '\n';
-        else if (isnum(n)) {
-            c = 0;
-            while (isnum(n)) {
-                c = c * 8 + n - '0';
-                n = inp();
-            }
-            ungetc(n, file);
-            return c;
-        }
+#ifndef TINY
+        else if (n == 'r')
+            n = '\r';
+        else if (n == 't')
+            n = '\t';
+#endif
+        else if (isnum(n))
+            n = getn(n, 8);
     }
     return n;
 }
@@ -497,12 +519,8 @@ void unary()
 
     if (isnum(tok)) {
         /* number */
-        n = 0;
-        while (isnum(tok)) {
-            n = n * 10 + tok - '0';
-            next();
-        }
-        vset(VT_CONST, n);
+        vset(VT_CONST, getn(tok, 10));
+        next();
     } else if (tok == '\'') {
         vset(VT_CONST, getq(inp()));
         next(); /* skip char */
@@ -545,8 +563,7 @@ void unary()
             if (!(vt & VT_LVAL))
                 error("lvalue expected");
 #endif        
-            vt = vt & VT_LVALN;
-            vt = vt + VT_PTRINC;
+            vt = (vt & VT_LVALN) + VT_PTRINC;
         } else
 #ifndef TINY
         if (t == '!') {
@@ -602,16 +619,9 @@ void unary()
         if (!(vt & VT_PTRMASK))
             error("pointer expected");
 #endif
-        gv();
-        ft = vt;
-        fc = vc;
-        next();
-        o(0x50); /* push %eax */
-        expr();
-        gen_op('+', ft);
+        gen_op('+', -1);
         /* dereference pointer */
-        vt = (ft - VT_PTRINC) | VT_LVAL;
-        vc = fc;
+        vt = (vt - VT_PTRINC) | VT_LVAL;
         skip(']');
     } else
     if (tok == '(') {
@@ -661,7 +671,7 @@ void unary()
         }
         if (t)
             oad(0xc481, t);
-        /* return value is variable */
+        /* return value is variable, int */
         vt = VT_VAR;
     }
 }
@@ -692,40 +702,33 @@ void uneq()
         if (ft & VT_VAR) {
             o(0x59); /* pop %ecx */
             o(0x0189 - b); /* mov %eax/%al, (%ecx) */
-        } else {
-            if (ft & VT_LOCAL)
-                oad(0x8589 - b, fc); /* mov %eax/%al,xxx(%ebp) */
-            else
-                oad(0xa3 - b, fc); /* mov %eax/%al,xxx */
-        }
+        } else if (ft & VT_LOCAL)
+            oad(0x8589 - b, fc); /* mov %eax/%al,xxx(%ebp) */
+        else
+            oad(0xa3 - b, fc); /* mov %eax/%al,xxx */
     }
 }
 
 void sum(l)
 {
-    int op, t;
+#ifndef TINY
+    int t;
+#endif
     if (l == 0)
         uneq();
     else {
-        l--;
-        sum(l);
-        while (1) {
-            op = tok;
-            if ((l == 0 & op != '*' & op != '/' & op != '%') |
-                (l == 1 & op != '+' & op != '-') |
-                (l == 2 & op != TOK_SHL & op != TOK_SHR) |
-                (l == 3 & (op < TOK_LT | op > TOK_GT)) |
-                (l == 4 & op != TOK_EQ & op != TOK_NE) |
-                (l == 5 & op != '&') |
-                (l == 6 & op != '^') |
-                (l == 7 & op != '|'))
-                break;
-            gv();
-            t = vt;
-            o(0x50); /* push %eax */
-            next();
-            sum(l);
-            gen_op(op, t);
+        sum(--l);
+        while ((l == 0 & (tok == '*' | tok == '/' | tok == '%')) |
+               (l == 1 & (tok == '+' | tok == '-')) |
+#ifndef TINY
+               (l == 2 & (tok == TOK_SHL | tok == TOK_SHR)) |
+#endif
+               (l == 3 & (tok >= TOK_LT & tok <= TOK_GT)) |
+               (l == 4 & (tok == TOK_EQ | tok == TOK_NE)) |
+               (l == 5 & tok == '&') |
+               (l == 6 & tok == '^') |
+               (l == 7 & tok == '|')) {
+            gen_op(tok, l);
        }
     }
 }
