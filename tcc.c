@@ -588,8 +588,8 @@ void vswap(void);
 void vdup(void);
 int get_reg(int rc);
 
-void macro_subst(TokenString *tok_str, 
-                 Sym **nested_list, int *macro_str);
+static void macro_subst(TokenString *tok_str, 
+                        Sym **nested_list, int *macro_str);
 int save_reg_forced(int r);
 void gen_op(int op);
 void force_charshort_cast(int t);
@@ -2727,7 +2727,7 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
 }
 
 /* handle the '##' operator */
-int *macro_twosharps(int *macro_str)
+static int *macro_twosharps(void)
 {
     TokenSym *ts;
     int *macro_ptr1;
@@ -2771,164 +2771,170 @@ int *macro_twosharps(int *macro_str)
     return macro_str1.str;
 }
 
-/* do macro substitution of macro_str and add result to
-   (tok_str,tok_len). If macro_str is NULL, then input stream token is
-   substituted. 'nested_list' is the list of all macros we got inside
-   to avoid recursing. */
-void macro_subst(TokenString *tok_str,
-                 Sym **nested_list, int *macro_str)
+
+/* do macro substitution of current token with macro 's' and add
+   result to (tok_str,tok_len). 'nested_list' is the list of all
+   macros we got inside to avoid recursing. Return non zero if no
+   substitution needs to be done */
+static int macro_subst_tok(TokenString *tok_str,
+                           Sym **nested_list, Sym *s)
 {
-    Sym *s, *args, *sa, *sa1;
-    int parlevel, *mstr, t, *saved_macro_ptr;
-    int mstr_allocated, *macro_str1;
-    CString cstr;
-    CValue cval;
+    Sym *args, *sa, *sa1;
+    int mstr_allocated, parlevel, *mstr, t;
     TokenString str;
     char *cstrval;
+    CValue cval;
+    CString cstr;
+            
+    /* if symbol is a macro, prepare substitution */
+    /* if nested substitution, do nothing */
+    if (sym_find2(*nested_list, tok))
+        return -1;
+
+    /* special macros */
+    if (tok == TOK___LINE__) {
+        cval.i = file->line_num;
+        tok_str_add2(tok_str, TOK_CINT, &cval);
+    } else if (tok == TOK___FILE__) {
+        cstrval = file->filename;
+        goto add_cstr;
+        tok_str_add2(tok_str, TOK_STR, &cval);
+    } else if (tok == TOK___DATE__) {
+        cstrval = "Jan  1 2002";
+        goto add_cstr;
+    } else if (tok == TOK___TIME__) {
+        cstrval = "00:00:00";
+    add_cstr:
+        cstr_new(&cstr);
+        cstr_cat(&cstr, cstrval);
+        cstr_ccat(&cstr, '\0');
+        cval.cstr = &cstr;
+        tok_str_add2(tok_str, TOK_STR, &cval);
+        cstr_free(&cstr);
+    } else {
+        mstr = (int *)s->c;
+        mstr_allocated = 0;
+        if (s->t == MACRO_FUNC) {
+            /* NOTE: we do not use next_nomacro to avoid eating the
+               next token. XXX: find better solution */
+            if (macro_ptr) {
+                t = *macro_ptr;
+            } else {
+                while (is_space(ch) || ch == '\n')
+                    cinp();
+                t = ch;
+            }
+            if (t != '(') /* no macro subst */
+                return -1;
+                    
+            /* argument macro */
+            next_nomacro();
+            next_nomacro();
+            args = NULL;
+            sa = s->next;
+            /* NOTE: empty args are allowed, except if no args */
+            for(;;) {
+                /* handle '()' case */
+                if (!args && tok == ')')
+                    break;
+                if (!sa)
+                    error("macro '%s' used with too many args",
+                          get_tok_str(s->v, 0));
+                tok_str_new(&str);
+                parlevel = 0;
+                /* NOTE: non zero sa->t indicates VA_ARGS */
+                while ((parlevel > 0 || 
+                        (tok != ')' && 
+                         (tok != ',' || sa->t))) && 
+                       tok != -1) {
+                    if (tok == '(')
+                        parlevel++;
+                    else if (tok == ')')
+                        parlevel--;
+                    tok_str_add2(&str, tok, &tokc);
+                    next_nomacro();
+                }
+                tok_str_add(&str, 0);
+                sym_push2(&args, sa->v & ~SYM_FIELD, sa->t, (int)str.str);
+                sa = sa->next;
+                if (tok == ')') {
+                    /* special case for gcc var args: add an empty
+                       var arg argument if it is omitted */
+                    if (sa && sa->t && gnu_ext)
+                        continue;
+                    else
+                        break;
+                }
+                if (tok != ',')
+                    expect(",");
+                next_nomacro();
+            }
+            if (sa) {
+                error("macro '%s' used with too few args",
+                      get_tok_str(s->v, 0));
+            }
+
+            /* now subst each arg */
+            mstr = macro_arg_subst(nested_list, mstr, args);
+            /* free memory */
+            sa = args;
+            while (sa) {
+                sa1 = sa->prev;
+                tok_str_free((int *)sa->c);
+                tcc_free(sa);
+                sa = sa1;
+            }
+            mstr_allocated = 1;
+        }
+        sym_push2(nested_list, s->v, 0, 0);
+        macro_subst(tok_str, nested_list, mstr);
+        /* pop nested defined symbol */
+        sa1 = *nested_list;
+        *nested_list = sa1->prev;
+        tcc_free(sa1);
+        if (mstr_allocated)
+            tok_str_free(mstr);
+    }
+    return 0;
+}
+
+/* do macro substitution of macro_str and add result to
+   (tok_str,tok_len). 'nested_list' is the list of all macros we got
+   inside to avoid recursing. */
+static void macro_subst(TokenString *tok_str,
+                        Sym **nested_list, int *macro_str)
+{
+    Sym *s;
+    int *saved_macro_ptr;
+    int *macro_str1;
 
     saved_macro_ptr = macro_ptr;
     macro_ptr = macro_str;
-    macro_str1 = NULL;
-    if (macro_str) {
-        /* first scan for '##' operator handling */
-        macro_str1 = macro_twosharps(macro_str);
-        macro_ptr = macro_str1;
-    }
+    /* first scan for '##' operator handling */
+    macro_str1 = macro_twosharps();
+    macro_ptr = macro_str1;
 
     while (1) {
         next_nomacro();
         if (tok == 0)
             break;
-        if ((s = sym_find1(&define_stack, tok)) != NULL) {
-            /* if symbol is a macro, prepare substitution */
-            /* if nested substitution, do nothing */
-            if (sym_find2(*nested_list, tok))
+        s = sym_find1(&define_stack, tok);
+        if (s != NULL) {
+            if (macro_subst_tok(tok_str, nested_list, s) != 0)
                 goto no_subst;
-
-            /* special macros */
-            if (tok == TOK___LINE__) {
-                cval.i = file->line_num;
-                tok_str_add2(tok_str, TOK_CINT, &cval);
-            } else if (tok == TOK___FILE__) {
-                cstrval = file->filename;
-                goto add_cstr;
-                tok_str_add2(tok_str, TOK_STR, &cval);
-            } else if (tok == TOK___DATE__) {
-                cstrval = "Jan  1 2002";
-                goto add_cstr;
-            } else if (tok == TOK___TIME__) {
-                cstrval = "00:00:00";
-            add_cstr:
-                cstr_new(&cstr);
-                cstr_cat(&cstr, cstrval);
-                cstr_ccat(&cstr, '\0');
-                cval.cstr = &cstr;
-                tok_str_add2(tok_str, TOK_STR, &cval);
-                cstr_free(&cstr);
-            } else {
-                mstr = (int *)s->c;
-                mstr_allocated = 0;
-                if (s->t == MACRO_FUNC) {
-                    /* NOTE: we do not use next_nomacro to avoid eating the
-                       next token. XXX: find better solution */
-                    if (macro_ptr) {
-                        t = *macro_ptr;
-                    } else {
-                        while (is_space(ch) || ch == '\n')
-                            cinp();
-                        t = ch;
-                    }
-                    if (t != '(') /* no macro subst */
-                        goto no_subst;
-                    
-                /* argument macro */
-                    next_nomacro();
-                    next_nomacro();
-                    args = NULL;
-                    sa = s->next;
-                    /* NOTE: empty args are allowed, except if no args */
-                    for(;;) {
-                        /* handle '()' case */
-                        if (!args && tok == ')')
-                            break;
-                        if (!sa)
-                            error("macro '%s' used with too many args",
-                                  get_tok_str(s->v, 0));
-                        tok_str_new(&str);
-                        parlevel = 0;
-                        /* NOTE: non zero sa->t indicates VA_ARGS */
-                        while ((parlevel > 0 || 
-                                (tok != ')' && 
-                                 (tok != ',' || sa->t))) && 
-                               tok != -1) {
-                            if (tok == '(')
-                                parlevel++;
-                            else if (tok == ')')
-                                parlevel--;
-                            tok_str_add2(&str, tok, &tokc);
-                            next_nomacro();
-                        }
-                        tok_str_add(&str, 0);
-                        sym_push2(&args, sa->v & ~SYM_FIELD, sa->t, (int)str.str);
-                        sa = sa->next;
-                        if (tok == ')') {
-                            /* special case for gcc var args: add an empty
-                               var arg argument if it is omitted */
-                            if (sa && sa->t && gnu_ext)
-                                continue;
-                            else
-                                break;
-                        }
-                        if (tok != ',')
-                            expect(",");
-                        next_nomacro();
-                    }
-                    if (sa) {
-                        error("macro '%s' used with too few args",
-                              get_tok_str(s->v, 0));
-                    }
-
-                    /* now subst each arg */
-                    mstr = macro_arg_subst(nested_list, mstr, args);
-                    /* free memory */
-                    sa = args;
-                    while (sa) {
-                        sa1 = sa->prev;
-                        tok_str_free((int *)sa->c);
-                        tcc_free(sa);
-                        sa = sa1;
-                    }
-                    mstr_allocated = 1;
-                }
-                sym_push2(nested_list, s->v, 0, 0);
-                macro_subst(tok_str, nested_list, mstr);
-                /* pop nested defined symbol */
-                sa1 = *nested_list;
-                *nested_list = sa1->prev;
-                tcc_free(sa1);
-                if (mstr_allocated)
-                    tok_str_free(mstr);
-            }
         } else {
         no_subst:
-            /* no need to add if reading input stream */
-            if (!macro_str)
-                return;
             tok_str_add2(tok_str, tok, &tokc);
         }
-        /* only replace one macro while parsing input stream */
-        if (!macro_str)
-            return;
     }
     macro_ptr = saved_macro_ptr;
-    if (macro_str1)
-        tok_str_free(macro_str1);
+    tok_str_free(macro_str1);
 }
 
 /* return next token with macro substitution */
 void next(void)
 {
-    Sym *nested_list;
+    Sym *nested_list, *s;
     TokenString str;
 
     /* special 'ungettok' case for label parsing */
@@ -2938,23 +2944,26 @@ void next(void)
         tok1 = 0;
     } else {
     redo:
+        next_nomacro();
         if (!macro_ptr) {
             /* if not reading from macro substituted string, then try
-               to substitute */
-            /* XXX: optimize non macro case */
-            tok_str_new(&str);
-            nested_list = NULL;
-            macro_subst(&str, &nested_list, NULL);
-            if (str.str) {
-                tok_str_add(&str, 0);
-                macro_ptr = str.str;
-                macro_ptr_allocated = str.str;
-                goto redo;
+               to substitute macros */
+            if (tok >= TOK_IDENT) {
+                s = sym_find1(&define_stack, tok);
+                if (s) {
+                    /* we have a macro: we try to substitute */
+                    tok_str_new(&str);
+                    nested_list = NULL;
+                    if (macro_subst_tok(&str, &nested_list, s) == 0) {
+                        /* substitution done, NOTE: maybe empty */
+                        tok_str_add(&str, 0);
+                        macro_ptr = str.str;
+                        macro_ptr_allocated = str.str;
+                        goto redo;
+                    }
+                }
             }
-            if (tok == 0)
-                goto redo;
         } else {
-            next_nomacro();
             if (tok == 0) {
                 /* end of macro string: free it */
                 tok_str_free(macro_ptr_allocated);
@@ -6226,13 +6235,20 @@ static void decl_initializer(int t, Section *sec, unsigned long c,
                 if (!size_only) {
                     if (cstr_len > nb)
                         warning("initializer-string for array is too long");
-                    for(i=0;i<nb;i++) {
-                        if (tok == TOK_STR)
-                            ch = ((unsigned char *)cstr->data)[i];
-                        else
-                            ch = ((int *)cstr->data)[i];
-                        init_putv(t1, sec, c + (array_length + i) * size1,
-                                  ch, EXPR_VAL);
+                    /* in order to go faster for common case (char
+                       string in global variable, we handle it
+                       specifically */
+                    if (sec && tok == TOK_STR && size1 == 1) {
+                        memcpy(sec->data + c + array_length, cstr->data, nb);
+                    } else {
+                        for(i=0;i<nb;i++) {
+                            if (tok == TOK_STR)
+                                ch = ((unsigned char *)cstr->data)[i];
+                            else
+                                ch = ((int *)cstr->data)[i];
+                            init_putv(t1, sec, c + (array_length + i) * size1,
+                                      ch, EXPR_VAL);
+                        }
                     }
                 }
                 array_length += nb;
