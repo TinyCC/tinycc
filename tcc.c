@@ -1,3 +1,22 @@
+/*
+ *  TCC - Tiny C Compiler
+ * 
+ *  Copyright (c) 2001 Fabrice Bellard
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 #include <stdio.h>
 
 #define TEXT_SIZE       20000
@@ -5,9 +24,19 @@
 #define SYM_TABLE_SIZE  10000
 #define VAR_TABLE_SIZE  4096
 
-/* vac: offset of variables 
-   vat: type of variables
-   loc : local variable index
+/* symbol management */
+typedef struct Sym {
+    int v;    /* symbol token */
+    int t;    /* associated type */
+    int c;    /* associated number */
+    struct Sym *next; /* next related symbol */
+    struct Sym *prev; /* prev symbol in stack */
+} Sym;
+
+#define SYM_STRUCT 0x40000000 /* struct/union/enum symbol space */
+#define SYM_FIELD  0x20000000 /* struct/union field symbol space */
+
+/* loc : local variable index
    glo : global variable index
    parm : parameter variable index
    ind : output code ptr
@@ -15,10 +44,12 @@
    prog: output code
    astk: arg position stack
 */
-int tok, tok1, *vac, *vat, rsym, 
-    prog, ind, loc, glo, file, vt, 
+void *file;
+int tok, tok1, rsym, 
+    prog, ind, loc, glo, vt, 
     vc, *macro_stack, *macro_stack_ptr, line_num;
 char *idtable, *idptr, *filename;
+Sym *define_stack, *global_stack, *local_stack, *label_stack;
 
 /* The current value can be: */
 #define VT_CONST   0x0002  /* constant in vc */
@@ -43,29 +74,30 @@ char *idtable, *idptr, *filename;
  * Basic types:
  *
  * VT_BYTE indicate a char
- *
+ * VT_UNSIGNED indicates unsigned type
  *
  * otherwise integer type is assumed.
- *  */
+ *  
+ */
 
-#define VT_BYTE     0x00001  /* byte pointer. HARDCODED VALUE */
+#define VT_BYTE     0x00001  /* byte type, HARDCODED VALUE */
 #define VT_PTRMASK  0x00f00  /* pointer mask */
 #define VT_PTRINC   0x00100  /* pointer increment */
 #define VT_FUNC     0x01000  /* function type */
 #define VT_UNSIGNED 0x02000  /* unsigned type */
 #define VT_ARRAY    0x04000  /* array type (only used in parsing) */
-#define VT_TYPE     0x07f01  /* type mask */
-#define VT_TYPEN   0xffff80fe  /* ~VT_TYPE */
-#define VT_FUNCN   -4097
+#define VT_TYPE    0xffffff01  /* type mask */
+#define VT_TYPEN   0x000000fe  /* ~VT_TYPE */
+#define VT_FUNCN   -4097       /* ~VT_FUNC */
 
-#define VT_EXTERN   0x08000   /* extern definition */
-#define VT_STATIC   0x10000   /* static variable */
+#define VT_EXTERN  0x008000   /* extern definition */
+#define VT_STATIC  0x010000   /* static variable */
 
 /* Special infos */
-#define VT_LABEL    0x40000  /* goto label symbol */
-#define VT_DEFINE   0x80000  /* special value for #defined symbols */
-#define VT_ENUM    0x100000  /* enum definition */
-#define VT_TYPEDEF 0x200000  /* typedef definition */
+#define VT_ENUM    0x020000  /* enum definition */
+#define VT_STRUCT  0x040000  /* struct/union definition */
+#define VT_TYPEDEF 0x080000  /* typedef definition */
+#define VT_STRUCT_SHIFT 20   /* structure/enum name shift (12 bits lefts) */
 
 /* token values */
 #define TOK_INT      256
@@ -95,12 +127,11 @@ char *idtable, *idptr, *filename;
 #define TOK_REGISTER 278
 #define TOK_SIGNED   279
 
-/* unsupported types. Must have contiguous values */
-#define TOK_FLOAT    280
-#define TOK_DOUBLE   281
+#define TOK_FLOAT    280 /* unsupported */
+#define TOK_DOUBLE   281 /* unsupported */
+
 #define TOK_STRUCT   282
 #define TOK_UNION    283
-
 #define TOK_TYPEDEF  284
 #define TOK_DEFAULT  285
 #define TOK_ENUM     286
@@ -115,12 +146,13 @@ char *idtable, *idptr, *filename;
 #define TOK_LAND 0xa0
 #define TOK_LOR  0xa1
 
-#define TOK_DEC  0xa2
-#define TOK_MID  0xa3 /* inc/dec, to void constant */
-#define TOK_INC  0xa4
+#define TOK_DEC   0xa2
+#define TOK_MID   0xa3 /* inc/dec, to void constant */
+#define TOK_INC   0xa4
+#define TOK_ARROW 0xa7 
 
-#define TOK_SHL  0x01 
-#define TOK_SHR  0x02 
+#define TOK_SHL   0x01 
+#define TOK_SHR   0x02 
   
 /* assignement operators : normal operator or 0x80 */
 #define TOK_A_MOD 0xa5
@@ -136,7 +168,14 @@ char *idtable, *idptr, *filename;
 
 #ifdef TINY
 #define expr_eq() expr()
+#else
+void sum();
+void next();
+void expr_eq();
+void expr();
+void decl();
 #endif
+
 
 int inp()
 {
@@ -170,6 +209,12 @@ void error(char *msg)
     exit(1);
 }
 
+void expect(char *msg)
+{
+    printf("%s:%d: %s expected\n", filename, line_num, msg);
+    exit(1);
+}
+
 void warning(char *msg)
 {
     printf("%s:%d: warning: %s\n", filename, line_num, msg);
@@ -187,7 +232,7 @@ void skip(c)
 void test_lvalue()
 {
     if (!(vt & VT_LVAL))
-        error("lvalue expected\n");
+        expect("lvalue");
 }
 
 #else
@@ -212,10 +257,74 @@ char *get_tok_str(int v)
     return p;
 }
 
+/* find a symbol and return its associated structure. 's' is the top
+   of the symbol stack */
+Sym *sym_find1(Sym *s, int v)
+{
+    while (s) {
+        if (s->v == v)
+            return s;
+        s = s->prev;
+    }
+    return 0;
+}
+
+Sym *sym_push1(Sym **ps, int v, int t, int c)
+{
+    Sym *s;
+    s = malloc(sizeof(Sym));
+    if (!s)
+        error("memory full");
+    s->v = v;
+    s->t = t;
+    s->c = c;
+    s->next = 0;
+    s->prev = *ps;
+    *ps = s;
+    return s;
+}
+
+/* find a symbol in the right symbol space */
+Sym *sym_find(int v)
+{
+    Sym *s;
+    s = sym_find1(local_stack, v);
+    if (!s)
+        s = sym_find1(global_stack, v);
+    return s;
+}
+
+/* push a given symbol on the symbol stack */
+Sym *sym_push(int v, int t, int c)
+{
+    //    printf("sym_push: %s type=%x\n", get_tok_str(v), t);
+    if (local_stack)
+        return sym_push1(&local_stack, v, t, c);
+    else
+        return sym_push1(&global_stack, v, t, c);
+}
+
+/* pop symbols until top reaches 'b' */
+void sym_pop(Sym **ps, Sym *b)
+{
+    Sym *s, *ss;
+
+    s = *ps;
+    while(s != b) {
+        ss = s->prev;
+        //        printf("sym_pop: %s type=%x\n", get_tok_str(s->v), s->t);
+        free(s);
+        s = ss;
+    }
+    *ps = b;
+}
+
+
 void next()
 {
     int c, v;
     char *q, *p;
+    Sym *s;
 
     /* special 'ungettok' case for label parsing */
     if (tok1) {
@@ -260,8 +369,7 @@ void next()
             if (tok == TOK_DEFINE) {
                 next();
                 /* now tok is the macro symbol */
-                vat[tok] = VT_DEFINE;
-                vac[tok] = ftell(file);
+                sym_push1(&define_stack, tok, 0, ftell(file));
             }
             /* ignore preprocessor or shell */
             while (c != '\n')
@@ -297,16 +405,16 @@ void next()
         if (p == idptr)
             idptr = q;
         /* eval defines */
-        if (vat[tok] & VT_DEFINE) {
+        if (s = sym_find1(define_stack, tok)) {
             *macro_stack_ptr++ = ftell(file);
-            fseek(file, vac[tok], 0);
+            fseek(file, s->c, 0);
             next();
         }
     } else {
 #ifdef TINY
         q = "<=\236>=\235!=\225++\244--\242==\224";
 #else
-        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374";
+        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\247";
 #endif
         /* two chars */
         v = inp();
@@ -460,19 +568,35 @@ int gtst(inv, t)
     return t;
 }
 
-int type_size(t)
+/* return type size. Put alignment at 'a' */
+int type_size(int t, int *a)
 {
-    if ((t & VT_PTRMASK) >= VT_PTRINC | (t & VT_TYPE) == 0)
+    Sym *s;
+
+    /* int, enum or pointer */
+    if ((t & VT_PTRMASK) >= VT_PTRINC | 
+        (t & VT_TYPE) == 0 |
+        (t & VT_ENUM)) {
+        *a = 4;
         return 4;
-    else
+    } else if (t & VT_STRUCT) {
+        /* struct/union */
+        s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
+        *a = 4; /* XXX: cannot store it yet. Doing that is safe */
+        return s->c;
+    } else {
+        *a = 1;
         return 1;
+    }
 }
 
 /* return the number size in bytes of a given type */
 int incr_value(t)
 {
+    int a;
+
     if ((t & VT_PTRMASK) >= VT_PTRINC)
-        return type_size(t - VT_PTRINC);
+        return type_size(t - VT_PTRINC, &a);
     else
         return 1;
 }
@@ -557,9 +681,94 @@ int expr_const()
 {
     expr_eq();
     if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST)
-        error("constant expected");
+        expect("constant");
     return vc;
 }
+
+#ifndef TINY
+
+/* enum/struct/union declaration */
+int struct_decl(u)
+{
+    int a, t, b, v, size, align, maxalign, c;
+    Sym *slast, *s, *ss;
+
+    a = tok; /* save decl type */
+    next();
+    v = 0;
+    if (tok != '{') {
+        v = tok;
+        next();
+        /* struct already defined ? return it */
+        /* XXX: check consistency */
+        if (s = sym_find(v | SYM_STRUCT)) {
+            if (s->t != a)
+                error("invalid type");
+            u = u | (v << VT_STRUCT_SHIFT);
+            return u;
+        }
+    }
+    s = sym_push(v | SYM_STRUCT, a, 0);
+    /* put struct/union/enum name in type */
+    u = u | (v << VT_STRUCT_SHIFT);
+    
+    if (tok == '{') {
+        next();
+        /* cannot be empty */
+        c = 0;
+        maxalign = 0;
+        slast = 0;
+        while (1) {
+            if (a == TOK_ENUM) {
+                v = tok;
+                next();
+                if (tok == '=') {
+                    next();
+                    c = expr_const();
+                }
+                sym_push(v, VT_CONST, c);
+                if (tok == ',')
+                    next();
+                c++;
+            } else {
+                b = ist();
+                while (1) {
+                    t = typ(&v, b, &size);
+                    if (t & (VT_FUNC | VT_TYPEDEF))
+                        error("invalid type");
+                    /* XXX: align & correct type size */
+                    v |= SYM_FIELD;
+                    size = type_size(t, &align);
+                    if (a == TOK_STRUCT) {
+                        c = (c + align - 1) & -align;
+                        ss = sym_push(v, t, c);
+                        c += size;
+                    } else {
+                        ss = sym_push(v, t, 0);
+                        if (size > c)
+                            c = size;
+                    }
+                    if (align > maxalign)
+                        maxalign = align;
+                    ss->next = slast;
+                    slast = ss;
+                    if (tok == ';' || tok == -1)
+                        break;
+                    skip(',');
+                }
+                skip(';');
+            }
+            if (tok == '}')
+                break;
+        }
+        skip('}');
+        s->next = slast;
+        /* size for struct/union, dummy for enum */
+        s->c = (c + maxalign - 1) & -maxalign; 
+    }
+    return u;
+}
+#endif
 
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
@@ -568,41 +777,25 @@ int expr_const()
 int ist()
 {
     int t, n, v;
+    Sym *s;
 
     t = 0;
     while(1) {
+#ifndef TINY
         if (tok == TOK_ENUM) {
-            next();
-            if (tok != '{')
-                next();
-            if (tok == '{') {
-                next();
-                n = 0;
-                while (tok != '}' & tok != -1) {
-                    v = tok;
-                    next();
-                    if (tok == '=') {
-                        next();
-                        n = expr_const();
-                    }
-                    vat[v] = VT_CONST;
-                    vac[v] = n;
-                    if (tok != ',')
-                        break;
-                    next();
-                    n++;
-                }
-                skip('}');
-            }
-            t |= VT_ENUM;
-        } else {
+            t = struct_decl(VT_ENUM);
+        } else if (tok == TOK_STRUCT || tok == TOK_UNION) {
+            t = struct_decl(VT_STRUCT);
+        } else
+#endif
+        {
             if (tok == TOK_CHAR | tok == TOK_VOID) {
                 t |= VT_BYTE;
             } else if (tok == TOK_INT |
                        (tok >= TOK_CONST & tok <= TOK_SIGNED)) {
                 /* ignored types */
-            } else if (tok >= TOK_FLOAT & tok <= TOK_UNION) {
-                error("unsupported type");
+            } else if (tok == TOK_FLOAT & tok == TOK_DOUBLE) {
+                error("floats not supported");
             } else if (tok == TOK_EXTERN) {
                 t |= VT_EXTERN;
             } else if (tok == TOK_STATIC) {
@@ -612,10 +805,10 @@ int ist()
             } else if (tok == TOK_TYPEDEF) {
                 t |= VT_TYPEDEF;
             } else {
-                v = vat[tok];
-                if (!(v & VT_TYPEDEF))
+                s = sym_find(tok);
+                if (!s || !(s->t & VT_TYPEDEF))
                     break;
-                t = v & ~VT_TYPEDEF;
+                t = s->t & ~VT_TYPEDEF;
             }
             next();
         }
@@ -654,21 +847,22 @@ int typ(int *v, int t, int *array_size_ptr)
         if (tok == '(') {
             /* function declaration */
             next();
+            /* push a dummy symbol to force local symbol stack usage */
+            sym_push1(&local_stack, 0, 0, 0);
             p = 4; 
             while (tok != ')') {
                 /* read param name and compute offset */
-            if (t = ist())
-                t = typ(&n, t, 0); /* XXX: should accept both arg/non arg if v == 0 */
-            else {
-                n = tok;
-                t = 0;
-                next();
-            }
-            p = p + 4;
-            vat[n] = VT_LOCAL | VT_LVAL | t;
-            vac[n] = p;
-            if (tok == ',')
-                next();
+                if (t = ist())
+                    t = typ(&n, t, 0); /* XXX: should accept both arg/non arg if v == 0 */
+                else {
+                    n = tok;
+                    t = 0;
+                    next();
+                }
+                p = p + 4;
+                sym_push(n, VT_LOCAL | VT_LVAL | t, p);
+                if (tok == ',')
+                    next();
             }
             next(); /* skip ')' */
             if (u)
@@ -697,20 +891,24 @@ int typ(int *v, int t, int *array_size_ptr)
 }
 
 /* define a new external reference to a function 'v' of type 'u' */
-void external_func(v, u)
+Sym *external_func(v, u)
 {
     int t, n;
-    t = vat[v];
-    if (t == 0) {
+    Sym *s;
+    s = sym_find(v);
+    if (!s) {
         n = dlsym(0, get_tok_str(v));
         if (n == 0) {
-            vat[v] = u | VT_CONST | VT_LVAL | VT_FORWARD;
-            vac[v] = 0; /* used to generate symbol list */
+            /* used to generate symbol list */
+            s = sym_push1(&global_stack, 
+                          v, u | VT_CONST | VT_LVAL | VT_FORWARD, 0);
         } else {
-            vat[v] = u | VT_CONST | VT_LVAL; /* int f() */
-            vac[v] = n;
+            /* int f() */
+            s = sym_push1(&global_stack,
+                          v, u | VT_CONST | VT_LVAL, n);
         }
     }
+    return s;
 }
 
 /* read a number in base b */
@@ -762,6 +960,7 @@ int getq(n)
 void unary()
 {
     int n, t, ft, fc, p;
+    Sym *s;
 
     if (isnum(tok)) {
         /* number */
@@ -817,7 +1016,7 @@ void unary()
                 gv();
 #ifndef TINY
             if (!(vt & VT_PTRMASK))
-                error("pointer expected");
+                expect("pointer");
 #endif
             vt = (vt - VT_PTRINC) | VT_LVAL;
         } else if (t == '&') {
@@ -859,86 +1058,115 @@ void unary()
             }
         } else 
         {
-            if (vat[t] == 0) {
+            s = sym_find(t);
+            if (!s) {
                 if (tok != '(')
                     error("undefined symbol");
                 /* for simple function calls, we tolerate undeclared
                    external reference */
-                external_func(t, VT_FUNC); /* int() function */
+                s = external_func(t, VT_FUNC); /* int() function */
             }
-            vset(vat[t], vac[t]);
-            /* if forward reference, we must point to vac[t] */
+            vset(s->t, s->c);
+            /* if forward reference, we must point to s->c */
             if (vt & VT_FORWARD)
-                vc = t;
+                vc = (int)&s->c;
         }
     }
     
     /* post operations */
-    if (tok == TOK_INC | tok == TOK_DEC) {
-        inc(POST_ADD, tok);
-        next();
-    } else 
-    if (tok == '[') {
+    while (1) {
+        if (tok == TOK_INC | tok == TOK_DEC) {
+            inc(POST_ADD, tok);
+            next();
+        } else if (tok == '.' | tok == TOK_ARROW) {
+            /* field */ 
+            if (tok == '.') {
+                test_lvalue();
+                vt = (vt & VT_LVALN) + VT_PTRINC;
+            }
+            next();
+            /* expect pointer on structure */
+            if (!(vt & VT_STRUCT) || (vt & VT_PTRMASK) == 0)
+                expect("struct or union");
+            s = sym_find(((unsigned)vt >> VT_STRUCT_SHIFT) | SYM_STRUCT);
+            /* find field */
+            tok |= SYM_FIELD;
+            while (s = s->next) {
+                if (s->v == tok)
+                    break;
+            }
+            if (!s)
+                error("field not found");
+            /* add field offset to pointer */
+            gv();
+            if (s->c)
+                oad(0x05, s->c);
+            /* change type to field type, and set to lvalue */
+            vt = (vt & VT_TYPEN) | VT_LVAL | s->t;
+            next();
+        } else if (tok == '[') {
 #ifndef TINY
-        if (!(vt & VT_PTRMASK))
-            error("pointer expected");
+            if (!(vt & VT_PTRMASK))
+                expect("pointer");
 #endif
-        gen_op('+', -1);
-        /* dereference pointer */
-        vt = (vt - VT_PTRINC) | VT_LVAL;
-        skip(']');
-    } else
-    if (tok == '(') {
-        /* function call  */
-        /* lvalue is implied */
-        vt = vt & VT_LVALN;
-        if ((vt & VT_CONST) == 0) {
-            /* evaluate function address */
-            gv();
-            o(0x50); /* push %eax */
-        }
-        ft = vt;
-        fc = vc;
+            gen_op('+', -1);
+            /* dereference pointer */
+            vt = (vt - VT_PTRINC) | VT_LVAL;
+            skip(']');
+        } else if (tok == '(') {
+            /* function call  */
+            /* lvalue is implied */
+            vt = vt & VT_LVALN;
+            if ((vt & VT_CONST) == 0) {
+                /* evaluate function address */
+                gv();
+                o(0x50); /* push %eax */
+            }
+            ft = vt;
+            fc = vc;
 
-        next();
-        t = 0;
-        while (tok != ')') {
-            t = t + 4;
-            expr_eq();
-            gv();
-            o(0x50); /* push %eax */
-            if (tok == ',')
-                next();
-        }
-        skip(')');
-        /* horrible, but needed : convert to native ordering (could
-           parse parameters in reverse order, but would cost more
-           code) */
-        n = 0;
-        p = t - 4;
-        while (n < p) {
-            oad(0x24848b, p); /* mov x(%esp,1), %eax */
-            oad(0x248487, n); /* xchg   x(%esp,1), %eax */
-            oad(0x248489, p); /* mov %eax, x(%esp,1) */
-            n = n + 4;
-            p = p - 4;
-        }
-        if (ft & VT_CONST) {
-            /* forward reference */
-            if (ft & VT_FORWARD) {
-                vac[fc] = psym(0xe8, vac[fc]);
-            } else
-                oad(0xe8, fc - ind - 5);
-            /* return value is variable, and take type from function proto */
-            vt = VT_VAR | (ft & VT_TYPE & VT_FUNCN);
+            next();
+            t = 0;
+            while (tok != ')') {
+                t = t + 4;
+                expr_eq();
+                gv();
+                o(0x50); /* push %eax */
+                if (tok == ',')
+                    next();
+            }
+            skip(')');
+            /* horrible, but needed : convert to native ordering (could
+               parse parameters in reverse order, but would cost more
+               code) */
+            n = 0;
+            p = t - 4;
+            while (n < p) {
+                oad(0x24848b, p); /* mov x(%esp,1), %eax */
+                oad(0x248487, n); /* xchg   x(%esp,1), %eax */
+                oad(0x248489, p); /* mov %eax, x(%esp,1) */
+                n = n + 4;
+                p = p - 4;
+            }
+            if (ft & VT_CONST) {
+                /* forward reference */
+                if (ft & VT_FORWARD) {
+                    *(int *)fc = psym(0xe8, *(int *)fc);
+                } else
+                    oad(0xe8, fc - ind - 5);
+                /* return value is variable, and take type from function proto */
+                vt = VT_VAR | (ft & VT_TYPE & VT_FUNCN);
+            } else {
+                oad(0x2494ff, t); /* call *xxx(%esp) */
+                t = t + 4;
+                /* return value is variable, int */
+                vt = VT_VAR;
+            }
+            if (t)
+                oad(0xc481, t);
         } else {
-            oad(0x2494ff, t); /* call *xxx(%esp) */
-            t = t + 4;
-            /* return value is variable, int */
-            vt = VT_VAR;
+            break;
         }
-        if (t)
-            oad(0xc481, t);
     }
 }
 
@@ -1082,6 +1310,7 @@ void expr()
 void block(int *bsym, int *csym, int *case_sym, int *def_sym)
 {
     int a, b, c, d;
+    Sym *s;
 
     if (tok == TOK_IF) {
         /* if test */
@@ -1115,9 +1344,12 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
     } else if (tok == '{') {
         next();
         /* declarations */
+        s = local_stack;
         decl(VT_LOCAL);
         while (tok != '}')
             block(bsym, csym, case_sym, def_sym);
+        /* pop locally defined symbols */
+        sym_pop(&local_stack, s);
         next();
     } else if (tok == TOK_RETURN) {
         next();
@@ -1209,7 +1441,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
         next();
         a = expr_const();
         if (!case_sym)
-            error("switch expected");
+            expect("switch");
         gsym(*case_sym);
         oad(0x3d, a); /* cmp $xxx, %eax */
         *case_sym = psym(0x850f, 0); /* jne xxx */
@@ -1220,7 +1452,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
         next();
         skip(':');
         if (!def_sym)
-            error("switch expected");
+            expect("switch");
         if (*def_sym)
             error("too many 'default'");
         *def_sym = ind;
@@ -1228,19 +1460,15 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
     } else
     if (tok == TOK_GOTO) {
         next();
-        a = vat[tok];
-        if (a == 0) {
-            /* put forward definition */
-            a = VT_LABEL | VT_FORWARD;
-            vat[tok] = a;
-            vac[tok] = 0;
-        } else if (!(a & VT_LABEL))
-            error("invalid label name");
+        s = sym_find1(label_stack, tok);
+        /* put forward definition if needed */
+        if (!s)
+            s = sym_push1(&label_stack, tok, VT_FORWARD, 0);
         /* label already defined */
-        if (a & VT_FORWARD) 
-            vac[tok] = psym(0xe9, vac[tok]); /* jmp xxx */
+        if (s->t & VT_FORWARD) 
+            s->c = psym(0xe9, s->c); /* jmp xxx */
         else
-            oad(0xe9, vac[tok] - ind - 5); /* jmp xxx */
+            oad(0xe9, s->c - ind - 5); /* jmp xxx */
         next();
         skip(';');
     } else
@@ -1251,16 +1479,16 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
         if (tok == ':') {
             next();
             /* label case */
-            a = vat[b];
-            if (a != 0) {
-                if (!(a & VT_LABEL))
-                    error("invalid label name");
-                else if (!(a & VT_FORWARD))
+            s = sym_find1(label_stack, b);
+            if (s) {
+                if (!(s->t & VT_FORWARD))
                     error("multiple defined label");
-                gsym(vac[b]);
+                gsym(s->c);
+                s->c = ind;
+                s->t = 0;
+            } else {
+                sym_push1(&label_stack, b, 0, ind);
             }
-            vac[b] = ind;
-            vat[b] = VT_LABEL;
             block(bsym, csym, case_sym, def_sym);
         } else {
             /* expression case: go backward of one token */
@@ -1279,37 +1507,47 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym)
 void decl(l)
 {
     int *a, t, b, s, align, v, u, n;
+    Sym *sym, *slocal;
 
     while (b = ist()) {
-        if ((b & VT_ENUM) && tok == ';') {
+        if ((b & (VT_ENUM | VT_STRUCT)) && tok == ';') {
             /* we accept no variable after */
             next();
             continue;
         }
-
         while (1) { /* iterate thru each declaration */
             s = 1;
+            slocal = local_stack; /* save local stack position, to restore it */
             t = typ(&v, b, &s);
             if (tok == '{') {
                 /* patch forward references */
-                if (vat[v] & VT_FORWARD)
-                    gsym(vac[v]);
-                /* put function address */
-                vat[v] = VT_CONST | VT_LVAL | t;
-                vac[v] = ind;
+                if ((sym = sym_find(v)) && (sym->t & VT_FORWARD)) {
+                    gsym(sym->c);
+                    sym->c = ind;
+                    sym->t = VT_CONST | VT_LVAL | t;
+                } else {
+                    /* put function address */
+                    sym_push1(&global_stack, v, VT_CONST | VT_LVAL | t, ind);
+                }
                 loc = 0;
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
-                a = oad(0xec81, 0); /* sub $xxx, %esp */
+                a = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
                 rsym = 0;
                 block(0, 0, 0, 0);
                 gsym(rsym);
                 o(0xc3c9); /* leave, ret */
                 *a = (-loc + 3) & -4; /* align local size to word & 
                                          save local variables */
+                sym_pop(&label_stack, 0); /* reset label stack */
+                sym_pop(&local_stack, 0); /* reset local stack */
                 break;
             } else {
+                /* reset local stack (needed because of dummy function
+                   parameters */
+                sym_pop(&local_stack, slocal);
                 if (t & VT_TYPEDEF) {
-                    vat[v] = t; /* save typedefed type */
+                    /* save typedefed type */
+                    sym_push(v, t, 0);
                 } else if (t & VT_FUNC) {
                     /* external function definition */
                     external_func(v, t);
@@ -1319,28 +1557,28 @@ void decl(l)
                         t |= VT_LVAL;
                     if (t & VT_EXTERN) {
                         /* external variable */
+                        /* XXX: factorize with external function def */
                         n = dlsym(NULL, get_tok_str(v));
                         if (!n)
                             error("unknown external variable");
-                        vat[v] = VT_CONST | t;
-                        vac[v] = n;
+                        sym_push(v, VT_CONST | t, n);
                     } else {
                         u = l;
                         if (t & VT_STATIC)
                             u = VT_CONST;
-                        vat[v] = u | t;
+                        u |= t;
                         if (t & VT_ARRAY)
                             t -= VT_PTRINC; 
-                        align = type_size(t);
+                        align = type_size(t, &align);
                         s *= align;
-                        if (u == VT_LOCAL) {
+                        if (u & VT_LOCAL) {
                             /* allocate space down on the stack */
                             loc = (loc - s) & -align;
-                            vac[v] = loc;
+                            sym_push(v, u, loc);
                         } else {
                             /* allocate space up in the data space */
                             glo = (glo + align - 1) & -align;
-                            vac[v] = glo;
+                            sym_push(v, u, glo);
                             glo += s;
                         }
                     }
@@ -1357,6 +1595,7 @@ void decl(l)
 
 int main(int c, char **v)
 {
+    Sym *s;
     int (*t)();
     if (c < 2) {
         printf("usage: tc src\n");
@@ -1384,8 +1623,6 @@ int main(int c, char **v)
 #endif
     glo = malloc(DATA_SIZE);
     prog = malloc(TEXT_SIZE);
-    vac = malloc(VAR_TABLE_SIZE);
-    vat = malloc(VAR_TABLE_SIZE);
     macro_stack = malloc(256);
     macro_stack_ptr = macro_stack;
     ind = prog;
@@ -1401,11 +1638,10 @@ int main(int c, char **v)
         return 0;
     }
 #else
-    t = vac[TOK_MAIN];
-#ifndef TINY
-    if (!t)
+    s = sym_find(TOK_MAIN);
+    if (!s)
         error("main() not defined");
-#endif
+    t = s->c;
     return (*t)(c - 1, v);
 #endif
 }
