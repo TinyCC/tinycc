@@ -1,7 +1,7 @@
 /*
  *  TCC - Tiny C Compiler
  * 
- *  Copyright (c) 2001, 2002 Fabrice Bellard
+ *  Copyright (c) 2001, 2002, 2003 Fabrice Bellard
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -737,6 +737,7 @@ typedef struct ASMOperand {
     int ref_index; /* if >= 0, gives reference to a output constraint */
     int priority; /* priority, used to assign registers */
     int reg; /* if >= 0, register number used for this operand */
+    int is_llong; /* true if double register value */
 } ASMOperand;
 
 static void asm_expr(TCCState *s1, ExprValue *pe);
@@ -7499,7 +7500,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         }
         gsym(b);
         skip(':');
-        block(bsym, csym, case_sym, def_sym, case_reg, 0);
+        is_expr = 0;
+        goto block_after_label;
     } else 
     if (tok == TOK_DEFAULT) {
         next();
@@ -7509,7 +7511,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         if (*def_sym)
             error("too many 'default'");
         *def_sym = ind;
-        block(bsym, csym, case_sym, def_sym, case_reg, 0);
+        is_expr = 0;
+        goto block_after_label;
     } else
     if (tok == TOK_GOTO) {
         next();
@@ -7556,6 +7559,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             }
             s->next = (void *)ind;
             /* we accept this, but it is a mistake */
+        block_after_label:
             if (tok == '}') {
                 warning("deprecated use of label at end of compound statement");
             } else {
