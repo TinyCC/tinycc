@@ -41,6 +41,8 @@
 //#define DEBUG
 /* preprocessor debug */
 //#define PP_DEBUG
+/* include file debug */
+//#define INC_DEBUG
 
 //#define MEM_DEBUG
 
@@ -201,7 +203,10 @@ typedef struct BufferedFile {
     unsigned char *buf_end;
     int fd;
     int line_num;    /* current line number - here to simply code */
+    int ifndef_macro;  /*'#ifndef macro \n #define macro' search */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
+    char inc_type;          /* type of include */
+    char inc_filename[512]; /* filename specified by the user */
     char filename[1024];    /* current filename - here to simplify code */
     unsigned char buffer[IO_BUF_SIZE + 1]; /* extra size for CH_EOB char */
 } BufferedFile;
@@ -225,6 +230,14 @@ typedef struct TokenString {
     int last_line_num;
 } TokenString;
 
+/* include file cache, used to find files faster and also to eliminate
+   inclusion if the include file is protected by #ifndef ... #endif */
+typedef struct CachedInclude {
+    int ifndef_macro;
+    char type; /* '"' or '>' to give include type */
+    char filename[1]; /* path specified in #include */
+} CachedInclude;
+
 /* parser */
 struct BufferedFile *file;
 int ch, ch1, tok, tok1;
@@ -232,8 +245,9 @@ CValue tokc, tok1c;
 CString tokcstr; /* current parsed string, if any */
 /* if true, line feed is returned as a token. line feed is also
    returned at eof */
-int return_linefeed;
-
+int return_linefeed; 
+/* set to TRUE if eof was reached */
+int eof_seen;
 /* sections */
 Section **sections;
 int nb_sections; /* number of sections, including first dummy section */
@@ -267,6 +281,9 @@ Section *stab_section, *stabstr_section;
 
 char **library_paths;
 int nb_library_paths;
+
+CachedInclude **cached_includes;
+int nb_cached_includes;
 
 /* loc : local variable index
    ind : output code index
@@ -1043,7 +1060,7 @@ void skip(int c)
     next();
 }
 
-static void test_lvalue(void)
+void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
         expect("lvalue");
@@ -1398,6 +1415,7 @@ BufferedFile *tcc_open(const char *filename)
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
     bf->line_num = 1;
+    bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = ifdef_stack_ptr;
     //    printf("opening '%s'\n", filename);
     return bf;
@@ -1446,6 +1464,7 @@ void handle_eob(void)
         ch1 = tcc_getc_slow(file);
         if (ch1 != CH_EOF)
             return;
+        eof_seen = 1;
         if (return_linefeed) {
             ch1 = '\n';
             return;
@@ -1737,7 +1756,7 @@ int expr_preprocess(void)
     TokenString str;
     
     tok_str_new(&str);
-    while (tok != TOK_LINEFEED) {
+    while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         next(); /* do macro subst */
         if (tok == TOK_DEFINED) {
             next_nomacro();
@@ -1837,15 +1856,60 @@ void parse_define(void)
     s->next = first;
 }
 
+/* XXX: use a token or a hash table to accelerate matching ? */
+static CachedInclude *search_cached_include(int type, const char *filename)
+{
+    CachedInclude *e;
+    int i;
+
+    for(i = 0;i < nb_cached_includes; i++) {
+        e = cached_includes[i];
+        if (e->type == type && !strcmp(e->filename, filename))
+            return e;
+    }
+    return NULL;
+}
+
+static inline void add_cached_include(int type, 
+                                      const char *filename, int ifndef_macro)
+{
+    CachedInclude *e;
+
+    if (search_cached_include(type, filename))
+        return;
+#ifdef INC_DEBUG
+    printf("adding cached '%s' %s\n", filename, get_tok_str(ifndef_macro, NULL));
+#endif
+    e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
+    if (!e)
+        return;
+    e->type = type;
+    strcpy(e->filename, filename);
+    e->ifndef_macro = ifndef_macro;
+    dynarray_add((void ***)&cached_includes, &nb_cached_includes, e);
+}
+
+
+enum IncludeState {
+    INCLUDE_STATE_NONE = 0,
+    INCLUDE_STATE_SEEK_IFNDEF,
+};
+
 void preprocess(void)
 {
     int size, i, c, n;
+    enum IncludeState state;
     char buf[1024], *q, *p;
     char buf1[1024];
     BufferedFile *f;
     Sym *s;
+    CachedInclude *e;
 
-    return_linefeed = 1; /* linefeed will be returned as a token */
+    return_linefeed = 1; /* linefeed will be returned as a
+                            token. EOF is also returned as line feed */
+    state = INCLUDE_STATE_NONE;
+    eof_seen = 0;
+ redo1:
     cinp();
     next_nomacro();
  redo:
@@ -1909,51 +1973,73 @@ void preprocess(void)
             }
         }
 
-        if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
-            error("#include recursion too deep");
-        if (c == '\"') {
-            /* first search in current dir if "header.h" */
-            size = 0;
-            p = strrchr(file->filename, '/');
-            if (p) 
-                size = p + 1 - file->filename;
-            if (size > sizeof(buf1) - 1)
-                size = sizeof(buf1) - 1;
-            memcpy(buf1, file->filename, size);
-            buf1[size] = '\0';
-            pstrcat(buf1, sizeof(buf1), buf);
-            f = tcc_open(buf1);
-            if (f)
-                goto found;
-        }
-        /* now search in all the include paths */
-        n = nb_include_paths + nb_sysinclude_paths;
-        for(i = 0; i < n; i++) {
-            const char *path;
-            if (i < nb_include_paths)
-                path = include_paths[i];
-            else
-                path = sysinclude_paths[i - nb_include_paths];
-            pstrcpy(buf1, sizeof(buf1), path);
-            pstrcat(buf1, sizeof(buf1), "/");
-            pstrcat(buf1, sizeof(buf1), buf);
-            f = tcc_open(buf1);
-            if (f)
-                goto found;
-        }
-        error("include file '%s' not found", buf);
-        f = NULL;
-    found:
-        /* push current file in stack */
-        /* XXX: fix current line init */
-        *include_stack_ptr++ = file;
-        file = f;
-        /* add include file debug info */
-        if (do_debug) {
-            put_stabs(file->filename, N_BINCL, 0, 0, 0);
-        }
         ch = '\n';
-        goto the_end;
+        e = search_cached_include(c, buf);
+        if (e && sym_find1(&define_stack, e->ifndef_macro)) {
+            /* no need to parse the include because the 'ifndef macro'
+               is defined */
+#ifdef INC_DEBUG
+            printf("%s: skipping %s\n", file->filename, buf);
+#endif
+        } else {
+            if (c == '\"') {
+                /* first search in current dir if "header.h" */
+                size = 0;
+                p = strrchr(file->filename, '/');
+                if (p) 
+                    size = p + 1 - file->filename;
+                if (size > sizeof(buf1) - 1)
+                    size = sizeof(buf1) - 1;
+                memcpy(buf1, file->filename, size);
+                buf1[size] = '\0';
+                pstrcat(buf1, sizeof(buf1), buf);
+                f = tcc_open(buf1);
+                if (f)
+                    goto found;
+            }
+            if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
+                error("#include recursion too deep");
+            /* now search in all the include paths */
+            n = nb_include_paths + nb_sysinclude_paths;
+            for(i = 0; i < n; i++) {
+                const char *path;
+                if (i < nb_include_paths)
+                    path = include_paths[i];
+                else
+                    path = sysinclude_paths[i - nb_include_paths];
+                pstrcpy(buf1, sizeof(buf1), path);
+                pstrcat(buf1, sizeof(buf1), "/");
+                pstrcat(buf1, sizeof(buf1), buf);
+                f = tcc_open(buf1);
+                if (f)
+                    goto found;
+            }
+            error("include file '%s' not found", buf);
+            f = NULL;
+        found:
+#ifdef INC_DEBUG
+            printf("%s: including %s\n", file->filename, buf1);
+#endif
+            f->inc_type = c;
+            pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf);
+            /* push current file in stack */
+            /* XXX: fix current line init */
+            *include_stack_ptr++ = file;
+            file = f;
+            /* add include file debug info */
+            if (do_debug) {
+                put_stabs(file->filename, N_BINCL, 0, 0, 0);
+            }
+            /* we check for the construct: #ifndef IDENT \n #define IDENT */
+            inp();
+            /* get first non space char */
+            while (is_space(ch) || ch == '\n')
+                cinp();
+            if (ch != '#')
+                goto the_end;
+            state = INCLUDE_STATE_SEEK_IFNDEF;
+            goto redo1;
+        }
     } else if (tok == TOK_IFNDEF) {
         c = 1;
         goto do_ifdef;
@@ -1964,6 +2050,14 @@ void preprocess(void)
         c = 0;
     do_ifdef:
         next_nomacro();
+        if (tok < TOK_IDENT)
+            error("invalid argument for '#if%sdef'", c ? "n" : "");
+        if (state == INCLUDE_STATE_SEEK_IFNDEF) {
+            if (c) {
+                file->ifndef_macro = tok;
+            }
+            state = INCLUDE_STATE_NONE;
+        }
         c = (sym_find1(&define_stack, tok) != 0) ^ c;
     do_if:
         if (ifdef_stack_ptr >= ifdef_stack + IFDEF_STACK_SIZE)
@@ -1992,11 +2086,29 @@ void preprocess(void)
         if (!(c & 1)) {
         skip:
             preprocess_skip();
+            state = INCLUDE_STATE_NONE;
             goto redo;
         }
     } else if (tok == TOK_ENDIF) {
         if (ifdef_stack_ptr <= file->ifdef_stack_ptr)
             error("#endif without matching #if");
+        if (file->ifndef_macro &&
+            ifdef_stack_ptr == (file->ifdef_stack_ptr + 1)) {
+            /* '#ifndef macro \n #define macro' was at the start of
+               file. Now we check if an '#endif' is exactly at the end
+               of file */
+            while (tok != TOK_LINEFEED)
+                next_nomacro();
+            /* XXX: should also skip comments, but it is more complicated */
+            if (eof_seen) {
+                add_cached_include(file->inc_type, file->inc_filename, 
+                                   file->ifndef_macro);
+            } else {
+                /* if not end of file, we must desactivate the ifndef
+                   macro search */
+                file->ifndef_macro = 0;
+            }
+        }
         ifdef_stack_ptr--;
     } else if (tok == TOK_LINE) {
         int line_num;
@@ -2017,7 +2129,7 @@ void preprocess(void)
         error("#error");
     }
     /* ignore other preprocess commands or #! for C scripts */
-    while (tok != TOK_LINEFEED)
+    while (tok != TOK_LINEFEED && tok != TOK_EOF)
         next_nomacro();
  the_end:
     return_linefeed = 0;
@@ -2397,7 +2509,7 @@ void parse_number(void)
 
 
 /* return next token without macro substitution */
-void next_nomacro1(void)
+static inline void next_nomacro1(void)
 {
     int b;
     char *q;
@@ -6654,6 +6766,9 @@ static int tcc_compile(TCCState *s)
     char buf[512];
     int p, section_sym;
 
+#ifdef INC_DEBUG
+    printf("%s: **** new file\n", file->filename);
+#endif
     funcname = "";
     include_stack_ptr = include_stack;
     /* XXX: move that before to avoid having to initialize
