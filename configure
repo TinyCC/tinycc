@@ -265,12 +265,10 @@ if test "$gprof" = "yes" ; then
   echo "TARGET_GPROF=yes" >> config.mak
   echo "#define HAVE_GPROF 1" >> $TMPH
 fi
-echo -n "VERSION=" >>config.mak
-head $source_path/VERSION >>config.mak
-echo "" >>config.mak
-echo -n "#define TCC_VERSION \"" >> $TMPH
-head $source_path/VERSION >> $TMPH
-echo "\"" >> $TMPH
+version=`head $source_path/VERSION`
+echo "VERSION=$version" >>config.mak
+echo "#define TCC_VERSION \"$version\"" >> $TMPH
+echo "@set VERSION $version" > config.texi
 
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
