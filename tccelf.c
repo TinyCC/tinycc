@@ -1,7 +1,7 @@
 /*
  *  ELF file handling for TCC
  * 
- *  Copyright (c) 2001, 2002 Fabrice Bellard
+ *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
