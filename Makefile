@@ -11,7 +11,7 @@ LIBS_P=
 CFLAGS+=-m386 -malign-functions=0
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.3
+VERSION=0.9.4
 
 all: tcc
 
@@ -93,6 +93,13 @@ install: tcc
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p
+
+# win32 version
+tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
+	i386-mingw32msvc-gcc $(CFLAGS) -DCONFIG_TCC_STATIC -o $@ $<
+
+tcc.exe: tcc_g.exe
+	i386-mingw32msvc-strip -o $@ $<
 
 # profiling version
 tcc_p: tcc.c Makefile
