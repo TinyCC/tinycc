@@ -11,12 +11,11 @@
    glo : global variable index
    parm : parameter variable index
    ind : output code ptr
-   lsym: loop symbol stack
    rsym: return symbol
    prog: output code
    astk: arg position stack
 */
-int tok, *vac, *vat, *lsym, rsym, 
+int tok, *vac, *vat, rsym, 
     prog, ind, loc, glo, file, vt, 
     vc, *macro_stack, *macro_stack_ptr, line_num;
 char *idtable, *idptr, *filename;
@@ -87,17 +86,21 @@ char *idtable, *idptr, *filename;
 #define TOK_CASE     274
 
 /* ignored types Must have contiguous values */
-#define TOK_CONST    271
-#define TOK_LONG     276
-#define TOK_REGISTER 277
-#define TOK_SIGNED   278
+#define TOK_CONST    275
+#define TOK_VOLATILE 276
+#define TOK_LONG     277
+#define TOK_REGISTER 278
+#define TOK_SIGNED   279
 
 /* unsupported types. Must have contiguous values */
-#define TOK_FLOAT    279
-#define TOK_DOUBLE   280
-#define TOK_STRUCT   281
-#define TOK_UNION    282
-#define TOK_TYPEDEF  283
+#define TOK_FLOAT    280
+#define TOK_DOUBLE   281
+#define TOK_STRUCT   282
+#define TOK_UNION    283
+#define TOK_TYPEDEF  284
+
+#define TOK_DEFAULT  285
+#define TOK_ENUM     286
 
 #define TOK_EQ 0x94 /* warning: depend on asm code */
 #define TOK_NE 0x95 /* warning: depend on asm code */
@@ -336,14 +339,19 @@ void o(c)
 }
 
 /* output a symbol and patch all calls to it */
-void gsym(t)
+void gsym_addr(t, a)
 {
     int n;
     while (t) {
         n = *(int *)t; /* next value */
-        *(int *)t = ind - t - 4;
+        *(int *)t = a - t - 4;
         t = n;
     }
+}
+
+void gsym(t)
+{
+    gsym_addr(t, ind);
 }
 
 /* psym is used to put an instruction with a data field which is a
@@ -1022,9 +1030,9 @@ void expr()
 
 #endif
 
-void block()
+void block(int *bsym, int *csym)
 {
-    int a, c, d;
+    int a, b, c, d;
 
     if (tok == TOK_IF) {
         /* if test */
@@ -1033,13 +1041,13 @@ void block()
         expr();
         skip(')');
         a = gtst(1, 0);
-        block();
+        block(bsym, csym);
         c = tok;
         if (c == TOK_ELSE) {
             next();
             d = psym(0xe9, 0); /* jmp */
             gsym(a);
-            block();
+            block(bsym, csym);
             gsym(d); /* patch else jmp */
         } else
             gsym(a);
@@ -1049,16 +1057,18 @@ void block()
         skip('(');
         expr();
         skip(')');
-        *++lsym = gtst(1, 0);
-        block();
+        a = gtst(1, 0);
+        b = 0;
+        block(&a, &b);
         oad(0xe9, d - ind - 5); /* jmp */
-        gsym(*lsym--);
+        gsym(a);
+        gsym_addr(b, d);
     } else if (tok == '{') {
         next();
         /* declarations */
         decl(VT_LOCAL);
         while (tok != '}')
-            block();
+            block(bsym, csym);
         next();
     } else if (tok == TOK_RETURN) {
         next();
@@ -1070,7 +1080,16 @@ void block()
         rsym = psym(0xe9, rsym); /* jmp */
     } else if (tok == TOK_BREAK) {
         /* compute jump */
-        *lsym = psym(0xe9, *lsym);
+        if (!bsym)
+            error("cannot break");
+        *bsym = psym(0xe9, *bsym);
+        next();
+        skip(';');
+    } else if (tok == TOK_CONTINUE) {
+        /* compute jump */
+        if (!csym)
+            error("cannot continue");
+        *csym = psym(0xe9, *csym);
         next();
         skip(';');
     } else 
@@ -1085,11 +1104,11 @@ void block()
         d = ind;
         c = ind;
         a = 0;
+        b = 0;
         if (tok != ';') {
             expr();
             a = gtst(1, 0);
         }
-        *++lsym = a;
         skip(';');
         if (tok != ')') {
             e = psym(0xe9, 0);
@@ -1099,10 +1118,26 @@ void block()
             gsym(e);
         }
         skip(')');
-        block();
+        block(&a, &b);
         oad(0xe9, c - ind - 5); /* jmp */
-        gsym(*lsym--);
+        gsym(a);
+        gsym_addr(b, c);
     } else 
+    if (tok == TOK_DO) {
+        next();
+        a = 0;
+        b = 0;
+        d = ind;
+        block(&a, &b);
+        skip(TOK_WHILE);
+        skip('(');
+        gsym(b);
+        expr();
+        c = gtst(0, 0);
+        gsym_addr(c, d);
+        skip(')');
+        gsym(a);
+    } else
 #endif
     {
         if (tok != ';')
@@ -1131,7 +1166,7 @@ void decl(l)
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
                 a = oad(0xec81, 0); /* sub $xxx, %esp */
                 rsym = 0;
-                block();
+                block(0, 0);
                 gsym(rsym);
                 o(0xc3c9); /* leave, ret */
                 *a = (-loc + 3) & -4; /* align local size to word & 
@@ -1207,15 +1242,13 @@ int main(int c, char **v)
     idptr = idtable + 53;
 #else
     memcpy(idtable, 
-           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0long\0register\0signed\0float\0double\0struct\0union\0typedef", 170);
-
-    idptr = idtable + 170;
+           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0float\0double\0struct\0union\0typedef\0default\0enum", 192);
+    idptr = idtable + 192;
 #endif
     glo = malloc(DATA_SIZE);
     prog = malloc(TEXT_SIZE);
     vac = malloc(VAR_TABLE_SIZE);
     vat = malloc(VAR_TABLE_SIZE);
-    lsym = malloc(256);
     macro_stack = malloc(256);
     macro_stack_ptr = macro_stack;
     ind = prog;
