@@ -3,15 +3,15 @@
 #
 prefix=/usr/local
 
-CFLAGS=-O2 -g -Wall -Wno-parentheses -Wno-missing-braces -I.
+CFLAGS=-O2 -g -Wall
 LIBS=-ldl
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
 CFLAGS+=-m386 -malign-functions=0
-DISAS=objdump -D -b binary -m i386
+DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.2
+VERSION=0.9.3
 
 all: tcc
 
@@ -20,27 +20,48 @@ all: tcc
 test: test.ref test.out
 	@if diff -u test.ref test.out ; then echo "Auto Test OK"; fi
 
-prog.ref: prog.c 
-	gcc3 $(CFLAGS) -o $@ $<
+tcctest.ref: tcctest.c 
+	gcc $(CFLAGS) -I. -o $@ $<
 
-test.ref: prog.ref
-	./prog.ref > $@
+test.ref: tcctest.ref
+	./tcctest.ref > $@
 
-test.out: tcc prog.c
-	./tcc -I. prog.c > $@
+test.out: tcc tcctest.c
+	./tcc -I. tcctest.c > $@
 
-run: tcc prog.c
-	./tcc -I. prog.c
+run: tcc tcctest.c
+	./tcc -I. tcctest.c
 
-# iterated test2 (compile tcc then compile prog.c !)
-test2: tcc tcc.c prog.c test.ref
-	./tcc -I. tcc.c -I. prog.c > test.out2
+# iterated test2 (compile tcc then compile tcctest.c !)
+test2: tcc tcc.c tcctest.c test.ref
+	./tcc -I. tcc.c -I. tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
-# iterated test3 (compile tcc then compile tcc then compile prog.c !)
-test3: tcc tcc.c prog.c test.ref
-	./tcc -I. tcc.c -I. tcc.c -I. prog.c > test.out3
+# iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
+test3: tcc tcc.c tcctest.c test.ref
+	./tcc -I. tcc.c -I. tcc.c -I. tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
+
+# memory and bound check auto test
+BOUNDS_OK  = 1 4 8 10
+BOUNDS_FAIL= 2 5 7 9 11 12
+
+btest: boundtest.c tcc
+	@for i in $(BOUNDS_OK); do \
+           if ./tcc -b boundtest.c $$i ; then \
+               /bin/true ; \
+           else\
+	       echo Failed positive test $$i ; exit 1 ; \
+           fi ;\
+        done ;\
+        for i in $(BOUNDS_FAIL); do \
+           if ./tcc -b boundtest.c $$i ; then \
+	       echo Failed negative test $$i ; exit 1 ;\
+           else\
+               /bin/true ; \
+           fi\
+        done ;\
+        echo Bound test OK
 
 # speed test
 speed: tcc ex2 ex3
@@ -57,7 +78,7 @@ ex3: ex3.c
 
 # Tiny C Compiler
 
-tcc_g: tcc.c i386-gen.c Makefile
+tcc_g: tcc.c i386-gen.c bcheck.c Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
 tcc: tcc_g
@@ -66,20 +87,21 @@ tcc: tcc_g
 install: tcc 
 	$(INSTALL) -m755 tcc $(prefix)/bin
 	mkdir -p $(prefix)/lib/tcc
-	$(INSTALL) -m644 stdarg.h stddef.h float.h tcclib.h $(prefix)/lib/tcc
+	$(INSTALL) -m644 stdarg.h stddef.h float.h stdbool.h \
+                   tcclib.h $(prefix)/lib/tcc
 
 clean:
-	rm -f *~ *.o tcc tcc1 tcct tcc_g prog.ref *.bin *.i ex2 \
+	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p
 
 # profiling version
 tcc_p: tcc.c Makefile
 	gcc $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
-# target for development
+# targets for development
 
 %.bin: %.c tcc
-	./tcc -o $@ -I. $<
+	./tcc -g -o $@ -I. $<
 	$(DISAS) $@
 
 instr: instr.o
@@ -96,8 +118,8 @@ tar:
 	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
           $(FILE)/Makefile $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
 	  $(FILE)/Changelog $(FILE)/tcc-doc.html \
-          $(FILE)/tcc.c $(FILE)/i386-gen.c \
+          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/bcheck.c \
           $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \
           $(FILE)/tcclib.h \
-          $(FILE)/ex*.c $(FILE)/prog.c )
+          $(FILE)/ex*.c $(FILE)/tcctest.c $(FILE)/boundtest.c )
 	rm -rf /tmp/$(FILE)
