@@ -466,17 +466,30 @@ static void asm_parse_directive(TCCState *s1)
 	}
 	break;
     case TOK_ASM_string:
+    case TOK_ASM_ascii:
+    case TOK_ASM_asciz:
         {
             const uint8_t *p;
-            int i;
+            int i, size, t;
 
+            t = tok;
             next();
-            if (tok != TOK_STR)
-                expect("string constant");
-            p = tokc.cstr->data;
-            for(i = 0; i < tokc.cstr->size; i++)
-                g(p[i]);
-            next();
+            for(;;) {
+                if (tok != TOK_STR)
+                    expect("string constant");
+                p = tokc.cstr->data;
+                size = tokc.cstr->size;
+                if (t == TOK_ASM_ascii && size > 0)
+                    size--;
+                for(i = 0; i < size; i++)
+                    g(p[i]);
+                next();
+                if (tok == ',') {
+                    next();
+                } else if (tok != TOK_STR) {
+                    break;
+                }
+            }
 	}
 	break;
     case TOK_ASM_text:
