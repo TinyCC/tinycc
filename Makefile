@@ -21,7 +21,7 @@ INSTALL=install
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
-all: tcc libtcc1.o bcheck.o tcc-doc.html tcc.1 libtcc.a libtcc_test
+all: tcc libtcc1.a bcheck.o tcc-doc.html tcc.1 libtcc.a libtcc_test
 
 Makefile: config.mak
 
@@ -118,17 +118,20 @@ tcc: tcc_g Makefile
 libtcc1.o: libtcc1.c
 	$(CC) -O2 -Wall -c -o $@ $<
 
+libtcc1.a: libtcc1.o
+	$(AR) rcs $@ $^
+
 bcheck.o: bcheck.c
 	$(CC) -O2 -Wall -c -o $@ $<
 
 install: tcc_install libinstall
 
-tcc_install: tcc tcc.1 libtcc1.o bcheck.o
+tcc_install: tcc tcc.1 libtcc1.a bcheck.o
 	$(INSTALL) -m755 tcc $(bindir)
 	$(INSTALL) tcc.1 $(mandir)/man1
 	mkdir -p $(libdir)/tcc
 	mkdir -p $(libdir)/tcc/include
-	$(INSTALL) -m644 libtcc1.o bcheck.o $(libdir)/tcc
+	$(INSTALL) -m644 libtcc1.a bcheck.o $(libdir)/tcc
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h $(libdir)/tcc/include
 
