@@ -19,6 +19,9 @@ unsigned long int strtoul(const char *nptr, char **endptr, int base);
 /* stdio.h */
 typedef struct __FILE FILE;
 #define EOF (-1)
+extern FILE *stdin;
+extern FILE *stdout;
+extern FILE *stderr;
 FILE *fopen(const char *path, const char *mode);
 FILE *fdopen(int fildes, const char *mode);
 FILE *freopen(const  char *path, const char *mode, FILE *stream);
@@ -58,6 +61,10 @@ void *memset(void *s, int c, size_t n);
 char *strdup(const char *s);
 
 /* dlfcn.h */
+#define RTLD_LAZY       0x001
+#define RTLD_NOW        0x002
+#define RTLD_GLOBAL     0x100
+
 void *dlopen(const char *filename, int flag);
 const char *dlerror(void);
 void *dlsym(void *handle, char *symbol);

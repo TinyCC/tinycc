@@ -1,61 +1,92 @@
-all: test cvt
+#
+# Tiny C Compiler Makefile
+#
+prefix=/usr/local
 
-test: prog.bin 
-	cmp -l prog.bin prog.bin.ref
+CFLAGS=-O2 -g -Wall -Wno-parentheses -I.
+LIBS=-ldl
+#CFLAGS=-O2 -g -Wall -Wno-parentheses -I. -pg -static -DPROFILE
+#LIBS=
+
+CFLAGS+=-m386 -malign-functions=0
+DISAS=objdump -D -b binary -m i386
+INSTALL=install
+VERSION=0.9
+
+all: tcc
+
+# auto test
+
+test: test.ref test.out
+	@if diff -u test.ref test.out ; then echo "Auto Test OK"; fi
+
+prog.ref: prog.c 
+	gcc $(CFLAGS) -o $@ $<
+
+test.ref: prog.ref
+	./prog.ref > $@
+
+test.out: tcc prog.c
+	./tcc -I. prog.c > $@
 
 run: tcc prog.c
-	./tcc prog.c
+	./tcc -I. prog.c
 
-run2: tcc tcc1.c prog.c
-	./tcc tcc1.c prog.c
+run2: tcc tcc.c prog.c
+	./tcc -I. tcc.c -I. prog.c
 
-run3: tcc tcc1.c prog.c
-	./tcc tcc1.c tcc1.c prog.c
+run3: tcc tcc.c prog.c
+	./tcc -I. tcc.c -I. tcc.c -I. prog.c
 
-prog.bin: prog.c tcc
-	./tc prog.c $@
-	ndisasm -b 32 $@
+# speed test
+speed: tcc ex2 ex3
+	time ./ex2 1238 2 3 4 10 13 4
+	time ./tcc -I. ./ex2.c 1238 2 3 4 10 13 4
+	time ./ex3 35
+	time ./tcc -I. ./ex3.c 35
 
-p2.bin: p2.c tcc
-	./tcc $< $@
-	ndisasm -b 32 $@
+ex2: ex2.c
+	gcc $(CFLAGS) -o $@ $<
+
+ex3: ex3.c
+	gcc $(CFLAGS) -o $@ $<
 
 # Tiny C Compiler
 
-tcc: tcc.c
-	gcc -O2 -Wall -g -o $@ $< -ldl
+tcc_g: tcc.c Makefile
+	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
-tcc1: tcc1.c
-	gcc -O2 -Wall -g -o $@ $<
+tcc: tcc_g
+	strip -s -R .comment -R .note -o $@ $<
 
-tcc1.i: tcc.c Makefile
-	gcc -E -P -o $@ $<
+install: tcc 
+	$(INSTALL) -m755 tcc $(prefix)/bin
+	mkdir -p $(prefix)/lib/tcc
+	$(INSTALL) -m644 stdarg.h stddef.h tcclib.h $(prefix)/lib/tcc
 
-tcc1.c: tcc1.i cvt Makefile
-	./cvt -d $< $@
-	@ls -l $@
+clean:
+	rm -f *~ *.o tcc tcc1 tcct tcc_g prog.ref *.bin *.i ex2 \
+           core gmon.out test.out test.ref a.out
 
-# obfuscated C compiler
-otcc: otcc.c
-	gcc -O2 -Wall -g -o $@ $< -ldl
+# target for development
 
-otcc.i: otcc.c Makefile
-	gcc -E -P -DTINY -o $@ $<
+%.bin: %.c tcct
+	./tcct -I. $< $@
+	$(DISAS) $@
 
-otcc1.c: otcc.i cvt Makefile
-	./cvt $< $@
-	@ls -l $@
-
-orun: otcc otcc1.c
-	./otcc otcc1.c ex1.c
-
-# misc
-
-cvt: cvt.c
-	gcc -O2 -Wall -g -o $@ $<
+tcct: tcc.c
+	gcc -DTEST $(CFLAGS) -o $@ $< -ldl
 
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
 
-clean:
-	rm -f *~ *.o tcc tcc1 cvt 
+FILE=tcc-$(VERSION)
+
+tar:
+	rm -rf /tmp/$(FILE)
+	cp -r ../tcc /tmp/$(FILE)
+	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
+          $(FILE)/Makefile $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
+          $(FILE)/tcc.c $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/tcclib.h \
+          $(FILE)/ex*.c $(FILE)/prog.c )
+	rm -rf /tmp/$(FILE)

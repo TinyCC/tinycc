@@ -1,7 +1,15 @@
+TODO list:
 
-- static arrays
-- external symbols (vars)
-- continue/do while/switch/case/goto
-- 'x'=
-- constant propagation for '+', '-' and [].
-- verify function types
+Critical:
+
+- add hash tables for symbols (useful for long programs)
+- 0 is pointer - fix type compare
+- add message if external function or variable not found.
+
+Not critical:
+
+- fix preprocessor symbol redefinition 
+- better constant opt (&&, ||, ?:)
+- function pointers to forward reference (patch code generator) 
+- add PowerPC code generator.
+- add portable byte code generator and interpreter.
