@@ -10086,6 +10086,7 @@ enum {
     TCC_OPTION_run,
     TCC_OPTION_v,
     TCC_OPTION_w,
+    TCC_OPTION_pipe,
 };
 
 static const TCCOption tcc_options[] = {
@@ -10102,7 +10103,7 @@ static const TCCOption tcc_options[] = {
 #ifdef CONFIG_TCC_BCHECK
     { "b", TCC_OPTION_b, 0 },
 #endif
-    { "g", TCC_OPTION_g, 0 },
+    { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
     { "static", TCC_OPTION_static, 0 },
     { "shared", TCC_OPTION_shared, 0 },
@@ -10120,6 +10121,7 @@ static const TCCOption tcc_options[] = {
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 }, 
     { "v", TCC_OPTION_v, 0 },
     { "w", TCC_OPTION_w, 0 },
+    { "pipe", TCC_OPTION_pipe, 0},
     { NULL },
 };
 
