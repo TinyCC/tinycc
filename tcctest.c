@@ -204,6 +204,8 @@ void string_test()
     printf("wc=%C 0x%lx %C\n", L'a', L'\x1234', L'c');
     printf("wstring=%S\n", L"abc");
     printf("wstring=%S\n", L"abc" L"def" "ghi");
+    printf("'\\377'=%d '\xff'=%d\n", '\377', '\xff');
+    printf("L'\\377'=%d L'\xff'=%d\n", L'\377', L'\xff');
     ps("test\n");
     b = 32;
     while ((b = b + 1) < 96) {
@@ -425,6 +427,8 @@ void array_test(int a[4])
     printf("sizeof(unsigned short) = %d\n", sizeof(unsigned short));
     printf("sizeof(char) = %d\n", sizeof(char));
     printf("sizeof(unsigned char) = %d\n", sizeof(unsigned char));
+    printf("sizeof(\"a\") = %d\n", sizeof("a"));
+    printf("sizeof(__func__) = %d\n", sizeof(__func__));
     printf("sizeof tab %d\n", sizeof(tab));
     printf("sizeof tab2 %d\n", sizeof tab2);
     tab[0] = 1;
@@ -868,6 +872,11 @@ void cast_test()
     tab[1] = 2;
     tab[c] = 1;
     printf("%d %d\n", tab[0], tab[1]);
+
+    /* test implicit casting on some operators */
+    printf("sizeof(+(char)'a') = %d\n", sizeof(+(char)'a'));
+    printf("sizeof(-(char)'a') = %d\n", sizeof(-(char)'a'));
+    printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
 }
 
 /* initializers tests */
