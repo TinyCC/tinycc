@@ -9,6 +9,10 @@ version 0.9.19:
 - chars support in assembler (Dave Long)
 - .string, .globl, .section, .text, .data and .bss asm directive
   support (Dave Long)
+- man page generated from tcc-doc.texi
+- fixed macro argument substitution
+- fixed zero argument macro parsing
+- changed license to LGPL
 
 version 0.9.18:
 
