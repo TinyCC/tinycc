@@ -349,9 +349,8 @@ static void gadd_sp(int val)
     }
 }
 
-/* generate function call with address in (vtop->t, vtop->c) and free function
-   context. Stack entry is popped */
-void gfunc_call(GFuncContext *c)
+/* 'is_jmp' is '1' if it is a jump */
+static void gcall_or_jmp(int is_jmp)
 {
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
@@ -365,13 +364,20 @@ void gfunc_call(GFuncContext *c)
             put_elf_reloc(symtab_section, cur_text_section, 
                           ind + 1, R_386_PC32, 0);
         }
-        oad(0xe8, vtop->c.ul - 4);
+        oad(0xe8 + is_jmp, vtop->c.ul - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
         r = gv(RC_INT);
-        o(0xff); /* call *r */
-        o(0xd0 + r);
+        o(0xff); /* call/jmp *r */
+        o(0xd0 + r + (is_jmp << 4));
     }
+}
+
+/* generate function call with address in (vtop->t, vtop->c) and free function
+   context. Stack entry is popped */
+void gfunc_call(GFuncContext *c)
+{
+    gcall_or_jmp(0);
     if (c->args_size && c->func_call == FUNC_CDECL)
         gadd_sp(c->args_size);
     vtop--;
@@ -860,6 +866,13 @@ void gen_cvt_ftof(int t)
 {
     /* all we have to do on i386 is to put the float in a register */
     gv(RC_FLOAT);
+}
+
+/* computed goto support */
+void ggoto(void)
+{
+    gcall_or_jmp(1);
+    vtop--;
 }
 
 /* bound check support functions */
