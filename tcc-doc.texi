@@ -36,8 +36,8 @@ generation (@xref{libtcc}).
 @section Quick start
 
 @example
-usage: tcc [-c] [-o outfile] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
-           [-g] [-b] [-llib] [-shared] [-static]
+usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
+           [-g] [-b] [-Ldir] [-llib] [-shared] [-static]
            [--] infile1 [infile2... --] [infile_args...]
 @end example
 
@@ -99,8 +99,12 @@ Generate an object file (@samp{-o} option must also be given).
 @item -o outfile
 Put object file, executable, or dll into output file @file{outfile}.
 
+@item -Bdir
+Set the path where the tcc internal libraries can be found (default is
+@code{prefix}@file{/lib/tcc}.
+
 @item -bench
-Output compilation statistics
+Output compilation statistics.
 @end table
 
 Preprocessor options:
@@ -108,8 +112,9 @@ Preprocessor options:
 @table @samp
 @item -Idir
 Specify an additionnal include path. The default ones are:
-@file{/usr/include}, @code{prefix}@file{/lib/tcc/include} (@code{prefix}
-is usually @file{/usr} or @file{/usr/local}).
+@file{/usr/local/include}, @code{prefix}@file{/lib/tcc/include} and
+@file{/usr/include} (@code{prefix} is usually @file{/usr} or
+@file{/usr/local}).
 
 @item -Dsym[=val]
 Define preprocessor symbol 'sym' to
@@ -138,13 +143,18 @@ that the generated code is slower and bigger in this case.
 Linker options:
 
 @table @samp
+@item -Ldir
+Specify an additionnal static library path for the @samp{-l} option. The
+default library paths are @file{/usr/local/lib}, @file{/usr/lib} and @file{/lib}.
+
 @item -lxxx
-Dynamically link your program with library
-libxxx.so. Standard library paths are checked, including those
-specified with LD_LIBRARY_PATH.
+Link your program with dynamic library libxxx.so or static library
+libxxx.a. The library is searched in the paths specified by the
+@samp{-L} option.
 
 @item -shared
-Generate a shared library instead of an executable  (@samp{-o} option must also be given).
+Generate a shared library instead of an executable (@samp{-o} option
+must also be given).
 
 @item -static
 Generate a statically linked executable (default is a shared linked
@@ -313,6 +323,47 @@ indicate that you use TCC.
 @item @code{__BOUNDS_CHECKING_ON} is defined if bound checking is activated.
 
 @end itemize
+
+@chapter TinyCC Linker
+
+@section ELF file generation
+
+TCC can directly output relocatable ELF files (object files),
+executable ELF files and dynamic ELF libraries without relying on an
+external linker.
+
+Dynamic ELF libraries are not working correctly yet because the C
+compiler does not generate position independant code (PIC) code.
+
+TCC linker cannot currently suppress unused object code. But TCC
+will soon integrate a novel feature not found in GNU tools: unused code
+will be suppressed at the function or variable level, provided you only
+use TCC to compile your files.
+
+ELF symbol hash table is currently fixed.
+
+@section ELF file loader
+
+TCC can load ELF object files, archives (.a files) and dynamic
+libraries (.so).
+
+Currently, the @code{stabs} debug information is not relocated.
+
+@section GNU Linker Scripts
+
+Because on many Linux systems some dynamic libraries (such as
+@file{/usr/lib/libc.so}) are in fact GNU ld link scripts (horrible!),
+TCC linker also support a subset of GNU ld scripts.
+
+The @code{GROUP} and @code{FILE} commands are supported.
+
+Example from @file{/usr/lib/libc.so}:
+@example
+/* GNU ld script
+   Use the shared library, but some functions are only in
+   the static library, so try that secondarily.  */
+GROUP ( /lib/libc.so.6 /usr/lib/libc_nonshared.a )
+@end example
 
 @node bounds
 @chapter TinyCC Memory and Bound checks

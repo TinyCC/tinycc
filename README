@@ -75,38 +75,6 @@ when doing 'make test'.
 
 Please read tcc-doc.html to have all the features of TCC.
 
-Technical Description:
----------------------
-
-This is not my first C compiler (see my 'fbcc' compiler) but it
-contains the first C preprocessor I wrote. The project started as a
-joke to make the smallest C compiler. Then I expanded it torward
-ISOC99 compliance. This C compiler is particular because each feature
-was added while trying to be as simple and compact as possible. For
-example, no intermediate structure is used to store code or
-expressions.
-
-The TCC code generator directly generates linked binary code. It is
-rather unusual these days (see gcc for example which generates text
-assembly), but it allows to be very fast and surprisingly not so
-complicated.
-
-The TCC code generator is register based. It means that it could even
-generate not so bad code for RISC processors. On x86, three temporary
-registers are used. When more registers are needed, one register is
-flushed in a new local variable.
-
-Constant propagation is done for all operations. Multiplications and
-divisions are optimized to shifts when appropriate. Comparison
-operators are optimized by maintaining a special cache for the
-processor flags. &&, || and ! are optimized by maintaining a special
-'jump target' value. No other jump optimization is currently performed
-because it would require to store the code in a more abstract fashion.
-
-The types are stored in a single 'int' variable (see VT_xxx
-constants). It was choosen in the first stages of development when tcc
-was much simpler. Now, it may not be the best solution.
-
 License:
 -------
 

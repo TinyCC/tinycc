@@ -9,11 +9,15 @@ CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
 CFLAGS+=-m386 -malign-functions=0
+CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.7
+VERSION=0.9.8
 
-all: tcc
+# run local version of tcc with local libraries and includes
+TCC=./tcc -B. -I.
+
+all: tcc libtcc1.o bcheck.o tcc-doc.html
 
 # auto test
 
@@ -27,19 +31,19 @@ test.ref: tcctest.ref
 	./tcctest.ref > $@
 
 test.out: tcc tcctest.c
-	./tcc -I. tcctest.c > $@
+	$(TCC) tcctest.c > $@
 
 run: tcc tcctest.c
-	./tcc -I. tcctest.c
+	$(TCC) tcctest.c
 
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: tcc tcc.c tcctest.c test.ref
-	./tcc -I. tcc.c -I. tcctest.c > test.out2
+	$(TCC) tcc.c -B. -I. tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: tcc tcc.c tcctest.c test.ref
-	./tcc -I. tcc.c -I. tcc.c -I. tcctest.c > test.out3
+	$(TCC) tcc.c -B. -I. tcc.c -B. -I. tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # memory and bound check auto test
@@ -48,14 +52,14 @@ BOUNDS_FAIL= 2 5 7 9 11 12 13
 
 btest: boundtest.c tcc
 	@for i in $(BOUNDS_OK); do \
-           if ./tcc -b boundtest.c $$i ; then \
+           if $(TCC) -b boundtest.c $$i ; then \
                /bin/true ; \
            else\
 	       echo Failed positive test $$i ; exit 1 ; \
            fi ;\
         done ;\
         for i in $(BOUNDS_FAIL); do \
-           if ./tcc -b boundtest.c $$i ; then \
+           if $(TCC) -b boundtest.c $$i ; then \
 	       echo Failed negative test $$i ; exit 1 ;\
            else\
                /bin/true ; \
@@ -78,17 +82,27 @@ ex3: ex3.c
 
 # Native Tiny C Compiler
 
-tcc_g: tcc.c i386-gen.c bcheck.c Makefile
+tcc_g: tcc.c i386-gen.c bcheck.c tcctok.h libtcc.h Makefile
 	gcc $(CFLAGS) -o $@ $< $(LIBS)
 
 tcc: tcc_g
 	strip -s -R .comment -R .note -o $@ $<
 
-install: tcc 
+# TinyCC runtime libraries
+libtcc1.o: libtcc1.c
+	gcc -O2 -Wall -c -o $@ $<
+
+bcheck.o: bcheck.c
+	gcc -O2 -Wall -c -o $@ $<
+
+install: tcc libtcc1.o bcheck.o
 	$(INSTALL) -m755 tcc $(prefix)/bin
+	$(INSTALL) tcc.1 $(prefix)/man/man1
 	mkdir -p $(prefix)/lib/tcc
+	mkdir -p $(prefix)/lib/tcc/include
+	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc
 	$(INSTALL) -m644 stdarg.h stddef.h float.h stdbool.h \
-                   tcclib.h $(prefix)/lib/tcc
+                   tcclib.h $(prefix)/lib/tcc/include
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
@@ -131,7 +145,7 @@ libtcc_test: libtcc_test.c libtcc.a
 # targets for development
 
 %.bin: %.c tcc
-	./tcc -g -o $@ -I. $<
+	$(TCC) -g -o $@ $<
 	$(DISAS) $@
 
 instr: instr.o
@@ -139,6 +153,10 @@ instr: instr.o
 
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
+
+# documentation
+tcc-doc.html: tcc-doc.texi
+	texi2html -monolithic -number $<
 
 FILE=tcc-$(VERSION)
 
@@ -148,8 +166,10 @@ tar:
 	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz \
           $(FILE)/Makefile $(FILE)/Makefile.uClibc \
           $(FILE)/README $(FILE)/TODO $(FILE)/COPYING \
-	  $(FILE)/Changelog $(FILE)/tcc-doc.html \
-          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/bcheck.c \
+	  $(FILE)/Changelog $(FILE)/tcc-doc.texi $(FILE)/tcc-doc.html \
+          $(FILE)/tcc.1 \
+          $(FILE)/tcc.c $(FILE)/i386-gen.c $(FILE)/tcctok.h \
+          $(FILE)/bcheck.c $(FILE)/libtcc1.c \
           $(FILE)/il-opcodes.h $(FILE)/il-gen.c \
           $(FILE)/elf.h $(FILE)/stab.h $(FILE)/stab.def \
           $(FILE)/stddef.h $(FILE)/stdarg.h $(FILE)/stdbool.h $(FILE)/float.h \

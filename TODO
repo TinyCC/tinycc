@@ -1,10 +1,14 @@
 TODO list:
 
-Critical:
-- better local symbol handling (needed for other targets)
+- relocate .stabs information
+- fix -I search order (same as gcc)
+- dynamic hash table resizing
+- better section generator (suppress mmaps)
+- relocate .bounds section content
+- add size info on all ELF symbols
+- add separate symbol/offset handling
+- better local variables handling (needed for other targets)
 - handle void (__attribute__() *ptr)()
-- optimize slightly bound checking when doing addition + dereference.
-- better section generator (suppress some mmaps).
 - To check: bound checking and float/long long/struct copy code
 - To fix: 'sizeof' generate code if too complex expression is given.
 - fix bound check code with '&' on local variables (currently done
@@ -21,11 +25,9 @@ Not critical:
 - fix multiple compound literals inits in blocks (ISOC99 normative
   example - only relevant when using gotos! -> must add boolean
   variable to tell if compound literal was already initialized).
-- add more bounds checked functions (strcpy, ...)
 - fix L"\x1234" wide string case (need to store them as utf8 ?)
 - fix preprocessor symbol redefinition
 - better constant opt (&&, ||, ?:)
-- add ELF executable and shared library output option (would be needed
-  for completness!).
 - add portable byte code generator and interpreter for other
   unsupported architectures.
+- C++: variable declaration in for, minimal 'class' support.
