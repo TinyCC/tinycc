@@ -233,7 +233,7 @@ void load(int r, SValue *sv)
         } else if (v == VT_JMP || v == VT_JMPI) {
             t = v & 1;
             oad(0xb8 + r, t); /* mov $1, r */
-            oad(0xe9, 5); /* jmp after */
+            o(0x05eb); /* jmp after */
             gsym(fc);
             oad(0xb8 + r, t ^ 1); /* mov $0, r */
         } else if (v != r) {
@@ -479,7 +479,14 @@ int gjmp(int t)
 /* generate a jump to a fixed address */
 void gjmp_addr(int a)
 {
-    oad(0xe9, a - ind - 5);
+    int r;
+    r = a - ind - 2;
+    if (r == (char)r) {
+        g(0xeb);
+        g(r);
+    } else {
+        oad(0xe9, a - ind - 5);
+    }
 }
 
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
