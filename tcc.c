@@ -8507,6 +8507,13 @@ static void decl(int l)
                     error("cannot use local functions");
                 if (!(type.t & VT_FUNC))
                     expect("function definition");
+
+                /* reject abstract declarators in function definition */
+                sym = type.ref;
+                while ((sym = sym->next) != NULL)
+                    if (!(sym->v & ~SYM_FIELD))
+                       expect("identifier");
+                
                 /* XXX: cannot do better now: convert extern line to static inline */
                 if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
                     type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
