@@ -1303,6 +1303,16 @@ void bitfield_test(void)
     st1.f5++;
     printf("%d %d %d %d %d\n",
            st1.f1, st1.f2, st1.f3, st1.f4, st1.f5);
+
+    st1.f1 = 7;
+    if (st1.f1 == -1) 
+        printf("st1.f1 == -1\n");
+    else 
+        printf("st1.f1 != -1\n");
+    if (st1.f2 == -1) 
+        printf("st1.f2 == -1\n");
+    else 
+        printf("st1.f2 != -1\n");
 }
 
 #define FTEST(prefix, type, fmt)\

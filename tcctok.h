@@ -102,6 +102,8 @@
      DEF(TOK_NORETURN2, "__noreturn__")
      DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")
      DEF(TOK_builtin_constant_p, "__builtin_constant_p")
+     DEF(TOK_REGPARM1, "regparm")
+     DEF(TOK_REGPARM2, "__regparm__")
 
 /* builtin functions or variables */
      DEF(TOK_memcpy, "memcpy")
@@ -184,6 +186,9 @@
  DEF_ASM(text)
  DEF_ASM(data)
  DEF_ASM(bss)
+ DEF_ASM(previous)
+ DEF_ASM(fill)
+ DEF_ASM(org)
 
 #ifdef TCC_TARGET_I386
 

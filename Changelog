@@ -7,6 +7,13 @@ version 0.9.21:
 - line comment fix (reported by Bertram Felgenhauer)
 - initial TMS320C67xx target support (TK)
 - win32 configure
+- regparm() attribute
+- many built-in assembler fixes
+- added '.org', '.fill' and '.previous' assembler directives
+- '-fno-common' option
+- '-Ttext' linker option
+- section alignment fixes
+- bit fields fixes
 
 version 0.9.20:
 
