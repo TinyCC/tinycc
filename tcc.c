@@ -71,6 +71,17 @@ typedef struct SymStack {
   struct Sym *hash[SYM_HASH_SIZE];
 } SymStack;
 
+/* relocation entry (currently only used for functions or variables */
+typedef struct Reloc {
+    int type;            /* type of relocation */
+    int addr;            /* address of relocation */
+    struct Reloc *next;  /* next relocation */
+} Reloc;
+
+#define RELOC_ADDR32 1  /* 32 bits relocation */
+#define RELOC_REL32  2  /* 32 bits relative relocation */
+
+
 #define SYM_STRUCT 0x40000000 /* struct/union/enum symbol space */
 #define SYM_FIELD  0x20000000 /* struct/union field symbol space */
 
@@ -144,13 +155,15 @@ int nb_include_paths;
 #define VT_ENUM     0x00800  /* enum definition */
 #define VT_FUNC     0x01000  /* function type */
 #define VT_STRUCT  0x002000  /* struct/union definition */
-#define VT_TYPEDEF 0x004000  /* typedef definition */
-#define VT_EXTERN  0x008000  /* extern definition */
-#define VT_STATIC  0x010000  /* static variable */
-#define VT_SHORT   0x020000  /* short type */
+#define VT_SHORT   0x004000  /* short type */
 #define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 
-#define VT_TYPE    0xffffffc0  /* type mask */
+/* storage */
+#define VT_EXTERN  0x00008000  /* extern definition */
+#define VT_STATIC  0x00010000  /* static variable */
+#define VT_TYPEDEF 0x00020000  /* typedef definition */
+
+#define VT_TYPE    0xfffc7fc0  /* type mask */
 #define VT_TYPEN   0x0000003f  /* ~VT_TYPE */
 #define VT_FUNCN   -4097       /* ~VT_FUNC */
 
@@ -269,12 +282,12 @@ enum {
 };
 
 void sum();
-void next();
+void next(void);
 void next_nomacro();
 int expr_const();
 void expr_eq();
-void expr();
-void decl();
+void expr(void);
+void decl(int l);
 void decl_initializer(int t, int c, int first, int size_only);
 int decl_initializer_alloc(int t, int has_init);
 int gv(void);
@@ -1450,17 +1463,60 @@ typedef struct GFuncContext {
     int args_size;
 } GFuncContext;
 
-void g(c)
+void g(int c)
 {
     *(char *)ind++ = c;
 }
 
-void o(c)
+void o(int c)
 {
     while (c) {
         g(c);
         c = c / 256;
     }
+}
+
+void gen_le32(int c)
+{
+    g(c);
+    g(c >> 8);
+    g(c >> 16);
+    g(c >> 24);
+}
+
+/* add a new relocation entry to symbol 's' */
+void greloc(Sym *s, int addr, int type)
+{
+    Reloc *p;
+    p = malloc(sizeof(Reloc));
+    if (!p)
+        error("memory full");
+    p->type = type;
+    p->addr = addr;
+    p->next = (Reloc *)s->c;
+    s->c = (int)p;
+}
+
+/* patch each relocation entry with value 'val' */
+void greloc_patch(Sym *s, int val)
+{
+    Reloc *p, *p1;
+
+    p = (Reloc *)s->c;
+    while (p != NULL) {
+        p1 = p->next;
+        switch(p->type) {
+        case RELOC_ADDR32:
+            *(int *)p->addr = val;
+            break;
+        case RELOC_REL32:
+            *(int *)p->addr = val - p->addr - 4;
+            break;
+        }
+        free(p);
+        p = p1;
+    }
+    s->c = val;
 }
 
 /* output a symbol and patch all calls to it */
@@ -1484,13 +1540,24 @@ void gsym(t)
 #define psym oad
 
 /* instruction + 4 bytes data. Return the address of the data */
-int oad(c, s)
+int oad(int c, int s)
 {
     o(c);
     *(int *)ind = s;
     s = ind;
     ind = ind + 4;
     return s;
+}
+
+/* output constant with relocation if 't & VT_FORWARD' is true */
+void gen_addr32(int c, int t)
+{
+    if (!(t & VT_FORWARD)) {
+        gen_le32(c);
+    } else {
+        greloc((Sym *)c, ind, RELOC_ADDR32);
+        gen_le32(0);
+    }
 }
 
 /* XXX: generate correct pointer for forward references to functions */
@@ -1516,7 +1583,8 @@ void load(r, ft, fc)
         else
             o(0x8b);     /* movl */
         if (v == VT_CONST) {
-            oad(0x05 + r * 8, fc); /* 0xXX, r */
+            o(0x05 + r * 8); /* 0xXX, r */
+            gen_addr32(fc, ft);
         } else if (v == VT_LOCAL) {
             oad(0x85 + r * 8, fc); /* xx(%ebp), r */
         } else {
@@ -1524,7 +1592,8 @@ void load(r, ft, fc)
         }
     } else {
         if (v == VT_CONST) {
-            oad(0xb8 + r, fc); /* mov $xx, r */
+            o(0xb8 + r); /* mov $xx, r */
+            gen_addr32(fc, ft);
         } else if (v == VT_LOCAL) {
             o(0x8d);
             oad(0x85 + r * 8, fc); /* lea xxx(%ebp), r */
@@ -1559,7 +1628,8 @@ void store(r, ft, fc)
         o(0x66);
     o(0x89 - b);
     if (fr == VT_CONST) {
-        oad(0x05 + r * 8, fc); /* mov r,xxx */
+        o(0x05 + r * 8); /* mov r,xxx */
+        gen_addr32(fc, ft);
     } else if (fr == VT_LOCAL) {
         oad(0x85 + r * 8, fc); /* mov r,xxx(%ebp) */
     } else if (ft & VT_LVAL) {
@@ -1615,9 +1685,11 @@ void gfunc_call(GFuncContext *c, int ft, int fc)
     if (r == VT_CONST) {
         /* forward reference */
         if (ft & VT_FORWARD) {
-            *(int *)fc = psym(0xe8, *(int *)fc);
-        } else
+            greloc((Sym *)fc, ind + 1, RELOC_REL32);
+            oad(0xe8, 0);
+        } else {
             oad(0xe8, fc - ind - 5);
+        }
     } else if (r == VT_LOCAL) {
         oad(0x95ff, fc); /* call *xxx(%ebp) */
     } else {
@@ -2171,7 +2243,7 @@ void inc(post, c)
 }
 
 /* enum/struct/union declaration */
-int struct_decl(u)
+int struct_decl(int u)
 {
     int a, t, b, v, size, align, maxalign, c;
     Sym *s, *ss, **ps;
@@ -2428,27 +2500,19 @@ int type_decl(int *v, int t, int td)
 }
 
 /* define a new external reference to a function 'v' of type 'u' */
-Sym *external_func(v, u)
+Sym *external_sym(int v, int u)
 {
-    int n;
     Sym *s;
     s = sym_find(v);
     if (!s) {
-        n = (int)dlsym(0, get_tok_str(v, 0));
-        if (n == 0) {
-            /* used to generate symbol list */
-            s = sym_push1(&global_stack, 
-                          v, u | VT_CONST | VT_LVAL | VT_FORWARD, 0);
-        } else {
-            /* int f() */
-            s = sym_push1(&global_stack,
-                          v, u | VT_CONST | VT_LVAL, n);
-        }
+        /* push forward reference */
+        s = sym_push1(&global_stack, 
+                      v, u | VT_CONST | VT_FORWARD, 0);
     }
     return s;
 }
 
-void indir()
+void indir(void)
 {
     if (vt & VT_LVAL)
         gv();
@@ -2459,7 +2523,7 @@ void indir()
         vt |= VT_LVAL;
 }
 
-void unary()
+void unary(void)
 {
     int n, t, ft, fc, p, align, size;
     Sym *s;
@@ -2523,7 +2587,12 @@ void unary()
             indir();
         } else if (t == '&') {
             unary();
-            test_lvalue();
+            /* functions names must be treated as function pointers,
+               except for unary '&' and sizeof. Since we consider that
+               functions are not lvalues, we only have to handle it
+               there and in function calls. */
+            if (!(vt & VT_FUNC))
+                test_lvalue();
             vt = mk_pointer(vt & VT_LVALN);
         } else
         if (t == '!') {
@@ -2577,12 +2646,12 @@ void unary()
                 p = anon_sym++;        
                 sym_push1(&global_stack, p, 0, FUNC_OLD);
                 /* int() function */
-                s = external_func(t, VT_FUNC | (p << VT_STRUCT_SHIFT)); 
+                s = external_sym(t, VT_FUNC | (p << VT_STRUCT_SHIFT)); 
             }
             vset(s->t, s->c);
-            /* if forward reference, we must point to s->c */
+            /* if forward reference, we must point to s */
             if (vt & VT_FORWARD)
-                vc = (int)&s->c;
+                vc = (int)s;
         }
     }
     
@@ -2632,8 +2701,16 @@ void unary()
             int rett, retc;
 
             /* function call  */
-            if (!(vt & VT_FUNC))
-                expect("function type");
+            if (!(vt & VT_FUNC)) {
+                if ((vt & (VT_PTR | VT_ARRAY)) == VT_PTR) {
+                    vt = pointed_type(vt);
+                    if (!(vt & VT_FUNC))
+                        goto error_func;
+                } else {
+                error_func:
+                    expect("function type");
+                }
+            }
             /* get return type */
             s = sym_find((unsigned)vt >> VT_STRUCT_SHIFT);
 
@@ -2725,6 +2802,30 @@ void unary()
     }
 }
 
+/* check if types are compatible for assignation */
+int same_types(int t1, int t2)
+{
+    t1 &= VT_TYPE;
+    t2 &= VT_TYPE;
+    if (t1 & VT_PTR) {
+        /* XXX: zero test ? */
+        if (!(t2 & VT_PTR))
+            return 0;
+        t1 = pointed_type(t1);
+        t2 = pointed_type(t2);
+        /* void matches everything */
+        if (t1 == VT_VOID || t2 == VT_VOID)
+            return 1;
+        return same_types(t1, t2);
+    } else if (t1 & VT_STRUCT) {
+        return (t2 == t1);
+    } else {
+        /* XXX: not complete */
+        return 1;
+    }
+}
+
+
 void uneq()
 {
     int t;
@@ -2740,9 +2841,8 @@ void uneq()
         next();
         if (t == '=') {
             expr_eq();
-            /* XXX: be more precise */
-            if ((vt & VT_PTR) != (vstack_ptr[-2] & VT_PTR))
-                warning("incompatible type");
+            if (!same_types(vt, vstack_ptr[-2]))
+                error("incompatible types");
         } else {
             vpush();
             expr_eq();
@@ -2919,7 +3019,8 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         s = local_stack.top;
         while (tok != '}') {
             decl(VT_LOCAL);
-            block(bsym, csym, case_sym, def_sym, case_reg);
+            if (tok != '}')
+                block(bsym, csym, case_sym, def_sym, case_reg);
         }
         /* pop locally defined symbols */
         sym_pop(&local_stack, s);
@@ -3002,6 +3103,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         gsym_addr(c, d);
         skip(')');
         gsym(a);
+        skip(';');
     } else
     if (tok == TOK_SWITCH) {
         next();
@@ -3297,9 +3399,9 @@ void decl_initializer(int t, int c, int first, int size_only)
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
-    } else if (t & VT_STRUCT) {
+    } else if ((t & VT_STRUCT) && tok == '{') {
         /* XXX: union needs only one init */
-        skip('{');
+        next();
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
         f = s->next;
         array_length = 0;
@@ -3428,14 +3530,20 @@ int decl_initializer_alloc(int t, int has_init)
 
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
-void decl(l)
+void decl(int l)
 {
-    int *a, t, b, v, u, n, addr, has_init, size, align;
+    int *a, t, b, v, u, addr, has_init, size, align;
     Sym *sym;
     
     while (1) {
         b = ist();
         if (!b) {
+            /* skip redundant ';' */
+            /* XXX: find more elegant solution */
+            if (tok == ';') {
+                next();
+                continue;
+            }
             /* special test for old K&R protos without explicit int
                type. Only accepted when defining global data */
             if (l == VT_LOCAL || tok < TOK_DEFINE)
@@ -3450,16 +3558,17 @@ void decl(l)
         while (1) { /* iterate thru each declaration */
             t = type_decl(&v, b, TYPE_DIRECT);
             if (tok == '{') {
+                if (l == VT_LOCAL)
+                    error("cannot use local functions");
                 if (!(t & VT_FUNC))
                     expect("function definition");
                 /* patch forward references */
                 if ((sym = sym_find(v)) && (sym->t & VT_FORWARD)) {
-                    gsym(sym->c);
-                    sym->c = ind;
-                    sym->t = VT_CONST | VT_LVAL | t;
+                    greloc_patch(sym, ind);
+                    sym->t = VT_CONST | t;
                 } else {
                     /* put function address */
-                    sym_push1(&global_stack, v, VT_CONST | VT_LVAL | t, ind);
+                    sym_push1(&global_stack, v, VT_CONST | t, ind);
                 }
                 funcname = get_tok_str(v, 0);
                 /* push a dummy symbol to enable local sym storage */
@@ -3516,21 +3625,15 @@ void decl(l)
                     /* save typedefed type */
                     sym_push(v, t | VT_TYPEDEF, 0);
                 } else if (t & VT_FUNC) {
-                    /* XXX: incorrect to flush, but needed while
-                       waiting for function prototypes */
                     /* external function definition */
-                    external_func(v, t);
+                    external_sym(v, t);
                 } else {
                     /* not lvalue if array */
                     if (!(t & VT_ARRAY))
                         t |= VT_LVAL;
                     if (b & VT_EXTERN) {
                         /* external variable */
-                        /* XXX: factorize with external function def */
-                        n = (int)dlsym(NULL, get_tok_str(v, 0));
-                        if (!n)
-                            error("unknown external variable");
-                        sym_push(v, VT_CONST | t, n);
+                        external_sym(v, t);
                     } else {
                         u = l;
                         if (t & VT_STATIC)
@@ -3564,6 +3667,30 @@ void open_dll(char *libname)
     h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
     if (!h)
         error((char *)dlerror());
+}
+
+void reloc_external_syms(void)
+{
+    Sym *s, *s1;
+    char *str;
+    int addr;
+
+    s = global_stack.top;
+    while (s != NULL) {
+        s1 = s->prev;
+        if (s->t & VT_FORWARD) {
+            /* if there is at least one relocation to do, then find it
+               and patch it */
+            if (s->c) {
+                str = get_tok_str(s->v, 0);
+                addr = (int)dlsym(NULL, str);
+                if (!addr)
+                    error("unresolved external reference '%s'", str);
+                greloc_patch(s, addr);
+            }
+        }
+        s = s1;
+    }
 }
 
 /* output a binary file (for testing) */
@@ -3658,6 +3785,7 @@ int main(int argc, char **argv)
     decl(VT_CONST);
     if (tok != -1)
         expect("declaration");
+    reloc_external_syms();
     if (outfile) {
         build_exe(outfile);
         return 0;
