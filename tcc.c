@@ -38,6 +38,8 @@
 #include <dlfcn.h>
 #endif
 
+#include "libtcc.h"
+
 //#define DEBUG
 /* preprocessor debug */
 //#define PP_DEBUG
@@ -244,6 +246,10 @@ int gnu_ext = 1;
 
 /* use Tiny C extensions */
 int tcc_ext = 1;
+
+struct TCCState {
+    int dummy;
+};
 
 /* The current value can be: */
 #define VT_VALMASK   0x00ff
@@ -491,7 +497,7 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init);
 int gv(int rc);
 void gv2(int rc1, int rc2);
 void move_reg(int r, int s);
-void save_regs(void);
+void save_regs(int n);
 void save_reg(int r);
 void vpop(void);
 void vswap(void);
@@ -2450,7 +2456,7 @@ void save_reg(int r)
                 }
 #endif
                 /* special long long case */
-                if ((p->t & VT_BTYPE) == VT_LLONG) {
+                if ((t & VT_BTYPE) == VT_LLONG) {
                     sv.c.ul += 4;
                     store(p->r2, &sv);
                 }
@@ -2501,12 +2507,13 @@ int get_reg(int rc)
     return r;
 }
 
-void save_regs(void)
+/* save registers up to (vtop - n) stack entry */
+void save_regs(int n)
 {
     int r;
-    SValue *p;
-
-    for(p=vstack;p<=vtop;p++) {
+    SValue *p, *p1;
+    p1 = vtop - n;
+    for(p = vstack;p <= p1; p++) {
         r = p->r & VT_VALMASK;
         if (r < VT_CONST) {
             save_reg(r);
@@ -3810,7 +3817,7 @@ void vstore(void)
         gaddrof();
         gfunc_param(&gf);
 
-        save_regs();
+        save_regs(0);
         vpushi((int)&memcpy);
         gfunc_call(&gf);
         /* leave source on stack */
@@ -4660,7 +4667,7 @@ void unary(void)
             }
             /* get return type */
             s = sym_find((unsigned)vtop->t >> VT_STRUCT_SHIFT);
-            save_regs(); /* save used temporary registers */
+            save_regs(0); /* save used temporary registers */
             gfunc_start(&gf, s->r);
             next();
             sa = s->next; /* first parameter */
@@ -4879,6 +4886,8 @@ void expr_eq(void)
         eor();
         if (tok == '?') {
             next();
+            save_regs(1); /* we need to save all registers here except
+                             at the top because it is a branch point */
             t = gtst(1, 0);
             gexpr();
             /* XXX: long long handling ? */
@@ -5832,17 +5841,13 @@ void resolve_global_syms(void)
     }
 }
 
-/* compile a C file. Return non zero if errors. */
-int tcc_compile_file(const char *filename1)
+/* compile the C file opened in 'file'. Return non zero if errors. */
+int tcc_compile(TCCState *s)
 {
     Sym *define_start;
     char buf[512];
     
     funcname = "";
-
-    file = tcc_open(filename1);
-    if (!file)
-        error("file '%s' not found", filename1);
     include_stack_ptr = include_stack;
     ifdef_stack_ptr = ifdef_stack;
 
@@ -5868,7 +5873,6 @@ int tcc_compile_file(const char *filename1)
     decl(VT_CONST);
     if (tok != -1)
         expect("declaration");
-    tcc_close(file);
 
     /* end of translation unit info */
     if (do_debug) {
@@ -5886,23 +5890,48 @@ int tcc_compile_file(const char *filename1)
     return 0;
 }
 
-/* define a symbol. A value can also be provided with the '=' operator */
-/* XXX: currently only handles integers and string defines. should use
-   tcc parser, but would need a custom 'FILE *' */
-void define_symbol(const char *sym)
+int tcc_compile_file(TCCState *s, const char *filename1)
 {
-    char *p;
+    int ret;
+    file = tcc_open(filename1);
+    if (!file)
+        error("file '%s' not found", filename1);
+    ret = tcc_compile(s);
+    tcc_close(file);
+    return ret;
+}
+
+int tcc_compile_string(TCCState *s, const char *str)
+{
+    BufferedFile bf1, *bf = &bf1;
+    int ret;
+
+    /* init file structure */
+    bf->fd = -1;
+    bf->buf_ptr = (char *)str;
+    bf->buf_end = (char *)str + strlen(bf->buffer);
+    pstrcpy(bf->filename, sizeof(bf->filename), "<string>");
+    bf->line_num = 1;
+    file = bf;
+    
+    ret = tcc_compile(s);
+    
+    /* currently, no need to close */
+    return ret;
+}
+
+/* define a symbol. A value can also be provided with the '=' operator */
+void tcc_define_symbol(TCCState *s, const char *sym, const char *value)
+{
     BufferedFile bf1, *bf = &bf1;
 
     pstrcpy(bf->buffer, IO_BUF_SIZE, sym);
-    p = strchr(bf->buffer, '=');
-    if (!p) {
-        /* default value */
-        pstrcat(bf->buffer, IO_BUF_SIZE, " 1");
-    } else {
-        *p = ' ';
-    }
-    
+    pstrcat(bf->buffer, IO_BUF_SIZE, " ");
+    /* default value */
+    if (!value) 
+        value = "1";
+    pstrcat(bf->buffer, IO_BUF_SIZE, value);
+
     /* init file structure */
     bf->fd = -1;
     bf->buf_ptr = bf->buffer;
@@ -5921,7 +5950,7 @@ void define_symbol(const char *sym)
     file = NULL;
 }
 
-void undef_symbol(const char *sym)
+void tcc_undefine_symbol(TCCState *s1, const char *sym)
 {
     TokenSym *ts;
     Sym *s;
@@ -5934,15 +5963,39 @@ void undef_symbol(const char *sym)
 
 /* open a dynamic library so that its symbol are available for
    compiled programs */
-void open_dll(char *libname)
+/* XXX: open the lib only to actually run the program */
+int tcc_add_dll(TCCState *s, const char *library_name)
 {
-    char buf[1024];
     void *h;
 
-    snprintf(buf, sizeof(buf), "lib%s.so", libname);
-    h = dlopen(buf, RTLD_GLOBAL | RTLD_LAZY);
+    h = dlopen(library_name, RTLD_GLOBAL | RTLD_LAZY);
     if (!h)
         error((char *)dlerror());
+    return 0;
+}
+
+/* If the symbol already exists, then it is redefined */
+int tcc_add_symbol(TCCState *s, const char *name, void *value)
+{
+    TokenSym *ts;
+    Sym *ext_sym;
+    int v;
+
+    ts = tok_alloc(name, 0);
+    v = ts->tok;
+    ext_sym = sym_find1(&extern_stack, v);
+    if (ext_sym) {
+        if (ext_sym->r & VT_FORWARD) {
+            greloc_patch(ext_sym, (long)value);
+        } else {
+            /* redefine symbol */
+            ext_sym->c = (long)value;
+        }
+    } else {
+        ext_sym = sym_push1(&extern_stack, v, VT_INT, (long)value);
+        ext_sym->r = VT_CONST;
+    }
+    return 0;
 }
 
 static void *resolve_sym(const char *sym)
@@ -6059,7 +6112,7 @@ static void put_stabd(int type, int other, int desc)
 /* XXX: generate startup code */
 /* XXX: better program header generation */
 /* XXX: handle realloc'ed sections (instead of mmaping them) */
-void build_exe(char *filename)
+int tcc_output_file(TCCState *s, const char *filename, int file_type)
 { 
     Elf32_Ehdr ehdr;
     FILE *f;
@@ -6188,6 +6241,7 @@ void build_exe(char *filename)
     }
     fwrite(shdr, 1, shnum * sizeof(Elf32_Shdr), f);
     fclose(f);
+    return 0;
 }
 
 /* print the position in the source file of PC value 'pc' by reading
@@ -6337,10 +6391,12 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 #endif
 
 /* launch the compiled program with the given arguments */
-int launch_exe(int argc, char **argv)
+int tcc_run(TCCState *s1, int argc, char **argv)
 {
     Sym *s;
     int (*t)();
+
+    resolve_extern_syms();
 
     s = sym_find1(&extern_stack, TOK_MAIN);
     if (!s || (s->r & VT_FORWARD))
@@ -6382,10 +6438,71 @@ int launch_exe(int argc, char **argv)
     return (*t)(argc, argv);
 }
 
+TCCState *tcc_new(void)
+{
+    char *p, *r;
+    TCCState *s;
+
+    s = malloc(sizeof(TCCState));
+    if (!s)
+        return NULL;
+
+    /* default include paths */
+    nb_include_paths = 0;
+    tcc_add_include_path(s, "/usr/include");
+    tcc_add_include_path(s, "/usr/lib/tcc");
+    tcc_add_include_path(s, "/usr/local/lib/tcc");
+
+    /* add all tokens */
+    tok_ident = TOK_IDENT;
+    p = tcc_keywords;
+    while (*p) {
+        r = p;
+        while (*r++);
+        tok_alloc(p, r - p - 1);
+        p = r;
+    }
+
+    /* standard defines */
+    tcc_define_symbol(s, "__STDC__", NULL);
+#ifdef __i386__
+    tcc_define_symbol(s, "__i386__", NULL);
+#endif
+    /* tiny C specific defines */
+    tcc_define_symbol(s, "__TINYC__", NULL);
+    
+    /* create standard sections */
+    text_section = new_section(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    /* XXX: should change type to SHT_NOBITS */
+    bss_section = new_section(".bss", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+
+    return s;
+}
+
+void tcc_delete(TCCState *s)
+{
+    free(s);
+}
+
+int tcc_add_include_path(TCCState *s, const char *pathname)
+{
+    char *pathname1;
+
+    if (nb_include_paths >= INCLUDE_PATHS_MAX)
+        return -1;
+    pathname1 = strdup(pathname);
+    if (!pathname1)
+        return -1;
+    include_paths[nb_include_paths++] = pathname1;
+    return 0;
+}
+
+#if !defined(LIBTCC)
 
 void help(void)
 {
-    printf("tcc version 0.9.6 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.7 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]\n"
            "           [-i infile] infile [infile_args...]\n"
            "\n"
@@ -6403,37 +6520,11 @@ void help(void)
 
 int main(int argc, char **argv)
 {
-    char *p, *r, *outfile;
+    char *r, *outfile;
     int optind;
-
-    include_paths[0] = "/usr/include";
-    include_paths[1] = "/usr/lib/tcc";
-    include_paths[2] = "/usr/local/lib/tcc";
-    nb_include_paths = 3;
-
-    /* add all tokens */
-    tok_ident = TOK_IDENT;
-    p = tcc_keywords;
-    while (*p) {
-        r = p;
-        while (*r++);
-        tok_alloc(p, r - p - 1);
-        p = r;
-    }
-
-    /* standard defines */
-    define_symbol("__STDC__");
-#ifdef __i386__
-    define_symbol("__i386__");
-#endif
-    /* tiny C specific defines */
-    define_symbol("__TINYC__");
+    TCCState *s;
     
-    /* create standard sections */
-    text_section = new_section(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
-    data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-    /* XXX: should change type to SHT_NOBITS */
-    bss_section = new_section(".bss", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    s = tcc_new();
 
     optind = 1;
     outfile = NULL;
@@ -6448,19 +6539,27 @@ int main(int argc, char **argv)
             break;
         optind++;
         if (r[1] == 'I') {
-            if (nb_include_paths >= INCLUDE_PATHS_MAX)
+            if (tcc_add_include_path(s, r + 2) < 0)
                 error("too many include paths");
-            include_paths[nb_include_paths++] = r + 2;
         } else if (r[1] == 'D') {
-            define_symbol(r + 2);
+            char *sym, *value;
+            sym = r + 2;
+            value = strchr(sym, '=');
+            if (value) {
+                *value = '\0';
+                value++;
+            }
+            tcc_define_symbol(s, sym, value);
         } else if (r[1] == 'U') {
-            undef_symbol(r + 2);
+            tcc_undefine_symbol(s, r + 2);
         } else if (r[1] == 'l') {
-            open_dll(r + 2);
+            char buf[1024];
+            snprintf(buf, sizeof(buf), "lib%s.so", r + 2);
+            tcc_add_dll(s, buf);
         } else if (r[1] == 'i') {
             if (optind >= argc)
                 goto show_help;
-            tcc_compile_file(argv[optind++]);
+            tcc_compile_file(s, argv[optind++]);
         } else if (!strcmp(r + 1, "bench")) {
             do_bench = 1;
 #ifdef CONFIG_TCC_BCHECK
@@ -6468,7 +6567,7 @@ int main(int argc, char **argv)
             if (!do_bounds_check) {
                 do_bounds_check = 1;
                 /* define symbol */
-                define_symbol("__BOUNDS_CHECKING_ON");
+                tcc_define_symbol(s, "__BOUNDS_CHECKING_ON", NULL);
                 /* create bounds sections */
                 bounds_section = new_section(".bounds", 
                                              SHT_PROGBITS, SHF_ALLOC);
@@ -6512,19 +6611,19 @@ int main(int argc, char **argv)
         }
     }
     
-    tcc_compile_file(argv[optind]);
+    tcc_compile_file(s, argv[optind]);
 
     if (do_bench) {
         printf("total: %d idents, %d lines, %d bytes\n", 
                tok_ident - TOK_IDENT, total_lines, total_bytes);
     }
 
-    resolve_extern_syms();
-
     if (outfile) {
-        build_exe(outfile);
+        tcc_output_file(s, outfile, TCC_FILE_EXE);
         return 0;
     } else {
-        return launch_exe(argc - optind, argv + optind);
+        return tcc_run(s, argc - optind, argv + optind);
     }
 }
+
+#endif
