@@ -56,17 +56,29 @@ void __bound_init(void);
 void __bound_new_region(void *p, unsigned long size);
 void __bound_delete_region(void *p);
 
+/* currently, tcc cannot compile that because we use GNUC extensions */
+#if !defined(__TINYC__)
 void *__bound_ptr_add(void *p, int offset) __attribute__((regparm(2)));
 char __bound_ptr_indir_b(void *p, int offset) __attribute__((regparm(2)));
 unsigned char __bound_ptr_indir_ub(void *p, int offset) __attribute__((regparm(2)));
 short __bound_ptr_indir_w(void *p, int offset) __attribute__((regparm(2)));
 unsigned short __bound_ptr_indir_uw(void *p, int offset) __attribute__((regparm(2)));
 int __bound_ptr_indir_i(void *p, int offset) __attribute((regparm(2)));
+#endif
 
-void *__bound_calloc(size_t nmemb, size_t size);
-void *__bound_malloc(size_t size);
-void __bound_free(void *ptr);
-void *__bound_realloc(void *ptr, size_t size);
+void *__bound_malloc(size_t size, const void *caller);
+void *__bound_memalign(size_t size, size_t align, const void *caller);
+void __bound_free(void *ptr, const void *caller);
+void *__bound_realloc(void *ptr, size_t size, const void *caller);
+static void *libc_malloc(size_t size);
+static void libc_free(void *ptr);
+static void install_malloc_hooks(void);
+static void restore_malloc_hooks(void);
+
+static void *saved_malloc_hook;
+static void *saved_free_hook;
+static void *saved_realloc_hook;
+static void *saved_memalign_hook;
 
 extern char _end;
 
@@ -122,12 +134,15 @@ static void bound_alloc_error(void)
     bound_error("not enough memory for bound checking code\n");
 }
 
+/* currently, tcc cannot compile that because we use GNUC extensions */
+#if !defined(__TINYC__)
+
 /* do: return (p + offset); */
 void *__bound_ptr_add(void *p, int offset)
 {
     unsigned long addr = (unsigned long)p;
     BoundEntry *e;
-#ifdef BOUND_DEBUG
+#if defined(BOUND_DEBUG)
     printf("add: 0x%x %d\n", (int)p, offset);
 #endif
 
@@ -168,6 +183,21 @@ type __bound_ptr_indir_ ## suffix (void *p, int offset)                 \
     return *(type *)(p + offset);                                       \
 }
 
+#else
+
+void *__bound_ptr_add(void *p, int offset)
+{
+    return p + offset;
+}
+
+#define BOUND_PTR_INDIR(suffix, type)                                   \
+type __bound_ptr_indir_ ## suffix (void *p, int offset)                 \
+{                                                                       \
+    return *(type *)(p + offset);                                       \
+}
+
+#endif
+
 BOUND_PTR_INDIR(b, char)
 BOUND_PTR_INDIR(ub, unsigned char)
 BOUND_PTR_INDIR(w, short)
@@ -179,7 +209,7 @@ static BoundEntry *__bound_new_page(void)
     BoundEntry *page;
     int i;
 
-    page = malloc(sizeof(BoundEntry) * BOUND_T2_SIZE);
+    page = libc_malloc(sizeof(BoundEntry) * BOUND_T2_SIZE);
     if (!page)
         bound_alloc_error();
     for(i=0;i<BOUND_T2_SIZE;i++) {
@@ -196,13 +226,13 @@ static BoundEntry *__bound_new_page(void)
 static BoundEntry *bound_new_entry(void)
 {
     BoundEntry *e;
-    e = malloc(sizeof(BoundEntry));
+    e = libc_malloc(sizeof(BoundEntry));
     return e;
 }
 
 static void bound_free_entry(BoundEntry *e)
 {
-    free(e);
+    libc_free(e);
 }
 
 static inline BoundEntry *get_page(int index)
@@ -233,7 +263,9 @@ static void mark_invalid(unsigned long addr, unsigned long size)
     else
         t2_end = 1 << (BOUND_T1_BITS + BOUND_T2_BITS);
 
+#if 0
     printf("mark_invalid: start = %x %x\n", t2_start, t2_end);
+#endif
     
     /* first we handle full pages */
     t1_start = (t2_start + BOUND_T2_SIZE - 1) >> BOUND_T2_BITS;
@@ -275,8 +307,11 @@ void __bound_init(void)
     BoundEntry *page;
     unsigned long start, size;
 
+    /* save malloc hooks and install bound check hooks */
+    install_malloc_hooks();
+
 #ifndef BOUND_STATIC
-    __bound_t1 = malloc(BOUND_T1_SIZE * sizeof(BoundEntry *));
+    __bound_t1 = libc_malloc(BOUND_T1_SIZE * sizeof(BoundEntry *));
     if (!__bound_t1)
         bound_alloc_error();
 #endif
@@ -300,10 +335,12 @@ void __bound_init(void)
     size = BOUND_T23_SIZE;
     mark_invalid(start, size);
 
+#if !defined(__TINYC__)
     /* malloc zone is also marked invalid */
     start = (unsigned long)&_end;
     size = 128 * 0x100000;
     mark_invalid(start, size);
+#endif
 }
 
 static inline void add_region(BoundEntry *e, 
@@ -453,7 +490,7 @@ void __bound_delete_region(void *p)
         e = __bound_find_region(e, p);
     /* test if invalid region */
     if (e->size == EMPTY_SIZE || (unsigned long)p != e->start) 
-        bound_error("deleting invalid region");
+        bound_error("freeing invalid region");
     /* compute the size we put in invalid regions */
     if (e->is_invalid)
         empty_size = INVALID_SIZE;
@@ -529,60 +566,107 @@ static unsigned long get_region_size(void *p)
 
 /* patched memory functions */
 
+static void install_malloc_hooks(void)
+{
+    saved_malloc_hook = __malloc_hook;
+    saved_free_hook = __free_hook;
+    saved_realloc_hook = __realloc_hook;
+    saved_memalign_hook = __memalign_hook;
+    __malloc_hook = __bound_malloc;
+    __free_hook = __bound_free;
+    __realloc_hook = __bound_realloc;
+    __memalign_hook = __bound_memalign;
+}
+
+static void restore_malloc_hooks(void)
+{
+    __malloc_hook = saved_malloc_hook;
+    __free_hook = saved_free_hook;
+    __realloc_hook = saved_realloc_hook;
+    __memalign_hook = saved_memalign_hook;
+}
+
+static void *libc_malloc(size_t size)
+{
+    void *ptr;
+    restore_malloc_hooks();
+    ptr = malloc(size);
+    install_malloc_hooks();
+    return ptr;
+}
+
+static void libc_free(void *ptr)
+{
+    restore_malloc_hooks();
+    free(ptr);
+    install_malloc_hooks();
+}
+
 /* XXX: we should use a malloc which ensure that it is unlikely that
    two malloc'ed data have the same address if 'free' are made in
    between. */
-void *__bound_malloc(size_t size)
+void *__bound_malloc(size_t size, const void *caller)
 {
     void *ptr;
+    
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
-    ptr = malloc(size + 1);
+    ptr = libc_malloc(size + 1);
+    
     if (!ptr)
         return NULL;
     __bound_new_region(ptr, size);
     return ptr;
 }
 
-void __bound_free(void *ptr)
+void *__bound_memalign(size_t size, size_t align, const void *caller)
+{
+    void *ptr;
+
+    restore_malloc_hooks();
+
+    /* we allocate one more byte to ensure the regions will be
+       separated by at least one byte. With the glibc malloc, it may
+       be in fact not necessary */
+    ptr = memalign(size + 1, align);
+    
+    install_malloc_hooks();
+    
+    if (!ptr)
+        return NULL;
+    __bound_new_region(ptr, size);
+    return ptr;
+}
+
+void __bound_free(void *ptr, const void *caller)
 {
     if (ptr == NULL)
         return;
     __bound_delete_region(ptr);
-    free(ptr);
+
+    libc_free(ptr);
 }
 
-void *__bound_realloc(void *ptr, size_t size)
+void *__bound_realloc(void *ptr, size_t size, const void *caller)
 {
     void *ptr1;
     int old_size;
 
     if (size == 0) {
-        __bound_free(ptr);
+        __bound_free(ptr, caller);
         return NULL;
     } else {
-        ptr1 = __bound_malloc(size);
+        ptr1 = __bound_malloc(size, caller);
         if (ptr == NULL || ptr1 == NULL)
             return ptr1;
         old_size = get_region_size(ptr);
         if (old_size == EMPTY_SIZE)
             bound_error("realloc'ing invalid pointer");
         memcpy(ptr1, ptr, old_size);
-        __bound_free(ptr);
+        __bound_free(ptr, caller);
         return ptr1;
     }
-}
-
-void *__bound_calloc(size_t nmemb, size_t size)
-{
-    void *ptr;
-    size = size * nmemb;
-    ptr = __bound_malloc(size);
-    if (!ptr)
-        return NULL;
-    memset(ptr, 0, size);
-    return ptr;
 }
 
 #if 0
@@ -611,3 +695,29 @@ static void bound_dump(void)
     }
 }
 #endif
+
+#if 0
+/* resolve check check syms */
+typedef struct BCSyms {
+    char *str;
+    void *ptr;
+} BCSyms;
+
+static BCSyms bcheck_syms[] = {
+    { NULL, NULL },
+};
+#endif
+
+static void *bound_resolve_sym(const char *sym)
+{
+#if 0
+    BCSyms *p;
+    p = bcheck_syms;
+    while (p->str != NULL) {
+        if (!strcmp(p->str, sym))
+            return p->ptr;
+        p++;
+    }
+#endif
+    return NULL;
+}
