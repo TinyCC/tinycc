@@ -104,24 +104,6 @@ void gen_le32(int c)
     g(c >> 24);
 }
 
-void greloc_patch(unsigned char *ptr, 
-                  unsigned long addr, unsigned long val, int type)
-{
-    switch(type) {
-    case R_386_32:
-        *(int *)ptr += val;
-        break;
-    case R_386_PC32:
-        *(int *)ptr += val - addr;
-        break;
-    case R_386_GOTPC:
-        *(int *)ptr += val - addr; /* XXX: use GOT address directly
-                                      instead of relying on
-                                      _GLOBAL_OFFSET_TABLE symbol ? */
-        break;
-    }
-}
-
 /* output a symbol and patch all calls to it */
 void gsym_addr(int t, int a)
 {
