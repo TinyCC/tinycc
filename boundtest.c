@@ -159,6 +159,16 @@ int test12(void)
     return 0;
 }
 
+/* error */
+int test13(void)
+{
+    char pad1 = 0;
+    char tab[10];
+    char pad2 = 0;
+    memset(tab, 'a', sizeof(tab));
+    return strlen(tab);
+}
+
 int (*table_test[])(void) = {
     test1,
     test1,
@@ -173,6 +183,7 @@ int (*table_test[])(void) = {
     test10,
     test11,
     test12,
+    test13,
 };
 
 int main(int argc, char **argv)
