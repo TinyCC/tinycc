@@ -658,24 +658,20 @@ index (@code{REG_xxx} constants), but additionnal values and flags are
 defined:
 
 @example
-#define VT_CONST     0x00f0  /* constant in vc 
-                              (must be first non register value) */
-#define VT_LLOCAL    0x00f1  /* lvalue, offset on stack */
-#define VT_LOCAL     0x00f2  /* offset on stack */
-#define VT_CMP       0x00f3  /* the value is stored in processor flags (in vc) */
-#define VT_JMP       0x00f4  /* value is the consequence of jmp true (even) */
-#define VT_JMPI      0x00f5  /* value is the consequence of jmp false (odd) */
-#define VT_LVAL      0x0100  /* var is an lvalue */
-#define VT_FORWARD   0x0200  /* value is forward reference */
-#define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
-                                char/short stored in integer registers) */
-#define VT_MUSTBOUND 0x0800  /* bound checking must be done before
-                                dereferencing value */
-#define VT_BOUNDED   0x8000  /* value is bounded. The address of the
-                                bounding function call point is in vc */
-#define VT_LVAL_BYTE     0x1000  /* lvalue is a byte */
-#define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
-#define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
+#define VT_CONST     0x00f0
+#define VT_LLOCAL    0x00f1
+#define VT_LOCAL     0x00f2
+#define VT_CMP       0x00f3
+#define VT_JMP       0x00f4
+#define VT_JMPI      0x00f5
+#define VT_LVAL      0x0100
+#define VT_SYM       0x0200
+#define VT_MUSTCAST  0x0400
+#define VT_MUSTBOUND 0x0800
+#define VT_BOUNDED   0x8000
+#define VT_LVAL_BYTE     0x1000
+#define VT_LVAL_SHORT    0x2000
+#define VT_LVAL_UNSIGNED 0x4000
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
 @end example
 
@@ -692,7 +688,10 @@ stack.
 @item VT_CMP
 indicates that the value is actually stored in the CPU flags (i.e. the
 value is the consequence of a test). The value is either 0 or 1. The
-actual CPU flags used is indicated in @code{SValue.c.i}.
+actual CPU flags used is indicated in @code{SValue.c.i}. 
+
+If any code is generated which destroys the CPU flags, this value MUST be
+put in a normal register.
 
 @item VT_JMP
 @itemx VT_JMPI
@@ -701,6 +700,10 @@ indicates that the value is the consequence of a jmp. For VT_JMP, it is
 
 These values are used to compile the @code{||} and @code{&&} logical
 operators.
+
+If any code is generated, this value MUST be put in a normal
+register. Otherwise, the generated code won't be executed if the jump is
+taken.
 
 @item VT_LVAL
 is a flag indicating that the value is actually an lvalue (left value of
@@ -724,8 +727,8 @@ ASAP because its semantics are rather complicated.
 indicates that a cast to the value type must be performed if the value
 is used (lazy casting).
 
-@item VT_FORWARD
-indicates that the value is a forward reference to a variable or a function.
+@item VT_SYM
+indicates that the symbol @code{SValue.sym} must be added to the constant.
 
 @item VT_MUSTBOUND
 @itemx VT_BOUNDED

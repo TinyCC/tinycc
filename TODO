@@ -1,11 +1,12 @@
 TODO list:
 
+- To fix: 'sizeof' generates code if too complex expression is given.
+- add gcc extension typeof()
+- add gcc extension __alignof__()
 - fix constant error msg
-- add alloca()
-- add typeof()
-- add checks for multiple including of same file (= compile even faster)
 - add 'CType' structure to optimize type handling (= compile even faster)
 - suppress unneeded hash table for Symbols (= compile even faster)
+- add alloca()
 - ignore at least asm extension
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
@@ -13,7 +14,6 @@ TODO list:
   only for local arrays).
 - To check: bound checking and float/long long/struct copy code. bound
   checking and symbol + offset optimization
-- To fix: 'sizeof' generate code if too complex expression is given.
 - free all allocated data and use longjmp for errors (useful for libtcc use)
 
 Not critical:

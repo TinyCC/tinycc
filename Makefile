@@ -12,7 +12,7 @@ CFLAGS+=-m386 -malign-functions=0
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.11
+VERSION=0.9.12
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
