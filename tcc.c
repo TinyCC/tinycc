@@ -2977,8 +2977,9 @@ void gen_opl(int op)
     }
 }
 
-/* handle constant optimizations and various machine independant opt */
-void gen_opc(int op)
+/* handle integer constant optimizations and various machine
+   independant opt */
+void gen_opic(int op)
 {
     int fc, c1, c2, n;
     SValue *v1, *v2;
@@ -3080,6 +3081,67 @@ void gen_opc(int op)
     }
 }
 
+/* generate a floating point operation with constant propagation */
+void gen_opif(int op)
+{
+    int c1, c2;
+    SValue *v1, *v2;
+    long double f1, f2;
+
+    v1 = vtop - 1;
+    v2 = vtop;
+    /* currently, we cannot do computations with forward symbols */
+    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
+    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
+    if (c1 && c2) {
+        if (v1->t == VT_FLOAT) {
+            f1 = v1->c.f;
+            f2 = v2->c.f;
+        } else if (v1->t == VT_DOUBLE) {
+            f1 = v1->c.d;
+            f2 = v2->c.d;
+        } else {
+            f1 = v1->c.ld;
+            f2 = v2->c.ld;
+        }
+
+        /* NOTE: we only do constant propagation if finite number (not
+           NaN or infinity) (ANSI spec) */
+        if (!finite(f1) || !finite(f2))
+            goto general_case;
+
+        switch(op) {
+        case '+': f1 += f2; break;
+        case '-': f1 -= f2; break;
+        case '*': f1 *= f2; break;
+        case '/': 
+            if (f2 == 0.0) {
+                if (const_wanted)
+                    error("division by zero in constant");
+                goto general_case;
+            }
+            f1 /= f2; 
+            break;
+            /* XXX: also handles tests ? */
+        default:
+            goto general_case;
+        }
+        /* XXX: overflow test ? */
+        if (v1->t == VT_FLOAT) {
+            v1->c.f = f1;
+        } else if (v1->t == VT_DOUBLE) {
+            v1->c.d = f1;
+        } else {
+            v1->c.ld = f1;
+        }
+        vtop--;
+    } else {
+    general_case:
+        gen_opf(op);
+    }
+}
+
+
 int pointed_size(int t)
 {
     return type_size(pointed_type(t), &t);
@@ -3127,7 +3189,7 @@ void gen_op(int op)
             //            check_pointer_types(vtop - 1, vtop);
             /* XXX: check that types are compatible */
             u = pointed_size(t1);
-            gen_opc(op);
+            gen_opic(op);
             /* set to integer type */
             vtop->t = VT_INT; 
             vpushi(u);
@@ -3160,9 +3222,9 @@ void gen_op(int op)
             } else 
 #endif
             {
-                gen_opc(op);
+                gen_opic(op);
             }
-            /* put again type if gen_opc() swaped operands */
+            /* put again type if gen_opic() swaped operands */
             vtop->t = t1;
         }
     } else if (is_float(bt1) || is_float(bt2)) {
@@ -3223,11 +3285,11 @@ void gen_op(int op)
         else
             gen_cast(t);
         if (is_float(t))
-            gen_opf(op);
+            gen_opif(op);
         else if ((t & VT_BTYPE) == VT_LLONG)
             gen_opl(op);
         else
-            gen_opc(op);
+            gen_opic(op);
         if (op >= TOK_ULT && op <= TOK_GT) {
             /* relationnal op: the result is an int */
             vtop->t = VT_INT;
@@ -6314,7 +6376,7 @@ int launch_exe(int argc, char **argv)
 
 void help(void)
 {
-    printf("tcc version 0.9.5 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.6 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]\n"
            "           [-i infile] infile [infile_args...]\n"
            "\n"
