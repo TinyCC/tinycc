@@ -15,7 +15,6 @@ else
 CFLAGS+=-march=i386 -falign-functions=0
 endif
 
-
 DISAS=objdump -d
 INSTALL=install
 
@@ -38,19 +37,19 @@ test.ref: tcctest.ref
 	./tcctest.ref > $@
 
 test.out: tcc tcctest.c
-	$(TCC) tcctest.c > $@
+	$(TCC) -run tcctest.c > $@
 
 run: tcc tcctest.c
-	$(TCC) tcctest.c
+	$(TCC) -run tcctest.c
 
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: tcc tcc.c tcctest.c test.ref
-	$(TCC) tcc.c -B. -I. tcctest.c > test.out2
+	$(TCC) -run tcc.c -B. -I. -run tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: tcc tcc.c tcctest.c test.ref
-	$(TCC) tcc.c -B. -I. tcc.c -B. -I. tcctest.c > test.out3
+	$(TCC) -run tcc.c -B. -I. -run tcc.c -B. -I. -run tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # binary output test
@@ -79,14 +78,14 @@ BOUNDS_FAIL= 2 5 7 9 11 12 13
 
 btest: boundtest.c tcc
 	@for i in $(BOUNDS_OK); do \
-           if $(TCC) -b boundtest.c $$i ; then \
+           if $(TCC) -b -run boundtest.c $$i ; then \
                /bin/true ; \
            else\
 	       echo Failed positive test $$i ; exit 1 ; \
            fi ;\
         done ;\
         for i in $(BOUNDS_FAIL); do \
-           if $(TCC) -b boundtest.c $$i ; then \
+           if $(TCC) -b -run boundtest.c $$i ; then \
 	       echo Failed negative test $$i ; exit 1 ;\
            else\
                /bin/true ; \
@@ -140,7 +139,7 @@ clean:
            tcctest[1234] test[1234].out
 
 distclean: clean
-	rm -f config.h config.mak
+	rm -f config.h config.mak config.texi
 
 # win32 TCC
 tcc_g.exe: tcc.c i386-gen.c bcheck.c Makefile
