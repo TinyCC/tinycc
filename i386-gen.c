@@ -207,16 +207,17 @@ void load(int r, SValue *sv)
         } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             o(0xdb); /* fldt */
             r = 5;
-        } else if ((ft & VT_TYPE) == VT_BYTE)
+        } else if ((ft & VT_TYPE) == VT_BYTE) {
             o(0xbe0f);   /* movsbl */
-        else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED))
+        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
             o(0xb60f);   /* movzbl */
-        else if ((ft & VT_TYPE) == VT_SHORT)
+        } else if ((ft & VT_TYPE) == VT_SHORT) {
             o(0xbf0f);   /* movswl */
-        else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED))
+        } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
             o(0xb70f);   /* movzwl */
-        else
+        } else {
             o(0x8b);     /* movl */
+        }
         gen_modrm(r, fr, fc);
     } else {
         if (v == VT_CONST) {
@@ -303,7 +304,7 @@ void gfunc_param(GFuncContext *c)
         r = get_reg(RC_INT);
         o(0x89); /* mov %esp, r */
         o(0xe0 + r);
-        vset(VT_INT, r, 0);
+        vset(vtop->t, r | VT_LVAL, 0);
         vswap();
         vstore();
         c->args_size += size;
@@ -655,11 +656,22 @@ void gen_opf(int op)
         gv(RC_FLOAT);
         vswap();
     }
+    swapped = 0;
+    /* swap the stack if needed so that t1 is the register and t2 is
+       the memory reference */
+    if (vtop[-1].r & VT_LVAL) {
+        vswap();
+        swapped = 1;
+    }
     if (op >= TOK_ULT && op <= TOK_GT) {
         /* load on stack second operand */
         load(REG_ST0, vtop);
         save_reg(REG_EAX); /* eax is used by FP comparison code */
         if (op == TOK_GE || op == TOK_GT)
+            swapped = !swapped;
+        else if (op == TOK_EQ || op == TOK_NE)
+            swapped = 0;
+        if (swapped)
             o(0xc9d9); /* fxch %st(1) */
         o(0xe9da); /* fucompp */
         o(0xe0df); /* fnstsw %ax */
@@ -681,13 +693,6 @@ void gen_opf(int op)
         vtop->r = VT_CMP;
         vtop->c.i = op;
     } else {
-        swapped = 0;
-        /* swap the stack if needed so that t1 is the register and t2 is
-           the memory reference */
-        if (vtop[-1].r & VT_LVAL) {
-            vswap();
-            swapped = 1;
-        }
         /* no memory reference possible for long double operations */
         if ((vtop->t & VT_BTYPE) == VT_LDOUBLE) {
             load(REG_ST0, vtop);
@@ -821,45 +826,57 @@ void gen_cvt_ftof(int t)
 
 /* bound check support functions */
 #ifdef CONFIG_TCC_BCHECK
-/* generate first part of bounded pointer addition */
-void gen_bounded_ptr_add1(void)
+
+/* generate a bounded pointer addition */
+void gen_bounded_ptr_add(void)
 {
+    int addr;
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     /* save all temporary registers */
-    vtop--;
-    vtop->r = VT_CONST;
-    save_regs(0); 
+    vtop -= 2;
+    save_regs(0);
+    /* do a fast function call */
+    addr = ind;
+    oad(0xe8, (int)__bound_ptr_add - ind - 5);
+    /* returned pointer is in eax */
+    vtop++;
+    vtop->r = REG_EAX | VT_BOUNDED;
+    vtop->c.ul = addr; /* address of bounding function call point */
 }
 
-/* if deref is true, then also test dereferencing */
-void gen_bounded_ptr_add2(int deref)
+/* patch pointer addition in vtop so that pointer dereferencing is
+   also tested */
+void gen_bounded_ptr_deref(void)
 {
     void *func;
-    int size, align;
+    int size, align, addr;
 
-    if (deref) {
+    size = 0;
+    /* XXX: put that code in generic part of tcc */
+    if (!is_float(vtop->t)) {
+        if (vtop->r & VT_LVAL_BYTE)
+            size = 1;
+        else if (vtop->r & VT_LVAL_SHORT)
+            size = 2;
+    }
+    if (!size)
         size = type_size(vtop->t, &align);
-        switch(size) {
-        case  1: func = __bound_ptr_indir1; break;
-        case  2: func = __bound_ptr_indir2; break;
-        case  4: func = __bound_ptr_indir4; break;
-        case  8: func = __bound_ptr_indir8; break;
-        case 12: func = __bound_ptr_indir12; break;
-        case 16: func = __bound_ptr_indir16; break;
-        default:
-            error("unhandled size when derefencing bounded pointer");
-            func = NULL;
-            break;
-        }
-    } else {
-        func = __bound_ptr_add;
+    switch(size) {
+    case  1: func = __bound_ptr_indir1; break;
+    case  2: func = __bound_ptr_indir2; break;
+    case  4: func = __bound_ptr_indir4; break;
+    case  8: func = __bound_ptr_indir8; break;
+    case 12: func = __bound_ptr_indir12; break;
+    case 16: func = __bound_ptr_indir16; break;
+    default:
+        error("unhandled size when derefencing bounded pointer");
+        func = NULL;
+        break;
     }
 
-    /* do a fast function call */
-    oad(0xe8, (int)func - ind - 5);
-    /* return pointer is there */
-    vtop->r = REG_EAX;
+    addr = vtop->c.ul;
+    *(int *)(addr + 1) = (int)func - addr - 5;
 }
 #endif
 
