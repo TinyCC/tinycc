@@ -4,6 +4,8 @@
  * only for your convenience so that you do not need to put the whole
  * glibc include files on your floppy disk 
  */
+#ifndef _TCCLIB_H
+#define _TCCLIB_H
 
 #include <stddef.h>
 #include <stdarg.h>
@@ -42,13 +44,13 @@ int fprintf(FILE *stream, const char *format, ...);
 int sprintf(char *str, const char *format, ...);
 int snprintf(char *str, size_t size, const  char  *format, ...);
 int asprintf(char **strp, const char *format, ...);
-int dprintf(int d, const char *format, ...);
+int dprintf(int fd, const char *format, ...);
 int vprintf(const char *format, va_list ap);
 int vfprintf(FILE  *stream,  const  char *format, va_list ap);
 int vsprintf(char *str, const char *format, va_list ap);
 int vsnprintf(char *str, size_t size, const char  *format, va_list ap);
 int vasprintf(char  **strp,  const  char *format, va_list ap);
-int vdprintf(int d, const char *format, va_list ap);
+int vdprintf(int fd, const char *format, va_list ap);
 
 void perror(const char *s);
 
@@ -58,6 +60,7 @@ char *strchr(const char *s, int c);
 char *strrchr(const char *s, int c);
 char *strcpy(char *dest, const char *src);
 void *memcpy(void *dest, const void *src, size_t n);
+void *memmove(void *dest, const void *src, size_t n);
 void *memset(void *s, int c, size_t n);
 char *strdup(const char *s);
 
@@ -70,3 +73,5 @@ void *dlopen(const char *filename, int flag);
 const char *dlerror(void);
 void *dlsym(void *handle, char *symbol);
 int dlclose(void *handle);
+
+#endif /* _TCCLIB_H */
