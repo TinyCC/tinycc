@@ -17,6 +17,11 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <malloc.h>
 
 //#define BOUND_DEBUG
 
@@ -91,6 +96,11 @@ static void *saved_memalign_hook;
 #endif
 
 extern char _end;
+
+/* TCC defines: */
+extern char __bounds_start; /* start of static bounds table */
+/* runtime error output */
+extern void rt_error(unsigned long pc, const char *fmt, ...);
 
 #ifdef BOUND_STATIC
 static BoundEntry *__bound_t1[BOUND_T1_SIZE]; /* page table */
@@ -381,6 +391,7 @@ void __bound_init(void)
     int i;
     BoundEntry *page;
     unsigned long start, size;
+    int *p;
 
     /* save malloc hooks and install bound check hooks */
     install_malloc_hooks();
@@ -418,6 +429,13 @@ void __bound_init(void)
     size = 128 * 0x100000;
     mark_invalid(start, size);
 #endif
+
+    /* add all static bound check values */
+    p = (int *)&__bounds_start;
+    while (p[0] != 0) {
+        __bound_new_region((void *)p[0], p[1]);
+        p += 2;
+    }
 }
 
 static inline void add_region(BoundEntry *e, 
@@ -853,36 +871,3 @@ char *__bound_strcpy(char *dst, const char *src)
     return __bound_memcpy(dst, src, len + 1);
 }
 
-/* resolve bound check syms */
-typedef struct BCSyms {
-    char *str;
-    void *ptr;
-} BCSyms;
-
-static BCSyms bcheck_syms[] = {
-#ifndef CONFIG_TCC_MALLOC_HOOKS
-    { "malloc", __bound_malloc },
-    { "free", __bound_free },
-    { "realloc", __bound_realloc },
-    { "memalign", __bound_memalign },
-    { "calloc", __bound_calloc },
-#endif
-    { "memcpy", __bound_memcpy },
-    { "memmove", __bound_memmove },
-    { "memset", __bound_memset },
-    { "strlen", __bound_strlen },
-    { "strcpy", __bound_strcpy },
-    { NULL, NULL },
-};
-
-static void *bound_resolve_sym(const char *sym)
-{
-    BCSyms *p;
-    p = bcheck_syms;
-    while (p->str != NULL) {
-        if (!strcmp(p->str, sym))
-            return p->ptr;
-        p++;
-    }
-    return NULL;
-}
