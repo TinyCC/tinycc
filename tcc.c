@@ -9323,6 +9323,22 @@ int tcc_set_output_type(TCCState *s, int output_type)
 
 #if !defined(LIBTCC)
 
+/* extract the basename of a file */
+static const char *tcc_basename(const char *name)
+{
+    const char *p;
+    p = strrchr(name, '/');
+#ifdef WIN32
+    if (!p)
+        p = strrchr(name, '\\');
+#endif    
+    if (!p)
+        p = name;
+    else 
+        p++;
+    return p;
+}
+
 static int64_t getclock_us(void)
 {
 #ifdef WIN32
@@ -9625,8 +9641,10 @@ int main(int argc, char **argv)
     if (output_type != TCC_OUTPUT_MEMORY && !outfile) {
         if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
             char *ext;
+            /* strip path */
+            pstrcpy(objfilename, sizeof(objfilename) - 1, 
+                    tcc_basename(files[0]));
             /* add .o extension */
-            pstrcpy(objfilename, sizeof(objfilename) - 1, files[0]);
             ext = strrchr(objfilename, '.');
             if (!ext)
                 goto default_outfile;
