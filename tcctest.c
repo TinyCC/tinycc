@@ -1084,7 +1084,7 @@ FTEST(f, float, "%f")
 FTEST(d, double, "%f")
 FTEST(ld, long double, "%Lf")
 
-double ftab1[3] = { 1.2, 3.4, 5.6 };
+double ftab1[3] = { 1.2, 3.4, -5.6 };
 
 
 void float_test(void)
