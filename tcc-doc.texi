@@ -1,0 +1,172 @@
+<!doctype html public "-//w3c//dtd html 4.0 transitional//en">
+<html>
+<head>
+   <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <title> Tiny C Compiler Reference Documentation </title>
+</head>
+<body>
+
+<center>
+<h1>
+Tiny C Compiler Reference Documentation
+</h1>
+</center>
+
+<h2>Introduction</h2>
+
+TinyCC (aka TCC) is a small but very fast C compiler. Unlike other C
+compilers, it is meant to be self-suffisant: you do not need an
+external assembler or linker because TCC does that for you.
+<P>
+
+TCC compiles so fast that even for big projects <tt>Makefile</tt>s may
+not be necessary. 
+<P>
+TCC can also be used to make <I>C scripts</I>,
+i.e. pieces of C source that you run as a Perl or Python
+script. Compilation is so fast that your script will be as fast as if
+it was an executable.
+
+<h2>Exact differences with ANSI C</h2>
+
+TCC implements almost all the ANSI C standard, except floating point
+and long long numbers.
+
+<ul>
+ <li> The preprocessor tokens are the same as C. It means that in some
+  rare cases, preprocessed numbers are not handled exactly as in ANSI
+  C. This approach has the advantage of being simpler and FAST!
+
+ <li> Floating point numbers are not fully supported yet (some
+ implicit casts are missing).
+
+ <li> Some typing errors are not signaled.
+</ul>
+
+<h2>ISOC99 extensions</h2>
+
+TCC implements many features of the new C standard: ISO C99. Currently
+missing items are: complex and imaginary numbers (will come with ANSI
+C floating point numbers), <tt>long long</tt>s and variable length
+arrays.
+
+Currently implemented ISOC99 features:
+
+<ul>
+
+<li> <tt>'inline'</tt> keyword is ignored.
+
+<li> <tt>'restrict'</tt> keyword is ignored.
+
+<li> <tt>'__func__'</tt> is a string variable containing the current
+function name.
+
+<li> Variadic macros: <tt>__VA_ARGS__</tt> can be used for
+   function-like macros:
+<PRE>
+    #define dprintf(level, __VA_ARGS__) printf(__VA_ARGS__)
+</PRE>
+<tt>dprintf</tt> can then be used with a variable number of parameters.
+
+<li> Declarations can appear anywhere in a block as in C++.
+
+<li> Array and struct/union elements can be initialized in any order by
+  using designators:
+<PRE>
+    struct { int x, y; } st[10] = { [0].x = 1, [0].y = 2 };
+
+    int tab[10] = { 1, 2, [5] = 5, [9] = 9};
+</PRE>
+    
+<li> Compound initializers are supported:
+<PRE>
+    int *p = (int []){ 1, 2, 3 };
+</PRE>
+to initialize a pointer pointing to an initialized array. The same
+works for structures and strings.
+
+<li> The boolean type <tt>'_Bool'</tt> is supported.
+
+<li> <tt>'long long'</tt> types not supported yet, except in type
+ definition or <tt>'sizeof'</tt>.
+
+<li> Hexadecimal floating point constants are supported:
+<PRE>
+          double d = 0x1234p10;
+</PRE>
+is the same as writing 
+<PRE>
+          double d = 4771840.0;
+</PRE>
+</ul>
+
+<h2>GNU C extensions</h2>
+
+TCC implements some GNU C extensions which are found in many C sources:
+
+<ul>
+
+<li> array designators can be used without '=': 
+<PRE>
+    int a[10] = { [0] 1, [5] 2, 3, 4 };
+</PRE>
+
+<li> Structure field designators can be a label: 
+<PRE>
+    struct { int x, y; } st = { x: 1, y: 1};
+</PRE>
+instead of
+<PRE>
+    struct { int x, y; } st = { .x = 1, .y = 1};
+</PRE>
+
+<li> <tt>'\e'</tt> is ASCII character 27.
+
+</ul>
+
+<h2>TinyCC extensions</h2>
+
+I have added some extensions I find interesting:
+
+<ul>
+
+<li> <tt>__TINYC__</tt> is a predefined macro to <tt>'1'</tt> to
+indicate that you use TCC.
+
+<li> <tt>'#!'</tt> at the start of a line is ignored to allow scripting.
+
+<li> Binary digits can be entered (<tt>'0b101'</tt> instead of
+<tt>'5'</tt>).
+
+</ul>
+
+<h2> Command line invokation </h2>
+
+<PRE>
+usage: tcc [-Idir] [-Dsym] [-llib] [-i infile] infile [infile_args...]
+</PRE>
+
+<table>
+<tr><td>'-Idir'</td> 
+<td>specify an additionnal include path. The default ones are:
+/usr/include, /usr/lib/tcc, /usr/local/lib/tcc.</td>
+
+<tr><td>'-Dsym'</td>
+<td>define preprocessor symbol 'sym' to 1.</td>
+
+<tr><td>'-lxxx'</td>
+<td>dynamically link your program with library
+libxxx.so. Standard library paths are checked, including those
+specificed with LD_LIBRARY_PATH.</td>
+
+<tr><td>'-i file'</td>
+<td>compile C source 'file' before main C source. With this
+command, multiple C files can be compiled and linked together.</td>
+</table>
+
+<hr>
+Copyright (c) 2001 Fabrice Bellard <hr>
+Fabrice Bellard - <em> fabrice.bellard at free.fr </em> - <A HREF="http://fabrice.bellard.free.fr/"> http://fabrice.bellard.free.fr/ </A> - <A HREF="http://www.tinycc.org/"> http://www.tinycc.org/ </A>
+
+</body>
+</html>
