@@ -21,15 +21,18 @@
 /* number of available registers */
 #define NB_REGS             4
 
-/* a register can belong to several classes */
+/* a register can belong to several classes. The classes must be
+   sorted from more general to more precise (see gv2() code which does
+   assumptions on it). */
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 #define RC_EAX     0x0004
-#define RC_FRET    0x0008 /* function return: float register */
+#define RC_ST0     0x0008 
 #define RC_ECX     0x0010
 #define RC_EDX     0x0020
 #define RC_IRET    RC_EAX /* function return: integer register */
 #define RC_LRET    RC_EDX /* function return: second integer register */
+#define RC_FRET    RC_ST0 /* function return: float register */
 
 /* pretty names for the registers */
 enum {
@@ -40,10 +43,10 @@ enum {
 };
 
 int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_IRET,
+    /* eax */ RC_INT | RC_EAX,
     /* ecx */ RC_INT | RC_ECX,
     /* edx */ RC_INT | RC_EDX,
-    /* st0 */ RC_FLOAT | RC_FRET,
+    /* st0 */ RC_FLOAT | RC_ST0,
 };
 
 /* return registers for function */
@@ -73,6 +76,7 @@ typedef struct GFuncContext {
 /******************************************************/
 
 static int *func_sub_sp_ptr;
+static unsigned char *func_bound_ptr;
 
 void g(int c)
 {
@@ -389,14 +393,39 @@ void gfunc_prolog(int t)
     }
     o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
     func_sub_sp_ptr = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
+    /* leave some room for bound checking code */
+    if (do_bounds_check) {
+        oad(0xb8, 0); /* lbound section pointer */
+        oad(0xb8, 0); /* call to function */
+        func_bound_ptr = lbounds_section->data_ptr;
+    }
 }
 
 /* generate function epilog */
 void gfunc_epilog(void)
 {
+    if (do_bounds_check && func_bound_ptr != lbounds_section->data_ptr) {
+        int saved_ind;
+        int *bounds_ptr;
+        /* add end of table info */
+        bounds_ptr = (int *)lbounds_section->data_ptr;
+        *bounds_ptr++ = 0;
+        lbounds_section->data_ptr = (unsigned char *)bounds_ptr;
+        /* generate bound local allocation */
+        saved_ind = ind;
+        ind = (int)func_sub_sp_ptr + 4;
+        oad(0xb8, (int)func_bound_ptr); /* mov %eax, xxx */
+        oad(0xe8, (int)__bound_local_new - ind - 5);
+        ind = saved_ind;
+        /* generate bound check local freeing */
+        o(0x5250); /* save returned value, if any */
+        oad(0xb8, (int)func_bound_ptr); /* mov %eax, xxx */
+        oad(0xe8, (int)__bound_local_delete - ind - 5);
+        o(0x585a); /* restore returned value, if any */
+    }
     o(0xc3c9); /* leave, ret */
-    *func_sub_sp_ptr = (-loc + 3) & -4; /* align local size to word & 
-                                           save local variables */
+    /* align local size to word & save local variables */
+    *func_sub_sp_ptr = (-loc + 3) & -4; 
 }
 
 int gjmp(int t)
@@ -457,11 +486,11 @@ void gen_opi(int op)
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        vswap();
-        r = gv(RC_INT);
-        vswap();
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
             /* constant case */
+            vswap();
+            r = gv(RC_INT);
+            vswap();
             c = vtop->c.i;
             if (c == (char)c) {
                 /* XXX: generate inc and dec for smaller code ? */
@@ -473,7 +502,9 @@ void gen_opi(int op)
                 oad(0xc0 | (opc << 3) | r, c);
             }
         } else {
-            fr = gv(RC_INT);
+            gv2(RC_INT, RC_INT);
+            r = vtop[-1].r;
+            fr = vtop[0].r;
             o((opc << 3) | 0x01);
             o(0xc0 + r + fr * 8); 
         }
@@ -503,10 +534,9 @@ void gen_opi(int op)
         opc = 1;
         goto gen_op8;
     case '*':
-        vswap();
-        r = gv(RC_INT);
-        vswap();
-        fr = gv(RC_INT);
+        gv2(RC_INT, RC_INT);
+        r = vtop[-1].r;
+        fr = vtop[0].r;
         vtop--;
         o(0xaf0f); /* imul fr, r */
         o(0xc0 + fr + r * 8);
@@ -520,29 +550,24 @@ void gen_opi(int op)
     case TOK_SAR:
         opc = 7;
     gen_shift:
-        vswap();
-        r = gv(RC_INT);
-        vswap();
         opc = 0xc0 | (opc << 3);
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
             /* constant case */
+            vswap();
+            r = gv(RC_INT);
+            vswap();
             c = vtop->c.i & 0x1f;
             o(0xc1); /* shl/shr/sar $xxx, r */
             o(opc | r);
             g(c);
         } else {
             /* we generate the shift in ecx */
-            gv(RC_ECX);
-            /* the first op may have been spilled, so we reload it if
-               needed */
-            vswap();
-            r = gv(RC_INT);
-            vswap();
+            gv2(RC_INT, RC_ECX);
+            r = vtop[-1].r;
             o(0xd3); /* shl/shr/sar %cl, r */
             o(opc | r);
         }
         vtop--;
-        vtop->r = r;
         break;
     case '/':
     case TOK_UDIV:
@@ -550,14 +575,11 @@ void gen_opi(int op)
     case '%':
     case TOK_UMOD:
     case TOK_UMULL:
-        vswap();
-        r = gv(RC_EAX); /* first operand must be in eax */
-        vswap();
-        /* XXX: need better constraint */
-        fr = gv(RC_ECX); /* second operand in ecx */
-        vswap();
-        r = gv(RC_EAX); /* reload first operand if flushed */
-        vswap();
+        /* first operand must be in eax */
+        /* XXX: need better constraint for second operand */
+        gv2(RC_EAX, RC_ECX);
+        r = vtop[-1].r;
+        fr = vtop[0].r;
         vtop--;
         save_reg(REG_EDX);
         if (op == TOK_UMULL) {
@@ -588,7 +610,7 @@ void gen_opi(int op)
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranted to have the same floating point type */
-/* NOTE: currently floats can only be lvalues */
+/* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
     int a, ft, fc, swapped;
@@ -757,6 +779,49 @@ void gen_cvt_ftof(int t)
 {
     /* all we have to do on i386 is to put the float in a register */
     gv(RC_FLOAT);
+}
+
+/* bound check support functions */
+
+/* generate first part of bounded pointer addition */
+void gen_bounded_ptr_add1(void)
+{
+    /* prepare fast i386 function call (args in eax and edx) */
+    gv2(RC_EAX, RC_EDX);
+    /* save all temporary registers */
+    vtop--;
+    vtop->r = VT_CONST;
+    save_regs(); 
+}
+
+/* if deref is true, then also test dereferencing */
+void gen_bounded_ptr_add2(int deref)
+{
+    void *func;
+    int size, align;
+
+    if (deref) {
+        size = type_size(vtop->t, &align);
+        switch(size) {
+        case  1: func = __bound_ptr_indir1; break;
+        case  2: func = __bound_ptr_indir2; break;
+        case  4: func = __bound_ptr_indir4; break;
+        case  8: func = __bound_ptr_indir8; break;
+        case 12: func = __bound_ptr_indir12; break;
+        case 16: func = __bound_ptr_indir16; break;
+        default:
+            error("unhandled size when derefencing bounded pointer");
+            func = NULL;
+            break;
+        }
+    } else {
+        func = __bound_ptr_add;
+    }
+
+    /* do a fast function call */
+    oad(0xe8, (int)func - ind - 5);
+    /* return pointer is there */
+    vtop->r = REG_EAX;
 }
 
 /* end of X86 code generator */
