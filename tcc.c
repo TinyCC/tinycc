@@ -61,6 +61,10 @@
 #define CONFIG_TCC_PREFIX "/usr/local"
 #endif
 
+/* path to find crt1.o, crti.o and crtn.o. Only needed when generating
+   executables or dlls */
+#define CONFIG_TCC_CRT_PREFIX "/usr/lib"
+
 /* amount of virtual memory associated to a section (currently, we do
    not realloc them) */
 #define SECTION_VSIZE       (1024 * 1024)
@@ -7617,26 +7621,37 @@ void tcc_add_file(TCCState *s, const char *filename)
 void help(void)
 {
     printf("tcc version 0.9.8 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
-           "usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]\n"
-           "           [-i infile] [-bench] infile [infile_args...]\n"
+           "usage: tcc [-c] [-o outfile] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
+           "           [-g] [-b] [-llib] [-shared] [-static]\n"
+           "           [--] infile1 [infile2... --] [infile_args...]\n"
            "\n"
-           "-Idir        : add include path 'dir'\n"
-           "-Dsym[=val]  : define 'sym' with value 'val'\n"
-           "-Usym        : undefine 'sym'\n"
-           "-llib        : link with dynamic library 'lib'\n"
-           "-g           : generate runtime debug info\n"
+           "General options:\n"
+           "  -c          compile only - generate an object file\n"
+           "  -i infile   compile infile\n"
+           "  -o outfile  set output filename (NOT WORKING YET)\n"
+           "  -bench      output compilation statistics\n"
+           "  --          allows multiples input files if no -o option given. Also\n" 
+           "              separate input files from runtime arguments\n"
+           "Preprocessor options:\n"
+           "  -Idir       add include path 'dir'\n"
+           "  -Dsym[=val] define 'sym' with value 'val'\n"
+           "  -Usym       undefine 'sym'\n"
+           "C compiler options:\n"
+           "  -g          generate runtime debug info\n"
 #ifdef CONFIG_TCC_BCHECK
-           "-b           : compile with built-in memory and bounds checker (implies -g)\n"
+           "  -b          compile with built-in memory and bounds checker (implies -g)\n"
 #endif
-           "-i infile    : compile infile\n"
-           "-bench       : output compilation statistics\n"
+           "Linker options:\n"
+           "  -llib       link with dynamic library 'lib'\n"
+           "  -shared     generate a shared library (NOT WORKING YET)\n"
+           "  -static     static linking (NOT WORKING YET)\n"
            );
 }
 
 int main(int argc, char **argv)
 {
     char *r, *outfile;
-    int optind, file_type;
+    int optind, file_type, multiple_files;
     TCCState *s;
     
     s = tcc_new();
@@ -7644,6 +7659,7 @@ int main(int argc, char **argv)
 
     optind = 1;
     outfile = NULL;
+    multiple_files = 0;
     while (1) {
         if (optind >= argc) {
         show_help:
@@ -7654,7 +7670,10 @@ int main(int argc, char **argv)
         if (r[0] != '-')
             break;
         optind++;
-        if (r[1] == 'I') {
+        if (r[1] == '-') {
+            /* '--' enables multiple files input */
+            multiple_files = 1;
+        } else if (r[1] == 'I') {
             if (tcc_add_include_path(s, r + 2) < 0)
                 error("too many include paths");
         } else if (r[1] == 'D') {
@@ -7672,10 +7691,6 @@ int main(int argc, char **argv)
             char buf[1024];
             snprintf(buf, sizeof(buf), "lib%s.so", r + 2);
             tcc_add_dll(s, buf);
-        } else if (r[1] == 'i') {
-            if (optind >= argc)
-                goto show_help;
-            tcc_add_file(s, argv[optind++]);
         } else if (!strcmp(r + 1, "bench")) {
             do_bench = 1;
 #ifdef CONFIG_TCC_BCHECK
@@ -7713,6 +7728,7 @@ int main(int argc, char **argv)
         /* the following options are only for testing, so not
            documented */
         if (r[1] == 'c') {
+            multiple_files = 1;
             file_type = TCC_FILE_OBJ;
         } else if (!strcmp(r + 1, "static")) {
             static_link = 1;
@@ -7721,13 +7737,26 @@ int main(int argc, char **argv)
         } else if (r[1] == 'o') {
             if (optind >= argc)
                 goto show_help;
+            multiple_files = 1;
             outfile = argv[optind++];
         } else {
             error("invalid option -- '%s'", r);
         }
     }
-    
+
     tcc_add_file(s, argv[optind]);
+    if (multiple_files) {
+        while ((optind + 1) < argc) {
+            optind++;
+            r = argv[optind];
+            if (r[0] == '-') {
+                if (r[1] != '-')
+                    error("'--' expected");
+                break;
+            }
+            tcc_add_file(s, r);
+        }
+    }
 
     if (do_bench) {
         printf("total: %d idents, %d lines, %d bytes\n", 
