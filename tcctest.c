@@ -1,7 +1,6 @@
 /*
  * TCC auto test program
  */
-#include <tcclib.h>    
 
 /* Unfortunately, gcc version < 3 does not handle that! */
 //#define ALL_ISOC99
@@ -10,6 +9,25 @@
 //#define BOOL_ISOC99
 
 #define C99_MACROS
+
+/* test various include syntaxes */
+
+#define TCCLIB_INC <tcclib.h>
+#define TCCLIB_INC1 <tcclib
+#define TCCLIB_INC2 h>
+#define TCCLIB_INC3 "tcclib"
+
+#include TCCLIB_INC
+
+#include TCCLIB_INC1.TCCLIB_INC2
+
+#include TCCLIB_INC1.h>
+
+#include TCCLIB_INC3 ".h"
+
+#include <tcclib.h>
+
+#include "tcclib.h"
 
 void string_test();
 void expr_test();
@@ -158,6 +176,14 @@ void macro_test()
 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
+#line 200
+    printf("__LINE__=%d __FILE__=%s\n",
+           __LINE__, __FILE__);
+#line 203 "test" 
+    printf("__LINE__=%d __FILE__=%s\n",
+           __LINE__, __FILE__);
+#line 185 "tcctest.c"
+    
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
     printf("__func__ = %s\n", __func__);
@@ -428,7 +454,9 @@ void array_test(int a[4])
     printf("sizeof(char) = %d\n", sizeof(char));
     printf("sizeof(unsigned char) = %d\n", sizeof(unsigned char));
     printf("sizeof(\"a\") = %d\n", sizeof("a"));
+#ifdef C99_MACROS
     printf("sizeof(__func__) = %d\n", sizeof(__func__));
+#endif
     printf("sizeof tab %d\n", sizeof(tab));
     printf("sizeof tab2 %d\n", sizeof tab2);
     tab[0] = 1;
