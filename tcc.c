@@ -264,7 +264,7 @@ int expr_const();
 void expr_eq();
 void expr();
 void decl();
-void decl_assign(int t, int c, int first);
+void decl_initializer(int t, int c, int first, int size_only);
 int gv();
 void move_reg();
 void save_reg();
@@ -1168,7 +1168,7 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                 tok_add(&str, &len, t);
             }
         } else if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR) {
-            tok_add2(&str, &len, t, *macro_ptr++);
+            tok_add2(&str, &len, t, *macro_str++);
         } else {
             s = sym_find2(args, t);
             if (s) {
@@ -2906,8 +2906,10 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
 }
 
 /* t is the array or struct type. c is the array or struct
-   address. cur_index/cur_field is the pointer to the current value */
-void decl_designator(int t, int c, int *cur_index, Sym **cur_field)
+   address. cur_index/cur_field is the pointer to the current
+   value. 'size_only' is true if only size info is needed (only used
+   in arrays) */
+void decl_designator(int t, int c, int *cur_index, Sym **cur_field, int size_only)
 {
     Sym *s, *f;
     int notfirst, index, align;
@@ -2964,39 +2966,79 @@ void decl_designator(int t, int c, int *cur_index, Sym **cur_field)
             c += f->c;
         }
     }
-    decl_assign(t, c, 0);
+    decl_initializer(t, c, 0, size_only);
+}
+
+/* store a value or an expression directly in global data or in local array */
+
+void init_putv(int t, int c, int v, int is_expr)
+{
+    if ((t & VT_VALMASK) == VT_CONST) {
+        if (is_expr)
+            v = expr_const();
+        if (t & VT_BYTE)
+            *(char *)c = v;
+        else if (t & VT_SHORT)
+            *(short *)c = v;
+        else
+            *(int *)c = v;
+    } else {
+        vt = t;
+        vc = c;
+        vpush();
+        if (is_expr)
+            expr_eq();
+        else
+            vset(VT_CONST, v);
+        vstore();
+    }
 }
 
 /* 't' contains the type and storage info. c is the address of the
    object. 'first' is true if array '{' must be read (multi dimension
-   implicit array init handling). */
-void decl_assign(int t, int c, int first)
+   implicit array init handling). 'size_only' is true if size only
+   evaluation is wanted (only for arrays). */
+void decl_initializer(int t, int c, int first, int size_only)
 {
-    int v, index, index_max, t1, n, no_oblock;
+    int index, array_length, t1, n, no_oblock, nb, parlevel, i;
     Sym *s, *f;
     TokenSym *ts;
 
     if (t & VT_ARRAY) {
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
         n = s->c;
-        index_max = 0;
+        array_length = 0;
         if (tok == TOK_STR) {
             t1 = pointed_type(t);
             if (!(t1 & VT_BYTE))
                 error("invalid type");
-            if ((t & VT_VALMASK) == VT_CONST) {
-                while (tok == TOK_STR) {
-                    ts = (TokenSym *)tokc;
-                    memcpy((void *)c, ts->str, ts->len);
-                    c += ts->len;
-                    index_max += ts->len;
-                    next();
+            /* XXX: move multiple string parsing in parser ? */
+            while (tok == TOK_STR) {
+                ts = (TokenSym *)tokc;
+                /* compute maximum number of chars wanted */
+                nb = ts->len;
+                if (n >= 0 && nb > (n - array_length))
+                    nb = n - array_length;
+                if (!size_only) {
+                    if (ts->len > nb)
+                        warning("initializer-string for array is too long");
+                    for(i=0;i<nb;i++) {
+                        init_putv(t1, c, ts->str[i], 0);
+                        c++;
+                    }
                 }
-                *(char *)c++ = 0;
-            } else {
-                error("local string init not handled");
+                array_length += nb;
+                next();
             }
-            /* string init */
+            /* only add trailing zero if enough storage (no
+               warning in this case since it is standard) */
+            if (n < 0 || array_length < n) {
+                if (!size_only) {
+                    init_putv(t1, c, 0, 0);
+                    c++;
+                }
+                array_length++;
+            }
         } else {
             no_oblock = 0;
             if (!first && tok != '{')
@@ -3005,12 +3047,12 @@ void decl_assign(int t, int c, int first)
                 skip('{');
             index = 0;
             while (tok != '}') {
-                decl_designator(t, c, &index, NULL);
+                decl_designator(t, c, &index, NULL, size_only);
                 if (n >= 0 && index >= n)
                     error("index too large");
-                if (index > index_max)
-                    index_max = index;
                 index++;
+                if (index > array_length)
+                    array_length = index;
                 /* special test for multi dimensional arrays (may not
                    be strictly correct if designators are used at the
                    same time) */
@@ -3025,45 +3067,43 @@ void decl_assign(int t, int c, int first)
         }
         /* patch type size if needed */
         if (n < 0)
-            s->c = index_max + 1;
+            s->c = array_length;
     } else if (t & VT_STRUCT) {
         /* XXX: union needs only one init */
         skip('{');
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
         f = s->next;
         while (tok != '}') {
-            decl_designator(t, c, NULL, &f);
+            decl_designator(t, c, NULL, &f, size_only);
             if (tok == '}')
                 break;
             skip(',');
             f = f->next;
         }
         skip('}');
+    } else if (size_only) {
+        /* just skip expression */
+        parlevel = 0;
+        while ((parlevel > 0 || (tok != '}' && tok != ',')) && 
+               tok != -1) {
+            if (tok == '(')
+                parlevel++;
+            else if (tok == ')')
+                parlevel--;
+            next();
+       }
     } else {
-        if ((t & VT_VALMASK) == VT_CONST) {
-            v = expr_const();
-            if (t & VT_BYTE)
-                *(char *)c = v;
-            else if (t & VT_SHORT)
-                *(short *)c = v;
-            else
-                *(int *)c = v;
-        } else {
-            vt = t;
-            vc = c;
-            vpush();
-            expr_eq();
-            vstore();
-        }
+        init_putv(t, c, 0, 1);
     }
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(l)
 {
-    int *a, t, b, size, align, v, u, n, addr;
+    int *a, t, b, size, align, v, u, n, addr, tok1;
     Sym *sym;
-
+    int *init_str, init_len, level, *saved_macro_ptr;
+    
     while (b = ist()) {
         if ((b & (VT_ENUM | VT_STRUCT)) && tok == ';') {
             /* we accept no variable after */
@@ -3130,16 +3170,67 @@ void decl(l)
                             u = VT_CONST;
                         u |= t;
                         size = type_size(t, &align);
+                        /* If unknown size, we must evaluate it before
+                           evaluating initializers because
+                           initializers can generate global data too
+                           (e.g. string pointers or ISOC99 compound
+                           literals). It also simplifies local
+                           initializers handling */
+                        init_len = 0;
+                        init_str = NULL;
+                        saved_macro_ptr = NULL; /* avoid warning */
+                        tok1 = 0;
+                        if (size < 0) {
+                            if (tok != '=') 
+                                error("unknown size for '%s'", get_tok_str(v, 0));
+                            tok_add2(&init_str, &init_len, tok, tokc);
+                            next();
+                            /* get all init string */
+                            level = 0;
+                            while (level > 0 || (tok != ',' && tok != ';')) {
+                                if (tok < 0)
+                                    error("unexpect end of file in initializer for '%s'",
+                                          get_tok_str(v, 0));
+                                tok_add2(&init_str, &init_len, tok, tokc);
+                                if (tok == '{')
+                                    level++;
+                                else if (tok == '}') {
+                                    if (level == 0)
+                                        break;
+                                    level--;
+                                }
+                                next();
+                            }
+                            tok1 = tok;
+                            tok_add(&init_str, &init_len, -1);
+                            tok_add(&init_str, &init_len, 0);
+
+                            /* compute size */
+                            saved_macro_ptr = macro_ptr;
+                            macro_ptr = init_str;
+                            next();
+                            skip('=');
+                            decl_initializer(u, 0, 1, 1);
+                            /* prepare second initializer parsing */
+                            macro_ptr = init_str;
+                            next();
+                            
+                            /* if still unknown size, error */
+                            size = type_size(t, &align);
+                            if (size < 0) 
+                                error("unknown size for '%s'", get_tok_str(v, 0));
+                        }
                         if ((u & VT_VALMASK) == VT_LOCAL) {
-                            /* XXX: cannot use implicit size for local
-                               storage */
-                            if (size < 0)
-                                error("size must be known for locals");
                             loc = (loc - size) & -align;
                             addr = loc;
                         } else {
                             glo = (glo + align - 1) & -align;
                             addr = glo;
+                            /* very important to increment global
+                               pointer at this time because
+                               initializers themselves can create new
+                               initializers */
+                            glo += size;
                         }
                         if (tok == '=') {
                             next();
@@ -3149,20 +3240,17 @@ void decl(l)
                                 n = 1;
                                 next();
                             }
-                            decl_assign(u, addr, 1);
+                            decl_initializer(u, addr, 1, 0);
                             if (n)
                                 skip('}');
+                            /* restore parse state if needed */
+                            if (init_str) {
+                                free(init_str);
+                                macro_ptr = saved_macro_ptr;
+                                tok = tok1;
+                            }
                         }
                         sym_push(v, u, addr);
-                        /* if global, add size */
-                        if ((u & VT_VALMASK) == VT_CONST) {
-                            /* must recompute size if it was an array
-                               with implicit size */
-                            size = type_size(t, &align);
-                            if (size < 0)
-                                error("invalid size");
-                            glo += size;
-                        }
                     }
                 }
                 if (tok != ',') {
