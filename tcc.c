@@ -17,19 +17,29 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include "tcclib.h"
+#include <tcclib.h>
 
-#define INCLUDE_PATH "/usr/include"
+//#define DEBUG
+/* preprocessor debug */
+//#define PP_DEBUG
 
 #define TEXT_SIZE           50000
 #define DATA_SIZE           50000
-#define SYM_TABLE_SIZE      10000
-#define MACRO_STACK_SIZE    32
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         64
+#define STRING_MAX_SIZE     1024
+#define INCLUDE_PATHS_MAX   32
 
 #define NB_REGS             3
+
+/* token symbol management */
+typedef struct TokenSym {
+    struct TokenSym *next;
+    int tok; /* token number */
+    int len;
+    char str[1];
+} TokenSym;
 
 /* symbol management */
 typedef struct Sym {
@@ -47,6 +57,10 @@ typedef struct Sym {
 #define FUNC_OLD       2 /* old function prototype */
 #define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
 
+/* field t for macros */
+#define MACRO_OBJ      0 /* object like macro */
+#define MACRO_FUNC     1 /* function like macro */
+
 typedef struct {
     FILE *file;
     char *filename;
@@ -62,14 +76,18 @@ typedef struct {
 */
 FILE *file;
 int tok, tok1, tokc, rsym, anon_sym,
-    prog, ind, loc, glo, vt, vc, line_num;
-char *idtable, *idptr, *filename;
+    prog, ind, loc, glo, vt, vc, const_wanted, line_num;
+TokenSym *first_ident;
+char token_buf[STRING_MAX_SIZE + 1];
+char *filename;
 Sym *define_stack, *global_stack, *local_stack, *label_stack;
 
 int vstack[VSTACK_SIZE], *vstack_ptr;
-char *macro_stack[MACRO_STACK_SIZE], **macro_stack_ptr, *macro_ptr;
+int *macro_ptr, *macro_ptr_allocated;
 IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
+char *include_paths[INCLUDE_PATHS_MAX];
+int nb_include_paths;
 
 /* The current value can be: */
 #define VT_VALMASK 0x000f
@@ -132,7 +150,11 @@ int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
 #define TOK_UMOD  0xb1 /* unsigned modulo */
 #define TOK_PDIV  0xb2 /* fast division with undefined rounding for pointers */
 #define TOK_NUM   0xb3 /* number in tokc */
+#define TOK_CCHAR 0xb4 /* char constant in tokc */
+#define TOK_STR   0xb5 /* pointer to string in tokc */
 
+#define TOK_TWOSHARPS 0xb6 /* ## preprocessing token */
+ 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
   
@@ -148,8 +170,11 @@ int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
 #define TOK_A_SHL 0x81
 #define TOK_A_SAR 0x82
 
+/* all identificators and strings have token above that */
+#define TOK_IDENT 256
+
 enum {
-    TOK_INT = 256,
+    TOK_INT = TOK_IDENT,
     TOK_VOID,
     TOK_CHAR,
     TOK_IF,
@@ -180,6 +205,7 @@ enum {
     TOK_FLOAT,
     TOK_DOUBLE,
 
+    TOK_SHORT,
     TOK_STRUCT,
     TOK_UNION,
     TOK_TYPEDEF,
@@ -195,6 +221,7 @@ enum {
     TOK_ELIF,
     TOK_ENDIF,
     TOK_DEFINED,
+    TOK_UNDEF,
 
     /* special identifiers */
     TOK_MAIN,
@@ -202,6 +229,7 @@ enum {
 
 void sum();
 void next();
+void next_nomacro();
 int expr_const();
 void expr_eq();
 void expr();
@@ -209,6 +237,14 @@ void decl();
 int gv();
 void move_reg();
 void save_reg();
+void macro_subst(int **tok_str, int *tok_len, 
+                 Sym **nested_list, int *macro_str);
+int save_reg_forced(int r);
+int type_size(int t, int *a);
+int pointed_type(int t);
+int pointed_size(int t);
+int ist(void);
+int typ(int *v, int t);
 
 int isid(c)
 {
@@ -221,8 +257,6 @@ int isnum(c)
 {
     return c >= '0' & c <= '9';
 }
-
-#ifndef TINY
 
 void printline()
 {
@@ -269,26 +303,98 @@ void test_lvalue()
         expect("lvalue");
 }
 
-#else
-
-#define skip(c) next()
-#define test_lvalue() 
-
-#endif
-
-char *get_tok_str(int v)
+TokenSym *tok_alloc(char *str, int len)
 {
+    TokenSym *ts, **pts;
     int t;
-    char *p;
-    p = idtable;
-    t = 256;
-    while (t != v) {
-        if (p >= idptr)
-            return 0;
-        while (*p++);
+    
+    t = TOK_IDENT;
+    pts = &first_ident;
+    while (1) {
+        ts = *pts;
+        if (!ts)
+            break;
+        if (ts->len == len && !memcmp(ts->str, str, len))
+            return ts;
         t++;
+        pts = &(ts->next);
     }
-    return p;
+    ts = malloc(sizeof(TokenSym) + len);
+    if (!ts)
+        error("memory full");
+    ts->tok = t;
+    ts->len = len;
+    ts->next = NULL;
+    memcpy(ts->str, str, len + 1);
+
+    *pts = ts;
+    return ts;
+}
+
+void add_char(char **pp, int c)
+{
+    char *p;
+    p = *pp;
+    if (c == '\'' || c == '\"' || c == '\\') {
+        /* XXX: could be more precise if char or string */
+        *p++ = '\\';
+    }
+    if (c >= 32 && c <= 126) {
+        *p++ = c;
+    } else {
+        *p++ = '\\';
+        if (c == '\n') {
+            *p++ = 'n';
+        } else {
+            *p++ = '0' + ((c >> 6) & 7);
+            *p++ = '0' + ((c >> 3) & 7);
+            *p++ = '0' + (c & 7);
+        }
+    }
+    *pp = p;
+}
+
+/* XXX: buffer overflow */
+char *get_tok_str(int v, int c)
+{
+    static char buf[STRING_MAX_SIZE + 1];
+    TokenSym *ts;
+    char *p;
+    int i;
+
+    if (v == TOK_NUM) {
+        sprintf(buf, "%d", c);
+        return buf;
+    } else if (v == TOK_CCHAR) {
+        p = buf;
+        *p++ = '\'';
+        add_char(&p, c);
+        *p++ = '\'';
+        *p = '\0';
+        return buf;
+    } else if (v == TOK_STR) {
+        ts = (TokenSym *)c;
+        p = buf;
+        *p++ = '\"';
+        for(i=0;i<ts->len;i++)
+            add_char(&p, ts->str[i]);
+        *p++ = '\"';
+        *p = '\0';
+        return buf;
+    } else if (v < TOK_IDENT) {
+        p = buf;
+        *p++ = v;
+        *p = '\0';
+        return buf;
+    } else {
+        ts = first_ident;
+        while (ts != NULL) {
+            if (ts->tok == v)
+                return ts->str;
+            ts = ts->next;
+        }
+        return NULL;
+    }
 }
 
 /* find a symbol and return its associated structure. 's' is the top
@@ -312,7 +418,7 @@ Sym *sym_push1(Sym **ps, int v, int t, int c)
     s->v = v;
     s->t = t;
     s->c = c;
-    s->next = 0;
+    s->next = NULL;
     s->prev = *ps;
     *ps = s;
     return s;
@@ -331,7 +437,6 @@ Sym *sym_find(int v)
 /* push a given symbol on the symbol stack */
 Sym *sym_push(int v, int t, int c)
 {
-    //    printf("sym_push: %x %s type=%x\n", v, get_tok_str(v), t);
     if (local_stack)
         return sym_push1(&local_stack, v, t, c);
     else
@@ -346,7 +451,6 @@ void sym_pop(Sym **ps, Sym *b)
     s = *ps;
     while(s != b) {
         ss = s->prev;
-        //        printf("sym_pop: %x %s type=%x\n", s->v, get_tok_str(s->v), s->t);
         free(s);
         s = ss;
     }
@@ -358,8 +462,6 @@ int ch, ch1;
 /* read next char from current input file */
 void inp()
 {
-    int c;
-
  redo:
     ch1 = fgetc(file);
     if (ch1 == -1) {
@@ -379,26 +481,17 @@ void inp()
     //    printf("ch1=%c 0x%x\n", ch1, ch1);
 }
 
-/* input with '\\n' handling and macro subtitution if in macro state */
+/* input with '\\n' handling */
 void minp()
 {
-    if (macro_ptr != 0) {
-        ch = *macro_ptr++;
-        /* end of macro ? */
-        if (ch == '\0') {
-            macro_ptr = *--macro_stack_ptr;
-            ch = (int)*--macro_stack_ptr;
-        }
-    } else {
     redo:
-        ch = ch1;
+    ch = ch1;
+    inp();
+    if (ch == '\\' && ch1 == '\n') {
         inp();
-        if (ch == '\\' && ch1 == '\n') {
-            inp();
-            goto redo;
-        }
+        goto redo;
     }
-    //    printf("ch=%c 0x%x\n", ch, ch);
+    //printf("ch=%c 0x%x\n", ch, ch);
 }
 
 /* same as minp, but also skip comments */
@@ -458,7 +551,7 @@ void preprocess_skip()
         skip_spaces();
         if (ch == '#') {
             cinp();
-            next();
+            next_nomacro();
             if (a == 0 && 
                 (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
                 break;
@@ -497,53 +590,145 @@ char *get_str(c)
     return str;
 }
 
-/* return next token without macro substitution */
-void next_nomacro()
+void tok_add(int **tok_str, int *tok_len, int t)
 {
-    Sym *s;
-    /* hack to avoid replacing id by defined value */
-    s = define_stack;
-    define_stack = 0;
-    next();
-    define_stack = s;
+    int len, *str;
+    len = *tok_len;
+    str = *tok_str;
+    if ((len & 63) == 0) {
+        str = realloc(str, (len + 64) * sizeof(int));
+        if (!str)
+            return;
+        *tok_str = str;
+    }
+    str[len++] = t;
+    *tok_len = len;
 }
 
-/* XXX: not correct yet (need to ensure it is constant) */
+void tok_add2(int **tok_str, int *tok_len, int t, int c)
+{
+    tok_add(tok_str, tok_len, t);
+    if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+        tok_add(tok_str, tok_len, c);
+}
+
+/* eval an expression for #if/#elif */
 int expr_preprocess()
 {
-    int c;
-
-    if ((macro_stack_ptr - macro_stack) >= MACRO_STACK_SIZE)
-        error("too many nested macros");
-    *macro_stack_ptr++ = (char *)'\n';
-    *macro_stack_ptr++ = macro_ptr;
-    macro_ptr = get_str(';');
-    cinp();
+    int *str, len, c, t;
+    int *saved_macro_ptr;
+    
+    str = NULL;
+    len = 0;
+    while (1) {
+        skip_spaces();
+        if (ch == '\n')
+            break;
+        next(); /* do macro subst */
+        if (tok == TOK_DEFINED) {
+            next_nomacro();
+            t = tok;
+            if (t == '(') 
+                next_nomacro();
+            c = sym_find1(define_stack, tok) != 0;
+            if (t == '(')
+                next_nomacro();
+            tok = TOK_NUM;
+            tokc = c;
+        } else if (tok >= TOK_IDENT) {
+            /* if undefined macro */
+            tok = TOK_NUM;
+            tokc = 0;
+        }
+        tok_add2(&str, &len, tok, tokc);
+    }
+    tok_add(&str, &len, -1); /* simulate end of file */
+    tok_add(&str, &len, 0);
+    /* now evaluate C constant expression */
+    saved_macro_ptr = macro_ptr;
+    macro_ptr = str;
     next();
     c = expr_const();
-    ch = '\n';
+    macro_ptr = saved_macro_ptr;
+    free(str);
     return c != 0;
 }
 
+#ifdef DEBUG
+void tok_print(int *str)
+{
+    int t, c;
+
+    while (1) {
+        t = *str++;
+        if (!t)
+            break;
+        c = 0;
+        if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+            c = *str++;
+        printf(" %s", get_tok_str(t, c));
+    }
+    printf("\n");
+}
+#endif
+
 void preprocess()
 {
-    char *str;
-    int size, n, c, v;
+    int size, i, c, v, t, *str, len;
     char buf[1024], *q, *p;
     char buf1[1024];
     FILE *f;
+    Sym **ps, *first, *s;
 
     cinp();
     next_nomacro();
  redo:
     if (tok == TOK_DEFINE) {
-        next_nomacro(); /* XXX: should pass parameter to avoid macro subst */
-        skip_spaces();
-        /* now 'tok' is the macro symbol */
-        /* a space is inserted after each macro */
-        str = get_str(' ');
-        //        printf("define %s '%s'\n", get_tok_str(tok), str);
-        sym_push1(&define_stack, tok, 0, (int)str);
+        next_nomacro();
+        v = tok;
+        /* XXX: should check if same macro (ANSI) */
+        if (sym_find1(define_stack, v))
+            warning("macro redefinition");
+        first = NULL;
+        t = MACRO_OBJ;
+        /* '(' must be just after macro definition for MACRO_FUNC */
+        if (ch == '(') {
+            next_nomacro();
+            next_nomacro();
+            ps = &first;
+            while (tok != ')') {
+                s = sym_push1(&define_stack, tok | SYM_FIELD, 0, 0);
+                *ps = s;
+                ps = &s->next;
+                next_nomacro();
+                if (tok != ',')
+                    break;
+                next_nomacro();
+            }
+            t = MACRO_FUNC;
+        }
+        str = NULL;
+        len = 0;
+        while (1) {
+            skip_spaces();
+            if (ch == '\n' || ch == -1)
+                break;
+            next_nomacro();
+            tok_add2(&str, &len, tok, tokc);
+        }
+        tok_add(&str, &len, 0);
+#ifdef PP_DEBUG
+        printf("define %s %d: ", get_tok_str(v, 0), t);
+        tok_print(str);
+#endif
+        s = sym_push1(&define_stack, v, t, (int)str);
+        s->next = first;
+    } else if (tok == TOK_UNDEF) {
+        next_nomacro();
+        s = sym_find1(define_stack, tok);
+        /* undefine symbol by putting an invalid name */
+        if (s)
+            s->v = 0;
     } else if (tok == TOK_INCLUDE) {
         skip_spaces();
         if (ch == '<') {
@@ -577,12 +762,16 @@ void preprocess()
                     goto found;
             }
             /* now search in standard include path */
-            strcpy(buf1, INCLUDE_PATH);
-            strcat(buf1, "/");
-            strcat(buf1, buf);
-            f = fopen(buf1, "r");
-            if (!f)
-                error("include file not found");
+            for(i=nb_include_paths - 1;i>=0;i--) {
+                strcpy(buf1, include_paths[i]);
+                strcat(buf1, "/");
+                strcat(buf1, buf);
+                f = fopen(buf1, "r");
+                if (f)
+                    goto found;
+            }
+            error("include file not found");
+            f = NULL;
         found:
             /* push current file in stack */
             /* XXX: fix current line init */
@@ -659,19 +848,46 @@ int getn(b)
     return n;
 }
 
-void next()
+/* read a character for string or char constant and eval escape codes */
+int getq()
 {
-    int v, b;
-    char *q, *p;
-    Sym *s;
+    int c;
 
-    /* special 'ungettok' case for label parsing */
-    if (tok1) {
-        tok = tok1;
-        tok1 = 0;
-        return;
+    c = ch;
+    minp();
+    if (c == '\\') {
+        if (isnum(ch)) {
+            return getn(8);
+        } else {
+            if (ch == 'a')
+                c = '\a';
+            else if (ch == 'b')
+                c = '\b';
+            else if (ch == 'f')
+                c = '\f';
+            else if (ch == 'n')
+                c = '\n';
+            else if (ch == 'r')
+                c = '\r';
+            else if (ch == 't')
+                c = '\t';
+            else if (ch == 'v')
+                c = '\v';
+            else
+                c = ch;
+            minp();
+        }
     }
- redo:
+    return c;
+}
+
+/* return next token without macro substitution */
+void next_nomacro1()
+{
+    int b;
+    char *q;
+    TokenSym *ts;
+
     /* skip spaces */
     while(1) {
         while (ch == '\n') {
@@ -684,58 +900,61 @@ void next()
                 preprocess();
             }
         }
-        if (ch != ' ' && ch != 9)
+        if (ch != ' ' && ch != '\t' && ch != '\f')
             break;
         cinp();
     }
     if (isid(ch)) {
-        q = idptr;
-        while(isid(ch) | isnum(ch)) {
+        q = token_buf;
+        while (isid(ch) | isnum(ch)) {
+            if (q >= token_buf + STRING_MAX_SIZE)
+                error("ident too long");
             *q++ = ch;
             cinp();
         }
-        *q++ = '\0';
-        p = idtable;
-        tok = 256;
-        while (p < idptr) {
-            if (strcmp(p, idptr) == 0)
-                break;
-            while (*p++);
-            tok++;
-        }
-        //        printf("id=%s\n", idptr);
-        /* if not found, add symbol */
-        if (p == idptr)
-            idptr = q;
-        /* if symbol is a define, prepare substitution */
-        if (s = sym_find1(define_stack, tok)) {
-            if ((macro_stack_ptr - macro_stack) >= MACRO_STACK_SIZE)
-                error("too many nested macros");
-            *macro_stack_ptr++ = (char *)ch;
-            *macro_stack_ptr++ = macro_ptr;
-            macro_ptr = (char *)s->c;
-            cinp();
-            goto redo;
-        }
+        *q = '\0';
+        ts = tok_alloc(token_buf, q - token_buf);
+        tok = ts->tok;
     } else if (isnum(ch)) {
         /* number */
         b = 10;
         if (ch == '0') {
             cinp();
             b = 8;
-            if (ch == 'x') {
+            if (ch == 'x' || ch == 'X') {
                 cinp();
                 b = 16;
             }
         }
         tokc = getn(b);
+        /* XXX: add unsigned constant support (ANSI) */
+        while (ch == 'L' || ch == 'l' || ch == 'U' || ch == 'u')
+            cinp();
         tok = TOK_NUM;
+    } else if (ch == '\'') {
+        minp();
+        tokc = getq();
+        tok = TOK_CCHAR;
+        if (ch != '\'')
+            expect("\'");
+        minp();
+    } else if (ch == '\"') {
+        minp();
+        q = token_buf;
+        while (ch != '\"') {
+            b = getq();
+            if (ch == -1)
+                error("unterminated string");
+            if (q >= token_buf + STRING_MAX_SIZE)
+                error("string too long");
+            *q++ = b;
+        }
+        *q = '\0';
+        tokc = (int)tok_alloc(token_buf, q - token_buf);
+        tok = TOK_STR;
+        minp();
     } else {
-#ifdef TINY
-        q = "<=\236>=\235!=\225++\244--\242==\224";
-#else
-        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\247..\250";
-#endif
+        q = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\247..\250##\266";
         /* two chars */
         tok = ch;
         cinp();
@@ -764,7 +983,278 @@ void next()
         else if (tok == '>')
             tok = TOK_GT;
     }
-    //    printf("tok=%x\n", tok);
+}
+
+/* return next token without macro substitution. Can read input from
+   macro_ptr buffer */
+void next_nomacro()
+{
+    if (macro_ptr) {
+        tok = *macro_ptr;
+        if (tok) {
+            macro_ptr++;
+            if (tok == TOK_NUM || tok == TOK_CCHAR || tok == TOK_STR)
+                tokc = *macro_ptr++;
+        }
+    } else {
+        next_nomacro1();
+    }
+}
+
+/* substitute args in macro_str and return allocated string */
+int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
+{
+    int *st, last_tok, t, c, notfirst, *str, len;
+    Sym *s;
+    TokenSym *ts;
+
+    str = NULL;
+    len = 0;
+    last_tok = 0;
+    while(1) {
+        t = *macro_str++;
+        if (!t)
+            break;
+        if (t == '#') {
+            /* stringize */
+            t = *macro_str++;
+            if (!t)
+                break;
+            s = sym_find1(args, t);
+            if (s) {
+                token_buf[0] = '\0';
+                st = (int *)s->c;
+                /* XXX: buffer overflow */
+                notfirst = 0;
+                while (*st) {
+                    if (notfirst)
+                        strcat(token_buf, " ");
+                    t = *st++;
+                    c = 0;
+                    if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR) 
+                        c = *st++;
+                    strcat(token_buf, get_tok_str(t, c));
+                    notfirst = 1;
+                }
+#ifdef PP_DEBUG
+                printf("stringize: %s\n", token_buf);
+#endif
+                /* add string */
+                ts = tok_alloc(token_buf, strlen(token_buf));
+                tok_add2(&str, &len, TOK_STR, (int)ts);
+            } else {
+                tok_add(&str, &len, t);
+            }
+        } else if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR) {
+            tok_add2(&str, &len, t, *macro_ptr++);
+        } else {
+            s = sym_find1(args, t);
+            if (s) {
+                st = (int *)s->c;
+                /* if '##' is present before or after , no arg substitution */
+                if (*macro_str == TOK_TWOSHARPS || last_tok == TOK_TWOSHARPS) {
+                    while (*st)
+                        tok_add(&str, &len, *st++);
+                } else {
+                    macro_subst(&str, &len, nested_list, st);
+                }
+            } else {
+                tok_add(&str, &len, t);
+            }
+        }
+        last_tok = t;
+    }
+    tok_add(&str, &len, 0);
+    return str;
+}
+
+/* handle the '##' operator */
+int *macro_twosharps(int *macro_str)
+{
+    TokenSym *ts;
+    int *macro_str1, macro_str1_len, *macro_ptr1;
+    int t, c;
+    char *p;
+
+    macro_str1 = NULL;
+    macro_str1_len = 0;
+    tok = 0;
+    while (1) {
+        next_nomacro();
+        if (tok == 0)
+            break;
+        if (*macro_ptr == TOK_TWOSHARPS) {
+            macro_ptr++;
+            macro_ptr1 = macro_ptr;
+            t = *macro_ptr;
+            if (t) {
+                macro_ptr++;
+                c = 0;
+                if (t == TOK_NUM || t == TOK_CCHAR || t == TOK_STR)
+                    c = *macro_ptr++;
+                /* XXX: we handle only most common cases: 
+                   ident + ident or ident + number */
+                if (tok >= TOK_IDENT && 
+                    (t >= TOK_IDENT || t == TOK_NUM)) {
+                    /* XXX: buffer overflow */
+                    p = get_tok_str(tok, tokc);
+                    strcpy(token_buf, p);
+                    p = get_tok_str(t, c);
+                    strcat(token_buf, p);
+                    ts = tok_alloc(token_buf, strlen(token_buf));
+                    tok_add2(&macro_str1, &macro_str1_len, ts->tok, 0);
+                } else {
+                    /* cannot merge tokens: skip '##' */
+                    macro_ptr = macro_ptr1;
+                }
+            }
+        } else {
+            tok_add2(&macro_str1, &macro_str1_len, tok, tokc);
+        }
+    }
+    tok_add(&macro_str1, &macro_str1_len, 0);
+    return macro_str1;
+}
+
+
+
+/* do macro substitution of macro_str and add result to
+   (tok_str,tok_len). If macro_str is NULL, then input stream token is
+   substituted. 'nested_list' is the list of all macros we got inside
+   to avoid recursing. */
+void macro_subst(int **tok_str, int *tok_len, 
+                 Sym **nested_list, int *macro_str)
+{
+    Sym *s, *args, *sa;
+    int *str, parlevel, len, *mstr, t, *saved_macro_ptr;
+    int mstr_allocated, *macro_str1;
+
+    saved_macro_ptr = macro_ptr;
+    macro_ptr = macro_str;
+    macro_str1 = NULL;
+    if (macro_str) {
+        /* first scan for '##' operator handling */
+        macro_str1 = macro_twosharps(macro_str);
+        macro_ptr = macro_str1;
+    }
+
+    while (1) {
+        next_nomacro();
+        if (tok == 0)
+            break;
+        /* if symbol is a macro, prepare substitution */
+        s = sym_find1(define_stack, tok);
+        if (s) {
+            /* if nested substitution, do nothing */
+            if (sym_find1(*nested_list, tok))
+                goto no_subst;
+            mstr = (int *)s->c;
+            mstr_allocated = 0;
+            if (s->t == MACRO_FUNC) {
+                /* NOTE: we do not use next_nomacro to avoid eating the
+                   next token. XXX: find better solution */
+                if (macro_ptr) {
+                    t = *macro_ptr;
+                } else {
+                    while (ch == ' ' || ch == '\t' || ch == '\n')
+                        cinp();
+                    t = ch;
+                }
+                if (t != '(') /* no macro subst */
+                    goto no_subst;
+                    
+                /* argument macro */
+                next_nomacro();
+                next_nomacro();
+                args = NULL;
+                sa = s->next;
+                while (tok != ')' && sa) {
+                    len = 0;
+                    str = NULL;
+                    parlevel = 0;
+                    while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
+                           tok != -1) {
+                        if (tok == '(')
+                            parlevel++;
+                        else if (tok == ')')
+                            parlevel--;
+                        tok_add2(&str, &len, tok, tokc);
+                        next_nomacro();
+                    }
+                    tok_add(&str, &len, 0);
+                    sym_push1(&args, sa->v & ~SYM_FIELD, 0, (int)str);
+                    if (tok != ',')
+                        break;
+                    next_nomacro();
+                    sa = sa->next;
+                }
+                if (tok != ')')
+                    expect(")");
+                /* now subst each arg */
+                mstr = macro_arg_subst(nested_list, mstr, args);
+                sym_pop(&args, NULL);
+                mstr_allocated = 1;
+            }
+            sym_push1(nested_list, s->v, 0, 0);
+            macro_subst(tok_str, tok_len, nested_list, mstr);
+            sym_pop(nested_list, (*nested_list)->prev);
+            if (mstr_allocated)
+                free(mstr);
+            /* only replace one macro while parsing input stream */
+            if (!macro_str)
+                return;
+        } else {
+        no_subst:
+            /* no need to add if reading input stream */
+            if (!macro_str)
+                return;
+            tok_add2(tok_str, tok_len, tok, tokc);
+        }
+    }
+    macro_ptr = saved_macro_ptr;
+    if (macro_str1)
+        free(macro_str1);
+}
+
+/* return next token with macro substitution */
+void next()
+{
+    int len, *ptr;
+    Sym *nested_list;
+
+    /* special 'ungettok' case for label parsing */
+    if (tok1) {
+        tok = tok1;
+        tok1 = 0;
+    } else {
+    redo:
+        if (!macro_ptr) {
+            /* if not reading from macro substuted string, then try to substitute */
+            len = 0;
+            ptr = NULL;
+            nested_list = NULL;
+            macro_subst(&ptr, &len, &nested_list, NULL);
+            if (ptr) {
+                tok_add(&ptr, &len, 0);
+                macro_ptr = ptr;
+                macro_ptr_allocated = ptr;
+                goto redo;
+            }
+            if (tok == 0)
+                goto redo;
+        } else {
+            next_nomacro();
+            if (tok == 0) {
+                /* end of macro string: free it */
+                free(macro_ptr_allocated);
+                macro_ptr = NULL;
+                goto redo;
+            }
+        }
+    }
+#ifdef DEBUG
+    printf("token = %s\n", get_tok_str(tok, tokc));
+#endif
 }
 
 void swap(int *p, int *q)
@@ -1004,7 +1494,7 @@ void gen_op1(op, r, fr)
 /* end of X86 code generator */
 /*************************************************************/
 
-int save_reg_forced(r)
+int save_reg_forced(int r)
 {
     int i, l, *p, t;
     /* store register */
@@ -1156,6 +1646,20 @@ void gen_opc(op)
         case TOK_SHL: vc <<= fc; break;
         case TOK_SHR: vc = (unsigned)vc >> fc; break;
         case TOK_SAR: vc >>= fc; break;
+            /* tests */
+        case TOK_ULT: vc = (unsigned)vc < (unsigned)fc; break;
+        case TOK_UGE: vc = (unsigned)vc >= (unsigned)fc; break;
+        case TOK_EQ: vc = vc == fc; break;
+        case TOK_NE: vc = vc != fc; break;
+        case TOK_ULE: vc = (unsigned)vc <= (unsigned)fc; break;
+        case TOK_UGT: vc = (unsigned)vc > (unsigned)fc; break;
+        case TOK_LT: vc = vc < fc; break;
+        case TOK_GE: vc = vc >= fc; break;
+        case TOK_LE: vc = vc <= fc; break;
+        case TOK_GT: vc = vc > fc; break;
+            /* logical */
+        case TOK_LAND: vc = vc && fc; break;
+        case TOK_LOR: vc = vc || fc; break;
         default:
             goto general_case;
         }
@@ -1208,13 +1712,13 @@ void gen_opc(op)
     }
 }
 
-int pointed_size(t)
+int pointed_size(int t)
 {
     return type_size(pointed_type(t), &t);
 }
 
 /* generic gen_op: handles types problems */
-void gen_op(op)
+void gen_op(int op)
 {
     int u, t1, t2;
 
@@ -1354,14 +1858,6 @@ void inc(post, c)
         vpop(&vt, &vc);
 }
 
-int expr_const()
-{
-    expr_eq();
-    if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST)
-        expect("constant");
-    return vc;
-}
-
 /* enum/struct/union declaration */
 int struct_decl(u)
 {
@@ -1393,7 +1889,7 @@ int struct_decl(u)
         /* cannot be empty */
         c = 0;
         maxalign = 0;
-        slast = 0;
+        slast = NULL;
         while (1) {
             if (a == TOK_ENUM) {
                 v = tok;
@@ -1449,30 +1945,27 @@ int struct_decl(u)
    and skip it. 
    XXX: A '2' is ored to ensure non zero return if int type.
  */
-int ist()
+int ist(void)
 {
-    int t, n, v;
+    int t;
     Sym *s;
 
     t = 0;
     while(1) {
-#ifndef TINY
         if (tok == TOK_ENUM) {
             t |= struct_decl(VT_ENUM);
         } else if (tok == TOK_STRUCT || tok == TOK_UNION) {
             t |= struct_decl(VT_STRUCT);
-        } else
-#endif
-        {
+        } else {
             if (tok == TOK_CHAR) {
                 t |= VT_BYTE;
             } else if (tok == TOK_VOID) {
                 t |= VT_VOID;
-            } else if (tok == TOK_INT |
+            } else if (tok == TOK_INT | tok == TOK_SHORT |
                        (tok >= TOK_CONST & tok <= TOK_INLINE)) {
                 /* ignored types */
-            } else if (tok == TOK_FLOAT & tok == TOK_DOUBLE) {
-                error("floats not supported");
+            } else if (tok == TOK_FLOAT || tok == TOK_DOUBLE) {
+                warning("floats not supported");
             } else if (tok == TOK_EXTERN) {
                 t |= VT_EXTERN;
             } else if (tok == TOK_STATIC) {
@@ -1618,11 +2111,11 @@ int typ(int *v, int t)
 /* define a new external reference to a function 'v' of type 'u' */
 Sym *external_func(v, u)
 {
-    int t, n, p;
+    int n;
     Sym *s;
     s = sym_find(v);
     if (!s) {
-        n = dlsym(0, get_tok_str(v));
+        n = (int)dlsym(0, get_tok_str(v, 0));
         if (n == 0) {
             /* used to generate symbol list */
             s = sym_push1(&global_stack, 
@@ -1634,31 +2127,6 @@ Sym *external_func(v, u)
         }
     }
     return s;
-}
-
-/* read a character for string or char constant and eval escape codes */
-int getq()
-{
-    int c;
-
-    c = ch;
-    minp();
-    if (c == '\\') {
-        if (isnum(ch)) {
-            return getn(8);
-        } else {
-            if (ch == 'n')
-                c = '\n';
-            else if (ch == 'r')
-                c = '\r';
-            else if (ch == 't')
-                c = '\t';
-            else
-                c = ch;
-            minp();
-        }
-    }
-    return c;
 }
 
 void indir()
@@ -1677,37 +2145,20 @@ void unary()
     int n, t, ft, fc, p, r;
     Sym *s;
 
-    if (tok == TOK_NUM) {
+    if (tok == TOK_NUM || tok == TOK_CCHAR) {
         vset(VT_CONST, tokc);
         next();
-    } else 
-    if (tok == '\'') {
-        vset(VT_CONST, getq());
-        next(); /* skip char */
-        skip('\''); 
-    } else if (tok == '\"') {
+    } else if (tok == TOK_STR) {
+        TokenSym *ts;
         /* generate (char *) type */
         vset(VT_CONST | mk_pointer(VT_TYPE), glo);
-        while (tok == '\"') {
-            while (ch != '\"') {
-                if (ch == -1)
-                    error("unterminated string");
-                *(char *)glo++ = getq();
-            }
-            minp();
+        while (tok == TOK_STR) {
+            ts = (TokenSym *)tokc;
+            memcpy((void *)glo, ts->str, ts->len);
+            glo += ts->len;
             next();
         }
         *(char *)glo++ = 0;
-    } else if (tok == TOK_DEFINED) {
-        /* XXX: should only be used in preprocess expr parsing */
-        next_nomacro();
-        t = tok;
-        if (t == '(') 
-            next_nomacro();
-        vset(VT_CONST, sym_find1(define_stack, tok) != 0);
-        next();
-        if (t == '(')
-            skip(')');
     } else {
         t = tok;
         next();
@@ -1732,11 +2183,13 @@ void unary()
         } else
         if (t == '!') {
             unary();
-            if ((vt & VT_VALMASK) == VT_CMP)
+            if ((vt & (VT_CONST | VT_LVAL)) == VT_CONST) 
+                vc = !vc;
+            else if ((vt & VT_VALMASK) == VT_CMP)
                 vc = vc ^ 1;
             else
                 vset(VT_JMP, gtst(1, 0));
-        } else 
+        } else
         if (t == '~') {
             unary();
             vpush();
@@ -1818,7 +2271,10 @@ void unary()
             vset(VT_CONST, s->c);
             gen_op('+');
             /* change type to field type, and set to lvalue */
-            vt = (vt & VT_TYPEN) | VT_LVAL | s->t;
+            vt = (vt & VT_TYPEN) | s->t;
+            /* an array is never an lvalue */
+            if (!(vt & VT_ARRAY))
+                vt |= VT_LVAL;
             next();
         } else if (tok == '[') {
             next();
@@ -1912,7 +2368,7 @@ void uneq()
 
 void sum(l)
 {
-    int ft, fc, t;
+    int t;
 
     if (l == 0)
         uneq();
@@ -1926,7 +2382,9 @@ void sum(l)
                (l == 4 & (tok == TOK_EQ | tok == TOK_NE)) |
                (l == 5 & tok == '&') |
                (l == 6 & tok == '^') |
-               (l == 7 & tok == '|')) {
+               (l == 7 & tok == '|') |
+               (l == 8 & tok == TOK_LAND) |
+               (l == 9 & tok == TOK_LOR)) {
             vpush();
             t = tok;
             next();
@@ -1936,12 +2394,7 @@ void sum(l)
     }
 }
 
-#ifdef TINY 
-void expr()
-{
-    sum(8);
-}
-#else
+/* only used if non constant */
 void eand()
 {
     int t;
@@ -1964,7 +2417,7 @@ void eand()
 
 void eor()
 {
-    int t, u;
+    int t;
 
     eand();
     t = 0;
@@ -1982,22 +2435,37 @@ void eor()
     }
 }
 
+/* XXX: better constant handling */
 void expr_eq()
 {
-    int t, u;
-    
-    eor();
-    if (tok == '?') {
-        next();
-        t = gtst(1, 0);
-        expr();
-        gv();
-        skip(':');
-        u = gjmp(0);
-        gsym(t);
-        expr_eq();
-        gv();
-        gsym(u);
+    int t, u, c;
+
+    if (const_wanted) {
+        sum(10);
+        if (tok == '?') {
+            c = vc;
+            next();
+            expr();
+            t = vc;
+            skip(':');
+            expr_eq();
+            if (c)
+                vc = t;
+        }
+    } else {
+        eor();
+        if (tok == '?') {
+            next();
+            t = gtst(1, 0);
+            expr();
+            gv();
+            skip(':');
+            u = gjmp(0);
+            gsym(t);
+            expr_eq();
+            gv();
+            gsym(u);
+        }
     }
 }
 
@@ -2011,7 +2479,17 @@ void expr()
     }
 }
 
-#endif
+int expr_const()
+{
+    int a;
+    a = const_wanted;
+    const_wanted = 1;
+    expr_eq();
+    if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST)
+        expect("constant");
+    const_wanted = a;
+    return vc;
+}
 
 void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
 {
@@ -2079,9 +2557,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         *csym = gjmp(*csym);
         next();
         skip(';');
-    } else 
-#ifndef TINY
-    if (tok == TOK_FOR) {
+    } else if (tok == TOK_FOR) {
         int e;
         next();
         skip('(');
@@ -2180,9 +2656,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
             oad(0xe9, s->c - ind - 5); /* jmp xxx */
         next();
         skip(';');
-    } else
-#endif
-    {
+    } else {
         b = tok;
         next();
         if (tok == ':') {
@@ -2272,7 +2746,7 @@ void decl(l)
                     if (t & VT_EXTERN) {
                         /* external variable */
                         /* XXX: factorize with external function def */
-                        n = dlsym(NULL, get_tok_str(v));
+                        n = (int)dlsym(NULL, get_tok_str(v, 0));
                         if (!n)
                             error("unknown external variable");
                         sym_push(v, VT_CONST | t, n);
@@ -2306,16 +2780,47 @@ void decl(l)
     }
 }
 
-int main(int c, char **v)
+int main(int argc, char **argv)
 {
     Sym *s;
     int (*t)();
-    if (c < 2) {
-        printf("usage: tcc source ...\n");
-        return 1;
+    char *p, *r;
+    int optind;
+
+    include_paths[0] = "/usr/include";
+    include_paths[1] = "/usr/lib/tcc";
+    include_paths[2] = "/usr/local/lib/tcc";
+    nb_include_paths = 3;
+
+    /* add all tokens */
+    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0float\0double\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0main\0";
+    while (*p) {
+        r = p;
+        while (*r++);
+        tok_alloc(p, r - p - 1);
+        p = r;
     }
-    v++;
-    filename = *v;
+
+    optind = 1;
+    while (1) {
+        if (optind >= argc) {
+            printf("usage: tcc [-Idir] infile [infile_arg...]\n");
+            return 1;
+        }
+        r = argv[optind];
+        if (r[0] != '-')
+            break;
+        if (r[1] == 'I') {
+            if (nb_include_paths >= INCLUDE_PATHS_MAX)
+                error("too many include paths");
+            include_paths[nb_include_paths++] = r + 2;
+        } else {
+            error("invalid option");
+        }
+        optind++;
+    }
+    
+    filename = argv[optind];
     line_num = 1;
     file = fopen(filename, "r");
     if (!file) {
@@ -2325,16 +2830,10 @@ int main(int c, char **v)
     include_stack_ptr = include_stack;
     ifdef_stack_ptr = ifdef_stack;
 
-    idtable = malloc(SYM_TABLE_SIZE);
-    memcpy(idtable, 
-           "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0float\0double\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0main", 251);
-    idptr = idtable + 251;
-
-    glo = malloc(DATA_SIZE);
+    glo = (int)malloc(DATA_SIZE);
     memset((void *)glo, 0, DATA_SIZE);
-    prog = malloc(TEXT_SIZE);
+    prog = (int)malloc(TEXT_SIZE);
     vstack_ptr = vstack;
-    macro_stack_ptr = macro_stack;
     anon_sym = 1 << (31 - VT_STRUCT_SHIFT); 
     ind = prog;
     inp();
@@ -2356,6 +2855,6 @@ int main(int c, char **v)
     if (!s)
         error("main() not defined");
     t = s->c;
-    return (*t)(c - 1, v);
+    return (*t)(argc - optind, argv + optind);
 #endif
 }
