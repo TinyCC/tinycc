@@ -6371,6 +6371,7 @@ static void struct_decl(CType *type, int u)
                         if (bt != VT_INT && 
                             bt != VT_BYTE && 
                             bt != VT_SHORT &&
+                            bt != VT_BOOL &&
                             bt != VT_ENUM)
                             error("bitfields must have scalar type");
                         bsize = size * 8;
