@@ -2675,14 +2675,21 @@ static inline void next_nomacro1(void)
     char *q;
     TokenSym *ts;
 
-    /* skip spaces */
-    while(1) {
-        while (ch == '\n') {
-            /* during preprocessor parsing, '\n' is a token */
-            if (return_linefeed) {
-                tok = TOK_LINEFEED;
-                return;
-            }
+ redo_no_start:
+    switch(ch) {
+    case ' ':
+    case '\t':
+    case '\f':
+    case '\v':
+    case '\r':
+        cinp();
+        goto redo_no_start;
+        
+    case '\n':
+        if (return_linefeed) {
+            /* XXX: should eat token ? */
+            tok = TOK_LINEFEED;
+        } else {
             cinp();
             skip_spaces();
             if (ch == '#') {
@@ -2690,12 +2697,9 @@ static inline void next_nomacro1(void)
                    spaces */
                 preprocess();
             }
+            goto redo_no_start;
         }
-        if (!is_space(ch))
-            break;
-        cinp();
-    }
-    switch(ch) {
+        break;
 
     case '#':
         tok = ch;
