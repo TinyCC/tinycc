@@ -6310,12 +6310,33 @@ static unsigned long elf_hash(const unsigned char *name)
     return h;
 }
 
+/* add one symbol in hash table if it is global */
+/* WARNING: must be called each time a symbol is added otherwise the
+   hash table is not synchronized with the symbol table */
+static void update_hash_elf_sym(Section *hs, 
+                                int sym_index, int info, const char *name)
+{
+    int nbuckets, h;
+
+    /* only add global symbols */
+    if (ELF32_ST_BIND(info) == STB_GLOBAL) {
+        /* add another hashing entry */
+        nbuckets = ((int *)hs->data)[0];
+        h = elf_hash(name) % nbuckets;
+        ((int *)hs->data)[2 + nbuckets + sym_index] = ((int *)hs->data)[2 + h];
+        ((int *)hs->data)[2 + h] = sym_index;
+    }
+    /* but still add room for all symbols */
+    ((int *)hs->data)[1]++;
+    hs->data_ptr += sizeof(int);
+}
+
 /* return the symbol number */
 static int put_elf_sym(Section *s, 
                        unsigned long value, unsigned long size,
                        int info, int other, int shndx, const char *name)
 {
-    int name_offset, nbuckets, h, sym_index;
+    int name_offset, sym_index;
     Elf32_Sym *sym;
     Section *hs;
     
@@ -6333,13 +6354,8 @@ static int put_elf_sym(Section *s,
     sym->st_shndx = shndx;
     sym_index = sym - (Elf32_Sym *)s->data;
     hs = s->hash;
-    if (hs && ELF32_ST_BIND(info) == STB_GLOBAL) {
-        /* add another hashing entry */
-        nbuckets = ((int *)hs->data)[0];
-        ((int *)hs->data)[1]++;
-        h = elf_hash(name) % nbuckets;
-        ((int *)hs->data)[2 + nbuckets + sym_index] = ((int *)hs->data)[2 + h];
-        ((int *)hs->data)[2 + h] = sym_index;
+    if (hs) {
+        update_hash_elf_sym(hs, sym_index, info, name);
     }
     s->data_ptr += sizeof(Elf32_Sym);
     return sym_index;
@@ -6432,7 +6448,9 @@ static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
     if (!sr) {
         /* if no relocation section, create it */
         snprintf(buf, sizeof(buf), ".rel%s", s->name);
-        sr = new_section(buf, SHT_REL, s->sh_flags);
+        /* if the symtab is allocated, then we consider the relocation
+           are also */
+        sr = new_section(buf, SHT_REL, symtab->sh_flags);
         sr->sh_entsize = sizeof(Elf32_Rel);
         sr->link = symtab;
         sr->sh_info = s->sh_num;
@@ -6548,6 +6566,38 @@ static void sort_symbols(Section *s)
     free(old_to_new_syms);
 }
 
+static unsigned long get_sym_val(int sym_index)
+{
+    unsigned long val;
+    Elf32_Sym *sym;
+    
+    sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+    val = sym->st_value;
+    if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
+        val += sections[sym->st_shndx]->sh_addr;
+    return val;
+}
+
+/* relocate a given section */
+static void relocate_section(Section *s)
+{
+    Section *sr;
+    Elf32_Rel *rel;
+    int type;
+    unsigned char *ptr;
+    unsigned long val;
+
+    sr = s->reloc;
+    for(rel = (Elf32_Rel *)sr->data;
+        rel < (Elf32_Rel *)sr->data_ptr;
+        rel++) {
+        ptr = s->data + rel->r_offset;
+        val = get_sym_val(ELF32_R_SYM(rel->r_info));
+        type = ELF32_R_TYPE(rel->r_info);
+        greloc_patch(ptr, s->sh_addr + rel->r_offset, val, type);
+    }
+}
+
 static Section *new_section_hash(const char *name, int sh_flags, 
                                  int nb_buckets, Section *symtab)
 {
@@ -6588,10 +6638,10 @@ static void put32(unsigned char *p, unsigned int val)
 }
 
 /* output an ELF file (currently, only for testing) */
-/* XXX: generate startup code */
 /* XXX: handle realloc'ed sections (instead of mmaping them) */
+/* XXX: suppress unneeded sections */
 int tcc_output_file(TCCState *s1, const char *filename, int file_type)
-{ 
+{
     Elf32_Ehdr ehdr;
     FILE *f;
     int fd, mode;
@@ -6781,7 +6831,8 @@ int tcc_output_file(TCCState *s1, const char *filename, int file_type)
                     ph->p_paddr = ph->p_vaddr;
                 }
                 addr += s->sh_size;
-                file_offset += s->sh_size;
+                if (s->sh_type != SHT_NOBITS)
+                    file_offset += s->sh_size;
             }
             ph->p_filesz = file_offset - ph->p_offset;
             ph->p_memsz = addr - ph->p_vaddr;
@@ -6908,8 +6959,21 @@ int tcc_output_file(TCCState *s1, const char *filename, int file_type)
         file_offset = (file_offset + s->sh_addralign - 1) & 
             ~(s->sh_addralign - 1);
         s->sh_offset = file_offset;
-        file_offset += s->sh_size;
+        if (s->sh_type != SHT_NOBITS)
+            file_offset += s->sh_size;
     }
+    
+#if 1
+    /* if building executable, then relocate each section except the GOT
+       which is already relocated */
+    if (file_type == TCC_FILE_EXE) {
+        for(i = 1; i < nb_sections; i++) {
+            s = sections[i];
+            if (s->reloc && s != got)
+                relocate_section(s);
+        }
+    }
+#endif
 
     /* align to 4 */
     file_offset = (file_offset + 3) & -4;
@@ -6958,20 +7022,22 @@ int tcc_output_file(TCCState *s1, const char *filename, int file_type)
     offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
     for(i=1;i<nb_sections;i++) {
         s = sections[section_order[i]];
-        while (offset < s->sh_offset) {
-            fputc(0, f);
-            offset++;
+        if (s->sh_type != SHT_NOBITS) {
+            while (offset < s->sh_offset) {
+                fputc(0, f);
+                offset++;
+            }
+            size = s->data_ptr - s->data;
+            fwrite(s->data, 1, size, f);
+            offset += size;
         }
-        size = s->data_ptr - s->data;
-        fwrite(s->data, 1, size, f);
-        offset += size;
     }
     while (offset < ehdr.e_shoff) {
         fputc(0, f);
         offset++;
     }
     
-    /* output sections */
+    /* output section headers */
     for(i=0;i<nb_sections;i++) {
         sh = &shdr;
         memset(sh, 0, sizeof(Elf32_Shdr));
@@ -6995,6 +7061,219 @@ int tcc_output_file(TCCState *s1, const char *filename, int file_type)
 
     free(section_order);
     free(phdr);
+    return 0;
+}
+
+typedef struct SectionMergeInfo {
+    Section *s;            /* corresponding existing section */
+    unsigned long offset;  /* offset of the new section in the existing section */
+    int new_section;       /* true if section 's' was added */
+} SectionMergeInfo;
+
+/* load an object file and merge it with current files */
+/* XXX: handle correctly stab (debug) info */
+int tcc_load_object(TCCState *s1, const char *filename)
+{ 
+    Elf32_Ehdr ehdr;
+    FILE *f;
+    Elf32_Shdr *shdr, *sh;
+    int size, i, j, offset, offsetl, offseti;
+    unsigned char *strsec;
+    char *sh_name;
+    SectionMergeInfo *sm_table, *sm;
+    Elf32_Sym *sym;
+    Elf32_Rel *rel;
+    Section *s, *sl;
+
+    f = fopen(filename, "r");
+    if (!f)
+        error("could not open '%s'", filename);
+    if (fread(&ehdr, 1, sizeof(ehdr), f) != sizeof(ehdr))
+        goto fail;
+    if (ehdr.e_ident[0] != ELFMAG0 ||
+        ehdr.e_ident[1] != ELFMAG1 ||
+        ehdr.e_ident[2] != ELFMAG2 ||
+        ehdr.e_ident[3] != ELFMAG3)
+        goto fail;
+    /* test if object file */
+    if (ehdr.e_type != ET_REL)
+        goto fail;
+    /* test CPU specific stuff */
+    if (ehdr.e_ident[5] != ELFDATA2LSB ||
+        ehdr.e_machine != EM_386) {
+    fail:
+        error("invalid object file '%s'", filename);
+    }
+    /* read sections */
+    size = sizeof(Elf32_Shdr) * ehdr.e_shnum;
+    shdr = malloc(size);
+    if (!shdr)
+        error("memory full");
+    fseek(f, ehdr.e_shoff, SEEK_SET);
+    if (fread(shdr, 1, size, f) != size)
+        goto fail;
+
+    sm_table = malloc(sizeof(SectionMergeInfo) * ehdr.e_shnum);
+    if (!sm_table)
+        error("memory full");
+    memset(sm_table, 0, sizeof(SectionMergeInfo) * ehdr.e_shnum);
+    
+    /* load section names */
+    sh = &shdr[ehdr.e_shstrndx];
+    strsec = malloc(sh->sh_size);
+    if (!strsec)
+        error("memory full");
+    fseek(f, sh->sh_offset, SEEK_SET);
+    fread(strsec, 1, sh->sh_size, f);
+    
+    /* now examine each section and try to merge its content with the
+       ones in memory */
+    for(i = 1; i < ehdr.e_shnum; i++) {
+        /* no need to examine section name strtab */
+        if (i == ehdr.e_shstrndx)
+            continue;
+        sh = &shdr[i];
+        sh_name = strsec + sh->sh_name;
+        printf("%d: sh_name=%s\n", i, sh_name);
+        /* ignore sections types we do not handle */
+        if (sh->sh_type != SHT_PROGBITS &&
+            sh->sh_type != SHT_SYMTAB &&
+            sh->sh_type != SHT_STRTAB &&
+            sh->sh_type != SHT_REL && 
+            sh->sh_type != SHT_NOBITS)
+            continue;
+        if (sh->sh_addralign < 1)
+            sh->sh_addralign = 1;
+        /* find corresponding section, if any */
+        for(j = 1; j < nb_sections;j++) {
+            s = sections[j];
+            if (!strcmp(s->name, sh_name))
+                goto found;
+        }
+        /* not found: create new section */
+        s = new_section(sh_name, sh->sh_type, sh->sh_flags);
+        /* take as much info as possible from the section. sh_link and
+           sh_info will be updated later */
+        s->sh_addralign = sh->sh_addralign;
+        s->sh_entsize = sh->sh_entsize;
+        sm_table[i].new_section = 1;
+    found:
+        if (sh->sh_type != s->sh_type)
+            goto fail;
+        if (sh->sh_type == SHT_SYMTAB) {
+            /* if symbol, suppress first dummy entry */
+            sh->sh_size -= sizeof(Elf32_Sym);
+            sh->sh_offset += sizeof(Elf32_Sym);
+        }
+
+        /* align start of section */
+        offset = s->data_ptr - s->data;
+        size = sh->sh_addralign - 1;
+        offset = (offset + size) & ~size;
+        if (sh->sh_addralign > s->sh_addralign)
+            s->sh_addralign = sh->sh_addralign;
+        s->data_ptr = s->data + offset;
+        sm_table[i].offset = offset;
+        sm_table[i].s = s;
+        /* concatenate sections */
+        size = sh->sh_size;
+        if (sh->sh_type != SHT_NOBITS) {
+            fseek(f, sh->sh_offset, SEEK_SET);
+            fread(s->data_ptr, 1, size, f);
+        }
+        s->data_ptr += size;
+    }
+
+    /* second short pass to update sh_link and sh_info fields of new
+       sections */
+    sm = sm_table;
+    for(i = 1; i < ehdr.e_shnum; i++) {
+        s = sm_table[i].s;
+        if (!s || !sm_table[i].new_section)
+            continue;
+        sh = &shdr[i];
+        if (sh->sh_link > 0)
+            s->link = sm_table[sh->sh_link].s;
+        if (sh->sh_type == SHT_REL) {
+            s->sh_info = sm_table[sh->sh_info].s->sh_num;
+            /* update backward link */
+            sections[s->sh_info]->reloc = s;
+        }
+    }
+
+    /* third pass to patch symbol and relocation entries */
+    for(i = 1; i < ehdr.e_shnum; i++) {
+        s = sm_table[i].s;
+        if (!s)
+            continue;
+        sh = &shdr[i];
+        offset = sm_table[i].offset;
+        switch(s->sh_type) {
+        case SHT_SYMTAB:
+            /* take strtab offset information */
+            sl = sm_table[sh->sh_link].s;
+            offsetl = sm_table[sh->sh_link].offset;
+            
+            for(sym = (Elf32_Sym *)(s->data + offset);
+                sym < (Elf32_Sym *)s->data_ptr;
+                sym++) {
+                /* offset name */
+                if (sym->st_name != 0)
+                    sym->st_name += offsetl;
+                /* add to internal hash table */
+                if (s->hash) {
+                    update_hash_elf_sym(s->hash, sym - (Elf32_Sym *)s->data,
+                                        sym->st_info, sl->data + sym->st_name);
+                }
+                /* no need to patch */
+                if (sym->st_shndx == SHN_UNDEF ||
+                    sym->st_shndx >= SHN_LORESERVE)
+                    continue;
+                /* transform section number */
+                sm = &sm_table[sym->st_shndx];
+                if (sm->s) {
+                    sym->st_shndx = sm->s->sh_num;
+                    /* offset value */
+                    sym->st_value += sm->offset;
+                } else {
+                    /* if the section was suppressed, we put a dummy symbol */
+                    /* XXX: suppress it ? */
+                    sym->st_value = 0;
+                    sym->st_shndx = SHN_ABS;
+                    sym->st_info = 0;
+                    sym->st_name = 0;
+                    printf("warning: invalid symbol %d\n", 
+                           sym - (Elf32_Sym *)(s->data + offset) + 1);
+                }
+            }
+            break;
+        case SHT_REL:
+            /* take symbol offset information */
+            /* minus one because we deleted the first symbol */
+            offsetl = (sm_table[sh->sh_link].offset / sizeof(Elf32_Sym)) - 1;
+            /* take relocation offset information */
+            offseti = sm_table[sh->sh_info].offset;
+            
+            for(rel = (Elf32_Rel *)(s->data + offset);
+                rel < (Elf32_Rel *)s->data_ptr;
+                rel++) {
+                int type, sym_index;
+                /* offset symbol index */
+                type = ELF32_R_TYPE(rel->r_info);
+                sym_index = ELF32_R_SYM(rel->r_info);
+                sym_index += offsetl;
+                rel->r_info = ELF32_R_INFO(sym_index, type);
+                /* offset the relocation offset */
+                rel->r_offset += offseti;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    free(sm_table);
+    free(shdr);
+    fclose(f);
     return 0;
 }
 
@@ -7177,40 +7456,6 @@ static void resolve_extern_syms(void)
     }
 }
 
-static unsigned long get_sym_val(int sym_index)
-{
-    unsigned long val;
-    Elf32_Sym *sym;
-    
-    sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
-    val = sym->st_value;
-    if (sym->st_shndx != SHN_ABS)
-        val += sections[sym->st_shndx]->sh_addr;
-    return val;
-}
-
-/* relocate sections */
-static void relocate_section(Section *s)
-{
-    Section *sr;
-    Elf32_Rel *rel;
-    int type;
-    unsigned char *ptr;
-    unsigned long val;
-
-    sr = s->reloc;
-    if (!sr)
-        return;
-    for(rel = (Elf32_Rel *)sr->data;
-        rel < (Elf32_Rel *)sr->data_ptr;
-        rel++) {
-        ptr = s->data + rel->r_offset;
-        val = get_sym_val(ELF32_R_SYM(rel->r_info));
-        type = ELF32_R_TYPE(rel->r_info);
-        greloc_patch(ptr, s->sh_addr + rel->r_offset, val, type);
-    }
-}
-
 /* relocate all the code and data */
 static void relocate_program(void)
 {
@@ -7218,13 +7463,13 @@ static void relocate_program(void)
 
     /* compute relocation address : section are relocated in place */
     for(s = first_section; s != NULL; s = s->next) {
-        if (s->sh_type == SHT_PROGBITS)
+        if (s->sh_flags & SHF_ALLOC)
             s->sh_addr = (unsigned long)s->data;
     }
 
     /* relocate each section */
     for(s = first_section; s != NULL; s = s->next) {
-        if (s->sh_type == SHT_PROGBITS) 
+        if ((s->sh_flags & SHF_ALLOC) && s->reloc)
             relocate_section(s);
     }
 }
@@ -7315,8 +7560,7 @@ TCCState *tcc_new(void)
     nb_sections = 1;
     text_section = new_section(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-    /* XXX: should change type to SHT_NOBITS */
-    bss_section = new_section(".bss", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    bss_section = new_section(".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
     
     /* symbols are always generated for linking stage */
     symtab_section = new_section(".symtab", SHT_SYMTAB, 0);
@@ -7351,6 +7595,24 @@ int tcc_add_include_path(TCCState *s, const char *pathname)
 }
 
 #if !defined(LIBTCC)
+
+void tcc_add_file(TCCState *s, const char *filename)
+{
+    const char *p;
+    int ext;
+
+    /* find file type with extension */
+    p = strrchr(filename, '.');
+    if (!p)
+        ext = '\0';
+    else
+        ext = p[1];
+    if (ext == 'o') {
+        tcc_load_object(s, filename);
+    } else {
+        tcc_compile_file(s, filename);
+    }
+}
 
 void help(void)
 {
@@ -7413,7 +7675,7 @@ int main(int argc, char **argv)
         } else if (r[1] == 'i') {
             if (optind >= argc)
                 goto show_help;
-            tcc_compile_file(s, argv[optind++]);
+            tcc_add_file(s, argv[optind++]);
         } else if (!strcmp(r + 1, "bench")) {
             do_bench = 1;
 #ifdef CONFIG_TCC_BCHECK
@@ -7452,6 +7714,8 @@ int main(int argc, char **argv)
            documented */
         if (r[1] == 'c') {
             file_type = TCC_FILE_OBJ;
+        } else if (!strcmp(r + 1, "static")) {
+            static_link = 1;
         } else if (!strcmp(r + 1, "shared")) {
             file_type = TCC_FILE_DLL;
         } else if (r[1] == 'o') {
@@ -7463,7 +7727,7 @@ int main(int argc, char **argv)
         }
     }
     
-    tcc_compile_file(s, argv[optind]);
+    tcc_add_file(s, argv[optind]);
 
     if (do_bench) {
         printf("total: %d idents, %d lines, %d bytes\n", 
