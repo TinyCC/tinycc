@@ -20,6 +20,13 @@
 #define _GNU_SOURCE
 #include "config.h"
 
+#ifdef CONFIG_TCCBOOT
+
+#include "tccboot.h"
+#define CONFIG_TCC_STATIC
+
+#else
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -40,10 +47,16 @@
 #include <sys/time.h>
 #include <sys/ucontext.h>
 #endif
+
+#endif /* !CONFIG_TCCBOOT */
+
 #include "elf.h"
 #include "stab.h"
 #ifndef CONFIG_TCC_STATIC
 #include <dlfcn.h>
+#endif
+#ifndef O_BINARY
+#define O_BINARY 0
 #endif
 
 #include "libtcc.h"
@@ -101,10 +114,8 @@ typedef int BOOL;
 #define VSTACK_SIZE         64
 #define STRING_MAX_SIZE     1024
 
-#define TOK_HASH_SIZE       2048 /* must be a power of two */
+#define TOK_HASH_SIZE       8192 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
-#define TOK_STR_ALLOC_INCR_BITS 6
-#define TOK_STR_ALLOC_INCR (1 << TOK_STR_ALLOC_INCR_BITS)
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
 /* token symbol management */
@@ -432,6 +443,9 @@ struct TCCState {
     /* address of text section */
     unsigned long text_addr;
     int has_text_addr;
+    
+    /* output format, see TCC_OUTPUT_FORMAT_xxx */
+    int output_format;
 
     /* C language options */
     int char_is_unsigned;
@@ -704,6 +718,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
 static int expr_const(void);
 static void expr_eq(void);
 static void gexpr(void);
+static void gen_inline_functions(void);
 static void decl(int l);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
                              int first, int size_only);
@@ -722,7 +737,6 @@ int get_reg_ex(int rc,int rc2);
 
 static void macro_subst(TokenString *tok_str, Sym **nested_list, 
                         const int *macro_str, int can_read_stream);
-int save_reg_forced(int r);
 void gen_op(int op);
 void force_charshort_cast(int t);
 static void gen_cast(CType *type);
@@ -781,7 +795,7 @@ static int tcc_add_dll(TCCState *s, const char *filename, int flags);
 static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
 
 /* tcccoff.c */
-int tcc_output_coff(TCCState *s1, const char *OutFile);
+int tcc_output_coff(TCCState *s1, FILE *f);
 
 /* tccasm.c */
 
@@ -867,10 +881,12 @@ typedef struct TCCSyms {
 
 /* add the symbol you want here if no dynamic linking is done */
 static TCCSyms tcc_syms[] = {
+#if !defined(CONFIG_TCCBOOT)
     TCCSYM(printf)
     TCCSYM(fprintf)
     TCCSYM(fopen)
     TCCSYM(fclose)
+#endif
     { NULL, NULL },
 };
 
@@ -1722,7 +1738,7 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
     int fd;
     BufferedFile *bf;
 
-    fd = open(filename, O_RDONLY);
+    fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
         return NULL;
     bf = tcc_malloc(sizeof(BufferedFile));
@@ -2254,7 +2270,11 @@ static int *tok_str_realloc(TokenString *s)
 {
     int *str, len;
 
-    len = s->allocated_len + TOK_STR_ALLOC_INCR;
+    if (s->allocated_len == 0) {
+        len = 8;
+    } else {
+        len = s->allocated_len * 2;
+    }
     str = tcc_realloc(s->str, len * sizeof(int));
     if (!str)
         error("memory full");
@@ -4630,8 +4650,13 @@ int gv(int rc)
                     load(r, vtop);
                     vtop->r = r; /* save register value */
                     vpushi(ll >> 32); /* second word */
-                } else if (r >= VT_CONST || 
+                } else if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
                            (vtop->r & VT_LVAL)) {
+                    /* We do not want to modifier the long long
+                       pointer here, so the safest (and less
+                       efficient) is to save all the other registers
+                       in the stack. XXX: totally inefficient. */
+                    save_regs(1);
                     /* load from memory */
                     load(r, vtop);
                     vdup();
@@ -7119,7 +7144,20 @@ static void unary(void)
                         get_tok_str(t, NULL));
             s = external_global_sym(t, &func_old_type, 0); 
         }
-        vset(&s->type, s->r, s->c);
+        if ((s->type.t & (VT_STATIC | VT_INLINE | VT_BTYPE)) ==
+            (VT_STATIC | VT_INLINE | VT_FUNC)) {
+            /* if referencing an inline function, then we generate a
+               symbol to it if not already done. It will have the
+               effect to generate code for it at the end of the
+               compilation unit. Inline function as always
+               generated in the text section. */
+            if (!s->c)
+                put_extern_sym(s, text_section, 0, 0);
+            r = VT_SYM | VT_CONST;
+        } else {
+            r = s->r;
+        }
+        vset(&s->type, r, s->c);
         /* if forward reference, we must point to s */
         if (vtop->r & VT_SYM) {
             vtop->sym = s;
@@ -8594,65 +8632,6 @@ void put_func_debug(Sym *sym)
     last_line_num = 0;
 }
 
-/* not finished : try to put some local vars in registers */
-//#define CONFIG_REG_VARS
-
-#ifdef CONFIG_REG_VARS
-void add_var_ref(int t)
-{
-    printf("%s:%d: &%s\n", 
-           file->filename, file->line_num,
-           get_tok_str(t, NULL));
-}
-
-/* first pass on a function with heuristic to extract variable usage
-   and pointer references to local variables for register allocation */
-void analyse_function(void)
-{
-    int level, t;
-
-    for(;;) {
-        if (tok == -1)
-            break;
-        /* any symbol coming after '&' is considered as being a
-           variable whose reference is taken. It is highly unaccurate
-           but it is difficult to do better without a complete parse */
-        if (tok == '&') {
-            next();
-            /* if '& number', then no need to examine next tokens */
-            if (tok == TOK_CINT ||
-                tok == TOK_CUINT ||
-                tok == TOK_CLLONG ||
-                tok == TOK_CULLONG) {
-                continue;
-            } else if (tok >= TOK_UIDENT) {
-                /* if '& ident [' or '& ident ->', then ident address
-                   is not needed */
-                t = tok;
-                next();
-                if (tok != '[' && tok != TOK_ARROW)
-                    add_var_ref(t);
-            } else {
-                level = 0;
-                while (tok != '}' && tok != ';' && 
-                       !((tok == ',' || tok == ')') && level == 0)) {
-                    if (tok >= TOK_UIDENT) {
-                        add_var_ref(tok);
-                    } else if (tok == '(') {
-                        level++;
-                    } else if (tok == ')') {
-                        level--;
-                    }
-                    next();
-                }
-            }
-        } else {
-            next();
-        }
-    }
-}
-#endif
-
 /* parse an old style function declaration list */
 /* XXX: check multiple parameter */
 static void func_decl_list(Sym *func_sym)
@@ -8698,6 +8677,88 @@ static void func_decl_list(Sym *func_sym)
             }
         }
         skip(';');
+    }
+}
+
+/* parse a function defined by symbol 'sym' and generate its code in
+   'cur_text_section' */
+static void gen_function(Sym *sym)
+{
+    ind = cur_text_section->data_offset;
+    /* NOTE: we patch the symbol size later */
+    put_extern_sym(sym, cur_text_section, ind, 0);
+    funcname = get_tok_str(sym->v, NULL);
+    func_ind = ind;
+    /* put debug symbol */
+    if (do_debug)
+        put_func_debug(sym);
+    /* push a dummy symbol to enable local sym storage */
+    sym_push2(&local_stack, SYM_FIELD, 0, 0);
+    gfunc_prolog(&sym->type);
+    rsym = 0;
+    block(NULL, NULL, NULL, NULL, 0, 0);
+    gsym(rsym);
+    gfunc_epilog();
+    cur_text_section->data_offset = ind;
+    label_pop(&global_label_stack, NULL);
+    sym_pop(&local_stack, NULL); /* reset local stack */
+    /* end of function */
+    /* patch symbol size */
+    ((Elf32_Sym *)symtab_section->data)[sym->c].st_size = 
+        ind - func_ind;
+    if (do_debug) {
+        put_stabn(N_FUN, 0, 0, ind - func_ind);
+    }
+    funcname = ""; /* for safety */
+    func_vt.t = VT_VOID; /* for safety */
+    ind = 0; /* for safety */
+}
+
+static void gen_inline_functions(void)
+{
+    Sym *sym;
+    CType *type;
+    int *str, inline_generated;
+
+    /* iterate while inline function are referenced */
+    for(;;) {
+        inline_generated = 0;
+        for(sym = global_stack; sym != NULL; sym = sym->prev) {
+            type = &sym->type;
+            if (((type->t & VT_BTYPE) == VT_FUNC) &&
+                (type->t & (VT_STATIC | VT_INLINE)) == 
+                (VT_STATIC | VT_INLINE) &&
+                sym->c != 0) {
+                /* the function was used: generate its code and
+                   convert it to a normal function */
+                str = (int *)sym->r;
+                sym->r = VT_SYM | VT_CONST;
+                type->t &= ~VT_INLINE;
+
+                macro_ptr = str;
+                next();
+                cur_text_section = text_section;
+                gen_function(sym);
+                macro_ptr = NULL; /* fail safe */
+
+                tok_str_free(str);
+                inline_generated = 1;
+            }
+        }
+        if (!inline_generated)
+            break;
+    }
+
+    /* free all remaining inline function tokens */
+    for(sym = global_stack; sym != NULL; sym = sym->prev) {
+        type = &sym->type;
+        if (((type->t & VT_BTYPE) == VT_FUNC) &&
+            (type->t & (VT_STATIC | VT_INLINE)) == 
+            (VT_STATIC | VT_INLINE)) {
+            str = (int *)sym->r;
+            tok_str_free(str);
+            sym->r = 0; /* fail safe */
+        }
     }
 }
 
@@ -8755,11 +8816,6 @@ static void decl(int l)
             }
 
             if (tok == '{') {
-#ifdef CONFIG_REG_VARS
-                TokenString func_str;
-                ParseState saved_parse_state;
-                int block_level;
-#endif
                 if (l == VT_LOCAL)
                     error("cannot use local functions");
                 if (!(type.t & VT_FUNC))
@@ -8774,44 +8830,7 @@ static void decl(int l)
                 /* XXX: cannot do better now: convert extern line to static inline */
                 if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
                     type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
-
-#ifdef CONFIG_REG_VARS
-                /* parse all function code and record it */
-
-                tok_str_new(&func_str);
                 
-                block_level = 0;
-                for(;;) {
-                    int t;
-                    if (tok == -1)
-                        error("unexpected end of file");
-                    tok_str_add_tok(&func_str);
-                    t = tok;
-                    next();
-                    if (t == '{') {
-                        block_level++;
-                    } else if (t == '}') {
-                        block_level--;
-                        if (block_level == 0)
-                            break;
-                    }
-                }
-                tok_str_add(&func_str, -1);
-                tok_str_add(&func_str, 0);
-
-                save_parse_state(&saved_parse_state);
-    
-                macro_ptr = func_str.str;
-                next();
-                analyse_function();
-#endif
-
-                /* compute text section */
-                cur_text_section = ad.section;
-                if (!cur_text_section)
-                    cur_text_section = text_section;
-                ind = cur_text_section->data_offset;
-                funcname = get_tok_str(v, NULL);
                 sym = sym_find(v);
                 if (sym) {
                     if ((sym->type.t & VT_BTYPE) != VT_FUNC)
@@ -8834,42 +8853,44 @@ static void decl(int l)
                     sym = global_identifier_push(v, type.t, 0);
                     sym->type.ref = type.ref;
                 }
-                /* NOTE: we patch the symbol size later */
-                put_extern_sym(sym, cur_text_section, ind, 0);
-                func_ind = ind;
-                sym->r = VT_SYM | VT_CONST;
-                /* put debug symbol */
-                if (do_debug)
-                    put_func_debug(sym);
-                /* push a dummy symbol to enable local sym storage */
-                sym_push2(&local_stack, SYM_FIELD, 0, 0);
-                gfunc_prolog(&type);
-                rsym = 0;
-#ifdef CONFIG_REG_VARS
-                macro_ptr = func_str.str;
-                next();
-#endif
-                block(NULL, NULL, NULL, NULL, 0, 0);
-                gsym(rsym);
-                gfunc_epilog();
-                cur_text_section->data_offset = ind;
-                label_pop(&global_label_stack, NULL);
-                sym_pop(&local_stack, NULL); /* reset local stack */
-                /* end of function */
-                /* patch symbol size */
-                ((Elf32_Sym *)symtab_section->data)[sym->c].st_size = 
-                    ind - func_ind;
-                if (do_debug) {
-                    put_stabn(N_FUN, 0, 0, ind - func_ind);
-                }
-                funcname = ""; /* for safety */
-                func_vt.t = VT_VOID; /* for safety */
-                ind = 0; /* for safety */
 
-#ifdef CONFIG_REG_VARS
-                tok_str_free(func_str.str);
-                restore_parse_state(&saved_parse_state);
-#endif
+                /* static inline functions are just recorded as a kind
+                   of macro. Their code will be emitted at the end of
+                   the compilation unit only if they are used */
+                if ((type.t & (VT_INLINE | VT_STATIC)) == 
+                    (VT_INLINE | VT_STATIC)) {
+                    TokenString func_str;
+                    int block_level;
+                           
+                    tok_str_new(&func_str);
+                    
+                    block_level = 0;
+                    for(;;) {
+                        int t;
+                        if (tok == TOK_EOF)
+                            error("unexpected end of file");
+                        tok_str_add_tok(&func_str);
+                        t = tok;
+                        next();
+                        if (t == '{') {
+                            block_level++;
+                        } else if (t == '}') {
+                            block_level--;
+                            if (block_level == 0)
+                                break;
+                        }
+                    }
+                    tok_str_add(&func_str, -1);
+                    tok_str_add(&func_str, 0);
+                    sym->r = (int)func_str.str;
+                } else {
+                    /* compute text section */
+                    cur_text_section = ad.section;
+                    if (!cur_text_section)
+                        cur_text_section = text_section;
+                    sym->r = VT_SYM | VT_CONST;
+                    gen_function(sym);
+                }
                 break;
             } else {
                 if (btype.t & VT_TYPEDEF) {
@@ -9014,6 +9035,8 @@ static int tcc_compile(TCCState *s1)
     /* reset define stack, but leave -Dsymbols (may be incorrect if
        they are undefined) */
     free_defines(define_start); 
+
+    gen_inline_functions();
 
     sym_pop(&global_stack, NULL);
 
@@ -9239,7 +9262,7 @@ static void rt_printline(unsigned long wanted_pc)
     fprintf(stderr, "\n");
 }
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(CONFIG_TCCBOOT)
 
 #ifdef __i386__
 
@@ -9406,7 +9429,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     prog_main = tcc_get_symbol_err(s1, "main");
     
     if (do_debug) {
-#ifdef WIN32
+#if defined(WIN32) || defined(CONFIG_TCCBOOT)
         error("debug mode currently not available for Windows");
 #else        
         struct sigaction sigact;
@@ -10249,8 +10272,22 @@ int parse_args(TCCState *s, int argc, char **argv)
                     if (strstart(optarg, "-Ttext,", &p)) {
                         s->text_addr = strtoul(p, NULL, 16);
                         s->has_text_addr = 1;
+                    } else if (strstart(optarg, "--oformat,", &p)) {
+                        if (strstart(p, "elf32-", NULL)) {
+                            s->output_format = TCC_OUTPUT_FORMAT_ELF;
+                        } else if (!strcmp(p, "binary")) {
+                            s->output_format = TCC_OUTPUT_FORMAT_BINARY;
+                        } else
+#ifdef TCC_TARGET_COFF
+                        if (!strcmp(p, "coff")) {
+                            s->output_format = TCC_OUTPUT_FORMAT_COFF;
+                        } else
+#endif
+                        {
+                            error("target %s not found", p);
+                        }
                     } else {
-                        error("unsupported ld option '%s'", optarg);
+                        error("unsupported linker option '%s'", optarg);
                     }
                 }
                 break;
