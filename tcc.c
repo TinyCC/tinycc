@@ -233,10 +233,12 @@ enum {
     TOK_DEFINED,
     TOK_UNDEF,
     TOK_ERROR,
+    TOK_LINE,
     TOK___LINE__,
     TOK___FILE__,
     TOK___DATE__,
     TOK___TIME__,
+    TOK___VA_ARGS__,
 
     /* special identifiers */
     TOK___FUNC__,
@@ -250,6 +252,7 @@ int expr_const();
 void expr_eq();
 void expr();
 void decl();
+void decl_assign(int t, int c, int first);
 int gv();
 void move_reg();
 void save_reg();
@@ -715,6 +718,8 @@ void preprocess()
             next_nomacro();
             ps = &first;
             while (tok != ')') {
+                if (tok == TOK_DOTS) 
+                    tok = TOK___VA_ARGS__;
                 s = sym_push1(&define_stack, tok | SYM_FIELD, 0, 0);
                 *ps = s;
                 ps = &s->next;
@@ -763,44 +768,51 @@ void preprocess()
                 minp();
             }
             *q = '\0';
-            if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
-                error("memory full");
-            if (c == '\"') {
-                /* first search in current dir if "header.h" */
-                /* XXX: buffer overflow */
-                size = 0;
-                p = strrchr(filename, '/');
-                if (p) 
-                    size = p + 1 - filename;
-                memcpy(buf1, filename, size);
-                buf1[size] = '\0';
-                strcat(buf1, buf);
-                f = fopen(buf1, "r");
-                if (f)
-                    goto found;
-            }
-            /* now search in standard include path */
-            for(i=nb_include_paths - 1;i>=0;i--) {
-                strcpy(buf1, include_paths[i]);
-                strcat(buf1, "/");
-                strcat(buf1, buf);
-                f = fopen(buf1, "r");
-                if (f)
-                    goto found;
-            }
-            error("include file not found");
-            f = NULL;
-        found:
-            /* push current file in stack */
-            /* XXX: fix current line init */
-            include_stack_ptr->file = file;
-            include_stack_ptr->filename = filename;
-            include_stack_ptr->line_num = line_num;
-            include_stack_ptr++;
-            file = f;
-            filename = strdup(buf1);
-            line_num = 1;
+        } else {
+            next();
+            if (tok != TOK_STR)
+                error("#include syntax error");
+            /* XXX: buffer overflow */
+            strcpy(buf, get_tok_str(tok, tokc));
+            c = '\"';
         }
+        if (include_stack_ptr >= include_stack + INCLUDE_STACK_SIZE)
+            error("memory full");
+        if (c == '\"') {
+            /* first search in current dir if "header.h" */
+            /* XXX: buffer overflow */
+            size = 0;
+            p = strrchr(filename, '/');
+            if (p) 
+                size = p + 1 - filename;
+            memcpy(buf1, filename, size);
+            buf1[size] = '\0';
+            strcat(buf1, buf);
+            f = fopen(buf1, "r");
+            if (f)
+                goto found;
+        }
+        /* now search in standard include path */
+        for(i=nb_include_paths - 1;i>=0;i--) {
+            strcpy(buf1, include_paths[i]);
+            strcat(buf1, "/");
+            strcat(buf1, buf);
+            f = fopen(buf1, "r");
+            if (f)
+                goto found;
+        }
+        error("include file not found");
+        f = NULL;
+    found:
+        /* push current file in stack */
+        /* XXX: fix current line init */
+        include_stack_ptr->file = file;
+        include_stack_ptr->filename = filename;
+        include_stack_ptr->line_num = line_num;
+        include_stack_ptr++;
+        file = f;
+        filename = strdup(buf1);
+        line_num = 1;
     } else if (tok == TOK_IFNDEF) {
         c = 1;
         goto do_ifdef;
@@ -838,6 +850,19 @@ void preprocess()
         if (ifdef_stack_ptr == ifdef_stack)
             expect("#if");
         ifdef_stack_ptr--;
+    } else if (tok == TOK_LINE) {
+        next();
+        if (tok != TOK_NUM)
+            error("#line");
+        line_num = tokc;
+        skip_spaces();
+        if (ch != '\n') {
+            next();
+            if (tok != TOK_STR)
+                error("#line");
+            /* XXX: potential memory leak */
+            filename = strdup(get_tok_str(tok, tokc));
+        }
     } else if (tok == TOK_ERROR) {
         error("#error");
     }
@@ -877,7 +902,21 @@ int getq()
     minp();
     if (c == '\\') {
         if (isnum(ch)) {
-            return getn(8);
+            /* at most three octal digits */
+            c = ch - '0';
+            minp();
+            if (isnum(ch)) {
+                c = c * 8 + ch - '0';
+                minp();
+                if (isnum(ch)) {
+                    c = c * 8 + ch - '0';
+                    minp();
+                }
+            }
+            return c;
+        } else if (ch == 'x') {
+            minp();
+            return getn(16);
         } else {
             if (ch == 'a')
                 c = '\a';
@@ -926,6 +965,16 @@ void next_nomacro1()
     }
     if (isid(ch)) {
         q = token_buf;
+        *q++ = ch;
+        cinp();
+        if (q[-1] == 'L') {
+            /* XXX: not supported entirely (needs different
+               preprocessor architecture) */
+            if (ch == '\'')
+                goto char_const;
+            if (ch == '\"')
+                goto str_const;
+        }
         while (isid(ch) | isnum(ch)) {
             if (q >= token_buf + STRING_MAX_SIZE)
                 error("ident too long");
@@ -944,6 +993,9 @@ void next_nomacro1()
             if (ch == 'x' || ch == 'X') {
                 cinp();
                 b = 16;
+            } else if (ch == 'b' || ch == 'B') {
+                cinp();
+                b = 2;
             }
         }
         tokc = getn(b);
@@ -952,6 +1004,7 @@ void next_nomacro1()
             cinp();
         tok = TOK_NUM;
     } else if (ch == '\'') {
+    char_const:
         minp();
         tokc = getq();
         tok = TOK_CCHAR;
@@ -959,6 +1012,7 @@ void next_nomacro1()
             expect("\'");
         minp();
     } else if (ch == '\"') {
+    str_const:
         minp();
         q = token_buf;
         while (ch != '\"') {
@@ -1203,7 +1257,10 @@ void macro_subst(int **tok_str, int *tok_len,
                     len = 0;
                     str = NULL;
                     parlevel = 0;
-                    while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
+                    while ((parlevel > 0 || 
+                            (tok != ')' && 
+                             (tok != ',' || 
+                              sa->v == (TOK___VA_ARGS__ | SYM_FIELD)))) && 
                            tok != -1) {
                         if (tok == '(')
                             parlevel++;
@@ -1916,7 +1973,7 @@ void inc(post, c)
 int struct_decl(u)
 {
     int a, t, b, v, size, align, maxalign, c;
-    Sym *slast, *s, *ss;
+    Sym *s, *ss, **ps;
 
     a = tok; /* save decl type */
     next();
@@ -1945,7 +2002,7 @@ int struct_decl(u)
         /* cannot be empty */
         c = 0;
         maxalign = 0;
-        slast = NULL;
+        ps = &s->next;
         while (1) {
             if (a == TOK_ENUM) {
                 v = tok;
@@ -1978,8 +2035,8 @@ int struct_decl(u)
                     }
                     if (align > maxalign)
                         maxalign = align;
-                    ss->next = slast;
-                    slast = ss;
+                    *ps = ss;
+                    ps = &ss->next;
                     if (tok == ';' || tok == -1)
                         break;
                     skip(',');
@@ -1990,7 +2047,6 @@ int struct_decl(u)
                 break;
         }
         skip('}');
-        s->next = slast;
         /* size for struct/union, dummy for enum */
         s->c = (c + maxalign - 1) & -maxalign; 
     }
@@ -2215,13 +2271,13 @@ void unary()
     } else if (tok == TOK___FUNC__) {
         /* special function name identifier */
         /* generate (char *) type */
-        vset(VT_CONST | mk_pointer(VT_TYPE), glo);
+        vset(VT_CONST | mk_pointer(VT_BYTE), glo);
         strcpy((void *)glo, funcname);
         glo += strlen(funcname) + 1;
     } else if (tok == TOK_STR) {
         TokenSym *ts;
         /* generate (char *) type */
-        vset(VT_CONST | mk_pointer(VT_TYPE), glo);
+        vset(VT_CONST | mk_pointer(VT_BYTE), glo);
         while (tok == TOK_STR) {
             ts = (TokenSym *)tokc;
             memcpy((void *)glo, ts->str, ts->len);
@@ -2296,7 +2352,7 @@ void unary()
             s = sym_find(t);
             if (!s) {
                 if (tok != '(')
-                    error("undefined symbol");
+                    error("'%s' undeclared", get_tok_str(t, 0));
                 /* for simple function calls, we tolerate undeclared
                    external reference */
                 p = anon_sym++;        
@@ -2637,9 +2693,10 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         next();
         /* declarations */
         s = local_stack;
-        decl(VT_LOCAL);
-        while (tok != '}')
+        while (tok != '}') {
+            decl(VT_LOCAL);
             block(bsym, csym, case_sym, def_sym, case_reg);
+        }
         /* pop locally defined symbols */
         sym_pop(&local_stack, s);
         next();
@@ -2794,10 +2851,164 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
     }
 }
 
+/* t is the array or struct type. c is the array or struct
+   address. cur_index/cur_field is the pointer to the current value */
+void decl_designator(int t, int c, int *cur_index, Sym **cur_field)
+{
+    Sym *s, *f;
+    int notfirst, index, align;
+
+    notfirst = 0;
+    while (tok == '[' || tok == '.') {
+        if (tok == '[') {
+            if (!(t & VT_ARRAY))
+                expect("array type");
+            s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
+            next();
+            index = expr_const();
+            if (index < 0 || (s->c >= 0 && index >= s->c))
+                expect("invalid index");
+            skip(']');
+            if (!notfirst)
+                *cur_index = index;
+            t = pointed_type(t);
+            c += index * type_size(t, &align);
+        } else {
+            if (!(t & VT_STRUCT))
+                expect("struct/union type");
+            next();
+            s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
+            tok |= SYM_FIELD;
+            f = s->next;
+            while (f) {
+                if (f->v == tok)
+                    break;
+                f = f->next;
+            }
+            if (!f)
+                expect("field");
+            next();
+            if (!notfirst)
+                *cur_field = f;
+            t = f->t | (t & VT_TYPEN);
+            c += f->c;
+        }
+        notfirst = 1;
+    }
+    if (notfirst) {
+        skip('=');
+    } else {
+        if (t & VT_ARRAY) {
+            index = *cur_index;
+            t = pointed_type(t);
+            c += index * type_size(t, &align);
+        } else {
+            f = *cur_field;
+            if (!f)
+                error("too many field init");
+            t = f->t | (t & VT_TYPEN);
+            c += f->c;
+        }
+    }
+    decl_assign(t, c, 0);
+}
+
+/* 't' contains the type and storage info. c is the address of the
+   object. 'first' is true if array '{' must be read (multi dimension
+   implicit array init handling). */
+void decl_assign(int t, int c, int first)
+{
+    int v, index, index_max, t1, n, no_oblock;
+    Sym *s, *f;
+    TokenSym *ts;
+
+    if (t & VT_ARRAY) {
+        s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
+        n = s->c;
+        index_max = 0;
+        if (tok == TOK_STR) {
+            t1 = pointed_type(t);
+            if (!(t1 & VT_BYTE))
+                error("invalid type");
+            if ((t & VT_VALMASK) == VT_CONST) {
+                while (tok == TOK_STR) {
+                    ts = (TokenSym *)tokc;
+                    memcpy((void *)c, ts->str, ts->len);
+                    c += ts->len;
+                    index_max += ts->len;
+                    next();
+                }
+                *(char *)c++ = 0;
+            } else {
+                error("local string init not handled");
+            }
+            /* string init */
+        } else {
+            no_oblock = 0;
+            if (!first && tok != '{')
+                no_oblock = 1;
+            else
+                skip('{');
+            index = 0;
+            while (tok != '}') {
+                decl_designator(t, c, &index, NULL);
+                if (n >= 0 && index >= n)
+                    error("index too large");
+                if (index > index_max)
+                    index_max = index;
+                index++;
+                /* special test for multi dimensional arrays (may not
+                   be strictly correct if designators are used at the
+                   same time) */
+                if (index >= n && no_oblock)
+                    break;
+                if (tok == '}')
+                    break;
+                skip(',');
+            }
+            if (!no_oblock)
+                skip('}');
+        }
+        /* patch type size if needed */
+        if (n < 0)
+            s->c = index_max + 1;
+    } else if (t & VT_STRUCT) {
+        /* XXX: union needs only one init */
+        skip('{');
+        s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
+        f = s->next;
+        while (tok != '}') {
+            decl_designator(t, c, NULL, &f);
+            if (tok == '}')
+                break;
+            skip(',');
+            f = f->next;
+        }
+        skip('}');
+    } else {
+        if ((t & VT_VALMASK) == VT_CONST) {
+            v = expr_const();
+            printf("v=%d\n", v);
+            if (t & VT_BYTE)
+                *(char *)c = v;
+            else if (t & VT_SHORT)
+                *(short *)c = v;
+            else
+                *(int *)c = v;
+        } else {
+            vt = t;
+            vc = c;
+            vpush();
+            expr_eq();
+            vstore();
+        }
+    }
+}
+
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(l)
 {
-    int *a, t, b, size, align, v, u, n;
+    int *a, t, b, size, align, v, u, n, addr;
     Sym *sym;
 
     while (b = ist()) {
@@ -2866,16 +3077,37 @@ void decl(l)
                             u = VT_CONST;
                         u |= t;
                         size = type_size(t, &align);
-                        if (size < 0)
-                            error("invalid size");
                         if ((u & VT_VALMASK) == VT_LOCAL) {
-                            /* allocate space down on the stack */
+                            /* XXX: cannot use implicit size for local
+                               storage */
+                            if (size < 0)
+                                error("size must be known for locals");
                             loc = (loc - size) & -align;
-                            sym_push(v, u, loc);
+                            addr = loc;
                         } else {
-                            /* allocate space up in the data space */
                             glo = (glo + align - 1) & -align;
-                            sym_push(v, u, glo);
+                            addr = glo;
+                        }
+                        if (tok == '=') {
+                            next();
+                            /* special case for non array types */
+                            n = 0;
+                            if (tok == '{' && (u & (VT_ARRAY | VT_STRUCT)) == 0) {
+                                n = 1;
+                                next();
+                            }
+                            decl_assign(u, addr, 1);
+                            if (n)
+                                skip('}');
+                        }
+                        sym_push(v, u, addr);
+                        /* if global, add size */
+                        if ((u & VT_VALMASK) == VT_CONST) {
+                            /* must recompute size if it was an array
+                               with implicit size */
+                            size = type_size(t, &align);
+                            if (size < 0)
+                                error("invalid size");
                             glo += size;
                         }
                     }
@@ -2916,7 +3148,7 @@ int main(int argc, char **argv)
     nb_include_paths = 3;
 
     /* add all tokens */
-    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0restrict\0float\0double\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0error\0__LINE__\0__FILE__\0__DATE__\0__TIME__\0__func__\0main\0";
+    p = "int\0void\0char\0if\0else\0while\0break\0return\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0volatile\0long\0register\0signed\0auto\0inline\0restrict\0float\0double\0short\0struct\0union\0typedef\0default\0enum\0sizeof\0define\0include\0ifdef\0ifndef\0elif\0endif\0defined\0undef\0error\0line\0__LINE__\0__FILE__\0__DATE__\0__TIME__\0__VA_ARGS__\0__func__\0main\0";
     while (*p) {
         r = p;
         while (*r++);
