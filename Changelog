@@ -1,3 +1,7 @@
+version 0.9.21:
+
+- ARM target support (Daniel Glöckner)
+
 version 0.9.20:
 
 - added '-w' option
