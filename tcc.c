@@ -681,8 +681,8 @@ void vswap(void);
 void vdup(void);
 int get_reg(int rc);
 
-static void macro_subst(TokenString *tok_str, 
-                        Sym **nested_list, const int *macro_str);
+static void macro_subst(TokenString *tok_str, Sym **nested_list, 
+                        const int *macro_str, int can_read_stream);
 int save_reg_forced(int r);
 void gen_op(int op);
 void force_charshort_cast(int t);
@@ -3711,7 +3711,9 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                         }
                     }
                 } else {
-                    macro_subst(&str, nested_list, st);
+                    /* NOTE: the stream cannot be read when macro
+                       substituing an argument */
+                    macro_subst(&str, nested_list, st, 0);
                 }
             } else {
                 tok_str_add(&str, t);
@@ -3736,7 +3738,7 @@ static char const ab_month_name[12][4] =
    macros we got inside to avoid recursing. Return non zero if no
    substitution needs to be done */
 static int macro_subst_tok(TokenString *tok_str,
-                           Sym **nested_list, Sym *s)
+                           Sym **nested_list, Sym *s, int can_read_stream)
 {
     Sym *args, *sa, *sa1;
     int mstr_allocated, parlevel, *mstr, t;
@@ -3785,7 +3787,7 @@ static int macro_subst_tok(TokenString *tok_str,
                next token. XXX: find better solution */
             if (macro_ptr) {
                 t = *macro_ptr;
-                if (t == 0) {
+                if (t == 0 && can_read_stream) {
                     /* end of macro stream: we must look at the token
                        after in the file */
                     macro_ptr = NULL;
@@ -3862,7 +3864,7 @@ static int macro_subst_tok(TokenString *tok_str,
             mstr_allocated = 1;
         }
         sym_push2(nested_list, s->v, 0, 0);
-        macro_subst(tok_str, nested_list, mstr);
+        macro_subst(tok_str, nested_list, mstr, 1);
         /* pop nested defined symbol */
         sa1 = *nested_list;
         *nested_list = sa1->prev;
@@ -4009,8 +4011,8 @@ static inline int *macro_twosharps(const int *macro_str)
 /* do macro substitution of macro_str and add result to
    (tok_str,tok_len). 'nested_list' is the list of all macros we got
    inside to avoid recursing. */
-static void macro_subst(TokenString *tok_str,
-                        Sym **nested_list, const int *macro_str)
+static void macro_subst(TokenString *tok_str, Sym **nested_list, 
+                        const int *macro_str, int can_read_stream)
 {
     Sym *s;
     int *saved_macro_ptr, *macro_str1;
@@ -4039,7 +4041,7 @@ static void macro_subst(TokenString *tok_str,
             saved_macro_ptr = macro_ptr;
             macro_ptr = (int *)ptr;
             tok = t;
-            ret = macro_subst_tok(tok_str, nested_list, s);
+            ret = macro_subst_tok(tok_str, nested_list, s, can_read_stream);
             ptr = (int *)macro_ptr;
             macro_ptr = saved_macro_ptr;
             if (ret != 0)
@@ -4071,7 +4073,7 @@ static void next(void)
                 /* we have a macro: we try to substitute */
                 tok_str_new(&str);
                 nested_list = NULL;
-                if (macro_subst_tok(&str, &nested_list, s) == 0) {
+                if (macro_subst_tok(&str, &nested_list, s, 1) == 0) {
                     /* substitution done, NOTE: maybe empty */
                     tok_str_add(&str, 0);
                     macro_ptr = str.str;
