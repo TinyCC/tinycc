@@ -71,12 +71,14 @@ int reg_classes[NB_REGS] = {
 /* function call context */
 typedef struct GFuncContext {
     int args_size;
+    int func_call; /* func call type (FUNC_STDCALL or FUNC_CDECL) */
 } GFuncContext;
 
 /******************************************************/
 
 static int *func_sub_sp_ptr;
 static unsigned char *func_bound_ptr;
+static int func_ret_sub;
 
 void g(int c)
 {
@@ -279,9 +281,10 @@ void store(int r, SValue *v)
 }
 
 /* start function call and return function call context */
-void gfunc_start(GFuncContext *c)
+void gfunc_start(GFuncContext *c, int func_call)
 {
     c->args_size = 0;
+    c->func_call = func_call;
 }
 
 /* push function parameter which is in (vtop->t, vtop->c). Stack entry
@@ -356,7 +359,7 @@ void gfunc_call(GFuncContext *c)
         o(0xff); /* call *r */
         o(0xd0 + r);
     }
-    if (c->args_size)
+    if (c->args_size && c->func_call == FUNC_CDECL)
         oad(0xc481, c->args_size); /* add $xxx, %esp */
     vtop--;
 }
@@ -364,10 +367,11 @@ void gfunc_call(GFuncContext *c)
 /* generate function prolog of type 't' */
 void gfunc_prolog(int t)
 {
-    int addr, align, size, u;
+    int addr, align, size, u, func_call;
     Sym *sym;
 
     sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
+    func_call = sym->r;
     addr = 8;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
@@ -391,6 +395,10 @@ void gfunc_prolog(int t)
 #endif
         addr += size;
     }
+    func_ret_sub = 0;
+    /* pascal type call ? */
+    if (func_call == FUNC_STDCALL)
+        func_ret_sub = addr - 8;
     o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
     func_sub_sp_ptr = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
     /* leave some room for bound checking code */
@@ -423,7 +431,14 @@ void gfunc_epilog(void)
         oad(0xe8, (int)__bound_local_delete - ind - 5);
         o(0x585a); /* restore returned value, if any */
     }
-    o(0xc3c9); /* leave, ret */
+    o(0xc9); /* leave */
+    if (func_ret_sub == 0) {
+        o(0xc3); /* ret */
+    } else {
+        o(0xc2); /* ret n */
+        g(func_ret_sub);
+        g(func_ret_sub >> 8);
+    }
     /* align local size to word & save local variables */
     *func_sub_sp_ptr = (-loc + 3) & -4; 
 }
@@ -613,7 +628,7 @@ void gen_opi(int op)
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
-    int a, ft, fc, swapped;
+    int a, ft, fc, swapped, r;
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
@@ -634,6 +649,7 @@ void gen_opf(int op)
     if (op >= TOK_ULT && op <= TOK_GT) {
         /* load on stack second operand */
         load(REG_ST0, vtop);
+        save_reg(REG_EAX); /* eax is used by FP comparison code */
         if (op == TOK_GE || op == TOK_GT)
             o(0xc9d9); /* fxch %st(1) */
         o(0xe9da); /* fucompp */
@@ -694,11 +710,23 @@ void gen_opf(int op)
             o(0xde); /* fxxxp %st, %st(1) */
             o(0xc1 + (a << 3));
         } else {
+            /* if saved lvalue, then we must reload it */
+            r = vtop->r;
+            if ((r & VT_VALMASK) == VT_LLOCAL) {
+                SValue v1;
+                r = get_reg(RC_INT);
+                v1.t = VT_INT;
+                v1.r = VT_LOCAL | VT_LVAL;
+                v1.c.ul = fc;
+                load(r, &v1);
+                fc = 0;
+            }
+
             if ((ft & VT_BTYPE) == VT_DOUBLE)
                 o(0xdc);
             else
                 o(0xd8);
-            gen_modrm(a, vtop->r, fc);
+            gen_modrm(a, r, fc);
         }
         vtop--;
     }
@@ -714,6 +742,7 @@ static unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
    and 'long long' cases. */
 void gen_cvt_itof(int t)
 {
+    save_reg(REG_ST0);
     gv(RC_INT);
     if ((vtop->t & VT_BTYPE) == VT_LLONG) {
         /* signed long long to float/double/long double (unsigned case
