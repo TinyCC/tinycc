@@ -1,0 +1,6 @@
+
+- 'x'=
+- shifts
+- conditionnal ?:
+- constant propagation for '+', '-' and [].
+- verify function types
