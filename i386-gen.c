@@ -79,13 +79,14 @@ typedef struct GFuncContext {
 
 /******************************************************/
 
-static int *func_sub_sp_ptr;
-static unsigned char *func_bound_ptr;
+static unsigned long func_sub_sp_offset;
+static unsigned long func_bound_offset;
 static int func_ret_sub;
 
 void g(int c)
 {
-    *(char *)ind++ = c;
+    cur_text_section->data[ind] = c;
+    ind++;
 }
 
 void o(int c)
@@ -107,10 +108,11 @@ void gen_le32(int c)
 /* output a symbol and patch all calls to it */
 void gsym_addr(int t, int a)
 {
-    int n;
+    int n, *ptr;
     while (t) {
-        n = *(int *)t; /* next value */
-        *(int *)t = a - t - 4;
+        ptr = (int *)(cur_text_section->data + t);
+        n = *ptr; /* next value */
+        *ptr = a - t - 4;
         t = n;
     }
 }
@@ -128,7 +130,7 @@ void gsym(int t)
 int oad(int c, int s)
 {
     o(c);
-    *(int *)ind = s;
+    *(int *)(cur_text_section->data + ind) = s;
     s = ind;
     ind = ind + 4;
     return s;
@@ -141,7 +143,7 @@ void gen_addr32(int r, int c)
         gen_le32(c);
     } else {
         greloc(cur_text_section, 
-               (Sym *)c, ind - (int)cur_text_section->data, R_386_32);
+               (Sym *)c, ind, R_386_32);
         gen_le32(0);
     }
 }
@@ -351,7 +353,7 @@ void gfunc_call(GFuncContext *c)
         if (vtop->r & VT_SYM) {
             /* relocation case */
             greloc(cur_text_section, vtop->c.sym, 
-                   ind + 1 - (int)cur_text_section->data, R_386_PC32);
+                   ind + 1, R_386_PC32);
             oad(0xe8, -4);
         } else {
             oad(0xe8, vtop->c.ul - ind - 5);
@@ -403,12 +405,12 @@ void gfunc_prolog(int t)
     if (func_call == FUNC_STDCALL)
         func_ret_sub = addr - 8;
     o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
-    func_sub_sp_ptr = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
+    func_sub_sp_offset = oad(0xec81, 0); /* sub $xxx, %esp */
     /* leave some room for bound checking code */
     if (do_bounds_check) {
         oad(0xb8, 0); /* lbound section pointer */
         oad(0xb8, 0); /* call to function */
-        func_bound_ptr = lbounds_section->data_ptr;
+        func_bound_offset = lbounds_section->data_offset;
     }
 }
 
@@ -416,36 +418,34 @@ void gfunc_prolog(int t)
 void gfunc_epilog(void)
 {
 #ifdef CONFIG_TCC_BCHECK
-    if (do_bounds_check && func_bound_ptr != lbounds_section->data_ptr) {
+    if (do_bounds_check && func_bound_offset != lbounds_section->data_offset) {
         int saved_ind;
         int *bounds_ptr;
         Sym *sym, *sym_data;
         /* add end of table info */
-        bounds_ptr = (int *)lbounds_section->data_ptr;
-        *bounds_ptr++ = 0;
-        lbounds_section->data_ptr = (unsigned char *)bounds_ptr;
+        bounds_ptr = section_ptr_add(lbounds_section, sizeof(int));
+        *bounds_ptr = 0;
         /* generate bound local allocation */
         saved_ind = ind;
-        ind = (int)func_sub_sp_ptr + 4;
+        ind = func_sub_sp_offset + 4;
         sym_data = get_sym_ref(char_pointer_type, lbounds_section, 
-                               func_bound_ptr - lbounds_section->data,
-                               lbounds_section->data_ptr - func_bound_ptr);
+                               func_bound_offset, lbounds_section->data_offset);
         greloc(cur_text_section, sym_data,
-               ind + 1 - (int)cur_text_section->data, R_386_32);
+               ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
         sym = external_sym(TOK___bound_local_new, func_old_type, 0);
         greloc(cur_text_section, sym, 
-               ind + 1 - (int)cur_text_section->data, R_386_PC32);
+               ind + 1, R_386_PC32);
         oad(0xe8, -4);
         ind = saved_ind;
         /* generate bound check local freeing */
         o(0x5250); /* save returned value, if any */
         greloc(cur_text_section, sym_data,
-               ind + 1 - (int)cur_text_section->data, R_386_32);
+               ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
         sym = external_sym(TOK___bound_local_delete, func_old_type, 0);
         greloc(cur_text_section, sym, 
-               ind + 1 - (int)cur_text_section->data, R_386_PC32);
+               ind + 1, R_386_PC32);
         oad(0xe8, -4);
         o(0x585a); /* restore returned value, if any */
     }
@@ -459,7 +459,7 @@ void gfunc_epilog(void)
         g(func_ret_sub >> 8);
     }
     /* align local size to word & save local variables */
-    *func_sub_sp_ptr = (-loc + 3) & -4; 
+    *(int *)(cur_text_section->data + func_sub_sp_offset) = (-loc + 3) & -4; 
 }
 
 /* generate a jump to a label */
@@ -489,7 +489,7 @@ int gtst(int inv, int t)
             /* insert vtop->c jump list in t */
             p = &vtop->c.i;
             while (*p != 0)
-                p = (int *)*p;
+                p = (int *)(cur_text_section->data + *p);
             *p = t;
             t = vtop->c.i;
         } else {
@@ -809,7 +809,7 @@ void gen_cvt_ftoi(int t)
     sym = external_sym(TOK___tcc_int_fpu_control, 
                        VT_SHORT | VT_UNSIGNED, VT_LVAL);
     greloc(cur_text_section, sym, 
-           ind - (int)cur_text_section->data, R_386_32);
+           ind, R_386_32);
     gen_le32(0);
     
     oad(0xec81, size); /* sub $xxx, %esp */
@@ -822,7 +822,7 @@ void gen_cvt_ftoi(int t)
     sym = external_sym(TOK___tcc_fpu_control, 
                        VT_SHORT | VT_UNSIGNED, VT_LVAL);
     greloc(cur_text_section, sym, 
-           ind - (int)cur_text_section->data, R_386_32);
+           ind, R_386_32);
     gen_le32(0);
 
     r = get_reg(RC_INT);
@@ -863,13 +863,13 @@ void gen_bounded_ptr_add(void)
     /* do a fast function call */
     sym = external_sym(TOK___bound_ptr_add, func_old_type, 0);
     greloc(cur_text_section, sym, 
-           ind + 1 - (int)cur_text_section->data, R_386_PC32);
+           ind + 1, R_386_PC32);
     oad(0xe8, -4);
     /* returned pointer is in eax */
     vtop++;
     vtop->r = REG_EAX | VT_BOUNDED;
     /* address of bounding function call point */
-    vtop->c.ptr = (cur_text_section->reloc->data_ptr - sizeof(Elf32_Rel)); 
+    vtop->c.ul = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel)); 
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -906,7 +906,7 @@ void gen_bounded_ptr_deref(void)
 
     /* patch relocation */
     /* XXX: find a better solution ? */
-    rel = vtop->c.ptr;
+    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.ul);
     sym = external_sym(func, func_old_type, 0);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0);
