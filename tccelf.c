@@ -378,7 +378,7 @@ static void relocate_common_syms(void)
 
 static void *resolve_sym(const char *sym)
 {
-    return dlsym(NULL, sym);
+    return dlsym(RTLD_DEFAULT, sym);
 }
 
 /* relocate symbol table, resolve undefined symbols if do_resolve is
@@ -1813,71 +1813,110 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     return ret;
 }
 
-/* return -2 if error and CH_EOF if eof */
-static void ld_skipspaces(void)
-{
-    while (ch == ' ' || ch == '\t' || ch == '\n')
-        cinp();
-}
+#define LD_TOK_NAME 256
+#define LD_TOK_EOF  (-1)
 
-static int ld_get_cmd(char *cmd, int cmd_size)
+/* return next ld script token */
+static int ld_next(TCCState *s1, char *name, int name_size)
 {
+    int c;
     char *q;
 
-    ld_skipspaces();
-    if (ch == CH_EOF)
-        return -1;
-    q = cmd;
-    for(;;) {
-        if (!((ch >= 'a' && ch <= 'z') ||
-              (ch >= 'A' && ch <= 'Z') ||
-              (ch >= '0' && ch <= '9') ||
-              strchr("/.-_+=$:\\,~?*", ch)))
-            break;
-        if ((q - cmd) >= (cmd_size - 1))
-            return -2;
-        *q++ = ch;
-        cinp();
+ redo:
+    switch(ch) {
+    case ' ':
+    case '\t':
+    case '\f':
+    case '\v':
+    case '\r':
+    case '\n':
+        inp();
+        goto redo;
+    case '/':
+        minp();
+        if (ch == '*') {
+            parse_comment();
+            goto redo;
+        } else {
+            q = name;
+            *q++ = '/';
+            goto parse_name;
+        }
+        break;
+    case 'a' ... 'z':
+    case 'A' ... 'Z':
+    case '_':
+    case '\\':
+    case '.':
+    case '$':
+    case '~':
+        q = name;
+    parse_name:
+        for(;;) {
+            if (!((ch >= 'a' && ch <= 'z') ||
+                  (ch >= 'A' && ch <= 'Z') ||
+                  (ch >= '0' && ch <= '9') ||
+                  strchr("/.-_+=$:\\,~", ch)))
+                break;
+            if ((q - name) < name_size - 1) {
+                *q++ = ch;
+            }
+            minp();
+        }
+        *q = '\0';
+        c = LD_TOK_NAME;
+        break;
+    case CH_EOF:
+        c = LD_TOK_EOF;
+        break;
+    default:
+        c = ch;
+        inp();
+        break;
     }
-    *q = '\0';
-    return 0;
+#if 0
+    printf("tok=%c %d\n", c, c);
+    if (c == LD_TOK_NAME)
+        printf("  name=%s\n", name);
+#endif
+    return c;
 }
-                     
+
 /* interpret a subset of GNU ldscripts to handle the dummy libc.so
    files */
 static int tcc_load_ldscript(TCCState *s1)
 {
     char cmd[64];
     char filename[1024];
-    int ret;
+    int t;
     
     inp();
-    cinp();
     for(;;) {
-        ret = ld_get_cmd(cmd, sizeof(cmd));
-        if (ret == CH_EOF)
+        t = ld_next(s1, cmd, sizeof(cmd));
+        if (t == LD_TOK_EOF)
             return 0;
-        else if (ret < 0)
+        else if (t != LD_TOK_NAME)
             return -1;
-        //        printf("cmd='%s'\n", cmd);
         if (!strcmp(cmd, "INPUT") ||
             !strcmp(cmd, "GROUP")) {
-            ld_skipspaces();
-            if (ch != '(')
+            t = ld_next(s1, cmd, sizeof(cmd));
+            if (t != '(')
                 expect("(");
-            cinp();
+            t = ld_next(s1, filename, sizeof(filename));
             for(;;) {
-                ld_get_cmd(filename, sizeof(filename));
-                tcc_add_file(s1, filename);
-                ld_skipspaces();
-                if (ch == ',') {
-                    cinp();
-                } else if (ch == ')') {
-                    cinp();
-                    break;
-                } else if (ch == CH_EOF) {
+                if (t == LD_TOK_EOF) {
                     error_noabort("unexpected end of file");
                     return -1;
+                } else if (t == ')') {
+                    break;
+                } else if (t != LD_TOK_NAME) {
+                    error_noabort("filename expected");
+                    return -1;
+                } 
+                tcc_add_file(s1, filename);
+                t = ld_next(s1, filename, sizeof(filename));
+                if (t == ',') {
+                    t = ld_next(s1, filename, sizeof(filename));
                 }
             }
         } else {

@@ -43,7 +43,8 @@
 
 #include "libtcc.h"
 
-//#define DEBUG
+/* parser debug */
+//#define PARSE_DEBUG
 /* preprocessor debug */
 //#define PP_DEBUG
 /* include file debug */
@@ -249,7 +250,7 @@ typedef struct CachedInclude {
 
 /* parser */
 struct BufferedFile *file;
-int ch, ch1, tok, tok1;
+int ch, tok, tok1;
 CValue tokc, tok1c;
 CString tokcstr; /* current parsed string, if any */
 /* if true, line feed is returned as a token. line feed is also
@@ -1481,7 +1482,7 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
     bf->buf_end = bf->buffer;
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
-    bf->line_num = 1;
+    bf->line_num = 0;
     bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     //    printf("opening '%s'\n", filename);
@@ -1494,9 +1495,6 @@ void tcc_close(BufferedFile *bf)
     close(bf->fd);
     tcc_free(bf);
 }
-
-/* read one char. MUST call tcc_fillbuf if CH_EOB is read */
-#define TCC_GETC(bf) (*(bf)->buf_ptr++)
 
 /* fill input buffer and return next char */
 int tcc_getc_slow(BufferedFile *bf)
@@ -1534,12 +1532,12 @@ void handle_eob(void)
         return;
 
     for(;;) {
-        ch1 = tcc_getc_slow(file);
-        if (ch1 != CH_EOF)
+        ch = tcc_getc_slow(file);
+        if (ch != CH_EOF)
             return;
         eof_seen = 1;
         if (return_linefeed) {
-            ch1 = '\n';
+            ch = '\n';
             return;
         }
         if (s1->include_stack_ptr == s1->include_stack)
@@ -1555,80 +1553,100 @@ void handle_eob(void)
     }
 }
 
-/* read next char from current input file */
+/* read next char from current input file and handle end of input buffer */
 static inline void inp(void)
 {
-    ch1 = TCC_GETC(file);
+    ch = *(file->buf_ptr++);
     /* end of buffer/file handling */
-    if (ch1 == CH_EOB)
+    if (ch == CH_EOB)
         handle_eob();
-    if (ch1 == '\n')
-        file->line_num++;
-    //    printf("ch1=%c 0x%x\n", ch1, ch1);
 }
 
-/* handle '\\n' and '\\r\n' */
+/* handle '\[\r]\n' */
 static void handle_stray(void)
 {
-    do {
-        if (ch1 == '\n') {
+    while (ch == '\\') {
+        inp();
+        if (ch == '\n') {
+            file->line_num++;
             inp();
-        } else if (ch1 == '\r') {
+        } else if (ch == '\r') {
             inp();
-            if (ch1 != '\n')
-                error("invalid character after '\\'");
+            if (ch != '\n')
+                goto fail;
+            file->line_num++;
             inp();
         } else {
-            break;
+        fail:
+            error("stray '\\' in program");
         }
-        ch = ch1;
-        inp();
-    } while (ch == '\\');
+    }
 }
 
-/* input with '\\n' handling. Also supports '\\r\n' for horrible MSDOS
-   case */
-static inline void minp(void)
+/* input with '\[\r]\n' handling. Note that this function cannot
+   handle other characters after '\', so you cannot call it inside
+   strings or comments */
+static void minp(void)
 {
-    ch = ch1;
     inp();
     if (ch == '\\') 
         handle_stray();
 }
 
 
-/* same as minp, but also skip comments */
-static void cinp(void)
+static void parse_line_comment(void)
 {
-    int c;
-
-    if (ch1 == '/') {
+    /* single line C++ comments */
+    /* XXX: accept '\\\n' ? */
+    inp();
+    while (ch != '\n' && ch != TOK_EOF)
         inp();
-        if (ch1 == '/') {
-            /* single line C++ comments */
+}
+
+static void parse_comment(void)
+{
+    /* C comments */
+    minp();
+    for(;;) {
+        /* fast skip loop */
+        while (ch != '\n' && ch != '*' && ch != TOK_EOF)
             inp();
-            while (ch1 != '\n' && ch1 != CH_EOF)
-                inp();
-            ch = ' '; /* return space */
-        } else if (ch1 == '*') {
-            /* C comments */
+        /* now we can handle all the cases */
+        if (ch == '\n') {
+            file->line_num++;
             inp();
-            while (ch1 != CH_EOF) {
-                c = ch1;
+        } else if (ch == '*') {
+            for(;;) {
                 inp();
-            if (c == '*' && ch1 == '/') {
-                inp();
-                ch = ' '; /* return space */
-                break;
-            }
+                if (ch == '/') {
+                    goto end_of_comment;
+                } else if (ch == '\\') {
+                    inp();
+                    if (ch == '\n') {
+                        file->line_num++;
+                        inp();
+                    } else if (ch == '\r') {
+                        inp();
+                        if (ch != '\n')
+                            break;
+                        file->line_num++;
+                        inp();
+                    } else {
+                        break;
+                    }
+                } else if (ch != '*') {
+                    break;
+                }
             }
         } else {
-            ch = '/';
+            error("unexpected end of file in comment");
         }
-    } else {
-        minp();
     }
+ end_of_comment:
+    inp();
 }
+
+#define cinp minp
 
 /* space exlcuding newline */
 static inline int is_space(int ch)
@@ -1646,28 +1664,85 @@ static inline void skip_spaces(void)
    #if/#endif */
 void preprocess_skip(void)
 {
-    int a;
+    int a, start_of_line, sep;
+    
+    start_of_line = 1;
     a = 0;
     while (1) {
-        while (ch != '\n') {
-            if (ch == CH_EOF)
-                expect("#endif");
-            cinp();
-        }
-        cinp();
-        skip_spaces();
-        if (ch == '#') {
-            cinp();
-            next_nomacro();
-            if (a == 0 && 
-                (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
-                break;
-            if (tok == TOK_IF || tok == TOK_IFDEF || tok == TOK_IFNDEF)
-                a++;
-            else if (tok == TOK_ENDIF)
-                a--;
+        switch(ch) {
+        case ' ':
+        case '\t':
+        case '\f':
+        case '\v':
+        case '\r':
+            inp();
+            break;
+        case '\n':
+            start_of_line = 1;
+            file->line_num++;
+            inp();
+            break;
+        case '\\':
+            handle_stray();
+            break;
+            /* skip strings */
+        case '\"':
+        case '\'':
+            start_of_line = 0;
+            sep = ch;
+            inp();
+            while (ch != sep) {
+                /* XXX: better error message */
+                if (ch == TOK_EOF) {
+                    error("unterminated string");
+                } else if (ch == '\n') {
+                    file->line_num++;
+                } else if (ch == '\\') {
+                    /* ignore next char */
+                    inp();
+                    if (ch == '\n')
+                        file->line_num++;
+                }
+                inp();
+            }
+            minp();
+            break;
+            /* skip comments */
+        case '/':
+            minp();
+            if (ch == '*') {
+                parse_comment();
+            } else if (ch == '/') {
+                parse_line_comment();
+            } else {
+                start_of_line = 0;
+            }
+            break;
+
+        case '#':
+            minp();
+            if (start_of_line) {
+                next_nomacro();
+                if (a == 0 && 
+                    (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
+                    goto the_end;
+                if (tok == TOK_IF || tok == TOK_IFDEF || tok == TOK_IFNDEF)
+                    a++;
+                else if (tok == TOK_ENDIF)
+                    a--;
+            }
+            start_of_line = 0;
+            break;
+        case CH_EOF:
+            expect("#endif");
+            break;
+        default:
+            inp();
+            start_of_line = 0;
+            break;
         }
     }
+ the_end: ;
 }
 
 /* ParseState handling */
@@ -1927,7 +2002,7 @@ int expr_preprocess(void)
     return c != 0;
 }
 
-#if defined(DEBUG) || defined(PP_DEBUG)
+#if defined(PARSE_DEBUG) || defined(PP_DEBUG)
 void tok_print(int *str)
 {
     int t;
@@ -2054,7 +2129,6 @@ void preprocess(void)
     state = INCLUDE_STATE_NONE;
     eof_seen = 0;
  redo1:
-    cinp();
     next_nomacro();
  redo:
     switch(tok) {
@@ -2085,10 +2159,12 @@ void preprocess(void)
                 minp();
             }
             *q = '\0';
+#if 0
             /* eat all spaces and comments after include */
             /* XXX: slightly incorrect */
             while (ch1 != '\n' && ch1 != CH_EOF)
                 inp();
+#endif
         } else {
             /* computed #include : either we have only strings or
                we have anything enclosed in '<>' */
@@ -2185,6 +2261,7 @@ void preprocess(void)
             if (ch != '#')
                 goto the_end;
             state = INCLUDE_STATE_SEEK_IFNDEF;
+            cinp();
             goto redo1;
         }
         break;
@@ -2324,7 +2401,7 @@ static int getn(int b)
         if (t < 0 || t >= b)
             break;
         n = n * b + t;
-        cinp();
+        inp();
     }
     return n;
 }
@@ -2334,50 +2411,76 @@ static int getq(void)
 {
     int c;
 
+ redo:
     c = ch;
-    minp();
+    inp();
     if (c == '\\') {
-        if (isoct(ch)) {
+        switch(ch) {
+        case '0': case '1': case '2': case '3':
+        case '4': case '5': case '6': case '7':
             /* at most three octal digits */
             c = ch - '0';
-            minp();
+            inp();
             if (isoct(ch)) {
                 c = c * 8 + ch - '0';
-                minp();
+                inp();
                 if (isoct(ch)) {
                     c = c * 8 + ch - '0';
-                    minp();
+                    inp();
                 }
             }
             return c;
-        } else if (ch == 'x') {
-            minp();
+        case 'x':
+            inp();
             return getn(16);
-        } else {
-            if (ch == 'a')
-                c = '\a';
-            else if (ch == 'b')
-                c = '\b';
-            else if (ch == 'f')
-                c = '\f';
-            else if (ch == 'n')
-                c = '\n';
-            else if (ch == 'r')
-                c = '\r';
-            else if (ch == 't')
-                c = '\t';
-            else if (ch == 'v')
-                c = '\v';
-            else if (ch == 'e' && gnu_ext)
-                c = 27;
-            else if (ch == '\'' || ch == '\"' || ch == '\\' || ch == '?')
-                c = ch;
-            else
-                error("invalid escaped char");
-            minp();
+        case 'a':
+            c = '\a';
+            break;
+        case 'b':
+            c = '\b';
+            break;
+        case 'f':
+            c = '\f';
+            break;
+        case 'n':
+            c = '\n';
+            break;
+        case 'r':
+            c = '\r';
+            break;
+        case 't':
+            c = '\t';
+            break;
+        case 'v':
+            c = '\v';
+            break;
+        case 'e':
+            if (!gnu_ext)
+                goto invalid_escape;
+            c = 27;
+            break;
+        case '\'':
+        case '\"':
+        case '\\': 
+        case '?':
+            c = ch;
+            break;
+        case '\n':
+            inp();
+            goto redo;
+        case '\r':
+            inp();
+            if (ch != '\n')
+                goto invalid_escape;
+            inp();
+            goto redo;
+        default:
+        invalid_escape:
+            error("invalid escaped char");
         }
+        inp();
     } else if (c == '\r' && ch == '\n') {
-        minp();
+        inp();
         c = '\n';
     }
     return c;
@@ -2677,10 +2780,11 @@ void parse_number(const char *p)
 /* return next token without macro substitution */
 static inline void next_nomacro1(void)
 {
-    int b, t;
+    int b, t, start_of_line;
     char *q;
     TokenSym *ts;
 
+    start_of_line = 0;
  redo_no_start:
     switch(ch) {
     case ' ':
@@ -2688,38 +2792,36 @@ static inline void next_nomacro1(void)
     case '\f':
     case '\v':
     case '\r':
-        cinp();
+        inp();
         goto redo_no_start;
         
+    case '\\':
+        handle_stray();
+        goto redo_no_start;
+
     case '\n':
+        file->line_num++;
         if (return_linefeed) {
             /* XXX: should eat token ? */
             tok = TOK_LINEFEED;
         } else {
-            cinp();
-            skip_spaces();
-            if (ch == '#') {
-                /* preprocessor command if # at start of line after
-                   spaces */
-                preprocess();
-            }
+            start_of_line = 1;
+            inp();
             goto redo_no_start;
         }
         break;
 
     case '#':
-        tok = ch;
-        cinp();
-#if 0
+        minp();
         if (start_of_line) {
             preprocess();
             goto redo_no_start;
-        } else 
-#endif
-            {
+        } else {
             if (ch == '#') {
-                cinp();
+                inp();
                 tok = TOK_TWOSHARPS;
+            } else {
+                tok = '#';
             }
         }
         break;
@@ -2754,7 +2856,7 @@ static inline void next_nomacro1(void)
         tok = ts->tok;
         break;
     case 'L':
-        cinp();
+        minp();
         if (ch == '\'') {
             tok = TOK_LCHAR;
             goto char_const;
@@ -2810,7 +2912,7 @@ static inline void next_nomacro1(void)
     case '\'':
         tok = TOK_CCHAR;
     char_const:
-        minp();
+        inp();
         b = getq();
         /* this cast is needed if >= 128 */
         if (tok == TOK_CCHAR)
@@ -2818,12 +2920,12 @@ static inline void next_nomacro1(void)
         tokc.i = b;
         if (ch != '\'')
             error("unterminated character constant");
-        minp();
+        inp();
         break;
     case '\"':
         tok = TOK_STR;
     str_const:
-        minp();
+        inp();
         cstr_reset(&tokcstr);
         while (ch != '\"') {
             b = getq();
@@ -2839,7 +2941,7 @@ static inline void next_nomacro1(void)
         else
             cstr_wccat(&tokcstr, '\0');
         tokc.cstr = &tokcstr;
-        minp();
+        inp();
         break;
 
     case '<':
@@ -2976,18 +3078,19 @@ static inline void next_nomacro1(void)
 
         /* comments or operator */
     case '/':
-        tok = ch;
-        cinp();
-        if (ch == '=') {
+        minp();
+        if (ch == '*') {
+            parse_comment();
+            goto redo_no_start;
+        } else if (ch == '/') {
+            parse_line_comment();
+            goto redo_no_start;
+        } else if (ch == '=') {
             cinp();
             tok = TOK_A_DIV;
-        } 
-#if 0
-        else if (ch == '/' || ch == '*') {
-            parse_comments();
-            goto redo_no_start;
+        } else {
+            tok = '/';
         }
-#endif
         break;
         
         /* simple tokens */
@@ -3012,6 +3115,9 @@ static inline void next_nomacro1(void)
         error("unrecognized character \\x%02x", ch);
         break;
     }
+#if defined(PARSE_DEBUG)
+    printf("token = %s\n", get_tok_str(tok, &tokc));
+#endif
 }
 
 /* return next token without macro substitution. Can read input from
@@ -3437,9 +3543,6 @@ static void next(void)
             parse_number((char *)tokc.cstr->data);
         }
     }
-#if defined(DEBUG)
-    printf("token = %s\n", get_tok_str(tok, &tokc));
-#endif
 }
 
 void swap(int *p, int *q)
@@ -7539,7 +7642,6 @@ static int tcc_compile(TCCState *s1)
         s1->nb_errors = 0;
         s1->error_set_jmp_enabled = 1;
 
-        inp();
         ch = '\n'; /* needed to parse correctly first preprocessor command */
         next();
         decl(VT_CONST);
@@ -7617,7 +7719,6 @@ void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
     s1->include_stack_ptr = s1->include_stack;
 
     /* parse with define parser */
-    inp();
     ch = '\n'; /* needed to parse correctly first preprocessor command */
     next_nomacro();
     parse_define();
