@@ -67,6 +67,8 @@ int reg_classes[NB_REGS] = {
 /* long double size and alignment, in bytes */
 #define LDOUBLE_SIZE  12
 #define LDOUBLE_ALIGN 4
+/* maximum alignment (for aligned attribute support) */
+#define MAX_ALIGN     8
 
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32 R_386_32
@@ -500,6 +502,7 @@ void gjmp_addr(int a)
 int gtst(int inv, int t)
 {
     int v, *p;
+
     v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
