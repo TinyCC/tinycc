@@ -5856,7 +5856,11 @@ static void gen_assign_cast(CType *dt)
         /* XXX: more tests */
         break;
     case VT_STRUCT:
-        if (!is_compatible_types(dt, st)) {
+        tmp_type1 = *dt;
+        tmp_type2 = *st;
+        tmp_type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
+        tmp_type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
+        if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
         error:
             type_to_str(buf1, sizeof(buf1), st, NULL);
             type_to_str(buf2, sizeof(buf2), dt, NULL);
