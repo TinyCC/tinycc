@@ -10,6 +10,9 @@
 
 #define C99_MACROS
 
+/* gcc 2.95.3 does not handle correctly CR in strings or after strays */
+//#define CORRECT_CR_HANDLING
+
 /* test various include syntaxes */
 
 #define TCCLIB_INC <tcclib.h>
@@ -23,7 +26,8 @@
 
 #include TCCLIB_INC1.h>
 
-#include TCCLIB_INC3 ".h"
+/* gcc 3.2 does not accept that (bug ?) */
+//#include TCCLIB_INC3 ".h"
 
 #include <tcclib.h>
 
@@ -1573,17 +1577,22 @@ void whitespace_test(void)
 ntf("whitspace:\n");
 #endif
     pf("N=%d\n", 2);
+
+#ifdef CORRECT_CR_HANDLING
     pri\
 ntf("aaa=%d\n", 3);
+#endif
 
     pri\
 \
 ntf("min=%d\n", 4);
     printf("len1=%d\n", strlen("
 "));
+#ifdef CORRECT_CR_HANDLING
     str = "
 ";
     printf("len1=%d str[0]=%d\n", strlen(str), str[0]);
+#endif
     printf("len1=%d\n", strlen("a
 "));
 }
