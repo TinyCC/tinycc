@@ -436,6 +436,13 @@ long long __shldi3(long long a, int b)
     return a << b;
 }
 
+#if defined(__i386__)
+/* FPU control word for rounding to nearest mode */
+unsigned short __tcc_fpu_control = 0x137f;
+/* FPU control word for round to zero mode for int convertion */
+unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
+#endif
+
 /* XXX: suppress that and patch tcc to do it */
 float __ulltof(unsigned long long a)
 {
