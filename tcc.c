@@ -17,7 +17,12 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include <tcclib.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#ifndef CONFIG_TCC_STATIC
+#include <dlfcn.h>
+#endif
 
 //#define DEBUG
 /* preprocessor debug */
@@ -103,6 +108,10 @@ typedef struct {
     int line_num;
 } IncludeFile;
 
+/* parser */
+FILE *file;
+int ch, ch1, tok, tokc, tok1, tok1c;
+
 /* loc : local variable index
    glo : global variable index
    ind : output code ptr
@@ -110,8 +119,7 @@ typedef struct {
    prog: output code
    anon_sym: anonymous symbol index
 */
-FILE *file;
-int tok, tokc, tok1, tok1c, rsym, anon_sym,
+int rsym, anon_sym,
     prog, ind, loc, glo, vt, vc, const_wanted, line_num;
 int global_expr; /* true if compound literals must be allocated
                     globally (used during initializers parsing */
@@ -309,20 +317,49 @@ int pointed_size(int t);
 int ist(void);
 int type_decl(int *v, int t, int td);
 
-#ifdef PROFILE
+#ifdef CONFIG_TCC_STATIC
+
+#define RTLD_LAZY       0x001
+#define RTLD_NOW        0x002
+#define RTLD_GLOBAL     0x100
+
 /* dummy function for profiling */
 void *dlopen(const char *filename, int flag)
 {
-    return (void *)1;
+    return NULL;
 }
+
 const char *dlerror(void)
 {
     return "error";
 }
 
+typedef struct TCCSyms {
+    char *str;
+    void *ptr;
+} TCCSyms;
+
+#define TCCSYM(a) { #a, &a, },
+
+/* add the symbol you want here if no dynamic linking is done */
+static TCCSyms tcc_syms[] = {
+    TCCSYM(printf)
+    TCCSYM(fprintf)
+    TCCSYM(fopen)
+    TCCSYM(fclose)
+    { NULL, NULL },
+};
+
 void *dlsym(void *handle, char *symbol)
 {
-    return (void *)1;
+    TCCSyms *p;
+    p = tcc_syms;
+    while (p->str != NULL) {
+        if (!strcmp(p->str, symbol))
+            return p->ptr;
+        p++;
+    }
+    return NULL;
 }
 
 #endif
@@ -576,13 +613,12 @@ void sym_pop(SymStack *st, Sym *b)
     st->top = b;
 }
 
-int ch, ch1;
-
 /* read next char from current input file */
-void inp()
+void inp(void)
 {
  redo:
-    ch1 = fgetc(file);
+    /* faster than fgetc */
+    ch1 = getc_unlocked(file);
     if (ch1 == -1) {
         if (include_stack_ptr == include_stack)
             return;
@@ -3887,10 +3923,6 @@ int main(int argc, char **argv)
         if (!s)
             error("main() not defined");
         t = (int (*)())s->c;
-#ifdef PROFILE
-        return 1;
-#else
         return (*t)(argc - optind, argv + optind);
-#endif
     }
 }
