@@ -19,7 +19,7 @@
 int tok, *vac, *vat, *lsym, rsym, 
     prog, ind, loc, glo, file, vt, 
     vc, *macro_stack, *macro_stack_ptr, line_num;
-char *idtable, *idptr, *idlast, *filename;
+char *idtable, *idptr, *filename;
 
 /* The current value can be: */
 #define VT_CONST   0x0002  /* constant in vc */
@@ -49,30 +49,55 @@ char *idtable, *idptr, *idlast, *filename;
  * otherwise integer type is assumed.
  *  */
 
-#define VT_BYTE    0x00001  /* byte pointer. HARDCODED VALUE */
-#define VT_PTRMASK 0x00f00  /* pointer mask */
-#define VT_PTRINC  0x00100  /* pointer increment */
-#define VT_FUNC    0x01000  /* function type */
-#define VT_TYPE    0x01f01  /* type mask */
-
-#define VT_TYPEN   0xffffe0fe  /* ~VT_TYPE */
+#define VT_BYTE     0x00001  /* byte pointer. HARDCODED VALUE */
+#define VT_PTRMASK  0x00f00  /* pointer mask */
+#define VT_PTRINC   0x00100  /* pointer increment */
+#define VT_FUNC     0x01000  /* function type */
+#define VT_UNSIGNED 0x02000  /* unsigned type */
+#define VT_ARRAY    0x04000  /* array type (only used in parsing) */
+#define VT_TYPE     0x07f01  /* type mask */
+#define VT_TYPEN   0xffff80fe  /* ~VT_TYPE */
 #define VT_FUNCN   -4097
 
+#define VT_EXTERN   0x08000   /* extern definition */
+#define VT_STATIC   0x10000   /* static variable */
+
 /* Special infos */
-#define VT_DEFINE  0x02000  /* special value for #defined symbols */
+#define VT_DEFINE   0x80000  /* special value for #defined symbols */
 
 /* token values */
-#define TOK_INT     256
-#define TOK_VOID    257
-#define TOK_CHAR    258
-#define TOK_IF      259
-#define TOK_ELSE    260
-#define TOK_WHILE   261
-#define TOK_BREAK   262
-#define TOK_RETURN  263
-#define TOK_DEFINE  264
-#define TOK_MAIN    265
-#define TOK_FOR     266
+#define TOK_INT      256
+#define TOK_VOID     257
+#define TOK_CHAR     258
+#define TOK_IF       259
+#define TOK_ELSE     260
+#define TOK_WHILE    261
+#define TOK_BREAK    262
+#define TOK_RETURN   263
+#define TOK_DEFINE   264
+#define TOK_MAIN     265
+#define TOK_FOR      266
+#define TOK_EXTERN   267
+#define TOK_STATIC   268
+#define TOK_UNSIGNED 269
+#define TOK_GOTO     270
+#define TOK_DO       271
+#define TOK_CONTINUE 272
+#define TOK_SWITCH   273
+#define TOK_CASE     274
+
+/* ignored types Must have contiguous values */
+#define TOK_CONST    271
+#define TOK_LONG     276
+#define TOK_REGISTER 277
+#define TOK_SIGNED   278
+
+/* unsupported types. Must have contiguous values */
+#define TOK_FLOAT    279
+#define TOK_DOUBLE   280
+#define TOK_STRUCT   281
+#define TOK_UNION    282
+#define TOK_TYPEDEF  283
 
 #define TOK_EQ 0x94 /* warning: depend on asm code */
 #define TOK_NE 0x95 /* warning: depend on asm code */
@@ -166,6 +191,21 @@ void test_lvalue()
 
 #endif
 
+char *get_tok_str(int v)
+{
+    int t;
+    char *p;
+    p = idtable;
+    t = 256;
+    while (t != v) {
+        if (p >= idptr)
+            return 0;
+        while (*p++);
+        t++;
+    }
+    return p;
+}
+
 void next()
 {
     int c, v;
@@ -226,7 +266,6 @@ void next()
     }
     if (isid(c)) {
         q = idptr;
-        idlast = q;
         while(isid(c) | isnum(c)) {
             *q++ = c;
             c = inp();
@@ -328,6 +367,7 @@ void vset(t, v)
 }
 
 /* generate a value in eax from vt and vc */
+/* XXX: generate correct pointer for forward references to functions */
 void gv()
 {
 #ifndef TINY
@@ -402,11 +442,19 @@ int gtst(inv, t)
     return t;
 }
 
-/* return the size in bytes of a given type */
 int type_size(t)
 {
-    if ((t & VT_PTRMASK) > VT_PTRINC | (t & VT_TYPE) == VT_PTRINC)
+    if ((t & VT_PTRMASK) >= VT_PTRINC | (t & VT_TYPE) == 0)
         return 4;
+    else
+        return 1;
+}
+
+/* return the number size in bytes of a given type */
+int incr_value(t)
+{
+    if ((t & VT_PTRMASK) >= VT_PTRINC)
+        return type_size(t - VT_PTRINC);
     else
         return 1;
 }
@@ -422,12 +470,13 @@ void inc(a, c)
     gv();
     o(0x018bc189); /* movl %eax, %ecx ; mov (%ecx), %eax */
     o(0x408d | a); /* leal x(%eax), %eax/%edx */
-    g((c - TOK_MID) * type_size(vt));
+    g((c - TOK_MID) * incr_value(vt));
     o(0x0189 | a); /* mov %eax/%edx, (%ecx) */
 }
 
 /* XXX: handle ptr sub and 'int + ptr' case (only 'ptr + int' handled) */
 /* XXX: handle constant propagation (need to track live eax) */
+/* XXX: handle unsigned propagation */
 void gen_op(op, l)
 {
     int t;
@@ -445,7 +494,7 @@ void gen_op(op, l)
     o(0x59); /* pop %ecx */
     if (op == '+' | op == '-') {
         /* XXX: incorrect for short (futur!) */
-        if (type_size(t) == 4)
+        if (incr_value(t) == 4)
             o(0x02e0c1); /* shl $2, %eax */
         if (op == '-') 
             o(0xd8f7); /* neg %eax */
@@ -461,16 +510,23 @@ void gen_op(op, l)
         o(0xc1af0f); /* imul %ecx, %eax */
 #ifndef TINY
     else if (op == TOK_SHL | op == TOK_SHR) {
-        o(0xd391); /* xchg %ecx, %eax, shl/sar %cl, %eax */
+        o(0xd391); /* xchg %ecx, %eax, shl/shr/sar %cl, %eax */
         if (op == TOK_SHL) 
             o(0xe0);
+        else if (t & VT_UNSIGNED)
+            o(0xe8);
         else
             o(0xf8);
     }
 #endif
     else if (op == '/' | op == '%') {
         o(0x91);   /* xchg %ecx, %eax */
-        o(0xf9f799); /* cltd, idiv %ecx, %eax */
+        if (t & VT_UNSIGNED) {
+            o(0xd231); /* xor %edx, %edx */
+            o(0xf1f7); /* div %ecx, %eax */
+        } else {
+            o(0xf9f799); /* cltd, idiv %ecx, %eax */
+        }
         if (op == '%')
             o(0x92); /* xchg %edx, %eax */
     } else {
@@ -486,19 +542,33 @@ void gen_op(op, l)
 int ist()
 {
     int t;
-
-    if (tok == TOK_INT | tok == TOK_CHAR | tok == TOK_VOID) {
-        t = tok;
+    t = 0;
+    while(1) {
+        if (tok == TOK_CHAR | tok == TOK_VOID) {
+            t |= VT_BYTE;
+        } else if (tok == TOK_INT |
+                   (tok >= TOK_CONST & tok <= TOK_SIGNED)) {
+            /* ignored types */
+        } else if (tok >= TOK_FLOAT & tok <= TOK_TYPEDEF) {
+            error("unsupported type");
+        } else if (tok == TOK_EXTERN) {
+            t |= VT_EXTERN;
+        } else if (tok == TOK_STATIC) {
+            t |= VT_STATIC;
+        } else if (tok == TOK_UNSIGNED) {
+            t |= VT_UNSIGNED;
+        } else {
+            break;
+        }
         next();
-        return (t != TOK_INT) | 2;
-    } else {
-        return 0;
+        t |= 2;
     }
+    return t;
 }
 
 /* Read a type declaration (except basic type), and return the
    type. If v is true, then also put variable name in 'vc' */
-int typ(v,t)
+int typ(int *v, int t, int *array_size_ptr)
 {
     int u, p, n;
 
@@ -512,44 +582,78 @@ int typ(v,t)
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     if (tok == '(') {
         next();
-        u = typ(v, 0);
+        u = typ(v, 0, 0);
         skip(')');
     } else {
         u = 0;
         /* type identifier */
         if (v) {
-            vc = tok;
+            *v = tok;
             next();
         }
     }
-    /* function declaration */
-    if (tok == '(') {
-        next();
-        p = 4; 
-        n = vc; /* must save vc there */
-        while (tok != ')') {
-            /* read param name and compute offset */
+    while(1) {
+        if (tok == '(') {
+            /* function declaration */
+            next();
+            p = 4; 
+            while (tok != ')') {
+                /* read param name and compute offset */
             if (t = ist())
-                t = typ(1, t); /* XXX: should accept both arg/non arg if v == 0 */
+                t = typ(&n, t, 0); /* XXX: should accept both arg/non arg if v == 0 */
             else {
-                vc = tok;
+                n = tok;
                 t = 0;
                 next();
             }
             p = p + 4;
-            vat[vc] = VT_LOCAL | VT_LVAL | t;
-            vac[vc] = p;
+            vat[n] = VT_LOCAL | VT_LVAL | t;
+            vac[n] = p;
             if (tok == ',')
                 next();
-        }
-        next(); /* skip ')' */
-        vc = n;
-        if (u)
-            t = u + VT_BYTE;
-        else
-            t = t | VT_FUNC;
+            }
+            next(); /* skip ')' */
+            if (u)
+                t = u + VT_BYTE;
+            else
+                t = t | VT_FUNC;
+        } else if (tok == '[') {
+            /* array definition */
+            if (t & VT_ARRAY) 
+                error("multi dimension arrays not supported");
+            next();
+            vc = 0;
+            if (tok != ']') {
+                expr();
+                if (array_size_ptr)
+                    *array_size_ptr = vc;
+            }
+            if ((vt & (VT_CONST | VT_LVAL)) != VT_CONST | 
+                (vc <= 0 & array_size_ptr != 0))
+                error("invalid array size");
+            skip(']');
+            t = (t + VT_PTRINC) | VT_ARRAY;
+        } else
+            break;
     }
     return t;
+}
+
+/* define a new external reference to a function 'v' of type 'u' */
+void external_func(v, u)
+{
+    int t, n;
+    t = vat[v];
+    if (t == 0) {
+        n = dlsym(0, get_tok_str(v));
+        if (n == 0) {
+            vat[v] = u | VT_CONST | VT_LVAL | VT_FORWARD;
+            vac[v] = 0; /* used to generate symbol list */
+        } else {
+            vat[v] = u | VT_CONST | VT_LVAL; /* int f() */
+            vac[v] = n;
+        }
+    }
 }
 
 /* read a number in base b */
@@ -631,20 +735,18 @@ void unary()
         vset(VT_CONST | VT_PTRINC | VT_BYTE, glo);
         while (tok == '\"') {
             while((n = inp()) != 34) {
-                *(char *)glo = getq(n);
-                glo++;
+                *(char *)glo++ = getq(n);
             }
             next();
         }
-        *(char *)glo = 0;
-        glo = (glo + 4) & -4; /* align heap */
+        *(char *)glo++ = 0;
     } else {
         t = tok;
         next();
         if (t == '(') {
             /* cast ? */
             if (t = ist()) {
-                ft = typ(0, t);
+                ft = typ(0, t, 0);
                 skip(')');
                 unary();
                 vt = (vt & VT_TYPEN) | ft;
@@ -700,15 +802,17 @@ void unary()
             }
         } else 
         {
-            vset(vat[t], vac[t]);
-            /* forward reference or external reference ? */
-            if (vt == 0) {
-                n = dlsym(0, idlast);
-                if (n == 0)
-                    vset(VT_CONST | VT_FORWARD | VT_LVAL, vac + t);
-                else
-                    vset(VT_CONST | VT_LVAL, n);
+            if (vat[t] == 0) {
+                if (tok != '(')
+                    error("undefined symbol");
+                /* for simple function calls, we tolerate undeclared
+                   external reference */
+                external_func(t, VT_FUNC); /* int() function */
             }
+            vset(vat[t], vac[t]);
+            /* if forward reference, we must point to vac[t] */
+            if (vt & VT_FORWARD)
+                vc = t;
         }
     }
     
@@ -764,18 +868,20 @@ void unary()
         }
         if (ft & VT_CONST) {
             /* forward reference */
-            if (ft & VT_FORWARD)
-                *(int *)fc = psym(0xe8, *(int *)fc); 
-            else
+            if (ft & VT_FORWARD) {
+                vac[fc] = psym(0xe8, vac[fc]);
+            } else
                 oad(0xe8, fc - ind - 5);
+            /* return value is variable, and take type from function proto */
+            vt = VT_VAR | (ft & VT_TYPE & VT_FUNCN);
         } else {
             oad(0x2494ff, t); /* call *xxx(%esp) */
             t = t + 4;
+            /* return value is variable, int */
+            vt = VT_VAR;
         }
         if (t)
             oad(0xc481, t);
-        /* return value is variable, int */
-        vt = VT_VAR;
     }
 }
 
@@ -1005,22 +1111,22 @@ void block()
     }
 }
 
-/* 'l' is true if local declarations */
+/* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(l)
 {
-    int *a, t, b;
+    int *a, t, b, s, align, v, u, n;
 
     while (b = ist()) {
         while (1) { /* iterate thru each declaration */
-            vt = typ(1, b);
+            s = 1;
+            t = typ(&v, b, &s);
             if (tok == '{') {
-                /* patch forward references (XXX: does not work for
-                   function pointers) */
-                if (vat[vc] == 0)
-                    gsym(vac[vc]);
+                /* patch forward references */
+                if (vat[v] & VT_FORWARD)
+                    gsym(vac[v]);
                 /* put function address */
-                vat[vc] = VT_CONST | VT_LVAL | vt;
-                vac[vc] = ind;
+                vat[v] = VT_CONST | VT_LVAL | t;
+                vac[v] = ind;
                 loc = 0;
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
                 a = oad(0xec81, 0); /* sub $xxx, %esp */
@@ -1028,17 +1134,44 @@ void decl(l)
                 block();
                 gsym(rsym);
                 o(0xc3c9); /* leave, ret */
-                *a = loc; /* save local variables */
+                *a = (-loc + 3) & -4; /* align local size to word & 
+                                         save local variables */
                 break;
             } else {
-                /* variable */
-                vat[vc] = l | VT_LVAL | vt;
-                if (l == VT_LOCAL) {
-                    loc = loc + 4;
-                    vac[vc] = -loc;
+                if (t & VT_FUNC) {
+                    /* external function definition */
+                    external_func(v, t);
                 } else {
-                    vac[vc] = glo;
-                    glo = glo + 4;
+                    /* not lvalue if array */
+                    if (!(t & VT_ARRAY))
+                        t |= VT_LVAL;
+                    if (t & VT_EXTERN) {
+                        /* external variable */
+                        n = dlsym(NULL, get_tok_str(v));
+                        if (!n)
+                            error("unknown external variable");
+                        vat[v] = VT_CONST | t;
+                        vac[v] = n;
+                    } else {
+                        u = l;
+                        if (t & VT_STATIC)
+                            u = VT_CONST;
+                        vat[v] = u | t;
+                        if (t & VT_ARRAY)
+                            t -= VT_PTRINC; 
+                        align = type_size(t);
+                        s *= align;
+                        if (u == VT_LOCAL) {
+                            /* allocate space down on the stack */
+                            loc = (loc - s) & -align;
+                            vac[v] = loc;
+                        } else {
+                            /* allocate space up in the data space */
+                            glo = (glo + align - 1) & -align;
+                            vac[v] = glo;
+                            glo += s;
+                        }
+                    }
                 }
                 if (tok != ',') {
                     skip(';');
@@ -1074,8 +1207,9 @@ int main(int c, char **v)
     idptr = idtable + 53;
 #else
     memcpy(idtable, 
-           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for", 57);
-    idptr = idtable + 57;
+           "int\0void\0char\0if\0else\0while\0break\0return\0define\0main\0for\0extern\0static\0unsigned\0goto\0do\0continue\0switch\0case\0const\0long\0register\0signed\0float\0double\0struct\0union\0typedef", 170);
+
+    idptr = idtable + 170;
 #endif
     glo = malloc(DATA_SIZE);
     prog = malloc(TEXT_SIZE);
