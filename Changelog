@@ -1,3 +1,12 @@
+version 0.9.20:
+
+- added '-w' option
+- added '.gnu.linkonce' ELF sections support
+- fixed libc linking when running in memory (avoid 'stat' function
+  errors).
+- extended '-run' option to be able to give several arguments to a C
+  script.
+
 version 0.9.19:
 
 - "alacarte" linking (Dave Long)

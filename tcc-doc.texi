@@ -154,8 +154,28 @@ Set the path where the tcc internal libraries can be found (default is
 @item -bench
 Output compilation statistics.
 
-@item -run
-Run compiled source.
+@item -run source [args...]
+
+Compile file @var{source} and run it with the command line arguments
+@var{args}. In order to be able to give more than one argument to a
+script, several TCC options can be given @emph{after} the
+@option{-run} option, separated by spaces. Example:
+
+@example
+tcc "-run -L/usr/X11R6/lib -lX11" ex4.c
+@end example
+
+In a script, it gives the following header:
+
+@example
+#!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
+#include <stdlib.h>
+int main(int argc, char **argv)
+@{
+    ...
+@}
+@end example
+
 @end table
 
 Preprocessor options:

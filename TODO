@@ -1,5 +1,7 @@
 TODO list:
 
+- cast bug (Peter Wang)
+- define incomplete type if defined several times (Peter Wang).
 - long long constant evaluation
 - configure --cc=tcc (still one bug in libtcc1.c)
 - disable-asm and disable-bcheck options
@@ -26,14 +28,12 @@ TODO list:
 - check section alignment in C
 - fix invalid cast in comparison 'if (v == (int8_t)v)'
 - packed attribute
-- support link once trick (gcc 3.2 / glibc compilation issue)
 - finish varargs.h support (gcc 3.2 testsuite issue)
 - fix static functions declared inside block
 - C99: add variable size arrays (gcc 3.2 testsuite issue)
 - C99: add complex types (gcc 3.2 testsuite issue)
 - postfix compound literals (see 20010124-1.c)
 - fix multiple unions init
-- look at GCC 3.2 compatibility problems.
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
 - fix bound check code with '&' on local variables (currently done
