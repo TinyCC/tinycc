@@ -83,10 +83,15 @@ static unsigned long func_sub_sp_offset;
 static unsigned long func_bound_offset;
 static int func_ret_sub;
 
+/* XXX: make it faster ? */
 void g(int c)
 {
+    int ind1;
+    ind1 = ind + 1;
+    if (ind1 > cur_text_section->data_allocated)
+        section_realloc(cur_text_section, ind1);
     cur_text_section->data[ind] = c;
-    ind++;
+    ind = ind1;
 }
 
 void o(int c)
@@ -129,10 +134,15 @@ void gsym(int t)
 /* instruction + 4 bytes data. Return the address of the data */
 int oad(int c, int s)
 {
+    int ind1;
+
     o(c);
+    ind1 = ind + 4;
+    if (ind1 > cur_text_section->data_allocated)
+        section_realloc(cur_text_section, ind1);
     *(int *)(cur_text_section->data + ind) = s;
     s = ind;
-    ind = ind + 4;
+    ind = ind1;
     return s;
 }
 
