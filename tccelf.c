@@ -1081,8 +1081,11 @@ int tcc_output_file(TCCState *s1, const char *filename)
     file_type = s1->output_type;
     s1->nb_errors = 0;
 
-    if (file_type != TCC_OUTPUT_OBJ)
+    if (file_type != TCC_OUTPUT_OBJ) {
+        relocate_common_syms();
+
         tcc_add_runtime(s1);
+    }
 
     phdr = NULL;
     section_order = NULL;
@@ -1092,8 +1095,6 @@ int tcc_output_file(TCCState *s1, const char *filename)
     saved_dynamic_data_offset = 0; /* avoid warning */
     
     if (file_type != TCC_OUTPUT_OBJ) {
-
-        relocate_common_syms();
 
         if (!s1->static_link) {
             const char *name;
@@ -1312,18 +1313,29 @@ int tcc_output_file(TCCState *s1, const char *filename)
     file_offset = sizeof(Elf32_Ehdr) + phnum * sizeof(Elf32_Phdr);
     if (phnum > 0) {
         /* compute section to program header mapping */
-        if (file_type == TCC_OUTPUT_DLL)
-            addr = 0;
-        else
-            addr = ELF_START_ADDR;
-
+        if (s1->has_text_addr) { 
+            int a_offset, p_offset;
+            addr = s1->text_addr;
+            /* we ensure that (addr % ELF_PAGE_SIZE) == file_offset %
+               ELF_PAGE_SIZE */
+            a_offset = addr & (ELF_PAGE_SIZE - 1);
+            p_offset = file_offset & (ELF_PAGE_SIZE - 1);
+            if (a_offset < p_offset) 
+                a_offset += ELF_PAGE_SIZE;
+            file_offset += (a_offset - p_offset);
+        } else {
+            if (file_type == TCC_OUTPUT_DLL)
+                addr = 0;
+            else
+                addr = ELF_START_ADDR;
+            /* compute address after headers */
+            addr += (file_offset & (ELF_PAGE_SIZE - 1));
+        }
+        
         /* dynamic relocation table information, for .dynamic section */
         rel_size = 0;
         rel_addr = 0;
 
-        /* compute address after headers */
-        addr += (file_offset & (ELF_PAGE_SIZE - 1));
-        
         /* leave one program header for the program interpreter */
         ph = &phdr[0];
         if (interp)
@@ -1374,11 +1386,11 @@ int tcc_output_file(TCCState *s1, const char *filename)
                     section_order[sh_order_index++] = i;
 
                     /* section matches: we align it and add its size */
-                    tmp = file_offset;
-                    file_offset = (file_offset + s->sh_addralign - 1) & 
+                    tmp = addr;
+                    addr = (addr + s->sh_addralign - 1) & 
                         ~(s->sh_addralign - 1);
+                    file_offset += addr - tmp;
                     s->sh_offset = file_offset;
-                    addr += file_offset - tmp;
                     s->sh_addr = addr;
                     
                     /* update program header infos */
