@@ -201,6 +201,7 @@ typedef struct BufferedFile {
     unsigned char *buf_end;
     int fd;
     int line_num;    /* current line number - here to simply code */
+    int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
     char filename[1024];    /* current filename - here to simplify code */
     unsigned char buffer[IO_BUF_SIZE + 1]; /* extra size for CH_EOB char */
 } BufferedFile;
@@ -229,7 +230,9 @@ struct BufferedFile *file;
 int ch, ch1, tok, tok1;
 CValue tokc, tok1c;
 CString tokcstr; /* current parsed string, if any */
-int return_linefeed; /* if true, line feed is returned as a token */
+/* if true, line feed is returned as a token. line feed is also
+   returned at eof */
+int return_linefeed;
 
 /* sections */
 Section **sections;
@@ -1040,7 +1043,7 @@ void skip(int c)
     next();
 }
 
-void test_lvalue(void)
+static void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
         expect("lvalue");
@@ -1051,8 +1054,6 @@ TokenSym *tok_alloc(const char *str, int len)
     TokenSym *ts, **pts, **ptable;
     int h, i;
     
-    if (len <= 0)
-        len = strlen(str);
     h = 1;
     for(i=0;i<len;i++)
         h = (h * 263 +  ((unsigned char *)str)[i]) & (TOK_HASH_SIZE - 1);
@@ -1397,6 +1398,7 @@ BufferedFile *tcc_open(const char *filename)
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
     bf->line_num = 1;
+    bf->ifdef_stack_ptr = ifdef_stack_ptr;
     //    printf("opening '%s'\n", filename);
     return bf;
 }
@@ -1444,7 +1446,10 @@ void handle_eob(void)
         ch1 = tcc_getc_slow(file);
         if (ch1 != CH_EOF)
             return;
-        
+        if (return_linefeed) {
+            ch1 = '\n';
+            return;
+        }
         if (include_stack_ptr == include_stack)
             return;
         /* add end of include file debug info */
@@ -1732,7 +1737,7 @@ int expr_preprocess(void)
     TokenString str;
     
     tok_str_new(&str);
-    while (tok != TOK_LINEFEED && tok != TOK_EOF) {
+    while (tok != TOK_LINEFEED) {
         next(); /* do macro subst */
         if (tok == TOK_DEFINED) {
             next_nomacro();
@@ -1817,12 +1822,11 @@ void parse_define(void)
         t = MACRO_FUNC;
     }
     tok_str_new(&str);
-    while (1) {
-        skip_spaces();
-        if (ch == '\n' || ch == CH_EOF)
-            break;
-        next_nomacro();
+    next_nomacro();
+    /* EOF testing necessary for '-D' handling */
+    while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         tok_str_add2(&str, tok, &tokc);
+        next_nomacro();
     }
     tok_str_add(&str, 0);
 #ifdef PP_DEBUG
@@ -1991,7 +1995,7 @@ void preprocess(void)
             goto redo;
         }
     } else if (tok == TOK_ENDIF) {
-        if (ifdef_stack_ptr == ifdef_stack)
+        if (ifdef_stack_ptr <= file->ifdef_stack_ptr)
             error("#endif without matching #if");
         ifdef_stack_ptr--;
     } else if (tok == TOK_LINE) {
@@ -2013,7 +2017,7 @@ void preprocess(void)
         error("#error");
     }
     /* ignore other preprocess commands or #! for C scripts */
-    while (tok != TOK_LINEFEED && tok != TOK_EOF)
+    while (tok != TOK_LINEFEED)
         next_nomacro();
  the_end:
     return_linefeed = 0;
@@ -2640,7 +2644,7 @@ int *macro_twosharps(int *macro_str)
                     pstrcpy(token_buf, sizeof(token_buf), p);
                     p = get_tok_str(t, &cval);
                     pstrcat(token_buf, sizeof(token_buf), p);
-                    ts = tok_alloc(token_buf, 0);
+                    ts = tok_alloc(token_buf, strlen(token_buf));
                     tok = ts->tok; /* modify current token */
                 } else {
                     /* cannot merge tokens: skip '##' */
@@ -6652,7 +6656,10 @@ static int tcc_compile(TCCState *s)
 
     funcname = "";
     include_stack_ptr = include_stack;
+    /* XXX: move that before to avoid having to initialize
+       file->ifdef_stack_ptr ? */
     ifdef_stack_ptr = ifdef_stack;
+    file->ifdef_stack_ptr = ifdef_stack_ptr;
 
     /* XXX: not ANSI compliant: bound checking says error */
     vtop = vstack - 1;
@@ -6774,7 +6781,7 @@ void tcc_undefine_symbol(TCCState *s1, const char *sym)
 {
     TokenSym *ts;
     Sym *s;
-    ts = tok_alloc(sym, 0);
+    ts = tok_alloc(sym, strlen(sym));
     s = sym_find1(&define_stack, tok);
     /* undefine symbol by putting an invalid name */
     if (s)
