@@ -111,7 +111,7 @@ typedef struct {
    anon_sym: anonymous symbol index
 */
 FILE *file;
-int tok, tok1, tokc, rsym, anon_sym,
+int tok, tokc, tok1, tok1c, rsym, anon_sym,
     prog, ind, loc, glo, vt, vc, const_wanted, line_num;
 int global_expr; /* true if compound literals must be allocated
                     globally (used during initializers parsing */
@@ -130,6 +130,9 @@ IncludeFile include_stack[INCLUDE_STACK_SIZE], *include_stack_ptr;
 int ifdef_stack[IFDEF_STACK_SIZE], *ifdef_stack_ptr;
 char *include_paths[INCLUDE_PATHS_MAX];
 int nb_include_paths;
+
+/* use GNU C extensions */
+int gnu_ext = 1;
 
 /* The current value can be: */
 #define VT_VALMASK 0x000f
@@ -260,7 +263,8 @@ enum {
     TOK_SIZEOF,
 
     /* preprocessor only */
-    TOK_DEFINE,
+    TOK_UIDENT, /* first "user" ident (not keyword) */
+    TOK_DEFINE = TOK_UIDENT,
     TOK_INCLUDE,
     TOK_IFDEF,
     TOK_IFNDEF,
@@ -1410,6 +1414,7 @@ void next()
     /* special 'ungettok' case for label parsing */
     if (tok1) {
         tok = tok1;
+        tokc = tok1c;
         tok1 = 0;
     } else {
     redo:
@@ -1517,6 +1522,7 @@ void greloc_patch(Sym *s, int val)
         p = p1;
     }
     s->c = val;
+    s->t &= ~VT_FORWARD;
 }
 
 /* output a symbol and patch all calls to it */
@@ -2802,26 +2808,65 @@ void unary(void)
     }
 }
 
-/* check if types are compatible for assignation */
-int same_types(int t1, int t2)
+int is_compatible_types(int t1, int t2)
 {
+    Sym *s1, *s2;
+
     t1 &= VT_TYPE;
     t2 &= VT_TYPE;
     if (t1 & VT_PTR) {
-        /* XXX: zero test ? */
-        if (!(t2 & VT_PTR))
-            return 0;
         t1 = pointed_type(t1);
-        t2 = pointed_type(t2);
+        /* if function, then convert implictely to function pointer */
+        if (!(t2 & VT_FUNC)) {
+            if (!(t2 & VT_PTR))
+                return 0;
+            t2 = pointed_type(t2);
+        }
         /* void matches everything */
+        t1 &= VT_TYPE;
+        t2 &= VT_TYPE;
         if (t1 == VT_VOID || t2 == VT_VOID)
             return 1;
-        return same_types(t1, t2);
+        return is_compatible_types(t1, t2);
     } else if (t1 & VT_STRUCT) {
         return (t2 == t1);
+    } else if (t1 & VT_FUNC) {
+        if (!(t2 & VT_FUNC))
+            return 0;
+        s1 = sym_find(((unsigned)t1 >> VT_STRUCT_SHIFT));
+        s2 = sym_find(((unsigned)t2 >> VT_STRUCT_SHIFT));
+        if (!is_compatible_types(s1->t, s2->t))
+            return 0;
+        /* XXX: not complete */
+        if (s1->c == FUNC_OLD || s2->c == FUNC_OLD)
+            return 1;
+        if (s1->c != s2->c)
+            return 0;
+        while (s1 != NULL) {
+            if (s2 == NULL)
+                return 0;
+            if (!is_compatible_types(s1->t, s2->t))
+                return 0;
+            s1 = s1->next;
+            s2 = s2->next;
+        }
+        if (s2)
+            return 0;
+        return 1;
     } else {
         /* XXX: not complete */
         return 1;
+    }
+}
+
+int check_assign_types(int t1, int t2)
+{
+    t1 &= VT_TYPE;
+    t2 &= VT_TYPE;
+    if ((t1 & VT_PTR) && (t2 & VT_FUNC)) {
+        return is_compatible_types(pointed_type(t1), t2);
+    } else {
+        return is_compatible_types(t1, t2);
     }
 }
 
@@ -2841,8 +2886,8 @@ void uneq()
         next();
         if (t == '=') {
             expr_eq();
-            if (!same_types(vt, vstack_ptr[-2]))
-                error("incompatible types");
+            if (!check_assign_types(vstack_ptr[-2], vt))
+                warning("incompatible types");
         } else {
             vpush();
             expr_eq();
@@ -2977,6 +3022,31 @@ int expr_const()
         expect("constant");
     const_wanted = a;
     return vc;
+}
+
+/* return the label token if current token is a label, otherwise
+   return zero */
+int is_label(void)
+{
+    int t, c;
+
+    /* fast test first */
+    if (tok < TOK_UIDENT)
+        return 0;
+    t = tok;
+    c = tokc;
+    next();
+    if (tok == ':') {
+        next();
+        return t;
+    } else {
+        /* XXX: may not work in all cases (macros ?) */
+        tok1 = tok;
+        tok1c = tokc;
+        tok = t;
+        tokc = c;
+        return 0;
+    }
 }
 
 void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
@@ -3161,10 +3231,8 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         next();
         skip(';');
     } else {
-        b = tok;
-        next();
-        if (tok == ':') {
-            next();
+        b = is_label();
+        if (b) {
             /* label case */
             s = sym_find1(&label_stack, b);
             if (s) {
@@ -3176,12 +3244,13 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
             } else {
                 sym_push1(&label_stack, b, 0, ind);
             }
-            block(bsym, csym, case_sym, def_sym, case_reg);
+            /* we accept this, but it is a mistake */
+            if (tok == '}') 
+                warning("deprecated use of label at end of compound statement");
+            else
+                block(bsym, csym, case_sym, def_sym, case_reg);
         } else {
-            /* expression case: go backward of one token */
-            /* XXX: currently incorrect if number/string/char */
-            tok1 = tok;
-            tok = b;
+            /* expression case */
             if (tok != ';') {
                 expr();
             }
@@ -3199,9 +3268,12 @@ void decl_designator(int t, int c,
                      int size_only)
 {
     Sym *s, *f;
-    int notfirst, index, align;
+    int notfirst, index, align, l;
 
     notfirst = 0;
+    if (gnu_ext && (l = is_label()) != 0)
+        goto struct_field;
+
     while (tok == '[' || tok == '.') {
         if (tok == '[') {
             if (!(t & VT_ARRAY))
@@ -3217,20 +3289,22 @@ void decl_designator(int t, int c,
             t = pointed_type(t);
             c += index * type_size(t, &align);
         } else {
+            next();
+            l = tok;
+            next();
+        struct_field:
             if (!(t & VT_STRUCT))
                 expect("struct/union type");
-            next();
             s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
-            tok |= SYM_FIELD;
+            l |= SYM_FIELD;
             f = s->next;
             while (f) {
-                if (f->v == tok)
+                if (f->v == l)
                     break;
                 f = f->next;
             }
             if (!f)
                 expect("field");
-            next();
             if (!notfirst)
                 *cur_field = f;
             t = f->t | (t & VT_TYPEN);
@@ -3239,7 +3313,12 @@ void decl_designator(int t, int c,
         notfirst = 1;
     }
     if (notfirst) {
-        skip('=');
+        if (tok == '=') {
+            next();
+        } else {
+            if (!gnu_ext)
+                expect("=");
+        }
     } else {
         if (t & VT_ARRAY) {
             index = *cur_index;
@@ -3643,7 +3722,21 @@ void decl(int l)
                         if (has_init)
                             next();
                         addr = decl_initializer_alloc(u, has_init);
-                        sym_push(v, u, addr);
+                        if (l == VT_CONST) {
+                            /* global scope: see if already defined */
+                            sym = sym_find(v);
+                            if (!sym)
+                                goto do_def;
+                            if (!is_compatible_types(sym->t, u))
+                                error("incompatible types for redefinition of '%s'", 
+                                      get_tok_str(v, 0));
+                            if (!(sym->t & VT_FORWARD))
+                                error("redefinition of '%s'", get_tok_str(v, 0));
+                            greloc_patch(sym, addr);
+                        } else {
+                        do_def:
+                            sym_push(v, u, addr);
+                        }
                     }
                 }
                 if (tok != ',') {
