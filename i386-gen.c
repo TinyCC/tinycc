@@ -412,6 +412,7 @@ void gfunc_prolog(int t)
 /* generate function epilog */
 void gfunc_epilog(void)
 {
+#ifdef CONFIG_TCC_BCHECK
     if (do_bounds_check && func_bound_ptr != lbounds_section->data_ptr) {
         int saved_ind;
         int *bounds_ptr;
@@ -431,6 +432,7 @@ void gfunc_epilog(void)
         oad(0xe8, (int)__bound_local_delete - ind - 5);
         o(0x585a); /* restore returned value, if any */
     }
+#endif
     o(0xc9); /* leave */
     if (func_ret_sub == 0) {
         o(0xc3); /* ret */
@@ -818,7 +820,7 @@ void gen_cvt_ftof(int t)
 }
 
 /* bound check support functions */
-
+#ifdef CONFIG_TCC_BCHECK
 /* generate first part of bounded pointer addition */
 void gen_bounded_ptr_add1(void)
 {
@@ -859,6 +861,7 @@ void gen_bounded_ptr_add2(int deref)
     /* return pointer is there */
     vtop->r = REG_EAX;
 }
+#endif
 
 /* end of X86 code generator */
 /*************************************************************/

@@ -662,20 +662,6 @@ void gen_cvt_ftof(int t)
     }
 }
 
-/* bound check support functions */
-
-/* generate first part of bounded pointer addition */
-void gen_bounded_ptr_add1(void)
-{
-    /* not handled */
-}
-
-/* if deref is true, then also test dereferencing */
-void gen_bounded_ptr_add2(int deref)
-{
-    /* not handled */
-}
-
-/* end of X86 code generator */
+/* end of CIL code generator */
 /*************************************************************/
 

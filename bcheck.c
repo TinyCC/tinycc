@@ -24,6 +24,9 @@
    bound checking not used) */
 //#define BOUND_STATIC
 
+/* use malloc hooks. Currently the code cannot be reliable if no hooks */
+#define CONFIG_TCC_MALLOC_HOOKS
+
 #define BOUND_T1_BITS 13
 #define BOUND_T2_BITS 11
 #define BOUND_T3_BITS (32 - BOUND_T1_BITS - BOUND_T2_BITS)
@@ -80,7 +83,7 @@ static void libc_free(void *ptr);
 static void install_malloc_hooks(void);
 static void restore_malloc_hooks(void);
 
-#ifndef WIN32
+#ifdef CONFIG_TCC_MALLOC_HOOKS
 static void *saved_malloc_hook;
 static void *saved_free_hook;
 static void *saved_realloc_hook;
@@ -407,8 +410,10 @@ void __bound_init(void)
     size = BOUND_T23_SIZE;
     mark_invalid(start, size);
 
-#if !defined(__TINYC__) && !defined(WIN32)
-    /* malloc zone is also marked invalid */
+#if !defined(__TINYC__) && defined(CONFIG_TCC_MALLOC_HOOKS)
+    /* malloc zone is also marked invalid. can only use that with
+       hooks because all libs should use the same malloc. The solution
+       would be to build a new malloc for tcc. */
     start = (unsigned long)&_end;
     size = 128 * 0x100000;
     mark_invalid(start, size);
@@ -642,7 +647,7 @@ static unsigned long get_region_size(void *p)
 
 static void install_malloc_hooks(void)
 {
-#ifndef WIN32
+#ifdef CONFIG_TCC_MALLOC_HOOKS
     saved_malloc_hook = __malloc_hook;
     saved_free_hook = __free_hook;
     saved_realloc_hook = __realloc_hook;
@@ -656,7 +661,7 @@ static void install_malloc_hooks(void)
 
 static void restore_malloc_hooks(void)
 {
-#ifndef WIN32
+#ifdef CONFIG_TCC_MALLOC_HOOKS
     __malloc_hook = saved_malloc_hook;
     __free_hook = saved_free_hook;
     __realloc_hook = saved_realloc_hook;
@@ -698,7 +703,6 @@ void *__bound_malloc(size_t size, const void *caller)
     return ptr;
 }
 
-#ifndef WIN32
 void *__bound_memalign(size_t size, size_t align, const void *caller)
 {
     void *ptr;
@@ -717,7 +721,6 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
     __bound_new_region(ptr, size);
     return ptr;
 }
-#endif
 
 void __bound_free(void *ptr, const void *caller)
 {
@@ -749,6 +752,19 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         return ptr1;
     }
 }
+
+#ifndef CONFIG_TCC_MALLOC_HOOKS
+void *__bound_calloc(size_t nmemb, size_t size)
+{
+    void *ptr;
+    size = size * nmemb;
+    ptr = __bound_malloc(size);
+    if (!ptr)
+        return NULL;
+    memset(ptr, 0, size);
+    return ptr;
+}
+#endif
 
 #if 0
 static void bound_dump(void)
@@ -844,6 +860,13 @@ typedef struct BCSyms {
 } BCSyms;
 
 static BCSyms bcheck_syms[] = {
+#ifndef CONFIG_TCC_MALLOC_HOOKS
+    { "malloc", __bound_malloc },
+    { "free", __bound_free },
+    { "realloc", __bound_realloc },
+    { "memalign", __bound_memalign },
+    { "calloc", __bound_calloc },
+#endif
     { "memcpy", __bound_memcpy },
     { "memmove", __bound_memmove },
     { "memset", __bound_memset },
