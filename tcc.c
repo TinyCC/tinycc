@@ -215,6 +215,7 @@ typedef struct DLLReference {
 /* GNUC attribute definition */
 typedef struct AttributeDef {
     int aligned;
+    int packed; 
     Section *section;
     unsigned char func_call; /* FUNC_CDECL, FUNC_STDCALL, FUNC_FASTCALLx */
 } AttributeDef;
@@ -3875,7 +3876,7 @@ static int macro_subst_tok(TokenString *tok_str,
     CValue cval;
     CString cstr;
     char buf[32];
-            
+    
     /* if symbol is a macro, prepare substitution */
     /* special macros */
     if (tok == TOK___LINE__) {
@@ -4149,7 +4150,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     const int *ptr;
     int t, ret;
     CValue cval;
-
+    
     /* first scan for '##' operator handling */
     ptr = macro_str;
     macro_str1 = macro_twosharps(ptr);
@@ -6175,8 +6176,10 @@ void inc(int post, int c)
 /* Parse GNUC __attribute__ extension. Currently, the following
    extensions are recognized:
    - aligned(n) : set data/function alignment.
+   - packed : force data alignment to 1
    - section(x) : generate data/code in this section.
    - unused : currently ignored, but may be used someday.
+   - regparm(n) : pass function parameters in registers (i386 only)
  */
 static void parse_attribute(AttributeDef *ad)
 {
@@ -6213,6 +6216,10 @@ static void parse_attribute(AttributeDef *ad)
                 n = MAX_ALIGN;
             }
             ad->aligned = n;
+            break;
+        case TOK_PACKED1:
+        case TOK_PACKED2:
+            ad->packed = 1;
             break;
         case TOK_UNUSED1:
         case TOK_UNUSED2:
@@ -6364,8 +6371,12 @@ static void struct_decl(CType *type, int u)
                                   get_tok_str(v, NULL));
                     }
                     size = type_size(&type1, &align);
-                    if (align < ad.aligned)
-                        align = ad.aligned;
+                    if (ad.aligned) {
+                        if (align < ad.aligned)
+                            align = ad.aligned;
+                    } else if (ad.packed) {
+                        align = 1;
+                    }
                     lbit_pos = 0;
                     if (bit_size >= 0) {
                         bt = type1.t & VT_BTYPE;
@@ -8480,8 +8491,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             error("unknown type size");
     }
     /* take into account specified alignment if bigger */
-    if (ad->aligned > align)
-        align = ad->aligned;
+    if (ad->aligned) {
+        if (ad->aligned > align)
+            align = ad->aligned;
+    } else if (ad->packed) {
+        align = 1;
+    }
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
         if (do_bounds_check && (type->t & VT_ARRAY)) 

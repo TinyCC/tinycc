@@ -90,6 +90,8 @@
      DEF(TOK_SECTION2, "__section__")
      DEF(TOK_ALIGNED1, "aligned")
      DEF(TOK_ALIGNED2, "__aligned__")
+     DEF(TOK_PACKED1, "packed")
+     DEF(TOK_PACKED2, "__packed__")
      DEF(TOK_UNUSED1, "unused")
      DEF(TOK_UNUSED2, "__unused__")
      DEF(TOK_CDECL1, "cdecl")
