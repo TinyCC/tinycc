@@ -127,7 +127,9 @@ bcheck.o: bcheck.c
 install: tcc_install libinstall
 
 tcc_install: tcc tcc.1 libtcc1.a bcheck.o
+	mkdir -p $(bindir)
 	$(INSTALL) -m755 tcc $(bindir)
+	mkdir -p $(mandir)/man1
 	$(INSTALL) tcc.1 $(mandir)/man1
 	mkdir -p $(libdir)/tcc
 	mkdir -p $(libdir)/tcc/include
@@ -157,7 +159,9 @@ tcc_p: tcc.c Makefile
 
 # libtcc generation and example
 libinstall: libtcc.a 
+	mkdir -p $(libdir)
 	$(INSTALL) -m644 libtcc.a $(libdir)
+	mkdir -p $(includedir)
 	$(INSTALL) -m644 libtcc.h $(includedir)
 
 libtcc.o: tcc.c i386-gen.c bcheck.c Makefile
