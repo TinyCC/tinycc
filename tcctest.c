@@ -76,6 +76,7 @@ void typeof_test(void);
 void local_label_test(void);
 void statement_expr_test(void);
 void asm_test(void);
+void builtin_test(void);
 
 int fib(int n);
 void num(int n);
@@ -498,6 +499,7 @@ int main(int argc, char **argv)
     statement_expr_test();
     local_label_test();
     asm_test();
+    builtin_test();
     return 0; 
 }
 
@@ -1897,3 +1899,32 @@ void asm_test(void)
 }
 
 #endif
+
+#define COMPAT_TYPE(type1, type2) \
+{\
+    printf("__builtin_types_compatible_p(%s, %s) = %d\n", #type1, #type2, \
+           __builtin_types_compatible_p (type1, type2));\
+}
+
+int constant_p_var;
+
+void builtin_test(void)
+{
+#if GCC_MAJOR >= 3
+    COMPAT_TYPE(int, int);
+    COMPAT_TYPE(int, unsigned int);
+    COMPAT_TYPE(int, char);
+    COMPAT_TYPE(int, const int);
+    COMPAT_TYPE(int, volatile int);
+    COMPAT_TYPE(int *, int *);
+    COMPAT_TYPE(int *, void *);
+    COMPAT_TYPE(int *, const int *);
+    COMPAT_TYPE(char *, unsigned char *);
+/* space is needed because tcc preprocessor introduces a space between each token */
+    COMPAT_TYPE(char * *, void *); 
+#endif
+    printf("res = %d\n", __builtin_constant_p(1));
+    printf("res = %d\n", __builtin_constant_p(1 + 2));
+    printf("res = %d\n", __builtin_constant_p(&constant_p_var));
+    printf("res = %d\n", __builtin_constant_p(constant_p_var));
+}
