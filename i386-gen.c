@@ -1,7 +1,7 @@
 /*
  *  X86 code generator for TCC
  * 
- *  Copyright (c) 2001 Fabrice Bellard
+ *  Copyright (c) 2001, 2002 Fabrice Bellard
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -68,6 +68,9 @@ int reg_classes[NB_REGS] = {
 #define LDOUBLE_SIZE  12
 #define LDOUBLE_ALIGN 4
 
+/* relocation type for 32 bit data relocation */
+#define R_DATA_32 R_386_32
+
 /* function call context */
 typedef struct GFuncContext {
     int args_size;
@@ -101,21 +104,21 @@ void gen_le32(int c)
     g(c >> 24);
 }
 
-/* patch relocation entry with value 'val' */
-void greloc_patch1(Reloc *p, int val)
+void greloc_patch(unsigned char *ptr, 
+                  unsigned long addr, unsigned long val, int type)
 {
-    switch(p->type) {
-    case RELOC_ADDR32:
-        *(int *)p->addr = val;
+    switch(type) {
+    case R_386_32:
+        *(int *)ptr += val;
         break;
-    case RELOC_REL32:
-        *(int *)p->addr = val - p->addr - 4;
+    case R_386_PC32:
+        *(int *)ptr += val - addr - 4;
         break;
     }
 }
 
 /* output a symbol and patch all calls to it */
-void gsym_addr(t, a)
+void gsym_addr(int t, int a)
 {
     int n;
     while (t) {
@@ -125,7 +128,7 @@ void gsym_addr(t, a)
     }
 }
 
-void gsym(t)
+void gsym(int t)
 {
     gsym_addr(t, ind);
 }
@@ -144,13 +147,14 @@ int oad(int c, int s)
     return s;
 }
 
-/* output constant with relocation if 'r & VT_FORWARD' is true */
+/* output constant with relocation if 'r & VT_SYM' is true */
 void gen_addr32(int r, int c)
 {
-    if (!(r & VT_FORWARD)) {
+    if (!(r & VT_SYM)) {
         gen_le32(c);
     } else {
-        greloc((Sym *)c, ind, RELOC_ADDR32);
+        greloc(cur_text_section, 
+               (Sym *)c, ind - (int)cur_text_section->data, R_386_32);
         gen_le32(0);
     }
 }
@@ -347,9 +351,10 @@ void gfunc_call(GFuncContext *c)
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         /* constant case */
-        /* forward reference */
-        if (vtop->r & VT_FORWARD) {
-            greloc(vtop->c.sym, ind + 1, RELOC_REL32);
+        if (vtop->r & VT_SYM) {
+            /* relocation case */
+            greloc(cur_text_section, vtop->c.sym, 
+                   ind + 1 - (int)cur_text_section->data, R_386_PC32);
             oad(0xe8, 0);
         } else {
             oad(0xe8, vtop->c.ul - ind - 5);
@@ -485,7 +490,7 @@ int gtst(int inv, int t)
             vpushi(0);
             gen_op(TOK_NE);
         }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant jmp optimization */
             if ((vtop->c.i != 0) != inv) 
                 t = gjmp(t);
@@ -511,7 +516,7 @@ void gen_opi(int op)
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
             vswap();
             r = gv(RC_INT);
@@ -576,7 +581,7 @@ void gen_opi(int op)
         opc = 7;
     gen_shift:
         opc = 0xc0 | (opc << 3);
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
             vswap();
             r = gv(RC_INT);

@@ -74,6 +74,7 @@
 #define TOK_HASH_SIZE       2048 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define SYM_HASH_SIZE       1031
+#define ELF_SYM_HASH_SIZE   2048 /* must be a power of two */
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -104,7 +105,7 @@ typedef struct SValue {
     unsigned short r;      /* register + flags */
     unsigned short r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
-    CValue c;   /* constant */
+    CValue c;              /* constant, if VT_CONST */
 } SValue;
 
 /* symbol management */
@@ -123,16 +124,6 @@ typedef struct SymStack {
   struct Sym *hash[SYM_HASH_SIZE];
 } SymStack;
 
-/* relocation entry (currently only used for functions or variables */
-typedef struct Reloc {
-    int type;            /* type of relocation */
-    int addr;            /* address of relocation */
-    struct Reloc *next;  /* next relocation */
-} Reloc;
-
-#define RELOC_ADDR32 1  /* 32 bits relocation */
-#define RELOC_REL32  2  /* 32 bits relative relocation */
-
 /* section definition */
 typedef struct Section {
     unsigned char *data;     /* section data */
@@ -140,8 +131,16 @@ typedef struct Section {
     int sh_num;              /* elf section number */
     int sh_type;             /* elf section type */
     int sh_flags;            /* elf section flags */
+/* special flag to indicate that the section should not be linked to
+   the other ones */
+#define SHF_PRIVATE 0x80000000
     int sh_entsize;          /* elf entry size */
+    unsigned long addr;      /* address at which the section is relocated */
     struct Section *link;    /* link to another section */
+    struct Section *reloc;   /* corresponding section for relocation, if any */
+    struct Section *reloc_sec;/* relocation: pointer to corresponding 
+                                 data section */
+    struct Section *hash;     /* hash table for symbols */
     struct Section *next;
     char name[64];           /* section name */
 } Section;
@@ -169,6 +168,9 @@ typedef struct AttributeDef {
 /* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
 #define MACRO_FUNC     1 /* function like macro */
+
+/* field 'Sym.t' for labels */
+#define LABEL_FORWARD  1 /* label is forward defined */
 
 /* type_decl() types */
 #define TYPE_ABSTRACT  1 /* type without variable */
@@ -210,16 +212,21 @@ int ch, ch1, tok, tok1;
 CValue tokc, tok1c;
 
 /* sections */
-Section *first_section;
-int section_num;
+/* XXX: suppress first_section */
+Section *first_section, **sections;
+int nb_sections; /* number of sections, including first dummy section */
+int nb_allocated_sections;
 Section *text_section, *data_section, *bss_section; /* predefined sections */
 Section *cur_text_section; /* current section where function code is
                               generated */
 /* bound check related sections */
 Section *bounds_section; /* contains global data bound description */
 Section *lbounds_section; /* contains local data bound description */
+/* symbol sections */
+Section *symtab_section, *strtab_section, *hashtab_section;
+
 /* debug sections */
-Section *stab_section, *stabstr_section, *symtab_section, *strtab_section;
+Section *stab_section, *stabstr_section;
 
 /* loc : local variable index
    ind : output code index
@@ -238,8 +245,6 @@ TokenSym **table_ident;
 TokenSym *hash_ident[TOK_HASH_SIZE];
 char token_buf[STRING_MAX_SIZE + 1];
 char *funcname;
-/* contains global symbols which remain between each translation unit */
-SymStack extern_stack;
 SymStack define_stack, global_stack, local_stack, label_stack;
 
 SValue vstack[VSTACK_SIZE], *vtop;
@@ -281,7 +286,7 @@ struct TCCState {
 #define VT_JMP       0x00f4  /* value is the consequence of jmp true (even) */
 #define VT_JMPI      0x00f5  /* value is the consequence of jmp false (odd) */
 #define VT_LVAL      0x0100  /* var is an lvalue */
-#define VT_FORWARD   0x0200  /* value is forward reference */
+#define VT_SYM       0x0200  /* a symbol value is added */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
                                 char/short stored in integer registers) */
 #define VT_MUSTBOUND 0x0800  /* bound checking must be done before
@@ -519,9 +524,9 @@ int expr_const(void);
 void expr_eq(void);
 void gexpr(void);
 void decl(int l);
-void decl_initializer(int t, int r, int c, int first, int size_only);
-int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
-                           int v, int scope);
+void decl_initializer(int t, Section *sec, unsigned long c, int first, int size_only);
+void decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
+                            int v, int scope);
 int gv(int rc);
 void gv2(int rc1, int rc2);
 void move_reg(int r, int s);
@@ -556,13 +561,17 @@ void vpushi(int v);
 void vset(int t, int r, int v);
 void type_to_str(char *buf, int buf_size, 
                  int t, const char *varstr);
+char *get_tok_str(int v, CValue *cv);
 
 /* section generation */
-void greloc(Sym *s, int addr, int type);
+void put_extern_sym(Sym *sym, Section *section, unsigned long value);
+void greloc(Section *s, Sym *sym, unsigned long addr, int type);
 static int put_elf_str(Section *s, const char *sym);
-static void put_elf_sym(Section *s, 
-                        unsigned long value, unsigned long size,
-                        int info, int other, int shndx, const char *name);
+static int put_elf_sym(Section *s, 
+                       unsigned long value, unsigned long size,
+                       int info, int other, int shndx, const char *name);
+static void put_elf_reloc(Section *s, unsigned long offset,
+                          int type, int symbol);
 static void put_stabs(const char *str, int type, int other, int desc, int value);
 static void put_stabn(int type, int other, int desc, int value);
 static void put_stabd(int type, int other, int desc);
@@ -755,8 +764,6 @@ Section *new_section(const char *name, int sh_type, int sh_flags)
         error("memory full");
     memset(sec, 0, sizeof(Section));
     pstrcpy(sec->name, sizeof(sec->name), name);
-    sec->link = NULL;
-    sec->sh_num = ++section_num;
     sec->sh_type = sh_type;
     sec->sh_flags = sh_flags;
 #ifdef WIN32
@@ -774,11 +781,29 @@ Section *new_section(const char *name, int sh_type, int sh_flags)
 #endif
     sec->data = data;
     sec->data_ptr = data;
-    psec = &first_section;
-    while (*psec != NULL)
-        psec = &(*psec)->next;
-    sec->next = NULL;
-    *psec = sec;
+
+    if (!(sh_flags & SHF_PRIVATE)) {
+        /* only add section if not private */
+
+        psec = &first_section;
+        while (*psec != NULL)
+            psec = &(*psec)->next;
+        sec->next = NULL;
+        *psec = sec;
+
+        if ((nb_sections + 1) > nb_allocated_sections) {
+            if (nb_allocated_sections == 0)
+                nb_allocated_sections = 1;
+            nb_allocated_sections *= 2;
+            sections = realloc(sections, 
+                               nb_allocated_sections * sizeof(Section *));
+            if (!sections)
+                error("memory full");
+        }
+        sections[nb_sections] = sec;
+        sec->sh_num = nb_sections;
+        nb_sections++;
+    }
     return sec;
 }
 
@@ -796,35 +821,14 @@ Section *find_section(const char *name)
     return new_section(name, SHT_PROGBITS, SHF_ALLOC);
 }
 
-/* add a new relocation entry to symbol 's' */
-void greloc(Sym *s, int addr, int type)
+/* add a new relocation entry to symbol 'sym' in section 's' */
+void greloc(Section *s, Sym *sym, unsigned long offset, int type)
 {
-    Reloc *p;
-    p = malloc(sizeof(Reloc));
-    if (!p)
-        error("memory full");
-    p->type = type;
-    p->addr = addr;
-    p->next = (Reloc *)s->c;
-    s->c = (int)p;
+    if (!sym->c) 
+        put_extern_sym(sym, NULL, 0);
+    /* now we can add ELF relocation info */
+    put_elf_reloc(s, offset, type, sym->c);
 }
-
-/* patch each relocation entry with value 'val' */
-void greloc_patch(Sym *s, int val)
-{
-    Reloc *p, *p1;
-
-    p = (Reloc *)s->c;
-    while (p != NULL) {
-        p1 = p->next;
-        greloc_patch1(p, val);
-        free(p);
-        p = p1;
-    }
-    s->c = val;
-    s->r &= ~VT_FORWARD;
-}
-
 
 static inline int isid(int c)
 {
@@ -2502,6 +2506,21 @@ void vpushi(int v)
     vsetc(VT_INT, VT_CONST, &cval);
 }
 
+/* push a reference to a section offset by adding a dummy symbol */
+void vpush_ref(int t, Section *sec, unsigned long offset)
+{
+    int v;
+    Sym *sym;
+    CValue cval;
+
+    v = anon_sym++;
+    sym = sym_push1(&global_stack, v, t | VT_STATIC, 0);
+    sym->r = VT_CONST | VT_SYM;
+    put_extern_sym(sym, sec, offset);
+    cval.sym = sym;
+    vsetc(t, VT_CONST | VT_SYM, &cval);
+}
+
 void vset(int t, int r, int v)
 {
     CValue cval;
@@ -3016,7 +3035,7 @@ void gen_opl(int op)
     case TOK_SAR:
     case TOK_SHR:
     case TOK_SHL:
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             t = vtop[-1].t;
             vswap();
             lexpand();
@@ -3142,8 +3161,8 @@ void gen_opic(int op)
     v1 = vtop - 1;
     v2 = vtop;
     /* currently, we cannot do computations with forward symbols */
-    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
-    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
+    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if (c1 && c2) {
         fc = v2->c.i;
         switch(op) {
@@ -3246,8 +3265,8 @@ void gen_opif(int op)
     v1 = vtop - 1;
     v2 = vtop;
     /* currently, we cannot do computations with forward symbols */
-    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
-    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
+    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if (c1 && c2) {
         if (v1->t == VT_FLOAT) {
             f1 = v1->c.f;
@@ -3544,7 +3563,7 @@ void gen_cast(int t)
     if (sbt != dbt) {
         sf = is_float(sbt);
         df = is_float(dbt);
-        c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST;
+        c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
         if (sf && df) {
             /* convert from fp to fp */
             if (c) {
@@ -3898,7 +3917,7 @@ void gen_assign_cast(int dt)
         }
         /* '0' can also be a pointer */
         if ((st & VT_BTYPE) == VT_INT &&
-            ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) &&
+            ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) &&
             vtop->c.i == 0)
             goto type_ok;
     }
@@ -4531,16 +4550,17 @@ int type_decl(AttributeDef *ad, int *v, int t, int td)
     return u;
 }
 
-/* define a new external reference to a function 'v' of type 'u' */
+/* define a new external reference to a symbol 'v' of type 'u' */
 Sym *external_sym(int v, int u, int r)
 {
     Sym *s;
+
     s = sym_find(v);
     if (!s) {
         /* push forward reference */
         s = sym_push1(&global_stack, 
-                      v, u, 0);
-        s->r = r | VT_CONST | VT_FORWARD;
+                      v, u | VT_EXTERN, 0);
+        s->r = r | VT_CONST | VT_SYM;
     }
     return s;
 }
@@ -4628,11 +4648,11 @@ void unary(void)
     } else if (tok == TOK___FUNC__) {
         /* special function name identifier */
         /* generate (char *) type */
-        data_offset = (int)data_section->data_ptr;
-        vset(mk_pointer(VT_BYTE), VT_CONST, data_offset);
-        strcpy((void *)data_offset, funcname);
+        data_offset = data_section->data_ptr - data_section->data;
+        vpush_ref(mk_pointer(VT_BYTE), data_section, data_offset);
+        strcpy(data_section->data + data_offset, funcname);
         data_offset += strlen(funcname) + 1;
-        data_section->data_ptr = (unsigned char *)data_offset;
+        data_section->data_ptr = data_section->data + data_offset;
         next();
     } else if (tok == TOK_LSTR) {
         t = VT_INT;
@@ -4642,16 +4662,16 @@ void unary(void)
         t = VT_BYTE;
     str_init:
         type_size(t, &align);
-        data_offset = (int)data_section->data_ptr;
+        data_offset = data_section->data_ptr - data_section->data;
         data_offset = (data_offset + align - 1) & -align;
         fc = data_offset;
         /* we must declare it as an array first to use initializer parser */
         t = VT_ARRAY | mk_pointer(t);
-        decl_initializer(t, VT_CONST, data_offset, 1, 0);
+        decl_initializer(t, data_section, data_offset, 1, 0);
         data_offset += type_size(t, &align);
         /* put it as pointer */
-        vset(t & ~VT_ARRAY, VT_CONST, fc);
-        data_section->data_ptr = (unsigned char *)data_offset;
+        vpush_ref(t & ~VT_ARRAY, data_section, fc);
+        data_section->data_ptr = data_section->data + data_offset;
     } else {
         t = tok;
         next();
@@ -4671,8 +4691,7 @@ void unary(void)
                     if (!(ft & VT_ARRAY))
                         r |= lvalue_type(ft);
                     memset(&ad, 0, sizeof(AttributeDef));
-                    fc = decl_initializer_alloc(ft, &ad, r, 1, 0, 0);
-                    vset(ft, r, fc);
+                    decl_initializer_alloc(ft, &ad, r, 1, 0, 0);
                 } else {
                     unary();
                     gen_cast(ft);
@@ -4751,14 +4770,14 @@ void unary(void)
                     error("'%s' undeclared", get_tok_str(t, NULL));
                 /* for simple function calls, we tolerate undeclared
                    external reference */
-                p = anon_sym++;        
+                p = anon_sym++;
                 sym_push1(&global_stack, p, 0, FUNC_OLD);
                 /* int() function */
                 s = external_sym(t, VT_FUNC | (p << VT_STRUCT_SHIFT), 0); 
             }
             vset(s->t, s->r, s->c);
             /* if forward reference, we must point to s */
-            if (vtop->r & VT_FORWARD)
+            if (vtop->r & VT_SYM)
                 vtop->c.sym = s;
         }
     }
@@ -5333,9 +5352,9 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
         s = sym_find1(&label_stack, tok);
         /* put forward definition if needed */
         if (!s)
-            s = sym_push1(&label_stack, tok, VT_FORWARD, 0);
+            s = sym_push1(&label_stack, tok, LABEL_FORWARD, 0);
         /* label already defined */
-        if (s->t & VT_FORWARD) 
+        if (s->t & LABEL_FORWARD) 
             s->c = gjmp(s->c);
         else
             gjmp_addr(s->c);
@@ -5347,7 +5366,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
             /* label case */
             s = sym_find1(&label_stack, b);
             if (s) {
-                if (!(s->t & VT_FORWARD))
+                if (!(s->t & LABEL_FORWARD))
                     error("multiple defined label");
                 gsym(s->c);
                 s->c = ind;
@@ -5375,7 +5394,7 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
    address. cur_index/cur_field is the pointer to the current
    value. 'size_only' is true if only size info is needed (only used
    in arrays) */
-void decl_designator(int t, int r, int c, 
+void decl_designator(int t, Section *sec, unsigned long c, 
                      int *cur_index, Sym **cur_field, 
                      int size_only)
 {
@@ -5444,7 +5463,7 @@ void decl_designator(int t, int r, int c,
             c += f->c;
         }
     }
-    decl_initializer(t, r, c, 0, size_only);
+    decl_initializer(t, sec, c, 0, size_only);
 }
 
 #define EXPR_VAL   0
@@ -5452,10 +5471,11 @@ void decl_designator(int t, int r, int c,
 #define EXPR_ANY   2
 
 /* store a value or an expression directly in global data or in local array */
-void init_putv(int t, int r, int c, 
+void init_putv(int t, Section *sec, unsigned long c, 
                int v, int expr_type)
 {
     int saved_global_expr, bt;
+    void *ptr;
 
     switch(expr_type) {
     case EXPR_VAL:
@@ -5473,33 +5493,47 @@ void init_putv(int t, int r, int c,
         break;
     }
     
-    if ((r & VT_VALMASK) == VT_CONST) {
+    if (sec) {
         /* XXX: not portable */
+        /* XXX: generate error if incorrect relocation */
         gen_assign_cast(t);
         bt = t & VT_BTYPE;
+        ptr = sec->data + c;
+        if ((vtop->r & VT_SYM) &&
+            (bt == VT_BYTE ||
+             bt == VT_SHORT ||
+             bt == VT_DOUBLE ||
+             bt == VT_LDOUBLE ||
+             bt == VT_LLONG))
+            error("initializer element is not computable at load time");
         switch(bt) {
         case VT_BYTE:
-            *(char *)c = vtop->c.i;
+            *(char *)ptr = vtop->c.i;
             break;
         case VT_SHORT:
-            *(short *)c = vtop->c.i;
+            *(short *)ptr = vtop->c.i;
             break;
         case VT_DOUBLE:
-            *(double *)c = vtop->c.d;
+            *(double *)ptr = vtop->c.d;
             break;
         case VT_LDOUBLE:
-            *(long double *)c = vtop->c.ld;
+            *(long double *)ptr = vtop->c.ld;
             break;
         case VT_LLONG:
-            *(long long *)c = vtop->c.ll;
+            *(long long *)ptr = vtop->c.ll;
             break;
         default:
-            *(int *)c = vtop->c.i;
+            if (vtop->r & VT_SYM) {
+                greloc(sec, vtop->c.sym, c, R_DATA_32);
+                *(int *)ptr = 0;
+            } else {
+                *(int *)ptr = vtop->c.i;
+            }
             break;
         }
         vtop--;
     } else {
-        vset(t, r, c);
+        vset(t, VT_LOCAL, c);
         vswap();
         vstore();
         vpop();
@@ -5507,11 +5541,11 @@ void init_putv(int t, int r, int c,
 }
 
 /* put zeros for variable based init */
-void init_putz(int t, int r, int c, int size)
+void init_putz(int t, Section *sec, unsigned long c, int size)
 {
     GFuncContext gf;
 
-    if ((r & VT_VALMASK) == VT_CONST) {
+    if (sec) {
         /* nothing to do because globals are already set to zero */
     } else {
         gfunc_start(&gf, FUNC_CDECL);
@@ -5526,11 +5560,12 @@ void init_putz(int t, int r, int c, int size)
     }
 }
 
-/* 't' contains the type and storage info. c is the address of the
-   object. 'first' is true if array '{' must be read (multi dimension
-   implicit array init handling). 'size_only' is true if size only
-   evaluation is wanted (only for arrays). */
-void decl_initializer(int t, int r, int c, int first, int size_only)
+/* 't' contains the type and storage info. 'c' is the offset of the
+   object in section 'sec'. If 'sec' is NULL, it means stack based
+   allocation. 'first' is true if array '{' must be read (multi
+   dimension implicit array init handling). 'size_only' is true if
+   size only evaluation is wanted (only for arrays). */
+void decl_initializer(int t, Section *sec, unsigned long c, int first, int size_only)
 {
     int index, array_length, n, no_oblock, nb, parlevel, i;
     int t1, size1, align1, expr_type;
@@ -5568,7 +5603,7 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
                     if (ts->len > nb)
                         warning("initializer-string for array is too long");
                     for(i=0;i<nb;i++) {
-                        init_putv(t1, r, c + (array_length + i) * size1, 
+                        init_putv(t1, sec, c + (array_length + i) * size1, 
                                   ts->str[i], EXPR_VAL);
                     }
                 }
@@ -5579,20 +5614,20 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
                warning in this case since it is standard) */
             if (n < 0 || array_length < n) {
                 if (!size_only) {
-                    init_putv(t1, r, c + (array_length * size1), 0, EXPR_VAL);
+                    init_putv(t1, sec, c + (array_length * size1), 0, EXPR_VAL);
                 }
                 array_length++;
             }
         } else {
             index = 0;
             while (tok != '}') {
-                decl_designator(t, r, c, &index, NULL, size_only);
+                decl_designator(t, sec, c, &index, NULL, size_only);
                 if (n >= 0 && index >= n)
                     error("index too large");
                 /* must put zero in holes (note that doing it that way
                    ensures that it even works with designators) */
                 if (!size_only && array_length < index) {
-                    init_putz(t1, r, c + array_length * size1, 
+                    init_putz(t1, sec, c + array_length * size1, 
                               (index - array_length) * size1);
                 }
                 index++;
@@ -5612,7 +5647,7 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
             skip('}');
         /* put zeros at the end */
         if (!size_only && n >= 0 && array_length < n) {
-            init_putz(t1, r, c + array_length * size1, 
+            init_putz(t1, sec, c + array_length * size1, 
                       (n - array_length) * size1);
         }
         /* patch type size if needed */
@@ -5627,11 +5662,11 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
         index = 0;
         n = s->c;
         while (tok != '}') {
-            decl_designator(t, r, c, NULL, &f, size_only);
+            decl_designator(t, sec, c, NULL, &f, size_only);
             /* fill with zero between fields */
             index = f->c;
             if (!size_only && array_length < index) {
-                init_putz(t, r, c + array_length, 
+                init_putz(t, sec, c + array_length, 
                           index - array_length);
             }
             index = index + type_size(f->t, &align1);
@@ -5644,13 +5679,13 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
         }
         /* put zeros at the end */
         if (!size_only && array_length < n) {
-            init_putz(t, r, c + array_length, 
+            init_putz(t, sec, c + array_length, 
                       n - array_length);
         }
         skip('}');
     } else if (tok == '{') {
         next();
-        decl_initializer(t, r, c, first, size_only);
+        decl_initializer(t, sec, c, first, size_only);
         skip('}');
     } else if (size_only) {
         /* just skip expression */
@@ -5667,19 +5702,20 @@ void decl_initializer(int t, int r, int c, int first, int size_only)
         /* currently, we always use constant expression for globals
            (may change for scripting case) */
         expr_type = EXPR_CONST;
-        if ((r & VT_VALMASK) == VT_LOCAL)
+        if (!sec)
             expr_type = EXPR_ANY;
-        init_putv(t, r, c, 0, expr_type);
+        init_putv(t, sec, c, 0, expr_type);
     }
 }
 
 /* parse an initializer for type 't' if 'has_init' is true, and
    allocate space in local or global data space ('r' is either
-   VT_LOCAL or VT_CONST). The allocated address in returned. If 'v' is
-   non zero, then an associated variable 'v' of scope 'scope' is
-   declared before initializers are parsed. */
-int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
-                           int v, int scope)
+   VT_LOCAL or VT_CONST). If 'v' is non zero, then an associated
+   variable 'v' of scope 'scope' is declared before initializers are
+   parsed. If 'v' is zero, then a reference to the new object is put
+   in the value stack. */
+void decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
+                            int v, int scope)
 {
     int size, align, addr, data_offset;
     int level;
@@ -5721,7 +5757,7 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
 
         macro_ptr = init_str.str;
         next();
-        decl_initializer(t, r, 0, 1, 1);
+        decl_initializer(t, NULL, 0, 1, 1);
         /* prepare second initializer parsing */
         macro_ptr = init_str.str;
         next();
@@ -5735,6 +5771,7 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
     if (ad->aligned > align)
         align = ad->aligned;
     if ((r & VT_VALMASK) == VT_LOCAL) {
+        sec = NULL;
         if (do_bounds_check && (t & VT_ARRAY)) 
             loc--;
 #ifdef TCC_TARGET_IL
@@ -5768,13 +5805,11 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
             else
                 sec = bss_section;
         }
-        data_offset = (int)sec->data_ptr;
+        data_offset = sec->data_ptr - sec->data;
         data_offset = (data_offset + align - 1) & -align;
         addr = data_offset;
-        /* very important to increment global
-           pointer at this time because
-           initializers themselves can create new
-           initializers */
+        /* very important to increment global pointer at this time
+           because initializers themselves can create new initializers */
         data_offset += size;
         /* handles bounds */
         if (do_bounds_check) {
@@ -5783,39 +5818,54 @@ int decl_initializer_alloc(int t, AttributeDef *ad, int r, int has_init,
             data_offset++;
             /* then add global bound info */
             bounds_ptr = (int *)bounds_section->data_ptr;
-            *bounds_ptr++ = addr;
+            /* XXX: add relocation */
+            *bounds_ptr++ = addr + (unsigned long)sec->data;
             *bounds_ptr++ = size;
             bounds_section->data_ptr = (unsigned char *)bounds_ptr;
         }
-        sec->data_ptr = (unsigned char *)data_offset;
+        sec->data_ptr = sec->data + data_offset;
     }
     if (v) {
         Sym *sym;
-        if (scope == VT_CONST) {
-            /* global scope: see if already defined */
-            sym = sym_find(v);
-            if (!sym)
-                goto do_def;
-            if (!is_compatible_types(sym->t, t))
-                error("incompatible types for redefinition of '%s'", 
-                      get_tok_str(v, NULL));
-            if (!(sym->r & VT_FORWARD))
-                error("redefinition of '%s'", get_tok_str(v, NULL));
-            greloc_patch(sym, addr);
-        } else {
-        do_def:
+
+        if (!sec) {
+            /* local variable */
             sym_push(v, t, r, addr);
+        } else {
+            if (scope == VT_CONST) {
+                /* global scope: see if already defined */
+                sym = sym_find(v);
+                if (!sym)
+                    goto do_def;
+                if (!is_compatible_types(sym->t, t))
+                    error("incompatible types for redefinition of '%s'", 
+                          get_tok_str(v, NULL));
+                if (!(sym->t & VT_EXTERN))
+                    error("redefinition of '%s'", get_tok_str(v, NULL));
+                sym->t &= ~VT_EXTERN;
+            } else {
+            do_def:
+                sym = sym_push(v, t, r | VT_SYM, 0);
+            }
+            put_extern_sym(sym, sec, addr);
+        }
+    } else {
+        if (!sec) {
+            /* push local reference */
+            vset(t, r, addr);
+        } else {
+            /* push global reference */
+            vpush_ref(t, sec, addr);
         }
     }
     if (has_init) {
-        decl_initializer(t, r, addr, 1, 0);
+        decl_initializer(t, sec, addr, 1, 0);
         /* restore parse state if needed */
         if (init_str.str) {
             free(init_str.str);
             restore_parse_state(&saved_parse_state);
         }
     }
-    return addr;
 }
 
 void put_func_debug(int t)
@@ -5894,7 +5944,7 @@ void analyse_function(void)
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(int l)
 {
-    int t, b, v, has_init, r, bind;
+    int t, b, v, has_init, r;
     Sym *sym;
     AttributeDef ad;
     
@@ -5976,25 +6026,18 @@ void decl(int l)
                 if (!cur_text_section)
                     cur_text_section = text_section;
                 ind = (int)cur_text_section->data_ptr;
-                /* patch forward references */
-                if ((sym = sym_find(v)) && (sym->r & VT_FORWARD)) {
-                    greloc_patch(sym, ind);
+                funcname = get_tok_str(v, NULL);
+                sym = sym_find(v);
+                if (sym) {
+                    /* if symbol is already defined, then put complete type */
                     sym->t = t;
                 } else {
-                    /* put function address */
-                    sym = sym_push1(&global_stack, v, t, ind);
+                    /* put function symbol */
+                    sym = sym_push1(&global_stack, v, t, 0);
                 }
-                sym->r = VT_CONST;
-                funcname = get_tok_str(v, NULL);
-                /* add symbol info */
-                if (t & VT_STATIC)
-                    bind = STB_LOCAL;
-                else
-                    bind = STB_GLOBAL;
-                put_elf_sym(symtab_section, ind, 0, 
-                            ELF32_ST_INFO(bind, STT_FUNC), 0, 
-                            cur_text_section->sh_num, funcname);
-                
+                put_extern_sym(sym, cur_text_section, 
+                               ind - (int)cur_text_section->data);
+                sym->r = VT_SYM | VT_CONST;
                 /* put debug symbol */
                 if (do_debug)
                     put_func_debug(t);
@@ -6064,52 +6107,6 @@ void decl(int l)
     }
 }
 
-/* put all global symbols in the extern stack and do all the
-   resolving which can be done without using external symbols from DLLs */
-/* XXX: could try to verify types, but would not to save them in
-   extern_stack too */
-void resolve_global_syms(void)
-{
-    Sym *s, *s1, *ext_sym;
-    Reloc **p;
-
-    s = global_stack.top;
-    while (s != NULL) {
-        s1 = s->prev;
-        /* do not save static or typedefed symbols or types */
-        if (!(s->t & (VT_STATIC | VT_TYPEDEF)) && 
-            !(s->v & (SYM_FIELD | SYM_STRUCT)) &&
-            (s->v < SYM_FIRST_ANOM)) {
-            ext_sym = sym_find1(&extern_stack, s->v);
-            if (!ext_sym) {
-                /* if the symbol do not exist, we simply save it */
-                ext_sym = sym_push1(&extern_stack, s->v, s->t, s->c);
-                ext_sym->r = s->r;
-            } else if (ext_sym->r & VT_FORWARD) {
-                /* external symbol already exists, but only as forward
-                   definition */
-                if (!(s->r & VT_FORWARD)) {
-                    /* s is not forward, so we can relocate all symbols */
-                    greloc_patch(ext_sym, s->c);
-                } else {
-                    /* the two symbols are forward: merge them */
-                    p = (Reloc **)&ext_sym->c;
-                    while (*p != NULL)
-                        p = &(*p)->next;
-                    *p = (Reloc *)s->c;
-                }
-            } else {
-                /* external symbol already exists and is defined :
-                   patch all references to it */
-                if (!(s->r & VT_FORWARD))
-                    error("'%s' defined twice", get_tok_str(s->v, NULL));
-                greloc_patch(s, ext_sym->c);
-            }
-        } 
-        s = s1;
-    }
-}
-
 /* compile the C file opened in 'file'. Return non zero if errors. */
 int tcc_compile(TCCState *s)
 {
@@ -6151,8 +6148,6 @@ int tcc_compile(TCCState *s)
     /* reset define stack, but leave -Dsymbols (may be incorrect if
        they are undefined) */
     sym_pop(&define_stack, define_start); 
-    
-    resolve_global_syms();
     
     sym_pop(&global_stack, NULL);
     
@@ -6243,67 +6238,6 @@ int tcc_add_dll(TCCState *s, const char *library_name)
     return 0;
 }
 
-/* If the symbol already exists, then it is redefined */
-int tcc_add_symbol(TCCState *s, const char *name, void *value)
-{
-    TokenSym *ts;
-    Sym *ext_sym;
-    int v;
-
-    ts = tok_alloc(name, 0);
-    v = ts->tok;
-    ext_sym = sym_find1(&extern_stack, v);
-    if (ext_sym) {
-        if (ext_sym->r & VT_FORWARD) {
-            greloc_patch(ext_sym, (long)value);
-        } else {
-            /* redefine symbol */
-            ext_sym->c = (long)value;
-        }
-    } else {
-        ext_sym = sym_push1(&extern_stack, v, VT_INT, (long)value);
-        ext_sym->r = VT_CONST;
-    }
-    return 0;
-}
-
-static void *resolve_sym(const char *sym)
-{
-#ifdef CONFIG_TCC_BCHECK
-    if (do_bounds_check) {
-        void *ptr;
-        ptr = bound_resolve_sym(sym);
-        if (ptr)
-            return ptr;
-    }
-#endif
-    return dlsym(NULL, sym);
-}
-
-void resolve_extern_syms(void)
-{
-    Sym *s, *s1;
-    char *str;
-    int addr;
-
-    s = extern_stack.top;
-    while (s != NULL) {
-        s1 = s->prev;
-        if (s->r & VT_FORWARD) {
-            /* if there is at least one relocation to do, then find it
-               and patch it */
-            if (s->c) {
-                str = get_tok_str(s->v, NULL);
-                addr = (int)resolve_sym(str);
-                if (!addr)
-                    error("unresolved external reference '%s'", str);
-                greloc_patch(s, addr);
-            }
-        }
-        s = s1;
-    }
-}
-
 static int put_elf_str(Section *s, const char *sym)
 {
     int c, offset;
@@ -6317,25 +6251,155 @@ static int put_elf_str(Section *s, const char *sym)
     return offset;
 }
 
-static void put_elf_sym(Section *s, 
-                        unsigned long value, unsigned long size,
-                        int info, int other, int shndx, const char *name)
+/* elf symbol hashing function */
+static unsigned long elf_hash(const unsigned char *name)
 {
-    int name_offset;
-    Elf32_Sym *sym;
+    unsigned long h = 0, g;
+    
+    while (*name) {
+        h = (h << 4) + *name++;
+        g = h & 0xf0000000;
+        if (g)
+            h ^= g >> 24;
+        h &= ~g;
+    }
+    return h;
+}
 
+/* return the symbol number */
+static int put_elf_sym(Section *s, 
+                       unsigned long value, unsigned long size,
+                       int info, int other, int shndx, const char *name)
+{
+    int name_offset, nbuckets, h, sym_index;
+    Elf32_Sym *sym;
+    Section *hs;
+    
     sym = (Elf32_Sym *)s->data_ptr;
     if (name)
         name_offset = put_elf_str(s->link, name);
     else
         name_offset = 0;
+    /* XXX: endianness */
     sym->st_name = name_offset;
     sym->st_value = value;
     sym->st_size = size;
     sym->st_info = info;
     sym->st_other = other;
     sym->st_shndx = shndx;
+    sym_index = sym - (Elf32_Sym *)s->data;
+    hs = s->hash;
+    if (hs && ELF32_ST_BIND(info) == STB_GLOBAL) {
+        /* add another hashing entry */
+        nbuckets = ((int *)hs->data)[0];
+        ((int *)hs->data)[1]++;
+        h = elf_hash(name) % nbuckets;
+        ((int *)hs->data)[2 + nbuckets + sym_index] = ((int *)hs->data)[2 + h];
+        ((int *)hs->data)[2 + h] = sym_index;
+    }
     s->data_ptr += sizeof(Elf32_Sym);
+    return sym_index;
+}
+
+/* find global ELF symbol 'name' and return its index. Return 0 if not
+   found. */
+static int find_elf_sym(Section *s, const char *name)
+{
+    Elf32_Sym *sym;
+    Section *hs;
+    int nbuckets, sym_index, h;
+    const char *name1;
+    
+    hs = s->hash;
+    if (!hs)
+        return 0;
+    nbuckets = ((int *)hs->data)[0];
+    h = elf_hash(name) % nbuckets;
+    sym_index = ((int *)hs->data)[2 + h];
+    while (sym_index != 0) {
+        sym = &((Elf32_Sym *)s->data)[sym_index];
+        name1 = s->link->data + sym->st_name;
+        if (!strcmp(name, name1))
+            return sym_index;
+        sym_index = ((int *)hs->data)[2 + nbuckets + sym_index];
+    }
+    return 0;
+}
+
+/* update sym->c so that it points to an external symbol in section
+   'section' with value 'value' */
+/* XXX: get rid of put_elf_sym */
+void put_extern_sym(Sym *sym, Section *section, unsigned long value)
+{
+    int sym_type, sym_bind, sh_num;
+    Elf32_Sym *esym;
+    const char *name;
+    
+    if (section)
+        sh_num = section->sh_num;
+    else
+        sh_num = SHN_UNDEF;
+    if (!sym->c) {
+        if ((sym->t & VT_BTYPE) == VT_FUNC)
+            sym_type = STT_FUNC;
+        else
+            sym_type = STT_OBJECT;
+        if (sym->t & VT_STATIC)
+            sym_bind = STB_LOCAL;
+        else
+            sym_bind = STB_GLOBAL;
+        /* if the symbol is global, then we look if it is already
+           defined */
+        /* NOTE: name can be NULL if anonymous symbol */
+        name = get_tok_str(sym->v, NULL);
+        if (sym_bind == STB_GLOBAL) {
+            sym->c = find_elf_sym(symtab_section, name);
+            if (!sym->c)
+                goto do_def;
+            /* check if not defined */
+            if (section) {
+                esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
+                if (esym->st_shndx != SHN_UNDEF)
+                    error("'%s' defined twice", name);
+                esym->st_shndx = sh_num;
+                esym->st_value = value;
+            }
+        } else {
+        do_def:
+            sym->c = put_elf_sym(symtab_section, value, 0, 
+                                 ELF32_ST_INFO(sym_bind, sym_type), 0, 
+                                 sh_num, name);
+        }
+    } else {
+        esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
+        esym->st_value = value;
+        esym->st_shndx = sh_num;
+    }
+}
+
+/* put relocation */
+static void put_elf_reloc(Section *s, unsigned long offset,
+                          int type, int symbol)
+{
+    char buf[256];
+    Section *sr;
+    Elf32_Rel *rel;
+
+    sr = s->reloc;
+    if (!sr) {
+        /* if no relocation section, create it */
+        snprintf(buf, sizeof(buf), ".rel%s", s->name);
+        sr = new_section(buf, SHT_REL, 0);
+        sr->sh_entsize = sizeof(Elf32_Rel);
+        sr->link = symtab_section;
+        sr->reloc_sec = s;
+        s->reloc = sr;
+    }
+    rel = (Elf32_Rel *)sr->data_ptr;
+    /* XXX: endianness */
+    rel->r_offset = offset;
+    rel->r_info = ELF32_R_INFO(symbol, type);
+    sr->data_ptr += sizeof(Elf32_Rel);
 }
 
 /* put stab debug information */
@@ -6427,6 +6491,8 @@ int tcc_output_file(TCCState *s, const char *filename, int file_type)
         sh->sh_entsize = sec->sh_entsize;
         if (sec->link)
             sh->sh_link = sec->link->sh_num;
+        if (sec->reloc_sec)
+            sh->sh_info = sec->reloc_sec->sh_num;
         if (sh->sh_type == SHT_STRTAB) {
             sh->sh_addralign = 1;
         } else if (sh->sh_type == SHT_SYMTAB ||
@@ -6677,17 +6743,105 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 }
 #endif
 
+static void *resolve_sym(const char *sym)
+{
+#ifdef CONFIG_TCC_BCHECK
+    if (do_bounds_check) {
+        void *ptr;
+        ptr = bound_resolve_sym(sym);
+        if (ptr)
+            return ptr;
+    }
+#endif
+    return dlsym(NULL, sym);
+}
+
+static void resolve_extern_syms(void)
+{
+    unsigned long addr;
+    Elf32_Sym *sym;
+    const char *name;
+    
+    for(sym = (Elf32_Sym *)symtab_section->data + 1; 
+        sym < (Elf32_Sym *)symtab_section->data_ptr;
+        sym++) {
+        if (sym->st_shndx == SHN_UNDEF) {
+            name = symtab_section->link->data + sym->st_name;
+            addr = (unsigned long)resolve_sym(name);
+            if (!addr)
+                error("unresolved external reference '%s'", name);
+            sym->st_value = addr;
+            sym->st_shndx = SHN_ABS;
+        }
+    }
+}
+
+static unsigned long get_sym_val(int sym_index)
+{
+    unsigned long val;
+    Elf32_Sym *sym;
+    
+    sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+    val = sym->st_value;
+    if (sym->st_shndx != SHN_ABS)
+        val += sections[sym->st_shndx]->addr;
+    return val;
+}
+
+/* relocate sections */
+static void relocate_section(Section *s)
+{
+    Section *sr;
+    Elf32_Rel *rel;
+    int type;
+    unsigned char *ptr;
+    unsigned long val;
+
+    sr = s->reloc;
+    if (!sr)
+        return;
+    for(rel = (Elf32_Rel *)sr->data;
+        rel < (Elf32_Rel *)sr->data_ptr;
+        rel++) {
+        ptr = s->data + rel->r_offset;
+        val = get_sym_val(ELF32_R_SYM(rel->r_info));
+        type = ELF32_R_TYPE(rel->r_info);
+        greloc_patch(ptr, s->addr + rel->r_offset, val, type);
+    }
+}
+
+/* relocate all the code and data */
+static void relocate_program(void)
+{
+    Section *s;
+
+    /* compute relocation address : section are relocated in place */
+    for(s = first_section; s != NULL; s = s->next) {
+        if (s->sh_type == SHT_PROGBITS)
+            s->addr = (unsigned long)s->data;
+    }
+
+    /* relocate each section */
+    for(s = first_section; s != NULL; s = s->next) {
+        if (s->sh_type == SHT_PROGBITS) 
+            relocate_section(s);
+    }
+}
+
 /* launch the compiled program with the given arguments */
 int tcc_run(TCCState *s1, int argc, char **argv)
 {
-    Sym *s;
-    int (*t)();
+    int (*prog_main)(int, char **);
+    int sym_index;
 
     resolve_extern_syms();
 
-    s = sym_find1(&extern_stack, TOK_MAIN);
-    if (!s || (s->r & VT_FORWARD))
+    relocate_program();
+
+    sym_index = find_elf_sym(symtab_section, "main");
+    if (!sym_index)
         error("main() not defined");
+    prog_main = (void *)get_sym_val(sym_index);
     
     if (do_debug) {
 #ifdef WIN32
@@ -6721,8 +6875,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     }
 #endif
 
-    t = (int (*)())s->c;
-    return (*t)(argc, argv);
+    return (*prog_main)(argc, argv);
 }
 
 TCCState *tcc_new(void)
@@ -6758,6 +6911,7 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "__TINYC__", NULL);
     
     /* create standard sections */
+    nb_sections = 1;
     text_section = new_section(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     /* XXX: should change type to SHT_NOBITS */
@@ -6770,7 +6924,13 @@ TCCState *tcc_new(void)
     put_elf_str(strtab_section, "");
     symtab_section->link = strtab_section;
     put_elf_sym(symtab_section, 0, 0, 0, 0, 0, NULL);
-    
+
+    /* private hash table for extern symbols */
+    hashtab_section = new_section(".hashtab", SHT_HASH, SHF_PRIVATE);
+    ((int *)hashtab_section->data)[0] = ELF_SYM_HASH_SIZE;
+    ((int *)hashtab_section->data)[1] = 1;
+    hashtab_section->data_ptr += (2 + ELF_SYM_HASH_SIZE + 1) * 4;
+    symtab_section->hash = hashtab_section;
     return s;
 }
 
