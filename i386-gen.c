@@ -73,12 +73,6 @@ int reg_classes[NB_REGS] = {
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32 R_386_32
 
-/* function call context */
-typedef struct GFuncContext {
-    int args_size;
-    int func_call; /* func call type (FUNC_STDCALL or FUNC_CDECL) */
-} GFuncContext;
-
 /******************************************************/
 
 static unsigned long func_sub_sp_offset;
@@ -282,65 +276,6 @@ void store(int r, SValue *v)
     }
 }
 
-/* start function call and return function call context */
-void gfunc_start(GFuncContext *c, int func_call)
-{
-    c->args_size = 0;
-    c->func_call = func_call;
-}
-
-/* push function parameter which is in (vtop->t, vtop->c). Stack entry
-   is then popped. */
-void gfunc_param(GFuncContext *c)
-{
-    int size, align, r;
-
-    if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-        size = type_size(&vtop->type, &align);
-        /* align to stack align size */
-        size = (size + 3) & ~3;
-        /* allocate the necessary size on stack */
-        oad(0xec81, size); /* sub $xxx, %esp */
-        /* generate structure store */
-        r = get_reg(RC_INT);
-        o(0x89); /* mov %esp, r */
-        o(0xe0 + r);
-        vset(&vtop->type, r | VT_LVAL, 0);
-        vswap();
-        vstore();
-        c->args_size += size;
-    } else if (is_float(vtop->type.t)) {
-        gv(RC_FLOAT); /* only one float register */
-        if ((vtop->type.t & VT_BTYPE) == VT_FLOAT)
-            size = 4;
-        else if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
-            size = 8;
-        else
-            size = 12;
-        oad(0xec81, size); /* sub $xxx, %esp */
-        if (size == 12)
-            o(0x7cdb);
-        else
-            o(0x5cd9 + size - 4); /* fstp[s|l] 0(%esp) */
-        g(0x24);
-        g(0x00);
-        c->args_size += size;
-    } else {
-        /* simple type (currently always same size) */
-        /* XXX: implicit cast ? */
-        r = gv(RC_INT);
-        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
-            size = 8;
-            o(0x50 + vtop->r2); /* push r */
-        } else {
-            size = 4;
-        }
-        o(0x50 + r); /* push r */
-        c->args_size += size;
-    }
-    vtop--;
-}
-
 static void gadd_sp(int val)
 {
     if (val == (char)val) {
@@ -375,13 +310,66 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
-/* generate function call with address in (vtop->t, vtop->c) and free function
-   context. Stack entry is popped */
-void gfunc_call(GFuncContext *c)
+/* Generate function call. The function address is pushed first, then
+   all the parameters in call order. This functions pops all the
+   parameters and the function address. */
+void gfunc_call(int nb_args)
 {
+    int size, align, r, args_size, i;
+    Sym *func_sym;
+    
+    args_size = 0;
+    for(i = 0;i < nb_args; i++) {
+        if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
+            size = type_size(&vtop->type, &align);
+            /* align to stack align size */
+            size = (size + 3) & ~3;
+            /* allocate the necessary size on stack */
+            oad(0xec81, size); /* sub $xxx, %esp */
+            /* generate structure store */
+            r = get_reg(RC_INT);
+            o(0x89); /* mov %esp, r */
+            o(0xe0 + r);
+            vset(&vtop->type, r | VT_LVAL, 0);
+            vswap();
+            vstore();
+            args_size += size;
+        } else if (is_float(vtop->type.t)) {
+            gv(RC_FLOAT); /* only one float register */
+            if ((vtop->type.t & VT_BTYPE) == VT_FLOAT)
+                size = 4;
+            else if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
+                size = 8;
+            else
+                size = 12;
+            oad(0xec81, size); /* sub $xxx, %esp */
+            if (size == 12)
+                o(0x7cdb);
+            else
+                o(0x5cd9 + size - 4); /* fstp[s|l] 0(%esp) */
+            g(0x24);
+            g(0x00);
+            args_size += size;
+        } else {
+            /* simple type (currently always same size) */
+            /* XXX: implicit cast ? */
+            r = gv(RC_INT);
+            if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+                size = 8;
+                o(0x50 + vtop->r2); /* push r */
+            } else {
+                size = 4;
+            }
+            o(0x50 + r); /* push r */
+            args_size += size;
+        }
+        vtop--;
+    }
+    save_regs(0); /* save used temporary registers */
+    func_sym = vtop->type.ref;
     gcall_or_jmp(0);
-    if (c->args_size && c->func_call == FUNC_CDECL)
-        gadd_sp(c->args_size);
+    if (args_size && func_sym->r == FUNC_CDECL)
+        gadd_sp(args_size);
     vtop--;
 }
 

@@ -4589,7 +4589,9 @@ void lbuild(int t)
     vpop();
 }
 
-/* rotate n first stack elements to the bottom */
+/* rotate n first stack elements to the bottom 
+   I1 ... In -> I2 ... In I1 [top is right]
+*/
 void vrotb(int n)
 {
     int i;
@@ -4599,6 +4601,20 @@ void vrotb(int n)
     for(i=-n+1;i!=0;i++)
         vtop[i] = vtop[i+1];
     vtop[0] = tmp;
+}
+
+/* rotate n first stack elements to the top 
+   I1 ... In -> In I1 ... I(n-1)  [top is right]
+ */
+void vrott(int n)
+{
+    int i;
+    SValue tmp;
+
+    tmp = vtop[0];
+    for(i = 0;i < n - 1; i++)
+        vtop[-i] = vtop[-i - 1];
+    vtop[-n + 1] = tmp;
 }
 
 /* pop stack value */
@@ -4665,7 +4681,6 @@ void gen_opl(int op)
 {
     int t, a, b, op1, c, i;
     int func;
-    GFuncContext gf;
     SValue tmp;
 
     switch(op) {
@@ -4683,11 +4698,9 @@ void gen_opl(int op)
         func = TOK___umoddi3;
     gen_func:
         /* call generic long long function */
-        gfunc_start(&gf, FUNC_CDECL);
-        gfunc_param(&gf);
-        gfunc_param(&gf);
         vpush_global_sym(&func_old_type, func);
-        gfunc_call(&gf);
+        vrott(3);
+        gfunc_call(2);
         vpushi(0);
         vtop->r = REG_IRET;
         vtop->r2 = REG_LRET;
@@ -5227,20 +5240,17 @@ void gen_op(int op)
 /* generic itof for unsigned long long case */
 void gen_cvt_itof1(int t)
 {
-    GFuncContext gf;
-
     if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
         (VT_LLONG | VT_UNSIGNED)) {
 
-        gfunc_start(&gf, FUNC_CDECL);
-        gfunc_param(&gf);
         if (t == VT_FLOAT)
             vpush_global_sym(&func_old_type, TOK___ulltof);
         else if (t == VT_DOUBLE)
             vpush_global_sym(&func_old_type, TOK___ulltod);
         else
             vpush_global_sym(&func_old_type, TOK___ulltold);
-        gfunc_call(&gf);
+        vrott(2);
+        gfunc_call(1);
         vpushi(0);
         vtop->r = REG_FRET;
     } else {
@@ -5251,21 +5261,19 @@ void gen_cvt_itof1(int t)
 /* generic ftoi for unsigned long long case */
 void gen_cvt_ftoi1(int t)
 {
-    GFuncContext gf;
     int st;
 
     if (t == (VT_LLONG | VT_UNSIGNED)) {
         /* not handled natively */
-        gfunc_start(&gf, FUNC_CDECL);
         st = vtop->type.t & VT_BTYPE;
-        gfunc_param(&gf);
         if (st == VT_FLOAT)
             vpush_global_sym(&func_old_type, TOK___fixunssfdi);
         else if (st == VT_DOUBLE)
             vpush_global_sym(&func_old_type, TOK___fixunsdfdi);
         else
             vpush_global_sym(&func_old_type, TOK___fixunsxfdi);
-        gfunc_call(&gf);
+        vrott(2);
+        gfunc_call(1);
         vpushi(0);
         vtop->r = REG_IRET;
         vtop->r2 = REG_LRET;
@@ -5700,7 +5708,6 @@ static void gen_assign_cast(CType *dt)
 void vstore(void)
 {
     int sbt, dbt, ft, r, t, size, align, bit_size, bit_pos, rc, delayed_cast;
-    GFuncContext gf;
 
     ft = vtop[-1].type.t;
     sbt = vtop->type.t & VT_BTYPE;
@@ -5720,25 +5727,24 @@ void vstore(void)
         /* structure assignment : generate memcpy */
         /* XXX: optimize if small size */
         if (!nocode_wanted) {
-            vdup();
-            gfunc_start(&gf, FUNC_CDECL);
-            /* type size */
             size = type_size(&vtop->type, &align);
-            vpushi(size);
-            gfunc_param(&gf);
-            /* source */
-            vtop->type.t = VT_INT;
-            gaddrof();
-            gfunc_param(&gf);
-            /* destination */
-            vswap();
-            vtop->type.t = VT_INT;
-            gaddrof();
-            gfunc_param(&gf);
-            
-            save_regs(0);
+
             vpush_global_sym(&func_old_type, TOK_memcpy);
-            gfunc_call(&gf);
+
+            /* destination */
+            vpushv(vtop - 2);
+            vtop->type.t = VT_INT;
+            gaddrof();
+            /* source */
+            vpushv(vtop - 2);
+            vtop->type.t = VT_INT;
+            gaddrof();
+            /* type size */
+            vpushi(size);
+            gfunc_call(3);
+            
+            vswap();
+            vpop();
         } else {
             vswap();
             vpop();
@@ -6436,7 +6442,7 @@ static void indir(void)
 }
 
 /* pass a parameter to a function and do type checking and casting */
-void gfunc_param_typed(GFuncContext *gf, Sym *func, Sym *arg)
+static void gfunc_param_typed(Sym *func, Sym *arg)
 {
     int func_type;
     CType type;
@@ -6453,11 +6459,6 @@ void gfunc_param_typed(GFuncContext *gf, Sym *func, Sym *arg)
         error("too many arguments to function");
     } else {
         gen_assign_cast(&arg->type);
-    }
-    if (!nocode_wanted) {
-        gfunc_param(gf);
-    } else {
-        vpop();
     }
 }
 
@@ -6489,7 +6490,6 @@ static void unary(void)
     int n, t, align, size, r;
     CType type;
     Sym *s;
-    GFuncContext gf;
     AttributeDef ad;
 
     /* XXX: GCC 2.95.3 does not generate a table although it should be
@@ -6764,6 +6764,7 @@ static void unary(void)
         } else if (tok == '(') {
             SValue ret;
             Sym *sa;
+            int nb_args;
 
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
@@ -6781,63 +6782,9 @@ static void unary(void)
             }
             /* get return type */
             s = vtop->type.ref;
-            if (!nocode_wanted) {
-                save_regs(0); /* save used temporary registers */
-                gfunc_start(&gf, s->r);
-            }
             next();
             sa = s->next; /* first parameter */
-#ifdef INVERT_FUNC_PARAMS
-            {
-                int parlevel;
-                Sym *args, *s1;
-                ParseState saved_parse_state;
-                TokenString str;
-                
-                /* read each argument and store it on a stack */
-                args = NULL;
-                if (tok != ')') {
-                    for(;;) {
-                        tok_str_new(&str);
-                        parlevel = 0;
-                        while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
-                               tok != TOK_EOF) {
-                            if (tok == '(')
-                                parlevel++;
-                            else if (tok == ')')
-                                parlevel--;
-                            tok_str_add_tok(&str);
-                            next();
-                        }
-                        tok_str_add(&str, -1); /* end of file added */
-                        tok_str_add(&str, 0);
-                        s1 = sym_push2(&args, 0, 0, (int)str.str);
-                        s1->next = sa; /* add reference to argument */
-                        if (sa)
-                            sa = sa->next;
-                        if (tok == ')')
-                            break;
-                        skip(',');
-                    }
-                }
-                
-                /* now generate code in reverse order by reading the stack */
-                save_parse_state(&saved_parse_state);
-                while (args) {
-                    macro_ptr = (int *)args->c;
-                    next();
-                    expr_eq();
-                    if (tok != -1)
-                        expect("',' or ')'");
-                    gfunc_param_typed(&gf, s, args->next);
-                    s1 = args->prev;
-                    tok_str_free((int *)args->c);
-                    tcc_free(args);
-                    args = s1;
-                }
-                restore_parse_state(&saved_parse_state);
-            }
-#endif
+            nb_args = 0;
             /* compute first implicit argument if a structure is returned */
             if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
                 /* get some space for the returned structure */
@@ -6849,10 +6796,7 @@ static void unary(void)
                    problems */
                 vseti(VT_LOCAL, loc);
                 ret.c = vtop->c;
-                if (!nocode_wanted)
-                    gfunc_param(&gf);
-                else
-                    vtop--;
+                nb_args++;
             } else {
                 ret.type = s->type; 
                 ret.r2 = VT_CONST;
@@ -6866,11 +6810,11 @@ static void unary(void)
                 }
                 ret.c.i = 0;
             }
-#ifndef INVERT_FUNC_PARAMS
             if (tok != ')') {
                 for(;;) {
                     expr_eq();
-                    gfunc_param_typed(&gf, s, sa);
+                    gfunc_param_typed(s, sa);
+                    nb_args++;
                     if (sa)
                         sa = sa->next;
                     if (tok == ')')
@@ -6878,14 +6822,14 @@ static void unary(void)
                     skip(',');
                 }
             }
-#endif
             if (sa)
                 error("too few arguments to function");
             skip(')');
-            if (!nocode_wanted)
-                gfunc_call(&gf);
-            else
-                vtop--;
+            if (!nocode_wanted) {
+                gfunc_call(nb_args);
+            } else {
+                vtop -= (nb_args + 1);
+            }
             /* return value */
             vsetc(&ret.type, ret.r, &ret.c);
             vtop->r2 = ret.r2;
@@ -7793,20 +7737,14 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
 /* put zeros for variable based init */
 static void init_putz(CType *t, Section *sec, unsigned long c, int size)
 {
-    GFuncContext gf;
-
     if (sec) {
         /* nothing to do because globals are already set to zero */
     } else {
-        gfunc_start(&gf, FUNC_CDECL);
-        vpushi(size);
-        gfunc_param(&gf);
-        vpushi(0);
-        gfunc_param(&gf);
-        vseti(VT_LOCAL, c);
-        gfunc_param(&gf);
         vpush_global_sym(&func_old_type, TOK_memset);
-        gfunc_call(&gf);
+        vseti(VT_LOCAL, c);
+        vpushi(0);
+        vpushi(size);
+        gfunc_call(3);
     }
 }
 
