@@ -6312,7 +6312,7 @@ static int lvalue_type(int t)
     int bt, r;
     r = VT_LVAL;
     bt = t & VT_BTYPE;
-    if (bt == VT_BYTE)
+    if (bt == VT_BYTE || bt == VT_BOOL)
         r |= VT_LVAL_BYTE;
     else if (bt == VT_SHORT)
         r |= VT_LVAL_SHORT;
