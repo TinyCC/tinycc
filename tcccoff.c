@@ -73,9 +73,8 @@ typedef struct {
     unsigned short dummy4;
 } AUXEF;
 
-int tcc_output_coff(TCCState *s1, const char *OutFile)
+int tcc_output_coff(TCCState *s1, FILE *f)
 {
-    FILE *f;
     Section *tcc_sect;
     SCNHDR *coff_sec;
     int file_pointer;
@@ -83,12 +82,6 @@ int tcc_output_coff(TCCState *s1, const char *OutFile)
     int CoffTextSectionNo, coff_nb_syms;
     FILHDR file_hdr;		/* FILE HEADER STRUCTURE              */
     Section *stext, *sdata, *sbss;
-
-    f = fopen(OutFile, "wb");
-
-    if (!f) {
-	error("Unable to open output file");
-    }
 
     stext = FindSection(s1, ".text");
     sdata = FindSection(s1, ".data");
@@ -237,7 +230,7 @@ int tcc_output_coff(TCCState *s1, const char *OutFile)
 			EndAddress[nFuncs] = pc;
 			FuncEntries[nFuncs] =
 			    (file_pointer -
-			     LineNoFilePtr[nFuncs]) / LINESZ;
+			     LineNoFilePtr[nFuncs]) / LINESZ - 1;
 			LastLineNo[nFuncs++] = last_line_num + 1;
 		    } else {
 			// beginning of function
@@ -703,8 +696,6 @@ int tcc_output_coff(TCCState *s1, const char *OutFile)
 	tcc_free(Coff_str_table);
     }
 
-    fclose(f);
-
     return 0;
 }
 
@@ -843,18 +834,13 @@ int FindCoffSymbolIndex(const char *func_name)
     return n;			// total number of symbols
 }
 
-
-
-
-
-
 BOOL OutputTheSection(Section * sect)
 {
     const char *s = sect->name;
 
-    if (s == ".text")
+    if (!strcmp(s, ".text"))
 	return true;
-    else if (s == ".data")
+    else if (!strcmp(s, ".data"))
 	return true;
     else
 	return 0;
@@ -862,15 +848,15 @@ BOOL OutputTheSection(Section * sect)
 
 short int GetCoffFlags(const char *s)
 {
-    if (s == ".text")
+    if (!strcmp(s, ".text"))
 	return STYP_TEXT | STYP_DATA | STYP_ALIGN | 0x400;
-    else if (s == ".data")
+    else if (!strcmp(s, ".data"))
 	return STYP_DATA;
-    else if (s == ".bss")
+    else if (!strcmp(s, ".bss"))
 	return STYP_BSS;
-    else if (s == ".stack")
+    else if (!strcmp(s, ".stack"))
 	return STYP_BSS | STYP_ALIGN | 0x200;
-    else if (s == ".cinit")
+    else if (!strcmp(s, ".cinit"))
 	return STYP_COPY | STYP_DATA | STYP_ALIGN | 0x200;
     else
 	return 0;

@@ -181,6 +181,8 @@
  DEF_ASM(skip)
  DEF_ASM(space)
  DEF_ASM(string)
+ DEF_ASM(asciz)
+ DEF_ASM(ascii)
  DEF_ASM(globl)
  DEF_ASM(global)
  DEF_ASM(text)

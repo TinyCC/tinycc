@@ -1599,6 +1599,15 @@ void longlong_test(void)
           printf("%lld\n", value(&a));
     }
     lloptest(0x80000000, 0);
+
+    /* another long long spill test */
+    {
+        long long *p, v;
+        v = 1;
+        p = &v;
+        p[0]++;
+        printf("%lld\n", *p);
+    }
 }
 
 void vprintf1(const char *fmt, ...)

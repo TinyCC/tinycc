@@ -14,6 +14,9 @@ version 0.9.21:
 - '-Ttext' linker option
 - section alignment fixes
 - bit fields fixes
+- do not generate code for unused inline functions
+- '-oformat' linker option. 
+- added 'binary' output format.
 
 version 0.9.20:
 
