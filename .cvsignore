@@ -2,8 +2,6 @@ tcc_g
 tcc
 tc2.c
 ex3
-ex1.c
-ex2.c
 otcc1.c
 doc
 tc3s.c
@@ -11,14 +9,11 @@ p3.c
 tc1.c
 error.c
 i386-gen1.c
-ex4.c
 test.out2
 test.out3
 web.sh
-ex3.c
 memdebug.c
 bench
-ex5.c
 tcc-newparse.c
 p1.c
 Makefile.uClibc
