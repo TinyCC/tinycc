@@ -12,6 +12,7 @@
    .align 16, 0x90
    .skip 3
    .skip 15, 0x90
+   .string "hello\0world"
 
 /* some label tests */
 
