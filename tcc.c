@@ -3289,7 +3289,15 @@ void decl(l)
     int *a, t, b, v, u, n, addr, has_init;
     Sym *sym;
     
-    while (b = ist()) {
+    while (1) {
+        b = ist();
+        if (!b) {
+            /* special test for old K&R protos without explicit int
+               type. Only accepted when defining global data */
+            if (l == VT_LOCAL || tok < TOK_DEFINE)
+                break;
+            b = VT_INT;
+        }
         if ((b & (VT_ENUM | VT_STRUCT)) && tok == ';') {
             /* we accept no variable after */
             next();
