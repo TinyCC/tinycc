@@ -3749,7 +3749,14 @@ static int macro_subst_tok(TokenString *tok_str,
                next token. XXX: find better solution */
             if (macro_ptr) {
                 t = *macro_ptr;
+                if (t == 0) {
+                    /* end of macro stream: we must look at the token
+                       after in the file */
+                    macro_ptr = NULL;
+                    goto parse_stream;
+                }
             } else {
+            parse_stream:
                 /* XXX: incorrect with comments */
                 ch = file->buf_ptr[0];
                 while (is_space(ch) || ch == '\n')
@@ -3981,6 +3988,10 @@ static void macro_subst(TokenString *tok_str,
     if (macro_str1) 
         ptr = macro_str1;
     while (1) {
+        /* NOTE: ptr == NULL can only happen if tokens are read from
+           file stream due to a macro function call */
+        if (ptr == NULL)
+            break;
         TOK_GET(t, ptr, cval);
         if (t == 0)
             break;

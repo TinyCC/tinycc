@@ -7,6 +7,7 @@ version 0.9.17:
 - function parameters must be converted to pointers (signaled by Neil Brown)
 - sanitized string and character constant parsing
 - fixed comment parse (signaled by Damian M Gryski)
+- fixed macro function bug (signaled by Philippe Ribet)
 
 version 0.9.16:
 
