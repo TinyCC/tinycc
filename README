@@ -32,13 +32,14 @@ Documentation:
 
 *** TCC currently only works on Linux x86 with glibc >= 2.1 ***.
 
-Type 'make install' to compile and install tcc in /usr/local/bin and
-/usr/local/lib/tcc.
+   ./configure
+   make
+   make test
+   make install
 
-Or type 'make all' to only compile it.
+By default, tcc is installed in /usr/local/bin.
+./configure --help  shows configuration options.
 
-Type 'make libinstall' to compile and install libtcc.
-Or type 'make libtcc_test' to only compile it.
 
 2) Introduction
 

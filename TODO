@@ -1,5 +1,9 @@
 TODO list:
 
+- '-b' bug.
+- atexit (Nigel Horne)
+- see -lxxx bug (Michael Charity).
+- empty 'default:' in switch.
 - fix asm without input/output (no % preprocessing)
 - handle inline functions as macros.
 - see transparent union pb in /urs/include/sys/socket.h

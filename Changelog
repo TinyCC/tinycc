@@ -8,6 +8,7 @@ version 0.9.17:
 - sanitized string and character constant parsing
 - fixed comment parse (signaled by Damian M Gryski)
 - fixed macro function bug (signaled by Philippe Ribet)
+- added configure (initial patch by Mitchell N Charity)
 
 version 0.9.16:
 
