@@ -70,8 +70,18 @@ int reg_classes[NB_REGS] = {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
+/******************************************************/
+/* ELF defines */
+
+#define EM_TCC_TARGET EM_386
+
 /* relocation type for 32 bit data relocation */
-#define R_DATA_32 R_386_32
+#define R_DATA_32   R_386_32
+#define R_JMP_SLOT  R_386_JMP_SLOT
+#define R_COPY      R_386_COPY
+
+#define ELF_START_ADDR 0x08048000
+#define ELF_PAGE_SIZE  0x1000
 
 /******************************************************/
 

@@ -61,18 +61,21 @@
 
 /* target selection */
 //#define TCC_TARGET_I386   /* i386 code generator */
+//#define TCC_TARGET_ARM    /* ARMv4 code generator */
 
 /* default target is I386 */
-#if !defined(TCC_TARGET_I386)
+#if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM)
 #define TCC_TARGET_I386
 #endif
 
-#if !defined(WIN32) && !defined(TCC_UCLIBC)
+#if !defined(WIN32) && !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
 
 /* define it to include assembler support */
+#if !defined(TCC_TARGET_ARM)
 #define CONFIG_TCC_ASM
+#endif
 
 /* path to find crt1.o, crti.o and crtn.o. Only needed when generating
    executables or dlls */
@@ -471,6 +474,7 @@ struct TCCState {
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
 #define VT_CONSTANT   0x0800  /* const modifier */
 #define VT_VOLATILE   0x1000  /* volatile modifier */
+#define VT_SIGNED     0x2000  /* signed type */
 
 /* storage */
 #define VT_EXTERN  0x00000080  /* extern definition */
@@ -684,6 +688,7 @@ void vpop(void);
 void vswap(void);
 void vdup(void);
 int get_reg(int rc);
+int get_reg_ex(int rc,int rc2);
 
 static void macro_subst(TokenString *tok_str, Sym **nested_list, 
                         const int *macro_str, int can_read_stream);
@@ -704,8 +709,11 @@ static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static int is_compatible_types(CType *type1, CType *type2);
 
+int ieee_finite(double d);
 void error(const char *fmt, ...);
 void vpushi(int v);
+void vrott(int n);
+static void vpush_global_sym(CType *type, int v);
 void vset(CType *type, int r, int v);
 void type_to_str(char *buf, int buf_size, 
                  CType *type, const char *varstr);
@@ -783,6 +791,10 @@ static inline int is_float(int t)
 
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
+#endif
+
+#ifdef TCC_TARGET_ARM
+#include "arm-gen.c"
 #endif
 
 #ifdef CONFIG_TCC_STATIC
@@ -2220,15 +2232,18 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
+#if LDOUBLE_SIZE == 8
+    case TOK_CLDOUBLE:
+#endif
         str[len++] = cv->tab[0];
         str[len++] = cv->tab[1];
         break;
-    case TOK_CLDOUBLE:
 #if LDOUBLE_SIZE == 12
+    case TOK_CLDOUBLE:
         str[len++] = cv->tab[0];
         str[len++] = cv->tab[1];
         str[len++] = cv->tab[2];
-#else
+#elif LDOUBLE_SIZE != 8
 #error add long double size support
 #endif
         break;
@@ -2257,6 +2272,10 @@ static void tok_str_add_tok(TokenString *s)
         cv.tab[0] = p[0];                       \
         cv.tab[1] = p[1];                       \
         cv.tab[2] = p[2];
+#elif LDOUBLE_SIZE == 8
+#define LDOUBLE_GET(p, cv)                      \
+        cv.tab[0] = p[0];                       \
+        cv.tab[1] = p[1];
 #else
 #error add long double size support
 #endif
@@ -4335,6 +4354,29 @@ void save_reg(int r)
     }
 }
 
+/* find a register of class 'rc2' with at most one reference on stack.
+ * If none, call get_reg(rc) */
+int get_reg_ex(int rc, int rc2) 
+{
+    int r;
+    SValue *p;
+    
+    for(r=0;r<NB_REGS;r++) {
+        if (reg_classes[r] & rc2) {
+            int n;
+            n=0;
+            for(p = vstack; p <= vtop; p++) {
+                if ((p->r & VT_VALMASK) == r ||
+                    (p->r2 & VT_VALMASK) == r)
+                    n++;
+            }
+            if (n <= 1)
+                return r;
+        }
+    }
+    return get_reg(rc);
+}
+
 /* find a free register of class 'rc'. If none, save one register */
 int get_reg(int rc)
 {
@@ -4905,10 +4947,13 @@ void gen_opl(int op)
             if (a == 0) {
                 b = gtst(0, 0);
             } else {
-#ifdef TCC_TARGET_I386
+#if defined(TCC_TARGET_I386)
                 b = psym(0x850f, 0);
+#elif defined(TCC_TARGET_ARM)
+		b = ind;
+		o(0x1A000000 | encbranch(ind, 0, 1));
 #else
-                error("not implemented");
+#error not supported
 #endif
             }
         }
@@ -5447,7 +5492,11 @@ static void gen_cast(CType *type)
                 }
             } else {
             do_itof:
+#if !defined(TCC_TARGET_ARM)
                 gen_cvt_itof1(dbt);
+#else
+                gen_cvt_itof(dbt);
+#endif
             }
         } else if (sf) {
             /* convert fp to int */
@@ -6302,6 +6351,9 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_SIGNED2:
         case TOK_SIGNED3:
             typespec_found = 1;
+	    t |= VT_SIGNED;
+	    next();
+	    break;
         case TOK_REGISTER:
         case TOK_AUTO:
         case TOK_RESTRICT1:
@@ -6361,6 +6413,14 @@ static int parse_btype(CType *type, AttributeDef *ad)
         type_found = 1;
     }
 the_end:
+    if ((t & (VT_SIGNED|VT_UNSIGNED)) == (VT_SIGNED|VT_UNSIGNED))
+      error("signed and unsigned modifier");
+#ifdef CHAR_IS_UNSIGNED
+    if ((t & (VT_SIGNED|VT_UNSIGNED|VT_BTYPE)) == VT_BYTE)
+      t |= VT_UNSIGNED;
+#endif
+    t &= ~VT_SIGNED;
+
     /* long is never used as type */
     if ((t & VT_BTYPE) == VT_LONG)
         t = (t & ~VT_BTYPE) | VT_INT;
@@ -8838,7 +8898,9 @@ void tcc_undefine_symbol(TCCState *s1, const char *sym)
 
 #ifdef CONFIG_TCC_ASM
 
+#ifdef TCC_TARGET_I386
 #include "i386-asm.c"
+#endif
 #include "tccasm.c"
 
 #else
@@ -9013,7 +9075,14 @@ static int rt_get_caller_pc(unsigned long *paddr,
     }
 }
 #else
-#error add arch specific rt_get_caller_pc()
+
+#warning add arch specific rt_get_caller_pc()
+
+static int rt_get_caller_pc(unsigned long *paddr,
+                            ucontext_t *uc, int level)
+{
+    return -1;
+}
 #endif
 
 /* emit a run time error at position 'pc' */
@@ -9207,6 +9276,19 @@ TCCState *tcc_new(void)
 #if defined(TCC_TARGET_I386)
     tcc_define_symbol(s, "__i386__", NULL);
 #endif
+#if defined(TCC_TARGET_ARM)
+    tcc_define_symbol(s, "__ARM_ARCH_4__", NULL);
+    tcc_define_symbol(s, "__arm_elf__", NULL);
+    tcc_define_symbol(s, "__arm_elf", NULL);
+    tcc_define_symbol(s, "arm_elf", NULL);
+    tcc_define_symbol(s, "__arm__", NULL);
+    tcc_define_symbol(s, "__arm", NULL);
+    tcc_define_symbol(s, "arm", NULL);
+    tcc_define_symbol(s, "__APCS_32__", NULL);
+#endif
+#ifdef CHAR_IS_UNSIGNED
+    tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
+#endif
 #if defined(linux)
     tcc_define_symbol(s, "__linux__", NULL);
     tcc_define_symbol(s, "linux", NULL);
@@ -9359,11 +9441,14 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     {
         fd = file->fd;
         /* assume executable format: auto guess file type */
-        if (read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
+        ret = read(fd, &ehdr, sizeof(ehdr));
+        lseek(fd, 0, SEEK_SET);
+        if (ret <= 0) {
             error_noabort("could not read header");
             goto fail;
+        } else if (ret != sizeof(ehdr)) {
+            goto try_load_script;
         }
-        lseek(fd, 0, SEEK_SET);
         
         if (ehdr.e_ident[0] == ELFMAG0 &&
             ehdr.e_ident[1] == ELFMAG1 &&
@@ -9393,6 +9478,7 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             ret = tcc_load_archive(s1, fd);
         } else {
             /* as GNU ld, consider it is an ld script if not recognized */
+        try_load_script:
             ret = tcc_load_ldscript(s1);
             if (ret < 0) {
                 error_noabort("unrecognized file type");

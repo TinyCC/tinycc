@@ -111,9 +111,20 @@
      DEF(TOK___moddi3, "__moddi3")
      DEF(TOK___udivdi3, "__udivdi3")
      DEF(TOK___umoddi3, "__umoddi3")
+#ifdef TCC_TARGET_ARM
+     DEF(TOK___divsi3, "__divsi3")
+     DEF(TOK___modsi3, "__modsi3")
+     DEF(TOK___udivsi3, "__udivsi3")
+     DEF(TOK___umodsi3, "__umodsi3")
+     DEF(TOK___sardi3, "__ashrdi3")
+     DEF(TOK___shrdi3, "__lshrdi3")
+     DEF(TOK___shldi3, "__ashldi3")
+#else
+     /* XXX: same names on i386 ? */
      DEF(TOK___sardi3, "__sardi3")
      DEF(TOK___shrdi3, "__shrdi3")
      DEF(TOK___shldi3, "__shldi3")
+#endif
      DEF(TOK___tcc_int_fpu_control, "__tcc_int_fpu_control")
      DEF(TOK___tcc_fpu_control, "__tcc_fpu_control")
      DEF(TOK___ulltof, "__ulltof")

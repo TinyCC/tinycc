@@ -468,6 +468,7 @@ static void relocate_section(TCCState *s1, Section *s)
 
         /* CPU specific */
         switch(type) {
+#if defined(TCC_TARGET_I386)
         case R_386_32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 esym_index = s1->symtab_to_dynsym[sym_index];
@@ -513,6 +514,43 @@ static void relocate_section(TCCState *s1, Section *s)
             /* we load the got offset */
             *(int *)ptr += s1->got_offsets[sym_index];
             break;
+#elif defined(TCC_TARGET_ARM)
+	case R_ARM_PC24:
+	case R_ARM_PLT32:
+	    {
+                int x;
+                x = (*(int *)ptr)&0xffffff;
+                (*(int *)ptr) &= 0xff000000;
+                if (x & 0x800000)
+                    x -= 0x1000000;
+                x *= 4;
+                x += val - addr;
+                if((x & 3) != 0 || x >= 0x4000000 || x < -0x4000000)
+                    error("can't relocate value at %x",addr);
+                x >>= 2;
+                x &= 0xffffff;
+                (*(int *)ptr) |= x;
+	    }
+	    break;
+	case R_ARM_ABS32:
+	    *(int *)ptr += val;
+	    break;
+	case R_ARM_GOTPC:
+	    *(int *)ptr += s1->got->sh_addr - addr;
+	    break;
+        case R_ARM_GOT32:
+            /* we load the got offset */
+            *(int *)ptr += s1->got_offsets[sym_index];
+            break;
+	case R_ARM_COPY:
+            break;
+	default:
+	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
+                    type,addr,(unsigned int )ptr,val);
+            break;
+#else
+#error unsupported processor
+#endif
         }
     }
     /* if the relocation is allocated, we change its symbol table */
@@ -646,6 +684,7 @@ static void put_got_entry(TCCState *s1,
         sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
         name = symtab_section->link->data + sym->st_name;
         offset = sym->st_value;
+#ifdef TCC_TARGET_I386
         if (reloc_type == R_386_JMP_SLOT) {
             Section *plt;
             uint8_t *p;
@@ -684,6 +723,40 @@ static void put_got_entry(TCCState *s1,
             if (s1->output_type == TCC_OUTPUT_EXE)
                 offset = plt->data_offset - 16;
         }
+#elif defined(TCC_TARGET_ARM)
+	if (reloc_type == R_ARM_JUMP_SLOT) {
+            Section *plt;
+            uint8_t *p;
+            
+            /* if we build a DLL, we add a %ebx offset */
+            if (s1->output_type == TCC_OUTPUT_DLL)
+                error("DLLs unimplemented!");
+
+            /* add a PLT entry */
+            plt = s1->plt;
+            if (plt->data_offset == 0) {
+                /* first plt entry */
+                p = section_ptr_add(plt, 16);
+		put32(p     , 0xe52de004);
+		put32(p +  4, 0xe59fe010);
+		put32(p +  8, 0xe08fe00e);
+		put32(p + 12, 0xe5bef008);
+            }
+
+            p = section_ptr_add(plt, 16);
+	    put32(p  , 0xe59fc004);
+	    put32(p+4, 0xe08fc00c);
+	    put32(p+8, 0xe59cf000);
+	    put32(p+12, s1->got->data_offset);
+
+            /* the symbol is modified so that it will be relocated to
+               the PLT */
+            if (s1->output_type == TCC_OUTPUT_EXE)
+                offset = plt->data_offset - 16;
+        }
+#else
+#error unsupported CPU
+#endif
         index = put_elf_sym(s1->dynsym, offset, 
                             size, info, 0, sym->st_shndx, name);
         /* put a got entry */
@@ -717,6 +790,7 @@ static void build_got_entries(TCCState *s1)
             rel++) {
             type = ELF32_R_TYPE(rel->r_info);
             switch(type) {
+#if defined(TCC_TARGET_I386)
             case R_386_GOT32:
             case R_386_GOTOFF:
             case R_386_GOTPC:
@@ -735,6 +809,28 @@ static void build_got_entries(TCCState *s1)
                                   sym_index);
                 }
                 break;
+#elif defined(TCC_TARGET_ARM)
+	    case R_ARM_GOT32:
+            case R_ARM_GOTOFF:
+            case R_ARM_GOTPC:
+            case R_ARM_PLT32:
+                if (!s1->got)
+                    build_got(s1);
+                if (type == R_ARM_GOT32 || type == R_ARM_PLT32) {
+                    sym_index = ELF32_R_SYM(rel->r_info);
+                    sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+                    /* look at the symbol got offset. If none, then add one */
+                    if (type == R_ARM_GOT32)
+                        reloc_type = R_ARM_GLOB_DAT;
+                    else
+                        reloc_type = R_ARM_JUMP_SLOT;
+                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info, 
+                                  sym_index);
+                }
+                break;
+#else
+#error unsupported CPU
+#endif
             default:
                 break;
             }
@@ -916,9 +1012,6 @@ static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
 static char elf_interp[] = "/lib/ld-linux.so.2";
 #endif
 
-#define ELF_START_ADDR 0x08048000
-#define ELF_PAGE_SIZE  0x1000
-
 /* output an ELF file */
 /* XXX: suppress unneeded sections */
 int tcc_output_file(TCCState *s1, const char *filename)
@@ -1005,7 +1098,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
                             esym = &((Elf32_Sym *)s1->dynsymtab_section->data)[sym_index];
                             type = ELF32_ST_TYPE(esym->st_info);
                             if (type == STT_FUNC) {
-                                put_got_entry(s1, R_386_JMP_SLOT, esym->st_size, 
+                                put_got_entry(s1, R_JMP_SLOT, esym->st_size, 
                                               esym->st_info, 
                                               sym - (Elf32_Sym *)symtab_section->data);
                             } else if (type == STT_OBJECT) {
@@ -1017,7 +1110,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
                                                     esym->st_info, 0, 
                                                     bss_section->sh_num, name);
                                 put_elf_reloc(s1->dynsym, bss_section, 
-                                              offset, R_386_COPY, index);
+                                              offset, R_COPY, index);
                                 offset += esym->st_size;
                                 bss_section->data_offset = offset;
                             }
@@ -1306,6 +1399,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
                 p = s1->plt->data;
                 p_end = p + s1->plt->data_offset;
                 if (p < p_end) {
+#if defined(TCC_TARGET_I386)
                     put32(p + 2, get32(p + 2) + s1->got->sh_addr);
                     put32(p + 8, get32(p + 8) + s1->got->sh_addr);
                     p += 16;
@@ -1313,6 +1407,17 @@ int tcc_output_file(TCCState *s1, const char *filename)
                         put32(p + 2, get32(p + 2) + s1->got->sh_addr);
                         p += 16;
                     }
+#elif defined(TCC_TARGET_ARM)
+		    int x;
+		    x=s1->got->sh_addr - s1->plt->sh_addr - 12;
+		    p +=16;
+		    while (p < p_end) {
+		        put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
+			p += 16;
+		    }
+#else
+#error unsupported CPU
+#endif
                 }
             }
 
@@ -1416,6 +1521,9 @@ int tcc_output_file(TCCState *s1, const char *filename)
 #ifdef __FreeBSD__
     ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
 #endif
+#ifdef TCC_TARGET_ARM
+    ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
+#endif
     switch(file_type) {
     default:
     case TCC_OUTPUT_EXE:
@@ -1428,7 +1536,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
         ehdr.e_type = ET_REL;
         break;
     }
-    ehdr.e_machine = EM_386;
+    ehdr.e_machine = EM_TCC_TARGET;
     ehdr.e_version = EV_CURRENT;
     ehdr.e_shoff = file_offset;
     ehdr.e_ehsize = sizeof(Elf32_Ehdr);
@@ -1543,7 +1651,7 @@ static int tcc_load_object_file(TCCState *s1,
         goto fail1;
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
-        ehdr.e_machine != EM_386) {
+        ehdr.e_machine != EM_TCC_TARGET) {
     fail1:
         error_noabort("invalid object file");
         return -1;
@@ -1881,7 +1989,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
-        ehdr.e_machine != EM_386) {
+        ehdr.e_machine != EM_TCC_TARGET) {
         error_noabort("bad architecture");
         return -1;
     }
