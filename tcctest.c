@@ -33,7 +33,7 @@ void char_short_test();
 void init_test(void);
 void compound_literal_test(void);
 int kr_test();
-void struct_assign_test();
+void struct_assign_test(void);
 void cast_test(void);
 void bitfield_test(void);
 void c99_bool_test(void);
@@ -61,6 +61,11 @@ int isid(int c);
 #ifdef C99_MACROS
 #define dprintf(level,...) printf(__VA_ARGS__)
 #endif
+
+/* gcc vararg macros */
+#define dprintf1(level, fmt, args...) printf(fmt, ## args)
+
+#define MACRO_NOARGS()
 
 #define AAA 3
 #undef AAA
@@ -149,6 +154,8 @@ void macro_test()
     printf("test 3\n");
 #endif
 
+    MACRO_NOARGS();
+
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
     /* not strictly preprocessor, but we test it there */
@@ -156,6 +163,9 @@ void macro_test()
     printf("__func__ = %s\n", __func__);
     dprintf(1, "vaarg=%d\n", 1);
 #endif
+    dprintf1(1, "vaarg1\n");
+    dprintf1(1, "vaarg1=%d\n", 2);
+    dprintf1(1, "vaarg1=%d %d\n", 1, 2);
 }
 
 int op(a,b)
@@ -648,7 +658,7 @@ typedef struct Sym {
 
 void bool_test()
 {
-    int *s, a;
+    int *s, a, b;
 
     a = 0;
     s = (void*)0;
@@ -676,6 +686,13 @@ void bool_test()
 
     a = 4;
     printf("b=%d\n", a + (0 ? 1 : a / 2));
+
+    /* test register spilling */
+    a = 10;
+    b = 10;
+    a = (a + b) * ((a < b) ?
+                   ((b - a) * (a - b)): a + b);
+    printf("a=%d\n", a);
 }
 
 
@@ -785,10 +802,11 @@ struct structa1 struct_assign_test2(struct structa1 s1, int t)
     return s1;
 }
 
-void struct_assign_test()
+void struct_assign_test(void)
 {
     struct structa1 lsta1, lsta2;
     
+#if 0
     printf("struct_assign_test:\n");
 
     lsta1.f1 = 1;
@@ -796,7 +814,10 @@ void struct_assign_test()
     printf("%d %d\n", lsta1.f1, lsta1.f2);
     lsta2 = lsta1;
     printf("%d %d\n", lsta2.f1, lsta2.f2);
-
+#else
+    lsta2.f1 = 1;
+    lsta2.f2 = 2;
+#endif
     struct_assign_test1(lsta2, 3);
     
     printf("before call: %d %d\n", lsta2.f1, lsta2.f2);
@@ -817,6 +838,8 @@ short scast;
 void cast_test()
 {
     int a;
+    char c;
+    char tab[10];
 
     printf("cast_test:\n");
     a = 0xfffff;
@@ -837,6 +860,14 @@ void cast_test()
     printf("%d\n", a);
     a = (scast = 65536) + 1;
     printf("%d\n", a);
+    
+    printf("sizeof(c) = %d, sizeof((int)c) = %d\n", sizeof(c), sizeof((int)c));
+
+    /* test implicit int casting for array accesses */
+    c = 0;
+    tab[1] = 2;
+    tab[c] = 1;
+    printf("%d %d\n", tab[0], tab[1]);
 }
 
 /* initializers tests */
@@ -873,6 +904,7 @@ char *sinit13[] = {
     "test3",
 };
 char sinit14[10] = { "abc" };
+int sinit15[3] = { sizeof(sinit15), 1, 2 };
 
 void init_test(void)
 {
@@ -887,6 +919,7 @@ void init_test(void)
     char linit14[10] = "abc";
     int linit15[10] = { linit1, linit1 + 1, [6] = linit1 + 2, };
     struct linit16 { int a1, a2, a3, a4; } linit16 = { 1, .a3 = 2 };
+    int linit17 = sizeof(linit17);
     
     printf("init_test:\n");
 
@@ -955,6 +988,9 @@ void init_test(void)
            linit16.a2,
            linit16.a3,
            linit16.a4);
+    /* test that initialisation is done after variable declare */
+    printf("linit17=%d\n", linit17);
+    printf("sinit15=%d\n", sinit15[0]);
 }
 
 void switch_test()
