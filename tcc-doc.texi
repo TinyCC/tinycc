@@ -33,10 +33,77 @@ generation (@xref{libtcc}).
 @node invoke
 @chapter Command line invocation
 
+@section Quick start
+
 @example
-usage: tcc [-Idir] [-Dsym[=val]] [-Usym] [-llib] [-g] [-b]
-           [-i infile] infile [infile_args...]
+usage: tcc [-c] [-o outfile] [-bench] [-Idir] [-Dsym[=val]] [-Usym]
+           [-g] [-b] [-llib] [-shared] [-static]
+           [--] infile1 [infile2... --] [infile_args...]
 @end example
+
+TCC options are a very much like gcc. The main difference is that TCC
+can also execute directly the resulting program and give it runtime
+arguments.
+
+Here are some examples to understand the logic:
+
+@table @code
+@item tcc a.c
+Compile a.c and execute it directly
+
+@item tcc a.c arg1
+Compile a.c and execute it directly. arg1 is given as first argument to
+the @code{main()} of a.c.
+
+@item tcc -- a.c b.c -- arg1
+Compile a.c and b.c, link them together and execute them. arg1 is given
+as first argument to the @code{main()} of the resulting program. Because
+multiple C files are specified, @code{--} are necessary to clearly separate the
+program arguments from the TCC options.
+
+@item tcc -o myprog a.c b.c
+Compile a.c and b.c, link them and generate the executable myprog.
+
+@item tcc -o myprog a.o b.o
+link a.o and b.o together and generate the executable myprog.
+
+@item tcc -c -o a.o a.c
+Compile a.c and generate object file a.o
+
+@end table
+
+Scripting:
+
+TCC can be invoked from @emph{scripts}, just as shell scripts. You just
+need to add @code{#!/usr/local/bin/tcc} at the start of your C source:
+
+@example
+#!/usr/local/bin/tcc
+#include <stdio.h>
+
+int main() 
+{
+    printf("Hello World\n");
+    return 0;
+}
+@end example
+
+@section Option summary
+
+General Options:
+
+@table @samp
+@item -c
+Generate an object file (@samp{-o} option must also be given).
+
+@item -o outfile
+Put object file, executable, or dll into output file @file{outfile}.
+
+@item -bench
+Output compilation statistics
+@end table
+
+Preprocessor options:
 
 @table @samp
 @item -Idir
@@ -51,12 +118,11 @@ also be defined: @code{'-DF(a)=a+1'}
 
 @item -Usym
 Undefine preprocessor symbol 'sym'.
+@end table
 
-@item -lxxx
-Dynamically link your program with library
-libxxx.so. Standard library paths are checked, including those
-specified with LD_LIBRARY_PATH.
+C compiler options:
 
+@table @samp
 @item -g
 Generate run time debug information so that you get clear run time
 error messages: @code{ test.c:68: in function 'test5()': dereferencing
@@ -67,15 +133,24 @@ fault}.
 Generate additionnal support code to check
 memory allocations and array/pointer bounds. '-g' is implied. Note
 that the generated code is slower and bigger in this case.
-
-@item -i file
-Compile C source 'file' before main C source. With this
-command, multiple C files can be compiled and linked together.
-
 @end table
 
-Note: the @code{-o file} option to generate an ELF executable is
-currently unsupported.
+Linker options:
+
+@table @samp
+@item -lxxx
+Dynamically link your program with library
+libxxx.so. Standard library paths are checked, including those
+specified with LD_LIBRARY_PATH.
+
+@item -shared
+Generate a shared library instead of an executable  (@samp{-o} option must also be given).
+
+@item -static
+Generate a statically linked executable (default is a shared linked
+executable) (@samp{-o} option must also be given).
+
+@end table
 
 @chapter C language support
 
