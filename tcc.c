@@ -501,15 +501,7 @@ enum {
     TOK_UNDEF,
     TOK_ERROR,
     TOK_LINE,
-    TOK___LINE__,
-    TOK___FILE__,
-    TOK___DATE__,
-    TOK___TIME__,
-    TOK___VA_ARGS__,
 
-    /* special identifiers */
-    TOK___FUNC__,
-    TOK_MAIN,
 #define DEF(id, str) id,
 #include "tcctok.h"
 #undef DEF
@@ -524,8 +516,6 @@ char *tcc_keywords =
 /* the following are not keywords. They are included to ease parsing */
 "define\0include\0ifdef\0ifndef\0elif\0endif\0"
 "defined\0undef\0error\0line\0"
-"__LINE__\0__FILE__\0__DATE__\0__TIME__\0__VA_ARGS__\0"
-"__func__\0main\0"
 /* builtin functions */
 #define DEF(id, str) str "\0"
 #include "tcctok.h"
@@ -1470,22 +1460,38 @@ static inline void inp(void)
     //    printf("ch1=%c 0x%x\n", ch1, ch1);
 }
 
-/* input with '\\n' handling */
+/* handle '\\n' and '\\r\n' */
+static void handle_stray(void)
+{
+    do {
+        if (ch1 == '\n') {
+            inp();
+        } else if (ch1 == '\r') {
+            inp();
+            if (ch1 != '\n')
+                error("invalid character after '\\'");
+            inp();
+        } else {
+            break;
+        }
+        ch = ch1;
+        inp();
+    } while (ch == '\\');
+}
+
+/* input with '\\n' handling. Also supports '\\r\n' for horrible MSDOS
+   case */
 static inline void minp(void)
 {
- redo:
     ch = ch1;
     inp();
-    if (ch == '\\' && ch1 == '\n') {
-        inp();
-        goto redo;
-    }
-    //printf("ch=%c 0x%x\n", ch, ch);
+    if (ch == '\\') 
+        handle_stray();
 }
 
 
 /* same as minp, but also skip comments */
-void cinp(void)
+static void cinp(void)
 {
     int c;
 
@@ -1494,14 +1500,13 @@ void cinp(void)
         if (ch1 == '/') {
             /* single line C++ comments */
             inp();
-            while (ch1 != '\n' && ch1 != -1)
+            while (ch1 != '\n' && ch1 != CH_EOF)
                 inp();
-            inp();
             ch = ' '; /* return space */
         } else if (ch1 == '*') {
             /* C comments */
             inp();
-            while (ch1 != -1) {
+            while (ch1 != CH_EOF) {
                 c = ch1;
                 inp();
             if (c == '*' && ch1 == '/') {
@@ -1518,9 +1523,15 @@ void cinp(void)
     }
 }
 
-void skip_spaces(void)
+/* space exlcuding newline */
+static inline int is_space(int ch)
 {
-    while (ch == ' ' || ch == '\t')
+    return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
+}
+
+static inline void skip_spaces(void)
+{
+    while (is_space(ch))
         cinp();
 }
 
@@ -1532,7 +1543,7 @@ void preprocess_skip(void)
     a = 0;
     while (1) {
         while (ch != '\n') {
-            if (ch == -1)
+            if (ch == CH_EOF)
                 expect("#endif");
             cinp();
         }
@@ -1798,7 +1809,7 @@ void parse_define(void)
     tok_str_new(&str);
     while (1) {
         skip_spaces();
-        if (ch == '\n' || ch == -1)
+        if (ch == '\n' || ch == CH_EOF)
             break;
         next_nomacro();
         tok_str_add2(&str, tok, &tokc);
@@ -2067,6 +2078,9 @@ static int getq(void)
                 error("invalid escaped char");
             minp();
         }
+    } else if (c == '\r' && ch == '\n') {
+        minp();
+        c = '\n';
     }
     return c;
 }
@@ -2384,15 +2398,14 @@ void next_nomacro1(void)
                 return;
             }
             cinp();
-            while (ch == ' ' || ch == '\t')
-                cinp();
+            skip_spaces();
             if (ch == '#') {
                 /* preprocessor command if # at start of line after
                    spaces */
                 preprocess();
             }
         }
-        if (ch != ' ' && ch != '\t' && ch != '\f')
+        if (!is_space(ch))
             break;
         cinp();
     }
@@ -2660,113 +2673,119 @@ void macro_subst(TokenString *tok_str,
         next_nomacro();
         if (tok == 0)
             break;
-        /* special macros */
-        if (tok == TOK___LINE__) {
-            cval.i = file->line_num;
-            tok_str_add2(tok_str, TOK_CINT, &cval);
-        } else if (tok == TOK___FILE__) {
-            cstrval = file->filename;
-            goto add_cstr;
-            tok_str_add2(tok_str, TOK_STR, &cval);
-        } else if (tok == TOK___DATE__) {
-            cstrval = "Jan  1 1970";
-            goto add_cstr;
-        } else if (tok == TOK___TIME__) {
-            cstrval = "00:00:00";
-        add_cstr:
-            cstr_new(&cstr);
-            cstr_cat(&cstr, cstrval);
-            cstr_ccat(&cstr, '\0');
-            cval.cstr = &cstr;
-            tok_str_add2(tok_str, TOK_STR, &cval);
-            cstr_free(&cstr);
-        } else if ((s = sym_find1(&define_stack, tok)) != NULL) {
+        if ((s = sym_find1(&define_stack, tok)) != NULL) {
             /* if symbol is a macro, prepare substitution */
             /* if nested substitution, do nothing */
             if (sym_find2(*nested_list, tok))
                 goto no_subst;
-            mstr = (int *)s->c;
-            mstr_allocated = 0;
-            if (s->t == MACRO_FUNC) {
-                /* NOTE: we do not use next_nomacro to avoid eating the
-                   next token. XXX: find better solution */
-                if (macro_ptr) {
-                    t = *macro_ptr;
-                } else {
-                    while (ch == ' ' || ch == '\t' || ch == '\n')
-                        cinp();
-                    t = ch;
-                }
-                if (t != '(') /* no macro subst */
-                    goto no_subst;
+
+            /* special macros */
+            if (tok == TOK___LINE__) {
+                cval.i = file->line_num;
+                tok_str_add2(tok_str, TOK_CINT, &cval);
+            } else if (tok == TOK___FILE__) {
+                cstrval = file->filename;
+                goto add_cstr;
+                tok_str_add2(tok_str, TOK_STR, &cval);
+            } else if (tok == TOK___DATE__) {
+                cstrval = "Jan  1 2002";
+                goto add_cstr;
+            } else if (tok == TOK___TIME__) {
+                cstrval = "00:00:00";
+                goto add_cstr;
+            } else if (tok == TOK___FUNCTION__) {
+                cstrval = funcname;
+            add_cstr:
+                cstr_new(&cstr);
+                cstr_cat(&cstr, cstrval);
+                cstr_ccat(&cstr, '\0');
+                cval.cstr = &cstr;
+                tok_str_add2(tok_str, TOK_STR, &cval);
+                cstr_free(&cstr);
+            } else {
+                mstr = (int *)s->c;
+                mstr_allocated = 0;
+                if (s->t == MACRO_FUNC) {
+                    /* NOTE: we do not use next_nomacro to avoid eating the
+                       next token. XXX: find better solution */
+                    if (macro_ptr) {
+                        t = *macro_ptr;
+                    } else {
+                        while (is_space(ch) || ch == '\n')
+                            cinp();
+                        t = ch;
+                    }
+                    if (t != '(') /* no macro subst */
+                        goto no_subst;
                     
                 /* argument macro */
-                next_nomacro();
-                next_nomacro();
-                args = NULL;
-                sa = s->next;
-                /* NOTE: empty args are allowed, except if no args */
-                for(;;) {
-                    /* handle '()' case */
-                    if (!args && tok == ')')
-                        break;
-                    if (!sa)
-                        error("macro '%s' used with too many args",
-                              get_tok_str(s->v, 0));
-                    tok_str_new(&str);
-                    parlevel = 0;
-                    /* NOTE: non zero sa->t indicates VA_ARGS */
-                    while ((parlevel > 0 || 
-                            (tok != ')' && 
-                             (tok != ',' || sa->t))) && 
-                           tok != -1) {
-                        if (tok == '(')
-                            parlevel++;
-                        else if (tok == ')')
-                            parlevel--;
-                        tok_str_add2(&str, tok, &tokc);
+                    next_nomacro();
+                    next_nomacro();
+                    args = NULL;
+                    sa = s->next;
+                    /* NOTE: empty args are allowed, except if no args */
+                    for(;;) {
+                        /* handle '()' case */
+                        if (!args && tok == ')')
+                            break;
+                        if (!sa)
+                            error("macro '%s' used with too many args",
+                                  get_tok_str(s->v, 0));
+                        tok_str_new(&str);
+                        parlevel = 0;
+                        /* NOTE: non zero sa->t indicates VA_ARGS */
+                        while ((parlevel > 0 || 
+                                (tok != ')' && 
+                                 (tok != ',' || sa->t))) && 
+                               tok != -1) {
+                            if (tok == '(')
+                                parlevel++;
+                            else if (tok == ')')
+                                parlevel--;
+                            tok_str_add2(&str, tok, &tokc);
+                            next_nomacro();
+                        }
+                        tok_str_add(&str, 0);
+                        sym_push2(&args, sa->v & ~SYM_FIELD, sa->t, (int)str.str);
+                        sa = sa->next;
+                        if (tok == ')') {
+                            /* special case for gcc var args: add an empty
+                               var arg argument if it is omitted */
+                            if (sa && sa->t && gnu_ext)
+                                continue;
+                            else
+                                break;
+                        }
+                        if (tok != ',')
+                            expect(",");
                         next_nomacro();
                     }
-                    tok_str_add(&str, 0);
-                    sym_push2(&args, sa->v & ~SYM_FIELD, sa->t, (int)str.str);
-                    sa = sa->next;
-                    if (tok == ')') {
-                        /* special case for gcc var args: add an empty
-                           var arg argument if it is omitted */
-                        if (sa && sa->t && gnu_ext)
-                            continue;
-                        else
-                            break;
+                    if (sa) {
+                        error("macro '%s' used with too few args",
+                              get_tok_str(s->v, 0));
                     }
-                    if (tok != ',')
-                        expect(",");
-                    next_nomacro();
-                }
-                if (sa) {
-                    error("macro '%s' used with too few args",
-                          get_tok_str(s->v, 0));
-                }
 
-                /* now subst each arg */
-                mstr = macro_arg_subst(nested_list, mstr, args);
-                /* free memory */
-                sa = args;
-                while (sa) {
-                    sa1 = sa->prev;
-                    tok_str_free((int *)sa->c);
-                    tcc_free(sa);
-                    sa = sa1;
+                    /* now subst each arg */
+                    mstr = macro_arg_subst(nested_list, mstr, args);
+                    /* free memory */
+                    sa = args;
+                    while (sa) {
+                        sa1 = sa->prev;
+                        tok_str_free((int *)sa->c);
+                        tcc_free(sa);
+                        sa = sa1;
+                    }
+                    mstr_allocated = 1;
                 }
-                mstr_allocated = 1;
+                sym_push2(nested_list, s->v, 0, 0);
+                macro_subst(tok_str, nested_list, mstr);
+                /* pop nested defined symbol */
+                sa1 = *nested_list;
+                *nested_list = sa1->prev;
+                tcc_free(sa1);
+                if (mstr_allocated)
+                    tok_str_free(mstr);
             }
-            sym_push2(nested_list, s->v, 0, 0);
-            macro_subst(tok_str, nested_list, mstr);
-            /* pop nested defined symbol */
-            sa1 = *nested_list;
-            *nested_list = sa1->prev;
-            tcc_free(sa1);
-            if (mstr_allocated)
-                tok_str_free(mstr);
         } else {
         no_subst:
             /* no need to add if reading input stream */
@@ -2880,7 +2899,7 @@ void vpush_ref(int t, Section *sec, unsigned long offset, unsigned long size)
     vsetc(t, VT_CONST | VT_SYM, &cval);
 }
 
-/* push a reference to symbol v */
+/* push a reference to global symbol v */
 void vpush_sym(int t, int v)
 {
     Sym *sym;
@@ -6524,7 +6543,7 @@ void decl(int l)
 /* compile the C file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s)
 {
-    Sym *define_start;
+    Sym *define_start, *sym;
     char buf[512];
     int p, section_sym;
 
@@ -6560,7 +6579,8 @@ static int tcc_compile(TCCState *s)
     char_pointer_type = mk_pointer(VT_BYTE);
     /* define an old type function 'int func()' */
     p = anon_sym++;
-    sym_push1(&global_stack, p, 0, FUNC_OLD);
+    sym = sym_push1(&global_stack, p, 0, FUNC_OLD);
+    sym->r = FUNC_CDECL;
     func_old_type = VT_FUNC | (p << VT_STRUCT_SHIFT);
 
     define_start = define_stack.top;
@@ -6894,10 +6914,21 @@ TCCState *tcc_new(void)
         p = r;
     }
 
+    /* we add dummy defines for some special macros to speed up tests
+       and to have working defined() */
+    sym_push1(&define_stack, TOK___LINE__, MACRO_OBJ, 0);
+    sym_push1(&define_stack, TOK___FILE__, MACRO_OBJ, 0);
+    sym_push1(&define_stack, TOK___DATE__, MACRO_OBJ, 0);
+    sym_push1(&define_stack, TOK___TIME__, MACRO_OBJ, 0);
+    sym_push1(&define_stack, TOK___FUNCTION__, MACRO_OBJ, 0);
+
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
 #if defined(TCC_TARGET_I386)
     tcc_define_symbol(s, "__i386__", NULL);
+#endif
+#if defined(linux)
+    tcc_define_symbol(s, "linux", NULL);
 #endif
     /* tiny C specific defines */
     tcc_define_symbol(s, "__TINYC__", NULL);
