@@ -164,7 +164,7 @@ int gnu_ext = 1;
 #define VT_TYPEDEF 0x00000100  /* typedef definition */
 
 /* types */
-#define VT_STRUCT_SHIFT 15   /* structure/enum name shift (14 bits left) */
+#define VT_STRUCT_SHIFT 16   /* structure/enum name shift (16 bits left) */
 
 #define VT_BTYPE_SHIFT 9
 #define VT_INT        (0 << VT_BTYPE_SHIFT)  /* integer type */
@@ -178,6 +178,7 @@ int gnu_ext = 1;
 #define VT_BTYPE      (0xf << VT_BTYPE_SHIFT) /* mask for basic type */
 #define VT_UNSIGNED   (0x10 << VT_BTYPE_SHIFT)  /* unsigned type */
 #define VT_ARRAY      (0x20 << VT_BTYPE_SHIFT)  /* array type (also has VT_PTR) */
+#define VT_BITFIELD   (0x40 << VT_BTYPE_SHIFT)  /* bitfield modifier */
 
 #define VT_TYPE    0xfffffe00  /* type mask */
 
@@ -313,6 +314,7 @@ int get_reg(void);
 void macro_subst(int **tok_str, int *tok_len, 
                  Sym **nested_list, int *macro_str);
 int save_reg_forced(int r);
+void gen_op(int op);
 void vstore(void);
 int type_size(int t, int *a);
 int pointed_type(int t);
@@ -1635,7 +1637,7 @@ void gen_addr32(int c, int t)
 
 /* XXX: generate correct pointer for forward references to functions */
 /* r = (ft, fc) */
-void load(r, ft, fc)
+void load(int r, int ft, int fc)
 {
     int v, t;
 
@@ -1975,18 +1977,35 @@ void move_reg(r, s)
     }
 }
 
-/* convert a stack entry in register. lvalues are converted as
+/* convert a (vt, vc) in register. lvalues are converted as
    values. Cannot be used if cannot be converted to register value
    (such as structures). */
-int gvp(int *p)
+int gvp(void)
 {
-    int r;
-    r = p[0] & VT_VALMASK;
-    if (r >= VT_CONST || (p[0] & VT_LVAL))
-        r = get_reg();
-    /* NOTE: get_reg can modify p[] */
-    load(r, p[0], p[1]);
-    p[0] = (p[0] & VT_TYPE) | r;
+    int r, bit_pos, bit_size;
+
+    /* NOTE: get_reg can modify vstack[] */
+    if (vt & VT_BITFIELD) {
+        bit_pos = (vt >> VT_STRUCT_SHIFT) & 0x3f;
+        bit_size = (vt >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
+        /* remove bit field info to avoid loops */
+        vt &= ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
+        /* generate shifts */
+        vpush();
+        vset(VT_CONST, 32 - (bit_pos + bit_size));
+        gen_op(TOK_SHL);
+        vpush();
+        vset(VT_CONST, 32 - bit_size);
+        /* NOTE: transformed to SHR if unsigned */
+        gen_op(TOK_SAR);
+        r = gv();
+    } else {
+        r = vt & VT_VALMASK;
+        if (r >= VT_CONST || (vt & VT_LVAL))
+            r = get_reg();
+        load(r, vt, vc);
+        vt = (vt & VT_TYPE) | r;
+    }
     return r;
 }
 
@@ -1994,12 +2013,12 @@ void vpush(void)
 {
     if (vstack_ptr >= vstack + VSTACK_SIZE)
         error("memory full");
-    *vstack_ptr++ = vt;
-    *vstack_ptr++ = vc;
     /* cannot let cpu flags if other instruction are generated */
     /* XXX: VT_JMP test too ? */
     if ((vt & VT_VALMASK) == VT_CMP)
-        gvp(vstack_ptr - 2);
+        gvp();
+    *vstack_ptr++ = vt;
+    *vstack_ptr++ = vc;
 }
 
 void vpop(int *ft, int *fc)
@@ -2008,18 +2027,25 @@ void vpop(int *ft, int *fc)
     *ft = *--vstack_ptr;
 }
 
+void vswap(void)
+{
+    swap(vstack_ptr - 4, vstack_ptr - 2);
+    swap(vstack_ptr - 3, vstack_ptr - 1);
+}
+
 /* generate a value in a register from vt and vc */
 int gv(void)
 {
     int r;
-    vpush();
-    r = gvp(vstack_ptr - 2);
-    vpop(&vt, &vc);
+    vpush(); /* need so that gvp does not allocate the register we
+                currently use */
+    r = gvp();
+    vstack_ptr -= 2;
     return r;
 }
 
 /* handle constant optimizations and various machine independant opt */
-void gen_opc(op)
+void gen_opc(int op)
 {
     int fr, ft, fc, r, c1, c2, n;
 
@@ -2098,11 +2124,15 @@ void gen_opc(op)
             vpush();
             vt = ft;
             vc = fc;
-            vpush();
-            r = gvp(vstack_ptr - 4);
-            fr = gvp(vstack_ptr - 2);
+
+            fr = gv(); /* second operand */
             vpop(&ft, &fc);
-            vpop(&vt, &vc);
+            vpush();
+            vt = ft;
+            vc = fc;
+            r = gv(); /* first operand */
+            vpop(&ft, &fc);
+
             /* call low level op generator */
             gen_op1(op, r, fr);
         }
@@ -2217,12 +2247,15 @@ int type_size(int t, int *a)
         s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT) | SYM_STRUCT);
         *a = 4; /* XXX: cannot store it yet. Doing that is safe */
         return s->c;
-    } else if (t & VT_ARRAY) {
-        s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
-        return type_size(s->t, a) * s->c;
-    } else if (bt == VT_PTR ||
-               bt == VT_INT ||
-               bt == VT_ENUM) {
+    } else if (bt == VT_PTR) {
+        if (t & VT_ARRAY) {
+            s = sym_find(((unsigned)t >> VT_STRUCT_SHIFT));
+            return type_size(s->t, a) * s->c;
+        } else {
+            *a = 4;
+            return 4;
+        }
+    } else if (bt == VT_INT || bt == VT_ENUM) {
         *a = 4;
         return 4;
     } else if (bt == VT_SHORT) {
@@ -2254,7 +2287,7 @@ int mk_pointer(int t)
 /* store value in lvalue pushed on stack */
 void vstore(void)
 {
-    int ft, fc, r, t, size, align;
+    int ft, fc, r, t, size, align, bit_size, bit_pos;
     GFuncContext gf;
 
     if ((vt & VT_BTYPE) == VT_STRUCT) {
@@ -2285,6 +2318,31 @@ void vstore(void)
         /* generate again current type */
         vt = ft;
         vc = fc;
+    } else if (vstack_ptr[-2] & VT_BITFIELD) {
+        /* bitfield store handling */
+        ft = vstack_ptr[-2];
+        bit_pos = (ft >> VT_STRUCT_SHIFT) & 0x3f;
+        bit_size = (ft >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
+        /* remove bit field info to avoid loops */
+        vstack_ptr[-2] = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
+
+        /* mask and shift source */
+        vpush();
+        vset(VT_CONST, (1 << bit_size) - 1);
+        gen_op('&');
+        vpush();
+        vset(VT_CONST, bit_pos);
+        gen_op(TOK_SHL);
+        vpush();
+        /* load destination, mask and or with source */
+        vt = vstack_ptr[-4];
+        vc = vstack_ptr[-3];
+        vpush();
+        vset(VT_CONST, ~(((1 << bit_size) - 1) << bit_pos));
+        gen_op('&');
+        gen_op('|');
+        /* store result */
+        vstore();
     } else {
         r = gv();  /* generate value */
         vpush();
@@ -2302,7 +2360,7 @@ void vstore(void)
 }
 
 /* post defines POST/PRE add. c is the token ++ or -- */
-void inc(post, c)
+void inc(int post, int c)
 {
     int r, r1;
     test_lvalue();
@@ -2329,7 +2387,8 @@ void inc(post, c)
 /* enum/struct/union declaration */
 int struct_decl(int u)
 {
-    int a, t, b, v, size, align, maxalign, c;
+    int a, t, b, v, size, align, maxalign, c, offset;
+    int bit_size, bit_pos, bsize, bt, lbit_pos;
     Sym *s, *ss, **ps;
 
     a = tok; /* save decl type */
@@ -2360,6 +2419,8 @@ int struct_decl(int u)
         c = 0;
         maxalign = 0;
         ps = &s->next;
+        bit_pos = 0;
+        offset = 0;
         while (1) {
             if (a == TOK_ENUM) {
                 v = tok;
@@ -2376,26 +2437,92 @@ int struct_decl(int u)
             } else {
                 b = ist();
                 while (1) {
-                    t = type_decl(&v, b, TYPE_DIRECT);
-                    if ((t & VT_BTYPE) == VT_FUNC ||
-                        (t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN)))
-                        error("invalid type");
-                    /* XXX: align & correct type size */
-                    v |= SYM_FIELD;
-                    size = type_size(t, &align);
-                    if (a == TOK_STRUCT) {
-                        c = (c + align - 1) & -align;
-                        ss = sym_push(v, t, c);
-                        c += size;
+                    bit_size = -1;
+                    v = 0;
+                    if (tok != ':') {
+                        t = type_decl(&v, b, TYPE_DIRECT);
+                        if ((t & VT_BTYPE) == VT_FUNC ||
+                            (t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN)))
+                            error("invalid type for '%s'", get_tok_str(v, 0));
                     } else {
-                        ss = sym_push(v, t, 0);
-                        if (size > c)
-                            c = size;
+                        t = b;
                     }
-                    if (align > maxalign)
-                        maxalign = align;
-                    *ps = ss;
-                    ps = &ss->next;
+                    if (tok == ':') {
+                        next();
+                        bit_size = expr_const();
+                        /* XXX: handle v = 0 case for messages */
+                        if (bit_size < 0)
+                            error("negative width in bit-field '%s'", 
+                                  get_tok_str(v, 0));
+                        if (v && bit_size == 0)
+                            error("zero width for bit-field '%s'", 
+                                  get_tok_str(v, 0));
+                    }
+                    size = type_size(t, &align);
+                    lbit_pos = 0;
+                    if (bit_size >= 0) {
+                        bt = t & VT_BTYPE;
+                        if (bt != VT_INT && 
+                            bt != VT_BYTE && 
+                            bt != VT_SHORT)
+                            error("bitfields must have scalar type");
+                        bsize = size * 8;
+                        if (bit_size > bsize) {
+                            error("width of '%s' exceeds its type",
+                                  get_tok_str(v, 0));
+                        } else if (bit_size == bsize) {
+                            /* no need for bit fields */
+                            bit_pos = 0;
+                        } else if (bit_size == 0) {
+                            /* XXX: what to do if only padding in a
+                               structure ? */
+                            /* zero size: means to pad */
+                            if (bit_pos > 0)
+                                bit_pos = bsize;
+                        } else {
+                            /* we do not have enough room ? */
+                            if ((bit_pos + bit_size) > bsize)
+                                bit_pos = 0;
+                            lbit_pos = bit_pos;
+                            /* XXX: handle LSB first */
+                            t |= VT_BITFIELD | 
+                                (bit_pos << VT_STRUCT_SHIFT) |
+                                (bit_size << (VT_STRUCT_SHIFT + 6));
+                            bit_pos += bit_size;
+                        }
+                    } else {
+                        bit_pos = 0;
+                    }
+                    if (v) {
+                        /* add new memory data only if starting
+                           bit field */
+                        if (lbit_pos == 0) {
+                            if (a == TOK_STRUCT) {
+                                c = (c + align - 1) & -align;
+                                offset = c;
+                                c += size;
+                            } else {
+                                offset = 0;
+                                if (size > c)
+                                    c = size;
+                            }
+                            if (align > maxalign)
+                                maxalign = align;
+                        }
+#if 0
+                        printf("add field %s offset=%d", 
+                               get_tok_str(v, 0), offset);
+                        if (t & VT_BITFIELD) {
+                            printf(" pos=%d size=%d", 
+                                   (t >> VT_STRUCT_SHIFT) & 0x3f,
+                                   (t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
+                        }
+                        printf("\n");
+#endif
+                        ss = sym_push(v | SYM_FIELD, t, offset);
+                        *ps = ss;
+                        ps = &ss->next;
+                    }
                     if (tok == ';' || tok == -1)
                         break;
                     skip(',');
@@ -3003,15 +3130,15 @@ int check_assign_types(int t1, int t2)
 }
 
 
-void uneq()
+void uneq(void)
 {
     int t;
     
     unary();
-    if (tok == '=' | 
-        (tok >= TOK_A_MOD & tok <= TOK_A_DIV) |
-        tok == TOK_A_XOR | tok == TOK_A_OR | 
-        tok == TOK_A_SHL | tok == TOK_A_SAR) {
+    if (tok == '=' ||
+        (tok >= TOK_A_MOD && tok <= TOK_A_DIV) ||
+        tok == TOK_A_XOR || tok == TOK_A_OR ||
+        tok == TOK_A_SHL || tok == TOK_A_SAR) {
         test_lvalue();
         vpush();
         t = tok;
