@@ -496,8 +496,8 @@ char *get_str(c)
     return str;
 }
 
-/* return 1 if next token is defined, 0 otherwise. */
-int is_defined()
+/* return next token without macro substitution */
+void next_nomacro()
 {
     Sym *s;
     /* hack to avoid replacing id by defined value */
@@ -505,7 +505,6 @@ int is_defined()
     define_stack = 0;
     next();
     define_stack = s;
-    return sym_find1(define_stack, tok) != 0;
 }
 
 /* XXX: not correct yet (need to ensure it is constant) */
@@ -528,20 +527,21 @@ int expr_preprocess()
 void preprocess()
 {
     char *str;
-    int size, n, c;
+    int size, n, c, v;
     char buf[1024], *q, *p;
     char buf1[1024];
     FILE *f;
 
     cinp();
-    next(); /* XXX: should pass parameter to avoid macro subst */
+    next_nomacro();
  redo:
     if (tok == TOK_DEFINE) {
-        next(); /* XXX: should pass parameter to avoid macro subst */
+        next_nomacro(); /* XXX: should pass parameter to avoid macro subst */
         skip_spaces();
         /* now 'tok' is the macro symbol */
         /* a space is inserted after each macro */
         str = get_str(' ');
+        printf("define %s '%s'\n", get_tok_str(tok), str);
         sym_push1(&define_stack, tok, 0, (int)str);
     } else if (tok == TOK_INCLUDE) {
         skip_spaces();
@@ -594,15 +594,17 @@ void preprocess()
             line_num = 1;
         }
     } else if (tok == TOK_IFNDEF) {
-        c = !is_defined();
+        c = 1;
         goto do_ifdef;
     } else if (tok == TOK_IF) {
-        /* XXX: incorrect constant parsing now */
         c = expr_preprocess();
-        goto do_ifdef;
+        goto do_if;
     } else if (tok == TOK_IFDEF) {
-        c = is_defined();
+        c = 0;
     do_ifdef:
+        next_nomacro();
+        c = (sym_find1(define_stack, tok) != 0) ^ c;
+    do_if:
         if (ifdef_stack_ptr >= ifdef_stack + IFDEF_STACK_SIZE)
             error("memory full");
         *ifdef_stack_ptr++ = c;
@@ -1693,6 +1695,16 @@ void unary()
             next();
         }
         *(char *)glo++ = 0;
+    } else if (tok == TOK_DEFINED) {
+        /* XXX: should only be used in preprocess expr parsing */
+        next_nomacro();
+        t = tok;
+        if (t == '(') 
+            next_nomacro();
+        vset(VT_CONST, sym_find1(define_stack, tok) != 0);
+        next();
+        if (t == '(')
+            skip(')');
     } else {
         t = tok;
         next();
@@ -1753,13 +1765,6 @@ void unary()
             vpush();
             unary();
             gen_op('-');
-        } else if (t == TOK_DEFINED) {
-            /* XXX: should only be used in preprocess expr parsing */
-            if (tok != '(')
-                expect("(");
-            vset(VT_CONST, is_defined());
-            next();
-            skip(')');
         } else 
         {
             s = sym_find(t);
