@@ -114,6 +114,11 @@ void greloc_patch(unsigned char *ptr,
     case R_386_PC32:
         *(int *)ptr += val - addr;
         break;
+    case R_386_GOTPC:
+        *(int *)ptr += val - addr; /* XXX: use GOT address directly
+                                      instead of relying on
+                                      _GLOBAL_OFFSET_TABLE symbol ? */
+        break;
     }
 }
 
