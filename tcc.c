@@ -135,7 +135,6 @@ typedef struct Reloc {
 
 /* section definition */
 typedef struct Section {
-    char name[64];           /* section name */
     unsigned char *data;     /* section data */
     unsigned char *data_ptr; /* current data pointer */
     int sh_num;              /* elf section number */
@@ -144,6 +143,7 @@ typedef struct Section {
     int sh_entsize;          /* elf entry size */
     struct Section *link;    /* link to another section */
     struct Section *next;
+    char name[64];           /* section name */
 } Section;
 
 /* GNUC attribute definition */
@@ -283,12 +283,13 @@ struct TCCState {
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_FORWARD   0x0200  /* value is forward reference */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
-                               char/short stored in integer registers) */
+                                char/short stored in integer registers) */
 #define VT_MUSTBOUND 0x0800  /* bound checking must be done before
                                 dereferencing value */
 #define VT_LVAL_BYTE     0x1000  /* lvalue is a byte */
 #define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
 #define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
+#define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
 
 /* types */
 #define VT_STRUCT_SHIFT 16   /* structure/enum name shift (16 bits left) */
@@ -1466,7 +1467,7 @@ void tok_print(int *str)
 void parse_define(void)
 {
     Sym *s, *first, **ps;
-    int v, t;
+    int v, t, varg, is_vaargs;
     TokenString str;
     
     v = tok;
@@ -1479,12 +1480,21 @@ void parse_define(void)
         next_nomacro();
         ps = &first;
         while (tok != ')') {
-            if (tok == TOK_DOTS) 
-                tok = TOK___VA_ARGS__;
-            s = sym_push1(&define_stack, tok | SYM_FIELD, 0, 0);
+            varg = tok;
+            next_nomacro();
+            is_vaargs = 0;
+            if (varg == TOK_DOTS) {
+                varg = TOK___VA_ARGS__;
+                is_vaargs = 1;
+            } else if (tok == TOK_DOTS && gnu_ext) {
+                is_vaargs = 1;
+                next_nomacro();
+            }
+            if (varg < TOK_IDENT)
+                error("badly punctuated parameter list");
+            s = sym_push1(&define_stack, varg | SYM_FIELD, is_vaargs, 0);
             *ps = s;
             ps = &s->next;
-            next_nomacro();
             if (tok != ',')
                 break;
             next_nomacro();
@@ -2197,10 +2207,22 @@ int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
             s = sym_find2(args, t);
             if (s) {
                 st = (int *)s->c;
-                /* if '##' is present before or after , no arg substitution */
+                /* if '##' is present before or after, no arg substitution */
                 if (*macro_str == TOK_TWOSHARPS || last_tok == TOK_TWOSHARPS) {
-                    while (*st)
-                        tok_str_add(&str, *st++);
+                    /* special case for var arg macros : ## eats the
+                       ',' if empty VA_ARGS riable. */
+                    /* XXX: test of the ',' is not 100%
+                       reliable. should fix it to avoid security
+                       problems */
+                    if (gnu_ext && s->t && *st == 0 &&
+                        last_tok == TOK_TWOSHARPS && 
+                        str.len >= 2&& str.str[str.len - 2] == ',') {
+                        /* suppress ',' '##' */
+                        str.len -= 2;
+                    } else {
+                        while (*st)
+                            tok_str_add(&str, *st++);
+                    }
                 } else {
                     macro_subst(&str, nested_list, st);
                 }
@@ -2335,10 +2357,10 @@ void macro_subst(TokenString *tok_str,
                               get_tok_str(s->v, 0));
                     tok_str_new(&str);
                     parlevel = 0;
+                    /* NOTE: non zero sa->t indicates VA_ARGS */
                     while ((parlevel > 0 || 
                             (tok != ')' && 
-                             (tok != ',' || 
-                              sa->v == (TOK___VA_ARGS__ | SYM_FIELD)))) && 
+                             (tok != ',' || sa->t))) && 
                            tok != -1) {
                         if (tok == '(')
                             parlevel++;
@@ -2348,17 +2370,24 @@ void macro_subst(TokenString *tok_str,
                         next_nomacro();
                     }
                     tok_str_add(&str, 0);
-                    sym_push2(&args, sa->v & ~SYM_FIELD, 0, (int)str.str);
-                    if (tok == ')')
-                        break;
+                    sym_push2(&args, sa->v & ~SYM_FIELD, sa->t, (int)str.str);
+                    sa = sa->next;
+                    if (tok == ')') {
+                        /* special case for gcc var args: add an empty
+                           var arg argument if it is omitted */
+                        if (sa && sa->t && gnu_ext)
+                            continue;
+                        else
+                            break;
+                    }
                     if (tok != ',')
                         expect(",");
                     next_nomacro();
-                    sa = sa->next;
                 }
-                if (sa->next)
+                if (sa) {
                     error("macro '%s' used with too few args",
                           get_tok_str(s->v, 0));
+                }
 
                 /* now subst each arg */
                 mstr = macro_arg_subst(nested_list, mstr, args);
@@ -2626,14 +2655,17 @@ void gaddrof(void)
 /* generate lvalue bound code */
 void gbound(void)
 {
+    int lval_type;
+
     vtop->r &= ~VT_MUSTBOUND;
     /* if lvalue, then use checking code before dereferencing */
     if (vtop->r & VT_LVAL) {
+        lval_type = vtop->r & (VT_LVAL_TYPE | VT_LVAL);
         gaddrof();
         vpushi(0);
         gen_bounded_ptr_add1();
         gen_bounded_ptr_add2(1);
-        vtop->r |= VT_LVAL;
+        vtop->r |= lval_type;
     }
 }
 #endif
@@ -2730,6 +2762,23 @@ int gv(int rc)
                 vpop();
                 /* write second register */
                 vtop->r2 = r2;
+            } else if ((vtop->r & VT_LVAL) && !is_float(vtop->t)) {
+                int t1, t;
+                /* lvalue of scalar type : need to use lvalue type
+                   because of possible cast */
+                t = vtop->t;
+                t1 = t;
+                /* compute memory access type */
+                if (vtop->r & VT_LVAL_BYTE)
+                    t = VT_BYTE;
+                else if (vtop->r & VT_LVAL_SHORT)
+                    t = VT_SHORT;
+                if (vtop->r & VT_LVAL_UNSIGNED)
+                    t |= VT_UNSIGNED;
+                vtop->t = t;
+                load(r, vtop);
+                /* restore wanted type */
+                vtop->t = t1;
             } else {
                 /* one register type load */
                 load(r, vtop);
@@ -2806,12 +2855,18 @@ void vrotb(int n)
 /* pop stack value */
 void vpop(void)
 {
+    int v;
+    v = vtop->r & VT_VALMASK;
 #ifdef TCC_TARGET_I386
     /* for x86, we need to pop the FP stack */
-    if ((vtop->r & VT_VALMASK) == REG_ST0) {
+    if (v == REG_ST0) {
         o(0xd9dd); /* fstp %st(1) */
-    }
+    } else
 #endif
+    if (v == VT_JMP || v == VT_JMPI) {
+        /* need to put correct jump if && or || without test */
+        gsym(vtop->c.ul);
+    }
     vtop--;
 }
 
@@ -3467,7 +3522,7 @@ void force_charshort_cast(int t)
 /* cast 'vtop' to 't' type */
 void gen_cast(int t)
 {
-    int sbt, dbt, sf, df, c, st1, dt1;
+    int sbt, dbt, sf, df, c;
 
     /* special delayed cast for char/short */
     /* XXX: in some cases (multiple cascaded casts), it may still
@@ -3477,8 +3532,8 @@ void gen_cast(int t)
         force_charshort_cast(vtop->t);
     }
 
-    dbt = t & VT_BTYPE;
-    sbt = vtop->t & VT_BTYPE;
+    dbt = t & (VT_BTYPE | VT_UNSIGNED);
+    sbt = vtop->t & (VT_BTYPE | VT_UNSIGNED);
 
     if (sbt != dbt) {
         sf = is_float(sbt);
@@ -3507,9 +3562,8 @@ void gen_cast(int t)
             }
         } else if (df) {
             /* convert int to fp */
-            st1 = vtop->t & (VT_BTYPE | VT_UNSIGNED);
             if (c) {
-                switch(st1) {
+                switch(sbt) {
                 case VT_LLONG | VT_UNSIGNED:
                 case VT_LLONG:
                     /* XXX: add const cases for long long */
@@ -3535,14 +3589,13 @@ void gen_cast(int t)
             }
         } else if (sf) {
             /* convert fp to int */
-            dt1 = t & (VT_BTYPE | VT_UNSIGNED);
             /* we handle char/short/etc... with generic code */
-            if (dt1 != (VT_INT | VT_UNSIGNED) &&
-                dt1 != (VT_LLONG | VT_UNSIGNED) &&
-                dt1 != VT_LLONG)
-                dt1 = VT_INT;
+            if (dbt != (VT_INT | VT_UNSIGNED) &&
+                dbt != (VT_LLONG | VT_UNSIGNED) &&
+                dbt != VT_LLONG)
+                dbt = VT_INT;
             if (c) {
-                switch(dt1) {
+                switch(dbt) {
                 case VT_LLONG | VT_UNSIGNED:
                 case VT_LLONG:
                     /* XXX: add const cases for long long */
@@ -3565,59 +3618,58 @@ void gen_cast(int t)
                 }
             } else {
             do_ftoi:
-                gen_cvt_ftoi1(dt1);
+                gen_cvt_ftoi1(dbt);
             }
-            if (dt1 == VT_INT && (t & (VT_BTYPE | VT_UNSIGNED)) != dt1) {
+            if (dbt == VT_INT && (t & (VT_BTYPE | VT_UNSIGNED)) != dbt) {
                 /* additionnal cast for char/short/bool... */
-                vtop->t = dt1;
+                vtop->t = dbt;
                 gen_cast(t);
             }
-        } else if (dbt == VT_LLONG) {
-            /* scalar to long long */
-            if (c) {
-                if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED))
-                    vtop->c.ll = vtop->c.ui;
-                else
-                    vtop->c.ll = vtop->c.i;
-            } else {
-                /* machine independant conversion */
-                gv(RC_INT);
-                /* generate high word */
-                if ((vtop->t & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
-                    vpushi(0);
-                    gv(RC_INT);
+        } else if ((dbt & VT_BTYPE) == VT_LLONG) {
+            if ((sbt & VT_BTYPE) != VT_LLONG) {
+                /* scalar to long long */
+                if (c) {
+                    if (sbt == (VT_INT | VT_UNSIGNED))
+                        vtop->c.ll = vtop->c.ui;
+                    else
+                        vtop->c.ll = vtop->c.i;
                 } else {
-                    gv_dup();
-                    vpushi(31);
-                    gen_op(TOK_SAR);
+                    /* machine independant conversion */
+                    gv(RC_INT);
+                    /* generate high word */
+                    if (sbt == (VT_INT | VT_UNSIGNED)) {
+                        vpushi(0);
+                        gv(RC_INT);
+                    } else {
+                        gv_dup();
+                        vpushi(31);
+                        gen_op(TOK_SAR);
+                    }
+                    /* patch second register */
+                    vtop[-1].r2 = vtop->r;
+                    vpop();
                 }
-                /* patch second register */
-                vtop[-1].r2 = vtop->r;
-                vpop();
             }
         } else if (dbt == VT_BOOL) {
             /* scalar to bool */
             vpushi(0);
             gen_op(TOK_NE);
-        } else if (dbt == VT_BYTE || dbt == VT_SHORT) {
+        } else if ((dbt & VT_BTYPE) == VT_BYTE || 
+                   (dbt & VT_BTYPE) == VT_SHORT) {
             force_charshort_cast(t);
-        } else if (dbt == VT_INT) {
+        } else if ((dbt & VT_BTYPE) == VT_INT) {
             /* scalar to int */
             if (sbt == VT_LLONG) {
                 /* from long long: just take low order word */
                 lexpand();
                 vpop();
-            } else if (sbt == VT_PTR) {
-                /* ok to cast */
-            } else if (vtop->r & VT_LVAL) {
-                /* if lvalue and single word type, nothing to do (XXX:
-                   maybe incorrect for sizeof op) */
-                goto no_cast;
-            }
+            } 
+            /* if lvalue and single word type, nothing to do because
+               the lvalue already contains the real type size (see
+               VT_LVAL_xxx constants) */
         }
     }
     vtop->t = t;
- no_cast: ;
 }
 
 /* return type size. Put alignment at 'a' */
@@ -3698,7 +3750,7 @@ int is_compatible_types(int t1, int t2)
         if (t1 == VT_VOID || t2 == VT_VOID)
             return 1;
         return is_compatible_types(t1, t2);
-    } else if (bt1 == VT_STRUCT) {
+    } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
         return (t2 == t1);
     } else if (bt1 == VT_FUNC) {
         if (bt2 != VT_FUNC)
@@ -3877,7 +3929,6 @@ void vstore(void)
         /* if structure, only generate pointer */
         /* structure assignment : generate memcpy */
         /* XXX: optimize if small size */
-
         vdup();
         gfunc_start(&gf, FUNC_CDECL);
         /* type size */
@@ -4488,7 +4539,25 @@ Sym *external_sym(int v, int u, int r)
     return s;
 }
 
-void indir(void)
+/* compute the lvalue VT_LVAL_xxx needed to match type t. */
+static int lvalue_type(int t)
+{
+    int bt, r;
+    r = VT_LVAL;
+    bt = t & VT_BTYPE;
+    if (bt == VT_BYTE)
+        r |= VT_LVAL_BYTE;
+    else if (bt == VT_SHORT)
+        r |= VT_LVAL_SHORT;
+    else
+        return r;
+    if (t & VT_UNSIGNED)
+        r |= VT_LVAL_UNSIGNED;
+    return r;
+}
+
+/* indirection with full error checking and bound check */
+static void indir(void)
 {
     if ((vtop->t & VT_BTYPE) != VT_PTR)
         expect("pointer");
@@ -4497,7 +4566,7 @@ void indir(void)
     vtop->t = pointed_type(vtop->t);
     /* an array is never an lvalue */
     if (!(vtop->t & VT_ARRAY)) {
-        vtop->r |= VT_LVAL;
+        vtop->r |= lvalue_type(vtop->t);
         /* if bound checking, the referenced pointer must be checked */
         if (do_bounds_check) 
             vtop->r |= VT_MUSTBOUND;
@@ -4594,7 +4663,7 @@ void unary(void)
                         r = VT_LOCAL;
                     /* all except arrays are lvalues */
                     if (!(ft & VT_ARRAY))
-                        r |= VT_LVAL;
+                        r |= lvalue_type(ft);
                     memset(&ad, 0, sizeof(AttributeDef));
                     fc = decl_initializer_alloc(ft, &ad, r, 1);
                     vset(ft, r, fc);
@@ -4615,7 +4684,9 @@ void unary(void)
                except for unary '&' and sizeof. Since we consider that
                functions are not lvalues, we only have to handle it
                there and in function calls. */
-            if ((vtop->t & VT_BTYPE) != VT_FUNC)
+            /* arrays can also be used although they are not lvalues */
+            if ((vtop->t & VT_BTYPE) != VT_FUNC &&
+                !(vtop->t & VT_ARRAY))
                 test_lvalue();
             vtop->t = mk_pointer(vtop->t);
             gaddrof();
@@ -4666,6 +4737,8 @@ void unary(void)
             gen_op('-');
         } else 
         {
+            if (t < TOK_UIDENT)
+                expect("identifier");
             s = sym_find(t);
             if (!s) {
                 if (tok != '(')
@@ -4716,7 +4789,7 @@ void unary(void)
             vtop->t = s->t;
             /* an array is never an lvalue */
             if (!(vtop->t & VT_ARRAY))
-                vtop->r |= VT_LVAL;
+                vtop->r |= lvalue_type(vtop->t);
             next();
         } else if (tok == '[') {
             next();
@@ -4758,30 +4831,30 @@ void unary(void)
                 /* read each argument and store it on a stack */
                 /* XXX: merge it with macro args ? */
                 args = NULL;
-                while (tok != ')') {
-                    tok_str_new(&str);
-                    parlevel = 0;
-                    while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
-                           tok != -1) {
-                        if (tok == '(')
-                            parlevel++;
-                        else if (tok == ')')
-                            parlevel--;
-                        tok_str_add_tok(&str);
-                        next();
+                if (tok != ')') {
+                    for(;;) {
+                        tok_str_new(&str);
+                        parlevel = 0;
+                        while ((parlevel > 0 || (tok != ')' && tok != ',')) && 
+                               tok != -1) {
+                            if (tok == '(')
+                                parlevel++;
+                            else if (tok == ')')
+                                parlevel--;
+                            tok_str_add_tok(&str);
+                            next();
+                        }
+                        tok_str_add(&str, -1); /* end of file added */
+                        tok_str_add(&str, 0);
+                        s1 = sym_push2(&args, 0, 0, (int)str.str);
+                        s1->next = sa; /* add reference to argument */
+                        if (sa)
+                            sa = sa->next;
+                        if (tok == ')')
+                            break;
+                        skip(',');
                     }
-                    tok_str_add(&str, -1); /* end of file added */
-                    tok_str_add(&str, 0);
-                    s1 = sym_push2(&args, 0, 0, (int)str.str);
-                    s1->next = sa; /* add reference to argument */
-                    if (sa)
-                        sa = sa->next;
-                    if (tok != ',')
-                        break;
-                    next();
                 }
-                if (tok != ')')
-                    expect(")");
                 
                 /* now generate code in reverse order by reading the stack */
                 save_parse_state(&saved_parse_state);
@@ -4826,13 +4899,16 @@ void unary(void)
                 ret.c.i = 0;
             }
 #ifndef INVERT_FUNC_PARAMS
-            while (tok != ')') {
-                expr_eq();
-                gfunc_param_typed(&gf, s, sa);
-                if (sa)
-                    sa = sa->next;
-                if (tok == ',')
-                    next();
+            if (tok != ')') {
+                for(;;) {
+                    expr_eq();
+                    gfunc_param_typed(&gf, s, sa);
+                    if (sa)
+                        sa = sa->next;
+                    if (tok == ')')
+                        break;
+                    skip(',');
+                }
             }
 #endif
             if (sa)
@@ -5934,7 +6010,7 @@ void decl(int l)
                     /* not lvalue if array */
                     r = 0;
                     if (!(t & VT_ARRAY))
-                        r |= VT_LVAL;
+                        r |= lvalue_type(t);
                     if (b & VT_EXTERN) {
                         /* external variable */
                         external_sym(v, t, r);
