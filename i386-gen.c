@@ -100,11 +100,11 @@ void g(int c)
     ind = ind1;
 }
 
-void o(int c)
+void o(unsigned int c)
 {
     while (c) {
         g(c);
-        c = c / 256;
+        c = c >> 8;
     }
 }
 
