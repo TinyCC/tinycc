@@ -829,7 +829,7 @@ void gen_bounded_ptr_add1(void)
     /* save all temporary registers */
     vtop--;
     vtop->r = VT_CONST;
-    save_regs(); 
+    save_regs(0); 
 }
 
 /* if deref is true, then also test dereferencing */
