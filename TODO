@@ -1,8 +1,22 @@
 TODO list:
 
-- add 'CType' structure to optimize type handling (= compile even faster)
-- suppress unneeded hash table for Symbols (= compile even faster)
+- finish varargs.h support
 - add alloca()
+- fix static functions declared inside block
+- fix bitfield binary operations
+- C99: add variable size arrays
+- C99: add complex types
+- GCC: add statment expressions
+- ignore __extension__ keyword (see 20010328-1.c). 
+- Add __restrict keyword (20010611-1.c).
+- postfix compound literals (see 20010124-1.c)
+- handle '? x, y : z' in reversed function arguments or unsized
+  variable initialization (',' is considered incorrectly as separator
+  in preparser) : use a "record" parse mode ?
+- fix multiple unions init
+- test includes in libtcc_test.
+- look at GCC 3.2 compatibility problems.
+- add option for auto run
 - implement minimal 'asm' extension
 - setjmp is not supported properly in bound checking.
 - better local variables handling (needed for other targets)
@@ -15,10 +29,14 @@ TODO list:
 - make libtcc fully reentrant (except for the compilation stage itself).
 - '-MD' option
 
+Optimizations:
+
+- suppress specific anonymous symbol handling
+- more parse optimizations (=even faster compilation)
+- memory alloc optimizations (=even faster compilation)
+
 Not critical:
 
-- C99: add variable size arrays
-- C99: add complex types
 - C99: fix multiple compound literals inits in blocks (ISOC99
   normative example - only relevant when using gotos! -> must add
   boolean variable to tell if compound literal was already
@@ -35,6 +53,7 @@ Not critical:
   al. check GetModuleHandle for dlls. check exception code (exception
   filter func).
 - handle void (__attribute__() *ptr)()
-- handle '? x, y : z' in reversed function arguments or unsized
-  variable initialization (',' is considered incorrectly as separator
-  in preparser).
+
+
+
+

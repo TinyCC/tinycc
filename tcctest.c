@@ -74,7 +74,8 @@ int isid(int c);
 #define pf printf
 #define M1(a, b)  (a) + (b)
 
-#define str(s) # s
+#define str\
+(s) # s
 #define glue(a, b) a ## b
 #define xglue(a, b) glue(a, b)
 #define HIGHLOW "hello"
@@ -195,8 +196,8 @@ void macro_test(void)
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 198 "tcctest.c"
-    
+#line 200 "tcctest.c"
+
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS
     printf("__func__ = %s\n", __func__);
@@ -219,6 +220,9 @@ void macro_test(void)
         glue(a <, <= 2);
         printf("a=%d\n", a);
     }
+    
+    /* comment with stray handling *\
+/
 }
 
 int op(a,b)
@@ -255,10 +259,12 @@ void string_test()
     printf("\x41\x42\x43\x3a\n");
     printf("c=%c\n", 'r');
     printf("wc=%C 0x%lx %C\n", L'a', L'\x1234', L'c');
+#if 0
     printf("wstring=%S\n", L"abc");
     printf("wstring=%S\n", L"abc" L"def" "ghi");
     printf("'\\377'=%d '\\xff'=%d\n", '\377', '\xff');
     printf("L'\\377'=%d L'\\xff'=%d\n", L'\377', L'\xff');
+#endif
     ps("test\n");
     b = 32;
     while ((b = b + 1) < 96) {
@@ -660,6 +666,26 @@ void expr_cmp_test()
     printf("%d\n", (unsigned)b > a);
 }
 
+struct empty {
+};
+
+struct aligntest1 {
+    char a[10];
+};
+
+struct aligntest2 {
+    int a;
+    char b[10];
+};
+
+struct aligntest3 {
+    double a, b;
+};
+
+struct aligntest4 {
+    double a[0];
+};
+
 void struct_test()
 {
     struct1 *s;
@@ -689,6 +715,20 @@ void struct_test()
     printf("st2: %d %d %d\n",
            s->f1, s->f2, s->f3);
     printf("str_addr=%x\n", (int)st1.str - (int)&st1.f1);
+
+    /* align / size tests */
+    printf("aligntest1 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest1), __alignof__(struct aligntest1));
+    printf("aligntest2 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest2), __alignof__(struct aligntest2));
+    printf("aligntest3 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest3), __alignof__(struct aligntest3));
+    printf("aligntest4 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest4), __alignof__(struct aligntest4));
+           
+    /* empty structures (GCC extension) */
+    printf("sizeof(struct empty) = %d\n", sizeof(struct empty));
+    printf("alignof(struct empty) = %d\n", __alignof__(struct empty));
 }
 
 /* XXX: depend on endianness */
@@ -730,9 +770,17 @@ typedef struct Sym {
     struct Sym *prev;
 } Sym;
 
+#define ISLOWER(c) ('a' <= (c) && (c) <= 'z')
+#define TOUPPER(c) (ISLOWER(c) ? 'A' + ((c) - 'a') : (c))
+
+static int toupper1(int a)
+{
+    return TOUPPER(a);
+}
+
 void bool_test()
 {
-    int *s, a, b, t, f;
+    int *s, a, b, t, f, i;
 
     a = 0;
     s = (void*)0;
@@ -785,6 +833,12 @@ void bool_test()
             aspect=aspect_on?(aspect_native*bfu_aspect+0.5):65535UL;
             printf("aspect=%d\n", aspect);
         }
+    }
+
+    /* again complex expression */
+    for(i=0;i<256;i++) {
+        if (toupper1 (i) != TOUPPER (i))
+            printf("error %d\n", i);
     }
 }
 
@@ -1004,6 +1058,16 @@ char *sinit13[] = {
 char sinit14[10] = { "abc" };
 int sinit15[3] = { sizeof(sinit15), 1, 2 };
 
+struct { int a[3], b; } sinit16[] = { { 1 }, 2 };
+
+struct bar {
+        char *s;
+        int len;
+} sinit17[] = {
+        "a1", 4,
+        "a2", 1
+};
+
 void init_test(void)
 {
     int linit1 = 2;
@@ -1089,6 +1153,10 @@ void init_test(void)
     /* test that initialisation is done after variable declare */
     printf("linit17=%d\n", linit17);
     printf("sinit15=%d\n", sinit15[0]);
+    printf("sinit16=%d %d\n", sinit16[0].a[0], sinit16[1].a[0]);
+    printf("sinit17=%s %d %s %d\n",
+           sinit17[0].s, sinit17[0].len,
+           sinit17[1].s, sinit17[1].len);
 }
 
 void switch_test()
@@ -1290,13 +1358,17 @@ void lloptest(long long a, long long b)
     ua = a;
     ub = b;
     /* arith */
-    printf("arith: %Ld %Ld %Ld %Ld %Ld\n",
+    printf("arith: %Ld %Ld %Ld\n",
            a + b,
            a - b,
-           a * b,
+           a * b);
+    
+    if (b != 0) {
+        printf("arith1: %Ld %Ld\n",
            a / b,
            a % b);
-    
+    }
+
     /* binary */
     printf("bin: %Ld %Ld %Ld\n",
            a & b,
@@ -1438,6 +1510,7 @@ void longlong_test(void)
           a.item = 3;
           printf("%lld\n", value(&a));
     }
+    lloptest(0x80000000, 0);
 }
 
 void vprintf1(const char *fmt, ...)

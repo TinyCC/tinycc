@@ -13,7 +13,7 @@ CFLAGS+=-m386 -malign-functions=0
 CFLAGS+=-DCONFIG_TCC_PREFIX=\"$(prefix)\"
 DISAS=objdump -d
 INSTALL=install
-VERSION=0.9.13
+VERSION=0.9.14
 
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
@@ -122,7 +122,7 @@ install: tcc libtcc1.o bcheck.o
 	mkdir -p $(prefix)/lib/tcc
 	mkdir -p $(prefix)/lib/tcc/include
 	$(INSTALL) -m644 libtcc1.o bcheck.o $(prefix)/lib/tcc
-	$(INSTALL) -m644 stdarg.h stddef.h float.h stdbool.h \
+	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h $(prefix)/lib/tcc/include
 
 clean:
@@ -176,6 +176,10 @@ instr: instr.o
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<
 
+cache: tcc_g
+	cachegrind ./tcc_g -o /tmp/linpack -lm bench/linpack.c
+	vg_annotate tcc.c > /tmp/linpack.cache.log
+
 # documentation
 tcc-doc.html: tcc-doc.texi
 	texi2html -monolithic -number $<
@@ -188,10 +192,10 @@ FILES= Makefile Makefile.uClibc \
        bcheck.c libtcc1.c \
        il-opcodes.h il-gen.c \
        elf.h stab.h stab.def \
-       stddef.h stdarg.h stdbool.h float.h \
+       stddef.h stdarg.h stdbool.h float.h varargs.h \
        tcclib.h libtcc.h libtcc_test.c \
        ex1.c ex2.c ex3.c ex4.c ex5.c \
-       tcctest.c boundtest.c 
+       tcctest.c boundtest.c gcctestsuite.sh
 
 FILE=tcc-$(VERSION)
 
