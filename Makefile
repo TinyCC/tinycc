@@ -3,7 +3,7 @@
 #
 prefix=/usr/local
 
-CFLAGS=-O2 -g -Wall -Wno-parentheses -I.
+CFLAGS=-O2 -g -Wall -Wno-parentheses -Wno-missing-braces -I.
 LIBS=-ldl
 #CFLAGS=-O2 -g -Wall -Wno-parentheses -I. -pg -static -DPROFILE
 #LIBS=
@@ -32,11 +32,15 @@ test.out: tcc prog.c
 run: tcc prog.c
 	./tcc -I. prog.c
 
-run2: tcc tcc.c prog.c
-	./tcc -I. tcc.c -I. prog.c
+# iterated test2 (compile tcc then compile prog.c !)
+test2: tcc tcc.c prog.c
+	./tcc -I. tcc.c -I. prog.c > test.out2
+	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
-run3: tcc tcc.c prog.c
-	./tcc -I. tcc.c -I. tcc.c -I. prog.c
+# iterated test3 (compile tcc then compile tcc then compile prog.c !)
+test3: tcc tcc.c prog.c
+	./tcc -I. tcc.c -I. tcc.c -I. prog.c > test.out3
+	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # speed test
 speed: tcc ex2 ex3
@@ -70,12 +74,9 @@ clean:
 
 # target for development
 
-%.bin: %.c tcct
-	./tcct -I. $< $@
+%.bin: %.c tcc
+	./tcc -o $@ -I. $<
 	$(DISAS) $@
-
-tcct: tcc.c
-	gcc -DTEST $(CFLAGS) -o $@ $< -ldl
 
 instr.o: instr.S
 	gcc -O2 -Wall -g -c -o $@ $<

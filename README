@@ -5,16 +5,18 @@ Features:
 --------
 
 - SMALL! You can compile and execute C code everywhere, for example on
-  rescue disks (25KB for x86 executable).
+  rescue disks (27KB for x86 TCC executable).
 
-- FAST! tcc generates optimized x86 code. No byte code overhead.
+- FAST! tcc generates optimized x86 code. No byte code
+  overhead. Compiles, assemble and link about 7 times faster than 'gcc
+  -O0'.
 
 - UNLIMITED! Any C dynamic library can be used directly. TCC is
-  heading torward full ANSI C compliance. TCC can of course compile
+  heading torward full ISOC99 compliance. TCC can of course compile
   itself.
 
 - Compile and execute C source directly. No linking or assembly
-  necessary. Full C preprocessor included.
+  necessary. Full C preprocessor included. 
 
 - C script supported : just add '#!/usr/local/bin/tcc' at the first
   line of your C source, and execute it directly from the command
@@ -27,7 +29,7 @@ Documentation:
 
 ***TCC currently only work on Linux x86***.
 
-Type 'make install' to compile and install tcc in /usr/local and
+Type 'make install' to compile and install tcc in /usr/local/bin and
 /usr/local/lib/tcc.
 
 2) Introduction
@@ -64,7 +66,7 @@ files, add one which includes all your sources.
 4) Examples
 
 ex1.c: simplest example (hello world). Can also be launched directly
-as a script: ./ex2.c.
+as a script: './ex1.c'.
 
 ex2.c: more complicated example: find a number with the four
 operations given a list of numbers (benchmark).
@@ -72,12 +74,12 @@ operations given a list of numbers (benchmark).
 ex3.c: compute fibonacci numbers (benchmark).
 
 ex4.c: more complicated: X11 program. Very complicated test in fact
-because standard headers are being used ! Currently slow because
-parsing does not use hash tables.
+because standard headers are being used !
 
 ex5.c: 'hello world' with standard glibc headers.
 
-tcc.c: TCC can compile itself. Used to check the code generator.
+tcc.c: TCC can of course compile itself. Used to check the code
+generator.
 
 prog.c: auto test for TCC which tests many subtle possible bugs. Used
 when doing 'make test'.
@@ -91,38 +93,57 @@ Exact differences with ANSI C:
   rare cases, preprocessed numbers are not handled exactly as in ANSI
   C. This approach has the advantage of being simpler and FAST!
 
- - __LINE__, __FILE__, __DATE__, __TIME__ are currently not handled.
-
- - #line not handled
-
 2) C language
-
-- Parsing: variables cannot be initialized ('int a = 1' or 'int tab[2] =
-  {1, 2}' not supported).
 
 - Cannot pass struct/union as value. Cannot assign struct/union (use
   memcpy instead).
 
-- Types: floating point numbers are not supported.
+- Types: floating point numbers are not supported yet.
 
 - (BUG) 'char' and 'short' casts do not truncate correctly.
 
 - 'sizeof' may not work if too complex expression is given.
 
-Supported C extensions:
-----------------------
+- bit fields are not supported.
 
-- 'inline' keyword is ignored.
+- L'c' or L"string" for wide chars are parsed but not handled as wchar_t.
 
+- Cannot initialize auto (=local) arrays with implicit size
+  (workaround: specificy exact size in array declaration). Cannot
+  initialize auto arrays with strings.
+
+3) Linking
+
+- extern variables must appear in a referenced dll and cannot appear
+  in current source.
+
+Supported ANSI C extensions:
+---------------------------
+
+- 'inline' keyword is ignored (ISOC99).
+
+- 'restrict' keyword is ignored (ISOC99).
+
+- '__func__' is a string variable containing the current function name (ISOC99).
+
+- variadic macros: __VA_ARGS__ can be used for function-like macros (ISOC99):
+   #define dprintf(level, __VA_ARGS__) printf(__VA_ARGS__).
+
+- declarations can appear anywhere in a block (ISOC99).
+
+- array and struct/union elements can be initialized in any order by
+  using designators (.e. { [0].x = 1 }) (ISOC99).
+
+- binary digits can be entered ('0b101' instead of '5').
 
 Technical Description:
 ---------------------
 
 This is not my first C compiler (see my 'fbcc' compiler) but it
 contains the first C preprocessor I wrote. The project started as a
-joke to make the smallest C compiler. Then I expanded it torward ANSI
-compliance. This C compiler is particular because each feature was
-added while trying to be as simple and compact as possible. For
+joke to make the smallest C compiler. Then I expanded it torward
+ISOC99 compliance. This C compiler is particular because each feature
+was added while trying to be as simple and compact as possible. For
 example, no intermediate structure is used to store code or
 expressions.
 
@@ -137,10 +158,10 @@ registers are used. When more registers are needed, one register is
 flushed in a new local variable.
 
 Constant propagation is done for all operations. Multiplications and
-divisions are optimized to shifts when appropriate. Logical operators
-are optimized by maintaining a special cache for the processor
-flags. &&, || and ! are optimized by maintaining a special 'jmp
-target' value. No other jmp optimization is currently performed
+divisions are optimized to shifts when appropriate. Comparison
+operators are optimized by maintaining a special cache for the
+processor flags. &&, || and ! are optimized by maintaining a special
+'jmp target' value. No other jmp optimization is currently performed
 because it would require to store the code in a more abstract fashion.
 
 The types and values descriptions are stored in a single 'int'
@@ -151,10 +172,10 @@ solution.
 License:
 -------
 
-TCC is distributed under the GNU Generic Public License (see COPYING
+TCC is distributed under the GNU General Public License (see COPYING
 file). 
 
 I accept only patches where you give your copyright explictely to me
 to simplify licensing issues.
 
-Fabrice Bellard - Nov 11, 2001.
+Fabrice Bellard - Nov 17, 2001.

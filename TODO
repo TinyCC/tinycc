@@ -2,10 +2,12 @@ TODO list:
 
 Critical:
 
-- initializers
-- add hash tables for symbols (useful for long programs)
+- add structure assign.
+- fix 'char' and 'short' casts.
 - 0 is pointer - fix type compare
+- fix L'' and L"" wide chars
 - add message if external function or variable not found.
+- function pointers to forward reference (patch code generator).
 - add float/double support (should be as small as possible while being
   usable for RISC code generator too).
 
@@ -13,6 +15,8 @@ Not critical:
 
 - fix preprocessor symbol redefinition 
 - better constant opt (&&, ||, ?:)
-- function pointers to forward reference (patch code generator) 
+- add ELF executable and shared library output option (would be needed
+  for completness!).
 - add PowerPC code generator.
-- add portable byte code generator and interpreter.
+- add portable byte code generator and interpreter for other
+  unsupported architectures.
