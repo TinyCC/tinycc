@@ -28,6 +28,8 @@ static int asm_get_local_label_name(TCCState *s1, unsigned int n)
     return ts->tok;
 }
 
+static void asm_expr(TCCState *s1, ExprValue *pe);
+
 /* We do not use the C expression parser to handle symbols. Maybe the
    C expression parser could be tweaked to do so. */
 
@@ -91,6 +93,11 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
 	pe->sym = NULL;
 	next();
 	break;
+    case '(':
+        next();
+        asm_expr(s1, pe);
+        skip(')');
+        break;
     default:
         if (tok >= TOK_IDENT) {
             /* label case : if the label was not found, add one */
@@ -100,8 +107,14 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 /* NOTE: by default, the symbol is global */
                 sym->type.t = VT_VOID;
             }
-            pe->v = 0;
-            pe->sym = sym;
+            if (sym->r == SHN_ABS) {
+                /* if absolute symbol, no need to put a symbol value */
+                pe->v = (long)sym->next;
+                pe->sym = NULL;
+            } else {
+                pe->v = 0;
+                pe->sym = sym;
+            }
             next();
         } else {
             error("bad expression syntax [%s]", get_tok_str(tok, &tokc));
@@ -241,7 +254,8 @@ static int asm_int_expr(TCCState *s1)
 
 /* NOTE: the same name space as C labels is used to avoid using too
    much memory when storing labels in TokenStrings */
-static void asm_new_label(TCCState *s1, int label, int is_local)
+static void asm_new_label1(TCCState *s1, int label, int is_local,
+                           int sh_num, int value)
 {
     Sym *sym;
 
@@ -262,18 +276,29 @@ static void asm_new_label(TCCState *s1, int label, int is_local)
         sym = label_push(&s1->asm_labels, label, 0);
         sym->type.t = VT_STATIC | VT_VOID;
     }
-    sym->r = cur_text_section->sh_num;
-    sym->next = (void *)ind;
+    sym->r = sh_num;
+    sym->next = (void *)value;
+}
+
+static void asm_new_label(TCCState *s1, int label, int is_local)
+{
+    asm_new_label1(s1, label, is_local, cur_text_section->sh_num, ind);
 }
 
 static void asm_free_labels(TCCState *st)
 {
     Sym *s, *s1;
+    Section *sec;
+    
     for(s = st->asm_labels; s != NULL; s = s1) {
         s1 = s->prev;
         /* define symbol value in object file */
         if (s->r) {
-            put_extern_sym(s, st->sections[s->r], (long)s->next, 0);
+            if (s->r == SHN_ABS)
+                sec = SECTION_ABS;
+            else
+                sec = st->sections[s->r];
+            put_extern_sym(s, sec, (long)s->next, 0);
         }
         /* remove label */
         table_ident[s->v - TOK_IDENT]->sym_label = NULL;
@@ -282,13 +307,18 @@ static void asm_free_labels(TCCState *st)
     st->asm_labels = NULL;
 }
 
+static void use_section1(TCCState *s1, Section *sec)
+{
+    cur_text_section->data_offset = ind;
+    cur_text_section = sec;
+    ind = cur_text_section->data_offset;
+}
+
 static void use_section(TCCState *s1, const char *name)
 {
     Section *sec;
     sec = find_section(s1, name);
-    cur_text_section->data_offset = ind;
-    cur_text_section = sec;
-    ind = cur_text_section->data_offset;
+    use_section1(s1, sec);
 }
 
 static void asm_parse_directive(TCCState *s1)
@@ -312,6 +342,9 @@ static void asm_parse_directive(TCCState *s1)
                 error("alignment must be a positive power of two");
             offset = (ind + n - 1) & -n;
             size = offset - ind;
+            /* the section must have a compatible alignment */
+            if (sec->sh_addralign < n)
+                sec->sh_addralign = n;
         } else {
             size = n;
         }
@@ -320,6 +353,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
             v = asm_int_expr(s1);
         }
+    zero_pad:
         if (sec->sh_type != SHT_NOBITS) {
             sec->data_offset = ind;
             ptr = section_ptr_add(sec, size);
@@ -359,6 +393,61 @@ static void asm_parse_directive(TCCState *s1)
             if (tok != ',')
                 break;
             next();
+        }
+        break;
+    case TOK_ASM_fill:
+        {
+            int repeat, size, val, i, j;
+            uint8_t repeat_buf[8];
+            next();
+            repeat = asm_int_expr(s1);
+            if (repeat < 0) {
+                error("repeat < 0; .fill ignored");
+                break;
+            }
+            size = 1;
+            val = 0;
+            if (tok == ',') {
+                next();
+                size = asm_int_expr(s1);
+                if (size < 0) {
+                    error("size < 0; .fill ignored");
+                    break;
+                }
+                if (size > 8)
+                    size = 8;
+                if (tok == ',') {
+                    next();
+                    val = asm_int_expr(s1);
+                }
+            }
+            /* XXX: endianness */
+            repeat_buf[0] = val;
+            repeat_buf[1] = val >> 8;
+            repeat_buf[2] = val >> 16;
+            repeat_buf[3] = val >> 24;
+            repeat_buf[4] = 0;
+            repeat_buf[5] = 0;
+            repeat_buf[6] = 0;
+            repeat_buf[7] = 0;
+            for(i = 0; i < repeat; i++) {
+                for(j = 0; j < size; j++) {
+                    g(repeat_buf[j]);
+                }
+            }
+        }
+        break;
+    case TOK_ASM_org:
+        {
+            unsigned long n;
+            next();
+            /* XXX: handle section symbols too */
+            n = asm_int_expr(s1);
+            if (n < ind)
+                error("attempt to .org backwards");
+            v = 0;
+            size = n - ind;
+            goto zero_pad;
         }
         break;
     case TOK_ASM_globl:
@@ -420,7 +509,26 @@ static void asm_parse_directive(TCCState *s1)
                     pstrcat(sname, sizeof(sname), get_tok_str(tok, NULL));
                 next();
             }
+            if (tok == ',') {
+                /* skip section options */
+                next();
+                if (tok != TOK_STR)
+                    expect("string constant");
+                next();
+            }
+            last_text_section = cur_text_section;
             use_section(s1, sname);
+        }
+        break;
+    case TOK_ASM_previous:
+        { 
+            Section *sec;
+            next();
+            if (!last_text_section)
+                error("no previous section referenced");
+            sec = cur_text_section;
+            use_section1(s1, last_text_section);
+            last_text_section = sec;
         }
         break;
     default:
@@ -471,7 +579,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
 
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-    parse_flags = 0;
+    parse_flags = PARSE_FLAG_ASM_COMMENTS;
     if (do_preprocess)
         parse_flags |= PARSE_FLAG_PREPROCESS;
     next();
@@ -507,6 +615,12 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
                 asm_new_label(s1, opcode, 0);
                 next();
                 goto redo;
+            } else if (tok == '=') {
+                int n;
+                next();
+                n = asm_int_expr(s1);
+                asm_new_label1(s1, opcode, 0, SHN_ABS, n);
+                goto redo;
             } else {
                 asm_opcode(s1, opcode);
             }
@@ -527,6 +641,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
 /* Assemble the current file */
 static int tcc_assemble(TCCState *s1, int do_preprocess)
 {
+    Sym *define_start;
     int ret;
 
     preprocess_init(s1);
@@ -535,9 +650,14 @@ static int tcc_assemble(TCCState *s1, int do_preprocess)
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
 
+    define_start = define_stack;
+
     ret = tcc_assemble_internal(s1, do_preprocess);
 
     cur_text_section->data_offset = ind;
+
+    free_defines(define_start); 
+
     return ret;
 }
 
@@ -691,12 +811,14 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
             if (is_output) {
                 test_lvalue();
             } else {
-                /* we want to avoid LLOCAL case. note that it may come
-                   from register storage, so we need to convert (reg)
+                /* we want to avoid LLOCAL case, except when the 'm'
+                   constraint is used. Note that it may come from
+                   register storage, so we need to convert (reg)
                    case */
                 if ((vtop->r & VT_LVAL) &&
                     ((vtop->r & VT_VALMASK) == VT_LLOCAL ||
-                     (vtop->r & VT_VALMASK) < VT_CONST)) {
+                     (vtop->r & VT_VALMASK) < VT_CONST) &&
+                    !strchr(op->constraint, 'm')) {
                     gv(RC_INT);
                 }
             }
@@ -712,14 +834,27 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
     }
 }
 
+static void parse_asm_str(CString *astr)
+{
+    skip('(');
+    /* read the string */
+    if (tok != TOK_STR)
+        expect("string constant");
+    cstr_new(astr);
+    while (tok == TOK_STR) {
+        /* XXX: add \0 handling too ? */
+        cstr_cat(astr, tokc.cstr->data);
+        next();
+    }
+    cstr_ccat(astr, '\0');
+}
+
 /* parse the GCC asm() instruction */
 static void asm_instr(void)
 {
     CString astr, astr1;
     ASMOperand operands[MAX_ASM_OPERANDS];
-    int nb_inputs, nb_outputs, nb_operands, i;
-    uint8_t input_regs_allocated[NB_ASM_REGS];
-    uint8_t output_regs_allocated[NB_ASM_REGS];
+    int nb_inputs, nb_outputs, nb_operands, i, must_subst, out_reg;
     uint8_t clobber_regs[NB_ASM_REGS];
 
     next();
@@ -728,22 +863,14 @@ static void asm_instr(void)
     if (tok == TOK_VOLATILE1 || tok == TOK_VOLATILE2 || tok == TOK_VOLATILE3) {
         next();
     }
-    skip('(');
-    /* read the string */
-    if (tok != TOK_STR)
-        expect("string constant");
-    cstr_new(&astr);
-    while (tok == TOK_STR) {
-        /* XXX: add \0 handling too ? */
-        cstr_cat(&astr, tokc.cstr->data);
-        next();
-    }
-    cstr_ccat(&astr, '\0');
+    parse_asm_str(&astr);
     nb_operands = 0;
     nb_outputs = 0;
+    must_subst = 0;
     memset(clobber_regs, 0, sizeof(clobber_regs));
     if (tok == ':') {
         next();
+        must_subst = 1;
         /* output args */
         parse_asm_operands(operands, &nb_operands, 1);
         nb_outputs = nb_operands;
@@ -780,19 +907,15 @@ static void asm_instr(void)
     save_regs(0);
 
     /* compute constraints */
-    asm_compute_constraints(input_regs_allocated, 
-                            operands, nb_operands, nb_outputs, 0, 
-                            NULL);
-    asm_compute_constraints(output_regs_allocated,
-                            operands, nb_operands, nb_outputs, 1, 
-                            input_regs_allocated);
+    asm_compute_constraints(operands, nb_operands, nb_outputs, 
+                            clobber_regs, &out_reg);
 
     /* substitute the operands in the asm string. No substitution is
        done if no operands (GCC behaviour) */
 #ifdef ASM_DEBUG
     printf("asm: \"%s\"\n", (char *)astr.data);
 #endif
-    if (nb_operands > 0) {
+    if (must_subst) {
         subst_asm_operands(operands, nb_operands, nb_outputs, &astr1, &astr);
         cstr_free(&astr);
     } else {
@@ -803,7 +926,8 @@ static void asm_instr(void)
 #endif
 
     /* generate loads */
-    asm_gen_code(operands, nb_operands, nb_outputs, 0, clobber_regs);    
+    asm_gen_code(operands, nb_operands, nb_outputs, 0, 
+                 clobber_regs, out_reg);    
 
     /* assemble the string with tcc internal assembler */
     tcc_assemble_inline(tcc_state, astr1.data, astr1.size - 1);
@@ -812,7 +936,8 @@ static void asm_instr(void)
     next();
 
     /* store the output values if needed */
-    asm_gen_code(operands, nb_operands, nb_outputs, 1, clobber_regs);    
+    asm_gen_code(operands, nb_operands, nb_outputs, 1, 
+                 clobber_regs, out_reg);
     
     /* free everything */
     for(i=0;i<nb_operands;i++) {
@@ -824,3 +949,31 @@ static void asm_instr(void)
     cstr_free(&astr1);
 }
 
+static void asm_global_instr(void)
+{
+    CString astr;
+
+    next();
+    parse_asm_str(&astr);
+    skip(')');
+    /* NOTE: we do not eat the ';' so that we can restore the current
+       token after the assembler parsing */
+    if (tok != ';')
+        expect("';'");
+    
+#ifdef ASM_DEBUG
+    printf("asm_global: \"%s\"\n", (char *)astr.data);
+#endif
+    cur_text_section = text_section;
+    ind = cur_text_section->data_offset;
+
+    /* assemble the string with tcc internal assembler */
+    tcc_assemble_inline(tcc_state, astr.data, astr.size - 1);
+    
+    cur_text_section->data_offset = ind;
+
+    /* restore the current C token */
+    next();
+
+    cstr_free(&astr);
+}
