@@ -771,6 +771,34 @@ static void put_dt(Section *dynamic, int dt, unsigned long val)
     dyn->d_un.d_val = val;
 }
 
+static void add_init_array_defines(TCCState *s1, const char *section_name)
+{
+    Section *s;
+    long end_offset;
+    char sym_start[1024];
+    char sym_end[1024];
+    
+    snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);
+    snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);
+
+    s = find_section(s1, section_name);
+    if (!s) {
+        end_offset = 0;
+        s = data_section;
+    } else {
+        end_offset = s->data_offset;
+    }
+
+    add_elf_sym(symtab_section, 
+                0, 0,
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                s->sh_num, sym_start);
+    add_elf_sym(symtab_section, 
+                end_offset, 0,
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                s->sh_num, sym_end);
+}
+
 /* add tcc runtime libraries */
 static void tcc_add_runtime(TCCState *s1)
 {
@@ -830,6 +858,11 @@ static void tcc_add_runtime(TCCState *s1)
                 bss_section->data_offset, 0,
                 ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
                 bss_section->sh_num, "_end");
+    /* horrible new standard ldscript defines */
+    add_init_array_defines(s1, ".preinit_array");
+    add_init_array_defines(s1, ".init_array");
+    add_init_array_defines(s1, ".fini_array");
+    
     /* add start and stop symbols for sections whose name can be
        expressed in C */
     for(i = 1; i < s1->nb_sections; i++) {
