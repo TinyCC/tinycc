@@ -155,10 +155,10 @@ int oad(int c, int s)
     return s;
 }
 
-/* output constant with relocation if 't & VT_FORWARD' is true */
-void gen_addr32(int c, int t)
+/* output constant with relocation if 'r & VT_FORWARD' is true */
+void gen_addr32(int r, int c)
 {
-    if (!(t & VT_FORWARD)) {
+    if (!(r & VT_FORWARD)) {
         gen_le32(c);
     } else {
         greloc((Sym *)c, ind, RELOC_ADDR32);
@@ -166,16 +166,23 @@ void gen_addr32(int c, int t)
     }
 }
 
-/* XXX: generate correct pointer for forward references to functions */
-/* r = (ft, fc) */
-void load(int r, int ft, int fc)
+/* load 'r' from value 'sv' */
+void load(int r, SValue *sv)
 {
-    int v, t;
+    int v, t, ft, fc, fr;
+    SValue v1;
 
-    v = ft & VT_VALMASK;
-    if (ft & VT_LVAL) {
+    fr = sv->r;
+    ft = sv->t;
+    fc = sv->c.ul;
+
+    v = fr & VT_VALMASK;
+    if (fr & VT_LVAL) {
         if (v == VT_LLOCAL) {
-            load(r, VT_LOCAL | VT_LVAL, fc);
+            v1.t = VT_INT;
+            v1.r = VT_LOCAL | VT_LVAL;
+            v1.c.ul = fc;
+            load(r, &v1);
             v = r;
         }
         if ((ft & VT_BTYPE) == VT_FLOAT) {
@@ -200,7 +207,7 @@ void load(int r, int ft, int fc)
 
         if (v == VT_CONST) {
             o(0x05 + r * 8); /* 0xXX, r */
-            gen_addr32(fc, ft);
+            gen_addr32(fr, fc);
         } else if (v == VT_LOCAL) {
             oad(0x85 + r * 8, fc); /* xx(%ebp), r */
         } else {
@@ -209,7 +216,7 @@ void load(int r, int ft, int fc)
     } else {
         if (v == VT_CONST) {
             o(0xb8 + r); /* mov $xx, r */
-            gen_addr32(fc, ft);
+            gen_addr32(fr, fc);
         } else if (v == VT_LOCAL) {
             o(0x8d);
             oad(0x85 + r * 8, fc); /* lea xxx(%ebp), r */
@@ -231,13 +238,14 @@ void load(int r, int ft, int fc)
     }
 }
 
-/* (ft, fc) = r */
-/* WARNING: r must not be allocated on the stack */
-void store(r, ft, fc)
+/* store register 'r' in lvalue 'v' */
+void store(int r, SValue *v)
 {
-    int fr, bt;
+    int fr, bt, ft, fc;
 
-    fr = ft & VT_VALMASK;
+    ft = v->t;
+    fc = v->c.ul;
+    fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
     /* XXX: incorrect if reg to reg */
     /* XXX: should not flush float stack */
@@ -261,10 +269,10 @@ void store(r, ft, fc)
     }
     if (fr == VT_CONST) {
         o(0x05 + r * 8); /* mov r,xxx */
-        gen_addr32(fc, ft);
+        gen_addr32(v->r, fc);
     } else if (fr == VT_LOCAL) {
         oad(0x85 + r * 8, fc); /* mov r,xxx(%ebp) */
-    } else if (ft & VT_LVAL) {
+    } else if (v->r & VT_LVAL) {
         g(fr + r * 8); /* mov r, (fr) */
     } else if (fr != r) {
         o(0xc0 + fr + r * 8); /* mov r, fr */
@@ -283,7 +291,7 @@ void gfunc_param(GFuncContext *c)
 {
     int size, align, r;
 
-    if ((vtop->t & (VT_BTYPE | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
+    if ((vtop->t & VT_BTYPE) == VT_STRUCT) {
         size = type_size(vtop->t, &align);
         /* align to stack align size */
         size = (size + 3) & ~3;
@@ -293,7 +301,7 @@ void gfunc_param(GFuncContext *c)
         r = get_reg(REG_CLASS_INT);
         o(0x89); /* mov %esp, r */
         o(0xe0 + r);
-        vset(VT_INT | r, 0);
+        vset(VT_INT, r, 0);
         vswap();
         vstore();
         c->args_size += size;
@@ -328,10 +336,10 @@ void gfunc_param(GFuncContext *c)
 void gfunc_call(GFuncContext *c)
 {
     int r;
-    if ((vtop->t & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         /* constant case */
         /* forward reference */
-        if (vtop->t & VT_FORWARD) {
+        if (vtop->r & VT_FORWARD) {
             greloc(vtop->c.sym, ind + 1, RELOC_REL32);
             oad(0xe8, 0);
         } else {
@@ -357,7 +365,7 @@ int gjmp(int t)
 int gtst(int inv, int t)
 {
     int v, *p;
-    v = vtop->t & VT_VALMASK;
+    v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
         g(0x0f);
@@ -375,7 +383,7 @@ int gtst(int inv, int t)
             t = gjmp(t);
             gsym(vtop->c.i);
         }
-    } else if ((vtop->t & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    } else if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         /* constant jmp optimization */
         if ((vtop->c.i != 0) != inv) 
             t = gjmp(t);
@@ -438,7 +446,7 @@ void gen_opi(int op)
             o(0xe8 + r);
         else
             o(0xf8 + r);
-        vtop->t = (vtop->t & VT_TYPE) | r;
+        vtop->r = r;
     } else if (op == '/' | op == TOK_UDIV | op == TOK_PDIV | 
                op == '%' | op == TOK_UMOD) {
         save_reg(2); /* save edx */
@@ -455,12 +463,12 @@ void gen_opi(int op)
             r = 2;
         else
             r = 0;
-        vtop->t = (vtop->t & VT_TYPE) | r;
+        vtop->r = r;
     } else {
         vtop--;
         o(0x39);
         o(0xc0 + r + fr * 8); /* cmp fr, r */
-        vset(VT_CMP, op);
+        vset(VT_INT, VT_CMP, op);
     }
 }
 
@@ -472,24 +480,24 @@ void gen_opf(int op)
     int a, ft, fc, swapped, r;
 
     /* convert constants to memory references */
-    if ((vtop[-1].t & (VT_CONST | VT_LVAL)) == VT_CONST) {
+    if ((vtop[-1].r & (VT_CONST | VT_LVAL)) == VT_CONST) {
         vswap();
         gv();
         vswap();
     }
-    if ((vtop[0].t & (VT_CONST | VT_LVAL)) == VT_CONST)
+    if ((vtop[0].r & (VT_CONST | VT_LVAL)) == VT_CONST)
         gv();
 
     /* must put at least one value in the floating point register */
-    if ((vtop[-1].t & VT_LVAL) &&
-        (vtop[0].t & VT_LVAL)) {
+    if ((vtop[-1].r & VT_LVAL) &&
+        (vtop[0].r & VT_LVAL)) {
         vswap();
         gv();
         vswap();
     }
     if (op >= TOK_EQ && op <= TOK_GT) {
         /* load on stack second operand */
-        load(REG_ST0, vtop->t, vtop->c.ul);
+        load(REG_ST0, vtop);
         if (op == TOK_GE || op == TOK_GT)
             o(0xc9d9); /* fxch %st(1) */
         o(0xe9da); /* fucompp */
@@ -509,13 +517,13 @@ void gen_opf(int op)
             op = TOK_EQ;
         }
         vtop--;
-        vtop->t = (vtop->t & VT_TYPE) | VT_CMP;
+        vtop->r = VT_CMP;
         vtop->c.i = op;
     } else {
         /* swap the stack if needed so that t1 is the register and t2 is
            the memory reference */
         swapped = 0;
-        if (vtop[-1].t & VT_LVAL) {
+        if (vtop[-1].r & VT_LVAL) {
             vswap();
             swapped = 1;
         }
@@ -546,10 +554,10 @@ void gen_opf(int op)
         else
             o(0xd8);
         
-        r = ft & VT_VALMASK;
+        r = vtop->r & VT_VALMASK;
         if (r == VT_CONST) {
             o(0x05 + a);
-            gen_addr32(fc, ft);
+            gen_addr32(vtop->r, fc);
         } else if (r == VT_LOCAL) {
             oad(0x85 + a, fc);
         } else {
@@ -567,16 +575,16 @@ void gen_cvt_itof(int t)
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
         g(0x00);
-        o(0x50 + (vtop->t & VT_VALMASK)); /* push r */
+        o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
     } else {
         /* int to float/double/long double */
-        o(0x50 + (vtop->t & VT_VALMASK)); /* push r */
+        o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x2404db); /* fildl (%esp) */
         o(0x04c483); /* add $4, %esp */
     }
-    vtop->t = t | REG_ST0;
+    vtop->r = REG_ST0;
 }
 
 /* FPU control word for rounding to nearest mode */
@@ -611,7 +619,7 @@ void gen_cvt_ftoi(int t)
     o(0x58 + r); /* pop r */
     if (size == 8) 
         o(0x04c483); /* add $4, %esp */
-    vtop->t = t | r;
+    vtop->r = r;
 }
 
 /* convert from one floating point type to another */
@@ -625,7 +633,7 @@ void gen_cvt_ftof(int t)
 void vpop(void)
 {
     /* for x86, we need to pop the FP stack */
-    if ((vtop->t & VT_VALMASK) == REG_ST0) {
+    if ((vtop->r & VT_VALMASK) == REG_ST0) {
         o(0xd9dd); /* fstp %st(1) */
     }
     vtop--;
