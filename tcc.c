@@ -40,8 +40,13 @@
 
 /* number of available temporary registers */
 #define NB_REGS             3
+/* return register for functions */
+#define FUNC_RET_REG        0 
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS
+/* defined if structures are passed as pointers. Otherwise structures
+   are directly pushed on stack. */
+//#define FUNC_STRUCT_PARAM_AS_PTR
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -99,6 +104,8 @@ int tok, tok1, tokc, rsym, anon_sym,
     prog, ind, loc, glo, vt, vc, const_wanted, line_num;
 int global_expr; /* true if compound literals must be allocated
                     globally (used during initializers parsing */
+int func_vt, func_vc; /* current function return type (used by
+                         return instruction) */
 int tok_ident;
 TokenSym **table_ident;
 TokenSym *hash_ident[521];
@@ -273,9 +280,12 @@ int decl_initializer_alloc(int t, int has_init);
 int gv(void);
 void move_reg();
 void save_reg();
+void vpush(void);
+int get_reg(void);
 void macro_subst(int **tok_str, int *tok_len, 
                  Sym **nested_list, int *macro_str);
 int save_reg_forced(int r);
+void vstore(void);
 int type_size(int t, int *a);
 int pointed_type(int t);
 int pointed_size(int t);
@@ -1437,7 +1447,7 @@ void vset(t, v)
 /* X86 code generator */
 
 typedef struct GFuncContext {
-    int nb_args;
+    int args_size;
 } GFuncContext;
 
 void g(c)
@@ -1562,14 +1572,39 @@ void store(r, ft, fc)
 /* start function call and return function call context */
 void gfunc_start(GFuncContext *c)
 {
-    c->nb_args = 0;
+    c->args_size = 0;
 }
 
 /* push function parameter which is in (vt, vc) */
 void gfunc_param(GFuncContext *c)
 {
-    o(0x50 + gv()); /* push r */
-    c->nb_args++;
+    int size, align, ft, fc, r;
+
+    if ((vt & (VT_STRUCT | VT_LVAL)) == (VT_STRUCT | VT_LVAL)) {
+        size = type_size(vt, &align);
+        /* align to stack align size */
+        size = (size + 3) & ~3;
+        /* allocate the necessary size on stack */
+        oad(0xec81, size); /* sub $xxx, %esp */
+        /* generate structure store */
+        r = get_reg();
+        o(0x89); /* mov %esp, r */
+        o(0xe0 + r);
+        ft = vt;
+        fc = vc;
+        vset(VT_INT | r, 0);
+        vpush();
+        vt = ft;
+        vc = fc;
+        vstore();
+        c->args_size += size;
+    } else {
+        /* simple type (currently always same size) */
+        /* XXX: implicit cast ? */
+        r = gv();
+        o(0x50 + r); /* push r */
+        c->args_size += 4;
+    }
 }
 
 /* generate function call with address in (ft, fc) and free function */
@@ -1587,11 +1622,11 @@ void gfunc_call(GFuncContext *c, int ft, int fc)
         oad(0x95ff, fc); /* call *xxx(%ebp) */
     } else {
         /* not actually used */
-        o(0xff); /* call *reg */
+        o(0xff); /* call *r */
         o(0xd0 + r);
     }
-    if (c->nb_args)
-        oad(0xc481, c->nb_args * 4); /* addl $xxx, %esp */
+    if (c->args_size)
+        oad(0xc481, c->args_size); /* add $xxx, %esp */
 }
 
 int gjmp(int t)
@@ -1743,7 +1778,7 @@ void save_reg(r)
 }
 
 /* find a free register. If none, save one register */
-int get_reg()
+int get_reg(void)
 {
     int r, i, *p;
 
@@ -1807,7 +1842,7 @@ int gvp(int *p)
     return r;
 }
 
-void vpush()
+void vpush(void)
 {
     if (vstack_ptr >= vstack + VSTACK_SIZE)
         error("memory full");
@@ -1987,6 +2022,36 @@ void gen_op(int op)
     }
 }
 
+/* cast (vt, vc) to 't' type */
+void gen_cast(int t)
+{
+    int r, bits;
+    r = vt & VT_VALMASK;
+    if (!(t & VT_LVAL)) {
+        /* if not lvalue, then we convert now */
+        if ((t & VT_TYPE & ~VT_UNSIGNED) == VT_BYTE)
+            bits = 8;
+        else if ((t & VT_TYPE & ~VT_UNSIGNED) == VT_SHORT)
+            bits = 16;
+        else
+            goto the_end;
+        vpush();
+        if (t & VT_UNSIGNED) {
+            vset(VT_CONST, (1 << bits) - 1);
+            gen_op('&');
+        } else {
+            bits = 32 - bits;
+            vset(VT_CONST, bits);
+            gen_op(TOK_SHL);
+            vpush();
+            vset(VT_CONST, bits);
+            gen_op(TOK_SAR);
+        }
+    }
+ the_end:
+    vt = (vt & VT_TYPEN) | t;
+}
+
 /* return type size. Put alignment at 'a' */
 int type_size(int t, int *a)
 {
@@ -2032,7 +2097,7 @@ int mk_pointer(int t)
 }
 
 /* store value in lvalue pushed on stack */
-void vstore()
+void vstore(void)
 {
     int ft, fc, r, t, size, align;
     GFuncContext gf;
@@ -2240,15 +2305,15 @@ int ist(void)
 
 int post_type(t)
 {
-    int p, n, pt, l, a;
-    Sym *last, *s;
+    int p, n, pt, l;
+    Sym **plast, *s, *first;
 
     if (tok == '(') {
         /* function declaration */
         next();
-        a = 4; 
         l = 0;
-        last = NULL;
+        first = NULL;
+        plast = &first;
         while (tok != ')') {
             /* read param name and compute offset */
             if (l != FUNC_OLD) {
@@ -2267,16 +2332,14 @@ int post_type(t)
             } else {
             old_proto:
                 n = tok;
-                pt = 0; /* int type */
+                pt = VT_INT;
                 next();
             }
             /* array must be transformed to pointer according to ANSI C */
             pt &= ~VT_ARRAY;
-            /* XXX: size will be different someday */
-            a = a + 4;
-            s = sym_push(n | SYM_FIELD, VT_LOCAL | VT_LVAL | pt, a);
-            s->next = last;
-            last = s;
+            s = sym_push(n | SYM_FIELD, pt, 0);
+            *plast = s;
+            plast = &s->next;
             if (tok == ',') {
                 next();
                 if (l == FUNC_NEW && tok == TOK_DOTS) {
@@ -2291,7 +2354,7 @@ int post_type(t)
         /* we push a anonymous symbol which will contain the function prototype */
         p = anon_sym++;
         s = sym_push(p, t, l);
-        s->next = last;
+        s->next = first;
         t = VT_FUNC | (p << VT_STRUCT_SHIFT);
     } else if (tok == '[') {
         /* array definition */
@@ -2398,7 +2461,7 @@ void indir()
 
 void unary()
 {
-    int n, t, ft, fc, p, align;
+    int n, t, ft, fc, p, align, size;
     Sym *s;
     GFuncContext gf;
 
@@ -2449,7 +2512,7 @@ void unary()
                     vset(ft, fc);
                 } else {
                     unary();
-                    vt = (vt & VT_TYPEN) | ft;
+                    gen_cast(ft);
                 }
             } else {
                 expr();
@@ -2566,7 +2629,14 @@ void unary()
             indir();
             skip(']');
         } else if (tok == '(') {
+            int rett, retc;
+
             /* function call  */
+            if (!(vt & VT_FUNC))
+                expect("function type");
+            /* get return type */
+            s = sym_find((unsigned)vt >> VT_STRUCT_SHIFT);
+
             vt &= ~VT_LVAL; /* no lvalue */
             vpush(); /* push function address */
             save_regs(); /* save used temporary registers */
@@ -2619,7 +2689,23 @@ void unary()
                 /* restore token */
                 tok = ')';
             }
-#else
+#endif
+            /* compute first implicit argument if a structure is returned */
+            if (s->t & VT_STRUCT) {
+                /* get some space for the returned structure */
+                size = type_size(s->t, &align);
+                loc = (loc - size) & -align;
+                rett = s->t | VT_LOCAL | VT_LVAL;
+                /* pass it as 'int' to avoid structure arg passing
+                   problems */
+                vset(VT_INT | VT_LOCAL, loc);
+                retc = vc;
+                gfunc_param(&gf);
+            } else {
+                rett = s->t | FUNC_RET_REG; /* return in register */
+                retc = 0;
+            }
+#ifndef INVERT_FUNC_PARAMS
             while (tok != ')') {
                 expr_eq();
                 gfunc_param(&gf);
@@ -2630,23 +2716,9 @@ void unary()
             skip(')');
             vpop(&ft, &fc);
             gfunc_call(&gf, ft, fc);
-#if 0
-            if ((ft & VT_VALMASK) == VT_CONST) {
-                /* forward reference */
-                if (ft & VT_FORWARD) {
-                    *(int *)fc = psym(0xe8, *(int *)fc);
-                } else
-                    oad(0xe8, fc - ind - 5);
-            } else {
-                oad(0x2494ff, t); /* call *xxx(%esp) */
-                t = t + 4;
-            }
-            if (t)
-                oad(0xc481, t);
-#endif
-            /* get return type */
-            s = sym_find((unsigned)ft >> VT_STRUCT_SHIFT);
-            vt = s->t | 0; /* return register is eax */
+            /* return value */
+            vt = rett;
+            vc = retc;
         } else {
             break;
         }
@@ -2855,8 +2927,21 @@ void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg)
     } else if (tok == TOK_RETURN) {
         next();
         if (tok != ';') {
+            if (func_vt & VT_STRUCT) {
+                /* if returning structure, must copy it to implicit
+                   first pointer arg location */
+                vset(mk_pointer(func_vt) | VT_LOCAL | VT_LVAL, func_vc);
+                indir();
+                vpush();
+            }
             expr();
-            move_reg(0, gv());
+            if (func_vt & VT_STRUCT) {
+                /* copy structure value to pointer */
+                vstore();
+            } else {
+                /* move return value to standard return register */
+                move_reg(FUNC_RET_REG, gv());
+            }
         }
         skip(';');
         rsym = gjmp(rsym); /* jmp */
@@ -3345,7 +3430,7 @@ int decl_initializer_alloc(int t, int has_init)
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 void decl(l)
 {
-    int *a, t, b, v, u, n, addr, has_init;
+    int *a, t, b, v, u, n, addr, has_init, size, align;
     Sym *sym;
     
     while (1) {
@@ -3381,8 +3466,37 @@ void decl(l)
                 sym_push1(&local_stack, 0, 0, 0);
                 /* define parameters */
                 sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
-                while (sym = sym->next)
-                    sym_push(sym->v & ~SYM_FIELD, sym->t, sym->c);
+                /* XXX: the following is x86 dependant -> move it to
+                   x86 code gen */
+                addr = 8;
+                /* if the function returns a structure, then add an
+                   implicit pointer parameter */
+                func_vt = sym->t;
+                if (func_vt & VT_STRUCT) {
+                    func_vc = addr;
+                    addr += 4;
+                }
+                while (sym = sym->next) {
+                    u = sym->t;
+                    sym_push(sym->v & ~SYM_FIELD, 
+                             u | VT_LOCAL | VT_LVAL, 
+                             addr);
+                    if (u & VT_STRUCT) {
+#ifdef FUNC_STRUCT_PARAM_AS_PTR
+                        /* structs are passed as pointer */
+                        size = 4;
+#else
+                        /* structs are directly put on stack (x86
+                           like) */
+                        size = type_size(u, &align);
+                        size = (size + 3) & ~3;
+#endif
+                    } else {
+                        /* XXX: size will be different someday */
+                        size = 4;
+                    }
+                    addr += size;
+                }
                 loc = 0;
                 o(0xe58955); /* push   %ebp, mov    %esp, %ebp */
                 a = (int *)oad(0xec81, 0); /* sub $xxx, %esp */
@@ -3394,7 +3508,8 @@ void decl(l)
                                          save local variables */
                 sym_pop(&label_stack, 0); /* reset label stack */
                 sym_pop(&local_stack, 0); /* reset local stack */
-                funcname = "";
+                funcname = ""; /* for safety */
+                func_vt = VT_VOID; /* for safety */
                 break;
             } else {
                 if (b & VT_TYPEDEF) {
