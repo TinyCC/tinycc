@@ -2541,6 +2541,7 @@ static void preprocess(int is_bof)
     case TOK_ERROR:
     case TOK_WARNING:
         c = tok;
+        ch = file->buf_ptr[0];
         skip_spaces();
         q = buf;
         while (ch != '\n' && ch != CH_EOF) {
@@ -5567,12 +5568,16 @@ void parse_attribute(AttributeDef *ad)
             break;
         case TOK_ALIGNED:
         case TOK___ALIGNED__:
-            skip('(');
-            n = expr_const();
-            if (n <= 0 || (n & (n - 1)) != 0) 
-                error("alignment must be a positive power of two");
+            if (tok == '(') {
+                next();
+                n = expr_const();
+                if (n <= 0 || (n & (n - 1)) != 0) 
+                    error("alignment must be a positive power of two");
+                skip(')');
+            } else {
+                n = MAX_ALIGN;
+            }
             ad->aligned = n;
-            skip(')');
             break;
         case TOK_UNUSED:
         case TOK___UNUSED__:
@@ -7263,8 +7268,9 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
 static void init_putv(CType *type, Section *sec, unsigned long c, 
                       int v, int expr_type)
 {
-    int saved_global_expr, bt;
+    int saved_global_expr, bt, bit_pos, bit_size;
     void *ptr;
+    unsigned long long bit_mask;
 
     switch(expr_type) {
     case EXPR_VAL:
@@ -7291,19 +7297,30 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         gen_assign_cast(type);
         bt = type->t & VT_BTYPE;
         ptr = sec->data + c;
+        /* XXX: make code faster ? */
+        if (!(type->t & VT_BITFIELD)) {
+            bit_pos = 0;
+            bit_size = 32;
+            bit_mask = -1LL;
+        } else {
+            bit_pos = (vtop->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+            bit_size = (vtop->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
+            bit_mask = (1LL << bit_size) - 1;
+        }
         if ((vtop->r & VT_SYM) &&
             (bt == VT_BYTE ||
              bt == VT_SHORT ||
              bt == VT_DOUBLE ||
              bt == VT_LDOUBLE ||
-             bt == VT_LLONG))
+             bt == VT_LLONG ||
+             (bt == VT_INT && bit_size != 32)))
             error("initializer element is not computable at load time");
         switch(bt) {
         case VT_BYTE:
-            *(char *)ptr = vtop->c.i;
+            *(char *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
             break;
         case VT_SHORT:
-            *(short *)ptr = vtop->c.i;
+            *(short *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
             break;
         case VT_DOUBLE:
             *(double *)ptr = vtop->c.d;
@@ -7312,13 +7329,13 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
             *(long double *)ptr = vtop->c.ld;
             break;
         case VT_LLONG:
-            *(long long *)ptr = vtop->c.ll;
+            *(long long *)ptr |= (vtop->c.ll & bit_mask) << bit_pos;
             break;
         default:
             if (vtop->r & VT_SYM) {
                 greloc(sec, vtop->sym, c, R_DATA_32);
             }
-            *(int *)ptr = vtop->c.i;
+            *(int *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
             break;
         }
         vtop--;
@@ -7467,7 +7484,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* NOTE: the previous test is a specific case for automatic
            struct/union init */
         /* XXX: union needs only one init */
-        /* XXX: handle bit fields */
         no_oblock = 1;
         if (first || tok == '{') {
             skip('{');
@@ -7480,8 +7496,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         n = s->c;
         while (tok != '}') {
             decl_designator(type, sec, c, NULL, &f, size_only);
-            /* XXX: bitfields ? */
-            /* fill with zero between fields */
             index = f->c;
             if (!size_only && array_length < index) {
                 init_putz(type, sec, c + array_length, 
@@ -7490,12 +7504,12 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             index = index + type_size(&f->type, &align1);
             if (index > array_length)
                 array_length = index;
-            if (no_oblock && f->next == NULL)
+            f = f->next;
+            if (no_oblock && f == NULL)
                 break;
             if (tok == '}')
                 break;
             skip(',');
-            f = f->next;
         }
         /* put zeros at the end */
         if (!size_only && array_length < n) {
@@ -8843,7 +8857,7 @@ static int64_t getclock_us(void)
 
 void help(void)
 {
-    printf("tcc version 0.9.13 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
+    printf("tcc version 0.9.14 - Tiny C Compiler - Copyright (C) 2001, 2002 Fabrice Bellard\n" 
            "usage: tcc [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [--] infile1 [infile2... --] [infile_args...]\n"
