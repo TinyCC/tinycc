@@ -418,19 +418,19 @@ unsigned long long __umoddi3(unsigned long long u, unsigned long long v)
     return w;
 }
 
-/* XXX: suppress that and patch tcc to do it */
+/* XXX: fix tcc's code generator to do this instead */
 long long __sardi3(long long a, int b)
 {
     return a >> b;
 }
 
-/* XXX: suppress that and patch tcc to do it */
+/* XXX: fix tcc's code generator to do this instead */
 unsigned long long __shrdi3(unsigned long long a, int b)
 {
     return a >> b;
 }
 
-/* XXX: suppress that and patch tcc to do it */
+/* XXX: fix tcc's code generator to do this instead */
 long long __shldi3(long long a, int b)
 {
     return a << b;
@@ -439,11 +439,11 @@ long long __shldi3(long long a, int b)
 #if defined(__i386__)
 /* FPU control word for rounding to nearest mode */
 unsigned short __tcc_fpu_control = 0x137f;
-/* FPU control word for round to zero mode for int convertion */
+/* FPU control word for round to zero mode for int conversion */
 unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
 #endif
 
-/* XXX: suppress that and patch tcc to do it */
+/* XXX: fix tcc's code generator to do this instead */
 float __ulltof(unsigned long long a)
 {
     DWunion uu; 
