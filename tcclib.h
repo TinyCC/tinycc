@@ -4,10 +4,8 @@
  * only for your convenience so that you do not need to put the whole
  * glibc include files on your floppy disk 
  */
-#define NULL 0
-typedef unsigned int size_t;
-typedef struct __FILE FILE;
-typedef void *va_list;
+#include <stddef.h>
+#include <stdarg.h>
 
 /* stdlib.h */
 void *calloc(size_t nmemb, size_t size);
@@ -19,6 +17,7 @@ long int strtol(const char *nptr, char **endptr, int base);
 unsigned long int strtoul(const char *nptr, char **endptr, int base);
 
 /* stdio.h */
+typedef struct __FILE FILE;
 #define EOF (-1)
 FILE *fopen(const char *path, const char *mode);
 FILE *fdopen(int fildes, const char *mode);
@@ -47,6 +46,8 @@ int vsnprintf(char *str, size_t size, const char  *format, va_list ap);
 int vasprintf(char  **strp,  const  char *format, va_list ap);
 int vdprintf(int d, const char *format, va_list ap);
 
+void perror(const char *s);
+
 /* string.h */
 char *strcat(char *dest, const char *src);
 char *strchr(const char *s, int c);
@@ -55,3 +56,9 @@ char *strcpy(char *dest, const char *src);
 void *memcpy(void *dest, const void *src, size_t n);
 void *memset(void *s, int c, size_t n);
 char *strdup(const char *s);
+
+/* dlfcn.h */
+void *dlopen(const char *filename, int flag);
+const char *dlerror(void);
+void *dlsym(void *handle, char *symbol);
+int dlclose(void *handle);
