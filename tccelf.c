@@ -385,11 +385,6 @@ static void relocate_common_syms(void)
     }
 }
 
-static void *resolve_sym(const char *sym)
-{
-    return dlsym(RTLD_DEFAULT, sym);
-}
-
 /* relocate symbol table, resolve undefined symbols if do_resolve is
    true and output error if undefined symbol. */
 static void relocate_syms(TCCState *s1, int do_resolve)
@@ -408,7 +403,7 @@ static void relocate_syms(TCCState *s1, int do_resolve)
             name = strtab_section->data + sym->st_name;
             if (do_resolve) {
                 name = symtab_section->link->data + sym->st_name;
-                addr = (unsigned long)resolve_sym(name);
+                addr = (unsigned long)resolve_sym(s1, name, ELF32_ST_TYPE(sym->st_info));
                 if (addr) {
                     sym->st_value = addr;
                     goto found;

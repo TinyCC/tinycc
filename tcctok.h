@@ -100,6 +100,7 @@
      DEF(TOK_STDCALL1, "stdcall")
      DEF(TOK_STDCALL2, "__stdcall")
      DEF(TOK_STDCALL3, "__stdcall__")
+     DEF(TOK_DLLEXPORT, "dllexport")
      DEF(TOK_NORETURN1, "noreturn")
      DEF(TOK_NORETURN2, "__noreturn__")
      DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")

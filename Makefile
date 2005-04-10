@@ -20,7 +20,7 @@ endif
 
 DISAS=objdump -d
 INSTALL=install
-PROGS=tcc$(EXESUF) c67-tcc$(EXESUF) arm-tcc$(EXESUF)
+PROGS=tcc$(EXESUF) c67-tcc$(EXESUF) arm-tcc$(EXESUF) i386-win32-tcc$(EXESUF)
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
@@ -124,6 +124,9 @@ c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c 
 
 arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
 	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+
+i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c Makefile
+	$(CC) $(CFLAGS) -DTCC_TARGET_PE -o $@ $< $(LIBS)
 
 # TinyCC runtime libraries
 libtcc1.o: libtcc1.c
