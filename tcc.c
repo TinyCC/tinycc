@@ -2731,6 +2731,7 @@ static void preprocess(int is_bof)
             define_undef(s);
         break;
     case TOK_INCLUDE:
+    case TOK_INCLUDE_NEXT:
         ch = file->buf_ptr[0];
         /* XXX: incorrect if comments : use next_nomacro with a special mode */
         skip_spaces();
@@ -2807,8 +2808,12 @@ static void preprocess(int is_bof)
                 buf1[size] = '\0';
                 pstrcat(buf1, sizeof(buf1), buf);
                 f = tcc_open(s1, buf1);
-                if (f)
-                    goto found;
+                if (f) {
+                    if (tok == TOK_INCLUDE_NEXT)
+                        tok = TOK_INCLUDE;
+                    else
+                        goto found;
+                }
             }
             if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
                 error("#include recursion too deep");
@@ -2824,8 +2829,12 @@ static void preprocess(int is_bof)
                 pstrcat(buf1, sizeof(buf1), "/");
                 pstrcat(buf1, sizeof(buf1), buf);
                 f = tcc_open(s1, buf1);
-                if (f)
-                    goto found;
+                if (f) {
+                    if (tok == TOK_INCLUDE_NEXT)
+                        tok = TOK_INCLUDE;
+                    else
+                        goto found;
+                }
             }
             error("include file '%s' not found", buf);
             f = NULL;
