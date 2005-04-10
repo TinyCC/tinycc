@@ -155,6 +155,7 @@
      DEF(TOK___fixunssfdi, "__fixunssfdi")
      DEF(TOK___fixunsdfdi, "__fixunsdfdi")
      DEF(TOK___fixunsxfdi, "__fixunsxfdi")
+     DEF(TOK___chkstk, "__chkstk")
 
 /* bound checking symbols */
 #ifdef CONFIG_TCC_BCHECK
