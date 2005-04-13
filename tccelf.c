@@ -178,7 +178,7 @@ void *tcc_get_symbol_err(TCCState *s, const char *name)
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
 static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
-                       int info, int sh_num, const char *name)
+                       int info, int other, int sh_num, const char *name)
 {
     Elf32_Sym *esym;
     int sym_bind, sym_index, sym_type, esym_bind;
@@ -217,11 +217,12 @@ static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
             esym->st_shndx = sh_num;
             esym->st_value = value;
             esym->st_size = size;
+            esym->st_other = other;
         }
     } else {
     do_def:
         sym_index = put_elf_sym(s, value, size, 
-                                ELF32_ST_INFO(sym_bind, sym_type), 0, 
+                                ELF32_ST_INFO(sym_bind, sym_type), other, 
                                 sh_num, name);
     }
     return sym_index;
@@ -675,7 +676,7 @@ static void build_got(TCCState *s1)
     s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     s1->got->sh_entsize = 4;
     add_elf_sym(symtab_section, 0, 4, ELF32_ST_INFO(STB_GLOBAL, STT_OBJECT), 
-                s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
+                0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
     ptr = section_ptr_add(s1->got, 3 * sizeof(int));
     /* keep space for _DYNAMIC pointer, if present */
     put32(ptr, 0);
@@ -943,11 +944,11 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 
     add_elf_sym(symtab_section, 
                 0, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 s->sh_num, sym_start);
     add_elf_sym(symtab_section, 
                 end_offset, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 s->sh_num, sym_end);
 }
 
@@ -967,7 +968,7 @@ static void tcc_add_runtime(TCCState *s1)
         ptr = section_ptr_add(bounds_section, sizeof(unsigned long));
         *ptr = 0;
         add_elf_sym(symtab_section, 0, 0, 
-                    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                     bounds_section->sh_num, "__bounds_start");
         /* add bound check code */
         snprintf(buf, sizeof(buf), "%s/%s", tcc_lib_path, "bcheck.o");
@@ -1010,15 +1011,15 @@ static void tcc_add_linker_symbols(TCCState *s1)
 
     add_elf_sym(symtab_section, 
                 text_section->data_offset, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 text_section->sh_num, "_etext");
     add_elf_sym(symtab_section, 
                 data_section->data_offset, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 data_section->sh_num, "_edata");
     add_elf_sym(symtab_section, 
                 bss_section->data_offset, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 bss_section->sh_num, "_end");
     /* horrible new standard ldscript defines */
     add_init_array_defines(s1, ".preinit_array");
@@ -1047,12 +1048,12 @@ static void tcc_add_linker_symbols(TCCState *s1)
             snprintf(buf, sizeof(buf), "__start_%s", s->name);
             add_elf_sym(symtab_section, 
                         0, 0,
-                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                         s->sh_num, buf);
             snprintf(buf, sizeof(buf), "__stop_%s", s->name);
             add_elf_sym(symtab_section,
                         s->data_offset, 0,
-                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                        ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                         s->sh_num, buf);
         }
     next_sec: ;
@@ -1919,7 +1920,8 @@ static int tcc_load_object_file(TCCState *s1,
         /* add symbol */
         name = strtab + sym->st_name;
         sym_index = add_elf_sym(symtab_section, sym->st_value, sym->st_size, 
-                                sym->st_info, sym->st_shndx, name);
+                                sym->st_info, sym->st_other, 
+                                sym->st_shndx, name);
         old_to_new_syms[i] = sym_index;
     }
 
@@ -2093,7 +2095,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 { 
     Elf32_Ehdr ehdr;
     Elf32_Shdr *shdr, *sh, *sh1;
-    int i, nb_syms, nb_dts, sym_bind, ret;
+    int i, nb_syms, nb_dts, sym_bind, ret, other;
     Elf32_Sym *sym, *dynsym;
     Elf32_Dyn *dt, *dynamic;
     unsigned char *dynstr;
@@ -2173,8 +2175,15 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         if (sym_bind == STB_LOCAL)
             continue;
         name = dynstr + sym->st_name;
+#ifdef TCC_TARGET_PE
+        /* in the PE format we need to know the DLL from which the
+           symbol comes. XXX: add a new array for that ? */
+        other = s1->nb_loaded_dlls - 1;
+#else
+        other = sym->st_other;
+#endif
         add_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
-                    sym->st_info, sym->st_shndx, name);
+                    sym->st_info, other, sym->st_shndx, name);
     }
 
     /* load all referenced DLLs */

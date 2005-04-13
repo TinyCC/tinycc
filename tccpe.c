@@ -414,24 +414,25 @@ void *resolve_sym(struct TCCState *s1, const char *symbol, int type)
     char buffer[100], *p = buffer;
     void *a = NULL;
     int sym_index = pe_find_import(s1, symbol, p);
+    int dll_index;
+    const char *dll_name;
+    void *hm;
+
     if (sym_index) {
-	int dll_index =
-	    ((Elf32_Sym *) s1->dynsymtab_section->data)[sym_index].
+	dll_index = ((Elf32_Sym *) s1->dynsymtab_section->data)[sym_index].
 	    st_other;
-	if (dll_index) {
-	    const char *dll_name = s1->loaded_dlls[dll_index - 1]->name;
-	    void *hm = GetModuleHandleA(dll_name);
-	    if (NULL == hm)
-		hm = LoadLibraryA(dll_name);
-	    if (hm) {
-		a = GetProcAddress(hm, buffer);
-		if (a && STT_OBJECT == type) {
-		    // need to return a pointer to the address for data objects
-		    dynarray_add(&pe_imp, &nb_pe_imp, a);
-		    a = &pe_imp[nb_pe_imp - 1];
-		}
-	    }
-	}
+        dll_name = s1->loaded_dlls[dll_index]->name;
+	hm = GetModuleHandleA(dll_name);
+        if (NULL == hm)
+            hm = LoadLibraryA(dll_name);
+        if (hm) {
+            a = GetProcAddress(hm, buffer);
+            if (a && STT_OBJECT == type) {
+                // need to return a pointer to the address for data objects
+                dynarray_add(&pe_imp, &nb_pe_imp, a);
+                a = &pe_imp[nb_pe_imp - 1];
+            }
+        }
     }
     return a;
 }
@@ -642,9 +643,6 @@ ST int pe_add_import(struct pe_info *pe, int sym_index, DWORD offset)
     dll_index =
 	((Elf32_Sym *) pe->s1->dynsymtab_section->data)[sym_index].
 	st_other;
-    if (0 == dll_index)
-	return 0;
-
     i = dynarray_assoc((void **) pe->imp_info, pe->imp_count, dll_index);
     if (-1 != i) {
 	p = pe->imp_info[i];
@@ -694,7 +692,7 @@ ST void pe_build_imports(struct pe_info *pe)
 	struct pe_import_header *hdr;
 	int k, n, v;
 	struct pe_import_info *p = pe->imp_info[i];
-	const char *name = pe->s1->loaded_dlls[p->dll_index - 1]->name;
+	const char *name = pe->s1->loaded_dlls[p->dll_index]->name;
 
 	/* put the dll name into the import header */
 	if (0 == strncmp(name, "lib", 3))
@@ -1079,7 +1077,7 @@ int pe_load_def_file(TCCState * s1, FILE * fp)
 {
     DLLReference *dllref;
     int f = 0, sym_index;
-    char *p, *p_other, line[120], dllname[40];
+    char *p, line[120], dllname[40];
     while (fgets(line, sizeof line, fp)) {
 	p = strchr(line, 0);
 	while (p > line && p[-1] <= ' ')
@@ -1116,16 +1114,13 @@ int pe_load_def_file(TCCState * s1, FILE * fp)
 		++f;
 
 	    default:
+		/* tccpe needs to know from what dll it should import
+                   the sym */
 		sym_index = add_elf_sym(s1->dynsymtab_section,
 					0, 0, ELF32_ST_INFO(STB_GLOBAL,
 							    STT_FUNC),
+                                        s1->nb_loaded_dlls - 1,
 					text_section->sh_num, p);
-		/*gr: tccpe needs to know from what dll it should import the sym */
-		p_other =
-		    &((Elf32_Sym *) s1->dynsymtab_section->
-		      data)[sym_index].st_other;
-		if (0 == *p_other)
-		    *p_other = s1->nb_loaded_dlls;
 		continue;
 	    }
     }
@@ -1151,7 +1146,7 @@ unsigned long pe_add_runtime(TCCState * s1)
     if (start_symbol)
 	add_elf_sym(symtab_section,
 		    0, 0,
-		    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+		    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
 		    SHN_UNDEF, start_symbol);
 
     if (0 == s1->nostdlib) {
@@ -1171,7 +1166,7 @@ unsigned long pe_add_runtime(TCCState * s1)
 	/* for -run GUI's, put '_runwinmain' instead of 'main' */
 	add_elf_sym(symtab_section,
 		    addr, 0,
-		    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+		    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
 		    text_section->sh_num, "main");
 
 	/* FreeConsole(); */
