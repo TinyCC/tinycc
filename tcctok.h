@@ -109,6 +109,14 @@
      DEF(TOK_REGPARM1, "regparm")
      DEF(TOK_REGPARM2, "__regparm__")
 
+/* pragma */
+     DEF(TOK_pack, "pack")
+#if !defined(TCC_TARGET_I386)
+     /* already defined for assembler */
+     DEF(TOK_ASM_push, "push")
+     DEF(TOK_ASM_pop, "pop")
+#endif
+
 /* builtin functions or variables */
      DEF(TOK_memcpy, "memcpy")
      DEF(TOK_memset, "memset")

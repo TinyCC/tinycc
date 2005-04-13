@@ -109,6 +109,7 @@ typedef int BOOL;
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
+#define PACK_STACK_SIZE     8
 
 #define TOK_HASH_SIZE       8192 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
@@ -481,6 +482,10 @@ struct TCCState {
 
     /* see cached_includes */
     int cached_includes_hash[CACHED_INCLUDES_HASH_SIZE];
+
+    /* pack stack */
+    int pack_stack[PACK_STACK_SIZE];
+    int *pack_stack_ptr;
 };
 
 /* The current value can be: */
@@ -789,7 +794,7 @@ static int put_elf_sym(Section *s,
                        unsigned long value, unsigned long size,
                        int info, int other, int shndx, const char *name);
 static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
-                       int info, int sh_num, const char *name);
+                       int info, int other, int sh_num, const char *name);
 static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
                           int type, int symbol);
 static void put_stabs(const char *str, int type, int other, int desc, 
@@ -1251,7 +1256,7 @@ static void put_extern_sym(Sym *sym, Section *section,
         }
 #endif
         info = ELF32_ST_INFO(sym_bind, sym_type);
-        sym->c = add_elf_sym(symtab_section, value, size, info, sh_num, name);
+        sym->c = add_elf_sym(symtab_section, value, size, info, 0, sh_num, name);
     } else {
         esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
         esym->st_value = value;
@@ -2702,6 +2707,52 @@ static inline void add_cached_include(TCCState *s1, int type,
     s1->cached_includes_hash[h] = s1->nb_cached_includes;
 }
 
+static void pragma_parse(TCCState *s1)
+{
+    int val;
+
+    next();
+    if (tok == TOK_pack) {
+        /*
+          This may be:
+          #pragma pack(1) // set
+          #pragma pack() // reset to default
+          #pragma pack(push,1) // push & set
+          #pragma pack(pop) // restore previous
+        */
+        skip('(');
+        if (tok == TOK_ASM_pop) {
+            next();
+            if (s1->pack_stack_ptr <= s1->pack_stack) {
+            stk_error:
+                error("out of pack stack");
+            }
+            s1->pack_stack_ptr--;
+        } else {
+            val = 0;
+            if (tok != ')') {
+                if (tok == TOK_ASM_push) {
+                    next();
+                    if (s1->pack_stack_ptr >= s1->pack_stack + PACK_STACK_SIZE - 1)
+                        goto stk_error;
+                    s1->pack_stack_ptr++;
+                    skip(',');
+                }
+                if (tok != TOK_CINT) {
+                pack_error:
+                    error("invalid pack pragma");
+                }
+                val = tokc.i;
+                if (val < 1 || val > 16 || (val & (val - 1)) != 0)
+                    goto pack_error;
+                next();
+            }
+            *s1->pack_stack_ptr = val;
+            skip(')');
+        }
+    }
+}
+
 /* is_bof is true if first non space token at beginning of file */
 static void preprocess(int is_bof)
 {
@@ -2958,7 +3009,7 @@ static void preprocess(int is_bof)
             warning("#warning %s", buf);
         break;
     case TOK_PRAGMA:
-        /* ignored */
+        pragma_parse(s1);
         break;
     default:
         if (tok == TOK_LINEFEED || tok == '!' || tok == TOK_CINT) {
@@ -6437,6 +6488,9 @@ static void struct_decl(CType *type, int u)
                             align = ad.aligned;
                     } else if (ad.packed) {
                         align = 1;
+                    } else if (*tcc_state->pack_stack_ptr) {
+                        if (align > *tcc_state->pack_stack_ptr)
+                            align = *tcc_state->pack_stack_ptr;
                     }
                     lbit_pos = 0;
                     if (bit_size >= 0) {
@@ -8971,6 +9025,11 @@ static void decl(int l)
                         cur_text_section = text_section;
                     sym->r = VT_SYM | VT_CONST;
                     gen_function(sym);
+#ifdef TCC_TARGET_PE
+                    if (ad.dllexport) {
+                        ((Elf32_Sym *)symtab_section->data)[sym->c].st_other |= 1;
+                    }
+#endif
                 }
                 break;
             } else {
@@ -9032,6 +9091,8 @@ static void preprocess_init(TCCState *s1)
 
     /* XXX: not ANSI compliant: bound checking says error */
     vtop = vstack - 1;
+    s1->pack_stack[0] = 0;
+    s1->pack_stack_ptr = s1->pack_stack;
 }
 
 /* compile the C file opened in 'file'. Return non zero if errors. */
@@ -9903,7 +9964,7 @@ int tcc_add_library(TCCState *s, const char *libraryname)
 int tcc_add_symbol(TCCState *s, const char *name, unsigned long val)
 {
     add_elf_sym(symtab_section, val, 0, 
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_ABS, name);
     return 0;
 }
