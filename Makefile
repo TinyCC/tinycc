@@ -20,7 +20,31 @@ endif
 
 DISAS=objdump -d
 INSTALL=install
-PROGS=tcc$(EXESUF) c67-tcc$(EXESUF) arm-tcc$(EXESUF) i386-win32-tcc$(EXESUF)
+
+ifdef CONFIG_WIN32
+PROGS=tcc$(EXESUF)
+ifdef CONFIG_CROSS
+PROGS+=c67-tcc$(EXESUF) arm-tcc$(EXESUF)
+endif
+PROGS+=tiny_impdef$(EXESUF)
+else
+ifeq ($(ARCH),i386)
+PROGS=tcc$(EXESUF)
+ifdef CONFIG_CROSS
+PROGS+=arm-tcc$(EXESUF)
+endif
+endif
+ifeq ($(ARCH),arm)
+PROGS=tcc$(EXESUF)
+ifdef CONFIG_CROSS
+PROGS+=i386-tcc$(EXESUF)
+endif
+endif
+ifdef CONFIG_CROSS
+PROGS+=c67-tcc$(EXESUF) i386-win32-tcc$(EXESUF)
+endif
+endif
+
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
@@ -111,28 +135,52 @@ ex2: ex2.c
 ex3: ex3.c
 	$(CC) $(CFLAGS) -o $@ $<
 
-# Native Tiny C Compiler
+# Host Tiny C Compiler
+ifdef CONFIG_WIN32
+tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c
+	$(CC) $(CFLAGS) -DTCC_TARGET_PE -o $@ $< $(LIBS)
+else
+ifeq ($(ARCH),i386)
+tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+endif
+ifeq ($(ARCH),arm)
+tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+endif
+endif
 
-tcc_g$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h Makefile
+# Cross Tiny C Compilers
+i386-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
-tcc$(EXESUF): tcc_g$(EXESUF) Makefile
-	$(STRIP) -o $@ $<
-
-c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c Makefile
+c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
-arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h Makefile
+arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
 	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
 
-i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c Makefile
+i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c
 	$(CC) $(CFLAGS) -DTCC_TARGET_PE -o $@ $< $(LIBS)
 
+# windows utilities
+tiny_impdef$(EXESUF): tiny_impdef.c
+	$(CC) $(CFLAGS) -o $@ $< -lkernel32
+
 # TinyCC runtime libraries
-libtcc1.o: libtcc1.c
+ifdef CONFIG_WIN32
+LIBTCC1_OBJS=$(addprefix win32/lib/, crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o) libtcc1.o
+else
+LIBTCC1_OBJS=libtcc1.o
+endif
+
+%.o: %.c
 	$(CC) -O2 -Wall -c -o $@ $<
 
-libtcc1$(LIBSUF): libtcc1.o
+%.o: %.S
+	$(CC) -c -o $@ $<
+
+libtcc1$(LIBSUF): $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
 
 bcheck.o: bcheck.c
@@ -147,19 +195,29 @@ ifndef CONFIG_WIN32
 	mkdir -p "$(mandir)/man1"
 	$(INSTALL) tcc.1 "$(mandir)/man1"
 endif
-	mkdir -p "$(libdir)/tcc"
-	mkdir -p "$(libdir)/tcc/include"
-	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(libdir)/tcc"
+	mkdir -p "$(tccdir)"
+	mkdir -p "$(tccdir)/include"
+	mkdir -p "$(tccdir)/lib"
+ifdef CONFIG_WIN32
+	$(INSTALL) -m644 libtcc1$(LIBSUF) win32/lib/*.def "$(tccdir)/lib"
+	cp -r win32/include "$(tccdir)/include"
+	cp -r win32/examples "$(tccdir)/examples"
+else
+	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(tccdir)/lib"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
-                   tcclib.h "$(libdir)/tcc/include"
+                   tcclib.h "$(tccdir)/include"
+endif
 	mkdir -p "$(docdir)"
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
+ifdef CONFIG_WIN32
+	$(INSTALL) -m644 win32/readme.txt "$(docdir)"
+endif
 
 clean:
 	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
            *.exe tcc-doc.html tcc.pod tcc.1 libtcc$(LIBSUF) libtcc_test \
-           tcctest[1234] test[1234].out c67-tcc arm-tcc
+           tcctest[1234] test[1234].out $(PROGS) win32/lib/*.o
 
 distclean: clean
 	rm -f config.h config.mak config.texi
