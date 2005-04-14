@@ -85,6 +85,10 @@
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
 
+#if defined(WIN32) && !defined(TCC_TARGET_PE)
+#define CONFIG_TCC_STATIC
+#endif
+
 /* define it to include assembler support */
 #if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_ASM
@@ -392,7 +396,7 @@ static const char **rt_bound_error_msg;
 static struct TCCState *tcc_state;
 
 /* give the path of the tcc libraries */
-static const char *tcc_lib_path = CONFIG_TCC_LIBDIR "/tcc";
+static const char *tcc_lib_path = CONFIG_TCCDIR;
 
 struct TCCState {
     int output_type;
@@ -699,6 +703,12 @@ static const char tcc_keywords[] =
 #define TOK_UIDENT TOK_DEFINE
 
 #ifdef WIN32
+int __stdcall GetModuleFileNameA(void *, char *, int);
+void *__stdcall GetProcAddress(void *, const char *);
+void *__stdcall GetModuleHandleA(const char *);
+void *__stdcall LoadLibraryA(const char *);
+int __stdcall FreeConsole(void);
+
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #endif
@@ -10499,7 +10509,8 @@ int main(int argc, char **argv)
        of 'tcc.exe' */
     {
         static char path[1024];
-
+        char *p, *d;
+        
         GetModuleFileNameA(NULL, path, sizeof path);
         p = d = strlwr(path);
         while (*d)

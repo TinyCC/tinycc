@@ -58,9 +58,9 @@ these checks even if non patched libraries are used.
 With @code{libtcc}, you can use TCC as a backend for dynamic code
 generation (@pxref{Libtcc}).
 
-TCC mainly supports the i386 target. There are alpha ports for the ARM
-(@code{arm-tcc}) and the TMS320C67xx targets (@code{c67-tcc}). More
-information about the ARM port is available at
+TCC mainly supports the i386 target on Linux and Windows. There are alpha
+ports for the ARM (@code{arm-tcc}) and the TMS320C67xx targets
+(@code{c67-tcc}). More information about the ARM port is available at
 @url{http://lists.gnu.org/archive/html/tinycc-devel/2003-10/msg00044.html}.
 
 @node Invoke

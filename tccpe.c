@@ -380,14 +380,6 @@ ST char pe_type;
 #define PE_GUI 2
 #define PE_EXE 3
 
-#ifdef WIN32
-int __stdcall GetModuleFileNameA(void *, char *, int);
-void *__stdcall GetProcAddress(void *, const char *);
-void *__stdcall GetModuleHandleA(const char *);
-void *__stdcall LoadLibraryA(const char *);
-int __stdcall FreeConsole(void);
-#endif
-
 ST int pe_find_import(TCCState * s1, const char *symbol, char *ret)
 {
     int sym_index = find_elf_sym(s1->dynsymtab_section, symbol);
