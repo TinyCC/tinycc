@@ -214,9 +214,9 @@ ifdef CONFIG_WIN32
 endif
 
 clean:
-	rm -f *~ *.o tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
+	rm -f *~ *.o *.a tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe tcc-doc.html tcc.pod tcc.1 libtcc$(LIBSUF) libtcc_test \
+           *.exe *.lib tcc.pod libtcc$(LIBSUF) libtcc_test \
            tcctest[1234] test[1234].out $(PROGS) win32/lib/*.o
 
 distclean: clean
@@ -285,25 +285,11 @@ tcc.1: tcc-doc.texi
 	./texi2pod.pl $< tcc.pod
 	pod2man --section=1 --center=" " --release=" " tcc.pod > $@
 
-FILES= Makefile Makefile.uClibc configure VERSION \
-       README TODO COPYING \
-       Changelog tcc-doc.texi tcc-doc.html \
-       tcc.1 \
-       tcc.c tccelf.c tcctok.h tccasm.c i386-asm.c i386-asm.h \
-       tcccoff.c coff.h \
-       i386-gen.c c67-gen.c arm-gen.c \
-       bcheck.c libtcc1.c \
-       elf.h stab.h stab.def \
-       stddef.h stdarg.h stdbool.h float.h varargs.h \
-       tcclib.h libtcc.h libtcc_test.c \
-       ex1.c ex2.c ex3.c ex4.c ex5.c \
-       tcctest.c boundtest.c gcctestsuite.sh texi2pod.pl
+FILE=tcc-$(shell cat VERSION)
 
-FILE=tcc-$(VERSION)
-
+# tar release (use 'make -k tar' on a checkouted tree)
 tar:
 	rm -rf /tmp/$(FILE)
-	mkdir -p /tmp/$(FILE)
-	cp -P $(FILES) /tmp/$(FILE)
-	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz $(FILE) )
+	cp -r . /tmp/$(FILE)
+	( cd /tmp ; tar zcvf ~/$(FILE).tar.gz $(FILE) --exclude CVS )
 	rm -rf /tmp/$(FILE)
