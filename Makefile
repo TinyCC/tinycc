@@ -197,13 +197,13 @@ ifndef CONFIG_WIN32
 endif
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
-	mkdir -p "$(tccdir)/lib"
 ifdef CONFIG_WIN32
+	mkdir -p "$(tccdir)/lib"
 	$(INSTALL) -m644 libtcc1$(LIBSUF) win32/lib/*.def "$(tccdir)/lib"
 	cp -r win32/include "$(tccdir)/include"
 	cp -r win32/examples "$(tccdir)/examples"
 else
-	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(tccdir)/lib"
+	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(tccdir)"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h "$(tccdir)/include"
 endif
