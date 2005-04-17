@@ -13,7 +13,7 @@ int _winstart(void)
 	char *szCmd; STARTUPINFO startinfo;
 
 	__set_app_type(__GUI_APP);
-	_controlfp(0x30000, 0x10000);
+	_controlfp(0x10000, 0x30000);
 
 	szCmd = GetCommandLine();
 	if (szCmd)

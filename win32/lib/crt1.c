@@ -23,7 +23,7 @@ int _start(void)
 	int argc; char **argv; char **env; int ret;
 	_startupinfo start_info = {0};
 
-	_controlfp(0x30000, 0x10000);
+	_controlfp(0x10000, 0x30000);
 	__set_app_type(__CONSOLE_APP);
 	__getmainargs(&argc, &argv, &env, 0, &start_info);
 
