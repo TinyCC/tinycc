@@ -127,9 +127,9 @@ int wherey (void);
  *  DISCLAMED. This includes but is not limited to warranties of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *
- * $Revision: 1.1 $
+ * $Revision: 1.2 $
  * $Author: bellard $
- * $Date: 2005/04/14 23:49:21 $
+ * $Date: 2005/04/17 13:14:29 $
  *
  */
 
