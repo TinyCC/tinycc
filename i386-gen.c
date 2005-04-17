@@ -272,7 +272,7 @@ void store(int r, SValue *v)
     } else {
         if (bt == VT_SHORT)
             o(0x66);
-        if (bt == VT_BYTE)
+        if (bt == VT_BYTE || bt == VT_BOOL)
             o(0x88);
         else
             o(0x89);
