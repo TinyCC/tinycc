@@ -2095,7 +2095,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 { 
     Elf32_Ehdr ehdr;
     Elf32_Shdr *shdr, *sh, *sh1;
-    int i, nb_syms, nb_dts, sym_bind, ret, other;
+    int i, nb_syms, nb_dts, sym_bind, ret;
     Elf32_Sym *sym, *dynsym;
     Elf32_Dyn *dt, *dynamic;
     unsigned char *dynstr;
@@ -2175,15 +2175,8 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         if (sym_bind == STB_LOCAL)
             continue;
         name = dynstr + sym->st_name;
-#ifdef TCC_TARGET_PE
-        /* in the PE format we need to know the DLL from which the
-           symbol comes. XXX: add a new array for that ? */
-        other = s1->nb_loaded_dlls - 1;
-#else
-        other = sym->st_other;
-#endif
         add_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
-                    sym->st_info, other, sym->st_shndx, name);
+                    sym->st_info, sym->st_other, sym->st_shndx, name);
     }
 
     /* load all referenced DLLs */

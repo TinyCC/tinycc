@@ -711,9 +711,12 @@ int __stdcall FreeConsole(void);
 
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
+#ifndef __GNUC__
+  #define strtold (long double)strtod
+  #define strtof (float)strtod
+  #define strtoll (long long)strtol
 #endif
-
-#if defined(WIN32) || defined(TCC_UCLIBC) || defined(__FreeBSD__)
+#elif defined(TCC_UCLIBC) || defined(__FreeBSD__)
 /* currently incorrect */
 long double strtold(const char *nptr, char **endptr)
 {
@@ -2730,6 +2733,7 @@ static void pragma_parse(TCCState *s1)
           #pragma pack(push,1) // push & set
           #pragma pack(pop) // restore previous
         */
+        next();
         skip('(');
         if (tok == TOK_ASM_pop) {
             next();
@@ -10514,8 +10518,10 @@ int main(int argc, char **argv)
         GetModuleFileNameA(NULL, path, sizeof path);
         p = d = strlwr(path);
         while (*d)
-            if (*d++ == '\\')
-                (p = d)[-1] = '/';
+        {
+            if (*d == '\\') *d = '/', p = d;
+            ++d;
+        }
         *p = '\0';
         tcc_lib_path = path;
     }
@@ -10555,23 +10561,28 @@ int main(int argc, char **argv)
             error("cannot specify libraries with -c");
     }
     
+    if (output_type != TCC_OUTPUT_MEMORY) {
+        if (!outfile) {
     /* compute default outfile name */
-    if (output_type != TCC_OUTPUT_MEMORY && !outfile) {
-        if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
-            char *ext;
-            /* strip path */
             pstrcpy(objfilename, sizeof(objfilename) - 1, 
+                    /* strip path */
                     tcc_basename(files[0]));
-            /* add .o extension */
-            ext = strrchr(objfilename, '.');
+#ifdef TCC_TARGET_PE
+            pe_guess_outfile(objfilename, output_type);
+#else
+            if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
+                char *ext = strrchr(objfilename, '.');
             if (!ext)
                 goto default_outfile;
+                /* add .o extension */
             strcpy(ext + 1, "o");
         } else {
         default_outfile:
             pstrcpy(objfilename, sizeof(objfilename), "a.out");
         }
+#endif
         outfile = objfilename;
+        }
     }
 
     if (do_bench) {

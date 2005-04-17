@@ -742,24 +742,38 @@ ST void pe_build_imports(struct pe_info *pe)
 }
 
 /* ------------------------------------------------------------- */
+ST int sym_cmp(const void *va, const void *vb)
+{
+    Elf32_Sym *sa = (Elf32_Sym *)symtab_section->data + *(int*)va;
+    Elf32_Sym *sb = (Elf32_Sym *)symtab_section->data + *(int*)vb;
+    const char *ca = symtab_section->link->data + sa->st_name;
+    const char *cb = symtab_section->link->data + sb->st_name;
+    return strcmp(ca, cb);
+}
+
 ST void pe_build_exports(struct pe_info *pe)
 {
     Elf32_Sym *sym;
-    DWORD func_offset;
-    DWORD voffset = pe->thunk->sh_addr - pe->imagebase;
+    DWORD func_offset, voffset;
     struct pe_export_header *hdr;
-    int sym_count = 0, ordinal = 0;
+    int sym_count, n, ord, *sorted;
+
+    voffset = pe->thunk->sh_addr - pe->imagebase;
+    sym_count = 0, n = 1, sorted = NULL;
 
     // for simplicity only functions are exported
     for_sym_in_symtab(sym)
-	if (sym->st_shndx != text_section->sh_num)
-	sym->st_other &= ~1;
-    else if (sym->st_other & 1)
-	++sym_count;
+    {
+        if ((sym->st_other & 1)
+            && sym->st_shndx == text_section->sh_num)
+            dynarray_add((void***)&sorted, &sym_count, (void*)n);
+        ++n;
+    }
 
     if (0 == sym_count)
 	return;
 
+    qsort (sorted, sym_count, sizeof sorted[0], sym_cmp);
     pe_align_section(pe->thunk, 16);
 
     pe->exp_offs = pe->thunk->data_offset;
@@ -774,30 +788,28 @@ ST void pe_build_exports(struct pe_info *pe)
     hdr->NumberOfFunctions = sym_count;
     hdr->NumberOfNames = sym_count;
     hdr->AddressOfFunctions = func_offset + voffset;
-    hdr->AddressOfNames =
-	hdr->AddressOfFunctions + sym_count * sizeof(DWORD);
-    hdr->AddressOfNameOrdinals =
-	hdr->AddressOfNames + sym_count * sizeof(DWORD);
+    hdr->AddressOfNames         = hdr->AddressOfFunctions + sym_count * sizeof(DWORD);
+    hdr->AddressOfNameOrdinals  = hdr->AddressOfNames + sym_count * sizeof(DWORD);
     hdr->Name = pe->thunk->data_offset + voffset;
     put_elf_str(pe->thunk, tcc_basename(pe->filename));
 
-    for_sym_in_symtab(sym)
-	if (sym->st_other & 1) {
-	char *name = symtab_section->link->data + sym->st_name;
-	DWORD *p = (DWORD *) (pe->thunk->data + func_offset);
-	DWORD *pfunc = p + ordinal;
-	DWORD *pname = p + sym_count + ordinal;
-	WORD *pord = (WORD *) (p + 2 * sym_count) + ordinal;
-	*pfunc =
-	    sym->st_value + pe->s1->sections[sym->st_shndx]->sh_addr -
-	    pe->imagebase;
+    for (ord = 0; ord < sym_count; ++ord)
+    {
+        char *name; DWORD *p, *pfunc, *pname; WORD *pord;
+        sym = (Elf32_Sym *)symtab_section->data + sorted[ord];
+        name = symtab_section->link->data + sym->st_name;
+        p = (DWORD*)(pe->thunk->data + func_offset);
+        pfunc = p + ord;
+        pname = p + sym_count + ord;
+        pord = (WORD *)(p + 2*sym_count) + ord;
+        *pfunc = sym->st_value + pe->s1->sections[sym->st_shndx]->sh_addr - pe->imagebase;
 	*pname = pe->thunk->data_offset + voffset;
-	*pord = ordinal;
+        *pord  = ord;
 	put_elf_str(pe->thunk, name);
 	/* printf("export: %s\n", name); */
-	++ordinal;
     }
     pe->exp_size = pe->thunk->data_offset - pe->exp_offs;
+    tcc_free(sorted);
 }
 
 /* ------------------------------------------------------------- */
@@ -1120,6 +1132,24 @@ int pe_load_def_file(TCCState * s1, FILE * fp)
 }
 
 /* ------------------------------------------------------------- */
+void pe_guess_outfile(char *objfilename, int output_type)
+{
+    char *ext = strrchr(objfilename, '.');
+    if (NULL == ext)
+        ext = strchr(objfilename, 0);
+    if (output_type == TCC_OUTPUT_DLL)
+        strcpy(ext, ".dll");
+    else
+    if (output_type == TCC_OUTPUT_EXE)
+        strcpy(ext, ".exe");
+    else
+    if (output_type == TCC_OUTPUT_OBJ && strcmp(ext, ".o"))
+        strcpy(ext, ".o");
+    else
+        error("no outputfile given");
+}
+
+/* ------------------------------------------------------------- */
 unsigned long pe_add_runtime(TCCState * s1)
 {
     const char *start_symbol;
@@ -1127,6 +1157,13 @@ unsigned long pe_add_runtime(TCCState * s1)
 
     if (find_elf_sym(symtab_section, "WinMain"))
 	pe_type = PE_GUI;
+    else
+    if (TCC_OUTPUT_DLL == s1->output_type)
+    {
+        pe_type = PE_DLL;
+        // need this for 'tccelf.c:relocate_section()'
+        s1->output_type = TCC_OUTPUT_EXE;
+    }
 
     start_symbol =
 	TCC_OUTPUT_MEMORY == s1->output_type
@@ -1192,7 +1229,7 @@ int tcc_output_pe(TCCState * s1, const char *filename)
     {
 	Section *s;
 	FILE *f;
-	f = fopen("tccpe.log", "wb");
+        f = fopen("tccpe.log", "wt");
 	for (i = 1; i < s1->nb_sections; ++i) {
 	    s = s1->sections[i];
 	    pe_print_section(f, s);
