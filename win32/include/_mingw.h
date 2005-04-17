@@ -47,5 +47,6 @@ typedef unsigned int wint_t;
 #define NONAMELESSUNION
 #define DECLSPEC_NORETURN
 #define WIN32_LEAN_AND_MEAN
+#define DECLARE_STDCALL_P(type) __stdcall type
 
 #endif /* __MINGW_H */
