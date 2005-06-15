@@ -460,7 +460,8 @@ struct TCCState {
 
     /* C language options */
     int char_is_unsigned;
-
+    int leading_underscore;
+    
     /* warning switches */
     int warn_write_strings;
     int warn_unsupported;
@@ -1216,12 +1217,14 @@ Section *find_section(TCCState *s1, const char *name)
 
 /* update sym->c so that it points to an external symbol in section
    'section' with value 'value' */
-static void put_extern_sym(Sym *sym, Section *section, 
-                           unsigned long value, unsigned long size)
+static void put_extern_sym2(Sym *sym, Section *section, 
+                            unsigned long value, unsigned long size,
+                            int can_add_underscore)
 {
     int sym_type, sym_bind, sh_num, info;
     Elf32_Sym *esym;
     const char *name;
+    char buf1[256];
 
     if (section == NULL)
         sh_num = SHN_UNDEF;
@@ -1268,6 +1271,11 @@ static void put_extern_sym(Sym *sym, Section *section,
             }
         }
 #endif
+        if (tcc_state->leading_underscore && can_add_underscore) {
+            buf1[0] = '_';
+            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
+            name = buf1;
+        }
         info = ELF32_ST_INFO(sym_bind, sym_type);
         sym->c = add_elf_sym(symtab_section, value, size, info, 0, sh_num, name);
     } else {
@@ -1276,6 +1284,12 @@ static void put_extern_sym(Sym *sym, Section *section,
         esym->st_size = size;
         esym->st_shndx = sh_num;
     }
+}
+
+static void put_extern_sym(Sym *sym, Section *section, 
+                           unsigned long value, unsigned long size)
+{
+    put_extern_sym2(sym, section, value, size, 1);
 }
 
 /* add a new relocation entry to symbol 'sym' in section 's' */
@@ -3854,6 +3868,7 @@ static inline void next_nomacro1(void)
     case '?':
     case '~':
     case '$': /* only used in assembler */
+    case '@': /* dito */
         tok = c;
         p++;
         break;
@@ -9732,6 +9747,9 @@ TCCState *tcc_new(void)
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
 #endif
+#ifdef TCC_TARGET_PE
+    s->leading_underscore = 1;
+#endif
     return s;
 }
 
@@ -10109,6 +10127,7 @@ static const FlagDef flag_defs[] = {
     { offsetof(TCCState, char_is_unsigned), 0, "unsigned-char" },
     { offsetof(TCCState, char_is_unsigned), FD_INVERT, "signed-char" },
     { offsetof(TCCState, nocommon), FD_INVERT, "common" },
+    { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
 };
 
 /* set/reset a flag */
