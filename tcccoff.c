@@ -507,8 +507,7 @@ int tcc_output_coff(TCCState *s1, FILE *f)
 	AUXEF auxef;
 	int i;
 	Elf32_Sym *p;
-	char *name;
-	char _name[MAX_FUNCS];
+	const char *name;
 	int nstr;
 	int n = 0;
 
@@ -521,26 +520,15 @@ int tcc_output_coff(TCCState *s1, FILE *f)
 
 	for (i = 0; i < nb_syms; i++) {
 
-	    /* don't add underscores for Code Composer Version 2.xx */
-
-#define ADD_UNDERSCORE 0
-
-	    name = (char *) symtab_section->link->data + p->st_name;
-
-#if ADD_UNDERSCORE
-	    _name[0] = '_';
-	    strcpy(_name + 1, name);
-#else
-	    strcpy(_name, name);
-#endif
+	    name = symtab_section->link->data + p->st_name;
 
 	    for (k = 0; k < 8; k++)
 		csym._n._n_name[k] = 0;
 
-	    if (strlen(_name) <= 8) {
-		strcpy(csym._n._n_name, _name);
+	    if (strlen(name) <= 8) {
+		strcpy(csym._n._n_name, name);
 	    } else {
-		if (pCoff_str_table - Coff_str_table + strlen(_name) >
+		if (pCoff_str_table - Coff_str_table + strlen(name) >
 		    MAX_STR_TABLE - 1)
 		    error("String table too large");
 
@@ -548,8 +536,8 @@ int tcc_output_coff(TCCState *s1, FILE *f)
 		csym._n._n_n._n_offset =
 		    pCoff_str_table - Coff_str_table + 4;
 
-		strcpy(pCoff_str_table, _name);
-		pCoff_str_table += strlen(_name) + 1;	// skip over null
+		strcpy(pCoff_str_table, name);
+		pCoff_str_table += strlen(name) + 1;	// skip over null
 		nstr++;
 	    }
 

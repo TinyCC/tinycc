@@ -298,7 +298,7 @@ static void asm_free_labels(TCCState *st)
                 sec = SECTION_ABS;
             else
                 sec = st->sections[s->r];
-            put_extern_sym(s, sec, (long)s->next, 0);
+            put_extern_sym2(s, sec, (long)s->next, 0, 0);
         }
         /* remove label */
         table_ident[s->v - TOK_IDENT]->sym_label = NULL;

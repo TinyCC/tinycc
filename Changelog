@@ -4,6 +4,7 @@ version 0.9.23:
 - '#pragma pack' support (grischka)
 - '#include_next' support (Bernhard Fischer)
 - ignore '-pipe' option
+- added -f[no-]leading-underscore
 
 version 0.9.22:
 
