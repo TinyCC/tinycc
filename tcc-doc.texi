@@ -219,6 +219,9 @@ Let the @code{char} type be signed.
 @item -fno-common
 Do not generate common symbols for uninitialized data.
 
+@item -fleading-underscore
+Add a leading underscore at the beginning of each C symbol.
+
 @end table
 
 Warning options:
@@ -542,6 +545,8 @@ operands are supported.
 @item @code{__builtin_types_compatible_p()} and @code{__builtin_constant_p()} 
 are supported.
 
+@item @code{#pragma pack} is supported for win32 compatibility.
+
 @end itemize
 
 @section TinyCC extensions
@@ -712,6 +717,18 @@ options (@option{--start-group} and @option{--end-group}) are supported.
 
 TCC can load ELF object files, archives (.a files) and dynamic
 libraries (.so).
+
+@section PE-i386 file generation
+@cindex PE-i386
+
+TCC for Windows supports the native Win32 executable file format (PE-i386). It
+generates both EXE and DLL files. DLL symbols can be imported thru DEF files
+generated with the @code{tiny_impdef} tool.
+
+Currently TCC for Windows cannot generate nor read PE object files, so ELF
+object files are used for that purpose. It can be a problem if
+interoperability with MSVC is needed. Moreover, no leading underscore is
+currently generated in the ELF symbols.
 
 @section GNU Linker Scripts
 @cindex scripts, linker

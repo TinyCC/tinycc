@@ -28,7 +28,20 @@
 	- TCC can of course compile itself.
 
 
-	Installation:
+	Compilation:  (omit that if you use the binary ZIP package)
+	------------
+        
+        You must use the MinGW and MSYS tools available at
+        http://www.mingw.org to compile TCC for Windows. Untar the TCC
+        archive and type in the MSYS shell:
+        
+           ./configure
+           make
+           make install 
+
+           TCC is installed in c:\Program Files\tcc
+
+	Installation: (from the binary ZIP package)
 	-------------
 
 	Just unzip the package to a directory anywhere on your computer.

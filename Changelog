@@ -5,6 +5,7 @@ version 0.9.23:
 - '#include_next' support (Bernhard Fischer)
 - ignore '-pipe' option
 - added -f[no-]leading-underscore
+- preprocessor function macro parsing fix (grischka)
 
 version 0.9.22:
 

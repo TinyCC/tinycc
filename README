@@ -28,9 +28,7 @@ Features:
 Documentation:
 -------------
 
-1) Installation
-
-*** TCC currently only works on Linux x86 with glibc >= 2.1 ***.
+1) Installation on a i386 Linux host (for Windows read win32/readme.txt)
 
    ./configure
    make
@@ -80,6 +78,9 @@ when doing 'make test'.
 4) Full Documentation
 
 Please read tcc-doc.html to have all the features of TCC.
+
+Additional information is available for the Windows port in
+win32/readme.txt.
 
 License:
 -------
