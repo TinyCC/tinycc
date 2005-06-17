@@ -764,8 +764,13 @@ void vdup(void);
 int get_reg(int rc);
 int get_reg_ex(int rc,int rc2);
 
+struct macro_level {
+    struct macro_level *prev;
+    int *p;
+};
+
 static void macro_subst(TokenString *tok_str, Sym **nested_list, 
-                        const int *macro_str, int can_read_stream);
+                        const int *macro_str, struct macro_level **can_read_stream);
 void gen_op(int op);
 void force_charshort_cast(int t);
 static void gen_cast(CType *type);
@@ -3980,7 +3985,7 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
                 } else {
                     /* NOTE: the stream cannot be read when macro
                        substituing an argument */
-                    macro_subst(&str, nested_list, st, 0);
+                    macro_subst(&str, nested_list, st, NULL);
                 }
             } else {
                 tok_str_add(&str, t);
@@ -4005,7 +4010,7 @@ static char const ab_month_name[12][4] =
    macros we got inside to avoid recursing. Return non zero if no
    substitution needs to be done */
 static int macro_subst_tok(TokenString *tok_str,
-                           Sym **nested_list, Sym *s, int can_read_stream)
+                           Sym **nested_list, Sym *s, struct macro_level **can_read_stream)
 {
     Sym *args, *sa, *sa1;
     int mstr_allocated, parlevel, *mstr, t, t1;
@@ -4054,16 +4059,23 @@ static int macro_subst_tok(TokenString *tok_str,
         if (s->type.t == MACRO_FUNC) {
             /* NOTE: we do not use next_nomacro to avoid eating the
                next token. XXX: find better solution */
+        redo:
             if (macro_ptr) {
                 t = *macro_ptr;
                 if (t == 0 && can_read_stream) {
                     /* end of macro stream: we must look at the token
                        after in the file */
+                    struct macro_level *ml = *can_read_stream;
                     macro_ptr = NULL;
-                    goto parse_stream;
+                    if (ml)
+                    {
+                        macro_ptr = ml->p;
+                        ml->p = NULL;
+                        *can_read_stream = ml -> prev;
+                    }
+                    goto redo;
                 }
             } else {
-            parse_stream:
                 /* XXX: incorrect with comments */
                 ch = file->buf_ptr[0];
                 while (is_space(ch) || ch == '\n')
@@ -4133,7 +4145,7 @@ static int macro_subst_tok(TokenString *tok_str,
             mstr_allocated = 1;
         }
         sym_push2(nested_list, s->v, 0, 0);
-        macro_subst(tok_str, nested_list, mstr, 1);
+        macro_subst(tok_str, nested_list, mstr, can_read_stream);
         /* pop nested defined symbol */
         sa1 = *nested_list;
         *nested_list = sa1->prev;
@@ -4281,13 +4293,14 @@ static inline int *macro_twosharps(const int *macro_str)
    (tok_str,tok_len). 'nested_list' is the list of all macros we got
    inside to avoid recursing. */
 static void macro_subst(TokenString *tok_str, Sym **nested_list, 
-                        const int *macro_str, int can_read_stream)
+                        const int *macro_str, struct macro_level ** can_read_stream)
 {
     Sym *s;
-    int *saved_macro_ptr, *macro_str1;
+    int *macro_str1;
     const int *ptr;
     int t, ret;
     CValue cval;
+    struct macro_level ml;
     
     /* first scan for '##' operator handling */
     ptr = macro_str;
@@ -4307,12 +4320,16 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             /* if nested substitution, do nothing */
             if (sym_find2(*nested_list, t))
                 goto no_subst;
-            saved_macro_ptr = macro_ptr;
+            ml.p = macro_ptr;
+            if (can_read_stream)
+                ml.prev = *can_read_stream, *can_read_stream = &ml;
             macro_ptr = (int *)ptr;
             tok = t;
             ret = macro_subst_tok(tok_str, nested_list, s, can_read_stream);
             ptr = (int *)macro_ptr;
-            macro_ptr = saved_macro_ptr;
+            macro_ptr = ml.p;
+            if (can_read_stream && *can_read_stream == &ml)
+                    *can_read_stream = ml.prev;
             if (ret != 0)
                 goto no_subst;
         } else {
@@ -4329,6 +4346,7 @@ static void next(void)
 {
     Sym *nested_list, *s;
     TokenString str;
+    struct macro_level *ml;
 
  redo:
     next_nomacro();
@@ -4342,7 +4360,8 @@ static void next(void)
                 /* we have a macro: we try to substitute */
                 tok_str_new(&str);
                 nested_list = NULL;
-                if (macro_subst_tok(&str, &nested_list, s, 1) == 0) {
+                ml = NULL;
+                if (macro_subst_tok(&str, &nested_list, s, &ml) == 0) {
                     /* substitution done, NOTE: maybe empty */
                     tok_str_add(&str, 0);
                     macro_ptr = str.str;
@@ -9747,7 +9766,8 @@ TCCState *tcc_new(void)
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
 #endif
-#ifdef TCC_TARGET_PE
+#if defined(TCC_TARGET_PE) && 0
+    /* XXX: currently the PE linker is not ready to support that */
     s->leading_underscore = 1;
 #endif
     return s;
