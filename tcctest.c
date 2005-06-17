@@ -132,6 +132,10 @@ int qq(int x)
 }
 #define qq(x) x
 
+#define spin_lock(lock) do { } while (0)
+#define wq_spin_lock spin_lock
+#define TEST2() wq_spin_lock(a)
+
 void macro_test(void)
 {
     printf("macro:\n");
@@ -268,6 +272,10 @@ void macro_test(void)
        /* this is a valid comment *\*/
     //  this is a valid\
 comment
+
+    /* test function macro substitution when the function name is
+       substituted */
+    TEST2();
 }
 
 int op(a,b)
