@@ -49,7 +49,7 @@ endif
 TCC=./tcc -B. -I.
 
 all: $(PROGS) \
-     libtcc1$(LIBSUF) $(BCHECK_O) tcc-doc.html tcc.1 libtcc$(LIBSUF) \
+     libtcc1.a $(BCHECK_O) tcc-doc.html tcc.1 libtcc.a \
      libtcc_test$(EXESUF)
 
 Makefile: config.mak
@@ -169,18 +169,21 @@ tiny_impdef$(EXESUF): tiny_impdef.c
 
 # TinyCC runtime libraries
 ifdef CONFIG_WIN32
+# for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS=$(addprefix win32/lib/, crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o) libtcc1.o
+LIBTCC1_CC=./tcc.exe -Bwin32
 else
 LIBTCC1_OBJS=libtcc1.o
+LIBTCC1_CC=$(CC)
 endif
 
 %.o: %.c
-	$(CC) -O2 -Wall -c -o $@ $<
+	$(LIBTCC1_CC) -O2 -Wall -c -o $@ $<
 
 %.o: %.S
-	$(CC) -c -o $@ $<
+	$(LIBTCC1_CC) -c -o $@ $<
 
-libtcc1$(LIBSUF): $(LIBTCC1_OBJS)
+libtcc1.a: $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
 
 bcheck.o: bcheck.c
@@ -188,7 +191,7 @@ bcheck.o: bcheck.c
 
 install: tcc_install libinstall
 
-tcc_install: $(PROGS) tcc.1 libtcc1$(LIBSUF) $(BCHECK_O) tcc-doc.html tcc.1
+tcc_install: $(PROGS) tcc.1 libtcc1.a $(BCHECK_O) tcc-doc.html tcc.1
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 ifndef CONFIG_WIN32
@@ -199,11 +202,11 @@ endif
 	mkdir -p "$(tccdir)/include"
 ifdef CONFIG_WIN32
 	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 libtcc1$(LIBSUF) win32/lib/*.def "$(tccdir)/lib"
-	cp -r win32/include "$(tccdir)/include"
-	cp -r win32/examples "$(tccdir)/examples"
+	$(INSTALL) -m644 libtcc1.a win32/lib/*.def "$(tccdir)/lib"
+	cp -r win32/include/. "$(tccdir)/include"
+	cp -r win32/examples/. "$(tccdir)/examples"
 else
-	$(INSTALL) -m644 libtcc1$(LIBSUF) $(BCHECK_O) "$(tccdir)"
+	$(INSTALL) -m644 libtcc1.a $(BCHECK_O) "$(tccdir)"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h "$(tccdir)/include"
 endif
@@ -216,7 +219,7 @@ endif
 clean:
 	rm -f *~ *.o *.a tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
-           *.exe *.lib tcc.pod libtcc$(LIBSUF) libtcc_test \
+           *.exe *.lib tcc.pod libtcc_test \
            tcctest[1234] test[1234].out $(PROGS) win32/lib/*.o
 
 distclean: clean
@@ -227,20 +230,20 @@ tcc_p: tcc.c Makefile
 	$(CC) $(CFLAGS_P) -o $@ $< $(LIBS_P)
 
 # libtcc generation and example
-libinstall: libtcc$(LIBSUF) 
+libinstall: libtcc.a 
 	mkdir -p "$(libdir)"
-	$(INSTALL) -m644 libtcc$(LIBSUF) "$(libdir)"
+	$(INSTALL) -m644 libtcc.a "$(libdir)"
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 libtcc.h "$(includedir)"
 
 libtcc.o: tcc.c i386-gen.c Makefile
 	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
 
-libtcc$(LIBSUF): libtcc.o 
+libtcc.a: libtcc.o 
 	$(AR) rcs $@ $^
 
-libtcc_test$(EXESUF): libtcc_test.c libtcc$(LIBSUF)
-	$(CC) $(CFLAGS) -o $@ $< libtcc$(LIBSUF) $(LIBS)
+libtcc_test$(EXESUF): libtcc_test.c libtcc.a
+	$(CC) $(CFLAGS) -o $@ $< libtcc.a $(LIBS)
 
 libtest: libtcc_test
 	./libtcc_test
