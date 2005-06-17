@@ -383,10 +383,13 @@ ST char pe_type;
 ST int pe_find_import(TCCState * s1, const char *symbol, char *ret)
 {
     int sym_index = find_elf_sym(s1->dynsymtab_section, symbol);
-    if (0 == sym_index && 
-        !memcmp(symbol, "__imp__", 7)) {
-	/* Hm, maybe it's '_symbol' instead of '__imp__symbol' */
-        symbol += 6;
+    if (0 == sym_index) {
+	/* Hm, maybe it's '_symbol' instead of 'symbol' or '__imp__symbol' */
+	char buffer[100];
+	if (0 == memcmp(symbol, "__imp__", 7))
+	    symbol += 6;
+	else
+	    buffer[0] = '_', strcpy(buffer + 1, symbol), symbol = buffer;
 	sym_index = find_elf_sym(s1->dynsymtab_section, symbol);
     }
     if (ret)
