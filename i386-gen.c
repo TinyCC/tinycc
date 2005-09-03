@@ -321,6 +321,7 @@ static void gcall_or_jmp(int is_jmp)
 }
 
 static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
+static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
@@ -381,13 +382,21 @@ void gfunc_call(int nb_args)
     func_sym = vtop->type.ref;
     func_call = func_sym->r;
     /* fast call case */
-    if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
+    if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
+        func_call == FUNC_FASTCALLW) {
         int fastcall_nb_regs;
-        fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
+        uint8_t *fastcall_regs_ptr;
+        if (func_call == FUNC_FASTCALLW) {
+            fastcall_regs_ptr = fastcallw_regs;
+            fastcall_nb_regs = 2;
+        } else {
+            fastcall_regs_ptr = fastcall_regs;
+            fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
+        }
         for(i = 0;i < fastcall_nb_regs; i++) {
             if (args_size <= 0)
                 break;
-            o(0x58 + fastcall_regs[i]); /* pop r */
+            o(0x58 + fastcall_regs_ptr[i]); /* pop r */
             /* XXX: incorrect for struct/floats */
             args_size -= 4;
         }
@@ -409,6 +418,7 @@ void gfunc_prolog(CType *func_type)
 {
     int addr, align, size, func_call, fastcall_nb_regs;
     int param_index, param_addr;
+    uint8_t *fastcall_regs_ptr;
     Sym *sym;
     CType *type;
 
@@ -418,8 +428,13 @@ void gfunc_prolog(CType *func_type)
     loc = 0;
     if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
         fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
+        fastcall_regs_ptr = fastcall_regs;
+    } else if (func_call == FUNC_FASTCALLW) {
+        fastcall_nb_regs = 2;
+        fastcall_regs_ptr = fastcallw_regs;
     } else {
         fastcall_nb_regs = 0;
+        fastcall_regs_ptr = NULL;
     }
     param_index = 0;
 
@@ -449,7 +464,7 @@ void gfunc_prolog(CType *func_type)
             /* save FASTCALL register */
             loc -= 4;
             o(0x89);     /* movl */
-            gen_modrm(fastcall_regs[param_index], VT_LOCAL, NULL, loc);
+            gen_modrm(fastcall_regs_ptr[param_index], VT_LOCAL, NULL, loc);
             param_addr = loc;
         } else {
             param_addr = addr;

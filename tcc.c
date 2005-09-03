@@ -249,6 +249,7 @@ typedef struct AttributeDef {
 #define FUNC_FASTCALL1 2 /* first param in %eax */
 #define FUNC_FASTCALL2 3 /* first parameters in %eax, %edx */
 #define FUNC_FASTCALL3 4 /* first parameter in %eax, %edx, %ecx */
+#define FUNC_FASTCALLW 5 /* first parameter in %ecx, %edx */
 
 /* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
@@ -6428,6 +6429,11 @@ static void parse_attribute(AttributeDef *ad)
                 ad->func_call = FUNC_FASTCALL1 + n - 1;
             skip(')');
             break;
+        case TOK_FASTCALL1:
+        case TOK_FASTCALL2:
+        case TOK_FASTCALL3:
+            ad->func_call = FUNC_FASTCALLW;
+            break;            
 #endif
         case TOK_DLLEXPORT:
             ad->dllexport = 1;
