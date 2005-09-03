@@ -2277,13 +2277,49 @@ static int ld_next(TCCState *s1, char *name, int name_size)
     return c;
 }
 
+static int ld_add_file_list(TCCState *s1, int as_needed)
+{
+    char filename[1024];
+    int t, ret;
+
+    t = ld_next(s1, filename, sizeof(filename));
+    if (t != '(')
+        expect("(");
+    t = ld_next(s1, filename, sizeof(filename));
+    for(;;) {
+        if (t == LD_TOK_EOF) {
+            error_noabort("unexpected end of file");
+            return -1;
+        } else if (t == ')') {
+            break;
+        } else if (t != LD_TOK_NAME) {
+            error_noabort("filename expected");
+            return -1;
+        } 
+        if (!strcmp(filename, "AS_NEEDED")) {
+            ret = ld_add_file_list(s1, 1);
+            if (ret)
+                return ret;
+        } else {
+            /* TODO: Implement AS_NEEDED support. Ignore it for now */
+            if (!as_needed)
+                tcc_add_file(s1, filename);
+        }
+        t = ld_next(s1, filename, sizeof(filename));
+        if (t == ',') {
+            t = ld_next(s1, filename, sizeof(filename));
+        }
+    }
+    return 0;
+}
+
 /* interpret a subset of GNU ldscripts to handle the dummy libc.so
    files */
 static int tcc_load_ldscript(TCCState *s1)
 {
     char cmd[64];
     char filename[1024];
-    int t;
+    int t, ret;
     
     ch = file->buf_ptr[0];
     ch = handle_eob();
@@ -2295,26 +2331,9 @@ static int tcc_load_ldscript(TCCState *s1)
             return -1;
         if (!strcmp(cmd, "INPUT") ||
             !strcmp(cmd, "GROUP")) {
-            t = ld_next(s1, cmd, sizeof(cmd));
-            if (t != '(')
-                expect("(");
-            t = ld_next(s1, filename, sizeof(filename));
-            for(;;) {
-                if (t == LD_TOK_EOF) {
-                    error_noabort("unexpected end of file");
-                    return -1;
-                } else if (t == ')') {
-                    break;
-                } else if (t != LD_TOK_NAME) {
-                    error_noabort("filename expected");
-                    return -1;
-                } 
-                tcc_add_file(s1, filename);
-                t = ld_next(s1, filename, sizeof(filename));
-                if (t == ',') {
-                    t = ld_next(s1, filename, sizeof(filename));
-                }
-            }
+            ret = ld_add_file_list(s1, 0);
+            if (ret)
+                return ret;
         } else if (!strcmp(cmd, "OUTPUT_FORMAT") ||
                    !strcmp(cmd, "TARGET")) {
             /* ignore some commands */
