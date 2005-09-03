@@ -8992,7 +8992,7 @@ static void decl(int l)
 #if 0
             {
                 char buf[500];
-                type_to_str(buf, sizeof(buf), t, get_tok_str(v, NULL));
+                type_to_str(buf, sizeof(buf), &type, get_tok_str(v, NULL));
                 printf("type = '%s'\n", buf);
             }
 #endif
@@ -9007,7 +9007,7 @@ static void decl(int l)
             if (tok == '{') {
                 if (l == VT_LOCAL)
                     error("cannot use local functions");
-                if (!(type.t & VT_FUNC))
+                if ((type.t & VT_BTYPE) != VT_FUNC)
                     expect("function definition");
 
                 /* reject abstract declarators in function definition */
