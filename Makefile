@@ -3,7 +3,7 @@
 #
 include config.mak
 
-CFLAGS=-O2 -g -Wall
+CFLAGS+=-g -Wall
 ifndef CONFIG_WIN32
 LIBS=-ldl
 BCHECK_O=bcheck.o
