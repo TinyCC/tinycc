@@ -6465,7 +6465,7 @@ static void struct_decl(CType *type, int u)
 {
     int a, v, size, align, maxalign, c, offset;
     int bit_size, bit_pos, bsize, bt, lbit_pos;
-    Sym *s, *ss, **ps;
+    Sym *s, *ss, *ass, **ps;
     AttributeDef ad;
     CType type1, btype;
 
@@ -6536,7 +6536,9 @@ static void struct_decl(CType *type, int u)
                     v = 0;
                     type1 = btype;
                     if (tok != ':') {
-                        type_decl(&type1, &ad, &v, TYPE_DIRECT);
+                        type_decl(&type1, &ad, &v, TYPE_DIRECT | TYPE_ABSTRACT);
+                        if (v == 0 && (type1.t & VT_BTYPE) != VT_STRUCT)
+                            expect("identifier");
                         if ((type1.t & VT_BTYPE) == VT_FUNC ||
                             (type1.t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN | VT_INLINE)))
                             error("invalid type for '%s'", 
@@ -6599,7 +6601,7 @@ static void struct_decl(CType *type, int u)
                     } else {
                         bit_pos = 0;
                     }
-                    if (v) {
+                    if (v != 0 || (type1.t & VT_BTYPE) == VT_STRUCT) {
                         /* add new memory data only if starting
                            bit field */
                         if (lbit_pos == 0) {
@@ -6625,6 +6627,15 @@ static void struct_decl(CType *type, int u)
                         }
                         printf("\n");
 #endif
+                    }
+                    if (v == 0 && (type1.t & VT_BTYPE) == VT_STRUCT) {
+                        ass = type1.ref;
+                        while ((ass = ass->next) != NULL) {
+                           ss = sym_push(ass->v, &ass->type, 0, offset + ass->c);
+                           *ps = ss;
+                           ps = &ss->next;
+                        }
+                    } else if (v) {
                         ss = sym_push(v | SYM_FIELD, &type1, 0, offset);
                         *ps = ss;
                         ps = &ss->next;
