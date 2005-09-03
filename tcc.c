@@ -40,13 +40,19 @@
 #include <time.h>
 #ifdef WIN32
 #include <sys/timeb.h>
+#include <windows.h>
 #endif
 #ifndef WIN32
 #include <sys/time.h>
 #include <sys/ucontext.h>
+#include <sys/mman.h>
 #endif
 
 #endif /* !CONFIG_TCCBOOT */
+
+#ifndef PAGESIZE
+#define PAGESIZE 4096
+#endif
 
 #include "elf.h"
 #include "stab.h"
@@ -199,7 +205,7 @@ typedef struct Section {
     int sh_entsize;          /* elf entry size */
     unsigned long sh_size;   /* section size (only used during output) */
     unsigned long sh_addr;      /* address at which the section is relocated */
-    unsigned long sh_offset;      /* address at which the section is relocated */
+    unsigned long sh_offset;    /* file offset */
     int nb_hashed_syms;      /* used to resize the hash table */
     struct Section *link;    /* link to another section */
     struct Section *reloc;   /* corresponding section for relocation, if any */
@@ -9614,6 +9620,30 @@ int tcc_relocate(TCCState *s1)
         s = s1->sections[i];
         if (s->reloc)
             relocate_section(s1, s);
+    }
+
+    /* mark executable sections as executable in memory */
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if ((s->sh_flags & (SHF_ALLOC | SHF_EXECINSTR)) == 
+            (SHF_ALLOC | SHF_EXECINSTR)) {
+#ifdef WIN32
+            {
+                DWORD old_protect;
+                VirtualProtect(s->data, s->data_offset,
+                               PAGE_EXECUTE_READWRITE, &old_protect);
+            }
+#else
+            {
+                unsigned long start, end;
+                start = (unsigned long)(s->data) & ~(PAGESIZE - 1);
+                end = (unsigned long)(s->data + s->data_offset);
+                end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
+                mprotect((void *)start, end - start, 
+                         PROT_READ | PROT_WRITE | PROT_EXEC);
+            }
+#endif            
+        }
     }
     return 0;
 }
