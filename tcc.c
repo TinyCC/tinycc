@@ -6853,35 +6853,39 @@ static void post_type(CType *type, AttributeDef *ad)
         l = 0;
         first = NULL;
         plast = &first;
-        while (tok != ')') {
-            /* read param name and compute offset */
-            if (l != FUNC_OLD) {
-                if (!parse_btype(&pt, &ad1)) {
-                    if (l) {
-                        error("invalid type");
-                    } else {
-                        l = FUNC_OLD;
-                        goto old_proto;
+        if (tok != ')') {
+            for(;;) {
+                /* read param name and compute offset */
+                if (l != FUNC_OLD) {
+                    if (!parse_btype(&pt, &ad1)) {
+                        if (l) {
+                            error("invalid type");
+                        } else {
+                            l = FUNC_OLD;
+                            goto old_proto;
+                        }
                     }
+                    l = FUNC_NEW;
+                    if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
+                        break;
+                    type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
+                    if ((pt.t & VT_BTYPE) == VT_VOID)
+                        error("parameter declared as void");
+                } else {
+                old_proto:
+                    n = tok;
+                    if (n < TOK_UIDENT)
+                        expect("identifier");
+                    pt.t = VT_INT;
+                    next();
                 }
-                l = FUNC_NEW;
-                if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
+                convert_parameter_type(&pt);
+                s = sym_push(n | SYM_FIELD, &pt, 0, 0);
+                *plast = s;
+                plast = &s->next;
+                if (tok == ')')
                     break;
-                type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
-                if ((pt.t & VT_BTYPE) == VT_VOID)
-                    error("parameter declared as void");
-            } else {
-            old_proto:
-                n = tok;
-                pt.t = VT_INT;
-                next();
-            }
-            convert_parameter_type(&pt);
-            s = sym_push(n | SYM_FIELD, &pt, 0, 0);
-            *plast = s;
-            plast = &s->next;
-            if (tok == ',') {
-                next();
+                skip(',');
                 if (l == FUNC_NEW && tok == TOK_DOTS) {
                     l = FUNC_ELLIPSIS;
                     next();
