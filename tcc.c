@@ -1832,6 +1832,7 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
 {
     int fd;
     BufferedFile *bf;
+    int i, len;
 
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
@@ -1846,6 +1847,10 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
     bf->buf_end = bf->buffer;
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
+    len = strlen(bf->filename);
+    for (i = 0; i < len; i++)
+        if (bf->filename[i] == '\\')
+            bf->filename[i] = '/';
     bf->line_num = 1;
     bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
