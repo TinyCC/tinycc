@@ -151,6 +151,15 @@ static const uint8_t test_bits[NB_TEST_OPCODES] = {
  0x0f, /* g */
 };
 
+static const uint8_t segment_prefixes[] = {
+ 0x26, /* es */
+ 0x2e, /* cs */
+ 0x36, /* ss */
+ 0x3e, /* ds */
+ 0x64, /* fs */
+ 0x65  /* gs */
+};
+
 static const ASMInstr asm_instrs[] = {
 #define ALT(x) x
 #define DEF_ASM_OP0(name, opcode)
@@ -410,14 +419,15 @@ static inline void asm_modrm(int reg, Operand *op)
 static void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, reg, v, op1, is_short_jmp;
+    int i, modrm_index, reg, v, op1, is_short_jmp, has_seg_prefix;
     int nb_ops, s, ss;
-    Operand ops[MAX_OPERANDS], *pop;
+    Operand ops[MAX_OPERANDS], *pop, seg_prefix;
     int op_type[3]; /* decoded op type */
 
     /* get operands */
     pop = ops;
     nb_ops = 0;
+    has_seg_prefix = 0;
     for(;;) {
         if (tok == ';' || tok == TOK_LINEFEED)
             break;
@@ -425,6 +435,18 @@ static void asm_opcode(TCCState *s1, int opcode)
             error("incorrect number of operands");
         }
         parse_operand(s1, pop);
+        if (tok == ':') {
+           if (pop->type != OP_SEG || has_seg_prefix) {
+               error("incorrect prefix");
+           }
+           seg_prefix = *pop;
+           has_seg_prefix = 1;
+           next();
+           parse_operand(s1, pop);
+           if (!(pop->type & OP_EA)) {
+               error("segment prefix must be followed by memory reference");
+           }
+        }
         pop++;
         nb_ops++;
         if (tok != ',')
@@ -538,6 +560,8 @@ static void asm_opcode(TCCState *s1, int opcode)
     /* now generates the operation */
     if (pa->instr_type & OPC_FWAIT)
         g(0x9b);
+    if (has_seg_prefix)
+        g(segment_prefixes[seg_prefix.reg]);
 
     v = pa->opcode;
     if (v == 0x69 || v == 0x69) {
