@@ -1,3 +1,15 @@
+version 0.9.24:
+
+- ignore AS_NEEDED ld command
+- mark executable sections as executable when running in memory
+- added support for win32 wchar_t (Filip Navara)
+- segment override prefix support (Filip Navara)
+- normalized slashes in paths (Filip Navara)
+- windows style fastcall (Filip Navara)
+- support for empty input register section in asm (Filip Navara)
+- anonymous union/struct support (Filip Navara)
+- fixed parsing of function parameters
+
 version 0.9.23:
 
 - initial PE executable format for windows version (grischka)
