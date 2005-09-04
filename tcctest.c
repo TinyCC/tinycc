@@ -1803,14 +1803,14 @@ void local_label_test(void)
     goto l1;
  l2:
     a = 1 + ({
-        __label__ l1, l2, l3;
-        goto l4;
-    l5:
-        printf("aa1\n");
+        __label__ l1, l2, l3, l4;
         goto l1;
+    l4:
+        printf("aa1\n");
+        goto l3;
     l2:
         printf("aa3\n");
-        goto l3;
+        goto l4;
     l1:
         printf("aa2\n");
         goto l2;
@@ -1819,12 +1819,12 @@ void local_label_test(void)
     });
     printf("a=%d\n", a);
     return;
- l1:
+ l4:
     printf("bb1\n");
     goto l2;
- l4:
+ l1:
     printf("bb2\n");
-    goto l5;
+    goto l4;
 }
 
 /* inline assembler test */
