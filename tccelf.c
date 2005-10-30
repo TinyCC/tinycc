@@ -2095,7 +2095,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 { 
     Elf32_Ehdr ehdr;
     Elf32_Shdr *shdr, *sh, *sh1;
-    int i, nb_syms, nb_dts, sym_bind, ret;
+    int i, j, nb_syms, nb_dts, sym_bind, ret;
     Elf32_Sym *sym, *dynsym;
     Elf32_Dyn *dt, *dynamic;
     unsigned char *dynstr;
@@ -2184,8 +2184,8 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         switch(dt->d_tag) {
         case DT_NEEDED:
             name = dynstr + dt->d_un.d_val;
-            for(i = 0; i < s1->nb_loaded_dlls; i++) {
-                dllref = s1->loaded_dlls[i];
+            for(j = 0; j < s1->nb_loaded_dlls; j++) {
+                dllref = s1->loaded_dlls[j];
                 if (!strcmp(name, dllref->name))
                     goto already_loaded;
             }
