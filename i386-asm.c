@@ -320,8 +320,10 @@ static void parse_operand(TCCState *s1, Operand *op)
                 if (tok != ',') {
                     op->reg2 = asm_parse_reg();
                 } 
-                skip(',');
-                op->shift = get_reg_shift(s1);
+                if (tok == ',') {
+                    next();
+                    op->shift = get_reg_shift(s1);
+                }
             }
             skip(')');
         }
