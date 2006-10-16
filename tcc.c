@@ -504,6 +504,9 @@ struct TCCState {
     /* pack stack */
     int pack_stack[PACK_STACK_SIZE];
     int *pack_stack_ptr;
+
+    /* output file for preprocessing */
+    FILE *outfile;
 };
 
 /* The current value can be: */
@@ -839,6 +842,7 @@ static int tcc_add_dll(TCCState *s, const char *filename, int flags);
 
 #define AFF_PRINT_ERROR     0x0001 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
+#define AFF_PREPROCESS      0x0004 /* preprocess file */
 static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
 
 /* tcccoff.c */
@@ -1675,6 +1679,8 @@ char *get_tok_str(int v, CValue *cv)
     case TOK_GT:
         v = '>';
         goto addv;
+    case TOK_DOTS:
+        return strcpy(p, "...");
     case TOK_A_SHL:
         return strcpy(p, "<<=");
     case TOK_A_SAR:
@@ -9279,6 +9285,47 @@ static int tcc_compile(TCCState *s1)
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
+/* Preprocess the current file */
+/* XXX: add line and file infos, add options to preserve spaces */
+static int tcc_preprocess(TCCState *s1)
+{
+    Sym *define_start;
+    int last_is_space;
+    
+    preprocess_init(s1);
+
+    define_start = define_stack;
+
+    ch = file->buf_ptr[0];
+    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+    parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS | 
+        PARSE_FLAG_LINEFEED;
+    last_is_space = 1;
+    next();
+    for(;;) {
+        if (tok == TOK_EOF)
+            break;
+        if (!last_is_space) {
+            fputc(' ', s1->outfile);
+        }
+        fputs(get_tok_str(tok, &tokc), s1->outfile);
+        if (tok == TOK_LINEFEED) {
+            last_is_space = 1;
+            /* XXX: suppress that hack */
+            parse_flags &= ~PARSE_FLAG_LINEFEED;
+            next();
+            parse_flags |= PARSE_FLAG_LINEFEED;
+        } else {
+            last_is_space = 0;
+            next();
+        }
+    }
+
+    free_defines(define_start); 
+
+    return 0;
+}
+
 #ifdef LIBTCC
 int tcc_compile_string(TCCState *s, const char *str)
 {
@@ -9944,7 +9991,9 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         goto fail1;
     }
 
-    if (!ext || !strcmp(ext, "c")) {
+    if (flags & AFF_PREPROCESS) {
+        ret = tcc_preprocess(s1);
+    } else if (!ext || !strcmp(ext, "c")) {
         /* C file assumed */
         ret = tcc_compile(s1);
     } else 
@@ -10264,7 +10313,7 @@ static int64_t getclock_us(void)
 
 void help(void)
 {
-    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2005 Fabrice Bellard\n"
+    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
            "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
            "           [-Wwarn] [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
            "           [infile1 infile2...] [-run infile args...]\n"
@@ -10280,6 +10329,7 @@ void help(void)
            "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
            "Preprocessor options:\n"
+           "  -E          preprocess only\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
@@ -10338,6 +10388,7 @@ enum {
     TCC_OPTION_v,
     TCC_OPTION_w,
     TCC_OPTION_pipe,
+    TCC_OPTION_E,
 };
 
 static const TCCOption tcc_options[] = {
@@ -10373,6 +10424,7 @@ static const TCCOption tcc_options[] = {
     { "v", TCC_OPTION_v, 0 },
     { "w", TCC_OPTION_w, 0 },
     { "pipe", TCC_OPTION_pipe, 0},
+    { "E", TCC_OPTION_E, 0},
     { NULL },
 };
 
@@ -10601,6 +10653,9 @@ int parse_args(TCCState *s, int argc, char **argv)
                     }
                 }
                 break;
+            case TCC_OPTION_E:
+                output_type = TCC_OUTPUT_PREPROCESS;
+                break;
             default:
                 if (s->warn_unsupported) {
                 unsupported_option:
@@ -10657,7 +10712,7 @@ int main(int argc, char **argv)
         printf("install: %s/\n", tcc_lib_path);
         return 0;
     }
-
+    
     nb_objfiles = nb_files - nb_libraries;
 
     /* if outfile provided without other options, we output an
@@ -10674,7 +10729,16 @@ int main(int argc, char **argv)
             error("cannot specify libraries with -c");
     }
     
-    if (output_type != TCC_OUTPUT_MEMORY) {
+
+    if (output_type == TCC_OUTPUT_PREPROCESS) {
+        if (!outfile) {
+            s->outfile = stdout;
+        } else {
+            s->outfile = fopen(outfile, "wb");
+            if (!s->outfile)
+                error("could not open '%s", outfile);
+        }
+    } else if (output_type != TCC_OUTPUT_MEMORY) {
         if (!outfile) {
     /* compute default outfile name */
             pstrcpy(objfilename, sizeof(objfilename) - 1, 
@@ -10709,13 +10773,18 @@ int main(int argc, char **argv)
         const char *filename;
 
         filename = files[i];
-        if (filename[0] == '-') {
-            if (tcc_add_library(s, filename + 2) < 0)
-                error("cannot find %s", filename);
+        if (output_type == TCC_OUTPUT_PREPROCESS) {
+            tcc_add_file_internal(s, filename, 
+                                  AFF_PRINT_ERROR | AFF_PREPROCESS);
         } else {
-            if (tcc_add_file(s, filename) < 0) {
-                ret = 1;
-                goto the_end;
+            if (filename[0] == '-') {
+                if (tcc_add_library(s, filename + 2) < 0)
+                    error("cannot find %s", filename);
+            } else {
+                if (tcc_add_file(s, filename) < 0) {
+                    ret = 1;
+                    goto the_end;
+                }
             }
         }
     }
@@ -10736,7 +10805,11 @@ int main(int argc, char **argv)
                total_bytes / total_time / 1000000.0); 
     }
 
-    if (s->output_type == TCC_OUTPUT_MEMORY) {
+    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+        if (outfile)
+            fclose(s->outfile);
+        ret = 0;
+    } else if (s->output_type == TCC_OUTPUT_MEMORY) {
         ret = tcc_run(s, argc - optind, argv + optind);
     } else
 #ifdef TCC_TARGET_PE
