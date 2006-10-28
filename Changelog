@@ -9,6 +9,14 @@ version 0.9.24:
 - support for empty input register section in asm (Filip Navara)
 - anonymous union/struct support (Filip Navara)
 - fixed parsing of function parameters
+- workaround for function pointers in conditional expressions (Dave Dodge)
+- initial '-E' option support to use the C preprocessor alone
+- discard type qualifiers when comparing function parameters (Dave Dodge)
+- Bug fix: A long long value used as a test expression ignores the
+  upper 32 bits at runtime (Dave Dodge)
+- fixed multiple concatenation of PPNUM tokens (initial patch by Dave Dodge)
+- fixed multiple typedef specifiers handling
+- fixed sign extension in some type conversions (Dave Dodge)
 
 version 0.9.23:
 
