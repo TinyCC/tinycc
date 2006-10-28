@@ -6837,6 +6837,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t |= (s->type.t & ~VT_TYPEDEF);
             type->ref = s->type.ref;
             next();
+            typespec_found = 1;
             break;
         }
         type_found = 1;
