@@ -600,7 +600,8 @@ int gtst(int inv, int t)
             gsym(vtop->c.i);
         }
     } else {
-        if (is_float(vtop->type.t)) {
+        if (is_float(vtop->type.t) || 
+            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
             vpushi(0);
             gen_op(TOK_NE);
         }
