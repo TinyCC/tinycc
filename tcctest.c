@@ -441,14 +441,21 @@ void enum_test()
 
 typedef int *my_ptr;
 
+typedef int mytype1;
+typedef int mytype2;
+
 void typedef_test()
 {
     my_ptr a;
+    mytype1 mytype2;
     int b;
+
     a = &b;
     *a = 1234;
     printf("typedef:\n");
     printf("a=%d\n", *a);
+    mytype2 = 2;
+    printf("mytype2=%d\n", mytype2);
 }
 
 void forward_test()
