@@ -7799,6 +7799,9 @@ static void expr_eq(void)
             } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
                 /* XXX: test pointer compatibility */
                 type = type1;
+            } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
+                /* XXX: test function pointer compatibility */
+                type = type1;
             } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
                 /* XXX: test structure compatibility */
                 type = type1;
