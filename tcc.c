@@ -5764,6 +5764,10 @@ void force_charshort_cast(int t)
         bits = 32 - bits;
         vpushi(bits);
         gen_op(TOK_SHL);
+        /* result must be signed or the SAR is converted to an SHL
+           This was not the case when "t" was a signed short
+           and the last value on the stack was an unsigned int */
+        vtop->type.t &= ~VT_UNSIGNED;
         vpushi(bits);
         gen_op(TOK_SAR);
     }
