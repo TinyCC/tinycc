@@ -191,7 +191,7 @@ bcheck.o: bcheck.c
 
 install: tcc_install libinstall
 
-tcc_install: $(PROGS) tcc.1 libtcc1.a $(BCHECK_O) tcc-doc.html tcc.1
+tcc_install: $(PROGS) tcc.1 libtcc1.a $(BCHECK_O) tcc-doc.html
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 ifndef CONFIG_WIN32
@@ -217,7 +217,7 @@ ifdef CONFIG_WIN32
 endif
 
 clean:
-	rm -f *~ *.o *.a tcc tcc1 tcct tcc_g tcctest.ref *.bin *.i ex2 \
+	rm -f *~ *.o *.a tcc tcct tcc_g tcctest.ref *.bin *.i ex2 \
            core gmon.out test.out test.ref a.out tcc_p \
            *.exe *.lib tcc.pod libtcc_test \
            tcctest[1234] test[1234].out $(PROGS) win32/lib/*.o
