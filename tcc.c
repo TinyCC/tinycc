@@ -801,7 +801,9 @@ static int pointed_size(CType *type);
 static int lvalue_type(int t);
 static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
+static int compare_types(CType *type1, CType *type2, int unqualified);
 static int is_compatible_types(CType *type1, CType *type2);
+static int is_compatible_parameter_types(CType *type1, CType *type2);
 
 int ieee_finite(double d);
 void error(const char *fmt, ...);
@@ -6007,7 +6009,7 @@ static int is_compatible_func(CType *type1, CType *type2)
     while (s1 != NULL) {
         if (s2 == NULL)
             return 0;
-        if (!is_compatible_types(&s1->type, &s2->type))
+        if (!is_compatible_parameter_types(&s1->type, &s2->type))
             return 0;
         s1 = s1->next;
         s2 = s2->next;
@@ -6017,17 +6019,22 @@ static int is_compatible_func(CType *type1, CType *type2)
     return 1;
 }
 
-/* return true if type1 and type2 are exactly the same (including
-   qualifiers). 
+/* return true if type1 and type2 are the same.  If unqualified is
+   true, qualifiers on the types are ignored.
 
    - enums are not checked as gcc __builtin_types_compatible_p () 
  */
-static int is_compatible_types(CType *type1, CType *type2)
+static int compare_types(CType *type1, CType *type2, int unqualified)
 {
     int bt1, t1, t2;
 
     t1 = type1->t & VT_TYPE;
     t2 = type2->t & VT_TYPE;
+    if (unqualified) {
+        /* strip qualifiers before comparing */
+        t1 &= ~(VT_CONSTANT | VT_VOLATILE);
+        t2 &= ~(VT_CONSTANT | VT_VOLATILE);
+    }
     /* XXX: bitfields ? */
     if (t1 != t2)
         return 0;
@@ -6044,6 +6051,21 @@ static int is_compatible_types(CType *type1, CType *type2)
     } else {
         return 1;
     }
+}
+
+/* return true if type1 and type2 are exactly the same (including
+   qualifiers). 
+*/
+static int is_compatible_types(CType *type1, CType *type2)
+{
+    return compare_types(type1,type2,0);
+}
+
+/* return true if type1 and type2 are the same (ignoring qualifiers).
+*/
+static int is_compatible_parameter_types(CType *type1, CType *type2)
+{
+    return compare_types(type1,type2,1);
 }
 
 /* print a type. If 'varstr' is not NULL, then the variable is also
