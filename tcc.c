@@ -4240,7 +4240,10 @@ static inline int *macro_twosharps(const int *macro_str)
                         /* if number, then create a number token */
                         /* NOTE: no need to allocate because
                            tok_str_add2() does it */
-                        tokc.cstr = &cstr;
+                        cstr_reset(&tokcstr);
+                        tokcstr = cstr;
+                        cstr_new(&cstr);
+                        tokc.cstr = &tokcstr;
                     } else {
                         /* if identifier, we must do a test to
                            validate we have a correct identifier */
