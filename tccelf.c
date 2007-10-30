@@ -1874,7 +1874,6 @@ static int tcc_load_object_file(TCCState *s1,
 
     /* second short pass to update sh_link and sh_info fields of new
        sections */
-    sm = sm_table;
     for(i = 1; i < ehdr.e_shnum; i++) {
         s = sm_table[i].s;
         if (!s || !sm_table[i].new_section)
@@ -1888,6 +1887,7 @@ static int tcc_load_object_file(TCCState *s1,
             s1->sections[s->sh_info]->reloc = s;
         }
     }
+    sm = sm_table;
 
     /* resolve symbols */
     old_to_new_syms = tcc_mallocz(nb_syms * sizeof(int));
@@ -1949,9 +1949,11 @@ static int tcc_load_object_file(TCCState *s1,
                 if (sym_index >= nb_syms)
                     goto invalid_reloc;
                 sym_index = old_to_new_syms[sym_index];
-                if (!sym_index) {
+               /* ignore link_once in rel section. */
+                if (!sym_index && !sm->link_once) {
                 invalid_reloc:
-                    error_noabort("Invalid relocation entry");
+                    error_noabort("Invalid relocation entry [%2d] '%s' @ %.8x",
+                        i, strsec + sh->sh_name, rel->r_offset);
                     goto fail;
                 }
                 rel->r_info = ELF32_R_INFO(sym_index, type);

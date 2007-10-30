@@ -1,5 +1,8 @@
 version 0.9.24:
 
+- Fix "invalid relocation entry" problem on ubuntu - from Bernhard Fischer
+  http://lists.gnu.org/archive/html/tinycc-devel/2005-09/msg00051.html
+
 - ignore AS_NEEDED ld command
 - mark executable sections as executable when running in memory
 - added support for win32 wchar_t (Filip Navara)
