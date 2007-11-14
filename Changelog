@@ -1,7 +1,21 @@
 version 0.9.24:
 
-- Fix "invalid relocation entry" problem on ubuntu - from Bernhard Fischer
-  http://lists.gnu.org/archive/html/tinycc-devel/2005-09/msg00051.html
+- Import some changesets from Rob Landley's fork (part 1):
+  462: Use LGPL with bcheck.c and il-gen.c
+  458: Fix global compound literals (in unary: case '&':) (Andrew Johnson)
+  456: Use return code from tcc_output_file in main() (Michael Somos)
+  442: Fix indirections with function pointers (***fn)() (grischka)
+  441: Fix LL left shift in libtcc1.c:__shldi3 (grischka)
+  440: Pass structures and function ptrs through ?: (grischka)
+  439: Keep rvalue in bit assignment (bit2 = bit1 = x) (grischka)
+  438: Degrade nonportable pointer assignment to warning (grischka)
+  437: Call 'saveregs()' before jumping with logical and/or/not (grischka)
+  435: Put local static variables into global memory (grischka)
+  432/434: Cast double and ptr to bool (grischka)
+  420: Zero pad x87 tenbyte long doubles (Felix Nawothnig)
+  417: Make 'sizeof' unsigned (Rob Landley)
+  397: Fix save_reg for longlongs (Daniel Glöckner)
+  396: Fix "invalid relocation entry" problem on ubuntu - (Bernhard Fischer)
 
 - ignore AS_NEEDED ld command
 - mark executable sections as executable when running in memory

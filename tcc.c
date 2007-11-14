@@ -40,7 +40,7 @@
 #include <time.h>
 #ifdef WIN32
 #include <sys/timeb.h>
-#include <windows.h>
+// #include <windows.h>
 #endif
 #ifndef WIN32
 #include <sys/time.h>
@@ -725,6 +725,8 @@ void *__stdcall GetProcAddress(void *, const char *);
 void *__stdcall GetModuleHandleA(const char *);
 void *__stdcall LoadLibraryA(const char *);
 int __stdcall FreeConsole(void);
+int __stdcall VirtualProtect(void*,unsigned long,unsigned long,unsigned long*);
+#define PAGE_EXECUTE_READWRITE 0x0040
 
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -751,7 +753,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 static char *pstrcpy(char *buf, int buf_size, const char *s);
 static char *pstrcat(char *buf, int buf_size, const char *s);
-static const char *tcc_basename(const char *name);
+static char *tcc_basename(const char *name);
 
 static void next(void);
 static void next_nomacro(void);
@@ -4596,7 +4598,7 @@ void save_reg(int r)
     l = 0;
     for(p=vstack;p<=vtop;p++) {
         if ((p->r & VT_VALMASK) == r ||
-            (p->r2 & VT_VALMASK) == r) {
+            ((p->type.t & VT_BTYPE) == VT_LLONG && (p->r2 & VT_VALMASK) == r)) {
             /* must save value on stack if not already done */
             if (!saved) {
                 /* NOTE: must reload 'r' because r might be equal to r2 */
@@ -4803,6 +4805,11 @@ int gv(int rc)
             offset = (data_section->data_offset + align - 1) & -align;
             data_section->data_offset = offset;
             /* XXX: not portable yet */
+#ifdef __i386__
+            /* Zero pad x87 tenbyte long doubles */
+            if (size == 12)
+                vtop->c.tab[2] &= 0xffff;
+#endif
             ptr = section_ptr_add(data_section, size);
             size = size >> 2;
             for(i=0;i<size;i++)
@@ -5852,41 +5859,46 @@ static void gen_cast(CType *type)
             }
         } else if (sf) {
             /* convert fp to int */
-            /* we handle char/short/etc... with generic code */
-            if (dbt != (VT_INT | VT_UNSIGNED) &&
-                dbt != (VT_LLONG | VT_UNSIGNED) &&
-                dbt != VT_LLONG)
-                dbt = VT_INT;
-            if (c) {
-                switch(dbt) {
-                case VT_LLONG | VT_UNSIGNED:
-                case VT_LLONG:
-                    /* XXX: add const cases for long long */
-                    goto do_ftoi;
-                case VT_INT | VT_UNSIGNED:
-                    switch(sbt) {
-                    case VT_FLOAT: vtop->c.ui = (unsigned int)vtop->c.d; break;
-                    case VT_DOUBLE: vtop->c.ui = (unsigned int)vtop->c.d; break;
-                    case VT_LDOUBLE: vtop->c.ui = (unsigned int)vtop->c.d; break;
-                    }
-                    break;
-                default:
-                    /* int case */
-                    switch(sbt) {
-                    case VT_FLOAT: vtop->c.i = (int)vtop->c.d; break;
-                    case VT_DOUBLE: vtop->c.i = (int)vtop->c.d; break;
-                    case VT_LDOUBLE: vtop->c.i = (int)vtop->c.d; break;
-                    }
-                    break;
-                }
+            if (dbt == VT_BOOL) {
+                 vpushi(0);
+                 gen_op(TOK_NE);
             } else {
-            do_ftoi:
-                gen_cvt_ftoi1(dbt);
-            }
-            if (dbt == VT_INT && (type->t & (VT_BTYPE | VT_UNSIGNED)) != dbt) {
-                /* additional cast for char/short/bool... */
-                vtop->type.t = dbt;
-                gen_cast(type);
+                /* we handle char/short/etc... with generic code */
+                if (dbt != (VT_INT | VT_UNSIGNED) &&
+                    dbt != (VT_LLONG | VT_UNSIGNED) &&
+                    dbt != VT_LLONG)
+                    dbt = VT_INT;
+                if (c) {
+                    switch(dbt) {
+                    case VT_LLONG | VT_UNSIGNED:
+                    case VT_LLONG:
+                        /* XXX: add const cases for long long */
+                        goto do_ftoi;
+                    case VT_INT | VT_UNSIGNED:
+                        switch(sbt) {
+                        case VT_FLOAT: vtop->c.ui = (unsigned int)vtop->c.d; break;
+                        case VT_DOUBLE: vtop->c.ui = (unsigned int)vtop->c.d; break;
+                        case VT_LDOUBLE: vtop->c.ui = (unsigned int)vtop->c.d; break;
+                        }
+                        break;
+                    default:
+                        /* int case */
+                        switch(sbt) {
+                        case VT_FLOAT: vtop->c.i = (int)vtop->c.d; break;
+                        case VT_DOUBLE: vtop->c.i = (int)vtop->c.d; break;
+                        case VT_LDOUBLE: vtop->c.i = (int)vtop->c.d; break;
+                        }
+                        break;
+                    }
+                } else {
+                do_ftoi:
+                    gen_cvt_ftoi1(dbt);
+                }
+                if (dbt == VT_INT && (type->t & (VT_BTYPE | VT_UNSIGNED)) != dbt) {
+                    /* additional cast for char/short... */
+                    vtop->type.t = dbt;
+                    gen_cast(type);
+                }
             }
         } else if ((dbt & VT_BTYPE) == VT_LLONG) {
             if ((sbt & VT_BTYPE) != VT_LLONG) {
@@ -5919,6 +5931,10 @@ static void gen_cast(CType *type)
             gen_op(TOK_NE);
         } else if ((dbt & VT_BTYPE) == VT_BYTE || 
                    (dbt & VT_BTYPE) == VT_SHORT) {
+            if (sbt == VT_PTR) {
+                vtop->type.t = VT_INT;
+                warning("nonportable conversion from pointer to char/short");
+            }
             force_charshort_cast(dbt);
         } else if ((dbt & VT_BTYPE) == VT_INT) {
             /* scalar to int */
@@ -6214,7 +6230,7 @@ static void gen_assign_cast(CType *dt)
             tmp_type1.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
             tmp_type2.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
             if (!is_compatible_types(&tmp_type1, &tmp_type2))
-                goto error;
+                warning("assignment from incompatible pointer type");
         }
         /* check const and volatile */
         if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT)) ||
@@ -6304,6 +6320,11 @@ void vstore(void)
         /* remove bit field info to avoid loops */
         vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
 
+        /* duplicate source into other register */
+        gv_dup();
+        vswap();
+        vrott(3);
+
         /* duplicate destination */
         vdup();
         vtop[-1] = vtop[-2];
@@ -6320,6 +6341,10 @@ void vstore(void)
         gen_op('|');
         /* store result */
         vstore();
+
+        /* pop off shifted source from "duplicate source..." above */
+        vpop();
+
     } else {
 #ifdef CONFIG_TCC_BCHECK
         /* bound check case */
@@ -7066,13 +7091,17 @@ static int lvalue_type(int t)
 /* indirection with full error checking and bound check */
 static void indir(void)
 {
-    if ((vtop->type.t & VT_BTYPE) != VT_PTR)
+    if ((vtop->type.t & VT_BTYPE) != VT_PTR) {
+        if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
+            return;
         expect("pointer");
+    }
     if ((vtop->r & VT_LVAL) && !nocode_wanted)
         gv(RC_INT);
     vtop->type = *pointed_type(&vtop->type);
-    /* an array is never an lvalue */
-    if (!(vtop->type.t & VT_ARRAY)) {
+    /* Arrays and functions are never lvalues */
+    if (!(vtop->type.t & VT_ARRAY)
+        && (vtop->type.t & VT_BTYPE) != VT_FUNC) {
         vtop->r |= lvalue_type(vtop->type.t);
         /* if bound checking, the referenced pointer must be checked */
         if (do_bounds_check) 
@@ -7269,7 +7298,7 @@ static void unary(void)
            there and in function calls. */
         /* arrays can also be used although they are not lvalues */
         if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
-            !(vtop->type.t & VT_ARRAY))
+            !(vtop->type.t & VT_ARRAY) && !(vtop->type.t & VT_LLOCAL))
             test_lvalue();
         mk_pointer(&vtop->type);
         gaddrof();
@@ -7281,8 +7310,10 @@ static void unary(void)
             vtop->c.i = !vtop->c.i;
         else if ((vtop->r & VT_VALMASK) == VT_CMP)
             vtop->c.i = vtop->c.i ^ 1;
-        else
+        else {
+            save_regs(1);
             vseti(VT_JMP, gtst(1, 0));
+        }
         break;
     case '~':
         next();
@@ -7317,6 +7348,7 @@ static void unary(void)
         } else {
             vpushi(align);
         }
+        vtop->type.t |= VT_UNSIGNED;
         break;
 
     case TOK_builtin_types_compatible_p:
@@ -7694,6 +7726,7 @@ static void expr_land(void)
     expr_or();
     if (tok == TOK_LAND) {
         t = 0;
+        save_regs(1);
         for(;;) {
             t = gtst(1, t);
             if (tok != TOK_LAND) {
@@ -7713,6 +7746,7 @@ static void expr_lor(void)
     expr_land();
     if (tok == TOK_LOR) {
         t = 0;
+        save_regs(1);
         for(;;) {
             t = gtst(0, t);
             if (tok != TOK_LOR) {
@@ -7824,6 +7858,8 @@ static void expr_eq(void)
                 
             /* now we convert second operand */
             gen_cast(&type);
+            if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                gaddrof();
             rc = RC_INT;
             if (is_float(type.t)) {
                 rc = RC_FLOAT;
@@ -7841,6 +7877,8 @@ static void expr_eq(void)
             /* put again first value and cast it */
             *vtop = sv;
             gen_cast(&type);
+            if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                gaddrof();
             r1 = gv(rc);
             move_reg(r2, r1);
             vtop->r = r2;
@@ -8440,7 +8478,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         }
         vtop--;
     } else {
-        vset(&dtype, VT_LOCAL, c);
+        vset(&dtype, VT_LOCAL|VT_LVAL, c);
         vswap();
         vstore();
         vpop();
@@ -9192,6 +9230,7 @@ static void decl(int l)
                            extern */
                         external_sym(v, &type, r);
                     } else {
+                        type.t |= (btype.t & VT_STATIC); /* Retain "static". */
                         if (type.t & VT_STATIC)
                             r |= VT_CONST;
                         else
@@ -9749,7 +9788,7 @@ int tcc_relocate(TCCState *s1)
             (SHF_ALLOC | SHF_EXECINSTR)) {
 #ifdef WIN32
             {
-                DWORD old_protect;
+                unsigned long old_protect;
                 VirtualProtect(s->data, s->data_offset,
                                PAGE_EXECUTE_READWRITE, &old_protect);
             }
@@ -10313,10 +10352,8 @@ int tcc_set_flag(TCCState *s, const char *flag_name, int value)
                     flag_name, value);
 }
 
-#if !defined(LIBTCC)
-
 /* extract the basename of a file */
-static const char *tcc_basename(const char *name)
+static char *tcc_basename(const char *name)
 {
     const char *p;
     p = strrchr(name, '/');
@@ -10328,8 +10365,10 @@ static const char *tcc_basename(const char *name)
         p = name;
     else 
         p++;
-    return p;
+    return (char*)p;
 }
+
+#if !defined(LIBTCC)
 
 static int64_t getclock_us(void)
 {
@@ -10357,7 +10396,7 @@ void help(void)
            "  -o outfile  set output filename\n"
            "  -Bdir       set tcc internal library path\n"
            "  -bench      output compilation statistics\n"
- 	   "  -run        run compiled source\n"
+           "  -run        run compiled source\n"
            "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
            "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
@@ -10773,7 +10812,7 @@ int main(int argc, char **argv)
         }
     } else if (output_type != TCC_OUTPUT_MEMORY) {
         if (!outfile) {
-    /* compute default outfile name */
+    	    /* compute default outfile name */
             pstrcpy(objfilename, sizeof(objfilename) - 1, 
                     /* strip path */
                     tcc_basename(files[0]));
@@ -10782,16 +10821,16 @@ int main(int argc, char **argv)
 #else
             if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
                 char *ext = strrchr(objfilename, '.');
-            if (!ext)
-                goto default_outfile;
+            	if (!ext)
+                    goto default_outfile;
                 /* add .o extension */
-            strcpy(ext + 1, "o");
-        } else {
+            	strcpy(ext + 1, "o");
+            } else {
         default_outfile:
-            pstrcpy(objfilename, sizeof(objfilename), "a.out");
-        }
+                pstrcpy(objfilename, sizeof(objfilename), "a.out");
+            }
 #endif
-        outfile = objfilename;
+            outfile = objfilename;
         }
     }
 
@@ -10851,8 +10890,7 @@ int main(int argc, char **argv)
     } else
 #endif
     {
-        tcc_output_file(s, outfile);
-        ret = 0;
+        ret = tcc_output_file(s, outfile) ? 1 : 0;
     }
  the_end:
     /* XXX: cannot do it with bound checking because of the malloc hooks */
