@@ -176,6 +176,9 @@ else
 LIBTCC1_OBJS=libtcc1.o
 LIBTCC1_CC=$(CC)
 endif
+ifeq ($(ARCH),i386)
+LIBTCC1_OBJS+=alloca86.o alloca86-bt.o
+endif
 
 %.o: %.c
 	$(LIBTCC1_CC) -O2 -Wall -c -o $@ $<
@@ -237,7 +240,11 @@ libinstall: libtcc.a
 	$(INSTALL) -m644 libtcc.h "$(includedir)"
 
 libtcc.o: tcc.c i386-gen.c Makefile
+ifdef CONFIG_WIN32
+	$(CC) $(CFLAGS) -DTCC_TARGET_PE -DLIBTCC -c -o $@ $<
+else
 	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
+endif
 
 libtcc.a: libtcc.o 
 	$(AR) rcs $@ $^
@@ -282,11 +289,11 @@ cache: tcc_g
 
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	texi2html -monolithic -number $<
+	-texi2html -monolithic -number $<
 
 tcc.1: tcc-doc.texi
-	./texi2pod.pl $< tcc.pod
-	pod2man --section=1 --center=" " --release=" " tcc.pod > $@
+	-./texi2pod.pl $< tcc.pod
+	-pod2man --section=1 --center=" " --release=" " tcc.pod > $@
 
 FILE=tcc-$(shell cat VERSION)
 

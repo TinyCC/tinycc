@@ -182,9 +182,11 @@ static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
 {
     Elf32_Sym *esym;
     int sym_bind, sym_index, sym_type, esym_bind;
+    unsigned char sym_vis, esym_vis, new_vis;
 
     sym_bind = ELF32_ST_BIND(info);
     sym_type = ELF32_ST_TYPE(info);
+    sym_vis = ELF32_ST_VISIBILITY(other);
         
     if (sym_bind != STB_LOCAL) {
         /* we search global or weak symbols */
@@ -194,6 +196,19 @@ static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
         esym = &((Elf32_Sym *)s->data)[sym_index];
         if (esym->st_shndx != SHN_UNDEF) {
             esym_bind = ELF32_ST_BIND(esym->st_info);
+            /* propagate the most constraining visibility */
+            /* STV_DEFAULT(0)<STV_PROTECTED(3)<STV_HIDDEN(2)<STV_INTERNAL(1) */
+            esym_vis = ELF32_ST_VISIBILITY(esym->st_other);
+            if (esym_vis == STV_DEFAULT) {
+                new_vis = sym_vis;
+            } else if (sym_vis == STV_DEFAULT) {
+                new_vis = esym_vis;
+            } else {
+                new_vis = (esym_vis < sym_vis) ? esym_vis : sym_vis;
+            }
+            esym->st_other = (esym->st_other & ~ELF32_ST_VISIBILITY(-1))
+                             | new_vis;
+            other = esym->st_other; /* in case we have to patch esym */
             if (sh_num == SHN_UNDEF) {
                 /* ignore adding of undefined symbol if the
                    corresponding symbol is already defined */
@@ -202,6 +217,8 @@ static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
                 goto do_patch;
             } else if (sym_bind == STB_WEAK && esym_bind == STB_GLOBAL) {
                 /* weak is ignored if already global */
+            } else if (sym_vis == STV_HIDDEN || sym_vis == STV_INTERNAL) {
+                /* ignore hidden symbols after */
             } else {
 #if 0
                 printf("new_bind=%d new_shndx=%d last_bind=%d old_shndx=%d\n",
@@ -1949,7 +1966,7 @@ static int tcc_load_object_file(TCCState *s1,
                 if (sym_index >= nb_syms)
                     goto invalid_reloc;
                 sym_index = old_to_new_syms[sym_index];
-               /* ignore link_once in rel section. */
+                /* ignore link_once in rel section. */
                 if (!sym_index && !sm->link_once) {
                 invalid_reloc:
                     error_noabort("Invalid relocation entry [%2d] '%s' @ %.8x",

@@ -1,5 +1,21 @@
 version 0.9.24:
 
+- Import more changesets from Rob Landley's fork (part 2):
+  487: Handle long long constants in gen_opic() (Rob Landley)
+  484: Handle parentheses within __attribute__((...)) (Rob Landley)
+  480: Remove a goto in decl_initializer_alloc (Rob Landley)
+  475: Fix dereferences in inline assembly output (Joshua Phillips)
+  474: Cast ptrs to ints of different sizes correctly (Joshua Phillips)
+  473: Fix size of structs with empty array member (Joshua Phillips)
+  470: No warning for && and || with mixed pointers/integers (Rob Landley)
+  469: Fix symbol visibility problems in the linker (Vincent Pit)
+  468: Allow && and || involving pointer arguments (Rob Landley)
+  455: Optimize case labels with no code in between (Zdenek Pavlas)
+  450: Implement alloca for x86 (grischka)
+  415: Parse unicode escape sequences (Axel Liljencrantz)
+  407: Add a simple va_copy() in stdarg.h (Hasso Tepper)
+  400: Allow typedef names as symbols (Dave Dodge)
+
 - Import some changesets from Rob Landley's fork (part 1):
   462: Use LGPL with bcheck.c and il-gen.c
   458: Fix global compound literals (in unary: case '&':) (Andrew Johnson)

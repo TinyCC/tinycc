@@ -123,7 +123,6 @@
 /* builtin functions or variables */
      DEF(TOK_memcpy, "memcpy")
      DEF(TOK_memset, "memset")
-     DEF(TOK_alloca, "alloca")
      DEF(TOK___divdi3, "__divdi3")
      DEF(TOK___moddi3, "__moddi3")
      DEF(TOK___udivdi3, "__udivdi3")
@@ -188,6 +187,7 @@
      DEF(TOK_memmove, "memmove")
      DEF(TOK_strlen, "strlen")
      DEF(TOK_strcpy, "strcpy")
+     DEF(TOK__alloca, "_alloca")
 #endif
 
 /* Tiny Assembler */

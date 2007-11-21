@@ -18,6 +18,8 @@
 #ifndef __MINGW_H
 #define __MINGW_H
 
+#include <stddef.h>
+
 #define __int64 long long
 #define __int32 long
 #define __int16 short

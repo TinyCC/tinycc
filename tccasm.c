@@ -806,7 +806,7 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             sv = *op->vt;
             if (op->reg >= 0) {
                 sv.r = op->reg;
-                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL)
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL && op->is_memory)
                     sv.r |= VT_LVAL;
             }
             subst_asm_operand(out_str, &sv, modifier);

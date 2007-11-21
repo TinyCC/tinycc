@@ -1290,6 +1290,7 @@ static void put_extern_sym2(Sym *sym, Section *section,
             case TOK_memset:
             case TOK_strlen:
             case TOK_strcpy:
+            case TOK__alloca:
                 strcpy(buf, "__bound_");
                 strcat(buf, name);
                 name = buf;
@@ -3123,6 +3124,8 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                 c = n;
                 goto add_char_nonext;
             case 'x':
+            case 'u':
+            case 'U':
                 p++;
                 n = 0;
                 for(;;) {
@@ -4360,7 +4363,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             ptr = (int *)macro_ptr;
             macro_ptr = ml.p;
             if (can_read_stream && *can_read_stream == &ml)
-                    *can_read_stream = ml.prev;
+                *can_read_stream = ml.prev;
             if (ret != 0)
                 goto no_subst;
         } else {
@@ -5298,8 +5301,8 @@ void gen_opl(int op)
 #if defined(TCC_TARGET_I386)
                 b = psym(0x850f, 0);
 #elif defined(TCC_TARGET_ARM)
-		b = ind;
-		o(0x1A000000 | encbranch(ind, 0, 1));
+                b = ind;
+                o(0x1A000000 | encbranch(ind, 0, 1));
 #elif defined(TCC_TARGET_C67)
                 error("not implemented");
 #else
@@ -5329,23 +5332,29 @@ void gen_opl(int op)
    independent opt */
 void gen_opic(int op)
 {
-    int fc, c1, c2, n;
+    int c1, c2, t1, t2, n, c;
     SValue *v1, *v2;
+    long long l1, l2, l;
+    typedef unsigned long long U;
 
     v1 = vtop - 1;
     v2 = vtop;
+    t1 = v1->type.t & VT_BTYPE;
+    t2 = v2->type.t & VT_BTYPE;
+    l1 = (t1 == VT_LLONG) ? v1->c.ll : v1->c.i;
+    l2 = (t2 == VT_LLONG) ? v2->c.ll : v2->c.i;
+
     /* currently, we cannot do computations with forward symbols */
     c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if (c1 && c2) {
-        fc = v2->c.i;
         switch(op) {
-        case '+': v1->c.i += fc; break;
-        case '-': v1->c.i -= fc; break;
-        case '&': v1->c.i &= fc; break;
-        case '^': v1->c.i ^= fc; break;
-        case '|': v1->c.i |= fc; break;
-        case '*': v1->c.i *= fc; break;
+        case '+': l1 += l2; break;
+        case '-': l1 -= l2; break;
+        case '&': l1 &= l2; break;
+        case '^': l1 ^= l2; break;
+        case '|': l1 |= l2; break;
+        case '*': l1 *= l2; break;
 
         case TOK_PDIV:
         case '/':
@@ -5353,66 +5362,68 @@ void gen_opic(int op)
         case TOK_UDIV:
         case TOK_UMOD:
             /* if division by zero, generate explicit division */
-            if (fc == 0) {
+            if (l2 == 0) {
                 if (const_wanted)
                     error("division by zero in constant");
                 goto general_case;
             }
             switch(op) {
-            default: v1->c.i /= fc; break;
-            case '%': v1->c.i %= fc; break;
-            case TOK_UDIV: v1->c.i = (unsigned)v1->c.i / fc; break;
-            case TOK_UMOD: v1->c.i = (unsigned)v1->c.i % fc; break;
+            default: l1 /= l2; break;
+            case '%': l1 %= l2; break;
+            case TOK_UDIV: l1 = (U)l1 / l2; break;
+            case TOK_UMOD: l1 = (U)l1 % l2; break;
             }
             break;
-        case TOK_SHL: v1->c.i <<= fc; break;
-        case TOK_SHR: v1->c.i = (unsigned)v1->c.i >> fc; break;
-        case TOK_SAR: v1->c.i >>= fc; break;
+        case TOK_SHL: l1 <<= l2; break;
+        case TOK_SHR: l1 = (U)l1 >> l2; break;
+        case TOK_SAR: l1 >>= l2; break;
             /* tests */
-        case TOK_ULT: v1->c.i = (unsigned)v1->c.i < (unsigned)fc; break;
-        case TOK_UGE: v1->c.i = (unsigned)v1->c.i >= (unsigned)fc; break;
-        case TOK_EQ: v1->c.i = v1->c.i == fc; break;
-        case TOK_NE: v1->c.i = v1->c.i != fc; break;
-        case TOK_ULE: v1->c.i = (unsigned)v1->c.i <= (unsigned)fc; break;
-        case TOK_UGT: v1->c.i = (unsigned)v1->c.i > (unsigned)fc; break;
-        case TOK_LT: v1->c.i = v1->c.i < fc; break;
-        case TOK_GE: v1->c.i = v1->c.i >= fc; break;
-        case TOK_LE: v1->c.i = v1->c.i <= fc; break;
-        case TOK_GT: v1->c.i = v1->c.i > fc; break;
+        case TOK_ULT: l1 = (U)l1 < (U)l2; break;
+        case TOK_UGE: l1 = (U)l1 >= (U)l2; break;
+        case TOK_EQ: l1 = l1 == l2; break;
+        case TOK_NE: l1 = l1 != l2; break;
+        case TOK_ULE: l1 = (U)l1 <= (U)l2; break;
+        case TOK_UGT: l1 = (U)l1 > (U)l2; break;
+        case TOK_LT: l1 = l1 < l2; break;
+        case TOK_GE: l1 = l1 >= l2; break;
+        case TOK_LE: l1 = l1 <= l2; break;
+        case TOK_GT: l1 = l1 > l2; break;
             /* logical */
-        case TOK_LAND: v1->c.i = v1->c.i && fc; break;
-        case TOK_LOR: v1->c.i = v1->c.i || fc; break;
+        case TOK_LAND: l1 = l1 && l2; break;
+        case TOK_LOR: l1 = l1 || l2; break;
         default:
             goto general_case;
         }
+        v1->c.ll = l1;
         vtop--;
     } else {
         /* if commutative ops, put c2 as constant */
         if (c1 && (op == '+' || op == '&' || op == '^' || 
                    op == '|' || op == '*')) {
             vswap();
-            swap(&c1, &c2);
+            c = c1, c1 = c2, c2 = c;
+            l = l1, l1 = l2, l2 = l;
         }
-        fc = vtop->c.i;
+        /* Filter out NOP operations like x*1, x-0, x&-1... */
         if (c2 && (((op == '*' || op == '/' || op == TOK_UDIV || 
                      op == TOK_PDIV) && 
-                    fc == 1) ||
+                    l2 == 1) ||
                    ((op == '+' || op == '-' || op == '|' || op == '^' || 
                      op == TOK_SHL || op == TOK_SHR || op == TOK_SAR) && 
-                    fc == 0) ||
+                    l2 == 0) ||
                    (op == '&' && 
-                    fc == -1))) {
+                    l2 == -1))) {
             /* nothing to do */
             vtop--;
         } else if (c2 && (op == '*' || op == TOK_PDIV || op == TOK_UDIV)) {
             /* try to use shifts instead of muls or divs */
-            if (fc > 0 && (fc & (fc - 1)) == 0) {
+            if (l2 > 0 && (l2 & (l2 - 1)) == 0) {
                 n = -1;
-                while (fc) {
-                    fc >>= 1;
+                while (l2) {
+                    l2 >>= 1;
                     n++;
                 }
-                vtop->c.i = n;
+                vtop->c.ll = n;
                 if (op == '*')
                     op = TOK_SHL;
                 else if (op == TOK_PDIV)
@@ -5426,14 +5437,17 @@ void gen_opic(int op)
                    (VT_CONST | VT_SYM)) {
             /* symbol + constant case */
             if (op == '-')
-                fc = -fc;
+                l2 = -l2;
             vtop--;
-            vtop->c.i += fc;
+            vtop->c.ll += l2;
         } else {
         general_case:
             if (!nocode_wanted) {
                 /* call low level op generator */
-                gen_opi(op);
+                if (t1 == VT_LLONG || t2 == VT_LLONG) 
+                    gen_opl(op);
+                else
+                    gen_opi(op);
             } else {
                 vtop--;
             }
@@ -5540,7 +5554,8 @@ static void check_comparison_pointer_types(SValue *p1, SValue *p2, int op)
     bt2 = type2->t & VT_BTYPE;
     /* accept comparison between pointer and integer with a warning */
     if ((is_integer_btype(bt1) || is_integer_btype(bt2)) && op != '-') {
-        warning("comparison between pointer and integer");
+        if (op != TOK_LOR && op != TOK_LAND )
+            warning("comparison between pointer and integer");
         return;
     }
 
@@ -5586,7 +5601,7 @@ void gen_op(int op)
     if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relationnal op: must be both pointers */
-        if (op >= TOK_ULT && op <= TOK_GT) {
+        if (op >= TOK_ULT && op <= TOK_LOR) {
             check_comparison_pointer_types(vtop - 1, vtop, op);
             /* pointers are handled are unsigned */
             t = VT_INT | VT_UNSIGNED;
@@ -5696,8 +5711,6 @@ void gen_op(int op)
         gen_cast(&type1);
         if (is_float(t))
             gen_opif(op);
-        else if ((t & VT_BTYPE) == VT_LLONG)
-            gen_opl(op);
         else
             gen_opic(op);
         if (op >= TOK_ULT && op <= TOK_GT) {
@@ -5947,6 +5960,11 @@ static void gen_cast(CType *type)
                the lvalue already contains the real type size (see
                VT_LVAL_xxx constants) */
         }
+    } else if ((dbt & VT_BTYPE) == VT_PTR && !(vtop->r & VT_LVAL)) {
+        /* if we are casting between pointer types,
+           we must update the VT_LVAL_xxx size */
+        vtop->r = (vtop->r & ~VT_LVAL_TYPE)
+                  | (lvalue_type(type->ref->type.t) & VT_LVAL_TYPE);
     }
     vtop->type = *type;
 }
@@ -6502,12 +6520,15 @@ static void parse_attribute(AttributeDef *ad)
             if (tcc_state->warn_unsupported)
                 warning("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
-            /* XXX: skip parenthesis too */
             if (tok == '(') {
-                next();
-                while (tok != ')' && tok != -1)
+                int parenthesis = 0;
+                do {
+                    if (tok == '(') 
+                        parenthesis++;
+                    else if (tok == ')') 
+                        parenthesis--;
                     next();
-                next();
+                } while (parenthesis && tok != -1);
             }
             break;
         }
@@ -6668,7 +6689,8 @@ static void struct_decl(CType *type, int u)
                             if (a == TOK_STRUCT) {
                                 c = (c + align - 1) & -align;
                                 offset = c;
-                                c += size;
+                                if (size > 0)
+                                    c += size;
                             } else {
                                 offset = 0;
                                 if (size > c)
@@ -6719,13 +6741,14 @@ static void struct_decl(CType *type, int u)
  */
 static int parse_btype(CType *type, AttributeDef *ad)
 {
-    int t, u, type_found, typespec_found;
+    int t, u, type_found, typespec_found, typedef_found;
     Sym *s;
     CType type1;
 
     memset(ad, 0, sizeof(AttributeDef));
     type_found = 0;
     typespec_found = 0;
+    typedef_found = 0;
     t = 0;
     while(1) {
         switch(tok) {
@@ -6809,9 +6832,9 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_SIGNED2:
         case TOK_SIGNED3:
             typespec_found = 1;
-	    t |= VT_SIGNED;
-	    next();
-	    break;
+            t |= VT_SIGNED;
+            next();
+            break;
         case TOK_REGISTER:
         case TOK_AUTO:
         case TOK_RESTRICT1:
@@ -6858,11 +6881,12 @@ static int parse_btype(CType *type, AttributeDef *ad)
             parse_expr_type(&type1);
             goto basic_type2;
         default:
-            if (typespec_found)
+            if (typespec_found || typedef_found)
                 goto the_end;
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
+            typedef_found = 1;
             t |= (s->type.t & ~VT_TYPEDEF);
             type->ref = s->type.ref;
             next();
@@ -8164,6 +8188,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         int v1, v2;
         if (!case_sym)
             expect("switch");
+        /* since a case is like a label, we must skip it with a jmp */
+        b = gjmp(0);
+    next_case:
         next();
         v1 = expr_const();
         v2 = v1;
@@ -8173,24 +8200,26 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if (v2 < v1)
                 warning("empty case range");
         }
-        /* since a case is like a label, we must skip it with a jmp */
-        b = gjmp(0);
         gsym(*case_sym);
         vseti(case_reg, 0);
         vpushi(v1);
         if (v1 == v2) {
             gen_op(TOK_EQ);
-            *case_sym = gtst(1, 0);
+            *case_sym = 0;
         } else {
             gen_op(TOK_GE);
             *case_sym = gtst(1, 0);
             vseti(case_reg, 0);
             vpushi(v2);
             gen_op(TOK_LE);
-            *case_sym = gtst(1, *case_sym);
         }
-        gsym(b);
         skip(':');
+        if (tok == TOK_CASE) {
+            b = gtst(0, b);
+            goto next_case;
+        }
+        *case_sym = gtst(1, *case_sym);
+        gsym(b);
         is_expr = 0;
         goto block_after_label;
     } else 
@@ -8873,11 +8902,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
 
         if (v) {
-            if (scope == VT_CONST) {
-                if (!sym)
-                    goto do_def;
-            } else {
-            do_def:
+            if (scope != VT_CONST || !sym) {
                 sym = sym_push(v, type, r | VT_SYM, 0);
             }
             /* update symbol definition */
