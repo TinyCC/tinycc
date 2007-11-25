@@ -1,5 +1,15 @@
 version 0.9.24:
 
+- Some in-between fixes:
+  TCC -E no longer hangs with macro calls involving newlines.
+  (next_nomacro1 now advances the read-pointer with TOK_LINEFEED)
+  Global cast (int g_i = 1LL;) no longer crashes tcc.
+  (nocode_wanted is initially 1, and only 0 for gen_function)
+  On win32 now tcc.exe finds 'include' & 'lib' even if itself is in 'bin'.
+  (new function w32_tcc_lib_path removes 'bin' if detected)
+  Added quick build batch file for mingw (win32/build-tcc.bat)
+  Last added case label optimization (455) produced wrong code. Reverted.
+
 - Import more changesets from Rob Landley's fork (part 2):
   487: Handle long long constants in gen_opic() (Rob Landley)
   484: Handle parentheses within __attribute__((...)) (Rob Landley)
