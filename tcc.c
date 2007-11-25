@@ -321,6 +321,7 @@ static int tok_flags;
 #define TOK_FLAG_BOL   0x0001 /* beginning of line before */
 #define TOK_FLAG_BOF   0x0002 /* beginning of file before */
 #define TOK_FLAG_ENDIF 0x0004 /* a endif was found matching starting #ifdef */
+#define TOK_FLAG_EOF   0x0008 /* end of file */
 
 static int *macro_ptr, *macro_ptr_allocated;
 static int *unget_saved_macro_ptr;
@@ -1031,6 +1032,32 @@ static int strstart(const char *str, const char *val, const char **ptr)
         *ptr = p;
     return 1;
 }
+
+#ifdef WIN32
+char *normalize_slashes(char *path)
+{
+    char *p;
+    for (p = path; *p; ++p)
+        if (*p == '\\')
+            *p = '/';
+    return path;
+}
+
+char *w32_tcc_lib_path(void)
+{
+    /* on win32, we suppose the lib and includes are at the location
+       of 'tcc.exe' */
+    char path[1024], *p;
+    GetModuleFileNameA(NULL, path, sizeof path);
+    p = tcc_basename(normalize_slashes(strlwr(path)));
+    if (p - 5 > path && 0 == strncmp(p - 5, "/bin/", 5))
+	p -= 5;
+    else if (p > path)
+	p--;
+    *p = 0;
+    return strdup(path);
+}
+#endif
 
 /* memory management */
 #ifdef MEM_DEBUG
@@ -1844,7 +1871,6 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
 {
     int fd;
     BufferedFile *bf;
-    int i, len;
 
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
@@ -1859,10 +1885,7 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
     bf->buf_end = bf->buffer;
     bf->buffer[0] = CH_EOB; /* put eob symbol */
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
-    len = strlen(bf->filename);
-    for (i = 0; i < len; i++)
-        if (bf->filename[i] == '\\')
-            bf->filename[i] = '/';
+    normalize_slashes(bf->filename);
     bf->line_num = 1;
     bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
@@ -3540,13 +3563,17 @@ static inline void next_nomacro1(void)
     parse_eof:
         {
             TCCState *s1 = tcc_state;
-            if (parse_flags & PARSE_FLAG_LINEFEED) {
+            if ((parse_flags & PARSE_FLAG_LINEFEED)
+	     	&& !(tok_flags & TOK_FLAG_EOF)) {
+		tok_flags |= TOK_FLAG_EOF;
                 tok = TOK_LINEFEED;
+		goto keep_tok_flags;
             } else if (s1->include_stack_ptr == s1->include_stack ||
                        !(parse_flags & PARSE_FLAG_PREPROCESS)) {
                 /* no include left : end of file. */
                 tok = TOK_EOF;
             } else {
+		tok_flags &= ~TOK_FLAG_EOF;
                 /* pop include file */
                 
                 /* test if previous '#endif' was after a #ifdef at
@@ -3574,15 +3601,13 @@ static inline void next_nomacro1(void)
         break;
 
     case '\n':
-        if (parse_flags & PARSE_FLAG_LINEFEED) {
-            tok = TOK_LINEFEED;
-        } else {
-            file->line_num++;
-            tok_flags |= TOK_FLAG_BOL;
-            p++;
+	file->line_num++;
+	tok_flags |= TOK_FLAG_BOL;
+	p++;
+        if (0 == (parse_flags & PARSE_FLAG_LINEFEED))
             goto redo_no_start;
-        }
-        break;
+        tok = TOK_LINEFEED;
+	goto keep_tok_flags;
 
     case '#':
         /* XXX: simplify */
@@ -3912,8 +3937,9 @@ static inline void next_nomacro1(void)
         error("unrecognized character \\x%02x", c);
         break;
     }
-    file->buf_ptr = p;
     tok_flags = 0;
+keep_tok_flags:
+    file->buf_ptr = p;
 #if defined(PARSE_DEBUG)
     printf("token = %s\n", get_tok_str(tok, &tokc));
 #endif
@@ -4140,7 +4166,8 @@ static int macro_subst_tok(TokenString *tok_str,
                         parlevel++;
                     else if (tok == ')')
                         parlevel--;
-                    tok_str_add2(&str, tok, &tokc);
+		    if (tok != TOK_LINEFEED)
+                    	tok_str_add2(&str, tok, &tokc);
                     next_nomacro();
                 }
                 tok_str_add(&str, 0);
@@ -8188,9 +8215,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         int v1, v2;
         if (!case_sym)
             expect("switch");
-        /* since a case is like a label, we must skip it with a jmp */
-        b = gjmp(0);
-    next_case:
         next();
         v1 = expr_const();
         v2 = v1;
@@ -8200,26 +8224,24 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if (v2 < v1)
                 warning("empty case range");
         }
+        /* since a case is like a label, we must skip it with a jmp */
+        b = gjmp(0);
         gsym(*case_sym);
         vseti(case_reg, 0);
         vpushi(v1);
         if (v1 == v2) {
             gen_op(TOK_EQ);
-            *case_sym = 0;
+            *case_sym = gtst(1, 0);
         } else {
             gen_op(TOK_GE);
             *case_sym = gtst(1, 0);
             vseti(case_reg, 0);
             vpushi(v2);
             gen_op(TOK_LE);
+            *case_sym = gtst(1, *case_sym);
         }
-        skip(':');
-        if (tok == TOK_CASE) {
-            b = gtst(0, b);
-            goto next_case;
-        }
-        *case_sym = gtst(1, *case_sym);
         gsym(b);
+        skip(':');
         is_expr = 0;
         goto block_after_label;
     } else 
@@ -9015,6 +9037,8 @@ static void func_decl_list(Sym *func_sym)
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
+    int saved_nocode_wanted = nocode_wanted;
+    nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
@@ -9043,6 +9067,7 @@ static void gen_function(Sym *sym)
     funcname = ""; /* for safety */
     func_vt.t = VT_VOID; /* for safety */
     ind = 0; /* for safety */
+    nocode_wanted = saved_nocode_wanted;
 }
 
 static void gen_inline_functions(void)
@@ -9350,6 +9375,7 @@ static int tcc_compile(TCCState *s1)
 #endif
 
     define_start = define_stack;
+    nocode_wanted = 1;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
@@ -9400,26 +9426,19 @@ static int tcc_preprocess(TCCState *s1)
     last_is_space = 1;
     next();
     for(;;) {
-        if (tok == TOK_EOF)
+        if (tok == TOK_EOF) {
             break;
-        if (!last_is_space) {
-            fputc(' ', s1->outfile);
+        } else if (tok == TOK_LINEFEED) {
+            last_is_space = 1;
+	} else {
+	    if (!last_is_space)
+            	fputc(' ', s1->outfile);
+            last_is_space = 0;
         }
         fputs(get_tok_str(tok, &tokc), s1->outfile);
-        if (tok == TOK_LINEFEED) {
-            last_is_space = 1;
-            /* XXX: suppress that hack */
-            parse_flags &= ~PARSE_FLAG_LINEFEED;
-            next();
-            parse_flags |= PARSE_FLAG_LINEFEED;
-        } else {
-            last_is_space = 0;
-            next();
-        }
+        next();
     }
-
     free_defines(define_start); 
-
     return 0;
 }
 
@@ -10380,17 +10399,15 @@ int tcc_set_flag(TCCState *s, const char *flag_name, int value)
 /* extract the basename of a file */
 static char *tcc_basename(const char *name)
 {
-    const char *p;
-    p = strrchr(name, '/');
+    char *p = strchr(name, 0);
+    while (p > name
+        && p[-1] != '/'
 #ifdef WIN32
-    if (!p)
-        p = strrchr(name, '\\');
-#endif    
-    if (!p)
-        p = name;
-    else 
-        p++;
-    return (char*)p;
+        && p[-1] != '\\'
+#endif
+        )
+        --p;
+    return p;
 }
 
 #if !defined(LIBTCC)
@@ -10774,22 +10791,7 @@ int main(int argc, char **argv)
     int64_t start_time = 0;
 
 #ifdef WIN32
-    /* on win32, we suppose the lib and includes are at the location
-       of 'tcc.exe' */
-    {
-        static char path[1024];
-        char *p, *d;
-        
-        GetModuleFileNameA(NULL, path, sizeof path);
-        p = d = strlwr(path);
-        while (*d)
-        {
-            if (*d == '\\') *d = '/', p = d;
-            ++d;
-        }
-        *p = '\0';
-        tcc_lib_path = path;
-    }
+    tcc_lib_path = w32_tcc_lib_path();
 #endif
 
     s = tcc_new();
