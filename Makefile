@@ -158,7 +158,7 @@ c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
 arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
-	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -DTCC_ARM_EABI -o $@ $< $(LIBS)
 
 i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c
 	$(CC) $(CFLAGS) -DTCC_TARGET_PE -o $@ $< $(LIBS)

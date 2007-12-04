@@ -532,6 +532,8 @@ static void relocate_section(TCCState *s1, Section *s)
             break;
 #elif defined(TCC_TARGET_ARM)
 	case R_ARM_PC24:
+	case R_ARM_CALL:
+	case R_ARM_JUMP24:
 	case R_ARM_PLT32:
 	    {
                 int x;
@@ -548,13 +550,27 @@ static void relocate_section(TCCState *s1, Section *s)
                 (*(int *)ptr) |= x;
 	    }
 	    break;
+	case R_ARM_PREL31:
+	    {
+	 	int x;
+		x = (*(int *)ptr) & 0x7fffffff;
+		(*(int *)ptr) &= 0x80000000;
+		x = (x * 2) / 2;
+		x += val - addr;
+		if((x^(x>>1))&0x40000000)
+		    error("can't relocate value at %x",addr);
+		(*(int *)ptr) |= x & 0x7fffffff;
+	    }
 	case R_ARM_ABS32:
 	    *(int *)ptr += val;
 	    break;
-	case R_ARM_GOTPC:
+	case R_ARM_BASE_PREL:
 	    *(int *)ptr += s1->got->sh_addr - addr;
 	    break;
-        case R_ARM_GOT32:
+	case R_ARM_GOTOFF32:
+            *(int *)ptr += val - s1->got->sh_addr;
+            break;
+        case R_ARM_GOT_BREL:
             /* we load the got offset */
             *(int *)ptr += s1->got_offsets[sym_index];
             break;
@@ -856,17 +872,17 @@ static void build_got_entries(TCCState *s1)
                 }
                 break;
 #elif defined(TCC_TARGET_ARM)
-	    case R_ARM_GOT32:
-            case R_ARM_GOTOFF:
-            case R_ARM_GOTPC:
+	    case R_ARM_GOT_BREL:
+            case R_ARM_GOTOFF32:
+            case R_ARM_BASE_PREL:
             case R_ARM_PLT32:
                 if (!s1->got)
                     build_got(s1);
-                if (type == R_ARM_GOT32 || type == R_ARM_PLT32) {
+                if (type == R_ARM_GOT_BREL || type == R_ARM_PLT32) {
                     sym_index = ELF32_R_SYM(rel->r_info);
                     sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
                     /* look at the symbol got offset. If none, then add one */
-                    if (type == R_ARM_GOT32)
+                    if (type == R_ARM_GOT_BREL)
                         reloc_type = R_ARM_GLOB_DAT;
                     else
                         reloc_type = R_ARM_JUMP_SLOT;
@@ -1081,7 +1097,11 @@ static void tcc_add_linker_symbols(TCCState *s1)
 #ifdef __FreeBSD__
 static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
 #else
+#ifdef TCC_ARM_EABI
+static char elf_interp[] = "/lib/ld-linux.so.3";
+#else
 static char elf_interp[] = "/lib/ld-linux.so.2";
+#endif
 #endif
 
 static void tcc_output_binary(TCCState *s1, FILE *f,
@@ -1661,7 +1681,12 @@ int tcc_output_file(TCCState *s1, const char *filename)
         ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
 #endif
 #ifdef TCC_TARGET_ARM
+#ifdef TCC_ARM_EABI
+	ehdr.e_ident[EI_OSABI] = 0;
+	ehdr.e_flags = 4 << 24;
+#else
         ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
+#endif
 #endif
         switch(file_type) {
         default:
@@ -1833,6 +1858,9 @@ static int tcc_load_object_file(TCCState *s1,
         /* ignore sections types we do not handle */
         if (sh->sh_type != SHT_PROGBITS &&
             sh->sh_type != SHT_REL && 
+#ifdef TCC_ARM_EABI
+	    sh->sh_type != SHT_ARM_EXIDX &&
+#endif
             sh->sh_type != SHT_NOBITS)
             continue;
         if (sh->sh_addralign < 1)

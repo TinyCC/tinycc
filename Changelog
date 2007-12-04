@@ -1,5 +1,7 @@
 version 0.9.24:
 
+- Import 409,410: ARM EABI by Daniel Glöckner
+
 - Some in-between fixes:
   TCC -E no longer hangs with macro calls involving newlines.
   (next_nomacro1 now advances the read-pointer with TOK_LINEFEED)

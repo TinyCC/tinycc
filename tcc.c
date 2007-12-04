@@ -577,6 +577,8 @@ struct TCCState {
 #define TOK_NE  0x95
 #define TOK_ULE 0x96
 #define TOK_UGT 0x97
+#define TOK_Nset 0x98
+#define TOK_Nclear 0x99
 #define TOK_LT  0x9c
 #define TOK_GE  0x9d
 #define TOK_LE  0x9e
@@ -4827,6 +4829,9 @@ int gv(int rc)
             Sym *sym;
             int *ptr;
             unsigned long offset;
+#if defined(TCC_TARGET_ARM) && !defined(TCC_ARM_VFP)
+            CValue check;
+#endif
             
             /* XXX: unify with initializers handling ? */
             /* CPUs usually cannot use float constants, so we store them
@@ -4842,6 +4847,13 @@ int gv(int rc)
 #endif
             ptr = section_ptr_add(data_section, size);
             size = size >> 2;
+#if defined(TCC_TARGET_ARM) && !defined(TCC_ARM_VFP)
+            check.d = 1;
+            if(check.tab[0])
+                for(i=0;i<size;i++)
+                    ptr[i] = vtop->c.tab[size-1-i];
+            else
+#endif
             for(i=0;i<size;i++)
                 ptr[i] = vtop->c.tab[i];
             sym = get_sym_ref(&vtop->type, data_section, offset, size << 2);
@@ -6022,6 +6034,12 @@ static int type_size(CType *type, int *a)
     } else if (bt == VT_DOUBLE || bt == VT_LLONG) {
 #ifdef TCC_TARGET_I386
         *a = 4;
+#elif defined(TCC_TARGET_ARM)
+#ifdef TCC_ARM_EABI
+        *a = 8; 
+#else
+        *a = 4;
+#endif
 #else
         *a = 8;
 #endif
@@ -6337,6 +6355,13 @@ void vstore(void)
         if (!nocode_wanted) {
             size = type_size(&vtop->type, &align);
 
+#ifdef TCC_ARM_EABI
+            if(!(align & 7))
+                vpush_global_sym(&func_old_type, TOK_memcpy8);
+            else if(!(align & 3))
+                vpush_global_sym(&func_old_type, TOK_memcpy4);
+            else
+#endif
             vpush_global_sym(&func_old_type, TOK_memcpy);
 
             /* destination */
@@ -8113,6 +8138,27 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                 CType type;
                 /* if returning structure, must copy it to implicit
                    first pointer arg location */
+#ifdef TCC_ARM_EABI
+                int align, size;
+                size = type_size(&func_vt,&align);
+                if(size <= 4)
+                {
+                    if((vtop->r != (VT_LOCAL | VT_LVAL) || (vtop->c.i & 3))
+                       && (align & 3))
+                    {
+                        int addr;
+                        loc = (loc - size) & -4;
+                        addr = loc;
+                        type = func_vt;
+                        vset(&type, VT_LOCAL | VT_LVAL, addr);
+                        vswap();
+                        vstore();
+                        vset(&int_type, VT_LOCAL | VT_LVAL, addr);
+                    }
+                    vtop->type = int_type;
+                    gv(RC_IRET);
+                } else {
+#endif
                 type = func_vt;
                 mk_pointer(&type);
                 vset(&type, VT_LOCAL | VT_LVAL, func_vc);
@@ -8120,6 +8166,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                 vswap();
                 /* copy structure value to pointer */
                 vstore();
+#ifdef TCC_ARM_EABI
+                }
+#endif
             } else if (is_float(func_vt.t)) {
                 gv(RC_FRET);
             } else {
@@ -9359,6 +9408,16 @@ static int tcc_compile(TCCState *s1)
 
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
+
+#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+    float_type.t = VT_FLOAT;
+    double_type.t = VT_DOUBLE;
+
+    func_float_type.t = VT_FUNC;
+    func_float_type.ref = sym_push(SYM_FIELD, &float_type, FUNC_CDECL, FUNC_OLD);
+    func_double_type.t = VT_FUNC;
+    func_double_type.ref = sym_push(SYM_FIELD, &double_type, FUNC_CDECL, FUNC_OLD);
+#endif
 
 #if 0
     /* define 'void *alloca(unsigned int)' builtin function */

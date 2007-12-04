@@ -290,6 +290,9 @@ typedef struct
 #define SHT_HISUNW	 0x6fffffff	/* Sun-specific high bound.  */
 #define SHT_HIOS	 0x6fffffff	/* End OS-specific type */
 #define SHT_LOPROC	 0x70000000	/* Start of processor-specific */
+#define SHT_ARM_EXIDX    0x70000001     /* Exception Index table */
+#define SHT_ARM_PREEMPTMAP 0x70000002   /* dynamic linking pre-emption map */
+#define SHT_ARM_ATTRIBUTES 0x70000003   /* Object file compatibility attrs */
 #define SHT_HIPROC	 0x7fffffff	/* End of processor-specific */
 #define SHT_LOUSER	 0x80000000	/* Start of application-specific */
 #define SHT_HIUSER	 0x8fffffff	/* End of application-specific */
@@ -1589,10 +1592,13 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_ARM_GLOB_DAT		21	/* Create GOT entry */
 #define R_ARM_JUMP_SLOT		22	/* Create PLT entry */
 #define R_ARM_RELATIVE		23	/* Adjust by program base */
-#define R_ARM_GOTOFF		24	/* 32 bit offset to GOT */
-#define R_ARM_GOTPC		25	/* 32 bit PC relative offset to GOT */
-#define R_ARM_GOT32		26	/* 32 bit GOT entry */
+#define R_ARM_GOTOFF32          24      /* 32 bit offset to GOT */
+#define R_ARM_BASE_PREL         25      /* 32 bit PC relative offset to GOT */
+#define R_ARM_GOT_BREL          26      /* 32 bit GOT entry */
 #define R_ARM_PLT32		27	/* 32 bit PLT address */
+#define R_ARM_CALL              28
+#define R_ARM_JUMP24            29
+#define R_ARM_PREL31            42
 #define R_ARM_GNU_VTENTRY	100
 #define R_ARM_GNU_VTINHERIT	101
 #define R_ARM_THM_PC11		102	/* thumb unconditional branch */
