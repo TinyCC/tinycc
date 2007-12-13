@@ -1,9 +1,9 @@
 /* ---------------------------------------------- */
 /* alloca86b.S */
 
-.globl __bound___alloca
+.globl __bound__alloca
 
-__bound___alloca:
+__bound__alloca:
     pop     %edx
     pop     %eax
     mov     %eax, %ecx
