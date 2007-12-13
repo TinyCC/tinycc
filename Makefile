@@ -16,6 +16,7 @@ ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
 CFLAGS+=-march=i386 -falign-functions=0 -fno-strict-aliasing
+CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
 endif
 
 DISAS=objdump -d
