@@ -738,7 +738,8 @@ int __stdcall VirtualProtect(void*,unsigned long,unsigned long,unsigned long*);
   #define strtof (float)strtod
   #define strtoll (long long)strtol
 #endif
-#elif defined(TCC_UCLIBC) || defined(__FreeBSD__)
+#elif defined(TCC_UCLIBC) || defined(__FreeBSD__) || defined(__DragonFly__) \
+    || defined(__OpenBSD__)
 /* currently incorrect */
 long double strtold(const char *nptr, char **endptr)
 {
@@ -10013,9 +10014,15 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "arm", NULL);
     tcc_define_symbol(s, "__APCS_32__", NULL);
 #endif
-#if defined(linux)
+#ifdef TCC_TARGET_PE
+    tcc_define_symbol(s, "_WIN32", NULL);
+#else
+    tcc_define_symbol(s, "__unix__", NULL);
+    tcc_define_symbol(s, "__unix", NULL);
+#if defined(__linux)
     tcc_define_symbol(s, "__linux__", NULL);
-    tcc_define_symbol(s, "linux", NULL);
+    tcc_define_symbol(s, "__linux", NULL);
+#endif
 #endif
     /* tiny C specific defines */
     tcc_define_symbol(s, "__TINYC__", NULL);
@@ -10025,7 +10032,6 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "int");
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "__WCHAR_TYPE__", "unsigned short");
-    tcc_define_symbol(s, "_WIN32", NULL);
 #else
     tcc_define_symbol(s, "__WCHAR_TYPE__", "int");
 #endif

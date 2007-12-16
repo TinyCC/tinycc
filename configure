@@ -68,6 +68,12 @@ case $targetos in
 MINGW32*)
 mingw32="yes"
 ;;
+DragonFly)
+noldl="yes"
+;;
+OpenBSD)
+noldl="yes"
+;;
 *) ;;
 esac
 
@@ -142,15 +148,15 @@ if test -z "$cross_prefix" ; then
 cat > $TMPC << EOF
 #include <inttypes.h>
 int main(int argc, char ** argv){
-	volatile uint32_t i=0x01234567;
-	return (*((uint8_t*)(&i))) == 0x67;
+    volatile uint32_t i=0x01234567;
+    return (*((uint8_t*)(&i))) == 0x67;
 }
 EOF
 
 if $cc -o $TMPE $TMPC 2>/dev/null ; then
-$TMPE && bigendian="yes"
+    $TMPE && bigendian="yes"
 else
-echo big/little test failed
+    echo big/little test failed
 fi
 
 else
@@ -302,6 +308,9 @@ else
   echo "Unsupported CPU"
   exit 1
 fi
+if test "$noldl" = "yes" ; then
+  echo "CONFIG_NOLDL=yes" >> config.mak
+fi
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=yes" >> config.mak
   echo "#define CONFIG_WIN32 1" >> $TMPH
@@ -327,7 +336,7 @@ if test "$source_path_used" = "yes" ; then
     DIRS="tests"
     FILES="Makefile tests/Makefile"
     for dir in $DIRS ; do
-            mkdir -p $dir
+        mkdir -p $dir
     done
     for f in $FILES ; do
         ln -sf $source_path/$f $f
@@ -337,9 +346,9 @@ echo "SRC_PATH=$source_path" >> config.mak
 
 diff $TMPH config.h >/dev/null 2>&1
 if test $? -ne 0 ; then
-	mv -f $TMPH config.h
+    mv -f $TMPH config.h
 else
-	echo "config.h is unchanged"
+    echo "config.h is unchanged"
 fi
 
 rm -f $TMPO $TMPC $TMPE $TMPS $TMPH
