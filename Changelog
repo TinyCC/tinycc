@@ -1,12 +1,10 @@
 version 0.9.24:
 
+- Handle backslashes within #include, #error, #warning
 - Import changesets (part 4) 428,457,460,467: defines for openbsd etc.
-
 - Use _WIN32 for a windows hosted tcc and define it for the PE target,
   otherwise define __unix / __linux (Detlef Riekenberg)
-
 - Import changesets (part 3) 409,410: ARM EABI by Daniel Glöckner
-
 - Some in-between fixes:
   TCC -E no longer hangs with macro calls involving newlines.
   (next_nomacro1 now advances the read-pointer with TOK_LINEFEED)
