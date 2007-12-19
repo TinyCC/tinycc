@@ -380,7 +380,7 @@ void gfunc_call(int nb_args)
     }
     save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
-    func_call = func_sym->r;
+    func_call = FUNC_CALL(func_sym->r);
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
         func_call == FUNC_FASTCALLW) {
@@ -402,7 +402,7 @@ void gfunc_call(int nb_args)
         }
     }
     gcall_or_jmp(0);
-    if (args_size && func_sym->r != FUNC_STDCALL)
+    if (args_size && func_call != FUNC_STDCALL)
         gadd_sp(args_size);
     vtop--;
 }
@@ -423,7 +423,7 @@ void gfunc_prolog(CType *func_type)
     CType *type;
 
     sym = func_type->ref;
-    func_call = sym->r;
+    func_call = FUNC_CALL(sym->r);
     addr = 8;
     loc = 0;
     if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {

@@ -531,11 +531,11 @@ static void relocate_section(TCCState *s1, Section *s)
             *(int *)ptr += s1->got_offsets[sym_index];
             break;
 #elif defined(TCC_TARGET_ARM)
-	case R_ARM_PC24:
-	case R_ARM_CALL:
-	case R_ARM_JUMP24:
-	case R_ARM_PLT32:
-	    {
+        case R_ARM_PC24:
+        case R_ARM_CALL:
+        case R_ARM_JUMP24:
+        case R_ARM_PLT32:
+            {
                 int x;
                 x = (*(int *)ptr)&0xffffff;
                 (*(int *)ptr) &= 0xff000000;
@@ -548,42 +548,42 @@ static void relocate_section(TCCState *s1, Section *s)
                 x >>= 2;
                 x &= 0xffffff;
                 (*(int *)ptr) |= x;
-	    }
-	    break;
-	case R_ARM_PREL31:
-	    {
-	 	int x;
-		x = (*(int *)ptr) & 0x7fffffff;
-		(*(int *)ptr) &= 0x80000000;
-		x = (x * 2) / 2;
-		x += val - addr;
-		if((x^(x>>1))&0x40000000)
-		    error("can't relocate value at %x",addr);
-		(*(int *)ptr) |= x & 0x7fffffff;
-	    }
-	case R_ARM_ABS32:
-	    *(int *)ptr += val;
-	    break;
-	case R_ARM_BASE_PREL:
-	    *(int *)ptr += s1->got->sh_addr - addr;
-	    break;
-	case R_ARM_GOTOFF32:
+            }
+            break;
+        case R_ARM_PREL31:
+            {
+                int x;
+                x = (*(int *)ptr) & 0x7fffffff;
+                (*(int *)ptr) &= 0x80000000;
+                x = (x * 2) / 2;
+                x += val - addr;
+                if((x^(x>>1))&0x40000000)
+                    error("can't relocate value at %x",addr);
+                (*(int *)ptr) |= x & 0x7fffffff;
+            }
+        case R_ARM_ABS32:
+            *(int *)ptr += val;
+            break;
+        case R_ARM_BASE_PREL:
+            *(int *)ptr += s1->got->sh_addr - addr;
+            break;
+        case R_ARM_GOTOFF32:
             *(int *)ptr += val - s1->got->sh_addr;
             break;
         case R_ARM_GOT_BREL:
             /* we load the got offset */
             *(int *)ptr += s1->got_offsets[sym_index];
             break;
-	case R_ARM_COPY:
+        case R_ARM_COPY:
             break;
-	default:
-	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
+        default:
+            fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
                     type,addr,(unsigned int )ptr,val);
             break;
 #elif defined(TCC_TARGET_C67)
-	case R_C60_32:
-	    *(int *)ptr += val;
-	    break;
+        case R_C60_32:
+            *(int *)ptr += val;
+            break;
         case R_C60LO16:
             {
                 uint32_t orig;
@@ -603,7 +603,7 @@ static void relocate_section(TCCState *s1, Section *s)
         case R_C60HI16:
             break;
         default:
-	    fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
+            fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
                     type,addr,(unsigned int )ptr,val);
             break;
 #else
@@ -784,7 +784,7 @@ static void put_got_entry(TCCState *s1,
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_ARM)
-	if (reloc_type == R_ARM_JUMP_SLOT) {
+        if (reloc_type == R_ARM_JUMP_SLOT) {
             Section *plt;
             uint8_t *p;
             
@@ -797,17 +797,17 @@ static void put_got_entry(TCCState *s1,
             if (plt->data_offset == 0) {
                 /* first plt entry */
                 p = section_ptr_add(plt, 16);
-		put32(p     , 0xe52de004);
-		put32(p +  4, 0xe59fe010);
-		put32(p +  8, 0xe08fe00e);
-		put32(p + 12, 0xe5bef008);
+                put32(p     , 0xe52de004);
+                put32(p +  4, 0xe59fe010);
+                put32(p +  8, 0xe08fe00e);
+                put32(p + 12, 0xe5bef008);
             }
 
             p = section_ptr_add(plt, 16);
-	    put32(p  , 0xe59fc004);
-	    put32(p+4, 0xe08fc00c);
-	    put32(p+8, 0xe59cf000);
-	    put32(p+12, s1->got->data_offset);
+            put32(p  , 0xe59fc004);
+            put32(p+4, 0xe08fc00c);
+            put32(p+8, 0xe59cf000);
+            put32(p+12, s1->got->data_offset);
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
@@ -872,7 +872,7 @@ static void build_got_entries(TCCState *s1)
                 }
                 break;
 #elif defined(TCC_TARGET_ARM)
-	    case R_ARM_GOT_BREL:
+            case R_ARM_GOT_BREL:
             case R_ARM_GOTOFF32:
             case R_ARM_BASE_PREL:
             case R_ARM_PLT32:
@@ -891,7 +891,7 @@ static void build_got_entries(TCCState *s1)
                 }
                 break;
 #elif defined(TCC_TARGET_C67)
-	    case R_C60_GOT32:
+            case R_C60_GOT32:
             case R_C60_GOTOFF:
             case R_C60_GOTPC:
             case R_C60_PLT32:
@@ -1547,13 +1547,13 @@ int tcc_output_file(TCCState *s1, const char *filename)
                         p += 16;
                     }
 #elif defined(TCC_TARGET_ARM)
-		    int x;
-		    x=s1->got->sh_addr - s1->plt->sh_addr - 12;
-		    p +=16;
-		    while (p < p_end) {
-		        put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
-			p += 16;
-		    }
+                    int x;
+                    x=s1->got->sh_addr - s1->plt->sh_addr - 12;
+                    p +=16;
+                    while (p < p_end) {
+                        put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
+                        p += 16;
+                    }
 #elif defined(TCC_TARGET_C67)
                     /* XXX: TODO */
 #else
@@ -1682,8 +1682,8 @@ int tcc_output_file(TCCState *s1, const char *filename)
 #endif
 #ifdef TCC_TARGET_ARM
 #ifdef TCC_ARM_EABI
-	ehdr.e_ident[EI_OSABI] = 0;
-	ehdr.e_flags = 4 << 24;
+        ehdr.e_ident[EI_OSABI] = 0;
+        ehdr.e_flags = 4 << 24;
 #else
         ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
 #endif
@@ -1859,7 +1859,7 @@ static int tcc_load_object_file(TCCState *s1,
         if (sh->sh_type != SHT_PROGBITS &&
             sh->sh_type != SHT_REL && 
 #ifdef TCC_ARM_EABI
-	    sh->sh_type != SHT_ARM_EXIDX &&
+            sh->sh_type != SHT_ARM_EXIDX &&
 #endif
             sh->sh_type != SHT_NOBITS)
             continue;
@@ -2022,16 +2022,16 @@ static int tcc_load_object_file(TCCState *s1,
     return ret;
 }
 
-#define ARMAG  "!<arch>\012"	/* For COFF and a.out archives */
+#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
 
 typedef struct ArchiveHeader {
-    char ar_name[16];		/* name of this member */
-    char ar_date[12];		/* file mtime */
-    char ar_uid[6];		/* owner uid; printed as decimal */
-    char ar_gid[6];		/* owner gid; printed as decimal */
-    char ar_mode[8];		/* file mode, printed as octal   */
-    char ar_size[10];		/* file size, printed as decimal */
-    char ar_fmag[2];		/* should contain ARFMAG */
+    char ar_name[16];           /* name of this member */
+    char ar_date[12];           /* file mtime */
+    char ar_uid[6];             /* owner uid; printed as decimal */
+    char ar_gid[6];             /* owner gid; printed as decimal */
+    char ar_mode[8];            /* file mode, printed as octal   */
+    char ar_size[10];           /* file size, printed as decimal */
+    char ar_fmag[2];            /* should contain ARFMAG */
 } ArchiveHeader;
 
 static int get_be32(const uint8_t *b)
@@ -2056,26 +2056,26 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size)
     ar_names = ar_index + nsyms * 4;
 
     do {
-	bound = 0;
-	for(p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
-	    sym_index = find_elf_sym(symtab_section, p);
-	    if(sym_index) {
-		sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
-		if(sym->st_shndx == SHN_UNDEF) {
-		    off = get_be32(ar_index + i * 4) + sizeof(ArchiveHeader);
+        bound = 0;
+        for(p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
+            sym_index = find_elf_sym(symtab_section, p);
+            if(sym_index) {
+                sym = &((Elf32_Sym *)symtab_section->data)[sym_index];
+                if(sym->st_shndx == SHN_UNDEF) {
+                    off = get_be32(ar_index + i * 4) + sizeof(ArchiveHeader);
 #if 0
-		    printf("%5d\t%s\t%08x\n", i, p, sym->st_shndx);
+                    printf("%5d\t%s\t%08x\n", i, p, sym->st_shndx);
 #endif
-		    ++bound;
-		    lseek(fd, off, SEEK_SET);
-		    if(tcc_load_object_file(s1, fd, off) < 0) {
+                    ++bound;
+                    lseek(fd, off, SEEK_SET);
+                    if(tcc_load_object_file(s1, fd, off) < 0) {
                     fail:
                         ret = -1;
                         goto the_end;
                     }
-		}
-	    }
-	}
+                }
+            }
+        }
     } while(bound);
     ret = 0;
  the_end:
@@ -2119,8 +2119,8 @@ static int tcc_load_archive(TCCState *s1, int fd)
         size = (size + 1) & ~1;
         if (!strcmp(ar_name, "/")) {
             /* coff symbol table : we handle it */
-	    if(s1->alacarte_link)
-		return tcc_load_alacarte(s1, fd, size);
+            if(s1->alacarte_link)
+                return tcc_load_alacarte(s1, fd, size);
         } else if (!strcmp(ar_name, "//") ||
                    !strcmp(ar_name, "__.SYMDEF") ||
                    !strcmp(ar_name, "__.SYMDEF/") ||
@@ -2146,7 +2146,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     Elf32_Sym *sym, *dynsym;
     Elf32_Dyn *dt, *dynamic;
     unsigned char *dynstr;
-    const char *name, *soname, *p;
+    const char *name, *soname;
     DLLReference *dllref;
     
     read(fd, &ehdr, sizeof(ehdr));
@@ -2185,10 +2185,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     }
     
     /* compute the real library name */
-    soname = filename;
-    p = strrchr(soname, '/');
-    if (p)
-        soname = p + 1;
+    soname = tcc_basename(filename);
         
     for(i = 0, dt = dynamic; i < nb_dts; i++, dt++) {
         if (dt->d_tag == DT_SONAME) {
