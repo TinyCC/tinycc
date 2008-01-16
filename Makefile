@@ -175,7 +175,7 @@ tiny_impdef$(EXESUF): tiny_impdef.c
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS=$(addprefix win32/lib/, crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o) libtcc1.o
-LIBTCC1_CC=./tcc.exe -Bwin32
+LIBTCC1_CC=./tcc.exe -Bwin32 -DTCC_TARGET_PE
 else
 LIBTCC1_OBJS=libtcc1.o
 LIBTCC1_CC=$(CC)
