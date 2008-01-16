@@ -1,5 +1,7 @@
 TODO list:
 
+- FPU st(0) is left unclean (incompatible with optimized gcc/msc code)
+
 - bug with defines:
     #define spin_lock(lock) do { } while (0)
     #define wq_spin_lock spin_lock

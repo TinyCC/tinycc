@@ -1,6 +1,8 @@
 /* ---------------------------------------------- */
 /* alloca86b.S */
 
+#include "config.h"
+
 .globl __bound__alloca
 
 __bound__alloca:
@@ -11,6 +13,7 @@ __bound__alloca:
     and     $-4,%eax
     jz      p6
 
+#ifdef TCC_TARGET_PE
 p4:
     cmp     $4096,%eax
     jle     p5
@@ -20,17 +23,17 @@ p4:
     jmp p4
 
 p5:
+#endif
+
     sub     %eax,%esp
     mov     %esp,%eax
 
     push    %edx
     push    %eax
-
     push    %ecx
     push    %eax
     call   __bound_new_region
     add    $8, %esp
-
     pop     %eax
     pop     %edx
 

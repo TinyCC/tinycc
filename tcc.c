@@ -2307,12 +2307,14 @@ static uint8_t *parse_pp_string(uint8_t *p,
    #if/#endif */
 void preprocess_skip(void)
 {
-    int a, start_of_line, c;
+    int a, start_of_line, c, in_warn_or_error;
     uint8_t *p;
 
     p = file->buf_ptr;
-    start_of_line = 1;
     a = 0;
+redo_start:
+    start_of_line = 1;
+    in_warn_or_error = 0;
     for(;;) {
     redo_no_start:
         c = *p;
@@ -2325,10 +2327,9 @@ void preprocess_skip(void)
             p++;
             goto redo_no_start;
         case '\n':
-            start_of_line = 1;
             file->line_num++;
             p++;
-            goto redo_no_start;
+            goto redo_start;
         case '\\':
             file->buf_ptr = p;
             c = handle_eob();
@@ -2340,13 +2341,17 @@ void preprocess_skip(void)
             }
             p = file->buf_ptr;
             goto redo_no_start;
-            /* skip strings */
+        /* skip strings */
         case '\"':
         case '\'':
+            if (in_warn_or_error)
+                goto _default;
             p = parse_pp_string(p, c, NULL);
             break;
-            /* skip comments */
+        /* skip comments */
         case '/':
+            if (in_warn_or_error)
+                goto _default;
             file->buf_ptr = p;
             ch = *p;
             minp();
@@ -2357,7 +2362,6 @@ void preprocess_skip(void)
                 p = parse_line_comment(p);
             }
             break;
-
         case '#':
             p++;
             if (start_of_line) {
@@ -2371,8 +2375,11 @@ void preprocess_skip(void)
                     a++;
                 else if (tok == TOK_ENDIF)
                     a--;
+                else if( tok == TOK_ERROR || tok == TOK_WARNING)
+                    in_warn_or_error = 1;
             }
             break;
+_default:
         default:
             p++;
             break;
@@ -3195,7 +3202,7 @@ static void preprocess(int is_bof)
                to emulate cpp behaviour */
         } else {
             if (!(saved_parse_flags & PARSE_FLAG_ASM_COMMENTS))
-                error("invalid preprocessing directive #%s", get_tok_str(tok, &tokc));
+                warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
         }
         break;
     }
@@ -5464,9 +5471,9 @@ void gen_opl(int op)
    independent opt */
 void gen_opic(int op)
 {
-    int c1, c2, t1, t2, n, c;
+    int c1, c2, t1, t2, n;
     SValue *v1, *v2;
-    long long l1, l2, l;
+    long long l1, l2;
     typedef unsigned long long U;
 
     v1 = vtop - 1;
@@ -5533,8 +5540,8 @@ void gen_opic(int op)
         if (c1 && (op == '+' || op == '&' || op == '^' || 
                    op == '|' || op == '*')) {
             vswap();
-            c = c1, c1 = c2, c2 = c;
-            l = l1, l1 = l2, l2 = l;
+            c2 = c1; //c = c1, c1 = c2, c2 = c;
+            l2 = l1; //l = l1, l1 = l2, l2 = l;
         }
         /* Filter out NOP operations like x*1, x-0, x&-1... */
         if (c2 && (((op == '*' || op == '/' || op == TOK_UDIV || 
@@ -7650,7 +7657,7 @@ static void unary(void)
                     break;
             }
             if (!s)
-                error("field not found");
+                error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, NULL));
             /* add field offset to pointer */
             vtop->type = char_pointer_type; /* change type to 'char *' */
             vpushi(s->c);
@@ -9306,7 +9313,7 @@ static void decl(int l)
 #if 0
             {
                 char buf[500];
-                type_to_str(buf, sizeof(buf), &type, get_tok_str(v, NULL));
+                type_to_str(buf, sizeof(buf), t, get_tok_str(v, NULL));
                 printf("type = '%s'\n", buf);
             }
 #endif
@@ -10081,6 +10088,7 @@ TCCState *tcc_new(void)
 
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
+    tcc_define_symbol(s, "__STDC_VERSION__", "199901L");
 #if defined(TCC_TARGET_I386)
     tcc_define_symbol(s, "__i386__", NULL);
 #endif

@@ -1,7 +1,10 @@
 version 0.9.24:
 
+- Just warn about unknown directives, ignore quotes in #error/#warning
+- Define __STDC_VERSION__=199901L (477)
+
 - Switch to newer tccpe.c (includes support for resources)
-- Handle backslashes within #include, #error, #warning
+- Handle backslashes within #include/#error/#warning
 - Import changesets (part 4) 428,457,460,467: defines for openbsd etc.
 - Use _WIN32 for a windows hosted tcc and define it for the PE target,
   otherwise define __unix / __linux (Detlef Riekenberg)
