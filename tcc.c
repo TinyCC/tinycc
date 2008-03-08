@@ -10124,14 +10124,8 @@ TCCState *tcc_new(void)
     tcc_define_symbol(s, "__WCHAR_TYPE__", "int");
 #endif
     
+#ifndef TCC_TARGET_PE
     /* default library paths */
-#ifdef TCC_TARGET_PE
-    {
-        char buf[1024];
-        snprintf(buf, sizeof(buf), "%s/lib", tcc_lib_path);
-        tcc_add_library_path(s, buf);
-    }
-#else
     tcc_add_library_path(s, "/usr/local/lib");
     tcc_add_library_path(s, "/usr/lib");
     tcc_add_library_path(s, "/lib");
@@ -10407,11 +10401,11 @@ int tcc_add_symbol(TCCState *s, const char *name, unsigned long val)
 
 int tcc_set_output_type(TCCState *s, int output_type)
 {
+    char buf[1024];
+
     s->output_type = output_type;
 
     if (!s->nostdinc) {
-        char buf[1024];
-
         /* default include paths */
         /* XXX: reverse order needed if -isystem support */
 #ifndef TCC_TARGET_PE
@@ -10464,6 +10458,12 @@ int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_file(s, CONFIG_TCC_CRT_PREFIX "/crti.o");
     }
 #endif
+
+#ifdef TCC_TARGET_PE
+    snprintf(buf, sizeof(buf), "%s/lib", tcc_lib_path);
+    tcc_add_library_path(s, buf);
+#endif
+
     return 0;
 }
 
