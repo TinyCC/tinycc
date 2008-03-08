@@ -19,7 +19,9 @@ ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
 CFLAGS+=-march=i386 -falign-functions=0 -fno-strict-aliasing
+ifneq ($(GCC_MAJOR),3)
 CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
+endif
 endif
 
 DISAS=objdump -d
@@ -30,7 +32,7 @@ PROGS=tcc$(EXESUF)
 ifdef CONFIG_CROSS
 PROGS+=c67-tcc$(EXESUF) arm-tcc$(EXESUF)
 endif
-PROGS+=tiny_impdef$(EXESUF)
+PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 else
 ifeq ($(ARCH),i386)
 PROGS=tcc$(EXESUF)
@@ -168,7 +170,9 @@ i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h 
 	$(CC) $(CFLAGS) -DTCC_TARGET_PE -o $@ $< $(LIBS)
 
 # windows utilities
-tiny_impdef$(EXESUF): tiny_impdef.c
+tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
+	$(CC) $(CFLAGS) -o $@ $< -lkernel32
+tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 	$(CC) $(CFLAGS) -o $@ $< -lkernel32
 
 # TinyCC runtime libraries

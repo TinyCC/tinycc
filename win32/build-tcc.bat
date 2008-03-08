@@ -2,17 +2,14 @@
 @rem batch file to build tcc using gcc and ar from mingw
 @rem ----------------------------------------------------
 :
-@if exist ..\config.h goto configready
-:
-@echo>..\config.h #define TCC_VERSION "0.9.24pre"
+@echo>..\config.h #define TCC_VERSION "0.9.24"
 @echo>>..\config.h #define TCC_TARGET_PE 1
 @echo>>..\config.h #define CONFIG_TCCDIR NULL
 :
-:configready
-:
 gcc -Os -fno-strict-aliasing ../tcc.c -o tcc.exe -s
 gcc -Os -fno-strict-aliasing ../tcc.c -D LIBTCC -c -o libtcc.o
-gcc -Os -fno-strict-aliasing ../tiny_impdef.c -o tiny_impdef.exe -s
+gcc -Os tools/tiny_impdef.c -o tiny_impdef.exe -s
+gcc -Os tools/tiny_libmaker.c -o tiny_libmaker.exe -s
 mkdir libtcc
 ar rcs libtcc/libtcc.a libtcc.o
 del libtcc.o

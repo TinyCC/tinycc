@@ -1,37 +1,34 @@
 
-    TinyCC-PE
-    ---------
+    TinyCC
+    ======
 
-    TinyCC (aka TCC) is a small but hyperfast C compiler,
-    written by Fabrice Bellard,
-
-
-    TinyCC-PE is the TinyCC compiler with an extension to
-    write PE executables for MS-Windows.
+    This file contains some additional information for usage of TinyCC
+    under MS-Windows:
 
 
-    Features:
-    ---------
+    Overview:
+    --------- 
+    TinyCC (aka TCC) is a small but hyperfast C compiler, written by
+    Fabrice Bellard.
 
-    TinyCC-PE can produce console applications, native windows
-    GUI programs and DLL's.
+    TinyCC for MS-Windows can produce console applications, native 
+    windows GUI programs and DLL's.
 
-    Most of the features pointed out by Fabrice Bellard for the
-    original version are still valid, i.e:
+    The package with under 300kb includes a complete C-compiler with
+    header files and basic system library support.
 
-    - SMALL! The package with ~400kb includes a complete C-compiler
-      with header files for console and GUI applications.
+    With the -run switch you can run C-sources without any linking
+    directly from the command line.
 
-    - With the -run switch you can run C-sources without any
-      linking directly from the command line.
+    TinyCC can be used as dynamic code generator library in your own
+    program.
 
-    - TCC can of course compile itself.
+    TinyCC can of course compile itself.
 
 
     Compilation:  (omit that if you use the binary ZIP package)
     ------------
-    
-    You must use the MinGW and MSYS tools available at
+    You can use the MinGW and MSYS tools available at
     http://www.mingw.org to compile TCC for Windows. Untar the TCC
     archive and type in the MSYS shell:
     
@@ -48,13 +45,14 @@
 
     Installation: (from the binary ZIP package)
     -------------
-
     Just unzip the package to a directory anywhere on your computer.
+    
+    The binary package does not include libtcc. If you want tcc as
+    dynamic code generator, please use the source code distribution.
 
 
     Examples:
     ---------
-
     For the 'Fibonacci' console example type from the command line:
 
         tcc examples\fib.c
@@ -69,25 +67,22 @@
         tcc examples\hello_dll.c examples\dll.def
 
 
-    Import Definitions:
-    -------------------
+    Import Definition Files:
+    ------------------------
+    To link with Windows system DLLs, TinyCC uses import definition
+    files (.def) instead of libraries.
 
-    TinyCC-PE searches and reads import definition files similar
-    to libraries.
-
-    The included 'tiny_impdef' program may be used to make .def files
-    for any DLL, e.g for an 'opengl32.def':
+    The included 'tiny_impdef' program may be used to make additional 
+    .def files for any DLL. For example:
 
         tiny_impdef.exe opengl32.dll
 
-    or to the same effect:
-
-        tcc -run tiny_impdef.c opengl32.dll
+    To use it, put the opengl32.def file into the tcc/lib directory,
+    and specify -lopengl32 at the tcc commandline.
 
 
     Resource Files:
     ---------------
-
     TinyCC-PE can now link windows resources in coff format as generated
     by MINGW's windres.exe. For example:
 
@@ -95,32 +90,25 @@
         tcc app.c appres.o -o app.exe
 
 
+    Tiny Libmaker:
+    --------------
+    The included tiny_libmaker tool by Timovj Lahde can be used as
+    'ar' replacement to make a library from several object files.
+
+
     Header Files:
     -------------
-
-    The system header files, except '_mingw.h', are from the
-    3.7 mingw distribution. See also: http://www.mingw.org/
-
-
-    Compile TCC:
-    ------------
-
-    With TCC itself just say:
-
-        tcc src\tcc.c -o tcc.new.exe
-
-    Other compilers like mingw-gcc or msvc work as well.
-    To make libtcc1.a, you need 'ar' from the mingw binutils.
+    The system header files (except _mingw.h) are from the mingw
+    distribution (http://www.mingw.org/).
 
 
     Documentation and License:
     --------------------------
-
     TCC is distributed under the GNU Lesser General Public License
     (see COPYING file).
 
-    Please read the original tcc-doc.html to have all the features
-    of TCC. Also visit: http://fabrice.bellard.free.fr/tcc/
+    Please read tcc-doc.html to have all the features of TCC. Also 
+    visit: http://fabrice.bellard.free.fr/tcc/
 
-    --
-    grischka@users.sourceforge.net
+    
+    -- grischka@users.sourceforge.net

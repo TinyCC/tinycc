@@ -181,7 +181,20 @@ EOF
 
 gcc_major="2"
 if $cc -o $TMPO $TMPC 2> /dev/null ; then
-   gcc_major="3"
+    gcc_major="3"
+fi
+cat > $TMPC <<EOF
+int main(void) {
+#if __GNUC__ >= 4
+return 0;
+#else
+#error gcc < 4
+#endif
+}
+EOF
+
+if $cc -o $TMPO $TMPC 2> /dev/null ; then
+    gcc_major="4"
 fi
 
 if test x"$1" = x"-h" -o x"$1" = x"--help" ; then
