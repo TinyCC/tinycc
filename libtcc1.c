@@ -399,7 +399,7 @@ long long __moddi3(long long u, long long v)
     if (vv.s.high < 0)
         vv.ll = __negdi2 (vv.ll);
     
-    __udivmoddi4 (uu.ll, vv.ll, &w);
+    __udivmoddi4 (uu.ll, vv.ll, (UDWtype *) &w);
     if (c)
         w = __negdi2 (w);
     return w;
