@@ -1314,8 +1314,11 @@ int tcc_output_file(TCCState *s1, const char *filename)
             }
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */
-            if (file_type == TCC_OUTPUT_DLL)
+            if (file_type == TCC_OUTPUT_DLL) {
+                if (s1->soname)
+                    put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
                 put_dt(dynamic, DT_TEXTREL, 0);
+            }
 
             /* add necessary space for other entries */
             saved_dynamic_data_offset = dynamic->data_offset;
@@ -2286,8 +2289,60 @@ static int ld_next(TCCState *s1, char *name, int name_size)
             goto parse_name;
         }
         break;
-    case 'a' ... 'z':
-    case 'A' ... 'Z':
+    /* case 'a' ... 'z': */
+    case 'a':
+       case 'b':
+       case 'c':
+       case 'd':
+       case 'e':
+       case 'f':
+       case 'g':
+       case 'h':
+       case 'i':
+       case 'j':
+       case 'k':
+       case 'l':
+       case 'm':
+       case 'n':
+       case 'o':
+       case 'p':
+       case 'q':
+       case 'r':
+       case 's':
+       case 't':
+       case 'u':
+       case 'v':
+       case 'w':
+       case 'x':
+       case 'y':
+       case 'z':
+    /* case 'A' ... 'z': */
+    case 'A':
+       case 'B':
+       case 'C':
+       case 'D':
+       case 'E':
+       case 'F':
+       case 'G':
+       case 'H':
+       case 'I':
+       case 'J':
+       case 'K':
+       case 'L':
+       case 'M':
+       case 'N':
+       case 'O':
+       case 'P':
+       case 'Q':
+       case 'R':
+       case 'S':
+       case 'T':
+       case 'U':
+       case 'V':
+       case 'W':
+       case 'X':
+       case 'Y':
+       case 'Z':
     case '_':
     case '\\':
     case '.':

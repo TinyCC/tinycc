@@ -476,6 +476,9 @@ struct TCCState {
     /* if true, static linking is performed */
     int static_link;
 
+    /* soname as specified on the command line (-soname) */
+    const char *soname;
+
     /* if true, all symbols are exported */
     int rdynamic;
 
@@ -10560,8 +10563,8 @@ void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
            "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
-           "           [-Wwarn] [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-static]\n"
-           "           [infile1 infile2...] [-run infile args...]\n"
+           "           [-Wwarn] [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-soname name]\n"
+           "           [-static] [infile1 infile2...] [-run infile args...]\n"
            "\n"
            "General options:\n"
            "  -v          display current version\n"
@@ -10582,6 +10585,7 @@ void help(void)
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
            "  -shared     generate a shared library\n"
+           "  -soname     set name for shared library to be used at runtime\n"
            "  -static     static linking\n"
            "  -rdynamic   export all global symbols to dynamic linker\n"
            "  -r          generate (relocatable) object file\n"
@@ -10618,6 +10622,7 @@ enum {
     TCC_OPTION_c,
     TCC_OPTION_static,
     TCC_OPTION_shared,
+    TCC_OPTION_soname,
     TCC_OPTION_o,
     TCC_OPTION_r,
     TCC_OPTION_Wl,
@@ -10654,6 +10659,7 @@ static const TCCOption tcc_options[] = {
     { "c", TCC_OPTION_c, 0 },
     { "static", TCC_OPTION_static, 0 },
     { "shared", TCC_OPTION_shared, 0 },
+    { "soname", TCC_OPTION_soname, TCC_OPTION_HAS_ARG },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
     { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
@@ -10824,6 +10830,9 @@ int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_shared:
                 output_type = TCC_OUTPUT_DLL;
+                break;
+            case TCC_OPTION_soname:
+                s->soname = optarg; 
                 break;
             case TCC_OPTION_o:
                 multiple_files = 1;
