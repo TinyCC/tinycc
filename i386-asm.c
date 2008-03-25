@@ -424,15 +424,15 @@ static inline void asm_modrm(int reg, Operand *op)
 static void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, reg, v, op1, is_short_jmp, has_seg_prefix;
+    int i, modrm_index, reg, v, op1, is_short_jmp, seg_prefix;
     int nb_ops, s, ss;
-    Operand ops[MAX_OPERANDS], *pop, seg_prefix;
+    Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
 
     /* get operands */
     pop = ops;
     nb_ops = 0;
-    has_seg_prefix = 0;
+    seg_prefix = 0;
     for(;;) {
         if (tok == ';' || tok == TOK_LINEFEED)
             break;
@@ -441,11 +441,10 @@ static void asm_opcode(TCCState *s1, int opcode)
         }
         parse_operand(s1, pop);
         if (tok == ':') {
-           if (pop->type != OP_SEG || has_seg_prefix) {
+           if (pop->type != OP_SEG || seg_prefix) {
                error("incorrect prefix");
            }
-           seg_prefix = *pop;
-           has_seg_prefix = 1;
+           seg_prefix = segment_prefixes[pop->reg];
            next();
            parse_operand(s1, pop);
            if (!(pop->type & OP_EA)) {
@@ -565,8 +564,8 @@ static void asm_opcode(TCCState *s1, int opcode)
     /* now generates the operation */
     if (pa->instr_type & OPC_FWAIT)
         g(0x9b);
-    if (has_seg_prefix)
-        g(segment_prefixes[seg_prefix.reg]);
+    if (seg_prefix)
+        g(seg_prefix);
 
     v = pa->opcode;
     if (v == 0x69 || v == 0x69) {
