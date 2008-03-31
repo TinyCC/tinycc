@@ -1956,14 +1956,13 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
     int fd;
     BufferedFile *bf;
 
-    fd = open(filename, O_RDONLY | O_BINARY);
+    if (strcmp(filename, "-") == 0)
+        fd = 0, filename = "stdin";
+    else
+        fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
         return NULL;
     bf = tcc_malloc(sizeof(BufferedFile));
-    if (!bf) {
-        close(fd);
-        return NULL;
-    }
     bf->fd = fd;
     bf->buf_ptr = bf->buffer;
     bf->buf_end = bf->buffer;
@@ -10730,7 +10729,7 @@ int parse_args(TCCState *s, int argc, char **argv)
                 break;
         }
         r = argv[optind++];
-        if (r[0] != '-') {
+        if (r[0] != '-' || r[1] == '\0') {
             /* add a new file */
             dynarray_add((void ***)&files, &nb_files, r);
             if (!multiple_files) {
@@ -10982,7 +10981,9 @@ int main(int argc, char **argv)
         if (!outfile) {
             /* compute default outfile name */
             char *ext;
-            pstrcpy(objfilename, sizeof(objfilename), tcc_basename(files[0]));
+            const char *name = 
+                strcmp(files[0], "-") == 0 ? "a" : tcc_basename(files[0]);
+            pstrcpy(objfilename, sizeof(objfilename), name);
             ext = tcc_fileextension(objfilename);
 #ifdef TCC_TARGET_PE
             if (output_type == TCC_OUTPUT_DLL)
@@ -11015,7 +11016,7 @@ int main(int argc, char **argv)
             if (tcc_add_file_internal(s, filename, 
                     AFF_PRINT_ERROR | AFF_PREPROCESS) < 0)
                 ret = 1;
-        } else if (filename[0] == '-') {
+        } else if (filename[0] == '-' && filename[1]) {
             if (tcc_add_library(s, filename + 2) < 0)
                 error("cannot find %s", filename);
         } else {

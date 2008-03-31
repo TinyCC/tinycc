@@ -94,9 +94,11 @@ the @code{main()} of a.c.
 
 @item @samp{tcc a.c -run b.c arg1}
 Compile @file{a.c} and @file{b.c}, link them together and execute them. arg1 is given
-as first argument to the @code{main()} of the resulting program. Because
-multiple C files are specified, @option{--} are necessary to clearly separate the
-program arguments from the TCC options.
+as first argument to the @code{main()} of the resulting program. 
+@ignore 
+Because multiple C files are specified, @option{--} are necessary to clearly 
+separate the program arguments from the TCC options.
+@end ignore
 
 @item @samp{tcc -o myprog a.c b.c}
 Compile @file{a.c} and @file{b.c}, link them and generate the executable @file{myprog}.
@@ -135,6 +137,13 @@ int main()
     return 0;
 @}
 @end example
+
+TCC can read C source code from @emph{standard input} when @option{-} is used in 
+place of @option{infile}. Example:
+
+@example
+echo 'main(){puts("hello");}' | tcc -run -
+@end example
 @c man end
 
 @section Option summary
@@ -160,7 +169,6 @@ Set the path where the tcc internal libraries can be found (default is
 Output compilation statistics.
 
 @item -run source [args...]
-
 Compile file @var{source} and run it with the command line arguments
 @var{args}. In order to be able to give more than one argument to a
 script, several TCC options can be given @emph{after} the
