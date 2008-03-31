@@ -153,7 +153,7 @@ General Options:
 @c man begin OPTIONS
 @table @option
 @item -v
-Display current TCC version.
+Display current TCC version, increase verbosity.
 
 @item -c
 Generate an object file (@option{-o} option must also be given).

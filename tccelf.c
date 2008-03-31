@@ -1664,6 +1664,8 @@ int tcc_output_file(TCCState *s1, const char *filename)
         goto fail;
     }
     f = fdopen(fd, "wb");
+    if (verbose) 
+        printf("<- %s\n", filename);
 
 #ifdef TCC_TARGET_COFF
     if (s1->output_format == TCC_OUTPUT_FORMAT_COFF) {

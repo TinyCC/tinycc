@@ -1960,6 +1960,9 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
         fd = 0, filename = "stdin";
     else
         fd = open(filename, O_RDONLY | O_BINARY);
+    if ((verbose == 2 && fd >= 0) || verbose == 3)
+        printf("%s %*s%s\n", fd < 0 ? "nf":"->",
+               (s1->include_stack_ptr - s1->include_stack), "", filename);
     if (fd < 0)
         return NULL;
     bf = tcc_malloc(sizeof(BufferedFile));
@@ -3033,6 +3036,11 @@ static void preprocess(int is_bof)
             printf("%s: skipping %s\n", file->filename, buf);
 #endif
         } else {
+            if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
+                error("#include recursion too deep");
+            /* push current file in stack */
+            /* XXX: fix current line init */
+            *s1->include_stack_ptr++ = file;
             if (c == '\"') {
                 /* first search in current dir if "header.h" */
                 size = tcc_basename(file->filename) - file->filename;
@@ -3049,8 +3057,6 @@ static void preprocess(int is_bof)
                         goto found;
                 }
             }
-            if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
-                error("#include recursion too deep");
             /* now search in all the include paths */
             n = s1->nb_include_paths + s1->nb_sysinclude_paths;
             for(i = 0; i < n; i++) {
@@ -3070,17 +3076,15 @@ static void preprocess(int is_bof)
                         goto found;
                 }
             }
+            --s1->include_stack_ptr;
             error("include file '%s' not found", buf);
-            f = NULL;
+            break;
         found:
 #ifdef INC_DEBUG
             printf("%s: including %s\n", file->filename, buf1);
 #endif
             f->inc_type = c;
             pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf);
-            /* push current file in stack */
-            /* XXX: fix current line init */
-            *s1->include_stack_ptr++ = file;
             file = f;
             /* add include file debug info */
             if (do_debug) {
@@ -10566,7 +10570,7 @@ void help(void)
            "           [-static] [infile1 infile2...] [-run infile args...]\n"
            "\n"
            "General options:\n"
-           "  -v          display current version\n"
+           "  -v          display current version, increase verbosity\n"
            "  -c          compile only - generate an object file\n"
            "  -o outfile  set output filename\n"
            "  -Bdir       set tcc internal library path\n"
@@ -10671,7 +10675,7 @@ static const TCCOption tcc_options[] = {
     { "nostdinc", TCC_OPTION_nostdinc, 0 },
     { "nostdlib", TCC_OPTION_nostdlib, 0 },
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 }, 
-    { "v", TCC_OPTION_v, 0 },
+    { "v", TCC_OPTION_v, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "w", TCC_OPTION_w, 0 },
     { "pipe", TCC_OPTION_pipe, 0},
     { "E", TCC_OPTION_E, 0},
@@ -10723,10 +10727,12 @@ int parse_args(TCCState *s, int argc, char **argv)
     optind = 0;
     while (1) {
         if (optind >= argc) {
-            if (nb_files == 0 && !print_search_dirs)
+            if (nb_files == 0 && !print_search_dirs) {
+                if (verbose)
+                    exit(0);
                 goto show_help;
-            else
-                break;
+            }
+            break;
         }
         r = argv[optind++];
         if (r[0] != '-' || r[1] == '\0') {
@@ -10864,8 +10870,11 @@ int parse_args(TCCState *s, int argc, char **argv)
                 }
                 break;
             case TCC_OPTION_v:
-                printf("tcc version %s\n", TCC_VERSION);
-                exit(0);
+                do {
+                    if (0 == verbose++) 
+                        printf("tcc version %s\n", TCC_VERSION);
+                } while (*optarg++ == 'v');
+                break;
             case TCC_OPTION_f:
                 if (tcc_set_flag(s, optarg, 1) < 0 && s->warn_unsupported)
                     goto unsupported_option;
@@ -11020,6 +11029,8 @@ int main(int argc, char **argv)
             if (tcc_add_library(s, filename + 2) < 0)
                 error("cannot find %s", filename);
         } else {
+            if (1 == verbose)
+                printf("-> %s\n", filename);
             if (tcc_add_file(s, filename) < 0)
                 ret = 1;
         }
