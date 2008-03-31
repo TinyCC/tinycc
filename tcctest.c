@@ -223,7 +223,7 @@ void macro_test(void)
 #line 203 "test" 
     printf("__LINE__=%d __FILE__=%s\n",
            __LINE__, __FILE__);
-#line 220 "tcctest.c"
+#line 227 "tcctest.c"
 
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS

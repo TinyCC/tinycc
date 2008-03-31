@@ -1035,6 +1035,7 @@ static char *pstrcat(char *buf, int buf_size, const char *s)
     return buf;
 }
 
+#ifndef LIBTCC
 static int strstart(const char *str, const char *val, const char **ptr)
 {
     const char *p, *q;
@@ -1050,6 +1051,7 @@ static int strstart(const char *str, const char *val, const char **ptr)
         *ptr = p;
     return 1;
 }
+#endif
 
 /* extract the basename of a file */
 static char *tcc_basename(const char *name)

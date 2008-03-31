@@ -414,13 +414,6 @@ is the same as writing
 @end itemize
 
 @section GNU C extensions
-@cindex aligned attribute
-@cindex packed attribute
-@cindex section attribute
-@cindex unused attribute
-@cindex cdecl attribute
-@cindex stdcall attribute
-@cindex regparm attribute
 
 TCC implements some GNU C extensions:
 
@@ -454,13 +447,22 @@ instead of
     @}
 @end example
 
+@cindex aligned attribute
+@cindex packed attribute
+@cindex section attribute
+@cindex unused attribute
+@cindex cdecl attribute
+@cindex stdcall attribute
+@cindex regparm attribute
+@cindex dllexport attribute
+
 @item The keyword @code{__attribute__} is handled to specify variable or
 function attributes. The following attributes are supported:
   @itemize
 
   @item @code{aligned(n)}: align a variable or a structure field to n bytes
 (must be a power of two).
-  
+
   @item @code{packed}: force alignment of a variable or a structure field to
   1.
 
@@ -477,6 +479,8 @@ section.
   @item @code{regparm(n)}: use fast i386 calling convention. @var{n} must be
 between 1 and 3. The first @var{n} function parameters are respectively put in
 registers @code{%eax}, @code{%edx} and @code{%ecx}.
+
+  @item @code{dllexport}: export function from dll/executable (win32 only)
 
   @end itemize
 
@@ -733,10 +737,13 @@ TCC for Windows supports the native Win32 executable file format (PE-i386). It
 generates both EXE and DLL files. DLL symbols can be imported thru DEF files
 generated with the @code{tiny_impdef} tool.
 
-Currently TCC for Windows cannot generate nor read PE object files, so ELF
-object files are used for that purpose. It can be a problem if
-interoperability with MSVC is needed. Moreover, no leading underscore is
-currently generated in the ELF symbols.
+On the object file level, currently TCC supports only the ELF format, not COFF 
+as used by MINGW and MSVC. It is not possible to exchange object files or 
+libraries between TCC and these compilers.  However libraries for TCC from objects 
+by TCC can be made using the @code{tiny_libmaker} tool or MINGW's @code{ar}.
+
+No leading underscore is generated in the ELF symbols.  Only functions (no 
+data) can be exported. Bounds checking (@option{-b}) is not supported currently.
 
 @section GNU Linker Scripts
 @cindex scripts, linker

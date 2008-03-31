@@ -1,8 +1,11 @@
 version 0.9.24:
 
+- added verbosity levels -v, -vv, -vvv
+- Accept standard input as an inputstream (Hanzac Chen)
+- Support c89 compilers other than gcc (Hanzac Chen)
+- -soname linker option (Marc Andre Tanner)
 - Just warn about unknown directives, ignore quotes in #error/#warning
 - Define __STDC_VERSION__=199901L (477)
-
 - Switch to newer tccpe.c (includes support for resources)
 - Handle backslashes within #include/#error/#warning
 - Import changesets (part 4) 428,457,460,467: defines for openbsd etc.

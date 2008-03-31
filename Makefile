@@ -66,7 +66,7 @@ test: test.ref test.out
 	@if diff -u test.ref test.out ; then echo "Auto Test OK"; fi
 
 tcctest.ref: tcctest.c 
-	$(CC) $(CFLAGS) -I. -o $@ $<
+	$(CC) $(CFLAGS) -w -I. -o $@ $<
 
 test.ref: tcctest.ref
 	./tcctest.ref > $@
