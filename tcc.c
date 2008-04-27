@@ -10761,15 +10761,8 @@ int parse_args(TCCState *s, int argc, char **argv)
     char *r;
 
     optind = 0;
-    while (1) {
-        if (optind >= argc) {
-            if (nb_files == 0 && !print_search_dirs) {
-                if (verbose)
-                    exit(0);
-                goto show_help;
-            }
-            break;
-        }
+    while (optind < argc) {
+
         r = argv[optind++];
         if (r[0] != '-' || r[1] == '\0') {
             /* add a new file */
@@ -10808,15 +10801,14 @@ int parse_args(TCCState *s, int argc, char **argv)
                 }
             } else {
                 if (*r1 != '\0')
-                    goto show_help;
+                    return 0;
                 optarg = NULL;
             }
                 
             switch(popt->index) {
             case TCC_OPTION_HELP:
-            show_help:
-                help();
-                exit(1);
+                return 0;
+
             case TCC_OPTION_I:
                 if (tcc_add_include_path(s, optarg) < 0)
                     error("too many include paths");
@@ -10963,7 +10955,7 @@ int parse_args(TCCState *s, int argc, char **argv)
             }
         }
     }
-    return optind;
+    return optind + 1;
 }
 
 int main(int argc, char **argv)
@@ -10989,14 +10981,19 @@ int main(int argc, char **argv)
     print_search_dirs = 0;
     ret = 0;
 
-    optind = parse_args(s, argc - 1, argv + 1) + 1;
-
+    optind = parse_args(s, argc - 1, argv + 1);
     if (print_search_dirs) {
         /* enough for Linux kernel */
         printf("install: %s/\n", tcc_lib_path);
         return 0;
     }
-    
+    if (optind == 0 || nb_files == 0) {
+        if (optind && verbose)
+            return 0;
+        help();
+        return 1;
+    }
+
     nb_objfiles = nb_files - nb_libraries;
 
     /* if outfile provided without other options, we output an
