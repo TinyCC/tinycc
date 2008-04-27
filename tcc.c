@@ -390,6 +390,8 @@ static Sym *global_label_stack, *local_label_stack;
 /* symbol allocator */
 #define SYM_POOL_NB (8192 / sizeof(Sym))
 static Sym *sym_free_first;
+static void **sym_pools;
+static int nb_sym_pools;
 
 static SValue vstack[VSTACK_SIZE], *vtop;
 /* some predefined types */
@@ -1118,6 +1120,7 @@ void set_pages_executable(void *ptr, unsigned long length)
 #ifdef MEM_DEBUG
 int mem_cur_size;
 int mem_max_size;
+unsigned malloc_usable_size(void*);
 #endif
 
 static inline void tcc_free(void *ptr)
@@ -1217,6 +1220,7 @@ static Sym *__sym_malloc(void)
     int i;
 
     sym_pool = tcc_malloc(SYM_POOL_NB * sizeof(Sym));
+    dynarray_add(&sym_pools, &nb_sym_pools, sym_pool);
 
     last_sym = sym_free_first;
     sym = sym_pool;
@@ -1279,6 +1283,10 @@ Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
 
 static void free_section(Section *s)
 {
+    if (s->link && 0 == s->link->sh_num)
+        free_section(s->link);
+    if (s->hash && 0 == s->hash->sh_num)
+        s->hash->link = NULL, free_section(s->hash);
     tcc_free(s->data);
     tcc_free(s);
 }
@@ -9476,6 +9484,8 @@ static void preprocess_init(TCCState *s1)
     vtop = vstack - 1;
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
+
+    macro_ptr = NULL;
 }
 
 /* compile the C file opened in 'file'. Return non zero if errors. */
@@ -9578,6 +9588,7 @@ static int tcc_compile(TCCState *s1)
     gen_inline_functions();
 
     sym_pop(&global_stack, NULL);
+    sym_pop(&local_stack, NULL);
 
     return s1->nb_errors != 0 ? -1 : 0;
 }
@@ -9637,9 +9648,8 @@ int tcc_compile_string(TCCState *s, const char *str)
     pstrcpy(bf->filename, sizeof(bf->filename), "<string>");
     bf->line_num = 1;
     file = bf;
-    
     ret = tcc_compile(s);
-    
+    file = NULL;
     tcc_free(buf);
 
     /* currently, no need to close */
@@ -10053,12 +10063,46 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     return (*prog_main)(argc, argv);
 }
 
+void tcc_memstats(void)
+{
+#ifdef MEM_DEBUG
+    printf("memory in use: %d\n", mem_cur_size);
+#endif
+}
+
+static void tcc_cleanup(void)
+{
+    int i, n;
+
+    if (NULL == tcc_state)
+        return;
+    tcc_state = NULL;
+
+    /* free -D defines */
+    free_defines(NULL);
+
+    /* free tokens */
+    n = tok_ident - TOK_IDENT;
+    for(i = 0; i < n; i++)
+        tcc_free(table_ident[i]);
+    tcc_free(table_ident);
+
+    /* free sym_pools */
+    dynarray_reset(&sym_pools, &nb_sym_pools);
+    /* string buffer */
+    cstr_free(&tokcstr);
+    /* reset symbol stack */
+    sym_free_first = NULL;
+}
+
 TCCState *tcc_new(void)
 {
     const char *p, *r;
     TCCState *s;
     TokenSym *ts;
     int i, c;
+
+    tcc_cleanup();
 
     s = tcc_mallocz(sizeof(TCCState));
     if (!s)
@@ -10171,23 +10215,11 @@ TCCState *tcc_new(void)
 
 void tcc_delete(TCCState *s1)
 {
-    int i, n;
+    int i;
 
-    /* free -D defines */
-    free_defines(NULL);
-
-    /* free tokens */
-    n = tok_ident - TOK_IDENT;
-    for(i = 0; i < n; i++)
-        tcc_free(table_ident[i]);
-    tcc_free(table_ident);
+    tcc_cleanup();
 
     /* free all sections */
-
-    free_section(symtab_section->hash);
-
-    free_section(s1->dynsymtab_section->hash);
-    free_section(s1->dynsymtab_section->link);
     free_section(s1->dynsymtab_section);
 
     for(i = 1; i < s1->nb_sections; i++)
