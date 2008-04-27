@@ -1821,6 +1821,11 @@ static int tcc_load_object_file(TCCState *s1,
     Elf32_Rel *rel, *rel_end;
     Section *s;
 
+    int stab_index;
+    int stabstr_index;
+
+    stab_index = stabstr_index = 0;
+
     if (read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
         goto fail1;
     if (ehdr.e_ident[0] != ELFMAG0 ||
@@ -1885,7 +1890,9 @@ static int tcc_load_object_file(TCCState *s1,
 #ifdef TCC_ARM_EABI
             sh->sh_type != SHT_ARM_EXIDX &&
 #endif
-            sh->sh_type != SHT_NOBITS)
+            sh->sh_type != SHT_NOBITS && 
+            strcmp(sh_name, ".stabstr")
+            )
             continue;
         if (sh->sh_addralign < 1)
             sh->sh_addralign = 1;
@@ -1921,11 +1928,22 @@ static int tcc_load_object_file(TCCState *s1,
 
         /* align start of section */
         offset = s->data_offset;
+
+        if (0 == strcmp(sh_name, ".stab")) {
+            stab_index = i;
+            goto no_align;
+        }
+        if (0 == strcmp(sh_name, ".stabstr")) {
+            stabstr_index = i;
+            goto no_align;
+        }
+
         size = sh->sh_addralign - 1;
         offset = (offset + size) & ~size;
         if (sh->sh_addralign > s->sh_addralign)
             s->sh_addralign = sh->sh_addralign;
         s->data_offset = offset;
+    no_align:
         sm_table[i].offset = offset;
         sm_table[i].s = s;
         /* concatenate sections */
@@ -1939,6 +1957,18 @@ static int tcc_load_object_file(TCCState *s1,
             s->data_offset += size;
         }
     next: ;
+    }
+
+    /* //gr relocate stab strings */
+    if (stab_index && stabstr_index) {
+        Stab_Sym *a, *b;
+        unsigned o;
+        s = sm_table[stab_index].s;
+        a = (Stab_Sym *)(s->data + sm_table[stab_index].offset);
+        b = (Stab_Sym *)(s->data + s->data_offset);
+        o = sm_table[stabstr_index].offset;
+        while (a < b) 
+            a->n_strx += o, a++;
     }
 
     /* second short pass to update sh_link and sh_info fields of new
