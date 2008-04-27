@@ -1367,12 +1367,25 @@ int tcc_output_file(TCCState *s1, const char *filename)
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         s->sh_name = put_elf_str(strsec, s->name);
+#if 0 //gr       
+        printf("section: f=%08x t=%08x i=%08x %s %s\n", 
+               s->sh_flags, 
+               s->sh_type, 
+               s->sh_info, 
+               s->name, 
+               s->reloc ? s->reloc->name : "n"
+               ); 
+#endif
         /* when generating a DLL, we include relocations but we may
            patch them */
         if (file_type == TCC_OUTPUT_DLL && 
             s->sh_type == SHT_REL && 
             !(s->sh_flags & SHF_ALLOC)) {
-            prepare_dynamic_rel(s1, s);
+            /* //gr: avoid bogus relocs for empty (debug) sections */
+            if (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC)
+                prepare_dynamic_rel(s1, s);
+            else if (do_debug)
+                s->sh_size = s->data_offset;
         } else if (do_debug || 
             file_type == TCC_OUTPUT_OBJ || 
             (s->sh_flags & SHF_ALLOC) ||
@@ -1595,6 +1608,8 @@ int tcc_output_file(TCCState *s1, const char *filename)
             put_dt(dynamic, DT_REL, rel_addr);
             put_dt(dynamic, DT_RELSZ, rel_size);
             put_dt(dynamic, DT_RELENT, sizeof(Elf32_Rel));
+            if (do_debug)
+                put_dt(dynamic, DT_DEBUG, 0);
             put_dt(dynamic, DT_NULL, 0);
         }
 
@@ -1632,7 +1647,7 @@ int tcc_output_file(TCCState *s1, const char *filename)
         /* XXX: ignore sections with allocated relocations ? */
         for(i = 1; i < s1->nb_sections; i++) {
             s = s1->sections[i];
-            if (s->reloc && s != s1->got)
+            if (s->reloc && s != s1->got && (s->sh_flags & SHF_ALLOC)) //gr
                 relocate_section(s1, s);
         }
 
