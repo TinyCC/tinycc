@@ -1132,7 +1132,7 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
 
 /* output an ELF file */
 /* XXX: suppress unneeded sections */
-int tcc_output_file(TCCState *s1, const char *filename)
+int elf_output_file(TCCState *s1, const char *filename)
 {
     Elf32_Ehdr ehdr;
     FILE *f;
@@ -1785,6 +1785,20 @@ int tcc_output_file(TCCState *s1, const char *filename)
     tcc_free(section_order);
     tcc_free(phdr);
     tcc_free(s1->got_offsets);
+    return ret;
+}
+
+int tcc_output_file(TCCState *s, const char *filename)
+{
+    int ret;
+#ifdef TCC_TARGET_PE
+    if (s->output_type != TCC_OUTPUT_OBJ) {
+        ret = pe_output_file(s, filename);
+    } else
+#endif
+    {
+        ret = elf_output_file(s, filename);
+    }
     return ret;
 }
 

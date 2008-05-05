@@ -11094,14 +11094,7 @@ int main(int argc, char **argv)
     } else if (s->output_type == TCC_OUTPUT_MEMORY) {
         ret = tcc_run(s, argc - optind, argv + optind);
     } else
-#ifdef TCC_TARGET_PE
-    if (s->output_type != TCC_OUTPUT_OBJ) {
-        ret = pe_output_file(s, outfile);
-    } else
-#endif
-    {
         ret = tcc_output_file(s, outfile) ? 1 : 0;
-    }
  the_end:
     /* XXX: cannot do it with bound checking because of the malloc hooks */
     if (!do_bounds_check)
