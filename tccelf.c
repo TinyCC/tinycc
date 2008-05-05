@@ -2276,7 +2276,7 @@ static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     //    printf("loading dll '%s'\n", soname);
 
     /* add the dll and its level */
-    dllref = tcc_malloc(sizeof(DLLReference) + strlen(soname));
+    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
     dllref->level = level;
     strcpy(dllref->name, soname);
     dynarray_add((void ***)&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);

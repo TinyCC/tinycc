@@ -465,6 +465,8 @@ ST_FN int pe_find_import(TCCState * s1, const char *symbol)
 # include <dlfcn.h>
 # define LoadLibrary(s) dlopen(s, RTLD_NOW)
 # define GetProcAddress(h,s) dlsym(h, s)
+#else
+# define dlclose(h) FreeLibrary(h)
 #endif
 
 /* for the -run option: dynamically load symbol from dll */
@@ -472,16 +474,21 @@ void *resolve_sym(struct TCCState *s1, const char *symbol, int type)
 {
     char buffer[100];
     int sym_index, dll_index;
-    void *hModule, *addr, **m;
+    void *addr, **m;
+    DLLReference *dllref;
 
     sym_index = pe_find_import(s1, symbol);
     if (0 == sym_index)
         return NULL;
     dll_index = ((Elf32_Sym *)s1->dynsymtab_section->data + sym_index)->st_value;
-    hModule = LoadLibrary(s1->loaded_dlls[dll_index-1]->name);
-    addr = GetProcAddress(hModule, symbol);
+    dllref = s1->loaded_dlls[dll_index-1];
+    if ( !dllref->handle )
+    {
+        dllref->handle = LoadLibrary(dllref->name);
+    }
+    addr = GetProcAddress(dllref->handle, symbol);
     if (NULL == addr)
-        addr = GetProcAddress(hModule, get_alt_symbol(buffer, symbol));
+        addr = GetProcAddress(dllref->handle, get_alt_symbol(buffer, symbol));
 
     if (addr && STT_OBJECT == type) {
         /* need to return a pointer to the address for data objects */
@@ -1413,9 +1420,8 @@ PUB_FN int pe_load_def_file(TCCState *s1, int fd)
             continue;
 
         case 2:
-            dllref = tcc_malloc(sizeof(DLLReference) + strlen(dllname));
+            dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
             strcpy(dllref->name, dllname);
-            dllref->level = 0;
             dynarray_add((void ***) &s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
             ++state;
 
