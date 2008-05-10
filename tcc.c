@@ -1284,9 +1284,9 @@ Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
 
 static void free_section(Section *s)
 {
-    if (s->link && 0 == s->link->sh_num)
+    if (s->link && (s->link->sh_flags & SHF_PRIVATE))
         free_section(s->link);
-    if (s->hash && 0 == s->hash->sh_num)
+    if (s->hash && (s->link->sh_flags & SHF_PRIVATE))
         s->hash->link = NULL, free_section(s->hash);
     tcc_free(s->data);
     tcc_free(s);
