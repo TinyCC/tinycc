@@ -398,7 +398,7 @@ static SValue vstack[VSTACK_SIZE], *vtop;
 /* some predefined types */
 static CType char_pointer_type, func_old_type, int_type;
 /* true if isid(c) || isnum(c) */
-static unsigned char isidnum_table[256];
+static unsigned char isidnum_table[256-CH_EOF];
 
 /* display some information during compilation */
 static int verbose = 0;
@@ -3772,7 +3772,7 @@ static inline void next_nomacro1(void)
         p++;
         for(;;) {
             c = *p;
-            if (!isidnum_table[c])
+            if (!isidnum_table[c-CH_EOF])
                 break;
             h = TOK_HASH_FUNC(h, c);
             p++;
@@ -3807,7 +3807,7 @@ static inline void next_nomacro1(void)
             p--;
             PEEKC(c, p);
         parse_ident_slow:
-            while (isidnum_table[c]) {
+            while (isidnum_table[c-CH_EOF]) {
                 cstr_ccat(&tokcstr, c);
                 PEEKC(c, p);
             }
@@ -10114,8 +10114,8 @@ TCCState *tcc_new(void)
     s->output_type = TCC_OUTPUT_MEMORY;
 
     /* init isid table */
-    for(i=0;i<256;i++)
-        isidnum_table[i] = isid(i) || isnum(i);
+    for(i=CH_EOF;i<256;i++)
+        isidnum_table[i-CH_EOF] = isid(i) || isnum(i);
 
     /* add all tokens */
     table_ident = NULL;
