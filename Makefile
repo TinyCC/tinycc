@@ -203,28 +203,28 @@ bcheck.o: bcheck.c
 install: tcc_install libinstall
 
 tcc_install: $(PROGS) tcc.1 libtcc1.a $(BCHECK_O) tcc-doc.html
-	mkdir -p "$(bindir)"
-	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
+	mkdir -p "$(DESTDIR)$(bindir)"
+	$(INSTALL) -s -m755 $(PROGS) "$(DESTDIR)$(bindir)"
 ifndef CONFIG_WIN32
-	mkdir -p "$(mandir)/man1"
-	$(INSTALL) tcc.1 "$(mandir)/man1"
+	mkdir -p "$(DESTDIR)$(mandir)/man1"
+	$(INSTALL) tcc.1 "$(DESTDIR)$(mandir)/man1"
 endif
-	mkdir -p "$(tccdir)"
-	mkdir -p "$(tccdir)/include"
+	mkdir -p "$(DESTDIR)$(tccdir)"
+	mkdir -p "$(DESTDIR)$(tccdir)/include"
 ifdef CONFIG_WIN32
-	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 libtcc1.a win32/lib/*.def "$(tccdir)/lib"
-	cp -r win32/include/. "$(tccdir)/include"
-	cp -r win32/examples/. "$(tccdir)/examples"
+	mkdir -p "$(DESTDIR)$(tccdir)/lib"
+	$(INSTALL) -m644 libtcc1.a win32/lib/*.def "$(DESTDIR)$(tccdir)/lib"
+	cp -r win32/include/. "$(DESTDIR)$(tccdir)/include"
+	cp -r win32/examples/. "$(DESTDIR)$(tccdir)/examples"
 else
-	$(INSTALL) -m644 libtcc1.a $(BCHECK_O) "$(tccdir)"
+	$(INSTALL) -m644 libtcc1.a $(BCHECK_O) "$(DESTDIR)$(tccdir)"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
-                   tcclib.h "$(tccdir)/include"
+                   tcclib.h "$(DESTDIR)$(tccdir)/include"
 endif
-	mkdir -p "$(docdir)"
-	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
+	mkdir -p "$(DESTDIR)$(docdir)"
+	$(INSTALL) -m644 tcc-doc.html "$(DESTDIR)$(docdir)"
 ifdef CONFIG_WIN32
-	$(INSTALL) -m644 win32/readme.txt "$(docdir)"
+	$(INSTALL) -m644 win32/readme.txt "$(DESTDIR)$(docdir)"
 endif
 
 clean:
@@ -242,10 +242,10 @@ tcc_p: tcc.c Makefile
 
 # libtcc generation and example
 libinstall: libtcc.a 
-	mkdir -p "$(libdir)"
-	$(INSTALL) -m644 libtcc.a "$(libdir)"
-	mkdir -p "$(includedir)"
-	$(INSTALL) -m644 libtcc.h "$(includedir)"
+	mkdir -p "$(DESTDIR)$(libdir)"
+	$(INSTALL) -m644 libtcc.a "$(DESTDIR)$(libdir)"
+	mkdir -p "$(DESTDIR)$(includedir)"
+	$(INSTALL) -m644 libtcc.h "$(DESTDIR)$(includedir)"
 
 libtcc.o: tcc.c i386-gen.c Makefile
 ifdef CONFIG_WIN32
