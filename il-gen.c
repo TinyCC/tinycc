@@ -449,7 +449,7 @@ void gfunc_prolog(int t)
     while ((sym = sym->next) != NULL) {
         u = sym->t;
         sym_push(sym->v & ~SYM_FIELD, u,
-                 VT_LOCAL | VT_LVAL, addr);
+                 VT_LOCAL | lvalue_type(sym->type.t), addr);
         addr++;
     }
 }
