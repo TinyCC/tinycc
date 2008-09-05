@@ -19,6 +19,7 @@ TMPH="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.h"
 
 # default parameters
 build_cross="no"
+use_libgcc="no"
 prefix=""
 execprefix=""
 bindir=""
@@ -127,6 +128,8 @@ for opt do
   ;; 
   --enable-cross) build_cross="yes"
   ;;
+  --with-libgcc) use_libgcc="yes"
+  ;;
   esac
 done
 
@@ -224,6 +227,7 @@ echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
 echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
 echo "  --make=MAKE              use specified make [$make]"
+echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc1.a"
 echo ""
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -279,6 +283,7 @@ echo "CPU              $cpu"
 echo "Big Endian       $bigendian"
 echo "gprof enabled    $gprof"
 echo "cross compilers  $build_cross"
+echo "use libgcc       $use_libgcc"
 
 echo "Creating config.mak and config.h"
 
@@ -344,6 +349,10 @@ if test "$gprof" = "yes" ; then
 fi
 if test "$build_cross" = "yes" ; then
   echo "CONFIG_CROSS=yes" >> config.mak
+fi
+if test "$use_libgcc" = "yes" ; then
+  echo "#define CONFIG_USE_LIBGCC" >> $TMPH
+  echo "CONFIG_USE_LIBGCC=yes" >> config.mak
 fi
 version=`head $source_path/VERSION`
 echo "VERSION=$version" >>config.mak

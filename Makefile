@@ -51,11 +51,17 @@ PROGS+=c67-tcc$(EXESUF) i386-win32-tcc$(EXESUF)
 endif
 endif
 
+ifdef CONFIG_USE_LIBGCC
+LIBTCC1=
+else
+LIBTCC1=libtcc1.a
+endif
+
 # run local version of tcc with local libraries and includes
 TCC=./tcc -B. -I.
 
 all: $(PROGS) \
-     libtcc1.a $(BCHECK_O) tcc-doc.html tcc.1 libtcc.a \
+     $(LIBTCC1) $(BCHECK_O) tcc-doc.html tcc.1 libtcc.a \
      libtcc_test$(EXESUF)
 
 Makefile: config.mak
@@ -214,7 +220,7 @@ bcheck.o: bcheck.c
 
 install: tcc_install libinstall
 
-tcc_install: $(PROGS) tcc.1 libtcc1.a $(BCHECK_O) tcc-doc.html
+tcc_install: $(PROGS) tcc.1 $(LIBTCC1) $(BCHECK_O) tcc-doc.html
 	mkdir -p "$(DESTDIR)$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(DESTDIR)$(bindir)"
 ifndef CONFIG_WIN32
@@ -225,11 +231,14 @@ endif
 	mkdir -p "$(DESTDIR)$(tccdir)/include"
 ifdef CONFIG_WIN32
 	mkdir -p "$(DESTDIR)$(tccdir)/lib"
-	$(INSTALL) -m644 libtcc1.a win32/lib/*.def "$(DESTDIR)$(tccdir)/lib"
+	$(INSTALL) -m644 $(LIBTCC1) win32/lib/*.def "$(DESTDIR)$(tccdir)/lib"
 	cp -r win32/include/. "$(DESTDIR)$(tccdir)/include"
 	cp -r win32/examples/. "$(DESTDIR)$(tccdir)/examples"
 else
-	$(INSTALL) -m644 libtcc1.a $(BCHECK_O) "$(DESTDIR)$(tccdir)"
+ifndef CONFIG_USE_LIBGCC
+	$(INSTALL) -m644 libtcc1.a "$(DESTDIR)$(tccdir)"
+endif
+	$(INSTALL) -m644 $(BCHECK_O) "$(DESTDIR)$(tccdir)"
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h "$(DESTDIR)$(tccdir)/include"
 endif
