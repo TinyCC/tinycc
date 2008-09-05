@@ -4984,6 +4984,9 @@ int gv(int rc)
 #endif
 
         r = vtop->r & VT_VALMASK;
+        rc2 = RC_INT;
+        if (rc == RC_IRET)
+            rc2 = RC_LRET;
         /* need to reload if:
            - constant
            - lvalue (need to dereference pointer)
@@ -4992,7 +4995,7 @@ int gv(int rc)
             (vtop->r & VT_LVAL) ||
             !(reg_classes[r] & rc) ||
             ((vtop->type.t & VT_BTYPE) == VT_LLONG && 
-             !(reg_classes[vtop->r2] & rc))) {
+             !(reg_classes[vtop->r2] & rc2))) {
             r = get_reg(rc);
             if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
                 /* two register type load : expand to two words
@@ -5029,9 +5032,6 @@ int gv(int rc)
                     vtop->r = vtop[-1].r2;
                 }
                 /* allocate second register */
-                rc2 = RC_INT;
-                if (rc == RC_IRET)
-                    rc2 = RC_LRET;
                 r2 = get_reg(rc2);
                 load(r2, vtop);
                 vpop();
