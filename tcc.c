@@ -5261,6 +5261,8 @@ void gen_opl(int op)
 {
     int t, a, b, op1, c, i;
     int func;
+    unsigned short reg_iret = REG_IRET;
+    unsigned short reg_lret = REG_LRET;
     SValue tmp;
 
     switch(op) {
@@ -5273,17 +5275,22 @@ void gen_opl(int op)
         goto gen_func;
     case '%':
         func = TOK___moddi3;
-        goto gen_func;
+        goto gen_mod_func;
     case TOK_UMOD:
         func = TOK___umoddi3;
+    gen_mod_func:
+#ifdef TCC_ARM_EABI
+	reg_iret = TREG_R2;
+	reg_lret = TREG_R3;
+#endif
     gen_func:
         /* call generic long long function */
         vpush_global_sym(&func_old_type, func);
         vrott(3);
         gfunc_call(2);
         vpushi(0);
-        vtop->r = REG_IRET;
-        vtop->r2 = REG_LRET;
+        vtop->r = reg_iret;
+        vtop->r2 = reg_lret;
         break;
     case '^':
     case '&':
@@ -5407,13 +5414,13 @@ void gen_opl(int op)
             /* XXX: should provide a faster fallback on x86 ? */
             switch(op) {
             case TOK_SAR:
-                func = TOK___sardi3;
+                func = TOK___ashrdi3;
                 goto gen_func;
             case TOK_SHR:
-                func = TOK___shrdi3;
+                func = TOK___lshrdi3;
                 goto gen_func;
             case TOK_SHL:
-                func = TOK___shldi3;
+                func = TOK___ashldi3;
                 goto gen_func;
             }
         }
@@ -5878,6 +5885,7 @@ void gen_op(int op)
     }
 }
 
+#ifndef TCC_TARGET_ARM
 /* generic itof for unsigned long long case */
 void gen_cvt_itof1(int t)
 {
@@ -5885,11 +5893,13 @@ void gen_cvt_itof1(int t)
         (VT_LLONG | VT_UNSIGNED)) {
 
         if (t == VT_FLOAT)
-            vpush_global_sym(&func_old_type, TOK___ulltof);
-        else if (t == VT_DOUBLE)
-            vpush_global_sym(&func_old_type, TOK___ulltod);
+            vpush_global_sym(&func_old_type, TOK___floatundisf);
+#if LDOUBLE_SIZE != 8
+        else if (t == VT_LDOUBLE)
+            vpush_global_sym(&func_old_type, TOK___floatundixf);
+#endif
         else
-            vpush_global_sym(&func_old_type, TOK___ulltold);
+            vpush_global_sym(&func_old_type, TOK___floatundidf);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -5898,6 +5908,7 @@ void gen_cvt_itof1(int t)
         gen_cvt_itof(t);
     }
 }
+#endif
 
 /* generic ftoi for unsigned long long case */
 void gen_cvt_ftoi1(int t)
@@ -5909,10 +5920,12 @@ void gen_cvt_ftoi1(int t)
         st = vtop->type.t & VT_BTYPE;
         if (st == VT_FLOAT)
             vpush_global_sym(&func_old_type, TOK___fixunssfdi);
-        else if (st == VT_DOUBLE)
-            vpush_global_sym(&func_old_type, TOK___fixunsdfdi);
-        else
+#if LDOUBLE_SIZE != 8
+        else if (st == VT_LDOUBLE)
             vpush_global_sym(&func_old_type, TOK___fixunsxfdi);
+#endif
+        else
+            vpush_global_sym(&func_old_type, TOK___fixunsdfdi);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -6020,11 +6033,7 @@ static void gen_cast(CType *type)
                 }
             } else {
             do_itof:
-#if !defined(TCC_TARGET_ARM)
                 gen_cvt_itof1(dbt);
-#else
-                gen_cvt_itof(dbt);
-#endif
             }
         } else if (sf) {
             /* convert fp to int */

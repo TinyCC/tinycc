@@ -110,6 +110,13 @@ static int regmask(int r) {
 #define REG_LRET TREG_R1 /* second word return register (for long long) */
 #define REG_FRET TREG_F0 /* float return register */
 
+#ifdef TCC_ARM_EABI
+#define TOK___divdi3 TOK___aeabi_ldivmod
+#define TOK___moddi3 TOK___aeabi_ldivmod
+#define TOK___udivdi3 TOK___aeabi_uldivmod
+#define TOK___umoddi3 TOK___aeabi_uldivmod
+#endif
+
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS
 
@@ -119,6 +126,11 @@ static int regmask(int r) {
 
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
 static CType float_type, double_type, func_float_type, func_double_type;
+#define func_ldouble_type func_double_type
+#else
+#define func_float_type func_old_type
+#define func_double_type func_old_type
+#define func_ldouble_type func_old_type
 #endif
 
 /* pointer size, in bytes */
@@ -1083,6 +1095,7 @@ void gen_opi(int op)
 {
   int c, func = 0;
   unsigned long opc = 0,r,fr;
+  unsigned short retreg = REG_IRET;
 
   c=0;
   switch(op) {
@@ -1151,11 +1164,21 @@ void gen_opi(int op)
       c=3;
       break;
     case '%':
+#ifdef TCC_ARM_EABI
+      func=TOK___aeabi_idivmod;
+      retreg=REG_LRET;
+#else
       func=TOK___modsi3;
+#endif
       c=3;
       break;
     case TOK_UMOD:
+#ifdef TCC_ARM_EABI
+      func=TOK___aeabi_uidivmod;
+      retreg=REG_LRET;
+#else
       func=TOK___umodsi3;
+#endif
       c=3;
       break;
     case TOK_UMULL:
@@ -1230,7 +1253,7 @@ done:
       vrott(3);
       gfunc_call(2);
       vpushi(0);
-      vtop->r = REG_IRET;
+      vtop->r = retreg;
       break;
     default:
       error("gen_opi %i unimplemented!",op);
@@ -1547,11 +1570,14 @@ void gen_opf(int op)
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-void gen_cvt_itof(int t)
+void gen_cvt_itof1(int t)
 {
   int r,r2,bt;
   bt=vtop->type.t & VT_BTYPE;
   if(bt == VT_INT || bt == VT_SHORT || bt == VT_BYTE) {
+#ifndef TCC_ARM_VFP
+    unsigned int dsize=0;
+#endif
     r=intr(gv(RC_INT));
 #ifdef TCC_ARM_VFP
     r2=vfpr(vtop->r=get_reg(RC_FLOAT));
@@ -1562,10 +1588,12 @@ void gen_cvt_itof(int t)
     o(0xEEB80A40|r2|T2CPR(t)); /* fYitoX*/
 #else
     r2=fpr(vtop->r=get_reg(RC_FLOAT));
-    o(0xEE000190|(r2<<16)|(r<<12));
+    if((t & VT_BTYPE) != VT_FLOAT)
+      dsize=0x80;    /* flts -> fltd */
+    o(0xEE000110|dsize|(r2<<16)|(r<<12)); /* flts */
     if((vtop->type.t & (VT_UNSIGNED|VT_BTYPE)) == (VT_UNSIGNED|VT_INT)) {
       unsigned int off=0;
-      o(0xE3500000|(r<<12));
+      o(0xE3500000|(r<<12));        /* cmp */
       r=fpr(get_reg(RC_FLOAT));
       if(last_itod_magic) {
 	off=ind+8-last_itod_magic;
@@ -1573,44 +1601,50 @@ void gen_cvt_itof(int t)
 	if(off>255)
 	  off=0;
       }
-      o(0xBD1F8100|(r<<12)|off);
+      o(0xBD1F0100|(r<<12)|off);    /* ldflts */
       if(!off) {
-        o(0xEA000001);
+        o(0xEA000000);              /* b */
         last_itod_magic=ind;
-        o(0x41F00000);
-        o(0);
+        o(0x4F800000);              /* 4294967296.0f */
       }
-      o(0xBE000180|(r2<<16)|(r2<<12)|r);
+      o(0xBE000100|dsize|(r2<<16)|(r2<<12)|r); /* adflt */
     }
 #endif
     return;
   } else if(bt == VT_LLONG) {
     int func;
-    CType *func_type = &func_old_type;
-#ifdef TCC_ARM_VFP
-#ifdef TCC_ARM_EABI
-    func_type = &func_double_type;
-#endif
+    CType *func_type = 0;
     if((t & VT_BTYPE) == VT_FLOAT) {
-#ifdef TCC_ARM_EABI
       func_type = &func_float_type;
-#endif
       if(vtop->type.t & VT_UNSIGNED)
-        func=TOK___ulltof;
+        func=TOK___floatundisf;
       else
-        func=TOK___slltof;
-    } else
+        func=TOK___floatdisf;
+#if LDOUBLE_SIZE != 8
+    } else if((t & VT_BTYPE) == VT_LDOUBLE) {
+      func_type = &func_ldouble_type;
+      if(vtop->type.t & VT_UNSIGNED)
+        func=TOK___floatundixf;
+      else
+        func=TOK___floatdixf;
+    } else if((t & VT_BTYPE) == VT_DOUBLE) {
+#else
+    } else if((t & VT_BTYPE) == VT_DOUBLE || (t & VT_BTYPE) == VT_LDOUBLE) {
 #endif
-    if(vtop->type.t & VT_UNSIGNED)
-      func=TOK___ulltold;
-    else
-      func=TOK___slltold;
-    vpush_global_sym(func_type, func);
-    vswap();
-    gfunc_call(1);
-    vpushi(0);
-    vtop->r=TREG_F0;
-    return;
+      func_type = &func_double_type;
+      if(vtop->type.t & VT_UNSIGNED)
+        func=TOK___floatundidf;
+      else
+        func=TOK___floatdidf;
+    }
+    if(func_type) {
+      vpush_global_sym(func_type, func);
+      vswap();
+      gfunc_call(1);
+      vpushi(0);
+      vtop->r=TREG_F0;
+      return;
+    }
   }
   error("unimplemented gen_cvt_itof %x!",vtop->type.t);
 }
@@ -1634,33 +1668,33 @@ void gen_cvt_ftoi(int t)
     if(u) {
       if(r2 == VT_FLOAT)
         func=TOK___fixunssfsi;
-      else if(r2 == VT_DOUBLE)
-	func=TOK___fixunsdfsi;
+#if LDOUBLE_SIZE != 8
       else if(r2 == VT_LDOUBLE)
-#if LDOUBLE_SIZE == 8
-	func=TOK___fixunsdfsi;
-#else
 	func=TOK___fixunsxfsi;
+      else if(r2 == VT_DOUBLE)
+#else
+      else if(r2 == VT_LDOUBLE || r2 == VT_DOUBLE)
 #endif
+	func=TOK___fixunsdfsi;
     } else {
       r=fpr(gv(RC_FLOAT));
       r2=intr(vtop->r=get_reg(RC_INT));
       o(0xEE100170|(r2<<12)|r);
-    return;
+      return;
     }
 #endif
   } else if(t == VT_LLONG) { // unsigned handled in gen_cvt_ftoi1
     if(r2 == VT_FLOAT)
       func=TOK___fixsfdi;
-    else if(r2 == VT_DOUBLE)
-      func=TOK___fixdfdi;
+#if LDOUBLE_SIZE != 8
     else if(r2 == VT_LDOUBLE)
-#if LDOUBLE_SIZE == 8
-      func=TOK___fixdfdi;
-#else
       func=TOK___fixxfdi;
+    else if(r2 == VT_DOUBLE)
+#else
+    else if(r2 == VT_LDOUBLE || r2 == VT_DOUBLE)
 #endif
-    }
+      func=TOK___fixdfdi;
+  }
   if(func) {
     vpush_global_sym(&func_old_type, func);
     vswap();
