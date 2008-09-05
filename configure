@@ -26,6 +26,7 @@ libdir=""
 tccdir=""
 includedir=""
 mandir=""
+sysroot=""
 cross_prefix=""
 cc="gcc"
 host_cc="gcc"
@@ -101,6 +102,8 @@ for opt do
   --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
   ;;
   --mandir=*) mandir=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2`
   ;;
   --source-path=*) source_path=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -218,6 +221,7 @@ echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
 echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
+echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
 echo "  --make=MAKE              use specified make [$make]"
 echo ""
@@ -267,6 +271,7 @@ echo "Library directory   $libdir"
 echo "Include directory   $includedir"
 echo "Manual directory    $mandir"
 echo "Doc directory       $docdir"
+echo "Target root prefix  $sysroot"
 echo "Source path      $source_path"
 echo "C compiler       $cc"
 echo "make             $make"
@@ -287,6 +292,7 @@ echo "libdir=$libdir" >> config.mak
 echo "includedir=$includedir" >> config.mak
 echo "mandir=$mandir" >> config.mak
 echo "docdir=$docdir" >> config.mak
+echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
 echo "MAKE=$make" >> config.mak
 echo "CC=$cc" >> config.mak
