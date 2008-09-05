@@ -30,14 +30,14 @@ INSTALL=install
 ifdef CONFIG_WIN32
 PROGS=tcc$(EXESUF)
 ifdef CONFIG_CROSS
-PROGS+=c67-tcc$(EXESUF) arm-tcc$(EXESUF)
+PROGS+=c67-tcc$(EXESUF) arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
 endif
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 else
 ifeq ($(ARCH),i386)
 PROGS=tcc$(EXESUF)
 ifdef CONFIG_CROSS
-PROGS+=arm-tcc$(EXESUF)
+PROGS+=arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
 endif
 endif
 ifeq ($(ARCH),arm)
@@ -151,8 +151,11 @@ tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i3
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 endif
 ifeq ($(ARCH),arm)
+ARMFLAGS = $(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
+ARMFLAGS += $(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
+
 tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
-	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM $(ARMFLAGS) -o $@ $< $(LIBS)
 endif
 endif
 
@@ -163,7 +166,16 @@ i386-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc
 c67-tcc$(EXESUF): tcc.c c67-gen.c tccelf.c tccasm.c tcctok.h libtcc.h tcccoff.c
 	$(CC) $(CFLAGS) -DTCC_TARGET_C67 -o $@ $< $(LIBS)
 
-arm-tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
+arm-tcc-fpa$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -o $@ $< $(LIBS)
+
+arm-tcc-fpa-ld$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12 -o $@ $< $(LIBS)
+
+arm-tcc-vfp$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
+	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -DTCC_ARM_VFP -o $@ $< $(LIBS)
+
+arm-tcc-vfp-eabi$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
 	$(CC) $(CFLAGS) -DTCC_TARGET_ARM -DTCC_ARM_EABI -o $@ $< $(LIBS)
 
 i386-win32-tcc$(EXESUF): tcc.c i386-gen.c tccelf.c tccasm.c i386-asm.c tcctok.h libtcc.h i386-asm.h tccpe.c
