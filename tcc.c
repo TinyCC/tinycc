@@ -4929,10 +4929,17 @@ int gv(int rc)
 
     /* NOTE: get_reg can modify vstack[] */
     if (vtop->type.t & VT_BITFIELD) {
+        CType type;
         bit_pos = (vtop->type.t >> VT_STRUCT_SHIFT) & 0x3f;
         bit_size = (vtop->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
         /* remove bit field info to avoid loops */
         vtop->type.t &= ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
+        /* cast to int to propagate signedness in following ops */
+        type.t = VT_INT;
+        if((vtop->type.t & VT_UNSIGNED) ||
+           (vtop->type.t & VT_BTYPE) == VT_BOOL)
+            type.t |= VT_UNSIGNED;
+        gen_cast(&type);
         /* generate shifts */
         vpushi(32 - (bit_pos + bit_size));
         gen_op(TOK_SHL);
@@ -6465,7 +6472,7 @@ void vstore(void)
         (sbt == VT_INT && dbt == VT_SHORT)) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
-        vtop->type.t = ft & VT_TYPE;
+        vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));
         /* XXX: factorize */
         if (ft & VT_CONSTANT)
             warning("assignment of read-only location");
@@ -6522,13 +6529,20 @@ void vstore(void)
         vswap();
         vrott(3);
 
+        if((ft & VT_BTYPE) == VT_BOOL) {
+            gen_cast(&vtop[-1].type);
+            vtop[-1].type.t = (vtop[-1].type.t & ~VT_BTYPE) | (VT_BYTE | VT_UNSIGNED);
+        }
+
         /* duplicate destination */
         vdup();
         vtop[-1] = vtop[-2];
 
         /* mask and shift source */
-        vpushi((1 << bit_size) - 1);
-        gen_op('&');
+        if((ft & VT_BTYPE) != VT_BOOL) {
+            vpushi((1 << bit_size) - 1);
+            gen_op('&');
+        }
         vpushi(bit_pos);
         gen_op(TOK_SHL);
         /* load destination, mask and or with source */
@@ -6724,7 +6738,7 @@ static void parse_attribute(AttributeDef *ad)
 static void struct_decl(CType *type, int u)
 {
     int a, v, size, align, maxalign, c, offset;
-    int bit_size, bit_pos, bsize, bt, lbit_pos;
+    int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
     Sym *s, *ss, *ass, **ps;
     AttributeDef ad;
     CType type1, btype;
@@ -6787,6 +6801,7 @@ static void struct_decl(CType *type, int u)
         } else {
             maxalign = 1;
             ps = &s->next;
+            prevbt = VT_INT;
             bit_pos = 0;
             offset = 0;
             while (tok != '}') {
@@ -6845,11 +6860,13 @@ static void struct_decl(CType *type, int u)
                             /* XXX: what to do if only padding in a
                                structure ? */
                             /* zero size: means to pad */
-                            if (bit_pos > 0)
-                                bit_pos = bsize;
+                            bit_pos = 0;
                         } else {
-                            /* we do not have enough room ? */
-                            if ((bit_pos + bit_size) > bsize)
+                            /* we do not have enough room ?
+                               did the type change?
+                               is it a union? */
+                            if ((bit_pos + bit_size) > bsize ||
+                                bt != prevbt || a == TOK_UNION)
                                 bit_pos = 0;
                             lbit_pos = bit_pos;
                             /* XXX: handle LSB first */
@@ -6858,6 +6875,7 @@ static void struct_decl(CType *type, int u)
                                 (bit_size << (VT_STRUCT_SHIFT + 6));
                             bit_pos += bit_size;
                         }
+                        prevbt = bt;
                     } else {
                         bit_pos = 0;
                     }
@@ -8684,6 +8702,8 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
              (bt == VT_INT && bit_size != 32)))
             error("initializer element is not computable at load time");
         switch(bt) {
+        case VT_BOOL:
+            vtop->c.i = (vtop->c.i != 0);
         case VT_BYTE:
             *(char *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
             break;
