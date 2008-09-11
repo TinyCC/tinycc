@@ -5596,8 +5596,9 @@ void gen_opic(int op)
             }
             goto general_case;
         } else if (c2 && (op == '+' || op == '-') &&
-                   (vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) == 
-                   (VT_CONST | VT_SYM)) {
+                   ((vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) ==
+                   (VT_CONST | VT_SYM) ||
+		   (vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_LOCAL)) {
             /* symbol + constant case */
             if (op == '-')
                 l2 = -l2;
