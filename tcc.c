@@ -8275,6 +8275,20 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel);
         /* pop locally defined symbols */
+        if(is_expr) {
+            /* XXX: this solution makes only valgrind happy...
+               triggered by gcc.c-torture/execute/20000917-1.c */
+            Sym *p;
+            switch(vtop->type.t & VT_BTYPE) {
+            case VT_PTR:
+            case VT_STRUCT:
+            case VT_ENUM:
+            case VT_FUNC:
+                for(p=vtop->type.ref;p;p=p->prev)
+                    if(p->prev==s)
+                        error("unsupported expression type");
+            }
+        }
         sym_pop(&local_stack, s);
         next();
     } else if (tok == TOK_RETURN) {
