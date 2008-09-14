@@ -1,3 +1,10 @@
+... for next version:
+
+- Fix bitfields with non-int types and in unions
+- improve ARM cross-compiling (Daniel GlÃ¶ckner)
+- link stabstr sections from multiple objects
+- better (still limited) support for multiple TCCStates
+
 version 0.9.24:
 
 - added verbosity levels -v, -vv, -vvv
@@ -11,7 +18,7 @@ version 0.9.24:
 - Import changesets (part 4) 428,457,460,467: defines for openbsd etc.
 - Use _WIN32 for a windows hosted tcc and define it for the PE target,
   otherwise define __unix / __linux (Detlef Riekenberg)
-- Import changesets (part 3) 409,410: ARM EABI by Daniel Glöckner
+- Import changesets (part 3) 409,410: ARM EABI by Daniel GlÃ¶ckner
 - Some in-between fixes:
   TCC -E no longer hangs with macro calls involving newlines.
   (next_nomacro1 now advances the read-pointer with TOK_LINEFEED)
@@ -52,7 +59,7 @@ version 0.9.24:
   432/434: Cast double and ptr to bool (grischka)
   420: Zero pad x87 tenbyte long doubles (Felix Nawothnig)
   417: Make 'sizeof' unsigned (Rob Landley)
-  397: Fix save_reg for longlongs (Daniel Glöckner)
+  397: Fix save_reg for longlongs (Daniel GlÃ¶ckner)
   396: Fix "invalid relocation entry" problem on ubuntu - (Bernhard Fischer)
 
 - ignore AS_NEEDED ld command
