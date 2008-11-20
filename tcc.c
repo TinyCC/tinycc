@@ -5975,7 +5975,7 @@ void force_charshort_cast(int t)
 /* cast 'vtop' to 'type'. Casting to bitfields is forbidden. */
 static void gen_cast(CType *type)
 {
-    int sbt, dbt, sf, df, c;
+    int sbt, dbt, sf, df, c, p;
 
     /* special delayed cast for char/short */
     /* XXX: in some cases (multiple cascaded casts), it may still
@@ -5997,6 +5997,7 @@ static void gen_cast(CType *type)
         sf = is_float(sbt);
         df = is_float(dbt);
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+        p = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == (VT_CONST | VT_SYM);
         if (c) {
             /* constant case: we can do it now */
             /* XXX: in ISOC, cannot do it if error in convert */
@@ -6053,6 +6054,9 @@ static void gen_cast(CType *type)
                         vtop->c.i = ((int)vtop->c.ll << s) >> s;
                 }
             }
+        } else if (p && dbt == VT_BOOL) {
+            vtop->r = VT_CONST;
+            vtop->c.i = 1;
         } else if (!nocode_wanted) {
             /* non constant case: generate code */
             if (sf && df) {
@@ -6119,8 +6123,7 @@ static void gen_cast(CType *type)
                    the lvalue already contains the real type size (see
                    VT_LVAL_xxx constants) */
             }
-        } else
-            expect("constant expression");
+        }
     } else if ((dbt & VT_BTYPE) == VT_PTR && !(vtop->r & VT_LVAL)) {
         /* if we are casting between pointer types,
            we must update the VT_LVAL_xxx size */
