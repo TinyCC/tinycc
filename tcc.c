@@ -7980,23 +7980,26 @@ static void expr_eq(void)
     CType type, type1, type2;
 
     if (const_wanted) {
-        int c1, c;
         expr_lor_const();
         if (tok == '?') {
+            CType boolean;
+            int c;
+            boolean.t = VT_BOOL;
+            vdup();
+            gen_cast(&boolean);
             c = vtop->c.i;
             vpop();
             next();
-            if (tok == ':' && gnu_ext) {
-                c1 = c;
-            } else {
-                gexpr();
-                c1 = vtop->c.i;
+            if (tok != ':' || !gnu_ext) {
                 vpop();
+                gexpr();
             }
+            if (!c)
+                vpop();
             skip(':');
             expr_eq();
             if (c)
-                vtop->c.i = c1;
+                vpop();
         }
     } else {
         expr_lor();
