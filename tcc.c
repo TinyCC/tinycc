@@ -1770,8 +1770,9 @@ char *get_tok_str(int v, CValue *cv)
         /* XXX: not quite exact, but only useful for testing  */
         sprintf(p, "%Lu", cv->ull);
         break;
-    case TOK_CCHAR:
     case TOK_LCHAR:
+	cstr_ccat(&cstr_buf, 'L');
+    case TOK_CCHAR:
         cstr_ccat(&cstr_buf, '\'');
         add_char(&cstr_buf, cv->i);
         cstr_ccat(&cstr_buf, '\'');
@@ -1784,8 +1785,9 @@ char *get_tok_str(int v, CValue *cv)
             add_char(&cstr_buf, ((unsigned char *)cstr->data)[i]);
         cstr_ccat(&cstr_buf, '\0');
         break;
-    case TOK_STR:
     case TOK_LSTR:
+	cstr_ccat(&cstr_buf, 'L');
+    case TOK_STR:
         cstr = cv->cstr;
         cstr_ccat(&cstr_buf, '\"');
         if (v == TOK_STR) {
