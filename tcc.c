@@ -7516,9 +7516,12 @@ static void unary(void)
     case '!':
         next();
         unary();
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+            CType boolean;
+            boolean.t = VT_BOOL;
+            gen_cast(&boolean);
             vtop->c.i = !vtop->c.i;
-        else if ((vtop->r & VT_VALMASK) == VT_CMP)
+        } else if ((vtop->r & VT_VALMASK) == VT_CMP)
             vtop->c.i = vtop->c.i ^ 1;
         else {
             save_regs(1);
