@@ -9646,30 +9646,43 @@ static int tcc_compile(TCCState *s1)
 static int tcc_preprocess(TCCState *s1)
 {
     Sym *define_start;
-    int last_is_space;
-    
+    BufferedFile *file_ref;
+    int token_seen, line_ref;
+
     preprocess_init(s1);
-
     define_start = define_stack;
-
     ch = file->buf_ptr[0];
+
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS | 
         PARSE_FLAG_LINEFEED;
-    last_is_space = 1;
-    next();
-    for(;;) {
+
+    token_seen = 0;
+    line_ref = 0;
+    file_ref = NULL;
+
+    for (;;) {
+        next();
         if (tok == TOK_EOF) {
             break;
         } else if (tok == TOK_LINEFEED) {
-            last_is_space = 1;
+            if (!token_seen)
+                continue;
+            ++line_ref;
+            token_seen = 0;
+        } else if (token_seen) {
+            fputc(' ', s1->outfile);
         } else {
-            if (!last_is_space)
-                fputc(' ', s1->outfile);
-            last_is_space = 0;
+            int d = file->line_num - line_ref;
+            if (file != file_ref || d < 0 || d >= 8)
+                fprintf(s1->outfile, "# %d \"%s\"\n", file->line_num, file->filename);
+            else
+                while (d)
+                    fputs("\n", s1->outfile), --d;
+            line_ref = (file_ref = file)->line_num;
+            token_seen = 1;
         }
         fputs(get_tok_str(tok, &tokc), s1->outfile);
-        next();
     }
     free_defines(define_start); 
     return 0;
