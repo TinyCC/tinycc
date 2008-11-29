@@ -1261,6 +1261,7 @@ Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
     switch(sh_type) {
     case SHT_HASH:
     case SHT_REL:
+    case SHT_RELA:
     case SHT_DYNSYM:
     case SHT_SYMTAB:
     case SHT_DYNAMIC:
@@ -1349,7 +1350,7 @@ static void put_extern_sym2(Sym *sym, Section *section,
                             int can_add_underscore)
 {
     int sym_type, sym_bind, sh_num, info, other, attr;
-    Elf32_Sym *esym;
+    ElfW(Sym) *esym;
     const char *name;
     char buf1[256];
 
@@ -1424,10 +1425,10 @@ static void put_extern_sym2(Sym *sym, Section *section,
             pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
             name = buf1;
         }
-        info = ELF32_ST_INFO(sym_bind, sym_type);
+        info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = add_elf_sym(symtab_section, value, size, info, other, sh_num, name);
     } else {
-        esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
+        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
         esym->st_value = value;
         esym->st_size = size;
         esym->st_shndx = sh_num;
@@ -9140,11 +9141,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             if (sec) {
                 put_extern_sym(sym, sec, addr, size);
             } else {
-                Elf32_Sym *esym;
+                ElfW(Sym) *esym;
                 /* put a common area */
                 put_extern_sym(sym, NULL, align, size);
                 /* XXX: find a nicer way */
-                esym = &((Elf32_Sym *)symtab_section->data)[sym->c];
+                esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
                 esym->st_shndx = SHN_COMMON;
             }
         } else {
@@ -9270,7 +9271,7 @@ static void gen_function(Sym *sym)
     sym_pop(&local_stack, NULL); /* reset local stack */
     /* end of function */
     /* patch symbol size */
-    ((Elf32_Sym *)symtab_section->data)[sym->c].st_size = 
+    ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
         ind - func_ind;
     if (do_debug) {
         put_stabn(N_FUN, 0, 0, ind - func_ind);
@@ -9552,7 +9553,7 @@ static int tcc_compile(TCCState *s1)
     section_sym = 0; /* avoid warning */
     if (do_debug) {
         section_sym = put_elf_sym(symtab_section, 0, 0, 
-                                  ELF32_ST_INFO(STB_LOCAL, STT_SECTION), 0, 
+                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0, 
                                   text_section->sh_num, NULL);
         getcwd(buf, sizeof(buf));
 #ifdef _WIN32
@@ -9567,7 +9568,7 @@ static int tcc_compile(TCCState *s1)
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
        symbols can be safely used */
     put_elf_sym(symtab_section, 0, 0, 
-                ELF32_ST_INFO(STB_LOCAL, STT_FILE), 0, 
+                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0, 
                 SHN_ABS, file->filename);
 
     /* define some often used types */
@@ -9872,14 +9873,14 @@ static void rt_printline(unsigned long wanted_pc)
     /* second pass: we try symtab symbols (no line number info) */
     incl_index = 0;
     {
-        Elf32_Sym *sym, *sym_end;
+        ElfW(Sym) *sym, *sym_end;
         int type;
 
-        sym_end = (Elf32_Sym *)(symtab_section->data + symtab_section->data_offset);
-        for(sym = (Elf32_Sym *)symtab_section->data + 1; 
+        sym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
+        for(sym = (ElfW(Sym) *)symtab_section->data + 1; 
             sym < sym_end;
             sym++) {
-            type = ELF32_ST_TYPE(sym->st_info);
+            type = ELFW(ST_TYPE)(sym->st_info);
             if (type == STT_FUNC) {
                 if (wanted_pc >= sym->st_value &&
                     wanted_pc < sym->st_value + sym->st_size) {
@@ -10329,7 +10330,7 @@ int tcc_add_sysinclude_path(TCCState *s1, const char *pathname)
 static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     const char *ext;
-    Elf32_Ehdr ehdr;
+    ElfW(Ehdr) ehdr;
     int fd, ret;
     BufferedFile *saved_file;
 
@@ -10502,7 +10503,7 @@ int tcc_add_library(TCCState *s, const char *libraryname)
 int tcc_add_symbol(TCCState *s, const char *name, unsigned long val)
 {
     add_elf_sym(symtab_section, val, 0, 
-                ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_ABS, name);
     return 0;
 }

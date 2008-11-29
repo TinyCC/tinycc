@@ -1630,4 +1630,14 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_C60HI16      0x55       // high 16 bit MVKH embedded
 #define R_C60LO16      0x54       // low 16 bit MVKL embedded
 
+#ifdef TCC_TARGET_X86_64
+#define TCC_ELFCLASS ELFCLASS64
+#define ElfW(type) Elf##64##_##type
+#define ELFW(type) ELF##64##_##type
+#else
+#define TCC_ELFCLASS ELFCLASS32
+#define ElfW(type) Elf##32##_##type
+#define ELFW(type) ELF##32##_##type
+#endif
+
 #endif  /* elf.h */
