@@ -5,6 +5,7 @@
 @echo>..\config.h #define TCC_VERSION "0.9.24"
 @echo>>..\config.h #define TCC_TARGET_PE 1
 @echo>>..\config.h #define CONFIG_TCCDIR "."
+@echo>>..\config.h #define CONFIG_SYSROOT ""
 :
 gcc -Os -fno-strict-aliasing ../tcc.c -o tcc.exe -s
 gcc -Os -fno-strict-aliasing ../tcc.c -D LIBTCC -c -o libtcc.o
