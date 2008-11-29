@@ -195,7 +195,7 @@ typedef struct
 #define EM_V800         36              /* NEC V800 series */
 #define EM_FR20         37              /* Fujitsu FR20 */
 #define EM_RH32         38              /* TRW RH32 */
-#define EM_MMA          39              /* Fujitsu MMA */
+#define EM_RCE          39              /* Motorola RCE */
 #define EM_ARM          40              /* ARM */
 #define EM_FAKE_ALPHA   41              /* Digital Alpha */
 #define EM_SH           42              /* Hitachi SH */
@@ -210,7 +210,46 @@ typedef struct
 #define EM_MIPS_X       51              /* Stanford MIPS-X */
 #define EM_COLDFIRE     52              /* Motorola Coldfire */
 #define EM_68HC12       53              /* Motorola M68HC12 */
-#define EM_NUM          54
+#define EM_MMA          54              /* Fujitsu MMA Multimedia Accelerator*/
+#define EM_PCP          55              /* Siemens PCP */
+#define EM_NCPU         56              /* Sony nCPU embeeded RISC */
+#define EM_NDR1         57              /* Denso NDR1 microprocessor */
+#define EM_STARCORE     58              /* Motorola Start*Core processor */
+#define EM_ME16         59              /* Toyota ME16 processor */
+#define EM_ST100        60              /* STMicroelectronic ST100 processor */
+#define EM_TINYJ        61              /* Advanced Logic Corp. Tinyj emb.fam*/
+#define EM_X86_64       62              /* AMD x86-64 architecture */
+#define EM_PDSP         63              /* Sony DSP Processor */
+#define EM_FX66         66              /* Siemens FX66 microcontroller */
+#define EM_ST9PLUS      67              /* STMicroelectronics ST9+ 8/16 mc */
+#define EM_ST7          68              /* STmicroelectronics ST7 8 bit mc */
+#define EM_68HC16       69              /* Motorola MC68HC16 microcontroller */
+#define EM_68HC11       70              /* Motorola MC68HC11 microcontroller */
+#define EM_68HC08       71              /* Motorola MC68HC08 microcontroller */
+#define EM_68HC05       72              /* Motorola MC68HC05 microcontroller */
+#define EM_SVX          73              /* Silicon Graphics SVx */
+#define EM_ST19         74              /* STMicroelectronics ST19 8 bit mc */
+#define EM_VAX          75              /* Digital VAX */
+#define EM_CRIS         76              /* Axis Communications 32-bit embedded processor */
+#define EM_JAVELIN      77              /* Infineon Technologies 32-bit embedded processor */
+#define EM_FIREPATH     78              /* Element 14 64-bit DSP Processor */
+#define EM_ZSP          79              /* LSI Logic 16-bit DSP Processor */
+#define EM_MMIX         80              /* Donald Knuth's educational 64-bit processor */
+#define EM_HUANY        81              /* Harvard University machine-independent object files */
+#define EM_PRISM        82              /* SiTera Prism */
+#define EM_AVR          83              /* Atmel AVR 8-bit microcontroller */
+#define EM_FR30         84              /* Fujitsu FR30 */
+#define EM_D10V         85              /* Mitsubishi D10V */
+#define EM_D30V         86              /* Mitsubishi D30V */
+#define EM_V850         87              /* NEC v850 */
+#define EM_M32R         88              /* Mitsubishi M32R */
+#define EM_MN10300      89              /* Matsushita MN10300 */
+#define EM_MN10200      90              /* Matsushita MN10200 */
+#define EM_PJ           91              /* picoJava */
+#define EM_OPENRISC     92              /* OpenRISC 32-bit embedded processor */
+#define EM_ARC_A5       93              /* ARC Cores Tangent-A5 */
+#define EM_XTENSA       94              /* Tensilica Xtensa Architecture */
+#define EM_NUM          95
 
 /* If it is necessary to assign new unofficial EM_* values, please
    pick large random numbers (0x8523, 0xa7f2, etc.) to minimize the
@@ -462,7 +501,7 @@ typedef struct
 
 #define ELF64_R_SYM(i)                  ((i) >> 32)
 #define ELF64_R_TYPE(i)                 ((i) & 0xffffffff)
-#define ELF64_R_INFO(sym,type)          (((sym) << 32) + (type))
+#define ELF64_R_INFO(sym,type)          ((((Elf64_Xword)(sym)) << 32) + (type))
 
 /* Program segment header.  */
 
@@ -984,6 +1023,38 @@ typedef struct
 #define R_SPARC_UA16    55              /* Direct 16 bit unaligned */
 /* Keep this the last entry.  */
 #define R_SPARC_NUM     56
+
+/* AMD x86-64 relocations.  */
+#define R_X86_64_NONE		0	/* No reloc */
+#define R_X86_64_64		1	/* Direct 64 bit  */
+#define R_X86_64_PC32		2	/* PC relative 32 bit signed */
+#define R_X86_64_GOT32		3	/* 32 bit GOT entry */
+#define R_X86_64_PLT32		4	/* 32 bit PLT address */
+#define R_X86_64_COPY		5	/* Copy symbol at runtime */
+#define R_X86_64_GLOB_DAT	6	/* Create GOT entry */
+#define R_X86_64_JUMP_SLOT	7	/* Create PLT entry */
+#define R_X86_64_RELATIVE	8	/* Adjust by program base */
+#define R_X86_64_GOTPCREL	9	/* 32 bit signed PC relative
+					   offset to GOT */
+#define R_X86_64_32		10	/* Direct 32 bit zero extended */
+#define R_X86_64_32S		11	/* Direct 32 bit sign extended */
+#define R_X86_64_16		12	/* Direct 16 bit zero extended */
+#define R_X86_64_PC16		13	/* 16 bit sign extended pc relative */
+#define R_X86_64_8		14	/* Direct 8 bit sign extended  */
+#define R_X86_64_PC8		15	/* 8 bit sign extended pc relative */
+#define R_X86_64_DTPMOD64	16	/* ID of module containing symbol */
+#define R_X86_64_DTPOFF64	17	/* Offset in module's TLS block */
+#define R_X86_64_TPOFF64	18	/* Offset in initial TLS block */
+#define R_X86_64_TLSGD		19	/* 32 bit signed PC relative offset
+					   to two GOT entries for GD symbol */
+#define R_X86_64_TLSLD		20	/* 32 bit signed PC relative offset
+					   to two GOT entries for LD symbol */
+#define R_X86_64_DTPOFF32	21	/* Offset in TLS block */
+#define R_X86_64_GOTTPOFF	22	/* 32 bit signed PC relative offset
+					   to GOT entry for IE symbol */
+#define R_X86_64_TPOFF32	23	/* Offset in initial TLS block */
+
+#define R_X86_64_NUM		24
 
 /* For Sparc64, legal values for d_tag of Elf64_Dyn.  */
 
