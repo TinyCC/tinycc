@@ -270,7 +270,7 @@ static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
     sr = s->reloc;
     if (!sr) {
         /* if no relocation section, create it */
-        snprintf(buf, sizeof(buf), ".rel%s", s->name);
+        snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);
         /* if the symtab is allocated, then we consider the relocation
            are also */
         sr = new_section(tcc_state, buf, SHT_RELX, symtab->sh_flags);
@@ -724,12 +724,23 @@ static void build_got(TCCState *s1)
     s1->got->sh_entsize = 4;
     add_elf_sym(symtab_section, 0, 4, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 
                 0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
-    ptr = section_ptr_add(s1->got, 3 * sizeof(int));
+    ptr = section_ptr_add(s1->got, 3 * PTR_SIZE);
+#ifdef PTR_SIZE == 4
     /* keep space for _DYNAMIC pointer, if present */
     put32(ptr, 0);
     /* two dummy got entries */
     put32(ptr + 4, 0);
     put32(ptr + 8, 0);
+#else
+    /* keep space for _DYNAMIC pointer, if present */
+    put32(ptr, 0);
+    put32(ptr + 4, 0);
+    /* two dummy got entries */
+    put32(ptr + 8, 0);
+    put32(ptr + 12, 0);
+    put32(ptr + 16, 0);
+    put32(ptr + 20, 0);
+#endif
 }
 
 /* put a got entry corresponding to a symbol in symtab_section. 'size'
@@ -775,12 +786,12 @@ static void put_got_entry(TCCState *s1,
             if (plt->data_offset == 0) {
                 /* first plt entry */
                 p = section_ptr_add(plt, 16);
-                p[0] = 0xff; /* pushl got + 4 */
+                p[0] = 0xff; /* pushl got + PTR_SIZE */
                 p[1] = modrm + 0x10;
-                put32(p + 2, 4);
-                p[6] = 0xff; /* jmp *(got + 8) */
+                put32(p + 2, PTR_SIZE);
+                p[6] = 0xff; /* jmp *(got + PTR_SIZE * 2) */
                 p[7] = modrm;
-                put32(p + 8, 8);
+                put32(p + 8, PTR_SIZE * 2);
             }
 
             p = section_ptr_add(plt, 16);
@@ -840,7 +851,7 @@ static void put_got_entry(TCCState *s1,
                       s1->got->data_offset, 
                       reloc_type, index);
     }
-    ptr = section_ptr_add(s1->got, sizeof(int));
+    ptr = section_ptr_add(s1->got, PTR_SIZE);
     *ptr = 0;
 }
 
@@ -1338,7 +1349,7 @@ int elf_output_file(TCCState *s1, const char *filename)
 
             /* add necessary space for other entries */
             saved_dynamic_data_offset = dynamic->data_offset;
-            dynamic->data_offset += 8 * 9;
+            dynamic->data_offset += sizeof(ElfW(Dyn)) * 9;
         } else {
             /* still need to build got entries in case of static link */
             build_got_entries(s1);
@@ -1714,7 +1725,7 @@ int elf_output_file(TCCState *s1, const char *filename)
         ehdr.e_ident[1] = ELFMAG1;
         ehdr.e_ident[2] = ELFMAG2;
         ehdr.e_ident[3] = ELFMAG3;
-        ehdr.e_ident[4] = ELFCLASS32;
+        ehdr.e_ident[4] = TCC_ELFCLASS;
         ehdr.e_ident[5] = ELFDATA2LSB;
         ehdr.e_ident[6] = EV_CURRENT;
 #ifdef __FreeBSD__
