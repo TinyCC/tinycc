@@ -7599,6 +7599,24 @@ static void unary(void)
             vpushi(res);
         }
         break;
+    case TOK_builtin_frame_address:
+        {
+            CType type;
+            next();
+            skip('(');
+            if (tok != TOK_CINT) {
+                error("__builtin_frame_address only takes integers");
+            }
+            if (tokc.i != 0) {
+                error("TCC only supports __builtin_frame_address(0)");
+            }
+            next();
+            skip(')');
+            type.t = VT_VOID;
+            mk_pointer(&type);
+            vset(&type, VT_LOCAL, 0);
+        }
+        break;
     case TOK_INC:
     case TOK_DEC:
         t = tok;
