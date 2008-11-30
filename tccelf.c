@@ -725,7 +725,7 @@ static void build_got(TCCState *s1)
     add_elf_sym(symtab_section, 0, 4, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 
                 0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
     ptr = section_ptr_add(s1->got, 3 * PTR_SIZE);
-#ifdef PTR_SIZE == 4
+#if PTR_SIZE == 4
     /* keep space for _DYNAMIC pointer, if present */
     put32(ptr, 0);
     /* two dummy got entries */
