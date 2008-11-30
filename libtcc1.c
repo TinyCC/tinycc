@@ -89,13 +89,13 @@ union double_long {
     double d;
 #if 1
     struct {
-        unsigned long lower;
-        long upper;
+        unsigned int lower;
+        int upper;
     } l;
 #else
     struct {
-        long upper;
-        unsigned long lower;
+        int upper;
+        unsigned int lower;
     } l;
 #endif
     long long ll;
