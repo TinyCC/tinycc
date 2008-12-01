@@ -2560,6 +2560,12 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
         str[len++] = cv->tab[0];
         str[len++] = cv->tab[1];
         str[len++] = cv->tab[2];
+#elif LDOUBLE_SIZE == 16
+    case TOK_CLDOUBLE:
+        str[len++] = cv->tab[0];
+        str[len++] = cv->tab[1];
+        str[len++] = cv->tab[2];
+        str[len++] = cv->tab[3];
 #elif LDOUBLE_SIZE != 8
 #error add long double size support
 #endif
@@ -2584,7 +2590,13 @@ static void tok_str_add_tok(TokenString *s)
     tok_str_add2(s, tok, &tokc);
 }
 
-#if LDOUBLE_SIZE == 12
+#if LDOUBLE_SIZE == 16
+#define LDOUBLE_GET(p, cv)                      \
+        cv.tab[0] = p[0];                       \
+        cv.tab[1] = p[1];                       \
+        cv.tab[2] = p[2];                       \
+        cv.tab[3] = p[3];
+#elif LDOUBLE_SIZE == 12
 #define LDOUBLE_GET(p, cv)                      \
         cv.tab[0] = p[0];                       \
         cv.tab[1] = p[1];                       \
@@ -4967,9 +4979,9 @@ int gv(int rc)
             offset = (data_section->data_offset + align - 1) & -align;
             data_section->data_offset = offset;
             /* XXX: not portable yet */
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__)
             /* Zero pad x87 tenbyte long doubles */
-            if (size == 12)
+            if (size == LDOUBLE_SIZE)
                 vtop->c.tab[2] &= 0xffff;
 #endif
             ptr = section_ptr_add(data_section, size);
