@@ -106,6 +106,9 @@ union float_long {
     long l;
 };
 
+/* XXX: we don't support several builtin supports for now */
+#ifndef __x86_64__
+
 /* XXX: use gcc/tcc intrinsic ? */
 #if defined(__i386__)
 #define sub_ddmmss(sh, sl, ah, al, bh, bl) \
@@ -481,6 +484,8 @@ unsigned short __tcc_fpu_control = 0x137f;
 /* FPU control word for round to zero mode for int conversion */
 unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
 #endif
+
+#endif /* !__x86_64__ */
 
 /* XXX: fix tcc's code generator to do this instead */
 float __floatundisf(unsigned long long a)

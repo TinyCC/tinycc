@@ -39,6 +39,9 @@ case "$cpu" in
   i386|i486|i586|i686|i86pc|BePC)
     cpu="x86"
   ;;
+  x86_64)
+    cpu="x86-64"
+  ;;
   armv4l)
     cpu="armv4l"
   ;;
@@ -313,6 +316,9 @@ echo "EXESUF=$EXESUF" >> config.mak
 if test "$cpu" = "x86" ; then
   echo "ARCH=i386" >> config.mak
   echo "#define HOST_I386 1" >> $TMPH
+elif test "$cpu" = "x86-64" ; then
+  echo "ARCH=x86-64" >> config.mak
+  echo "#define HOST_X86_64 1" >> $TMPH
 elif test "$cpu" = "armv4l" ; then
   echo "ARCH=arm" >> config.mak
   echo "#define HOST_ARM 1" >> $TMPH

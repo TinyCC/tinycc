@@ -282,6 +282,9 @@ static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
     rel = section_ptr_add(sr, sizeof(ElfW_Rel));
     rel->r_offset = offset;
     rel->r_info = ELFW(R_INFO)(symbol, type);
+#ifdef TCC_TARGET_X86_64
+    rel->r_addend = 0;
+#endif
 }
 
 /* put stab debug information */
@@ -469,6 +472,33 @@ static void relocate_syms(TCCState *s1, int do_resolve)
     }
 }
 
+#ifdef TCC_TARGET_X86_64
+#define JMP_TABLE_ENTRY_SIZE 14
+#define JMP_TABLE_ENTRY_MAX_NUM 4096
+static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
+{
+    char *p;
+    if (!s1->jmp_table) {
+        int size = JMP_TABLE_ENTRY_SIZE * JMP_TABLE_ENTRY_MAX_NUM;
+        s1->jmp_table_num = 0;
+        s1->jmp_table = (char *)tcc_malloc(size);
+        set_pages_executable(s1->jmp_table, size);
+    }
+    if (s1->jmp_table_num == JMP_TABLE_ENTRY_MAX_NUM) {
+        error("relocating >%d symbols are not supported",
+              JMP_TABLE_ENTRY_MAX_NUM);
+    }
+    p = s1->jmp_table + s1->jmp_table_num * JMP_TABLE_ENTRY_SIZE;
+    s1->jmp_table_num++;
+    /* jmp *0x0(%rip) */
+    p[0] = 0xff;
+    p[1] = 0x25;
+    *(int *)(p + 2) = 0;
+    *(unsigned long *)(p + 6) = val;
+    return (unsigned long)p;
+}
+#endif
+
 /* relocate a given section (CPU dependent) */
 static void relocate_section(TCCState *s1, Section *s)
 {
@@ -493,6 +523,10 @@ static void relocate_section(TCCState *s1, Section *s)
         sym_index = ELFW(R_SYM)(rel->r_info);
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         val = sym->st_value;
+#ifdef TCC_TARGET_X86_64
+        /* XXX: not tested */
+        val += rel->r_addend;
+#endif
         type = ELFW(R_TYPE)(rel->r_info);
         addr = s->sh_addr + rel->r_offset;
 
@@ -620,6 +654,62 @@ static void relocate_section(TCCState *s1, Section *s)
             fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
                     type,addr,(unsigned int )ptr,val);
             break;
+#elif defined(TCC_TARGET_X86_64)
+        case R_X86_64_64:
+            *(long long *)ptr += val;
+            break;
+        case R_X86_64_32:
+        case R_X86_64_32S:
+            *(int *)ptr += val;
+            break;
+        case R_X86_64_PC32: {
+            long diff = val - addr;
+            if (diff < -2147483648 || diff > 2147483647) {
+                /* XXX: naive support for over 32bit jump */
+                if (s1->output_type == TCC_OUTPUT_MEMORY) {
+                    val = add_jmp_table(s1, val);
+                    diff = val - addr;
+                }
+                if (diff <= -2147483647 || diff > 2147483647) {
+#if 0
+                    /* output memory map to debug easily */
+                    FILE* fp;
+                    char buf[4096];
+                    int size;
+                    Dl_info di;
+                    printf("%ld - %ld = %ld\n", val, addr, diff);
+                    dladdr((void *)addr, &di);
+                    printf("addr = %lx = %lx+%lx(%s) ptr=%p\n",
+                           addr, s->sh_addr, rel->r_offset, di.dli_sname,
+                           ptr);
+                    fp = fopen("/proc/self/maps", "r");
+                    size = fread(buf, 1, 4095, fp);
+                    buf[size] = '\0';
+                    printf("%s", buf);
+#endif
+                    error("internal error: relocation failed");
+                }
+            }
+            *(int *)ptr += val - addr;
+        }
+            break;
+        case R_X86_64_PLT32:
+            *(int *)ptr += val - addr;
+            break;
+        case R_X86_64_GLOB_DAT:
+        case R_X86_64_JUMP_SLOT:
+            *(int *)ptr = val;
+            break;
+        case R_X86_64_GOTPCREL:
+            *(int *)ptr += s1->got->sh_addr - addr;
+            break;
+        case R_X86_64_GOTTPOFF:
+            *(int *)ptr += val - s1->got->sh_addr;
+            break;
+        case R_X86_64_GOT32:
+            /* we load the got offset */
+            *(int *)ptr += s1->got_offsets[sym_index];
+            break;
 #else
 #error unsupported processor
 #endif
@@ -708,7 +798,8 @@ static void put32(unsigned char *p, uint32_t val)
     p[3] = val >> 24;
 }
 
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM)
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM) || \
+    defined(TCC_TARGET_X86_64)
 static uint32_t get32(unsigned char *p)
 {
     return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
@@ -769,8 +860,14 @@ static void put_got_entry(TCCState *s1,
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         name = symtab_section->link->data + sym->st_name;
         offset = sym->st_value;
-#ifdef TCC_TARGET_I386
-        if (reloc_type == R_386_JMP_SLOT) {
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
+        if (reloc_type ==
+#ifdef TCC_TARGET_X86_64
+            R_X86_64_JUMP_SLOT
+#else
+            R_386_JMP_SLOT
+#endif
+            ) {
             Section *plt;
             uint8_t *p;
             int modrm;
@@ -930,6 +1027,25 @@ static void build_got_entries(TCCState *s1)
                         reloc_type = R_C60_GLOB_DAT;
                     else
                         reloc_type = R_C60_JMP_SLOT;
+                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info, 
+                                  sym_index);
+                }
+                break;
+#elif defined(TCC_TARGET_X86_64)
+            case R_X86_64_GOT32:
+            case R_X86_64_GOTTPOFF:
+            case R_X86_64_GOTPCREL:
+            case R_X86_64_PLT32:
+                if (!s1->got)
+                    build_got(s1);
+                if (type == R_X86_64_GOT32 || type == R_X86_64_PLT32) {
+                    sym_index = ELFW(R_SYM)(rel->r_info);
+                    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                    /* look at the symbol got offset. If none, then add one */
+                    if (type == R_X86_64_GOT32)
+                        reloc_type = R_X86_64_GLOB_DAT;
+                    else
+                        reloc_type = R_X86_64_JUMP_SLOT;
                     put_got_entry(s1, reloc_type, sym->st_size, sym->st_info, 
                                   sym_index);
                 }
@@ -1130,6 +1246,8 @@ static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
 #else
 #ifdef TCC_ARM_EABI
 static char elf_interp[] = "/lib/ld-linux.so.3";
+#elif defined(TCC_TARGET_X86_64)
+static char elf_interp[] = "/lib/ld-linux-x86-64.so.2";
 #else
 static char elf_interp[] = "/lib/ld-linux.so.2";
 #endif
@@ -1593,6 +1711,15 @@ int elf_output_file(TCCState *s1, const char *filename)
                         put32(p + 2, get32(p + 2) + s1->got->sh_addr);
                         p += 16;
                     }
+#elif defined(TCC_TARGET_X86_64)
+                    int x = s1->got->sh_addr - s1->plt->sh_addr - 6;
+                    put32(p + 2, get32(p + 2) + x);
+                    put32(p + 8, get32(p + 8) + x - 6);
+                    p += 16;
+                    while (p < p_end) {
+                        put32(p + 2, get32(p + 2) + x + s1->plt->data - p);
+                        p += 16;
+                    }
 #elif defined(TCC_TARGET_ARM)
                     int x;
                     x=s1->got->sh_addr - s1->plt->sh_addr - 12;
@@ -1632,9 +1759,15 @@ int elf_output_file(TCCState *s1, const char *filename)
             put_dt(dynamic, DT_SYMTAB, s1->dynsym->sh_addr);
             put_dt(dynamic, DT_STRSZ, dynstr->data_offset);
             put_dt(dynamic, DT_SYMENT, sizeof(ElfW(Sym)));
+#ifdef TCC_TARGET_X86_64
+            put_dt(dynamic, DT_RELA, rel_addr);
+            put_dt(dynamic, DT_RELASZ, rel_size);
+            put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));
+#else
             put_dt(dynamic, DT_REL, rel_addr);
             put_dt(dynamic, DT_RELSZ, rel_size);
             put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
+#endif
             if (do_debug)
                 put_dt(dynamic, DT_DEBUG, 0);
             put_dt(dynamic, DT_NULL, 0);

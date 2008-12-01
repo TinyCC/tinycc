@@ -9,18 +9,26 @@ LIBS=-lm
 ifndef CONFIG_NOLDL
 LIBS+=-ldl
 endif
+ifneq ($(ARCH),x86-64)
 BCHECK_O=bcheck.o
+endif
 endif
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
+ifneq ($(GCC_MAJOR),2)
+CFLAGS+=-fno-strict-aliasing
+endif
+
+ifeq ($(ARCH),i386)
 CFLAGS+=-mpreferred-stack-boundary=2
 ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
-CFLAGS+=-march=i386 -falign-functions=0 -fno-strict-aliasing
+CFLAGS+=-march=i386 -falign-functions=0
 ifneq ($(GCC_MAJOR),3)
 CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
+endif
 endif
 endif
 
@@ -49,6 +57,9 @@ endif
 ifdef CONFIG_CROSS
 PROGS+=c67-tcc$(EXESUF) i386-win32-tcc$(EXESUF)
 endif
+endif
+ifeq ($(ARCH),x86-64)
+PROGS=tcc$(EXESUF)
 endif
 
 ifdef CONFIG_USE_LIBGCC
@@ -163,6 +174,10 @@ ARMFLAGS += $(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-
 tcc$(EXESUF): tcc.c arm-gen.c tccelf.c tccasm.c tcctok.h libtcc.h
 	$(CC) $(CFLAGS) -DTCC_TARGET_ARM $(ARMFLAGS) -o $@ $< $(LIBS)
 endif
+ifeq ($(ARCH),x86-64)
+tcc$(EXESUF): tcc.c tccelf.c tccasm.c tcctok.h libtcc.h x86_64-gen.c
+	$(CC) $(CFLAGS) -DTCC_TARGET_X86_64 -o $@ $< $(LIBS)
+endif
 endif
 
 # Cross Tiny C Compilers
@@ -238,7 +253,9 @@ else
 ifndef CONFIG_USE_LIBGCC
 	$(INSTALL) -m644 libtcc1.a "$(DESTDIR)$(tccdir)"
 endif
+ifneq ($(ARCH),x86-64)
 	$(INSTALL) -m644 $(BCHECK_O) "$(DESTDIR)$(tccdir)"
+endif
 	$(INSTALL) -m644 stdarg.h stddef.h stdbool.h float.h varargs.h \
                    tcclib.h "$(DESTDIR)$(tccdir)/include"
 endif
@@ -272,7 +289,11 @@ libtcc.o: tcc.c i386-gen.c Makefile
 ifdef CONFIG_WIN32
 	$(CC) $(CFLAGS) -DTCC_TARGET_PE -DLIBTCC -c -o $@ $<
 else
+ifeq ($(ARCH),x86-64)
+	$(CC) $(CFLAGS) -DTCC_TARGET_X86_64 -DLIBTCC -c -o $@ $<
+else
 	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
+endif
 endif
 
 libtcc.a: libtcc.o 
