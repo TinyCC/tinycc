@@ -8808,6 +8808,10 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         /* XXX: generate error if incorrect relocation */
         gen_assign_cast(&dtype);
         bt = type->t & VT_BTYPE;
+        /* we'll write at most 12 bytes */
+        if (c + 12 > sec->data_allocated) {
+            section_realloc(sec, c + 12);
+        }
         ptr = sec->data + c;
         /* XXX: make code faster ? */
         if (!(type->t & VT_BITFIELD)) {
