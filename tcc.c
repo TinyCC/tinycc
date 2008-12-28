@@ -5556,8 +5556,20 @@ void gen_opic(int op)
     v2 = vtop;
     t1 = v1->type.t & VT_BTYPE;
     t2 = v2->type.t & VT_BTYPE;
-    l1 = (t1 == VT_LLONG) ? v1->c.ll : v1->c.i;
-    l2 = (t2 == VT_LLONG) ? v2->c.ll : v2->c.i;
+
+    if (t1 == VT_LLONG)
+        l1 = v1->c.ll;
+    else if (v1->type.t & VT_UNSIGNED)
+        l1 = v1->c.ui;
+    else
+        l1 = v1->c.i;
+
+    if (t2 == VT_LLONG)
+        l2 = v2->c.ll;
+    else if (v2->type.t & VT_UNSIGNED)
+        l2 = v2->c.ui;
+    else
+        l2 = v2->c.i;
 
     /* currently, we cannot do computations with forward symbols */
     c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
