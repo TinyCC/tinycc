@@ -331,6 +331,7 @@ typedef struct CachedInclude {
 /* parser */
 static struct BufferedFile *file;
 static int ch, tok;
+static CString tok_spaces;  /* spaces before current token */
 static CValue tokc;
 static CString tokcstr; /* current parsed string, if any */
 /* additional informations about token */
@@ -3675,6 +3676,7 @@ static inline void next_nomacro1(void)
     uint8_t *p, *p1;
     unsigned int h;
 
+    cstr_reset(&tok_spaces);
     p = file->buf_ptr;
  redo_no_start:
     c = *p;
@@ -3684,6 +3686,7 @@ static inline void next_nomacro1(void)
     case '\f':
     case '\v':
     case '\r':
+        cstr_ccat(&tok_spaces, c);
         p++;
         goto redo_no_start;
         
@@ -9777,7 +9780,10 @@ static int tcc_compile(TCCState *s1)
 }
 
 /* Preprocess the current file */
-/* XXX: add line and file infos, add options to preserve spaces */
+/* XXX: add line and file infos,
+ * XXX: add options to preserve spaces (partly done, only spaces in macro are
+ *      not preserved)
+ */
 static int tcc_preprocess(TCCState *s1)
 {
     Sym *define_start;
@@ -9806,7 +9812,7 @@ static int tcc_preprocess(TCCState *s1)
             ++line_ref;
             token_seen = 0;
         } else if (token_seen) {
-            fputc(' ', s1->outfile);
+            fwrite(tok_spaces.data, tok_spaces.size, 1, s1->outfile);
         } else {
             int d = file->line_num - line_ref;
             if (file != file_ref || d < 0 || d >= 8)
