@@ -312,11 +312,7 @@ test\14\
 
 void string_test()
 {
-#if defined(__x86_64__) && defined(__GNUC__)
     unsigned int b;
-#else
-    int b;
-#endif
     printf("string:\n");
     printf("\141\1423\143\n");/* dezdez test */
     printf("\x41\x42\x43\x3a\n");
