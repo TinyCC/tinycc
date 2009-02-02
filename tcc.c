@@ -6229,8 +6229,15 @@ static int type_size(CType *type, int *a)
         return s->c;
     } else if (bt == VT_PTR) {
         if (type->t & VT_ARRAY) {
+            int ts;
+
             s = type->ref;
-            return type_size(&s->type, a) * s->c;
+            ts = type_size(&s->type, a);
+
+            if (ts < 0 && s->c < 0)
+                ts = -ts;
+
+            return ts * s->c;
         } else {
             *a = PTR_SIZE;
             return PTR_SIZE;
