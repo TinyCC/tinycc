@@ -33,16 +33,21 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
-#include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
+
 #ifdef _WIN32
-#include <sys/timeb.h>
 #include <windows.h>
+#include <sys/timeb.h>
+#ifdef _MSC_VER
+#define inline __inline
 #endif
+#endif
+
 #ifndef _WIN32
+#include <unistd.h>
 #include <sys/time.h>
 #include <sys/ucontext.h>
 #include <sys/mman.h>
