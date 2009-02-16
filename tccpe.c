@@ -343,10 +343,10 @@ enum {
     sec_data ,
     sec_bss ,
     sec_idata ,
+    sec_other ,
     sec_rsrc ,
     sec_stab ,
     sec_reloc ,
-
     sec_last
 };
 
@@ -355,6 +355,7 @@ ST_DATA DWORD pe_sec_flags[] = {
     0xC0000040, /* ".data"     , */
     0xC0000080, /* ".bss"      , */
     0x40000040, /* ".idata"    , */
+    0xE0000060, /* < other >   , */
     0x40000040, /* ".rsrc"     , */
     0x42000802, /* ".stab"     , */
     0x42000040, /* ".reloc"    , */
@@ -960,6 +961,7 @@ ST_FN int pe_section_class(Section *s)
                 return sec_rsrc;
             if (0 == strcmp(name, ".iedat"))
                 return sec_idata;
+            return sec_other;
         } else if (type == SHT_NOBITS) {
             if (flags & SHF_WRITE)
                 return sec_bss;
