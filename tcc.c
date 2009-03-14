@@ -6947,7 +6947,11 @@ static void struct_decl(CType *type, int u)
                             bt != VT_BYTE && 
                             bt != VT_SHORT &&
                             bt != VT_BOOL &&
-                            bt != VT_ENUM)
+                            bt != VT_ENUM
+#ifdef TCC_TARGET_X86_64
+                            && bt != VT_LLONG
+#endif
+                            )
                             error("bitfields must have scalar type");
                         bsize = size * 8;
                         if (bit_size > bsize) {
