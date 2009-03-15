@@ -5890,13 +5890,7 @@ void gen_op(int op)
             }
             type1 = vtop[-1].type;
 #ifdef TCC_TARGET_X86_64
-            {
-                CValue cval;
-                CType ctype;
-                ctype.t = VT_LLONG;
-                cval.ull = pointed_size(&vtop[-1].type);
-                vsetc(&ctype, VT_CONST, &cval);
-            }
+            vpushll(pointed_size(&vtop[-1].type));
 #else
             /* XXX: cast to int ? (long long case) */
             vpushi(pointed_size(&vtop[-1].type));
