@@ -844,6 +844,7 @@ static int is_compatible_parameter_types(CType *type1, CType *type2);
 int ieee_finite(double d);
 void error(const char *fmt, ...);
 void vpushi(int v);
+void vpushll(long long v);
 void vrott(int n);
 void vnrott(int n);
 void lexpand_nr(void);
@@ -4663,6 +4664,16 @@ void vpushi(int v)
     vsetc(&int_type, VT_CONST, &cval);
 }
 
+/* push long long constant */
+void vpushll(long long v)
+{
+    CValue cval;
+    CType ctype;
+    ctype.t = VT_LLONG;
+    cval.ull = v;
+    vsetc(&ctype, VT_CONST, &cval);
+}
+
 /* Return a static symbol pointing to a section */
 static Sym *get_sym_ref(CType *type, Section *sec, 
                         unsigned long offset, unsigned long size)
@@ -4971,20 +4982,25 @@ int gv(int rc)
     /* NOTE: get_reg can modify vstack[] */
     if (vtop->type.t & VT_BITFIELD) {
         CType type;
+        int bits = 32;
         bit_pos = (vtop->type.t >> VT_STRUCT_SHIFT) & 0x3f;
         bit_size = (vtop->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
         /* remove bit field info to avoid loops */
         vtop->type.t &= ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
         /* cast to int to propagate signedness in following ops */
-        type.t = VT_INT;
+        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+            type.t = VT_LLONG;
+            bits = 64;
+        } else
+            type.t = VT_INT;
         if((vtop->type.t & VT_UNSIGNED) ||
            (vtop->type.t & VT_BTYPE) == VT_BOOL)
             type.t |= VT_UNSIGNED;
         gen_cast(&type);
         /* generate shifts */
-        vpushi(32 - (bit_pos + bit_size));
+        vpushi(bits - (bit_pos + bit_size));
         gen_op(TOK_SHL);
-        vpushi(32 - bit_size);
+        vpushi(bits - bit_size);
         /* NOTE: transformed to SHR if unsigned */
         gen_op(TOK_SAR);
         r = gv(rc);
@@ -6628,14 +6644,22 @@ void vstore(void)
 
         /* mask and shift source */
         if((ft & VT_BTYPE) != VT_BOOL) {
-            vpushi((1 << bit_size) - 1);
+            if((ft & VT_BTYPE) == VT_LLONG) {
+                vpushll((1ULL << bit_size) - 1ULL);
+            } else {
+                vpushi((1 << bit_size) - 1);
+            }
             gen_op('&');
         }
         vpushi(bit_pos);
         gen_op(TOK_SHL);
         /* load destination, mask and or with source */
         vswap();
-        vpushi(~(((1 << bit_size) - 1) << bit_pos));
+        if((ft & VT_BTYPE) == VT_LLONG) {
+            vpushll(~(((1ULL << bit_size) - 1ULL) << bit_pos));
+        } else {
+            vpushi(~(((1 << bit_size) - 1) << bit_pos));
+        }
         gen_op('&');
         gen_op('|');
         /* store result */
@@ -6947,11 +6971,8 @@ static void struct_decl(CType *type, int u)
                             bt != VT_BYTE && 
                             bt != VT_SHORT &&
                             bt != VT_BOOL &&
-                            bt != VT_ENUM
-#ifdef TCC_TARGET_X86_64
-                            && bt != VT_LLONG
-#endif
-                            )
+                            bt != VT_ENUM &&
+                            bt != VT_LLONG)
                             error("bitfields must have scalar type");
                         bsize = size * 8;
                         if (bit_size > bsize) {

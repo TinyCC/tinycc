@@ -1375,6 +1375,21 @@ void bitfield_test(void)
         printf("st1.f2 == -1\n");
     else 
         printf("st1.f2 != -1\n");
+
+    /* bit sizes below must be bigger than 32 since GCC doesn't allow
+       long-long bitfields whose size is not bigger than int */
+    struct sbf2 {
+        long long f1 : 45;
+        long long : 2;
+        long long f2 : 35;
+        unsigned long long f3 : 38;
+    } st2;
+    st2.f1 = 0x123456789ULL;
+    a = 120;
+    st2.f2 = (long long)a << 25;
+    st2.f3 = a;
+    st2.f2++;
+    printf("%lld %lld %lld\n", st2.f1, st2.f2, st2.f3);
 }
 
 #ifdef __x86_64__
