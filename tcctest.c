@@ -1693,6 +1693,8 @@ void longlong_test(void)
     a = 68719476720LL;
     b = 4294967295LL;
     printf("%d %d %d %d\n", a > b, a < b, a >= b, a <= b);
+
+    printf("%Ld\n", 0x123456789LLU);
 }
 
 void manyarg_test(void)

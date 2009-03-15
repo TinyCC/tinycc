@@ -312,7 +312,7 @@ void load(int r, SValue *sv)
         gen_modrm(r, fr, sv->sym, fc);
     } else {
         if (v == VT_CONST) {
-            if ((ft & VT_TYPE) == VT_LLONG) {
+            if ((ft & VT_BTYPE) == VT_LLONG) {
                 o(0x48);
                 o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_addr64(fr, sv->sym, sv->c.ull);
