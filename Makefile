@@ -4,6 +4,10 @@
 include config.mak
 
 CFLAGS+=-g -Wall
+ifeq ($(ARCH),x86-64)
+CFLAGS+=-Wno-pointer-sign
+endif
+
 ifndef CONFIG_WIN32
 LIBS=-lm
 ifndef CONFIG_NOLDL
