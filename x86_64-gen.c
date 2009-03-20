@@ -198,14 +198,6 @@ static void gen_addr64(int r, Sym *sym, int64_t c)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-static void gen_addr32(int r, Sym *sym, int c)
-{
-    if (r & VT_SYM)
-        greloc(cur_text_section, sym, ind, R_X86_64_32);
-    gen_le32(c);
-}
-
-/* output constant with relocation if 'r & VT_SYM' is true */
 static void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
@@ -317,9 +309,14 @@ void load(int r, SValue *sv)
                 o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_addr64(fr, sv->sym, sv->c.ull);
             } else {
-                o(0xc748);
-                o(0xc0 + REG_VALUE(r)); /* mov $xx, r */
-                gen_addr32(fr, sv->sym, fc);
+                if (fr & VT_SYM) {
+                    o(0x8d48);
+                    o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
+                    gen_addrpc32(fr, sv->sym, fc);
+                } else {
+                    o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
+                    gen_le32(fc);
+                }
             }
         } else if (v == VT_LOCAL) {
             o(0x48 | REX_BASE(r));
