@@ -508,9 +508,7 @@ static void relocate_section(TCCState *s1, Section *s)
     int type, sym_index;
     unsigned char *ptr;
     unsigned long val, addr;
-#if defined(TCC_TARGET_I386)
     int esym_index;
-#endif
 
     sr = s->reloc;
     rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
@@ -656,13 +654,36 @@ static void relocate_section(TCCState *s1, Section *s)
             break;
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_64:
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
+                qrel->r_addend = *(long long *)ptr + val;
+                qrel++;
+            }
             *(long long *)ptr += val;
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                /* XXX: this logic may depend on TCC's codegen
+                   now TCC uses R_X86_64_32 even for a 64bit pointer */
+                qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
+                qrel->r_addend = *(int *)ptr + val;
+                qrel++;
+            }
             *(int *)ptr += val;
             break;
         case R_X86_64_PC32: {
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                /* DLL relocation */
+                esym_index = s1->symtab_to_dynsym[sym_index];
+                if (esym_index) {
+                    qrel->r_offset = rel->r_offset;
+                    qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
+                    qrel->r_addend = *(int *)ptr;
+                    qrel++;
+                    break;
+                }
+            }
             long diff = val - addr;
             if (diff < -2147483648 || diff > 2147483647) {
                 /* XXX: naive support for over 32bit jump */
@@ -690,7 +711,7 @@ static void relocate_section(TCCState *s1, Section *s)
                     error("internal error: relocation failed");
                 }
             }
-            *(int *)ptr += val - addr;
+            *(int *)ptr += diff;
         }
             break;
         case R_X86_64_PLT32:
@@ -748,10 +769,19 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         sym_index = ELFW(R_SYM)(rel->r_info);
         type = ELFW(R_TYPE)(rel->r_info);
         switch(type) {
+#if defined(TCC_TARGET_I386)
         case R_386_32:
+#elif defined(TCC_TARGET_X86_64)
+        case R_X86_64_32:
+        case R_X86_64_32S:
+#endif
             count++;
             break;
+#if defined(TCC_TARGET_I386)
         case R_386_PC32:
+#elif defined(TCC_TARGET_X86_64)
+        case R_X86_64_PC32:
+#endif
             esym_index = s1->symtab_to_dynsym[sym_index];
             if (esym_index)
                 count++;
