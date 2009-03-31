@@ -9176,9 +9176,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 if (tok == '{')
                     level++;
                 else if (tok == '}') {
-                    if (level == 0)
-                        break;
                     level--;
+                    if (level <= 0) {
+                        next();
+                        break;
+                    }
                 }
                 next();
             }
