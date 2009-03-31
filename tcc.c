@@ -3660,6 +3660,8 @@ void parse_number(const char *p)
         else
             tokc.ull = n;
     }
+    if (ch)
+        error("invalid number\n");
 }
 
 
