@@ -20,14 +20,10 @@ struct __va_list_struct {
 
 typedef struct __va_list_struct *va_list;
 
-/* avoid #define malloc tcc_malloc.
-   XXX: add __malloc or something into libtcc? */
-inline void *__va_list_malloc(size_t size) { return malloc(size); }
-inline void __va_list_free(void *ptr) { free(ptr); }
-
+/* we use __builtin_(malloc|free) to avoid #define malloc tcc_malloc */
 /* XXX: this lacks the support of aggregated types. */
 #define va_start(ap, last)                                              \
-    (ap = (va_list)__va_list_malloc(sizeof(struct __va_list_struct)),   \
+    (ap = (va_list)__builtin_malloc(sizeof(struct __va_list_struct)),   \
      *ap = *(struct __va_list_struct*)(                                 \
          (char*)__builtin_frame_address(0) - 16),                       \
      ap->overflow_arg_area = ((char *)__builtin_frame_address(0) +      \
@@ -53,7 +49,7 @@ inline void __va_list_free(void *ptr) { free(ptr); }
 #define va_copy(dest, src)                                      \
     ((dest) = (va_list)malloc(sizeof(struct __va_list_struct)), \
      *(dest) = *(src))
-#define va_end(ap) __va_list_free(ap)
+#define va_end(ap) __builtin_free(ap)
 
 #else
 

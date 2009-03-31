@@ -7750,6 +7750,24 @@ static void unary(void)
             vset(&type, VT_LOCAL, 0);
         }
         break;
+#ifdef TCC_TARGET_X86_64
+    case TOK_builtin_malloc:
+        {
+            char *p = file->buf_ptr;
+            file->buf_ptr = "malloc";
+            next_nomacro1();
+            file->buf_ptr = p;
+            goto tok_identifier;
+        }
+    case TOK_builtin_free:
+        {
+            char *p = file->buf_ptr;
+            file->buf_ptr = "free";
+            next_nomacro1();
+            file->buf_ptr = p;
+            goto tok_identifier;
+        }
+#endif
     case TOK_INC:
     case TOK_DEC:
         t = tok;
