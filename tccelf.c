@@ -22,11 +22,16 @@
 #define ElfW_Rel ElfW(Rela)
 #define SHT_RELX SHT_RELA
 #define REL_SECTION_FMT ".rela%s"
+/* x86-64 requires PLT for DLLs */
+#define TCC_OUTPUT_DLL_WITH_PLT
 #else
 #define ElfW_Rel ElfW(Rel)
 #define SHT_RELX SHT_REL
 #define REL_SECTION_FMT ".rel%s"
 #endif
+
+/* XXX: DLL with PLT would only work with x86-64 for now */
+//#define TCC_OUTPUT_DLL_WITH_PLT
 
 static int put_elf_str(Section *s, const char *sym)
 {
@@ -902,11 +907,15 @@ static void put_got_entry(TCCState *s1,
             uint8_t *p;
             int modrm;
 
+#if defined(TCC_OUTPUT_DLL_WITH_PLT)
+            modrm = 0x25;
+#else
             /* if we build a DLL, we add a %ebx offset */
             if (s1->output_type == TCC_OUTPUT_DLL)
                 modrm = 0xa3;
             else
                 modrm = 0x25;
+#endif
 
             /* add a PLT entry */
             plt = s1->plt;
@@ -932,7 +941,9 @@ static void put_got_entry(TCCState *s1,
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
+#if !defined(TCC_OUTPUT_DLL_WITH_PLT)
             if (s1->output_type == TCC_OUTPUT_EXE)
+#endif
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_ARM)
@@ -1468,13 +1479,29 @@ int elf_output_file(TCCState *s1, const char *filename)
                     sym < sym_end;
                     sym++) {
                     if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
-                        name = symtab_section->link->data + sym->st_name;
-                        index = put_elf_sym(s1->dynsym, sym->st_value, sym->st_size, 
-                                            sym->st_info, 0, 
-                                            sym->st_shndx, name);
-                        s1->symtab_to_dynsym[sym - 
-                                            (ElfW(Sym) *)symtab_section->data] = 
-                            index;
+#if defined(TCC_OUTPUT_DLL_WITH_PLT)
+                        if (ELFW(ST_TYPE)(sym->st_info) == STT_FUNC &&
+                            sym->st_shndx == SHN_UNDEF) {
+                            put_got_entry(s1, R_JMP_SLOT, sym->st_size, 
+                                          sym->st_info, 
+                                          sym - (ElfW(Sym) *)symtab_section->data);
+                        }
+                        else if (ELFW(ST_TYPE)(sym->st_info) == STT_OBJECT) {
+                            put_got_entry(s1, R_X86_64_GLOB_DAT, sym->st_size, 
+                                          sym->st_info, 
+                                          sym - (ElfW(Sym) *)symtab_section->data);
+                        }
+                        else
+#endif
+                        {
+                            name = symtab_section->link->data + sym->st_name;
+                            index = put_elf_sym(s1->dynsym, sym->st_value, sym->st_size, 
+                                                sym->st_info, 0, 
+                                                sym->st_shndx, name);
+                            s1->symtab_to_dynsym[sym - 
+                                                 (ElfW(Sym) *)symtab_section->data] = 
+                                index;
+                        }
                     }
                 }
             }
@@ -1727,7 +1754,11 @@ int elf_output_file(TCCState *s1, const char *filename)
             put32(s1->got->data, dynamic->sh_addr);
 
             /* relocate the PLT */
-            if (file_type == TCC_OUTPUT_EXE) {
+            if (file_type == TCC_OUTPUT_EXE
+#if defined(TCC_OUTPUT_DLL_WITH_PLT)
+                || file_type == TCC_OUTPUT_DLL
+#endif
+                ) {
                 uint8_t *p, *p_end;
 
                 p = s1->plt->data;
