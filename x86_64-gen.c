@@ -582,6 +582,8 @@ void gfunc_call(int nb_args)
         vtop--;
     }
 
+    save_regs(0); /* save used temporary registers */
+
     /* Copy R10 and R11 into RDX and RCX, respectively */
     if (nb_reg_args > 2) {
         o(0xd2894c); /* mov %r10, %rdx */
@@ -589,8 +591,6 @@ void gfunc_call(int nb_args)
             o(0xd9894c); /* mov %r11, %rcx */
         }
     }
-
-    save_regs(0); /* save used temporary registers */
 
     func_sym = vtop->type.ref;
     func_call = FUNC_CALL(func_sym->r);
