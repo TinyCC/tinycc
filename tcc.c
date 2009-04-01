@@ -4802,13 +4802,12 @@ void save_reg(int r)
                 r = p->r & VT_VALMASK;
                 /* store register in the stack */
                 type = &p->type;
-#ifndef TCC_TARGET_X86_64
-                if ((p->r & VT_LVAL) || 
+                if ((p->r & VT_LVAL) ||
                     (!is_float(type->t) && (type->t & VT_BTYPE) != VT_LLONG))
-                    type = &int_type;
-#else
-                if (p->r & VT_LVAL)
+#ifdef TCC_TARGET_X86_64
                     type = &char_pointer_type;
+#else
+                    type = &int_type;
 #endif
                 size = type_size(type, &align);
                 loc = (loc - size) & -align;
