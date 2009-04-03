@@ -203,8 +203,8 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    funcmax = 1000;
-    afpos = realloc(NULL, funcmax); // 250 func
+    funcmax = 250;
+    afpos = realloc(NULL, funcmax * sizeof *afpos); // 250 func
     memcpy(&arhdro.ar_mode, "100666", 6);
 
     //iarg = 1;
@@ -264,11 +264,11 @@ int main(int argc, char **argv)
                     anames = realloc(anames, strpos+istrlen);
                     strcpy(anames + strpos, strtab + sym->st_name);
                     strpos += istrlen;
-                    if (funccnt >= funcmax) {
-                        afpos = realloc(NULL, funcmax+1000);    // 250 func more
-                        funcmax += 1000;
+                    if (++funccnt >= funcmax) {
+                        funcmax += 250;
+                        afpos = realloc(afpos, funcmax * sizeof *afpos); // 250 func more
                     }
-                    afpos[++funccnt] = fpos;
+                    afpos[funccnt] = fpos;
                 }
             }
         }
