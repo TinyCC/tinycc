@@ -6266,7 +6266,11 @@ static int type_size(CType *type, int *a)
         return LDOUBLE_SIZE;
     } else if (bt == VT_DOUBLE || bt == VT_LLONG) {
 #ifdef TCC_TARGET_I386
+#ifdef TCC_TARGET_PE
         *a = 8;
+#else
+        *a = 4;
+#endif
 #elif defined(TCC_TARGET_ARM)
 #ifdef TCC_ARM_EABI
         *a = 8; 
