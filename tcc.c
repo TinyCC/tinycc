@@ -466,6 +466,9 @@ struct TCCState {
     Section **sections;
     int nb_sections; /* number of sections, including first dummy section */
 
+    Section **priv_sections;
+    int nb_priv_sections; /* number of private sections */
+
     /* got handling */
     Section *got;
     Section *plt;
@@ -1294,22 +1297,19 @@ Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
         break;
     }
 
-    /* only add section if not private */
-    if (!(sh_flags & SHF_PRIVATE)) {
+    if (sh_flags & SHF_PRIVATE) {
+        dynarray_add((void ***)&s1->priv_sections, &s1->nb_priv_sections, sec);
+    } else {
         sec->sh_num = s1->nb_sections;
         dynarray_add((void ***)&s1->sections, &s1->nb_sections, sec);
     }
+
     return sec;
 }
 
 static void free_section(Section *s)
 {
-    if (s->link && (s->link->sh_flags & SHF_PRIVATE))
-        free_section(s->link);
-    if (s->hash && (s->hash->sh_flags & SHF_PRIVATE))
-        s->hash->link = NULL, free_section(s->hash);
     tcc_free(s->data);
-    tcc_free(s);
 }
 
 /* realloc section and set its content to zero */
@@ -10506,15 +10506,16 @@ void tcc_delete(TCCState *s1)
     tcc_cleanup();
 
     /* free all sections */
-    free_section(s1->dynsymtab_section);
-
     for(i = 1; i < s1->nb_sections; i++)
         free_section(s1->sections[i]);
-    tcc_free(s1->sections);
-	
+    dynarray_reset(&s1->sections, &s1->nb_sections);
+
+    for(i = 0; i < s1->nb_priv_sections; i++)
+        free_section(s1->priv_sections[i]);
+    dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
+        
     /* free any loaded DLLs */
-    for ( i = 0; i < s1->nb_loaded_dlls; i++)
-    {
+    for ( i = 0; i < s1->nb_loaded_dlls; i++) {
         DLLReference *ref = s1->loaded_dlls[i];
         if ( ref->handle )
             dlclose(ref->handle);
