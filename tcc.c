@@ -1078,16 +1078,19 @@ static int strstart(const char *str, const char *val, const char **ptr)
 }
 #endif
 
+#ifdef _WIN32
+#define IS_PATHSEP(c) (c == '/' || c == '\\')
+#define IS_ABSPATH(p) (IS_PATHSEP(p[0]) || (p[0] && p[1] == ':' && IS_PATHSEP(p[2])))
+#else
+#define IS_PATHSEP(c) (c == '/')
+#define IS_ABSPATH(p) IS_PATHSEP(p[0])
+#endif
+
 /* extract the basename of a file */
 static char *tcc_basename(const char *name)
 {
     char *p = strchr(name, 0);
-    while (p > name
-        && p[-1] != '/'
-#ifdef _WIN32
-        && p[-1] != '\\'
-#endif
-        )
+    while (p > name && !IS_PATHSEP(p[-1]))
         --p;
     return p;
 }
@@ -3086,6 +3089,13 @@ static void preprocess(int is_bof)
             /* push current file in stack */
             /* XXX: fix current line init */
             *s1->include_stack_ptr++ = file;
+
+            /* check absolute include path */
+            if (IS_ABSPATH(buf)) {
+                f = tcc_open(s1, buf);
+                if (f)
+                    goto found;
+            }
             if (c == '\"') {
                 /* first search in current dir if "header.h" */
                 size = tcc_basename(file->filename) - file->filename;
