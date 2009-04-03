@@ -295,11 +295,11 @@ static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
 /* put stab debug information */
 
 typedef struct {
-    unsigned long n_strx;         /* index into string table of name */
+    unsigned int n_strx;         /* index into string table of name */
     unsigned char n_type;         /* type of symbol */
     unsigned char n_other;        /* misc info (usually empty) */
     unsigned short n_desc;        /* description field */
-    unsigned long n_value;        /* value of symbol */
+    unsigned int n_value;        /* value of symbol */
 } Stab_Sym;
 
 static void put_stabs(const char *str, int type, int other, int desc, 
@@ -324,7 +324,7 @@ static void put_stabs_r(const char *str, int type, int other, int desc,
 {
     put_stabs(str, type, other, desc, value);
     put_elf_reloc(symtab_section, stab_section, 
-                  stab_section->data_offset - sizeof(unsigned long),
+                  stab_section->data_offset - sizeof(unsigned int),
                   R_DATA_32, sym_index);
 }
 
