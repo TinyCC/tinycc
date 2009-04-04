@@ -728,6 +728,10 @@ static void relocate_section(TCCState *s1, Section *s)
             break;
         case R_X86_64_GOTPCREL:
             *(int *)ptr += s1->got->sh_addr - addr;
+            /* XXX: is this OK? */
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                *(int *)ptr += s1->got_offsets[sym_index] - 4;
+            }
             break;
         case R_X86_64_GOTTPOFF:
             *(int *)ptr += val - s1->got->sh_addr;
@@ -779,6 +783,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_32:
         case R_X86_64_32S:
+        case R_X86_64_64:
 #endif
             count++;
             break;
@@ -1079,11 +1084,12 @@ static void build_got_entries(TCCState *s1)
             case R_X86_64_PLT32:
                 if (!s1->got)
                     build_got(s1);
-                if (type == R_X86_64_GOT32 || type == R_X86_64_PLT32) {
+                if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL ||
+                    type == R_X86_64_PLT32) {
                     sym_index = ELFW(R_SYM)(rel->r_info);
                     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                     /* look at the symbol got offset. If none, then add one */
-                    if (type == R_X86_64_GOT32)
+                    if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL)
                         reloc_type = R_X86_64_GLOB_DAT;
                     else
                         reloc_type = R_X86_64_JUMP_SLOT;
