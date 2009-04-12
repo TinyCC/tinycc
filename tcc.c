@@ -542,15 +542,6 @@ struct TCCState {
 
     /* output file for preprocessing */
     FILE *outfile;
-
-#ifdef TCC_TARGET_X86_64
-    /* buffer to store jump tables used when the output is memory */
-    char *jmp_table;
-    int jmp_table_num;
-    /* buffer to store got tables used when the output is memory */
-    void **got_table;
-    int got_table_num;
-#endif
 };
 
 /* The current value can be: */
@@ -1315,7 +1306,12 @@ Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
 
 static void free_section(Section *s)
 {
-    tcc_free(s->data);
+#ifdef TCC_TARGET_X86_64
+    /* after tcc_relocate(), some sections share the data buffer.
+       let's check if the data is allocated not to free the shared buffers */
+    if (s->data_allocated)
+#endif
+        tcc_free(s->data);
 }
 
 /* realloc section and set its content to zero */
@@ -10276,6 +10272,51 @@ int tcc_relocate(TCCState *s1)
 #ifndef TCC_TARGET_PE
     build_got_entries(s1);
 #endif
+
+#ifdef TCC_TARGET_X86_64
+    {
+        /* If the distance of two sections are longer than 32bit, our
+           program will crash. Let's combine all sections which are
+           necessary to run the program into a single buffer in the
+           text section */
+        unsigned char *p;
+        int size;
+        /* calculate the size of buffers we need */
+        size = 0;
+        for(i = 1; i < s1->nb_sections; i++) {
+            s = s1->sections[i];
+            if (s->sh_flags & SHF_ALLOC) {
+                size += s->data_offset;
+            }
+        }
+        /* double the size of the buffer for got and plt entries
+           XXX: calculate exact size for them? */
+        section_realloc(text_section, size * 2);
+        p = text_section->data + text_section->data_offset;
+        /* we will put got and plt after this offset */
+        text_section->data_offset = size;
+
+        for(i = 1; i < s1->nb_sections; i++) {
+            s = s1->sections[i];
+            if (s->sh_flags & SHF_ALLOC) {
+                if (s != text_section && s->data_offset) {
+                    if (s->sh_type == SHT_NOBITS) {
+                        /* for bss section */
+                        memset(p, 0, s->data_offset);
+                    } else {
+                        memcpy(p, s->data, s->data_offset);
+                        tcc_free(s->data);
+                    }
+                    s->data = p;
+                    /* we won't free s->data for this section */
+                    s->data_allocated = 0;
+                    p += s->data_offset;
+                }
+                s->sh_addr = (unsigned long)s->data;
+            }
+        }
+    }
+#else
     /* compute relocation address : section are relocated in place. We
        also alloc the bss space */
     for(i = 1; i < s1->nb_sections; i++) {
@@ -10286,6 +10327,7 @@ int tcc_relocate(TCCState *s1)
             s->sh_addr = (unsigned long)s->data;
         }
     }
+#endif
 
     relocate_syms(s1, 1);
 
@@ -10505,11 +10547,6 @@ TCCState *tcc_new(void)
     /* XXX: currently the PE linker is not ready to support that */
     s->leading_underscore = 1;
 #endif
-
-#ifdef TCC_TARGET_X86_64
-    s->jmp_table = NULL;
-    s->got_table = NULL;
-#endif
     return s;
 }
 
@@ -10546,10 +10583,6 @@ void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
 
-#ifdef TCC_TARGET_X86_64
-    tcc_free(s1->jmp_table);
-    tcc_free(s1->got_table);
-#endif
     tcc_free(s1);
 }
 

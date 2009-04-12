@@ -479,22 +479,9 @@ static void relocate_syms(TCCState *s1, int do_resolve)
 
 #ifdef TCC_TARGET_X86_64
 #define JMP_TABLE_ENTRY_SIZE 14
-#define JMP_TABLE_ENTRY_MAX_NUM 4096
 static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
 {
-    char *p;
-    if (!s1->jmp_table) {
-        int size = JMP_TABLE_ENTRY_SIZE * JMP_TABLE_ENTRY_MAX_NUM;
-        s1->jmp_table_num = 0;
-        s1->jmp_table = (char *)tcc_malloc(size);
-        set_pages_executable(s1->jmp_table, size);
-    }
-    if (s1->jmp_table_num == JMP_TABLE_ENTRY_MAX_NUM) {
-        error("relocating >%d symbols are not supported",
-              JMP_TABLE_ENTRY_MAX_NUM);
-    }
-    p = s1->jmp_table + s1->jmp_table_num * JMP_TABLE_ENTRY_SIZE;
-    s1->jmp_table_num++;
+    char *p = (char *)section_ptr_add(text_section, JMP_TABLE_ENTRY_SIZE);
     /* jmp *0x0(%rip) */
     p[0] = 0xff;
     p[1] = 0x25;
@@ -503,21 +490,10 @@ static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
     return (unsigned long)p;
 }
 
-#define GOT_TABLE_ENTRY_MAX_NUM 4096
 static unsigned long add_got_table(TCCState *s1, unsigned long val)
 {
-    unsigned long *p;
-    if (!s1->got_table) {
-        int size = sizeof(void *) * GOT_TABLE_ENTRY_MAX_NUM;
-        s1->got_table_num = 0;
-        s1->got_table = (char *)tcc_malloc(size);
-    }
-    if (s1->got_table_num == GOT_TABLE_ENTRY_MAX_NUM) {
-        error("relocating >%d symbols are not supported",
-              GOT_TABLE_ENTRY_MAX_NUM);
-    }
-    p = s1->got_table + s1->got_table_num;
-    s1->got_table_num++;
+    unsigned long *p =
+        (unsigned long *)section_ptr_add(text_section, sizeof(void *));
     *p = val;
     return (unsigned long)p;
 }
