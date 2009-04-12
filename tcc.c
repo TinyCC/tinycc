@@ -544,9 +544,12 @@ struct TCCState {
     FILE *outfile;
 
 #ifdef TCC_TARGET_X86_64
-    /* buffer to store jump tables */
+    /* buffer to store jump tables used when the output is memory */
     char *jmp_table;
     int jmp_table_num;
+    /* buffer to store got tables used when the output is memory */
+    void **got_table;
+    int got_table_num;
 #endif
 };
 
@@ -10505,6 +10508,7 @@ TCCState *tcc_new(void)
 
 #ifdef TCC_TARGET_X86_64
     s->jmp_table = NULL;
+    s->got_table = NULL;
 #endif
     return s;
 }
@@ -10544,6 +10548,7 @@ void tcc_delete(TCCState *s1)
 
 #ifdef TCC_TARGET_X86_64
     tcc_free(s1->jmp_table);
+    tcc_free(s1->got_table);
 #endif
     tcc_free(s1);
 }

@@ -502,6 +502,25 @@ static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
     *(unsigned long *)(p + 6) = val;
     return (unsigned long)p;
 }
+
+#define GOT_TABLE_ENTRY_MAX_NUM 4096
+static unsigned long add_got_table(TCCState *s1, unsigned long val)
+{
+    unsigned long *p;
+    if (!s1->got_table) {
+        int size = sizeof(void *) * GOT_TABLE_ENTRY_MAX_NUM;
+        s1->got_table_num = 0;
+        s1->got_table = (char *)tcc_malloc(size);
+    }
+    if (s1->got_table_num == GOT_TABLE_ENTRY_MAX_NUM) {
+        error("relocating >%d symbols are not supported",
+              GOT_TABLE_ENTRY_MAX_NUM);
+    }
+    p = s1->got_table + s1->got_table_num;
+    s1->got_table_num++;
+    *p = val;
+    return (unsigned long)p;
+}
 #endif
 
 /* relocate a given section (CPU dependent) */
@@ -727,11 +746,13 @@ static void relocate_section(TCCState *s1, Section *s)
             *(int *)ptr = val;
             break;
         case R_X86_64_GOTPCREL:
-            *(int *)ptr += s1->got->sh_addr - addr;
-            /* XXX: is this OK? */
-            if (s1->output_type == TCC_OUTPUT_DLL) {
-                *(int *)ptr += s1->got_offsets[sym_index] - 4;
+            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+                val = add_got_table(s1, val - rel->r_addend) + rel->r_addend;
+                *(int *)ptr += val - addr;
+                break;
             }
+            *(int *)ptr += (s1->got->sh_addr - addr +
+                            s1->got_offsets[sym_index] - 4);
             break;
         case R_X86_64_GOTTPOFF:
             *(int *)ptr += val - s1->got->sh_addr;
