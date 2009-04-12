@@ -888,7 +888,6 @@ int gtst(int inv, int t)
             gsym(vtop->c.i);
         }
     } else {
-        /* XXX: not tested */
         if (is_float(vtop->type.t) ||
             (vtop->type.t & VT_BTYPE) == VT_LLONG) {
             vpushi(0);

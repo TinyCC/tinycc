@@ -1420,6 +1420,8 @@ void prefix ## cmp(type a, type b)\
     printf(fmt "\n", ++a);\
     printf(fmt "\n", a++);\
     printf(fmt "\n", a);\
+    b = 0;\
+    printf("%d %d\n", !a, !b);\
 }\
 void prefix ## fcast(type a)\
 {\
@@ -1583,6 +1585,8 @@ void lloptest(long long a, long long b)
     printf("arith2: %Ld %Ld\n", a++, b++);
     printf("arith2: %Ld %Ld\n", --a, --b);
     printf("arith2: %Ld %Ld\n", a, b);
+    b = ub = 0;
+    printf("not: %d %d %d %d\n", !a, !ua, !b, !ub);
 }
 
 void llshift(long long a, int b)
