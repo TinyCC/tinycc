@@ -1399,6 +1399,11 @@ void bitfield_test(void)
 #define FLOAT_FMT "%.5f\n"
 #endif
 
+/* declare strto* functions as they are C99 */
+double strtod(const char *nptr, char **endptr);
+float strtof(const char *nptr, char **endptr);
+long double strtold(const char *nptr, char **endptr);
+
 #define FTEST(prefix, type, fmt)\
 void prefix ## cmp(type a, type b)\
 {\
@@ -1455,6 +1460,7 @@ void prefix ## call(void)\
     printf("float: " FLOAT_FMT, prefix ## retf(42.123456789));\
     printf("double: %f\n", prefix ## retd(42.123456789));\
     printf("long double: %Lf\n", prefix ## retld(42.123456789));\
+    printf("strto%s: %f\n", #prefix, (double)strto ## prefix("1.2", NULL));\
 }\
 \
 void prefix ## test(void)\

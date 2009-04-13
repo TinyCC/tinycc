@@ -5180,6 +5180,28 @@ void gv2(int rc1, int rc2)
     }
 }
 
+/* wrapper around RC_FRET to return a register by type */
+int rc_fret(int t)
+{
+#ifdef TCC_TARGET_X86_64
+    if (t == VT_LDOUBLE) {
+        return TREG_ST0;
+    }
+#endif
+    return RC_FRET;
+}
+
+/* wrapper around REG_FRET to return a register by type */
+int reg_fret(int t)
+{
+#ifdef TCC_TARGET_X86_64
+    if (t == VT_LDOUBLE) {
+        return TREG_ST0;
+    }
+#endif
+    return REG_FRET;
+ }
+
 /* expand long long on stack in two int registers */
 void lexpand(void)
 {
@@ -6014,7 +6036,7 @@ void gen_cvt_itof1(int t)
         vrott(2);
         gfunc_call(1);
         vpushi(0);
-        vtop->r = REG_FRET;
+        vtop->r = reg_fret(t);
     } else {
         gen_cvt_itof(t);
     }
@@ -7942,7 +7964,7 @@ static void unary(void)
                 ret.type = s->type; 
                 /* return in register */
                 if (is_float(ret.type.t)) {
-                    ret.r = REG_FRET; 
+                    ret.r = reg_fret(ret.type.t);
                 } else {
                     if ((ret.type.t & VT_BTYPE) == VT_LLONG)
                         ret.r2 = REG_LRET;
@@ -8524,7 +8546,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                 }
 #endif
             } else if (is_float(func_vt.t)) {
-                gv(RC_FRET);
+                gv(rc_fret(func_vt.t));
             } else {
                 gv(RC_IRET);
             }
