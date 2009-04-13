@@ -5185,7 +5185,7 @@ int rc_fret(int t)
 {
 #ifdef TCC_TARGET_X86_64
     if (t == VT_LDOUBLE) {
-        return TREG_ST0;
+        return RC_ST0;
     }
 #endif
     return RC_FRET;
@@ -5200,7 +5200,7 @@ int reg_fret(int t)
     }
 #endif
     return REG_FRET;
- }
+}
 
 /* expand long long on stack in two int registers */
 void lexpand(void)
