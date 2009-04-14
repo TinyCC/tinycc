@@ -10193,7 +10193,7 @@ static int rt_get_caller_pc(unsigned long *paddr,
         fp = uc->uc_mcontext.gregs[REG_RBP];
         for(i=1;i<level;i++) {
             /* XXX: check address validity with program info */
-            if (fp <= 0x1000 || fp >= 0xc0000000)
+            if (fp <= 0x1000)
                 return -1;
             fp = ((unsigned long *)fp)[0];
         }
