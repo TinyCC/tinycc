@@ -6634,11 +6634,11 @@ void vstore(void)
 
             /* destination */
             vpushv(vtop - 2);
-            vtop->type.t = VT_INT;
+            vtop->type.t = VT_PTR;
             gaddrof();
             /* source */
             vpushv(vtop - 2);
-            vtop->type.t = VT_INT;
+            vtop->type.t = VT_PTR;
             gaddrof();
             /* type size */
             vpushi(size);
