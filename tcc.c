@@ -1075,9 +1075,11 @@ static int strstart(const char *str, const char *val, const char **ptr)
 #ifdef _WIN32
 #define IS_PATHSEP(c) (c == '/' || c == '\\')
 #define IS_ABSPATH(p) (IS_PATHSEP(p[0]) || (p[0] && p[1] == ':' && IS_PATHSEP(p[2])))
+#define PATHCMP stricmp
 #else
 #define IS_PATHSEP(c) (c == '/')
 #define IS_ABSPATH(p) IS_PATHSEP(p[0])
+#define PATHCMP strcmp
 #endif
 
 /* extract the basename of a file */
@@ -2908,7 +2910,7 @@ static CachedInclude *search_cached_include(TCCState *s1,
         if (i == 0)
             break;
         e = s1->cached_includes[i - 1];
-        if (e->type == type && !strcmp(e->filename, filename))
+        if (e->type == type && !PATHCMP(e->filename, filename))
             return e;
         i = e->hash_next;
     }
@@ -10651,7 +10653,7 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
     if (flags & AFF_PREPROCESS) {
         ret = tcc_preprocess(s1);
-    } else if (!ext[0] || !strcmp(ext, "c")) {
+    } else if (!ext[0] || !PATHCMP(ext, "c")) {
         /* C file assumed */
         ret = tcc_compile(s1);
     } else 
@@ -10665,7 +10667,7 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     } else 
 #endif
 #ifdef TCC_TARGET_PE
-    if (!strcmp(ext, "def")) {
+    if (!PATHCMP(ext, "def")) {
         ret = pe_load_def_file(s1, file->fd);
     } else
 #endif
