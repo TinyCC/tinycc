@@ -1154,9 +1154,7 @@ void cast_test()
     printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
 
     /* from pointer to integer types */
-    printf("%d %d %d %d %d %d %ld %ld %lld %lld\n",
-           (char)p, (unsigned char)p,
-           (short)p, (unsigned short)p,
+    printf("%d %d %ld %ld %lld %lld\n",
            (int)p, (unsigned int)p,
            (long)p, (unsigned long)p,
            (long long)p, (unsigned long long)p);

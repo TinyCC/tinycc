@@ -6219,6 +6219,11 @@ static void gen_cast(CType *type)
                         vpushi(0);
                         gv(RC_INT);
                     } else {
+                        if (sbt == VT_PTR) {
+                            /* cast from pointer to int before we apply
+                               shift operation, which pointers don't support*/
+                            gen_cast(&int_type);
+                        }
                         gv_dup();
                         vpushi(31);
                         gen_op(TOK_SAR);
