@@ -6228,7 +6228,7 @@ static void gen_cast(CType *type)
                     vpop();
 #else
                     int r = gv(RC_INT);
-                    if (sbt != (VT_INT | VT_UNSIGNED)) {
+                    if (sbt != (VT_INT | VT_UNSIGNED) && sbt != VT_PTR) {
                         /* x86_64 specific: movslq */
                         o(0x6348);
                         o(0xc0 + (REG_VALUE(r) << 3) + REG_VALUE(r));

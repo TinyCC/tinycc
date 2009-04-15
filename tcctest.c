@@ -1109,6 +1109,8 @@ void cast_test()
     char tab[10];
     unsigned b,d;
     short s;
+    char *p = NULL;
+    p -= 0x700000000042;
 
     printf("cast_test:\n");
     a = 0xfffff;
@@ -1150,6 +1152,14 @@ void cast_test()
     printf("sizeof(+(char)'a') = %d\n", sizeof(+(char)'a'));
     printf("sizeof(-(char)'a') = %d\n", sizeof(-(char)'a'));
     printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
+
+    /* from pointer to integer types */
+    printf("%d %d %d %d %d %d %ld %ld %lld %lld\n",
+           (char)p, (unsigned char)p,
+           (short)p, (unsigned short)p,
+           (int)p, (unsigned int)p,
+           (long)p, (unsigned long)p,
+           (long long)p, (unsigned long long)p);
 }
 
 /* initializers tests */
