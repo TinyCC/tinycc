@@ -685,7 +685,7 @@ static void relocate_section(TCCState *s1, Section *s)
                 }
             }
             long diff = val - addr;
-            if (diff < -2147483648 || diff > 2147483647) {
+            if (diff <= -2147483647 || diff > 2147483647) {
                 /* XXX: naive support for over 32bit jump */
                 if (s1->output_type == TCC_OUTPUT_MEMORY) {
                     val = add_jmp_table(s1, val);
