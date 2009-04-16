@@ -6208,10 +6208,10 @@ static void gen_cast(CType *type)
                         gen_cast(type);
                     }
                 }
+#ifndef TCC_TARGET_X86_64
             } else if ((dbt & VT_BTYPE) == VT_LLONG) {
                 if ((sbt & VT_BTYPE) != VT_LLONG) {
                     /* scalar to long long */
-#ifndef TCC_TARGET_X86_64
                     /* machine independent conversion */
                     gv(RC_INT);
                     /* generate high word */
@@ -6231,15 +6231,21 @@ static void gen_cast(CType *type)
                     /* patch second register */
                     vtop[-1].r2 = vtop->r;
                     vpop();
+                }
 #else
+            } else if ((dbt & VT_BTYPE) == VT_LLONG ||
+                       (dbt & VT_BTYPE) == VT_PTR) {
+                /* XXX: not sure if this is perfect... need more tests */
+                if ((sbt & VT_BTYPE) != VT_LLONG) {
                     int r = gv(RC_INT);
-                    if (sbt != (VT_INT | VT_UNSIGNED) && sbt != VT_PTR) {
+                    if (sbt != (VT_INT | VT_UNSIGNED) &&
+                        sbt != VT_PTR && sbt != VT_FUNC) {
                         /* x86_64 specific: movslq */
                         o(0x6348);
                         o(0xc0 + (REG_VALUE(r) << 3) + REG_VALUE(r));
                     }
-#endif
                 }
+#endif
             } else if (dbt == VT_BOOL) {
                 /* scalar to bool */
                 vpushi(0);

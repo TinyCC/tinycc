@@ -1158,6 +1158,10 @@ void cast_test()
            (int)p, (unsigned int)p,
            (long)p, (unsigned long)p,
            (long long)p, (unsigned long long)p);
+
+    /* from integers to pointers */
+    printf("%p %p %p %p\n",
+           (void *)a, (void *)b, (void *)c, (void *)d);
 }
 
 /* initializers tests */
