@@ -3,8 +3,10 @@
 #
 include config.mak
 
+TARGET=
 CFLAGS+=-g -Wall
 ifeq ($(ARCH),x86-64)
+TARGET=-DTCC_TARGET_X86_64
 CFLAGS+=-Wno-pointer-sign
 endif
 
@@ -100,12 +102,12 @@ run: tcc tcctest.c
 
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: tcc tcc.c tcctest.c test.ref
-	$(TCC) -run tcc.c -B. -I. -run tcctest.c > test.out2
+	$(TCC) -run $(TARGET) tcc.c -B. -I. -run tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: tcc tcc.c tcctest.c test.ref
-	$(TCC) -run tcc.c -B. -I. -run tcc.c -B. -I. -run tcctest.c > test.out3
+	$(TCC) -run $(TARGET) tcc.c -B. -I. -run $(TARGET) tcc.c -B. -I. -run tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # binary output test
@@ -293,11 +295,7 @@ libtcc.o: tcc.c i386-gen.c Makefile
 ifdef CONFIG_WIN32
 	$(CC) $(CFLAGS) -DTCC_TARGET_PE -DLIBTCC -c -o $@ $<
 else
-ifeq ($(ARCH),x86-64)
-	$(CC) $(CFLAGS) -DTCC_TARGET_X86_64 -DLIBTCC -c -o $@ $<
-else
-	$(CC) $(CFLAGS) -DLIBTCC -c -o $@ $<
-endif
+	$(CC) $(CFLAGS) $(TARGET) -DLIBTCC -c -o $@ $<
 endif
 
 libtcc.a: libtcc.o 
