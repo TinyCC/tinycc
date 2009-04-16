@@ -7801,21 +7801,11 @@ static void unary(void)
         break;
 #ifdef TCC_TARGET_X86_64
     case TOK_builtin_malloc:
-        {
-            char *p = file->buf_ptr;
-            file->buf_ptr = "malloc";
-            next_nomacro1();
-            file->buf_ptr = p;
-            goto tok_identifier;
-        }
+        tok = TOK_malloc;
+        goto tok_identifier;
     case TOK_builtin_free:
-        {
-            char *p = file->buf_ptr;
-            file->buf_ptr = "free";
-            next_nomacro1();
-            file->buf_ptr = p;
-            goto tok_identifier;
-        }
+        tok = TOK_free;
+        goto tok_identifier;
 #endif
     case TOK_INC:
     case TOK_DEC:
