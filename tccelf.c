@@ -692,22 +692,6 @@ static void relocate_section(TCCState *s1, Section *s)
                     diff = val - addr;
                 }
                 if (diff <= -2147483647 || diff > 2147483647) {
-#if 0
-                    /* output memory map to debug easily */
-                    FILE* fp;
-                    char buf[4096];
-                    int size;
-                    Dl_info di;
-                    printf("%ld - %ld = %ld\n", val, addr, diff);
-                    dladdr((void *)addr, &di);
-                    printf("addr = %lx = %lx+%lx(%s) ptr=%p\n",
-                           addr, s->sh_addr, rel->r_offset, di.dli_sname,
-                           ptr);
-                    fp = fopen("/proc/self/maps", "r");
-                    size = fread(buf, 1, 4095, fp);
-                    buf[size] = '\0';
-                    printf("%s", buf);
-#endif
                     error("internal error: relocation failed");
                 }
             }
