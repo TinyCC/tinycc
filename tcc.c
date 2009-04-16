@@ -10438,6 +10438,7 @@ static void tcc_cleanup(void)
     dynarray_reset(&sym_pools, &nb_sym_pools);
     /* string buffer */
     cstr_free(&tokcstr);
+    cstr_free(&tok_spaces);
     /* reset symbol stack */
     sym_free_first = NULL;
     /* cleanup from error/setjmp */
