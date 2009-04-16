@@ -74,7 +74,7 @@ int tcc_add_library_path(TCCState *s, const char *pathname);
 int tcc_add_library(TCCState *s, const char *libraryname);
 
 /* add a symbol to the compiled program */
-int tcc_add_symbol(TCCState *s, const char *name, unsigned long val);
+int tcc_add_symbol(TCCState *s, const char *name, void *val);
 
 /* output an executable, library or object file. DO NOT call
    tcc_relocate() before. */
@@ -89,8 +89,8 @@ int tcc_run(TCCState *s, int argc, char **argv);
    returns -1 on error and required size if ptr is NULL */
 int tcc_relocate(TCCState *s1, void *ptr);
 
-/* return symbol value. return 0 if OK, -1 if symbol not found */
-int tcc_get_symbol(TCCState *s, unsigned long *pval, const char *name);
+/* return symbol value or NULL if not found */
+void *tcc_get_symbol(TCCState *s, const char *name);
 
 #ifdef __cplusplus
 }

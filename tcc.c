@@ -10398,8 +10398,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         void (*bound_init)(void);
 
         /* set error function */
-        rt_bound_error_msg = (void *)tcc_get_symbol_err(s1, 
-                                                        "__bound_error_msg");
+        rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
 
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = (void *)tcc_get_symbol_err(s1, "__bound_init");
@@ -10793,9 +10792,9 @@ int tcc_add_library(TCCState *s, const char *libraryname)
     return -1;
 }
 
-int tcc_add_symbol(TCCState *s, const char *name, unsigned long val)
+int tcc_add_symbol(TCCState *s, const char *name, void *val)
 {
-    add_elf_sym(symtab_section, val, 0, 
+    add_elf_sym(symtab_section, (unsigned long)val, 0, 
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_ABS, name);
     return 0;

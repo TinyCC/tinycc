@@ -169,25 +169,24 @@ static int find_elf_sym(Section *s, const char *name)
 }
 
 /* return elf symbol value or error */
-int tcc_get_symbol(TCCState *s, unsigned long *pval, const char *name)
+void *tcc_get_symbol(TCCState *s, const char *name)
 {
     int sym_index;
     ElfW(Sym) *sym;
-    
     sym_index = find_elf_sym(symtab_section, name);
     if (!sym_index)
-        return -1;
+        return NULL;
     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-    *pval = sym->st_value;
-    return 0;
+    return (void*)sym->st_value;
 }
 
 void *tcc_get_symbol_err(TCCState *s, const char *name)
 {
-    unsigned long val;
-    if (tcc_get_symbol(s, &val, name) < 0)
+    void *sym;
+    sym = tcc_get_symbol(s, name);
+    if (!sym)
         error("%s not defined", name);
-    return (void *)val;
+    return sym;
 }
 
 /* add an elf symbol : check if it is already defined and patch
