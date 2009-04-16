@@ -542,6 +542,9 @@ struct TCCState {
 
     /* output file for preprocessing */
     FILE *outfile;
+
+    /* for tcc_relocate */
+    int runtime_added;
 };
 
 /* The current value can be: */
@@ -10277,87 +10280,60 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 }
 #endif
 
-/* do all relocations (needed before using tcc_get_symbol()) */
-int tcc_relocate(TCCState *s1)
+/* copy code into memory passed in by the caller and do all relocations
+   (needed before using tcc_get_symbol()).
+   returns -1 on error and required size if ptr is NULL */
+int tcc_relocate(TCCState *s1, void *ptr)
 {
     Section *s;
+    unsigned long offset, length, mem;
     int i;
 
     s1->nb_errors = 0;
-    
+
+    if (0 == s1->runtime_added) {
 #ifdef TCC_TARGET_PE
-    pe_add_runtime(s1);
+        pe_add_runtime(s1);
+        relocate_common_syms();
+        tcc_add_linker_symbols(s1);
 #else
-    tcc_add_runtime(s1);
+        tcc_add_runtime(s1);
+        relocate_common_syms();
+        tcc_add_linker_symbols(s1);
+        build_got_entries(s1);
 #endif
-
-    relocate_common_syms();
-
-    tcc_add_linker_symbols(s1);
-#ifndef TCC_TARGET_PE
-    build_got_entries(s1);
-#endif
-
-#ifdef TCC_TARGET_X86_64
-    {
-        /* If the distance of two sections are longer than 32bit, our
-           program will crash. Let's combine all sections which are
-           necessary to run the program into a single buffer in the
-           text section */
-        unsigned char *p;
-        int size;
-        /* calculate the size of buffers we need */
-        size = 0;
-        for(i = 1; i < s1->nb_sections; i++) {
-            s = s1->sections[i];
-            if (s->sh_flags & SHF_ALLOC) {
-                size += s->data_offset;
-            }
-        }
-        /* double the size of the buffer for got and plt entries
-           XXX: calculate exact size for them? */
-        section_realloc(text_section, size * 2);
-        p = text_section->data + text_section->data_offset;
-        /* we will put got and plt after this offset */
-        text_section->data_offset = size;
-
-        for(i = 1; i < s1->nb_sections; i++) {
-            s = s1->sections[i];
-            if (s->sh_flags & SHF_ALLOC) {
-                if (s != text_section && s->data_offset) {
-                    if (s->sh_type == SHT_NOBITS) {
-                        /* for bss section */
-                        memset(p, 0, s->data_offset);
-                    } else {
-                        memcpy(p, s->data, s->data_offset);
-                        tcc_free(s->data);
-                    }
-                    s->data = p;
-                    /* we won't free s->data for this section */
-                    s->data_allocated = 0;
-                    p += s->data_offset;
-                }
-                s->sh_addr = (unsigned long)s->data;
-            }
-        }
+        s1->runtime_added = 1;
     }
-#else
-    /* compute relocation address : section are relocated in place. We
-       also alloc the bss space */
+
+    offset = 0;
+    mem = (unsigned long)ptr;
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (s->sh_flags & SHF_ALLOC) {
+        if (0 == (s->sh_flags & SHF_ALLOC))
+            continue;
+        length = s->data_offset;
+        if (0 == mem) {
+            s->sh_addr = 0;
+        } else if (1 == mem) {
+            /* section are relocated in place.
+               We also alloc the bss space */
             if (s->sh_type == SHT_NOBITS)
-                s->data = tcc_mallocz(s->data_offset);
+                s->data = tcc_malloc(length);
             s->sh_addr = (unsigned long)s->data;
+        } else {
+            /* sections are relocated to new memory */
+            s->sh_addr = (mem + offset + 15) & ~15;
         }
+        offset = (offset + length + 15) & ~15;
     }
-#endif
 
+    /* relocate symbols */
     relocate_syms(s1, 1);
-
-    if (s1->nb_errors != 0)
+    if (s1->nb_errors)
         return -1;
+
+    if (0 == mem)
+        return offset + 15;
 
     /* relocate each section */
     for(i = 1; i < s1->nb_sections; i++) {
@@ -10366,12 +10342,20 @@ int tcc_relocate(TCCState *s1)
             relocate_section(s1, s);
     }
 
-    /* mark executable sections as executable in memory */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if ((s->sh_flags & (SHF_ALLOC | SHF_EXECINSTR)) == 
-            (SHF_ALLOC | SHF_EXECINSTR))
-            set_pages_executable(s->data, s->data_offset);
+        if (0 == (s->sh_flags & SHF_ALLOC))
+            continue;
+        length = s->data_offset;
+        // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
+        ptr = (void*)s->sh_addr;
+        if (NULL == s->data || s->sh_type == SHT_NOBITS)
+            memset(ptr, 0, length);
+        else if (ptr != s->data)
+            memcpy(ptr, s->data, length);
+        /* mark executable sections as executable in memory */
+        if (s->sh_flags & SHF_EXECINSTR)
+            set_pages_executable(ptr, length);
     }
     return 0;
 }
@@ -10380,9 +10364,14 @@ int tcc_relocate(TCCState *s1)
 int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
+    void *ptr;
+    int ret;
 
-    if (tcc_relocate(s1) < 0)
+    ret = tcc_relocate(s1, NULL);
+    if (ret < 0)
         return -1;
+    ptr = tcc_malloc(ret);
+    tcc_relocate(s1, ptr);
 
     prog_main = tcc_get_symbol_err(s1, "main");
     
@@ -10417,7 +10406,9 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         bound_init();
     }
 #endif
-    return (*prog_main)(argc, argv);
+    ret = (*prog_main)(argc, argv);
+    tcc_free(ptr);
+    return ret;
 }
 
 void tcc_memstats(void)

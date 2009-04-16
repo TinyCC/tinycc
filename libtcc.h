@@ -84,9 +84,10 @@ int tcc_output_file(TCCState *s, const char *filename);
    tcc_relocate() before. */
 int tcc_run(TCCState *s, int argc, char **argv);
 
-/* do all relocations (needed before using tcc_get_symbol()). Return
-   non zero if link error. */
-int tcc_relocate(TCCState *s);
+/* copy code into memory passed in by the caller and do all relocations
+   (needed before using tcc_get_symbol()).
+   returns -1 on error and required size if ptr is NULL */
+int tcc_relocate(TCCState *s1, void *ptr);
 
 /* return symbol value. return 0 if OK, -1 if symbol not found */
 int tcc_get_symbol(TCCState *s, unsigned long *pval, const char *name);

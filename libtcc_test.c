@@ -36,6 +36,8 @@ int main(int argc, char **argv)
     TCCState *s;
     int (*func)(int);
     unsigned long val;
+    void *mem;
+    int size;
     
     s = tcc_new();
     if (!s) {
@@ -53,13 +55,25 @@ int main(int argc, char **argv)
        with tcc_add_dll(() and using its symbols directly. */
     tcc_add_symbol(s, "add", (unsigned long)&add);
     
-    tcc_relocate(s);
+    /* get needed size of the code */
+    size = tcc_relocate(s, NULL);
+    if (size == -1)
+        return 1;
 
+    /* allocate memory and copy the code into it */
+    mem = malloc(size);
+    tcc_relocate(s, mem);
+
+    /* get entry symbol */
     tcc_get_symbol(s, &val, "foo");
     func = (void *)val;
 
+    /* delete the state */
+    tcc_delete(s);
+
+    /* run the code */
     func(32);
 
-    tcc_delete(s);
+    free(mem);
     return 0;
 }
