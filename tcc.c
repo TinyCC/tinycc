@@ -336,7 +336,6 @@ typedef struct CachedInclude {
 /* parser */
 static struct BufferedFile *file;
 static int ch, tok;
-static CString tok_spaces;  /* spaces before current token */
 static CValue tokc;
 static CString tokcstr; /* current parsed string, if any */
 /* additional informations about token */
@@ -357,6 +356,7 @@ static int parse_flags;
                                         token. line feed is also
                                         returned at eof */
 #define PARSE_FLAG_ASM_COMMENTS 0x0008 /* '#' can be used for line comment */
+#define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
  
 static Section *text_section, *data_section, *bss_section; /* predefined sections */
 static Section *cur_text_section; /* current section where function code is
@@ -797,6 +797,7 @@ static char *tcc_fileextension (const char *p);
 
 static void next(void);
 static void next_nomacro(void);
+static void next_nomacro_spc(void);
 static void parse_expr_type(CType *type);
 static void expr_type(CType *type);
 static void unary_type(CType *type);
@@ -2290,6 +2291,17 @@ static inline void skip_spaces(void)
         cinp();
 }
 
+static inline int check_space(int t, int *spc) 
+{
+    if (is_space(t)) {
+        if (*spc) 
+            return 1;
+        *spc = 1;
+    } else 
+        *spc = 0;
+    return 0;
+}
+
 /* parse a string without interpreting escapes */
 static uint8_t *parse_pp_string(uint8_t *p,
                                 int sep, CString *str)
@@ -2822,13 +2834,14 @@ static void tok_print(int *str)
     int t;
     CValue cval;
 
+    printf("<");
     while (1) {
         TOK_GET(t, str, cval);
         if (!t)
             break;
-        printf(" %s", get_tok_str(t, &cval));
+        printf("%s", get_tok_str(t, &cval));
     }
-    printf("\n");
+    printf(">\n");
 }
 #endif
 
@@ -2836,7 +2849,7 @@ static void tok_print(int *str)
 static void parse_define(void)
 {
     Sym *s, *first, **ps;
-    int v, t, varg, is_vaargs, c;
+    int v, t, varg, is_vaargs, spc;
     TokenString str;
     
     v = tok;
@@ -2846,11 +2859,8 @@ static void parse_define(void)
     first = NULL;
     t = MACRO_OBJ;
     /* '(' must be just after macro definition for MACRO_FUNC */
-    c = file->buf_ptr[0];
-    if (c == '\\')
-        c = handle_stray1(file->buf_ptr);
-    if (c == '(') {
-        next_nomacro();
+    next_nomacro_spc();
+    if (tok == '(') {
         next_nomacro();
         ps = &first;
         while (tok != ')') {
@@ -2873,15 +2883,30 @@ static void parse_define(void)
                 break;
             next_nomacro();
         }
+        if (tok == ')')
+            next_nomacro_spc();
         t = MACRO_FUNC;
     }
     tok_str_new(&str);
-    next_nomacro();
+    spc = 2;
     /* EOF testing necessary for '-D' handling */
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
+        /* remove spaces around ## and after '#' */        
+        if (TOK_TWOSHARPS == tok) {
+            if (1 == spc)
+                --str.len;
+            spc = 2;
+        } else if ('#' == tok) {
+            spc = 2;
+        } else if (check_space(tok, &spc)) {
+            goto skip;
+        }
         tok_str_add2(&str, tok, &tokc);
-        next_nomacro();
+    skip:
+        next_nomacro_spc();
     }
+    if (spc == 1)
+        --str.len; /* remove trailing space */
     tok_str_add(&str, 0);
 #ifdef PP_DEBUG
     printf("define %s %d: ", get_tok_str(v, NULL), t);
@@ -3703,20 +3728,20 @@ static inline void next_nomacro1(void)
     uint8_t *p, *p1;
     unsigned int h;
 
-    cstr_reset(&tok_spaces);
     p = file->buf_ptr;
  redo_no_start:
     c = *p;
     switch(c) {
     case ' ':
     case '\t':
+        tok = c;
+        p++;
+        goto keep_tok_flags;
     case '\f':
     case '\v':
     case '\r':
-        cstr_ccat(&tok_spaces, c);
         p++;
         goto redo_no_start;
-        
     case '\\':
         /* first look if it is in fact an end of buffer */
         if (p >= file->buf_end) {
@@ -4121,7 +4146,7 @@ keep_tok_flags:
 
 /* return next token without macro substitution. Can read input from
    macro_ptr buffer */
-static void next_nomacro(void)
+static void next_nomacro_spc(void)
 {
     if (macro_ptr) {
     redo:
@@ -4138,10 +4163,17 @@ static void next_nomacro(void)
     }
 }
 
+static void next_nomacro(void)
+{
+    do {
+        next_nomacro_spc();
+    } while (is_space(tok));
+}
+ 
 /* substitute args in macro_str and return allocated string */
 static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
 {
-    int *st, last_tok, t, notfirst;
+    int *st, last_tok, t, spc;
     Sym *s;
     CValue cval;
     TokenString str;
@@ -4162,16 +4194,13 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
             if (s) {
                 cstr_new(&cstr);
                 st = (int *)s->c;
-                notfirst = 0;
+                spc = 0;
                 while (*st) {
-                    if (notfirst)
-                        cstr_ccat(&cstr, ' ');
                     TOK_GET(t, st, cval);
-                    cstr_cat(&cstr, get_tok_str(t, &cval));
-#ifndef PP_NOSPACES
-                    notfirst = 1;
-#endif
+                    if (!check_space(t, &spc))
+                        cstr_cat(&cstr, get_tok_str(t, &cval));
                 }
+                cstr.size -= spc;
                 cstr_ccat(&cstr, '\0');
 #ifdef PP_DEBUG
                 printf("stringize: %s\n", (char *)cstr.data);
@@ -4246,7 +4275,7 @@ static int macro_subst_tok(TokenString *tok_str,
                            Sym **nested_list, Sym *s, struct macro_level **can_read_stream)
 {
     Sym *args, *sa, *sa1;
-    int mstr_allocated, parlevel, *mstr, t, t1;
+    int mstr_allocated, parlevel, *mstr, t, t1, *p, spc;
     TokenString str;
     char *cstrval;
     CValue cval;
@@ -4294,7 +4323,9 @@ static int macro_subst_tok(TokenString *tok_str,
                next token. XXX: find better solution */
         redo:
             if (macro_ptr) {
-                t = *macro_ptr;
+                p = macro_ptr;
+                while (is_space(t = *p) || TOK_LINEFEED == t) 
+                    ++p;
                 if (t == 0 && can_read_stream) {
                     /* end of macro stream: we must look at the token
                        after in the file */
@@ -4332,7 +4363,7 @@ static int macro_subst_tok(TokenString *tok_str,
                     error("macro '%s' used with too many args",
                           get_tok_str(s->v, 0));
                 tok_str_new(&str);
-                parlevel = 0;
+                parlevel = spc = 0;
                 /* NOTE: non zero sa->t indicates VA_ARGS */
                 while ((parlevel > 0 || 
                         (tok != ')' && 
@@ -4342,10 +4373,13 @@ static int macro_subst_tok(TokenString *tok_str,
                         parlevel++;
                     else if (tok == ')')
                         parlevel--;
-                    if (tok != TOK_LINEFEED)
+                    if (tok == TOK_LINEFEED)
+                        tok = ' ';
+                    if (!check_space(tok, &spc))
                         tok_str_add2(&str, tok, &tokc);
-                    next_nomacro();
+                    next_nomacro_spc();
                 }
+                str.len -= spc;
                 tok_str_add(&str, 0);
                 sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, (long)str.str);
                 sa = sa->next;
@@ -4535,7 +4569,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     Sym *s;
     int *macro_str1;
     const int *ptr;
-    int t, ret;
+    int t, ret, spc;
     CValue cval;
     struct macro_level ml;
     
@@ -4544,6 +4578,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     macro_str1 = macro_twosharps(ptr);
     if (macro_str1) 
         ptr = macro_str1;
+    spc = 0;
     while (1) {
         /* NOTE: ptr == NULL can only happen if tokens are read from
            file stream due to a macro function call */
@@ -4571,7 +4606,8 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
                 goto no_subst;
         } else {
         no_subst:
-            tok_str_add2(tok_str, t, &cval);
+            if (!check_space(t, &spc)) 
+                tok_str_add2(tok_str, t, &cval);
         }
     }
     if (macro_str1)
@@ -4586,7 +4622,10 @@ static void next(void)
     struct macro_level *ml;
 
  redo:
-    next_nomacro();
+    if (parse_flags & PARSE_FLAG_SPACES)
+        next_nomacro_spc();
+    else
+        next_nomacro();
     if (!macro_ptr) {
         /* if not reading from macro substituted string, then try
            to substitute macros */
@@ -9873,10 +9912,6 @@ static int tcc_compile(TCCState *s1)
 }
 
 /* Preprocess the current file */
-/* XXX: add line and file infos,
- * XXX: add options to preserve spaces (partly done, only spaces in macro are
- *      not preserved)
- */
 static int tcc_preprocess(TCCState *s1)
 {
     Sym *define_start;
@@ -9886,11 +9921,9 @@ static int tcc_preprocess(TCCState *s1)
     preprocess_init(s1);
     define_start = define_stack;
     ch = file->buf_ptr[0];
-
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-    parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS | 
-        PARSE_FLAG_LINEFEED;
-
+    parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS |
+        PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
     token_seen = 0;
     line_ref = 0;
     file_ref = NULL;
@@ -9904,9 +9937,7 @@ static int tcc_preprocess(TCCState *s1)
                 continue;
             ++line_ref;
             token_seen = 0;
-        } else if (token_seen) {
-            fwrite(tok_spaces.data, tok_spaces.size, 1, s1->outfile);
-        } else {
+        } else if (!token_seen) {
             int d = file->line_num - line_ref;
             if (file != file_ref || d < 0 || d >= 8)
                 fprintf(s1->outfile, "# %d \"%s\"\n", file->line_num, file->filename);
@@ -10455,7 +10486,6 @@ static void tcc_cleanup(void)
     dynarray_reset(&sym_pools, &nb_sym_pools);
     /* string buffer */
     cstr_free(&tokcstr);
-    cstr_free(&tok_spaces);
     /* reset symbol stack */
     sym_free_first = NULL;
     /* cleanup from error/setjmp */
