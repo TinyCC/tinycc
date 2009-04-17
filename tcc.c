@@ -976,6 +976,10 @@ void *dlopen(const char *filename, int flag)
     return NULL;
 }
 
+void dlclose(void *p)
+{
+}
+
 const char *dlerror(void)
 {
     return "error";
