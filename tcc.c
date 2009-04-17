@@ -4429,45 +4429,38 @@ static int macro_subst_tok(TokenString *tok_str,
 static inline int *macro_twosharps(const int *macro_str)
 {
     TokenSym *ts;
-    const int *macro_ptr1, *start_macro_ptr, *ptr, *saved_macro_ptr;
+    const int *ptr, *saved_macro_ptr;
     int t;
     const char *p1, *p2;
     CValue cval;
     TokenString macro_str1;
     CString cstr;
 
-    start_macro_ptr = macro_str;
     /* we search the first '##' */
-    for(;;) {
-        macro_ptr1 = macro_str;
-        TOK_GET(t, macro_str, cval);
+    for(ptr = macro_str;;) {
+        TOK_GET(t, ptr, cval);
+        if (t == TOK_TWOSHARPS)
+            break;
         /* nothing more to do if end of string */
         if (t == 0)
             return NULL;
-        if (*macro_str == TOK_TWOSHARPS)
-            break;
     }
 
     /* we saw '##', so we need more processing to handle it */
     cstr_new(&cstr);
     tok_str_new(&macro_str1);
-    tok = t;
-    tokc = cval;
-
-    /* add all tokens seen so far */
-    for(ptr = start_macro_ptr; ptr < macro_ptr1;) {
-        TOK_GET(t, ptr, cval);
-        tok_str_add2(&macro_str1, t, &cval);
-    }
     saved_macro_ptr = macro_ptr;
     /* XXX: get rid of the use of macro_ptr here */
     macro_ptr = (int *)macro_str;
     for(;;) {
+        next_nomacro_spc();
+        if (tok == 0)
+            break;
+        if (tok == TOK_TWOSHARPS)
+            continue;
         while (*macro_ptr == TOK_TWOSHARPS) {
-            macro_ptr++;
-            macro_ptr1 = macro_ptr;
-            t = *macro_ptr;
-            if (t) {
+            t = *++macro_ptr;
+            if (t && t != TOK_TWOSHARPS) {
                 TOK_GET(t, macro_ptr, cval);
                 /* We concatenate the two tokens if we have an
                    identifier or a preprocessing number */
@@ -4477,7 +4470,7 @@ static inline int *macro_twosharps(const int *macro_str)
                 p2 = get_tok_str(t, &cval);
                 cstr_cat(&cstr, p2);
                 cstr_ccat(&cstr, '\0');
-                
+
                 if ((tok >= TOK_IDENT || tok == TOK_PPNUM) && 
                     (t >= TOK_IDENT || t == TOK_PPNUM)) {
                     if (tok == TOK_PPNUM) {
@@ -4549,9 +4542,6 @@ static inline int *macro_twosharps(const int *macro_str)
             }
         }
         tok_str_add2(&macro_str1, tok, &tokc);
-        next_nomacro();
-        if (tok == 0)
-            break;
     }
     macro_ptr = (int *)saved_macro_ptr;
     cstr_free(&cstr);
