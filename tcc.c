@@ -9208,7 +9208,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 {
     int size, align, addr, data_offset;
     int level;
-    ParseState saved_parse_state;
+    ParseState saved_parse_state = {0};
     TokenString init_str;
     Section *sec;
 
