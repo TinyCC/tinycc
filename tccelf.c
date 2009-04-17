@@ -480,7 +480,8 @@ static void relocate_syms(TCCState *s1, int do_resolve)
 #define JMP_TABLE_ENTRY_SIZE 14
 static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
 {
-    char *p = (char *)section_ptr_add(text_section, JMP_TABLE_ENTRY_SIZE);
+    char *p = s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset;
+    s1->runtime_plt_and_got_offset += JMP_TABLE_ENTRY_SIZE;
     /* jmp *0x0(%rip) */
     p[0] = 0xff;
     p[1] = 0x25;
@@ -491,8 +492,9 @@ static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
 
 static unsigned long add_got_table(TCCState *s1, unsigned long val)
 {
-    unsigned long *p =
-        (unsigned long *)section_ptr_add(text_section, sizeof(void *));
+    unsigned long *p =(unsigned long *)(s1->runtime_plt_and_got +
+                                        s1->runtime_plt_and_got_offset);
+    s1->runtime_plt_and_got_offset += sizeof(void *);
     *p = val;
     return (unsigned long)p;
 }
