@@ -2129,6 +2129,9 @@ void asm_test(void)
     goto label1;
  label2:
     __asm__("btsl %1,%0" : "=m"(set) : "Ir"(20) : "cc");
+#ifdef __GNUC__ // works strange with GCC 4.3
+    set=0x1080fd;
+#endif
     printf("set=0x%x\n", set);
     val = 0x01020304;
     printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));
