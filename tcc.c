@@ -10315,9 +10315,9 @@ int tcc_relocate(TCCState *s1, void *ptr)
     unsigned long offset, length, mem;
     int i;
 
-    s1->nb_errors = 0;
-
     if (0 == s1->runtime_added) {
+        s1->runtime_added = 1;
+        s1->nb_errors = 0;
 #ifdef TCC_TARGET_PE
         pe_add_runtime(s1);
         relocate_common_syms();
@@ -10328,28 +10328,15 @@ int tcc_relocate(TCCState *s1, void *ptr)
         tcc_add_linker_symbols(s1);
         build_got_entries(s1);
 #endif
-        s1->runtime_added = 1;
     }
 
-    offset = 0;
-    mem = (unsigned long)ptr;
+    offset = 0, mem = (unsigned long)ptr;
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
             continue;
         length = s->data_offset;
-        if (0 == mem) {
-            s->sh_addr = 0;
-        } else if (1 == mem) {
-            /* section are relocated in place.
-               We also alloc the bss space */
-            if (s->sh_type == SHT_NOBITS)
-                s->data = tcc_malloc(length);
-            s->sh_addr = (unsigned long)s->data;
-        } else {
-            /* sections are relocated to new memory */
-            s->sh_addr = (mem + offset + 15) & ~15;
-        }
+        s->sh_addr = mem ? (mem + offset + 15) & ~15 : 0;
         offset = (offset + length + 15) & ~15;
     }
 
@@ -10385,7 +10372,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
         ptr = (void*)s->sh_addr;
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
-        else if (ptr != s->data)
+        else
             memcpy(ptr, s->data, length);
         /* mark executable sections as executable in memory */
         if (s->sh_flags & SHF_EXECINSTR)
