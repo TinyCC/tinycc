@@ -112,6 +112,10 @@
 #define TCC_TARGET_COFF
 #endif
 
+#if !defined(_WIN32) && !defined(CONFIG_TCCBOOT)
+#define CONFIG_TCC_BACKTRACE
+#endif
+
 #define FALSE 0
 #define false 0
 #define TRUE 1
@@ -431,8 +435,10 @@ static int gnu_ext = 1;
 static int tcc_ext = 1;
 
 /* max number of callers shown if error */
+#ifdef CONFIG_TCC_BACKTRACE
 static int num_callers = 6;
 static const char **rt_bound_error_msg;
+#endif
 
 /* XXX: get rid of this ASAP */
 static struct TCCState *tcc_state;
@@ -10043,6 +10049,7 @@ static void asm_global_instr(void)
 #include "tccpe.c"
 #endif
 
+#ifdef CONFIG_TCC_BACKTRACE
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
 static void rt_printline(unsigned long wanted_pc)
@@ -10165,10 +10172,7 @@ static void rt_printline(unsigned long wanted_pc)
     fprintf(stderr, "\n");
 }
 
-#if !defined(_WIN32) && !defined(CONFIG_TCCBOOT)
-
 #ifdef __i386__
-
 /* fix for glibc 2.1 */
 #ifndef REG_EIP
 #define REG_EIP EIP
@@ -10234,9 +10238,7 @@ static int rt_get_caller_pc(unsigned long *paddr,
     }
 }
 #else
-
 #warning add arch specific rt_get_caller_pc()
-
 static int rt_get_caller_pc(unsigned long *paddr,
                             ucontext_t *uc, int level)
 {
@@ -10304,6 +10306,7 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
     }
     exit(255);
 }
+
 #endif
 
 /* copy code into memory passed in by the caller and do all relocations
@@ -10401,9 +10404,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     prog_main = tcc_get_symbol_err(s1, "main");
     
     if (do_debug) {
-#if defined(_WIN32) || defined(CONFIG_TCCBOOT)
-        error("debug mode currently not available for Windows");
-#else        
+#ifdef CONFIG_TCC_BACKTRACE
         struct sigaction sigact;
         /* install TCC signal handlers to print debug info on fatal
            runtime errors */
@@ -10415,6 +10416,8 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         sigaction(SIGSEGV, &sigact, NULL);
         sigaction(SIGBUS, &sigact, NULL);
         sigaction(SIGABRT, &sigact, NULL);
+#else        
+        error("debug mode not available");
 #endif
     }
 
@@ -11023,7 +11026,9 @@ void help(void)
 #ifdef CONFIG_TCC_BCHECK
            "  -b          compile with built-in memory and bounds checker (implies -g)\n"
 #endif
+#ifdef CONFIG_TCC_BACKTRACE
            "  -bt N       show N callers in stack traces\n"
+#endif
            );
 }
 
@@ -11232,9 +11237,11 @@ int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_bench:
                 do_bench = 1;
                 break;
+#ifdef CONFIG_TCC_BACKTRACE
             case TCC_OPTION_bt:
                 num_callers = atoi(optarg);
                 break;
+#endif
 #ifdef CONFIG_TCC_BCHECK
             case TCC_OPTION_b:
                 do_bounds_check = 1;
