@@ -17,7 +17,7 @@ include $(TOP)/Makefile
 
 # run local version of tcc with local libraries and includes
 TCC = ../tcc -B..
-RUN_TCC = -run ../tcc.c -B..
+RUN_TCC = $(TARGET) -run ../tcc.c -B..
 DISAS=objdump -d
 
 all test : $(TESTS)
@@ -49,13 +49,13 @@ test1: test.ref
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RuN_TCC) -run tcctest.c > test.out2
+	$(TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RuN_TCC) $(RUN_TCC) -run tcctest.c > test.out3
+	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # binary output test
