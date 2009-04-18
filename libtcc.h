@@ -92,6 +92,9 @@ int tcc_relocate(TCCState *s1, void *ptr);
 /* return symbol value or NULL if not found */
 void *tcc_get_symbol(TCCState *s, const char *name);
 
+/* set CONFIG_TCCDIR at runtime */
+void tcc_set_lib_path(TCCState *s, const char *path);
+
 #ifdef __cplusplus
 }
 #endif

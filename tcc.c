@@ -1122,7 +1122,7 @@ char *normalize_slashes(char *path)
     return path;
 }
 
-char *w32_tcc_lib_path(void)
+void tcc_set_lib_path_w32(TCCState *s)
 {
     /* on win32, we suppose the lib and includes are at the location
        of 'tcc.exe' */
@@ -1134,7 +1134,7 @@ char *w32_tcc_lib_path(void)
     else if (p > path)
         p--;
     *p = 0;
-    return strdup(path);
+    tcc_set_lib_path(s, path);
 }
 #endif
 
@@ -10967,6 +10967,12 @@ int tcc_set_flag(TCCState *s, const char *flag_name, int value)
                     flag_name, value);
 }
 
+/* set CONFIG_TCCDIR at runtime */
+void tcc_set_lib_path(TCCState *s, const char *path)
+{
+    tcc_lib_path = tcc_strdup(path);
+}
+
 #if !defined(LIBTCC)
 
 static int64_t getclock_us(void)
@@ -11217,7 +11223,7 @@ int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_B:
                 /* set tcc utilities path (mainly for tcc development) */
-                tcc_lib_path = optarg;
+                tcc_set_lib_path(s, optarg);
                 break;
             case TCC_OPTION_l:
                 dynarray_add((void ***)&files, &nb_files, r);
@@ -11350,11 +11356,10 @@ int main(int argc, char **argv)
     char objfilename[1024];
     int64_t start_time = 0;
 
-#ifdef _WIN32
-    tcc_lib_path = w32_tcc_lib_path();
-#endif
-
     s = tcc_new();
+#ifdef _WIN32
+    tcc_set_lib_path_w32(s);
+#endif
     output_type = TCC_OUTPUT_EXE;
     outfile = NULL;
     multiple_files = 1;

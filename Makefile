@@ -305,7 +305,7 @@ libtcc_test$(EXESUF): libtcc_test.c libtcc.a
 	$(CC) $(CFLAGS) -o $@ $< libtcc.a $(LIBS)
 
 libtest: libtcc_test
-	./libtcc_test
+	./libtcc_test lib_path=.
 
 # targets for development
 
