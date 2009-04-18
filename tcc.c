@@ -10353,6 +10353,11 @@ int tcc_relocate(TCCState *s1, void *ptr)
         offset = (offset + length + 15) & ~15;
     }
 
+    /* relocate symbols */
+    relocate_syms(s1, 1);
+    if (s1->nb_errors)
+        return -1;
+
 #ifdef TCC_TARGET_X86_64
     s1->runtime_plt_and_got_offset = 0;
     s1->runtime_plt_and_got = (char *)(mem + offset);
@@ -10363,11 +10368,6 @@ int tcc_relocate(TCCState *s1, void *ptr)
 
     if (0 == mem)
         return offset + 15;
-
-    /* relocate symbols */
-    relocate_syms(s1, 1);
-    if (s1->nb_errors)
-        return -1;
 
     /* relocate each section */
     for(i = 1; i < s1->nb_sections; i++) {
