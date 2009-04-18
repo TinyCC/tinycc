@@ -16,11 +16,8 @@
 @headings double
 @end iftex
 
-@c @ifhtml
 @contents
-@c @end ifhtml
 
-@ifnothtml
 @node Top, Introduction, (dir), (dir)
 @top Tiny C Compiler Reference Documentation
 
@@ -29,10 +26,14 @@ This manual documents version @value{VERSION} of the Tiny C Compiler.
 @menu
 * Introduction::                Introduction to tcc.
 * Invoke::                      Invocation of tcc (command line, options).
+* Clang::                       ANSI C and extensions.
+* asm::                         Assembler syntax.
+* linker::                      Output file generation and supported targets.
 * Bounds::                      Automatic bounds-checking of C code.
 * Libtcc::                      The libtcc library.
+* devel::                       Guide for Developers.
 @end menu
-@end ifnothtml
+
 
 @node Introduction
 @chapter Introduction
@@ -42,7 +43,7 @@ compilers, it is meant to be self-relying: you do not need an
 external assembler or linker because TCC does that for you.
 
 TCC compiles so @emph{fast} that even for big projects @code{Makefile}s may
-not be necessary. 
+not be necessary.
 
 TCC not only supports ANSI C, but also most of the new ISO C99
 standard and many GNUC extensions including inline assembly.
@@ -63,10 +64,10 @@ ports for the ARM (@code{arm-tcc}) and the TMS320C67xx targets
 (@code{c67-tcc}). More information about the ARM port is available at
 @url{http://lists.gnu.org/archive/html/tinycc-devel/2003-10/msg00044.html}.
 
+For usage on Windows, see also tcc-win32.txt.
+
 @node Invoke
 @chapter Command line invocation
-
-[This manual documents version @value{VERSION} of the Tiny C Compiler]
 
 @section Quick start
 
@@ -142,7 +143,7 @@ TCC can read C source code from @emph{standard input} when @option{-} is used in
 place of @option{infile}. Example:
 
 @example
-echo 'main(){puts("hello");}' | tcc -run -
+echo 'main()@{puts("hello");@}' | tcc -run -
 @end example
 @c man end
 
@@ -346,6 +347,7 @@ Fabrice Bellard
 
 @end ignore
 
+@node Clang
 @chapter C language support
 
 @section ANSI C
@@ -577,6 +579,7 @@ indicate that you use TCC.
 
 @end itemize
 
+@node asm
 @chapter TinyCC Assembler
 
 Since version 0.9.16, TinyCC integrates its own assembler. TinyCC
@@ -706,6 +709,7 @@ tries to guess it from the operand sizes.
 
 Currently, MMX opcodes are supported but not SSE ones.
 
+@node linker
 @chapter TinyCC Linker
 @cindex linker
 
@@ -733,17 +737,10 @@ libraries (.so).
 @section PE-i386 file generation
 @cindex PE-i386
 
-TCC for Windows supports the native Win32 executable file format (PE-i386). It
-generates both EXE and DLL files. DLL symbols can be imported thru DEF files
-generated with the @code{tiny_impdef} tool.
+TCC for Windows supports the native Win32 executable file format (PE-i386).  It
+generates EXE files (console and gui) and DLL files.
 
-On the object file level, currently TCC supports only the ELF format, not COFF 
-as used by MINGW and MSVC. It is not possible to exchange object files or 
-libraries between TCC and these compilers.  However libraries for TCC from objects 
-by TCC can be made using the @code{tiny_libmaker} tool or MINGW's @code{ar}.
-
-No leading underscore is generated in the ELF symbols.  Only functions (no 
-data) can be exported. Bounds checking (@option{-b}) is not supported currently.
+For usage on Windows, see also tcc-win32.txt.
 
 @section GNU Linker Scripts
 @cindex scripts, linker
@@ -854,6 +851,7 @@ The idea consists in giving a C string containing the program you want
 to compile directly to @code{libtcc}. Then you can access to any global
 symbol (function or variable) defined.
 
+@node devel
 @chapter Developer's guide
 
 This chapter gives some hints to understand how TCC works. You can skip

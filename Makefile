@@ -268,7 +268,7 @@ endif
 	mkdir -p "$(DESTDIR)$(docdir)"
 	$(INSTALL) -m644 tcc-doc.html "$(DESTDIR)$(docdir)"
 ifdef CONFIG_WIN32
-	$(INSTALL) -m644 win32/readme.txt "$(DESTDIR)$(docdir)"
+	$(INSTALL) -m644 win32/tcc-win32.txt "$(DESTDIR)$(docdir)"
 endif
 
 clean:
