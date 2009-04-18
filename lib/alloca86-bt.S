@@ -1,7 +1,7 @@
 /* ---------------------------------------------- */
 /* alloca86b.S */
 
-#include "config.h"
+#include "../config.h"
 
 .globl __bound__alloca
 

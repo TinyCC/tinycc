@@ -1,4 +1,5 @@
-#include "tcclib.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 #define N 20
 
@@ -23,7 +24,7 @@ int find(int n, int i1, int a, int b, int op)
             return 1;
         tab[i1] = n;
     }
-    
+
     for(i=0;i<nb_num;i++) {
         for(j=i+1;j<nb_num;j++) {
             a = tab[i];
@@ -52,7 +53,7 @@ int find(int n, int i1, int a, int b, int op)
                     if (find(c, i, b, a, '/'))
                         return 1;
                 }
-                
+
                 stack_ptr--;
                 tab[i] = a;
                 tab[j] = b;
@@ -66,7 +67,7 @@ int find(int n, int i1, int a, int b, int op)
 int main(int argc, char **argv)
 {
     int i, res, p;
-    
+
     if (argc < 3) {
         printf("usage: %s: result numbers...\n"
                "Try to find result from numbers with the 4 basic operations.\n", argv[0]);
@@ -85,7 +86,7 @@ int main(int argc, char **argv)
     res = find(0, 0, 0, 0, ' ');
     if (res) {
         for(i=0;i<=stack_ptr;i++) {
-            printf("%d %c %d = %d\n", 
+            printf("%d %c %d = %d\n",
                    stack_res[3*i], stack_op[i],
                    stack_res[3*i+1], stack_res[3*i+2]);
         }

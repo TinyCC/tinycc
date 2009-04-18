@@ -1,7 +1,7 @@
 /*
  * TCC auto test program
  */
-#include "config.h"
+#include "../config.h"
 
 #if GCC_MAJOR >= 3
 

@@ -21,8 +21,8 @@ copy ..\libtcc.h libtcc
 .\tcc -c lib/dllcrt1.c
 .\tcc -c lib/dllmain.c
 .\tcc -c lib/chkstk.S
-.\tcc -c ../libtcc1.c
-.\tcc -c ../alloca86.S
-.\tcc -c ../alloca86-bt.S
+.\tcc -c ../lib/libtcc1.c
+.\tcc -c ../lib/alloca86.S
+.\tcc -c ../lib/alloca86-bt.S
 ar rcs lib/libtcc1.a crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o libtcc1.o alloca86.o alloca86-bt.o
 del *.o
