@@ -1,6 +1,0 @@
-; Windows DLL example - export definition for the DLL
-
-LIBRARY dll.dll
-
-EXPORTS
-HelloWorld
