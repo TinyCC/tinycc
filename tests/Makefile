@@ -17,7 +17,7 @@ include $(TOP)/Makefile
 
 # run local version of tcc with local libraries and includes
 TCC = ../tcc -B..
-RUN_TCC = $(TARGET) -run ../tcc.c -B..
+RUN_TCC = $(NATIVE_TARGET) -run ../tcc.c -B..
 DISAS=objdump -d
 
 all test : $(TESTS)
@@ -141,4 +141,4 @@ cache: tcc_g
 # clean
 clean:
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.gcc \
-	   tcctest[1234] ex? libtcc_test tcc_g
+	   tcctest[1234] ex? libtcc_test$(EXESUF) tcc_g
