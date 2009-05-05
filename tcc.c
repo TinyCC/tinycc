@@ -20,8 +20,6 @@
 
 #include "libtcc.c"
 
-#if !defined(LIBTCC)
-
 void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
@@ -565,4 +563,3 @@ int main(int argc, char **argv)
     return ret;
 }
 
-#endif

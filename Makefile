@@ -139,7 +139,7 @@ arm-tcc-vfp-eabi$(EXESUF): $(ARM_FILES)
 
 # libtcc generation and test
 libtcc.o: $(NATIVE_FILES)
-	$(CC) -o $@ -c $< $(NATIVE_TARGET) -DLIBTCC $(CFLAGS)
+	$(CC) -o $@ -c libtcc.c $(NATIVE_TARGET) $(CFLAGS)
 
 libtcc.a: libtcc.o
 	$(AR) rcs $@ $^

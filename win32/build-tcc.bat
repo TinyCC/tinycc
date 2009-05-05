@@ -8,7 +8,7 @@
 @echo>>..\config.h #define CONFIG_SYSROOT ""
 :
 gcc -Os -fno-strict-aliasing ../tcc.c -o tcc.exe -s
-gcc -Os -fno-strict-aliasing ../tcc.c -D LIBTCC -c -o libtcc.o
+gcc -Os -fno-strict-aliasing ../libtcc.c -c -o libtcc.o
 gcc -Os tools/tiny_impdef.c -o tiny_impdef.exe -s
 gcc -Os tools/tiny_libmaker.c -o tiny_libmaker.exe -s
 mkdir libtcc

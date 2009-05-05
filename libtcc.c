@@ -125,7 +125,6 @@ static struct TCCState *tcc_state;
 static const char *tcc_lib_path = CONFIG_TCCDIR;
 
 
-
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
 #endif
@@ -706,14 +705,12 @@ void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
         s1->nb_errors++;
 }
 
-#ifdef LIBTCC
 void tcc_set_error_func(TCCState *s, void *error_opaque,
                         void (*error_func)(void *opaque, const char *msg))
 {
     s->error_opaque = error_opaque;
     s->error_func = error_func;
 }
-#endif
 
 /* error without aborting current compilation */
 void error_noabort(const char *fmt, ...)
@@ -1130,7 +1127,6 @@ static int tcc_compile(TCCState *s1)
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
-#ifdef LIBTCC
 int tcc_compile_string(TCCState *s, const char *str)
 {
     BufferedFile bf1, *bf = &bf1;
@@ -1158,7 +1154,6 @@ int tcc_compile_string(TCCState *s, const char *str)
     /* currently, no need to close */
     return ret;
 }
-#endif
 
 /* define a preprocessor symbol. A value can also be provided with the '=' operator */
 void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
