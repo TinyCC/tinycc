@@ -73,7 +73,8 @@ ARM_CROSS = arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) \
     arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
 C67_CROSS = c67-tcc$(EXESUF)
 
-CORE_FILES = tcc.c tccelf.c tccasm.c tcctok.h libtcc.h config.h
+CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c \
+    tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h tccpe.c
 X86_64_FILES = $(CORE_FILES) x86_64-gen.c
