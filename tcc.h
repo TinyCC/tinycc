@@ -210,6 +210,9 @@ typedef struct Sym {
    the other ones */
 #define SHF_PRIVATE 0x80000000
 
+/* special flag, too */
+#define SECTION_ABS ((void *)1)
+
 typedef struct Section {
     unsigned long data_offset; /* current data offset */
     unsigned char *data;       /* section data */
@@ -580,9 +583,6 @@ struct TCCState {
 #define countof(tab) (sizeof(tab) / sizeof((tab)[0]))
 #endif
 
-/* WARNING: the content of this string encodes token numbers */
-static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
-
 #define TOK_EOF       (-1)  /* end of file */
 #define TOK_LINEFEED  10    /* line feed */
 
@@ -655,12 +655,6 @@ enum tcc_token {
 #undef DEF
 };
 
-static const char tcc_keywords[] = 
-#define DEF(id, str) str "\0"
-#include "tcctok.h"
-#undef DEF
-;
-
 #define TOK_UIDENT TOK_DEFINE
 
 #ifdef _WIN32
@@ -686,6 +680,16 @@ float strtof(const char *nptr, char **endptr)
 /* XXX: need to define this to use them in non ISOC99 context */
 extern float strtof (const char *__nptr, char **__endptr);
 extern long double strtold (const char *__nptr, char **__endptr);
+#endif
+
+#ifdef _WIN32
+#define IS_PATHSEP(c) (c == '/' || c == '\\')
+#define IS_ABSPATH(p) (IS_PATHSEP(p[0]) || (p[0] && p[1] == ':' && IS_PATHSEP(p[2])))
+#define PATHCMP stricmp
+#else
+#define IS_PATHSEP(c) (c == '/')
+#define IS_ABSPATH(p) IS_PATHSEP(p[0])
+#define PATHCMP strcmp
 #endif
 
 static char *pstrcpy(char *buf, int buf_size, const char *s);

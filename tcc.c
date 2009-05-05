@@ -22,19 +22,6 @@
 
 #if !defined(LIBTCC)
 
-static int64_t getclock_us(void)
-{
-#ifdef _WIN32
-    struct _timeb tb;
-    _ftime(&tb);
-    return (tb.time * 1000LL + tb.millitm) * 1000LL;
-#else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000LL + tv.tv_usec;
-#endif
-}
-
 void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
@@ -75,6 +62,15 @@ void help(void)
 #endif
            );
 }
+
+static char **files;
+static int nb_files, nb_libraries;
+static int multiple_files;
+static int print_search_dirs;
+static int output_type;
+static int reloc_output;
+static const char *outfile;
+static int do_bench = 0;
 
 #define TCC_OPTION_HAS_ARG 0x0001
 #define TCC_OPTION_NOSEP   0x0002 /* cannot have space before option and arg */
@@ -157,6 +153,35 @@ static const TCCOption tcc_options[] = {
     { NULL },
 };
 
+static int64_t getclock_us(void)
+{
+#ifdef _WIN32
+    struct _timeb tb;
+    _ftime(&tb);
+    return (tb.time * 1000LL + tb.millitm) * 1000LL;
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000000LL + tv.tv_usec;
+#endif
+}
+
+static int strstart(const char *str, const char *val, const char **ptr)
+{
+    const char *p, *q;
+    p = str;
+    q = val;
+    while (*q != '\0') {
+        if (*p != *q)
+            return 0;
+        p++;
+        q++;
+    }
+    if (ptr)
+        *ptr = p;
+    return 1;
+}
+
 /* convert 'str' into an array of space separated strings */
 static int expand_args(char ***pargv, const char *str)
 {
@@ -183,14 +208,6 @@ static int expand_args(char ***pargv, const char *str)
     *pargv = argv;
     return argc;
 }
-
-static char **files;
-static int nb_files, nb_libraries;
-static int multiple_files;
-static int print_search_dirs;
-static int output_type;
-static int reloc_output;
-static const char *outfile;
 
 int parse_args(TCCState *s, int argc, char **argv)
 {

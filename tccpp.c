@@ -18,6 +18,182 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+
+static const char tcc_keywords[] = 
+#define DEF(id, str) str "\0"
+#include "tcctok.h"
+#undef DEF
+;
+
+/* WARNING: the content of this string encodes token numbers */
+static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
+
+/* true if isid(c) || isnum(c) */
+static unsigned char isidnum_table[256-CH_EOF];
+
+
+/* allocate a new token */
+static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
+{
+    TokenSym *ts, **ptable;
+    int i;
+
+    if (tok_ident >= SYM_FIRST_ANOM) 
+        error("memory full");
+
+    /* expand token table if needed */
+    i = tok_ident - TOK_IDENT;
+    if ((i % TOK_ALLOC_INCR) == 0) {
+        ptable = tcc_realloc(table_ident, (i + TOK_ALLOC_INCR) * sizeof(TokenSym *));
+        if (!ptable)
+            error("memory full");
+        table_ident = ptable;
+    }
+
+    ts = tcc_malloc(sizeof(TokenSym) + len);
+    table_ident[i] = ts;
+    ts->tok = tok_ident++;
+    ts->sym_define = NULL;
+    ts->sym_label = NULL;
+    ts->sym_struct = NULL;
+    ts->sym_identifier = NULL;
+    ts->len = len;
+    ts->hash_next = NULL;
+    memcpy(ts->str, str, len);
+    ts->str[len] = '\0';
+    *pts = ts;
+    return ts;
+}
+
+#define TOK_HASH_INIT 1
+#define TOK_HASH_FUNC(h, c) ((h) * 263 + (c))
+
+/* find a token and add it if not found */
+static TokenSym *tok_alloc(const char *str, int len)
+{
+    TokenSym *ts, **pts;
+    int i;
+    unsigned int h;
+    
+    h = TOK_HASH_INIT;
+    for(i=0;i<len;i++)
+        h = TOK_HASH_FUNC(h, ((unsigned char *)str)[i]);
+    h &= (TOK_HASH_SIZE - 1);
+
+    pts = &hash_ident[h];
+    for(;;) {
+        ts = *pts;
+        if (!ts)
+            break;
+        if (ts->len == len && !memcmp(ts->str, str, len))
+            return ts;
+        pts = &(ts->hash_next);
+    }
+    return tok_alloc_new(pts, str, len);
+}
+
+/* XXX: buffer overflow */
+/* XXX: float tokens */
+char *get_tok_str(int v, CValue *cv)
+{
+    static char buf[STRING_MAX_SIZE + 1];
+    static CString cstr_buf;
+    CString *cstr;
+    unsigned char *q;
+    char *p;
+    int i, len;
+
+    /* NOTE: to go faster, we give a fixed buffer for small strings */
+    cstr_reset(&cstr_buf);
+    cstr_buf.data = buf;
+    cstr_buf.size_allocated = sizeof(buf);
+    p = buf;
+
+    switch(v) {
+    case TOK_CINT:
+    case TOK_CUINT:
+        /* XXX: not quite exact, but only useful for testing */
+        sprintf(p, "%u", cv->ui);
+        break;
+    case TOK_CLLONG:
+    case TOK_CULLONG:
+        /* XXX: not quite exact, but only useful for testing  */
+        sprintf(p, "%Lu", cv->ull);
+        break;
+    case TOK_LCHAR:
+        cstr_ccat(&cstr_buf, 'L');
+    case TOK_CCHAR:
+        cstr_ccat(&cstr_buf, '\'');
+        add_char(&cstr_buf, cv->i);
+        cstr_ccat(&cstr_buf, '\'');
+        cstr_ccat(&cstr_buf, '\0');
+        break;
+    case TOK_PPNUM:
+        cstr = cv->cstr;
+        len = cstr->size - 1;
+        for(i=0;i<len;i++)
+            add_char(&cstr_buf, ((unsigned char *)cstr->data)[i]);
+        cstr_ccat(&cstr_buf, '\0');
+        break;
+    case TOK_LSTR:
+        cstr_ccat(&cstr_buf, 'L');
+    case TOK_STR:
+        cstr = cv->cstr;
+        cstr_ccat(&cstr_buf, '\"');
+        if (v == TOK_STR) {
+            len = cstr->size - 1;
+            for(i=0;i<len;i++)
+                add_char(&cstr_buf, ((unsigned char *)cstr->data)[i]);
+        } else {
+            len = (cstr->size / sizeof(nwchar_t)) - 1;
+            for(i=0;i<len;i++)
+                add_char(&cstr_buf, ((nwchar_t *)cstr->data)[i]);
+        }
+        cstr_ccat(&cstr_buf, '\"');
+        cstr_ccat(&cstr_buf, '\0');
+        break;
+    case TOK_LT:
+        v = '<';
+        goto addv;
+    case TOK_GT:
+        v = '>';
+        goto addv;
+    case TOK_DOTS:
+        return strcpy(p, "...");
+    case TOK_A_SHL:
+        return strcpy(p, "<<=");
+    case TOK_A_SAR:
+        return strcpy(p, ">>=");
+    default:
+        if (v < TOK_IDENT) {
+            /* search in two bytes table */
+            q = tok_two_chars;
+            while (*q) {
+                if (q[2] == v) {
+                    *p++ = q[0];
+                    *p++ = q[1];
+                    *p = '\0';
+                    return buf;
+                }
+                q += 3;
+            }
+        addv:
+            *p++ = v;
+            *p = '\0';
+        } else if (v < tok_ident) {
+            return table_ident[v - TOK_IDENT]->str;
+        } else if (v >= SYM_FIRST_ANOM) {
+            /* special name for anonymous symbol */
+            sprintf(p, "L.%u", v - SYM_FIRST_ANOM);
+        } else {
+            /* should never happen */
+            return NULL;
+        }
+        break;
+    }
+    return cstr_buf.data;
+}
+
 /* fill input buffer and peek next char */
 static int tcc_peekc_slow(BufferedFile *bf)
 {
@@ -2660,4 +2836,90 @@ static inline void unget_tok(int last_tok)
     tok = last_tok;
 }
 
+
+/* better than nothing, but needs extension to handle '-E' option
+   correctly too */
+static void preprocess_init(TCCState *s1)
+{
+    s1->include_stack_ptr = s1->include_stack;
+    /* XXX: move that before to avoid having to initialize
+       file->ifdef_stack_ptr ? */
+    s1->ifdef_stack_ptr = s1->ifdef_stack;
+    file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+
+    /* XXX: not ANSI compliant: bound checking says error */
+    vtop = vstack - 1;
+    s1->pack_stack[0] = 0;
+    s1->pack_stack_ptr = s1->pack_stack;
+}
+
+void preprocess_new()
+{
+    int i, c;
+    const char *p, *r;
+    TokenSym *ts;
+
+    /* init isid table */
+    for(i=CH_EOF;i<256;i++)
+        isidnum_table[i-CH_EOF] = isid(i) || isnum(i);
+
+    /* add all tokens */
+    table_ident = NULL;
+    memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
+    
+    tok_ident = TOK_IDENT;
+    p = tcc_keywords;
+    while (*p) {
+        r = p;
+        for(;;) {
+            c = *r++;
+            if (c == '\0')
+                break;
+        }
+        ts = tok_alloc(p, r - p - 1);
+        p = r;
+    }
+}
+
+/* Preprocess the current file */
+static int tcc_preprocess(TCCState *s1)
+{
+    Sym *define_start;
+    BufferedFile *file_ref;
+    int token_seen, line_ref;
+
+    preprocess_init(s1);
+    define_start = define_stack;
+    ch = file->buf_ptr[0];
+    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+    parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS |
+        PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
+    token_seen = 0;
+    line_ref = 0;
+    file_ref = NULL;
+
+    for (;;) {
+        next();
+        if (tok == TOK_EOF) {
+            break;
+        } else if (tok == TOK_LINEFEED) {
+            if (!token_seen)
+                continue;
+            ++line_ref;
+            token_seen = 0;
+        } else if (!token_seen) {
+            int d = file->line_num - line_ref;
+            if (file != file_ref || d < 0 || d >= 8)
+                fprintf(s1->outfile, "# %d \"%s\"\n", file->line_num, file->filename);
+            else
+                while (d)
+                    fputs("\n", s1->outfile), --d;
+            line_ref = (file_ref = file)->line_num;
+            token_seen = 1;
+        }
+        fputs(get_tok_str(tok, &tokc), s1->outfile);
+    }
+    free_defines(define_start); 
+    return 0;
+}
 
