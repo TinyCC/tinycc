@@ -260,7 +260,7 @@ void stuff_const_harder(unsigned long op,unsigned long v) {
     for(i=1;i<16;i++)
       a[i]=(a[i-1]>>2)|(a[i-1]<<30);
     for(i=0;i<12;i++)
-      for(j=i+4;i<13+i;i++)
+      for(j=i<4?i+12:15;j>=i+4;j--)
 	if((v&(a[i]|a[j]))==v) {
 	  o(stuff_const(op,v&a[i]));
 	  o(stuff_const(o2,v&a[j]));
@@ -270,15 +270,15 @@ void stuff_const_harder(unsigned long op,unsigned long v) {
     n2=o2^0xC00000;
     nv=-v;
     for(i=0;i<12;i++)
-      for(j=i+4;i<13+i;i++)
+      for(j=i<4?i+12:15;j>=i+4;j--)
 	if((nv&(a[i]|a[j]))==nv) {
 	  o(stuff_const(no,nv&a[i]));
 	  o(stuff_const(n2,nv&a[j]));
 	  return;
 	}
     for(i=0;i<8;i++)
-      for(j=i+4;i<12;i++)
-	for(k=j+4;k<13+i;i++)
+      for(j=i+4;j<12;j++)
+	for(k=i<4?i+12:15;k>=j+4;k--)
 	  if((v&(a[i]|a[j]|a[k]))==v) {
 	    o(stuff_const(op,v&a[i]));
 	    o(stuff_const(o2,v&a[j]));
@@ -288,8 +288,8 @@ void stuff_const_harder(unsigned long op,unsigned long v) {
     no=op^0xC00000;
     nv=-v;
     for(i=0;i<8;i++)
-      for(j=i+4;i<12;i++)
-	for(k=j+4;k<13+i;i++)
+      for(j=i+4;j<12;j++)
+	for(k=i<4?i+12:15;k>=j+4;k--)
 	  if((nv&(a[i]|a[j]|a[k]))==nv) {
 	    o(stuff_const(no,nv&a[i]));
 	    o(stuff_const(n2,nv&a[j]));
