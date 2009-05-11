@@ -42,9 +42,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <sys/timeb.h>
-#ifdef _MSC_VER
+#include <io.h> /* open, close etc. */
+#include <direct.h> /* getcwd */
 #define inline __inline
-#endif
+#define inp next_inp
 #endif
 
 #ifndef _WIN32

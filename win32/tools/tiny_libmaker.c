@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h> /* for mktemp */
+#endif
 
 /* #include "ar-elf.h" */
 /*  "ar-elf.h" */
@@ -177,25 +180,13 @@ int main(int argc, char **argv)
         }
     }
 
-    //tfile[0] = '.'; tfile[1] = '/';
-    //if (tmpnam(&tfile[2])) {
     strcpy(tfile, "./XXXXXX");
-    if (mktemp(tfile))
+    if (!mktemp(tfile) || (fo = fopen(tfile, "wb+")) == NULL)
     {
-        if ((fo = fopen(tfile, "wb+")) == NULL)
-        {
-            fprintf(stderr, "Can't open  file %s \n", tfile);
-            return 2;
-        }
-    }
-
-/*
-    if ((fo = tmpfile()) == NULL)
-    {
-        fprintf(stderr, "Can't open temporary file \n");
+        fprintf(stderr, "Can't open temporary file %s\n", tfile);
         return 2;
     }
-*/
+
     if ((fh = fopen(afile, "wb")) == NULL)
     {
         fprintf(stderr, "Can't open file %s \n", afile);
