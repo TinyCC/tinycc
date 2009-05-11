@@ -20,6 +20,9 @@
 
 #include "tcc.h"
 
+/********************************************************/
+/* global variables */
+
 /* display benchmark infos */
 int total_lines;
 int total_bytes;
@@ -111,6 +114,126 @@ const char **rt_bound_error_msg;
 
 /* XXX: get rid of this ASAP */
 static struct TCCState *tcc_state;
+
+/********************************************************/
+/* function prototypes */
+
+/* tccpp.c */
+static void next(void);
+char *get_tok_str(int v, CValue *cv);
+
+/* tccgen.c */
+static void parse_expr_type(CType *type);
+static void expr_type(CType *type);
+static void unary_type(CType *type);
+static void block(int *bsym, int *csym, int *case_sym, int *def_sym, 
+                  int case_reg, int is_expr);
+static int expr_const(void);
+static void expr_eq(void);
+static void gexpr(void);
+static void gen_inline_functions(void);
+static void decl(int l);
+static void decl_initializer(CType *type, Section *sec, unsigned long c, 
+                             int first, int size_only);
+static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, 
+                                   int has_init, int v, int scope);
+int gv(int rc);
+void gv2(int rc1, int rc2);
+void move_reg(int r, int s);
+void save_regs(int n);
+void save_reg(int r);
+void vpop(void);
+void vswap(void);
+void vdup(void);
+int get_reg(int rc);
+int get_reg_ex(int rc,int rc2);
+
+void gen_op(int op);
+void force_charshort_cast(int t);
+static void gen_cast(CType *type);
+void vstore(void);
+static Sym *sym_find(int v);
+static Sym *sym_push(int v, CType *type, int r, int c);
+
+/* type handling */
+static int type_size(CType *type, int *a);
+static inline CType *pointed_type(CType *type);
+static int pointed_size(CType *type);
+static int lvalue_type(int t);
+static int parse_btype(CType *type, AttributeDef *ad);
+static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
+static int compare_types(CType *type1, CType *type2, int unqualified);
+static int is_compatible_types(CType *type1, CType *type2);
+static int is_compatible_parameter_types(CType *type1, CType *type2);
+
+int ieee_finite(double d);
+void vpushi(int v);
+void vpushll(long long v);
+void vrott(int n);
+void vnrott(int n);
+void lexpand_nr(void);
+static void vpush_global_sym(CType *type, int v);
+void vset(CType *type, int r, int v);
+void type_to_str(char *buf, int buf_size, 
+                 CType *type, const char *varstr);
+static Sym *get_sym_ref(CType *type, Section *sec,
+                        unsigned long offset, unsigned long size);
+static Sym *external_global_sym(int v, CType *type, int r);
+
+/* section generation */
+static void section_realloc(Section *sec, unsigned long new_size);
+static void *section_ptr_add(Section *sec, unsigned long size);
+static void put_extern_sym(Sym *sym, Section *section, 
+                           unsigned long value, unsigned long size);
+static void greloc(Section *s, Sym *sym, unsigned long addr, int type);
+static int put_elf_str(Section *s, const char *sym);
+static int put_elf_sym(Section *s, 
+                       unsigned long value, unsigned long size,
+                       int info, int other, int shndx, const char *name);
+static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
+                       int info, int other, int sh_num, const char *name);
+static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
+                          int type, int symbol);
+static void put_stabs(const char *str, int type, int other, int desc, 
+                      unsigned long value);
+static void put_stabs_r(const char *str, int type, int other, int desc, 
+                        unsigned long value, Section *sec, int sym_index);
+static void put_stabn(int type, int other, int desc, int value);
+static void put_stabd(int type, int other, int desc);
+static int tcc_add_dll(TCCState *s, const char *filename, int flags);
+
+#define AFF_PRINT_ERROR     0x0001 /* print error if file not found */
+#define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
+#define AFF_PREPROCESS      0x0004 /* preprocess file */
+static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
+
+/* tcccoff.c */
+int tcc_output_coff(TCCState *s1, FILE *f);
+
+/* tccpe.c */
+void *resolve_sym(TCCState *s1, const char *sym, int type);
+int pe_load_def_file(struct TCCState *s1, int fd);
+int pe_test_res_file(void *v, int size);
+int pe_load_res_file(struct TCCState *s1, int fd);
+void pe_add_runtime(struct TCCState *s1);
+void pe_guess_outfile(char *objfilename, int output_type);
+int pe_output_file(struct TCCState *s1, const char *filename);
+
+/* tccasm.c */
+#ifdef CONFIG_TCC_ASM
+static void asm_expr(TCCState *s1, ExprValue *pe);
+static int asm_int_expr(TCCState *s1);
+static int find_constraint(ASMOperand *operands, int nb_operands, 
+                           const char *name, const char **pp);
+
+static int tcc_assemble(TCCState *s1, int do_preprocess);
+#endif
+
+static void asm_instr(void);
+static void asm_global_instr(void);
+
+/********************************************************/
+/* global variables */
 
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
@@ -2118,7 +2241,7 @@ void tcc_set_lib_path(TCCState *s, const char *path)
     s->tcc_lib_path = tcc_strdup(path);
 }
 
-LIBTCCAPI void print_stats(TCCState *s, int64_t total_time)
+void tcc_print_stats(TCCState *s, int64_t total_time)
 {
     double tt;
     tt = (double)total_time / 1000000.0;

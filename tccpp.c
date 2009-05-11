@@ -32,6 +32,17 @@ static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<
 static unsigned char isidnum_table[256-CH_EOF];
 
 
+struct macro_level {
+    struct macro_level *prev;
+    int *p;
+};
+
+static void next_nomacro(void);
+static void next_nomacro_spc(void);
+static void macro_subst(TokenString *tok_str, Sym **nested_list,
+                        const int *macro_str, struct macro_level **can_read_stream);
+
+
 /* allocate a new token */
 static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
 {
@@ -438,12 +449,6 @@ static uint8_t *parse_comment(uint8_t *p)
 }
 
 #define cinp minp
-
-/* space exlcuding newline */
-LIBTCCAPI static inline int is_space(int ch)
-{
-    return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
-}
 
 static inline void skip_spaces(void)
 {

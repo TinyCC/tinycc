@@ -531,7 +531,7 @@ int main(int argc, char **argv)
         goto the_end;
 
     if (do_bench)
-        print_stats(s, getclock_us() - start_time);
+        tcc_print_stats(s, getclock_us() - start_time);
 
     if (s->output_type == TCC_OUTPUT_PREPROCESS) {
         if (outfile)
