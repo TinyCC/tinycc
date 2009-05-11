@@ -1190,13 +1190,10 @@ static void pragma_parse(TCCState *s1)
 static void preprocess(int is_bof)
 {
     TCCState *s1 = tcc_state;
-    int size, i, c, n, saved_parse_flags;
+    int i, c, n, saved_parse_flags;
     char buf[1024], *q;
-    char buf1[1024];
-    BufferedFile *f;
     Sym *s;
-    CachedInclude *e;
-    
+
     saved_parse_flags = parse_flags;
     parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | 
         PARSE_FLAG_LINEFEED;
@@ -1275,70 +1272,76 @@ static void preprocess(int is_bof)
             }
         }
 
-        e = search_cached_include(s1, c, buf);
-        if (e && define_find(e->ifndef_macro)) {
-            /* no need to parse the include because the 'ifndef macro'
-               is defined */
-#ifdef INC_DEBUG
-            printf("%s: skipping %s\n", file->filename, buf);
-#endif
-        } else {
-            if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
-                error("#include recursion too deep");
-            /* push current file in stack */
-            /* XXX: fix current line init */
-            *s1->include_stack_ptr++ = file;
+        if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
+            error("#include recursion too deep");
 
-            /* check absolute include path */
-            if (IS_ABSPATH(buf)) {
-                f = tcc_open(s1, buf);
-                if (f)
-                    goto found;
-            }
-            if (c == '\"') {
-                /* first search in current dir if "header.h" */
+        n = s1->nb_include_paths + s1->nb_sysinclude_paths;
+        for (i = -2; i < n; ++i) {
+            char buf1[sizeof file->filename];
+            BufferedFile *f;
+            CachedInclude *e;
+            const char *path;
+            int size;
+
+            if (i == -2) {
+                /* check absolute include path */
+                if (!IS_ABSPATH(buf))
+                    continue;
+                buf1[0] = 0;
+
+            } else if (i == -1) {
+                /* search in current dir if "header.h" */
+                if (c != '\"')
+                    continue;
                 size = tcc_basename(file->filename) - file->filename;
-                if (size > sizeof(buf1) - 1)
-                    size = sizeof(buf1) - 1;
                 memcpy(buf1, file->filename, size);
                 buf1[size] = '\0';
-                pstrcat(buf1, sizeof(buf1), buf);
-                f = tcc_open(s1, buf1);
-                if (f) {
-                    if (tok == TOK_INCLUDE_NEXT)
-                        tok = TOK_INCLUDE;
-                    else
-                        goto found;
-                }
-            }
-            /* now search in all the include paths */
-            n = s1->nb_include_paths + s1->nb_sysinclude_paths;
-            for(i = 0; i < n; i++) {
-                const char *path;
+
+            } else {
+                /* search in all the include paths */
                 if (i < s1->nb_include_paths)
                     path = s1->include_paths[i];
                 else
                     path = s1->sysinclude_paths[i - s1->nb_include_paths];
                 pstrcpy(buf1, sizeof(buf1), path);
                 pstrcat(buf1, sizeof(buf1), "/");
-                pstrcat(buf1, sizeof(buf1), buf);
-                f = tcc_open(s1, buf1);
-                if (f) {
-                    if (tok == TOK_INCLUDE_NEXT)
-                        tok = TOK_INCLUDE;
-                    else
-                        goto found;
-                }
             }
-            --s1->include_stack_ptr;
-            error("include file '%s' not found", buf);
-            break;
-        found:
+
+            pstrcat(buf1, sizeof(buf1), buf);
+
+            e = search_cached_include(s1, c, buf1);
+            if (e && define_find(e->ifndef_macro)) {
+                /* no need to parse the include because the 'ifndef macro'
+                   is defined */
+#ifdef INC_DEBUG
+                printf("%s: skipping %s\n", file->filename, buf);
+#endif
+                f = NULL;
+            }  else {
+                f = tcc_open(s1, buf1);
+                if (!f)
+                    continue;
+            }
+
+            if (tok == TOK_INCLUDE_NEXT) {
+                tok = TOK_INCLUDE;
+                if (f)
+                    tcc_close(f);
+                continue;
+            }
+
+            if (!f)
+                goto include_done;
+
 #ifdef INC_DEBUG
             printf("%s: including %s\n", file->filename, buf1);
 #endif
+
+           /* XXX: fix current line init */
+           /* push current file in stack */
+            *s1->include_stack_ptr++ = file;
             f->inc_type = c;
-            pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf);
+            pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf1);
             file = f;
             /* add include file debug info */
             if (tcc_state->do_debug) {
@@ -1348,6 +1351,8 @@ static void preprocess(int is_bof)
             ch = file->buf_ptr[0];
             goto the_end;
         }
+        error("include file '%s' not found", buf);
+include_done:
         break;
     case TOK_IFNDEF:
         c = 1;
