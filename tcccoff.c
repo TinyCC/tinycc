@@ -84,6 +84,8 @@ int tcc_output_coff(TCCState *s1, FILE *f)
     Section *stext, *sdata, *sbss;
     int i, NSectionsToOutput = 0;
 
+    Coff_str_table = pCoff_str_table = NULL;
+
     stext = FindSection(s1, ".text");
     sdata = FindSection(s1, ".data");
     sbss = FindSection(s1, ".bss");

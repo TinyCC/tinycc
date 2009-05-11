@@ -509,7 +509,9 @@ static void relocate_section(TCCState *s1, Section *s)
     int type, sym_index;
     unsigned char *ptr;
     unsigned long val, addr;
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
     int esym_index;
+#endif
 
     sr = s->reloc;
     rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
