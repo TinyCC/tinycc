@@ -326,7 +326,7 @@ int ieee_finite(double d)
 }
 
 /* copy a string and truncate it. */
-static char *pstrcpy(char *buf, int buf_size, const char *s)
+char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
     int c;
@@ -346,7 +346,7 @@ static char *pstrcpy(char *buf, int buf_size, const char *s)
 }
 
 /* strcat and truncate. */
-static char *pstrcat(char *buf, int buf_size, const char *s)
+char *pstrcat(char *buf, int buf_size, const char *s)
 {
     int len;
     len = strlen(buf);
@@ -356,7 +356,7 @@ static char *pstrcat(char *buf, int buf_size, const char *s)
 }
 
 /* extract the basename of a file */
-static char *tcc_basename(const char *name)
+char *tcc_basename(const char *name)
 {
     char *p = strchr(name, 0);
     while (p > name && !IS_PATHSEP(p[-1]))
@@ -364,7 +364,7 @@ static char *tcc_basename(const char *name)
     return p;
 }
 
-static char *tcc_fileextension (const char *name)
+char *tcc_fileextension (const char *name)
 {
     char *b = tcc_basename(name);
     char *e = strrchr(b, '.');
@@ -418,7 +418,7 @@ int mem_max_size;
 unsigned malloc_usable_size(void*);
 #endif
 
-static inline void tcc_free(void *ptr)
+void tcc_free(void *ptr)
 {
 #ifdef MEM_DEBUG
     mem_cur_size -= malloc_usable_size(ptr);
@@ -426,7 +426,7 @@ static inline void tcc_free(void *ptr)
     free(ptr);
 }
 
-static void *tcc_malloc(unsigned long size)
+void *tcc_malloc(unsigned long size)
 {
     void *ptr;
     ptr = malloc(size);
@@ -440,7 +440,7 @@ static void *tcc_malloc(unsigned long size)
     return ptr;
 }
 
-static void *tcc_mallocz(unsigned long size)
+void *tcc_mallocz(unsigned long size)
 {
     void *ptr;
     ptr = tcc_malloc(size);
@@ -448,7 +448,7 @@ static void *tcc_mallocz(unsigned long size)
     return ptr;
 }
 
-static inline void *tcc_realloc(void *ptr, unsigned long size)
+void *tcc_realloc(void *ptr, unsigned long size)
 {
     void *ptr1;
 #ifdef MEM_DEBUG
@@ -464,7 +464,7 @@ static inline void *tcc_realloc(void *ptr, unsigned long size)
     return ptr1;
 }
 
-static char *tcc_strdup(const char *str)
+char *tcc_strdup(const char *str)
 {
     char *ptr;
     ptr = tcc_malloc(strlen(str) + 1);
@@ -476,7 +476,7 @@ static char *tcc_strdup(const char *str)
 #define malloc(s) use_tcc_malloc(s)
 #define realloc(p, s) use_tcc_realloc(p, s)
 
-static void dynarray_add(void ***ptab, int *nb_ptr, void *data)
+void dynarray_add(void ***ptab, int *nb_ptr, void *data)
 {
     int nb, nb_alloc;
     void **pp;
@@ -498,7 +498,7 @@ static void dynarray_add(void ***ptab, int *nb_ptr, void *data)
     *nb_ptr = nb;
 }
 
-static void dynarray_reset(void *pp, int *n)
+void dynarray_reset(void *pp, int *n)
 {
     void **p;
     for (p = *(void***)pp; *n; ++p, --*n)
@@ -2030,7 +2030,10 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
 int tcc_add_file(TCCState *s, const char *filename)
 {
-    return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR);
+    if (s->output_type == TCC_OUTPUT_PREPROCESS)
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS);
+    else
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR);
 }
 
 int tcc_add_library_path(TCCState *s, const char *pathname)

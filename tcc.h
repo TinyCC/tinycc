@@ -724,23 +724,25 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 void error(const char *fmt, ...);
+void error_noabort(const char *fmt, ...);
 void warning(const char *fmt, ...);
+
 void tcc_set_lib_path_w32(TCCState *s);
 int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 void tcc_print_stats(TCCState *s, int64_t total_time);
 
-static void tcc_free(void *ptr);
-static void *tcc_malloc(unsigned long size);
-static void *tcc_mallocz(unsigned long size);
-static void *tcc_realloc(void *ptr, unsigned long size);
-static char *tcc_strdup(const char *str);
+void tcc_free(void *ptr);
+void *tcc_malloc(unsigned long size);
+void *tcc_mallocz(unsigned long size);
+void *tcc_realloc(void *ptr, unsigned long size);
+char *tcc_strdup(const char *str);
 
-static char *tcc_basename(const char *name);
-static char *tcc_fileextension (const char *name);
-static char *pstrcpy(char *buf, int buf_size, const char *s);
-static char *pstrcat(char *buf, int buf_size, const char *s);
-static void dynarray_add(void ***ptab, int *nb_ptr, void *data);
-static void dynarray_reset(void *pp, int *n);
+char *tcc_basename(const char *name);
+char *tcc_fileextension (const char *name);
+char *pstrcpy(char *buf, int buf_size, const char *s);
+char *pstrcat(char *buf, int buf_size, const char *s);
+void dynarray_add(void ***ptab, int *nb_ptr, void *data);
+void dynarray_reset(void *pp, int *n);
 
 #ifdef CONFIG_TCC_BACKTRACE
 extern int num_callers;

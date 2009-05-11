@@ -509,13 +509,11 @@ int main(int argc, char **argv)
         const char *filename;
 
         filename = files[i];
-        if (output_type == TCC_OUTPUT_PREPROCESS) {
-            if (tcc_add_file_internal(s, filename, 
-                    AFF_PRINT_ERROR | AFF_PREPROCESS) < 0)
+        if (filename[0] == '-' && filename[1]) {
+            if (tcc_add_library(s, filename + 2) < 0) {
+                error_noabort("cannot find %s", filename);
                 ret = 1;
-        } else if (filename[0] == '-' && filename[1]) {
-            if (tcc_add_library(s, filename + 2) < 0)
-                error("cannot find %s", filename);
+            }
         } else {
             if (1 == s->verbose)
                 printf("-> %s\n", filename);
