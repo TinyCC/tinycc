@@ -1163,7 +1163,7 @@ static void tcc_add_runtime(TCCState *s1)
 #endif
 
 #ifdef CONFIG_TCC_BCHECK
-    if (do_bounds_check) {
+    if (s1->do_bounds_check) {
         unsigned long *ptr;
         Section *init_section;
         unsigned char *pinit;
@@ -1176,7 +1176,7 @@ static void tcc_add_runtime(TCCState *s1)
                     ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                     bounds_section->sh_num, "__bounds_start");
         /* add bound check code */
-        snprintf(buf, sizeof(buf), "%s/%s", tcc_lib_path, "bcheck.o");
+        snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "bcheck.o");
         tcc_add_file(s1, buf);
 #ifdef TCC_TARGET_I386
         if (s1->output_type != TCC_OUTPUT_MEMORY) {
@@ -1199,7 +1199,7 @@ static void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_USE_LIBGCC
         tcc_add_file(s1, CONFIG_SYSROOT "/lib/libgcc_s.so.1");
 #else
-        snprintf(buf, sizeof(buf), "%s/%s", tcc_lib_path, "libtcc1.a");
+        snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "libtcc1.a");
         tcc_add_file(s1, buf);
 #endif
     }
@@ -1574,9 +1574,9 @@ int elf_output_file(TCCState *s1, const char *filename)
             /* //gr: avoid bogus relocs for empty (debug) sections */
             if (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC)
                 prepare_dynamic_rel(s1, s);
-            else if (do_debug)
+            else if (s1->do_debug)
                 s->sh_size = s->data_offset;
-        } else if (do_debug || 
+        } else if (s1->do_debug ||
             file_type == TCC_OUTPUT_OBJ || 
             (s->sh_flags & SHF_ALLOC) ||
             i == (s1->nb_sections - 1)) {
@@ -1817,7 +1817,7 @@ int elf_output_file(TCCState *s1, const char *filename)
             put_dt(dynamic, DT_RELSZ, rel_size);
             put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
 #endif
-            if (do_debug)
+            if (s1->do_debug)
                 put_dt(dynamic, DT_DEBUG, 0);
             put_dt(dynamic, DT_NULL, 0);
         }
@@ -1888,7 +1888,7 @@ int elf_output_file(TCCState *s1, const char *filename)
         goto fail;
     }
     f = fdopen(fd, "wb");
-    if (verbose) 
+    if (s1->verbose)
         printf("<- %s\n", filename);
 
 #ifdef TCC_TARGET_COFF

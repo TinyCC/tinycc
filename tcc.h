@@ -385,7 +385,6 @@ struct TCCState {
 
     int nostdinc; /* if true, no standard headers are added */
     int nostdlib; /* if true, no standard libraries are added */
-
     int nocommon; /* if true, do not use common symbols for .bss data */
 
     /* if true, static linking is performed */
@@ -417,6 +416,15 @@ struct TCCState {
     int warn_error;
     int warn_none;
     int warn_implicit_function_declaration;
+
+    /* display some information during compilation */
+    int verbose;
+    /* compile with debug symbol (and use them if error during execution) */
+    int do_debug;
+    /* compile with built-in memory and bounds checker */
+    int do_bounds_check;
+    /* give the path of the tcc libraries */
+    const char *tcc_lib_path;
 
     /* error handling */
     void *error_opaque;
@@ -841,6 +849,11 @@ static int tcc_assemble(TCCState *s1, int do_preprocess);
 
 static void asm_instr(void);
 static void asm_global_instr(void);
+
+#ifdef CONFIG_TCC_BACKTRACE
+extern int num_callers;
+extern const char **rt_bound_error_msg;
+#endif
 
 /* true if float/double/long double type */
 static inline int is_float(int t)

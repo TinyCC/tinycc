@@ -577,7 +577,7 @@ ST_FN int pe_write(struct pe_info *pe)
     file_offset = pe->sizeofheaders;
     pe_fpad(op, file_offset);
 
-    if (2 == verbose)
+    if (2 == pe->s1->verbose)
         printf("-------------------------------"
                "\n  virt   file   size  section" "\n");
 
@@ -588,7 +588,7 @@ ST_FN int pe_write(struct pe_info *pe)
         unsigned long size = si->sh_size;
         IMAGE_SECTION_HEADER *psh = &si->ish;
 
-        if (2 == verbose)
+        if (2 == pe->s1->verbose)
             printf("%6lx %6lx %6lx  %s\n",
                 addr, file_offset, size, sh_name);
 
@@ -662,9 +662,9 @@ ST_FN int pe_write(struct pe_info *pe)
         fwrite(&pe->sec_info[i].ish, 1, sizeof(IMAGE_SECTION_HEADER), op);
     fclose (op);
 
-    if (2 == verbose)
+    if (2 == pe->s1->verbose)
         printf("-------------------------------\n");
-    if (verbose)
+    if (pe->s1->verbose)
         printf("<- %s (%lu bytes)\n", pe->filename, file_offset);
 
     return 0;
@@ -859,7 +859,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
         error_noabort("could not create '%s': %s", buf, strerror(errno));
     } else {
         fprintf(op, "LIBRARY %s\n\nEXPORTS\n", dllname);
-        if (verbose)
+        if (pe->s1->verbose)
             printf("<- %s (%d symbols)\n", buf, sym_count);
     }
 #endif
@@ -1065,7 +1065,7 @@ ST_FN int pe_assign_addresses (struct pe_info *pe)
             flags & SHF_EXECINSTR ? "exec" : ""
             );
     }
-    verbose = 2;
+    pe->s1->verbose = 2;
 #endif
 
     tcc_free(section_order);

@@ -1311,7 +1311,7 @@ void gen_op(int op)
 #ifdef CONFIG_TCC_BCHECK
             /* if evaluating constant expression, no code should be
                generated, so no bound check */
-            if (do_bounds_check && !const_wanted) {
+            if (tcc_state->do_bounds_check && !const_wanted) {
                 /* if bounded pointers, we generate a special code to
                    test bounds */
                 if (op == '-') {
@@ -2880,7 +2880,7 @@ static void indir(void)
         && (vtop->type.t & VT_BTYPE) != VT_FUNC) {
         vtop->r |= lvalue_type(vtop->type.t);
         /* if bound checking, the referenced pointer must be checked */
-        if (do_bounds_check) 
+        if (tcc_state->do_bounds_check)
             vtop->r |= VT_MUSTBOUND;
     }
 }
@@ -3294,7 +3294,7 @@ static void unary(void)
             if (!(vtop->type.t & VT_ARRAY)) {
                 vtop->r |= lvalue_type(vtop->type.t);
                 /* if bound checking, the referenced pointer must be checked */
-                if (do_bounds_check) 
+                if (tcc_state->do_bounds_check)
                     vtop->r |= VT_MUSTBOUND;
             }
             next();
@@ -3794,7 +3794,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
     Sym *s;
 
     /* generate line number info */
-    if (do_debug && 
+    if (tcc_state->do_debug &&
         (last_line_num != file->line_num || last_ind != ind)) {
         put_stabn(N_SLINE, 0, file->line_num, ind - func_ind);
         last_ind = ind;
@@ -4649,14 +4649,14 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     }
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
-        if (do_bounds_check && (type->t & VT_ARRAY)) 
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY))
             loc--;
         loc = (loc - size) & -align;
         addr = loc;
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (do_bounds_check && (type->t & VT_ARRAY)) {
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
             unsigned long *bounds_ptr;
             /* add padding between regions */
             loc--;
@@ -4722,7 +4722,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                because initializers themselves can create new initializers */
             data_offset += size;
             /* add padding if bound check */
-            if (do_bounds_check)
+            if (tcc_state->do_bounds_check)
                 data_offset++;
             sec->data_offset = data_offset;
             /* allocate section space to put the data */
@@ -4763,7 +4763,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
         /* handles bounds now because the symbol must be defined
            before for the relocation */
-        if (do_bounds_check) {
+        if (tcc_state->do_bounds_check) {
             unsigned long *bounds_ptr;
 
             greloc(bounds_section, sym, bounds_section->data_offset, R_DATA_32);
@@ -4860,7 +4860,7 @@ static void gen_function(Sym *sym)
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
     /* put debug symbol */
-    if (do_debug)
+    if (tcc_state->do_debug)
         put_func_debug(sym);
     /* push a dummy symbol to enable local sym storage */
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
@@ -4876,7 +4876,7 @@ static void gen_function(Sym *sym)
     /* patch symbol size */
     ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
         ind - func_ind;
-    if (do_debug) {
+    if (tcc_state->do_debug) {
         put_stabn(N_FUN, 0, 0, ind - func_ind);
     }
     /* It's better to crash than to generate wrong code */

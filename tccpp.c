@@ -440,7 +440,7 @@ static uint8_t *parse_comment(uint8_t *p)
 #define cinp minp
 
 /* space exlcuding newline */
-static inline int is_space(int ch)
+LIBTCCAPI static inline int is_space(int ch)
 {
     return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
 }
@@ -1336,7 +1336,7 @@ static void preprocess(int is_bof)
             pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf);
             file = f;
             /* add include file debug info */
-            if (do_debug) {
+            if (tcc_state->do_debug) {
                 put_stabs(file->filename, N_BINCL, 0, 0, 0);
             }
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
@@ -1946,7 +1946,7 @@ static inline void next_nomacro1(void)
                 }
 
                 /* add end of include file debug info */
-                if (do_debug) {
+                if (tcc_state->do_debug) {
                     put_stabd(N_EINCL, 0, 0);
                 }
                 /* pop include stack */
