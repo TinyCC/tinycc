@@ -1,6 +1,9 @@
-... for next version:
+version 0.9.25:
 
-- Fix bitfields with non-int types and in unions
+- split tcc.c into tcc.h libtcc.c tccpp.c tccgen.c tcc.c
+- first support for x86-64 target (Shinichiro Hamaji)
+- improved preprocess output with linenumbers and spaces preserved
+- fix bitfields with non-int types and in unions
 - improve ARM cross-compiling (Daniel Glöckner)
 - link stabstr sections from multiple objects
 - better (still limited) support for multiple TCCStates

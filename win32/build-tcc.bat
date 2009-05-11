@@ -2,7 +2,7 @@
 @rem batch file to build tcc using gcc and ar from mingw
 @rem ----------------------------------------------------
 :
-@echo>..\config.h #define TCC_VERSION "0.9.24"
+@echo>..\config.h #define TCC_VERSION "0.9.25"
 @echo>>..\config.h #define TCC_TARGET_PE 1
 @echo>>..\config.h #define CONFIG_TCCDIR "."
 @echo>>..\config.h #define CONFIG_SYSROOT ""
