@@ -75,6 +75,7 @@ void stdarg_test(void);
 void whitespace_test(void);
 void relocation_test(void);
 void old_style_function(void);
+void alloca_test(void);
 void sizeof_test(void);
 void typeof_test(void);
 void local_label_test(void);
@@ -529,6 +530,7 @@ int main(int argc, char **argv)
     whitespace_test();
     relocation_test();
     old_style_function();
+    alloca_test();
     sizeof_test();
     typeof_test();
     statement_expr_test();
@@ -1933,6 +1935,18 @@ void old_style_function(void)
     old_style_f((void *)1, 2, 3.0);
     decl_func1(NULL);
     decl_func2(NULL);
+}
+
+void alloca_test()
+{
+#if defined __i386__ || defined __x86_64__
+    char *p = alloca(16);
+    strcpy(p,"123456789012345");
+    printf("alloca: p is %s\n", p);
+    char *demo = "This is only a test.\n";
+    /* Test alloca embedded in a larger expression */
+    printf("alloca: %s\n", strcpy(alloca(strlen(demo)+1),demo) );
+#endif
 }
 
 void sizeof_test(void)

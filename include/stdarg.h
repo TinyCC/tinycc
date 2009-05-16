@@ -2,9 +2,6 @@
 #define _STDARG_H
 
 #ifdef __x86_64__
-
-#ifdef __TINYC__
-
 #include <stdlib.h>
 
 /* GCC compatible definition of va_list. */
@@ -50,19 +47,6 @@ typedef struct __va_list_struct *va_list;
     ((dest) = (va_list)malloc(sizeof(struct __va_list_struct)), \
      *(dest) = *(src))
 #define va_end(ap) __builtin_free(ap)
-
-#else
-
-/* for GNU C */
-
-typedef __builtin_va_list va_list;
-
-#define va_start(ap, last) __builtin_va_start(ap, last)
-#define va_arg(ap, type) __builtin_va_arg(ap, type)
-#define va_copy(dest, src) __builtin_va_copy(dest, src)
-#define va_end(ap) __builtin_va_end(ap)
-
-#endif
 
 #else
 

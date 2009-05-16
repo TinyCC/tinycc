@@ -37,7 +37,8 @@ libtcc_test$(EXESUF): libtcc_test.c ../libtcc.a
 
 # test.ref - generate using gcc
 test.ref: tcctest.c
-	$(CC) -o tcctest.gcc $< -w -I.. -I../include $(CFLAGS)
+	cp -u ../include/tcclib.h .
+	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
@@ -141,4 +142,4 @@ cache: tcc_g
 # clean
 clean:
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.gcc \
-	   tcctest[1234] ex? libtcc_test$(EXESUF) tcc_g
+	   tcctest[1234] ex? libtcc_test$(EXESUF) tcc_g tcclib.h

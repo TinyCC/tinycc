@@ -3,9 +3,9 @@
 
 #include "../config.h"
 
-.globl __bound__alloca
+.globl __bound_alloca
 
-__bound__alloca:
+__bound_alloca:
     pop     %edx
     pop     %eax
     mov     %eax, %ecx

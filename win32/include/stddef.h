@@ -18,9 +18,6 @@ typedef int int32_t;
 typedef long long int int64_t;
 #endif
 
-#ifdef __i386__
-void *_alloca(size_t);
-#define alloca _alloca
-#endif
+void *alloca(size_t);
 
 #endif
