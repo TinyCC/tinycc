@@ -1,8 +1,10 @@
 version 0.9.25:
 
-- split tcc.c into tcc.h libtcc.c tccpp.c tccgen.c tcc.c
 - first support for x86-64 target (Shinichiro Hamaji)
+- support µClibc
+- split tcc.c into tcc.h libtcc.c tccpp.c tccgen.c tcc.c
 - improved preprocess output with linenumbers and spaces preserved
+- tcc_relocate now copies code into user buffer
 - fix bitfields with non-int types and in unions
 - improve ARM cross-compiling (Daniel Gl√∂ckner)
 - link stabstr sections from multiple objects
