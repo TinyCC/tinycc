@@ -1834,6 +1834,8 @@ static void tcc_cleanup(void)
 TCCState *tcc_new(void)
 {
     TCCState *s;
+    char buffer[100];
+    int a,b,c;
 
     tcc_cleanup();
 
@@ -1889,7 +1891,9 @@ TCCState *tcc_new(void)
 #endif
 #endif
     /* tiny C specific defines */
-    tcc_define_symbol(s, "__TINYC__", NULL);
+    sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
+    sprintf(buffer, "%d", a*10000 + b*100 + c);
+    tcc_define_symbol(s, "__TINYC__", buffer);
 
     /* tiny C & gcc defines */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
