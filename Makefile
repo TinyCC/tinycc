@@ -177,6 +177,10 @@ VPATH+=win32/lib
 endif
 ifeq ($(ARCH),i386)
 LIBTCC1_OBJS+=alloca86.o alloca86-bt.o
+else
+ifeq ($(ARCH),x86-64)
+LIBTCC1_OBJS+=alloca86_64.o
+endif
 endif
 
 %.o: %.c
