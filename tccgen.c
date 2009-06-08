@@ -207,7 +207,7 @@ void save_reg(int r)
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
                 /* x86 specific: need to pop fp register ST0 if saved */
                 if (r == TREG_ST0) {
-                    o(0xd9dd); /* fstp %st(1) */
+                    o(0xd8dd); /* fstp %st(0) */
                 }
 #endif
 #ifndef TCC_TARGET_X86_64
@@ -686,7 +686,7 @@ void vpop(void)
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     /* for x86, we need to pop the FP stack */
     if (v == TREG_ST0 && !nocode_wanted) {
-        o(0xd9dd); /* fstp %st(1) */
+        o(0xd8dd); /* fstp %st(0) */
     } else
 #endif
     if (v == VT_JMP || v == VT_JMPI) {
@@ -738,7 +738,8 @@ void gv_dup(void)
         load(r1, &sv); /* move r to r1 */
         vdup();
         /* duplicates value */
-        vtop->r = r1;
+        if (r != r1)
+            vtop->r = r1;
     }
 }
 
