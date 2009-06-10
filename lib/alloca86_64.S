@@ -8,8 +8,8 @@
 alloca:
     pop     %rdx
     mov     %rdi,%rax
-    add     $3,%rax
-    and     $-4,%rax
+    add     $15,%rax
+    and     $-16,%rax
     jz      p3
 
 #ifdef TCC_TARGET_PE
