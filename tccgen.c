@@ -3266,9 +3266,11 @@ static void unary(void)
             inc(1, tok);
             next();
         } else if (tok == '.' || tok == TOK_ARROW) {
+            int qualifiers;
             /* field */ 
             if (tok == TOK_ARROW) 
                 indir();
+            qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
             test_lvalue();
             gaddrof();
             next();
@@ -3290,6 +3292,7 @@ static void unary(void)
             gen_op('+');
             /* change type to field type, and set to lvalue */
             vtop->type = s->type;
+            vtop->type.t |= qualifiers;
             /* an array is never an lvalue */
             if (!(vtop->type.t & VT_ARRAY)) {
                 vtop->r |= lvalue_type(vtop->type.t);
