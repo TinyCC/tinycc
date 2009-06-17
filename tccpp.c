@@ -2895,8 +2895,9 @@ void preprocess_new()
 static int tcc_preprocess(TCCState *s1)
 {
     Sym *define_start;
-    BufferedFile *file_ref;
-    int token_seen, line_ref;
+    BufferedFile *file_ref, **iptr, **iptr_new;
+    int token_seen, line_ref, d;
+    const char *s;
 
     preprocess_init(s1);
     define_start = define_stack;
@@ -2908,24 +2909,38 @@ static int tcc_preprocess(TCCState *s1)
     line_ref = 0;
     file_ref = NULL;
 
+    iptr = s1->include_stack_ptr;
     for (;;) {
         next();
         if (tok == TOK_EOF) {
             break;
+        } else if (file != file_ref) {
+            goto print_line;
         } else if (tok == TOK_LINEFEED) {
             if (!token_seen)
                 continue;
             ++line_ref;
             token_seen = 0;
         } else if (!token_seen) {
-            int d = file->line_num - line_ref;
-            if (file != file_ref || d < 0 || d >= 8)
-                fprintf(s1->outfile, "# %d \"%s\"\n", file->line_num, file->filename);
-            else
+            d = file->line_num - line_ref;
+            if (file != file_ref || d < 0 || d >= 8) {
+print_line:
+                iptr_new = s1->include_stack_ptr;
+                s = iptr_new > iptr ? " 1"
+                  : iptr_new < iptr ? " 2"
+                  : iptr_new > s1->include_stack ? " 3"
+                  : ""
+                  ;
+                iptr = iptr_new;
+                fprintf(s1->outfile, "# %d \"%s\"%s\n", file->line_num, file->filename, s);
+            } else {
                 while (d)
                     fputs("\n", s1->outfile), --d;
+            }
             line_ref = (file_ref = file)->line_num;
-            token_seen = 1;
+            token_seen = tok != TOK_LINEFEED;
+            if (!token_seen)
+                continue;
         }
         fputs(get_tok_str(tok, &tokc), s1->outfile);
     }
