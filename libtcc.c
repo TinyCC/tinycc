@@ -803,6 +803,8 @@ void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
     }
     if (is_warning)
         strcat_printf(buf, sizeof(buf), "warning: ");
+    else
+        strcat_printf(buf, sizeof(buf), "error: ");
     strcat_vprintf(buf, sizeof(buf), fmt, ap);
 
     if (!s1->error_func) {
