@@ -233,7 +233,8 @@ static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
                 /* weak is ignored if already global */
             } else if (sym_vis == STV_HIDDEN || sym_vis == STV_INTERNAL) {
                 /* ignore hidden symbols after */
-            } else if (esym->st_shndx == SHN_COMMON && sh_num < SHN_LORESERVE) {
+            } else if (esym->st_shndx == SHN_COMMON
+                    && (sh_num < SHN_LORESERVE || sh_num == SHN_COMMON)) {
                 /* gr: Happens with 'tcc ... -static tcctest.c' on e.g. Ubuntu 6.01
                    No idea if this is the correct solution ... */
                 goto do_patch;
