@@ -5032,15 +5032,20 @@ static void decl(int l)
                 if (sym) {
                     if ((sym->type.t & VT_BTYPE) != VT_FUNC)
                         goto func_error1;
-                    /* specific case: if not func_call defined, we put
-                       the one of the prototype */
-                    /* XXX: should have default value */
+
                     r = sym->type.ref->r;
+                    /* use func_call from prototype if not defined */
                     if (FUNC_CALL(r) != FUNC_CDECL
                      && FUNC_CALL(type.ref->r) == FUNC_CDECL)
                         FUNC_CALL(type.ref->r) = FUNC_CALL(r);
+
+                    /* use export from prototype */
                     if (FUNC_EXPORT(r))
                         FUNC_EXPORT(type.ref->r) = 1;
+
+                    /* use static from prototype */
+                    if (sym->type.t & VT_STATIC)
+                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
 
                     if (!is_compatible_types(&sym->type, &type)) {
                     func_error1:
