@@ -115,10 +115,13 @@ static Sym *external_sym(int v, CType *type, int r)
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
         s->type.t |= VT_EXTERN;
-    } else {
-        if (!is_compatible_types(&s->type, type))
-            error("incompatible types for redefinition of '%s'", 
-                  get_tok_str(v, NULL));
+    } else if (s->type.ref == func_old_type.ref) {
+        s->type.ref = type->ref;
+        s->r = r | VT_CONST | VT_SYM;
+        s->type.t |= VT_EXTERN;
+    } else if (!is_compatible_types(&s->type, type)) {
+        error("incompatible types for redefinition of '%s'", 
+              get_tok_str(v, NULL));
     }
     return s;
 }
