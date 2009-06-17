@@ -1939,9 +1939,8 @@ static void gen_assign_cast(CType *dt)
         if (sbt == VT_FUNC) {
             if ((type1->t & VT_BTYPE) != VT_VOID &&
                 !is_compatible_types(pointed_type(dt), st))
-                goto error;
-            else
-                goto type_ok;
+                warning("assignment from incompatible pointer type");
+            goto type_ok;
         }
         if (sbt != VT_PTR)
             goto error;
