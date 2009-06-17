@@ -111,6 +111,7 @@ enum {
     TCC_OPTION_w,
     TCC_OPTION_pipe,
     TCC_OPTION_E,
+    TCC_OPTION_x,
 };
 
 static const TCCOption tcc_options[] = {
@@ -148,6 +149,7 @@ static const TCCOption tcc_options[] = {
     { "w", TCC_OPTION_w, 0 },
     { "pipe", TCC_OPTION_pipe, 0},
     { "E", TCC_OPTION_E, 0},
+    { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
     { NULL },
 };
 
@@ -401,6 +403,8 @@ int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_E:
                 output_type = TCC_OUTPUT_PREPROCESS;
+                break;
+            case TCC_OPTION_x:
                 break;
             default:
                 if (s->warn_unsupported) {
