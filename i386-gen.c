@@ -402,6 +402,11 @@ void gfunc_call(int nb_args)
         }
     }
     gcall_or_jmp(0);
+
+#ifdef TCC_TARGET_PE
+    if ((func_sym->type.t & VT_BTYPE) == VT_STRUCT)
+        args_size -= 4;
+#endif
     if (args_size && func_call != FUNC_STDCALL)
         gadd_sp(args_size);
     vtop--;
@@ -426,6 +431,8 @@ void gfunc_prolog(CType *func_type)
     func_call = FUNC_CALL(sym->r);
     addr = 8;
     loc = 0;
+    func_vc = 0;
+
     if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
         fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
         fastcall_regs_ptr = fastcall_regs;
@@ -478,6 +485,10 @@ void gfunc_prolog(CType *func_type)
     /* pascal type call ? */
     if (func_call == FUNC_STDCALL)
         func_ret_sub = addr - 8;
+#ifdef TCC_TARGET_PE
+    else if (func_vc)
+        func_ret_sub = 4;
+#endif
 
     /* leave some room for bound checking code */
     if (tcc_state->do_bounds_check) {
