@@ -4530,6 +4530,24 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             index = index + type_size(&f->type, &align1);
             if (index > array_length)
                 array_length = index;
+
+            /* gr: skip fields from same union - ugly. */
+            while (f->next) {
+                ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
+                /* test for same offset */
+                if (f->next->c != f->c)
+                    break;
+                /* if yes, test for bitfield shift */
+                if ((f->type.t & VT_BITFIELD) && (f->next->type.t & VT_BITFIELD)) {
+                    int bit_pos_1 = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+                    int bit_pos_2 = (f->next->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+                    //printf("bitfield %d %d\n", bit_pos_1, bit_pos_2);
+                    if (bit_pos_1 != bit_pos_2)
+                        break;
+                }
+                f = f->next;
+            }
+
             f = f->next;
             if (no_oblock && f == NULL)
                 break;
