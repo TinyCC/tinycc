@@ -1,7 +1,10 @@
 #ifndef _STDARG_H
 #define _STDARG_H
 
+#ifndef _VA_LIST
+#define _VA_LIST
 typedef char *va_list;
+#endif
 
 /* only correct for i386 */
 #define va_start(ap,last) ap = ((char *)&(last)) + ((sizeof(last)+3)&~3)
