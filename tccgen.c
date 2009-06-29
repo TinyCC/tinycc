@@ -4914,21 +4914,22 @@ static void gen_function(Sym *sym)
 static void gen_inline_functions(void)
 {
     Sym *sym;
-    CType *type;
-    int *str, inline_generated;
+    int *str, inline_generated, i;
+    struct InlineFunc *fn;
 
     /* iterate while inline function are referenced */
     for(;;) {
         inline_generated = 0;
-        for(sym = global_stack; sym != NULL; sym = sym->prev) {
-            type = &sym->type;
-            if (((type->t & VT_BTYPE) == VT_FUNC) &&
-                (type->t & (VT_STATIC | VT_INLINE)) == 
-                (VT_STATIC | VT_INLINE) &&
-                sym->c != 0) {
+        for (i = 0; i < tcc_state->nb_inline_fns; ++i) {
+            fn = tcc_state->inline_fns[i];
+            sym = fn->sym;
+            if (sym && sym->c) {
                 /* the function was used: generate its code and
                    convert it to a normal function */
-                str = INLINE_DEF(sym->r);
+                str = fn->token_str;
+                fn->sym = NULL;
+                if (file)
+                    strcpy(file->filename, fn->filename);
                 sym->r = VT_SYM | VT_CONST;
                 sym->type.t &= ~VT_INLINE;
 
@@ -4945,21 +4946,7 @@ static void gen_inline_functions(void)
         if (!inline_generated)
             break;
     }
-
-    /* free all remaining inline function tokens */
-    for(sym = global_stack; sym != NULL; sym = sym->prev) {
-        type = &sym->type;
-        if (((type->t & VT_BTYPE) == VT_FUNC) &&
-            (type->t & (VT_STATIC | VT_INLINE)) == 
-            (VT_STATIC | VT_INLINE)) {
-            //gr printf("sym %d %s\n", sym->r, get_tok_str(sym->v, NULL));
-            if (sym->r == (VT_SYM | VT_CONST)) //gr beware!
-                continue;
-            str = INLINE_DEF(sym->r);
-            tok_str_free(str);
-            sym->r = 0; /* fail safe */
-        }
-    }
+    dynarray_reset(&tcc_state->inline_fns, &tcc_state->nb_inline_fns);
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
@@ -5070,6 +5057,8 @@ static void decl(int l)
                     (VT_INLINE | VT_STATIC)) {
                     TokenString func_str;
                     int block_level;
+                    struct InlineFunc *fn;
+                    const char *filename;
                            
                     tok_str_new(&func_str);
                     
@@ -5091,7 +5080,13 @@ static void decl(int l)
                     }
                     tok_str_add(&func_str, -1);
                     tok_str_add(&func_str, 0);
-                    INLINE_DEF(sym->r) = func_str.str;
+                    filename = file ? file->filename : "";
+                    fn = tcc_malloc(sizeof *fn + strlen(filename));
+                    strcpy(fn->filename, filename);
+                    fn->sym = sym;
+                    fn->token_str = func_str.str;
+                    dynarray_add((void ***)&tcc_state->inline_fns, &tcc_state->nb_inline_fns, fn);
+
                 } else {
                     /* compute text section */
                     cur_text_section = ad.section;
