@@ -198,7 +198,10 @@ typedef struct SValue {
 typedef struct Sym {
     int v;    /* symbol token */
     long r;    /* associated register */
-    long c;    /* associated number */
+    union {
+        long c;    /* associated number */
+        int *d;   /* define token stream */
+    };
     CType type;    /* associated type */
     struct Sym *next; /* next related symbol */
     struct Sym *prev; /* prev symbol in stack */

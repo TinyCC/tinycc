@@ -860,7 +860,8 @@ static inline void define_push(int v, int macro_type, int *str, Sym *first_arg)
 {
     Sym *s;
 
-    s = sym_push2(&define_stack, v, macro_type, (long)str);
+    s = sym_push2(&define_stack, v, macro_type, 0);
+    s->d = str;
     s->next = first_arg;
     table_ident[v - TOK_IDENT]->sym_define = s;
 }
@@ -893,8 +894,8 @@ static void free_defines(Sym *b)
     while (top != b) {
         top1 = top->prev;
         /* do not free args or predefined defines */
-        if (top->c)
-            tok_str_free((int *)top->c);
+        if (top->d)
+            tok_str_free(top->d);
         v = top->v;
         if (v >= TOK_IDENT && v < tok_ident)
             table_ident[v - TOK_IDENT]->sym_define = NULL;
@@ -2364,7 +2365,7 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
             s = sym_find2(args, t);
             if (s) {
                 cstr_new(&cstr);
-                st = (int *)s->c;
+                st = s->d;
                 spc = 0;
                 while (*st) {
                     TOK_GET(t, st, cval);
@@ -2386,7 +2387,7 @@ static int *macro_arg_subst(Sym **nested_list, int *macro_str, Sym *args)
         } else if (t >= TOK_IDENT) {
             s = sym_find2(args, t);
             if (s) {
-                st = (int *)s->c;
+                st = s->d;
                 /* if '##' is present before or after, no arg substitution */
                 if (*macro_str == TOK_TWOSHARPS || last_tok == TOK_TWOSHARPS) {
                     /* special case for var arg macros : ## eats the
@@ -2487,7 +2488,7 @@ static int macro_subst_tok(TokenString *tok_str,
         tok_str_add2(tok_str, t1, &cval);
         cstr_free(&cstr);
     } else {
-        mstr = (int *)s->c;
+        mstr = s->d;
         mstr_allocated = 0;
         if (s->type.t == MACRO_FUNC) {
             /* NOTE: we do not use next_nomacro to avoid eating the
@@ -2552,7 +2553,8 @@ static int macro_subst_tok(TokenString *tok_str,
                 }
                 str.len -= spc;
                 tok_str_add(&str, 0);
-                sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, (long)str.str);
+                sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
+                sa1->d = str.str;
                 sa = sa->next;
                 if (tok == ')') {
                     /* special case for gcc var args: add an empty
@@ -2577,7 +2579,7 @@ static int macro_subst_tok(TokenString *tok_str,
             sa = args;
             while (sa) {
                 sa1 = sa->prev;
-                tok_str_free((int *)sa->c);
+                tok_str_free(sa->d);
                 sym_free(sa);
                 sa = sa1;
             }
