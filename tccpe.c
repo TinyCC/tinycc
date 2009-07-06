@@ -755,10 +755,16 @@ ST_FN void pe_build_imports(struct pe_info *pe)
         *(int*)something
 */
 
+struct pe_sort_sym
+{
+    int index;
+    const char *name;
+};
+
 ST_FN int sym_cmp(const void *va, const void *vb)
 {
-    const char *ca = ((const char **)va)[1];
-    const char *cb = ((const char **)vb)[1];
+    const char *ca = (*(struct pe_sort_sym**)va)->name;
+    const char *cb = (*(struct pe_sort_sym**)vb)->name;
     return strcmp(ca, cb);
 }
 
@@ -768,7 +774,8 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     int sym_index, sym_end;
     DWORD rva_base, func_o, name_o, ord_o, str_o;
     struct pe_export_header *hdr;
-    int sym_count, n, ord, *sorted, *sp;
+    int sym_count, ord;
+    struct pe_sort_sym **sorted, *p;
 
     FILE *op;
     char buf[MAX_PATH];
@@ -776,7 +783,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     const char *name;
 
     rva_base = pe->thunk->sh_addr - pe->imagebase;
-    sym_count = 0, n = 1, sorted = NULL, op = NULL;
+    sym_count = 0, sorted = NULL, op = NULL;
 
     sym_end = symtab_section->data_offset / sizeof(Elf32_Sym);
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
@@ -785,10 +792,11 @@ ST_FN void pe_build_exports(struct pe_info *pe)
         if ((sym->st_other & 1)
             /* export only symbols from actually written sections */
             && pe->s1->sections[sym->st_shndx]->sh_addr) {
-            dynarray_add((void***)&sorted, &sym_count, (void*)n);
-            dynarray_add((void***)&sorted, &sym_count, (void*)name);
+            p = tcc_malloc(sizeof *p);
+            p->index = sym_index;
+            p->name = name;
+            dynarray_add((void***)&sorted, &sym_count, p);
         }
-        ++n;
 #if 0
         if (sym->st_other & 1)
             printf("export: %s\n", name);
@@ -799,9 +807,9 @@ ST_FN void pe_build_exports(struct pe_info *pe)
 
     if (0 == sym_count)
         return;
-    sym_count /= 2;
 
-    qsort (sorted, sym_count, 2 * sizeof sorted[0], sym_cmp);
+    qsort (sorted, sym_count, sizeof *sorted, sym_cmp);
+
     pe_align_section(pe->thunk, 16);
     dllname = tcc_basename(pe->filename);
 
@@ -836,9 +844,9 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     }
 #endif
 
-    for (sp = sorted, ord = 0; ord < sym_count; ++ord, sp += 2)
+    for (ord = 0; ord < sym_count; ++ord)
     {
-        sym_index = sp[0], name = (const char *)sp[1];
+        p = sorted[ord], sym_index = p->index, name = p->name;
         /* insert actual address later in pe_relocate_rva */
         put_elf_reloc(symtab_section, pe->thunk,
             func_o, R_386_RELATIVE, sym_index);
@@ -850,12 +858,11 @@ ST_FN void pe_build_exports(struct pe_info *pe)
         func_o += sizeof (DWORD);
         name_o += sizeof (DWORD);
         ord_o += sizeof (WORD);
-
         if (op)
             fprintf(op, "%s\n", name);
     }
     pe->exp_size = pe->thunk->data_offset - pe->exp_offs;
-    tcc_free(sorted);
+    dynarray_reset(&sorted, &sym_count);
 }
 
 /* ------------------------------------------------------------- */
