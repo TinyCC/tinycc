@@ -6,7 +6,7 @@
 TESTS = libtest test3
 
 # these should work too
-# TESTS += test1 test2 speed btest
+# TESTS += test1 test2 speedtest btest
 
 # these don't work as they should
 # TESTS += test4 asmtest
@@ -23,6 +23,7 @@ all test : $(TESTS)
 
 # make sure that tcc exists
 $(TESTS) : ../tcc
+
 ../tcc ../libtcc.a :
 	$(MAKE) -C ..
 
@@ -104,7 +105,7 @@ btest: boundtest.c
 	echo; echo Bound test OK
 
 # speed test
-speed: ex2 ex3
+speedtest: ex2 ex3
 	@echo ------------ $@ ------------
 	time ./ex2 1238 2 3 4 10 13 4
 	time $(TCC) -run ../examples/ex2.c 1238 2 3 4 10 13 4
@@ -116,13 +117,13 @@ ex%: ../examples/ex%.c
 
 # tiny assembler testing
 asmtest.ref: asmtest.S
-	$(CC) -o asmtest.ref.o -c asmtest.S
-	objdump -D asmtest.ref.o > $@
+	$(CC) -Wa,-W -o asmtest.ref.o -c asmtest.S
+	objdump -D asmtest.ref.o > asmtest.ref
 
 asmtest: asmtest.ref
 	@echo ------------ $@ ------------
 	$(TCC) -c asmtest.S
-	objdump -D asmtest.o > $@
+	objdump -D asmtest.o > asmtest.out
 	@if diff -u --ignore-matching-lines="file format" asmtest.ref asmtest.out ; then echo "ASM Auto Test OK"; fi
 
 # targets for development

@@ -262,8 +262,12 @@ tar:
 	rm -rf /tmp/$(TCC-VERSION)
 
 # in tests subdir
-test clean :
+test clean:
 	$(MAKE) -C tests $@
+
+config.mak:
+	@echo Running configure ...
+	@./configure
 
 # clean
 clean: local_clean
@@ -271,6 +275,6 @@ local_clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out libtcc_test$(EXESUF)
 
 distclean: clean
-	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.html
+	rm -vf config.h config.mak config.texi tcc.1
 
 endif # ifeq ($(TOP),.)

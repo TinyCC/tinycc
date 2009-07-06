@@ -341,9 +341,9 @@ L3:
  fnstcw 0x1002
  fstcw 0x1002
  fnstsw 0x1004
- fnstsw %eax
+ fnstsw (%eax)
  fstsw 0x1004
- fstsw %eax
+ fstsw (%eax)
  fnclex
  fclex
  fnstenv 0x1000
