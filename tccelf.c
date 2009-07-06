@@ -432,7 +432,6 @@ static void relocate_syms(TCCState *s1, int do_resolve)
     ElfW(Sym) *sym, *esym, *sym_end;
     int sym_bind, sh_num, sym_index;
     const char *name;
-    unsigned long addr;
 
     sym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
     for(sym = (ElfW(Sym) *)symtab_section->data + 1; 
@@ -442,12 +441,15 @@ static void relocate_syms(TCCState *s1, int do_resolve)
         if (sh_num == SHN_UNDEF) {
             name = strtab_section->data + sym->st_name;
             if (do_resolve) {
+#ifndef _WIN32
+                unsigned long addr;
                 name = symtab_section->link->data + sym->st_name;
-                addr = (unsigned long)resolve_sym(s1, name, ELFW(ST_TYPE)(sym->st_info));
+                addr = (unsigned long)resolve_sym(s1, name);
                 if (addr) {
                     sym->st_value = addr;
                     goto found;
                 }
+#endif
             } else if (s1->dynsym) {
                 /* if dynamic symbol exist, then use it */
                 sym_index = find_elf_sym(s1->dynsym, name);

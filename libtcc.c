@@ -212,12 +212,9 @@ static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
 int tcc_output_coff(TCCState *s1, FILE *f);
 
 /* tccpe.c */
-void *resolve_sym(TCCState *s1, const char *sym, int type);
 int pe_load_def_file(struct TCCState *s1, int fd);
 int pe_test_res_file(void *v, int size);
 int pe_load_res_file(struct TCCState *s1, int fd);
-void pe_add_runtime(struct TCCState *s1);
-void pe_guess_outfile(char *objfilename, int output_type);
 int pe_output_file(struct TCCState *s1, const char *filename);
 
 /* tccasm.c */
@@ -306,7 +303,7 @@ static inline int toup(int c)
         return c;
 }
 
-void *resolve_sym(TCCState *s1, const char *sym, int type);
+void *resolve_sym(TCCState *s1, const char *sym);
 
 /********************************************************/
 
@@ -412,7 +409,7 @@ void *resolve_sym(TCCState *s1, const char *symbol, int type)
 
 #include <dlfcn.h>
 
-void *resolve_sym(TCCState *s1, const char *sym, int type)
+void *resolve_sym(TCCState *s1, const char *sym)
 {
     return dlsym(RTLD_DEFAULT, sym);
 }
@@ -1666,15 +1663,15 @@ int tcc_relocate(TCCState *s1, void *ptr)
         s1->runtime_added = 1;
         s1->nb_errors = 0;
 #ifdef TCC_TARGET_PE
-        pe_add_runtime(s1);
-        relocate_common_syms();
-        tcc_add_linker_symbols(s1);
+        pe_output_file(s1, NULL);
 #else
         tcc_add_runtime(s1);
         relocate_common_syms();
         tcc_add_linker_symbols(s1);
         build_got_entries(s1);
 #endif
+        if (s1->nb_errors)
+            return -1;
     }
 
     offset = 0, mem = (unsigned long)ptr;

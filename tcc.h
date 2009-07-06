@@ -46,6 +46,7 @@
 #include <direct.h> /* getcwd */
 #define inline __inline
 #define inp next_inp
+#define dlclose FreeLibrary
 #endif
 
 #ifndef _WIN32

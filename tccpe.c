@@ -36,6 +36,10 @@
 #define PE_MERGE_DATA
 // #define PE_PRINT_SECTIONS
 
+#if defined _WIN32 && (defined _WIN64) == (defined TCC_TARGET_X86_64)
+#define TCC_IS_NATIVE
+#endif
+
 /* ----------------------------------------------------------- */
 #ifndef IMAGE_NT_SIGNATURE
 /* ----------------------------------------------------------- */
@@ -411,6 +415,7 @@ struct pe_info {
 #define PE_DLL 1
 #define PE_GUI 2
 #define PE_EXE 3
+#define PE_RUN 4
 
 void error_noabort(const char *, ...);
 
@@ -455,53 +460,10 @@ ST_FN int pe_find_import(TCCState * s1, const char *symbol)
     do {
         s = n ? get_alt_symbol(buffer, symbol) : symbol;
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
-        // printf("find %d %s\n", sym_index, s);
+        // printf("find (%d) %d %s\n", n, sym_index, s);
     } while (0 == sym_index && ++n < 2);
     return sym_index;
 }
-
-#if defined _WIN32 || defined __CYGWIN__
-
-#ifdef __CYGWIN__
-# include <dlfcn.h>
-# define LoadLibrary(s) dlopen(s, RTLD_NOW)
-# define GetProcAddress(h,s) dlsym(h, s)
-#else
-# define dlclose(h) FreeLibrary(h)
-#endif
-
-/* for the -run option: dynamically load symbol from dll */
-void *resolve_sym(struct TCCState *s1, const char *symbol, int type)
-{
-    char buffer[100];
-    int sym_index, dll_index;
-    void *addr, **m;
-    DLLReference *dllref;
-
-    sym_index = pe_find_import(s1, symbol);
-    if (0 == sym_index)
-        return NULL;
-    dll_index = ((Elf32_Sym *)s1->dynsymtab_section->data + sym_index)->st_value;
-    dllref = s1->loaded_dlls[dll_index-1];
-    if ( !dllref->handle )
-    {
-        dllref->handle = LoadLibrary(dllref->name);
-    }
-    addr = GetProcAddress(dllref->handle, symbol);
-    if (NULL == addr)
-        addr = GetProcAddress(dllref->handle, get_alt_symbol(buffer, symbol));
-
-    if (addr && STT_OBJECT == type) {
-        /* need to return a pointer to the address for data objects */
-        m = (void**)tcc_malloc(sizeof addr), *m = addr, addr = m;
-#ifdef MEM_DEBUG
-        /* yep, we don't free it */
-        mem_cur_size -= sizeof (void*);
-#endif
-    }
-    return addr;
-}
-#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -729,7 +691,8 @@ ST_FN void pe_build_imports(struct pe_info *pe)
 
     for (i = 0; i < pe->imp_count; ++i) {
         struct pe_import_header *hdr;
-        int k, n, v;
+        int k, n;
+        DWORD v;
         struct pe_import_info *p = pe->imp_info[i];
         const char *name = pe->s1->loaded_dlls[p->dll_index-1]->name;
 
@@ -743,7 +706,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
 
         for (k = 0, n = p->sym_count; k <= n; ++k) {
             if (k < n) {
-                DWORD iat_index = p->symbols[k]->iat_index;
+                int iat_index = p->symbols[k]->iat_index;
                 int sym_index = p->symbols[k]->sym_index;
                 Elf32_Sym *imp_sym = (Elf32_Sym *)pe->s1->dynsymtab_section->data + sym_index;
                 Elf32_Sym *org_sym = (Elf32_Sym *)symtab_section->data + iat_index;
@@ -754,7 +717,16 @@ ST_FN void pe_build_imports(struct pe_info *pe)
                 v = pe->thunk->data_offset + rva_base;
                 section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
                 put_elf_str(pe->thunk, name);
-
+#ifdef TCC_IS_NATIVE
+                if (pe->type == PE_RUN) {
+                    DLLReference *dllref = pe->s1->loaded_dlls[imp_sym->st_value-1];
+                    if ( !dllref->handle )
+                        dllref->handle = LoadLibrary(dllref->name);
+                    v = (DWORD)GetProcAddress(dllref->handle, name);
+                    if (!v)
+                        error_noabort("undefined symbol '%s'", name);
+                }
+#endif
             } else {
                 v = 0; /* last entry is zero */
             }
@@ -1488,6 +1460,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
             tcc_add_library(s1, "gdi32");
         }
     }
+    pe->type = pe_type;
 
     if (start_symbol) {
         addr = (unsigned long)tcc_get_symbol_err(s1, start_symbol);
@@ -1498,16 +1471,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
                     ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                     text_section->sh_num, "main");
     }
-
-    if (pe) {
-        pe->type = pe_type;
-        pe->start_addr = addr;
-    }
-}
-
-PUB_FN void pe_add_runtime(TCCState *s1)
-{
-    pe_add_runtime_ex(s1, NULL);
+    pe->start_addr = addr;
 }
 
 PUB_FN int pe_output_file(TCCState * s1, const char *filename)
@@ -1525,7 +1489,10 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
     tcc_add_linker_symbols(s1);
 
     ret = pe_check_symbols(&pe);
-    if (0 == ret) {
+    if (ret)
+        return ret;
+
+    if (filename) {
         if (PE_DLL == pe.type) {
             pe.reloc = new_section(pe.s1, ".reloc", SHT_PROGBITS, 0);
             pe.imagebase = 0x10000000;
@@ -1546,6 +1513,13 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
         else
             ret = pe_write(&pe);
         tcc_free(pe.sec_info);
+    } else {
+#ifndef TCC_IS_NATIVE
+        error_noabort("-run supported only on native platform");
+#endif
+        pe.type = PE_RUN;
+        pe.thunk = data_section;
+        pe_build_imports(&pe);
     }
 
 #ifdef PE_PRINT_SECTIONS
