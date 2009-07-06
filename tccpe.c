@@ -177,6 +177,31 @@ typedef struct _IMAGE_SECTION_HEADER {
 
 #define IMAGE_SIZEOF_SECTION_HEADER     40
 
+typedef struct _IMAGE_EXPORT_DIRECTORY {
+    DWORD Characteristics;
+    DWORD TimeDateStamp;
+    WORD MajorVersion;
+    WORD MinorVersion;
+    DWORD Name;
+    DWORD Base;
+    DWORD NumberOfFunctions;
+    DWORD NumberOfNames;
+    DWORD AddressOfFunctions;
+    DWORD AddressOfNames;
+    DWORD AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY,*PIMAGE_EXPORT_DIRECTORY;
+
+typedef struct _IMAGE_IMPORT_DESCRIPTOR {
+    union {
+	DWORD Characteristics;
+	DWORD OriginalFirstThunk;
+    };
+    DWORD TimeDateStamp;
+    DWORD ForwarderChain;
+    DWORD Name;
+    DWORD FirstThunk;
+} IMAGE_IMPORT_DESCRIPTOR;
+
 typedef struct _IMAGE_BASE_RELOCATION {
     DWORD   VirtualAddress;
     DWORD   SizeOfBlock;
@@ -216,27 +241,6 @@ struct pe_header
     IMAGE_OPTIONAL_HEADER opthdr;
 #endif
 #endif
-};
-
-struct pe_import_header {
-    DWORD first_entry;
-    DWORD time_date;
-    DWORD forwarder;
-    DWORD lib_name_offset;
-    DWORD first_thunk;
-};
-
-struct pe_export_header {
-    DWORD Characteristics;
-    DWORD TimeDateStamp;
-    DWORD Version;
-    DWORD Name;
-    DWORD Base;
-    DWORD NumberOfFunctions;
-    DWORD NumberOfNames;
-    DWORD AddressOfFunctions;
-    DWORD AddressOfNames;
-    DWORD AddressOfNameOrdinals;
 };
 
 struct pe_reloc_header {
@@ -742,7 +746,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
     pe_align_section(pe->thunk, 16);
 
     pe->imp_offs = dll_ptr = pe->thunk->data_offset;
-    pe->imp_size = (ndlls + 1) * sizeof(struct pe_import_header);
+    pe->imp_size = (ndlls + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR);
     pe->iat_offs = dll_ptr + pe->imp_size;
     pe->iat_size = (sym_cnt + ndlls) * sizeof(ADDR3264);
     section_ptr_add(pe->thunk, pe->imp_size + 2*pe->iat_size);
@@ -751,7 +755,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
     ent_ptr = pe->iat_offs + pe->iat_size;
 
     for (i = 0; i < pe->imp_count; ++i) {
-        struct pe_import_header *hdr;
+        IMAGE_IMPORT_DESCRIPTOR *hdr;
         int k, n;
         ADDR3264 v;
         struct pe_import_info *p = pe->imp_info[i];
@@ -760,10 +764,10 @@ ST_FN void pe_build_imports(struct pe_info *pe)
         /* put the dll name into the import header */
         v = put_elf_str(pe->thunk, name);
 
-        hdr = (struct pe_import_header*)(pe->thunk->data + dll_ptr);
-        hdr->first_thunk     = thk_ptr + rva_base;
-        hdr->first_entry     = ent_ptr + rva_base;
-        hdr->lib_name_offset = v + rva_base;
+        hdr = (IMAGE_IMPORT_DESCRIPTOR*)(pe->thunk->data + dll_ptr);
+        hdr->FirstThunk = thk_ptr + rva_base;
+        hdr->OriginalFirstThunk = ent_ptr + rva_base;
+        hdr->Name = v + rva_base;
 
         for (k = 0, n = p->sym_count; k <= n; ++k) {
             if (k < n) {
@@ -796,7 +800,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
             thk_ptr += sizeof (ADDR3264);
             ent_ptr += sizeof (ADDR3264);
         }
-        dll_ptr += sizeof(struct pe_import_header);
+        dll_ptr += sizeof(IMAGE_IMPORT_DESCRIPTOR);
         dynarray_reset(&p->symbols, &p->sym_count);
     }
     dynarray_reset(&pe->imp_info, &pe->imp_count);
@@ -834,7 +838,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     ElfW(Sym) *sym;
     int sym_index, sym_end;
     DWORD rva_base, func_o, name_o, ord_o, str_o;
-    struct pe_export_header *hdr;
+    IMAGE_EXPORT_DIRECTORY *hdr;
     int sym_count, ord;
     struct pe_sort_sym **sorted, *p;
 
@@ -875,7 +879,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     dllname = tcc_basename(pe->filename);
 
     pe->exp_offs = pe->thunk->data_offset;
-    func_o = pe->exp_offs + sizeof(struct pe_export_header);
+    func_o = pe->exp_offs + sizeof(IMAGE_EXPORT_DIRECTORY);
     name_o = func_o + sym_count * sizeof (DWORD);
     ord_o = name_o + sym_count * sizeof (DWORD);
     str_o = ord_o + sym_count * sizeof(WORD);
