@@ -634,6 +634,31 @@ ST_FN int pe_write(struct pe_info *pe)
 
 /*----------------------------------------------------------------------------*/
 
+#ifdef TCC_TARGET_X86_64
+#define ELFW_R_(type) ELF64_R_##type
+#define ElfW_Rel ElfW(Rela)
+
+#define REL_TYPE_DIRECT R_X86_64_64
+#define R_XXX_THUNKFIX R_X86_64_PC32
+#define R_XXX_RELATIVE R_X86_64_RELATIVE
+
+#define ELFW_ST_BIND ELF64_ST_BIND
+#define ELFW_ST_TYPE ELF64_ST_TYPE
+#define ELFW_ST_INFO ELF64_ST_INFO
+#else
+#define ELFW_R_(type) ELF32_R_##type
+#define ElfW_Rel ElfW(Rel)
+
+#define REL_TYPE_DIRECT R_386_32
+#define R_XXX_THUNKFIX R_386_32
+#define R_XXX_RELATIVE R_386_RELATIVE
+
+#define ELFW_ST_BIND ELF32_ST_BIND
+#define ELFW_ST_TYPE ELF32_ST_TYPE
+#define ELFW_ST_INFO ELF32_ST_INFO
+#endif
+/*----------------------------------------------------------------------------*/
+
 ST_FN struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
 {
     int i;
@@ -641,7 +666,7 @@ ST_FN struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
     struct pe_import_info *p;
     struct import_symbol *s;
 
-    dll_index = ((Elf32_Sym *)pe->s1->dynsymtab_section->data + sym_index)->st_value;
+    dll_index = ((ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index)->st_value;
     if (0 == dll_index)
         return NULL;
 
@@ -708,8 +733,8 @@ ST_FN void pe_build_imports(struct pe_info *pe)
             if (k < n) {
                 int iat_index = p->symbols[k]->iat_index;
                 int sym_index = p->symbols[k]->sym_index;
-                Elf32_Sym *imp_sym = (Elf32_Sym *)pe->s1->dynsymtab_section->data + sym_index;
-                Elf32_Sym *org_sym = (Elf32_Sym *)symtab_section->data + iat_index;
+                ElfW(Sym) *imp_sym = (ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index;
+                ElfW(Sym) *org_sym = (ElfW(Sym) *)symtab_section->data + iat_index;
                 const char *name = pe->s1->dynsymtab_section->link->data + imp_sym->st_name;
 
                 org_sym->st_value = thk_ptr;
@@ -770,7 +795,7 @@ ST_FN int sym_cmp(const void *va, const void *vb)
 
 ST_FN void pe_build_exports(struct pe_info *pe)
 {
-    Elf32_Sym *sym;
+    ElfW(Sym) *sym;
     int sym_index, sym_end;
     DWORD rva_base, func_o, name_o, ord_o, str_o;
     struct pe_export_header *hdr;
@@ -785,9 +810,9 @@ ST_FN void pe_build_exports(struct pe_info *pe)
     rva_base = pe->thunk->sh_addr - pe->imagebase;
     sym_count = 0, sorted = NULL, op = NULL;
 
-    sym_end = symtab_section->data_offset / sizeof(Elf32_Sym);
+    sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
-        sym = (Elf32_Sym*)symtab_section->data + sym_index;
+        sym = (ElfW(Sym)*)symtab_section->data + sym_index;
         name = symtab_section->link->data + sym->st_name;
         if ((sym->st_other & 1)
             /* export only symbols from actually written sections */
@@ -849,7 +874,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
         p = sorted[ord], sym_index = p->index, name = p->name;
         /* insert actual address later in pe_relocate_rva */
         put_elf_reloc(symtab_section, pe->thunk,
-            func_o, R_386_RELATIVE, sym_index);
+            func_o, R_XXX_RELATIVE, sym_index);
         *(DWORD*)(pe->thunk->data + name_o)
             = pe->thunk->data_offset + rva_base;
         *(WORD*)(pe->thunk->data + ord_o)
@@ -870,7 +895,7 @@ ST_FN void pe_build_reloc (struct pe_info *pe)
 {
     DWORD offset, block_ptr, addr;
     int count, i;
-    Elf32_Rel *rel, *rel_end;
+    ElfW_Rel *rel, *rel_end;
     Section *s = NULL, *sr;
 
     offset = addr = block_ptr = count = i = 0;
@@ -878,10 +903,10 @@ ST_FN void pe_build_reloc (struct pe_info *pe)
 
     for(;;) {
         if (rel < rel_end) {
-            int type = ELF32_R_TYPE(rel->r_info);
+            int type = ELFW_R_(TYPE)(rel->r_info);
             addr = rel->r_offset + s->sh_addr;
             ++ rel;
-            if (type != R_386_32)
+            if (type != REL_TYPE_DIRECT)
                 continue;
             if (count == 0) { /* new block */
                 block_ptr = pe->reloc->data_offset;
@@ -899,8 +924,8 @@ ST_FN void pe_build_reloc (struct pe_info *pe)
         } else if (i < pe->sec_count) {
             sr = (s = pe->s1->sections[pe->sec_info[i++].ord])->reloc;
             if (sr) {
-                rel = (Elf32_Rel *)sr->data;
-                rel_end = (Elf32_Rel *)(sr->data + sr->data_offset);
+                rel = (ElfW_Rel *)sr->data;
+                rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
             }
             continue;
         }
@@ -1037,7 +1062,7 @@ ST_FN int pe_assign_addresses (struct pe_info *pe)
             type == SHT_NOBITS ? "nobits" :
             type == SHT_SYMTAB ? "symtab" :
             type == SHT_STRTAB ? "strtab" :
-            type == SHT_REL ? "rel" : "???",
+            type == SHT_RELX ? "rel" : "???",
             s->data_offset,
             flags & SHF_ALLOC ? "alloc" : "",
             flags & SHF_WRITE ? "write" : "",
@@ -1055,37 +1080,39 @@ ST_FN int pe_assign_addresses (struct pe_info *pe)
 ST_FN void pe_relocate_rva (struct pe_info *pe, Section *s)
 {
     Section *sr = s->reloc;
-    Elf32_Rel *rel, *rel_end;
-    rel_end = (Elf32_Rel *)(sr->data + sr->data_offset);
-    for(rel = (Elf32_Rel *)sr->data; rel < rel_end; rel++)
-        if (ELF32_R_TYPE(rel->r_info) == R_386_RELATIVE) {
-            int sym_index = ELF32_R_SYM(rel->r_info);
+    ElfW_Rel *rel, *rel_end;
+    rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
+    for(rel = (ElfW_Rel *)sr->data; rel < rel_end; rel++) {
+        if (ELFW_R_(TYPE)(rel->r_info) == R_XXX_RELATIVE) {
+            int sym_index = ELFW_R_(SYM)(rel->r_info);
             DWORD addr = s->sh_addr;
             if (sym_index) {
-                Elf32_Sym *sym = (Elf32_Sym *)symtab_section->data + sym_index;
+                ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
                 addr = sym->st_value;
             }
+            // printf("reloc rva %08x %08x\n", (DWORD)rel->r_offset, addr);
             *(DWORD*)(s->data + rel->r_offset) += addr - pe->imagebase;
         }
+    }
 }
 
 /*----------------------------------------------------------------------------*/
 ST_FN int pe_check_symbols(struct pe_info *pe)
 {
-    Elf32_Sym *sym;
+    ElfW(Sym) *sym;
     int sym_index, sym_end;
     int ret = 0;
 
     pe_align_section(text_section, 8);
 
-    sym_end = symtab_section->data_offset / sizeof(Elf32_Sym);
+    sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
 
-        sym = (Elf32_Sym*)symtab_section->data + sym_index;
+        sym = (ElfW(Sym) *)symtab_section->data + sym_index;
         if (sym->st_shndx == SHN_UNDEF) {
 
             const char *name = symtab_section->link->data + sym->st_name;
-            unsigned type = ELF32_ST_TYPE(sym->st_info);
+            unsigned type = ELFW_ST_TYPE(sym->st_info);
             int imp_sym = pe_find_import(pe->s1, name);
             struct import_symbol *is;
 
@@ -1112,15 +1139,15 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
                     sprintf(buffer, "IAT.%s", name);
                     is->iat_index = put_elf_sym(
                         symtab_section, 0, sizeof(DWORD),
-                        ELF32_ST_INFO(STB_GLOBAL, STT_OBJECT),
+                        ELFW_ST_INFO(STB_GLOBAL, STT_OBJECT),
                         0, SHN_UNDEF, buffer);
                     put_elf_reloc(symtab_section, text_section, 
-                        offset + 2, R_386_32, is->iat_index);
+                        offset + 2, R_XXX_THUNKFIX, is->iat_index);
                     is->thk_offset = offset;
                 }
 
                 /* tcc_realloc might have altered sym's address */
-                sym = (Elf32_Sym*)symtab_section->data + sym_index;
+                sym = (ElfW(Sym) *)symtab_section->data + sym_index;
 
                 /* patch the original symbol */
                 sym->st_value = offset;
@@ -1142,7 +1169,7 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
             ret = 1;
 
         } else if (pe->s1->rdynamic
-                   && ELF32_ST_BIND(sym->st_info) != STB_LOCAL) {
+                   && ELFW_ST_BIND(sym->st_info) != STB_LOCAL) {
             /* if -rdynamic option, then export all non local symbols */
             sym->st_other |= 1;
         }
@@ -1166,8 +1193,8 @@ ST_FN void pe_print_section(FILE * f, Section * s)
         fprintf(f, "\nlink     \"%s\"", s->link->name);
     if (s->reloc)
         fprintf(f, "\nreloc    \"%s\"", s->reloc->name);
-    fprintf(f, "\nv_addr   %08X", s->sh_addr);
-    fprintf(f, "\ncontents %08X", l);
+    fprintf(f, "\nv_addr   %08X", (unsigned)s->sh_addr);
+    fprintf(f, "\ncontents %08X", (unsigned)l);
     fprintf(f, "\n\n");
 
     if (s->sh_type == SHT_NOBITS)
@@ -1177,9 +1204,9 @@ ST_FN void pe_print_section(FILE * f, Section * s)
         return;
 
     if (s->sh_type == SHT_SYMTAB)
-        m = sizeof(Elf32_Sym);
-    if (s->sh_type == SHT_REL)
-        m = sizeof(Elf32_Rel);
+        m = sizeof(ElfW(Sym));
+    else if (s->sh_type == SHT_RELX)
+        m = sizeof(ElfW_Rel);
     else
         m = 16;
 
@@ -1188,7 +1215,7 @@ ST_FN void pe_print_section(FILE * f, Section * s)
         fprintf(f, " %02x", i);
     n = 56;
 
-    if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_REL) {
+    if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_RELX) {
         const char *fields1[] = {
             "name",
             "value",
@@ -1235,25 +1262,28 @@ ST_FN void pe_print_section(FILE * f, Section * s)
         }
 
         if (s->sh_type == SHT_SYMTAB) {
-            Elf32_Sym *sym = (Elf32_Sym *) (p + i);
+            ElfW(Sym) *sym = (ElfW(Sym) *) (p + i);
             const char *name = s->link->data + sym->st_name;
             fprintf(f, "  %04X  %04X  %04X   %02X    %02X    %02X   %04X  \"%s\"",
-                    sym->st_name,
-                    sym->st_value,
-                    sym->st_size,
-                    ELF32_ST_BIND(sym->st_info),
-                    ELF32_ST_TYPE(sym->st_info),
-                    sym->st_other, sym->st_shndx, name);
+                    (unsigned)sym->st_name,
+                    (unsigned)sym->st_value,
+                    (unsigned)sym->st_size,
+                    (unsigned)ELFW_ST_BIND(sym->st_info),
+                    (unsigned)ELFW_ST_TYPE(sym->st_info),
+                    (unsigned)sym->st_other,
+                    (unsigned)sym->st_shndx,
+                    name);
 
-        } else if (s->sh_type == SHT_REL) {
-            Elf32_Rel *rel = (Elf32_Rel *) (p + i);
-            Elf32_Sym *sym =
-                (Elf32_Sym *) s->link->data + ELF32_R_SYM(rel->r_info);
+        } else if (s->sh_type == SHT_RELX) {
+            ElfW_Rel *rel = (ElfW_Rel *) (p + i);
+            ElfW(Sym) *sym =
+                (ElfW(Sym) *) s->link->data + ELFW_R_(SYM)(rel->r_info);
             const char *name = s->link->link->data + sym->st_name;
             fprintf(f, "  %04X   %02X   %04X  \"%s\"",
-                    rel->r_offset,
-                    ELF32_R_TYPE(rel->r_info),
-                    ELF32_R_SYM(rel->r_info), name);
+                    (unsigned)rel->r_offset,
+                    (unsigned)ELFW_R_(TYPE)(rel->r_info),
+                    (unsigned)ELFW_R_(SYM)(rel->r_info),
+                    name);
         } else {
             fprintf(f, "   ");
             for (n = 0; n < m; ++n) {
@@ -1336,7 +1366,7 @@ PUB_FN int pe_load_res_file(TCCState *s1, int fd)
         if (rel.type != 7) /* DIR32NB */
             goto quit;
         put_elf_reloc(symtab_section, rsrc_section,
-            rel.offset, R_386_RELATIVE, 0);
+            rel.offset, R_XXX_RELATIVE, 0);
     }
     ret = 0;
 quit:
@@ -1409,7 +1439,7 @@ PUB_FN int pe_load_def_file(TCCState *s1, int fd)
         default:
             add_elf_sym(s1->dynsymtab_section,
                 s1->nb_loaded_dlls, 0,
-                ELF32_ST_INFO(STB_GLOBAL, STT_FUNC), 0,
+                ELFW_ST_INFO(STB_GLOBAL, STT_FUNC), 0,
                 text_section->sh_num, p);
             continue;
         }
@@ -1451,7 +1481,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
     if (start_symbol)
         add_elf_sym(symtab_section,
             0, 0,
-            ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
+            ELFW_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
             SHN_UNDEF, start_symbol);
 
     if (0 == s1->nostdlib) {
@@ -1475,7 +1505,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
             /* for -run GUI's, put '_runwinmain' instead of 'main' */
             add_elf_sym(symtab_section,
                     addr, 0,
-                    ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
+                    ELFW_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                     text_section->sh_num, "main");
     }
     pe->start_addr = addr;
