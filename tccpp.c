@@ -2598,13 +2598,13 @@ static int macro_subst_tok(TokenString *tok_str,
    return the resulting string (which must be freed). */
 static inline int *macro_twosharps(const int *macro_str)
 {
-    TokenSym *ts;
-    const int *ptr, *saved_macro_ptr;
+    const int *ptr;
     int t;
-    const char *p1, *p2;
     CValue cval;
     TokenString macro_str1;
     CString cstr;
+    char *p;
+    int n;
 
     /* we search the first '##' */
     for(ptr = macro_str;;) {
@@ -2617,104 +2617,42 @@ static inline int *macro_twosharps(const int *macro_str)
     }
 
     /* we saw '##', so we need more processing to handle it */
-    cstr_new(&cstr);
     tok_str_new(&macro_str1);
-    saved_macro_ptr = macro_ptr;
-    /* XXX: get rid of the use of macro_ptr here */
-    macro_ptr = (int *)macro_str;
-    for(;;) {
-        next_nomacro_spc();
+    for(ptr = macro_str;;) {
+        TOK_GET(tok, ptr, tokc);
         if (tok == 0)
             break;
         if (tok == TOK_TWOSHARPS)
             continue;
-        while (*macro_ptr == TOK_TWOSHARPS) {
-            t = *++macro_ptr;
+        while (*ptr == TOK_TWOSHARPS) {
+            t = *++ptr;
             if (t && t != TOK_TWOSHARPS) {
-                TOK_GET(t, macro_ptr, cval);
-                /* We concatenate the two tokens if we have an
-                   identifier or a preprocessing number */
-                cstr_reset(&cstr);
-                p1 = get_tok_str(tok, &tokc);
-                cstr_cat(&cstr, p1);
-                p2 = get_tok_str(t, &cval);
-                cstr_cat(&cstr, p2);
+                TOK_GET(t, ptr, cval);
+
+                /* We concatenate the two tokens */
+                cstr_new(&cstr);
+                cstr_cat(&cstr, get_tok_str(tok, &tokc));
+                n = cstr.size;
+                cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
-                if ((tok >= TOK_IDENT || tok == TOK_PPNUM) && 
-                    (t >= TOK_IDENT || t == TOK_PPNUM)) {
-                    if (tok == TOK_PPNUM) {
-                        /* if number, then create a number token */
-                        /* NOTE: no need to allocate because
-                           tok_str_add2() does it */
-                        cstr_reset(&tokcstr);
-                        tokcstr = cstr;
-                        cstr_new(&cstr);
-                        tokc.cstr = &tokcstr;
-                    } else {
-                        /* if identifier, we must do a test to
-                           validate we have a correct identifier */
-                        if (t == TOK_PPNUM) {
-                            const char *p;
-                            int c;
+                p = file->buf_ptr;
+                file->buf_ptr = cstr.data;
+                for (;;) {
+                    next_nomacro1();
+                    if (0 == *file->buf_ptr)
+                        break;
+                    tok_str_add2(&macro_str1, tok, &tokc);
 
-                            p = p2;
-                            for(;;) {
-                                c = *p;
-                                if (c == '\0')
-                                    break;
-                                p++;
-                                if (!isnum(c) && !isid(c))
-                                    goto error_pasting;
-                            }
-                        }
-                        ts = tok_alloc(cstr.data, strlen(cstr.data));
-                        tok = ts->tok; /* modify current token */
-                    }
-                } else {
-                    const char *str = cstr.data;
-                    const unsigned char *q;
-
-                    /* we look for a valid token */
-                    /* XXX: do more extensive checks */
-                    if (!strcmp(str, ">>=")) {
-                        tok = TOK_A_SAR;
-                    } else if (!strcmp(str, "<<=")) {
-                        tok = TOK_A_SHL;
-                    } else if (strlen(str) == 2) {
-                        /* search in two bytes table */
-                        q = tok_two_chars;
-                        for(;;) {
-                            if (!*q)
-                                goto error_pasting;
-                            if (q[0] == str[0] && q[1] == str[1])
-                                break;
-                            q += 3;
-                        }
-                        tok = q[2];
-                    } else {
-                    error_pasting:
-                        /* NOTE: because get_tok_str use a static buffer,
-                           we must save it */
-                        cstr_reset(&cstr);
-                        p1 = get_tok_str(tok, &tokc);
-                        cstr_cat(&cstr, p1);
-                        cstr_ccat(&cstr, '\0');
-                        p2 = get_tok_str(t, &cval);
-                        warning("pasting \"%s\" and \"%s\" does not give a valid preprocessing token", cstr.data, p2);
-                        /* cannot merge tokens: just add them separately */
-                        tok_str_add2(&macro_str1, tok, &tokc);
-                        /* XXX: free associated memory ? */
-                        tok = t;
-                        tokc = cval;
-                    }
+                    warning("pasting \"%.*s\" and \"%s\" does not give a valid preprocessing token",
+                        n, cstr.data, (char*)cstr.data + n);
                 }
+                file->buf_ptr = p;
+                cstr_reset(&cstr);
             }
         }
         tok_str_add2(&macro_str1, tok, &tokc);
     }
-    macro_ptr = (int *)saved_macro_ptr;
-    cstr_free(&cstr);
     tok_str_add(&macro_str1, 0);
     return macro_str1.str;
 }
