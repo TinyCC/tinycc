@@ -234,7 +234,81 @@ static void asm_instr(void);
 static void asm_global_instr(void);
 
 /********************************************************/
-/* global variables */
+/* libtcc.c */
+
+static Sym *__sym_malloc(void);
+static inline Sym *sym_malloc(void);
+static inline void sym_free(Sym *sym);
+Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
+static void free_section(Section *s);
+static void section_realloc(Section *sec, unsigned long new_size);
+static void *section_ptr_add(Section *sec, unsigned long size);
+Section *find_section(TCCState *s1, const char *name);
+static void put_extern_sym2(
+    Sym *sym, Section *section,
+    unsigned long value, unsigned long size, int can_add_underscore);
+static void put_extern_sym(
+    Sym *sym, Section *section,
+    unsigned long value, unsigned long size);
+static void greloc(Section *s, Sym *sym, unsigned long offset, int type);
+
+static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap);
+static void strcat_printf(char *buf, int buf_size, const char *fmt, ...);
+
+/* CString handling */
+static void cstr_realloc(CString *cstr, int new_size);
+static inline void cstr_ccat(CString *cstr, int ch);
+static void cstr_cat(CString *cstr, const char *str);
+static void cstr_wccat(CString *cstr, int ch);
+static void cstr_new(CString *cstr);
+static void cstr_free(CString *cstr);
+#define cstr_reset(cstr) cstr_free(cstr)
+static void add_char(CString *cstr, int c);
+
+static Sym *sym_push2(Sym **ps, int v, int t, long c);
+static Sym *sym_find2(Sym *s, int v);
+static inline Sym *struct_find(int v);
+static inline Sym *sym_find(int v);
+static Sym *sym_push(int v, CType *type, int r, int c);
+static Sym *global_identifier_push(int v, int t, int c);
+static void sym_pop(Sym **ptop, Sym *b);
+
+BufferedFile *tcc_open(TCCState *s1, const char *filename);
+void tcc_close(BufferedFile *bf);
+static int tcc_compile(TCCState *s1);
+
+void expect(const char *msg);
+void skip(int c);
+static void test_lvalue(void);
+
+static inline int isid(int c)
+{
+    return (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
+        || c == '_';
+}
+
+static inline int isnum(int c)
+{
+    return c >= '0' && c <= '9';
+}
+
+static inline int isoct(int c)
+{
+    return c >= '0' && c <= '7';
+}
+
+static inline int toup(int c)
+{
+    if (c >= 'a' && c <= 'z')
+        return c - 'a' + 'A';
+    else
+        return c;
+}
+
+void *resolve_sym(TCCState *s1, const char *sym, int type);
+
+/********************************************************/
 
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
@@ -252,6 +326,36 @@ static void asm_global_instr(void);
 #include "x86_64-gen.c"
 #endif
 
+#include "tccpp.c"
+#include "tccgen.c"
+
+#ifdef CONFIG_TCC_ASM
+#ifdef TCC_TARGET_I386
+#include "i386-asm.c"
+#endif
+#include "tccasm.c"
+#else
+static void asm_instr(void)
+{
+    error("inline asm() not supported");
+}
+static void asm_global_instr(void)
+{
+    error("inline asm() not supported");
+}
+#endif
+
+#include "tccelf.c"
+
+#ifdef TCC_TARGET_COFF
+#include "tcccoff.c"
+#endif
+
+#ifdef TCC_TARGET_PE
+#include "tccpe.c"
+#endif
+
+/********************************************************/
 #ifdef CONFIG_TCC_STATIC
 
 #define RTLD_LAZY       0x001
@@ -741,31 +845,6 @@ static void greloc(Section *s, Sym *sym, unsigned long offset, int type)
     put_elf_reloc(symtab_section, s, offset, type, sym->c);
 }
 
-static inline int isid(int c)
-{
-    return (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        c == '_';
-}
-
-static inline int isnum(int c)
-{
-    return c >= '0' && c <= '9';
-}
-
-static inline int isoct(int c)
-{
-    return c >= '0' && c <= '7';
-}
-
-static inline int toup(int c)
-{
-    if (c >= 'a' && c <= 'z')
-        return c - 'a' + 'A';
-    else
-        return c;
-}
-
 static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
 {
     int len;
@@ -1130,10 +1209,6 @@ void tcc_close(BufferedFile *bf)
     tcc_free(bf);
 }
 
-#include "tccpp.c"
-#include "tccgen.c"
-
-
 /* compile the C file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s1)
 {
@@ -1310,33 +1385,6 @@ void tcc_undefine_symbol(TCCState *s1, const char *sym)
         define_undef(s);
 }
 
-#ifdef CONFIG_TCC_ASM
-
-#ifdef TCC_TARGET_I386
-#include "i386-asm.c"
-#endif
-#include "tccasm.c"
-
-#else
-static void asm_instr(void)
-{
-    error("inline asm() not supported");
-}
-static void asm_global_instr(void)
-{
-    error("inline asm() not supported");
-}
-#endif
-
-#include "tccelf.c"
-
-#ifdef TCC_TARGET_COFF
-#include "tcccoff.c"
-#endif
-
-#ifdef TCC_TARGET_PE
-#include "tccpe.c"
-#endif
 
 #ifdef CONFIG_TCC_BACKTRACE
 /* print the position in the source file of PC value 'pc' by reading
