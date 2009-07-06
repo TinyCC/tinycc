@@ -36,6 +36,12 @@
 #define PE_MERGE_DATA
 // #define PE_PRINT_SECTIONS
 
+#ifdef TCC_TARGET_X86_64
+# define ADDR3264 ULONGLONG
+#else
+# define ADDR3264 DWORD
+#endif
+
 #if defined _WIN32 && (defined _WIN64) == (defined TCC_TARGET_X86_64)
 #define TCC_IS_NATIVE
 #endif
@@ -48,6 +54,7 @@
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned long DWORD;
+typedef unsigned long long ULONGLONG;
 #pragma pack(push, 1)
 
 typedef struct _IMAGE_DOS_HEADER {  /* DOS .EXE header */
@@ -104,10 +111,11 @@ typedef struct _IMAGE_OPTIONAL_HEADER {
     DWORD   SizeOfUninitializedData;
     DWORD   AddressOfEntryPoint;
     DWORD   BaseOfCode;
+#ifndef TCC_TARGET_X86_64
     DWORD   BaseOfData;
-
+#endif
     /* NT additional fields. */
-    DWORD   ImageBase;
+    ADDR3264 ImageBase;
     DWORD   SectionAlignment;
     DWORD   FileAlignment;
     WORD    MajorOperatingSystemVersion;
@@ -122,16 +130,14 @@ typedef struct _IMAGE_OPTIONAL_HEADER {
     DWORD   CheckSum;
     WORD    Subsystem;
     WORD    DllCharacteristics;
-    DWORD   SizeOfStackReserve;
-    DWORD   SizeOfStackCommit;
-    DWORD   SizeOfHeapReserve;
-    DWORD   SizeOfHeapCommit;
+    ADDR3264 SizeOfStackReserve;
+    ADDR3264 SizeOfStackCommit;
+    ADDR3264 SizeOfHeapReserve;
+    ADDR3264 SizeOfHeapCommit;
     DWORD   LoaderFlags;
     DWORD   NumberOfRvaAndSizes;
     IMAGE_DATA_DIRECTORY DataDirectory[16];
-
-} IMAGE_OPTIONAL_HEADER, *PIMAGE_OPTIONAL_HEADER;
-
+} IMAGE_OPTIONAL_HEADER32, IMAGE_OPTIONAL_HEADER64, IMAGE_OPTIONAL_HEADER;
 
 #define IMAGE_DIRECTORY_ENTRY_EXPORT          0   /* Export Directory */
 #define IMAGE_DIRECTORY_ENTRY_IMPORT          1   /* Import Directory */
@@ -193,7 +199,6 @@ typedef struct _IMAGE_BASE_RELOCATION {
 /* ----------------------------------------------------------- */
 #endif /* ndef IMAGE_NT_SIGNATURE */
 /* ----------------------------------------------------------- */
-
 #pragma pack(push, 1)
 
 struct pe_header
@@ -202,7 +207,15 @@ struct pe_header
     BYTE dosstub[0x40];
     DWORD nt_sig;
     IMAGE_FILE_HEADER filehdr;
+#ifdef TCC_TARGET_X86_64
+    IMAGE_OPTIONAL_HEADER64 opthdr;
+#else
+#ifdef _WIN64
+    IMAGE_OPTIONAL_HEADER32 opthdr;
+#else
     IMAGE_OPTIONAL_HEADER opthdr;
+#endif
+#endif
 };
 
 struct pe_import_header {
@@ -280,17 +293,32 @@ ST_DATA struct pe_header pe_header = {
     0x00004550, /* DWORD nt_sig = IMAGE_NT_SIGNATURE */
 {
     /* IMAGE_FILE_HEADER filehdr */
+#ifdef TCC_TARGET_X86_64
+    0x8664, /*WORD    Machine; */
+#else
     0x014C, /*WORD    Machine; */
+#endif
     0x0003, /*WORD    NumberOfSections; */
     0x00000000, /*DWORD   TimeDateStamp; */
     0x00000000, /*DWORD   PointerToSymbolTable; */
     0x00000000, /*DWORD   NumberOfSymbols; */
+#ifdef TCC_TARGET_X86_64
+    0x00F0, /*WORD    SizeOfOptionalHeader; */
+    0x022F  /*WORD    Characteristics; */
+#define CHARACTERISTICS_DLL 0x222E
+#else
     0x00E0, /*WORD    SizeOfOptionalHeader; */
     0x030F  /*WORD    Characteristics; */
+#define CHARACTERISTICS_DLL 0x230E
+#endif
 },{
     /* IMAGE_OPTIONAL_HEADER opthdr */
     /* Standard fields. */
+#ifdef TCC_TARGET_X86_64
+    0x020B, /*WORD    Magic; */
+#else
     0x010B, /*WORD    Magic; */
+#endif
     0x06, /*BYTE    MajorLinkerVersion; */
     0x00, /*BYTE    MinorLinkerVersion; */
     0x00000000, /*DWORD   SizeOfCode; */
@@ -298,8 +326,9 @@ ST_DATA struct pe_header pe_header = {
     0x00000000, /*DWORD   SizeOfUninitializedData; */
     0x00000000, /*DWORD   AddressOfEntryPoint; */
     0x00000000, /*DWORD   BaseOfCode; */
+#ifndef TCC_TARGET_X86_64
     0x00000000, /*DWORD   BaseOfData; */
-
+#endif
     /* NT additional fields. */
     0x00400000, /*DWORD   ImageBase; */
     0x00001000, /*DWORD   SectionAlignment; */
@@ -317,7 +346,12 @@ ST_DATA struct pe_header pe_header = {
     0x0002, /*WORD    Subsystem; */
     0x0000, /*WORD    DllCharacteristics; */
     0x00100000, /*DWORD   SizeOfStackReserve; */
+#ifdef TCC_TARGET_X86_64
+    // need to have a __chkstk eventually
+    0x00008000, /*DWORD   SizeOfStackCommit; */
+#else
     0x00001000, /*DWORD   SizeOfStackCommit; */
+#endif
     0x00100000, /*DWORD   SizeOfHeapReserve; */
     0x00001000, /*DWORD   SizeOfHeapCommit; */
     0x00000000, /*DWORD   LoaderFlags; */
@@ -561,7 +595,9 @@ ST_FN int pe_write(struct pe_info *pe)
                 break;
 
             case sec_data:
+#ifndef TCC_TARGET_X86_64
                 pe_header.opthdr.BaseOfData = addr;
+#endif
                 break;
 
             case sec_bss:
@@ -614,7 +650,7 @@ ST_FN int pe_write(struct pe_info *pe)
     pe_header.opthdr.SizeOfHeaders = pe->sizeofheaders;
     pe_header.opthdr.ImageBase = pe->imagebase;
     if (PE_DLL == pe->type)
-        pe_header.filehdr.Characteristics = 0x230E;
+        pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
     else if (PE_GUI != pe->type)
         pe_header.opthdr.Subsystem = 3;
 
@@ -708,7 +744,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
     pe->imp_offs = dll_ptr = pe->thunk->data_offset;
     pe->imp_size = (ndlls + 1) * sizeof(struct pe_import_header);
     pe->iat_offs = dll_ptr + pe->imp_size;
-    pe->iat_size = (sym_cnt + ndlls) * sizeof(DWORD);
+    pe->iat_size = (sym_cnt + ndlls) * sizeof(ADDR3264);
     section_ptr_add(pe->thunk, pe->imp_size + 2*pe->iat_size);
 
     thk_ptr = pe->iat_offs;
@@ -717,7 +753,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
     for (i = 0; i < pe->imp_count; ++i) {
         struct pe_import_header *hdr;
         int k, n;
-        DWORD v;
+        ADDR3264 v;
         struct pe_import_info *p = pe->imp_info[i];
         const char *name = pe->s1->loaded_dlls[p->dll_index-1]->name;
 
@@ -747,7 +783,7 @@ ST_FN void pe_build_imports(struct pe_info *pe)
                     DLLReference *dllref = pe->s1->loaded_dlls[imp_sym->st_value-1];
                     if ( !dllref->handle )
                         dllref->handle = LoadLibrary(dllref->name);
-                    v = (DWORD)GetProcAddress(dllref->handle, name);
+                    v = (ADDR3264)GetProcAddress(dllref->handle, name);
                     if (!v)
                         error_noabort("undefined symbol '%s'", name);
                 }
@@ -755,10 +791,10 @@ ST_FN void pe_build_imports(struct pe_info *pe)
             } else {
                 v = 0; /* last entry is zero */
             }
-            *(DWORD*)(pe->thunk->data+thk_ptr) =
-            *(DWORD*)(pe->thunk->data+ent_ptr) = v;
-            thk_ptr += sizeof (DWORD);
-            ent_ptr += sizeof (DWORD);
+            *(ADDR3264*)(pe->thunk->data+thk_ptr) =
+            *(ADDR3264*)(pe->thunk->data+ent_ptr) = v;
+            thk_ptr += sizeof (ADDR3264);
+            ent_ptr += sizeof (ADDR3264);
         }
         dll_ptr += sizeof(struct pe_import_header);
         dynarray_reset(&p->symbols, &p->sym_count);
@@ -1129,11 +1165,15 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
 
                 } else {
                     char buffer[100];
+                    WORD *p;
 
                     offset = text_section->data_offset;
                     /* add the 'jmp IAT[x]' instruction */
-                    *(WORD*)section_ptr_add(text_section, 8) = 0x25FF;
-
+                    p = section_ptr_add(text_section, 8);
+                    *p = 0x25FF;
+#ifdef TCC_TARGET_X86_64
+                    *(DWORD*)(p+1) = (DWORD)-4;
+#endif
                     /* add a helper symbol, will be patched later in
                        pe_build_imports */
                     sprintf(buffer, "IAT.%s", name);
@@ -1306,7 +1346,7 @@ ST_FN void pe_print_sections(TCCState *s1, const char *fname)
     Section *s;
     FILE *f;
     int i;
-    f = fopen(fname, "wt");
+    f = fopen(fname, "w");
     for (i = 1; i < s1->nb_sections; ++i) {
         s = s1->sections[i];
         pe_print_section(f, s);
@@ -1454,6 +1494,11 @@ quit:
 }
 
 /* ------------------------------------------------------------- */
+#ifdef TCC_TARGET_X86_64
+#define PE_STDSYM(n,s) n
+#else
+#define PE_STDSYM(n,s) "_" n s
+#endif
 
 ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
 {
@@ -1461,7 +1506,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
     unsigned long addr = 0;
     int pe_type = 0;
 
-    if (find_elf_sym(symtab_section, "_WinMain@16"))
+    if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
         pe_type = PE_GUI;
     else
     if (TCC_OUTPUT_DLL == s1->output_type) {
@@ -1473,7 +1518,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
         ? PE_GUI == pe_type ? "_runwinmain" : NULL
-        : PE_DLL == pe_type ? "__dllstart@12"
+        : PE_DLL == pe_type ? PE_STDSYM("_dllstart","@12")
         : PE_GUI == pe_type ? "_winstart" : "_start"
         ;
 
@@ -1485,22 +1530,21 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
             SHN_UNDEF, start_symbol);
 
     if (0 == s1->nostdlib) {
-        tcc_add_library(s1, "tcc1");
-#ifdef __CYGWIN__
-        tcc_add_library(s1, "cygwin1");
-#else
-        tcc_add_library(s1, "msvcrt");
-#endif
-        tcc_add_library(s1, "kernel32");
-        if (PE_DLL == pe_type || PE_GUI == pe_type) {
-            tcc_add_library(s1, "user32");
-            tcc_add_library(s1, "gdi32");
+        static const char *libs[] = {
+            "tcc1", "msvcrt", "kernel32", "", "user32", "gdi32", NULL
+        };
+        const char **pp, *p;
+        for (pp = libs; 0 != (p = *pp); ++pp) {
+            if (0 == *p) {
+                if (PE_DLL != pe_type && PE_GUI != pe_type)
+                    break;
+            } else if (tcc_add_library(s1, p) < 0)
+                error_noabort("cannot find library: %s", p);
         }
     }
-    pe->type = pe_type;
 
     if (start_symbol) {
-        addr = (unsigned long)tcc_get_symbol_err(s1, start_symbol);
+        addr = (ADDR3264)tcc_get_symbol_err(s1, start_symbol);
         if (s1->output_type == TCC_OUTPUT_MEMORY && addr)
             /* for -run GUI's, put '_runwinmain' instead of 'main' */
             add_elf_sym(symtab_section,
@@ -1508,6 +1552,8 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
                     ELFW_ST_INFO(STB_GLOBAL, STT_NOTYPE), 0,
                     text_section->sh_num, "main");
     }
+
+    pe->type = pe_type;
     pe->start_addr = addr;
 }
 
