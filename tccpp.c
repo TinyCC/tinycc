@@ -1973,6 +1973,7 @@ static inline void next_nomacro1(void)
         file->line_num++;
         tok_flags |= TOK_FLAG_BOL;
         p++;
+maybe_newline:
         if (0 == (parse_flags & PARSE_FLAG_LINEFEED))
             goto redo_no_start;
         tok = TOK_LINEFEED;
@@ -1986,7 +1987,7 @@ static inline void next_nomacro1(void)
             file->buf_ptr = p;
             preprocess(tok_flags & TOK_FLAG_BOF);
             p = file->buf_ptr;
-            goto redo_no_start;
+            goto maybe_newline;
         } else {
             if (c == '#') {
                 p++;
