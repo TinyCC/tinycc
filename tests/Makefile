@@ -6,11 +6,10 @@
 TESTS = libtest test3
 
 # these should work too
-# TESTS += test1 test2 speed
+# TESTS += test1 test2 speed btest
 
 # these don't work as they should
-# TESTS += test4 btest asmtest
-
+# TESTS += test4 asmtest
 
 TOP = ..
 include $(TOP)/Makefile
@@ -87,20 +86,22 @@ BOUNDS_FAIL= 2 5 7 9 11 12 13
 btest: boundtest.c
 	@echo ------------ $@ ------------
 	@for i in $(BOUNDS_OK); do \
+	   echo ; echo --- boundtest $$i ---; \
 	   if $(TCC) -b -run boundtest.c $$i ; then \
-	       /bin/true ; \
+	       echo succeded as expected; \
 	   else\
 	       echo Failed positive test $$i ; exit 1 ; \
 	   fi ;\
 	done ;\
 	for i in $(BOUNDS_FAIL); do \
+	   echo ; echo --- boundtest $$i ---; \
 	   if $(TCC) -b -run boundtest.c $$i ; then \
 	       echo Failed negative test $$i ; exit 1 ;\
 	   else\
-	       /bin/true ; \
+	       echo failed as expected; \
 	   fi ;\
 	done ;\
-	echo Bound test OK
+	echo; echo Bound test OK
 
 # speed test
 speed: ex2 ex3

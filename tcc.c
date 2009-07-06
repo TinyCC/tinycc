@@ -529,23 +529,20 @@ int main(int argc, char **argv)
     /* free all files */
     tcc_free(files);
 
-    if (ret)
-        goto the_end;
+    if (0 == ret) {
+        if (do_bench)
+            tcc_print_stats(s, getclock_us() - start_time);
 
-    if (do_bench)
-        tcc_print_stats(s, getclock_us() - start_time);
+        if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+            if (outfile)
+                fclose(s->outfile);
+        } else if (s->output_type == TCC_OUTPUT_MEMORY)
+            ret = tcc_run(s, argc - optind, argv + optind);
+        else
+            ret = tcc_output_file(s, outfile) ? 1 : 0;
+    }
 
-    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-        if (outfile)
-            fclose(s->outfile);
-    } else if (s->output_type == TCC_OUTPUT_MEMORY) {
-        ret = tcc_run(s, argc - optind, argv + optind);
-    } else
-        ret = tcc_output_file(s, outfile) ? 1 : 0;
- the_end:
-    /* XXX: cannot do it with bound checking because of the malloc hooks */
-    if (!s->do_bounds_check)
-        tcc_delete(s);
+    tcc_delete(s);
 
 #ifdef MEM_DEBUG
     if (do_bench) {
@@ -554,4 +551,3 @@ int main(int argc, char **argv)
 #endif
     return ret;
 }
-

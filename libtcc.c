@@ -110,6 +110,7 @@ static int tcc_ext = 1;
 #ifdef CONFIG_TCC_BACKTRACE
 int num_callers = 6;
 const char **rt_bound_error_msg;
+unsigned long rt_prog_main;
 #endif
 
 /* XXX: get rid of this ASAP */
@@ -1340,7 +1341,7 @@ static void asm_global_instr(void)
 #ifdef CONFIG_TCC_BACKTRACE
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static void rt_printline(unsigned long wanted_pc)
+static unsigned long rt_printline(unsigned long wanted_pc)
 {
     Stab_Sym *sym, *sym_end;
     char func_name[128], last_func_name[128];
@@ -1438,6 +1439,7 @@ static void rt_printline(unsigned long wanted_pc)
                     wanted_pc < sym->st_value + sym->st_size) {
                     pstrcpy(last_func_name, sizeof(last_func_name),
                             strtab_section->data + sym->st_name);
+                    func_addr = sym->st_value;
                     goto found;
                 }
             }
@@ -1445,7 +1447,7 @@ static void rt_printline(unsigned long wanted_pc)
     }
     /* did not find any info: */
     fprintf(stderr, " ???\n");
-    return;
+    return 0;
  found:
     if (last_func_name[0] != '\0') {
         fprintf(stderr, " %s()", last_func_name);
@@ -1458,6 +1460,7 @@ static void rt_printline(unsigned long wanted_pc)
         fprintf(stderr, ")");
     }
     fprintf(stderr, "\n");
+    return func_addr;
 }
 
 #ifdef __i386__
@@ -1552,7 +1555,9 @@ void rt_error(ucontext_t *uc, const char *fmt, ...)
             fprintf(stderr, "at ");
         else
             fprintf(stderr, "by ");
-        rt_printline(pc);
+        pc = rt_printline(pc);
+        if (pc == rt_prog_main && pc)
+            break;
     }
     exit(255);
     va_end(ap);
@@ -1712,14 +1717,17 @@ int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
-
+        void (*bound_exit)(void);
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
-
+        rt_prog_main = (unsigned long)prog_main;
         /* XXX: use .init section so that it also work in binary ? */
-        bound_init = (void *)tcc_get_symbol_err(s1, "__bound_init");
+        bound_init = tcc_get_symbol_err(s1, "__bound_init");
+        bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
         bound_init();
-    }
+        ret = (*prog_main)(argc, argv);
+        bound_exit();
+    } else
 #endif
     ret = (*prog_main)(argc, argv);
     tcc_free(ptr);
