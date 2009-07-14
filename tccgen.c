@@ -4945,12 +4945,16 @@ static void gen_inline_functions(void)
                 gen_function(sym);
                 macro_ptr = NULL; /* fail safe */
 
-                tok_str_free(str);
                 inline_generated = 1;
             }
         }
         if (!inline_generated)
             break;
+    }
+    for (i = 0; i < tcc_state->nb_inline_fns; ++i) {
+        fn = tcc_state->inline_fns[i];
+        str = fn->token_str;
+        tok_str_free(str);
     }
     dynarray_reset(&tcc_state->inline_fns, &tcc_state->nb_inline_fns);
 }
