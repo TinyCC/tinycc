@@ -509,32 +509,6 @@ char *tcc_fileextension (const char *name)
     return e ? e : strchr(b, 0);
 }
 
-#ifdef _WIN32
-char *normalize_slashes(char *path)
-{
-    char *p;
-    for (p = path; *p; ++p)
-        if (*p == '\\')
-            *p = '/';
-    return path;
-}
-
-void tcc_set_lib_path_w32(TCCState *s)
-{
-    /* on win32, we suppose the lib and includes are at the location
-       of 'tcc.exe' */
-    char path[1024], *p;
-    GetModuleFileNameA(NULL, path, sizeof path);
-    p = tcc_basename(normalize_slashes(strlwr(path)));
-    if (p - 5 > path && 0 == strncmp(p - 5, "/bin/", 5))
-        p -= 5;
-    else if (p > path)
-        p--;
-    *p = 0;
-    tcc_set_lib_path(s, path);
-}
-#endif
-
 void set_pages_executable(void *ptr, unsigned long length)
 {
 #ifdef _WIN32
@@ -1867,9 +1841,12 @@ TCCState *tcc_new(void)
     if (!s)
         return NULL;
     tcc_state = s;
+#ifdef _WIN32
+    tcc_set_lib_path_w32(s);
+#else
+    tcc_set_lib_path(s, CONFIG_TCCDIR);
+#endif
     s->output_type = TCC_OUTPUT_MEMORY;
-    s->tcc_lib_path = CONFIG_TCCDIR;
-
     preprocess_new();
 
     /* we add dummy defines for some special macros to speed up tests
@@ -1993,6 +1970,7 @@ void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
 
+    tcc_free(s1->tcc_lib_path);
     tcc_free(s1);
 }
 
@@ -2348,6 +2326,7 @@ int tcc_set_flag(TCCState *s, const char *flag_name, int value)
 /* set CONFIG_TCCDIR at runtime */
 void tcc_set_lib_path(TCCState *s, const char *path)
 {
+    tcc_free(s->tcc_lib_path);
     s->tcc_lib_path = tcc_strdup(path);
 }
 

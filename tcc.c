@@ -427,9 +427,7 @@ int main(int argc, char **argv)
     int64_t start_time = 0;
 
     s = tcc_new();
-#ifdef _WIN32
-    tcc_set_lib_path_w32(s);
-#endif
+
     output_type = TCC_OUTPUT_EXE;
     outfile = NULL;
     multiple_files = 1;

@@ -473,7 +473,7 @@ struct TCCState {
     /* compile with built-in memory and bounds checker */
     int do_bounds_check;
     /* give the path of the tcc libraries */
-    const char *tcc_lib_path;
+    char *tcc_lib_path;
 
     /* error handling */
     void *error_opaque;

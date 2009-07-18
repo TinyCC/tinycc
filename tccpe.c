@@ -1511,7 +1511,7 @@ PUB_FN int pe_load_file(struct TCCState *s1, const char *filename, int fd)
         else if (pe_load_res(s1, fp) == 0)
             ret = 0;
         else if (read_mem(fp, 0, buf, sizeof buf) && 0 == strncmp(buf, "MZ", 2))
-            ret = pe_load_dll(s1, filename, fp);
+            ret = pe_load_dll(s1, tcc_basename(filename), fp);
         fclose(fp);
     }
     return ret;
