@@ -632,7 +632,7 @@ static void relocate_section(TCCState *s1, Section *s)
             break;
         default:
             fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
-                    type,addr,(unsigned int )ptr,val);
+                    type,addr,(unsigned int)(long)ptr,val);
             break;
 #elif defined(TCC_TARGET_C67)
         case R_C60_32:
@@ -658,7 +658,7 @@ static void relocate_section(TCCState *s1, Section *s)
             break;
         default:
             fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
-                    type,addr,(unsigned int )ptr,val);
+                    type,addr,(unsigned int)(long)ptr, val);
             break;
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_64:

@@ -109,7 +109,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
             }
             if (sym->r == SHN_ABS) {
                 /* if absolute symbol, no need to put a symbol value */
-                pe->v = (long)sym->next;
+                pe->v = sym->jnext;
                 pe->sym = NULL;
             } else {
                 pe->v = 0;
@@ -225,7 +225,7 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
                     /* OK */
                 } else if (pe->sym->r == e2.sym->r && pe->sym->r != 0) {
                     /* we also accept defined symbols in the same section */
-                    pe->v += (long)pe->sym->next - (long)e2.sym->next;
+                    pe->v += pe->sym->jnext - e2.sym->jnext;
                 } else {
                     goto cannot_relocate;
                 }
@@ -277,7 +277,7 @@ static void asm_new_label1(TCCState *s1, int label, int is_local,
         sym->type.t = VT_STATIC | VT_VOID;
     }
     sym->r = sh_num;
-    sym->next = (void *)value;
+    sym->jnext = value;
 }
 
 static void asm_new_label(TCCState *s1, int label, int is_local)
@@ -298,7 +298,7 @@ static void asm_free_labels(TCCState *st)
                 sec = SECTION_ABS;
             else
                 sec = st->sections[s->r];
-            put_extern_sym2(s, sec, (long)s->next, 0, 0);
+            put_extern_sym2(s, sec, s->jnext, 0, 0);
         }
         /* remove label */
         table_ident[s->v - TOK_IDENT]->sym_label = NULL;
