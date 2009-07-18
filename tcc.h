@@ -47,6 +47,9 @@
 #define inline __inline
 #define inp next_inp
 #define dlclose FreeLibrary
+#ifdef _MSC_VER
+#define __aligned(n) __declspec(align(n))
+#endif
 #ifdef _WIN64
 #define uplong unsigned long long
 #endif
@@ -63,6 +66,10 @@
 
 #ifndef uplong
 #define uplong unsigned long
+#endif
+
+#ifndef __aligned
+#define __aligned(n) __attribute__((aligned(n)))
 #endif
 
 #ifndef PAGESIZE
@@ -473,6 +480,9 @@ struct TCCState {
     void *error_opaque;
     void (*error_func)(void *opaque, const char *msg);
     int error_set_jmp_enabled;
+#ifdef _WIN64
+    __aligned(16)
+#endif
     jmp_buf error_jmp_buf;
     int nb_errors;
 
