@@ -191,7 +191,7 @@ static int put_elf_str(Section *s, const char *sym);
 static int put_elf_sym(Section *s, 
                        unsigned long value, unsigned long size,
                        int info, int other, int shndx, const char *name);
-static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
+static int add_elf_sym(Section *s, uplong value, unsigned long size,
                        int info, int other, int sh_num, const char *name);
 static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
                           int type, int symbol);
@@ -1183,7 +1183,7 @@ BufferedFile *tcc_open(TCCState *s1, const char *filename)
         fd = open(filename, O_RDONLY | O_BINARY);
     if ((s1->verbose == 2 && fd >= 0) || s1->verbose == 3)
         printf("%s %*s%s\n", fd < 0 ? "nf":"->",
-               (s1->include_stack_ptr - s1->include_stack), "", filename);
+               (int)(s1->include_stack_ptr - s1->include_stack), "", filename);
     if (fd < 0)
         return NULL;
     bf = tcc_malloc(sizeof(BufferedFile));
@@ -1656,7 +1656,8 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
 int tcc_relocate(TCCState *s1, void *ptr)
 {
     Section *s;
-    unsigned long offset, length, mem;
+    unsigned long offset, length;
+    uplong mem;
     int i;
 
     if (0 == s1->runtime_added) {
@@ -1674,7 +1675,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
             return -1;
     }
 
-    offset = 0, mem = (unsigned long)ptr;
+    offset = 0, mem = (uplong)ptr;
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
@@ -1715,7 +1716,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
             continue;
         length = s->data_offset;
         // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
-        ptr = (void*)s->sh_addr;
+        ptr = (void*)(uplong)s->sh_addr;
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
         else
@@ -2155,7 +2156,7 @@ int tcc_add_library(TCCState *s, const char *libraryname)
 
 int tcc_add_symbol(TCCState *s, const char *name, void *val)
 {
-    add_elf_sym(symtab_section, (unsigned long)val, 0, 
+    add_elf_sym(symtab_section, (uplong)val, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_ABS, name);
     return 0;

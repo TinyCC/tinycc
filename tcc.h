@@ -47,6 +47,9 @@
 #define inline __inline
 #define inp next_inp
 #define dlclose FreeLibrary
+#ifdef _WIN64
+#define uplong unsigned long long
+#endif
 #endif
 
 #ifndef _WIN32
@@ -57,6 +60,10 @@
 #endif
 
 #endif /* !CONFIG_TCCBOOT */
+
+#ifndef uplong
+#define uplong unsigned long
+#endif
 
 #ifndef PAGESIZE
 #define PAGESIZE 4096
@@ -204,7 +211,10 @@ typedef struct Sym {
         int *d;   /* define token stream */
     };
     CType type;    /* associated type */
-    struct Sym *next; /* next related symbol */
+    union {
+        struct Sym *next; /* next related symbol */
+        long jnext; /* next jump label */
+    };
     struct Sym *prev; /* prev symbol in stack */
     struct Sym *prev_tok; /* previous symbol for this token */
 } Sym;

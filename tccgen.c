@@ -4088,9 +4088,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             }
             /* label already defined */
             if (s->r & LABEL_FORWARD) 
-                s->next = (void *)gjmp((long)s->next);
+                s->jnext = gjmp(s->jnext);
             else
-                gjmp_addr((long)s->next);
+                gjmp_addr(s->jnext);
             next();
         } else {
             expect("label identifier");
@@ -4106,12 +4106,12 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if (s) {
                 if (s->r == LABEL_DEFINED)
                     error("duplicate label '%s'", get_tok_str(s->v, NULL));
-                gsym((long)s->next);
+                gsym(s->jnext);
                 s->r = LABEL_DEFINED;
             } else {
                 s = label_push(&global_label_stack, b, LABEL_DEFINED);
             }
-            s->next = (void *)ind;
+            s->jnext = ind;
             /* we accept this, but it is a mistake */
         block_after_label:
             if (tok == '}') {

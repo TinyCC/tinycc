@@ -129,7 +129,11 @@ char *get_tok_str(int v, CValue *cv)
     case TOK_CLLONG:
     case TOK_CULLONG:
         /* XXX: not quite exact, but only useful for testing  */
+#ifdef _WIN32
+        sprintf(p, "%u", (unsigned)cv->ull);
+#else
         sprintf(p, "%Lu", cv->ull);
+#endif
         break;
     case TOK_LCHAR:
         cstr_ccat(&cstr_buf, 'L');
@@ -947,7 +951,7 @@ static void label_pop(Sym **ptop, Sym *slast)
             if (s->c) {
                 /* define corresponding symbol. A size of
                    1 is put. */
-                put_extern_sym(s, cur_text_section, (long)s->next, 1);
+                put_extern_sym(s, cur_text_section, s->jnext, 1);
             }
         }
         /* remove label */

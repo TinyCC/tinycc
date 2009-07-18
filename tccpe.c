@@ -1548,7 +1548,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
     }
 
     if (start_symbol) {
-        addr = (ADDR3264)tcc_get_symbol_err(s1, start_symbol);
+        addr = (uplong)tcc_get_symbol_err(s1, start_symbol);
         if (s1->output_type == TCC_OUTPUT_MEMORY && addr)
             /* for -run GUI's, put '_runwinmain' instead of 'main' */
             add_elf_sym(symtab_section,

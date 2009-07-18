@@ -177,7 +177,7 @@ void *tcc_get_symbol(TCCState *s, const char *name)
     if (!sym_index)
         return NULL;
     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-    return (void*)(long)sym->st_value;
+    return (void*)(uplong)sym->st_value;
 }
 
 void *tcc_get_symbol_err(TCCState *s, const char *name)
@@ -191,7 +191,7 @@ void *tcc_get_symbol_err(TCCState *s, const char *name)
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
-static int add_elf_sym(Section *s, unsigned long value, unsigned long size,
+static int add_elf_sym(Section *s, uplong value, unsigned long size,
                        int info, int other, int sh_num, const char *name)
 {
     ElfW(Sym) *esym;
@@ -442,11 +442,11 @@ static void relocate_syms(TCCState *s1, int do_resolve)
             name = strtab_section->data + sym->st_name;
             if (do_resolve) {
 #ifndef _WIN32
-                unsigned long addr;
+                void *addr;
                 name = symtab_section->link->data + sym->st_name;
-                addr = (unsigned long)resolve_sym(s1, name);
+                addr = resolve_sym(s1, name);
                 if (addr) {
-                    sym->st_value = addr;
+                    sym->st_value = (uplong)addr;
                     goto found;
                 }
 #endif
@@ -1884,7 +1884,7 @@ int elf_output_file(TCCState *s1, const char *filename)
 
         /* get entry point address */
         if (file_type == TCC_OUTPUT_EXE)
-            ehdr.e_entry = (unsigned long)tcc_get_symbol_err(s1, "_start");
+            ehdr.e_entry = (uplong)tcc_get_symbol_err(s1, "_start");
         else
             ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
     }
