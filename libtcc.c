@@ -212,9 +212,7 @@ static int tcc_add_file_internal(TCCState *s, const char *filename, int flags);
 int tcc_output_coff(TCCState *s1, FILE *f);
 
 /* tccpe.c */
-int pe_load_def_file(struct TCCState *s1, int fd);
-int pe_test_res_file(void *v, int size);
-int pe_load_res_file(struct TCCState *s1, int fd);
+int pe_load_file(struct TCCState *s1, const char *filename, int fd);
 int pe_output_file(struct TCCState *s1, const char *filename);
 
 /* tccasm.c */
@@ -277,6 +275,7 @@ static int tcc_compile(TCCState *s1);
 void expect(const char *msg);
 void skip(int c);
 static void test_lvalue(void);
+void *resolve_sym(TCCState *s1, const char *sym);
 
 static inline int isid(int c)
 {
@@ -302,8 +301,6 @@ static inline int toup(int c)
     else
         return c;
 }
-
-void *resolve_sym(TCCState *s1, const char *sym);
 
 /********************************************************/
 
@@ -353,6 +350,43 @@ static void asm_global_instr(void)
 #endif
 
 /********************************************************/
+#ifdef _WIN32
+char *normalize_slashes(char *path)
+{
+    char *p;
+    for (p = path; *p; ++p)
+        if (*p == '\\')
+            *p = '/';
+    return path;
+}
+
+HMODULE tcc_module;
+
+/* on win32, we suppose the lib and includes are at the location of 'tcc.exe' */
+void tcc_set_lib_path_w32(TCCState *s)
+{
+    char path[1024], *p;
+    GetModuleFileNameA(tcc_module, path, sizeof path);
+    p = tcc_basename(normalize_slashes(strlwr(path)));
+    if (p - 5 > path && 0 == strncmp(p - 5, "/bin/", 5))
+        p -= 5;
+    else if (p > path)
+        p--;
+    *p = 0;
+    tcc_set_lib_path(s, path);
+}
+
+#ifdef LIBTCC_AS_DLL
+BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved)
+{
+    if (DLL_PROCESS_ATTACH == dwReason)
+        tcc_module = hDll;
+    return TRUE;
+}
+#endif
+#endif
+
+/********************************************************/
 #ifdef CONFIG_TCC_STATIC
 
 #define RTLD_LAZY       0x001
@@ -393,7 +427,7 @@ static TCCSyms tcc_syms[] = {
     { NULL, NULL },
 };
 
-void *resolve_sym(TCCState *s1, const char *symbol, int type)
+void *resolve_sym(TCCState *s1, const char *symbol)
 {
     TCCSyms *p;
     p = tcc_syms;
@@ -405,8 +439,10 @@ void *resolve_sym(TCCState *s1, const char *symbol, int type)
     return NULL;
 }
 
-#elif !defined(_WIN32)
+#elif defined(_WIN32)
+#define dlclose FreeLibrary
 
+#else
 #include <dlfcn.h>
 
 void *resolve_sym(TCCState *s1, const char *sym)
@@ -1982,8 +2018,10 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     const char *ext;
     ElfW(Ehdr) ehdr;
-    int fd, ret;
+    int fd, ret, size;
     BufferedFile *saved_file;
+
+    ret = -1;
 
     /* find source file type with extension */
     ext = tcc_fileextension(filename);
@@ -1994,104 +2032,103 @@ static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     saved_file = file;
     file = tcc_open(s1, filename);
     if (!file) {
-        if (flags & AFF_PRINT_ERROR) {
+        if (flags & AFF_PRINT_ERROR)
             error_noabort("file '%s' not found", filename);
-        }
-        ret = -1;
-        goto fail1;
+        goto the_end;
     }
 
     if (flags & AFF_PREPROCESS) {
         ret = tcc_preprocess(s1);
-    } else if (!ext[0] || !PATHCMP(ext, "c")) {
+        goto the_end;
+    }
+
+    if (!ext[0] || !PATHCMP(ext, "c")) {
         /* C file assumed */
         ret = tcc_compile(s1);
-    } else 
+        goto the_end;
+    }
+
 #ifdef CONFIG_TCC_ASM
     if (!strcmp(ext, "S")) {
         /* preprocessed assembler */
         ret = tcc_assemble(s1, 1);
-    } else if (!strcmp(ext, "s")) {
+        goto the_end;
+    }
+
+    if (!strcmp(ext, "s")) {
         /* non preprocessed assembler */
         ret = tcc_assemble(s1, 0);
-    } else 
-#endif
-#ifdef TCC_TARGET_PE
-    if (!PATHCMP(ext, "def")) {
-        ret = pe_load_def_file(s1, file->fd);
-    } else
-#endif
-    {
-        fd = file->fd;
-        /* assume executable format: auto guess file type */
-        ret = read(fd, &ehdr, sizeof(ehdr));
-        lseek(fd, 0, SEEK_SET);
-        if (ret <= 0) {
-            error_noabort("could not read header");
-            goto fail;
-        } else if (ret != sizeof(ehdr)) {
-            goto try_load_script;
-        }
-
-        if (ehdr.e_ident[0] == ELFMAG0 &&
-            ehdr.e_ident[1] == ELFMAG1 &&
-            ehdr.e_ident[2] == ELFMAG2 &&
-            ehdr.e_ident[3] == ELFMAG3) {
-            file->line_num = 0; /* do not display line number if error */
-            if (ehdr.e_type == ET_REL) {
-                ret = tcc_load_object_file(s1, fd, 0);
-            } else if (ehdr.e_type == ET_DYN) {
-                if (s1->output_type == TCC_OUTPUT_MEMORY) {
-#ifdef TCC_TARGET_PE
-                    ret = -1;
-#else
-                    void *h;
-                    h = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
-                    if (h)
-                        ret = 0;
-                    else
-                        ret = -1;
-#endif
-                } else {
-                    ret = tcc_load_dll(s1, fd, filename, 
-                                       (flags & AFF_REFERENCED_DLL) != 0);
-                }
-            } else {
-                error_noabort("unrecognized ELF file");
-                goto fail;
-            }
-        } else if (memcmp((char *)&ehdr, ARMAG, 8) == 0) {
-            file->line_num = 0; /* do not display line number if error */
-            ret = tcc_load_archive(s1, fd);
-        } else 
-#ifdef TCC_TARGET_COFF
-        if (*(uint16_t *)(&ehdr) == COFF_C67_MAGIC) {
-            ret = tcc_load_coff(s1, fd);
-        } else
-#endif
-#ifdef TCC_TARGET_PE
-        if (pe_test_res_file(&ehdr, ret)) {
-            ret = pe_load_res_file(s1, fd);
-        } else
-#endif
-        {
-            /* as GNU ld, consider it is an ld script if not recognized */
-        try_load_script:
-            ret = tcc_load_ldscript(s1);
-            if (ret < 0) {
-                error_noabort("unrecognized file type");
-                goto fail;
-            }
-        }
+        goto the_end;
     }
- the_end:
-    tcc_close(file);
- fail1:
+#endif
+
+    fd = file->fd;
+    /* assume executable format: auto guess file type */
+    size = read(fd, &ehdr, sizeof(ehdr));
+    lseek(fd, 0, SEEK_SET);
+    if (size <= 0) {
+        error_noabort("could not read header");
+        goto the_end;
+    }
+
+    if (size == sizeof(ehdr) &&
+        ehdr.e_ident[0] == ELFMAG0 &&
+        ehdr.e_ident[1] == ELFMAG1 &&
+        ehdr.e_ident[2] == ELFMAG2 &&
+        ehdr.e_ident[3] == ELFMAG3) {
+
+        /* do not display line number if error */
+        file->line_num = 0;
+        if (ehdr.e_type == ET_REL) {
+            ret = tcc_load_object_file(s1, fd, 0);
+            goto the_end;
+
+        }
+#ifndef TCC_TARGET_PE
+        if (ehdr.e_type == ET_DYN) {
+            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+                void *h;
+                h = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                if (h)
+                    ret = 0;
+            } else {
+                ret = tcc_load_dll(s1, fd, filename, 
+                                   (flags & AFF_REFERENCED_DLL) != 0);
+            }
+            goto the_end;
+        }
+#endif
+        error_noabort("unrecognized ELF file");
+        goto the_end;
+    }
+
+    if (memcmp((char *)&ehdr, ARMAG, 8) == 0) {
+        file->line_num = 0; /* do not display line number if error */
+        ret = tcc_load_archive(s1, fd);
+        goto the_end;
+    }
+
+#ifdef TCC_TARGET_COFF
+    if (*(uint16_t *)(&ehdr) == COFF_C67_MAGIC) {
+        ret = tcc_load_coff(s1, fd);
+        goto the_end;
+    }
+#endif
+
+#ifdef TCC_TARGET_PE
+    ret = pe_load_file(s1, filename, fd);
+#else
+    /* as GNU ld, consider it is an ld script if not recognized */
+    ret = tcc_load_ldscript(s1);
+#endif
+    if (ret < 0)
+        error_noabort("unrecognized file type");
+
+the_end:
+    if (file)
+        tcc_close(file);
     file = saved_file;
     return ret;
- fail:
-    ret = -1;
-    goto the_end;
 }
 
 int tcc_add_file(TCCState *s, const char *filename)
@@ -2136,14 +2173,14 @@ int tcc_add_library(TCCState *s, const char *libraryname)
     /* first we look for the dynamic library if not static linking */
     if (!s->static_link) {
 #ifdef TCC_TARGET_PE
-        snprintf(buf, sizeof(buf), "%s.def", libraryname);
+        if (pe_add_dll(s, libraryname) == 0)
+            return 0;
 #else
         snprintf(buf, sizeof(buf), "lib%s.so", libraryname);
-#endif
         if (tcc_add_dll(s, buf, 0) == 0)
             return 0;
+#endif
     }
-
     /* then we look for the static library */
     for(i = 0; i < s->nb_library_paths; i++) {
         snprintf(buf, sizeof(buf), "%s/lib%s.a", 
@@ -2225,6 +2262,10 @@ int tcc_set_output_type(TCCState *s, int output_type)
 #ifdef TCC_TARGET_PE
     snprintf(buf, sizeof(buf), "%s/lib", s->tcc_lib_path);
     tcc_add_library_path(s, buf);
+#ifdef _WIN32
+    if (GetSystemDirectory(buf, sizeof buf))
+        tcc_add_library_path(s, buf);
+#endif
 #endif
 
     return 0;

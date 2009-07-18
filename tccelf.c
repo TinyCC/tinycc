@@ -2424,6 +2424,7 @@ static int tcc_load_archive(TCCState *s1, int fd)
     return 0;
 }
 
+#ifndef TCC_TARGET_PE
 /* load a DLL and all referenced DLLs. 'level = 0' means that the DLL
    is referenced by the user (so it should be added as DT_NEEDED in
    the generated ELF file) */
@@ -2740,3 +2741,4 @@ static int tcc_load_ldscript(TCCState *s1)
     }
     return 0;
 }
+#endif

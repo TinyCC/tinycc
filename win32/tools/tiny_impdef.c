@@ -20,100 +20,19 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifndef TINY_IMPDEF_GET_EXPORT_NAMES_ONLY
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
 #include <malloc.h>
 #include "../../config.h"
 
-int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
-{
-    fseek(fp, offset, 0);
-    return len == fread(buffer, 1, len, fp);
-}
+char *get_export_names(FILE *fp);
+#define tcc_free free
+#define tcc_realloc realloc
 
-char *get_export_names(FILE *fp)
-{
-    int l, i, n, n0;
-    char *p;
-
-    IMAGE_SECTION_HEADER ish;
-    IMAGE_EXPORT_DIRECTORY ied;
-    IMAGE_DOS_HEADER dh;
-    IMAGE_FILE_HEADER ih;
-    DWORD sig, ref, addr, ptr, namep;
-#ifdef TCC_TARGET_X86_64
-    IMAGE_OPTIONAL_HEADER64 oh;
-    const int MACHINE = 0x8664;
-#else
-    IMAGE_OPTIONAL_HEADER32 oh;
-    const int MACHINE = 0x014C;
-#endif
-    int pef_hdroffset, opt_hdroffset, sec_hdroffset;
-
-    n = n0 = 0;
-    p = NULL;
-
-    if (!read_mem(fp, 0, &dh, sizeof dh))
-        goto the_end;
-    if (!read_mem(fp, dh.e_lfanew, &sig, sizeof sig))
-        goto the_end;
-    if (sig != 0x00004550)
-        goto the_end;
-    pef_hdroffset = dh.e_lfanew + sizeof sig;
-    if (!read_mem(fp, pef_hdroffset, &ih, sizeof ih))
-        goto the_end;
-    if (MACHINE != ih.Machine)
-        goto the_end;
-    opt_hdroffset = pef_hdroffset + sizeof ih;
-    sec_hdroffset = opt_hdroffset + sizeof oh;
-    if (!read_mem(fp, opt_hdroffset, &oh, sizeof oh))
-        goto the_end;
-
-    if (IMAGE_DIRECTORY_ENTRY_EXPORT >= oh.NumberOfRvaAndSizes)
-        goto the_end;
-
-    addr = oh.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
-    //printf("addr: %08x\n", addr);
-    for (i = 0; i < ih.NumberOfSections; ++i) {
-        if (!read_mem(fp, sec_hdroffset + i * sizeof ish, &ish, sizeof ish))
-            goto the_end;
-        //printf("vaddr: %08x\n", ish.VirtualAddress);
-        if (addr >= ish.VirtualAddress && addr < ish.VirtualAddress + ish.SizeOfRawData)
-            goto found;
-    }
-    goto the_end;
-
-found:
-    ref = ish.VirtualAddress - ish.PointerToRawData;
-    if (!read_mem(fp, addr - ref, &ied, sizeof ied))
-        goto the_end;
-
-    namep = ied.AddressOfNames - ref;
-    for (i = 0; i < ied.NumberOfNames; ++i) {
-        if (!read_mem(fp, namep, &ptr, sizeof ptr))
-            goto the_end;
-        namep += sizeof ptr;
-        for (l = 0;;) {
-            if (n+1 >= n0)
-                p = realloc(p, n0 = n0 ? n0 * 2 : 256);
-            if (!read_mem(fp, ptr - ref + l, p + n, 1) || ++l >= 80) {
-                free(p), p = NULL;
-                goto the_end;
-            }
-            if (p[n++] == 0)
-                break;
-        }
-    }
-    if (p)
-        p[n] = 0;
-the_end:
-    return p;
-}
-
-/* -------------------------------------------------------------- */
 /* extract the basename of a file */
-
 static char *file_basename(const char *name)
 {
     const char *p = strchr(name, 0);
@@ -124,8 +43,6 @@ static char *file_basename(const char *name)
         --p;
     return (char*)p;
 }
-
-/* -------------------------------------------------------------- */
 
 int main(int argc, char **argv)
 {
@@ -229,6 +146,96 @@ the_end:
     if (op)
         fclose(op);
     return ret;
+}
+
+/* -------------------------------------------------------------- */
+
+int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
+{
+    fseek(fp, offset, 0);
+    return len == fread(buffer, 1, len, fp);
+}
+
+/* -------------------------------------------------------------- */
+#endif
+
+char *get_export_names(FILE *fp)
+{
+    int l, i, n, n0;
+    char *p;
+
+    IMAGE_SECTION_HEADER ish;
+    IMAGE_EXPORT_DIRECTORY ied;
+    IMAGE_DOS_HEADER dh;
+    IMAGE_FILE_HEADER ih;
+    DWORD sig, ref, addr, ptr, namep;
+#ifdef TCC_TARGET_X86_64
+    IMAGE_OPTIONAL_HEADER64 oh;
+    const int MACHINE = 0x8664;
+#else
+    IMAGE_OPTIONAL_HEADER32 oh;
+    const int MACHINE = 0x014C;
+#endif
+    int pef_hdroffset, opt_hdroffset, sec_hdroffset;
+
+    n = n0 = 0;
+    p = NULL;
+
+    if (!read_mem(fp, 0, &dh, sizeof dh))
+        goto the_end;
+    if (!read_mem(fp, dh.e_lfanew, &sig, sizeof sig))
+        goto the_end;
+    if (sig != 0x00004550)
+        goto the_end;
+    pef_hdroffset = dh.e_lfanew + sizeof sig;
+    if (!read_mem(fp, pef_hdroffset, &ih, sizeof ih))
+        goto the_end;
+    if (MACHINE != ih.Machine)
+        goto the_end;
+    opt_hdroffset = pef_hdroffset + sizeof ih;
+    sec_hdroffset = opt_hdroffset + sizeof oh;
+    if (!read_mem(fp, opt_hdroffset, &oh, sizeof oh))
+        goto the_end;
+
+    if (IMAGE_DIRECTORY_ENTRY_EXPORT >= oh.NumberOfRvaAndSizes)
+        goto the_end;
+
+    addr = oh.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+    //printf("addr: %08x\n", addr);
+    for (i = 0; i < ih.NumberOfSections; ++i) {
+        if (!read_mem(fp, sec_hdroffset + i * sizeof ish, &ish, sizeof ish))
+            goto the_end;
+        //printf("vaddr: %08x\n", ish.VirtualAddress);
+        if (addr >= ish.VirtualAddress && addr < ish.VirtualAddress + ish.SizeOfRawData)
+            goto found;
+    }
+    goto the_end;
+
+found:
+    ref = ish.VirtualAddress - ish.PointerToRawData;
+    if (!read_mem(fp, addr - ref, &ied, sizeof ied))
+        goto the_end;
+
+    namep = ied.AddressOfNames - ref;
+    for (i = 0; i < ied.NumberOfNames; ++i) {
+        if (!read_mem(fp, namep, &ptr, sizeof ptr))
+            goto the_end;
+        namep += sizeof ptr;
+        for (l = 0;;) {
+            if (n+1 >= n0)
+                p = tcc_realloc(p, n0 = n0 ? n0 * 2 : 256);
+            if (!read_mem(fp, ptr - ref + l, p + n, 1) || ++l >= 80) {
+                tcc_free(p), p = NULL;
+                goto the_end;
+            }
+            if (p[n++] == 0)
+                break;
+        }
+    }
+    if (p)
+        p[n] = 0;
+the_end:
+    return p;
 }
 
 /* -------------------------------------------------------------- */

@@ -46,7 +46,6 @@
 #include <direct.h> /* getcwd */
 #define inline __inline
 #define inp next_inp
-#define dlclose FreeLibrary
 #ifdef _MSC_VER
 #define __aligned(n) __declspec(align(n))
 #endif
