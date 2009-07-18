@@ -274,106 +274,6 @@ struct pe_rsrc_reloc {
 
 #pragma pack(pop)
 
-/* ----------------------------------------------------------- */
-ST_DATA struct pe_header pe_header = {
-{
-    /* IMAGE_DOS_HEADER doshdr */
-    0x5A4D, /*WORD e_magic;         Magic number */
-    0x0090, /*WORD e_cblp;          Bytes on last page of file */
-    0x0003, /*WORD e_cp;            Pages in file */
-    0x0000, /*WORD e_crlc;          Relocations */
-
-    0x0004, /*WORD e_cparhdr;       Size of header in paragraphs */
-    0x0000, /*WORD e_minalloc;      Minimum extra paragraphs needed */
-    0xFFFF, /*WORD e_maxalloc;      Maximum extra paragraphs needed */
-    0x0000, /*WORD e_ss;            Initial (relative) SS value */
-
-    0x00B8, /*WORD e_sp;            Initial SP value */
-    0x0000, /*WORD e_csum;          Checksum */
-    0x0000, /*WORD e_ip;            Initial IP value */
-    0x0000, /*WORD e_cs;            Initial (relative) CS value */
-    0x0040, /*WORD e_lfarlc;        File address of relocation table */
-    0x0000, /*WORD e_ovno;          Overlay number */
-    {0,0,0,0}, /*WORD e_res[4];     Reserved words */
-    0x0000, /*WORD e_oemid;         OEM identifier (for e_oeminfo) */
-    0x0000, /*WORD e_oeminfo;       OEM information; e_oemid specific */
-    {0,0,0,0,0,0,0,0,0,0}, /*WORD e_res2[10];      Reserved words */
-    0x00000080  /*DWORD   e_lfanew;        File address of new exe header */
-},{
-    /* BYTE dosstub[0x40] */
-    /* 14 code bytes + "This program cannot be run in DOS mode.\r\r\n$" + 6 * 0x00 */
-    0x0e,0x1f,0xba,0x0e,0x00,0xb4,0x09,0xcd,0x21,0xb8,0x01,0x4c,0xcd,0x21,0x54,0x68,
-    0x69,0x73,0x20,0x70,0x72,0x6f,0x67,0x72,0x61,0x6d,0x20,0x63,0x61,0x6e,0x6e,0x6f,
-    0x74,0x20,0x62,0x65,0x20,0x72,0x75,0x6e,0x20,0x69,0x6e,0x20,0x44,0x4f,0x53,0x20,
-    0x6d,0x6f,0x64,0x65,0x2e,0x0d,0x0d,0x0a,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-},
-    0x00004550, /* DWORD nt_sig = IMAGE_NT_SIGNATURE */
-{
-    /* IMAGE_FILE_HEADER filehdr */
-#ifdef TCC_TARGET_X86_64
-    0x8664, /*WORD    Machine; */
-#else
-    0x014C, /*WORD    Machine; */
-#endif
-    0x0003, /*WORD    NumberOfSections; */
-    0x00000000, /*DWORD   TimeDateStamp; */
-    0x00000000, /*DWORD   PointerToSymbolTable; */
-    0x00000000, /*DWORD   NumberOfSymbols; */
-#ifdef TCC_TARGET_X86_64
-    0x00F0, /*WORD    SizeOfOptionalHeader; */
-    0x022F  /*WORD    Characteristics; */
-#define CHARACTERISTICS_DLL 0x222E
-#else
-    0x00E0, /*WORD    SizeOfOptionalHeader; */
-    0x030F  /*WORD    Characteristics; */
-#define CHARACTERISTICS_DLL 0x230E
-#endif
-},{
-    /* IMAGE_OPTIONAL_HEADER opthdr */
-    /* Standard fields. */
-#ifdef TCC_TARGET_X86_64
-    0x020B, /*WORD    Magic; */
-#else
-    0x010B, /*WORD    Magic; */
-#endif
-    0x06, /*BYTE    MajorLinkerVersion; */
-    0x00, /*BYTE    MinorLinkerVersion; */
-    0x00000000, /*DWORD   SizeOfCode; */
-    0x00000000, /*DWORD   SizeOfInitializedData; */
-    0x00000000, /*DWORD   SizeOfUninitializedData; */
-    0x00000000, /*DWORD   AddressOfEntryPoint; */
-    0x00000000, /*DWORD   BaseOfCode; */
-#ifndef TCC_TARGET_X86_64
-    0x00000000, /*DWORD   BaseOfData; */
-#endif
-    /* NT additional fields. */
-    0x00400000, /*DWORD   ImageBase; */
-    0x00001000, /*DWORD   SectionAlignment; */
-    0x00000200, /*DWORD   FileAlignment; */
-    0x0004, /*WORD    MajorOperatingSystemVersion; */
-    0x0000, /*WORD    MinorOperatingSystemVersion; */
-    0x0000, /*WORD    MajorImageVersion; */
-    0x0000, /*WORD    MinorImageVersion; */
-    0x0004, /*WORD    MajorSubsystemVersion; */
-    0x0000, /*WORD    MinorSubsystemVersion; */
-    0x00000000, /*DWORD   Win32VersionValue; */
-    0x00000000, /*DWORD   SizeOfImage; */
-    0x00000200, /*DWORD   SizeOfHeaders; */
-    0x00000000, /*DWORD   CheckSum; */
-    0x0002, /*WORD    Subsystem; */
-    0x0000, /*WORD    DllCharacteristics; */
-    0x00100000, /*DWORD   SizeOfStackReserve; */
-    0x00001000, /*DWORD   SizeOfStackCommit; */
-    0x00100000, /*DWORD   SizeOfHeapReserve; */
-    0x00001000, /*DWORD   SizeOfHeapCommit; */
-    0x00000000, /*DWORD   LoaderFlags; */
-    0x00000010, /*DWORD   NumberOfRvaAndSizes; */
-
-    /* IMAGE_DATA_DIRECTORY DataDirectory[16]; */
-    {{0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0},
-     {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}}
-}};
-
 /* ------------------------------------------------------------- */
 /* internal temporary structures */
 
@@ -400,7 +300,7 @@ enum {
     sec_last
 };
 
-ST_DATA DWORD pe_sec_flags[] = {
+ST_DATA const DWORD pe_sec_flags[] = {
     0x60000020, /* ".text"     , */
     0xC0000040, /* ".data"     , */
     0xC0000080, /* ".bss"      , */
@@ -541,18 +441,118 @@ ST_FN void pe_align_section(Section *s, int a)
         section_ptr_add(s, a - i);
 }
 
-ST_FN void pe_set_datadir(int dir, DWORD addr, DWORD size)
+ST_FN void pe_set_datadir(struct pe_header *hdr, int dir, DWORD addr, DWORD size)
 {
-    pe_header.opthdr.DataDirectory[dir].VirtualAddress = addr;
-    pe_header.opthdr.DataDirectory[dir].Size = size;
+    hdr->opthdr.DataDirectory[dir].VirtualAddress = addr;
+    hdr->opthdr.DataDirectory[dir].Size = size;
 }
 
 /*----------------------------------------------------------------------------*/
 ST_FN int pe_write(struct pe_info *pe)
 {
+    static const struct pe_header pe_template = {
+    {
+    /* IMAGE_DOS_HEADER doshdr */
+    0x5A4D, /*WORD e_magic;         Magic number */
+    0x0090, /*WORD e_cblp;          Bytes on last page of file */
+    0x0003, /*WORD e_cp;            Pages in file */
+    0x0000, /*WORD e_crlc;          Relocations */
+
+    0x0004, /*WORD e_cparhdr;       Size of header in paragraphs */
+    0x0000, /*WORD e_minalloc;      Minimum extra paragraphs needed */
+    0xFFFF, /*WORD e_maxalloc;      Maximum extra paragraphs needed */
+    0x0000, /*WORD e_ss;            Initial (relative) SS value */
+
+    0x00B8, /*WORD e_sp;            Initial SP value */
+    0x0000, /*WORD e_csum;          Checksum */
+    0x0000, /*WORD e_ip;            Initial IP value */
+    0x0000, /*WORD e_cs;            Initial (relative) CS value */
+    0x0040, /*WORD e_lfarlc;        File address of relocation table */
+    0x0000, /*WORD e_ovno;          Overlay number */
+    {0,0,0,0}, /*WORD e_res[4];     Reserved words */
+    0x0000, /*WORD e_oemid;         OEM identifier (for e_oeminfo) */
+    0x0000, /*WORD e_oeminfo;       OEM information; e_oemid specific */
+    {0,0,0,0,0,0,0,0,0,0}, /*WORD e_res2[10];      Reserved words */
+    0x00000080  /*DWORD   e_lfanew;        File address of new exe header */
+    },{
+    /* BYTE dosstub[0x40] */
+    /* 14 code bytes + "This program cannot be run in DOS mode.\r\r\n$" + 6 * 0x00 */
+    0x0e,0x1f,0xba,0x0e,0x00,0xb4,0x09,0xcd,0x21,0xb8,0x01,0x4c,0xcd,0x21,0x54,0x68,
+    0x69,0x73,0x20,0x70,0x72,0x6f,0x67,0x72,0x61,0x6d,0x20,0x63,0x61,0x6e,0x6e,0x6f,
+    0x74,0x20,0x62,0x65,0x20,0x72,0x75,0x6e,0x20,0x69,0x6e,0x20,0x44,0x4f,0x53,0x20,
+    0x6d,0x6f,0x64,0x65,0x2e,0x0d,0x0d,0x0a,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    },
+    0x00004550, /* DWORD nt_sig = IMAGE_NT_SIGNATURE */
+    {
+    /* IMAGE_FILE_HEADER filehdr */
+#ifdef TCC_TARGET_X86_64
+    0x8664, /*WORD    Machine; */
+#else
+    0x014C, /*WORD    Machine; */
+#endif
+    0x0003, /*WORD    NumberOfSections; */
+    0x00000000, /*DWORD   TimeDateStamp; */
+    0x00000000, /*DWORD   PointerToSymbolTable; */
+    0x00000000, /*DWORD   NumberOfSymbols; */
+#ifdef TCC_TARGET_X86_64
+    0x00F0, /*WORD    SizeOfOptionalHeader; */
+    0x022F  /*WORD    Characteristics; */
+#define CHARACTERISTICS_DLL 0x222E
+#else
+    0x00E0, /*WORD    SizeOfOptionalHeader; */
+    0x030F  /*WORD    Characteristics; */
+#define CHARACTERISTICS_DLL 0x230E
+#endif
+},{
+    /* IMAGE_OPTIONAL_HEADER opthdr */
+    /* Standard fields. */
+#ifdef TCC_TARGET_X86_64
+    0x020B, /*WORD    Magic; */
+#else
+    0x010B, /*WORD    Magic; */
+#endif
+    0x06, /*BYTE    MajorLinkerVersion; */
+    0x00, /*BYTE    MinorLinkerVersion; */
+    0x00000000, /*DWORD   SizeOfCode; */
+    0x00000000, /*DWORD   SizeOfInitializedData; */
+    0x00000000, /*DWORD   SizeOfUninitializedData; */
+    0x00000000, /*DWORD   AddressOfEntryPoint; */
+    0x00000000, /*DWORD   BaseOfCode; */
+#ifndef TCC_TARGET_X86_64
+    0x00000000, /*DWORD   BaseOfData; */
+#endif
+    /* NT additional fields. */
+    0x00400000, /*DWORD   ImageBase; */
+    0x00001000, /*DWORD   SectionAlignment; */
+    0x00000200, /*DWORD   FileAlignment; */
+    0x0004, /*WORD    MajorOperatingSystemVersion; */
+    0x0000, /*WORD    MinorOperatingSystemVersion; */
+    0x0000, /*WORD    MajorImageVersion; */
+    0x0000, /*WORD    MinorImageVersion; */
+    0x0004, /*WORD    MajorSubsystemVersion; */
+    0x0000, /*WORD    MinorSubsystemVersion; */
+    0x00000000, /*DWORD   Win32VersionValue; */
+    0x00000000, /*DWORD   SizeOfImage; */
+    0x00000200, /*DWORD   SizeOfHeaders; */
+    0x00000000, /*DWORD   CheckSum; */
+    0x0002, /*WORD    Subsystem; */
+    0x0000, /*WORD    DllCharacteristics; */
+    0x00100000, /*DWORD   SizeOfStackReserve; */
+    0x00001000, /*DWORD   SizeOfStackCommit; */
+    0x00100000, /*DWORD   SizeOfHeapReserve; */
+    0x00001000, /*DWORD   SizeOfHeapCommit; */
+    0x00000000, /*DWORD   LoaderFlags; */
+    0x00000010, /*DWORD   NumberOfRvaAndSizes; */
+
+    /* IMAGE_DATA_DIRECTORY DataDirectory[16]; */
+    {{0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0},
+     {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}}
+    }};
+
     int i;
     FILE *op;
     DWORD file_offset, r;
+    struct pe_header pe_header = pe_template;
 
     op = fopen(pe->filename, "wb");
     if (NULL == op) {
@@ -561,7 +561,7 @@ ST_FN int pe_write(struct pe_info *pe)
     }
 
     pe->sizeofheaders = pe_file_align(
-        sizeof pe_header
+        sizeof (struct pe_header)
         + pe->sec_count * sizeof (IMAGE_SECTION_HEADER)
         );
 
@@ -599,11 +599,11 @@ ST_FN int pe_write(struct pe_info *pe)
                 break;
 
             case sec_reloc:
-                pe_set_datadir(IMAGE_DIRECTORY_ENTRY_BASERELOC, addr, size);
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_BASERELOC, addr, size);
                 break;
 
             case sec_rsrc:
-                pe_set_datadir(IMAGE_DIRECTORY_ENTRY_RESOURCE, addr, size);
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_RESOURCE, addr, size);
                 break;
 
             case sec_stab:
@@ -612,13 +612,13 @@ ST_FN int pe_write(struct pe_info *pe)
 
         if (pe->thunk == pe->s1->sections[si->ord]) {
             if (pe->imp_size) {
-                pe_set_datadir(IMAGE_DIRECTORY_ENTRY_IMPORT,
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IMPORT,
                     pe->imp_offs + addr, pe->imp_size);
-                pe_set_datadir(IMAGE_DIRECTORY_ENTRY_IAT,
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IAT,
                     pe->iat_offs + addr, pe->iat_size);
             }
             if (pe->exp_size) {
-                pe_set_datadir(IMAGE_DIRECTORY_ENTRY_EXPORT,
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_EXPORT,
                     pe->exp_offs + addr, pe->exp_size);
             }
         }

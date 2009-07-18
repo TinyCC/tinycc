@@ -42,7 +42,7 @@ enum {
     TREG_ST0,
 };
 
-int reg_classes[NB_REGS] = {
+const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_EAX,
     /* ecx */ RC_INT | RC_ECX,
     /* edx */ RC_INT | RC_EDX,

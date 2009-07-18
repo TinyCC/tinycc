@@ -26,7 +26,9 @@ static const char tcc_keywords[] =
 ;
 
 /* WARNING: the content of this string encodes token numbers */
-static char tok_two_chars[] = "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
+static const unsigned char tok_two_chars[] =
+    "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253"
+    "-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
 
 /* true if isid(c) || isnum(c) */
 static unsigned char isidnum_table[256-CH_EOF];
@@ -110,7 +112,6 @@ char *get_tok_str(int v, CValue *cv)
     static char buf[STRING_MAX_SIZE + 1];
     static CString cstr_buf;
     CString *cstr;
-    unsigned char *q;
     char *p;
     int i, len;
 
@@ -182,7 +183,7 @@ char *get_tok_str(int v, CValue *cv)
     default:
         if (v < TOK_IDENT) {
             /* search in two bytes table */
-            q = tok_two_chars;
+            const unsigned char *q = tok_two_chars;
             while (*q) {
                 if (q[2] == v) {
                     *p++ = q[0];

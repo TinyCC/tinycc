@@ -85,7 +85,7 @@ enum {
     TREG_C67_B13,
 };
 
-int reg_classes[NB_REGS] = {
+const int reg_classes[NB_REGS] = {
 						/* eax */ RC_INT | RC_FLOAT | RC_EAX,
 						// only allow even regs for floats (allow for doubles)
     /* ecx */ RC_INT | RC_ECX,

@@ -60,7 +60,7 @@ enum {
 #define REX_BASE(reg) (((reg) >> 3) & 1)
 #define REG_VALUE(reg) ((reg) & 7)
 
-int reg_classes[NB_REGS] = {
+const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_RAX,
     /* ecx */ RC_INT | RC_RCX,
     /* edx */ RC_INT | RC_RDX,
@@ -535,12 +535,12 @@ static void gcall_or_jmp(int is_jmp)
 
 #ifdef TCC_TARGET_PE
 #define REGN 4
-static uint8_t arg_regs[] = {
+static const uint8_t arg_regs[] = {
     TREG_RCX, TREG_RDX, TREG_R8, TREG_R9
 };
 #else
 #define REGN 6
-static uint8_t arg_regs[REGN] = {
+static const uint8_t arg_regs[REGN] = {
     TREG_RDI, TREG_RSI, TREG_RDX, TREG_RCX, TREG_R8, TREG_R9
 };
 #endif

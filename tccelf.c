@@ -1283,15 +1283,15 @@ static void tcc_add_linker_symbols(TCCState *s1)
 
 /* name of ELF interpreter */
 #if defined __FreeBSD__
-static char elf_interp[] = "/usr/libexec/ld-elf.so.1";
+static const char elf_interp[] = "/usr/libexec/ld-elf.so.1";
 #elif defined TCC_ARM_EABI
-static char elf_interp[] = "/lib/ld-linux.so.3";
+static const char elf_interp[] = "/lib/ld-linux.so.3";
 #elif defined(TCC_TARGET_X86_64)
-static char elf_interp[] = "/lib/ld-linux-x86-64.so.2";
+static const char elf_interp[] = "/lib/ld-linux-x86-64.so.2";
 #elif defined(TCC_UCLIBC)
-static char elf_interp[] = "/lib/ld-uClibc.so.0";
+static const char elf_interp[] = "/lib/ld-uClibc.so.0";
 #else
-static char elf_interp[] = "/lib/ld-linux.so.2";
+static const char elf_interp[] = "/lib/ld-linux.so.2";
 #endif
 
 static void tcc_output_binary(TCCState *s1, FILE *f,

@@ -75,7 +75,7 @@ enum {
 #endif
 };
 
-int reg_classes[NB_REGS] = {
+const int reg_classes[NB_REGS] = {
     /* r0 */ RC_INT | RC_R0,
     /* r1 */ RC_INT | RC_R1,
     /* r2 */ RC_INT | RC_R2,

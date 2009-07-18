@@ -41,7 +41,7 @@ enum {
     REG_ST2,
 };
 
-int reg_classes[NB_REGS] = {
+const int reg_classes[NB_REGS] = {
     /* ST0 */ RC_ST | RC_ST0,
     /* ST1 */ RC_ST | RC_ST1,
     /* ST2 */ RC_ST,
