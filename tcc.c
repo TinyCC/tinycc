@@ -18,7 +18,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#ifdef TCC_USE_LIBTCC
+#include "tcc.h"
+#else
 #include "libtcc.c"
+#endif
 
 void help(void)
 {
