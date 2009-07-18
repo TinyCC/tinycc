@@ -13,98 +13,8 @@
 #include <io.h> /* for mktemp */
 #endif
 
-/* #include "ar-elf.h" */
-/*  "ar-elf.h" */
-/* ELF_v1.2.pdf */
-typedef unsigned short int Elf32_Half;
-typedef int Elf32_Sword;
-typedef unsigned int Elf32_Word;
-typedef unsigned int Elf32_Addr;
-typedef unsigned int Elf32_Off;
-typedef unsigned short int Elf32_Section;
-
-#define EI_NIDENT 16
-typedef struct {
-    unsigned char e_ident[EI_NIDENT];
-    Elf32_Half e_type;
-    Elf32_Half e_machine;
-    Elf32_Word e_version;
-    Elf32_Addr e_entry;
-    Elf32_Off e_phoff;
-    Elf32_Off e_shoff;
-    Elf32_Word e_flags;
-    Elf32_Half e_ehsize;
-    Elf32_Half e_phentsize;
-    Elf32_Half e_phnum;
-    Elf32_Half e_shentsize;
-    Elf32_Half e_shnum;
-    Elf32_Half e_shstrndx;
-} Elf32_Ehdr;
-
-typedef struct {
-    Elf32_Word sh_name;
-    Elf32_Word sh_type;
-    Elf32_Word sh_flags;
-    Elf32_Addr sh_addr;
-    Elf32_Off sh_offset;
-    Elf32_Word sh_size;
-    Elf32_Word sh_link;
-    Elf32_Word sh_info;
-    Elf32_Word sh_addralign;
-    Elf32_Word sh_entsize;
-} Elf32_Shdr;
-
-#define SHT_NULL 0
-#define SHT_PROGBITS 1
-#define SHT_SYMTAB 2
-#define SHT_STRTAB 3
-#define SHT_RELA 4
-#define SHT_HASH 5
-#define SHT_DYNAMIC 6
-#define SHT_NOTE 7
-#define SHT_NOBITS 8
-#define SHT_REL 9
-#define SHT_SHLIB 10
-#define SHT_DYNSYM 11
-
-typedef struct {
-    Elf32_Word st_name;
-    Elf32_Addr st_value;
-    Elf32_Word st_size;
-    unsigned char st_info;
-    unsigned char st_other;
-    Elf32_Half st_shndx;
-} Elf32_Sym;
-
-#define ELF32_ST_BIND(i) ((i)>>4)
-#define ELF32_ST_TYPE(i) ((i)&0xf)
-#define ELF32_ST_INFO(b,t) (((b)<<4)+((t)&0xf))
-
-#define STT_NOTYPE 0
-#define STT_OBJECT 1
-#define STT_FUNC 2
-#define STT_SECTION 3
-#define STT_FILE 4
-#define STT_LOPROC 13
-#define STT_HIPROC 15
-
-#define STB_LOCAL 0
-#define STB_GLOBAL 1
-#define STB_WEAK 2
-#define STB_LOPROC 13
-#define STB_HIPROC 15
-
-typedef struct {
-    Elf32_Word p_type;
-    Elf32_Off p_offset;
-    Elf32_Addr p_vaddr;
-    Elf32_Addr p_paddr;
-    Elf32_Word p_filesz;
-    Elf32_Word p_memsz;
-    Elf32_Word p_flags;
-    Elf32_Word p_align;
-} Elf32_Phdr;
-/* "ar-elf.h" ends */
+#include "../../config.h"
+#include "../../elf.h"
 
 #define ARMAG  "!<arch>\n"
 #define ARFMAG "`\n"
@@ -118,7 +28,6 @@ typedef struct ArHdr {
     char ar_size[10];
     char ar_fmag[2];
 } ArHdr;
-
 
 unsigned long le2belong(unsigned long ul) {
     return ((ul & 0xFF0000)>>8)+((ul & 0xFF000000)>>24) +
@@ -148,9 +57,9 @@ ArHdr arhdro = {
 int main(int argc, char **argv)
 {
     FILE *fi, *fh, *fo;
-    Elf32_Ehdr *ehdr;
-    Elf32_Shdr *shdr;
-    Elf32_Sym *sym;
+    ElfW(Ehdr) *ehdr;
+    ElfW(Shdr) *shdr;
+    ElfW(Sym) *sym;
     int i, fsize, iarg;
     char *buf, *shstr, *symtab = NULL, *strtab = NULL;
     int symtabsize = 0, strtabsize = 0;
@@ -207,7 +116,7 @@ int main(int argc, char **argv)
         }
         if ((fi = fopen(argv[iarg], "rb")) == NULL)
         {
-            fprintf(stderr, "Can't open  file %s \n", argv[iarg]);
+            fprintf(stderr, "Can't open file %s \n", argv[iarg]);
             remove(tfile);
             return 2;
         }
@@ -218,14 +127,21 @@ int main(int argc, char **argv)
         fread(buf, fsize, 1, fi);
         fclose(fi);
 
-        printf("%s:\n", argv[iarg]);
+        //printf("%s:\n", argv[iarg]);
         // elf header
-        ehdr = (Elf32_Ehdr *)buf;
-        shdr = (Elf32_Shdr *) (buf + ehdr->e_shoff + ehdr->e_shstrndx * ehdr->e_shentsize);
+        ehdr = (ElfW(Ehdr) *)buf;
+        if (ehdr->e_ident[4] != TCC_ELFCLASS)
+        {
+            fprintf(stderr, "Unsupported Elf Class: %s\n", argv[iarg]);
+            remove(tfile);
+            return 2;
+        }
+
+        shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + ehdr->e_shstrndx * ehdr->e_shentsize);
         shstr = (char *)(buf + shdr->sh_offset);
         for (i = 0; i < ehdr->e_shnum; i++)
         {
-            shdr = (Elf32_Shdr *) (buf + ehdr->e_shoff + i * ehdr->e_shentsize);
+            shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + i * ehdr->e_shentsize);
             if (!shdr->sh_offset) continue;
             if (shdr->sh_type == SHT_SYMTAB)
             {
@@ -244,12 +160,16 @@ int main(int argc, char **argv)
 
         if (symtab && symtabsize)
         {
-            int nsym = symtabsize / sizeof(Elf32_Sym);
+            int nsym = symtabsize / sizeof(ElfW(Sym));
             //printf("symtab: info size shndx name\n");
             for (i = 1; i < nsym; i++)
             {
-                sym = (Elf32_Sym *) (symtab + i * sizeof(Elf32_Sym));
-                if (sym->st_shndx && (sym->st_info == 0x11 || sym->st_info == 0x12)) {
+                sym = (ElfW(Sym) *) (symtab + i * sizeof(ElfW(Sym)));
+                if (sym->st_shndx &&
+                    (sym->st_info == 0x10
+                    || sym->st_info == 0x11
+                    || sym->st_info == 0x12
+                    )) {
                     //printf("symtab: %2Xh %4Xh %2Xh %s\n", sym->st_info, sym->st_size, sym->st_shndx, strtab + sym->st_name);
                     istrlen = strlen(strtab + sym->st_name)+1;
                     anames = realloc(anames, strpos+istrlen);
@@ -281,7 +201,7 @@ int main(int argc, char **argv)
     } else fpos = 0;
     // write header
     fwrite("!<arch>\n", 8, 1, fh);
-    sprintf(stmp, "%-10d", strpos + (funccnt+1) * sizeof(int));
+    sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)));
     memcpy(&arhdr.ar_size, stmp, 10);
     fwrite(&arhdr, sizeof(arhdr), 1, fh);
     afpos[0] = le2belong(funccnt);
