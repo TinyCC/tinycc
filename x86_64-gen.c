@@ -919,12 +919,13 @@ void gfunc_epilog(void)
     v = (-loc + 15) & -16;
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
-#if 0 // def TCC_TARGET_PE - don't have __chkstk yet, because assembler does not work
+#ifdef TCC_TARGET_PE
     if (v >= 4096) {
         Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
         oad(0xe8, -4); /* call __chkstk, (does the stackframe too) */
         greloc(cur_text_section, sym, ind-4, R_X86_64_PC32);
+	o(0x90); /* fill for FUNC_PROLOG_SIZE = 11 bytes */
     } else
 #endif
     {

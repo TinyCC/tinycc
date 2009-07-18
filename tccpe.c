@@ -193,8 +193,8 @@ typedef struct _IMAGE_EXPORT_DIRECTORY {
 
 typedef struct _IMAGE_IMPORT_DESCRIPTOR {
     union {
-	DWORD Characteristics;
-	DWORD OriginalFirstThunk;
+        DWORD Characteristics;
+        DWORD OriginalFirstThunk;
     };
     DWORD TimeDateStamp;
     DWORD ForwarderChain;
@@ -350,12 +350,7 @@ ST_DATA struct pe_header pe_header = {
     0x0002, /*WORD    Subsystem; */
     0x0000, /*WORD    DllCharacteristics; */
     0x00100000, /*DWORD   SizeOfStackReserve; */
-#ifdef TCC_TARGET_X86_64
-    // need to have a __chkstk eventually
-    0x00008000, /*DWORD   SizeOfStackCommit; */
-#else
     0x00001000, /*DWORD   SizeOfStackCommit; */
-#endif
     0x00100000, /*DWORD   SizeOfHeapReserve; */
     0x00001000, /*DWORD   SizeOfHeapCommit; */
     0x00000000, /*DWORD   LoaderFlags; */

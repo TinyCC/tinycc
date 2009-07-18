@@ -1,29 +1,61 @@
-// =================================================
-// chkstk.s
+/* ---------------------------------------------- */
+/* chkstk86.s */
 
-.text
+#include "../../config.h"
+
+/* ---------------------------------------------- */
+#ifndef TCC_TARGET_X86_64
+/* ---------------------------------------------- */
+
 .globl __chkstk
 
 __chkstk:
-	xchg    (%esp), %ebp   // store ebp, get ret.addr
-	push    %ebp           // push ret.addr
-	lea     4(%esp), %ebp  // setup frame ptr
-	push    %ecx           // save ecx
-	mov     %ebp, %ecx
+    xchg    (%esp),%ebp     /* store ebp, get ret.addr */
+    push    %ebp            /* push ret.addr */
+    lea     4(%esp),%ebp    /* setup frame ptr */
+    push    %ecx            /* save ecx */
+    mov     %ebp,%ecx
 P0:
-	sub     $4096,%ecx
-	test    %eax,(%ecx)
-	sub     $4096,%eax
-	cmp     $4096,%eax
-	jge     P0
+    sub     $4096,%ecx
+    test    %eax,(%ecx)
+    sub     $4096,%eax
+    cmp     $4096,%eax
+    jge     P0
+    sub     %eax,%ecx
+    test    %eax,(%ecx)
 
-	sub     %eax,%ecx
-	mov     %esp,%eax
-	test    %eax,(%ecx)
-	mov     %ecx,%esp
+    mov     %esp,%eax
+    mov     %ecx,%esp
+    mov     (%eax),%ecx     /* restore ecx */
+    jmp     *4(%eax)
 
-	mov     (%eax),%ecx     // restore ecx
-	mov     4(%eax),%eax
-	push    %eax
-	ret
+/* ---------------------------------------------- */
+#else
+/* ---------------------------------------------- */
 
+.globl __chkstk
+
+__chkstk:
+    xchg    (%rsp),%rbp     /* store ebp, get ret.addr */
+    push    %rbp            /* push ret.addr */
+    lea     8(%rsp),%rbp    /* setup frame ptr */
+    push    %rcx            /* save ecx */
+    mov     %rbp,%rcx
+    movslq  %eax,%rax
+P0:
+    sub     $4096,%rcx
+    test    %rax,(%rcx)
+    sub     $4096,%rax
+    cmp     $4096,%rax
+    jge     P0
+    sub     %rax,%rcx
+    test    %rax,(%rcx)
+
+    mov     %rsp,%rax
+    mov     %rcx,%rsp
+    mov     (%rax),%rcx     /* restore ecx */
+    jmp     *8(%rax)
+
+/* ---------------------------------------------- */
+#endif
+/* ---------------------------------------------- */

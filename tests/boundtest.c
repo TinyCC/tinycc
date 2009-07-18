@@ -169,6 +169,23 @@ int test13(void)
     return strlen(tab);
 }
 
+int test14(void)
+{
+    char *p = alloca(TAB_SIZE);
+    memset(p, 'a', TAB_SIZE);
+    p[TAB_SIZE-1] = 0;
+    return strlen(p);
+}
+
+/* error */
+int test15(void)
+{
+    char *p = alloca(TAB_SIZE-1);
+    memset(p, 'a', TAB_SIZE);
+    p[TAB_SIZE-1] = 0;
+    return strlen(p);
+}
+
 int (*table_test[])(void) = {
     test1,
     test1,
@@ -184,6 +201,8 @@ int (*table_test[])(void) = {
     test11,
     test12,
     test13,
+    test14,
+    test15,
 };
 
 int main(int argc, char **argv)

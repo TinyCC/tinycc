@@ -11,6 +11,9 @@ LIBS_P=
 
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
+ifneq ($(GCC_MAJOR),3)
+CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
+endif
 endif
 
 ifeq ($(ARCH),i386)
@@ -19,14 +22,7 @@ ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
 CFLAGS+=-march=i386 -falign-functions=0
-ifneq ($(GCC_MAJOR),3)
-CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
 endif
-endif
-endif
-
-ifeq ($(ARCH),x86-64)
-CFLAGS+=-Wno-pointer-sign
 endif
 
 ifndef CONFIG_WIN32
@@ -36,26 +32,29 @@ LIBS+=-ldl
 endif
 endif
 
-ifdef CONFIG_WIN32
-NATIVE_TARGET=-DTCC_TARGET_PE
-LIBTCC1=libtcc1.a
-else
 ifeq ($(ARCH),i386)
 NATIVE_TARGET=-DTCC_TARGET_I386
 LIBTCC1=libtcc1.a
 BCHECK_O=bcheck.o
-else
-ifeq ($(ARCH),arm)
-NATIVE_TARGET=-DTCC_TARGET_ARM
-NATIVE_TARGET+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
-NATIVE_TARGET+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
+ALLOCA_O=alloca86.o alloca86-bt.o
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_TARGET=-DTCC_TARGET_X86_64
 LIBTCC1=libtcc1.a
+BCHECK_O=
+ALLOCA_O=alloca86_64.o
 endif
 endif
+
+ifeq ($(ARCH),arm)
+NATIVE_TARGET=-DTCC_TARGET_ARM
+NATIVE_TARGET+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
+NATIVE_TARGET+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
+
+ifdef CONFIG_WIN32
+NATIVE_TARGET+=-DTCC_TARGET_PE
+BCHECK_O=
 endif
 
 ifneq ($(wildcard /lib/ld-uClibc.so.0),)
@@ -70,7 +69,6 @@ endif
 ifeq ($(TOP),.)
 
 PROGS=tcc$(EXESUF)
-
 I386_CROSS = i386-tcc$(EXESUF)
 WIN32_CROSS = i386-win32-tcc$(EXESUF)
 WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
@@ -171,26 +169,19 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 	$(CC) -o $@ $< $(CFLAGS)
 
 # TinyCC runtime libraries
-LIBTCC1_OBJS=libtcc1.o
+LIBTCC1_OBJS=libtcc1.o $(ALLOCA_O)
 LIBTCC1_CC=$(CC)
 VPATH+=lib
+
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 LIBTCC1_CC=./tcc.exe -Bwin32 -Iinclude $(NATIVE_TARGET)
 VPATH+=win32/lib
 endif
-ifeq ($(ARCH),i386)
-LIBTCC1_OBJS+=alloca86.o alloca86-bt.o
-else
-ifeq ($(ARCH),x86-64)
-LIBTCC1_OBJS+=alloca86_64.o
-endif
-endif
 
 %.o: %.c
 	$(LIBTCC1_CC) -o $@ -c $< -O2 -Wall
-
 %.o: %.S
 	$(LIBTCC1_CC) -o $@ -c $<
 
