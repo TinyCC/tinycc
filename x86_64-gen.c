@@ -191,6 +191,7 @@ static int oad(int c, int s)
     return s;
 }
 
+#if 0
 /* output constant with relocation if 'r & VT_SYM' is true */
 static void gen_addr64(int r, Sym *sym, int64_t c)
 {
@@ -198,6 +199,7 @@ static void gen_addr64(int r, Sym *sym, int64_t c)
         greloc(cur_text_section, sym, ind, R_X86_64_64);
     gen_le64(c);
 }
+#endif
 
 /* output constant with relocation if 'r & VT_SYM' is true */
 static void gen_addrpc32(int r, Sym *sym, int c)
@@ -354,30 +356,29 @@ void load(int r, SValue *sv)
         gen_modrm(r, fr, sv->sym, fc);
     } else {
         if (v == VT_CONST) {
-            if ((ft & VT_BTYPE) == VT_LLONG) {
-                assert(!(fr & VT_SYM));
+            if (fr & VT_SYM) {
+#ifdef TCC_TARGET_PE
+                o(0x8d48);
+                o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
+                gen_addrpc32(fr, sv->sym, fc);
+#else
+                if (sv->sym->type.t & VT_STATIC) {
+                    o(0x8d48);
+                    o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
+                    gen_addrpc32(fr, sv->sym, fc);
+                } else {
+                    o(0x8b48);
+                    o(0x05 + REG_VALUE(r) * 8); /* mov xx(%rip), r */
+                    gen_gotpcrel(r, sv->sym, fc);
+                }
+#endif
+            } else if (is64_type(ft)) {
                 o(0x48);
                 o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
-                gen_addr64(fr, sv->sym, sv->c.ull);
+                gen_le64(sv->c.ull);
             } else {
-                if (fr & VT_SYM) {
-#ifndef TCC_TARGET_PE
-                    if (sv->sym->type.t & VT_STATIC) {
-#endif
-                        o(0x8d48);
-                        o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
-                        gen_addrpc32(fr, sv->sym, fc);
-#ifndef TCC_TARGET_PE
-                    } else {
-                        o(0x8b48);
-                        o(0x05 + REG_VALUE(r) * 8); /* mov xx(%rip), r */
-                        gen_gotpcrel(r, sv->sym, fc);
-                    }
-#endif
-                } else {
-                    o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
-                    gen_le32(fc);
-                }
+                o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
+                gen_le32(fc);
             }
         } else if (v == VT_LOCAL) {
             o(0x48 | REX_BASE(r));
