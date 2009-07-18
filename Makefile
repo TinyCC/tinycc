@@ -73,6 +73,7 @@ PROGS=tcc$(EXESUF)
 
 I386_CROSS = i386-tcc$(EXESUF)
 WIN32_CROSS = i386-win32-tcc$(EXESUF)
+WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
 X64_CROSS = x86_64-tcc$(EXESUF)
 ARM_CROSS = arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) \
     arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
@@ -82,6 +83,7 @@ CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c \
     tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h tccpe.c
+WIN64_FILES = $(CORE_FILES) x86_64-gen.c tccpe.c
 X86_64_FILES = $(CORE_FILES) x86_64-gen.c
 ARM_FILES = $(CORE_FILES) arm-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
@@ -89,19 +91,19 @@ C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
 ifdef CONFIG_WIN32
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN32_FILES)
-PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
-PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(ARM_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(ARM_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
-PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
 endif
 endif
 endif
@@ -123,6 +125,9 @@ i386-tcc$(EXESUF): $(I386_FILES)
 
 i386-win32-tcc$(EXESUF): $(WIN32_FILES)
 	$(CC) -o $@ $< -DTCC_TARGET_PE $(CFLAGS) $(LIBS)
+
+x86_64-win32-tcc$(EXESUF): $(WIN32_FILES)
+	$(CC) -o $@ $< -DTCC_TARGET_PE -DTCC_TARGET_X86_64 $(CFLAGS) $(LIBS)
 
 x86_64-tcc$(EXESUF): $(X86_64_FILES)
 	$(CC) -o $@ $< -DTCC_TARGET_X86_64 $(CFLAGS) $(LIBS)
