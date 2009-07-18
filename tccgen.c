@@ -2527,7 +2527,9 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_LONG:
             next();
             if ((t & VT_BTYPE) == VT_DOUBLE) {
+#ifndef TCC_TARGET_PE
                 t = (t & ~VT_BTYPE) | VT_LDOUBLE;
+#endif
             } else if ((t & VT_BTYPE) == VT_LONG) {
                 t = (t & ~VT_BTYPE) | VT_LLONG;
             } else {
@@ -2544,7 +2546,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_DOUBLE:
             next();
             if ((t & VT_BTYPE) == VT_LONG) {
+#ifdef TCC_TARGET_PE
+                t = (t & ~VT_BTYPE) | VT_DOUBLE;
+#else
                 t = (t & ~VT_BTYPE) | VT_LDOUBLE;
+#endif
             } else {
                 u = VT_DOUBLE;
                 goto basic_type1;

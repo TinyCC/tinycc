@@ -1743,9 +1743,14 @@ void parse_number(const char *p)
                 tokc.f = (float)d;
             } else if (t == 'L') {
                 ch = *p++;
+#ifdef TCC_TARGET_PE
+                tok = TOK_CDOUBLE;
+                tokc.d = d;
+#else
                 tok = TOK_CLDOUBLE;
                 /* XXX: not large enough */
                 tokc.ld = (long double)d;
+#endif
             } else {
                 tok = TOK_CDOUBLE;
                 tokc.d = d;
@@ -1794,8 +1799,13 @@ void parse_number(const char *p)
                 tokc.f = strtof(token_buf, NULL);
             } else if (t == 'L') {
                 ch = *p++;
+#ifdef TCC_TARGET_PE
+                tok = TOK_CDOUBLE;
+                tokc.d = strtod(token_buf, NULL);
+#else
                 tok = TOK_CLDOUBLE;
                 tokc.ld = strtold(token_buf, NULL);
+#endif
             } else {
                 tok = TOK_CDOUBLE;
                 tokc.d = strtod(token_buf, NULL);
