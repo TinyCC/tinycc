@@ -1689,12 +1689,14 @@ int tcc_relocate(TCCState *s1, void *ptr)
     if (s1->nb_errors)
         return -1;
 
+#ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     s1->runtime_plt_and_got_offset = 0;
     s1->runtime_plt_and_got = (char *)(mem + offset);
     /* double the size of the buffer for got and plt entries
        XXX: calculate exact size for them? */
     offset *= 2;
+#endif
 #endif
 
     if (0 == mem)
@@ -1722,9 +1724,11 @@ int tcc_relocate(TCCState *s1, void *ptr)
         if (s->sh_flags & SHF_EXECINSTR)
             set_pages_executable(ptr, length);
     }
+#ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     set_pages_executable(s1->runtime_plt_and_got,
                          s1->runtime_plt_and_got_offset);
+#endif
 #endif
     return 0;
 }
@@ -1859,6 +1863,9 @@ TCCState *tcc_new(void)
 #endif
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "_WIN32", NULL);
+#ifdef TCC_TARGET_X86_64
+    tcc_define_symbol(s, "_WIN64", NULL);
+#endif
 #else
     tcc_define_symbol(s, "__unix__", NULL);
     tcc_define_symbol(s, "__unix", NULL);

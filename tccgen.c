@@ -2652,7 +2652,7 @@ the_end:
 
     /* long is never used as type */
     if ((t & VT_BTYPE) == VT_LONG)
-#ifndef TCC_TARGET_X86_64
+#if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
         t = (t & ~VT_BTYPE) | VT_INT;
 #else
         t = (t & ~VT_BTYPE) | VT_LLONG;

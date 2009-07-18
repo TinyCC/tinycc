@@ -491,10 +491,12 @@ struct TCCState {
     struct InlineFunc **inline_fns;
     int nb_inline_fns;
 
+#ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     /* write PLT and GOT here */
     char *runtime_plt_and_got;
     unsigned int runtime_plt_and_got_offset;
+#endif
 #endif
 };
 

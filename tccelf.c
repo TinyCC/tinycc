@@ -479,6 +479,7 @@ static void relocate_syms(TCCState *s1, int do_resolve)
     }
 }
 
+#ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
 #define JMP_TABLE_ENTRY_SIZE 14
 static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
@@ -501,6 +502,7 @@ static unsigned long add_got_table(TCCState *s1, unsigned long val)
     *p = val;
     return (unsigned long)p;
 }
+#endif
 #endif
 
 /* relocate a given section (CPU dependent) */
@@ -679,6 +681,7 @@ static void relocate_section(TCCState *s1, Section *s)
             *(int *)ptr += val;
             break;
         case R_X86_64_PC32: {
+            long long diff;
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
                 esym_index = s1->symtab_to_dynsym[sym_index];
@@ -690,13 +693,15 @@ static void relocate_section(TCCState *s1, Section *s)
                     break;
                 }
             }
-            long diff = val - addr;
+            diff = (long long)val - addr;
             if (diff <= -2147483647 || diff > 2147483647) {
+#ifndef TCC_TARGET_PE
                 /* XXX: naive support for over 32bit jump */
                 if (s1->output_type == TCC_OUTPUT_MEMORY) {
                     val = add_jmp_table(s1, val);
                     diff = val - addr;
                 }
+#endif
                 if (diff <= -2147483647 || diff > 2147483647) {
                     error("internal error: relocation failed");
                 }
@@ -712,11 +717,13 @@ static void relocate_section(TCCState *s1, Section *s)
             *(int *)ptr = val;
             break;
         case R_X86_64_GOTPCREL:
+#ifndef TCC_TARGET_PE
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
                 val = add_got_table(s1, val - rel->r_addend) + rel->r_addend;
                 *(int *)ptr += val - addr;
                 break;
             }
+#endif
             *(int *)ptr += (s1->got->sh_addr - addr +
                             s1->got_offsets[sym_index] - 4);
             break;
