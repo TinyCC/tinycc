@@ -163,6 +163,7 @@ int TotalBytesPushedOnStack;
 
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32   R_C60_32
+#define R_DATA_PTR  R_C60_32
 #define R_JMP_SLOT  R_C60_JMP_SLOT
 #define R_COPY      R_C60_COPY
 

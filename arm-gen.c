@@ -163,6 +163,7 @@ static CType float_type, double_type, func_float_type, func_double_type;
 
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32   R_ARM_ABS32
+#define R_DATA_PTR  R_ARM_ABS32
 #define R_JMP_SLOT  R_ARM_JUMP_SLOT
 #define R_COPY      R_ARM_COPY
 

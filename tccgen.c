@@ -4346,7 +4346,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
             break;
         default:
             if (vtop->r & VT_SYM) {
-                greloc(sec, vtop->sym, c, R_DATA_32);
+                greloc(sec, vtop->sym, c, R_DATA_PTR);
             }
             *(int *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
             break;
@@ -4796,7 +4796,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (tcc_state->do_bounds_check) {
             unsigned long *bounds_ptr;
 
-            greloc(bounds_section, sym, bounds_section->data_offset, R_DATA_32);
+            greloc(bounds_section, sym, bounds_section->data_offset, R_DATA_PTR);
             /* then add global bound info */
             bounds_ptr = section_ptr_add(bounds_section, 2 * sizeof(long));
             bounds_ptr[0] = 0; /* relocated */

@@ -91,7 +91,8 @@ const int reg_classes[NB_REGS] = {
 #define EM_TCC_TARGET EM_X86_64
 
 /* relocation type for 32 bit data relocation */
-#define R_DATA_32   R_X86_64_64
+#define R_DATA_32   R_X86_64_32
+#define R_DATA_PTR  R_X86_64_64
 #define R_JMP_SLOT  R_X86_64_JUMP_SLOT
 #define R_COPY      R_X86_64_COPY
 
