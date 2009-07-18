@@ -592,6 +592,8 @@ void array_test(int a[4])
         printf(" %3d", ((int *)tab2)[i]);
     }
     printf("\n");
+    printf("sizeof(size_t)=%d\n", sizeof(size_t));
+    printf("sizeof(ptrdiff_t)=%d\n", sizeof(ptrdiff_t));
 }
 
 void expr_test()
