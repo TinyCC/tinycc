@@ -417,13 +417,6 @@ ST_FN DWORD umax(DWORD a, DWORD b)
     return a < b ? b : a;
 }
 
-ST_FN void pe_fpad(FILE *fp, DWORD new_pos)
-{
-    DWORD pos = ftell(fp);
-    while (++pos <= new_pos)
-        fputc(0, fp);
-}
-
 ST_FN DWORD pe_file_align(DWORD n)
 {
     return (n + (0x200 - 1)) & ~(0x200 - 1);
@@ -445,6 +438,28 @@ ST_FN void pe_set_datadir(struct pe_header *hdr, int dir, DWORD addr, DWORD size
 {
     hdr->opthdr.DataDirectory[dir].VirtualAddress = addr;
     hdr->opthdr.DataDirectory[dir].Size = size;
+}
+
+ST_FN int pe_fwrite(void *data, unsigned len, FILE *fp, DWORD *psum)
+{
+    if (psum) {
+        DWORD sum = *psum;
+        WORD *p = data;
+        int i;
+        for (i = len; i > 0; i -= 2) {
+            sum += (i >= 2) ? *p++ : *(BYTE*)p;
+            sum = (sum + (sum >> 16)) & 0xFFFF;
+        }
+        *psum = sum;
+    }
+    return len == fwrite(data, 1, len, fp) ? 0 : -1;
+}
+
+ST_FN void pe_fpad(FILE *fp, DWORD new_pos)
+{
+    DWORD pos = ftell(fp);
+    while (++pos <= new_pos)
+        fputc(0, fp);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -549,15 +564,18 @@ ST_FN int pe_write(struct pe_info *pe)
      {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}}
     }};
 
+    struct pe_header pe_header = pe_template;
+
     int i;
     FILE *op;
-    DWORD file_offset, r;
-    struct pe_header pe_header = pe_template;
+    DWORD file_offset, sum;
+    struct section_info *si;
+    IMAGE_SECTION_HEADER *psh;
 
     op = fopen(pe->filename, "wb");
     if (NULL == op) {
         error_noabort("could not write '%s': %s", pe->filename, strerror(errno));
-        return 1;
+        return -1;
     }
 
     pe->sizeofheaders = pe_file_align(
@@ -566,18 +584,19 @@ ST_FN int pe_write(struct pe_info *pe)
         );
 
     file_offset = pe->sizeofheaders;
-    pe_fpad(op, file_offset);
 
     if (2 == pe->s1->verbose)
         printf("-------------------------------"
                "\n  virt   file   size  section" "\n");
-
     for (i = 0; i < pe->sec_count; ++i) {
-        struct section_info *si = pe->sec_info + i;
-        const char *sh_name = si->name;
-        unsigned long addr = si->sh_addr - pe->imagebase;
-        unsigned long size = si->sh_size;
-        IMAGE_SECTION_HEADER *psh = &si->ish;
+        unsigned long addr, size;
+        const char *sh_name;
+
+        si = pe->sec_info + i;
+        sh_name = si->name;
+        addr = si->sh_addr - pe->imagebase;
+        size = si->sh_size;
+        psh = &si->ish;
 
         if (2 == pe->s1->verbose)
             printf("%6lx %6lx %6lx  %s\n",
@@ -632,15 +651,13 @@ ST_FN int pe_write(struct pe_info *pe)
             umax(pe_virtual_align(size + addr), pe_header.opthdr.SizeOfImage); 
 
         if (si->data_size) {
-            psh->PointerToRawData = r = file_offset;
-            fwrite(si->data, 1, si->data_size, op);
+            psh->PointerToRawData = file_offset;
             file_offset = pe_file_align(file_offset + si->data_size);
-            psh->SizeOfRawData = file_offset - r;
-            pe_fpad(op, file_offset);
+            psh->SizeOfRawData = file_offset - psh->PointerToRawData;
         }
     }
 
-    // pe_header.filehdr.TimeDateStamp = time(NULL);
+    //pe_header.filehdr.TimeDateStamp = time(NULL);
     pe_header.filehdr.NumberOfSections = pe->sec_count;
     pe_header.opthdr.SizeOfHeaders = pe->sizeofheaders;
     pe_header.opthdr.ImageBase = pe->imagebase;
@@ -649,10 +666,24 @@ ST_FN int pe_write(struct pe_info *pe)
     else if (PE_GUI != pe->type)
         pe_header.opthdr.Subsystem = 3;
 
-    fseek(op, SEEK_SET, 0);
-    fwrite(&pe_header,  1, sizeof pe_header, op);
+    sum = 0;
+    pe_fwrite(&pe_header, sizeof pe_header, op, &sum);
     for (i = 0; i < pe->sec_count; ++i)
-        fwrite(&pe->sec_info[i].ish, 1, sizeof(IMAGE_SECTION_HEADER), op);
+        pe_fwrite(&pe->sec_info[i].ish, sizeof(IMAGE_SECTION_HEADER), op, &sum);
+    pe_fpad(op, pe->sizeofheaders);
+    for (i = 0; i < pe->sec_count; ++i) {
+        si = pe->sec_info + i;
+        psh = &si->ish;
+        if (si->data_size) {
+            pe_fwrite(si->data, si->data_size, op, &sum);
+            file_offset = psh->PointerToRawData + psh->SizeOfRawData;
+            pe_fpad(op, file_offset);
+        }
+    }
+
+    pe_header.opthdr.CheckSum = sum + file_offset;
+    fseek(op, offsetof(struct pe_header, opthdr.CheckSum), SEEK_SET);
+    pe_fwrite(&pe_header.opthdr.CheckSum, sizeof pe_header.opthdr.CheckSum, op, NULL);
     fclose (op);
 
     if (2 == pe->s1->verbose)
@@ -1201,7 +1232,7 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
 
         not_found:
             error_noabort("undefined symbol '%s'", name);
-            ret = 1;
+            ret = -1;
 
         } else if (pe->s1->rdynamic
                    && ELFW_ST_BIND(sym->st_info) != STB_LOCAL) {
@@ -1628,7 +1659,7 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
             }
         }
         if (s1->nb_errors)
-            ret = 1;
+            ret = -1;
         else
             ret = pe_write(&pe);
         tcc_free(pe.sec_info);
