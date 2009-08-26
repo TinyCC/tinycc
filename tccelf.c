@@ -1345,7 +1345,7 @@ int elf_output_file(TCCState *s1, const char *filename)
     file_type = s1->output_type;
     s1->nb_errors = 0;
 
-    if (file_type != TCC_OUTPUT_OBJ) {
+    if ((file_type != TCC_OUTPUT_OBJ) && (s1->output_type != TCC_OUTPUT_FORMAT_BINARY)) {
         tcc_add_runtime(s1);
     }
 
@@ -1359,14 +1359,15 @@ int elf_output_file(TCCState *s1, const char *filename)
     if (file_type != TCC_OUTPUT_OBJ) {
         relocate_common_syms();
 
-        tcc_add_linker_symbols(s1);
+        if (s1->output_type != TCC_OUTPUT_FORMAT_BINARY)
+            tcc_add_linker_symbols(s1);
 
-        if (!s1->static_link) {
+        if ((!s1->static_link) && (s1->output_type != TCC_OUTPUT_FORMAT_BINARY)) {
             const char *name;
             int sym_index, index;
             ElfW(Sym) *esym, *sym_end;
             
-            if (file_type == TCC_OUTPUT_EXE) {
+            if ((file_type == TCC_OUTPUT_EXE) && (s1->output_type != TCC_OUTPUT_FORMAT_BINARY)) {
                 char *ptr;
                 /* add interpreter section only if executable */
                 interp = new_section(s1, ".interp", SHT_PROGBITS, SHF_ALLOC);
