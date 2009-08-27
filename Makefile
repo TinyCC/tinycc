@@ -72,6 +72,7 @@ PROGS=tcc$(EXESUF)
 I386_CROSS = i386-tcc$(EXESUF)
 WIN32_CROSS = i386-win32-tcc$(EXESUF)
 WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
+WINCE_CROSS = arm-win32-tcc$(EXESUF)
 X64_CROSS = x86_64-tcc$(EXESUF)
 ARM_CROSS = arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) \
     arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
@@ -82,6 +83,7 @@ CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c \
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
 WIN64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-asm.c x86_64-asm.h x86_64-tok.h tccpe.c
+WINCE_FILES = $(CORE_FILES) arm-gen.c tccpe.c
 X86_64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-asm.c x86_64-asm.h x86_64-tok.h
 ARM_FILES = $(CORE_FILES) arm-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
@@ -132,6 +134,9 @@ x86_64-tcc$(EXESUF): $(X86_64_FILES)
 
 c67-tcc$(EXESUF): $(C67_FILES)
 	$(CC) -o $@ $< -DTCC_TARGET_C67 $(CFLAGS) $(LIBS)
+
+arm-win32-tcc$(EXESUF): $(WIN32_FILES)
+	$(CC) -o $@ $< -DTCC_TARGET_PE -DTCC_TARGET_ARM $(CFLAGS) $(LIBS)
 
 arm-tcc-fpa$(EXESUF): $(ARM_FILES)
 	$(CC) -o $@ $< -DTCC_TARGET_ARM $(CFLAGS) $(LIBS)

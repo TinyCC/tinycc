@@ -412,6 +412,9 @@ int parse_args(TCCState *s, int argc, char **argv)
                             s->pe_subsystem = 12;
                         else if (!strcmp(p, "efirom"))
                             s->pe_subsystem = 13;
+#elif defined(TCC_TARGET_ARM)
+                        if (!strcmp(p, "wince"))
+                            s->pe_subsystem = 9;
 #endif
                         else {
                             error("invalid subsystem '%s'", p);

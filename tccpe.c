@@ -503,23 +503,29 @@ ST_FN int pe_write(struct pe_info *pe)
     0x00004550, /* DWORD nt_sig = IMAGE_NT_SIGNATURE */
     {
     /* IMAGE_FILE_HEADER filehdr */
-#ifdef TCC_TARGET_X86_64
-    0x8664, /*WORD    Machine; */
-#else
-    0x014C, /*WORD    Machine; */
+#if defined(TCC_TARGET_I386)
+    0x014C,   /*WORD    Machine; */
+#elif defined(TCC_TARGET_X86_64)
+    0x8664,   /*WORD    Machine; */
+#elif defined(TCC_TARGET_ARM)
+    0x01C0,   /*WORD    Machine; */
 #endif
     0x0003, /*WORD    NumberOfSections; */
     0x00000000, /*DWORD   TimeDateStamp; */
     0x00000000, /*DWORD   PointerToSymbolTable; */
     0x00000000, /*DWORD   NumberOfSymbols; */
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_X86_64)
     0x00F0, /*WORD    SizeOfOptionalHeader; */
     0x022F  /*WORD    Characteristics; */
 #define CHARACTERISTICS_DLL 0x222E
-#else
+#elif defined(TCC_TARGET_I386)
     0x00E0, /*WORD    SizeOfOptionalHeader; */
     0x030F  /*WORD    Characteristics; */
 #define CHARACTERISTICS_DLL 0x230E
+#elif defined(TCC_TARGET_ARM)
+    0x00E0, /*WORD    SizeOfOptionalHeader; */
+    0x010F, /*WORD    Characteristics; */
+#define CHARACTERISTICS_DLL 0x230F
 #endif
 },{
     /* IMAGE_OPTIONAL_HEADER opthdr */
@@ -540,7 +546,11 @@ ST_FN int pe_write(struct pe_info *pe)
     0x00000000, /*DWORD   BaseOfData; */
 #endif
     /* NT additional fields. */
-    0x00400000, /*DWORD   ImageBase; */
+#if defined(TCC_TARGET_ARM)
+    0x00100000,	    /*DWORD   ImageBase; */
+#else
+    0x00400000,	    /*DWORD   ImageBase; */
+#endif
     0x00001000, /*DWORD   SectionAlignment; */
     0x00000200, /*DWORD   FileAlignment; */
     0x0004, /*WORD    MajorOperatingSystemVersion; */
@@ -699,7 +709,7 @@ ST_FN int pe_write(struct pe_info *pe)
 
 /*----------------------------------------------------------------------------*/
 
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_X86_64)
 #define ELFW_R_(type) ELF64_R_##type
 #define ElfW_Rel ElfW(Rela)
 
@@ -710,13 +720,24 @@ ST_FN int pe_write(struct pe_info *pe)
 #define ELFW_ST_BIND ELF64_ST_BIND
 #define ELFW_ST_TYPE ELF64_ST_TYPE
 #define ELFW_ST_INFO ELF64_ST_INFO
-#else
+#elif defined(TCC_TARGET_I386)
 #define ELFW_R_(type) ELF32_R_##type
 #define ElfW_Rel ElfW(Rel)
 
 #define REL_TYPE_DIRECT R_386_32
 #define R_XXX_THUNKFIX R_386_32
 #define R_XXX_RELATIVE R_386_RELATIVE
+
+#define ELFW_ST_BIND ELF32_ST_BIND
+#define ELFW_ST_TYPE ELF32_ST_TYPE
+#define ELFW_ST_INFO ELF32_ST_INFO
+#elif defined(TCC_TARGET_ARM)
+#define ELFW_R_(type) ELF32_R_##type
+#define ElfW_Rel ElfW(Rel)
+
+#define REL_TYPE_DIRECT R_ARM_ABS32
+#define R_XXX_THUNKFIX R_ARM_ABS32
+#define R_XXX_RELATIVE R_ARM_RELATIVE
 
 #define ELFW_ST_BIND ELF32_ST_BIND
 #define ELFW_ST_TYPE ELF32_ST_TYPE
@@ -1648,17 +1669,25 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
     if (filename) {
         if (PE_DLL == pe.type) {
             pe.reloc = new_section(pe.s1, ".reloc", SHT_PROGBITS, 0);
+            /* XXX: check if is correct for arm-pe target */
             pe.imagebase = 0x10000000;
         } else {
+#if defined(TCC_TARGET_ARM)
+            pe.imagebase = 0x00010000;
+#else
             pe.imagebase = 0x00400000;
+#endif
         }
 
         /* if no subsystem specified, we use "console" subsystem by default */
         if (s1->pe_subsystem != 0)
             pe.subsystem = s1->pe_subsystem;
         else
+#if defined(TCC_TARGET_ARM)
             pe.subsystem = 3;
-
+#else
+            pe.subsystem = 9;
+#endif
         /* set default file/section alignment */
 	if (pe.subsystem == 1) {
 	    pe.section_align = 0x20;
