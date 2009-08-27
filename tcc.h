@@ -118,8 +118,7 @@
 #endif
 
 /* define it to include assembler support */
-#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67) && \
-    !defined(TCC_TARGET_X86_64)
+#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_ASM
 #endif
 
@@ -674,6 +673,23 @@ struct TCCState {
  DEF(TOK_ASM_ ## x ## w, #x "w") \
  DEF(TOK_ASM_ ## x ## l, #x "l") \
  DEF(TOK_ASM_ ## x, #x)
+
+#ifdef TCC_TARGET_X86_64
+
+#define DEF_BWLQ(x) \
+ DEF(TOK_ASM_ ## x ## b, #x "b") \
+ DEF(TOK_ASM_ ## x ## w, #x "w") \
+ DEF(TOK_ASM_ ## x ## l, #x "l") \
+ DEF(TOK_ASM_ ## x ## q, #x "q") \
+ DEF(TOK_ASM_ ## x, #x)
+
+#define DEF_WLQ(x) \
+ DEF(TOK_ASM_ ## x ## w, #x "w") \
+ DEF(TOK_ASM_ ## x ## l, #x "l") \
+ DEF(TOK_ASM_ ## x ## q, #x "q") \
+ DEF(TOK_ASM_ ## x, #x)
+
+#endif
 
 #define DEF_FP1(x) \
  DEF(TOK_ASM_ ## f ## x ## s, "f" #x "s") \

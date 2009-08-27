@@ -585,6 +585,12 @@ static void asm_parse_directive(TCCState *s1)
         }
         break;
 #endif
+#ifdef TCC_TARGET_X86_64
+    /* added for compatibility with GAS */
+    case TOK_ASM_code64:
+        next();
+        break;
+#endif
     default:
         error("unknown assembler directive '.%s'", get_tok_str(tok, NULL));
         break;

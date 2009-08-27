@@ -324,9 +324,15 @@ static inline int toup(int c)
 #include "tccgen.c"
 
 #ifdef CONFIG_TCC_ASM
+
 #ifdef TCC_TARGET_I386
 #include "i386-asm.c"
 #endif
+
+#ifdef TCC_TARGET_X86_64
+#include "x86_64-asm.c"
+#endif
+
 #include "tccasm.c"
 #else
 static void asm_instr(void)
