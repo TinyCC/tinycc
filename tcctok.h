@@ -235,6 +235,7 @@
 /* Tiny Assembler */
 
  DEF_ASM(byte)
+ DEF_ASM(word)
  DEF_ASM(align)
  DEF_ASM(skip)
  DEF_ASM(space)
@@ -250,6 +251,10 @@
  DEF_ASM(fill)
  DEF_ASM(org)
  DEF_ASM(quad)
+#if defined(TCC_TARGET_I386)
+ DEF_ASM(code16)
+ DEF_ASM(code32)
+#endif
 
 #ifdef TCC_TARGET_I386
 

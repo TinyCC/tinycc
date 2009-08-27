@@ -591,6 +591,18 @@ static void relocate_section(TCCState *s1, Section *s)
             /* we load the got offset */
             *(int *)ptr += s1->got_offsets[sym_index];
             break;
+        case R_386_16:
+            if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY) {
+            output_file:
+		error("can only produce 16-bit binary files");
+            }
+            *(short *)ptr += val;
+            break;
+        case R_386_PC16:
+            if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY)
+		goto output_file;
+            *(short *)ptr += val - addr;
+            break;
 #elif defined(TCC_TARGET_ARM)
         case R_ARM_PC24:
         case R_ARM_CALL:

@@ -1938,6 +1938,9 @@ TCCState *tcc_new(void)
     /* XXX: currently the PE linker is not ready to support that */
     s->leading_underscore = 1;
 #endif
+#ifdef TCC_TARGET_I386
+    s->seg_size = 32;
+#endif
     return s;
 }
 

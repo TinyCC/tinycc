@@ -512,6 +512,10 @@ struct TCCState {
     struct InlineFunc **inline_fns;
     int nb_inline_fns;
 
+#ifdef TCC_TARGET_I386
+    int seg_size;
+#endif
+
 #ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     /* write PLT and GOT here */
