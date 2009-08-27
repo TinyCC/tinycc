@@ -1632,10 +1632,10 @@ int elf_output_file(TCCState *s1, const char *filename)
             addr = s1->text_addr;
             /* we ensure that (addr % ELF_PAGE_SIZE) == file_offset %
                ELF_PAGE_SIZE */
-            a_offset = addr & (ELF_PAGE_SIZE - 1);
-            p_offset = file_offset & (ELF_PAGE_SIZE - 1);
+            a_offset = addr & (s1->section_align - 1);
+            p_offset = file_offset & (s1->section_align - 1);
             if (a_offset < p_offset) 
-                a_offset += ELF_PAGE_SIZE;
+                a_offset += s1->section_align;
             file_offset += (a_offset - p_offset);
         } else {
             if (file_type == TCC_OUTPUT_DLL)
@@ -1643,7 +1643,7 @@ int elf_output_file(TCCState *s1, const char *filename)
             else
                 addr = ELF_START_ADDR;
             /* compute address after headers */
-            addr += (file_offset & (ELF_PAGE_SIZE - 1));
+            addr += (file_offset & (s1->section_align - 1));
         }
         
         /* dynamic relocation table information, for .dynamic section */
@@ -1661,7 +1661,7 @@ int elf_output_file(TCCState *s1, const char *filename)
                 ph->p_flags = PF_R | PF_X;
             else
                 ph->p_flags = PF_R | PF_W;
-            ph->p_align = ELF_PAGE_SIZE;
+            ph->p_align = s1->section_align;
             
             /* we do the following ordering: interp, symbol tables,
                relocations, progbits, nobits */
@@ -1731,12 +1731,12 @@ int elf_output_file(TCCState *s1, const char *filename)
                 if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
                     /* if in the middle of a page, we duplicate the page in
                        memory so that one copy is RX and the other is RW */
-                    if ((addr & (ELF_PAGE_SIZE - 1)) != 0)
-                        addr += ELF_PAGE_SIZE;
+                    if ((addr & (s1->section_align - 1)) != 0)
+                        addr += s1->section_align;
                 } else {
-                    addr = (addr + ELF_PAGE_SIZE - 1) & ~(ELF_PAGE_SIZE - 1);
-                    file_offset = (file_offset + ELF_PAGE_SIZE - 1) & 
-                        ~(ELF_PAGE_SIZE - 1);
+                    addr = (addr + s1->section_align - 1) & ~(s1->section_align - 1);
+                    file_offset = (file_offset + s1->section_align - 1) &
+                        ~(s1->section_align - 1);
                 }
             }
         }

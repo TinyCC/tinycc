@@ -349,6 +349,9 @@ struct pe_info {
     DWORD iat_size;
     DWORD exp_offs;
     DWORD exp_size;
+    int subsystem;
+    DWORD section_align;
+    DWORD file_align;
     struct section_info *sec_info;
     int sec_count;
     struct pe_import_info **imp_info;
@@ -417,14 +420,14 @@ ST_FN DWORD umax(DWORD a, DWORD b)
     return a < b ? b : a;
 }
 
-ST_FN DWORD pe_file_align(DWORD n)
+ST_FN DWORD pe_file_align(struct pe_info *pe, DWORD n)
 {
-    return (n + (0x200 - 1)) & ~(0x200 - 1);
+    return (n + (pe->file_align - 1)) & ~(pe->file_align - 1);
 }
 
-ST_FN DWORD pe_virtual_align(DWORD n)
+ST_FN DWORD pe_virtual_align(struct pe_info *pe, DWORD n)
 {
-    return (n + (0x1000 - 1)) & ~(0x1000 - 1);
+    return (n + (pe->section_align - 1)) & ~(pe->section_align - 1);
 }
 
 ST_FN void pe_align_section(Section *s, int a)
@@ -578,7 +581,7 @@ ST_FN int pe_write(struct pe_info *pe)
         return -1;
     }
 
-    pe->sizeofheaders = pe_file_align(
+    pe->sizeofheaders = pe_file_align(pe,
         sizeof (struct pe_header)
         + pe->sec_count * sizeof (IMAGE_SECTION_HEADER)
         );
@@ -648,11 +651,11 @@ ST_FN int pe_write(struct pe_info *pe)
         psh->VirtualAddress = addr;
         psh->Misc.VirtualSize = size;
         pe_header.opthdr.SizeOfImage =
-            umax(pe_virtual_align(size + addr), pe_header.opthdr.SizeOfImage); 
+            umax(pe_virtual_align(pe, size + addr), pe_header.opthdr.SizeOfImage);
 
         if (si->data_size) {
             psh->PointerToRawData = file_offset;
-            file_offset = pe_file_align(file_offset + si->data_size);
+            file_offset = pe_file_align(pe, file_offset + si->data_size);
             psh->SizeOfRawData = file_offset - psh->PointerToRawData;
         }
     }
@@ -1085,7 +1088,7 @@ ST_FN int pe_assign_addresses (struct pe_info *pe)
         strcpy(si->name, s->name);
         si->cls = c;
         si->ord = k;
-        si->sh_addr = s->sh_addr = addr = pe_virtual_align(addr);
+        si->sh_addr = s->sh_addr = addr = pe_virtual_align(pe, addr);
         si->sh_flags = s->sh_flags;
 
         if (c == sec_data && NULL == pe->thunk)
@@ -1649,6 +1652,33 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
         } else {
             pe.imagebase = 0x00400000;
         }
+
+        /* if no subsystem specified, we use "console" subsystem by default */
+        if (s1->pe_subsystem != 0)
+            pe.subsystem = s1->pe_subsystem;
+        else
+            pe.subsystem = 3;
+
+        /* set default file/section alignment */
+	if (pe.subsystem == 1) {
+	    pe.section_align = 0x20;
+	    pe.file_align = 0x20;
+	} else {
+	    pe.section_align = 0x1000;
+	    pe.file_align = 0x200;
+	}
+
+        if (s1->section_align != 0)
+            pe.section_align = s1->section_align;
+        if (s1->pe_file_align != 0)
+            pe.file_align = s1->pe_file_align;
+
+        if ((pe.subsystem >= 10) && (pe.subsystem <= 12))
+            pe.imagebase = 0;
+
+        if (s1->has_text_addr)
+            pe.imagebase = s1->text_addr;
+
         pe_assign_addresses(&pe);
         relocate_syms(s1, 0);
         for (i = 1; i < s1->nb_sections; ++i) {

@@ -515,6 +515,15 @@ struct TCCState {
     int seg_size;
 #endif
 
+    /* section alignment */
+    unsigned long section_align;
+
+#ifdef TCC_TARGET_PE
+    /* PE info */
+    int pe_subsystem;
+    unsigned long pe_file_align;
+#endif
+
 #ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     /* write PLT and GOT here */

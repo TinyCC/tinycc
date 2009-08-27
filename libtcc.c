@@ -1944,6 +1944,10 @@ TCCState *tcc_new(void)
     /* XXX: currently the PE linker is not ready to support that */
     s->leading_underscore = 1;
 #endif
+
+    if (s->section_align == 0)
+        s->section_align = ELF_PAGE_SIZE;
+
 #ifdef TCC_TARGET_I386
     s->seg_size = 32;
 #endif
