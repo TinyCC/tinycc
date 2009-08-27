@@ -122,7 +122,7 @@
 
 /* pragma */
      DEF(TOK_pack, "pack")
-#if !defined(TCC_TARGET_I386)
+#if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_X86_64)
      /* already defined for assembler */
      DEF(TOK_ASM_push, "push")
      DEF(TOK_ASM_pop, "pop")
