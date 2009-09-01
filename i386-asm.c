@@ -653,7 +653,7 @@ static void asm_opcode(TCCState *s1, int opcode)
         if (ops[i].type & OP_REG32) {
             if (s1->seg_size == 16)
                 o32 = 1;
-        } else if (!ops[i].type & OP_REG32) {
+        } else if (!(ops[i].type & OP_REG32)) {
             if (s1->seg_size == 32)
                 o32 = 1;
         }
