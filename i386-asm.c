@@ -841,8 +841,7 @@ static void asm_opcode(TCCState *s1, int opcode)
                     else {
                         if (ops[i].e.sym)
                             goto error_relocate;
-                    }
-                    gen_le16(ops[i].e.v);
+                        gen_le16(ops[i].e.v);
                     }
                 } else {
                     if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
@@ -876,7 +875,6 @@ static void asm_opcode(TCCState *s1, int opcode)
             }
         }
     }
-
     a32 = o32 = 0;
 }
 
