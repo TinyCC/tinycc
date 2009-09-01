@@ -156,6 +156,10 @@ General Options:
 @item -v
 Display current TCC version, increase verbosity.
 
+@item -print-search-dirs
+Print the name of the configured installation directory and a list
+of program and library directories tcc will search.
+
 @item -c
 Generate an object file (@option{-o} option must also be given).
 
