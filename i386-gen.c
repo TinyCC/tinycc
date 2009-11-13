@@ -184,6 +184,32 @@ static void gen_modrm(int op_reg, int r, Sym *sym, int c)
     }
 }
 
+#ifdef TCC_TARGET_PE
+static void mk_pointer(CType *type);
+static void indir(void);
+
+int handle_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
+{
+    if ((sv->r & (VT_VALMASK|VT_SYM|VT_CONST)) != (VT_SYM|VT_CONST))
+        return 0;
+    if (0 == (sv->sym->type.t & VT_IMPORT))
+        return 0;
+
+    printf("import %d %04x %s\n", r, ind, get_tok_str(sv->sym->v, NULL));
+
+    sv->sym->type.t &= ~VT_IMPORT;
+    ++vtop;
+
+    *vtop = *sv;
+    mk_pointer(&vtop->type);
+    indir();
+    fn(r, vtop);
+
+    --vtop;
+    sv->sym->type.t |= VT_IMPORT;
+    return 1;
+}
+#endif
 
 /* load 'r' from value 'sv' */
 void load(int r, SValue *sv)
@@ -191,6 +217,10 @@ void load(int r, SValue *sv)
     int v, t, ft, fc, fr;
     SValue v1;
 
+#ifdef TCC_TARGET_PE
+    if (handle_dllimport(r, sv, load))
+        return;
+#endif
     fr = sv->r;
     ft = sv->type.t;
     fc = sv->c.ul;
@@ -255,6 +285,10 @@ void store(int r, SValue *v)
 {
     int fr, bt, ft, fc;
 
+#ifdef TCC_TARGET_PE
+    if (handle_dllimport(r, v, store))
+        return;
+#endif
     ft = v->type.t;
     fc = v->c.ul;
     fr = v->r & VT_VALMASK;

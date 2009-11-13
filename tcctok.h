@@ -105,6 +105,7 @@
      DEF(TOK_FASTCALL2, "__fastcall")
      DEF(TOK_FASTCALL3, "__fastcall__")
      DEF(TOK_DLLEXPORT, "dllexport")
+     DEF(TOK_DLLIMPORT, "dllimport")
      DEF(TOK_NORETURN1, "noreturn")
      DEF(TOK_NORETURN2, "__noreturn__")
      DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")

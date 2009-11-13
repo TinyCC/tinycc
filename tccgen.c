@@ -1100,8 +1100,9 @@ void gen_opic(int op)
             }
             goto general_case;
         } else if (c2 && (op == '+' || op == '-') &&
-                   ((vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) ==
-                   (VT_CONST | VT_SYM) ||
+                   (((vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) == (VT_CONST | VT_SYM)
+                    && !(vtop[-1].sym->type.t & VT_IMPORT))
+                   ||
                    (vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_LOCAL)) {
             /* symbol + constant case */
             if (op == '-')
@@ -2256,6 +2257,9 @@ static void parse_attribute(AttributeDef *ad)
 #endif
         case TOK_DLLEXPORT:
             FUNC_EXPORT(ad->func_attr) = 1;
+            break;
+        case TOK_DLLIMPORT:
+            FUNC_IMPORT(ad->func_attr) = 1;
             break;
         default:
             if (tcc_state->warn_unsupported)
@@ -5131,6 +5135,10 @@ static void decl(int l)
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
+#ifdef TCC_TARGET_PE
+                        if (FUNC_IMPORT(ad.func_attr))
+                            type.t |= VT_IMPORT;
+#endif
                         external_sym(v, &type, r);
                     } else {
                         type.t |= (btype.t & VT_STATIC); /* Retain "static". */
