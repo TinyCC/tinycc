@@ -146,6 +146,7 @@
  DEF_ASM(movsbw)
  DEF_ASM(movsbl)
  DEF_ASM(movswl)
+ DEF_ASM(movslq)
 
  DEF_WLQ(lea)
 

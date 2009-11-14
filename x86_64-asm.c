@@ -117,14 +117,14 @@ typedef struct Operand {
     ExprValue e;
 } Operand;
 
-static const uint8_t reg_to_size[7] = {
+static const uint8_t reg_to_size[9] = {
 /*
     [OP_REG8] = 0,
     [OP_REG16] = 1,
     [OP_REG32] = 2,
     [OP_REG64] = 3,
 */
-    0, 0, 1, 0, 2, 0, 3
+    0, 0, 1, 0, 2, 0, 0, 0, 3
 };
 
 #define NB_TEST_OPCODES 30
@@ -493,23 +493,22 @@ static void asm_opcode(TCCState *s1, int opcode)
             if (!((unsigned)v < 8 * 6 && (v % 6) == 0))
                 continue;
         } else if (pa->instr_type & OPC_ARITH) {
-            if (!(opcode >= pa->sym && opcode < pa->sym + 8 * 4))
+            if (!(opcode >= pa->sym && opcode < pa->sym + 8 * 5))
                 continue;
-            goto compute_size;
+            s = (opcode - pa->sym) % 5;
         } else if (pa->instr_type & OPC_SHIFT) {
-            if (!(opcode >= pa->sym && opcode < pa->sym + 7 * 4))
+            if (!(opcode >= pa->sym && opcode < pa->sym + 7 * 5))
                 continue;
-            goto compute_size;
+            s = (opcode - pa->sym) % 5;
         } else if (pa->instr_type & OPC_TEST) {
             if (!(opcode >= pa->sym && opcode < pa->sym + NB_TEST_OPCODES))
                 continue;
         } else if (pa->instr_type & OPC_B) {
-            if (!(opcode >= pa->sym && opcode <= pa->sym + 3))
+            if (!(opcode >= pa->sym && opcode < pa->sym + 5))
                 continue;
-        compute_size:
-            s = (opcode - pa->sym) & 3;
+            s = opcode - pa->sym;
         } else if (pa->instr_type & OPC_WLQ) {
-            if (!(opcode >= pa->sym && opcode <= pa->sym + 2))
+            if (!(opcode >= pa->sym && opcode < pa->sym + 4))
                 continue;
             s = opcode - pa->sym + 1;
         } else {
@@ -589,7 +588,11 @@ static void asm_opcode(TCCState *s1, int opcode)
         s = 1;
     else if (s == 3) {
         /* generate REX prefix */
-        g(rex);
+        if ((opcode == TOK_ASM_push || opcode == TOK_ASM_pop) &&
+            (ops[0].type & OP_REG64))
+            ;
+        else
+            g(rex);
         s = 1;
     }
     /* now generates the operation */
@@ -616,7 +619,7 @@ static void asm_opcode(TCCState *s1, int opcode)
         nb_ops = 0;
     } else if (v <= 0x05) {
         /* arith case */
-        v += ((opcode - TOK_ASM_addb) >> 2) << 3;
+        v += ((opcode - TOK_ASM_addb) / 5) << 3;
     } else if ((pa->instr_type & (OPC_FARITH | OPC_MODRM)) == OPC_FARITH) {
         /* fpu arith case */
         v += ((opcode - pa->sym) / 6) << 3;
@@ -673,11 +676,11 @@ static void asm_opcode(TCCState *s1, int opcode)
     /* search which operand will used for modrm */
     modrm_index = 0;
     if (pa->instr_type & OPC_SHIFT) {
-        reg = (opcode - pa->sym) >> 2;
+        reg = (opcode - pa->sym) / 5;
         if (reg == 6)
             reg = 7;
     } else if (pa->instr_type & OPC_ARITH) {
-        reg = (opcode - pa->sym) >> 2;
+        reg = (opcode - pa->sym) / 5;
     } else if (pa->instr_type & OPC_FARITH) {
         reg = (opcode - pa->sym) / 6;
     } else {
