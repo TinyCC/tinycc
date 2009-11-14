@@ -74,8 +74,12 @@ ALT(DEF_ASM_OP2(btcw, 0x0fbb, 0, OPC_MODRM | OPC_WL, OPT_REGW, OPT_REGW | OPT_EA
 ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WL, OPT_IM8, OPT_REGW | OPT_EA))
 
      /* prefixes */
+     DEF_ASM_OP0(addr16, 0x67)
      DEF_ASM_OP0(a32, 0x67)
+
+     DEF_ASM_OP0(data16, 0x66)
      DEF_ASM_OP0(o32, 0x66)
+
      DEF_ASM_OP0(lock, 0xf0)
      DEF_ASM_OP0(rep, 0xf3)
      DEF_ASM_OP0(repe, 0xf3)

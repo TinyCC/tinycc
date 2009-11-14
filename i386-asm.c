@@ -504,10 +504,12 @@ static void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
     int i, modrm_index, reg, v, op1, is_short_jmp, seg_prefix;
-    int nb_ops, s, ss;
+    int nb_ops, s;
     Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
-    static int a32 = 0, o32 = 0, addr32 = 0, data32 = 0;
+
+    int a32, o32;
+    static int addr32 = 0, data32 = 0;
 
     /* get operands */
     pop = ops;
@@ -618,12 +620,12 @@ static void asm_opcode(TCCState *s1, int opcode)
                 if (s1->seg_size == 32)
                     goto bad_prefix;
                 else
-                    o32 = data32 = 1;
+                    data32 = 1;
             } else if (opcode == TOK_ASM_a32) {
                 if (s1->seg_size == 32)
                     goto bad_prefix;
                 else
-                    a32 = addr32 = 1;
+                    addr32 = 1;
             }
             if (b & 0xff00) 
                 g(b >> 8);
@@ -649,26 +651,13 @@ static void asm_opcode(TCCState *s1, int opcode)
         }
     }
 
-    for(i = 0; i < nb_ops; i++) {
-        if (ops[i].type & OP_REG32) {
-            if (s1->seg_size == 16)
-                o32 = 1;
-        } else if (!(ops[i].type & OP_REG32)) {
-            if (s1->seg_size == 32)
-                o32 = 1;
-        }
-    }
-
-    ss = s;
+    a32 = o32 = 0;
     if (s == 1 || (pa->instr_type & OPC_D16)) {
         if (s1->seg_size == 32)
             o32 = 1;
-    } else if (s == 2) {
-        if (s1->seg_size == 16) {
-            if (!(pa->instr_type & OPC_D16))
-                o32 = 1;
-        }
-        s = 1;
+    } else if (s == 2 && !(pa->instr_type & OPC_D16)) {
+        if (s1->seg_size == 16)
+            o32 = 1;
     }
 
     /* generate a16/a32 prefix if needed */
@@ -721,7 +710,7 @@ static void asm_opcode(TCCState *s1, int opcode)
             v += 7;
     }
     if (pa->instr_type & OPC_B)
-        v += s;
+        v += s >= 1;
     if (pa->instr_type & OPC_TEST)
         v += test_bits[opcode - pa->sym]; 
     if (pa->instr_type & OPC_SHORTJMP) {
@@ -824,9 +813,9 @@ static void asm_opcode(TCCState *s1, int opcode)
                    at the op size */
                 if (v == (OP_IM8 | OP_IM16 | OP_IM32) ||
                     v == (OP_IM16 | OP_IM32)) {
-                    if (ss == 0)
+                    if (s == 0)
                         v = OP_IM8;
-                    else if (ss == 1)
+                    else if (s == 1)
                         v = OP_IM16;
                     else
                         v = OP_IM32;
@@ -875,7 +864,6 @@ static void asm_opcode(TCCState *s1, int opcode)
             }
         }
     }
-    a32 = o32 = 0;
 }
 
 #define NB_SAVED_REGS 3
