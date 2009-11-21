@@ -374,7 +374,7 @@ static void gen_disp32(ExprValue *pe)
                that the TCC compiler behaves differently here because
                it always outputs a relocation to ease (future) code
                elimination in the linker */
-            gen_le32(pe->v + (long)sym->next - ind - 4);
+            gen_le32(pe->v + sym->jnext - ind - 4);
         } else {
             greloc(cur_text_section, sym, ind, R_386_PC32);
             gen_le32(pe->v - 4);
@@ -397,7 +397,7 @@ static void gen_disp16(ExprValue *pe)
                that the TCC compiler behaves differently here because
                it always outputs a relocation to ease (future) code
                elimination in the linker */
-            gen_le16(pe->v + (long)sym->next - ind - 2);
+            gen_le16(pe->v + sym->jnext - ind - 2);
         } else {
             greloc(cur_text_section, sym, ind, R_386_PC16);
             gen_le16(pe->v - 2);
@@ -723,7 +723,7 @@ static void asm_opcode(TCCState *s1, int opcode)
             goto no_short_jump;
         if (sym->r != cur_text_section->sh_num)
             goto no_short_jump;
-        jmp_disp = ops[0].e.v + (long)sym->next - ind - 2;
+        jmp_disp = ops[0].e.v + sym->jnext - ind - 2;
         if (jmp_disp == (int8_t)jmp_disp) {
             /* OK to generate jump */
             is_short_jmp = 1;
