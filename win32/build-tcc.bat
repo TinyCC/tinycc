@@ -17,6 +17,7 @@ echo>>..\config.h #define CONFIG_SYSROOT ""
 :x86_64
 echo>>..\config.h #define TCC_TARGET_X86_64 1
 @set P=x86_64-pc-mingw32-
+@set S=_64
 @goto tools
 
 :tools
@@ -39,14 +40,13 @@ copy ..\libtcc.h libtcc\libtcc.h
 .\tcc -c lib/dllcrt1.c
 .\tcc -c lib/dllmain.c
 .\tcc -c ../lib/libtcc1.c
-@if not x%P%==x goto asm64
+@rem if not x%P%==x goto use_yasm
 .\tcc -c lib/chkstk.S
-.\tcc -c ../lib/alloca86.S
-tiny_libmaker lib/libtcc1.a crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o libtcc1.o alloca86.o
+.\tcc -c ../lib/alloca86%S%.S
+tiny_libmaker lib/libtcc1.a crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o libtcc1.o alloca86%S%.o
 @goto cleanup
 
-:asm64
-@rem !!! currently TinyCC doesn't 64bit asm. Need 'yasm' !!!
+:use_yasm
 .\tcc -o tmp.s -E lib/chkstk.S
 yasm -p gnu -f elf64 -o chkstk.o tmp.s
 .\tcc -o tmp.s -E ../lib/alloca86_64.S
