@@ -92,7 +92,8 @@
 	http://www.mingw.org/
 
     From the windows headers, only a minimal set is included.  If you need
-    more,  get MinGW's "w32api" package.
+    more,  get MinGW's "w32api" package.  Extract the files from "include"
+    into your "tcc/include/winapi" directory.
 
 
 
