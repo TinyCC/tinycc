@@ -148,7 +148,7 @@ extern "C" {
 #ifdef __GNUC__
 #define alloca(x) __builtin_alloca((x))
 #else
-#define alloca _alloca
+//gr #define alloca _alloca
 #endif
 #endif
 
