@@ -676,10 +676,11 @@ static void asm_opcode(TCCState *s1, int opcode)
         g(seg_prefix);
 
     v = pa->opcode;
-    if (v == 0x69 || v == 0x69) {
+    if ((v == 0x69 || v == 0x6b) && nb_ops == 2) {
         /* kludge for imul $im, %reg */
         nb_ops = 3;
         ops[2] = ops[1];
+        op_type[2] = op_type[1];
     } else if (v == 0xcd && ops[0].e.v == 3 && !ops[0].e.sym) {
         v--; /* int $3 case */
         nb_ops = 0;
