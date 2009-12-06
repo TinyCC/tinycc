@@ -46,9 +46,6 @@
 #include <direct.h> /* getcwd */
 #define inline __inline
 #define inp next_inp
-#ifdef _MSC_VER
-#define __aligned(n) __declspec(align(n))
-#endif
 #ifdef _WIN64
 #define uplong unsigned long long
 #endif
@@ -65,10 +62,6 @@
 
 #ifndef uplong
 #define uplong unsigned long
-#endif
-
-#ifndef __aligned
-#define __aligned(n) __attribute__((aligned(n)))
 #endif
 
 #ifndef PAGESIZE
@@ -263,26 +256,25 @@ typedef struct DLLReference {
 
 /* GNUC attribute definition */
 typedef struct AttributeDef {
-    int aligned;
-    int packed; 
-    Section *section;
-    int func_attr; /* calling convention, exports, ... */
+    unsigned
+      packed        : 1,
+      aligned       : 5, /* alignement (0..16) */
+      func_call     : 3, /* calling convention (0..5), see below */
+      func_export   : 1,
+      func_import   : 1,
+      func_args     : 8;
+    struct Section *section;
 } AttributeDef;
 
-/* -------------------------------------------------- */
 /* gr: wrappers for casting sym->r for other purposes */
-typedef struct {
-    unsigned
-      func_call : 8,
-      func_args : 8,
-      func_export : 1,
-      func_import : 1;
-} func_attr_t;
+#define FUNC_CALL(r) (((AttributeDef*)&(r))->func_call)
+#define FUNC_EXPORT(r) (((AttributeDef*)&(r))->func_export)
+#define FUNC_IMPORT(r) (((AttributeDef*)&(r))->func_import)
+#define FUNC_ARGS(r) (((AttributeDef*)&(r))->func_args)
+#define FUNC_ALIGN(r) (((AttributeDef*)&(r))->aligned)
+#define FUNC_PACKED(r) (((AttributeDef*)&(r))->packed)
+#define INT_ATTR(ad) (*(int*)(ad))
 
-#define FUNC_CALL(r) (((func_attr_t*)&(r))->func_call)
-#define FUNC_EXPORT(r) (((func_attr_t*)&(r))->func_export)
-#define FUNC_IMPORT(r) (((func_attr_t*)&(r))->func_import)
-#define FUNC_ARGS(r) (((func_attr_t*)&(r))->func_args)
 /* -------------------------------------------------- */
 
 #define SYM_STRUCT     0x40000000 /* struct/union/enum symbol space */
@@ -480,9 +472,6 @@ struct TCCState {
     void *error_opaque;
     void (*error_func)(void *opaque, const char *msg);
     int error_set_jmp_enabled;
-#ifdef _WIN64
-    __aligned(16)
-#endif
     jmp_buf error_jmp_buf;
     int nb_errors;
 
