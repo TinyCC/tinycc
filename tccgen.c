@@ -1543,6 +1543,10 @@ static void gen_cast(CType *type)
                     vtop->c.ll = vtop->c.ull;
                 else if (sbt & VT_UNSIGNED)
                     vtop->c.ll = vtop->c.ui;
+#ifdef TCC_TARGET_X86_64
+                else if (sbt == VT_PTR)
+                    ;
+#endif
                 else if (sbt != VT_LLONG)
                     vtop->c.ll = vtop->c.i;
 
