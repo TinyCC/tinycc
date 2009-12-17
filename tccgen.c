@@ -448,11 +448,14 @@ int gv(int rc)
            - constant
            - lvalue (need to dereference pointer)
            - already a register, but not in the right class */
-        if (r >= VT_CONST || 
-            (vtop->r & VT_LVAL) ||
-            !(reg_classes[r] & rc) ||
-            ((vtop->type.t & VT_BTYPE) == VT_LLONG && 
-             !(reg_classes[vtop->r2] & rc2))) {
+        if (r >= VT_CONST
+         || (vtop->r & VT_LVAL)
+         || !(reg_classes[r] & rc)
+#ifndef TCC_TARGET_X86_64
+         || ((vtop->type.t & VT_BTYPE) == VT_LLONG && !(reg_classes[vtop->r2] & rc2))
+#endif
+            )
+        {
             r = get_reg(rc);
 #ifndef TCC_TARGET_X86_64
             if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
