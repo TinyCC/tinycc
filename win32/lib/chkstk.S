@@ -57,5 +57,13 @@ P0:
     jmp     *8(%rax)
 
 /* ---------------------------------------------- */
+/* avoid msvcrt unwind stuff for setjmp/longjmp */
+
+.globl tinyc_getsp
+tinyc_getsp:
+    xor %rax,%rax
+    ret
+
+/* ---------------------------------------------- */
 #endif
 /* ---------------------------------------------- */

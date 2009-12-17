@@ -57,6 +57,8 @@ typedef unsigned __int64 uintptr_t;
 #define __stdcall
 #define _AMD64_ 1
 #define __x86_64 1
+#define USE_MINGW_SETJMP_TWO_ARGS
+#define mingw_getsp tinyc_getsp
 #else
 typedef __int32 intptr_t;
 typedef unsigned __int32 uintptr_t;
