@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         5
+#define NB_REGS         10
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -34,6 +34,8 @@
 #define RC_RAX     0x0004
 #define RC_RCX     0x0008
 #define RC_RDX     0x0010
+#define RC_R8      0x0100
+#define RC_R9      0x0200
 #define RC_XMM0    0x0020
 #define RC_ST0     0x0040 /* only for long double */
 #define RC_IRET    RC_RAX /* function return: integer register */
@@ -45,15 +47,16 @@ enum {
     TREG_RAX = 0,
     TREG_RCX = 1,
     TREG_RDX = 2,
+    TREG_XMM0 = 3,
+    TREG_ST0 = 4,
+
     TREG_RSI = 6,
     TREG_RDI = 7,
     TREG_R8  = 8,
     TREG_R9  = 9,
+
     TREG_R10 = 10,
     TREG_R11 = 11,
-
-    TREG_XMM0 = 3,
-    TREG_ST0 = 4,
 
     TREG_MEM = 0x10,
 };
@@ -107,6 +110,13 @@ ST_DATA const int reg_classes[NB_REGS] = {
     /* edx */ RC_INT | RC_RDX,
     /* xmm0 */ RC_FLOAT | RC_XMM0,
     /* st0 */ RC_ST0,
+#if NB_REGS == 10
+    0,
+    0,
+    0,
+    RC_R8,
+    RC_R9,
+#endif
 };
 
 static unsigned long func_sub_sp_offset;
@@ -286,7 +296,7 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
             g(0x00 | op_reg | REG_VALUE(r));
         }
     } else {
-        g(0x00 | op_reg | (r & VT_VALMASK));
+        g(0x00 | op_reg | REG_VALUE(r));
     }
 }
 
@@ -364,62 +374,78 @@ void load(int r, SValue *sv)
         } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             o(0xdb); /* fldt */
             r = 5;
-        } else if ((ft & VT_TYPE) == VT_BYTE) {
-            o(0xbe0f);   /* movsbl */
-        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
-            o(0xb60f);   /* movzbl */
-        } else if ((ft & VT_TYPE) == VT_SHORT) {
-            o(0xbf0f);   /* movswl */
-        } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
-            o(0xb70f);   /* movzwl */
-        } else if (is64_type(ft)) {
-            gen_modrm64(0x8b, r, fr, sv->sym, fc);
-            return;
         } else {
-            o(0x8b);   /* movl */
+            int x;
+            if ((ft & VT_TYPE) == VT_BYTE) {
+                x = 0xbe0f;   /* movsbl */
+            } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
+                x = 0xb60f;   /* movzbl */
+            } else if ((ft & VT_TYPE) == VT_SHORT) {
+                x = 0xbf0f;   /* movswl */
+            } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
+                x = 0xb70f;   /* movzwl */
+            } else if (is64_type(ft)) {
+                gen_modrm64(0x8b, r, fr, sv->sym, fc);
+                return;
+            } else {
+                x = 0x8b; /* movl */
+            }
+            if (REX_BASE(r) || (!(fr & ~0x0f) && REX_BASE(fr)))
+                o(0x40 + REX_BASE(fr) + (REX_BASE(r) << 2));
+            o(x);
         }
         gen_modrm(r, fr, sv->sym, fc);
     } else {
         if (v == VT_CONST) {
             if (fr & VT_SYM) {
 #ifdef TCC_TARGET_PE
-                o(0x8d48);
+                o(0x8d48 + (REX_BASE(r) << 2));
                 o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
                 gen_addrpc32(fr, sv->sym, fc);
 #else
                 if (sv->sym->type.t & VT_STATIC) {
-                    o(0x8d48);
+                    o(0x8d48 + REX_BASE(r));
                     o(0x05 + REG_VALUE(r) * 8); /* lea xx(%rip), r */
                     gen_addrpc32(fr, sv->sym, fc);
                 } else {
-                    o(0x8b48);
+                    o(0x8b48 + REX_BASE(r));
                     o(0x05 + REG_VALUE(r) * 8); /* mov xx(%rip), r */
                     gen_gotpcrel(r, sv->sym, fc);
                 }
 #endif
             } else if (is64_type(ft)) {
-                o(0x48);
+                o(0x48 + REX_BASE(r));
                 o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_le64(sv->c.ull);
             } else {
+                if (REX_BASE(r))
+                    o(0x41);
                 o(0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_le32(fc);
             }
         } else if (v == VT_LOCAL) {
-            o(0x48 | REX_BASE(r));
+            o(0x48 | (REX_BASE(r) << 2));
             o(0x8d); /* lea xxx(%ebp), r */
             gen_modrm(r, VT_LOCAL, sv->sym, fc);
         } else if (v == VT_CMP) {
-            oad(0xb8 + r, 0); /* mov $0, r */
+            if (REX_BASE(r))
+                o(0x41);
+            oad(0xb8 + REG_VALUE(r), 0); /* mov $0, r */
+            if (REX_BASE(r))
+                o(0x41);
             o(0x0f); /* setxx %br */
             o(fc);
-            o(0xc0 + r);
+            o(0xc0 + REG_VALUE(r));
         } else if (v == VT_JMP || v == VT_JMPI) {
             t = v & 1;
-            oad(0xb8 + r, t); /* mov $1, r */
-            o(0x05eb); /* jmp after */
+            if (REX_BASE(r))
+                o(0x41);
+            oad(0xb8 + REG_VALUE(r), t); /* mov $1, r */
+            o(0x05eb + (REX_BASE(r) << 8)); /* jmp after */
             gsym(fc);
-            oad(0xb8 + r, t ^ 1); /* mov $0, r */
+            if (REX_BASE(r))
+                o(0x41);
+            oad(0xb8 + REG_VALUE(r), t ^ 1); /* mov $0, r */
         } else if (v != r) {
             if (r == TREG_XMM0) {
                 assert(v == TREG_ST0);
@@ -438,7 +464,7 @@ void load(int r, SValue *sv)
             } else {
                 o(0x48 | REX_BASE(r) | (REX_BASE(v) << 2));
                 o(0x89);
-                o(0xc0 + r + v * 8); /* mov v, r */
+                o(0xc0 + REG_VALUE(r) + REG_VALUE(v) * 8); /* mov v, r */
             }
         }
     }
@@ -505,9 +531,7 @@ void store(int r, SValue *v)
             o(op64);
         o(3 + (r << 3));
     } else if (op64) {
-        if (fr == VT_CONST ||
-            fr == VT_LOCAL ||
-            (v->r & VT_LVAL)) {
+        if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
             gen_modrm64(op64, r, v->r, v->sym, fc);
         } else if (fr != r) {
             /* XXX: don't we really come here? */
@@ -515,9 +539,7 @@ void store(int r, SValue *v)
             o(0xc0 + fr + r * 8); /* mov r, fr */
         }
     } else {
-        if (fr == VT_CONST ||
-            fr == VT_LOCAL ||
-            (v->r & VT_LVAL)) {
+        if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
             gen_modrm(r, v->r, v->sym, fc);
         } else if (fr != r) {
             /* XXX: don't we really come here? */
@@ -591,7 +613,6 @@ void gfunc_call(int nb_args)
     }
 
     args_size = (nb_reg_args < REGN ? REGN : nb_reg_args) * PTR_SIZE;
-    save_regs(0); /* save used temporary registers */
 
     /* for struct arguments, we need to call memcpy and the function
        call breaks register passing arguments we are preparing.
@@ -627,12 +648,14 @@ void gfunc_call(int nb_args)
     if (func_scratch < args_size)
         func_scratch = args_size;
 
+    for (i = 0; i < REGN; ++i)
+        save_reg(arg_regs[i]);
+
     gen_reg = nb_reg_args;
     for(i = 0; i < nb_args; i++) {
         bt = (vtop->type.t & VT_BTYPE);
         if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
             ; /* done */
-
         } else if (is_sse_float(vtop->type.t)) {
             gv(RC_FLOAT); /* only one float register */
             j = --gen_reg;
@@ -641,31 +664,39 @@ void gfunc_call(int nb_args)
                 /* movq %xmm0, j*8(%rsp) */
                 gen_offs_sp(0x2444d6, 0, j*8);
             } else {
-                d = arg_regs[j];
                 /* movaps %xmm0, %xmmN */
                 o(0x280f);
                 o(0xc0 + (j << 3));
+                d = arg_regs[j];
                 /* mov %xmm0, %rxx */
                 o(0x66);
-                o(0x7e0f48 + (d >= 8));
-                o(0xc0 + (d & 7));
+                o(0x7e0f48 + REX_BASE(d));
+                o(0xc0 + REG_VALUE(d));
             }
         } else {
-            r = gv(RC_INT);
             j = --gen_reg;
             if (j >= REGN) {
+                r = gv(RC_INT);
                 o(0x48);
                 gen_offs_sp(0x244489, r, j*8);
             } else {
                 d = arg_regs[j];
-                if (d != r) {
-                    o(0x8948 + (d >= 8));
-                    o(0xc0 + r*8 + (d & 7));
+                if (d < NB_REGS) {
+                    gv(reg_classes[d] & ~RC_INT);
+                } else {
+                    r = gv(RC_INT);
+                    if (d != r) {
+                        o(0x8948 + REX_BASE(d));
+                        o(0xc0 + r*8 + REG_VALUE(d));
+                    }
                 }
+
             }
         }
         vtop--;
     }
+
+    save_regs(0);
     gcall_or_jmp(0);
     vtop--;
 }
