@@ -1137,7 +1137,13 @@ void gen_opi(int op)
             r = TREG_RAX;
         } else {
             if (op == TOK_UDIV || op == TOK_UMOD) {
-                o(0xf7d231); /* xor %edx, %edx, div fr, %eax */
+                if ((vtop->type.t & VT_BTYPE) & VT_LLONG) {
+                    o(0xd23148); /* xor %rdx, %rdx */
+                    o(0x48 + REX_BASE(fr));
+                } else {
+                    o(0xd231); /* xor %edx, %edx */
+                }
+                o(0xf7); /* div fr, %eax */
                 o(0xf0 + fr);
             } else {
                 if ((vtop->type.t & VT_BTYPE) & VT_LLONG) {

@@ -26,6 +26,7 @@
      DEF_ASM_OP0(cwtl, 0x98)
      DEF_ASM_OP0(cwtd, 0x6699)
      DEF_ASM_OP0(cltd, 0x99)
+     DEF_ASM_OP0(cqto, 0x4899)
      DEF_ASM_OP0(int3, 0xcc)
      DEF_ASM_OP0(into, 0xce)
      DEF_ASM_OP0(iret, 0xcf)
