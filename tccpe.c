@@ -1611,15 +1611,18 @@ PUB_FN int pe_load_file(struct TCCState *s1, const char *filename, int fd)
     return ret;
 }
 
-int pe_add_dll(struct TCCState *s, const char *libraryname)
+int pe_add_dll(struct TCCState *s, const char *libname)
 {
-    char buf[MAX_PATH];
-    snprintf(buf, sizeof(buf), "%s.def", libraryname);
-    if (tcc_add_dll(s, buf, 0) == 0)
-        return 0;
-    snprintf(buf, sizeof(buf), "%s.dll", libraryname);
-    if (tcc_add_dll(s, buf, 0) == 0)
-        return 0;
+    static const char *pat[] = {
+        "%s.def", "lib%s.def", "%s.dll", "lib%s.dll", NULL
+    };
+    const char **p = pat;
+    do {
+        char buf[MAX_PATH];
+        snprintf(buf, sizeof(buf), *p, libname);
+        if (tcc_add_dll(s, buf, 0) == 0)
+            return 0;
+    } while (*++p);
     return -1;
 }
 
