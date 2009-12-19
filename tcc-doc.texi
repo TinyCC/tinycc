@@ -284,6 +284,9 @@ libxxx.a. The library is searched in the paths specified by the
 Generate a shared library instead of an executable (@option{-o} option
 must also be given).
 
+@item -soname name
+set name for shared library to be used at runtime
+
 @item -static
 Generate a statically linked executable (default is a shared linked
 executable) (@option{-o} option must also be given).
@@ -309,6 +312,9 @@ Binary image (only for executable output)
 @item coff
 COFF output format (only for executable output for TMS320C67xx target)
 @end table
+
+@item -Wl,-rpath=path
+Set custom library search path
 
 @end table
 

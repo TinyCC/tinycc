@@ -442,6 +442,8 @@ int parse_args(TCCState *s, int argc, char **argv)
                         {
                             error("target %s not found", p);
                         }
+                    } else if (strstart(optarg, "-rpath=", &p)) {
+                        s->rpath = p;
                     } else {
                         error("unsupported linker option '%s'", optarg);
                     }

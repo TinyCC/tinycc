@@ -1563,6 +1563,10 @@ int elf_output_file(TCCState *s1, const char *filename)
                 if (dllref->level == 0)
                     put_dt(dynamic, DT_NEEDED, put_elf_str(dynstr, dllref->name));
             }
+
+            if (s1->rpath)
+                put_dt(dynamic, DT_RPATH, put_elf_str(dynstr, s1->rpath));
+
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */
             if (file_type == TCC_OUTPUT_DLL) {
@@ -1570,7 +1574,6 @@ int elf_output_file(TCCState *s1, const char *filename)
                     put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
                 put_dt(dynamic, DT_TEXTREL, 0);
             }
-
             /* add necessary space for other entries */
             saved_dynamic_data_offset = dynamic->data_offset;
             dynamic->data_offset += sizeof(ElfW(Dyn)) * EXTRA_RELITEMS;

@@ -434,6 +434,8 @@ struct TCCState {
 
     /* soname as specified on the command line (-soname) */
     const char *soname;
+    /* rpath as specified on the command line (-Wl,-rpath=) */
+    const char *rpath;
 
     /* if true, all symbols are exported */
     int rdynamic;

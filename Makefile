@@ -215,12 +215,12 @@ ifneq ($(BCHECK_O),)
 	$(INSTALL) -m644 $(BCHECK_O) "$(tccdir)"
 endif
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
-	mkdir -p "$(docdir)"
-	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 libtcc.a "$(libdir)"
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 libtcc.h "$(includedir)"
+	mkdir -p "$(docdir)"
+	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
