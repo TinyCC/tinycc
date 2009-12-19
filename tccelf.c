@@ -1186,50 +1186,59 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
                 s->sh_num, sym_end);
 }
 
+static void tcc_add_bcheck(TCCState *s1)
+{
+#ifdef CONFIG_TCC_BCHECK
+    unsigned long *ptr;
+    Section *init_section;
+    unsigned char *pinit;
+    int sym_index;
+
+    if (0 == s1->do_bounds_check)
+        return;
+
+    /* XXX: add an object file to do that */
+    ptr = section_ptr_add(bounds_section, sizeof(unsigned long));
+    *ptr = 0;
+    add_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                bounds_section->sh_num, "__bounds_start");
+    /* add bound check code */
+#ifndef TCC_TARGET_PE
+    {
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "bcheck.o");
+    tcc_add_file(s1, buf);
+    }
+#endif
+#ifdef TCC_TARGET_I386
+    if (s1->output_type != TCC_OUTPUT_MEMORY) {
+        /* add 'call __bound_init()' in .init section */
+        init_section = find_section(s1, ".init");
+        pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        put32(pinit + 1, -4);
+        sym_index = find_elf_sym(symtab_section, "__bound_init");
+        put_elf_reloc(symtab_section, init_section,
+                      init_section->data_offset - 4, R_386_PC32, sym_index);
+    }
+#endif
+#endif
+}
+
 /* add tcc runtime libraries */
 static void tcc_add_runtime(TCCState *s1)
 {
-#if defined(CONFIG_TCC_BCHECK) || !defined(CONFIG_USE_LIBGCC)
-    char buf[1024];
-#endif
+    tcc_add_bcheck(s1);
 
-#ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check) {
-        unsigned long *ptr;
-        Section *init_section;
-        unsigned char *pinit;
-        int sym_index;
-
-        /* XXX: add an object file to do that */
-        ptr = section_ptr_add(bounds_section, sizeof(unsigned long));
-        *ptr = 0;
-        add_elf_sym(symtab_section, 0, 0, 
-                    ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                    bounds_section->sh_num, "__bounds_start");
-        /* add bound check code */
-        snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "bcheck.o");
-        tcc_add_file(s1, buf);
-#ifdef TCC_TARGET_I386
-        if (s1->output_type != TCC_OUTPUT_MEMORY) {
-            /* add 'call __bound_init()' in .init section */
-            init_section = find_section(s1, ".init");
-            pinit = section_ptr_add(init_section, 5);
-            pinit[0] = 0xe8;
-            put32(pinit + 1, -4);
-            sym_index = find_elf_sym(symtab_section, "__bound_init");
-            put_elf_reloc(symtab_section, init_section, 
-                          init_section->data_offset - 4, R_386_PC32, sym_index);
-        }
-#endif
-    }
-#endif
     /* add libc */
     if (!s1->nostdlib) {
-        tcc_add_library(s1, "c");
-
 #ifdef CONFIG_USE_LIBGCC
+        tcc_add_library(s1, "c");
         tcc_add_file(s1, CONFIG_SYSROOT "/lib/libgcc_s.so.1");
 #else
+        char buf[1024];
+        tcc_add_library(s1, "c");
         snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "libtcc1.a");
         tcc_add_file(s1, buf);
 #endif

@@ -58,9 +58,13 @@ static Section *cur_text_section; /* current section where function code is
 #ifdef CONFIG_TCC_ASM
 static Section *last_text_section; /* to handle .previous asm directive */
 #endif
+
+#ifdef CONFIG_TCC_BCHECK
 /* bound check related sections */
 static Section *bounds_section; /* contains global data bound description */
 static Section *lbounds_section; /* contains local data bound description */
+#endif
+
 /* symbol sections */
 static Section *symtab_section, *strtab_section;
 
@@ -109,8 +113,8 @@ static int tcc_ext = 1;
 /* max number of callers shown if error */
 #ifdef CONFIG_TCC_BACKTRACE
 int num_callers = 6;
+void *rt_prog_main;
 const char **rt_bound_error_msg;
-unsigned long rt_prog_main;
 #endif
 
 /* XXX: get rid of this ASAP */
@@ -731,7 +735,7 @@ static void put_extern_sym2(Sym *sym, Section *section,
             /* if bound checking is activated, we change some function
                names by adding the "__bound" prefix */
             switch(sym->v) {
-#if 0
+#ifdef TCC_TARGET_PE
             /* XXX: we rely only on malloc hooks */
             case TOK_malloc: 
             case TOK_free: 

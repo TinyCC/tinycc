@@ -20,75 +20,167 @@
 
 /* tccrun.c - support for tcc -run */
 
-
-/********************************************************/
-#ifdef CONFIG_TCC_STATIC
-
-#define RTLD_LAZY       0x001
-#define RTLD_NOW        0x002
-#define RTLD_GLOBAL     0x100
-#define RTLD_DEFAULT    NULL
-
-/* dummy function for profiling */
-void *dlopen(const char *filename, int flag)
-{
-    return NULL;
-}
-
-void dlclose(void *p)
-{
-}
-
-const char *dlerror(void)
-{
-    return "error";
-}
-
-typedef struct TCCSyms {
-    char *str;
-    void *ptr;
-} TCCSyms;
-
-#define TCCSYM(a) { #a, &a, },
-
-/* add the symbol you want here if no dynamic linking is done */
-static TCCSyms tcc_syms[] = {
-#if !defined(CONFIG_TCCBOOT)
-    TCCSYM(printf)
-    TCCSYM(fprintf)
-    TCCSYM(fopen)
-    TCCSYM(fclose)
+#ifdef _WIN32
+#define ucontext_t CONTEXT
 #endif
-    { NULL, NULL },
-};
 
-void *resolve_sym(TCCState *s1, const char *symbol)
+static void set_pages_executable(void *ptr, unsigned long length);
+static void set_exception_handler(void);
+static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level);
+static void rt_error(ucontext_t *uc, const char *fmt, ...);
+static int tcc_relocate_ex(TCCState *s1, void *ptr);
+
+/* ------------------------------------------------------------- */
+/* Do all relocations (needed before using tcc_get_symbol())
+   Returns -1 on error. */
+
+int tcc_relocate(TCCState *s1)
 {
-    TCCSyms *p;
-    p = tcc_syms;
-    while (p->str != NULL) {
-        if (!strcmp(p->str, symbol))
-            return p->ptr;
-        p++;
+    int ret;
+
+    ret = tcc_relocate_ex(s1, NULL);
+    if (-1 != ret) {
+        s1->runtime_mem = tcc_malloc(ret);
+        ret = tcc_relocate_ex(s1, s1->runtime_mem);
     }
-    return NULL;
+    return ret;
 }
 
-#elif defined(_WIN32)
-#define dlclose FreeLibrary
-
-#else
-#include <dlfcn.h>
-
-void *resolve_sym(TCCState *s1, const char *sym)
+/* launch the compiled program with the given arguments */
+int tcc_run(TCCState *s1, int argc, char **argv)
 {
-    return dlsym(RTLD_DEFAULT, sym);
+    int (*prog_main)(int, char **);
+
+    if (tcc_relocate(s1) < 0)
+        return -1;
+
+    prog_main = tcc_get_symbol_err(s1, "main");
+
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->do_debug)
+        set_exception_handler();
+#endif
+
+#ifdef CONFIG_TCC_BCHECK
+    if (s1->do_bounds_check) {
+        void (*bound_init)(void);
+        void (*bound_exit)(void);
+        int ret;
+        /* set error function */
+        rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
+        rt_prog_main = prog_main;
+        /* XXX: use .init section so that it also work in binary ? */
+        bound_init = tcc_get_symbol_err(s1, "__bound_init");
+        bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
+        bound_init();
+        ret = (*prog_main)(argc, argv);
+        bound_exit();
+        return ret;
+    }
+#endif
+    return (*prog_main)(argc, argv);
 }
 
-#endif /* defined CONFIG_TCC_STATIC */
 
-/********************************************************/
+/* relocate code. Return -1 on error, required size if ptr is NULL,
+   otherwise copy code into buffer passed by the caller */
+static int tcc_relocate_ex(TCCState *s1, void *ptr)
+{
+    Section *s;
+    unsigned long offset, length;
+    uplong mem;
+    int i;
 
+    if (0 == s1->runtime_added) {
+        s1->runtime_added = 1;
+        s1->nb_errors = 0;
+#ifdef TCC_TARGET_PE
+        pe_output_file(s1, NULL);
+#else
+        tcc_add_runtime(s1);
+        relocate_common_syms();
+        tcc_add_linker_symbols(s1);
+        build_got_entries(s1);
+#endif
+        if (s1->nb_errors)
+            return -1;
+    }
+
+    offset = 0, mem = (uplong)ptr;
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (0 == (s->sh_flags & SHF_ALLOC))
+            continue;
+        length = s->data_offset;
+        s->sh_addr = mem ? (mem + offset + 15) & ~15 : 0;
+        offset = (offset + length + 15) & ~15;
+    }
+    offset += 16;
+
+    /* relocate symbols */
+    relocate_syms(s1, 1);
+    if (s1->nb_errors)
+        return -1;
+
+#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
+    s1->runtime_plt_and_got_offset = 0;
+    s1->runtime_plt_and_got = (char *)(mem + offset);
+    /* double the size of the buffer for got and plt entries
+       XXX: calculate exact size for them? */
+    offset *= 2;
+#endif
+
+    if (0 == mem)
+        return offset;
+
+    /* relocate each section */
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->reloc)
+            relocate_section(s1, s);
+    }
+
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (0 == (s->sh_flags & SHF_ALLOC))
+            continue;
+        length = s->data_offset;
+        // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
+        ptr = (void*)(uplong)s->sh_addr;
+        if (NULL == s->data || s->sh_type == SHT_NOBITS)
+            memset(ptr, 0, length);
+        else
+            memcpy(ptr, s->data, length);
+        /* mark executable sections as executable in memory */
+        if (s->sh_flags & SHF_EXECINSTR)
+            set_pages_executable(ptr, length);
+    }
+
+#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
+    set_pages_executable(s1->runtime_plt_and_got,
+                         s1->runtime_plt_and_got_offset);
+#endif
+    return 0;
+}
+
+/* ------------------------------------------------------------- */
+/* allow to run code in memory */
+
+static void set_pages_executable(void *ptr, unsigned long length)
+{
+#ifdef _WIN32
+    unsigned long old_protect;
+    VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
+#else
+    unsigned long start, end;
+    start = (unsigned long)ptr & ~(PAGESIZE - 1);
+    end = (unsigned long)ptr + length;
+    end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
+    mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
+#endif
+}
+
+/* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
 
 /* print the position in the source file of PC value 'pc' by reading
@@ -215,90 +307,8 @@ static unsigned long rt_printline(unsigned long wanted_pc)
     return func_addr;
 }
 
-#ifdef __i386__
-/* fix for glibc 2.1 */
-#ifndef REG_EIP
-#define REG_EIP EIP
-#define REG_EBP EBP
-#endif
-
-/* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
-{
-    unsigned long fp;
-    int i;
-
-    if (level == 0) {
-#if defined(__FreeBSD__)
-        *paddr = uc->uc_mcontext.mc_eip;
-#elif defined(__dietlibc__)
-        *paddr = uc->uc_mcontext.eip;
-#else
-        *paddr = uc->uc_mcontext.gregs[REG_EIP];
-#endif
-        return 0;
-    } else {
-#if defined(__FreeBSD__)
-        fp = uc->uc_mcontext.mc_ebp;
-#elif defined(__dietlibc__)
-        fp = uc->uc_mcontext.ebp;
-#else
-        fp = uc->uc_mcontext.gregs[REG_EBP];
-#endif
-        for(i=1;i<level;i++) {
-            /* XXX: check address validity with program info */
-            if (fp <= 0x1000 || fp >= 0xc0000000)
-                return -1;
-            fp = ((unsigned long *)fp)[0];
-        }
-        *paddr = ((unsigned long *)fp)[1];
-        return 0;
-    }
-}
-#elif defined(__x86_64__)
-/* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
-{
-    unsigned long fp;
-    int i;
-
-    if (level == 0) {
-        /* XXX: only support linux */
-#if defined(__FreeBSD__)
-        *paddr = uc->uc_mcontext.mc_rip;
-#else
-        *paddr = uc->uc_mcontext.gregs[REG_RIP];
-#endif
-        return 0;
-    } else {
-#if defined(__FreeBSD__)
-        fp = uc->uc_mcontext.mc_rbp;
-#else
-        fp = uc->uc_mcontext.gregs[REG_RBP];
-#endif
-        for(i=1;i<level;i++) {
-            /* XXX: check address validity with program info */
-            if (fp <= 0x1000)
-                return -1;
-            fp = ((unsigned long *)fp)[0];
-        }
-        *paddr = ((unsigned long *)fp)[1];
-        return 0;
-    }
-}
-#else
-#warning add arch specific rt_get_caller_pc()
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
-{
-    return -1;
-}
-#endif
-
 /* emit a run time error at position 'pc' */
-void rt_error(ucontext_t *uc, const char *fmt, ...)
+static void rt_error(ucontext_t *uc, const char *fmt, ...)
 {
     va_list ap;
     unsigned long pc;
@@ -308,6 +318,7 @@ void rt_error(ucontext_t *uc, const char *fmt, ...)
     fprintf(stderr, "Runtime error: ");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
+
     for(i=0;i<num_callers;i++) {
         if (rt_get_caller_pc(&pc, uc, i) < 0)
             break;
@@ -316,12 +327,15 @@ void rt_error(ucontext_t *uc, const char *fmt, ...)
         else
             fprintf(stderr, "by ");
         pc = rt_printline(pc);
-        if (pc == rt_prog_main && pc)
+        if (pc == (unsigned long)rt_prog_main && pc)
             break;
     }
     exit(255);
     va_end(ap);
 }
+
+/* ------------------------------------------------------------- */
+#ifndef _WIN32
 
 /* signal handler for fatal errors */
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
@@ -360,164 +374,229 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
     exit(255);
 }
 
-#endif /* defined CONFIG_TCC_BACKTRACE */
-
-/********************************************************/
-
-void set_pages_executable(void *ptr, unsigned long length)
+/* Generate a stack backtrace when a CPU exception occurs. */
+static void set_exception_handler(void)
 {
-#ifdef _WIN32
-    unsigned long old_protect;
-    VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
-#else
-    unsigned long start, end;
-    start = (unsigned long)ptr & ~(PAGESIZE - 1);
-    end = (unsigned long)ptr + length;
-    end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
-    mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
-#endif
+    struct sigaction sigact;
+    /* install TCC signal handlers to print debug info on fatal
+       runtime errors */
+    sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sigact.sa_sigaction = sig_error;
+    sigemptyset(&sigact.sa_mask);
+    sigaction(SIGFPE, &sigact, NULL);
+    sigaction(SIGILL, &sigact, NULL);
+    sigaction(SIGSEGV, &sigact, NULL);
+    sigaction(SIGBUS, &sigact, NULL);
+    sigaction(SIGABRT, &sigact, NULL);
 }
 
-/* relocate code. Return -1 on error, required size if ptr is NULL,
-   otherwise copy code into buffer passed by the caller */
-static int tcc_relocate_ex(TCCState *s1, void *ptr)
+/* ------------------------------------------------------------- */
+#ifdef __i386__
+
+/* fix for glibc 2.1 */
+#ifndef REG_EIP
+#define REG_EIP EIP
+#define REG_EBP EBP
+#endif
+
+/* return the PC at frame level 'level'. Return non zero if not found */
+static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level)
 {
-    Section *s;
-    unsigned long offset, length;
-    uplong mem;
+    unsigned long fp;
     int i;
 
-    if (0 == s1->runtime_added) {
-        s1->runtime_added = 1;
-        s1->nb_errors = 0;
-#ifdef TCC_TARGET_PE
-        pe_output_file(s1, NULL);
+    if (level == 0) {
+#if defined(__FreeBSD__)
+        *paddr = uc->uc_mcontext.mc_eip;
+#elif defined(__dietlibc__)
+        *paddr = uc->uc_mcontext.eip;
 #else
-        tcc_add_runtime(s1);
-        relocate_common_syms();
-        tcc_add_linker_symbols(s1);
-        build_got_entries(s1);
+        *paddr = uc->uc_mcontext.gregs[REG_EIP];
 #endif
-        if (s1->nb_errors)
-            return -1;
-    }
-
-    offset = 0, mem = (uplong)ptr;
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (0 == (s->sh_flags & SHF_ALLOC))
-            continue;
-        length = s->data_offset;
-        s->sh_addr = mem ? (mem + offset + 15) & ~15 : 0;
-        offset = (offset + length + 15) & ~15;
-    }
-    offset += 16;
-
-    /* relocate symbols */
-    relocate_syms(s1, 1);
-    if (s1->nb_errors)
-        return -1;
-
-#ifndef TCC_TARGET_PE
-#ifdef TCC_TARGET_X86_64
-    s1->runtime_plt_and_got_offset = 0;
-    s1->runtime_plt_and_got = (char *)(mem + offset);
-    /* double the size of the buffer for got and plt entries
-       XXX: calculate exact size for them? */
-    offset *= 2;
-#endif
-#endif
-
-    if (0 == mem)
-        return offset;
-
-    /* relocate each section */
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (s->reloc)
-            relocate_section(s1, s);
-    }
-
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (0 == (s->sh_flags & SHF_ALLOC))
-            continue;
-        length = s->data_offset;
-        // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
-        ptr = (void*)(uplong)s->sh_addr;
-        if (NULL == s->data || s->sh_type == SHT_NOBITS)
-            memset(ptr, 0, length);
-        else
-            memcpy(ptr, s->data, length);
-        /* mark executable sections as executable in memory */
-        if (s->sh_flags & SHF_EXECINSTR)
-            set_pages_executable(ptr, length);
-    }
-
-#ifndef TCC_TARGET_PE
-#ifdef TCC_TARGET_X86_64
-    set_pages_executable(s1->runtime_plt_and_got,
-                         s1->runtime_plt_and_got_offset);
-#endif
-#endif
-    return 0;
-}
-
-/* Do all relocations (needed before using tcc_get_symbol())
-   Returns -1 on error. */
-int tcc_relocate(TCCState *s1)
-{
-    int ret = tcc_relocate_ex(s1, NULL);
-    if (-1 == ret)
-        return ret;
-    s1->runtime_mem = tcc_malloc(ret);
-    return tcc_relocate_ex(s1, s1->runtime_mem);
-}
-
-/* launch the compiled program with the given arguments */
-int tcc_run(TCCState *s1, int argc, char **argv)
-{
-    int (*prog_main)(int, char **);
-
-    if (tcc_relocate(s1) < 0)
-        return -1;
-
-    prog_main = tcc_get_symbol_err(s1, "main");
-
-    if (s1->do_debug) {
-#ifdef CONFIG_TCC_BACKTRACE
-        struct sigaction sigact;
-        /* install TCC signal handlers to print debug info on fatal
-           runtime errors */
-        sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
-        sigact.sa_sigaction = sig_error;
-        sigemptyset(&sigact.sa_mask);
-        sigaction(SIGFPE, &sigact, NULL);
-        sigaction(SIGILL, &sigact, NULL);
-        sigaction(SIGSEGV, &sigact, NULL);
-        sigaction(SIGBUS, &sigact, NULL);
-        sigaction(SIGABRT, &sigact, NULL);
+        return 0;
+    } else {
+#if defined(__FreeBSD__)
+        fp = uc->uc_mcontext.mc_ebp;
+#elif defined(__dietlibc__)
+        fp = uc->uc_mcontext.ebp;
 #else
-        error("debug mode not available");
+        fp = uc->uc_mcontext.gregs[REG_EBP];
 #endif
+        for(i=1;i<level;i++) {
+            /* XXX: check address validity with program info */
+            if (fp <= 0x1000 || fp >= 0xc0000000)
+                return -1;
+            fp = ((unsigned long *)fp)[0];
+        }
+        *paddr = ((unsigned long *)fp)[1];
+        return 0;
     }
-
-#ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check) {
-        void (*bound_init)(void);
-        void (*bound_exit)(void);
-        /* set error function */
-        rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
-        rt_prog_main = (unsigned long)prog_main;
-        /* XXX: use .init section so that it also work in binary ? */
-        bound_init = tcc_get_symbol_err(s1, "__bound_init");
-        bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
-        bound_init();
-        ret = (*prog_main)(argc, argv);
-        bound_exit();
-    } else
-#endif
-    return (*prog_main)(argc, argv);
 }
 
-/********************************************************/
+/* ------------------------------------------------------------- */
+#elif defined(__x86_64__)
+
+/* return the PC at frame level 'level'. Return non zero if not found */
+static int rt_get_caller_pc(unsigned long *paddr,
+                            ucontext_t *uc, int level)
+{
+    unsigned long fp;
+    int i;
+
+    if (level == 0) {
+        /* XXX: only support linux */
+#if defined(__FreeBSD__)
+        *paddr = uc->uc_mcontext.mc_rip;
+#else
+        *paddr = uc->uc_mcontext.gregs[REG_RIP];
+#endif
+        return 0;
+    } else {
+#if defined(__FreeBSD__)
+        fp = uc->uc_mcontext.mc_rbp;
+#else
+        fp = uc->uc_mcontext.gregs[REG_RBP];
+#endif
+        for(i=1;i<level;i++) {
+            /* XXX: check address validity with program info */
+            if (fp <= 0x1000)
+                return -1;
+            fp = ((unsigned long *)fp)[0];
+        }
+        *paddr = ((unsigned long *)fp)[1];
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------- */
+#else
+
+#warning add arch specific rt_get_caller_pc()
+static int rt_get_caller_pc(unsigned long *paddr,
+                            ucontext_t *uc, int level)
+{
+    return -1;
+}
+
+#endif /* !__i386__ */
+
+/* ------------------------------------------------------------- */
+#else /* WIN32 */
+
+static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
+{
+    CONTEXT *uc = ex_info->ContextRecord;
+/*
+    EXCEPTION_RECORD *er = ex_info->ExceptionRecord;
+    printf("CPU exception: code=%08lx addr=%p\n",
+	er->ExceptionCode, er->ExceptionAddress);
+*/
+    if (rt_bound_error_msg && *rt_bound_error_msg)
+	rt_error(uc, *rt_bound_error_msg);
+    else
+	rt_error(uc, "dereferencing invalid pointer");
+    exit(255);
+    //return EXCEPTION_CONTINUE_SEARCH;
+}
+
+/* Generate a stack backtrace when a CPU exception occurs. */
+static void set_exception_handler(void)
+{
+    SetUnhandledExceptionFilter(cpu_exception_handler);
+}
+
+/* return the PC at frame level 'level'. Return non zero if not found */
+static int rt_get_caller_pc(unsigned long *paddr,
+			    CONTEXT *uc, int level)
+{
+    unsigned long fp;
+    int i;
+
+    if (level == 0) {
+	*paddr = uc->Eip;
+	return 0;
+    } else {
+	fp = uc->Ebp;
+	for(i=1;i<level;i++) {
+	    /* XXX: check address validity with program info */
+	    if (fp <= 0x1000 || fp >= 0xc0000000)
+		return -1;
+	    fp = ((unsigned long *)fp)[0];
+	}
+	*paddr = ((unsigned long *)fp)[1];
+	return 0;
+    }
+}
+
+#endif /* _WIN32 */
+#endif /* CONFIG_TCC_BACKTRACE */
+/* ------------------------------------------------------------- */
+
+#ifdef CONFIG_TCC_STATIC
+
+#define RTLD_LAZY       0x001
+#define RTLD_NOW        0x002
+#define RTLD_GLOBAL     0x100
+#define RTLD_DEFAULT    NULL
+
+/* dummy function for profiling */
+void *dlopen(const char *filename, int flag)
+{
+    return NULL;
+}
+
+void dlclose(void *p)
+{
+}
+
+const char *dlerror(void)
+{
+    return "error";
+}
+
+typedef struct TCCSyms {
+    char *str;
+    void *ptr;
+} TCCSyms;
+
+#define TCCSYM(a) { #a, &a, },
+
+/* add the symbol you want here if no dynamic linking is done */
+static TCCSyms tcc_syms[] = {
+#if !defined(CONFIG_TCCBOOT)
+    TCCSYM(printf)
+    TCCSYM(fprintf)
+    TCCSYM(fopen)
+    TCCSYM(fclose)
+#endif
+    { NULL, NULL },
+};
+
+void *resolve_sym(TCCState *s1, const char *symbol)
+{
+    TCCSyms *p;
+    p = tcc_syms;
+    while (p->str != NULL) {
+        if (!strcmp(p->str, symbol))
+            return p->ptr;
+        p++;
+    }
+    return NULL;
+}
+
+#elif defined(_WIN32)
+
+#define dlclose FreeLibrary
+
+#else
+
+#include <dlfcn.h>
+
+void *resolve_sym(TCCState *s1, const char *sym)
+{
+    return dlsym(RTLD_DEFAULT, sym);
+}
+
+#endif /* CONFIG_TCC_STATIC */
+
+/* ------------------------------------------------------------- */

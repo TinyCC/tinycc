@@ -33,12 +33,11 @@
 
 /* use malloc hooks. Currently the code cannot be reliable if no hooks */
 #define CONFIG_TCC_MALLOC_HOOKS
-
 #define HAVE_MEMALIGN
 
 #if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__dietlibc__) \
-    || defined(__UCLIBC__) || defined(__OpenBSD__)
-#warning Bound checking not fully supported in this environment.
+    || defined(__UCLIBC__) || defined(__OpenBSD__) || defined(_WIN32)
+#warning Bound checking does not support malloc (etc.) in this environment.
 #undef CONFIG_TCC_MALLOC_HOOKS
 #undef HAVE_MEMALIGN
 #endif
@@ -152,9 +151,6 @@ static void bound_alloc_error(void)
     bound_error("not enough memory for bound checking code");
 }
 
-/* currently, tcc cannot compile that because we use GNUC extensions */
-#if !defined(__TINYC__)
-
 /* return '(p + offset)' for pointer arithmetic (a pointer can reach
    the end of a region in this case */
 void * FASTCALL __bound_ptr_add(void *p, int offset)
@@ -203,6 +199,13 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, int offset)        \
     return p + offset;                                                  \
 }
 
+BOUND_PTR_INDIR(1)
+BOUND_PTR_INDIR(2)
+BOUND_PTR_INDIR(4)
+BOUND_PTR_INDIR(8)
+BOUND_PTR_INDIR(12)
+BOUND_PTR_INDIR(16)
+
 #ifdef __i386__
 /* return the frame pointer of the caller */
 #define GET_CALLER_FP(fp)\
@@ -245,34 +248,6 @@ void FASTCALL __bound_local_delete(void *p1)
         __bound_delete_region((void *)addr);
     }
 }
-
-#else
-
-void __bound_local_new(void *p) 
-{
-}
-void __bound_local_delete(void *p) 
-{
-}
-
-void *__bound_ptr_add(void *p, int offset)
-{
-    return p + offset;
-}
-
-#define BOUND_PTR_INDIR(dsize)                               \
-void *__bound_ptr_indir ## dsize (void *p, int offset)       \
-{                                                            \
-    return p + offset;                                       \
-}
-#endif
-
-BOUND_PTR_INDIR(1)
-BOUND_PTR_INDIR(2)
-BOUND_PTR_INDIR(4)
-BOUND_PTR_INDIR(8)
-BOUND_PTR_INDIR(12)
-BOUND_PTR_INDIR(16)
 
 static BoundEntry *__bound_new_page(void)
 {

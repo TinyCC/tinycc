@@ -78,7 +78,7 @@ ARM_CROSS = arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) \
     arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
 C67_CROSS = c67-tcc$(EXESUF)
 
-CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c \
+CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c \
     tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
@@ -180,7 +180,7 @@ VPATH+=lib
 
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
-LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
+LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
 LIBTCC1_CC=./tcc.exe -Bwin32 -Iinclude $(NATIVE_TARGET)
 VPATH+=win32/lib
 endif
@@ -192,9 +192,6 @@ endif
 
 libtcc1.a: $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
-
-bcheck.o: bcheck.c
-	$(CC) -o $@ -c $< -O2 -Wall
 
 # install
 TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h

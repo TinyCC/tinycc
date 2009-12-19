@@ -1700,15 +1700,15 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
     pe.filename = filename;
     pe.s1 = s1;
 
+    tcc_add_bcheck(s1);
     pe_add_runtime_ex(s1, &pe);
     relocate_common_syms(); /* assign bss adresses */
     tcc_add_linker_symbols(s1);
 
     ret = pe_check_symbols(&pe);
     if (ret)
-        return ret;
-
-    if (filename) {
+        ;
+    else if (filename) {
         if (PE_DLL == pe.type) {
             pe.reloc = new_section(pe.s1, ".reloc", SHT_PROGBITS, 0);
             /* XXX: check if is correct for arm-pe target */

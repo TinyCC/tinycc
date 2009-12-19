@@ -87,8 +87,10 @@ const int reg_classes[NB_REGS] = {
 /******************************************************/
 
 static unsigned long func_sub_sp_offset;
-static unsigned long func_bound_offset;
 static int func_ret_sub;
+#ifdef CONFIG_TCC_BCHECK
+static unsigned long func_bound_offset;
+#endif
 
 /* XXX: make it faster ? */
 void g(int c)
@@ -511,12 +513,14 @@ void gfunc_prolog(CType *func_type)
         func_ret_sub = 4;
 #endif
 
+#ifdef CONFIG_TCC_BCHECK
     /* leave some room for bound checking code */
     if (tcc_state->do_bounds_check) {
         oad(0xb8, 0); /* lbound section pointer */
         oad(0xb8, 0); /* call to function */
         func_bound_offset = lbounds_section->data_offset;
     }
+#endif
 }
 
 /* generate function epilog */

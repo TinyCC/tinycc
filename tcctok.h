@@ -219,9 +219,11 @@
      DEF(TOK___bound_ptr_indir16, "__bound_ptr_indir16")
      DEF(TOK___bound_local_new, "__bound_local_new")
      DEF(TOK___bound_local_delete, "__bound_local_delete")
-#if 0
+#ifdef TCC_TARGET_PE
+#ifndef TCC_TARGET_X86_64
      DEF(TOK_malloc, "malloc")
      DEF(TOK_free, "free")
+#endif
      DEF(TOK_realloc, "realloc")
      DEF(TOK_memalign, "memalign")
      DEF(TOK_calloc, "calloc")

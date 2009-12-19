@@ -31,8 +31,10 @@ copy ..\libtcc.h libtcc\libtcc.h
 :tcc
 %P%gcc -Os -fno-strict-aliasing ../tcc.c -o tcc.exe -s -DTCC_USE_LIBTCC -ltcc -Llibtcc
 
-:libtcc1.a
+:copy_std_includes
 copy ..\include\*.h include
+
+:libtcc1.a
 .\tcc -c lib/crt1.c
 .\tcc -c lib/wincrt1.c
 .\tcc -c lib/dllcrt1.c
@@ -40,5 +42,15 @@ copy ..\include\*.h include
 .\tcc -c ../lib/libtcc1.c
 .\tcc -c lib/chkstk.S
 .\tcc -c ../lib/alloca86%S%.S
-tiny_libmaker lib/libtcc1.a crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o libtcc1.o alloca86%S%.o
+
+@set LIBFILES=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o libtcc1.o alloca86%S%.o
+
+@if not _%P%==_ goto makelib
+.\tcc -c ../lib/alloca86-bt%S%.S
+.\tcc -c ../lib/bcheck.c
+
+@set LIBFILES=%LIBFILES% alloca86-bt%S%.o bcheck.o
+
+:makelib
+tiny_libmaker lib/libtcc1.a %LIBFILES%
 del *.o
