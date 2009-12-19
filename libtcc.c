@@ -780,6 +780,8 @@ static void put_extern_sym2(Sym *sym, Section *section,
         if (FUNC_CALL(attr) == FUNC_STDCALL)
             other |= 2;
 #endif
+    } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
+        sym_type = STT_NOTYPE;
     } else {
         sym_type = STT_OBJECT;
     }
