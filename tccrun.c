@@ -85,7 +85,7 @@ void *resolve_sym(TCCState *s1, const char *sym)
     return dlsym(RTLD_DEFAULT, sym);
 }
 
-#endif /* defined CONFIG_TCC_STATIC
+#endif /* defined CONFIG_TCC_STATIC */
 
 /********************************************************/
 
@@ -378,10 +378,9 @@ void set_pages_executable(void *ptr, unsigned long length)
 #endif
 }
 
-/* copy code into memory passed in by the caller and do all relocations
-   (needed before using tcc_get_symbol()).
-   returns -1 on error and required size if ptr is NULL */
-int tcc_relocate(TCCState *s1, void *ptr)
+/* relocate code. Return -1 on error, required size if ptr is NULL,
+   otherwise copy code into buffer passed by the caller */
+static int tcc_relocate_ex(TCCState *s1, void *ptr)
 {
     Section *s;
     unsigned long offset, length;
@@ -412,6 +411,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
         s->sh_addr = mem ? (mem + offset + 15) & ~15 : 0;
         offset = (offset + length + 15) & ~15;
     }
+    offset += 16;
 
     /* relocate symbols */
     relocate_syms(s1, 1);
@@ -429,7 +429,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
 #endif
 
     if (0 == mem)
-        return offset + 15;
+        return offset;
 
     /* relocate each section */
     for(i = 1; i < s1->nb_sections; i++) {
@@ -453,6 +453,7 @@ int tcc_relocate(TCCState *s1, void *ptr)
         if (s->sh_flags & SHF_EXECINSTR)
             set_pages_executable(ptr, length);
     }
+
 #ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
     set_pages_executable(s1->runtime_plt_and_got,
@@ -462,18 +463,24 @@ int tcc_relocate(TCCState *s1, void *ptr)
     return 0;
 }
 
+/* Do all relocations (needed before using tcc_get_symbol())
+   Returns -1 on error. */
+int tcc_relocate(TCCState *s1)
+{
+    int ret = tcc_relocate_ex(s1, NULL);
+    if (-1 == ret)
+        return ret;
+    s1->runtime_mem = tcc_malloc(ret);
+    return tcc_relocate_ex(s1, s1->runtime_mem);
+}
+
 /* launch the compiled program with the given arguments */
 int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
-    void *ptr;
-    int ret;
 
-    ret = tcc_relocate(s1, NULL);
-    if (ret < 0)
+    if (tcc_relocate(s1) < 0)
         return -1;
-    ptr = tcc_malloc(ret);
-    tcc_relocate(s1, ptr);
 
     prog_main = tcc_get_symbol_err(s1, "main");
 
@@ -510,9 +517,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         bound_exit();
     } else
 #endif
-    ret = (*prog_main)(argc, argv);
-    tcc_free(ptr);
-    return ret;
+    return (*prog_main)(argc, argv);
 }
 
 /********************************************************/

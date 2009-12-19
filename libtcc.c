@@ -1525,6 +1525,7 @@ void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
 
     tcc_free(s1->tcc_lib_path);
+    tcc_free(s1->runtime_mem);
     tcc_free(s1);
 }
 

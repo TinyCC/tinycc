@@ -498,6 +498,7 @@ struct TCCState {
 
     /* for tcc_relocate */
     int runtime_added;
+    void *runtime_mem;
 
     struct InlineFunc **inline_fns;
     int nb_inline_fns;

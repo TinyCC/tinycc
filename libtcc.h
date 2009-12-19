@@ -90,10 +90,9 @@ LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename);
    tcc_relocate() before. */
 LIBTCCAPI int tcc_run(TCCState *s, int argc, char **argv);
 
-/* copy code into memory passed in by the caller and do all relocations
-   (needed before using tcc_get_symbol()).
-   returns -1 on error and required size if ptr is NULL */
-LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr);
+/* Do all relocations (needed before using tcc_get_symbol())
+   Returns -1 on error. */
+LIBTCCAPI int tcc_relocate(TCCState *s1);
 
 /* return symbol value or NULL if not found */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name);
