@@ -1074,6 +1074,7 @@ static Sym *sym_push2(Sym **ps, int v, int t, long c)
     s = sym_malloc();
     s->v = v;
     s->type.t = t;
+    s->type.ref = NULL;
 #ifdef _WIN64
     s->d = NULL;
 #endif

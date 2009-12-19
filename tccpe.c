@@ -1185,6 +1185,21 @@ ST_FN void pe_relocate_rva (struct pe_info *pe, Section *s)
 }
 
 /*----------------------------------------------------------------------------*/
+static int pe_isafunc(int sym_index)
+{
+    Section *sr = text_section->reloc;
+    ElfW_Rel *rel, *rel_end;
+    Elf32_Word info = ELF32_R_INFO(sym_index, R_386_PC32);
+    if (!sr)
+        return 0;
+    rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
+    for (rel = (ElfW_Rel *)sr->data; rel < rel_end; rel++)
+        if (rel->r_info == info)
+            return 1;
+    return 0;
+}
+
+/*----------------------------------------------------------------------------*/
 ST_FN int pe_check_symbols(struct pe_info *pe)
 {
     ElfW(Sym) *sym;
@@ -1209,6 +1224,14 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
             is = pe_add_import(pe, imp_sym);
             if (!is)
                 goto not_found;
+
+            if (type == STT_NOTYPE) {
+                /* symbols from assembler have no type, find out which */
+                if (pe_isafunc(sym_index))
+                    type = STT_FUNC;
+                else
+                    type = STT_OBJECT;
+            }
 
             if (type == STT_FUNC) {
                 unsigned long offset = is->thk_offset;
