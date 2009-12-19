@@ -52,6 +52,7 @@
 #define _CRT_WIDE(_String) __CRT_WIDE(_String)
 
 #ifdef _WIN64
+
 typedef __int64 intptr_t;
 typedef unsigned __int64 uintptr_t;
 #define __stdcall
@@ -59,12 +60,15 @@ typedef unsigned __int64 uintptr_t;
 #define __x86_64 1
 #define USE_MINGW_SETJMP_TWO_ARGS
 #define mingw_getsp tinyc_getbp
+
 #else
+
 typedef __int32 intptr_t;
 typedef unsigned __int32 uintptr_t;
 #define __stdcall __attribute__((__stdcall__))
 #define _X86_ 1
 #define WIN32 1
+
 #endif
 
 #define _INTEGRAL_MAX_BITS 64
@@ -74,6 +78,11 @@ typedef long __time32_t;
 #define _TIME32_T_DEFINED
 typedef __int64 __time64_t;
 #define _TIME64_T_DEFINED
+
+typedef unsigned long size_t;
+#define _SIZE_T_DEFINED
+typedef long ssize_t;
+#define _SSIZE_T_DEFINED
 
 #ifdef _USE_32BIT_TIME_T
 #ifdef _WIN64
