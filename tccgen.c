@@ -400,7 +400,7 @@ ST_FUNC void vswap(void)
     vtop[-1] = tmp;
 }
 
-static void vpushv(SValue *v)
+ST_FUNC void vpushv(SValue *v)
 {
     if (vtop >= vstack + (VSTACK_SIZE - 1))
         error("memory full");

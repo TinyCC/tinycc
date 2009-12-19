@@ -611,7 +611,7 @@ void gfunc_call(int nb_args)
 
             /* generate memcpy call */
             vset(&sv->type, r | VT_LVAL, 0);
-            *++vtop = *sv;
+            vpushv(sv);
             vstore();
             --vtop;
 

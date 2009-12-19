@@ -1620,7 +1620,7 @@ ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
     sv->sym->type.t = t & ~VT_IMPORT;
     //printf("import %x %04x %s\n", t, ind, get_tok_str(sv->sym->v, NULL));
 
-    *++vtop = *sv;
+    vpushv(sv);
     vtop->type.t &= ~(VT_ARRAY|VT_IMPORT);
     mk_pointer(&vtop->type);
     indir();
