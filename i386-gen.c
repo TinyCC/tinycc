@@ -109,6 +109,12 @@ void o(unsigned int c)
     }
 }
 
+void gen_le16(int v)
+{
+    g(v);
+    g(v >> 8);
+}
+
 void gen_le32(int c)
 {
     g(c);
@@ -159,6 +165,13 @@ static void gen_addr32(int r, Sym *sym, int c)
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_386_32);
     gen_le32(c);
+}
+
+static void gen_addrpc32(int r, Sym *sym, int c)
+{
+    if (r & VT_SYM)
+        greloc(cur_text_section, sym, ind, R_386_PC32);
+    gen_le32(c - 4);
 }
 
 /* generate a modrm reference. 'op_reg' contains the addtionnal 3

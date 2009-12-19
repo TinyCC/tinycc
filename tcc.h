@@ -660,35 +660,41 @@ struct TCCState {
 /* all identificators and strings have token above that */
 #define TOK_IDENT 256
 
-/* only used for i386 asm opcodes definitions */
 #define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
+#define TOK_ASM_int TOK_INT
 
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+/* only used for i386 asm opcodes definitions */
 #define DEF_BWL(x) \
  DEF(TOK_ASM_ ## x ## b, #x "b") \
  DEF(TOK_ASM_ ## x ## w, #x "w") \
  DEF(TOK_ASM_ ## x ## l, #x "l") \
  DEF(TOK_ASM_ ## x, #x)
-
 #define DEF_WL(x) \
  DEF(TOK_ASM_ ## x ## w, #x "w") \
  DEF(TOK_ASM_ ## x ## l, #x "l") \
  DEF(TOK_ASM_ ## x, #x)
-
 #ifdef TCC_TARGET_X86_64
-
-#define DEF_BWLQ(x) \
+# define DEF_BWLQ(x) \
  DEF(TOK_ASM_ ## x ## b, #x "b") \
  DEF(TOK_ASM_ ## x ## w, #x "w") \
  DEF(TOK_ASM_ ## x ## l, #x "l") \
  DEF(TOK_ASM_ ## x ## q, #x "q") \
  DEF(TOK_ASM_ ## x, #x)
-
-#define DEF_WLQ(x) \
+# define DEF_WLQ(x) \
  DEF(TOK_ASM_ ## x ## w, #x "w") \
  DEF(TOK_ASM_ ## x ## l, #x "l") \
  DEF(TOK_ASM_ ## x ## q, #x "q") \
  DEF(TOK_ASM_ ## x, #x)
-
+# define DEF_BWLX DEF_BWLQ
+# define DEF_WLX DEF_WLQ
+/* number of sizes + 1 */
+# define NBWLX 5
+#else
+# define DEF_BWLX DEF_BWL
+# define DEF_WLX DEF_WL
+/* number of sizes + 1 */
+# define NBWLX 4
 #endif
 
 #define DEF_FP1(x) \
@@ -734,7 +740,7 @@ struct TCCState {
  DEF_ASM(x ## nle) \
  DEF_ASM(x ## g)
 
-#define TOK_ASM_int TOK_INT
+#endif // defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 
 enum tcc_token {
     TOK_LAST = TOK_IDENT - 1,

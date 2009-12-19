@@ -325,12 +325,8 @@ static inline int toup(int c)
 
 #ifdef CONFIG_TCC_ASM
 
-#ifdef TCC_TARGET_I386
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #include "i386-asm.c"
-#endif
-
-#ifdef TCC_TARGET_X86_64
-#include "x86_64-asm.c"
 #endif
 
 #include "tccasm.c"
@@ -854,10 +850,14 @@ static void put_extern_sym(Sym *sym, Section *section,
 /* add a new relocation entry to symbol 'sym' in section 's' */
 static void greloc(Section *s, Sym *sym, unsigned long offset, int type)
 {
-    if (!sym->c) 
-        put_extern_sym(sym, NULL, 0, 0);
+    int c = 0;
+    if (sym) {
+        if (0 == sym->c)
+            put_extern_sym(sym, NULL, 0, 0);
+        c = sym->c;
+    }
     /* now we can add ELF relocation info */
-    put_elf_reloc(symtab_section, s, offset, type, sym->c);
+    put_elf_reloc(symtab_section, s, offset, type, c);
 }
 
 static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)

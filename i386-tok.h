@@ -1,5 +1,7 @@
-
+/* ------------------------------------------------------------------ */
 /* WARNING: relative order of tokens is important. */
+
+/* register */
  DEF_ASM(al)
  DEF_ASM(cl)
  DEF_ASM(dl)
@@ -24,6 +26,16 @@
  DEF_ASM(ebp)
  DEF_ASM(esi)
  DEF_ASM(edi)
+#ifdef TCC_TARGET_X86_64
+ DEF_ASM(rax)
+ DEF_ASM(rcx)
+ DEF_ASM(rdx)
+ DEF_ASM(rbx)
+ DEF_ASM(rsp)
+ DEF_ASM(rbp)
+ DEF_ASM(rsi)
+ DEF_ASM(rdi)
+#endif
  DEF_ASM(mm0)
  DEF_ASM(mm1)
  DEF_ASM(mm2)
@@ -80,39 +92,39 @@
  DEF_ASM(gs)
  DEF_ASM(st)
 
- DEF_BWL(mov)
-
  /* generic two operands */
- DEF_BWL(add)
- DEF_BWL(or)
- DEF_BWL(adc)
- DEF_BWL(sbb)
- DEF_BWL(and)
- DEF_BWL(sub)
- DEF_BWL(xor)
- DEF_BWL(cmp)
+ DEF_BWLX(mov)
+
+ DEF_BWLX(add)
+ DEF_BWLX(or)
+ DEF_BWLX(adc)
+ DEF_BWLX(sbb)
+ DEF_BWLX(and)
+ DEF_BWLX(sub)
+ DEF_BWLX(xor)
+ DEF_BWLX(cmp)
 
  /* unary ops */
- DEF_BWL(inc)
- DEF_BWL(dec)
- DEF_BWL(not)
- DEF_BWL(neg)
- DEF_BWL(mul)
- DEF_BWL(imul)
- DEF_BWL(div)
- DEF_BWL(idiv)
+ DEF_BWLX(inc)
+ DEF_BWLX(dec)
+ DEF_BWLX(not)
+ DEF_BWLX(neg)
+ DEF_BWLX(mul)
+ DEF_BWLX(imul)
+ DEF_BWLX(div)
+ DEF_BWLX(idiv)
 
- DEF_BWL(xchg)
- DEF_BWL(test)
+ DEF_BWLX(xchg)
+ DEF_BWLX(test)
 
  /* shifts */
- DEF_BWL(rol)
- DEF_BWL(ror)
- DEF_BWL(rcl)
- DEF_BWL(rcr)
- DEF_BWL(shl)
- DEF_BWL(shr)
- DEF_BWL(sar)
+ DEF_BWLX(rol)
+ DEF_BWLX(ror)
+ DEF_BWLX(rcl)
+ DEF_BWLX(rcr)
+ DEF_BWLX(shl)
+ DEF_BWLX(shr)
+ DEF_BWLX(sar)
 
  DEF_ASM(shldw)
  DEF_ASM(shldl)
@@ -123,21 +135,31 @@
 
  DEF_ASM(pushw)
  DEF_ASM(pushl)
+#ifdef TCC_TARGET_X86_64
+ DEF_ASM(pushq)
+#endif
  DEF_ASM(push)
+
  DEF_ASM(popw)
  DEF_ASM(popl)
+#ifdef TCC_TARGET_X86_64
+ DEF_ASM(popq)
+#endif
  DEF_ASM(pop)
+
  DEF_BWL(in)
  DEF_BWL(out)
 
  DEF_WL(movzb)
-
  DEF_ASM(movzwl)
  DEF_ASM(movsbw)
  DEF_ASM(movsbl)
  DEF_ASM(movswl)
+#ifdef TCC_TARGET_X86_64
+ DEF_ASM(movslq)
+#endif
 
- DEF_WL(lea)
+ DEF_WLX(lea)
 
  DEF_ASM(les)
  DEF_ASM(lds)
@@ -155,14 +177,14 @@
  DEF_ASMTEST(set)
  DEF_ASMTEST(cmov)
 
- DEF_WL(bsf)
- DEF_WL(bsr)
- DEF_WL(bt)
- DEF_WL(bts)
- DEF_WL(btr)
- DEF_WL(btc)
+ DEF_WLX(bsf)
+ DEF_WLX(bsr)
+ DEF_WLX(bt)
+ DEF_WLX(bts)
+ DEF_WLX(btr)
+ DEF_WLX(btc)
 
- DEF_WL(lsl)
+ DEF_WLX(lsl)
 
  /* generic FP ops */
  DEF_FP(add)
@@ -178,32 +200,35 @@
  DEF_FP(div)
  DEF_FP(divr)
 
- DEF_BWL(xadd)
- DEF_BWL(cmpxchg)
+ DEF_BWLX(xadd)
+ DEF_BWLX(cmpxchg)
 
  /* string ops */
- DEF_BWL(cmps)
- DEF_BWL(scmp)
+ DEF_BWLX(cmps)
+ DEF_BWLX(scmp)
  DEF_BWL(ins)
  DEF_BWL(outs)
- DEF_BWL(lods)
- DEF_BWL(slod)
- DEF_BWL(movs)
- DEF_BWL(smov)
- DEF_BWL(scas)
- DEF_BWL(ssca)
- DEF_BWL(stos)
- DEF_BWL(ssto)
+ DEF_BWLX(lods)
+ DEF_BWLX(slod)
+ DEF_BWLX(movs)
+ DEF_BWLX(smov)
+ DEF_BWLX(scas)
+ DEF_BWLX(ssca)
+ DEF_BWLX(stos)
+ DEF_BWLX(ssto)
 
  /* generic asm ops */
-
 #define ALT(x)
 #define DEF_ASM_OP0(name, opcode) DEF_ASM(name)
 #define DEF_ASM_OP0L(name, opcode, group, instr_type)
 #define DEF_ASM_OP1(name, opcode, group, instr_type, op0)
 #define DEF_ASM_OP2(name, opcode, group, instr_type, op0, op1)
 #define DEF_ASM_OP3(name, opcode, group, instr_type, op0, op1, op2)
-#include "i386-asm.h"
+#ifdef TCC_TARGET_X86_64
+# include "x86_64-asm.h"
+#else
+# include "i386-asm.h"
+#endif
 
 #define ALT(x)
 #define DEF_ASM_OP0(name, opcode)
@@ -211,4 +236,8 @@
 #define DEF_ASM_OP1(name, opcode, group, instr_type, op0) DEF_ASM(name)
 #define DEF_ASM_OP2(name, opcode, group, instr_type, op0, op1) DEF_ASM(name)
 #define DEF_ASM_OP3(name, opcode, group, instr_type, op0, op1, op2) DEF_ASM(name)
-#include "i386-asm.h"
+#ifdef TCC_TARGET_X86_64
+# include "x86_64-asm.h"
+#else
+# include "i386-asm.h"
+#endif

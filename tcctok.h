@@ -233,7 +233,6 @@
 #endif
 
 /* Tiny Assembler */
-
  DEF_ASM(byte)
  DEF_ASM(word)
  DEF_ASM(align)
@@ -258,9 +257,6 @@
  DEF_ASM(code64)
 #endif
 
-#ifdef TCC_TARGET_I386
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #include "i386-tok.h"
-#elif TCC_TARGET_X86_64
-#include "x86_64-tok.h"
 #endif
-

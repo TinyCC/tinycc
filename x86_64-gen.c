@@ -123,6 +123,12 @@ void o(unsigned int c)
     }
 }
 
+void gen_le16(int v)
+{
+    g(v);
+    g(v >> 8);
+}
+
 void gen_le32(int c)
 {
     g(c);
@@ -192,7 +198,13 @@ static int oad(int c, int s)
     return s;
 }
 
-#if 0
+static void gen_addr32(int r, Sym *sym, int c)
+{
+    if (r & VT_SYM)
+        greloc(cur_text_section, sym, ind, R_X86_64_32);
+    gen_le32(c);
+}
+
 /* output constant with relocation if 'r & VT_SYM' is true */
 static void gen_addr64(int r, Sym *sym, int64_t c)
 {
@@ -200,7 +212,6 @@ static void gen_addr64(int r, Sym *sym, int64_t c)
         greloc(cur_text_section, sym, ind, R_X86_64_64);
     gen_le64(c);
 }
-#endif
 
 /* output constant with relocation if 'r & VT_SYM' is true */
 static void gen_addrpc32(int r, Sym *sym, int c)
