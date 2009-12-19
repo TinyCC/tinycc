@@ -938,6 +938,7 @@ void gen_cvt_ftoi(int t)
     CType ushort_type;
 
     ushort_type.t = VT_SHORT | VT_UNSIGNED;
+    ushort_type.ref = 0;
 
     gv(RC_FLOAT);
     if (t != VT_INT)

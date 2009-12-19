@@ -61,6 +61,7 @@ void vpushll(long long v)
     CValue cval;
     CType ctype;
     ctype.t = VT_LLONG;
+    ctype.ref = 0;
     cval.ull = v;
     vsetc(&ctype, VT_CONST, &cval);
 }
@@ -150,6 +151,7 @@ void vseti(int r, int v)
 {
     CType type;
     type.t = VT_INT;
+    type.ref = 0;
     vset(&type, r, v);
 }
 
@@ -2968,6 +2970,7 @@ static void vpush_tokc(int t)
 {
     CType type;
     type.t = t;
+    type.ref = 0;
     vsetc(&type, VT_CONST, &tokc);
 }
 
