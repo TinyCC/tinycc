@@ -426,6 +426,10 @@ static void gen_disp32(ExprValue *pe)
            elimination in the linker */
         gen_le32(pe->v + sym->jnext - ind - 4);
     } else {
+        if (sym && sym->type.t == VT_VOID) {
+            sym->type.t = VT_FUNC;
+            sym->type.ref = NULL;
+        }
         gen_addrpc32(VT_SYM, sym, pe->v);
     }
 }

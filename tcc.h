@@ -521,6 +521,10 @@ struct TCCState {
     /* PE info */
     int pe_subsystem;
     unsigned long pe_file_align;
+    struct pe_uw {
+        Section *pdata;
+        int sym_1, sym_2, offs_1;
+    } pe_unwind;
 #endif
 
 #ifndef TCC_TARGET_PE
@@ -1167,6 +1171,9 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
 ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv));
 /* tiny_impdef.c */
 ST_FUNC char *get_export_names(FILE *fp);
+#ifdef TCC_TARGET_X86_64
+ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
+#endif
 #endif
 
 /* ------------ tccrun.c ----------------- */

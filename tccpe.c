@@ -289,6 +289,7 @@ enum {
     sec_data ,
     sec_bss ,
     sec_idata ,
+    sec_pdata ,
     sec_other ,
     sec_rsrc ,
     sec_stab ,
@@ -301,6 +302,7 @@ static const DWORD pe_sec_flags[] = {
     0xC0000040, /* ".data"     , */
     0xC0000080, /* ".bss"      , */
     0x40000040, /* ".idata"    , */
+    0x40000040, /* ".pdata"    , */
     0xE0000060, /* < other >   , */
     0x40000040, /* ".rsrc"     , */
     0x42000802, /* ".stab"     , */
@@ -632,6 +634,10 @@ static int pe_write(struct pe_info *pe)
 
             case sec_rsrc:
                 pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_RESOURCE, addr, size);
+                break;
+
+            case sec_pdata:
+                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_EXCEPTION, addr, size);
                 break;
 
             case sec_stab:
@@ -1037,6 +1043,8 @@ static int pe_section_class(Section *s)
                 return sec_rsrc;
             if (0 == strcmp(name, ".iedat"))
                 return sec_idata;
+            if (0 == strcmp(name, ".pdata"))
+                return sec_pdata;
             return sec_other;
         } else if (type == SHT_NOBITS) {
             if (flags & SHF_WRITE)
@@ -1086,7 +1094,7 @@ static int pe_assign_addresses (struct pe_info *pe)
 #ifdef PE_MERGE_DATA
         if (c == sec_bss && pe->sec_count && si[-1].cls == sec_data) {
             /* append .bss to .data */
-            s->sh_addr = addr = ((addr-1) | 15) + 1;
+            s->sh_addr = addr = ((addr-1) | (s->sh_addralign-1)) + 1;
             addr += s->data_offset;
             si[-1].sh_size = addr - si[-1].sh_addr;
             continue;
@@ -1162,7 +1170,7 @@ static void pe_relocate_rva (struct pe_info *pe, Section *s)
                 ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
                 addr = sym->st_value;
             }
-            // printf("reloc rva %08x %08x\n", (DWORD)rel->r_offset, addr);
+            // printf("reloc rva %08x %08x %s\n", (DWORD)rel->r_offset, addr, s->name);
             *(DWORD*)(s->data + rel->r_offset) += addr - pe->imagebase;
         }
     }
@@ -1622,6 +1630,56 @@ ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
     sv->sym->type.t = t;
     return 1;
 }
+
+/* ------------------------------------------------------------- */
+#ifdef TCC_TARGET_X86_64
+ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
+{
+    static const char uw_info[] = {
+        0x01, // UBYTE: 3 Version , UBYTE: 5 Flags
+        0x04, // UBYTE Size of prolog
+        0x02, // UBYTE Count of unwind codes
+        0x05, // UBYTE: 4 Frame Register (rbp), UBYTE: 4 Frame Register offset (scaled)
+        // USHORT * n Unwind codes array
+        // 0x0b, 0x01, 0xff, 0xff, // stack size
+        0x04, 0x03, // set frame ptr (mov rsp -> rbp)
+        0x01, 0x50  // push reg (rbp)
+    };
+
+    struct pe_uw *pe_uw = &tcc_state->pe_unwind;
+
+    Section *uw, *pd;
+    WORD *p1;
+    DWORD *p2;
+    unsigned o2;
+
+    uw = data_section;
+    pd = pe_uw->pdata;
+    if (NULL == pd)
+    {
+        pe_uw->pdata = pd = find_section(tcc_state, ".pdata");
+        pe_uw->pdata->sh_addralign = 4;
+        section_ptr_add(uw, -uw->data_offset & 3);
+        pe_uw->offs_1 = uw->data_offset;
+        p1 = section_ptr_add(uw, sizeof uw_info);
+        /* use one common entry for all functions */
+        memcpy(p1, uw_info, sizeof uw_info);
+        pe_uw->sym_1 = put_elf_sym(symtab_section, 0, 0, 0, 0, text_section->sh_num, NULL);
+        pe_uw->sym_2 = put_elf_sym(symtab_section, 0, 0, 0, 0, uw->sh_num, NULL);
+    }
+
+    o2 = pd->data_offset;
+    p2 = section_ptr_add(pd, 3 * sizeof (DWORD));
+    /* record this function */
+    p2[0] = start;
+    p2[1] = end;
+    p2[2] = pe_uw->offs_1;
+    /* put relocations on it */
+    put_elf_reloc(symtab_section, pd, o2,   R_X86_64_RELATIVE, pe_uw->sym_1);
+    put_elf_reloc(symtab_section, pd, o2+4, R_X86_64_RELATIVE, pe_uw->sym_1);
+    put_elf_reloc(symtab_section, pd, o2+8, R_X86_64_RELATIVE, pe_uw->sym_2);
+}
+#endif
 
 /* ------------------------------------------------------------- */
 #ifdef TCC_TARGET_X86_64

@@ -78,6 +78,13 @@ int tcc_run(TCCState *s1, int argc, char **argv)
         return ret;
     }
 #endif
+
+#ifdef TCC_TARGET_PE
+    {
+      unsigned char *p = tcc_get_symbol(s1, "tinyc_no_getbp");
+      if (p) *p = 0;
+    }
+#endif
     return (*prog_main)(argc, argv);
 }
 
