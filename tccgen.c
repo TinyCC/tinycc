@@ -5143,7 +5143,7 @@ static void decl(int l)
                     if (!(type.t & VT_ARRAY))
                         r |= lvalue_type(type.t);
                     has_init = (tok == '=');
-                    if ((btype.t & VT_EXTERN) || 
+                    if ((btype.t & VT_EXTERN) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
                          !has_init && l == VT_CONST && type.ref->c < 0)) {
                         /* external variable */
@@ -5163,7 +5163,11 @@ static void decl(int l)
                             r |= l;
                         if (has_init)
                             next();
-                        decl_initializer_alloc(&type, &ad, r, 
+#ifdef TCC_TARGET_PE
+                        if (ad.func_export)
+                            type.t |= VT_EXPORT;
+#endif
+                        decl_initializer_alloc(&type, &ad, r,
                                                has_init, v, l);
                     }
                 }

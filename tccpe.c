@@ -853,18 +853,6 @@ ST_FN void pe_build_imports(struct pe_info *pe)
 }
 
 /* ------------------------------------------------------------- */
-/*
-    For now only functions are exported. Export of data
-    would work, but import requires compiler support to
-    do an additional indirection.
-
-    For instance:
-        __declspec(dllimport) extern int something;
-
-    needs to be translated to:
-
-        *(int*)something
-*/
 
 struct pe_sort_sym
 {
@@ -1430,6 +1418,32 @@ ST_FN void pe_print_sections(TCCState *s1, const char *fname)
     fclose(f);
 }
 #endif
+
+/* ------------------------------------------------------------- */
+/* helper function for load/store to insert one more indirection */
+
+int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
+{
+    int t;
+    if ((sv->r & (VT_VALMASK|VT_SYM|VT_CONST)) != (VT_SYM|VT_CONST))
+        return 0;
+    t = sv->sym->type.t;
+    if (0 == (t & VT_IMPORT))
+        return 0;
+
+    sv->sym->type.t = t & ~VT_IMPORT;
+    //printf("import %x %04x %s\n", t, ind, get_tok_str(sv->sym->v, NULL));
+
+    *++vtop = *sv;
+    vtop->type.t &= ~(VT_ARRAY|VT_IMPORT);
+    mk_pointer(&vtop->type);
+    indir();
+    fn(r, vtop);
+    --vtop;
+
+    sv->sym->type.t = t;
+    return 1;
+}
 
 /* ------------------------------------------------------------- */
 

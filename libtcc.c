@@ -214,6 +214,7 @@ int tcc_output_coff(TCCState *s1, FILE *f);
 /* tccpe.c */
 int pe_load_file(struct TCCState *s1, const char *filename, int fd);
 int pe_output_file(struct TCCState *s1, const char *filename);
+int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv));
 
 /* tccasm.c */
 #ifdef CONFIG_TCC_ASM
@@ -780,6 +781,10 @@ static void put_extern_sym2(Sym *sym, Section *section,
         sym_type = STT_NOTYPE;
     } else {
         sym_type = STT_OBJECT;
+#ifdef TCC_TARGET_PE
+        if (sym->type.t & VT_EXPORT)
+            other |= 1;
+#endif
     }
 
     if (sym->type.t & VT_STATIC)

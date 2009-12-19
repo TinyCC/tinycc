@@ -312,6 +312,11 @@ void load(int r, SValue *sv)
     int v, t, ft, fc, fr;
     SValue v1;
 
+#ifdef TCC_TARGET_PE
+    if (pe_dllimport(r, sv, load))
+        return;
+#endif
+
     fr = sv->r;
     ft = sv->type.t;
     fc = sv->c.ul;
@@ -438,6 +443,11 @@ void store(int r, SValue *v)
     int op64 = 0;
     /* store the REX prefix in this variable when PIC is enabled */
     int pic = 0;
+
+#ifdef TCC_TARGET_PE
+    if (pe_dllimport(r, v, store))
+        return;
+#endif
 
     ft = v->type.t;
     fc = v->c.ul;

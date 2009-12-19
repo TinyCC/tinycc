@@ -576,11 +576,12 @@ struct TCCState {
 #define VT_TYPEDEF 0x00000200  /* typedef definition */
 #define VT_INLINE  0x00000400  /* inline definition */
 #define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
+#define VT_EXPORT  0x00008000  /* win32: data exported from dll */
 
 #define VT_STRUCT_SHIFT 16   /* shift for bitfield shift values */
 
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT)
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT)
 #define VT_TYPE    (~(VT_STORAGE))
 
 /* token values */
