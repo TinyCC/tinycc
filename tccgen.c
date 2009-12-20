@@ -364,7 +364,7 @@ static Sym *external_sym(int v, CType *type, int r)
 }
 
 /* push a reference to global symbol v */
-static void vpush_global_sym(CType *type, int v)
+ST_FUNC void vpush_global_sym(CType *type, int v)
 {
     Sym *sym;
     CValue cval;
@@ -897,7 +897,7 @@ static void vrotb(int n)
 /* rotate n first stack elements to the top 
    I1 ... In -> In I1 ... I(n-1)  [top is right]
  */
-static void vrott(int n)
+ST_FUNC void vrott(int n)
 {
     int i;
     SValue tmp;
@@ -912,7 +912,7 @@ static void vrott(int n)
 /* like vrott but in other direction
    In ... I1 -> I(n-1) ... I1 In  [top is right]
  */
-void vnrott(int n)
+ST_FUNC void vnrott(int n)
 {
     int i;
     SValue tmp;

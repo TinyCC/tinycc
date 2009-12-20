@@ -442,7 +442,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
         if (sh_num == SHN_UNDEF) {
             name = strtab_section->data + sym->st_name;
             if (do_resolve) {
-#ifndef _WIN32
+#if !defined TCC_TARGET_PE || !defined _WIN32
                 void *addr;
                 name = symtab_section->link->data + sym->st_name;
                 addr = resolve_sym(s1, name);

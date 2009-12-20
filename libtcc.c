@@ -111,6 +111,13 @@ static void tcc_set_lib_path_w32(TCCState *s)
     tcc_set_lib_path(s, path);
 }
 
+#ifndef CONFIG_TCC_STATIC
+void dlclose(void *p)
+{
+    FreeLibrary((HMODULE)p);
+}
+#endif
+
 #ifdef LIBTCC_AS_DLL
 BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved)
 {

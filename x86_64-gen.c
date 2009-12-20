@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         10
+#define NB_REGS         5
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be

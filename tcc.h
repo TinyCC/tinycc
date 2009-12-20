@@ -49,7 +49,6 @@
 #include <direct.h> /* getcwd */
 #define inline __inline
 #define inp next_inp
-#define dlclose FreeLibrary
 #ifdef _WIN64
 #define uplong unsigned long long
 #endif
@@ -1015,6 +1014,13 @@ ST_FUNC void vpushi(int v);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
+ST_FUNC void vpush_global_sym(CType *type, int v);
+ST_FUNC void vrott(int n);
+#ifdef TCC_TARGET_ARM
+ST_FUNC int get_reg_ex(int rc, int rc2);
+ST_FUNC void vnrott(int n);
+ST_FUNC void lexpand_nr(void);
+#endif
 ST_FUNC void vpushv(SValue *v);
 ST_FUNC void save_reg(int r);
 ST_FUNC int get_reg(int rc);
@@ -1036,7 +1042,7 @@ ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
 ST_FUNC void gen_inline_functions(void);
 ST_FUNC void decl(int l);
-#ifdef CONFIG_TCC_BCHECK
+#if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif
 
@@ -1145,6 +1151,7 @@ ST_FUNC void gen_cvt_itof1(int t);
 
 #ifdef TCC_TARGET_COFF
 ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f);
+ST_FUNC int tcc_load_coff(TCCState * s1, int fd);
 #endif
 
 /* ------------ tccasm.c ------------ */
@@ -1178,10 +1185,19 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 #endif
 
 /* ------------ tccrun.c ----------------- */
-#if !defined CONFIG_TCC_STATIC && !defined _WIN32
+#ifdef CONFIG_TCC_STATIC
+#define RTLD_LAZY       0x001
+#define RTLD_NOW        0x002
+#define RTLD_GLOBAL     0x100
+#define RTLD_DEFAULT    NULL
+/* dummy function for profiling */
+ST_FUNC void *dlopen(const char *filename, int flag);
+ST_FUNC void dlclose(void *p);
+//ST_FUNC const char *dlerror(void);
+ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
+#elif !defined TCC_TARGET_PE || !defined _WIN32
 ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
 #endif
-
 /********************************************************/
 /* include the target specific definitions */
 
@@ -1196,6 +1212,7 @@ ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
 #include "arm-gen.c"
 #endif
 #ifdef TCC_TARGET_C67
+#include "coff.h"
 #include "c67-gen.c"
 #endif
 #undef TARGET_DEFS_ONLY

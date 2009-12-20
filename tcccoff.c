@@ -20,7 +20,6 @@
  */
 
 #include "tcc.h"
-#include "coff.h"
 
 #define MAXNSCNS 255		/* MAXIMUM NUMBER OF SECTIONS         */
 #define MAX_STR_TABLE 1000000
@@ -869,7 +868,7 @@ Section *FindSection(TCCState * s1, const char *sname)
     return 0;
 }
 
-int tcc_load_coff(TCCState * s1, int fd)
+ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
 {
 // tktk TokenSym *ts;
 
