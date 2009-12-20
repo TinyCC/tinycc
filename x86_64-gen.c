@@ -270,7 +270,6 @@ static void gen_gotpcrel(int r, Sym *sym, int c)
     greloc(cur_text_section, sym, ind, R_X86_64_PC32);
 #endif
     gen_le32(0);
-
     if (c) {
         /* we use add c, %xxx for displacement */
         orex(1, r, 0, 0x81);
@@ -323,8 +322,8 @@ static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 static void gen_modrm64(int opcode, int op_reg, int r, Sym *sym, int c)
 {
     int is_got;
-    orex(1, r, op_reg, opcode);
     is_got = (op_reg & TREG_MEM) && !(sym->type.t & VT_STATIC);
+    orex(1, r, op_reg, opcode);
     gen_modrm_impl(op_reg, r, sym, c, is_got);
 }
 
@@ -833,8 +832,6 @@ void gfunc_call(int nb_args)
         }
     }
 
-    save_regs(0); /* save used temporary registers */
-
     /* for struct arguments, we need to call memcpy and the function
        call breaks register passing arguments we are preparing.
        So, we process arguments which will be passed by stack first. */
@@ -899,6 +896,7 @@ void gfunc_call(int nb_args)
     }
     vtop = orig_vtop;
 
+    save_regs(0); /* save used temporary registers */
 
     /* then, we prepare register passing arguments.
        Note that we cannot set RDX and RCX in this loop because gv()
@@ -922,19 +920,13 @@ void gfunc_call(int nb_args)
             /* simple type */
             /* XXX: implicit cast ? */
             if (j < REGN) {
+                int d = arg_regs[j];
                 r = gv(RC_INT);
-                if (j < 2) {
-                    o(0x8948); /* mov */
-                    o(0xc0 + r * 8 + arg_regs[j]);
-                } else if (j < 4) {
-                    o(0x8949); /* mov */
+                if (j == 2 || j == 3)
                     /* j=2: r10, j=3: r11 */
-                    o(0xc0 + r * 8 + j);
-                } else {
-                    o(0x8949); /* mov */
-                    /* j=4: r8, j=5: r9 */
-                    o(0xc0 + r * 8 + j - 4);
-                }
+                    d = j + 8;
+                orex(1,d,r,0x89); /* mov */
+                o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
             }
         }
         vtop--;
@@ -1168,8 +1160,8 @@ int gtst(int inv, int t)
                 t = gjmp(t);
         } else {
             v = gv(RC_INT);
-            o(0x85);
-            o(0xc0 + v * 9);
+            orex(0,v,v,0x85);
+            o(0xc0 + REG_VALUE(v) * 9);
             g(0x0f);
             t = psym(0x85 ^ inv, t);
         }
