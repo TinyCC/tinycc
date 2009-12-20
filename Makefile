@@ -33,13 +33,13 @@ endif
 endif
 
 ifeq ($(ARCH),i386)
-NATIVE_TARGET=-DTCC_TARGET_I386
+NATIVE_DEFINES=-DTCC_TARGET_I386
 LIBTCC1=libtcc1.a
 BCHECK_O=bcheck.o
 ALLOCA_O=alloca86.o alloca86-bt.o
 else
 ifeq ($(ARCH),x86-64)
-NATIVE_TARGET=-DTCC_TARGET_X86_64
+NATIVE_DEFINES=-DTCC_TARGET_X86_64
 LIBTCC1=libtcc1.a
 BCHECK_O=
 ALLOCA_O=alloca86_64.o
@@ -47,18 +47,18 @@ endif
 endif
 
 ifeq ($(ARCH),arm)
-NATIVE_TARGET=-DTCC_TARGET_ARM
-NATIVE_TARGET+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
-NATIVE_TARGET+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
+NATIVE_DEFINES=-DTCC_TARGET_ARM
+NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
+NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
 
 ifdef CONFIG_WIN32
-NATIVE_TARGET+=-DTCC_TARGET_PE
+NATIVE_DEFINES+=-DTCC_TARGET_PE
 BCHECK_O=
 endif
 
 ifneq ($(wildcard /lib/ld-uClibc.so.0),)
-NATIVE_TARGET+=-DTCC_UCLIBC
+NATIVE_DEFINES+=-DTCC_UCLIBC
 BCHECK_O=
 endif
 
@@ -74,12 +74,15 @@ WIN32_CROSS = i386-win32-tcc$(EXESUF)
 WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
 WINCE_CROSS = arm-win32-tcc$(EXESUF)
 X64_CROSS = x86_64-tcc$(EXESUF)
-ARM_CROSS = arm-tcc-fpa$(EXESUF) arm-tcc-fpa-ld$(EXESUF) \
-    arm-tcc-vfp$(EXESUF) arm-tcc-vfp-eabi$(EXESUF)
+ARM_FPA_CROSS = arm-fpa-tcc$(EXESUF)
+ARM_FPA_LD_CROSS = arm-fpa-ld-tcc$(EXESUF)
+ARM_VFP_CROSS = arm-vfp-tcc$(EXESUF)
+ARM_EABI_CROSS = arm-eabi-tcc$(EXESUF)
+ARM_CROSS = $(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS)
 C67_CROSS = c67-tcc$(EXESUF)
 
-CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c \
-    tcc.h config.h libtcc.h tcctok.h
+CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
+CORE_FILES += tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
 WIN64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h tccpe.c
@@ -113,8 +116,6 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 endif
 
-# NOTALLINONE = 1
-
 all: $(PROGS) $(LIBTCC1) $(BCHECK_O) libtcc.a tcc-doc.html tcc.1 libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
@@ -122,51 +123,41 @@ tcc$(EXESUF): tcc.o libtcc.a
 	$(CC) -o $@ $^ $(LIBS)
 
 # Cross Tiny C Compilers
-i386-tcc$(EXESUF): $(I386_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_I386 $(CFLAGS) $(LIBS)
+%-tcc$(EXESUF):
+	$(CC) -o $@ tcc.c $(DEFINES) $(CFLAGS) $(LIBS)
 
-i386-win32-tcc$(EXESUF): $(WIN32_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_PE $(CFLAGS) $(LIBS)
+$(I386_CROSS): DEFINES = -DTCC_TARGET_I386
+$(X64_CROSS): DEFINES = -DTCC_TARGET_X86_64
+$(WIN32_CROSS): DEFINES = -DTCC_TARGET_I386 -DTCC_TARGET_PE
+$(WIN64_CROSS): DEFINES = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
+$(WINCE_CROSS): DEFINES = -DTCC_TARGET_PE
+$(C67_CROSS): DEFINES = -DTCC_TARGET_C67
+$(ARM_FPA_CROSS): DEFINES = -DTCC_TARGET_ARM
+$(ARM_FPA_LD_CROSS)$(EXESUF): DEFINES = -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12
+$(ARM_VFP_CROSS): DEFINES = -DTCC_TARGET_ARM -DTCC_ARM_VFP
+$(ARM_EABI_CROSS): DEFINES = -DTCC_TARGET_ARM -DTCC_ARM_EABI
 
-x86_64-win32-tcc$(EXESUF): $(WIN32_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_PE -DTCC_TARGET_X86_64 $(CFLAGS) $(LIBS)
-
-x86_64-tcc$(EXESUF): $(X86_64_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_X86_64 $(CFLAGS) $(LIBS)
-
-c67-tcc$(EXESUF): $(C67_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_C67 $(CFLAGS) $(LIBS)
-
-arm-win32-tcc$(EXESUF): $(WIN32_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_PE -DTCC_TARGET_ARM $(CFLAGS) $(LIBS)
-
-arm-tcc-fpa$(EXESUF): $(ARM_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_ARM $(CFLAGS) $(LIBS)
-
-arm-tcc-fpa-ld$(EXESUF): $(ARM_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12 $(CFLAGS) $(LIBS)
-
-arm-tcc-vfp$(EXESUF): $(ARM_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_ARM -DTCC_ARM_VFP $(CFLAGS) $(LIBS)
-
-arm-tcc-vfp-eabi$(EXESUF): $(ARM_FILES)
-	$(CC) -o $@ $< -DTCC_TARGET_ARM -DTCC_ARM_EABI $(CFLAGS) $(LIBS)
+$(I386_CROSS): $(I386_FILES)
+$(X64_CROSS): $(X86_64_FILES)
+$(WIN32_CROSS): $(WIN32_FILES)
+$(WIN64_CROSS): $(WIN64_FILES)
+$(WINCE_CROSS): $(WINCE_FILES)
+$(C67_CROSS): $(C67_FILES)
+$(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS): $(ARM_FILES)
 
 # libtcc generation and test
-
 ifdef NOTALLINONE
 LIBTCC_OBJ = $(filter-out tcc.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
 LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES),$(NATIVE_FILES))
-$(LIBTCC_OBJ) : DEFINES += -DNOTALLINONE
+$(LIBTCC_OBJ) tcc.o : NATIVE_DEFINES += -DNOTALLINONE
 else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)
+tcc.o : NATIVE_DEFINES += -DNOTALLINONE
 endif
 
-tcc.o : DEFINES += -DNOTALLINONE
-
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
-	$(CC) -o $@ -c $< $(NATIVE_TARGET) $(CFLAGS) $(DEFINES)
+	$(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CFLAGS)
 
 libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
@@ -179,7 +170,7 @@ libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 
 # profiling version
 tcc_p$(EXESUF): $(NATIVE_FILES)
-	$(CC) -o $@ $< $(NATIVE_TARGET) $(CFLAGS_P) $(LIBS_P)
+	$(CC) -o $@ $< $(NATIVE_DEFINES) $(CFLAGS_P) $(LIBS_P)
 
 # windows utilities
 tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
@@ -195,7 +186,7 @@ VPATH+=lib
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-LIBTCC1_CC=./tcc.exe -Bwin32 -Iinclude $(NATIVE_TARGET)
+LIBTCC1_CC=./tcc.exe -Bwin32 -Iinclude $(NATIVE_DEFINES)
 VPATH+=win32/lib
 endif
 

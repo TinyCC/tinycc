@@ -16,7 +16,7 @@ include $(TOP)/Makefile
 
 # run local version of tcc with local libraries and includes
 TCC = ../tcc -B..
-RUN_TCC = $(NATIVE_TARGET) -run ../tcc.c -B..
+RUN_TCC = $(NATIVE_DEFINES) -run ../tcc.c -B..
 DISAS=objdump -d
 
 all test : $(TESTS)
