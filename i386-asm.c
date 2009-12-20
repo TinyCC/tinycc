@@ -19,7 +19,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "tcc.h"
+
+// #define NB_ASM_REGS 8
 #define MAX_OPERANDS 3
+#define NB_SAVED_REGS 3
 
 #define TOK_ASM_first TOK_ASM_clc
 #define TOK_ASM_last TOK_ASM_emms
@@ -398,7 +402,8 @@ static void parse_operand(TCCState *s1, Operand *op)
     op->type |= indir;
 }
 
-static void gen_expr32(ExprValue *pe)
+/* XXX: unify with C code output ? */
+ST_FUNC void gen_expr32(ExprValue *pe)
 {
     gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }
@@ -554,7 +559,7 @@ static inline void asm_modrm(int reg, Operand *op)
     }
 }
 
-static void asm_opcode(TCCState *s1, int opcode)
+ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
     int i, modrm_index, reg, v, op1, is_short_jmp, seg_prefix;
@@ -966,9 +971,6 @@ static void asm_opcode(TCCState *s1, int opcode)
 #endif
 }
 
-#define NB_SAVED_REGS 3
-#define NB_ASM_REGS 8
-
 /* return the constraint priority (we allocate first the lowest
    numbered constraints) */
 static inline int constraint_priority(const char *str)
@@ -1030,7 +1032,7 @@ static const char *skip_constraint_modifiers(const char *p)
 
 #define is_reg_allocated(reg) (regs_allocated[reg] & reg_mask)
 
-static void asm_compute_constraints(ASMOperand *operands,
+ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     int nb_operands, int nb_outputs,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
@@ -1262,7 +1264,7 @@ static void asm_compute_constraints(ASMOperand *operands,
 #endif
 }
 
-static void subst_asm_operand(CString *add_str,
+ST_FUNC void subst_asm_operand(CString *add_str,
                               SValue *sv, int modifier)
 {
     int r, reg, size, val;
@@ -1356,7 +1358,7 @@ static void subst_asm_operand(CString *add_str,
 }
 
 /* generate prolog and epilog code for asm statment */
-static void asm_gen_code(ASMOperand *operands, int nb_operands,
+ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          int nb_outputs, int is_output,
                          uint8_t *clobber_regs,
                          int out_reg)
@@ -1450,7 +1452,7 @@ static void asm_gen_code(ASMOperand *operands, int nb_operands,
     }
 }
 
-static void asm_clobber(uint8_t *clobber_regs, const char *str)
+ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 {
     int reg;
     TokenSym *ts;

@@ -18,6 +18,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#ifdef TARGET_DEFS_ONLY
+
 //#define ASSEMBLY_LISTING_C67
 
 /* number of available registers */
@@ -85,40 +87,10 @@ enum {
     TREG_C67_B13,
 };
 
-const int reg_classes[NB_REGS] = {
-						/* eax */ RC_INT | RC_FLOAT | RC_EAX,
-						// only allow even regs for floats (allow for doubles)
-    /* ecx */ RC_INT | RC_ECX,
-								/* edx */ RC_INT | RC_INT_BSIDE | RC_FLOAT | RC_EDX,
-								// only allow even regs for floats (allow for doubles)
-    /* st0 */ RC_INT | RC_INT_BSIDE | RC_ST0,
-    /* A4  */ RC_C67_A4,
-    /* A5  */ RC_C67_A5,
-    /* B4  */ RC_C67_B4,
-    /* B5  */ RC_C67_B5,
-    /* A6  */ RC_C67_A6,
-    /* A7  */ RC_C67_A7,
-    /* B6  */ RC_C67_B6,
-    /* B7  */ RC_C67_B7,
-    /* A8  */ RC_C67_A8,
-    /* A9  */ RC_C67_A9,
-    /* B8  */ RC_C67_B8,
-    /* B9  */ RC_C67_B9,
-    /* A10  */ RC_C67_A10,
-    /* A11  */ RC_C67_A11,
-    /* B10  */ RC_C67_B10,
-    /* B11  */ RC_C67_B11,
-    /* A12  */ RC_C67_A10,
-    /* A13  */ RC_C67_A11,
-    /* B12  */ RC_C67_B10,
-    /* B13  */ RC_C67_B11
-};
-
 /* return registers for function */
 #define REG_IRET TREG_C67_A4	/* single word int return register */
 #define REG_LRET TREG_C67_A5	/* second word return register (for long long) */
 #define REG_FRET TREG_C67_A4	/* float return register */
-
 
 #define ALWAYS_ASSERT(x) \
 do {\
@@ -126,21 +98,7 @@ do {\
        error("internal compiler error file at %s:%d", __FILE__, __LINE__);\
 } while (0)
 
-// although tcc thinks it is passing parameters on the stack,
-// the C67 really passes up to the first 10 params in special
-// regs or regs pairs (for 64 bit params).  So keep track of
-// the stack offsets so we can translate to the appropriate 
-// reg (pair)
-
-
-#define NoCallArgsPassedOnStack 10
-int NoOfCurFuncArgs;
-int TranslateStackToReg[NoCallArgsPassedOnStack];
-int ParamLocOnStack[NoCallArgsPassedOnStack];
-int TotalBytesPushedOnStack;
-
 /* defined if function parameters must be evaluated in reverse order */
-
 //#define INVERT_FUNC_PARAMS
 
 /* defined if structures are passed as pointers. Otherwise structures
@@ -171,7 +129,52 @@ int TotalBytesPushedOnStack;
 #define ELF_PAGE_SIZE  0x1000
 
 /******************************************************/
+#else /* ! TARGET_DEFS_ONLY */
+/******************************************************/
+#include "tcc.h"
 
+ST_DATA const int reg_classes[NB_REGS] = {
+    /* eax */ RC_INT | RC_FLOAT | RC_EAX, 
+    // only allow even regs for floats (allow for doubles)
+    /* ecx */ RC_INT | RC_ECX,
+    /* edx */ RC_INT | RC_INT_BSIDE | RC_FLOAT | RC_EDX,
+    // only allow even regs for floats (allow for doubles)
+    /* st0 */ RC_INT | RC_INT_BSIDE | RC_ST0,
+    /* A4  */ RC_C67_A4,
+    /* A5  */ RC_C67_A5,
+    /* B4  */ RC_C67_B4,
+    /* B5  */ RC_C67_B5,
+    /* A6  */ RC_C67_A6,
+    /* A7  */ RC_C67_A7,
+    /* B6  */ RC_C67_B6,
+    /* B7  */ RC_C67_B7,
+    /* A8  */ RC_C67_A8,
+    /* A9  */ RC_C67_A9,
+    /* B8  */ RC_C67_B8,
+    /* B9  */ RC_C67_B9,
+    /* A10  */ RC_C67_A10,
+    /* A11  */ RC_C67_A11,
+    /* B10  */ RC_C67_B10,
+    /* B11  */ RC_C67_B11,
+    /* A12  */ RC_C67_A10,
+    /* A13  */ RC_C67_A11,
+    /* B12  */ RC_C67_B10,
+    /* B13  */ RC_C67_B11
+};
+
+// although tcc thinks it is passing parameters on the stack,
+// the C67 really passes up to the first 10 params in special
+// regs or regs pairs (for 64 bit params).  So keep track of
+// the stack offsets so we can translate to the appropriate 
+// reg (pair)
+
+#define NoCallArgsPassedOnStack 10
+int NoOfCurFuncArgs;
+int TranslateStackToReg[NoCallArgsPassedOnStack];
+int ParamLocOnStack[NoCallArgsPassedOnStack];
+int TotalBytesPushedOnStack;
+
+/******************************************************/
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 
@@ -2545,5 +2548,7 @@ void ggoto(void)
     vtop--;
 }
 
-/* end of X86 code generator */
+/* end of C67 code generator */
+/*************************************************************/
+#endif
 /*************************************************************/

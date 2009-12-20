@@ -20,10 +20,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#ifdef TARGET_DEFS_ONLY
+
 #ifdef TCC_ARM_EABI
 #define TCC_ARM_VFP
 #endif
-
 
 /* number of available registers */
 #ifdef TCC_ARM_VFP
@@ -74,32 +75,6 @@ enum {
     TREG_F7,
 #endif
 };
-
-const int reg_classes[NB_REGS] = {
-    /* r0 */ RC_INT | RC_R0,
-    /* r1 */ RC_INT | RC_R1,
-    /* r2 */ RC_INT | RC_R2,
-    /* r3 */ RC_INT | RC_R3,
-    /* r12 */ RC_INT | RC_R12,
-    /* f0 */ RC_FLOAT | RC_F0,
-    /* f1 */ RC_FLOAT | RC_F1,
-    /* f2 */ RC_FLOAT | RC_F2,
-    /* f3 */ RC_FLOAT | RC_F3,
-#ifdef TCC_ARM_VFP
- /* d4/s8 */ RC_FLOAT | RC_F4,
-/* d5/s10 */ RC_FLOAT | RC_F5,
-/* d6/s12 */ RC_FLOAT | RC_F6,
-/* d7/s14 */ RC_FLOAT | RC_F7,
-#endif
-};
-
-static int two2mask(int a,int b) {
-  return (reg_classes[a]|reg_classes[b])&~(RC_INT|RC_FLOAT);
-}
-
-static int regmask(int r) {
-  return reg_classes[r]&~(RC_INT|RC_FLOAT);
-}
 
 #ifdef TCC_ARM_VFP
 #define T2CPR(t) (((t) & VT_BTYPE) != VT_FLOAT ? 0x100 : 0)
@@ -171,10 +146,42 @@ static CType float_type, double_type, func_float_type, func_double_type;
 #define ELF_PAGE_SIZE  0x1000
 
 /******************************************************/
+#else /* ! TARGET_DEFS_ONLY */
+/******************************************************/
+#include "tcc.h"
+
+ST_DATA const int reg_classes[NB_REGS] = {
+    /* r0 */ RC_INT | RC_R0,
+    /* r1 */ RC_INT | RC_R1,
+    /* r2 */ RC_INT | RC_R2,
+    /* r3 */ RC_INT | RC_R3,
+    /* r12 */ RC_INT | RC_R12,
+    /* f0 */ RC_FLOAT | RC_F0,
+    /* f1 */ RC_FLOAT | RC_F1,
+    /* f2 */ RC_FLOAT | RC_F2,
+    /* f3 */ RC_FLOAT | RC_F3,
+#ifdef TCC_ARM_VFP
+ /* d4/s8 */ RC_FLOAT | RC_F4,
+/* d5/s10 */ RC_FLOAT | RC_F5,
+/* d6/s12 */ RC_FLOAT | RC_F6,
+/* d7/s14 */ RC_FLOAT | RC_F7,
+#endif
+};
+
 static unsigned long func_sub_sp_offset,last_itod_magic;
 static int leaffunc;
 
-void o(unsigned long i)
+static int two2mask(int a,int b) {
+  return (reg_classes[a]|reg_classes[b])&~(RC_INT|RC_FLOAT);
+}
+
+static int regmask(int r) {
+  return reg_classes[r]&~(RC_INT|RC_FLOAT);
+}
+
+/******************************************************/
+
+void o(unsigned int i)
 {
   /* this is a good place to start adding big-endian support*/
   int ind1;
@@ -304,7 +311,7 @@ void stuff_const_harder(unsigned long op,unsigned long v) {
   }
 }
 
-unsigned long encbranch(int pos,int addr,int fail)
+ST_FUNC unsigned long encbranch(int pos,int addr,int fail)
 {
   addr-=pos+8;
   addr/=4;
@@ -1571,7 +1578,7 @@ void gen_opf(int op)
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-void gen_cvt_itof1(int t)
+ST_FUNC void gen_cvt_itof1(int t)
 {
   int r,r2,bt;
   bt=vtop->type.t & VT_BTYPE;
@@ -1732,4 +1739,5 @@ void ggoto(void)
 
 /* end of ARM code generator */
 /*************************************************************/
-
+#endif
+/*************************************************************/

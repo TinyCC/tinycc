@@ -18,6 +18,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "tcc.h"
+
 #ifdef TCC_TARGET_X86_64
 #define ElfW_Rel ElfW(Rela)
 #define SHT_RELX SHT_RELA
@@ -33,7 +35,7 @@
 /* XXX: DLL with PLT would only work with x86-64 for now */
 //#define TCC_OUTPUT_DLL_WITH_PLT
 
-static int put_elf_str(Section *s, const char *sym)
+ST_FUNC int put_elf_str(Section *s, const char *sym)
 {
     int offset, len;
     char *ptr;
@@ -95,7 +97,7 @@ static void rebuild_hash(Section *s, unsigned int nb_buckets)
 }
 
 /* return the symbol number */
-static int put_elf_sym(Section *s, 
+ST_FUNC int put_elf_sym(Section *s, 
                        unsigned long value, unsigned long size,
                        int info, int other, int shndx, const char *name)
 {
@@ -145,7 +147,7 @@ static int put_elf_sym(Section *s,
 
 /* find global ELF symbol 'name' and return its index. Return 0 if not
    found. */
-static int find_elf_sym(Section *s, const char *name)
+ST_FUNC int find_elf_sym(Section *s, const char *name)
 {
     ElfW(Sym) *sym;
     Section *hs;
@@ -185,20 +187,20 @@ static void *get_elf_sym_addr(TCCState *s, const char *name, int err)
 }
 
 /* return elf symbol value */
-void *tcc_get_symbol(TCCState *s, const char *name)
+LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
 {
     return get_elf_sym_addr(s, name, 0);
 }
 
 /* return elf symbol value or error */
-void *tcc_get_symbol_err(TCCState *s, const char *name)
+ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name)
 {
     return get_elf_sym_addr(s, name, 1);
 }
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
-static int add_elf_sym(Section *s, uplong value, unsigned long size,
+ST_FUNC int add_elf_sym(Section *s, uplong value, unsigned long size,
                        int info, int other, int sh_num, const char *name)
 {
     ElfW(Sym) *esym;
@@ -272,7 +274,7 @@ static int add_elf_sym(Section *s, uplong value, unsigned long size,
 }
 
 /* put relocation */
-static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
+ST_FUNC void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
                           int type, int symbol)
 {
     char buf[256];
@@ -301,15 +303,7 @@ static void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
 
 /* put stab debug information */
 
-typedef struct {
-    unsigned int n_strx;         /* index into string table of name */
-    unsigned char n_type;         /* type of symbol */
-    unsigned char n_other;        /* misc info (usually empty) */
-    unsigned short n_desc;        /* description field */
-    unsigned int n_value;        /* value of symbol */
-} Stab_Sym;
-
-static void put_stabs(const char *str, int type, int other, int desc, 
+ST_FUNC void put_stabs(const char *str, int type, int other, int desc,
                       unsigned long value)
 {
     Stab_Sym *sym;
@@ -326,7 +320,7 @@ static void put_stabs(const char *str, int type, int other, int desc,
     sym->n_value = value;
 }
 
-static void put_stabs_r(const char *str, int type, int other, int desc, 
+ST_FUNC void put_stabs_r(const char *str, int type, int other, int desc, 
                         unsigned long value, Section *sec, int sym_index)
 {
     put_stabs(str, type, other, desc, value);
@@ -335,12 +329,12 @@ static void put_stabs_r(const char *str, int type, int other, int desc,
                   R_DATA_32, sym_index);
 }
 
-static void put_stabn(int type, int other, int desc, int value)
+ST_FUNC void put_stabn(int type, int other, int desc, int value)
 {
     put_stabs(NULL, type, other, desc, value);
 }
 
-static void put_stabd(int type, int other, int desc)
+ST_FUNC void put_stabd(int type, int other, int desc)
 {
     put_stabs(NULL, type, other, desc, 0);
 }
@@ -410,7 +404,7 @@ static void sort_syms(TCCState *s1, Section *s)
 }
 
 /* relocate common symbols in the .bss section */
-static void relocate_common_syms(void)
+ST_FUNC void relocate_common_syms(void)
 {
     ElfW(Sym) *sym, *sym_end;
     unsigned long offset, align;
@@ -434,7 +428,7 @@ static void relocate_common_syms(void)
 
 /* relocate symbol table, resolve undefined symbols if do_resolve is
    true and output error if undefined symbol. */
-static void relocate_syms(TCCState *s1, int do_resolve)
+ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
 {
     ElfW(Sym) *sym, *esym, *sym_end;
     int sym_bind, sh_num, sym_index;
@@ -513,7 +507,7 @@ static unsigned long add_got_table(TCCState *s1, unsigned long val)
 #endif
 
 /* relocate a given section (CPU dependent) */
-static void relocate_section(TCCState *s1, Section *s)
+ST_FUNC void relocate_section(TCCState *s1, Section *s)
 {
     Section *sr;
     ElfW_Rel *rel, *rel_end, *qrel;
@@ -1012,7 +1006,7 @@ static void put_got_entry(TCCState *s1,
 }
 
 /* build GOT and PLT entries */
-static void build_got_entries(TCCState *s1)
+ST_FUNC void build_got_entries(TCCState *s1)
 {
     Section *s, *symtab;
     ElfW_Rel *rel, *rel_end;
@@ -1120,7 +1114,7 @@ static void build_got_entries(TCCState *s1)
     }
 }
 
-static Section *new_symtab(TCCState *s1,
+ST_FUNC Section *new_symtab(TCCState *s1,
                            const char *symtab_name, int sh_type, int sh_flags,
                            const char *strtab_name, 
                            const char *hash_name, int hash_sh_flags)
@@ -1186,7 +1180,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
                 s->sh_num, sym_end);
 }
 
-static void tcc_add_bcheck(TCCState *s1)
+ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
     unsigned long *ptr;
@@ -1227,7 +1221,7 @@ static void tcc_add_bcheck(TCCState *s1)
 }
 
 /* add tcc runtime libraries */
-static void tcc_add_runtime(TCCState *s1)
+ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
     tcc_add_bcheck(s1);
 
@@ -1252,7 +1246,7 @@ static void tcc_add_runtime(TCCState *s1)
 /* add various standard linker symbols (must be done after the
    sections are filled (for example after allocating common
    symbols)) */
-static void tcc_add_linker_symbols(TCCState *s1)
+ST_FUNC void tcc_add_linker_symbols(TCCState *s1)
 {
     char buf[1024];
     int i;
@@ -1371,7 +1365,7 @@ void patch_dynsym_undef(TCCState *s1, Section *s)
 
 /* output an ELF file */
 /* XXX: suppress unneeded sections */
-int elf_output_file(TCCState *s1, const char *filename)
+static int elf_output_file(TCCState *s1, const char *filename)
 {
     ElfW(Ehdr) ehdr;
     FILE *f;
@@ -2110,7 +2104,7 @@ int elf_output_file(TCCState *s1, const char *filename)
     return ret;
 }
 
-int tcc_output_file(TCCState *s, const char *filename)
+LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename)
 {
     int ret;
 #ifdef TCC_TARGET_PE
@@ -2143,7 +2137,7 @@ typedef struct SectionMergeInfo {
 
 /* load an object file and merge it with current files */
 /* XXX: handle correctly stab (debug) info */
-static int tcc_load_object_file(TCCState *s1, 
+ST_FUNC int tcc_load_object_file(TCCState *s1, 
                                 int fd, unsigned long file_offset)
 { 
     ElfW(Ehdr) ehdr;
@@ -2412,8 +2406,6 @@ static int tcc_load_object_file(TCCState *s1,
     return ret;
 }
 
-#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
-
 typedef struct ArchiveHeader {
     char ar_name[16];           /* name of this member */
     char ar_date[12];           /* file mtime */
@@ -2474,7 +2466,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size)
 }
 
 /* load a '.a' file */
-static int tcc_load_archive(TCCState *s1, int fd)
+ST_FUNC int tcc_load_archive(TCCState *s1, int fd)
 {
     ArchiveHeader hdr;
     char ar_size[11];
@@ -2529,7 +2521,7 @@ static int tcc_load_archive(TCCState *s1, int fd)
 /* load a DLL and all referenced DLLs. 'level = 0' means that the DLL
    is referenced by the user (so it should be added as DT_NEEDED in
    the generated ELF file) */
-static int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
+ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 { 
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh, *sh1;
@@ -2802,7 +2794,7 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
 
 /* interpret a subset of GNU ldscripts to handle the dummy libc.so
    files */
-static int tcc_load_ldscript(TCCState *s1)
+ST_FUNC int tcc_load_ldscript(TCCState *s1)
 {
     char cmd[64];
     char filename[1024];

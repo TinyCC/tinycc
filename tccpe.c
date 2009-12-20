@@ -18,11 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifdef TCC_TARGET_PE
-
-#define ST_FN static
-#define ST_DATA static
-#define PUB_FN
+#include "tcc.h"
 
 #ifndef _WIN32
 #define stricmp strcasecmp
@@ -300,7 +296,7 @@ enum {
     sec_last
 };
 
-ST_DATA const DWORD pe_sec_flags[] = {
+static const DWORD pe_sec_flags[] = {
     0x60000020, /* ".text"     , */
     0xC0000040, /* ".data"     , */
     0xC0000080, /* ".bss"      , */
@@ -366,7 +362,7 @@ struct pe_info {
 
 /* --------------------------------------------*/
 
-ST_FN const char* get_alt_symbol(char *buffer, const char *symbol)
+static const char* get_alt_symbol(char *buffer, const char *symbol)
 {
     const char *p;
     p = strrchr(symbol, '@');
@@ -384,7 +380,7 @@ ST_FN const char* get_alt_symbol(char *buffer, const char *symbol)
     return buffer;
 }
 
-ST_FN int pe_find_import(TCCState * s1, const char *symbol)
+static int pe_find_import(TCCState * s1, const char *symbol)
 {
     char buffer[200];
     const char *s;
@@ -399,7 +395,7 @@ ST_FN int pe_find_import(TCCState * s1, const char *symbol)
 
 /*----------------------------------------------------------------------------*/
 
-ST_FN int dynarray_assoc(void **pp, int n, int key)
+static int dynarray_assoc(void **pp, int n, int key)
 {
     int i;
     for (i = 0; i < n; ++i, ++pp)
@@ -415,35 +411,35 @@ ST_FN DWORD umin(DWORD a, DWORD b)
 }
 #endif
 
-ST_FN DWORD umax(DWORD a, DWORD b)
+static DWORD umax(DWORD a, DWORD b)
 {
     return a < b ? b : a;
 }
 
-ST_FN DWORD pe_file_align(struct pe_info *pe, DWORD n)
+static DWORD pe_file_align(struct pe_info *pe, DWORD n)
 {
     return (n + (pe->file_align - 1)) & ~(pe->file_align - 1);
 }
 
-ST_FN DWORD pe_virtual_align(struct pe_info *pe, DWORD n)
+static DWORD pe_virtual_align(struct pe_info *pe, DWORD n)
 {
     return (n + (pe->section_align - 1)) & ~(pe->section_align - 1);
 }
 
-ST_FN void pe_align_section(Section *s, int a)
+static void pe_align_section(Section *s, int a)
 {
     int i = s->data_offset & (a-1);
     if (i)
         section_ptr_add(s, a - i);
 }
 
-ST_FN void pe_set_datadir(struct pe_header *hdr, int dir, DWORD addr, DWORD size)
+static void pe_set_datadir(struct pe_header *hdr, int dir, DWORD addr, DWORD size)
 {
     hdr->opthdr.DataDirectory[dir].VirtualAddress = addr;
     hdr->opthdr.DataDirectory[dir].Size = size;
 }
 
-ST_FN int pe_fwrite(void *data, unsigned len, FILE *fp, DWORD *psum)
+static int pe_fwrite(void *data, unsigned len, FILE *fp, DWORD *psum)
 {
     if (psum) {
         DWORD sum = *psum;
@@ -458,7 +454,7 @@ ST_FN int pe_fwrite(void *data, unsigned len, FILE *fp, DWORD *psum)
     return len == fwrite(data, 1, len, fp) ? 0 : -1;
 }
 
-ST_FN void pe_fpad(FILE *fp, DWORD new_pos)
+static void pe_fpad(FILE *fp, DWORD new_pos)
 {
     DWORD pos = ftell(fp);
     while (++pos <= new_pos)
@@ -466,7 +462,7 @@ ST_FN void pe_fpad(FILE *fp, DWORD new_pos)
 }
 
 /*----------------------------------------------------------------------------*/
-ST_FN int pe_write(struct pe_info *pe)
+static int pe_write(struct pe_info *pe)
 {
     static const struct pe_header pe_template = {
     {
@@ -745,7 +741,7 @@ ST_FN int pe_write(struct pe_info *pe)
 #endif
 /*----------------------------------------------------------------------------*/
 
-ST_FN struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
+static struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
 {
     int i;
     int dll_index;
@@ -777,7 +773,7 @@ found_dll:
 }
 
 /*----------------------------------------------------------------------------*/
-ST_FN void pe_build_imports(struct pe_info *pe)
+static void pe_build_imports(struct pe_info *pe)
 {
     int thk_ptr, ent_ptr, dll_ptr, sym_cnt, i;
     DWORD rva_base = pe->thunk->sh_addr - pe->imagebase;
@@ -860,14 +856,14 @@ struct pe_sort_sym
     const char *name;
 };
 
-ST_FN int sym_cmp(const void *va, const void *vb)
+static int sym_cmp(const void *va, const void *vb)
 {
     const char *ca = (*(struct pe_sort_sym**)va)->name;
     const char *cb = (*(struct pe_sort_sym**)vb)->name;
     return strcmp(ca, cb);
 }
 
-ST_FN void pe_build_exports(struct pe_info *pe)
+static void pe_build_exports(struct pe_info *pe)
 {
     ElfW(Sym) *sym;
     int sym_index, sym_end;
@@ -967,7 +963,7 @@ ST_FN void pe_build_exports(struct pe_info *pe)
 }
 
 /* ------------------------------------------------------------- */
-ST_FN void pe_build_reloc (struct pe_info *pe)
+static void pe_build_reloc (struct pe_info *pe)
 {
     DWORD offset, block_ptr, addr;
     int count, i;
@@ -1023,7 +1019,7 @@ ST_FN void pe_build_reloc (struct pe_info *pe)
 }
 
 /* ------------------------------------------------------------- */
-ST_FN int pe_section_class(Section *s)
+static int pe_section_class(Section *s)
 {
     int type, flags;
     const char *name;
@@ -1055,7 +1051,7 @@ ST_FN int pe_section_class(Section *s)
     return -1;
 }
 
-ST_FN int pe_assign_addresses (struct pe_info *pe)
+static int pe_assign_addresses (struct pe_info *pe)
 {
     int i, k, o, c;
     DWORD addr;
@@ -1153,7 +1149,7 @@ ST_FN int pe_assign_addresses (struct pe_info *pe)
 }
 
 /* ------------------------------------------------------------- */
-ST_FN void pe_relocate_rva (struct pe_info *pe, Section *s)
+static void pe_relocate_rva (struct pe_info *pe, Section *s)
 {
     Section *sr = s->reloc;
     ElfW_Rel *rel, *rel_end;
@@ -1173,6 +1169,7 @@ ST_FN void pe_relocate_rva (struct pe_info *pe, Section *s)
 }
 
 /*----------------------------------------------------------------------------*/
+
 static int pe_isafunc(int sym_index)
 {
     Section *sr = text_section->reloc;
@@ -1188,7 +1185,7 @@ static int pe_isafunc(int sym_index)
 }
 
 /*----------------------------------------------------------------------------*/
-ST_FN int pe_check_symbols(struct pe_info *pe)
+static int pe_check_symbols(struct pe_info *pe)
 {
     ElfW(Sym) *sym;
     int sym_index, sym_end;
@@ -1282,7 +1279,7 @@ ST_FN int pe_check_symbols(struct pe_info *pe)
 
 /*----------------------------------------------------------------------------*/
 #ifdef PE_PRINT_SECTIONS
-ST_FN void pe_print_section(FILE * f, Section * s)
+static void pe_print_section(FILE * f, Section * s)
 {
     /* just if you'r curious */
     BYTE *p, *e, b;
@@ -1404,7 +1401,7 @@ ST_FN void pe_print_section(FILE * f, Section * s)
     fprintf(f, "\n\n");
 }
 
-ST_FN void pe_print_sections(TCCState *s1, const char *fname)
+static void pe_print_sections(TCCState *s1, const char *fname)
 {
     Section *s;
     FILE *f;
@@ -1420,34 +1417,8 @@ ST_FN void pe_print_sections(TCCState *s1, const char *fname)
 #endif
 
 /* ------------------------------------------------------------- */
-/* helper function for load/store to insert one more indirection */
 
-int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
-{
-    int t;
-    if ((sv->r & (VT_VALMASK|VT_SYM|VT_CONST)) != (VT_SYM|VT_CONST))
-        return 0;
-    t = sv->sym->type.t;
-    if (0 == (t & VT_IMPORT))
-        return 0;
-
-    sv->sym->type.t = t & ~VT_IMPORT;
-    //printf("import %x %04x %s\n", t, ind, get_tok_str(sv->sym->v, NULL));
-
-    *++vtop = *sv;
-    vtop->type.t &= ~(VT_ARRAY|VT_IMPORT);
-    mk_pointer(&vtop->type);
-    indir();
-    fn(r, vtop);
-    --vtop;
-
-    sv->sym->type.t = t;
-    return 1;
-}
-
-/* ------------------------------------------------------------- */
-
-ST_FN int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
+static int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
 {
     fseek(fp, offset, 0);
     return len == fread(buffer, 1, len, fp);
@@ -1458,7 +1429,7 @@ ST_FN int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
  *  as generated by 'windres.exe -O coff ...'.
  */
 
-ST_FN int pe_load_res(TCCState *s1, FILE *fp)
+static int pe_load_res(TCCState *s1, FILE *fp)
 {
     struct pe_rsrc_header hdr;
     Section *rsrc_section;
@@ -1498,14 +1469,14 @@ quit:
 }
 
 /* ------------------------------------------------------------- */
-ST_FN char *trimfront(char *p)
+static char *trimfront(char *p)
 {
     while (*p && (unsigned char)*p <= ' ')
         ++p;
     return p;
 }
 
-ST_FN char *trimback(char *a, char *e)
+static char *trimback(char *a, char *e)
 {
     while (e > a && (unsigned char)e[-1] <= ' ')
         --e;
@@ -1513,7 +1484,7 @@ ST_FN char *trimback(char *a, char *e)
     return a;
 }
 
-ST_FN char *get_line(char *line, int size, FILE *fp)
+static char *get_line(char *line, int size, FILE *fp)
 {
     if (NULL == fgets(line, size, fp))
         return NULL;
@@ -1522,7 +1493,7 @@ ST_FN char *get_line(char *line, int size, FILE *fp)
 }
 
 /* ------------------------------------------------------------- */
-ST_FN int pe_load_def(TCCState *s1, FILE *fp)
+static int pe_load_def(TCCState *s1, FILE *fp)
 {
     DLLReference *dllref;
     int state = 0, ret = -1;
@@ -1571,7 +1542,7 @@ quit:
 #define TINY_IMPDEF_GET_EXPORT_NAMES_ONLY
 #include "win32/tools/tiny_impdef.c"
 
-ST_FN int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
+static int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
 {
     int i = 0;
     char *p, *q;
@@ -1594,7 +1565,7 @@ ST_FN int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
 }
 
 /* ------------------------------------------------------------- */
-PUB_FN int pe_load_file(struct TCCState *s1, const char *filename, int fd)
+ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd)
 {
     FILE *fp = fdopen(dup(fd), "rb");
     int ret = -1;
@@ -1611,7 +1582,7 @@ PUB_FN int pe_load_file(struct TCCState *s1, const char *filename, int fd)
     return ret;
 }
 
-int pe_add_dll(struct TCCState *s, const char *libname)
+ST_FUNC int pe_add_dll(struct TCCState *s, const char *libname)
 {
     static const char *pat[] = {
         "%s.def", "lib%s.def", "%s.dll", "lib%s.dll", NULL
@@ -1627,13 +1598,39 @@ int pe_add_dll(struct TCCState *s, const char *libname)
 }
 
 /* ------------------------------------------------------------- */
+/* helper function for load/store to insert one more indirection */
+
+ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
+{
+    int t;
+    if ((sv->r & (VT_VALMASK|VT_SYM|VT_CONST)) != (VT_SYM|VT_CONST))
+	return 0;
+    t = sv->sym->type.t;
+    if (0 == (t & VT_IMPORT))
+	return 0;
+
+    sv->sym->type.t = t & ~VT_IMPORT;
+    //printf("import %x %04x %s\n", t, ind, get_tok_str(sv->sym->v, NULL));
+
+    *++vtop = *sv;
+    vtop->type.t &= ~(VT_ARRAY|VT_IMPORT);
+    mk_pointer(&vtop->type);
+    indir();
+    fn(r, vtop);
+    --vtop;
+
+    sv->sym->type.t = t;
+    return 1;
+}
+
+/* ------------------------------------------------------------- */
 #ifdef TCC_TARGET_X86_64
 #define PE_STDSYM(n,s) n
 #else
 #define PE_STDSYM(n,s) "_" n s
 #endif
 
-ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
+static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
     unsigned long addr = 0;
@@ -1690,7 +1687,7 @@ ST_FN void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
     pe->start_addr = addr;
 }
 
-PUB_FN int pe_output_file(TCCState * s1, const char *filename)
+ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
 {
     int ret;
     struct pe_info pe;
@@ -1779,6 +1776,4 @@ PUB_FN int pe_output_file(TCCState * s1, const char *filename)
     return ret;
 }
 
-/* ------------------------------------------------------------- */
-#endif /* def TCC_TARGET_PE */
 /* ------------------------------------------------------------- */

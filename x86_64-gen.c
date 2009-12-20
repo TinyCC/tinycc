@@ -20,10 +20,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <assert.h>
+#ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS             5
+#define NB_REGS         5
+#define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -60,14 +61,6 @@ enum {
 #define REX_BASE(reg) (((reg) >> 3) & 1)
 #define REG_VALUE(reg) ((reg) & 7)
 
-const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_RAX,
-    /* ecx */ RC_INT | RC_RCX,
-    /* edx */ RC_INT | RC_RDX,
-    /* xmm0 */ RC_FLOAT | RC_XMM0,
-    /* st0 */ RC_ST0,
-};
-
 /* return registers for function */
 #define REG_IRET TREG_RAX /* single word int return register */
 #define REG_LRET TREG_RDX /* second word return register (for long long) */
@@ -85,6 +78,9 @@ const int reg_classes[NB_REGS] = {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
+ST_FUNC void gen_opl(int op);
+ST_FUNC void gen_le64(int64_t c);
+
 /******************************************************/
 /* ELF defines */
 
@@ -100,6 +96,18 @@ const int reg_classes[NB_REGS] = {
 #define ELF_PAGE_SIZE  0x1000
 
 /******************************************************/
+#else /* ! TARGET_DEFS_ONLY */
+/******************************************************/
+#include "tcc.h"
+#include <assert.h>
+
+ST_DATA const int reg_classes[NB_REGS] = {
+    /* eax */ RC_INT | RC_RAX,
+    /* ecx */ RC_INT | RC_RCX,
+    /* edx */ RC_INT | RC_RDX,
+    /* xmm0 */ RC_FLOAT | RC_XMM0,
+    /* st0 */ RC_ST0,
+};
 
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
@@ -184,7 +192,7 @@ static int is_sse_float(int t) {
 }
 
 /* instruction + 4 bytes data. Return the address of the data */
-static int oad(int c, int s)
+ST_FUNC int oad(int c, int s)
 {
     int ind1;
 
@@ -198,7 +206,7 @@ static int oad(int c, int s)
     return s;
 }
 
-static void gen_addr32(int r, Sym *sym, int c)
+ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_X86_64_32);
@@ -206,7 +214,7 @@ static void gen_addr32(int r, Sym *sym, int c)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-static void gen_addr64(int r, Sym *sym, int64_t c)
+ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_X86_64_64);
@@ -214,7 +222,7 @@ static void gen_addr64(int r, Sym *sym, int64_t c)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-static void gen_addrpc32(int r, Sym *sym, int c)
+ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_X86_64_PC32);
@@ -1537,3 +1545,5 @@ void ggoto(void)
 
 /* end of x86-64 code generator */
 /*************************************************************/
+#endif /* ! TARGET_DEFS_ONLY */
+/******************************************************/

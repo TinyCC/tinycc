@@ -1,5 +1,5 @@
 /*
- *  TCC - Tiny C Compiler
+ *  TCC - Tiny C Compiler - Support for -run switch
  *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -18,7 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-/* tccrun.c - support for tcc -run */
+#include "tcc.h"
 
 #ifdef _WIN32
 #define ucontext_t CONTEXT
@@ -26,7 +26,7 @@
 
 static void set_pages_executable(void *ptr, unsigned long length);
 static void set_exception_handler(void);
-static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level);
+static int rt_get_caller_pc(uplong *paddr, ucontext_t *uc, int level);
 static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
@@ -173,8 +173,8 @@ static void set_pages_executable(void *ptr, unsigned long length)
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
     unsigned long start, end;
-    start = (unsigned long)ptr & ~(PAGESIZE - 1);
-    end = (unsigned long)ptr + length;
+    start = (uplong)ptr & ~(PAGESIZE - 1);
+    end = (uplong)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
 #endif
@@ -185,7 +185,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static unsigned long rt_printline(unsigned long wanted_pc)
+static uplong rt_printline(uplong wanted_pc)
 {
     Stab_Sym *sym, *sym_end;
     char func_name[128], last_func_name[128];
@@ -194,7 +194,7 @@ static unsigned long rt_printline(unsigned long wanted_pc)
     int incl_index, len, last_line_num, i;
     const char *str, *p;
 
-    fprintf(stderr, "0x%08lx:", wanted_pc);
+    fprintf(stderr, "0x%08lx:", (unsigned long)wanted_pc);
 
     func_name[0] = '\0';
     func_addr = 0;
@@ -311,7 +311,7 @@ static unsigned long rt_printline(unsigned long wanted_pc)
 static void rt_error(ucontext_t *uc, const char *fmt, ...)
 {
     va_list ap;
-    unsigned long pc;
+    uplong pc;
     int i;
 
     va_start(ap, fmt);
@@ -327,7 +327,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
         else
             fprintf(stderr, "by ");
         pc = rt_printline(pc);
-        if (pc == (unsigned long)rt_prog_main && pc)
+        if (pc == (uplong)rt_prog_main && pc)
             break;
     }
     exit(255);
@@ -505,11 +505,15 @@ static void set_exception_handler(void)
     SetUnhandledExceptionFilter(cpu_exception_handler);
 }
 
+#ifdef _WIN64
+#define Eip Rip
+#define Ebp Rbp
+#endif
+
 /* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(unsigned long *paddr,
-			    CONTEXT *uc, int level)
+static int rt_get_caller_pc(uplong *paddr, CONTEXT *uc, int level)
 {
-    unsigned long fp;
+    uplong fp;
     int i;
 
     if (level == 0) {
@@ -521,12 +525,15 @@ static int rt_get_caller_pc(unsigned long *paddr,
 	    /* XXX: check address validity with program info */
 	    if (fp <= 0x1000 || fp >= 0xc0000000)
 		return -1;
-	    fp = ((unsigned long *)fp)[0];
+	    fp = ((uplong*)fp)[0];
 	}
-	*paddr = ((unsigned long *)fp)[1];
+	*paddr = ((uplong*)fp)[1];
 	return 0;
     }
 }
+
+#undef Eip
+#undef Ebp
 
 #endif /* _WIN32 */
 #endif /* CONFIG_TCC_BACKTRACE */
@@ -584,13 +591,7 @@ void *resolve_sym(TCCState *s1, const char *symbol)
     return NULL;
 }
 
-#elif defined(_WIN32)
-
-#define dlclose FreeLibrary
-
-#else
-
-#include <dlfcn.h>
+#elif !defined(_WIN32)
 
 void *resolve_sym(TCCState *s1, const char *sym)
 {

@@ -18,8 +18,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#ifdef TARGET_DEFS_ONLY
+
 /* number of available registers */
-#define NB_REGS             4
+#define NB_REGS         4
+#define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -40,13 +43,6 @@ enum {
     TREG_ECX,
     TREG_EDX,
     TREG_ST0,
-};
-
-const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_EAX,
-    /* ecx */ RC_INT | RC_ECX,
-    /* edx */ RC_INT | RC_EDX,
-    /* st0 */ RC_FLOAT | RC_ST0,
 };
 
 /* return registers for function */
@@ -70,6 +66,9 @@ const int reg_classes[NB_REGS] = {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
+
+#define psym oad
+
 /******************************************************/
 /* ELF defines */
 
@@ -85,6 +84,16 @@ const int reg_classes[NB_REGS] = {
 #define ELF_PAGE_SIZE  0x1000
 
 /******************************************************/
+#else /* ! TARGET_DEFS_ONLY */
+/******************************************************/
+#include "tcc.h"
+
+ST_DATA const int reg_classes[NB_REGS] = {
+    /* eax */ RC_INT | RC_EAX,
+    /* ecx */ RC_INT | RC_ECX,
+    /* edx */ RC_INT | RC_EDX,
+    /* st0 */ RC_FLOAT | RC_ST0,
+};
 
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
@@ -93,7 +102,7 @@ static unsigned long func_bound_offset;
 #endif
 
 /* XXX: make it faster ? */
-void g(int c)
+ST_FUNC void g(int c)
 {
     int ind1;
     ind1 = ind + 1;
@@ -103,7 +112,7 @@ void g(int c)
     ind = ind1;
 }
 
-void o(unsigned int c)
+ST_FUNC void o(unsigned int c)
 {
     while (c) {
         g(c);
@@ -111,13 +120,13 @@ void o(unsigned int c)
     }
 }
 
-void gen_le16(int v)
+ST_FUNC void gen_le16(int v)
 {
     g(v);
     g(v >> 8);
 }
 
-void gen_le32(int c)
+ST_FUNC void gen_le32(int c)
 {
     g(c);
     g(c >> 8);
@@ -126,7 +135,7 @@ void gen_le32(int c)
 }
 
 /* output a symbol and patch all calls to it */
-void gsym_addr(int t, int a)
+ST_FUNC void gsym_addr(int t, int a)
 {
     int n, *ptr;
     while (t) {
@@ -137,7 +146,7 @@ void gsym_addr(int t, int a)
     }
 }
 
-void gsym(int t)
+ST_FUNC void gsym(int t)
 {
     gsym_addr(t, ind);
 }
@@ -147,7 +156,7 @@ void gsym(int t)
 #define psym oad
 
 /* instruction + 4 bytes data. Return the address of the data */
-static int oad(int c, int s)
+ST_FUNC int oad(int c, int s)
 {
     int ind1;
 
@@ -162,14 +171,14 @@ static int oad(int c, int s)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-static void gen_addr32(int r, Sym *sym, int c)
+ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_386_32);
     gen_le32(c);
 }
 
-static void gen_addrpc32(int r, Sym *sym, int c)
+ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_386_PC32);
@@ -200,7 +209,7 @@ static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 }
 
 /* load 'r' from value 'sv' */
-void load(int r, SValue *sv)
+ST_FUNC void load(int r, SValue *sv)
 {
     int v, t, ft, fc, fr;
     SValue v1;
@@ -269,7 +278,7 @@ void load(int r, SValue *sv)
 }
 
 /* store register 'r' in lvalue 'v' */
-void store(int r, SValue *v)
+ST_FUNC void store(int r, SValue *v)
 {
     int fr, bt, ft, fc;
 
@@ -349,7 +358,7 @@ static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
-void gfunc_call(int nb_args)
+ST_FUNC void gfunc_call(int nb_args)
 {
     int size, align, r, args_size, i, func_call;
     Sym *func_sym;
@@ -442,7 +451,7 @@ void gfunc_call(int nb_args)
 #endif
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(CType *func_type)
+ST_FUNC void gfunc_prolog(CType *func_type)
 {
     int addr, align, size, func_call, fastcall_nb_regs;
     int param_index, param_addr;
@@ -524,7 +533,7 @@ void gfunc_prolog(CType *func_type)
 }
 
 /* generate function epilog */
-void gfunc_epilog(void)
+ST_FUNC void gfunc_epilog(void)
 {
     int v, saved_ind;
 
@@ -595,13 +604,13 @@ void gfunc_epilog(void)
 }
 
 /* generate a jump to a label */
-int gjmp(int t)
+ST_FUNC int gjmp(int t)
 {
     return psym(0xe9, t);
 }
 
 /* generate a jump to a fixed address */
-void gjmp_addr(int a)
+ST_FUNC void gjmp_addr(int a)
 {
     int r;
     r = a - ind - 2;
@@ -614,7 +623,7 @@ void gjmp_addr(int a)
 }
 
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
-int gtst(int inv, int t)
+ST_FUNC int gtst(int inv, int t)
 {
     int v, *p;
 
@@ -659,7 +668,7 @@ int gtst(int inv, int t)
 }
 
 /* generate an integer binary operation */
-void gen_opi(int op)
+ST_FUNC void gen_opi(int op)
 {
     int r, fr, opc, c;
 
@@ -793,7 +802,7 @@ void gen_opi(int op)
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranted to have the same floating point type */
 /* XXX: need to use ST1 too */
-void gen_opf(int op)
+ST_FUNC void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
 
@@ -905,7 +914,7 @@ void gen_opf(int op)
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-void gen_cvt_itof(int t)
+ST_FUNC void gen_cvt_itof(int t)
 {
     save_reg(TREG_ST0);
     gv(RC_INT);
@@ -935,7 +944,7 @@ void gen_cvt_itof(int t)
 
 /* convert fp to int 't' type */
 /* XXX: handle long long case */
-void gen_cvt_ftoi(int t)
+ST_FUNC void gen_cvt_ftoi(int t)
 {
     int r, r2, size;
     Sym *sym;
@@ -986,14 +995,14 @@ void gen_cvt_ftoi(int t)
 }
 
 /* convert from one floating point type to another */
-void gen_cvt_ftof(int t)
+ST_FUNC void gen_cvt_ftof(int t)
 {
     /* all we have to do on i386 is to put the float in a register */
     gv(RC_FLOAT);
 }
 
 /* computed goto support */
-void ggoto(void)
+ST_FUNC void ggoto(void)
 {
     gcall_or_jmp(1);
     vtop--;
@@ -1003,7 +1012,7 @@ void ggoto(void)
 #ifdef CONFIG_TCC_BCHECK
 
 /* generate a bounded pointer addition */
-void gen_bounded_ptr_add(void)
+ST_FUNC void gen_bounded_ptr_add(void)
 {
     Sym *sym;
 
@@ -1026,7 +1035,7 @@ void gen_bounded_ptr_add(void)
 
 /* patch pointer addition in vtop so that pointer dereferencing is
    also tested */
-void gen_bounded_ptr_deref(void)
+ST_FUNC void gen_bounded_ptr_deref(void)
 {
     int func;
     int size, align;
@@ -1068,4 +1077,5 @@ void gen_bounded_ptr_deref(void)
 
 /* end of X86 code generator */
 /*************************************************************/
-
+#endif
+/*************************************************************/

@@ -113,11 +113,13 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 endif
 
+# NOTALLINONE = 1
+
 all: $(PROGS) $(LIBTCC1) $(BCHECK_O) libtcc.a tcc-doc.html tcc.1 libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
-tcc$(EXESUF): $(NATIVE_FILES)
-	$(CC) -o $@ $< $(NATIVE_TARGET) $(CFLAGS) $(LIBS)
+tcc$(EXESUF): tcc.o libtcc.a
+	$(CC) -o $@ $^ $(LIBS)
 
 # Cross Tiny C Compilers
 i386-tcc$(EXESUF): $(I386_FILES)
@@ -151,10 +153,22 @@ arm-tcc-vfp-eabi$(EXESUF): $(ARM_FILES)
 	$(CC) -o $@ $< -DTCC_TARGET_ARM -DTCC_ARM_EABI $(CFLAGS) $(LIBS)
 
 # libtcc generation and test
-libtcc.o: $(NATIVE_FILES)
-	$(CC) -o $@ -c libtcc.c $(NATIVE_TARGET) $(CFLAGS)
 
-libtcc.a: libtcc.o
+ifdef NOTALLINONE
+LIBTCC_OBJ = $(filter-out tcc.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
+LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES),$(NATIVE_FILES))
+$(LIBTCC_OBJ) : DEFINES += -DNOTALLINONE
+else
+LIBTCC_OBJ = libtcc.o
+LIBTCC_INC = $(NATIVE_FILES)
+endif
+
+tcc.o : DEFINES += -DNOTALLINONE
+
+$(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
+	$(CC) -o $@ -c $< $(NATIVE_TARGET) $(CFLAGS) $(DEFINES)
+
+libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
 
 libtcc_test$(EXESUF): tests/libtcc_test.c libtcc.a
@@ -260,19 +274,18 @@ tar:
 	rm -rf /tmp/$(TCC-VERSION)
 
 # in tests subdir
-test clean:
+%est:
 	$(MAKE) -C tests $@
+
+clean:
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out libtcc_test$(EXESUF)
+	$(MAKE) -C tests $@
+
+distclean: clean
+	rm -vf config.h config.mak config.texi tcc.1
 
 config.mak:
 	@echo Running configure ...
 	@./configure
-
-# clean
-clean: local_clean
-local_clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out libtcc_test$(EXESUF)
-
-distclean: clean
-	rm -vf config.h config.mak config.texi tcc.1
 
 endif # ifeq ($(TOP),.)

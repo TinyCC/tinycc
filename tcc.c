@@ -18,13 +18,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifdef TCC_USE_LIBTCC
+#if defined NOTALLINONE || defined TCC_USE_LIBTCC
 #include "tcc.h"
 #else
 #include "libtcc.c"
 #endif
 
-void help(void)
+static char **files;
+static int nb_files, nb_libraries;
+static int multiple_files;
+static int print_search_dirs;
+static int output_type;
+static int reloc_output;
+static const char *outfile;
+static int do_bench = 0;
+
+#define TCC_OPTION_HAS_ARG 0x0001
+#define TCC_OPTION_NOSEP   0x0002 /* cannot have space before option and arg */
+
+static void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
            "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
@@ -64,18 +76,6 @@ void help(void)
 #endif
            );
 }
-
-static char **files;
-static int nb_files, nb_libraries;
-static int multiple_files;
-static int print_search_dirs;
-static int output_type;
-static int reloc_output;
-static const char *outfile;
-static int do_bench = 0;
-
-#define TCC_OPTION_HAS_ARG 0x0001
-#define TCC_OPTION_NOSEP   0x0002 /* cannot have space before option and arg */
 
 typedef struct TCCOption {
     const char *name;
@@ -213,7 +213,7 @@ static int expand_args(char ***pargv, const char *str)
     return argc;
 }
 
-int parse_args(TCCState *s, int argc, char **argv)
+static int parse_args(TCCState *s, int argc, char **argv)
 {
     int optind;
     const TCCOption *popt;
@@ -304,7 +304,7 @@ int parse_args(TCCState *s, int argc, char **argv)
                 break;
 #ifdef CONFIG_TCC_BACKTRACE
             case TCC_OPTION_bt:
-                num_callers = atoi(optarg);
+                set_num_callers(atoi(optarg));
                 break;
 #endif
 #ifdef CONFIG_TCC_BCHECK
