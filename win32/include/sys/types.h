@@ -12,6 +12,7 @@
 
 #include <_mingw.h>
 
+#ifndef __TINYC__ //gr
 #ifdef _USE_32BIT_TIME_T
 #ifdef _WIN64
 #undef _USE_32BIT_TIME_T
@@ -19,6 +20,7 @@
 #else
 #if _INTEGRAL_MAX_BITS < 64
 #define _USE_32BIT_TIME_T
+#endif
 #endif
 #endif
 
