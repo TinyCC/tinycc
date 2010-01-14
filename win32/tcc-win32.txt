@@ -35,11 +35,6 @@
     -----------------------------------------
     Unzip the package to a directory of your choice.
     
-    (Note that the binary package does not include libtcc.  If you
-    want TCC as dynamic code generator, please use the source code
-    distribution.)
-
-
 
     Set the system PATH:
     --------------------
@@ -61,12 +56,15 @@
 
 	tcc hello_win.c
 
-    for the 'Hello DLL' example type
+    For the 'Hello DLL' example type
 
 	tcc -shared dll.c
 	tiny_impdef dll.dll (optional)
         tcc hello_dll.c dll.def
 
+    For the 'libtcc_test' example type
+
+        tcc examples/libtcc_test.c -I. libtcc.dll
 
 
     Import Definition Files:
