@@ -738,7 +738,8 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 static void tcc_assemble_inline(TCCState *s1, char *str, int len)
 {
     BufferedFile *bf, *saved_file;
-    int saved_parse_flags, *saved_macro_ptr;
+    int saved_parse_flags;
+    const int *saved_macro_ptr;
 
     bf = tcc_malloc(sizeof(BufferedFile));
     memset(bf, 0, sizeof(BufferedFile));
