@@ -393,7 +393,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
                             unsigned long value, unsigned long size,
                             int can_add_underscore)
 {
-    int sym_type, sym_bind, sh_num, info, other, attr;
+    int sym_type, sym_bind, sh_num, info, other;
     ElfW(Sym) *esym;
     const char *name;
     char buf1[256];
@@ -405,26 +405,12 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     else
         sh_num = section->sh_num;
 
-    other = attr = 0;
-
     if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
         sym_type = STT_FUNC;
-#ifdef TCC_TARGET_PE
-        if (sym->type.ref)
-            attr = sym->type.ref->r;
-        if (FUNC_EXPORT(attr))
-            other |= 1;
-        if (FUNC_CALL(attr) == FUNC_STDCALL)
-            other |= 2;
-#endif
     } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
         sym_type = STT_NOTYPE;
     } else {
         sym_type = STT_OBJECT;
-#ifdef TCC_TARGET_PE
-        if (sym->type.t & VT_EXPORT)
-            other |= 1;
-#endif
     }
 
     if (sym->type.t & VT_STATIC)
@@ -463,12 +449,27 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
             }
         }
 #endif
+        other = 0;
 
 #ifdef TCC_TARGET_PE
-        if ((other & 2) && can_add_underscore) {
-            sprintf(buf1, "_%s@%d", name, FUNC_ARGS(attr));
-            name = buf1;
-        } else
+        if (sym->type.t & VT_EXPORT)
+            other |= 1;
+        if (sym_type == STT_FUNC && sym->type.ref) {
+            int attr = sym->type.ref->r;
+            if (FUNC_EXPORT(attr))
+                other |= 1;
+            if (FUNC_CALL(attr) == FUNC_STDCALL && can_add_underscore) {
+                sprintf(buf1, "_%s@%d", name, FUNC_ARGS(attr) * PTR_SIZE);
+                name = buf1;
+                other |= 2;
+                can_add_underscore = 0;
+            }
+        } else {
+            if (find_elf_sym(tcc_state->dynsymtab_section, name))
+                other |= 4;
+            if (sym->type.t & VT_IMPORT)
+                other |= 4;
+        }
 #endif
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
@@ -482,7 +483,6 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         esym->st_value = value;
         esym->st_size = size;
         esym->st_shndx = sh_num;
-        esym->st_other |= other;
     }
 }
 
@@ -1215,9 +1215,13 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 
 LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, void *val)
 {
+#ifdef TCC_TARGET_PE
+    pe_putimport(s, 0, name, val);
+#else
     add_elf_sym(symtab_section, (uplong)val, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_ABS, name);
+#endif
     return 0;
 }
 

@@ -753,10 +753,10 @@ static struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
     int dll_index;
     struct pe_import_info *p;
     struct import_symbol *s;
+    ElfW(Sym) *isym;
 
-    dll_index = ((ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index)->st_value;
-    if (0 == dll_index)
-        return NULL;
+    isym = (ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index;
+    dll_index = isym->st_size;
 
     i = dynarray_assoc ((void**)pe->imp_info, pe->imp_count, dll_index);
     if (-1 != i) {
@@ -804,14 +804,20 @@ static void pe_build_imports(struct pe_info *pe)
 
     for (i = 0; i < pe->imp_count; ++i) {
         IMAGE_IMPORT_DESCRIPTOR *hdr;
-        int k, n;
+        int k, n, dllindex;
         ADDR3264 v;
         struct pe_import_info *p = pe->imp_info[i];
-        const char *name = pe->s1->loaded_dlls[p->dll_index-1]->name;
+        const char *name;
+        DLLReference *dllref;
+
+        dllindex = p->dll_index;
+        if (dllindex)
+            name = (dllref = pe->s1->loaded_dlls[dllindex-1])->name;
+        else
+            name = "", dllref = NULL;
 
         /* put the dll name into the import header */
         v = put_elf_str(pe->thunk, name);
-
         hdr = (IMAGE_IMPORT_DESCRIPTOR*)(pe->thunk->data + dll_ptr);
         hdr->FirstThunk = thk_ptr + rva_base;
         hdr->OriginalFirstThunk = ent_ptr + rva_base;
@@ -832,10 +838,12 @@ static void pe_build_imports(struct pe_info *pe)
                 put_elf_str(pe->thunk, name);
 #ifdef TCC_IS_NATIVE
                 if (pe->type == PE_RUN) {
-                    DLLReference *dllref = pe->s1->loaded_dlls[imp_sym->st_value-1];
-                    if ( !dllref->handle )
-                        dllref->handle = LoadLibrary(dllref->name);
-                    v = (ADDR3264)GetProcAddress(dllref->handle, name);
+                    v = imp_sym->st_value;
+                    if (dllref) {
+                        if ( !dllref->handle )
+                            dllref->handle = LoadLibrary(dllref->name);
+                        v = (ADDR3264)GetProcAddress(dllref->handle, name);
+                    }
                     if (!v)
                         error_noabort("undefined symbol '%s'", name);
                 }
@@ -1214,9 +1222,6 @@ static int pe_check_symbols(struct pe_info *pe)
 
             if (0 == imp_sym)
                 goto not_found;
-            is = pe_add_import(pe, imp_sym);
-            if (!is)
-                goto not_found;
 
             if (type == STT_NOTYPE) {
                 /* symbols from assembler have no type, find out which */
@@ -1225,6 +1230,8 @@ static int pe_check_symbols(struct pe_info *pe)
                 else
                     type = STT_OBJECT;
             }
+
+            is = pe_add_import(pe, imp_sym);
 
             if (type == STT_FUNC) {
                 unsigned long offset = is->thk_offset;
@@ -1425,6 +1432,75 @@ static void pe_print_sections(TCCState *s1, const char *fname)
 #endif
 
 /* ------------------------------------------------------------- */
+/* helper function for load/store to insert one more indirection */
+
+ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
+{
+    Sym *sym;
+    ElfW(Sym) *esym;
+    int r2;
+
+    if ((sv->r & (VT_VALMASK|VT_SYM)) != (VT_CONST|VT_SYM) || (sv->r2 != VT_CONST))
+        return sv;
+    sym = sv->sym;
+    if ((sym->type.t & (VT_EXTERN|VT_STATIC)) != VT_EXTERN)
+        return sv;
+    if (!sym->c)
+        put_extern_sym(sym, NULL, 0, 0);
+    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+    if (!(esym->st_other & 4))
+        return sv;
+
+    // printf("import %04x %04x %04x %s\n", sv->type.t, sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));
+
+    memset(v2, 0, sizeof *v2);
+    v2->type.t = VT_PTR;
+    v2->r = VT_CONST | VT_SYM | VT_LVAL;
+    v2->sym = sv->sym;
+
+    r2 = get_reg(RC_INT);
+    load(r2, v2);
+    v2->r = r2;
+
+    if (sv->c.ui) {
+        vpushv(v2);
+        vpushi(sv->c.ui);
+        gen_opi('+');
+        *v2 = *vtop--;
+    }
+
+    v2->type.t = sv->type.t;
+    v2->r |= sv->r & VT_LVAL;
+    return v2;
+}
+
+ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, const void *value)
+{
+    return add_elf_sym(
+        s1->dynsymtab_section,
+        (uplong)value,
+        dllindex, /* st_size */
+        ELFW_ST_INFO(STB_GLOBAL, STT_NOTYPE),
+        0,
+        value ? SHN_ABS : SHN_UNDEF,
+        name
+        );
+}
+
+static int add_dllref(TCCState *s1, const char *dllname)
+{
+    DLLReference *dllref;
+    int i;
+    for (i = 0; i < s1->nb_loaded_dlls; ++i)
+        if (0 == strcmp(s1->loaded_dlls[i]->name, dllname))
+            return i + 1;
+    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
+    strcpy(dllref->name, dllname);
+    dynarray_add((void ***) &s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    return s1->nb_loaded_dlls;
+}
+
+/* ------------------------------------------------------------- */
 
 static int read_mem(FILE *fp, unsigned offset, void *buffer, unsigned len)
 {
@@ -1503,8 +1579,7 @@ static char *get_line(char *line, int size, FILE *fp)
 /* ------------------------------------------------------------- */
 static int pe_load_def(TCCState *s1, FILE *fp)
 {
-    DLLReference *dllref;
-    int state = 0, ret = -1;
+    int state = 0, ret = -1, dllindex = 0;
     char line[400], dllname[80], *p;
 
     for (;;) {
@@ -1528,16 +1603,11 @@ static int pe_load_def(TCCState *s1, FILE *fp)
             continue;
 
         case 2:
-            dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
-            strcpy(dllref->name, dllname);
-            dynarray_add((void ***) &s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+            dllindex = add_dllref(s1, dllname);
             ++state;
 
         default:
-            add_elf_sym(s1->dynsymtab_section,
-                s1->nb_loaded_dlls, 0,
-                ELFW_ST_INFO(STB_GLOBAL, STT_FUNC), 0,
-                text_section->sh_num, p);
+            pe_putimport(s1, dllindex, p, NULL);
             continue;
         }
     }
@@ -1552,24 +1622,16 @@ quit:
 
 static int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
 {
-    int i = 0;
     char *p, *q;
+    int index;
     p = get_export_names(fp);
-    if (p) {
-        DLLReference *dllref;
-        dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
-        strcpy(dllref->name, dllname);
-        dynarray_add((void ***) &s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
-        for (q = p, i = 0; *q; ++i) {
-            add_elf_sym(s1->dynsymtab_section,
-                s1->nb_loaded_dlls, 0,
-                ELFW_ST_INFO(STB_GLOBAL, STT_FUNC), 0,
-                text_section->sh_num, q);
-            q += 1 + strlen(q);
-        }
-        tcc_free(p);
-    }
-    return i ? 0 : -1;
+    if (!p)
+        return -1;
+    index = add_dllref(s1, dllname);
+    for (q = p; *q; q += 1 + strlen(q))
+        pe_putimport(s1, index, q, NULL);
+    tcc_free(p);
+    return 0;
 }
 
 /* ------------------------------------------------------------- */
@@ -1603,32 +1665,6 @@ ST_FUNC int pe_add_dll(struct TCCState *s, const char *libname)
             return 0;
     } while (*++p);
     return -1;
-}
-
-/* ------------------------------------------------------------- */
-/* helper function for load/store to insert one more indirection */
-
-ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv))
-{
-    int t;
-    if ((sv->r & (VT_VALMASK|VT_SYM|VT_CONST)) != (VT_SYM|VT_CONST))
-	return 0;
-    t = sv->sym->type.t;
-    if (0 == (t & VT_IMPORT))
-	return 0;
-
-    sv->sym->type.t = t & ~VT_IMPORT;
-    //printf("import %x %04x %s\n", t, ind, get_tok_str(sv->sym->v, NULL));
-
-    vpushv(sv);
-    vtop->type.t &= ~(VT_ARRAY|VT_IMPORT);
-    mk_pointer(&vtop->type);
-    indir();
-    fn(r, vtop);
-    --vtop;
-
-    sv->sym->type.t = t;
-    return 1;
 }
 
 /* ------------------------------------------------------------- */
@@ -1702,6 +1738,8 @@ static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
         /* need this for 'tccelf.c:relocate_section()' */
         s1->output_type = TCC_OUTPUT_EXE;
     }
+    else
+        pe_type = PE_EXE;
 
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
@@ -1731,9 +1769,12 @@ static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
         }
     }
 
+    if (TCC_OUTPUT_MEMORY == s1->output_type)
+        pe_type = PE_RUN;
+
     if (start_symbol) {
         addr = (uplong)tcc_get_symbol_err(s1, start_symbol);
-        if (s1->output_type == TCC_OUTPUT_MEMORY && addr)
+        if (PE_RUN == pe_type && addr)
             /* for -run GUI's, put '_runwinmain' instead of 'main' */
             add_elf_sym(symtab_section,
                     addr, 0,
@@ -1823,7 +1864,6 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
 #ifndef TCC_IS_NATIVE
         error_noabort("-run supported only on native platform");
 #endif
-        pe.type = PE_RUN;
         pe.thunk = data_section;
         pe_build_imports(&pe);
     }

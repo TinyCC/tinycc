@@ -60,6 +60,7 @@ int main(int argc, char **argv)
     fp = op = NULL;
     v = 0;
     ret = 1;
+    p = NULL;
 
     for (i = 1; i < argc; ++i) {
         const char *a = argv[i];
@@ -90,24 +91,33 @@ usage:
     if (0 == outfile[0])
     {
         strcpy(outfile, file_basename(infile));
-        p = strrchr(outfile, '.');
-        if (NULL == p)
-            p = strchr(outfile, 0);
-        strcpy(p, ".def");
+        q = strrchr(outfile, '.');
+        if (NULL == q)
+            q = strchr(outfile, 0);
+        strcpy(q, ".def");
     }
 
     file = infile;
+
 #ifdef _WIN32
-    for (pp = ext; *pp; ++pp)
-        if (SearchPath(NULL, file, *pp, sizeof path, path, NULL)) {
-            file = path;
-            break;
-        }
+    pp = ext;
+    do if (SearchPath(NULL, file, *pp, sizeof path, path, NULL)) {
+       file = path;
+       break;
+    } while (*pp++);
 #endif
 
     fp = fopen(file, "rb");
     if (NULL == fp) {
         fprintf(stderr, "tiny_impdef: no such file: %s\n", infile);
+        goto the_end;
+    }
+    if (v)
+        printf("--> %s\n", file);
+
+    p = get_export_names(fp);
+    if (NULL == p) {
+        fprintf(stderr, "tiny_impdef: could not get exported function names.\n");
         goto the_end;
     }
 
@@ -117,21 +127,11 @@ usage:
         goto the_end;
     }
 
-    if (v)
-        printf("--> %s\n", infile);
-
-    fprintf(op, "LIBRARY %s\n\nEXPORTS\n", file_basename(infile));
-    p = get_export_names(fp);
-    if (NULL == p) {
-        fprintf(stderr, "tiny_impdef: could not get exported function names.\n");
-        goto the_end;
-    }
-
+    fprintf(op, "LIBRARY %s\n\nEXPORTS\n", file_basename(file));
     for (q = p, i = 0; *q; ++i) {
         fprintf(op, "%s\n", q);
         q += strlen(q) + 1;
     }
-    free(p);
 
     if (v) {
         printf("<-- %s\n", outfile);
@@ -141,6 +141,8 @@ usage:
     ret = 0;
 
 the_end:
+    if (p)
+        free(p);
     if (fp)
         fclose(fp);
     if (op)

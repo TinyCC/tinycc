@@ -261,12 +261,13 @@ typedef struct DLLReference {
 /* GNUC attribute definition */
 typedef struct AttributeDef {
     unsigned
-      packed        : 1,
-      aligned       : 5, /* alignement (0..16) */
       func_call     : 3, /* calling convention (0..5), see below */
+      aligned       : 5, /* alignement (0..16) */
+      packed        : 1,
       func_export   : 1,
       func_import   : 1,
-      func_args     : 8;
+      func_args     : 5,
+      fill          : 16;
     struct Section *section;
 } AttributeDef;
 
@@ -1176,7 +1177,8 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd);
 ST_FUNC int pe_add_dll(struct TCCState *s, const char *libraryname);
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
-ST_FUNC int pe_dllimport(int r, SValue *sv, void (*fn)(int r, SValue *sv));
+ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, const void *value);
+ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);
 /* tiny_impdef.c */
 ST_FUNC char *get_export_names(FILE *fp);
 #ifdef TCC_TARGET_X86_64

@@ -335,8 +335,8 @@ void load(int r, SValue *sv)
     SValue v1;
 
 #ifdef TCC_TARGET_PE
-    if (pe_dllimport(r, sv, load))
-        return;
+    SValue v2;
+    sv = pe_getimport(sv, &v2);
 #endif
 
     fr = sv->r;
@@ -469,8 +469,8 @@ void store(int r, SValue *v)
     int pic = 0;
 
 #ifdef TCC_TARGET_PE
-    if (pe_dllimport(r, v, store))
-        return;
+    SValue v2;
+    v = pe_getimport(v, &v2);
 #endif
 
     ft = v->type.t;
