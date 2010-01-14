@@ -58,28 +58,27 @@
 #define _CRT_WIDE(_String) __CRT_WIDE(_String)
 
 #ifdef _WIN64
-# define _INTEGRAL_MAX_BITS 64
-typedef __int64 intptr_t;
-typedef __int64 ptrdiff_t;
-typedef unsigned __int64 uintptr_t;
-# define __stdcall
-# define _AMD64_ 1
-# define __x86_64 1
-# define USE_MINGW_SETJMP_TWO_ARGS
-# define mingw_getsp tinyc_getbp
+#define __stdcall
+#define _AMD64_ 1
+#define __x86_64 1
+#define USE_MINGW_SETJMP_TWO_ARGS
+#define mingw_getsp tinyc_getbp
 #else
-# define _INTEGRAL_MAX_BITS 32
-typedef __int32 intptr_t;
-typedef __int32 ptrdiff_t;
-typedef unsigned __int32 uintptr_t;
-# define __stdcall __attribute__((__stdcall__))
-# define _X86_ 1
-# define WIN32 1
-# define _USE_32BIT_TIME_T
+#define __stdcall __attribute__((__stdcall__))
+#define _X86_ 1
+#define WIN32 1
+#define _USE_32BIT_TIME_T
 #endif
+
+/* in stddef.h */
+#define _SIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
+#define _PTRDIFF_T_DEFINED
+#define _WCHAR_T_DEFINED
 #define _UINTPTR_T_DEFINED
 #define _INTPTR_T_DEFINED
-#define _PTRDIFF_T_DEFINED
+
+#define _INTEGRAL_MAX_BITS 64
 
 typedef long __time32_t;
 #define _TIME32_T_DEFINED

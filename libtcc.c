@@ -886,9 +886,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__STDC__", NULL);
     tcc_define_symbol(s, "__STDC_VERSION__", "199901L");
 #if defined(TCC_TARGET_I386)
-    tcc_define_symbol(s, "__i386__", "1");
-    tcc_define_symbol(s, "__i386", "1");
-    tcc_define_symbol(s, "i386", "1");
+    tcc_define_symbol(s, "__i386__", NULL);
+    tcc_define_symbol(s, "__i386", NULL);
+    tcc_define_symbol(s, "i386", NULL);
 #endif
 #if defined(TCC_TARGET_X86_64)
     tcc_define_symbol(s, "__x86_64__", NULL);
@@ -909,13 +909,12 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "_WIN64", NULL);
 #endif
 #else
-    tcc_define_symbol(s, "__unix__", "1");
-    tcc_define_symbol(s, "__unix", "1");
-    tcc_define_symbol(s, "unix", "1");
+    tcc_define_symbol(s, "__unix__", NULL);
+    tcc_define_symbol(s, "__unix", NULL);
+    tcc_define_symbol(s, "unix", NULL);
 #if defined(__FreeBSD__)
 #define str(s) #s
     tcc_define_symbol(s, "__FreeBSD__", str( __FreeBSD__));
-    tcc_define_symbol(s, "__INTEL_COMPILER", "1");
 #undef str
 #endif
 #if defined(__linux)
@@ -929,8 +928,14 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__TINYC__", buffer);
 
     /* tiny C & gcc defines */
+#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
+    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long long");
+    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long long");
+#else
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
+#endif
+
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "__WCHAR_TYPE__", "unsigned short");
 #else
