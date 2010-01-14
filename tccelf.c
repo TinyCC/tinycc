@@ -97,9 +97,8 @@ static void rebuild_hash(Section *s, unsigned int nb_buckets)
 }
 
 /* return the symbol number */
-ST_FUNC int put_elf_sym(Section *s, 
-                       unsigned long value, unsigned long size,
-                       int info, int other, int shndx, const char *name)
+ST_FUNC int put_elf_sym(Section *s, uplong value, unsigned long size,
+    int info, int other, int shndx, const char *name)
 {
     int name_offset, sym_index;
     int nbuckets, h;
@@ -483,7 +482,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
 #ifndef TCC_TARGET_PE
 #ifdef TCC_TARGET_X86_64
 #define JMP_TABLE_ENTRY_SIZE 14
-static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
+static uplong add_jmp_table(TCCState *s1, uplong val)
 {
     char *p = s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset;
     s1->runtime_plt_and_got_offset += JMP_TABLE_ENTRY_SIZE;
@@ -491,17 +490,16 @@ static unsigned long add_jmp_table(TCCState *s1, unsigned long val)
     p[0] = 0xff;
     p[1] = 0x25;
     *(int *)(p + 2) = 0;
-    *(unsigned long *)(p + 6) = val;
-    return (unsigned long)p;
+    *(uplong *)(p + 6) = val;
+    return (uplong)p;
 }
 
-static unsigned long add_got_table(TCCState *s1, unsigned long val)
+static uplong add_got_table(TCCState *s1, uplong val)
 {
-    unsigned long *p =(unsigned long *)(s1->runtime_plt_and_got +
-                                        s1->runtime_plt_and_got_offset);
-    s1->runtime_plt_and_got_offset += sizeof(void *);
+    uplong *p = (uplong *)(s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset);
+    s1->runtime_plt_and_got_offset += sizeof(uplong);
     *p = val;
-    return (unsigned long)p;
+    return (uplong)p;
 }
 #endif
 #endif
@@ -514,7 +512,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
     ElfW(Sym) *sym;
     int type, sym_index;
     unsigned char *ptr;
-    unsigned long val, addr;
+    uplong val, addr;
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
     int esym_index;
 #endif

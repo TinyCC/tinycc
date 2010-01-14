@@ -1213,7 +1213,7 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     return -1;
 }
 
-LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, void *val)
+LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 {
 #ifdef TCC_TARGET_PE
     pe_putimport(s, 0, name, val);

@@ -80,7 +80,7 @@ LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname);
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname);
 
 /* add a symbol to the compiled program */
-LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, void *val);
+LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val);
 
 /* output an executable, library or object file. DO NOT call
    tcc_relocate() before. */
