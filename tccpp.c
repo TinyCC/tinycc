@@ -2105,8 +2105,11 @@ static inline void next_nomacro1(void)
                 tok_flags |= TOK_FLAG_EOF;
                 tok = TOK_LINEFEED;
                 goto keep_tok_flags;
-            } else if (s1->include_stack_ptr == s1->include_stack ||
-                       !(parse_flags & PARSE_FLAG_PREPROCESS)) {
+            } else if (!(parse_flags & PARSE_FLAG_PREPROCESS)) {
+                tok = TOK_EOF;
+            } else if (s1->ifdef_stack_ptr != file->ifdef_stack_ptr) {
+                error("missing #endif");
+            } else if (s1->include_stack_ptr == s1->include_stack) {
                 /* no include left : end of file. */
                 tok = TOK_EOF;
             } else {
