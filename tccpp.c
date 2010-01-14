@@ -997,10 +997,29 @@ ST_FUNC void tok_str_add_tok(TokenString *s)
     }                                           \
 }
 
+static int macro_is_equal(const int *a, const int *b)
+{
+    char buf[STRING_MAX_SIZE + 1];
+    CValue cv;
+    int t;
+    while (*a && *b) {
+        TOK_GET(t, a, cv);
+        pstrcpy(buf, sizeof buf, get_tok_str(t, &cv));
+        TOK_GET(t, b, cv);
+        if (strcmp(buf, get_tok_str(t, &cv)))
+            return 0;
+    }
+    return !(*a || *b);
+}
+
 /* defines handling */
 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
 {
     Sym *s;
+
+    s = define_find(v);
+    if (s && !macro_is_equal(s->d, str))
+        warning("%s redefined", get_tok_str(v, NULL));
 
     s = sym_push2(&define_stack, v, macro_type, 0);
     s->d = str;
