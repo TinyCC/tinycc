@@ -18,6 +18,13 @@
 #ifndef __MINGW_H
 #define __MINGW_H
 
+/* some winapi files define these before including _mingw.h --> */
+#undef NULL
+#undef __cdecl
+#undef _X86_
+#undef WIN32
+/* <-- */
+
 #include <stddef.h>
 #include <stdarg.h>
 
@@ -111,6 +118,10 @@ typedef struct threadmbcinfostruct *pthreadmbcinfo;
 typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 
 /* for winapi */
+#define _ANONYMOUS_UNION
+#define _ANONYMOUS_STRUCT
+#define DECLSPEC_NORETURN
+#define DECLARE_STDCALL_P(type) __stdcall type
 #define WIN32_LEAN_AND_MEAN
 #define NOSERVICE 1
 #define NOMCX 1
