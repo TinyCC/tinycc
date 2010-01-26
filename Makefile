@@ -273,7 +273,7 @@ clean:
 	$(MAKE) -C tests $@
 
 distclean: clean
-	rm -vf config.h config.mak config.texi tcc.1
+	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.html
 
 config.mak:
 	@echo Running configure ...
