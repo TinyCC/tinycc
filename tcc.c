@@ -386,6 +386,8 @@ static int parse_args(TCCState *s, int argc, char **argv)
                     if (strstart(optarg, "-Ttext,", &p)) {
                         s->text_addr = strtoul(p, NULL, 16);
                         s->has_text_addr = 1;
+                    } else if (strstart(optarg, "-Bsymbolic", &p)) {
+                        s->symbolic = TRUE;
                     } else if (strstart(optarg, "--section-alignment,", &p)) {
                         s->section_align = strtoul(p, NULL, 16);
                     } else if (strstart(optarg, "--image-base,", &p)) {

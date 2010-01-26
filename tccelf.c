@@ -1575,6 +1575,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
                     put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
                 put_dt(dynamic, DT_TEXTREL, 0);
             }
+
+            if (s1->symbolic)
+                put_dt(dynamic, DT_SYMBOLIC, 0);
+
             /* add necessary space for other entries */
             saved_dynamic_data_offset = dynamic->data_offset;
             dynamic->data_offset += sizeof(ElfW(Dyn)) * EXTRA_RELITEMS;

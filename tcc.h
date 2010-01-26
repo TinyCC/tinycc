@@ -445,6 +445,9 @@ struct TCCState {
     /* if true, all symbols are exported */
     int rdynamic;
 
+    /* if true, resolve symbols in the current module first (-Wl,Bsymbolic) */
+    int symbolic;
+
     /* if true, only link in referenced objects from archive */
     int alacarte_link;
 
