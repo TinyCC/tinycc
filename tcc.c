@@ -120,6 +120,7 @@ enum {
 
 static const TCCOption tcc_options[] = {
     { "h", TCC_OPTION_HELP, 0 },
+    { "-help", TCC_OPTION_HELP, 0 },
     { "?", TCC_OPTION_HELP, 0 },
     { "I", TCC_OPTION_I, TCC_OPTION_HAS_ARG },
     { "D", TCC_OPTION_D, TCC_OPTION_HAS_ARG },
