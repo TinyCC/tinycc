@@ -2501,6 +2501,25 @@ static void parse_attribute(AttributeDef *ad)
             ad->func_call = FUNC_FASTCALLW;
             break;            
 #endif
+        case TOK_MODE:
+            skip('(');
+            switch(tok) {
+                case TOK_MODE_DI:
+                    ad->mode = VT_LLONG + 1;
+                    break;
+                case TOK_MODE_HI:
+                    ad->mode = VT_SHORT + 1;
+                    break;
+                case TOK_MODE_SI:
+                    ad->mode = VT_INT + 1;
+                    break;
+                default:
+                    warning("__mode__(%s) not supported\n", get_tok_str(tok, NULL));
+                    break;
+            }
+            next();
+            skip(')');
+            break;
         case TOK_DLLEXPORT:
             ad->func_export = 1;
             break;
@@ -2874,6 +2893,10 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_ATTRIBUTE1:
         case TOK_ATTRIBUTE2:
             parse_attribute(ad);
+            if (ATTR_MODE(ad)) {
+                u = ATTR_MODE(ad) -1;
+                t = (t & ~VT_BTYPE) | u;
+            }
             break;
             /* GNUC typeof */
         case TOK_TYPEOF1:
