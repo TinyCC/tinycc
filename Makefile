@@ -40,6 +40,7 @@ ALLOCA_O=alloca86.o alloca86-bt.o
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
+NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DTCC_TARGET_X86_64_CENTOS)
 LIBTCC1=libtcc1.a
 BCHECK_O=
 ALLOCA_O=alloca86_64.o

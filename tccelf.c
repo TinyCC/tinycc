@@ -1307,7 +1307,11 @@ static const char elf_interp[] = "/libexec/ld-elf.so.1";
 #elif defined TCC_ARM_EABI
 static const char elf_interp[] = "/lib/ld-linux.so.3";
 #elif defined(TCC_TARGET_X86_64)
+# if defined(TCC_TARGET_X86_64_CENTOS)
+static const char elf_interp[] = "/lib64/ld-linux-x86-64.so.2";
+# else
 static const char elf_interp[] = "/lib/ld-linux-x86-64.so.2";
+# endif /* TCC_TARGET_X86_64_CENTOS */
 #elif defined(TCC_UCLIBC)
 static const char elf_interp[] = "/lib/ld-uClibc.so.0";
 #else
