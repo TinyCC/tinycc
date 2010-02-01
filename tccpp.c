@@ -1620,7 +1620,7 @@ include_done:
         pragma_parse(s1);
         break;
     default:
-        if (tok == TOK_LINEFEED || tok == '!' || tok == TOK_CINT) {
+        if (tok == TOK_LINEFEED || tok == '!' || tok == TOK_PPNUM) {
             /* '!' is ignored to allow C scripts. numbers are ignored
                to emulate cpp behaviour */
         } else {
