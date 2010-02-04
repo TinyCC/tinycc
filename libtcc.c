@@ -372,6 +372,15 @@ ST_FUNC void *section_ptr_add(Section *sec, unsigned long size)
     return sec->data + offset;
 }
 
+/* reserve at least 'size' bytes from section start */
+ST_FUNC void section_reserve(Section *sec, unsigned long size)
+{
+    if (size > sec->data_allocated)
+        section_realloc(sec, size);
+    if (size > sec->data_offset)
+        sec->data_offset = size;
+}
+
 /* return a reference to a section, and create it if it does not
    exists */
 ST_FUNC Section *find_section(TCCState *s1, const char *name)

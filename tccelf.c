@@ -1365,6 +1365,48 @@ void patch_dynsym_undef(TCCState *s1, Section *s)
 #define	EXTRA_RELITEMS	9
 #endif
 
+ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
+{
+	int sym_index = ELFW(R_SYM) (rel->r_info);
+	ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
+	unsigned long offset;
+
+	if (sym_index >= s1->nb_got_offsets)
+		return;
+	offset = s1->got_offsets[sym_index];
+	section_reserve(s1->got, offset + PTR_SIZE);
+	/* only works for x86-64 */
+	put32(s1->got->data + offset, sym->st_value >> 32);
+	put32(s1->got->data + offset, sym->st_value & 0xffffffff);
+}
+
+ST_FUNC void fill_got(TCCState *s1)
+{
+	Section *s;
+	ElfW_Rel *rel, *rel_end;
+	int i;
+
+	for(i = 1; i < s1->nb_sections; i++) {
+		s = s1->sections[i];
+		if (s->sh_type != SHT_RELX)
+			continue;
+		/* no need to handle got relocations */
+		if (s->link != symtab_section)
+			continue;
+		rel_end = (ElfW_Rel *) (s->data + s->data_offset);
+		for(rel = (ElfW_Rel *) s->data; rel < rel_end; rel++) {
+			switch (ELFW(R_TYPE) (rel->r_info)) {
+			case R_X86_64_GOT32:
+			case R_X86_64_GOTPCREL:
+			case R_X86_64_PLT32:
+				fill_got_entry(s1, rel);
+				break;
+			}
+		}
+	}
+}
+
+
 /* output an ELF file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
@@ -1985,6 +2027,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
         else
             ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
     }
+    if (file_type == TCC_OUTPUT_EXE && s1->static_link)
+        fill_got(s1);
 
     /* write elf file */
     if (file_type == TCC_OUTPUT_OBJ)
