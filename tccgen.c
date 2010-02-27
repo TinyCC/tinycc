@@ -2462,6 +2462,10 @@ static void parse_attribute(AttributeDef *ad)
         case TOK_PACKED2:
             ad->packed = 1;
             break;
+        case TOK_WEAK1:
+        case TOK_WEAK2:
+            ad->weak = 1;
+            break;
         case TOK_UNUSED1:
         case TOK_UNUSED2:
             /* currently, no need to handle it because tcc does not

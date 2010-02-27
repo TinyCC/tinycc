@@ -272,7 +272,8 @@ typedef struct AttributeDef {
       func_import   : 1,
       func_args     : 5,
       mode          : 4,
-      fill          : 12;
+      weak          : 1,
+      fill          : 11;
     struct Section *section;
 } AttributeDef;
 
@@ -283,6 +284,7 @@ typedef struct AttributeDef {
 #define FUNC_ARGS(r) (((AttributeDef*)&(r))->func_args)
 #define FUNC_ALIGN(r) (((AttributeDef*)&(r))->aligned)
 #define FUNC_PACKED(r) (((AttributeDef*)&(r))->packed)
+#define FUNC_WEAK(r) (((AttributeDef*)&(r))->weak)
 #define ATTR_MODE(r)  (((AttributeDef*)&(r))->mode)
 #define INT_ATTR(ad) (*(int*)(ad))
 
