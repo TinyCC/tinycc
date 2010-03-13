@@ -4690,6 +4690,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         no_oblock = 1;
         if ((first && tok != TOK_LSTR && tok != TOK_STR) || 
             tok == '{') {
+            if (tok != '{')
+                error("character array initializer must be a literal,"
+                    " optionally enclosed in braces");
             skip('{');
             no_oblock = 0;
         }
