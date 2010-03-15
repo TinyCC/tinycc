@@ -1548,11 +1548,14 @@ ST_FUNC void gen_op(int op)
             }
             type1 = vtop[-1].type;
             type1.t &= ~VT_ARRAY;
+            u = pointed_size(&vtop[-1].type);
+            if (u < 0)
+                error("unknown array element size");
 #ifdef TCC_TARGET_X86_64
-            vpushll(pointed_size(&vtop[-1].type));
+            vpushll(u);
 #else
             /* XXX: cast to int ? (long long case) */
-            vpushi(pointed_size(&vtop[-1].type));
+            vpushi(u);
 #endif
             gen_op('*');
 #ifdef CONFIG_TCC_BCHECK
