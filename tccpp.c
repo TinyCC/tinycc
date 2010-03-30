@@ -378,6 +378,27 @@ static int tcc_peekc_slow(BufferedFile *bf)
     }
 }
 
+BufferedFile *tcc_save_buffer_state(int *offset)
+{
+    BufferedFile *state;
+
+    state = tcc_malloc(sizeof(BufferedFile));
+    memcpy(state, file, sizeof(BufferedFile));
+    *offset = lseek(file->fd, 0, SEEK_CUR);
+    return state;
+}
+
+void tcc_load_buffer_state(BufferedFile *buf_state, int offset)
+{
+    memcpy(file, buf_state, sizeof(BufferedFile));
+    lseek(file->fd, offset, SEEK_SET);
+}
+
+void tcc_free_buffer_state(BufferedFile *buf_state)
+{
+    tcc_free(buf_state);
+}
+
 /* return the current character, handling end of block if necessary
    (but not stray) */
 ST_FUNC int handle_eob(void)

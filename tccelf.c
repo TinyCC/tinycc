@@ -259,6 +259,7 @@ ST_FUNC int add_elf_sym(Section *s, uplong value, unsigned long size,
         do_patch:
             esym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
             esym->st_shndx = sh_num;
+            new_undef_sym = 1;
             esym->st_value = value;
             esym->st_size = size;
             esym->st_other = other;
@@ -2808,9 +2809,77 @@ static int ld_next(TCCState *s1, char *name, int name_size)
     return c;
 }
 
+/*
+ * Extract the library name from the file name
+ * Return 0 if the file isn't a library
+ *
+ * /!\ No test on filename capacity, be careful
+ */
+static int filename_to_libname(TCCState *s1, char filename[], char libname[])
+{
+    char *ext, *base;
+    int libprefix;
+
+    /* already converted to library name */
+    if (filename[0] == '\0')
+        return 1;
+    base = tcc_basename(filename);
+    if (base != filename)
+        return 0;
+    ext = strrchr(base, '.');
+    if (ext == NULL)
+        return 0;
+    ext++;
+    libprefix = !strncmp(filename, "lib", 3);
+    if (!s1->static_link) {
+#ifdef TCC_TARGET_PE
+        if (!strncmp(ext, "def", 3)) {
+            *(--ext) = '\0';
+            strcpy(libname, filename);
+            *ext = '.';
+            return 1;
+        }
+#else
+        if (libprefix && (!strncmp(ext, "so", 2))) {
+            *(--ext) = '\0';
+            strcpy(libname, filename + 3);
+            *ext = '.';
+            return 1;
+        }
+#endif
+    } else {
+        if (libprefix && (!strncmp(ext, "a", 1))) {
+            *(--ext) = '\0';
+            strcpy(libname, filename + 3);
+            *ext = '.';
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/*
+ * Extract the file name from the library name
+ *
+ * /!\ No test on filename capacity, be careful
+ */
+static void libname_to_filename(TCCState *s1, char libname[], char filename[])
+{
+    if (!s1->static_link) {
+#ifdef TCC_TARGET_PE
+        snprintf(filename, strlen(libname) + 5, "%s.def", libname);
+#else
+        snprintf(filename, strlen(libname) + 7, "lib%s.so", libname);
+#endif
+    } else {
+        snprintf(filename, strlen(libname) + 6, "lib%s.a", libname);
+    }
+}
+
 static int ld_add_file_list(TCCState *s1, int as_needed)
 {
     char filename[1024];
+    char libname[1024];
     int t, ret;
 
     t = ld_next(s1, filename, sizeof(filename));
@@ -2818,11 +2887,20 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
         expect("(");
     t = ld_next(s1, filename, sizeof(filename));
     for(;;) {
+        libname[0] = '\0';
         if (t == LD_TOK_EOF) {
             error_noabort("unexpected end of file");
             return -1;
         } else if (t == ')') {
             break;
+        } else if (t == '-') {
+            t = ld_next(s1, filename, sizeof(filename));
+            if ((t != LD_TOK_NAME) || (filename[0] != 'l')) {
+                error_noabort("library name expected");
+                return -1;
+            }
+            strcpy(libname, &filename[1]);
+            libname_to_filename(s1, libname, filename);
         } else if (t != LD_TOK_NAME) {
             error_noabort("filename expected");
             return -1;
@@ -2833,8 +2911,15 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
                 return ret;
         } else {
             /* TODO: Implement AS_NEEDED support. Ignore it for now */
-            if (!as_needed)
-                tcc_add_file(s1, filename);
+            if (!as_needed) {
+                ret = tcc_add_file_internal(s1, filename, 0);
+                if (ret) {
+                    if (filename_to_libname(s1, filename, libname))
+                        ret = tcc_add_library(s1, libname);
+                    if (ret)
+                        return ret;
+		}
+            }
         }
         t = ld_next(s1, filename, sizeof(filename));
         if (t == ',') {
@@ -2842,6 +2927,14 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
         }
     }
     return 0;
+}
+
+static int new_undef_syms(void)
+{
+    int ret = 0;
+    ret = new_undef_sym;
+    new_undef_sym = 0;
+    return ret;
 }
 
 /* interpret a subset of GNU ldscripts to handle the dummy libc.so
@@ -2862,7 +2955,24 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
             return -1;
         if (!strcmp(cmd, "INPUT") ||
             !strcmp(cmd, "GROUP")) {
-            ret = ld_add_file_list(s1, 0);
+            if (!strcmp(cmd, "GROUP")) {
+                BufferedFile *buf_state;
+                int off;
+
+                buf_state = tcc_save_buffer_state(&off);
+                new_undef_syms();
+                ret = ld_add_file_list(s1, 0);
+                if (ret)
+                    goto free_bufstate;
+                while (!ret && new_undef_syms()) {
+                    tcc_load_buffer_state(buf_state, off);
+                    ret = ld_add_file_list(s1, 0);
+                }
+                free_bufstate:
+                tcc_free_buffer_state(buf_state);
+            } else {
+                ret = ld_add_file_list(s1, 0);
+            }
             if (ret)
                 return ret;
         } else if (!strcmp(cmd, "OUTPUT_FORMAT") ||
