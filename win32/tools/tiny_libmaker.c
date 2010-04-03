@@ -99,6 +99,7 @@ int main(int argc, char **argv)
     if ((fh = fopen(afile, "wb")) == NULL)
     {
         fprintf(stderr, "Can't open file %s \n", afile);
+        fclose(fo);
         remove(tfile);
         return 2;
     }
@@ -117,6 +118,7 @@ int main(int argc, char **argv)
         if ((fi = fopen(argv[iarg], "rb")) == NULL)
         {
             fprintf(stderr, "Can't open file %s \n", argv[iarg]);
+            fclose(fo);
             remove(tfile);
             return 2;
         }
@@ -133,6 +135,7 @@ int main(int argc, char **argv)
         if (ehdr->e_ident[4] != TCC_ELFCLASS)
         {
             fprintf(stderr, "Unsupported Elf Class: %s\n", argv[iarg]);
+            fclose(fo);
             remove(tfile);
             return 2;
         }
