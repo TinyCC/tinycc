@@ -686,10 +686,16 @@ ST_FUNC void gen_opi(int op)
             vswap();
             c = vtop->c.i;
             if (c == (char)c) {
-                /* XXX: generate inc and dec for smaller code ? */
-                o(0x83);
-                o(0xc0 | (opc << 3) | r);
-                g(c);
+                /* generate inc and dec for smaller code */
+                if (c==1 && opc==0) {
+                    o (0x40 | r); // inc
+                } else if (c==1 && opc==5) {
+                    o (0x48 | r); // dec
+                } else {
+                    o(0x83);
+                    o(0xc0 | (opc << 3) | r);
+                    g(c);
+                }
             } else {
                 o(0x81);
                 oad(0xc0 | (opc << 3) | r, c);
