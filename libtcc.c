@@ -425,7 +425,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     if (sym->type.t & VT_STATIC)
         sym_bind = STB_LOCAL;
     else {
-        if (FUNC_WEAK(sym->type.ref->r))
+        if (sym->type.ref && FUNC_WEAK(sym->type.ref->r))
             sym_bind = STB_WEAK;
         else
             sym_bind = STB_GLOBAL;
