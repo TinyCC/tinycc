@@ -1456,6 +1456,9 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, const char *option, int multi)
             s->rpath = p;
         } else if (strstart(option, "--section-alignment,", &p)) {
             s->section_align = strtoul(p, &end, 16);
+        } else if (strstart(option, "-soname,", &p)) {
+            s->soname = p;
+            multi = 0;
 #ifdef TCC_TARGET_PE
         } else if (strstart(option, "--subsystem,", &p)) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
