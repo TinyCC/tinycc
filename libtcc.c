@@ -1395,7 +1395,7 @@ PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value)
 }
 
 
-static int strstart(const char *str, const char *val, const char **ptr)
+static int strstart(const char *str, const char *val, char **ptr)
 {
     const char *p, *q;
     p = str;
@@ -1407,27 +1407,36 @@ static int strstart(const char *str, const char *val, const char **ptr)
         q++;
     }
     if (ptr)
-        *ptr = p;
+        *ptr = (char *) p;
     return 1;
 }
 
 /* set linker options */
-PUB_FUNC const char * tcc_set_linker(TCCState *s, const char *option, int multi)
+PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
 {
-    const char *p = option;
-    char *end = NULL;
+    char *p = option;
+    char *end;
 
     while (option && *option) {
-
+        end = NULL;
         if (strstart(option, "-Bsymbolic", &p)) {
             s->symbolic = TRUE;
 #ifdef TCC_TARGET_PE
         } else if (strstart(option, "--file-alignment,", &p)) {
             s->pe_file_align = strtoul(p, &end, 16);
 #endif
+        } else if (strstart(option, "-fini,", &p)) {
+            s->fini_symbol = p;
+            if (s->warn_unsupported)
+                warning("ignoring -fini %s", p);
+
         } else if (strstart(option, "--image-base,", &p)) {
             s->text_addr = strtoul(p, &end, 16);
             s->has_text_addr = 1;
+        } else if (strstart(option, "-init,", &p)) {
+            s->init_symbol = p;
+            if (s->warn_unsupported)
+                warning("ignoring -init %s", p);
 
         } else if (strstart(option, "--oformat,", &p)) {
 #if defined(TCC_TARGET_PE)
@@ -1496,11 +1505,11 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, const char *option, int multi)
         }
 
         if (multi) {
-            if (end) {
-                option = end;
-            } else {
-                option = strchr(p, ',');
-                if (option) option++;
+            option = NULL;
+            p = strchr( (end) ? end : p, ',');
+            if (p) {
+                *p = 0;    /* terminate last option */
+                option = ++p;
             }
         } else
             option = NULL;
