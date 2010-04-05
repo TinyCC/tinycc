@@ -555,6 +555,37 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+    case TOK_ASM_type:
+        { 
+            Sym *sym;
+            char newtype[64];
+            newtype[0] = 0;
+
+            next();
+            sym = label_find(tok);
+            if (!sym) {
+                sym = label_push(&s1->asm_labels, tok, 0);
+                sym->type.t = VT_VOID;
+            }
+
+            next();
+            skip(',');
+            skip('@');
+            if (tok == TOK_STR)
+                pstrcat(newtype, sizeof(newtype), tokc.cstr->data);
+            else
+                pstrcat(newtype, sizeof(newtype), get_tok_str(tok, NULL));
+
+            if (!strcmp(newtype, "function")) {
+                sym->type.t = VT_FUNC;
+            }
+            else if (s1->warn_unsupported)
+                warning("change type of '%s' from 0x%x to '%s' ignored", 
+                    get_tok_str(sym->v, NULL), sym->type.t, newtype);
+
+            next();
+        }
+        break;
     case TOK_SECTION1:
         {
             char sname[256];
