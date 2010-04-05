@@ -691,8 +691,11 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
             opcode = tok;
             next();
             if (tok == ':') {
+                char * label = get_tok_str(opcode, NULL);
+
                 /* new label */
-                asm_new_label(s1, opcode, 0);
+                asm_new_label(s1, opcode,
+                    (label && label[0] == '.' && label[1] == 'L') ? 1 : 0);
                 next();
                 goto redo;
             } else if (tok == '=') {

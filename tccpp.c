@@ -2279,6 +2279,12 @@ maybe_newline:
         tok = TOK_PPNUM;
         break;
     case '.':
+        /* check first for a local label (.Lxx:) */
+        if (p[1] == 'L') {
+            /* fast case */
+            goto parse_ident_fast;
+        }
+
         /* special dot handling because it can also start a number */
         PEEKC(c, p);
         if (isnum(c)) {
