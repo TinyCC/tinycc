@@ -537,6 +537,24 @@ static void asm_parse_directive(TCCState *s1)
             use_section(s1, sname);
 	}
 	break;
+    case TOK_ASM_file:
+        {
+            char filename[512];
+
+            filename[0] = '\0';
+            next();
+
+            if (tok == TOK_STR)
+                pstrcat(filename, sizeof(filename), tokc.cstr->data);
+            else
+                pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
+
+            if (s1->warn_unsupported)
+                warning("ignoring .file %s", filename);
+
+            next();
+        }
+        break;
     case TOK_SECTION1:
         {
             char sname[256];
