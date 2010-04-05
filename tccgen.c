@@ -5419,10 +5419,39 @@ ST_FUNC void decl(int l)
                     sym = sym_push(v, &type, INT_ATTR(&ad), 0);
                     sym->type.t |= VT_TYPEDEF;
                 } else if ((type.t & VT_BTYPE) == VT_FUNC) {
+                    Sym *fn;
                     /* external function definition */
                     /* specific case for func_call attribute */
                     type.ref->r = INT_ATTR(&ad);
-                    external_sym(v, &type, 0);
+                    fn = external_sym(v, &type, 0);
+
+                    if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
+                        char target[256];
+
+                        *target = 0;
+                        next();
+                        skip('(');
+                        /* Part 1: __USER_LABEL_PREFIX__ (user defined) */
+                        if (tok == TOK_STR)
+                            pstrcat(target, sizeof(target), tokc.cstr->data);
+                        else
+                            pstrcat(target, sizeof(target), get_tok_str(tok, NULL));
+
+                        next();
+                        /* Part 2: api name */
+                        if (tok == TOK_STR)
+                            pstrcat(target, sizeof(target), tokc.cstr->data);
+                        else
+                            pstrcat(target, sizeof(target), get_tok_str(tok, NULL));
+
+                        next();
+                        skip(')');
+                        if (tcc_state->warn_unsupported)
+                            warning("ignoring redirection from %s to %s\n", get_tok_str(v, NULL), target);
+
+                        if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
+                            parse_attribute((AttributeDef *) &fn->type.ref->r);
+                    }
                 } else {
                     /* not lvalue if array */
                     r = 0;
