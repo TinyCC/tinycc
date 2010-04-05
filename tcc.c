@@ -171,22 +171,6 @@ static int64_t getclock_us(void)
 #endif
 }
 
-static int strstart(const char *str, const char *val, const char **ptr)
-{
-    const char *p, *q;
-    p = str;
-    q = val;
-    while (*q != '\0') {
-        if (*p != *q)
-            return 0;
-        p++;
-        q++;
-    }
-    if (ptr)
-        *ptr = p;
-    return 1;
-}
-
 /* convert 'str' into an array of space separated strings */
 static int expand_args(char ***pargv, const char *str)
 {
@@ -383,73 +367,8 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_Wl:
                 {
-                    const char *p;
-                    if (strstart(optarg, "-Ttext,", &p)) {
-                        s->text_addr = strtoul(p, NULL, 16);
-                        s->has_text_addr = 1;
-                    } else if (strstart(optarg, "-Bsymbolic", &p)) {
-                        s->symbolic = TRUE;
-                    } else if (strstart(optarg, "--section-alignment,", &p)) {
-                        s->section_align = strtoul(p, NULL, 16);
-                    } else if (strstart(optarg, "--image-base,", &p)) {
-                        s->text_addr = strtoul(p, NULL, 16);
-                        s->has_text_addr = 1;
-#ifdef TCC_TARGET_PE
-                    } else if (strstart(optarg, "--file-alignment,", &p)) {
-                        s->pe_file_align = strtoul(p, NULL, 16);
-                    } else if (strstart(optarg, "--subsystem,", &p)) {
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
-                        if (!strcmp(p, "native"))
-                            s->pe_subsystem = 1;
-                        else if (!strcmp(p, "console"))
-                            s->pe_subsystem = 3;
-                        else if (!strcmp(p, "gui"))
-                            s->pe_subsystem = 2;
-                        else if (!strcmp(p, "posix"))
-                            s->pe_subsystem = 7;
-                        else if (!strcmp(p, "efiapp"))
-                            s->pe_subsystem = 10;
-                        else if (!strcmp(p, "efiboot"))
-                            s->pe_subsystem = 11;
-                        else if (!strcmp(p, "efiruntime"))
-                            s->pe_subsystem = 12;
-                        else if (!strcmp(p, "efirom"))
-                            s->pe_subsystem = 13;
-#elif defined(TCC_TARGET_ARM)
-                        if (!strcmp(p, "wince"))
-                            s->pe_subsystem = 9;
-#endif
-                        else {
-                            error("invalid subsystem '%s'", p);
-                        }
-#endif
-                    } else if (strstart(optarg, "--oformat,", &p)) {
-#if defined(TCC_TARGET_PE)
-                        if (strstart(p, "pe-", NULL)) {
-#else
-#if defined(TCC_TARGET_X86_64)
-                        if (strstart(p, "elf64-", NULL)) {
-#else
-                        if (strstart(p, "elf32-", NULL)) {
-#endif
-#endif
-                            s->output_format = TCC_OUTPUT_FORMAT_ELF;
-                        } else if (!strcmp(p, "binary")) {
-                            s->output_format = TCC_OUTPUT_FORMAT_BINARY;
-                        } else
-#ifdef TCC_TARGET_COFF
-                        if (!strcmp(p, "coff")) {
-                            s->output_format = TCC_OUTPUT_FORMAT_COFF;
-                        } else
-#endif
-                        {
-                            error("target %s not found", p);
-                        }
-                    } else if (strstart(optarg, "-rpath=", &p)) {
-                        s->rpath = p;
-                    } else {
-                        error("unsupported linker option '%s'", optarg);
-                    }
+                    if ((r = (char *)tcc_set_linker(s, optarg, TRUE)))
+                        error("unsupported linker option '%s'", r);
                 }
                 break;
             case TCC_OPTION_E:
