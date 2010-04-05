@@ -555,6 +555,27 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+    case TOK_ASM_size:
+        { 
+            Sym *sym;
+
+            next();
+            sym = label_find(tok);
+            if (!sym) {
+                error("label not found: %s", get_tok_str(tok, NULL));
+            }
+
+            next();
+            skip(',');
+            /* XXX .size name,label2-label1 */
+            if (s1->warn_unsupported)
+                warning("ignoring .size %s,*", get_tok_str(tok, NULL));
+
+            while (tok != '\n' && tok != CH_EOF) {
+                next();
+            }
+        }
+        break;
     case TOK_ASM_type:
         { 
             Sym *sym;
