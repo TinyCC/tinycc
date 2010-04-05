@@ -252,6 +252,7 @@
  DEF_ASM(file)
  DEF_ASM(globl)
  DEF_ASM(global)
+ DEF_ASM(ident)
  DEF_ASM(size)
  DEF_ASM(type)
  DEF_ASM(text)

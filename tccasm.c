@@ -555,6 +555,24 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+    case TOK_ASM_ident:
+        {
+            char ident[256];
+
+            ident[0] = '\0';
+            next();
+
+            if (tok == TOK_STR)
+                pstrcat(ident, sizeof(ident), tokc.cstr->data);
+            else
+                pstrcat(ident, sizeof(ident), get_tok_str(tok, NULL));
+
+            if (s1->warn_unsupported)
+                warning("ignoring .ident %s", ident);
+
+            next();
+        }
+        break;
     case TOK_ASM_size:
         { 
             Sym *sym;
