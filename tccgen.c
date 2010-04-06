@@ -2900,8 +2900,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_ATTRIBUTE1:
         case TOK_ATTRIBUTE2:
             parse_attribute(ad);
-            if (ATTR_MODE(ad)) {
-                u = ATTR_MODE(ad) -1;
+            if (ad->mode) {
+                u = ad->mode -1;
                 t = (t & ~VT_BTYPE) | u;
             }
             break;
