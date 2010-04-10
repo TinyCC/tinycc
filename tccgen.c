@@ -284,6 +284,13 @@ static void vsetc(CType *type, int r, CValue *vc)
     vtop->c = *vc;
 }
 
+/* push constant of type "type" with useless value */
+void vpush(CType *type)
+{
+    CValue cval;
+    vsetc(type, VT_CONST, &cval);
+}
+
 /* push integer constant */
 ST_FUNC void vpushi(int v)
 {
@@ -3244,11 +3251,14 @@ static void vpush_tokc(int t)
 
 ST_FUNC void unary(void)
 {
-    int n, t, align, size, r;
+    int n, t, align, size, r, sizeof_caller;
     CType type;
     Sym *s;
     AttributeDef ad;
+    static int in_sizeof = 0;
 
+    sizeof_caller = in_sizeof;
+    in_sizeof = 0;
     /* XXX: GCC 2.95.3 does not generate a table although it should be
        better here */
  tok_next:
@@ -3345,6 +3355,10 @@ ST_FUNC void unary(void)
                 memset(&ad, 0, sizeof(AttributeDef));
                 decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
             } else {
+                if (sizeof_caller) {
+                    vpush(&type);
+                    return;
+                }
                 unary();
                 gen_cast(&type);
             }
@@ -3414,11 +3428,8 @@ ST_FUNC void unary(void)
     case TOK_ALIGNOF2:
         t = tok;
         next();
-        if (tok == '(') {
-            parse_expr_type(&type);
-        } else {
-            unary_type(&type);
-        }
+        in_sizeof++;
+        unary_type(&type); // Perform a in_sizeof = 0;
         size = type_size(&type, &align);
         if (t == TOK_SIZEOF) {
             if (size < 0)
@@ -4040,9 +4051,11 @@ static void expr_type(CType *type)
 static void unary_type(CType *type)
 {
     int a;
+    void *vtop_saved;
 
     a = nocode_wanted;
     nocode_wanted = 1;
+    vtop_saved = vtop;
     unary();
     *type = vtop->type;
     vpop();
