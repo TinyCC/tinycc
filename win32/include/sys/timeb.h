@@ -85,7 +85,8 @@ extern "C" {
 
 #ifdef _USE_32BIT_TIME_T
 #define _timeb __timeb32
-#define _ftime _ftime32
+//gr #define _ftime _ftime32
+#define _ftime32 _ftime
 #else
 #define _timeb __timeb64
 #define _ftime _ftime64
