@@ -5423,6 +5423,10 @@ ST_FUNC void decl(int l)
         while (1) { /* iterate thru each declaration */
             type = btype;
             type_decl(&type, &ad, &v, TYPE_DIRECT);
+            if (((type.t & (VT_STATIC|VT_FUNC)) == (VT_STATIC|VT_FUNC))
+                && (l == VT_LOCAL)) {
+                error("Function without file scope cannot be static");
+            }
 #if 0
             {
                 char buf[500];
