@@ -1375,8 +1375,10 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
 		return;
 	offset = s1->got_offsets[sym_index];
 	section_reserve(s1->got, offset + PTR_SIZE);
+#ifdef TCC_TARGET_X86_64
 	/* only works for x86-64 */
 	put32(s1->got->data + offset, sym->st_value >> 32);
+#endif
 	put32(s1->got->data + offset, sym->st_value & 0xffffffff);
 }
 
