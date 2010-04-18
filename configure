@@ -41,7 +41,7 @@ case "$cpu" in
   x86_64)
     cpu="x86-64"
   ;;
-  armv4l)
+  armv4l|armv5tel|armv6j|armv7a)
     cpu="armv4l"
   ;;
   alpha)
