@@ -680,6 +680,8 @@ static int pe_write(struct pe_info *pe)
         pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
     else if (PE_GUI != pe->type)
         pe_header.opthdr.Subsystem = 3;
+    if (pe->subsystem == 9)  // WinCE
+        pe_header.opthdr.Subsystem = 9;
 
     sum = 0;
     pe_fwrite(&pe_header, sizeof pe_header, op, &sum);
