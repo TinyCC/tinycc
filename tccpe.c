@@ -1244,10 +1244,16 @@ static int pe_check_symbols(struct pe_info *pe)
 
                     offset = text_section->data_offset;
                     /* add the 'jmp IAT[x]' instruction */
+#ifdef TCC_TARGET_ARM
+                    p = section_ptr_add(text_section, 8+4); // room for code and address
+                    (*(DWORD*)(p)) = 0xE59FC000; // arm code ldr ip, [pc] ; PC+8+0 = 0001xxxx
+                    (*(DWORD*)(p+2)) = 0xE59CF000; // arm code ldr pc, [ip]
+#else
                     p = section_ptr_add(text_section, 8);
                     *p = 0x25FF;
 #ifdef TCC_TARGET_X86_64
                     *(DWORD*)(p+1) = (DWORD)-4;
+#endif
 #endif
                     /* add a helper symbol, will be patched later in
                        pe_build_imports */
@@ -1256,8 +1262,13 @@ static int pe_check_symbols(struct pe_info *pe)
                         symtab_section, 0, sizeof(DWORD),
                         ELFW_ST_INFO(STB_GLOBAL, STT_OBJECT),
                         0, SHN_UNDEF, buffer);
+#ifdef TCC_TARGET_ARM
+                    put_elf_reloc(symtab_section, text_section,
+                        offset + 8, R_XXX_THUNKFIX, is->iat_index); // offset to IAT position
+#else
                     put_elf_reloc(symtab_section, text_section, 
                         offset + 2, R_XXX_THUNKFIX, is->iat_index);
+#endif
                     is->thk_offset = offset;
                 }
 
@@ -1822,9 +1833,9 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
             pe.subsystem = s1->pe_subsystem;
         else
 #if defined(TCC_TARGET_ARM)
-            pe.subsystem = 3;
-#else
             pe.subsystem = 9;
+#else
+            pe.subsystem = 3;
 #endif
         /* set default file/section alignment */
 	if (pe.subsystem == 1) {
