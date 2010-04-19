@@ -926,6 +926,7 @@ ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 ST_FUNC BufferedFile *tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(BufferedFile *bf);
+ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);

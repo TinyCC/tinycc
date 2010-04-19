@@ -1060,7 +1060,7 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s1, const char *pathname)
     return 0;
 }
 
-static int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
+ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     const char *ext;
     ElfW(Ehdr) ehdr;
