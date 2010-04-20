@@ -32,6 +32,8 @@
 #define REL_SECTION_FMT ".rel%s"
 #endif
 
+static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
+
 /* XXX: DLL with PLT would only work with x86-64 for now */
 //#define TCC_OUTPUT_DLL_WITH_PLT
 
@@ -2809,49 +2811,49 @@ static int ld_next(TCCState *s1, char *name, int name_size)
     return c;
 }
 
+char *tcc_strcpy_part(char *out, const char *in, size_t num)
+{
+    memcpy(out, in, num);
+    out[num] = '\0';
+    return out;
+}
+
 /*
  * Extract the library name from the file name
  * Return 0 if the file isn't a library
  *
  * /!\ No test on filename capacity, be careful
  */
-static int filename_to_libname(TCCState *s1, char filename[], char libname[])
+static int filename_to_libname(TCCState *s1, const char filename[], char libname[])
 {
-    char *ext, *base;
+    char *ext;
     int libprefix;
 
     /* already converted to library name */
-    if (filename[0] == '\0')
+    if (libname[0] == '\0')
         return 1;
-    base = tcc_basename(filename);
-    if (base != filename)
+    ext = tcc_fileextension(filename);
+    if (*ext == '\0')
         return 0;
-    ext = strrchr(base, '.');
-    if (ext == NULL)
-        return 0;
-    ext++;
     libprefix = !strncmp(filename, "lib", 3);
     if (!s1->static_link) {
 #ifdef TCC_TARGET_PE
-        if (!strncmp(ext, "def", 3)) {
-            *(--ext) = '\0';
-            strcpy(libname, filename);
-            *ext = '.';
+        if (!strcmp(ext, ".def")) {
+            size_t len = ext - filename;
+            tcc_strcpy_part(libname, filename, len);
             return 1;
         }
 #else
-        if (libprefix && (!strncmp(ext, "so", 2))) {
-            *(--ext) = '\0';
-            strcpy(libname, filename + 3);
-            *ext = '.';
+        if (libprefix && (!strcmp(ext, ".so"))) {
+            size_t len = ext - filename - 3;
+            tcc_strcpy_part(libname, filename + 3, len);
             return 1;
         }
 #endif
     } else {
-        if (libprefix && (!strncmp(ext, "a", 1))) {
-            *(--ext) = '\0';
-            strcpy(libname, filename + 3);
-            *ext = '.';
+        if (libprefix && (!strcmp(ext, ".a"))) {
+            size_t len = ext - filename - 3;
+            tcc_strcpy_part(libname, filename + 3, len);
             return 1;
         }
     }
@@ -2863,25 +2865,48 @@ static int filename_to_libname(TCCState *s1, char filename[], char libname[])
  *
  * /!\ No test on filename capacity, be careful
  */
-static void libname_to_filename(TCCState *s1, char libname[], char filename[])
+static void libname_to_filename(TCCState *s1, const char libname[], char filename[])
 {
     if (!s1->static_link) {
 #ifdef TCC_TARGET_PE
-        snprintf(filename, strlen(libname) + 5, "%s.def", libname);
+        sprintf(filename, "%s.def", libname);
 #else
-        snprintf(filename, strlen(libname) + 7, "lib%s.so", libname);
+        sprintf(filename, "lib%s.so", libname);
 #endif
     } else {
-        snprintf(filename, strlen(libname) + 6, "lib%s.a", libname);
+        sprintf(filename, "lib%s.a", libname);
     }
 }
 
-static int ld_add_file_list(TCCState *s1, int as_needed)
+static int ld_add_file(TCCState *s1, const char filename[], char libname[])
 {
-    char filename[1024];
-    char libname[1024];
-    int t, ret;
+    int ret;
 
+    ret = tcc_add_file_internal(s1, filename, 0);
+    if (ret) {
+        if (filename_to_libname(s1, filename, libname))
+            ret = tcc_add_library(s1, libname);
+    }
+    return ret;
+}
+
+static inline int new_undef_syms(void)
+{
+    int ret = 0;
+    ret = new_undef_sym;
+    new_undef_sym = 0;
+    return ret;
+}
+
+static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
+{
+    char filename[1024], libname[1024];
+    int t, group, nblibs = 0, ret = 0;
+    char **libs = NULL;
+
+    group = !strcmp(cmd, "GROUP");
+    if (!as_needed)
+        new_undef_syms();
     t = ld_next(s1, filename, sizeof(filename));
     if (t != '(')
         expect("(");
@@ -2890,35 +2915,45 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
         libname[0] = '\0';
         if (t == LD_TOK_EOF) {
             error_noabort("unexpected end of file");
-            return -1;
+            ret = -1;
+            goto lib_parse_error;
         } else if (t == ')') {
             break;
         } else if (t == '-') {
             t = ld_next(s1, filename, sizeof(filename));
             if ((t != LD_TOK_NAME) || (filename[0] != 'l')) {
                 error_noabort("library name expected");
-                return -1;
+                ret = -1;
+                goto lib_parse_error;
             }
             strcpy(libname, &filename[1]);
             libname_to_filename(s1, libname, filename);
         } else if (t != LD_TOK_NAME) {
             error_noabort("filename expected");
-            return -1;
+            ret = -1;
+            goto lib_parse_error;
         } 
         if (!strcmp(filename, "AS_NEEDED")) {
-            ret = ld_add_file_list(s1, 1);
+            ret = ld_add_file_list(s1, cmd, 1);
             if (ret)
-                return ret;
+                goto lib_parse_error;
         } else {
             /* TODO: Implement AS_NEEDED support. Ignore it for now */
             if (!as_needed) {
-                ret = tcc_add_file_internal(s1, filename, 0);
-                if (ret) {
-                    if (filename_to_libname(s1, filename, libname))
-                        ret = tcc_add_library(s1, libname);
-                    if (ret)
-                        return ret;
-		}
+                ret = ld_add_file(s1, filename, libname);
+                if (ret)
+                    goto lib_parse_error;
+                if (group) {
+                    char *file_name, *lib_name;
+
+                    /* Add the filename and the libname to avoid future conversions */
+                    file_name = tcc_malloc(sizeof(char) * (strlen(filename) + 1));
+                    strcpy(file_name, filename);
+                    dynarray_add((void ***) &libs, &nblibs, file_name);
+                    lib_name = tcc_malloc(sizeof(char) * (strlen(libname) + 1));
+                    strcpy(lib_name, libname);
+                    dynarray_add((void ***) &libs, &nblibs, lib_name);
+                }
             }
         }
         t = ld_next(s1, filename, sizeof(filename));
@@ -2926,14 +2961,16 @@ static int ld_add_file_list(TCCState *s1, int as_needed)
             t = ld_next(s1, filename, sizeof(filename));
         }
     }
-    return 0;
-}
+    if (group && !as_needed) {
+        while (new_undef_syms()) {
+            int i;
 
-static int new_undef_syms(void)
-{
-    int ret = 0;
-    ret = new_undef_sym;
-    new_undef_sym = 0;
+            for (i = 0; i < nblibs; i += 2)
+                ld_add_file(s1, libs[i], libs[i+1]);
+        }
+    }
+lib_parse_error:
+    dynarray_reset(&libs, &nblibs);
     return ret;
 }
 
@@ -2955,24 +2992,7 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
             return -1;
         if (!strcmp(cmd, "INPUT") ||
             !strcmp(cmd, "GROUP")) {
-            if (!strcmp(cmd, "GROUP")) {
-                BufferedFile *buf_state;
-                int off;
-
-                buf_state = tcc_save_buffer_state(&off);
-                new_undef_syms();
-                ret = ld_add_file_list(s1, 0);
-                if (ret)
-                    goto free_bufstate;
-                while (!ret && new_undef_syms()) {
-                    tcc_load_buffer_state(buf_state, off);
-                    ret = ld_add_file_list(s1, 0);
-                }
-                free_bufstate:
-                tcc_free_buffer_state(buf_state);
-            } else {
-                ret = ld_add_file_list(s1, 0);
-            }
+            ret = ld_add_file_list(s1, cmd, 0);
             if (ret)
                 return ret;
         } else if (!strcmp(cmd, "OUTPUT_FORMAT") ||

@@ -225,8 +225,6 @@ typedef struct Sym {
     struct Sym *prev_tok; /* previous symbol for this token */
 } Sym;
 
-static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
-
 /* section definition */
 /* XXX: use directly ELF structure for parameters ? */
 /* special flag to indicate that the section should not be linked to
