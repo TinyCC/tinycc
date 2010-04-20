@@ -4054,11 +4054,9 @@ static void expr_type(CType *type)
 static void unary_type(CType *type)
 {
     int a;
-    void *vtop_saved;
 
     a = nocode_wanted;
     nocode_wanted = 1;
-    vtop_saved = vtop;
     unary();
     *type = vtop->type;
     vpop();
