@@ -2944,15 +2944,9 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
                 if (ret)
                     goto lib_parse_error;
                 if (group) {
-                    char *file_name, *lib_name;
-
-                    /* Add the filename and the libname to avoid future conversions */
-                    file_name = tcc_malloc(sizeof(char) * (strlen(filename) + 1));
-                    strcpy(file_name, filename);
-                    dynarray_add((void ***) &libs, &nblibs, file_name);
-                    lib_name = tcc_malloc(sizeof(char) * (strlen(libname) + 1));
-                    strcpy(lib_name, libname);
-                    dynarray_add((void ***) &libs, &nblibs, lib_name);
+                    /* Add the filename *and* the libname to avoid future conversions */
+                    dynarray_add((void ***) &libs, &nblibs, tcc_strdup(filename));
+                    dynarray_add((void ***) &libs, &nblibs, tcc_strdup(libname));
                 }
             }
         }
