@@ -2830,7 +2830,7 @@ static int filename_to_libname(TCCState *s1, const char filename[], char libname
     int libprefix;
 
     /* already converted to library name */
-    if (libname[0] == '\0')
+    if (libname[0] != '\0')
         return 1;
     ext = tcc_fileextension(filename);
     if (*ext == '\0')
