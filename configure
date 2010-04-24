@@ -128,6 +128,8 @@ for opt do
   ;; 
   --enable-cross) build_cross="yes"
   ;;
+  --disable-static) disable_static="yes"
+  ;;
   --with-libgcc) use_libgcc="yes"
   ;;
   --with-selinux) have_selinux="yes"
@@ -230,6 +232,7 @@ echo "  --source-path=PATH       path of source code [$source_path]"
 echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
 echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
+echo "  --disable-static         make libtcc.so instead of libtcc.a"
 echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc1.a"
 echo "  --with-selinux           use mmap instead of exec mem"
 echo "                           [requires write access to /tmp]"
@@ -356,6 +359,9 @@ if test "$gprof" = "yes" ; then
 fi
 if test "$build_cross" = "yes" ; then
   echo "CONFIG_CROSS=yes" >> config.mak
+fi
+if test "$disable_static" = "yes" ; then
+  echo "DISABLE_STATIC=yes" >> config.mak
 fi
 if test "$use_libgcc" = "yes" ; then
   echo "#define CONFIG_USE_LIBGCC" >> $TMPH

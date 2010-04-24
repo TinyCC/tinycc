@@ -8,6 +8,18 @@ include $(TOP)/config.mak
 CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
+LIBS=.
+
+# My distro wants shared libs, not static ones
+LIBTCCA=libtcc.a
+ifdef DISABLE_STATIC
+CFLAGS+=-fPIC
+LIBTCCA=
+LIBTCCL=-ltcc
+LIBTCCSO=libtcc.so.1
+endif
+LIBTCCB=$(LIBTCCA)
+LIBTCCB+=$(LIBTCCSO)
 
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
@@ -117,11 +129,11 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 endif
 
-all: $(PROGS) $(LIBTCC1) $(BCHECK_O) libtcc.a tcc-doc.html tcc.1 libtcc_test$(EXESUF)
+all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCB) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
-tcc$(EXESUF): tcc.o libtcc.a
-	$(CC) -o $@ $^ $(LIBS)
+tcc$(EXESUF): tcc.o $(LIBTCCA)
+	$(CC) -o $@ $^ $(LIBS) $(LIBTCCL)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF):
@@ -163,8 +175,13 @@ $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
 libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
 
-libtcc_test$(EXESUF): tests/libtcc_test.c libtcc.a
-	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS)
+libtcc.so.1: $(LIBTCC_OBJ)
+	$(CC) -shared -Wl,-soname,$@ -o $@.0 $^
+	ln -sf libtcc.so.1.0 libtcc.so.1
+	ln -sf libtcc.so.1.0 libtcc.so
+	
+libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCA)
+	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
 
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=.
@@ -204,7 +221,7 @@ TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
 INSTALL=install
 
 ifndef CONFIG_WIN32
-install: $(PROGS) $(LIBTCC1) $(BCHECK_O) libtcc.a tcc.1 tcc-doc.html
+install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCB) tcc.1 tcc-doc.html
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 	mkdir -p "$(mandir)/man1"
@@ -219,7 +236,7 @@ ifneq ($(BCHECK_O),)
 endif
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	mkdir -p "$(libdir)"
-	$(INSTALL) -m644 libtcc.a "$(libdir)"
+	$(INSTALL) -m644 $(LIBTCCB) "$(libdir)"
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 libtcc.h "$(includedir)"
 	mkdir -p "$(docdir)"
@@ -230,7 +247,7 @@ uninstall:
 	rm -fv $(foreach P,$(LIBTCC1) $(BCHECK_O),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1"
-	rm -fv "$(libdir)/libtcc.a" "$(includedir)/libtcc.h"
+	rm -fv "$(libdir)/$(LIBTCCB)" "$(includedir)/libtcc.h"
 
 else
 install: $(PROGS) $(LIBTCC1) libtcc.a tcc-doc.html
@@ -246,7 +263,7 @@ install: $(PROGS) $(LIBTCC1) libtcc.a tcc-doc.html
 	cp -r win32/examples/. "$(tccdir)/examples"
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html win32/tcc-win32.txt "$(tccdir)/doc"
-	$(INSTALL) -m644 libtcc.a libtcc.h "$(tccdir)/libtcc"
+	$(INSTALL) -m644 $(LIBTCCB) libtcc.h "$(tccdir)/libtcc"
 endif
 
 # documentation and man page
@@ -270,7 +287,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out libtcc_test$(EXESUF)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
 
 distclean: clean
