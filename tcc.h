@@ -521,6 +521,10 @@ struct TCCState {
     /* for tcc_relocate */
     int runtime_added;
     void *runtime_mem;
+#ifdef HAVE_SELINUX
+    void *write_mem;
+    unsigned long mem_size;
+#endif
 
     struct InlineFunc **inline_fns;
     int nb_inline_fns;

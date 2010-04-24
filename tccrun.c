@@ -37,12 +37,33 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr);
 int tcc_relocate(TCCState *s1)
 {
     int ret;
-
+#ifdef HAVE_SELINUX
+    char tmpfname[] = "/tmp/.tccrunXXXXXX";
+    int fd = mkstemp (tmpfname);
+    unlink (tmpfname); ftruncate (fd, 1000);
+    if ((ret= tcc_relocate_ex(s1,NULL)) < 0)return -1;
+    s1->mem_size=ret;
+     /* Use mmap instead of malloc for Selinux */
+    s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
+        MAP_SHARED, fd, 0);
+    if(s1->write_mem == MAP_FAILED){
+        error("/tmp not writeable");
+        return -1;
+    }
+    s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
+        MAP_SHARED, fd, 0);
+    if(s1->runtime_mem == MAP_FAILED){
+        error("/tmp not executable");
+        return -1;
+    }
+    ret = tcc_relocate_ex(s1, s1->write_mem);
+#else
     ret = tcc_relocate_ex(s1, NULL);
     if (-1 != ret) {
         s1->runtime_mem = tcc_malloc(ret);
         ret = tcc_relocate_ex(s1, s1->runtime_mem);
     }
+#endif
     return ret;
 }
 
@@ -50,34 +71,10 @@ int tcc_relocate(TCCState *s1)
 int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
-    int ret;
-#ifdef HAVE_SELINUX
-    int rret;
-    void *ptr,*writep;
-    char tmpfname[] = "/tmp/.tccrunXXXXXX";
-    int fd = mkstemp (tmpfname);
-    unlink (tmpfname);
-    ftruncate (fd, 1000);
-     if ((rret= tcc_relocate_ex(s1,NULL)) < 0)
-         return -1;
-     /* Use mmap instead of malloc for Selinux */
-	writep = mmap (NULL, rret, PROT_READ|PROT_WRITE,
-            MAP_SHARED, fd, 0);
-        if(writep == MAP_FAILED){
-            error("/tmp not writeable");
-            return -1;
-	}
-    ptr = mmap (NULL, rret, PROT_READ|PROT_EXEC,
-            MAP_SHARED, fd, 0);
-	if(ptr == MAP_FAILED){
-            error("/tmp not executable");
-            return -1;
-	}
-    tcc_relocate_ex(s1, writep);
-#else
+
     if (tcc_relocate(s1) < 0)
         return -1;
-#endif
+
     prog_main = tcc_get_symbol_err(s1, "main");
 
 #ifdef CONFIG_TCC_BACKTRACE
@@ -89,6 +86,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
+        int ret;
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
         rt_prog_main = prog_main;
@@ -108,13 +106,7 @@ int tcc_run(TCCState *s1, int argc, char **argv)
       if (p) *p = 0;
     }
 #endif
-    ret=(*prog_main)(argc, argv);
-#ifdef HAVE_SELINUX
-    munmap (writep, rret);
-    munmap (ptr, rret);    
-
-#endif
-    return ret;
+    return (*prog_main)(argc, argv);
 }
 
 

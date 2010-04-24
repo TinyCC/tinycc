@@ -1038,7 +1038,12 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
 
     tcc_free(s1->tcc_lib_path);
+#ifdef HAVE_SELINUX
+    munmap (s1->write_mem, s1->mem_size);
+    munmap (s1->runtime_mem, s1->mem_size);    
+#else
     tcc_free(s1->runtime_mem);
+#endif
     tcc_free(s1);
 }
 
