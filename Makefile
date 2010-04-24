@@ -10,7 +10,6 @@ CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 LIBS=.
 
-# My distro wants shared libs, not static ones
 LIBTCCA=libtcc.a
 ifdef DISABLE_STATIC
 CFLAGS+=-fPIC
@@ -111,11 +110,11 @@ PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
-PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(X64_CROSS) libtcc1_win32 $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+PROGS_CROSS=$(I386_CROSS) libtcc1_win32 $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
@@ -126,6 +125,7 @@ endif
 endif
 
 ifdef CONFIG_CROSS
+
 PROGS+=$(PROGS_CROSS)
 endif
 
@@ -179,7 +179,9 @@ libtcc.so.1: $(LIBTCC_OBJ)
 	$(CC) -shared -Wl,-soname,$@ -o $@.0 $^
 	ln -sf libtcc.so.1.0 libtcc.so.1
 	ln -sf libtcc.so.1.0 libtcc.so
-	
+libtcc1_win32:
+	./make_libtcc1_win32.sh
+
 libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCA)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
 
