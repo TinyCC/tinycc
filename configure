@@ -268,7 +268,7 @@ if test x"$libdir" = x""; then
 libdir="${execprefix}/lib"
 fi
 if test x"$tccdir" = x""; then
-tccdir="${execprefix}/lib/tcc"
+tccdir="${libdir}/tcc"
 fi
 if test x"$mandir" = x""; then
 mandir="${prefix}/man"
