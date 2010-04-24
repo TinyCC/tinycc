@@ -232,7 +232,8 @@ echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
 echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc1.a"
 echo "  --with-selinux           use mmap instead of exec mem"
-echo "                           [requires write access to /tmp]"echo ""
+echo "                           [requires write access to /tmp]"
+echo ""
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
 fi
