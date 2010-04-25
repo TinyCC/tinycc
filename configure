@@ -301,6 +301,7 @@ echo "prefix=$prefix" >> config.mak
 echo "bindir=\$(DESTDIR)$bindir" >> config.mak
 echo "tccdir=\$(DESTDIR)$tccdir" >> config.mak
 echo "libdir=\$(DESTDIR)$libdir" >> config.mak
+echo "ln_libdir=$libdir" >> config.mak
 echo "includedir=\$(DESTDIR)$includedir" >> config.mak
 echo "mandir=\$(DESTDIR)$mandir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak

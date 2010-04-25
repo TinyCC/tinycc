@@ -10,15 +10,16 @@ CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 LIBS=.
 
-LIBTCCA=libtcc.a
+LIBTCCB=libtcc.a
 ifdef DISABLE_STATIC
 CFLAGS+=-fPIC
-LIBTCCA=
 LIBTCCL=-L. -ltcc
-LIBTCCSO=libtcc.so.1
+LIBTCCB=libtcc.so.1.0
 endif
-LIBTCCB=$(LIBTCCA)
-LIBTCCB+=$(LIBTCCSO)
+LIBTCCPROGS=$(LIBTCCB)
+ifndef CONFIG_WIN32
+LIBTCCPROGS+=tcc1.def
+endif
 
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
@@ -128,7 +129,7 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 endif
 
-all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCB) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
+all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCPROGS) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCCB)
@@ -174,31 +175,32 @@ $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
 libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
 
-libtcc.so.1: $(LIBTCC_OBJ)
-	$(CC) -shared -Wl,-soname,$@ -o $@.0 $^
+libtcc.so.1.0: $(LIBTCC_OBJ)
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^
 	ln -sf libtcc.so.1.0 libtcc.so.1
 	ln -sf libtcc.so.1.0 libtcc.so
 
 libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
-ifdef CONFIG_CROSS
-ifndef CONFIG_WIN32
-	cp config.mak config.mak.bak
-	cp config.h config.h.bak
+
+tcc1.def:
+	mv config.mak config.mak.bak
+	mv config.h config.h.bak
+	cp config.h.bak config.h
+	cp config.mak.bak config.mak
 	echo "ARCH=i386" >> config.mak
 	echo "#undef HOST_X86_64" >> config.h
 	echo "#define HOST_I386 1" >> config.h
 	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
+	echo "ARCH=i386" >> config.mak
 	make i386-win32-tcc 
 	cp i386-win32-tcc tcc.exe
 	mv libtcc1.a libtcc1.bak
 	make CONFIG_WIN32=1 libtcc1.a
-	mv libtcc1.a lib
+	mv libtcc1.a lib/tcc1.def
 	mv libtcc1.bak libtcc1.a
 	mv config.mak.bak config.mak
 	mv config.h.bak config.h
-endif
-endif
 
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=.
@@ -238,7 +240,7 @@ TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
 INSTALL=install
 
 ifndef CONFIG_WIN32
-install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCB) tcc.1 tcc-doc.html
+install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCPROGS) tcc.1 tcc-doc.html
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 	mkdir -p "$(mandir)/man1"
@@ -253,10 +255,10 @@ ifneq ($(BCHECK_O),)
 endif
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	mkdir -p "$(libdir)"
-	$(INSTALL) -m644 $(LIBTCCB) "$(libdir)"
-ifeq ($(LIBTCCB),$(LIBTCCSO))
-	$(INSTALL) -m644 $(LIBTCCB,.1.0=.1) "$(libdir)"
-	$(INSTALL) -m644 $(LIBTCCB,.1.0=) "$(libdir)"
+	$(INSTALL) -m755 $(LIBTCCB) "$(libdir)"
+ifdef DISABLE_STATIC
+	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so.1"
+	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so"
 endif
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 libtcc.h "$(includedir)"
@@ -264,7 +266,7 @@ endif
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 win32/lib/*.def lib/libtcc1.a "$(tccdir)/lib"
+	$(INSTALL) -m644 win32/lib/*.def lib/tcc1.def "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 endif
@@ -275,8 +277,8 @@ uninstall:
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1"
 	rm -fv "$(libdir)/$(LIBTCCB)" "$(includedir)/libtcc.h"
-ifeq ($(LIBTCCB),$(LIBTCCSO))
-	rm -fv "$(libdir)/$(LIBTCCB,.1.0=.1)" "$(libdir)/$(LIBTCCB,.1.0=)"
+ifdef DISABLE_STATIC
+	rm -fv "$(libdir)/libtcc.so*"
 endif
 ifdef CONFIG_CROSS
 	rm -rf "$(tccdir)/include"
