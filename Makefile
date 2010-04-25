@@ -183,15 +183,20 @@ libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
 ifdef CONFIG_CROSS
 ifndef CONFIG_WIN32
+	cp config.mak config.mak.bak
+	cp config.h config.h.bak
 	echo "ARCH=i386" >> config.mak
-	make i386-win32-tcc
+	echo "#undef HOST_X86_64" >> config.h
+	echo "#define HOST_I386 1" >> config.h
+	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
+	make i386-win32-tcc 
 	cp i386-win32-tcc tcc.exe
 	mv libtcc1.a libtcc1.bak
 	make CONFIG_WIN32=1 libtcc1.a
 	mv libtcc1.a lib
 	mv libtcc1.bak libtcc1.a
-	head -n -1 config.mak > config.bak
-	mv config.bak config.mak
+	mv config.mak.bak config.mak
+	mv config.h.bak config.h
 endif
 endif
 
