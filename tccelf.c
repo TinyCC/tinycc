@@ -1510,12 +1510,32 @@ static int elf_output_file(TCCState *s1, const char *filename)
                                               sym - (ElfW(Sym) *)symtab_section->data);
                             } else if (type == STT_OBJECT) {
                                 unsigned long offset;
+                                ElfW(Sym) *dynsym, *dynsym_end;
                                 offset = bss_section->data_offset;
                                 /* XXX: which alignment ? */
                                 offset = (offset + 16 - 1) & -16;
                                 index = put_elf_sym(s1->dynsym, offset, esym->st_size, 
                                                     esym->st_info, 0, 
                                                     bss_section->sh_num, name);
+                                /* Ensure symbol aliases (that is, symbols with
+                                   the same st_value) resolve to the same
+                                   address in program .bss or .data section. */
+                                dynsym_end = (ElfW(Sym) *)
+                                             (s1->dynsymtab_section->data +
+                                              s1->dynsymtab_section->data_offset);
+                                for(dynsym = (ElfW(Sym) *)s1->dynsymtab_section->data + 1;
+                                    dynsym < dynsym_end; dynsym++) {
+                                    if (dynsym->st_value == esym->st_value) {
+                                        char *dynname;
+                                        dynname = s1->dynsymtab_section->link->data
+                                                  + dynsym->st_name;
+                                        put_elf_sym(s1->dynsym, offset,
+                                                    dynsym->st_size,
+                                                    dynsym->st_info, 0,
+                                                    bss_section->sh_num,
+                                                    dynname);
+                                    }
+                                }
                                 put_elf_reloc(s1->dynsym, bss_section, 
                                               offset, R_COPY, index);
                                 offset += esym->st_size;
