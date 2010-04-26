@@ -10,17 +10,6 @@ CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 LIBS=.
 
-LIBTCCB=libtcc.a
-ifdef DISABLE_STATIC
-CFLAGS+=-fPIC
-LIBTCCL=-L. -ltcc
-LIBTCCB=libtcc.so.1.0
-endif
-LIBTCCPROGS=$(LIBTCCB)
-ifndef CONFIG_WIN32
-LIBTCCPROGS+=tcc1.def
-endif
-
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
 ifneq ($(GCC_MAJOR),3)
@@ -125,8 +114,19 @@ endif
 endif
 endif
 
+LIBTCCB=libtcc.a
+ifdef DISABLE_STATIC
+CFLAGS+=-fPIC
+LIBTCCL=-L. -ltcc
+LIBTCCB=libtcc.so.1.0
+endif
+LIBTCCPROGS=$(LIBTCCB)
+
 ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
+ifndef CONFIG_WIN32
+LIBTCCPROGS+=tcc1.def
+endif
 endif
 
 all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCPROGS) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
