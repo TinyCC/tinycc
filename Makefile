@@ -49,6 +49,7 @@ endif
 
 ifeq ($(ARCH),arm)
 NATIVE_DEFINES=-DTCC_TARGET_ARM
+NATIVE_TARGET=-DWITHOUT_LIBTCC
 NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif

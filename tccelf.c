@@ -1232,10 +1232,14 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         tcc_add_library(s1, "c");
         tcc_add_file(s1, CONFIG_SYSROOT "/lib/libgcc_s.so.1");
 #else
-        char buf[1024];
         tcc_add_library(s1, "c");
-        snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "libtcc1.a");
-        tcc_add_file(s1, buf);
+#ifndef WITHOUT_LIBTCC
+	{
+            char buf[1024];
+            snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "libtcc1.a");
+            tcc_add_file(s1, buf);
+	}
+#endif
 #endif
     }
     /* add crt end if not memory output */
