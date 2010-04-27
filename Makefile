@@ -114,22 +114,24 @@ endif
 endif
 endif
 
+# LIBTCCB decides whether libtcc is installed static or dynamic
 LIBTCCB=libtcc.a
 ifdef DISABLE_STATIC
 CFLAGS+=-fPIC
 LIBTCCL=-L. -ltcc
 LIBTCCB=libtcc.so.1.0
 endif
-LIBTCCPROGS=$(LIBTCCB)
+LIBTCCLIBS=$(LIBTCCB)
 
 ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
+# Try to build win32 cross-compiler lib on *nix
 ifndef CONFIG_WIN32
-LIBTCCPROGS+=tcc1.def
+LIBTCCLIBS+=tcc1.def
 endif
 endif
 
-all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCPROGS) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
+all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCCB)
@@ -182,7 +184,10 @@ libtcc.so.1.0: $(LIBTCC_OBJ)
 
 libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
-
+        
+# To build cross-compilers on Linux we must make a fake 32 bit tcc.exe
+# and use it to build ELF objects into libtcc1.a which is then
+# renamed to tcc1.def in order to have another target in the Makefile
 tcc1.def:
 	mv config.mak config.mak.bak
 	mv config.h config.h.bak
@@ -240,7 +245,7 @@ TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
 INSTALL=install
 
 ifndef CONFIG_WIN32
-install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCPROGS) tcc.1 tcc-doc.html
+install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc.1 tcc-doc.html
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 	mkdir -p "$(mandir)/man1"
