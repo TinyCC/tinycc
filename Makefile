@@ -8,7 +8,6 @@ include $(TOP)/config.mak
 CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
-LIBS=.
 
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
