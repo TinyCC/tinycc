@@ -197,10 +197,10 @@ tcc1.def:
 	echo "#define HOST_I386 1" >> config.h
 	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
 	echo "ARCH=i386" >> config.mak
-	make i386-win32-tcc 
+	$(MAKE) i386-win32-tcc 
 	cp i386-win32-tcc tcc.exe
 	mv libtcc1.a libtcc1.bak
-	make CONFIG_WIN32=1 libtcc1.a
+	$(MAKE) CONFIG_WIN32=1 libtcc1.a
 	mv libtcc1.a lib/tcc1.def
 	mv libtcc1.bak libtcc1.a
 	mv config.mak.bak config.mak
@@ -327,7 +327,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/tcc1.def
 	$(MAKE) -C tests $@
 
 distclean: clean
