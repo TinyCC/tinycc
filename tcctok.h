@@ -81,10 +81,15 @@
      DEF(TOK___TIME__, "__TIME__")
      DEF(TOK___FUNCTION__, "__FUNCTION__")
      DEF(TOK___VA_ARGS__, "__VA_ARGS__")
-     
+
 /* special identifiers */
      DEF(TOK___FUNC__, "__func__")
-     
+
+/* special floating point values */
+     DEF(TOK___NAN__, "__nan__")
+     DEF(TOK___SNAN__, "__snan__")
+     DEF(TOK___INF__, "__inf__")
+
 /* attribute identifiers */
 /* XXX: handle all tokens generically since speed is not critical */
      DEF(TOK_SECTION1, "section")
