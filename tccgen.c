@@ -3548,15 +3548,15 @@ ST_FUNC void unary(void)
     
     // special qnan , snan and infinity values
     case TOK___NAN__:
-        vpush64(VT_DOUBLE, 0x7ff8000000000000);
+        vpush64(VT_DOUBLE, 0x7ff8000000000000ULL);
         next();
         break;
     case TOK___SNAN__:
-        vpush64(VT_DOUBLE, 0x7ff0000000000001);
+        vpush64(VT_DOUBLE, 0x7ff0000000000001ULL);
         next();
         break;
     case TOK___INF__:
-        vpush64(VT_DOUBLE, 0x7ff0000000000000);
+        vpush64(VT_DOUBLE, 0x7ff0000000000000ULL);
         next();
         break;
 
