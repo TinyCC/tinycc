@@ -1161,7 +1161,7 @@ ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c);
 
 /* ------------ arm-gen.c ------------ */
 #ifdef TCC_TARGET_ARM
-ST_FUNC unsigned long encbranch(int pos,int addr,int fail);
+ST_FUNC uint32_t encbranch(int pos, int addr, int fail);
 ST_FUNC void gen_cvt_itof1(int t);
 #endif
 
