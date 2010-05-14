@@ -150,7 +150,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     if (s1->nb_errors)
         return -1;
 
-#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
+#if (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM) && !defined TCC_TARGET_PE
     s1->runtime_plt_and_got_offset = 0;
     s1->runtime_plt_and_got = (char *)(mem + offset);
     /* double the size of the buffer for got and plt entries
@@ -184,7 +184,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
             set_pages_executable(ptr, length);
     }
 
-#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
+#if (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM) && !defined TCC_TARGET_PE
     set_pages_executable(s1->runtime_plt_and_got,
                          s1->runtime_plt_and_got_offset);
 #endif

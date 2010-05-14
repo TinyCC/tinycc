@@ -547,7 +547,7 @@ struct TCCState {
 #endif
 
 #ifndef TCC_TARGET_PE
-#ifdef TCC_TARGET_X86_64
+#if defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM
     /* write PLT and GOT here */
     char *runtime_plt_and_got;
     unsigned int runtime_plt_and_got_offset;
