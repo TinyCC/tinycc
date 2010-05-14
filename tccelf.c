@@ -2321,6 +2321,9 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             sh->sh_type != SHT_ARM_EXIDX &&
 #endif
             sh->sh_type != SHT_NOBITS && 
+            sh->sh_type != SHT_PREINIT_ARRAY &&
+            sh->sh_type != SHT_INIT_ARRAY &&
+            sh->sh_type != SHT_FINI_ARRAY &&
             strcmp(sh_name, ".stabstr")
             )
             continue;

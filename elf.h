@@ -318,7 +318,12 @@ typedef struct
 #define SHT_REL          9              /* Relocation entries, no addends */
 #define SHT_SHLIB        10             /* Reserved */
 #define SHT_DYNSYM       11             /* Dynamic linker symbol table */
-#define SHT_NUM          12             /* Number of defined types.  */
+#define SHT_INIT_ARRAY   14             /* Array of constructors */
+#define SHT_FINI_ARRAY   15             /* Array of destructors */
+#define SHT_PREINIT_ARRAY 16            /* Array of pre-constructors */
+#define SHT_GROUP        17             /* Section group */
+#define SHT_SYMTAB_SHNDX 18             /* Extended section indices */
+#define SHT_NUM          19             /* Number of defined types.  */
 #define SHT_LOOS         0x60000000     /* Start OS-specific */
 #define SHT_LOSUNW       0x6ffffffb     /* Sun-specific low bound.  */
 #define SHT_SUNW_COMDAT  0x6ffffffb
