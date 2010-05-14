@@ -497,6 +497,50 @@ static int rt_get_caller_pc(unsigned long *paddr,
 }
 
 /* ------------------------------------------------------------- */
+#elif defined(__arm__)
+
+/* return the PC at frame level 'level'. Return negative if not found */
+static int rt_get_caller_pc(unsigned long *paddr,
+                            ucontext_t *uc, int level)
+{
+    uint32_t fp, sp;
+    int i;
+
+    if (level == 0) {
+        /* XXX: only supports linux */
+#if defined(__linux__)
+        *paddr = uc->uc_mcontext.arm_pc;
+#else
+        return -1;
+#endif
+        return 0;
+    } else {
+#if defined(__linux__)
+        fp = uc->uc_mcontext.arm_fp;
+        sp = uc->uc_mcontext.arm_sp;
+        if (sp < 0x1000)
+            sp = 0x1000;
+#else
+        return -1;
+#endif
+        /* XXX: specific to tinycc stack frames */
+        if (fp < sp + 12 || fp & 3)
+            return -1;
+        for(i = 1; i < level; i++) {
+            sp = ((uint32_t *)fp)[-2];
+            if (sp < fp || sp - fp > 16 || sp & 3)
+                return -1;
+            fp = ((uint32_t *)fp)[-3];
+            if (fp <= sp || fp - sp < 12 || fp & 3)
+                return -1;
+        }
+        /* XXX: check address validity with program info */
+        *paddr = ((uint32_t *)fp)[-1];
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------- */
 #else
 
 #warning add arch specific rt_get_caller_pc()
