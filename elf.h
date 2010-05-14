@@ -1673,6 +1673,7 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_ARM_PLT32             27      /* 32 bit PLT address */
 #define R_ARM_CALL              28
 #define R_ARM_JUMP24            29
+#define R_ARM_V4BX              40
 #define R_ARM_PREL31            42
 #define R_ARM_GNU_VTENTRY       100
 #define R_ARM_GNU_VTINHERIT     101
