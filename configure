@@ -11,11 +11,21 @@ else
     TMPDIR1="/tmp"
 fi
 
-TMPC="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.c"
-TMPO="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.o"
-TMPE="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}"
-TMPS="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.S"
-TMPH="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.h"
+RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+TMPC="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.c"
+RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+TMPO="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.o"
+RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+TMPE="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}"
+RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+TMPS="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.S"
+RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
+TMPH="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.h"
 
 # default parameters
 build_cross="no"
