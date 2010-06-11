@@ -4864,7 +4864,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* Coo: initial last member of union */
         while (f->next && f->next->c==f->c) {
             if ((f->type.t&VT_BITFIELD) && (f->next->type.t&VT_BITFIELD)
-                && ((f->type.t>>VT_STRUCT_SHIFT)&0x3f)==((f->next->type.t>>VT_STRUCT_SHIFT)&0x3f))
+                && ((f->type.t>>VT_STRUCT_SHIFT)&0x3f)!=((f->next->type.t>>VT_STRUCT_SHIFT)&0x3f))
                 break;
             f = f->next;
         }
