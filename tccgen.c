@@ -4865,6 +4865,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         index = 0;
         n = s->c;
         while (tok != '}') {
+            int bit_pos;
             decl_designator(type, sec, c, NULL, &f, size_only);
             index = f->c;
             if (!size_only && array_length < index) {
@@ -4876,7 +4877,12 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                 array_length = index;
 
             /* Coo: skip fields from same union */
-            while (f->next && f->next->c<index)
+            if ((f->type.t&VT_BITFIELD)==0)
+                bit_pos=index*8;
+            else
+                bit_pos=f->c*8+((f->type.t>>VT_STRUCT_SHIFT)&0x3f)+((f->type.t>>(VT_STRUCT_SHIFT+6))&0x3f);
+            while (f->next && f->next->c<index &&
+                ((f->next->type.t&VT_BITFIELD)==0 || f->next->c*8+((f->next->type.t>>VT_STRUCT_SHIFT)&0x3f)<bit_pos))
                 f=f->next;
 
             f = f->next;
