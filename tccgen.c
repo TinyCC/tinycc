@@ -4861,13 +4861,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         s = type->ref;
         f = s->next;
-        /* Coo: initial last member of union */
-        while (f->next && f->next->c==f->c) {
-            if ((f->type.t&VT_BITFIELD) && (f->next->type.t&VT_BITFIELD)
-                && ((f->type.t>>VT_STRUCT_SHIFT)&0x3f)!=((f->next->type.t>>VT_STRUCT_SHIFT)&0x3f))
-                break;
-            f = f->next;
-        }
         array_length = 0;
         index = 0;
         n = s->c;
@@ -4882,26 +4875,12 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (index > array_length)
                 array_length = index;
 
+            /* Coo: skip fields from same union */
+            while (f->next && f->next->c<index)
+                f=f->next;
+
             f = f->next;
-            /* Coo: initial last member of union */
-            if (f)
-                /* gr: skip fields from same union - ugly. */
-                while (f->next) {
-                    ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
-                    /* test for same offset */
-                    if (f->next->c != f->c)
-                        break;
-                    /* if yes, test for bitfield shift */
-                    if ((f->type.t & VT_BITFIELD) && (f->next->type.t & VT_BITFIELD)) {
-                        int bit_pos_1 = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
-                        int bit_pos_2 = (f->next->type.t >> VT_STRUCT_SHIFT) & 0x3f;
-                        //printf("bitfield %d %d\n", bit_pos_1, bit_pos_2);
-                        if (bit_pos_1 != bit_pos_2)
-                            break;
-                    }
-                    f = f->next;
-                }
-            else if (no_oblock)
+            if (no_oblock && f == NULL)
                 break;
             if (tok == '}')
                 break;
