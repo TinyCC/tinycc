@@ -4824,7 +4824,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
-    } else if ((type->t & VT_BTYPE) == VT_STRUCT && type->ref->c && /* Coo: ignore empty */
+    } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
                (sec || !first || tok == '{')) {
         int par_count;
 
@@ -4837,6 +4837,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
            to do it correctly (ideally, the expression parser should
            be used in all cases) */
         par_count = 0;
+        /* Coo: I think we must not deal '(' */
         if (tok == '(') {
             AttributeDef ad1;
             CType type1;
@@ -4861,6 +4862,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         s = type->ref;
         f = s->next;
+        /* Coo: skip empty struct */
+        while (f->next && (f->type.t&VT_BTYPE)==VT_STRUCT && !f->type.ref->c)
+            f=f->next;
         array_length = 0;
         index = 0;
         n = s->c;
@@ -4877,19 +4881,24 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                 array_length = index;
 
             /* Coo: skip fields from same union */
-            if ((f->type.t&VT_BITFIELD)==0)
+            if (!(f->type.t&VT_BITFIELD))
                 bit_pos=index*8;
             else
                 bit_pos=f->c*8+((f->type.t>>VT_STRUCT_SHIFT)&0x3f)+((f->type.t>>(VT_STRUCT_SHIFT+6))&0x3f);
-            while (f->next && f->next->c<index &&
-                ((f->next->type.t&VT_BITFIELD)==0 || f->next->c*8+((f->next->type.t>>VT_STRUCT_SHIFT)&0x3f)<bit_pos))
+            do
                 f=f->next;
+            while (f && (((f->type.t&VT_BTYPE)==VT_STRUCT && !f->type.ref->c) ||
+                f->c*8+((f->type.t&VT_BITFIELD)?((f->type.t>>VT_STRUCT_SHIFT)&0x3f):0)<bit_pos));
 
-            f = f->next;
             if (no_oblock && f == NULL)
                 break;
             if (tok == '}')
                 break;
+            /* Coo: skip ')' in front of ',' for initializer */
+            while (tok==')' && par_count) {
+                next();
+                par_count--;
+            }
             skip(',');
         }
         /* put zeros at the end */
