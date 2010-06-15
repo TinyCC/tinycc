@@ -2995,9 +2995,6 @@ static void post_type(CType *type, AttributeDef *ad)
 
     if (tok == '(') {
         /* function declaration */
-        if ((type->t & VT_STATIC) && local_stack) {
-            error("Function without file scope cannot be static");
-        }
         next();
         l = 0;
         first = NULL;
