@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # tcc configure script (c) 2003 Fabrice Bellard
-#
+
 # set temporary file name
 if test ! -z "$TMPDIR" ; then
     TMPDIR1="${TMPDIR}"
@@ -11,21 +11,13 @@ else
     TMPDIR1="/tmp"
 fi
 
-RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-TMPC="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.c"
-RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-TMPO="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.o"
-RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-TMPE="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}"
-RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-TMPS="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.S"
-RDM1="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-RDM2="$(dd if=/dev/urandom count=1 2> /dev/null | cksum | cut -f1 -d" " )"
-TMPH="${TMPDIR1}/tcc-conf-${RDM1}-$$-${RDM2}.h"
+# bashism: TMPN="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.c"
+TMPN="./conftest-$$"
+
+TMPC=$TMPN.c
+TMPH=$TMPN.h
+TMPO=$TMPN.o
+TMPE=$TMPN
 
 # default parameters
 build_cross="no"
@@ -407,4 +399,4 @@ else
     echo "config.h is unchanged"
 fi
 
-rm -f $TMPO $TMPC $TMPE $TMPS $TMPH
+rm -f $TMPN*
