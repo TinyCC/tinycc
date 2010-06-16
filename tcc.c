@@ -444,7 +444,7 @@ int main(int argc, char **argv)
         } else {
             s->outfile = fopen(outfile, "w");
             if (!s->outfile)
-                error("could not open '%s", outfile);
+                error("could not open '%s'", outfile);
         }
     } else if (output_type != TCC_OUTPUT_MEMORY) {
         if (!outfile) {
