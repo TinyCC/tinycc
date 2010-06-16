@@ -1557,3 +1557,31 @@ PUB_FUNC void set_num_callers(int n)
     num_callers = n;
 #endif
 }
+
+
+LIBTCCAPI const char *tcc_default_target(TCCState *s)
+{
+    /* FIXME will break in multithreaded case */
+    static char outfile_default[1024];
+
+    char *ext;
+    const char *name =
+        strcmp(s->input_files[0], "-") == 0 ? "a"
+                                            : tcc_basename(s->input_files[0]);
+    pstrcpy(outfile_default, sizeof(outfile_default), name);
+    ext = tcc_fileextension(outfile_default);
+#ifdef TCC_TARGET_PE
+    if (s->output_type == TCC_OUTPUT_DLL)
+        strcpy(ext, ".dll");
+    else
+    if (s->output_type == TCC_OUTPUT_EXE)
+        strcpy(ext, ".exe");
+    else
+#endif
+    if (s->output_type == TCC_OUTPUT_OBJ && !s->reloc_output && *ext)
+        strcpy(ext, ".o");
+    else
+        pstrcpy(outfile_default, sizeof(outfile_default), "a.out");
+
+    return outfile_default;
+}

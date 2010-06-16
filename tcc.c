@@ -393,7 +393,6 @@ int main(int argc, char **argv)
     int i;
     TCCState *s;
     int nb_objfiles, ret, optind;
-    char objfilename[1024];
     int64_t start_time = 0;
 
     s = tcc_new();
@@ -446,28 +445,6 @@ int main(int argc, char **argv)
             if (!s->outfile)
                 error("could not open '%s'", outfile);
         }
-    } else if (output_type != TCC_OUTPUT_MEMORY) {
-        if (!outfile) {
-            /* compute default outfile name */
-            char *ext;
-            const char *name = 
-                strcmp(files[0], "-") == 0 ? "a" : tcc_basename(files[0]);
-            pstrcpy(objfilename, sizeof(objfilename), name);
-            ext = tcc_fileextension(objfilename);
-#ifdef TCC_TARGET_PE
-            if (output_type == TCC_OUTPUT_DLL)
-                strcpy(ext, ".dll");
-            else
-            if (output_type == TCC_OUTPUT_EXE)
-                strcpy(ext, ".exe");
-            else
-#endif
-            if (output_type == TCC_OUTPUT_OBJ && !reloc_output && *ext)
-                strcpy(ext, ".o");
-            else
-                pstrcpy(objfilename, sizeof(objfilename), "a.out");
-            outfile = objfilename;
-        }
     }
 
     if (do_bench) {
@@ -507,8 +484,10 @@ int main(int argc, char **argv)
                 fclose(s->outfile);
         } else if (s->output_type == TCC_OUTPUT_MEMORY)
             ret = tcc_run(s, argc - optind, argv + optind);
-        else
-            ret = tcc_output_file(s, outfile) ? 1 : 0;
+        else {
+            ret = tcc_output_file(s, outfile ? outfile : tcc_default_target(s));
+            ret = ret ? 1 : 0;
+        }
     }
 
     tcc_delete(s);
