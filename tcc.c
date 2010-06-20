@@ -474,7 +474,7 @@ int main(int argc, char **argv)
         const char *filename;
 
         filename = files[i];
-        if (filename[0] == '-' && filename[1]) {
+        if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
                 error_noabort("cannot find %s", filename);
                 ret = 1;
