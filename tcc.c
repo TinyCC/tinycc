@@ -475,6 +475,7 @@ int main(int argc, char **argv)
     }
 
     tcc_set_output_type(s, output_type);
+    s->reloc_output = reloc_output;
 
     /* compile or add each files or library */
     for(i = 0; i < nb_files && ret == 0; i++) {
