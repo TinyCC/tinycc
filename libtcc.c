@@ -1583,7 +1583,9 @@ LIBTCCAPI const char *tcc_default_target(TCCState *s)
         strcpy(ext, ".exe");
     else
 #endif
-    if (s->output_type == TCC_OUTPUT_OBJ && !s->reloc_output && *ext)
+    if (( (s->output_type == TCC_OUTPUT_OBJ && !s->reloc_output) ||
+          (s->output_type == TCC_OUTPUT_PREPROCESS) )
+        && *ext)
         strcpy(ext, ".o");
     else
         pstrcpy(outfile_default, sizeof(outfile_default), "a.out");
