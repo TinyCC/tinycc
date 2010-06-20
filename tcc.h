@@ -525,6 +525,10 @@ struct TCCState {
     char **input_libs;
     int nb_input_libs;
 
+    /* automatically collected dependencies for this compilation */
+    char **target_deps;
+    int nb_target_deps;
+
     /* for tcc_relocate */
     int runtime_added;
     void *runtime_mem;

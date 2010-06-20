@@ -46,7 +46,6 @@ Missing features:
 - disable-asm and disable-bcheck options
 - __builtin_expect()
 - improve '-E' option.
-- add '-MD' option
 - atexit (Nigel Horne)
 - packed attribute
 - C99: add variable size arrays (gcc 3.2 testsuite issue)

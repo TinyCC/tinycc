@@ -32,6 +32,8 @@ static int output_type;
 static int reloc_output;
 static const char *outfile;
 static int do_bench = 0;
+static int gen_deps;
+static const char *deps_outfile;
 
 #define TCC_OPTION_HAS_ARG 0x0001
 #define TCC_OPTION_NOSEP   0x0002 /* cannot have space before option and arg */
@@ -74,6 +76,9 @@ static void help(void)
 #ifdef CONFIG_TCC_BACKTRACE
            "  -bt N       show N callers in stack traces\n"
 #endif
+           "Misc options:\n"
+           "  -MD         generate target dependencies for make\n"
+           "  -MF depfile put generated dependencies here\n"
            );
 }
 
@@ -115,6 +120,8 @@ enum {
     TCC_OPTION_w,
     TCC_OPTION_pipe,
     TCC_OPTION_E,
+    TCC_OPTION_MD,
+    TCC_OPTION_MF,
     TCC_OPTION_x,
 };
 
@@ -154,6 +161,8 @@ static const TCCOption tcc_options[] = {
     { "w", TCC_OPTION_w, 0 },
     { "pipe", TCC_OPTION_pipe, 0},
     { "E", TCC_OPTION_E, 0},
+    { "MD", TCC_OPTION_MD, 0},
+    { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
     { NULL },
 };
@@ -374,6 +383,12 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_E:
                 output_type = TCC_OUTPUT_PREPROCESS;
                 break;
+            case TCC_OPTION_MD:
+                gen_deps = 1;
+                break;
+            case TCC_OPTION_MF:
+                deps_outfile = optarg;
+                break;
             case TCC_OPTION_x:
                 break;
             default:
@@ -479,14 +494,20 @@ int main(int argc, char **argv)
         if (do_bench)
             tcc_print_stats(s, getclock_us() - start_time);
 
-        if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-            if (outfile)
-                fclose(s->outfile);
-        } else if (s->output_type == TCC_OUTPUT_MEMORY)
+        if (s->output_type == TCC_OUTPUT_MEMORY)
             ret = tcc_run(s, argc - optind, argv + optind);
         else {
-            ret = tcc_output_file(s, outfile ? outfile : tcc_default_target(s));
-            ret = ret ? 1 : 0;
+            if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+                if (outfile)
+                    fclose(s->outfile);
+            } else {
+                ret = tcc_output_file(s, outfile ? outfile : tcc_default_target(s));
+                ret = ret ? 1 : 0;
+            }
+
+            /* dump collected dependencies */
+            if (gen_deps && !ret)
+                tcc_gen_makedeps(s, outfile, deps_outfile);
         }
     }
 

@@ -1,3 +1,7 @@
+not released:
+
+- Add support for -MD/-MF (automatically generate dependencies for make)
+
 version 0.9.25:
 
 - first support for x86-64 target (Shinichiro Hamaji)

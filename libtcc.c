@@ -1041,6 +1041,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     dynarray_reset(&s1->input_files, &s1->nb_input_files);
     dynarray_reset(&s1->input_libs, &s1->nb_input_libs);
+    dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
 
 #ifdef HAVE_SELINUX
     munmap (s1->write_mem, s1->mem_size);
@@ -1091,6 +1092,10 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             error_noabort("file '%s' not found", filename);
         goto the_end;
     }
+
+    /* update target deps */
+    dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
+            tcc_strdup(filename));
 
     if (flags & AFF_PREPROCESS) {
         ret = tcc_preprocess(s1);
@@ -1584,4 +1589,38 @@ LIBTCCAPI const char *tcc_default_target(TCCState *s)
         pstrcpy(outfile_default, sizeof(outfile_default), "a.out");
 
     return outfile_default;
+}
+
+
+LIBTCCAPI void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename)
+{
+    FILE *depout;
+    char buf[1024], *ext;
+    int i;
+
+    if (!target)
+        target = tcc_default_target(s);
+
+    if (!filename) {
+        /* compute filename automatically
+         * dir/file.o -> dir/file.d             */
+        pstrcpy(buf, sizeof(buf), target);
+        ext = tcc_fileextension(buf);
+        pstrcpy(ext, sizeof(buf) - (ext-buf), ".d");
+        filename = buf;
+    }
+
+    if (s->verbose)
+        printf("<- %s\n", filename);
+
+    /* XXX return err codes instead of error() ? */
+    depout = fopen(filename, "w");
+    if (!depout)
+        error("could not open '%s'", filename);
+
+    fprintf(depout, "%s : \\\n", target);
+    for (i=0; i<s->nb_target_deps; ++i)
+        fprintf(depout, "\t%s \\\n", s->target_deps[i]);
+    fprintf(depout, "\n");
+    fclose(depout);
 }

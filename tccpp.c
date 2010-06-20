@@ -1491,6 +1491,9 @@ ST_FUNC void preprocess(int is_bof)
 #ifdef INC_DEBUG
             printf("%s: including %s\n", file->filename, buf1);
 #endif
+            /* update target deps */
+            dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
+                    tcc_strdup(buf1));
 
            /* XXX: fix current line init */
            /* push current file in stack */
