@@ -37,3 +37,4 @@ config.h
 config.mak
 config.texi
 tests
+tags
