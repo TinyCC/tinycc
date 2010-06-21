@@ -4867,7 +4867,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
            to do it correctly (ideally, the expression parser should
            be used in all cases) */
         par_count = 0;
-        /* Coo: I think we must not deal '(' */
         if (tok == '(') {
             AttributeDef ad1;
             CType type1;
@@ -4892,14 +4891,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         s = type->ref;
         f = s->next;
-        /* Coo: skip empty struct */
-        while (f->next && (f->type.t&VT_BTYPE)==VT_STRUCT && !f->type.ref->c)
-            f=f->next;
         array_length = 0;
         index = 0;
         n = s->c;
         while (tok != '}') {
-            int bit_pos;
             decl_designator(type, sec, c, NULL, &f, size_only);
             index = f->c;
             if (!size_only && array_length < index) {
@@ -4910,25 +4905,28 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (index > array_length)
                 array_length = index;
 
-            /* Coo: skip fields from same union */
-            if (!(f->type.t&VT_BITFIELD))
-                bit_pos=index*8;
-            else
-                bit_pos=f->c*8+((f->type.t>>VT_STRUCT_SHIFT)&0x3f)+((f->type.t>>(VT_STRUCT_SHIFT+6))&0x3f);
-            do
-                f=f->next;
-            while (f && (((f->type.t&VT_BTYPE)==VT_STRUCT && !f->type.ref->c) ||
-                f->c*8+((f->type.t&VT_BITFIELD)?((f->type.t>>VT_STRUCT_SHIFT)&0x3f):0)<bit_pos));
+            /* gr: skip fields from same union - ugly. */
+            while (f->next) {
+                ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
+                /* test for same offset */
+                if (f->next->c != f->c)
+                    break;
+                /* if yes, test for bitfield shift */
+                if ((f->type.t & VT_BITFIELD) && (f->next->type.t & VT_BITFIELD)) {
+                    int bit_pos_1 = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+                    int bit_pos_2 = (f->next->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+                    //printf("bitfield %d %d\n", bit_pos_1, bit_pos_2);
+                    if (bit_pos_1 != bit_pos_2)
+                        break;
+                }
+                f = f->next;
+            }
 
+            f = f->next;
             if (no_oblock && f == NULL)
                 break;
             if (tok == '}')
                 break;
-            /* Coo: skip ')' in front of ',' for initializer */
-            while (tok==')' && par_count) {
-                next();
-                par_count--;
-            }
             skip(',');
         }
         /* put zeros at the end */
