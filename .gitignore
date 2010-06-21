@@ -1,3 +1,5 @@
+*.o
+*.a
 tcc_g
 tcc
 tc2.c
@@ -35,3 +37,4 @@ config.h
 config.mak
 config.texi
 tests
+tags
