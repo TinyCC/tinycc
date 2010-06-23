@@ -11,7 +11,8 @@ else
     TMPDIR1="/tmp"
 fi
 
-TMPN="$(mktemp --tmpdir=${TMPDIR1} tcc-conf-XXXXXXXXXX-$$-XXXXXXXXXX)"
+# bashism: TMPN="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.c"
+TMPN="./conftest-$$"
 
 TMPC=$TMPN.c
 TMPH=$TMPN.h
