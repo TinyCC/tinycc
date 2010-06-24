@@ -306,7 +306,11 @@ static uplong rt_printline(uplong wanted_pc)
             sym < sym_end;
             sym++) {
             type = ELFW(ST_TYPE)(sym->st_info);
-            if (type == STT_FUNC) {
+            if (type == STT_FUNC
+#ifdef STT_GNU_IFUNC
+                || type == STT_GNU_IFUNC
+#endif
+                ) {
                 if (wanted_pc >= sym->st_value &&
                     wanted_pc < sym->st_value + sym->st_size) {
                     pstrcpy(last_func_name, sizeof(last_func_name),

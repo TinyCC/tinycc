@@ -436,6 +436,7 @@ typedef struct
 #define STT_SECTION     3               /* Symbol associated with a section */
 #define STT_FILE        4               /* Symbol's name is file name */
 #define STT_NUM         5               /* Number of defined types.  */
+#define STT_GNU_IFUNC   10              /* Symbol is a indirect code object */
 #define STT_LOOS        11              /* Start of OS-specific */
 #define STT_HIOS        12              /* End of OS-specific */
 #define STT_LOPROC      13              /* Start of processor-specific */
