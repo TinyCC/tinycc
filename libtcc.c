@@ -1433,6 +1433,50 @@ static int strstart(const char *str, const char *val, char **ptr)
     return 1;
 }
 
+
+/* Like strstart, but automatically takes into account that ld options can
+ *
+ * - start with double or single dash (e.g. '--soname' or '-soname')
+ * - arguments can be given as separate or after '=' (e.g. '-Wl,-soname,x.so'
+ *   or '-Wl,-soname=x.so')
+ *
+ * you provide `val` always in 'option[=]' form (no leading -)
+ */
+static int link_option(const char *str, const char *val, char **ptr)
+{
+    const char *p, *q;
+
+    /* there should be 1 or 2 dashes */
+    if (*str++ != '-')
+        return 0;
+    if (*str == '-')
+        str++;
+
+    /* then str & val should match (potentialy up to '=') */
+    p = str;
+    q = val;
+
+    while (*q != '\0' && *q != '=') {
+        if (*p != *q)
+            return 0;
+        p++;
+        q++;
+    }
+
+    /* '=' near eos means ',' or '=' is ok */
+    if (*q == '=') {
+        if (*p != ',' && *p != '=')
+            return 0;
+        p++;
+        q++;
+    }
+
+    if (ptr)
+        *ptr = (char *) p;
+    return 1;
+}
+
+
 /* set linker options */
 PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
 {
@@ -1441,26 +1485,26 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
 
     while (option && *option) {
         end = NULL;
-        if (strstart(option, "-Bsymbolic", &p)) {
+        if (link_option(option, "Bsymbolic", &p)) {
             s->symbolic = TRUE;
 #ifdef TCC_TARGET_PE
-        } else if (strstart(option, "--file-alignment,", &p)) {
+        } else if (link_option(option, "file-alignment=", &p)) {
             s->pe_file_align = strtoul(p, &end, 16);
 #endif
-        } else if (strstart(option, "-fini,", &p)) {
+        } else if (link_option(option, "fini=", &p)) {
             s->fini_symbol = p;
             if (s->warn_unsupported)
                 warning("ignoring -fini %s", p);
 
-        } else if (strstart(option, "--image-base,", &p)) {
+        } else if (link_option(option, "image-base=", &p)) {
             s->text_addr = strtoul(p, &end, 16);
             s->has_text_addr = 1;
-        } else if (strstart(option, "-init,", &p)) {
+        } else if (link_option(option, "init=", &p)) {
             s->init_symbol = p;
             if (s->warn_unsupported)
                 warning("ignoring -init %s", p);
 
-        } else if (strstart(option, "--oformat,", &p)) {
+        } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
             if (strstart(p, "pe-", NULL)) {
 #else
@@ -1483,15 +1527,15 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
                 return p;
             }
 
-        } else if (strstart(option, "-rpath=", &p)) {
+        } else if (link_option(option, "rpath=", &p)) {
             s->rpath = p;
-        } else if (strstart(option, "--section-alignment,", &p)) {
+        } else if (link_option(option, "section-alignment=", &p)) {
             s->section_align = strtoul(p, &end, 16);
-        } else if (strstart(option, "-soname,", &p)) {
+        } else if (link_option(option, "soname=", &p)) {
             s->soname = p;
             multi = 0;
 #ifdef TCC_TARGET_PE
-        } else if (strstart(option, "--subsystem,", &p)) {
+        } else if (link_option(option, "subsystem=", &p)) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
             if (!strcmp(p, "native")) {
                 s->pe_subsystem = 1;
@@ -1518,7 +1562,7 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
             }
 #endif
 
-        } else if (strstart(option, "-Ttext,", &p)) {
+        } else if (link_option(option, "Ttext=", &p)) {
             s->text_addr = strtoul(p, &end, 16);
             s->has_text_addr = 1;
 
