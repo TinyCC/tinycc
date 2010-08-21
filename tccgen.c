@@ -4291,28 +4291,14 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         next();
         skip(';');
     } else if (tok == TOK_FOR) {
-        int e, c99_for_decl = 0;
+        int e;
         next();
         skip('(');
         if (tok != ';') {
-            if (tok < TOK_UIDENT) {
-                // handle C99 for loop construct
-                c99_for_decl = 1;
-
-                /* record local declaration stack position */
-                s = local_stack;
-
-                decl(VT_LOCAL);
-                if (is_expr)
-                    vpop();
-            } else {
-                gexpr();
-                vpop();
-                skip(';');
-            }
-        } else {
-            skip(';');
+            gexpr();
+            vpop();
         }
+        skip(';');
         d = ind;
         c = ind;
         a = 0;
@@ -4335,25 +4321,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
-
-        if (c99_for_decl) {
-            /* pop locally defined symbols */
-            if(is_expr) {
-                /* XXX: this solution makes only valgrind happy...
-                   triggered by gcc.c-torture/execute/20000917-1.c */
-                Sym *p;
-                switch(vtop->type.t & VT_BTYPE) {
-                case VT_PTR:
-                case VT_STRUCT:
-                case VT_ENUM:
-                case VT_FUNC:
-                    for(p=vtop->type.ref;p;p=p->prev)
-                        if(p->prev==s)
-                            error("unsupported expression type");
-                }
-            }
-            sym_pop(&local_stack, s);
-        }
     } else 
     if (tok == TOK_DO) {
         next();
