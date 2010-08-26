@@ -1061,9 +1061,9 @@ struct structa1 {
 
 struct structa1 ssta1;
 
-void struct_assign_test1(struct structa1 s1, int t)
+void struct_assign_test1(struct structa1 s1, int t, float f)
 {
-    printf("%d %d %d\n", s1.f1, s1.f2, t);
+    printf("%d %d %d %f\n", s1.f1, s1.f2, t, f);
 }
 
 struct structa1 struct_assign_test2(struct structa1 s1, int t)
@@ -1089,7 +1089,7 @@ void struct_assign_test(void)
     lsta2.f1 = 1;
     lsta2.f2 = 2;
 #endif
-    struct_assign_test1(lsta2, 3);
+    struct_assign_test1(lsta2, 3, 4.5);
     
     printf("before call: %d %d\n", lsta2.f1, lsta2.f2);
     lsta2 = struct_assign_test2(lsta2, 4);

@@ -820,7 +820,8 @@ void gfunc_call(int nb_args)
     args_size = 0;
     for(i = 0; i < nb_args; i++) {
         if ((vtop[-i].type.t & VT_BTYPE) == VT_STRUCT) {
-            args_size += type_size(&vtop->type, &align);
+            args_size += type_size(&vtop[-i].type, &align);
+            args_size = (args_size + 3) & ~3;
         } else if ((vtop[-i].type.t & VT_BTYPE) == VT_LDOUBLE) {
             args_size += 16;
         } else if (is_sse_float(vtop[-i].type.t)) {
@@ -840,9 +841,16 @@ void gfunc_call(int nb_args)
     sse_reg = nb_sse_args;
 
     /* adjust stack to align SSE boundary */
-    if (args_size &= 8) {
-        o(0x50); /* push $rax */
+    if (args_size &= 15) {
+        /* fetch cpu flag before the following sub will change the value */
+        if (vtop >= vstack && (vtop->r & VT_VALMASK) == VT_CMP)
+            gv(RC_INT);
+
+        args_size = 16 - args_size;
+        o(0x48);
+        oad(0xec81, args_size); /* sub $xxx, %rsp */
     }
+
     for(i = 0; i < nb_args; i++) {
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             size = type_size(&vtop->type, &align);
@@ -856,12 +864,16 @@ void gfunc_call(int nb_args)
             orex(1, r, 0, 0x89); /* mov %rsp, r */
             o(0xe0 + REG_VALUE(r));
             {
-                /* following code breaks vtop[1] */
-                SValue tmp = vtop[1];
+                /* following code breaks vtop[1], vtop[2], and vtop[3] */
+                SValue tmp1 = vtop[1];
+                SValue tmp2 = vtop[2];
+                SValue tmp3 = vtop[3];
                 vset(&vtop->type, r | VT_LVAL, 0);
                 vswap();
                 vstore();
-                vtop[1] = tmp;
+                vtop[1] = tmp1;
+                vtop[2] = tmp2;
+                vtop[3] = tmp3;
             }
             args_size += size;
         } else if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
