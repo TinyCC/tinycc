@@ -614,7 +614,7 @@ void gfunc_call(int nb_args)
         if (bt == VT_STRUCT) {
             size = type_size(&sv->type, &align);
             /* align to stack align size */
-            size = (size + 15) & ~16;
+            size = (size + 15) & ~15;
             /* generate structure store */
             r = get_reg(RC_INT);
             gen_offs_sp(0x8d, r, args_size);
