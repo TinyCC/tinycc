@@ -1094,6 +1094,14 @@ void struct_assign_test(void)
     printf("before call: %d %d\n", lsta2.f1, lsta2.f2);
     lsta2 = struct_assign_test2(lsta2, 4);
     printf("after call: %d %d\n", lsta2.f1, lsta2.f2);
+
+    static struct {
+        void (*elem)();
+    } t[] = {
+        /* XXX: we should allow this even without braces */
+        { struct_assign_test }
+    };
+    printf("%d\n", struct_assign_test == t[0].elem);
 }
 
 /* casts to short/char */

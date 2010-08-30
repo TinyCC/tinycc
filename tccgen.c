@@ -1883,12 +1883,14 @@ static void gen_cast(CType *type)
                 }
 #else
             } else if ((dbt & VT_BTYPE) == VT_LLONG ||
-                       (dbt & VT_BTYPE) == VT_PTR) {
-                /* XXX: not sure if this is perfect... need more tests */
-                if ((sbt & VT_BTYPE) != VT_LLONG) {
+                       (dbt & VT_BTYPE) == VT_PTR ||
+                       (dbt & VT_BTYPE) == VT_FUNC) {
+                if ((sbt & VT_BTYPE) != VT_LLONG &&
+                    (sbt & VT_BTYPE) != VT_PTR &&
+                    (sbt & VT_BTYPE) != VT_FUNC) {
+                    /* need to convert from 32bit to 64bit */
                     int r = gv(RC_INT);
-                    if (sbt != (VT_INT | VT_UNSIGNED) &&
-                        sbt != VT_PTR && sbt != VT_FUNC) {
+                    if (sbt != (VT_INT | VT_UNSIGNED)) {
                         /* x86_64 specific: movslq */
                         o(0x6348);
                         o(0xc0 + (REG_VALUE(r) << 3) + REG_VALUE(r));
