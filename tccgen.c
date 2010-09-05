@@ -136,6 +136,7 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
 {
     Sym *s;
     s = sym_malloc();
+    s->a = 0;
     s->v = v;
     s->type.t = t;
     s->type.ref = NULL;
@@ -368,6 +369,8 @@ static Sym *external_sym(int v, CType *type, int r)
     if (!s) {
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
+        if (type && type->ref && type->ref->a)
+            s->a = type->ref->a;
         s->type.t |= VT_EXTERN;
     } else if (s->type.ref == func_old_type.ref) {
         s->type.ref = type->ref;
@@ -2996,6 +2999,8 @@ static void post_type(CType *type, AttributeDef *ad)
     CType pt;
 
     if (tok == '(') {
+        TokenSym *ts = NULL;
+
         /* function declaration */
         next();
         l = 0;
@@ -3051,10 +3056,19 @@ static void post_type(CType *type, AttributeDef *ad)
         /* NOTE: const is ignored in returned type as it has a special
            meaning in gcc / C++ */
         type->t &= ~(VT_STORAGE | VT_CONSTANT); 
+        if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+          CString astr;
+
+          asm_label_instr(&astr);
+          ts = tok_alloc(astr.data, strlen(astr.data));
+          cstr_free(&astr);
+        }
         post_type(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         ad->func_args = arg_size;
         s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
+        if (ts != NULL)
+          s->a = ts->tok;
         s->next = first;
         type->t = t1 | VT_FUNC;
         type->ref = s;
@@ -5228,7 +5242,10 @@ static void gen_function(Sym *sym)
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
-    funcname = get_tok_str(sym->v, NULL);
+    if (sym->a)
+      funcname = get_tok_str(sym->a, NULL);
+    else
+      funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
     /* put debug symbol */
     if (tcc_state->do_debug)
@@ -5308,6 +5325,12 @@ ST_FUNC void decl(int l)
     Sym *sym;
     AttributeDef ad;
     
+    /* 
+     *  type.ref must be either a valid reference or NULL for external_sym to
+     *  work. As type = btype is executed before external_sym is call, setting
+     *  btype.ref to 0 is enough.
+     */
+    btype.ref = 0;
     while (1) {
         if (!parse_btype(&btype, &ad)) {
             /* skip redundant ';' */

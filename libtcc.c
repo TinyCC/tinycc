@@ -72,6 +72,12 @@ ST_DATA void *rt_prog_main;
 #endif /* ALL_IN_ONE */
 
 /********************************************************/
+#ifndef CONFIG_TCC_ASM_LABEL
+ST_FUNC void asm_label_instr(CString *)
+{
+    error("inline asm() not supported");
+}
+#endif
 #ifndef CONFIG_TCC_ASM
 ST_FUNC void asm_instr(void)
 {
@@ -436,7 +442,10 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     }
 
     if (!sym->c) {
-        name = get_tok_str(sym->v, NULL);
+        if (sym->a)
+          name = get_tok_str(sym->a, NULL);
+        else
+          name = get_tok_str(sym->v, NULL);
 #ifdef CONFIG_TCC_BCHECK
         if (tcc_state->do_bounds_check) {
             char buf[32];

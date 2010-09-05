@@ -118,6 +118,7 @@
 #if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_ASM
 #endif
+#define CONFIG_TCC_ASM_LABEL
 
 /* object format selection */
 #if defined(TCC_TARGET_C67)
@@ -211,6 +212,7 @@ typedef struct SValue {
 /* symbol management */
 typedef struct Sym {
     int v;    /* symbol token */
+    int a;    /* asm symbol token */
     long r;    /* associated register */
     union {
         long c;    /* associated number */
@@ -1189,6 +1191,7 @@ ST_FUNC int tcc_load_coff(TCCState * s1, int fd);
 
 /* ------------ tccasm.c ------------ */
 ST_FUNC void asm_instr(void);
+ST_FUNC void asm_label_instr(CString *);
 ST_FUNC void asm_global_instr(void);
 
 #ifdef CONFIG_TCC_ASM
