@@ -41,10 +41,8 @@ static const char *deps_outfile;
 static void help(void)
 {
     printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
-           "usage: tcc [-v] [-c] [-o outfile] [-Bdir] [-bench] [-Idir] [-Dsym[=val]] [-Usym]\n"
-           "           [-Wwarn] [-g] [-b] [-bt N] [-Ldir] [-llib] [-shared] [-soname name]\n"
-           "           [-static] [infile1 infile2...] [-run infile args...]\n"
-           "\n"
+           "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
+           "       tcc [options...] -run infile [arguments...]\n"
            "General options:\n"
            "  -v          display current version, increase verbosity\n"
            "  -c          compile only - generate an object file\n"
@@ -136,7 +134,9 @@ static const TCCOption tcc_options[] = {
     { "B", TCC_OPTION_B, TCC_OPTION_HAS_ARG },
     { "l", TCC_OPTION_l, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "bench", TCC_OPTION_bench, 0 },
+#ifdef CONFIG_TCC_BACKTRACE
     { "bt", TCC_OPTION_bt, TCC_OPTION_HAS_ARG },
+#endif
 #ifdef CONFIG_TCC_BCHECK
     { "b", TCC_OPTION_b, 0 },
 #endif
