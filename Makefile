@@ -131,7 +131,7 @@ LIBTCCLIBS+=tcc1.def
 endif
 endif
 
-all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc-doc.html tcc.1 libtcc_test$(EXESUF)
+all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc-doc.html tcc.1 tcc-doc.info libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCCB)
@@ -245,11 +245,13 @@ TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
 INSTALL=install
 
 ifndef CONFIG_WIN32
-install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc.1 tcc-doc.html
+install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc.1 tcc-doc.info tcc-doc.html
 	mkdir -p "$(bindir)"
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
 	mkdir -p "$(mandir)/man1"
 	$(INSTALL) tcc.1 "$(mandir)/man1"
+	mkdir -p $(infodir)
+	$(INSTALL)  tcc-doc.info "$(infodir)"
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
 ifneq ($(LIBTCC1),)
@@ -315,6 +317,9 @@ tcc.1: tcc-doc.texi
 	-./texi2pod.pl $< tcc.pod
 	-pod2man --section=1 --center=" " --release=" " tcc.pod > $@
 
+tcc-doc.info: tcc-doc.texi
+	makeinfo tcc-doc.texi
+
 # tar release (use 'make -k tar' on a checkouted tree)
 TCC-VERSION=tcc-$(shell cat VERSION)
 tar:
@@ -332,7 +337,7 @@ clean:
 	$(MAKE) -C tests $@
 
 distclean: clean
-	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.html
+	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
 
 config.mak:
 	@echo Running configure ...

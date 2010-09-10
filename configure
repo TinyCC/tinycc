@@ -29,6 +29,7 @@ libdir=""
 tccdir=""
 includedir=""
 mandir=""
+infodir=""
 sysroot=""
 cross_prefix=""
 cc="gcc"
@@ -107,6 +108,8 @@ for opt do
   --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
   ;;
   --mandir=*) mandir=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --infodir=*) infodir=`echo $opt | cut -d '=' -f 2`
   ;;
   --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -227,6 +230,7 @@ echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
 echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
 echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
 echo "  --mandir=DIR             man documentation in DIR [PREFIX/man]"
+echo "  --infodir=DIR            info documentation in DIR [PREFIX/info]"
 echo "  --enable-cross           build cross compilers"
 echo ""
 echo "Advanced options (experts only):"
@@ -275,6 +279,9 @@ fi
 if test x"$mandir" = x""; then
 mandir="${prefix}/man"
 fi
+if test x"$infodir" = x""; then
+infodir="${prefix}/info"
+fi
 if test x"$includedir" = x""; then
 includedir="${prefix}/include"
 fi
@@ -284,6 +291,7 @@ echo "TinyCC directory    $tccdir"
 echo "Library directory   $libdir"
 echo "Include directory   $includedir"
 echo "Manual directory    $mandir"
+echo "Info directory    $infodir"
 echo "Doc directory       $docdir"
 echo "Target root prefix  $sysroot"
 echo "Source path      $source_path"
@@ -306,6 +314,7 @@ echo "libdir=\$(DESTDIR)$libdir" >> config.mak
 echo "ln_libdir=$libdir" >> config.mak
 echo "includedir=\$(DESTDIR)$includedir" >> config.mak
 echo "mandir=\$(DESTDIR)$mandir" >> config.mak
+echo "infodir=$infodir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
