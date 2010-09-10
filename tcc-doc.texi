@@ -2,6 +2,10 @@
 @c %**start of header
 @setfilename tcc-doc.info
 @settitle Tiny C Compiler Reference Documentation
+@dircategory Software development
+@direntry
+* TCC: (tcc-doc).               The Tiny C Compiler.
+@end direntry
 @c %**end of header
 
 @include config.texi
