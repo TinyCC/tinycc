@@ -21,7 +21,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#if !defined(__FreeBSD__) && !defined(__DragonFly__) && !defined(__OpenBSD__)
+#if !defined(__FreeBSD__) && !defined(__FreeBSD_kernel__) \
+    && !defined(__DragonFly__) && !defined(__OpenBSD__)
 #include <malloc.h>
 #endif
 
@@ -35,7 +36,8 @@
 #define CONFIG_TCC_MALLOC_HOOKS
 #define HAVE_MEMALIGN
 
-#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__dietlibc__) \
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) \
+    || defined(__DragonFly__) || defined(__dietlibc__) \
     || defined(__UCLIBC__) || defined(__OpenBSD__) || defined(_WIN32)
 #warning Bound checking does not support malloc (etc.) in this environment.
 #undef CONFIG_TCC_MALLOC_HOOKS

@@ -943,6 +943,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__FreeBSD__", str( __FreeBSD__));
 #undef str
 #endif
+#if defined(__FreeBSD_kernel__)
+    tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);
+#endif
 #if defined(__linux)
     tcc_define_symbol(s, "__linux__", NULL);
     tcc_define_symbol(s, "__linux", NULL);
