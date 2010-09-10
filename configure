@@ -37,7 +37,7 @@ ar="ar"
 strip="strip"
 cpu=`uname -m`
 case "$cpu" in
-  i386|i486|i586|i686|i86pc|BePC)
+  i386|i486|i586|i686|i86pc|BePC|i686-AT386)
     cpu="x86"
   ;;
   x86_64)

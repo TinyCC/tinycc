@@ -79,6 +79,10 @@
 #define O_BINARY 0
 #endif
 
+#ifndef SA_SIGINFO
+#define SA_SIGINFO 0x00000004u
+#endif
+
 #include "libtcc.h"
 
 /* parser debug */
