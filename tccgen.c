@@ -2991,6 +2991,33 @@ static inline void convert_parameter_type(CType *pt)
     }
 }
 
+ST_FUNC void parse_asm_str(CString *astr)
+{
+    skip('(');
+    /* read the string */
+    if (tok != TOK_STR)
+        expect("string constant");
+    cstr_new(astr);
+    while (tok == TOK_STR) {
+        /* XXX: add \0 handling too ? */
+        cstr_cat(astr, tokc.cstr->data);
+        next();
+    }
+    cstr_ccat(astr, '\0');
+}
+
+/* Parse an asm label and return the label
+ * Don't forget to free the CString in the caller! */
+static void asm_label_instr(CString *astr)
+{
+    next();
+    parse_asm_str(astr);
+    skip(')');
+#ifdef ASM_DEBUG
+    printf("asm_alias: \"%s\"\n", (char *)astr->data);
+#endif
+}
+
 static void post_type(CType *type, AttributeDef *ad)
 {
     int n, l, t1, arg_size, align;
@@ -5325,7 +5352,7 @@ ST_FUNC void decl(int l)
     Sym *sym;
     AttributeDef ad;
     
-    /* 
+    /*
      *  type.ref must be either a valid reference or NULL for external_sym to
      *  work. As type = btype is executed before external_sym is call, setting
      *  btype.ref to 0 is enough.

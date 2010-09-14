@@ -72,12 +72,6 @@ ST_DATA void *rt_prog_main;
 #endif /* ALL_IN_ONE */
 
 /********************************************************/
-#ifndef CONFIG_TCC_ASM_LABEL
-ST_FUNC void asm_label_instr(CString *)
-{
-    error("inline asm() not supported");
-}
-#endif
 #ifndef CONFIG_TCC_ASM
 ST_FUNC void asm_instr(void)
 {
