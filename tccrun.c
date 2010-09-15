@@ -76,6 +76,7 @@ int tcc_relocate(TCCState *s1)
 int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
+    int ret;
 
     if (tcc_relocate(s1) < 0)
         return -1;
@@ -83,37 +84,29 @@ int tcc_run(TCCState *s1, int argc, char **argv)
     prog_main = tcc_get_symbol_err(s1, "main");
 
 #ifdef CONFIG_TCC_BACKTRACE
-    if (s1->do_debug)
+    if (s1->do_debug) {
         set_exception_handler();
+        rt_prog_main = prog_main;
+    }
 #endif
 
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
-        int ret;
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
-        rt_prog_main = prog_main;
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = tcc_get_symbol_err(s1, "__bound_init");
         bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
         bound_init();
         ret = (*prog_main)(argc, argv);
         bound_exit();
-        return ret;
-    }
+    } else
 #endif
-
-#ifdef TCC_TARGET_PE
-    {
-      unsigned char *p = tcc_get_symbol(s1, "tinyc_no_getbp");
-      if (p) *p = 0;
-    }
-#endif
-    return (*prog_main)(argc, argv);
+        ret = (*prog_main)(argc, argv);
+    return ret;
 }
-
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
    otherwise copy code into buffer passed by the caller */
@@ -370,9 +363,10 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
     uplong pc;
     int i;
 
-    va_start(ap, fmt);
     fprintf(stderr, "Runtime error: ");
+    va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
+    va_end(ap);
     fprintf(stderr, "\n");
 
     for(i=0;i<num_callers;i++) {
@@ -382,8 +376,6 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
         if (pc == (uplong)rt_prog_main && pc)
             break;
     }
-    exit(255);
-    va_end(ap);
 }
 
 /* ------------------------------------------------------------- */
@@ -581,18 +573,27 @@ static int rt_get_caller_pc(unsigned long *paddr,
 
 static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 {
-    CONTEXT *uc = ex_info->ContextRecord;
-/*
     EXCEPTION_RECORD *er = ex_info->ExceptionRecord;
-    printf("CPU exception: code=%08lx addr=%p\n",
-	er->ExceptionCode, er->ExceptionAddress);
-*/
-    if (rt_bound_error_msg && *rt_bound_error_msg)
-	rt_error(uc, *rt_bound_error_msg);
-    else
-	rt_error(uc, "dereferencing invalid pointer");
-    exit(255);
-    //return EXCEPTION_CONTINUE_SEARCH;
+    CONTEXT *uc = ex_info->ContextRecord;
+    switch (er->ExceptionCode) {
+    case EXCEPTION_ACCESS_VIOLATION:
+        if (rt_bound_error_msg && *rt_bound_error_msg)
+            rt_error(uc, *rt_bound_error_msg);
+        else
+	    rt_error(uc, "access violation");
+        break;
+    case EXCEPTION_STACK_OVERFLOW:
+        rt_error(uc, "stack overflow");
+        break;
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        rt_error(uc, "division by zero");
+        break;
+    default:
+        rt_error(uc, "exception caught");
+        break;
+    }
+    exit(-1);
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 /* Generate a stack backtrace when a CPU exception occurs. */
