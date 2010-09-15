@@ -224,22 +224,34 @@ static void set_pages_executable(void *ptr, unsigned long length)
    the stabs debug information */
 static uplong rt_printline(uplong wanted_pc, const char *msg)
 {
-    Stab_Sym *sym, *sym_end;
     char func_name[128], last_func_name[128];
-    unsigned long func_addr, last_pc, pc;
+    uplong func_addr, last_pc, pc;
     const char *incl_files[INCLUDE_STACK_SIZE];
     int incl_index, len, last_line_num, i;
     const char *str, *p;
+
+    Stab_Sym *stab_sym = NULL, *stab_sym_end, *sym;
+    int stab_len = 0;
+    char *stab_str = NULL;
+
+    if (stab_section) {
+        stab_len = stab_section->data_offset;
+        stab_sym = (Stab_Sym *)stab_section->data;
+        stab_str = stabstr_section->data;
+    }
 
     func_name[0] = '\0';
     func_addr = 0;
     incl_index = 0;
     last_func_name[0] = '\0';
-    last_pc = 0xffffffff;
+    last_pc = (uplong)-1;
     last_line_num = 1;
-    sym = (Stab_Sym *)stab_section->data + 1;
-    sym_end = (Stab_Sym *)(stab_section->data + stab_section->data_offset);
-    while (sym < sym_end) {
+
+    if (!stab_sym)
+        goto no_stabs;
+
+    stab_sym_end = (Stab_Sym*)((char*)stab_sym + stab_len);
+    for (sym = stab_sym + 1; sym < stab_sym_end; ++sym) {
         switch(sym->n_type) {
             /* function start or end */
         case N_FUN:
@@ -251,7 +263,7 @@ static uplong rt_printline(uplong wanted_pc, const char *msg)
                 func_name[0] = '\0';
                 func_addr = 0;
             } else {
-                str = stabstr_section->data + sym->n_strx;
+                str = stab_str + sym->n_strx;
                 p = strchr(str, ':');
                 if (!p) {
                     pstrcpy(func_name, sizeof(func_name), str);
@@ -277,7 +289,7 @@ static uplong rt_printline(uplong wanted_pc, const char *msg)
             break;
             /* include files */
         case N_BINCL:
-            str = stabstr_section->data + sym->n_strx;
+            str = stab_str + sym->n_strx;
         add_incl:
             if (incl_index < INCLUDE_STACK_SIZE) {
                 incl_files[incl_index++] = str;
@@ -291,7 +303,7 @@ static uplong rt_printline(uplong wanted_pc, const char *msg)
             if (sym->n_strx == 0) {
                 incl_index = 0; /* end of translation unit */
             } else {
-                str = stabstr_section->data + sym->n_strx;
+                str = stab_str + sym->n_strx;
                 /* do not add path */
                 len = strlen(str);
                 if (len > 0 && str[len - 1] != '/')
@@ -299,11 +311,12 @@ static uplong rt_printline(uplong wanted_pc, const char *msg)
             }
             break;
         }
-        sym++;
     }
 
+no_stabs:
     /* second pass: we try symtab symbols (no line number info) */
     incl_index = 0;
+    if (symtab_section)
     {
         ElfW(Sym) *sym, *sym_end;
         int type;
