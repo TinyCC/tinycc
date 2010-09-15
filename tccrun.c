@@ -222,7 +222,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static uplong rt_printline(uplong wanted_pc)
+static uplong rt_printline(uplong wanted_pc, const char *msg)
 {
     Stab_Sym *sym, *sym_end;
     char func_name[128], last_func_name[128];
@@ -230,8 +230,6 @@ static uplong rt_printline(uplong wanted_pc)
     const char *incl_files[INCLUDE_STACK_SIZE];
     int incl_index, len, last_line_num, i;
     const char *str, *p;
-
-    fprintf(stderr, "0x%08lx:", (unsigned long)wanted_pc);
 
     func_name[0] = '\0';
     func_addr = 0;
@@ -327,20 +325,28 @@ static uplong rt_printline(uplong wanted_pc)
         }
     }
     /* did not find any info: */
-    fprintf(stderr, " ???\n");
+    fprintf(stderr, "%s %p ???\n", msg, (void*)wanted_pc);
+    fflush(stderr);
     return 0;
  found:
-    if (last_func_name[0] != '\0') {
+    i = incl_index;
+    if (i > 0)
+        fprintf(stderr, "%s:%d: ", incl_files[--i], last_line_num);
+    fprintf(stderr, "%s %p", msg, (void*)wanted_pc);
+    if (last_func_name[0] != '\0')
         fprintf(stderr, " %s()", last_func_name);
-    }
-    if (incl_index > 0) {
-        fprintf(stderr, " (%s:%d",
-                incl_files[incl_index - 1], last_line_num);
-        for(i = incl_index - 2; i >= 0; i--)
-            fprintf(stderr, ", included from %s", incl_files[i]);
+    if (--i >= 0) {
+        fprintf(stderr, " (included from ");
+        for (;;) {
+            fprintf(stderr, "%s", incl_files[i]);
+            if (--i < 0)
+                break;
+            fprintf(stderr, ", ");
+        }
         fprintf(stderr, ")");
     }
     fprintf(stderr, "\n");
+    fflush(stderr);
     return func_addr;
 }
 
@@ -359,11 +365,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
     for(i=0;i<num_callers;i++) {
         if (rt_get_caller_pc(&pc, uc, i) < 0)
             break;
-        if (i == 0)
-            fprintf(stderr, "at ");
-        else
-            fprintf(stderr, "by ");
-        pc = rt_printline(pc);
+        pc = rt_printline(pc, i ? "by" : "at");
         if (pc == (uplong)rt_prog_main && pc)
             break;
     }
