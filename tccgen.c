@@ -5738,6 +5738,7 @@ static int decl0(int l, int is_for_loop_init)
                 }
                 next();
             }
+            ad.aligned = 0;
         }
     }
     return 0;
