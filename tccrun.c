@@ -612,35 +612,30 @@ static void win64_add_function_table(TCCState *s1)
 }
 #endif
 
-#ifdef _WIN64
-#define Eip Rip
-#define Ebp Rbp
-#endif
-
 /* return the PC at frame level 'level'. Return non zero if not found */
 static int rt_get_caller_pc(uplong *paddr, CONTEXT *uc, int level)
 {
-    uplong fp;
+    uplong fp, pc;
     int i;
-
-    if (level == 0) {
-	*paddr = uc->Eip;
-	return 0;
-    } else {
-	fp = uc->Ebp;
-	for(i=1;i<level;i++) {
+#ifdef _WIN64
+    pc = uc->Rip;
+    fp = uc->Rbp;
+#else
+    pc = uc->Eip;
+    fp = uc->Ebp;
+#endif
+    if (level > 0) {
+        for(i=1;i<level;i++) {
 	    /* XXX: check address validity with program info */
 	    if (fp <= 0x1000 || fp >= 0xc0000000)
 		return -1;
 	    fp = ((uplong*)fp)[0];
 	}
-	*paddr = ((uplong*)fp)[1];
-	return 0;
+        pc = ((uplong*)fp)[1];
     }
+    *paddr = pc;
+    return 0;
 }
-
-#undef Eip
-#undef Ebp
 
 #endif /* _WIN32 */
 #endif /* CONFIG_TCC_BACKTRACE */
