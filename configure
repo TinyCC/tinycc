@@ -314,7 +314,7 @@ echo "libdir=\$(DESTDIR)$libdir" >> config.mak
 echo "ln_libdir=$libdir" >> config.mak
 echo "includedir=\$(DESTDIR)$includedir" >> config.mak
 echo "mandir=\$(DESTDIR)$mandir" >> config.mak
-echo "infodir=$infodir" >> config.mak
+echo "infodir=\$(DESTDIR)$infodir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
