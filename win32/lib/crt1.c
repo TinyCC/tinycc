@@ -15,11 +15,11 @@ typedef struct
 } _startupinfo;
 
 void __getmainargs(int *pargc, char ***pargv, char ***penv, int globb, _startupinfo*);
-
 int main(int argc, char **argv, char **env);
 
 int _start(void)
 {
+    __TRY__
     int argc; char **argv; char **env; int ret;
     _startupinfo start_info = {0};
 
@@ -32,4 +32,3 @@ int _start(void)
 }
 
 // =============================================
-

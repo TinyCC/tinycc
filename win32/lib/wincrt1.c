@@ -10,6 +10,7 @@ void _controlfp(unsigned a, unsigned b);
 
 int _winstart(void)
 {
+    __TRY__
     char *szCmd;
     STARTUPINFO startinfo;
     int fShow;

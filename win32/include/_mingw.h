@@ -70,11 +70,13 @@
 #define __x86_64 1
 #define USE_MINGW_SETJMP_TWO_ARGS
 #define mingw_getsp tinyc_getbp
+#define __TRY__
 #else
 #define __stdcall __attribute__((__stdcall__))
 #define _X86_ 1
 #define WIN32 1
 #define _USE_32BIT_TIME_T
+#define __TRY__ void __try__(void**), *_sehrec[6]; __try__(_sehrec);
 #endif
 
 /* in stddef.h */
