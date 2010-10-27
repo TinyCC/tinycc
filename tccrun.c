@@ -38,12 +38,13 @@ int tcc_relocate(TCCState *s1)
 {
     int ret;
 #ifdef HAVE_SELINUX
+    /* Use mmap instead of malloc for Selinux
+    Ref http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
     char tmpfname[] = "/tmp/.tccrunXXXXXX";
     int fd = mkstemp (tmpfname);
-    unlink (tmpfname); ftruncate (fd, 1000);
     if ((ret= tcc_relocate_ex(s1,NULL)) < 0)return -1;
     s1->mem_size=ret;
-     /* Use mmap instead of malloc for Selinux */
+    unlink (tmpfname); ftruncate (fd, s1->mem_size);
     s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
         MAP_SHARED, fd, 0);
     if(s1->write_mem == MAP_FAILED){
