@@ -198,7 +198,7 @@ tcc1.def:
 	echo "#define HOST_I386 1" >> config.h
 	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
 	echo "ARCH=i386" >> config.mak
-	$(MAKE) i386-win32-tcc 
+	$(MAKE) i386-win32-tcc CC=gcc
 	cp i386-win32-tcc tcc.exe
 	mv libtcc1.a libtcc1.bak
 	$(MAKE) CONFIG_WIN32=1 libtcc1.a
