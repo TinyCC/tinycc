@@ -127,7 +127,7 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 # Try to build win32 cross-compiler lib on *nix
 ifndef CONFIG_WIN32
-LIBTCCLIBS+=tcc1.def
+LIBTCCLIBS+=win32libcc1
 endif
 endif
 
@@ -188,7 +188,7 @@ libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 # To build cross-compilers on Linux we must make a fake 32 bit tcc.exe
 # and use it to build ELF objects into libtcc1.a which is then
 # renamed to tcc1.def in order to have another target in the Makefile
-tcc1.def:
+win32libcc1:
 	mv config.mak config.mak.bak
 	mv config.h config.h.bak
 	cp config.h.bak config.h
@@ -200,10 +200,10 @@ tcc1.def:
 	echo "ARCH=i386" >> config.mak
 	$(MAKE) i386-win32-tcc CC=gcc
 	cp i386-win32-tcc tcc.exe
-	mv libtcc1.a libtcc1.bak
+	-mv libtcc1.a libtcc1.bak
 	$(MAKE) CONFIG_WIN32=1 libtcc1.a
-	mv libtcc1.a lib/tcc1.def
-	mv libtcc1.bak libtcc1.a
+	mv libtcc1.a lib
+	-mv libtcc1.bak libtcc1.a
 	mv config.mak.bak config.mak
 	mv config.h.bak config.h
 
@@ -273,7 +273,7 @@ endif
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 win32/lib/*.def lib/tcc1.def "$(tccdir)/lib"
+	$(INSTALL) -m644 win32/lib/*.def lib/libtcc1.a "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 endif
@@ -333,7 +333,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/tcc1.def
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/libtcc1.a
 	$(MAKE) -C tests $@
 
 distclean: clean
