@@ -186,8 +186,7 @@ libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
         
 # To build cross-compilers on Linux we must make a fake 32 bit tcc.exe
-# and use it to build ELF objects into libtcc1.a which is then
-# renamed to tcc1.def in order to have another target in the Makefile
+# and use it to build ELF objects into win32 version of libtcc1.a
 win32libcc1:
 	mv config.mak config.mak.bak
 	mv config.h config.h.bak
