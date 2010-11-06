@@ -104,7 +104,9 @@ PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+# $(WIN32_CROSS) is buit more carefully on this platform. See win32libcc1:
+# PROGS+=$(WIN32_CROSS)
+PROGS_CROSS=$(I386_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
@@ -197,8 +199,8 @@ win32libcc1:
 	echo "#define HOST_I386 1" >> config.h
 	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
 	echo "ARCH=i386" >> config.mak
-	$(MAKE) i386-win32-tcc CC=gcc
-	cp i386-win32-tcc tcc.exe
+	$(MAKE) $(WIN32_CROSS) CC=gcc
+	-ln -s $(WIN32_CROSS) tcc.exe
 	-mv libtcc1.a libtcc1.bak
 	$(MAKE) CONFIG_WIN32=1 libtcc1.a
 	mv libtcc1.a lib
@@ -332,7 +334,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/libtcc1.a
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/libtcc1.a $(WIN32_CROSS)
 	$(MAKE) -C tests $@
 
 distclean: clean
