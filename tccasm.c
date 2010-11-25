@@ -825,32 +825,22 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
    end */
 static void tcc_assemble_inline(TCCState *s1, char *str, int len)
 {
-    BufferedFile *bf, *saved_file;
     int saved_parse_flags;
     const int *saved_macro_ptr;
 
-    bf = tcc_malloc(sizeof(BufferedFile));
-    memset(bf, 0, sizeof(BufferedFile));
-    bf->fd = -1;
-    bf->buf_ptr = str;
-    bf->buf_end = str + len;
-    str[len] = CH_EOB;
-    /* same name as current file so that errors are correctly
-       reported */
-    pstrcpy(bf->filename, sizeof(bf->filename), file->filename);
-    bf->line_num = file->line_num;
-    saved_file = file;
-    file = bf;
     saved_parse_flags = parse_flags;
     saved_macro_ptr = macro_ptr;
+
+    tcc_open_bf(s1, file->filename, len);
+    file->line_num = file->prev->line_num;
+    memcpy(file->buffer, str, len);
+
     macro_ptr = NULL;
-    
     tcc_assemble_internal(s1, 0);
+    tcc_close();
 
     parse_flags = saved_parse_flags;
     macro_ptr = saved_macro_ptr;
-    file = saved_file;
-    tcc_free(bf);
 }
 
 /* find a constraint by its number or id (gcc 3 extended

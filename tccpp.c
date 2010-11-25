@@ -1433,10 +1433,9 @@ ST_FUNC void preprocess(int is_bof)
         n = s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (i = -2; i < n; ++i) {
             char buf1[sizeof file->filename];
-            BufferedFile *f;
             CachedInclude *e;
             const char *path;
-            int size;
+            int size, fd;
 
             if (i == -2) {
                 /* check absolute include path */
@@ -1471,21 +1470,21 @@ ST_FUNC void preprocess(int is_bof)
 #ifdef INC_DEBUG
                 printf("%s: skipping %s\n", file->filename, buf);
 #endif
-                f = NULL;
-            }  else {
-                f = tcc_open(s1, buf1);
-                if (!f)
+                fd = 0;
+            } else {
+                fd = tcc_open(s1, buf1);
+                if (fd < 0)
                     continue;
             }
 
             if (tok == TOK_INCLUDE_NEXT) {
                 tok = TOK_INCLUDE;
-                if (f)
-                    tcc_close(f);
+                if (fd)
+                    tcc_close();
                 continue;
             }
 
-            if (!f)
+            if (0 == fd)
                 goto include_done;
 
 #ifdef INC_DEBUG
@@ -1494,17 +1493,14 @@ ST_FUNC void preprocess(int is_bof)
             /* update target deps */
             dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
                     tcc_strdup(buf1));
-
            /* XXX: fix current line init */
            /* push current file in stack */
-            *s1->include_stack_ptr++ = file;
-            f->inc_type = c;
-            pstrcpy(f->inc_filename, sizeof(f->inc_filename), buf1);
-            file = f;
+            *s1->include_stack_ptr++ = file->prev;
+            file->inc_type = c;
+            pstrcpy(file->inc_filename, sizeof(file->inc_filename), buf1);
             /* add include file debug info */
-            if (s1->do_debug) {
+            if (s1->do_debug)
                 put_stabs(file->filename, N_BINCL, 0, 0, 0);
-            }
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
             ch = file->buf_ptr[0];
             goto the_end;
@@ -2134,9 +2130,8 @@ static inline void next_nomacro1(void)
                     put_stabd(N_EINCL, 0, 0);
                 }
                 /* pop include stack */
-                tcc_close(file);
+                tcc_close();
                 s1->include_stack_ptr--;
-                file = *s1->include_stack_ptr;
                 p = file->buf_ptr;
                 goto redo_no_start;
             }

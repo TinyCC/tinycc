@@ -635,11 +635,41 @@ PUB_FUNC void warning(const char *fmt, ...)
 /********************************************************/
 /* I/O layer */
 
-ST_FUNC BufferedFile *tcc_open(TCCState *s1, const char *filename)
+ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
+{
+    BufferedFile *bf;
+    int buflen = initlen ? initlen : IO_BUF_SIZE;
+
+    bf = tcc_malloc(sizeof(BufferedFile) + buflen);
+    bf->buf_ptr = bf->buffer;
+    bf->buf_end = bf->buffer + initlen;
+    bf->buf_end[0] = CH_EOB; /* put eob symbol */
+    pstrcpy(bf->filename, sizeof(bf->filename), filename);
+#ifdef _WIN32
+    normalize_slashes(bf->filename);
+#endif
+    bf->line_num = 1;
+    bf->ifndef_macro = 0;
+    bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+    bf->fd = -1;
+    bf->prev = file;
+    file = bf;
+}
+
+ST_FUNC void tcc_close(void)
+{
+    BufferedFile *bf = file;
+    if (bf->fd > 0) {
+        close(bf->fd);
+        total_lines += bf->line_num;
+    }
+    file = bf->prev;
+    tcc_free(bf);
+}
+
+ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 {
     int fd;
-    BufferedFile *bf;
-
     if (strcmp(filename, "-") == 0)
         fd = 0, filename = "stdin";
     else
@@ -648,28 +678,11 @@ ST_FUNC BufferedFile *tcc_open(TCCState *s1, const char *filename)
         printf("%s %*s%s\n", fd < 0 ? "nf":"->",
                (int)(s1->include_stack_ptr - s1->include_stack), "", filename);
     if (fd < 0)
-        return NULL;
-    bf = tcc_malloc(sizeof(BufferedFile));
-    bf->fd = fd;
-    bf->buf_ptr = bf->buffer;
-    bf->buf_end = bf->buffer;
-    bf->buffer[0] = CH_EOB; /* put eob symbol */
-    pstrcpy(bf->filename, sizeof(bf->filename), filename);
-#ifdef _WIN32
-    normalize_slashes(bf->filename);
-#endif
-    bf->line_num = 1;
-    bf->ifndef_macro = 0;
-    bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
-    //    printf("opening '%s'\n", filename);
-    return bf;
-}
+        return -1;
 
-ST_FUNC void tcc_close(BufferedFile *bf)
-{
-    total_lines += bf->line_num;
-    close(bf->fd);
-    tcc_free(bf);
+    tcc_open_bf(s1, filename, 0);
+    file->fd = fd;
+    return fd;
 }
 
 /* compile the C file opened in 'file'. Return non zero if errors. */
@@ -780,60 +793,38 @@ static int tcc_compile(TCCState *s1)
 
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
 {
-    BufferedFile bf1, *bf = &bf1;
-    int ret, len;
-    char *buf;
-
-    /* init file structure */
-    bf->fd = -1;
-    /* XXX: avoid copying */
+    int len, ret;
     len = strlen(str);
-    buf = tcc_malloc(len + 1);
-    if (!buf)
-        return -1;
-    memcpy(buf, str, len);
-    buf[len] = CH_EOB;
-    bf->buf_ptr = buf;
-    bf->buf_end = buf + len;
-    pstrcpy(bf->filename, sizeof(bf->filename), "<string>");
-    bf->line_num = 1;
-    file = bf;
-    ret = tcc_compile(s);
-    file = NULL;
-    tcc_free(buf);
 
-    /* currently, no need to close */
+    tcc_open_bf(s, "<string>", len);
+    memcpy(file->buffer, str, len);
+    ret = tcc_compile(s);
+    tcc_close();
     return ret;
 }
 
 /* define a preprocessor symbol. A value can also be provided with the '=' operator */
 LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
 {
-    BufferedFile bf1, *bf = &bf1;
-
-    pstrcpy(bf->buffer, IO_BUF_SIZE, sym);
-    pstrcat(bf->buffer, IO_BUF_SIZE, " ");
+    int len1, len2;
     /* default value */
-    if (!value) 
+    if (!value)
         value = "1";
-    pstrcat(bf->buffer, IO_BUF_SIZE, value);
-    
+    len1 = strlen(sym);
+    len2 = strlen(value);
+
     /* init file structure */
-    bf->fd = -1;
-    bf->buf_ptr = bf->buffer;
-    bf->buf_end = bf->buffer + strlen(bf->buffer);
-    *bf->buf_end = CH_EOB;
-    bf->filename[0] = '\0';
-    bf->line_num = 1;
-    file = bf;
-    
-    s1->include_stack_ptr = s1->include_stack;
+    tcc_open_bf(s1, "<define>", len1 + len2 + 1);
+    memcpy(file->buffer, sym, len1);
+    file->buffer[len1] = ' ';
+    memcpy(file->buffer + len1 + 1, value, len2);
 
     /* parse with define parser */
     ch = file->buf_ptr[0];
     next_nomacro();
     parse_define();
-    file = NULL;
+
+    tcc_close();
 }
 
 /* undefine a preprocessor symbol */
@@ -1082,9 +1073,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     const char *ext;
     ElfW(Ehdr) ehdr;
     int fd, ret, size;
-    BufferedFile *saved_file;
-
-    ret = -1;
 
     /* find source file type with extension */
     ext = tcc_fileextension(filename);
@@ -1092,12 +1080,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         ext++;
 
     /* open the file */
-    saved_file = file;
-    file = tcc_open(s1, filename);
-    if (!file) {
+    ret = tcc_open(s1, filename);
+    if (ret < 0) {
         if (flags & AFF_PRINT_ERROR)
             error_noabort("file '%s' not found", filename);
-        goto the_end;
+        return ret;
     }
 
     /* update target deps */
@@ -1192,9 +1179,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         error_noabort("unrecognized file type");
 
 the_end:
-    if (file)
-        tcc_close(file);
-    file = saved_file;
+    tcc_close();
     return ret;
 }
 

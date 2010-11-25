@@ -334,6 +334,7 @@ typedef struct BufferedFile {
     uint8_t *buf_ptr;
     uint8_t *buf_end;
     int fd;
+    struct BufferedFile *prev;
     int line_num;    /* current line number - here to simplify code */
     int ifndef_macro;  /* #ifndef macro / #endif search */
     int ifndef_macro_saved; /* saved ifndef_macro */
@@ -946,8 +947,10 @@ ST_INLN Sym *struct_find(int v);
 ST_INLN Sym *sym_find(int v);
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
-ST_FUNC BufferedFile *tcc_open(TCCState *s1, const char *filename);
-ST_FUNC void tcc_close(BufferedFile *bf);
+ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
+ST_FUNC int tcc_open(TCCState *s1, const char *filename);
+ST_FUNC void tcc_close(void);
+
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
