@@ -61,6 +61,7 @@ static void help(void)
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
+           "  -pthread    link with -lpthread and -D_REENTRANT (POSIX Linux)\n"
            "  -shared     generate a shared library\n"
            "  -soname     set name for shared library to be used at runtime\n"
            "  -static     static linking\n"
@@ -113,6 +114,7 @@ enum {
     TCC_OPTION_nostdlib,
     TCC_OPTION_print_search_dirs,
     TCC_OPTION_rdynamic,
+    TCC_OPTION_pthread,
     TCC_OPTION_run,
     TCC_OPTION_v,
     TCC_OPTION_w,
@@ -146,6 +148,7 @@ static const TCCOption tcc_options[] = {
     { "shared", TCC_OPTION_shared, 0 },
     { "soname", TCC_OPTION_soname, TCC_OPTION_HAS_ARG },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
+    { "pthread", TCC_OPTION_pthread, 0},
     { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
@@ -292,6 +295,12 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_l:
                 dynarray_add((void ***)&files, &nb_files, r);
                 nb_libraries++;
+                break;
+            case TCC_OPTION_pthread:
+/* fixme: these options could be different on your platform */
+                dynarray_add((void ***)&files, &nb_files, "-lpthread");
+                nb_libraries++;
+                tcc_define_symbol(s, "_REENTRANT", "1");
                 break;
             case TCC_OPTION_bench:
                 do_bench = 1;
