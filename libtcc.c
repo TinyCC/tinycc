@@ -962,7 +962,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifndef TCC_TARGET_PE
     /* default library paths */
     tcc_add_library_path(s, CONFIG_TCC_CRT_PREFIX);
-    tcc_add_library_path(s, CONFIG_TCC_LDDIR);
+    tcc_add_library_path(s, CONFIG_SYSROOT CONFIG_TCC_LDDIR);
     tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local"CONFIG_TCC_LDDIR);
 #endif
 

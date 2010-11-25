@@ -1251,7 +1251,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     if (!s1->nostdlib) {
 #ifdef CONFIG_USE_LIBGCC
         tcc_add_library(s1, "c");
-        tcc_add_file(s1, CONFIG_TCC_LDDIR"/libgcc_s.so.1");
+        tcc_add_file(s1, CONFIG_SYSROOT CONFIG_TCC_LDDIR"/libgcc_s.so.1");
 #else
         tcc_add_library(s1, "c");
 #ifndef WITHOUT_LIBTCC
