@@ -2776,7 +2776,6 @@ static inline int *macro_twosharps(const int *macro_str)
     CValue cval;
     TokenString macro_str1;
     CString cstr;
-    char *p;
     int n;
 
     /* we search the first '##' */
@@ -2809,18 +2808,17 @@ static inline int *macro_twosharps(const int *macro_str)
                 cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
-                p = file->buf_ptr;
-                file->buf_ptr = cstr.data;
+                tcc_open_bf(tcc_state, "<paste>", cstr.size);
+                memcpy(file->buffer, cstr.data, cstr.size);
                 for (;;) {
                     next_nomacro1();
                     if (0 == *file->buf_ptr)
                         break;
                     tok_str_add2(&macro_str1, tok, &tokc);
-
                     warning("pasting \"%.*s\" and \"%s\" does not give a valid preprocessing token",
                         n, cstr.data, (char*)cstr.data + n);
                 }
-                file->buf_ptr = p;
+                tcc_close();
                 cstr_reset(&cstr);
             }
         }
