@@ -970,15 +970,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     
 #ifndef TCC_TARGET_PE
     /* default library paths */
-# if defined(TCC_TARGET_X86_64_CENTOS)
-    tcc_add_library_path(s, CONFIG_SYSROOT "/usr/lib64");
-    tcc_add_library_path(s, CONFIG_SYSROOT "/lib64");
-    tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local/lib64");
-# else
-    tcc_add_library_path(s, CONFIG_SYSROOT "/usr/lib");
-    tcc_add_library_path(s, CONFIG_SYSROOT "/lib");
-    tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local/lib");
-# endif
+    tcc_add_library_path(s, CONFIG_TCC_CRT_PREFIX);
+    tcc_add_library_path(s, CONFIG_TCC_LDDIR);
+    tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local"CONFIG_TCC_LDDIR);
 #endif
 
     /* no section zero */

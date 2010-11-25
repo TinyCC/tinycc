@@ -140,10 +140,13 @@ typedef int BOOL;
 
 /* path to find crt1.o, crti.o and crtn.o. Only needed when generating
    executables or dlls */
+
 #if defined(TCC_TARGET_X86_64_CENTOS)
 # define CONFIG_TCC_CRT_PREFIX CONFIG_SYSROOT "/usr/lib64"
+# define CONFIG_TCC_LDDIR "/lib64"
 #else
 # define CONFIG_TCC_CRT_PREFIX CONFIG_SYSROOT "/usr/lib"
+# define CONFIG_TCC_LDDIR "/lib"
 #endif
 
 #define INCLUDE_STACK_SIZE  32

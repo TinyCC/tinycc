@@ -1251,7 +1251,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     if (!s1->nostdlib) {
 #ifdef CONFIG_USE_LIBGCC
         tcc_add_library(s1, "c");
-        tcc_add_file(s1, CONFIG_SYSROOT "/lib/libgcc_s.so.1");
+        tcc_add_file(s1, CONFIG_TCC_LDDIR"/libgcc_s.so.1");
 #else
         tcc_add_library(s1, "c");
 #ifndef WITHOUT_LIBTCC
@@ -1337,11 +1337,7 @@ static char elf_interp[] = "/lib/ld.so.1";
 #elif defined TCC_ARM_EABI
 static const char elf_interp[] = "/lib/ld-linux.so.3";
 #elif defined(TCC_TARGET_X86_64)
-# if defined(TCC_TARGET_X86_64_CENTOS)
-static const char elf_interp[] = "/lib64/ld-linux-x86-64.so.2";
-# else
-static const char elf_interp[] = "/lib/ld-linux-x86-64.so.2";
-# endif /* TCC_TARGET_X86_64_CENTOS */
+static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux-x86-64.so.2";
 #elif defined(TCC_UCLIBC)
 static const char elf_interp[] = "/lib/ld-uClibc.so.0";
 #else
