@@ -1,8 +1,6 @@
 /* ---------------------------------------------- */
 /* alloca86_64.S */
 
-#include "../config.h"
-
 .globl alloca
 
 alloca:

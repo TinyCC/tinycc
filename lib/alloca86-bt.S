@@ -1,8 +1,6 @@
 /* ---------------------------------------------- */
 /* alloca86-bt.S */
 
-#include "../config.h"
-
 .globl __bound_alloca
 
 __bound_alloca:

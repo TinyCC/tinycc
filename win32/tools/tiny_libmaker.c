@@ -25,7 +25,6 @@
 #include <io.h> /* for mktemp */
 #endif
 
-#include "../../config.h"
 #include "../../elf.h"
 
 #define ARMAG  "!<arch>\n"

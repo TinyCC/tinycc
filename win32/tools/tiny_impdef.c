@@ -26,7 +26,6 @@
 #include <windows.h>
 #include <stdio.h>
 #include <malloc.h>
-#include "../../config.h"
 
 char *get_export_names(FILE *fp);
 #define tcc_free free
