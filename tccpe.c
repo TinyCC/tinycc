@@ -62,7 +62,7 @@ void dbg_printf (const char *fmt, ...)
 
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
-typedef unsigned long DWORD;
+typedef unsigned int DWORD;
 typedef unsigned long long ULONGLONG;
 #pragma pack(push, 1)
 
@@ -600,7 +600,7 @@ static int pe_write(struct pe_info *pe)
         printf("-------------------------------"
                "\n  virt   file   size  section" "\n");
     for (i = 0; i < pe->sec_count; ++i) {
-        unsigned long addr, size;
+        DWORD addr, size;
         const char *sh_name;
 
         si = pe->sec_info + i;
@@ -610,8 +610,8 @@ static int pe_write(struct pe_info *pe)
         psh = &si->ish;
 
         if (2 == pe->s1->verbose)
-            printf("%6lx %6lx %6lx  %s\n",
-                addr, file_offset, size, sh_name);
+            printf("%6x %6x %6x  %s\n",
+                (unsigned)addr, (unsigned)file_offset, (unsigned)size, sh_name);
 
         switch (si->cls) {
             case sec_text:
@@ -706,7 +706,7 @@ static int pe_write(struct pe_info *pe)
     if (2 == pe->s1->verbose)
         printf("-------------------------------\n");
     if (pe->s1->verbose)
-        printf("<- %s (%lu bytes)\n", pe->filename, file_offset);
+        printf("<- %s (%u bytes)\n", pe->filename, (unsigned)file_offset);
 
     return 0;
 }
