@@ -101,6 +101,8 @@ for opt do
   ;;
   --exec-prefix=*) execprefix=`echo $opt | cut -d '=' -f 2`
   ;;
+  --tccdir=*) tccdir=${libdir}/`echo $opt | cut -d '=' -f 2`
+  ;;
   --bindir=*) bindir=`echo $opt | cut -d '=' -f 2`
   ;;
   --libdir=*) libdir=`echo $opt | cut -d '=' -f 2`
@@ -228,6 +230,7 @@ echo "  --exec-prefix=EPREFIX    install architecture-dependent files in EPREFIX
 echo "                           [same as prefix]"
 echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
 echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
+echo "  --tccdir=DIR             installation directory [EPREFIX/lib/tcc]"
 echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
 echo "  --mandir=DIR             man documentation in DIR [PREFIX/man]"
 echo "  --infodir=DIR            info documentation in DIR [PREFIX/info]"
