@@ -104,8 +104,7 @@ PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
-# $(WIN32_CROSS) is buit more carefully on this platform. See win32libcc1:
-# PROGS+=$(WIN32_CROSS)
+PROGS+=$(WIN32_CROSS)
 PROGS_CROSS=$(I386_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 else
 ifeq ($(ARCH),arm)
@@ -129,7 +128,7 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 # Try to build win32 cross-compiler lib on *nix
 ifndef CONFIG_WIN32
-LIBTCCLIBS+=win32libcc1
+LIBTCCLIBS+=LinuxWIN32libtcc1
 endif
 endif
 
@@ -186,27 +185,12 @@ libtcc.so.1.0: $(LIBTCC_OBJ)
 
 libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
-        
-# To build cross-compilers on Linux we must make a fake 32 bit tcc.exe
-# and use it to build ELF objects into win32 version of libtcc1.a
-win32libcc1:
-	mv config.mak config.mak.bak
-	mv config.h config.h.bak
-	cp config.h.bak config.h
-	cp config.mak.bak config.mak
-	echo "ARCH=i386" >> config.mak
-	echo "#undef HOST_X86_64" >> config.h
-	echo "#define HOST_I386 1" >> config.h
-	echo "CFLAGS=-O2 -g -pipe -Wall -m32" >> config.mak
-	echo "ARCH=i386" >> config.mak
-	$(MAKE) $(WIN32_CROSS) CC=gcc
-	-ln -s $(WIN32_CROSS) tcc.exe
-	-mv libtcc1.a libtcc1.bak
-	$(MAKE) CONFIG_WIN32=1 libtcc1.a
-	mv libtcc1.a lib
-	-mv libtcc1.bak libtcc1.a
-	mv config.mak.bak config.mak
-	mv config.h.bak config.h
+		
+# use i386-win32-tcc instead of tcc.exe to build libtcc1.a on Linux
+# ar t libtcc1.a will list the ELF objects
+LinuxWIN32libtcc1: $(WIN32_CROSS)
+	$(MAKE) ARCH=i386 CONFIG_WIN32=1 TCC=./i386-win32-tcc libtcc1.a
+	@-mv libtcc1.a win32/lib
 
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=.
@@ -229,7 +213,7 @@ VPATH+=lib
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-LIBTCC1_CC=./tcc.exe -Bwin32 -Iinclude $(NATIVE_DEFINES)
+LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
 VPATH+=win32/lib
 endif
 
@@ -274,7 +258,7 @@ endif
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 win32/lib/*.def lib/libtcc1.a "$(tccdir)/lib"
+	$(INSTALL) -m644 win32/lib/*.def win32/lib/libtcc1.a "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 endif
@@ -334,7 +318,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) lib/libtcc1.a $(WIN32_CROSS)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) win32/lib/libtcc1.a $(WIN32_CROSS)
 	$(MAKE) -C tests $@
 
 distclean: clean
