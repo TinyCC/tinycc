@@ -4,7 +4,7 @@
 
 TOP ?= .
 include $(TOP)/config.mak
-
+TCC=./tcc
 CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
