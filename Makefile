@@ -5,6 +5,7 @@
 TOP ?= .
 include $(TOP)/config.mak
 TCC=./tcc
+LIBTCC1_DIR= $(TOP)
 CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
@@ -185,12 +186,6 @@ libtcc.so.1.0: $(LIBTCC_OBJ)
 libtcc_test$(EXESUF): tests/libtcc_test.c $(LIBTCCB)
 	$(CC) -o $@ $^ -I. $(CFLAGS) $(LIBS) $(LIBTCCL)
 		
-# use i386-win32-tcc instead of tcc.exe to build libtcc1.a on Linux
-# ar t libtcc1.a will list the ELF objects
-LinuxWIN32libtcc1: $(WIN32_CROSS)
-	$(MAKE) ARCH=i386 CONFIG_WIN32=1 TCC=./i386-win32-tcc libtcc1.a
-	@-mv libtcc1.a win32/lib
-
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=.
 
@@ -209,6 +204,12 @@ LIBTCC1_OBJS=libtcc1.o $(ALLOCA_O)
 LIBTCC1_CC=$(CC)
 VPATH+=lib
 
+# use i386-win32-tcc (WIN32_CROSS) to build libtcc1.a on Linux
+# ar t libtcc1.a will list the ELF objects
+LinuxWIN32libtcc1: $(WIN32_CROSS)
+	$(MAKE) TCC=./i386-win32-tcc LIBTCC1_DIR=win32/lib ARCH=i386 \
+    CONFIG_WIN32=1 CFLAGS+="-Bwin32 -Iinclude" ./win32/lib/libtcc1.a
+
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
@@ -221,7 +222,7 @@ endif
 %.o: %.S
 	$(LIBTCC1_CC) -o $@ -c $<
 
-libtcc1.a: $(LIBTCC1_OBJS)
+$(LIBTCC1_DIR)/libtcc1.a: $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
 
 # install
