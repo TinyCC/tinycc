@@ -298,8 +298,10 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_pthread:
 /* fixme: these options could be different on your platform */
-                dynarray_add((void ***)&files, &nb_files, "-lpthread");
-                nb_libraries++;
+                if(output_type != TCC_OUTPUT_OBJ){
+                    dynarray_add((void ***)&files, &nb_files, "-lpthread");
+                    nb_libraries++;
+                }
                 tcc_define_symbol(s, "_REENTRANT", "1");
                 break;
             case TCC_OPTION_bench:
