@@ -305,6 +305,8 @@ tcc.1: tcc-doc.texi
 tcc-doc.info: tcc-doc.texi
 	makeinfo tcc-doc.texi
 
+.PHONY: all libtest clean tar distclean install uninstall LinuxWIN32libtcc1
+
 # tar release (use 'make -k tar' on a checkouted tree)
 TCC-VERSION=tcc-$(shell cat VERSION)
 tar:
