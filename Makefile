@@ -128,7 +128,7 @@ ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 # Try to build win32 cross-compiler lib on *nix
 ifndef CONFIG_WIN32
-LIBTCCLIBS+=LinuxWIN32libtcc1
+LIBTCCLIBS+=LinuxWinCrossLibs
 endif
 endif
 
@@ -204,12 +204,12 @@ LIBTCC1_OBJS=libtcc1.o $(ALLOCA_O)
 LIBTCC1_CC=$(CC)
 VPATH+=lib
 
-# use cross-compilers to bootstrap build libtcc1-winxx.a on Linux
+# use cross-compilers to bootstrap libtcc1-winxx.a on Linux
 # ar t *.a can list the ELF objects in archive for debugging
-LinuxWIN32libtcc1: $(WIN32_CROSS) $(WIN64_CROSS)
+LinuxWinCrossLibs: $(WIN32_CROSS) $(WIN64_CROSS)
 	$(MAKE) TCC=$(WIN32_CROSS) LIBTCC1_DIR=win32/lib ARCH=i386 \
     CONFIG_WIN32=1 LIBTCC1=libtcc1-win32.a ./win32/lib/libtcc1-win32.a
-	-rm libtcc1.o crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
 	$(MAKE) TCC=$(WIN64_CROSS) LIBTCC1_DIR=win32/lib ARCH=x86_64 \
     CONFIG_WIN64=1 LIBTCC1=libtcc1-win64.a ./win32/lib/libtcc1-win64.a
 
@@ -271,7 +271,7 @@ endif
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 win32/lib/*.def win32/lib/libtcc1.a "$(tccdir)/lib"
+	$(INSTALL) -m644 win32/lib/*.def win32/lib/libtcc1*.a "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 endif
@@ -318,7 +318,7 @@ tcc.1: tcc-doc.texi
 tcc-doc.info: tcc-doc.texi
 	makeinfo tcc-doc.texi
 
-.PHONY: all libtest clean tar distclean install uninstall LinuxWIN32libtcc1
+.PHONY: all libtest clean tar distclean install uninstall LinuxWinCrossLibs
 
 # tar release (use 'make -k tar' on a checkouted tree)
 TCC-VERSION=tcc-$(shell cat VERSION)
