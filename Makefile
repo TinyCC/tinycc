@@ -204,15 +204,26 @@ LIBTCC1_OBJS=libtcc1.o $(ALLOCA_O)
 LIBTCC1_CC=$(CC)
 VPATH+=lib
 
-# use i386-win32-tcc (WIN32_CROSS) to build libtcc1.a on Linux
-# ar t libtcc1.a will list the ELF objects
-LinuxWIN32libtcc1: $(WIN32_CROSS)
-	$(MAKE) TCC=./i386-win32-tcc LIBTCC1_DIR=win32/lib ARCH=i386 \
-    CONFIG_WIN32=1 CFLAGS+="-Bwin32 -Iinclude" ./win32/lib/libtcc1.a
+# use cross-compilers to bootstrap build libtcc1-winxx.a on Linux
+# ar t *.a can list the ELF objects in archive for debugging
+LinuxWIN32libtcc1: $(WIN32_CROSS) $(WIN64_CROSS)
+	$(MAKE) TCC=$(WIN32_CROSS) LIBTCC1_DIR=win32/lib ARCH=i386 \
+    CONFIG_WIN32=1 LIBTCC1=libtcc1-win32.a ./win32/lib/libtcc1-win32.a
+	-rm libtcc1.o crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+	$(MAKE) TCC=$(WIN64_CROSS) LIBTCC1_DIR=win32/lib ARCH=x86_64 \
+    CONFIG_WIN64=1 LIBTCC1=libtcc1-win64.a ./win32/lib/libtcc1-win64.a
 
 ifdef CONFIG_WIN32
 # for windows, we must use TCC because we generate ELF objects
 LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
+VPATH+=win32/lib
+endif
+
+ifdef CONFIG_WIN64
+# windows 64: fixme: chkstk.o bcheck.o fails, not included
+# windows 64: fixme: alloca86_64 is broken
+LIBTCC1_OBJS=libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o dllmain.o
 LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
 VPATH+=win32/lib
 endif
@@ -222,7 +233,8 @@ endif
 %.o: %.S
 	$(LIBTCC1_CC) -o $@ -c $<
 
-$(LIBTCC1_DIR)/libtcc1.a: $(LIBTCC1_OBJS)
+#libtcc1.a
+$(LIBTCC1_DIR)/$(LIBTCC1): $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
 
 # install
@@ -321,7 +333,7 @@ tar:
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) win32/lib/libtcc1.a $(WIN32_CROSS)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) win32/lib/libtcc1*.a $(WIN32_CROSS)
 	$(MAKE) -C tests $@
 
 distclean: clean
