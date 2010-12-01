@@ -207,6 +207,7 @@ VPATH+=lib
 # use cross-compilers to bootstrap libtcc1-winxx.a on Linux
 # ar t *.a can list the ELF objects in archive for debugging
 LinuxWinCrossLibs: $(WIN32_CROSS) $(WIN64_CROSS)
+	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
 	$(MAKE) TCC=$(WIN32_CROSS) LIBTCC1_DIR=win32/lib ARCH=i386 \
     CONFIG_WIN32=1 LIBTCC1=libtcc1-win32.a ./win32/lib/libtcc1-win32.a
 	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
