@@ -210,7 +210,7 @@ LinuxWinCrossLibs: $(WIN32_CROSS) $(WIN64_CROSS)
 	$(MAKE) TCC=$(WIN32_CROSS) LIBTCC1_DIR=win32/lib ARCH=i386 \
     CONFIG_WIN32=1 LIBTCC1=libtcc1-win32.a ./win32/lib/libtcc1-win32.a
 	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-	$(MAKE) TCC=$(WIN64_CROSS) LIBTCC1_DIR=win32/lib ARCH=x86_64 \
+	$(MAKE) TCC=$(WIN64_CROSS) LIBTCC1_DIR=win32/lib ARCH=x86-64 \
     CONFIG_WIN64=1 LIBTCC1=libtcc1-win64.a ./win32/lib/libtcc1-win64.a
 
 ifdef CONFIG_WIN32
@@ -223,7 +223,7 @@ endif
 ifdef CONFIG_WIN64
 # windows 64: fixme: chkstk.o bcheck.o fails, not included
 # windows 64: fixme: alloca86_64 is broken
-LIBTCC1_OBJS=libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o dllmain.o
+LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o
 LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
 VPATH+=win32/lib
 endif
