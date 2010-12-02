@@ -131,8 +131,8 @@ for opt do
   ;;
   --enable-gprof) gprof="yes"
   ;;
-  --enable-mingw32) mingw32="yes" ; cross_prefix="i386-mingw32-"
-  ;; 
+  --enable-mingw32) mingw32="yes" ; cross_prefix="i686-pc-mingw32-" ; cpu=x86
+  ;;
   --enable-cross) build_cross="yes"
   ;;
   --disable-static) disable_static="yes"
@@ -242,7 +242,10 @@ echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
 echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
 echo "  --disable-static         make libtcc.so instead of libtcc.a"
-echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc1.a"
+echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc.a"
+echo "  --enable-mingw32         build windows version with mingw32"
+echo "  --extra-cflags=          extra compiler flags"
+echo "  --extra-ldflags=         extra linker options"
 echo "  --with-selinux           use mmap instead of exec mem"
 echo "                           [requires write access to /tmp]"
 echo ""

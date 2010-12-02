@@ -1273,10 +1273,15 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/local/include");
         tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/include");
 #endif
+        tcc_add_sysinclude_path(s, CONFIG_SYSROOT CONFIG_TCCDIR "/include");
         snprintf(buf, sizeof(buf), "%s/include", s->tcc_lib_path);
         tcc_add_sysinclude_path(s, buf);
 #ifdef TCC_TARGET_PE
+        snprintf(buf, sizeof(buf), "%s/win32/include", s->tcc_lib_path);
+        tcc_add_sysinclude_path(s, buf);
         snprintf(buf, sizeof(buf), "%s/include/winapi", s->tcc_lib_path);
+        tcc_add_sysinclude_path(s, buf);
+        snprintf(buf, sizeof(buf), "%s/win32/include/winapi", s->tcc_lib_path);
         tcc_add_sysinclude_path(s, buf);
 #endif
     }
@@ -1318,9 +1323,30 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
             tcc_add_file(s, CONFIG_TCC_CRT_PREFIX "/crt1.o");
         tcc_add_file(s, CONFIG_TCC_CRT_PREFIX "/crti.o");
     }
+#if defined(TCC_TARGET_X86_64)
+    snprintf(buf, sizeof(buf), "%s/lib64", s->tcc_lib_path);
+    tcc_set_lib_path(s, buf);
+#elif defined(TCC_TARGET_I386)
+    snprintf(buf, sizeof(buf), "%s/lib", s->tcc_lib_path);
+    tcc_set_lib_path(s, buf);
 #endif
-
+#endif
 #ifdef TCC_TARGET_PE
+    snprintf(buf, sizeof(buf), "%s/win32/lib", s->tcc_lib_path);
+    tcc_add_library_path(s, buf);
+#if defined(TCC_TARGET_X86_64)
+    snprintf(buf, sizeof(buf), "%s/win32/lib/64", s->tcc_lib_path);
+    tcc_add_library_path(s, buf);
+    snprintf(buf, sizeof(buf), "%s/lib/64", s->tcc_lib_path);
+#elif defined(TCC_TARGET_I386)
+    snprintf(buf, sizeof(buf), "%s/win32/lib/32", s->tcc_lib_path);
+    tcc_add_library_path(s, buf);
+    snprintf(buf, sizeof(buf), "%s/lib/32", s->tcc_lib_path);
+#else
+    snprintf(buf, sizeof(buf), "%s/win32/lib/other", s->tcc_lib_path);
+#endif
+    tcc_add_library_path(s, buf);
+    /* support deprecated -Bwin32 */
     snprintf(buf, sizeof(buf), "%s/lib", s->tcc_lib_path);
     tcc_add_library_path(s, buf);
 #ifdef _WIN32

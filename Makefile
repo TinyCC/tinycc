@@ -10,63 +10,62 @@ CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
-ifneq ($(GCC_MAJOR),2)
-CFLAGS+=-fno-strict-aliasing
-ifneq ($(GCC_MAJOR),3)
-CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
+LIBTCC1=libtcc1.a
+ifdef CONFIG_USE_LIBGCC
+    LIBTCC1=
 endif
+
+ifneq ($(GCC_MAJOR),2)
+    CFLAGS+=-fno-strict-aliasing
+    ifneq ($(GCC_MAJOR),3)
+        CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
+    endif
 endif
 
 ifeq ($(ARCH),i386)
-CFLAGS+=-mpreferred-stack-boundary=2
-ifeq ($(GCC_MAJOR),2)
-CFLAGS+=-m386 -malign-functions=0
-else
-CFLAGS+=-march=i386 -falign-functions=0
-endif
+    CFLAGS+=-mpreferred-stack-boundary=2
+    ifeq ($(GCC_MAJOR),2)
+        CFLAGS+=-m386 -malign-functions=0
+    else
+        CFLAGS+=-march=i386 -falign-functions=0
+    endif
 endif
 
 ifndef CONFIG_WIN32
-LIBS=-lm
-ifndef CONFIG_NOLDL
-LIBS+=-ldl
-endif
+    LIBS=-lm
+    ifndef CONFIG_NOLDL
+        LIBS+=-ldl
+    endif
 endif
 
 ifeq ($(ARCH),i386)
-NATIVE_DEFINES=-DTCC_TARGET_I386
-LIBTCC1=libtcc1.a
-BCHECK_O=bcheck.o
-ALLOCA_O=alloca86.o alloca86-bt.o
-else
-ifeq ($(ARCH),x86-64)
-NATIVE_DEFINES=-DTCC_TARGET_X86_64
-NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DTCC_TARGET_X86_64_CENTOS)
-LIBTCC1=libtcc1.a
-BCHECK_O=
-ALLOCA_O=alloca86_64.o
-endif
+    NATIVE_DEFINES=-DTCC_TARGET_I386
+    LIBTCC1_DIR=lib
+    BCHECK_O=bcheck.o
+    ALLOCA_O=alloca86.o alloca86-bt.o
+else ifeq ($(ARCH),x86-64)
+    NATIVE_DEFINES=-DTCC_TARGET_X86_64
+    NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DTCC_TARGET_X86_64_CENTOS)
+    LIBTCC1_DIR=lib64
+    BCHECK_O=
+    ALLOCA_O=alloca86_64.o
 endif
 
 ifeq ($(ARCH),arm)
-NATIVE_DEFINES=-DTCC_TARGET_ARM
-NATIVE_TARGET=-DWITHOUT_LIBTCC
-NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
-NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
+    NATIVE_DEFINES=-DTCC_TARGET_ARM
+    NATIVE_TARGET=-DWITHOUT_LIBTCC
+    NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
+    NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
 
 ifdef CONFIG_WIN32
-NATIVE_DEFINES+=-DTCC_TARGET_PE
-BCHECK_O=
+    NATIVE_DEFINES+=-DTCC_TARGET_PE
+    BCHECK_O=
 endif
 
 ifneq ($(wildcard /lib/ld-uClibc.so.0),)
-NATIVE_DEFINES+=-DTCC_UCLIBC
-BCHECK_O=
-endif
-
-ifdef CONFIG_USE_LIBGCC
-LIBTCC1=
+    NATIVE_DEFINES+=-DTCC_UCLIBC
+    BCHECK_O=
 endif
 
 ifeq ($(TOP),.)
@@ -95,44 +94,42 @@ ARM_FILES = $(CORE_FILES) arm-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
 
 ifdef CONFIG_WIN32
-PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
-NATIVE_FILES=$(WIN32_FILES)
-PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-else
-ifeq ($(ARCH),i386)
-NATIVE_FILES=$(I386_FILES)
-PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-else
-ifeq ($(ARCH),x86-64)
-NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS= $(WIN32_CROSS) $(I386_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-else
-ifeq ($(ARCH),arm)
-NATIVE_FILES=$(ARM_FILES)
-PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
-endif
-endif
-endif
+    PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
+    NATIVE_FILES=$(WIN32_FILES)
+    PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+else ifeq ($(ARCH),i386)
+    NATIVE_FILES=$(I386_FILES)
+    PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+else ifeq ($(ARCH),x86-64)
+    NATIVE_FILES=$(X86_64_FILES)
+    PROGS_CROSS= $(WIN32_CROSS) $(I386_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
+else ifeq ($(ARCH),arm)
+    NATIVE_FILES=$(ARM_FILES)
+    PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
 endif
 
-# LIBTCCB decides whether libtcc is installed static or dynamic
+# LIBTCCB decides whether libtcc is built static or dynamic
 LIBTCCB=libtcc.a
 ifdef DISABLE_STATIC
-CFLAGS+=-fPIC
-LIBTCCL=-L. -ltcc
-LIBTCCB=libtcc.so.1.0
+    CFLAGS+=-fPIC
+    LIBTCCL=-L. -ltcc
+    LIBTCCB=libtcc.so.1.0
 endif
 LIBTCCLIBS=$(LIBTCCB)
 
+# conditionally make win32/lib/xx/libtcc1.a cross compiler lib archives
 ifdef CONFIG_CROSS
-PROGS+=$(PROGS_CROSS)
-# Try to build win32 cross-compiler lib on *nix
-ifndef CONFIG_WIN32
-LIBTCCLIBS+=LinuxWinCrossLibs
-endif
+    PROGS+=$(PROGS_CROSS)
+    ifdef CONFIG_WIN32
+        LIBTCCLIBS+=win32
+    else ifdef CONFIG_WIN64
+        LIBTCCLIBS+=win64
+    else
+        LIBTCCLIBS+=$(ARCH)
+    endif
 endif
 
-all: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc-doc.html tcc.1 tcc-doc.info libtcc_test$(EXESUF)
+all: $(PROGS) $(LIBTCC1_DIR)/$(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc-doc.html tcc.1 tcc-doc.info libtcc_test$(EXESUF)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCCB)
@@ -200,43 +197,62 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 	$(CC) -o $@ $< $(CFLAGS)
 
 # TinyCC runtime libraries
-LIBTCC1_OBJS=libtcc1.o $(ALLOCA_O)
+LIBTCC1_OBJS=$(LIBTCC1_DIR)/libtcc1.o $(ALLOCA_O)
 LIBTCC1_CC=$(CC)
 VPATH+=lib
 
-# use cross-compilers to bootstrap libtcc1-winxx.a on Linux
-# ar t *.a can list the ELF objects in archive for debugging
-LinuxWinCrossLibs: $(WIN32_CROSS) $(WIN64_CROSS)
-	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-	$(MAKE) TCC=$(WIN32_CROSS) LIBTCC1_DIR=win32/lib ARCH=i386 \
-    CONFIG_WIN32=1 LIBTCC1=libtcc1-win32.a ./win32/lib/libtcc1-win32.a
-	-rm -f crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-	$(MAKE) TCC=$(WIN64_CROSS) LIBTCC1_DIR=win32/lib ARCH=x86-64 \
-    CONFIG_WIN64=1 LIBTCC1=libtcc1-win64.a ./win32/lib/libtcc1-win64.a
-
+WINDLLS=$(LIBTCC1_DIR)/crt1.o $(LIBTCC1_DIR)/wincrt1.o $(LIBTCC1_DIR)/dllcrt1.o $(LIBTCC1_DIR)/dllmain.o
 ifdef CONFIG_WIN32
-# for windows, we must use TCC because we generate ELF objects
-LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
-VPATH+=win32/lib
+    # for windows, we must use TCC because we generate ELF objects
+    LIBTCC1_OBJS+=$(WINDLLS) $(LIBTCC1_DIR)/chkstk.o $(LIBTCC1_DIR)/bcheck.o
+    LIBTCC1_CC=./$(TCC)$(EXESUF) -B. -Iinclude $(NATIVE_DEFINES)
+    VPATH+=win32/lib
 endif
 
 ifdef CONFIG_WIN64
-# windows 64: fixme: chkstk.o bcheck.o fails, not included
-# windows 64: fixme: alloca86_64 is broken
-LIBTCC1_OBJS+=crt1.o wincrt1.o dllcrt1.o dllmain.o
-LIBTCC1_CC=./$(TCC)$(EXESUF) -Bwin32 -Iinclude $(NATIVE_DEFINES)
-VPATH+=win32/lib
+    # windows 64: fixme: chkstk.o bcheck.o fails, not included
+    # windows 64: fixme: alloca86_64 is broken
+    LIBTCC1_OBJS+=$(WINDLLS)
+    LIBTCC1_CC=./$(TCC)$(EXESUF) -B. -Iinclude $(NATIVE_DEFINES)
+    VPATH+=win32/lib
 endif
-
-%.o: %.c
+#~ win32/lib/64/libtcc1.o:
+	#~ $(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CFLAGS)
+$(LIBTCC1_DIR)/%.o: %.c
 	$(LIBTCC1_CC) -o $@ -c $< -O2 -Wall
-%.o: %.S
+$(LIBTCC1_DIR)/%.o: %.S
 	$(LIBTCC1_CC) -o $@ -c $<
 
-#libtcc1.a
-$(LIBTCC1_DIR)/$(LIBTCC1): $(LIBTCC1_OBJS)
+$(LIBTCC1_DIR)/libtcc1.a: $(LIBTCC1_OBJS)
 	$(AR) rcs $@ $^
+	$(RM) $^
+
+#recursively build cross-compiler lib archives for each arch
+win32: $(TCC)$(EXESUF) $(I386_CROSS)
+	$(MAKE) CC=./$(I386_CROSS) ARCH=i386 LIBTCC1_DIR=lib lib/libtcc1.a
+	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a \
+    LIBTCC1_OBJS="lib/libtcc1.o alloca86_64.o"
+    #todo: build arm, etc cross lib archives
+
+win64: $(PROGS_CROSS)
+	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
+    ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
+	$(MAKE) CC=./$(I386_CROSS) LIBTCC1_DIR=lib ARCH=i386 lib/libtcc1.a
+	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a
+
+i386: $(PROGS_CROSS)
+	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
+    ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
+	$(MAKE) TCC=./$(WIN64_CROSS) CC=./$(WIN64_CROSS) LIBTCC1_DIR=win32/lib/64 \
+    ARCH=x86-64 CONFIG_WIN64=1 win32/lib/64/libtcc1.a
+	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a
+
+x86-64: $(PROGS_CROSS)
+	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
+    ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
+	$(MAKE) TCC=./$(WIN64_CROSS) CC=./$(WIN64_CROSS) LIBTCC1_DIR=win32/lib/64 \
+    ARCH=x86-64 CONFIG_WIN64=1 win32/lib/64/libtcc1.a
+	$(MAKE) CC=./$(I386_CROSS) LIBTCC1_DIR=lib ARCH=i386 lib/libtcc1.a
 
 # install
 TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
@@ -253,15 +269,16 @@ install: $(PROGS) $(LIBTCC1) $(BCHECK_O) $(LIBTCCLIBS) tcc.1 tcc-doc.info tcc-do
 	$(INSTALL)  tcc-doc.info "$(infodir)"
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
-ifneq ($(LIBTCC1),)
-	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
-endif
+	mkdir -p "$(tccdir)/lib"
+	-$(INSTALL) lib/libtcc1.a "$(tccdir)/lib"
+	mkdir -p "$(tccdir)/lib64"
+	-$(INSTALL) lib64/libtcc1.a "$(tccdir)/lib64"
 ifneq ($(BCHECK_O),)
 	$(INSTALL) -m644 $(BCHECK_O) "$(tccdir)"
 endif
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	mkdir -p "$(libdir)"
-	$(INSTALL) -m755 $(LIBTCCB) "$(libdir)"
+	-$(INSTALL) -m755 $(LIBTCCB) "$(libdir)"
 ifdef DISABLE_STATIC
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so.1"
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so"
@@ -271,25 +288,38 @@ endif
 	mkdir -p "$(docdir)"
 	$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
-	mkdir -p "$(tccdir)/lib"
-	$(INSTALL) -m644 win32/lib/*.def win32/lib/libtcc1*.a "$(tccdir)/lib"
+	mkdir -p "$(tccdir)/win32/lib"
+	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/win32/lib"
+	mkdir -p "$(tccdir)/win32/lib/32"
+	$(INSTALL) win32/lib/32/libtcc1.a "$(tccdir)/win32/lib/32"
+	mkdir -p "$(tccdir)/win32/lib/64"
+	$(INSTALL) win32/lib/64/libtcc1.a "$(tccdir)/win32/lib/64"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
-	rm -fv $(foreach P,$(LIBTCC1) $(BCHECK_O),"$(tccdir)/$P")
+	rm -fv $(foreach P,$(BCHECK_O),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1"
 	rm -fv "$(libdir)/$(LIBTCCB)" "$(includedir)/libtcc.h"
+	rm -fv "$(tccdir)/lib/libtcc1.a"
+	rm -fv "$(tccdir)/lib64/libtcc1.a"
 ifdef DISABLE_STATIC
-	rm -fv "$(libdir)/libtcc.so*"
+	rm -fv "$(libdir)/libtcc.so"
+	rm -fv "$(libdir)/libtcc.so.1"
+	rm -fv "$(libdir)/libtcc.so"
+else
+	rm -fv "$(libdir)/libtcc.a"
 endif
+	-rmdir "$(tccdir)/lib"
+	-rmdir "$(tccdir)/lib64"
+	-rmdir "$(tccdir)"
 ifdef CONFIG_CROSS
-	rm -rf "$(tccdir)/include"
-	rm -rf "$(tccdir)/lib"
-	rm -rf "$(tccdir)/examples"
+	rm -rfv "$(tccdir)/include"
+	rm -rfv "$(tccdir)/examples"
+	rm -rfv "$(tccdir)/win32"
 endif
 else
 install: $(PROGS) $(LIBTCC1) libtcc.a tcc-doc.html
@@ -300,12 +330,22 @@ install: $(PROGS) $(LIBTCC1) libtcc.a tcc-doc.html
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
 	$(INSTALL) -s -m755 $(PROGS) "$(tccdir)"
-	$(INSTALL) -m644 $(LIBTCC1) win32/lib/*.def "$(tccdir)/lib"
+	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
 	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html win32/tcc-win32.txt "$(tccdir)/doc"
 	$(INSTALL) -m644 $(LIBTCCB) libtcc.h "$(tccdir)/libtcc"
+	mkdir -p "$(tccdir)/win32/lib/32"
+	-$(INSTALL) win32/lib/32/libtcc1.a "$(tccdir)/win32/lib/32"
+	mkdir -p "$(tccdir)/win32/lib/64"
+	-$(INSTALL) win32/lib/64/libtcc1.a "$(tccdir)/win32/lib/64"
+ifdef CONFIG_CROSS
+	$(INSTALL) lib/libtcc1.a "$(tccdir)/lib"
+	mkdir -p "$(tccdir)/lib64"
+	$(INSTALL) lib64/libtcc1.a "$(tccdir)/lib64
+endif
+
 endif
 
 # documentation and man page
@@ -319,7 +359,7 @@ tcc.1: tcc-doc.texi
 tcc-doc.info: tcc-doc.texi
 	makeinfo tcc-doc.texi
 
-.PHONY: all libtest clean tar distclean install uninstall LinuxWinCrossLibs
+.PHONY: all libtest clean tar distclean install uninstall win32 win64 x86 x86-64
 
 # tar release (use 'make -k tar' on a checkouted tree)
 TCC-VERSION=tcc-$(shell cat VERSION)
@@ -332,9 +372,10 @@ tar:
 # in tests subdir
 %est:
 	$(MAKE) -C tests $@
-
+    
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF) win32/lib/libtcc1*.a $(WIN32_CROSS)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.out *.so* *.exe libtcc_test$(EXESUF)
+	rm -vf win32/lib/32/libtcc1.a win32/lib/64/libtcc1.a lib64/libtcc1.a lib/libtcc1.a $(WIN32_CROSS)
 	$(MAKE) -C tests $@
 
 distclean: clean
