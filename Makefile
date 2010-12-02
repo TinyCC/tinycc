@@ -204,7 +204,7 @@ VPATH+=lib
 WINDLLS=$(LIBTCC1_DIR)/crt1.o $(LIBTCC1_DIR)/wincrt1.o $(LIBTCC1_DIR)/dllcrt1.o $(LIBTCC1_DIR)/dllmain.o
 ifdef CONFIG_WIN32
     # for windows, we must use TCC because we generate ELF objects
-    LIBTCC1_OBJS+=$(WINDLLS) $(LIBTCC1_DIR)/chkstk.o $(LIBTCC1_DIR)/bcheck.o
+    LIBTCC1_OBJS+=$(WINDLLS) $(BCHECK_O)
     LIBTCC1_CC=./$(TCC)$(EXESUF) -B. -Iinclude $(NATIVE_DEFINES)
     VPATH+=win32/lib
 endif
@@ -228,19 +228,26 @@ $(LIBTCC1_DIR)/libtcc1.a: $(LIBTCC1_OBJS)
 	$(RM) $^
 
 #recursively build cross-compiler lib archives for each arch
-win32: $(TCC)$(EXESUF) $(I386_CROSS)
+win32: $(TCC)$(EXESUF) $(WIN64_CROSS)
+#testing: bleeding: cross-cross (./configure --enable-mingw32 --enable-cross)
+#fixme: The windows exe cross-compilers still use Linux libc
+#fixme: thus cygwin or some such needed to even run them on Windows
 	$(MAKE) CC=./$(I386_CROSS) ARCH=i386 LIBTCC1_DIR=lib lib/libtcc1.a
-	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a \
-    LIBTCC1_OBJS="lib/libtcc1.o alloca86_64.o"
-    #todo: build arm, etc cross lib archives
+	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 \
+    ARCH=x86-64 LIBTCC1_OBJS="lib/libtcc1.o alloca86_64.o" lib64/libtcc1.a
+	$(MAKE) CC=./$(WIN64_CROSS) CONFIG_CROSS= TCC=./x86_64-win32-tcc \
+    ARCH=x86-64 LIBTCC1_DIR=win32/lib/64 CONFIG_WIN64=1 win32/lib/64/libtcc1.a
+    #todo: add arm, etc cross lib archives
 
 win64: $(PROGS_CROSS)
+#testing: bleeding: mingw64 cross-cross lib stuff would go here
 	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
     ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
 	$(MAKE) CC=./$(I386_CROSS) LIBTCC1_DIR=lib ARCH=i386 lib/libtcc1.a
 	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a
 
 i386: $(PROGS_CROSS)
+#testing: unstable: build cross-compiler libs on i386 platform
 	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
     ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
 	$(MAKE) TCC=./$(WIN64_CROSS) CC=./$(WIN64_CROSS) LIBTCC1_DIR=win32/lib/64 \
@@ -248,6 +255,7 @@ i386: $(PROGS_CROSS)
 	$(MAKE) CC=./$(X64_CROSS) LIBTCC1_DIR=lib64 ARCH=x86-64 lib64/libtcc1.a
 
 x86-64: $(PROGS_CROSS)
+#stable: build cross-compiler lib archives on x86_64 platform
 	$(MAKE) TCC=./$(WIN32_CROSS) CC=./$(WIN32_CROSS) LIBTCC1_DIR=win32/lib/32 \
     ARCH=i386 CONFIG_WIN32=1 win32/lib/32/libtcc1.a
 	$(MAKE) TCC=./$(WIN64_CROSS) CC=./$(WIN64_CROSS) LIBTCC1_DIR=win32/lib/64 \
@@ -309,7 +317,7 @@ uninstall:
 ifdef DISABLE_STATIC
 	rm -fv "$(libdir)/libtcc.so"
 	rm -fv "$(libdir)/libtcc.so.1"
-	rm -fv "$(libdir)/libtcc.so"
+	rm -fv "$(libdir)/libtcc.so.1.0"
 else
 	rm -fv "$(libdir)/libtcc.a"
 endif
