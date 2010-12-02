@@ -1,6 +1,16 @@
 not released:
 
 - Add support for -MD/-MF (automatically generate dependencies for make)
+- Add tcc_open_bf() function for BufferedFile compilation (grischka)
+- Support Security-Enhanced Linux (Henry Kroll III)
+- Split libtcc1.a build into separate directories (Henry Kroll III)
+- Add -pthread option = -D_REENTRANT -lpthread (Henry Kroll III)
+- Register __TRY__ SEH in startup code only for i386 (grischka)
+- Support FreeBSD and GNU/Hurd kernels (Thomas Preud'homme)
+- support for asm labels for functions (Thomas Preud'homme)
+- fix 32 to 64 bit casts, alignment and struct issues (Shinichiro Hamaji)
+- mimic all GNU -option forms supported by ld (Kirill Smelkov)
+- support indirect functions as externals (Thomas Preud'homme)
 
 version 0.9.25:
 
