@@ -204,7 +204,7 @@ VPATH+=lib
 WINDLLS=$(LIBTCC1_DIR)/crt1.o $(LIBTCC1_DIR)/wincrt1.o $(LIBTCC1_DIR)/dllcrt1.o $(LIBTCC1_DIR)/dllmain.o
 ifdef CONFIG_WIN32
     # for windows, we must use TCC because we generate ELF objects
-    LIBTCC1_OBJS+=$(WINDLLS) $(BCHECK_O)
+    LIBTCC1_OBJS+=$(WINDLLS) $(LIBTCC1_DIR)/chkstk.o $(LIBTCC1_DIR)/bcheck.o
     LIBTCC1_CC=./$(TCC)$(EXESUF) -B. -Iinclude $(NATIVE_DEFINES)
     VPATH+=win32/lib
 endif
