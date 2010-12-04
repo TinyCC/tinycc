@@ -506,14 +506,14 @@ static uplong add_got_table(TCCState *s1, uplong val)
 }
 #elif defined TCC_TARGET_ARM
 #define JMP_TABLE_ENTRY_SIZE 8
-static int add_jmp_table(TCCState *s1, int val)
+static uplong add_jmp_table(TCCState *s1, int val)
 {
     uint32_t *p = (uint32_t *)(s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset);
     s1->runtime_plt_and_got_offset += JMP_TABLE_ENTRY_SIZE;
     /* ldr pc, [pc, #-4] */
     p[0] = 0xE51FF004;
     p[1] = val;
-    return (int)p;
+    return (uplong)p;
 }
 #endif
 #endif
@@ -666,8 +666,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 *(int*)ptr ^= 0xE12FFF10 ^ 0xE1A0F000; /* BX Rm -> MOV PC, Rm */
             break;
         default:
-            fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
-                    type,addr,(unsigned int)(long)ptr,val);
+            fprintf(stderr,"FIXME: handle reloc type %x at %x [%.8x] to %x\n",
+                type, (unsigned)addr, (unsigned)(uplong)ptr, (unsigned)val);
             break;
 #elif defined(TCC_TARGET_C67)
         case R_C60_32:
@@ -692,8 +692,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_C60HI16:
             break;
         default:
-            fprintf(stderr,"FIXME: handle reloc type %x at %lx [%.8x] to %lx\n",
-                    type,addr,(unsigned int)(long)ptr, val);
+            fprintf(stderr,"FIXME: handle reloc type %x at %x [%.8x] to %x\n",
+                type, (unsigned)addr, (unsigned)(uplong)ptr, (unsigned)val);
             break;
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_64:
