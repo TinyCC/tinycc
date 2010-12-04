@@ -78,6 +78,7 @@ int main(int argc, char **argv)
     int *afpos = NULL;
     int istrlen, strpos = 0, fpos = 0, funccnt = 0, funcmax, hofs;
     char afile[260], tfile[260], stmp[20];
+    char *file, *name;
 
 
     strcpy(afile, "ar_test.a");
@@ -197,9 +198,18 @@ int main(int argc, char **argv)
                 }
             }
         }
-        memset(&arhdro.ar_name, ' ', sizeof(arhdr.ar_name));
-        strcpy(arhdro.ar_name, argv[iarg]);
-        arhdro.ar_name[strlen(argv[iarg])] = '/';
+
+        file = argv[iarg];
+        for (name = strchr(file, 0); 
+             name > file && name[-1] != '/' && name[-1] != '\\';
+             --name);
+        istrlen = strlen(name);
+        if (istrlen >= sizeof(arhdro.ar_name))
+            istrlen = sizeof(arhdro.ar_name) - 1;
+        memset(arhdro.ar_name, ' ', sizeof(arhdro.ar_name));
+        memcpy(arhdro.ar_name, name, istrlen);
+        arhdro.ar_name[istrlen] = '/';
+
         sprintf(stmp, "%-10d", fsize);
         memcpy(&arhdro.ar_size, stmp, 10);
         fwrite(&arhdro, sizeof(arhdro), 1, fo);
