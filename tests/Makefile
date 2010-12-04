@@ -14,6 +14,10 @@ TESTS = libtest test3
 TOP = ..
 include $(TOP)/Makefile
 
+ifdef DISABLE_STATIC
+export LD_LIBRARY_PATH:=$(CURDIR)/..
+endif
+
 # run local version of tcc with local libraries and includes
 TCC = ../tcc -B..
 RUN_TCC = $(NATIVE_DEFINES) -run ../tcc.c -B..
@@ -22,23 +26,21 @@ DISAS=objdump -d
 all test : $(TESTS)
 
 # make sure that tcc exists
-$(TESTS) : ../tcc
-
-../tcc ../libtcc.a :
-	$(MAKE) -C ..
+test1 test2 test3 test4 btest speedtest asmtest : ../tcc
+../%:
+	$(MAKE) -C .. $*
 
 # libtcc test
-libtest: libtcc_test$(EXESUF)
+libtest: libtcc_test$(EXESUF) ../libtcc1.a
 	@echo ------------ $@ ------------
-	./libtcc_test lib_path=..
+	./libtcc_test$(EXESUF) lib_path=..
 
-libtcc_test$(EXESUF): libtcc_test.c ../libtcc.a
-	$(CC) -o $@ $^ -I.. $(CFLAGS) $(LIBS)
+libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
+	$(CC) -o $@ $^ -I.. $(CFLAGS) $(LIBS) $(LINK_LIBTCC)
 
 # test.ref - generate using gcc
 test.ref: tcctest.c
-	cp -u ../include/tcclib.h .
-	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS)
+	$(CC) -o tcctest.gcc $< -w $(CFLAGS) -I../include 
 	./tcctest.gcc > $@
 
 # auto test
@@ -84,7 +86,7 @@ test4: test.ref
 BOUNDS_OK  = 1 4 8 10 14
 BOUNDS_FAIL= 2 5 7 9 11 12 13 15
 
-btest: boundtest.c
+btest: boundtest.c ../bcheck.o
 	@echo ------------ $@ ------------
 	@for i in $(BOUNDS_OK); do \
 	   echo ; echo --- boundtest $$i ---; \

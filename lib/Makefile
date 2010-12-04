@@ -1,0 +1,90 @@
+#
+# Tiny C Compiler Makefile for libtcc1.a
+#
+
+TOP = ..
+include $(TOP)/config.mak
+
+ifndef TARGET
+ ifdef CONFIG_WIN64
+  TARGET = x86_64-win32
+ else
+ ifdef CONFIG_WIN32
+  TARGET = i386-win32
+ else
+ ifeq ($(ARCH),i386)
+  TARGET = i386
+  XCC = gcc -O2
+ else
+ ifeq ($(ARCH),x86-64)
+  TARGET = x86_64
+  XCC = gcc -O2
+ endif
+ endif
+ endif
+ endif
+endif
+
+DIR = $(TARGET)
+
+native : ../libtcc1.a
+cross : $(DIR)/libtcc1.a
+
+native : TCC = $(TOP)/tcc$(EXESUF)
+cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
+
+I386_O = libtcc1.o alloca86.o alloca86-bt.o
+X86_64_O = libtcc1.o alloca86_64.o
+WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
+
+VPATH = $(TOP)/lib $(TOP)/win32/lib
+
+ifeq "$(TARGET)" "i386-win32"
+ OBJ = $(addprefix $(DIR)/,$(WIN32_O))
+ TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
+ XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XAR = $(DIR)/tiny_libmaker$(EXESUF)
+else
+ifeq "$(TARGET)" "x86_64-win32"
+ OBJ = $(addprefix $(DIR)/,$(WIN64_O))
+ TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
+ XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XAR = $(DIR)/tiny_libmaker$(EXESUF)
+else
+ifeq "$(TARGET)" "i386"
+ OBJ = $(addprefix $(DIR)/,$(I386_O))
+ TGT = -DTCC_TARGET_I386
+ XCC ?= $(TCC) -B$(TOP)
+else
+ifeq "$(TARGET)" "x86_64"
+ OBJ = $(addprefix $(DIR)/,$(X86_64_O))
+ TGT = -DTCC_TARGET_X86_64
+ XCC ?= $(TCC) -B$(TOP)
+else
+ $(error libtcc1.a not supported on target '$(TARGET)')
+endif
+endif
+endif
+endif
+
+ifdef XAR
+AR = $(XAR)
+endif
+
+$(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
+	$(AR) rcs $@ $(OBJ)
+$(DIR)/%.o : %.c
+	$(XCC) -c $< -o $@ $(TGT)
+$(DIR)/%.o : %.S
+	$(XCC) -c $< -o $@ $(TGT)
+$(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
+	$(CC) -Os -s -w -o $@ $< $(TGT)
+
+$(OBJ) $(XAR) : $(DIR)/exists
+$(DIR)/exists :
+	mkdir -p $(DIR)
+	@echo $@ > $@
+
+clean :
+	rm -rfv i386-win32 x86_64-win32 i386 x86_64

@@ -329,7 +329,9 @@ echo "infodir=\$(DESTDIR)$infodir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
+echo "#ifndef CONFIG_TCCDIR" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
+echo "#endif" >> $TMPH
 echo "CC=$cc" >> config.mak
 echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
