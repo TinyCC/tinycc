@@ -119,7 +119,7 @@ else
 ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
 LIBTCC1=libtcc1.a
 else
 ifeq ($(ARCH),arm)
@@ -158,7 +158,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 %-tcc$(EXESUF):
 	$(CC) -o $@ tcc.c $(DEFINES) $(CFLAGS) $(LIBS)
 
-$(I386_CROSS): DEFINES = -DTCC_TARGET_I386
+$(I386_CROSS): DEFINES = -DTCC_TARGET_I386 -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
 $(X64_CROSS): DEFINES = -DTCC_TARGET_X86_64
 $(WIN32_CROSS): DEFINES = -DTCC_TARGET_I386 -DTCC_TARGET_PE -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" -DCONFIG_TCC_CROSSLIB="\"lib/32\""
 $(WIN64_CROSS): DEFINES = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" -DCONFIG_TCC_CROSSLIB="\"lib/64\""
@@ -252,6 +252,11 @@ endif
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/32"
 	mkdir -p "$(tccdir)/win32/lib/64"
+ifeq ($(ARCH),x86-64)
+	mkdir -p "$(tccdir)/i386"
+	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
+	ln -sf "$(tccdir)/include" "$(tccdir)/i386"
+endif
 	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
 	$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
@@ -267,6 +272,9 @@ uninstall:
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv "$(libdir)/libtcc.so*"
 	rm -rf "$(tccdir)/win32"
+ifeq ($(ARCH),x86-64)
+	rm -rf "$(tccdir)/i386"
+endif
 else
 # on windows
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
