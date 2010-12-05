@@ -348,8 +348,6 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_nostdinc:
                 s->nostdinc = 1;
                 break;
-            case TCC_OPTION_s:
-                break;
             case TCC_OPTION_nostdlib:
                 s->nostdlib = 1;
                 break;
