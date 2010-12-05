@@ -144,6 +144,7 @@ TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
+PROGS_CROSS_WAIT=$(PROGS_CROSS)
 TCCLIBS+=$(LIBTCC1_CROSS)
 endif
 
@@ -211,7 +212,7 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 # TinyCC runtime libraries
 libtcc1.a : FORCE
 	@$(MAKE) -C lib native
-lib/%/libtcc1.a : FORCE
+lib/%/libtcc1.a : FORCE $(PROGS_CROSS_WAIT)
 	@$(MAKE) -C lib cross TARGET=$*
 bcheck.o : lib/bcheck.c
 	gcc -c $< -o $@ -O2 -Wall
