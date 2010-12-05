@@ -105,6 +105,7 @@ enum {
     TCC_OPTION_soname,
     TCC_OPTION_o,
     TCC_OPTION_r,
+    TCC_OPTION_s,
     TCC_OPTION_Wl,
     TCC_OPTION_W,
     TCC_OPTION_O,
@@ -152,6 +153,7 @@ static const TCCOption tcc_options[] = {
     { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
+    { "s", TCC_OPTION_s, 0 },
     { "Wl,", TCC_OPTION_Wl, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -297,7 +299,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 nb_libraries++;
                 break;
             case TCC_OPTION_pthread:
-/* fixme: these options could be different on your platform */
+                /* fixme: these options could be different on your platform */
                 if(output_type != TCC_OUTPUT_OBJ){
                     dynarray_add((void ***)&files, &nb_files, "-lpthread");
                     nb_libraries++;
@@ -345,6 +347,8 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_nostdinc:
                 s->nostdinc = 1;
+                break;
+            case TCC_OPTION_s:
                 break;
             case TCC_OPTION_nostdlib:
                 s->nostdlib = 1;
