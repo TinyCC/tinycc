@@ -212,6 +212,36 @@ static int expand_args(char ***pargv, const char *str)
     return argc;
 }
 
+void exec_other_tcc(TCCState *s, int argc,char **argv,int optarg)
+{
+#ifdef TCC_TARGET_X86_64
+#define WIN32_CAST
+    char arg[20]="i386-tcc";
+    char sep='/',*tcc;
+    if (32 == optarg) {/* -m32 launches 32 bit tcc */
+#ifdef TCC_TARGET_PE
+#ifdef _WIN32
+#define WIN32_CAST (const char**)(const char *)
+        strcpy(arg,"tcc.exe");
+        sep='\\';
+#else
+        strcpy(arg,"i386-win32-tcc");
+#endif
+#endif
+        if (!(tcc=strrchr(argv[0],sep)))
+            tcc=argv[0];
+        else tcc++;
+        if (0<s->verbose) printf("%s->%s\n",tcc,arg);
+        if (strcmp(tcc,arg)) {
+            execvp(arg, WIN32_CAST (argv));
+            error("cross compiler not found!");
+            exit(1);
+#undef WIN32_CAST
+        } else warning("-m32 infinite loop prevented");
+    } else warning("usupported option \"-m%s\"",optarg);
+#endif
+}
+
 static int parse_args(TCCState *s, int argc, char **argv)
 {
     int optind;
@@ -334,7 +364,10 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 output_type = TCC_OUTPUT_DLL;
                 break;
             case TCC_OPTION_soname:
-                s->soname = optarg; 
+                s->soname = optarg;
+                break;
+            case TCC_OPTION_m:
+                    exec_other_tcc(s,argc+1,argv-1,atoi(optarg));
                 break;
             case TCC_OPTION_o:
                 multiple_files = 1;
