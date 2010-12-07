@@ -39,8 +39,10 @@ libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
 	$(CC) -o $@ $^ -I.. $(CFLAGS) $(LIBS) $(LINK_LIBTCC)
 
 # test.ref - generate using gcc
+# copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
-	$(CC) -o tcctest.gcc $< -w $(CFLAGS) -I../include 
+	cp -u ../include/tcclib.h .
+	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
