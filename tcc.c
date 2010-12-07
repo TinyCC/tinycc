@@ -236,9 +236,9 @@ void exec_other_tcc(TCCState *s, int argc,char **argv,int optarg)
             execvp(arg, WIN32_CAST (argv));
             error("cross compiler not found!");
             exit(1);
-#undef WIN32_CAST
         } else warning("-m32 infinite loop prevented");
     } else warning("usupported option \"-m%s\"",optarg);
+#undef WIN32_CAST
 #endif
 }
 
