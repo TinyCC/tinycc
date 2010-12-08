@@ -212,35 +212,69 @@ static int expand_args(char ***pargv, const char *str)
     return argc;
 }
 
-void exec_other_tcc(TCCState *s, int argc,char **argv,int optarg)
-{
-#ifdef TCC_TARGET_X86_64
-#define WIN32_CAST
-    char arg[20]="i386-tcc";
-    char sep='/',*tcc;
-    if (32 == optarg) {/* -m32 launches 32 bit tcc */
-#ifdef TCC_TARGET_PE
+#if defined(TCC_TARGET_X86_64) || defined (TCC_TARGET_I386)
+
 #ifdef _WIN32
-#define WIN32_CAST (const char**)(const char *)
-        strcpy(arg,"tcc.exe");
-        sep='\\';
+#define CAST (const char * const *)
 #else
-        strcpy(arg,"i386-win32-tcc");
+#define CAST (char * const *)
 #endif
+
+#if defined(TCC_TARGET_X86_64)
+#define ARG 32
+#define CHILD "i386"
+#elif defined (TCC_TARGET_I386)
+#define ARG 64
+#define CHILD "x86_64"
 #endif
-        if (!(tcc=strrchr(argv[0],sep)))
-            tcc=argv[0];
-        else tcc++;
-        if (0<s->verbose) printf("%s->%s\n",tcc,arg);
-        if (strcmp(tcc,arg)) {
-            execvp(arg, WIN32_CAST (argv));
-            error("cross compiler not found!");
-            exit(1);
-        } else warning("-m32 infinite loop prevented");
-    } else warning("usupported option \"-m%s\"",optarg);
-#undef WIN32_CAST
-#endif
+
+static const char *ssuffix(const char *name, const char sep)
+{
+    char *p = strchr(name, sep);
+    return p?p+1:name;
 }
+
+static void exec_other_tcc(TCCState *s, int argc,
+    char **argv,const char *optarg, int optind)
+{
+    char child_path[4096],child_name[4096];
+    char *parent,*child_tcc;
+    int opt = atoi(optarg);
+    if (strlen(argv[0]) > 4000)
+        error("-m%s unsafe path length", ARG);
+    switch (opt) {
+        case ARG + 1: /* oops we called ourselves */
+            error("-m%s cross compiler not installed", ARG);
+            break;
+        case ARG:
+        {
+            parent = tcc_basename(argv[0]);
+            sprintf(child_name, CHILD "-%s", ssuffix(parent,'-'));
+            if (strcmp(parent, child_name)) {
+                /* child_path = dirname */
+                pstrcpy(child_path, parent - argv[0] + 1, argv[0]);
+                child_tcc = strchr(child_path, 0);
+                strcpy(child_tcc, child_name);
+                if (0 < s->verbose)
+                    printf("%s -m%i -> %s\n",
+                         parent, ARG, child_path);
+                sprintf(argv[optind],"-m%i", ARG + 1); /* no loop */
+                execvp(child_path, CAST argv);
+                sprintf(child_tcc,"tcc%s",tcc_fileextension(parent));
+                execvp(child_path, CAST argv);
+                error("-m%s cross compiler not found", ARG);
+            } else error("-m%s unsupported configuration", ARG);
+        }
+        case 96 ^  ARG     : break;
+        case 96 ^ (ARG + 1): break;
+        default:
+            warning("usupported option \"-m%s\"",optarg);
+    }
+}
+#undef CAST
+#undef ARG
+#undef CHILD
+#endif
 
 static int parse_args(TCCState *s, int argc, char **argv)
 {
@@ -366,9 +400,11 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_soname:
                 s->soname = optarg;
                 break;
+#if defined(TCC_TARGET_X86_64) || defined (TCC_TARGET_I386)
             case TCC_OPTION_m:
-                    exec_other_tcc(s,argc+1,argv-1,atoi(optarg));
+                    exec_other_tcc(s, argc+1, argv-1, optarg, optind);
                 break;
+#endif
             case TCC_OPTION_o:
                 multiple_files = 1;
                 outfile = optarg;
