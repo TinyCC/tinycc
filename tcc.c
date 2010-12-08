@@ -241,10 +241,10 @@ static void exec_other_tcc(TCCState *s, int argc,
     char *parent,*child_tcc;
     int opt = atoi(optarg);
     if (strlen(argv[0]) > 4000)
-        error("-m32/64 unsafe path length");
+        error("-m%i unsafe path length", ARG);
     switch (opt) {
         case ARG + 1: /* oops we called ourselves */
-            error("-m32/64 cross compiler not installed");
+            error("-m%i cross compiler not installed", ARG);
             break;
         case ARG:
         {
@@ -262,8 +262,8 @@ static void exec_other_tcc(TCCState *s, int argc,
                 execvp(child_path, CAST argv);
                 sprintf(child_tcc,"tcc%s",tcc_fileextension(parent));
                 execvp(child_path, CAST argv);
-                error("-m32/64 cross compiler not found");
-            } else error("-m32/65 unsupported configuration");
+                error("-m%i cross compiler not found", ARG);
+            } else error("-m%i unsupported configuration", ARG);
         }
         case 96 ^  ARG     : break;
         case 96 ^ (ARG + 1): break;
