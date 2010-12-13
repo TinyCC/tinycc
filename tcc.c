@@ -228,10 +228,18 @@ static int expand_args(char ***pargv, const char *str)
 #define CHILD "x86_64"
 #endif
 
-static const char *ssuffix(const char *name, const char sep)
+static char *ssuffix(const char *oldname, const char sep)
 {
-    char *p = strchr(name, sep);
-    return p?p+1:name;
+    char *p, *name = tcc_strdup(oldname);
+    p = strchr(name, sep);
+    if (p)
+        return p + 1;
+    /* prefix "win32-" when file extension is present */
+    if (*tcc_fileextension(name)){
+        name = tcc_realloc(name, strlen(oldname + 7));
+        sprintf(name, "win32-%s", oldname);
+    }
+    return name;
 }
 
 static void exec_other_tcc(TCCState *s, int argc,
@@ -249,7 +257,9 @@ static void exec_other_tcc(TCCState *s, int argc,
         case ARG:
         {
             parent = tcc_basename(argv[0]);
-            sprintf(child_name, CHILD "-%s", ssuffix(parent,'-'));
+            child_tcc = ssuffix(parent,'-');
+            sprintf(child_name, CHILD "-%s", child_tcc);
+            tcc_free(child_tcc);
             if (strcmp(parent, child_name)) {
                 /* child_path = dirname */
                 pstrcpy(child_path, parent - argv[0] + 1, argv[0]);
