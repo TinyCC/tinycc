@@ -608,10 +608,14 @@ static void move_reg(int r, int s)
 /* get address of vtop (vtop MUST BE an lvalue) */
 static void gaddrof(void)
 {
+    if (vtop->r & VT_REF)
+        gv(RC_INT);
     vtop->r &= ~VT_LVAL;
     /* tricky: if saved lvalue, then we can go back to lvalue */
     if ((vtop->r & VT_VALMASK) == VT_LLOCAL)
         vtop->r = (vtop->r & ~(VT_VALMASK | VT_LVAL_TYPE)) | VT_LOCAL | VT_LVAL;
+
+
 }
 
 #ifdef CONFIG_TCC_BCHECK

@@ -583,14 +583,14 @@ struct TCCState {
 };
 
 /* The current value can be: */
-#define VT_VALMASK   0x00ff
-#define VT_CONST     0x00f0  /* constant in vc 
+#define VT_VALMASK   0x001f
+#define VT_CONST     0x0010  /* constant in vc 
                               (must be first non register value) */
-#define VT_LLOCAL    0x00f1  /* lvalue, offset on stack */
-#define VT_LOCAL     0x00f2  /* offset on stack */
-#define VT_CMP       0x00f3  /* the value is stored in processor flags (in vc) */
-#define VT_JMP       0x00f4  /* value is the consequence of jmp true (even) */
-#define VT_JMPI      0x00f5  /* value is the consequence of jmp false (odd) */
+#define VT_LLOCAL    0x0011  /* lvalue, offset on stack */
+#define VT_LOCAL     0x0012  /* offset on stack */
+#define VT_CMP       0x0013  /* the value is stored in processor flags (in vc) */
+#define VT_JMP       0x0014  /* value is the consequence of jmp true (even) */
+#define VT_JMPI      0x0015  /* value is the consequence of jmp false (odd) */
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
@@ -603,6 +603,8 @@ struct TCCState {
 #define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
 #define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
+
+#define VT_REF       0x0020
 
 /* types */
 #define VT_INT        0  /* integer type */

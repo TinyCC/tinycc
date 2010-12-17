@@ -592,22 +592,16 @@ void gen_offs_sp(int b, int r, int d)
 
 void gfunc_call(int nb_args)
 {
-    int size, align, r, args_size, i, d, j, bt;
+    int size, align, r, args_size, i, d, j, bt, struct_size;
     int nb_reg_args, gen_reg;
 
-    /* calculate the number of integer/float arguments */
-    nb_reg_args = 0;
-    for(i = 0; i < nb_args; i++) {
-        bt = (vtop[-i].type.t & VT_BTYPE);
-        if (bt != VT_STRUCT && bt != VT_LDOUBLE)
-            nb_reg_args++;
-    }
-
+    nb_reg_args = nb_args;
     args_size = (nb_reg_args < REGN ? REGN : nb_reg_args) * PTR_SIZE;
 
     /* for struct arguments, we need to call memcpy and the function
        call breaks register passing arguments we are preparing.
        So, we process arguments which will be passed by stack first. */
+    struct_size = args_size;
     for(i = 0; i < nb_args; i++) {
         SValue *sv = &vtop[-i];
         bt = (sv->type.t & VT_BTYPE);
@@ -617,8 +611,8 @@ void gfunc_call(int nb_args)
             size = (size + 15) & ~15;
             /* generate structure store */
             r = get_reg(RC_INT);
-            gen_offs_sp(0x8d, r, args_size);
-            args_size += size;
+            gen_offs_sp(0x8d, r, struct_size);
+            struct_size += size;
 
             /* generate memcpy call */
             vset(&sv->type, r | VT_LVAL, 0);
@@ -629,23 +623,43 @@ void gfunc_call(int nb_args)
         } else if (bt == VT_LDOUBLE) {
 
             gv(RC_ST0);
-            gen_offs_sp(0xdb, 0x107, args_size);
-            args_size += 16;
+            gen_offs_sp(0xdb, 0x107, struct_size);
+            struct_size += 16;
 
         }
     }
 
-    if (func_scratch < args_size)
-        func_scratch = args_size;
-
+    if (func_scratch < struct_size)
+        func_scratch = struct_size;
+#if 1
     for (i = 0; i < REGN; ++i)
         save_reg(arg_regs[i]);
-
+    save_reg(TREG_RAX);
+#endif
     gen_reg = nb_reg_args;
+    struct_size = args_size;
+
     for(i = 0; i < nb_args; i++) {
         bt = (vtop->type.t & VT_BTYPE);
+
         if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
-            ; /* done */
+            if (bt == VT_LDOUBLE)
+                size = 16;
+            else
+                size = type_size(&vtop->type, &align);
+            /* align to stack align size */
+            size = (size + 15) & ~15;
+            j = --gen_reg;
+            if (j >= REGN) {
+                d = TREG_RAX;
+                gen_offs_sp(0x8d, d, struct_size);
+                gen_offs_sp(0x89, d, j*8);
+            } else {
+                d = arg_regs[j];
+                gen_offs_sp(0x8d, d, struct_size);
+            }
+            struct_size += size;
+
         } else if (is_sse_float(vtop->type.t)) {
             gv(RC_FLOAT); /* only one float register */
             j = --gen_reg;
@@ -694,7 +708,7 @@ void gfunc_call(int nb_args)
 /* generate function prolog of type 't' */
 void gfunc_prolog(CType *func_type)
 {
-    int addr, align, size, reg_param_index, bt;
+    int addr, reg_param_index, bt;
     Sym *sym;
     CType *type;
 
@@ -722,13 +736,15 @@ void gfunc_prolog(CType *func_type)
     while ((sym = sym->next) != NULL) {
         type = &sym->type;
         bt = type->t & VT_BTYPE;
-        if (bt == VT_STRUCT || bt == VT_LDOUBLE)
-            continue;
         if (reg_param_index < REGN) {
             /* save arguments passed by register */
             gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
         }
-        sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL, addr);
+        if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
+            sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL | VT_REF, addr);
+        } else {
+            sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL, addr);
+        }
         reg_param_index++;
         addr += PTR_SIZE;
     }
@@ -738,18 +754,6 @@ void gfunc_prolog(CType *func_type)
             gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
         reg_param_index++;
         addr += PTR_SIZE;
-    }
-
-    sym = func_type->ref;
-    while ((sym = sym->next) != NULL) {
-        type = &sym->type;
-        bt = type->t & VT_BTYPE;
-        if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
-            size = type_size(type, &align);
-            size = (size + 15) & -16;
-            sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL, addr);
-            addr += size;
-        }
     }
 }
 
