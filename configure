@@ -259,14 +259,20 @@ exit 1
 fi
 
 if test "$mingw32" = "yes" ; then
+    if test x"$tccdir" = x""; then
+    tccdir="tcc"
+    fi
     if test -z "$prefix" ; then
-        prefix="C:/Program Files/tcc"
+        prefix="C:/Program Files/${tccdir}"
     fi
     execprefix="$prefix"
     bindir="$prefix"
     tccdir="$prefix"
     docdir="$prefix/doc"
 else
+    if test x"$tccdir" = x""; then
+    tccdir="${libdir}/tcc"
+    fi
     if test -z "$prefix" ; then
         prefix="/usr/local"
     fi
@@ -277,15 +283,12 @@ else
         bindir="${execprefix}/bin"
     fi
     if test x"$docdir" = x""; then
-        docdir="$prefix/share/doc/tcc"
+        docdir="$prefix/share/doc/${tccdir}"
     fi
 fi # mingw32
 
 if test x"$libdir" = x""; then
 libdir="${execprefix}/lib"
-fi
-if test x"$tccdir" = x""; then
-tccdir="${libdir}/tcc"
 fi
 if test x"$mandir" = x""; then
 mandir="${prefix}/man"
