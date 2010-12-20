@@ -228,7 +228,11 @@ INSTALL=install
 ifndef CONFIG_WIN32
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(bindir)"
+ifeq ($(CC),tcc)
+	$(INSTALL) -m755 $(PROGS) "$(bindir)"
+else
 	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
+endif
 	mkdir -p "$(mandir)/man1"
 	-$(INSTALL) tcc.1 "$(mandir)/man1"
 	mkdir -p "$(infodir)"
@@ -258,7 +262,7 @@ ifdef CONFIG_CROSS
 ifeq ($(ARCH),x86-64)
 	mkdir -p "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
-	ln -sf "$(tccdir)/include" "$(tccdir)/i386"
+	cp -r "$(tccdir)/include" "$(tccdir)/i386"
 endif
 	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
@@ -275,6 +279,7 @@ uninstall:
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv "$(libdir)/libtcc.so*"
 	rm -rf "$(tccdir)/win32"
+	-rmdir $(tccdir)/include
 ifeq ($(ARCH),x86-64)
 	rm -rf "$(tccdir)/i386"
 endif
