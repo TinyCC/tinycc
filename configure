@@ -140,6 +140,8 @@ for opt do
   ;;
   --disable-static) disable_static="yes"
   ;;
+  --disable-rpath) disable_rpath="yes"
+  ;;
   --with-libgcc) use_libgcc="yes"
   ;;
   --with-selinux) have_selinux="yes"
@@ -244,6 +246,7 @@ echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
 echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
 echo "  --cc=CC                  use C compiler CC [$cc]"
 echo "  --disable-static         make libtcc.so instead of libtcc.a"
+echo "  --disable-rpath          disable use of -rpath with the above"
 echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc.a"
 echo "  --enable-mingw32         build windows version on linux with mingw32"
 echo "  --enable-cygwin          build windows version on windows with cygwin"
@@ -396,6 +399,9 @@ if test "$build_cross" = "yes" ; then
 fi
 if test "$disable_static" = "yes" ; then
   echo "DISABLE_STATIC=yes" >> config.mak
+fi
+if test "$disable_rpath" = "yes" ; then
+  echo "DISABLE_RPATH=yes" >> config.mak
 fi
 if test "$use_libgcc" = "yes" ; then
   echo "#define CONFIG_USE_LIBGCC" >> $TMPH
