@@ -66,8 +66,7 @@ ifdef DISABLE_STATIC
 LIBTCC=libtcc.so.1.0
 LINK_LIBTCC=-Wl,-rpath,"$(libdir)"
 ifdef DISABLE_RPATH
-CFLAGS+=-fPIC
-LINK_LIBTCC=-ltcc
+LINK_LIBTCC=
 endif
 else
 LIBTCC=libtcc.a
