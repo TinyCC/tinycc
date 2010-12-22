@@ -102,7 +102,7 @@ for opt do
   ;;
   --exec-prefix=*) execprefix=`echo $opt | cut -d '=' -f 2`
   ;;
-  --tccdir=*) tccdir=${libdir}/`echo $opt | cut -d '=' -f 2`
+  --tccdir=*) tccdir=`echo $opt | cut -d '=' -f 2`
   ;;
   --bindir=*) bindir=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -110,9 +110,13 @@ for opt do
   ;;
   --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
   ;;
+  --sharedir=*) sharedir=`echo $opt | cut -d '=' -f 2`
+  ;;
   --mandir=*) mandir=`echo $opt | cut -d '=' -f 2`
   ;;
   --infodir=*) infodir=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --docdir=*) docdir=`echo $opt | cut -d '=' -f 2`
   ;;
   --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -237,8 +241,10 @@ echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
 echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
 echo "  --tccdir=DIR             installation directory [EPREFIX/lib/tcc]"
 echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
-echo "  --mandir=DIR             man documentation in DIR [PREFIX/man]"
-echo "  --infodir=DIR            info documentation in DIR [PREFIX/info]"
+echo "  --sharedir=DIR           documentation root DIR [PREFIX]"
+echo "  --docdir=DIR             documentation in DIR [SHAREDIR/doc/tcc]"
+echo "  --mandir=DIR             man documentation in DIR [SHAREDIR/man]"
+echo "  --infodir=DIR            info documentation in DIR [SHAREDIR/info]"
 echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
@@ -260,45 +266,55 @@ echo ""
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
 fi
-
+    
 if test "$mingw32" = "yes" ; then
     if test x"$tccdir" = x""; then
     tccdir="tcc"
     fi
     if test -z "$prefix" ; then
-        prefix="C:/Program Files/${tccdir}"
+    prefix="C:/Program Files/${tccdir}"
+    fi
+    if test -z "$sharedir" ; then
+    sharedir="${prefix}"
     fi
     execprefix="$prefix"
-    bindir="$prefix"
-    tccdir="$prefix"
-    docdir="$prefix/doc"
+    bindir="${prefix}"
+    tccdir="${prefix}"
+    libdir="${prefix}/lib"
+    docdir="${sharedir}/doc"
+    mandir="${sharedir}/man"
+    infodir="${sharedir}/info"
 else
-    if test x"$tccdir" = x""; then
-    tccdir="${libdir}/tcc"
-    fi
     if test -z "$prefix" ; then
-        prefix="/usr/local"
+    prefix="/usr/local"
+    fi
+    if test -z "$sharedir" ; then
+    sharedir="${prefix}"
     fi
     if test x"$execprefix" = x""; then
-        execprefix="${prefix}"
+    execprefix="${prefix}"
+    fi
+    if test x"$libdir" = x""; then
+    libdir="${execprefix}/lib"
     fi
     if test x"$bindir" = x""; then
-        bindir="${execprefix}/bin"
+    bindir="${execprefix}/bin"
+    fi
+    if test x"$tccdir" = x""; then
+    tccdir="tcc"
     fi
     if test x"$docdir" = x""; then
-        docdir="$prefix/share/doc/${tccdir}"
+    docdir="${sharedir}/doc/${tccdir}"
     fi
+    if test x"$mandir" = x""; then
+    mandir="${sharedir}/man"
+    fi
+    if test x"$infodir" = x""; then
+    infodir="${sharedir}/info"
+    fi
+    tccdir="${libdir}/${tccdir}"
 fi # mingw32
 
-if test x"$libdir" = x""; then
-libdir="${execprefix}/lib"
-fi
-if test x"$mandir" = x""; then
-mandir="${prefix}/man"
-fi
-if test x"$infodir" = x""; then
-infodir="${prefix}/info"
-fi
 if test x"$includedir" = x""; then
 includedir="${prefix}/include"
 fi
@@ -308,7 +324,7 @@ echo "TinyCC directory    $tccdir"
 echo "Library directory   $libdir"
 echo "Include directory   $includedir"
 echo "Manual directory    $mandir"
-echo "Info directory    $infodir"
+echo "Info directory      $infodir"
 echo "Doc directory       $docdir"
 echo "Target root prefix  $sysroot"
 echo "Source path      $source_path"
