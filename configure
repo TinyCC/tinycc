@@ -241,7 +241,7 @@ echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
 echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
 echo "  --tccdir=DIR             installation directory [EPREFIX/lib/tcc]"
 echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
-echo "  --sharedir=DIR           documentation root DIR [PREFIX]"
+echo "  --sharedir=DIR           documentation root DIR [PREFIX]/share"
 echo "  --docdir=DIR             documentation in DIR [SHAREDIR/doc/tcc]"
 echo "  --mandir=DIR             man documentation in DIR [SHAREDIR/man]"
 echo "  --infodir=DIR            info documentation in DIR [SHAREDIR/info]"
@@ -289,7 +289,7 @@ else
     prefix="/usr/local"
     fi
     if test -z "$sharedir" ; then
-    sharedir="${prefix}"
+    sharedir="${prefix}/share"
     fi
     if test x"$execprefix" = x""; then
     execprefix="${prefix}"
