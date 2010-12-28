@@ -735,7 +735,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 #ifndef TCC_TARGET_PE
                 /* XXX: naive support for over 32bit jump */
                 if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                    val = add_jmp_table(s1, val) + rel->r_addend;
+                    val = (add_jmp_table(s1, val - rel->r_addend) +
+                           rel->r_addend);
                     diff = val - addr;
                 }
 #endif
