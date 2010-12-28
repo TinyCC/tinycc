@@ -543,7 +543,6 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         val = sym->st_value;
 #ifdef TCC_TARGET_X86_64
-        /* XXX: not tested */
         val += rel->r_addend;
 #endif
         type = ELFW(R_TYPE)(rel->r_info);
@@ -715,7 +714,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             }
             *(int *)ptr += val;
             break;
-        case R_X86_64_PC32: {
+
+        case R_X86_64_PC32:
+        case R_X86_64_PLT32: {
             long long diff;
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
@@ -733,7 +734,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 #ifndef TCC_TARGET_PE
                 /* XXX: naive support for over 32bit jump */
                 if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                    val = add_jmp_table(s1, val);
+                    val = add_jmp_table(s1, val) + rel->r_addend;
                     diff = val - addr;
                 }
 #endif
@@ -744,12 +745,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             *(int *)ptr += diff;
         }
             break;
-        case R_X86_64_PLT32:
-            *(int *)ptr += val - addr;
-            break;
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT:
-            *(int *)ptr = val;
+            /* They don't need addend */
+            *(int *)ptr = val - rel->r_addend;
             break;
         case R_X86_64_GOTPCREL:
 #ifndef TCC_TARGET_PE
