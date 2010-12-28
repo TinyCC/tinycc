@@ -821,7 +821,7 @@ void gfunc_call(int nb_args)
     for(i = 0; i < nb_args; i++) {
         if ((vtop[-i].type.t & VT_BTYPE) == VT_STRUCT) {
             args_size += type_size(&vtop[-i].type, &align);
-            args_size = (args_size + 3) & ~3;
+            args_size = (args_size + 7) & ~7;
         } else if ((vtop[-i].type.t & VT_BTYPE) == VT_LDOUBLE) {
             args_size += 16;
         } else if (is_sse_float(vtop[-i].type.t)) {
@@ -855,7 +855,7 @@ void gfunc_call(int nb_args)
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             size = type_size(&vtop->type, &align);
             /* align to stack align size */
-            size = (size + 3) & ~3;
+            size = (size + 7) & ~7;
             /* allocate the necessary size on stack */
             o(0x48);
             oad(0xec81, size); /* sub $xxx, %rsp */
@@ -999,7 +999,7 @@ void gfunc_prolog(CType *func_type)
                 }
             } else if ((type->t & VT_BTYPE) == VT_STRUCT) {
                 size = type_size(type, &align);
-                size = (size + 3) & ~3;
+                size = (size + 7) & ~7;
                 seen_stack_size += size;
             } else if ((type->t & VT_BTYPE) == VT_LDOUBLE) {
                 seen_stack_size += LDOUBLE_SIZE;
@@ -1058,7 +1058,7 @@ void gfunc_prolog(CType *func_type)
     while ((sym = sym->next) != NULL) {
         type = &sym->type;
         size = type_size(type, &align);
-        size = (size + 3) & ~3;
+        size = (size + 7) & ~7;
         if (is_sse_float(type->t)) {
             if (sse_param_index < 8) {
                 /* save arguments passed by register */
