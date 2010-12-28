@@ -716,8 +716,6 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
 
         case R_X86_64_PC32:
-        case R_X86_64_PLT32: {
-            long long diff;
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
                 esym_index = s1->symtab_to_dynsym[sym_index];
@@ -729,6 +727,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     break;
                 }
             }
+            /* fall through */
+        case R_X86_64_PLT32: {
+            long long diff;
             diff = (long long)val - addr;
             if (diff <= -2147483647 || diff > 2147483647) {
 #ifndef TCC_TARGET_PE
