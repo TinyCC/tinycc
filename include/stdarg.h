@@ -3,51 +3,19 @@
 
 #ifdef __x86_64__
 #ifndef _WIN64
-#include <stdlib.h>
 
-/* GCC compatible definition of va_list. */
-struct __va_list_struct {
-    unsigned int gp_offset;
-    unsigned int fp_offset;
-    union {
-        unsigned int overflow_offset;
-        char *overflow_arg_area;
-    };
-    char *reg_save_area;
-};
+typedef void *va_list;
 
-typedef struct __va_list_struct *va_list;
+va_list __va_start(void *fp);
+void *__va_arg(va_list ap, int arg_type, int size);
+va_list __va_copy(va_list src);
+void __va_end(va_list ap);
 
-/* we use __builtin_(malloc|free) to avoid #define malloc tcc_malloc */
-/* XXX: this lacks the support of aggregated types. */
-#define va_start(ap, last)                                              \
-    (ap = (va_list)__builtin_malloc(sizeof(struct __va_list_struct)),   \
-     *ap = *(struct __va_list_struct*)(                                 \
-         (char*)__builtin_frame_address(0) - 16),                       \
-     ap->overflow_arg_area = ((char *)__builtin_frame_address(0) +      \
-                              ap->overflow_offset),                     \
-     ap->reg_save_area = (char *)__builtin_frame_address(0) - 176 - 16  \
-        )
-#define va_arg(ap, type)                                        \
-    (*(type*)(__builtin_types_compatible_p(type, long double)   \
-              ? (ap->overflow_arg_area += 16,                   \
-                 ap->overflow_arg_area - 16)                    \
-              : __builtin_types_compatible_p(type, double)      \
-              ? (ap->fp_offset < 128 + 48                       \
-                 ? (ap->fp_offset += 16,                        \
-                    ap->reg_save_area + ap->fp_offset - 16)     \
-                 : (ap->overflow_arg_area += 8,                 \
-                    ap->overflow_arg_area - 8))                 \
-              : (ap->gp_offset < 48                             \
-                 ? (ap->gp_offset += 8,                         \
-                    ap->reg_save_area + ap->gp_offset - 8)      \
-                 : (ap->overflow_arg_area += 8,                 \
-                    ap->overflow_arg_area - 8))                 \
-        ))
-#define va_copy(dest, src)                                      \
-    ((dest) = (va_list)malloc(sizeof(struct __va_list_struct)), \
-     *(dest) = *(src))
-#define va_end(ap) __builtin_free(ap)
+#define va_start(ap, last) ((ap) = __va_start(__builtin_frame_address(0)))
+#define va_arg(ap, type)                                                \
+    (*(type *)(__va_arg(ap, __builtin_va_arg_types(type), sizeof(type))));
+#define va_copy(dest, src) ((dest) = __va_copy(src))
+#define va_end(ap) __va_end(ap)
 
 #else /* _WIN64 */
 typedef char *va_list;

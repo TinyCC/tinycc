@@ -3542,12 +3542,28 @@ ST_FUNC void unary(void)
         }
         break;
 #ifdef TCC_TARGET_X86_64
-    case TOK_builtin_malloc:
-        tok = TOK_malloc;
-        goto tok_identifier;
-    case TOK_builtin_free:
-        tok = TOK_free;
-        goto tok_identifier;
+    case TOK_builtin_va_arg_types:
+        {
+            /* This definition must be synced with stdarg.h */
+            enum __va_arg_type {
+                __va_gen_reg, __va_float_reg, __va_stack
+            };
+            CType type;
+            int bt;
+            next();
+            skip('(');
+            parse_type(&type);
+            skip(')');
+            bt = type.t & VT_BTYPE;
+            if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
+                vpushi(__va_stack);
+            } else if (bt == VT_FLOAT || bt == VT_DOUBLE) {
+                vpushi(__va_float_reg);
+            } else {
+                vpushi(__va_gen_reg);
+            }
+        }
+        break;
 #endif
     case TOK_INC:
     case TOK_DEC:

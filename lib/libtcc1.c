@@ -605,3 +605,82 @@ unsigned long long __fixunsxfdi (long double a1)
         return 0;
 }
 
+#if defined(__x86_64__) && !defined(_WIN64)
+
+/* helper functions for stdarg.h */
+
+#include <stdio.h>
+#include <stdlib.h>
+
+enum __va_arg_type {
+    __va_gen_reg, __va_float_reg, __va_stack
+};
+
+/* GCC compatible definition of va_list. */
+struct __va_list_struct {
+    unsigned int gp_offset;
+    unsigned int fp_offset;
+    union {
+        unsigned int overflow_offset;
+        char *overflow_arg_area;
+    };
+    char *reg_save_area;
+};
+
+void *__va_start(void *fp)
+{
+    struct __va_list_struct *ap =
+        (struct __va_list_struct *)malloc(sizeof(struct __va_list_struct));
+    *ap = *(struct __va_list_struct *)((char *)fp - 16);
+    ap->overflow_arg_area = (char *)fp + ap->overflow_offset;
+    ap->reg_save_area = (char *)fp - 176 - 16;
+    return ap;
+}
+
+void *__va_arg(struct __va_list_struct *ap,
+               enum __va_arg_type arg_type,
+               int size)
+{
+    size = (size + 7) & ~7;
+    switch (arg_type) {
+    case __va_gen_reg:
+        if (ap->gp_offset < 48) {
+            ap->gp_offset += 8;
+            return ap->reg_save_area + ap->gp_offset - 8;
+        }
+        size = 8;
+        goto use_overflow_area;
+
+    case __va_float_reg:
+        if (ap->fp_offset < 128 + 48) {
+            ap->fp_offset += 16;
+            return ap->reg_save_area + ap->fp_offset - 16;
+        }
+        size = 8;
+        goto use_overflow_area;
+
+    case __va_stack:
+    use_overflow_area:
+        ap->overflow_arg_area += size;
+        return ap->overflow_arg_area - size;
+
+    default:
+        fprintf(stderr, "unknown ABI type for __va_arg\n");
+        abort();
+    }
+}
+
+void *__va_copy(struct __va_list_struct *src)
+{
+    struct __va_list_struct *dest =
+        (struct __va_list_struct *)malloc(sizeof(struct __va_list_struct));
+    *dest = *src;
+    return dest;
+}
+
+void __va_end(struct __va_list_struct *ap)
+{
+    free(ap);
+}
+
+#endif /* __x86_64__ */

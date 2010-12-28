@@ -1834,10 +1834,30 @@ void vprintf1(const char *fmt, ...)
     va_end(ap);
 }
 
+struct myspace {
+    short int profile;
+};
+
+void stdarg_for_struct(struct myspace bob, ...)
+{
+    struct myspace george, bill;
+    va_list ap;
+    short int validate;
+
+    va_start(ap, bob);
+    bill     = va_arg(ap, struct myspace);
+    george   = va_arg(ap, struct myspace);
+    validate = va_arg(ap, int);
+    printf("stdarg_for_struct: %d %d %d %d\n",
+           bob.profile, bill.profile, george.profile, validate);
+    va_end(ap);
+}
 
 void stdarg_test(void)
 {
     long double ld = 1234567891234LL;
+    struct myspace bob;
+
     vprintf1("%d %d %d\n", 1, 2, 3);
     vprintf1("%f %d %f\n", 1.0, 2, 3.0);
     vprintf1("%l %l %d %f\n", 1234567891234LL, 987654321986LL, 3, 1234.0);
@@ -1879,6 +1899,9 @@ void stdarg_test(void)
              0.1, 1.2, 2.3, 3.4, 4.5, 5.6, 6.7, 7.8, 8.9, 9.0,
              ld, 1234567891234LL, 987654321986LL,
              42.0, 43.0, ld);
+
+    bob.profile = 42;
+    stdarg_for_struct(bob, bob, bob, bob.profile);
 }
 
 void whitespace_test(void)
