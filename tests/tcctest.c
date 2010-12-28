@@ -1786,14 +1786,15 @@ void manyarg_test(void)
 
 void vprintf1(const char *fmt, ...)
 {
-    va_list ap;
+    va_list ap, aq;
     const char *p;
     int c, i;
     double d;
     long long ll;
     long double ld;
 
-    va_start(ap, fmt);
+    va_start(aq, fmt);
+    va_copy(ap, aq);
     
     p = fmt;
     for(;;) {
@@ -1829,6 +1830,7 @@ void vprintf1(const char *fmt, ...)
         }
     }
  the_end:
+    va_end(aq);
     va_end(ap);
 }
 
