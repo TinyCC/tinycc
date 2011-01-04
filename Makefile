@@ -154,11 +154,11 @@ all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
-	$(CC) -o $@ $^ $(LIBS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF):
-	$(CC) -o $@ tcc.c $(DEFINES) $(CFLAGS) $(LIBS)
+	$(CC) -o $@ tcc.c $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
 
 $(I386_CROSS): DEFINES = -DTCC_TARGET_I386 -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
 $(X64_CROSS): DEFINES = -DTCC_TARGET_X86_64
