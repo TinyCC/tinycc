@@ -294,6 +294,9 @@ static int parse_args(TCCState *s, int argc, char **argv)
     const TCCOption *popt;
     const char *optarg, *p1, *r1;
     char *r;
+    int was_pthread;
+
+    was_pthread = 0; /* is set if commandline contains -pthread key */
 
     optind = 0;
     while (optind < argc) {
@@ -375,11 +378,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 nb_libraries++;
                 break;
             case TCC_OPTION_pthread:
-                /* fixme: these options could be different on your platform */
-                if(output_type != TCC_OUTPUT_OBJ){
-                    dynarray_add((void ***)&files, &nb_files, "-lpthread");
-                    nb_libraries++;
-                }
+                was_pthread = 1;
                 tcc_define_symbol(s, "_REENTRANT", "1");
                 break;
             case TCC_OPTION_bench:
@@ -493,6 +492,13 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 break;
             }
         }
+    }
+    /* fixme: these options could be different on your platform */
+    if (was_pthread
+        && output_type != TCC_OUTPUT_OBJ)
+    {
+        dynarray_add((void ***)&files, &nb_files, "-lpthread");
+        nb_libraries++;
     }
     return optind + 1;
 }
