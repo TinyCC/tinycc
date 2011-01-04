@@ -28,4 +28,8 @@ p3:
     push    %edx
     ret
 
+/* mark stack as nonexecutable */
+#if defined __ELF__ && defined __linux__
+    .section    .note.GNU-stack,"",@progbits
+#endif
 /* ---------------------------------------------- */
