@@ -224,6 +224,7 @@ typedef struct Sym {
     union {
         long c;    /* associated number */
         int *d;   /* define token stream */
+        SValue *s; /* associated stack value */
     };
     CType type;    /* associated type */
     union {
@@ -616,6 +617,7 @@ struct TCCState {
 #define VT_BTYPE      0x000f /* mask for basic type */
 #define VT_UNSIGNED   0x0010  /* unsigned type */
 #define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
+#define VT_VLA        0x10000 /* VLA type (also has VT_PTR and VT_ARRAY) */
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
 #define VT_CONSTANT   0x0800  /* const modifier */
 #define VT_VOLATILE   0x1000  /* volatile modifier */

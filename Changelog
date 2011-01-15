@@ -12,6 +12,7 @@ not released:
 - fix 32 to 64 bit casts, alignment and struct issues (Shinichiro Hamaji)
 - mimic all GNU -option forms supported by ld (Kirill Smelkov)
 - support indirect functions as externals (Thomas Preud'homme)
+- Add support for C99 variable length arrays (Thomas Preud'homme)
 
 version 0.9.25:
 

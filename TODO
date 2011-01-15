@@ -48,7 +48,6 @@ Missing features:
 - improve '-E' option.
 - atexit (Nigel Horne)
 - packed attribute
-- C99: add variable size arrays (gcc 3.2 testsuite issue)
 - C99: add complex types (gcc 3.2 testsuite issue)
 - postfix compound literals (see 20010124-1.c)
 

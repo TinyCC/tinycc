@@ -929,7 +929,11 @@ be the best solution.
 #define VT_BTYPE      0x000f /* mask for basic type */
 #define VT_UNSIGNED   0x0010  /* unsigned type */
 #define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
+#define VT_VLA        0x10000 /* VLA type (also has VT_PTR and VT_ARRAY) */
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
+#define VT_CONSTANT   0x0800  /* const modifier */
+#define VT_VOLATILE   0x1000  /* volatile modifier */
+#define VT_SIGNED     0x2000  /* signed type */
 
 #define VT_STRUCT_SHIFT 16   /* structure/enum name shift (16 bits left) */
 @end example
@@ -942,7 +946,8 @@ The @code{VT_UNSIGNED} flag can be set for chars, shorts, ints and long
 longs.
 
 Arrays are considered as pointers @code{VT_PTR} with the flag
-@code{VT_ARRAY} set.
+@code{VT_ARRAY} set. Variable length arrays are considered as special
+arrays and therefore also have flag @code{VT_VLA} set.
 
 The @code{VT_BITFIELD} flag can be set for chars, shorts, ints and long
 longs. If it is set, then the bitfield position is stored from bits
@@ -958,6 +963,10 @@ integer:
 #define VT_EXTERN  0x00000080  /* extern definition */
 #define VT_STATIC  0x00000100  /* static variable */
 #define VT_TYPEDEF 0x00000200  /* typedef definition */
+#define VT_INLINE  0x00000400  /* inline definition */
+#define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
+#define VT_EXPORT  0x00008000  /* win32: data exported from dll */
+#define VT_WEAK    0x00010000  /* win32: data exported from dll */
 @end example
 
 @section Symbols
@@ -969,7 +978,10 @@ contains @code{Sym} structures.
 an idenfier is also a token, so a string is never necessary to store
 it). @code{Sym.t} gives the type of the symbol. @code{Sym.r} is usually
 the register in which the corresponding variable is stored. @code{Sym.c} is
-usually a constant associated to the symbol.
+usually a constant associated to the symbol like its address for normal
+symbols, and the number of entries for symbols representing arrays.
+Variable length arrays use @code{Sym.r} instead, which is a pointer to
+a @code{SValue} holding its runtime size.
 
 Four main symbol stacks are defined:
 

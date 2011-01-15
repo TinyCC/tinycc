@@ -77,6 +77,7 @@ void whitespace_test(void);
 void relocation_test(void);
 void old_style_function(void);
 void alloca_test(void);
+void c99_vla_test(int size1, int size2);
 void sizeof_test(void);
 void typeof_test(void);
 void local_label_test(void);
@@ -563,6 +564,7 @@ int main(int argc, char **argv)
     relocation_test();
     old_style_function();
     alloca_test();
+    c99_vla_test(5, 2);
     sizeof_test();
     typeof_test();
     statement_expr_test();
@@ -2015,6 +2017,26 @@ void alloca_test()
     char *demo = "This is only a test.\n";
     /* Test alloca embedded in a larger expression */
     printf("alloca: %s\n", strcpy(alloca(strlen(demo)+1),demo) );
+#endif
+}
+
+void c99_vla_test(int size1, int size2)
+{
+#if defined __i386__ || defined __x86_64__
+    int tab1[size1 * size2][2], tab2[10][2];
+    void *tab1_ptr, *tab2_ptr;
+
+    printf("Test C99 VLA 1 (sizeof): ");
+    printf("%s\n", (sizeof tab1 == size1 * size2 * 2 * sizeof(int)) ? "PASSED" : "FAILED");
+    tab1_ptr = tab1;
+    tab2_ptr = tab2;
+    printf("Test C99 VLA 2 (ptrs substract): ");
+    printf("%s\n", (tab2 - tab1 == (tab2_ptr - tab1_ptr) / (sizeof(int) * 2)) ? "PASSED" : "FAILED");
+    printf("Test C99 VLA 3 (ptr add): ");
+    printf("%s\n", &tab1[5][1] == (tab1_ptr + (5 * 2 + 1) * sizeof(int)) ? "PASSED" : "FAILED");
+    printf("Test C99 VLA 4 (ptr access): ");
+    tab1[size1][1] = 42;
+    printf("%s\n", (*((int *) (tab1_ptr + (size1 * 2 + 1) * sizeof(int))) == 42) ? "PASSED" : "FAILED");
 #endif
 }
 
