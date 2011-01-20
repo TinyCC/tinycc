@@ -481,7 +481,7 @@ static void asm_parse_directive(TCCState *s1)
         break;
     case TOK_ASM_globl:
     case TOK_ASM_global:
-	{ 
+	do { 
             Sym *sym;
 
             next();
@@ -492,7 +492,7 @@ static void asm_parse_directive(TCCState *s1)
             }
             sym->type.t &= ~VT_STATIC;
             next();
-	}
+	} while (tok == ',');
 	break;
     case TOK_ASM_string:
     case TOK_ASM_ascii:

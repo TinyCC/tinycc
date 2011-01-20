@@ -196,6 +196,11 @@ call *%eax
 call *0x1000
 call func1
 
+.global L5,L6
+
+L5:
+L6:
+
 lcall $0x100, $0x1000
 
 jmp 0x1000
