@@ -90,7 +90,7 @@ static void macro_subst(
 ST_FUNC void skip(int c)
 {
     if (tok != c)
-        error("'%c' expected (got \"%s\")", c, get_tok_str(tok, NULL));
+        error("'%c' expected (got \"%s\")", c, get_tok_str(tok, &tokc));
     next();
 }
 
