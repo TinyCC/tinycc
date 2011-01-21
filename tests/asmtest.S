@@ -210,8 +210,10 @@ jmp *0x1000
 ljmp $0x100, $0x1000
 
 ret
+retl
 
 ret $10
+retl $10
 
 lret
 
