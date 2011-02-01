@@ -478,6 +478,24 @@ int $0x10
     repz
     repne
     repnz
+    nop
+
+    lock ;negl (%eax)
+    wait ;pushf
+    rep  ;stosb
+    repe ;lodsb
+    repz ;cmpsb
+    repne;movsb
+    repnz;outsb
+
+    /* handle one-line prefix + ops */
+    lock  negl (%eax)
+    wait  pushf
+    rep   stosb
+    repe  lodsb
+    repz  cmpsb
+    repne movsb
+    repnz outsb
     
     invd
     wbinvd

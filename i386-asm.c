@@ -574,6 +574,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     static int a32 = 0, o32 = 0, addr32 = 0, data32 = 0;
 #endif
 
+    /* force synthetic ';' after prefix instruction, so we can handle */
+    /* one-line things like "rep stosb" instead of only "rep\nstosb" */
+    if (opcode >= TOK_ASM_wait && opcode <= TOK_ASM_repnz)
+        unget_tok(';');
+
     /* get operands */
     pop = ops;
     nb_ops = 0;

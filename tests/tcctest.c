@@ -2132,11 +2132,50 @@ __asm__ __volatile__(
 return dest;
 }
 
+static char * strncat2(char * dest,const char * src,size_t count)
+{
+int d0, d1, d2, d3;
+__asm__ __volatile__(
+	"repne scasb\n\t" /* one-line repne prefix + string op */
+	"decl %1\n\t"
+	"movl %8,%3\n"
+	"1:\tdecl %3\n\t"
+	"js 2f\n\t"
+	"lodsb\n\t"
+	"stosb\n\t"
+	"testb %%al,%%al\n\t"
+	"jne 1b\n"
+	"2:\txorl %2,%2\n\t"
+	"stosb"
+	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
+	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
+	: "memory");
+return dest;
+}
+
 static inline void * memcpy1(void * to, const void * from, size_t n)
 {
 int d0, d1, d2;
 __asm__ __volatile__(
 	"rep ; movsl\n\t"
+	"testb $2,%b4\n\t"
+	"je 1f\n\t"
+	"movsw\n"
+	"1:\ttestb $1,%b4\n\t"
+	"je 2f\n\t"
+	"movsb\n"
+	"2:"
+	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
+	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+	: "memory");
+return (to);
+}
+
+static inline void * memcpy2(void * to, const void * from, size_t n)
+{
+int d0, d1, d2;
+__asm__ __volatile__(
+	"rep movsl\n\t"  /* one-line rep prefix + string op */
 	"testb $2,%b4\n\t"
 	"je 1f\n\t"
 	"movsw\n"
@@ -2197,6 +2236,10 @@ void asm_test(void)
 
     memcpy1(buf, "hello", 6);
     strncat1(buf, " worldXXXXX", 3);
+    printf("%s\n", buf);
+
+    memcpy2(buf, "hello", 6);
+    strncat2(buf, " worldXXXXX", 3);
     printf("%s\n", buf);
 
     /* 'A' constraint test */

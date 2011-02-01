@@ -33,7 +33,6 @@
      DEF_ASM_OP0(iret, 0xcf)
      DEF_ASM_OP0(rsm, 0x0faa)
      DEF_ASM_OP0(hlt, 0xf4)
-     DEF_ASM_OP0(wait, 0x9b)
      DEF_ASM_OP0(nop, 0x90)
      DEF_ASM_OP0(xlat, 0xd7)
 
@@ -74,6 +73,8 @@ ALT(DEF_ASM_OP2(btcw, 0x0fbb, 0, OPC_MODRM | OPC_WL, OPT_REGW, OPT_REGW | OPT_EA
 ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WL, OPT_IM8, OPT_REGW | OPT_EA))
 
      /* prefixes */
+     DEF_ASM_OP0(wait, 0x9b)
+     DEF_ASM_OP0(fwait, 0x9b)
 #ifdef I386_ASM_16
      DEF_ASM_OP0(a32, 0x67)
      DEF_ASM_OP0(o32, 0x66)
@@ -282,7 +283,6 @@ ALT(DEF_ASM_OP1(fiadds, 0xde, 0, OPC_FARITH | OPC_MODRM, OPT_EA))
      DEF_ASM_OP0(fninit, 0xdbe3)
      DEF_ASM_OP0(fnclex, 0xdbe2)
      DEF_ASM_OP0(fnop, 0xd9d0)
-     DEF_ASM_OP0(fwait, 0x9b)
 
     /* fp load */
     DEF_ASM_OP1(fld, 0xd9c0, 0, OPC_REG, OPT_ST)
