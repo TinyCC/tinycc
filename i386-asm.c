@@ -376,8 +376,20 @@ static void parse_operand(TCCState *s1, Operand *op)
             op->e.v = e.v;
             op->e.sym = e.sym;
         } else {
-            op->e.v = 0;
-            op->e.sym = NULL;
+            next();
+            if (tok == '%') {
+                unget_tok('(');
+                op->e.v = 0;
+                op->e.sym = NULL;
+            } else {
+                /* bracketed offset expression */
+                asm_expr(s1, &e);
+                if (tok != ')')
+                    expect(")");
+                next();
+                op->e.v = e.v;
+                op->e.sym = e.sym;
+            }
         }
         if (tok == '(') {
             next();
