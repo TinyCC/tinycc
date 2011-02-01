@@ -481,6 +481,8 @@ static void asm_parse_directive(TCCState *s1)
         break;
     case TOK_ASM_globl:
     case TOK_ASM_global:
+    case TOK_ASM_weak:
+    tok1 = tok;
 	do { 
             Sym *sym;
 
@@ -491,6 +493,8 @@ static void asm_parse_directive(TCCState *s1)
                 sym->type.t = VT_VOID;
             }
             sym->type.t &= ~VT_STATIC;
+            if (tok1 == TOK_ASM_weak)
+                sym->type.t |= VT_WEAK;
             next();
 	} while (tok == ',');
 	break;

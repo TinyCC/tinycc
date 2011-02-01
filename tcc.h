@@ -715,6 +715,7 @@ struct TCCState {
 
 #define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
 #define TOK_ASM_int TOK_INT
+#define TOK_ASM_weak TOK_WEAK1
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 /* only used for i386 asm opcodes definitions */
