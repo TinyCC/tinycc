@@ -683,6 +683,7 @@ struct TCCState {
 #define TOK_DOTS     0xcc /* three dots */
 #define TOK_SHR      0xcd /* unsigned shift right */
 #define TOK_PPNUM    0xce /* preprocessor number */
+#define TOK_NOSUBST  0xcf /* means following token has already been pp'd */
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */

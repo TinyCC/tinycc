@@ -2797,7 +2797,8 @@ static inline int *macro_twosharps(const int *macro_str)
         if (tok == TOK_TWOSHARPS)
             continue;
         while (*ptr == TOK_TWOSHARPS) {
-            t = *++ptr;
+            do { t = *++ptr; } while (t == TOK_NOSUBST);
+            
             if (t && t != TOK_TWOSHARPS) {
                 TOK_GET(&t, &ptr, &cval);
 
@@ -2856,11 +2857,20 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
         TOK_GET(&t, &ptr, &cval);
         if (t == 0)
             break;
+        if (t == TOK_NOSUBST) {
+            /* following token has already been subst'd. just copy it on */
+            tok_str_add2(tok_str, TOK_NOSUBST, NULL);
+            TOK_GET(&t, &ptr, &cval);
+            goto no_subst;
+        }
         s = define_find(t);
         if (s != NULL) {
             /* if nested substitution, do nothing */
-            if (sym_find2(*nested_list, t))
+            if (sym_find2(*nested_list, t)) {
+                /* and mark it as TOK_NOSUBST, so it doesn't get subst'd again */
+                tok_str_add2(tok_str, TOK_NOSUBST, NULL);
                 goto no_subst;
+            }
             ml.p = macro_ptr;
             if (can_read_stream)
                 ml.prev = *can_read_stream, *can_read_stream = &ml;
@@ -2927,6 +2937,9 @@ ST_FUNC void next(void)
                 macro_ptr_allocated = NULL;
                 macro_ptr = NULL;
             }
+            goto redo;
+        } else if (tok == TOK_NOSUBST) {
+            /* discard preprocessor's nosubst markers */
             goto redo;
         }
     }

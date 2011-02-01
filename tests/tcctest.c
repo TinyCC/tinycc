@@ -45,6 +45,7 @@
 void string_test();
 void expr_test();
 void macro_test();
+void recursive_macro_test();
 void scope_test();
 void forward_test();
 void funcptr_test();
@@ -281,6 +282,35 @@ comment
     TEST2();
 }
 
+
+static void print_num(char *fn, int line, int num) {
+    printf("fn %s, line %d, num %d\n", fn, line, num);
+}
+
+void recursive_macro_test(void)
+{
+#if 0 /* doesnt work yet */
+#define ELF32_ST_TYPE(val)              ((val) & 0xf)
+#define ELF32_ST_INFO(bind, type)       (((bind) << 4) + ((type) & 0xf))
+#define STB_WEAK        2               /* Weak symbol */
+#define ELFW(type) ELF##32##_##type
+    printf("%d\n", ELFW(ST_INFO)(STB_WEAK, ELFW(ST_TYPE)(123)));
+#endif
+
+#define WRAP(x) x
+    
+#define print_num(x) print_num(__FILE__,__LINE__,x)
+    print_num(123);
+    WRAP(print_num(123));
+    WRAP(WRAP(print_num(123)));
+
+static struct recursive_macro { int rm_field; } G;
+#define rm_field (G.rm_field)
+    printf("rm_field = %d\n", rm_field);
+    printf("rm_field = %d\n", WRAP(rm_field));
+    WRAP((printf("rm_field = %d %d\n", rm_field, WRAP(rm_field))));
+}
+
 int op(a,b)
 {
     return a / b;
@@ -501,6 +531,7 @@ int main(int argc, char **argv)
     string_test();
     expr_test();
     macro_test();
+    recursive_macro_test();
     scope_test();
     forward_test();
     funcptr_test();
