@@ -82,6 +82,7 @@ void local_label_test(void);
 void statement_expr_test(void);
 void asm_test(void);
 void builtin_test(void);
+void weak_test(void);
 
 int fib(int n);
 void num(int n);
@@ -537,6 +538,7 @@ int main(int argc, char **argv)
     local_label_test();
     asm_test();
     builtin_test();
+    weak_test();
     return 0; 
 }
 
@@ -2226,6 +2228,22 @@ void builtin_test(void)
     printf("res = %d\n", __builtin_constant_p(constant_p_var));
 }
 
+
+extern int __attribute__((weak)) weak_f1(void);
+extern int __attribute__((weak)) weak_f2(void);
+extern int __attribute__((weak)) weak_v1;
+extern int __attribute__((weak)) weak_v2;
+
+void __attribute__((weak)) weak_test(void)
+{
+	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
+	printf("weak_f2=%d\n", weak_f2 ? weak_f2() : 123);
+	printf("weak_v1=%d\n",&weak_v1 ? weak_v1   : 123);
+	printf("weak_v2=%d\n",&weak_v2 ? weak_v2   : 123);
+}
+
+int __attribute__((weak)) weak_f2() { return 222; }
+int __attribute__((weak)) weak_v2 = 222;
 
 void const_func(const int a)
 {

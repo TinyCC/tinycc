@@ -293,7 +293,6 @@ typedef struct AttributeDef {
 #define FUNC_ARGS(r) (((AttributeDef*)&(r))->func_args)
 #define FUNC_ALIGN(r) (((AttributeDef*)&(r))->aligned)
 #define FUNC_PACKED(r) (((AttributeDef*)&(r))->packed)
-#define FUNC_WEAK(r) (((AttributeDef*)&(r))->weak)
 #define ATTR_MODE(r)  (((AttributeDef*)&(r))->mode)
 #define INT_ATTR(ad) (*(int*)(ad))
 
@@ -629,11 +628,12 @@ struct TCCState {
 #define VT_INLINE  0x00000400  /* inline definition */
 #define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
 #define VT_EXPORT  0x00008000  /* win32: data exported from dll */
+#define VT_WEAK    0x00010000  /* win32: data exported from dll */
 
-#define VT_STRUCT_SHIFT 16   /* shift for bitfield shift values */
+#define VT_STRUCT_SHIFT 17   /* shift for bitfield shift values */
 
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT)
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT | VT_WEAK)
 #define VT_TYPE    (~(VT_STORAGE))
 
 /* token values */
