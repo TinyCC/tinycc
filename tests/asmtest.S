@@ -248,7 +248,11 @@ L3:
 
  fadd
  fadd %st(1), %st
+ fadd %st(0), %st(1)
  fadd %st(3)
+
+ fmul %st(0),%st(0)
+ fmul %st(0),%st(1)
 
  faddp %st(5)
  faddp
