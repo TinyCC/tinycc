@@ -6,7 +6,7 @@
 TESTS = libtest test3
 
 # these should work too
-# TESTS += test1 test2 speedtest btest
+# TESTS += test1 test2 speedtest btest weaktest
 
 # these don't work as they should
 # TESTS += test4 asmtest
@@ -26,7 +26,7 @@ DISAS=objdump -d
 all test : $(TESTS)
 
 # make sure that tcc exists
-test1 test2 test3 test4 btest speedtest asmtest : ../tcc
+test1 test2 test3 test4 btest speedtest asmtest weaktest : ../tcc
 ../%:
 	$(MAKE) -C .. $*
 
@@ -115,6 +115,13 @@ speedtest: ex2 ex3
 	time $(TCC) -run ../examples/ex2.c 1238 2 3 4 10 13 4
 	time ./ex3 35
 	time $(TCC) -run ../examples/ex3.c 35
+
+weaktest: test.ref
+	$(TCC) -c tcctest.c -o weaktest.tcc.o
+	 $(CC) -c tcctest.c -o weaktest.gcc.o -I. -w $(CFLAGS)
+	objdump -t weaktest.tcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.tcc.o.txt
+	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
+	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
 
 ex%: ../examples/ex%.c
 	$(CC) -o $@ $< $(CFLAGS)

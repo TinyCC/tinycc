@@ -5194,6 +5194,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             vsetc(type, VT_CONST | VT_SYM, &cval);
             vtop->sym = sym;
         }
+        /* patch symbol weakness */
+        if (type->t & VT_WEAK) {
+            unsigned char *st_info = 
+                &((ElfW(Sym) *)symtab_section->data)[sym->c].st_info;
+            *st_info = ELF32_ST_INFO(STB_WEAK, ELF32_ST_TYPE(*st_info));
+        }
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
@@ -5314,6 +5320,12 @@ static void gen_function(Sym *sym)
     /* patch symbol size */
     ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
         ind - func_ind;
+    /* patch symbol weakness (this definition overrules any prototype) */
+    if (sym->type.t & VT_WEAK) {
+        unsigned char *st_info = 
+            &((ElfW(Sym) *)symtab_section->data)[sym->c].st_info;
+        *st_info = ELF32_ST_INFO(STB_WEAK, ELF32_ST_TYPE(*st_info));
+    }
     if (tcc_state->do_debug) {
         put_stabn(N_FUN, 0, 0, ind - func_ind);
     }
