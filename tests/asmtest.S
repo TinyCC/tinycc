@@ -564,3 +564,7 @@ int $0x10
     pushl $1
     pushw $1
     push $1
+
+#ifdef __ASSEMBLER__ // should be defined, for S files
+    inc %eax
+#endif

@@ -1080,6 +1080,12 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     if (ext[0])
         ext++;
 
+#ifdef CONFIG_TCC_ASM
+    /* if .S file, define __ASSEMBLER__ like gcc does */
+    if (!strcmp(ext, "S"))
+        tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
+#endif
+
     /* open the file */
     ret = tcc_open(s1, filename);
     if (ret < 0) {
