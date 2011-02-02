@@ -1274,7 +1274,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 
     if (!s->nostdinc) {
         /* default include paths */
-        /* XXX: reverse order needed if -isystem support */
+        /* -isystem paths have already been handled */
 #ifndef TCC_TARGET_PE
         tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/local/include");
         tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/include");
