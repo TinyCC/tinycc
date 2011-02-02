@@ -1084,6 +1084,7 @@ void num(int n)
         printf("%c", *p);
     }
     printf("\n");
+    free(tab);
 }
 
 /* structure assignment tests */
