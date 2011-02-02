@@ -47,7 +47,7 @@ static void help(void)
            "  -v          display current version, increase verbosity\n"
            "  -c          compile only - generate an object file\n"
            "  -o outfile  set output filename\n"
-           "  -Bdir       set tcc internal library path\n"
+           "  -Bdir       set tcc internal library and include path\n"
            "  -bench      output compilation statistics\n"
            "  -run        run compiled source\n"
            "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
@@ -374,6 +374,12 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_B:
                 /* set tcc utilities path (mainly for tcc development) */
                 tcc_set_lib_path(s, optarg);
+                /* append /include and add it as -isystem, as gcc does */
+                r = tcc_strdup(optarg);
+                r = tcc_realloc(r, strlen(r) + 8 + 1);
+                strcat(r, "/include");
+                tcc_add_sysinclude_path(s, r);
+                tcc_free(r);
                 break;
             case TCC_OPTION_l:
                 dynarray_add((void ***)&files, &nb_files, r);
