@@ -2010,7 +2010,7 @@ void old_style_function(void)
 
 void alloca_test()
 {
-#if defined __i386__ || defined __x86_64__
+#ifdef TOK_alloca
     char *p = alloca(16);
     strcpy(p,"123456789012345");
     printf("alloca: p is %s\n", p);
@@ -2022,7 +2022,7 @@ void alloca_test()
 
 void c99_vla_test(int size1, int size2)
 {
-#if defined __i386__ || defined __x86_64__
+#ifdef TOK_alloca
     int tab1[size1 * size2][2], tab2[10][2];
     void *tab1_ptr, *tab2_ptr;
 
