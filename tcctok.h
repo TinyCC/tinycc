@@ -237,6 +237,8 @@
      DEF(TOK_memmove, "memmove")
      DEF(TOK_strlen, "strlen")
      DEF(TOK_strcpy, "strcpy")
+#endif
+#if defined __i386__ || defined __x86_64__
      DEF(TOK_alloca, "alloca")
 #endif
 
