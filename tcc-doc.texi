@@ -935,7 +935,7 @@ be the best solution.
 #define VT_VOLATILE   0x0200  /* volatile modifier */
 #define VT_SIGNED     0x0400  /* signed type */
 
-#define VT_STRUCT_SHIFT 16   /* structure/enum name shift (16 bits left) */
+#define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 @end example
 
 When a reference to another type is needed (for pointers, functions and
