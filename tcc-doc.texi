@@ -929,11 +929,11 @@ be the best solution.
 #define VT_BTYPE      0x000f /* mask for basic type */
 #define VT_UNSIGNED   0x0010  /* unsigned type */
 #define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
-#define VT_VLA        0x0040  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_BITFIELD   0x0080  /* bitfield modifier */
-#define VT_CONSTANT   0x0100  /* const modifier */
-#define VT_VOLATILE   0x0200  /* volatile modifier */
-#define VT_SIGNED     0x0400  /* signed type */
+#define VT_VLA        0x10000 /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_BITFIELD   0x0040  /* bitfield modifier */
+#define VT_CONSTANT   0x0800  /* const modifier */
+#define VT_VOLATILE   0x1000  /* volatile modifier */
+#define VT_SIGNED     0x2000  /* signed type */
 
 #define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 @end example
@@ -960,13 +960,13 @@ During parsing, the storage of an object is also stored in the type
 integer:
 
 @example
-#define VT_EXTERN  0x00000800  /* extern definition */
-#define VT_STATIC  0x00001000  /* static variable */
-#define VT_TYPEDEF 0x00002000  /* typedef definition */
-#define VT_INLINE  0x00004000  /* inline definition */
-#define VT_IMPORT  0x00008000  /* win32: extern data imported from dll */
-#define VT_EXPORT  0x00010000  /* win32: data exported from dll */
-#define VT_WEAK    0x00020000  /* win32: data exported from dll */
+#define VT_EXTERN  0x00000080  /* extern definition */
+#define VT_STATIC  0x00000100  /* static variable */
+#define VT_TYPEDEF 0x00000200  /* typedef definition */
+#define VT_INLINE  0x00000400  /* inline definition */
+#define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
+#define VT_EXPORT  0x00008000  /* win32: data exported from dll */
+#define VT_WEAK    0x00010000  /* win32: data exported from dll */
 @end example
 
 @section Symbols
