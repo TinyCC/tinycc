@@ -931,7 +931,7 @@ be the best solution.
 #define VT_ARRAY      0x0020  /* array type (also has VT_PTR) */
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
 
-#define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
+#define VT_STRUCT_SHIFT 17   /* structure/enum name shift (14 bits left) */
 @end example
 
 When a reference to another type is needed (for pointers, functions and
