@@ -3162,21 +3162,17 @@ static void post_type(CType *type, AttributeDef *ad)
         n = -1;
         if (tok != ']') {
             gexpr();
-#ifdef TOK_alloca
             if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-#endif
                 n = vtop->c.i;
                 last_vtop = vtop;
                 if (n < 0)
                     error("invalid array size");
-#ifdef TOK_alloca
             } else {
                 if (!is_integer_btype(vtop->type.t & VT_BTYPE))
                     error("size of variable length array should be an integer");
                 type->t |= VT_VLA;
                 last_vtop = vtop;
             }
-#endif
         }
         skip(']');
         /* parse next post type */
@@ -4868,11 +4864,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         int a;
         CValue retcval;
 
-/* No need to coment all the block as it will never be called without
-   TOK_alloca defined (See ifdef TOK_alloca stanza in post_type */
-#ifdef TOK_alloca
         vpush_global_sym(&func_old_type, TOK_alloca);
-#endif
         vla_runtime_type_size(type, &a);
         gfunc_call(1);
 
