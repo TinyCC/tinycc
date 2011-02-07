@@ -436,10 +436,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     }
 
     if (!sym->c) {
-        if (sym->a)
-          name = get_tok_str(sym->a, NULL);
-        else
-          name = get_tok_str(sym->v, NULL);
+        name = get_tok_str(sym->v, NULL);
 #ifdef CONFIG_TCC_BCHECK
         if (tcc_state->do_bounds_check) {
             char buf[32];
@@ -495,6 +492,9 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
             buf1[0] = '_';
             pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
             name = buf1;
+        }
+        if (sym->asm_label) {
+            name = sym->asm_label;
         }
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = add_elf_sym(symtab_section, value, size, info, other, sh_num, name);

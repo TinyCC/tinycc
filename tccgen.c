@@ -128,6 +128,7 @@ static inline Sym *sym_malloc(void)
 ST_INLN void sym_free(Sym *sym)
 {
     sym->next = sym_free_first;
+    tcc_free(sym->asm_label);
     sym_free_first = sym;
 }
 
@@ -136,7 +137,7 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
 {
     Sym *s;
     s = sym_malloc();
-    s->a = 0;
+    s->asm_label = NULL;
     s->v = v;
     s->type.t = t;
     s->type.ref = NULL;
@@ -360,8 +361,10 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
     return s;
 }
 
-/* define a new external reference to a symbol 'v' of type 'u' */
-static Sym *external_sym(int v, CType *type, int r)
+/* define a new external reference to a symbol 'v' with alternate asm
+   name 'asm_label' of type 'u'. 'asm_label' is equal to NULL if there
+   is no alternate name (most cases) */
+static Sym *external_sym(int v, CType *type, int r, char *asm_label)
 {
     Sym *s;
 
@@ -369,8 +372,7 @@ static Sym *external_sym(int v, CType *type, int r)
     if (!s) {
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
-        if (type && type->ref && type->ref->a)
-            s->a = type->ref->a;
+        s->asm_label = asm_label;
         s->type.t |= VT_EXTERN;
     } else if (s->type.ref == func_old_type.ref) {
         s->type.ref = type->ref;
@@ -3029,8 +3031,6 @@ static void post_type(CType *type, AttributeDef *ad)
     CType pt;
 
     if (tok == '(') {
-        TokenSym *ts = NULL;
-
         /* function declaration */
         next();
         l = 0;
@@ -3086,19 +3086,10 @@ static void post_type(CType *type, AttributeDef *ad)
         /* NOTE: const is ignored in returned type as it has a special
            meaning in gcc / C++ */
         type->t &= ~(VT_STORAGE | VT_CONSTANT); 
-        if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
-          CString astr;
-
-          asm_label_instr(&astr);
-          ts = tok_alloc(astr.data, strlen(astr.data));
-          cstr_free(&astr);
-        }
         post_type(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         ad->func_args = arg_size;
         s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
-        if (ts != NULL)
-          s->a = ts->tok;
         s->next = first;
         type->t = t1 | VT_FUNC;
         type->ref = s;
@@ -5251,7 +5242,8 @@ static void func_decl_list(Sym *func_sym)
     CType btype, type;
 
     /* parse each declaration */
-    while (tok != '{' && tok != ';' && tok != ',' && tok != TOK_EOF) {
+    while (tok != '{' && tok != ';' && tok != ',' && tok != TOK_EOF &&
+           tok != TOK_ASM1 && tok != TOK_ASM2 && tok != TOK_ASM3) {
         if (!parse_btype(&btype, &ad)) 
             expect("declaration list");
         if (((btype.t & VT_BTYPE) == VT_ENUM ||
@@ -5298,10 +5290,7 @@ static void gen_function(Sym *sym)
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
-    if (sym->a)
-      funcname = get_tok_str(sym->a, NULL);
-    else
-      funcname = get_tok_str(sym->v, NULL);
+    funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
     /* put debug symbol */
     if (tcc_state->do_debug)
@@ -5387,12 +5376,6 @@ ST_FUNC void decl(int l)
     Sym *sym;
     AttributeDef ad;
     
-    /*
-     *  type.ref must be either a valid reference or NULL for external_sym to
-     *  work. As type = btype is executed before external_sym is call, setting
-     *  btype.ref to 0 is enough.
-     */
-    btype.ref = 0;
     while (1) {
         if (!parse_btype(&btype, &ad)) {
             /* skip redundant ';' */
@@ -5548,39 +5531,24 @@ ST_FUNC void decl(int l)
                     sym = sym_push(v, &type, INT_ATTR(&ad), 0);
                     sym->type.t |= VT_TYPEDEF;
                 } else if ((type.t & VT_BTYPE) == VT_FUNC) {
+                    char *asm_label; // associated asm label
                     Sym *fn;
+
+                    asm_label = NULL;
                     /* external function definition */
                     /* specific case for func_call attribute */
                     type.ref->r = INT_ATTR(&ad);
-                    fn = external_sym(v, &type, 0);
 
                     if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
-                        char target[256];
+                        CString astr;
 
-                        *target = 0;
-                        next();
-                        skip('(');
-                        /* Part 1: __USER_LABEL_PREFIX__ (user defined) */
-                        if (tok == TOK_STR)
-                            pstrcat(target, sizeof(target), tokc.cstr->data);
-                        else
-                            pstrcat(target, sizeof(target), get_tok_str(tok, NULL));
-
-                        next();
-                        /* Part 2: api name */
-                        if (tok == TOK_STR)
-                            pstrcat(target, sizeof(target), tokc.cstr->data);
-                        else
-                            pstrcat(target, sizeof(target), get_tok_str(tok, NULL));
-
-                        next();
-                        skip(')');
-                        if (tcc_state->warn_unsupported)
-                            warning("ignoring redirection from %s to %s\n", get_tok_str(v, NULL), target);
-
-                        if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
-                            parse_attribute((AttributeDef *) &fn->type.ref->r);
+                        asm_label_instr(&astr);
+                        asm_label = tcc_strdup(astr.data);
+                        cstr_free(&astr);
                     }
+                    fn = external_sym(v, &type, 0, asm_label);
+                    if (gnu_ext && (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2))
+                        parse_attribute((AttributeDef *) &fn->type.ref->r);
                 } else {
                     /* not lvalue if array */
                     r = 0;
@@ -5594,7 +5562,7 @@ ST_FUNC void decl(int l)
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
-                        external_sym(v, &type, r);
+                        external_sym(v, &type, r, NULL);
                     } else {
                         type.t |= (btype.t & VT_STATIC); /* Retain "static". */
                         if (type.t & VT_STATIC)
