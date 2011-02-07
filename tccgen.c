@@ -75,7 +75,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg, int is_expr);
-static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, char *asm_label, int scope);
 static void expr_eq(void);
 static void unary_type(CType *type);
 static int is_compatible_parameter_types(CType *type1, CType *type2);
@@ -3385,7 +3385,7 @@ ST_FUNC void unary(void)
         mk_pointer(&type);
         type.t |= VT_ARRAY;
         memset(&ad, 0, sizeof(AttributeDef));
-        decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
+        decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, NULL, 0);
         break;
     case '(':
         next();
@@ -3404,7 +3404,7 @@ ST_FUNC void unary(void)
                 if (!(type.t & VT_ARRAY))
                     r |= lvalue_type(type.t);
                 memset(&ad, 0, sizeof(AttributeDef));
-                decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
+                decl_initializer_alloc(&type, &ad, r, 1, 0, NULL, 0);
             } else {
                 if (sizeof_caller) {
                     vpush(&type);
@@ -4992,12 +4992,14 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 /* parse an initializer for type 't' if 'has_init' is non zero, and
    allocate space in local or global data space ('r' is either
    VT_LOCAL or VT_CONST). If 'v' is non zero, then an associated
-   variable 'v' of scope 'scope' is declared before initializers are
-   parsed. If 'v' is zero, then a reference to the new object is put
-   in the value stack. If 'has_init' is 2, a special parsing is done
-   to handle string constants. */
+   variable 'v' with an associated name represented by 'asm_label' of
+   scope 'scope' is declared before initializers are parsed. If 'v' is
+   zero, then a reference to the new object is put in the value stack.
+   If 'has_init' is 2, a special parsing is done to handle string
+   constants. */
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, 
-                                   int has_init, int v, int scope)
+                                   int has_init, int v, char *asm_label,
+                                   int scope)
 {
     int size, align, addr, data_offset;
     int level;
@@ -5164,6 +5166,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (v) {
             if (scope != VT_CONST || !sym) {
                 sym = sym_push(v, type, r | VT_SYM, 0);
+                sym->asm_label = asm_label;
             }
             /* update symbol definition */
             if (sec) {
@@ -5550,10 +5553,20 @@ ST_FUNC void decl(int l)
                     if (gnu_ext && (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2))
                         parse_attribute((AttributeDef *) &fn->type.ref->r);
                 } else {
+                    char *asm_label; // associated asm label
+
                     /* not lvalue if array */
                     r = 0;
+                    asm_label = NULL;
                     if (!(type.t & VT_ARRAY))
                         r |= lvalue_type(type.t);
+                    if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+                        CString astr;
+
+                        asm_label_instr(&astr);
+                        asm_label = tcc_strdup(astr.data);
+                        cstr_free(&astr);
+                    }
                     has_init = (tok == '=');
                     if ((btype.t & VT_EXTERN) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
@@ -5562,7 +5575,7 @@ ST_FUNC void decl(int l)
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
-                        external_sym(v, &type, r, NULL);
+                        external_sym(v, &type, r, asm_label);
                     } else {
                         type.t |= (btype.t & VT_STATIC); /* Retain "static". */
                         if (type.t & VT_STATIC)
@@ -5571,7 +5584,7 @@ ST_FUNC void decl(int l)
                             r |= l;
                         if (has_init)
                             next();
-                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
+                        decl_initializer_alloc(&type, &ad, r, has_init, v, asm_label, l);
                     }
                 }
                 if (tok != ',') {
