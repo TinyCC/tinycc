@@ -5423,10 +5423,6 @@ ST_FUNC void decl(int l)
         while (1) { /* iterate thru each declaration */
             type = btype;
             type_decl(&type, &ad, &v, TYPE_DIRECT);
-            if (((type.t & (VT_STATIC|VT_FUNC)) == (VT_STATIC|VT_FUNC))
-                && (l == VT_LOCAL)) {
-                error("Function without file scope cannot be static");
-            }
 #if 0
             {
                 char buf[500];
@@ -5435,6 +5431,9 @@ ST_FUNC void decl(int l)
             }
 #endif
             if ((type.t & VT_BTYPE) == VT_FUNC) {
+                if ((type.t & VT_STATIC) && (l == VT_LOCAL)) {
+                    error("function without file scope cannot be static");
+                }
                 /* if old style function prototype, we accept a
                    declaration list */
                 sym = type.ref;
