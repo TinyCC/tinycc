@@ -991,8 +991,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
 #endif
+    /* enable this if you want symbols with leading underscore on windows: */
 #if defined(TCC_TARGET_PE) && 0
-    /* XXX: currently the PE linker is not ready to support that */
     s->leading_underscore = 1;
 #endif
     if (s->section_align == 0)

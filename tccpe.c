@@ -364,31 +364,41 @@ struct pe_info {
 
 /* --------------------------------------------*/
 
-static const char* get_alt_symbol(char *buffer, const char *symbol)
+static const char *pe_export_name(TCCState *s1, ElfW(Sym) *sym)
 {
-    const char *p;
-    p = strrchr(symbol, '@');
-    if (p && isnum(p[1]) && symbol[0] == '_') { /* stdcall decor */
-        strcpy(buffer, symbol+1)[p-symbol-1] = 0;
-    } else if (symbol[0] != '_') { /* try non-ansi function */
-        buffer[0] = '_', strcpy(buffer + 1, symbol);
-    } else if (0 == memcmp(symbol, "__imp__", 7)) { /* mingw 2.0 */
-        strcpy(buffer, symbol + 6);
-    } else if (0 == memcmp(symbol, "_imp___", 7)) { /* mingw 3.7 */
-        strcpy(buffer, symbol + 6);
-    } else {
-        return symbol;
-    }
-    return buffer;
+    const char *name = symtab_section->link->data + sym->st_name;
+    if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & 2))
+        return name + 1;
+    return name;
 }
 
-static int pe_find_import(TCCState * s1, const char *symbol)
+static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
 {
     char buffer[200];
-    const char *s;
+    const char *s, *p;
     int sym_index, n = 0;
+
     do {
-        s = n ? get_alt_symbol(buffer, symbol) : symbol;
+        s = pe_export_name(s1, sym);
+        if (n) {
+            /* second try: */
+	    if (sym->st_other & 2) {
+                /* try w/0 stdcall deco (windows API convention) */
+	        p = strrchr(s, '@');
+	        if (!p || s[0] != '_')
+	            break;
+	        strcpy(buffer, s+1)[p-s-1] = 0;
+	    } else if (s[0] != '_') { /* try non-ansi function */
+	        buffer[0] = '_', strcpy(buffer + 1, s);
+	    } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
+	        strcpy(buffer, s + 6);
+	    } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
+	        strcpy(buffer, s + 6);
+	    } else {
+	        break;
+	    }
+	    s = buffer;
+        }
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
         // printf("find (%d) %d %s\n", n, sym_index, s);
     } while (0 == sym_index && ++n < 2);
@@ -899,7 +909,7 @@ static void pe_build_exports(struct pe_info *pe)
     sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
         sym = (ElfW(Sym)*)symtab_section->data + sym_index;
-        name = symtab_section->link->data + sym->st_name;
+        name = pe_export_name(pe->s1, sym);
         if ((sym->st_other & 1)
             /* export only symbols from actually written sections */
             && pe->s1->sections[sym->st_shndx]->sh_addr) {
@@ -1219,7 +1229,7 @@ static int pe_check_symbols(struct pe_info *pe)
 
             const char *name = symtab_section->link->data + sym->st_name;
             unsigned type = ELFW_ST_TYPE(sym->st_info);
-            int imp_sym = pe_find_import(pe->s1, name);
+            int imp_sym = pe_find_import(pe->s1, sym);
             struct import_symbol *is;
 
             if (0 == imp_sym)
@@ -1756,10 +1766,16 @@ static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
 
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
-        ? PE_GUI == pe_type ? "_runwinmain" : NULL
-        : PE_DLL == pe_type ? PE_STDSYM("_dllstart","@12")
-        : PE_GUI == pe_type ? "_winstart" : "_start"
+        ? PE_GUI == pe_type ? "__runwinmain" : "_main"
+        : PE_DLL == pe_type ? PE_STDSYM("__dllstart","@12")
+        : PE_GUI == pe_type ? "__winstart" : "__start"
         ;
+
+    if (!s1->leading_underscore || strchr(start_symbol, '@')) {
+        ++start_symbol;
+        if (start_symbol[0] != '_')
+            start_symbol = NULL;
+    }
 
     /* grab the startup code from libtcc1 */
     if (start_symbol)

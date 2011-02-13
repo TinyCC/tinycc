@@ -150,6 +150,8 @@ seh_scopetable:
 seh_handler:
     jmp _except_handler3
 
+.globl ___try__
+___try__:
 .globl __try__
 __try__:
     push %ebp
