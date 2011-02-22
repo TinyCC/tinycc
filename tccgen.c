@@ -4768,7 +4768,7 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
                              int first, int size_only)
 {
-    int index, array_length, n, no_oblock, nb, parlevel, i;
+    int index, array_length, n, no_oblock, nb, parlevel, parlevel1, i;
     int size1, align1, expr_type;
     Sym *s, *f;
     CType *t1;
@@ -4970,13 +4970,17 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         skip('}');
     } else if (size_only) {
         /* just skip expression */
-        parlevel = 0;
-        while ((parlevel > 0 || (tok != '}' && tok != ',')) && 
-               tok != -1) {
+        parlevel = parlevel1 = 0;
+        while ((parlevel > 0 || parlevel1 > 0 ||
+		(tok != '}' && tok != ',')) &&  tok != -1) {
             if (tok == '(')
                 parlevel++;
             else if (tok == ')')
                 parlevel--;
+	    else if (tok == '{')
+		parlevel1++;
+	    else if (tok == '}')
+		parlevel1--;
             next();
         }
     } else {
