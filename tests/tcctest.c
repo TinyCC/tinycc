@@ -1269,7 +1269,7 @@ struct complexinit0 {
 
 struct complexinit {
     int a;
-    struct complexinit0 *b;
+    const struct complexinit0 *b;
 };
 
 const static struct complexinit cix[] = {
