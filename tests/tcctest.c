@@ -827,27 +827,6 @@ struct aligntest4 {
     double a[0];
 };
 
-struct complexinit0 {
-    int a;
-    int b;
-};
-
-struct complexinit {
-    int a;
-    struct complexinit0 *b;
-};
-
-const static struct complexinit cix[] = {
-    [0] = {
-	.a = 0xfefa,
-	.b = (const struct complexinit0[]) {
-		{ 0x80, 0x81 },
-		{ 0x82, 0x83 },
-		{}
-	}
-    }
-};
-
 void struct_test()
 {
     struct1 *s;
@@ -877,11 +856,6 @@ void struct_test()
     printf("st2: %d %d %d\n",
            s->f1, s->f2, s->f3);
     printf("str_addr=%x\n", (int)st1.str - (int)&st1.f1);
-    printf("cix: %d %d %d %d %d %d %d\n",
-	cix[0].a,
-	cix[0].b[0].a, cix[0].b[0].b,
-	cix[0].b[1].a, cix[0].b[1].b,
-	cix[0].b[2].a, cix[0].b[2].b);
 
     /* align / size tests */
     printf("aligntest1 sizeof=%d alignof=%d\n",
@@ -1288,6 +1262,42 @@ int sinit18[10] = {
     [8] = 10,
 };
 
+struct complexinit0 {
+    int a;
+    int b;
+};
+
+struct complexinit {
+    int a;
+    struct complexinit0 *b;
+};
+
+const static struct complexinit cix[] = {
+    [0] = {
+	.a = 2000,
+	.b = (const struct complexinit0[]) {
+		{ 2001, 2002 },
+		{ 2003, 2003 },
+		{}
+	}
+    }
+};
+
+struct complexinit2 {
+	int a;
+	int b[];
+};
+
+struct complexinit2 cix21 = {
+	.a = 3000,
+	.b = { 3001, 3002, 3003 }
+};
+
+struct complexinit2 cix22 = {
+	.a = 4000,
+	.b = { 4001, 4002, 4003, 4004, 4005, 4006 }
+};
+
 void init_test(void)
 {
     int linit1 = 2;
@@ -1380,6 +1390,13 @@ void init_test(void)
     for(i=0;i<10;i++)
         printf("%x ", sinit18[i]);
     printf("\n");
+    /* complex init check */
+    printf("cix: %d %d %d %d %d %d %d\n",
+	cix[0].a,
+	cix[0].b[0].a, cix[0].b[0].b,
+	cix[0].b[1].a, cix[0].b[1].b,
+	cix[0].b[2].a, cix[0].b[2].b);
+    printf("cix2: %d %d\n", cix21.b[2], cix22.b[5]);
 }
 
 

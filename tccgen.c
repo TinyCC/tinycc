@@ -1944,7 +1944,7 @@ ST_FUNC int type_size(CType *type, int *a)
     if (bt == VT_STRUCT) {
         /* struct/union */
         s = type->ref;
-        *a = s->r;
+        *a = s->r & 0xffffff;
         return s->c;
     } else if (bt == VT_PTR) {
         if (type->t & VT_ARRAY) {
@@ -2586,7 +2586,7 @@ static void parse_attribute(AttributeDef *ad)
 static void struct_decl(CType *type, int u)
 {
     int a, v, size, align, maxalign, c, offset;
-    int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
+    int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt, resize;
     Sym *s, *ss, *ass, **ps;
     AttributeDef ad;
     CType type1, btype;
@@ -2647,6 +2647,7 @@ static void struct_decl(CType *type, int u)
             }
             skip('}');
         } else {
+	    resize = 0;
             maxalign = 1;
             ps = &s->next;
             prevbt = VT_INT;
@@ -2737,6 +2738,8 @@ static void struct_decl(CType *type, int u)
                                 offset = c;
                                 if (size > 0)
                                     c += size;
+				if (size < 0)
+				    resize = 1;
                             } else {
                                 offset = 0;
                                 if (size > c)
@@ -2777,7 +2780,7 @@ static void struct_decl(CType *type, int u)
             skip('}');
             /* store size and alignment */
             s->c = (c + maxalign - 1) & -maxalign; 
-            s->r = maxalign;
+            s->r = maxalign | (resize ? (1 << 31) : 0);
         }
     }
 }
@@ -3113,6 +3116,8 @@ static void post_type(CType *type, AttributeDef *ad)
         /* we push a anonymous symbol which will contain the array
            element type */
         s = sym_push(SYM_FIELD, type, 0, n);
+	if (n < 0)
+		ARRAY_RESIZE(s->r) = 1;
         type->t = t1 | VT_ARRAY | VT_PTR;
         type->ref = s;
     }
@@ -4845,6 +4850,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             }
         } else {
             index = 0;
+	    if (ARRAY_RESIZE(s->r))
+		n = -1;
             while (tok != '}') {
                 decl_designator(type, sec, c, &index, NULL, size_only);
                 if (n >= 0 && index >= n)
@@ -4918,6 +4925,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         array_length = 0;
         index = 0;
         n = s->c;
+	if (s->r & (1<<31))
+	    n = -1;
         while (tok != '}') {
             decl_designator(type, sec, c, NULL, &f, size_only);
             index = f->c;
@@ -4954,7 +4963,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             skip(',');
         }
         /* put zeros at the end */
-        if (!size_only && array_length < n) {
+        if (!size_only && n >= 0 && array_length < n) {
             init_putz(type, sec, c + array_length, 
                       n - array_length);
         }
@@ -4964,6 +4973,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             skip(')');
             par_count--;
         }
+	if (n < 0)
+	    s->c = array_length;
     } else if (tok == '{') {
         next();
         decl_initializer(type, sec, c, first, size_only);
@@ -5011,6 +5022,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     TokenString init_str;
     Section *sec;
 
+    /* resize the struct */
+    if ((type->t & VT_BTYPE) == VT_STRUCT && (type->ref->r & (1<<31)) != 0)
+	type->ref->c = -1;
     size = type_size(type, &align);
     /* If unknown size, we must evaluate it before
        evaluating initializers because
