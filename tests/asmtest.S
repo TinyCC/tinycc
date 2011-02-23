@@ -1,3 +1,4 @@
+# gas comment with ``gnu'' style quotes
 
 /* some directive tests */
 

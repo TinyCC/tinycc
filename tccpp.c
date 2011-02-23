@@ -1625,6 +1625,11 @@ include_done:
         } else {
             if (!(saved_parse_flags & PARSE_FLAG_ASM_COMMENTS))
                 warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
+            else {
+                /* this is a gas line comment in an 'S' file. */
+                file->buf_ptr = parse_line_comment(file->buf_ptr);
+                goto the_end;
+            }
         }
         break;
     }
