@@ -601,8 +601,7 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASM_type:
         { 
             Sym *sym;
-            char newtype[64];
-            newtype[0] = 0;
+            const char *newtype;
 
             next();
             sym = label_find(tok);
@@ -613,13 +612,15 @@ static void asm_parse_directive(TCCState *s1)
 
             next();
             skip(',');
-            skip('@');
-            if (tok == TOK_STR)
-                pstrcat(newtype, sizeof(newtype), tokc.cstr->data);
-            else
-                pstrcat(newtype, sizeof(newtype), get_tok_str(tok, NULL));
+            if (tok == TOK_STR) {
+                newtype = tokc.cstr->data;
+            } else {
+                if (tok == '@' || tok == '%')
+                    skip(tok);
+                newtype = get_tok_str(tok, NULL);
+            }
 
-            if (!strcmp(newtype, "function")) {
+            if (!strcmp(newtype, "function") || !strcmp(newtype, "STT_FUNC")) {
                 sym->type.t = VT_FUNC;
             }
             else if (s1->warn_unsupported)
