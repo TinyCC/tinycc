@@ -34,6 +34,7 @@
      DEF_ASM_OP0(rsm, 0x0faa)
      DEF_ASM_OP0(hlt, 0xf4)
      DEF_ASM_OP0(nop, 0x90)
+     DEF_ASM_OP0(pause, 0xf390)
      DEF_ASM_OP0(xlat, 0xd7)
 
      /* strings */

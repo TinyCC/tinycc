@@ -606,3 +606,4 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
 .type ft7,%function
 .type ft8,"function"
 
+    pause
