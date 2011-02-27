@@ -2851,6 +2851,9 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     /* first scan for '##' operator handling */
     ptr = macro_str;
     macro_str1 = macro_twosharps(ptr);
+
+    /* a ' ' after subst */
+    int append_space = 0;
     if (macro_str1) 
         ptr = macro_str1;
     spc = 0;
@@ -2888,8 +2891,15 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
                 *can_read_stream = ml.prev;
             if (ret != 0)
                 goto no_subst;
+            if (parse_flags & PARSE_FLAG_SPACES)
+                append_space = 1;
         } else {
         no_subst:
+            if (append_space) {
+                tok_str_add(tok_str, ' ');
+                spc = 1;
+                append_space = 0;
+            }
             if (!check_space(t, &spc)) 
                 tok_str_add2(tok_str, t, &cval);
         }
