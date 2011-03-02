@@ -2354,6 +2354,10 @@ extern int __attribute__((weak)) weak_v1;
 extern int __attribute__((weak)) weak_v2;
 extern int                       weak_v3;
 
+extern int                           (*weak_fpa)() __attribute__((weak));
+extern int __attribute__((weak))     (*weak_fpb)();
+extern     __attribute__((weak)) int (*weak_fpc)();
+
 void __attribute__((weak)) weak_test(void)
 {
 	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
@@ -2362,6 +2366,10 @@ void __attribute__((weak)) weak_test(void)
 	printf("weak_v1=%d\n",&weak_v1 ? weak_v1   : 123);
 	printf("weak_v2=%d\n",&weak_v2 ? weak_v2   : 123);
 	printf("weak_v3=%d\n",&weak_v3 ? weak_v3   : 123);
+
+	printf("weak_fpa=%d\n",&weak_fpa ? weak_fpa() : 123);
+	printf("weak_fpb=%d\n",&weak_fpb ? weak_fpb() : 123);
+	printf("weak_fpc=%d\n",&weak_fpc ? weak_fpc() : 123);
 }
 
 int __attribute__((weak)) weak_f2() { return 222; }
