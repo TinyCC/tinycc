@@ -2086,6 +2086,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         mode = 0666;
     else
         mode = 0777;
+    unlink(filename);
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode); 
     if (fd < 0) {
         error_noabort("could not write '%s'", filename);
