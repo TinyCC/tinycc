@@ -5560,21 +5560,21 @@ ST_FUNC void decl(int l)
                     /* XXX: test storage specifiers ? */
                     sym = sym_push(v, &type, INT_ATTR(&ad), 0);
                     sym->type.t |= VT_TYPEDEF;
-                } else if ((type.t & VT_BTYPE) == VT_FUNC) {
-                    /* external function definition */
-                    /* specific case for func_call attribute */
-                    type.ref->r = INT_ATTR(&ad);
-                    external_sym(v, &type, 0, asm_label);
                 } else {
-                    /* not lvalue if array */
                     r = 0;
-                    if (!(type.t & VT_ARRAY))
+                    if ((type.t & VT_BTYPE) == VT_FUNC) {
+                        /* external function definition */
+                        /* specific case for func_call attribute */
+                        type.ref->r = INT_ATTR(&ad);
+                    } else if (!(type.t & VT_ARRAY)) {
+                        /* not lvalue if array */
                         r |= lvalue_type(type.t);
+                    }
                     has_init = (tok == '=');
-                    if ((btype.t & VT_EXTERN) ||
+                    if ((btype.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
                          !has_init && l == VT_CONST && type.ref->c < 0)) {
-                        /* external variable */
+                        /* external variable or function */
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
