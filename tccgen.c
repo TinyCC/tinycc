@@ -2472,6 +2472,16 @@ static void parse_attribute(AttributeDef *ad)
             next();
             skip(')');
             break;
+        case TOK_ALIAS1:
+        case TOK_ALIAS2:
+            skip('(');
+            if (tok != TOK_STR)
+                expect("alias(\"target\")");
+            ad->alias_target = /* save string as token, for later */
+              tok_alloc((char*)tokc.cstr->data, tokc.cstr->size-1)->tok;
+            next();
+            skip(')');
+            break;
         case TOK_ALIGNED1:
         case TOK_ALIGNED2:
             if (tok == '(') {
@@ -5578,7 +5588,20 @@ ST_FUNC void decl(int l)
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
-                        external_sym(v, &type, r, asm_label);
+                        sym = external_sym(v, &type, r, asm_label);
+
+                        if (ad.alias_target) {
+                            Section tsec;
+                            Elf32_Sym *esym;
+                            Sym *alias_target;
+
+                            alias_target = sym_find(ad.alias_target);
+                            if (!alias_target || !alias_target->c)
+                                error("unsupported forward __alias__ attribute");
+                            esym = &((Elf32_Sym *)symtab_section->data)[alias_target->c];
+                            tsec.sh_num = esym->st_shndx;
+                            put_extern_sym2(sym, &tsec, esym->st_value, esym->st_size, 0);
+                        }
                     } else {
                         type.t |= (btype.t & VT_STATIC); /* Retain "static". */
                         if (type.t & VT_STATIC)

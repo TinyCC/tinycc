@@ -100,6 +100,8 @@
      DEF(TOK_PACKED2, "__packed__")
      DEF(TOK_WEAK1, "weak")
      DEF(TOK_WEAK2, "__weak__")
+     DEF(TOK_ALIAS1, "alias")
+     DEF(TOK_ALIAS2, "__alias__")
      DEF(TOK_UNUSED1, "unused")
      DEF(TOK_UNUSED2, "__unused__")
      DEF(TOK_CDECL1, "cdecl")

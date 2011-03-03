@@ -285,6 +285,7 @@ typedef struct AttributeDef {
       resize	    : 1,
       fill          : 10;
     struct Section *section;
+    int alias_target;    /* token */
 } AttributeDef;
 
 /* gr: wrappers for casting sym->r for other purposes */
