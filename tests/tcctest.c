@@ -2358,6 +2358,13 @@ extern int                           (*weak_fpa)() __attribute__((weak));
 extern int __attribute__((weak))     (*weak_fpb)();
 extern     __attribute__((weak)) int (*weak_fpc)();
 
+extern int                     weak_asm_f1(void) asm("weak_asm_f1x") __attribute((weak));
+extern int __attribute((weak)) weak_asm_f2(void) asm("weak_asm_f2x")                    ;
+extern int __attribute((weak)) weak_asm_f3(void) asm("weak_asm_f3x") __attribute((weak));
+extern int                     weak_asm_v1       asm("weak_asm_v1x") __attribute((weak));
+extern int __attribute((weak)) weak_asm_v2       asm("weak_asm_v2x")                    ;
+extern int __attribute((weak)) weak_asm_v3(void) asm("weak_asm_v3x") __attribute((weak));
+
 void __attribute__((weak)) weak_test(void)
 {
 	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
@@ -2370,6 +2377,13 @@ void __attribute__((weak)) weak_test(void)
 	printf("weak_fpa=%d\n",&weak_fpa ? weak_fpa() : 123);
 	printf("weak_fpb=%d\n",&weak_fpb ? weak_fpb() : 123);
 	printf("weak_fpc=%d\n",&weak_fpc ? weak_fpc() : 123);
+	
+	printf("weak_asm_f1=%d\n", weak_asm_f1 != NULL);
+	printf("weak_asm_f2=%d\n", weak_asm_f2 != NULL);
+	printf("weak_asm_f3=%d\n", weak_asm_f3 != NULL);
+	printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
+	printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
+	printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
 }
 
 int __attribute__((weak)) weak_f2() { return 222; }

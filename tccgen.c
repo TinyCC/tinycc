@@ -5419,6 +5419,7 @@ ST_FUNC void decl(int l)
             continue;
         }
         while (1) { /* iterate thru each declaration */
+            char *asm_label; // associated asm label
             type = btype;
             type_decl(&type, &ad, &v, TYPE_DIRECT);
 #if 0
@@ -5437,6 +5438,18 @@ ST_FUNC void decl(int l)
                 sym = type.ref;
                 if (sym->c == FUNC_OLD)
                     func_decl_list(sym);
+            }
+
+            asm_label = NULL;
+            if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
+                CString astr;
+
+                asm_label_instr(&astr);
+                asm_label = tcc_strdup(astr.data);
+                cstr_free(&astr);
+                
+                /* parse one last attribute list, after asm label */
+                parse_attribute(&ad);
             }
 
             if (ad.weak)
@@ -5548,39 +5561,15 @@ ST_FUNC void decl(int l)
                     sym = sym_push(v, &type, INT_ATTR(&ad), 0);
                     sym->type.t |= VT_TYPEDEF;
                 } else if ((type.t & VT_BTYPE) == VT_FUNC) {
-                    char *asm_label; // associated asm label
-                    Sym *fn;
-
-                    asm_label = NULL;
                     /* external function definition */
                     /* specific case for func_call attribute */
                     type.ref->r = INT_ATTR(&ad);
-
-                    if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
-                        CString astr;
-
-                        asm_label_instr(&astr);
-                        asm_label = tcc_strdup(astr.data);
-                        cstr_free(&astr);
-                    }
-                    fn = external_sym(v, &type, 0, asm_label);
-                    if (gnu_ext && (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2))
-                        parse_attribute((AttributeDef *) &fn->type.ref->r);
+                    external_sym(v, &type, 0, asm_label);
                 } else {
-                    char *asm_label; // associated asm label
-
                     /* not lvalue if array */
                     r = 0;
-                    asm_label = NULL;
                     if (!(type.t & VT_ARRAY))
                         r |= lvalue_type(type.t);
-                    if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
-                        CString astr;
-
-                        asm_label_instr(&astr);
-                        asm_label = tcc_strdup(astr.data);
-                        cstr_free(&astr);
-                    }
                     has_init = (tok == '=');
                     if ((btype.t & VT_EXTERN) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
