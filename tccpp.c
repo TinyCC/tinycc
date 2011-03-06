@@ -746,6 +746,8 @@ redo_start:
                     a--;
                 else if( tok == TOK_ERROR || tok == TOK_WARNING)
                     in_warn_or_error = 1;
+                else if (tok == TOK_LINEFEED)
+                    goto redo_start;
             }
             break;
 _default:
