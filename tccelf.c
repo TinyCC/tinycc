@@ -241,6 +241,8 @@ ST_FUNC int add_elf_sym(Section *s, uplong value, unsigned long size,
                 goto do_patch;
             } else if (sym_bind == STB_WEAK && esym_bind == STB_GLOBAL) {
                 /* weak is ignored if already global */
+            } else if (sym_bind == STB_WEAK && esym_bind == STB_WEAK) {
+                /* keep first-found weak definition, ignore subsequents */
             } else if (sym_vis == STV_HIDDEN || sym_vis == STV_INTERNAL) {
                 /* ignore hidden symbols after */
             } else if (esym->st_shndx == SHN_COMMON
