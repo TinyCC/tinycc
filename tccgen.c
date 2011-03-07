@@ -5592,6 +5592,9 @@ ST_FUNC void decl(int l)
                            extern */
                         sym = external_sym(v, &type, r, asm_label);
 
+                        if (type.t & VT_WEAK)
+                            sym->type.t |= VT_WEAK;
+
                         if (ad.alias_target) {
                             Section tsec;
                             Elf32_Sym *esym;

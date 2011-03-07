@@ -2370,6 +2370,10 @@ extern __typeof(dummy) weak_dummy1 __attribute__((weak, alias("dummy")));
 extern __typeof(dummy) __attribute__((weak, alias("dummy"))) weak_dummy2;
 extern __attribute__((weak, alias("dummy"))) __typeof(dummy) weak_dummy3;
 
+int some_lib_func(void);
+int dummy_impl_of_slf(void) { return 444; }
+int some_lib_func(void) __attribute__((weak, alias("dummy_impl_of_slf")));
+
 void __attribute__((weak)) weak_test(void)
 {
 	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
