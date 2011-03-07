@@ -42,7 +42,7 @@ libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
 	cp -u ../include/tcclib.h .
-	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS)
+	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS) -std=gnu99
 	./tcctest.gcc > $@
 
 # auto test
