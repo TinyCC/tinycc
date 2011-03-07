@@ -2948,6 +2948,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_TYPEOF3:
             next();
             parse_expr_type(&type1);
+            /* remove all storage modifiers except typedef */
+            type1.t &= ~(VT_STORAGE&~VT_TYPEDEF);
             goto basic_type2;
         default:
             if (typespec_found || typedef_found)

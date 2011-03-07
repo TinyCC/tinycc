@@ -2365,6 +2365,11 @@ extern int                     weak_asm_v1       asm("weak_asm_v1x") __attribute
 extern int __attribute((weak)) weak_asm_v2       asm("weak_asm_v2x")                    ;
 extern int __attribute((weak)) weak_asm_v3(void) asm("weak_asm_v3x") __attribute((weak));
 
+static const size_t dummy = 0;
+extern __typeof(dummy) weak_dummy1 __attribute__((weak, alias("dummy")));
+extern __typeof(dummy) __attribute__((weak, alias("dummy"))) weak_dummy2;
+extern __attribute__((weak, alias("dummy"))) __typeof(dummy) weak_dummy3;
+
 void __attribute__((weak)) weak_test(void)
 {
 	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
