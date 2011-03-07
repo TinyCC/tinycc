@@ -255,6 +255,19 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b)
     *ptop = b;
 }
 
+static void weaken_symbol(Sym *sym)
+{
+    sym->type.t |= VT_WEAK;
+    if (sym->c > 0) {
+        int esym_type;
+        ElfW(Sym) *esym;
+        
+        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+        esym_type = ELFW(ST_TYPE)(esym->st_info);
+        esym->st_info = ELFW(ST_INFO)(STB_WEAK, esym_type);
+    }
+}
+
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void swap(int *p, int *q)
@@ -5213,11 +5226,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             vtop->sym = sym;
         }
         /* patch symbol weakness */
-        if (type->t & VT_WEAK) {
-            unsigned char *st_info = 
-                &((ElfW(Sym) *)symtab_section->data)[sym->c].st_info;
-            *st_info = ELF32_ST_INFO(STB_WEAK, ELF32_ST_TYPE(*st_info));
-        }
+        if (type->t & VT_WEAK)
+            weaken_symbol(sym);
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
@@ -5337,11 +5347,8 @@ static void gen_function(Sym *sym)
     ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
         ind - func_ind;
     /* patch symbol weakness (this definition overrules any prototype) */
-    if (sym->type.t & VT_WEAK) {
-        unsigned char *st_info = 
-            &((ElfW(Sym) *)symtab_section->data)[sym->c].st_info;
-        *st_info = ELF32_ST_INFO(STB_WEAK, ELF32_ST_TYPE(*st_info));
-    }
+    if (sym->type.t & VT_WEAK)
+        weaken_symbol(sym);
     if (tcc_state->do_debug) {
         put_stabn(N_FUN, 0, 0, ind - func_ind);
     }
