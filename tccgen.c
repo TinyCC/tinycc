@@ -5600,7 +5600,7 @@ ST_FUNC void decl(int l)
                         sym = external_sym(v, &type, r, asm_label);
 
                         if (type.t & VT_WEAK)
-                            sym->type.t |= VT_WEAK;
+                            weaken_symbol(sym);
 
                         if (ad.alias_target) {
                             Section tsec;
