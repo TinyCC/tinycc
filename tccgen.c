@@ -4379,7 +4379,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         next();
         skip('(');
         if (tok != ';') {
-            for_loop_init();
+            gexpr();
+            vpop();
         }
         skip(';');
         d = ind;
@@ -5405,7 +5406,7 @@ ST_FUNC void gen_inline_functions(void)
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
-static void decl0(int l, int is_for_loop_init)
+ST_FUNC void decl(int l)
 {
     int v, has_init, r;
     CType type, btype;
@@ -5414,11 +5415,6 @@ static void decl0(int l, int is_for_loop_init)
     
     while (1) {
         if (!parse_btype(&btype, &ad)) {
-            if (is_for_loop_init) {
-                gexpr();
-                vpop();
-                return;
-            }
             /* skip redundant ';' */
             /* XXX: find more elegant solution */
             if (tok == ';') {
@@ -5633,8 +5629,6 @@ static void decl0(int l, int is_for_loop_init)
                     }
                 }
                 if (tok != ',') {
-                    if (is_for_loop_init)
-                        return;
                     skip(';');
                     break;
                 }
@@ -5642,14 +5636,4 @@ static void decl0(int l, int is_for_loop_init)
             }
         }
     }
-}
-
-ST_FUNC void for_loop_init(void)
-{
-    decl0(VT_LOCAL, 1);
-}
-
-ST_FUNC void decl(int l)
-{
-    decl0(l, 0);
 }
