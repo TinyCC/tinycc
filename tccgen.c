@@ -3111,6 +3111,9 @@ static void post_type(CType *type, AttributeDef *ad)
         /* NOTE: const is ignored in returned type as it has a special
            meaning in gcc / C++ */
         type->t &= ~(VT_STORAGE | VT_CONSTANT); 
+        /* some ancient pre-K&R C allows a function to return an array
+           and the array brackets to be put after the arguments, such 
+           that "int c()[]" means the same as "int[] c()" */
         post_type(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         ad->func_args = arg_size;
