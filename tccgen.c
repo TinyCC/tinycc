@@ -3048,112 +3048,104 @@ static void asm_label_instr(CString *astr)
 #endif
 }
 
-static void post_type_array(CType *type, AttributeDef *ad);
-
-static void post_type_args(CType *type, AttributeDef *ad)
+static void post_type(CType *type, AttributeDef *ad)
 {
     int n, l, t1, arg_size, align;
     Sym **plast, *s, *first;
     AttributeDef ad1;
     CType pt;
 
-    /* function declaration */
-    skip('(');
-    l = 0;
-    first = NULL;
-    plast = &first;
-    arg_size = 0;
-    if (tok != ')') {
-        for(;;) {
-            /* read param name and compute offset */
-            if (l != FUNC_OLD) {
-                if (!parse_btype(&pt, &ad1)) {
-                    if (l) {
-                        error("invalid type");
-                    } else {
-                        l = FUNC_OLD;
-                        goto old_proto;
+    if (tok == '(') {
+        /* function declaration */
+        next();
+        l = 0;
+        first = NULL;
+        plast = &first;
+        arg_size = 0;
+        if (tok != ')') {
+            for(;;) {
+                /* read param name and compute offset */
+                if (l != FUNC_OLD) {
+                    if (!parse_btype(&pt, &ad1)) {
+                        if (l) {
+                            error("invalid type");
+                        } else {
+                            l = FUNC_OLD;
+                            goto old_proto;
+                        }
                     }
+                    l = FUNC_NEW;
+                    if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
+                        break;
+                    type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
+                    if ((pt.t & VT_BTYPE) == VT_VOID)
+                        error("parameter declared as void");
+                    arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
+                } else {
+                old_proto:
+                    n = tok;
+                    if (n < TOK_UIDENT)
+                        expect("identifier");
+                    pt.t = VT_INT;
+                    next();
                 }
-                l = FUNC_NEW;
-                if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
+                convert_parameter_type(&pt);
+                s = sym_push(n | SYM_FIELD, &pt, 0, 0);
+                *plast = s;
+                plast = &s->next;
+                if (tok == ')')
                     break;
-                type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
-                if ((pt.t & VT_BTYPE) == VT_VOID)
-                    error("parameter declared as void");
-                arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
-            } else {
-            old_proto:
-                n = tok;
-                if (n < TOK_UIDENT)
-                    expect("identifier");
-                pt.t = VT_INT;
-                next();
-            }
-            convert_parameter_type(&pt);
-            s = sym_push(n | SYM_FIELD, &pt, 0, 0);
-            *plast = s;
-            plast = &s->next;
-            if (tok == ')')
-                break;
-            skip(',');
-            if (l == FUNC_NEW && tok == TOK_DOTS) {
-                l = FUNC_ELLIPSIS;
-                next();
-                break;
+                skip(',');
+                if (l == FUNC_NEW && tok == TOK_DOTS) {
+                    l = FUNC_ELLIPSIS;
+                    next();
+                    break;
+                }
             }
         }
-    }
-    /* if no parameters, then old type prototype */
-    if (l == 0)
-        l = FUNC_OLD;
-    skip(')');
-    t1 = type->t & VT_STORAGE;
-    /* NOTE: const is ignored in returned type as it has a special
-       meaning in gcc / C++ */
-    type->t &= ~(VT_STORAGE | VT_CONSTANT); 
-    /* some ancient pre-K&R C allows a function to return an array
-       and the array brackets to be put after the arguments, such 
-       that "int c()[]" means the same as "int[] c()" */
-    if (tok == '[')
-        post_type_array(type, ad);
-    /* we push a anonymous symbol which will contain the function prototype */
-    ad->func_args = arg_size;
-    s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
-    s->next = first;
-    type->t = t1 | VT_FUNC;
-    type->ref = s;
-}
-
-static void post_type_array(CType *type, AttributeDef *ad)
-{
-    int n, t1;
-    Sym *s;
-    
-    /* array definition */
-    skip('[');
-    if (tok == TOK_RESTRICT1)
+        /* if no parameters, then old type prototype */
+        if (l == 0)
+            l = FUNC_OLD;
+        skip(')');
+        t1 = type->t & VT_STORAGE;
+        /* NOTE: const is ignored in returned type as it has a special
+           meaning in gcc / C++ */
+        type->t &= ~(VT_STORAGE | VT_CONSTANT); 
+        /* some ancient pre-K&R C allows a function to return an array
+           and the array brackets to be put after the arguments, such 
+           that "int c()[]" means the same as "int[] c()" */
+        post_type(type, ad);
+        /* we push a anonymous symbol which will contain the function prototype */
+        ad->func_args = arg_size;
+        s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
+        s->next = first;
+        type->t = t1 | VT_FUNC;
+        type->ref = s;
+    } else if (tok == '[') {
+        /* array definition */
         next();
-    n = -1;
-    if (tok != ']') {
-        n = expr_const();
-        if (n < 0)
-            error("invalid array size");    
-    }
-    skip(']');
-    /* parse next post type */
-    t1 = type->t & VT_STORAGE;
-    type->t &= ~VT_STORAGE;
-    if (tok == '[')
-        post_type_array(type, ad);
-    
-    /* we push a anonymous symbol which will contain the array
-       element type */
-    s = sym_push(SYM_FIELD, type, 0, n);
+        if (tok == TOK_RESTRICT1)
+            next();
+        n = -1;
+        if (tok != ']') {
+            n = expr_const();
+            if (n < 0)
+                error("invalid array size");    
+        }
+        skip(']');
+        /* parse next post type */
+        t1 = type->t & VT_STORAGE;
+        type->t &= ~VT_STORAGE;
+        post_type(type, ad);
+        
+        /* we push a anonymous symbol which will contain the array
+           element type */
+        s = sym_push(SYM_FIELD, type, 0, n);
 	if (n < 0)
 		ARRAY_RESIZE(s->r) = 1;
-    type->t = t1 | VT_ARRAY | VT_PTR;
-    type->ref = s;
+        type->t = t1 | VT_ARRAY | VT_PTR;
+        type->ref = s;
+    }
 }
 
 /* Parse a type declaration (except basic type), and return the type
@@ -3218,10 +3210,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
             *v = 0;
         }
     }
-    if (tok == '(')
-        post_type_args(type, ad);
-    else if (tok == '[')
-        post_type_array(type, ad);
+    post_type(type, ad);
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
     
