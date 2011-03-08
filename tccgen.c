@@ -4384,6 +4384,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         int e;
         next();
         skip('(');
+        s = local_stack;
         if (tok != ';') {
             /* c99 for-loop init decl? */
             if (!decl0(VT_LOCAL, 1)) {
@@ -4415,6 +4416,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
+        sym_pop(&local_stack, s);
     } else 
     if (tok == TOK_DO) {
         next();

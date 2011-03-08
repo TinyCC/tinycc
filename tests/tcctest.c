@@ -387,9 +387,11 @@ void loop_test()
     } while (i < 10);
     printf("\n");
 
+    char count = 123;
     /* c99 for loop init test */
     for (size_t count = 1; count < 3; count++)
         printf("count=%d\n", count);
+    printf("count = %d\n", count);
 
     /* break/continue tests */
     i = 0;
