@@ -3108,19 +3108,22 @@ static void post_type(CType *type, AttributeDef *ad)
         if (l == 0)
             l = FUNC_OLD;
         skip(')');
-        t1 = type->t & VT_STORAGE;
         /* NOTE: const is ignored in returned type as it has a special
            meaning in gcc / C++ */
-        type->t &= ~(VT_STORAGE | VT_CONSTANT); 
+        type->t &= ~VT_CONSTANT; 
         /* some ancient pre-K&R C allows a function to return an array
            and the array brackets to be put after the arguments, such 
-           that "int c()[]" means the same as "int[] c()" */
-        post_type(type, ad);
+           that "int c()[]" means something like "int[] c()" */
+        if (tok == '[') {
+            next();
+            skip(']'); /* only handle simple "[]" */
+            type->t |= VT_PTR;
+        }
         /* we push a anonymous symbol which will contain the function prototype */
         ad->func_args = arg_size;
         s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
         s->next = first;
-        type->t = t1 | VT_FUNC;
+        type->t |= VT_FUNC;
         type->ref = s;
     } else if (tok == '[') {
         /* array definition */
