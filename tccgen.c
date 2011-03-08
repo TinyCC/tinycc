@@ -3048,7 +3048,9 @@ static void asm_label_instr(CString *astr)
 #endif
 }
 
-static void post_type(CType *type, AttributeDef *ad)
+static void post_type_array(CType *type, AttributeDef *ad);
+
+static void post_type_args(CType *type, AttributeDef *ad)
 {
     int n, l, t1, arg_size, align;
     Sym **plast, *s, *first;
@@ -3114,14 +3116,23 @@ static void post_type(CType *type, AttributeDef *ad)
         /* some ancient pre-K&R C allows a function to return an array
            and the array brackets to be put after the arguments, such 
            that "int c()[]" means the same as "int[] c()" */
-        post_type(type, ad);
+        if (tok == '[')
+            post_type_array(type, ad);
         /* we push a anonymous symbol which will contain the function prototype */
         ad->func_args = arg_size;
         s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
         s->next = first;
         type->t = t1 | VT_FUNC;
         type->ref = s;
-    } else if (tok == '[') {
+    }
+}
+
+static void post_type_array(CType *type, AttributeDef *ad)
+{
+    int n, t1;
+    Sym *s;
+    
+    if (tok == '[') {
         /* array definition */
         next();
         if (tok == TOK_RESTRICT1)
@@ -3136,7 +3147,8 @@ static void post_type(CType *type, AttributeDef *ad)
         /* parse next post type */
         t1 = type->t & VT_STORAGE;
         type->t &= ~VT_STORAGE;
-        post_type(type, ad);
+        if (tok == '[')
+            post_type_array(type, ad);
         
         /* we push a anonymous symbol which will contain the array
            element type */
@@ -3210,7 +3222,10 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
             *v = 0;
         }
     }
-    post_type(type, ad);
+    if (tok == '(')
+        post_type_args(type, ad);
+    else if (tok == '[')
+        post_type_array(type, ad);
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
     
