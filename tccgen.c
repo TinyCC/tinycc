@@ -5044,6 +5044,17 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     ParseState saved_parse_state = {0};
     TokenString init_str;
     Section *sec;
+    Sym *flexible_array;
+
+    flexible_array = NULL;
+    if ((type->t & VT_BTYPE) == VT_STRUCT) {
+        Sym *field;
+        field = type->ref;
+        while (field && field->next)
+            field = field->next;
+        if (field->type.t & VT_ARRAY && field->type.ref->c < 0)
+            flexible_array = field;
+    }
 
     size = type_size(type, &align);
     /* If unknown size, we must evaluate it before
@@ -5053,7 +5064,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
        literals). It also simplifies local
        initializers handling */
     tok_str_new(&init_str);
-    if (size < 0) {
+    if (size < 0 || flexible_array) {
         if (!has_init) 
             error("unknown type size");
         /* get all init string */
@@ -5099,6 +5110,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (size < 0) 
             error("unknown type size");
     }
+    if (flexible_array)
+        size += flexible_array->type.ref->c * pointed_size(&flexible_array->type);
     /* take into account specified alignment if bigger */
     if (ad->aligned) {
         if (ad->aligned > align)
@@ -5250,6 +5263,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             tok_str_free(init_str.str);
             restore_parse_state(&saved_parse_state);
         }
+        /* patch flexible array member size back to -1, */
+        /* for possible subsequent similar declarations */
+        if (flexible_array)
+            flexible_array->type.ref->c = -1;
     }
  no_alloc: ;
 }
