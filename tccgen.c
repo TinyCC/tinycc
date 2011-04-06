@@ -79,6 +79,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has
 static int decl0(int l, int is_for_loop_init);
 static void expr_eq(void);
 static void unary_type(CType *type);
+static void vla_runtime_type_size(CType *type, int *a);
 static int is_compatible_parameter_types(CType *type1, CType *type2);
 static void expr_type(CType *type);
 
@@ -1471,6 +1472,12 @@ static int pointed_size(CType *type)
     return type_size(pointed_type(type), &align);
 }
 
+static void vla_runtime_pointed_size(CType *type)
+{
+    int align;
+    vla_runtime_type_size(pointed_type(type), &align);
+}
+
 static inline int is_null_pointer(SValue *p)
 {
     if ((p->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
@@ -1559,11 +1566,20 @@ ST_FUNC void gen_op(int op)
         }
         /* if both pointers, then it must be the '-' op */
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
+            int ptr1_is_vla;
+
+            ptr1_is_vla = 0;
             if (op != '-')
                 error("cannot use pointers here");
             check_comparison_pointer_types(vtop - 1, vtop, op);
             /* XXX: check that types are compatible */
-            u = pointed_size(&vtop[-1].type);
+            if (vtop[-1].type.t & VT_VLA) {
+                vla_runtime_pointed_size(&vtop[-1].type);
+                vrott(3);
+                ptr1_is_vla = 1;
+            } else {
+                u = pointed_size(&vtop[-1].type);
+            }
             gen_opic(op);
             /* set to integer type */
 #ifdef TCC_TARGET_X86_64
@@ -1571,7 +1587,10 @@ ST_FUNC void gen_op(int op)
 #else
             vtop->type.t = VT_INT; 
 #endif
-            vpushi(u);
+            if (ptr1_is_vla)
+                vswap();
+            else
+                vpushi(u);
             gen_op(TOK_PDIV);
         } else {
             /* exactly one pointer : must be '+' or '-'. */
@@ -1583,16 +1602,20 @@ ST_FUNC void gen_op(int op)
                 swap(&t1, &t2);
             }
             type1 = vtop[-1].type;
-            type1.t &= ~VT_ARRAY;
-            u = pointed_size(&vtop[-1].type);
-            if (u < 0)
-                error("unknown array element size");
+            type1.t &= ~(VT_ARRAY|VT_VLA);
+            if (vtop[-1].type.t & VT_VLA)
+                vla_runtime_pointed_size(&vtop[-1].type);
+            else {
+                u = pointed_size(&vtop[-1].type);
+                if (u < 0)
+                    error("unknown array element size");
 #ifdef TCC_TARGET_X86_64
-            vpushll(u);
+                vpushll(u);
 #else
-            /* XXX: cast to int ? (long long case) */
-            vpushi(u);
+                /* XXX: cast to int ? (long long case) */
+                vpushi(u);
 #endif
+            }
             gen_op('*');
 #ifdef CONFIG_TCC_BCHECK
             /* if evaluating constant expression, no code should be
@@ -1948,7 +1971,7 @@ static void gen_cast(CType *type)
     vtop->type = *type;
 }
 
-/* return type size. Put alignment at 'a' */
+/* return type size as known at compile time. Put alignment at 'a' */
 ST_FUNC int type_size(CType *type, int *a)
 {
     Sym *s;
@@ -1961,7 +1984,10 @@ ST_FUNC int type_size(CType *type, int *a)
         *a = s->r;
         return s->c;
     } else if (bt == VT_PTR) {
-        if (type->t & VT_ARRAY) {
+        if (type->t & VT_VLA) {
+            *a = 1;
+            return 0;
+        } else if (type->t & VT_ARRAY) {
             int ts;
 
             s = type->ref;
@@ -2005,6 +2031,30 @@ ST_FUNC int type_size(CType *type, int *a)
         /* char, void, function, _Bool */
         *a = 1;
         return 1;
+    }
+}
+
+/* push type size as known at runtime time on top of value stack. Put
+   alignment at 'a' */
+ST_FUNC void vla_runtime_type_size(CType *type, int *a)
+{
+    if (type->t & VT_VLA) {
+        Sym *s;
+
+        s = type->ref;
+        vla_runtime_type_size(&s->type, a);
+        vpushv(s->s);
+        if ((vtop->r & (VT_SYM|VT_LVAL|VT_VALMASK)) != VT_CONST) {
+            gv_dup();
+            vswap();
+            vpop();
+        }
+        gen_op('*');
+    } else {
+        int size;
+
+        size = type_size(type, a);
+        vpushi(size);
     }
 }
 
@@ -3125,25 +3175,43 @@ static void post_type(CType *type, AttributeDef *ad)
         type->t = t1 | VT_FUNC;
         type->ref = s;
     } else if (tok == '[') {
+        SValue *last_vtop = NULL;
+
         /* array definition */
         next();
         if (tok == TOK_RESTRICT1)
             next();
         n = -1;
         if (tok != ']') {
-            n = expr_const();
-            if (n < 0)
-                error("invalid array size");    
+            gexpr();
+            if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+                n = vtop->c.i;
+                last_vtop = vtop;
+                if (n < 0)
+                    error("invalid array size");
+            } else {
+                if (!is_integer_btype(vtop->type.t & VT_BTYPE))
+                    error("size of variable length array should be an integer");
+                type->t |= VT_VLA;
+                last_vtop = vtop;
+            }
         }
         skip(']');
         /* parse next post type */
-        t1 = type->t & VT_STORAGE;
-        type->t &= ~VT_STORAGE;
+        t1 = type->t & (VT_STORAGE|VT_VLA);
+        type->t &= ~(VT_STORAGE|VT_VLA);
         post_type(type, ad);
+        t1 |= type->t & VT_VLA;
         
-        /* we push a anonymous symbol which will contain the array
+        /* we push an anonymous symbol which will contain the array
            element type */
         s = sym_push(SYM_FIELD, type, 0, n);
+        if (t1 & VT_VLA) {
+            s->s = last_vtop; // That's ok, we don't need n with VLA
+        } else {
+            if (n >= 0)
+                vpop();
+        }
         type->t = t1 | VT_ARRAY | VT_PTR;
         type->ref = s;
     }
@@ -3509,11 +3577,18 @@ ST_FUNC void unary(void)
         next();
         in_sizeof++;
         unary_type(&type); // Perform a in_sizeof = 0;
-        size = type_size(&type, &align);
+        if ((t == TOK_SIZEOF) && (type.t & VT_VLA)) {
+            vla_runtime_type_size(&type, &align);
+            size = 0;
+        } else {
+            size = type_size(&type, &align);
+        }
         if (t == TOK_SIZEOF) {
-            if (size < 0)
-                error("sizeof applied to an incomplete type");
-            vpushi(size);
+            if (!(type.t & VT_VLA)) {
+                if (size < 0)
+                    error("sizeof applied to an incomplete type");
+                vpushi(size);
+            }
         } else {
             vpushi(align);
         }
@@ -3672,7 +3747,10 @@ ST_FUNC void unary(void)
         } else {
             r = s->r;
         }
-        vset(&s->type, r, s->c);
+        if (s->type.t & VT_VLA)
+            vpushv(s->s);
+        else
+            vset(&s->type, r, s->c);
         /* if forward reference, we must point to s */
         if (vtop->r & VT_SYM) {
             vtop->sym = s;
@@ -4807,7 +4885,18 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
     Sym *s, *f;
     CType *t1;
 
-    if (type->t & VT_ARRAY) {
+    if (type->t & VT_VLA) {
+        int a;
+        CValue retcval;
+
+        vpush_global_sym(&func_old_type, TOK_alloca);
+        vla_runtime_type_size(type, &a);
+        gfunc_call(1);
+
+        /* return value */
+        retcval.i = 0;
+        vsetc(type, REG_IRET, &retcval);
+    } else if (type->t & VT_ARRAY) {
         s = type->ref;
         n = s->c;
         array_length = 0;
@@ -5044,6 +5133,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     ParseState saved_parse_state = {0};
     TokenString init_str;
     Section *sec;
+    Sym *vla = NULL;
     Sym *flexible_array;
 
     flexible_array = NULL;
@@ -5122,8 +5212,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY))
-            loc--;
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+            if (type->t & VT_VLA)
+                warning("Array bound check don't work for VLA");
+            else
+                loc--;
+        }
 #endif
         loc = (loc - size) & -align;
         addr = loc;
@@ -5131,7 +5225,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY) &&
+            !(type->t & VT_VLA)) {
             unsigned long *bounds_ptr;
             /* add padding between regions */
             loc--;
@@ -5143,7 +5238,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #endif
         if (v) {
             /* local variable */
-            sym_push(v, type, r, addr);
+            vla = sym_push(v, type, r, addr);
         } else {
             /* push local reference */
             vset(type, r, addr);
@@ -5256,8 +5351,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
 #endif
     }
-    if (has_init) {
+    if (has_init || (type->t & VT_VLA)) {
         decl_initializer(type, sec, addr, 1, 0);
+        if (type->t & VT_VLA)
+            vla->s = vtop;
         /* restore parse state if needed */
         if (init_str.str) {
             tok_str_free(init_str.str);
@@ -5610,9 +5707,12 @@ static int decl0(int l, int is_for_loop_init)
                         r |= lvalue_type(type.t);
                     }
                     has_init = (tok == '=');
+                    if (has_init && (type.t & VT_VLA))
+                        error("Variable length array cannot be initialized");
                     if ((btype.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
-                        ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
-                         !has_init && l == VT_CONST && type.ref->c < 0)) {
+                        ((type.t & VT_ARRAY) && (!(type.t & VT_VLA)) &&
+                        (type.t & VT_STATIC) && !has_init && l == VT_CONST &&
+                        type.ref->c < 0)) {
                         /* external variable or function */
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
