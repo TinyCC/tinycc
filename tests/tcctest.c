@@ -2070,11 +2070,17 @@ void alloca_test()
 #endif
 }
 
+void *bounds_checking_is_enabled()
+{
+    char ca[10], *cp = ca-1;
+    return (ca != cp + 1) ? cp : NULL;
+}
+
 void c99_vla_test(int size1, int size2)
 {
 #if defined __i386__ || defined __x86_64__
     int tab1[size1 * size2][2], tab2[10][2];
-    void *tab1_ptr, *tab2_ptr;
+    void *tab1_ptr, *tab2_ptr, *bad_ptr;
 
     printf("Test C99 VLA 1 (sizeof): ");
     printf("%s\n", (sizeof tab1 == size1 * size2 * 2 * sizeof(int)) ? "PASSED" : "FAILED");
@@ -2087,6 +2093,32 @@ void c99_vla_test(int size1, int size2)
     printf("Test C99 VLA 4 (ptr access): ");
     tab1[size1][1] = 42;
     printf("%s\n", (*((int *) (tab1_ptr + (size1 * 2 + 1) * sizeof(int))) == 42) ? "PASSED" : "FAILED");
+
+    printf("Test C99 VLA 5 (bounds checking (might be disabled)): ");
+    if (bad_ptr = bounds_checking_is_enabled()) {
+        int *t1 = &tab1[size1 * size2 - 1][3];
+        int *t2 = &tab2[9][3];
+        printf("%s ", bad_ptr == t1 ? "PASSED" : "FAILED");
+        printf("%s ", bad_ptr == t2 ? "PASSED" : "FAILED");
+
+        char*c1 = 1 + sizeof(tab1) + (char*)tab1;
+        char*c2 = 1 + sizeof(tab2) + (char*)tab2;
+        printf("%s ", bad_ptr == c1 ? "PASSED" : "FAILED");
+        printf("%s ", bad_ptr == c2 ? "PASSED" : "FAILED");
+
+        int *i1 = tab1[-1];
+        int *i2 = tab2[-1];
+        printf("%s ", bad_ptr == i1 ? "PASSED" : "FAILED");
+        printf("%s ", bad_ptr == i2 ? "PASSED" : "FAILED");
+
+        int *x1 = tab1[size1 * size2 + 1];
+        int *x2 = tab2[10 + 1];
+        printf("%s ", bad_ptr == x1 ? "PASSED" : "FAILED");
+        printf("%s ", bad_ptr == x2 ? "PASSED" : "FAILED");
+    } else {
+        printf("PASSED PASSED PASSED PASSED PASSED PASSED PASSED PASSED ");
+    }
+    printf("\n");
 #endif
 }
 

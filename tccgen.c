@@ -5213,9 +5213,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
         if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
-            if (type->t & VT_VLA)
-                warning("Array bound check don't work for VLA");
-            else
+            if (!(type->t & VT_VLA))
                 loc--;
         }
 #endif
