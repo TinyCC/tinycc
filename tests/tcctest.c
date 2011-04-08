@@ -2079,9 +2079,14 @@ void *bounds_checking_is_enabled()
 void c99_vla_test(int size1, int size2)
 {
 #if defined __i386__ || defined __x86_64__
-    int tab1[size1 * size2][2], tab2[10][2];
+    int size = size1 * size2;
+    int tab1[size][2], tab2[10][2];
     void *tab1_ptr, *tab2_ptr, *bad_ptr;
 
+    /* "size" should have been 'captured' at tab1 declaration, 
+        so modifying it should have no effect on VLA behaviour. */
+    size = size-1;
+    
     printf("Test C99 VLA 1 (sizeof): ");
     printf("%s\n", (sizeof tab1 == size1 * size2 * 2 * sizeof(int)) ? "PASSED" : "FAILED");
     tab1_ptr = tab1;
