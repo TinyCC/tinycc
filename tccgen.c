@@ -4378,7 +4378,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         label_pop(&local_label_stack, llabel);
         /* pop left-over VLA size expressions */
         vtop = pvtop;
-        /* pop locally defined symbols */
         if(is_expr) {
             /* XXX: this solution makes only valgrind happy...
                triggered by gcc.c-torture/execute/20000917-1.c */
@@ -4393,6 +4392,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                         error("unsupported expression type");
             }
         }
+        /* pop locally defined symbols */
         sym_pop(&local_stack, s);
         next();
     } else if (tok == TOK_RETURN) {
