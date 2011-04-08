@@ -1602,7 +1602,7 @@ ST_FUNC void gen_op(int op)
                 swap(&t1, &t2);
             }
             type1 = vtop[-1].type;
-            type1.t &= ~(VT_ARRAY|VT_VLA);
+            type1.t &= ~VT_ARRAY;
             if (vtop[-1].type.t & VT_VLA)
                 vla_runtime_pointed_size(&vtop[-1].type);
             else {
@@ -1984,10 +1984,7 @@ ST_FUNC int type_size(CType *type, int *a)
         *a = s->r;
         return s->c;
     } else if (bt == VT_PTR) {
-        if (type->t & VT_VLA) {
-            *a = 1;
-            return 0;
-        } else if (type->t & VT_ARRAY) {
+        if (type->t & VT_ARRAY) {
             int ts;
 
             s = type->ref;
@@ -3209,7 +3206,7 @@ static void post_type(CType *type, AttributeDef *ad)
             if (n >= 0)
                 vpop();
         }
-        type->t = t1 | VT_ARRAY | VT_PTR;
+        type->t = (t1 ? VT_VLA : VT_ARRAY) | VT_PTR;
         type->ref = s;
     }
 }
@@ -3327,7 +3324,7 @@ ST_FUNC void indir(void)
         gv(RC_INT);
     vtop->type = *pointed_type(&vtop->type);
     /* Arrays and functions are never lvalues */
-    if (!(vtop->type.t & VT_ARRAY)
+    if (!(vtop->type.t & VT_ARRAY) && !(vtop->type.t & VT_VLA)
         && (vtop->type.t & VT_BTYPE) != VT_FUNC) {
         vtop->r |= lvalue_type(vtop->type.t);
         /* if bound checking, the referenced pointer must be checked */
@@ -3577,17 +3574,14 @@ ST_FUNC void unary(void)
         next();
         in_sizeof++;
         unary_type(&type); // Perform a in_sizeof = 0;
-        if ((t == TOK_SIZEOF) && (type.t & VT_VLA)) {
-            vla_runtime_type_size(&type, &align);
-            size = 0;
-        } else {
-            size = type_size(&type, &align);
-        }
+        size = type_size(&type, &align);
         if (t == TOK_SIZEOF) {
             if (!(type.t & VT_VLA)) {
                 if (size < 0)
                     error("sizeof applied to an incomplete type");
                 vpushi(size);
+            } else {
+                vla_runtime_type_size(&type, &align);
             }
         } else {
             vpushi(align);
@@ -5218,8 +5212,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
         if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
-            if (!(type->t & VT_VLA))
-                loc--;
+            loc--;
         }
 #endif
         loc = (loc - size) & -align;
@@ -5228,8 +5221,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY) &&
-            !(type->t & VT_VLA)) {
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
             unsigned long *bounds_ptr;
             /* add padding between regions */
             loc--;
@@ -5713,9 +5705,8 @@ static int decl0(int l, int is_for_loop_init)
                     if (has_init && (type.t & VT_VLA))
                         error("Variable length array cannot be initialized");
                     if ((btype.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
-                        ((type.t & VT_ARRAY) && (!(type.t & VT_VLA)) &&
-                        (type.t & VT_STATIC) && !has_init && l == VT_CONST &&
-                        type.ref->c < 0)) {
+                        ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
+                         !has_init && l == VT_CONST && type.ref->c < 0)) {
                         /* external variable or function */
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
