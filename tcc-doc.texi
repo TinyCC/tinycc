@@ -947,7 +947,7 @@ longs.
 
 Arrays are considered as pointers @code{VT_PTR} with the flag
 @code{VT_ARRAY} set. Variable length arrays are considered as special
-arrays and therefore also have flag @code{VT_VLA} set.
+arrays and have flag @code{VT_VLA} set instead of @code{VT_ARRAY}.
 
 The @code{VT_BITFIELD} flag can be set for chars, shorts, ints and long
 longs. If it is set, then the bitfield position is stored from bits
@@ -980,8 +980,8 @@ it). @code{Sym.t} gives the type of the symbol. @code{Sym.r} is usually
 the register in which the corresponding variable is stored. @code{Sym.c} is
 usually a constant associated to the symbol like its address for normal
 symbols, and the number of entries for symbols representing arrays.
-Variable length arrays use @code{Sym.r} instead, which is a pointer to
-a @code{SValue} holding its runtime size.
+Variable length array types use @code{Sym.c} as a location on the stack
+which holds the runtime sizeof for the type.
 
 Four main symbol stacks are defined:
 
