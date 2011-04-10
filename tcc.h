@@ -224,7 +224,6 @@ typedef struct Sym {
     union {
         long c;    /* associated number */
         int *d;   /* define token stream */
-        SValue *s; /* associated stack value */
     };
     CType type;    /* associated type */
     union {
