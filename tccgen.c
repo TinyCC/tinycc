@@ -1566,20 +1566,16 @@ ST_FUNC void gen_op(int op)
         }
         /* if both pointers, then it must be the '-' op */
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
-            int ptr1_is_vla;
-
-            ptr1_is_vla = 0;
             if (op != '-')
                 error("cannot use pointers here");
             check_comparison_pointer_types(vtop - 1, vtop, op);
             /* XXX: check that types are compatible */
             if (vtop[-1].type.t & VT_VLA) {
                 vla_runtime_pointed_size(&vtop[-1].type);
-                vrott(3);
-                ptr1_is_vla = 1;
             } else {
-                u = pointed_size(&vtop[-1].type);
+                vpushi(pointed_size(&vtop[-1].type));
             }
+            vrott(3);
             gen_opic(op);
             /* set to integer type */
 #ifdef TCC_TARGET_X86_64
@@ -1587,10 +1583,7 @@ ST_FUNC void gen_op(int op)
 #else
             vtop->type.t = VT_INT; 
 #endif
-            if (ptr1_is_vla)
-                vswap();
-            else
-                vpushi(u);
+            vswap();
             gen_op(TOK_PDIV);
         } else {
             /* exactly one pointer : must be '+' or '-'. */
