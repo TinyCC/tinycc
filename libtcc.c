@@ -778,7 +778,10 @@ static int tcc_compile(TCCState *s1)
             put_stabs_r(NULL, N_SO, 0, 0, 
                         text_section->data_offset, text_section, section_sym);
         }
+    } else if (pvtop != vtop) {
+        warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
     }
+
     s1->error_set_jmp_enabled = 0;
 
     /* reset define stack, but leave -Dsymbols (may be incorrect if
@@ -789,8 +792,6 @@ static int tcc_compile(TCCState *s1)
 
     sym_pop(&global_stack, NULL);
     sym_pop(&local_stack, NULL);
-    if (pvtop != vtop)
-        warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
 
     return s1->nb_errors != 0 ? -1 : 0;
 }
