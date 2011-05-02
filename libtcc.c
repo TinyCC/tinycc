@@ -759,7 +759,6 @@ static int tcc_compile(TCCState *s1)
 
     define_start = define_stack;
     nocode_wanted = 1;
-    pvtop = vtop;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
@@ -768,18 +767,19 @@ static int tcc_compile(TCCState *s1)
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM;
+        pvtop = vtop;
         next();
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
+        if (pvtop != vtop)
+            warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
 
         /* end of translation unit info */
         if (s1->do_debug) {
             put_stabs_r(NULL, N_SO, 0, 0, 
                         text_section->data_offset, text_section, section_sym);
         }
-    } else if (pvtop != vtop) {
-        warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
     }
 
     s1->error_set_jmp_enabled = 0;
