@@ -337,7 +337,9 @@ tar:
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
+ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@
+endif
 
 distclean: clean
 	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
