@@ -31,7 +31,11 @@ test1 test2 test3 test4 btest speedtest asmtest weaktest : ../tcc
 	$(MAKE) -C .. $*
 
 # libtcc test
-libtest: libtcc_test$(EXESUF) ../libtcc1.a
+ifdef LIBTCC1
+LIBTCC1:=$(TOP)/$(LIBTCC1)
+endif
+
+libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	@echo ------------ $@ ------------
 	./libtcc_test$(EXESUF) lib_path=..
 

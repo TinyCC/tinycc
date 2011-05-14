@@ -331,6 +331,8 @@ tar:
 	rm -rf /tmp/$(TCC-VERSION)
 
 # in tests subdir
+export LIBTCC1
+
 %est:
 	$(MAKE) -C tests $@
 
