@@ -23,7 +23,9 @@
 #ifdef TARGET_DEFS_ONLY
 
 #ifdef TCC_ARM_EABI
+#ifndef TCC_ARM_VFP // Avoid useless warning
 #define TCC_ARM_VFP
+#endif
 #endif
 
 /* number of available registers */
@@ -100,8 +102,10 @@ enum {
 //#define FUNC_STRUCT_PARAM_AS_PTR
 
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+#ifdef NEED_FLOAT_TYPES
 static CType float_type, double_type, func_float_type, func_double_type;
 #define func_ldouble_type func_double_type
+#endif
 #else
 #define func_float_type func_old_type
 #define func_double_type func_old_type
