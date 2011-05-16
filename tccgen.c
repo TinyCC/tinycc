@@ -647,7 +647,10 @@ static void gbound(void)
    register value (such as structures). */
 ST_FUNC int gv(int rc)
 {
-    int r, rc2, bit_pos, bit_size, size, align, i;
+    int r, bit_pos, bit_size, size, align, i;
+#ifndef TCC_TARGET_X86_64
+    int rc2;
+#endif
 
     /* NOTE: get_reg can modify vstack[] */
     if (vtop->type.t & VT_BITFIELD) {
@@ -718,9 +721,11 @@ ST_FUNC int gv(int rc)
 #endif
 
         r = vtop->r & VT_VALMASK;
+#ifndef TCC_TARGET_X86_64
         rc2 = RC_INT;
         if (rc == RC_IRET)
             rc2 = RC_LRET;
+#endif
         /* need to reload if:
            - constant
            - lvalue (need to dereference pointer)

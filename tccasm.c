@@ -991,7 +991,7 @@ ST_FUNC void asm_instr(void)
 {
     CString astr, astr1;
     ASMOperand operands[MAX_ASM_OPERANDS];
-    int nb_inputs, nb_outputs, nb_operands, i, must_subst, out_reg;
+    int nb_outputs, nb_operands, i, must_subst, out_reg;
     uint8_t clobber_regs[NB_ASM_REGS];
 
     next();
@@ -1040,7 +1040,6 @@ ST_FUNC void asm_instr(void)
        token after the assembler parsing */
     if (tok != ';')
         expect("';'");
-    nb_inputs = nb_operands - nb_outputs;
     
     /* save all values in the memory */
     save_regs(0);

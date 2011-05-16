@@ -3011,7 +3011,6 @@ ST_FUNC void preprocess_new()
 {
     int i, c;
     const char *p, *r;
-    TokenSym *ts;
 
     /* init isid table */
     for(i=CH_EOF;i<256;i++)
@@ -3030,7 +3029,7 @@ ST_FUNC void preprocess_new()
             if (c == '\0')
                 break;
         }
-        ts = tok_alloc(p, r - p - 1);
+        tok_alloc(p, r - p - 1);
         p = r;
     }
 }
