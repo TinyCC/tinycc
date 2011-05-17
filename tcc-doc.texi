@@ -165,7 +165,7 @@ Print the name of the configured installation directory and a list
 of program and library directories tcc will search.
 
 @item -c
-Generate an object file (@option{-o} option must also be given).
+Generate an object file.
 
 @item -o outfile
 Put object file, executable, or dll into output file @file{outfile}.
@@ -285,23 +285,21 @@ libxxx.a. The library is searched in the paths specified by the
 @option{-L} option.
 
 @item -shared
-Generate a shared library instead of an executable (@option{-o} option
-must also be given).
+Generate a shared library instead of an executable.
 
 @item -soname name
 set name for shared library to be used at runtime
 
 @item -static
 Generate a statically linked executable (default is a shared linked
-executable) (@option{-o} option must also be given).
+executable).
 
 @item -rdynamic
 Export global symbols to the dynamic linker. It is useful when a library
 opened with @code{dlopen()} needs to access executable symbols.
 
 @item -r
-Generate an object file combining all input files (@option{-o} option must
-also be given).
+Generate an object file combining all input files.
 
 @item -Wl,-Ttext,address
 Set the start of the .text section to @var{address}.
