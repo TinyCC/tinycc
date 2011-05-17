@@ -749,7 +749,7 @@ void gfunc_call(int nb_args)
     gv(RC_INT);
 #ifdef TCC_ARM_EABI
   if((vtop[-nb_args].type.ref->type.t & VT_BTYPE) == VT_STRUCT
-     && type_size(&vtop[-nb_args].type, &align) <= 4) {
+     && type_size(&vtop[-nb_args].type.ref->type, &align) <= 4) {
     SValue tmp;
     tmp=vtop[-nb_args];
     vtop[-nb_args]=vtop[-nb_args+1];
