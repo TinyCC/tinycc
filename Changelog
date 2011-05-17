@@ -8,11 +8,12 @@ not released:
 - Register __TRY__ SEH in startup code only for i386 (grischka)
 - Support Debian GNU/kFreeBSD kernels (Pierre Chifflier)
 - Support GNU/Hurd kernels (Thomas Preud'homme)
-- support for asm labels for functions (Thomas Preud'homme)
-- fix 32 to 64 bit casts, alignment and struct issues (Shinichiro Hamaji)
-- mimic all GNU -option forms supported by ld (Kirill Smelkov)
-- support indirect functions as externals (Thomas Preud'homme)
-- Add support for C99 variable length arrays (Thomas Preud'homme)
+- support for asm labels for variables and functions (Thomas Preud'homme)
+- Fix 32 to 64 bit casts, alignment and struct issues (Shinichiro Hamaji)
+- Mimic all GNU -option forms supported by ld (Kirill Smelkov)
+- Support indirect functions as externals (Thomas Preud'homme)
+- Add support for C99 variable length arrays (Thomas Preud'homme & Joe Soroka)
+- Improve support of ARM (Daniel Glöckner)
 
 version 0.9.25:
 
