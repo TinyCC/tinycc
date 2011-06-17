@@ -5,7 +5,6 @@
 TOP ?= .
 include $(TOP)/config.mak
 
-CFLAGS+=-g -Wall
 CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
 LIBS_P=
 
@@ -217,12 +216,17 @@ libtcc1.a : FORCE
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	@$(MAKE) -C lib cross TARGET=$*
 bcheck.o : lib/bcheck.c
-	gcc -c $< -o $@ -O2 -Wall
+	gcc -c $< -o $@ $(CFLAGS)
 FORCE:
 
 # install
 TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
 INSTALL=install
+ifdef STRIP_BINARIES
+INSTALLBIN=$(INSTALL) -s
+else
+INSTALLBIN=$(INSTALL)
+endif
 
 ifndef CONFIG_WIN32
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
@@ -230,7 +234,7 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 ifeq ($(CC),tcc)
 	$(INSTALL) -m755 $(PROGS) "$(bindir)"
 else
-	$(INSTALL) -s -m755 $(PROGS) "$(bindir)"
+	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
 endif
 	mkdir -p "$(mandir)/man1"
 	-$(INSTALL) tcc.1 "$(mandir)/man1"
@@ -291,7 +295,7 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(tccdir)/examples"
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
-	$(INSTALL) -s -m755 $(PROGS) "$(tccdir)"
+	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
 	$(INSTALL) -m644 $(LIBTCC1) win32/lib/*.def "$(tccdir)/lib"
 	cp -r win32/include/. "$(tccdir)/include"
 	cp -r win32/examples/. "$(tccdir)/examples"
