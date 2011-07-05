@@ -112,7 +112,7 @@ for opt do
   ;;
   --lddir=*) lddir=`echo $opt | cut -d '=' -f 2`
   ;;
-  --extralddir=*) extralddir="$extralddir:`echo $opt | cut -d '=' -f 2`"
+  --extralddir=*) extralddir="${extralddir:+:}`echo $opt | cut -d '=' -f 2`"
   ;;
   --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -366,9 +366,13 @@ echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
 echo "#ifndef CONFIG_TCCDIR" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
-echo "#define CONFIG_TCC_LDDIR \"$lddir\"" >> $TMPH
-echo "#define CONFIG_TCC_EXTRA_LDDIR \"$extralddir\"" >> $TMPH
 echo "#endif" >> $TMPH
+if test -n "$lddir" ; then
+  echo "#define CONFIG_TCC_LDDIR \"$lddir\"" >> $TMPH
+fi
+if test -n "$extralddir" ; then
+  echo "#define CONFIG_TCC_EXTRA_LDDIR \"$extralddir\"" >> $TMPH
+fi
 echo "CC=$cc" >> config.mak
 echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
