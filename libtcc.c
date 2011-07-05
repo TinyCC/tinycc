@@ -971,6 +971,30 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_add_library_path(s, CONFIG_TCC_CRT_PREFIX);
     tcc_add_library_path(s, CONFIG_SYSROOT CONFIG_TCC_LDDIR);
     tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local"CONFIG_TCC_LDDIR);
+#ifdef CONFIG_TCC_EXTRA_LDDIR
+    {
+        const char delim[] = ":";
+        char *tok, *tok_extra_libdir = NULL, *tok_save_ptr, *extra_libdir_str;
+        size_t toklen = 0, old_toklen = 0;
+
+        extra_libdir_str = tcc_strdup(CONFIG_TCC_EXTRA_LDDIR);
+        tok = strtok_r(extra_libdir_str, delim, &tok_save_ptr);
+        while (tok != NULL)
+        {
+            toklen = strlen(CONFIG_SYSROOT "/usr/local") + strlen(tok);
+            if (toklen > old_toklen)
+                tok_extra_libdir = tcc_realloc(tok_extra_libdir,
+                                               toklen * sizeof(char));
+            /* No need for snprintf: value in tok comes from tcc compilation */
+            sprintf(tok_extra_libdir, CONFIG_SYSROOT "%s", tok);
+            tcc_add_library_path(s, tok_extra_libdir);
+            sprintf(tok_extra_libdir, CONFIG_SYSROOT "/usr/local%s", tok);
+            tcc_add_library_path(s, tok_extra_libdir);
+            tok = strtok_r(NULL, delim, &tok_save_ptr);
+        }
+        tcc_free(tok_extra_libdir);
+    }
+#endif
 #endif
 
     /* no section zero */
