@@ -993,6 +993,7 @@ LIBTCCAPI TCCState *tcc_new(void)
             tok = strtok_r(NULL, delim, &tok_save_ptr);
         }
         tcc_free(tok_extra_libdir);
+        tcc_free(extra_libdir_str);
     }
 #endif
 #endif
