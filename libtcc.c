@@ -247,6 +247,34 @@ PUB_FUNC char *tcc_strdup(const char *str)
     return ptr;
 }
 
+/* out must not point to a valid dynarray since a new one is created */
+PUB_FUNC int tcc_split_path_components(const char *in,
+                                       const char * const *prefixs,
+                                       int nb_prefixs, char ***out)
+{
+        int i, nb_components = 0;
+        char *path_component;
+        const char *end_component;
+        size_t path_size;
+
+        *out = NULL;
+        end_component = in;
+        do {
+            while (*end_component && *end_component != ':')
+                ++end_component;
+            for (i = 0; i < nb_prefixs; i++) {
+                path_size = (strlen(prefixs[i]) + 1) * sizeof(char)
+                            + (end_component - in);
+                path_component = tcc_malloc(path_size);
+                pstrcpy(path_component, path_size, prefixs[i]);
+                pstrcat(path_component, path_size, in);
+                dynarray_add((void ***) out, &nb_components, path_component);
+            }
+            in = ++end_component;
+        } while (*end_component);
+        return nb_components;
+}
+
 PUB_FUNC void tcc_memstats(void)
 {
 #ifdef MEM_DEBUG
@@ -973,27 +1001,20 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_add_library_path(s, CONFIG_SYSROOT "/usr/local"CONFIG_TCC_LDDIR);
 #ifdef CONFIG_TCC_EXTRA_LDDIR
     {
-        const char delim[] = ":";
-        char *tok, *tok_extra_libdir = NULL, *tok_save_ptr, *extra_libdir_str;
-        size_t toklen = 0, old_toklen = 0;
+        int i, nb_extra_lddirs, nb_prefixs;
+        char **extra_lddirs;
+        char extra_lddir_str[] = CONFIG_TCC_EXTRA_LDDIR;
+	const char lddir_prefix1[] = CONFIG_SYSROOT;
+	const char lddir_prefix2[] = CONFIG_SYSROOT "/usr/local";
+	const char * const lddir_prefixs[] = {lddir_prefix1, lddir_prefix2};
 
-        extra_libdir_str = tcc_strdup(CONFIG_TCC_EXTRA_LDDIR);
-        tok = strtok_r(extra_libdir_str, delim, &tok_save_ptr);
-        while (tok != NULL)
-        {
-            toklen = strlen(CONFIG_SYSROOT "/usr/local") + strlen(tok);
-            if (toklen > old_toklen)
-                tok_extra_libdir = tcc_realloc(tok_extra_libdir,
-                                               toklen * sizeof(char));
-            /* No need for snprintf: value in tok comes from tcc compilation */
-            sprintf(tok_extra_libdir, CONFIG_SYSROOT "%s", tok);
-            tcc_add_library_path(s, tok_extra_libdir);
-            sprintf(tok_extra_libdir, CONFIG_SYSROOT "/usr/local%s", tok);
-            tcc_add_library_path(s, tok_extra_libdir);
-            tok = strtok_r(NULL, delim, &tok_save_ptr);
-        }
-        tcc_free(tok_extra_libdir);
-        tcc_free(extra_libdir_str);
+        nb_prefixs = sizeof lddir_prefixs / sizeof *lddir_prefixs;
+        nb_extra_lddirs = tcc_split_path_components(CONFIG_TCC_EXTRA_LDDIR,
+                                                    lddir_prefixs, nb_prefixs,
+                                                    &extra_lddirs);
+        for (i = 0; i < nb_extra_lddirs; i++)
+            tcc_add_library_path(s, extra_lddirs[i]);
+        dynarray_reset(&extra_lddirs, &nb_extra_lddirs);
     }
 #endif
 #endif
