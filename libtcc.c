@@ -1328,8 +1328,23 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         /* default include paths */
         /* -isystem paths have already been handled */
 #ifndef TCC_TARGET_PE
-        tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/local/include");
-        tcc_add_sysinclude_path(s, CONFIG_SYSROOT "/usr/include");
+        {
+            int i, nb_extra_incdirs, nb_prefixs;
+            char **extra_incdirs;
+            const char incdir_prefix1[] = CONFIG_SYSROOT "/usr/local/include";
+            const char incdir_prefix2[] = CONFIG_SYSROOT "/usr/include";
+            const char * const incdir_prefixs[] = {incdir_prefix1,
+                                                   incdir_prefix2};
+
+            nb_prefixs = sizeof incdir_prefixs / sizeof *incdir_prefixs;
+            nb_extra_incdirs = tcc_split_path_components(CONFIG_TCC_INCSUBDIR,
+                                                        incdir_prefixs,
+                                                        nb_prefixs,
+                                                        &extra_incdirs);
+            for (i = 0; i < nb_extra_incdirs; i++)
+                tcc_add_sysinclude_path(s, extra_incdirs[i]);
+            dynarray_reset(&extra_incdirs, &nb_extra_incdirs);
+        }
 #endif
         snprintf(buf, sizeof(buf), "%s/include", s->tcc_lib_path);
         tcc_add_sysinclude_path(s, buf);

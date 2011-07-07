@@ -150,6 +150,9 @@ typedef int BOOL;
   #endif
 #endif
 #define CONFIG_TCC_CRT_PREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
+#ifndef CONFIG_TCC_INCSUBDIR
+  #define CONFIG_TCC_INCSUBDIR ""
+#endif
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
