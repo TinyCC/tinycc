@@ -65,7 +65,8 @@ operations given a list of numbers (benchmark).
 ex3.c: compute fibonacci numbers (benchmark).
 
 ex4.c: more complicated: X11 program. Very complicated test in fact
-because standard headers are being used !
+because standard headers are being used ! As for ex1.c, can also be launched
+directly as a script: './ex4.c'.
 
 ex5.c: 'hello world' with standard glibc headers.
 
