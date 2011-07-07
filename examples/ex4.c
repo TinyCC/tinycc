@@ -1,4 +1,4 @@
-#! @BINDIR@/tcc -run -L/usr/X11R6/lib -lX11
+#!./tcc -run -L/usr/X11R6/lib -lX11
 #include <stdlib.h>
 #include <stdio.h>
 #include <X11/Xlib.h>

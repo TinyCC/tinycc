@@ -141,16 +141,15 @@ ifdef CONFIG_USE_LIBGCC
 LIBTCC1=
 endif
 
-TCCLIBS := $(LIBTCC1) $(LIBTCC) $(BCHECK_O)
-TCCDOCS := tcc.1 tcc-doc.html tcc-doc.info
-TCCEXS := $(patsubst ex%.c.template,ex%.c,$(wildcard examples/ex*.c.template))
+TCCLIBS = $(LIBTCC1) $(LIBTCC) $(BCHECK_O)
+TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
 PROGS+=$(PROGS_CROSS)
 TCCLIBS+=$(LIBTCC1_CROSS)
 endif
 
-all: $(PROGS) $(TCCLIBS) $(TCCDOCS) $(TCCEXS)
+all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
@@ -325,11 +324,6 @@ tcc.1: tcc-doc.texi
 tcc-doc.info: tcc-doc.texi
 	-makeinfo tcc-doc.texi
 
-# examples
-examples/ex%.c: examples/ex%.c.template
-	sed '1s/@BINDIR@/$(subst /,\/,$(bindir))/' $< > $@
-	chmod a+x $@
-
 .PHONY: all clean tar distclean install uninstall FORCE
 
 # tar release (use 'make -k tar' on a checkouted tree)
@@ -347,7 +341,7 @@ export LIBTCC1
 	$(MAKE) -C tests $@
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF) $(TCCEXS)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@
