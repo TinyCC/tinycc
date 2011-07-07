@@ -26,8 +26,6 @@ prefix=""
 execprefix=""
 bindir=""
 libdir=""
-lddir=""
-extralddir=""
 tccdir=""
 includedir=""
 mandir=""
@@ -109,10 +107,6 @@ for opt do
   --bindir=*) bindir=`echo $opt | cut -d '=' -f 2`
   ;;
   --libdir=*) libdir=`echo $opt | cut -d '=' -f 2`
-  ;;
-  --lddir=*) lddir=`echo $opt | cut -d '=' -f 2`
-  ;;
-  --extralddir=*) extralddir="${extralddir:+:}`echo $opt | cut -d '=' -f 2`"
   ;;
   --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -247,8 +241,6 @@ echo "  --exec-prefix=EPREFIX    install architecture-dependent files in EPREFIX
 echo "                           [same as prefix]"
 echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
 echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
-echo "  --lddir=DIR              loader library search path in DIR [/lib]"
-echo "  --extralddir=DIR         extra loader library search path in DIR []"
 echo "  --tccdir=DIR             installation directory [EPREFIX/lib/tcc]"
 echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
 echo "  --sharedir=DIR           documentation root DIR [PREFIX]/share"
@@ -330,23 +322,21 @@ if test x"$includedir" = x""; then
 includedir="${prefix}/include"
 fi
 
-echo "Binary  directory                      $bindir"
-echo "TinyCC directory                       $tccdir"
-echo "Library directory                      $libdir"
-echo "Loader library search directory        ${lddir:-default value (see tcc.h)}"
-echo "Extra loader library search directory  ${extralddir:-(none)}"
-echo "Include directory                      $includedir"
-echo "Manual directory                       $mandir"
-echo "Info directory                         $infodir"
-echo "Doc directory                          $docdir"
-echo "Target root prefix                     $sysroot"
-echo "Source path                            $source_path"
-echo "C compiler                             $cc"
-echo "CPU                                    $cpu"
-echo "Big Endian                             $bigendian"
-echo "gprof enabled                          $gprof"
-echo "cross compilers                        $build_cross"
-echo "use libgcc                             $use_libgcc"
+echo "Binary  directory   $bindir"
+echo "TinyCC directory    $tccdir"
+echo "Library directory   $libdir"
+echo "Include directory   $includedir"
+echo "Manual directory    $mandir"
+echo "Info directory      $infodir"
+echo "Doc directory       $docdir"
+echo "Target root prefix  $sysroot"
+echo "Source path      $source_path"
+echo "C compiler       $cc"
+echo "CPU              $cpu"
+echo "Big Endian       $bigendian"
+echo "gprof enabled    $gprof"
+echo "cross compilers  $build_cross"
+echo "use libgcc       $use_libgcc"
 
 echo "Creating config.mak and config.h"
 
@@ -367,12 +357,6 @@ echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
 echo "#ifndef CONFIG_TCCDIR" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
 echo "#endif" >> $TMPH
-if test -n "$lddir" ; then
-  echo "#define CONFIG_TCC_LDDIR \"$lddir\"" >> $TMPH
-fi
-if test -n "$extralddir" ; then
-  echo "#define CONFIG_TCC_EXTRA_LDDIR \"$extralddir\"" >> $TMPH
-fi
 echo "CC=$cc" >> config.mak
 echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
