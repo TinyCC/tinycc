@@ -290,13 +290,12 @@ static void print_num(char *fn, int line, int num) {
 
 void recursive_macro_test(void)
 {
-#if 0 /* doesnt work yet */
+
 #define ELF32_ST_TYPE(val)              ((val) & 0xf)
 #define ELF32_ST_INFO(bind, type)       (((bind) << 4) + ((type) & 0xf))
 #define STB_WEAK        2               /* Weak symbol */
 #define ELFW(type) ELF##32##_##type
     printf("%d\n", ELFW(ST_INFO)(STB_WEAK, ELFW(ST_TYPE)(123)));
-#endif
 
 #define WRAP(x) x
     

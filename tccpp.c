@@ -2689,6 +2689,8 @@ static int macro_subst_tok(TokenString *tok_str,
                         ml->p = NULL;
                         *can_read_stream = ml -> prev;
                     }
+                    /* also, end of scope for nested defined symbol */
+                    (*nested_list)->v = -1;
                     goto redo;
                 }
             } else {
