@@ -2788,7 +2788,7 @@ static inline int *macro_twosharps(const int *macro_str)
     CValue cval;
     TokenString macro_str1;
     CString cstr;
-    int n;
+    int n, start_of_nosubsts;
 
     /* we search the first '##' */
     for(ptr = macro_str;;) {
@@ -2801,6 +2801,7 @@ static inline int *macro_twosharps(const int *macro_str)
     }
 
     /* we saw '##', so we need more processing to handle it */
+    start_of_nosubsts = -1;
     tok_str_new(&macro_str1);
     for(ptr = macro_str;;) {
         TOK_GET(&tok, &ptr, &tokc);
@@ -2808,8 +2809,17 @@ static inline int *macro_twosharps(const int *macro_str)
             break;
         if (tok == TOK_TWOSHARPS)
             continue;
+        if (tok == TOK_NOSUBST && start_of_nosubsts < 0)
+            start_of_nosubsts = macro_str1.len;
         while (*ptr == TOK_TWOSHARPS) {
-            do { t = *++ptr; } while (t == TOK_NOSUBST);
+            /* given 'a##b', remove nosubsts preceding 'a' */
+            if (start_of_nosubsts >= 0)
+                macro_str1.len = start_of_nosubsts;
+            /* given 'a##b', skip '##' */
+            t = *++ptr;
+            /* given 'a##b', remove nosubsts preceding 'b' */
+            while (t == TOK_NOSUBST)
+                t = *++ptr;
             
             if (t && t != TOK_TWOSHARPS) {
                 TOK_GET(&t, &ptr, &cval);
@@ -2835,6 +2845,8 @@ static inline int *macro_twosharps(const int *macro_str)
                 cstr_reset(&cstr);
             }
         }
+        if (tok != TOK_NOSUBST) 
+            start_of_nosubsts = -1;
         tok_str_add2(&macro_str1, tok, &tokc);
     }
     tok_str_add(&macro_str1, 0);

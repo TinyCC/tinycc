@@ -103,6 +103,10 @@ int isid(int c);
 #define HIGHLOW "hello"
 #define LOW LOW ", world"
 
+static int onetwothree = 123;
+#define onetwothree4 onetwothree
+#define onetwothree xglue(onetwothree,4)
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 #ifdef C99_MACROS
@@ -154,6 +158,8 @@ void macro_test(void)
     printf("s3=%s\n", str("c"));
     printf("s4=%s\n", str(a1));
     printf("B3=%d\n", B3);
+
+    printf("onetwothree=%d\n", onetwothree);
 
 #ifdef A
     printf("A defined\n");
