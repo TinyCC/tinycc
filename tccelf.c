@@ -1335,15 +1335,15 @@ ST_FUNC void tcc_add_linker_symbols(TCCState *s1)
 #if defined __FreeBSD__
 static const char elf_interp[] = "/libexec/ld-elf.so.1";
 #elif defined __FreeBSD_kernel__
-static char elf_interp[] = "/lib/ld.so.1";
+static char elf_interp[] = CONFIG_TCC_LDDIR"/ld.so.1";
 #elif defined TCC_ARM_EABI
-static const char elf_interp[] = "/lib/ld-linux.so.3";
+static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux.so.3";
 #elif defined(TCC_TARGET_X86_64)
 static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux-x86-64.so.2";
 #elif defined(TCC_UCLIBC)
-static const char elf_interp[] = "/lib/ld-uClibc.so.0";
+static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-uClibc.so.0";
 #else
-static const char elf_interp[] = "/lib/ld-linux.so.2";
+static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux.so.2";
 #endif
 
 static void tcc_output_binary(TCCState *s1, FILE *f,
