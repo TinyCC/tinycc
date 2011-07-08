@@ -247,34 +247,6 @@ PUB_FUNC char *tcc_strdup(const char *str)
     return ptr;
 }
 
-/* out must not point to a valid dynarray since a new one is created */
-PUB_FUNC int tcc_split_path_components(const char *in,
-                                       const char * const *prefixs,
-                                       int nb_prefixs, char ***out)
-{
-        int i, nb_components = 0;
-        char *path_component;
-        const char *end_component;
-        size_t path_size;
-
-        *out = NULL;
-        end_component = in;
-        do {
-            while (*end_component && *end_component != ':')
-                ++end_component;
-            for (i = 0; i < nb_prefixs; i++) {
-                path_size = (strlen(prefixs[i]) + 1) * sizeof(char)
-                            + (end_component - in);
-                path_component = tcc_malloc(path_size);
-                pstrcpy(path_component, path_size, prefixs[i]);
-                pstrcat(path_component, path_size, in);
-                dynarray_add((void ***) out, &nb_components, path_component);
-            }
-            in = ++end_component;
-        } while (*end_component);
-        return nb_components;
-}
-
 PUB_FUNC void tcc_memstats(void)
 {
 #ifdef MEM_DEBUG
@@ -319,6 +291,33 @@ PUB_FUNC void dynarray_reset(void *pp, int *n)
             tcc_free(*p);
     tcc_free(*(void**)pp);
     *(void**)pp = NULL;
+}
+
+/* out must not point to a valid dynarray since a new one is created */
+PUB_FUNC int tcc_split_path(const char *in, const char * const *prefixs,
+                            int nb_prefixs, char ***out)
+{
+    int i, nb_comps = 0;
+    char *path;
+    const char *end;
+    size_t size;
+
+    *out = NULL;
+    do {
+        end = in;
+        while (*end && *end != ':')
+            ++end;
+        for (i = 0; i < nb_prefixs; i++) {
+            size = (strlen(prefixs[i]) + 1) * sizeof(char)
+                   + (end - in);
+            path = tcc_malloc(size);
+            pstrcpy(path, size, prefixs[i]);
+            pstrcat(path, size, in);
+            dynarray_add((void ***) out, &nb_comps, path);
+        }
+        in = end + 1;
+    } while (*end);
+    return nb_comps;
 }
 
 /* we use our own 'finite' function to avoid potential problems with
@@ -1009,9 +1008,9 @@ LIBTCCAPI TCCState *tcc_new(void)
 	const char * const lddir_prefixs[] = {lddir_prefix1, lddir_prefix2};
 
         nb_prefixs = sizeof lddir_prefixs / sizeof *lddir_prefixs;
-        nb_extra_lddirs = tcc_split_path_components(CONFIG_TCC_EXTRA_LDDIR,
-                                                    lddir_prefixs, nb_prefixs,
-                                                    &extra_lddirs);
+        nb_extra_lddirs = tcc_split_path(CONFIG_TCC_EXTRA_LDDIR,
+                                         lddir_prefixs, nb_prefixs,
+                                         &extra_lddirs);
         for (i = 0; i < nb_extra_lddirs; i++)
             tcc_add_library_path(s, extra_lddirs[i]);
         dynarray_reset(&extra_lddirs, &nb_extra_lddirs);
@@ -1337,10 +1336,9 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
                                                    incdir_prefix2};
 
             nb_prefixs = sizeof incdir_prefixs / sizeof *incdir_prefixs;
-            nb_extra_incdirs = tcc_split_path_components(CONFIG_TCC_INCSUBDIR,
-                                                        incdir_prefixs,
-                                                        nb_prefixs,
-                                                        &extra_incdirs);
+            nb_extra_incdirs = tcc_split_path(CONFIG_TCC_INCSUBDIR,
+                                              incdir_prefixs, nb_prefixs,
+                                              &extra_incdirs);
             for (i = 0; i < nb_extra_incdirs; i++)
                 tcc_add_sysinclude_path(s, extra_incdirs[i]);
             dynarray_reset(&extra_incdirs, &nb_extra_incdirs);
