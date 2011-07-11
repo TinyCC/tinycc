@@ -1551,15 +1551,10 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
         end = NULL;
         if (link_option(option, "Bsymbolic", &p)) {
             s->symbolic = TRUE;
-#ifdef TCC_TARGET_PE
-        } else if (link_option(option, "file-alignment=", &p)) {
-            s->pe_file_align = strtoul(p, &end, 16);
-#endif
         } else if (link_option(option, "fini=", &p)) {
             s->fini_symbol = p;
             if (s->warn_unsupported)
                 warning("ignoring -fini %s", p);
-
         } else if (link_option(option, "image-base=", &p)) {
             s->text_addr = strtoul(p, &end, 16);
             s->has_text_addr = 1;
@@ -1567,7 +1562,6 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
             s->init_symbol = p;
             if (s->warn_unsupported)
                 warning("ignoring -init %s", p);
-
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
             if (strstart(p, "pe-", NULL)) {
@@ -1599,6 +1593,10 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
             s->soname = p;
             multi = 0;
 #ifdef TCC_TARGET_PE
+        } else if (link_option(option, "file-alignment=", &p)) {
+            s->pe_file_align = strtoul(p, &end, 16);
+        } else if (link_option(option, "stack=", &p)) {
+            s->pe_stack_size = strtoul(p, &end, 10);
         } else if (link_option(option, "subsystem=", &p)) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
             if (!strcmp(p, "native")) {

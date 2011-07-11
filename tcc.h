@@ -565,6 +565,7 @@ struct TCCState {
     /* PE info */
     int pe_subsystem;
     unsigned long pe_file_align;
+    unsigned long pe_stack_size;
     struct pe_uw {
         Section *pdata;
         int sym_1, sym_2, offs_1;

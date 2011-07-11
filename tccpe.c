@@ -686,6 +686,8 @@ static int pe_write(struct pe_info *pe)
     pe_header.filehdr.NumberOfSections = pe->sec_count;
     pe_header.opthdr.SizeOfHeaders = pe->sizeofheaders;
     pe_header.opthdr.ImageBase = pe->imagebase;
+    if (pe->s1->pe_stack_size)
+        pe_header.opthdr.SizeOfStackReserve = pe->s1->pe_stack_size;
     if (PE_DLL == pe->type)
         pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
     else if (PE_GUI != pe->type)
