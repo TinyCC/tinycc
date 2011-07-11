@@ -353,7 +353,9 @@ echo "mandir=\$(DESTDIR)$mandir" >> config.mak
 echo "infodir=\$(DESTDIR)$infodir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 
+echo "#ifndef CONFIG_SYSROOT" >> $TMPH
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
+echo "#endif" >> $TMPH
 echo "#ifndef CONFIG_TCCDIR" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
 echo "#endif" >> $TMPH
