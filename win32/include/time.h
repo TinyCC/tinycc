@@ -119,10 +119,10 @@ extern "C" {
 
 #define CLOCKS_PER_SEC 1000
 
-//!__TINYC__:   __MINGW_IMPORT int _daylight;
-//!__TINYC__:   __MINGW_IMPORT long _dstbias;
-//!__TINYC__:   __MINGW_IMPORT long _timezone;
-//!__TINYC__:   __MINGW_IMPORT char * _tzname[2];
+  __MINGW_IMPORT int _daylight;
+  __MINGW_IMPORT long _dstbias;
+  __MINGW_IMPORT long _timezone;
+  __MINGW_IMPORT char * _tzname[2];
   _CRTIMP errno_t __cdecl _get_daylight(int *_Daylight);
   _CRTIMP errno_t __cdecl _get_dstbias(long *_Daylight_savings_bias);
   _CRTIMP errno_t __cdecl _get_timezone(long *_Timezone);
@@ -242,9 +242,10 @@ __CRT_INLINE time_t __cdecl time(time_t *_Time) { return _time64(_Time); }
 #if !defined(NO_OLDNAMES) || defined(_POSIX)
 #define CLK_TCK CLOCKS_PER_SEC
 
-  _CRTIMP extern int daylight;
-  _CRTIMP extern long timezone;
-  _CRTIMP extern char *tzname[2];
+  __MINGW_IMPORT int daylight;
+  __MINGW_IMPORT long dstbias;
+  __MINGW_IMPORT long timezone;
+  __MINGW_IMPORT char *tzname[2];
   void __cdecl tzset(void);
 #endif
 

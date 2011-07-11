@@ -38,9 +38,8 @@
 #define __unaligned __attribute__((packed))
 #define __fastcall __attribute__((fastcall))
 
-// #define __MINGW_IMPORT extern __declspec(dllimport)
+#define __MINGW_IMPORT extern __declspec(dllimport)
 #undef _MSVCRT_
-#undef __MINGW_IMPORT
 #define __MINGW_ATTRIB_NORETURN
 #define __MINGW_ATTRIB_CONST
 #define __MINGW_ATTRIB_DEPRECATED
@@ -124,10 +123,12 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 #define _ANONYMOUS_STRUCT
 #define DECLSPEC_NORETURN
 #define DECLARE_STDCALL_P(type) __stdcall type
-#define WIN32_LEAN_AND_MEAN
 #define NOSERVICE 1
 #define NOMCX 1
 #define NOIME 1
+#ifndef WIN32_LEAN_AND_MEAN
+# define WIN32_LEAN_AND_MEAN 1
+#endif
 #ifndef WINVER
 # define WINVER 0x0502
 #endif
