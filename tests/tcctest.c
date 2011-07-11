@@ -2081,6 +2081,8 @@ void *bounds_checking_is_enabled()
     return (ca != cp + 1) ? cp : NULL;
 }
 
+typedef int constant_negative_array_size_as_compile_time_assertion_idiom[(1 ? 2 : 0) - 1];
+
 void c99_vla_test(int size1, int size2)
 {
 #if defined __i386__ || defined __x86_64__
