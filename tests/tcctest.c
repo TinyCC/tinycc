@@ -615,9 +615,9 @@ void scope_test()
     printf("g5=%d\n", g);
 }
 
-void array_test(int a[4])
+void array_test()
 {
-    int i, j;
+    int i, j, a[4];
 
     printf("array:\n");
     printf("sizeof(a) = %d\n", sizeof(a));
