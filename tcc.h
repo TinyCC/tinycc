@@ -1150,6 +1150,24 @@ ST_INLN void inp(void);
 ST_FUNC int handle_eob(void);
 #endif
 
+#ifdef TCC_TARGET_X86_64
+# define ELFCLASSW ELFCLASS64
+# define ElfW(type) Elf##64##_##type
+# define ELFW(type) ELF##64##_##type
+# define ElfW_Rel ElfW(Rela)
+# define SHT_RELX SHT_RELA
+# define REL_SECTION_FMT ".rela%s"
+/* XXX: DLL with PLT would only work with x86-64 for now */
+# define TCC_OUTPUT_DLL_WITH_PLT
+#else
+# define ELFCLASSW ELFCLASS32
+# define ElfW(type) Elf##32##_##type
+# define ELFW(type) ELF##32##_##type
+# define ElfW_Rel ElfW(Rel)
+# define SHT_RELX SHT_REL
+# define REL_SECTION_FMT ".rel%s"
+#endif
+
 /* ------------ xxx-gen.c ------------ */
 
 ST_FUNC void gsym_addr(int t, int a);

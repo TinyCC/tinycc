@@ -20,22 +20,7 @@
 
 #include "tcc.h"
 
-#ifdef TCC_TARGET_X86_64
-#define ElfW_Rel ElfW(Rela)
-#define SHT_RELX SHT_RELA
-#define REL_SECTION_FMT ".rela%s"
-/* x86-64 requires PLT for DLLs */
-#define TCC_OUTPUT_DLL_WITH_PLT
-#else
-#define ElfW_Rel ElfW(Rel)
-#define SHT_RELX SHT_REL
-#define REL_SECTION_FMT ".rel%s"
-#endif
-
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
-
-/* XXX: DLL with PLT would only work with x86-64 for now */
-//#define TCC_OUTPUT_DLL_WITH_PLT
 
 ST_FUNC int put_elf_str(Section *s, const char *sym)
 {
@@ -2119,7 +2104,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         ehdr.e_ident[1] = ELFMAG1;
         ehdr.e_ident[2] = ELFMAG2;
         ehdr.e_ident[3] = ELFMAG3;
-        ehdr.e_ident[4] = TCC_ELFCLASS;
+        ehdr.e_ident[4] = ELFCLASSW;
         ehdr.e_ident[5] = ELFDATA2LSB;
         ehdr.e_ident[6] = EV_CURRENT;
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)

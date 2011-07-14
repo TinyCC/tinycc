@@ -27,6 +27,16 @@
 
 #include "../../elf.h"
 
+#ifdef TCC_TARGET_X86_64
+# define ELFCLASSW ELFCLASS64
+# define ElfW(type) Elf##64##_##type
+# define ELFW(type) ELF##64##_##type
+#else
+# define ELFCLASSW ELFCLASS32
+# define ElfW(type) Elf##32##_##type
+# define ELFW(type) ELF##32##_##type
+#endif
+
 #define ARMAG  "!<arch>\n"
 #define ARFMAG "`\n"
 
@@ -144,7 +154,7 @@ int main(int argc, char **argv)
         //printf("%s:\n", argv[iarg]);
         // elf header
         ehdr = (ElfW(Ehdr) *)buf;
-        if (ehdr->e_ident[4] != TCC_ELFCLASS)
+        if (ehdr->e_ident[4] != ELFCLASSW)
         {
             fprintf(stderr, "Unsupported Elf Class: %s\n", argv[iarg]);
             fclose(fo);
