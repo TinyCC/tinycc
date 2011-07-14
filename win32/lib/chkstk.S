@@ -57,17 +57,9 @@ P0:
 /* ---------------------------------------------- */
 /* setjmp/longjmp support */
 
-.globl tinyc_no_getbp
-tinyc_no_getbp:
-    .byte 0x90
-
 .globl tinyc_getbp
 tinyc_getbp:
-    xor %rax,%rax
-    cmp %al,tinyc_no_getbp(%rax)
-    je t1
     mov %rbp,%rax
-t1:
     ret
 
 /* ---------------------------------------------- */

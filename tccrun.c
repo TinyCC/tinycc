@@ -30,6 +30,10 @@ static int rt_get_caller_pc(uplong *paddr, ucontext_t *uc, int level);
 static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
+#ifdef _WIN64
+static void win64_add_function_table(TCCState *s1);
+#endif
+
 /* ------------------------------------------------------------- */
 /* Do all relocations (needed before using tcc_get_symbol())
    Returns -1 on error. */
@@ -188,6 +192,10 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
 #if (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM) && !defined TCC_TARGET_PE
     set_pages_executable(s1->runtime_plt_and_got,
                          s1->runtime_plt_and_got_offset);
+#endif
+
+#ifdef _WIN64
+    win64_add_function_table(s1);
 #endif
     return 0;
 }
@@ -577,6 +585,17 @@ static void set_exception_handler(void)
 {
     SetUnhandledExceptionFilter(cpu_exception_handler);
 }
+
+#ifdef _WIN64
+static void win64_add_function_table(TCCState *s1)
+{
+    RtlAddFunctionTable(
+        (RUNTIME_FUNCTION*)(uplong)s1->uw_pdata->sh_addr,
+        s1->uw_pdata->data_offset / sizeof (RUNTIME_FUNCTION),
+        (uplong)text_section->sh_addr
+        );
+}
+#endif
 
 #ifdef _WIN64
 #define Eip Rip

@@ -772,8 +772,6 @@ void gfunc_epilog(void)
     /* align local size to word & save local variables */
     v = (func_scratch + -loc + 15) & -16;
 
-    pe_add_unwind_data(ind, saved_ind, v);
-
     if (v >= 4096) {
         Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
@@ -785,7 +783,10 @@ void gfunc_epilog(void)
         o(0xec8148);  /* sub rsp, stacksize */
         gen_le32(v);
     }
-    ind = saved_ind;
+
+    cur_text_section->data_offset = saved_ind;
+    pe_add_unwind_data(ind, saved_ind, v);
+    ind = cur_text_section->data_offset;
 }
 
 #else

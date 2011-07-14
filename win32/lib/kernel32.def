@@ -549,7 +549,9 @@ ResetEvent
 ResetNLSUserInfoCache
 ResetWriteWatch
 ResumeThread
+RtlAddFunctionTable
 RtlFillMemory
+RtlInstallFunctionTableCallback
 RtlMoveMemory
 RtlUnwind
 RtlZeroMemory

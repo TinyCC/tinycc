@@ -566,10 +566,11 @@ struct TCCState {
     int pe_subsystem;
     unsigned long pe_file_align;
     unsigned long pe_stack_size;
-    struct pe_uw {
-        Section *pdata;
-        int sym_1, sym_2, offs_1;
-    } pe_unwind;
+#ifdef TCC_TARGET_X86_64
+    Section *uw_pdata;
+    int uw_sym;
+    unsigned uw_offs;
+#endif
 #endif
 
 #ifndef TCC_TARGET_PE
