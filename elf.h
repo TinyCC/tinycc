@@ -348,6 +348,17 @@ typedef struct
 #define SHF_EXECINSTR   (1 << 2)        /* Executable */
 #define SHF_MASKPROC    0xf0000000      /* Processor-specific */
 
+#define SHF_MERGE       0x10
+#define SHF_STRINGS     0x20
+#define SHF_INFO_LINK   0x40
+#define SHF_LINK_ORDER  0x80
+#define SHF_OS_NONCONFORMING 0x100
+#define SHF_GROUP       0x200
+#define SHF_TLS         0x400
+#define SHF_MASKOS      0x0ff00000
+#define SHF_ORDERED     0x40000000
+#define SHF_EXCLUDE     0x80000000
+
 /* Symbol table entry.  */
 
 typedef struct
