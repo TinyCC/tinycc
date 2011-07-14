@@ -157,7 +157,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF):
-	$(CC) -o $@ tcc.c $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
+	$(CC) -o $@ tcc.c -DONE_SOURCE $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
 
 $(I386_CROSS): DEFINES = -DTCC_TARGET_I386 -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
 $(X64_CROSS): DEFINES = -DTCC_TARGET_X86_64
@@ -179,14 +179,13 @@ $(C67_CROSS): $(C67_FILES)
 $(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS): $(ARM_FILES)
 
 # libtcc generation and test
-ifdef NOTALLINONE
+ifndef ONE_SOURCE
 LIBTCC_OBJ = $(filter-out tcc.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
 LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES),$(NATIVE_FILES))
-$(LIBTCC_OBJ) tcc.o : NATIVE_DEFINES += -DNOTALLINONE
 else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)
-tcc.o : NATIVE_DEFINES += -DNOTALLINONE
+$(LIBTCC_OBJ) tcc.o : NATIVE_DEFINES += -DONE_SOURCE
 endif
 
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)

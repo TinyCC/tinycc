@@ -102,10 +102,8 @@ enum {
 //#define FUNC_STRUCT_PARAM_AS_PTR
 
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
-#ifdef NEED_FLOAT_TYPES
-static CType float_type, double_type, func_float_type, func_double_type;
+ST_DATA CType float_type, double_type, func_float_type, func_double_type;
 #define func_ldouble_type func_double_type
-#endif
 #else
 #define func_float_type func_old_type
 #define func_double_type func_old_type
@@ -171,6 +169,11 @@ ST_DATA const int reg_classes[NB_REGS] = {
 /* d7/s14 */ RC_FLOAT | RC_F7,
 #endif
 };
+
+/* keep in sync with line 104 above */
+#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+ST_DATA CType float_type, double_type, func_float_type, func_double_type;
+#endif
 
 static int func_sub_sp_offset, last_itod_magic;
 static int leaffunc;

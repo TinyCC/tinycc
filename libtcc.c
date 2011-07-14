@@ -18,7 +18,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#define NEED_FLOAT_TYPES
 #include "tcc.h"
 
 /********************************************************/
@@ -41,7 +40,7 @@ ST_DATA void *rt_prog_main;
 
 /********************************************************/
 
-#ifndef NOTALLINONE
+#ifdef ONE_SOURCE
 #include "tccpp.c"
 #include "tccgen.c"
 #include "tccelf.c"

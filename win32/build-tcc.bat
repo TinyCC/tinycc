@@ -29,11 +29,11 @@ echo>>..\config.h #define CONFIG_SYSROOT ""
 :libtcc
 if not exist libtcc\nul mkdir libtcc
 copy ..\libtcc.h libtcc\libtcc.h
-%CC% %target% -fno-strict-aliasing ../libtcc.c -c -o libtcc.o
+%CC% %target% -fno-strict-aliasing -DONE_SOURCE ../libtcc.c -c -o libtcc.o
 %AR% rcs libtcc/libtcc.a libtcc.o
 
 :tcc
-%CC% %target% -fno-strict-aliasing ../tcc.c -o tcc.exe -DTCC_USE_LIBTCC -ltcc -Llibtcc
+%CC% %target% -fno-strict-aliasing ../tcc.c -o tcc.exe -ltcc -Llibtcc
 
 :copy_std_includes
 copy ..\include\*.h include

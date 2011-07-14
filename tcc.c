@@ -18,10 +18,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#if defined NOTALLINONE || defined TCC_USE_LIBTCC
-#include "tcc.h"
-#else
+#ifdef ONE_SOURCE
 #include "libtcc.c"
+#else
+#include "tcc.h"
 #endif
 
 static char **files;

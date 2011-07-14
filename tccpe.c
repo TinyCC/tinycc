@@ -376,7 +376,7 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
 {
     char buffer[200];
     const char *s, *p;
-    int sym_index, n = 0;
+    int sym_index = 0, n = 0;
 
     do {
         s = pe_export_name(s1, sym);

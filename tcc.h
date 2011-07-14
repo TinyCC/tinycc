@@ -877,7 +877,7 @@ static inline int toup(int c)
 
 #define PUB_FUNC 
 
-#ifndef NOTALLINONE
+#ifdef ONE_SOURCE
 #define ST_INLN static inline
 #define ST_FUNC static
 #define ST_DATA static
@@ -1278,7 +1278,7 @@ ST_DATA const int reg_classes[NB_REGS];
 
 /********************************************************/
 #undef ST_DATA
-#ifndef NOTALLINONE
+#ifdef ONE_SOURCE
 #define ST_DATA static
 #else
 #define ST_DATA
