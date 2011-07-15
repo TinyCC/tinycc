@@ -873,18 +873,6 @@ enum tcc_token {
   #define strtof (float)strtod
   #define strtoll (long long)strtol
 #endif
-#elif defined(TCC_UCLIBC) || defined(__FreeBSD__) \
-    || defined(__FreeBSD_kernel__) || defined(__DragonFly__) \
-    || defined(__OpenBSD__)
-/* currently incorrect */
-static inline long double strtold(const char *nptr, char **endptr)
-{
-    return (long double)strtod(nptr, endptr);
-}
-static inline float strtof(const char *nptr, char **endptr)
-{
-    return (float)strtod(nptr, endptr);
-}
 #else
 /* XXX: need to define this to use them in non ISOC99 context */
 extern float strtof (const char *__nptr, char **__endptr);
