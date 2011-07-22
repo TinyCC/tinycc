@@ -3166,13 +3166,13 @@ static void post_type(CType *type, AttributeDef *ad)
         n = -1;
         t1 = 0;
         if (tok != ']') {
-            gexpr();
+            if (!local_stack || nocode_wanted)
+                 vpushi(expr_const());
+            else gexpr();
             if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
                 n = vtop->c.i;
                 if (n < 0)
                     error("invalid array size");
-            } else if (!local_stack) {
-                error("expected constant expression (variably modified array at file scope)");
             } else {
                 if (!is_integer_btype(vtop->type.t & VT_BTYPE))
                     error("size of variable length array should be an integer");
