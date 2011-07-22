@@ -69,7 +69,7 @@ ST_DATA void *rt_prog_main;
 #ifdef TCC_TARGET_PE
 #include "tccpe.c"
 #endif
-#endif /* ALL_IN_ONE */
+#endif /* ONE_SOURCE */
 
 /********************************************************/
 #ifndef CONFIG_TCC_ASM
