@@ -4038,7 +4038,7 @@ static void expr_cond(void)
     SValue sv;
     CType type, type1, type2;
 
-    if (const_wanted) {
+    if (const_wanted || (cur_text_section == NULL)) {
         expr_lor_const();
         if (tok == '?') {
             CType boolean;
