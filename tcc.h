@@ -139,9 +139,6 @@
 #define true 1
 typedef int BOOL;
 
-/* path to find crt1.o, crti.o and crtn.o. Only needed when generating
-   executables or dlls */
-
 #ifndef CONFIG_TCC_LDDIR
   #if defined(TCC_TARGET_X86_64_CENTOS)
     #define CONFIG_TCC_LDDIR "/lib64"
@@ -149,9 +146,29 @@ typedef int BOOL;
     #define CONFIG_TCC_LDDIR "/lib"
   #endif
 #endif
-#define CONFIG_TCC_CRT_PREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
-#ifndef CONFIG_TCC_INCSUBDIR
-  #define CONFIG_TCC_INCSUBDIR ""
+
+/* path to find crt1.o, crti.o and crtn.o */
+#ifndef CONFIG_TCC_CRT_PREFIX
+# define CONFIG_TCC_CRT_PREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
+#endif
+
+#ifndef CONFIG_TCC_SYSINCLUDE_PATHS
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_SYSINCLUDE_PATHS "\b/include;\b/include/winapi"
+# else
+#  define CONFIG_TCC_SYSINCLUDE_PATHS "/usr/local/include:/usr/include:\b/include"
+# endif
+#endif
+
+#ifndef CONFIG_TCC_LIBPATH
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_LIBPATH "\b/lib"
+# else
+#  define CONFIG_TCC_LIBPATH \
+        CONFIG_TCC_CRT_PREFIX \
+    ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
+    ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
+# endif
 #endif
 
 #define INCLUDE_STACK_SIZE  32
@@ -843,13 +860,19 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 #ifdef _WIN32
-#define IS_PATHSEP(c) (c == '/' || c == '\\')
-#define IS_ABSPATH(p) (IS_PATHSEP(p[0]) || (p[0] && p[1] == ':' && IS_PATHSEP(p[2])))
+#define IS_DIRSEP(c) (c == '/' || c == '\\')
+#define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
 #define PATHCMP stricmp
 #else
-#define IS_PATHSEP(c) (c == '/')
-#define IS_ABSPATH(p) IS_PATHSEP(p[0])
+#define IS_DIRSEP(c) (c == '/')
+#define IS_ABSPATH(p) IS_DIRSEP(p[0])
 #define PATHCMP strcmp
+#endif
+
+#ifdef TCC_TARGET_PE
+#define PATHSEP ';'
+#else
+#define PATHSEP ':'
 #endif
 
 /* space exlcuding newline */
@@ -912,6 +935,7 @@ ST_DATA void *rt_prog_main;
 /* public functions currently used by the tcc main function */
 PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s);
 PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s);
+PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);
 PUB_FUNC char *tcc_fileextension (const char *name);
 PUB_FUNC void tcc_free(void *ptr);
@@ -969,8 +993,6 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC void set_num_callers(int n);
-
-ST_FUNC int ieee_finite(double d);
 
 /* ------------ tccpp.c ------------ */
 
@@ -1066,6 +1088,7 @@ ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc 
 ST_DATA char *funcname;
 
 ST_INLN int is_float(int t);
+ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void swap(int *p, int *q);
 ST_FUNC void vpushi(int v);

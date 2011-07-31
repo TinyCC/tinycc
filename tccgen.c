@@ -90,6 +90,15 @@ ST_INLN int is_float(int t)
     return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT;
 }
 
+/* we use our own 'finite' function to avoid potential problems with
+   non standard math libs */
+/* XXX: endianness dependent */
+ST_FUNC int ieee_finite(double d)
+{
+    int *p = (int *)&d;
+    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+}
+
 ST_FUNC void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))

@@ -2857,13 +2857,6 @@ static int ld_next(TCCState *s1, char *name, int name_size)
     return c;
 }
 
-char *tcc_strcpy_part(char *out, const char *in, size_t num)
-{
-    memcpy(out, in, num);
-    out[num] = '\0';
-    return out;
-}
-
 /*
  * Extract the library name from the file name
  * Return 0 if the file isn't a library
@@ -2886,20 +2879,20 @@ static int filename_to_libname(TCCState *s1, const char filename[], char libname
 #ifdef TCC_TARGET_PE
         if (!strcmp(ext, ".def")) {
             size_t len = ext - filename;
-            tcc_strcpy_part(libname, filename, len);
+            pstrncpy(libname, filename, len);
             return 1;
         }
 #else
         if (libprefix && (!strcmp(ext, ".so"))) {
             size_t len = ext - filename - 3;
-            tcc_strcpy_part(libname, filename + 3, len);
+            pstrncpy(libname, filename + 3, len);
             return 1;
         }
 #endif
     } else {
         if (libprefix && (!strcmp(ext, ".a"))) {
             size_t len = ext - filename - 3;
-            tcc_strcpy_part(libname, filename + 3, len);
+            pstrncpy(libname, filename + 3, len);
             return 1;
         }
     }
