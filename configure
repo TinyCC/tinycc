@@ -31,6 +31,7 @@ includedir=""
 mandir=""
 infodir=""
 sysroot=""
+multiarch_triplet=""
 cross_prefix=""
 cc="gcc"
 host_cc="gcc"
@@ -119,6 +120,8 @@ for opt do
   --docdir=*) docdir=`echo $opt | cut -d '=' -f 2`
   ;;
   --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --multiarch-triplet=*) multiarch_triplet=`echo $opt | cut -d '=' -f 2`
   ;;
   --source-path=*) source_path=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -235,36 +238,37 @@ Options: [defaults in brackets after descriptions]
 
 EOF
 echo "Standard options:"
-echo "  --help                   print this message"
-echo "  --prefix=PREFIX          install in PREFIX [$prefix]"
-echo "  --exec-prefix=EPREFIX    install architecture-dependent files in EPREFIX"
-echo "                           [same as prefix]"
-echo "  --bindir=DIR             user executables in DIR [EPREFIX/bin]"
-echo "  --libdir=DIR             object code libraries in DIR [EPREFIX/lib]"
-echo "  --tccdir=DIR             installation directory [EPREFIX/lib/tcc]"
-echo "  --includedir=DIR         C header files in DIR [PREFIX/include]"
-echo "  --sharedir=DIR           documentation root DIR [PREFIX]/share"
-echo "  --docdir=DIR             documentation in DIR [SHAREDIR/doc/tcc]"
-echo "  --mandir=DIR             man documentation in DIR [SHAREDIR/man]"
-echo "  --infodir=DIR            info documentation in DIR [SHAREDIR/info]"
+echo "  --help                        print this message"
+echo "  --prefix=PREFIX               install in PREFIX [$prefix]"
+echo "  --exec-prefix=EPREFIX         install architecture-dependent files in EPREFIX"
+echo "                                [same as prefix]"
+echo "  --bindir=DIR                  user executables in DIR [EPREFIX/bin]"
+echo "  --libdir=DIR                  object code libraries in DIR [EPREFIX/lib]"
+echo "  --tccdir=DIR                  installation directory [EPREFIX/lib/tcc]"
+echo "  --includedir=DIR              C header files in DIR [PREFIX/include]"
+echo "  --sharedir=DIR                documentation root DIR [PREFIX]/share"
+echo "  --docdir=DIR                  documentation in DIR [SHAREDIR/doc/tcc]"
+echo "  --mandir=DIR                  man documentation in DIR [SHAREDIR/man]"
+echo "  --infodir=DIR                 info documentation in DIR [SHAREDIR/info]"
 echo ""
 echo "Advanced options (experts only):"
-echo "  --source-path=PATH       path of source code [$source_path]"
-echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
-echo "  --sysroot=PREFIX         prepend PREFIX to library/include paths []"
-echo "  --cc=CC                  use C compiler CC [$cc]"
-echo "  --disable-static         make libtcc.so instead of libtcc.a"
-echo "  --disable-rpath          disable use of -rpath with the above"
-echo "  --strip-binaries         strip symbol tables from resulting binaries"
-echo "  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc.a"
-echo "  --enable-mingw32         build windows version on linux with mingw32"
-echo "  --enable-cygwin          build windows version on windows with cygwin"
-echo "                           [requires cygwin and mingw32-make]"
-echo "  --enable-cross           build cross compilers"
-echo "  --extra-cflags=          extra compiler flags"
-echo "  --extra-ldflags=         extra linker options"
-echo "  --with-selinux           use mmap instead of exec mem"
-echo "                           [requires write access to /tmp]"
+echo "  --source-path=PATH            path of source code [$source_path]"
+echo "  --cross-prefix=PREFIX         use PREFIX for compile tools [$cross_prefix]"
+echo "  --sysroot=PREFIX              prepend PREFIX to library/include paths []"
+echo "  --multiarch-triplet=SUFFIX    append SUFFIX to library/include paths []"
+echo "  --cc=CC                       use C compiler CC [$cc]"
+echo "  --disable-static              make libtcc.so instead of libtcc.a"
+echo "  --disable-rpath               disable use of -rpath with the above"
+echo "  --strip-binaries              strip symbol tables from resulting binaries"
+echo "  --with-libgcc                 use /lib/libgcc_s.so.1 instead of libtcc.a"
+echo "  --enable-mingw32              build windows version on linux with mingw32"
+echo "  --enable-cygwin               build windows version on windows with cygwin"
+echo "                                [requires cygwin and mingw32-make]"
+echo "  --enable-cross                build cross compilers"
+echo "  --extra-cflags=               extra compiler flags"
+echo "  --extra-ldflags=              extra linker options"
+echo "  --with-selinux                use mmap instead of exec mem"
+echo "                                [requires write access to /tmp]"
 echo ""
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -330,13 +334,14 @@ echo "Manual directory    $mandir"
 echo "Info directory      $infodir"
 echo "Doc directory       $docdir"
 echo "Target root prefix  $sysroot"
-echo "Source path      $source_path"
-echo "C compiler       $cc"
-echo "CPU              $cpu"
-echo "Big Endian       $bigendian"
-echo "gprof enabled    $gprof"
-echo "cross compilers  $build_cross"
-echo "use libgcc       $use_libgcc"
+echo "Multiarch triplet   $multiarch_triplet"
+echo "Source path         $source_path"
+echo "C compiler          $cc"
+echo "CPU                 $cpu"
+echo "Big Endian          $bigendian"
+echo "gprof enabled       $gprof"
+echo "cross compilers     $build_cross"
+echo "use libgcc          $use_libgcc"
 
 echo "Creating config.mak and config.h"
 
@@ -356,9 +361,93 @@ echo "docdir=\$(DESTDIR)$docdir" >> config.mak
 echo "#ifndef CONFIG_SYSROOT" >> $TMPH
 echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
 echo "#endif" >> $TMPH
+echo "" >> $TMPH
+
+# Set default include and library paths
+win_incpaths="\\\b/include;\\\b/include/winapi"
+unix_incpaths="/usr/local/include:/usr/include:\\\b/include"
+win_libpaths="\\\b/lib"
+unix_libpaths="CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX"
+unix_libpaths="$unix_libpaths\":\"CONFIG_SYSROOT CONFIG_TCC_LDDIR"
+unix_libpaths="$unix_libpaths\":\"CONFIG_SYSROOT \"/usr/local\" CONFIG_TCC_LDDIR"
+
+# sep: path separator in paths
+# tmp: paths multiarchified (one path per line)
+# q: quote (if sep contains ")
+# r: carriage return pattern (if sep contains ")
+# s: space (if sep contains ")
+multiarchify()
+{
+  local sep tmp
+
+  paths="$1"
+  sep="$2"
+  tmp=""
+  q=""
+  r=""
+  s=""
+  if [ -z "${sep%%\"*}" ] ; then
+    q="\""
+    r=" \\\\\n      "
+    s=" "
+  fi
+  paths="$paths$sep"
+  while test -n "$paths" ; do
+    tmp="$tmp${tmp:+$r$sep$s}${paths%%$sep*}$s$q/$multiarch_triplet$q"
+    tmp="$tmp$r$sep$s${paths%%$sep*}"
+    paths="${paths#*$sep}"
+  done
+  paths="$tmp"
+}
+
+if test -n "$multiarch_triplet" ; then
+  multiarchify "$win_incpaths" ";"
+  win_incpaths="\"$paths\""
+  multiarchify "$unix_incpaths" ":"
+  unix_incpaths="\"$paths\""
+  multiarchify "$win_libpaths" ";"
+  win_libpaths="\"$paths\""
+  multiarchify "$unix_libpaths" "\":\""
+  unix_libpaths="$paths"
+  echo "#define CONFIG_TCC_MULTIARCH_TRIPLET \"$multiarch_triplet\"" >> $TMPH
+fi
+
+echo "#ifndef CONFIG_TCC_LDDIR" >> $TMPH
+echo "  #if defined(TCC_TARGET_X86_64_CENTOS)" >> $TMPH
+echo "    #define CONFIG_TCC_LDDIR \"/lib64\"" >> $TMPH
+echo "  #else" >> $TMPH
+echo "    #define CONFIG_TCC_LDDIR \"/lib\"" >> $TMPH
+echo "  #endif" >> $TMPH
+echo "#endif" >> $TMPH
+echo "" >> $TMPH
+
+echo "/* path to find crt1.o, crti.o and crtn.o */" >> $TMPH
+echo "#ifndef CONFIG_TCC_CRT_PREFIX" >> $TMPH
+echo "# define CONFIG_TCC_CRT_PREFIX \"/usr\" CONFIG_TCC_LDDIR" >> $TMPH
+echo "#endif" >> $TMPH
+echo "" >> $TMPH
+
+echo "#ifndef CONFIG_TCC_SYSINCLUDE_PATHS" >> $TMPH
+echo "# ifdef TCC_TARGET_PE" >> $TMPH
+echo "#  define CONFIG_TCC_SYSINCLUDE_PATHS $win_incpaths" >> $TMPH
+echo "# else" >> $TMPH
+echo "#  define CONFIG_TCC_SYSINCLUDE_PATHS $unix_incpaths" >> $TMPH
+echo "# endif" >> $TMPH
+echo "#endif" >> $TMPH
+echo "" >> $TMPH
+echo "#ifndef CONFIG_TCC_LIBPATH" >> $TMPH
+echo "# ifdef TCC_TARGET_PE" >> $TMPH
+echo "#  define CONFIG_TCC_LIBPATH $win_libpaths" >> $TMPH
+echo "# else" >> $TMPH
+echo "#  define CONFIG_TCC_LIBPATH $unix_libpaths" >> $TMPH
+echo "# endif" >> $TMPH
+echo "#endif" >> $TMPH
+echo "" >> $TMPH
+
 echo "#ifndef CONFIG_TCCDIR" >> $TMPH
 echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
 echo "#endif" >> $TMPH
+echo "" >> $TMPH
 echo "CC=$cc" >> config.mak
 echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
