@@ -1348,8 +1348,8 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_file(s, CONFIG_TCC_CRT_PREFIX "/crt1.o");
-        tcc_add_file(s, CONFIG_TCC_CRT_PREFIX "/crti.o");
+            tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crt1.o");
+        tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crti.o");
     }
 #endif
     return 0;
