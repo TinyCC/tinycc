@@ -139,9 +139,37 @@
 #define true 1
 typedef int BOOL;
 
-/* See definition of default values of CONFIG_TCC_LDDIR, CONFIG_TCC_CRT_PREFIX,
-   CONFIG_TCC_SYSINCLUDE_PATHS and CONFIG_TCC_LIBPATH in config.h or configure
- */
+#ifndef CONFIG_TCC_LDDIR
+  #if defined(TCC_TARGET_X86_64_CENTOS)
+    #define CONFIG_TCC_LDDIR "/lib64"
+  #else
+    #define CONFIG_TCC_LDDIR "/lib"
+  #endif
+#endif
+
+/* path to find crt1.o, crti.o and crtn.o */
+#ifndef CONFIG_TCC_CRT_PREFIX
+# define CONFIG_TCC_CRT_PREFIX "/usr" CONFIG_TCC_LDDIR
+#endif
+
+#ifndef CONFIG_TCC_SYSINCLUDE_PATHS
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_SYSINCLUDE_PATHS "\b/include;\b/include/winapi"
+# else
+#  define CONFIG_TCC_SYSINCLUDE_PATHS "/usr/local/include:/usr/include:\b/include"
+# endif
+#endif
+
+#ifndef CONFIG_TCC_LIBPATH
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_LIBPATH "\b/lib"
+# else
+#  define CONFIG_TCC_LIBPATH \
+        CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX \
+    ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
+    ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
+# endif
+#endif
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64

@@ -1226,19 +1226,14 @@ the_end:
     return ret;
 }
 
-static int tcc_add_file_noerror(TCCState *s, const char *filename, int extra_flags)
+LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
 {
     dynarray_add((void ***)&s->input_files, &s->nb_input_files, tcc_strdup(filename));
 
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
-        return tcc_add_file_internal(s, filename, extra_flags | AFF_PREPROCESS);
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS);
     else
-        return tcc_add_file_internal(s, filename, extra_flags);
-}
-
-LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
-{
-    return tcc_add_file_noerror(s, filename, AFF_PRINT_ERROR);
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR);
 }
 
 LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
@@ -1352,16 +1347,9 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #else
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
-        if (output_type != TCC_OUTPUT_DLL) {
-#ifdef CONFIG_TCC_MULTIARCH_TRIPLET
-            if (tcc_add_file_noerror(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/" CONFIG_TCC_MULTIARCH_TRIPLET "/crt1.o", 0))
-#endif
-                tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crt1.o");
-        }
-#ifdef CONFIG_TCC_MULTIARCH_TRIPLET
-        if (tcc_add_file_noerror(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/" CONFIG_TCC_MULTIARCH_TRIPLET "/crti.o", 0))
-#endif
-            tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crti.o");
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crt1.o");
+        tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crti.o");
     }
 #endif
     return 0;
