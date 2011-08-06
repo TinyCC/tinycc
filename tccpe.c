@@ -1659,21 +1659,6 @@ ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd)
     return ret;
 }
 
-ST_FUNC int pe_add_dll(struct TCCState *s, const char *libname)
-{
-    static const char *pat[] = {
-        "%s.def", "lib%s.def", "%s.dll", "lib%s.dll", NULL
-    };
-    const char **p = pat;
-    do {
-        char buf[MAX_PATH];
-        snprintf(buf, sizeof(buf), *p, libname);
-        if (tcc_add_dll(s, buf, 0) == 0)
-            return 0;
-    } while (*++p);
-    return -1;
-}
-
 /* ------------------------------------------------------------- */
 #ifdef TCC_TARGET_X86_64
 static unsigned pe_add_uwwind_info(TCCState *s1)

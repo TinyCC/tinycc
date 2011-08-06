@@ -144,7 +144,7 @@
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX "/usr" CONFIG_TCC_LDDIR
+# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
 #endif
 
 /* system include paths */
@@ -190,8 +190,6 @@
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #define TCC_LIBGCC CONFIG_SYSROOT CONFIG_TCC_LDDIR "/libgcc_s.so.1"
-/* crt?.o files */
-#define TCC_CRTO(crto) CONFIG_SYSROOT CONFIG_TCC_CRTPREFIX "/" crto
 
 /* -------------------------------------------- */
 
@@ -474,6 +472,8 @@ struct TCCState {
 
     char **library_paths;
     int nb_library_paths;
+    char **crt_paths;
+    int nb_crt_paths;
 
     /* array of all loaded dlls (including those referenced by loaded
        dlls) */
@@ -1013,6 +1013,7 @@ ST_FUNC void tcc_close(void);
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC void set_num_callers(int n);
@@ -1300,7 +1301,6 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 /* ------------ tccpe.c -------------- */
 #ifdef TCC_TARGET_PE
 ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd);
-ST_FUNC int pe_add_dll(struct TCCState *s, const char *libraryname);
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, const void *value);
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);

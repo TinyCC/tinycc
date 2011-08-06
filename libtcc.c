@@ -994,6 +994,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifndef TCC_TARGET_PE
     /* default library paths */
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
+    /* paths for crt objects */
+    tcc_split_path(s, (void ***)&s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
 #endif
 
     /* no section zero */
@@ -1059,6 +1061,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     /* free library paths */
     dynarray_reset(&s1->library_paths, &s1->nb_library_paths);
+    dynarray_reset(&s1->crt_paths, &s1->nb_crt_paths);
 
     /* free include paths */
     dynarray_reset(&s1->cached_includes, &s1->nb_cached_includes);
@@ -1225,45 +1228,51 @@ LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
     return 0;
 }
 
-/* find and load a dll. Return non zero if not found */
-/* XXX: add '-rpath' option support ? */
-ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
+static int tcc_add_library_internal(TCCState *s, const char *fmt,
+    const char *filename, int flags, char **paths, int nb_paths)
 {
     char buf[1024];
     int i;
 
-    for(i = 0; i < s->nb_library_paths; i++) {
-        snprintf(buf, sizeof(buf), "%s/%s", 
-                 s->library_paths[i], filename);
+    for(i = 0; i < nb_paths; i++) {
+        snprintf(buf, sizeof(buf), fmt, paths[i], filename);
         if (tcc_add_file_internal(s, buf, flags) == 0)
             return 0;
     }
     return -1;
 }
 
+/* find and load a dll. Return non zero if not found */
+/* XXX: add '-rpath' option support ? */
+ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
+{
+    return tcc_add_library_internal(s, "%s/%s", filename, flags,
+        s->library_paths, s->nb_library_paths);
+}
+
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
+{
+    if (-1 == tcc_add_library_internal(s, "%s/%s",
+        filename, 0, s->crt_paths, s->nb_crt_paths))
+        error_noabort("file '%s' not found", filename);
+    return 0;
+}
+
 /* the library name is the same as the argument of the '-l' option */
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 {
-    char buf[1024];
-    int i;
-
-    /* first we look for the dynamic library if not static linking */
-    if (!s->static_link) {
 #ifdef TCC_TARGET_PE
-        if (pe_add_dll(s, libraryname) == 0)
-            return 0;
+    const char *libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
+    const char **pp = s->static_link ? libs + 4 : libs;
 #else
-        snprintf(buf, sizeof(buf), "lib%s.so", libraryname);
-        if (tcc_add_dll(s, buf, 0) == 0)
-            return 0;
+    const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
+    const char **pp = s->static_link ? libs + 1 : libs;
 #endif
-    }
-    /* then we look for the static library */
-    for(i = 0; i < s->nb_library_paths; i++) {
-        snprintf(buf, sizeof(buf), "%s/lib%s.a", 
-                 s->library_paths[i], libraryname);
-        if (tcc_add_file_internal(s, buf, 0) == 0)
+    while (*pp) {
+        if (0 == tcc_add_library_internal(s, *pp,
+            libraryname, 0, s->library_paths, s->nb_library_paths))
             return 0;
+        ++pp;
     }
     return -1;
 }
@@ -1329,8 +1338,8 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_file(s, TCC_CRTO("crt1.o"));
-        tcc_add_file(s, TCC_CRTO("crti.o"));
+            tcc_add_crt(s, "crt1.o");
+        tcc_add_crt(s, "crti.o");
     }
 #endif
     return 0;
