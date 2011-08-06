@@ -1065,11 +1065,9 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
 
-    tcc_free(s1->tcc_lib_path);
-
-    dynarray_reset(&s1->input_files, &s1->nb_input_files);
-    dynarray_reset(&s1->input_libs, &s1->nb_input_libs);
     dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
+
+    tcc_free(s1->tcc_lib_path);
 
 #ifdef HAVE_SELINUX
     munmap (s1->write_mem, s1->mem_size);
@@ -1215,7 +1213,6 @@ the_end:
 
 LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
 {
-    dynarray_add((void ***)&s->input_files, &s->nb_input_files, tcc_strdup(filename));
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
         return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS);
     else
@@ -1250,8 +1247,6 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     char buf[1024];
     int i;
 
-    dynarray_add((void ***)&s->input_libs, &s->nb_input_libs, tcc_strdup(libraryname));
-    
     /* first we look for the dynamic library if not static linking */
     if (!s->static_link) {
 #ifdef TCC_TARGET_PE
@@ -1608,17 +1603,16 @@ PUB_FUNC void set_num_callers(int n)
 }
 
 
-LIBTCCAPI const char *tcc_default_target(TCCState *s)
+PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file)
 {
-    /* FIXME will break in multithreaded case */
-    static char outfile_default[1024];
-
+    char buf[1024];
     char *ext;
-    const char *name =
-        strcmp(s->input_files[0], "-") == 0 ? "a"
-                                            : tcc_basename(s->input_files[0]);
-    pstrcpy(outfile_default, sizeof(outfile_default), name);
-    ext = tcc_fileextension(outfile_default);
+    const char *name = "a";
+
+    if (default_file && strcmp(default_file, "-"))
+        name = tcc_basename(default_file);
+    pstrcpy(buf, sizeof(buf), name);
+    ext = tcc_fileextension(buf);
 #ifdef TCC_TARGET_PE
     if (s->output_type == TCC_OUTPUT_DLL)
         strcpy(ext, ".dll");
@@ -1632,20 +1626,17 @@ LIBTCCAPI const char *tcc_default_target(TCCState *s)
         && *ext)
         strcpy(ext, ".o");
     else
-        pstrcpy(outfile_default, sizeof(outfile_default), "a.out");
+        pstrcpy(buf, sizeof(buf), "a.out");
 
-    return outfile_default;
+    return tcc_strdup(buf);
 }
 
 
-LIBTCCAPI void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename)
+PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename)
 {
     FILE *depout;
     char buf[1024], *ext;
     int i;
-
-    if (!target)
-        target = tcc_default_target(s);
 
     if (!filename) {
         /* compute filename automatically

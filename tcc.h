@@ -580,12 +580,6 @@ struct TCCState {
     /* output file for preprocessing */
     FILE *outfile;
 
-    /* input files and libraries for this compilation */
-    char **input_files;
-    int nb_input_files;
-    char **input_libs;
-    int nb_input_libs;
-
     /* automatically collected dependencies for this compilation */
     char **target_deps;
     int nb_target_deps;
@@ -1022,6 +1016,9 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC void set_num_callers(int n);
+
+PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file);
+PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename);
 
 /* ------------ tccpp.c ------------ */
 

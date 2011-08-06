@@ -103,20 +103,6 @@ LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name);
 /* set CONFIG_TCCDIR at runtime */
 LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path);
 
-
-/*****************************/
-/* Miscellaneous */
-
-/* Get default target filename for this compilation */
-LIBTCCAPI const char *tcc_default_target(TCCState *s);
-
-/* Generate make dependencies for target and store them into file
- *
- * !target    - use default target name
- * !filename  - use (target.o -> target.d)
- */
-LIBTCCAPI void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename);
-
 #ifdef __cplusplus
 }
 #endif
