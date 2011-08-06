@@ -306,38 +306,25 @@ PUB_FUNC void dynarray_reset(void *pp, int *n)
     *(void**)pp = NULL;
 }
 
-/* out must not point to a valid dynarray since a new one is created */
 static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char *in)
 {
     const char *p;
     do {
-        const char *r = NULL;
         int c;
         CString str;
 
         cstr_new(&str);
-        for (p = in;;) {
-            if (r) {
-                if ((c = *r++) == 0) {
-                    r = NULL;
-                    continue;
-                }
-            } else if ((c = *p++) == 0) {
-                ;
-            } else if (c == PATHSEP) {
-                c = 0;
-            } else if (c == '\b') {
-                r = s->tcc_lib_path;
-                continue;
+        for (p = in; c = *p, c != '\0' && c != PATHSEP; ++p) {
+            if (c == '\b') {
+                cstr_cat(&str, s->tcc_lib_path);
+            } else {
+                cstr_ccat(&str, c);
             }
-            cstr_ccat(&str, c);
-            if (0 == c)
-                break;
         }
-        //printf("path: %s\n", (char*)str.data);
+        cstr_ccat(&str, '\0');
         dynarray_add(p_ary, p_nb_ary, str.data);
-        in = p;
-    } while (p[-1]);
+        in = p+1;
+    } while (*p);
 }
 
 /********************************************************/
@@ -1006,7 +993,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     
 #ifndef TCC_TARGET_PE
     /* default library paths */
-    tcc_add_library_path(s, CONFIG_TCC_LIBPATH);
+    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
 #endif
 
     /* no section zero */
@@ -1229,7 +1216,6 @@ the_end:
 LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
 {
     dynarray_add((void ***)&s->input_files, &s->nb_input_files, tcc_strdup(filename));
-
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
         return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS);
     else
@@ -1306,7 +1292,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
-        tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDE_PATHS);
+        tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
     }
 
     /* if bound checking, then add corresponding sections */
@@ -1338,18 +1324,18 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         put_stabs("", 0, 0, 0, 0);
     }
 
-    /* add libc crt1/crti objects */
 #ifdef TCC_TARGET_PE
-    tcc_add_library_path(s, CONFIG_TCC_LIBPATH);
+    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
 # ifdef _WIN32
     tcc_add_systemdir(s);
 # endif
 #else
+    /* add libc crt1/crti objects */
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crt1.o");
-        tcc_add_file(s, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crti.o");
+            tcc_add_file(s, TCC_CRTO("crt1.o"));
+        tcc_add_file(s, TCC_CRTO("crti.o"));
     }
 #endif
     return 0;

@@ -133,43 +133,74 @@
 #define CONFIG_TCC_BACKTRACE
 #endif
 
+/* ------------ path configuration ------------ */
+
+#ifndef CONFIG_TCC_LDDIR
+# if defined(TCC_TARGET_X86_64_CENTOS)
+#  define CONFIG_TCC_LDDIR "/lib64"
+# else
+#  define CONFIG_TCC_LDDIR "/lib"
+# endif
+#endif
+
+/* path to find crt1.o, crti.o and crtn.o */
+#ifndef CONFIG_TCC_CRTPREFIX
+# define CONFIG_TCC_CRTPREFIX "/usr" CONFIG_TCC_LDDIR
+#endif
+
+/* system include paths */
+#ifndef CONFIG_TCC_SYSINCLUDEPATHS
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_SYSINCLUDEPATHS "\b/include;\b/include/winapi"
+# else
+#  define CONFIG_TCC_SYSINCLUDEPATHS \
+        CONFIG_SYSROOT "/usr/local/include" \
+    ":" CONFIG_SYSROOT "/usr/include" \
+    ":" "\b/include"
+# endif
+#endif
+
+/* library search paths */
+#ifndef CONFIG_TCC_LIBPATHS
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_LIBPATHS "\b/lib"
+# else
+#  define CONFIG_TCC_LIBPATHS \
+        CONFIG_SYSROOT CONFIG_TCC_CRTPREFIX \
+    ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
+    ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
+# endif
+#endif
+
+/* name of ELF interpreter */
+#ifndef CONFIG_TCC_ELFINTERP
+# if defined __FreeBSD__
+#  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
+# elif defined __FreeBSD_kernel__
+#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld.so.1"
+# elif defined TCC_ARM_EABI
+#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux.so.3"
+# elif defined(TCC_TARGET_X86_64)
+#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux-x86-64.so.2"
+# elif defined(TCC_UCLIBC)
+#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-uClibc.so.0"
+# else
+#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux.so.2"
+# endif
+#endif
+
+/* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
+#define TCC_LIBGCC CONFIG_SYSROOT CONFIG_TCC_LDDIR "/libgcc_s.so.1"
+/* crt?.o files */
+#define TCC_CRTO(crto) CONFIG_SYSROOT CONFIG_TCC_CRTPREFIX "/" crto
+
+/* -------------------------------------------- */
+
 #define FALSE 0
 #define false 0
 #define TRUE 1
 #define true 1
 typedef int BOOL;
-
-#ifndef CONFIG_TCC_LDDIR
-  #if defined(TCC_TARGET_X86_64_CENTOS)
-    #define CONFIG_TCC_LDDIR "/lib64"
-  #else
-    #define CONFIG_TCC_LDDIR "/lib"
-  #endif
-#endif
-
-/* path to find crt1.o, crti.o and crtn.o */
-#ifndef CONFIG_TCC_CRT_PREFIX
-# define CONFIG_TCC_CRT_PREFIX "/usr" CONFIG_TCC_LDDIR
-#endif
-
-#ifndef CONFIG_TCC_SYSINCLUDE_PATHS
-# ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_SYSINCLUDE_PATHS "\b/include;\b/include/winapi"
-# else
-#  define CONFIG_TCC_SYSINCLUDE_PATHS "/usr/local/include:/usr/include:\b/include"
-# endif
-#endif
-
-#ifndef CONFIG_TCC_LIBPATH
-# ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_LIBPATH "\b/lib"
-# else
-#  define CONFIG_TCC_LIBPATH \
-        CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX \
-    ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
-    ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
-# endif
-#endif
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64

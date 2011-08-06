@@ -38,6 +38,12 @@ ar="ar"
 strip="strip"
 cygwin="no"
 cpu=`uname -m`
+
+tcc_sysincludepaths=""
+tcc_libpaths=""
+tcc_crtprefix=""
+tcc_elfinterp=""
+
 case "$cpu" in
   i386|i486|i586|i686|i86pc|BePC|i686-AT386)
     cpu="x86"
@@ -131,6 +137,14 @@ for opt do
   --extra-ldflags=*) LDFLAGS="${opt#--extra-ldflags=}"
   ;;
   --extra-libs=*) extralibs=${opt#--extra-libs=}
+  ;;
+  --sysincludepaths=*) tcc_sysincludepaths=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --libpaths=*) tcc_libpaths=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --crtprefix=*) tcc_crtprefix=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --elfinterp=*) tcc_elfinterp=`echo $opt | cut -d '=' -f 2`
   ;;
   --cpu=*) cpu=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -265,6 +279,10 @@ echo "  --extra-cflags=          extra compiler flags"
 echo "  --extra-ldflags=         extra linker options"
 echo "  --with-selinux           use mmap instead of exec mem"
 echo "                           [requires write access to /tmp]"
+echo "  --sysincludepaths=...    specify system include paths, colon separated"
+echo "  --libpaths=...           specify system library paths, colon separated"
+echo "  --crtprefix=...          specify location of crt?.o"
+echo "  --elfinterp=...          specify elf interpreter"
 echo ""
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -352,13 +370,23 @@ echo "includedir=\$(DESTDIR)$includedir" >> config.mak
 echo "mandir=\$(DESTDIR)$mandir" >> config.mak
 echo "infodir=\$(DESTDIR)$infodir" >> config.mak
 echo "docdir=\$(DESTDIR)$docdir" >> config.mak
+print_var1()
+{
+  echo "#ifndef $1" >> $TMPH
+  echo "# define $1 \"$2\"" >> $TMPH
+  echo "#endif" >> $TMPH
+}
+print_var2()
+{
+  if test -n "$2"; then print_var1 $1 "$2"; fi
+}
+print_var1 CONFIG_SYSROOT "$sysroot"
+print_var1 CONFIG_TCCDIR "$tccdir"
+print_var2 CONFIG_TCC_SYSINCLUDEPATHS "$tcc_sysincludepaths"
+print_var2 CONFIG_TCC_LIBPATHS "$tcc_libpaths"
+print_var2 CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
+print_var2 CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
 
-echo "#ifndef CONFIG_SYSROOT" >> $TMPH
-echo "#define CONFIG_SYSROOT \"$sysroot\"" >> $TMPH
-echo "#endif" >> $TMPH
-echo "#ifndef CONFIG_TCCDIR" >> $TMPH
-echo "#define CONFIG_TCCDIR \"$tccdir\"" >> $TMPH
-echo "#endif" >> $TMPH
 echo "CC=$cc" >> config.mak
 echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
@@ -369,6 +397,7 @@ echo "CFLAGS=$CFLAGS" >> config.mak
 echo "LDFLAGS=$LDFLAGS" >> config.mak
 echo "LIBSUF=$LIBSUF" >> config.mak
 echo "EXESUF=$EXESUF" >> config.mak
+
 if test "$cpu" = "x86" ; then
   echo "ARCH=i386" >> config.mak
   echo "#define HOST_I386 1" >> $TMPH

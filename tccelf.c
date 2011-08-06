@@ -1189,6 +1189,13 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
                 s->sh_num, sym_end);
 }
 
+static int tcc_add_support(TCCState *s1, const char *filename)
+{
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
+    return tcc_add_file(s1, buf);
+}
+
 ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
@@ -1208,11 +1215,7 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
                 bounds_section->sh_num, "__bounds_start");
     /* add bound check code */
 #ifndef TCC_TARGET_PE
-    {
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "bcheck.o");
-    tcc_add_file(s1, buf);
-    }
+    tcc_add_support(s1, "bcheck.o");
 #endif
 #ifdef TCC_TARGET_I386
     if (s1->output_type != TCC_OUTPUT_MEMORY) {
@@ -1236,23 +1239,15 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 
     /* add libc */
     if (!s1->nostdlib) {
+        tcc_add_library(s1, "c");
 #ifdef CONFIG_USE_LIBGCC
-        tcc_add_library(s1, "c");
-        tcc_add_file(s1, CONFIG_SYSROOT CONFIG_TCC_LDDIR"/libgcc_s.so.1");
-#else
-        tcc_add_library(s1, "c");
-#ifndef WITHOUT_LIBTCC
-	{
-            char buf[1024];
-            snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, "libtcc1.a");
-            tcc_add_file(s1, buf);
-	}
+        tcc_add_file(s1, TCC_LIBGCC);
+#elif !defined WITHOUT_LIBTCC
+        tcc_add_support(s1, "libtcc1.a");
 #endif
-#endif
-    }
-    /* add crt end if not memory output */
-    if (s1->output_type != TCC_OUTPUT_MEMORY && !s1->nostdlib) {
-        tcc_add_file(s1, CONFIG_SYSROOT CONFIG_TCC_CRT_PREFIX "/crtn.o");
+        /* add crt end if not memory output */
+        if (s1->output_type != TCC_OUTPUT_MEMORY)
+            tcc_add_file(s1, TCC_CRTO("crtn.o"));
     }
 }
 
@@ -1315,21 +1310,6 @@ ST_FUNC void tcc_add_linker_symbols(TCCState *s1)
     next_sec: ;
     }
 }
-
-/* name of ELF interpreter */
-#if defined __FreeBSD__
-static const char elf_interp[] = "/libexec/ld-elf.so.1";
-#elif defined __FreeBSD_kernel__
-static char elf_interp[] = CONFIG_TCC_LDDIR"/ld.so.1";
-#elif defined TCC_ARM_EABI
-static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux.so.3";
-#elif defined(TCC_TARGET_X86_64)
-static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux-x86-64.so.2";
-#elif defined(TCC_UCLIBC)
-static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-uClibc.so.0";
-#else
-static const char elf_interp[] = CONFIG_TCC_LDDIR"/ld-linux.so.2";
-#endif
 
 static void tcc_output_binary(TCCState *s1, FILE *f,
                               const int *section_order)
@@ -1473,7 +1453,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 		/* allow override the dynamic loader */
 		const char *elfint = getenv("LD_SO");
 		if (elfint == NULL)
-		    elfint = elf_interp;
+		    elfint = CONFIG_TCC_ELFINTERP;
                 /* add interpreter section only if executable */
                 interp = new_section(s1, ".interp", SHT_PROGBITS, SHF_ALLOC);
                 interp->sh_addralign = 1;
