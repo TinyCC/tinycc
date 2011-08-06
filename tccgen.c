@@ -709,8 +709,12 @@ ST_FUNC int gv(int rc)
             /* XXX: not portable yet */
 #if defined(__i386__) || defined(__x86_64__)
             /* Zero pad x87 tenbyte long doubles */
-            if (size == LDOUBLE_SIZE)
+            if (size == LDOUBLE_SIZE) {
                 vtop->c.tab[2] &= 0xffff;
+#if LDOUBLE_SIZE == 16
+                vtop->c.tab[3] = 0;
+#endif
+            }
 #endif
             ptr = section_ptr_add(data_section, size);
             size = size >> 2;
