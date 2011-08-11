@@ -166,7 +166,7 @@ static void *get_elf_sym_addr(TCCState *s, const char *name, int err)
     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
-            error("%s not defined", name);
+            tcc_error("%s not defined", name);
         return NULL;
     }
     return (void*)(uplong)sym->st_value;
@@ -242,7 +242,7 @@ ST_FUNC int add_elf_sym(Section *s, uplong value, unsigned long size,
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
                        sym_bind, sh_num, new_vis, esym_bind, esym->st_shndx, esym_vis);
 #endif
-                error_noabort("'%s' defined twice", name);
+                tcc_error_noabort("'%s' defined twice", name);
             }
         } else {
         do_patch:
@@ -459,7 +459,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
             if (sym_bind == STB_WEAK) {
                 sym->st_value = 0;
             } else {
-                error_noabort("undefined symbol '%s'", name);
+                tcc_error_noabort("undefined symbol '%s'", name);
             }
         } else if (sh_num < SHN_LORESERVE) {
             /* add section base */
@@ -586,7 +586,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_386_16:
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY) {
             output_file:
-		error("can only produce 16-bit binary files");
+		tcc_error("can only produce 16-bit binary files");
             }
             *(short *)ptr += val;
             break;
@@ -614,7 +614,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                         x += add_jmp_table(s1, val) - val; /* add veneer */
 #endif
                 if((x & 3) != 0 || x >= 0x4000000 || x < -0x4000000)
-                    error("can't relocate value at %x",addr);
+                    tcc_error("can't relocate value at %x",addr);
                 x >>= 2;
                 x &= 0xffffff;
                 (*(int *)ptr) |= x;
@@ -628,7 +628,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 x = (x * 2) / 2;
                 x += val - addr;
                 if((x^(x>>1))&0x40000000)
-                    error("can't relocate value at %x",addr);
+                    tcc_error("can't relocate value at %x",addr);
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:
@@ -728,7 +728,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 }
 #endif
                 if (diff <= -2147483647 || diff > 2147483647) {
-                    error("internal error: relocation failed");
+                    tcc_error("internal error: relocation failed");
                 }
             }
             *(int *)ptr += diff;
@@ -837,7 +837,7 @@ static void put_got_offset(TCCState *s1, int index, unsigned long val)
             n *= 2;
         tab = tcc_realloc(s1->got_offsets, n * sizeof(unsigned long));
         if (!tab)
-            error("memory full");
+            tcc_error("memory full");
         s1->got_offsets = tab;
         memset(s1->got_offsets + s1->nb_got_offsets, 0,
                (n - s1->nb_got_offsets) * sizeof(unsigned long));
@@ -975,7 +975,7 @@ static void put_got_entry(TCCState *s1,
             
             /* if we build a DLL, we add a %ebx offset */
             if (s1->output_type == TCC_OUTPUT_DLL)
-                error("DLLs unimplemented!");
+                tcc_error("DLLs unimplemented!");
 
             /* add a PLT entry */
             plt = s1->plt;
@@ -1000,7 +1000,7 @@ static void put_got_entry(TCCState *s1,
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_C67)
-        error("C67 got not implemented");
+        tcc_error("C67 got not implemented");
 #else
 #error unsupported CPU
 #endif
@@ -1543,7 +1543,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK ||
                                 !strcmp(name, "_fp_hw")) {
                             } else {
-                                error_noabort("undefined symbol '%s'", name);
+                                tcc_error_noabort("undefined symbol '%s'", name);
                             }
                         }
                     } else if (s1->rdynamic && 
@@ -1581,7 +1581,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                             if (ELFW(ST_BIND)(esym->st_info) == STB_WEAK) {
                                 /* weak symbols can stay undefined */
                             } else {
-                                warning("undefined dynamic symbol '%s'", name);
+                                tcc_warning("undefined dynamic symbol '%s'", name);
                             }
                         }
                     }
@@ -2061,7 +2061,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     unlink(filename);
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode); 
     if (fd < 0) {
-        error_noabort("could not write '%s'", filename);
+        tcc_error_noabort("could not write '%s'", filename);
         goto fail;
     }
     f = fdopen(fd, "wb");
@@ -2244,7 +2244,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
         ehdr.e_machine != EM_TCC_TARGET) {
     fail1:
-        error_noabort("invalid object file");
+        tcc_error_noabort("invalid object file");
         return -1;
     }
     /* read sections */
@@ -2265,7 +2265,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         sh = &shdr[i];
         if (sh->sh_type == SHT_SYMTAB) {
             if (symtab) {
-                error_noabort("object must contain only one symtab");
+                tcc_error_noabort("object must contain only one symtab");
             fail:
                 ret = -1;
                 goto the_end;
@@ -2329,7 +2329,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         sm_table[i].new_section = 1;
     found:
         if (sh->sh_type != s->sh_type) {
-            error_noabort("invalid section type");
+            tcc_error_noabort("invalid section type");
             goto fail;
         }
 
@@ -2462,7 +2462,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 #endif
                    ) {
                 invalid_reloc:
-                    error_noabort("Invalid relocation entry [%2d] '%s' @ %.8x",
+                    tcc_error_noabort("Invalid relocation entry [%2d] '%s' @ %.8x",
                         i, strsec + sh->sh_name, rel->r_offset);
                     goto fail;
                 }
@@ -2564,7 +2564,7 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd)
         if (len == 0)
             break;
         if (len != sizeof(hdr)) {
-            error_noabort("invalid archive");
+            tcc_error_noabort("invalid archive");
             return -1;
         }
         memcpy(ar_size, hdr.ar_size, sizeof(hdr.ar_size));
@@ -2618,7 +2618,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
         ehdr.e_machine != EM_TCC_TARGET) {
-        error_noabort("bad architecture");
+        tcc_error_noabort("bad architecture");
         return -1;
     }
 
@@ -2698,7 +2698,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
                     goto already_loaded;
             }
             if (tcc_add_dll(s1, name, AFF_REFERENCED_DLL) < 0) {
-                error_noabort("referenced dll '%s' not found", name);
+                tcc_error_noabort("referenced dll '%s' not found", name);
                 ret = -1;
                 goto the_end;
             }
@@ -2921,7 +2921,7 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
     for(;;) {
         libname[0] = '\0';
         if (t == LD_TOK_EOF) {
-            error_noabort("unexpected end of file");
+            tcc_error_noabort("unexpected end of file");
             ret = -1;
             goto lib_parse_error;
         } else if (t == ')') {
@@ -2929,14 +2929,14 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         } else if (t == '-') {
             t = ld_next(s1, filename, sizeof(filename));
             if ((t != LD_TOK_NAME) || (filename[0] != 'l')) {
-                error_noabort("library name expected");
+                tcc_error_noabort("library name expected");
                 ret = -1;
                 goto lib_parse_error;
             }
             strcpy(libname, &filename[1]);
             libname_to_filename(s1, libname, filename);
         } else if (t != LD_TOK_NAME) {
-            error_noabort("filename expected");
+            tcc_error_noabort("filename expected");
             ret = -1;
             goto lib_parse_error;
         } 
@@ -3005,7 +3005,7 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
             for(;;) {
                 t = ld_next(s1, filename, sizeof(filename));
                 if (t == LD_TOK_EOF) {
-                    error_noabort("unexpected end of file");
+                    tcc_error_noabort("unexpected end of file");
                     return -1;
                 } else if (t == ')') {
                     break;

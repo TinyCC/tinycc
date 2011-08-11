@@ -985,9 +985,9 @@ PUB_FUNC char *tcc_strdup(const char *str);
 PUB_FUNC void tcc_memstats(void);
 PUB_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data);
 PUB_FUNC void dynarray_reset(void *pp, int *n);
-PUB_FUNC void error_noabort(const char *fmt, ...);
-PUB_FUNC void error(const char *fmt, ...);
-PUB_FUNC void warning(const char *fmt, ...);
+PUB_FUNC void tcc_error_noabort(const char *fmt, ...);
+PUB_FUNC void tcc_error(const char *fmt, ...);
+PUB_FUNC void tcc_warning(const char *fmt, ...);
 
 /* other utilities */
 ST_INLN void cstr_ccat(CString *cstr, int ch);

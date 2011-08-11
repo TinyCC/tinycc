@@ -243,7 +243,7 @@ static inline int get_reg_shift(TCCState *s1)
     int shift, v;
 #ifdef I386_ASM_16
     if (s1->seg_size == 16)
-        error("invalid effective address");
+        tcc_error("invalid effective address");
 #endif
     v = asm_int_expr(s1);
     switch(v) {
@@ -342,7 +342,7 @@ static void parse_operand(TCCState *s1, Operand *op)
             goto no_skip;
         } else {
         reg_error:
-            error("unknown register");
+            tcc_error("unknown register");
         }
         next();
     no_skip: ;
@@ -551,12 +551,12 @@ static inline void asm_modrm(int reg, Operand *op)
 		} else if ((sib_reg1 == 3) && (reg2 == 7)) {
 		    reg1 = 1;
 		} else {
-		    error("invalid effective address");
+		    tcc_error("invalid effective address");
 		}
 		if (op->e.v == 0)
 		    mod = 0;
             } else {
-                error("invalid register");
+                tcc_error("invalid register");
             }
             g(mod + (reg << 3) + reg1);
         }
@@ -599,18 +599,18 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         if (tok == ';' || tok == TOK_LINEFEED)
             break;
         if (nb_ops >= MAX_OPERANDS) {
-            error("incorrect number of operands");
+            tcc_error("incorrect number of operands");
         }
         parse_operand(s1, pop);
         if (tok == ':') {
            if (pop->type != OP_SEG || seg_prefix)
-               error("incorrect prefix");
+               tcc_error("incorrect prefix");
            seg_prefix = segment_prefixes[pop->reg];
            next();
            parse_operand(s1, pop);
 #ifndef I386_ASM_16
            if (!(pop->type & OP_EA)) {
-               error("segment prefix must be followed by memory reference");
+               tcc_error("segment prefix must be followed by memory reference");
            }
 #endif
         }
@@ -701,12 +701,12 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #ifdef I386_ASM_16
             if (opcode == TOK_ASM_o32) {
                 if (s1->seg_size == 32)
-                    error("incorrect prefix");
+                    tcc_error("incorrect prefix");
                 else
                     o32 = data32 = 1;
             } else if (opcode == TOK_ASM_a32) {
                 if (s1->seg_size == 32)
-                    error("incorrect prefix");
+                    tcc_error("incorrect prefix");
                 else
                     a32 = addr32 = 1;
             }
@@ -716,7 +716,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             g(b);
             return;
         } else {
-            error("unknown opcode '%s'",
+            tcc_error("unknown opcode '%s'",
                   get_tok_str(opcode, NULL));
         }
     }
@@ -731,7 +731,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 (ops[0].type & (OP_SEG | OP_IM8S | OP_IM32 | OP_IM64)))
                 s = 2;
             else
-                error("cannot infer opcode suffix");
+                tcc_error("cannot infer opcode suffix");
         }
     }
 
@@ -849,7 +849,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 else
                     v += 0x0f10;
             } else {
-                error("invalid displacement");
+                tcc_error("invalid displacement");
             }
         }
     }
@@ -883,7 +883,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 goto modrm_found;
         }
 #ifdef ASM_DEBUG
-        error("bad op table");
+        tcc_error("bad op table");
 #endif
     modrm_found:
         modrm_index = i;
@@ -912,7 +912,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #endif
             gen_expr32(&ops[1].e);
         if (ops[0].e.sym)
-            error("cannot relocate");
+            tcc_error("cannot relocate");
         gen_le16(ops[0].e.v);
         return;
     }
@@ -944,7 +944,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #endif
                 if (ops[i].e.sym)
                 error_relocate:
-                    error("cannot relocate");
+                    tcc_error("cannot relocate");
                 else
                     gen_le16(ops[i].e.v);
             } else {
@@ -1032,7 +1032,7 @@ static inline int constraint_priority(const char *str)
             pr = 4;
             break;
         default:
-            error("unknown constraint '%c'", c);
+            tcc_error("unknown constraint '%c'", c);
             pr = 0;
         }
         if (pr > priority)
@@ -1083,11 +1083,11 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
             /* this is a reference to another constraint */
             k = find_constraint(operands, nb_operands, str, NULL);
             if ((unsigned)k >= i || i < nb_outputs)
-                error("invalid reference in constraint %d ('%s')",
+                tcc_error("invalid reference in constraint %d ('%s')",
                       i, str);
             op->ref_index = k;
             if (operands[k].input_index >= 0)
-                error("cannot reference twice the same operand");
+                tcc_error("cannot reference twice the same operand");
             operands[k].input_index = i;
             op->priority = 5;
         } else {
@@ -1147,7 +1147,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
             /* FALL THRU */
         case '&':
             if (j >= nb_outputs)
-                error("'%c' modifier can only be applied to outputs", c);
+                tcc_error("'%c' modifier can only be applied to outputs", c);
             reg_mask = REG_IN_MASK | REG_OUT_MASK;
             goto try_next;
         case 'A':
@@ -1238,7 +1238,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
             }
             break;
         default:
-            error("asm constraint %d ('%s') could not be satisfied",
+            tcc_error("asm constraint %d ('%s') could not be satisfied",
                   j, op->constraint);
             break;
         }
@@ -1261,7 +1261,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                 if (!(regs_allocated[reg] & REG_OUT_MASK))
                     goto reg_found2;
             }
-            error("could not find free output register for reloading");
+            tcc_error("could not find free output register for reloading");
         reg_found2:
             *pout_reg = reg;
             break;
@@ -1314,7 +1314,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
     } else if (r & VT_LVAL) {
         reg = r & VT_VALMASK;
         if (reg >= VT_CONST)
-            error("internal compiler error");
+            tcc_error("internal compiler error");
         snprintf(buf, sizeof(buf), "(%%%s)",
                  get_tok_str(TOK_ASM_eax + reg, NULL));
         cstr_cat(add_str, buf);
@@ -1322,7 +1322,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         /* register case */
         reg = r & VT_VALMASK;
         if (reg >= VT_CONST)
-            error("internal compiler error");
+            tcc_error("internal compiler error");
 
         /* choose register operand size */
         if ((sv->type.t & VT_BTYPE) == VT_BYTE)
@@ -1340,11 +1340,11 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 
         if (modifier == 'b') {
             if (reg >= 4)
-                error("cannot use byte register");
+                tcc_error("cannot use byte register");
             size = 1;
         } else if (modifier == 'h') {
             if (reg >= 4)
-                error("cannot use byte register");
+                tcc_error("cannot use byte register");
             size = -1;
         } else if (modifier == 'w') {
             size = 2;
@@ -1492,7 +1492,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
         reg -= TOK_ASM_rax;
 #endif
     } else {
-        error("invalid clobber register '%s'", str);
+        tcc_error("invalid clobber register '%s'", str);
     }
     clobber_regs[reg] = 1;
 }

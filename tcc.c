@@ -254,11 +254,11 @@ static void exec_other_tcc(TCCState *s, char **argv, const char *optarg)
                     printf("tcc: using '%s'\n", child_name), fflush(stdout);
                 execvp(argv[0] = child_path, argv);
             }
-            error("'%s' not found", child_name);
+            tcc_error("'%s' not found", child_name);
         case 0: /* ignore -march etc. */
             break;
         default:
-            warning("unsupported option \"-m%s\"", optarg);
+            tcc_warning("unsupported option \"-m%s\"", optarg);
     }
 }
 #endif
@@ -301,7 +301,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
             for(;;) {
                 p1 = popt->name;
                 if (p1 == NULL)
-                    error("invalid option -- '%s'", r);
+                    tcc_error("invalid option -- '%s'", r);
                 r1 = r + 1;
                 for(;;) {
                     if (*p1 == '\0')
@@ -319,7 +319,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
                     optarg = r1;
                 } else {
                     if (optind >= argc)
-                        error("argument to '%s' is missing", r);
+                        tcc_error("argument to '%s' is missing", r);
                     optarg = argv[optind++];
                 }
             } else {
@@ -334,7 +334,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
 
             case TCC_OPTION_I:
                 if (tcc_add_include_path(s, optarg) < 0)
-                    error("too many include paths");
+                    tcc_error("too many include paths");
                 break;
             case TCC_OPTION_D:
                 parse_option_D(s, optarg);
@@ -443,7 +443,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 break;
             case TCC_OPTION_Wl:
                 if ((r = (char *) tcc_set_linker(s, (char *)optarg, TRUE)))
-                    error("unsupported linker option '%s'", r);
+                    tcc_error("unsupported linker option '%s'", r);
                 break;
             case TCC_OPTION_E:
                 output_type = TCC_OUTPUT_PREPROCESS;
@@ -459,7 +459,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
             default:
                 if (s->warn_unsupported) {
                 unsupported_option:
-                    warning("unsupported option '%s'", r);
+                    tcc_warning("unsupported option '%s'", r);
                 }
                 break;
             }
@@ -528,9 +528,9 @@ int main(int argc, char **argv)
     if (output_type == TCC_OUTPUT_OBJ && !reloc_output) {
         /* accepts only a single input file */
         if (nb_objfiles != 1)
-            error("cannot specify multiple files with -c");
+            tcc_error("cannot specify multiple files with -c");
         if (nb_libraries != 0)
-            error("cannot specify libraries with -c");
+            tcc_error("cannot specify libraries with -c");
     }
     
     if (output_type == TCC_OUTPUT_PREPROCESS) {
@@ -539,7 +539,7 @@ int main(int argc, char **argv)
         } else {
             s->outfile = fopen(outfile, "w");
             if (!s->outfile)
-                error("could not open '%s'", outfile);
+                tcc_error("could not open '%s'", outfile);
         }
     }
 
@@ -557,7 +557,7 @@ int main(int argc, char **argv)
         filename = files[i];
         if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
-                error_noabort("cannot find %s", filename);
+                tcc_error_noabort("cannot find %s", filename);
                 ret = 1;
             }
         } else {

@@ -58,13 +58,13 @@ LIBTCCAPI int tcc_relocate(TCCState *s1)
     s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
         MAP_SHARED, fd, 0);
     if(s1->write_mem == MAP_FAILED){
-        error("/tmp not writeable");
+        tcc_error("/tmp not writeable");
         return -1;
     }
     s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
         MAP_SHARED, fd, 0);
     if(s1->runtime_mem == MAP_FAILED){
-        error("/tmp not executable");
+        tcc_error("/tmp not executable");
         return -1;
     }
     ret = tcc_relocate_ex(s1, s1->write_mem);

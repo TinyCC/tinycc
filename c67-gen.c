@@ -95,7 +95,7 @@ enum {
 #define ALWAYS_ASSERT(x) \
 do {\
    if (!(x))\
-       error("internal compiler error file at %s:%d", __FILE__, __LINE__);\
+       tcc_error("internal compiler error file at %s:%d", __FILE__, __LINE__);\
 } while (0)
 
 /* defined if function parameters must be evaluated in reverse order */
@@ -1572,7 +1572,7 @@ void load(int r, SValue * sv)
 	    load(r, &v1);
 	    fr = r;
 	} else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
-	    error("long double not supported");
+	    tcc_error("long double not supported");
 	} else if ((ft & VT_TYPE) == VT_BYTE) {
 	    size = 1;
 	} else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
@@ -1726,7 +1726,7 @@ void store(int r, SValue * v)
     /* XXX: incorrect if float reg to reg */
 
     if (bt == VT_LDOUBLE) {
-	error("long double not supported");
+	tcc_error("long double not supported");
     } else {
 	if (bt == VT_SHORT)
 	    size = 2;
@@ -1881,7 +1881,7 @@ void gfunc_call(int nb_args)
     int args_sizes[NoCallArgsPassedOnStack];
 
     if (nb_args > NoCallArgsPassedOnStack) {
-	error("more than 10 function params not currently supported");
+	tcc_error("more than 10 function params not currently supported");
 	// handle more than 10, put some on the stack
     }
 
@@ -1896,9 +1896,9 @@ void gfunc_call(int nb_args)
 
 
 	    if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
-		error("long long not supported");
+		tcc_error("long long not supported");
 	    } else if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-		error("long double not supported");
+		tcc_error("long double not supported");
 	    } else if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) {
 		size = 8;
 	    } else {
@@ -2329,7 +2329,7 @@ void gen_opf(int op)
 
 
     if ((ft & VT_BTYPE) == VT_LDOUBLE)
-	error("long doubles not supported");
+	tcc_error("long doubles not supported");
 
     if (op >= TOK_ULT && op <= TOK_GT) {
 
@@ -2481,7 +2481,7 @@ void gen_cvt_ftoi(int t)
     r = vtop->r;
 
     if (t != VT_INT)
-	error("long long not supported");
+	tcc_error("long long not supported");
     else {
 	if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) {
 	    C67_DPTRUNC(r, r);

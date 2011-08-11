@@ -69,11 +69,11 @@ ST_DATA struct TCCState *tcc_state;
 #ifndef CONFIG_TCC_ASM
 ST_FUNC void asm_instr(void)
 {
-    error("inline asm() not supported");
+    tcc_error("inline asm() not supported");
 }
 ST_FUNC void asm_global_instr(void)
 {
-    error("inline asm() not supported");
+    tcc_error("inline asm() not supported");
 }
 #endif
 
@@ -213,7 +213,7 @@ PUB_FUNC void *tcc_malloc(unsigned long size)
     void *ptr;
     ptr = malloc(size);
     if (!ptr && size)
-        error("memory full");
+        tcc_error("memory full");
 #ifdef MEM_DEBUG
     mem_cur_size += malloc_usable_size(ptr);
     if (mem_cur_size > mem_max_size)
@@ -283,7 +283,7 @@ PUB_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
             nb_alloc = nb * 2;
         pp = tcc_realloc(pp, nb_alloc * sizeof(void *));
         if (!pp)
-            error("memory full");
+            tcc_error("memory full");
         *ptab = pp;
     }
     pp[nb++] = data;
@@ -378,7 +378,7 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
         size = size * 2;
     data = tcc_realloc(sec->data, size);
     if (!data)
-        error("memory full");
+        tcc_error("memory full");
     memset(data + sec->data_allocated, 0, size - sec->data_allocated);
     sec->data = data;
     sec->data_allocated = size;
@@ -609,7 +609,7 @@ LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque,
 }
 
 /* error without aborting current compilation */
-PUB_FUNC void error_noabort(const char *fmt, ...)
+PUB_FUNC void tcc_error_noabort(const char *fmt, ...)
 {
     TCCState *s1 = tcc_state;
     va_list ap;
@@ -619,7 +619,7 @@ PUB_FUNC void error_noabort(const char *fmt, ...)
     va_end(ap);
 }
 
-PUB_FUNC void error(const char *fmt, ...)
+PUB_FUNC void tcc_error(const char *fmt, ...)
 {
     TCCState *s1 = tcc_state;
     va_list ap;
@@ -636,7 +636,7 @@ PUB_FUNC void error(const char *fmt, ...)
     }
 }
 
-PUB_FUNC void warning(const char *fmt, ...)
+PUB_FUNC void tcc_warning(const char *fmt, ...)
 {
     TCCState *s1 = tcc_state;
     va_list ap;
@@ -790,7 +790,7 @@ static int tcc_compile(TCCState *s1)
         if (tok != TOK_EOF)
             expect("declaration");
         if (pvtop != vtop)
-            warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
+            tcc_warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
 
         /* end of translation unit info */
         if (s1->do_debug) {
@@ -1105,7 +1105,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     ret = tcc_open(s1, filename);
     if (ret < 0) {
         if (flags & AFF_PRINT_ERROR)
-            error_noabort("file '%s' not found", filename);
+            tcc_error_noabort("file '%s' not found", filename);
         return ret;
     }
 
@@ -1143,7 +1143,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     size = read(fd, &ehdr, sizeof(ehdr));
     lseek(fd, 0, SEEK_SET);
     if (size <= 0) {
-        error_noabort("could not read header");
+        tcc_error_noabort("could not read header");
         goto the_end;
     }
 
@@ -1174,7 +1174,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             goto the_end;
         }
 #endif
-        error_noabort("unrecognized ELF file");
+        tcc_error_noabort("unrecognized ELF file");
         goto the_end;
     }
 
@@ -1198,7 +1198,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     ret = tcc_load_ldscript(s1);
 #endif
     if (ret < 0)
-        error_noabort("unrecognized file type");
+        tcc_error_noabort("unrecognized file type");
 
 the_end:
     tcc_close();
@@ -1247,7 +1247,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
 {
     if (-1 == tcc_add_library_internal(s, "%s/%s",
         filename, 0, s->crt_paths, s->nb_crt_paths))
-        error_noabort("file '%s' not found", filename);
+        tcc_error_noabort("file '%s' not found", filename);
     return 0;
 }
 
@@ -1485,14 +1485,14 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
         } else if (link_option(option, "fini=", &p)) {
             s->fini_symbol = p;
             if (s->warn_unsupported)
-                warning("ignoring -fini %s", p);
+                tcc_warning("ignoring -fini %s", p);
         } else if (link_option(option, "image-base=", &p)) {
             s->text_addr = strtoul(p, &end, 16);
             s->has_text_addr = 1;
         } else if (link_option(option, "init=", &p)) {
             s->init_symbol = p;
             if (s->warn_unsupported)
-                warning("ignoring -init %s", p);
+                tcc_warning("ignoring -init %s", p);
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
             if (strstart(p, "pe-", NULL)) {
@@ -1647,7 +1647,7 @@ PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *file
     /* XXX return err codes instead of error() ? */
     depout = fopen(filename, "w");
     if (!depout)
-        error("could not open '%s'", filename);
+        tcc_error("could not open '%s'", filename);
 
     fprintf(depout, "%s : \\\n", target);
     for (i=0; i<s->nb_target_deps; ++i)

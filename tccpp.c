@@ -90,13 +90,13 @@ static void macro_subst(
 ST_FUNC void skip(int c)
 {
     if (tok != c)
-        error("'%c' expected (got \"%s\")", c, get_tok_str(tok, &tokc));
+        tcc_error("'%c' expected (got \"%s\")", c, get_tok_str(tok, &tokc));
     next();
 }
 
 ST_FUNC void expect(const char *msg)
 {
-    error("%s expected", msg);
+    tcc_error("%s expected", msg);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -113,7 +113,7 @@ static void cstr_realloc(CString *cstr, int new_size)
         size = size * 2;
     data = tcc_realloc(cstr->data_allocated, size);
     if (!data)
-        error("memory full");
+        tcc_error("memory full");
     cstr->data_allocated = data;
     cstr->size_allocated = size;
     cstr->data = data;
@@ -194,14 +194,14 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     int i;
 
     if (tok_ident >= SYM_FIRST_ANOM) 
-        error("memory full");
+        tcc_error("memory full");
 
     /* expand token table if needed */
     i = tok_ident - TOK_IDENT;
     if ((i % TOK_ALLOC_INCR) == 0) {
         ptable = tcc_realloc(table_ident, (i + TOK_ALLOC_INCR) * sizeof(TokenSym *));
         if (!ptable)
-            error("memory full");
+            tcc_error("memory full");
         table_ident = ptable;
     }
 
@@ -424,7 +424,7 @@ static int handle_stray_noerror(void)
 static void handle_stray(void)
 {
     if (handle_stray_noerror())
-        error("stray '\\' in program");
+        tcc_error("stray '\\' in program");
 }
 
 /* skip the stray and handle the \\n case. Output an error if
@@ -584,7 +584,7 @@ ST_FUNC uint8_t *parse_comment(uint8_t *p)
             c = handle_eob();
             p = file->buf_ptr;
             if (c == CH_EOF) {
-                error("unexpected end of file in comment");
+                tcc_error("unexpected end of file in comment");
             } else if (c == '\\') {
                 p++;
             }
@@ -631,7 +631,7 @@ static uint8_t *parse_pp_string(uint8_t *p,
             if (c == CH_EOF) {
             unterminated_string:
                 /* XXX: indicate line number of start of string */
-                error("missing terminating %c character", sep);
+                tcc_error("missing terminating %c character", sep);
             } else if (c == '\\') {
                 /* escape : just skip \[\r]\n */
                 PEEKC_EOB(c, p);
@@ -806,7 +806,7 @@ static inline int tok_ext_size(int t)
     case TOK_STR:
     case TOK_LSTR:
     case TOK_PPNUM:
-        error("unsupported token");
+        tcc_error("unsupported token");
         return 1;
     case TOK_CDOUBLE:
     case TOK_CLLONG:
@@ -845,7 +845,7 @@ static int *tok_str_realloc(TokenString *s)
     }
     str = tcc_realloc(s->str, len * sizeof(int));
     if (!str)
-        error("memory full");
+        tcc_error("memory full");
     s->allocated_len = len;
     s->str = str;
     return str;
@@ -1019,7 +1019,7 @@ ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
 
     s = define_find(v);
     if (s && !macro_is_equal(s->d, str))
-        warning("%s redefined", get_tok_str(v, NULL));
+        tcc_warning("%s redefined", get_tok_str(v, NULL));
 
     s = sym_push2(&define_stack, v, macro_type, 0);
     s->d = str;
@@ -1100,9 +1100,9 @@ ST_FUNC void label_pop(Sym **ptop, Sym *slast)
     for(s = *ptop; s != slast; s = s1) {
         s1 = s->prev;
         if (s->r == LABEL_DECLARED) {
-            warning("label '%s' declared but not used", get_tok_str(s->v, NULL));
+            tcc_warning("label '%s' declared but not used", get_tok_str(s->v, NULL));
         } else if (s->r == LABEL_FORWARD) {
-                error("label '%s' used but not defined",
+                tcc_error("label '%s' used but not defined",
                       get_tok_str(s->v, NULL));
         } else {
             if (s->c) {
@@ -1181,7 +1181,7 @@ ST_FUNC void parse_define(void)
     
     v = tok;
     if (v < TOK_IDENT)
-        error("invalid macro name '%s'", get_tok_str(tok, &tokc));
+        tcc_error("invalid macro name '%s'", get_tok_str(tok, &tokc));
     /* XXX: should check if same macro (ANSI) */
     first = NULL;
     t = MACRO_OBJ;
@@ -1202,7 +1202,7 @@ ST_FUNC void parse_define(void)
                 next_nomacro();
             }
             if (varg < TOK_IDENT)
-                error("badly punctuated parameter list");
+                tcc_error("badly punctuated parameter list");
             s = sym_push2(&define_stack, varg | SYM_FIELD, is_vaargs, 0);
             *ps = s;
             ps = &s->next;
@@ -1320,7 +1320,7 @@ static void pragma_parse(TCCState *s1)
             next();
             if (s1->pack_stack_ptr <= s1->pack_stack) {
             stk_error:
-                error("out of pack stack");
+                tcc_error("out of pack stack");
             }
             s1->pack_stack_ptr--;
         } else {
@@ -1335,7 +1335,7 @@ static void pragma_parse(TCCState *s1)
                 }
                 if (tok != TOK_CINT) {
                 pack_error:
-                    error("invalid pack pragma");
+                    tcc_error("invalid pack pragma");
                 }
                 val = tokc.i;
                 if (val < 1 || val > 16 || (val & (val - 1)) != 0)
@@ -1412,7 +1412,7 @@ ST_FUNC void preprocess(int is_bof)
                 while (tok != TOK_LINEFEED) {
                     if (tok != TOK_STR) {
                     include_syntax:
-                        error("'#include' expects \"FILENAME\" or <FILENAME>");
+                        tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
                     }
                     pstrcat(buf, sizeof(buf), (char *)tokc.cstr->data);
                     next();
@@ -1435,7 +1435,7 @@ ST_FUNC void preprocess(int is_bof)
         }
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
-            error("#include recursion too deep");
+            tcc_error("#include recursion too deep");
 
         n = s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (i = -2; i < n; ++i) {
@@ -1512,7 +1512,7 @@ ST_FUNC void preprocess(int is_bof)
             ch = file->buf_ptr[0];
             goto the_end;
         }
-        error("include file '%s' not found", buf);
+        tcc_error("include file '%s' not found", buf);
 include_done:
         break;
     case TOK_IFNDEF:
@@ -1526,7 +1526,7 @@ include_done:
     do_ifdef:
         next_nomacro();
         if (tok < TOK_IDENT)
-            error("invalid argument for '#if%sdef'", c ? "n" : "");
+            tcc_error("invalid argument for '#if%sdef'", c ? "n" : "");
         if (is_bof) {
             if (c) {
 #ifdef INC_DEBUG
@@ -1538,22 +1538,22 @@ include_done:
         c = (define_find(tok) != 0) ^ c;
     do_if:
         if (s1->ifdef_stack_ptr >= s1->ifdef_stack + IFDEF_STACK_SIZE)
-            error("memory full");
+            tcc_error("memory full");
         *s1->ifdef_stack_ptr++ = c;
         goto test_skip;
     case TOK_ELSE:
         if (s1->ifdef_stack_ptr == s1->ifdef_stack)
-            error("#else without matching #if");
+            tcc_error("#else without matching #if");
         if (s1->ifdef_stack_ptr[-1] & 2)
-            error("#else after #else");
+            tcc_error("#else after #else");
         c = (s1->ifdef_stack_ptr[-1] ^= 3);
         goto test_else;
     case TOK_ELIF:
         if (s1->ifdef_stack_ptr == s1->ifdef_stack)
-            error("#elif without matching #if");
+            tcc_error("#elif without matching #if");
         c = s1->ifdef_stack_ptr[-1];
         if (c > 1)
-            error("#elif after #else");
+            tcc_error("#elif after #else");
         /* last #if/#elif expression was true: we skip */
         if (c == 1)
             goto skip;
@@ -1572,7 +1572,7 @@ include_done:
         break;
     case TOK_ENDIF:
         if (s1->ifdef_stack_ptr <= file->ifdef_stack_ptr)
-            error("#endif without matching #if");
+            tcc_error("#endif without matching #if");
         s1->ifdef_stack_ptr--;
         /* '#ifndef macro' was at the start of file. Now we check if
            an '#endif' is exactly at the end of file */
@@ -1591,12 +1591,12 @@ include_done:
     case TOK_LINE:
         next();
         if (tok != TOK_CINT)
-            error("#line");
+            tcc_error("#line");
         file->line_num = tokc.i - 1; /* the line number will be incremented after */
         next();
         if (tok != TOK_LINEFEED) {
             if (tok != TOK_STR)
-                error("#line");
+                tcc_error("#line");
             pstrcpy(file->filename, sizeof(file->filename), 
                     (char *)tokc.cstr->data);
         }
@@ -1618,9 +1618,9 @@ include_done:
         }
         *q = '\0';
         if (c == TOK_ERROR)
-            error("#error %s", buf);
+            tcc_error("#error %s", buf);
         else
-            warning("#warning %s", buf);
+            tcc_warning("#warning %s", buf);
         break;
     case TOK_PRAGMA:
         pragma_parse(s1);
@@ -1631,7 +1631,7 @@ include_done:
                to emulate cpp behaviour */
         } else {
             if (!(saved_parse_flags & PARSE_FLAG_ASM_COMMENTS))
-                warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
+                tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
             else {
                 /* this is a gas line comment in an 'S' file. */
                 file->buf_ptr = parse_line_comment(file->buf_ptr);
@@ -1734,9 +1734,9 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
             default:
             invalid_escape:
                 if (c >= '!' && c <= '~')
-                    warning("unknown escape sequence: \'\\%c\'", c);
+                    tcc_warning("unknown escape sequence: \'\\%c\'", c);
                 else
-                    warning("unknown escape sequence: \'\\x%x\'", c);
+                    tcc_warning("unknown escape sequence: \'\\x%x\'", c);
                 break;
             }
         }
@@ -1821,7 +1821,7 @@ static void parse_number(const char *p)
             break;
         if (q >= token_buf + STRING_MAX_SIZE) {
         num_too_long:
-            error("number too long");
+            tcc_error("number too long");
         }
         *q++ = ch;
         ch = *p++;
@@ -1870,7 +1870,7 @@ static void parse_number(const char *p)
                         break;
                     }
                     if (t >= b)
-                        error("invalid digit");
+                        tcc_error("invalid digit");
                     bn_lshift(bn, shift, t);
                     frac_bits += shift;
                     ch = *p++;
@@ -1999,14 +1999,14 @@ static void parse_number(const char *p)
             } else {
                 t = t - '0';
                 if (t >= b)
-                    error("invalid digit");
+                    tcc_error("invalid digit");
             }
             n1 = n;
             n = n * b + t;
             /* detect overflow */
             /* XXX: this test is not reliable */
             if (n < n1)
-                error("integer constant overflow");
+                tcc_error("integer constant overflow");
         }
         
         /* XXX: not exactly ANSI compliant */
@@ -2026,7 +2026,7 @@ static void parse_number(const char *p)
             t = toup(ch);
             if (t == 'L') {
                 if (lcount >= 2)
-                    error("three 'l's in integer constant");
+                    tcc_error("three 'l's in integer constant");
                 lcount++;
                 if (lcount == 2) {
                     if (tok == TOK_CINT)
@@ -2037,7 +2037,7 @@ static void parse_number(const char *p)
                 ch = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
-                    error("two 'u's in integer constant");
+                    tcc_error("two 'u's in integer constant");
                 ucount++;
                 if (tok == TOK_CINT)
                     tok = TOK_CUINT;
@@ -2054,7 +2054,7 @@ static void parse_number(const char *p)
             tokc.ull = n;
     }
     if (ch)
-        error("invalid number\n");
+        tcc_error("invalid number\n");
 }
 
 
@@ -2119,7 +2119,7 @@ static inline void next_nomacro1(void)
             } else if (!(parse_flags & PARSE_FLAG_PREPROCESS)) {
                 tok = TOK_EOF;
             } else if (s1->ifdef_stack_ptr != file->ifdef_stack_ptr) {
-                error("missing #endif");
+                tcc_error("missing #endif");
             } else if (s1->include_stack_ptr == s1->include_stack) {
                 /* no include left : end of file. */
                 tok = TOK_EOF;
@@ -2333,9 +2333,9 @@ maybe_newline:
                 else
                     char_size = sizeof(nwchar_t);
                 if (tokcstr.size <= char_size)
-                    error("empty character constant");
+                    tcc_error("empty character constant");
                 if (tokcstr.size > 2 * char_size)
-                    warning("multi-character character constant");
+                    tcc_warning("multi-character character constant");
                 if (!is_long) {
                     tokc.i = *(int8_t *)tokcstr.data;
                     tok = TOK_CCHAR;
@@ -2488,7 +2488,7 @@ maybe_newline:
         p++;
         break;
     default:
-        error("unrecognized character \\x%02x", c);
+        tcc_error("unrecognized character \\x%02x", c);
         break;
     }
     tok_flags = 0;
@@ -2719,7 +2719,7 @@ static int macro_subst_tok(TokenString *tok_str,
                 if (!args && !sa && tok == ')')
                     break;
                 if (!sa)
-                    error("macro '%s' used with too many args",
+                    tcc_error("macro '%s' used with too many args",
                           get_tok_str(s->v, 0));
                 tok_str_new(&str);
                 parlevel = spc = 0;
@@ -2756,7 +2756,7 @@ static int macro_subst_tok(TokenString *tok_str,
                 next_nomacro();
             }
             if (sa) {
-                error("macro '%s' used with too few args",
+                tcc_error("macro '%s' used with too few args",
                       get_tok_str(s->v, 0));
             }
 
@@ -2843,7 +2843,7 @@ static inline int *macro_twosharps(const int *macro_str)
                     if (0 == *file->buf_ptr)
                         break;
                     tok_str_add2(&macro_str1, tok, &tokc);
-                    warning("pasting \"%.*s\" and \"%s\" does not give a valid preprocessing token",
+                    tcc_warning("pasting \"%.*s\" and \"%s\" does not give a valid preprocessing token",
                         n, cstr.data, (char*)cstr.data + n);
                 }
                 tcc_close();

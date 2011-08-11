@@ -54,7 +54,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 if (sym && sym->r == 0)
                     sym = sym->prev_tok;
                 if (!sym)
-                    error("local label '%d' not found backward", n);
+                    tcc_error("local label '%d' not found backward", n);
             } else {
                 /* forward */
                 if (!sym || sym->r) {
@@ -69,7 +69,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
             pe->v = n;
             pe->sym = NULL;
         } else {
-            error("invalid number syntax");
+            tcc_error("invalid number syntax");
         }
         next();
         break;
@@ -83,7 +83,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         next();
         asm_expr_unary(s1, pe);
         if (pe->sym)
-            error("invalid operation with label");
+            tcc_error("invalid operation with label");
         if (op == '-')
             pe->v = -pe->v;
         else
@@ -119,7 +119,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
             }
             next();
         } else {
-            error("bad expression syntax [%s]", get_tok_str(tok, &tokc));
+            tcc_error("bad expression syntax [%s]", get_tok_str(tok, &tokc));
         }
         break;
     }
@@ -139,7 +139,7 @@ static void asm_expr_prod(TCCState *s1, ExprValue *pe)
         next();
         asm_expr_unary(s1, &e2);
         if (pe->sym || e2.sym)
-            error("invalid operation with label");
+            tcc_error("invalid operation with label");
         switch(op) {
         case '*':
             pe->v *= e2.v;
@@ -147,7 +147,7 @@ static void asm_expr_prod(TCCState *s1, ExprValue *pe)
         case '/':  
             if (e2.v == 0) {
             div_error:
-                error("division by zero");
+                tcc_error("division by zero");
             }
             pe->v /= e2.v;
             break;
@@ -180,7 +180,7 @@ static void asm_expr_logic(TCCState *s1, ExprValue *pe)
         next();
         asm_expr_prod(s1, &e2);
         if (pe->sym || e2.sym)
-            error("invalid operation with label");
+            tcc_error("invalid operation with label");
         switch(op) {
         case '&':
             pe->v &= e2.v;
@@ -234,7 +234,7 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
                 pe->sym = NULL; /* same symbols can be substracted to NULL */
             } else {
             cannot_relocate:
-                error("invalid operation with label");
+                tcc_error("invalid operation with label");
             }
         }
     }
@@ -266,7 +266,7 @@ static void asm_new_label1(TCCState *s1, int label, int is_local,
         if (sym->r) {
             /* the label is already defined */
             if (!is_local) {
-                error("assembler label '%s' already defined", 
+                tcc_error("assembler label '%s' already defined", 
                       get_tok_str(label, NULL));
             } else {
                 /* redefinition of local labels is possible */
@@ -341,7 +341,7 @@ static void asm_parse_directive(TCCState *s1)
         n = asm_int_expr(s1);
         if (tok1 == TOK_ASM_align) {
             if (n < 0 || (n & (n-1)) != 0)
-                error("alignment must be a positive power of two");
+                tcc_error("alignment must be a positive power of two");
             offset = (ind + n - 1) & -n;
             size = offset - ind;
             /* the section must have a compatible alignment */
@@ -372,7 +372,7 @@ static void asm_parse_directive(TCCState *s1)
             p = tokc.cstr->data;
             if (tok != TOK_PPNUM) {
             error_constant:
-                error("64 bit constant");
+                tcc_error("64 bit constant");
             }
             vl = strtoll(p, (char **)&p, 0);
             if (*p != '\0')
@@ -431,7 +431,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
             repeat = asm_int_expr(s1);
             if (repeat < 0) {
-                error("repeat < 0; .fill ignored");
+                tcc_error("repeat < 0; .fill ignored");
                 break;
             }
             size = 1;
@@ -440,7 +440,7 @@ static void asm_parse_directive(TCCState *s1)
                 next();
                 size = asm_int_expr(s1);
                 if (size < 0) {
-                    error("size < 0; .fill ignored");
+                    tcc_error("size < 0; .fill ignored");
                     break;
                 }
                 if (size > 8)
@@ -473,7 +473,7 @@ static void asm_parse_directive(TCCState *s1)
             /* XXX: handle section symbols too */
             n = asm_int_expr(s1);
             if (n < ind)
-                error("attempt to .org backwards");
+                tcc_error("attempt to .org backwards");
             v = 0;
             size = n - ind;
             goto zero_pad;
@@ -554,7 +554,7 @@ static void asm_parse_directive(TCCState *s1)
                 pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
 
             if (s1->warn_unsupported)
-                warning("ignoring .file %s", filename);
+                tcc_warning("ignoring .file %s", filename);
 
             next();
         }
@@ -572,7 +572,7 @@ static void asm_parse_directive(TCCState *s1)
                 pstrcat(ident, sizeof(ident), get_tok_str(tok, NULL));
 
             if (s1->warn_unsupported)
-                warning("ignoring .ident %s", ident);
+                tcc_warning("ignoring .ident %s", ident);
 
             next();
         }
@@ -584,14 +584,14 @@ static void asm_parse_directive(TCCState *s1)
             next();
             sym = label_find(tok);
             if (!sym) {
-                error("label not found: %s", get_tok_str(tok, NULL));
+                tcc_error("label not found: %s", get_tok_str(tok, NULL));
             }
 
             next();
             skip(',');
             /* XXX .size name,label2-label1 */
             if (s1->warn_unsupported)
-                warning("ignoring .size %s,*", get_tok_str(tok, NULL));
+                tcc_warning("ignoring .size %s,*", get_tok_str(tok, NULL));
 
             while (tok != '\n' && tok != CH_EOF) {
                 next();
@@ -624,7 +624,7 @@ static void asm_parse_directive(TCCState *s1)
                 sym->type.t = VT_FUNC;
             }
             else if (s1->warn_unsupported)
-                warning("change type of '%s' from 0x%x to '%s' ignored", 
+                tcc_warning("change type of '%s' from 0x%x to '%s' ignored", 
                     get_tok_str(sym->v, NULL), sym->type.t, newtype);
 
             next();
@@ -660,7 +660,7 @@ static void asm_parse_directive(TCCState *s1)
             Section *sec;
             next();
             if (!last_text_section)
-                error("no previous section referenced");
+                tcc_error("no previous section referenced");
             sec = cur_text_section;
             use_section1(s1, last_text_section);
             last_text_section = sec;
@@ -687,7 +687,7 @@ static void asm_parse_directive(TCCState *s1)
         break;
 #endif
     default:
-        error("unknown assembler directive '.%s'", get_tok_str(tok, NULL));
+        tcc_error("unknown assembler directive '.%s'", get_tok_str(tok, NULL));
         break;
     }
 }
@@ -913,7 +913,7 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
                 modifier = *str++;
             index = find_constraint(operands, nb_operands, str, &str);
             if (index < 0)
-                error("invalid operand reference after %%");
+                tcc_error("invalid operand reference after %%");
             op = &operands[index];
             sv = *op->vt;
             if (op->reg >= 0) {
@@ -942,7 +942,7 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
         nb_operands = *nb_operands_ptr;
         for(;;) {
             if (nb_operands >= MAX_ASM_OPERANDS)
-                error("too many asm operands");
+                tcc_error("too many asm operands");
             op = &operands[nb_operands++];
             op->id = 0;
             if (tok == '[') {

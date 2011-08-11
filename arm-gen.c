@@ -195,7 +195,7 @@ void o(uint32_t i)
 
   ind1 = ind + 4;
   if (!cur_text_section)
-    error("compiler error! This happens f.ex. if the compiler\n"
+    tcc_error("compiler error! This happens f.ex. if the compiler\n"
          "can't evaluate constant expressions outside of a function.");
   if (ind1 > cur_text_section->data_allocated)
     section_realloc(cur_text_section, ind1);
@@ -324,7 +324,7 @@ ST_FUNC uint32_t encbranch(int pos, int addr, int fail)
   addr/=4;
   if(addr>=0x1000000 || addr<-0x1000000) {
     if(fail)
-      error("FIXME: function bigger than 32MB");
+      tcc_error("FIXME: function bigger than 32MB");
     return 0;
   }
   return 0x0A000000|(addr&0xffffff);
@@ -366,14 +366,14 @@ void gsym(int t)
 static uint32_t vfpr(int r)
 {
   if(r<TREG_F0 || r>TREG_F7)
-    error("compiler error! register %i is no vfp register",r);
+    tcc_error("compiler error! register %i is no vfp register",r);
   return r-5;
 }
 #else
 static uint32_t fpr(int r)
 {
   if(r<TREG_F0 || r>TREG_F3)
-    error("compiler error! register %i is no fpa register",r);
+    tcc_error("compiler error! register %i is no fpa register",r);
   return r-5;
 }
 #endif
@@ -383,7 +383,7 @@ static uint32_t intr(int r)
   if(r==4)
     return 12;
   if((r<0 || r>4) && r!=14)
-    error("compiler error! register %i is no int register",r);
+    tcc_error("compiler error! register %i is no int register",r);
   return r;
 }
 
@@ -443,7 +443,7 @@ static uint32_t mapcc(int cc)
     case TOK_GT:
       return 0xC0000000; /* GT */
   }
-  error("unexpected condition code");
+  tcc_error("unexpected condition code");
   return 0xE0000000; /* AL */
 }
 
@@ -476,7 +476,7 @@ static int negcc(int cc)
     case TOK_GT:
       return TOK_LE;
   }
-  error("unexpected condition code");
+  tcc_error("unexpected condition code");
   return TOK_NE;
 }
 
@@ -616,7 +616,7 @@ void load(int r, SValue *sv)
       return;
     }
   }
-  error("load unimplemented!");
+  tcc_error("load unimplemented!");
 }
 
 /* store register 'r' in lvalue 'v' */
@@ -697,7 +697,7 @@ void store(int r, SValue *sv)
       return;
     }
   }
-  error("store unimplemented");
+  tcc_error("store unimplemented");
 }
 
 static void gadd_sp(int val)
@@ -1271,7 +1271,7 @@ done:
       vtop->r = retreg;
       break;
     default:
-      error("gen_opi %i unimplemented!",op);
+      tcc_error("gen_opi %i unimplemented!",op);
   }
 }
 
@@ -1325,7 +1325,7 @@ void gen_opf(int op)
       break;
     default:
       if(op < TOK_ULT && op > TOK_GT) {
-        error("unknown fp op %x!",op);
+        tcc_error("unknown fp op %x!",op);
         return;
       }
       if(is_zero(-1)) {
@@ -1520,7 +1520,7 @@ void gen_opf(int op)
 	  case TOK_UGE:
 	  case TOK_ULE:
 	  case TOK_UGT:
-            error("unsigned comparision on floats?");
+            tcc_error("unsigned comparision on floats?");
 	    break;
 	  case TOK_LT:
             op=TOK_Nset;
@@ -1564,7 +1564,7 @@ void gen_opf(int op)
 	vtop[-1].r = VT_CMP;
 	vtop[-1].c.i = op;
       } else {
-        error("unknown fp op %x!",op);
+        tcc_error("unknown fp op %x!",op);
 	return;
       }
   }
@@ -1661,7 +1661,7 @@ ST_FUNC void gen_cvt_itof1(int t)
       return;
     }
   }
-  error("unimplemented gen_cvt_itof %x!",vtop->type.t);
+  tcc_error("unimplemented gen_cvt_itof %x!",vtop->type.t);
 }
 
 /* convert fp to int 't' type */
@@ -1721,7 +1721,7 @@ void gen_cvt_ftoi(int t)
     vtop->r = REG_IRET;
     return;
   }
-  error("unimplemented gen_cvt_ftoi!");
+  tcc_error("unimplemented gen_cvt_ftoi!");
 }
 
 /* convert from one floating point type to another */
