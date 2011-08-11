@@ -94,6 +94,11 @@ ST_FUNC void skip(int c)
     next();
 }
 
+ST_FUNC void expect(const char *msg)
+{
+    error("%s expected", msg);
+}
+
 /* ------------------------------------------------------------------------- */
 /* CString handling */
 static void cstr_realloc(CString *cstr, int new_size)

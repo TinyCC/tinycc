@@ -3,8 +3,6 @@
 @rem ----------------------------------------------------
 
 echo>..\config.h #define TCC_VERSION "0.9.25"
-echo>>..\config.h #define CONFIG_TCCDIR "."
-echo>>..\config.h #define CONFIG_SYSROOT ""
 
 @if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ goto x86_64
 @if _%PROCESSOR_ARCHITECTURE%_==_AMD64_ goto x86_64
@@ -31,7 +29,9 @@ if not exist libtcc\nul mkdir libtcc
 copy ..\libtcc.h libtcc\libtcc.h
 %CC% %target% -DONE_SOURCE ../libtcc.c -c -o libtcc.o
 %AR% rcs libtcc/libtcc.a libtcc.o
-%CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc/libtcc.dll
+:libtcc.dll
+%CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc.dll
+tiny_impdef libtcc.dll -o lib/libtcc.def
 
 :tcc
 %CC% %target% ../tcc.c -o tcc.exe -ltcc -Llibtcc
@@ -61,3 +61,7 @@ tiny_libmaker lib/libtcc1.a libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o d
 
 :the_end
 del *.o
+
+:libtcc_test
+.\tcc -v -I libtcc -ltcc ../tests/libtcc_test.c
+.\libtcc_test

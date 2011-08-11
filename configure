@@ -168,6 +168,8 @@ for opt do
   ;;
   --help|-h) show_help="yes"
   ;;
+  *) echo "configure: unrecognized option $opt"; exit 1
+  ;;
   esac
 done
 
@@ -380,7 +382,7 @@ print_var2()
 {
   if test -n "$2"; then print_var1 $1 "$2"; fi
 }
-print_var1 CONFIG_SYSROOT "$sysroot"
+print_var2 CONFIG_SYSROOT "$sysroot"
 print_var1 CONFIG_TCCDIR "$tccdir"
 print_var2 CONFIG_TCC_SYSINCLUDEPATHS "$tcc_sysincludepaths"
 print_var2 CONFIG_TCC_LIBPATHS "$tcc_libpaths"

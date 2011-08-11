@@ -20,6 +20,12 @@
 
 #include "tcc.h"
 
+#ifdef CONFIG_TCC_BACKTRACE
+ST_DATA int rt_num_callers = 6;
+ST_DATA const char **rt_bound_error_msg;
+ST_DATA void *rt_prog_main;
+#endif
+
 #ifdef _WIN32
 #define ucontext_t CONTEXT
 #endif
@@ -38,7 +44,7 @@ static void win64_add_function_table(TCCState *s1);
 /* Do all relocations (needed before using tcc_get_symbol())
    Returns -1 on error. */
 
-int tcc_relocate(TCCState *s1)
+LIBTCCAPI int tcc_relocate(TCCState *s1)
 {
     int ret;
 #ifdef HAVE_SELINUX
@@ -73,7 +79,7 @@ int tcc_relocate(TCCState *s1)
 }
 
 /* launch the compiled program with the given arguments */
-int tcc_run(TCCState *s1, int argc, char **argv)
+LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
     int ret;
@@ -212,6 +218,11 @@ static void set_pages_executable(void *ptr, unsigned long length)
 
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
+
+PUB_FUNC void tcc_set_num_callers(int n)
+{
+    rt_num_callers = n;
+}
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
@@ -369,7 +380,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
     va_end(ap);
     fprintf(stderr, "\n");
 
-    for(i=0;i<num_callers;i++) {
+    for(i=0;i<rt_num_callers;i++) {
         if (rt_get_caller_pc(&pc, uc, i) < 0)
             break;
         pc = rt_printline(pc, i ? "by" : "at");
@@ -650,12 +661,12 @@ static int rt_get_caller_pc(uplong *paddr, CONTEXT *uc, int level)
 #define RTLD_DEFAULT    NULL
 
 /* dummy function for profiling */
-void *dlopen(const char *filename, int flag)
+ST_FUNC void *dlopen(const char *filename, int flag)
 {
     return NULL;
 }
 
-void dlclose(void *p)
+ST_FUNC void dlclose(void *p)
 {
 }
 /*
@@ -682,7 +693,7 @@ static TCCSyms tcc_syms[] = {
     { NULL, NULL },
 };
 
-void *resolve_sym(TCCState *s1, const char *symbol)
+ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol)
 {
     TCCSyms *p;
     p = tcc_syms;
@@ -696,7 +707,7 @@ void *resolve_sym(TCCState *s1, const char *symbol)
 
 #elif !defined(_WIN32)
 
-void *resolve_sym(TCCState *s1, const char *sym)
+ST_FUNC void *resolve_sym(TCCState *s1, const char *sym)
 {
     return dlsym(RTLD_DEFAULT, sym);
 }

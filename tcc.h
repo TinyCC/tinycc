@@ -50,7 +50,10 @@
 #define inline __inline
 #define inp next_inp
 #ifdef _WIN64
-#define uplong unsigned long long
+# define uplong unsigned long long
+#endif
+#ifdef LIBTCC_AS_DLL
+# define LIBTCCAPI __declspec(dllexport)
 #endif
 #endif
 
@@ -134,6 +137,10 @@
 
 /* ------------ path configuration ------------ */
 
+#ifndef CONFIG_SYSROOT
+# define CONFIG_SYSROOT ""
+#endif
+
 #ifndef CONFIG_TCC_LDDIR
 # if defined(TCC_TARGET_X86_64_CENTOS)
 #  define CONFIG_TCC_LDDIR "/lib64"
@@ -147,25 +154,27 @@
 # define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
 #endif
 
+/* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
+
 /* system include paths */
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
 # ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_SYSINCLUDEPATHS "\b/include;\b/include/winapi"
+#  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include;{B}/include/winapi"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         CONFIG_SYSROOT "/usr/local/include" \
     ":" CONFIG_SYSROOT "/usr/include" \
-    ":" "\b/include"
+    ":" "{B}/include"
 # endif
 #endif
 
 /* library search paths */
 #ifndef CONFIG_TCC_LIBPATHS
 # ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_LIBPATHS "\b/lib"
+#  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        CONFIG_SYSROOT CONFIG_TCC_CRTPREFIX \
+        CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR \
     ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
     ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
 # endif
@@ -924,7 +933,9 @@ static inline int toup(int c)
     return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
 }
 
-#define PUB_FUNC 
+#ifndef PUB_FUNC
+# define PUB_FUNC
+#endif
 
 #ifdef ONE_SOURCE
 #define ST_INLN static inline
@@ -946,7 +957,7 @@ ST_DATA int tcc_ext;
 ST_DATA struct TCCState *tcc_state;
 
 #ifdef CONFIG_TCC_BACKTRACE
-ST_DATA int num_callers;
+ST_DATA int rt_num_callers;
 ST_DATA const char **rt_bound_error_msg;
 ST_DATA void *rt_prog_main;
 #endif
@@ -976,7 +987,6 @@ PUB_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data);
 PUB_FUNC void dynarray_reset(void *pp, int *n);
 PUB_FUNC void error_noabort(const char *fmt, ...);
 PUB_FUNC void error(const char *fmt, ...);
-PUB_FUNC void expect(const char *msg);
 PUB_FUNC void warning(const char *fmt, ...);
 
 /* other utilities */
@@ -1012,14 +1022,18 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
-ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
+#ifndef TCC_TARGET_PE
+ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
+#endif
+
 PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
-PUB_FUNC void set_num_callers(int n);
-
 PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file);
 PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename);
+#ifdef CONFIG_TCC_BACKTRACE
+PUB_FUNC void tcc_set_num_callers(int n);
+#endif
 
 /* ------------ tccpp.c ------------ */
 
@@ -1074,6 +1088,7 @@ ST_FUNC void preprocess_init(TCCState *s1);
 ST_FUNC void preprocess_new();
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
+ST_FUNC void expect(const char *msg);
 
 /* ------------ tccgen.c ------------ */
 

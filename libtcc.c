@@ -32,12 +32,6 @@ ST_DATA int tcc_ext = 1;
 /* XXX: get rid of this ASAP */
 ST_DATA struct TCCState *tcc_state;
 
-#ifdef CONFIG_TCC_BACKTRACE
-ST_DATA int num_callers = 6;
-ST_DATA const char **rt_bound_error_msg;
-ST_DATA void *rt_prog_main;
-#endif
-
 /********************************************************/
 
 #ifdef ONE_SOURCE
@@ -115,7 +109,7 @@ static void tcc_add_systemdir(TCCState *s)
 {
     char buf[1000];
     GetSystemDirectory(buf, sizeof buf);
-    tcc_add_library_path(s, buf);
+    tcc_add_library_path(s, normalize_slashes(buf));
 }
 
 #ifndef CONFIG_TCC_STATIC
@@ -315,8 +309,10 @@ static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char
 
         cstr_new(&str);
         for (p = in; c = *p, c != '\0' && c != PATHSEP; ++p) {
-            if (c == '\b') {
-                cstr_cat(&str, s->tcc_lib_path);
+            if (c == '{' && p[1] && p[2] == '}') {
+                c = p[1], p += 2;
+                if (c == 'B')
+                    cstr_cat(&str, s->tcc_lib_path);
             } else {
                 cstr_ccat(&str, c);
             }
@@ -638,11 +634,6 @@ PUB_FUNC void error(const char *fmt, ...)
         /* XXX: eliminate this someday */
         exit(1);
     }
-}
-
-PUB_FUNC void expect(const char *msg)
-{
-    error("%s expected", msg);
 }
 
 PUB_FUNC void warning(const char *fmt, ...)
@@ -1242,6 +1233,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
     return -1;
 }
 
+#ifndef TCC_TARGET_PE
 /* find and load a dll. Return non zero if not found */
 /* XXX: add '-rpath' option support ? */
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
@@ -1249,6 +1241,7 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
     return tcc_add_library_internal(s, "%s/%s", filename, flags,
         s->library_paths, s->nb_library_paths);
 }
+#endif
 
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
 {
@@ -1603,14 +1596,6 @@ LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path)
     tcc_free(s->tcc_lib_path);
     s->tcc_lib_path = tcc_strdup(path);
 }
-
-PUB_FUNC void set_num_callers(int n)
-{
-#ifdef CONFIG_TCC_BACKTRACE
-    num_callers = n;
-#endif
-}
-
 
 PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file)
 {
