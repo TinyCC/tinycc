@@ -1379,6 +1379,12 @@ ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, int nb_flags,
     return 0;
 }
 
+/* enable debug */
+LIBTCCAPI void tcc_enable_debug(TCCState *s)
+{
+    s->do_debug = 1;
+}
+
 /* set/reset a warning */
 LIBTCCAPI int tcc_set_warning(TCCState *s, const char *warning_name, int value)
 {
