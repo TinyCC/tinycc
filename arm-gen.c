@@ -737,16 +737,85 @@ static void gcall_or_jmp(int is_jmp)
   }
 }
 
+#ifdef TCC_ARM_HARDFLOAT
+static int is_float_hgen_aggr(CType *type)
+{
+  if ((type->t & VT_BTYPE) == VT_STRUCT) {
+    struct Sym *ref;
+    int btype, nb_fields = 0;
+
+    ref = type->ref;
+    btype = ref->type.t & VT_BTYPE;
+    if (btype == VT_FLOAT || btype == VT_DOUBLE) {
+      for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
+      return !ref && nb_fields <= 4;
+    }
+  }
+  return 0;
+}
+
+struct avail_regs {
+  /* worst case: f(float, double, 3 float struct, double, 3 float struct, double) */
+  signed char avail[3];
+  int first_hole;
+  int last_hole;
+  int first_free_reg;
+};
+
+#define AVAIL_REGS_INITIALIZER (struct avail_regs) { { 0, 0, 0}, 0, 0, 0 }
+
+/* Assign a register for a CPRC param with correct size and alignment
+ * size and align are in bytes, as returned by type_size */
+int assign_fpreg(struct avail_regs *avregs, int align, int size)
+{
+  int first_reg = 0;
+
+  if (avregs->first_free_reg == -1)
+    return -1;
+  if (align >> 3) { // alignment needed (base type: double)
+    first_reg = avregs->first_free_reg;
+    if (first_reg & 1)
+      avregs->avail[avregs->last_hole++] = first_reg++;
+  } else {
+    if (size == 4 && avregs->first_hole != avregs->last_hole)
+      return avregs->avail[avregs->first_hole++];
+    else
+      first_reg = avregs->first_free_reg;
+  }
+  if (first_reg + size / 4 <= 16) {
+    avregs->first_free_reg = first_reg + size / 4;
+    return first_reg;
+  }
+  avregs->first_free_reg = -1;
+  return -1;
+}
+#endif
+
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
 void gfunc_call(int nb_args)
 {
-  int size, align, r, args_size, i;
-  Sym *func_sym;
+  int size, align, r, args_size, i, ncrn, ncprn, argno, vfp_argno;
   signed char plan[4][2]={{-1,-1},{-1,-1},{-1,-1},{-1,-1}};
-  int todo=0xf, keep, plan2[4]={0,0,0,0};
+  SValue *before_stack = NULL; /* SValue before first on stack argument */
+  SValue *before_vfpreg_hfa = NULL; /* SValue before first in VFP reg hfa argument */
+#ifdef TCC_ARM_HARDFLOAT
+  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+  signed char vfp_plan[16];
+  int plan2[4+16];
+  int variadic;
+#else
+  int plan2[4]={0,0,0,0};
+#endif
+  int vfp_todo=0;
+  int todo=0, keep;
 
+#ifdef TCC_ARM_HARDFLOAT
+  memset(vfp_plan, -1, sizeof(vfp_plan));
+  memset(plan2, 0, sizeof(plan2));
+  variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
+#endif
   r = vtop->r & VT_VALMASK;
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gv(RC_INT);
@@ -763,39 +832,128 @@ void gfunc_call(int nb_args)
   vpushi(0);
   vtop->type.t = VT_LLONG;
   args_size = 0;
-  for(i = nb_args + 1 ; i-- ;) {
-    size = type_size(&vtop[-i].type, &align);
-    if(args_size & (align-1)) {
-      vpushi(0);
-      vtop->type.t = VT_VOID; /* padding */
-      vrott(i+2);
-      args_size += 4;
-      ++nb_args;
-    }
-    args_size += (size + 3) & -4;
-  }
-  vtop--;
 #endif
-  args_size = 0;
-  for(i = nb_args ; i-- && args_size < 16 ;) {
+  ncrn = ncprn = argno = vfp_argno = 0;
+  /* Assign argument to registers and stack with alignment.
+     If, considering alignment constraints, enough registers of the correct type
+     (core or VFP) are free for the current argument, assign them to it, else
+     allocate on stack with correct alignment. Whenever a structure is allocated
+     in registers or on stack, it is always put on the stack at this stage. The
+     stack is divided in 3 zones. The zone are, from low addresses to high
+     addresses: structures to be loaded in core registers, structures to be
+     loaded in VFP registers, argument allocated to stack. SValue's representing
+     structures in the first zone are moved just after the SValue pointed by
+     before_vfpreg_hfa. SValue's representing structures in the second zone are
+     moved just after the SValue pointer by before_stack. */
+  for(i = nb_args + 1 ; i-- ;) {
+    int j, assigned_vfpreg = 0;
+    size = type_size(&vtop[-i].type, &align);
     switch(vtop[-i].type.t & VT_BTYPE) {
       case VT_STRUCT:
       case VT_FLOAT:
       case VT_DOUBLE:
       case VT_LDOUBLE:
-      size = type_size(&vtop[-i].type, &align);
-        size = (size + 3) & -4;
-      args_size += size;
-        break;
-      default:
-      plan[nb_args-1-i][0]=args_size/4;
-      args_size += 4;
-      if ((vtop[-i].type.t & VT_BTYPE) == VT_LLONG && args_size < 16) {
-	plan[nb_args-1-i][1]=args_size/4;
-	args_size += 4;
+#ifdef TCC_ARM_HARDFLOAT
+      if (!variadic) {
+        int hfa = 0; /* Homogeneous float aggregate */
+
+        if (is_float(vtop[-i].type.t)
+            || (hfa = is_float_hgen_aggr(&vtop[-i].type))) {
+          int end_reg;
+
+          assigned_vfpreg = assign_fpreg(&avregs, align, size);
+          end_reg = assigned_vfpreg + (size - 1) / 4;
+          if (assigned_vfpreg >= 0) {
+            vfp_plan[vfp_argno++]=TREG_F0 + assigned_vfpreg/2;
+            if (hfa) {
+              /* before_stack can only have been set because all core registers
+                 are assigned, so no need to care about before_vfpreg_hfa if
+                 before_stack is set */
+              if (before_stack) {
+	        vrote(&vtop[-i], &vtop[-i] - before_stack);
+                before_stack++;
+              } else if (!before_vfpreg_hfa)
+                before_vfpreg_hfa = &vtop[-i-1];
+              for (j = assigned_vfpreg; j <= end_reg; j++)
+                vfp_todo|=(1<<j);
+            }
+            continue;
+          } else {
+            if (!hfa)
+              vfp_argno++;
+            /* No need to update before_stack as no more hfa can be allocated in
+               VFP regs */
+            if (!before_vfpreg_hfa)
+              before_vfpreg_hfa = &vtop[-i-1];
+            break;
+          }
+        }
       }
+#endif
+      ncrn = (ncrn + (align-1)/4) & -(align/4);
+      size = (size + 3) & -4;
+      if (ncrn + size/4 <= 4 || (ncrn < 4 && assigned_vfpreg != -1)) {
+        /* Either there is HFA in VFP registers, or there is arguments on stack,
+           it cannot be both. Hence either before_stack already points after
+           the slot where the vtop[-i] SValue is moved, or before_stack will not
+           be used */
+        if (before_vfpreg_hfa) {
+	  vrote(&vtop[-i], &vtop[-i] - before_vfpreg_hfa);
+          before_vfpreg_hfa++;
+        }
+        for (j = ncrn; j < 4 && j < ncrn + size / 4; j++)
+          todo|=(1<<j);
+        ncrn+=size/4;
+        if (ncrn > 4) {
+          args_size = (ncrn - 4) * 4;
+          if (!before_stack)
+            before_stack = &vtop[-i-1];
+        }
+      }
+      else {
+        ncrn = 4;
+        /* No need to set before_vfpreg_hfa if not set since there will no
+           longer be any structure assigned to core registers */
+        if (!before_stack)
+          before_stack = &vtop[-i-1];
+        break;
+      }
+      continue;
+      default:
+      if (!i) {
+        break;
+      }
+      if (ncrn < 4) {
+        int is_long = (vtop[-i].type.t & VT_BTYPE) == VT_LLONG;
+
+        if (is_long) {
+          ncrn = (ncrn + 1) & -2;
+          if (ncrn == 4) {
+            argno++;
+            break;
+          }
+        }
+        plan[argno++][0]=ncrn++;
+        if (is_long) {
+          plan[argno-1][1]=ncrn++;
+        }
+        continue;
+      }
+      argno++;
     }
+#ifdef TCC_ARM_EABI
+    if(args_size & (align-1)) {
+      vpushi(0);
+      vtop->type.t = VT_VOID; /* padding */
+      vrott(i+2);
+      args_size += 4;
+      nb_args++;
+      argno++;
+    }
+#endif
+    args_size += (size + 3) & -4;
   }
+  vtop--;
   args_size = keep = 0;
   for(i = 0;i < nb_args; i++) {
     vrotb(keep+1);
@@ -814,6 +972,12 @@ void gfunc_call(int nb_args)
       vtop--;
       args_size += size;
     } else if (is_float(vtop->type.t)) {
+#ifdef TCC_ARM_HARDFLOAT
+      if (!variadic && --vfp_argno<16 && vfp_plan[vfp_argno]!=-1) {
+        plan2[keep++]=vfp_plan[vfp_argno];
+        continue;
+      }
+#endif
 #ifdef TCC_ARM_VFP
       r=vfpr(gv(RC_FLOAT))<<12;
       size=4;
@@ -848,57 +1012,59 @@ void gfunc_call(int nb_args)
       size=4;
       if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
 	lexpand_nr();
-	s=RC_INT;
-	if(nb_args-i<5 && plan[nb_args-i-1][1]!=-1) {
-	  s=regmask(plan[nb_args-i-1][1]);
-	  todo&=~(1<<plan[nb_args-i-1][1]);
-	}
-	if(s==RC_INT) {
-	  r = gv(s);
+	s=-1;
+	if(--argno<4 && plan[argno][1]!=-1)
+	  s=plan[argno][1];
+	argno++;
+	size = 8;
+	if(s==-1) {
+	  r = gv(RC_INT);
 	  o(0xE52D0004|(intr(r)<<12)); /* str r,[sp,#-4]! */
 	  vtop--;
 	} else {
+	  size=0;
 	  plan2[keep]=s;
 	  keep++;
           vswap();
 	}
-	size = 8;
       }
-      s=RC_INT;
-      if(nb_args-i<5 && plan[nb_args-i-1][0]!=-1) {
-        s=regmask(plan[nb_args-i-1][0]);
-	todo&=~(1<<plan[nb_args-i-1][0]);
-      }
+      s=-1;
+      if(--argno<4 && plan[argno][0]!=-1)
+        s=plan[argno][0];
 #ifdef TCC_ARM_EABI
       if(vtop->type.t == VT_VOID) {
-        if(s == RC_INT)
+        if(s == -1)
           o(0xE24DD004); /* sub sp,sp,#4 */
         vtop--;
       } else
-#endif      
-      if(s == RC_INT) {
-	r = gv(s);
+#endif
+      if(s == -1) {
+	r = gv(RC_INT);
 	o(0xE52D0004|(intr(r)<<12)); /* str r,[sp,#-4]! */
 	vtop--;
       } else {
+        size=0;
 	plan2[keep]=s;
 	keep++;
       }
       args_size += size;
     }
   }
-  for(i=keep;i--;) {
-    gv(plan2[i]);
-    vrott(keep);
+  for(i = 0; i < keep; i++) {
+    vrotb(keep);
+    gv(regmask(plan2[i]));
+    /* arg is in s(2d+1): plan2[i]<plan2[i+1] => alignment occured (ex f,d,f) */
+    if (i < keep - 1 && is_float(vtop->type.t) && (plan2[i] <= plan2[i + 1])) {
+      o(0xEEF00A40|(vfpr(plan2[i])<<12)|vfpr(plan2[i]));
+    }
   }
 save_regs(keep); /* save used temporary registers */
   keep++;
-  if(args_size) {
-    int n;
-    n=args_size/4;
-    if(n>4)
-      n=4;
-    todo&=((1<<n)-1);
+  if(ncrn) {
+    int nb_regs=0;
+    if (ncrn>4)
+      ncrn=4;
+    todo&=((1<<ncrn)-1);
     if(todo) {
       int i;
       o(0xE8BD0000|todo);
@@ -907,12 +1073,31 @@ save_regs(keep); /* save used temporary registers */
 	  vpushi(0);
 	  vtop->r=i;
 	  keep++;
+	  nb_regs++;
 	}
     }
-    args_size-=n*4;
+    args_size-=nb_regs*4;
+  }
+  if(vfp_todo) {
+    int nb_fregs=0;
+
+    for(i=0;i<16;i++)
+      if(vfp_todo&(1<<i)) {
+        o(0xED9D0A00|(i&1)<<22|(i>>1)<<12|nb_fregs);
+        vpushi(0);
+        /* There might be 2 floats in a double VFP reg but that doesn't seem
+           to matter */
+        if (!(i%2))
+          vtop->r=TREG_F0+i/2;
+        keep++;
+        nb_fregs++;
+      }
+    if (nb_fregs) {
+      gadd_sp(nb_fregs*4);
+      args_size-=nb_fregs*4;
+    }
   }
   vrotb(keep);
-  func_sym = vtop->type.ref;
   gcall_or_jmp(0);
   if (args_size)
       gadd_sp(args_size);
@@ -924,7 +1109,11 @@ save_regs(keep); /* save used temporary registers */
     ++keep;
   }
 #ifdef TCC_ARM_VFP
+#ifdef TCC_ARM_HARDFLOAT
+  else if(variadic && is_float(vtop->type.ref->type.t)) {
+#else
   else if(is_float(vtop->type.ref->type.t)) {
+#endif
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
       o(0xEE000A10); /* fmsr s0,r0 */
     } else {
@@ -942,26 +1131,38 @@ save_regs(keep); /* save used temporary registers */
 void gfunc_prolog(CType *func_type)
 {
   Sym *sym,*sym2;
-  int n,addr,size,align;
+  int n,nf,size,align, variadic, struct_ret = 0;
+#ifdef TCC_ARM_HARDFLOAT
+  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+#endif
 
   sym = func_type->ref;
   func_vt = sym->type;
-  
-  n = 0;
-  addr = 0;
+
+  n = nf = 0;
+  variadic = (func_type->ref->c == FUNC_ELLIPSIS);
   if((func_vt.t & VT_BTYPE) == VT_STRUCT
      && type_size(&func_vt,&align) > 4)
   {
-    func_vc = addr;
-    addr += 4;
     n++;
+    struct_ret = 1;
   }
-  for(sym2=sym->next;sym2 && n<4;sym2=sym2->next) {
+  for(sym2=sym->next;sym2 && (n<4 || nf<16);sym2=sym2->next) {
     size = type_size(&sym2->type, &align);
-    n += (size + 3) / 4;
+#ifdef TCC_ARM_HARDFLOAT
+    if (!variadic && (is_float(sym2->type.t)
+        || is_float_hgen_aggr(&sym2->type))) {
+      int tmpnf = assign_fpreg(&avregs, align, size) + 1;
+      nf = (tmpnf > nf) ? tmpnf : nf;
+    } else
+#endif
+    if (n < 4)
+      n += (size + 3) / 4;
   }
+  if (struct_ret)
+    func_vc = nf * 4;
   o(0xE1A0C00D); /* mov ip,sp */
-  if(func_type->ref->c == FUNC_ELLIPSIS)
+  if(variadic)
     n=4;
   if(n) {
     if(n>4)
@@ -971,20 +1172,57 @@ void gfunc_prolog(CType *func_type)
 #endif
     o(0xE92D0000|((1<<n)-1)); /* save r0-r4 on stack if needed */
   }
+  if (nf) {
+    if (nf>16)
+      nf=16;
+    nf=(nf+1)&-2; /* nf => HARDFLOAT => EABI */
+    o(0xED2D0A00|nf); /* save s0-s15 on stack if needed */
+  }
   o(0xE92D5800); /* save fp, ip, lr */
   o(0xE28DB00C); /* add fp, sp, #12 */
   func_sub_sp_offset = ind;
-  o(0xE1A00000); /* nop, leave space for stack adjustment */
-  while ((sym = sym->next)) {
-    CType *type;
-    type = &sym->type;
-    size = type_size(type, &align);
-    size = (size + 3) & -4;
-#ifdef TCC_ARM_EABI
-    addr = (addr + align - 1) & -align;
+  o(0xE1A00000); /* nop, leave space for stack adjustment in epilogue */
+  {
+    int addr, pn = struct_ret, sn = 0; /* pn=core, sn=stack */
+
+#ifdef TCC_ARM_HARDFLOAT
+    avregs = AVAIL_REGS_INITIALIZER;
 #endif
-    sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t), addr);
-    addr += size;
+    while ((sym = sym->next)) {
+      CType *type;
+      type = &sym->type;
+      size = type_size(type, &align);
+      size = (size + 3) >> 2;
+#ifdef TCC_ARM_HARDFLOAT
+      if (!variadic && (is_float(sym->type.t)
+          || is_float_hgen_aggr(&sym->type))) {
+        int fpn = assign_fpreg(&avregs, align, size << 2);
+        if (fpn >= 0) {
+          addr = fpn * 4;
+        } else
+          goto from_stack;
+      } else
+#endif
+      if (pn < 4) {
+#ifdef TCC_ARM_EABI
+        pn = (pn + (align-1)/4) & -(align/4);
+#endif
+        addr = (nf + pn) * 4;
+        pn += size;
+        if (!sn && pn > 4)
+          sn = (pn - 4);
+      } else {
+#ifdef TCC_ARM_HARDFLOAT
+from_stack:
+#endif
+#ifdef TCC_ARM_EABI
+        sn = (sn + (align-1)/4) & -(align/4);
+#endif
+        addr = (n + nf + sn) * 4;
+        sn += size;
+      }
+      sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t), addr);
+    }
   }
   last_itod_magic=0;
   leaffunc = 1;
@@ -997,6 +1235,8 @@ void gfunc_epilog(void)
   uint32_t x;
   int diff;
 #ifdef TCC_ARM_EABI
+  /* Useless but harmless copy of the float result into main register(s) in case
+     of variadic function in the hardfloat variant */
   if(is_float(func_vt.t)) {
     if((func_vt.t & VT_BTYPE) == VT_FLOAT)
       o(0xEE100A10); /* fmrs r0, s0 */

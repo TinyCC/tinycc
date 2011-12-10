@@ -972,18 +972,26 @@ ST_FUNC void vrotb(int n)
     vtop[0] = tmp;
 }
 
-/* rotate n first stack elements to the top 
-   I1 ... In -> In I1 ... I(n-1)  [top is right]
+/* rotate the n elements before entry e towards the top
+   I1 ... In ... -> In I1 ... I(n-1) ... [top is right]
  */
-ST_FUNC void vrott(int n)
+ST_FUNC void vrote(SValue *e, int n)
 {
     int i;
     SValue tmp;
 
-    tmp = vtop[0];
+    tmp = *e;
     for(i = 0;i < n - 1; i++)
-        vtop[-i] = vtop[-i - 1];
-    vtop[-n + 1] = tmp;
+        e[-i] = e[-i - 1];
+    e[-n + 1] = tmp;
+}
+
+/* rotate n first stack elements to the top
+   I1 ... In -> In I1 ... I(n-1)  [top is right]
+ */
+ST_FUNC void vrott(int n)
+{
+    vrote(vtop, n);
 }
 
 /* pop stack value */

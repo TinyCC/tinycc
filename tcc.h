@@ -204,6 +204,8 @@
 #  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
 # elif defined __FreeBSD_kernel__
 #  define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
+# elif defined TCC_ARM_HARDFLOAT
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-armhf.so.3"
 # elif defined TCC_ARM_EABI
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.3"
 # elif defined(TCC_TARGET_X86_64)
@@ -1138,6 +1140,7 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
 ST_FUNC void vpush_global_sym(CType *type, int v);
+ST_FUNC void vrote(SValue *e, int n);
 ST_FUNC void vrott(int n);
 ST_FUNC void vrotb(int n);
 #ifdef TCC_TARGET_ARM

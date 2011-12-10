@@ -14,6 +14,7 @@ not released:
 - Support indirect functions as externals (Thomas Preud'homme)
 - Add support for C99 variable length arrays (Thomas Preud'homme & Joe Soroka)
 - Improve support of ARM (Daniel Glöckner)
+- Support ARM hardfloat calling convention (Thomas Preud'homme)
 
 version 0.9.25:
 
