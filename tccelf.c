@@ -2847,40 +2847,6 @@ static int ld_next(TCCState *s1, char *name, int name_size)
 }
 
 /*
- * Extract the library name from the file name
- * Return 0 if the file isn't a library
- *
- * /!\ No test on filename capacity, be careful
- */
-static int filename_to_libname(TCCState *s1, const char filename[], char libname[])
-{
-    char *ext;
-    int libprefix;
-
-    /* already converted to library name */
-    if (libname[0] != '\0')
-        return 1;
-    ext = tcc_fileextension(filename);
-    if (*ext == '\0')
-        return 0;
-    libprefix = !strncmp(filename, "lib", 3);
-    if (!s1->static_link) {
-        if (libprefix && (!strcmp(ext, ".so"))) {
-            size_t len = ext - filename - 3;
-            pstrncpy(libname, filename + 3, len);
-            return 1;
-        }
-    } else {
-        if (libprefix && (!strcmp(ext, ".a"))) {
-            size_t len = ext - filename - 3;
-            pstrncpy(libname, filename + 3, len);
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/*
  * Extract the file name from the library name
  *
  * /!\ No test on filename capacity, be careful
@@ -2894,15 +2860,13 @@ static void libname_to_filename(TCCState *s1, const char libname[], char filenam
     }
 }
 
-static int ld_add_file(TCCState *s1, const char filename[], char libname[])
+static int ld_add_file(TCCState *s1, const char filename[])
 {
     int ret;
 
     ret = tcc_add_file_internal(s1, filename, 0);
-    if (ret) {
-        if (filename_to_libname(s1, filename, libname))
-            ret = tcc_add_library(s1, libname);
-    }
+    if (ret)
+        ret = tcc_add_dll(s1, filename, 0);
     return ret;
 }
 
@@ -2948,7 +2912,7 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
             tcc_error_noabort("filename expected");
             ret = -1;
             goto lib_parse_error;
-        } 
+        }
         if (!strcmp(filename, "AS_NEEDED")) {
             ret = ld_add_file_list(s1, cmd, 1);
             if (ret)
@@ -2956,13 +2920,14 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         } else {
             /* TODO: Implement AS_NEEDED support. Ignore it for now */
             if (!as_needed) {
-                ret = ld_add_file(s1, filename, libname);
+                ret = ld_add_file(s1, filename);
                 if (ret)
                     goto lib_parse_error;
                 if (group) {
                     /* Add the filename *and* the libname to avoid future conversions */
                     dynarray_add((void ***) &libs, &nblibs, tcc_strdup(filename));
-                    dynarray_add((void ***) &libs, &nblibs, tcc_strdup(libname));
+                    if (libname[0] != '\0')
+                        dynarray_add((void ***) &libs, &nblibs, tcc_strdup(libname));
                 }
             }
         }
@@ -2975,8 +2940,8 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         while (new_undef_syms()) {
             int i;
 
-            for (i = 0; i < nblibs; i += 2)
-                ld_add_file(s1, libs[i], libs[i+1]);
+            for (i = 0; i < nblibs; i ++)
+                ld_add_file(s1, libs[i]);
         }
     }
 lib_parse_error:
