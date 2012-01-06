@@ -19,6 +19,7 @@
  */
 
 #include "tcc.h"
+#ifdef CONFIG_TCC_ASM
 
 ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 {
@@ -1115,3 +1116,4 @@ ST_FUNC void asm_global_instr(void)
 
     cstr_free(&astr);
 }
+#endif /* CONFIG_TCC_ASM */
