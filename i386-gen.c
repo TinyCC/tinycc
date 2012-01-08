@@ -1068,7 +1068,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     case 12: func = TOK___bound_ptr_indir12; break;
     case 16: func = TOK___bound_ptr_indir16; break;
     default:
-        tcc_error("unhandled size when derefencing bounded pointer");
+        tcc_error("unhandled size when dereferencing bounded pointer");
         func = 0;
         break;
     }
