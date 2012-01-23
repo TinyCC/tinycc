@@ -229,8 +229,10 @@ ST_FUNC void load(int r, SValue *sv)
             v1.type.t = VT_INT;
             v1.r = VT_LOCAL | VT_LVAL;
             v1.c.ul = fc;
-            load(r, &v1);
             fr = r;
+            if (!(reg_classes[fr] & RC_INT))
+                fr = get_reg(RC_INT);
+            load(fr, &v1);
         }
         if ((ft & VT_BTYPE) == VT_FLOAT) {
             o(0xd9); /* flds */
