@@ -352,6 +352,7 @@ echo "Doc directory       $docdir"
 echo "Target root prefix  $sysroot"
 echo "Source path      $source_path"
 echo "C compiler       $cc"
+echo "Target OS        $targetos"
 echo "CPU              $cpu"
 echo "Big Endian       $bigendian"
 echo "gprof enabled    $gprof"
@@ -425,6 +426,7 @@ else
   echo "Unsupported CPU"
   exit 1
 fi
+echo "TARGETOS=$targetos" >> config.mak
 if test "$noldl" = "yes" ; then
   echo "CONFIG_NOLDL=yes" >> config.mak
 fi

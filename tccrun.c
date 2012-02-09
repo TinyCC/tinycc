@@ -461,7 +461,9 @@ static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level)
     int i;
 
     if (level == 0) {
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if defined(__APPLE__)
+        *paddr = uc->uc_mcontext->__ss.__eip;
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         *paddr = uc->uc_mcontext.mc_eip;
 #elif defined(__dietlibc__)
         *paddr = uc->uc_mcontext.eip;
@@ -470,7 +472,9 @@ static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level)
 #endif
         return 0;
     } else {
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if defined(__APPLE__)
+        fp = uc->uc_mcontext->__ss.__ebp;
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         fp = uc->uc_mcontext.mc_ebp;
 #elif defined(__dietlibc__)
         fp = uc->uc_mcontext.ebp;
@@ -500,14 +504,18 @@ static int rt_get_caller_pc(unsigned long *paddr,
 
     if (level == 0) {
         /* XXX: only support linux */
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if defined(__APPLE__)
+        *paddr = uc->uc_mcontext->__ss.__rip;
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) 
         *paddr = uc->uc_mcontext.mc_rip;
 #else
         *paddr = uc->uc_mcontext.gregs[REG_RIP];
 #endif
         return 0;
     } else {
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if defined(__APPLE__)
+        fp = uc->uc_mcontext->__ss.__rbp;
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         fp = uc->uc_mcontext.mc_rbp;
 #else
         fp = uc->uc_mcontext.gregs[REG_RBP];

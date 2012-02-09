@@ -38,3 +38,8 @@ config.mak
 config.texi
 tests
 tags
+.DS_Store
+*.swp
+lib/x86_64
+tcc-doc.info
+conftest*
