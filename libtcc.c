@@ -980,6 +980,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 #endif
 
     /* glibc defines */
+    tcc_define_symbol(s, "__REDIRECT(name, proto, alias)", "name proto __asm__ (#alias)");
     tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)", "name proto __asm__ (#alias) __THROW");
     
 #ifndef TCC_TARGET_PE
