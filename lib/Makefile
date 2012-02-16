@@ -14,11 +14,11 @@ ifndef TARGET
  else
  ifeq ($(ARCH),i386)
   TARGET = i386
-  XCC = gcc -O2
+  XCC = gcc -O2 -m32
  else
  ifeq ($(ARCH),x86-64)
   TARGET = x86_64
-  XCC = gcc -O2
+  XCC = gcc -O2 -m64
  endif
  endif
  endif

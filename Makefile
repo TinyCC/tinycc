@@ -36,10 +36,12 @@ endif
 endif
 
 ifeq ($(ARCH),i386)
-NATIVE_DEFINES=-DTCC_TARGET_I386
+NATIVE_DEFINES=-DTCC_TARGET_I386 
+CFLAGS+=-m32
 else
 ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
+CFLAGS+=-m64
 NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DTCC_TARGET_X86_64_CENTOS)
 endif
 endif
@@ -140,6 +142,9 @@ endif
 ifdef CONFIG_UCLIBC
 BCHECK_O=
 endif
+ifeq ($(TARGETOS),Darwin)
+BCHECK_O=
+endif
 
 ifdef CONFIG_USE_LIBGCC
 LIBTCC1=
@@ -157,7 +162,7 @@ all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
-	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ $(LIBS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF):
