@@ -425,7 +425,7 @@ ST_FUNC Section *find_section(TCCState *s1, const char *name)
 /* update sym->c so that it points to an external symbol in section
    'section' with value 'value' */
 ST_FUNC void put_extern_sym2(Sym *sym, Section *section, 
-                            unsigned long value, unsigned long size,
+                            uplong value, unsigned long size,
                             int can_add_underscore)
 {
     int sym_type, sym_bind, sh_num, info, other;
@@ -529,7 +529,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
 }
 
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, 
-                           unsigned long value, unsigned long size)
+                           uplong value, unsigned long size)
 {
     put_extern_sym2(sym, section, value, size, 1);
 }
@@ -1493,7 +1493,7 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
             if (s->warn_unsupported)
                 tcc_warning("ignoring -fini %s", p);
         } else if (link_option(option, "image-base=", &p)) {
-            s->text_addr = strtoul(p, &end, 16);
+            s->text_addr = strtoull(p, &end, 16);
             s->has_text_addr = 1;
         } else if (link_option(option, "init=", &p)) {
             s->init_symbol = p;
@@ -1562,9 +1562,8 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
 #endif
 
         } else if (link_option(option, "Ttext=", &p)) {
-            s->text_addr = strtoul(p, &end, 16);
+            s->text_addr = strtoull(p, &end, 16);
             s->has_text_addr = 1;
-
         } else {
             return option;
         }

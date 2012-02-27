@@ -36,9 +36,10 @@ static int rt_get_caller_pc(uplong *paddr, ucontext_t *uc, int level);
 static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
-#ifdef _WIN64
+#if defined TCC_TARGET_X86_64 && defined TCC_TARGET_PE
 static void win64_add_function_table(TCCState *s1);
 #endif
+
 
 /* ------------------------------------------------------------- */
 /* Do all relocations (needed before using tcc_get_symbol())
@@ -193,7 +194,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
                          s1->runtime_plt_and_got_offset);
 #endif
 
-#ifdef _WIN64
+#if defined TCC_TARGET_X86_64 && defined TCC_TARGET_PE
     win64_add_function_table(s1);
 #endif
     return 0;
@@ -621,7 +622,8 @@ static void set_exception_handler(void)
     SetUnhandledExceptionFilter(cpu_exception_handler);
 }
 
-#ifdef _WIN64
+#ifdef TCC_TARGET_PE
+#ifdef TCC_TARGET_X86_64
 static void win64_add_function_table(TCCState *s1)
 {
     RtlAddFunctionTable(
@@ -630,6 +632,7 @@ static void win64_add_function_table(TCCState *s1)
         (uplong)text_section->sh_addr
         );
 }
+#endif
 #endif
 
 /* return the PC at frame level 'level'. Return non zero if not found */
