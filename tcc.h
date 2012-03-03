@@ -313,8 +313,8 @@ typedef struct Section {
     int sh_addralign;        /* elf section alignment */
     int sh_entsize;          /* elf entry size */
     unsigned long sh_size;   /* section size (only used during output) */
-    uplong sh_addr;          /* address at which the section is relocated */
-    unsigned long sh_offset; /* file offset */
+    unsigned long sh_addr;      /* address at which the section is relocated */
+    unsigned long sh_offset;    /* file offset */
     int nb_hashed_syms;      /* used to resize the hash table */
     struct Section *link;    /* link to another section */
     struct Section *reloc;   /* corresponding section for relocation, if any */
@@ -531,7 +531,7 @@ struct TCCState {
     int alacarte_link;
 
     /* address of text section */
-    uplong text_addr;
+    unsigned long text_addr;
     int has_text_addr;
 
     /* symbols to call at load-time / unload-time */
@@ -872,7 +872,6 @@ enum tcc_token {
   #define strtold (long double)strtod
   #define strtof (float)strtod
   #define strtoll (long long)strtol
-  #define strtoull (unsigned long long)strtoull
 #endif
 #else
 /* XXX: need to define this to use them in non ISOC99 context */
@@ -993,8 +992,8 @@ ST_FUNC void *section_ptr_add(Section *sec, unsigned long size);
 ST_FUNC void section_reserve(Section *sec, unsigned long size);
 ST_FUNC Section *find_section(TCCState *s1, const char *name);
 
-ST_FUNC void put_extern_sym2(Sym *sym, Section *section, uplong value, unsigned long size, int can_add_underscore);
-ST_FUNC void put_extern_sym(Sym *sym, Section *section, uplong value, unsigned long size);
+ST_FUNC void put_extern_sym2(Sym *sym, Section *section, unsigned long value, unsigned long size, int can_add_underscore);
+ST_FUNC void put_extern_sym(Sym *sym, Section *section, unsigned long value, unsigned long size);
 ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
 
 ST_INLN void sym_free(Sym *sym);

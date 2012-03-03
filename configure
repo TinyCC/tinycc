@@ -154,8 +154,6 @@ for opt do
   ;;
   --enable-cygwin) mingw32="yes" ; cygwin="yes" ; cross_prefix="mingw32-" ; cpu=x86
   ;;
-  --enable-cygwin64) mingw32="yes" ; cygwin="yes" ; cross_prefix="x86_64-w64-mingw32-" ; cpu="x86-64"
-  ;;
   --enable-cross) build_cross="yes"
   ;;
   --disable-static) disable_static="yes"
@@ -433,18 +431,14 @@ if test "$noldl" = "yes" ; then
   echo "CONFIG_NOLDL=yes" >> config.mak
 fi
 if test "$mingw32" = "yes" ; then
-  if test "$cpu" = "x86-64" ; then
-    echo "CONFIG_WIN64=yes" >> config.mak
-    echo "#define CONFIG_WIN64 1" >> $TMPH
-  else
-    echo "CONFIG_WIN32=yes" >> config.mak
-    echo "#define CONFIG_WIN32 1" >> $TMPH
-  fi
+  echo "CONFIG_WIN32=yes" >> config.mak
+  echo "#define CONFIG_WIN32 1" >> $TMPH
 fi
 if test "$cygwin" = "yes" ; then
   echo "#ifndef _WIN32" >> $TMPH
   echo "#define _WIN32" >> $TMPH
   echo "#endif" >> $TMPH
+  echo "AR=ar" >> config.mak
 fi
 if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> config.mak

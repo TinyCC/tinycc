@@ -318,11 +318,8 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
-ifeq ($(ARCH),x86-64)
 	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/lib/32"
-else
 	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/lib/64"
-endif
 endif
 
 uninstall:
