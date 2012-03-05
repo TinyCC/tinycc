@@ -578,7 +578,11 @@ int main(int argc, char **argv)
             tcc_print_stats(s, getclock_us() - start_time);
 
         if (s->output_type == TCC_OUTPUT_MEMORY) {
+#ifdef TCC_IS_NATIVE
             ret = tcc_run(s, argc - optind, argv + optind);
+#else
+            tcc_error_noabort("-run is not available in a cross compiler");
+#endif
         } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
              if (s->outfile)
                 fclose(s->outfile);

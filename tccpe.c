@@ -38,10 +38,6 @@
 # define ADDR3264 DWORD
 #endif
 
-#if defined _WIN32 && (defined _WIN64) == (defined TCC_TARGET_X86_64)
-#define TCC_IS_NATIVE
-#endif
-
 #ifdef _WIN32
 void dbg_printf (const char *fmt, ...)
 {
@@ -339,7 +335,7 @@ struct pe_info {
     const char *filename;
     int type;
     DWORD sizeofheaders;
-    DWORD imagebase;
+    ADDR3264 imagebase;
     DWORD start_addr;
     DWORD imp_offs;
     DWORD imp_size;
@@ -1870,11 +1866,10 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
             ret = pe_write(&pe);
         tcc_free(pe.sec_info);
     } else {
-#ifndef TCC_IS_NATIVE
-        tcc_error_noabort("-run supported only on native platform");
-#endif
+#ifdef TCC_IS_NATIVE
         pe.thunk = data_section;
         pe_build_imports(&pe);
+#endif
     }
 
 #ifdef PE_PRINT_SECTIONS

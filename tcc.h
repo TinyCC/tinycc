@@ -49,9 +49,6 @@
 #include <direct.h> /* getcwd */
 #define inline __inline
 #define inp next_inp
-#ifdef _WIN64
-# define uplong unsigned long long
-#endif
 #ifdef LIBTCC_AS_DLL
 # define LIBTCCAPI __declspec(dllexport)
 #endif
@@ -67,16 +64,9 @@
 
 #endif /* !CONFIG_TCCBOOT */
 
-#ifndef uplong
-#define uplong unsigned long
-#endif
-
 #ifndef PAGESIZE
 #define PAGESIZE 4096
 #endif
-
-#include "elf.h"
-#include "stab.h"
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -86,6 +76,8 @@
 #define SA_SIGINFO 0x00000004u
 #endif
 
+#include "elf.h"
+#include "stab.h"
 #include "libtcc.h"
 
 /* parser debug */
@@ -131,8 +123,26 @@
 #define TCC_TARGET_COFF
 #endif
 
-#if !defined(CONFIG_TCCBOOT)
-#define CONFIG_TCC_BACKTRACE
+/* only native compiler supports -run */
+#if defined _WIN32 == defined TCC_TARGET_PE
+# if (defined __i386__ || defined _X86_) && defined TCC_TARGET_I386
+#  define TCC_IS_NATIVE
+# elif (defined __x86_64__ || defined _AMD64_) && defined TCC_TARGET_X86_64
+#  define TCC_IS_NATIVE
+# elif defined __arm__ && defined TCC_TARGET_ARM
+#  define TCC_IS_NATIVE
+# endif
+#endif
+
+#if defined TCC_IS_NATIVE && !defined CONFIG_TCCBOOT
+# define CONFIG_TCC_BACKTRACE
+#endif
+
+/* target address type */
+#if defined TCC_TARGET_X86_64 && (!defined __x86_64__ || defined _WIN32)
+# define uplong unsigned long long
+#else
+# define uplong unsigned long
 #endif
 
 /* ------------ path configuration ------------ */

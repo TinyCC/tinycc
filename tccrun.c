@@ -20,6 +20,9 @@
 
 #include "tcc.h"
 
+/* only native compiler supports -run */
+#ifdef TCC_IS_NATIVE
+
 #ifdef CONFIG_TCC_BACKTRACE
 ST_DATA int rt_num_callers = 6;
 ST_DATA const char **rt_bound_error_msg;
@@ -217,6 +220,8 @@ static void set_pages_executable(void *ptr, unsigned long length)
 }
 
 /* ------------------------------------------------------------- */
+#endif /* TCC_IS_NATIVE */
+
 #ifdef CONFIG_TCC_BACKTRACE
 
 PUB_FUNC void tcc_set_num_callers(int n)
