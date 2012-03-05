@@ -36,6 +36,8 @@
 #define RC_RDX     0x0010
 #define RC_R8      0x0100
 #define RC_R9      0x0200
+#define RC_R10     0x0400
+#define RC_R11     0x0800
 #define RC_XMM0    0x0020
 #define RC_ST0     0x0040 /* only for long double */
 #define RC_IRET    RC_RAX /* function return: integer register */
@@ -104,19 +106,19 @@ ST_FUNC void gen_le64(int64_t c);
 #include "tcc.h"
 #include <assert.h>
 
-ST_DATA const int reg_classes[NB_REGS] = {
+ST_DATA const int reg_classes[] = {
     /* eax */ RC_INT | RC_RAX,
     /* ecx */ RC_INT | RC_RCX,
     /* edx */ RC_INT | RC_RDX,
     /* xmm0 */ RC_FLOAT | RC_XMM0,
     /* st0 */ RC_ST0,
-#if NB_REGS == 10
     0,
     0,
     0,
     RC_INT | RC_R8,
     RC_INT | RC_R9,
-#endif
+    RC_INT | RC_R10,
+    RC_INT | RC_R11
 };
 
 static unsigned long func_sub_sp_offset;
@@ -367,8 +369,10 @@ void load(int r, SValue *sv)
             v1.type.t = VT_PTR;
             v1.r = VT_LOCAL | VT_LVAL;
             v1.c.ul = fc;
-            load(r, &v1);
             fr = r;
+            if (!(reg_classes[fr] & RC_INT))
+                fr = get_reg(RC_INT);
+            load(fr, &v1);
         }
         ll = 0;
         if ((ft & VT_BTYPE) == VT_FLOAT) {

@@ -1358,7 +1358,7 @@ ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
 #endif
 #undef TARGET_DEFS_ONLY
 
-ST_DATA const int reg_classes[NB_REGS];
+ST_DATA const int reg_classes[];
 
 /********************************************************/
 #undef ST_DATA
