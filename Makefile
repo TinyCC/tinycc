@@ -53,10 +53,6 @@ NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
 
-ifeq ($(TARGETOS),Darwin)
-NATIVE_DEFINES+=-DWITHOUT_LIBTCC
-endif
-
 ifdef CONFIG_WIN32
 NATIVE_DEFINES+=-DTCC_TARGET_PE
 endif
@@ -144,6 +140,7 @@ BCHECK_O=
 endif
 ifeq ($(TARGETOS),Darwin)
 BCHECK_O=
+PROGS+=tiny_libmaker$(EXESUF)
 endif
 
 ifdef CONFIG_USE_LIBGCC

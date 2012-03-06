@@ -3,10 +3,10 @@
 #
 
 # what tests to run
-TESTS = libtest test3
+TESTS = libtest test1 test3
 
 # these should work too
-# TESTS += test1 test2 speedtest btest weaktest
+TESTS += test2 speedtest btest weaktest
 
 # these don't work as they should
 # TESTS += test4 asmtest
@@ -16,6 +16,12 @@ include $(TOP)/Makefile
 
 ifdef DISABLE_STATIC
 export LD_LIBRARY_PATH:=$(CURDIR)/..
+endif
+
+ifeq ($(TARGETOS),Darwin)
+CFLAGS+=-Wl,-flat_namespace,-undefined,warning
+export MACOSX_DEPLOYMENT_TARGET:=10.2
+NATIVE_DEFINES+=-D_ANSI_SOURCE
 endif
 
 # run local version of tcc with local libraries and includes

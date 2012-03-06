@@ -14,11 +14,15 @@ ifndef TARGET
  else
  ifeq ($(ARCH),i386)
   TARGET = i386
-  XCC = gcc -O2 -m32
+	ifneq ($(TARGETOS),Darwin)
+		XCC = gcc -O2 -m32
+	endif
  else
  ifeq ($(ARCH),x86-64)
   TARGET = x86_64
-  XCC = gcc -O2 -m64
+	ifneq ($(TARGETOS),Darwin)
+		XCC = gcc -O2 -m64
+	endif
  endif
  endif
  endif
@@ -55,12 +59,18 @@ else
 ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(TOP) -m32 -D_ANSI_SOURCE
+ ifeq ($(TARGETOS),Darwin)
+  XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ endif
 else
 ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(TOP) -m64 -D_ANSI_SOURCE
+ ifeq ($(TARGETOS),Darwin)
+  XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ endif
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
