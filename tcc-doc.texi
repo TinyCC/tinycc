@@ -334,6 +334,8 @@ Generate additional support code to check
 memory allocations and array/pointer bounds. @option{-g} is implied. Note
 that the generated code is slower and bigger in this case.
 
+Note: @option{-b} is only available on i386 for the moment.
+
 @item -bt N
 Display N callers in stack traces. This is useful with @option{-g} or
 @option{-b}.
