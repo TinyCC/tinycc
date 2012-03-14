@@ -961,7 +961,7 @@ static void lbuild(int t)
 /* rotate n first stack elements to the bottom 
    I1 ... In -> I2 ... In I1 [top is right]
 */
-static void vrotb(int n)
+ST_FUNC void vrotb(int n)
 {
     int i;
     SValue tmp;
