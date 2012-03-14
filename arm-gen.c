@@ -798,7 +798,7 @@ void gfunc_call(int nb_args)
   }
   args_size = keep = 0;
   for(i = 0;i < nb_args; i++) {
-    vnrott(keep+1);
+    vrotb(keep+1);
     if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
       size = type_size(&vtop->type, &align);
       /* align to stack align size */
@@ -911,7 +911,7 @@ save_regs(keep); /* save used temporary registers */
     }
     args_size-=n*4;
   }
-  vnrott(keep);
+  vrotb(keep);
   func_sym = vtop->type.ref;
   gcall_or_jmp(0);
   if (args_size)

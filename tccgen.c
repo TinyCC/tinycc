@@ -967,22 +967,6 @@ ST_FUNC void vrott(int n)
     vtop[-n + 1] = tmp;
 }
 
-#ifdef TCC_TARGET_ARM
-/* like vrott but in other direction
-   In ... I1 -> I(n-1) ... I1 In  [top is right]
- */
-ST_FUNC void vnrott(int n)
-{
-    int i;
-    SValue tmp;
-
-    tmp = vtop[-n + 1];
-    for(i = n - 1; i > 0; i--)
-        vtop[-i] = vtop[-i + 1];
-    vtop[0] = tmp;
-}
-#endif
-
 /* pop stack value */
 ST_FUNC void vpop(void)
 {

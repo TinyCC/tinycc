@@ -1140,7 +1140,6 @@ ST_FUNC void vpush_global_sym(CType *type, int v);
 ST_FUNC void vrott(int n);
 #ifdef TCC_TARGET_ARM
 ST_FUNC int get_reg_ex(int rc, int rc2);
-ST_FUNC void vnrott(int n);
 ST_FUNC void lexpand_nr(void);
 #endif
 ST_FUNC void vpushv(SValue *v);
