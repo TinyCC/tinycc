@@ -2028,12 +2028,16 @@ static void parse_number(const char *p)
                 if (lcount >= 2)
                     tcc_error("three 'l's in integer constant");
                 lcount++;
+#if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
                 if (lcount == 2) {
+#endif
                     if (tok == TOK_CINT)
                         tok = TOK_CLLONG;
                     else if (tok == TOK_CUINT)
                         tok = TOK_CULLONG;
+#if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
                 }
+#endif
                 ch = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
