@@ -1566,6 +1566,9 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
             s->text_addr = strtoull(p, &end, 16);
             s->has_text_addr = 1;
         } else {
+            char *comma_ptr = strchr(option, ',');
+            if (comma_ptr)
+                *comma_ptr = '\0';
             return option;
         }
 

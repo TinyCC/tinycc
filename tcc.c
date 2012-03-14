@@ -280,6 +280,8 @@ static int parse_args(TCCState *s, int argc, char **argv)
     const char *optarg, *p1, *r1;
     char *r;
     int was_pthread;
+    char *linker_arg = NULL;
+    unsigned long linker_argsize = 0;
 
     was_pthread = 0; /* is set if commandline contains -pthread key */
 
@@ -442,8 +444,17 @@ static int parse_args(TCCState *s, int argc, char **argv)
                 s->rdynamic = 1;
                 break;
             case TCC_OPTION_Wl:
-                if ((r = (char *) tcc_set_linker(s, (char *)optarg, TRUE)))
-                    tcc_error("unsupported linker option '%s'", r);
+                if (!linker_arg) {
+                    linker_argsize = strlen(optarg) + 1;
+                    linker_arg = tcc_malloc(linker_argsize);
+                    pstrcpy(linker_arg, linker_argsize, optarg);
+                }
+                else {
+                    linker_argsize += strlen(optarg) + 1;
+                    linker_arg = tcc_realloc(linker_arg, linker_argsize);
+                    pstrcat(linker_arg, linker_argsize, ",");
+                    pstrcat(linker_arg, linker_argsize, optarg);
+                }
                 break;
             case TCC_OPTION_E:
                 output_type = TCC_OUTPUT_PREPROCESS;
@@ -465,6 +476,9 @@ static int parse_args(TCCState *s, int argc, char **argv)
             }
         }
     }
+    if ((r = (char *) tcc_set_linker(s, (char *)linker_arg, TRUE)))
+        tcc_error("unsupported linker option '%s'", r);
+    tcc_free(linker_arg);
     /* fixme: these options could be different on your platform */
     if (was_pthread && output_type != TCC_OUTPUT_OBJ) {
         dynarray_add((void ***)&files, &nb_files, "-lpthread");
