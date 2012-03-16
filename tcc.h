@@ -882,7 +882,7 @@ enum tcc_token {
   #define strtold (long double)strtod
   #define strtof (float)strtod
   #define strtoll (long long)strtol
-  #define strtoull (unsigned long long)strtoull
+  #define strtoull (unsigned long long)strtoui64
 #endif
 #else
 /* XXX: need to define this to use them in non ISOC99 context */
