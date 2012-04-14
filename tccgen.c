@@ -1489,7 +1489,8 @@ static inline int is_null_pointer(SValue *p)
     if ((p->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
         return 0;
     return ((p->type.t & VT_BTYPE) == VT_INT && p->c.i == 0) ||
-        ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.ll == 0);
+        ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.ll == 0) ||
+	((p->type.t & VT_BTYPE) == VT_PTR && p->c.ptr == 0);
 }
 
 static inline int is_integer_btype(int bt)
@@ -4116,14 +4117,22 @@ static void expr_cond(void)
                     (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
             } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
-                /* XXX: test pointer compatibility */
-                type = type1;
+		/* If one is a null ptr constant the result type
+		   is the other.  */
+		if (is_null_pointer (vtop))
+		  type = type1;
+		else if (is_null_pointer (&sv))
+		  type = type2;
+                /* XXX: test pointer compatibility, C99 has more elaborate
+		   rules here.  */
+		else
+		  type = type1;
             } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
                 /* XXX: test function pointer compatibility */
-                type = type1;
+                type = bt1 == VT_FUNC ? type1 : type2;
             } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
                 /* XXX: test structure compatibility */
-                type = type1;
+                type = bt1 == VT_STRUCT ? type1 : type2;
             } else if (bt1 == VT_VOID || bt2 == VT_VOID) {
                 /* NOTE: as an extension, we accept void on only one side */
                 type.t = VT_VOID;

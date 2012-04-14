@@ -2486,3 +2486,16 @@ void const_warn_test(void)
 {
     const_func(1);
 }
+
+struct condstruct {
+  int i;
+};
+
+int getme (struct condstruct *s, int i)
+{
+  int i1 = (i == 0 ? 0 : s)->i;
+  int i2 = (i == 0 ? s : 0)->i;
+  int i3 = (i == 0 ? (void*)0 : s)->i;
+  int i4 = (i == 0 ? s : (void*)0)->i;
+  return i1 + i2 + i3 + i4;
+}
