@@ -2320,8 +2320,9 @@ ST_FUNC void vstore(void)
     ft = vtop[-1].type.t;
     sbt = vtop->type.t & VT_BTYPE;
     dbt = ft & VT_BTYPE;
-    if (((sbt == VT_INT || sbt == VT_SHORT) && dbt == VT_BYTE) ||
-        (sbt == VT_INT && dbt == VT_SHORT)) {
+    if ((((sbt == VT_INT || sbt == VT_SHORT) && dbt == VT_BYTE) ||
+         (sbt == VT_INT && dbt == VT_SHORT))
+	&& !(vtop->type.t & VT_BITFIELD)) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
         vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));

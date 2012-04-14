@@ -1461,6 +1461,8 @@ void c99_bool_test(void)
 void bitfield_test(void)
 {
     int a;
+    short sa;
+    unsigned char ca;
     struct sbf1 {
         int f1 : 3;
         int : 2;
@@ -1482,6 +1484,9 @@ void bitfield_test(void)
     st1.f5++;
     printf("%d %d %d %d %d\n",
            st1.f1, st1.f2, st1.f3, st1.f4, st1.f5);
+    sa = st1.f5;
+    ca = st1.f5;
+    printf("%d %d\n", sa, ca);
 
     st1.f1 = 7;
     if (st1.f1 == -1) 
