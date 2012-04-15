@@ -64,7 +64,7 @@ ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
 
-ST_DATA CType char_pointer_type, func_old_type, int_type;
+ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 
 /* ------------------------------------------------------------------------- */
 static void gen_cast(CType *type);
@@ -323,6 +323,17 @@ ST_FUNC void vpushi(int v)
     CValue cval;
     cval.i = v;
     vsetc(&int_type, VT_CONST, &cval);
+}
+
+/* push a pointer sized constant */
+static void vpushs(long long v)
+{
+  CValue cval;
+  if (PTR_SIZE == 4)
+    cval.i = (int)v;
+  else
+    cval.ull = v;
+  vsetc(&size_type, VT_CONST, &cval);
 }
 
 /* push long long constant */
@@ -3575,12 +3586,12 @@ ST_FUNC void unary(void)
             if (!(type.t & VT_VLA)) {
                 if (size < 0)
                     tcc_error("sizeof applied to an incomplete type");
-                vpushi(size);
+                vpushs(size);
             } else {
                 vla_runtime_type_size(&type, &align);
             }
         } else {
-            vpushi(align);
+            vpushs(align);
         }
         vtop->type.t |= VT_UNSIGNED;
         break;

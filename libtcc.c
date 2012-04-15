@@ -745,6 +745,12 @@ static int tcc_compile(TCCState *s1)
     char_pointer_type.t = VT_BYTE;
     mk_pointer(&char_pointer_type);
 
+#if PTR_SIZE == 4
+    size_type.t = VT_INT;
+#else
+    size_type.t = VT_LLONG;
+#endif
+
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
 

@@ -1117,7 +1117,7 @@ ST_DATA Sym *local_stack;
 ST_DATA Sym *local_label_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *define_stack;
-ST_DATA CType char_pointer_type, func_old_type, int_type;
+ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 ST_DATA SValue vstack[VSTACK_SIZE], *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
 

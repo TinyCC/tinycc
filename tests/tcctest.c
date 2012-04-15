@@ -2155,6 +2155,8 @@ void c99_vla_test(int size1, int size2)
 #endif
 }
 
+typedef __SIZE_TYPE__ uintptr_t;
+
 void sizeof_test(void)
 {
     int a;
@@ -2174,6 +2176,20 @@ void sizeof_test(void)
     printf("a=%d\n", a);
     ptr = NULL;
     printf("sizeof(**ptr) = %d\n", sizeof (**ptr));
+
+    /* The type of sizeof should be as large as a pointer, actually
+       it should be size_t.  */
+    printf("sizeof(sizeof(int) = %d\n", sizeof(sizeof(int)));
+    uintptr_t t = 1;
+    uintptr_t t2;
+    /* Effectively <<32, but defined also on 32bit machines.  */
+    t <<= 16;
+    t <<= 16;
+    t++;
+    /* This checks that sizeof really can be used to manipulate 
+       uintptr_t objects, without truncation.  */
+    t2 = t & -sizeof(uintptr_t);
+    printf ("%lu %lu\n", t, t2);
 
     /* some alignof tests */
     printf("__alignof__(int) = %d\n", __alignof__(int));
