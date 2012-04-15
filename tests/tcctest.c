@@ -288,6 +288,10 @@ comment
     /* test function macro substitution when the function name is
        substituted */
     TEST2();
+
+    /* And again when the name and parenthes are separated by a
+       comment.  */
+    TEST2 /* the comment */ ();
 }
 
 

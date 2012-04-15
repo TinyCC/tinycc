@@ -2697,10 +2697,25 @@ static int macro_subst_tok(TokenString *tok_str,
                     goto redo;
                 }
             } else {
-                /* XXX: incorrect with comments */
                 ch = file->buf_ptr[0];
-                while (is_space(ch) || ch == '\n')
-                    cinp();
+                while (is_space(ch) || ch == '\n' || ch == '/')
+		  {
+		    if (ch == '/')
+		      {
+			int c;
+			uint8_t *p = file->buf_ptr;
+			PEEKC(c, p);
+			if (c == '*') {
+			    p = parse_comment(p);
+			    file->buf_ptr = p - 1;
+			} else if (c == '/') {
+			    p = parse_line_comment(p);
+			    file->buf_ptr = p - 1;
+			} else
+			  break;
+		      }
+		    cinp();
+		  }
                 t = ch;
             }
             if (t != '(') /* no macro subst */
