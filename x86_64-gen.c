@@ -820,7 +820,6 @@ static const uint8_t arg_regs[REGN] = {
 void gfunc_call(int nb_args)
 {
     int size, align, r, args_size, i;
-    SValue *orig_vtop;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
@@ -845,7 +844,6 @@ void gfunc_call(int nb_args)
     /* for struct arguments, we need to call memcpy and the function
        call breaks register passing arguments we are preparing.
        So, we process arguments which will be passed by stack first. */
-    orig_vtop = vtop;
     gen_reg = nb_reg_args;
     sse_reg = nb_sse_args;
 
@@ -861,6 +859,14 @@ void gfunc_call(int nb_args)
     }
 
     for(i = 0; i < nb_args; i++) {
+	/* Swap argument to top, it will possibly be changed here,
+	   and might use more temps.  All arguments must remain on the
+	   stack, so that get_reg can correctly evict some of them onto
+	   stack.  We could use also use a vrott(nb_args) at the end
+	   of this loop, but this seems faster.  */
+        SValue tmp = vtop[0];
+	vtop[0] = vtop[-i];
+	vtop[-i] = tmp;
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             size = type_size(&vtop->type, &align);
             /* align to stack align size */
@@ -872,18 +878,9 @@ void gfunc_call(int nb_args)
             r = get_reg(RC_INT);
             orex(1, r, 0, 0x89); /* mov %rsp, r */
             o(0xe0 + REG_VALUE(r));
-            {
-                /* following code breaks vtop[1], vtop[2], and vtop[3] */
-                SValue tmp1 = vtop[1];
-                SValue tmp2 = vtop[2];
-                SValue tmp3 = vtop[3];
-                vset(&vtop->type, r | VT_LVAL, 0);
-                vswap();
-                vstore();
-                vtop[1] = tmp1;
-                vtop[2] = tmp2;
-                vtop[3] = tmp3;
-            }
+	    vset(&vtop->type, r | VT_LVAL, 0);
+	    vswap();
+	    vstore();
             args_size += size;
         } else if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
             gv(RC_ST0);
@@ -913,10 +910,14 @@ void gfunc_call(int nb_args)
                 args_size += 8;
             }
         }
-        vtop--;
-    }
-    vtop = orig_vtop;
 
+	/* And swap the argument back to it's original position.  */
+        tmp = vtop[0];
+	vtop[0] = vtop[-i];
+	vtop[-i] = tmp;
+    }
+
+    /* XXX This should be superfluous.  */
     save_regs(0); /* save used temporary registers */
 
     /* then, we prepare register passing arguments.
@@ -952,6 +953,12 @@ void gfunc_call(int nb_args)
         }
         vtop--;
     }
+
+    /* We shouldn't have many operands on the stack anymore, but the
+       call address itself is still there, and it might be in %eax
+       (or edx/ecx) currently, which the below writes would clobber.
+       So evict all remaining operands here.  */
+    save_regs(0);
 
     /* Copy R10 and R11 into RDX and RCX, respectively */
     if (nb_reg_args > 2) {

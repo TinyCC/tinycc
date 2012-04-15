@@ -1122,25 +1122,30 @@ struct structa1 struct_assign_test2(struct structa1 s1, int t)
 
 void struct_assign_test(void)
 {
-    struct structa1 lsta1, lsta2;
+    struct S {
+      struct structa1 lsta1, lsta2;
+      int i;
+    } s, *ps;
     
+    ps = &s;
+    ps->i = 4;
 #if 0
     printf("struct_assign_test:\n");
 
-    lsta1.f1 = 1;
-    lsta1.f2 = 2;
-    printf("%d %d\n", lsta1.f1, lsta1.f2);
-    lsta2 = lsta1;
-    printf("%d %d\n", lsta2.f1, lsta2.f2);
+    s.lsta1.f1 = 1;
+    s.lsta1.f2 = 2;
+    printf("%d %d\n", s.lsta1.f1, s.lsta1.f2);
+    s.lsta2 = s.lsta1;
+    printf("%d %d\n", s.lsta2.f1, s.lsta2.f2);
 #else
-    lsta2.f1 = 1;
-    lsta2.f2 = 2;
+    s.lsta2.f1 = 1;
+    s.lsta2.f2 = 2;
 #endif
-    struct_assign_test1(lsta2, 3, 4.5);
+    struct_assign_test1(ps->lsta2, 3, 4.5);
     
-    printf("before call: %d %d\n", lsta2.f1, lsta2.f2);
-    lsta2 = struct_assign_test2(lsta2, 4);
-    printf("after call: %d %d\n", lsta2.f1, lsta2.f2);
+    printf("before call: %d %d\n", s.lsta2.f1, s.lsta2.f2);
+    ps->lsta2 = struct_assign_test2(ps->lsta2, ps->i);
+    printf("after call: %d %d\n", ps->lsta2.f1, ps->lsta2.f2);
 
     static struct {
         void (*elem)();
