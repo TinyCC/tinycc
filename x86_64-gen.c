@@ -414,7 +414,7 @@ void load(int r, SValue *sv)
                 } else {
                     orex(1,0,r,0x8b);
                     o(0x05 + REG_VALUE(r) * 8); /* mov xx(%rip), r */
-                    gen_gotpcrel(fr, sv->sym, fc);
+                    gen_gotpcrel(r, sv->sym, fc);
                 }
 #endif
             } else if (is64_type(ft)) {

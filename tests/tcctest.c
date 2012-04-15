@@ -85,6 +85,7 @@ void statement_expr_test(void);
 void asm_test(void);
 void builtin_test(void);
 void weak_test(void);
+void global_data_test(void);
 
 int fib(int n);
 void num(int n);
@@ -583,6 +584,7 @@ int main(int argc, char **argv)
     asm_test();
     builtin_test();
     weak_test();
+    global_data_test();
     return 0; 
 }
 
@@ -2508,4 +2510,32 @@ int getme (struct condstruct *s, int i)
   int i3 = (i == 0 ? (void*)0 : s)->i;
   int i4 = (i == 0 ? s : (void*)0)->i;
   return i1 + i2 + i3 + i4;
+}
+
+struct global_data
+{
+  int a[40];
+  int *b[40];
+};
+
+struct global_data global_data;
+
+int global_data_getstuff (int *, int);
+
+void global_data_callit (int i)
+{
+  *global_data.b[i] = global_data_getstuff (global_data.b[i], 1);
+}
+
+int global_data_getstuff (int *p, int i)
+{
+  return *p + i;
+}
+
+void global_data_test (void)
+{
+  global_data.a[0] = 42;
+  global_data.b[0] = &global_data.a[0];
+  global_data_callit (0);
+  printf ("%d\n", global_data.a[0]);
 }
