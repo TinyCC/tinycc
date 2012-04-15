@@ -2995,8 +2995,16 @@ ST_INLN void unget_tok(int last_tok)
 {
     int i, n;
     int *q;
-    unget_saved_macro_ptr = macro_ptr;
-    unget_buffer_enabled = 1;
+    if (unget_buffer_enabled)
+      {
+        /* assert(macro_ptr == unget_saved_buffer + 1);
+	   assert(*macro_ptr == 0);  */
+      }
+    else
+      {
+	unget_saved_macro_ptr = macro_ptr;
+	unget_buffer_enabled = 1;
+      }
     q = unget_saved_buffer;
     macro_ptr = q;
     *q++ = tok;

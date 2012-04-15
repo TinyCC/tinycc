@@ -432,6 +432,7 @@ void loop_test()
     printf("\n");
 }
 
+typedef int typedef_and_label;
 
 void goto_test()
 {
@@ -440,6 +441,8 @@ void goto_test()
 
     printf("goto:\n");
     i = 0;
+    /* This needs to parse as label, not as start of decl.  */
+ typedef_and_label:
  s_loop:
     if (i >= 10) 
         goto s_end;
