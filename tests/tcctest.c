@@ -86,6 +86,7 @@ void asm_test(void);
 void builtin_test(void);
 void weak_test(void);
 void global_data_test(void);
+void cmp_comparison_test(void);
 
 int fib(int n);
 void num(int n);
@@ -592,6 +593,7 @@ int main(int argc, char **argv)
     builtin_test();
     weak_test();
     global_data_test();
+    cmp_comparison_test();
     return 0; 
 }
 
@@ -2561,4 +2563,32 @@ void global_data_test (void)
   global_data.b[0] = &global_data.a[0];
   global_data_callit (0);
   printf ("%d\n", global_data.a[0]);
+}
+
+struct cmpcmpS
+{
+  unsigned char fill : 3;
+  unsigned char b1 : 1;
+  unsigned char b2 : 1;
+  unsigned char fill2 : 3;
+};
+
+int glob1, glob2, glob3;
+
+void compare_comparisons (struct cmpcmpS *s)
+{
+  if (s->b1 != (glob1 == glob2)
+      || (s->b2 != (glob1 == glob3)))
+    printf ("comparing comparisons broken\n");
+}
+
+void cmp_comparison_test(void)
+{
+  struct cmpcmpS s;
+  s.b1 = 1;
+  glob1 = 42; glob2 = 42;
+  s.b2 = 0;
+  glob3 = 43;
+  compare_comparisons (&s);
+  return 0;
 }
