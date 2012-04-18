@@ -120,7 +120,7 @@ static void cstr_realloc(CString *cstr, int new_size)
 }
 
 /* add a byte */
-ST_INLN void cstr_ccat(CString *cstr, int ch)
+PUB_FUNC void cstr_ccat(CString *cstr, int ch)
 {
     int size;
     size = cstr->size + 1;
@@ -130,7 +130,7 @@ ST_INLN void cstr_ccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-ST_FUNC void cstr_cat(CString *cstr, const char *str)
+PUB_FUNC void cstr_cat(CString *cstr, const char *str)
 {
     int c;
     for(;;) {
@@ -143,7 +143,7 @@ ST_FUNC void cstr_cat(CString *cstr, const char *str)
 }
 
 /* add a wide char */
-ST_FUNC void cstr_wccat(CString *cstr, int ch)
+PUB_FUNC void cstr_wccat(CString *cstr, int ch)
 {
     int size;
     size = cstr->size + sizeof(nwchar_t);
@@ -153,20 +153,20 @@ ST_FUNC void cstr_wccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-ST_FUNC void cstr_new(CString *cstr)
+PUB_FUNC void cstr_new(CString *cstr)
 {
     memset(cstr, 0, sizeof(CString));
 }
 
 /* free string and reset it to NULL */
-ST_FUNC void cstr_free(CString *cstr)
+PUB_FUNC void cstr_free(CString *cstr)
 {
     tcc_free(cstr->data_allocated);
     cstr_new(cstr);
 }
 
 /* XXX: unicode ? */
-ST_FUNC void add_char(CString *cstr, int c)
+static void add_char(CString *cstr, int c)
 {
     if (c == '\'' || c == '\"' || c == '\\') {
         /* XXX: could be more precise if char or string */

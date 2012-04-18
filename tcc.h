@@ -51,6 +51,7 @@
 #define inp next_inp
 #ifdef LIBTCC_AS_DLL
 # define LIBTCCAPI __declspec(dllexport)
+# define PUB_FUNC LIBTCCAPI
 #endif
 #endif
 
@@ -989,12 +990,11 @@ PUB_FUNC void tcc_error(const char *fmt, ...);
 PUB_FUNC void tcc_warning(const char *fmt, ...);
 
 /* other utilities */
-ST_INLN void cstr_ccat(CString *cstr, int ch);
-ST_FUNC void cstr_cat(CString *cstr, const char *str);
-ST_FUNC void cstr_wccat(CString *cstr, int ch);
-ST_FUNC void cstr_new(CString *cstr);
-ST_FUNC void cstr_free(CString *cstr);
-ST_FUNC void add_char(CString *cstr, int c);
+PUB_FUNC void cstr_ccat(CString *cstr, int ch);
+PUB_FUNC void cstr_cat(CString *cstr, const char *str);
+PUB_FUNC void cstr_wccat(CString *cstr, int ch);
+PUB_FUNC void cstr_new(CString *cstr);
+PUB_FUNC void cstr_free(CString *cstr);
 #define cstr_reset(cstr) cstr_free(cstr)
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
