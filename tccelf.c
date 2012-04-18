@@ -162,8 +162,8 @@ static void *get_elf_sym_addr(TCCState *s, const char *name, int err)
     int sym_index;
     ElfW(Sym) *sym;
 
-    sym_index = find_elf_sym(symtab_section, name);
-    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+    sym_index = find_elf_sym(s->symtab, name);
+    sym = &((ElfW(Sym) *)s->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
             tcc_error("%s not defined", name);

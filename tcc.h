@@ -527,6 +527,9 @@ struct TCCState {
     /* exported dynamic symbol section */
     Section *dynsym;
 
+    /* copy of the gobal symtab_section variable */
+    Section *symtab;
+
     int nostdinc; /* if true, no standard headers are added */
     int nostdlib; /* if true, no standard libraries are added */
     int nocommon; /* if true, do not use common symbols for .bss data */

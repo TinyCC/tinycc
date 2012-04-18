@@ -1001,6 +1001,7 @@ LIBTCCAPI TCCState *tcc_new(void)
                                 ".strtab",
                                 ".hashtab", SHF_PRIVATE); 
     strtab_section = symtab_section->link;
+    s->symtab = symtab_section;
     
     /* private symbol table for dynamic symbols */
     s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE,
