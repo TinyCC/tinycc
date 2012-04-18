@@ -152,17 +152,17 @@
 # define CONFIG_SYSROOT ""
 #endif
 
-#ifndef CONFIG_TCC_LDDIR
-# if defined(TCC_TARGET_X86_64_CENTOS)
-#  define CONFIG_TCC_LDDIR "/lib64"
+#ifndef CONFIG_LDDIR
+# ifdef CONFIG_MULTIARCHDIR
+#  define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR
 # else
-#  define CONFIG_TCC_LDDIR "/lib"
+#  define CONFIG_LDDIR "lib"
 # endif
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR
+# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr/" CONFIG_LDDIR
 #endif
 
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
@@ -171,6 +171,13 @@
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
 # ifdef TCC_TARGET_PE
 #  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include;{B}/include/winapi"
+# elif defined CONFIG_MULTIARCHDIR
+#  define CONFIG_TCC_SYSINCLUDEPATHS \
+        CONFIG_SYSROOT "/usr/local/include" \
+    ":" CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
+    ":" CONFIG_SYSROOT "/usr/include" \
+    ":" CONFIG_SYSROOT "/usr/include/" CONFIG_MULTIARCHDIR \
+    ":" "{B}/include"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         CONFIG_SYSROOT "/usr/local/include" \
@@ -185,9 +192,9 @@
 #  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        CONFIG_SYSROOT "/usr" CONFIG_TCC_LDDIR \
-    ":" CONFIG_SYSROOT CONFIG_TCC_LDDIR \
-    ":" CONFIG_SYSROOT "/usr/local" CONFIG_TCC_LDDIR
+        CONFIG_SYSROOT "/usr/" CONFIG_LDDIR \
+    ":" CONFIG_SYSROOT "/" CONFIG_LDDIR \
+    ":" CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR
 # endif
 #endif
 
@@ -196,20 +203,20 @@
 # if defined __FreeBSD__
 #  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
 # elif defined __FreeBSD_kernel__
-#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld.so.1"
+#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld.so.1"
 # elif defined TCC_ARM_EABI
-#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux.so.3"
+#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux.so.3"
 # elif defined(TCC_TARGET_X86_64)
-#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux-x86-64.so.2"
+#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux-x86-64.so.2"
 # elif defined(TCC_UCLIBC)
-#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-uClibc.so.0"
+#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-uClibc.so.0"
 # else
-#  define CONFIG_TCC_ELFINTERP CONFIG_TCC_LDDIR"/ld-linux.so.2"
+#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux.so.2"
 # endif
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
-#define TCC_LIBGCC CONFIG_SYSROOT CONFIG_TCC_LDDIR "/libgcc_s.so.1"
+#define TCC_LIBGCC CONFIG_SYSROOT "/" CONFIG_LDDIR "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
 

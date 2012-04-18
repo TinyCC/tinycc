@@ -42,7 +42,8 @@ else
 ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
 CFLAGS+=-m64
-NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DTCC_TARGET_X86_64_CENTOS)
+NATIVE_DEFINES+=$(if $(wildcard /lib64/ld-linux-x86-64.so.2),-DCONFIG_LDDIR=\"lib64\")
+NATIVE_DEFINES+=$(if $(wildcard /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\")
 endif
 endif
 
