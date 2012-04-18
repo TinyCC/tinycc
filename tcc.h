@@ -882,8 +882,8 @@ enum tcc_token {
 #ifndef __GNUC__
   #define strtold (long double)strtod
   #define strtof (float)strtod
-  #define strtoll (long long)strtol
-  #define strtoull (unsigned long long)strtoui64
+  #define strtoll _strtoi64
+  #define strtoull _strtoui64
 #endif
 #else
 /* XXX: need to define this to use them in non ISOC99 context */

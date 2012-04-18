@@ -3,10 +3,10 @@
 #
 
 # what tests to run
-TESTS = libtest test1 test3
+TESTS = libtest test3
 
 # these should work too
-TESTS += test2 speedtest btest weaktest
+# TESTS += test1 test2 speedtest btest weaktest
 
 # these don't work as they should
 # TESTS += test4 asmtest
