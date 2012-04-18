@@ -112,8 +112,6 @@ static void cstr_realloc(CString *cstr, int new_size)
     while (size < new_size)
         size = size * 2;
     data = tcc_realloc(cstr->data_allocated, size);
-    if (!data)
-        tcc_error("memory full");
     cstr->data_allocated = data;
     cstr->size_allocated = size;
     cstr->data = data;
@@ -200,8 +198,6 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     i = tok_ident - TOK_IDENT;
     if ((i % TOK_ALLOC_INCR) == 0) {
         ptable = tcc_realloc(table_ident, (i + TOK_ALLOC_INCR) * sizeof(TokenSym *));
-        if (!ptable)
-            tcc_error("memory full");
         table_ident = ptable;
     }
 
@@ -844,8 +840,6 @@ static int *tok_str_realloc(TokenString *s)
         len = s->allocated_len * 2;
     }
     str = tcc_realloc(s->str, len * sizeof(int));
-    if (!str)
-        tcc_error("memory full");
     s->allocated_len = len;
     s->str = str;
     return str;

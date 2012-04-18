@@ -237,6 +237,8 @@ PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
     mem_cur_size -= malloc_usable_size(ptr);
 #endif
     ptr1 = realloc(ptr, size);
+    if (!ptr1 && size)
+        tcc_error("memory full");
 #ifdef MEM_DEBUG
     /* NOTE: count not correct if alloc error, but not critical */
     mem_cur_size += malloc_usable_size(ptr1);
@@ -282,8 +284,6 @@ PUB_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
         else
             nb_alloc = nb * 2;
         pp = tcc_realloc(pp, nb_alloc * sizeof(void *));
-        if (!pp)
-            tcc_error("memory full");
         *ptab = pp;
     }
     pp[nb++] = data;
@@ -377,8 +377,6 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
     while (size < new_size)
         size = size * 2;
     data = tcc_realloc(sec->data, size);
-    if (!data)
-        tcc_error("memory full");
     memset(data + sec->data_allocated, 0, size - sec->data_allocated);
     sec->data = data;
     sec->data_allocated = size;
