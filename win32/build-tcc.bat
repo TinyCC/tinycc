@@ -34,7 +34,7 @@ copy ..\libtcc.h libtcc\libtcc.h
 tiny_impdef libtcc.dll -o lib/libtcc.def
 
 :tcc
-%CC% %target% ../tcc.c -o tcc.exe -ltcc -Llibtcc
+%CC% %target% -DONE_SOURCE ../tcc.c -o tcc.exe -ltcc -Llibtcc
 
 :copy_std_includes
 copy ..\include\*.h include
