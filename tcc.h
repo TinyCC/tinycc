@@ -956,12 +956,6 @@ ST_DATA int tcc_ext;
 /* XXX: get rid of this ASAP */
 ST_DATA struct TCCState *tcc_state;
 
-#ifdef CONFIG_TCC_BACKTRACE
-ST_DATA int rt_num_callers;
-ST_DATA const char **rt_bound_error_msg;
-ST_DATA void *rt_prog_main;
-#endif
-
 #define AFF_PRINT_ERROR     0x0001 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
 #define AFF_PREPROCESS      0x0004 /* preprocess file */
@@ -1030,9 +1024,6 @@ PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file);
 PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename);
-#ifdef CONFIG_TCC_BACKTRACE
-PUB_FUNC void tcc_set_num_callers(int n);
-#endif
 
 /* ------------ tccpp.c ------------ */
 
@@ -1338,6 +1329,14 @@ ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
 #elif !defined TCC_TARGET_PE || !defined _WIN32
 ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
 #endif
+
+#ifdef CONFIG_TCC_BACKTRACE
+ST_DATA int rt_num_callers;
+ST_DATA const char **rt_bound_error_msg;
+ST_DATA void *rt_prog_main;
+PUB_FUNC void tcc_set_num_callers(int n);
+#endif
+
 /********************************************************/
 /* include the target specific definitions */
 
