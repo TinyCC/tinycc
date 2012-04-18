@@ -27,10 +27,7 @@ echo>..\config.h #define TCC_VERSION "0.9.25"
 :libtcc
 if not exist libtcc\nul mkdir libtcc
 copy ..\libtcc.h libtcc\libtcc.h
-%CC% %target% -DONE_SOURCE ../libtcc.c -c -o libtcc.o
-%AR% rcs libtcc/libtcc.a libtcc.o
-:libtcc.dll
-%CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc.dll
+%CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc.dll -Wl,-out-implib,libtcc/libtcc.a
 tiny_impdef libtcc.dll -o lib/libtcc.def
 
 :tcc

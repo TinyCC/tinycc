@@ -64,7 +64,7 @@
 
     For the 'libtcc_test' example type
 
-        tcc examples/libtcc_test.c -I. libtcc.dll
+        tcc examples/libtcc_test.c -I libtcc -ltcc
 
 
     Import Definition Files:
