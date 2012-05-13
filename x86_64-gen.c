@@ -429,7 +429,18 @@ void load(int r, SValue *sv)
             gen_modrm(r, VT_LOCAL, sv->sym, fc);
         } else if (v == VT_CMP) {
             orex(0,r,0,0);
-            oad(0xb8 + REG_VALUE(r), 0); /* mov $0, r */
+	    if ((fc & ~0x100) != TOK_NE)
+              oad(0xb8 + REG_VALUE(r), 0); /* mov $0, r */
+	    else
+              oad(0xb8 + REG_VALUE(r), 1); /* mov $1, r */
+	    if (fc & 0x100)
+	      {
+	        /* This was a float compare.  If the parity bit is
+		   set the result was unordered, meaning false for everything
+		   except TOK_NE, and true for TOK_NE.  */
+		fc &= ~0x100;
+		o(0x037a + (REX_BASE(r) << 8));
+	      }
             orex(0,r,0, 0x0f); /* setxx %br */
             o(fc);
             o(0xc0 + REG_VALUE(r));
@@ -1161,6 +1172,24 @@ int gtst(int inv, int t)
     v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
+	if (vtop->c.i & 0x100)
+	  {
+	    /* This was a float compare.  If the parity flag is set
+	       the result was unordered.  For anything except != this
+	       means false and we don't jump (anding both conditions).
+	       For != this means true (oring both).
+	       Take care about inverting the test.  We need to jump
+	       to our target if the result was unordered and test wasn't NE,
+	       otherwise if unordered we don't want to jump.  */
+	    vtop->c.i &= ~0x100;
+	    if (!inv == (vtop->c.i != TOK_NE))
+	      o(0x067a);  /* jp +6 */
+	    else
+	      {
+	        g(0x0f);
+		t = psym(0x8a, t); /* jp t */
+	      }
+	  }
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
     } else if (v == VT_JMP || v == VT_JMPI) {
@@ -1469,7 +1498,7 @@ void gen_opf(int op)
 
             vtop--;
             vtop->r = VT_CMP;
-            vtop->c.i = op;
+            vtop->c.i = op | 0x100;
         } else {
             /* no memory reference possible for long double operations */
             if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {

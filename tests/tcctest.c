@@ -87,6 +87,7 @@ void builtin_test(void);
 void weak_test(void);
 void global_data_test(void);
 void cmp_comparison_test(void);
+void math_cmp_test(void);
 
 int fib(int n);
 void num(int n);
@@ -594,6 +595,7 @@ int main(int argc, char **argv)
     weak_test();
     global_data_test();
     cmp_comparison_test();
+    math_cmp_test();
     return 0; 
 }
 
@@ -2591,4 +2593,68 @@ void cmp_comparison_test(void)
   glob3 = 43;
   compare_comparisons (&s);
   return 0;
+}
+
+int fcompare (double a, double b, int code)
+{
+  switch (code) {
+    case 0: return a == b;
+    case 1: return a != b;
+    case 2: return a < b;
+    case 3: return a >= b;
+    case 4: return a > b;
+    case 5: return a <= b;
+  }
+}
+
+void math_cmp_test(void)
+{
+  double nan = 0.0/0.0;
+  double one = 1.0;
+  double two = 2.0;
+  int comp = 0;
+#define bug(a,b,op,iop,part) printf("Test broken: %s %s %s %s %d\n", #a, #b, #op, #iop, part)
+
+  /* This asserts that "a op b" is _not_ true, but "a iop b" is true.
+     And it does this in various ways so that all code generation paths
+     are checked (generating inverted tests, or non-inverted tests, or
+     producing a 0/1 value without jumps (that's done in the fcompare
+     function).  */
+#define FCMP(a,b,op,iop,code) \
+  if (fcompare (a,b,code))    \
+    bug (a,b,op,iop,1); \
+  if (a op b) \
+    bug (a,b,op,iop,2); \
+  if (a iop b) \
+    ; \
+  else \
+    bug (a,b,op,iop,3); \
+  if ((a op b) || comp) \
+    bug (a,b,op,iop,4); \
+  if ((a iop b) || comp) \
+    ; \
+  else \
+    bug (a,b,op,iop,5);
+
+  /* Equality tests.  */
+  FCMP(nan, nan, ==, !=, 0);
+  FCMP(one, two, ==, !=, 0);
+  FCMP(one, one, !=, ==, 1);
+  /* Non-equality is a bit special.  */
+  if (!fcompare (nan, nan, 1))
+    bug (nan, nan, !=, ==, 6);
+
+  /* Relational tests on numbers.  */
+  FCMP(two, one, <, >=, 2);
+  FCMP(one, two, >=, <, 3);
+  FCMP(one, two, >, <=, 4);
+  FCMP(two, one, <=, >, 5);
+
+  /* Relational tests on NaNs.  Note that the inverse op here is
+     always !=, there's no operator in C that is equivalent to !(a < b),
+     when NaNs are involved, same for the other relational ops.  */
+  FCMP(nan, nan, <, !=, 2);
+  FCMP(nan, nan, >=, !=, 3);
+  FCMP(nan, nan, >, !=, 4);
+  FCMP(nan, nan, <=, !=, 5);
 }
