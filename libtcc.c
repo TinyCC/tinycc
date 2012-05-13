@@ -1667,7 +1667,7 @@ PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *file
 
     fprintf(depout, "%s : \\\n", target);
     for (i=0; i<s->nb_target_deps; ++i)
-        fprintf(depout, "\t%s \\\n", s->target_deps[i]);
+        fprintf(depout, " %s \\\n", s->target_deps[i]);
     fprintf(depout, "\n");
     fclose(depout);
 }
