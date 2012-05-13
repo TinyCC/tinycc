@@ -283,7 +283,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
     int was_pthread;
 
     was_pthread = 0; /* is set if commandline contains -pthread key */
-    optind = 1;
+    optind = 0;
     cstr_new(&linker_arg);
 
     while (optind < argc) {
@@ -500,7 +500,7 @@ int main(int argc, char **argv)
     m_option = NULL;
     ret = 0;
 
-    optind = parse_args(s, argc, argv);
+    optind = parse_args(s, argc - 1, argv + 1);
 
 #if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
     if (m_option)
@@ -585,7 +585,7 @@ int main(int argc, char **argv)
 
         if (s->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
-            ret = tcc_run(s, argc - optind, argv + optind);
+            ret = tcc_run(s, argc - 1 - optind, argv + 1 + optind);
 #else
             tcc_error_noabort("-run is not available in a cross compiler");
 #endif
