@@ -153,11 +153,12 @@
 #endif
 
 #ifndef CONFIG_LDDIR
-# ifdef CONFIG_MULTIARCHDIR
-#  define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR
-# else
-#  define CONFIG_LDDIR "lib"
-# endif
+# define CONFIG_LDDIR "lib"
+#endif
+
+#ifdef CONFIG_MULTIARCHDIR
+# undef CONFIG_LDDIR
+# define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o */
@@ -203,15 +204,15 @@
 # if defined __FreeBSD__
 #  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
 # elif defined __FreeBSD_kernel__
-#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld.so.1"
+#  define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
 # elif defined TCC_ARM_EABI
-#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux.so.3"
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.3"
 # elif defined(TCC_TARGET_X86_64)
-#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux-x86-64.so.2"
+#  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_UCLIBC)
-#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-uClibc.so.0"
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-uClibc.so.0"
 # else
-#  define CONFIG_TCC_ELFINTERP "/" CONFIG_LDDIR "/ld-linux.so.2"
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
 # endif
 #endif
 
