@@ -168,7 +168,7 @@ for opt do
   ;;
   --help|-h) show_help="yes"
   ;;
-  *) echo "configure: unrecognized option $opt"; exit 1
+  *) echo "configure: WARNING: unrecognized option $opt"
   ;;
   esac
 done
