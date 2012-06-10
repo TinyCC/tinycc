@@ -1460,7 +1460,7 @@ void gen_opf(int op)
             if ((r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
                 r = get_reg(RC_INT);
-                v1.type.t = VT_INT;
+                v1.type.t = VT_PTR;
                 v1.r = VT_LOCAL | VT_LVAL;
                 v1.c.ul = fc;
                 load(r, &v1);
@@ -1531,7 +1531,7 @@ void gen_opf(int op)
                 if ((r & VT_VALMASK) == VT_LLOCAL) {
                     SValue v1;
                     r = get_reg(RC_INT);
-                    v1.type.t = VT_INT;
+                    v1.type.t = VT_PTR;
                     v1.r = VT_LOCAL | VT_LVAL;
                     v1.c.ul = fc;
                     load(r, &v1);

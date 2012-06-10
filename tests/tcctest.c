@@ -88,6 +88,7 @@ void weak_test(void);
 void global_data_test(void);
 void cmp_comparison_test(void);
 void math_cmp_test(void);
+void callsave_test(void);
 
 int fib(int n);
 void num(int n);
@@ -596,6 +597,7 @@ int main(int argc, char **argv)
     global_data_test();
     cmp_comparison_test();
     math_cmp_test();
+    callsave_test();
     return 0; 
 }
 
@@ -2657,4 +2659,22 @@ void math_cmp_test(void)
   FCMP(nan, nan, >=, !=, 3);
   FCMP(nan, nan, >, !=, 4);
   FCMP(nan, nan, <=, !=, 5);
+}
+
+double get100 () { return 100.0; }
+
+void callsave_test(void)
+{
+  int i, s; double *d; double t;
+  s = sizeof (double);
+  printf ("callsavetest: %d\n", s);
+  d = alloca (sizeof(double));
+  d[0] = 10.0;
+  /* x86-64 had a bug were the next call to get100 would evict
+     the lvalue &d[0] as VT_LLOCAL, and the reload would be done
+     in int type, not pointer type.  When alloca returns a pointer
+     with the high 32 bit set (which is likely on x86-64) the access
+     generates a segfault.  */
+  i = d[0] > get100 ();
+  printf ("%d\n", i);
 }
