@@ -15,12 +15,14 @@ CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
 endif
 endif
 
+ifneq ($(TARGETOS),Darwin)
 ifeq ($(ARCH),i386)
 CFLAGS+=-mpreferred-stack-boundary=2
 ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
 CFLAGS+=-march=i386 -falign-functions=0
+endif
 endif
 endif
 

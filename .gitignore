@@ -42,6 +42,7 @@ tags
 .DS_Store
 *.swp
 lib/x86_64
+lib/i386
 tcc-doc.info
 conftest*
 tiny_libmaker
