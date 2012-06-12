@@ -636,6 +636,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
         case R_ARM_REL32:
             *(int *)ptr += val - addr;
+            break;
         case R_ARM_BASE_PREL:
             *(int *)ptr += s1->got->sh_addr - addr;
             break;
