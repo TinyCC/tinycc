@@ -103,6 +103,7 @@ if test -z "$source_path" -o "$source_path" = "." ; then
 fi
 
 for opt do
+  eval opt=$opt
   case "$opt" in
   --prefix=*) prefix=`echo $opt | cut -d '=' -f 2`
   ;;
