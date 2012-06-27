@@ -1678,6 +1678,9 @@ ST_FUNC void gen_op(int op)
             (op < TOK_ULT || op > TOK_GT))
             tcc_error("invalid operands for binary operation");
         goto std_op;
+    } else if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL) {
+        t = (bt1 == VT_LLONG ? VT_LLONG : VT_INT) | (t1 & VT_UNSIGNED);
+        goto std_op;
     } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
         /* cast to biggest op */
         t = VT_LLONG;
