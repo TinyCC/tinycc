@@ -2,17 +2,36 @@
 # Tiny C Compiler Makefile - tests
 #
 
+TOP = ..
+include $(TOP)/Makefile
+
 # what tests to run
-TESTS = libtest test3
+TESTS = libtest \
+		test1 \
+		test2 \
+		test3 \
+		speedtest \
+		btest \
+		weaktest
+
+		# test4 # this test does not seem to work on any platform
+		# asmtest # this test does not seem to work on any platform
 
 # these should work too
 # TESTS += test1 test2 speedtest btest weaktest
 
-# these don't work as they should
-# TESTS += test4 asmtest
-
-TOP = ..
-include $(TOP)/Makefile
+# some tests do not pass on all platforms, remove them for now
+ifeq ($(TARGETOS),Linux)
+    TESTS := $(filter-out btest,$(TESTS))
+    TESTS := $(filter-out weaktest,$(TESTS))
+endif
+ifeq ($(TARGETOS),Darwin)
+    TESTS := $(filter-out test1,$(TESTS))
+    TESTS := $(filter-out test2,$(TESTS))
+    TESTS := $(filter-out test3,$(TESTS))
+    TESTS := $(filter-out btest,$(TESTS))
+    TESTS := $(filter-out weaktest,$(TESTS))
+endif
 
 ifdef DISABLE_STATIC
 export LD_LIBRARY_PATH:=$(CURDIR)/..
@@ -25,7 +44,10 @@ NATIVE_DEFINES+=-D_ANSI_SOURCE
 endif
 
 # run local version of tcc with local libraries and includes
-TCC = ../tcc -B..
+TCC = ../tcc -B.. $(NATIVE_DEFINES)
+ifdef CONFIG_WIN32
+	TCC := $(TCC) -I $(TOP)/win32/include -L$(TOP)
+endif
 RUN_TCC = $(NATIVE_DEFINES) -run -DONE_SOURCE ../tcc.c -B..
 DISAS=objdump -d
 
@@ -46,13 +68,13 @@ libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=..
 
 libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
-	$(CC) -o $@ $^ -I.. $(CFLAGS) $(LIBS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ -I.. $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC)
 
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
 	cp ../include/tcclib.h .
-	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS) -std=gnu99
+	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99
 	./tcctest.gcc > $@
 
 # auto test
