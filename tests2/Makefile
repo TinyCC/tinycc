@@ -61,7 +61,8 @@ TESTS=	00_assignment.test \
 		50_logical_second_arg.test \
 		51_static.test \
 		52_unnamed_enum.test \
-		54_goto.test
+		54_goto.test \
+		55_lshift_type.test
 
 		# 30_hanoi.test \ # seg fault in the code, gcc as well
 		# 34_array_assignment.test \ # array assignment is not in C standard
