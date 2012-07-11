@@ -589,11 +589,11 @@ ST_FUNC int get_reg(int rc)
        IMPORTANT to start from the bottom to ensure that we don't
        spill registers used in gen_opi()) */
     for(p=vstack;p<=vtop;p++) {
-        r = p->r & VT_VALMASK;
+        /* look at second register (if long long) */
+        r = p->r2 & VT_VALMASK;
         if (r < VT_CONST && (reg_classes[r] & rc))
             goto save_found;
-        /* also look at second register (if long long) */
-        r = p->r2 & VT_VALMASK;
+        r = p->r & VT_VALMASK;
         if (r < VT_CONST && (reg_classes[r] & rc)) {
         save_found:
             save_reg(r);
@@ -812,7 +812,8 @@ ST_FUNC int gv(int rc)
                     vtop[-1].r = r; /* save register value */
                     vtop->r = vtop[-1].r2;
                 }
-                /* allocate second register */
+                /* Allocate second register. Here we rely on the fact that
+                   get_reg() tries first to free r2 of an SValue. */
                 r2 = get_reg(rc2);
                 load(r2, vtop);
                 vpop();
