@@ -59,8 +59,10 @@ NATIVE_DEFINES+=-DWITHOUT_LIBTCC
 NATIVE_DEFINES+=$(if $(wildcard /lib/ld-linux.so.3),-DTCC_ARM_EABI)
 NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabi),-DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabi\")
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
-# To use ARM hardfloat calling convension
+# To use ARM hardfloat calling convension, uncomment the next 2 lines
+# Beware: only -run and -c work so far, linking is not yet supported
 #NATIVE_DEFINES+=-DTCC_ARM_HARDFLOAT
+#NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabihf),-DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabihf\")
 endif
 
 ifdef CONFIG_WIN32
