@@ -2665,6 +2665,7 @@ double get100 () { return 100.0; }
 
 void callsave_test(void)
 {
+#if defined __i386__ || defined __x86_64__
   int i, s; double *d; double t;
   s = sizeof (double);
   printf ("callsavetest: %d\n", s);
@@ -2677,4 +2678,5 @@ void callsave_test(void)
      generates a segfault.  */
   i = d[0] > get100 ();
   printf ("%d\n", i);
+#endif
 }
