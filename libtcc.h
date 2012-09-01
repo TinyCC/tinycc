@@ -91,9 +91,14 @@ LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename);
    tcc_relocate() before. */
 LIBTCCAPI int tcc_run(TCCState *s, int argc, char **argv);
 
-/* Do all relocations (needed before using tcc_get_symbol())
-   Returns -1 on error. */
-LIBTCCAPI int tcc_relocate(TCCState *s1);
+/* do all relocations (needed before using tcc_get_symbol())
+   possible values for 'ptr':
+   - TCC_RELOCATE_AUTO : Allocate and manage memory internally
+   - NULL              : return required memory size for the step below
+   - memory address    : copy code to memory passed by the caller
+   returns -1 on error. */
+LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr);
+#define TCC_RELOCATE_AUTO (void*)1
 
 /* return symbol value or NULL if not found */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name);

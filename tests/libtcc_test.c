@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     tcc_add_symbol(s, "add", add);
 
     /* relocate the code */
-    if (tcc_relocate(s) < 0)
+    if (tcc_relocate(s, TCC_RELOCATE_AUTO) < 0)
         return 1;
 
     /* get entry symbol */

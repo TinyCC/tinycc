@@ -47,9 +47,13 @@ static void win64_add_function_table(TCCState *s1);
 /* Do all relocations (needed before using tcc_get_symbol())
    Returns -1 on error. */
 
-LIBTCCAPI int tcc_relocate(TCCState *s1)
+LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 {
     int ret;
+
+    if (TCC_RELOCATE_AUTO != ptr)
+        return tcc_relocate_ex(s1, ptr);
+
 #ifdef HAVE_SELINUX
     /* Use mmap instead of malloc for Selinux
     Ref http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
@@ -87,7 +91,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     int (*prog_main)(int, char **);
     int ret;
 
-    if (tcc_relocate(s1) < 0)
+    if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
 
     prog_main = tcc_get_symbol_err(s1, "main");
