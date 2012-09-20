@@ -34,6 +34,10 @@ ST_DATA struct TCCState *tcc_state;
 
 /********************************************************/
 
+#ifndef _WIN32
+#include <limits.h>
+#endif
+
 #ifdef ONE_SOURCE
 #include "tccpp.c"
 #include "tccgen.c"
@@ -318,7 +322,30 @@ static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char
             }
         }
         cstr_ccat(&str, '\0');
+#ifndef _WIN32
+        {
+            int i, do_include;
+            char tmp[PATH_MAX];
+
+            if (realpath(str.data, tmp)) {
+                str.size = 0;
+                cstr_cat(&str, tmp);
+                cstr_ccat(&str, '\0');
+            }
+
+            do_include = 1;
+            for (i = 0; i < *p_nb_ary && do_include; i++) {
+                do_include = do_include &&
+                    strcmp((char*)str.data, (char*)(*p_ary)[i]);
+            }
+
+            if (do_include) {
+                dynarray_add(p_ary, p_nb_ary, str.data);
+            }
+        }
+#else
         dynarray_add(p_ary, p_nb_ary, str.data);
+#endif
         in = p+1;
     } while (*p);
 }
