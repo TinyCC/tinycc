@@ -620,6 +620,38 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 (*(int *)ptr) |= x;
             }
             break;
+        case R_ARM_MOVT_ABS:
+        case R_ARM_MOVW_ABS_NC:
+            {
+                int x, imm4, imm12;
+                if (type == R_ARM_MOVT_ABS)
+                    val >>= 16;
+                imm12 = val & 0xfff;
+                imm4 = (val >> 12) & 0xf;
+                x = (imm4 << 16) | imm12;
+                if (type == R_ARM_THM_MOVT_ABS)
+                    *(int *)ptr |= x;
+                else
+                    *(int *)ptr += x;
+	    }
+            break;
+        case R_ARM_THM_MOVT_ABS:
+        case R_ARM_THM_MOVW_ABS_NC:
+            {
+                int x, i, imm4, imm3, imm8;
+                if (type == R_ARM_THM_MOVT_ABS)
+                    val >>= 16;
+                imm8 = val & 0xff;
+                imm3 = (val >> 8) & 0x7;
+                i = (val >> 11) & 1;
+                imm4 = (val >> 12) & 0xf;
+                x = (imm3 << 28) | (imm8 << 16) | (i << 10) | imm4;
+                if (type == R_ARM_THM_MOVT_ABS)
+                    *(int *)ptr |= x;
+                else
+                    *(int *)ptr += x;
+	    }
+            break;
         case R_ARM_PREL31:
             {
                 int x;

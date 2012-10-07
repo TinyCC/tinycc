@@ -1692,6 +1692,10 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_ARM_JUMP24            29
 #define R_ARM_V4BX              40
 #define R_ARM_PREL31            42
+#define R_ARM_MOVW_ABS_NC       43
+#define R_ARM_MOVT_ABS          44
+#define R_ARM_THM_MOVW_ABS_NC   47
+#define R_ARM_THM_MOVT_ABS      48
 #define R_ARM_GNU_VTENTRY       100
 #define R_ARM_GNU_VTINHERIT     101
 #define R_ARM_THM_PC11          102     /* thumb unconditional branch */
