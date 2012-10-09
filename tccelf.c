@@ -601,22 +601,30 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_ARM_JUMP24:
         case R_ARM_PLT32:
             {
-                int x;
+                int x, is_thumb, is_call, h;
                 x = (*(int *)ptr)&0xffffff;
                 (*(int *)ptr) &= 0xff000000;
                 if (x & 0x800000)
                     x -= 0x1000000;
-                x *= 4;
-                x += val - addr;
+                x <<= 2;
+                is_thumb = val & 1;
+                is_call = (type == R_ARM_CALL);
+                x += (val & -2) - addr;
+                h = x & 2;
 #ifndef TCC_TARGET_PE
                 if((x & 3) != 0 || x >= 0x4000000 || x < -0x4000000)
                     if (s1->output_type == TCC_OUTPUT_MEMORY)
                         x += add_jmp_table(s1, val) - val; /* add veneer */
 #endif
                 if((x & 3) != 0 || x >= 0x4000000 || x < -0x4000000)
-                    tcc_error("can't relocate value at %x",addr);
+                    if (!(h && is_call && is_thumb))
+                        tcc_error("can't relocate value at %x",addr);
                 x >>= 2;
                 x &= 0xffffff;
+                if (is_call && is_thumb) {
+                    x |= h << 24;
+                    (*(int *)ptr) = 0xfa << 24; /* bl -> blx */
+                }
                 (*(int *)ptr) |= x;
             }
             break;
