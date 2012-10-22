@@ -68,13 +68,13 @@ libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=..
 
 libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
-	$(CC) -o $@ $^ -I.. $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ -I.. $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS)
 
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
 	cp ../include/tcclib.h .
-	$(CC) -o tcctest.gcc $< -I. -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99
+	$(CC) -o tcctest.gcc $< -I. $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 $(LDFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
@@ -149,14 +149,14 @@ speedtest: ex2 ex3
 	time $(TCC) -run ../examples/ex3.c 35
 
 weaktest: test.ref
-	$(TCC) -c tcctest.c -o weaktest.tcc.o
-	 $(CC) -c tcctest.c -o weaktest.gcc.o -I. -w $(CFLAGS)
+	$(TCC) -c tcctest.c -o weaktest.tcc.o $(CPPFLAGS) $(CFLAGS)
+	 $(CC) -c tcctest.c -o weaktest.gcc.o -I. $(CPPFLAGS) -w $(CFLAGS)
 	objdump -t weaktest.tcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.tcc.o.txt
 	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
 	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
 
 ex%: ../examples/ex%.c
-	$(CC) -o $@ $< $(CFLAGS)
+	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # tiny assembler testing
 asmtest.ref: asmtest.S

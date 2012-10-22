@@ -5,8 +5,10 @@
 TOP ?= .
 include $(TOP)/config.mak
 
-CFLAGS_P=$(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
+CPPFLAGS_P=$(CPPFLAGS) -DCONFIG_TCC_STATIC
+CFLAGS_P=$(CFLAGS) -pg -static
 LIBS_P=
+LDFLAGS_P=$(LDFLAGS)
 
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
@@ -171,11 +173,11 @@ all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
-	$(CC) -o $@ $^ $(LIBS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ $(LIBS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF):
-	$(CC) -o $@ tcc.c -DONE_SOURCE $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
+	$(CC) -o $@ tcc.c -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
 
 $(I386_CROSS): DEFINES = -DTCC_TARGET_I386 \
     -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
@@ -212,25 +214,25 @@ libtcc.o : NATIVE_DEFINES += -DONE_SOURCE
 endif
 
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
-	$(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CFLAGS)
+	$(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CPPFLAGS) $(CFLAGS)
 
 libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
 
 libtcc.so.1.0: $(LIBTCC_OBJ)
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
 
 libtcc.so.1.0: CFLAGS+=-fPIC
 
 # profiling version
 tcc_p$(EXESUF): $(NATIVE_FILES)
-	$(CC) -o $@ $< $(NATIVE_DEFINES) $(CFLAGS_P) $(LIBS_P)
+	$(CC) -o $@ $< $(NATIVE_DEFINES) $(CPPFLAGS_P) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
 
 # windows utilities
 tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
-	$(CC) -o $@ $< $(CFLAGS)
+	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
-	$(CC) -o $@ $< $(CFLAGS)
+	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # TinyCC runtime libraries
 libtcc1.a : FORCE
@@ -238,7 +240,7 @@ libtcc1.a : FORCE
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	@$(MAKE) -C lib cross TARGET=$*
 bcheck.o : lib/bcheck.c
-	gcc -c $< -o $@ $(CFLAGS)
+	gcc -c $< -o $@ $(CPPFLAGS) $(CFLAGS)
 FORCE:
 
 # install

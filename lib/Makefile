@@ -85,11 +85,11 @@ endif
 $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 	$(AR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
-	$(XCC) -c $< -o $@ $(TGT)
+	$(XCC) -c $< -o $@ $(CPPFLAGS) $(TGT) $(CFLAGS)
 $(DIR)/%.o : %.S
-	$(XCC) -c $< -o $@ $(TGT)
+	$(XCC) -c $< -o $@ $(CPPFLAGS) $(TGT) $(CFLAGS)
 $(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
-	$(CC) -Os -s -w -o $@ $< $(TGT)
+	$(CC) -Os -s -w -o $@ $< $(CPPFLAGS) $(TGT) $(CFLAGS) $(LDFLAGS)
 
 $(OBJ) $(XAR) : $(DIR)/exists
 $(DIR)/exists :
