@@ -3317,7 +3317,8 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         nocode_wanted = 1;
     }
     post_type(type, ad);
-    nocode_wanted = saved_nocode_wanted;
+    if (storage & VT_STATIC)
+        nocode_wanted = saved_nocode_wanted;
     type->t |= storage;
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
