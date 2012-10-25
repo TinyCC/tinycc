@@ -3250,7 +3250,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
 {
     Sym *s;
     CType type1, *type2;
-    int qualifiers, storage;
+    int qualifiers, storage, saved_nocode_wanted;
     
     while (tok == '*') {
         qualifiers = 0;
@@ -3304,7 +3304,12 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
     }
     storage = type->t & VT_STORAGE;
     type->t &= ~VT_STORAGE;
+    if (storage & VT_STATIC) {
+        saved_nocode_wanted = nocode_wanted;
+        nocode_wanted = 1;
+    }
     post_type(type, ad);
+    nocode_wanted = saved_nocode_wanted;
     type->t |= storage;
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
