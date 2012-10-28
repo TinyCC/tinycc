@@ -638,7 +638,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_ARM_THM_JUMP24:
 	    {
                 int x, hi, lo, s, j1, j2, i1, i2, imm10, imm11;
-                int to_thumb, is_call, blx_bit = 1 << 12;
+                int to_thumb, is_call, to_plt, blx_bit = 1 << 12;
+                Section *plt;
 
                 /* weak reference */
                 if (sym->st_shndx == SHN_UNDEF &&
@@ -662,9 +663,14 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 
                 /* Relocation infos */
                 to_thumb = val & 1;
+                plt = s1->plt;
+                to_plt = (val >= plt->sh_addr) &&
+                         (val < plt->sh_addr + plt->data_offset);
                 is_call = (type == R_ARM_THM_CALL);
 
                 /* Compute final offset */
+                if (to_plt && !is_call) /* Point to 1st instr of Thumb stub */
+                    x -= 4;
                 x += val - addr;
                 if (!to_thumb && is_call) {
                     blx_bit = 0; /* bl -> blx */
@@ -675,9 +681,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                    * offset must not be out of range
                    * if target is to be entered in arm mode:
                      - bit 1 must not set
-                     - instruction must be a call (bl) */
+                     - instruction must be a call (bl) or a jump to PLT */
                 if (!to_thumb || x >= 0x1000000 || x < -0x1000000)
-                    if (to_thumb || (val & 2) || !is_call)
+                    if (to_thumb || (val & 2) || (!is_call && !to_plt))
                         tcc_error("can't relocate value at %x",addr);
 
                 /* Compute and store final offset */
@@ -1096,10 +1102,13 @@ static void put_got_entry(TCCState *s1,
                 put32(p + 12, 0xe5bef008);
             }
 
-            p = section_ptr_add(plt, 16);
-            put32(p  , 0xe59fc004);
-            put32(p+4, 0xe08fc00c);
-            put32(p+8, 0xe59cf000);
+            p = section_ptr_add(plt, 20);
+            put32(p  , 0x4778); // bx pc
+            put32(p+2, 0x46c0); // nop
+            p += 4;
+            put32(p  , 0xe59fc004); // ldr ip, [pc, #4] // offset in GOT
+            put32(p+4, 0xe08fc00c); // add ip, pc, ip // absolute address or offset
+            put32(p+8, 0xe59cf000); // ldr pc, [ip] // load absolute address or load offset
             put32(p+12, s1->got->data_offset);
 
             /* the symbol is modified so that it will be relocated to
@@ -2057,8 +2066,9 @@ static int elf_output_file(TCCState *s1, const char *filename)
 #elif defined(TCC_TARGET_ARM)
                     int x;
                     x=s1->got->sh_addr - s1->plt->sh_addr - 12;
-                    p +=16;
+                    p += 16;
                     while (p < p_end) {
+                        p += 4;
                         put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
                         p += 16;
                     }
