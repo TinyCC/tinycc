@@ -581,7 +581,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
         case R_386_GOT32:
             /* we load the got offset */
-            *(int *)ptr += s1->got_offsets[sym_index];
+            *(int *)ptr += s1->sym_infos[sym_index].got_offset << 1;
             break;
         case R_386_16:
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY) {
@@ -758,7 +758,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
         case R_ARM_GOT_BREL:
             /* we load the got offset */
-            *(int *)ptr += s1->got_offsets[sym_index];
+            *(int *)ptr += s1->sym_infos[sym_index].got_offset << 1;
             break;
         case R_ARM_COPY:
             break;
@@ -864,14 +864,14 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             }
 #endif
             *(int *)ptr += (s1->got->sh_addr - addr +
-                            s1->got_offsets[sym_index] - 4);
+                            (s1->sym_infos[sym_index].got_offset << 1) - 4);
             break;
         case R_X86_64_GOTTPOFF:
             *(int *)ptr += val - s1->got->sh_addr;
             break;
         case R_X86_64_GOT32:
             /* we load the got offset */
-            *(int *)ptr += s1->got_offsets[sym_index];
+            *(int *)ptr += s1->sym_infos[sym_index].got_offset << 1;
             break;
 #else
 #error unsupported processor
@@ -941,23 +941,36 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
     return count;
 }
 
-static void put_got_offset(TCCState *s1, int index, unsigned long val)
+static void put_sym_info(TCCState *s1, int index)
 {
     int n;
-    unsigned long *tab;
+    typeof(s1->sym_infos) tab;
 
-    if (index >= s1->nb_got_offsets) {
+    if (index >= s1->nb_sym_infos) {
         /* find immediately bigger power of 2 and reallocate array */
         n = 1;
         while (index >= n)
             n *= 2;
-        tab = tcc_realloc(s1->got_offsets, n * sizeof(unsigned long));
-        s1->got_offsets = tab;
-        memset(s1->got_offsets + s1->nb_got_offsets, 0,
-               (n - s1->nb_got_offsets) * sizeof(unsigned long));
-        s1->nb_got_offsets = n;
+        tab = tcc_realloc(s1->sym_infos, n * sizeof(unsigned long));
+        s1->sym_infos = tab;
+        memset(s1->sym_infos + s1->nb_sym_infos, 0,
+               (n - s1->nb_sym_infos) * sizeof(unsigned long));
+        s1->nb_sym_infos = n;
     }
-    s1->got_offsets[index] = val;
+}
+
+#ifdef TCC_TARGET_ARM
+static void put_plt_thumb_stub(TCCState *s1, int index, unsigned char bit)
+{
+    put_sym_info(s1, index);
+    s1->sym_infos[index].plt_thumb_stub = bit;
+}
+#endif
+
+static void put_got_offset(TCCState *s1, int index, unsigned long val)
+{
+    put_sym_info(s1, index);
+    s1->sym_infos[index].got_offset = val >> 1;
 }
 
 /* XXX: suppress that */
@@ -1021,8 +1034,8 @@ static void put_got_entry(TCCState *s1,
         build_got(s1);
 
     /* if a got entry already exists for that symbol, no need to add one */
-    if (sym_index < s1->nb_got_offsets &&
-        s1->got_offsets[sym_index] != 0)
+    if (sym_index < s1->nb_sym_infos &&
+        s1->sym_infos[sym_index].got_offset << 1)
         return;
     
     put_got_offset(s1, sym_index, s1->got->data_offset);
@@ -1102,10 +1115,13 @@ static void put_got_entry(TCCState *s1,
                 put32(p + 12, 0xe5bef008);
             }
 
-            p = section_ptr_add(plt, 20);
-            put32(p  , 0x4778); // bx pc
-            put32(p+2, 0x46c0); // nop
-            p += 4;
+            if (s1->sym_infos[sym_index].plt_thumb_stub) {
+                p = section_ptr_add(plt, 20);
+                put32(p  , 0x4778); // bx pc
+                put32(p+2, 0x46c0); // nop
+                p += 4;
+            } else
+                p = section_ptr_add(plt, 16);
             put32(p  , 0xe59fc004); // ldr ip, [pc, #4] // offset in GOT
             put32(p+4, 0xe08fc00c); // add ip, pc, ip // absolute address or offset
             put32(p+8, 0xe59cf000); // ldr pc, [ip] // load absolute address or load offset
@@ -1492,9 +1508,9 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
 	ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
 	unsigned long offset;
 
-	if (sym_index >= s1->nb_got_offsets)
+	if (sym_index >= s1->nb_sym_infos)
 		return;
-	offset = s1->got_offsets[sym_index];
+	offset = s1->sym_infos[sym_index].got_offset << 1;
 	section_reserve(s1->got, offset + PTR_SIZE);
 #ifdef TCC_TARGET_X86_64
 	/* only works for x86-64 */
@@ -2068,7 +2084,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
                     x=s1->got->sh_addr - s1->plt->sh_addr - 12;
                     p += 16;
                     while (p < p_end) {
-                        p += 4;
+                        if (get32(p) == 0x46c04778) /* PLT Thumb stub present */
+                            p += 4;
                         put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
                         p += 16;
                     }
@@ -2302,7 +2319,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     tcc_free(s1->symtab_to_dynsym);
     tcc_free(section_order);
     tcc_free(phdr);
-    tcc_free(s1->got_offsets);
+    tcc_free(s1->sym_infos);
     return ret;
 }
 
@@ -2597,6 +2614,19 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                 rel->r_info = ELFW(R_INFO)(sym_index, type);
                 /* offset the relocation offset */
                 rel->r_offset += offseti;
+#ifdef TCC_TARGET_ARM
+                /* Jumps and branches from a Thumb code to a PLT entry need
+                   special handling since PLT entries are ARM code.
+                   Unconditional bl instructions referencing PLT entries are
+                   handled by converting these instructions into blx
+                   instructions. Other case of instructions referencing a PLT
+                   entry require to add a Thumb stub before the PLT entry to
+                   switch to ARM mode. We set bit 0 of the got offset of a
+                   symbol to indicate such a case. */
+                if (type == R_ARM_THM_JUMP24) {
+                    put_plt_thumb_stub(s1, sym_index, 1);
+                }
+#endif
             }
             break;
         default:
