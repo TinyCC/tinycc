@@ -492,6 +492,13 @@ typedef struct ASMOperand {
 } ASMOperand;
 #endif
 
+struct sym_attr {
+    unsigned long got_offset;
+#ifdef TCC_TARGET_ARM
+    unsigned char plt_thumb_stub:1;
+#endif
+};
+
 struct TCCState {
     unsigned output_type    : 8;
     unsigned reloc_output   : 1;
@@ -524,11 +531,11 @@ struct TCCState {
     Section **priv_sections;
     int nb_priv_sections; /* number of private sections */
 
-    /* got handling */
+    /* got & plt handling */
     Section *got;
     Section *plt;
-    unsigned long *got_offsets;
-    int nb_got_offsets;
+    struct sym_attr *sym_attrs;
+    int nb_sym_attrs;
     /* give the correspondance from symtab indexes to dynsym indexes */
     int *symtab_to_dynsym;
 
