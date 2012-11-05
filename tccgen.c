@@ -1700,6 +1700,8 @@ ST_FUNC void gen_op(int op)
             (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED))
             t |= VT_UNSIGNED;
         goto std_op;
+    } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+        tcc_error("comparison of struct");
     } else {
         /* integer operations */
         t = VT_INT;
