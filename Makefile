@@ -13,7 +13,7 @@ LDFLAGS_P=$(LDFLAGS)
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
 ifneq ($(GCC_MAJOR),3)
-CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -D_FORTIFY_SOURCE=0
+CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -Wno-unused-result
 endif
 endif
 
