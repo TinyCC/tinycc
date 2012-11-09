@@ -615,8 +615,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 #ifndef TCC_TARGET_PE
                 if ((x & 3) || x >= 0x4000000 || x < -0x4000000)
                     if (!(x & 3) || !blx_avail || !is_call)
-                        if (s1->output_type == TCC_OUTPUT_MEMORY)
+                        if (s1->output_type == TCC_OUTPUT_MEMORY) {
                             x += add_jmp_table(s1, val) - val; /* add veneer */
+                            is_thumb = 0; /* Veneer uses ARM instructions */
+                        }
 #endif
                 if ((x & 3) || x >= 0x4000000 || x < -0x4000000)
                     if (!(x & 3) || !blx_avail || !is_call)
