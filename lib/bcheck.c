@@ -638,6 +638,9 @@ static unsigned long get_region_size(void *p)
 
 /* patched memory functions */
 
+/* force compiler to perform stores coded up to this point */
+#define barrier()   __asm__ __volatile__ ("": : : "memory")
+
 static void install_malloc_hooks(void)
 {
 #ifdef CONFIG_TCC_MALLOC_HOOKS
@@ -649,6 +652,8 @@ static void install_malloc_hooks(void)
     __free_hook = __bound_free;
     __realloc_hook = __bound_realloc;
     __memalign_hook = __bound_memalign;
+
+    barrier();
 #endif
 }
 
@@ -659,6 +664,8 @@ static void restore_malloc_hooks(void)
     __free_hook = saved_free_hook;
     __realloc_hook = saved_realloc_hook;
     __memalign_hook = saved_memalign_hook;
+
+    barrier();
 #endif
 }
 
