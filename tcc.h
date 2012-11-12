@@ -33,7 +33,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
@@ -525,15 +524,11 @@ struct TCCState {
     Section **priv_sections;
     int nb_priv_sections; /* number of private sections */
 
-    /* got & plt handling */
+    /* got handling */
     Section *got;
     Section *plt;
-    struct {
-        unsigned long plt_thumb_stub:1;
-        /* mult by 2 (or left shift by 1) before use */
-        unsigned long got_offset:(sizeof(long)*CHAR_BIT-1);
-    } *sym_infos;
-    int nb_sym_infos;
+    unsigned long *got_offsets;
+    int nb_got_offsets;
     /* give the correspondance from symtab indexes to dynsym indexes */
     int *symtab_to_dynsym;
 
