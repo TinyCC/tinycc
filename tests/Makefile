@@ -22,7 +22,6 @@ TESTS = libtest \
 
 # some tests do not pass on all platforms, remove them for now
 ifeq ($(TARGETOS),Linux)
-    TESTS := $(filter-out btest,$(TESTS))
     TESTS := $(filter-out weaktest,$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
