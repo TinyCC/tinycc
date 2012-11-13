@@ -208,25 +208,11 @@ BOUND_PTR_INDIR(8)
 BOUND_PTR_INDIR(12)
 BOUND_PTR_INDIR(16)
 
-#ifdef __i386__
 /* return the frame pointer of the caller */
 #define GET_CALLER_FP(fp)\
 {\
-    unsigned long *fp1;\
-    __asm__ __volatile__ ("movl %%ebp,%0" :"=g" (fp1));\
-    fp = fp1[0];\
+    fp = (unsigned long)__builtin_frame_address(1);\
 }
-#elif defined(__x86_64__)
-/* TCC always creates %rbp frames also on x86_64, so use them.  */
-#define GET_CALLER_FP(fp)\
-{\
-    unsigned long *fp1;\
-    __asm__ __volatile__ ("movq %%rbp,%0" :"=g" (fp1));\
-    fp = fp1[0];\
-}
-#else
-#error put code to extract the calling frame pointer
-#endif
 
 /* called when entering a function to add all the local regions */
 void FASTCALL __bound_local_new(void *p1) 
