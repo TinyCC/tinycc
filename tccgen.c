@@ -3665,20 +3665,23 @@ ST_FUNC void unary(void)
         break;
     case TOK_builtin_frame_address:
         {
+            int level;
             CType type;
             next();
             skip('(');
-            if (tok != TOK_CINT) {
-                tcc_error("__builtin_frame_address only takes integers");
+            if (tok != TOK_CINT || tokc.i < 0) {
+                tcc_error("__builtin_frame_address only takes positive integers");
             }
-            if (tokc.i != 0) {
-                tcc_error("TCC only supports __builtin_frame_address(0)");
-            }
+            level = tokc.i;
             next();
             skip(')');
             type.t = VT_VOID;
             mk_pointer(&type);
-            vset(&type, VT_LOCAL, 0);
+            vset(&type, VT_LOCAL, 0);       /* local frame */
+            while (level--) {
+                mk_pointer(&vtop->type);
+                indir();                    /* -> parent frame */
+            }
         }
         break;
 #ifdef TCC_TARGET_X86_64

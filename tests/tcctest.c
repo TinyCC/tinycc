@@ -89,6 +89,7 @@ void global_data_test(void);
 void cmp_comparison_test(void);
 void math_cmp_test(void);
 void callsave_test(void);
+void builtin_frame_address_test(void);
 
 int fib(int n);
 void num(int n);
@@ -598,6 +599,7 @@ int main(int argc, char **argv)
     cmp_comparison_test();
     math_cmp_test();
     callsave_test();
+    builtin_frame_address_test();
     return 0; 
 }
 
@@ -2679,4 +2681,29 @@ void callsave_test(void)
   i = d[0] > get100 ();
   printf ("%d\n", i);
 #endif
+}
+
+
+void bfa3(ptrdiff_t str_offset)
+{
+    printf("bfa3: %s\n", (char *)__builtin_frame_address(3) + str_offset);
+}
+void bfa2(ptrdiff_t str_offset)
+{
+    printf("bfa2: %s\n", (char *)__builtin_frame_address(2) + str_offset);
+    bfa3(str_offset);
+}
+void bfa1(ptrdiff_t str_offset)
+{
+    printf("bfa1: %s\n", (char *)__builtin_frame_address(1) + str_offset);
+    bfa2(str_offset);
+}
+
+void builtin_frame_address_test(void)
+{
+    char str[] = "__builtin_frame_address";
+    char *fp0 = __builtin_frame_address(0);
+
+    printf("str: %s\n", str);
+    bfa1(str-fp0);
 }

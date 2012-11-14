@@ -73,7 +73,7 @@ libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
 	cp ../include/tcclib.h .
-	$(CC) -o tcctest.gcc $< -I. $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 $(LDFLAGS)
+	$(CC) -o tcctest.gcc $< -I. $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
