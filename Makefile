@@ -13,7 +13,18 @@ LDFLAGS_P=$(LDFLAGS)
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
 ifneq ($(GCC_MAJOR),3)
-CFLAGS+=-Wno-pointer-sign -Wno-sign-compare -Wno-unused-result
+CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
+
+# add -Wno-unused-result only on gcc >= 4.4
+ifeq ($(GCC_MAJOR),4)
+GCCGREATERTHEN44 := $(shell expr `gcc -dumpversion | cut -f2 -d.` \>= 4)
+else
+GCCGREATERTHEN44 := 1
+endif
+ifeq ($(GCCGREATERTHEN44),1)
+CFLAGS+=-Wno-unused-result
+endif
+
 endif
 endif
 
