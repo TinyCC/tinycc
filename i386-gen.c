@@ -260,8 +260,13 @@ ST_FUNC void load(int r, SValue *sv)
             o(0xb8 + r); /* mov $xx, r */
             gen_addr32(fr, sv->sym, fc);
         } else if (v == VT_LOCAL) {
-            o(0x8d); /* lea xxx(%ebp), r */
-            gen_modrm(r, VT_LOCAL, sv->sym, fc);
+            if (fc) {
+                o(0x8d); /* lea xxx(%ebp), r */
+                gen_modrm(r, VT_LOCAL, sv->sym, fc);
+            } else {
+                o(0x89);
+                o(0xe8 + r); /* mov %ebp, r */
+            }
         } else if (v == VT_CMP) {
             oad(0xb8 + r, 0); /* mov $0, r */
             o(0x0f); /* setxx %br */
