@@ -2,6 +2,7 @@
 *.a
 tcc_g
 tcc
+/*-tcc
 tc2.c
 doc
 tc3s.c
@@ -9,6 +10,7 @@ p3.c
 tc1.c
 error.c
 i386-gen1.c
+test.out1
 test.out2
 test.out3
 web.sh
@@ -32,6 +34,8 @@ tcctest[1234]
 test[1234].out
 tests/tcclib.h
 tests/tcctest.gcc
+tests/weaktest.*.o.txt
+tests2/fred.txt
 .gdb_history
 tcc.1
 tcc.pod
@@ -43,6 +47,8 @@ tags
 *.swp
 lib/x86_64
 lib/i386
+lib/x86_64-win32
+lib/i386-win32
 tcc-doc.info
 conftest*
 tiny_libmaker
