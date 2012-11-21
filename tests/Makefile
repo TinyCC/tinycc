@@ -17,6 +17,11 @@ TESTS = libtest \
 		# test4 # this test does not seem to work on any platform
 		# asmtest # this test does not seem to work on any platform
 
+# bounds-checking is supported only on i386
+ifneq ($(ARCH),i386)
+    TESTS := $(filter-out btest,$(TESTS))
+endif
+
 # these should work too
 # TESTS += test1 test2 speedtest btest weaktest
 
