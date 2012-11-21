@@ -1053,10 +1053,12 @@ void gfunc_call(int nb_args)
   for(i = 0; i < keep; i++) {
     vrotb(keep);
     gv(regmask(plan2[i]));
+#ifdef TCC_ARM_HARDFLOAT
     /* arg is in s(2d+1): plan2[i]<plan2[i+1] => alignment occured (ex f,d,f) */
     if (i < keep - 1 && is_float(vtop->type.t) && (plan2[i] <= plan2[i + 1])) {
       o(0xEEF00A40|(vfpr(plan2[i])<<12)|vfpr(plan2[i]));
     }
+#endif
   }
 save_regs(keep); /* save used temporary registers */
   keep++;
