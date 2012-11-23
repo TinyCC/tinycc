@@ -1566,7 +1566,7 @@ void gen_opf(int op)
       x|=0x800000;
       break;
     default:
-      if(op < TOK_ULT && op > TOK_GT) {
+      if(op < TOK_ULT || op > TOK_GT) {
         tcc_error("unknown fp op %x!",op);
         return;
       }
