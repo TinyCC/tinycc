@@ -829,7 +829,7 @@ void gfunc_call(int nb_args)
     --nb_args;
   }
   
-  vpushi(0);
+  vpushi(0), nb_args++;
   vtop->type.t = VT_LLONG;
   args_size = 0;
 #endif
@@ -845,7 +845,7 @@ void gfunc_call(int nb_args)
      structures in the first zone are moved just after the SValue pointed by
      before_vfpreg_hfa. SValue's representing structures in the second zone are
      moved just after the SValue pointer by before_stack. */
-  for(i = nb_args + 1 ; i-- ;) {
+  for(i = nb_args; i-- ;) {
     int j, assigned_vfpreg = 0;
     size = type_size(&vtop[-i].type, &align);
     switch(vtop[-i].type.t & VT_BTYPE) {
@@ -920,9 +920,11 @@ void gfunc_call(int nb_args)
       }
       continue;
       default:
+#ifdef TCC_ARM_EABI
       if (!i) {
         break;
       }
+#endif
       if (ncrn < 4) {
         int is_long = (vtop[-i].type.t & VT_BTYPE) == VT_LLONG;
 
@@ -953,7 +955,9 @@ void gfunc_call(int nb_args)
 #endif
     args_size += (size + 3) & -4;
   }
-  vtop--;
+#ifdef TCC_ARM_EABI
+  vtop--, nb_args--;
+#endif
   args_size = keep = 0;
   for(i = 0;i < nb_args; i++) {
     vrotb(keep+1);
