@@ -3041,7 +3041,6 @@ ST_FUNC void preprocess_init(TCCState *s1)
     s1->ifdef_stack_ptr = s1->ifdef_stack;
     file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
 
-    /* XXX: not ANSI compliant: bound checking says error */
     vtop = vstack - 1;
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;

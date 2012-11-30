@@ -1135,7 +1135,8 @@ ST_DATA Sym *local_label_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *define_stack;
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
-ST_DATA SValue vstack[VSTACK_SIZE], *vtop;
+ST_DATA SValue __vstack[1+/*to make bcheck happy*/ VSTACK_SIZE], *vtop;
+#define vstack  (__vstack + 1)
 ST_DATA int rsym, anon_sym, ind, loc;
 
 ST_DATA int const_wanted; /* true if constant wanted */
