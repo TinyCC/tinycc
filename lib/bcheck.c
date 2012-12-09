@@ -25,6 +25,7 @@
     && !defined(__DragonFly__) && !defined(__OpenBSD__)
 #include <malloc.h>
 #endif
+#include <unistd.h>
 
 //#define BOUND_DEBUG
 
@@ -93,9 +94,6 @@ static void *saved_free_hook;
 static void *saved_realloc_hook;
 static void *saved_memalign_hook;
 #endif
-
-/* linker definitions */
-extern char _end;
 
 /* TCC definitions */
 extern char __bounds_start; /* start of static bounds table */
@@ -379,9 +377,32 @@ void __bound_init(void)
 
 #if !defined(__TINYC__) && defined(CONFIG_TCC_MALLOC_HOOKS)
     /* malloc zone is also marked invalid. can only use that with
-       hooks because all libs should use the same malloc. The solution
-       would be to build a new malloc for tcc. */
-    start = (unsigned long)&_end;
+     * hooks because all libs should use the same malloc. The solution
+     * would be to build a new malloc for tcc.
+     *
+     * usually heap (= malloc zone) comes right after bss, i.e. after _end, but
+     * not always - either if we are running from under `tcc -b -run`, or if
+     * address space randomization is turned on(a), heap start will be separated
+     * from bss end.
+     *
+     * So sbrk(0) will be a good approximation for start_brk:
+     *
+     *   - if we are a separately compiled program, __bound_init() runs early,
+     *     and sbrk(0) should be equal or very near to start_brk(b) (in case other
+     *     constructors malloc something), or
+     *
+     *   - if we are running from under `tcc -b -run`, sbrk(0) will return
+     *     start of heap portion which is under this program control, and not
+     *     mark as invalid earlier allocated memory.
+     *
+     *
+     * (a) /proc/sys/kernel/randomize_va_space = 2, on Linux;
+     *     usually turned on by default.
+     *
+     * (b) on Linux >= v3.3, the alternative is to read
+     *     start_brk from /proc/self/stat
+     */
+    start = (unsigned long)sbrk(0);
     size = 128 * 0x100000;
     mark_invalid(start, size);
 #endif
