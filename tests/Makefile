@@ -12,6 +12,9 @@ TESTS = libtest \
 		test3 \
 		speedtest \
 		btest \
+		test1b\
+		test2b\
+		test3b\
 		weaktest
 
 		# test4 # this test does not seem to work on any platform
@@ -20,6 +23,9 @@ TESTS = libtest \
 # bounds-checking is supported only on i386
 ifneq ($(ARCH),i386)
     TESTS := $(filter-out btest,$(TESTS))
+    TESTS := $(filter-out test1b,$(TESTS))
+    TESTS := $(filter-out test2b,$(TESTS))
+    TESTS := $(filter-out test3b,$(TESTS))
 endif
 
 # these should work too
@@ -87,17 +93,32 @@ test1: test.ref
 	$(TCC) -run tcctest.c > test.out1
 	@if diff -u test.ref test.out1 ; then echo "Auto Test OK"; fi
 
+test1b: test.ref
+	@echo ------------ $@ ------------
+	$(TCC) -b -run tcctest.c > test.out1b
+	@if diff -u test.ref test.out1b ; then echo "Auto Test OK"; fi
+
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: test.ref
 	@echo ------------ $@ ------------
 	$(TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
+test2b: test.ref ../bcheck.o
+	@echo ------------ $@ ------------
+	$(TCC) -b $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out2b
+	@if diff -u test.ref test.out2b ; then echo "Auto Test2b OK"; fi
+
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: test.ref
 	@echo ------------ $@ ------------
 	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
+
+test3b: test.ref
+	@echo ------------ $@ ------------
+	$(TCC) -b $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out3b
+	@if diff -u test.ref test.out3b ; then echo "Auto Test3 OK"; fi
 
 # binary output test
 test4: test.ref
@@ -190,5 +211,5 @@ cache: tcc_g
 
 # clean
 clean:
-	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.gcc \
+	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.gcc \
 	   tcctest[1234] ex? libtcc_test$(EXESUF) tcc_g tcclib.h
