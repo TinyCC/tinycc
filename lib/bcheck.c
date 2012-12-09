@@ -613,7 +613,7 @@ int __bound_delete_region(void *p)
             }
         }
         /* last page */
-        page = get_page(t2_end);
+        page = get_page(t1_end);
         e2 = (BoundEntry *)((char *)page + t2_end);
         for(e=page;e<e2;e++) {
             e->start = 0;
