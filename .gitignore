@@ -11,8 +11,11 @@ tc1.c
 error.c
 i386-gen1.c
 test.out1
+test.out1b
 test.out2
+test.out2b
 test.out3
+test.out3b
 web.sh
 memdebug.c
 bench
