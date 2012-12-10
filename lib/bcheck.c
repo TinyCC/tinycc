@@ -25,7 +25,9 @@
     && !defined(__DragonFly__) && !defined(__OpenBSD__)
 #include <malloc.h>
 #endif
+#if !defined(_WIN32)
 #include <unistd.h>
+#endif
 
 //#define BOUND_DEBUG
 
