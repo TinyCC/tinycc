@@ -4,6 +4,7 @@
 
 TOP ?= .
 include $(TOP)/config.mak
+VPATH = $(top_srcdir)
 
 CPPFLAGS_P=$(CPPFLAGS) -DCONFIG_TCC_STATIC
 CFLAGS_P=$(CFLAGS) -pg -static
@@ -356,11 +357,11 @@ tcc-doc.html: tcc-doc.texi
 	-texi2html -monolithic -number $<
 
 tcc.1: tcc-doc.texi
-	-./texi2pod.pl $< tcc.pod
+	-$(top_srcdir)/texi2pod.pl $< tcc.pod
 	-pod2man --section=1 --center=" " --release=" " tcc.pod > $@
 
 tcc-doc.info: tcc-doc.texi
-	-makeinfo tcc-doc.texi
+	-makeinfo $<
 
 .PHONY: all clean tar distclean install uninstall FORCE
 

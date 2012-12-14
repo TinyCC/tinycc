@@ -35,6 +35,16 @@ Documentation:
    make test
    make install
 
+Alternatively, VPATH builds are supported: you may use different
+directories to old build objects, kept separate from your source tree:
+
+   mkdir _build
+   cd _build
+   ../configure
+   make
+   make test
+   make install
+
 By default, tcc is installed in /usr/local/bin.
 ./configure --help  shows configuration options.
 

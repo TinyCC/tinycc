@@ -1,5 +1,6 @@
 TOP = ..
 include $(TOP)/Makefile
+VPATH = $(top_srcdir)/tests2
 
 ifeq ($(TARGETOS),Darwin)
     CFLAGS+=-Wl,-flat_namespace,-undefined,warning
@@ -77,15 +78,15 @@ ifdef CONFIG_WIN32
     TESTS := $(filter-out 28_strings.test,$(TESTS))
 endif
 
-%.test: %.expect %.c
+%.test: %.c %.expect
 	@echo Test: $*...
 	@if [ "x`echo $* | grep args`" != "x" ]; \
 	then \
-		../tcc -B.. $(TCCFLAGS) -run $*.c - arg1 arg2 arg3 arg4 2>&1 >$*.output; \
+		../tcc -B.. $(TCCFLAGS) -run $< - arg1 arg2 arg3 arg4 2>&1 >$*.output; \
 	else \
-		../tcc -B.. $(TCCFLAGS) -run $*.c 2>&1 >$*.output; \
+		../tcc -B.. $(TCCFLAGS) -run $< 2>&1 >$*.output; \
 	fi
-	@if diff -bu $*.expect $*.output ; \
+	@if diff -bu $(<:.c=.expect) $*.output ; \
 	then \
         rm -f $*.output \
 	else \

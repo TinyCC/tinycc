@@ -4,6 +4,7 @@
 
 TOP = ..
 include $(TOP)/Makefile
+VPATH = $(top_srcdir)/tests
 
 # what tests to run
 TESTS = libtest \
@@ -56,7 +57,7 @@ endif
 # run local version of tcc with local libraries and includes
 TCC = ../tcc -B.. $(NATIVE_DEFINES)
 ifdef CONFIG_WIN32
-	TCC := $(TCC) -I $(TOP)/win32/include -L$(TOP)
+	TCC := $(TCC) -I $(top_srcdir)/win32/include -L$(top_build)
 endif
 RUN_TCC = $(NATIVE_DEFINES) -run -DONE_SOURCE ../tcc.c -B..
 DISAS=objdump -d
@@ -77,8 +78,8 @@ libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	@echo ------------ $@ ------------
 	./libtcc_test$(EXESUF) lib_path=..
 
-libtcc_test$(EXESUF): libtcc_test.c ../$(LIBTCC)
-	$(CC) -o $@ $^ -I.. $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS)
+libtcc_test$(EXESUF): libtcc_test.c $(top_builddir)/$(LIBTCC)
+	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS)
 
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
@@ -169,9 +170,9 @@ btest: boundtest.c ../bcheck.o
 speedtest: ex2 ex3
 	@echo ------------ $@ ------------
 	time ./ex2 1238 2 3 4 10 13 4
-	time $(TCC) -run ../examples/ex2.c 1238 2 3 4 10 13 4
+	time $(TCC) -run $(top_srcdir)/examples/ex2.c 1238 2 3 4 10 13 4
 	time ./ex3 35
-	time $(TCC) -run ../examples/ex3.c 35
+	time $(TCC) -run $(top_srcdir)/examples/ex3.c 35
 
 weaktest: test.ref
 	$(TCC) -c tcctest.c -o weaktest.tcc.o $(CPPFLAGS) $(CFLAGS)
@@ -180,7 +181,7 @@ weaktest: test.ref
 	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
 	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
 
-ex%: ../examples/ex%.c
+ex%: $(top_srcdir)/examples/ex%.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # tiny assembler testing

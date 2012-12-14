@@ -2,6 +2,14 @@
 #
 # tcc configure script (c) 2003 Fabrice Bellard
 
+fn_dirname()
+{
+  case $1 in
+    */*) echo "$1" | sed -e 's,/[^/]*,,';;
+      *) echo '.'
+  esac
+}
+
 # set temporary file name
 if test ! -z "$TMPDIR" ; then
     TMPDIR1="${TMPDIR}"
@@ -411,10 +419,13 @@ echo "#define GCC_MAJOR $gcc_major" >> $TMPH
 echo "HOST_CC=$host_cc" >> config.mak
 echo "AR=$ar" >> config.mak
 echo "STRIP=$strip -s -R .comment -R .note" >> config.mak
-echo "CFLAGS=$CFLAGS" >> config.mak
-echo "LDFLAGS=$LDFLAGS" >> config.mak
-echo "LIBSUF=$LIBSUF" >> config.mak
-echo "EXESUF=$EXESUF" >> config.mak
+cat >> config.mak <<EOF
+CPPFLAGS = -I. -I\$(top_srcdir)
+CFLAGS=$CFLAGS
+LDFLAGS=$LDFLAGS
+LIBSUF=$LIBSUF
+EXESUF=$EXESUF
+EOF
 
 if test "$cpu" = "x86" ; then
   echo "ARCH=i386" >> config.mak
@@ -491,16 +502,23 @@ echo "@set VERSION $version" > config.texi
 
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
-    DIRS="tests"
-    FILES="Makefile tests/Makefile"
-    for dir in $DIRS ; do
-        mkdir -p $dir
-    done
+    FILES="Makefile lib/Makefile tests/Makefile tests2/Makefile"
     for f in $FILES ; do
-        ln -sf $source_path/$f $f
+        dir=`fn_dirname "$f"`
+        test -d "$dir" || mkdir -p "$dir"
+        back=`echo "$source_path/$dir/" | sed 's,/\./,/,g;s,[^/]*/,../,g'`
+        back=$back$f
+        ln -sf $back $f
     done
 fi
-echo "SRC_PATH=$source_path" >> config.mak
+cat >>config.mak <<EOF
+SRC_PATH = $source_path
+top_builddir = \$(TOP)
+EOF
+case $source_path in
+  /*) echo 'top_srcdir = $(SRC_PATH)';;
+   *) echo 'top_srcdir = $(TOP)/$(SRC_PATH)';;
+esac >>config.mak
 
 diff $TMPH config.h >/dev/null 2>&1
 if test $? -ne 0 ; then
