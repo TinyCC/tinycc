@@ -363,16 +363,6 @@ tcc.1: tcc-doc.texi
 tcc-doc.info: tcc-doc.texi
 	-makeinfo $<
 
-.PHONY: all clean tar distclean install uninstall FORCE
-
-# tar release (use 'make -k tar' on a checkouted tree)
-TCC-VERSION=tcc-$(shell cat VERSION)
-tar:
-	rm -rf /tmp/$(TCC-VERSION)
-	cp -r . /tmp/$(TCC-VERSION)
-	( cd /tmp ; tar zcvf ~/$(TCC-VERSION).tar.gz $(TCC-VERSION) --exclude CVS )
-	rm -rf /tmp/$(TCC-VERSION)
-
 # in tests subdir
 export LIBTCC1
 
@@ -394,5 +384,22 @@ distclean: clean
 config.mak:
 	@echo "Please run ./configure."
 	@exit 1
+
+# create release tarball from *current* git branch (including tcc-doc.html
+# and converting two files to CRLF)
+TCC-VERSION := tcc-$(shell cat VERSION)
+tar:    tcc-doc.html
+	mkdir $(TCC-VERSION)
+	( cd $(TCC-VERSION) && git --git-dir ../.git checkout -f )
+	cp tcc-doc.html $(TCC-VERSION)
+	for f in tcc-win32.txt build-tcc.bat ; do \
+	    cat win32/$$f | sed 's,\(.*\),\1\r,g' > $(TCC-VERSION)/win32/$$f ; \
+	done
+	tar cjf $(TCC-VERSION).tar.bz2 $(TCC-VERSION)
+	rm -rf $(TCC-VERSION)
+	git reset
+
+
+.PHONY: all clean tar distclean install uninstall FORCE
 
 endif # ifeq ($(TOP),.)
