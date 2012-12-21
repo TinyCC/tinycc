@@ -375,7 +375,7 @@ config.mak:
 
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
-TCC-VERSION := tcc-$(shell cat VERSION)
+TCC-VERSION := tcc-$(shell cat $(top_srcdir)/VERSION)
 tar:    tcc-doc.html
 	mkdir $(TCC-VERSION)
 	( cd $(TCC-VERSION) && git --git-dir ../.git checkout -f )
