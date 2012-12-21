@@ -228,6 +228,10 @@
 #define true 1
 typedef int BOOL;
 
+#ifndef _STATIC_ASSERT
+#define _STATIC_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
+#endif
+
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         256
