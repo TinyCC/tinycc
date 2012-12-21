@@ -1008,7 +1008,7 @@ PUB_FUNC void cstr_cat(CString *cstr, const char *str);
 PUB_FUNC void cstr_wccat(CString *cstr, int ch);
 PUB_FUNC void cstr_new(CString *cstr);
 PUB_FUNC void cstr_free(CString *cstr);
-#define cstr_reset(cstr) cstr_free(cstr)
+PUB_FUNC void cstr_reset(CString *cstr);
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);

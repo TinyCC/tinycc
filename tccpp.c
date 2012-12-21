@@ -163,6 +163,12 @@ PUB_FUNC void cstr_free(CString *cstr)
     cstr_new(cstr);
 }
 
+/* reset string to empty */
+PUB_FUNC void cstr_reset(CString *cstr)
+{
+    cstr->size = 0;
+}
+
 /* XXX: unicode ? */
 static void add_char(CString *cstr, int c)
 {
