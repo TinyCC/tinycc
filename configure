@@ -502,9 +502,14 @@ if test "$source_path_used" = "yes" ; then
     for f in $FILES ; do
         dir=`fn_dirname "$f"`
         test -d "$dir" || mkdir -p "$dir"
-        back=`echo "$source_path/$dir/" | sed 's,/\./,/,g;s,[^/]*/,../,g'`
-        back=$back$f
-        ln -sf $back $f
+        # Build a symlink $f that points to $dest, its $source_path
+        # counterpart.
+        case $source_path in
+          /*) dest=$source_path/$f;;
+           *) dest=`echo "$source_path/$dir/" | sed 's,/\./,/,g;s,[^/]*/,../,g'`
+              dest=$dest$f;;
+        esac
+        ln -sf $dest $f
     done
 fi
 cat >>config.mak <<EOF

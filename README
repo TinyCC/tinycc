@@ -35,8 +35,8 @@ Documentation:
    make test
    make install
 
-Alternatively, VPATH builds are supported: you may use different
-directories to old build objects, kept separate from your source tree:
+Alternatively, out-of-tree builds are supported: you may use different
+directories to hold build objects, kept separate from your source tree:
 
    mkdir _build
    cd _build
