@@ -101,16 +101,10 @@ EXESUF=""
 # OS specific
 targetos=`uname -s`
 case $targetos in
-MINGW32*)
-mingw32="yes"
-;;
-DragonFly)
-noldl="yes"
-;;
-OpenBSD)
-noldl="yes"
-;;
-*) ;;
+  MINGW32*)  mingw32=yes;;
+  DragonFly) noldl=yes;;
+  OpenBSD)   noldl=yes;;
+  *) ;;
 esac
 
 # find source path
@@ -231,9 +225,9 @@ fi
 else
 
 # if cross compiling, cannot launch a program, so make a static guess
-if test "$cpu" = "powerpc" -o "$cpu" = "mips" -o "$cpu" = "s390" ; then
-    bigendian="yes"
-fi
+case $cpu in
+  powerpc|mips|s390)  bigendian=yes;;
+esac
 
 fi
 
