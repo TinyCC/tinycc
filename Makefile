@@ -275,15 +275,13 @@ endif
 ifneq ($(BCHECK_O),)
 	$(INSTALL) -m644 $(BCHECK_O) "$(tccdir)"
 endif
-	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
+	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m755 $(LIBTCC) "$(libdir)"
 ifdef DISABLE_STATIC
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so.1"
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so"
 endif
-	mkdir -p "$(includedir)"
-	$(INSTALL) -m644 libtcc.h "$(includedir)"
 	mkdir -p "$(docdir)"
 	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
