@@ -57,14 +57,12 @@ NATIVE_DEFINES+=$(if $(wildcard /lib/i386-linux-gnu),-DCONFIG_MULTIARCHDIR=\"i38
 NATIVE_DEFINES+=$(if $(wildcard /lib/i386-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"i386-kfreebsd-gnu\")
 NATIVE_DEFINES+=$(if $(wildcard /lib/i386-gnu),-DCONFIG_MULTIARCHDIR=\"i386-gnu\")
 CFLAGS+=-m32
-else
-ifeq ($(ARCH),x86-64)
+else ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
 CFLAGS+=-m64
 NATIVE_DEFINES+=$(if $(wildcard /usr/lib64),-DCONFIG_LDDIR=\"lib64\")
 NATIVE_DEFINES+=$(if $(wildcard /lib/x86_64-linux-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\")
 NATIVE_DEFINES+=$(if $(wildcard /lib/x86_64-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-kfreebsd-gnu\")
-endif
 endif
 
 ifeq ($(ARCH),arm)
@@ -73,11 +71,9 @@ NATIVE_DEFINES+=-DWITHOUT_LIBTCC
 ifneq (,$(wildcard /lib/ld-linux.so.3))
 NATIVE_DEFINES+=-DTCC_ARM_EABI
 NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabi), -DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabi\")
-else
-ifneq (,$(wildcard /lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux.so.3))
+else ifneq (,$(wildcard /lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux.so.3))
 NATIVE_DEFINES+=-DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
 NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabihf),-DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabihf\")
-endif
 endif
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
@@ -134,34 +130,26 @@ NATIVE_FILES=$(WIN64_FILES)
 PROGS_CROSS=$(WIN32_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
 LIBTCC1=libtcc1.a
-else
-ifdef CONFIG_WIN32
+else ifdef CONFIG_WIN32
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN32_FILES)
 PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
 LIBTCC1=libtcc1.a
-else
-ifeq ($(ARCH),i386)
+else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
 LIBTCC1=libtcc1.a
 BCHECK_O=bcheck.o
-else
-ifeq ($(ARCH),x86-64)
+else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
 LIBTCC1=libtcc1.a
-else
-ifeq ($(ARCH),arm)
+else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
-endif
-endif
-endif
-endif
 endif
 
 ifdef CONFIG_UCLIBC
