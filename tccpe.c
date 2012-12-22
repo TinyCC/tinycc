@@ -1,4 +1,4 @@
-/*
+    /*
  *  TCCPE.C - PE file output for the Tiny C Compiler
  *
  *  Copyright (c) 2005-2007 grischka
@@ -1100,6 +1100,9 @@ static int pe_assign_addresses (struct pe_info *pe)
             continue;
         }
 #endif
+        if (c == sec_stab && 0 == pe->s1->do_debug)
+            continue;
+
         strcpy(si->name, s->name);
         si->cls = c;
         si->ord = k;
