@@ -2596,7 +2596,6 @@ void cmp_comparison_test(void)
   s.b2 = 0;
   glob3 = 43;
   compare_comparisons (&s);
-  return 0;
 }
 
 int fcompare (double a, double b, int code)
