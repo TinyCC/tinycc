@@ -1242,13 +1242,12 @@ ST_FUNC void parse_define(void)
     define_push(v, t, str.str, first);
 }
 
-static inline int hash_cached_include(int type, const char *filename)
+static inline int hash_cached_include(const char *filename)
 {
     const unsigned char *s;
     unsigned int h;
 
     h = TOK_HASH_INIT;
-    h = TOK_HASH_FUNC(h, type);
     s = filename;
     while (*s) {
         h = TOK_HASH_FUNC(h, *s);
@@ -1258,45 +1257,39 @@ static inline int hash_cached_include(int type, const char *filename)
     return h;
 }
 
-/* XXX: use a token or a hash table to accelerate matching ? */
-static CachedInclude *search_cached_include(TCCState *s1,
-                                            int type, const char *filename)
+static CachedInclude *search_cached_include(TCCState *s1, const char *filename)
 {
     CachedInclude *e;
     int i, h;
-    h = hash_cached_include(type, filename);
+    h = hash_cached_include(filename);
     i = s1->cached_includes_hash[h];
     for(;;) {
         if (i == 0)
             break;
         e = s1->cached_includes[i - 1];
-        if (e->type == type && !PATHCMP(e->filename, filename))
+        if (0 == PATHCMP(e->filename, filename))
             return e;
         i = e->hash_next;
     }
     return NULL;
 }
 
-static inline void add_cached_include(TCCState *s1, int type, 
-                                      const char *filename, int ifndef_macro)
+static inline void add_cached_include(TCCState *s1, const char *filename, int ifndef_macro)
 {
     CachedInclude *e;
     int h;
 
-    if (search_cached_include(s1, type, filename))
+    if (search_cached_include(s1, filename))
         return;
 #ifdef INC_DEBUG
     printf("adding cached '%s' %s\n", filename, get_tok_str(ifndef_macro, NULL));
 #endif
     e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
-    if (!e)
-        return;
-    e->type = type;
     strcpy(e->filename, filename);
     e->ifndef_macro = ifndef_macro;
     dynarray_add((void ***)&s1->cached_includes, &s1->nb_cached_includes, e);
     /* add in hash table */
-    h = hash_cached_include(type, filename);
+    h = hash_cached_include(filename);
     e->hash_next = s1->cached_includes_hash[h];
     s1->cached_includes_hash[h] = s1->nb_cached_includes;
 }
@@ -1436,27 +1429,29 @@ ST_FUNC void preprocess(int is_bof)
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
             tcc_error("#include recursion too deep");
+        /* store current file in stack, but increment stack later below */
+        *s1->include_stack_ptr = file;
 
         n = s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (i = -2; i < n; ++i) {
             char buf1[sizeof file->filename];
             CachedInclude *e;
+            BufferedFile **f;
             const char *path;
-            int size, fd;
 
             if (i == -2) {
                 /* check absolute include path */
                 if (!IS_ABSPATH(buf))
                     continue;
                 buf1[0] = 0;
+                i = n; /* force end loop */
 
             } else if (i == -1) {
                 /* search in current dir if "header.h" */
                 if (c != '\"')
                     continue;
-                size = tcc_basename(file->filename) - file->filename;
-                memcpy(buf1, file->filename, size);
-                buf1[size] = '\0';
+                path = file->filename;
+                pstrncpy(buf1, path, tcc_basename(path) - path);
 
             } else {
                 /* search in all the include paths */
@@ -1470,41 +1465,37 @@ ST_FUNC void preprocess(int is_bof)
 
             pstrcat(buf1, sizeof(buf1), buf);
 
-            e = search_cached_include(s1, c, buf1);
+            if (tok == TOK_INCLUDE_NEXT)
+                for (f = s1->include_stack_ptr; f >= s1->include_stack; --f)
+                    if (0 == PATHCMP((*f)->filename, buf1)) {
+#ifdef INC_DEBUG
+                        printf("%s: #include_next skipping %s\n", file->filename, buf1);
+#endif
+                        goto include_trynext;
+                    }
+
+            e = search_cached_include(s1, buf1);
             if (e && define_find(e->ifndef_macro)) {
                 /* no need to parse the include because the 'ifndef macro'
                    is defined */
 #ifdef INC_DEBUG
-                printf("%s: skipping %s\n", file->filename, buf);
+                printf("%s: skipping cached %s\n", file->filename, buf1);
 #endif
-                fd = 0;
-            } else {
-                fd = tcc_open(s1, buf1);
-                if (fd < 0)
-                    continue;
-            }
-
-            if (tok == TOK_INCLUDE_NEXT) {
-                tok = TOK_INCLUDE;
-                if (fd)
-                    tcc_close();
-                continue;
-            }
-
-            if (0 == fd)
                 goto include_done;
+            }
+
+            if (tcc_open(s1, buf1) < 0)
+include_trynext:
+                continue;
 
 #ifdef INC_DEBUG
-            printf("%s: including %s\n", file->filename, buf1);
+            printf("%s: including %s\n", file->prev->filename, file->filename);
 #endif
             /* update target deps */
             dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
                     tcc_strdup(buf1));
-           /* XXX: fix current line init */
-           /* push current file in stack */
-            *s1->include_stack_ptr++ = file->prev;
-            file->inc_type = c;
-            pstrcpy(file->inc_filename, sizeof(file->inc_filename), buf1);
+            /* push current file in stack */
+            ++s1->include_stack_ptr;
             /* add include file debug info */
             if (s1->do_debug)
                 put_stabs(file->filename, N_BINCL, 0, 0, 0);
@@ -2137,8 +2128,8 @@ static inline void next_nomacro1(void)
 #ifdef INC_DEBUG
                     printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
 #endif
-                    add_cached_include(s1, file->inc_type, file->inc_filename,
-                                       file->ifndef_macro_saved);
+                    add_cached_include(s1, file->filename, file->ifndef_macro_saved);
+                    tok_flags &= ~TOK_FLAG_ENDIF;
                 }
 
                 /* add end of include file debug info */

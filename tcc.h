@@ -422,9 +422,7 @@ typedef struct BufferedFile {
     int ifndef_macro;  /* #ifndef macro / #endif search */
     int ifndef_macro_saved; /* saved ifndef_macro */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
-    char inc_type;          /* type of include */
-    char inc_filename[512]; /* filename specified by the user */
-    char filename[1024];    /* current filename - here to simplify code */
+    char filename[1024];    /* filename */
     unsigned char buffer[IO_BUF_SIZE + 1]; /* extra size for CH_EOB char */
 } BufferedFile;
 
@@ -460,7 +458,6 @@ typedef struct InlineFunc {
 typedef struct CachedInclude {
     int ifndef_macro;
     int hash_next; /* -1 if none */
-    char type; /* '"' or '>' to give include type */
     char filename[1]; /* path specified in #include */
 } CachedInclude;
 
