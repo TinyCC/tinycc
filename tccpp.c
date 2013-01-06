@@ -2857,7 +2857,7 @@ static inline int *macro_twosharps(const int *macro_str)
                         n, cstr.data, (char*)cstr.data + n);
                 }
                 tcc_close();
-                cstr_reset(&cstr);
+                cstr_free(&cstr);
             }
         }
         if (tok != TOK_NOSUBST) 
