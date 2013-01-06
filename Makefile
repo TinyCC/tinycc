@@ -18,7 +18,7 @@ CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
 
 # add -Wno-unused-result only on gcc >= 4.4
 ifeq ($(GCC_MAJOR),4)
-GCCGREATERTHEN44 := $(shell expr `gcc -dumpversion | cut -f2 -d.` \>= 4)
+GCCGREATERTHEN44 := $(shell expr `$(CC) -dumpversion | cut -f2 -d.` \>= 4)
 else
 GCCGREATERTHEN44 := 1
 endif
