@@ -13,6 +13,28 @@ struct TCCState;
 
 typedef struct TCCState TCCState;
 
+struct vio_module_t;
+
+typedef struct vio_fd {
+    int fd;
+    void *vio_udata;
+    struct vio_module_t *vio_module;
+} vio_fd;
+
+#define CALL_VIO_OPEN_FIRST 0x01
+#define CALL_VIO_OPEN_LAST 0x02
+
+typedef struct vio_module_t {
+    void *user_data;
+    struct TCCState *tcc_state;
+    int call_vio_open_flags; /*CALL_VIO_OPEN_FIRST, CALL_VIO_OPEN_LAST, one or both */
+    int (*vio_open)(vio_fd *fd, const char *fn, int oflag) ;
+    off_t (*vio_lseek)(vio_fd fd, off_t offset, int whence);
+    size_t (*vio_read)(vio_fd fd, void *buf, size_t bytes);
+    int (*vio_close)(vio_fd *fd);
+} vio_module_t;
+
+
 /* create a new TCC compilation context */
 LIBTCCAPI TCCState *tcc_new(void);
 
@@ -31,6 +53,9 @@ LIBTCCAPI int tcc_set_warning(TCCState *s, const char *warning_name, int value);
 
 /* set linker option */
 LIBTCCAPI const char * tcc_set_linker(TCCState *s, char *option, int multi);
+
+/* set virtual io module */
+LIBTCCAPI void tcc_set_vio_module(TCCState *s, vio_module_t *vio_module);
 
 /*****************************/
 /* preprocessor */
@@ -57,6 +82,10 @@ LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename);
 /* compile a string containing a C source. Return non zero if
    error. */
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *buf);
+
+/* compile a string containing a C source. Return non zero if
+   error. Can associate a name with string for errors. */
+int tcc_compile_named_string(TCCState *s, const char *buf, const char *strname);
 
 /*****************************/
 /* linking commands */

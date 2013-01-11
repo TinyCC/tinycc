@@ -81,6 +81,15 @@
 #include "stab.h"
 #include "libtcc.h"
 
+/* virtual io to allow in memory files*/
+
+void vio_initialize(vio_fd *fd);
+int vio_open(struct TCCState *s, vio_fd *fd, const char *fn, int oflag);
+off_t vio_lseek(vio_fd fd, off_t offset, int whence);
+size_t vio_read(vio_fd fd, void *buf, size_t bytes);
+int vio_close(vio_fd *fd);
+
+
 /* parser debug */
 //#define PARSE_DEBUG
 /* preprocessor debug */
@@ -416,7 +425,7 @@ typedef struct AttributeDef {
 typedef struct BufferedFile {
     uint8_t *buf_ptr;
     uint8_t *buf_end;
-    int fd;
+    vio_fd fd;
     struct BufferedFile *prev;
     int line_num;    /* current line number - here to simplify code */
     int ifndef_macro;  /* #ifndef macro / #endif search */
@@ -661,6 +670,7 @@ struct TCCState {
     unsigned int runtime_plt_and_got_offset;
 #endif
 #endif
+   vio_module_t *vio_module;
 };
 
 /* The current value can be: */
@@ -1031,7 +1041,7 @@ ST_INLN Sym *sym_find(int v);
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
-ST_FUNC int tcc_open(TCCState *s1, const char *filename);
+ST_FUNC vio_fd tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
@@ -1212,8 +1222,8 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
 
 ST_FUNC void tcc_add_linker_symbols(TCCState *s1);
-ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
-ST_FUNC int tcc_load_archive(TCCState *s1, int fd);
+ST_FUNC int tcc_load_object_file(TCCState *s1, vio_fd fd, unsigned long file_offset);
+ST_FUNC int tcc_load_archive(TCCState *s1, vio_fd fd);
 ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
 ST_FUNC void tcc_add_bcheck(TCCState *s1);
 
@@ -1221,7 +1231,7 @@ ST_FUNC void build_got_entries(TCCState *s1);
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 
 #ifndef TCC_TARGET_PE
-ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level);
+ST_FUNC int tcc_load_dll(TCCState *s1, vio_fd fd, const char *filename, int level);
 ST_FUNC int tcc_load_ldscript(TCCState *s1);
 ST_FUNC uint8_t *parse_comment(uint8_t *p);
 ST_FUNC void minp(void);
@@ -1305,7 +1315,7 @@ ST_FUNC void gen_cvt_itof1(int t);
 
 #ifdef TCC_TARGET_COFF
 ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f);
-ST_FUNC int tcc_load_coff(TCCState * s1, int fd);
+ST_FUNC int tcc_load_coff(TCCState * s1, vio_fd fd);
 #endif
 
 /* ------------ tccasm.c ------------ */
@@ -1327,7 +1337,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 #endif
 /* ------------ tccpe.c -------------- */
 #ifdef TCC_TARGET_PE
-ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd);
+ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, vio_fd fd);
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, const void *value);
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);

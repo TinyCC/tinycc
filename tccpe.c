@@ -1638,9 +1638,9 @@ static int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
 }
 
 /* ------------------------------------------------------------- */
-ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd)
+ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, vio_fd fd)
 {
-    FILE *fp = fdopen(dup(fd), "rb");
+    FILE *fp = fdopen(dup(fd.fd), "rb");
     int ret = -1;
     char buf[10];
     if (fp) {

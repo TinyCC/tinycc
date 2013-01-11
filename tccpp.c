@@ -360,13 +360,13 @@ static int tcc_peekc_slow(BufferedFile *bf)
     int len;
     /* only tries to read if really end of buffer */
     if (bf->buf_ptr >= bf->buf_end) {
-        if (bf->fd != -1) {
+        if (bf->fd.fd != -1) {
 #if defined(PARSE_DEBUG)
             len = 8;
 #else
             len = IO_BUF_SIZE;
 #endif
-            len = read(bf->fd, bf->buffer, len);
+            len = vio_read(bf->fd, bf->buffer, len);
             if (len < 0)
                 len = 0;
         } else {
@@ -1438,6 +1438,8 @@ ST_FUNC void preprocess(int is_bof)
             CachedInclude *e;
             BufferedFile **f;
             const char *path;
+            int size;
+            vio_fd fd;
 
             if (i == -2) {
                 /* check absolute include path */
@@ -1450,8 +1452,9 @@ ST_FUNC void preprocess(int is_bof)
                 /* search in current dir if "header.h" */
                 if (c != '\"')
                     continue;
-                path = file->filename;
-                pstrncpy(buf1, path, tcc_basename(path) - path);
+                size = tcc_basename(file->filename) - file->filename;
+                memcpy(buf1, file->filename, size);
+                buf1[size] = '\0';
 
             } else {
                 /* search in all the include paths */
@@ -1481,10 +1484,13 @@ ST_FUNC void preprocess(int is_bof)
 #ifdef INC_DEBUG
                 printf("%s: skipping cached %s\n", file->filename, buf1);
 #endif
+				vio_initialize(&fd);
+				fd.fd = 0;
                 goto include_done;
             }
 
-            if (tcc_open(s1, buf1) < 0)
+			fd = tcc_open(s1, buf1);
+            if (fd.fd < 0)
 include_trynext:
                 continue;
 
