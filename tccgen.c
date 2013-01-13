@@ -458,6 +458,7 @@ static void vseti(int r, int v)
 
 ST_FUNC void vswap(void)
 {
+    unsigned long *vtopl;
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
        because it would complicate the code generator. */
@@ -473,7 +474,7 @@ ST_FUNC void vswap(void)
      * vswap is called often and exchanging vtop[0] vs vtop[-1] is hot on
      * profile, so it is hand optimized
      */
-    unsigned long *vtopl = (unsigned long *)vtop;
+    vtopl = (unsigned long *) vtop;
 #   define VSIZEL (sizeof(*vtop) / sizeof(*vtopl))
 
     _STATIC_ASSERT( VSIZEL*sizeof(*vtopl) == sizeof(*vtop) );
