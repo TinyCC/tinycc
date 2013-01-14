@@ -458,7 +458,7 @@ static void vseti(int r, int v)
 
 ST_FUNC void vswap(void)
 {
-    unsigned long *vtopl;
+    SValue tmp;
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
        because it would complicate the code generator. */
@@ -467,35 +467,14 @@ ST_FUNC void vswap(void)
         if (v == VT_CMP || (v & ~1) == VT_JMP)
             gv(RC_INT);
     }
+    tmp = vtop[0];
+    vtop[0] = vtop[-1];
+    vtop[-1] = tmp;
 
-    /*
-     * vtop[0], vtop[-1] = vtop[-1], vtop[0]
-     *
-     * vswap is called often and exchanging vtop[0] vs vtop[-1] is hot on
-     * profile, so it is hand optimized
-     */
-    vtopl = (unsigned long *) vtop;
-#   define VSIZEL (sizeof(*vtop) / sizeof(*vtopl))
-
-    _STATIC_ASSERT( VSIZEL*sizeof(*vtopl) == sizeof(*vtop) );
-    _STATIC_ASSERT( VSIZEL <= 16 ); /* should be enough */
-    switch(VSIZEL) {
-#   define VSWAPL(i) \
-    case i+1: { \
-        unsigned long tmpl; \
-        tmpl = vtopl[i];    \
-        vtopl[i] = vtopl[-1*VSIZEL + i];    \
-        vtopl[-1*VSIZEL + i] = tmpl;    \
-      } do {} while (0)
-
-    VSWAPL(15); VSWAPL(14); VSWAPL(13); VSWAPL(12);
-    VSWAPL(11); VSWAPL(10); VSWAPL( 9); VSWAPL( 8);
-    VSWAPL( 7); VSWAPL( 6); VSWAPL( 5); VSWAPL( 4);
-    VSWAPL( 3); VSWAPL( 2); VSWAPL( 1); VSWAPL( 0);
-    }
-
-#   undef VSWAPL
-#   undef VSIZEL
+/* XXX: +2% overall speed possible with optimized memswap
+ *
+ *  memswap(&vtop[0], &vtop[1], sizeof *vtop);
+ */
 }
 
 ST_FUNC void vpushv(SValue *v)
