@@ -858,7 +858,7 @@ Section *FindSection(TCCState * s1, const char *sname)
     return 0;
 }
 
-ST_FUNC int tcc_load_coff(TCCState * s1, vio_fd fd)
+ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
 {
 // tktk TokenSym *ts;
 
@@ -870,7 +870,7 @@ ST_FUNC int tcc_load_coff(TCCState * s1, vio_fd fd)
     char name2[9];
     FILHDR file_hdr;		/* FILE HEADER STRUCTURE              */
 
-    f = fdopen(fd.fd, "rb");
+    f = fdopen(fd, "rb");
     if (!f) {
 	tcc_error("Unable to open .out file for input");
     }

@@ -1,8 +1,0 @@
-rm *.a
-rm *.o
-make
-./mk-attachments.sh
-rm tcc.o
-make CONFIG_USE_ATTACHMENTS=1
-strip tcc
-

@@ -268,62 +268,6 @@ PUB_FUNC void tcc_memstats(void)
 #define realloc(p, s) use_tcc_realloc(p, s)
 
 /********************************************************/
-/* virtual io */
-
-LIBTCCAPI void tcc_set_vio_module(TCCState *s, vio_module_t *vio_module){
-	s->vio_module = vio_module;
-	vio_module->tcc_state = s;
-}
-
-void vio_initialize(vio_fd *fd) {
-    fd->fd = -1;
-    fd->vio_udata = NULL;
-    fd->vio_module = NULL;
-}
-
-int vio_open(struct TCCState *s, vio_fd *fd, const char *fn, int oflag) {
-    int rc;
-    vio_initialize(fd);
-    fd->vio_module = s->vio_module;
-    if(s->vio_module && (s->vio_module->call_vio_open_flags & CALL_VIO_OPEN_FIRST)) {
-	rc =  s->vio_module->vio_open(fd, fn, oflag); 
-	if(rc >= 0) return rc;
-    }
-    
-    fd->fd = open(fn, oflag);
-    
-    if(fd->fd < 0 && s->vio_module && (s->vio_module->call_vio_open_flags & CALL_VIO_OPEN_LAST)) {
-	rc =  s->vio_module->vio_open(fd, fn, oflag); 
-	if(rc >= 0) return rc;
-    }
-    //printf("vio_open = %d %s\n", fd->fd, fn);
-    return fd->fd;
-}
-
-off_t vio_lseek(vio_fd fd, off_t offset, int whence) {
-    if(fd.vio_udata) {
-        return fd.vio_module->vio_lseek(fd, offset, whence);
-    }
-    return lseek(fd.fd, offset, whence);
-}
-
-size_t vio_read(vio_fd fd, void *buf, size_t bytes) {
-    if(fd.vio_udata) {
-	return fd.vio_module->vio_read(fd, buf, bytes);
-    }
-    return read(fd.fd, buf, bytes);
-}
-
-int vio_close(vio_fd *fd) {
-    int rc = 0;
-    if(fd->vio_udata){
-	fd->vio_module->vio_close(fd);
-    } else rc = close(fd->fd);
-    vio_initialize(fd);
-    return rc;
-}
-
-/********************************************************/
 /* dynarrays */
 
 PUB_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
@@ -722,7 +666,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     bf->line_num = 1;
     bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
-    vio_initialize(&bf->fd);
+    bf->fd = -1;
     bf->prev = file;
     file = bf;
 }
@@ -730,28 +674,26 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
 ST_FUNC void tcc_close(void)
 {
     BufferedFile *bf = file;
-    if (bf->fd.fd > 0) {
-        vio_close(&bf->fd);
+    if (bf->fd > 0) {
+        close(bf->fd);
         total_lines += bf->line_num;
     }
     file = bf->prev;
     tcc_free(bf);
 }
 
-ST_FUNC vio_fd tcc_open(TCCState *s1, const char *filename)
+ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 {
-    vio_fd fd;
-    if (strcmp(filename, "-") == 0) {
-        vio_initialize(&fd);
-        fd.fd = 0, filename = "stdin";
-    }
+    int fd;
+    if (strcmp(filename, "-") == 0)
+        fd = 0, filename = "stdin";
     else
-        vio_open(s1, &fd, filename, O_RDONLY | O_BINARY);
-    if ((s1->verbose == 2 && fd.fd >= 0) || s1->verbose == 3)
-        printf("%s %*s%s\n", fd.fd < 0 ? "nf":"->",
+        fd = open(filename, O_RDONLY | O_BINARY);
+    if ((s1->verbose == 2 && fd >= 0) || s1->verbose == 3)
+        printf("%s %*s%s\n", fd < 0 ? "nf":"->",
                (int)(s1->include_stack_ptr - s1->include_stack), "", filename);
-    if (fd.fd < 0)
-        return fd;
+    if (fd < 0)
+        return -1;
 
     tcc_open_bf(s1, filename, 0);
     file->fd = fd;
@@ -875,21 +817,16 @@ static int tcc_compile(TCCState *s1)
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
-LIBTCCAPI int tcc_compile_named_string(TCCState *s, const char *str, const char *strname)
+LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
 {
     int len, ret;
     len = strlen(str);
 
-    tcc_open_bf(s, strname ? strname : "<string>", len);
+    tcc_open_bf(s, "<string>", len);
     memcpy(file->buffer, str, len);
     ret = tcc_compile(s);
     tcc_close();
     return ret;
-}
-
-LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
-{
-    return tcc_compile_named_string(s, str, NULL);
 }
 
 /* define a preprocessor symbol. A value can also be provided with the '=' operator */
@@ -1091,7 +1028,6 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifdef TCC_TARGET_I386
     s->seg_size = 32;
 #endif
-    s->vio_module = NULL;
     return s;
 }
 
@@ -1158,8 +1094,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     const char *ext;
     ElfW(Ehdr) ehdr;
-    int ret=0, size;
-    vio_fd fd;
+    int fd, ret, size;
 
     /* find source file type with extension */
     ext = tcc_fileextension(filename);
@@ -1173,11 +1108,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #endif
 
     /* open the file */
-    fd = tcc_open(s1, filename);
-    if (fd.fd < 0) {
+    ret = tcc_open(s1, filename);
+    if (ret < 0) {
         if (flags & AFF_PRINT_ERROR)
             tcc_error_noabort("file '%s' not found", filename);
-        return fd.fd;
+        return ret;
     }
 
     /* update target deps */
@@ -1211,8 +1146,8 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
     fd = file->fd;
     /* assume executable format: auto guess file type */
-    size = vio_read(fd, &ehdr, sizeof(ehdr));
-    vio_lseek(fd, 0, SEEK_SET);
+    size = read(fd, &ehdr, sizeof(ehdr));
+    lseek(fd, 0, SEEK_SET);
     if (size <= 0) {
         tcc_error_noabort("could not read header");
         goto the_end;

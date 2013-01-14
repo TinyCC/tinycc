@@ -479,98 +479,6 @@ static int parse_args(TCCState *s, int argc, char **argv)
     return optind;
 }
 
-#ifdef WITH_ATTACHMENTS
-#include "tcc_attachments.h"
-#define ATTACH_PREFIX "/_attach_"
-
-static vio_module_t vio_module;
-
-typedef struct vio_memfile_t {
-    off_t size;
-    off_t pos;
-    const unsigned char *mem;
-} vio_memfile_t;
-
-static int vio_mem_open(vio_fd *fd, const char *fn, int oflag) {
-    //printf("%d:%s\n", fd->fd, fn);
-    if(fd->vio_module && strncmp(ATTACH_PREFIX, fn, sizeof(ATTACH_PREFIX)-1) == 0){
-        int i, count = sizeof(bin2c_filesAttached)/sizeof(bin2c_filesAttached_st);
-        for(i=0; i < count; ++i) {
-            //printf("%s:%s\n", fn, bin2c_filesAttached[i].file_name);
-            if(strcmp(fn, bin2c_filesAttached[i].file_name) == 0) {
-                vio_memfile_t *mf = (vio_memfile_t*)tcc_malloc(sizeof(vio_memfile_t));
-                mf->mem = bin2c_filesAttached[i].sym_name;
-                mf->size = bin2c_filesAttached[i].size;
-                mf->pos = 0;
-                fd->fd = 1;
-                fd->vio_udata = mf;
-		//printf("%d:%s\n", fd->fd, fn);
-                return fd->fd;
-            }
-        }
-    }
-    return -1;
-}
-
-static off_t vio_mem_lseek(vio_fd fd, off_t offset, int whence) {
-    if(fd.vio_udata) {
-        off_t loffset = 0;
-        vio_memfile_t *mf = (vio_memfile_t*)fd.vio_udata;
-        if (whence == SEEK_CUR)
-            loffset = mf->pos + offset;
-        else if (whence == SEEK_SET)
-            loffset = offset;
-        else if (whence == SEEK_END)
-            loffset = ((off_t)mf->size) + offset;
-
-        if (loffset < 0 && loffset > mf->size)
-            return -1;
-
-        mf->pos = loffset;
-
-        return mf->pos;
-    }
-    return lseek(fd.fd, offset, whence);
-}
-
-static size_t vio_mem_read(vio_fd fd, void *buf, size_t bytes) {
-    if(fd.vio_udata) {
-        vio_memfile_t *mf = (vio_memfile_t*)fd.vio_udata;
-        if( (mf->pos + bytes) > mf->size) {
-            long bc = mf->size - mf->pos;
-            if(bc > 0) {
-                memcpy(buf, mf->mem + mf->pos, bc);
-                mf->pos = mf->size;
-                return bc;
-            }
-            return 0;
-        }
-        memcpy(buf, mf->mem + mf->pos, bytes);
-        mf->pos += bytes;
-        return bytes;
-    }
-    return 0;
-}
-
-static int vio_mem_close(vio_fd *fd) {
-    if(fd->vio_udata){
-        tcc_free(fd->vio_udata);
-    }
-    return 0;
-}
-
-void set_vio_module(TCCState *s){
-    vio_module.user_data = NULL;
-    vio_module.call_vio_open_flags = CALL_VIO_OPEN_FIRST;
-    vio_module.vio_open = &vio_mem_open;
-    vio_module.vio_lseek = &vio_mem_lseek;
-    vio_module.vio_read = &vio_mem_read;
-    vio_module.vio_close = &vio_mem_close;
-    tcc_set_vio_module(s, &vio_module);
-}
-
-#endif
-
 int main(int argc, char **argv)
 {
     int i;
@@ -592,11 +500,6 @@ int main(int argc, char **argv)
     m_option = NULL;
     ret = 0;
 
-#ifdef WITH_ATTACHMENTS
-    tcc_set_lib_path(s, ATTACH_PREFIX);
-    tcc_add_include_path(s, ATTACH_PREFIX);
-    set_vio_module(s);
-#endif
     optind = parse_args(s, argc - 1, argv + 1);
 
 #if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
