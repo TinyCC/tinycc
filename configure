@@ -506,8 +506,8 @@ if test "$source_path_used" = "yes" ; then
         # counterpart.
         case $source_path in
           /*) dest=$source_path/$f;;
-           *) dest=`echo "$source_path/$dir/" | sed 's,/\./,/,g;s,[^/]*/,../,g'`
-              dest=$dest$f;;
+           *) dest=`echo "$dir/" | sed 's,^\./,,;s,[^/]*/,../,g'`
+              dest=$dest$source_path/$f;;
         esac
         ln -sf $dest $f
     done
