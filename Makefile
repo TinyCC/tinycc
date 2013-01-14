@@ -271,6 +271,8 @@ ifdef DISABLE_STATIC
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so.1"
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so"
 endif
+	mkdir -p "$(includedir)"
+	$(INSTALL) -m644 $(top_srcdir)/libtcc.h "$(includedir)"
 	mkdir -p "$(docdir)"
 	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
