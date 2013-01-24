@@ -16,7 +16,7 @@ int main()
 
    printf("%s", freddy);
 
-   char InChar;
+   int InChar;
    char ShowChar;
    f = fopen("fred.txt", "r");
    while ( (InChar = fgetc(f)) != EOF)
