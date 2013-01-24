@@ -19,7 +19,6 @@
 #define __MINGW_H
 
 /* some winapi files define these before including _mingw.h --> */
-#undef NULL
 #undef __cdecl
 #undef _X86_
 #undef WIN32
