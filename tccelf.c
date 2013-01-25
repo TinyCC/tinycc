@@ -1632,8 +1632,16 @@ static int elf_output_file(TCCState *s1, const char *filename)
                             esym = &((ElfW(Sym) *)s1->dynsymtab_section->data)[sym_index];
                             type = ELFW(ST_TYPE)(esym->st_info);
                             if ((type == STT_FUNC) || (type == STT_GNU_IFUNC)) {
+                                /* Indirect functions shall have STT_FUNC type
+                                 * in executable dynsym section. Indeed, a dlsym
+                                 * call following a lazy resolution would pick
+                                 * the symbol value from the executable dynsym
+                                 * entry which would contain the address of the
+                                 * function wanted by the caller of dlsym
+                                 * instead of the address of the function that
+                                 * would return that address */
                                 put_got_entry(s1, R_JMP_SLOT, esym->st_size, 
-                                              ELFW(ST_INFO)(STB_GLOBAL,type), 
+                                              ELFW(ST_INFO)(STB_GLOBAL,STT_FUNC),
                                               sym - (ElfW(Sym) *)symtab_section->data);
                             } else if (type == STT_OBJECT) {
                                 unsigned long offset;
@@ -1733,8 +1741,9 @@ static int elf_output_file(TCCState *s1, const char *filename)
                         if ((ELFW(ST_TYPE)(sym->st_info) == STT_FUNC ||
                             ELFW(ST_TYPE)(sym->st_info) == STT_GNU_IFUNC)
                             && sym->st_shndx == SHN_UNDEF) {
+                            int visibility = ELFW(ST_BIND)(sym->st_info);
                             put_got_entry(s1, R_JMP_SLOT, sym->st_size, 
-                                          sym->st_info, 
+                                          ELFW(ST_INFO)(visibility,STT_FUNC),
                                           sym - (ElfW(Sym) *)symtab_section->data);
                         }
                         else if (ELFW(ST_TYPE)(sym->st_info) == STT_OBJECT) {
