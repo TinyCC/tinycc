@@ -1152,6 +1152,7 @@ void gfunc_prolog(CType *func_type)
   {
     n++;
     struct_ret = 1;
+    func_vc = 12; /* Offset from fp of the place to store the result */
   }
   for(sym2=sym->next;sym2 && (n<4 || nf<16);sym2=sym2->next) {
     size = type_size(&sym2->type, &align);
@@ -1165,8 +1166,6 @@ void gfunc_prolog(CType *func_type)
     if (n < 4)
       n += (size + 3) / 4;
   }
-  if (struct_ret)
-    func_vc = nf * 4;
   o(0xE1A0C00D); /* mov ip,sp */
   if(variadic)
     n=4;
@@ -1185,7 +1184,7 @@ void gfunc_prolog(CType *func_type)
     o(0xED2D0A00|nf); /* save s0-s15 on stack if needed */
   }
   o(0xE92D5800); /* save fp, ip, lr */
-  o(0xE28DB00C); /* add fp, sp, #12 */
+  o(0xE1A0B00D); /* mov fp, sp */
   func_sub_sp_offset = ind;
   o(0xE1A00000); /* nop, leave space for stack adjustment in epilogue */
   {
@@ -1227,7 +1226,7 @@ from_stack:
         addr = (n + nf + sn) * 4;
         sn += size;
       }
-      sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t), addr);
+      sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t), addr+12);
     }
   }
   last_itod_magic=0;
@@ -1252,7 +1251,7 @@ void gfunc_epilog(void)
     }
   }
 #endif
-  o(0xE91BA800); /* restore fp, sp, pc */
+  o(0xE89BA800); /* restore fp, sp, pc */
   diff = (-loc + 3) & -4;
 #ifdef TCC_ARM_EABI
   if(!leaffunc)
