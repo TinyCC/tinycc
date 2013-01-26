@@ -2695,7 +2695,9 @@ void bfa2(ptrdiff_t str_offset)
 void bfa1(ptrdiff_t str_offset)
 {
     printf("bfa1: %s\n", (char *)__builtin_frame_address(1) + str_offset);
+#if defined(__arm__) && !defined(__GNUC__)
     bfa2(str_offset);
+#endif
 }
 
 void builtin_frame_address_test(void)
