@@ -1231,7 +1231,7 @@ from_stack:
   }
   last_itod_magic=0;
   leaffunc = 1;
-  loc = -12;
+  loc = 0;
 }
 
 /* generate function epilog */
@@ -1255,9 +1255,9 @@ void gfunc_epilog(void)
   diff = (-loc + 3) & -4;
 #ifdef TCC_ARM_EABI
   if(!leaffunc)
-    diff = (diff + 7) & -8;
+    diff = ((diff + 11) & -8) - 4;
 #endif
-  if(diff > 12) {
+  if(diff > 0) {
     x=stuff_const(0xE24BD000, diff); /* sub sp,fp,# */
     if(x)
       *(uint32_t *)(cur_text_section->data + func_sub_sp_offset) = x;
