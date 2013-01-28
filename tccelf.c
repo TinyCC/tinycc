@@ -613,14 +613,14 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 x += val - addr;
                 h = x & 2;
 #ifndef TCC_TARGET_PE
-                if ((x & 3) || x >= 0x4000000 || x < -0x4000000)
+                if ((x & 3) || x >= 0x2000000 || x < -0x2000000)
                     if (!(x & 3) || !blx_avail || !is_call)
                         if (s1->output_type == TCC_OUTPUT_MEMORY) {
                             x += add_jmp_table(s1, val) - val; /* add veneer */
                             is_thumb = 0; /* Veneer uses ARM instructions */
                         }
 #endif
-                if ((x & 3) || x >= 0x4000000 || x < -0x4000000)
+                if ((x & 3) || x >= 0x2000000 || x < -0x2000000)
                     if (!(x & 3) || !blx_avail || !is_call)
                         tcc_error("can't relocate value at %x",addr);
                 x >>= 2;
