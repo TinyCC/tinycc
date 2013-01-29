@@ -57,12 +57,12 @@ endif
 ifeq ($(ARCH),arm)
 NATIVE_DEFINES=-DTCC_TARGET_ARM
 NATIVE_DEFINES+=-DWITHOUT_LIBTCC
-ifneq (,$(wildcard /lib/ld-linux.so.3))
-NATIVE_DEFINES+=-DTCC_ARM_EABI
-NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabi), -DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabi\")
-else ifneq (,$(wildcard /lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux.so.3))
+ifneq (,$(wildcard /lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux.so.3))
 NATIVE_DEFINES+=-DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
 NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabihf),-DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabihf\")
+else ifneq (,$(wildcard /lib/ld-linux.so.3))
+NATIVE_DEFINES+=-DTCC_ARM_EABI
+NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabi), -DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabi\")
 endif
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
