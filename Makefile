@@ -170,8 +170,8 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 	$(CC) -o $@ $^ $(LIBS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
-%-tcc$(EXESUF):
-	$(CC) -o $@ tcc.c -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
+%-tcc$(EXESUF): tcc.c
+	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
 
 $(I386_CROSS): DEFINES = -DTCC_TARGET_I386 \
     -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
