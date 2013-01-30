@@ -1,23 +1,29 @@
-not released:
+version 0.9.26:
 
-- Add support for -MD/-MF (automatically generate dependencies for make)
-- Add tcc_open_bf() function for BufferedFile compilation (grischka)
-- Support Security-Enhanced Linux (Henry Kroll III)
-- Split libtcc1.a build into separate directories (Henry Kroll III)
-- Add -pthread option = -D_REENTRANT -lpthread (Henry Kroll III)
-- Register __TRY__ SEH in startup code only for i386 (grischka)
+User interface:
+- -MD/-MF (automatically generate dependencies for make)
+- -pthread option (same as -D_REENTRANT -lpthread) (Henry Kroll III)
+- -m32/-m64 to re-exec cross compiler (Henry Kroll III)
+- Mimic all GNU -option forms supported by ld (Kirill Smelkov)
+
+Platforms:
+- Many improvements for x86-64 target (Shinichiro Hamaji, Michael Matz, grischka)
+- x86-64 assembler (Frederic Feret)
+- Many improvements for ARM target (Daniel Glöckner, Thomas Preud'homme)
+- Support WinCE PE ARM (Timo VJ Lahde)
+- Support ARM hardfloat calling convention (Thomas Preud'homme)
+- Support SELinux (Security-Enhanced Linux) (Henry Kroll III)
 - Support Debian GNU/kFreeBSD kernels (Pierre Chifflier)
 - Support GNU/Hurd kernels (Thomas Preud'homme)
-- support for asm labels for variables and functions (Thomas Preud'homme)
-- Fix 32 to 64 bit casts, alignment and struct issues (Shinichiro Hamaji)
-- Mimic all GNU -option forms supported by ld (Kirill Smelkov)
-- Support indirect functions as externals (Thomas Preud'homme)
-- Add support for C99 variable length arrays (Thomas Preud'homme & Joe Soroka)
-- Improve support of ARM (Daniel Glöckner)
-- Support ARM hardfloat calling convention (Thomas Preud'homme)
-- Fix incorrect load of 64 bit values on 32 bit platforms (Thomas Preud'homme)
-- Add support for multiarch (Thomas Preud'homme)
+- Support OSX (tcc -run only) (Milutin Jovanovic)
+- Support multiarch configuration (Thomas Preud'homme)
 - Support out-of-tree build (Akim Demaille)
+
+Features:
+- C99 variable length arrays (Thomas Preud'homme & Joe Soroka)
+- Asm labels for variables and functions (Thomas Preud'homme)
+- STT_GNU_IFUNC (Indirect functions as externals) (Thomas Preud'homme)
+- More tests (tests2) (Milutin Jovanovic)
 
 version 0.9.25:
 
