@@ -46,13 +46,13 @@ WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
 else
 ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
 else
 ifeq "$(TARGET)" "i386"

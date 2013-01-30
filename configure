@@ -409,14 +409,14 @@ print_var2 CONFIG_TCC_LIBPATHS "$tcc_libpaths"
 print_var2 CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
 print_var2 CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
 
-echo "CC=$cc" >> config.mak
-echo "GCC_MAJOR=$gcc_major" >> config.mak
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
-echo "HOST_CC=$host_cc" >> config.mak
-echo "AR=$ar" >> config.mak
-echo "STRIP=$strip -s -R .comment -R .note" >> config.mak
+
 cat >> config.mak <<EOF
-CPPFLAGS = -I. -I\$(top_srcdir)
+CC=$cc
+GCC_MAJOR=$gcc_major
+HOST_CC=$host_cc
+AR=$ar
+STRIP=$strip -s -R .comment -R .note
 CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 LIBSUF=$LIBSUF
@@ -491,10 +491,12 @@ if test "$have_selinux" = "yes" ; then
   echo "#define HAVE_SELINUX" >> $TMPH
   echo "HAVE_SELINUX=yes" >> config.mak
 fi
+
 version=`head $source_path/VERSION`
 echo "VERSION=$version" >>config.mak
 echo "#define TCC_VERSION \"$version\"" >> $TMPH
 echo "@set VERSION $version" > config.texi
+echo "SRC_PATH=$source_path" >>config.mak
 
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
@@ -511,15 +513,14 @@ if test "$source_path_used" = "yes" ; then
         esac
         ln -sf $dest $f
     done
+    case $source_path in
+       /*) echo "top_srcdir=$source_path";;
+        *) echo "top_srcdir=\$(TOP)/$source_path";;
+     esac >>config.mak
+else
+     echo 'top_srcdir=$(TOP)' >>config.mak
 fi
-cat >>config.mak <<EOF
-SRC_PATH = $source_path
-top_builddir = \$(TOP)
-EOF
-case $source_path in
-  /*) echo 'top_srcdir = $(SRC_PATH)';;
-   *) echo 'top_srcdir = $(TOP)/$(SRC_PATH)';;
-esac >>config.mak
+echo 'top_builddir=$(TOP)' >>config.mak
 
 diff $TMPH config.h >/dev/null 2>&1
 if test $? -ne 0 ; then

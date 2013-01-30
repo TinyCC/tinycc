@@ -6,6 +6,8 @@ TOP ?= .
 include $(TOP)/config.mak
 VPATH = $(top_srcdir)
 
+CPPFLAGS = -I$(TOP) # for config.h
+
 CPPFLAGS_P=$(CPPFLAGS) -DCONFIG_TCC_STATIC
 CFLAGS_P=$(CFLAGS) -pg -static
 LIBS_P=
