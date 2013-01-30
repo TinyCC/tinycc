@@ -17,6 +17,7 @@ not released:
 - Support ARM hardfloat calling convention (Thomas Preud'homme)
 - Fix incorrect load of 64 bit values on 32 bit platforms (Thomas Preud'homme)
 - Add support for multiarch (Thomas Preud'homme)
+- Support out-of-tree build (Akim Demaille)
 
 version 0.9.25:
 
