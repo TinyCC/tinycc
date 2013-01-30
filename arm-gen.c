@@ -2,6 +2,7 @@
  *  ARMv4 code generator for TCC
  * 
  *  Copyright (c) 2003 Daniel Glöckner
+ *  Copyright (c) 2012 Thomas Preud'homme
  *
  *  Based on i386-gen.c by Fabrice Bellard
  *
