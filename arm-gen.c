@@ -36,6 +36,10 @@
 #define NB_REGS             9
 #endif
 
+#ifndef TCC_ARM_VERSION
+# define TCC_ARM_VERSION 5
+#endif
+
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
