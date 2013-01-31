@@ -361,6 +361,7 @@ void vpush64(int ty, unsigned long long v)
     CValue cval;
     CType ctype;
     ctype.t = ty;
+    ctype.ref = 0;
     cval.ull = v;
     vsetc(&ctype, VT_CONST, &cval);
 }
@@ -1734,6 +1735,7 @@ ST_FUNC void gen_op(int op)
         }
         vswap();
         type1.t = t;
+        type1.ref = 0;
         gen_cast(&type1);
         vswap();
         /* special case for shifts and long long: we keep the shift as
@@ -2717,6 +2719,7 @@ static void struct_decl(CType *type, int u)
         v = anon_sym++;
     }
     type1.t = a;
+    type1.ref = 0;
     /* we put an undefined size for struct/union */
     s = sym_push(v | SYM_STRUCT, &type1, 0, -1);
     s->r = 0; /* default alignment is zero as gcc */
@@ -3396,6 +3399,7 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
         /* default casting : only need to convert float to double */
         if ((vtop->type.t & VT_BTYPE) == VT_FLOAT) {
             type.t = VT_DOUBLE;
+            type.ref = 0;
             gen_cast(&type);
         }
     } else if (arg == NULL) {
@@ -3592,6 +3596,7 @@ ST_FUNC void unary(void)
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             CType boolean;
             boolean.t = VT_BOOL;
+            boolean.ref = 0;
             gen_cast(&boolean);
             vtop->c.i = !vtop->c.i;
         } else if ((vtop->r & VT_VALMASK) == VT_CMP)
@@ -4101,6 +4106,7 @@ static void expr_cond(void)
             CType boolean;
             int c;
             boolean.t = VT_BOOL;
+            boolean.ref = 0;
             vdup();
             gen_cast(&boolean);
             c = vtop->c.i;
