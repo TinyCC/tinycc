@@ -663,7 +663,7 @@ static int pe_write(struct pe_info *pe)
             }
         }
 
-        strcpy((char*)psh->Name, sh_name);
+        pstrcpy((char*)psh->Name, sizeof psh->Name, sh_name);
 
         psh->Characteristics = pe_sec_flags[si->cls];
         psh->VirtualAddress = addr;
@@ -933,7 +933,7 @@ static void pe_build_exports(struct pe_info *pe)
 
 #if 1
     /* automatically write exports to <output-filename>.def */
-    strcpy(buf, pe->filename);
+    pstrcpy(buf, sizeof buf, pe->filename);
     strcpy(tcc_fileextension(buf), ".def");
     op = fopen(buf, "w");
     if (NULL == op) {
@@ -1598,7 +1598,7 @@ static int pe_load_def(TCCState *s1, FILE *fp)
         case 0:
             if (0 != strnicmp(p, "LIBRARY", 7))
                 goto quit;
-            strcpy(dllname, trimfront(p+7));
+            pstrcpy(dllname, sizeof dllname, trimfront(p+7));
             ++state;
             continue;
 

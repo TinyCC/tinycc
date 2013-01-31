@@ -1636,7 +1636,7 @@ PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file)
         && *ext)
         strcpy(ext, ".o");
     else
-        pstrcpy(buf, sizeof(buf), "a.out");
+        strcpy(buf, "a.out");
 
     return tcc_strdup(buf);
 }

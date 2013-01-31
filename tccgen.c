@@ -5580,7 +5580,7 @@ ST_FUNC void gen_inline_functions(void)
                 str = fn->token_str;
                 fn->sym = NULL;
                 if (file)
-                    strcpy(file->filename, fn->filename);
+                    pstrcpy(file->filename, sizeof file->filename, fn->filename);
                 sym->r = VT_SYM | VT_CONST;
                 sym->type.t &= ~VT_INLINE;
 
