@@ -114,7 +114,7 @@ ST_FUNC int put_elf_sym(Section *s, uplong value, unsigned long size,
         if (ELFW(ST_BIND)(info) != STB_LOCAL) {
             /* add another hashing entry */
             nbuckets = base[0];
-            h = elf_hash(name) % nbuckets;
+            h = name ? elf_hash(name) % nbuckets : 0;
             *ptr = base[2 + h];
             base[2 + h] = sym_index;
             base[1]++;
