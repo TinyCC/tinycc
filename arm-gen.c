@@ -1847,7 +1847,7 @@ ST_FUNC void gen_cvt_itof1(int t)
 #ifdef TCC_ARM_VFP
     r2=vfpr(vtop->r=get_reg(RC_FLOAT));
     o(0xEE000A10|(r<<12)|(r2<<16)); /* fmsr */
-    r2<<=12;
+    r2|=r2<<12;
     if(!(vtop->type.t & VT_UNSIGNED))
       r2|=0x80;                /* fuitoX -> fsituX */
     o(0xEEB80A40|r2|T2CPR(t)); /* fYitoX*/
