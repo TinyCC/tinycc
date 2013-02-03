@@ -1926,7 +1926,7 @@ void gen_cvt_ftoi(int t)
 #ifdef TCC_ARM_VFP
     r=vfpr(gv(RC_FLOAT));
     u=u?0:0x10000;
-    o(0xEEBC0A40|(r<<12)|r|T2CPR(r2)); /* ftoXiY */
+    o(0xEEBC0A40|(r<<12)|r|T2CPR(r2)|u); /* ftoXiY */
     r2=intr(vtop->r=get_reg(RC_INT));
     o(0xEE100A10|(r<<16)|(r2<<12));
     return;
