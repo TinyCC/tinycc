@@ -13,6 +13,7 @@ CFLAGS_P=$(CFLAGS) -pg -static
 LIBS_P=
 LDFLAGS_P=$(LDFLAGS)
 
+ifeq ($(patsubst %gcc,gcc,$(CC)),gcc)
 ifneq ($(GCC_MAJOR),2)
 CFLAGS+=-fno-strict-aliasing
 ifneq ($(GCC_MAJOR),3)
@@ -27,6 +28,7 @@ ifeq ($(GCC_MAJOR),2)
 CFLAGS+=-m386 -malign-functions=0
 else
 CFLAGS+=-march=i386 -falign-functions=0
+endif
 endif
 endif
 endif
@@ -236,7 +238,7 @@ libtcc1.a : FORCE
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	@$(MAKE) -C lib cross TARGET=$*
 bcheck.o : lib/bcheck.c
-	gcc -c $< -o $@ $(CPPFLAGS) $(CFLAGS)
+	$(CC) -c $< -o $@ $(CPPFLAGS) $(CFLAGS)
 FORCE:
 
 # install
