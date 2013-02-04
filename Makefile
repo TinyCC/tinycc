@@ -43,17 +43,19 @@ endif
 endif
 
 ifeq ($(ARCH),i386)
-NATIVE_DEFINES=-DTCC_TARGET_I386 
-NATIVE_DEFINES+=$(if $(wildcard /lib/i386-linux-gnu),-DCONFIG_MULTIARCHDIR=\"i386-linux-gnu\")
-NATIVE_DEFINES+=$(if $(wildcard /lib/i386-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"i386-kfreebsd-gnu\")
-NATIVE_DEFINES+=$(if $(wildcard /lib/i386-gnu),-DCONFIG_MULTIARCHDIR=\"i386-gnu\")
+NATIVE_DEFINES=-DTCC_TARGET_I386
+NATIVE_DEFINES+=\
+  $(if $(wildcard /lib/i386-linux-gnu),-DCONFIG_MULTIARCHDIR=\"i386-linux-gnu\"\
+  $(if $(wildcard /lib/i386-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"i386-kfreebsd-gnu\"\
+  $(if $(wildcard /lib/i386-gnu),-DCONFIG_MULTIARCHDIR=\"i386-gnu\")))
 CFLAGS+=-m32
 else ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
 CFLAGS+=-m64
-NATIVE_DEFINES+=$(if $(wildcard /usr/lib64),-DCONFIG_LDDIR=\"lib64\")
-NATIVE_DEFINES+=$(if $(wildcard /lib/x86_64-linux-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\")
-NATIVE_DEFINES+=$(if $(wildcard /lib/x86_64-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-kfreebsd-gnu\")
+NATIVE_DEFINES+=\
+  $(if $(wildcard /usr/lib64),-DCONFIG_LDDIR=\"lib64\"\
+  $(if $(wildcard /lib/x86_64-linux-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\"\
+  $(if $(wildcard /lib/x86_64-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-kfreebsd-gnu\")))
 endif
 
 ifeq ($(ARCH),arm)

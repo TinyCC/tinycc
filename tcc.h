@@ -152,12 +152,12 @@
 # define CONFIG_SYSROOT ""
 #endif
 
-#ifdef CONFIG_MULTIARCHDIR
-# define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR
-#endif
-
 #ifndef CONFIG_LDDIR
-# define CONFIG_LDDIR "lib"
+# ifdef CONFIG_MULTIARCHDIR
+#  define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR
+# else
+#  define CONFIG_LDDIR "lib"
+# endif
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o */
