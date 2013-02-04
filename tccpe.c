@@ -1,4 +1,4 @@
-    /*
+/*
  *  TCCPE.C - PE file output for the Tiny C Compiler
  *
  *  Copyright (c) 2005-2007 grischka
@@ -1480,11 +1480,11 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     return v2;
 }
 
-ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, const void *value)
+ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t value)
 {
     return add_elf_sym(
         s1->dynsymtab_section,
-        (uplong)value,
+        value,
         dllindex, /* st_size */
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE),
         0,
@@ -1613,7 +1613,7 @@ static int pe_load_def(TCCState *s1, FILE *fp)
             ++state;
 
         default:
-            pe_putimport(s1, dllindex, p, NULL);
+            pe_putimport(s1, dllindex, p, 0);
             continue;
         }
     }
@@ -1635,7 +1635,7 @@ static int pe_load_dll(TCCState *s1, const char *dllname, FILE *fp)
         return -1;
     index = add_dllref(s1, dllname);
     for (q = p; *q; q += 1 + strlen(q))
-        pe_putimport(s1, index, q, NULL);
+        pe_putimport(s1, index, q, 0);
     tcc_free(p);
     return 0;
 }
@@ -1729,7 +1729,7 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
-    unsigned long addr = 0;
+    ADDR3264 addr = 0;
     int pe_type = 0;
 
     if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
@@ -1781,7 +1781,7 @@ static void pe_add_runtime_ex(TCCState *s1, struct pe_info *pe)
         pe_type = PE_RUN;
 
     if (start_symbol) {
-        addr = (uplong)tcc_get_symbol_err(s1, start_symbol);
+        addr = get_elf_sym_addr(s1, start_symbol, 1);
         if (PE_RUN == pe_type && addr)
             /* for -run GUI's, put '_runwinmain' instead of 'main' */
             add_elf_sym(symtab_section,

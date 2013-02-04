@@ -35,7 +35,7 @@ ST_DATA void *rt_prog_main;
 
 static void set_pages_executable(void *ptr, unsigned long length);
 static void set_exception_handler(void);
-static int rt_get_caller_pc(uplong *paddr, ucontext_t *uc, int level);
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level);
 static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
@@ -127,7 +127,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
 {
     Section *s;
     unsigned long offset, length;
-    uplong mem;
+    addr_t mem;
     int i;
 
     if (0 == s1->runtime_added) {
@@ -145,7 +145,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
             return -1;
     }
 
-    offset = 0, mem = (uplong)ptr;
+    offset = 0, mem = (addr_t)ptr;
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
@@ -161,7 +161,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     if (s1->nb_errors)
         return -1;
 
-#if (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM) && !defined TCC_TARGET_PE
+#ifdef TCC_HAS_RUNTIME_PLTGOT
     s1->runtime_plt_and_got_offset = 0;
     s1->runtime_plt_and_got = (char *)(mem + offset);
     /* double the size of the buffer for got and plt entries
@@ -185,7 +185,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
             continue;
         length = s->data_offset;
         // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
-        ptr = (void*)(uplong)s->sh_addr;
+        ptr = (void*)s->sh_addr;
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
         else
@@ -195,7 +195,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
             set_pages_executable(ptr, length);
     }
 
-#if (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM) && !defined TCC_TARGET_PE
+#ifdef TCC_HAS_RUNTIME_PLTGOT
     set_pages_executable(s1->runtime_plt_and_got,
                          s1->runtime_plt_and_got_offset);
 #endif
@@ -215,17 +215,15 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
-    unsigned long start, end;
-    start = (uplong)ptr & ~(PAGESIZE - 1);
-    end = (uplong)ptr + length;
+    addr_t start, end;
+    start = (addr_t)ptr & ~(PAGESIZE - 1);
+    end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
 #endif
 }
 
 /* ------------------------------------------------------------- */
-#endif /* TCC_IS_NATIVE */
-
 #ifdef CONFIG_TCC_BACKTRACE
 
 PUB_FUNC void tcc_set_num_callers(int n)
@@ -235,10 +233,10 @@ PUB_FUNC void tcc_set_num_callers(int n)
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static uplong rt_printline(uplong wanted_pc, const char *msg)
+static addr_t rt_printline(addr_t wanted_pc, const char *msg)
 {
     char func_name[128], last_func_name[128];
-    uplong func_addr, last_pc, pc;
+    addr_t func_addr, last_pc, pc;
     const char *incl_files[INCLUDE_STACK_SIZE];
     int incl_index, len, last_line_num, i;
     const char *str, *p;
@@ -257,7 +255,7 @@ static uplong rt_printline(uplong wanted_pc, const char *msg)
     func_addr = 0;
     incl_index = 0;
     last_func_name[0] = '\0';
-    last_pc = (uplong)-1;
+    last_pc = (addr_t)-1;
     last_line_num = 1;
 
     if (!stab_sym)
@@ -380,7 +378,7 @@ no_stabs:
 static void rt_error(ucontext_t *uc, const char *fmt, ...)
 {
     va_list ap;
-    uplong pc;
+    addr_t pc;
     int i;
 
     fprintf(stderr, "Runtime error: ");
@@ -393,7 +391,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
         if (rt_get_caller_pc(&pc, uc, i) < 0)
             break;
         pc = rt_printline(pc, i ? "by" : "at");
-        if (pc == (uplong)rt_prog_main && pc)
+        if (pc == (addr_t)rt_prog_main && pc)
             break;
     }
 }
@@ -464,7 +462,7 @@ static void set_exception_handler(void)
 #endif
 
 /* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(unsigned long *paddr, ucontext_t *uc, int level)
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 {
     unsigned long fp;
     int i;
@@ -634,17 +632,17 @@ static void set_exception_handler(void)
 static void win64_add_function_table(TCCState *s1)
 {
     RtlAddFunctionTable(
-        (RUNTIME_FUNCTION*)(uplong)s1->uw_pdata->sh_addr,
+        (RUNTIME_FUNCTION*)s1->uw_pdata->sh_addr,
         s1->uw_pdata->data_offset / sizeof (RUNTIME_FUNCTION),
-        (uplong)text_section->sh_addr
+        text_section->sh_addr
         );
 }
 #endif
 
 /* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(uplong *paddr, CONTEXT *uc, int level)
+static int rt_get_caller_pc(addr_t *paddr, CONTEXT *uc, int level)
 {
-    uplong fp, pc;
+    addr_t fp, pc;
     int i;
 #ifdef _WIN64
     pc = uc->Rip;
@@ -658,9 +656,9 @@ static int rt_get_caller_pc(uplong *paddr, CONTEXT *uc, int level)
 	    /* XXX: check address validity with program info */
 	    if (fp <= 0x1000 || fp >= 0xc0000000)
 		return -1;
-	    fp = ((uplong*)fp)[0];
+	    fp = ((addr_t*)fp)[0];
 	}
-        pc = ((uplong*)fp)[1];
+        pc = ((addr_t*)fp)[1];
     }
     *paddr = pc;
     return 0;
@@ -730,5 +728,5 @@ ST_FUNC void *resolve_sym(TCCState *s1, const char *sym)
 }
 
 #endif /* CONFIG_TCC_STATIC */
-
+#endif /* TCC_IS_NATIVE */
 /* ------------------------------------------------------------- */

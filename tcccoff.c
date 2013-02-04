@@ -933,7 +933,7 @@ ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
 	    if (name[0] == '_' && strcmp(name, "_main") != 0)
 		name++;
 
-	    tcc_add_symbol(s1, name, (void*)(uplong)csym.n_value);
+	    tcc_add_symbol(s1, name, (void*)(uintptr_t)csym.n_value);
 	}
 	// skip any aux records
 

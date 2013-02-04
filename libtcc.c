@@ -423,7 +423,7 @@ ST_FUNC Section *find_section(TCCState *s1, const char *name)
 /* update sym->c so that it points to an external symbol in section
    'section' with value 'value' */
 ST_FUNC void put_extern_sym2(Sym *sym, Section *section, 
-                            uplong value, unsigned long size,
+                            addr_t value, unsigned long size,
                             int can_add_underscore)
 {
     int sym_type, sym_bind, sh_num, info, other;
@@ -527,7 +527,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
 }
 
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, 
-                           uplong value, unsigned long size)
+                           addr_t value, unsigned long size)
 {
     put_extern_sym2(sym, section, value, size, 1);
 }
@@ -1279,11 +1279,11 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 {
 #ifdef TCC_TARGET_PE
-    pe_putimport(s, 0, name, val);
+pe_putimport(s, 0, name, (uintptr_t)val);
 #else
-    add_elf_sym(symtab_section, (uplong)val, 0,
-                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                SHN_ABS, name);
+add_elf_sym(symtab_section, (uintptr_t)val, 0,
+            ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+            SHN_ABS, name);
 #endif
     return 0;
 }
