@@ -682,14 +682,11 @@ static int pe_write(struct pe_info *pe)
     pe_header.filehdr.NumberOfSections = pe->sec_count;
     pe_header.opthdr.SizeOfHeaders = pe->sizeofheaders;
     pe_header.opthdr.ImageBase = pe->imagebase;
+    pe_header.opthdr.Subsystem = pe->subsystem;
     if (pe->s1->pe_stack_size)
         pe_header.opthdr.SizeOfStackReserve = pe->s1->pe_stack_size;
     if (PE_DLL == pe->type)
         pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
-    else if (PE_GUI != pe->type)
-        pe_header.opthdr.Subsystem = 3;
-    if (pe->subsystem == 9)  // WinCE
-        pe_header.opthdr.Subsystem = 9;
 
     sum = 0;
     pe_fwrite(&pe_header, sizeof pe_header, op, &sum);
@@ -1825,15 +1822,19 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
 #endif
         }
 
-        /* if no subsystem specified, we use "console" subsystem by default */
-        if (s1->pe_subsystem != 0)
-            pe.subsystem = s1->pe_subsystem;
-        else
 #if defined(TCC_TARGET_ARM)
-            pe.subsystem = 9;
+        /* we use "console" subsystem by default */
+        pe.subsystem = 9;
 #else
+        if (PE_DLL == pe.type || PE_GUI == pe.type)
+            pe.subsystem = 2;
+        else
             pe.subsystem = 3;
 #endif
+        /* Allow override via -Wl,-subsystem=... option */
+        if (s1->pe_subsystem != 0)
+            pe.subsystem = s1->pe_subsystem;
+
         /* set default file/section alignment */
 	if (pe.subsystem == 1) {
 	    pe.section_align = 0x20;
