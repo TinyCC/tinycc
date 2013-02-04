@@ -222,12 +222,6 @@
 
 /* -------------------------------------------- */
 
-#define FALSE 0
-#define false 0
-#define TRUE 1
-#define true 1
-typedef int BOOL;
-
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         256

@@ -1493,9 +1493,9 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
     while (option && *option) {
         end = NULL;
         if (link_option(option, "Bsymbolic", &p)) {
-            s->symbolic = TRUE;
+            s->symbolic = 1;
         } else if (link_option(option, "nostdlib", &p)) {
-            s->nostdlib = TRUE;
+            s->nostdlib = 1;
         } else if (link_option(option, "fini=", &p)) {
             s->fini_symbol = p;
             if (s->warn_unsupported)

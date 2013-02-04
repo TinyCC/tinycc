@@ -38,7 +38,7 @@ int EndAddress[MAX_FUNCS];
 int LastLineNo[MAX_FUNCS];
 int FuncEntries[MAX_FUNCS];
 
-BOOL OutputTheSection(Section * sect);
+int OutputTheSection(Section * sect);
 short int GetCoffFlags(const char *s);
 void SortSymbolTable(void);
 Section *FindSection(TCCState * s1, const char *sname);
@@ -814,14 +814,14 @@ int FindCoffSymbolIndex(const char *func_name)
     return n;			// total number of symbols
 }
 
-BOOL OutputTheSection(Section * sect)
+int OutputTheSection(Section * sect)
 {
     const char *s = sect->name;
 
     if (!strcmp(s, ".text"))
-	return true;
+	return 1;
     else if (!strcmp(s, ".data"))
-	return true;
+	return 1;
     else
 	return 0;
 }

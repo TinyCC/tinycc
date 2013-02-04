@@ -469,7 +469,7 @@ static int parse_args(TCCState *s, int argc, char **argv)
             }
         }
     }
-    if (NULL != (r1 = tcc_set_linker(s, (char *) linker_arg.data, TRUE)))
+    if (NULL != (r1 = tcc_set_linker(s, (char *) linker_arg.data, 1)))
         tcc_error("unsupported linker option '%s'", r1);
     /* fixme: these options could be different on your platform */
     if (was_pthread && output_type != TCC_OUTPUT_OBJ) {
