@@ -746,60 +746,6 @@ static void gcall_or_jmp(int is_jmp)
   }
 }
 
-#ifdef TCC_ARM_HARDFLOAT
-static int is_float_hgen_aggr(CType *type)
-{
-  if ((type->t & VT_BTYPE) == VT_STRUCT) {
-    struct Sym *ref;
-    int btype, nb_fields = 0;
-
-    ref = type->ref;
-    btype = ref->type.t & VT_BTYPE;
-    if (btype == VT_FLOAT || btype == VT_DOUBLE) {
-      for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
-      return !ref && nb_fields <= 4;
-    }
-  }
-  return 0;
-}
-
-struct avail_regs {
-  /* worst case: f(float, double, 3 float struct, double, 3 float struct, double) */
-  signed char avail[3];
-  int first_hole;
-  int last_hole;
-  int first_free_reg;
-};
-
-#define AVAIL_REGS_INITIALIZER (struct avail_regs) { { 0, 0, 0}, 0, 0, 0 }
-
-/* Assign a register for a CPRC param with correct size and alignment
- * size and align are in bytes, as returned by type_size */
-int assign_fpreg(struct avail_regs *avregs, int align, int size)
-{
-  int first_reg = 0;
-
-  if (avregs->first_free_reg == -1)
-    return -1;
-  if (align >> 3) { // alignment needed (base type: double)
-    first_reg = avregs->first_free_reg;
-    if (first_reg & 1)
-      avregs->avail[avregs->last_hole++] = first_reg++;
-  } else {
-    if (size == 4 && avregs->first_hole != avregs->last_hole)
-      return avregs->avail[avregs->first_hole++];
-    else
-      first_reg = avregs->first_free_reg;
-  }
-  if (first_reg + size / 4 <= 16) {
-    avregs->first_free_reg = first_reg + size / 4;
-    return first_reg;
-  }
-  avregs->first_free_reg = -1;
-  return -1;
-}
-#endif
-
 /* Return 1 if this function returns via an sret pointer, 0 otherwise */
 ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
 #ifdef TCC_ARM_EABI
@@ -818,61 +764,143 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
 #endif
 }
 
-/* Generate function call. The function address is pushed first, then
-   all the parameters in call order. This functions pops all the
-   parameters and the function address. */
-void gfunc_call(int nb_args)
+#ifdef TCC_ARM_HARDFLOAT
+/* Return whether a structure is an homogeneous float aggregate or not.
+   The answer is true if all the elements of the structure are of the same
+   primitive float type and there is less than 4 elements.
+
+   type: the type corresponding to the structure to be tested */
+static int is_hgen_float_aggr(CType *type)
 {
-  int size, align, r, args_size, i, ncrn, ncprn, argno, vfp_argno;
-  signed char plan[4][2]={{-1,-1},{-1,-1},{-1,-1},{-1,-1}};
-  SValue *before_stack = NULL; /* SValue before first on stack argument */
-  SValue *before_creg = NULL; /* SValue before first argument of type struct in core register */
+  if ((type->t & VT_BTYPE) == VT_STRUCT) {
+    struct Sym *ref;
+    int btype, nb_fields = 0;
+
+    ref = type->ref;
+    btype = ref->type.t & VT_BTYPE;
+    if (btype == VT_FLOAT || btype == VT_DOUBLE) {
+      for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
+      return !ref && nb_fields <= 4;
+    }
+  }
+  return 0;
+}
+
+struct avail_regs {
+  signed char avail[3]; /* 3 holes max with only float and double alignments */
+  int first_hole; /* first available hole */
+  int last_hole; /* last available hole (none if equal to first_hole) */
+  int first_free_reg; /* next free register in the sequence, hole excluded */
+};
+
+#define AVAIL_REGS_INITIALIZER (struct avail_regs) { { 0, 0, 0}, 0, 0, 0 }
+
+/* Find suitable registers for a VFP Co-Processor Register Candidate (VFP CPRC
+   param) according to the rules described in the procedure call standard for
+   the ARM architecture (AAPCS). If found, the registers are assigned to this
+   VFP CPRC parameter. Registers are allocated in sequence unless a hole exists
+   and the parameter is a single float.
+
+   avregs: opaque structure to keep track of available VFP co-processor regs
+   align: alignment contraints for the param, as returned by type_size()
+   size: size of the parameter, as returned by type_size() */
+int assign_vfpreg(struct avail_regs *avregs, int align, int size)
+{
+  int first_reg = 0;
+
+  if (avregs->first_free_reg == -1)
+    return -1;
+  if (align >> 3) { /* double alignment */
+    first_reg = avregs->first_free_reg;
+    /* alignment contraint not respected so use next reg and record hole */
+    if (first_reg & 1)
+      avregs->avail[avregs->last_hole++] = first_reg++;
+  } else { /* no special alignment (float or array of float) */
+    /* if single float and a hole is available, assign the param to it */
+    if (size == 4 && avregs->first_hole != avregs->last_hole)
+      return avregs->avail[avregs->first_hole++];
+    else
+      first_reg = avregs->first_free_reg;
+  }
+  if (first_reg + size / 4 <= 16) {
+    avregs->first_free_reg = first_reg + size / 4;
+    return first_reg;
+  }
+  avregs->first_free_reg = -1;
+  return -1;
+}
+#endif
+
+/* Parameters are classified according to how they are copied to their final
+   destination for the function call. Because the copying is performed class
+   after class according to the order in the union below, it is important that
+   some constraints about the order of the members of this union are respected:
+   - CORE_STRUCT_CLASS must come after STACK_CLASS;
+   - CORE_CLASS must come after STACK_CLASS, CORE_STRUCT_CLASS and
+     VFP_STRUCT_CLASS;
+   - VFP_STRUCT_CLASS must come after VFP_CLASS.
+   See the comment for the main loop in copy_params() for the reason. */
+enum reg_class {
+	STACK_CLASS = 0,
+	CORE_STRUCT_CLASS,
+	VFP_CLASS,
+	VFP_STRUCT_CLASS,
+	CORE_CLASS,
+	NB_CLASSES
+};
+
+struct param_plan {
+    int start; /* first reg or addr used depending on the class */
+    int end; /* last reg used or next free addr depending on the class */
+    SValue *sval; /* pointer to SValue on the value stack */
+    struct param_plan *prev; /*  previous element in this class */
+};
+
+struct plan {
+    struct param_plan *pplans; /* array of all the param plans */
+    struct param_plan *clsplans[NB_CLASSES]; /* per class lists of param plans */
+};
+
+#define add_param_plan(plan,pplan,class)                        \
+    do {                                                        \
+        pplan.prev = plan->clsplans[class];                     \
+        plan->pplans[plan ## _nb] = pplan;                      \
+        plan->clsplans[class] = &plan->pplans[plan ## _nb++];   \
+    } while(0)
+
+/* Assign parameters to registers and stack with alignment according to the
+   rules in the procedure call standard for the ARM architecture (AAPCS).
+   The overall assignment is recorded in an array of per parameter structures
+   called parameter plans. The parameter plans are also further organized in a
+   number of linked lists, one per class of parameter (see the comment for the
+   definition of union reg_class).
+
+   nb_args: number of parameters of the function for which a call is generated
+   variadic: whether the function is a variadic function or not
+   plan: the structure where the overall assignment is recorded
+   todo: a bitmap that record which core registers hold a parameter
+
+   Returns the amount of stack space needed for parameter passing
+
+   Note: this function allocated an array in plan->pplans with tcc_malloc. It
+   is the responsability of the caller to free this array once used (ie not
+   before copy_params). */
+static int assign_regs(int nb_args, int variadic, struct plan *plan, int *todo)
+{
+  int i, size, align;
+  int ncrn /* next core register number */, nsaa /* next stacked argument address*/;
+  int plan_nb = 0;
+  struct param_plan pplan;
 #ifdef TCC_ARM_HARDFLOAT
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
-  signed char vfp_plan[16];
-  int plan2[4+16];
-  int variadic;
-#else
-  int plan2[4]={0,0,0,0};
 #endif
-  int vfp_todo=0;
-  int todo=0, keep;
 
-#ifdef TCC_ARM_HARDFLOAT
-  memset(vfp_plan, -1, sizeof(vfp_plan));
-  memset(plan2, 0, sizeof(plan2));
-  variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
-#endif
-  r = vtop->r & VT_VALMASK;
-  if (r == VT_CMP || (r & ~1) == VT_JMP)
-    gv(RC_INT);
-#ifdef TCC_ARM_EABI
-  if((vtop[-nb_args].type.ref->type.t & VT_BTYPE) == VT_STRUCT
-     && type_size(&vtop[-nb_args].type.ref->type, &align) <= 4) {
-    SValue tmp;
-    tmp=vtop[-nb_args];
-    vtop[-nb_args]=vtop[-nb_args+1];
-    vtop[-nb_args+1]=tmp;
-    --nb_args;
-  }
-
-  vpushi(0), nb_args++;
-  vtop->type.t = VT_LLONG;
-#endif
-  ncrn = ncprn = argno = vfp_argno = args_size = 0;
-  /* Assign argument to registers and stack with alignment.
-     If, considering alignment constraints, enough registers of the correct type
-     (core or VFP) are free for the current argument, assign them to it, else
-     allocate on stack with correct alignment. Whenever a structure is allocated
-     in registers or on stack, it is always put on the stack at this stage. The
-     stack is divided in 3 zones. The zone are, from high addresses to low
-     addresses: structures to be loaded in core registers, structures to be
-     loaded in VFP registers, argument allocated to stack. SValue's representing
-     structures in the first zone are moved just after the SValue pointed by
-     before_stack. SValue's representing structures in the second zone are
-     moved just after the SValue pointer by before_creg. */
+  ncrn = nsaa = 0;
+  *todo = 0;
+  plan->pplans = tcc_malloc(nb_args * sizeof(*plan->pplans));
+  memset(plan->clsplans, 0, sizeof(plan->clsplans));
   for(i = nb_args; i-- ;) {
-    int j, assigned_vfpreg = 0;
+    int j, start_vfpreg = 0;
     size = type_size(&vtop[-i].type, &align);
     switch(vtop[-i].type.t & VT_BTYPE) {
       case VT_STRUCT:
@@ -881,262 +909,266 @@ void gfunc_call(int nb_args)
       case VT_LDOUBLE:
 #ifdef TCC_ARM_HARDFLOAT
       if (!variadic) {
-        int hfa = 0; /* Homogeneous float aggregate */
+        int is_hfa = 0; /* Homogeneous float aggregate */
 
         if (is_float(vtop[-i].type.t)
-            || (hfa = is_float_hgen_aggr(&vtop[-i].type))) {
-          int end_reg;
+            || (is_hfa = is_hgen_float_aggr(&vtop[-i].type))) {
+          int end_vfpreg;
 
-          assigned_vfpreg = assign_fpreg(&avregs, align, size);
-          end_reg = assigned_vfpreg + (size - 1) / 4;
-          if (assigned_vfpreg >= 0) {
-            vfp_plan[vfp_argno++]=TREG_F0 + assigned_vfpreg/2;
-            if (hfa) {
-              /* if before_creg is not set, it means that no parameter has been
-               * allocated in core register. This implied that no argument has
-               * been allocated on stack neither because a VFP was available for
-               * this parameter. */
-              if (before_creg) {
-                /* before_creg already exists and we just update it */
-                vrote(&vtop[-i], &vtop[-i] - before_creg);
-                before_creg++;
-              }
-              for (j = assigned_vfpreg; j <= end_reg; j++)
-                vfp_todo|=(1<<j);
-            }
+          start_vfpreg = assign_vfpreg(&avregs, align, size);
+          end_vfpreg = start_vfpreg + ((size - 1) >> 2);
+          if (start_vfpreg >= 0) {
+            pplan = (struct param_plan) {start_vfpreg, end_vfpreg, &vtop[-i]};
+            if (is_hfa)
+              add_param_plan(plan, pplan, VFP_STRUCT_CLASS);
+            else
+              add_param_plan(plan, pplan, VFP_CLASS);
             continue;
-          } else {
-            if (!hfa)
-              vfp_argno++;
-            if (!before_stack)
-              before_stack = &vtop[-i-1];
+          } else
             break;
-          }
         }
       }
 #endif
       ncrn = (ncrn + (align-1)/4) & -(align/4);
       size = (size + 3) & -4;
-      if (ncrn + size/4 <= 4 || (ncrn < 4 && assigned_vfpreg != -1)) {
-        if (before_stack) {
-          vrote(&vtop[-i], &vtop[-i] - before_stack);
-          before_stack++;
-          /* before_stack can only have been set because all VFP registers are
-           * assigned, so no need to care about before_creg if before_stack is
-	   * set since no more argument will be allocated in a VFP register. */
-	} else if (!before_creg)
-          before_creg = &vtop[-i];
+      if (ncrn + size/4 <= 4 || (ncrn < 4 && start_vfpreg != -1)) {
+        /* The parameter is allocated both in core register and on stack. As
+	 * such, it can be of either class: it would either be the last of
+	 * CORE_STRUCT_CLASS or the first of STACK_CLASS. */
         for (j = ncrn; j < 4 && j < ncrn + size / 4; j++)
-          todo|=(1<<j);
-        ncrn+=size/4;
-        if (ncrn > 4) {
-          args_size = (ncrn - 4) * 4;
-          if (!before_stack)
-            before_stack = &vtop[-i-1];
-        }
+          *todo|=(1<<j);
+        pplan = (struct param_plan) {ncrn, j, &vtop[-i]};
+        add_param_plan(plan, pplan, CORE_STRUCT_CLASS);
+        ncrn += size/4;
+        if (ncrn > 4)
+          nsaa = (ncrn - 4) * 4;
       } else {
         ncrn = 4;
-        /* No need to set before_creg since it has already been set when
-         * assigning argument to core registers */
-        if (!before_stack)
-          before_stack = &vtop[-i-1];
         break;
       }
       continue;
       default:
-#ifdef TCC_ARM_EABI
-      if (!i) {
-        break;
-      }
-#endif
       if (ncrn < 4) {
         int is_long = (vtop[-i].type.t & VT_BTYPE) == VT_LLONG;
 
         if (is_long) {
           ncrn = (ncrn + 1) & -2;
-          if (ncrn == 4) {
-            argno++;
+          if (ncrn == 4)
             break;
-          }
         }
-        plan[argno++][0]=ncrn++;
-        if (is_long) {
-          plan[argno-1][1]=ncrn++;
-        }
+        pplan = (struct param_plan) {ncrn, ncrn, &vtop[-i]};
+        ncrn++;
+        if (is_long)
+          pplan.end = ncrn++;
+        add_param_plan(plan, pplan, CORE_CLASS);
         continue;
       }
-      argno++;
     }
-#ifdef TCC_ARM_EABI
-    if(args_size & (align-1)) {
-      vpushi(0);
-      vtop->type.t = VT_VOID; /* padding */
-      vrott(i+2);
-      args_size += 4;
-      nb_args++;
-      argno++;
-    }
-#endif
-    args_size += (size + 3) & -4;
+    nsaa = (nsaa + (align - 1)) & ~(align - 1);
+    pplan = (struct param_plan) {nsaa, nsaa + size, &vtop[-i]};
+    add_param_plan(plan, pplan, STACK_CLASS);
+    nsaa += size; /* size already rounded up before */
   }
+  return nsaa;
+}
+
+#undef add_param_plan
+
+/* Copy parameters to their final destination (core reg, VFP reg or stack) for
+   function call.
+
+   nb_args: number of parameters the function take
+   plan: the overall assignment plan for parameters
+   todo: a bitmap indicating what core reg will hold a parameter */
+static void copy_params(int nb_args, struct plan *plan, int todo)
+{
+  int size, align, r, i;
+  struct param_plan *pplan;
+
+  /* Put argument on stack (structure are put on stack no matter how they are
+   * passed via register or the stack). */
 #ifdef TCC_ARM_EABI
-  vtop--, nb_args--;
+  if ((pplan = plan->clsplans[STACK_CLASS]) && pplan->end & 7)
+    o(0xE24DD004); /* sub sp, sp, #4 */
 #endif
-  args_size = keep = 0;
-  for(i = 0;i < nb_args; i++) {
-    vrotb(keep+1);
-    if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-      size = type_size(&vtop->type, &align);
-      /* align to stack align size */
-      size = (size + 3) & -4;
-      /* allocate the necessary size on stack */
-      gadd_sp(-size);
-      /* generate structure store */
-      r = get_reg(RC_INT);
-      o(0xE1A0000D|(intr(r)<<12));
-      vset(&vtop->type, r | VT_LVAL, 0);
-      vswap();
-      vstore();
-      vtop--;
-      args_size += size;
-    } else if (is_float(vtop->type.t)) {
-#ifdef TCC_ARM_HARDFLOAT
-      if (!variadic && --vfp_argno<16 && vfp_plan[vfp_argno]!=-1) {
-        plan2[keep++]=vfp_plan[vfp_argno];
-        continue;
-      }
-#endif
+   /* Several constraints require parameters to be copied in a specific order:
+      - structures are copied to the stack before being loaded in a reg;
+      - floats loaded to an odd numbered VFP reg are first copied to the
+        preceding even numbered VFP reg and then moved to the next VFP reg.
+
+      It is thus important that:
+      - structures assigned to core regs must be copied after parameters
+        assigned to the stack but before structures assigned to VFP regs because
+        a structure can lie partly in core registers and partly on the stack;
+      - parameters assigned to the stack and all structures be copied before
+        parameters assigned to a core reg since copying a parameter to the stack
+        require using a core reg;
+      - parameters assigned to VFP regs be copied before structures assigned to
+        VFP regs as the copy might use an even numbered VFP reg that already
+        holds part of a structure. */
+  for(i = 0; i < NB_CLASSES; i++) {
+    for(pplan = plan->clsplans[i]; pplan; pplan = pplan->prev) {
+      vpushv(pplan->sval);
+      pplan->sval->r = pplan->sval->r2 = VT_CONST; /* disable entry */
+      switch(i) {
+        case STACK_CLASS:
+        case CORE_STRUCT_CLASS:
+        case VFP_STRUCT_CLASS:
+          if ((pplan->sval->type.t & VT_BTYPE) == VT_STRUCT) {
+            size = type_size(&pplan->sval->type, &align);
+            /* align to stack align size */
+            size = (size + 3) & ~3;
+            if (i == STACK_CLASS && pplan->prev)
+              size += pplan->start - pplan->prev->end; /* Add padding if any */
+            /* allocate the necessary size on stack */
+            gadd_sp(-size);
+            /* generate structure store */
+            r = get_reg(RC_INT);
+            o(0xE1A0000D|(intr(r)<<12)); /* mov r, sp */
+            vset(&vtop->type, r | VT_LVAL, 0);
+            vswap();
+            vstore(); /* memcpy to current sp */
+            /* Homogeneous float aggregate are loaded to VFP registers
+               immediately since there is no way of loading data in multiple
+               non consecutive VFP registers as what is done for other
+               structures (see the use of todo). */
+            if (i == VFP_STRUCT_CLASS) {
+              int first = pplan->start, nb = pplan->end - first + 1;
+              /* vpop.32 {pplan->start, ..., pplan->end} */
+              o(0xECBD0A00|(first&1)<<22|(first>>1)<<12|nb);
+              /* No need to write the register used to a SValue since VFP regs
+                 cannot be used for gcall_or_jmp */
+            }
+          } else {
+            if (is_float(pplan->sval->type.t)) {
 #ifdef TCC_ARM_VFP
-      r=vfpr(gv(RC_FLOAT))<<12;
-      size=4;
-      if ((vtop->type.t & VT_BTYPE) != VT_FLOAT)
-      {
-        size=8;
-        r|=0x101; /* fstms -> fstmd */
-      }
-      o(0xED2D0A01+r);
+              r = vfpr(gv(RC_FLOAT)) << 12;
+              if ((pplan->sval->type.t & VT_BTYPE) == VT_FLOAT)
+                size = 4;
+              else {
+                size = 8;
+                r |= 0x101; /* vpush.32 -> vpush.64 */
+              }
+              o(0xED2D0A01 + r); /* vpush */
 #else
-      r=fpr(gv(RC_FLOAT))<<12;
-      if ((vtop->type.t & VT_BTYPE) == VT_FLOAT)
-        size = 4;
-      else if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
-        size = 8;
-      else
-        size = LDOUBLE_SIZE;
+              r = fpr(gv(RC_FLOAT)) << 12;
+              if ((pplan->sval->type.t & VT_BTYPE) == VT_FLOAT)
+                size = 4;
+              else if ((pplan->sval->type.t & VT_BTYPE) == VT_DOUBLE)
+                size = 8;
+              else
+                size = LDOUBLE_SIZE;
 
-      if (size == 12)
-	r|=0x400000;
-      else if(size == 8)
-	r|=0x8000;
+              if (size == 12)
+                r |= 0x400000;
+              else if(size == 8)
+                r|=0x8000;
 
-      o(0xED2D0100|r|(size>>2));
+              o(0xED2D0100|r|(size>>2)); /* some kind of vpush for FPA */
 #endif
+            } else {
+              /* simple type (currently always same size) */
+              /* XXX: implicit cast ? */
+              size=4;
+              if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG) {
+                lexpand_nr();
+                size = 8;
+                r = gv(RC_INT);
+                o(0xE52D0004|(intr(r)<<12)); /* push r */
+                vtop--;
+              }
+              r = gv(RC_INT);
+              o(0xE52D0004|(intr(r)<<12)); /* push r */
+            }
+            if (i == STACK_CLASS && pplan->prev)
+              gadd_sp(pplan->prev->end - pplan->start); /* Add padding if any */
+          }
+          break;
+
+        case VFP_CLASS:
+          gv(regmask(TREG_F0 + (pplan->start >> 1)));
+          if (pplan->start & 1) { /* Must be in upper part of double register */
+            o(0xEEF00A40|((pplan->start>>1)<<12)|(pplan->start>>1)); /* vmov.f32 s(n+1), sn */
+            vtop->r = VT_CONST; /* avoid being saved on stack by gv for next float */
+          }
+          break;
+
+        case CORE_CLASS:
+          if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG) {
+            lexpand_nr();
+            gv(regmask(pplan->end));
+            pplan->sval->r2 = vtop->r;
+            vtop--;
+          }
+          gv(regmask(pplan->start));
+          /* Mark register as used so that gcall_or_jmp use another one
+             (regs >=4 are free as never used to pass parameters) */
+          pplan->sval->r = vtop->r;
+          break;
+      }
       vtop--;
-      args_size += size;
-    } else {
-      int s;
-      /* simple type (currently always same size) */
-      /* XXX: implicit cast ? */
-      size=4;
-      if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
-	lexpand_nr();
-	s=-1;
-	if(--argno<4 && plan[argno][1]!=-1)
-	  s=plan[argno][1];
-	argno++;
-	size = 8;
-	if(s==-1) {
-	  r = gv(RC_INT);
-	  o(0xE52D0004|(intr(r)<<12)); /* str r,[sp,#-4]! */
-	  vtop--;
-	} else {
-	  size=0;
-	  plan2[keep]=s;
-	  keep++;
-          vswap();
-	}
-      }
-      s=-1;
-      if(--argno<4 && plan[argno][0]!=-1)
-        s=plan[argno][0];
-#ifdef TCC_ARM_EABI
-      if(vtop->type.t == VT_VOID) {
-        if(s == -1)
-          o(0xE24DD004); /* sub sp,sp,#4 */
-        vtop--;
-      } else
-#endif
-      if(s == -1) {
-	r = gv(RC_INT);
-	o(0xE52D0004|(intr(r)<<12)); /* str r,[sp,#-4]! */
-	vtop--;
-      } else {
-        size=0;
-	plan2[keep]=s;
-	keep++;
-      }
-      args_size += size;
     }
   }
-  for(i = 0; i < keep; i++) {
-    vrotb(keep);
-    gv(regmask(plan2[i]));
-#ifdef TCC_ARM_HARDFLOAT
-    /* arg is in s(2d+1): plan2[i]<plan2[i+1] => alignment occured (ex f,d,f) */
-    if (i < keep - 1 && is_float(vtop->type.t) && (plan2[i] <= plan2[i + 1])) {
-      o(0xEEF00A40|(vfpr(plan2[i])<<12)|vfpr(plan2[i]));
-    }
-#endif
-  }
-save_regs(keep); /* save used temporary registers */
-  keep++;
-  if(vfp_todo) {
-    int nb_fregs=0;
 
-    for(i=0;i<16;i++)
-      if(vfp_todo&(1<<i)) {
-        o(0xED9D0A00|(i&1)<<22|(i>>1)<<12|nb_fregs);
-        vpushi(0);
-        /* There might be 2 floats in a double VFP reg but that doesn't seem
-           to matter */
-        if (!(i%2))
-          vtop->r=TREG_F0+i/2;
-        keep++;
-        nb_fregs++;
-      }
-    if (nb_fregs) {
-      gadd_sp(nb_fregs*4);
-      args_size-=nb_fregs*4;
+  /* Manually free remaining registers since next parameters are loaded
+   * manually, without the help of gv(int). */
+  save_regs(nb_args);
+
+  if(todo) {
+    o(0xE8BD0000|todo); /* pop {todo} */
+    for(pplan = plan->clsplans[CORE_STRUCT_CLASS]; pplan; pplan = pplan->prev) {
+      pplan->sval->r = pplan->start;
+      if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG)
+        pplan->sval->r2 = pplan->end;
     }
   }
-  if(ncrn) {
-    int nb_regs=0;
-    if (ncrn>4)
-      ncrn=4;
-    todo&=((1<<ncrn)-1);
-    if(todo) {
-      int i;
-      o(0xE8BD0000|todo);
-      for(i=0;i<4;i++)
-	if(todo&(1<<i)) {
-	  vpushi(0);
-	  vtop->r=i;
-	  keep++;
-	  nb_regs++;
-	}
-    }
-    args_size-=nb_regs*4;
+}
+
+/* Generate function call. The function address is pushed first, then
+   all the parameters in call order. This functions pops all the
+   parameters and the function address. */
+void gfunc_call(int nb_args)
+{
+  int align, r, args_size;
+  int variadic;
+  int todo;
+  struct plan plan;
+
+  variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
+  /* cannot let cpu flags if other instruction are generated. Also avoid leaving
+     VT_JMP anywhere except on the top of the stack because it would complicate
+     the code generator. */
+  r = vtop->r & VT_VALMASK;
+  if (r == VT_CMP || (r & ~1) == VT_JMP)
+    gv(RC_INT);
+#ifdef TCC_ARM_EABI
+  /* return type is a struct so caller of gfunc_call (unary(void) in tccgen.c)
+     assumed it had to be passed by a pointer. Since it's less than 4 bytes, we
+     can actually pass it directly in a register. */
+  if((vtop[-nb_args].type.ref->type.t & VT_BTYPE) == VT_STRUCT
+     && type_size(&vtop[-nb_args].type.ref->type, &align) <= 4) {
+    SValue tmp;
+    tmp=vtop[-nb_args];
+    vtop[-nb_args]=vtop[-nb_args+1];
+    vtop[-nb_args+1]=tmp;
+    --nb_args;
   }
-  vrotb(keep);
+#endif
+
+  args_size = assign_regs(nb_args, variadic, &plan, &todo);
+  copy_params(nb_args, &plan, todo);
+  tcc_free(plan.pplans);
+
+  /* Move fct SValue on top as required by gcall_or_jmp */
+  vrotb(nb_args + 1);
   gcall_or_jmp(0);
   if (args_size)
-      gadd_sp(args_size);
+      gadd_sp(args_size); /* pop all parameters passed on the stack */
 #ifdef TCC_ARM_EABI
   if((vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT
-     && type_size(&vtop->type.ref->type, &align) <= 4)
-  {
-    store(REG_IRET,vtop-keep);
-    ++keep;
+     && type_size(&vtop->type.ref->type, &align) <= 4) {
+    store(REG_IRET,vtop-nb_args-1);
+    nb_args++;
   }
 #ifdef TCC_ARM_VFP
 #ifdef TCC_ARM_HARDFLOAT
@@ -1145,16 +1177,16 @@ save_regs(keep); /* save used temporary registers */
   else if(is_float(vtop->type.ref->type.t)) {
 #endif
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
-      o(0xEE000A10); /* fmsr s0,r0 */
+      o(0xEE000A10); /*vmov s0, r0 */
     } else {
-      o(0xEE000B10); /* fmdlr d0,r0 */
-      o(0xEE201B10); /* fmdhr d0,r1 */
+      o(0xEE000B10); /* vmov.32 d0[0], r0 */
+      o(0xEE201B10); /* vmov.32 d0[1], r1 */
     }
   }
 #endif
 #endif
-  vtop-=keep;
-  leaffunc = 0;
+  vtop -= nb_args + 1; /* Pop all params and fct address from value stack */
+  leaffunc = 0; /* we are calling a function, so we aren't in a leaf function */
 }
 
 /* generate function prolog of type 't' */
@@ -1182,8 +1214,8 @@ void gfunc_prolog(CType *func_type)
     size = type_size(&sym2->type, &align);
 #ifdef TCC_ARM_HARDFLOAT
     if (!variadic && (is_float(sym2->type.t)
-        || is_float_hgen_aggr(&sym2->type))) {
-      int tmpnf = assign_fpreg(&avregs, align, size) + 1;
+        || is_hgen_float_aggr(&sym2->type))) {
+      int tmpnf = assign_vfpreg(&avregs, align, size) + 1;
       nf = (tmpnf > nf) ? tmpnf : nf;
     } else
 #endif
@@ -1226,8 +1258,8 @@ void gfunc_prolog(CType *func_type)
       align = (align + 3) & ~3;
 #ifdef TCC_ARM_HARDFLOAT
       if (!variadic && (is_float(sym->type.t)
-          || is_float_hgen_aggr(&sym->type))) {
-        int fpn = assign_fpreg(&avregs, align, size << 2);
+          || is_hgen_float_aggr(&sym->type))) {
+        int fpn = assign_vfpreg(&avregs, align, size << 2);
         if (fpn >= 0) {
           addr = fpn * 4;
         } else
