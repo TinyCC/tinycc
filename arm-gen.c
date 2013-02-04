@@ -836,9 +836,8 @@ void gfunc_call(int nb_args)
   
   vpushi(0), nb_args++;
   vtop->type.t = VT_LLONG;
-  args_size = 0;
 #endif
-  ncrn = ncprn = argno = vfp_argno = 0;
+  ncrn = ncprn = argno = vfp_argno = args_size = 0;
   /* Assign argument to registers and stack with alignment.
      If, considering alignment constraints, enough registers of the correct type
      (core or VFP) are free for the current argument, assign them to it, else
