@@ -172,13 +172,13 @@ ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err)
     return sym->st_value;
 }
 
-#ifdef TCC_IS_NATIVE
 /* return elf symbol value */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
 {
-    return (void*)get_elf_sym_addr(s, name, 0);
+    return (void*)(uintptr_t)get_elf_sym_addr(s, name, 0);
 }
 
+#ifdef TCC_IS_NATIVE
 /* return elf symbol value or error */
 ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 {
