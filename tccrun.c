@@ -461,10 +461,10 @@ static void set_exception_handler(void)
 #define REG_EBP EBP
 #endif
 
-/* return the PC at frame level 'level'. Return non zero if not found */
+/* return the PC at frame level 'level'. Return negative if not found */
 static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 {
-    unsigned long fp;
+    addr_t fp;
     int i;
 
     if (level == 0) {
@@ -492,9 +492,9 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
             /* XXX: check address validity with program info */
             if (fp <= 0x1000 || fp >= 0xc0000000)
                 return -1;
-            fp = ((unsigned long *)fp)[0];
+            fp = ((addr_t *)fp)[0];
         }
-        *paddr = ((unsigned long *)fp)[1];
+        *paddr = ((addr_t *)fp)[1];
         return 0;
     }
 }
@@ -502,11 +502,10 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 /* ------------------------------------------------------------- */
 #elif defined(__x86_64__)
 
-/* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
+/* return the PC at frame level 'level'. Return negative if not found */
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 {
-    unsigned long fp;
+    addr_t fp;
     int i;
 
     if (level == 0) {
@@ -531,9 +530,9 @@ static int rt_get_caller_pc(unsigned long *paddr,
             /* XXX: check address validity with program info */
             if (fp <= 0x1000)
                 return -1;
-            fp = ((unsigned long *)fp)[0];
+            fp = ((addr_t *)fp)[0];
         }
-        *paddr = ((unsigned long *)fp)[1];
+        *paddr = ((addr_t *)fp)[1];
         return 0;
     }
 }
@@ -542,10 +541,9 @@ static int rt_get_caller_pc(unsigned long *paddr,
 #elif defined(__arm__)
 
 /* return the PC at frame level 'level'. Return negative if not found */
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 {
-    uint32_t fp, sp;
+    addr_t fp, sp;
     int i;
 
     if (level == 0) {
@@ -569,15 +567,15 @@ static int rt_get_caller_pc(unsigned long *paddr,
         if (fp < sp + 12 || fp & 3)
             return -1;
         for(i = 1; i < level; i++) {
-            sp = ((uint32_t *)fp)[-2];
+            sp = ((addr_t *)fp)[-2];
             if (sp < fp || sp - fp > 16 || sp & 3)
                 return -1;
-            fp = ((uint32_t *)fp)[-3];
+            fp = ((addr_t *)fp)[-3];
             if (fp <= sp || fp - sp < 12 || fp & 3)
                 return -1;
         }
         /* XXX: check address validity with program info */
-        *paddr = ((uint32_t *)fp)[-1];
+        *paddr = ((addr_t *)fp)[-1];
         return 0;
     }
 }
@@ -586,8 +584,7 @@ static int rt_get_caller_pc(unsigned long *paddr,
 #else
 
 #warning add arch specific rt_get_caller_pc()
-static int rt_get_caller_pc(unsigned long *paddr,
-                            ucontext_t *uc, int level)
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 {
     return -1;
 }
