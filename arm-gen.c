@@ -1202,6 +1202,7 @@ void gfunc_prolog(CType *func_type)
       type = &sym->type;
       size = type_size(type, &align);
       size = (size + 3) >> 2;
+      align = (align + 3) & ~3;
 #ifdef TCC_ARM_HARDFLOAT
       if (!variadic && (is_float(sym->type.t)
           || is_float_hgen_aggr(&sym->type))) {
