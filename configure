@@ -500,7 +500,7 @@ echo "SRC_PATH=$source_path" >>config.mak
 
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
-    FILES="Makefile lib/Makefile tests/Makefile tests2/Makefile"
+    FILES="Makefile lib/Makefile tests/Makefile tests/tests2/Makefile"
     for f in $FILES ; do
         dir=`fn_dirname "$f"`
         test -d "$dir" || mkdir -p "$dir"

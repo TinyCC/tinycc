@@ -350,12 +350,10 @@ tcc-doc.info: tcc-doc.texi
 export LIBTCC1
 
 %est:
-	$(MAKE) -C tests2 $@
 	$(MAKE) -C tests $@
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
-	$(MAKE) -C tests2 $@
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@

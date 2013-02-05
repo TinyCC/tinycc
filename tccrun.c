@@ -615,8 +615,7 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
         rt_error(uc, "exception caught");
         break;
     }
-    exit(-1);
-    return EXCEPTION_CONTINUE_SEARCH;
+    return EXCEPTION_EXECUTE_HANDLER;
 }
 
 /* Generate a stack backtrace when a CPU exception occurs. */
