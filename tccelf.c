@@ -2178,7 +2178,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         /* XXX: ignore sections with allocated relocations ? */
         for(i = 1; i < s1->nb_sections; i++) {
             s = s1->sections[i];
-            if (s->reloc && s != s1->got && (s->sh_flags & SHF_ALLOC)) //gr
+            if (s->reloc && s != s1->got)
                 relocate_section(s1, s);
         }
 
