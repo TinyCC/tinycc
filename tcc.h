@@ -47,7 +47,9 @@
 # include <sys/time.h>
 # include <sys/ucontext.h>
 # include <sys/mman.h>
-# include <dlfcn.h>
+# ifndef CONFIG_TCC_STATIC
+#  include <dlfcn.h>
+# endif
 #else
 # include <windows.h>
 # include <sys/timeb.h>
@@ -132,10 +134,6 @@
 #if !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_C67) && !defined(TCC_TARGET_X86_64)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
-#endif
-
-#if defined(_WIN32) && !defined(TCC_TARGET_PE)
-#define CONFIG_TCC_STATIC
 #endif
 
 /* define it to include assembler support */

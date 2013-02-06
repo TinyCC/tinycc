@@ -105,12 +105,14 @@ static void tcc_set_lib_path_w32(TCCState *s)
     tcc_set_lib_path(s, path);
 }
 
+#ifdef TCC_TARGET_PE
 static void tcc_add_systemdir(TCCState *s)
 {
     char buf[1000];
     GetSystemDirectory(buf, sizeof buf);
     tcc_add_library_path(s, normalize_slashes(buf));
 }
+#endif
 
 #ifndef CONFIG_TCC_STATIC
 void dlclose(void *p)
@@ -1169,9 +1171,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #ifndef TCC_TARGET_PE
         if (ehdr.e_type == ET_DYN) {
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
+#ifdef TCC_IS_NATIVE
                 void *h;
                 h = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
                 if (h)
+#endif
                     ret = 0;
             } else {
                 ret = tcc_load_dll(s1, fd, filename, 

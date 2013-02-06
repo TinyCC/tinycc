@@ -41,7 +41,8 @@
 
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) \
     || defined(__DragonFly__) || defined(__dietlibc__) \
-    || defined(__UCLIBC__) || defined(__OpenBSD__) || defined(_WIN32)
+    || defined(__UCLIBC__) || defined(__OpenBSD__) \
+    || defined(_WIN32) || defined(TCC_UCLIBC)
 #warning Bound checking does not support malloc (etc.) in this environment.
 #undef CONFIG_TCC_MALLOC_HOOKS
 #undef HAVE_MEMALIGN
@@ -377,7 +378,7 @@ void __bound_init(void)
     size = BOUND_T23_SIZE;
     mark_invalid(start, size);
 
-#if !defined(__TINYC__) && defined(CONFIG_TCC_MALLOC_HOOKS)
+#if defined(CONFIG_TCC_MALLOC_HOOKS)
     /* malloc zone is also marked invalid. can only use that with
      * hooks because all libs should use the same malloc. The solution
      * would be to build a new malloc for tcc.

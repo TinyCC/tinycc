@@ -26,7 +26,7 @@ ifdef CONFIG_WIN32
  TESTS := $(filter-out test3,$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
- TESTS := $(filter-out test3 btest,$(TESTS))
+ TESTS := $(filter-out hello test3 btest,$(TESTS))
 endif
 
 ifdef DISABLE_STATIC

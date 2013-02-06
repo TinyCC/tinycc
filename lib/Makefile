@@ -15,15 +15,15 @@ ifndef TARGET
  else
  ifeq ($(ARCH),i386)
   TARGET = i386
-	ifneq ($(TARGETOS),Darwin)
-		XCC = gcc -O2 -m32
-	endif
+  ifneq ($(TARGETOS),Darwin)
+   XCC = $(CC)
+  endif
  else
  ifeq ($(ARCH),x86-64)
   TARGET = x86_64
-	ifneq ($(TARGETOS),Darwin)
-		XCC = gcc -O2 -m64
-	endif
+  ifneq ($(TARGETOS),Darwin)
+   XCC = $(CC)
+  endif
  endif
  endif
  endif
@@ -38,9 +38,11 @@ cross : $(DIR)/libtcc1.a
 native : TCC = $(TOP)/tcc$(EXESUF)
 cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
 
-I386_O = libtcc1.o alloca86.o alloca86-bt.o
+BCHECK_O = bcheck.o
+
+I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o
-WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 
 ifeq "$(TARGET)" "i386-win32"
@@ -58,23 +60,25 @@ else
 ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOP) -m32 -D_ANSI_SOURCE
- ifeq ($(TARGETOS),Darwin)
-  XAR = $(DIR)/tiny_libmaker$(EXESUF)
- endif
+ XCC ?= $(TCC) -B$(TOP)
 else
 ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOP) -m64 -D_ANSI_SOURCE
- ifeq ($(TARGETOS),Darwin)
-  XAR = $(DIR)/tiny_libmaker$(EXESUF)
- endif
+ XCC ?= $(TCC) -B$(TOP)
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
 endif
 endif
+endif
+
+XFLAGS = $(CPPFLAGS) $(CFLAGS) $(TGT)
+
+ifeq ($(TARGETOS),Darwin)
+ XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ XFLAGS += -D_ANSI_SOURCE
+ BCHECK_O =
 endif
 
 ifdef XAR
@@ -84,11 +88,11 @@ endif
 $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 	$(AR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
-	$(XCC) -c $< -o $@ $(CPPFLAGS) $(TGT) $(CFLAGS)
+	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%.o : %.S
-	$(XCC) -c $< -o $@ $(CPPFLAGS) $(TGT) $(CFLAGS)
+	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
-	$(CC) -Os -s -w -o $@ $< $(CPPFLAGS) $(TGT) $(CFLAGS) $(LDFLAGS)
+	$(CC) -Os -s -w -o $@ $< $(XFLAGS) $(LDFLAGS)
 
 $(OBJ) $(XAR) : $(DIR)/exists
 $(DIR)/exists :

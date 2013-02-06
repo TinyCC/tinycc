@@ -20,17 +20,6 @@ ifneq ($(GCC_MAJOR),3)
 CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
 endif
 endif
-
-ifneq ($(TARGETOS),Darwin)
-ifeq ($(ARCH),i386)
-CFLAGS+=-mpreferred-stack-boundary=2
-ifeq ($(GCC_MAJOR),2)
-CFLAGS+=-m386 -malign-functions=0
-else
-CFLAGS+=-march=i386 -falign-functions=0
-endif
-endif
-endif
 endif
 
 ifdef CONFIG_WIN64
@@ -50,10 +39,8 @@ NATIVE_DEFINES+=\
   $(if $(wildcard /lib/i386-linux-gnu),-DCONFIG_MULTIARCHDIR=\"i386-linux-gnu\",\
   $(if $(wildcard /lib/i386-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"i386-kfreebsd-gnu\",\
   $(if $(wildcard /lib/i386-gnu),-DCONFIG_MULTIARCHDIR=\"i386-gnu\")))
-CFLAGS+=-m32
 else ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
-CFLAGS+=-m64
 NATIVE_DEFINES+=\
   $(if $(wildcard /usr/lib64),-DCONFIG_LDDIR=\"lib64\",\
   $(if $(wildcard /lib/x86_64-linux-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\",\
@@ -79,7 +66,6 @@ endif
 
 ifneq ($(wildcard /lib/ld-uClibc.so.0),)
 NATIVE_DEFINES+=-DTCC_UCLIBC
-CONFIG_UCLIBC = 1
 endif
 
 # make libtcc as static or dynamic library?
@@ -136,7 +122,6 @@ NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
 LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
 LIBTCC1=libtcc1.a
-BCHECK_O=bcheck.o
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
@@ -147,11 +132,7 @@ NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
 endif
 
-ifdef CONFIG_UCLIBC
-BCHECK_O=
-endif
 ifeq ($(TARGETOS),Darwin)
-BCHECK_O=
 PROGS+=tiny_libmaker$(EXESUF)
 endif
 
@@ -159,7 +140,7 @@ ifdef CONFIG_USE_LIBGCC
 LIBTCC1=
 endif
 
-TCCLIBS = $(LIBTCC1) $(LIBTCC) $(BCHECK_O)
+TCCLIBS = $(LIBTCC1) $(LIBTCC)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
@@ -176,6 +157,10 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 # Cross Tiny C Compilers
 %-tcc$(EXESUF): tcc.c
 	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
+
+# profiling version
+tcc_p$(EXESUF): $(NATIVE_FILES)
+	$(CC) -o $@ $< -DONE_SOURCE $(NATIVE_DEFINES) $(CPPFLAGS_P) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
 
 $(I386_CROSS): DEFINES = -DTCC_TARGET_I386 \
     -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
@@ -222,10 +207,6 @@ libtcc.so.1.0: $(LIBTCC_OBJ)
 
 libtcc.so.1.0: CFLAGS+=-fPIC
 
-# profiling version
-tcc_p$(EXESUF): $(NATIVE_FILES)
-	$(CC) -o $@ $< $(NATIVE_DEFINES) $(CPPFLAGS_P) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
-
 # windows utilities
 tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
@@ -237,8 +218,7 @@ libtcc1.a : FORCE
 	@$(MAKE) -C lib native
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	@$(MAKE) -C lib cross TARGET=$*
-bcheck.o : lib/bcheck.c
-	$(CC) -c $< -o $@ $(CPPFLAGS) $(CFLAGS)
+
 FORCE:
 
 # install
@@ -266,9 +246,6 @@ endif
 	mkdir -p "$(tccdir)/include"
 ifneq ($(LIBTCC1),)
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
-endif
-ifneq ($(BCHECK_O),)
-	$(INSTALL) -m644 $(BCHECK_O) "$(tccdir)"
 endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	mkdir -p "$(libdir)"
@@ -298,7 +275,7 @@ endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
-	rm -fv $(foreach P,$(LIBTCC1) $(BCHECK_O),"$(tccdir)/$P")
+	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
