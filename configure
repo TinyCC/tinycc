@@ -5,7 +5,7 @@
 fn_dirname()
 {
   case $1 in
-    */*) echo "$1" | sed -e 's,/[^/]*,,';;
+    */*) echo ${1%/*};;
       *) echo '.'
   esac
 }
