@@ -7,34 +7,11 @@
 
 
 
-    Compilation from source:
-    ------------------------
-    * You can use the MinGW and MSYS tools available at
-
-    	http://www.mingw.org
-
-    Untar the TCC archive and type in the MSYS shell:
-    
-       ./configure
-       make
-       make install 
-
-    The default install location is c:\Program Files\tcc
-
-
-    * Alternatively you can compile TCC with just GCC from MinGW using
-
-	win32\build-tcc.bat
-
-    To install, copy the entire contents of the win32 directory to
-    where you want.
-
-
-
     Installation from the binary ZIP package:
     -----------------------------------------
     Unzip the package to a directory of your choice.
     
+
 
     Set the system PATH:
     --------------------
@@ -114,6 +91,30 @@
 
 
 
+    Compilation from source:
+    ------------------------
+    * You can use the MinGW and MSYS tools available at
+
+        http://www.mingw.org
+
+    Untar the TCC archive and type in the MSYS shell:
+
+       ./configure
+       make
+       make install
+
+    The default install location is c:\Program Files\tcc
+
+
+    * Alternatively you can compile TCC with just GCC from MinGW using
+
+        win32\build-tcc.bat
+
+    To install, copy the entire contents of the win32 directory to
+    where you want.
+
+
+
     Limitations:
     ------------
     - On the object file level, currently TCC supports only the ELF format,
@@ -124,11 +125,7 @@
 
     - No leading underscore is generated in the ELF symbols.
 
-    - With DLLs, only functions (not data) can be im-/exported.
-
-    - Bounds checking (option -b) is not supported currently.
-
-    - 64-bit systems are not (yet) supported.
+    - Bounds checking (option -b) is not supported on 64-bit OS.
 
 
 

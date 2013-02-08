@@ -113,9 +113,8 @@
 //#define PP_DEBUG
 /* include file debug */
 //#define INC_DEBUG
-
+/* memory leak debug */
 //#define MEM_DEBUG
-
 /* assembler debug */
 //#define ASM_DEBUG
 
@@ -236,6 +235,25 @@
 #define TCC_LIBGCC CONFIG_SYSROOT "/" CONFIG_LDDIR "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
+/* include the target specific definitions */
+
+#define TARGET_DEFS_ONLY
+#ifdef TCC_TARGET_I386
+# include "i386-gen.c"
+#endif
+#ifdef TCC_TARGET_X86_64
+# include "x86_64-gen.c"
+#endif
+#ifdef TCC_TARGET_ARM
+# include "arm-gen.c"
+#endif
+#ifdef TCC_TARGET_C67
+# include "coff.h"
+# include "c67-gen.c"
+#endif
+#undef TARGET_DEFS_ONLY
+
+/* -------------------------------------------- */
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
@@ -290,7 +308,7 @@ typedef union CValue {
     unsigned long long ull;
     struct CString *cstr;
     void *ptr;
-    int tab[2];
+    int tab[LDOUBLE_SIZE/4];
 } CValue;
 
 /* value on stack */
@@ -1240,6 +1258,12 @@ ST_FUNC int handle_eob(void);
 
 /* ------------ xxx-gen.c ------------ */
 
+ST_DATA const int reg_classes[NB_REGS
+#ifdef TCC_TARGET_X86_64
+    + 7
+#endif
+];
+
 ST_FUNC void gsym_addr(int t, int a);
 ST_FUNC void gsym(int t);
 ST_FUNC void load(int r, SValue *sv);
@@ -1280,10 +1304,12 @@ ST_FUNC void gen_bounded_ptr_deref(void);
 /* ------------ x86_64-gen.c ------------ */
 #ifdef TCC_TARGET_X86_64
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c);
+ST_FUNC void gen_opl(int op);
 #endif
 
 /* ------------ arm-gen.c ------------ */
 #ifdef TCC_TARGET_ARM
+ST_FUNC void arm_init_types(void);
 ST_FUNC uint32_t encbranch(int pos, int addr, int fail);
 ST_FUNC void gen_cvt_itof1(int t);
 #endif
@@ -1352,27 +1378,6 @@ ST_DATA void *rt_prog_main;
 PUB_FUNC void tcc_set_num_callers(int n);
 #endif
 #endif
-
-/********************************************************/
-/* include the target specific definitions */
-
-#define TARGET_DEFS_ONLY
-#ifdef TCC_TARGET_I386
-#include "i386-gen.c"
-#endif
-#ifdef TCC_TARGET_X86_64
-#include "x86_64-gen.c"
-#endif
-#ifdef TCC_TARGET_ARM
-#include "arm-gen.c"
-#endif
-#ifdef TCC_TARGET_C67
-#include "coff.h"
-#include "c67-gen.c"
-#endif
-#undef TARGET_DEFS_ONLY
-
-ST_DATA const int reg_classes[];
 
 /********************************************************/
 #undef ST_DATA

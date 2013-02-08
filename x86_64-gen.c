@@ -83,9 +83,6 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
-ST_FUNC void gen_opl(int op);
-ST_FUNC void gen_le64(int64_t c);
-
 /******************************************************/
 /* ELF defines */
 
@@ -106,7 +103,7 @@ ST_FUNC void gen_le64(int64_t c);
 #include "tcc.h"
 #include <assert.h>
 
-ST_DATA const int reg_classes[] = {
+ST_DATA const int reg_classes[NB_REGS+7] = {
     /* eax */ RC_INT | RC_RAX,
     /* ecx */ RC_INT | RC_RCX,
     /* edx */ RC_INT | RC_RDX,

@@ -68,7 +68,7 @@ ports for the ARM (@code{arm-tcc}) and the TMS320C67xx targets
 (@code{c67-tcc}). More information about the ARM port is available at
 @url{http://lists.gnu.org/archive/html/tinycc-devel/2003-10/msg00044.html}.
 
-For usage on Windows, see also tcc-win32.txt.
+For usage on Windows, see also @url{tcc-win32.txt}.
 
 @node Invoke
 @chapter Command line invocation

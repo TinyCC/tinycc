@@ -215,9 +215,9 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 
 # TinyCC runtime libraries
 libtcc1.a : FORCE
-	@$(MAKE) -C lib native
+	$(MAKE) -C lib native
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
-	@$(MAKE) -C lib cross TARGET=$*
+	$(MAKE) -C lib cross TARGET=$*
 
 FORCE:
 

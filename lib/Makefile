@@ -28,6 +28,7 @@ ifndef TARGET
  endif
  endif
  endif
+ BCHECK_O = bcheck.o
 endif
 
 DIR = $(TARGET)
@@ -37,8 +38,6 @@ cross : $(DIR)/libtcc1.a
 
 native : TCC = $(TOP)/tcc$(EXESUF)
 cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
-
-BCHECK_O = bcheck.o
 
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o

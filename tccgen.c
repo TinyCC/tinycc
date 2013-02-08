@@ -344,25 +344,21 @@ static void vpushs(long long v)
   vsetc(&size_type, VT_CONST, &cval);
 }
 
-/* push long long constant */
-static void vpushll(long long v)
-{
-    CValue cval;
-    CType ctype;
-    ctype.t = VT_LLONG;
-    ctype.ref = 0;
-    cval.ull = v;
-    vsetc(&ctype, VT_CONST, &cval);
-}
-
 /* push arbitrary 64bit constant */
 void vpush64(int ty, unsigned long long v)
 {
     CValue cval;
     CType ctype;
     ctype.t = ty;
+    ctype.ref = NULL;
     cval.ull = v;
     vsetc(&ctype, VT_CONST, &cval);
+}
+
+/* push long long constant */
+static inline void vpushll(long long v)
+{
+    vpush64(VT_LLONG, v);
 }
 
 /* Return a static symbol pointing to a section */

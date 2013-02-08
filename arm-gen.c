@@ -106,15 +106,6 @@ enum {
    are directly pushed on stack. */
 //#define FUNC_STRUCT_PARAM_AS_PTR
 
-#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
-ST_DATA CType float_type, double_type, func_float_type, func_double_type;
-#define func_ldouble_type func_double_type
-#else
-#define func_float_type func_old_type
-#define func_double_type func_old_type
-#define func_ldouble_type func_old_type
-#endif
-
 /* pointer size, in bytes */
 #define PTR_SIZE 4
 
@@ -175,13 +166,26 @@ ST_DATA const int reg_classes[NB_REGS] = {
 #endif
 };
 
-/* keep in sync with line 104 above */
-#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
-ST_DATA CType float_type, double_type, func_float_type, func_double_type;
-#endif
-
 static int func_sub_sp_offset, last_itod_magic;
 static int leaffunc;
+
+#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+static CType float_type, double_type, func_float_type, func_double_type;
+ST_FUNC void arm_init_types(void)
+{
+    float_type.t = VT_FLOAT;
+    double_type.t = VT_DOUBLE;
+    func_float_type.t = VT_FUNC;
+    func_float_type.ref = sym_push(SYM_FIELD, &float_type, FUNC_CDECL, FUNC_OLD);
+    func_double_type.t = VT_FUNC;
+    func_double_type.ref = sym_push(SYM_FIELD, &double_type, FUNC_CDECL, FUNC_OLD);
+}
+#else
+#define func_float_type func_old_type
+#define func_double_type func_old_type
+#define func_ldouble_type func_old_type
+ST_FUNC void arm_init_types(void) {}
+#endif
 
 static int two2mask(int a,int b) {
   return (reg_classes[a]|reg_classes[b])&~(RC_INT|RC_FLOAT);

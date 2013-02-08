@@ -92,12 +92,6 @@ enum {
 #define REG_LRET TREG_C67_A5	/* second word return register (for long long) */
 #define REG_FRET TREG_C67_A4	/* float return register */
 
-#define ALWAYS_ASSERT(x) \
-do {\
-   if (!(x))\
-       tcc_error("internal compiler error file at %s:%d", __FILE__, __LINE__);\
-} while (0)
-
 /* defined if function parameters must be evaluated in reverse order */
 //#define INVERT_FUNC_PARAMS
 
@@ -181,6 +175,12 @@ int TotalBytesPushedOnStack;
 
 #undef BOOL
 #define BOOL int
+
+#define ALWAYS_ASSERT(x) \
+do {\
+   if (!(x))\
+       tcc_error("internal compiler error file at %s:%d", __FILE__, __LINE__);\
+} while (0)
 
 /******************************************************/
 static unsigned long func_sub_sp_offset;
