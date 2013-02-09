@@ -1589,20 +1589,6 @@ PUB_FUNC const char * tcc_set_linker(TCCState *s, char *option, int multi)
     return NULL;
 }
 
-PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time)
-{
-    double tt;
-    tt = (double)total_time / 1000000.0;
-    if (tt < 0.001)
-        tt = 0.001;
-    if (total_bytes < 1)
-        total_bytes = 1;
-    printf("%d idents, %d lines, %d bytes, %0.3f s, %d lines/s, %0.1f MB/s\n", 
-           tok_ident - TOK_IDENT, total_lines, total_bytes,
-           tt, (int)(total_lines / tt),
-           total_bytes / tt / 1000000.0);
-}
-
 /* set CONFIG_TCCDIR at runtime */
 LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path)
 {
@@ -1668,3 +1654,67 @@ PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *file
     fprintf(depout, "\n");
     fclose(depout);
 }
+
+PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time)
+{
+    double tt;
+    tt = (double)total_time / 1000000.0;
+    if (tt < 0.001)
+        tt = 0.001;
+    if (total_bytes < 1)
+        total_bytes = 1;
+    printf("%d idents, %d lines, %d bytes, %0.3f s, %d lines/s, %0.1f MB/s\n", 
+           tok_ident - TOK_IDENT, total_lines, total_bytes,
+           tt, (int)(total_lines / tt),
+           total_bytes / tt / 1000000.0);
+}
+
+static void print_paths(const char *msg, char **paths, int nb_paths)
+{
+    int i;
+    printf("%s:\n%s", msg, nb_paths ? "" : "  -\n");
+    for(i = 0; i < nb_paths; i++)
+        printf("  %s\n", paths[i]);
+}
+
+PUB_FUNC void tcc_display_info(TCCState *s, int what)
+{
+    switch (what) {
+    case 0:
+        printf("tcc version %s ("
+#ifdef TCC_TARGET_I386
+        "i386"
+# ifdef TCC_TARGET_PE
+        " Win32"
+# endif
+#elif defined TCC_TARGET_X86_64
+        "x86-64"
+# ifdef TCC_TARGET_PE
+        " Win64"
+# endif
+#elif defined TCC_TARGET_ARM
+        "ARM"
+# ifdef TCC_ARM_HARDFLOAT
+        " Hard Float"
+# endif
+# ifdef TCC_TARGET_PE
+        " WinCE"
+# endif
+#endif
+#ifndef TCC_TARGET_PE
+# ifdef __linux
+        " Linux"
+# endif
+#endif
+        ")\n", TCC_VERSION);
+        break;
+    case 1:
+        printf("install: %s/\n", s->tcc_lib_path);
+        /* print_paths("programs", NULL, 0); */
+        print_paths("crt", s->crt_paths, s->nb_crt_paths);
+        print_paths("libraries", s->library_paths, s->nb_library_paths);
+        print_paths("include", s->sysinclude_paths, s->nb_sysinclude_paths);
+        break;
+    }
+}
+

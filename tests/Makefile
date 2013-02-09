@@ -8,7 +8,8 @@ VPATH = $(top_srcdir)/tests
 
 # what tests to run
 TESTS = \
- hello \
+ hello-exe \
+ hello-run \
  libtest \
  test3 \
  moretests
@@ -26,7 +27,7 @@ ifdef CONFIG_WIN32
  TESTS := $(filter-out test3,$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
- TESTS := $(filter-out hello test3 btest,$(TESTS))
+ TESTS := $(filter-out hello-exe test3 btest,$(TESTS))
 endif
 
 ifdef DISABLE_STATIC
@@ -57,9 +58,12 @@ endif
 
 all test : $(TESTS)
 
-hello: ../examples/ex1.c
+hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
-	$(TCC) $< -o $@$(EXESUF) && ./$@$(EXESUF)
+	$(TCC) $< -o hello$(EXESUF) || ($(TOP)/tcc -vv; exit 1) && ./hello$(EXESUF)
+
+hello-run: ../examples/ex1.c
+	@echo ------------ $@ ------------
 	$(TCC) -run $<
 
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
@@ -192,3 +196,4 @@ clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.gcc *.exe \
 	   hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h
+

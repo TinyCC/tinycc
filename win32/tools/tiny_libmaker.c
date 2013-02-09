@@ -21,10 +21,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <io.h> /* for mktemp */
-#endif
-
 #include "../../elf.h"
 
 #ifdef TCC_TARGET_X86_64
@@ -77,7 +73,7 @@ ArHdr arhdro = {
 
 int main(int argc, char **argv)
 {
-    FILE *fi, *fh, *fo;
+    FILE *fi, *fh = NULL, *fo = NULL;
     ElfW(Ehdr) *ehdr;
     ElfW(Shdr) *shdr;
     ElfW(Sym) *sym;
@@ -89,6 +85,7 @@ int main(int argc, char **argv)
     int istrlen, strpos = 0, fpos = 0, funccnt = 0, funcmax, hofs;
     char afile[260], tfile[260], stmp[20];
     char *file, *name;
+    int ret = 2;
 
 
     strcpy(afile, "ar_test.a");
@@ -111,19 +108,17 @@ int main(int argc, char **argv)
         }
     }
 
-    strcpy(tfile, "./XXXXXX");
-    if (!mktemp(tfile) || (fo = fopen(tfile, "wb+")) == NULL)
-    {
-        fprintf(stderr, "Can't open temporary file %s\n", tfile);
-        return 2;
-    }
-
     if ((fh = fopen(afile, "wb")) == NULL)
     {
         fprintf(stderr, "Can't open file %s \n", afile);
-        fclose(fo);
-        remove(tfile);
-        return 2;
+        goto the_end;
+    }
+
+    sprintf(tfile, "%s.tmp", afile);
+    if ((fo = fopen(tfile, "wb+")) == NULL)
+    {
+        fprintf(stderr, "Can't create temporary file %s\n", tfile);
+        goto the_end;
     }
 
     funcmax = 250;
@@ -140,9 +135,7 @@ int main(int argc, char **argv)
         if ((fi = fopen(argv[iarg], "rb")) == NULL)
         {
             fprintf(stderr, "Can't open file %s \n", argv[iarg]);
-            fclose(fo);
-            remove(tfile);
-            return 2;
+            goto the_end;
         }
         fseek(fi, 0, SEEK_END);
         fsize = ftell(fi);
@@ -152,14 +145,13 @@ int main(int argc, char **argv)
         fclose(fi);
 
         //printf("%s:\n", argv[iarg]);
+
         // elf header
         ehdr = (ElfW(Ehdr) *)buf;
         if (ehdr->e_ident[4] != ELFCLASSW)
         {
             fprintf(stderr, "Unsupported Elf Class: %s\n", argv[iarg]);
-            fclose(fo);
-            remove(tfile);
-            return 2;
+            goto the_end;
         }
 
         shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + ehdr->e_shstrndx * ehdr->e_shentsize);
@@ -167,7 +159,8 @@ int main(int argc, char **argv)
         for (i = 0; i < ehdr->e_shnum; i++)
         {
             shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + i * ehdr->e_shentsize);
-            if (!shdr->sh_offset) continue;
+            if (!shdr->sh_offset)
+                continue;
             if (shdr->sh_type == SHT_SYMTAB)
             {
                 symtab = (char *)(buf + shdr->sh_offset);
@@ -210,7 +203,7 @@ int main(int argc, char **argv)
         }
 
         file = argv[iarg];
-        for (name = strchr(file, 0); 
+        for (name = strchr(file, 0);
              name > file && name[-1] != '/' && name[-1] != '\\';
              --name);
         istrlen = strlen(name);
@@ -219,7 +212,6 @@ int main(int argc, char **argv)
         memset(arhdro.ar_name, ' ', sizeof(arhdro.ar_name));
         memcpy(arhdro.ar_name, name, istrlen);
         arhdro.ar_name[istrlen] = '/';
-
         sprintf(stmp, "%-10d", fsize);
         memcpy(&arhdro.ar_size, stmp, 10);
         fwrite(&arhdro, sizeof(arhdro), 1, fo);
@@ -229,36 +221,38 @@ int main(int argc, char **argv)
         fpos += (fsize + sizeof(arhdro));
     }
     hofs = 8 + sizeof(arhdr) + strpos + (funccnt+1) * sizeof(int);
-    if ((hofs & 1)) {   // align
-        hofs++;
-        fpos = 1;
-    } else fpos = 0;
+    fpos = 0;
+    if ((hofs & 1)) // align
+        hofs++, fpos = 1;
     // write header
     fwrite("!<arch>\n", 8, 1, fh);
     sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)));
     memcpy(&arhdr.ar_size, stmp, 10);
     fwrite(&arhdr, sizeof(arhdr), 1, fh);
     afpos[0] = le2belong(funccnt);
-    for (i=1; i<=funccnt; i++) {
+    for (i=1; i<=funccnt; i++)
         afpos[i] = le2belong(afpos[i] + hofs);
-    }
     fwrite(afpos, (funccnt+1) * sizeof(int), 1, fh);
     fwrite(anames, strpos, 1, fh);
-    if (fpos) fwrite("", 1, 1, fh);
+    if (fpos)
+        fwrite("", 1, 1, fh);
     // write objects
     fseek(fo, 0, SEEK_END);
     fsize = ftell(fo);
     fseek(fo, 0, SEEK_SET);
     buf = malloc(fsize + 1);
     fread(buf, fsize, 1, fo);
-    fclose(fo);
     fwrite(buf, fsize, 1, fh);
-    fclose(fh);
     free(buf);
+    ret = 0;
+the_end:
     if (anames)
         free(anames);
     if (afpos)
         free(afpos);
-    remove(tfile);
-    return 0;
+    if (fh)
+        fclose(fh);
+    if (fo)
+        fclose(fo), remove(tfile);
+    return ret;
 }

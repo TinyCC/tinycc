@@ -37,8 +37,9 @@
 #define __unaligned __attribute__((packed))
 #define __fastcall __attribute__((fastcall))
 
-#define __MINGW_IMPORT extern __declspec(dllimport)
+#define __MSVCRT__ 1
 #undef _MSVCRT_
+#define __MINGW_IMPORT extern __declspec(dllimport)
 #define __MINGW_ATTRIB_NORETURN
 #define __MINGW_ATTRIB_CONST
 #define __MINGW_ATTRIB_DEPRECATED

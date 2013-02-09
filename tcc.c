@@ -508,17 +508,21 @@ int main(int argc, char **argv)
 #endif
 
     if (print_search_dirs) {
-        /* enough for Linux kernel */
-        printf("install: %s/\n", s->tcc_lib_path);
+psd:
+        tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
+        tcc_display_info(s, 1);
         return 0;
     }
 
     if (s->verbose)
-        printf("tcc version %s\n", TCC_VERSION);
+        tcc_display_info(s, 0);
 
     if (optind == 0 || nb_files == 0) {
-        if (optind && s->verbose)
+        if (optind && s->verbose) {
+            if (s->verbose == 2)
+                goto psd;
             return 0;
+        }
         help();
         return 1;
     }

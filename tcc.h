@@ -1067,6 +1067,7 @@ PUB_FUNC int tcc_set_flag(TCCState *s, const char *flag_name, int value);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC char *tcc_default_target(TCCState *s, const char *default_file);
 PUB_FUNC void tcc_gen_makedeps(TCCState *s, const char *target, const char *filename);
+PUB_FUNC void tcc_display_info(TCCState *s, int what);
 
 /* ------------ tccpp.c ------------ */
 
