@@ -46,29 +46,33 @@ static void help(void)
            "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
            "       tcc [options...] -run infile [arguments...]\n"
            "General options:\n"
-           "  -v          display current version, increase verbosity\n"
            "  -c          compile only - generate an object file\n"
            "  -o outfile  set output filename\n"
-           "  -Bdir       set tcc internal library and include path\n"
-           "  -bench      output compilation statistics\n"
            "  -run        run compiled source\n"
            "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
            "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
+           "  -v          show version\n"
+           "  -vv         show included files (as sole argument: show search paths)\n"
+           "  -bench      show compilation statistics\n"
            "Preprocessor options:\n"
            "  -E          preprocess only\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
+           "  -nostdinc   do not use standard system include paths\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
+           "  -Bdir       use 'dir' as tcc internal library and include path\n"
+           "  -nostdlib   do not link with standard crt and libraries\n"
            "  -pthread    link with -lpthread and -D_REENTRANT (POSIX Linux)\n"
+           "  -r          generate (relocatable) object file\n"
+           "  -rdynamic   export all global symbols to dynamic linker\n"
            "  -shared     generate a shared library\n"
            "  -soname     set name for shared library to be used at runtime\n"
            "  -static     static linking\n"
-           "  -rdynamic   export all global symbols to dynamic linker\n"
-           "  -r          generate (relocatable) object file\n"
+           "  -Wl,opt[=val]  set linker option 'opt' (see manual)\n"
            "Debugger options:\n"
            "  -g          generate runtime debug info\n"
 #ifdef CONFIG_TCC_BCHECK
@@ -175,7 +179,7 @@ static const TCCOption tcc_options[] = {
     { "MD", TCC_OPTION_MD, 0},
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
-    { NULL },
+    { NULL, 0, 0 },
 };
 
 static int64_t getclock_us(void)
@@ -458,7 +462,12 @@ static int parse_args(TCCState *s, int argc, char **argv)
             case TCC_OPTION_MF:
                 deps_outfile = optarg;
                 break;
+            case TCC_OPTION_O:
+            case TCC_OPTION_pedantic:
+            case TCC_OPTION_pipe:
+            case TCC_OPTION_s:
             case TCC_OPTION_x:
+                /* ignored */
                 break;
             default:
                 if (s->warn_unsupported) {

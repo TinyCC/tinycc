@@ -157,46 +157,37 @@ General Options:
 
 @c man begin OPTIONS
 @table @option
-@item -v
-Display current TCC version, increase verbosity.
-
-@item -print-search-dirs
-Print the name of the configured installation directory and a list
-of program and library directories tcc will search.
-
 @item -c
 Generate an object file.
 
 @item -o outfile
 Put object file, executable, or dll into output file @file{outfile}.
 
-@item -Bdir
-Set the path where the tcc internal libraries can be found (default is
-@file{PREFIX/lib/tcc}).
-
-@item -bench
-Output compilation statistics.
-
 @item -run source [args...]
 Compile file @var{source} and run it with the command line arguments
 @var{args}. In order to be able to give more than one argument to a
 script, several TCC options can be given @emph{after} the
-@option{-run} option, separated by spaces. Example:
-
+@option{-run} option, separated by spaces:
 @example
 tcc "-run -L/usr/X11R6/lib -lX11" ex4.c
 @end example
-
 In a script, it gives the following header:
-
 @example
 #!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
-#include <stdlib.h>
-int main(int argc, char **argv)
-@{
-    ...
-@}
 @end example
+
+@item -v
+Display TCC version.
+
+@item -vv
+Show included files.  As sole argument, print search dirs (as below).
+
+@item -bench
+Display compilation statistics.
+
+@item -print-search-dirs
+Print the configured installation directory and a list of library
+and include directories tcc will search.
 
 @end table
 
@@ -284,6 +275,10 @@ Link your program with dynamic library libxxx.so or static library
 libxxx.a. The library is searched in the paths specified by the
 @option{-L} option.
 
+@item -Bdir
+Set the path where the tcc internal libraries (and include files) can be
+found (default is @file{PREFIX/lib/tcc}).
+
 @item -shared
 Generate a shared library instead of an executable.
 
@@ -301,10 +296,10 @@ opened with @code{dlopen()} needs to access executable symbols.
 @item -r
 Generate an object file combining all input files.
 
-@item -Wl,-Ttext,address
-Set the start of the .text section to @var{address}.
+@item -Wl,-rpath=path
+Put custom seatch path for dynamic libraries into executable.
 
-@item -Wl,--oformat,fmt
+@item -Wl,--oformat=fmt
 Use @var{fmt} as output format. The supported output formats are:
 @table @code
 @item elf32-i386
@@ -315,8 +310,14 @@ Binary image (only for executable output)
 COFF output format (only for executable output for TMS320C67xx target)
 @end table
 
-@item -Wl,-rpath=path
-Set custom library search path
+@item -Wl,-subsystem=console/gui/wince/...
+Set type for PE (Windows) executables.
+
+@item -Wl,-[Ttext=# | section-alignment=# | file-alignment=# | image-base=# | stack=#]
+Modify executable layout.
+
+@item -Wl,-Bsymbolic
+Set DT_SYMBOLIC tag.
 
 @end table
 
@@ -339,6 +340,17 @@ Note: @option{-b} is only available on i386 for the moment.
 @item -bt N
 Display N callers in stack traces. This is useful with @option{-g} or
 @option{-b}.
+
+@end table
+
+Misc options:
+
+@table @option
+@item -MD
+Generate makefile fragment with dependencies.
+
+@item -MF depfile
+Use @file{depfile} as output for -MD.
 
 @end table
 
