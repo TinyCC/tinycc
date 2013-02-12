@@ -4,7 +4,8 @@ User interface:
 - -MD/-MF (automatically generate dependencies for make)
 - -pthread option (same as -D_REENTRANT -lpthread) (Henry Kroll III)
 - -m32/-m64 to re-exec cross compiler (Henry Kroll III)
-- Mimic all GNU -option forms supported by ld (Kirill Smelkov)
+- -Wl, Mimic all GNU -option forms supported by ld (Kirill Smelkov)
+- new LIBTCCAPI tcc_set_options() (grischka)
 
 Platforms:
 - Many improvements for x86-64 target (Shinichiro Hamaji, Michael Matz, grischka)

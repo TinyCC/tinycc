@@ -79,7 +79,7 @@ int main(int argc, char **argv)
     ElfW(Sym) *sym;
     int i, fsize, iarg;
     char *buf, *shstr, *symtab = NULL, *strtab = NULL;
-    int symtabsize = 0, strtabsize = 0;
+    int symtabsize = 0;//, strtabsize = 0;
     char *anames = NULL;
     int *afpos = NULL;
     int istrlen, strpos = 0, fpos = 0, funccnt = 0, funcmax, hofs;
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
                 if (!strcmp(shstr + shdr->sh_name, ".strtab"))
                 {
                     strtab = (char *)(buf + shdr->sh_offset);
-                    strtabsize = shdr->sh_size;
+                    //strtabsize = shdr->sh_size;
                 }
             }
         }

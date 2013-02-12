@@ -54,33 +54,36 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     if (TCC_RELOCATE_AUTO != ptr)
         return tcc_relocate_ex(s1, ptr);
 
-#ifdef HAVE_SELINUX
-    /* Use mmap instead of malloc for Selinux
-    Ref http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
-    char tmpfname[] = "/tmp/.tccrunXXXXXX";
-    int fd = mkstemp (tmpfname);
-    if ((ret= tcc_relocate_ex(s1,NULL)) < 0)return -1;
-    s1->mem_size=ret;
-    unlink (tmpfname); ftruncate (fd, s1->mem_size);
-    s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
-        MAP_SHARED, fd, 0);
-    if(s1->write_mem == MAP_FAILED){
-        tcc_error("/tmp not writeable");
-        return -1;
-    }
-    s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
-        MAP_SHARED, fd, 0);
-    if(s1->runtime_mem == MAP_FAILED){
-        tcc_error("/tmp not executable");
-        return -1;
-    }
-    ret = tcc_relocate_ex(s1, s1->write_mem);
-#else
     ret = tcc_relocate_ex(s1, NULL);
-    if (-1 != ret) {
-        s1->runtime_mem = tcc_malloc(ret);
-        ret = tcc_relocate_ex(s1, s1->runtime_mem);
+    if (ret < 0)
+        return ret;
+
+#ifdef HAVE_SELINUX
+    {   /* Use mmap instead of malloc for Selinux.  Ref:
+           http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
+
+        char tmpfname[] = "/tmp/.tccrunXXXXXX";
+        int fd = mkstemp (tmpfname);
+
+        s1->mem_size = ret;
+        unlink (tmpfname);
+        ftruncate (fd, s1->mem_size);
+
+        s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
+            MAP_SHARED, fd, 0);
+        if (s1->write_mem == MAP_FAILED)
+            tcc_error("/tmp not writeable");
+
+        s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
+            MAP_SHARED, fd, 0);
+        if (s1->runtime_mem == MAP_FAILED)
+            tcc_error("/tmp not executable");
+
+        ret = tcc_relocate_ex(s1, s1->write_mem);
     }
+#else
+    s1->runtime_mem = tcc_malloc(ret);
+    ret = tcc_relocate_ex(s1, s1->runtime_mem);
 #endif
     return ret;
 }
@@ -130,8 +133,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     addr_t mem;
     int i;
 
-    if (0 == s1->runtime_added) {
-        s1->runtime_added = 1;
+    if (NULL == ptr) {
         s1->nb_errors = 0;
 #ifdef TCC_TARGET_PE
         pe_output_file(s1, NULL);
@@ -215,6 +217,9 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
+#ifndef PAGESIZE
+# define PAGESIZE 4096
+#endif
     addr_t start, end;
     start = (addr_t)ptr & ~(PAGESIZE - 1);
     end = (addr_t)ptr + length;
@@ -226,7 +231,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
 
-PUB_FUNC void tcc_set_num_callers(int n)
+ST_FUNC void tcc_set_num_callers(int n)
 {
     rt_num_callers = n;
 }
@@ -435,6 +440,10 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
     }
     exit(255);
 }
+
+#ifndef SA_SIGINFO
+# define SA_SIGINFO 0x00000004u
+#endif
 
 /* Generate a stack backtrace when a CPU exception occurs. */
 static void set_exception_handler(void)
@@ -663,13 +672,7 @@ static int rt_get_caller_pc(addr_t *paddr, CONTEXT *uc, int level)
 #endif /* _WIN32 */
 #endif /* CONFIG_TCC_BACKTRACE */
 /* ------------------------------------------------------------- */
-
 #ifdef CONFIG_TCC_STATIC
-
-#define RTLD_LAZY       0x001
-#define RTLD_NOW        0x002
-#define RTLD_GLOBAL     0x100
-#define RTLD_DEFAULT    NULL
 
 /* dummy function for profiling */
 ST_FUNC void *dlopen(const char *filename, int flag)
@@ -680,26 +683,27 @@ ST_FUNC void *dlopen(const char *filename, int flag)
 ST_FUNC void dlclose(void *p)
 {
 }
-/*
-const char *dlerror(void)
+
+ST_FUNC const char *dlerror(void)
 {
     return "error";
 }
-*/
+
 typedef struct TCCSyms {
     char *str;
     void *ptr;
 } TCCSyms;
 
-#define TCCSYM(a) { #a, &a, },
 
 /* add the symbol you want here if no dynamic linking is done */
 static TCCSyms tcc_syms[] = {
 #if !defined(CONFIG_TCCBOOT)
+#define TCCSYM(a) { #a, &a, },
     TCCSYM(printf)
     TCCSYM(fprintf)
     TCCSYM(fopen)
     TCCSYM(fclose)
+#undef TCCSYM
 #endif
     { NULL, NULL },
 };

@@ -118,7 +118,7 @@ static void cstr_realloc(CString *cstr, int new_size)
 }
 
 /* add a byte */
-PUB_FUNC void cstr_ccat(CString *cstr, int ch)
+ST_FUNC void cstr_ccat(CString *cstr, int ch)
 {
     int size;
     size = cstr->size + 1;
@@ -128,7 +128,7 @@ PUB_FUNC void cstr_ccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-PUB_FUNC void cstr_cat(CString *cstr, const char *str)
+ST_FUNC void cstr_cat(CString *cstr, const char *str)
 {
     int c;
     for(;;) {
@@ -141,7 +141,7 @@ PUB_FUNC void cstr_cat(CString *cstr, const char *str)
 }
 
 /* add a wide char */
-PUB_FUNC void cstr_wccat(CString *cstr, int ch)
+ST_FUNC void cstr_wccat(CString *cstr, int ch)
 {
     int size;
     size = cstr->size + sizeof(nwchar_t);
@@ -151,20 +151,20 @@ PUB_FUNC void cstr_wccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-PUB_FUNC void cstr_new(CString *cstr)
+ST_FUNC void cstr_new(CString *cstr)
 {
     memset(cstr, 0, sizeof(CString));
 }
 
 /* free string and reset it to NULL */
-PUB_FUNC void cstr_free(CString *cstr)
+ST_FUNC void cstr_free(CString *cstr)
 {
     tcc_free(cstr->data_allocated);
     cstr_new(cstr);
 }
 
 /* reset string to empty */
-PUB_FUNC void cstr_reset(CString *cstr)
+ST_FUNC void cstr_reset(CString *cstr)
 {
     cstr->size = 0;
 }
@@ -3112,17 +3112,17 @@ print_line:
                   : ""
                   ;
                 iptr = iptr_new;
-                fprintf(s1->outfile, "# %d \"%s\"%s\n", file->line_num, file->filename, s);
+                fprintf(s1->ppfp, "# %d \"%s\"%s\n", file->line_num, file->filename, s);
             } else {
                 while (d)
-                    fputs("\n", s1->outfile), --d;
+                    fputs("\n", s1->ppfp), --d;
             }
             line_ref = (file_ref = file)->line_num;
             token_seen = tok != TOK_LINEFEED;
             if (!token_seen)
                 continue;
         }
-        fputs(get_tok_str(tok, &tokc), s1->outfile);
+        fputs(get_tok_str(tok, &tokc), s1->ppfp);
     }
     free_defines(define_start);
     return 0;
