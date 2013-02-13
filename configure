@@ -261,7 +261,7 @@ if $cc -o $TMPO $TMPC 2> /dev/null ; then
 fi
 
 if test -z "$cross_prefix" ; then
- libc_dir="$(ldd ./print_env_info | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
+ libc_dir="$(ldd $TMPO | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
  multiarch_triplet=${libc_dir#*/}
  multiarch_triplet=${multiarch_triplet%/}
  lddir="${libc_dir%%/*}"
@@ -418,6 +418,8 @@ print_var2 CONFIG_TCC_SYSINCLUDEPATHS "$tcc_sysincludepaths"
 print_var2 CONFIG_TCC_LIBPATHS "$tcc_libpaths"
 print_var2 CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
 print_var2 CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
+print_var2 CONFIG_MULTIARCHDIR "$multiarch_triplet"
+print_var2 CONFIG_LDDIR "$lddir"
 
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
 
@@ -500,12 +502,6 @@ fi
 if test "$have_selinux" = "yes" ; then
   echo "#define HAVE_SELINUX" >> $TMPH
   echo "HAVE_SELINUX=yes" >> config.mak
-fi
-if test -n "$multiarch_triplet" ; then
-  echo "#define CONFIG_MULTIARCHDIR \"$multiarch_triplet\"" >> $TMPH
-fi
-if test -n "$lddir" ; then
-  echo "#define CONFIG_LDDIR \"$lddir\"" >> $TMPH
 fi
 
 version=`head $source_path/VERSION`
