@@ -22,10 +22,7 @@ fi
 # bashism: TMPN="${TMPDIR1}/tcc-conf-${RANDOM}-$$-${RANDOM}.c"
 TMPN="./conftest-$$"
 
-TMPC=$TMPN.c
 TMPH=$TMPN.h
-TMPO=$TMPN.o
-TMPE=$TMPN
 
 # default parameters
 build_cross="no"
@@ -206,20 +203,11 @@ fi
 
 if test -z "$cross_prefix" ; then
 
-# ---
-# big/little endian test
-cat > $TMPC << EOF
-#include <inttypes.h>
-int main(int argc, char ** argv){
-    volatile uint32_t i=0x01234567;
-    return (*((uint8_t*)(&i))) == 0x67;
-}
-EOF
-
-if $cc -o $TMPE $TMPC 2>/dev/null ; then
-    $TMPE && bigendian="yes"
+if ! $cc -o config-print config-print.c 2>/dev/null ; then
+    echo "$cc is not able to compile TCC"
 else
-    echo big/little test failed
+	bigendian="$(./config-print e)"
+	gcc_major="$(./config-print v)"
 fi
 
 else
@@ -231,37 +219,8 @@ esac
 
 fi
 
-# check gcc version
-cat > $TMPC <<EOF
-int main(void) {
-#if __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
-return 0;
-#else
-#error gcc < 3.2
-#endif
-}
-EOF
-
-gcc_major="2"
-if $cc -o $TMPO $TMPC 2> /dev/null ; then
-    gcc_major="3"
-fi
-cat > $TMPC <<EOF
-int main(void) {
-#if __GNUC__ >= 4
-return 0;
-#else
-#error gcc < 4
-#endif
-}
-EOF
-
-if $cc -o $TMPO $TMPC 2> /dev/null ; then
-    gcc_major="4"
-fi
-
 if test -z "$cross_prefix" ; then
- libc_dir="$(ldd $TMPO | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
+ libc_dir="$(ldd ./config-print | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
  multiarch_triplet=${libc_dir#*/}
  multiarch_triplet=${multiarch_triplet%/}
  lddir="${libc_dir%%/*}"
@@ -269,6 +228,7 @@ if test -z "$cross_prefix" ; then
   lddir="$lddir/$multiarch_triplet"
  fi
 fi
+rm config-print
 
 if test x"$show_help" = "xyes" ; then
 cat << EOF
