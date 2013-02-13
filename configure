@@ -264,7 +264,7 @@ if test -z "$cross_prefix" ; then
  if test -f "/usr/lib64" ; then
    lddir="lib64"
  elif test -z "$tcc_crtprefix" ; then # check if system is multiarch
-  if ! test -f $sysroot/usr/lib/crti.o -o test -L $sysroot/usr/lib/crti.o ; then
+  if test ! -f $sysroot/usr/lib/crti.o -o -L $sysroot/usr/lib/crti.o ; then
    use_multiarch="yes"
   fi
  fi
