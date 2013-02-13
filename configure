@@ -261,12 +261,12 @@ if $cc -o $TMPO $TMPC 2> /dev/null ; then
 fi
 
 if test -z "$cross_prefix" ; then
- if test -f "/usr/lib64" ; then
-   lddir="lib64"
- elif test -z "$tcc_crtprefix" ; then # check if system is multiarch
-  if test ! -f $sysroot/usr/lib/crti.o -o -L $sysroot/usr/lib/crti.o ; then
-   use_multiarch="yes"
-  fi
+ libc_dir="$(ldd ./print_env_info | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
+ multiarch_triplet=${libc_dir#*/}
+ multiarch_triplet=${multiarch_triplet%/}
+ lddir="${libc_dir%%/*}"
+ if test -n "$multiarch_triplet" ; then
+  lddir="$lddir/$multiarch_triplet"
  fi
 fi
 
@@ -501,8 +501,8 @@ if test "$have_selinux" = "yes" ; then
   echo "#define HAVE_SELINUX" >> $TMPH
   echo "HAVE_SELINUX=yes" >> config.mak
 fi
-if test "$use_multiarch" = "yes" ; then
-  echo "#define CONFIG_TCC_MULTIARCH" >> $TMPH
+if test -n "$multiarch_triplet" ; then
+  echo "#define CONFIG_MULTIARCHDIR \"$multiarch_triplet\"" >> $TMPH
 fi
 if test -n "$lddir" ; then
   echo "#define CONFIG_LDDIR \"$lddir\"" >> $TMPH
