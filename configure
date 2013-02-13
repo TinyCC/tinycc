@@ -260,6 +260,16 @@ if $cc -o $TMPO $TMPC 2> /dev/null ; then
     gcc_major="4"
 fi
 
+if test -z "$cross_prefix" ; then
+ if test -f "/usr/lib64" ; then
+   lddir="lib64"
+ elif test -z "$tcc_crtprefix" ; then # check if system is multiarch
+  if ! test -f $sysroot/usr/lib/crti.o -o test -L $sysroot/usr/lib/crti.o ; then
+   use_multiarch="yes"
+  fi
+ fi
+fi
+
 if test x"$show_help" = "xyes" ; then
 cat << EOF
 Usage: configure [options]
@@ -490,6 +500,12 @@ fi
 if test "$have_selinux" = "yes" ; then
   echo "#define HAVE_SELINUX" >> $TMPH
   echo "HAVE_SELINUX=yes" >> config.mak
+fi
+if test "$use_multiarch" = "yes" ; then
+  echo "#define CONFIG_TCC_MULTIARCH" >> $TMPH
+fi
+if test -n "$lddir" ; then
+  echo "#define CONFIG_LDDIR \"$lddir\"" >> $TMPH
 fi
 
 version=`head $source_path/VERSION`

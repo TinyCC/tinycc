@@ -156,6 +156,34 @@
 # define CONFIG_SYSROOT ""
 #endif
 
+#if defined(CONFIG_TCC_MULTIARCH) && defined(TCC_IS_NATIVE)
+/* Define architecture */
+# if defined(TCC_TARGET_I386)
+#  define TRIPLET_ARCH "i386"
+# elif defined(TCC_TARGET_X86_64)
+#  define TRIPLET_ARCH "x86_64"
+# elif defined(TCC_TARGET_ARM)
+#  define TRIPLET_ARCH "arm"
+# else
+#  define TRIPLET_ARCH "unknown"
+# endif
+/* Define OS */
+# if defined (__linux__)
+#  define TRIPLET_OS "linux"
+# elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
+#  define TRIPLET_OS "kfreebsd"
+# elif !defined (__GNU__)
+#  define TRIPLET_OS "unknown"
+# endif
+/* Define calling convention and ABI */
+# define TRIPLET_ABI "gnu"
+# ifdef __GNU__
+#  define CONFIG_MULTIARCHDIR TRIPLET_ARCH "-" TRIPLET_ABI
+# else
+#  define CONFIG_MULTIARCHDIR TRIPLET_ARCH "-" TRIPLET_OS "-" TRIPLET_ABI
+# endif
+#endif
+
 #ifndef CONFIG_LDDIR
 # ifdef CONFIG_MULTIARCHDIR
 #  define CONFIG_LDDIR "lib/" CONFIG_MULTIARCHDIR

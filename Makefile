@@ -35,16 +35,8 @@ endif
 
 ifeq ($(ARCH),i386)
 NATIVE_DEFINES=-DTCC_TARGET_I386
-NATIVE_DEFINES+=\
-  $(if $(wildcard /lib/i386-linux-gnu),-DCONFIG_MULTIARCHDIR=\"i386-linux-gnu\",\
-  $(if $(wildcard /lib/i386-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"i386-kfreebsd-gnu\",\
-  $(if $(wildcard /lib/i386-gnu),-DCONFIG_MULTIARCHDIR=\"i386-gnu\")))
 else ifeq ($(ARCH),x86-64)
 NATIVE_DEFINES=-DTCC_TARGET_X86_64
-NATIVE_DEFINES+=\
-  $(if $(wildcard /usr/lib64),-DCONFIG_LDDIR=\"lib64\",\
-  $(if $(wildcard /lib/x86_64-linux-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-linux-gnu\",\
-  $(if $(wildcard /lib/x86_64-kfreebsd-gnu),-DCONFIG_MULTIARCHDIR=\"x86_64-kfreebsd-gnu\")))
 endif
 
 ifeq ($(ARCH),arm)
@@ -52,10 +44,8 @@ NATIVE_DEFINES=-DTCC_TARGET_ARM
 NATIVE_DEFINES+=-DWITHOUT_LIBTCC
 ifneq (,$(wildcard /lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux.so.3))
 NATIVE_DEFINES+=-DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
-NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabihf),-DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabihf\")
 else ifneq (,$(wildcard /lib/ld-linux.so.3))
 NATIVE_DEFINES+=-DTCC_ARM_EABI
-NATIVE_DEFINES+=$(if $(wildcard /lib/arm-linux-gnueabi), -DCONFIG_MULTIARCHDIR=\"arm-linux-gnueabi\")
 endif
 NATIVE_DEFINES+=$(if $(shell grep -l "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo),-DTCC_ARM_VFP)
 endif
