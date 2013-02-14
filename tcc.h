@@ -155,6 +155,12 @@
 #ifndef CONFIG_SYSROOT
 # define CONFIG_SYSROOT ""
 #endif
+#ifndef CONFIG_TCCDIR
+# define CONFIG_TCCDIR "."
+#endif
+#ifndef CONFIG_LDDIR
+# define CONFIG_LDDIR "lib"
+#endif
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX

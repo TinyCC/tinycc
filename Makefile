@@ -13,11 +13,14 @@ CFLAGS_P=$(CFLAGS) -pg -static
 LIBS_P=
 LDFLAGS_P=$(LDFLAGS)
 
-ifeq ($(patsubst %gcc,gcc,$(CC)),gcc)
-ifneq ($(GCC_MAJOR),2)
+ifeq (-$(findstring $(GCC_MAJOR),01)-,--)
 CFLAGS+=-fno-strict-aliasing
-ifneq ($(GCC_MAJOR),3)
+ifeq (-$(findstring $(GCC_MAJOR),23)-,--)
 CFLAGS+=-Wno-pointer-sign -Wno-sign-compare
+ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
+CFLAGS+=-D_FORTIFY_SOURCE=0
+else
+CFLAGS+=-Wno-unused-result
 endif
 endif
 endif

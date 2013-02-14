@@ -837,8 +837,7 @@ static void tcc_assemble_inline(TCCState *s1, char *str, int len)
     saved_parse_flags = parse_flags;
     saved_macro_ptr = macro_ptr;
 
-    tcc_open_bf(s1, file->filename, len);
-    file->line_num = file->prev->line_num;
+    tcc_open_bf(s1, ":asm:", len);
     memcpy(file->buffer, str, len);
 
     macro_ptr = NULL;

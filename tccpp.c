@@ -2800,13 +2800,13 @@ static inline int *macro_twosharps(const int *macro_str)
 {
     const int *ptr;
     int t;
-    CValue cval;
     TokenString macro_str1;
     CString cstr;
     int n, start_of_nosubsts;
 
     /* we search the first '##' */
     for(ptr = macro_str;;) {
+        CValue cval;
         TOK_GET(&t, &ptr, &cval);
         if (t == TOK_TWOSHARPS)
             break;
@@ -2835,10 +2835,9 @@ static inline int *macro_twosharps(const int *macro_str)
             /* given 'a##b', remove nosubsts preceding 'b' */
             while (t == TOK_NOSUBST)
                 t = *++ptr;
-            
             if (t && t != TOK_TWOSHARPS) {
+                CValue cval;
                 TOK_GET(&t, &ptr, &cval);
-
                 /* We concatenate the two tokens */
                 cstr_new(&cstr);
                 cstr_cat(&cstr, get_tok_str(tok, &tokc));
@@ -2846,7 +2845,7 @@ static inline int *macro_twosharps(const int *macro_str)
                 cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
-                tcc_open_bf(tcc_state, "<paste>", cstr.size);
+                tcc_open_bf(tcc_state, ":paste:", cstr.size);
                 memcpy(file->buffer, cstr.data, cstr.size);
                 for (;;) {
                     next_nomacro1();

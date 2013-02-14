@@ -567,23 +567,24 @@ static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)
 static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
 {
     char buf[2048];
-    BufferedFile **f;
+    BufferedFile **pf, *f;
     
     buf[0] = '\0';
-    if (file) {
-        for(f = s1->include_stack; f < s1->include_stack_ptr; f++)
-            strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n", 
-                          (*f)->filename, (*f)->line_num);
-        if (file->line_num > 0) {
-            strcat_printf(buf, sizeof(buf), 
-                          "%s:%d: ", file->filename, file->line_num);
+    /* use upper file if inline ":asm:" or token ":paste:" */
+    for (f = file; f && f->filename[0] == ':'; f = f->prev);
+    if (f) {
+        for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
+            strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
+                (*pf)->filename, (*pf)->line_num);
+        if (f->line_num > 0) {
+            strcat_printf(buf, sizeof(buf), "%s:%d: ",
+                f->filename, f->line_num);
         } else {
-            strcat_printf(buf, sizeof(buf),
-                          "%s: ", file->filename);
+            strcat_printf(buf, sizeof(buf), "%s: ",
+                f->filename);
         }
     } else {
-        strcat_printf(buf, sizeof(buf),
-                      "tcc: ");
+        strcat_printf(buf, sizeof(buf), "tcc: ");
     }
     if (is_warning)
         strcat_printf(buf, sizeof(buf), "warning: ");
