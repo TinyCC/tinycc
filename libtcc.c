@@ -1643,6 +1643,7 @@ enum {
     TCC_OPTION_MD,
     TCC_OPTION_MF,
     TCC_OPTION_x,
+    TCC_OPTION_dumpversion
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
@@ -1693,6 +1694,7 @@ static const TCCOption tcc_options[] = {
     { "MD", TCC_OPTION_MD, 0},
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
+    { "dumpversion", TCC_OPTION_dumpversion, 0},
     { NULL, 0, 0 },
 };
 
@@ -1870,6 +1872,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         case TCC_OPTION_MF:
             s->deps_outfile = tcc_strdup(optarg);
             break;
+        case TCC_OPTION_dumpversion:
+            printf ("%s\n", TCC_VERSION);
+            exit(0);
         case TCC_OPTION_O:
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:

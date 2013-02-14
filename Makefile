@@ -25,6 +25,11 @@ endif
 endif
 endif
 
+# make clang accept gnuisms in libtcc1.c
+ifeq ($(CC),clang)
+CFLAGS+=-fheinous-gnu-extensions
+endif
+
 ifdef CONFIG_WIN64
 CONFIG_WIN32=yes
 endif

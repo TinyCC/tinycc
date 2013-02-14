@@ -38,6 +38,7 @@ static void help(void)
            "  -w          disable all warnings\n"
            "  -v          show version\n"
            "  -vv         show included files (as sole argument: show search paths)\n"
+           "  -dumpversion\n"
            "  -bench      show compilation statistics\n"
            "Preprocessor options:\n"
            "  -E          preprocess only\n"
