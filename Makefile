@@ -8,6 +8,7 @@ VPATH = $(top_srcdir)
 
 CPPFLAGS = -I$(TOP) # for config.h
 
+ifeq (-$(findstring clang,$(CC))-,-gcc-)
 ifeq (-$(findstring $(GCC_MAJOR),01)-,--)
 CFLAGS+=-fno-strict-aliasing
 ifeq (-$(findstring $(GCC_MAJOR),23)-,--)
@@ -16,6 +17,7 @@ ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
 CFLAGS+=-D_FORTIFY_SOURCE=0
 else
 CFLAGS+=-Wno-unused-result
+endif
 endif
 endif
 else # not GCC

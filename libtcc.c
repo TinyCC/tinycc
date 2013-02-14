@@ -1643,7 +1643,7 @@ enum {
     TCC_OPTION_MD,
     TCC_OPTION_MF,
     TCC_OPTION_x,
-    TCC_OPTION_dumpversion
+    TCC_OPTION_dumpversion,
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
