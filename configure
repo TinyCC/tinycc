@@ -296,7 +296,13 @@ if test -z "$cross_prefix" ; then
     gcc_major="$($CONFTEST version)"
     gcc_minor="$($CONFTEST minor)"
     if test "$mingw32" = "no" ; then
-      libc_dir="$(ldd $CONFTEST | grep libc.so | sed 's|[^/]*/\(.*/\)[^/]*|\1|')"
+      triplet="$($CONFTEST triplet)"
+      if test -f "/usr/lib/$triplet/crti.o" ; then
+        tcc_lddir="lib/$triplet"
+        multiarch_triplet="$triplet"
+      elif test -f "usr/lib64/crti.o" ; then
+        tcc_lddir="lib64"
+      fi
 
 # gr: FIXME
 #  ldd $CONFTEST gives (ubuntu 8)
@@ -306,13 +312,13 @@ if test -z "$cross_prefix" ; then
 #  result is crap:
 #        CONFIG_LDDIR="lib/tls/i686/cmov"
 #        CONFIG_MUADIR="tls/i686/cmov"
-
-      multiarch_triplet=${libc_dir#*/}
-      multiarch_triplet=${multiarch_triplet%/}
-      tcc_lddir="${libc_dir%%/*}"
-      if test -n "$multiarch_triplet" ; then
-        tcc_lddir="$tcc_lddir/$multiarch_triplet"
-      fi
+#
+#      multiarch_triplet=${libc_dir#*/}
+#      multiarch_triplet=${multiarch_triplet%/}
+#      tcc_lddir="${libc_dir%%/*}"
+#      if test -n "$multiarch_triplet" ; then
+#        tcc_lddir="$tcc_lddir/$multiarch_triplet"
+#      fi
 
 # gr: maybe for after the release:
 #      tcc_elfinterp="$(ldd $CONFTEST | grep 'ld.*.so' | sed 's,\s*\(\S\+\).*,\1,')"
