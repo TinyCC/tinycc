@@ -214,6 +214,8 @@
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_UCLIBC)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-uClibc.so.0"
+# elif defined(TCC_TARGET_PE)
+#  define CONFIG_TCC_ELFINTERP "-"
 # else
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
 # endif

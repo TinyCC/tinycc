@@ -609,8 +609,11 @@ unsigned long long __fixunsxfdi (long double a1)
 
 /* helper functions for stdarg.h */
 
-#include <stdio.h>
 #include <stdlib.h>
+#ifndef __TINYC__
+/* gives "incompatible types for redefinition of __va_arg" below */
+#include <stdio.h>
+#endif
 
 enum __va_arg_type {
     __va_gen_reg, __va_float_reg, __va_stack
@@ -665,7 +668,9 @@ void *__va_arg(struct __va_list_struct *ap,
         return ap->overflow_arg_area - size;
 
     default:
+#ifndef __TINYC__
         fprintf(stderr, "unknown ABI type for __va_arg\n");
+#endif
         abort();
     }
 }

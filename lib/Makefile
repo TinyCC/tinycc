@@ -3,7 +3,7 @@
 #
 
 TOP = ..
-include $(TOP)/config.mak
+include $(TOP)/Makefile
 VPATH = $(top_srcdir)/lib $(top_srcdir)/win32/lib
 
 ifndef TARGET
@@ -91,7 +91,7 @@ $(DIR)/%.o : %.c
 $(DIR)/%.o : %.S
 	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
-	$(CC) -Os -s -o $@ $< $(XFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $< $(XFLAGS) $(LDFLAGS)
 
 $(OBJ) $(XAR) : $(DIR)/exists
 $(DIR)/exists :
