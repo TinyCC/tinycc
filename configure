@@ -300,7 +300,7 @@ if test -z "$cross_prefix" ; then
       if test -f "/usr/lib/$triplet/crti.o" ; then
         tcc_lddir="lib/$triplet"
         multiarch_triplet="$triplet"
-      elif test -f "usr/lib64/crti.o" ; then
+      elif test -f "/usr/lib64/crti.o" ; then
         tcc_lddir="lib64"
       fi
 
