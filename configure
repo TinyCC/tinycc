@@ -44,6 +44,7 @@ tcc_libpaths=""
 tcc_crtprefix=""
 tcc_elfinterp=""
 tcc_lddir=
+confvars=
 
 cpu=`uname -m`
 
@@ -304,6 +305,17 @@ if test -z "$cross_prefix" ; then
         tcc_lddir="lib64"
       fi
 
+      if test "$cpu" = "armv4l" ; then
+        if test "${triplet%eabihf}" != "$triplet" ; then
+           confvars="$confvars arm_eabihf"
+        elif test "${triplet%eabi}" != "$triplet" ; then
+           confvars="$confvars arm_eabi"
+        fi
+        if grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
+           confvars="$confvars arm_vfp"
+        fi
+      fi
+
 #      multiarch_triplet=${libc_dir#*/}
 #      multiarch_triplet=${multiarch_triplet%/}
 #      tcc_lddir="${libc_dir%%/*}"
@@ -311,6 +323,9 @@ if test -z "$cross_prefix" ; then
 #        tcc_lddir="$tcc_lddir/$multiarch_triplet"
 #      fi
 
+      if test -f "/lib/ld-uClibc.so.0" ; then
+        confvars="$confvars uClibc"
+      fi
 # gr: maybe for after the release:
 #       tcc_elfinterp="$(ldd $CONFTEST | grep 'ld.*.so' | sed 's,\s*\(\S\+\).*,\1,')"
        # echo "elfinterp           $tcc_elfinterp"
@@ -424,6 +439,9 @@ fi
 
 echo "TARGETOS=$targetos" >> config.mak
 
+for v in $confvars ; do
+  echo "CONFIG_$v=yes" >> config.mak
+done
 if test "$noldl" = "yes" ; then
   echo "CONFIG_NOLDL=yes" >> config.mak
 fi
