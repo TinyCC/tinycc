@@ -21,7 +21,15 @@
 #endif
 
 /* Define calling convention and ABI */
-#define TRIPLET_ABI "gnu"
+#if defined (__ARM_EABI__)
+# if defined (__ARM_PCS_VFP)
+#  define TRIPLET_ABI "gnueabihf"
+# else
+#  define TRIPLET_ABI "gnueabi"
+# endif
+#else
+# define TRIPLET_ABI "gnu"
+#endif
 
 #ifdef __GNU__
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_ABI
