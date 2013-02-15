@@ -176,6 +176,9 @@ In a script, it gives the following header:
 #!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
 @end example
 
+@item -dumpversion
+Print only the compiler version and nothing else.
+
 @item -v
 Display TCC version.
 

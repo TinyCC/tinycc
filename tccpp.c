@@ -3042,7 +3042,7 @@ ST_FUNC void preprocess_init(TCCState *s1)
     s1->pack_stack_ptr = s1->pack_stack;
 }
 
-ST_FUNC void preprocess_new()
+ST_FUNC void preprocess_new(void)
 {
     int i, c;
     const char *p, *r;
