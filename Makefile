@@ -8,7 +8,7 @@ VPATH = $(top_srcdir)
 
 CPPFLAGS = -I$(TOP) # for config.h
 
-ifeq (-$(findstring clang,$(CC))-,-gcc-)
+ifeq (-$(findstring gcc,$(CC))-,-gcc-)
 ifeq (-$(findstring $(GCC_MAJOR),01)-,--)
 CFLAGS+=-fno-strict-aliasing
 ifeq (-$(findstring $(GCC_MAJOR),23)-,--)
