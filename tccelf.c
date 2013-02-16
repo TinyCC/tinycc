@@ -1835,7 +1835,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         s->sh_name = put_elf_str(strsec, s->name);
-#if 0 //gr       
+#if 0 /* gr */
         printf("section: f=%08x t=%08x i=%08x %s %s\n", 
                s->sh_flags, 
                s->sh_type, 

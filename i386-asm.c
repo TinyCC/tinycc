@@ -21,7 +21,7 @@
 
 #include "tcc.h"
 
-// #define NB_ASM_REGS 8
+/* #define NB_ASM_REGS 8 */
 #define MAX_OPERANDS 3
 #define NB_SAVED_REGS 3
 

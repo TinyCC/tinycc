@@ -1725,7 +1725,7 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_C60_GOTOFF    9               /* 32 bit offset to GOT */
 #define R_C60_GOTPC     10              /* 32 bit PC relative offset to GOT */
 
-#define R_C60HI16      0x55       // high 16 bit MVKH embedded
-#define R_C60LO16      0x54       // low 16 bit MVKL embedded
+#define R_C60HI16      0x55       /* high 16 bit MVKH embedded */
+#define R_C60LO16      0x54       /* low 16 bit MVKL embedded */
 
 #endif  /* elf.h */

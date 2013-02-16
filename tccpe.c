@@ -30,7 +30,7 @@
 #endif
 
 #define PE_MERGE_DATA
-// #define PE_PRINT_SECTIONS
+/* #define PE_PRINT_SECTIONS */
 
 #ifdef TCC_TARGET_X86_64
 # define ADDR3264 ULONGLONG

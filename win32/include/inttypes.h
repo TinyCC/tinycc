@@ -239,7 +239,7 @@ typedef struct {
 #define SCNiPTR "i"
 #define SCNoPTR "o"
 #define SCNxPTR "x"
- #define SCNuPTR "u"
+#define SCNuPTR "u"
 #endif
 
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L

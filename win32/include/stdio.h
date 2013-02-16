@@ -241,8 +241,8 @@ extern FILE (*_imp___iob)[];    /* A pointer to an array of FILE */
   /* Make sure macros are not defined.  */
 #pragma push_macro("vsnprintf")
 #pragma push_macro("snprintf")
-  #undef vsnprintf
-  #undef snprintf
+# undef vsnprintf
+# undef snprintf
   extern
   __attribute__((format(gnu_printf, 3, 0))) __attribute__((nonnull (3)))
   int __mingw_vsnprintf(char *_DstBuf,size_t _MaxCount,const char *_Format,va_list _ArgList);
@@ -267,14 +267,14 @@ extern FILE (*_imp___iob)[];    /* A pointer to an array of FILE */
 #pragma pop_macro("snprintf")
 #pragma pop_macro("vsnprintf")
 /* Check if vsnprintf and snprintf are defaulting to gnu-style.  */
-  #if defined(USE_MINGW_GNU_SNPRINTF) && USE_MINGW_GNU_SNPRINTF
-  #ifndef vsnprint
-  #define vsnprintf __mingw_vsnprintf
-  #endif
-  #ifndef snprintf
-  #define snprintf __mingw_snprintf
-  #endif
-  #endif
+# if defined(USE_MINGW_GNU_SNPRINTF) && USE_MINGW_GNU_SNPRINTF
+# ifndef vsnprint
+# define vsnprintf __mingw_vsnprintf
+# endif
+# ifndef snprintf
+# define snprintf __mingw_snprintf
+# endif
+# endif
   _CRTIMP int __cdecl _vscprintf(const char *_Format,va_list _ArgList);
   _CRTIMP int __cdecl _set_printf_count_output(int _Value);
   _CRTIMP int __cdecl _get_printf_count_output(void);

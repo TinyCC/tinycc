@@ -98,21 +98,21 @@
 #include "libtcc.h"
 
 /* parser debug */
-//#define PARSE_DEBUG
+/* #define PARSE_DEBUG */
 /* preprocessor debug */
-//#define PP_DEBUG
+/* #define PP_DEBUG */
 /* include file debug */
-//#define INC_DEBUG
+/* #define INC_DEBUG */
 /* memory leak debug */
-//#define MEM_DEBUG
+/* #define MEM_DEBUG */
 /* assembler debug */
-//#define ASM_DEBUG
+/* #define ASM_DEBUG */
 
 /* target selection */
-//#define TCC_TARGET_I386   /* i386 code generator */
-//#define TCC_TARGET_ARM    /* ARMv4 code generator */
-//#define TCC_TARGET_C67    /* TMS320C67xx code generator */
-//#define TCC_TARGET_X86_64 /* x86-64 code generator */
+/* #define TCC_TARGET_I386   *//* i386 code generator */
+/* #define TCC_TARGET_ARM    *//* ARMv4 code generator */
+/* #define TCC_TARGET_C67    *//* TMS320C67xx code generator */
+/* #define TCC_TARGET_X86_64 *//* x86-64 code generator */
 
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
@@ -894,7 +894,7 @@ struct TCCState {
  DEF_ASM(x ## nle) \
  DEF_ASM(x ## g)
 
-#endif // defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+#endif /* defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 */
 
 enum tcc_token {
     TOK_LAST = TOK_IDENT - 1,
@@ -909,10 +909,10 @@ enum tcc_token {
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #ifndef __GNUC__
-  #define strtold (long double)strtod
-  #define strtof (float)strtod
-  #define strtoll _strtoi64
-  #define strtoull _strtoui64
+# define strtold (long double)strtod
+# define strtof (float)strtod
+# define strtoll _strtoi64
+# define strtoull _strtoui64
 #endif
 #else
 /* XXX: need to define this to use them in non ISOC99 context */

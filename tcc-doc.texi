@@ -388,12 +388,13 @@ and floating point numbers (@code{long double}, @code{double}, and
 @section ISOC99 extensions
 
 TCC implements many features of the new C standard: ISO C99. Currently
-missing items are: complex and imaginary numbers and variable length
-arrays.
+missing items are: complex and imaginary numbers.
 
 Currently implemented ISOC99 features:
 
 @itemize
+
+@item variable length arrays.
 
 @item 64 bit @code{long long} types are fully supported.
 

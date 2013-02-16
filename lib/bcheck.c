@@ -29,11 +29,11 @@
 #include <unistd.h>
 #endif
 
-//#define BOUND_DEBUG
+/* #define BOUND_DEBUG */
 
 /* define so that bound array is static (faster, but use memory if
    bound checking not used) */
-//#define BOUND_STATIC
+/* #define BOUND_STATIC */
 
 /* use malloc hooks. Currently the code cannot be reliable if no hooks */
 #define CONFIG_TCC_MALLOC_HOOKS

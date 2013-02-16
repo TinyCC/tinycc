@@ -20,7 +20,7 @@
 
 #ifdef TARGET_DEFS_ONLY
 
-//#define ASSEMBLY_LISTING_C67
+/* #define ASSEMBLY_LISTING_C67 */
 
 /* number of available registers */
 #define NB_REGS            24
@@ -93,11 +93,11 @@ enum {
 #define REG_FRET TREG_C67_A4	/* float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
-//#define INVERT_FUNC_PARAMS
+/* #define INVERT_FUNC_PARAMS */
 
 /* defined if structures are passed as pointers. Otherwise structures
    are directly pushed on stack. */
-//#define FUNC_STRUCT_PARAM_AS_PTR
+/* #define FUNC_STRUCT_PARAM_AS_PTR */
 
 /* pointer size, in bytes */
 #define PTR_SIZE 4
@@ -253,7 +253,7 @@ void gsym(int t)
 #define C67_B3 107
 #define C67_FP 108
 #define C67_B2 109
-#define C67_CREG_ZERO -1	// Special code for no condition reg test
+#define C67_CREG_ZERO -1	/* Special code for no condition reg test */
 
 
 int ConvertRegToRegClass(int r)

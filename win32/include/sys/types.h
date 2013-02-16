@@ -12,7 +12,7 @@
 
 #include <_mingw.h>
 
-#ifndef __TINYC__ //gr
+#ifndef __TINYC__ /* gr */
 #ifdef _USE_32BIT_TIME_T
 #ifdef _WIN64
 #undef _USE_32BIT_TIME_T

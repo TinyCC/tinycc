@@ -24,7 +24,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 #ifdef TCC_ARM_EABI
-#ifndef TCC_ARM_VFP // Avoid useless warning
+#ifndef TCC_ARM_VFP /* Avoid useless warning */
 #define TCC_ARM_VFP
 #endif
 #endif
@@ -104,7 +104,7 @@ enum {
 
 /* defined if structures are passed as pointers. Otherwise structures
    are directly pushed on stack. */
-//#define FUNC_STRUCT_PARAM_AS_PTR
+/* #define FUNC_STRUCT_PARAM_AS_PTR */
 
 /* pointer size, in bytes */
 #define PTR_SIZE 4

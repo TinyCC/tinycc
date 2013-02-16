@@ -37,8 +37,8 @@ struct filehdr {
 #define F_BYTE_ORDER (F_LITTLE | F_BIG)
 #define FILHDR  struct filehdr
 
-//#define FILHSZ  sizeof(FILHDR) 
-#define FILHSZ  22                // above rounds to align on 4 bytes which causes problems 
+/* #define FILHSZ  sizeof(FILHDR)  */
+#define FILHSZ  22                /* above rounds to align on 4 bytes which causes problems */
 
 #define COFF_C67_MAGIC 0x00c2
 
@@ -150,7 +150,7 @@ struct scnhdr {
 /*------------------------------------------------------------------------*/
 /* Define constants for names of "special" sections                       */
 /*------------------------------------------------------------------------*/
-//#define _TEXT    ".text"
+/* #define _TEXT    ".text" */
 #define _DATA    ".data"
 #define _BSS     ".bss"
 #define _CINIT   ".cinit"

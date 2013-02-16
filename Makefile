@@ -300,11 +300,11 @@ endif
 
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	-texi2html -monolithic -number $<
+	-texi2html -monolithic -number-sections $<
 
 tcc.1: tcc-doc.texi
 	-$(top_srcdir)/texi2pod.pl $< tcc.pod
-	-pod2man --section=1 --center=" " --release=" " tcc.pod > $@
+	-pod2man --section=1 --center="Tiny C Compiler" --release=`cat $(top_srcdir)/VERSION` tcc.pod > $@
 
 tcc-doc.info: tcc-doc.texi
 	-makeinfo $<
