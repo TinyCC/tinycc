@@ -205,7 +205,11 @@
 # if defined __FreeBSD__
 #  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
 # elif defined __FreeBSD_kernel__
-#  define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
+#  if defined(TCC_TARGET_X86_64)
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-kfreebsd-x86-64.so.1"
+#  else
+#   define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
+#  endif
 # elif defined TCC_ARM_HARDFLOAT
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-armhf.so.3"
 # elif defined TCC_ARM_EABI
