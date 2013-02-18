@@ -210,6 +210,8 @@
 #  else
 #   define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
 #  endif
+# elif defined __GNU__
+#  define CONFIG_TCC_ELFINTERP "/lib/ld.so"
 # elif defined TCC_ARM_HARDFLOAT
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-armhf.so.3"
 # elif defined TCC_ARM_EABI
