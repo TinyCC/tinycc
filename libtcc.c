@@ -571,7 +571,8 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
     
     buf[0] = '\0';
     /* use upper file if inline ":asm:" or token ":paste:" */
-    for (f = file; f && f->filename[0] == ':'; f = f->prev);
+    for (f = file; f && f->filename[0] == ':'; f = f->prev)
+     ;
     if (f) {
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
             strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
@@ -924,7 +925,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
     tcc_define_symbol(s, "__STDC_VERSION__", "199901L");
-    tcc_define_symbol(s, "__STDC_HOSTED__", "1");
+    tcc_define_symbol(s, "__STDC_HOSTED__", NULL);
 
     /* target defines */
 #if defined(TCC_TARGET_I386)

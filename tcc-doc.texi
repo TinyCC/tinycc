@@ -597,8 +597,7 @@ are supported.
 
 @itemize
 
-@item @code{__TINYC__} is a predefined macro to @code{1} to
-indicate that you use TCC.
+@item @code{__TINYC__} is a predefined macro to indicate that you use TCC.
 
 @item @code{#!} at the start of a line is ignored to allow scripting.
 

@@ -78,7 +78,6 @@ struct macro_level {
     const int *p;
 };
 
-ST_FUNC void next_nomacro(void);
 static void next_nomacro_spc(void);
 static void macro_subst(
     TokenString *tok_str,

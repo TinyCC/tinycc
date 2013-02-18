@@ -9,7 +9,6 @@ Bugs:
 - constructors
 - cast bug (Peter Wang)
 - define incomplete type if defined several times (Peter Wang).
-- configure --cc=tcc (still one bug in libtcc1.c)
 - test binutils/gcc compile
 - tci patch + argument.
 - see -lxxx bug (Michael Charity).
