@@ -1941,3 +1941,21 @@ PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time)
            tt, (int)(total_lines / tt),
            total_bytes / tt / 1000000.0);
 }
+
+PUB_FUNC void tcc_set_environment(TCCState *s)
+{
+    char * path;
+    
+    path = getenv("C_INCLUDE_PATH");
+    if(path != NULL) {
+        tcc_add_include_path(s, path);
+    }
+    path = getenv("CPATH");
+    if(path != NULL) {
+        tcc_add_include_path(s, path);
+    }
+    path = getenv("LD_LIBRARY_PATH");
+    if(path != NULL) {
+        tcc_add_library_path(s, path);
+    }
+}

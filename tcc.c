@@ -252,6 +252,7 @@ int main(int argc, char **argv)
     s->output_type = TCC_OUTPUT_EXE;
 
     optind = tcc_parse_args(s, argc - 1, argv + 1);
+    tcc_set_environment(s);
 
     if (optind == 0) {
         help();

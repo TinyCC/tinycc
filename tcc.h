@@ -1061,6 +1061,8 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv);
 
+PUB_FUNC void tcc_set_environment(TCCState *s);
+
 /* ------------ tccpp.c ------------ */
 
 ST_DATA struct BufferedFile *file;
