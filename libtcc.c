@@ -1954,7 +1954,7 @@ PUB_FUNC void tcc_set_environment(TCCState *s)
     if(path != NULL) {
         tcc_add_include_path(s, path);
     }
-    path = getenv("LD_LIBRARY_PATH");
+    path = getenv("LIBRARY_PATH");
     if(path != NULL) {
         tcc_add_library_path(s, path);
     }
