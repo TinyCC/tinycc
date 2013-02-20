@@ -276,7 +276,7 @@ default library paths are @file{/usr/local/lib}, @file{/usr/lib} and @file{/lib}
 @item -lxxx
 Link your program with dynamic library libxxx.so or static library
 libxxx.a. The library is searched in the paths specified by the
-@option{-L} option.
+@option{-L} option and @env{LIBRARY_PATH} variable.
 
 @item -Bdir
 Set the path where the tcc internal libraries (and include files) can be
@@ -361,12 +361,31 @@ Note: GCC options @option{-Ox}, @option{-fx} and @option{-mx} are
 ignored.
 @c man end
 
+@c man begin ENVIRONMENT
+Environment variables that affect how tcc operates.
+
+@table @option
+
+@item CPATH
+@item C_INCLUDE_PATH
+A colon-separated list of directories searched for include files,
+directories given with @option{-I} are searched first.
+
+@item LIBRARY_PATH
+A colon-separated list of directories searched for libraries for the
+@option{-l} option, directories given with @option{-L} are searched first.
+
+@end table
+
+@c man end
+
 @ignore
 
 @setfilename tcc
 @settitle Tiny C Compiler
 
 @c man begin SEEALSO
+cpp(1),
 gcc(1)
 @c man end
 
@@ -702,7 +721,7 @@ They can be defined several times in the same source. Use 'b'
 @cindex asciz directive
 @cindex ascii directive
 
-All directives are preceeded by a '.'. The following directives are
+All directives are preceded by a '.'. The following directives are
 supported:
 
 @itemize
@@ -921,7 +940,7 @@ reverse order, a first pass is done to reverse the argument order.
 
 @section Types
 
-The types are stored in a single 'int' variable. It was choosen in the
+The types are stored in a single 'int' variable. It was chosen in the
 first stages of development when tcc was much simpler. Now, it may not
 be the best solution.
 
