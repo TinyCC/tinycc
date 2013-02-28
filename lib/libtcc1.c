@@ -689,3 +689,14 @@ void __va_end(struct __va_list_struct *ap)
 }
 
 #endif /* __x86_64__ */
+
+/* Flushing for tccrun */
+#if defined(__x86_64__) || defined(__i386__)
+
+void __clear_cache(char *beginning, char *end)
+{
+}
+
+#else
+#warning __clear_cache not defined for this architecture, avoid using tcc -run
+#endif
