@@ -38,7 +38,8 @@ test[1234].out
 tests/tcclib.h
 tests/tcctest.gcc
 tests/weaktest.*.o.txt
-tests2/fred.txt
+tests/tests2/fred.txt
+tests/hello
 .gdb_history
 tcc.1
 tcc.pod
