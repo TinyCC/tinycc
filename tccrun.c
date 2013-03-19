@@ -225,7 +225,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
-    __clear_cache(ptr, prog_main + length);
+    __clear_cache(ptr, ptr + length);
 #endif
 }
 
