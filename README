@@ -28,12 +28,12 @@ Features:
 Documentation:
 -------------
 
-1) Installation on a i386 Linux host (for Windows read tcc-win32.txt)
+1) Installation on a i386/x86_64/arm Linux/OSX/FreeBSD host (for Windows read tcc-win32.txt)
 
    ./configure
-   make
-   make test
-   make install
+   gmake
+   gmake test
+   gmake install
 
 Alternatively, out-of-tree builds are supported: you may use different
 directories to hold build objects, kept separate from your source tree:
@@ -41,10 +41,11 @@ directories to hold build objects, kept separate from your source tree:
    mkdir _build
    cd _build
    ../configure
-   make
-   make test
-   make install
+   gmake
+   gmake test
+   gmake install
 
+Texi2html must be installed to compile the doc. 
 By default, tcc is installed in /usr/local/bin.
 ./configure --help  shows configuration options.
 
