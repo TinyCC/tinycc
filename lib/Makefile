@@ -45,7 +45,7 @@ cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
 
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o
-ARM_O = libtcc1.o
+ARM_O = libtcc1.o armeabi.o
 WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 

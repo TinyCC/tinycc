@@ -59,6 +59,7 @@
 
 #include "tcclib.h"
 
+void intdiv_test();
 void string_test();
 void expr_test();
 void macro_test();
@@ -166,6 +167,71 @@ int qq(int x)
 #define spin_lock(lock) do { } while (0)
 #define wq_spin_lock spin_lock
 #define TEST2() wq_spin_lock(a)
+
+#define UINT_MAX ((unsigned) -1)
+
+void intdiv_test(void)
+{
+    printf("18/21=%u\n", 18/21);
+    printf("18%21=%u\n", 18%21);
+    printf("41/21=%u\n", 41/21);
+    printf("41%21=%u\n", 41%21);
+    printf("42/21=%u\n", 42/21);
+    printf("42%21=%u\n", 42%21);
+    printf("43/21=%u\n", 43/21);
+    printf("43%21=%u\n", 43%21);
+    printf("126/21=%u\n", 126/21);
+    printf("12%/21=%u\n", 126%21);
+    printf("131/21=%u\n", 131/21);
+    printf("131%21=%u\n", 131%21);
+    printf("(UINT_MAX/2+3)/2=%u\n", (UINT_MAX/2+3)/2);
+    printf("(UINT_MAX/2+3)%2=%u\n", (UINT_MAX/2+3)%2);
+
+    printf("18/-21=%u\n", 18/-21);
+    printf("18%-21=%u\n", 18%-21);
+    printf("41/-21=%u\n", 41/-21);
+    printf("41%-21=%u\n", 41%-21);
+    printf("42/-21=%u\n", 42/-21);
+    printf("42%-21=%u\n", 42%-21);
+    printf("43/-21=%u\n", 43/-21);
+    printf("43%-21=%u\n", 43%-21);
+    printf("126/-21=%u\n", 126/-21);
+    printf("12%/-21=%u\n", 126%-21);
+    printf("131/-21=%u\n", 131/-21);
+    printf("131%-21=%u\n", 131%-21);
+    printf("(UINT_MAX/2+3)/-2=%u\n", (UINT_MAX/2+3)/-2);
+    printf("(UINT_MAX/2+3)%-2=%u\n", (UINT_MAX/2+3)%-2);
+
+    printf("-18/21=%u\n", -18/21);
+    printf("-18%21=%u\n", -18%21);
+    printf("-41/21=%u\n", -41/21);
+    printf("-41%21=%u\n", -41%21);
+    printf("-42/21=%u\n", -42/21);
+    printf("-42%21=%u\n", -42%21);
+    printf("-43/21=%u\n", -43/21);
+    printf("-43%21=%u\n", -43%21);
+    printf("-126/21=%u\n", -126/21);
+    printf("-12%/21=%u\n", -126%21);
+    printf("-131/21=%u\n", -131/21);
+    printf("-131%21=%u\n", -131%21);
+    printf("-(UINT_MAX/2+3)/2=%u\n", (0-(UINT_MAX/2+3))/2);
+    printf("-(UINT_MAX/2+3)%2=%u\n", (0-(UINT_MAX/2+3))%2);
+
+    printf("-18/-21=%u\n", -18/-21);
+    printf("-18%-21=%u\n", -18%-21);
+    printf("-41/-21=%u\n", -41/-21);
+    printf("-41%-21=%u\n", -41%-21);
+    printf("-42/-21=%u\n", -42/-21);
+    printf("-42%-21=%u\n", -42%-21);
+    printf("-43/-21=%u\n", -43/-21);
+    printf("-43%-21=%u\n", -43%-21);
+    printf("-126/-21=%u\n", -126/-21);
+    printf("-12%/-21=%u\n", -126%-21);
+    printf("-131/-21=%u\n", -131/-21);
+    printf("-131%-21=%u\n", -131%-21);
+    printf("-(UINT_MAX/2+3)/-2=%u\n", (0-(UINT_MAX/2+3))/-2);
+    printf("-(UINT_MAX/2+3)%-2=%u\n", (0-(UINT_MAX/2+3))%-2);
+}
 
 void macro_test(void)
 {
@@ -619,6 +685,7 @@ int main(int argc, char **argv)
     math_cmp_test();
     callsave_test();
     builtin_frame_address_test();
+    intdiv_test();
     return 0; 
 }
 
