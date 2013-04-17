@@ -4,7 +4,8 @@
 
 TOP = ..
 include $(TOP)/Makefile
-VPATH = $(top_srcdir)/tests
+SRCDIR = $(top_srcdir)/tests
+VPATH = $(SRCDIR)
 
 # what tests to run
 TESTS = \
@@ -41,13 +42,13 @@ ifeq ($(TARGETOS),Darwin)
 endif
 
 # run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP)
+TCCFLAGS = -B$(TOP) -I$(TOP)
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
 endif
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
-RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(TOP)/tcc.c $(TCCFLAGS)
+RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
 
 DISAS = objdump -d
 
@@ -71,7 +72,7 @@ libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	./libtcc_test$(EXESUF) lib_path=..
 
 libtcc_test$(EXESUF): libtcc_test.c $(top_builddir)/$(LIBTCC)
-	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
 
 moretests:
 	@echo ------------ $@ ------------
@@ -80,26 +81,26 @@ moretests:
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
-	cp ../include/tcclib.h .
+	cp $(top_srcdir)/include/tcclib.h .
 	gcc -o tcctest.gcc $< -I. $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
 test1: test.ref
 	@echo ------------ $@ ------------
-	$(TCC) -run tcctest.c > test.out1
+	$(TCC) -run $(SRCDIR)/tcctest.c > test.out1
 	@if diff -u test.ref test.out1 ; then echo "Auto Test OK"; fi
 
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2: test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out2
+	$(TCC) $(RUN_TCC) $(RUN_TCC) -run $(SRCDIR)/tcctest.c > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3: test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run tcctest.c > test.out3
+	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $(SRCDIR)/tcctest.c > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # binary output test
@@ -197,3 +198,5 @@ clean:
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.gcc *.exe \
 	   hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h
 
+Makefile: $(SRCDIR)/Makefile
+	cp $< $@

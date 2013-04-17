@@ -343,6 +343,8 @@ tar:    tcc-doc.html
 	rm -rf $(TCC-VERSION)
 	git reset
 
+Makefile: $(top_srcdir)/Makefile
+	cp $< $@
 
 .PHONY: all clean tar distclean install uninstall FORCE
 

@@ -1,7 +1,7 @@
 /*
  * TCC auto test program
  */
-#include "../config.h"
+#include "config.h"
 
 #if GCC_MAJOR >= 3
 
@@ -14,6 +14,15 @@
 /* gcc 2.95.3 does not handle correctly CR in strings or after strays */
 #define CORRECT_CR_HANDLING
 
+#endif
+
+// MinGW has 80-bit rather than 64-bit long double which isn't compatible with TCC or MSVC
+#if defined(_WIN32) && defined(__GNUC__)
+#define LONG_DOUBLE double
+#define LONG_DOUBLE_LITERAL(x) x
+#else
+#define LONG_DOUBLE long double
+#define LONG_DOUBLE_LITERAL(x) x ## L
 #endif
 
 /* deprecated and no longer supported in gcc 3.3 */
@@ -1547,10 +1556,16 @@ void bitfield_test(void)
 
 /* declare strto* functions as they are C99 */
 double strtod(const char *nptr, char **endptr);
-float strtof(const char *nptr, char **endptr);
-long double strtold(const char *nptr, char **endptr);
 
-#define FTEST(prefix, type, fmt)\
+#if defined(_WIN32)
+float strtof(const char *nptr, char **endptr) {return (float)strtod(nptr, endptr);}
+LONG_DOUBLE strtold(const char *nptr, char **endptr) {return (LONG_DOUBLE)strtod(nptr, endptr);}
+#else
+float strtof(const char *nptr, char **endptr);
+LONG_DOUBLE strtold(const char *nptr, char **endptr);
+#endif
+
+#define FTEST(prefix, typename, type, fmt)\
 void prefix ## cmp(type a, type b)\
 {\
     printf("%d %d %d %d %d %d\n",\
@@ -1578,7 +1593,7 @@ void prefix ## fcast(type a)\
 {\
     float fa;\
     double da;\
-    long double la;\
+    LONG_DOUBLE la;\
     int ia;\
     unsigned int ua;\
     type b;\
@@ -1599,7 +1614,7 @@ void prefix ## fcast(type a)\
 \
 float prefix ## retf(type a) { return a; }\
 double prefix ## retd(type a) { return a; }\
-long double prefix ## retld(type a) { return a; }\
+LONG_DOUBLE prefix ## retld(type a) { return a; }\
 \
 void prefix ## call(void)\
 {\
@@ -1611,7 +1626,7 @@ void prefix ## call(void)\
 \
 void prefix ## test(void)\
 {\
-    printf("testing '%s'\n", #type);\
+    printf("testing '%s'\n", #typename);\
     prefix ## cmp(1, 2.5);\
     prefix ## cmp(2, 1.5);\
     prefix ## cmp(1, 1);\
@@ -1620,9 +1635,9 @@ void prefix ## test(void)\
     prefix ## call();\
 }
 
-FTEST(f, float, "%f")
-FTEST(d, double, "%f")
-FTEST(ld, long double, "%Lf")
+FTEST(f, float, float, "%f")
+FTEST(d, double, double, "%f")
+FTEST(ld, long double, LONG_DOUBLE, "%Lf")
 
 double ftab1[3] = { 1.2, 3.4, -5.6 };
 
@@ -1637,7 +1652,7 @@ void float_test(void)
     printf("float_test:\n");
     printf("sizeof(float) = %d\n", sizeof(float));
     printf("sizeof(double) = %d\n", sizeof(double));
-    printf("sizeof(long double) = %d\n", sizeof(long double));
+    printf("sizeof(long double) = %d\n", sizeof(LONG_DOUBLE));
     ftest();
     dtest();
     ldtest();
@@ -1761,7 +1776,7 @@ void llfloat(void)
 {
     float fa;
     double da;
-    long double lda;
+    LONG_DOUBLE lda;
     long long la, lb, lc;
     unsigned long long ula, ulb, ulc;
     la = 0x12345678;
@@ -1870,7 +1885,7 @@ void longlong_test(void)
 
 void manyarg_test(void)
 {
-    long double ld = 1234567891234LL;
+    LONG_DOUBLE ld = 1234567891234LL;
     printf("manyarg_test:\n");
     printf("%d %d %d %d %d %d %d %d %f %f %f %f %f %f %f %f %f %f\n",
            1, 2, 3, 4, 5, 6, 7, 8,
@@ -1913,7 +1928,7 @@ void vprintf1(const char *fmt, ...)
     int c, i;
     double d;
     long long ll;
-    long double ld;
+    LONG_DOUBLE ld;
 
     va_start(aq, fmt);
     va_copy(ap, aq);
@@ -1942,7 +1957,7 @@ void vprintf1(const char *fmt, ...)
                 printf("%Ld", ll);
                 break;
             case 'F':
-                ld = va_arg(ap, long double);
+                ld = va_arg(ap, LONG_DOUBLE);
                 printf("%Lf", ld);
                 break;
             }
@@ -1977,13 +1992,13 @@ void stdarg_for_struct(struct myspace bob, ...)
 
 void stdarg_test(void)
 {
-    long double ld = 1234567891234LL;
+    LONG_DOUBLE ld = 1234567891234LL;
     struct myspace bob;
 
     vprintf1("%d %d %d\n", 1, 2, 3);
     vprintf1("%f %d %f\n", 1.0, 2, 3.0);
     vprintf1("%l %l %d %f\n", 1234567891234LL, 987654321986LL, 3, 1234.0);
-    vprintf1("%F %F %F\n", 1.2L, 2.3L, 3.4L);
+    vprintf1("%F %F %F\n", LONG_DOUBLE_LITERAL(1.2), LONG_DOUBLE_LITERAL(2.3), LONG_DOUBLE_LITERAL(3.4));
 #ifdef __x86_64__
     /* a bug of x86's TCC */
     vprintf1("%d %f %l %F %d %f %l %F\n",

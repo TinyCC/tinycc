@@ -1638,6 +1638,7 @@ enum {
     TCC_OPTION_pedantic,
     TCC_OPTION_pthread,
     TCC_OPTION_run,
+    TCC_OPTION_norunsrc,
     TCC_OPTION_v,
     TCC_OPTION_w,
     TCC_OPTION_pipe,
@@ -1677,6 +1678,7 @@ static const TCCOption tcc_options[] = {
     { "pedantic", TCC_OPTION_pedantic, 0},
     { "pthread", TCC_OPTION_pthread, 0},
     { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "norunsrc", TCC_OPTION_norunsrc, 0 },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
     { "s", TCC_OPTION_s, 0 },
@@ -1715,6 +1717,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     const TCCOption *popt;
     const char *optarg, *r;
     int run = 0;
+    int norunsrc = 0;
     int pthread = 0;
     int optind = 0;
 
@@ -1727,7 +1730,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         r = argv[optind++];
         if (r[0] != '-' || r[1] == '\0') {
             /* add a new file */
-            dynarray_add((void ***)&s->files, &s->nb_files, tcc_strdup(r));
+            if (!run || !norunsrc)
+              dynarray_add((void ***)&s->files, &s->nb_files, tcc_strdup(r));
             if (run) {
                 optind--;
                 /* argv[0] will be this file */
@@ -1840,6 +1844,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->output_type = TCC_OUTPUT_MEMORY;
             tcc_set_options(s, optarg);
             run = 1;
+            break;
+        case TCC_OPTION_norunsrc:
+            norunsrc = 1;
             break;
         case TCC_OPTION_v:
             do ++s->verbose; while (*optarg++ == 'v');

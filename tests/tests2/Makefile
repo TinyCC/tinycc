@@ -13,7 +13,7 @@ ifeq ($(TARGETOS),Darwin)
  export MACOSX_DEPLOYMENT_TARGET:=10.2
 endif
 
-TCC_RUN = $(TOP)/tcc $(TCCFLAGS) -run
+TCC = $(TOP)/tcc $(TCCFLAGS)
 
 TESTS =	\
  00_assignment.test \
@@ -84,8 +84,8 @@ endif
 %.test: %.c %.expect
 	@echo Test: $*...
 	@if [ "x`echo $* | grep args`" != "x" ]; \
-	then $(TCC_RUN) $< - arg1 arg2 arg3 arg4 >$*.output; \
-	else $(TCC_RUN) $< >$*.output; \
+	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output; \
+	else $(TCC) -run $< >$*.output; \
 	fi
 	@if diff -bu $(<:.c=.expect) $*.output ; \
 	then rm -f $*.output; \
@@ -96,3 +96,6 @@ all test: $(TESTS)
 
 clean:
 	rm -vf fred.txt *.output
+
+Makefile: $(top_srcdir)/tests/tests2/Makefile
+	cp $< $@
