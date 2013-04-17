@@ -191,7 +191,7 @@
 /* library search paths */
 #ifndef CONFIG_TCC_LIBPATHS
 # ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_LIBPATHS "{B}/lib"
+#  define CONFIG_TCC_LIBPATHS "{B}/lib;{B}"
 # else
 #  define CONFIG_TCC_LIBPATHS \
         CONFIG_SYSROOT "/usr/" CONFIG_LDDIR \
