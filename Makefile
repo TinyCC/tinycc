@@ -281,12 +281,12 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
 	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
-	$(INSTALL) -m644 $(LIBTCC1) win32/lib/*.def "$(tccdir)/lib"
-	cp -r win32/include/. "$(tccdir)/include"
-	cp -r win32/examples/. "$(tccdir)/examples"
-	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) "$(tccdir)/include"
-	$(INSTALL) -m644 tcc-doc.html win32/tcc-win32.txt "$(tccdir)/doc"
-	$(INSTALL) -m644 $(LIBTCC) libtcc.h "$(tccdir)/libtcc"
+	$(INSTALL) -m644 $(LIBTCC1) $(top_srcdir)/win32/lib/*.def "$(tccdir)/lib"
+	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/include"
+	cp -r $(top_srcdir)/win32/examples/. "$(tccdir)/examples"
+	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
+	$(INSTALL) -m644 tcc-doc.html $(top_srcdir)/win32/tcc-win32.txt "$(tccdir)/doc"
+	$(INSTALL) -m644 $(LIBTCC) $(top_srcdir)/libtcc.h "$(tccdir)/libtcc"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
@@ -300,7 +300,7 @@ endif
 
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	-texi2html -monolithic -number-sections $<
+	makeinfo --no-split --html -o $@ $<
 
 tcc.1: tcc-doc.texi
 	-$(top_srcdir)/texi2pod.pl $< tcc.pod
