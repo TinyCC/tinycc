@@ -364,6 +364,28 @@ static void gcall_or_jmp(int is_jmp)
 static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
 static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
+/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+    *ret_align = 1; // Never have to re-align return values for x86
+#ifdef TCC_TARGET_PE
+    int size, align;
+    size = type_size(vt, &align);
+    if (size > 8) {
+        return 1;
+    } else if (size > 4) {
+        ret->ref = NULL;
+        ret->t = VT_LLONG;
+        return 0;
+    } else {
+        ret->ref = NULL;
+        ret->t = VT_INT;
+        return 0;
+    }
+#else
+    return 1;
+#endif
+}
+
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
@@ -444,10 +466,6 @@ ST_FUNC void gfunc_call(int nb_args)
     }
     gcall_or_jmp(0);
 
-#ifdef TCC_TARGET_PE
-    if ((func_sym->type.t & VT_BTYPE) == VT_STRUCT)
-        args_size -= 4;
-#endif
     if (args_size && func_call != FUNC_STDCALL)
         gadd_sp(args_size);
     vtop--;
@@ -491,7 +509,12 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+#ifdef TCC_TARGET_PE
+    size = type_size(&func_vt,&align);
+    if (((func_vt.t & VT_BTYPE) == VT_STRUCT) && (size > 8)) {
+#else
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
+#endif
         /* XXX: fastcall case ? */
         func_vc = addr;
         addr += 4;
@@ -526,10 +549,6 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* pascal type call ? */
     if (func_call == FUNC_STDCALL)
         func_ret_sub = addr - 8;
-#ifdef TCC_TARGET_PE
-    else if (func_vc)
-        func_ret_sub = 4;
-#endif
 
 #ifdef CONFIG_TCC_BCHECK
     /* leave some room for bound checking code */

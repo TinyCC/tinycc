@@ -45,7 +45,13 @@ endif
 
 # make libtcc as static or dynamic library?
 ifdef DISABLE_STATIC
+ifndef CONFIG_WIN32
 LIBTCC=libtcc.so.1.0
+else
+LIBTCC=libtcc.dll
+LIBTCC_DLL=yes
+LIBTCC_EXTRA=libtcc.def libtcc.a
+endif
 LINK_LIBTCC=-Wl,-rpath,"$(libdir)"
 ifdef DISABLE_RPATH
 LINK_LIBTCC=
@@ -126,7 +132,7 @@ ifdef CONFIG_USE_LIBGCC
 LIBTCC1=
 endif
 
-TCCLIBS = $(LIBTCC1) $(LIBTCC)
+TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCC_EXTRA)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
@@ -185,13 +191,20 @@ endif
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
 	$(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CPPFLAGS) $(CFLAGS)
 
+ifndef LIBTCC_DLL
 libtcc.a: $(LIBTCC_OBJ)
 	$(AR) rcs $@ $^
+endif
 
 libtcc.so.1.0: $(LIBTCC_OBJ)
 	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
 
 libtcc.so.1.0: CFLAGS+=-fPIC
+
+ifdef LIBTCC_DLL
+libtcc.dll libtcc.def libtcc.a: $(LIBTCC_OBJ)
+	$(CC) -shared $^ -o $@ $(LDFLAGS) -Wl,--output-def,libtcc.def,--out-implib,libtcc.a
+endif
 
 # windows utilities
 tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
@@ -286,7 +299,8 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	cp -r $(top_srcdir)/win32/examples/. "$(tccdir)/examples"
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html $(top_srcdir)/win32/tcc-win32.txt "$(tccdir)/doc"
-	$(INSTALL) -m644 $(LIBTCC) $(top_srcdir)/libtcc.h "$(tccdir)/libtcc"
+	$(INSTALL) -m644 $(top_srcdir)/libtcc.h $(LIBTCC_EXTRA) "$(tccdir)/libtcc"
+	$(INSTALL) -m644 $(LIBTCC) $(tccdir)
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
