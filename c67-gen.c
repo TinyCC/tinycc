@@ -1879,6 +1879,12 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
+/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+    *ret_align = 1; // Never have to re-align return values for x86-64
+    return 1;
+}
+
 /* generate function call with address in (vtop->t, vtop->c) and free function
    context. Stack entry is popped */
 void gfunc_call(int nb_args)

@@ -69,7 +69,7 @@ static void help(void)
            "  -Bdir       use 'dir' as tcc internal library and include path\n"
            "  -MD         generate target dependencies for make\n"
            "  -MF depfile put generated dependencies here\n"
-           "  -norunsrc   Do not compile the file which is the first argument after -run."
+           "  -norunsrc   Do not compile the file which is the first argument after -run.\n"
            );
 }
 

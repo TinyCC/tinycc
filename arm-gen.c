@@ -801,16 +801,21 @@ int assign_fpreg(struct avail_regs *avregs, int align, int size)
 #endif
 
 /* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *align) {
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+#if TCC_ARM_EABI
+    int size, align;
     size = type_size(vt, &align);
     if (size > 4) {
         return 1;
     } else {
-        *align = 4;
+        *ret_align = 4;
         ret->ref = NULL;
         ret->t = VT_INT;
+        return 0;
     }
-    return 0;
+#else
+    return 1;
+#endif
 }
 
 /* Generate function call. The function address is pushed first, then

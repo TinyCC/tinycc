@@ -188,8 +188,8 @@ abitest-tcc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 
 abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
 	@echo ------------ $@ ------------
-	abitest-cc$(EXESUF) lib_path=..
-	abitest-tcc$(EXESUF) lib_path=..
+	./abitest-cc$(EXESUF) lib_path=..
+	./abitest-tcc$(EXESUF) lib_path=..
 
 # targets for development
 %.bin: %.c tcc

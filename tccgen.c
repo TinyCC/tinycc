@@ -2495,21 +2495,29 @@ ST_FUNC void vstore(void)
                 vtop[-1].r = t | VT_LVAL;
             }
             store(r, vtop - 1);
-#ifndef TCC_TARGET_X86_64
-            /* two word case handling : store second register at word + 4 */
+            /* two word case handling : store second register at word + 4 (or +8 for x86-64)  */
+#ifdef TCC_TARGET_X86_64
+            if ((ft & VT_BTYPE) == VT_QLONG) {
+#else
             if ((ft & VT_BTYPE) == VT_LLONG) {
+#endif
                 vswap();
                 /* convert to int to increment easily */
+#ifdef TCC_TARGET_X86_64
+                vtop->type.t = VT_LLONG;
+                gaddrof();
+                vpushi(8);
+#else
                 vtop->type.t = VT_INT;
                 gaddrof();
                 vpushi(4);
+#endif
                 gen_op('+');
                 vtop->r |= VT_LVAL;
                 vswap();
                 /* XXX: it works because r2 is spilled last ! */
                 store(vtop->r2, vtop - 1);
             }
-#endif
         }
         vswap();
         vtop--; /* NOT vpop() because on x86 it would flush the fp stack */

@@ -54,6 +54,7 @@ RET_PRIMITIVE_TEST(int, int)
 RET_PRIMITIVE_TEST(longlong, long long)
 RET_PRIMITIVE_TEST(float, float)
 RET_PRIMITIVE_TEST(double, double)
+RET_PRIMITIVE_TEST(longdouble, long double)
 
 typedef struct ret_2float_test_type_s {float x, y;} ret_2float_test_type;
 typedef ret_2float_test_type (*ret_2float_test_function_type) (ret_2float_test_type);
@@ -128,8 +129,52 @@ static int sret_test(void) {
   return run_callback(src, sret_test_callback);
 }
 
+typedef union one_member_union_test_type_u {int x;} one_member_union_test_type;
+typedef one_member_union_test_type (*one_member_union_test_function_type) (one_member_union_test_type);
+
+static int one_member_union_test_callback(void *ptr) {
+  one_member_union_test_function_type f = (one_member_union_test_function_type)ptr;
+  one_member_union_test_type a, b;
+  a.x = 34;
+  b = f(a);
+  return (b.x == a.x*2) ? 0 : -1;
+}
+
+static int one_member_union_test(void) {
+  const char *src =
+  "typedef union one_member_union_test_type_u {int x;} one_member_union_test_type;\n"
+  "one_member_union_test_type f(one_member_union_test_type a) {\n"
+  "  one_member_union_test_type b;\n"
+  "  b.x = a.x * 2;\n"
+  "  return b;\n"
+  "}\n";
+  return run_callback(src, one_member_union_test_callback);
+}
+
+typedef union two_member_union_test_type_u {int x; long y;} two_member_union_test_type;
+typedef two_member_union_test_type (*two_member_union_test_function_type) (two_member_union_test_type);
+
+static int two_member_union_test_callback(void *ptr) {
+  two_member_union_test_function_type f = (two_member_union_test_function_type)ptr;
+  two_member_union_test_type a, b;
+  a.x = 34;
+  b = f(a);
+  return (b.x == a.x*2) ? 0 : -1;
+}
+
+static int two_member_union_test(void) {
+  const char *src =
+  "typedef union two_member_union_test_type_u {int x; long y;} two_member_union_test_type;\n"
+  "two_member_union_test_type f(two_member_union_test_type a) {\n"
+  "  two_member_union_test_type b;\n"
+  "  b.x = a.x * 2;\n"
+  "  return b;\n"
+  "}\n";
+  return run_callback(src, two_member_union_test_callback);
+}
+
 #define RUN_TEST(t) \
-  do { \
+  if (!testname || (strcmp(#t, testname) == 0)) { \
     fputs(#t "... ", stdout); \
     fflush(stdout); \
     if (t() == 0) { \
@@ -138,20 +183,30 @@ static int sret_test(void) {
       fputs("failure\n", stdout); \
       retval = EXIT_FAILURE; \
     } \
-  } while (0);
+  }
 
 int main(int argc, char **argv) {
+  int i;
+  const char *testname = NULL;
   int retval = EXIT_SUCCESS;
+  
   /* if tcclib.h and libtcc1.a are not installed, where can we find them */
-  if (argc == 2 && !memcmp(argv[1], "lib_path=",9))
-    tccdir = argv[1] + 9;
+  for (i = 1; i < argc; ++i) {
+    if (!memcmp(argv[i], "lib_path=",9))
+      tccdir = argv[i] + 9;
+    else if (!memcmp(argv[i], "run_test=", 9))
+      testname = argv[i] + 9;
+  }   
 
   RUN_TEST(ret_int_test);
   RUN_TEST(ret_longlong_test);
   RUN_TEST(ret_float_test);
   RUN_TEST(ret_double_test);
+  RUN_TEST(ret_longdouble_test);
   RUN_TEST(ret_2float_test);
   RUN_TEST(reg_pack_test);
   RUN_TEST(sret_test);
+  RUN_TEST(one_member_union_test);
+  RUN_TEST(two_member_union_test);
   return retval;
 }

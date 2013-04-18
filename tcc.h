@@ -718,6 +718,8 @@ struct TCCState {
 #define VT_LLONG           12  /* 64 bit integer */
 #define VT_LONG            13  /* long integer (NEVER USED as type, only
                                   during parsing) */
+#define VT_QLONG           14  /* 128-bit integer. Only used for x86-64 ABI */
+#define VT_QFLOAT          15  /* 128-bit float. Only used for x86-64 ABI */
 #define VT_UNSIGNED    0x0010  /* unsigned type */
 #define VT_ARRAY       0x0020  /* array type (also has VT_PTR) */
 #define VT_BITFIELD    0x0040  /* bitfield modifier */
