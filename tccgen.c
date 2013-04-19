@@ -790,11 +790,14 @@ ST_FUNC int gv(int rc)
             r = get_reg(rc);
 #ifdef TCC_TARGET_X86_64
             if (((vtop->type.t & VT_BTYPE) == VT_QLONG) || ((vtop->type.t & VT_BTYPE) == VT_QFLOAT)) {
+                int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
 #else
             if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+                int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
 #endif
-                int r2;
+                int r2, original_type;
                 unsigned long long ll;
+                original_type = vtop->type.t;
                 /* two register type load : expand to two words
                    temporarily */
 #ifndef TCC_TARGET_X86_64
@@ -809,11 +812,6 @@ ST_FUNC int gv(int rc)
 #endif
                 if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
                            (vtop->r & VT_LVAL)) {
-#ifdef TCC_TARGET_X86_64
-                    int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
-#else
-                    int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
-#endif
                     /* We do not want to modifier the long long
                        pointer here, so the safest (and less
                        efficient) is to save all the other registers
@@ -845,6 +843,7 @@ ST_FUNC int gv(int rc)
                 vpop();
                 /* write second register */
                 vtop->r2 = r2;
+                vtop->type.t = original_type;
             } else if ((vtop->r & VT_LVAL) && !is_float(vtop->type.t)) {
                 int t1, t;
                 /* lvalue of scalar type : need to use lvalue type

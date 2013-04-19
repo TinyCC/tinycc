@@ -38,10 +38,10 @@ static int run_callback(const char *src, callback_type callback) {
   return result;
 }
 
-#define RET_PRIMITIVE_TEST(name, type) \
+#define RET_PRIMITIVE_TEST(name, type, val) \
   static int ret_ ## name ## _test_callback(void *ptr) { \
     type (*callback) (type) = (type(*)(type))ptr; \
-    type x = 29; \
+    type x = val; \
     type y = callback(x); \
     return (y == x+x) ? 0 : -1; \
   } \
@@ -51,11 +51,11 @@ static int run_callback(const char *src, callback_type callback) {
     return run_callback(src, ret_ ## name ## _test_callback); \
   }
 
-RET_PRIMITIVE_TEST(int, int)
-RET_PRIMITIVE_TEST(longlong, long long)
-RET_PRIMITIVE_TEST(float, float)
-RET_PRIMITIVE_TEST(double, double)
-RET_PRIMITIVE_TEST(longdouble, long double)
+RET_PRIMITIVE_TEST(int, int, 70000)
+RET_PRIMITIVE_TEST(longlong, long long, 4333369356528LL)
+RET_PRIMITIVE_TEST(float, float, 63.0)
+RET_PRIMITIVE_TEST(double, double, 14789798.0)
+RET_PRIMITIVE_TEST(longdouble, long double, 378943892.0)
 
 /*
  * ret_2float_test:
