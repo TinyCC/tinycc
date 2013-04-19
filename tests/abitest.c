@@ -88,8 +88,8 @@ static int ret_2float_test(void) {
 /*
  * ret_2double_test:
  * 
- * On x86-64, a struct with 2 doubles should be packed into a single
- * SSE register (this tests VT_QFLOAT).
+ * On x86-64, a struct with 2 doubles should be passed in two SSE
+ * registers.
  */
 typedef struct ret_2double_test_type_s {double x, y;} ret_2double_test_type;
 typedef ret_2double_test_type (*ret_2double_test_function_type) (ret_2double_test_type);

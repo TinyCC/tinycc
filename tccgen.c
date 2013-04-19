@@ -88,7 +88,7 @@ ST_INLN int is_float(int t)
 {
     int bt;
     bt = t & VT_BTYPE;
-    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT;
+    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
 }
 
 /* we use our own 'finite' function to avoid potential problems with
@@ -688,9 +688,7 @@ static void gbound(void)
 ST_FUNC int gv(int rc)
 {
     int r, bit_pos, bit_size, size, align, i;
-#ifndef TCC_TARGET_X86_64
     int rc2;
-#endif
 
     /* NOTE: get_reg can modify vstack[] */
     if (vtop->type.t & VT_BITFIELD) {
@@ -765,11 +763,14 @@ ST_FUNC int gv(int rc)
 #endif
 
         r = vtop->r & VT_VALMASK;
-#ifndef TCC_TARGET_X86_64
         rc2 = RC_INT;
         if (rc == RC_IRET)
             rc2 = RC_LRET;
+#ifdef TCC_TARGET_X86_64
+        else if (rc == RC_FRET)
+            rc2 = RC_QRET;
 #endif
+
         /* need to reload if:
            - constant
            - lvalue (need to dereference pointer)
@@ -777,18 +778,25 @@ ST_FUNC int gv(int rc)
         if (r >= VT_CONST
          || (vtop->r & VT_LVAL)
          || !(reg_classes[r] & rc)
-#ifndef TCC_TARGET_X86_64
+#ifdef TCC_TARGET_X86_64
+         || ((vtop->type.t & VT_BTYPE) == VT_QLONG && !(reg_classes[vtop->r2] & rc2))
+         || ((vtop->type.t & VT_BTYPE) == VT_QFLOAT && !(reg_classes[vtop->r2] & rc2))
+#else
          || ((vtop->type.t & VT_BTYPE) == VT_LLONG && !(reg_classes[vtop->r2] & rc2))
 #endif
             )
         {
             r = get_reg(rc);
-#ifndef TCC_TARGET_X86_64
+#ifdef TCC_TARGET_X86_64
+            if (((vtop->type.t & VT_BTYPE) == VT_QLONG) || ((vtop->type.t & VT_BTYPE) == VT_QFLOAT)) {
+#else
             if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+#endif
                 int r2;
                 unsigned long long ll;
                 /* two register type load : expand to two words
                    temporarily */
+#ifndef TCC_TARGET_X86_64
                 if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
                     /* load constant */
                     ll = vtop->c.ull;
@@ -796,23 +804,32 @@ ST_FUNC int gv(int rc)
                     load(r, vtop);
                     vtop->r = r; /* save register value */
                     vpushi(ll >> 32); /* second word */
-                } else if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
+                } else
+#endif
+                if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
                            (vtop->r & VT_LVAL)) {
+#ifdef TCC_TARGET_X86_64
+                    int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
+#else
+                    int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
+#endif
                     /* We do not want to modifier the long long
                        pointer here, so the safest (and less
                        efficient) is to save all the other registers
                        in the stack. XXX: totally inefficient. */
                     save_regs(1);
                     /* load from memory */
+                    vtop->type.t = load_type;
                     load(r, vtop);
                     vdup();
                     vtop[-1].r = r; /* save register value */
                     /* increment pointer to get second word */
-                    vtop->type.t = VT_INT;
+                    vtop->type.t = addr_type;
                     gaddrof();
-                    vpushi(4);
+                    vpushi(load_size);
                     gen_op('+');
                     vtop->r |= VT_LVAL;
+                    vtop->type.t = load_type;
                 } else {
                     /* move registers */
                     load(r, vtop);
@@ -827,9 +844,7 @@ ST_FUNC int gv(int rc)
                 vpop();
                 /* write second register */
                 vtop->r2 = r2;
-            } else
-#endif
-            if ((vtop->r & VT_LVAL) && !is_float(vtop->type.t)) {
+            } else if ((vtop->r & VT_LVAL) && !is_float(vtop->type.t)) {
                 int t1, t;
                 /* lvalue of scalar type : need to use lvalue type
                    because of possible cast */
@@ -2479,6 +2494,8 @@ ST_FUNC void vstore(void)
 #ifdef TCC_TARGET_X86_64
                 if ((ft & VT_BTYPE) == VT_LDOUBLE) {
                     rc = RC_ST0;
+                } else if ((ft & VT_BTYPE) == VT_QFLOAT) {
+                    rc = RC_FRET;
                 }
 #endif
             }
@@ -2497,29 +2514,29 @@ ST_FUNC void vstore(void)
                 load(t, &sv);
                 vtop[-1].r = t | VT_LVAL;
             }
-            store(r, vtop - 1);
             /* two word case handling : store second register at word + 4 (or +8 for x86-64)  */
 #ifdef TCC_TARGET_X86_64
-            if ((ft & VT_BTYPE) == VT_QLONG) {
+            if (((ft & VT_BTYPE) == VT_QLONG) || ((ft & VT_BTYPE) == VT_QFLOAT)) {
+                int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
 #else
             if ((ft & VT_BTYPE) == VT_LLONG) {
+                int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
 #endif
+                vtop[-1].type.t = load_type;
+                store(r, vtop - 1);
                 vswap();
                 /* convert to int to increment easily */
-#ifdef TCC_TARGET_X86_64
-                vtop->type.t = VT_LLONG;
+                vtop->type.t = addr_type;
                 gaddrof();
-                vpushi(8);
-#else
-                vtop->type.t = VT_INT;
-                gaddrof();
-                vpushi(4);
-#endif
+                vpushi(load_size);
                 gen_op('+');
                 vtop->r |= VT_LVAL;
                 vswap();
+                vtop[-1].type.t = load_type;
                 /* XXX: it works because r2 is spilled last ! */
                 store(vtop->r2, vtop - 1);
+            } else {
+                store(r, vtop - 1);
             }
         }
         vswap();
@@ -3897,8 +3914,16 @@ ST_FUNC void unary(void)
                 /* return in register */
                 if (is_float(ret.type.t)) {
                     ret.r = reg_fret(ret.type.t);
+#ifdef TCC_TARGET_X86_64
+                    if ((ret.type.t & VT_BTYPE) == VT_QFLOAT)
+                      ret.r2 = REG_QRET;
+#endif
                 } else {
+#ifdef TCC_TARGET_X86_64
+                    if ((ret.type.t & VT_BTYPE) == VT_QLONG)
+#else
                     if ((ret.type.t & VT_BTYPE) == VT_LLONG)
+#endif
                         ret.r2 = REG_LRET;
                     ret.r = REG_IRET;
                 }
