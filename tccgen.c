@@ -2067,6 +2067,9 @@ ST_FUNC int type_size(CType *type, int *a)
     } else if (bt == VT_SHORT) {
         *a = 2;
         return 2;
+    } else if (bt == VT_QLONG || bt == VT_QFLOAT) {
+        *a = 8;
+        return 16;
     } else {
         /* char, void, function, _Bool */
         *a = 1;
@@ -3695,24 +3698,13 @@ ST_FUNC void unary(void)
 #ifdef TCC_TARGET_X86_64
     case TOK_builtin_va_arg_types:
         {
-            /* This definition must be synced with stdarg.h */
-            enum __va_arg_type {
-                __va_gen_reg, __va_float_reg, __va_stack
-            };
             CType type;
             int bt;
             next();
             skip('(');
             parse_type(&type);
             skip(')');
-            bt = type.t & VT_BTYPE;
-            if (bt == VT_STRUCT || bt == VT_LDOUBLE) {
-                vpushi(__va_stack);
-            } else if (bt == VT_FLOAT || bt == VT_DOUBLE) {
-                vpushi(__va_float_reg);
-            } else {
-                vpushi(__va_gen_reg);
-            }
+            vpushi(classify_x86_64_va_arg(&type));
         }
         break;
 #endif
@@ -4966,7 +4958,7 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
         vpush_global_sym(&func_old_type, TOK_memset);
         vseti(VT_LOCAL, c);
         vpushi(0);
-        vpushi(size);
+        vpushs(size);
         gfunc_call(3);
     }
 }

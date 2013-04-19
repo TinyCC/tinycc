@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 static const char *tccdir = NULL;
 
@@ -56,6 +57,12 @@ RET_PRIMITIVE_TEST(float, float)
 RET_PRIMITIVE_TEST(double, double)
 RET_PRIMITIVE_TEST(longdouble, long double)
 
+/*
+ * ret_2float_test:
+ * 
+ * On x86-64, a struct with 2 floats should be packed into a single
+ * SSE register (VT_DOUBLE is used for this purpose).
+ */
 typedef struct ret_2float_test_type_s {float x, y;} ret_2float_test_type;
 typedef ret_2float_test_type (*ret_2float_test_function_type) (ret_2float_test_type);
 
@@ -76,6 +83,34 @@ static int ret_2float_test(void) {
   "}\n";
 
   return run_callback(src, ret_2float_test_callback);
+}
+
+/*
+ * ret_2double_test:
+ * 
+ * On x86-64, a struct with 2 doubles should be packed into a single
+ * SSE register (this tests VT_QFLOAT).
+ */
+typedef struct ret_2double_test_type_s {double x, y;} ret_2double_test_type;
+typedef ret_2double_test_type (*ret_2double_test_function_type) (ret_2double_test_type);
+
+static int ret_2double_test_callback(void *ptr) {
+  ret_2double_test_function_type f = (ret_2double_test_function_type)ptr;
+  ret_2double_test_type a = {10, 35};
+  ret_2double_test_type r;
+  r = f(a);
+  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+}
+
+static int ret_2double_test(void) {
+  const char *src =
+  "typedef struct ret_2double_test_type_s {double x, y;} ret_2double_test_type;"
+  "ret_2double_test_type f(ret_2double_test_type a) {\n"
+  "  ret_2double_test_type r = {a.x*5, a.y*3};\n"
+  "  return r;\n"
+  "}\n";
+
+  return run_callback(src, ret_2double_test_callback);
 }
 
 /*
@@ -105,6 +140,32 @@ static int reg_pack_test(void) {
 }
 
 /*
+ * reg_pack_longlong_test: return a small struct which should be packed into
+ * registers (x86-64) during return.
+ */
+typedef struct reg_pack_longlong_test_type_s {long long x, y;} reg_pack_longlong_test_type;
+typedef reg_pack_longlong_test_type (*reg_pack_longlong_test_function_type) (reg_pack_longlong_test_type);
+
+static int reg_pack_longlong_test_callback(void *ptr) {
+  reg_pack_longlong_test_function_type f = (reg_pack_longlong_test_function_type)ptr;
+  reg_pack_longlong_test_type a = {10, 35};
+  reg_pack_longlong_test_type r;
+  r = f(a);
+  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+}
+
+static int reg_pack_longlong_test(void) {
+  const char *src =
+  "typedef struct reg_pack_longlong_test_type_s {long long x, y;} reg_pack_longlong_test_type;"
+  "reg_pack_longlong_test_type f(reg_pack_longlong_test_type a) {\n"
+  "  reg_pack_longlong_test_type r = {a.x*5, a.y*3};\n"
+  "  return r;\n"
+  "}\n";
+  
+  return run_callback(src, reg_pack_longlong_test_callback);
+}
+
+/*
  * sret_test: Create a struct large enough to be returned via sret
  * (hidden pointer as first function argument)
  */
@@ -129,6 +190,12 @@ static int sret_test(void) {
   return run_callback(src, sret_test_callback);
 }
 
+/*
+ * one_member_union_test:
+ * 
+ * In the x86-64 ABI a union should always be passed on the stack. However
+ * it appears that a single member union is treated by GCC as its member.
+ */
 typedef union one_member_union_test_type_u {int x;} one_member_union_test_type;
 typedef one_member_union_test_type (*one_member_union_test_function_type) (one_member_union_test_type);
 
@@ -151,6 +218,11 @@ static int one_member_union_test(void) {
   return run_callback(src, one_member_union_test_callback);
 }
 
+/*
+ * two_member_union_test:
+ * 
+ * In the x86-64 ABI a union should always be passed on the stack.
+ */
 typedef union two_member_union_test_type_u {int x; long y;} two_member_union_test_type;
 typedef two_member_union_test_type (*two_member_union_test_function_type) (two_member_union_test_type);
 
@@ -171,6 +243,41 @@ static int two_member_union_test(void) {
   "  return b;\n"
   "}\n";
   return run_callback(src, two_member_union_test_callback);
+}
+
+/*
+ * stdarg_test: Test variable argument list ABI
+ */
+
+typedef void (*stdarg_test_function_type) (int,int,...);
+
+static int stdarg_test_callback(void *ptr) {
+  stdarg_test_function_type f = (stdarg_test_function_type)ptr;
+  int x;
+  double y;
+  f(10, 10,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, &x,
+    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, &y);
+  return ((x == 55) && (y == 55)) ? 0 : -1;
+}
+
+static int stdarg_test(void) {
+  const char *src =
+  "#include <stdarg.h>\n"
+  "void f(int n_int, int n_float, ...) {\n"
+  "  int i, ti;\n"
+  "  double td;\n"
+  "  va_list ap;\n"
+  "  va_start(ap, n_float);\n"
+  "  for (i = 0, ti = 0; i < n_int; ++i)\n"
+  "    ti += va_arg(ap, int);\n"
+  "  *va_arg(ap, int*) = ti;\n"
+  "  for (i = 0, td = 0; i < n_float; ++i)\n"
+  "    td += va_arg(ap, double);\n"
+  "  *va_arg(ap, double*) = td;\n"
+  "  va_end(ap);"
+  "}\n";
+  return run_callback(src, stdarg_test_callback);
 }
 
 #define RUN_TEST(t) \
@@ -204,9 +311,12 @@ int main(int argc, char **argv) {
   RUN_TEST(ret_double_test);
   RUN_TEST(ret_longdouble_test);
   RUN_TEST(ret_2float_test);
+  RUN_TEST(ret_2double_test);
   RUN_TEST(reg_pack_test);
+  RUN_TEST(reg_pack_longlong_test);
   RUN_TEST(sret_test);
   RUN_TEST(one_member_union_test);
   RUN_TEST(two_member_union_test);
+  RUN_TEST(stdarg_test);
   return retval;
 }
