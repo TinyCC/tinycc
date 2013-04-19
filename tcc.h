@@ -1262,11 +1262,7 @@ ST_FUNC int handle_eob(void);
 
 /* ------------ xxx-gen.c ------------ */
 
-#ifdef TCC_TARGET_X86_64
-ST_DATA const int reg_classes[NB_REGS+7];
-#else
 ST_DATA const int reg_classes[NB_REGS];
-#endif
 
 ST_FUNC void gsym_addr(int t, int a);
 ST_FUNC void gsym(int t);

@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         6
+#define NB_REGS         18
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -51,19 +51,20 @@ enum {
     TREG_RAX = 0,
     TREG_RCX = 1,
     TREG_RDX = 2,
-    TREG_XMM0 = 3,
-    TREG_XMM1 = 4,
-    TREG_ST0 = 5,
-
     TREG_RSI = 6,
     TREG_RDI = 7,
+
     TREG_R8  = 8,
     TREG_R9  = 9,
-
     TREG_R10 = 10,
     TREG_R11 = 11,
 
-    TREG_MEM = 0x10,
+    TREG_XMM0 = 16,
+    TREG_XMM1 = 17,
+
+    TREG_ST0 = 4, // SP slot won't be used
+
+    TREG_MEM = 0x20,
 };
 
 #define REX_BASE(reg) (((reg) >> 3) & 1)
@@ -107,20 +108,25 @@ enum {
 #include "tcc.h"
 #include <assert.h>
 
-ST_DATA const int reg_classes[NB_REGS+7] = {
+ST_DATA const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_RAX,
     /* ecx */ RC_INT | RC_RCX,
     /* edx */ RC_INT | RC_RDX,
-    /* xmm0 */ RC_FLOAT | RC_XMM0,
-    /* xmm1 */ RC_FLOAT | RC_XMM1,
+    0,
     /* st0 */ RC_ST0,
     0,
     0,
     0,
-    RC_INT | RC_R8,
-    RC_INT | RC_R9,
-    RC_INT | RC_R10,
-    RC_INT | RC_R11
+    /*RC_INT |*/ RC_R8,
+    /*RC_INT |*/ RC_R9,
+    /*RC_INT |*/ RC_R10,
+    /*RC_INT |*/ RC_R11,
+    0,
+    0,
+    0,
+    0,
+    /* xmm0 */ RC_FLOAT | RC_XMM0,
+    /* xmm1 */ RC_FLOAT | RC_XMM1,
 };
 
 static unsigned long func_sub_sp_offset;
@@ -135,6 +141,8 @@ void g(int c)
         section_realloc(cur_text_section, ind1);
     cur_text_section->data[ind] = c;
     ind = ind1;
+    assert((ind < 4) || (cur_text_section->data[ind-4] != ('\362'&0xFF)) || (cur_text_section->data[ind-3] != '\017')
+     || (cur_text_section->data[ind-2] != 'X') || (cur_text_section->data[ind-1] != '\001'));
 }
 
 void o(unsigned int c)
@@ -378,10 +386,11 @@ void load(int r, SValue *sv)
         }
         ll = 0;
         if ((ft & VT_BTYPE) == VT_FLOAT) {
-            b = 0x6e0f66, r = 0; /* movd */
+            b = 0x6e0f66;
+            r = REG_VALUE(r); /* movd */
         } else if ((ft & VT_BTYPE) == VT_DOUBLE) {
             b = 0x7e0ff3; /* movq */
-            r -= TREG_XMM0;
+            r = REG_VALUE(r);
         } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             b = 0xdb, r = 5; /* fldt */
         } else if ((ft & VT_TYPE) == VT_BYTE) {
@@ -465,7 +474,7 @@ void load(int r, SValue *sv)
                     o(0xf0245cdd); /* fstpl -0x10(%rsp) */
                     /* movsd -0x10(%rsp),%xmmN */
                     o(0x100ff2);
-                    o(0x44 + ((r - TREG_XMM0) << 3)); /* %xmmN */
+                    o(0x44 + REG_VALUE(r)*8); /* %xmmN */
                     o(0xf024);
                 } else {
                     assert((v == TREG_XMM0) || (v == TREG_XMM1));
@@ -475,14 +484,14 @@ void load(int r, SValue *sv)
                         assert((ft & VT_BTYPE) == VT_DOUBLE);
                         o(0x100ff2);
                     }
-                    o(0xc0 + (v - TREG_XMM0) + ((r - TREG_XMM0) << 3));
+                    o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
                 }
             } else if (r == TREG_ST0) {
                 assert((v == TREG_XMM0) || (v == TREG_XMM1));
                 /* gen_cvt_ftof(VT_LDOUBLE); */
-                /* movsd %xmm0,-0x10(%rsp) */
+                /* movsd %xmmN,-0x10(%rsp) */
                 o(0x110ff2);
-                o(0x44 + ((r - TREG_XMM0) << 3)); /* %xmmN */
+                o(0x44 + REG_VALUE(r)*8); /* %xmmN */
                 o(0xf024);
                 o(0xf02444dd); /* fldl -0x10(%rsp) */
             } else {
@@ -526,12 +535,12 @@ void store(int r, SValue *v)
         o(0x66);
         o(pic);
         o(0x7e0f); /* movd */
-        r = 0;
+        r = REG_VALUE(r);
     } else if (bt == VT_DOUBLE) {
         o(0x66);
         o(pic);
         o(0xd60f); /* movq */
-        r -= TREG_XMM0;
+        r = REG_VALUE(r);
     } else if (bt == VT_LDOUBLE) {
         o(0xc0d9); /* fld %st(0) */
         o(pic);
@@ -1083,10 +1092,11 @@ void gfunc_call(int nb_args)
             
         case x86_64_mode_sse:
             if (sse_reg > 8) {
-                gv(RC_XMM0);
+                r = gv(RC_FLOAT);
                 o(0x50); /* push $rax */
                 /* movq %xmm0, (%rsp) */
-                o(0x04d60f66);
+                o(0xd60f66);
+                o(0x04 + REG_VALUE(r)*8);
                 o(0x24);
                 args_size += size;
             }
@@ -1131,7 +1141,7 @@ void gfunc_call(int nb_args)
         case x86_64_mode_sse:
             sse_reg -= reg_count;
             if (sse_reg + reg_count <= 8) {
-                gv(RC_XMM0); /* only one float register */
+                gv(RC_FRET); /* only one float register */
                 if (sse_reg) { /* avoid redundant movaps %xmm0, %xmm0 */
                     /* movaps %xmm0, %xmmN */
                     o(0x280f);
@@ -1157,10 +1167,10 @@ void gfunc_call(int nb_args)
                 if (reg_count == 2) {
                     /* Second word of two-word value should always be in rdx
                        this case is handled via RC_IRET */
-                    r = TREG_RDX;
+                    assert(vtop->r2 == TREG_RDX);
                     d = arg_prepare_reg(gen_reg+1);
-                    orex(1,d,r,0x89); /* mov */
-                    o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
+                    orex(1,d,vtop->r2,0x89); /* mov */
+                    o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
                 }
             }
             break;
@@ -1584,12 +1594,12 @@ void gen_opl(int op)
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranted to have the same floating point type */
-/* XXX: need to use ST1 and XMM1 too */
+/* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
     int float_type =
-        (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_XMM0; /* to avoid xmm1 handling for now */
+        (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
@@ -1702,31 +1712,26 @@ void gen_opf(int op)
             }
 
             if (swapped) {
-                o(0x7e0ff3); /* movq */
-                gen_modrm(1, r, vtop->sym, fc);
-
-                if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) {
-                    o(0x66);
-                }
-                o(0x2e0f); /* ucomisd %xmm0, %xmm1 */
-                o(0xc8);
+                gv(RC_FLOAT);
+                vswap();
+            }
+            assert(!(vtop[-1].r & VT_LVAL));
+            
+            if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
+                o(0x66);
+            o(0x2e0f); /* ucomisd */
+            
+            if (vtop->r & VT_LVAL) {
+                gen_modrm(vtop[-1].r, r, vtop->sym, fc);
             } else {
-                if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) {
-                    o(0x66);
-                }
-                o(0x2e0f); /* ucomisd */
-                gen_modrm(0, r, vtop->sym, fc);
+                o(0xc0 + REG_VALUE(vtop[0].r) + REG_VALUE(vtop[-1].r)*8);
             }
 
             vtop--;
             vtop->r = VT_CMP;
             vtop->c.i = op | 0x100;
         } else {
-            /* no memory reference possible for long double operations */
-            if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-                load(TREG_XMM0, vtop);
-                swapped = !swapped;
-            }
+            assert((vtop->type.t & VT_BTYPE) != VT_LDOUBLE);
             switch(op) {
             default:
             case '+':
@@ -1744,46 +1749,41 @@ void gen_opf(int op)
             }
             ft = vtop->type.t;
             fc = vtop->c.ul;
-            if ((ft & VT_BTYPE) == VT_LDOUBLE) {
-                o(0xde); /* fxxxp %st, %st(1) */
-                o(0xc1 + (a << 3));
-            } else {
-                /* if saved lvalue, then we must reload it */
-                r = vtop->r;
-                if ((r & VT_VALMASK) == VT_LLOCAL) {
-                    SValue v1;
-                    r = get_reg(RC_INT);
-                    v1.type.t = VT_PTR;
-                    v1.r = VT_LOCAL | VT_LVAL;
-                    v1.c.ul = fc;
-                    load(r, &v1);
-                    fc = 0;
-                }
-                if (swapped) {
-                    /* movq %xmm0,%xmm1 */
-                    o(0x7e0ff3);
-                    o(0xc8);
-                    load(TREG_XMM0, vtop);
-                    /* subsd  %xmm1,%xmm0 (f2 0f 5c c1) */
-                    if ((ft & VT_BTYPE) == VT_DOUBLE) {
-                        o(0xf2);
-                    } else {
-                        o(0xf3);
-                    }
-                    o(0x0f);
-                    o(0x58 + a);
-                    o(0xc1);
-                } else {
-                    if ((ft & VT_BTYPE) == VT_DOUBLE) {
-                        o(0xf2);
-                    } else {
-                        o(0xf3);
-                    }
-                    o(0x0f);
-                    o(0x58 + a);
-                    gen_modrm(0, r, vtop->sym, fc);
-                }
+            assert((ft & VT_BTYPE) != VT_LDOUBLE);
+            
+            r = vtop->r;
+            /* if saved lvalue, then we must reload it */
+            if ((vtop->r & VT_VALMASK) == VT_LLOCAL) {
+                SValue v1;
+                r = get_reg(RC_INT);
+                v1.type.t = VT_PTR;
+                v1.r = VT_LOCAL | VT_LVAL;
+                v1.c.ul = fc;
+                load(r, &v1);
+                fc = 0;
             }
+            
+            assert(!(vtop[-1].r & VT_LVAL));
+            if (swapped) {
+                assert(vtop->r & VT_LVAL);
+                gv(RC_FLOAT);
+                vswap();
+            }
+            
+            if ((ft & VT_BTYPE) == VT_DOUBLE) {
+                o(0xf2);
+            } else {
+                o(0xf3);
+            }
+            o(0x0f);
+            o(0x58 + a);
+            
+            if (vtop->r & VT_LVAL) {
+                gen_modrm(vtop[-1].r, r, vtop->sym, fc);
+            } else {
+                o(0xc0 + REG_VALUE(vtop[0].r) + REG_VALUE(vtop[-1].r)*8);
+            }
+
             vtop--;
         }
     }
@@ -1818,17 +1818,17 @@ void gen_cvt_itof(int t)
         }
         vtop->r = TREG_ST0;
     } else {
-        save_reg(TREG_XMM0);
+        int r = get_reg(RC_FLOAT);
         gv(RC_INT);
-        o(0xf2 + ((t & VT_BTYPE) == VT_FLOAT));
+        o(0xf2 + ((t & VT_BTYPE) == VT_FLOAT?1:0));
         if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
             (VT_INT | VT_UNSIGNED) ||
             (vtop->type.t & VT_BTYPE) == VT_LLONG) {
             o(0x48); /* REX */
         }
         o(0x2a0f);
-        o(0xc0 + (vtop->r & VT_VALMASK)); /* cvtsi2sd */
-        vtop->r = TREG_XMM0;
+        o(0xc0 + (vtop->r & VT_VALMASK) + REG_VALUE(r)*8); /* cvtsi2sd */
+        vtop->r = r;
     }
 }
 
@@ -1842,43 +1842,54 @@ void gen_cvt_ftof(int t)
     tbt = t & VT_BTYPE;
     
     if (bt == VT_FLOAT) {
-        gv(RC_XMM0); /* to avoid rewriting to handle xmm1 for now */
+        gv(RC_FLOAT);
         if (tbt == VT_DOUBLE) {
-            o(0xc0140f); /* unpcklps */
-            o(0xc05a0f); /* cvtps2pd */
+            o(0x140f); /* unpcklps */
+            o(0xc0 + REG_VALUE(vtop->r)*9);
+            o(0x5a0f); /* cvtps2pd */
+            o(0xc0 + REG_VALUE(vtop->r)*9);
         } else if (tbt == VT_LDOUBLE) {
+            save_reg(RC_ST0);
             /* movss %xmm0,-0x10(%rsp) */
-            o(0x44110ff3);
+            o(0x110ff3);
+            o(0x44 + REG_VALUE(vtop->r)*8);
             o(0xf024);
             o(0xf02444d9); /* flds -0x10(%rsp) */
             vtop->r = TREG_ST0;
         }
     } else if (bt == VT_DOUBLE) {
-        gv(RC_XMM0); /* to avoid rewriting to handle xmm1 for now */
+        gv(RC_FLOAT);
         if (tbt == VT_FLOAT) {
-            o(0xc0140f66); /* unpcklpd */
-            o(0xc05a0f66); /* cvtpd2ps */
+            o(0x140f66); /* unpcklpd */
+            o(0xc0 + REG_VALUE(vtop->r)*9);
+            o(0x5a0f66); /* cvtpd2ps */
+            o(0xc0 + REG_VALUE(vtop->r)*9);
         } else if (tbt == VT_LDOUBLE) {
+            save_reg(RC_ST0);
             /* movsd %xmm0,-0x10(%rsp) */
-            o(0x44110ff2);
+            o(0x110ff2);
+            o(0x44 + REG_VALUE(vtop->r)*8);
             o(0xf024);
             o(0xf02444dd); /* fldl -0x10(%rsp) */
             vtop->r = TREG_ST0;
         }
     } else {
         gv(RC_ST0);
+        int r = get_reg(RC_FLOAT);
         if (tbt == VT_DOUBLE) {
             o(0xf0245cdd); /* fstpl -0x10(%rsp) */
             /* movsd -0x10(%rsp),%xmm0 */
-            o(0x44100ff2);
+            o(0x100ff2);
+            o(0x44 + REG_VALUE(r)*8);
             o(0xf024);
-            vtop->r = TREG_XMM0;
+            vtop->r = r;
         } else if (tbt == VT_FLOAT) {
             o(0xf0245cd9); /* fstps -0x10(%rsp) */
             /* movss -0x10(%rsp),%xmm0 */
-            o(0x44100ff3);
+            o(0x100ff3);
+            o(0x44 + REG_VALUE(r)*8);
             o(0xf024);
-            vtop->r = TREG_XMM0;
+            vtop->r = r;
         }
     }
 }
@@ -1894,7 +1905,7 @@ void gen_cvt_ftoi(int t)
         bt = VT_DOUBLE;
     }
 
-    gv(RC_XMM0);
+    gv(RC_FLOAT);
     if (t != VT_INT)
         size = 8;
     else
@@ -1909,7 +1920,7 @@ void gen_cvt_ftoi(int t)
         assert(0);
     }
     orex(size == 8, r, 0, 0x2c0f); /* cvttss2si or cvttsd2si */
-    o(0xc0 + (REG_VALUE(r) << 3));
+    o(0xc0 + REG_VALUE(vtop->r) + REG_VALUE(r)*8);
     vtop->r = r;
 }
 

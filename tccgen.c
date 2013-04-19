@@ -626,15 +626,16 @@ ST_FUNC void save_regs(int n)
     }
 }
 
-/* move register 's' to 'r', and flush previous value of r to memory
+/* move register 's' (of type 't') to 'r', and flush previous value of r to memory
    if needed */
-static void move_reg(int r, int s)
+static void move_reg(int r, int s, int t)
 {
     SValue sv;
 
     if (r != s) {
         save_reg(r);
-        sv.type.t = VT_INT;
+        sv.type.t = t;
+        sv.type.ref = NULL;
         sv.r = s;
         sv.c.ul = 0;
         load(r, &sv);
@@ -4271,7 +4272,7 @@ static void expr_cond(void)
             if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
                 gaddrof();
             r1 = gv(rc);
-            move_reg(r2, r1);
+            move_reg(r2, r1, type.t);
             vtop->r = r2;
             gsym(tt);
         }
