@@ -108,20 +108,20 @@ test3: test.ref
 test4: test.ref
 	@echo ------------ $@ ------------
 # object + link output
-	$(TCC) -c -o tcctest3.o tcctest.c
+	$(TCC) -c -o tcctest3.o $(SRCDIR)/tcctest.c
 	$(TCC) -o tcctest3 tcctest3.o
 	./tcctest3 > test3.out
 	@if diff -u test.ref test3.out ; then echo "Object Auto Test OK"; fi
 # dynamic output
-	$(TCC) -o tcctest1 tcctest.c
+	$(TCC) -o tcctest1 $(SRCDIR)/tcctest.c
 	./tcctest1 > test1.out
 	@if diff -u test.ref test1.out ; then echo "Dynamic Auto Test OK"; fi
 # dynamic output + bound check
-	$(TCC) -b -o tcctest4 tcctest.c
+	$(TCC) -b -o tcctest4 $(SRCDIR)/tcctest.c
 	./tcctest4 > test4.out
 	@if diff -u test.ref test4.out ; then echo "BCheck Auto Test OK"; fi
 # static output
-	$(TCC) -static -o tcctest2 tcctest.c
+	$(TCC) -static -o tcctest2 $(SRCDIR)/tcctest.c
 	./tcctest2 > test2.out
 	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
 
@@ -188,8 +188,8 @@ abitest-tcc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 
 abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
 	@echo ------------ $@ ------------
-	./abitest-cc$(EXESUF) lib_path=..
-	./abitest-tcc$(EXESUF) lib_path=..
+	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
+	./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 
 # targets for development
 %.bin: %.c tcc

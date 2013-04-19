@@ -4,7 +4,17 @@
 #include <string.h>
 #include <stdarg.h>
 
+// MinGW has 80-bit rather than 64-bit long double which isn't compatible with TCC or MSVC
+#if defined(_WIN32) && defined(__GNUC__)
+#define LONG_DOUBLE double
+#define LONG_DOUBLE_LITERAL(x) x
+#else
+#define LONG_DOUBLE long double
+#define LONG_DOUBLE_LITERAL(x) x ## L
+#endif
+
 static const char *tccdir = NULL;
+static const char *include_dir = NULL;
 
 typedef int (*callback_type) (void*);
 
@@ -21,6 +31,10 @@ static int run_callback(const char *src, callback_type callback) {
     return -1;
   if (tccdir)
     tcc_set_lib_path(s, tccdir);
+  if (include_dir) {
+    if (tcc_add_include_path(s, include_dir) == -1)
+      return -1;
+  }
   if (tcc_set_output_type(s, TCC_OUTPUT_MEMORY) == -1)
     return -1;
   if (tcc_compile_string(s, src) == -1)
@@ -38,6 +52,9 @@ static int run_callback(const char *src, callback_type callback) {
   return result;
 }
 
+#define STR2(x) #x
+#define STR(x) STR2(x)
+
 #define RET_PRIMITIVE_TEST(name, type, val) \
   static int ret_ ## name ## _test_callback(void *ptr) { \
     type (*callback) (type) = (type(*)(type))ptr; \
@@ -47,7 +64,7 @@ static int run_callback(const char *src, callback_type callback) {
   } \
   \
   static int ret_ ## name ## _test(void) { \
-    const char *src = #type " f(" #type " x) {return x+x;}"; \
+    const char *src = STR(type) " f(" STR(type) " x) {return x+x;}"; \
     return run_callback(src, ret_ ## name ## _test_callback); \
   }
 
@@ -55,7 +72,7 @@ RET_PRIMITIVE_TEST(int, int, 70000)
 RET_PRIMITIVE_TEST(longlong, long long, 4333369356528LL)
 RET_PRIMITIVE_TEST(float, float, 63.0)
 RET_PRIMITIVE_TEST(double, double, 14789798.0)
-RET_PRIMITIVE_TEST(longdouble, long double, 378943892.0)
+RET_PRIMITIVE_TEST(longdouble, LONG_DOUBLE, LONG_DOUBLE_LITERAL(378943892.0))
 
 /*
  * ret_2float_test:
@@ -303,6 +320,8 @@ int main(int argc, char **argv) {
       tccdir = argv[i] + 9;
     else if (!memcmp(argv[i], "run_test=", 9))
       testname = argv[i] + 9;
+    else if (!memcmp(argv[i], "include=", 8))
+      include_dir = argv[i] + 8;
   }   
 
   RUN_TEST(ret_int_test);
