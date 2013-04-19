@@ -764,7 +764,7 @@ ST_FUNC int gv(int rc)
 #endif
 
         r = vtop->r & VT_VALMASK;
-        rc2 = RC_INT;
+        rc2 = (rc & RC_FLOAT) ? RC_FLOAT : RC_INT;
         if (rc == RC_IRET)
             rc2 = RC_LRET;
 #ifdef TCC_TARGET_X86_64

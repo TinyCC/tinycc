@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         18
+#define NB_REGS         24
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -34,13 +34,19 @@
 #define RC_RAX     0x0004
 #define RC_RCX     0x0008
 #define RC_RDX     0x0010
+#define RC_ST0     0x0080 /* only for long double */
 #define RC_R8      0x0100
 #define RC_R9      0x0200
 #define RC_R10     0x0400
 #define RC_R11     0x0800
-#define RC_XMM0    0x0020
-#define RC_XMM1    0x0040
-#define RC_ST0     0x0080 /* only for long double */
+#define RC_XMM0    0x1000
+#define RC_XMM1    0x2000
+#define RC_XMM2    0x4000
+#define RC_XMM3    0x8000
+#define RC_XMM4    0x10000
+#define RC_XMM5    0x20000
+#define RC_XMM6    0x40000
+#define RC_XMM7    0x80000
 #define RC_IRET    RC_RAX /* function return: integer register */
 #define RC_LRET    RC_RDX /* function return: second integer register */
 #define RC_FRET    RC_XMM0 /* function return: float register */
@@ -61,6 +67,12 @@ enum {
 
     TREG_XMM0 = 16,
     TREG_XMM1 = 17,
+    TREG_XMM2 = 18,
+    TREG_XMM3 = 19,
+    TREG_XMM4 = 20,
+    TREG_XMM5 = 21,
+    TREG_XMM6 = 22,
+    TREG_XMM7 = 23,
 
     TREG_ST0 = 4, // SP slot won't be used
 
@@ -117,16 +129,22 @@ ST_DATA const int reg_classes[NB_REGS] = {
     0,
     0,
     0,
-    /*RC_INT |*/ RC_R8,
-    /*RC_INT |*/ RC_R9,
-    /*RC_INT |*/ RC_R10,
-    /*RC_INT |*/ RC_R11,
+    RC_R8,
+    RC_R9,
+    RC_R10,
+    RC_R11,
     0,
     0,
     0,
     0,
     /* xmm0 */ RC_FLOAT | RC_XMM0,
     /* xmm1 */ RC_FLOAT | RC_XMM1,
+    /* xmm2 */ RC_FLOAT | RC_XMM2,
+    /* xmm3 */ RC_FLOAT | RC_XMM3,
+    /* xmm4 */ RC_FLOAT | RC_XMM4,
+    /* xmm5 */ RC_FLOAT | RC_XMM5,
+    /* xmm6 */ RC_FLOAT | RC_XMM6,
+    /* xmm7 */ RC_FLOAT | RC_XMM7,
 };
 
 static unsigned long func_sub_sp_offset;
@@ -141,8 +159,6 @@ void g(int c)
         section_realloc(cur_text_section, ind1);
     cur_text_section->data[ind] = c;
     ind = ind1;
-    assert((ind < 4) || (cur_text_section->data[ind-4] != ('\362'&0xFF)) || (cur_text_section->data[ind-3] != '\017')
-     || (cur_text_section->data[ind-2] != 'X') || (cur_text_section->data[ind-1] != '\001'));
 }
 
 void o(unsigned int c)
@@ -1055,32 +1071,48 @@ void gfunc_call(int nb_args)
         oad(0xec81, args_size); /* sub $xxx, %rsp */
     }
 
-    for(i = 0; i < nb_args; i++) {
+    for(i = 0; i < nb_args;) {
 	/* Swap argument to top, it will possibly be changed here,
-	   and might use more temps.  All arguments must remain on the
-	   stack, so that get_reg can correctly evict some of them onto
-	   stack.  We could use also use a vrott(nb_args) at the end
-	   of this loop, but this seems faster.  */
+	   and might use more temps. At the end of the loop we keep
+	   in on the stack and swap it back to its original position
+	   if it is a register. */
         SValue tmp = vtop[0];
 	vtop[0] = vtop[-i];
 	vtop[-i] = tmp;
+        
         mode = classify_x86_64_arg(&vtop->type, NULL, &size, &reg_count);
-        switch (mode) {
-        case x86_64_mode_memory:
-            /* allocate the necessary size on stack */
-            o(0x48);
-            oad(0xec81, size); /* sub $xxx, %rsp */
-            /* generate structure store */
-            r = get_reg(RC_INT);
-            orex(1, r, 0, 0x89); /* mov %rsp, r */
-            o(0xe0 + REG_VALUE(r));
-	    vset(&vtop->type, r | VT_LVAL, 0);
-	    vswap();
-	    vstore();
-            args_size += size;
+        
+        int arg_stored = 1;
+        switch (vtop->type.t & VT_BTYPE) {
+        case VT_STRUCT:
+            if (mode == x86_64_mode_sse) {
+                if (sse_reg > 8)
+                    sse_reg -= reg_count;
+                else
+                    arg_stored = 0;
+            } else if (mode == x86_64_mode_integer) {
+                if (gen_reg > REGN)
+                    gen_reg -= reg_count;
+                else
+                    arg_stored = 0;
+            }
+            
+            if (arg_stored) {
+                /* allocate the necessary size on stack */
+                o(0x48);
+                oad(0xec81, size); /* sub $xxx, %rsp */
+                /* generate structure store */
+                r = get_reg(RC_INT);
+                orex(1, r, 0, 0x89); /* mov %rsp, r */
+                o(0xe0 + REG_VALUE(r));
+                vset(&vtop->type, r | VT_LVAL, 0);
+                vswap();
+                vstore();
+                args_size += size;
+            }
             break;
             
-        case x86_64_mode_x87:
+        case VT_LDOUBLE:
             gv(RC_ST0);
             size = LDOUBLE_SIZE;
             oad(0xec8148, size); /* sub $xxx, %rsp */
@@ -1090,8 +1122,11 @@ void gfunc_call(int nb_args)
             args_size += size;
             break;
             
-        case x86_64_mode_sse:
+        case VT_FLOAT:
+        case VT_DOUBLE:
+            assert(mode == x86_64_mode_sse);
             if (sse_reg > 8) {
+                --sse_reg;
                 r = gv(RC_FLOAT);
                 o(0x50); /* push $rax */
                 /* movq %xmm0, (%rsp) */
@@ -1099,26 +1134,39 @@ void gfunc_call(int nb_args)
                 o(0x04 + REG_VALUE(r)*8);
                 o(0x24);
                 args_size += size;
+            } else {
+                arg_stored = 0;
             }
-            sse_reg -= reg_count;
             break;
             
-        case x86_64_mode_integer:
+        default:
+            assert(mode == x86_64_mode_integer);
             /* simple type */
             /* XXX: implicit cast ? */
             if (gen_reg > REGN) {
+                --gen_reg;
                 r = gv(RC_INT);
                 orex(0,r,0,0x50 + REG_VALUE(r)); /* push r */
                 args_size += size;
+            } else {
+                arg_stored = 0;
             }
-            gen_reg -= reg_count;
             break;
         }
-
-	/* And swap the argument back to it's original position.  */
+        
+        /* And swap the argument back to it's original position.  */
         tmp = vtop[0];
-	vtop[0] = vtop[-i];
-	vtop[-i] = tmp;
+        vtop[0] = vtop[-i];
+        vtop[-i] = tmp;
+
+        if (arg_stored) {
+          vrotb(i+1);
+          assert(vtop->type.t == tmp.type.t);
+          vpop();
+          --nb_args;
+        } else {
+          ++i;
+        }
     }
 
     /* XXX This should be superfluous.  */
@@ -1128,55 +1176,50 @@ void gfunc_call(int nb_args)
        Note that we cannot set RDX and RCX in this loop because gv()
        may break these temporary registers. Let's use R10 and R11
        instead of them */
-    gen_reg = nb_reg_args;
-    sse_reg = nb_sse_args;
+    assert(gen_reg <= REGN);
+    assert(sse_reg <= 8);
     for(i = 0; i < nb_args; i++) {
         mode = classify_x86_64_arg(&vtop->type, &type, &size, &reg_count);
         /* Alter stack entry type so that gv() knows how to treat it */
         vtop->type = type;
-        switch (mode) {
-        default:
-            break;
-            
-        case x86_64_mode_sse:
-            sse_reg -= reg_count;
-            if (sse_reg + reg_count <= 8) {
-                gv(RC_FRET); /* only one float register */
-                if (sse_reg) { /* avoid redundant movaps %xmm0, %xmm0 */
-                    /* movaps %xmm0, %xmmN */
-                    o(0x280f);
-                    o(0xc0 + (sse_reg << 3));
-                    if (reg_count == 2) {
-                        /* movaps %xmm1, %xmmN */
-                        o(0x280f);
-                        o(0xc1 + ((sse_reg+1) << 3));
-                    }
-                }
-            }
-            break;
-        
-        case x86_64_mode_integer:
+        if (mode == x86_64_mode_sse) {
+          if (reg_count == 2) {
+              sse_reg -= 2;
+              gv(RC_FRET); /* Use pair load into xmm0 & xmm1 */
+              if (sse_reg) { /* avoid redundant movaps %xmm0, %xmm0 */
+                  /* movaps %xmm0, %xmmN */
+                  o(0x280f);
+                  o(0xc0 + (sse_reg << 3));
+                  /* movaps %xmm1, %xmmN */
+                  o(0x280f);
+                  o(0xc1 + ((sse_reg+1) << 3));
+              }
+          } else {
+              assert(reg_count == 1);
+              --sse_reg;
+              /* Load directly to register */
+              gv(RC_XMM0 << sse_reg);
+          }
+        } else if (mode == x86_64_mode_integer) {
             /* simple type */
             /* XXX: implicit cast ? */
             gen_reg -= reg_count;
-            if (gen_reg + reg_count <= REGN) {
-                r = gv((reg_count == 1) ? RC_INT : RC_IRET);
-                int d = arg_prepare_reg(gen_reg);
-                orex(1,d,r,0x89); /* mov */
-                o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-                if (reg_count == 2) {
-                    /* Second word of two-word value should always be in rdx
-                       this case is handled via RC_IRET */
-                    assert(vtop->r2 == TREG_RDX);
-                    d = arg_prepare_reg(gen_reg+1);
-                    orex(1,d,vtop->r2,0x89); /* mov */
-                    o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
-                }
+            r = gv(RC_INT);
+            int d = arg_prepare_reg(gen_reg);
+            orex(1,d,r,0x89); /* mov */
+            o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
+            if (reg_count == 2) {
+                /* Second word of two-word value should always be in rdx
+                    this case is handled via RC_IRET */
+                d = arg_prepare_reg(gen_reg+1);
+                orex(1,d,vtop->r2,0x89); /* mov */
+                o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
             }
-            break;
         }
         vtop--;
     }
+    assert(gen_reg == 0);
+    assert(sse_reg == 0);
 
     /* We shouldn't have many operands on the stack anymore, but the
        call address itself is still there, and it might be in %eax
