@@ -80,12 +80,19 @@ ST_FUNC void asm_global_instr(void)
 /********************************************************/
 
 #ifdef _WIN32
+// GCC appears to use '/' for relative paths and '\\' for absolute paths on Windows
 static char *normalize_slashes(char *path)
 {
     char *p;
-    for (p = path; *p; ++p)
-        if (*p == '\\')
-            *p = '/';
+    if (path[1] == ':') {
+        for (p = path+2; *p; ++p)
+            if (*p == '/')
+                *p = '\\';
+    } else {
+        for (p = path; *p; ++p)
+            if (*p == '\\')
+                *p = '/';
+    }
     return path;
 }
 

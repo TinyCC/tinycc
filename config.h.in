@@ -1,0 +1,16 @@
+#define CONFIG_TCCDIR "${CMAKE_INSTALL_PREFIX}"
+#define TCC_VERSION "${TCC_VERSION}"
+
+#cmakedefine CONFIG_WIN32
+#cmakedefine CONFIG_WIN64
+
+#cmakedefine TCC_TARGET_I386
+#cmakedefine TCC_TARGET_X86_64
+#cmakedefine TCC_TARGET_ARM
+#cmakedefine TCC_TARGET_C67
+
+#cmakedefine TCC_TARGET_PE
+#define TCC_ARM_VERSION ${TCC_ARM_VERSION}
+#cmakedefine TCC_ARM_VFP
+#cmakedefine TCC_ARM_EABI
+#cmakedefine TCC_ARM_HARDFLOAT

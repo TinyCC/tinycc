@@ -3712,7 +3712,7 @@ ST_FUNC void unary(void)
             }
         }
         break;
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_PE)
     case TOK_builtin_va_arg_types:
         {
             CType type;
