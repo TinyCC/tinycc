@@ -6,7 +6,7 @@ add_test(NAME abitest-cc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND abitest-c
 
 set(ABITEST_TCC abitest-tcc${CMAKE_EXECUTABLE_SUFFIX})
 get_property(LIBTCC_LIB TARGET libtcc PROPERTY LOCATION)
-add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS abitest.c)
+add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -g -I${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS abitest.c)
 add_custom_target(abitest-tcc-exe ALL DEPENDS ${ABITEST_TCC})
 
 add_test(NAME abitest-tcc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${ABITEST_TCC} lib_path=${CMAKE_BINARY_DIR} include=${CMAKE_SOURCE_DIR}/include)
@@ -20,7 +20,7 @@ if(WIN32)
   set(TCC_TEST_CFLAGS ${TCC_TEST_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include/winapi)
 endif()
 set(TCC_TEST_SOURCE ${TCC_TEST_CFLAGS} -run ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
-set(TCC_TEST_RUN ${TCC_TEST_CFLAGS} -DONE_SOURCE -run ${CMAKE_SOURCE_DIR}/tcc.c)
+set(TCC_TEST_RUN ${TCC_TEST_CFLAGS} ${TCC_TARGET_FLAGS} -DONE_SOURCE -run ${CMAKE_SOURCE_DIR}/tcc.c)
 
 add_custom_command(OUTPUT tcctest.ref COMMAND tcctest-cc > tcctest.ref)
 add_custom_command(OUTPUT tcctest.1 COMMAND tcc ${TCC_TEST_SOURCE} > tcctest.1)

@@ -19,9 +19,9 @@ void __va_end(va_list ap);
 
 #else /* _WIN64 */
 typedef char *va_list;
-#define va_start(ap,last) ap = ((char *)&(last)) + ((sizeof(last)+7)&~7)
-#define va_arg(ap,type) (ap += (sizeof(type)+7)&~7, *(type *)(ap - ((sizeof(type)+7)&~7)))
-#define va_copy(dest, src) (dest) = (src)
+#define va_start(ap,last) __builtin_va_start(ap,last)
+#define va_arg(ap,type) (ap += 8, sizeof(type)<=8 ? *(type*)ap : **(type**)ap)
+#define va_copy(dest, src) ((dest) = (src))
 #define va_end(ap)
 #endif
 

@@ -263,38 +263,130 @@ static int two_member_union_test(void) {
 }
 
 /*
+ * Win64 calling convetntion test.
+ */
+
+typedef struct many_struct_test_type_s {long long a, b, c;} many_struct_test_type;
+typedef many_struct_test_type (*many_struct_test_function_type) (many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type);
+ 
+static int many_struct_test_callback(void *ptr) {
+  many_struct_test_function_type f = (many_struct_test_function_type)ptr;
+  many_struct_test_type v = {1, 2, 3};
+  many_struct_test_type r = f(v,v,v,v,v,v);
+  return ((r.a == 6) && (r.b == 12) && (r.c == 18))?0:-1;
+}
+
+static int many_struct_test(void) {
+  const char *src =
+  "typedef struct many_struct_test_type_s {long long a, b, c;} many_struct_test_type;\n"
+  "many_struct_test_type f(many_struct_test_type x1, many_struct_test_type x2, many_struct_test_type x3, many_struct_test_type x4, many_struct_test_type x5, many_struct_test_type x6) {\n"
+  "  many_struct_test_type y;\n"
+  "  y.a = x1.a + x2.a + x3.a + x4.a + x5.a + x6.a;\n"
+  "  y.b = x1.b + x2.b + x3.b + x4.b + x5.b + x6.b;\n"
+  "  y.c = x1.c + x2.c + x3.c + x4.c + x5.c + x6.c;\n"
+  "  return y;\n"
+  "}\n";
+  return run_callback(src, many_struct_test_callback);
+}
+
+/*
+ * Win64 calling convention test.
+ */
+
+typedef struct many_struct_test_2_type_s {int a, b;} many_struct_test_2_type;
+typedef many_struct_test_2_type (*many_struct_test_2_function_type) (many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type);
+ 
+static int many_struct_test_2_callback(void *ptr) {
+  many_struct_test_2_function_type f = (many_struct_test_2_function_type)ptr;
+  many_struct_test_2_type v = {1,2};
+  many_struct_test_2_type r = f(v,v,v,v,v,v);
+  return ((r.a == 6) && (r.b == 12))?0:-1;
+}
+
+static int many_struct_test_2(void) {
+  const char *src =
+  "typedef struct many_struct_test_2_type_s {int a, b;} many_struct_test_2_type;\n"
+  "many_struct_test_2_type f(many_struct_test_2_type x1, many_struct_test_2_type x2, many_struct_test_2_type x3, many_struct_test_2_type x4, many_struct_test_2_type x5, many_struct_test_2_type x6) {\n"
+  "  many_struct_test_2_type y;\n"
+  "  y.a = x1.a + x2.a + x3.a + x4.a + x5.a + x6.a;\n"
+  "  y.b = x1.b + x2.b + x3.b + x4.b + x5.b + x6.b;\n"
+  "  return y;\n"
+  "}\n";
+  return run_callback(src, many_struct_test_2_callback);
+}
+
+/*
  * stdarg_test: Test variable argument list ABI
  */
 
-typedef void (*stdarg_test_function_type) (int,int,...);
+typedef struct {long long a, b, c;} stdarg_test_struct_type;
+typedef void (*stdarg_test_function_type) (int,int,int,...);
 
 static int stdarg_test_callback(void *ptr) {
   stdarg_test_function_type f = (stdarg_test_function_type)ptr;
   int x;
   double y;
-  f(10, 10,
+  stdarg_test_struct_type z = {1, 2, 3}, w;
+  f(10, 10, 5,
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, &x,
-    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, &y);
-  return ((x == 55) && (y == 55)) ? 0 : -1;
+    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, &y,
+    z, z, z, z, z, &w);
+  return ((x == 55) && (y == 55) && (w.a == 5) && (w.b == 10) && (w.c == 15)) ? 0 : -1;
 }
 
 static int stdarg_test(void) {
   const char *src =
   "#include <stdarg.h>\n"
-  "void f(int n_int, int n_float, ...) {\n"
+  "typedef struct {long long a, b, c;} stdarg_test_struct_type;\n"
+  "void f(int n_int, int n_float, int n_struct, ...) {\n"
   "  int i, ti;\n"
   "  double td;\n"
+  "  stdarg_test_struct_type ts = {0,0,0}, tmp;\n"
   "  va_list ap;\n"
-  "  va_start(ap, n_float);\n"
+  "  va_start(ap, n_struct);\n"
   "  for (i = 0, ti = 0; i < n_int; ++i)\n"
   "    ti += va_arg(ap, int);\n"
   "  *va_arg(ap, int*) = ti;\n"
   "  for (i = 0, td = 0; i < n_float; ++i)\n"
   "    td += va_arg(ap, double);\n"
   "  *va_arg(ap, double*) = td;\n"
+  "  for (i = 0; i < n_struct; ++i) {\n"
+  "    tmp = va_arg(ap, stdarg_test_struct_type);\n"
+  "    ts.a += tmp.a; ts.b += tmp.b; ts.c += tmp.c;"
+  "  }\n"
+  "  *va_arg(ap, stdarg_test_struct_type*) = ts;\n"
   "  va_end(ap);"
   "}\n";
   return run_callback(src, stdarg_test_callback);
+}
+
+/*
+ * Test Win32 stdarg handling, since the calling convention will pass a pointer
+ * to the struct and the stdarg pointer must point to that pointer initially.
+ */
+
+typedef struct {long long a, b, c;} stdarg_struct_test_struct_type;
+typedef int (*stdarg_struct_test_function_type) (stdarg_struct_test_struct_type a, ...);
+
+static int stdarg_struct_test_callback(void *ptr) {
+  stdarg_struct_test_function_type f = (stdarg_struct_test_function_type)ptr;
+  stdarg_struct_test_struct_type v = {10, 35, 99};
+  int x = f(v, 234);
+  return (x == 378) ? 0 : -1;
+}
+
+static int stdarg_struct_test(void) {
+  const char *src =
+  "#include <stdarg.h>\n"
+  "typedef struct {long long a, b, c;} stdarg_struct_test_struct_type;\n"
+  "int f(stdarg_struct_test_struct_type a, ...) {\n"
+  "  va_list ap;\n"
+  "  va_start(ap, a);\n"
+  "  int z = va_arg(ap, int);\n"
+  "  va_end(ap);\n"
+  "  return z + a.a + a.b + a.c;\n"
+  "}\n";
+  return run_callback(src, stdarg_struct_test_callback);
 }
 
 #define RUN_TEST(t) \
@@ -336,6 +428,9 @@ int main(int argc, char **argv) {
   RUN_TEST(sret_test);
   RUN_TEST(one_member_union_test);
   RUN_TEST(two_member_union_test);
+  RUN_TEST(many_struct_test);
+  RUN_TEST(many_struct_test_2);
   RUN_TEST(stdarg_test);
+  RUN_TEST(stdarg_struct_test);
   return retval;
 }
