@@ -5,7 +5,7 @@ if(WIN32)
   set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include)
 else()
   set(TCC_MATH_LDFLAGS -lm)
-  set(LIBTCC_LDFLAGS -ldl -lm)
+  set(LIBTCC_LDFLAGS -ldl -lm -Wl,-rpath=${CMAKE_BINARY_DIR})
 endif()
 
 add_executable(abitest-cc abitest.c)
@@ -61,7 +61,7 @@ if(PYTHONINTERP_FOUND)
     add_test(test6 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST6})
   endif()
 
-  if(NOT WIN32 AND NOT TCC_NATIVE_TARGET STREQUAL "x86_64")
+  if(0)
     # Static output
     set(TEST7 test7${CMAKE_EXECUTABLE_SUFFIX})
     add_custom_command(OUTPUT ${TEST7} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -static -o ${TEST7} DEPENDS tcc tcctest.c)

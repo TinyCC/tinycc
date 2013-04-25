@@ -464,6 +464,10 @@ ST_FUNC void gfunc_call(int nb_args)
             args_size -= 4;
         }
     }
+#ifndef TCC_TARGET_PE
+    else if ((vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT)
+        args_size -= 4;
+#endif
     gcall_or_jmp(0);
 
     if (args_size && func_call != FUNC_STDCALL)
@@ -549,6 +553,10 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* pascal type call ? */
     if (func_call == FUNC_STDCALL)
         func_ret_sub = addr - 8;
+#ifndef TCC_TARGET_PE
+    else if (func_vc)
+        func_ret_sub = 4;
+#endif
 
 #ifdef CONFIG_TCC_BCHECK
     /* leave some room for bound checking code */
