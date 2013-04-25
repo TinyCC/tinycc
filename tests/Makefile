@@ -43,9 +43,9 @@ ifeq ($(TARGETOS),Darwin)
 endif
 
 # run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP) -I$(TOP)
+TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
 endif
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
@@ -82,8 +82,7 @@ moretests:
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
-	cp $(top_srcdir)/include/tcclib.h .
-	gcc -o tcctest.gcc $< -I. $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
+	gcc -o tcctest.gcc $< -I$(top_srcdir) $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
 	./tcctest.gcc > $@
 
 # auto test

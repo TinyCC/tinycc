@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         22
+#define NB_REGS         24
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -45,6 +45,8 @@
 #define RC_XMM3    0x8000
 #define RC_XMM4    0x10000
 #define RC_XMM5    0x20000
+#define RC_XMM6    0x40000
+#define RC_XMM7    0x80000
 #define RC_IRET    RC_RAX /* function return: integer register */
 #define RC_LRET    RC_RDX /* function return: second integer register */
 #define RC_FRET    RC_XMM0 /* function return: float register */
@@ -140,7 +142,12 @@ ST_DATA const int reg_classes[NB_REGS] = {
     /* xmm2 */ RC_FLOAT | RC_XMM2,
     /* xmm3 */ RC_FLOAT | RC_XMM3,
     /* xmm4 */ RC_FLOAT | RC_XMM4,
-    /* xmm5 */ RC_FLOAT | RC_XMM5 /* only up to xmm5: xmm6-15 must be callee saved on Win64 */
+    /* xmm5 */ RC_FLOAT | RC_XMM5,
+    /* xmm6 an xmm7 are included so gv() can be used on them,
+       but they are not tagged with RC_FLOAT because they are
+       callee saved on Windows */
+    RC_XMM6,
+    RC_XMM7 
 };
 
 static unsigned long func_sub_sp_offset;
@@ -499,7 +506,7 @@ void load(int r, SValue *sv)
                     o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
                 }
             } else if (r == TREG_ST0) {
-                assert((v == TREG_XMM0) || (v == TREG_XMM1));
+                assert((v >= TREG_XMM0) || (v <= TREG_XMM7));
                 /* gen_cvt_ftof(VT_LDOUBLE); */
                 /* movsd %xmmN,-0x10(%rsp) */
                 o(0x110ff2);
@@ -1173,7 +1180,7 @@ void gfunc_call(int nb_args)
                 --sse_reg;
                 r = gv(RC_FLOAT);
                 o(0x50); /* push $rax */
-                /* movq %xmm0, (%rsp) */
+                /* movq %xmmN, (%rsp) */
                 o(0xd60f66);
                 o(0x04 + REG_VALUE(r)*8);
                 o(0x24);

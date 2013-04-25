@@ -2,7 +2,7 @@ TOP = ../..
 include $(TOP)/Makefile
 VPATH = $(top_srcdir)/tests/tests2
 
-TCCFLAGS = -B$(TOP)
+TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
  TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
 endif

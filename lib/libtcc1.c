@@ -607,9 +607,16 @@ unsigned long long __fixunsxfdi (long double a1)
 
 #if defined(__x86_64__) && !defined(_WIN64)
 
+#ifndef __TINYC__
+#include <stdlib.h>
+#include <stdio.h>
+#else
 /* Avoid including stdlib.h because it is not easily available when
    cross compiling */
 extern void *malloc(unsigned long long);
+extern void free(void*);
+extern void abort(void);
+#endif
 
 enum __va_arg_type {
     __va_gen_reg, __va_float_reg, __va_stack

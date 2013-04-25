@@ -1,17 +1,22 @@
-include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
-set(TCC_CFLAGS -I${CMAKE_SOURCE_DIR})
+set(TCC_CFLAGS -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/include -B${CMAKE_BINARY_DIR})
 if(WIN32)
-  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/include -I${CMAKE_SOURCE_DIR}/win32/include)
+  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include)
+else()
+  set(TCC_MATH_LDFLAGS -lm)
+  set(LIBTCC_LDFLAGS -ldl -lm)
 endif()
 
 add_executable(abitest-cc abitest.c)
-target_link_libraries(abitest-cc libtcc)
+if(NOT WIN32)
+  target_link_libraries(abitest-cc libtcc dl)
+endif()
 add_test(NAME abitest-cc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND abitest-cc lib_path=${CMAKE_BINARY_DIR} include=${CMAKE_SOURCE_DIR}/include)
 
 set(ABITEST_TCC abitest-tcc${CMAKE_EXECUTABLE_SUFFIX})
 get_property(LIBTCC_LIB TARGET libtcc PROPERTY LOCATION)
-add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -g -I${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS abitest.c)
+add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -g ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LDFLAGS} ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS tcc abitest.c)
 add_custom_target(abitest-tcc-exe ALL DEPENDS ${ABITEST_TCC})
 
 add_test(NAME abitest-tcc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${ABITEST_TCC} lib_path=${CMAKE_BINARY_DIR} include=${CMAKE_SOURCE_DIR}/include)
@@ -19,9 +24,6 @@ add_test(NAME abitest-tcc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ${CMAKE_
 add_executable(tcctest-cc tcctest.c)
 target_link_libraries(tcctest-cc libtcc)
 set_target_properties(tcctest-cc PROPERTIES COMPILE_FLAGS -std=gnu99)
-if(WIN32)
-  set_target_properties(tcctest-cc PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR};${CMAKE_SOURCE_DIR}/include")
-endif()
 
 find_package(PythonInterp)
 if(PYTHONINTERP_FOUND)
@@ -29,14 +31,43 @@ if(PYTHONINTERP_FOUND)
   if(WIN32)
     set(TCC_TEST_CFLAGS ${TCC_TEST_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include/winapi)
   endif()
-  set(TCC_TEST_SOURCE ${TCC_TEST_CFLAGS} -run ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
+  set(TCC_TEST_SOURCE ${TCC_TEST_CFLAGS} ${TCC_MATH_LDFLAGS} -run ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
   set(TCC_TEST_RUN ${TCC_TEST_CFLAGS} ${TCC_NATIVE_FLAGS} -DONE_SOURCE -run ${CMAKE_SOURCE_DIR}/tcc.c)
   get_property(TCC TARGET tcc PROPERTY LOCATION)
   get_property(TCCTESTCC TARGET tcctest-cc PROPERTY LOCATION)
-  set(TCCTEST_PY ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.py ${TCCTESTCC} ${TCC})
-  add_test(test1 ${TCCTEST_PY} ${TCC_TEST_SOURCE})
-  add_test(test2 ${TCCTEST_PY} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
-  add_test(test3 ${TCCTEST_PY} ${TCC_TEST_RUN} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
+  set(TCCTEST_PY ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.py ${TCCTESTCC})
+  add_test(test1 ${TCCTEST_PY} ${TCC} ${TCC_TEST_SOURCE})
+  add_test(test2 ${TCCTEST_PY} ${TCC} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
+  add_test(test3 ${TCCTEST_PY} ${TCC} ${TCC_TEST_RUN} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
+
+  # Object + link output
+  set(TEST4 test4${CMAKE_EXECUTABLE_SUFFIX})
+  add_custom_command(OUTPUT test4.o COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -c -o test4.o DEPENDS tcc tcctest.c)
+  add_custom_command(OUTPUT ${TEST4} COMMAND tcc ${TCC_TEST_CFLAGS} test4.o -o ${TEST4} DEPENDS tcc test4.o)
+  add_custom_target(test4-exe ALL DEPENDS ${TEST4})
+  add_test(test4 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST4})
+
+  # Dynamic output
+  set(TEST5 test5${CMAKE_EXECUTABLE_SUFFIX})
+  add_custom_command(OUTPUT ${TEST5} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -o ${TEST5} DEPENDS tcc tcctest.c)
+  add_custom_target(test5-exe ALL DEPENDS ${TEST5})
+  add_test(test5 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST5})
+
+  if(TCC_BCHECK)
+    # Dynamic output + bound check
+    set(TEST6 test6${CMAKE_EXECUTABLE_SUFFIX})
+    add_custom_command(OUTPUT ${TEST5} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -b -o ${TEST6} DEPENDS tcc tcctest.c)
+    add_custom_target(test6-exe ALL DEPENDS ${TEST6})
+    add_test(test6 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST6})
+  endif()
+
+  if(NOT WIN32 AND NOT TCC_NATIVE_TARGET STREQUAL "x86_64")
+    # Static output
+    set(TEST7 test7${CMAKE_EXECUTABLE_SUFFIX})
+    add_custom_command(OUTPUT ${TEST7} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -static -o ${TEST7} DEPENDS tcc tcctest.c)
+    add_custom_target(test7-exe ALL DEPENDS ${TEST7})
+    add_test(test7 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST7})
+  endif()
 endif()
 
 set(MORETESTS
@@ -99,5 +130,5 @@ if(WIN32)
 endif()
 foreach(testfile ${MORETESTS})
   add_test(NAME ${testfile} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests2
-           COMMAND tcc ${TCC_CFLAGS} -run ${testfile}.c - arg1 arg2 arg3 arg4 | ${DIFF} - ${testfile}.expect)
+           COMMAND tcc ${TCC_CFLAGS} ${TCC_MATH_LDFLAGS} -run ${testfile}.c - arg1 arg2 arg3 arg4 | ${DIFF} - ${testfile}.expect)
 endforeach()

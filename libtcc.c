@@ -1052,11 +1052,13 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
         
     /* free any loaded DLLs */
+#ifdef TCC_IS_NATIVE
     for ( i = 0; i < s1->nb_loaded_dlls; i++) {
         DLLReference *ref = s1->loaded_dlls[i];
         if ( ref->handle )
             dlclose(ref->handle);
     }
+#endif
     
     /* free loaded dlls array */
     dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);

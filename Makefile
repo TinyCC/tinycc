@@ -221,7 +221,7 @@ lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 FORCE:
 
 # install
-TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h tcclib.h
+TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h
 INSTALL=install
 ifdef STRIP_BINARIES
 INSTALLBIN=$(INSTALL) -s
@@ -246,7 +246,7 @@ endif
 ifneq ($(LIBTCC1),)
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
 endif
-	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
+	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m755 $(LIBTCC) "$(libdir)"
 ifdef DISABLE_STATIC
@@ -265,17 +265,18 @@ ifeq ($(ARCH),x86-64)
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
 	cp -r "$(tccdir)/include" "$(tccdir)/i386"
 endif
-	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/win32/lib"
+	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
 	$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
-	cp -r win32/include/. "$(tccdir)/win32/include"
-	cp -r include/. "$(tccdir)/win32/include"
+	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/win32/include"
+	cp -r $(top_srcdir)/include/. "$(tccdir)/win32/include"
 endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
 	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
+	rm -fv "$(tccdir)/include/tcclib.h"
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv "$(libdir)/libtcc.so*"
@@ -297,7 +298,7 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	$(INSTALL) -m644 $(LIBTCC1) $(top_srcdir)/win32/lib/*.def "$(tccdir)/lib"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/include"
 	cp -r $(top_srcdir)/win32/examples/. "$(tccdir)/examples"
-	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) "$(tccdir)/include"
+	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html $(top_srcdir)/win32/tcc-win32.txt "$(tccdir)/doc"
 	$(INSTALL) -m644 $(top_srcdir)/libtcc.h $(LIBTCC_EXTRA) "$(tccdir)/libtcc"
 	$(INSTALL) -m644 $(LIBTCC) $(tccdir)
