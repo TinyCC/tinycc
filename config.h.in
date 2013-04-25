@@ -3,3 +3,4 @@
 
 #cmakedefine CONFIG_WIN32
 #cmakedefine CONFIG_WIN64
+#cmakedefine CONFIG_TCC_BCHECK

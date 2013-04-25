@@ -607,13 +607,9 @@ unsigned long long __fixunsxfdi (long double a1)
 
 #if defined(__x86_64__) && !defined(_WIN64)
 
-/* helper functions for stdarg.h */
-
-#include <stdlib.h>
-#ifndef __TINYC__
-/* gives "incompatible types for redefinition of __va_arg" below */
-#include <stdio.h>
-#endif
+/* Avoid including stdlib.h because it is not easily available when
+   cross compiling */
+extern void *malloc(unsigned long long);
 
 enum __va_arg_type {
     __va_gen_reg, __va_float_reg, __va_stack

@@ -1,5 +1,10 @@
 include_directories(${CMAKE_SOURCE_DIR})
 
+set(TCC_CFLAGS -I${CMAKE_SOURCE_DIR})
+if(WIN32)
+  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/include -I${CMAKE_SOURCE_DIR}/win32/include)
+endif()
+
 add_executable(abitest-cc abitest.c)
 target_link_libraries(abitest-cc libtcc)
 add_test(NAME abitest-cc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND abitest-cc lib_path=${CMAKE_BINARY_DIR} include=${CMAKE_SOURCE_DIR}/include)
@@ -13,26 +18,26 @@ add_test(NAME abitest-tcc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ${CMAKE_
 
 add_executable(tcctest-cc tcctest.c)
 target_link_libraries(tcctest-cc libtcc)
-set_target_properties(tcctest-cc PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR};${CMAKE_SOURCE_DIR}/include" COMPILE_FLAGS -std=gnu99)
-
-set(TCC_TEST_CFLAGS ${TCC_CFLAGS} -B${CMAKE_BINARY_DIR} -I${CMAKE_BINARY_DIR})
+set_target_properties(tcctest-cc PROPERTIES COMPILE_FLAGS -std=gnu99)
 if(WIN32)
-  set(TCC_TEST_CFLAGS ${TCC_TEST_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include/winapi)
+  set_target_properties(tcctest-cc PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR};${CMAKE_SOURCE_DIR}/include")
 endif()
-set(TCC_TEST_SOURCE ${TCC_TEST_CFLAGS} -run ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
-set(TCC_TEST_RUN ${TCC_TEST_CFLAGS} ${TCC_TARGET_FLAGS} -DONE_SOURCE -run ${CMAKE_SOURCE_DIR}/tcc.c)
 
-add_custom_command(OUTPUT tcctest.ref COMMAND tcctest-cc > tcctest.ref)
-add_custom_command(OUTPUT tcctest.1 COMMAND tcc ${TCC_TEST_SOURCE} > tcctest.1)
-add_custom_command(OUTPUT tcctest.2 COMMAND tcc ${TCC_TEST_RUN} ${TCC_TEST_SOURCE} > tcctest.2)
-add_custom_command(OUTPUT tcctest.3 COMMAND tcc ${TCC_TEST_RUN} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE} > tcctest.3)
-add_custom_target(tcctest-ref ALL DEPENDS tcctest.ref tcctest.1 tcctest.2 tcctest.3)
-
-find_program(DIFF diff C:/MinGW/msys/1.0/bin)
-
-add_test(test1 ${DIFF} tcctest.ref tcctest.1)
-add_test(test2 ${DIFF} tcctest.ref tcctest.2)
-add_test(test3 ${DIFF} tcctest.ref tcctest.3)
+find_package(PythonInterp)
+if(PYTHONINTERP_FOUND)
+  set(TCC_TEST_CFLAGS ${TCC_CFLAGS} -B${CMAKE_BINARY_DIR} -I${CMAKE_BINARY_DIR})
+  if(WIN32)
+    set(TCC_TEST_CFLAGS ${TCC_TEST_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include/winapi)
+  endif()
+  set(TCC_TEST_SOURCE ${TCC_TEST_CFLAGS} -run ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
+  set(TCC_TEST_RUN ${TCC_TEST_CFLAGS} ${TCC_NATIVE_FLAGS} -DONE_SOURCE -run ${CMAKE_SOURCE_DIR}/tcc.c)
+  get_property(TCC TARGET tcc PROPERTY LOCATION)
+  get_property(TCCTESTCC TARGET tcctest-cc PROPERTY LOCATION)
+  set(TCCTEST_PY ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.py ${TCCTESTCC} ${TCC})
+  add_test(test1 ${TCCTEST_PY} ${TCC_TEST_SOURCE})
+  add_test(test2 ${TCCTEST_PY} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
+  add_test(test3 ${TCCTEST_PY} ${TCC_TEST_RUN} ${TCC_TEST_RUN} ${TCC_TEST_SOURCE})
+endif()
 
 set(MORETESTS
  00_assignment

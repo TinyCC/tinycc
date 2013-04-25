@@ -2,20 +2,19 @@ project(tcc C)
 cmake_minimum_required(VERSION 2.6)
 enable_testing()
 
-set(CMAKE_USE_RELATIVE_PATHS ON)
-
+# Detect native platform
 if(WIN32)
   set(BUILD_SHARED_LIBS ON)
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM")
-    set(TCC_TARGET_DEFAULT "WinCE")
+    set(TCC_NATIVE_TARGET "WinCE")
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TCC_TARGET_DEFAULT "Win64")
+    set(TCC_NATIVE_TARGET "Win64")
   else()
-    set(TCC_TARGET_DEFAULT "Win32")
+    set(TCC_NATIVE_TARGET "Win32")
   endif()
 else()
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
-    set(TCC_TARGET_DEFAULT "ARM")
+    set(TCC_NATIVE_TARGET "ARM")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^armv5")
       set(TCC_ARM_VERSION_DEFAULT 5)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^armv6")
@@ -26,108 +25,242 @@ else()
       set(TCC_ARM_VERSION_DEFAULT 4)
     endif()
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TCC_TARGET_DEFAULT "x86_64")
+    set(TCC_NATIVE_TARGET "x86_64")
   else()
-    set(TCC_TARGET_DEFAULT "i386")
+    set(TCC_NATIVE_TARGET "i386")
   endif()
 endif()
 
-set(TCC_TARGET_LIST "Win32" "Win64" "WinCE" "i386" "x86_64" "ARM" "C67")
-set(TCC_TARGET ${TCC_TARGET_DEFAULT} CACHE STRING "Target OS")
-set_property(CACHE TCC_TARGET PROPERTY STRINGS ${TCC_TARGET_LIST})
+if(WIN32)
+  set(EXE_PATH ".")
+  set(TCC_LIB_PATH lib)
+  set(NATIVE_LIB_PATH)
+  set(DOC_PATH doc)
+else()
+  set(EXE_PATH bin)
+  set(TCC_LIB_PATH lib/tcc)
+  set(NATIVE_LIB_PATH lib)
+  set(DOC_PATH share/doc/tcc)
+endif()
+
+# Use two variables to keep CMake configuration variable names consistent
+set(TCC_BCHECK OFF CACHE BOOL "Enable bounds checking")
+set(CONFIG_TCC_BCHECK ${TCC_BCHECK})
+
+set(TCC_BUILD_NATIVE ON CACHE BOOL "Build native compiler")
+set(TCC_BUILD_I386 OFF CACHE BOOL "Build i386 cross compiler")
+set(TCC_BUILD_X64 OFF CACHE BOOL "Build x86-64 cross compiler")
+set(TCC_BUILD_WIN32 OFF CACHE BOOL "Build Windows i386 cross compiler")
+set(TCC_BUILD_WIN64 OFF CACHE BOOL "Build Windows x86-64 cross compiler")
+set(TCC_BUILD_WINCE OFF CACHE BOOL "Build Windows CE cross compiler")
+set(TCC_BUILD_ARM_FPA OFF CACHE BOOL "Build arm-fpa cross compiler")
+set(TCC_BUILD_ARM_FPA_LD OFF CACHE BOOL "Build arm-fpa-ld cross compiler")
+set(TCC_BUILD_ARM_VFP OFF CACHE BOOL "Build arm-vfp cross compiler")
+set(TCC_BUILD_ARM_EABI OFF CACHE BOOL "Build ARM EABI cross compiler")
+set(TCC_BUILD_ARM_EABIHF OFF CACHE BOOL "Build ARM EABI hardware float cross compiler")
+set(TCC_BUILD_ARM OFF CACHE BOOL "Build ARM cross compiler")
+set(TCC_BUILD_C67 OFF CACHE BOOL "Build C67 cross compiler")
 
 set(TCC_ARM_VERSION ${TCC_ARM_VERSION_DEFAULT} CACHE STRING "ARM target CPU version")
 set_property(CACHE TCC_ARM_VERSION PROPERTY STRINGS 4 5 6 7)
-set(TCC_ARM_EABI OFF CACHE BOOL "Enable EABI on ARM")
-set(TCC_ARM_VFP OFF CACHE BOOL "Enable VFP on ARM")
-set(TCC_ARM_HARDFLOAT OFF CACHE BOOL "Enable hardware floating point on ARM")
 
-set(I386_SOURCES i386-gen.c i386-asm.c i386-asm.h i386-tok.h)
-set(X86_64_SOURCES x86_64-gen.c i386-asm.c x86_64-asm.h)
-
-if(TCC_TARGET STREQUAL "Win32")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_I386 -DTCC_TARGET_PE)
-  set(LIBTCC_TARGET_SOURCES ${I386_SOURCES} tccpe.c)
-elseif(TCC_TARGET STREQUAL "Win64")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_X86_64 -DTCC_TARGET_PE)
-  set(LIBTCC_TARGET_SOURCES ${X86_64_SOURCES} tccpe.c)
-elseif(TCC_TARGET STREQUAL "WinCE")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_ARM
-    -DTCC_ARM_VERSION=${TCC_ARM_VERSION})
-  set(LIBTCC_TARGET_SOURCES arm-gen.c tccpe.c)
-elseif(TCC_TARGET STREQUAL "i386")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_I386)
-  set(LIBTCC_TARGET_SOURCES ${I386_SOURCES})
-elseif(TCC_TARGET STREQUAL "x86-64")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_X86_64)
-  set(LIBTCC_TARGET_SOURCES ${X86_64_SOURCES})
-elseif(TCC_TARGET STREQUAL "ARM")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_ARM
-    -DTCC_ARM_VERSION=${TCC_ARM_VERSION}
-    -DTCC_ARM_EABI=${TCC_ARM_EABI}
-    -DTCC_ARM_VFP=${TCC_ARM_VFP}
-    -DTCC_ARM_HARDFLOAT=${TCC_ARM_HARDFLOAT})
-  set(LIBTCC_TARGET_SOURCES arm-gen.c)
-elseif(TCC_TARGET STREQUAL "C67")
-  set(TCC_TARGET_FLAGS -DTCC_TARGET_C67)
-  set(LIBTCC_TARGET_SOURCES c67-gen.c tcccoff.c)
-else()
-  message(FATAL_ERROR "Unrecognised target in TCC_TARGET, must be one of ${TCC_TARGET_LIST}")
-endif()
-
-add_definitions(${TCC_TARGET_FLAGS})
 file(STRINGS "VERSION" TCC_VERSION)
 list(GET TCC_VERSION 0 TCC_VERSION)
 include_directories(${CMAKE_BINARY_DIR})
 configure_file(config.h.in config.h)
+configure_file(config.texi.in config.texi)
 
-add_library(libtcc
-libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
-tcc.h config.h libtcc.h tcctok.h
-${LIBTCC_TARGET_SOURCES}
-)
-set_target_properties(libtcc PROPERTIES PREFIX "")
+# Utility variables
+set(I386_SOURCES i386-gen.c i386-asm.c i386-asm.h i386-tok.h)
+set(X86_64_SOURCES x86_64-gen.c i386-asm.c x86_64-asm.h)
+set(ARM_SOURCES arm_gen.c)
 
-add_executable(tcc tcc.c)
-target_link_libraries(tcc libtcc)
-set(TCC_CFLAGS -I${CMAKE_SOURCE_DIR}/include ${CMAKE_C_FLAGS})
-if(TCC_TARGET MATCHES "^Win")
-  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include)
-endif()
-
-add_executable(tiny_impdef win32/tools/tiny_impdef.c)
-add_executable(tiny_libmaker win32/tools/tiny_libmaker.c)
-
-set(LIBTCC1_I386_SOURCES lib/alloca86.S lib/alloca86-bt.S lib/bcheck.c)
+set(LIBTCC1_I386_SOURCES lib/alloca86.S lib/alloca86-bt.S)
 set(LIBTCC1_WIN_SOURCES win32/lib/crt1.c win32/lib/wincrt1.c win32/lib/dllcrt1.c win32/lib/dllmain.c win32/lib/chkstk.S)
-
-if(TCC_TARGET STREQUAL "Win32")
-  set(LIBTCC1_SOURCES ${LIBTCC1_I386_SOURCES} ${LIBTCC1_WIN_SOURCES})
-elseif(TCC_TARGET STREQUAL "Win64")
-  set(LIBTCC1_SOURCES lib/alloca86_64.S ${LIBTCC1_WIN_SOURCES})
-elseif(TCC_TARGET STREQUAL "i386")
-  set(LIBTCC1_SOURCES ${LIBTCC1_I386_SOURCES})
-elseif(TCC_TARGET STREQUAL "x86-64")
-  set(LIBTCC1_SOURCES lib/alloca86_64.S)
+if(NOT WIN32)
+  set(LIBTCC1_I386_SOURCES ${LIBTCC1_I386_SOURCES} lib/bcheck.c)
 endif()
 
-if (TCC_TARGET MATCHES "^Win")
-  set(XCC tcc ${TCC_CFLAGS} ${TCC_TARGET_FLAGS} -B${CMAKE_SOURCE_DIR}/win32)
-  set(XAR tiny_libmaker${CMAKE_EXECUTABLE_SUFFIX})
-  set(XDEPENDS tiny_libmaker)
+if(WIN32)
+  add_executable(tiny_impdef win32/tools/tiny_impdef.c)
 endif()
+add_executable(tiny_libmaker_32 win32/tools/tiny_libmaker.c)
+set_target_properties(tiny_libmaker_32 PROPERTIES COMPILE_DEFINITIONS TCC_TARGET_I386)
+add_executable(tiny_libmaker_64 win32/tools/tiny_libmaker.c)
+set_target_properties(tiny_libmaker_64 PROPERTIES COMPILE_DEFINITIONS TCC_TARGET_X86_64)
 
-if(LIBTCC1_SOURCES)
-  list(APPEND LIBTCC1_SOURCES lib/libtcc1.c)
-  foreach(LIBTCC1_C ${LIBTCC1_SOURCES})
-    string(REGEX MATCH "[^/]+$" LIBTCC1_O ${LIBTCC1_C})
-    string(REGEX MATCH "^[^.]+" LIBTCC1_O ${LIBTCC1_O})
-    set(LIBTCC1_O ${LIBTCC1_O}.o)
-    add_custom_command(OUTPUT ${LIBTCC1_O} COMMAND ${XCC} -c ${CMAKE_SOURCE_DIR}/${LIBTCC1_C} -o ${LIBTCC1_O} DEPENDS ${CMAKE_SOURCE_DIR}/${LIBTCC1_C})
-    list(APPEND LIBTCC1_OBJECTS ${LIBTCC1_O})
+macro(make_libtcc1 prefix xcc xar defs includes sources)
+  set(libtcc1_prefix)
+  if("${prefix}" STRGREATER "")
+    set(libtcc1_prefix ${prefix}-)
+  endif()
+  set(libtcc1_flags -I${CMAKE_SOURCE_DIR}/include)
+  foreach(i ${defs})
+    set(libtcc1_flags ${libtcc1_flags} -D${i})
   endforeach()
-  add_custom_command(OUTPUT libtcc1.a COMMAND ${XAR} libtcc1.a ${LIBTCC1_OBJECTS} DEPENDS ${LIBTCC1_OBJECTS} ${XDEPENDS})
-  add_custom_target(libtcc1 ALL DEPENDS libtcc1.a)
-endif()
+  foreach(i ${includes})
+    set(libtcc1_flags ${libtcc1_flags} -I${CMAKE_SOURCE_DIR}/${i})
+  endforeach()
+  set(libtcc1_objects)
+  foreach(libtcc1_c lib/libtcc1.c ${sources})
+    string(REGEX MATCH "[^/]+$" libtcc1_o ${libtcc1_c})
+    string(REGEX MATCH "^[^.]+" libtcc1_o ${libtcc1_o})
+    set(libtcc1_o ${libtcc1_prefix}${libtcc1_o}.o)
+    add_custom_command(OUTPUT ${libtcc1_o}
+      COMMAND ${xcc} ${libtcc1_flags} -c ${CMAKE_SOURCE_DIR}/${libtcc1_c} -o ${libtcc1_o}
+      DEPENDS ${xcc} ${CMAKE_SOURCE_DIR}/${libtcc1_c}
+    )
+    list(APPEND libtcc1_objects ${libtcc1_o})
+  endforeach()
+  add_custom_command(OUTPUT ${libtcc1_prefix}libtcc1.a
+    COMMAND ${xar} ${libtcc1_prefix}libtcc1.a ${libtcc1_objects}
+    DEPENDS ${xar} ${libtcc1_objects}
+  )
+  add_custom_target(${libtcc1_prefix}libtcc1 ALL DEPENDS ${libtcc1_prefix}libtcc1.a)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${libtcc1_prefix}libtcc1.a
+    DESTINATION ${TCC_LIB_PATH}/${prefix} RENAME libtcc1.a)
+endmacro()
+
+macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libtcc_ar libtcc_sources libtcc_includes)
+  if (xx${native_name} STREQUAL xx${TCC_NATIVE_TARGET})
+    set(TCC_NATIVE_FLAGS)
+    foreach(make_tcc_def ${definitions})
+      set(TCC_NATIVE_FLAGS ${TCC_NATIVE_FLAGS} -D${make_tcc_def})
+    endforeach()
+    
+    if (TCC_BUILD_NATIVE)
+      add_library(libtcc
+        libtcc.c
+        tccpp.c
+        tccgen.c
+        tccelf.c
+        tccasm.c
+        tccrun.c
+        tcc.h
+        libtcc.h
+        tcctok.h
+        ${tcc_sources}
+      )
+      set_target_properties(libtcc PROPERTIES OUTPUT_NAME tcc PREFIX lib LINK_FLAGS "-Wl,--output-def,libtcc.def")
+      add_executable(tcc tcc.c)
+      target_link_libraries(tcc libtcc)
+      install(TARGETS tcc libtcc RUNTIME DESTINATION ${EXE_PATH} LIBRARY DESTINATION ${NATIVE_LIB_PATH})
+      set_target_properties(tcc libtcc PROPERTIES COMPILE_DEFINITIONS "${definitions}")
+      
+      if("${libtcc_sources}" STRGREATER "")
+        make_libtcc1("" tcc "${libtcc_ar}" "${definitions}" "${libtcc_includes}" "${libtcc_sources}")
+      endif()
+    endif()
+  endif()
+  
+  if(${cross_enabled})
+    add_executable(${cross_name}-tcc tcc.c)
+    set_target_properties(${cross_name}-tcc PROPERTIES COMPILE_DEFINITIONS "ONE_SOURCE;${definitions}")
+    install(TARGETS ${cross_name}-tcc RUNTIME DESTINATION ${EXE_PATH})
+    
+    if("${libtcc_sources}" STRGREATER "")
+      make_libtcc1(${cross_name} "${cross_name}-tcc" "${libtcc_ar}" "${definitions}" "${libtcc_includes}" "${libtcc_sources}")
+    endif()
+  endif()
+endmacro()
+
+make_tcc("Win32" i386-win32 TCC_BUILD_WIN32
+  "TCC_TARGET_I386;TCC_TARGET_PE"
+  "${I386_SOURCES};tccpe.c"
+  tiny_libmaker_32 "${LIBTCC1_I386_SOURCES};${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
+)
+make_tcc("Win64" x86_64-win32 TCC_BUILD_WIN64
+  "TCC_TARGET_X86_64;TCC_TARGET_PE"
+  "${X86_64_SOURCES};tccpe.c"
+  tiny_libmaker_64 "lib/alloca86_64.S;${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
+)
+make_tcc("WinCE" arm-win32 TCC_BUILD_WINCE
+  "TCC_TARGET_ARM;TCC_ARM_VERSION=${TCC_ARM_VERSION};TCC_TARGET_PE"
+  "${ARM_SOURCES};tccpe.c"
+  "" "" ""
+)
+make_tcc("i386" i386 TCC_BUILD_I386
+  TCC_TARGET_I386
+  "${I386_SOURCES}"
+  tiny_libmaker_32 "${LIBTCC1_I386_SOURCES}" ""
+)
+make_tcc("x86_64" x86_64 TCC_BUILD_X64
+  TCC_TARGET_X86_64
+  "${X86_64_SOURCES}"
+  tiny_libmaker_64 "lib/alloca86_64.S" ""
+)
+set(ARM_DEFINITIONS TCC_TARGET_ARM TCC_ARM_VERSION=${TCC_ARM_VERSION})
+make_tcc("ARM" arm TCC_BUILD_ARM
+  "${ARM_DEFINITIONS};WITHOUT_LIBTCC"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" arm-eabihf TCC_BUILD_ARM_EABIHF
+  "${ARM_DEFINITIONS};TCC_ARM_EABI;TCC_ARM_HARDFLOAT"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" arm-eabi TCC_BUILD_ARM_EABI
+  "${ARM_DEFINITIONS};TCC_ARM_EABI"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" arm-fpa TCC_BUILD_ARM_FPA
+  "${ARM_DEFINITIONS}"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" arm-fpa-ld TCC_BUILD_ARM_FPA_LD
+  "${ARM_DEFINITIONS};LDOUBLE_SIZE=12"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" arm-vfp TCC_BUILD_ARM_VFP
+  "${ARM_DEFINITIONS};TCC_ARM_VFP"
+  "${ARM_SOURCES}"
+  "" "" ""
+)
+make_tcc("" c67 TCC_BUILD_C67
+  TCC_TARGET_C67
+  "c67-gen.c;tcccoff.c"
+  "" "" ""
+)
 
 add_subdirectory(tests)
+
+find_program(MAKEINFO NAMES makeinfo PATHS C:/MinGW/MSYS/1.0/bin)
+if(MAKEINFO)
+  add_custom_command(OUTPUT tcc-doc.html
+    COMMAND ${MAKEINFO} --no-split --html -o tcc-doc.html ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+  )
+  set(TCC_DOC_FILES tcc-doc.html)
+  if(NOT WIN32)
+    add_custom_command(OUTPUT tcc-doc.info
+      COMMAND ${MAKEINFO} -o tcc-doc.info ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+    )
+    set(TCC_DOC_FILES ${TCC_DOC_FILES} tcc-doc.info)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tcc-doc.info DESTINATION share/info)
+  endif()
+  add_custom_target(tcc-doc ALL DEPENDS ${TCC_DOC_FILES})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tcc-doc.html DESTINATION ${DOC_PATH})
+endif()
+
+if(WIN32)
+  file(GLOB WIN32_DEFS win32/lib/*.def)
+  install(FILES ${WIN32_DEFS} DESTINATION lib)
+  install(DIRECTORY include/ DESTINATION include)
+  install(DIRECTORY win32/include/ DESTINATION include)
+  install(DIRECTORY win32/examples/ DESTINATION examples)
+  install(FILES win32/tcc-win32.txt DESTINATION doc)
+  install(FILES ${CMAKE_BINARY_DIR}/libtcc.def DESTINATION libtcc)
+  install(FILES ${CMAKE_BINARY_DIR}/libtcc.dll.a DESTINATION libtcc RENAME libtcc.a)
+  install(FILES libtcc.h DESTINATION libtcc)
+else()
+  install(FILES libtcc.h DESTINATION include)
+  install(DIRECTORY include/ DESTINATION lib/tcc/include)
+  install(DIRECTORY win32/include/ DESTINATION lib/tcc/win32/include)
+  install(DIRECTORY include/ DESTINATION lib/tcc/win32/include)
+endif()
+
