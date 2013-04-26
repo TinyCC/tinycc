@@ -645,9 +645,10 @@ void *__va_start(void *fp)
 
 void *__va_arg(struct __va_list_struct *ap,
                enum __va_arg_type arg_type,
-               int size)
+               int size, int align)
 {
     size = (size + 7) & ~7;
+    align = (align + 7) & ~7;
     switch (arg_type) {
     case __va_gen_reg:
         if (ap->gp_offset < 48) {
@@ -668,6 +669,7 @@ void *__va_arg(struct __va_list_struct *ap,
     case __va_stack:
     use_overflow_area:
         ap->overflow_arg_area += size;
+        ap->overflow_arg_area = (char*)((long long)(ap->overflow_arg_area + align - 1) & -(long long)align);
         return ap->overflow_arg_area - size;
 
     default:

@@ -7,13 +7,13 @@
 typedef void *va_list;
 
 va_list __va_start(void *fp);
-void *__va_arg(va_list ap, int arg_type, int size);
+void *__va_arg(va_list ap, int arg_type, int size, int align);
 va_list __va_copy(va_list src);
 void __va_end(va_list ap);
 
 #define va_start(ap, last) ((ap) = __va_start(__builtin_frame_address(0)))
 #define va_arg(ap, type)                                                \
-    (*(type *)(__va_arg(ap, __builtin_va_arg_types(type), sizeof(type))))
+    (*(type *)(__va_arg(ap, __builtin_va_arg_types(type), sizeof(type), __alignof__(type))))
 #define va_copy(dest, src) ((dest) = __va_copy(src))
 #define va_end(ap) __va_end(ap)
 

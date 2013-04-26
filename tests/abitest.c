@@ -389,6 +389,24 @@ static int stdarg_struct_test(void) {
   return run_callback(src, stdarg_struct_test_callback);
 }
 
+/* Test that x86-64 arranges the stack correctly for arguments with alignment >8 bytes */
+
+typedef LONG_DOUBLE (*arg_align_test_callback_type) (LONG_DOUBLE,int,LONG_DOUBLE,int,LONG_DOUBLE);
+
+static int arg_align_test_callback(void *ptr) {
+  arg_align_test_callback_type f = (arg_align_test_callback_type)ptr;
+  long double x = f(12, 0, 25, 0, 37);
+  return (x == 74) ? 0 : -1;
+}
+
+static int arg_align_test(void) {
+  const char *src = 
+  "long double f(long double a, int b, long double c, int d, long double e) {\n"
+  "  return a + c + e;\n"
+  "}\n";
+  return run_callback(src, arg_align_test_callback);
+}
+
 #define RUN_TEST(t) \
   if (!testname || (strcmp(#t, testname) == 0)) { \
     fputs(#t "... ", stdout); \
@@ -432,5 +450,6 @@ int main(int argc, char **argv) {
   RUN_TEST(many_struct_test_2);
   RUN_TEST(stdarg_test);
   RUN_TEST(stdarg_struct_test);
+  RUN_TEST(arg_align_test);
   return retval;
 }
