@@ -57,6 +57,8 @@ endif()
 # Use two variables to keep CMake configuration variable names consistent
 set(TCC_BCHECK OFF CACHE BOOL "Enable bounds checking")
 set(CONFIG_TCC_BCHECK ${TCC_BCHECK})
+set(TCC_ASSERT OFF CACHE BOOL "Enable assertions")
+set(CONFIG_TCC_ASSERT ${TCC_ASSERT})
 
 set(TCC_BUILD_NATIVE ON CACHE BOOL "Build native compiler")
 set(TCC_BUILD_I386 OFF CACHE BOOL "Build i386 cross compiler")

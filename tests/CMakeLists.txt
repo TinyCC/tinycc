@@ -15,10 +15,15 @@ add_test(NAME abitest-cc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND abitest-c
 
 set(ABITEST_TCC abitest-tcc${CMAKE_EXECUTABLE_SUFFIX})
 get_property(LIBTCC_LIB TARGET libtcc PROPERTY LOCATION)
-add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -g ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LDFLAGS} ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS tcc abitest.c)
+add_custom_command(OUTPUT ${ABITEST_TCC} COMMAND tcc ${TCC_CFLAGS} -g ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c ${LIBTCC_LDFLAGS} ${LIBTCC_LIB} -o ${ABITEST_TCC} DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/abitest.c)
 add_custom_target(abitest-tcc-exe ALL DEPENDS ${ABITEST_TCC})
 
 add_test(NAME abitest-tcc WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${ABITEST_TCC} lib_path=${CMAKE_BINARY_DIR} include=${CMAKE_SOURCE_DIR}/include)
+
+set(VLA_TEST vla_test${CMAKE_EXECUTABLE_SUFFIX})
+add_custom_command(OUTPUT ${VLA_TEST} COMMAND tcc ${TCC_CFLAGS} -g ${CMAKE_CURRENT_SOURCE_DIR}/vla_test.c -o ${VLA_TEST} DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/vla_test.c)
+add_custom_target(vla_test-exe ALL DEPENDS ${VLA_TEST})
+add_test(vla_test vla_test)
 
 add_executable(tcctest-cc tcctest.c)
 target_link_libraries(tcctest-cc libtcc)
@@ -41,21 +46,21 @@ if(PYTHONINTERP_FOUND)
 
   # Object + link output
   set(TEST4 test4${CMAKE_EXECUTABLE_SUFFIX})
-  add_custom_command(OUTPUT test4.o COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -c -o test4.o DEPENDS tcc tcctest.c)
+  add_custom_command(OUTPUT test4.o COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -c -o test4.o DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
   add_custom_command(OUTPUT ${TEST4} COMMAND tcc ${TCC_TEST_CFLAGS} test4.o -o ${TEST4} DEPENDS tcc test4.o)
   add_custom_target(test4-exe ALL DEPENDS ${TEST4})
   add_test(test4 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST4})
 
   # Dynamic output
   set(TEST5 test5${CMAKE_EXECUTABLE_SUFFIX})
-  add_custom_command(OUTPUT ${TEST5} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -o ${TEST5} DEPENDS tcc tcctest.c)
+  add_custom_command(OUTPUT ${TEST5} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -o ${TEST5} DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
   add_custom_target(test5-exe ALL DEPENDS ${TEST5})
   add_test(test5 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST5})
 
   if(TCC_BCHECK)
     # Dynamic output + bound check
     set(TEST6 test6${CMAKE_EXECUTABLE_SUFFIX})
-    add_custom_command(OUTPUT ${TEST5} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -b -o ${TEST6} DEPENDS tcc tcctest.c)
+    add_custom_command(OUTPUT ${TEST6} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -b -o ${TEST6} DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
     add_custom_target(test6-exe ALL DEPENDS ${TEST6})
     add_test(test6 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST6})
   endif()
@@ -63,7 +68,7 @@ if(PYTHONINTERP_FOUND)
   if(0)
     # Static output
     set(TEST7 test7${CMAKE_EXECUTABLE_SUFFIX})
-    add_custom_command(OUTPUT ${TEST7} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -static -o ${TEST7} DEPENDS tcc tcctest.c)
+    add_custom_command(OUTPUT ${TEST7} COMMAND tcc ${TCC_TEST_CFLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c -static -o ${TEST7} DEPENDS tcc ${CMAKE_CURRENT_SOURCE_DIR}/tcctest.c)
     add_custom_target(test7-exe ALL DEPENDS ${TEST7})
     add_test(test7 ${TCCTEST_PY} ${CMAKE_CURRENT_BINARY_DIR}/${TEST7})
   endif()

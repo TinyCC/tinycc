@@ -23,7 +23,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         24
+#define NB_REGS         25
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -57,6 +57,7 @@ enum {
     TREG_RAX = 0,
     TREG_RCX = 1,
     TREG_RDX = 2,
+    TREG_RSP = 4,
     TREG_RSI = 6,
     TREG_RDI = 7,
 
@@ -74,7 +75,7 @@ enum {
     TREG_XMM6 = 22,
     TREG_XMM7 = 23,
 
-    TREG_ST0 = 4, // SP slot won't be used
+    TREG_ST0 = 24,
 
     TREG_MEM = 0x20,
 };
@@ -125,7 +126,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
     /* ecx */ RC_INT | RC_RCX,
     /* edx */ RC_INT | RC_RDX,
     0,
-    /* st0 */ RC_ST0,
+    0,
     0,
     0,
     0,
@@ -147,7 +148,8 @@ ST_DATA const int reg_classes[NB_REGS] = {
        but they are not tagged with RC_FLOAT because they are
        callee saved on Windows */
     RC_XMM6,
-    RC_XMM7 
+    RC_XMM7,
+    /* st0 */ RC_ST0
 };
 
 static unsigned long func_sub_sp_offset;
@@ -2079,6 +2081,43 @@ void ggoto(void)
     gcall_or_jmp(1);
     vtop--;
 }
+
+/* Save the stack pointer onto the stack and return the location of its address */
+ST_FUNC void gen_vla_sp_save(int addr) {
+    /* mov %rsp,addr(%rbp)*/
+    gen_modrm64(0x89, TREG_RSP, VT_LOCAL, NULL, addr);
+}
+
+/* Restore the SP from a location on the stack */
+ST_FUNC void gen_vla_sp_restore(int addr) {
+    gen_modrm64(0x8b, TREG_RSP, VT_LOCAL, NULL, addr);
+}
+
+/* Subtract from the stack pointer, and push the resulting value onto the stack */
+ST_FUNC void gen_vla_alloc(CType *type, int align) {
+#ifdef TCC_TARGET_PE
+    /* alloca does more than just adjust %rsp on Windows */
+    vpush_global_sym(&func_old_type, TOK_alloca);
+    vswap(); /* Move alloca ref past allocation size */
+    gfunc_call(1);
+    vset(type, REG_IRET, 0);
+#else
+    int r;
+    r = gv(RC_INT); /* allocation size */
+    /* sub r,%rsp */
+    o(0x2b48);
+    o(0xe0 | REG_VALUE(r));
+    /* We align to 16 bytes rather than align */
+    /* and ~15, %rsp */
+    o(0xf0e48348);
+    /* mov %rsp, r */
+    o(0x8948);
+    o(0xe0 | REG_VALUE(r));
+    vpop();
+    vset(type, r, 0);
+#endif
+}
+
 
 /* end of x86-64 code generator */
 /*************************************************************/

@@ -14,6 +14,7 @@ TESTS = \
  libtest \
  test3 \
  abitest \
+ vla_test-run \
  moretests
 
 # test4 -- problem with -static
@@ -30,6 +31,10 @@ ifdef CONFIG_WIN32
 endif
 ifeq ($(TARGETOS),Darwin)
  TESTS := $(filter-out hello-exe test3 btest,$(TESTS))
+endif
+ifeq ($(ARCH),i386)
+else ifneq ($(ARCH),x86-64)
+ TESTS := $(filter-out vla_test-run,$(TESTS))
 endif
 
 ifdef DISABLE_STATIC
@@ -189,6 +194,12 @@ abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
 	@echo ------------ $@ ------------
 	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 	./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
+
+vla_test$(EXESUF): vla_test.c
+	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS)
+vla_test-run: vla_test$(EXESUF)
+	@echo ------------ $@ ------------
+	./vla_test$(EXESUF)
 
 # targets for development
 %.bin: %.c tcc

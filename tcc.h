@@ -40,6 +40,13 @@
 #include <setjmp.h>
 #include <time.h>
 
+#ifdef CONFIG_TCCASSERT
+#include <assert.h>
+#define TCC_ASSERT(ex) assert(ex)
+#else
+#define TCC_ASSERT(ex)
+#endif
+
 #ifndef _WIN32
 # include <unistd.h>
 # include <sys/time.h>
@@ -403,6 +410,12 @@ typedef struct AttributeDef {
 #define SYM_STRUCT     0x40000000 /* struct/union/enum symbol space */
 #define SYM_FIELD      0x20000000 /* struct/union field symbol space */
 #define SYM_FIRST_ANOM 0x10000000 /* first anonymous sym */
+
+#define VLA_SP_LOC_SET     0x01 /* Location of SP on stack has been allocated */
+#define VLA_SP_SAVED       0x02 /* SP has been saved to slot already */
+#define VLA_NEED_NEW_FRAME 0x04 /* Needs new frame for next VLA */
+#define VLA_IN_SCOPE       0x08 /* One or more VLAs are in scope */
+#define VLA_SCOPE_FLAGS    (VLA_SP_SAVED|VLA_NEED_NEW_FRAME|VLA_IN_SCOPE) /* Flags which are saved and restored upon entering and exiting a block */
 
 /* stored in 'Sym.c' field */
 #define FUNC_NEW       1 /* ansi function prototype */
@@ -1201,7 +1214,7 @@ ST_FUNC void decl(int l);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif
-#ifdef TCC_TARGET_X86_64
+#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
 ST_FUNC int classify_x86_64_va_arg(CType *ty);
 #endif
 
@@ -1286,6 +1299,9 @@ ST_FUNC void o(unsigned int c);
 #ifndef TCC_TARGET_ARM
 ST_FUNC void gen_cvt_itof(int t);
 #endif
+ST_FUNC void gen_vla_sp_save(int addr);
+ST_FUNC void gen_vla_sp_restore(int addr);
+ST_FUNC void gen_vla_alloc(CType *type, int align);
 
 /* ------------ i386-gen.c ------------ */
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64

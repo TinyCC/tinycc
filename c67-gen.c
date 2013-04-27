@@ -2560,6 +2560,21 @@ void ggoto(void)
     vtop--;
 }
 
+/* Save the stack pointer onto the stack and return the location of its address */
+ST_FUNC void gen_vla_sp_save(int addr) {
+    tcc_error("variable length arrays unsupported for this target");
+}
+
+/* Restore the SP from a location on the stack */
+ST_FUNC void gen_vla_sp_restore(int addr) {
+    tcc_error("variable length arrays unsupported for this target");
+}
+
+/* Subtract from the stack pointer, and push the resulting value onto the stack */
+ST_FUNC void gen_vla_alloc(CType *type, int align) {
+    tcc_error("variable length arrays unsupported for this target");
+}
+
 /* end of C67 code generator */
 /*************************************************************/
 #endif

@@ -19,6 +19,7 @@ TMPH=$TMPN.h
 # default parameters
 build_cross="no"
 use_libgcc="no"
+enable_assert="no"
 prefix=""
 execprefix=""
 bindir=""
@@ -165,6 +166,8 @@ for opt do
   ;;
   --enable-cross) build_cross="yes"
   ;;
+  --enable-assert) enable_assert="yes"
+  ;;
   --disable-static) disable_static="yes"
   ;;
   --disable-rpath) disable_rpath="yes"
@@ -274,6 +277,7 @@ Advanced options (experts only):
   --enable-mingw32         build windows version on linux with mingw32
   --enable-cygwin          build windows version on windows with cygwin
   --enable-cross           build cross compilers
+  --enable-assert          enable debug assertions
   --with-selinux           use mmap for exec mem [needs writable /tmp]
   --sysincludepaths=...    specify system include paths, colon separated
   --libpaths=...           specify system library paths, colon separated
@@ -483,6 +487,9 @@ fi
 if test "$have_selinux" = "yes" ; then
   echo "#define HAVE_SELINUX" >> $TMPH
   echo "HAVE_SELINUX=yes" >> config.mak
+fi
+if test "$enable_assert" = "yes" ; then
+  echo "#define CONFIG_TCC_ASSERT" >> $TMPH
 fi
 
 version=`head $source_path/VERSION`
