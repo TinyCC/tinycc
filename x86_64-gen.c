@@ -664,9 +664,10 @@ void gen_offs_sp(int b, int r, int d)
 }
 
 /* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
-    *ret_align = 1; // Never have to re-align return values for x86-64
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+{
     int size, align;
+    *ret_align = 1; // Never have to re-align return values for x86-64
     size = type_size(vt, &align);
     ret->ref = NULL;
     if (size > 8) {
@@ -687,9 +688,9 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
 }
 
 int gfunc_arg_size(CType *type) {
+    int align;
     if (type->t & (VT_ARRAY|VT_BITFIELD))
         return 8;
-    int align;
     return type_size(type, &align);
 }
 
@@ -706,9 +707,10 @@ void gfunc_call(int nb_args)
        So, we process arguments which will be passed by stack first. */
     struct_size = args_size;
     for(i = 0; i < nb_args; i++) {
-        --arg;
+        SValue *sv;
         
-        SValue *sv = &vtop[-i];
+        --arg;
+        sv = &vtop[-i];
         bt = (sv->type.t & VT_BTYPE);
         size = gfunc_arg_size(&sv->type);
 
@@ -2025,8 +2027,9 @@ void gen_cvt_ftof(int t)
             vtop->r = TREG_ST0;
         }
     } else {
+        int r;
         gv(RC_ST0);
-        int r = get_reg(RC_FLOAT);
+        r = get_reg(RC_FLOAT);
         if (tbt == VT_DOUBLE) {
             o(0xf0245cdd); /* fstpl -0x10(%rsp) */
             /* movsd -0x10(%rsp),%xmm0 */

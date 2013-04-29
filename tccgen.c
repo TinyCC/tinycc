@@ -3995,9 +3995,10 @@ ST_FUNC void unary(void)
             vtop->r2 = ret.r2;
             /* handle packed struct return */
             if (((s->type.t & VT_BTYPE) == VT_STRUCT) && !sret) {
+                int addr;
                 size = type_size(&s->type, &align);
                 loc = (loc - size) & -align;
-                int addr = loc;
+                addr = loc;
                 vset(&ret.type, VT_LOCAL | VT_LVAL, addr);
                 vswap();
                 vstore();
@@ -4493,7 +4494,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gsym_addr(b, d);
     } else if (tok == '{') {
         Sym *llabel;
-        
+        int block_vla_sp_loc, *saved_vla_sp_loc, saved_vla_flags;
+
         next();
         /* record local declaration stack position */
         s = local_stack;
@@ -4503,12 +4505,11 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         llabel = local_label_stack;
         
         /* save VLA state */
-        int block_vla_sp_loc = *vla_sp_loc;
-        int *saved_vla_sp_loc = vla_sp_loc;
+        block_vla_sp_loc = *(saved_vla_sp_loc = vla_sp_loc);
         if (saved_vla_sp_loc != &vla_sp_root_loc)
           vla_sp_loc = &block_vla_sp_loc;
 
-        int saved_vla_flags = vla_flags;
+        saved_vla_flags = vla_flags;
         vla_flags |= VLA_NEED_NEW_FRAME;
         
         /* handle local labels declarations */

@@ -366,10 +366,12 @@ static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
 static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 /* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
-    *ret_align = 1; // Never have to re-align return values for x86
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+{
 #ifdef TCC_TARGET_PE
     int size, align;
+
+    *ret_align = 1; // Never have to re-align return values for x86
     size = type_size(vt, &align);
     if (size > 8) {
         return 1;
@@ -383,6 +385,7 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
         return 0;
     }
 #else
+    *ret_align = 1; // Never have to re-align return values for x86
     return 1;
 #endif
 }
