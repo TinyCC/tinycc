@@ -1217,6 +1217,7 @@ void gfunc_prolog(CType *func_type)
     int addr, pn = struct_ret, sn = 0; /* pn=core, sn=stack */
 
 #ifdef TCC_ARM_HARDFLOAT
+    func_vc += nf * 4;
     avregs = AVAIL_REGS_INITIALIZER;
 #endif
     while ((sym = sym->next)) {
