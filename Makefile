@@ -315,7 +315,7 @@ endif
 
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	makeinfo --no-split --html -o $@ $<
+	-makeinfo --no-split --html --number-sections -o $@ $<
 
 tcc.1: tcc-doc.texi
 	-$(top_srcdir)/texi2pod.pl $< tcc.pod
