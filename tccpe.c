@@ -663,7 +663,7 @@ static int pe_write(struct pe_info *pe)
             }
         }
 
-        pstrcpy((char*)psh->Name, sizeof psh->Name, sh_name);
+        strncpy((char*)psh->Name, sh_name, sizeof psh->Name);
 
         psh->Characteristics = pe_sec_flags[si->cls];
         psh->VirtualAddress = addr;
