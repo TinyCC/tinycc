@@ -950,6 +950,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__arm", NULL);
     tcc_define_symbol(s, "arm", NULL);
     tcc_define_symbol(s, "__APCS_32__", NULL);
+#if defined(TCC_ARM_HARDFLOAT)
+    tcc_define_symbol(s, "__ARM_PCS_VFP", NULL);
+#endif
 #endif
 
 #ifdef TCC_TARGET_PE
