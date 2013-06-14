@@ -571,7 +571,7 @@ void load(int r, SValue *sv)
 	op=0xE5100000;
 	if(!sign)
 	  op|=0x800000;
-        if ((ft & VT_BTYPE) == VT_BYTE)
+        if ((ft & VT_BTYPE) == VT_BYTE || (ft & VT_BTYPE) == VT_BOOL)
           op|=0x400000;
         o(op|(intr(r)<<12)|fc|(base<<16));
       }
@@ -699,7 +699,7 @@ void store(int r, SValue *sv)
 	op=0xE5000000;
 	if(!sign)
 	  op|=0x800000;
-        if ((ft & VT_BTYPE) == VT_BYTE)
+        if ((ft & VT_BTYPE) == VT_BYTE || (ft & VT_BTYPE) == VT_BOOL)
           op|=0x400000;
         o(op|(intr(r)<<12)|fc|(base<<16));
       }
