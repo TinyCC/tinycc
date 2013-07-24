@@ -2764,6 +2764,7 @@ static void struct_decl(CType *type, int u)
         v = anon_sym++;
     }
     type1.t = a;
+    type1.ref = NULL;
     /* we put an undefined size for struct/union */
     s = sym_push(v | SYM_STRUCT, &type1, 0, -1);
     s->r = 0; /* default alignment is zero as gcc */
@@ -5337,12 +5338,13 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
     flexible_array = NULL;
     if ((type->t & VT_BTYPE) == VT_STRUCT) {
-        Sym *field;
-        field = type->ref;
-        while (field && field->next)
-            field = field->next;
-        if (field->type.t & VT_ARRAY && field->type.ref->c < 0)
-            flexible_array = field;
+        Sym *field = type->ref->next;
+        if (field) {
+            while (field->next)
+                field = field->next;
+            if (field->type.t & VT_ARRAY && field->type.ref->c < 0)
+                flexible_array = field;
+        }
     }
 
     size = type_size(type, &align);
