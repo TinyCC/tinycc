@@ -97,7 +97,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
 
-    prog_main = tcc_get_symbol_err(s1, "main");
+    prog_main = tcc_get_symbol_err(s1, s1->runtime_main);
 
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug) {

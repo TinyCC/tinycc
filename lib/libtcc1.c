@@ -478,13 +478,24 @@ long long __ashldi3(long long a, int b)
 #endif
 }
 
-#if defined(__i386__)
-/* FPU control word for rounding to nearest mode */
-unsigned short __tcc_fpu_control = 0x137f;
-/* FPU control word for round to zero mode for int conversion */
-unsigned short __tcc_int_fpu_control = 0x137f | 0x0c00;
+#ifndef _WIN32
+void __tcc_fpinit(void)
+{
+    unsigned c = 0x137F;
+    __asm__ __volatile__ ("fldcw %0" : "=m" (c));
+}
 #endif
-
+long long __tcc_cvt_ftol(long double x)
+{
+    unsigned c0, c1;
+    long long ret;
+    __asm__ __volatile__ ("fnstcw %0" : "=m" (c0));
+    c1 = c0 | 0x0C00;
+    __asm__ __volatile__ ("fldcw %0" : "=m" (c1));
+    __asm__ __volatile__ ("fistpll %0"  : "=m" (ret));
+    __asm__ __volatile__ ("fldcw %0" : "=m" (c0));
+    return ret;
+}
 #endif /* !__x86_64__ */
 
 /* XXX: fix tcc's code generator to do this instead */

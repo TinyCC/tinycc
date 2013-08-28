@@ -59,6 +59,6 @@ int _runwinmain(int argc, char **argv)
         szCmd = "";
     else if (szCmd > p && szCmd[-1] == '\"')
         --szCmd;
+    _controlfp(0x10000, 0x30000);
     return WinMain(GetModuleHandle(NULL), NULL, szCmd, SW_SHOWDEFAULT);
 }
-

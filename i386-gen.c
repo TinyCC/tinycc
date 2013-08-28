@@ -338,6 +338,15 @@ static void gadd_sp(int val)
     }
 }
 
+static void gen_static_call(int v)
+{
+    Sym *sym;
+
+    sym = external_global_sym(v, &func_old_type, 0);
+    oad(0xe8, -4);
+    greloc(cur_text_section, sym, ind-4, R_386_PC32);
+}
+
 /* 'is_jmp' is '1' if it is a jump */
 static void gcall_or_jmp(int is_jmp)
 {
@@ -570,6 +579,12 @@ ST_FUNC void gfunc_prolog(CType *func_type)
         func_bound_offset = lbounds_section->data_offset;
     }
 #endif
+
+#ifndef TCC_TARGET_PE
+    if (0 == strcmp(funcname, "main"))
+        gen_static_call(TOK___tcc_fpinit);
+#endif
+
 }
 
 /* generate function epilog */
@@ -582,7 +597,7 @@ ST_FUNC void gfunc_epilog(void)
      && func_bound_offset != lbounds_section->data_offset) {
         int saved_ind;
         int *bounds_ptr;
-        Sym *sym, *sym_data;
+        Sym *sym_data;
         /* add end of table info */
         bounds_ptr = section_ptr_add(lbounds_section, sizeof(int));
         *bounds_ptr = 0;
@@ -594,20 +609,16 @@ ST_FUNC void gfunc_epilog(void)
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_new, &func_old_type, 0);
-        greloc(cur_text_section, sym, 
-               ind + 1, R_386_PC32);
-        oad(0xe8, -4);
+        gen_static_call(TOK___bound_local_new);
+
         ind = saved_ind;
         /* generate bound check local freeing */
         o(0x5250); /* save returned value, if any */
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_delete, &func_old_type, 0);
-        greloc(cur_text_section, sym, 
-               ind + 1, R_386_PC32);
-        oad(0xe8, -4);
+        gen_static_call(TOK___bound_local_delete);
+
         o(0x585a); /* restore returned value, if any */
     }
 #endif
@@ -626,10 +637,8 @@ ST_FUNC void gfunc_epilog(void)
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
 #ifdef TCC_TARGET_PE
     if (v >= 4096) {
-        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
-        oad(0xe8, -4); /* call __chkstk, (does the stackframe too) */
-        greloc(cur_text_section, sym, ind-4, R_386_PC32);
+        gen_static_call(TOK___chkstk); /* call __chkstk, (does the stackframe too) */
     } else
 #endif
     {
@@ -992,52 +1001,13 @@ ST_FUNC void gen_cvt_itof(int t)
 /* XXX: handle long long case */
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    int r, r2, size;
-    Sym *sym;
-    CType ushort_type;
-
-    ushort_type.t = VT_SHORT | VT_UNSIGNED;
-    ushort_type.ref = 0;
-
     gv(RC_FLOAT);
-    if (t != VT_INT)
-        size = 8;
-    else 
-        size = 4;
-    
-    o(0x2dd9); /* ldcw xxx */
-    sym = external_global_sym(TOK___tcc_int_fpu_control, 
-                              &ushort_type, VT_LVAL);
-    greloc(cur_text_section, sym, 
-           ind, R_386_32);
-    gen_le32(0);
-    
-    oad(0xec81, size); /* sub $xxx, %esp */
-    if (size == 4)
-        o(0x1cdb); /* fistpl */
-    else
-        o(0x3cdf); /* fistpll */
-    o(0x24);
-    o(0x2dd9); /* ldcw xxx */
-    sym = external_global_sym(TOK___tcc_fpu_control, 
-                              &ushort_type, VT_LVAL);
-    greloc(cur_text_section, sym, 
-           ind, R_386_32);
-    gen_le32(0);
-
-    r = get_reg(RC_INT);
-    o(0x58 + r); /* pop r */
-    if (size == 8) {
-        if (t == VT_LLONG) {
-            vtop->r = r; /* mark reg as used */
-            r2 = get_reg(RC_INT);
-            o(0x58 + r2); /* pop r2 */
-            vtop->r2 = r2;
-        } else {
-            o(0x04c483); /* add $4, %esp */
-        }
-    }
-    vtop->r = r;
+    save_reg(TREG_EAX);
+    save_reg(TREG_EDX);
+    gen_static_call(TOK___tcc_cvt_ftol);
+    vtop->r = TREG_EAX; /* mark reg as used */
+    if (t == VT_LLONG)
+        vtop->r2 = TREG_EDX;
 }
 
 /* convert from one floating point type to another */
@@ -1060,18 +1030,13 @@ ST_FUNC void ggoto(void)
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
-    Sym *sym;
-
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     /* save all temporary registers */
     vtop -= 2;
     save_regs(0);
     /* do a fast function call */
-    sym = external_global_sym(TOK___bound_ptr_add, &func_old_type, 0);
-    greloc(cur_text_section, sym, 
-           ind + 1, R_386_PC32);
-    oad(0xe8, -4);
+    gen_static_call(TOK___bound_ptr_add);
     /* returned pointer is in eax */
     vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;

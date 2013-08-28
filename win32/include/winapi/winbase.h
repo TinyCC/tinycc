@@ -968,15 +968,15 @@ extern "C" {
   LONG64 InterlockedExchangeAdd64(LONG64 volatile *Addend,LONG64 Value);
   LONG64 InterlockedCompareExchange64(LONG64 volatile *Destination,LONG64 ExChange,LONG64 Comperand);
 #else
-  LONG InterlockedIncrement(LONG volatile *lpAddend);
-  LONG InterlockedDecrement(LONG volatile *lpAddend);
-  LONG InterlockedExchange(LONG volatile *Target,LONG Value);
+  LONG WINAPI InterlockedIncrement(LONG volatile *lpAddend);
+  LONG WINAPI InterlockedDecrement(LONG volatile *lpAddend);
+  LONG WINAPI InterlockedExchange(LONG volatile *Target,LONG Value);
 
 #define InterlockedExchangePointer(Target,Value) (PVOID)InterlockedExchange((PLONG)(Target),(LONG)(Value))
 
-  LONG InterlockedExchangeAdd(LONG volatile *Addend,LONG Value);
-  LONG InterlockedCompareExchange(LONG volatile *Destination,LONG Exchange,LONG Comperand);
-  LONGLONG InterlockedCompareExchange64(LONGLONG volatile *Destination,LONGLONG Exchange,LONGLONG Comperand);
+  LONG WINAPI InterlockedExchangeAdd(LONG volatile *Addend,LONG Value);
+  LONG WINAPI InterlockedCompareExchange(LONG volatile *Destination,LONG Exchange,LONG Comperand);
+  LONGLONG WINAPI InterlockedCompareExchange64(LONGLONG volatile *Destination,LONGLONG Exchange,LONGLONG Comperand);
 
   __CRT_INLINE LONGLONG InterlockedAnd64 (LONGLONG volatile *Destination,LONGLONG Value) {
     LONGLONG Old;

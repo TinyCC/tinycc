@@ -1726,7 +1726,6 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
-    ADDR3264 addr = 0;
     int pe_type = 0;
 
     if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
@@ -1742,16 +1741,13 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
-        ? PE_GUI == pe_type ? "__runwinmain" : "_main"
+        ? PE_GUI == pe_type ? "__runwinmain" : "__runmain"
         : PE_DLL == pe_type ? PE_STDSYM("__dllstart","@12")
         : PE_GUI == pe_type ? "__winstart" : "__start"
         ;
 
-    if (!s1->leading_underscore || strchr(start_symbol, '@')) {
+    if (!s1->leading_underscore || strchr(start_symbol, '@'))
         ++start_symbol;
-        if (start_symbol[0] != '_')
-            start_symbol = NULL;
-    }
 
     /* grab the startup code from libtcc1 */
     if (start_symbol)
@@ -1776,21 +1772,13 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         }
     }
 
-    if (TCC_OUTPUT_MEMORY == s1->output_type)
+    if (TCC_OUTPUT_MEMORY == s1->output_type) {
         pe_type = PE_RUN;
-
-    if (start_symbol) {
-        addr = get_elf_sym_addr(s1, start_symbol, 1);
-        if (PE_RUN == pe_type && addr)
-            /* for -run GUI's, put '_runwinmain' instead of 'main' */
-            add_elf_sym(symtab_section,
-                    addr, 0,
-                    ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                    text_section->sh_num, "main");
+        s1->runtime_main = start_symbol;
     }
 
     pe->type = pe_type;
-    pe->start_addr = addr;
+    pe->start_addr = (DWORD)tcc_get_symbol_err(s1, start_symbol);
 }
 
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename)

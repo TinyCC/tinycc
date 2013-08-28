@@ -194,8 +194,8 @@
      DEF(TOK__remu, "_remu")
 #endif
 #ifdef TCC_TARGET_I386
-     DEF(TOK___tcc_int_fpu_control, "__tcc_int_fpu_control")
-     DEF(TOK___tcc_fpu_control, "__tcc_fpu_control")
+     DEF(TOK___tcc_fpinit, "__tcc_fpinit")
+     DEF(TOK___tcc_cvt_ftol, "__tcc_cvt_ftol")
 #endif
 #ifdef TCC_ARM_EABI
      DEF(TOK___ashrdi3, "__aeabi_lasr")

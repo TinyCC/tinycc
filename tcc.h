@@ -665,6 +665,7 @@ struct TCCState {
 #endif
 
 #ifdef TCC_IS_NATIVE
+    const char *runtime_main;
     /* for tcc_relocate */
     void *runtime_mem;
 # ifdef HAVE_SELINUX
