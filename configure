@@ -304,7 +304,7 @@ if test -z "$cross_prefix" ; then
     if test "$mingw32" = "no" ; then
       triplet="$($CONFTEST triplet)"
       if test -f "/usr/lib/$triplet/crti.o" ; then
-        tcc_lddir="lib/$triplet"
+        tcc_lddir="lib"
         multiarch_triplet="$triplet"
       elif test -f "/usr/lib64/crti.o" ; then
         tcc_lddir="lib64"

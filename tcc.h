@@ -168,10 +168,13 @@
 #ifndef CONFIG_LDDIR
 # define CONFIG_LDDIR "lib"
 #endif
+#ifndef CONFIG_MULTIARCHDIR
+#define CONFIG_MULTIARCHDIR
+#endif
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr/" CONFIG_LDDIR
+# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR
 #endif
 
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
@@ -180,16 +183,11 @@
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
 # ifdef TCC_TARGET_PE
 #  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include;{B}/include/winapi"
-# elif defined CONFIG_MULTIARCHDIR
-#  define CONFIG_TCC_SYSINCLUDEPATHS \
-        CONFIG_SYSROOT "/usr/local/include" \
-    ":" CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/usr/include" \
-    ":" CONFIG_SYSROOT "/usr/include/" CONFIG_MULTIARCHDIR \
-    ":" "{B}/include"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
-        CONFIG_SYSROOT "/usr/local/include" \
+    ":" CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
+    ":" CONFIG_SYSROOT "/usr/local/include" \
+    ":" CONFIG_SYSROOT "/usr/include/" CONFIG_MULTIARCHDIR \
     ":" CONFIG_SYSROOT "/usr/include" \
     ":" "{B}/include"
 # endif
@@ -201,8 +199,11 @@
 #  define CONFIG_TCC_LIBPATHS "{B}/lib;{B}"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        CONFIG_SYSROOT "/usr/" CONFIG_LDDIR \
+        CONFIG_SYSROOT "/usr/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
+    ":" CONFIG_SYSROOT "/usr/" CONFIG_LDDIR \
+    ":" CONFIG_SYSROOT "/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
     ":" CONFIG_SYSROOT "/" CONFIG_LDDIR \
+    ":" CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
     ":" CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR
 # endif
 #endif
@@ -235,7 +236,7 @@
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
-#define TCC_LIBGCC CONFIG_SYSROOT "/" CONFIG_LDDIR "/libgcc_s.so.1"
+#define TCC_LIBGCC CONFIG_SYSROOT "/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
 /* include the target specific definitions */
