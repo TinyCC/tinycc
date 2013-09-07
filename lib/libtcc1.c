@@ -482,7 +482,7 @@ long long __ashldi3(long long a, int b)
 void __tcc_fpinit(void)
 {
     unsigned c = 0x137F;
-    __asm__ __volatile__ ("fldcw %0" : "=m" (c));
+    __asm__ __volatile__ ("fldcw %0" : : "m" (c));
 }
 #endif
 long long __tcc_cvt_ftol(long double x)
@@ -491,9 +491,9 @@ long long __tcc_cvt_ftol(long double x)
     long long ret;
     __asm__ __volatile__ ("fnstcw %0" : "=m" (c0));
     c1 = c0 | 0x0C00;
-    __asm__ __volatile__ ("fldcw %0" : "=m" (c1));
+    __asm__ __volatile__ ("fldcw %0" : : "m" (c1));
     __asm__ __volatile__ ("fistpll %0"  : "=m" (ret));
-    __asm__ __volatile__ ("fldcw %0" : "=m" (c0));
+    __asm__ __volatile__ ("fldcw %0" : : "m" (c0));
     return ret;
 }
 #endif /* !__x86_64__ */
