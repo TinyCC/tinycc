@@ -31,10 +31,4 @@ int _start(void)
     exit(ret);
 }
 
-int _runmain(int argc, char **argv)
-{
-    _controlfp(0x10000, 0x30000);
-    return main(argc, argv, NULL);
-}
-
 // =============================================

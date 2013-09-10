@@ -1741,7 +1741,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
-        ? PE_GUI == pe_type ? "__runwinmain" : "__runmain"
+        ? PE_GUI == pe_type ? "__runwinmain" : "_main"
         : PE_DLL == pe_type ? PE_STDSYM("__dllstart","@12")
         : PE_GUI == pe_type ? "__winstart" : "__start"
         ;
@@ -1750,7 +1750,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         ++start_symbol;
 
     /* grab the startup code from libtcc1 */
-    if (start_symbol)
+    if (TCC_OUTPUT_MEMORY != s1->output_type || PE_GUI == pe_type)
         add_elf_sym(symtab_section,
             0, 0,
             ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
@@ -1775,10 +1775,11 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
     if (TCC_OUTPUT_MEMORY == s1->output_type) {
         pe_type = PE_RUN;
         s1->runtime_main = start_symbol;
+    } else {
+        pe->start_addr = (DWORD)tcc_get_symbol_err(s1, start_symbol);
     }
 
     pe->type = pe_type;
-    pe->start_addr = (DWORD)tcc_get_symbol_err(s1, start_symbol);
 }
 
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
