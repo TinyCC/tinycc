@@ -5818,6 +5818,10 @@ static int decl0(int l, int is_for_loop_init)
                         goto func_error1;
 
                     r = sym->type.ref->r;
+
+                    if (!FUNC_PROTO(r))
+                        tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
+
                     /* use func_call from prototype if not defined */
                     if (FUNC_CALL(r) != FUNC_CDECL
                      && FUNC_CALL(type.ref->r) == FUNC_CDECL)
@@ -5836,6 +5840,7 @@ static int decl0(int l, int is_for_loop_init)
                         tcc_error("incompatible types for redefinition of '%s'", 
                               get_tok_str(v, NULL));
                     }
+                    FUNC_PROTO(type.ref->r) = 0;
                     /* if symbol is already defined, then put complete type */
                     sym->type = type;
                 } else {
@@ -5901,6 +5906,7 @@ static int decl0(int l, int is_for_loop_init)
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
                         /* external function definition */
                         /* specific case for func_call attribute */
+                        ad.func_proto = 1;
                         type.ref->r = INT_ATTR(&ad);
                     } else if (!(type.t & VT_ARRAY)) {
                         /* not lvalue if array */
