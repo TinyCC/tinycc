@@ -3278,6 +3278,8 @@ static void post_type(CType *type, AttributeDef *ad)
         skip(']');
         /* parse next post type */
         post_type(type, ad);
+        if (type->t == VT_FUNC)
+            tcc_error("declaration of an array of functions");
         t1 |= type->t & VT_VLA;
         
         if (t1 & VT_VLA) {
