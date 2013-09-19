@@ -2801,6 +2801,7 @@ static void struct_decl(CType *type, int u)
                 if (tok == '}')
                     break;
             }
+            s->c = type_size(&int_type, &align);
             skip('}');
         } else {
             maxalign = 1;
