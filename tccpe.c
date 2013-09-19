@@ -813,6 +813,7 @@ static void pe_build_imports(struct pe_info *pe)
         hdr->Name = v + rva_base;
 
         for (k = 0, n = p->sym_count; k <= n; ++k) {
+            int ordinal = 0;
             if (k < n) {
                 int iat_index = p->symbols[k]->iat_index;
                 int sym_index = p->symbols[k]->sym_index;
@@ -823,25 +824,31 @@ static void pe_build_imports(struct pe_info *pe)
                 org_sym->st_value = thk_ptr;
                 org_sym->st_shndx = pe->thunk->sh_num;
                 v = pe->thunk->data_offset + rva_base;
-                section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
-                put_elf_str(pe->thunk, name);
+                
+                /* ordinal or name */
+                ordinal = imp_sym->st_value; /* from pe_load_def, temperary use */
+                //if (ordinal) printf("ordinal: %d\n", ordinal);
+                if (!ordinal) {
+                    section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
+                    put_elf_str(pe->thunk, name);
+                }
 #ifdef TCC_IS_NATIVE
                 if (pe->type == PE_RUN) {
                     v = imp_sym->st_value;
                     if (dllref) {
                         if ( !dllref->handle )
                             dllref->handle = LoadLibrary(dllref->name);
-                        v = (ADDR3264)GetProcAddress(dllref->handle, name);
+                        v = (ADDR3264)GetProcAddress(dllref->handle, ordinal?(LPCSTR)NULL+ordinal:name);
                     }
                     if (!v)
-                        tcc_error_noabort("undefined symbol '%s'", name);
+                        tcc_error_noabort("can't build symbol '%s'", name);
                 }
 #endif
             } else {
                 v = 0; /* last entry is zero */
             }
             *(ADDR3264*)(pe->thunk->data+thk_ptr) =
-            *(ADDR3264*)(pe->thunk->data+ent_ptr) = v;
+            *(ADDR3264*)(pe->thunk->data+ent_ptr) = (ordinal && pe->type != PE_RUN)?(ADDR3264)1<<(sizeof(ADDR3264)*8-1)|ordinal:v;
             thk_ptr += sizeof (ADDR3264);
             ent_ptr += sizeof (ADDR3264);
         }
@@ -1590,6 +1597,8 @@ static int pe_load_def(TCCState *s1, int fd)
     char line[400], dllname[80], *p;
 
     for (;;) {
+        int ord = 0;
+        char *x, *d, idxstr[8];
         p = get_line(line, sizeof line, fd);
         if (NULL == p)
             break;
@@ -1614,7 +1623,24 @@ static int pe_load_def(TCCState *s1, int fd)
             ++state;
 
         default:
-            pe_putimport(s1, dllindex, p, 0);
+            /* get ordianl and will store in sym->st_value */
+            d = NULL;
+            x = strchr(line, ' ');
+            if (x) x = strchr(line, '@');
+            while (x != NULL) {
+                d =x;
+                x = strchr(x+1, '@');
+            }
+            if (d) {
+                ord = atoi(d+1);
+                itoa(ord, idxstr, 10);
+                if (strcmp(idxstr, d+1) == 0) {
+                    memset(d, 0, 1);
+                    trimback(p, d);
+                } else
+                    ord = 0;
+            }
+            pe_putimport(s1, dllindex, p, ord);
             continue;
         }
     }
