@@ -989,8 +989,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* glibc defines */
     tcc_define_symbol(s, "__REDIRECT(name, proto, alias)", "name proto __asm__ (#alias)");
     tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)", "name proto __asm__ (#alias) __THROW");
-    /* default library paths */
-    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
     /* paths for crt objects */
     tcc_split_path(s, (void ***)&s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
 #endif
@@ -1343,8 +1341,8 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         put_stabs("", 0, 0, 0, 0);
     }
 
-#ifdef TCC_TARGET_PE
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
+#ifdef TCC_TARGET_PE
 # ifdef _WIN32
     tcc_add_systemdir(s);
 # endif
