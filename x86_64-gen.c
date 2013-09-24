@@ -239,13 +239,6 @@ static int is64_type(int t)
             (t & VT_BTYPE) == VT_LLONG);
 }
 
-static int is_sse_float(int t) {
-    int bt;
-    bt = t & VT_BTYPE;
-    return bt == VT_DOUBLE || bt == VT_FLOAT;
-}
-
-
 /* instruction + 4 bytes data. Return the address of the data */
 ST_FUNC int oad(int c, int s)
 {
@@ -687,6 +680,12 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     }
 }
 
+static int is_sse_float(int t) {
+    int bt;
+    bt = t & VT_BTYPE;
+    return bt == VT_DOUBLE || bt == VT_FLOAT;
+}
+
 int gfunc_arg_size(CType *type) {
     int align;
     if (type->t & (VT_ARRAY|VT_BITFIELD))
@@ -989,7 +988,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty) {
 
 static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count) {
     X86_64_Mode mode;
-    int size, align, ret_t;
+    int size, align, ret_t = 0;
     
     if (ty->t & (VT_BITFIELD|VT_ARRAY)) {
         *psize = 8;
@@ -1030,6 +1029,9 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
                 }
                 break;
+            case x86_64_mode_memory: /* avoid warning */
+            case x86_64_mode_none:
+                tcc_error("argument type not handled in classify_x86_64_arg\n");
             }
         }
     }
@@ -1083,7 +1085,7 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, run_start, run_end, i, j, reg_count;
+    int size, align, r, args_size, stack_adjust, run_start, run_end, i, reg_count;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
@@ -1133,6 +1135,8 @@ void gfunc_call(int nb_args)
                 gen_reg -= reg_count;
                 if (gen_reg + reg_count > REGN) goto stack_arg;
                 break;
+            case x86_64_mode_none: /* avoid warning */
+                tcc_error("argument type not handled in gfunc_call");
             }
         }
         
@@ -1366,7 +1370,7 @@ void gfunc_prolog(CType *func_type)
 {
     X86_64_Mode mode;
     int i, addr, align, size, reg_count;
-    int param_addr, reg_param_index, sse_param_index;
+    int param_addr = 0, reg_param_index, sse_param_index;
     Sym *sym;
     CType *type;
 
@@ -1499,6 +1503,8 @@ void gfunc_prolog(CType *func_type)
             }
             break;
         }
+        case x86_64_mode_none:
+            tcc_error("argument type not handled in gfunc_prolog\n");
         }
         sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, param_addr);

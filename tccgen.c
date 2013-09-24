@@ -800,9 +800,9 @@ ST_FUNC int gv(int rc)
 #else
             if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
                 int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
+                unsigned long long ll;
 #endif
                 int r2, original_type;
-                unsigned long long ll;
                 original_type = vtop->type.t;
                 /* two register type load : expand to two words
                    temporarily */
@@ -3765,7 +3765,6 @@ ST_FUNC void unary(void)
     case TOK_builtin_va_arg_types:
         {
             CType type;
-            int bt;
             next();
             skip('(');
             parse_type(&type);
