@@ -1029,9 +1029,7 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
                 }
                 break;
-            case x86_64_mode_memory: /* avoid warning */
-            case x86_64_mode_none:
-                tcc_error("argument type not handled in classify_x86_64_arg\n");
+            default: break; /* nothing to be done for x86_64_mode_memory and x86_64_mode_none*/
             }
         }
     }
@@ -1135,8 +1133,7 @@ void gfunc_call(int nb_args)
                 gen_reg -= reg_count;
                 if (gen_reg + reg_count > REGN) goto stack_arg;
                 break;
-            case x86_64_mode_none: /* avoid warning */
-                tcc_error("argument type not handled in gfunc_call");
+	    default: break; /* nothing to be done for x86_64_mode_none */
             }
         }
         
@@ -1503,8 +1500,7 @@ void gfunc_prolog(CType *func_type)
             }
             break;
         }
-        case x86_64_mode_none:
-            tcc_error("argument type not handled in gfunc_prolog\n");
+	default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, param_addr);
