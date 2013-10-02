@@ -185,7 +185,7 @@
 #  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include;{B}/include/winapi"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
-    ":" CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
+        CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
     ":" CONFIG_SYSROOT "/usr/local/include" \
     ":" CONFIG_SYSROOT "/usr/include/" CONFIG_MULTIARCHDIR \
     ":" CONFIG_SYSROOT "/usr/include" \
@@ -753,8 +753,9 @@ struct TCCState {
 #define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
 #define VT_EXPORT  0x00008000  /* win32: data exported from dll */
 #define VT_WEAK    0x00010000  /* weak symbol */
+#define VT_TLS     0x00040000  /* thread-local storage */
 
-#define VT_STRUCT_SHIFT 18     /* shift for bitfield shift values (max: 32 - 2*6) */
+#define VT_STRUCT_SHIFT 19     /* shift for bitfield shift values (max: 32 - 2*6) */
 
 /* type mask (except storage) */
 #define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT | VT_WEAK)
@@ -1140,6 +1141,7 @@ ST_FUNC void expect(const char *msg);
 /* ------------ tccgen.c ------------ */
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
+ST_DATA Section *tdata_section, *tbss_section; /* thread-local storage sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
 ST_DATA Section *last_text_section; /* to handle .previous asm directive */
