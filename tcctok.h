@@ -10,6 +10,7 @@
      DEF(TOK_FOR, "for")
      DEF(TOK_EXTERN, "extern")
      DEF(TOK_STATIC, "static")
+     DEF(TOK_THREAD, "__thread")
      DEF(TOK_UNSIGNED, "unsigned")
      DEF(TOK_GOTO, "goto")
      DEF(TOK_DO, "do")
