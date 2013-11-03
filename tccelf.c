@@ -1543,7 +1543,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
     int fd, mode, ret;
     int *section_order;
     int shnum, i, phnum, file_offset, offset, size, j, sh_order_index, k;
-    int have_tls_section = 0;
     long long tmp;
     addr_t addr;
     Section *strsec, *s;
@@ -1862,11 +1861,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
             /* we output all sections if debug or object file */
             s->sh_size = s->data_offset;
         }
-        /* if tls section we'll need to add one segment */
-        if (s->sh_flags & SHF_TLS) {
-          have_tls_section = 1;
-          phnum++;
-        }
     }
 
     /* allocate program segment headers */
@@ -1910,16 +1904,12 @@ static int elf_output_file(TCCState *s1, const char *filename)
         if (interp)
             ph += 1 + HAVE_PHDR;
 
-        for(j = 0; j < 2 + have_tls_section; j++) {
-            if (j != 2)
-                ph->p_type = PT_LOAD;
-            else
-                ph->p_type = PT_TLS;
-            ph->p_flags = PF_R;
+        for(j = 0; j < 2; j++) {
+            ph->p_type = PT_LOAD;
             if (j == 0)
-                ph->p_flags |= PF_X;
-            else if (j == 1)
-                ph->p_flags |= PF_W;
+                ph->p_flags = PF_R | PF_X;
+            else
+                ph->p_flags = PF_R | PF_W;
             ph->p_align = s1->section_align;
             
             /* we do the following ordering: interp, symbol tables,
@@ -1930,15 +1920,12 @@ static int elf_output_file(TCCState *s1, const char *filename)
                     s = s1->sections[i];
                     /* compute if section should be included */
                     if (j == 0) {
-                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_TLS)) !=
+                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE)) != 
                             SHF_ALLOC)
                             continue;
-                    } else if (j == 1) {
-                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_TLS)) !=
-                            (SHF_ALLOC | SHF_WRITE))
-                            continue;
                     } else {
-                        if ((s->sh_flags & SHF_TLS) != SHF_TLS)
+                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE)) != 
+                            (SHF_ALLOC | SHF_WRITE))
                             continue;
                     }
                     if (s == interp) {

@@ -444,10 +444,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
         sym_type = STT_NOTYPE;
     } else {
-        if (section && section->sh_flags & SHF_TLS)
-            sym_type = STT_TLS;
-        else
-            sym_type = STT_OBJECT;
+        sym_type = STT_OBJECT;
     }
 
     if (sym->type.t & VT_STATIC)

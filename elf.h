@@ -447,7 +447,6 @@ typedef struct
 #define STT_SECTION     3               /* Symbol associated with a section */
 #define STT_FILE        4               /* Symbol's name is file name */
 #define STT_NUM         5               /* Number of defined types.  */
-#define STT_TLS         6               /* Symbol is a thread-local data object */
 #define STT_GNU_IFUNC   10              /* Symbol is a indirect code object */
 #define STT_LOOS        11              /* Start of OS-specific */
 #define STT_HIOS        12              /* End of OS-specific */
@@ -556,8 +555,7 @@ typedef struct
 #define PT_NOTE         4               /* Auxiliary information */
 #define PT_SHLIB        5               /* Reserved */
 #define PT_PHDR         6               /* Entry for header table itself */
-#define PT_TLS          7               /* Thread-local program segment */
-#define PT_NUM          8               /* Number of defined types.  */
+#define PT_NUM          7               /* Number of defined types.  */
 #define PT_LOOS         0x60000000      /* Start of OS-specific */
 #define PT_HIOS         0x6fffffff      /* End of OS-specific */
 #define PT_LOPROC       0x70000000      /* Start of processor-specific */

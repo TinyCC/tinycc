@@ -31,7 +31,6 @@
 ST_DATA int rsym, anon_sym, ind, loc;
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
-ST_DATA Section *tdata_section, *tbss_section; /* thread-local storage sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
 ST_DATA Section *last_text_section; /* to handle .previous asm directive */
@@ -3093,10 +3092,6 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t |= VT_INLINE;
             next();
             break;
-        case TOK_THREAD:
-            t |= VT_TLS;
-            next();
-            break;
 
             /* GNUC attribute */
         case TOK_ATTRIBUTE1:
@@ -5500,26 +5495,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* allocate symbol in corresponding section */
         sec = ad->section;
         if (!sec) {
-            if (has_init) {
-                if (type->t & VT_TLS) {
-                    if (!tdata_section)
-                        tdata_section = new_section(tcc_state, ".tdata",
-                                               SHT_PROGBITS,
-                                               SHF_ALLOC | SHF_WRITE | SHF_TLS);
-                    sec = tdata_section;
-		} else
-                    sec = data_section;
-            }
-            else if (tcc_state->nocommon) {
-                if (type->t & VT_TLS) {
-                    if (!tbss_section)
-                        tbss_section = new_section(tcc_state, ".tbss",
-                                               SHT_NOBITS,
-                                               SHF_ALLOC | SHF_WRITE | SHF_TLS);
-                    sec = tbss_section;
-                } else
-                    sec = bss_section;
-            }
+            if (has_init)
+                sec = data_section;
+            else if (tcc_state->nocommon)
+                sec = bss_section;
         }
         if (sec) {
             data_offset = sec->data_offset;
