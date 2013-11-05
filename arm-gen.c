@@ -826,7 +826,7 @@ void gfunc_call(int nb_args)
   int size, align, r, args_size, i, ncrn, ncprn, argno, vfp_argno;
   signed char plan[4][2]={{-1,-1},{-1,-1},{-1,-1},{-1,-1}};
   SValue *before_stack = NULL; /* SValue before first on stack argument */
-  SValue *before_vfpreg_hfa = NULL; /* SValue before first in VFP reg hfa argument */
+  SValue *before_creg = NULL; /* SValue before first argument of type struct in core register */
 #ifdef TCC_ARM_HARDFLOAT
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
   signed char vfp_plan[16];
@@ -865,12 +865,12 @@ void gfunc_call(int nb_args)
      (core or VFP) are free for the current argument, assign them to it, else
      allocate on stack with correct alignment. Whenever a structure is allocated
      in registers or on stack, it is always put on the stack at this stage. The
-     stack is divided in 3 zones. The zone are, from low addresses to high
+     stack is divided in 3 zones. The zone are, from high addresses to low
      addresses: structures to be loaded in core registers, structures to be
      loaded in VFP registers, argument allocated to stack. SValue's representing
      structures in the first zone are moved just after the SValue pointed by
-     before_vfpreg_hfa. SValue's representing structures in the second zone are
-     moved just after the SValue pointer by before_stack. */
+     before_stack. SValue's representing structures in the second zone are
+     moved just after the SValue pointer by before_creg. */
   for(i = nb_args; i-- ;) {
     int j, assigned_vfpreg = 0;
     size = type_size(&vtop[-i].type, &align);
@@ -892,14 +892,15 @@ void gfunc_call(int nb_args)
           if (assigned_vfpreg >= 0) {
             vfp_plan[vfp_argno++]=TREG_F0 + assigned_vfpreg/2;
             if (hfa) {
-              /* before_stack can only have been set because all core registers
-                 are assigned, so no need to care about before_vfpreg_hfa if
-                 before_stack is set */
-              if (before_stack) {
-	        vrote(&vtop[-i], &vtop[-i] - before_stack);
-                before_stack++;
-              } else if (!before_vfpreg_hfa)
-                before_vfpreg_hfa = &vtop[-i-1];
+              /* if before_creg is not set, it means that no parameter has been
+               * allocated in core register. This implied that no argument has
+               * been allocated on stack neither because a VFP was available for
+               * this parameter. */
+              if (before_creg) {
+                /* before_creg already exists and we just update it */
+                vrote(&vtop[-i], &vtop[-i] - before_creg);
+                before_creg++;
+              }
               for (j = assigned_vfpreg; j <= end_reg; j++)
                 vfp_todo|=(1<<j);
             }
@@ -907,10 +908,8 @@ void gfunc_call(int nb_args)
           } else {
             if (!hfa)
               vfp_argno++;
-            /* No need to update before_stack as no more hfa can be allocated in
-               VFP regs */
-            if (!before_vfpreg_hfa)
-              before_vfpreg_hfa = &vtop[-i-1];
+            if (!before_stack)
+              before_stack = &vtop[-i-1];
             break;
           }
         }
@@ -919,14 +918,14 @@ void gfunc_call(int nb_args)
       ncrn = (ncrn + (align-1)/4) & -(align/4);
       size = (size + 3) & -4;
       if (ncrn + size/4 <= 4 || (ncrn < 4 && assigned_vfpreg != -1)) {
-        /* Either there is HFA in VFP registers, or there is arguments on stack,
-           it cannot be both. Hence either before_stack already points after
-           the slot where the vtop[-i] SValue is moved, or before_stack will not
-           be used */
-        if (before_vfpreg_hfa) {
-	  vrote(&vtop[-i], &vtop[-i] - before_vfpreg_hfa);
-          before_vfpreg_hfa++;
-        }
+        if (before_stack) {
+          vrote(&vtop[-i], &vtop[-i] - before_stack);
+          before_stack++;
+          /* before_stack can only have been set because all VFP registers are
+           * assigned, so no need to care about before_creg if before_stack is
+	   * set since no more argument will be allocated in a VFP register. */
+	} else if (!before_creg)
+          before_creg = &vtop[-i];
         for (j = ncrn; j < 4 && j < ncrn + size / 4; j++)
           todo|=(1<<j);
         ncrn+=size/4;
@@ -935,11 +934,10 @@ void gfunc_call(int nb_args)
           if (!before_stack)
             before_stack = &vtop[-i-1];
         }
-      }
-      else {
+      } else {
         ncrn = 4;
-        /* No need to set before_vfpreg_hfa if not set since there will no
-           longer be any structure assigned to core registers */
+        /* No need to set before_creg since it has already been set when
+         * assigning argument to core registers */
         if (!before_stack)
           before_stack = &vtop[-i-1];
         break;
@@ -1092,24 +1090,6 @@ void gfunc_call(int nb_args)
   }
 save_regs(keep); /* save used temporary registers */
   keep++;
-  if(ncrn) {
-    int nb_regs=0;
-    if (ncrn>4)
-      ncrn=4;
-    todo&=((1<<ncrn)-1);
-    if(todo) {
-      int i;
-      o(0xE8BD0000|todo);
-      for(i=0;i<4;i++)
-	if(todo&(1<<i)) {
-	  vpushi(0);
-	  vtop->r=i;
-	  keep++;
-	  nb_regs++;
-	}
-    }
-    args_size-=nb_regs*4;
-  }
   if(vfp_todo) {
     int nb_fregs=0;
 
@@ -1128,6 +1108,24 @@ save_regs(keep); /* save used temporary registers */
       gadd_sp(nb_fregs*4);
       args_size-=nb_fregs*4;
     }
+  }
+  if(ncrn) {
+    int nb_regs=0;
+    if (ncrn>4)
+      ncrn=4;
+    todo&=((1<<ncrn)-1);
+    if(todo) {
+      int i;
+      o(0xE8BD0000|todo);
+      for(i=0;i<4;i++)
+	if(todo&(1<<i)) {
+	  vpushi(0);
+	  vtop->r=i;
+	  keep++;
+	  nb_regs++;
+	}
+    }
+    args_size-=nb_regs*4;
   }
   vrotb(keep);
   gcall_or_jmp(0);
