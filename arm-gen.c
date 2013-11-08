@@ -1,6 +1,6 @@
 /*
  *  ARMv4 code generator for TCC
- * 
+ *
  *  Copyright (c) 2003 Daniel Glöckner
  *  Copyright (c) 2012 Thomas Preud'homme
  *
@@ -46,7 +46,7 @@
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 #define RC_R0      0x0004
-#define RC_R1      0x0008 
+#define RC_R1      0x0008
 #define RC_R2      0x0010
 #define RC_R3      0x0020
 #define RC_R12     0x0040
@@ -211,7 +211,7 @@ void o(uint32_t i)
   cur_text_section->data[ind++] = i&255;
   i>>=8;
   cur_text_section->data[ind++] = i&255;
-  i>>=8; 
+  i>>=8;
   cur_text_section->data[ind++] = i&255;
   i>>=8;
   cur_text_section->data[ind++] = i;
@@ -506,7 +506,7 @@ void load(int r, SValue *sv)
     sign=1;
     fc=-fc;
   }
-  
+
   v = fr & VT_VALMASK;
   if (fr & VT_LVAL) {
     uint32_t base = 0xB; // fp
@@ -645,8 +645,8 @@ void store(int r, SValue *sv)
     sign=1;
     fc=-fc;
   }
-  
-  v = fr & VT_VALMASK; 
+
+  v = fr & VT_VALMASK;
   if (fr & VT_LVAL || fr == VT_LOCAL) {
     uint32_t base = 0xb;
     if(v < VT_CONST) {
@@ -660,16 +660,16 @@ void store(int r, SValue *sv)
       v1.sym=sv->sym;
       load(base=14, &v1);
       fc=sign=0;
-      v=VT_LOCAL;   
+      v=VT_LOCAL;
     }
     if(v == VT_LOCAL) {
        if(is_float(ft)) {
 	calcaddr(&base,&fc,&sign,1020,2);
 #ifdef TCC_ARM_VFP
         op=0xED000A00; /* fsts */
-        if(!sign) 
-          op|=0x800000; 
-        if ((ft & VT_BTYPE) != VT_FLOAT) 
+        if(!sign)
+          op|=0x800000;
+        if ((ft & VT_BTYPE) != VT_FLOAT)
           op|=0x100;   /* fsts -> fstd */
         o(op|(vfpr(r)<<12)|(fc>>2)|(base<<16));
 #else
@@ -802,7 +802,7 @@ int assign_fpreg(struct avail_regs *avregs, int align, int size)
 
 /* Return 1 if this function returns via an sret pointer, 0 otherwise */
 ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
-#if TCC_ARM_EABI
+#ifdef TCC_ARM_EABI
     int size, align;
     size = type_size(vt, &align);
     if (size > 4) {
@@ -855,7 +855,7 @@ void gfunc_call(int nb_args)
     vtop[-nb_args+1]=tmp;
     --nb_args;
   }
-  
+
   vpushi(0), nb_args++;
   vtop->type.t = VT_LLONG;
 #endif
@@ -1023,7 +1023,7 @@ void gfunc_call(int nb_args)
         size = 8;
       else
         size = LDOUBLE_SIZE;
-      
+
       if (size == 12)
 	r|=0x400000;
       else if(size == 8)
@@ -1362,7 +1362,7 @@ int gtst(int inv, int t)
       return gtst(inv, t);
     } else if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
       /* constant jmp optimization */
-      if ((vtop->c.i != 0) != inv) 
+      if ((vtop->c.i != 0) != inv)
 	t = gjmp(t);
     } else {
       v = gv(RC_INT);
@@ -1370,7 +1370,7 @@ int gtst(int inv, int t)
       vtop->r = VT_CMP;
       vtop->c.i = TOK_NE;
       return gtst(inv, t);
-    }   
+    }
   }
   vtop--;
   return t;
@@ -1628,7 +1628,7 @@ void gen_opf(int op)
         case TOK_UGE: op=TOK_GE; break;
         case TOK_UGT: op=TOK_GT; break;
       }
-      
+
       vtop->r = VT_CMP;
       vtop->c.i = op;
       return;
@@ -1779,7 +1779,7 @@ void gen_opf(int op)
 	r=fpr(gv(RC_FLOAT));
 	vswap();
 	r2=fpr(gv(RC_FLOAT));
-      }     
+      }
       break;
     default:
       if(op >= TOK_ULT && op <= TOK_GT) {
