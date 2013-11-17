@@ -985,12 +985,6 @@ static void copy_params(int nb_args, struct plan *plan, int todo)
   int size, align, r, i;
   struct param_plan *pplan;
 
-  /* Put argument on stack (structure are put on stack no matter how they are
-   * passed via register or the stack). */
-#ifdef TCC_ARM_EABI
-  if ((pplan = plan->clsplans[STACK_CLASS]) && pplan->end & 7)
-    o(0xE24DD004); /* sub sp, sp, #4 */
-#endif
    /* Several constraints require parameters to be copied in a specific order:
       - structures are copied to the stack before being loaded in a reg;
       - floats loaded to an odd numbered VFP reg are first copied to the
@@ -1156,6 +1150,14 @@ void gfunc_call(int nb_args)
 #endif
 
   args_size = assign_regs(nb_args, variadic, &plan, &todo);
+
+#ifdef TCC_ARM_EABI
+  if (args_size & 7) { /* Stack must be 8 byte aligned at fct call for EABI */
+    args_size = (args_size + 7) & ~7;
+    o(0xE24DD004); /* sub sp, sp, #4 */
+  }
+#endif
+
   copy_params(nb_args, &plan, todo);
   tcc_free(plan.pplans);
 
