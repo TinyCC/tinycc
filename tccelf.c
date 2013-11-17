@@ -603,29 +603,30 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_ARM_JUMP24:
         case R_ARM_PLT32:
             {
-                int x, is_thumb, is_call, h, blx_avail;
-                x = (*(int *)ptr)&0xffffff;
+                int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
+                x = (*(int *) ptr) & 0xffffff;
                 (*(int *)ptr) &= 0xff000000;
                 if (x & 0x800000)
                     x -= 0x1000000;
                 x <<= 2;
                 blx_avail = (TCC_ARM_VERSION >= 5);
                 is_thumb = val & 1;
-                is_call = (type == R_ARM_CALL);
+                is_bl = (*(unsigned *) ptr) >> 24 == 0xeb;
+                is_call = (type == R_ARM_CALL || (type == R_ARM_PC24 && is_bl));
                 x += val - addr;
                 h = x & 2;
+                th_ko = (x & 3) && (!blx_avail || !is_call);
 #ifdef TCC_HAS_RUNTIME_PLTGOT
                 if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                    if ((x & 3) || x >= 0x2000000 || x < -0x2000000)
-                        if (!(x & 3) || !blx_avail || !is_call) {
-                            x += add_jmp_table(s1, val) - val; /* add veneer */
-                            is_thumb = 0; /* Veneer uses ARM instructions */
-                        }
+                    if (th_ko || x >= 0x2000000 || x < -0x2000000) {
+                        x += add_jmp_table(s1, val) - val; /* add veneer */
+                        th_ko = (x & 3) && (!blx_avail || !is_call);
+                        is_thumb = 0; /* Veneer uses ARM instructions */
+                    }
                 }
 #endif
-                if ((x & 3) || x >= 0x2000000 || x < -0x2000000)
-                    if (!(x & 3) || !blx_avail || !is_call)
-                        tcc_error("can't relocate value at %x",addr);
+                if (th_ko || x >= 0x2000000 || x < -0x2000000)
+                    tcc_error("can't relocate value at %x",addr);
                 x >>= 2;
                 x &= 0xffffff;
                 /* Only reached if blx is avail and it is a call */
@@ -633,7 +634,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     x |= h << 24;
                     (*(int *)ptr) = 0xfa << 24; /* bl -> blx */
                 }
-                (*(int *)ptr) |= x;
+                (*(int *) ptr) |= x;
             }
             break;
         /* Since these relocations only concern Thumb-2 and blx instruction was
