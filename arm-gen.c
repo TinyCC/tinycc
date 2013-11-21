@@ -776,7 +776,7 @@ static int is_hgen_float_aggr(CType *type)
     struct Sym *ref;
     int btype, nb_fields = 0;
 
-    ref = type->ref;
+    ref = type->ref->next;
     btype = ref->type.t & VT_BTYPE;
     if (btype == VT_FLOAT || btype == VT_DOUBLE) {
       for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
