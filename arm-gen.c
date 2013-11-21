@@ -1227,7 +1227,8 @@ void gfunc_prolog(CType *func_type)
 #ifdef TCC_ARM_HARDFLOAT
     if (!variadic && (is_float(sym2->type.t)
         || is_hgen_float_aggr(&sym2->type))) {
-      int tmpnf = assign_vfpreg(&avregs, align, size) + 1;
+      int tmpnf = assign_vfpreg(&avregs, align, size);
+      tmpnf += (size + 3) / 4;
       nf = (tmpnf > nf) ? tmpnf : nf;
     } else
 #endif
