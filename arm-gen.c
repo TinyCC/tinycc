@@ -1133,7 +1133,7 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
    parameters and the function address. */
 void gfunc_call(int nb_args)
 {
-  int align, r, args_size;
+  int r, args_size;
   int variadic;
   int todo;
   struct plan plan;
@@ -1145,19 +1145,6 @@ void gfunc_call(int nb_args)
   r = vtop->r & VT_VALMASK;
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gv(RC_INT);
-#ifdef TCC_ARM_EABI
-  /* return type is a struct so caller of gfunc_call (unary(void) in tccgen.c)
-     assumed it had to be passed by a pointer. Since it's less than 4 bytes, we
-     can actually pass it directly in a register. */
-  if((vtop[-nb_args].type.ref->type.t & VT_BTYPE) == VT_STRUCT
-     && type_size(&vtop[-nb_args].type.ref->type, &align) <= 4) {
-    SValue tmp;
-    tmp=vtop[-nb_args];
-    vtop[-nb_args]=vtop[-nb_args+1];
-    vtop[-nb_args+1]=tmp;
-    --nb_args;
-  }
-#endif
 
   args_size = assign_regs(nb_args, variadic, &plan, &todo);
 
@@ -1177,16 +1164,11 @@ void gfunc_call(int nb_args)
   if (args_size)
       gadd_sp(args_size); /* pop all parameters passed on the stack */
 #ifdef TCC_ARM_EABI
-  if((vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT
-     && type_size(&vtop->type.ref->type, &align) <= 4) {
-    store(REG_IRET,vtop-nb_args-1);
-    nb_args++;
-  }
 #ifdef TCC_ARM_VFP
 #ifdef TCC_ARM_HARDFLOAT
-  else if(variadic && is_float(vtop->type.ref->type.t)) {
+  if(variadic && is_float(vtop->type.ref->type.t)) {
 #else
-  else if(is_float(vtop->type.ref->type.t)) {
+  rf(is_float(vtop->type.ref->type.t)) {
 #endif
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
       o(0xEE000A10); /*vmov s0, r0 */
