@@ -979,10 +979,12 @@ static int assign_regs(int nb_args, int variadic, struct plan *plan, int *todo)
 
    nb_args: number of parameters the function take
    plan: the overall assignment plan for parameters
-   todo: a bitmap indicating what core reg will hold a parameter */
-static void copy_params(int nb_args, struct plan *plan, int todo)
+   todo: a bitmap indicating what core reg will hold a parameter
+
+   Returns the number of SValue added by this function on the value stack */
+static int copy_params(int nb_args, struct plan *plan, int todo)
 {
-  int size, align, r, i;
+  int size, align, r, i, nb_extra_sval = 0;
   struct param_plan *pplan;
 
    /* Several constraints require parameters to be copied in a specific order:
@@ -1111,11 +1113,19 @@ static void copy_params(int nb_args, struct plan *plan, int todo)
   if(todo) {
     o(0xE8BD0000|todo); /* pop {todo} */
     for(pplan = plan->clsplans[CORE_STRUCT_CLASS]; pplan; pplan = pplan->prev) {
+      int r;
       pplan->sval->r = pplan->start;
-      if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG)
-        pplan->sval->r2 = pplan->end;
+      /* TODO: why adding fake param */
+      for (r = pplan->start + 1; r <= pplan->end; r++) {
+        if (todo & (1 << r)) {
+          nb_extra_sval++;
+          vpushi(0);
+          vtop->r = r;
+        }
+      }
     }
   }
+  return nb_extra_sval;
 }
 
 /* Generate function call. The function address is pushed first, then
@@ -1158,7 +1168,7 @@ void gfunc_call(int nb_args)
   }
 #endif
 
-  copy_params(nb_args, &plan, todo);
+  nb_args += copy_params(nb_args, &plan, todo);
   tcc_free(plan.pplans);
 
   /* Move fct SValue on top as required by gcall_or_jmp */
