@@ -3927,7 +3927,7 @@ ST_FUNC void unary(void)
         } else if (tok == '(') {
             SValue ret;
             Sym *sa;
-            int nb_args, sret;
+            int nb_args, sret, ret_align;
 
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
@@ -3951,9 +3951,8 @@ ST_FUNC void unary(void)
             ret.r2 = VT_CONST;
             /* compute first implicit argument if a structure is returned */
             if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
-                int ret_align;
                 sret = gfunc_sret(&s->type, &ret.type, &ret_align);
-                if (sret) {
+                if (!sret) {
                     /* get some space for the returned structure */
                     size = type_size(&s->type, &align);
                     loc = (loc - size) & -align;
@@ -3966,11 +3965,11 @@ ST_FUNC void unary(void)
                     nb_args++;
                 }
             } else {
-                sret = 0;
+                sret = 1;
                 ret.type = s->type;
             }
 
-            if (!sret) {
+            if (sret) {
                 /* return in register */
                 if (is_float(ret.type.t)) {
                     ret.r = reg_fret(ret.type.t);
@@ -4010,18 +4009,23 @@ ST_FUNC void unary(void)
                 vtop -= (nb_args + 1);
             }
             /* return value */
-            vsetc(&ret.type, ret.r, &ret.c);
-            vtop->r2 = ret.r2;
+            for (r = ret.r + sret + !sret; r-- > ret.r;) {
+                vsetc(&ret.type, r, &ret.c);
+                vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
+            }
             /* handle packed struct return */
-            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && !sret) {
-                int addr;
+            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && sret) {
+                int addr, offset;
+
                 size = type_size(&s->type, &align);
                 loc = (loc - size) & -align;
                 addr = loc;
-                vset(&ret.type, VT_LOCAL | VT_LVAL, addr);
-                vswap();
-                vstore();
-                vtop--;
+                for(offset = 0; offset < size; offset += ret_align) {
+                    vset(&ret.type, VT_LOCAL | VT_LVAL, addr + offset);
+                    vswap();
+                    vstore();
+                    vtop--;
+                }
                 vset(&s->type, VT_LOCAL | VT_LVAL, addr);
             }
         } else {
@@ -4593,7 +4597,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
                 CType type, ret_type;
                 int ret_align;
-                if (gfunc_sret(&func_vt, &ret_type, &ret_align)) {
+                if (!gfunc_sret(&func_vt, &ret_type, &ret_align)) {
                     /* if returning structure, must copy it to implicit
                        first pointer arg location */
                     type = func_vt;
@@ -4605,7 +4609,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                     vstore();
                 } else {
                     /* returning structure packed into registers */
-                    int size, addr, align;
+                    int r, size, addr, offset, align;
                     size = type_size(&func_vt,&align);
                     if ((vtop->r != (VT_LOCAL | VT_LVAL) || (vtop->c.i & (ret_align-1)))
                         && (align & (ret_align-1))) {
@@ -4619,9 +4623,17 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                     }
                     vtop->type = ret_type;
                     if (is_float(ret_type.t))
-                        gv(rc_fret(ret_type.t));
+                        r = rc_fret(ret_type.t);
                     else
-                        gv(RC_IRET);
+                        r = RC_IRET;
+                    /* We assume that when a structure is returned in multiple
+                       registers, their classes are consecutive values of the
+                       suite s(n) = 2^n */
+                    for (offset = 0; offset < size; offset += ret_align, r<<=1) {
+                        gv(r);
+                        vtop->c.i += ret_align;
+                        vtop->r = VT_LOCAL | VT_LVAL;
+                    }
                 }
             } else if (is_float(func_vt.t)) {
                 gv(rc_fret(func_vt.t));

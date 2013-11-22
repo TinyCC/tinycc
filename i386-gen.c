@@ -374,7 +374,8 @@ static void gcall_or_jmp(int is_jmp)
 static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
 static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
 ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
 {
 #ifdef TCC_TARGET_PE
@@ -383,11 +384,11 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     *ret_align = 1; // Never have to re-align return values for x86
     size = type_size(vt, &align);
     if (size > 8) {
-        return 1;
+        return 0;
     } else if (size > 4) {
         ret->ref = NULL;
         ret->t = VT_LLONG;
-        return 0;
+        return 1;
     } else {
         ret->ref = NULL;
         ret->t = VT_INT;
@@ -395,7 +396,7 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     }
 #else
     *ret_align = 1; // Never have to re-align return values for x86
-    return 1;
+    return 0;
 #endif
 }
 

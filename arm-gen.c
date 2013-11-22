@@ -746,24 +746,6 @@ static void gcall_or_jmp(int is_jmp)
   }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
-#ifdef TCC_ARM_EABI
-    int size, align;
-    size = type_size(vt, &align);
-    if (size > 4) {
-        return 1;
-    } else {
-        *ret_align = 4;
-        ret->ref = NULL;
-        ret->t = VT_INT;
-        return 0;
-    }
-#else
-    return 1;
-#endif
-}
-
 #ifdef TCC_ARM_HARDFLOAT
 /* Return whether a structure is an homogeneous float aggregate or not.
    The answer is true if all the elements of the structure are of the same
@@ -830,6 +812,33 @@ int assign_vfpreg(struct avail_regs *avregs, int align, int size)
   return -1;
 }
 #endif
+
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
+ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+#ifdef TCC_ARM_EABI
+    int size, align;
+    size = type_size(vt, &align);
+#ifdef TCC_ARM_HARDFLOAT
+    if (is_float(vt->t) || is_hgen_float_aggr(vt)) {
+        *ret_align = 8;
+        ret->ref = NULL;
+        ret->t = VT_DOUBLE;
+        return (size + 7) >> 3;
+    } else
+#endif
+    if (size > 4) {
+        return 0;
+    } else {
+        *ret_align = 4;
+        ret->ref = NULL;
+        ret->t = VT_INT;
+        return 1;
+    }
+#else
+    return 0;
+#endif
+}
 
 /* Parameters are classified according to how they are copied to their final
    destination for the function call. Because the copying is performed class
@@ -1198,6 +1207,9 @@ void gfunc_prolog(CType *func_type)
   n = nf = 0;
   variadic = (func_type->ref->c == FUNC_ELLIPSIS);
   if((func_vt.t & VT_BTYPE) == VT_STRUCT
+#ifdef TCC_ARM_HARDFLOAT
+     && (variadic || !is_hgen_float_aggr(&func_vt))
+#endif
      && type_size(&func_vt,&align) > 4)
   {
     n++;

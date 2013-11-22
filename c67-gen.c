@@ -1879,10 +1879,11 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
 ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
     *ret_align = 1; // Never have to re-align return values for x86-64
-    return 1;
+    return 0;
 }
 
 /* generate function call with address in (vtop->t, vtop->c) and free function

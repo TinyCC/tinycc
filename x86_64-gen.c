@@ -656,7 +656,8 @@ void gen_offs_sp(int b, int r, int d)
     }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
 ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
 {
     int size, align;
@@ -664,19 +665,19 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     size = type_size(vt, &align);
     ret->ref = NULL;
     if (size > 8) {
-        return 1;
+        return 0;
     } else if (size > 4) {
         ret->t = VT_LLONG;
-        return 0;
+        return 1;
     } else if (size > 2) {
         ret->t = VT_INT;
-        return 0;
+        return 1;
     } else if (size > 1) {
         ret->t = VT_SHORT;
-        return 0;
+        return 1;
     } else {
         ret->t = VT_BYTE;
-        return 0;
+        return 1;
     }
 }
 
@@ -1056,11 +1057,12 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty) {
     }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
 int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
     int size, align, reg_count;
     *ret_align = 1; // Never have to re-align return values for x86-64
-    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) == x86_64_mode_memory);
+    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);
 }
 
 #define REGN 6
