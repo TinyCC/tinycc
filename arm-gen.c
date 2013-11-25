@@ -1020,19 +1020,22 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
         case CORE_STRUCT_CLASS:
         case VFP_STRUCT_CLASS:
           if ((pplan->sval->type.t & VT_BTYPE) == VT_STRUCT) {
+            int padding = 0;
             size = type_size(&pplan->sval->type, &align);
             /* align to stack align size */
             size = (size + 3) & ~3;
             if (i == STACK_CLASS && pplan->prev)
-              size += pplan->start - pplan->prev->end; /* Add padding if any */
+              padding = pplan->start - pplan->prev->end;
+            size += padding; /* Add padding if any */
             /* allocate the necessary size on stack */
             gadd_sp(-size);
             /* generate structure store */
             r = get_reg(RC_INT);
-            o(0xE1A0000D|(intr(r)<<12)); /* mov r, sp */
+            o(0xE28D0000|(intr(r)<<12)|padding); /* add r, sp, padding */
             vset(&vtop->type, r | VT_LVAL, 0);
             vswap();
-            vstore(); /* memcpy to current sp */
+            vstore(); /* memcpy to current sp + potential padding */
+
             /* Homogeneous float aggregate are loaded to VFP registers
                immediately since there is no way of loading data in multiple
                non consecutive VFP registers as what is done for other
