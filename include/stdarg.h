@@ -25,6 +25,17 @@ typedef char *va_list;
 #define va_end(ap)
 #endif
 
+#elif __arm__
+typedef char *va_list;
+#define _tcc_alignof(type) ((int)&((struct {char c;type x;} *)0)->x)
+#define _tcc_align(addr,type) (((unsigned)addr + _tcc_alignof(type) - 1) \
+                               & ~(_tcc_alignof(type) - 1))
+#define va_start(ap,last) ap = ((char *)&(last)) + ((sizeof(last)+3)&~3)
+#define va_arg(ap,type) (ap = (void *) ((_tcc_align(ap,type)+sizeof(type)+3) \
+                        &~3), *(type *)(ap - ((sizeof(type)+3)&~3)))
+#define va_copy(dest, src) (dest) = (src)
+#define va_end(ap)
+
 #else /* __i386__ */
 typedef char *va_list;
 /* only correct for i386 */
