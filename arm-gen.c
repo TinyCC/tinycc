@@ -1127,7 +1127,10 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
     for(pplan = plan->clsplans[CORE_STRUCT_CLASS]; pplan; pplan = pplan->prev) {
       int r;
       pplan->sval->r = pplan->start;
-      /* TODO: why adding fake param */
+      /* An SValue can only pin 2 registers at best (r and r2) but a structure
+         can occupy more than 2 registers. Thus, we need to push on the value
+         stack some fake parameter to have on SValue for each registers used
+         by a structure (r2 is not used). */
       for (r = pplan->start + 1; r <= pplan->end; r++) {
         if (todo & (1 << r)) {
           nb_extra_sval++;
