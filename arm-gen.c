@@ -746,7 +746,6 @@ static void gcall_or_jmp(int is_jmp)
   }
 }
 
-#ifdef TCC_ARM_HARDFLOAT
 /* Return whether a structure is an homogeneous float aggregate or not.
    The answer is true if all the elements of the structure are of the same
    primitive float type and there is less than 4 elements.
@@ -811,7 +810,32 @@ int assign_vfpreg(struct avail_regs *avregs, int align, int size)
   avregs->first_free_reg = -1;
   return -1;
 }
+
+/* Returns whether all params need to be passed in core registers or not.
+   This is the case for function part of the runtime ABI. */
+int floats_in_core_regs(SValue *sval)
+{
+  if (!sval->sym)
+    return 0;
+
+  switch (sval->sym->v) {
+    case TOK___floatundisf:
+    case TOK___floatundidf:
+    case TOK___fixunssfdi:
+    case TOK___fixunsdfdi:
+#ifndef TCC_ARM_VFP
+    case TOK___fixunsxfdi:
 #endif
+    case TOK___floatdisf:
+    case TOK___floatdidf:
+    case TOK___fixsfdi:
+    case TOK___fixdfdi:
+      return 1;
+
+    default:
+      return 0;
+  }
+}
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
@@ -885,7 +909,7 @@ struct plan {
    definition of union reg_class).
 
    nb_args: number of parameters of the function for which a call is generated
-   variadic: whether the function is a variadic function or not
+   corefloat: whether to pass float via core registers or not
    plan: the structure where the overall assignment is recorded
    todo: a bitmap that record which core registers hold a parameter
 
@@ -894,15 +918,13 @@ struct plan {
    Note: this function allocated an array in plan->pplans with tcc_malloc. It
    is the responsability of the caller to free this array once used (ie not
    before copy_params). */
-static int assign_regs(int nb_args, int variadic, struct plan *plan, int *todo)
+static int assign_regs(int nb_args, int corefloat, struct plan *plan, int *todo)
 {
   int i, size, align;
   int ncrn /* next core register number */, nsaa /* next stacked argument address*/;
   int plan_nb = 0;
   struct param_plan pplan;
-#ifdef TCC_ARM_HARDFLOAT
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
-#endif
 
   ncrn = nsaa = 0;
   *todo = 0;
@@ -916,8 +938,7 @@ static int assign_regs(int nb_args, int variadic, struct plan *plan, int *todo)
       case VT_FLOAT:
       case VT_DOUBLE:
       case VT_LDOUBLE:
-#ifdef TCC_ARM_HARDFLOAT
-      if (!variadic) {
+      if (!corefloat) {
         int is_hfa = 0; /* Homogeneous float aggregate */
 
         if (is_float(vtop[-i].type.t)
@@ -937,7 +958,6 @@ static int assign_regs(int nb_args, int variadic, struct plan *plan, int *todo)
             break;
         }
       }
-#endif
       ncrn = (ncrn + (align-1)/4) & -(align/4);
       size = (size + 3) & -4;
       if (ncrn + size/4 <= 4 || (ncrn < 4 && start_vfpreg != -1)) {
@@ -1149,11 +1169,14 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
 void gfunc_call(int nb_args)
 {
   int r, args_size;
-  int variadic;
+  int variadic, corefloat = 1;
   int todo;
   struct plan plan;
 
+#ifdef TCC_ARM_HARDFLOAT
   variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
+  corefloat = variadic || floats_in_core_regs(&vtop[-nb_args]);
+#endif
   /* cannot let cpu flags if other instruction are generated. Also avoid leaving
      VT_JMP anywhere except on the top of the stack because it would complicate
      the code generator. */
@@ -1161,7 +1184,7 @@ void gfunc_call(int nb_args)
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gv(RC_INT);
 
-  args_size = assign_regs(nb_args, variadic, &plan, &todo);
+  args_size = assign_regs(nb_args, corefloat, &plan, &todo);
 
 #ifdef TCC_ARM_EABI
   if (args_size & 7) { /* Stack must be 8 byte aligned at fct call for EABI */
@@ -1180,11 +1203,7 @@ void gfunc_call(int nb_args)
       gadd_sp(args_size); /* pop all parameters passed on the stack */
 #ifdef TCC_ARM_EABI
 #ifdef TCC_ARM_VFP
-#ifdef TCC_ARM_HARDFLOAT
-  if(variadic && is_float(vtop->type.ref->type.t)) {
-#else
-  rf(is_float(vtop->type.ref->type.t)) {
-#endif
+  if(corefloat && is_float(vtop->type.ref->type.t)) {
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
       o(0xEE000A10); /*vmov s0, r0 */
     } else {
