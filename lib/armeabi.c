@@ -1,4 +1,4 @@
-#include<limits.h>
+#include <limits.h>
 
 /* We rely on the little endianness and EABI calling convention for this to
    work */
@@ -325,22 +325,28 @@ static inline rettype aeabi_ ## name (type num, type den)                 \
 }
 
 #define __AEABI_XDIVMOD(name, type, uiname, rettype, urettype, typemacro)     \
-void __aeabi_ ## name(type numerator, type denominator)                    \
+void __aeabi_ ## name(type numerator, type denominator)                       \
 {                                                                             \
     unsigned type num, den;                                                   \
     urettype uxdiv_ret;                                                       \
     rettype ret;                                                              \
                                                                               \
-    num = numerator & typemacro ## _MAX;                                      \
-    den = denominator & typemacro ## _MAX;                                    \
+    if (numerator >= 0)                                                       \
+      num = numerator;                                                        \
+    else                                                                      \
+      num = 0 - numerator;                                                    \
+    if (denominator >= 0)                                                     \
+      den = denominator;                                                      \
+    else                                                                      \
+      den = 0 - denominator;                                                  \
     uxdiv_ret = aeabi_ ## uiname(num, den);                                   \
     /* signs differ */                                                        \
     if ((numerator & typemacro ## _MIN) != (denominator & typemacro ## _MIN)) \
-        ret.quot = uxdiv_ret.quot * -1;                                       \
+        ret.quot = 0 - uxdiv_ret.quot;                                        \
     else                                                                      \
         ret.quot = uxdiv_ret.quot;                                            \
-    if (numerator & typemacro ## _MIN)                                        \
-        ret.rem = uxdiv_ret.rem * -1;                                         \
+    if (numerator < 0)                                                        \
+        ret.rem = 0 - uxdiv_ret.rem;                                          \
     else                                                                      \
         ret.rem = uxdiv_ret.rem;                                              \
                                                                               \
@@ -420,8 +426,14 @@ int __aeabi_idiv(int numerator, int denominator)
     unsigned num, den;
     uidiv_t ret;
 
-    num = numerator & INT_MAX;
-    den = denominator & INT_MAX;
+    if (numerator >= 0)
+        num = numerator;
+    else
+        num = 0 - numerator;
+    if (denominator >= 0)
+        den = denominator;
+    else
+        den = 0 - denominator;
     ret = aeabi_uidivmod(num, den);
     if ((numerator & INT_MIN) != (denominator & INT_MIN)) /* signs differ */
         ret.quot *= -1;
