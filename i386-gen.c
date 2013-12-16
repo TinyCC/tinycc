@@ -392,7 +392,7 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     } else {
         ret->ref = NULL;
         ret->t = VT_INT;
-        return 0;
+        return 1;
     }
 #else
     *ret_align = 1; // Never have to re-align return values for x86

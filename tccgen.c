@@ -3927,7 +3927,7 @@ ST_FUNC void unary(void)
         } else if (tok == '(') {
             SValue ret;
             Sym *sa;
-            int nb_args, sret, ret_align;
+            int nb_args, ret_nregs, ret_align;
 
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
@@ -3951,8 +3951,8 @@ ST_FUNC void unary(void)
             ret.r2 = VT_CONST;
             /* compute first implicit argument if a structure is returned */
             if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
-                sret = gfunc_sret(&s->type, &ret.type, &ret_align);
-                if (!sret) {
+                ret_nregs = gfunc_sret(&s->type, &ret.type, &ret_align);
+                if (!ret_nregs) {
                     /* get some space for the returned structure */
                     size = type_size(&s->type, &align);
                     loc = (loc - size) & -align;
@@ -3965,11 +3965,11 @@ ST_FUNC void unary(void)
                     nb_args++;
                 }
             } else {
-                sret = 1;
+                ret_nregs = 1;
                 ret.type = s->type;
             }
 
-            if (sret) {
+            if (ret_nregs) {
                 /* return in register */
                 if (is_float(ret.type.t)) {
                     ret.r = reg_fret(ret.type.t);
@@ -4008,23 +4008,30 @@ ST_FUNC void unary(void)
             } else {
                 vtop -= (nb_args + 1);
             }
+
             /* return value */
-            for (r = ret.r + sret + !sret; r-- > ret.r;) {
+            for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
                 vsetc(&ret.type, r, &ret.c);
                 vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
             }
+
             /* handle packed struct return */
-            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && sret) {
+            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && ret_nregs) {
                 int addr, offset;
 
                 size = type_size(&s->type, &align);
                 loc = (loc - size) & -align;
                 addr = loc;
-                for(offset = 0; offset < size; offset += ret_align) {
+                offset = 0;
+                for (;;) {
                     vset(&ret.type, VT_LOCAL | VT_LVAL, addr + offset);
                     vswap();
                     vstore();
                     vtop--;
+                    if (--ret_nregs == 0)
+                        break;
+                    /* XXX: compatible with arm only: ret_align == register_size */
+                    offset += ret_align;
                 }
                 vset(&s->type, VT_LOCAL | VT_LVAL, addr);
             }
@@ -4596,8 +4603,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             gen_assign_cast(&func_vt);
             if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
                 CType type, ret_type;
-                int ret_align;
-                if (!gfunc_sret(&func_vt, &ret_type, &ret_align)) {
+                int ret_align, ret_nregs;
+                ret_nregs = gfunc_sret(&func_vt, &ret_type, &ret_align);
+                if (0 == ret_nregs) {
                     /* if returning structure, must copy it to implicit
                        first pointer arg location */
                     type = func_vt;
@@ -4609,7 +4617,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                     vstore();
                 } else {
                     /* returning structure packed into registers */
-                    int r, size, addr, offset, align;
+                    int r, size, addr, align;
                     size = type_size(&func_vt,&align);
                     if ((vtop->r != (VT_LOCAL | VT_LVAL) || (vtop->c.i & (ret_align-1)))
                         && (align & (ret_align-1))) {
@@ -4626,11 +4634,16 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                         r = rc_fret(ret_type.t);
                     else
                         r = RC_IRET;
-                    /* We assume that when a structure is returned in multiple
-                       registers, their classes are consecutive values of the
-                       suite s(n) = 2^n */
-                    for (offset = 0; offset < size; offset += ret_align, r<<=1) {
+
+                    for (;;) {
                         gv(r);
+                        if (--ret_nregs == 0)
+                            break;
+                        /* We assume that when a structure is returned in multiple
+                           registers, their classes are consecutive values of the
+                           suite s(n) = 2^n */
+                        r <<= 1;
+                        /* XXX: compatible with arm only: ret_align == register_size */
                         vtop->c.i += ret_align;
                         vtop->r = VT_LOCAL | VT_LVAL;
                     }
