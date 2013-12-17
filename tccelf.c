@@ -1102,23 +1102,23 @@ static void put_got_entry(TCCState *s1,
             if (plt->data_offset == 0) {
                 /* first plt entry */
                 p = section_ptr_add(plt, 16);
-                put32(p     , 0xe52de004);
-                put32(p +  4, 0xe59fe010);
-                put32(p +  8, 0xe08fe00e);
-                put32(p + 12, 0xe5bef008);
+                put32(p,    0xe52de004); /* push {lr}         */
+                put32(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
+                put32(p+8,  0xe08fe00e); /* add lr, pc, lr    */
+                put32(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
             }
 
             if (s1->sym_attrs[sym_index].plt_thumb_stub) {
                 p = section_ptr_add(plt, 20);
-                put32(p  , 0x4778); /* bx pc */
+                put32(p,   0x4778); /* bx pc */
                 put32(p+2, 0x46c0); /* nop   */
                 p += 4;
             } else
                 p = section_ptr_add(plt, 16);
-            put32(p  , 0xe59fc004); /* ldr ip, [pc, #4] ; offset in GOT */
-            put32(p+4, 0xe08fc00c); /* add ip, pc, ip ; absolute address or offset */
-            put32(p+8, 0xe59cf000); /* ldr pc, [ip] ; load absolute address or load offset */
-            put32(p+12, s1->got->data_offset);
+            put32(p,   0xe59fc004); /* ldr ip, [pc, #4] ; GOT entry offset */
+            put32(p+4, 0xe08fc00c); /* add ip, pc, ip ; addr of GOT entry  */
+            put32(p+8, 0xe59cf000); /* ldr pc, [ip] ; jump to GOT entry */
+            put32(p+12, s1->got->data_offset); /* GOT entry off once patched */
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
