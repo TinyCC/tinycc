@@ -40,6 +40,7 @@ tests/tcctest.gcc
 tests/weaktest.*.o.txt
 tests/tests2/fred.txt
 tests/hello
+tests/abitest-*cc
 .gdb_history
 tcc.1
 tcc.pod
