@@ -1390,7 +1390,7 @@ int gtst(int inv, int t)
     op|=encbranch(r,t,1);
     o(op);
     t=r;
-  } else if (v == VT_JMP || v == VT_JMPI) {
+  } else { /* VT_JMP || VT_JMPI */
     if ((v & 1) == inv) {
       if(!vtop->c.i)
 	vtop->c.i=t;
@@ -1411,29 +1411,6 @@ int gtst(int inv, int t)
     } else {
       t = gjmp(t);
       gsym(vtop->c.i);
-    }
-  } else {
-    if (is_float(vtop->type.t)) {
-      r=gv(RC_FLOAT);
-#ifdef TCC_ARM_VFP
-      o(0xEEB50A40|(vfpr(r)<<12)|T2CPR(vtop->type.t)); /* fcmpzX */
-      o(0xEEF1FA10); /* fmstat */
-#else
-      o(0xEE90F118|(fpr(r)<<16));
-#endif
-      vtop->r = VT_CMP;
-      vtop->c.i = TOK_NE;
-      return gtst(inv, t);
-    } else if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-      /* constant jmp optimization */
-      if ((vtop->c.i != 0) != inv)
-	t = gjmp(t);
-    } else {
-      v = gv(RC_INT);
-      o(0xE3300000|(intr(v)<<16));
-      vtop->r = VT_CMP;
-      vtop->c.i = TOK_NE;
-      return gtst(inv, t);
     }
   }
   vtop--;

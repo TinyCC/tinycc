@@ -1582,7 +1582,7 @@ int gtst(int inv, int t)
 	  }
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
+    } else { /* VT_JMP || VT_JMPI */
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
@@ -1594,23 +1594,6 @@ int gtst(int inv, int t)
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
-        }
-    } else {
-        if (is_float(vtop->type.t) ||
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
-            vpushi(0);
-            gen_op(TOK_NE);
-        }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            /* constant jmp optimization */
-            if ((vtop->c.i != 0) != inv)
-                t = gjmp(t);
-        } else {
-            v = gv(RC_INT);
-            orex(0,v,v,0x85);
-            o(0xc0 + REG_VALUE(v) * 9);
-            g(0x0f);
-            t = psym(0x85 ^ inv, t);
         }
     }
     vtop--;
