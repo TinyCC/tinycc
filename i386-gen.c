@@ -895,7 +895,10 @@ ST_FUNC void gen_opf(int op)
             swapped = 0;
         if (swapped)
             o(0xc9d9); /* fxch %st(1) */
-        o(0xe9da); /* fucompp */
+        if (op == TOK_EQ || op == TOK_NE)
+            o(0xe9da); /* fucompp */
+        else
+            o(0xd9de); /* fcompp */
         o(0xe0df); /* fnstsw %ax */
         if (op == TOK_EQ) {
             o(0x45e480); /* and $0x45, %ah */

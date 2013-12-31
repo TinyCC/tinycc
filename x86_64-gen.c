@@ -1793,7 +1793,10 @@ void gen_opf(int op)
                 swapped = 0;
             if (swapped)
                 o(0xc9d9); /* fxch %st(1) */
-            o(0xe9da); /* fucompp */
+            if (op == TOK_EQ || op == TOK_NE)
+                o(0xe9da); /* fucompp */
+            else
+                o(0xd9de); /* fcompp */
             o(0xe0df); /* fnstsw %ax */
             if (op == TOK_EQ) {
                 o(0x45e480); /* and $0x45, %ah */
@@ -1877,8 +1880,11 @@ void gen_opf(int op)
             
             if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
                 o(0x66);
-            o(0x2e0f); /* ucomisd */
-            
+            if (op == TOK_EQ || op == TOK_NE)
+                o(0x2e0f); /* ucomisd */
+            else
+                o(0x2f0f); /* comisd */
+
             if (vtop->r & VT_LVAL) {
                 gen_modrm(vtop[-1].r, r, vtop->sym, fc);
             } else {
