@@ -273,7 +273,7 @@ Advanced options (experts only):
   --strip-binaries         strip symbol tables from resulting binaries
   --disable-static         make libtcc.so instead of libtcc.a
   --disable-rpath          disable use of -rpath with the above
-  --with-libgcc            use /lib/libgcc_s.so.1 instead of libtcc.a
+  --with-libgcc            use libgcc_s.so.1 instead of libtcc.a in dynamic link
   --enable-mingw32         build windows version on linux with mingw32
   --enable-cygwin          build windows version on windows with cygwin
   --enable-cross           build cross compilers
