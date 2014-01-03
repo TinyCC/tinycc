@@ -993,6 +993,7 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
     
     if (ty->t & (VT_BITFIELD|VT_ARRAY)) {
         *psize = 8;
+        *palign = 8;
         *reg_count = 1;
         ret_t = ty->t;
         mode = x86_64_mode_integer;
