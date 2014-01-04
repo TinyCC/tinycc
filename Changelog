@@ -24,6 +24,7 @@ Features:
 - add the possibility to use noname functions by ordinal (YX Hao)
 - add a install-strip target to install tcc (Thomas Preud'homme)
 - add runtime selection of float ABI on ARM (Thomas Preud'homme)
+- add shared lib support on x86-64 (Michael Matz)
 
 Platforms:
 - support Debian GNU/kfreeBSD 64bit userspace (Thomas Preud'homme)
@@ -119,6 +120,7 @@ Bug fixes:
 - partially fix bound checking of argv and arge (Thomas Preud'homme)
 - fix possible dereference when getting name of symbol (grischka)
 - fix va_list type definition on x86-64 (Daniel Glöckner)
+- reduce number of scan-build false positive (mingodad)
 
 version 0.9.26:
 
