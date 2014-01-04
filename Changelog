@@ -1,7 +1,69 @@
 Version 0.9.27:
 
+Licensing:
+
+- TinyCC partly relicensed to MIT license
+
+User interface:
+
+- define __STDC_HOSTED__ (Michael Matz, Urs Janssen)
+- added support for CPATH, C_INCLUDE_PATH and LD_LIBRARY_PATH (Andrew Aladjev
+and Urs Janssen)
+- added option -norunsrc to control argv[0] with tcc -run (James Lyon)
+
+Features:
+
+- added ABI tests with native compiler using libtcc (James Lyon)
+- added CMake build system with support for cross-compilation (James Lyon)
+- improved variable length array support (James Lyon)
+- add the possibility to use noname functions by ordinal (YX Hao)
+- add a install-strip target to install tcc (Thomas Preud'homme)
+
 Platforms:
-- Support Debian GNU/kfreeBSD 64bit userspace (Thomas Preud'homme)
+- support Debian GNU/kfreeBSD 64bit userspace (Thomas Preud'homme)
+- fix GNU/Hurd interpreter path (Thomas Preud'homme)
+- fix configure script for FreeBSD host (Thomas Preud'homme)
+- make tcc -run work reliably on ARM by flushing caches (Thomas Preud'homme)
+- many x86-64 ABI fixes incl. XMM register passing (James Lyon)
+- improve compatibility with mingw's long double (James Lyon)
+- avoid .stabstr section name to be truncated on win32 (Roy)
+- add support for load/store of _Bool value (Thomas Preud'homme)
+- detect instruction with incorrect operands on x86-64 (Thomas Preud'homme)
+- improved relocations on ARM (Thomas Preud'homme)
+- add va_* macro implementation for ARM (Thomas Preud'homme)
+- define __ARM_EABI__, __ARMEL__ and __ARM_PCS_VFP (Thomas Preud'homme)
+- provide a runtime library for ARM (Thomas Preud'homme)
+- improved support for ARM hard float calling convention (Thomas Preud'homme,
+Daniel Glöckner)
+
+Bug fixes:
+- various code cleaning (Urs Janssen)
+- fixes of other's patches (grischka, Ramsay Jones)
+- fix documentation about __TINYC__ (Urs Janssen)
+- improve build of documentation (Urs Janssen)
+- improve build instructions (Jov)
+- switch from texi2html to makeinfo --html to build tcc-doc.html (James Lyon)
+- improve out of tree build (James Lyon)
+- improved passing and returning of struct (James Lyon)
+- fix CMake build on i386 and x86-64 (James Lyon)
+- fix i386 calling convention issue (James Lyon)
+- fix error in Windows build of tests (James Lyon)
+- fix x86-64 long double passing (James Lyon)
+- fix crash with undefined struct (grischka)
+- normalize slashes on win32 to always use backslashes (grischka)
+- use runtime function for float to int conversion on i386 (grischka)
+- improved documentation for include and lib lookup on win32 (grischka)
+- detect redefinition of function (Thomas Preud'homme)
+- detect the use of array of functions (Thomas Preud'homme)
+- detect use of enumerator with wrong enumeration (Thomas Preud'homme)
+- detect redefinition of enumerator or enumeration (Thomas Preud'homme)
+- set the user-defined library search paths first (Vittorio Giovara)
+- detect usage of incomplete types inside struct/union (Amine Najahi)
+- various macro bug fixes (Joseph Poirier)
+- avoid wrong trigger of assert on x86-64 platform (Thomas Preud'homme)
+- fix NaN comparison (Thomas Preud'homme)
+- use libtcc for static linking with runtime library (Thomas Preud'homme)
+- fix negation of 0.0 and -0.0 values (Thomas Preud'homme)
 
 version 0.9.26:
 
