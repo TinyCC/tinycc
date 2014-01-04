@@ -195,58 +195,53 @@ macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libt
   endif()
 endmacro()
 
-make_tcc("Win32" i386-win32 TCC_BUILD_WIN32
+make_tcc("Win32" i386-w64-mingw32 TCC_BUILD_WIN32
   "TCC_TARGET_I386;TCC_TARGET_PE"
   "${I386_SOURCES};tccpe.c"
   tiny_libmaker_32 "${LIBTCC1_I386_SOURCES};${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
 )
-make_tcc("Win64" x86_64-win32 TCC_BUILD_WIN64
+make_tcc("Win64" x86_64-w64-mingw32 TCC_BUILD_WIN64
   "TCC_TARGET_X86_64;TCC_TARGET_PE"
   "${X86_64_SOURCES};tccpe.c"
   tiny_libmaker_64 "lib/alloca86_64.S;${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
 )
-make_tcc("WinCE" arm-win32 TCC_BUILD_WINCE
+make_tcc("WinCE" arm-wince-mingw32ce TCC_BUILD_WINCE
   "TCC_TARGET_ARM;TCC_ARM_VERSION=${TCC_ARM_VERSION};TCC_TARGET_PE"
   "${ARM_SOURCES};tccpe.c"
   "" "" ""
 )
-make_tcc("i386" i386 TCC_BUILD_I386
+make_tcc("i386" i386-linux-gnu TCC_BUILD_I386
   TCC_TARGET_I386
   "${I386_SOURCES}"
   tiny_libmaker_32 "${LIBTCC1_I386_SOURCES}" ""
 )
-make_tcc("x86_64" x86_64 TCC_BUILD_X64
+make_tcc("x86_64" x86_64-linux-gnu TCC_BUILD_X64
   TCC_TARGET_X86_64
   "${X86_64_SOURCES}"
   tiny_libmaker_64 "lib/alloca86_64.S" ""
 )
 set(ARM_DEFINITIONS TCC_TARGET_ARM TCC_ARM_VERSION=${TCC_ARM_VERSION})
-make_tcc("ARM" arm TCC_BUILD_ARM
-  "${ARM_DEFINITIONS};WITHOUT_LIBTCC"
-  "${ARM_SOURCES}"
-  "" "" ""
-)
-make_tcc("" arm-eabihf TCC_BUILD_ARM_EABIHF
+make_tcc("" arm-linux-gnueabihf TCC_BUILD_ARM_EABIHF
   "${ARM_DEFINITIONS};TCC_ARM_EABI;TCC_ARM_HARDFLOAT"
   "${ARM_SOURCES}"
   "" "" ""
 )
-make_tcc("" arm-eabi TCC_BUILD_ARM_EABI
+make_tcc("" arm-linux-gnueabi TCC_BUILD_ARM_EABI
   "${ARM_DEFINITIONS};TCC_ARM_EABI"
   "${ARM_SOURCES}"
   "" "" ""
 )
-make_tcc("" arm-fpa TCC_BUILD_ARM_FPA
+make_tcc("" arm-linux-fpa TCC_BUILD_ARM_FPA
   "${ARM_DEFINITIONS}"
   "${ARM_SOURCES}"
   "" "" ""
 )
-make_tcc("" arm-fpa-ld TCC_BUILD_ARM_FPA_LD
+make_tcc("" arm-linux-fpa-ld TCC_BUILD_ARM_FPA_LD
   "${ARM_DEFINITIONS};LDOUBLE_SIZE=12"
   "${ARM_SOURCES}"
   "" "" ""
 )
-make_tcc("" arm-vfp TCC_BUILD_ARM_VFP
+make_tcc("" arm-linux-gnu TCC_BUILD_ARM_VFP
   "${ARM_DEFINITIONS};TCC_ARM_VFP"
   "${ARM_SOURCES}"
   "" "" ""
