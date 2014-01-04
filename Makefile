@@ -230,6 +230,9 @@ else
 INSTALLBIN=$(INSTALL)
 endif
 
+install-strip: install
+	strip $(foreach PROG,$(PROGS),"$(bindir)"/$(PROG))
+
 ifndef CONFIG_WIN32
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(bindir)"
