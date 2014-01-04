@@ -3794,9 +3794,22 @@ ST_FUNC void unary(void)
         break;
     case '-':
         next();
-        vpushi(0);
         unary();
-        gen_op('-');
+        t = vtop->type.t & VT_BTYPE;
+        /* handle (-)0.0 */
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST &&
+            is_float(t)) {
+            if (t == VT_FLOAT)
+                vtop->c.f = -vtop->c.f;
+            else if (t == VT_DOUBLE)
+                vtop->c.d = -vtop->c.d;
+            else
+                vtop->c.ld = -vtop->c.ld;
+	} else {
+            vpushi(0);
+            vswap();
+            gen_op('-');
+        }
         break;
     case TOK_LAND:
         if (!gnu_ext)
