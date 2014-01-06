@@ -66,6 +66,7 @@ ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
+ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
@@ -3960,7 +3961,7 @@ ST_FUNC void unary(void)
         } else if (tok == '(') {
             SValue ret;
             Sym *sa;
-            int nb_args, ret_nregs, ret_align;
+            int nb_args, ret_nregs, ret_align, variadic;
 
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
@@ -3984,7 +3985,9 @@ ST_FUNC void unary(void)
             ret.r2 = VT_CONST;
             /* compute first implicit argument if a structure is returned */
             if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
-                ret_nregs = gfunc_sret(&s->type, &ret.type, &ret_align);
+                variadic = (s->c == FUNC_ELLIPSIS);
+                ret_nregs = gfunc_sret(&s->type, variadic, &ret.type,
+                                       &ret_align);
                 if (!ret_nregs) {
                     /* get some space for the returned structure */
                     size = type_size(&s->type, &align);
@@ -4637,7 +4640,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
                 CType type, ret_type;
                 int ret_align, ret_nregs;
-                ret_nregs = gfunc_sret(&func_vt, &ret_type, &ret_align);
+                ret_nregs = gfunc_sret(&func_vt, func_var, &ret_type,
+                                       &ret_align);
                 if (0 == ret_nregs) {
                     /* if returning structure, must copy it to implicit
                        first pointer arg location */
@@ -5747,6 +5751,7 @@ static void gen_function(Sym *sym)
     cur_text_section = NULL;
     funcname = ""; /* for safety */
     func_vt.t = VT_VOID; /* for safety */
+    func_var = 0; /* for safety */
     ind = 0; /* for safety */
     nocode_wanted = saved_nocode_wanted;
 }

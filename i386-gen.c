@@ -376,7 +376,7 @@ static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
 {
 #ifdef TCC_TARGET_PE
     int size, align;
@@ -527,6 +527,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+    func_var = (sym->c == FUNC_ELLIPSIS);
 #ifdef TCC_TARGET_PE
     size = type_size(&func_vt,&align);
     if (((func_vt.t & VT_BTYPE) == VT_STRUCT) && (size > 8)) {

@@ -1881,7 +1881,7 @@ static void gcall_or_jmp(int is_jmp)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align) {
     *ret_align = 1; // Never have to re-align return values for x86-64
     return 0;
 }
@@ -1971,6 +1971,7 @@ void gfunc_prolog(CType * func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+    func_var = (sym->c == FUNC_ELLIPSIS);
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
 	func_vc = addr;
 	addr += 4;

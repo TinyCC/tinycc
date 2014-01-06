@@ -658,7 +658,7 @@ void gen_offs_sp(int b, int r, int d)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
 {
     int size, align;
     *ret_align = 1; // Never have to re-align return values for x86-64
@@ -833,6 +833,7 @@ void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+    func_var = (sym->c == FUNC_ELLIPSIS);
     size = gfunc_arg_size(&func_vt);
     if (size > 8) {
         gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);

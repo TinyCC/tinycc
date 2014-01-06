@@ -441,6 +441,7 @@ void gfunc_prolog(int t)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->t;
+    func_var = (sym->c == FUNC_ELLIPSIS);
     if ((func_vt & VT_BTYPE) == VT_STRUCT) {
         func_vc = addr;
         addr++;

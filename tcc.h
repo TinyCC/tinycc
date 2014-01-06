@@ -1176,6 +1176,7 @@ ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
+ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
@@ -1288,7 +1289,7 @@ ST_FUNC void gsym_addr(int t, int a);
 ST_FUNC void gsym(int t);
 ST_FUNC void load(int r, SValue *sv);
 ST_FUNC void store(int r, SValue *v);
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *align);
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align);
 ST_FUNC void gfunc_call(int nb_args);
 ST_FUNC void gfunc_prolog(CType *func_type);
 ST_FUNC void gfunc_epilog(void);

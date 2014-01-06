@@ -839,12 +839,12 @@ int floats_in_core_regs(SValue *sval)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align) {
 #ifdef TCC_ARM_EABI
     int size, align;
     size = type_size(vt, &align);
 #ifdef TCC_ARM_HARDFLOAT
-    if (is_float(vt->t) || is_hgen_float_aggr(vt)) {
+    if (!variadic && (is_float(vt->t) || is_hgen_float_aggr(vt))) {
         *ret_align = 8;
         ret->ref = NULL;
         ret->t = VT_DOUBLE;
@@ -1221,21 +1221,19 @@ void gfunc_call(int nb_args)
 void gfunc_prolog(CType *func_type)
 {
   Sym *sym,*sym2;
-  int n,nf,size,align, variadic, struct_ret = 0;
+  int n, nf, size, align, struct_ret = 0;
 #ifdef TCC_ARM_HARDFLOAT
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
 #endif
+  CType ret_type;
 
   sym = func_type->ref;
   func_vt = sym->type;
+  func_var = (func_type->ref->c == FUNC_ELLIPSIS);
 
   n = nf = 0;
-  variadic = (func_type->ref->c == FUNC_ELLIPSIS);
-  if((func_vt.t & VT_BTYPE) == VT_STRUCT
-#ifdef TCC_ARM_HARDFLOAT
-     && (variadic || !is_hgen_float_aggr(&func_vt))
-#endif
-     && type_size(&func_vt,&align) > 4)
+  if ((func_vt.t & VT_BTYPE) == VT_STRUCT &&
+      !gfunc_sret(&func_vt, func_var, &ret_type, &align))
   {
     n++;
     struct_ret = 1;
@@ -1244,7 +1242,7 @@ void gfunc_prolog(CType *func_type)
   for(sym2=sym->next;sym2 && (n<4 || nf<16);sym2=sym2->next) {
     size = type_size(&sym2->type, &align);
 #ifdef TCC_ARM_HARDFLOAT
-    if (!variadic && (is_float(sym2->type.t)
+    if (!func_var && (is_float(sym2->type.t)
         || is_hgen_float_aggr(&sym2->type))) {
       int tmpnf = assign_vfpreg(&avregs, align, size);
       tmpnf += (size + 3) / 4;
@@ -1255,9 +1253,9 @@ void gfunc_prolog(CType *func_type)
       n += (size + 3) / 4;
   }
   o(0xE1A0C00D); /* mov ip,sp */
-  if(variadic)
+  if (func_var)
     n=4;
-  if(n) {
+  if (n) {
     if(n>4)
       n=4;
 #ifdef TCC_ARM_EABI
@@ -1289,7 +1287,7 @@ void gfunc_prolog(CType *func_type)
       size = (size + 3) >> 2;
       align = (align + 3) & ~3;
 #ifdef TCC_ARM_HARDFLOAT
-      if (!variadic && (is_float(sym->type.t)
+      if (!func_var && (is_float(sym->type.t)
           || is_hgen_float_aggr(&sym->type))) {
         int fpn = assign_vfpreg(&avregs, align, size << 2);
         if (fpn >= 0) {
@@ -1329,10 +1327,14 @@ void gfunc_epilog(void)
 {
   uint32_t x;
   int diff;
+  /* Copy float return value to core register if base standard is used and
+     float computation is made with VFP */
 #ifdef TCC_ARM_EABI
-  /* Useless but harmless copy of the float result into main register(s) in case
-     of variadic function in the hardfloat variant */
-  if(is_float(func_vt.t)) {
+  if (
+#ifdef TCC_ARM_HARDFLOAT
+      func_var &&
+#endif
+      is_float(func_vt.t)) {
     if((func_vt.t & VT_BTYPE) == VT_FLOAT)
       o(0xEE100A10); /* fmrs r0, s0 */
     else {
