@@ -178,11 +178,11 @@ LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
     return (void*)(uintptr_t)get_elf_sym_addr(s, name, 0);
 }
 
-#ifdef TCC_IS_NATIVE
+#if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
 /* return elf symbol value or error */
 ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 {
-    return (void*)get_elf_sym_addr(s, name, 1);
+    return (void*)(uintptr_t)get_elf_sym_addr(s, name, 1);
 }
 #endif
 

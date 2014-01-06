@@ -581,14 +581,6 @@ ST_FUNC void gfunc_prolog(CType *func_type)
         func_bound_offset = lbounds_section->data_offset;
     }
 #endif
-
-#ifndef CONFIG_USE_LIBGCC
-#ifndef TCC_TARGET_PE
-    if (0 == strcmp(funcname, "main"))
-        gen_static_call(TOK___tcc_fpinit);
-#endif
-#endif
-
 }
 
 /* generate function epilog */
@@ -988,16 +980,20 @@ ST_FUNC void gen_cvt_itof(int t)
 }
 
 /* convert fp to int 't' type */
-/* XXX: handle long long case */
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    gv(RC_FLOAT);
-    save_reg(TREG_EAX);
-    save_reg(TREG_EDX);
-    gen_static_call(TOK___tcc_cvt_ftol);
-    vtop->r = TREG_EAX; /* mark reg as used */
-    if (t == VT_LLONG)
-        vtop->r2 = TREG_EDX;
+    int bt = vtop->type.t & VT_BTYPE;
+    if (bt == VT_FLOAT)
+        vpush_global_sym(&func_old_type, TOK___fixsfdi);
+    else if (bt == VT_LDOUBLE)
+        vpush_global_sym(&func_old_type, TOK___fixxfdi);
+    else
+        vpush_global_sym(&func_old_type, TOK___fixdfdi);
+    vswap();
+    gfunc_call(1);
+    vpushi(0);
+    vtop->r = REG_IRET;
+    vtop->r2 = REG_LRET;
 }
 
 /* convert from one floating point type to another */

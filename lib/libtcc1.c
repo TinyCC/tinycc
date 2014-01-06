@@ -478,24 +478,6 @@ long long __ashldi3(long long a, int b)
 #endif
 }
 
-#ifndef _WIN32
-void __tcc_fpinit(void)
-{
-    unsigned c = 0x137F;
-    __asm__ __volatile__ ("fldcw %0" : : "m" (c));
-}
-#endif
-long long __tcc_cvt_ftol(long double x)
-{
-    unsigned c0, c1;
-    long long ret;
-    __asm__ __volatile__ ("fnstcw %0" : "=m" (c0));
-    c1 = c0 | 0x0C00;
-    __asm__ __volatile__ ("fldcw %0" : : "m" (c1));
-    __asm__ __volatile__ ("fistpll %0"  : "=m" (ret));
-    __asm__ __volatile__ ("fldcw %0" : : "m" (c0));
-    return ret;
-}
 #endif /* !__x86_64__ */
 
 /* XXX: fix tcc's code generator to do this instead */
@@ -614,6 +596,27 @@ unsigned long long __fixunsxfdi (long double a1)
         return l >> -exp;
     else
         return 0;
+}
+
+long long __fixsfdi (float a1)
+{
+    long long ret; int s;
+    ret = __fixunssfdi((s = a1 >= 0) ? a1 : -a1);
+    return s ? ret : -ret;
+}
+
+long long __fixdfdi (double a1)
+{
+    long long ret; int s;
+    ret = __fixunsdfdi((s = a1 >= 0) ? a1 : -a1);
+    return s ? ret : -ret;
+}
+
+long long __fixxfdi (long double a1)
+{
+    long long ret; int s;
+    ret = __fixunsxfdi((s = a1 >= 0) ? a1 : -a1);
+    return s ? ret : -ret;
 }
 
 #if defined(__x86_64__) && !defined(_WIN64)
