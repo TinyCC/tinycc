@@ -581,9 +581,11 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     }
 #endif
 
+#ifndef CONFIG_USE_LIBGCC
 #ifndef TCC_TARGET_PE
     if (0 == strcmp(funcname, "main"))
         gen_static_call(TOK___tcc_fpinit);
+#endif
 #endif
 
 }
