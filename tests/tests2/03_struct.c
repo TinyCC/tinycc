@@ -6,7 +6,7 @@ struct fred
    int natasha;
 };
 
-void main() 
+int main()
 {
    struct fred bloggs;
 

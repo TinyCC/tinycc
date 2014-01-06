@@ -169,13 +169,18 @@
 #ifndef CONFIG_LDDIR
 # define CONFIG_LDDIR "lib"
 #endif
-#ifndef CONFIG_MULTIARCHDIR
-#define CONFIG_MULTIARCHDIR
+
+#ifdef CONFIG_MULTIARCHDIR
+# define USE_MUADIR(s) s "/" CONFIG_MULTIARCHDIR
+# define ALSO_MUADIR(s) s "/" CONFIG_MULTIARCHDIR ":" s
+#else
+# define USE_MUADIR(s) s
+# define ALSO_MUADIR(s) s
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX CONFIG_SYSROOT "/usr/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR
+# define CONFIG_TCC_CRTPREFIX USE_MUADIR(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
 #endif
 
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
@@ -186,10 +191,8 @@
 #  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include;{B}/include/winapi"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
-        CONFIG_SYSROOT "/usr/local/include/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/usr/local/include" \
-    ":" CONFIG_SYSROOT "/usr/include/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/usr/include" \
+        ALSO_MUADIR(CONFIG_SYSROOT "/usr/local/include") \
+    ":" ALSO_MUADIR(CONFIG_SYSROOT "/usr/include") \
     ":" "{B}/include"
 # endif
 #endif
@@ -197,15 +200,12 @@
 /* library search paths */
 #ifndef CONFIG_TCC_LIBPATHS
 # ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_LIBPATHS "{B}/lib;{B}"
+#  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        CONFIG_SYSROOT "/usr/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/usr/" CONFIG_LDDIR \
-    ":" CONFIG_SYSROOT "/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/" CONFIG_LDDIR \
-    ":" CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR \
-    ":" CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR
+        ALSO_MUADIR(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
+    ":" ALSO_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
+    ":" ALSO_MUADIR(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
 # endif
 #endif
 
@@ -237,7 +237,7 @@
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
-#define TCC_LIBGCC CONFIG_SYSROOT "/" CONFIG_LDDIR "/" CONFIG_MULTIARCHDIR "/libgcc_s.so.1"
+#define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
 /* include the target specific definitions */

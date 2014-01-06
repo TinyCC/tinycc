@@ -63,5 +63,5 @@ del *.o
 echo>..\config.texi @set VERSION %VERSION%
 if not exist doc md doc
 makeinfo --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi
-if exist tcc-win32.txt move tcc-win32.txt doc\
-copy ..\tests\libtcc_test.c examples\
+copy tcc-win32.txt doc
+copy ..\tests\libtcc_test.c examples

@@ -111,6 +111,3 @@ $(DIR)/exists :
 
 clean :
 	rm -rfv i386-win32 x86_64-win32 i386 x86_64
-
-Makefile: $(top_srcdir)/lib/Makefile
-	cp $< $@

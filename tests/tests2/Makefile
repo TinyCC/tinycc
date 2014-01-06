@@ -96,6 +96,3 @@ all test: $(TESTS)
 
 clean:
 	rm -vf fred.txt *.output
-
-Makefile: $(top_srcdir)/tests/tests2/Makefile
-	cp $< $@

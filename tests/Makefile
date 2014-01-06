@@ -27,7 +27,7 @@ ifneq ($(ARCH),i386)
  TESTS := $(filter-out btest,$(TESTS))
 endif
 ifdef CONFIG_WIN32
- TESTS := $(filter-out test3,$(TESTS))
+ TESTS := w32-prep $(filter-out test3,$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
  TESTS := $(filter-out hello-exe test3 btest,$(TESTS))
@@ -84,6 +84,9 @@ moretests:
 	@echo ------------ $@ ------------
 	$(MAKE) -C tests2
 
+w32-prep:
+	cp ../libtcc1.a ../lib
+
 # test.ref - generate using gcc
 # copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
@@ -91,41 +94,41 @@ test.ref: tcctest.c
 	./tcctest.gcc > $@
 
 # auto test
-test1: test.ref
+test1: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) -run $(SRCDIR)/tcctest.c > test.out1
+	$(TCC) -run $< > test.out1
 	@if diff -u test.ref test.out1 ; then echo "Auto Test OK"; fi
 
 # iterated test2 (compile tcc then compile tcctest.c !)
-test2: test.ref
+test2: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) -run $(SRCDIR)/tcctest.c > test.out2
+	$(TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out2
 	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
-test3: test.ref
+test3: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $(SRCDIR)/tcctest.c > test.out3
+	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out3
 	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
 
 # binary output test
-test4: test.ref
+test4: tcctest.c test.ref
 	@echo ------------ $@ ------------
 # object + link output
-	$(TCC) -c -o tcctest3.o $(SRCDIR)/tcctest.c
+	$(TCC) -c -o tcctest3.o $<
 	$(TCC) -o tcctest3 tcctest3.o
 	./tcctest3 > test3.out
 	@if diff -u test.ref test3.out ; then echo "Object Auto Test OK"; fi
 # dynamic output
-	$(TCC) -o tcctest1 $(SRCDIR)/tcctest.c
+	$(TCC) -o tcctest1 $<
 	./tcctest1 > test1.out
 	@if diff -u test.ref test1.out ; then echo "Dynamic Auto Test OK"; fi
 # dynamic output + bound check
-	$(TCC) -b -o tcctest4 $(SRCDIR)/tcctest.c
+	$(TCC) -b -o tcctest4 $<
 	./tcctest4 > test4.out
 	@if diff -u test.ref test4.out ; then echo "BCheck Auto Test OK"; fi
 # static output
-	$(TCC) -static -o tcctest2 $(SRCDIR)/tcctest.c
+	$(TCC) -static -o tcctest2 $<
 	./tcctest2 > test2.out
 	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
 
@@ -161,9 +164,9 @@ speedtest: ex2 ex3
 	time ./ex3 35
 	time $(TCC) -run $(top_srcdir)/examples/ex3.c 35
 
-weaktest: test.ref
-	$(TCC) -c tcctest.c -o weaktest.tcc.o $(CPPFLAGS) $(CFLAGS)
-	 $(CC) -c tcctest.c -o weaktest.gcc.o -I. $(CPPFLAGS) -w $(CFLAGS)
+weaktest: tcctest.c test.ref
+	$(TCC) -c $< -o weaktest.tcc.o $(CPPFLAGS) $(CFLAGS)
+	 $(CC) -c $< -o weaktest.gcc.o -I. $(CPPFLAGS) -w $(CFLAGS)
 	objdump -t weaktest.tcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.tcc.o.txt
 	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
 	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
@@ -220,7 +223,5 @@ cache: tcc_g
 clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.gcc *.exe \
-	   hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h
-
-Makefile: $(SRCDIR)/Makefile
-	cp $< $@
+	       hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h \
+	       ../lib/libtcc1.a

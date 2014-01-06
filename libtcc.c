@@ -214,7 +214,7 @@ PUB_FUNC void *tcc_malloc(unsigned long size)
     void *ptr;
     ptr = malloc(size);
     if (!ptr && size)
-        tcc_error("memory full");
+        tcc_error("memory full (malloc)");
 #ifdef MEM_DEBUG
     mem_cur_size += malloc_usable_size(ptr);
     if (mem_cur_size > mem_max_size)
@@ -239,7 +239,7 @@ PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 #endif
     ptr1 = realloc(ptr, size);
     if (!ptr1 && size)
-        tcc_error("memory full");
+        tcc_error("memory full (realloc)");
 #ifdef MEM_DEBUG
     /* NOTE: count not correct if alloc error, but not critical */
     mem_cur_size += malloc_usable_size(ptr1);
