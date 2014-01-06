@@ -813,28 +813,24 @@ static void pe_build_imports(struct pe_info *pe)
         hdr->Name = v + rva_base;
 
         for (k = 0, n = p->sym_count; k <= n; ++k) {
-            int ordinal = 0;
             if (k < n) {
                 int iat_index = p->symbols[k]->iat_index;
                 int sym_index = p->symbols[k]->sym_index;
                 ElfW(Sym) *imp_sym = (ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index;
                 ElfW(Sym) *org_sym = (ElfW(Sym) *)symtab_section->data + iat_index;
                 const char *name = pe->s1->dynsymtab_section->link->data + imp_sym->st_name;
+                int ordinal;
 
                 org_sym->st_value = thk_ptr;
                 org_sym->st_shndx = pe->thunk->sh_num;
-                v = pe->thunk->data_offset + rva_base;
-                
-                /* ordinal or name */
-                ordinal = imp_sym->st_value; /* from pe_load_def, temperary use */
-                //if (ordinal) printf("ordinal: %d\n", ordinal);
-                if (!ordinal) {
-                    section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
-                    put_elf_str(pe->thunk, name);
-                }
+
+                if (dllref)
+                    v = 0, ordinal = imp_sym->st_value; /* ordinal from pe_load_def */
+                else
+                    ordinal = 0, v = imp_sym->st_value; /* address from tcc_add_symbol() */
+
 #ifdef TCC_IS_NATIVE
                 if (pe->type == PE_RUN) {
-                    v = imp_sym->st_value;
                     if (dllref) {
                         if ( !dllref->handle )
                             dllref->handle = LoadLibrary(dllref->name);
@@ -842,13 +838,22 @@ static void pe_build_imports(struct pe_info *pe)
                     }
                     if (!v)
                         tcc_error_noabort("can't build symbol '%s'", name);
-                }
+                } else
 #endif
+                if (ordinal) {
+                    v = ordinal | (ADDR3264)1 << (sizeof(ADDR3264)*8 - 1);
+                } else {
+                    v = pe->thunk->data_offset + rva_base;
+                    section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
+                    put_elf_str(pe->thunk, name);
+                }
+
             } else {
                 v = 0; /* last entry is zero */
             }
+
             *(ADDR3264*)(pe->thunk->data+thk_ptr) =
-            *(ADDR3264*)(pe->thunk->data+ent_ptr) = (ordinal && pe->type != PE_RUN)?(ADDR3264)1<<(sizeof(ADDR3264)*8-1)|ordinal:v;
+            *(ADDR3264*)(pe->thunk->data+ent_ptr) = v;
             thk_ptr += sizeof (ADDR3264);
             ent_ptr += sizeof (ADDR3264);
         }
@@ -1593,12 +1598,11 @@ static char *get_line(char *line, int size, int fd)
 /* ------------------------------------------------------------- */
 static int pe_load_def(TCCState *s1, int fd)
 {
-    int state = 0, ret = -1, dllindex = 0;
-    char line[400], dllname[80], *p;
+    int state = 0, ret = -1, dllindex = 0, ord;
+    char line[400], dllname[80], *p, *x;
 
     for (;;) {
-        int ord = 0;
-        char *x, *d, idxstr[8];
+
         p = get_line(line, sizeof line, fd);
         if (NULL == p)
             break;
@@ -1621,24 +1625,19 @@ static int pe_load_def(TCCState *s1, int fd)
         case 2:
             dllindex = add_dllref(s1, dllname);
             ++state;
-
+            /* fall through */
         default:
-            /* get ordianl and will store in sym->st_value */
-            d = NULL;
-            x = strchr(line, ' ');
-            if (x) x = strchr(line, '@');
-            while (x != NULL) {
-                d =x;
-                x = strchr(x+1, '@');
-            }
-            if (d) {
-                ord = atoi(d+1);
-                itoa(ord, idxstr, 10);
-                if (strcmp(idxstr, d+1) == 0) {
-                    memset(d, 0, 1);
-                    trimback(p, d);
-                } else
-                    ord = 0;
+            /* get ordinal and will store in sym->st_value */
+            ord = 0;
+            x = strchr(p, ' ');
+            if (x) {
+                *x = 0, x = strrchr(x + 1, '@');
+                if (x) {
+                    char *d;
+                    ord = (int)strtol(x + 1, &d, 10);
+                    if (*d)
+                        ord = 0;
+                }
             }
             pe_putimport(s1, dllindex, p, ord);
             continue;
