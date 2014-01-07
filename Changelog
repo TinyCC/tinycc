@@ -18,6 +18,7 @@ Features:
 - improved variable length array support (James Lyon)
 - add the possibility to use noname functions by ordinal (YX Hao)
 - add a install-strip target to install tcc (Thomas Preud'homme)
+- add runtime selection of float ABI on ARM (Thomas Preud'homme)
 
 Platforms:
 - support Debian GNU/kfreeBSD 64bit userspace (Thomas Preud'homme)

@@ -224,7 +224,7 @@ static void display_info(TCCState *s, int what)
         print_paths("crt", s->crt_paths, s->nb_crt_paths);
         print_paths("libraries", s->library_paths, s->nb_library_paths);
         print_paths("include", s->sysinclude_paths, s->nb_sysinclude_paths);
-        printf("elfinterp:\n  %s\n",  CONFIG_TCC_ELFINTERP);
+        printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
         break;
     }
 }

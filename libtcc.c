@@ -757,7 +757,7 @@ static int tcc_compile(TCCState *s1)
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
 #ifdef TCC_TARGET_ARM
-    arm_init_types();
+    arm_init(s1);
 #endif
 
 #if 0
@@ -945,9 +945,12 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__ARMEL__", NULL);
 #if defined(TCC_ARM_EABI)
     tcc_define_symbol(s, "__ARM_EABI__", NULL);
-#if defined(TCC_ARM_HARDFLOAT)
-    tcc_define_symbol(s, "__ARM_PCS_VFP", NULL);
 #endif
+#if defined(TCC_ARM_HARDFLOAT)
+    s->float_abi = ARM_HARD_FLOAT;
+    tcc_define_symbol(s, "__ARM_PCS_VFP", NULL);
+#else
+    s->float_abi = ARM_SOFTFP_FLOAT;
 #endif
 #endif
 
@@ -1628,6 +1631,7 @@ enum {
     TCC_OPTION_b,
     TCC_OPTION_g,
     TCC_OPTION_c,
+    TCC_OPTION_float_abi,
     TCC_OPTION_static,
     TCC_OPTION_shared,
     TCC_OPTION_soname,
@@ -1680,6 +1684,9 @@ static const TCCOption tcc_options[] = {
 #endif
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
+#ifdef TCC_TARGET_ARM
+    { "mfloat-abi", TCC_OPTION_float_abi, TCC_OPTION_HAS_ARG },
+#endif
     { "static", TCC_OPTION_static, 0 },
     { "shared", TCC_OPTION_shared, 0 },
     { "soname", TCC_OPTION_soname, TCC_OPTION_HAS_ARG },
@@ -1817,6 +1824,18 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         case TCC_OPTION_c:
             s->output_type = TCC_OUTPUT_OBJ;
             break;
+#ifdef TCC_TARGET_ARM
+        case TCC_OPTION_float_abi:
+            /* tcc doesn't support soft float yet */
+            if (!strcmp(optarg, "softfp")) {
+                s->float_abi = ARM_SOFTFP_FLOAT;
+                tcc_undefine_symbol(s, "__ARM_PCS_VFP");
+            } else if (!strcmp(optarg, "hard"))
+                s->float_abi = ARM_HARD_FLOAT;
+            else
+                tcc_error("unsupported float abi '%s'", optarg);
+            break;
+#endif
         case TCC_OPTION_static:
             s->static_link = 1;
             break;

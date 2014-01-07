@@ -141,6 +141,13 @@ enum {
 #define ELF_START_ADDR 0x00008000
 #define ELF_PAGE_SIZE  0x1000
 
+enum float_abi {
+    ARM_SOFTFP_FLOAT,
+    ARM_HARD_FLOAT,
+};
+
+enum float_abi float_abi;
+
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
@@ -169,7 +176,7 @@ static int leaffunc;
 
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
 static CType float_type, double_type, func_float_type, func_double_type;
-ST_FUNC void arm_init_types(void)
+ST_FUNC void arm_init(struct TCCState *s)
 {
     float_type.t = VT_FLOAT;
     double_type.t = VT_DOUBLE;
@@ -177,12 +184,14 @@ ST_FUNC void arm_init_types(void)
     func_float_type.ref = sym_push(SYM_FIELD, &float_type, FUNC_CDECL, FUNC_OLD);
     func_double_type.t = VT_FUNC;
     func_double_type.ref = sym_push(SYM_FIELD, &double_type, FUNC_CDECL, FUNC_OLD);
+
+    float_abi = s->float_abi;
 }
 #else
 #define func_float_type func_old_type
 #define func_double_type func_old_type
 #define func_ldouble_type func_old_type
-ST_FUNC void arm_init_types(void) {}
+ST_FUNC void arm_init(void) {}
 #endif
 
 static int two2mask(int a,int b) {
@@ -194,6 +203,16 @@ static int regmask(int r) {
 }
 
 /******************************************************/
+
+#ifdef TCC_ARM_EABI
+char *default_elfinterp(struct TCCState *s)
+{
+    if (s->float_abi == ARM_HARD_FLOAT)
+        return "/lib/ld-linux-armhf.so.3";
+    else
+        return "/lib/ld-linux.so.3";
+}
+#endif
 
 void o(uint32_t i)
 {
@@ -841,22 +860,19 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align) {
 #ifdef TCC_ARM_EABI
     int size, align;
     size = type_size(vt, &align);
-#ifdef TCC_ARM_HARDFLOAT
-    if (!variadic && (is_float(vt->t) || is_hgen_float_aggr(vt))) {
+    if (float_abi == ARM_HARD_FLOAT && !variadic &&
+        (is_float(vt->t) || is_hgen_float_aggr(vt))) {
         *ret_align = 8;
         ret->ref = NULL;
         ret->t = VT_DOUBLE;
         return (size + 7) >> 3;
-    } else
-#endif
-    if (size > 4) {
-        return 0;
-    } else {
+    } else if (size <= 4) {
         *ret_align = 4;
         ret->ref = NULL;
         ret->t = VT_INT;
         return 1;
-    }
+    } else
+        return 0;
 #else
     return 0;
 #endif
@@ -1171,9 +1187,11 @@ void gfunc_call(int nb_args)
   int todo;
   struct plan plan;
 
-#ifdef TCC_ARM_HARDFLOAT
-  variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
-  corefloat = variadic || floats_in_core_regs(&vtop[-nb_args]);
+#ifdef TCC_ARM_EABI
+  if (float_abi == ARM_HARD_FLOAT) {
+    variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
+    corefloat = variadic || floats_in_core_regs(&vtop[-nb_args]);
+  }
 #endif
   /* cannot let cpu flags if other instruction are generated. Also avoid leaving
      VT_JMP anywhere except on the top of the stack because it would complicate
@@ -1199,9 +1217,9 @@ void gfunc_call(int nb_args)
   gcall_or_jmp(0);
   if (args_size)
       gadd_sp(args_size); /* pop all parameters passed on the stack */
-#ifdef TCC_ARM_EABI
-#ifdef TCC_ARM_VFP
-  if(corefloat && is_float(vtop->type.ref->type.t)) {
+#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+  if(float_abi == ARM_SOFTFP_FLOAT && corefloat &&
+     is_float(vtop->type.ref->type.t)) {
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
       o(0xEE000A10); /*vmov s0, r0 */
     } else {
@@ -1209,7 +1227,6 @@ void gfunc_call(int nb_args)
       o(0xEE201B10); /* vmov.32 d0[1], r1 */
     }
   }
-#endif
 #endif
   vtop -= nb_args + 1; /* Pop all params and fct address from value stack */
   leaffunc = 0; /* we are calling a function, so we aren't in a leaf function */
@@ -1220,9 +1237,8 @@ void gfunc_prolog(CType *func_type)
 {
   Sym *sym,*sym2;
   int n, nf, size, align, struct_ret = 0;
-#ifdef TCC_ARM_HARDFLOAT
+  int addr, pn, sn; /* pn=core, sn=stack */
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
-#endif
   CType ret_type;
 
   sym = func_type->ref;
@@ -1237,11 +1253,11 @@ void gfunc_prolog(CType *func_type)
     struct_ret = 1;
     func_vc = 12; /* Offset from fp of the place to store the result */
   }
-  for(sym2=sym->next;sym2 && (n<4 || nf<16);sym2=sym2->next) {
+  for(sym2 = sym->next; sym2 && (n < 4 || nf < 16); sym2 = sym2->next) {
     size = type_size(&sym2->type, &align);
-#ifdef TCC_ARM_HARDFLOAT
-    if (!func_var && (is_float(sym2->type.t)
-        || is_hgen_float_aggr(&sym2->type))) {
+#ifdef TCC_ARM_EABI
+    if (float_abi == ARM_HARD_FLOAT && !func_var &&
+        (is_float(sym2->type.t) || is_hgen_float_aggr(&sym2->type))) {
       int tmpnf = assign_vfpreg(&avregs, align, size);
       tmpnf += (size + 3) / 4;
       nf = (tmpnf > nf) ? tmpnf : nf;
@@ -1270,50 +1286,49 @@ void gfunc_prolog(CType *func_type)
   o(0xE92D5800); /* save fp, ip, lr */
   o(0xE1A0B00D); /* mov fp, sp */
   func_sub_sp_offset = ind;
-  o(0xE1A00000); /* nop, leave space for stack adjustment in epilogue */
-  {
-    int addr, pn = struct_ret, sn = 0; /* pn=core, sn=stack */
+  o(0xE1A00000); /* nop, leave space for stack adjustment in epilog */
 
-#ifdef TCC_ARM_HARDFLOAT
+#ifdef TCC_ARM_EABI
+  if (float_abi == ARM_HARD_FLOAT) {
     func_vc += nf * 4;
     avregs = AVAIL_REGS_INITIALIZER;
+  }
 #endif
-    while ((sym = sym->next)) {
-      CType *type;
-      type = &sym->type;
-      size = type_size(type, &align);
-      size = (size + 3) >> 2;
-      align = (align + 3) & ~3;
-#ifdef TCC_ARM_HARDFLOAT
-      if (!func_var && (is_float(sym->type.t)
-          || is_hgen_float_aggr(&sym->type))) {
-        int fpn = assign_vfpreg(&avregs, align, size << 2);
-        if (fpn >= 0) {
-          addr = fpn * 4;
-        } else
-          goto from_stack;
-      } else
+  pn = struct_ret, sn = 0;
+  while ((sym = sym->next)) {
+    CType *type;
+    type = &sym->type;
+    size = type_size(type, &align);
+    size = (size + 3) >> 2;
+    align = (align + 3) & ~3;
+#ifdef TCC_ARM_EABI
+    if (float_abi == ARM_HARD_FLOAT && !func_var && (is_float(sym->type.t)
+        || is_hgen_float_aggr(&sym->type))) {
+      int fpn = assign_vfpreg(&avregs, align, size << 2);
+      if (fpn >= 0)
+        addr = fpn * 4;
+      else
+        goto from_stack;
+    } else
 #endif
-      if (pn < 4) {
+    if (pn < 4) {
 #ifdef TCC_ARM_EABI
         pn = (pn + (align-1)/4) & -(align/4);
 #endif
-        addr = (nf + pn) * 4;
-        pn += size;
-        if (!sn && pn > 4)
-          sn = (pn - 4);
-      } else {
-#ifdef TCC_ARM_HARDFLOAT
+      addr = (nf + pn) * 4;
+      pn += size;
+      if (!sn && pn > 4)
+        sn = (pn - 4);
+    } else {
 from_stack:
-#endif
 #ifdef TCC_ARM_EABI
         sn = (sn + (align-1)/4) & -(align/4);
 #endif
-        addr = (n + nf + sn) * 4;
-        sn += size;
-      }
-      sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t), addr+12);
+      addr = (n + nf + sn) * 4;
+      sn += size;
     }
+    sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t),
+             addr + 12);
   }
   last_itod_magic=0;
   leaffunc = 1;
@@ -1327,12 +1342,8 @@ void gfunc_epilog(void)
   int diff;
   /* Copy float return value to core register if base standard is used and
      float computation is made with VFP */
-#ifdef TCC_ARM_EABI
-  if (
-#ifdef TCC_ARM_HARDFLOAT
-      func_var &&
-#endif
-      is_float(func_vt.t)) {
+#if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
+  if ((float_abi == ARM_SOFTFP_FLOAT || func_var) && is_float(func_vt.t)) {
     if((func_vt.t & VT_BTYPE) == VT_FLOAT)
       o(0xEE100A10); /* fmrs r0, s0 */
     else {

@@ -221,19 +221,22 @@
 #  endif
 # elif defined __GNU__
 #  define CONFIG_TCC_ELFINTERP "/lib/ld.so"
-# elif defined TCC_ARM_HARDFLOAT
-#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-armhf.so.3"
-# elif defined TCC_ARM_EABI
-#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.3"
 # elif defined(TCC_TARGET_X86_64)
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_UCLIBC)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-uClibc.so.0"
 # elif defined(TCC_TARGET_PE)
 #  define CONFIG_TCC_ELFINTERP "-"
-# else
+# elif !defined(TCC_ARM_EABI)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
 # endif
+#endif
+
+/* var elf_interp dans *-gen.c */
+#ifdef CONFIG_TCC_ELFINTERP
+# define DEFAULT_ELFINTERP(s) CONFIG_TCC_ELFINTERP
+#else
+# define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
@@ -560,6 +563,9 @@ struct TCCState {
 #ifdef CONFIG_TCC_BCHECK
     /* compile with built-in memory and bounds checker */
     int do_bounds_check;
+#endif
+#ifdef TCC_TARGET_ARM
+    enum float_abi float_abi; /* float ABI of the generated code*/
 #endif
 
     addr_t text_addr; /* address of text section */
@@ -1329,7 +1335,10 @@ ST_FUNC void gen_opl(int op);
 
 /* ------------ arm-gen.c ------------ */
 #ifdef TCC_TARGET_ARM
-ST_FUNC void arm_init_types(void);
+#ifdef TCC_ARM_EABI
+ST_FUNC char *default_elfinterp(struct TCCState *s);
+#endif
+ST_FUNC void arm_init(struct TCCState *s);
 ST_FUNC uint32_t encbranch(int pos, int addr, int fail);
 ST_FUNC void gen_cvt_itof1(int t);
 #endif
