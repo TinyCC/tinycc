@@ -493,11 +493,11 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         if (sym->type.t & VT_EXPORT)
             other |= 1;
         if (sym_type == STT_FUNC && sym->type.ref) {
-            int attr = sym->type.ref->r;
-            if (FUNC_EXPORT(attr))
+            Sym *ref = sym->type.ref;
+            if (ref->a.func_export)
                 other |= 1;
-            if (FUNC_CALL(attr) == FUNC_STDCALL && can_add_underscore) {
-                sprintf(buf1, "_%s@%d", name, FUNC_ARGS(attr) * PTR_SIZE);
+            if (ref->a.func_call == FUNC_STDCALL && can_add_underscore) {
+                sprintf(buf1, "_%s@%d", name, ref->a.func_args * PTR_SIZE);
                 name = buf1;
                 other |= 2;
                 can_add_underscore = 0;

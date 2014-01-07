@@ -457,7 +457,7 @@ ST_FUNC void gfunc_call(int nb_args)
     }
     save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
-    func_call = FUNC_CALL(func_sym->r);
+    func_call = func_sym->a.func_call;
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
         func_call == FUNC_FASTCALLW) {
@@ -505,7 +505,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     CType *type;
 
     sym = func_type->ref;
-    func_call = FUNC_CALL(sym->r);
+    func_call = sym->a.func_call;
     addr = 8;
     loc = 0;
     func_vc = 0;

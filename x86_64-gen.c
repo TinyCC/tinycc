@@ -933,7 +933,8 @@ typedef enum X86_64_Mode {
   x86_64_mode_x87
 } X86_64_Mode;
 
-static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b) {
+static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b)
+{
     if (a == b)
         return a;
     else if (a == x86_64_mode_none)
@@ -950,7 +951,8 @@ static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b) {
         return x86_64_mode_sse;
 }
 
-static X86_64_Mode classify_x86_64_inner(CType *ty) {
+static X86_64_Mode classify_x86_64_inner(CType *ty)
+{
     X86_64_Mode mode;
     Sym *f;
     
@@ -988,7 +990,8 @@ static X86_64_Mode classify_x86_64_inner(CType *ty) {
     assert(0);
 }
 
-static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count) {
+static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
+{
     X86_64_Mode mode;
     int size, align, ret_t = 0;
     
@@ -1045,7 +1048,8 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
     return mode;
 }
 
-ST_FUNC int classify_x86_64_va_arg(CType *ty) {
+ST_FUNC int classify_x86_64_va_arg(CType *ty)
+{
     /* This definition must be synced with stdarg.h */
     enum __va_arg_type {
         __va_gen_reg, __va_float_reg, __va_stack
@@ -1061,7 +1065,8 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty) {
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
+{
     int size, align, reg_count;
     *ret_align = 1; // Never have to re-align return values for x86-64
     return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);

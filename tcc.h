@@ -326,11 +326,35 @@ typedef struct SValue {
     struct Sym *sym;       /* symbol, if (VT_SYM | VT_CONST) */
 } SValue;
 
+struct Attribute {
+    unsigned
+        func_call     : 3, /* calling convention (0..5), see below */
+        aligned       : 5, /* alignement (0..16) */
+        packed        : 1,
+        func_export   : 1,
+        func_import   : 1,
+        func_args     : 5,
+        func_proto    : 1,
+        mode          : 4,
+        weak          : 1,
+        fill          : 10; // 10 bits left to fit well in union below
+};
+
+/* GNUC attribute definition */
+typedef struct AttributeDef {
+    struct Attribute a;
+    struct Section *section;
+    int alias_target;    /* token */
+} AttributeDef;
+
 /* symbol management */
 typedef struct Sym {
     int v;    /* symbol token */
     char *asm_label;    /* associated asm label */
-    long r;    /* associated register */
+    union {
+        long r;    /* associated register */
+        struct Attribute a;
+    };
     union {
         long c;    /* associated number */
         int *d;   /* define token stream */
@@ -380,34 +404,6 @@ typedef struct DLLReference {
     void *handle;
     char name[1];
 } DLLReference;
-
-/* GNUC attribute definition */
-typedef struct AttributeDef {
-    unsigned
-      func_call     : 3, /* calling convention (0..5), see below */
-      aligned       : 5, /* alignement (0..16) */
-      packed        : 1,
-      func_export   : 1,
-      func_import   : 1,
-      func_args     : 5,
-      func_proto    : 1,
-      mode          : 4,
-      weak          : 1,
-      fill          : 10;
-    struct Section *section;
-    int alias_target;    /* token */
-} AttributeDef;
-
-/* gr: wrappers for casting sym->r for other purposes */
-#define FUNC_CALL(r) (((AttributeDef*)&(r))->func_call)
-#define FUNC_EXPORT(r) (((AttributeDef*)&(r))->func_export)
-#define FUNC_IMPORT(r) (((AttributeDef*)&(r))->func_import)
-#define FUNC_ARGS(r) (((AttributeDef*)&(r))->func_args)
-#define FUNC_PROTO(r) (((AttributeDef*)&(r))->func_proto)
-#define FUNC_ALIGN(r) (((AttributeDef*)&(r))->aligned)
-#define FUNC_PACKED(r) (((AttributeDef*)&(r))->packed)
-#define ATTR_MODE(r)  (((AttributeDef*)&(r))->mode)
-#define INT_ATTR(ad) (*(int*)(ad))
 
 /* -------------------------------------------------- */
 
@@ -1142,7 +1138,6 @@ ST_FUNC void expect(const char *msg);
 /* ------------ tccgen.c ------------ */
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
-ST_DATA Section *tdata_section, *tbss_section; /* thread-local storage sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
 ST_DATA Section *last_text_section; /* to handle .previous asm directive */
@@ -1268,7 +1263,7 @@ ST_FUNC void build_got_entries(TCCState *s1);
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 
 ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err);
-#ifdef TCC_IS_NATIVE
+#if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
 ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
 #endif
 

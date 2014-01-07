@@ -103,7 +103,8 @@ ST_INLN int is_float(int t)
 /* XXX: endianness dependent */
 ST_FUNC int ieee_finite(double d)
 {
-    int *p = (int *)&d;
+    int p[4];
+    memcpy(p, &d, sizeof(double));
     return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
 }
 
@@ -2172,7 +2173,7 @@ static int is_compatible_func(CType *type1, CType *type2)
     if (!is_compatible_types(&s1->type, &s2->type))
         return 0;
     /* check func_call */
-    if (FUNC_CALL(s1->r) != FUNC_CALL(s2->r))
+    if (s1->a.func_call != s2->a.func_call)
         return 0;
     /* XXX: not complete */
     if (s1->c == FUNC_OLD || s2->c == FUNC_OLD)
@@ -2659,15 +2660,15 @@ static void parse_attribute(AttributeDef *ad)
             } else {
                 n = MAX_ALIGN;
             }
-            ad->aligned = n;
+            ad->a.aligned = n;
             break;
         case TOK_PACKED1:
         case TOK_PACKED2:
-            ad->packed = 1;
+            ad->a.packed = 1;
             break;
         case TOK_WEAK1:
         case TOK_WEAK2:
-            ad->weak = 1;
+            ad->a.weak = 1;
             break;
         case TOK_UNUSED1:
         case TOK_UNUSED2:
@@ -2682,12 +2683,12 @@ static void parse_attribute(AttributeDef *ad)
         case TOK_CDECL1:
         case TOK_CDECL2:
         case TOK_CDECL3:
-            ad->func_call = FUNC_CDECL;
+            ad->a.func_call = FUNC_CDECL;
             break;
         case TOK_STDCALL1:
         case TOK_STDCALL2:
         case TOK_STDCALL3:
-            ad->func_call = FUNC_STDCALL;
+            ad->a.func_call = FUNC_STDCALL;
             break;
 #ifdef TCC_TARGET_I386
         case TOK_REGPARM1:
@@ -2699,26 +2700,26 @@ static void parse_attribute(AttributeDef *ad)
             else if (n < 0)
                 n = 0;
             if (n > 0)
-                ad->func_call = FUNC_FASTCALL1 + n - 1;
+                ad->a.func_call = FUNC_FASTCALL1 + n - 1;
             skip(')');
             break;
         case TOK_FASTCALL1:
         case TOK_FASTCALL2:
         case TOK_FASTCALL3:
-            ad->func_call = FUNC_FASTCALLW;
+            ad->a.func_call = FUNC_FASTCALLW;
             break;            
 #endif
         case TOK_MODE:
             skip('(');
             switch(tok) {
                 case TOK_MODE_DI:
-                    ad->mode = VT_LLONG + 1;
+                    ad->a.mode = VT_LLONG + 1;
                     break;
                 case TOK_MODE_HI:
-                    ad->mode = VT_SHORT + 1;
+                    ad->a.mode = VT_SHORT + 1;
                     break;
                 case TOK_MODE_SI:
-                    ad->mode = VT_INT + 1;
+                    ad->a.mode = VT_INT + 1;
                     break;
                 default:
                     tcc_warning("__mode__(%s) not supported\n", get_tok_str(tok, NULL));
@@ -2728,10 +2729,10 @@ static void parse_attribute(AttributeDef *ad)
             skip(')');
             break;
         case TOK_DLLEXPORT:
-            ad->func_export = 1;
+            ad->a.func_export = 1;
             break;
         case TOK_DLLIMPORT:
-            ad->func_import = 1;
+            ad->a.func_import = 1;
             break;
         default:
             if (tcc_state->warn_unsupported)
@@ -2873,10 +2874,10 @@ static void struct_decl(CType *type, int u, int tdef)
                                   get_tok_str(v, NULL));
                     }
                     size = type_size(&type1, &align);
-                    if (ad.aligned) {
-                        if (align < ad.aligned)
-                            align = ad.aligned;
-                    } else if (ad.packed) {
+                    if (ad.a.aligned) {
+                        if (align < ad.a.aligned)
+                            align = ad.a.aligned;
+                    } else if (ad.a.packed) {
                         align = 1;
                     } else if (*tcc_state->pack_stack_ptr) {
                         if (align > *tcc_state->pack_stack_ptr)
@@ -3118,8 +3119,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_ATTRIBUTE1:
         case TOK_ATTRIBUTE2:
             parse_attribute(ad);
-            if (ad->mode) {
-                u = ad->mode -1;
+            if (ad->a.mode) {
+                u = ad->a.mode -1;
                 t = (t & ~VT_BTYPE) | u;
             }
             break;
@@ -3143,11 +3144,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
             type->ref = s->type.ref;
             if (s->r) {
                 /* get attributes from typedef */
-                if (0 == ad->aligned)
-                    ad->aligned = FUNC_ALIGN(s->r);
-                if (0 == ad->func_call)
-                    ad->func_call = FUNC_CALL(s->r);
-                ad->packed |= FUNC_PACKED(s->r);
+                if (0 == ad->a.aligned)
+                    ad->a.aligned = s->a.aligned;
+                if (0 == ad->a.func_call)
+                    ad->a.func_call = s->a.func_call;
+                ad->a.packed |= s->a.packed;
             }
             next();
             typespec_found = 1;
@@ -3287,8 +3288,9 @@ static void post_type(CType *type, AttributeDef *ad)
             type->t |= VT_PTR;
         }
         /* we push a anonymous symbol which will contain the function prototype */
-        ad->func_args = arg_size;
-        s = sym_push(SYM_FIELD, type, INT_ATTR(ad), l);
+        ad->a.func_args = arg_size;
+        s = sym_push(SYM_FIELD, type, 0, l);
+        s->a = ad->a;
         s->next = first;
         type->t = VT_FUNC;
         type->ref = s;
@@ -5484,10 +5486,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if (flexible_array)
         size += flexible_array->type.ref->c * pointed_size(&flexible_array->type);
     /* take into account specified alignment if bigger */
-    if (ad->aligned) {
-        if (ad->aligned > align)
-            align = ad->aligned;
-    } else if (ad->packed) {
+    if (ad->a.aligned) {
+        if (ad->a.aligned > align)
+            align = ad->a.aligned;
+    } else if (ad->a.packed) {
         align = 1;
     }
     if ((r & VT_VALMASK) == VT_LOCAL) {
@@ -5869,12 +5871,12 @@ static int decl0(int l, int is_for_loop_init)
                 parse_attribute(&ad);
             }
 
-            if (ad.weak)
+            if (ad.a.weak)
                 type.t |= VT_WEAK;
 #ifdef TCC_TARGET_PE
-            if (ad.func_import)
+            if (ad.a.func_import)
                 type.t |= VT_IMPORT;
-            if (ad.func_export)
+            if (ad.a.func_export)
                 type.t |= VT_EXPORT;
 #endif
             if (tok == '{') {
@@ -5895,22 +5897,22 @@ static int decl0(int l, int is_for_loop_init)
                 
                 sym = sym_find(v);
                 if (sym) {
+                    Sym *ref;
                     if ((sym->type.t & VT_BTYPE) != VT_FUNC)
                         goto func_error1;
 
-                    r = sym->type.ref->r;
-
-                    if (!FUNC_PROTO(r))
+                    ref = sym->type.ref;
+                    if (0 == ref->a.func_proto)
                         tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
 
                     /* use func_call from prototype if not defined */
-                    if (FUNC_CALL(r) != FUNC_CDECL
-                     && FUNC_CALL(type.ref->r) == FUNC_CDECL)
-                        FUNC_CALL(type.ref->r) = FUNC_CALL(r);
+                    if (ref->a.func_call != FUNC_CDECL
+                     && type.ref->a.func_call == FUNC_CDECL)
+                        type.ref->a.func_call = ref->a.func_call;
 
                     /* use export from prototype */
-                    if (FUNC_EXPORT(r))
-                        FUNC_EXPORT(type.ref->r) = 1;
+                    if (ref->a.func_export)
+                        type.ref->a.func_export = 1;
 
                     /* use static from prototype */
                     if (sym->type.t & VT_STATIC)
@@ -5921,7 +5923,7 @@ static int decl0(int l, int is_for_loop_init)
                         tcc_error("incompatible types for redefinition of '%s'", 
                               get_tok_str(v, NULL));
                     }
-                    FUNC_PROTO(type.ref->r) = 0;
+                    type.ref->a.func_proto = 0;
                     /* if symbol is already defined, then put complete type */
                     sym->type = type;
                 } else {
@@ -5980,15 +5982,16 @@ static int decl0(int l, int is_for_loop_init)
                 if (btype.t & VT_TYPEDEF) {
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
-                    sym = sym_push(v, &type, INT_ATTR(&ad), 0);
+                    sym = sym_push(v, &type, 0, 0);
+                    sym->a = ad.a;
                     sym->type.t |= VT_TYPEDEF;
                 } else {
                     r = 0;
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
                         /* external function definition */
                         /* specific case for func_call attribute */
-                        ad.func_proto = 1;
-                        type.ref->r = INT_ATTR(&ad);
+                        ad.a.func_proto = 1;
+                        type.ref->a = ad.a;
                     } else if (!(type.t & VT_ARRAY)) {
                         /* not lvalue if array */
                         r |= lvalue_type(type.t);
@@ -6039,7 +6042,7 @@ static int decl0(int l, int is_for_loop_init)
                 }
                 next();
             }
-            ad.aligned = 0;
+            ad.a.aligned = 0;
         }
     }
     return 0;
