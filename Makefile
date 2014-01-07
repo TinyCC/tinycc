@@ -242,9 +242,9 @@ else
 	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
 endif
 	mkdir -p "$(mandir)/man1"
-	-$(INSTALL) tcc.1 "$(mandir)/man1"
+	-$(INSTALL) -m644 tcc.1 "$(mandir)/man1"
 	mkdir -p "$(infodir)"
-	-$(INSTALL) tcc-doc.info "$(infodir)"
+	-$(INSTALL) -m644 tcc-doc.info "$(infodir)"
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
 ifneq ($(LIBTCC1),)
@@ -252,7 +252,7 @@ ifneq ($(LIBTCC1),)
 endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
-	$(INSTALL) -m755 $(LIBTCC) "$(libdir)"
+	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
 ifdef DISABLE_STATIC
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so.1"
 	ln -sf "$(ln_libdir)/libtcc.so.1.0" "$(libdir)/libtcc.so"
