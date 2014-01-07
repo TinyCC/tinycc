@@ -23,10 +23,8 @@
 
 #ifdef TARGET_DEFS_ONLY
 
-#ifdef TCC_ARM_EABI
-#ifndef TCC_ARM_VFP /* Avoid useless warning */
-#define TCC_ARM_VFP
-#endif
+#if defined(TCC_ARM_EABI) && !defined(TCC_ARM_VFP)
+#error "Currently TinyCC only supports float computation with VFP instructions"
 #endif
 
 /* number of available registers */
