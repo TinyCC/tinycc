@@ -217,7 +217,7 @@ Undefine preprocessor symbol @samp{sym}.
 
 Compilation flags:
 
-Note: each of the following warning options has a negative form beginning with
+Note: each of the following options has a negative form beginning with
 @option{-fno-}.
 
 @table @option
