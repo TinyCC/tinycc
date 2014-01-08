@@ -1365,11 +1365,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_USE_LIBGCC
         if (!s1->static_link)
             tcc_add_file(s1, TCC_LIBGCC);
-#if !defined WITHOUT_LIBTCC
         else
             tcc_add_support(s1, "libtcc1.a");
-#endif
-#elif !defined WITHOUT_LIBTCC
+#else
         tcc_add_support(s1, "libtcc1.a");
 #endif
         /* add crt end if not memory output */
