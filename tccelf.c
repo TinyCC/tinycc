@@ -640,7 +640,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         /* Since these relocations only concern Thumb-2 and blx instruction was
            introduced before Thumb-2, we can assume blx is available and not
            guard its use */
-        case R_ARM_THM_CALL:
+        case R_ARM_THM_PC22:
         case R_ARM_THM_JUMP24:
 	    {
                 int x, hi, lo, s, j1, j2, i1, i2, imm10, imm11;
@@ -672,7 +672,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 plt = s1->plt;
                 to_plt = (val >= plt->sh_addr) &&
                          (val < plt->sh_addr + plt->data_offset);
-                is_call = (type == R_ARM_THM_CALL);
+                is_call = (type == R_ARM_THM_PC22);
 
                 /* Compute final offset */
                 if (to_plt && !is_call) /* Point to 1st instr of Thumb stub */
@@ -756,13 +756,13 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_ARM_REL32:
             *(int *)ptr += val - addr;
             break;
-        case R_ARM_BASE_PREL:
+        case R_ARM_GOTPC:
             *(int *)ptr += s1->got->sh_addr - addr;
             break;
-        case R_ARM_GOTOFF32:
+        case R_ARM_GOTOFF:
             *(int *)ptr += val - s1->got->sh_addr;
             break;
-        case R_ARM_GOT_BREL:
+        case R_ARM_GOT32:
             /* we load the got offset */
             *(int *)ptr += s1->sym_attrs[sym_index].got_offset;
             break;
@@ -1182,17 +1182,17 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 }
                 break;
 #elif defined(TCC_TARGET_ARM)
-            case R_ARM_GOT_BREL:
-            case R_ARM_GOTOFF32:
-            case R_ARM_BASE_PREL:
+            case R_ARM_GOT32:
+            case R_ARM_GOTOFF:
+            case R_ARM_GOTPC:
             case R_ARM_PLT32:
                 if (!s1->got)
                     build_got(s1);
-                if (type == R_ARM_GOT_BREL || type == R_ARM_PLT32) {
+                if (type == R_ARM_GOT32 || type == R_ARM_PLT32) {
                     sym_index = ELFW(R_SYM)(rel->r_info);
                     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                     /* look at the symbol got offset. If none, then add one */
-                    if (type == R_ARM_GOT_BREL)
+                    if (type == R_ARM_GOT32)
                         reloc_type = R_ARM_GLOB_DAT;
                     else
                         reloc_type = R_ARM_JUMP_SLOT;
