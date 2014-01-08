@@ -2244,7 +2244,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 #ifdef TCC_ARM_EABI
         ehdr.e_ident[EI_OSABI] = 0;
         ehdr.e_flags = EF_ARM_EABI_VER4;
-        if (file_type == TCC_OUTPUT_EXE)
+        if (file_type == TCC_OUTPUT_EXE || file_type == TCC_OUTPUT_DLL)
             ehdr.e_flags |= EF_ARM_HASENTRY;
         if (s1->float_abi == ARM_HARD_FLOAT)
             ehdr.e_flags |= EF_ARM_VFP_FLOAT;
