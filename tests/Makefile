@@ -16,6 +16,9 @@ TESTS = \
  abitest \
  vla_test-run \
  moretests
+ifdef CONFIG_CROSS
+TESTS += hello-cross
+endif
 
 # test4 -- problem with -static
 # asmtest -- minor differences with gcc
@@ -50,8 +53,9 @@ endif
 # run local version of tcc with local libraries and includes
 TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 --I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
 endif
+XTCCFLAGS = -B$(TOP) -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
 RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
@@ -68,6 +72,15 @@ all test : $(TESTS)
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
 	$(TCC) $< -o hello$(EXESUF) || ($(TOP)/tcc -vv; exit 1) && ./hello$(EXESUF)
+
+hello-cross: ../examples/ex1.c
+	@echo ------------ $@ ------------
+	for XTCC in $(PROGS_CROSS) ; \
+		do echo -n "Test of $$XTCC...  "; \
+		out=$$($(TOP)/$$XTCC $(XTCCFLAGS) -c $< 2>&1); \
+		test $$? -ne 0 && { echo "Failed\n$$out\n" ; $(TOP)/$$XTCC -vv; exit 1; } ; \
+		echo "Success"; \
+	done
 
 hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------

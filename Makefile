@@ -135,6 +135,7 @@ else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
 LIBTCC1=libtcc1.a
+LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
 endif
 PROGS_CROSS_LINK=$(foreach PROG_CROSS,$(PROGS_CROSS),$($(PROG_CROSS)_LINK))
 
@@ -278,7 +279,7 @@ endif
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/32"
 	mkdir -p "$(tccdir)/win32/lib/64"
-ifeq ($(ARCH),x86-64)
+ifneq ($(ARCH),i386)
 	mkdir -p "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
 	cp -r "$(tccdir)/include" "$(tccdir)/i386"
@@ -287,7 +288,7 @@ endif
 	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
 	$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/win32/include"
-	cp -r $(top_srcdir)/include/. "$(tccdir)/win32/include"
+	cp -r "$(tccdir)/include" "$(tccdir)/win32"
 endif
 
 uninstall:
@@ -300,7 +301,7 @@ uninstall:
 	rm -fv "$(libdir)/libtcc.so*"
 	rm -rf "$(tccdir)/win32"
 	-rmdir $(tccdir)/include
-ifeq ($(ARCH),x86-64)
+ifneq ($(ARCH),i386)
 	rm -rf "$(tccdir)/i386"
 endif
 else
@@ -346,7 +347,7 @@ tcc-doc.info: tcc-doc.texi
 export LIBTCC1
 
 %est:
-	$(MAKE) -C tests $@
+	$(MAKE) -C tests $@ "PROGS_CROSS=$(PROGS_CROSS)"
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
