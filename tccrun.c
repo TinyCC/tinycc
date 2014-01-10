@@ -60,6 +60,8 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 
 #ifdef HAVE_SELINUX
     {   /* Use mmap instead of malloc for Selinux. */ 
+        s1->mem_size = ret;
+
         s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
             MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (s1->write_mem == MAP_FAILED)
