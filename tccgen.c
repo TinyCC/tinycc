@@ -369,6 +369,16 @@ static inline void vpushll(long long v)
     vpush64(VT_LLONG, v);
 }
 
+/* push a symbol value of TYPE */
+static inline void vpushsym(CType *type, Sym *sym)
+{
+    CValue cval;
+
+    cval.ull = 0;
+    vsetc(type, VT_CONST | VT_SYM, &cval);
+    vtop->sym = sym;
+}
+
 /* Return a static symbol pointing to a section */
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size)
 {
@@ -386,11 +396,7 @@ ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsign
 /* push a reference to a section offset by adding a dummy symbol */
 static void vpush_ref(CType *type, Section *sec, unsigned long offset, unsigned long size)
 {
-    CValue cval;
-
-    cval.ul = 0;
-    vsetc(type, VT_CONST | VT_SYM, &cval);
-    vtop->sym = get_sym_ref(type, sec, offset, size);
+    vpushsym(type, get_sym_ref(type, sec, offset, size));  
 }
 
 /* define a new external reference to a symbol 'v' of type 'u' */
@@ -435,18 +441,12 @@ static Sym *external_sym(int v, CType *type, int r, char *asm_label)
 /* push a reference to global symbol v */
 ST_FUNC void vpush_global_sym(CType *type, int v)
 {
-    Sym *sym;
-    CValue cval;
-
-    sym = external_global_sym(v, type, 0);
-    cval.ul = 0;
-    vsetc(type, VT_CONST | VT_SYM, &cval);
-    vtop->sym = sym;
+    vpushsym(type, external_global_sym(v, type, 0));
 }
 
 ST_FUNC void vset(CType *type, int r, int v)
 {
-    CValue cval = {0};
+    CValue cval;
 
     cval.i = v;
     vsetc(type, r, &cval);
@@ -764,7 +764,7 @@ ST_FUNC int gv(int rc)
             sym = get_sym_ref(&vtop->type, data_section, offset, size << 2);
             vtop->r |= VT_LVAL | VT_SYM;
             vtop->sym = sym;
-            vtop->c.ul = 0;
+            vtop->c.ull = 0;
         }
 #ifdef CONFIG_TCC_BCHECK
         if (vtop->r & VT_MUSTBOUND) 
@@ -1949,15 +1949,16 @@ static void gen_cast(CType *type)
                     vtop->c.ull = vtop->c.ll;
                 else if (dbt == VT_BOOL)
                     vtop->c.i = (vtop->c.ll != 0);
+#ifdef TCC_TARGET_X86_64
+                else if (dbt == VT_PTR)
+                    ;
+#endif
                 else if (dbt != VT_LLONG) {
                     int s = 0;
                     if ((dbt & VT_BTYPE) == VT_BYTE)
                         s = 24;
                     else if ((dbt & VT_BTYPE) == VT_SHORT)
                         s = 16;
-#ifdef TCC_TARGET_X86_64
-                    if (!(dbt & (VT_PTR|VT_LLONG|VT_FUNC|VT_STRUCT)))
-#endif
                     if(dbt & VT_UNSIGNED)
                         vtop->c.ui = ((unsigned int)vtop->c.ll << s) >> s;
                     else
@@ -3908,11 +3909,7 @@ ST_FUNC void unary(void)
         /* if forward reference, we must point to s */
         if (vtop->r & VT_SYM) {
             vtop->sym = s;
-#ifdef TCC_TARGET_X86_64
-            vtop->c.ull = 0;
-#else
-            vtop->c.ul = 0;
-#endif
+	    vtop->c.ull = 0;
         }
         break;
     }
@@ -5617,13 +5614,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 esym->st_shndx = SHN_COMMON;
             }
         } else {
-            CValue cval;
-
             /* push global reference */
             sym = get_sym_ref(type, sec, addr, size);
-            cval.ul = 0;
-            vsetc(type, VT_CONST | VT_SYM, &cval);
-            vtop->sym = sym;
+	    vpushsym(type, sym);
         }
         /* patch symbol weakness */
         if (type->t & VT_WEAK)
