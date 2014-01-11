@@ -191,7 +191,7 @@ ST_FUNC void arm_init(struct TCCState *s)
 #define func_float_type func_old_type
 #define func_double_type func_old_type
 #define func_ldouble_type func_old_type
-ST_FUNC void arm_init(void) {}
+ST_FUNC void arm_init(struct TCCState *s) {}
 #endif
 
 static int two2mask(int a,int b) {
