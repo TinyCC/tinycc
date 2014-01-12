@@ -3702,12 +3702,16 @@ ST_FUNC void unary(void)
         break;
     case '+':
         next();
-        /* in order to force cast, we add zero */
         unary();
         if ((vtop->type.t & VT_BTYPE) == VT_PTR)
             tcc_error("pointer not accepted for unary plus");
-        vpushi(0);
-        gen_op('+');
+        /* In order to force cast, we add zero, except for floating point
+	   where we really need an noop (otherwise -0.0 will be transformed
+	   into +0.0).  */
+	if (!is_float(vtop->type.t)) {
+	    vpushi(0);
+	    gen_op('+');
+	}
         break;
     case TOK_SIZEOF:
     case TOK_ALIGNOF1:
@@ -3822,20 +3826,20 @@ ST_FUNC void unary(void)
         next();
         unary();
         t = vtop->type.t & VT_BTYPE;
-        /* handle (-)0.0 */
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST &&
-            is_float(t)) {
-            if (t == VT_FLOAT)
-                vtop->c.f = -vtop->c.f;
-            else if (t == VT_DOUBLE)
-                vtop->c.d = -vtop->c.d;
-            else
-                vtop->c.ld = -vtop->c.ld;
-	} else {
-            vpushi(0);
-            vswap();
-            gen_op('-');
-        }
+	if (is_float(t)) {
+            /* In IEEE negate(x) isn't subtract(0,x), but rather
+	       subtract(-0, x).  */
+	    vpush(&vtop->type);
+	    if (t == VT_FLOAT)
+	        vtop->c.f = -0.0f;
+	    else if (t == VT_DOUBLE)
+	        vtop->c.d = -0.0;
+	    else
+	        vtop->c.ld = -0.0;
+	} else
+	    vpushi(0);
+	vswap();
+	gen_op('-');
         break;
     case TOK_LAND:
         if (!gnu_ext)
