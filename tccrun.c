@@ -59,18 +59,25 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
         return ret;
 
 #ifdef HAVE_SELINUX
-    {   /* Use mmap instead of malloc for Selinux. */ 
+    {   /* Use mmap instead of malloc for Selinux.  Ref:
+           http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
+
+        char tmpfname[] = "/tmp/.tccrunXXXXXX";
+        int fd = mkstemp (tmpfname);
+
         s1->mem_size = ret;
+        unlink (tmpfname);
+        ftruncate (fd, s1->mem_size);
 
         s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
-            MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+            MAP_SHARED, fd, 0);
         if (s1->write_mem == MAP_FAILED)
-            tcc_error("mmap not writeable");
+            tcc_error("/tmp not writeable");
 
         s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
-            MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+            MAP_SHARED, fd, 0);
         if (s1->runtime_mem == MAP_FAILED)
-            tcc_error("mmap not executable");
+            tcc_error("/tmp not executable");
 
         ret = tcc_relocate_ex(s1, s1->write_mem);
     }
