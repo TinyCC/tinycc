@@ -25,7 +25,7 @@ echo>..\config.h #define TCC_VERSION "%VERSION%"
 %CC% %target% tools/tiny_libmaker.c -o tiny_libmaker.exe
 
 :libtcc
-if not exist libtcc\nul mkdir libtcc
+if not exist libtcc mkdir libtcc
 copy ..\libtcc.h libtcc\libtcc.h
 %CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc.dll -Wl,-out-implib,libtcc/libtcc.a
 tiny_impdef libtcc.dll -o libtcc/libtcc.def
