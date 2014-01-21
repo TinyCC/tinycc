@@ -5,7 +5,7 @@
 TOP = ..
 include $(TOP)/Makefile
 SRCDIR = $(top_srcdir)/tests
-VPATH = $(SRCDIR)
+VPATH = $(SRCDIR) $(top_srcdir)
 
 # what tests to run
 TESTS = \
@@ -13,27 +13,30 @@ TESTS = \
  hello-run \
  libtest \
  test3 \
+ $(BTESTS) \
  abitest \
  vla_test-run \
  moretests
+
+BTESTS = test1b test3b btest
+
 ifdef CONFIG_CROSS
-TESTS += hello-cross
+ TESTS += hello-cross
 endif
 
 # test4 -- problem with -static
 # asmtest -- minor differences with gcc
 # btest -- works on i386 (including win32)
-# test3 -- win32 does not know how to printf long doubles
 
 # bounds-checking is supported only on i386
 ifneq ($(ARCH),i386)
- TESTS := $(filter-out btest,$(TESTS))
+ TESTS := $(filter-out $(BTESTS),$(TESTS))
 endif
 ifdef CONFIG_WIN32
- TESTS := w32-prep $(filter-out test3,$(TESTS))
+ TESTS := w32-prep $(filter-out $(BTESTS),$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
- TESTS := $(filter-out hello-exe test3 btest,$(TESTS))
+ TESTS := $(filter-out hello-exe test3 $(BTESTS),$(TESTS))
 endif
 ifeq ($(ARCH),i386)
 else ifneq ($(ARCH),x86-64)
@@ -53,7 +56,7 @@ endif
 # run local version of tcc with local libraries and includes
 TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 --I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
 endif
 XTCCFLAGS = -B$(TOP) -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 
@@ -101,28 +104,29 @@ w32-prep:
 	cp ../libtcc1.a ../lib
 
 # test.ref - generate using gcc
-# copy only tcclib.h so GCC's stddef and stdarg will be used
 test.ref: tcctest.c
 	gcc -o tcctest.gcc $< -I$(top_srcdir) $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
 	./tcctest.gcc > $@
 
 # auto test
-test1: tcctest.c test.ref
+test1 test1b: tcctest.c test.ref
 	@echo ------------ $@ ------------
 	$(TCC) -run $< > test.out1
-	@if diff -u test.ref test.out1 ; then echo "Auto Test OK"; fi
+	@diff -u test.ref test.out1 && echo "Auto Test OK"
 
 # iterated test2 (compile tcc then compile tcctest.c !)
-test2: tcctest.c test.ref
+test2 test2b: tcctest.c test.ref
 	@echo ------------ $@ ------------
 	$(TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out2
-	@if diff -u test.ref test.out2 ; then echo "Auto Test2 OK"; fi
+	@diff -u test.ref test.out2 && echo "Auto Test2 OK"
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
-test3: tcctest.c test.ref
+test3 test3b: tcctest.c test.ref
 	@echo ------------ $@ ------------
 	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out3
-	@if diff -u test.ref test.out3 ; then echo "Auto Test3 OK"; fi
+	@diff -u test.ref test.out3 && echo "Auto Test3 OK"
+
+test%b : TCCFLAGS += -b
 
 # binary output test
 test4: tcctest.c test.ref
@@ -153,7 +157,7 @@ btest: boundtest.c
 	@echo ------------ $@ ------------
 	@for i in $(BOUNDS_OK); do \
 	   echo ; echo --- boundtest $$i ---; \
-	   if $(TCC) -b -run boundtest.c $$i ; then \
+	   if $(TCC) -b -run $< $$i ; then \
 	       echo succeded as expected; \
 	   else\
 	       echo Failed positive test $$i ; exit 1 ; \
@@ -161,7 +165,7 @@ btest: boundtest.c
 	done ;\
 	for i in $(BOUNDS_FAIL); do \
 	   echo ; echo --- boundtest $$i ---; \
-	   if $(TCC) -b -run boundtest.c $$i ; then \
+	   if $(TCC) -b -run $< $$i ; then \
 	       echo Failed negative test $$i ; exit 1 ;\
 	   else\
 	       echo failed as expected; \
@@ -203,8 +207,8 @@ asmtest: asmtest.ref
 abitest-cc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
 
-abitest-tcc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
-	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
+abitest-tcc$(EXESUF): abitest.c libtcc.c
+	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE $(LIBS) $(LDFLAGS) -I$(top_srcdir)
 
 abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
 	@echo ------------ $@ ------------

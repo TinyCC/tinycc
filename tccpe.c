@@ -1803,7 +1803,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         s1->runtime_main = start_symbol;
 #endif
     } else {
-        pe->start_addr = (DWORD)tcc_get_symbol_err(s1, start_symbol);
+        pe->start_addr = (DWORD)(uintptr_t)tcc_get_symbol_err(s1, start_symbol);
     }
 
     pe->type = pe_type;

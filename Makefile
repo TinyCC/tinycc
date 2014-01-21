@@ -346,8 +346,8 @@ tcc-doc.info: tcc-doc.texi
 # in tests subdir
 export LIBTCC1
 
-%est:
-	$(MAKE) -C tests $@ "PROGS_CROSS=$(PROGS_CROSS)"
+test test% %test :
+	$(MAKE) -C tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
