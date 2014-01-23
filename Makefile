@@ -346,7 +346,7 @@ tcc-doc.info: tcc-doc.texi
 # in tests subdir
 export LIBTCC1
 
-test test% %test :
+%est:
 	$(MAKE) -C tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
 
 clean:
