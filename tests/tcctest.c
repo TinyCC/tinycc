@@ -1670,21 +1670,29 @@ void prefix ## fcast(type a)\
     double da;\
     LONG_DOUBLE la;\
     int ia;\
+    long long lla;\
     unsigned int ua;\
+    unsigned long long llua;\
     type b;\
     fa = a;\
     da = a;\
     la = a;\
     printf("ftof: %f %f %Lf\n", fa, da, la);\
     ia = (int)a;\
+    lla = (long long)a;\
     ua = (unsigned int)a;\
+    llua = (unsigned long long)a;\
     printf("ftoi: %d %u\n", ia, ua);\
     ia = -1234;\
     ua = 0x81234500;\
     b = ia;\
     printf("itof: " fmt "\n", b);\
+    b = lla;\
+    printf("lltof: " fmt "\n", b);\
     b = ua;\
     printf("utof: " fmt "\n", b);\
+    b = llua;\
+    printf("ulltof: " fmt "\n", b);\
 }\
 \
 float prefix ## retf(type a) { return a; }\
