@@ -1979,8 +1979,17 @@ ST_FUNC void gen_cvt_itof1(int t)
       vpush_global_sym(func_type, func);
       vswap();
       gfunc_call(1);
+#if defined(TCC_ARM_VFP) && defined(TCC_ARM_EABI)
+      r=get_reg(RC_FLOAT);
+      r2=vfpr(r);
+      o(0xEE000B10|(r2<<16)); /* vmov.32 dr2[0], r0 */
+      o(0xEE201B10|(r2<<16)); /* vmov.32 dr2[1], r1 */
+      vpushi(0);
+      vtop->r=r;
+#else
       vpushi(0);
       vtop->r=TREG_F0;
+#endif
       return;
     }
   }
