@@ -923,7 +923,7 @@ struct plan {
    definition of union reg_class).
 
    nb_args: number of parameters of the function for which a call is generated
-   corefloat: whether to pass float via core registers or not
+   float_abi: float ABI in use for this function call
    plan: the structure where the overall assignment is recorded
    todo: a bitmap that record which core registers hold a parameter
 
@@ -932,7 +932,7 @@ struct plan {
    Note: this function allocated an array in plan->pplans with tcc_malloc. It
    is the responsability of the caller to free this array once used (ie not
    before copy_params). */
-static int assign_regs(int nb_args, int corefloat, struct plan *plan, int *todo)
+static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
 {
   int i, size, align;
   int ncrn /* next core register number */, nsaa /* next stacked argument address*/;
@@ -952,7 +952,7 @@ static int assign_regs(int nb_args, int corefloat, struct plan *plan, int *todo)
       case VT_FLOAT:
       case VT_DOUBLE:
       case VT_LDOUBLE:
-      if (!corefloat) {
+      if (float_abi == ARM_HARD_FLOAT) {
         int is_hfa = 0; /* Homogeneous float aggregate */
 
         if (is_float(vtop[-i].type.t)
@@ -1183,14 +1183,15 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
 void gfunc_call(int nb_args)
 {
   int r, args_size;
-  int variadic, corefloat = 1;
+  int variadic, def_float_abi = float_abi;
   int todo;
   struct plan plan;
 
 #ifdef TCC_ARM_EABI
   if (float_abi == ARM_HARD_FLOAT) {
     variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
-    corefloat = variadic || floats_in_core_regs(&vtop[-nb_args]);
+    if (variadic || floats_in_core_regs(&vtop[-nb_args]))
+      float_abi = ARM_SOFTFP_FLOAT;
   }
 #endif
   /* cannot let cpu flags if other instruction are generated. Also avoid leaving
@@ -1200,7 +1201,7 @@ void gfunc_call(int nb_args)
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gv(RC_INT);
 
-  args_size = assign_regs(nb_args, corefloat, &plan, &todo);
+  args_size = assign_regs(nb_args, float_abi, &plan, &todo);
 
 #ifdef TCC_ARM_EABI
   if (args_size & 7) { /* Stack must be 8 byte aligned at fct call for EABI */
@@ -1218,8 +1219,7 @@ void gfunc_call(int nb_args)
   if (args_size)
       gadd_sp(args_size); /* pop all parameters passed on the stack */
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
-  if(float_abi == ARM_SOFTFP_FLOAT && corefloat &&
-     is_float(vtop->type.ref->type.t)) {
+  if(float_abi == ARM_SOFTFP_FLOAT && is_float(vtop->type.ref->type.t)) {
     if((vtop->type.ref->type.t & VT_BTYPE) == VT_FLOAT) {
       o(0xEE000A10); /*vmov s0, r0 */
     } else {
@@ -1230,6 +1230,7 @@ void gfunc_call(int nb_args)
 #endif
   vtop -= nb_args + 1; /* Pop all params and fct address from value stack */
   leaffunc = 0; /* we are calling a function, so we aren't in a leaf function */
+  float_abi = def_float_abi;
 }
 
 /* generate function prolog of type 't' */
@@ -1979,17 +1980,8 @@ ST_FUNC void gen_cvt_itof1(int t)
       vpush_global_sym(func_type, func);
       vswap();
       gfunc_call(1);
-#if defined(TCC_ARM_VFP) && defined(TCC_ARM_EABI)
-      r=get_reg(RC_FLOAT);
-      r2=vfpr(r);
-      o(0xEE000B10|(r2<<16)); /* vmov.32 dr2[0], r0 */
-      o(0xEE201B10|(r2<<16)); /* vmov.32 dr2[1], r1 */
-      vpushi(0);
-      vtop->r=r;
-#else
       vpushi(0);
       vtop->r=TREG_F0;
-#endif
       return;
     }
   }
