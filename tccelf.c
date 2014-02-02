@@ -1188,6 +1188,34 @@ ST_FUNC void build_got_entries(TCCState *s1)
                                   sym_index);
                 }
                 break;
+            case R_ARM_THM_JUMP24:
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                /* We are relocating a jump from thumb code to arm code */
+                if (sym->st_shndx != SHN_UNDEF && !(sym->st_value & 1)) {
+                    int index;
+                    uint8_t *p;
+                    char *name, buf[1024];
+                    Section *text_section;
+
+                    name = symtab_section->link->data + sym->st_name;
+                    text_section = s1->sections[sym->st_shndx];
+                    /* Modify reloc to target a thumb stub to switch to ARM */
+                    snprintf(buf, sizeof(buf), "%s_from_thumb", name);
+                    index = put_elf_sym(symtab_section,
+                                        text_section->data_offset + 1,
+                                        sym->st_size, sym->st_info, 0,
+                                        sym->st_shndx, buf);
+                    rel->r_info = ELFW(R_INFO)(index, type);
+                    /* Create a thumb stub fonction to switch to ARM mode */
+                    put_elf_reloc(symtab_section, text_section,
+                                  text_section->data_offset, R_ARM_JUMP24,
+                                  sym_index);
+                    p = section_ptr_add(text_section, 8);
+                    put32(p,   0x4778); /* bx pc */
+                    put32(p+2, 0x46c0); /* nop   */
+                    put32(p+4, 0xeafffffe); /* b $sym */
+                }
 #elif defined(TCC_TARGET_C67)
             case R_C60_GOT32:
             case R_C60_GOTOFF:
