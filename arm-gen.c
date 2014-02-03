@@ -947,6 +947,8 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
   for(i = nb_args; i-- ;) {
     int j, start_vfpreg = 0;
     size = type_size(&vtop[-i].type, &align);
+    size = (size + 3) & ~3;
+    align = (align + 3) & ~3;
     switch(vtop[-i].type.t & VT_BTYPE) {
       case VT_STRUCT:
       case VT_FLOAT:
@@ -972,8 +974,7 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
             break;
         }
       }
-      ncrn = (ncrn + (align-1)/4) & -(align/4);
-      size = (size + 3) & -4;
+      ncrn = (ncrn + (align-1)/4) & ~((align/4) - 1);
       if (ncrn + size/4 <= 4 || (ncrn < 4 && start_vfpreg != -1)) {
         /* The parameter is allocated both in core register and on stack. As
 	 * such, it can be of either class: it would either be the last of
