@@ -66,6 +66,7 @@ Bug fixes:
 - use libtcc for static linking with runtime library (Thomas Preud'homme)
 - fix negation of 0.0 and -0.0 values (Thomas Preud'homme)
 - fix integer to double conversion on ARM (Thomas Preud'homme)
+- fix parameter passing of (unsigned) long long bitfield (Thomas Preud'homme)
 
 version 0.9.26:
 

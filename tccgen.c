@@ -3490,6 +3490,9 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
         if ((vtop->type.t & VT_BTYPE) == VT_FLOAT) {
             type.t = VT_DOUBLE;
             gen_cast(&type);
+        } else if (vtop->type.t & VT_BITFIELD) {
+            type.t = vtop->type.t & (VT_BTYPE | VT_UNSIGNED);
+            gen_cast(&type);
         }
     } else if (arg == NULL) {
         tcc_error("too many arguments to function");
