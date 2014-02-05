@@ -1670,7 +1670,7 @@ void prefix ## fcast(type a)\
     double da;\
     LONG_DOUBLE la;\
     int ia;\
-    long long lla;\
+    long long llia;\
     unsigned int ua;\
     unsigned long long llua;\
     type b;\
@@ -1679,18 +1679,21 @@ void prefix ## fcast(type a)\
     la = a;\
     printf("ftof: %f %f %Lf\n", fa, da, la);\
     ia = (int)a;\
-    lla = (long long)a;\
+    llia = (long long)a;\
+    a = (a >= 0) ? a : -a;\
     ua = (unsigned int)a;\
     llua = (unsigned long long)a;\
-    printf("ftoi: %d %u\n", ia, ua);\
+    printf("ftoi: %d %u %lld %llu\n", ia, ua, llia, llua);\
     ia = -1234;\
     ua = 0x81234500;\
+    llia = -0x123456789012345LL;\
+    llua = 0xf123456789012345LLU;\
     b = ia;\
     printf("itof: " fmt "\n", b);\
-    b = lla;\
-    printf("lltof: " fmt "\n", b);\
     b = ua;\
     printf("utof: " fmt "\n", b);\
+    b = llia;\
+    printf("lltof: " fmt "\n", b);\
     b = llua;\
     printf("ulltof: " fmt "\n", b);\
 }\
