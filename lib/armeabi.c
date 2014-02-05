@@ -170,7 +170,7 @@ DEFINE__AEABI_D2XLZ(d2lz, 1)
 #define DEFINE__AEABI_XL2F(name, with_sign)                             \
 unsigned __aeabi_ ## name(unsigned long long v)                         \
 {                                                                       \
-    int s /* shift */, sign = 0;                                        \
+    int s /* shift */, flb /* first lost bit */, sign = 0;              \
     unsigned p = 0 /* power */, ret;                                    \
     double_unsigned_struct val;                                         \
                                                                         \
@@ -188,20 +188,28 @@ unsigned __aeabi_ ## name(unsigned long long v)                         \
         if (s < FLOAT_FRAC_BITS) {                                      \
             ret <<= FLOAT_FRAC_BITS - s;                                \
             ret |= val.low >> (32 - (FLOAT_FRAC_BITS - s));             \
-        } else                                                          \
+            flb = (val.low >> (32 - (FLOAT_FRAC_BITS - s - 1))) & 1;    \
+        } else {                                                        \
+            flb = (ret >> (s - FLOAT_FRAC_BITS - 1)) & 1;               \
             ret >>= s - FLOAT_FRAC_BITS;                                \
+        }                                                               \
         s += 32;                                                        \
     } else {                                                            \
         for (s = 31, p = 1 << 31; p && !(val.low & p); s--, p >>= 1);   \
         if (p) {                                                        \
             ret = val.low & (p - 1);                                    \
-            if (s <= FLOAT_FRAC_BITS)                                   \
+            if (s <= FLOAT_FRAC_BITS) {                                 \
                 ret <<= FLOAT_FRAC_BITS - s;                            \
-            else                                                        \
+                flb = 0;                                                \
+	    } else {                                                    \
+                flb = (ret >> (s - FLOAT_FRAC_BITS - 1)) & 1;           \
                 ret >>= s - FLOAT_FRAC_BITS;                            \
+	    }                                                           \
         } else                                                          \
             return 0;                                                   \
     }                                                                   \
+    if (flb)                                                            \
+        ret++;                                                          \
                                                                         \
     /* fill exponent bits */                                            \
     ret |= (s + ONE_EXP(FLOAT)) << FLOAT_FRAC_BITS;                     \
@@ -222,7 +230,7 @@ DEFINE__AEABI_XL2F(l2f, 1)
 #define __AEABI_XL2D(name, with_sign)                                   \
 void __aeabi_ ## name(unsigned long long v)                             \
 {                                                                       \
-    int s, high_shift, sign = 0;                                        \
+    int s /* shift */, high_shift, sign = 0;                            \
     unsigned tmp, p = 0;                                                \
     double_unsigned_struct val, ret;                                    \
                                                                         \
@@ -248,6 +256,13 @@ void __aeabi_ ## name(unsigned long long v)                             \
             ret.high = tmp >> high_shift;                               \
             ret.low = tmp << (32 - high_shift);                         \
             ret.low |= val.low >> high_shift;                           \
+            if ((val.low >> (high_shift - 1)) & 1) {                    \
+                if (ret.low == UINT_MAX) {                              \
+                    ret.high++;                                         \
+                    ret.low = 0;                                        \
+		} else                                                  \
+                    ret.low++;                                          \
+            }                                                           \
         }                                                               \
         s += 32;                                                        \
     } else {                                                            \
