@@ -34,7 +34,7 @@ REGS_RETURN(double_unsigned_struct, double_unsigned_struct)
 
 
 /* float to [unsigned] long long conversion */
-#define DEFINE__AEABIT_F2XLZ(name, with_sign)                                \
+#define DEFINE__AEABI_F2XLZ(name, with_sign)                                 \
 void __aeabi_ ## name(unsigned val)                                          \
 {                                                                            \
     int exp, high_shift, sign;                                               \
@@ -74,7 +74,7 @@ void __aeabi_ ## name(unsigned val)                                          \
         if (exp > FLOAT_FRAC_BITS)                                           \
             ret.low |= val << (exp - FLOAT_FRAC_BITS);                       \
         else                                                                 \
-            ret.low = val >> (FLOAT_FRAC_BITS - exp);                        \
+            ret.low |= val >> (FLOAT_FRAC_BITS - exp);                       \
     }                                                                        \
                                                                              \
     /* encode negative integer using 2's complement */                       \
@@ -92,13 +92,13 @@ void __aeabi_ ## name(unsigned val)                                          \
 }
 
 /* float to unsigned long long conversion */
-DEFINE__AEABIT_F2XLZ(f2ulz, 0)
+DEFINE__AEABI_F2XLZ(f2ulz, 0)
 
 /* float to long long conversion */
-DEFINE__AEABIT_F2XLZ(f2lz, 1)
+DEFINE__AEABI_F2XLZ(f2lz, 1)
 
 /* double to [unsigned] long long conversion */
-#define DEFINE__AEABIT_D2XLZ(name, with_sign)                                \
+#define DEFINE__AEABI_D2XLZ(name, with_sign)                                 \
 void __aeabi_ ## name(double_unsigned_struct val)                            \
 {                                                                            \
     int exp, high_shift, sign;                                               \
@@ -143,7 +143,7 @@ void __aeabi_ ## name(double_unsigned_struct val)                            \
             ret.low |= val.high << high_shift;                               \
             ret.low |= val.low >> (32 - high_shift);                         \
         } else                                                               \
-            ret.low = val.high >> (DOUBLE_FRAC_BITS - 32 - exp);             \
+            ret.low |= val.high >> (DOUBLE_FRAC_BITS - 32 - exp);            \
     }                                                                        \
                                                                              \
     /* encode negative integer using 2's complement */                       \
@@ -161,10 +161,10 @@ void __aeabi_ ## name(double_unsigned_struct val)                            \
 }
 
 /* double to unsigned long long conversion */
-DEFINE__AEABIT_D2XLZ(d2ulz, 0)
+DEFINE__AEABI_D2XLZ(d2ulz, 0)
 
 /* double to long long conversion */
-DEFINE__AEABIT_D2XLZ(d2lz, 1)
+DEFINE__AEABI_D2XLZ(d2lz, 1)
 
 /* long long to float conversion */
 #define DEFINE__AEABI_XL2F(name, with_sign)                             \
