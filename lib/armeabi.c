@@ -175,7 +175,7 @@ unsigned __aeabi_ ## name(unsigned long long v)                         \
     double_unsigned_struct val;                                         \
                                                                         \
     /* fraction in negative float is encoded in 1's complement */       \
-    if (with_sign && (v & (1 << 63))) {                                 \
+    if (with_sign && (v & (1ULL << 63))) {                              \
         sign = 1;                                                       \
         v = ~v + 1;                                                     \
     }                                                                   \
@@ -216,7 +216,7 @@ unsigned __aeabi_ ## name(unsigned long long v)                         \
 DEFINE__AEABI_XL2F(ul2f, 0)
 
 /* long long to float conversion */
-DEFINE__AEABI_XL2F(l2f, 0)
+DEFINE__AEABI_XL2F(l2f, 1)
 
 /* long long to double conversion */
 #define __AEABI_XL2D(name, with_sign)                                   \
