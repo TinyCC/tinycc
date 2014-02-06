@@ -949,7 +949,7 @@ static void lexpand(void)
 {
     int u;
 
-    u = vtop->type.t & VT_UNSIGNED;
+    u = vtop->type.t & (VT_DEFSIGN | VT_UNSIGNED);
     gv(RC_INT);
     vdup();
     vtop[0].r = vtop[-1].r2;
@@ -965,7 +965,7 @@ ST_FUNC void lexpand_nr(void)
 {
     int u,v;
 
-    u = vtop->type.t & VT_UNSIGNED;
+    u = vtop->type.t & (VT_DEFSIGN | VT_UNSIGNED);
     vdup();
     vtop->r2 = VT_CONST;
     vtop->type.t = VT_INT | u;
@@ -1621,8 +1621,8 @@ static void check_comparison_pointer_types(SValue *p1, SValue *p2, int op)
         return;
     tmp_type1 = *type1;
     tmp_type2 = *type2;
-    tmp_type1.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
-    tmp_type2.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+    tmp_type1.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+    tmp_type2.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
     if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
         /* gcc-like error if '-' is used */
         if (op == '-')
@@ -2212,6 +2212,11 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~(VT_CONSTANT | VT_VOLATILE);
         t2 &= ~(VT_CONSTANT | VT_VOLATILE);
     }
+    /* Default Vs explicit signedness only matters for char */
+    if ((t1 & VT_BTYPE) != VT_BYTE) {
+        t1 &= ~VT_DEFSIGN;
+        t2 &= ~VT_DEFSIGN;
+    }
     /* XXX: bitfields ? */
     if (t1 != t2)
         return 0;
@@ -2264,8 +2269,10 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "const ");
     if (t & VT_VOLATILE)
         pstrcat(buf, buf_size, "volatile ");
-    if (t & VT_UNSIGNED)
+    if (t & (VT_DEFSIGN | VT_UNSIGNED))
         pstrcat(buf, buf_size, "unsigned ");
+    else if (t & VT_DEFSIGN)
+        pstrcat(buf, buf_size, "signed ");
     switch(bt) {
     case VT_VOID:
         tstr = "void";
@@ -2385,8 +2392,10 @@ static void gen_assign_cast(CType *dt)
             /* exact type match, except for unsigned */
             tmp_type1 = *type1;
             tmp_type2 = *type2;
-            tmp_type1.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
-            tmp_type2.t &= ~(VT_UNSIGNED | VT_CONSTANT | VT_VOLATILE);
+            tmp_type1.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT |
+                             VT_VOLATILE);
+            tmp_type2.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT |
+                             VT_VOLATILE);
             if (!is_compatible_types(&tmp_type1, &tmp_type2))
                 tcc_warning("assignment from incompatible pointer type");
         }
@@ -3081,8 +3090,10 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_SIGNED1:
         case TOK_SIGNED2:
         case TOK_SIGNED3:
+            if ((t & (VT_DEFSIGN|VT_UNSIGNED)) == (VT_DEFSIGN|VT_UNSIGNED))
+                tcc_error("signed and unsigned modifier");
             typespec_found = 1;
-            t |= VT_SIGNED;
+            t |= VT_DEFSIGN;
             next();
             break;
         case TOK_REGISTER:
@@ -3093,7 +3104,9 @@ static int parse_btype(CType *type, AttributeDef *ad)
             next();
             break;
         case TOK_UNSIGNED:
-            t |= VT_UNSIGNED;
+            if ((t & (VT_DEFSIGN|VT_UNSIGNED)) == VT_DEFSIGN)
+                tcc_error("signed and unsigned modifier");
+            t |= VT_DEFSIGN | VT_UNSIGNED;
             next();
             typespec_found = 1;
             break;
@@ -3160,13 +3173,10 @@ static int parse_btype(CType *type, AttributeDef *ad)
         type_found = 1;
     }
 the_end:
-    if ((t & (VT_SIGNED|VT_UNSIGNED)) == (VT_SIGNED|VT_UNSIGNED))
-        tcc_error("signed and unsigned modifier");
     if (tcc_state->char_is_unsigned) {
-        if ((t & (VT_SIGNED|VT_UNSIGNED|VT_BTYPE)) == VT_BYTE)
+        if ((t & (VT_DEFSIGN|VT_BTYPE)) == VT_BYTE)
             t |= VT_UNSIGNED;
     }
-    t &= ~VT_SIGNED;
 
     /* long is never used as type */
     if ((t & VT_BTYPE) == VT_LONG)

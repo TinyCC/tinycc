@@ -68,6 +68,7 @@ Bug fixes:
 - fix integer to double conversion on ARM (Thomas Preud'homme)
 - fix parameter passing of (unsigned) long long bitfield (Thomas Preud'homme)
 - fix relocation of Thumb branch to ARM function (Thomas Preud'homme)
+- fix char wrong compatibility with [un]signed char (Thomas Preud'homme)
 
 version 0.9.26:
 

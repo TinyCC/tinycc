@@ -745,7 +745,7 @@ struct TCCState {
 #define VT_BITFIELD    0x0040  /* bitfield modifier */
 #define VT_CONSTANT    0x0800  /* const modifier */
 #define VT_VOLATILE    0x1000  /* volatile modifier */
-#define VT_SIGNED      0x2000  /* signed type */
+#define VT_DEFSIGN     0x2000  /* signed type */
 #define VT_VLA     0x00020000  /* VLA type (also has VT_PTR and VT_ARRAY) */
 
 /* storage */
