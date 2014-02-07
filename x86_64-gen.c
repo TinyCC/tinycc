@@ -366,7 +366,7 @@ void load(int r, SValue *sv)
 #endif
 
     fr = sv->r;
-    ft = sv->type.t;
+    ft = sv->type.t & ~VT_DEFSIGN;
     fc = sv->c.ul;
 
 #ifndef TCC_TARGET_PE
