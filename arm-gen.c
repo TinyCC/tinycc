@@ -146,12 +146,12 @@ enum float_abi {
     ARM_HARD_FLOAT,
 };
 
-enum float_abi float_abi;
-
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
 #include "tcc.h"
+
+enum float_abi float_abi;
 
 ST_DATA const int reg_classes[NB_REGS] = {
     /* r0 */ RC_INT | RC_R0,
