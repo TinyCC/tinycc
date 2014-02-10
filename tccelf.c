@@ -1541,13 +1541,11 @@ ST_FUNC void fill_got(TCCState *s1)
             continue;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             switch (ELFW(R_TYPE) (rel->r_info)) {
-#ifdef TCC_TARGET_X86_64
                 case R_X86_64_GOT32:
                 case R_X86_64_GOTPCREL:
                 case R_X86_64_PLT32:
                     fill_got_entry(s1, rel);
                     break;
-#endif
             }
         }
     }
