@@ -1901,8 +1901,6 @@ void gfunc_call(int nb_args)
     for (i = 0; i < nb_args; i++) {
 	if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
 	    ALWAYS_ASSERT(FALSE);
-	} else if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-	    ALWAYS_ASSERT(FALSE);
 	} else {
 	    /* simple type (currently always same size) */
 	    /* XXX: implicit cast ? */

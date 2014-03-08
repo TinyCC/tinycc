@@ -276,7 +276,7 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
 #ifdef _WIN32
         sprintf(p, "%u", (unsigned)cv->ull);
 #else
-        sprintf(p, "%Lu", cv->ull);
+        sprintf(p, "%llu", cv->ull);
 #endif
         break;
     case TOK_LCHAR:

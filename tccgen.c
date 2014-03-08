@@ -162,7 +162,6 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
                 tcc_error("incompatible types for redefinition of '%s'",
                           get_tok_str(v, NULL));
     }
-    s = *ps;
     s = sym_malloc();
     s->asm_label = NULL;
     s->v = v;

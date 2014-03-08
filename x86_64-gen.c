@@ -501,7 +501,7 @@ void load(int r, SValue *sv)
                     o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
                 }
             } else if (r == TREG_ST0) {
-                assert((v >= TREG_XMM0) || (v <= TREG_XMM7));
+                assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
                 /* gen_cvt_ftof(VT_LDOUBLE); */
                 /* movsd %xmmN,-0x10(%rsp) */
                 o(0x110ff2);
