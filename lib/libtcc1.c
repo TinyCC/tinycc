@@ -647,6 +647,11 @@ struct __va_list_struct {
     char *reg_save_area;
 };
 
+#undef __va_start
+#undef __va_arg
+#undef __va_copy
+#undef __va_end
+
 void *__va_start(void *fp)
 {
     struct __va_list_struct *ap =
