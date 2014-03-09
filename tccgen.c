@@ -2268,7 +2268,7 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "const ");
     if (t & VT_VOLATILE)
         pstrcat(buf, buf_size, "volatile ");
-    if (t & (VT_DEFSIGN | VT_UNSIGNED))
+    if ((t & (VT_DEFSIGN | VT_UNSIGNED)) == (VT_DEFSIGN | VT_UNSIGNED))
         pstrcat(buf, buf_size, "unsigned ");
     else if (t & VT_DEFSIGN)
         pstrcat(buf, buf_size, "signed ");
