@@ -272,7 +272,7 @@ static addr_t rt_printline(addr_t wanted_pc, const char *msg)
     if (stab_section) {
         stab_len = stab_section->data_offset;
         stab_sym = (Stab_Sym *)stab_section->data;
-        stab_str = stabstr_section->data;
+        stab_str = (char *) stabstr_section->data;
     }
 
     func_name[0] = '\0';
@@ -365,7 +365,7 @@ no_stabs:
                 if (wanted_pc >= sym->st_value &&
                     wanted_pc < sym->st_value + sym->st_size) {
                     pstrcpy(last_func_name, sizeof(last_func_name),
-                            strtab_section->data + sym->st_name);
+                            (char *) strtab_section->data + sym->st_name);
                     func_addr = sym->st_value;
                     goto found;
                 }
