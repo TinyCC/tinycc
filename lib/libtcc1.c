@@ -107,10 +107,10 @@ union float_long {
 };
 
 /* XXX: we don't support several builtin supports for now */
-#if !defined(__x86_64__) && !defined(__arm__)
+#if !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_ARM)
 
 /* XXX: use gcc/tcc intrinsic ? */
-#if defined(__i386__)
+#if defined(TCC_TARGET_I386)
 #define sub_ddmmss(sh, sl, ah, al, bh, bl) \
   __asm__ ("subl %5,%1\n\tsbbl %3,%0"					\
 	   : "=r" ((USItype) (sh)),					\
@@ -619,7 +619,7 @@ long long __fixxfdi (long double a1)
     return s ? ret : -ret;
 }
 
-#if defined(__x86_64__) && !defined(_WIN64)
+#if defined(TCC_TARGET_X86_64) && !defined(_WIN64)
 
 #ifndef __TINYC__
 #include <stdlib.h>
@@ -710,13 +710,13 @@ void __va_end(struct __va_list_struct *ap)
 #endif /* __x86_64__ */
 
 /* Flushing for tccrun */
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_I386)
 
 void __clear_cache(char *beginning, char *end)
 {
 }
 
-#elif defined(__arm__)
+#elif defined(TCC_TARGET_ARM)
 
 #define _GNU_SOURCE
 #include <unistd.h>
