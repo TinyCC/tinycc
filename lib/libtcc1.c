@@ -28,6 +28,8 @@ the Free Software Foundation, 59 Temple Place - Suite 330,
 Boston, MA 02111-1307, USA.  
 */
 
+#include <stdint.h>
+
 #define W_TYPE_SIZE   32
 #define BITS_PER_UNIT 8
 
@@ -688,7 +690,7 @@ void *__va_arg(struct __va_list_struct *ap,
     case __va_stack:
     use_overflow_area:
         ap->overflow_arg_area += size;
-        ap->overflow_arg_area = (char*)((long long)(ap->overflow_arg_area + align - 1) & -(long long)align);
+        ap->overflow_arg_area = (char*)((intptr_t)(ap->overflow_arg_area + align - 1) & -(intptr_t)align);
         return ap->overflow_arg_area - size;
 
     default:
