@@ -36,7 +36,7 @@ p2.c
 tcctest[1234]
 test[1234].out
 tests/tcclib.h
-tests/tcctest.gcc
+tests/tcctest.cc
 tests/weaktest.*.o.txt
 tests/tests2/fred.txt
 tests/hello

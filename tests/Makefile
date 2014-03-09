@@ -103,10 +103,10 @@ moretests:
 w32-prep:
 	cp ../libtcc1.a ../lib
 
-# test.ref - generate using gcc
+# test.ref - generate using cc
 test.ref: tcctest.c
-	gcc -o tcctest.gcc $< -I$(top_srcdir) $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
-	./tcctest.gcc > $@
+	$(CC) -o tcctest.cc $< -I$(top_srcdir) $(CPPFLAGS) -w $(CFLAGS) $(NATIVE_DEFINES) -std=gnu99 -O0 -fno-omit-frame-pointer $(LDFLAGS)
+	./tcctest.cc > $@
 
 # auto test
 test1 test1b: tcctest.c test.ref
@@ -183,10 +183,10 @@ speedtest: ex2 ex3
 
 weaktest: tcctest.c test.ref
 	$(TCC) -c $< -o weaktest.tcc.o $(CPPFLAGS) $(CFLAGS)
-	 $(CC) -c $< -o weaktest.gcc.o -I. $(CPPFLAGS) -w $(CFLAGS)
+	 $(CC) -c $< -o weaktest.cc.o -I. $(CPPFLAGS) -w $(CFLAGS)
 	objdump -t weaktest.tcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.tcc.o.txt
-	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
-	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
+	objdump -t weaktest.cc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.cc.o.txt
+	diff weaktest.cc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
 
 ex%: $(top_srcdir)/examples/ex%.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
@@ -239,6 +239,6 @@ cache: tcc_g
 # clean
 clean:
 	$(MAKE) -C tests2 $@
-	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.gcc *.exe \
+	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.exe \
 	       hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h \
 	       ../lib/libtcc1.a
