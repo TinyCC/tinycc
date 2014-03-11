@@ -728,13 +728,14 @@ void __clear_cache(char *beginning, char *end)
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <stdio.h>
 
 void __clear_cache(char *beginning, char *end)
 {
 /* __ARM_NR_cacheflush is kernel private and should not be used in user space.
  * However, there is no ARM asm parser in tcc so we use it for now */
 #if 1
-    syscall(__ARM_NR_cacheflush);
+    syscall(__ARM_NR_cacheflush, beginning, end, 0);
 #else
     __asm__ ("push {r7}\n\t"
              "mov r7, #0xf0002\n\t"
