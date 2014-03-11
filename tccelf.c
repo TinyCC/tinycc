@@ -1209,7 +1209,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
                     rel->r_info = ELFW(R_INFO)(index, type);
                     /* Create a thumb stub fonction to switch to ARM mode */
                     put_elf_reloc(symtab_section, text_section,
-                                  text_section->data_offset, R_ARM_JUMP24,
+                                  text_section->data_offset + 4, R_ARM_JUMP24,
                                   sym_index);
                     p = section_ptr_add(text_section, 8);
                     put32(p,   0x4778); /* bx pc */
