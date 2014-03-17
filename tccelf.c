@@ -1373,8 +1373,6 @@ static inline int tcc_add_support(TCCState *s1, const char *filename)
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
-    tcc_add_bcheck(s1);
-
     /* add libc */
     if (!s1->nostdlib) {
         tcc_add_library(s1, "c");
@@ -1386,6 +1384,14 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #else
         tcc_add_support(s1, "libtcc1.a");
 #endif
+    }
+
+    /* tcc_add_bcheck tries to relocate a call to __bound_init in _init so
+       libtcc1.a must be loaded before for __bound_init to be defined and
+       crtn.o must be loaded after to not finalize _init too early. */
+    tcc_add_bcheck(s1);
+
+    if (!s1->nostdlib) {
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tcc_add_crt(s1, "crtn.o");
