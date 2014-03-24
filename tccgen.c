@@ -2988,19 +2988,25 @@ static void struct_decl(CType *type, int u, int tdef)
     }
 }
 
+/* return 1 if basic type is a type size (short, long, long long) */
+int is_btype_size (int bt)
+{
+  return bt == VT_SHORT || bt == VT_LONG || bt == VT_LLONG;
+}
+
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
  */
 static int parse_btype(CType *type, AttributeDef *ad)
 {
-    int t, u, type_found, typespec_found, typedef_found;
+    int t, u, bt_size, complete, type_found, typespec_found;
     Sym *s;
     CType type1;
 
     memset(ad, 0, sizeof(AttributeDef));
+    complete = 0;
     type_found = 0;
     typespec_found = 0;
-    typedef_found = 0;
     t = 0;
     while(1) {
         switch(tok) {
@@ -3015,9 +3021,12 @@ static int parse_btype(CType *type, AttributeDef *ad)
         basic_type:
             next();
         basic_type1:
-            if ((t & VT_BTYPE) != 0)
+            if (complete)
                 tcc_error("too many basic types");
             t |= u;
+            bt_size = is_btype_size (u & VT_BTYPE);
+            if (u == VT_INT || (!bt_size && !(t & VT_TYPEDEF)))
+                complete = 1;
             typespec_found = 1;
             break;
         case TOK_VOID:
@@ -3027,9 +3036,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
             u = VT_SHORT;
             goto basic_type;
         case TOK_INT:
-            next();
-            typespec_found = 1;
-            break;
+            u = VT_INT;
+            goto basic_type;
         case TOK_LONG:
             next();
             if ((t & VT_BTYPE) == VT_DOUBLE) {
@@ -3149,12 +3157,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
             type1.t &= ~(VT_STORAGE&~VT_TYPEDEF);
             goto basic_type2;
         default:
-            if (typespec_found || typedef_found)
+            if (typespec_found)
                 goto the_end;
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
-            typedef_found = 1;
             t |= (s->type.t & ~VT_TYPEDEF);
             type->ref = s->type.ref;
             if (s->r) {
