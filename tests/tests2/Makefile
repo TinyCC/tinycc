@@ -67,7 +67,9 @@ TESTS =	\
  51_static.test \
  52_unnamed_enum.test \
  54_goto.test \
- 55_lshift_type.test
+ 55_lshift_type.test \
+ 56_btype_excess-1.test \
+ 57_btype_excess-2.test
 
 # 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
@@ -84,9 +86,9 @@ endif
 %.test: %.c %.expect
 	@echo Test: $*...
 	@if [ "x`echo $* | grep args`" != "x" ]; \
-	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output; \
-	else $(TCC) -run $< >$*.output; \
-	fi
+	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output 2>&1; \
+	else $(TCC) -run $< >$*.output 2>&1; \
+	fi || true
 	@if diff -bu $(<:.c=.expect) $*.output ; \
 	then rm -f $*.output; \
 	else exit 1; \
