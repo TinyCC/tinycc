@@ -1008,7 +1008,7 @@ static void put_got_entry(TCCState *s1,
                           int reloc_type, unsigned long size, int info,
                           int sym_index)
 {
-    int index;
+    int index, need_plt_entry, got_entry_present = 0;
     const char *name;
     ElfW(Sym) *sym;
     unsigned long offset;
@@ -1017,25 +1017,38 @@ static void put_got_entry(TCCState *s1,
     if (!s1->got)
         build_got(s1);
 
+    need_plt_entry = s1->dynsym &&
+#ifdef TCC_TARGET_X86_64
+        (reloc_type == R_X86_64_JUMP_SLOT);
+#elif defined(TCC_TARGET_I386)
+        (reloc_type == R_386_JMP_SLOT);
+#elif defined(TCC_TARGET_ARM)
+        (reloc_type == R_ARM_JUMP_SLOT);
+#else
+        0;
+#endif
+
     /* if a got entry already exists for that symbol, no need to add one */
     if (sym_index < s1->nb_sym_attrs &&
-        s1->sym_attrs[sym_index].got_offset)
-        return;
+        s1->sym_attrs[sym_index].got_offset) {
+        if (!need_plt_entry)
+            return;
+        else
+            got_entry_present = 1;
+    }
 
     alloc_sym_attr(s1, sym_index)->got_offset = s1->got->data_offset;
 
     if (s1->dynsym) {
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         name = (char *) symtab_section->link->data + sym->st_name;
+        if (!find_elf_sym(s1->dynsym, name))
+            need_plt_entry = 1;
+        else
+            return;
         offset = sym->st_value;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
-        if (reloc_type ==
-#ifdef TCC_TARGET_X86_64
-            R_X86_64_JUMP_SLOT
-#else
-            R_386_JMP_SLOT
-#endif
-            ) {
+        if (need_plt_entry) {
             Section *plt;
             uint8_t *p;
             int modrm;
@@ -1080,7 +1093,7 @@ static void put_got_entry(TCCState *s1,
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_ARM)
-        if (reloc_type == R_ARM_JUMP_SLOT) {
+        if (need_plt_entry) {
             Section *plt;
             uint8_t *p;
 
@@ -1123,6 +1136,13 @@ static void put_got_entry(TCCState *s1,
 #endif
         index = put_elf_sym(s1->dynsym, offset,
                             size, info, 0, sym->st_shndx, name);
+        if (got_entry_present) {
+            put_elf_reloc(s1->dynsym, s1->got,
+                          s1->sym_attrs[sym_index].got_offset,
+                          reloc_type, index);
+            return;
+        }
+
         /* put a got entry */
         put_elf_reloc(s1->dynsym, s1->got,
                       s1->got->data_offset,
