@@ -143,10 +143,6 @@ ifeq ($(TARGETOS),Darwin)
 PROGS+=tiny_libmaker$(EXESUF)
 endif
 
-ifdef CONFIG_USE_LIBGCC
-LIBTCC1=
-endif
-
 TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCC_EXTRA)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
