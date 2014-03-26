@@ -1042,10 +1042,9 @@ static void put_got_entry(TCCState *s1,
     if (s1->dynsym) {
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         name = (char *) symtab_section->link->data + sym->st_name;
-        if (!find_elf_sym(s1->dynsym, name))
-            need_plt_entry = 1;
-        else
+        if (s1->sym_attrs[sym_index].has_plt_entry)
             return;
+        s1->sym_attrs[sym_index].has_plt_entry = 1;
         offset = sym->st_value;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
         if (need_plt_entry) {

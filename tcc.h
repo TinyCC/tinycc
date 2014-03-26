@@ -522,6 +522,7 @@ typedef struct ASMOperand {
 
 struct sym_attr {
     unsigned long got_offset;
+    unsigned char has_plt_entry:1;
 #ifdef TCC_TARGET_ARM
     unsigned char plt_thumb_stub:1;
 #endif
