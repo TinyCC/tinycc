@@ -255,8 +255,14 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
     static char buf[STRING_MAX_SIZE + 1];
     static CString cstr_buf;
     CString *cstr;
+    CValue cval;
     char *p;
     int i, len;
+
+    if (!cv) {
+        cval.ull = 0;
+        cv = &cval;
+    }
 
     /* NOTE: to go faster, we give a fixed buffer for small strings */
     cstr_reset(&cstr_buf);
