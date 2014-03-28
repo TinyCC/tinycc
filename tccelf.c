@@ -1500,7 +1500,7 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
     }
 }
 
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if 1 // this allow valgrind to work on linux //defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #define HAVE_PHDR       1
 #define EXTRA_RELITEMS  14
 
