@@ -4,18 +4,28 @@
 #ifdef __x86_64__
 #ifndef _WIN64
 
-typedef void *va_list;
+//This should be in sync with the declaration on our lib/libtcc1.c
+/* GCC compatible definition of va_list. */
+typedef struct {
+    unsigned int gp_offset;
+    unsigned int fp_offset;
+    union {
+        unsigned int overflow_offset;
+        char *overflow_arg_area;
+    };
+    char *reg_save_area;
+} __va_list_struct;
 
-va_list __va_start(void *fp);
-void *__va_arg(va_list ap, int arg_type, int size, int align);
-va_list __va_copy(va_list src);
-void __va_end(va_list ap);
+typedef __va_list_struct va_list;
 
-#define va_start(ap, last) ((ap) = __va_start(__builtin_frame_address(0)))
+void __va_start(__va_list_struct *ap, void *fp);
+void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);
+
+#define va_start(ap, last) __va_start(&ap, __builtin_frame_address(0))
 #define va_arg(ap, type)                                                \
-    (*(type *)(__va_arg(ap, __builtin_va_arg_types(type), sizeof(type), __alignof__(type))))
-#define va_copy(dest, src) ((dest) = __va_copy(src))
-#define va_end(ap) __va_end(ap)
+    (*(type *)(__va_arg(&ap, __builtin_va_arg_types(type), sizeof(type), __alignof__(type))))
+#define va_copy(dest, src) ((dest) = (src))
+#define va_end(ap)
 
 #else /* _WIN64 */
 typedef char *va_list;
