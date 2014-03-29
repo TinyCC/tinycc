@@ -959,7 +959,9 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
   memset(plan->clsplans, 0, sizeof(plan->clsplans));
   for(i = nb_args; i-- ;) {
     int j, start_vfpreg = 0;
-    size = type_size(&vtop[-i].type, &align);
+    CType type = vtop[-i].type;
+    type.t &= ~VT_ARRAY;
+    size = type_size(&type, &align);
     size = (size + 3) & ~3;
     align = (align + 3) & ~3;
     switch(vtop[-i].type.t & VT_BTYPE) {
