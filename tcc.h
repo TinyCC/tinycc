@@ -783,35 +783,38 @@ struct TCCState {
 
 #define TOK_LAND  0xa0
 #define TOK_LOR   0xa1
-
 #define TOK_DEC   0xa2
 #define TOK_MID   0xa3 /* inc/dec, to void constant */
 #define TOK_INC   0xa4
 #define TOK_UDIV  0xb0 /* unsigned division */
 #define TOK_UMOD  0xb1 /* unsigned modulo */
 #define TOK_PDIV  0xb2 /* fast division with undefined rounding for pointers */
-#define TOK_CINT   0xb3 /* number in tokc */
-#define TOK_CCHAR 0xb4 /* char constant in tokc */
-#define TOK_STR   0xb5 /* pointer to string in tokc */
-#define TOK_TWOSHARPS 0xb6 /* ## preprocessing token */
-#define TOK_LCHAR    0xb7
-#define TOK_LSTR     0xb8
-#define TOK_CFLOAT   0xb9 /* float constant */
-#define TOK_LINENUM  0xba /* line number info */
-#define TOK_CDOUBLE  0xc0 /* double constant */
-#define TOK_CLDOUBLE 0xc1 /* long double constant */
+
+/* tokens that carry values (in additional token string space / tokc) --> */
+#define TOK_CCHAR   0xb3 /* char constant in tokc */
+#define TOK_LCHAR   0xb4
+#define TOK_CINT    0xb5 /* number in tokc */
+#define TOK_CUINT   0xb6 /* unsigned int constant */
+#define TOK_CLLONG  0xb7 /* long long constant */
+#define TOK_CULLONG 0xb8 /* unsigned long long constant */
+#define TOK_STR     0xb9 /* pointer to string in tokc */
+#define TOK_LSTR    0xba
+#define TOK_CFLOAT  0xbb /* float constant */
+#define TOK_CDOUBLE 0xbc /* double constant */
+#define TOK_CLDOUBLE 0xbd /* long double constant */
+#define TOK_PPNUM   0xbe /* preprocessor number */
+#define TOK_LINENUM 0xbf /* line number info */
+/* <-- */
+
+#define TOK_TWOSHARPS 0xc0 /* ## preprocessing token */
 #define TOK_UMULL    0xc2 /* unsigned 32x32 -> 64 mul */
 #define TOK_ADDC1    0xc3 /* add with carry generation */
 #define TOK_ADDC2    0xc4 /* add with carry use */
 #define TOK_SUBC1    0xc5 /* add with carry generation */
 #define TOK_SUBC2    0xc6 /* add with carry use */
-#define TOK_CUINT    0xc8 /* unsigned int constant */
-#define TOK_CLLONG   0xc9 /* long long constant */
-#define TOK_CULLONG  0xca /* unsigned long long constant */
 #define TOK_ARROW    0xcb
 #define TOK_DOTS     0xcc /* three dots */
 #define TOK_SHR      0xcd /* unsigned shift right */
-#define TOK_PPNUM    0xce /* preprocessor number */
 #define TOK_NOSUBST  0xcf /* means following token has already been pp'd */
 
 #define TOK_SHL   0x01 /* shift left */

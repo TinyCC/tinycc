@@ -70,8 +70,33 @@ static const char tcc_keywords[] =
 
 /* WARNING: the content of this string encodes token numbers */
 static const unsigned char tok_two_chars[] =
+/* outdated -- gr
     "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253"
     "-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
+*/{
+    '<','=', TOK_LE,
+    '>','=', TOK_GE,
+    '!','=', TOK_NE,
+    '&','&', TOK_LAND,
+    '|','|', TOK_LOR,
+    '+','+', TOK_INC,
+    '-','-', TOK_DEC,
+    '=','=', TOK_EQ,
+    '<','<', TOK_SHL,
+    '>','>', TOK_SHR,
+    '+','=', TOK_A_ADD,
+    '-','=', TOK_A_SUB,
+    '*','=', TOK_A_MUL,
+    '/','=', TOK_A_DIV,
+    '%','=', TOK_A_MOD,
+    '&','=', TOK_A_AND,
+    '^','=', TOK_A_XOR,
+    '|','=', TOK_A_OR,
+    '-','>', TOK_ARROW,
+    '.','.', 0xa8, // C++ token ?
+    '#','#', TOK_TWOSHARPS,
+    0
+};
 
 struct macro_level {
     struct macro_level *prev;
@@ -255,20 +280,18 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
     static char buf[STRING_MAX_SIZE + 1];
     static CString cstr_buf;
     CString *cstr;
-    CValue cval;
     char *p;
     int i, len;
-
-    if (!cv) {
-        cval.ull = 0;
-        cv = &cval;
-    }
 
     /* NOTE: to go faster, we give a fixed buffer for small strings */
     cstr_reset(&cstr_buf);
     cstr_buf.data = buf;
     cstr_buf.size_allocated = sizeof(buf);
     p = buf;
+
+/* just an explanation, should never happen:
+    if (v <= TOK_LINENUM && v >= TOK_CINT && cv == NULL)
+        tcc_error("internal error: get_tok_str"); */
 
     switch(v) {
     case TOK_CINT:
@@ -317,6 +340,15 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
         cstr_ccat(&cstr_buf, '\"');
         cstr_ccat(&cstr_buf, '\0');
         break;
+
+    case TOK_CFLOAT:
+    case TOK_CDOUBLE:
+    case TOK_CLDOUBLE:
+    case TOK_LINENUM:
+        return NULL; /* should not happen */
+
+    /* above tokens have value, the ones below don't */
+
     case TOK_LT:
         v = '<';
         goto addv;
