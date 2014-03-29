@@ -237,6 +237,7 @@
      DEF(TOK___bound_ptr_indir8, "__bound_ptr_indir8")
      DEF(TOK___bound_ptr_indir12, "__bound_ptr_indir12")
      DEF(TOK___bound_ptr_indir16, "__bound_ptr_indir16")
+     DEF(TOK___bound_main_arg, "__bound_main_arg")
      DEF(TOK___bound_local_new, "__bound_local_new")
      DEF(TOK___bound_local_delete, "__bound_local_delete")
 # ifdef TCC_TARGET_PE

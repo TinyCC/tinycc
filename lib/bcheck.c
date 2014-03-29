@@ -418,6 +418,13 @@ void __bound_init(void)
     }
 }
 
+void __bound_main_arg(void **p)
+{
+    void *start = p;
+    while (*p++);
+    __bound_new_region(start, (void *) p - start);
+}
+
 void __bound_exit(void)
 {
     restore_malloc_hooks();
