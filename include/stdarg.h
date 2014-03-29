@@ -16,15 +16,15 @@ typedef struct {
     char *reg_save_area;
 } __va_list_struct;
 
-typedef __va_list_struct va_list;
+typedef __va_list_struct va_list[1];
 
 void __va_start(__va_list_struct *ap, void *fp);
 void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);
 
-#define va_start(ap, last) __va_start(&ap, __builtin_frame_address(0))
+#define va_start(ap, last) __va_start(ap, __builtin_frame_address(0))
 #define va_arg(ap, type)                                                \
-    (*(type *)(__va_arg(&ap, __builtin_va_arg_types(type), sizeof(type), __alignof__(type))))
-#define va_copy(dest, src) ((dest) = (src))
+    (*(type *)(__va_arg(ap, __builtin_va_arg_types(type), sizeof(type), __alignof__(type))))
+#define va_copy(dest, src) (*(dest) = *(src))
 #define va_end(ap)
 
 #else /* _WIN64 */
