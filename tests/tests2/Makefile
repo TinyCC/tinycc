@@ -69,7 +69,12 @@ TESTS =	\
  54_goto.test \
  55_lshift_type.test \
  56_btype_excess-1.test \
- 57_btype_excess-2.test
+ 57_btype_excess-2.test \
+ 58_function_redefinition.test \
+ 59_function_array.test \
+ 60_enum_redefinition.test \
+ 61_undefined_enum.test \
+ 62_enumerator_redefinition.test
 
 # 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
