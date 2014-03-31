@@ -83,7 +83,7 @@ static const unsigned char tok_two_chars[] =
     '-','-', TOK_DEC,
     '=','=', TOK_EQ,
     '<','<', TOK_SHL,
-    '>','>', TOK_SHR,
+    '>','>', TOK_SAR,
     '+','=', TOK_A_ADD,
     '-','=', TOK_A_SUB,
     '*','=', TOK_A_MUL,
