@@ -604,7 +604,7 @@ static void gcall_or_jmp(int is_jmp)
         if (vtop->r & VT_SYM) {
             /* relocation case */
             greloc(cur_text_section, vtop->sym,
-                   ind + 1, R_X86_64_PC32);
+                   ind + 1, R_X86_64_PLT32);
         } else {
             /* put an empty PC32 relocation */
             put_elf_reloc(symtab_section, cur_text_section,
