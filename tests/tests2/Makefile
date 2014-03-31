@@ -74,7 +74,8 @@ TESTS =	\
  59_function_array.test \
  60_enum_redefinition.test \
  61_undefined_enum.test \
- 62_enumerator_redefinition.test
+ 62_enumerator_redefinition.test \
+ 63_local_enumerator_redefinition.test
 
 # 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
