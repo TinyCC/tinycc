@@ -49,6 +49,10 @@ ARM_O = libtcc1.o armeabi.o
 WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 
+# build TCC runtime library to contain PIC code, so it can be linked
+# into shared libraries
+PICFLAGS = -fPIC
+
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
@@ -83,7 +87,7 @@ endif
 endif
 endif
 
-XFLAGS = $(CPPFLAGS) $(CFLAGS) $(TGT)
+XFLAGS = $(CPPFLAGS) $(CFLAGS) $(PICFLAGS) $(TGT)
 
 ifeq ($(TARGETOS),Darwin)
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
