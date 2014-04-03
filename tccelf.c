@@ -1538,10 +1538,6 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
     }
 }
 
-// making this evaluate to true  allow valgrind to work on linux
-// but when compiled with debug info and then striped 
-// the compiled programs segfault
-// more tought must be applyed here
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #define HAVE_PHDR       1
 #define EXTRA_RELITEMS  14
@@ -1562,7 +1558,7 @@ void patch_dynsym_undef(TCCState *s1, Section *s)
     }
 }
 #else
-#define HAVE_PHDR      0
+#define HAVE_PHDR      1
 #define EXTRA_RELITEMS 9
 
 /* zero plt offsets of weak symbols in .dynsym */
@@ -1969,6 +1965,15 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                         file_offset += s->sh_size;
                 }
             }
+	    if (j == 0) {
+		/* Make the first PT_LOAD segment include the program
+		   headers itself (and the ELF header as well), it'll
+		   come out with same memory use but will make various
+		   tools like binutils strip work better.  */
+		ph->p_offset &= ~(ph->p_align - 1);
+		ph->p_vaddr &= ~(ph->p_align - 1);
+		ph->p_paddr &= ~(ph->p_align - 1);
+	    }
             ph->p_filesz = file_offset - ph->p_offset;
             ph->p_memsz = addr - ph->p_vaddr;
             ph++;
