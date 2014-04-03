@@ -112,8 +112,8 @@ enum {
 #define R_JMP_SLOT  R_X86_64_JUMP_SLOT
 #define R_COPY      R_X86_64_COPY
 
-#define ELF_START_ADDR 0x08048000
-#define ELF_PAGE_SIZE  0x1000
+#define ELF_START_ADDR 0x400000
+#define ELF_PAGE_SIZE  0x200000
 
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
