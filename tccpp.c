@@ -974,7 +974,6 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
 ST_FUNC void tok_str_add_tok(TokenString *s)
 {
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
 
     /* save line number info */
     if (file->line_num != s->last_line_num) {
@@ -1038,9 +1037,8 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
 static int macro_is_equal(const int *a, const int *b)
 {
     char buf[STRING_MAX_SIZE + 1];
-    int t;
     CValue cv;
-    memset(&cv, 0, sizeof(CValue));
+    int t;
     while (*a && *b) {
         TOK_GET(&t, &a, &cv);
         pstrcpy(buf, sizeof buf, get_tok_str(t, &cv));
@@ -1199,7 +1197,6 @@ static void tok_print(int *str)
 {
     int t;
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
 
     printf("<");
     while (1) {
@@ -2566,10 +2563,9 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
     int last_tok, t, spc;
     const int *st;
     Sym *s;
+    CValue cval;
     TokenString str;
     CString cstr;
-    CValue cval;
-    memset(&cval, 0, sizeof(CValue));
 
     tok_str_new(&str);
     last_tok = 0;
@@ -2671,10 +2667,9 @@ static int macro_subst_tok(TokenString *tok_str,
     const int *p;
     TokenString str;
     char *cstrval;
+    CValue cval;
     CString cstr;
     char buf[32];
-    CValue cval;
-    memset(&cval, 0, sizeof(CValue));
     
     /* if symbol is a macro, prepare substitution */
     /* special macros */
@@ -2849,7 +2844,6 @@ static inline int *macro_twosharps(const int *macro_str)
     /* we search the first '##' */
     for(ptr = macro_str;;) {
         CValue cval;
-        memset(&cval, 0, sizeof(CValue));
         TOK_GET(&t, &ptr, &cval);
         if (t == TOK_TWOSHARPS)
             break;
@@ -2880,7 +2874,6 @@ static inline int *macro_twosharps(const int *macro_str)
                 t = *++ptr;
             if (t && t != TOK_TWOSHARPS) {
                 CValue cval;
-                memset(&cval, 0, sizeof(CValue));
                 TOK_GET(&t, &ptr, &cval);
                 /* We concatenate the two tokens */
                 cstr_new(&cstr);
@@ -2922,10 +2915,9 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     int *macro_str1;
     const int *ptr;
     int t, ret, spc;
+    CValue cval;
     struct macro_level ml;
     int force_blank;
-    CValue cval;
-    memset(&cval, 0, sizeof(CValue));
     
     /* first scan for '##' operator handling */
     ptr = macro_str;

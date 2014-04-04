@@ -329,7 +329,6 @@ static void vsetc(CType *type, int r, CValue *vc)
 void vpush(CType *type)
 {
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
     vsetc(type, VT_CONST, &cval);
 }
 
@@ -337,29 +336,23 @@ void vpush(CType *type)
 ST_FUNC void vpushi(int v)
 {
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
     cval.i = v;
     vsetc(&int_type, VT_CONST, &cval);
 }
 
 /* push a pointer sized constant */
-static void vpushs(long long v)
+static void vpushs(addr_t v)
 {
   CValue cval;
-  memset(&cval, 0, sizeof(CValue));
-  if (PTR_SIZE == 4)
-    cval.i = (int)v;
-  else
-    cval.ull = v;
+  cval.ptr_offset = v;
   vsetc(&size_type, VT_CONST, &cval);
 }
 
 /* push arbitrary 64bit constant */
 void vpush64(int ty, unsigned long long v)
 {
-    CType ctype;
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
+    CType ctype;
     ctype.t = ty;
     ctype.ref = NULL;
     cval.ull = v;
@@ -376,9 +369,7 @@ static inline void vpushll(long long v)
 static inline void vpushsym(CType *type, Sym *sym)
 {
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
-
-    cval.ull = 0;
+    cval.ptr_offset = 0;
     vsetc(type, VT_CONST | VT_SYM, &cval);
     vtop->sym = sym;
 }
@@ -451,7 +442,6 @@ ST_FUNC void vpush_global_sym(CType *type, int v)
 ST_FUNC void vset(CType *type, int r, int v)
 {
     CValue cval;
-    memset(&cval, 0, sizeof(CValue));
 
     cval.i = v;
     vsetc(type, r, &cval);
@@ -737,7 +727,6 @@ ST_FUNC int gv(int rc)
             unsigned long offset;
 #if defined(TCC_TARGET_ARM) && !defined(TCC_ARM_VFP)
             CValue check;
-            memset(&check, 0, sizeof(CValue));
 #endif
             
             /* XXX: unify with initializers handling ? */
@@ -770,7 +759,7 @@ ST_FUNC int gv(int rc)
             sym = get_sym_ref(&vtop->type, data_section, offset, size << 2);
             vtop->r |= VT_LVAL | VT_SYM;
             vtop->sym = sym;
-            vtop->c.ull = 0;
+            vtop->c.ptr_offset = 0;
         }
 #ifdef CONFIG_TCC_BCHECK
         if (vtop->r & VT_MUSTBOUND) 
@@ -1581,7 +1570,7 @@ static inline int is_null_pointer(SValue *p)
         return 0;
     return ((p->type.t & VT_BTYPE) == VT_INT && p->c.i == 0) ||
         ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.ll == 0) ||
-	((p->type.t & VT_BTYPE) == VT_PTR && p->c.ptr == 0);
+	((p->type.t & VT_BTYPE) == VT_PTR && p->c.ptr_offset == 0);
 }
 
 static inline int is_integer_btype(int bt)
@@ -3886,8 +3875,7 @@ ST_FUNC void unary(void)
             mk_pointer(&s->type);
             s->type.t |= VT_STATIC;
         }
-        vset(&s->type, VT_CONST | VT_SYM, 0);
-        vtop->sym = s;
+        vpushsym(&s->type, s);
         next();
         break;
     
@@ -3939,7 +3927,7 @@ ST_FUNC void unary(void)
         /* if forward reference, we must point to s */
         if (vtop->r & VT_SYM) {
             vtop->sym = s;
-	    vtop->c.ull = 0;
+	    vtop->c.ptr_offset = 0;
         }
         break;
     }
@@ -5157,7 +5145,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
             if (vtop->r & VT_SYM) {
                 greloc(sec, vtop->sym, c, R_DATA_PTR);
             }
-            *(addr_t *)ptr |= (vtop->c.ull & bit_mask) << bit_pos;
+            *(addr_t *)ptr |= (vtop->c.ptr_offset & bit_mask) << bit_pos;
             break;
         default:
             if (vtop->r & VT_SYM) {

@@ -55,18 +55,27 @@
 # ifndef CONFIG_TCC_STATIC
 #  include <dlfcn.h>
 # endif
-#else
+/* XXX: need to define this to use them in non ISOC99 context */
+ extern float strtof (const char *__nptr, char **__endptr);
+ extern long double strtold (const char *__nptr, char **__endptr);
+#else /* on _WIN32: */
 # include <windows.h>
 # include <sys/timeb.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */
 # ifdef __GNUC__
 #  include <stdint.h>
-# else
-   typedef UINT_PTR uintptr_t;
 # endif
 # define inline __inline
 # define inp next_inp
+# define snprintf _snprintf
+# define vsnprintf _vsnprintf
+# ifndef __GNUC__
+#  define strtold (long double)strtod
+#  define strtof (float)strtod
+#  define strtoll _strtoi64
+#  define strtoull _strtoui64
+# endif
 # ifdef LIBTCC_AS_DLL
 #  define LIBTCCAPI __declspec(dllexport)
 #  define PUB_FUNC LIBTCCAPI
@@ -77,6 +86,30 @@
 
 #ifndef O_BINARY
 # define O_BINARY 0
+#endif
+
+#ifdef __GNUC__
+# define NORETURN __attribute__ ((noreturn))
+#elif defined _MSC_VER
+# define NORETURN __declspec(noreturn)
+#else
+# define NORETURN
+#endif
+
+#ifdef _WIN32
+# define IS_DIRSEP(c) (c == '/' || c == '\\')
+# define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
+# define PATHCMP stricmp
+#else
+# define IS_DIRSEP(c) (c == '/')
+# define IS_ABSPATH(p) IS_DIRSEP(p[0])
+# define PATHCMP strcmp
+#endif
+
+#ifdef TCC_TARGET_PE
+#define PATHSEP ';'
+#else
+#define PATHSEP ':'
 #endif
 
 #include "elf.h"
@@ -315,7 +348,7 @@ typedef union CValue {
     long long ll;
     unsigned long long ull;
     struct CString *cstr;
-    void *ptr;
+    addr_t ptr_offset;
     int tab[LDOUBLE_SIZE/4];
 } CValue;
 
@@ -938,37 +971,6 @@ enum tcc_token {
 
 #define TOK_UIDENT TOK_DEFINE
 
-#ifdef _WIN32
-#define snprintf _snprintf
-#define vsnprintf _vsnprintf
-#ifndef __GNUC__
-# define strtold (long double)strtod
-# define strtof (float)strtod
-# define strtoll _strtoi64
-# define strtoull _strtoui64
-#endif
-#else
-/* XXX: need to define this to use them in non ISOC99 context */
-extern float strtof (const char *__nptr, char **__endptr);
-extern long double strtold (const char *__nptr, char **__endptr);
-#endif
-
-#ifdef _WIN32
-#define IS_DIRSEP(c) (c == '/' || c == '\\')
-#define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
-#define PATHCMP stricmp
-#else
-#define IS_DIRSEP(c) (c == '/')
-#define IS_ABSPATH(p) IS_DIRSEP(p[0])
-#define PATHCMP strcmp
-#endif
-
-#ifdef TCC_TARGET_PE
-#define PATHSEP ';'
-#else
-#define PATHSEP ':'
-#endif
-
 /* space exlcuding newline */
 static inline int is_space(int ch)
 {
@@ -1045,7 +1047,7 @@ PUB_FUNC char *tcc_strdup(const char *str);
 #define strdup(s) use_tcc_strdup(s)
 PUB_FUNC void tcc_memstats(void);
 PUB_FUNC void tcc_error_noabort(const char *fmt, ...);
-PUB_FUNC void tcc_error(const char *fmt, ...) __attribute__ ((noreturn));
+PUB_FUNC NORETURN void tcc_error(const char *fmt, ...);
 PUB_FUNC void tcc_warning(const char *fmt, ...);
 
 /* other utilities */
@@ -1143,7 +1145,7 @@ ST_FUNC void preprocess_init(TCCState *s1);
 ST_FUNC void preprocess_new(void);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
-ST_FUNC void expect(const char *msg) __attribute__ ((noreturn));
+ST_FUNC NORETURN void expect(const char *msg);
 
 /* ------------ tccgen.c ------------ */
 
