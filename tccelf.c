@@ -769,6 +769,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             if ((0x0ffffff0 & *(int*)ptr) == 0x012FFF10)
                 *(int*)ptr ^= 0xE12FFF10 ^ 0xE1A0F000; /* BX Rm -> MOV PC, Rm */
             break;
+        case R_ARM_NONE:
+            /* Nothing to do.  Normally used to indicate a dependency
+               on a certain symbol (like for exception handling under EABI).  */
+            break;
         default:
             fprintf(stderr,"FIXME: handle reloc type %x at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
