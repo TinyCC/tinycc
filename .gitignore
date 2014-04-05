@@ -39,6 +39,7 @@ tests/tcclib.h
 tests/tcctest.cc
 tests/weaktest.*.o.txt
 tests/tests2/fred.txt
+tests/tests2/*.exe
 tests/hello
 tests/abitest-*cc
 .gdb_history
