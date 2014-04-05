@@ -20,6 +20,9 @@
 
 #include "tcc.h"
 
+/* Define this to get some debug output during relocation processing.  */
+#undef DEBUG_RELOC
+
 /* XXX: avoid static variable */
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
 
@@ -438,6 +441,9 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
                 addr = resolve_sym(s1, name);
                 if (addr) {
                     sym->st_value = (addr_t)addr;
+#ifdef DEBUG_RELOC
+		    printf ("relocate_sym: %s -> 0x%x\n", name, sym->st_value);
+#endif
                     goto found;
                 }
 #endif
@@ -601,6 +607,11 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             {
                 int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
                 x = (*(int *) ptr) & 0xffffff;
+		if (sym->st_shndx == SHN_UNDEF)
+	            val = s1->plt->sh_addr;
+#ifdef DEBUG_RELOC
+		printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
+#endif
                 (*(int *)ptr) &= 0xff000000;
                 if (x & 0x800000)
                     x -= 0x1000000;
@@ -610,6 +621,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 is_bl = (*(unsigned *) ptr) >> 24 == 0xeb;
                 is_call = (type == R_ARM_CALL || (type == R_ARM_PC24 && is_bl));
                 x += val - addr;
+#ifdef DEBUG_RELOC
+		printf (" newx=0x%x name=%s\n", x,
+			(char *) symtab_section->link->data + sym->st_name);
+#endif
                 h = x & 2;
                 th_ko = (x & 3) && (!blx_avail || !is_call);
 #ifdef TCC_HAS_RUNTIME_PLTGOT
@@ -622,7 +637,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 }
 #endif
                 if (th_ko || x >= 0x2000000 || x < -0x2000000)
-                    tcc_error("can't relocate value at %x",addr);
+                    tcc_error("can't relocate value at %x,%d",addr, type);
                 x >>= 2;
                 x &= 0xffffff;
                 /* Only reached if blx is avail and it is a call */
@@ -686,7 +701,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                      - instruction must be a call (bl) or a jump to PLT */
                 if (!to_thumb || x >= 0x1000000 || x < -0x1000000)
                     if (to_thumb || (val & 2) || (!is_call && !to_plt))
-                        tcc_error("can't relocate value at %x",addr);
+                        tcc_error("can't relocate value at %x,%d",addr, type);
 
                 /* Compute and store final offset */
                 s = (x >> 24) & 1;
@@ -743,7 +758,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 x = (x * 2) / 2;
                 x += val - addr;
                 if((x^(x>>1))&0x40000000)
-                    tcc_error("can't relocate value at %x",addr);
+                    tcc_error("can't relocate value at %x,%d",addr, type);
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:
@@ -768,6 +783,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             /* trade Thumb support for ARMv4 support */
             if ((0x0ffffff0 & *(int*)ptr) == 0x012FFF10)
                 *(int*)ptr ^= 0xE12FFF10 ^ 0xE1A0F000; /* BX Rm -> MOV PC, Rm */
+            break;
+        case R_ARM_GLOB_DAT:
+        case R_ARM_JUMP_SLOT:
+            *(addr_t *)ptr = val;
             break;
         case R_ARM_NONE:
             /* Nothing to do.  Normally used to indicate a dependency
@@ -1166,7 +1185,7 @@ static unsigned long put_got_entry(TCCState *s1,
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
-            if (s1->output_type == TCC_OUTPUT_EXE)
+	    if (sym->st_shndx == SHN_UNDEF)
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_C67)
@@ -1240,22 +1259,47 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 }
                 break;
 #elif defined(TCC_TARGET_ARM)
+            case R_ARM_PC24:
+            case R_ARM_CALL:
+            case R_ARM_JUMP24:
             case R_ARM_GOT32:
             case R_ARM_GOTOFF:
             case R_ARM_GOTPC:
             case R_ARM_PLT32:
                 if (!s1->got)
                     build_got(s1);
-                if (type == R_ARM_GOT32 || type == R_ARM_PLT32) {
-                    sym_index = ELFW(R_SYM)(rel->r_info);
-                    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+		if (type != R_ARM_GOTOFF && type != R_ARM_GOTPC
+		    && sym->st_shndx == SHN_UNDEF) {
+                    unsigned long ofs;
                     /* look at the symbol got offset. If none, then add one */
                     if (type == R_ARM_GOT32)
                         reloc_type = R_ARM_GLOB_DAT;
                     else
                         reloc_type = R_ARM_JUMP_SLOT;
-                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                                  sym_index);
+                    ofs = put_got_entry(s1, reloc_type, sym->st_size,
+				        sym->st_info, sym_index);
+#ifdef DEBUG_RELOC
+                    printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
+			    (char *) symtab_section->link->data + sym->st_name,
+			    type, sym->st_shndx, ofs);
+#endif
+		    if (type != R_ARM_GOT32) {
+			addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
+						+ rel->r_offset);
+			/* x must be signed!  */
+			int x = *ptr & 0xffffff;
+			x = (x << 8) >> 8;
+			x <<= 2;
+			x += ofs;
+			x >>= 2;
+#ifdef DEBUG_RELOC
+			printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
+				(*ptr & 0xff000000) | x, x);
+#endif
+			*ptr = (*ptr & 0xff000000) | x;
+		    }
                 }
                 break;
             case R_ARM_THM_JUMP24:
