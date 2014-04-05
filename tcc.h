@@ -712,7 +712,7 @@ struct TCCState {
     void *write_mem;
     unsigned long mem_size;
 # endif
-# if !defined TCC_TARGET_PE && (defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM)
+# if !defined TCC_TARGET_PE && (defined TCC_TARGET_ARM)
     /* write PLT and GOT here */
     char *runtime_plt_and_got;
     unsigned runtime_plt_and_got_offset;
@@ -1265,6 +1265,7 @@ ST_FUNC void put_stabd(int type, int other, int desc);
 ST_FUNC void relocate_common_syms(void);
 ST_FUNC void relocate_syms(TCCState *s1, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
+ST_FUNC void relocate_plt(TCCState *s1);
 
 ST_FUNC void tcc_add_linker_symbols(TCCState *s1);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);

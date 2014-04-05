@@ -851,8 +851,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 	    /* We've put the PLT slot offset into r_addend when generating
 	       it, and that's what we must use as relocation value (adjusted
 	       by section offset of course).  */
-	    if (s1->output_type != TCC_OUTPUT_MEMORY)
-	        val = s1->plt->sh_addr + rel->r_addend;
+	    val = s1->plt->sh_addr + rel->r_addend;
 	    /* fallthrough.  */
 
 	plt32pc32:
@@ -878,7 +877,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT:
             /* They don't need addend */
-            *(int *)ptr = val - rel->r_addend;
+            *(addr_t *)ptr = val - rel->r_addend;
             break;
         case R_X86_64_GOTPCREL:
 #ifdef TCC_HAS_RUNTIME_PLTGOT
@@ -1042,7 +1041,7 @@ static unsigned long put_got_entry(TCCState *s1,
     if (!s1->got)
         build_got(s1);
 
-    need_plt_entry = s1->dynsym &&
+    need_plt_entry =
 #ifdef TCC_TARGET_X86_64
         (reloc_type == R_X86_64_JUMP_SLOT);
 #elif defined(TCC_TARGET_I386)
@@ -1052,6 +1051,13 @@ static unsigned long put_got_entry(TCCState *s1,
 #else
         0;
 #endif
+
+    if (need_plt_entry && !s1->plt) {
+	/* add PLT */
+	s1->plt = new_section(s1, ".plt", SHT_PROGBITS,
+			      SHF_ALLOC | SHF_EXECINSTR);
+	s1->plt->sh_entsize = 4;
+    }
 
     /* If a got/plt entry already exists for that symbol, no need to add one */
     if (sym_index < s1->nb_sym_attrs) {
@@ -1067,10 +1073,9 @@ static unsigned long put_got_entry(TCCState *s1,
     if (!need_plt_entry)
         symattr->got_offset = s1->got->data_offset;
 
-    if (s1->dynsym) {
-        sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-        name = (char *) symtab_section->link->data + sym->st_name;
-        offset = sym->st_value;
+    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+    name = (char *) symtab_section->link->data + sym->st_name;
+    offset = sym->st_value;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
         if (need_plt_entry) {
             Section *plt;
@@ -1165,10 +1170,13 @@ static unsigned long put_got_entry(TCCState *s1,
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_C67)
+    if (s1->dynsym) {
         tcc_error("C67 got not implemented");
+    }
 #else
 #error unsupported CPU
 #endif
+    if (s1->dynsym) {
 	/* XXX This might generate multiple syms for name.  */
         index = put_elf_sym(s1->dynsym, offset,
                             size, info, 0, sym->st_shndx, name);
@@ -1316,8 +1324,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
                         reloc_type = R_X86_64_JUMP_SLOT;
                     ofs = put_got_entry(s1, reloc_type, sym->st_size,
 					sym->st_info, sym_index);
-		    if (type == R_X86_64_PLT32
-			&& s1->output_type != TCC_OUTPUT_MEMORY)
+		    if (type == R_X86_64_PLT32)
 		        /* We store the place of the generated PLT slot
 			   in our addend.  */
 		        rel->r_addend += ofs;
@@ -1754,9 +1761,12 @@ static void export_global_syms(TCCState *s1)
 
 /* relocate the PLT: compute addresses and offsets in the PLT now that final
    address for PLT and GOT are known (see fill_program_header) */
-static void relocate_plt(TCCState *s1)
+ST_FUNC void relocate_plt(TCCState *s1)
 {
     uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
 
     p = s1->plt->data;
     p_end = p + s1->plt->data_offset;
@@ -2345,11 +2355,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
                                   SHF_ALLOC | SHF_WRITE);
             dynamic->link = dynstr;
             dynamic->sh_entsize = sizeof(ElfW(Dyn));
-
-            /* add PLT */
-            s1->plt = new_section(s1, ".plt", SHT_PROGBITS,
-                                  SHF_ALLOC | SHF_EXECINSTR);
-            s1->plt->sh_entsize = 4;
 
             build_got(s1);
 
