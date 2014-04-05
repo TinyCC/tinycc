@@ -712,12 +712,6 @@ struct TCCState {
     void *write_mem;
     unsigned long mem_size;
 # endif
-# if !defined TCC_TARGET_PE && (0)
-    /* write PLT and GOT here */
-    char *runtime_plt_and_got;
-    unsigned runtime_plt_and_got_offset;
-#  define TCC_HAS_RUNTIME_PLTGOT
-# endif
 #endif
 
     /* used by main and tcc_parse_args only */

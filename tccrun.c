@@ -180,14 +180,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     if (s1->nb_errors)
         return -1;
 
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-    s1->runtime_plt_and_got_offset = 0;
-    s1->runtime_plt_and_got = (char *)(mem + offset);
-    /* double the size of the buffer for got and plt entries
-       XXX: calculate exact size for them? */
-    offset *= 2;
-#endif
-
     if (0 == mem)
         return offset;
 
@@ -214,11 +206,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         if (s->sh_flags & SHF_EXECINSTR)
             set_pages_executable(ptr, length);
     }
-
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-    set_pages_executable(s1->runtime_plt_and_got,
-                         s1->runtime_plt_and_got_offset);
-#endif
 
 #ifdef _WIN64
     win64_add_function_table(s1);

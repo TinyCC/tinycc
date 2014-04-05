@@ -476,42 +476,6 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
     }
 }
 
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-#ifdef TCC_TARGET_X86_64
-#define JMP_TABLE_ENTRY_SIZE 14
-static addr_t add_jmp_table(TCCState *s1, addr_t val)
-{
-    char *p = s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset;
-    s1->runtime_plt_and_got_offset += JMP_TABLE_ENTRY_SIZE;
-    /* jmp *0x0(%rip) */
-    p[0] = 0xff;
-    p[1] = 0x25;
-    *(int *)(p + 2) = 0;
-    *(addr_t *)(p + 6) = val;
-    return (addr_t)p;
-}
-
-static addr_t add_got_table(TCCState *s1, addr_t val)
-{
-    addr_t *p = (addr_t *)(s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset);
-    s1->runtime_plt_and_got_offset += sizeof(addr_t);
-    *p = val;
-    return (addr_t)p;
-}
-#elif defined TCC_TARGET_ARM
-#define JMP_TABLE_ENTRY_SIZE 8
-static addr_t add_jmp_table(TCCState *s1, int val)
-{
-    uint32_t *p = (uint32_t *)(s1->runtime_plt_and_got + s1->runtime_plt_and_got_offset);
-    s1->runtime_plt_and_got_offset += JMP_TABLE_ENTRY_SIZE;
-    /* ldr pc, [pc, #-4] */
-    p[0] = 0xE51FF004;
-    p[1] = val;
-    return (addr_t)p;
-}
-#endif
-#endif /* def TCC_HAS_RUNTIME_PLTGOT */
-
 /* relocate a given section (CPU dependent) by applying the relocations
    in the associated relocation section */
 ST_FUNC void relocate_section(TCCState *s1, Section *s)
@@ -627,15 +591,6 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 #endif
                 h = x & 2;
                 th_ko = (x & 3) && (!blx_avail || !is_call);
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-                if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                    if (th_ko || x >= 0x2000000 || x < -0x2000000) {
-                        x += add_jmp_table(s1, val) - val; /* add veneer */
-                        th_ko = (x & 3) && (!blx_avail || !is_call);
-                        is_thumb = 0; /* Veneer uses ARM instructions */
-                    }
-                }
-#endif
                 if (th_ko || x >= 0x2000000 || x < -0x2000000)
                     tcc_error("can't relocate value at %x,%d",addr, type);
                 x >>= 2;
@@ -878,17 +833,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             long long diff;
             diff = (long long)val - addr;
             if (diff <= -2147483647 || diff > 2147483647) {
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-                /* XXX: naive support for over 32bit jump */
-                if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                    val = (add_jmp_table(s1, val - rel->r_addend) +
-                           rel->r_addend);
-                    diff = val - addr;
-                }
-#endif
-                if (diff <= -2147483647 || diff > 2147483647) {
-                    tcc_error("internal error: relocation failed");
-                }
+                tcc_error("internal error: relocation failed");
             }
             *(int *)ptr += diff;
         }
@@ -899,13 +844,6 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             *(addr_t *)ptr = val - rel->r_addend;
             break;
         case R_X86_64_GOTPCREL:
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-            if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                val = add_got_table(s1, val - rel->r_addend) + rel->r_addend;
-                *(int *)ptr += val - addr;
-                break;
-            }
-#endif
             *(int *)ptr += (s1->got->sh_addr - addr +
                             s1->sym_attrs[sym_index].got_offset - 4);
             break;
