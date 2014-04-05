@@ -94,13 +94,18 @@ endif
 	@if [ "x`echo $* | grep args`" != "x" ]; \
 	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output 2>&1; \
 	else $(TCC) -run $< >$*.output 2>&1; \
+	  ($(TCC) -o $*.exe $< -lm && ./$*.exe) >$*.output2 2>&1; \
 	fi || true
 	@if diff -bu $(<:.c=.expect) $*.output ; \
 	then rm -f $*.output; \
 	else exit 1; \
 	fi
+	@if test -f $*.output2; then if diff -bu $(<:.c=.expect) $*.output2 ; \
+	then rm -f $*.output2; \
+	else exit 1; \
+	fi; fi
 
 all test: $(TESTS)
 
 clean:
-	rm -vf fred.txt *.output
+	rm -vf fred.txt *.output* *.exe
