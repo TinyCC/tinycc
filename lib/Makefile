@@ -6,7 +6,7 @@ TOP = ..
 include $(TOP)/Makefile
 VPATH = $(top_srcdir)/lib $(top_srcdir)/win32/lib
 
-ifndef TARGET
+ifndef TARGET # native library
  ifdef CONFIG_WIN64
   TARGET = x86_64-win32
  else
@@ -27,6 +27,7 @@ ifndef TARGET
  else
  ifeq ($(ARCH),arm)
   TARGET = arm
+  XCC = $(CC)
  endif
  endif
  endif
@@ -58,12 +59,14 @@ ifeq "$(TARGET)" "i386-win32"
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ PICFLAGS =
 else
 ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ PICFLAGS =
 else
 ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
@@ -104,7 +107,7 @@ $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%.o : %.S
-	$(CC) -c $< -o $@ $(XFLAGS)
+	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
 	$(CC) -o $@ $< $(XFLAGS) $(LDFLAGS)
 

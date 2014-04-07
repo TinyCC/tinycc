@@ -1,10 +1,10 @@
 TOP = ../..
 include $(TOP)/Makefile
-VPATH = $(top_srcdir)/tests/tests2
 
-TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
  TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
+else
+ TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include -lm
 endif
 
 ifeq ($(TARGETOS),Darwin)
@@ -94,7 +94,7 @@ endif
 	@if [ "x`echo $* | grep args`" != "x" ]; \
 	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output 2>&1; \
 	else $(TCC) -run $< >$*.output 2>&1; \
-	  ($(TCC) -o $*.exe $< -lm && ./$*.exe) >$*.output2 2>&1; \
+	  ($(TCC) -o $*.exe $< && ./$*.exe) >$*.output2 2>&1; \
 	fi || true
 	@if diff -bu $(<:.c=.expect) $*.output ; \
 	then rm -f $*.output; \
