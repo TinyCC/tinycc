@@ -1080,7 +1080,7 @@ are used when bound checking is activated
 
 @item stab_section
 @itemx stabstr_section
-are used when debugging is actived to store debug information
+are used when debugging is active to store debug information
 
 @item symtab_section
 @itemx strtab_section
