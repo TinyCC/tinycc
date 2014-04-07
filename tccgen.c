@@ -185,6 +185,8 @@ ST_FUNC Sym *sym_find2(Sym *s, int v)
     while (s) {
         if (s->v == v)
             return s;
+        else if (s->v == -1)
+            return NULL;
         s = s->prev;
     }
     return NULL;
