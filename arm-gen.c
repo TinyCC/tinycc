@@ -943,7 +943,7 @@ struct plan {
    Returns the amount of stack space needed for parameter passing
 
    Note: this function allocated an array in plan->pplans with tcc_malloc. It
-   is the responsability of the caller to free this array once used (ie not
+   is the responsibility of the caller to free this array once used (ie not
    before copy_params). */
 static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
 {
@@ -1860,7 +1860,7 @@ void gen_opf(int op)
 	  case TOK_UGE:
 	  case TOK_ULE:
 	  case TOK_UGT:
-            tcc_error("unsigned comparision on floats?");
+            tcc_error("unsigned comparison on floats?");
 	    break;
 	  case TOK_LT:
             op=TOK_Nset;

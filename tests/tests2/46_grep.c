@@ -29,10 +29,10 @@
 char    *documentation[] = {
    "grep searches a file for a given pattern.  Execute by",
    "   grep [flags] regular_expression file_list\n",
-   "Flags are single characters preceeded by '-':",
+   "Flags are single characters preceded by '-':",
    "   -c      Only a count of matching lines is printed",
    "   -f      Print file name for matching lines switch, see below",
-   "   -n      Each line is preceeded by its line number",
+   "   -n      Each line is preceded by its line number",
    "   -v      Only print non-matching lines\n",
    "The file_list is a list of files (wildcards are acceptable on RSX modes).",
    "\nThe file name is normally printed if there is a file given.",
@@ -54,10 +54,10 @@ char    *patdoc[] = {
    "':n'     \":n\" matches alphanumerics, \": \" matches spaces, tabs, and",
    "': '     other control characters, such as new-line.",
    "'*'    An expression followed by an asterisk matches zero or more",
-   "       occurrances of that expression: \"fo*\" matches \"f\", \"fo\"",
+   "       occurrences of that expression: \"fo*\" matches \"f\", \"fo\"",
    "       \"foo\", etc.",
    "'+'    An expression followed by a plus sign matches one or more",
-   "       occurrances of that expression: \"fo+\" matches \"fo\", etc.",
+   "       occurrences of that expression: \"fo+\" matches \"fo\", etc.",
    "'-'    An expression followed by a minus sign optionally matches",
    "       the expression.",
    "'[]'   A string enclosed in square brackets matches any character in",
@@ -153,7 +153,7 @@ void compile(char *source)
                o == STAR ||
                o == PLUS ||
                o == MINUS)
-            badpat("Illegal occurrance op.", source, s);
+            badpat("Illegal occurrence op.", source, s);
          store(ENDPAT);
          store(ENDPAT);
          spp = pp;               /* Save pattern end     */

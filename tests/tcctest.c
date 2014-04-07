@@ -2254,7 +2254,7 @@ void c99_vla_test(int size1, int size2)
     printf("%s\n", (sizeof tab1 == size1 * size2 * 2 * sizeof(int)) ? "PASSED" : "FAILED");
     tab1_ptr = tab1;
     tab2_ptr = tab2;
-    printf("Test C99 VLA 2 (ptrs substract): ");
+    printf("Test C99 VLA 2 (ptrs subtract): ");
     printf("%s\n", (tab2 - tab1 == (tab2_ptr - tab1_ptr) / (sizeof(int) * 2)) ? "PASSED" : "FAILED");
     printf("Test C99 VLA 3 (ptr add): ");
     printf("%s\n", &tab1[5][1] == (tab1_ptr + (5 * 2 + 1) * sizeof(int)) ? "PASSED" : "FAILED");

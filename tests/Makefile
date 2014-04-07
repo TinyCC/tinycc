@@ -158,7 +158,7 @@ btest: boundtest.c
 	@for i in $(BOUNDS_OK); do \
 	   echo ; echo --- boundtest $$i ---; \
 	   if $(TCC) -b -run $< $$i ; then \
-	       echo succeded as expected; \
+	       echo succeeded as expected; \
 	   else\
 	       echo Failed positive test $$i ; exit 1 ; \
 	   fi ;\
