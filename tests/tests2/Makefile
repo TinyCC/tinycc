@@ -79,7 +79,9 @@ TESTS =	\
  61_undefined_enum.test \
  62_enumerator_redefinition.test \
  63_local_enumerator_redefinition.test \
- 64_macro_nesting.test
+ 64_macro_nesting.test \
+ 65_macro_concat_start.test \
+ 66_macro_concat_end.test
 
 # 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
