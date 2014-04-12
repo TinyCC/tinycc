@@ -241,5 +241,5 @@ clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
 		*-cc *-tcc *.exe \
-		hello libtcc_test tcctest[1234] ex? tcc_g tcclib.h \
+		hello libtcc_test vla_test tcctest[1234] ex? tcc_g tcclib.h \
 		../lib/libtcc1.a

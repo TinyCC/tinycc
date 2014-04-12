@@ -42,6 +42,7 @@ tests/tests2/fred.txt
 tests/tests2/*.exe
 tests/hello
 tests/abitest-*cc
+tests/vla_test
 .gdb_history
 tcc.1
 tcc.pod
