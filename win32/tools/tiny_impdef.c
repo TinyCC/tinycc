@@ -226,7 +226,7 @@ found:
         for (l = 0;;) {
             if (n+1 >= n0)
                 p = tcc_realloc(p, n0 = n0 ? n0 * 2 : 256);
-            if (!read_mem(fd, ptr - ref + l, p + n, 1) || ++l >= 80) {
+            if (!read_mem(fd, ptr - ref + l++, p + n, 1)) {
                 tcc_free(p), p = NULL;
                 goto the_end;
             }
