@@ -528,7 +528,7 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
         /* XXX: only support linux */
 #if defined(__APPLE__)
         *paddr = uc->uc_mcontext->__ss.__rip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) 
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         *paddr = uc->uc_mcontext.mc_rip;
 #else
         *paddr = uc->uc_mcontext.gregs[REG_RIP];
@@ -537,7 +537,7 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     } else {
 #if defined(__APPLE__)
         fp = uc->uc_mcontext->__ss.__rbp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         fp = uc->uc_mcontext.mc_rbp;
 #else
         fp = uc->uc_mcontext.gregs[REG_RBP];
