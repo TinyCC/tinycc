@@ -84,11 +84,9 @@ TESTS =	\
  66_macro_concat_end.test \
  67_macro_concat.test
 
-# 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
-# 46_grep.test -- does not compile even with gcc
 
-SKIP = 34_array_assignment.test 46_grep.test
+SKIP = 34_array_assignment.test
 
 # some tests do not pass on all platforms, remove them for now
 ifeq ($(TARGETOS),Darwin)
@@ -102,6 +100,7 @@ endif
 # Some tests might need arguments
 ARGS =
 31_args.test : ARGS = arg1 arg2 arg3 arg4 arg5
+46_grep.test : ARGS = '[^* ]*[:a:d: ]+\:\*-/: $$' 46_grep.c
 
 all test: $(filter-out $(SKIP),$(TESTS))
 
