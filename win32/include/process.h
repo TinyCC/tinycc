@@ -153,20 +153,20 @@ extern "C" {
      stupid warnings, define them in POSIX way.  This is save, because those
      methods do not return in success case, so that the return value is not
      really dependent to its scalar width.  */
-  int __cdecl execv(const char *_Filename,char *const _ArgList[]);
-  int __cdecl execve(const char *_Filename,char *const _ArgList[],char *const _Env[]);
-  int __cdecl execvp(const char *_Filename,char *const _ArgList[]);
-  int __cdecl execvpe(const char *_Filename,char *const _ArgList[],char *const _Env[]);
+  int __cdecl execv(const char *_Filename,const char *const _ArgList[]);
+  int __cdecl execve(const char *_Filename,const char *const _ArgList[],const char *const _Env[]);
+  int __cdecl execvp(const char *_Filename,const char *const _ArgList[]);
+  int __cdecl execvpe(const char *_Filename,const char *const _ArgList[],const char *const _Env[]);
 #else
-  intptr_t __cdecl execv(const char *_Filename,char *const _ArgList[]);
-  intptr_t __cdecl execve(const char *_Filename,char *const _ArgList[],char *const _Env[]);
-  intptr_t __cdecl execvp(const char *_Filename,char *const _ArgList[]);
-  intptr_t __cdecl execvpe(const char *_Filename,char *const _ArgList[],char *const _Env[]);
+  intptr_t __cdecl execv(const char *_Filename,const char *const _ArgList[]);
+  intptr_t __cdecl execve(const char *_Filename,const char *const _ArgList[],const char *const _Env[]);
+  intptr_t __cdecl execvp(const char *_Filename,const char *const _ArgList[]);
+  intptr_t __cdecl execvpe(const char *_Filename,const char *const _ArgList[],const char *const _Env[]);
 #endif
-  intptr_t __cdecl spawnv(int,const char *_Filename,char *const _ArgList[]);
-  intptr_t __cdecl spawnve(int,const char *_Filename,char *const _ArgList[],char *const _Env[]);
-  intptr_t __cdecl spawnvp(int,const char *_Filename,char *const _ArgList[]);
-  intptr_t __cdecl spawnvpe(int,const char *_Filename,char *const _ArgList[],char *const _Env[]);
+  intptr_t __cdecl spawnv(int,const char *_Filename,const char *const _ArgList[]);
+  intptr_t __cdecl spawnve(int,const char *_Filename,const char *const _ArgList[],const char *const _Env[]);
+  intptr_t __cdecl spawnvp(int,const char *_Filename,const char *const _ArgList[]);
+  intptr_t __cdecl spawnvpe(int,const char *_Filename,const char *const _ArgList[],char *const _Env[]);
 #endif
 
 #ifdef __cplusplus
