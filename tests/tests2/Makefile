@@ -88,7 +88,7 @@ TESTS =	\
 # 34_array_assignment.test -- array assignment is not in C standard
 # 46_grep.test -- does not compile even with gcc
 
-SKIP = 30_hanoi.test 34_array_assignment.test 46_grep.test
+SKIP = 34_array_assignment.test 46_grep.test
 
 # some tests do not pass on all platforms, remove them for now
 ifeq ($(TARGETOS),Darwin)

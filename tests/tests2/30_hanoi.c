@@ -68,7 +68,7 @@ void PrintAll()
 /* Returns the value moved (not used.) */
 int Move(int *source, int *dest)
 {
-   int i,j;
+   int i = 0, j = 0;
 
    while (i<N && (source[i])==0) i++;
    while (j<N && (dest[j])==0) j++;
