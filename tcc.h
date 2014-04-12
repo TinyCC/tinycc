@@ -836,6 +836,7 @@ struct TCCState {
 /* <-- */
 
 #define TOK_TWOSHARPS 0xc0 /* ## preprocessing token */
+#define TOK_PLCHLDR  0xc1 /* placeholder token as defined in C99 */
 #define TOK_UMULL    0xc2 /* unsigned 32x32 -> 64 mul */
 #define TOK_ADDC1    0xc3 /* add with carry generation */
 #define TOK_ADDC2    0xc4 /* add with carry use */

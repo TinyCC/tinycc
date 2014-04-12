@@ -2565,7 +2565,8 @@ ST_FUNC void next_nomacro(void)
     } while (is_space(tok));
 }
  
-/* substitute args in macro_str and return allocated string */
+/* substitute arguments in replacement lists in macro_str by the values in
+   args (field d) and return allocated string */
 static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
 {
     int last_tok, t, spc;
@@ -2622,7 +2623,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                     if (gnu_ext && s->type.t &&
                         last_tok == TOK_TWOSHARPS && 
                         str.len >= 2 && str.str[str.len - 2] == ',') {
-                        if (*st == 0) {
+                        if (*st == TOK_PLCHLDR) {
                             /* suppress ',' '##' */
                             str.len -= 2;
                         } else {
@@ -2793,6 +2794,8 @@ static int macro_subst_tok(TokenString *tok_str,
                         tok_str_add2(&str, tok, &tokc);
                     next_nomacro_spc();
                 }
+                if (!str.len)
+                    tok_str_add(&str, TOK_PLCHLDR);
                 str.len -= spc;
                 tok_str_add(&str, 0);
                 sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
@@ -2885,9 +2888,11 @@ static inline int *macro_twosharps(const int *macro_str)
                 TOK_GET(&t, &ptr, &cval);
                 /* We concatenate the two tokens */
                 cstr_new(&cstr);
-                cstr_cat(&cstr, get_tok_str(tok, &tokc));
+                if (tok != TOK_PLCHLDR)
+                    cstr_cat(&cstr, get_tok_str(tok, &tokc));
                 n = cstr.size;
-                cstr_cat(&cstr, get_tok_str(t, &cval));
+                if (t != TOK_PLCHLDR || tok == TOK_PLCHLDR)
+                    cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
                 tcc_open_bf(tcc_state, ":paste:", cstr.size);
@@ -2904,8 +2909,35 @@ static inline int *macro_twosharps(const int *macro_str)
                 cstr_free(&cstr);
             }
         }
-        if (tok != TOK_NOSUBST) 
+        if (tok != TOK_NOSUBST) {
+            const int *oldptr;
+            CValue cval;
+
+            /* Check if a space need to be added after ## concatenation in
+               order to avoid misinterpreting the newly formed token
+               followed by the next token as being a single token (see
+               macro_concat test) */
+            cstr_new(&cstr);
+            cstr_cat(&cstr, get_tok_str(tok, &tokc));
+            oldptr = ptr;
+            TOK_GET(&t, &ptr, &cval);
+            ptr = oldptr;
+            cstr_cat(&cstr, get_tok_str(t, &cval));
+            cstr_ccat(&cstr, '\0');
+            t = tok;
+            cval = tokc;
+            tcc_open_bf(tcc_state, ":paste:", cstr.size);
+            memcpy(file->buffer, cstr.data, cstr.size);
+            next_nomacro1();
+            if (!*file->buf_ptr) {
+                tok_str_add2(&macro_str1, t, &cval);
+                tok = ' ';
+            }
+            tcc_close();
+            cstr_free(&cstr);
+
             start_of_nosubsts = -1;
+        }
         tok_str_add2(&macro_str1, tok, &tokc);
     }
     tok_str_add(&macro_str1, 0);
