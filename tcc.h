@@ -252,6 +252,8 @@
 #  else
 #   define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
 #  endif
+# elif defined __DragonFly__
+#  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld-elf.so.2"
 # elif defined __GNU__
 #  define CONFIG_TCC_ELFINTERP "/lib/ld.so"
 # elif defined(TCC_TARGET_X86_64)
