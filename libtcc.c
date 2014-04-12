@@ -121,7 +121,7 @@ void dlclose(void *p)
 #endif
 
 #ifdef LIBTCC_AS_DLL
-BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved)
+BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 {
     if (DLL_PROCESS_ATTACH == dwReason)
         tcc_module = hDll;
