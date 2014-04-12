@@ -486,10 +486,12 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     if (level == 0) {
 #if defined(__APPLE__)
         *paddr = uc->uc_mcontext->__ss.__eip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         *paddr = uc->uc_mcontext.mc_eip;
 #elif defined(__dietlibc__)
         *paddr = uc->uc_mcontext.eip;
+#elif defined(__NetBSD__)
+        *paddr = uc->uc_mcontext.__gregs[_REG_EIP];
 #else
         *paddr = uc->uc_mcontext.gregs[REG_EIP];
 #endif
@@ -497,10 +499,12 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     } else {
 #if defined(__APPLE__)
         fp = uc->uc_mcontext->__ss.__ebp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         fp = uc->uc_mcontext.mc_ebp;
 #elif defined(__dietlibc__)
         fp = uc->uc_mcontext.ebp;
+#elif defined(__NetBSD__)
+        fp = uc->uc_mcontext.__gregs[_REG_EBP];
 #else
         fp = uc->uc_mcontext.gregs[REG_EBP];
 #endif
@@ -530,6 +534,8 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
         *paddr = uc->uc_mcontext->__ss.__rip;
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         *paddr = uc->uc_mcontext.mc_rip;
+#elif defined(__NetBSD__)
+        *paddr = uc->uc_mcontext.__gregs[_REG_RIP];
 #else
         *paddr = uc->uc_mcontext.gregs[REG_RIP];
 #endif
@@ -539,6 +545,8 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
         fp = uc->uc_mcontext->__ss.__rbp;
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         fp = uc->uc_mcontext.mc_rbp;
+#elif defined(__NetBSD__)
+        fp = uc->uc_mcontext.__gregs[_REG_RBP];
 #else
         fp = uc->uc_mcontext.gregs[REG_RBP];
 #endif
