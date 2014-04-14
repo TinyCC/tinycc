@@ -1292,13 +1292,20 @@ ST_FUNC void build_got_entries(TCCState *s1)
             case R_X86_64_GOTTPOFF:
             case R_X86_64_GOTPCREL:
             case R_X86_64_PLT32:
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+		if (type == R_X86_64_PLT32 &&
+		    ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT)
+		  {
+		    rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
+		    break;
+		  }
+
                 if (!s1->got)
                     build_got(s1);
                 if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL ||
                     type == R_X86_64_PLT32) {
 		    unsigned long ofs;
-                    sym_index = ELFW(R_SYM)(rel->r_info);
-                    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                     /* look at the symbol got offset. If none, then add one */
                     if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL)
                         reloc_type = R_X86_64_GLOB_DAT;
