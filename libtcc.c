@@ -508,6 +508,9 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
             if (sym->type.t & VT_IMPORT)
                 other |= 4;
         }
+#else
+        if (! (sym->type.t & VT_STATIC))
+	    other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
 #endif
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
