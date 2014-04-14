@@ -314,7 +314,6 @@ static void apply_visibility(Sym *sym, CType *type)
     sym->type.t |= vis;
 
     if (sym->c > 0) {
-        int esym_type;
         ElfW(Sym) *esym;
         
         esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
