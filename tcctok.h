@@ -121,6 +121,8 @@
      DEF(TOK_DLLIMPORT, "dllimport")
      DEF(TOK_NORETURN1, "noreturn")
      DEF(TOK_NORETURN2, "__noreturn__")
+     DEF(TOK_VISIBILITY1, "visibility")
+     DEF(TOK_VISIBILITY2, "__visibility__")
      DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")
      DEF(TOK_builtin_constant_p, "__builtin_constant_p")
      DEF(TOK_builtin_frame_address, "__builtin_frame_address")

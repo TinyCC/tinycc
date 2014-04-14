@@ -375,7 +375,8 @@ struct Attribute {
         func_proto    : 1,
         mode          : 4,
         weak          : 1,
-        fill          : 10; // 10 bits left to fit well in union below
+        visibility    : 2,
+        fill          : 8; // 8 bits left to fit well in union below
 };
 
 /* GNUC attribute definition */
@@ -787,11 +788,18 @@ struct TCCState {
 #define VT_EXPORT  0x00008000  /* win32: data exported from dll */
 #define VT_WEAK    0x00010000  /* weak symbol */
 #define VT_TLS     0x00040000  /* thread-local storage */
+#define VT_VIS_SHIFT    19     /* shift for symbol visibility, overlapping
+				  bitfield values, because bitfields never
+				  have linkage and hence never have
+				  visibility.  */
+#define VT_VIS_SIZE      2     /* We have four visibilities.  */
+#define VT_VIS_MASK (((1 << VT_VIS_SIZE)-1) << VT_VIS_SHIFT)
 
 #define VT_STRUCT_SHIFT 19     /* shift for bitfield shift values (max: 32 - 2*6) */
 
+
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT | VT_WEAK)
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT | VT_WEAK | VT_VIS_MASK)
 #define VT_TYPE (~(VT_STORAGE))
 
 /* token values */

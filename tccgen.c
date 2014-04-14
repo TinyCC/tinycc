@@ -300,6 +300,29 @@ static void weaken_symbol(Sym *sym)
     }
 }
 
+static void apply_visibility(Sym *sym, CType *type)
+{
+    int vis = sym->type.t & VT_VIS_MASK;
+    int vis2 = type->t & VT_VIS_MASK;
+    if (vis == (STV_DEFAULT << VT_VIS_SHIFT))
+        vis = vis2;
+    else if (vis2 == (STV_DEFAULT << VT_VIS_SHIFT))
+        ;
+    else
+        vis = (vis < vis2) ? vis : vis2;
+    sym->type.t &= ~VT_VIS_MASK;
+    sym->type.t |= vis;
+
+    if (sym->c > 0) {
+        int esym_type;
+        ElfW(Sym) *esym;
+        
+        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+	vis >>= VT_VIS_SHIFT;
+        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1)) | vis;
+    }
+}
+
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void swap(int *p, int *q)
@@ -436,6 +459,13 @@ static Sym *external_sym(int v, CType *type, int r, char *asm_label)
         tcc_error("incompatible types for redefinition of '%s'", 
               get_tok_str(v, NULL));
     }
+    /* Merge some storage attributes.  */
+    if (type->t & VT_WEAK)
+        weaken_symbol(s);
+
+    if (type->t & VT_VIS_MASK)
+        apply_visibility(s, type);
+
     return s;
 }
 
@@ -2659,6 +2689,24 @@ static void parse_attribute(AttributeDef *ad)
                 expect("alias(\"target\")");
             ad->alias_target = /* save string as token, for later */
               tok_alloc((char*)tokc.cstr->data, tokc.cstr->size-1)->tok;
+            next();
+            skip(')');
+            break;
+	case TOK_VISIBILITY1:
+	case TOK_VISIBILITY2:
+            skip('(');
+            if (tok != TOK_STR)
+                expect("visibility(\"default|hidden|internal|protected\")");
+	    if (!strcmp (tokc.cstr->data, "default"))
+	        ad->a.visibility = STV_DEFAULT;
+	    else if (!strcmp (tokc.cstr->data, "hidden"))
+	        ad->a.visibility = STV_HIDDEN;
+	    else if (!strcmp (tokc.cstr->data, "internal"))
+	        ad->a.visibility = STV_INTERNAL;
+	    else if (!strcmp (tokc.cstr->data, "protected"))
+	        ad->a.visibility = STV_PROTECTED;
+	    else
+                expect("visibility(\"default|hidden|internal|protected\")");
             next();
             skip(')');
             break;
@@ -5656,6 +5704,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* patch symbol weakness */
         if (type->t & VT_WEAK)
             weaken_symbol(sym);
+	apply_visibility(sym, type);
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
@@ -5801,6 +5850,7 @@ static void gen_function(Sym *sym)
     /* patch symbol weakness (this definition overrules any prototype) */
     if (sym->type.t & VT_WEAK)
         weaken_symbol(sym);
+    apply_visibility(sym, &sym->type);
     if (tcc_state->do_debug) {
         put_stabn(N_FUN, 0, 0, ind - func_ind);
     }
@@ -5934,6 +5984,8 @@ static int decl0(int l, int is_for_loop_init)
             if (ad.a.func_export)
                 type.t |= VT_EXPORT;
 #endif
+	    type.t |= ad.a.visibility << VT_VIS_SHIFT;
+
             if (tok == '{') {
                 if (l == VT_LOCAL)
                     tcc_error("cannot use local functions");
@@ -5972,6 +6024,11 @@ static int decl0(int l, int is_for_loop_init)
                     /* use static from prototype */
                     if (sym->type.t & VT_STATIC)
                         type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+
+		    /* If the definition has no visibility use the
+		       one from prototype.  */
+		    if (! (type.t & VT_VIS_MASK))
+		        type.t |= sym->type.t & VT_VIS_MASK;
 
                     if (!is_compatible_types(&sym->type, &type)) {
                     func_error1:
@@ -6062,9 +6119,6 @@ static int decl0(int l, int is_for_loop_init)
                            arrays of null size are considered as
                            extern */
                         sym = external_sym(v, &type, r, asm_label);
-
-                        if (type.t & VT_WEAK)
-                            weaken_symbol(sym);
 
                         if (ad.alias_target) {
                             Section tsec;
