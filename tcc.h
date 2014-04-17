@@ -1392,6 +1392,10 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);
 #ifdef TCC_TARGET_X86_64
 ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 #endif
+/* symbol properties stored in Elf32_Sym->st_other */
+# define ST_PE_EXPORT 0x10
+# define ST_PE_IMPORT 0x20
+# define ST_PE_STDCALL 0x40
 #endif
 
 /* ------------ tccrun.c ----------------- */

@@ -363,7 +363,7 @@ struct pe_info {
 static const char *pe_export_name(TCCState *s1, ElfW(Sym) *sym)
 {
     const char *name = symtab_section->link->data + sym->st_name;
-    if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & 2))
+    if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & ST_PE_STDCALL))
         return name + 1;
     return name;
 }
@@ -378,7 +378,7 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
         s = pe_export_name(s1, sym);
         if (n) {
             /* second try: */
-	    if (sym->st_other & 2) {
+	    if (sym->st_other & ST_PE_STDCALL) {
                 /* try w/0 stdcall deco (windows API convention) */
 	        p = strrchr(s, '@');
 	        if (!p || s[0] != '_')
@@ -899,7 +899,7 @@ static void pe_build_exports(struct pe_info *pe)
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
         sym = (ElfW(Sym)*)symtab_section->data + sym_index;
         name = pe_export_name(pe->s1, sym);
-        if ((sym->st_other & 1)
+        if ((sym->st_other & ST_PE_EXPORT)
             /* export only symbols from actually written sections */
             && pe->s1->sections[sym->st_shndx]->sh_addr) {
             p = tcc_malloc(sizeof *p);
@@ -908,9 +908,9 @@ static void pe_build_exports(struct pe_info *pe)
             dynarray_add((void***)&sorted, &sym_count, p);
         }
 #if 0
-        if (sym->st_other & 1)
+        if (sym->st_other & ST_PE_EXPORT)
             printf("export: %s\n", name);
-        if (sym->st_other & 2)
+        if (sym->st_other & ST_PE_STDCALL)
             printf("stdcall: %s\n", name);
 #endif
     }
@@ -1282,7 +1282,7 @@ static int pe_check_symbols(struct pe_info *pe)
                 /* patch the original symbol */
                 sym->st_value = offset;
                 sym->st_shndx = text_section->sh_num;
-                sym->st_other &= ~1; /* do not export */
+                sym->st_other &= ~ST_PE_EXPORT; /* do not export */
                 continue;
             }
 
@@ -1301,7 +1301,7 @@ static int pe_check_symbols(struct pe_info *pe)
         } else if (pe->s1->rdynamic
                    && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
             /* if -rdynamic option, then export all non local symbols */
-            sym->st_other |= 1;
+            sym->st_other |= ST_PE_EXPORT;
         }
     }
     return ret;
@@ -1463,7 +1463,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-    if (!(esym->st_other & 4))
+    if (!(esym->st_other & ST_PE_IMPORT))
         return sv;
 
     // printf("import %04x %04x %04x %s\n", sv->type.t, sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));

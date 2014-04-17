@@ -491,22 +491,22 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
 
 #ifdef TCC_TARGET_PE
         if (sym->type.t & VT_EXPORT)
-            other |= 1;
+            other |= ST_PE_EXPORT;
         if (sym_type == STT_FUNC && sym->type.ref) {
             Sym *ref = sym->type.ref;
             if (ref->a.func_export)
-                other |= 1;
+                other |= ST_PE_EXPORT;
             if (ref->a.func_call == FUNC_STDCALL && can_add_underscore) {
                 sprintf(buf1, "_%s@%d", name, ref->a.func_args * PTR_SIZE);
                 name = buf1;
-                other |= 2;
+                other |= ST_PE_STDCALL;
                 can_add_underscore = 0;
             }
         } else {
             if (find_elf_sym(tcc_state->dynsymtab_section, name))
-                other |= 4;
+                other |= ST_PE_IMPORT;
             if (sym->type.t & VT_IMPORT)
-                other |= 4;
+                other |= ST_PE_IMPORT;
         }
 #else
         if (! (sym->type.t & VT_STATIC))
@@ -1316,8 +1316,6 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
        So it is handled here as if it were in a DLL. */
     pe_putimport(s, 0, name, (uintptr_t)val);
 #else
-    /* XXX: Same problem on linux but currently "solved" elsewhere
-       via the rather dirty 'runtime_plt_and_got' hack. */
     add_elf_sym(symtab_section, (uintptr_t)val, 0,
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
         SHN_ABS, name);
