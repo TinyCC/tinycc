@@ -981,7 +981,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
           return x86_64_mode_memory;
         
         mode = x86_64_mode_none;
-        for (; f; f = f->next)
+        for (f = f->next; f; f = f->next)
             mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type));
         
         return mode;

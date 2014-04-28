@@ -138,8 +138,6 @@ static int ret_longdouble_test_callback2(void *ptr) {
   ret_longdouble_test_type a = {10};
   ret_longdouble_test_type r;
   r = f(a);
-  printf("%Lf \n", a.x);
-  printf("%Lf \n", r.x);
   return ((r.x == a.x*5) && (f(a).x == a.x*5)) ? 0 : -1;
 }
 
