@@ -1272,7 +1272,7 @@ void gfunc_call(int nb_args)
                 g(0x00);
                 args_size += size;
             } else {
-                assert(mode == x86_64_mode_memory);
+                //assert(mode == x86_64_mode_memory);
 
                 /* allocate the necessary size on stack */
                 o(0x48);
