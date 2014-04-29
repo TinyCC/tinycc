@@ -363,7 +363,7 @@ struct pe_info {
 static const char *pe_export_name(TCCState *s1, ElfW(Sym) *sym)
 {
     const char *name = symtab_section->link->data + sym->st_name;
-    if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & 2))
+    if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & ST_PE_STDCALL))
         return name + 1;
     return name;
 }
@@ -378,7 +378,7 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
         s = pe_export_name(s1, sym);
         if (n) {
             /* second try: */
-	    if (sym->st_other & 2) {
+	    if (sym->st_other & ST_PE_STDCALL) {
                 /* try w/0 stdcall deco (windows API convention) */
 	        p = strrchr(s, '@');
 	        if (!p || s[0] != '_')
@@ -663,7 +663,7 @@ static int pe_write(struct pe_info *pe)
             }
         }
 
-        pstrcpy((char*)psh->Name, sizeof psh->Name, sh_name);
+        strncpy((char*)psh->Name, sh_name, sizeof psh->Name);
 
         psh->Characteristics = pe_sec_flags[si->cls];
         psh->VirtualAddress = addr;
@@ -819,27 +819,39 @@ static void pe_build_imports(struct pe_info *pe)
                 ElfW(Sym) *imp_sym = (ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index;
                 ElfW(Sym) *org_sym = (ElfW(Sym) *)symtab_section->data + iat_index;
                 const char *name = pe->s1->dynsymtab_section->link->data + imp_sym->st_name;
+                int ordinal;
 
                 org_sym->st_value = thk_ptr;
                 org_sym->st_shndx = pe->thunk->sh_num;
-                v = pe->thunk->data_offset + rva_base;
-                section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
-                put_elf_str(pe->thunk, name);
+
+                if (dllref)
+                    v = 0, ordinal = imp_sym->st_value; /* ordinal from pe_load_def */
+                else
+                    ordinal = 0, v = imp_sym->st_value; /* address from tcc_add_symbol() */
+
 #ifdef TCC_IS_NATIVE
                 if (pe->type == PE_RUN) {
-                    v = imp_sym->st_value;
                     if (dllref) {
                         if ( !dllref->handle )
                             dllref->handle = LoadLibrary(dllref->name);
-                        v = (ADDR3264)GetProcAddress(dllref->handle, name);
+                        v = (ADDR3264)GetProcAddress(dllref->handle, ordinal?(LPCSTR)NULL+ordinal:name);
                     }
                     if (!v)
-                        tcc_error_noabort("undefined symbol '%s'", name);
-                }
+                        tcc_error_noabort("can't build symbol '%s'", name);
+                } else
 #endif
+                if (ordinal) {
+                    v = ordinal | (ADDR3264)1 << (sizeof(ADDR3264)*8 - 1);
+                } else {
+                    v = pe->thunk->data_offset + rva_base;
+                    section_ptr_add(pe->thunk, sizeof(WORD)); /* hint, not used */
+                    put_elf_str(pe->thunk, name);
+                }
+
             } else {
                 v = 0; /* last entry is zero */
             }
+
             *(ADDR3264*)(pe->thunk->data+thk_ptr) =
             *(ADDR3264*)(pe->thunk->data+ent_ptr) = v;
             thk_ptr += sizeof (ADDR3264);
@@ -887,7 +899,7 @@ static void pe_build_exports(struct pe_info *pe)
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
         sym = (ElfW(Sym)*)symtab_section->data + sym_index;
         name = pe_export_name(pe->s1, sym);
-        if ((sym->st_other & 1)
+        if ((sym->st_other & ST_PE_EXPORT)
             /* export only symbols from actually written sections */
             && pe->s1->sections[sym->st_shndx]->sh_addr) {
             p = tcc_malloc(sizeof *p);
@@ -896,9 +908,9 @@ static void pe_build_exports(struct pe_info *pe)
             dynarray_add((void***)&sorted, &sym_count, p);
         }
 #if 0
-        if (sym->st_other & 1)
+        if (sym->st_other & ST_PE_EXPORT)
             printf("export: %s\n", name);
-        if (sym->st_other & 2)
+        if (sym->st_other & ST_PE_STDCALL)
             printf("stdcall: %s\n", name);
 #endif
     }
@@ -1270,7 +1282,7 @@ static int pe_check_symbols(struct pe_info *pe)
                 /* patch the original symbol */
                 sym->st_value = offset;
                 sym->st_shndx = text_section->sh_num;
-                sym->st_other &= ~1; /* do not export */
+                sym->st_other &= ~ST_PE_EXPORT; /* do not export */
                 continue;
             }
 
@@ -1289,7 +1301,7 @@ static int pe_check_symbols(struct pe_info *pe)
         } else if (pe->s1->rdynamic
                    && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
             /* if -rdynamic option, then export all non local symbols */
-            sym->st_other |= 1;
+            sym->st_other |= ST_PE_EXPORT;
         }
     }
     return ret;
@@ -1451,7 +1463,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-    if (!(esym->st_other & 4))
+    if (!(esym->st_other & ST_PE_IMPORT))
         return sv;
 
     // printf("import %04x %04x %04x %s\n", sv->type.t, sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));
@@ -1571,30 +1583,20 @@ static char *trimback(char *a, char *e)
     return a;
 }
 
-static char *get_line(char *line, int size, int fd)
-{
-    int n;
-    for (n = 0; n < size - 1; )
-        if (read(fd, line + n, 1) < 1 || line[n++] == '\n')
-            break;
-    if (0 == n)
-        return NULL;
-    trimback(line, line + n);
-    return trimfront(line);
-}
-
 /* ------------------------------------------------------------- */
 static int pe_load_def(TCCState *s1, int fd)
 {
-    int state = 0, ret = -1, dllindex = 0;
-    char line[400], dllname[80], *p;
+    int state = 0, ret = -1, dllindex = 0, ord;
+    char line[400], dllname[80], *p, *x;
+    FILE *fp;
 
-    for (;;) {
-        p = get_line(line, sizeof line, fd);
-        if (NULL == p)
-            break;
+    fp = fdopen(dup(fd), "rb");
+    while (fgets(line, sizeof line, fp))
+    {
+        p = trimfront(trimback(line, strchr(line, 0)));
         if (0 == *p || ';' == *p)
             continue;
+
         switch (state) {
         case 0:
             if (0 != strnicmp(p, "LIBRARY", 7))
@@ -1612,14 +1614,27 @@ static int pe_load_def(TCCState *s1, int fd)
         case 2:
             dllindex = add_dllref(s1, dllname);
             ++state;
-
+            /* fall through */
         default:
-            pe_putimport(s1, dllindex, p, 0);
+            /* get ordinal and will store in sym->st_value */
+            ord = 0;
+            x = strchr(p, ' ');
+            if (x) {
+                *x = 0, x = strrchr(x + 1, '@');
+                if (x) {
+                    char *d;
+                    ord = (int)strtol(x + 1, &d, 10);
+                    if (*d)
+                        ord = 0;
+                }
+            }
+            pe_putimport(s1, dllindex, p, ord);
             continue;
         }
     }
     ret = 0;
 quit:
+    fclose(fp);
     return ret;
 }
 
@@ -1726,7 +1741,6 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
-    ADDR3264 addr = 0;
     int pe_type = 0;
 
     if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
@@ -1747,14 +1761,11 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         : PE_GUI == pe_type ? "__winstart" : "__start"
         ;
 
-    if (!s1->leading_underscore || strchr(start_symbol, '@')) {
+    if (!s1->leading_underscore || strchr(start_symbol, '@'))
         ++start_symbol;
-        if (start_symbol[0] != '_')
-            start_symbol = NULL;
-    }
 
     /* grab the startup code from libtcc1 */
-    if (start_symbol)
+    if (TCC_OUTPUT_MEMORY != s1->output_type || PE_GUI == pe_type)
         add_elf_sym(symtab_section,
             0, 0,
             ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
@@ -1776,21 +1787,16 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         }
     }
 
-    if (TCC_OUTPUT_MEMORY == s1->output_type)
+    if (TCC_OUTPUT_MEMORY == s1->output_type) {
         pe_type = PE_RUN;
-
-    if (start_symbol) {
-        addr = get_elf_sym_addr(s1, start_symbol, 1);
-        if (PE_RUN == pe_type && addr)
-            /* for -run GUI's, put '_runwinmain' instead of 'main' */
-            add_elf_sym(symtab_section,
-                    addr, 0,
-                    ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                    text_section->sh_num, "main");
+#ifdef TCC_IS_NATIVE
+        s1->runtime_main = start_symbol;
+#endif
+    } else {
+        pe->start_addr = (DWORD)(uintptr_t)tcc_get_symbol_err(s1, start_symbol);
     }
 
     pe->type = pe_type;
-    pe->start_addr = addr;
 }
 
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename)

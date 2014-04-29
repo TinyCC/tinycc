@@ -15,6 +15,7 @@
  * privileges were granted by DECUS.
  */
 #include <stdio.h>
+#include <stdlib.h>
 
 /*
  * grep
@@ -25,14 +26,13 @@
  * See below for more information.
  */
 
-#if 0
 char    *documentation[] = {
    "grep searches a file for a given pattern.  Execute by",
    "   grep [flags] regular_expression file_list\n",
-   "Flags are single characters preceeded by '-':",
+   "Flags are single characters preceded by '-':",
    "   -c      Only a count of matching lines is printed",
    "   -f      Print file name for matching lines switch, see below",
-   "   -n      Each line is preceeded by its line number",
+   "   -n      Each line is preceded by its line number",
    "   -v      Only print non-matching lines\n",
    "The file_list is a list of files (wildcards are acceptable on RSX modes).",
    "\nThe file name is normally printed if there is a file given.",
@@ -54,10 +54,10 @@ char    *patdoc[] = {
    "':n'     \":n\" matches alphanumerics, \": \" matches spaces, tabs, and",
    "': '     other control characters, such as new-line.",
    "'*'    An expression followed by an asterisk matches zero or more",
-   "       occurrances of that expression: \"fo*\" matches \"f\", \"fo\"",
+   "       occurrences of that expression: \"fo*\" matches \"f\", \"fo\"",
    "       \"foo\", etc.",
    "'+'    An expression followed by a plus sign matches one or more",
-   "       occurrances of that expression: \"fo+\" matches \"fo\", etc.",
+   "       occurrences of that expression: \"fo+\" matches \"fo\", etc.",
    "'-'    An expression followed by a minus sign optionally matches",
    "       the expression.",
    "'[]'   A string enclosed in square brackets matches any character in",
@@ -70,7 +70,6 @@ char    *patdoc[] = {
    "       [a-z] matches alphabetics, while [z-a] never matches.",
    "The concatenation of regular expressions is a regular expression.",
    0};
-#endif
 
 #define LMAX    512
 #define PMAX    256
@@ -97,6 +96,10 @@ char *pp, lbuf[LMAX], pbuf[PMAX];
 
 char *cclass();
 char *pmatch();
+void store(int);
+void error(char *);
+void badpat(char *, char *, char *);
+int match(void);
 
 
 /*** Display a file name *******************************/
@@ -153,7 +156,7 @@ void compile(char *source)
                o == STAR ||
                o == PLUS ||
                o == MINUS)
-            badpat("Illegal occurrance op.", source, s);
+            badpat("Illegal occurrence op.", source, s);
          store(ENDPAT);
          store(ENDPAT);
          spp = pp;               /* Save pattern end     */
@@ -300,7 +303,7 @@ void badpat(char *message, char *source, char *stop)
    /* char  *stop;          // Pattern end   */
 {
    fprintf(stderr, "-GREP-E-%s, pattern is\"%s\"\n", message, source);
-   fprintf(stderr, "-GREP-E-Stopped at byte %d, '%c'\n",
+   fprintf(stderr, "-GREP-E-Stopped at byte %ld, '%c'\n",
          stop-source, stop[-1]);
    error("?GREP-E-Bad pattern\n");
 }
@@ -338,7 +341,7 @@ void grep(FILE *fp, char *fn)
 }
 
 /*** Match line (lbuf) with pattern (pbuf) return 1 if match ***/
-void match()
+int match()
 {
    char   *l;        /* Line pointer       */
 
@@ -368,7 +371,7 @@ char *pmatch(char *line, char *pattern)
    p = pattern;
    while ((op = *p++) != ENDPAT) {
       if (debug > 1)
-         printf("byte[%d] = 0%o, '%c', op = 0%o\n",
+         printf("byte[%ld] = 0%o, '%c', op = 0%o\n",
                l-line, *l, *l, op);
       switch(op) {
 

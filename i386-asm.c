@@ -27,6 +27,7 @@
 
 #define TOK_ASM_first TOK_ASM_clc
 #define TOK_ASM_last TOK_ASM_emms
+#define TOK_ASM_alllast TOK_ASM_pxor
 
 #define OPC_JMP        0x01  /* jmp operand */
 #define OPC_B          0x02  /* only used with OPC_WL */
@@ -715,6 +716,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 g(b >> 8);
             g(b);
             return;
+        } else if (opcode <= TOK_ASM_alllast) {
+            tcc_error("bad operand with opcode '%s'",
+                  get_tok_str(opcode, NULL));
         } else {
             tcc_error("unknown opcode '%s'",
                   get_tok_str(opcode, NULL));
@@ -1378,7 +1382,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
     }
 }
 
-/* generate prolog and epilog code for asm statment */
+/* generate prolog and epilog code for asm statement */
 ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          int nb_outputs, int is_output,
                          uint8_t *clobber_regs,

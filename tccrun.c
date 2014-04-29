@@ -97,7 +97,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
 
-    prog_main = tcc_get_symbol_err(s1, "main");
+    prog_main = tcc_get_symbol_err(s1, s1->runtime_main);
 
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug) {
@@ -110,13 +110,30 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
+        void (*bound_new_region)(void *p, unsigned long size);
+        int  (*bound_delete_region)(void *p);
+        int i;
+
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = tcc_get_symbol_err(s1, "__bound_init");
         bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
+        bound_new_region = tcc_get_symbol_err(s1, "__bound_new_region");
+        bound_delete_region = tcc_get_symbol_err(s1, "__bound_delete_region");
         bound_init();
+        /* mark argv area as valid */
+        bound_new_region(argv, argc*sizeof(argv[0]));
+        for (i=0; i<argc; ++i)
+            bound_new_region(argv[i], strlen(argv[i]));
+
         ret = (*prog_main)(argc, argv);
+
+        /* unmark argv area */
+        for (i=0; i<argc; ++i)
+            bound_delete_region(argv[i]);
+        bound_delete_region(argv);
+
         bound_exit();
     } else
 #endif
@@ -163,14 +180,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     if (s1->nb_errors)
         return -1;
 
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-    s1->runtime_plt_and_got_offset = 0;
-    s1->runtime_plt_and_got = (char *)(mem + offset);
-    /* double the size of the buffer for got and plt entries
-       XXX: calculate exact size for them? */
-    offset *= 2;
-#endif
-
     if (0 == mem)
         return offset;
 
@@ -180,6 +189,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         if (s->reloc)
             relocate_section(s1, s);
     }
+    relocate_plt(s1);
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -197,11 +207,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
             set_pages_executable(ptr, length);
     }
 
-#ifdef TCC_HAS_RUNTIME_PLTGOT
-    set_pages_executable(s1->runtime_plt_and_got,
-                         s1->runtime_plt_and_got_offset);
-#endif
-
 #ifdef _WIN64
     win64_add_function_table(s1);
 #endif
@@ -217,6 +222,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
+    extern void __clear_cache(char *beginning, char *end);
 #ifndef PAGESIZE
 # define PAGESIZE 4096
 #endif
@@ -254,7 +260,7 @@ static addr_t rt_printline(addr_t wanted_pc, const char *msg)
     if (stab_section) {
         stab_len = stab_section->data_offset;
         stab_sym = (Stab_Sym *)stab_section->data;
-        stab_str = stabstr_section->data;
+        stab_str = (char *) stabstr_section->data;
     }
 
     func_name[0] = '\0';
@@ -347,7 +353,7 @@ no_stabs:
                 if (wanted_pc >= sym->st_value &&
                     wanted_pc < sym->st_value + sym->st_size) {
                     pstrcpy(last_func_name, sizeof(last_func_name),
-                            strtab_section->data + sym->st_name);
+                            (char *) strtab_section->data + sym->st_name);
                     func_addr = sym->st_value;
                     goto found;
                 }
@@ -480,10 +486,12 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     if (level == 0) {
 #if defined(__APPLE__)
         *paddr = uc->uc_mcontext->__ss.__eip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         *paddr = uc->uc_mcontext.mc_eip;
 #elif defined(__dietlibc__)
         *paddr = uc->uc_mcontext.eip;
+#elif defined(__NetBSD__)
+        *paddr = uc->uc_mcontext.__gregs[_REG_EIP];
 #else
         *paddr = uc->uc_mcontext.gregs[REG_EIP];
 #endif
@@ -491,10 +499,12 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     } else {
 #if defined(__APPLE__)
         fp = uc->uc_mcontext->__ss.__ebp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         fp = uc->uc_mcontext.mc_ebp;
 #elif defined(__dietlibc__)
         fp = uc->uc_mcontext.ebp;
+#elif defined(__NetBSD__)
+        fp = uc->uc_mcontext.__gregs[_REG_EBP];
 #else
         fp = uc->uc_mcontext.gregs[REG_EBP];
 #endif
@@ -522,8 +532,10 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
         /* XXX: only support linux */
 #if defined(__APPLE__)
         *paddr = uc->uc_mcontext->__ss.__rip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) 
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         *paddr = uc->uc_mcontext.mc_rip;
+#elif defined(__NetBSD__)
+        *paddr = uc->uc_mcontext.__gregs[_REG_RIP];
 #else
         *paddr = uc->uc_mcontext.gregs[REG_RIP];
 #endif
@@ -531,8 +543,10 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
     } else {
 #if defined(__APPLE__)
         fp = uc->uc_mcontext->__ss.__rbp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         fp = uc->uc_mcontext.mc_rbp;
+#elif defined(__NetBSD__)
+        fp = uc->uc_mcontext.__gregs[_REG_RBP];
 #else
         fp = uc->uc_mcontext.gregs[REG_RBP];
 #endif

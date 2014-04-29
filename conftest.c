@@ -37,6 +37,10 @@
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_OS "-" TRIPLET_ABI
 #endif
 
+#if defined(_WIN32)
+int _CRT_glob = 0;
+#endif
+
 int main(int argc, char *argv[])
 {
     switch(argc == 2 ? argv[1][0] : 0) {

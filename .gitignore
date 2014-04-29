@@ -36,10 +36,13 @@ p2.c
 tcctest[1234]
 test[1234].out
 tests/tcclib.h
-tests/tcctest.gcc
+tests/tcctest.cc
 tests/weaktest.*.o.txt
 tests/tests2/fred.txt
+tests/tests2/*.exe
 tests/hello
+tests/abitest-*cc
+tests/vla_test
 .gdb_history
 tcc.1
 tcc.pod
@@ -53,6 +56,7 @@ lib/x86_64
 lib/i386
 lib/x86_64-win32
 lib/i386-win32
+lib/arm
 tcc-doc.info
 conftest*
 tiny_libmaker

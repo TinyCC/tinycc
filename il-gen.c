@@ -441,6 +441,7 @@ void gfunc_prolog(int t)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->t;
+    func_var = (sym->c == FUNC_ELLIPSIS);
     if ((func_vt & VT_BTYPE) == VT_STRUCT) {
         func_vc = addr;
         addr++;
@@ -515,7 +516,7 @@ int gtst(int inv, int t)
             break;
         }
         t = out_opj(c, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
+    } else { /* VT_JMP || VT_JMPI */
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
@@ -527,19 +528,6 @@ int gtst(int inv, int t)
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
-        }
-    } else {
-        if (is_float(vtop->t)) {
-            vpushi(0);
-            gen_op(TOK_NE);
-        }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_FORWARD)) == VT_CONST) {
-            /* constant jmp optimization */
-            if ((vtop->c.i != 0) != inv) 
-                t = gjmp(t);
-        } else {
-            v = gv(RC_INT);
-            t = out_opj(IL_OP_BRTRUE - inv, t);
         }
     }
     vtop--;

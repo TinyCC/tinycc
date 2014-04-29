@@ -18,6 +18,12 @@
     system PATH.
 
 
+    Include and library search paths
+    --------------------------------
+    On windows,  the standard "include" and "lib" directories are searched
+    relatively from the location of the executables (tcc.exe, libtcc.dll).
+
+
     Examples:
     ---------
     Open a console window (DOS box) and 'cd' to the examples directory.

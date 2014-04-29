@@ -88,7 +88,7 @@ static int ret_2float_test_callback(void *ptr) {
   ret_2float_test_type a = {10, 35};
   ret_2float_test_type r;
   r = f(a);
-  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+  return ((r.x == a.x*5) && (r.y == a.y*3) && (f(a).x == a.x*5) && (f(a).y == a.y*3)) ? 0 : -1;
 }
 
 static int ret_2float_test(void) {
@@ -116,7 +116,7 @@ static int ret_2double_test_callback(void *ptr) {
   ret_2double_test_type a = {10, 35};
   ret_2double_test_type r;
   r = f(a);
-  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+  return ((r.x == a.x*5) && (r.y == a.y*3) && (f(a).x == a.x*5) && (f(a).y == a.y*3)) ? 0 : -1;
 }
 
 static int ret_2double_test(void) {
@@ -128,6 +128,50 @@ static int ret_2double_test(void) {
   "}\n";
 
   return run_callback(src, ret_2double_test_callback);
+}
+
+typedef struct ret_longdouble_test_type_s2 {LONG_DOUBLE x;} ret_longdouble_test_type;
+typedef ret_longdouble_test_type (*ret_longdouble_test_function_type) (ret_longdouble_test_type);
+
+static int ret_longdouble_test_callback2(void *ptr) {
+  ret_longdouble_test_function_type f = (ret_longdouble_test_function_type)ptr;
+  ret_longdouble_test_type a = {10};
+  ret_longdouble_test_type r;
+  r = f(a);
+  return ((r.x == a.x*5) && (f(a).x == a.x*5)) ? 0 : -1;
+}
+
+static int ret_longdouble_test2(void) {
+  const char *src =
+  "typedef struct ret_longdouble_test_type_s2 {long double x;} ret_longdouble_test_type;"
+  "ret_longdouble_test_type f(ret_longdouble_test_type a) {\n"
+  "  ret_longdouble_test_type r = {a.x*5};\n"
+  "  return r;\n"
+  "}\n";
+
+  return run_callback(src, ret_longdouble_test_callback2);
+}
+
+typedef struct ret_longlong_test_type_s2 {int x[4];} ret_longlong_test_type;
+typedef ret_longlong_test_type (*ret_longlong_test_function_type) (ret_longlong_test_type);
+
+static int ret_longlong_test_callback2(void *ptr) {
+  ret_longlong_test_function_type f = (ret_longlong_test_function_type)ptr;
+  ret_longlong_test_type a = {{10,11,12,13}};
+  ret_longlong_test_type r;
+  r = f(a);
+  return ((r.x[2] == a.x[2]*5) && (f(a).x[2] == a.x[2]*5)) ? 0 : -1;
+}
+
+static int ret_longlong_test2(void) {
+  const char *src =
+  "typedef struct ret_longlong_test_type_s2 {int x[4];} ret_longlong_test_type;"
+  "ret_longlong_test_type f(ret_longlong_test_type a) {\n"
+  "  ret_longlong_test_type r = {.x[2] = a.x[2]*5};\n"
+  "  return r;\n"
+  "}\n";
+
+  return run_callback(src, ret_longlong_test_callback2);
 }
 
 /*
@@ -142,7 +186,7 @@ static int reg_pack_test_callback(void *ptr) {
   reg_pack_test_type a = {10, 35};
   reg_pack_test_type r;
   r = f(a);
-  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+  return ((r.x == a.x*5) && (r.y == a.y*3) && (f(a).x == a.x*5) && (f(a).y == a.y*3)) ? 0 : -1;
 }
 
 static int reg_pack_test(void) {
@@ -168,7 +212,7 @@ static int reg_pack_longlong_test_callback(void *ptr) {
   reg_pack_longlong_test_type a = {10, 35};
   reg_pack_longlong_test_type r;
   r = f(a);
-  return ((r.x == a.x*5) && (r.y == a.y*3)) ? 0 : -1;
+  return ((r.x == a.x*5) && (r.y == a.y*3) && (f(a).x == a.x*5) && (f(a).y == a.y*3)) ? 0 : -1;
 }
 
 static int reg_pack_longlong_test(void) {
@@ -248,7 +292,7 @@ static int two_member_union_test_callback(void *ptr) {
   two_member_union_test_type a, b;
   a.x = 34;
   b = f(a);
-  return (b.x == a.x*2) ? 0 : -1;
+  return ((b.x == a.x*2) && (f(a).x == a.x*2)) ? 0 : -1;
 }
 
 static int two_member_union_test(void) {
@@ -339,8 +383,8 @@ static int stdarg_test(void) {
   "#include <stdarg.h>\n"
   "typedef struct {long long a, b, c;} stdarg_test_struct_type;\n"
   "void f(int n_int, int n_float, int n_struct, ...) {\n"
-  "  int i, ti;\n"
-  "  double td;\n"
+  "  int i, ti = 0;\n"
+  "  double td = 0.0;\n"
   "  stdarg_test_struct_type ts = {0,0,0}, tmp;\n"
   "  va_list ap;\n"
   "  va_start(ap, n_struct);\n"
@@ -441,6 +485,8 @@ int main(int argc, char **argv) {
   RUN_TEST(ret_longdouble_test);
   RUN_TEST(ret_2float_test);
   RUN_TEST(ret_2double_test);
+  RUN_TEST(ret_longlong_test2);
+  RUN_TEST(ret_longdouble_test2);
   RUN_TEST(reg_pack_test);
   RUN_TEST(reg_pack_longlong_test);
   RUN_TEST(sret_test);

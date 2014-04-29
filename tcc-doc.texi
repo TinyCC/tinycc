@@ -176,6 +176,9 @@ In a script, it gives the following header:
 #!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
 @end example
 
+@item -mfloat-abi (ARM only)
+Select the float ABI. Possible values: @code{softfp} and @code{hard}
+
 @item -dumpversion
 Print only the compiler version and nothing else.
 
@@ -217,7 +220,7 @@ Undefine preprocessor symbol @samp{sym}.
 
 Compilation flags:
 
-Note: each of the following warning options has a negative form beginning with
+Note: each of the following options has a negative form beginning with
 @option{-fno-}.
 
 @table @option
@@ -338,7 +341,7 @@ Generate additional support code to check
 memory allocations and array/pointer bounds. @option{-g} is implied. Note
 that the generated code is slower and bigger in this case.
 
-Note: @option{-b} is only available on i386 for the moment.
+Note: @option{-b} is only available on i386 when using libtcc for the moment.
 
 @item -bt N
 Display N callers in stack traces. This is useful with @option{-g} or
@@ -967,7 +970,7 @@ be the best solution.
 #define VT_BITFIELD   0x0040  /* bitfield modifier */
 #define VT_CONSTANT   0x0800  /* const modifier */
 #define VT_VOLATILE   0x1000  /* volatile modifier */
-#define VT_SIGNED     0x2000  /* signed type */
+#define VT_DEFSIGN    0x2000  /* signed type */
 
 #define VT_STRUCT_SHIFT 18   /* structure/enum name shift (14 bits left) */
 @end example
@@ -1077,7 +1080,7 @@ are used when bound checking is activated
 
 @item stab_section
 @itemx stabstr_section
-are used when debugging is actived to store debug information
+are used when debugging is active to store debug information
 
 @item symtab_section
 @itemx strtab_section

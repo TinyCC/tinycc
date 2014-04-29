@@ -1,10 +1,10 @@
 TOP = ../..
 include $(TOP)/Makefile
-VPATH = $(top_srcdir)/tests/tests2
 
-TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include
 ifdef CONFIG_WIN32
  TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
+else
+ TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include -lm
 endif
 
 ifeq ($(TARGETOS),Darwin)
@@ -46,9 +46,11 @@ TESTS =	\
  27_sizeof.test \
  28_strings.test \
  29_array_address.test \
+ 30_hanoi.test \
  31_args.test \
  32_led.test \
  33_ternary_op.test \
+ 34_array_assignment.test \
  35_sizeof.test \
  36_array_initialisers.test \
  37_sprintf.test \
@@ -60,6 +62,7 @@ TESTS =	\
  43_void_param.test \
  44_scoped_declarations.test \
  45_empty_for.test \
+ 46_grep.test \
  47_switch_return.test \
  48_nested_break.test \
  49_bracket_evaluation.test \
@@ -67,35 +70,48 @@ TESTS =	\
  51_static.test \
  52_unnamed_enum.test \
  54_goto.test \
- 55_lshift_type.test
+ 55_lshift_type.test \
+ 56_btype_excess-1.test \
+ 57_btype_excess-2.test \
+ 58_function_redefinition.test \
+ 59_function_array.test \
+ 60_enum_redefinition.test \
+ 61_undefined_enum.test \
+ 62_enumerator_redefinition.test \
+ 63_local_enumerator_redefinition.test \
+ 64_macro_nesting.test \
+ 65_macro_concat_start.test \
+ 66_macro_concat_end.test \
+ 67_macro_concat.test
 
-# 30_hanoi.test -- seg fault in the code, gcc as well
 # 34_array_assignment.test -- array assignment is not in C standard
-# 46_grep.test -- does not compile even with gcc
+
+SKIP = 34_array_assignment.test
 
 # some tests do not pass on all platforms, remove them for now
 ifeq ($(TARGETOS),Darwin)
-  TESTS := $(filter-out 40_stdio.test,$(TESTS))
+ SKIP += 40_stdio.test
 endif
 ifdef CONFIG_WIN32
-  TESTS := $(filter-out 24_math_library.test 28_strings.test,$(TESTS))
+ SKIP += 24_math_library.test # don't have round()
+ SKIP += 28_strings.test # don't have r/index() / strings.h
 endif
+
+# Some tests might need arguments
+ARGS =
+31_args.test : ARGS = arg1 arg2 arg3 arg4 arg5
+46_grep.test : ARGS = '[^* ]*[:a:d: ]+\:\*-/: $$' 46_grep.c
+
+all test: $(filter-out $(SKIP),$(TESTS))
 
 %.test: %.c %.expect
 	@echo Test: $*...
-	@if [ "x`echo $* | grep args`" != "x" ]; \
-	then $(TCC) $< -norunsrc -run $(notdir $<) - arg1 arg2 arg3 arg4 >$*.output; \
-	else $(TCC) -run $< >$*.output; \
-	fi
-	@if diff -bu $(<:.c=.expect) $*.output ; \
-	then rm -f $*.output; \
-	else exit 1; \
-	fi
 
-all test: $(TESTS)
+	@$(TCC) -run $< $(ARGS) >$*.output 2>&1 || true
+	@diff -bu $*.expect $*.output && rm -f $*.output
+
+	@($(TCC) $< -o $*.exe && ./$*.exe $(ARGS)) >$*.output2 2>&1 || true
+	@diff -bu $*.expect $*.output2 && rm -f $*.output2 $*.exe
 
 clean:
-	rm -vf fred.txt *.output
-
-Makefile: $(top_srcdir)/tests/tests2/Makefile
-	cp $< $@
+	rm -vf fred.txt *.output* *.exe

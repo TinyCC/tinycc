@@ -338,6 +338,15 @@ static void gadd_sp(int val)
     }
 }
 
+static void gen_static_call(int v)
+{
+    Sym *sym;
+
+    sym = external_global_sym(v, &func_old_type, 0);
+    oad(0xe8, -4);
+    greloc(cur_text_section, sym, ind-4, R_386_PC32);
+}
+
 /* 'is_jmp' is '1' if it is a jump */
 static void gcall_or_jmp(int is_jmp)
 {
@@ -365,8 +374,9 @@ static void gcall_or_jmp(int is_jmp)
 static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
 static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
 {
 #ifdef TCC_TARGET_PE
     int size, align;
@@ -374,19 +384,19 @@ ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
     *ret_align = 1; // Never have to re-align return values for x86
     size = type_size(vt, &align);
     if (size > 8) {
-        return 1;
+        return 0;
     } else if (size > 4) {
         ret->ref = NULL;
         ret->t = VT_LLONG;
-        return 0;
+        return 1;
     } else {
         ret->ref = NULL;
         ret->t = VT_INT;
-        return 0;
+        return 1;
     }
 #else
     *ret_align = 1; // Never have to re-align return values for x86
-    return 1;
+    return 0;
 #endif
 }
 
@@ -447,7 +457,7 @@ ST_FUNC void gfunc_call(int nb_args)
     }
     save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
-    func_call = FUNC_CALL(func_sym->r);
+    func_call = func_sym->a.func_call;
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
         func_call == FUNC_FASTCALLW) {
@@ -495,7 +505,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     CType *type;
 
     sym = func_type->ref;
-    func_call = FUNC_CALL(sym->r);
+    func_call = sym->a.func_call;
     addr = 8;
     loc = 0;
     func_vc = 0;
@@ -517,6 +527,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+    func_var = (sym->c == FUNC_ELLIPSIS);
 #ifdef TCC_TARGET_PE
     size = type_size(&func_vt,&align);
     if (((func_vt.t & VT_BTYPE) == VT_STRUCT) && (size > 8)) {
@@ -582,7 +593,7 @@ ST_FUNC void gfunc_epilog(void)
      && func_bound_offset != lbounds_section->data_offset) {
         int saved_ind;
         int *bounds_ptr;
-        Sym *sym, *sym_data;
+        Sym *sym_data;
         /* add end of table info */
         bounds_ptr = section_ptr_add(lbounds_section, sizeof(int));
         *bounds_ptr = 0;
@@ -594,20 +605,16 @@ ST_FUNC void gfunc_epilog(void)
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_new, &func_old_type, 0);
-        greloc(cur_text_section, sym, 
-               ind + 1, R_386_PC32);
-        oad(0xe8, -4);
+        gen_static_call(TOK___bound_local_new);
+
         ind = saved_ind;
         /* generate bound check local freeing */
         o(0x5250); /* save returned value, if any */
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
         oad(0xb8, 0); /* mov %eax, xxx */
-        sym = external_global_sym(TOK___bound_local_delete, &func_old_type, 0);
-        greloc(cur_text_section, sym, 
-               ind + 1, R_386_PC32);
-        oad(0xe8, -4);
+        gen_static_call(TOK___bound_local_delete);
+
         o(0x585a); /* restore returned value, if any */
     }
 #endif
@@ -626,10 +633,8 @@ ST_FUNC void gfunc_epilog(void)
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
 #ifdef TCC_TARGET_PE
     if (v >= 4096) {
-        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
-        oad(0xe8, -4); /* call __chkstk, (does the stackframe too) */
-        greloc(cur_text_section, sym, ind-4, R_386_PC32);
+        gen_static_call(TOK___chkstk); /* call __chkstk, (does the stackframe too) */
     } else
 #endif
     {
@@ -672,7 +677,7 @@ ST_FUNC int gtst(int inv, int t)
         /* fast case : can jump directly since flags are set */
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
+    } else { /* VT_JMP || VT_JMPI */
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
@@ -684,23 +689,6 @@ ST_FUNC int gtst(int inv, int t)
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
-        }
-    } else {
-        if (is_float(vtop->type.t) || 
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
-            vpushi(0);
-            gen_op(TOK_NE);
-        }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            /* constant jmp optimization */
-            if ((vtop->c.i != 0) != inv) 
-                t = gjmp(t);
-        } else {
-            v = gv(RC_INT);
-            o(0x85);
-            o(0xc0 + v * 9);
-            g(0x0f);
-            t = psym(0x85 ^ inv, t);
         }
     }
     vtop--;
@@ -885,7 +873,10 @@ ST_FUNC void gen_opf(int op)
             swapped = 0;
         if (swapped)
             o(0xc9d9); /* fxch %st(1) */
-        o(0xe9da); /* fucompp */
+        if (op == TOK_EQ || op == TOK_NE)
+            o(0xe9da); /* fucompp */
+        else
+            o(0xd9de); /* fcompp */
         o(0xe0df); /* fnstsw %ax */
         if (op == TOK_EQ) {
             o(0x45e480); /* and $0x45, %ah */
@@ -989,55 +980,20 @@ ST_FUNC void gen_cvt_itof(int t)
 }
 
 /* convert fp to int 't' type */
-/* XXX: handle long long case */
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    int r, r2, size;
-    Sym *sym;
-    CType ushort_type;
-
-    ushort_type.t = VT_SHORT | VT_UNSIGNED;
-    ushort_type.ref = 0;
-
-    gv(RC_FLOAT);
-    if (t != VT_INT)
-        size = 8;
-    else 
-        size = 4;
-    
-    o(0x2dd9); /* ldcw xxx */
-    sym = external_global_sym(TOK___tcc_int_fpu_control, 
-                              &ushort_type, VT_LVAL);
-    greloc(cur_text_section, sym, 
-           ind, R_386_32);
-    gen_le32(0);
-    
-    oad(0xec81, size); /* sub $xxx, %esp */
-    if (size == 4)
-        o(0x1cdb); /* fistpl */
+    int bt = vtop->type.t & VT_BTYPE;
+    if (bt == VT_FLOAT)
+        vpush_global_sym(&func_old_type, TOK___fixsfdi);
+    else if (bt == VT_LDOUBLE)
+        vpush_global_sym(&func_old_type, TOK___fixxfdi);
     else
-        o(0x3cdf); /* fistpll */
-    o(0x24);
-    o(0x2dd9); /* ldcw xxx */
-    sym = external_global_sym(TOK___tcc_fpu_control, 
-                              &ushort_type, VT_LVAL);
-    greloc(cur_text_section, sym, 
-           ind, R_386_32);
-    gen_le32(0);
-
-    r = get_reg(RC_INT);
-    o(0x58 + r); /* pop r */
-    if (size == 8) {
-        if (t == VT_LLONG) {
-            vtop->r = r; /* mark reg as used */
-            r2 = get_reg(RC_INT);
-            o(0x58 + r2); /* pop r2 */
-            vtop->r2 = r2;
-        } else {
-            o(0x04c483); /* add $4, %esp */
-        }
-    }
-    vtop->r = r;
+        vpush_global_sym(&func_old_type, TOK___fixdfdi);
+    vswap();
+    gfunc_call(1);
+    vpushi(0);
+    vtop->r = REG_IRET;
+    vtop->r2 = REG_LRET;
 }
 
 /* convert from one floating point type to another */
@@ -1060,18 +1016,13 @@ ST_FUNC void ggoto(void)
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
-    Sym *sym;
-
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     /* save all temporary registers */
     vtop -= 2;
     save_regs(0);
     /* do a fast function call */
-    sym = external_global_sym(TOK___bound_ptr_add, &func_old_type, 0);
-    greloc(cur_text_section, sym, 
-           ind + 1, R_386_PC32);
-    oad(0xe8, -4);
+    gen_static_call(TOK___bound_ptr_add);
     /* returned pointer is in eax */
     vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;

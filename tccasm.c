@@ -232,7 +232,7 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
                 } else {
                     goto cannot_relocate;
                 }
-                pe->sym = NULL; /* same symbols can be substracted to NULL */
+                pe->sym = NULL; /* same symbols can be subtracted to NULL */
             } else {
             cannot_relocate:
                 tcc_error("invalid operation with label");
@@ -483,6 +483,7 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASM_globl:
     case TOK_ASM_global:
     case TOK_ASM_weak:
+    case TOK_ASM_hidden:
     tok1 = tok;
 	do { 
             Sym *sym;
@@ -493,9 +494,12 @@ static void asm_parse_directive(TCCState *s1)
                 sym = label_push(&s1->asm_labels, tok, 0);
                 sym->type.t = VT_VOID;
             }
-            sym->type.t &= ~VT_STATIC;
+	    if (tok1 != TOK_ASM_hidden)
+                sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASM_weak)
                 sym->type.t |= VT_WEAK;
+	    else if (tok1 == TOK_ASM_hidden)
+	        sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
             next();
 	} while (tok == ',');
 	break;
@@ -588,12 +592,12 @@ static void asm_parse_directive(TCCState *s1)
                 tcc_error("label not found: %s", get_tok_str(tok, NULL));
             }
 
-            next();
-            skip(',');
             /* XXX .size name,label2-label1 */
             if (s1->warn_unsupported)
                 tcc_warning("ignoring .size %s,*", get_tok_str(tok, NULL));
 
+            next();
+            skip(',');
             while (tok != '\n' && tok != CH_EOF) {
                 next();
             }
@@ -622,7 +626,7 @@ static void asm_parse_directive(TCCState *s1)
             }
 
             if (!strcmp(newtype, "function") || !strcmp(newtype, "STT_FUNC")) {
-                sym->type.t = VT_FUNC;
+                sym->type.t = (sym->type.t & ~VT_BTYPE) | VT_FUNC;
             }
             else if (s1->warn_unsupported)
                 tcc_warning("change type of '%s' from 0x%x to '%s' ignored", 

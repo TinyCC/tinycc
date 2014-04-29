@@ -112,8 +112,8 @@ enum {
 #define R_JMP_SLOT  R_X86_64_JUMP_SLOT
 #define R_COPY      R_X86_64_COPY
 
-#define ELF_START_ADDR 0x08048000
-#define ELF_PAGE_SIZE  0x1000
+#define ELF_START_ADDR 0x400000
+#define ELF_PAGE_SIZE  0x200000
 
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
@@ -238,13 +238,6 @@ static int is64_type(int t)
             (t & VT_BTYPE) == VT_FUNC ||
             (t & VT_BTYPE) == VT_LLONG);
 }
-
-static int is_sse_float(int t) {
-    int bt;
-    bt = t & VT_BTYPE;
-    return bt == VT_DOUBLE || bt == VT_FLOAT;
-}
-
 
 /* instruction + 4 bytes data. Return the address of the data */
 ST_FUNC int oad(int c, int s)
@@ -373,7 +366,7 @@ void load(int r, SValue *sv)
 #endif
 
     fr = sv->r;
-    ft = sv->type.t;
+    ft = sv->type.t & ~VT_DEFSIGN;
     fc = sv->c.ul;
 
 #ifndef TCC_TARGET_PE
@@ -508,7 +501,7 @@ void load(int r, SValue *sv)
                     o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
                 }
             } else if (r == TREG_ST0) {
-                assert((v >= TREG_XMM0) || (v <= TREG_XMM7));
+                assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
                 /* gen_cvt_ftof(VT_LDOUBLE); */
                 /* movsd %xmmN,-0x10(%rsp) */
                 o(0x110ff2);
@@ -611,7 +604,7 @@ static void gcall_or_jmp(int is_jmp)
         if (vtop->r & VT_SYM) {
             /* relocation case */
             greloc(cur_text_section, vtop->sym,
-                   ind + 1, R_X86_64_PC32);
+                   ind + 1, R_X86_64_PLT32);
         } else {
             /* put an empty PC32 relocation */
             put_elf_reloc(symtab_section, cur_text_section,
@@ -663,28 +656,35 @@ void gen_offs_sp(int b, int r, int d)
     }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
-ST_FUNC int gfunc_sret(CType *vt, CType *ret, int *ret_align)
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
 {
     int size, align;
     *ret_align = 1; // Never have to re-align return values for x86-64
     size = type_size(vt, &align);
     ret->ref = NULL;
     if (size > 8) {
-        return 1;
+        return 0;
     } else if (size > 4) {
         ret->t = VT_LLONG;
-        return 0;
+        return 1;
     } else if (size > 2) {
         ret->t = VT_INT;
-        return 0;
+        return 1;
     } else if (size > 1) {
         ret->t = VT_SHORT;
-        return 0;
+        return 1;
     } else {
         ret->t = VT_BYTE;
-        return 0;
+        return 1;
     }
+}
+
+static int is_sse_float(int t) {
+    int bt;
+    bt = t & VT_BTYPE;
+    return bt == VT_DOUBLE || bt == VT_FLOAT;
 }
 
 int gfunc_arg_size(CType *type) {
@@ -833,6 +833,7 @@ void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
+    func_var = (sym->c == FUNC_ELLIPSIS);
     size = gfunc_arg_size(&func_vt);
     if (size > 8) {
         gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
@@ -932,7 +933,8 @@ typedef enum X86_64_Mode {
   x86_64_mode_x87
 } X86_64_Mode;
 
-static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b) {
+static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b)
+{
     if (a == b)
         return a;
     else if (a == x86_64_mode_none)
@@ -949,7 +951,8 @@ static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b) {
         return x86_64_mode_sse;
 }
 
-static X86_64_Mode classify_x86_64_inner(CType *ty) {
+static X86_64_Mode classify_x86_64_inner(CType *ty)
+{
     X86_64_Mode mode;
     Sym *f;
     
@@ -978,7 +981,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty) {
           return x86_64_mode_memory;
         
         mode = x86_64_mode_none;
-        for (; f; f = f->next)
+        for (f = f->next; f; f = f->next)
             mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type));
         
         return mode;
@@ -987,12 +990,14 @@ static X86_64_Mode classify_x86_64_inner(CType *ty) {
     assert(0);
 }
 
-static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count) {
+static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
+{
     X86_64_Mode mode;
-    int size, align, ret_t;
+    int size, align, ret_t = 0;
     
     if (ty->t & (VT_BITFIELD|VT_ARRAY)) {
         *psize = 8;
+        *palign = 8;
         *reg_count = 1;
         ret_t = ty->t;
         mode = x86_64_mode_integer;
@@ -1030,6 +1035,7 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
                 }
                 break;
+            default: break; /* nothing to be done for x86_64_mode_memory and x86_64_mode_none*/
             }
         }
     }
@@ -1042,7 +1048,8 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
     return mode;
 }
 
-ST_FUNC int classify_x86_64_va_arg(CType *ty) {
+ST_FUNC int classify_x86_64_va_arg(CType *ty)
+{
     /* This definition must be synced with stdarg.h */
     enum __va_arg_type {
         __va_gen_reg, __va_float_reg, __va_stack
@@ -1056,11 +1063,13 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty) {
     }
 }
 
-/* Return 1 if this function returns via an sret pointer, 0 otherwise */
-int gfunc_sret(CType *vt, CType *ret, int *ret_align) {
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
+{
     int size, align, reg_count;
     *ret_align = 1; // Never have to re-align return values for x86-64
-    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) == x86_64_mode_memory);
+    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);
 }
 
 #define REGN 6
@@ -1083,7 +1092,7 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, run_start, run_end, i, j, reg_count;
+    int size, align, r, args_size, stack_adjust, run_start, run_end, i, reg_count;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
@@ -1133,6 +1142,7 @@ void gfunc_call(int nb_args)
                 gen_reg -= reg_count;
                 if (gen_reg + reg_count > REGN) goto stack_arg;
                 break;
+	    default: break; /* nothing to be done for x86_64_mode_none */
             }
         }
         
@@ -1262,7 +1272,7 @@ void gfunc_call(int nb_args)
                 g(0x00);
                 args_size += size;
             } else {
-                assert(mode == x86_64_mode_memory);
+                //assert(mode == x86_64_mode_memory);
 
                 /* allocate the necessary size on stack */
                 o(0x48);
@@ -1366,7 +1376,7 @@ void gfunc_prolog(CType *func_type)
 {
     X86_64_Mode mode;
     int i, addr, align, size, reg_count;
-    int param_addr, reg_param_index, sse_param_index;
+    int param_addr = 0, reg_param_index, sse_param_index;
     Sym *sym;
     CType *type;
 
@@ -1499,6 +1509,7 @@ void gfunc_prolog(CType *func_type)
             }
             break;
         }
+	default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, param_addr);
@@ -1577,7 +1588,7 @@ int gtst(int inv, int t)
 	  }
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
+    } else { /* VT_JMP || VT_JMPI */
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
@@ -1589,23 +1600,6 @@ int gtst(int inv, int t)
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
-        }
-    } else {
-        if (is_float(vtop->type.t) ||
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
-            vpushi(0);
-            gen_op(TOK_NE);
-        }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            /* constant jmp optimization */
-            if ((vtop->c.i != 0) != inv)
-                t = gjmp(t);
-        } else {
-            v = gv(RC_INT);
-            orex(0,v,v,0x85);
-            o(0xc0 + REG_VALUE(v) * 9);
-            g(0x0f);
-            t = psym(0x85 ^ inv, t);
         }
     }
     vtop--;
@@ -1788,7 +1782,10 @@ void gen_opf(int op)
                 swapped = 0;
             if (swapped)
                 o(0xc9d9); /* fxch %st(1) */
-            o(0xe9da); /* fucompp */
+            if (op == TOK_EQ || op == TOK_NE)
+                o(0xe9da); /* fucompp */
+            else
+                o(0xd9de); /* fcompp */
             o(0xe0df); /* fnstsw %ax */
             if (op == TOK_EQ) {
                 o(0x45e480); /* and $0x45, %ah */
@@ -1872,8 +1869,11 @@ void gen_opf(int op)
             
             if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
                 o(0x66);
-            o(0x2e0f); /* ucomisd */
-            
+            if (op == TOK_EQ || op == TOK_NE)
+                o(0x2e0f); /* ucomisd */
+            else
+                o(0x2f0f); /* comisd */
+
             if (vtop->r & VT_LVAL) {
                 gen_modrm(vtop[-1].r, r, vtop->sym, fc);
             } else {

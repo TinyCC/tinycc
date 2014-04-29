@@ -666,6 +666,7 @@ extern "C" {
   extern long double __cdecl fmal (long double, long double, long double);
 
 
+#if 0 // gr: duplicate, see below
   /* 7.12.14 */
   /* 
   *  With these functions, comparisons involving quiet NaNs set the FP
@@ -708,6 +709,7 @@ extern "C" {
   & 0x4500) == 0x4500)
 
 #endif
+#endif //0
 
 
 #endif /* __STDC_VERSION__ >= 199901L */

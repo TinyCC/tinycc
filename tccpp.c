@@ -58,7 +58,6 @@ static const int *unget_saved_macro_ptr;
 static int unget_saved_buffer[TOK_MAX_SIZE + 1];
 static int unget_buffer_enabled;
 static TokenSym *hash_ident[TOK_HASH_SIZE];
-static char token_buf[STRING_MAX_SIZE + 1];
 /* true if isid(c) || isnum(c) */
 static unsigned char isidnum_table[256-CH_EOF];
 
@@ -70,8 +69,33 @@ static const char tcc_keywords[] =
 
 /* WARNING: the content of this string encodes token numbers */
 static const unsigned char tok_two_chars[] =
+/* outdated -- gr
     "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253"
     "-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
+*/{
+    '<','=', TOK_LE,
+    '>','=', TOK_GE,
+    '!','=', TOK_NE,
+    '&','&', TOK_LAND,
+    '|','|', TOK_LOR,
+    '+','+', TOK_INC,
+    '-','-', TOK_DEC,
+    '=','=', TOK_EQ,
+    '<','<', TOK_SHL,
+    '>','>', TOK_SAR,
+    '+','=', TOK_A_ADD,
+    '-','=', TOK_A_SUB,
+    '*','=', TOK_A_MUL,
+    '/','=', TOK_A_DIV,
+    '%','=', TOK_A_MOD,
+    '&','=', TOK_A_AND,
+    '^','=', TOK_A_XOR,
+    '|','=', TOK_A_OR,
+    '-','>', TOK_ARROW,
+    '.','.', 0xa8, // C++ token ?
+    '#','#', TOK_TWOSHARPS,
+    0
+};
 
 struct macro_level {
     struct macro_level *prev;
@@ -197,7 +221,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     int i;
 
     if (tok_ident >= SYM_FIRST_ANOM) 
-        tcc_error("memory full");
+        tcc_error("memory full (symbols)");
 
     /* expand token table if needed */
     i = tok_ident - TOK_IDENT;
@@ -264,6 +288,10 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
     cstr_buf.size_allocated = sizeof(buf);
     p = buf;
 
+/* just an explanation, should never happen:
+    if (v <= TOK_LINENUM && v >= TOK_CINT && cv == NULL)
+        tcc_error("internal error: get_tok_str"); */
+
     switch(v) {
     case TOK_CINT:
     case TOK_CUINT:
@@ -276,7 +304,7 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
 #ifdef _WIN32
         sprintf(p, "%u", (unsigned)cv->ull);
 #else
-        sprintf(p, "%Lu", cv->ull);
+        sprintf(p, "%llu", cv->ull);
 #endif
         break;
     case TOK_LCHAR:
@@ -311,6 +339,15 @@ ST_FUNC char *get_tok_str(int v, CValue *cv)
         cstr_ccat(&cstr_buf, '\"');
         cstr_ccat(&cstr_buf, '\0');
         break;
+
+    case TOK_CFLOAT:
+    case TOK_CDOUBLE:
+    case TOK_CLDOUBLE:
+    case TOK_LINENUM:
+        return NULL; /* should not happen */
+
+    /* above tokens have value, the ones below don't */
+
     case TOK_LT:
         v = '<';
         goto addv;
@@ -1175,9 +1212,9 @@ static void tok_print(int *str)
 ST_FUNC void parse_define(void)
 {
     Sym *s, *first, **ps;
-    int v, t, varg, is_vaargs, spc;
+    int v, t, varg, is_vaargs, spc, ptok, macro_list_start;
     TokenString str;
-    
+
     v = tok;
     if (v < TOK_IDENT)
         tcc_error("invalid macro name '%s'", get_tok_str(tok, &tokc));
@@ -1216,8 +1253,13 @@ ST_FUNC void parse_define(void)
     tok_str_new(&str);
     spc = 2;
     /* EOF testing necessary for '-D' handling */
+    ptok = 0;
+    macro_list_start = 1;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
-        /* remove spaces around ## and after '#' */        
+        if (!macro_list_start && spc == 2 && tok == TOK_TWOSHARPS)
+            tcc_error("'##' invalid at start of macro");
+        ptok = tok;
+        /* remove spaces around ## and after '#' */
         if (TOK_TWOSHARPS == tok) {
             if (1 == spc)
                 --str.len;
@@ -1230,7 +1272,10 @@ ST_FUNC void parse_define(void)
         tok_str_add2(&str, tok, &tokc);
     skip:
         next_nomacro_spc();
+        macro_list_start = 0;
     }
+    if (ptok == TOK_TWOSHARPS)
+        tcc_error("'##' invalid at end of macro");
     if (spc == 1)
         --str.len; /* remove trailing space */
     tok_str_add(&str, 0);
@@ -1247,7 +1292,7 @@ static inline int hash_cached_include(const char *filename)
     unsigned int h;
 
     h = TOK_HASH_INIT;
-    s = filename;
+    s = (unsigned char *) filename;
     while (*s) {
         h = TOK_HASH_FUNC(h, *s);
         s++;
@@ -1528,7 +1573,7 @@ include_done:
         c = (define_find(tok) != 0) ^ c;
     do_if:
         if (s1->ifdef_stack_ptr >= s1->ifdef_stack + IFDEF_STACK_SIZE)
-            tcc_error("memory full");
+            tcc_error("memory full (ifdef)");
         *s1->ifdef_stack_ptr++ = c;
         goto test_skip;
     case TOK_ELSE:
@@ -1744,261 +1789,156 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
         cstr_wccat(outstr, '\0');
 }
 
-/* we use 64 bit numbers */
-#define BN_SIZE 2
-
-/* bn = (bn << shift) | or_val */
-static void bn_lshift(unsigned int *bn, int shift, int or_val)
-{
-    int i;
-    unsigned int v;
-    for(i=0;i<BN_SIZE;i++) {
-        v = bn[i];
-        bn[i] = (v << shift) | or_val;
-        or_val = v >> (32 - shift);
-    }
-}
-
-static void bn_zero(unsigned int *bn)
-{
-    int i;
-    for(i=0;i<BN_SIZE;i++) {
-        bn[i] = 0;
-    }
-}
-
 /* parse number in null terminated string 'p' and return it in the
    current token */
 static void parse_number(const char *p)
 {
-    int b, t, shift, frac_bits, s, exp_val, ch;
-    char *q;
-    unsigned int bn[BN_SIZE];
-    double d;
+    int b, t, c;
 
-    /* number */
-    q = token_buf;
-    ch = *p++;
-    t = ch;
-    ch = *p++;
-    *q++ = t;
+    c = *p++;
+	t = *p++;
     b = 10;
-    if (t == '.') {
-        goto float_frac_parse;
-    } else if (t == '0') {
-        if (ch == 'x' || ch == 'X') {
-            q--;
-            ch = *p++;
+	if(c=='.'){
+		--p;
+		goto float_frac_parse;
+	}
+	if(c == '0'){
+		if (t == 'x' || t == 'X') {
             b = 16;
-        } else if (tcc_ext && (ch == 'b' || ch == 'B')) {
-            q--;
-            ch = *p++;
+			c = *p++;
+        } else if (tcc_ext && (t == 'b' || t == 'B')) {
             b = 2;
-        }
-    }
-    /* parse all digits. cannot check octal numbers at this stage
-       because of floating point constants */
-    while (1) {
-        if (ch >= 'a' && ch <= 'f')
-            t = ch - 'a' + 10;
-        else if (ch >= 'A' && ch <= 'F')
-            t = ch - 'A' + 10;
-        else if (isnum(ch))
-            t = ch - '0';
-        else
-            break;
-        if (t >= b)
-            break;
-        if (q >= token_buf + STRING_MAX_SIZE) {
-        num_too_long:
-            tcc_error("number too long");
-        }
-        *q++ = ch;
-        ch = *p++;
-    }
-    if (ch == '.' ||
-        ((ch == 'e' || ch == 'E') && b == 10) ||
-        ((ch == 'p' || ch == 'P') && (b == 16 || b == 2))) {
-        if (b != 10) {
-            /* NOTE: strtox should support that for hexa numbers, but
-               non ISOC99 libcs do not support it, so we prefer to do
-               it by hand */
-            /* hexadecimal or binary floats */
-            /* XXX: handle overflows */
-            *q = '\0';
-            if (b == 16)
-                shift = 4;
-            else 
-                shift = 2;
-            bn_zero(bn);
-            q = token_buf;
-            while (1) {
-                t = *q++;
-                if (t == '\0') {
-                    break;
-                } else if (t >= 'a') {
-                    t = t - 'a' + 10;
-                } else if (t >= 'A') {
-                    t = t - 'A' + 10;
-                } else {
-                    t = t - '0';
-                }
-                bn_lshift(bn, shift, t);
-            }
-            frac_bits = 0;
-            if (ch == '.') {
-                ch = *p++;
-                while (1) {
-                    t = ch;
-                    if (t >= 'a' && t <= 'f') {
-                        t = t - 'a' + 10;
-                    } else if (t >= 'A' && t <= 'F') {
-                        t = t - 'A' + 10;
-                    } else if (t >= '0' && t <= '9') {
-                        t = t - '0';
-                    } else {
-                        break;
-                    }
-                    if (t >= b)
-                        tcc_error("invalid digit");
-                    bn_lshift(bn, shift, t);
-                    frac_bits += shift;
-                    ch = *p++;
-                }
-            }
-            if (ch != 'p' && ch != 'P')
-                expect("exponent");
-            ch = *p++;
-            s = 1;
-            exp_val = 0;
-            if (ch == '+') {
-                ch = *p++;
-            } else if (ch == '-') {
-                s = -1;
-                ch = *p++;
-            }
-            if (ch < '0' || ch > '9')
-                expect("exponent digits");
-            while (ch >= '0' && ch <= '9') {
-                exp_val = exp_val * 10 + ch - '0';
-                ch = *p++;
-            }
-            exp_val = exp_val * s;
-            
-            /* now we can generate the number */
-            /* XXX: should patch directly float number */
-            d = (double)bn[1] * 4294967296.0 + (double)bn[0];
-            d = ldexp(d, exp_val - frac_bits);
-            t = toup(ch);
-            if (t == 'F') {
-                ch = *p++;
-                tok = TOK_CFLOAT;
-                /* float : should handle overflow */
-                tokc.f = (float)d;
-            } else if (t == 'L') {
-                ch = *p++;
-#ifdef TCC_TARGET_PE
-                tok = TOK_CDOUBLE;
-                tokc.d = d;
-#else
-                tok = TOK_CLDOUBLE;
-                /* XXX: not large enough */
-                tokc.ld = (long double)d;
-#endif
-            } else {
-                tok = TOK_CDOUBLE;
-                tokc.d = d;
-            }
-        } else {
-            /* decimal floats */
-            if (ch == '.') {
-                if (q >= token_buf + STRING_MAX_SIZE)
-                    goto num_too_long;
-                *q++ = ch;
-                ch = *p++;
-            float_frac_parse:
-                while (ch >= '0' && ch <= '9') {
-                    if (q >= token_buf + STRING_MAX_SIZE)
-                        goto num_too_long;
-                    *q++ = ch;
-                    ch = *p++;
-                }
-            }
-            if (ch == 'e' || ch == 'E') {
-                if (q >= token_buf + STRING_MAX_SIZE)
-                    goto num_too_long;
-                *q++ = ch;
-                ch = *p++;
-                if (ch == '-' || ch == '+') {
-                    if (q >= token_buf + STRING_MAX_SIZE)
-                        goto num_too_long;
-                    *q++ = ch;
-                    ch = *p++;
-                }
-                if (ch < '0' || ch > '9')
-                    expect("exponent digits");
-                while (ch >= '0' && ch <= '9') {
-                    if (q >= token_buf + STRING_MAX_SIZE)
-                        goto num_too_long;
-                    *q++ = ch;
-                    ch = *p++;
-                }
-            }
-            *q = '\0';
-            t = toup(ch);
-            errno = 0;
-            if (t == 'F') {
-                ch = *p++;
-                tok = TOK_CFLOAT;
-                tokc.f = strtof(token_buf, NULL);
-            } else if (t == 'L') {
-                ch = *p++;
-#ifdef TCC_TARGET_PE
-                tok = TOK_CDOUBLE;
-                tokc.d = strtod(token_buf, NULL);
-#else
-                tok = TOK_CLDOUBLE;
-                tokc.ld = strtold(token_buf, NULL);
-#endif
-            } else {
-                tok = TOK_CDOUBLE;
-                tokc.d = strtod(token_buf, NULL);
-            }
-        }
-    } else {
-        unsigned long long n, n1;
-        int lcount, ucount;
+			c = *p++;
+        }else{
+			--p;
+		}
+	}else
+		--p;
+    if(strchr(p , '.') || (b == 10 && (strchr(p,'e') || strchr(p,'E'))) ||
+		((b == 2 || b == 16)&& (strchr(p,'p') || strchr(p,'P')))){
+		long double ld, sh, fb;
+		int exp;
+		/* NOTE: strtox should support that for hexa numbers, but
+			non ISOC99 libcs do not support it, so we prefer to do
+			it by hand */
+		/* hexadecimal or binary floats */
+		/* XXX: handle overflows */
+float_frac_parse:
+		fb = 1.0L/b;
+		sh = b;
+		ld = 0.0;
 
-        /* integer number */
-        *q = '\0';
-        q = token_buf;
-        if (b == 10 && *q == '0') {
+		while(1){
+			if (c == '\0')
+				break;
+			if (c >= 'a' && c <= 'f')
+				t = c - 'a' + 10;
+			else if (c >= 'A' && c <= 'F')
+				t = c - 'A' + 10;
+			else if(isnum(c))
+				t = c - '0';
+			else
+				break;
+			if (t >= b)
+				tcc_error("invalid digit");
+			ld = ld * b + t;
+			c = *p++;
+		}
+		if (c == '.'){
+			c = *p++;
+			sh = fb;
+			while (1){
+				if (c == '\0')
+					break;
+				if (c >= 'a' && c <= 'f')
+					t = c - 'a' + 10;
+				else if (c >= 'A' && c <= 'F')
+					t = c - 'A' + 10;
+				else if (isnum(c))
+					t =c - '0';
+				else
+					break;
+				if (t >= b){
+					if(b == 10 && (c == 'e' || c == 'E' || c == 'f' || c == 'F'))
+						break;
+					tcc_error("invalid digit");
+				}
+				ld += sh*t;
+				sh*=fb;
+				c = *p++;
+			}
+		}
+		if ((b == 16 || b == 2) && c != 'p' && c != 'P')
+                expect("exponent");
+		if(((c == 'e' || c == 'E') && b == 10) ||
+			((c == 'p' || c == 'P') && (b == 16 || b == 2))){
+			c = *p++;
+			if(c == '+' || c == '-'){
+				if (c == '-')
+					sh = fb;
+				c = *p++;
+			}else
+				sh = b;
+			if (!isnum(c))
+				expect("exponent digits");
+			exp = 0;
+			do{
+				exp = exp * 10 + c - '0';
+				c = *p++;
+			}while(isnum(c));
+			while (exp != 0){
+				if (exp & 1)
+					ld *= sh;
+				exp >>= 1;
+				sh *= sh;
+			}
+		}
+		t = toup(c);
+		if (t == 'F') {
+			c = *p++;
+			tok = TOK_CFLOAT;
+			tokc.f = (float)ld;
+		} else if (t == 'L') {
+			c = *p++;
+#ifdef TCC_TARGET_PE
+			tok = TOK_CDOUBLE;
+			tokc.d = (double)ld;
+#else
+			tok = TOK_CLDOUBLE;
+			tokc.ld = ld;
+#endif
+		} else {
+			tok = TOK_CDOUBLE;
+			tokc.d = (double)ld;
+		}
+    } else {
+		uint64_t n = 0, n1;
+		int warn = 1;
+        int lcount, ucount;
+		if (b == 10 && c == '0') {
             b = 8;
-            q++;
         }
-        n = 0;
-        while(1) {
-            t = *q++;
-            /* no need for checks except for base 10 / 8 errors */
-            if (t == '\0') {
-                break;
-            } else if (t >= 'a') {
-                t = t - 'a' + 10;
-            } else if (t >= 'A') {
-                t = t - 'A' + 10;
-            } else {
-                t = t - '0';
-                if (t >= b)
-                    tcc_error("invalid digit");
-            }
-            n1 = n;
-            n = n * b + t;
-            /* detect overflow */
-            /* XXX: this test is not reliable */
-            if (n < n1)
-                tcc_error("integer constant overflow");
-        }
-        
+		while(1){
+			if (c == '\0')
+				break;
+			if (c >= 'a' && c <= 'f')
+				t = c - 'a' + 10;
+			else if (c >= 'A' && c <= 'F')
+				t = c - 'A' + 10;
+			else if(isnum(c))
+				t = c - '0';
+			else
+				break;
+			if (t >= b)
+				tcc_error("invalid digit");
+			n1 = n;
+			n = n * b + t;
+			if (n < n1 && warn){
+				tcc_warning("integer constant overflow");
+				warn = 0;
+			}
+			c = *p++;
+		}
         /* XXX: not exactly ANSI compliant */
         if ((n & 0xffffffff00000000LL) != 0) {
             if ((n >> 63) != 0)
@@ -2013,7 +1953,7 @@ static void parse_number(const char *p)
         lcount = 0;
         ucount = 0;
         for(;;) {
-            t = toup(ch);
+            t = toup(c);
             if (t == 'L') {
                 if (lcount >= 2)
                     tcc_error("three 'l's in integer constant");
@@ -2028,7 +1968,7 @@ static void parse_number(const char *p)
 #if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
                 }
 #endif
-                ch = *p++;
+                c = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
                     tcc_error("two 'u's in integer constant");
@@ -2037,7 +1977,7 @@ static void parse_number(const char *p)
                     tok = TOK_CUINT;
                 else if (tok == TOK_CLLONG)
                     tok = TOK_CULLONG;
-                ch = *p++;
+                c = *p++;
             } else {
                 break;
             }
@@ -2047,7 +1987,7 @@ static void parse_number(const char *p)
         else
             tokc.ull = n;
     }
-    if (ch)
+    if (c)
         tcc_error("invalid number\n");
 }
 
@@ -2222,7 +2162,7 @@ maybe_newline:
                     goto token_found;
                 pts = &(ts->hash_next);
             }
-            ts = tok_alloc_new(pts, p1, len);
+            ts = tok_alloc_new(pts, (char *) p1, len);
         token_found: ;
         } else {
             /* slower case */
@@ -2519,7 +2459,8 @@ ST_FUNC void next_nomacro(void)
     } while (is_space(tok));
 }
  
-/* substitute args in macro_str and return allocated string */
+/* substitute arguments in replacement lists in macro_str by the values in
+   args (field d) and return allocated string */
 static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
 {
     int last_tok, t, spc;
@@ -2576,7 +2517,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                     if (gnu_ext && s->type.t &&
                         last_tok == TOK_TWOSHARPS && 
                         str.len >= 2 && str.str[str.len - 2] == ',') {
-                        if (*st == 0) {
+                        if (*st == TOK_PLCHLDR) {
                             /* suppress ',' '##' */
                             str.len -= 2;
                         } else {
@@ -2747,6 +2688,8 @@ static int macro_subst_tok(TokenString *tok_str,
                         tok_str_add2(&str, tok, &tokc);
                     next_nomacro_spc();
                 }
+                if (!str.len)
+                    tok_str_add(&str, TOK_PLCHLDR);
                 str.len -= spc;
                 tok_str_add(&str, 0);
                 sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
@@ -2839,9 +2782,11 @@ static inline int *macro_twosharps(const int *macro_str)
                 TOK_GET(&t, &ptr, &cval);
                 /* We concatenate the two tokens */
                 cstr_new(&cstr);
-                cstr_cat(&cstr, get_tok_str(tok, &tokc));
+                if (tok != TOK_PLCHLDR)
+                    cstr_cat(&cstr, get_tok_str(tok, &tokc));
                 n = cstr.size;
-                cstr_cat(&cstr, get_tok_str(t, &cval));
+                if (t != TOK_PLCHLDR || tok == TOK_PLCHLDR)
+                    cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
                 tcc_open_bf(tcc_state, ":paste:", cstr.size);
@@ -2858,8 +2803,11 @@ static inline int *macro_twosharps(const int *macro_str)
                 cstr_free(&cstr);
             }
         }
-        if (tok != TOK_NOSUBST) 
+        if (tok != TOK_NOSUBST) {
+            tok_str_add2(&macro_str1, tok, &tokc);
+            tok = ' ';
             start_of_nosubsts = -1;
+        }
         tok_str_add2(&macro_str1, tok, &tokc);
     }
     tok_str_add(&macro_str1, 0);

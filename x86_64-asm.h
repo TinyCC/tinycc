@@ -438,7 +438,7 @@ ALT(DEF_ASM_OP2(psrlq, 0x0f73, 2, OPC_MODRM, OPT_IM8, OPT_MMX ))
     DEF_ASM_OP2(punpcklbw, 0x0f60, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX )
     DEF_ASM_OP2(punpcklwd, 0x0f61, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX )
     DEF_ASM_OP2(punpckldq, 0x0f62, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX )
-    DEF_ASM_OP2(pxor, 0x0fef, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX )
+    DEF_ASM_OP2(pxor, 0x0fef, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX ) /* must be last !OP0 */
 
 #undef ALT
 #undef DEF_ASM_OP0

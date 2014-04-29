@@ -59,6 +59,7 @@
 
 #include "tcclib.h"
 
+void intdiv_test();
 void string_test();
 void expr_test();
 void macro_test();
@@ -166,6 +167,71 @@ int qq(int x)
 #define spin_lock(lock) do { } while (0)
 #define wq_spin_lock spin_lock
 #define TEST2() wq_spin_lock(a)
+
+#define UINT_MAX ((unsigned) -1)
+
+void intdiv_test(void)
+{
+    printf("18/21=%u\n", 18/21);
+    printf("18%21=%u\n", 18%21);
+    printf("41/21=%u\n", 41/21);
+    printf("41%21=%u\n", 41%21);
+    printf("42/21=%u\n", 42/21);
+    printf("42%21=%u\n", 42%21);
+    printf("43/21=%u\n", 43/21);
+    printf("43%21=%u\n", 43%21);
+    printf("126/21=%u\n", 126/21);
+    printf("12%/21=%u\n", 126%21);
+    printf("131/21=%u\n", 131/21);
+    printf("131%21=%u\n", 131%21);
+    printf("(UINT_MAX/2+3)/2=%u\n", (UINT_MAX/2+3)/2);
+    printf("(UINT_MAX/2+3)%2=%u\n", (UINT_MAX/2+3)%2);
+
+    printf("18/-21=%u\n", 18/-21);
+    printf("18%-21=%u\n", 18%-21);
+    printf("41/-21=%u\n", 41/-21);
+    printf("41%-21=%u\n", 41%-21);
+    printf("42/-21=%u\n", 42/-21);
+    printf("42%-21=%u\n", 42%-21);
+    printf("43/-21=%u\n", 43/-21);
+    printf("43%-21=%u\n", 43%-21);
+    printf("126/-21=%u\n", 126/-21);
+    printf("12%/-21=%u\n", 126%-21);
+    printf("131/-21=%u\n", 131/-21);
+    printf("131%-21=%u\n", 131%-21);
+    printf("(UINT_MAX/2+3)/-2=%u\n", (UINT_MAX/2+3)/-2);
+    printf("(UINT_MAX/2+3)%-2=%u\n", (UINT_MAX/2+3)%-2);
+
+    printf("-18/21=%u\n", -18/21);
+    printf("-18%21=%u\n", -18%21);
+    printf("-41/21=%u\n", -41/21);
+    printf("-41%21=%u\n", -41%21);
+    printf("-42/21=%u\n", -42/21);
+    printf("-42%21=%u\n", -42%21);
+    printf("-43/21=%u\n", -43/21);
+    printf("-43%21=%u\n", -43%21);
+    printf("-126/21=%u\n", -126/21);
+    printf("-12%/21=%u\n", -126%21);
+    printf("-131/21=%u\n", -131/21);
+    printf("-131%21=%u\n", -131%21);
+    printf("-(UINT_MAX/2+3)/2=%u\n", (0-(UINT_MAX/2+3))/2);
+    printf("-(UINT_MAX/2+3)%2=%u\n", (0-(UINT_MAX/2+3))%2);
+
+    printf("-18/-21=%u\n", -18/-21);
+    printf("-18%-21=%u\n", -18%-21);
+    printf("-41/-21=%u\n", -41/-21);
+    printf("-41%-21=%u\n", -41%-21);
+    printf("-42/-21=%u\n", -42/-21);
+    printf("-42%-21=%u\n", -42%-21);
+    printf("-43/-21=%u\n", -43/-21);
+    printf("-43%-21=%u\n", -43%-21);
+    printf("-126/-21=%u\n", -126/-21);
+    printf("-12%/-21=%u\n", -126%-21);
+    printf("-131/-21=%u\n", -131/-21);
+    printf("-131%-21=%u\n", -131%-21);
+    printf("-(UINT_MAX/2+3)/-2=%u\n", (0-(UINT_MAX/2+3))/-2);
+    printf("-(UINT_MAX/2+3)%-2=%u\n", (0-(UINT_MAX/2+3))%-2);
+}
 
 void macro_test(void)
 {
@@ -619,6 +685,7 @@ int main(int argc, char **argv)
     math_cmp_test();
     callsave_test();
     builtin_frame_address_test();
+    intdiv_test();
     return 0; 
 }
 
@@ -1603,21 +1670,32 @@ void prefix ## fcast(type a)\
     double da;\
     LONG_DOUBLE la;\
     int ia;\
+    long long llia;\
     unsigned int ua;\
+    unsigned long long llua;\
     type b;\
     fa = a;\
     da = a;\
     la = a;\
     printf("ftof: %f %f %Lf\n", fa, da, la);\
     ia = (int)a;\
+    llia = (long long)a;\
+    a = (a >= 0) ? a : -a;\
     ua = (unsigned int)a;\
-    printf("ftoi: %d %u\n", ia, ua);\
+    llua = (unsigned long long)a;\
+    printf("ftoi: %d %u %lld %llu\n", ia, ua, llia, llua);\
     ia = -1234;\
     ua = 0x81234500;\
+    llia = -0x123456789012345LL;\
+    llua = 0xf123456789012345LLU;\
     b = ia;\
     printf("itof: " fmt "\n", b);\
     b = ua;\
     printf("utof: " fmt "\n", b);\
+    b = llia;\
+    printf("lltof: " fmt "\n", b);\
+    b = llua;\
+    printf("ulltof: " fmt "\n", b);\
 }\
 \
 float prefix ## retf(type a) { return a; }\
@@ -1632,6 +1710,35 @@ void prefix ## call(void)\
     printf("strto%s: %f\n", #prefix, (double)strto ## prefix("1.2", NULL));\
 }\
 \
+void prefix ## signed_zeros(void) \
+{\
+  type x = 0.0, y = -0.0, n, p;\
+  if (x == y)\
+    printf ("Test 1.0 / x != 1.0 / y  returns %d (should be 1).\n",\
+            1.0 / x != 1.0 / y);\
+  else\
+    printf ("x != y; this is wrong!\n");\
+\
+  n = -x;\
+  if (x == n)\
+    printf ("Test 1.0 / x != 1.0 / -x returns %d (should be 1).\n",\
+            1.0 / x != 1.0 / n);\
+  else\
+    printf ("x != -x; this is wrong!\n");\
+\
+  p = +y;\
+  if (x == p)\
+    printf ("Test 1.0 / x != 1.0 / +y returns %d (should be 1).\n",\
+            1.0 / x != 1.0 / p);\
+  else\
+    printf ("x != +y; this is wrong!\n");\
+  p = -y;\
+  if (x == p)\
+    printf ("Test 1.0 / x != 1.0 / -y returns %d (should be 0).\n",\
+            1.0 / x != 1.0 / p);\
+  else\
+    printf ("x != -y; this is wrong!\n");\
+}\
 void prefix ## test(void)\
 {\
     printf("testing '%s'\n", #typename);\
@@ -1641,6 +1748,7 @@ void prefix ## test(void)\
     prefix ## fcast(234.6);\
     prefix ## fcast(-2334.6);\
     prefix ## call();\
+    prefix ## signed_zeros();\
 }
 
 FTEST(f, float, float, "%f")
@@ -2113,7 +2221,7 @@ void old_style_function(void)
 
 void alloca_test()
 {
-#if defined __i386__ || defined __x86_64__
+#if defined __i386__ || defined __x86_64__ || defined __arm__
     char *p = alloca(16);
     strcpy(p,"123456789012345");
     printf("alloca: p is %s\n", p);
@@ -2146,7 +2254,7 @@ void c99_vla_test(int size1, int size2)
     printf("%s\n", (sizeof tab1 == size1 * size2 * 2 * sizeof(int)) ? "PASSED" : "FAILED");
     tab1_ptr = tab1;
     tab2_ptr = tab2;
-    printf("Test C99 VLA 2 (ptrs substract): ");
+    printf("Test C99 VLA 2 (ptrs subtract): ");
     printf("%s\n", (tab2 - tab1 == (tab2_ptr - tab1_ptr) / (sizeof(int) * 2)) ? "PASSED" : "FAILED");
     printf("Test C99 VLA 3 (ptr add): ");
     printf("%s\n", &tab1[5][1] == (tab1_ptr + (5 * 2 + 1) * sizeof(int)) ? "PASSED" : "FAILED");
@@ -2686,7 +2794,7 @@ double get100 () { return 100.0; }
 
 void callsave_test(void)
 {
-#if defined __i386__ || defined __x86_64__
+#if defined __i386__ || defined __x86_64__ || defined __arm__
   int i, s; double *d; double t;
   s = sizeof (double);
   printf ("callsavetest: %d\n", s);
@@ -2715,16 +2823,17 @@ void bfa2(ptrdiff_t str_offset)
 void bfa1(ptrdiff_t str_offset)
 {
     printf("bfa1: %s\n", (char *)__builtin_frame_address(1) + str_offset);
-#if defined(__arm__) && !defined(__GNUC__)
     bfa2(str_offset);
-#endif
 }
 
 void builtin_frame_address_test(void)
 {
+/* builtin_frame_address fails on ARM with gcc which make test3 fail */
+#ifndef __arm__
     char str[] = "__builtin_frame_address";
     char *fp0 = __builtin_frame_address(0);
 
     printf("str: %s\n", str);
     bfa1(str-fp0);
+#endif
 }
