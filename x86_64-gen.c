@@ -29,28 +29,38 @@
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
-#define RC_INT     0x0001 /* generic integer register */
-#define RC_FLOAT   0x0002 /* generic float register */
-#define RC_RAX     0x0004
-#define RC_RCX     0x0008
-#define RC_RDX     0x0010
-#define RC_ST0     0x0080 /* only for long double */
-#define RC_R8      0x0100
-#define RC_R9      0x0200
-#define RC_R10     0x0400
-#define RC_R11     0x0800
-#define RC_XMM0    0x1000
-#define RC_XMM1    0x2000
-#define RC_XMM2    0x4000
-#define RC_XMM3    0x8000
-#define RC_XMM4    0x10000
-#define RC_XMM5    0x20000
-#define RC_XMM6    0x40000
-#define RC_XMM7    0x80000
-#define RC_IRET    RC_RAX /* function return: integer register */
-#define RC_LRET    RC_RDX /* function return: second integer register */
-#define RC_FRET    RC_XMM0 /* function return: float register */
-#define RC_QRET    RC_XMM1 /* function return: second float register */
+#define RC_INT    	0x0001 /* generic integer register */
+#define RC_FLOAT 	0x0002 /* generic float register */
+#define RC_RAX    	0x0004
+#define RC_RCX   	0x0008
+#define RC_RDX   	0x0010
+#define RC_ST0		0x0020 /* only for long double */
+#define RC_R8   	0x0040
+#define RC_R9   	0x0080
+#define RC_XMM0  	0x0100
+#define RC_XMM1  	0x0200
+#define RC_XMM2  	0x0400
+#define RC_XMM3  	0x0800
+#define RC_XMM4  	0x1000
+#define RC_XMM5  	0x2000
+#define RC_XMM6   	0x4000
+#define RC_XMM7  	0x8000
+#define RC_RSI		0x10000
+#define RC_RDI		0x20000
+#define RC_INT1  	0x40000	/* function_pointer */
+#define RC_INT2		0x80000
+#define RC_RBX		0x100000
+#define RC_R10		0x200000
+#define RC_R11		0x400000
+#define RC_R12		0x800000
+#define RC_R13		0x1000000
+#define RC_R14		0x2000000
+#define RC_R15		0x4000000
+#define RC_IRET  	RC_RAX /* function return: integer register */
+#define RC_LRET   	RC_RDX /* function return: second integer register */
+#define RC_FRET   	RC_XMM0 /* function return: float register */
+#define RC_QRET   	RC_XMM1 /* function return: second float register */
+#define RC_MASK	  	(RC_INT|RC_INT1|RC_INT2|RC_FLOAT)
 
 /* pretty names for the registers */
 enum {
@@ -58,6 +68,7 @@ enum {
     TREG_RCX = 1,
     TREG_RDX = 2,
     TREG_RSP = 4,
+    TREG_ST0 = 5,
     TREG_RSI = 6,
     TREG_RDI = 7,
 
@@ -75,13 +86,11 @@ enum {
     TREG_XMM6 = 22,
     TREG_XMM7 = 23,
 
-    TREG_ST0 = 24,
-
-    TREG_MEM = 0x20,
 };
 
 #define REX_BASE(reg) (((reg) >> 3) & 1)
 #define REG_VALUE(reg) ((reg) & 7)
+#define FLAG_GOT 	0X01
 
 /* return registers for function */
 #define REG_IRET TREG_RAX /* single word int return register */
@@ -122,34 +131,30 @@ enum {
 #include <assert.h>
 
 ST_DATA const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_RAX,
-    /* ecx */ RC_INT | RC_RCX,
-    /* edx */ RC_INT | RC_RDX,
+    /* eax */ RC_INT|RC_RAX|RC_INT2,
+    /* ecx */ RC_INT|RC_RCX|RC_INT2,
+    /* edx */ RC_INT|RC_RDX,
+	RC_INT|RC_INT1|RC_INT2|RC_RBX,
     0,
-    0,
-    0,
-    0,
-    0,
-    RC_R8,
-    RC_R9,
-    RC_R10,
-    RC_R11,
-    0,
-    0,
-    0,
-    0,
-    /* xmm0 */ RC_FLOAT | RC_XMM0,
-    /* xmm1 */ RC_FLOAT | RC_XMM1,
-    /* xmm2 */ RC_FLOAT | RC_XMM2,
-    /* xmm3 */ RC_FLOAT | RC_XMM3,
-    /* xmm4 */ RC_FLOAT | RC_XMM4,
-    /* xmm5 */ RC_FLOAT | RC_XMM5,
-    /* xmm6 an xmm7 are included so gv() can be used on them,
-       but they are not tagged with RC_FLOAT because they are
-       callee saved on Windows */
-    RC_XMM6,
-    RC_XMM7,
-    /* st0 */ RC_ST0
+    /* st0 */ RC_ST0,
+    RC_RSI|RC_INT2,
+    RC_RDI|RC_INT2,
+    RC_INT|RC_R8|RC_INT2,
+    RC_INT|RC_R9|RC_INT2,
+    RC_INT|RC_INT1|RC_INT2|RC_R10,
+	RC_INT|RC_INT1|RC_INT2|RC_R11,
+	RC_INT|RC_INT1|RC_INT2|RC_R12,
+	RC_INT|RC_INT1|RC_INT2|RC_R13,
+	RC_INT|RC_INT1|RC_INT2|RC_R14,
+	RC_INT|RC_INT1|RC_INT2|RC_R15,
+	/* xmm0 */ RC_FLOAT | RC_XMM0,
+	RC_FLOAT|RC_XMM1,
+	RC_FLOAT|RC_XMM2,
+	RC_FLOAT|RC_XMM3,
+	RC_FLOAT|RC_XMM4,
+	RC_FLOAT|RC_XMM5,
+	RC_FLOAT|RC_XMM6,
+	RC_FLOAT|RC_XMM7,
 };
 
 static unsigned long func_sub_sp_offset;
@@ -324,7 +329,7 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
         } else {
             oad(0x85 | op_reg, c);
         }
-    } else if ((r & VT_VALMASK) >= TREG_MEM) {
+    } else if (r & TREG_MEM) {
         if (c) {
             g(0x80 | op_reg | REG_VALUE(r));
             gen_le32(c);
@@ -1609,39 +1614,42 @@ int gtst(int inv, int t)
 /* generate an integer binary operation */
 void gen_opi(int op)
 {
-    int r, fr, opc, c;
-    int ll, uu, cc;
+    int r, fr, opc, fc, c, ll, uu, cc, tt2;
 
+	fr = vtop[0].r;
+	fc = vtop->c.ul;
     ll = is64_type(vtop[-1].type.t);
-    uu = (vtop[-1].type.t & VT_UNSIGNED) != 0;
-    cc = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    cc = (fr & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+	tt2 = (fr & (VT_LVAL | VT_LVAL_TYPE)) == VT_LVAL;
 
     switch(op) {
     case '+':
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
+		vswap();
+		r = gv(RC_INT);
+		vswap();
         if (cc && (!ll || (int)vtop->c.ll == vtop->c.ll)) {
             /* constant case */
-            vswap();
-            r = gv(RC_INT);
-            vswap();
             c = vtop->c.i;
             if (c == (char)c) {
                 /* XXX: generate inc and dec for smaller code ? */
-                orex(ll, r, 0, 0x83);
-                o(0xc0 | (opc << 3) | REG_VALUE(r));
-                g(c);
+				orex(ll, r, 0, 0x83);
+				o(0xc0 + REG_VALUE(r) + opc*8);
+				g(c);
             } else {
                 orex(ll, r, 0, 0x81);
-                oad(0xc0 | (opc << 3) | REG_VALUE(r), c);
+                oad(0xc0 + REG_VALUE(r) + opc*8, c);
             }
         } else {
-            gv2(RC_INT, RC_INT);
-            r = vtop[-1].r;
-            fr = vtop[0].r;
-            orex(ll, r, fr, (opc << 3) | 0x01);
-            o(0xc0 + REG_VALUE(r) + REG_VALUE(fr) * 8);
+			if(!tt2)
+				fr = gv(RC_INT);
+			orex(ll, fr, r, 0x03 + opc*8);
+			if(fr >= VT_CONST)
+                gen_modrm(r, fr, vtop->sym, fc);
+			else
+				o(0xc0 + REG_VALUE(fr) + REG_VALUE(r)*8);
         }
         vtop--;
         if (op >= TOK_ULT && op <= TOK_GT) {
@@ -1669,11 +1677,27 @@ void gen_opi(int op)
         opc = 1;
         goto gen_op8;
     case '*':
-        gv2(RC_INT, RC_INT);
-        r = vtop[-1].r;
-        fr = vtop[0].r;
-        orex(ll, fr, r, 0xaf0f); /* imul fr, r */
-        o(0xc0 + REG_VALUE(fr) + REG_VALUE(r) * 8);
+		opc = 5;
+        vswap();
+		r = gv(RC_INT);
+		vswap();
+		if(!tt2)
+			fr = gv(RC_INT);
+		if(r == TREG_RAX){
+			if(fr != TREG_RDX)
+				save_reg(TREG_RDX);
+			orex(ll, fr, r, 0xf7);
+			if(fr >= VT_CONST)
+				gen_modrm(opc, fr, vtop->sym, fc);
+			else
+				o(0xc0 + REG_VALUE(fr)  + opc*8);
+		}else{
+			orex(ll, fr, r, 0xaf0f);	/* imul fr, r */
+			if(fr >= VT_CONST)
+				gen_modrm(r, fr, vtop->sym, fc);
+			else
+				o(0xc0 + REG_VALUE(fr) + REG_VALUE(r)*8);
+		}
         vtop--;
         break;
     case TOK_SHL:
@@ -1685,47 +1709,62 @@ void gen_opi(int op)
     case TOK_SAR:
         opc = 7;
     gen_shift:
-        opc = 0xc0 | (opc << 3);
         if (cc) {
             /* constant case */
             vswap();
             r = gv(RC_INT);
             vswap();
-            orex(ll, r, 0, 0xc1); /* shl/shr/sar $xxx, r */
-            o(opc | REG_VALUE(r));
-            g(vtop->c.i & (ll ? 63 : 31));
+			c = vtop->c.i;
+			if(c == 1){
+				orex(ll, r, 0, 0xd1);
+				o(0xc0 + REG_VALUE(r) + opc*8);
+			}else{
+				orex(ll, r, 0, 0xc1); /* shl/shr/sar $xxx, r */
+				o(0xc0 + REG_VALUE(r) + opc*8);
+				g(c & (ll ? 0x3f : 0x1f));
+			}
         } else {
             /* we generate the shift in ecx */
             gv2(RC_INT, RC_RCX);
             r = vtop[-1].r;
             orex(ll, r, 0, 0xd3); /* shl/shr/sar %cl, r */
-            o(opc | REG_VALUE(r));
+			o(0xc0 + REG_VALUE(r) + opc*8);
         }
         vtop--;
         break;
     case TOK_UDIV:
     case TOK_UMOD:
+		opc = 6;
         uu = 1;
         goto divmod;
     case '/':
     case '%':
     case TOK_PDIV:
+		opc = 7;
         uu = 0;
     divmod:
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
-        gv2(RC_RAX, RC_RCX);
-        r = vtop[-1].r;
-        fr = vtop[0].r;
-        vtop--;
-        save_reg(TREG_RDX);
-        orex(ll, 0, 0, uu ? 0xd231 : 0x99); /* xor %edx,%edx : cqto */
-        orex(ll, fr, 0, 0xf7); /* div fr, %eax */
-        o((uu ? 0xf0 : 0xf8) + REG_VALUE(fr));
+		if(!tt2){
+			gv2(RC_RAX, RC_INT2);
+			fr = vtop[0].r;
+		}else{
+			vswap();
+			gv(RC_RAX);
+			vswap();
+		}
+		save_reg(TREG_RDX);
+		orex(ll, 0, 0, uu ? 0xd231 : 0x99); /* xor %edx,%edx : cdq RDX:RAX <- sign-extend of RAX. */
+		orex(ll, fr, 0, 0xf7); /* div fr, %eax */
+		if(fr >= VT_CONST)
+			gen_modrm(opc, fr, vtop->sym, fc);
+		else
+			o(0xc0 + REG_VALUE(fr) + opc*8);
         if (op == '%' || op == TOK_UMOD)
             r = TREG_RDX;
         else
             r = TREG_RAX;
+        vtop--;
         vtop->r = r;
         break;
     default:
@@ -1744,9 +1783,8 @@ void gen_opl(int op)
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
-    int a, ft, fc, swapped, r;
-    int float_type =
-        (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
+    int a, ft, fc, swapped, fr, r;
+    int float_type = (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
@@ -1757,21 +1795,23 @@ void gen_opf(int op)
     if ((vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST)
         gv(float_type);
 
-    /* must put at least one value in the floating point register */
-    if ((vtop[-1].r & VT_LVAL) &&
-        (vtop[0].r & VT_LVAL)) {
-        vswap();
-        gv(float_type);
-        vswap();
-    }
-    swapped = 0;
-    /* swap the stack if needed so that t1 is the register and t2 is
-       the memory reference */
-    if (vtop[-1].r & VT_LVAL) {
-        vswap();
-        swapped = 1;
-    }
-    if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+	swapped = 0;
+	fc = vtop->c.ul;
+	ft = vtop->type.t;
+
+    if ((ft & VT_BTYPE) == VT_LDOUBLE) {
+		/* swap the stack if needed so that t1 is the register and t2 is
+		the memory reference */
+		/* must put at least one value in the floating point register */
+		if ((vtop[-1].r & VT_LVAL) && (vtop[0].r & VT_LVAL)) {
+			vswap();
+			gv(float_type);
+			vswap();
+		}
+		if (vtop[-1].r & VT_LVAL) {
+			vswap();
+			swapped = 1;
+		}
         if (op >= TOK_ULT && op <= TOK_GT) {
             /* load on stack second operand */
             load(TREG_ST0, vtop);
@@ -1782,10 +1822,10 @@ void gen_opf(int op)
                 swapped = 0;
             if (swapped)
                 o(0xc9d9); /* fxch %st(1) */
-            if (op == TOK_EQ || op == TOK_NE)
-                o(0xe9da); /* fucompp */
-            else
-                o(0xd9de); /* fcompp */
+			if (op == TOK_EQ || op == TOK_NE)
+				o(0xe9da); /* fucompp */
+			else
+				o(0xd9de); /* fcompp */
             o(0xe0df); /* fnstsw %ax */
             if (op == TOK_EQ) {
                 o(0x45e480); /* and $0x45, %ah */
@@ -1808,7 +1848,6 @@ void gen_opf(int op)
             /* no memory reference possible for long double operations */
             load(TREG_ST0, vtop);
             swapped = !swapped;
-
             switch(op) {
             default:
             case '+':
@@ -1828,63 +1867,45 @@ void gen_opf(int op)
                     a++;
                 break;
             }
-            ft = vtop->type.t;
-            fc = vtop->c.ul;
             o(0xde); /* fxxxp %st, %st(1) */
             o(0xc1 + (a << 3));
             vtop--;
         }
     } else {
+		vswap();
+		gv(float_type);
+		vswap();
+		fr = vtop->r;
+		r = vtop[-1].r;
         if (op >= TOK_ULT && op <= TOK_GT) {
-            /* if saved lvalue, then we must reload it */
-            r = vtop->r;
-            fc = vtop->c.ul;
-            if ((r & VT_VALMASK) == VT_LLOCAL) {
-                SValue v1;
-                r = get_reg(RC_INT);
-                v1.type.t = VT_PTR;
-                v1.r = VT_LOCAL | VT_LVAL;
-                v1.c.ul = fc;
-                load(r, &v1);
-                fc = 0;
-            }
-
-            if (op == TOK_EQ || op == TOK_NE) {
-                swapped = 0;
-            } else {
-                if (op == TOK_LE || op == TOK_LT)
-                    swapped = !swapped;
-                if (op == TOK_LE || op == TOK_GE) {
-                    op = 0x93; /* setae */
-                } else {
-                    op = 0x97; /* seta */
-                }
-            }
-
-            if (swapped) {
-                gv(RC_FLOAT);
-                vswap();
-            }
-            assert(!(vtop[-1].r & VT_LVAL));
-            
-            if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
-                o(0x66);
-            if (op == TOK_EQ || op == TOK_NE)
-                o(0x2e0f); /* ucomisd */
-            else
-                o(0x2f0f); /* comisd */
-
-            if (vtop->r & VT_LVAL) {
-                gen_modrm(vtop[-1].r, r, vtop->sym, fc);
-            } else {
-                o(0xc0 + REG_VALUE(vtop[0].r) + REG_VALUE(vtop[-1].r)*8);
-            }
-
+			switch(op){
+			case TOK_LE:
+				op = TOK_ULE; /* setae */
+				break;
+			case TOK_LT:
+				op = TOK_ULT;
+				break;
+			case TOK_GE:
+				op = TOK_UGE;
+				break;
+			case TOK_GT:
+				op = TOK_UGT; /* seta */
+				break;
+			}
+			assert(!(vtop[-1].r & VT_LVAL));
+			if ((ft & VT_BTYPE) == VT_DOUBLE)
+				o(0x66);
+			o(0x2e0f); /* ucomisd */
+			if(fr >= VT_CONST)
+				gen_modrm(r, fr, vtop->sym, fc);
+			else
+				o(0xc0 + REG_VALUE(fr) + REG_VALUE(r)*8);
             vtop--;
             vtop->r = VT_CMP;
             vtop->c.i = op | 0x100;
         } else {
-            assert((vtop->type.t & VT_BTYPE) != VT_LDOUBLE);
+			assert((vtop->type.t & VT_BTYPE) != VT_LDOUBLE);
+            /* no memory reference possible for long double operations */
             switch(op) {
             default:
             case '+':
@@ -1900,44 +1921,20 @@ void gen_opf(int op)
                 a = 6;
                 break;
             }
-            ft = vtop->type.t;
-            fc = vtop->c.ul;
-            assert((ft & VT_BTYPE) != VT_LDOUBLE);
-            
-            r = vtop->r;
-            /* if saved lvalue, then we must reload it */
-            if ((vtop->r & VT_VALMASK) == VT_LLOCAL) {
-                SValue v1;
-                r = get_reg(RC_INT);
-                v1.type.t = VT_PTR;
-                v1.r = VT_LOCAL | VT_LVAL;
-                v1.c.ul = fc;
-                load(r, &v1);
-                fc = 0;
-            }
-            
-            assert(!(vtop[-1].r & VT_LVAL));
-            if (swapped) {
-                assert(vtop->r & VT_LVAL);
-                gv(RC_FLOAT);
-                vswap();
-            }
-            
-            if ((ft & VT_BTYPE) == VT_DOUBLE) {
-                o(0xf2);
-            } else {
-                o(0xf3);
-            }
-            o(0x0f);
-            o(0x58 + a);
-            
-            if (vtop->r & VT_LVAL) {
-                gen_modrm(vtop[-1].r, r, vtop->sym, fc);
-            } else {
-                o(0xc0 + REG_VALUE(vtop[0].r) + REG_VALUE(vtop[-1].r)*8);
-            }
-
-            vtop--;
+			assert((ft & VT_BTYPE) != VT_LDOUBLE);
+			assert(!(vtop[-1].r & VT_LVAL));
+			if ((ft & VT_BTYPE) == VT_DOUBLE) {
+				o(0xf2);
+			} else {
+				o(0xf3);
+			}
+			o(0x0f);
+			o(0x58 + a);
+			if(fr >= VT_CONST)
+				gen_modrm(r, fr, vtop->sym, fc);
+			else
+				o(0xc0 + REG_VALUE(fr) + REG_VALUE(r)*8);
+			vtop--;
         }
     }
 }
@@ -1946,103 +1943,96 @@ void gen_opf(int op)
    and 'long long' cases. */
 void gen_cvt_itof(int t)
 {
-    if ((t & VT_BTYPE) == VT_LDOUBLE) {
+	int ft, bt, tbt, r;
+
+    ft = vtop->type.t;
+    bt = ft & VT_BTYPE;
+    tbt = t & VT_BTYPE;
+	r = gv(RC_INT);
+
+    if (tbt == VT_LDOUBLE) {
         save_reg(TREG_ST0);
-        gv(RC_INT);
-        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+        if ((ft & VT_BTYPE) == VT_LLONG) {
             /* signed long long to float/double/long double (unsigned case
                is handled generically) */
-            o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
+            o(0x50 + REG_VALUE(r)); /* push r */
             o(0x242cdf); /* fildll (%rsp) */
             o(0x08c48348); /* add $8, %rsp */
-        } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
-                   (VT_INT | VT_UNSIGNED)) {
+        } else if ((ft & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED)) {
             /* unsigned int to float/double/long double */
             o(0x6a); /* push $0 */
             g(0x00);
-            o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
+            o(0x50 + REG_VALUE(r)); /* push r */
             o(0x242cdf); /* fildll (%rsp) */
             o(0x10c48348); /* add $16, %rsp */
         } else {
             /* int to float/double/long double */
-            o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
+            o(0x50 + REG_VALUE(r)); /* push r */
             o(0x2404db); /* fildl (%rsp) */
             o(0x08c48348); /* add $8, %rsp */
         }
         vtop->r = TREG_ST0;
     } else {
-        int r = get_reg(RC_FLOAT);
-        gv(RC_INT);
-        o(0xf2 + ((t & VT_BTYPE) == VT_FLOAT?1:0));
-        if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
-            (VT_INT | VT_UNSIGNED) ||
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
+		int r_xmm;
+        r_xmm = get_reg(RC_FLOAT);
+        o(0xf2 + (tbt == VT_FLOAT));
+        if ((ft & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED) || bt == VT_LLONG) {
             o(0x48); /* REX */
         }
         o(0x2a0f);
-        o(0xc0 + (vtop->r & VT_VALMASK) + REG_VALUE(r)*8); /* cvtsi2sd */
-        vtop->r = r;
+        o(0xc0 + REG_VALUE(r) + REG_VALUE(r_xmm)*8); /* cvtsi2sd or cvtsi2ss */
+        vtop->r = r_xmm;
     }
 }
 
 /* convert from one floating point type to another */
 void gen_cvt_ftof(int t)
 {
-    int ft, bt, tbt;
+    int ft, bt, tbt, r;
 
     ft = vtop->type.t;
     bt = ft & VT_BTYPE;
     tbt = t & VT_BTYPE;
-    
-    if (bt == VT_FLOAT) {
-        gv(RC_FLOAT);
+
+	if(bt == VT_LDOUBLE)
+		r = get_reg(RC_FLOAT);
+	else
+		r = gv(RC_FLOAT);
+    if (bt == VT_FLOAT) {		
         if (tbt == VT_DOUBLE) {
-            o(0x140f); /* unpcklps */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
             o(0x5a0f); /* cvtps2pd */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
+			o(0xc0 + REG_VALUE(r) + REG_VALUE(r) * 8);
         } else if (tbt == VT_LDOUBLE) {
-            save_reg(RC_ST0);
-            /* movss %xmm0,-0x10(%rsp) */
+            /* movss %xmm0-7,-0x10(%rsp) */
             o(0x110ff3);
-            o(0x44 + REG_VALUE(vtop->r)*8);
-            o(0xf024);
+            o(0xf02444 + REG_VALUE(r)*8);
             o(0xf02444d9); /* flds -0x10(%rsp) */
             vtop->r = TREG_ST0;
         }
     } else if (bt == VT_DOUBLE) {
-        gv(RC_FLOAT);
         if (tbt == VT_FLOAT) {
-            o(0x140f66); /* unpcklpd */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
             o(0x5a0f66); /* cvtpd2ps */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
+			o(0xc0 + REG_VALUE(r) + REG_VALUE(r) * 8);
         } else if (tbt == VT_LDOUBLE) {
-            save_reg(RC_ST0);
-            /* movsd %xmm0,-0x10(%rsp) */
+            /* movsd %xmm0-7,-0x10(%rsp) */
             o(0x110ff2);
-            o(0x44 + REG_VALUE(vtop->r)*8);
-            o(0xf024);
+            o(0xf02444 + REG_VALUE(r)*8);
             o(0xf02444dd); /* fldl -0x10(%rsp) */
             vtop->r = TREG_ST0;
         }
     } else {
-        int r;
         gv(RC_ST0);
-        r = get_reg(RC_FLOAT);
         if (tbt == VT_DOUBLE) {
             o(0xf0245cdd); /* fstpl -0x10(%rsp) */
-            /* movsd -0x10(%rsp),%xmm0 */
+            /* movsd -0x10(%rsp),%xmm0-7 */
             o(0x100ff2);
-            o(0x44 + REG_VALUE(r)*8);
-            o(0xf024);
+            o(0xf02444 + REG_VALUE(r)*8);
             vtop->r = r;
         } else if (tbt == VT_FLOAT) {
             o(0xf0245cd9); /* fstps -0x10(%rsp) */
-            /* movss -0x10(%rsp),%xmm0 */
+            /* movss -0x10(%rsp),%xmm0-7 */
             o(0x100ff3);
-            o(0x44 + REG_VALUE(r)*8);
-            o(0xf024);
+            o(0xf02444 + REG_VALUE(r)*8);
             vtop->r = r;
         }
     }
@@ -2051,20 +2041,20 @@ void gen_cvt_ftof(int t)
 /* convert fp to int 't' type */
 void gen_cvt_ftoi(int t)
 {
-    int ft, bt, size, r;
+    int ft, bt, ll, r, r_xmm;
+
     ft = vtop->type.t;
     bt = ft & VT_BTYPE;
+
     if (bt == VT_LDOUBLE) {
         gen_cvt_ftof(VT_DOUBLE);
         bt = VT_DOUBLE;
     }
-
-    gv(RC_FLOAT);
-    if (t != VT_INT)
-        size = 8;
+    r_xmm = gv(RC_FLOAT);
+    if ((t & VT_BTYPE) == VT_INT)
+        ll = 0;
     else
-        size = 4;
-
+        ll = 1;
     r = get_reg(RC_INT);
     if (bt == VT_FLOAT) {
         o(0xf3);
@@ -2073,8 +2063,8 @@ void gen_cvt_ftoi(int t)
     } else {
         assert(0);
     }
-    orex(size == 8, r, 0, 0x2c0f); /* cvttss2si or cvttsd2si */
-    o(0xc0 + REG_VALUE(vtop->r) + REG_VALUE(r)*8);
+    orex(ll, r, r_xmm, 0x2c0f); /* cvttss2si or cvttsd2si */
+    o(0xc0 + REG_VALUE(r_xmm) + (REG_VALUE(r) << 3));
     vtop->r = r;
 }
 

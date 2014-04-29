@@ -738,19 +738,21 @@ struct TCCState {
 #define VT_CMP       0x0033  /* the value is stored in processor flags (in vc) */
 #define VT_JMP       0x0034  /* value is the consequence of jmp true (even) */
 #define VT_JMPI      0x0035  /* value is the consequence of jmp false (odd) */
-#define VT_REF       0x0040  /* value is pointer to structure rather than address */
+#define TREG_MEM	 0x0040	/* x86_64-gen.c add for tcc.h: The current value can be */
+#define VT_REF       0x0080  /* value is pointer to structure rather than address */
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
                                 char/short stored in integer registers) */
 #define VT_MUSTBOUND 0x0800  /* bound checking must be done before
                                 dereferencing value */
-#define VT_BOUNDED   0x8000  /* value is bounded. The address of the
-                                bounding function call point is in vc */
 #define VT_LVAL_BYTE     0x1000  /* lvalue is a byte */
 #define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
 #define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
+#define VT_BOUNDED   	0x8000  /* value is bounded. The address of the
+                                bounding function call point is in vc */
+#define VT_TMP		0x10000
 
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */

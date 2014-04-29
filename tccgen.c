@@ -909,8 +909,9 @@ ST_FUNC int gv(int rc)
                 /* one register type load */
                 load(r, vtop);
             }
+			vtop->r = r;
+			vtop->c.ptr_offset = 0;
         }
-        vtop->r = r;
 #ifdef TCC_TARGET_C67
         /* uses register pairs for doubles */
         if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE) 
