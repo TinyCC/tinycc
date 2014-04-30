@@ -92,7 +92,7 @@ static int is_compatible_parameter_types(CType *type1, CType *type2);
 static void expr_type(CType *type);
 ST_FUNC void vpush64(int ty, unsigned long long v);
 ST_FUNC void vpush(CType *type);
-ST_FUNC int gvtst(int inv, int t);
+ST_FUNC int gtst(int inv, int t);
 ST_FUNC int is_btype_size(int bt);
 
 ST_INLN int is_float(int t)
@@ -1128,26 +1128,6 @@ static void gv_dup(void)
     }
 }
 
-/* Generate value test
- *
- * Generate a test for any value (jump, comparison and integers) */
-ST_FUNC int gvtst(int inv, int t)
-{
-    int v = vtop->r & VT_VALMASK;
-    if (v != VT_CMP && v != VT_JMP && v != VT_JMPI) {
-        vpushi(0);
-        gen_op(TOK_NE);
-    }
-    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-        /* constant jmp optimization */
-        if ((vtop->c.i != 0) != inv)
-            t = gjmp(t);
-        vtop--;
-        return t;
-    }
-    return gtst(inv, t);
-}
-
 #ifndef TCC_TARGET_X86_64
 /* generate CPU independent (unsigned) long long operations */
 static void gen_opl(int op)
@@ -1346,13 +1326,13 @@ static void gen_opl(int op)
         b = 0;
         gen_op(op1);
         if (op1 != TOK_NE) {
-            a = gvtst(1, 0);
+            a = gtst(1, 0);
         }
         if (op != TOK_EQ) {
             /* generate non equal test */
             /* XXX: NOT PORTABLE yet */
             if (a == 0) {
-                b = gvtst(0, 0);
+                b = gtst(0, 0);
             } else {
 #if defined(TCC_TARGET_I386)
                 b = psym(0x850f, 0);
@@ -1377,7 +1357,7 @@ static void gen_opl(int op)
         else if (op1 == TOK_GE)
             op1 = TOK_UGE;
         gen_op(op1);
-        a = gvtst(1, a);
+        a = gtst(1, a);
         gsym(b);
         vseti(VT_JMPI, a);
         break;
@@ -3760,7 +3740,7 @@ ST_FUNC void unary(void)
             vtop->c.i = vtop->c.i ^ 1;
         else {
             save_regs(1);
-            vseti(VT_JMP, gvtst(1, 0));
+            vseti(VT_JMP, gtst(1, 0));
         }
         break;
     case '~':
@@ -4288,7 +4268,7 @@ static void expr_land(void)
         t = 0;
         save_regs(1);
         for(;;) {
-            t = gvtst(1, t);
+            t = gtst(1, t);
             if (tok != TOK_LAND) {
                 vseti(VT_JMPI, t);
                 break;
@@ -4308,7 +4288,7 @@ static void expr_lor(void)
         t = 0;
         save_regs(1);
         for(;;) {
-            t = gvtst(0, t);
+            t = gtst(0, t);
             if (tok != TOK_LOR) {
                 vseti(VT_JMP, t);
                 break;
@@ -4370,9 +4350,9 @@ static void expr_cond(void)
             }
             if (tok == ':' && gnu_ext) {
                 gv_dup();
-                tt = gvtst(1, 0);
+                tt = gtst(1, 0);
             } else {
-                tt = gvtst(1, 0);
+                tt = gtst(1, 0);
                 gexpr();
             }
             type1 = vtop->type;
@@ -4618,7 +4598,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip('(');
         gexpr();
         skip(')');
-        a = gvtst(1, 0);
+        a = gtst(1, 0);
         block(bsym, csym, case_sym, def_sym, case_reg, 0);
         c = tok;
         if (c == TOK_ELSE) {
@@ -4635,7 +4615,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip('(');
         gexpr();
         skip(')');
-        a = gvtst(1, 0);
+        a = gtst(1, 0);
         b = 0;
         block(&a, &b, case_sym, def_sym, case_reg, 0);
         gjmp_addr(d);
@@ -4814,7 +4794,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         b = 0;
         if (tok != ';') {
             gexpr();
-            a = gvtst(1, 0);
+            a = gtst(1, 0);
         }
         skip(';');
         if (tok != ')') {
@@ -4843,7 +4823,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip('(');
         gsym(b);
         gexpr();
-        c = gvtst(0, 0);
+        c = gtst(0, 0);
         gsym_addr(c, d);
         skip(')');
         gsym(a);
