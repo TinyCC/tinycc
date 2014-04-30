@@ -487,31 +487,24 @@ void load(int r, SValue *sv)
             orex(0,r,0,0);
             oad(0xb8 + REG_VALUE(r), t ^ 1); /* mov $0, r */
         } else if (v != r) {
-            if ((r >= TREG_XMM0) && (r <= TREG_XMM7)) {
-                if (v == TREG_ST0) {
-                    /* gen_cvt_ftof(VT_DOUBLE); */
-                    o(0xf0245cdd); /* fstpl -0x10(%rsp) */
-                    /* movsd -0x10(%rsp),%xmmN */
-                    o(0x100ff2);
-                    o(0x44 + REG_VALUE(r)*8); /* %xmmN */
-                    o(0xf024);
-                } else {
-                    assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
-                    if ((ft & VT_BTYPE) == VT_FLOAT) {
-                        o(0x100ff3);
-                    } else {
-                        assert((ft & VT_BTYPE) == VT_DOUBLE);
-                        o(0x100ff2);
-                    }
-                    o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
-                }
+            if (reg_classes[r] & RC_FLOAT) {
+                if(v == TREG_ST0){
+					/* gen_cvt_ftof(VT_DOUBLE); */
+					o(0xf0245cdd); /* fstpl -0x10(%rsp) */
+					/* movsd -0x10(%rsp),%xmm0 */
+					o(0x100ff2);
+					o(0xf02444 + REG_VALUE(r)*8);
+				}else if(reg_classes[v] & RC_FLOAT){
+					o(0x7e0ff3);
+					o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
+				}else
+					assert(0);
             } else if (r == TREG_ST0) {
-                assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
+                assert(reg_classes[v] & RC_FLOAT);
                 /* gen_cvt_ftof(VT_LDOUBLE); */
-                /* movsd %xmmN,-0x10(%rsp) */
-                o(0x110ff2);
-                o(0x44 + REG_VALUE(r)*8); /* %xmmN */
-                o(0xf024);
+                /* movsd %xmm0,-0x10(%rsp) */
+				o(0x110ff2);
+				o(0xf02444 + REG_VALUE(v)*8);
                 o(0xf02444dd); /* fldl -0x10(%rsp) */
             } else {
                 orex(1,r,v, 0x89);
@@ -522,82 +515,56 @@ void load(int r, SValue *sv)
 }
 
 /* store register 'r' in lvalue 'v' */
-void store(int r, SValue *v)
+void store(int r, SValue *sv)
 {
-    int fr, bt, ft, fc;
-    int op64 = 0;
-    /* store the REX prefix in this variable when PIC is enabled */
-    int pic = 0;
+    int fr, bt, ft, fc, ll, v;
 
 #ifdef TCC_TARGET_PE
     SValue v2;
-    v = pe_getimport(v, &v2);
+    sv = pe_getimport(sv, &v2);
 #endif
-
-    ft = v->type.t;
-    fc = v->c.ul;
-    fr = v->r & VT_VALMASK;
+    ft = sv->type.t & ~VT_DEFSIGN;
+    fc = sv->c.ul;
+    fr = sv->r;
     bt = ft & VT_BTYPE;
+	ll = is64_type(ft);
+	v = fr & VT_VALMASK;
 
-#ifndef TCC_TARGET_PE
+//#ifndef TCC_TARGET_PE
     /* we need to access the variable via got */
-    if (fr == VT_CONST && (v->r & VT_SYM)) {
+  //  if (fr == VT_CONST && (v->r & VT_SYM)) {
         /* mov xx(%rip), %r11 */
-        o(0x1d8b4c);
-        gen_gotpcrel(TREG_R11, v->sym, v->c.ul);
-        pic = is64_type(bt) ? 0x49 : 0x41;
-    }
-#endif
+    //    o(0x1d8b4c);
+      //  gen_gotpcrel(TREG_R11, v->sym, v->c.ul);
+        //pic = is64_type(bt) ? 0x49 : 0x41;
+   // }
+//#endif
 
     /* XXX: incorrect if float reg to reg */
     if (bt == VT_FLOAT) {
-        o(0x66);
-        o(pic);
-        o(0x7e0f); /* movd */
-        r = REG_VALUE(r);
+		orex(0, fr, r, 0x110ff3); /* movss */
     } else if (bt == VT_DOUBLE) {
-        o(0x66);
-        o(pic);
-        o(0xd60f); /* movq */
-        r = REG_VALUE(r);
+		orex(0, fr, r, 0x110ff2);/* movds */
     } else if (bt == VT_LDOUBLE) {
         o(0xc0d9); /* fld %st(0) */
-        o(pic);
-        o(0xdb); /* fstpt */
+		orex(0, fr, r, 0xdb);/* fstpt */
         r = 7;
     } else {
         if (bt == VT_SHORT)
             o(0x66);
-        o(pic);
-        if (bt == VT_BYTE || bt == VT_BOOL)
-            orex(0, 0, r, 0x88);
-        else if (is64_type(bt))
-            op64 = 0x89;
-        else
-            orex(0, 0, r, 0x89);
+		if (bt == VT_BYTE || bt == VT_BOOL)
+			orex(ll, fr, r, 0x88);
+		else{
+			orex(ll, fr, r, 0x89);
+		}
     }
-    if (pic) {
-        /* xxx r, (%r11) where xxx is mov, movq, fld, or etc */
-        if (op64)
-            o(op64);
-        o(3 + (r << 3));
-    } else if (op64) {
-        if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
-            gen_modrm64(op64, r, v->r, v->sym, fc);
-        } else if (fr != r) {
-            /* XXX: don't we really come here? */
-            abort();
-            o(0xc0 + fr + r * 8); /* mov r, fr */
-        }
-    } else {
-        if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
-            gen_modrm(r, v->r, v->sym, fc);
-        } else if (fr != r) {
-            /* XXX: don't we really come here? */
-            abort();
-            o(0xc0 + fr + r * 8); /* mov r, fr */
-        }
-    }
+	if (v == VT_CONST || v == VT_LOCAL || (fr & VT_LVAL)) {
+		gen_modrm(r, fr, sv->sym, fc);
+	} else if (v != r) {
+		/* XXX: don't we really come here? */
+		abort();
+		o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8); /* mov r, fr */
+	}
 }
 
 /* 'is_jmp' is '1' if it is a jump */
@@ -618,10 +585,9 @@ static void gcall_or_jmp(int is_jmp)
         oad(0xe8 + is_jmp, vtop->c.ul - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
-        r = TREG_R11;
+        r = get_reg(RC_INT1);
         load(r, vtop);
-        o(0x41); /* REX */
-        o(0xff); /* call/jmp *r */
+		orex(0, r, 0, 0xff); /* REX call/jmp *r */
         o(0xd0 + REG_VALUE(r) + (is_jmp << 4));
     }
 }
@@ -997,7 +963,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
     assert(0);
 }
 
-static int classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
+static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
 {
     X86_64_Mode mode;
     int size, align, ret_t = 0;

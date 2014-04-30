@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
+#include <assert.h>
 
 #ifdef CONFIG_TCCASSERT
 #include <assert.h>
@@ -358,8 +359,8 @@ typedef union CValue {
 /* value on stack */
 typedef struct SValue {
     CType type;      /* type */
-    unsigned short r;      /* register + flags */
-    unsigned short r2;     /* second register, used for 'long long'
+    unsigned int r;      /* register + flags */
+    unsigned int r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
     CValue c;              /* constant, if VT_CONST */
     struct Sym *sym;       /* symbol, if (VT_SYM | VT_CONST) */
@@ -781,6 +782,7 @@ struct TCCState {
 #define VT_VOLATILE    0x1000  /* volatile modifier */
 #define VT_DEFSIGN     0x2000  /* signed type */
 #define VT_VLA     0x00020000  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_VLS     0x00080000  /* VLA type (also has VT_PTR and VT_STRUCT) */
 
 /* storage */
 #define VT_EXTERN  0x00000080  /* extern definition */
@@ -791,14 +793,14 @@ struct TCCState {
 #define VT_EXPORT  0x00008000  /* win32: data exported from dll */
 #define VT_WEAK    0x00010000  /* weak symbol */
 #define VT_TLS     0x00040000  /* thread-local storage */
-#define VT_VIS_SHIFT    19     /* shift for symbol visibility, overlapping
+#define VT_VIS_SHIFT    20     /* shift for symbol visibility, overlapping
 				  bitfield values, because bitfields never
 				  have linkage and hence never have
 				  visibility.  */
 #define VT_VIS_SIZE      2     /* We have four visibilities.  */
 #define VT_VIS_MASK (((1 << VT_VIS_SIZE)-1) << VT_VIS_SHIFT)
 
-#define VT_STRUCT_SHIFT 19     /* shift for bitfield shift values (max: 32 - 2*6) */
+#define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (max: 32 - 2*6) */
 
 
 /* type mask (except storage) */
@@ -1185,7 +1187,7 @@ ST_DATA Sym *define_stack;
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 ST_DATA SValue __vstack[1+/*to make bcheck happy*/ VSTACK_SIZE], *vtop;
 #define vstack  (__vstack + 1)
-ST_DATA int rsym, anon_sym, ind, loc;
+ST_DATA int rsym, anon_sym, ind, loc, ex_rc;
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
