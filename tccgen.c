@@ -70,6 +70,7 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
+ST_DATA int pop_stack;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 
@@ -524,6 +525,41 @@ static void vdup(void)
     vpushv(vtop);
 }
 
+static int align_size(int size)
+{
+#ifdef TCC_TARGET_X86_64
+	if(size > 4)
+		return 8;
+	else
+#endif
+	if(size > 2)
+		return 4;
+	else if(size > 1)
+		return 2;
+	else
+		return 1;
+}
+
+int loc_stack(int size, int is_sub){
+	int l, align;
+	align = align_size(size);
+	size = (size + align - 1) & - align;
+	if(is_sub){
+		pop_stack -= size;
+		if(pop_stack >= 0)
+			l = loc + pop_stack;
+		else{
+			loc += pop_stack;
+			l = loc &= -align;
+			pop_stack = 0;
+		}
+	}else{
+		pop_stack += size;
+		l = loc + pop_stack;
+	}
+	return l;
+}
+
 /* save r to the memory stack, and mark it as being free */
 ST_FUNC void save_reg(int r)
 {
@@ -924,13 +960,10 @@ ST_FUNC int gv(int rc)
 /* generate vtop[-1] and vtop[0] in resp. classes rc1 and rc2 */
 ST_FUNC void gv2(int rc1, int rc2)
 {
-    int v;
-
     /* generate more generic register first. But VT_JMP or VT_CMP
        values must be generated first in all cases to avoid possible
        reload errors */
-    v = vtop[0].r & VT_VALMASK;
-    if (v != VT_CMP && (v & ~1) != VT_JMP && rc1 <= rc2) {
+    if (rc1 <= rc2) {
         vswap();
         gv(rc1);
         vswap();
@@ -1018,6 +1051,7 @@ ST_FUNC void lexpand_nr(void)
 }
 #endif
 
+#ifndef TCC_TARGET_X86_64
 /* build a long long from two ints */
 static void lbuild(int t)
 {
@@ -1026,6 +1060,7 @@ static void lbuild(int t)
     vtop[-1].type.t = t;
     vpop();
 }
+#endif
 
 /* rotate n first stack elements to the bottom 
    I1 ... In -> I2 ... In I1 [top is right]
@@ -1087,8 +1122,8 @@ static void gv_dup(void)
 {
     int rc, t, r, r1;
     SValue sv;
-
     t = vtop->type.t;
+#ifndef TCC_TARGET_X86_64
     if ((t & VT_BTYPE) == VT_LLONG) {
         lexpand();
         gv_dup();
@@ -1098,15 +1133,14 @@ static void gv_dup(void)
         vrotb(4);
         /* stack: H L L1 H1 */
         lbuild(t);
-        vrotb(3);
-        vrotb(3);
+        vrott(3);
         vswap();
         lbuild(t);
         vswap();
-    } else {
+    } else
+#endif
+	{
         /* duplicate value */
-        rc = RC_INT;
-        sv.type.t = VT_INT;
         if (is_float(t)) {
             rc = RC_FLOAT;
 #ifdef TCC_TARGET_X86_64
@@ -1114,8 +1148,9 @@ static void gv_dup(void)
                 rc = RC_ST0;
             }
 #endif
-            sv.type.t = t;
-        }
+        }else
+			rc = RC_INT;
+		sv.type.t = t;
         r = gv(rc);
         r1 = get_reg(rc);
         sv.r = r;
@@ -1127,7 +1162,6 @@ static void gv_dup(void)
             vtop->r = r1;
     }
 }
-
 #ifndef TCC_TARGET_X86_64
 /* generate CPU independent (unsigned) long long operations */
 static void gen_opl(int op)
@@ -2441,17 +2475,78 @@ static void gen_assign_cast(CType *dt)
     gen_cast(dt);
 }
 
+static void vstore_im(){
+	int rc, ft, sbt, dbt, t, r;
+	ft = vtop[-1].type.t;
+    sbt = vtop->type.t & VT_BTYPE;
+    dbt = ft & VT_BTYPE;
+	if (is_float(ft)) {
+		rc = RC_FLOAT;
+#ifdef TCC_TARGET_X86_64
+		if (dbt == VT_LDOUBLE) {
+			rc = RC_ST0;
+		}
+#endif
+	}else
+		rc = RC_INT;
+	r = gv(rc);  /* generate value */
+	/* if lvalue was saved on stack, must read it */
+	if ((vtop[-1].r & VT_VALMASK) == VT_LLOCAL) {
+		SValue sv;
+		t = get_reg(RC_INT);
+#ifdef TCC_TARGET_X86_64
+		sv.type.t = VT_PTR;
+#else
+		sv.type.t = VT_INT;
+#endif
+		sv.r = VT_LOCAL | VT_LVAL;
+		sv.c.ul = vtop[-1].c.ul;
+		load(t, &sv);
+		vtop[-1].r = t | VT_LVAL;
+		vtop[-1].c.ul = 0;
+	}
+	/* two word case handling : store second register at word + 4 */
+#ifdef TCC_TARGET_X86_64
+	if ((dbt == VT_QLONG) || (dbt == VT_QFLOAT))
+#else
+	if (dbt == VT_LLONG)
+#endif
+	{
+#ifdef TCC_TARGET_X86_64
+		int load_size = 8, load_type = (sbt == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
+#else
+		int load_size = 4, load_type = VT_INT;
+#endif
+		vtop[-1].type.t = load_type;
+		store(r, vtop - 1);
+		vswap();
+		/* convert to int to increment easily */
+		vtop->type = char_pointer_type;
+		gaddrof();
+		vpushi(load_size);
+		gen_op('+');
+		vtop->r |= VT_LVAL;
+		vswap();
+		vtop[-1].type.t = load_type;
+		/* XXX: it works because r2 is spilled last ! */
+		store(vtop->r2, vtop - 1);
+		vtop->type.t = ft;
+		vtop[-1].type.t = ft;
+	} else {
+		store(r, vtop - 1);
+	}
+}
+
 /* store vtop in lvalue pushed on stack */
 ST_FUNC void vstore(void)
 {
-    int sbt, dbt, ft, r, t, size, align, bit_size, bit_pos, rc, delayed_cast;
+    int sbt, dbt, ft, size, align, bit_size, bit_pos, delayed_cast;
 
     ft = vtop[-1].type.t;
     sbt = vtop->type.t & VT_BTYPE;
     dbt = ft & VT_BTYPE;
     if ((((sbt == VT_INT || sbt == VT_SHORT) && dbt == VT_BYTE) ||
-         (sbt == VT_INT && dbt == VT_SHORT))
-	&& !(vtop->type.t & VT_BITFIELD)) {
+         (sbt == VT_INT && dbt == VT_SHORT)) && !(vtop->type.t & VT_BITFIELD)) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
         vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));
@@ -2507,14 +2602,14 @@ ST_FUNC void vstore(void)
         vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
 
         /* duplicate source into other register */
-        gv_dup();
-        vswap();
-        vrott(3);
-
         if((ft & VT_BTYPE) == VT_BOOL) {
             gen_cast(&vtop[-1].type);
             vtop[-1].type.t = (vtop[-1].type.t & ~VT_BTYPE) | (VT_BYTE | VT_UNSIGNED);
         }
+
+		/* duplicate destination */
+        vdup();
+        vtop[-1] = vtop[-2];
 
         /* duplicate destination */
         vdup();
@@ -2556,56 +2651,7 @@ ST_FUNC void vstore(void)
         }
 #endif
         if (!nocode_wanted) {
-            rc = RC_INT;
-            if (is_float(ft)) {
-                rc = RC_FLOAT;
-#ifdef TCC_TARGET_X86_64
-                if ((ft & VT_BTYPE) == VT_LDOUBLE) {
-                    rc = RC_ST0;
-                } else if ((ft & VT_BTYPE) == VT_QFLOAT) {
-                    rc = RC_FRET;
-                }
-#endif
-            }
-            r = gv(rc);  /* generate value */
-            /* if lvalue was saved on stack, must read it */
-            if ((vtop[-1].r & VT_VALMASK) == VT_LLOCAL) {
-                SValue sv;
-                t = get_reg(RC_INT);
-#ifdef TCC_TARGET_X86_64
-                sv.type.t = VT_PTR;
-#else
-                sv.type.t = VT_INT;
-#endif
-                sv.r = VT_LOCAL | VT_LVAL;
-                sv.c.ul = vtop[-1].c.ul;
-                load(t, &sv);
-                vtop[-1].r = t | VT_LVAL;
-            }
-            /* two word case handling : store second register at word + 4 (or +8 for x86-64)  */
-#ifdef TCC_TARGET_X86_64
-            if (((ft & VT_BTYPE) == VT_QLONG) || ((ft & VT_BTYPE) == VT_QFLOAT)) {
-                int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
-#else
-            if ((ft & VT_BTYPE) == VT_LLONG) {
-                int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
-#endif
-                vtop[-1].type.t = load_type;
-                store(r, vtop - 1);
-                vswap();
-                /* convert to int to increment easily */
-                vtop->type.t = addr_type;
-                gaddrof();
-                vpushi(load_size);
-                gen_op('+');
-                vtop->r |= VT_LVAL;
-                vswap();
-                vtop[-1].type.t = load_type;
-                /* XXX: it works because r2 is spilled last ! */
-                store(vtop->r2, vtop - 1);
-            } else {
-                store(r, vtop - 1);
-            }
+            vstore_im();
         }
         vswap();
         vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
@@ -4623,6 +4669,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gsym_addr(b, d);
     } else if (tok == '{') {
         Sym *llabel;
+		int saved_loc, saved_pop_stack, size;
         int block_vla_sp_loc, *saved_vla_sp_loc, saved_vla_flags;
 
         next();
@@ -4632,7 +4679,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         frame_bottom->next = scope_stack_bottom;
         scope_stack_bottom = frame_bottom;
         llabel = local_label_stack;
-        
+
+		saved_loc = loc;
+		saved_pop_stack = pop_stack;
+
         /* save VLA state */
         block_vla_sp_loc = *(saved_vla_sp_loc = vla_sp_loc);
         if (saved_vla_sp_loc != &vla_sp_root_loc)
@@ -4684,7 +4734,12 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         /* pop locally defined symbols */
         scope_stack_bottom = scope_stack_bottom->next;
         sym_pop(&local_stack, s);
-        
+
+		size = -(loc - saved_loc);
+		pop_stack = saved_pop_stack;
+		if(size)
+			pop_stack += size;
+
         /* Pop VLA frames and restore stack pointer if required */
         if (saved_vla_sp_loc != &vla_sp_root_loc)
             *saved_vla_sp_loc = block_vla_sp_loc;

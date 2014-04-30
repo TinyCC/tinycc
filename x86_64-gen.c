@@ -826,7 +826,7 @@ void gfunc_prolog(CType *func_type)
 
     func_ret_sub = 0;
     func_scratch = 0;
-    loc = 0;
+    pop_stack = loc = 0;
 
     addr = PTR_SIZE * 2;
     ind += FUNC_PROLOG_SIZE;
@@ -968,12 +968,14 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
     case VT_BYTE:
     case VT_SHORT:
     case VT_LLONG:
+	case VT_QLONG:
     case VT_BOOL:
     case VT_PTR:
     case VT_FUNC:
     case VT_ENUM: return x86_64_mode_integer;
     
     case VT_FLOAT:
+	case VT_QFLOAT:
     case VT_DOUBLE: return x86_64_mode_sse;
     
     case VT_LDOUBLE: return x86_64_mode_x87;
@@ -984,7 +986,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
         // Detect union
         if (f->next && (f->c == f->next->c))
           return x86_64_mode_memory;
-        
+
         mode = x86_64_mode_none;
         for (f = f->next; f; f = f->next)
             mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type));
@@ -995,14 +997,14 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
     assert(0);
 }
 
-static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
+static int classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
 {
     X86_64_Mode mode;
     int size, align, ret_t = 0;
     
     if (ty->t & (VT_BITFIELD|VT_ARRAY)) {
         *psize = 8;
-        *palign = 8;
+		*palign = 8;
         *reg_count = 1;
         ret_t = ty->t;
         mode = x86_64_mode_integer;
@@ -1013,6 +1015,7 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
     
         if (size > 16) {
             mode = x86_64_mode_memory;
+			ret_t = ty->t;
         } else {
             mode = classify_x86_64_inner(ty);
             switch (mode) {
@@ -1021,16 +1024,22 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     *reg_count = 2;
                     ret_t = VT_QLONG;
                 } else {
-                    *reg_count = 1;
-                    ret_t = (size > 4) ? VT_LLONG : VT_INT;
-                }
+					*reg_count = 1;
+					if(size > 4)
+						ret_t = VT_LLONG;
+					else if(size > 2){
+						ret_t = VT_INT;
+					}else if(size > 1)
+						ret_t = VT_SHORT;
+					else
+						ret_t = VT_BYTE;
+				}
+				ret_t |= (ty->t & VT_UNSIGNED);
                 break;
-                
             case x86_64_mode_x87:
                 *reg_count = 1;
                 ret_t = VT_LDOUBLE;
                 break;
-
             case x86_64_mode_sse:
                 if (size > 8) {
                     *reg_count = 2;
@@ -1040,13 +1049,15 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
                 }
                 break;
-            default: break; /* nothing to be done for x86_64_mode_memory and x86_64_mode_none*/
+			default:
+				ret_t = ty->t;
+				break; /* nothing to be done for x86_64_mode_memory and x86_64_mode_none*/
             }
         }
     }
     
     if (ret) {
-        ret->ref = NULL;
+        ret->ref = ty->ref;
         ret->t = ret_t;
     }
     
@@ -1057,12 +1068,13 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty)
 {
     /* This definition must be synced with stdarg.h */
     enum __va_arg_type {
-        __va_gen_reg, __va_float_reg, __va_stack
-    };
+		__va_gen_reg, __va_float_reg, __va_ld_reg, __va_stack
+	};
     int size, align, reg_count;
     X86_64_Mode mode = classify_x86_64_arg(ty, NULL, &size, &align, &reg_count);
     switch (mode) {
     default: return __va_stack;
+	case x86_64_mode_x87: return __va_ld_reg;
     case x86_64_mode_integer: return __va_gen_reg;
     case x86_64_mode_sse: return __va_float_reg;
     }
@@ -1387,7 +1399,7 @@ void gfunc_prolog(CType *func_type)
 
     sym = func_type->ref;
     addr = PTR_SIZE * 2;
-    loc = 0;
+    pop_stack = loc = 0;
     ind += FUNC_PROLOG_SIZE;
     func_sub_sp_offset = ind;
     func_ret_sub = 0;
@@ -1398,7 +1410,6 @@ void gfunc_prolog(CType *func_type)
         /* frame pointer and return address */
         seen_stack_size = PTR_SIZE * 2;
         /* count the number of seen parameters */
-        sym = func_type->ref;
         while ((sym = sym->next) != NULL) {
             type = &sym->type;
             mode = classify_x86_64_arg(type, NULL, &size, &align, &reg_count);
@@ -1439,19 +1450,19 @@ void gfunc_prolog(CType *func_type)
         o(0xf845c7);
         gen_le32(seen_stack_size);
 
+		o(0xc084);/* test   %al,%al */
+		o(0x74);/* je */
+		g(4*(8 - seen_sse_num) + 3);
+
         /* save all register passing arguments */
         for (i = 0; i < 8; i++) {
             loc -= 16;
-            o(0xd60f66); /* movq */
+            o(0x290f);/* movaps %xmm1-7,-XXX(%rbp) */
             gen_modrm(7 - i, VT_LOCAL, NULL, loc);
-            /* movq $0, loc+8(%rbp) */
-            o(0x85c748);
-            gen_le32(loc + 8);
-            gen_le32(0);
         }
-        for (i = 0; i < REGN; i++) {
-            push_arg_reg(REGN-1-i);
-        }
+        for (i = 0; i < (REGN - seen_reg_num); i++) {
+            push_arg_reg(REGN-1 - i);
+		}
     }
 
     sym = func_type->ref;

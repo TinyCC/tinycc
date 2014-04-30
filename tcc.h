@@ -1194,6 +1194,7 @@ ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
+ST_DATA int pop_stack;
 
 ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
