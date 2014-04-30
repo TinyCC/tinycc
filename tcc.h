@@ -274,7 +274,7 @@
 # define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 #endif
 
-/* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
+/* library to use with CONFIG_USE_LIBGCC instead of libcrt.a */
 #define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 
 /* -------------------------------------------- */

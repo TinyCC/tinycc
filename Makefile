@@ -22,7 +22,7 @@ endif
 endif
 else # not GCC
 ifeq (-$(findstring clang,$(CC))-,-clang-)
-# make clang accept gnuisms in libtcc1.c
+# make clang accept gnuisms in libcrt.c
 CFLAGS+=-fheinous-gnu-extensions
 endif
 endif
@@ -113,29 +113,29 @@ ifdef CONFIG_WIN64
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN64_FILES)
 PROGS_CROSS=$(WIN32_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
-LIBTCC1=libtcc1.a
+LIBTCC1_CROSS=lib/i386-win32/libcrt.a
+LIBCRT=libcrt.a
 else ifdef CONFIG_WIN32
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN32_FILES)
 PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
-LIBTCC1=libtcc1.a
+LIBTCC1_CROSS=lib/x86_64-win32/libcrt.a
+LIBCRT=libcrt.a
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
-LIBTCC1=libtcc1.a
+LIBTCC1_CROSS=lib/i386-win32/libcrt.a lib/x86_64-win32/libcrt.a
+LIBCRT=libcrt.a
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
-LIBTCC1=libtcc1.a
+LIBTCC1_CROSS=lib/i386-win32/libcrt.a lib/x86_64-win32/libcrt.a lib/i386/libcrt.a
+LIBCRT=libcrt.a
 else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(C67_CROSS)
-LIBTCC1=libtcc1.a
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
+LIBCRT=libcrt.a
+LIBTCC1_CROSS=lib/i386-win32/libcrt.a lib/x86_64-win32/libcrt.a lib/i386/libcrt.a
 endif
 PROGS_CROSS_LINK=$(foreach PROG_CROSS,$(PROGS_CROSS),$($(PROG_CROSS)_LINK))
 
@@ -143,7 +143,7 @@ ifeq ($(TARGETOS),Darwin)
 PROGS+=tiny_libmaker$(EXESUF)
 endif
 
-TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCC_EXTRA)
+TCCLIBS = $(LIBCRT) $(LIBTCC) $(LIBTCC_EXTRA)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
@@ -225,9 +225,9 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # TinyCC runtime libraries
-libtcc1.a : FORCE
+libcrt.a : FORCE
 	$(MAKE) -C lib native
-lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
+lib/%/libcrt.a : FORCE $(PROGS_CROSS)
 	$(MAKE) -C lib cross TARGET=$*
 
 FORCE:
@@ -258,8 +258,8 @@ endif
 	-$(INSTALL) -m644 tcc-doc.info "$(infodir)"
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
-ifneq ($(LIBTCC1),)
-	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
+ifneq ($(LIBCRT),)
+	$(INSTALL) -m644 $(LIBCRT) "$(tccdir)"
 endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
@@ -277,19 +277,19 @@ ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/64"
 ifneq ($(ARCH),i386)
 	mkdir -p "$(tccdir)/i386"
-	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
+	$(INSTALL) -m644 lib/i386/libcrt.a "$(tccdir)/i386"
 	cp -r "$(tccdir)/include" "$(tccdir)/i386"
 endif
 	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
-	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
-	$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
+	$(INSTALL) -m644 lib/i386-win32/libcrt.a "$(tccdir)/win32/lib/32"
+	$(INSTALL) -m644 lib/x86_64-win32/libcrt.a "$(tccdir)/win32/lib/64"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/win32/include"
 	cp -r "$(tccdir)/include" "$(tccdir)/win32"
 endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
-	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
+	rm -fv $(foreach P,$(LIBCRT),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(tccdir)/include/tcclib.h"
 	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
@@ -310,7 +310,7 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
 	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
-	$(INSTALL) -m644 $(LIBTCC1) $(top_srcdir)/win32/lib/*.def "$(tccdir)/lib"
+	$(INSTALL) -m644 $(LIBCRT) $(top_srcdir)/win32/lib/*.def "$(tccdir)/lib"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/include"
 	cp -r $(top_srcdir)/win32/examples/. "$(tccdir)/examples"
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
@@ -320,8 +320,8 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
-	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/lib/32"
-	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/lib/64"
+	-$(INSTALL) -m644 lib/i386-win32/libcrt.a "$(tccdir)/lib/32"
+	-$(INSTALL) -m644 lib/x86_64-win32/libcrt.a "$(tccdir)/lib/64"
 endif
 
 uninstall:
@@ -340,7 +340,7 @@ tcc-doc.info: tcc-doc.texi
 	-makeinfo $<
 
 # in tests subdir
-export LIBTCC1
+export LIBCRT
 
 %est:
 	$(MAKE) -C tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
@@ -348,7 +348,7 @@ export LIBTCC1
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
-ifneq ($(LIBTCC1),)
+ifneq ($(LIBCRT),)
 	$(MAKE) -C lib $@
 endif
 

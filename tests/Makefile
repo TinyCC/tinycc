@@ -66,8 +66,8 @@ RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
 
 # libtcc test
-ifdef LIBTCC1
- LIBTCC1:=$(TOP)/$(LIBTCC1)
+ifdef LIBCRT
+ LIBCRT:=$(TOP)/$(LIBCRT)
 endif
 
 all test : $(TESTS)
@@ -89,7 +89,7 @@ hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------
 	$(TCC) -run $<
 
-libtest: libtcc_test$(EXESUF) $(LIBTCC1)
+libtest: libtcc_test$(EXESUF) $(LIBCRT)
 	@echo ------------ $@ ------------
 	./libtcc_test$(EXESUF) lib_path=..
 
@@ -101,7 +101,7 @@ moretests:
 	$(MAKE) -C tests2
 
 w32-prep:
-	cp ../libtcc1.a ../lib
+	cp ../libcrt.a ../lib
 
 # test.ref - generate using cc
 test.ref: tcctest.c
@@ -242,4 +242,4 @@ clean:
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
 		*-cc *-tcc *.exe \
 		hello libtcc_test vla_test tcctest[1234] ex? tcc_g tcclib.h \
-		../lib/libtcc1.a
+		../lib/libcrt.a

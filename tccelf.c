@@ -1443,16 +1443,16 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_USE_LIBGCC
         if (!s1->static_link) {
             tcc_add_file(s1, TCC_LIBGCC);
-            tcc_add_support(s1, "libtcc1.a");
+            tcc_add_support(s1, "libcrt.a");
 	} else
-            tcc_add_support(s1, "libtcc1.a");
+            tcc_add_support(s1, "libcrt.a");
 #else
-        tcc_add_support(s1, "libtcc1.a");
+        tcc_add_support(s1, "libcrt.a");
 #endif
     }
 
     /* tcc_add_bcheck tries to relocate a call to __bound_init in _init so
-       libtcc1.a must be loaded before for __bound_init to be defined and
+       libcrt.a must be loaded before for __bound_init to be defined and
        crtn.o must be loaded after to not finalize _init too early. */
     tcc_add_bcheck(s1);
 
