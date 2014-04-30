@@ -52,10 +52,10 @@ ST_DATA struct TCCState *tcc_state;
 #include "x86_64-gen.c"
 #endif
 #ifdef CONFIG_TCC_ASM
-#include "tccasm.c"
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "i386-asm.c"
+#include "asmx86.c"
 #endif
+#include "tccasm.c"
 #endif
 #ifdef TCC_TARGET_COFF
 #include "tcccoff.c"

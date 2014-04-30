@@ -147,6 +147,7 @@
 /* #define MEM_DEBUG */
 /* assembler debug */
 /* #define ASM_DEBUG */
+/* #define PRINTF_ASM_CODE */
 
 /* target selection */
 /* #define TCC_TARGET_I386   *//* i386 code generator */

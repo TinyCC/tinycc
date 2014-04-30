@@ -20,7 +20,6 @@
 
 #include "tcc.h"
 #ifdef CONFIG_TCC_ASM
-
 ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 {
     char buf[64];
@@ -483,7 +482,7 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASM_globl:
     case TOK_ASM_global:
     case TOK_ASM_weak:
-    case TOK_ASM_hidden:
+	case TOK_ASM_hidden:
     tok1 = tok;
 	do { 
             Sym *sym;
@@ -494,12 +493,12 @@ static void asm_parse_directive(TCCState *s1)
                 sym = label_push(&s1->asm_labels, tok, 0);
                 sym->type.t = VT_VOID;
             }
-	    if (tok1 != TOK_ASM_hidden)
+            if (tok1 != TOK_ASM_hidden)
                 sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASM_weak)
                 sym->type.t |= VT_WEAK;
-	    else if (tok1 == TOK_ASM_hidden)
-	        sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
+			else if (tok1 == TOK_ASM_hidden)
+				sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
             next();
 	} while (tok == ',');
 	break;
@@ -697,42 +696,15 @@ static void asm_parse_directive(TCCState *s1)
     }
 }
 
-
 /* assemble a file */
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
 {
     int opcode;
 
-#if 0
+#ifdef PRINTF_ASM_CODE
+	ST_FUNC void printf_asm_opcode();
     /* print stats about opcodes */
-    {
-        const ASMInstr *pa;
-        int freq[4];
-        int op_vals[500];
-        int nb_op_vals, i, j;
-
-        nb_op_vals = 0;
-        memset(freq, 0, sizeof(freq));
-        for(pa = asm_instrs; pa->sym != 0; pa++) {
-            freq[pa->nb_ops]++;
-            for(i=0;i<pa->nb_ops;i++) {
-                for(j=0;j<nb_op_vals;j++) {
-                    if (pa->op_type[i] == op_vals[j])
-                        goto found;
-                }
-                op_vals[nb_op_vals++] = pa->op_type[i];
-            found: ;
-            }
-        }
-        for(i=0;i<nb_op_vals;i++) {
-            int v = op_vals[i];
-            if ((v & (v - 1)) != 0)
-                printf("%3d: %08x\n", i, v);
-        }
-        printf("size=%d nb=%d f0=%d f1=%d f2=%d f3=%d\n",
-               sizeof(asm_instrs), sizeof(asm_instrs) / sizeof(ASMInstr),
-               freq[0], freq[1], freq[2], freq[3]);
-    }
+	printf_asm_opcode();
 #endif
 
     /* XXX: undefine C labels */
@@ -814,9 +786,8 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
        symbols can be safely used */
-    put_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
-                SHN_ABS, file->filename);
+    put_elf_sym(symtab_section, 0, 0, ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
+		SHN_ABS, file->filename);
 
     ret = tcc_assemble_internal(s1, do_preprocess);
 

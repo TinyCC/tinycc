@@ -101,11 +101,11 @@ $(ARM_EABI_CROSS)_LINK = arm-eabi-tcc$(EXESUF)
 
 CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
-I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
-WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
-WIN64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h tccpe.c
+I386_FILES = $(CORE_FILES) i386-gen.c asmx86.c i386-asm.h asmx86-tok.h
+WIN32_FILES = $(CORE_FILES) i386-gen.c asmx86.c i386-asm.h asmx86-tok.h tccpe.c
+WIN64_FILES = $(CORE_FILES) x86_64-gen.c asmx86.c x86_64-asm.h tccpe.c
 WINCE_FILES = $(CORE_FILES) arm-gen.c tccpe.c
-X86_64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h
+X86_64_FILES = $(CORE_FILES) x86_64-gen.c asmx86.c x86_64-asm.h
 ARM_FILES = $(CORE_FILES) arm-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
 
