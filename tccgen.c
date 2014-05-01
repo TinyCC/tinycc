@@ -520,7 +520,7 @@ ST_FUNC void vpushv(SValue *v)
     *vtop = *v;
 }
 
-static void vdup(void)
+ST_FUNC void vdup(void)
 {
     vpushv(vtop);
 }
@@ -682,7 +682,7 @@ static void move_reg(int r, int s, int t)
 }
 
 /* get address of vtop (vtop MUST BE an lvalue) */
-static void gaddrof(void)
+ST_FUNC void gaddrof(void)
 {
     if (vtop->r & VT_REF)
         gv(RC_INT);
@@ -2531,31 +2531,55 @@ ST_FUNC void vstore(void)
         /* structure assignment : generate memcpy */
         /* XXX: optimize if small size */
         if (!nocode_wanted) {
-            size = type_size(&vtop->type, &align);
-
-            /* destination */
-            vswap();
-            vtop->type.t = VT_PTR;
-            gaddrof();
-
-            /* address of memcpy() */
+			SValue ret;
+			int ret_nregs, ret_align;
+			ret_nregs = gfunc_sret(&vtop->type, func_var, &ret.type, &ret_align);
+			if(0){
+				vswap();
+				vpushv(vtop - 1);
+				vtop[0].type = ret.type;
+				vtop[-1].type = ret.type;
+				vstore_im();
+				vtop -=2;
+			}else{
+				size = type_size(&vtop->type, &align);
 #ifdef TCC_ARM_EABI
-            if(!(align & 7))
-                vpush_global_sym(&func_old_type, TOK_memcpy8);
-            else if(!(align & 3))
-                vpush_global_sym(&func_old_type, TOK_memcpy4);
-            else
-#endif
-            vpush_global_sym(&func_old_type, TOK_memcpy);
+				/* destination */
+				vswap();
+				vtop->type.t = VT_PTR;
+				gaddrof();
 
-            vswap();
-            /* source */
-            vpushv(vtop - 2);
-            vtop->type.t = VT_PTR;
-            gaddrof();
-            /* type size */
-            vpushi(size);
-            gfunc_call(3);
+				/* address of memcpy() */
+				if(!(align & 7))
+					vpush_global_sym(&func_old_type, TOK_memcpy8);
+				else if(!(align & 3))
+					vpush_global_sym(&func_old_type, TOK_memcpy4);
+				else
+				vpush_global_sym(&func_old_type, TOK_memcpy);
+
+				vswap();
+				/* source */
+				vpushv(vtop - 2);
+				vtop->type.t = VT_PTR;
+				gaddrof();
+				/* type size */
+				vpushi(size);
+				gfunc_call(3);
+#else
+			/* destination */
+				vswap();
+				vtop->type.t = VT_PTR;
+				gaddrof();
+				/* source */
+				vpushv(vtop - 1);
+				vtop->type.t = VT_PTR;
+				gaddrof();
+				/* size */
+				vpushi(size);
+				struct_copy(&vtop[-2], &vtop[-1], &vtop[0]);
+				vtop -=3;
+#endif
+			}
         } else {
             vswap();
             vpop();

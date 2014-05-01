@@ -1237,6 +1237,8 @@ ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
 ST_FUNC void gen_inline_functions(void);
 ST_FUNC void decl(int l);
+ST_FUNC void vdup(void);
+ST_FUNC void gaddrof(void);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif

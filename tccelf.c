@@ -1596,7 +1596,7 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     put32(s1->got->data + offset, sym->st_value & 0xffffffff);
 }
 
-/* Perform relocation to GOT or PLT entries */
+/* Perform relocation to GOT or PLT entries */
 ST_FUNC void fill_got(TCCState *s1)
 {
     Section *s;
@@ -2469,7 +2469,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             goto the_end;
     }
 
-    /* Perform relocation to GOT or PLT entries */
+    /* Perform relocation to GOT or PLT entries */
     if (file_type == TCC_OUTPUT_EXE && s1->static_link)
         fill_got(s1);
 
