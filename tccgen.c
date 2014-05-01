@@ -4627,7 +4627,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gsym_addr(b, d);
     } else if (tok == '{') {
         Sym *llabel;
-		int saved_loc, saved_pop_stack, size;
         int block_vla_sp_loc, *saved_vla_sp_loc, saved_vla_flags;
 
         next();
@@ -4637,9 +4636,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         frame_bottom->next = scope_stack_bottom;
         scope_stack_bottom = frame_bottom;
         llabel = local_label_stack;
-
-		saved_loc = loc;
-		saved_pop_stack = pop_stack;
 
         /* save VLA state */
         block_vla_sp_loc = *(saved_vla_sp_loc = vla_sp_loc);
@@ -4692,11 +4688,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         /* pop locally defined symbols */
         scope_stack_bottom = scope_stack_bottom->next;
         sym_pop(&local_stack, s);
-
-		size = -(loc - saved_loc);
-		pop_stack = saved_pop_stack;
-		if(size)
-			pop_stack += size;
 
         /* Pop VLA frames and restore stack pointer if required */
         if (saved_vla_sp_loc != &vla_sp_root_loc)
