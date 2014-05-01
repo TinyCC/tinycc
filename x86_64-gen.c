@@ -1207,19 +1207,19 @@ doing:
 			mode = classify_x86_64_arg(&vtop->type, &type, &size, &align, &reg_count);
 			switch (mode) {
 			case x86_64_mode_x87:
-				/* 必须保证 TREG_ST0 的唯一 */
+				/* Must ensure TREG_ST0 only */
 				if((vtop->type.t & VT_BTYPE) == VT_STRUCT){
 					vdup();
 					vtop->type = type;
 					gv(RC_ST0);
 					args_size -= size;
 					gen_offs_sp(0xdb, 0x107, args_size);
-					vtop--;//释放 TREG_ST0
+					vtop--;//Release TREG_ST0
 				}else{
 					gv(RC_ST0);
 					args_size -= size;
 					gen_offs_sp(0xdb, 0x107, args_size);
-					vtop->r = VT_CONST;//释放 TREG_ST0
+					vtop->r = VT_CONST;//Release TREG_ST0
 				}
                 break;
 			case x86_64_mode_memory:
