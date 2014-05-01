@@ -70,7 +70,7 @@ ifdef LIBCRT
  LIBCRT:=$(TOP)/$(LIBCRT)
 endif
 
-all test : $(TESTS)
+all test : clean $(TESTS)
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
@@ -210,10 +210,14 @@ abitest-cc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 abitest-tcc$(EXESUF): abitest.c libtcc.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE $(LIBS) $(LDFLAGS) -I$(top_srcdir)
 
-abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
+abitest-tcc1$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
+	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
+
+abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF) abitest-tcc1$(EXESUF)
 	@echo ------------ $@ ------------
 	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 	./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
+	./abitest-tcc1$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 
 vla_test$(EXESUF): vla_test.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS)
@@ -240,6 +244,6 @@ cache: tcc_g
 clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
-		*-cc *-tcc *.exe \
+		*-cc *-tcc *.exe *-tcc1\
 		hello libtcc_test vla_test tcctest[1234] ex? tcc_g tcclib.h \
 		../lib/libcrt.a

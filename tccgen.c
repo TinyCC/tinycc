@@ -5224,16 +5224,17 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
     if (sec) {
         /* nothing to do because globals are already set to zero */
     } else {
+#ifdef TCC_TARGET_ARM
         vpush_global_sym(&func_old_type, TOK_memset);
         vseti(VT_LOCAL, c);
-#ifdef TCC_TARGET_ARM
         vpushs(size);
         vpushi(0);
-#else
-        vpushi(0);
-        vpushs(size);
-#endif
         gfunc_call(3);
+#else
+		vseti(VT_LOCAL, c);
+		gen_putz(vtop, size);
+		vtop--;
+#endif
     }
 }
 

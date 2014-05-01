@@ -592,6 +592,31 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
+void struct_copy(SValue *d, SValue *s, SValue *c)
+{
+	if(!c->c.i)
+		return;
+	save_reg(TREG_RCX);
+	load(TREG_RCX, c);
+	load(TREG_RDI, d);
+	load(TREG_RSI, s);
+	o(0xa4f3);// rep movsb
+}
+
+void gen_putz(SValue *d, int size)
+{
+	if(!size)
+		return;
+	save_reg(TREG_RAX);
+	o(0xb0);
+	g(0x00);
+	save_reg(TREG_RCX);
+	o(0xb8 + REG_VALUE(TREG_RCX)); /* mov $xx, r */
+	gen_le32(size);
+	load(TREG_RDI, d);
+	o(0xaaf3);//rep stos
+}
+
 #ifdef TCC_TARGET_PE
 
 #define REGN 4
@@ -1060,14 +1085,6 @@ static const uint8_t arg_regs[REGN] = {
     TREG_RDI, TREG_RSI, TREG_RDX, TREG_RCX, TREG_R8, TREG_R9
 };
 
-static int arg_prepare_reg(int idx) {
-  if (idx == 2 || idx == 3)
-      /* idx=2: r10, idx=3: r11 */
-      return idx + 8;
-  else
-      return arg_regs[idx];
-}
-
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
@@ -1080,6 +1097,9 @@ void gfunc_call(int nb_args)
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
 
+	/* fetch cpu flag before the following sub will change the value */
+	if (vtop >= vstack && (vtop->r & VT_VALMASK) == VT_CMP)
+		gv(RC_INT);
     /* calculate the number of integer/float register arguments */
     for(i = 0; i < nb_args; i++) {
         mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
@@ -1276,7 +1296,7 @@ void gfunc_call(int nb_args)
     }
     
     /* XXX This should be superfluous.  */
-    save_regs(0); /* save used temporary registers */
+   // save_regs(0); /* save used temporary registers */
 
     /* then, we prepare register passing arguments.
        Note that we cannot set RDX and RCX in this loop because gv()
@@ -1289,36 +1309,34 @@ void gfunc_call(int nb_args)
         /* Alter stack entry type so that gv() knows how to treat it */
         vtop->type = type;
         if (mode == x86_64_mode_sse) {
-            if (reg_count == 2) {
-                sse_reg -= 2;
-                gv(RC_FRET); /* Use pair load into xmm0 & xmm1 */
-                if (sse_reg) { /* avoid redundant movaps %xmm0, %xmm0 */
-                    /* movaps %xmm0, %xmmN */
-                    o(0x280f);
-                    o(0xc0 + (sse_reg << 3));
-                    /* movaps %xmm1, %xmmN */
-                    o(0x280f);
-                    o(0xc1 + ((sse_reg+1) << 3));
-                }
-            } else {
-                assert(reg_count == 1);
-                --sse_reg;
-                /* Load directly to register */
-                gv(RC_XMM0 << sse_reg);
-            }
+            sse_reg -= reg_count;
+			if (sse_reg + reg_count <= 8) {
+				if (reg_count == 2) {
+					ex_rc = RC_XMM0 << (sse_reg + 1);
+					gv(RC_XMM0 << sse_reg);
+				}else{
+					assert(reg_count == 1);
+					/* Load directly to register */
+					gv(RC_XMM0 << sse_reg);
+				}
+			}
         } else if (mode == x86_64_mode_integer) {
             /* simple type */
             /* XXX: implicit cast ? */
+			int d;
             gen_reg -= reg_count;
-            r = gv(RC_INT);
-            int d = arg_prepare_reg(gen_reg);
-            orex(1,d,r,0x89); /* mov */
-            o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-            if (reg_count == 2) {
-                d = arg_prepare_reg(gen_reg+1);
-                orex(1,d,vtop->r2,0x89); /* mov */
-                o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
-            }
+            if (gen_reg + reg_count <= REGN) {
+				if (reg_count == 2) {
+					d = arg_regs[gen_reg+1];
+					ex_rc = reg_classes[d] & ~RC_MASK;
+					d = arg_regs[gen_reg];
+					gv(reg_classes[d] & ~RC_MASK);
+				}else{
+					assert(reg_count == 1);
+					d = arg_regs[gen_reg];
+					gv(reg_classes[d] & ~RC_MASK);
+				}
+			}
         }
         vtop--;
     }
@@ -1330,15 +1348,6 @@ void gfunc_call(int nb_args)
        (or edx/ecx) currently, which the below writes would clobber.
        So evict all remaining operands here.  */
     save_regs(0);
-
-    /* Copy R10 and R11 into RDX and RCX, respectively */
-    if (nb_reg_args > 2) {
-        o(0xd2894c); /* mov %r10, %rdx */
-        if (nb_reg_args > 3) {
-            o(0xd9894c); /* mov %r11, %rcx */
-        }
-    }
-
     oad(0xb8, nb_sse_args < 8 ? nb_sse_args : 8); /* mov nb_sse_args, %eax */
     gcall_or_jmp(0);
     if (args_size)
