@@ -1025,8 +1025,8 @@ static int rc_fret(int t)
     if (t == VT_LDOUBLE) {
         return RC_ST0;
     }
-#endif
 	ex_rc = RC_QRET;
+#endif
     return RC_FRET;
 }
 
