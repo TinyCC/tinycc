@@ -405,6 +405,14 @@ void load(int r, SValue *sv)
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
+        if(fr & VT_TMP){
+			int size, align;
+			if((ft & VT_BTYPE) == VT_FUNC)
+				size = 8;
+			else
+				size = type_size(&sv->type, &align);
+			loc_stack(size, 0);
+		}
         if (v == VT_LLOCAL) {
             v1.type.t = VT_PTR;
             v1.r = VT_LOCAL | VT_LVAL;
@@ -602,6 +610,24 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
+static int func_scratch;
+static int r_loc;
+
+int reloc_add(int inds)
+{
+	return psym(0, inds);
+}
+
+void reloc_use(int t, int data)
+{
+	int *ptr;
+    while (t) {
+        ptr = (int *)(cur_text_section->data + t);
+        t = *ptr; /* next value */
+        *ptr = data;
+    }
+}
+
 void struct_copy(SValue *d, SValue *s, SValue *c)
 {
 	if(!c->c.i)
@@ -646,9 +672,6 @@ void gen_offs_sp(int b, int r, int off)
         gen_le32(off);
     }
 }
-
-static int func_scratch;
-static int r_loc;
 
 #ifdef TCC_TARGET_PE
 
@@ -905,7 +928,7 @@ void gfunc_epilog(void)
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
     /* align local size to word & save local variables */
     v = (func_scratch + -loc + 15) & -16;
-
+    reloc_use(r_loc, func_scratch);
     if (v >= 4096) {
         Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
@@ -1210,6 +1233,7 @@ doing:
 				/* Must ensure TREG_ST0 only */
 				if((vtop->type.t & VT_BTYPE) == VT_STRUCT){
 					vdup();
+                    vtop[-1].r = VT_CONST;
 					vtop->type = type;
 					gv(RC_ST0);
 					args_size -= size;
@@ -1228,7 +1252,7 @@ doing:
 				vpushv(&vtop[-1]);
 				vtop->type = char_pointer_type;
 				gaddrof();
-				vpushi(size);
+				vpushs(size);
 				struct_copy(&vtop[-2], &vtop[-1], &vtop[0]);
 				vtop -= 3;
 				break;
@@ -1474,6 +1498,7 @@ void gfunc_epilog(void)
     }
     /* align local size to word & save local variables */
     v = (func_scratch -loc + 15) & -16;
+    reloc_use(r_loc, func_scratch);
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
     o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */
@@ -2043,27 +2068,19 @@ ST_FUNC void gen_vla_sp_restore(int addr) {
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-#ifdef TCC_TARGET_PE
-    /* alloca does more than just adjust %rsp on Windows */
-    vpush_global_sym(&func_old_type, TOK_alloca);
-    vswap(); /* Move alloca ref past allocation size */
-    gfunc_call(1);
-    vset(type, REG_IRET, 0);
-#else
     int r;
     r = gv(RC_INT); /* allocation size */
     /* sub r,%rsp */
     o(0x2b48);
     o(0xe0 | REG_VALUE(r));
-    /* We align to 16 bytes rather than align */
-    /* and ~15, %rsp */
+	/* and ~15, %rsp */
     o(0xf0e48348);
     /* mov %rsp, r */
-    o(0x8948);
-    o(0xe0 | REG_VALUE(r));
+	orex(1, 0, r, 0x8d);
+	o(0x2484 | (REG_VALUE(r)*8));
+	r_loc = reloc_add(r_loc);
     vpop();
     vset(type, r, 0);
-#endif
 }
 
 

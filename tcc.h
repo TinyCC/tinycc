@@ -761,7 +761,7 @@ struct TCCState {
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
 #define VT_BOUNDED   	0x8000  /* value is bounded. The address of the
                                 bounding function call point is in vc */
-#define VT_TMP		0x10000
+#define VT_TMP		0x10000     /* luck or tmp stack */
 
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */
@@ -1212,6 +1212,7 @@ ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void swap(int *p, int *q);
 ST_FUNC void vpushi(int v);
+ST_FUNC void vpushs(addr_t v);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
@@ -1247,6 +1248,7 @@ ST_FUNC void gen_inline_functions(void);
 ST_FUNC void decl(int l);
 ST_FUNC void vdup(void);
 ST_FUNC void gaddrof(void);
+ST_FUNC int loc_stack(int size, int is_sub);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif
