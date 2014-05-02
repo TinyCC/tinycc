@@ -2543,30 +2543,32 @@ ST_FUNC void vstore(void)
 				vtop -=2;
 			}else{
 				size = type_size(&vtop->type, &align);
-#ifdef TCC_ARM_EABI
-				/* destination */
-				vswap();
-				vtop->type.t = VT_PTR;
-				gaddrof();
+#ifndef TCC_TARGET_X86_64
+                /* destination */
+                vswap();
+                vtop->type.t = VT_PTR;
+                gaddrof();
 
-				/* address of memcpy() */
-				if(!(align & 7))
-					vpush_global_sym(&func_old_type, TOK_memcpy8);
-				else if(!(align & 3))
-					vpush_global_sym(&func_old_type, TOK_memcpy4);
-				else
-				vpush_global_sym(&func_old_type, TOK_memcpy);
+                /* address of memcpy() */
+#   ifdef TCC_ARM_EABI
+                if(!(align & 7))
+                    vpush_global_sym(&func_old_type, TOK_memcpy8);
+                else if(!(align & 3))
+                    vpush_global_sym(&func_old_type, TOK_memcpy4);
+                else
+#   endif
+                vpush_global_sym(&func_old_type, TOK_memcpy);
 
-				vswap();
-				/* source */
-				vpushv(vtop - 2);
-				vtop->type.t = VT_PTR;
-				gaddrof();
-				/* type size */
-				vpushi(size);
-				gfunc_call(3);
+                vswap();
+                /* source */
+                vpushv(vtop - 2);
+                vtop->type.t = VT_PTR;
+                gaddrof();
+                /* type size */
+                vpushi(size);
+                gfunc_call(3);
 #else
-			/* destination */
+                /* destination */
 				vswap();
 				vtop->type.t = VT_PTR;
 				gaddrof();
@@ -5239,14 +5241,19 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
     if (sec) {
         /* nothing to do because globals are already set to zero */
     } else {
-#ifdef TCC_TARGET_ARM
+#ifndef TCC_TARGET_X86_64
         vpush_global_sym(&func_old_type, TOK_memset);
         vseti(VT_LOCAL, c);
+#ifdef TCC_TARGET_ARM
         vpushs(size);
         vpushi(0);
+#else
+        vpushi(0);
+        vpushs(size);
+#endif
         gfunc_call(3);
 #else
-		vseti(VT_LOCAL, c);
+        vseti(VT_LOCAL, c);
 		gen_putz(vtop, size);
 		vtop--;
 #endif
