@@ -5244,13 +5244,13 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
 #ifndef TCC_TARGET_X86_64
         vpush_global_sym(&func_old_type, TOK_memset);
         vseti(VT_LOCAL, c);
-#ifdef TCC_TARGET_ARM
+#   ifdef TCC_TARGET_ARM
         vpushs(size);
         vpushi(0);
-#else
+#   else
         vpushi(0);
         vpushs(size);
-#endif
+#   endif
         gfunc_call(3);
 #else
         vseti(VT_LOCAL, c);

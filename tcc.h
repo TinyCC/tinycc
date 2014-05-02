@@ -305,15 +305,22 @@
 #define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
 #define PACK_STACK_SIZE     8
+#define MACRO_STACK_SIZE    4
 
 #define TOK_HASH_SIZE       8192 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
+typedef struct CSym {
+    int off;
+    int size;/* size in *sym */
+    struct Sym **data; /* if non NULL, data has been malloced */
+} CSym;
+
 /* token symbol management */
 typedef struct TokenSym {
     struct TokenSym *hash_next;
-    struct Sym *sym_define; /* direct pointer to define */
+    struct CSym sym_define; /* direct pointer to define */
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
@@ -1129,7 +1136,8 @@ ST_DATA TokenSym **table_ident;
                                         token. line feed is also
                                         returned at eof */
 #define PARSE_FLAG_ASM_COMMENTS 0x0008 /* '#' can be used for line comment */
-#define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
+#define PARSE_FLAG_SPACES       0x0010 /* next() returns space tokens (for -E) */
+#define PARSE_FLAG_PACK         0x0020 /* #pragma pack */
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC char *get_tok_str(int v, CValue *cv);
