@@ -61,7 +61,7 @@
 #define RC_IRET    RC_R0  /* function return: integer register */
 #define RC_LRET    RC_R1  /* function return: second integer register */
 #define RC_FRET    RC_F0  /* function return: float register */
-
+#define RC_MASK    (RC_INT|RC_FLOAT)
 /* pretty names for the registers */
 enum {
     TREG_R0 = 0,
@@ -540,6 +540,14 @@ void load(int r, SValue *sv)
   v = fr & VT_VALMASK;
   if (fr & VT_LVAL) {
     uint32_t base = 0xB; // fp
+    if(fr & VT_TMP){
+			int size, align;
+			if((ft & VT_BTYPE) == VT_FUNC)
+				size = PTR_SIZE;
+			else
+				size = type_size(&sv->type, &align);
+			loc_stack(size, 0);
+		}
     if(v == VT_LLOCAL) {
       v1.type.t = VT_PTR;
       v1.r = VT_LOCAL | VT_LVAL;

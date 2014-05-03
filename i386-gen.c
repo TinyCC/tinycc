@@ -21,7 +21,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         4
+#define NB_REGS         8
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -41,7 +41,6 @@
 #define RC_LRET    RC_EDX /* function return: second integer register */
 #define RC_FRET    RC_ST0 /* function return: float register */
 #define RC_MASK    (RC_INT|RC_INT2|RC_FLOAT)
-
 /* pretty names for the registers */
 enum {
     TREG_EAX = 0,
@@ -104,8 +103,8 @@ ST_DATA const int reg_classes[NB_REGS] = {
     RC_INT|RC_INT2|RC_EBX,
     0,
     /* st0 */ RC_FLOAT | RC_ST0,
-    RC_RSI|RC_INT2,
-    RC_RDI|RC_INT2,
+    RC_ESI|RC_INT2,
+    RC_EDI|RC_INT2,
 };
 
 static unsigned long func_sub_sp_offset;
@@ -241,7 +240,7 @@ ST_FUNC void load(int r, SValue *sv)
         if(fr & VT_TMP){
 			int size, align;
 			if((ft & VT_BTYPE) == VT_FUNC)
-				size = 4;
+				size = PTR_SIZE;
 			else
 				size = type_size(&sv->type, &align);
 			loc_stack(size, 0);
@@ -254,6 +253,7 @@ ST_FUNC void load(int r, SValue *sv)
             if (!(reg_classes[fr] & RC_INT))
                 fr = get_reg(RC_INT);
             load(fr, &v1);
+            fc = 0;
         }
         if ((ft & VT_BTYPE) == VT_FLOAT) {
             o(0xd9); /* flds */

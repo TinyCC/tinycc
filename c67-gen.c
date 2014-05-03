@@ -58,7 +58,7 @@
 #define RC_IRET    RC_C67_A4	/* function return: integer register */
 #define RC_LRET    RC_C67_A5	/* function return: second integer register */
 #define RC_FRET    RC_C67_A4	/* function return: float register */
-
+#define RC_MASK    (RC_INT|RC_FLOAT)
 /* pretty names for the registers */
 enum {
     TREG_EAX = 0,		// really A2
@@ -1571,12 +1571,21 @@ void load(int r, SValue * sv)
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
+        if(fr & VT_TMP){
+			int size, align;
+			if((ft & VT_BTYPE) == VT_FUNC)
+				size = PTR_SIZE;
+			else
+				size = type_size(&sv->type, &align);
+			loc_stack(size, 0);
+		}
 	if (v == VT_LLOCAL) {
 	    v1.type.t = VT_INT;
 	    v1.r = VT_LOCAL | VT_LVAL;
 	    v1.c.ul = fc;
 	    load(r, &v1);
 	    fr = r;
+        fc = 0;
 	} else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
 	    tcc_error("long double not supported");
 	} else if ((ft & VT_TYPE) == VT_BYTE) {

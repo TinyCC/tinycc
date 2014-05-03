@@ -1350,8 +1350,6 @@ ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
 ST_FUNC void gen_addr32(int r, Sym *sym, int c);
 ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
-ST_FUNC void struct_copy(SValue *d, SValue *s, SValue *c);
-ST_FUNC void gen_putz(SValue *d, int size);
 #endif
 
 #ifdef CONFIG_TCC_BCHECK

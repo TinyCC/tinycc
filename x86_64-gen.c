@@ -408,7 +408,7 @@ void load(int r, SValue *sv)
         if(fr & VT_TMP){
 			int size, align;
 			if((ft & VT_BTYPE) == VT_FUNC)
-				size = 8;
+				size = PTR_SIZE;
 			else
 				size = type_size(&sv->type, &align);
 			loc_stack(size, 0);
