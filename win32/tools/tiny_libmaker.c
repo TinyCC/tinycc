@@ -1,5 +1,5 @@
 /*
- * This program is for making libcrt.a without ar
+ * This program is for making libtcc1.a without ar
  * tiny_libmaker - tiny elf lib maker
  * usage: tiny_libmaker [lib] files...
  * Copyright (c) 2007 Timppa

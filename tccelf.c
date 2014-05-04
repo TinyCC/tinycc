@@ -1443,16 +1443,16 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_USE_LIBGCC
         if (!s1->static_link) {
             tcc_add_file(s1, TCC_LIBGCC);
-            tcc_add_support(s1, "libcrt.a");
+            tcc_add_support(s1, "libtcc1.a");
 	} else
-            tcc_add_support(s1, "libcrt.a");
+            tcc_add_support(s1, "libtcc1.a");
 #else
-        tcc_add_support(s1, "libcrt.a");
+        tcc_add_support(s1, "libtcc1.a");
 #endif
     }
 
     /* tcc_add_bcheck tries to relocate a call to __bound_init in _init so
-       libcrt.a must be loaded before for __bound_init to be defined and
+       libtcc1.a must be loaded before for __bound_init to be defined and
        crtn.o must be loaded after to not finalize _init too early. */
     tcc_add_bcheck(s1);
 
@@ -1596,7 +1596,7 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     put32(s1->got->data + offset, sym->st_value & 0xffffffff);
 }
 
-/* Perform relocation to GOT or PLT entries */
+/* Perform relocation to GOT or PLT entries */
 ST_FUNC void fill_got(TCCState *s1)
 {
     Section *s;
@@ -2469,7 +2469,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             goto the_end;
     }
 
-    /* Perform relocation to GOT or PLT entries */
+    /* Perform relocation to GOT or PLT entries */
     if (file_type == TCC_OUTPUT_EXE && s1->static_link)
         fill_got(s1);
 

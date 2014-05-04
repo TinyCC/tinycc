@@ -379,23 +379,6 @@ comment
     /* And again when the name and parenthes are separated by a
        comment.  */
     TEST2 /* the comment */ ();
-    /* macro_push and macro_pop test */
-	#define MACRO_TEST "macro_test1\n"
-	#pragma push_macro("MACRO_TEST")
-	#undef MACRO_TEST
-	#define MACRO_TEST "macro_test2\n"
-	printf(MACRO_TEST);
-	#pragma pop_macro("MACRO_TEST")
-	printf(MACRO_TEST);
-/* gcc does not support
-	#define MACRO_TEST_MACRO "MACRO_TEST"
-	#pragma push_macro(MACRO_TEST_MACRO)
-	#undef MACRO_TEST
-	#define MACRO_TEST "macro_test3\n"
-	printf(MACRO_TEST);
-	#pragma pop_macro(MACRO_TEST_MACRO)
-	printf(MACRO_TEST);
-*/
 }
 
 
@@ -1697,6 +1680,7 @@ void prefix ## fcast(type a)\
     printf("ftof: %f %f %Lf\n", fa, da, la);\
     ia = (int)a;\
     llia = (long long)a;\
+    a = (a >= 0) ? a : -a;\
     ua = (unsigned int)a;\
     llua = (unsigned long long)a;\
     printf("ftoi: %d %u %lld %llu\n", ia, ua, llia, llua);\
@@ -1726,18 +1710,6 @@ void prefix ## call(void)\
     printf("strto%s: %f\n", #prefix, (double)strto ## prefix("1.2", NULL));\
 }\
 \
-void prefix ## calc(type x, type y)\
-{\
-	x=x*x;y=y*y;\
-	printf("%d, %d\n", (int)x, (int)y);\
-	x=x-y;y=y-x;\
-	printf("%d, %d\n", (int)x, (int)y);\
-	x=x/y;y=y/x;\
-	printf("%d, %d\n", (int)x, (int)y);\
-	x=x+x;y=y+y;\
-	printf("%d, %d\n", (int)x, (int)y);\
-}\
-\
 void prefix ## signed_zeros(void) \
 {\
   type x = 0.0, y = -0.0, n, p;\
@@ -1760,7 +1732,7 @@ void prefix ## signed_zeros(void) \
             1.0 / x != 1.0 / p);\
   else\
     printf ("x != +y; this is wrong!\n");\
-	p = -y;\
+  p = -y;\
   if (x == p)\
     printf ("Test 1.0 / x != 1.0 / -y returns %d (should be 0).\n",\
             1.0 / x != 1.0 / p);\
@@ -1776,8 +1748,7 @@ void prefix ## test(void)\
     prefix ## fcast(234.6);\
     prefix ## fcast(-2334.6);\
     prefix ## call();\
-	prefix ## calc(1, 1.0000000000000001);\
-	prefix ## signed_zeros();\
+    prefix ## signed_zeros();\
 }
 
 FTEST(f, float, float, "%f")
@@ -2184,8 +2155,7 @@ void whitespace_test(void)
 {
     char *str;
 
-
-#if 1
+#if 1
     pri\
 ntf("whitspace:\n");
 #endif
@@ -2208,8 +2178,7 @@ ntf("min=%d\n", 4);
 ";
     printf("len1=%d str[0]=%d\n", strlen(str), str[0]);
 #endif
-    printf("len1=%d\n", strlen("
-a
+    printf("len1=%d\n", strlen("a
 "));
 #endif /* ACCEPT_CR_IN_STRINGS */
 }
@@ -2603,6 +2572,7 @@ int constant_p_var;
 
 void builtin_test(void)
 {
+#if GCC_MAJOR >= 3
     COMPAT_TYPE(int, int);
     COMPAT_TYPE(int, unsigned int);
     COMPAT_TYPE(int, char);
@@ -2612,9 +2582,9 @@ void builtin_test(void)
     COMPAT_TYPE(int *, void *);
     COMPAT_TYPE(int *, const int *);
     COMPAT_TYPE(char *, unsigned char *);
-	COMPAT_TYPE(char, unsigned char);
 /* space is needed because tcc preprocessor introduces a space between each token */
-    COMPAT_TYPE(char **, void *);
+    COMPAT_TYPE(char * *, void *); 
+#endif
     printf("res = %d\n", __builtin_constant_p(1));
     printf("res = %d\n", __builtin_constant_p(1 + 2));
     printf("res = %d\n", __builtin_constant_p(&constant_p_var));

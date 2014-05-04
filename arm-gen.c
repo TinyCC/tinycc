@@ -61,7 +61,7 @@
 #define RC_IRET    RC_R0  /* function return: integer register */
 #define RC_LRET    RC_R1  /* function return: second integer register */
 #define RC_FRET    RC_F0  /* function return: float register */
-#define RC_MASK    (RC_INT|RC_FLOAT)
+
 /* pretty names for the registers */
 enum {
     TREG_R0 = 0,
@@ -540,14 +540,6 @@ void load(int r, SValue *sv)
   v = fr & VT_VALMASK;
   if (fr & VT_LVAL) {
     uint32_t base = 0xB; // fp
-    if(fr & VT_TMP){
-			int size, align;
-			if((ft & VT_BTYPE) == VT_FUNC)
-				size = PTR_SIZE;
-			else
-				size = type_size(&sv->type, &align);
-			loc_stack(size, 0);
-		}
     if(v == VT_LLOCAL) {
       v1.type.t = VT_PTR;
       v1.r = VT_LOCAL | VT_LVAL;
@@ -1417,60 +1409,37 @@ void gjmp_addr(int a)
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
 int gtst(int inv, int t)
 {
-	int v, r;
-	uint32_t op;
-	v = vtop->r & VT_VALMASK;
-	r=ind;
-	if (v == VT_CMP) {
-		op=mapcc(inv?negcc(vtop->c.i):vtop->c.i);
-		op|=encbranch(r,t,1);
-		o(op);
-		t=r;
-	} else if (v == VT_JMP || v == VT_JMPI) {
-		if ((v & 1) == inv) {
-			if(!vtop->c.i)
-				vtop->c.i=t;
-			else {
-				uint32_t *x;
-				int p,lp;
-				if(t) {
-					p = vtop->c.i;
-					do {
-						p = decbranch(lp=p);
-					} while(p);
-					x = (uint32_t *)(cur_text_section->data + lp);
-					*x &= 0xff000000;
-					*x |= encbranch(lp,t,1);
-				}
-			t = vtop->c.i;
-			}
-		} else {
-		t = gjmp(t);
-		gsym(vtop->c.i);
+  int v, r;
+  uint32_t op;
+  v = vtop->r & VT_VALMASK;
+  r=ind;
+  if (v == VT_CMP) {
+    op=mapcc(inv?negcc(vtop->c.i):vtop->c.i);
+    op|=encbranch(r,t,1);
+    o(op);
+    t=r;
+  } else { /* VT_JMP || VT_JMPI */
+    if ((v & 1) == inv) {
+      if(!vtop->c.i)
+	vtop->c.i=t;
+      else {
+	uint32_t *x;
+	int p,lp;
+	if(t) {
+          p = vtop->c.i;
+          do {
+	    p = decbranch(lp=p);
+          } while(p);
+	  x = (uint32_t *)(cur_text_section->data + lp);
+	  *x &= 0xff000000;
+	  *x |= encbranch(lp,t,1);
+	}
+	t = vtop->c.i;
+      }
+    } else {
+      t = gjmp(t);
+      gsym(vtop->c.i);
     }
-	} else {
-		if (is_float(vtop->type.t)) {
-		  r=gv(RC_FLOAT);
-#ifdef TCC_ARM_VFP
-			o(0xEEB50A40|(vfpr(r)<<12)|T2CPR(vtop->type.t)); /* fcmpzX */
-			o(0xEEF1FA10); /* fmstat */
-#else
-			o(0xEE90F118|(fpr(r)<<16));
-#endif
-			vtop->r = VT_CMP;
-			vtop->c.i = TOK_NE;
-			return gtst(inv, t);
-		} else if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-			/* constant jmp optimization */
-			if ((vtop->c.i != 0) != inv)
-			t = gjmp(t);
-		} else {
-			  v = gv(RC_INT);
-			  o(0xE3300000|(intr(v)<<16));
-			  vtop->r = VT_CMP;
-			  vtop->c.i = TOK_NE;
-			  return gtst(inv, t);
-		}
   }
   vtop--;
   return t;

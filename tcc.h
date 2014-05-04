@@ -39,7 +39,6 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
-#include <assert.h>
 
 #ifdef CONFIG_TCCASSERT
 #include <assert.h>
@@ -148,7 +147,6 @@
 /* #define MEM_DEBUG */
 /* assembler debug */
 /* #define ASM_DEBUG */
-/* #define PRINTF_ASM_CODE */
 
 /* target selection */
 /* #define TCC_TARGET_I386   *//* i386 code generator */
@@ -276,7 +274,7 @@
 # define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 #endif
 
-/* library to use with CONFIG_USE_LIBGCC instead of libcrt.a */
+/* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
@@ -305,22 +303,15 @@
 #define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
 #define PACK_STACK_SIZE     8
-#define MACRO_STACK_SIZE    4
 
 #define TOK_HASH_SIZE       8192 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
-typedef struct CSym {
-    int off;
-    int size;/* size in *sym */
-    struct Sym **data; /* if non NULL, data has been malloced */
-} CSym;
-
 /* token symbol management */
 typedef struct TokenSym {
     struct TokenSym *hash_next;
-    struct CSym sym_define; /* direct pointer to define */
+    struct Sym *sym_define; /* direct pointer to define */
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
@@ -366,8 +357,8 @@ typedef union CValue {
 /* value on stack */
 typedef struct SValue {
     CType type;      /* type */
-    unsigned int r;      /* register + flags */
-    unsigned int r2;     /* second register, used for 'long long'
+    unsigned short r;      /* register + flags */
+    unsigned short r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
     CValue c;              /* constant, if VT_CONST */
     struct Sym *sym;       /* symbol, if (VT_SYM | VT_CONST) */
@@ -747,21 +738,19 @@ struct TCCState {
 #define VT_CMP       0x0033  /* the value is stored in processor flags (in vc) */
 #define VT_JMP       0x0034  /* value is the consequence of jmp true (even) */
 #define VT_JMPI      0x0035  /* value is the consequence of jmp false (odd) */
-#define TREG_MEM	 0x0040	/* x86_64-gen.c add for tcc.h: The current value can be */
-#define VT_REF       0x0080  /* value is pointer to structure rather than address */
+#define VT_REF       0x0040  /* value is pointer to structure rather than address */
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
                                 char/short stored in integer registers) */
 #define VT_MUSTBOUND 0x0800  /* bound checking must be done before
                                 dereferencing value */
+#define VT_BOUNDED   0x8000  /* value is bounded. The address of the
+                                bounding function call point is in vc */
 #define VT_LVAL_BYTE     0x1000  /* lvalue is a byte */
 #define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
 #define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
 #define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
-#define VT_BOUNDED   	0x8000  /* value is bounded. The address of the
-                                bounding function call point is in vc */
-#define VT_TMP		0x10000     /* luck or tmp stack */
 
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */
@@ -789,7 +778,6 @@ struct TCCState {
 #define VT_VOLATILE    0x1000  /* volatile modifier */
 #define VT_DEFSIGN     0x2000  /* signed type */
 #define VT_VLA     0x00020000  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_VLS     0x00080000  /* VLA type (also has VT_PTR and VT_STRUCT) */
 
 /* storage */
 #define VT_EXTERN  0x00000080  /* extern definition */
@@ -800,14 +788,14 @@ struct TCCState {
 #define VT_EXPORT  0x00008000  /* win32: data exported from dll */
 #define VT_WEAK    0x00010000  /* weak symbol */
 #define VT_TLS     0x00040000  /* thread-local storage */
-#define VT_VIS_SHIFT    20     /* shift for symbol visibility, overlapping
+#define VT_VIS_SHIFT    19     /* shift for symbol visibility, overlapping
 				  bitfield values, because bitfields never
 				  have linkage and hence never have
 				  visibility.  */
 #define VT_VIS_SIZE      2     /* We have four visibilities.  */
 #define VT_VIS_MASK (((1 << VT_VIS_SIZE)-1) << VT_VIS_SHIFT)
 
-#define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (max: 32 - 2*6) */
+#define VT_STRUCT_SHIFT 19     /* shift for bitfield shift values (max: 32 - 2*6) */
 
 
 /* type mask (except storage) */
@@ -1136,8 +1124,7 @@ ST_DATA TokenSym **table_ident;
                                         token. line feed is also
                                         returned at eof */
 #define PARSE_FLAG_ASM_COMMENTS 0x0008 /* '#' can be used for line comment */
-#define PARSE_FLAG_SPACES       0x0010 /* next() returns space tokens (for -E) */
-#define PARSE_FLAG_PACK         0x0020 /* #pragma pack */
+#define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC char *get_tok_str(int v, CValue *cv);
@@ -1195,7 +1182,7 @@ ST_DATA Sym *define_stack;
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 ST_DATA SValue __vstack[1+/*to make bcheck happy*/ VSTACK_SIZE], *vtop;
 #define vstack  (__vstack + 1)
-ST_DATA int rsym, anon_sym, ind, loc, ex_rc;
+ST_DATA int rsym, anon_sym, ind, loc;
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
@@ -1205,14 +1192,12 @@ ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA char *funcname;
-ST_DATA int pop_stack;
 
 ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void swap(int *p, int *q);
 ST_FUNC void vpushi(int v);
-ST_FUNC void vpushs(addr_t v);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
@@ -1246,9 +1231,6 @@ ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
 ST_FUNC void gen_inline_functions(void);
 ST_FUNC void decl(int l);
-ST_FUNC void vdup(void);
-ST_FUNC void gaddrof(void);
-ST_FUNC int loc_stack(int size, int is_sub);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif

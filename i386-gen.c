@@ -21,7 +21,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS         8
+#define NB_REGS         4
 #define NB_ASM_REGS     8
 
 /* a register can belong to several classes. The classes must be
@@ -33,24 +33,17 @@
 #define RC_ST0     0x0008 
 #define RC_ECX     0x0010
 #define RC_EDX     0x0020
-#define RC_EBX     0x0040
-#define RC_ESI     0x0080
-#define RC_EDI     0x0100
-#define RC_INT2     0x0200
 #define RC_IRET    RC_EAX /* function return: integer register */
 #define RC_LRET    RC_EDX /* function return: second integer register */
 #define RC_FRET    RC_ST0 /* function return: float register */
-#define RC_MASK    (RC_INT|RC_INT2|RC_FLOAT)
+
 /* pretty names for the registers */
 enum {
     TREG_EAX = 0,
     TREG_ECX,
     TREG_EDX,
-    TREG_EBX,
-    TREG_ESP,
     TREG_ST0,
-    TREG_ESI,
-    TREG_EDI,
+    TREG_ESP = 4
 };
 
 /* return registers for function */
@@ -97,14 +90,10 @@ enum {
 #include "tcc.h"
 
 ST_DATA const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_EAX | RC_INT2,
-    /* ecx */ RC_INT | RC_ECX | RC_INT2,
+    /* eax */ RC_INT | RC_EAX,
+    /* ecx */ RC_INT | RC_ECX,
     /* edx */ RC_INT | RC_EDX,
-    RC_INT|RC_INT2|RC_EBX,
-    0,
     /* st0 */ RC_FLOAT | RC_ST0,
-    RC_ESI|RC_INT2,
-    RC_EDI|RC_INT2,
 };
 
 static unsigned long func_sub_sp_offset;
@@ -237,14 +226,6 @@ ST_FUNC void load(int r, SValue *sv)
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
-        if(fr & VT_TMP){
-			int size, align;
-			if((ft & VT_BTYPE) == VT_FUNC)
-				size = PTR_SIZE;
-			else
-				size = type_size(&sv->type, &align);
-			loc_stack(size, 0);
-		}
         if (v == VT_LLOCAL) {
             v1.type.t = VT_INT;
             v1.r = VT_LOCAL | VT_LVAL;
@@ -253,7 +234,6 @@ ST_FUNC void load(int r, SValue *sv)
             if (!(reg_classes[fr] & RC_INT))
                 fr = get_reg(RC_INT);
             load(fr, &v1);
-            fc = 0;
         }
         if ((ft & VT_BTYPE) == VT_FLOAT) {
             o(0xd9); /* flds */
@@ -697,7 +677,7 @@ ST_FUNC int gtst(int inv, int t)
         /* fast case : can jump directly since flags are set */
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
+    } else { /* VT_JMP || VT_JMPI */
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
@@ -710,23 +690,6 @@ ST_FUNC int gtst(int inv, int t)
             t = gjmp(t);
             gsym(vtop->c.i);
         }
-	} else {
-        if (is_float(vtop->type.t) || 
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
-            vpushi(0);
-            gen_op(TOK_NE);
-        }
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            /* constant jmp optimization */
-            if ((vtop->c.i != 0) != inv) 
-                t = gjmp(t);
-        } else {
-            v = gv(RC_INT);
-            o(0x85);
-            o(0xc0 + v * 9);
-            g(0x0f);
-            t = psym(0x85 ^ inv, t);
-        }
     }
     vtop--;
     return t;
@@ -735,48 +698,40 @@ ST_FUNC int gtst(int inv, int t)
 /* generate an integer binary operation */
 ST_FUNC void gen_opi(int op)
 {
-    int r, fr, opc, fc, c;
-	int cc, uu, tt2;
-
-	fr = vtop[0].r;
-	fc = vtop->c.ul;
-	cc = (fr & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
-	tt2 = (fr & (VT_LVAL | VT_LVAL_TYPE)) == VT_LVAL;
+    int r, fr, opc, c;
 
     switch(op) {
     case '+':
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-		vswap();
-		r = gv(RC_INT);
-		vswap();
-        if (cc) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
+            vswap();
+            r = gv(RC_INT);
+            vswap();
             c = vtop->c.i;
             if (c == (char)c) {
                 /* generate inc and dec for smaller code */
-                if (c == 1 && opc == 0) {
+                if (c==1 && opc==0) {
                     o (0x40 | r); // inc
-                } else if (c == 1 && opc == 5) {
+                } else if (c==1 && opc==5) {
                     o (0x48 | r); // dec
                 } else {
                     o(0x83);
-                    o(0xc0 + r + opc*8);
+                    o(0xc0 | (opc << 3) | r);
                     g(c);
                 }
             } else {
                 o(0x81);
-                oad(0xc0 + r+ opc*8, c);
+                oad(0xc0 | (opc << 3) | r, c);
             }
         } else {
-			if(!tt2)
-				fr = gv(RC_INT);
-			o(0x03 + opc*8);
-			if(fr >= VT_CONST)
-                gen_modrm(r, fr, vtop->sym, fc);
-			else
-				o(0xc0 + fr + r*8);
+            gv2(RC_INT, RC_INT);
+            r = vtop[-1].r;
+            fr = vtop[0].r;
+            o((opc << 3) | 0x01);
+            o(0xc0 + r + fr * 8); 
         }
         vtop--;
         if (op >= TOK_ULT && op <= TOK_GT) {
@@ -804,28 +759,12 @@ ST_FUNC void gen_opi(int op)
         opc = 1;
         goto gen_op8;
     case '*':
-		opc = 5;
-		vswap();
-		r = gv(RC_INT);
-		vswap();
-		if(!tt2)
-			fr = gv(RC_INT);
-		if(r == TREG_EAX){
-			if(fr != TREG_EDX)
-				save_reg(TREG_EDX);
-			o(0xf7);
-			if(fr >= VT_CONST)
-				gen_modrm(opc, fr, vtop->sym, fc);
-			else
-				o(0xc0 + fr + opc*8);
-		}else{
-			o(0xaf0f); /* imul fr, r */
-			if(fr >= VT_CONST)
-				gen_modrm(r, fr, vtop->sym, fc);
-			else
-				o(0xc0 + fr + r*8);
-		}
+        gv2(RC_INT, RC_INT);
+        r = vtop[-1].r;
+        fr = vtop[0].r;
         vtop--;
+        o(0xaf0f); /* imul fr, r */
+        o(0xc0 + fr + r * 8);
         break;
     case TOK_SHL:
         opc = 4;
@@ -836,71 +775,56 @@ ST_FUNC void gen_opi(int op)
     case TOK_SAR:
         opc = 7;
     gen_shift:
-		if (cc) {
+        opc = 0xc0 | (opc << 3);
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
             vswap();
             r = gv(RC_INT);
             vswap();
-			c = vtop->c.i;
-			if(c == 1){
-				o(0xd1);
-				o(0xc0 + r + opc*8);
-			}else{
-				o(0xc1); /* shl/shr/sar $xxx, r */
-				o(0xc0 + r + opc*8);
-				g(c & 0x1f);
-			}
+            c = vtop->c.i & 0x1f;
+            o(0xc1); /* shl/shr/sar $xxx, r */
+            o(opc | r);
+            g(c);
         } else {
             /* we generate the shift in ecx */
             gv2(RC_INT, RC_ECX);
             r = vtop[-1].r;
             o(0xd3); /* shl/shr/sar %cl, r */
-			o(0xc0 + r + opc*8);
+            o(opc | r);
         }
         vtop--;
         break;
-    case TOK_UMOD:
-		opc = 4;
-        uu = 1;
-        goto divmod;
-    case TOK_UDIV:
-    case TOK_UMULL:
-		opc = 6;
-        uu = 1;
-        goto divmod;
     case '/':
-    case '%':
+    case TOK_UDIV:
     case TOK_PDIV:
-		opc = 7;
-        uu = 0;
-	divmod:
+    case '%':
+    case TOK_UMOD:
+    case TOK_UMULL:
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
-		if(!tt2){
-			gv2(RC_EAX, RC_INT2);
-			fr = vtop[0].r;
-		}else{
-			vswap();
-			gv(RC_EAX);
-			vswap();
-		}
-		save_reg(TREG_EDX);
-		if (op == TOK_UMULL) {
+        gv2(RC_EAX, RC_ECX);
+        r = vtop[-1].r;
+        fr = vtop[0].r;
+        vtop--;
+        save_reg(TREG_EDX);
+        if (op == TOK_UMULL) {
             o(0xf7); /* mul fr */
-			vtop->r2 = TREG_EDX;
-		}else{
-			o(uu ? 0xd231 : 0x99); /* xor %edx,%edx : cdq RDX:RAX <- sign-extend of RAX. */
-			o(0xf7); /* div fr, %eax */
-		}
-		if(fr >= VT_CONST)
-			gen_modrm(opc, fr, vtop->sym, fc);
-		else
-			o(0xc0 + fr + opc*8);
-        if (op == '%' || op == TOK_UMOD)
-            r = TREG_EDX;
-        else
+            o(0xe0 + fr);
+            vtop->r2 = TREG_EDX;
             r = TREG_EAX;
-		vtop--;
+        } else {
+            if (op == TOK_UDIV || op == TOK_UMOD) {
+                o(0xf7d231); /* xor %edx, %edx, div fr, %eax */
+                o(0xf0 + fr);
+            } else {
+                o(0xf799); /* cltd, idiv fr, %eax */
+                o(0xf8 + fr);
+            }
+            if (op == '%' || op == TOK_UMOD)
+                r = TREG_EDX;
+            else
+                r = TREG_EAX;
+        }
         vtop->r = r;
         break;
     default:

@@ -239,36 +239,6 @@ static const uint16_t op0_codes[] = {
 #endif
 };
 
-#ifdef PRINTF_ASM_CODE
-void printf_asm_opcode(){
-	const ASMInstr *pa;
-	int freq[4];
-	int op_vals[500];
-	int nb_op_vals, i, j;
-	nb_op_vals = 0;
-	memset(freq, 0, sizeof(freq));
-	for(pa = asm_instrs; pa->sym != 0; pa++) {
-		freq[pa->nb_ops]++;
-		for(i=0;i<pa->nb_ops;i++) {
-			for(j=0;j<nb_op_vals;j++) {
-				if (pa->op_type[i] == op_vals[j])
-					goto found;
-			}
-			op_vals[nb_op_vals++] = pa->op_type[i];
-		found: ;
-		}
-	}
-	for(i=0;i<nb_op_vals;i++) {
-		int v = op_vals[i];
-		if ((v & (v - 1)) != 0)
-			printf("%3d: %08x\n", i, v);
-	}
-	printf("size=%d nb=%d f0=%d f1=%d f2=%d f3=%d\n",
-		(int)sizeof(asm_instrs), (int)sizeof(asm_instrs) / sizeof(ASMInstr),
-		freq[0], freq[1], freq[2], freq[3]);
-}
-#endif
-
 static inline int get_reg_shift(TCCState *s1)
 {
     int shift, v;
@@ -746,8 +716,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 g(b >> 8);
             g(b);
             return;
-		} else if (opcode <= TOK_ASM_alllast) {
-            tcc_error("bad operand with opcode '%s'", get_tok_str(opcode, NULL));
+        } else if (opcode <= TOK_ASM_alllast) {
+            tcc_error("bad operand with opcode '%s'",
+                  get_tok_str(opcode, NULL));
         } else {
             tcc_error("unknown opcode '%s'",
                   get_tok_str(opcode, NULL));
@@ -1098,7 +1069,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
     uint8_t regs_allocated[NB_ASM_REGS];
 
     /* init fields */
-    for(i=0; i<nb_operands; i++) {
+    for(i=0;i<nb_operands;i++) {
         op = &operands[i];
         op->input_index = -1;
         op->ref_index = -1;
@@ -1108,7 +1079,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
     }
     /* compute constraint priority and evaluate references to output
        constraints if input constraints */
-    for(i=0; i<nb_operands; i++) {
+    for(i=0;i<nb_operands;i++) {
         op = &operands[i];
         str = op->constraint;
         str = skip_constraint_modifiers(str);

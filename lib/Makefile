@@ -1,5 +1,5 @@
 #
-# Tiny C Compiler Makefile for libcrt.a
+# Tiny C Compiler Makefile for libtcc1.a
 #
 
 TOP = ..
@@ -38,15 +38,15 @@ endif
 
 DIR = $(TARGET)
 
-native : ../libcrt.a
-cross : $(DIR)/libcrt.a
+native : ../libtcc1.a
+cross : $(DIR)/libtcc1.a
 
 native : TCC = $(TOP)/tcc$(EXESUF)
 cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
 
-I386_O = libcrt.o alloca86.o alloca86-bt.o $(BCHECK_O)
-X86_64_O = libcrt.o alloca86_64.o
-ARM_O = libcrt.o armeabi.o alloca-arm.o
+I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
+X86_64_O = libtcc1.o alloca86_64.o
+ARM_O = libtcc1.o armeabi.o alloca-arm.o
 WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 
@@ -83,7 +83,7 @@ ifeq "$(TARGET)" "arm"
  TGT = -DTCC_TARGET_ARM
  XCC ?= $(TCC) -B$(TOP)
 else
- $(error libcrt.a not supported on target '$(TARGET)')
+ $(error libtcc1.a not supported on target '$(TARGET)')
 endif
 endif
 endif
@@ -102,7 +102,7 @@ ifdef XAR
 AR = $(XAR)
 endif
 
-$(DIR)/libcrt.a ../libcrt.a : $(OBJ) $(XAR)
+$(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 	$(AR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)

@@ -52,10 +52,10 @@ ST_DATA struct TCCState *tcc_state;
 #include "x86_64-gen.c"
 #endif
 #ifdef CONFIG_TCC_ASM
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "asmx86.c"
-#endif
 #include "tccasm.c"
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+#include "i386-asm.c"
+#endif
 #endif
 #ifdef TCC_TARGET_COFF
 #include "tcccoff.c"
@@ -868,7 +868,6 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
 static void tcc_cleanup(void)
 {
     int i, n;
-    CSym *def;
     if (NULL == tcc_state)
         return;
     tcc_state = NULL;
@@ -878,11 +877,8 @@ static void tcc_cleanup(void)
 
     /* free tokens */
     n = tok_ident - TOK_IDENT;
-    for(i = 0; i < n; i++){
-		def = &table_ident[i]->sym_define;
-		tcc_free(def->data);
+    for(i = 0; i < n; i++)
         tcc_free(table_ident[i]);
-	}
     tcc_free(table_ident);
 
     /* free sym_pools */

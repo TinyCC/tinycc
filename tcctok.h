@@ -138,8 +138,6 @@
 
 /* pragma */
      DEF(TOK_pack, "pack")
-     DEF(TOK_PUSH_MACRO, "push_macro")
-	 DEF(TOK_POP_MACRO, "pop_macro")
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_X86_64)
      /* already defined for assembler */
      DEF(TOK_ASM_push, "push")
@@ -287,5 +285,5 @@
 #endif
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "asmx86-tok.h"
+#include "i386-tok.h"
 #endif

@@ -468,7 +468,7 @@ int main(int argc, char **argv) {
   const char *testname = NULL;
   int retval = EXIT_SUCCESS;
   
-  /* if tcclib.h and libcrt.a are not installed, where can we find them */
+  /* if tcclib.h and libtcc1.a are not installed, where can we find them */
   for (i = 1; i < argc; ++i) {
     if (!memcmp(argv[i], "lib_path=",9))
       tccdir = argv[i] + 9;

@@ -66,11 +66,11 @@ RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
 
 # libtcc test
-ifdef LIBCRT
- LIBCRT:=$(TOP)/$(LIBCRT)
+ifdef LIBTCC1
+ LIBTCC1:=$(TOP)/$(LIBTCC1)
 endif
 
-all test : clean $(TESTS)
+all test : $(TESTS)
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
@@ -89,7 +89,7 @@ hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------
 	$(TCC) -run $<
 
-libtest: libtcc_test$(EXESUF) $(LIBCRT)
+libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	@echo ------------ $@ ------------
 	./libtcc_test$(EXESUF) lib_path=..
 
@@ -101,7 +101,7 @@ moretests:
 	$(MAKE) -C tests2
 
 w32-prep:
-	cp ../libcrt.a ../lib
+	cp ../libtcc1.a ../lib
 
 # test.ref - generate using cc
 test.ref: tcctest.c
@@ -210,14 +210,10 @@ abitest-cc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 abitest-tcc$(EXESUF): abitest.c libtcc.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE $(LIBS) $(LDFLAGS) -I$(top_srcdir)
 
-abitest-tcc1$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
-	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
-
-abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF) abitest-tcc1$(EXESUF)
+abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
 	@echo ------------ $@ ------------
 	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 	./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
-	./abitest-tcc1$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
 
 vla_test$(EXESUF): vla_test.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS)
@@ -244,6 +240,6 @@ cache: tcc_g
 clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
-		*-cc *-tcc *.exe *-tcc1\
+		*-cc *-tcc *.exe \
 		hello libtcc_test vla_test tcctest[1234] ex? tcc_g tcclib.h \
-		../lib/libcrt.a
+		../lib/libtcc1.a
