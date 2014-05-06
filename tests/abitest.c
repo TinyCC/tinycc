@@ -486,7 +486,10 @@ int main(int argc, char **argv) {
   RUN_TEST(ret_2float_test);
   RUN_TEST(ret_2double_test);
   RUN_TEST(ret_longlong_test2);
+#if !defined _WIN32 || !defined __GNUC__
+  /* on win32, 'long double' is 10-byte with gcc, but is 'double' with tcc/msvc */
   RUN_TEST(ret_longdouble_test2);
+#endif
   RUN_TEST(reg_pack_test);
   RUN_TEST(reg_pack_longlong_test);
   RUN_TEST(sret_test);

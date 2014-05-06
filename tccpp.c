@@ -58,6 +58,7 @@ static const int *unget_saved_macro_ptr;
 static int unget_saved_buffer[TOK_MAX_SIZE + 1];
 static int unget_buffer_enabled;
 static TokenSym *hash_ident[TOK_HASH_SIZE];
+static char token_buf[STRING_MAX_SIZE + 1];
 /* true if isid(c) || isnum(c) */
 static unsigned char isidnum_table[256-CH_EOF];
 
@@ -1789,156 +1790,261 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
         cstr_wccat(outstr, '\0');
 }
 
+/* we use 64 bit numbers */
+#define BN_SIZE 2
+
+/* bn = (bn << shift) | or_val */
+static void bn_lshift(unsigned int *bn, int shift, int or_val)
+{
+    int i;
+    unsigned int v;
+    for(i=0;i<BN_SIZE;i++) {
+        v = bn[i];
+        bn[i] = (v << shift) | or_val;
+        or_val = v >> (32 - shift);
+    }
+}
+
+static void bn_zero(unsigned int *bn)
+{
+    int i;
+    for(i=0;i<BN_SIZE;i++) {
+        bn[i] = 0;
+    }
+}
+
 /* parse number in null terminated string 'p' and return it in the
    current token */
 static void parse_number(const char *p)
 {
-    int b, t, c;
+    int b, t, shift, frac_bits, s, exp_val, ch;
+    char *q;
+    unsigned int bn[BN_SIZE];
+    double d;
 
-    c = *p++;
-	t = *p++;
+    /* number */
+    q = token_buf;
+    ch = *p++;
+    t = ch;
+    ch = *p++;
+    *q++ = t;
     b = 10;
-	if(c=='.'){
-		--p;
-		goto float_frac_parse;
-	}
-	if(c == '0'){
-		if (t == 'x' || t == 'X') {
+    if (t == '.') {
+        goto float_frac_parse;
+    } else if (t == '0') {
+        if (ch == 'x' || ch == 'X') {
+            q--;
+            ch = *p++;
             b = 16;
-			c = *p++;
-        } else if (tcc_ext && (t == 'b' || t == 'B')) {
+        } else if (tcc_ext && (ch == 'b' || ch == 'B')) {
+            q--;
+            ch = *p++;
             b = 2;
-			c = *p++;
-        }else{
-			--p;
-		}
-	}else
-		--p;
-    if(strchr(p , '.') || (b == 10 && (strchr(p,'e') || strchr(p,'E'))) ||
-		((b == 2 || b == 16)&& (strchr(p,'p') || strchr(p,'P')))){
-		long double ld, sh, fb;
-		int exp;
-		/* NOTE: strtox should support that for hexa numbers, but
-			non ISOC99 libcs do not support it, so we prefer to do
-			it by hand */
-		/* hexadecimal or binary floats */
-		/* XXX: handle overflows */
-float_frac_parse:
-		fb = 1.0L/b;
-		sh = b;
-		ld = 0.0;
-
-		while(1){
-			if (c == '\0')
-				break;
-			if (c >= 'a' && c <= 'f')
-				t = c - 'a' + 10;
-			else if (c >= 'A' && c <= 'F')
-				t = c - 'A' + 10;
-			else if(isnum(c))
-				t = c - '0';
-			else
-				break;
-			if (t >= b)
-				tcc_error("invalid digit");
-			ld = ld * b + t;
-			c = *p++;
-		}
-		if (c == '.'){
-			c = *p++;
-			sh = fb;
-			while (1){
-				if (c == '\0')
-					break;
-				if (c >= 'a' && c <= 'f')
-					t = c - 'a' + 10;
-				else if (c >= 'A' && c <= 'F')
-					t = c - 'A' + 10;
-				else if (isnum(c))
-					t =c - '0';
-				else
-					break;
-				if (t >= b){
-					if(b == 10 && (c == 'e' || c == 'E' || c == 'f' || c == 'F'))
-						break;
-					tcc_error("invalid digit");
-				}
-				ld += sh*t;
-				sh*=fb;
-				c = *p++;
-			}
-		}
-		if ((b == 16 || b == 2) && c != 'p' && c != 'P')
-                expect("exponent");
-		if(((c == 'e' || c == 'E') && b == 10) ||
-			((c == 'p' || c == 'P') && (b == 16 || b == 2))){
-			c = *p++;
-			if(c == '+' || c == '-'){
-				if (c == '-')
-					sh = fb;
-				c = *p++;
-			}else
-				sh = b;
-			if (!isnum(c))
-				expect("exponent digits");
-			exp = 0;
-			do{
-				exp = exp * 10 + c - '0';
-				c = *p++;
-			}while(isnum(c));
-			while (exp != 0){
-				if (exp & 1)
-					ld *= sh;
-				exp >>= 1;
-				sh *= sh;
-			}
-		}
-		t = toup(c);
-		if (t == 'F') {
-			c = *p++;
-			tok = TOK_CFLOAT;
-			tokc.f = (float)ld;
-		} else if (t == 'L') {
-			c = *p++;
-#ifdef TCC_TARGET_PE
-			tok = TOK_CDOUBLE;
-			tokc.d = (double)ld;
-#else
-			tok = TOK_CLDOUBLE;
-			tokc.ld = ld;
-#endif
-		} else {
-			tok = TOK_CDOUBLE;
-			tokc.d = (double)ld;
-		}
-    } else {
-		uint64_t n = 0, n1;
-		int warn = 1;
-        int lcount, ucount;
-		if (b == 10 && c == '0') {
-            b = 8;
         }
-		while(1){
-			if (c == '\0')
-				break;
-			if (c >= 'a' && c <= 'f')
-				t = c - 'a' + 10;
-			else if (c >= 'A' && c <= 'F')
-				t = c - 'A' + 10;
-			else if(isnum(c))
-				t = c - '0';
-			else
-				break;
-			if (t >= b)
-				tcc_error("invalid digit");
-			n1 = n;
-			n = n * b + t;
-			if (n < n1 && warn){
-				tcc_warning("integer constant overflow");
-				warn = 0;
-			}
-			c = *p++;
-		}
+    }
+    /* parse all digits. cannot check octal numbers at this stage
+       because of floating point constants */
+    while (1) {
+        if (ch >= 'a' && ch <= 'f')
+            t = ch - 'a' + 10;
+        else if (ch >= 'A' && ch <= 'F')
+            t = ch - 'A' + 10;
+        else if (isnum(ch))
+            t = ch - '0';
+        else
+            break;
+        if (t >= b)
+            break;
+        if (q >= token_buf + STRING_MAX_SIZE) {
+        num_too_long:
+            tcc_error("number too long");
+        }
+        *q++ = ch;
+        ch = *p++;
+    }
+    if (ch == '.' ||
+        ((ch == 'e' || ch == 'E') && b == 10) ||
+        ((ch == 'p' || ch == 'P') && (b == 16 || b == 2))) {
+        if (b != 10) {
+            /* NOTE: strtox should support that for hexa numbers, but
+               non ISOC99 libcs do not support it, so we prefer to do
+               it by hand */
+            /* hexadecimal or binary floats */
+            /* XXX: handle overflows */
+            *q = '\0';
+            if (b == 16)
+                shift = 4;
+            else 
+                shift = 2;
+            bn_zero(bn);
+            q = token_buf;
+            while (1) {
+                t = *q++;
+                if (t == '\0') {
+                    break;
+                } else if (t >= 'a') {
+                    t = t - 'a' + 10;
+                } else if (t >= 'A') {
+                    t = t - 'A' + 10;
+                } else {
+                    t = t - '0';
+                }
+                bn_lshift(bn, shift, t);
+            }
+            frac_bits = 0;
+            if (ch == '.') {
+                ch = *p++;
+                while (1) {
+                    t = ch;
+                    if (t >= 'a' && t <= 'f') {
+                        t = t - 'a' + 10;
+                    } else if (t >= 'A' && t <= 'F') {
+                        t = t - 'A' + 10;
+                    } else if (t >= '0' && t <= '9') {
+                        t = t - '0';
+                    } else {
+                        break;
+                    }
+                    if (t >= b)
+                        tcc_error("invalid digit");
+                    bn_lshift(bn, shift, t);
+                    frac_bits += shift;
+                    ch = *p++;
+                }
+            }
+            if (ch != 'p' && ch != 'P')
+                expect("exponent");
+            ch = *p++;
+            s = 1;
+            exp_val = 0;
+            if (ch == '+') {
+                ch = *p++;
+            } else if (ch == '-') {
+                s = -1;
+                ch = *p++;
+            }
+            if (ch < '0' || ch > '9')
+                expect("exponent digits");
+            while (ch >= '0' && ch <= '9') {
+                exp_val = exp_val * 10 + ch - '0';
+                ch = *p++;
+            }
+            exp_val = exp_val * s;
+            
+            /* now we can generate the number */
+            /* XXX: should patch directly float number */
+            d = (double)bn[1] * 4294967296.0 + (double)bn[0];
+            d = ldexp(d, exp_val - frac_bits);
+            t = toup(ch);
+            if (t == 'F') {
+                ch = *p++;
+                tok = TOK_CFLOAT;
+                /* float : should handle overflow */
+                tokc.f = (float)d;
+            } else if (t == 'L') {
+                ch = *p++;
+#ifdef TCC_TARGET_PE
+                tok = TOK_CDOUBLE;
+                tokc.d = d;
+#else
+                tok = TOK_CLDOUBLE;
+                /* XXX: not large enough */
+                tokc.ld = (long double)d;
+#endif
+            } else {
+                tok = TOK_CDOUBLE;
+                tokc.d = d;
+            }
+        } else {
+            /* decimal floats */
+            if (ch == '.') {
+                if (q >= token_buf + STRING_MAX_SIZE)
+                    goto num_too_long;
+                *q++ = ch;
+                ch = *p++;
+            float_frac_parse:
+                while (ch >= '0' && ch <= '9') {
+                    if (q >= token_buf + STRING_MAX_SIZE)
+                        goto num_too_long;
+                    *q++ = ch;
+                    ch = *p++;
+                }
+            }
+            if (ch == 'e' || ch == 'E') {
+                if (q >= token_buf + STRING_MAX_SIZE)
+                    goto num_too_long;
+                *q++ = ch;
+                ch = *p++;
+                if (ch == '-' || ch == '+') {
+                    if (q >= token_buf + STRING_MAX_SIZE)
+                        goto num_too_long;
+                    *q++ = ch;
+                    ch = *p++;
+                }
+                if (ch < '0' || ch > '9')
+                    expect("exponent digits");
+                while (ch >= '0' && ch <= '9') {
+                    if (q >= token_buf + STRING_MAX_SIZE)
+                        goto num_too_long;
+                    *q++ = ch;
+                    ch = *p++;
+                }
+            }
+            *q = '\0';
+            t = toup(ch);
+            errno = 0;
+            if (t == 'F') {
+                ch = *p++;
+                tok = TOK_CFLOAT;
+                tokc.f = strtof(token_buf, NULL);
+            } else if (t == 'L') {
+                ch = *p++;
+#ifdef TCC_TARGET_PE
+                tok = TOK_CDOUBLE;
+                tokc.d = strtod(token_buf, NULL);
+#else
+                tok = TOK_CLDOUBLE;
+                tokc.ld = strtold(token_buf, NULL);
+#endif
+            } else {
+                tok = TOK_CDOUBLE;
+                tokc.d = strtod(token_buf, NULL);
+            }
+        }
+    } else {
+        unsigned long long n, n1;
+        int lcount, ucount;
+
+        /* integer number */
+        *q = '\0';
+        q = token_buf;
+        if (b == 10 && *q == '0') {
+            b = 8;
+            q++;
+        }
+        n = 0;
+        while(1) {
+            t = *q++;
+            /* no need for checks except for base 10 / 8 errors */
+            if (t == '\0') {
+                break;
+            } else if (t >= 'a') {
+                t = t - 'a' + 10;
+            } else if (t >= 'A') {
+                t = t - 'A' + 10;
+            } else {
+                t = t - '0';
+                if (t >= b)
+                    tcc_error("invalid digit");
+            }
+            n1 = n;
+            n = n * b + t;
+            /* detect overflow */
+            /* XXX: this test is not reliable */
+            if (n < n1)
+                tcc_error("integer constant overflow");
+        }
+        
         /* XXX: not exactly ANSI compliant */
         if ((n & 0xffffffff00000000LL) != 0) {
             if ((n >> 63) != 0)
@@ -1953,7 +2059,7 @@ float_frac_parse:
         lcount = 0;
         ucount = 0;
         for(;;) {
-            t = toup(c);
+            t = toup(ch);
             if (t == 'L') {
                 if (lcount >= 2)
                     tcc_error("three 'l's in integer constant");
@@ -1968,7 +2074,7 @@ float_frac_parse:
 #if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
                 }
 #endif
-                c = *p++;
+                ch = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
                     tcc_error("two 'u's in integer constant");
@@ -1977,7 +2083,7 @@ float_frac_parse:
                     tok = TOK_CUINT;
                 else if (tok == TOK_CLLONG)
                     tok = TOK_CULLONG;
-                c = *p++;
+                ch = *p++;
             } else {
                 break;
             }
@@ -1987,7 +2093,7 @@ float_frac_parse:
         else
             tokc.ull = n;
     }
-    if (c)
+    if (ch)
         tcc_error("invalid number\n");
 }
 
