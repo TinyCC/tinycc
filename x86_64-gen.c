@@ -1404,7 +1404,7 @@ void gfunc_prolog(CType *func_type)
                 break;
                 
             case x86_64_mode_integer:
-                if (seen_reg_num + reg_count <= 8) {
+                if (seen_reg_num + reg_count <= REGN) {
                     seen_reg_num += reg_count;
                 } else {
                     seen_reg_num = 8;
