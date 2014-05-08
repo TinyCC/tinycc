@@ -1596,7 +1596,7 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     put32(s1->got->data + offset, sym->st_value & 0xffffffff);
 }
 
-/* Perform relocation to GOT or PLT entries */
+/* Perform relocation to GOT or PLT entries */
 ST_FUNC void fill_got(TCCState *s1)
 {
     Section *s;
@@ -1848,6 +1848,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                            int *sec_order)
 {
     int i, j, k, file_type, sh_order_index, file_offset;
+    unsigned long s_align;
     long long tmp;
     addr_t addr;
     ElfW(Phdr) *ph;
@@ -1855,10 +1856,12 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
 
     file_type = s1->output_type;
     sh_order_index = 1;
+    file_offset = 0;
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
         file_offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
-    else
-        file_offset = 0;
+    s_align = ELF_PAGE_SIZE;
+    if (s1->section_align)
+        s_align = s1->section_align;
 
     if (phnum > 0) {
         if (s1->has_text_addr) {
@@ -1866,10 +1869,10 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
             addr = s1->text_addr;
             /* we ensure that (addr % ELF_PAGE_SIZE) == file_offset %
                ELF_PAGE_SIZE */
-            a_offset = (int) (addr & (s1->section_align - 1));
-            p_offset = file_offset & (s1->section_align - 1);
+            a_offset = (int) (addr & (s_align - 1));
+            p_offset = file_offset & (s_align - 1);
             if (a_offset < p_offset)
-                a_offset += s1->section_align;
+                a_offset += s_align;
             file_offset += (a_offset - p_offset);
         } else {
             if (file_type == TCC_OUTPUT_DLL)
@@ -1877,7 +1880,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
             else
                 addr = ELF_START_ADDR;
             /* compute address after headers */
-            addr += (file_offset & (s1->section_align - 1));
+            addr += (file_offset & (s_align - 1));
         }
 
         ph = &phdr[0];
@@ -1899,7 +1902,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                 ph->p_flags = PF_R | PF_X;
             else
                 ph->p_flags = PF_R | PF_W;
-            ph->p_align = s1->section_align;
+            ph->p_align = s_align;
 
             /* Decide the layout of sections loaded in memory. This must
                be done before program headers are filled since they contain
@@ -1991,12 +1994,11 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                 if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
                     /* if in the middle of a page, we duplicate the page in
                        memory so that one copy is RX and the other is RW */
-                    if ((addr & (s1->section_align - 1)) != 0)
-                        addr += s1->section_align;
+                    if ((addr & (s_align - 1)) != 0)
+                        addr += s_align;
                 } else {
-                    addr = (addr + s1->section_align - 1) & ~(s1->section_align - 1);
-                    file_offset = (file_offset + s1->section_align - 1) &
-                        ~(s1->section_align - 1);
+                    addr = (addr + s_align - 1) & ~(s_align - 1);
+                    file_offset = (file_offset + s_align - 1) & ~(s_align - 1);
                 }
             }
         }
@@ -2469,7 +2471,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             goto the_end;
     }
 
-    /* Perform relocation to GOT or PLT entries */
+    /* Perform relocation to GOT or PLT entries */
     if (file_type == TCC_OUTPUT_EXE && s1->static_link)
         fill_got(s1);
 

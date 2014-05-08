@@ -288,7 +288,8 @@ static void gen_gotpcrel(int r, Sym *sym, int c)
     rel = (ElfW(Rela) *)(sr->data + sr->data_offset - sizeof(ElfW(Rela)));
     rel->r_addend = -4;
 #else
-    printf("picpic: %s %x %x | %02x %02x %02x\n", get_tok_str(sym->v, NULL), c, r,
+    tcc_error("internal error: no GOT on PE: %s %x %x | %02x %02x %02x\n",
+        get_tok_str(sym->v, NULL), c, r,
         cur_text_section->data[ind-3],
         cur_text_section->data[ind-2],
         cur_text_section->data[ind-1]
@@ -603,8 +604,11 @@ static void gcall_or_jmp(int is_jmp)
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
-            greloc(cur_text_section, vtop->sym,
-                   ind + 1, R_X86_64_PLT32);
+#ifdef TCC_TARGET_PE
+            greloc(cur_text_section, vtop->sym, ind + 1, R_X86_64_PC32);
+#else
+            greloc(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32);
+#endif
         } else {
             /* put an empty PC32 relocation */
             put_elf_reloc(symtab_section, cur_text_section,
