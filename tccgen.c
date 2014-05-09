@@ -3030,6 +3030,8 @@ static void struct_decl(CType *type, int u, int tdef)
                 skip(';');
             }
             skip('}');
+            if (!c && flexible)
+                tcc_error("flexible array member '%s' in otherwise empty struct", get_tok_str(v, NULL));
             /* store size and alignment */
             s->c = (c + maxalign - 1) & -maxalign; 
             s->r = maxalign;
