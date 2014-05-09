@@ -3795,6 +3795,8 @@ ST_FUNC void unary(void)
             if (!(type.t & VT_VLA)) {
                 if (size < 0)
                     tcc_error("sizeof applied to an incomplete type");
+                if(type.t & VT_BITFIELD)
+                    tcc_error("'%s' applied to a bit-field", get_tok_str(t, NULL));
                 vpushs(size);
             } else {
                 vla_runtime_type_size(&type, &align);
