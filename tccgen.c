@@ -2911,7 +2911,7 @@ static void struct_decl(CType *type, int u, int tdef)
                         if (v == 0 && (type1.t & VT_BTYPE) != VT_STRUCT)
                             expect("identifier");
                         if (type_size(&type1, &align) < 0) {
-			    if ((a == TOK_STRUCT) && (type1.t & VT_ARRAY) && c)
+			    if ((a == TOK_STRUCT) && (type1.t & VT_ARRAY))
 			        flexible = 1;
 			    else
 			        tcc_error("field '%s' has incomplete type",
