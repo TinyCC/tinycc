@@ -2839,7 +2839,7 @@ static void struct_decl(CType *type, int u, int tdef)
         s = struct_find(v);
         if (s) {
             if (s->type.t != a)
-                tcc_error("invalid type");
+                tcc_error("invalid type: '%s'", get_tok_str(v, NULL));
             goto do_decl;
         } else if (tok >= TOK_IDENT && !tdef)
             tcc_error("unknown struct/union/enum");
