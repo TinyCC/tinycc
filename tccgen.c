@@ -90,6 +90,8 @@ static void vla_runtime_type_size(CType *type, int *a);
 static void vla_sp_save(void);
 static int is_compatible_parameter_types(CType *type1, CType *type2);
 static void expr_type(CType *type);
+static int is_force;
+
 ST_FUNC void vpush64(int ty, unsigned long long v);
 ST_FUNC void vpush(CType *type);
 ST_FUNC int gvtst(int inv, int t);
@@ -1984,11 +1986,30 @@ static void gen_cast(CType *type)
                     ;
 #endif
                 else if (dbt != VT_LLONG) {
-                    int s = 0;
-                    if ((dbt & VT_BTYPE) == VT_BYTE)
+                    int s, dt, warr = 0;
+                    long long ll;
+                    dt = dbt & VT_BTYPE;
+                    ll = vtop->c.ll;
+                    if (dt == VT_BYTE){
+                        if((ll != (unsigned char)ll) && (ll != (char)ll))
+                            warr = 1;
                         s = 24;
-                    else if ((dbt & VT_BTYPE) == VT_SHORT)
+                    }else if (dt == VT_SHORT){
+                        if((ll != (unsigned short)ll) && (ll != (short)ll))
+                            warr = 1;
                         s = 16;
+                    }else{
+                        if((ll != (unsigned int)ll) && (ll != (int)ll))
+                            warr = 1;
+                        s = 0;
+                    }
+                    if(warr && !is_force){
+                        if(dt == VT_ENUM){
+                            tcc_warning("large integer implicitly truncated to unsigned type");
+                            dbt = VT_UNSIGNED;
+                        }else
+                            tcc_warning("overflow in implicit constant conversion");
+                    }
                     if(dbt & VT_UNSIGNED)
                         vtop->c.ui = ((unsigned int)vtop->c.ll << s) >> s;
                     else
@@ -2465,14 +2486,15 @@ static void gen_assign_cast(CType *dt)
 /* store vtop in lvalue pushed on stack */
 ST_FUNC void vstore(void)
 {
-    int sbt, dbt, ft, r, t, size, align, bit_size, bit_pos, rc, delayed_cast;
+    int sbt, dbt, ft, cc, r, t, size, align, bit_size, bit_pos, rc, delayed_cast;
 
     ft = vtop[-1].type.t;
     sbt = vtop->type.t & VT_BTYPE;
     dbt = ft & VT_BTYPE;
+    cc = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if ((((sbt == VT_INT || sbt == VT_SHORT) && dbt == VT_BYTE) ||
          (sbt == VT_INT && dbt == VT_SHORT))
-	&& !(vtop->type.t & VT_BITFIELD)) {
+	&& !(vtop->type.t & VT_BITFIELD) && !cc) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
         vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));
@@ -3718,7 +3740,9 @@ ST_FUNC void unary(void)
                     return;
                 }
                 unary();
+                is_force = 1;
                 gen_cast(&type);
+                is_force = 0;
             }
         } else if (tok == '{') {
             /* save all registers */
