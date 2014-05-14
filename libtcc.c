@@ -879,10 +879,10 @@ static void tcc_cleanup(void)
     /* free tokens */
     n = tok_ident - TOK_IDENT;
     for(i = 0; i < n; i++){
-		def = &table_ident[i]->sym_define;
-		tcc_free(def->data);
+        def = &table_ident[i]->sym_define;
+        tcc_free(def->data);
         tcc_free(table_ident[i]);
-	}
+    }
     tcc_free(table_ident);
 
     /* free sym_pools */

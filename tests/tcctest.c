@@ -380,21 +380,21 @@ comment
        comment.  */
     TEST2 /* the comment */ ();
     /* macro_push and macro_pop test */
-	#define MACRO_TEST "macro_test1\n"
-	#pragma push_macro("MACRO_TEST")
-	#undef MACRO_TEST
-	#define MACRO_TEST "macro_test2\n"
-	printf(MACRO_TEST);
-	#pragma pop_macro("MACRO_TEST")
-	printf(MACRO_TEST);
+    #define MACRO_TEST "macro_test1\n"
+    #pragma push_macro("MACRO_TEST")
+    #undef MACRO_TEST
+    #define MACRO_TEST "macro_test2\n"
+    printf(MACRO_TEST);
+    #pragma pop_macro("MACRO_TEST")
+    printf(MACRO_TEST);
 /* gcc does not support
-	#define MACRO_TEST_MACRO "MACRO_TEST"
-	#pragma push_macro(MACRO_TEST_MACRO)
-	#undef MACRO_TEST
-	#define MACRO_TEST "macro_test3\n"
-	printf(MACRO_TEST);
-	#pragma pop_macro(MACRO_TEST_MACRO)
-	printf(MACRO_TEST);
+    #define MACRO_TEST_MACRO "MACRO_TEST"
+    #pragma push_macro(MACRO_TEST_MACRO)
+    #undef MACRO_TEST
+    #define MACRO_TEST "macro_test3\n"
+    printf(MACRO_TEST);
+    #pragma pop_macro(MACRO_TEST_MACRO)
+    printf(MACRO_TEST);
 */
 }
 
