@@ -303,7 +303,7 @@
 #define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
 #define PACK_STACK_SIZE     8
-#define MACRO_STACK_SIZE    4
+#define MACRO_STACK_SIZE    8
 
 #define TOK_HASH_SIZE       8192 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */

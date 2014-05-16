@@ -383,7 +383,14 @@ comment
     #define MACRO_TEST "macro_test1\n"
     #pragma push_macro("MACRO_TEST")
     #undef MACRO_TEST
+
     #define MACRO_TEST "macro_test2\n"
+    #pragma push_macro("MACRO_TEST")
+    #undef MACRO_TEST
+
+    #define MACRO_TEST "macro_test3\n"
+    printf(MACRO_TEST);
+    #pragma pop_macro("MACRO_TEST")
     printf(MACRO_TEST);
     #pragma pop_macro("MACRO_TEST")
     printf(MACRO_TEST);

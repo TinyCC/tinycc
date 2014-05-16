@@ -234,7 +234,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     ts = tcc_malloc(sizeof(TokenSym) + len);
     table_ident[i] = ts;
     ts->tok = tok_ident++;
-    ts->sym_define.data = tcc_malloc(sizeof(Sym**));
+    ts->sym_define.data = tcc_malloc(sizeof(Sym*));
     ts->sym_define.off = 0;
     ts->sym_define.data[0] = NULL;
     ts->sym_define.size = 1;
@@ -1743,7 +1743,7 @@ pack_error:
                             size *= 2;
                             if (size >= MACRO_STACK_SIZE)
                                 tcc_error("stack full");
-                            def->data = tcc_realloc(def->data, size*sizeof(Sym**));
+                            def->data = tcc_realloc(def->data, size*sizeof(Sym*));
                             def->size = size;
                         }
                         def->data[def->off] = tmp;
