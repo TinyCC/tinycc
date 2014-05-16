@@ -379,34 +379,46 @@ comment
     /* And again when the name and parenthes are separated by a
        comment.  */
     TEST2 /* the comment */ ();
+
     /* macro_push and macro_pop test */
-    #define MACRO_TEST "macro_test1\n"
-    #pragma push_macro("MACRO_TEST")
-    printf(MACRO_TEST);
     #undef MACRO_TEST
+    #ifdef MACRO_TEST
+        printf("define MACRO_TEST\n");
+    #else
+        printf("undef MACRO_TEST\n");
+    #endif
 
-    #define MACRO_TEST "macro_test2\n"
     #pragma push_macro("MACRO_TEST")
-    printf(MACRO_TEST);
-    #undef MACRO_TEST
-
-    #define MACRO_TEST "macro_test3\n"
+    #define MACRO_TEST
     #pragma push_macro("MACRO_TEST")
-    printf(MACRO_TEST);
     #undef MACRO_TEST
-
-    #define MACRO_TEST "macro_test4\n"
-    printf(MACRO_TEST);
-    #undef MACRO_TEST
+    #pragma push_macro("MACRO_TEST")
 
     #pragma pop_macro("MACRO_TEST")
-    printf(MACRO_TEST);
+    #ifdef MACRO_TEST
+        printf("define MACRO_TEST\n");
+    #else
+        printf("undef MACRO_TEST\n");
+    #endif
 
     #pragma pop_macro("MACRO_TEST")
-    printf(MACRO_TEST);
+    #ifdef MACRO_TEST
+        printf("define MACRO_TEST\n");
+    #else
+        printf("undef MACRO_TEST\n");
+    #endif
 
     #pragma pop_macro("MACRO_TEST")
-    printf(MACRO_TEST);
+    #ifdef MACRO_TEST
+        printf("define MACRO_TEST\n");
+    #else
+        printf("undef MACRO_TEST\n");
+    #endif
+
+    /* pack test */
+    #pragma pack(push,8)
+    #pragma pack(pop)
+
 /* gcc does not support
     #define MACRO_TEST_MACRO "MACRO_TEST"
     #pragma push_macro(MACRO_TEST_MACRO)

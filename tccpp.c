@@ -1627,7 +1627,7 @@ skip:
         break;
     case TOK_PRAGMA:
         next();
-        if (tok == TOK_pack && parse_flags & PARSE_FLAG_PACK) {
+        if (tok == TOK_pack && s1->output_type != TCC_OUTPUT_PREPROCESS) {
             /*
               This may be:
               #pragma pack(1) // set
@@ -1736,32 +1736,29 @@ pack_error:
                 def = &ts->sym_define;
                 if(t == TOK_PUSH_MACRO){
                     void *tmp = def->data[def->off];
-                    if(tmp){
-                        def->off++;
-                        if(def->off >= def->size){
-                            int size = def->size;
-                            size *= 2;
-                            if (size > MACRO_STACK_SIZE)
-                                tcc_error("stack full");
-                            def->data = tcc_realloc(def->data, size*sizeof(Sym*));
-                            def->size = size;
-                        }
-                        def->data[def->off] = tmp;
+                    def->off++;
+                    if(def->off >= def->size){
+                        int size = def->size;
+                        size *= 2;
+                        if (size > MACRO_STACK_SIZE)
+                            tcc_error("stack full");
+                        def->data = tcc_realloc(def->data, size*sizeof(Sym*));
+                        def->size = size;
                     }
+                    def->data[def->off] = tmp;
                 }else{
                     if(def->off){
                         --def->off;
-                    }else{
-                        tcc_warning("stack empty");
                     }
                 }
             }
-        }else{
+        }else if(s1->output_type == TCC_OUTPUT_PREPROCESS){
             fputs("#pragma ", s1->ppfp);
             while (tok != TOK_LINEFEED){
                 fputs(get_tok_str(tok, &tokc), s1->ppfp);
                 next();
             }
+            fputs("\n", s1->ppfp);
             goto the_end;
         }
         break;
