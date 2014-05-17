@@ -1019,6 +1019,7 @@ ST_FUNC void lexpand_nr(void)
 }
 #endif
 
+#ifndef TCC_TARGET_X86_64
 /* build a long long from two ints */
 static void lbuild(int t)
 {
@@ -1027,6 +1028,7 @@ static void lbuild(int t)
     vtop[-1].type.t = t;
     vpop();
 }
+#endif
 
 /* rotate n first stack elements to the bottom 
    I1 ... In -> I2 ... In I1 [top is right]
@@ -1088,8 +1090,8 @@ static void gv_dup(void)
 {
     int rc, t, r, r1;
     SValue sv;
-
     t = vtop->type.t;
+#ifndef TCC_TARGET_X86_64
     if ((t & VT_BTYPE) == VT_LLONG) {
         lexpand();
         gv_dup();
@@ -1099,15 +1101,14 @@ static void gv_dup(void)
         vrotb(4);
         /* stack: H L L1 H1 */
         lbuild(t);
-        vrotb(3);
-        vrotb(3);
+        vrott(3);
         vswap();
         lbuild(t);
         vswap();
-    } else {
+    } else
+#endif
+    {
         /* duplicate value */
-        rc = RC_INT;
-        sv.type.t = VT_INT;
         if (is_float(t)) {
             rc = RC_FLOAT;
 #ifdef TCC_TARGET_X86_64
@@ -1115,8 +1116,9 @@ static void gv_dup(void)
                 rc = RC_ST0;
             }
 #endif
-            sv.type.t = t;
-        }
+        }else
+            rc = RC_INT;
+        sv.type.t = t;
         r = gv(rc);
         r1 = get_reg(rc);
         sv.r = r;
@@ -2549,11 +2551,6 @@ ST_FUNC void vstore(void)
         /* remove bit field info to avoid loops */
         vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
 
-        /* duplicate source into other register */
-        gv_dup();
-        vswap();
-        vrott(3);
-
         if((ft & VT_BTYPE) == VT_BOOL) {
             gen_cast(&vtop[-1].type);
             vtop[-1].type.t = (vtop[-1].type.t & ~VT_BTYPE) | (VT_BYTE | VT_UNSIGNED);
@@ -2585,10 +2582,6 @@ ST_FUNC void vstore(void)
         gen_op('|');
         /* store result */
         vstore();
-
-        /* pop off shifted source from "duplicate source..." above */
-        vpop();
-
     } else {
 #ifdef CONFIG_TCC_BCHECK
         /* bound check case */
