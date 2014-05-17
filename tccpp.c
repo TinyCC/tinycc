@@ -61,6 +61,7 @@ static TokenSym *hash_ident[TOK_HASH_SIZE];
 static char token_buf[STRING_MAX_SIZE + 1];
 /* true if isid(c) || isnum(c) */
 static unsigned char isidnum_table[256-CH_EOF];
+static int token_seen;
 
 static const char tcc_keywords[] = 
 #define DEF(id, str) str "\0"
@@ -1758,7 +1759,7 @@ pack_error:
                 fputs(get_tok_str(tok, &tokc), s1->ppfp);
                 next();
             }
-            fputs("\n", s1->ppfp);
+            token_seen = 0;//printf '\n'
             goto the_end;
         }
         break;
@@ -3229,7 +3230,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     Sym *define_start;
 
     BufferedFile *file_ref, **iptr, **iptr_new;
-    int token_seen, line_ref, d;
+    int line_ref, d;
     const char *s;
 
     preprocess_init(s1);
@@ -3238,7 +3239,6 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS |
                     PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
-    token_seen = 0;
     line_ref = 0;
     file_ref = NULL;
     iptr = s1->include_stack_ptr;
