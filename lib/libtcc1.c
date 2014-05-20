@@ -533,21 +533,22 @@ unsigned long long __fixunssfdi (float a1)
     register union float_long fl1;
     register int exp;
     register unsigned long l;
-
+    int s;
     fl1.f = a1;
 
     if (fl1.l == 0)
-    return (0);
+        return 0;
 
     exp = EXP (fl1.l) - EXCESS - 24;
 
     l = MANT(fl1.l);
-    if (exp >= 41)
-    return (unsigned long long)-1;
+    s = SIGN(fl1.l)? -1: 1;
+    if (exp >= 64)
+        return (unsigned long long)-1;
     else if (exp >= 0)
-        return (unsigned long long)l << exp;
+        return ((unsigned long long)l << exp)*s;
     else if (exp >= -23)
-        return l >> -exp;
+        return (l >> -exp)*s;
     else
         return 0;
 }
@@ -557,22 +558,22 @@ unsigned long long __fixunsdfdi (double a1)
     register union double_long dl1;
     register int exp;
     register unsigned long long l;
-
+    int s;
     dl1.d = a1;
 
     if (dl1.ll == 0)
-    return (0);
+        return (0);
 
     exp = EXPD (dl1) - EXCESSD - 53;
 
     l = MANTD_LL(dl1);
-
-    if (exp >= 12)
-    return (unsigned long long)-1;
+    s = SIGND(dl1)? -1: 1;
+    if (exp >= 64)
+        return (unsigned long long)-1;
     else if (exp >= 0)
-        return l << exp;
+        return (l << exp)*s;
     else if (exp >= -52)
-        return l >> -exp;
+        return (l >> -exp)*s;
     else
         return 0;
 }
@@ -582,20 +583,22 @@ unsigned long long __fixunsxfdi (long double a1)
     register union ldouble_long dl1;
     register int exp;
     register unsigned long long l;
-
+    int s;
     dl1.ld = a1;
 
     if (dl1.l.lower == 0 && dl1.l.upper == 0)
-    return (0);
+        return (0);
 
     exp = EXPLD (dl1) - EXCESSLD - 64;
-
+    s = SIGNLD(dl1)? -1: 1;
     l = dl1.l.lower;
 
-    if (exp > 0)
-    return (unsigned long long)-1;
-    else if (exp >= -63) 
-        return l >> -exp;
+    if (exp >= 64)
+        return (unsigned long long)-1;
+    else if (exp >= 0)
+        return ((unsigned long long)l << exp)*s;
+    else if (exp >= -64)
+        return (l >> -exp)*s;
     else
         return 0;
 }
@@ -637,7 +640,7 @@ extern void abort(void);
 #endif
 
 enum __va_arg_type {
-    __va_gen_reg, __va_float_reg, __va_stack
+        __va_gen_reg, __va_float_reg, __va_ld_reg, __va_stack
 };
 
 //This should be in sync with the declaration on our include/stdarg.h
