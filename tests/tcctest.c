@@ -155,8 +155,8 @@ static int onetwothree = 123;
 #define B3 4
 #endif
 
-#define __INT64_C(c)	c ## LL
-#define INT64_MIN	(-__INT64_C(9223372036854775807)-1)
+#define __INT64_C(c)    c ## LL
+#define INT64_MIN    (-__INT64_C(9223372036854775807)-1)
 
 int qq(int x)
 {
@@ -1444,30 +1444,30 @@ struct complexinit {
 
 const static struct complexinit cix[] = {
     [0] = {
-	.a = 2000,
-	.b = (const struct complexinit0[]) {
-		{ 2001, 2002 },
-		{ 2003, 2003 },
-		{}
-	}
+    .a = 2000,
+    .b = (const struct complexinit0[]) {
+        { 2001, 2002 },
+        { 2003, 2003 },
+        {}
+    }
     }
 };
 
 struct complexinit2 {
-	int a;
-	int b[];
+    int a;
+    int b[];
 };
 
 struct complexinit2 cix20;
 
 struct complexinit2 cix21 = {
-	.a = 3000,
-	.b = { 3001, 3002, 3003 }
+    .a = 3000,
+    .b = { 3001, 3002, 3003 }
 };
 
 struct complexinit2 cix22 = {
-	.a = 4000,
-	.b = { 4001, 4002, 4003, 4004, 4005, 4006 }
+    .a = 4000,
+    .b = { 4001, 4002, 4003, 4004, 4005, 4006 }
 };
 
 void init_test(void)
@@ -1564,10 +1564,10 @@ void init_test(void)
     printf("\n");
     /* complex init check */
     printf("cix: %d %d %d %d %d %d %d\n",
-	cix[0].a,
-	cix[0].b[0].a, cix[0].b[0].b,
-	cix[0].b[1].a, cix[0].b[1].b,
-	cix[0].b[2].a, cix[0].b[2].b);
+    cix[0].a,
+    cix[0].b[0].a, cix[0].b[0].b,
+    cix[0].b[1].a, cix[0].b[1].b,
+    cix[0].b[2].a, cix[0].b[2].b);
     printf("cix2: %d %d\n", cix21.b[2], cix22.b[5]);
     printf("sizeof cix20 %d, cix21 %d, sizeof cix22 %d\n", sizeof cix20, sizeof cix21, sizeof cix22);
 }
@@ -2454,21 +2454,21 @@ static char * strncat1(char * dest,const char * src,size_t count)
 {
 int d0, d1, d2, d3;
 __asm__ __volatile__(
-	"repne\n\t"
-	"scasb\n\t"
-	"decl %1\n\t"
-	"movl %8,%3\n"
-	"1:\tdecl %3\n\t"
-	"js 2f\n\t"
-	"lodsb\n\t"
-	"stosb\n\t"
-	"testb %%al,%%al\n\t"
-	"jne 1b\n"
-	"2:\txorl %2,%2\n\t"
-	"stosb"
-	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
-	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
-	: "memory");
+    "repne\n\t"
+    "scasb\n\t"
+    "decl %1\n\t"
+    "movl %8,%3\n"
+    "1:\tdecl %3\n\t"
+    "js 2f\n\t"
+    "lodsb\n\t"
+    "stosb\n\t"
+    "testb %%al,%%al\n\t"
+    "jne 1b\n"
+    "2:\txorl %2,%2\n\t"
+    "stosb"
+    : "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
+    : "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
+    : "memory");
 return dest;
 }
 
@@ -2476,20 +2476,20 @@ static char * strncat2(char * dest,const char * src,size_t count)
 {
 int d0, d1, d2, d3;
 __asm__ __volatile__(
-	"repne scasb\n\t" /* one-line repne prefix + string op */
-	"decl %1\n\t"
-	"movl %8,%3\n"
-	"1:\tdecl %3\n\t"
-	"js 2f\n\t"
-	"lodsb\n\t"
-	"stosb\n\t"
-	"testb %%al,%%al\n\t"
-	"jne 1b\n"
-	"2:\txorl %2,%2\n\t"
-	"stosb"
-	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
-	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
-	: "memory");
+    "repne scasb\n\t" /* one-line repne prefix + string op */
+    "decl %1\n\t"
+    "movl %8,%3\n"
+    "1:\tdecl %3\n\t"
+    "js 2f\n\t"
+    "lodsb\n\t"
+    "stosb\n\t"
+    "testb %%al,%%al\n\t"
+    "jne 1b\n"
+    "2:\txorl %2,%2\n\t"
+    "stosb"
+    : "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
+    : "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
+    : "memory");
 return dest;
 }
 
@@ -2497,17 +2497,17 @@ static inline void * memcpy1(void * to, const void * from, size_t n)
 {
 int d0, d1, d2;
 __asm__ __volatile__(
-	"rep ; movsl\n\t"
-	"testb $2,%b4\n\t"
-	"je 1f\n\t"
-	"movsw\n"
-	"1:\ttestb $1,%b4\n\t"
-	"je 2f\n\t"
-	"movsb\n"
-	"2:"
-	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
-	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
-	: "memory");
+    "rep ; movsl\n\t"
+    "testb $2,%b4\n\t"
+    "je 1f\n\t"
+    "movsw\n"
+    "1:\ttestb $1,%b4\n\t"
+    "je 2f\n\t"
+    "movsb\n"
+    "2:"
+    : "=&c" (d0), "=&D" (d1), "=&S" (d2)
+    :"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+    : "memory");
 return (to);
 }
 
@@ -2515,38 +2515,38 @@ static inline void * memcpy2(void * to, const void * from, size_t n)
 {
 int d0, d1, d2;
 __asm__ __volatile__(
-	"rep movsl\n\t"  /* one-line rep prefix + string op */
-	"testb $2,%b4\n\t"
-	"je 1f\n\t"
-	"movsw\n"
-	"1:\ttestb $1,%b4\n\t"
-	"je 2f\n\t"
-	"movsb\n"
-	"2:"
-	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
-	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
-	: "memory");
+    "rep movsl\n\t"  /* one-line rep prefix + string op */
+    "testb $2,%b4\n\t"
+    "je 1f\n\t"
+    "movsw\n"
+    "1:\ttestb $1,%b4\n\t"
+    "je 2f\n\t"
+    "movsb\n"
+    "2:"
+    : "=&c" (d0), "=&D" (d1), "=&S" (d2)
+    :"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+    : "memory");
 return (to);
 }
 
 static __inline__ void sigaddset1(unsigned int *set, int _sig)
 {
-	__asm__("btsl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
+    __asm__("btsl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
 }
 
 static __inline__ void sigdelset1(unsigned int *set, int _sig)
 {
-	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
+    asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
 }
 
 static __inline__ __const__ unsigned int swab32(unsigned int x)
 {
-	__asm__("xchgb %b0,%h0\n\t"	/* swap lower bytes	*/
-		"rorl $16,%0\n\t"	/* swap words		*/
-		"xchgb %b0,%h0"		/* swap higher bytes	*/
-		:"=q" (x)
-		: "0" (x));
-	return x;
+    __asm__("xchgb %b0,%h0\n\t"    /* swap lower bytes    */
+        "rorl $16,%0\n\t"    /* swap words        */
+        "xchgb %b0,%h0"        /* swap higher bytes    */
+        :"=q" (x)
+        : "0" (x));
+    return x;
 }
 
 static __inline__ unsigned long long mul64(unsigned int a, unsigned int b)
@@ -2675,23 +2675,23 @@ int weak_toolate() { return 0; }
 
 void __attribute__((weak)) weak_test(void)
 {
-	printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
-	printf("weak_f2=%d\n", weak_f2 ? weak_f2() : 123);
-	printf("weak_f3=%d\n", weak_f3 ? weak_f3() : 123);
-	printf("weak_v1=%d\n",&weak_v1 ? weak_v1   : 123);
-	printf("weak_v2=%d\n",&weak_v2 ? weak_v2   : 123);
-	printf("weak_v3=%d\n",&weak_v3 ? weak_v3   : 123);
+    printf("weak_f1=%d\n", weak_f1 ? weak_f1() : 123);
+    printf("weak_f2=%d\n", weak_f2 ? weak_f2() : 123);
+    printf("weak_f3=%d\n", weak_f3 ? weak_f3() : 123);
+    printf("weak_v1=%d\n",&weak_v1 ? weak_v1   : 123);
+    printf("weak_v2=%d\n",&weak_v2 ? weak_v2   : 123);
+    printf("weak_v3=%d\n",&weak_v3 ? weak_v3   : 123);
 
-	printf("weak_fpa=%d\n",&weak_fpa ? weak_fpa() : 123);
-	printf("weak_fpb=%d\n",&weak_fpb ? weak_fpb() : 123);
-	printf("weak_fpc=%d\n",&weak_fpc ? weak_fpc() : 123);
-	
-	printf("weak_asm_f1=%d\n", weak_asm_f1 != NULL);
-	printf("weak_asm_f2=%d\n", weak_asm_f2 != NULL);
-	printf("weak_asm_f3=%d\n", weak_asm_f3 != NULL);
-	printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
-	printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
-	printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
+    printf("weak_fpa=%d\n",&weak_fpa ? weak_fpa() : 123);
+    printf("weak_fpb=%d\n",&weak_fpb ? weak_fpb() : 123);
+    printf("weak_fpc=%d\n",&weak_fpc ? weak_fpc() : 123);
+    
+    printf("weak_asm_f1=%d\n", weak_asm_f1 != NULL);
+    printf("weak_asm_f2=%d\n", weak_asm_f2 != NULL);
+    printf("weak_asm_f3=%d\n", weak_asm_f3 != NULL);
+    printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
+    printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
+    printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
 }
 
 int __attribute__((weak)) weak_f2() { return 222; }
