@@ -576,12 +576,15 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
     for (f = file; f && f->filename[0] == ':'; f = f->prev)
      ;
     if (f) {
+        int line_num = f->line_num;
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
             strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
-        if (f->line_num > 0) {
+        if (line_num > 0) {
+            if(tok == TOK_LINEFEED)
+                line_num--;
             strcat_printf(buf, sizeof(buf), "%s:%d: ",
-                f->filename, f->line_num);
+                f->filename, line_num);
         } else {
             strcat_printf(buf, sizeof(buf), "%s: ",
                 f->filename);
