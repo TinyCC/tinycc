@@ -2552,6 +2552,11 @@ ST_FUNC void vstore(void)
         /* remove bit field info to avoid loops */
         vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
 
+        /* duplicate source into other register */
+        gv_dup();
+        vswap();
+        vrott(3);
+
         if((ft & VT_BTYPE) == VT_BOOL) {
             gen_cast(&vtop[-1].type);
             vtop[-1].type.t = (vtop[-1].type.t & ~VT_BTYPE) | (VT_BYTE | VT_UNSIGNED);
@@ -2583,6 +2588,9 @@ ST_FUNC void vstore(void)
         gen_op('|');
         /* store result */
         vstore();
+
+        /* pop off shifted source from "duplicate source..." above */
+        vpop();
     } else {
 #ifdef CONFIG_TCC_BCHECK
         /* bound check case */
