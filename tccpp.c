@@ -1239,16 +1239,15 @@ ST_FUNC void parse_define(void)
                 next_nomacro();
             }
             if (varg < TOK_IDENT)
-                tcc_error("badly punctuated parameter list");
+                tcc_error( "\'%s\' may not appear in parameter list", get_tok_str(varg, NULL));
             s = sym_push2(&define_stack, varg | SYM_FIELD, is_vaargs, 0);
             *ps = s;
             ps = &s->next;
             if (tok != ',')
-                break;
+                continue;
             next_nomacro();
         }
-        if (tok == ')')
-            next_nomacro_spc();
+        next_nomacro_spc();
         t = MACRO_FUNC;
     }
     tok_str_new(&str);

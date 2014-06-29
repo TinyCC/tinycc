@@ -82,7 +82,9 @@ TESTS =	\
  64_macro_nesting.test \
  65_macro_concat_start.test \
  66_macro_concat_end.test \
- 67_macro_concat.test
+ 67_macro_concat.test \
+ 68_macro_concat.test \
+ 69_macro_concat.test
 
 # 34_array_assignment.test -- array assignment is not in C standard
 
