@@ -3,7 +3,7 @@
 
 int main(void)
 {
-    int c = 0xa; 
+    int c = 0xa;
     printf("hex: %c\n", hexCh(c));
     return 0;
 }

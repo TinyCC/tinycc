@@ -83,8 +83,8 @@ TESTS =	\
  65_macro_concat_start.test \
  66_macro_concat_end.test \
  67_macro_concat.test \
- 68_macro_concat.test \
- 69_macro_concat.test
+ 68_macro_param_list_err_1.test \
+ 69_macro_param_list_err_2.test
 
 # 34_array_assignment.test -- array assignment is not in C standard
 
