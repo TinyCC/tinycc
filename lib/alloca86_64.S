@@ -17,10 +17,10 @@ alloca:
 #ifdef TCC_TARGET_PE
 p1:
     cmp     $4096,%rax
-    jle     p2
+    jb      p2
+    test    %rax,-4096(%rsp)
     sub     $4096,%rsp
     sub     $4096,%rax
-    test    %rax,(%rsp)
     jmp p1
 p2:
 #endif

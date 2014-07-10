@@ -14,10 +14,10 @@ __bound_alloca:
 #ifdef TCC_TARGET_PE
 p4:
     cmp     $4096,%eax
-    jle     p5
+    jb      p5
+    test    %eax,-4096(%esp)
     sub     $4096,%esp
     sub     $4096,%eax
-    test    %eax,(%esp)
     jmp p4
 
 p5:
