@@ -14,7 +14,7 @@ typedef struct
     int newmode;
 } _startupinfo;
 
-void __getmainargs(int *pargc, char ***pargv, char ***penv, int globb, _startupinfo*);
+int __getmainargs(int *pargc, char ***pargv, char ***penv, int globb, _startupinfo*);
 int main(int argc, char **argv, char **env);
 
 int _start(void)
@@ -25,7 +25,12 @@ int _start(void)
 
     _controlfp(0x10000, 0x30000);
     __set_app_type(__CONSOLE_APP);
-    __getmainargs(&argc, &argv, &env, 0, &start_info);
+    if (__getmainargs(&argc, &argv, &env, 0, &start_info)) {
+        // __getmainargs failed because possible few memory on the heap.
+        fprintf(stderr, "Error getting the main args.");
+        // terminate with exit code of 3, similar to abort()
+        ExitProcess(3);
+    }
 
     ret = main(argc, argv, env);
     exit(ret);
