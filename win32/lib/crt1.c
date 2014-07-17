@@ -20,20 +20,22 @@ int main(int argc, char **argv, char **env);
 int _start(void)
 {
     __TRY__
-    int argc; char **argv; char **env; int ret;
+    int argc; char **argv; char **env;
     _startupinfo start_info = {0};
 
     _controlfp(0x10000, 0x30000);
     __set_app_type(__CONSOLE_APP);
-    if (__getmainargs(&argc, &argv, &env, 0, &start_info)) {
-        // __getmainargs failed because possible few memory on the heap.
-        fprintf(stderr, "Error getting the main args.");
-        // terminate with exit code of 3, similar to abort()
-        ExitProcess(3);
-    }
 
-    ret = main(argc, argv, env);
-    exit(ret);
+    if (! __getmainargs(&argc, &argv, &env, 0, &start_info))
+    {
+        int ret;
+
+        ret = main(argc, argv, env);
+        exit(ret);
+    }
+    // __getmainargs failed because possible few memory on the heap.
+    // end with exit code of 3, similar to abort()
+    ExitProcess(3);
 }
 
 // =============================================
