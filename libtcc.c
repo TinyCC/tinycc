@@ -778,7 +778,6 @@ static int tcc_compile(TCCState *s1)
 #endif
 
     define_start = define_stack;
-    nocode_wanted = 1;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;

@@ -5528,9 +5528,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
        literals). It also simplifies local
        initializers handling */
     tok_str_new(&init_str);
-    if (size < 0 || (flexible_array && has_init)) {
-        if (!has_init) 
-            tcc_error("unknown type size");
+    if ((size < 0 || flexible_array) && has_init) {
         /* get all init string */
         if (has_init == 2) {
             /* only get strings */
@@ -5569,11 +5567,19 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         macro_ptr = init_str.str;
         next();
         
-        /* if still unknown size, error */
         size = type_size(type, &align);
-        if (size < 0) 
-            tcc_error("unknown type size");
     }
+
+    /* if still unknown size, error */
+    if (size < 0) 
+        tcc_error("unknown type size");
+
+    if (nocode_wanted) {
+        //tcc_warning("nocode_wanted set for decl_initializer_alloc");
+        vset(type, r, 0);
+        goto no_alloc;
+    }
+
     if (flexible_array)
         size += flexible_array->type.ref->c * pointed_size(&flexible_array->type);
     /* take into account specified alignment if bigger */
@@ -5720,17 +5726,17 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     }
     if (has_init || (type->t & VT_VLA)) {
         decl_initializer(type, sec, addr, 1, 0);
-        /* restore parse state if needed */
-        if (init_str.str) {
-            tok_str_free(init_str.str);
-            restore_parse_state(&saved_parse_state);
-        }
         /* patch flexible array member size back to -1, */
         /* for possible subsequent similar declarations */
         if (flexible_array)
             flexible_array->type.ref->c = -1;
     }
- no_alloc: ;
+no_alloc:
+    /* restore parse state if needed */
+    if (init_str.str) {
+        tok_str_free(init_str.str);
+        restore_parse_state(&saved_parse_state);
+    }
 }
 
 static void put_func_debug(Sym *sym)
@@ -5802,8 +5808,6 @@ static void func_decl_list(Sym *func_sym)
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
-    int saved_nocode_wanted = nocode_wanted;
-    nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
@@ -5859,7 +5863,6 @@ static void gen_function(Sym *sym)
     func_vt.t = VT_VOID; /* for safety */
     func_var = 0; /* for safety */
     ind = 0; /* for safety */
-    nocode_wanted = saved_nocode_wanted;
 }
 
 ST_FUNC void gen_inline_functions(void)
