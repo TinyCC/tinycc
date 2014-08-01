@@ -34,8 +34,28 @@
 
 #ifdef TCC_TARGET_X86_64
 # define ADDR3264 ULONGLONG
-#else
+# define REL_TYPE_DIRECT R_X86_64_64
+# define R_XXX_THUNKFIX R_X86_64_PC32
+# define R_XXX_RELATIVE R_X86_64_RELATIVE
+# define IMAGE_FILE_MACHINE 0x8664
+# define RSRC_RELTYPE 3
+
+#elif defined TCC_TARGET_ARM
 # define ADDR3264 DWORD
+# define REL_TYPE_DIRECT R_ARM_ABS32
+# define R_XXX_THUNKFIX R_ARM_ABS32
+# define R_XXX_RELATIVE R_ARM_RELATIVE
+# define IMAGE_FILE_MACHINE 0x01C0
+# define RSRC_RELTYPE 7 /* ??? (not tested) */
+
+#elif defined TCC_TARGET_I386
+# define ADDR3264 DWORD
+# define REL_TYPE_DIRECT R_386_32
+# define R_XXX_THUNKFIX R_386_32
+# define R_XXX_RELATIVE R_386_RELATIVE
+# define IMAGE_FILE_MACHINE 0x014C
+# define RSRC_RELTYPE 7 /* DIR32NB */
+
 #endif
 
 #ifdef _WIN32
@@ -507,13 +527,7 @@ static int pe_write(struct pe_info *pe)
     0x00004550, /* DWORD nt_sig = IMAGE_NT_SIGNATURE */
     {
     /* IMAGE_FILE_HEADER filehdr */
-#if defined(TCC_TARGET_I386)
-    0x014C,   /*WORD    Machine; */
-#elif defined(TCC_TARGET_X86_64)
-    0x8664,   /*WORD    Machine; */
-#elif defined(TCC_TARGET_ARM)
-    0x01C0,   /*WORD    Machine; */
-#endif
+    IMAGE_FILE_MACHINE, /*WORD    Machine; */
     0x0003, /*WORD    NumberOfSections; */
     0x00000000, /*DWORD   TimeDateStamp; */
     0x00000000, /*DWORD   PointerToSymbolTable; */
@@ -716,24 +730,6 @@ static int pe_write(struct pe_info *pe)
     return 0;
 }
 
-/*----------------------------------------------------------------------------*/
-
-#if defined(TCC_TARGET_X86_64)
-#define REL_TYPE_DIRECT R_X86_64_64
-#define R_XXX_THUNKFIX R_X86_64_PC32
-#define R_XXX_RELATIVE R_X86_64_RELATIVE
-
-#elif defined(TCC_TARGET_I386)
-#define REL_TYPE_DIRECT R_386_32
-#define R_XXX_THUNKFIX R_386_32
-#define R_XXX_RELATIVE R_386_RELATIVE
-
-#elif defined(TCC_TARGET_ARM)
-#define REL_TYPE_DIRECT R_ARM_ABS32
-#define R_XXX_THUNKFIX R_ARM_ABS32
-#define R_XXX_RELATIVE R_ARM_RELATIVE
-
-#endif
 /*----------------------------------------------------------------------------*/
 
 static struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
@@ -1539,7 +1535,7 @@ static int pe_load_res(TCCState *s1, int fd)
     if (!read_mem(fd, 0, &hdr, sizeof hdr))
         goto quit;
 
-    if (hdr.filehdr.Machine != 0x014C
+    if (hdr.filehdr.Machine != IMAGE_FILE_MACHINE
         || hdr.filehdr.NumberOfSections != 1
         || strcmp(hdr.sectionhdr.Name, ".rsrc") != 0)
         goto quit;
@@ -1556,7 +1552,7 @@ static int pe_load_res(TCCState *s1, int fd)
         if (!read_mem(fd, offs, &rel, sizeof rel))
             goto quit;
         // printf("rsrc_reloc: %x %x %x\n", rel.offset, rel.size, rel.type);
-        if (rel.type != 7) /* DIR32NB */
+        if (rel.type != RSRC_RELTYPE)
             goto quit;
         put_elf_reloc(symtab_section, rsrc_section,
             rel.offset, R_XXX_RELATIVE, 0);

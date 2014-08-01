@@ -158,6 +158,14 @@ int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 
 /* -------------------------------------------------------------- */
 
+#if defined TCC_TARGET_X86_64
+# define IMAGE_FILE_MACHINE 0x8664
+#elif defined TCC_TARGET_ARM
+# define IMAGE_FILE_MACHINE 0x01C0
+#elif 1 /* defined TCC_TARGET_I386 */
+# define IMAGE_FILE_MACHINE 0x014C
+#endif
+
 /* -------------------------------------------------------------- */
 #endif
 
@@ -173,10 +181,8 @@ char *get_export_names(int fd)
     DWORD sig, ref, addr, ptr, namep;
 #ifdef TCC_TARGET_X86_64
     IMAGE_OPTIONAL_HEADER64 oh;
-    const int MACHINE = 0x8664;
 #else
     IMAGE_OPTIONAL_HEADER32 oh;
-    const int MACHINE = 0x014C;
 #endif
     int pef_hdroffset, opt_hdroffset, sec_hdroffset;
 
@@ -192,7 +198,7 @@ char *get_export_names(int fd)
     pef_hdroffset = dh.e_lfanew + sizeof sig;
     if (!read_mem(fd, pef_hdroffset, &ih, sizeof ih))
         goto the_end;
-    if (MACHINE != ih.Machine)
+    if (IMAGE_FILE_MACHINE != ih.Machine)
         goto the_end;
     opt_hdroffset = pef_hdroffset + sizeof ih;
     sec_hdroffset = opt_hdroffset + sizeof oh;
