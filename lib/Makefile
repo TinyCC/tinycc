@@ -54,6 +54,10 @@ WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 # into shared libraries
 PICFLAGS = -fPIC
 
+# don't compile with -fstack-protector-strong, TCC doesn't handle it
+# correctly
+CFLAGS := $(filter-out -fstack-protector-strong,$(CFLAGS))
+
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
