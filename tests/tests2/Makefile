@@ -1,6 +1,10 @@
 TOP = ../..
 include $(TOP)/Makefile
 
+# clear CFLAGS and LDFLAGS
+CFLAGS :=
+LDFLAGS :=
+
 ifdef CONFIG_WIN32
  TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
 else

@@ -7,6 +7,10 @@ include $(TOP)/Makefile
 SRCDIR = $(top_srcdir)/tests
 VPATH = $(SRCDIR) $(top_srcdir)
 
+# clear CFLAGS and LDFLAGS
+CFLAGS :=
+LDFLAGS :=
+
 # what tests to run
 TESTS = \
  hello-exe \
