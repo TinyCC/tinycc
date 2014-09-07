@@ -6,7 +6,7 @@ TOP ?= .
 include $(TOP)/config.mak
 VPATH = $(top_srcdir)
 
-CPPFLAGS = -I$(TOP) # for config.h
+CPPFLAGS += -I$(TOP) # for config.h
 
 ifeq (-$(findstring gcc,$(CC))-,-gcc-)
 ifeq (-$(findstring $(GCC_MAJOR),01)-,--)
