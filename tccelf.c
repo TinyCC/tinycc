@@ -1844,8 +1844,8 @@ struct dyn_inf {
 /* Assign sections to segments and decide how are sections laid out when loaded
    in memory. This function also fills corresponding program headers. */
 static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
-                           Section *interp, struct dyn_inf *dyninf,
-                           int *sec_order)
+                           Section *interp, Section* strsec,
+                           struct dyn_inf *dyninf, int *sec_order)
 {
     int i, j, k, file_type, sh_order_index, file_offset;
     unsigned long s_align;
@@ -2428,7 +2428,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
     phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
     /* compute section to program header mapping */
-    file_offset = layout_sections(s1, phdr, phnum, interp, &dyninf, sec_order);
+    file_offset = layout_sections(s1, phdr, phnum, interp, strsec, &dyninf,
+                                  sec_order);
 
     /* Fill remaining program header and finalize relocation related to dynamic
        linking. */
