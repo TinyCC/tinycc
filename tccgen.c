@@ -2520,15 +2520,14 @@ ST_FUNC void vstore(void)
         /* leave source on stack */
     } else if (ft & VT_BITFIELD) {
         /* bitfield store handling */
+
+        /* save lvalue as expression result (example: s.b = s.a = n;) */
+        vdup(), vtop[-1] = vtop[-2];
+
         bit_pos = (ft >> VT_STRUCT_SHIFT) & 0x3f;
         bit_size = (ft >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
         /* remove bit field info to avoid loops */
         vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
-
-        /* duplicate source into other register */
-        gv_dup();
-        vswap();
-        vrott(3);
 
         if((ft & VT_BTYPE) == VT_BOOL) {
             gen_cast(&vtop[-1].type);
@@ -2561,8 +2560,7 @@ ST_FUNC void vstore(void)
         gen_op('|');
         /* store result */
         vstore();
-
-        /* pop off shifted source from "duplicate source..." above */
+        /* ... and discard */
         vpop();
 
     } else {
