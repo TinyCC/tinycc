@@ -113,10 +113,10 @@ all test: $(filter-out $(SKIP),$(TESTS))
 %.test: %.c %.expect
 	@echo Test: $*...
 
-	@$(TCC) -run $< $(ARGS) >$*.output 2>&1 || true
+	@$(TCC) -run $< $(ARGS) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output || true
 	@diff -bu $*.expect $*.output && rm -f $*.output
 
-	@($(TCC) $< -o $*.exe && ./$*.exe $(ARGS)) >$*.output2 2>&1 || true
+	@($(TCC) $< -o $*.exe && ./$*.exe $(ARGS)) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output2 || true
 	@diff -bu $*.expect $*.output2 && rm -f $*.output2 $*.exe
 
 clean:
