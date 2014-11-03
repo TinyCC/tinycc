@@ -2,6 +2,8 @@
 // crt1.c
 
 #include <stdlib.h>
+// For ExitProcess
+#include <windows.h>
 
 #define __UNKNOWN_APP    0
 #define __CONSOLE_APP    1
