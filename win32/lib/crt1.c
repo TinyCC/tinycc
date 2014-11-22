@@ -16,28 +16,32 @@ typedef struct
     int newmode;
 } _startupinfo;
 
-int __getmainargs(int *pargc, char ***pargv, char ***penv, int globb, _startupinfo*);
+// prototype of __getmainargs:
+// in msvcrt v6.0 : return void
+// in msvcrt v7.0 : return int
+// using first for compatibility
+void __getmainargs(int *pargc, char ***pargv, char ***penv, int globb, _startupinfo*);
 int main(int argc, char **argv, char **env);
 
 int _start(void)
 {
     __TRY__
-    int argc; char **argv; char **env;
+    int argc; char **argv; char **env; int ret;
     _startupinfo start_info = {0};
 
     _controlfp(0x10000, 0x30000);
     __set_app_type(__CONSOLE_APP);
 
-    if (! __getmainargs(&argc, &argv, &env, 0, &start_info))
+    argv = NULL;
+    __getmainargs(&argc, &argv, &env, 0, &start_info);
+    // check success comparing if argv now is not NULL
+    if (! argv)
     {
-        int ret;
-
-        ret = main(argc, argv, env);
-        exit(ret);
+        ExitProcess(-1);
     }
-    // __getmainargs failed because possible few memory on the heap.
-    // end with exit code of 3, similar to abort()
-    ExitProcess(3);
+
+    ret = main(argc, argv, env);
+    exit(ret);
 }
 
 // =============================================
