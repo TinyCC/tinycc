@@ -26,7 +26,7 @@ int main(int argc, char **argv, char **env);
 int _start(void)
 {
     __TRY__
-    int argc; char **argv; char **env; int ret;
+    int argc; char **argv; char **env;
     _startupinfo start_info = {0};
 
     _controlfp(0x10000, 0x30000);
@@ -35,13 +35,14 @@ int _start(void)
     argv = NULL;
     __getmainargs(&argc, &argv, &env, 0, &start_info);
     // check success comparing if argv now is not NULL
-    if (! argv)
+    if (argv != NULL)
+    {
+        exit( main(argc, argv, env) );
+    }
+    else
     {
         ExitProcess(-1);
     }
-
-    ret = main(argc, argv, env);
-    exit(ret);
 }
 
 // =============================================
