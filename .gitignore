@@ -1,5 +1,8 @@
 *.o
 *.a
+a.out
+*.exe
+*.log
 tcc_g
 tcc
 /*-tcc
@@ -50,6 +53,7 @@ config.h
 config.mak
 config.texi
 tags
+TAGS
 .DS_Store
 *.swp
 lib/x86_64
