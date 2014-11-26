@@ -346,7 +346,8 @@ export LIBTCC1
 	$(MAKE) -C tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.exe libtcc_test$(EXESUF)
+	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
+		*.exe a.out tags TAGS libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@
@@ -358,6 +359,12 @@ distclean: clean
 config.mak:
 	@echo "Please run ./configure."
 	@exit 1
+
+tags:
+	ctags $(top_srcdir)/*.[ch] $(top_srcdir)/include/*.h $(top_srcdir)/lib/*.[chS]
+
+TAGS:
+	ctags -e $(top_srcdir)/*.[ch] $(top_srcdir)/include/*.h $(top_srcdir)/lib/*.[chS]
 
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
@@ -373,6 +380,6 @@ tar:    tcc-doc.html
 	rm -rf $(TCC-VERSION)
 	git reset
 
-.PHONY: all clean tar distclean install uninstall FORCE
+.PHONY: all clean tar tags TAGS distclean install uninstall FORCE
 
 endif # ifeq ($(TOP),.)
