@@ -66,4 +66,5 @@ conftest*
 tiny_libmaker
 *.dSYM
 *~
-
+\#*
+.#*
