@@ -494,7 +494,7 @@ typedef struct BufferedFile {
     int ifndef_macro_saved; /* saved ifndef_macro */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
     char filename[1024];    /* filename */
-    unsigned char buffer[IO_BUF_SIZE + 1]; /* extra size for CH_EOB char */
+    unsigned char buffer[1]; /* extra size for CH_EOB char */
 } BufferedFile;
 
 #define CH_EOB   '\\'       /* end of buffer or '\0' char in file */
