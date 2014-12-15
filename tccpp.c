@@ -1874,7 +1874,7 @@ static void parse_number(const char *p)
             if (b == 16)
                 shift = 4;
             else 
-                shift = 2;
+                shift = 1;
             bn_zero(bn);
             q = token_buf;
             while (1) {
