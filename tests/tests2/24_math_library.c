@@ -1,3 +1,5 @@
+#define _ISOC99_SOURCE 1
+
 #include <stdio.h>
 #include <math.h>
 
