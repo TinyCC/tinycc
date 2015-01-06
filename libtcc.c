@@ -906,7 +906,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 #else
     tcc_set_lib_path(s, CONFIG_TCCDIR);
 #endif
-    s->output_type = TCC_OUTPUT_MEMORY;
+    s->output_type = 0;
     preprocess_new();
     s->include_stack_ptr = s->include_stack;
 
@@ -1831,6 +1831,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->do_debug = 1;
             break;
         case TCC_OPTION_c:
+    	    if (s->output_type)
+                tcc_warning("-c: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_OBJ;
             break;
 #ifdef TCC_TARGET_ARM
@@ -1849,6 +1851,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->static_link = 1;
             break;
         case TCC_OPTION_shared:
+    	    if (s->output_type)
+                tcc_warning("-shared: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_DLL;
             break;
         case TCC_OPTION_soname:
@@ -1862,6 +1866,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             break;
         case TCC_OPTION_r:
             /* generate a .o merging several output files */
+    	    if (s->output_type)
+                tcc_warning("-r: some compiler action already specified (%d)", s->output_type);
             s->option_r = 1;
             s->output_type = TCC_OUTPUT_OBJ;
             break;
@@ -1878,6 +1884,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->print_search_dirs = 1;
             break;
         case TCC_OPTION_run:
+    	    if (s->output_type)
+                tcc_warning("-run: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_MEMORY;
             tcc_set_options(s, optarg);
             run = 1;
@@ -1907,6 +1915,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             cstr_ccat(&linker_arg, '\0');
             break;
         case TCC_OPTION_E:
+    	    if (s->output_type)
+                tcc_warning("-E: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_PREPROCESS;
             break;
         case TCC_OPTION_MD:

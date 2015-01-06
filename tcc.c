@@ -249,7 +249,6 @@ int main(int argc, char **argv)
     const char *first_file = NULL;
 
     s = tcc_new();
-    s->output_type = TCC_OUTPUT_EXE;
 
     optind = tcc_parse_args(s, argc - 1, argv + 1);
     tcc_set_environment(s);
@@ -258,6 +257,9 @@ int main(int argc, char **argv)
         help();
         return 1;
     }
+
+    if (s->output_type == 0)
+	s->output_type = TCC_OUTPUT_EXE;
 
     if (s->option_m)
         exec_other_tcc(s, argv, s->option_m);
