@@ -204,6 +204,7 @@ ALT(DEF_ASM_OP1(ljmp, 0xff, 5, 0, OPT_EA))
 
 ALT(DEF_ASM_OP1(int, 0xcd, 0, 0, OPT_IM8))
 ALT(DEF_ASM_OP1(seto, 0x0f90, 0, OPC_MODRM | OPC_TEST, OPT_REG8 | OPT_EA))
+ALT(DEF_ASM_OP1(setob, 0x0f90, 0, OPC_MODRM | OPC_TEST, OPT_REG8 | OPT_EA))
     DEF_ASM_OP2(enter, 0xc8, 0, 0, OPT_IM16, OPT_IM8)
     DEF_ASM_OP0(leave, 0xc9)
     DEF_ASM_OP0(ret, 0xc3)

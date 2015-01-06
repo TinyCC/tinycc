@@ -244,6 +244,8 @@ L3:
 
         
  seto %al
+ setc %al
+ setcb %al
  setnp 0x1000
  setl 0xaaaa
  setg %dl

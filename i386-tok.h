@@ -172,10 +172,11 @@
  DEF_ASM(lcall)
  DEF_ASM(ljmp)
 
- DEF_ASMTEST(j)
+ DEF_ASMTEST(j,)
 
- DEF_ASMTEST(set)
- DEF_ASMTEST(cmov)
+ DEF_ASMTEST(set,)
+ DEF_ASMTEST(set,b)
+ DEF_ASMTEST(cmov,)
 
  DEF_WLX(bsf)
  DEF_WLX(bsr)

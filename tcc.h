@@ -933,37 +933,37 @@ struct TCCState {
  DEF(TOK_ASM_ ## f ## x ## p, "f" #x "p") \
  DEF_FP1(x)
 
-#define DEF_ASMTEST(x) \
- DEF_ASM(x ## o) \
- DEF_ASM(x ## no) \
- DEF_ASM(x ## b) \
- DEF_ASM(x ## c) \
- DEF_ASM(x ## nae) \
- DEF_ASM(x ## nb) \
- DEF_ASM(x ## nc) \
- DEF_ASM(x ## ae) \
- DEF_ASM(x ## e) \
- DEF_ASM(x ## z) \
- DEF_ASM(x ## ne) \
- DEF_ASM(x ## nz) \
- DEF_ASM(x ## be) \
- DEF_ASM(x ## na) \
- DEF_ASM(x ## nbe) \
- DEF_ASM(x ## a) \
- DEF_ASM(x ## s) \
- DEF_ASM(x ## ns) \
- DEF_ASM(x ## p) \
- DEF_ASM(x ## pe) \
- DEF_ASM(x ## np) \
- DEF_ASM(x ## po) \
- DEF_ASM(x ## l) \
- DEF_ASM(x ## nge) \
- DEF_ASM(x ## nl) \
- DEF_ASM(x ## ge) \
- DEF_ASM(x ## le) \
- DEF_ASM(x ## ng) \
- DEF_ASM(x ## nle) \
- DEF_ASM(x ## g)
+#define DEF_ASMTEST(x,suffix) \
+ DEF_ASM(x ## o ## suffix) \
+ DEF_ASM(x ## no ## suffix) \
+ DEF_ASM(x ## b ## suffix) \
+ DEF_ASM(x ## c ## suffix) \
+ DEF_ASM(x ## nae ## suffix) \
+ DEF_ASM(x ## nb ## suffix) \
+ DEF_ASM(x ## nc ## suffix) \
+ DEF_ASM(x ## ae ## suffix) \
+ DEF_ASM(x ## e ## suffix) \
+ DEF_ASM(x ## z ## suffix) \
+ DEF_ASM(x ## ne ## suffix) \
+ DEF_ASM(x ## nz ## suffix) \
+ DEF_ASM(x ## be ## suffix) \
+ DEF_ASM(x ## na ## suffix) \
+ DEF_ASM(x ## nbe ## suffix) \
+ DEF_ASM(x ## a ## suffix) \
+ DEF_ASM(x ## s ## suffix) \
+ DEF_ASM(x ## ns ## suffix) \
+ DEF_ASM(x ## p ## suffix) \
+ DEF_ASM(x ## pe ## suffix) \
+ DEF_ASM(x ## np ## suffix) \
+ DEF_ASM(x ## po ## suffix) \
+ DEF_ASM(x ## l ## suffix) \
+ DEF_ASM(x ## nge ## suffix) \
+ DEF_ASM(x ## nl ## suffix) \
+ DEF_ASM(x ## ge ## suffix) \
+ DEF_ASM(x ## le ## suffix) \
+ DEF_ASM(x ## ng ## suffix) \
+ DEF_ASM(x ## nle ## suffix) \
+ DEF_ASM(x ## g ## suffix)
 
 #endif /* defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 */
 
