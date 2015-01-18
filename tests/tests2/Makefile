@@ -89,7 +89,9 @@ TESTS =	\
  67_macro_concat.test \
  68_macro_param_list_err_1.test \
  69_macro_param_list_err_2.test \
- 70_floating_point_literals.test
+ 70_floating_point_literals.test \
+ 71_macro_empty_arg.test \
+
 
 # 34_array_assignment.test -- array assignment is not in C standard
 

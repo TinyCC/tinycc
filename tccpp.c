@@ -2640,7 +2640,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                             tok_str_add2(&str, t1, &cval);
                         }
                     }
-                } else {
+                } else if (*st != TOK_PLCHLDR) {
                     /* NOTE: the stream cannot be read when macro
                        substituing an argument */
                     macro_subst(&str, nested_list, st, NULL);
