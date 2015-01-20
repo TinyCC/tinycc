@@ -335,11 +335,19 @@ static void asm_parse_directive(TCCState *s1)
     sec = cur_text_section;
     switch(tok) {
     case TOK_ASM_align:
+    case TOK_ASM_p2align:
     case TOK_ASM_skip:
     case TOK_ASM_space:
         tok1 = tok;
         next();
         n = asm_int_expr(s1);
+        if (tok1 == TOK_ASM_p2align)
+        {
+            if (n < 0 || n > 30)
+                tcc_error("invalid p2align, must be between 0 and 30");
+            n = 1 << n;
+            tok1 = TOK_ASM_align;
+        }
         if (tok1 == TOK_ASM_align) {
             if (n < 0 || (n & (n-1)) != 0)
                 tcc_error("alignment must be a positive power of two");

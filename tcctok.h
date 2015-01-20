@@ -258,6 +258,7 @@
  DEF_ASM(byte)
  DEF_ASM(word)
  DEF_ASM(align)
+ DEF_ASM(p2align)
  DEF_ASM(skip)
  DEF_ASM(space)
  DEF_ASM(string)
