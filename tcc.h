@@ -113,7 +113,7 @@
 #endif
 
 #include "elf.h"
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
 # define ELFCLASSW ELFCLASS64
 # define ElfW(type) Elf##64##_##type
 # define ELFW(type) ELF##64##_##type
@@ -151,23 +151,26 @@
 /* target selection */
 /* #define TCC_TARGET_I386   *//* i386 code generator */
 /* #define TCC_TARGET_ARM    *//* ARMv4 code generator */
+/* #define TCC_TARGET_ARM64  *//* ARMv8 code generator */
 /* #define TCC_TARGET_C67    *//* TMS320C67xx code generator */
 /* #define TCC_TARGET_X86_64 *//* x86-64 code generator */
 
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
-    !defined(TCC_TARGET_C67) && !defined(TCC_TARGET_X86_64)
+    !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
+    !defined(TCC_TARGET_X86_64)
 #define TCC_TARGET_I386
 #endif
 
 #if !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM) && \
-    !defined(TCC_TARGET_C67) && !defined(TCC_TARGET_X86_64) && \
-    !defined(CONFIG_USE_LIBGCC)
+    !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
+    !defined(TCC_TARGET_X86_64) && !defined(CONFIG_USE_LIBGCC)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
 
 /* define it to include assembler support */
-#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_C67)
+#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64) && \
+    !defined(TCC_TARGET_C67)
 #define CONFIG_TCC_ASM
 #endif
 
@@ -183,6 +186,8 @@
 # elif (defined __x86_64__ || defined _AMD64_) && defined TCC_TARGET_X86_64
 #  define TCC_IS_NATIVE
 # elif defined __arm__ && defined TCC_TARGET_ARM
+#  define TCC_IS_NATIVE
+# elif defined __aarch64__ && defined TCC_TARGET_ARM64
 #  define TCC_IS_NATIVE
 # endif
 #endif
@@ -256,6 +261,8 @@
 #  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld-elf.so.2"
 # elif defined __GNU__
 #  define CONFIG_TCC_ELFINTERP "/lib/ld.so"
+# elif defined TCC_TARGET_ARM64
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-aarch64.so.1"
 # elif defined(TCC_TARGET_X86_64)
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_UCLIBC)
@@ -289,6 +296,9 @@
 #endif
 #ifdef TCC_TARGET_ARM
 # include "arm-gen.c"
+#endif
+#ifdef TCC_TARGET_ARM64
+# include "arm64-gen.c"
 #endif
 #ifdef TCC_TARGET_C67
 # include "coff.h"
@@ -1214,6 +1224,7 @@ ST_FUNC void vpushv(SValue *v);
 ST_FUNC void save_reg(int r);
 ST_FUNC int get_reg(int rc);
 ST_FUNC void save_regs(int n);
+ST_FUNC void gaddrof(void);
 ST_FUNC int gv(int rc);
 ST_FUNC void gv2(int rc1, int rc2);
 ST_FUNC void vpop(void);
@@ -1355,6 +1366,15 @@ ST_FUNC char *default_elfinterp(struct TCCState *s);
 ST_FUNC void arm_init(struct TCCState *s);
 ST_FUNC uint32_t encbranch(int pos, int addr, int fail);
 ST_FUNC void gen_cvt_itof1(int t);
+#endif
+
+/* ------------ arm64-gen.c ------------ */
+#ifdef TCC_TARGET_ARM64
+ST_FUNC void gen_cvt_sxtw(void);
+ST_FUNC void gen_opl(int op);
+ST_FUNC void greturn(void);
+ST_FUNC void gen_va_start(void);
+ST_FUNC void gen_va_arg(CType *t);
 #endif
 
 /* ------------ c67-gen.c ------------ */

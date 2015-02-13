@@ -291,7 +291,7 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
     rel = section_ptr_add(sr, sizeof(ElfW_Rel));
     rel->r_offset = offset;
     rel->r_info = ELFW(R_INFO)(symbol, type);
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
     rel->r_addend = addend;
 #else
     if (addend)
@@ -506,7 +506,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         sym_index = ELFW(R_SYM)(rel->r_info);
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         val = sym->st_value;
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
         val += rel->r_addend;
 #endif
         type = ELFW(R_TYPE)(rel->r_info);
@@ -760,6 +760,69 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             fprintf(stderr,"FIXME: handle reloc type %x at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
             break;
+#elif defined(TCC_TARGET_ARM64)
+        case R_AARCH64_ABS64:
+            *(uint64_t *)ptr = val;
+            break;
+        case R_AARCH64_ABS32:
+            *(uint32_t *)ptr = val;
+            break;
+        case R_AARCH64_MOVW_UABS_G0_NC:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
+                (val & 0xffff) << 5;
+            break;
+        case R_AARCH64_MOVW_UABS_G1_NC:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
+                (val >> 16 & 0xffff) << 5;
+            break;
+        case R_AARCH64_MOVW_UABS_G2_NC:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
+                (val >> 32 & 0xffff) << 5;
+            break;
+        case R_AARCH64_MOVW_UABS_G3:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
+                (val >> 48 & 0xffff) << 5;
+            break;
+        case R_AARCH64_ADR_PREL_PG_HI21: {
+            uint64_t off = (val >> 12) - (addr >> 12);
+            if ((off + ((uint64_t)1 << 20)) >> 21)
+                tcc_error("R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0x9f00001f) |
+                (off & 0x1ffffc) << 3 | (off & 3) << 29;
+            break;
+        }
+        case R_AARCH64_ADD_ABS_LO12_NC:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffc003ff) |
+                (val & 0xfff) << 10;
+            break;
+        case R_AARCH64_JUMP26:
+        case R_AARCH64_CALL26:
+            if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc)
+                tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed");
+            *(uint32_t *)ptr = 0x14000000 | (type == R_AARCH64_CALL26) << 31 |
+                ((val - addr) >> 2 & 0x3ffffff);
+            break;
+        case R_AARCH64_ADR_GOT_PAGE: {
+            uint64_t off =
+                (((s1->got->sh_addr +
+                   s1->sym_attrs[sym_index].got_offset) >> 12) - (addr >> 12));
+            if ((off + ((uint64_t)1 << 20)) >> 21)
+                tcc_error("R_AARCH64_ADR_GOT_PAGE relocation failed");
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0x9f00001f) |
+                (off & 0x1ffffc) << 3 | (off & 3) << 29;
+            break;
+        }
+        case R_AARCH64_LD64_GOT_LO12_NC:
+            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xfff803ff) |
+                ((s1->got->sh_addr + s1->sym_attrs[sym_index].got_offset)
+                 & 0xff8) << 7;
+            break;
+        case R_AARCH64_COPY:
+          break;
+        default:
+            fprintf(stderr, "FIXME: handle reloc type %x at %x [%p] to %x\n",
+                    type, (unsigned)addr, ptr, (unsigned)val);
+            break;
 #elif defined(TCC_TARGET_C67)
         case R_C60_32:
             *(int *)ptr += val;
@@ -955,7 +1018,7 @@ static void put32(unsigned char *p, uint32_t val)
 }
 
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM) || \
-    defined(TCC_TARGET_X86_64)
+    defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
 static uint32_t get32(unsigned char *p)
 {
     return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
@@ -1014,6 +1077,8 @@ static unsigned long put_got_entry(TCCState *s1,
         (reloc_type == R_386_JMP_SLOT);
 #elif defined(TCC_TARGET_ARM)
         (reloc_type == R_ARM_JUMP_SLOT);
+#elif defined(TCC_TARGET_ARM64)
+        (reloc_type == R_AARCH64_JUMP_SLOT);
 #else
         0;
 #endif
@@ -1133,6 +1198,24 @@ static unsigned long put_got_entry(TCCState *s1,
             /* the symbol is modified so that it will be relocated to
                the PLT */
 	    if (sym->st_shndx == SHN_UNDEF)
+                offset = plt->data_offset - 16;
+        }
+#elif defined(TCC_TARGET_ARM64)
+        if (need_plt_entry) {
+            Section *plt;
+            uint8_t *p;
+
+            if (s1->output_type == TCC_OUTPUT_DLL)
+                tcc_error("DLLs unimplemented!");
+
+            plt = s1->plt;
+            if (plt->data_offset == 0)
+                section_ptr_add(plt, 32);
+            p = section_ptr_add(plt, 16);
+            put32(p, s1->got->data_offset);
+            put32(p + 4, (uint64_t)s1->got->data_offset >> 32);
+
+            if (sym->st_shndx == SHN_UNDEF)
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_C67)
@@ -1277,6 +1360,18 @@ ST_FUNC void build_got_entries(TCCState *s1)
                     put32(p+2, 0x46c0); /* nop   */
                     put32(p+4, 0xeafffffe); /* b $sym */
                 }
+#elif defined(TCC_TARGET_ARM64)
+                //xx Other cases may be required here:
+            case R_AARCH64_ADR_GOT_PAGE:
+            case R_AARCH64_LD64_GOT_LO12_NC:
+                if (!s1->got)
+                    build_got(s1);
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                reloc_type = R_AARCH64_GLOB_DAT;
+                put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
+                              sym_index);
+                break;
 #elif defined(TCC_TARGET_C67)
             case R_C60_GOT32:
             case R_C60_GOTOFF:
@@ -1796,6 +1891,40 @@ ST_FUNC void relocate_plt(TCCState *s1)
             put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
             p += 16;
         }
+#elif defined(TCC_TARGET_ARM64)
+        uint64_t plt = s1->plt->sh_addr;
+        uint64_t got = s1->got->sh_addr;
+        uint64_t off = (got >> 12) - (plt >> 12);
+        if ((off + ((uint64_t)1 << 20)) >> 21)
+            tcc_error("Failed relocating PLT");
+        put32(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
+        put32(p + 4, (0x90000010 | // adrp x16,...
+                      (off & 0x1ffffc) << 3 | (off & 3) << 29));
+        put32(p + 8, (0xf9400211 | // ldr x17,[x16,#...]
+                      (got & 0xff8) << 7));
+        put32(p + 12, (0x91000210 | // add x16,x16,#...
+                       (got & 0xfff) << 10));
+        put32(p + 16, 0xd61f0220); // br x17
+        put32(p + 20, 0xd503201f); // nop
+        put32(p + 24, 0xd503201f); // nop
+        put32(p + 28, 0xd503201f); // nop
+        p += 32;
+        while (p < p_end) {
+            uint64_t pc = plt + (p - s1->plt->data);
+            uint64_t addr = got +
+                (get32(p) | (uint64_t)get32(p + 4) << 32);
+            uint32_t off = (addr >> 12) - (pc >> 12);
+            if ((off + ((uint64_t)1 << 20)) >> 21)
+                tcc_error("Failed relocating PLT");
+            put32(p, (0x90000010 | // adrp x16,...
+                      (off & 0x1ffffc) << 3 | (off & 3) << 29));
+            put32(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
+                          (addr & 0xff8) << 7));
+            put32(p + 8, (0x91000210 | // add x16,x16,#...
+                          (addr & 0xfff) << 10));
+            put32(p + 12, 0xd61f0220); // br x17
+            p += 16;
+        }
 #elif defined(TCC_TARGET_C67)
         /* XXX: TODO */
 #else
@@ -2093,7 +2222,7 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_SYMTAB, s1->dynsym->sh_addr);
     put_dt(dynamic, DT_STRSZ, dyninf->dynstr->data_offset);
     put_dt(dynamic, DT_SYMENT, sizeof(ElfW(Sym)));
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
     put_dt(dynamic, DT_RELA, dyninf->rel_addr);
     put_dt(dynamic, DT_RELASZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));

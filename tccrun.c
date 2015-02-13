@@ -605,6 +605,27 @@ static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
 }
 
 /* ------------------------------------------------------------- */
+#elif defined(__aarch64__)
+
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
+{
+    if (level < 0)
+        return -1;
+    else if (level == 0) {
+        *paddr = uc->uc_mcontext.pc;
+        return 0;
+    }
+    else {
+        addr_t *fp = (addr_t *)uc->uc_mcontext.regs[29];
+        int i;
+        for (i = 1; i < level; i++)
+            fp = (addr_t *)fp[0];
+        *paddr = fp[1];
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------- */
 #else
 
 #warning add arch specific rt_get_caller_pc()

@@ -45,6 +45,9 @@ ST_DATA struct TCCState *tcc_state;
 #ifdef TCC_TARGET_ARM
 #include "arm-gen.c"
 #endif
+#ifdef TCC_TARGET_ARM64
+#include "arm64-gen.c"
+#endif
 #ifdef TCC_TARGET_C67
 #include "c67-gen.c"
 #endif
@@ -959,6 +962,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #else
     s->float_abi = ARM_SOFTFP_FLOAT;
 #endif
+#elif defined(TCC_TARGET_ARM64)
+    tcc_define_symbol(s, "__aarch64__", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE
@@ -1560,7 +1565,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
             if (strstart("pe-", &p)) {
-#elif defined(TCC_TARGET_X86_64)
+#elif defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
             if (strstart("elf64-", &p)) {
 #else
             if (strstart("elf32-", &p)) {

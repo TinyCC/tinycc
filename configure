@@ -99,6 +99,9 @@ classify_cpu ()
       esac
       cpu="armv4l"
     ;;
+    aarch64)
+      cpu="aarch64"
+    ;;
     alpha)
       cpu="alpha"
     ;;
@@ -435,6 +438,9 @@ elif test "$cpu" = "armv4l" ; then
   echo "ARCH=arm" >> config.mak
   echo "#define HOST_ARM 1" >> $TMPH
   echo "#define TCC_ARM_VERSION $cpuver" >> $TMPH
+elif test "$cpu" = "aarch64" ; then
+  echo "ARCH=arm64" >> config.mak
+  echo "#define HOST_ARM64 1" >> $TMPH
 elif test "$cpu" = "powerpc" ; then
   echo "ARCH=ppc" >> config.mak
   echo "#define HOST_PPC 1" >> $TMPH

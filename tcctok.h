@@ -59,6 +59,10 @@
      DEF(TOK_ASM2, "__asm")
      DEF(TOK_ASM3, "__asm__")
 
+#ifdef TCC_TARGET_ARM64
+     DEF(TOK_UINT128, "__uint128_t")
+#endif
+
 /*********************************************************************/
 /* the following are not keywords. They are included to ease parsing */
 /* preprocessor only */
@@ -135,6 +139,11 @@
 #endif
      DEF(TOK_REGPARM1, "regparm")
      DEF(TOK_REGPARM2, "__regparm__")
+
+#ifdef TCC_TARGET_ARM64
+     DEF(TOK___va_start, "__va_start")
+     DEF(TOK___va_arg, "__va_arg")
+#endif
 
 /* pragma */
      DEF(TOK_pack, "pack")
@@ -228,6 +237,30 @@
 
 #if defined TCC_TARGET_PE
      DEF(TOK___chkstk, "__chkstk")
+#endif
+#ifdef TCC_TARGET_ARM64
+     DEF(TOK___addtf3, "__addtf3")
+     DEF(TOK___subtf3, "__subtf3")
+     DEF(TOK___multf3, "__multf3")
+     DEF(TOK___divtf3, "__divtf3")
+     DEF(TOK___extendsftf2, "__extendsftf2")
+     DEF(TOK___extenddftf2, "__extenddftf2")
+     DEF(TOK___trunctfsf2, "__trunctfsf2")
+     DEF(TOK___trunctfdf2, "__trunctfdf2")
+     DEF(TOK___fixtfsi, "__fixtfsi")
+     DEF(TOK___fixtfdi, "__fixtfdi")
+     DEF(TOK___fixunstfsi, "__fixunstfsi")
+     DEF(TOK___fixunstfdi, "__fixunstfdi")
+     DEF(TOK___floatsitf, "__floatsitf")
+     DEF(TOK___floatditf, "__floatditf")
+     DEF(TOK___floatunsitf, "__floatunsitf")
+     DEF(TOK___floatunditf, "__floatunditf")
+     DEF(TOK___eqtf2, "__eqtf2")
+     DEF(TOK___netf2, "__netf2")
+     DEF(TOK___lttf2, "__lttf2")
+     DEF(TOK___letf2, "__letf2")
+     DEF(TOK___gttf2, "__gttf2")
+     DEF(TOK___getf2, "__getf2")
 #endif
 
 /* bound checking symbols */

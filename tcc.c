@@ -203,6 +203,8 @@ static void display_info(TCCState *s, int what)
 # endif
 #elif defined TCC_TARGET_ARM
         "ARM"
+#elif defined TCC_TARGET_ARM64
+        "AArch64"
 # ifdef TCC_ARM_HARDFLOAT
         " Hard Float"
 # endif

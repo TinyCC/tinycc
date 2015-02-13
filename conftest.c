@@ -7,6 +7,8 @@
 # define TRIPLET_ARCH "x86_64"
 #elif defined(__arm__)
 # define TRIPLET_ARCH "arm"
+#elif defined(__aarch64__)
+# define TRIPLET_ARCH "aarch64"
 #else
 # define TRIPLET_ARCH "unknown"
 #endif

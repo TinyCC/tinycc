@@ -46,6 +46,19 @@ typedef char *va_list;
 #define va_copy(dest, src) (dest) = (src)
 #define va_end(ap)
 
+#elif defined(__aarch64__)
+typedef struct {
+    void *__stack;
+    void *__gr_top;
+    void *__vr_top;
+    int   __gr_offs;
+    int   __vr_offs;
+} va_list;
+#define va_start(ap, last) __va_start(ap, last)
+#define va_arg(ap, type) __va_arg(ap, type)
+#define va_end(ap)
+#define va_copy(dest, src) ((dest) = (src))
+
 #else /* __i386__ */
 typedef char *va_list;
 /* only correct for i386 */
