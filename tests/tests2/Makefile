@@ -91,6 +91,7 @@ TESTS =	\
  69_macro_param_list_err_2.test \
  70_floating_point_literals.test \
  71_macro_empty_arg.test \
+ 72_long_long_constant.test \
 
 
 # 34_array_assignment.test -- array assignment is not in C standard
@@ -113,14 +114,14 @@ ARGS =
 
 all test: $(filter-out $(SKIP),$(TESTS))
 
-%.test: %.c %.expect
+%.test: %.c
 	@echo Test: $*...
 
 	@$(TCC) -run $< $(ARGS) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output || true
-	@diff -bu $*.expect $*.output && rm -f $*.output
+	@diff -Nbu $*.expect $*.output && rm -f $*.output
 
 	@($(TCC) $< -o $*.exe && ./$*.exe $(ARGS)) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output2 || true
-	@diff -bu $*.expect $*.output2 && rm -f $*.output2 $*.exe
+	@diff -Nbu $*.expect $*.output2 && rm -f $*.output2 $*.exe
 
 clean:
 	rm -vf fred.txt *.output* *.exe

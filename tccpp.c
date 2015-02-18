@@ -2012,7 +2012,8 @@ static void parse_number(const char *p)
         }
     } else {
         unsigned long long n, n1;
-        int lcount, ucount;
+        int lcount, ucount, must_64bit;
+        const char *p1;
 
         /* integer number */
         *q = '\0';
@@ -2025,17 +2026,16 @@ static void parse_number(const char *p)
         while(1) {
             t = *q++;
             /* no need for checks except for base 10 / 8 errors */
-            if (t == '\0') {
+            if (t == '\0')
                 break;
-            } else if (t >= 'a') {
+            else if (t >= 'a')
                 t = t - 'a' + 10;
-            } else if (t >= 'A') {
+            else if (t >= 'A')
                 t = t - 'A' + 10;
-            } else {
+            else
                 t = t - '0';
-                if (t >= b)
-                    tcc_error("invalid digit");
-            }
+            if (t >= b)
+                tcc_error("invalid digit");
             n1 = n;
             n = n * b + t;
             /* detect overflow */
@@ -2043,50 +2043,57 @@ static void parse_number(const char *p)
             if (n < n1)
                 tcc_error("integer constant overflow");
         }
-        
-        /* XXX: not exactly ANSI compliant */
-        if ((n & 0xffffffff00000000LL) != 0) {
-            if ((n >> 63) != 0)
-                tok = TOK_CULLONG;
-            else
-                tok = TOK_CLLONG;
-        } else if (n > 0x7fffffff) {
-            tok = TOK_CUINT;
-        } else {
-            tok = TOK_CINT;
-        }
-        lcount = 0;
-        ucount = 0;
+
+        /* Determine the characteristics (unsigned and/or 64bit) the type of
+           the constant must have according to the constant suffix(es) */
+        lcount = ucount = must_64bit = 0;
+        p1 = p;
         for(;;) {
             t = toup(ch);
             if (t == 'L') {
                 if (lcount >= 2)
                     tcc_error("three 'l's in integer constant");
+                if (lcount && *(p - 1) != ch)
+                    tcc_error("incorrect integer suffix: %s", p1);
                 lcount++;
 #if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
-                if (lcount == 2) {
+                if (lcount == 2)
 #endif
-                    if (tok == TOK_CINT)
-                        tok = TOK_CLLONG;
-                    else if (tok == TOK_CUINT)
-                        tok = TOK_CULLONG;
-#if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
-                }
-#endif
+                    must_64bit = 1;
                 ch = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
                     tcc_error("two 'u's in integer constant");
                 ucount++;
-                if (tok == TOK_CINT)
-                    tok = TOK_CUINT;
-                else if (tok == TOK_CLLONG)
-                    tok = TOK_CULLONG;
                 ch = *p++;
             } else {
                 break;
             }
         }
+
+        /* Whether 64 bits are needed to hold the constant's value */
+        if (n & 0xffffffff00000000LL || must_64bit) {
+            tok = TOK_CLLONG;
+            n1 = n >> 32;
+	} else {
+            tok = TOK_CINT;
+            n1 = n;
+        }
+
+        /* Whether type must be unsigned to hold the constant's value */
+        if (ucount || ((n1 >> 31) && (b != 10))) {
+            if (tok == TOK_CLLONG)
+                tok = TOK_CULLONG;
+            else
+                tok = TOK_CUINT;
+        /* If decimal and no unsigned suffix, bump to 64 bits or throw error */
+        } else if (n1 >> 31) {
+            if (tok == TOK_CINT)
+                tok = TOK_CLLONG;
+            else
+                tcc_error("integer constant overflow");
+        }
+
         if (tok == TOK_CINT || tok == TOK_CUINT)
             tokc.ui = n;
         else
