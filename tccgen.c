@@ -1832,6 +1832,9 @@ ST_FUNC void gen_op(int op)
             vtop->type.t = t;
         }
     }
+    // Make sure that we have converted to an rvalue:
+    if (vtop->r & VT_LVAL)
+        gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
 }
 
 #ifndef TCC_TARGET_ARM
