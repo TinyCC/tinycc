@@ -1180,8 +1180,10 @@ if the lvalue has an integer type, then these flags give its real
 type. The type alone is not enough in case of cast optimisations.
 
 @item VT_LLOCAL
-is a saved lvalue on the stack. @code{VT_LLOCAL} should be eliminated
-ASAP because its semantics are rather complicated.
+is a saved lvalue on the stack. @code{VT_LVAL} must also be set with
+@code{VT_LLOCAL}. @code{VT_LLOCAL} can arise when a @code{VT_LVAL} in
+a register has to be saved to the stack, or it can come from an
+architecture-specific calling convention.
 
 @item VT_MUSTCAST
 indicates that a cast to the value type must be performed if the value
