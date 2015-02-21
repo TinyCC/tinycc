@@ -5201,18 +5201,34 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         case VT_LLONG:
             *(long long *)ptr |= (vtop->c.ll & bit_mask) << bit_pos;
             break;
-        case VT_PTR:
-            if (vtop->r & VT_SYM) {
+        case VT_PTR: {
+            addr_t val = (vtop->c.ptr_offset & bit_mask) << bit_pos;
+#ifdef TCC_TARGET_X86_64
+            if (vtop->r & VT_SYM)
+                greloca(sec, vtop->sym, c, R_DATA_PTR, val);
+            else
+                *(addr_t *)ptr |= val;
+#else
+            if (vtop->r & VT_SYM)
                 greloc(sec, vtop->sym, c, R_DATA_PTR);
-            }
-            *(addr_t *)ptr |= (vtop->c.ptr_offset & bit_mask) << bit_pos;
+            *(addr_t *)ptr |= val;
+#endif
             break;
-        default:
-            if (vtop->r & VT_SYM) {
+        }
+        default: {
+            int val = (vtop->c.i & bit_mask) << bit_pos;
+#ifdef TCC_TARGET_X86_64
+            if (vtop->r & VT_SYM)
+                greloca(sec, vtop->sym, c, R_DATA_PTR, val);
+            else
+                *(int *)ptr |= val;
+#else
+            if (vtop->r & VT_SYM)
                 greloc(sec, vtop->sym, c, R_DATA_PTR);
-            }
-            *(int *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
+            *(int *)ptr |= val;
+#endif
             break;
+        }
         }
         vtop--;
     } else {

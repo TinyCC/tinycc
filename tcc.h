@@ -1074,6 +1074,7 @@ ST_FUNC Section *find_section(TCCState *s1, const char *name);
 ST_FUNC void put_extern_sym2(Sym *sym, Section *section, addr_t value, unsigned long size, int can_add_underscore);
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
 ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
+ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, unsigned long addend);
 
 ST_INLN void sym_free(Sym *sym);
 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c);
@@ -1261,6 +1262,7 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size, int info, 
 ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size, int info, int other, int sh_num, const char *name);
 ST_FUNC int find_elf_sym(Section *s, const char *name);
 ST_FUNC void put_elf_reloc(Section *symtab, Section *s, unsigned long offset, int type, int symbol);
+ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset, int type, int symbol, unsigned long addend);
 
 ST_FUNC void put_stabs(const char *str, int type, int other, int desc, unsigned long value);
 ST_FUNC void put_stabs_r(const char *str, int type, int other, int desc, unsigned long value, Section *sec, int sym_index);
