@@ -196,7 +196,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         if (0 == (s->sh_flags & SHF_ALLOC))
             continue;
         length = s->data_offset;
-        // printf("%-12s %08x %04x\n", s->name, s->sh_addr, length);
+        // printf("%-12s %08lx %04x\n", s->name, s->sh_addr, length);
         ptr = (void*)s->sh_addr;
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
