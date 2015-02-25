@@ -1093,7 +1093,7 @@ ST_FUNC void gen_va_arg(CType *t)
 {
     int align, size = type_size(t, &align);
     int fsize, hfa = arm64_hfa(t, &fsize);
-    int r0, r1;
+    uint32_t r0, r1;
 
     if (is_float(t->t)) {
         hfa = 1;
@@ -1108,9 +1108,12 @@ ST_FUNC void gen_va_arg(CType *t)
 
     if (!hfa) {
         uint32_t n = size > 16 ? 8 : (size + 7) & -8;
-        if (size == 16 && align == 16)
-            tcc_error("va_arg(ap, __uint128_t) unimplemented");
         o(0xb940181e | r0 << 5); // ldr w30,[x(r0),#24] // __gr_offs
+        if (align == 16) {
+            assert(0); // this path untested but needed for __uint128_t
+            o(0x11003fde); // add w30,w30,#15
+            o(0x121c6fde); // and w30,w30,#-16
+        }
         o(0x310003c0 | r1 | n << 10); // adds w(r1),w30,#(n)
         o(0x540000ad); // b.le .+20
         o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
@@ -1126,10 +1129,7 @@ ST_FUNC void gen_va_arg(CType *t)
     else {
         uint32_t rsz = hfa << 4;
         uint32_t ssz = (size + 7) & -(uint32_t)8;
-        uint32_t b1;
-        if (hfa > 1 && fsize < 16)
-            // We may need to change the layout of this HFA
-            tcc_error("va_arg(ap, HFA) unimplemented");
+        uint32_t b1, b2;
         o(0xb9401c1e | r0 << 5); // ldr w30,[x(r0),#28] // __vr_offs
         o(0x310003c0 | r1 | rsz << 10); // adds w(r1),w30,#(rsz)
         b1 = ind; o(0x5400000d); // b.le lab1
@@ -1140,13 +1140,31 @@ ST_FUNC void gen_va_arg(CType *t)
         }
         o(0x9100001e | r1 << 5 | ssz << 10); // add x30,x(r1),#(ssz)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
-        o(0x14000004); // b .+16
+        b2 = ind; o(0x14000000); // b lab2
         // lab1:
         *(uint32_t *)(cur_text_section->data + b1) =
             (0x5400000d | (ind - b1) << 3);
         o(0xb9001c00 | r1 | r0 << 5); // str w(r1),[x(r0),#28] // __vr_offs
         o(0xf9400800 | r1 | r0 << 5); // ldr x(r1),[x(r0),#16] // __vr_top
-        o(0x8b3ec000 | r1 | r1 << 5); // add x(r1),x(r1),w30,sxtw
+        if (hfa == 1 || fsize == 16)
+            o(0x8b3ec000 | r1 | r1 << 5); // add x(r1),x(r1),w30,sxtw
+        else {
+            // We need to change the layout of this HFA.
+            // Get some space on the stack using global variable "loc":
+            loc = (loc - size) & -(uint32_t)align;
+            o(0x8b3ec000 | 30 | r1 << 5); // add x30,x(r1),w30,sxtw
+            arm64_movimm(r1, loc);
+            o(0x8b0003a0 | r1 | r1 << 16); // add x(r1),x29,x(r1)
+            o(0x4c402bdc | (uint32_t)fsize << 7 |
+              (uint32_t)(hfa == 2) << 15 |
+              (uint32_t)(hfa == 3) << 14); // ld1 {v28.(4s|2d),...},[x30]
+            o(0x0d00801c | r1 << 5 | (fsize == 8) << 10 |
+              (uint32_t)(hfa != 2) << 13 |
+              (uint32_t)(hfa != 3) << 21); // st(hfa) {v28.(s|d),...}[0],[x(r1)]
+        }
+        // lab2:
+        *(uint32_t *)(cur_text_section->data + b2) =
+            (0x14000000 | (ind - b2) >> 2);
     }
 }
 
