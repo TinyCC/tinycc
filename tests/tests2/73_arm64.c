@@ -180,24 +180,41 @@ struct hfa34 fr_hfa34(void) { return hfa34; }
 
 void ret(void)
 {
+    struct s1 t1 = fr_s1();
+    struct s2 t2 = fr_s2();
+    struct s3 t3 = fr_s3();
+    struct s4 t4 = fr_s4();
+    struct s5 t5 = fr_s5();
+    struct s6 t6 = fr_s6();
+    struct s7 t7 = fr_s7();
+    struct s8 t8 = fr_s8();
+    struct s9 t9 = fr_s9();
+    struct s10 t10 = fr_s10();
+    struct s11 t11 = fr_s11();
+    struct s12 t12 = fr_s12();
+    struct s13 t13 = fr_s13();
+    struct s14 t14 = fr_s14();
+    struct s15 t15 = fr_s15();
+    struct s16 t16 = fr_s16();
+    struct s17 t17 = fr_s17();
     printf("Return values:\n");
-    printf("%.1s\n", &fr_s1().x[0]);
-    printf("%.2s\n", &fr_s2().x[0]);
-    printf("%.3s\n", &fr_s3().x[0]);
-    printf("%.4s\n", &fr_s4().x[0]);
-    printf("%.5s\n", &fr_s5().x[0]);
-    printf("%.6s\n", &fr_s6().x[0]);
-    printf("%.7s\n", &fr_s7().x[0]);
-    printf("%.8s\n", &fr_s8().x[0]);
-    printf("%.9s\n", &fr_s9().x[0]);
-    printf("%.10s\n", &fr_s10().x[0]);
-    printf("%.11s\n", &fr_s11().x[0]);
-    printf("%.12s\n", &fr_s12().x[0]);
-    printf("%.13s\n", &fr_s13().x[0]);
-    printf("%.14s\n", &fr_s14().x[0]);
-    printf("%.15s\n", &fr_s15().x[0]);
-    printf("%.16s\n", &fr_s16().x[0]);
-    printf("%.17s\n", &fr_s17().x[0]);
+    printf("%.1s\n", t1.x);
+    printf("%.2s\n", t2.x);
+    printf("%.3s\n", t3.x);
+    printf("%.4s\n", t4.x);
+    printf("%.5s\n", t5.x);
+    printf("%.6s\n", t6.x);
+    printf("%.7s\n", t7.x);
+    printf("%.8s\n", t8.x);
+    printf("%.9s\n", t9.x);
+    printf("%.10s\n", t10.x);
+    printf("%.11s\n", t11.x);
+    printf("%.12s\n", t12.x);
+    printf("%.13s\n", t13.x);
+    printf("%.14s\n", t14.x);
+    printf("%.15s\n", t15.x);
+    printf("%.16s\n", t16.x);
+    printf("%.17s\n", t17.x);
     printf("%.1f\n", fr_hfa11().a);
     printf("%.1f %.1f\n", fr_hfa12().a, fr_hfa12().b);
     printf("%.1f %.1f\n", fr_hfa13().a, fr_hfa13().c);
@@ -230,10 +247,14 @@ void myprintf(const char *format, ...)
     va_list ap;
     va_start(ap, format);
     for (s = format; *s; s++) {
-        if (match(&s, "%7s"))
-            printf("%.7s", &va_arg(ap, struct s7).x[0]);
-        else if (match(&s, "%9s"))
-            printf("%.9s", &va_arg(ap, struct s9).x[0]);
+        if (match(&s, "%7s")) {
+            struct s7 t7 = va_arg(ap, struct s7);
+            printf("%.7s", t7.x);
+        }
+        else if (match(&s, "%9s")) {
+            struct s9 t9 = va_arg(ap, struct s9);
+            printf("%.9s", t9.x);
+        }
         else if (match(&s, "%hfa11")) {
             struct hfa11 x = va_arg(ap, struct hfa11);
             printf("%.1f,%.1f", x.a, x.a);
