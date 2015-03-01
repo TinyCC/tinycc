@@ -400,27 +400,30 @@ static void gen_fstore(int sz, int dst, int bas, uint64_t off)
 
 static void gen_addr(int r, Sym *sym, unsigned long addend)
 {
-#if 0
-    // This is normally the right way to do it, I think,
-    // but it does not work with "-run" when stdin or stderr is
-    // used by the program: "R_AARCH64_ADR_PREL_PG_HI21 relocation failed".
-    greloca(cur_text_section, sym, ind, R_AARCH64_ADR_PREL_PG_HI21, addend);
-    o(0x90000000 | r);
-    greloca(cur_text_section, sym, ind, R_AARCH64_ADD_ABS_LO12_NC, addend);
-    o(0x91000000 | r | r << 5);
-#else
-    // This seems to work in all cases, unless you try to use an old buggy
-    // GCC for linking, which says: "unresolvable R_AARCH64_MOVW_UABS_G0_NC
-    // relocation against symbol `stderr@@GLIBC_2.17'".
-    greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G0_NC, addend);
-    o(0xf2800000 | r); // movk x(rt),#...,lsl #0
-    greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G1_NC, addend);
-    o(0xf2a00000 | r); // movk x(rt),#...,lsl #16
-    greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G2_NC, addend);
-    o(0xf2c00000 | r); // movk x(rt),#...,lsl #32
-    greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G3, addend);
-    o(0xf2e00000 | r); // movk x(rt),#...,lsl #48
-#endif
+    // Currently TCC's linker does not generate COPY relocations for
+    // STT_OBJECTs when tcc is invoked with "-run". This typically
+    // results in "R_AARCH64_ADR_PREL_PG_HI21 relocation failed" when
+    // a program refers to stdin. A workaround is to avoid that
+    // relocation and use only relocations with unlimited range.
+    int avoid_adrp = 1;
+
+    if (avoid_adrp || (sym->type.t & VT_WEAK)) {
+        // (GCC uses a R_AARCH64_ABS64 in this case.)
+        greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G0_NC, addend);
+        o(0xd2800000 | r); // mov x(rt),#0,lsl #0
+        greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G1_NC, addend);
+        o(0xf2a00000 | r); // movk x(rt),#0,lsl #16
+        greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G2_NC, addend);
+        o(0xf2c00000 | r); // movk x(rt),#0,lsl #32
+        greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G3, addend);
+        o(0xf2e00000 | r); // movk x(rt),#0,lsl #48
+    }
+    else {
+        greloca(cur_text_section, sym, ind, R_AARCH64_ADR_PREL_PG_HI21, addend);
+        o(0x90000000 | r);
+        greloca(cur_text_section, sym, ind, R_AARCH64_ADD_ABS_LO12_NC, addend);
+        o(0x91000000 | r | r << 5);
+    }
 }
 
 ST_FUNC void load(int r, SValue *sv)
