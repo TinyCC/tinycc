@@ -409,6 +409,24 @@ void movi(void)
     pll(0x007fffc0);
     pll(0x03fff80003fff800);
     pll(0x0007fffffffffe00);
+
+    pll(0xabcd1234);
+    pll(0xabcd00001234);
+    pll(0xabcd000000001234);
+    pll(0xabcd12340000);
+    pll(0xabcd000012340000);
+    pll(0xabcd123400000000);
+    pll(0xffffffffabcd1234);
+    pll(0xffffabcdffff1234);
+    pll(0xabcdffffffff1234);
+    pll(0xffffabcd1234ffff);
+    pll(0xabcdffff1234ffff);
+    pll(0xabcd1234ffffffff);
+
+    pll(0xffffef0123456789);
+    pll(0xabcdef012345ffff);
+
+    pll(0xabcdef0123456789);
 }
 
 void pcs(void)

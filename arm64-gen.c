@@ -204,16 +204,30 @@ static void arm64_movimm(int r, uint64_t x)
 {
     uint32_t i;
     if ((i = arm64_movi(r, x)))
-        o(i);
+        o(i); // a single MOV
     else {
-        // This could be improved:
-        o(0x52800000 | r | (x & 0xffff) << 5); // movz w(r),#(x & 0xffff)
-        for (i = 1; i < 4; i++)
-            if (x >> 16 * i & 0xffff) {
-                o(0xf2800000 | r | (x >> 16 * i & 0xffff) << 5 | i << 21);
-                // movk w(r),#(*),lsl #(*)
+        // MOVZ/MOVN and 1-3 MOVKs
+        int z = 0, m = 0;
+        uint32_t mov1 = 0xd2800000; // movz
+        uint64_t x1 = x;
+        for (i = 0; i < 64; i += 16) {
+            z += !(x >> i & 0xffff);
+            m += !(~x >> i & 0xffff);
+        }
+        if (m > z) {
+            x1 = ~x;
+            mov1 = 0x92800000; // movn
+        }
+        for (i = 0; i < 64; i += 16)
+            if (x1 >> i & 0xffff) {
+                o(mov1 | r | (x1 >> i & 0xffff) << 5 | i << 17);
+                // movz/movn x(r),#(*),lsl #(i)
+                break;
             }
-
+        for (i += 16; i < 64; i += 16)
+            if (x1 >> i & 0xffff)
+                o(0xf2800000 | r | (x >> i & 0xffff) << 5 | i << 17);
+                // movk x(r),#(*),lsl #(i)
     }
 }
 
