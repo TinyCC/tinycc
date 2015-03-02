@@ -274,8 +274,16 @@ static int arm64_type_size(int t)
 
 static void arm64_spoff(int reg, uint64_t off)
 {
-    arm64_movimm(30, off); // use x30 for offset
-    o(0x8b3e63e0 | reg); // add x(reg),sp,x30
+    uint32_t sub = off >> 63;
+    if (sub)
+        off = -off;
+    if (off < 4096)
+        o(0x910003e0 | sub << 30 | reg | off << 10);
+        // (add|sub) x(reg),sp,#(off)
+    else {
+        arm64_movimm(30, off); // use x30 for offset
+        o(0x8b3e63e0 | sub << 30 | reg); // (add|sub) x(reg),sp,x30
+    }
 }
 
 static void arm64_ldrx(int sg, int sz, int dst, int bas, uint64_t off)
