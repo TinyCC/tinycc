@@ -272,112 +272,113 @@ static int arm64_type_size(int t)
     return 0;
 }
 
-static void gen_stack_addr(int reg, uint64_t off)
+static void arm64_spoff(int reg, uint64_t off)
 {
     arm64_movimm(30, off); // use x30 for offset
-    o(0x8b3e63e0 | reg);
+    o(0x8b3e63e0 | reg); // add x(reg),sp,x30
 }
 
-static void gen_load(int sg, int sz, int dst, int bas, uint64_t off)
+static void arm64_ldrx(int sg, int sz, int dst, int bas, uint64_t off)
 {
     if (sz >= 2)
         sg = 0;
     if (!(off & ~(0xfff << sz)))
         o(0x39400000 | dst | bas << 5 | off << (10 - sz) |
-          !!sg << 23 | sz << 30);
+          !!sg << 23 | sz << 30); // ldr(*) x(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
         o(0x38400000 | dst | bas << 5 | (off & 511) << 12 |
-          !!sg << 23 | sz << 30);
+          !!sg << 23 | sz << 30); // ldur(*) x(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
         o(0x38206800 | dst | bas << 5 | 30 << 16 |
-          (!!sg + 1) << 22 | sz << 30);
+          (!!sg + 1) << 22 | sz << 30); // ldr(*) x(dst),[x(bas),x30]
     }
 }
 
-static void gen_fload(int sz, int dst, int bas, uint64_t off)
+static void arm64_ldrv(int sz, int dst, int bas, uint64_t off)
 {
     if (!(off & ~(0xfff << sz)))
         o(0x3d400000 | dst | bas << 5 | off << (10 - sz) |
-          (sz & 4) << 21 | (sz & 3) << 30);
+          (sz & 4) << 21 | (sz & 3) << 30); // ldr (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
         o(0x3c400000 | dst | bas << 5 | (off & 511) << 12 |
-          (sz & 4) << 21 | (sz & 3) << 30);
+          (sz & 4) << 21 | (sz & 3) << 30); // ldur (s|d|q)(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
         o(0x3c606800 | dst | bas << 5 | 30 << 16 | sz << 30 | (sz & 4) << 21);
+        // ldr (s|d|q)(dst),[x(bas),x30]
     }
 }
 
-static void gen_sload(int reg, int size)
+static void arm64_ldrs(int reg, int size)
 {
     // Use x30 for intermediate value in some cases.
     switch (size) {
     default: assert(0); break;
     case 1:
-        gen_load(0, 0, reg, reg, 0);
+        arm64_ldrx(0, 0, reg, reg, 0);
         break;
     case 2:
-        gen_load(0, 1, reg, reg, 0);
+        arm64_ldrx(0, 1, reg, reg, 0);
         break;
     case 3:
-        gen_load(0, 1, 30, reg, 0);
-        gen_load(0, 0, reg, reg, 2);
+        arm64_ldrx(0, 1, 30, reg, 0);
+        arm64_ldrx(0, 0, reg, reg, 2);
         o(0x2a0043c0 | reg | reg << 16); // orr x(reg),x30,x(reg),lsl #16
         break;
     case 4:
-        gen_load(0, 2, reg, reg, 0);
+        arm64_ldrx(0, 2, reg, reg, 0);
         break;
     case 5:
-        gen_load(0, 2, 30, reg, 0);
-        gen_load(0, 0, reg, reg, 4);
+        arm64_ldrx(0, 2, 30, reg, 0);
+        arm64_ldrx(0, 0, reg, reg, 4);
         o(0xaa0083c0 | reg | reg << 16); // orr x(reg),x30,x(reg),lsl #32
         break;
     case 6:
-        gen_load(0, 2, 30, reg, 0);
-        gen_load(0, 1, reg, reg, 4);
+        arm64_ldrx(0, 2, 30, reg, 0);
+        arm64_ldrx(0, 1, reg, reg, 4);
         o(0xaa0083c0 | reg | reg << 16); // orr x(reg),x30,x(reg),lsl #32
         break;
     case 7:
-        gen_load(0, 2, 30, reg, 0);
-        gen_load(0, 2, reg, reg, 3);
+        arm64_ldrx(0, 2, 30, reg, 0);
+        arm64_ldrx(0, 2, reg, reg, 3);
         o(0x53087c00 | reg | reg << 5); // lsr w(reg), w(reg), #8
         o(0xaa0083c0 | reg | reg << 16); // orr x(reg),x30,x(reg),lsl #32
         break;
     case 8:
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 9:
-        gen_load(0, 0, reg + 1, reg, 8);
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 0, reg + 1, reg, 8);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 10:
-        gen_load(0, 1, reg + 1, reg, 8);
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 1, reg + 1, reg, 8);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 11:
-        gen_load(0, 2, reg + 1, reg, 7);
+        arm64_ldrx(0, 2, reg + 1, reg, 7);
         o(0x53087c00 | (reg+1) | (reg+1) << 5); // lsr w(reg+1), w(reg+1), #8
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 12:
-        gen_load(0, 2, reg + 1, reg, 8);
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 2, reg + 1, reg, 8);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 13:
-        gen_load(0, 3, reg + 1, reg, 5);
+        arm64_ldrx(0, 3, reg + 1, reg, 5);
         o(0xd358fc00 | (reg+1) | (reg+1) << 5); // lsr x(reg+1), x(reg+1), #24
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 14:
-        gen_load(0, 3, reg + 1, reg, 6);
+        arm64_ldrx(0, 3, reg + 1, reg, 6);
         o(0xd350fc00 | (reg+1) | (reg+1) << 5); // lsr x(reg+1), x(reg+1), #16
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 15:
-        gen_load(0, 3, reg + 1, reg, 7);
+        arm64_ldrx(0, 3, reg + 1, reg, 7);
         o(0xd348fc00 | (reg+1) | (reg+1) << 5); // lsr x(reg+1), x(reg+1), #8
-        gen_load(0, 3, reg, reg, 0);
+        arm64_ldrx(0, 3, reg, reg, 0);
         break;
     case 16:
         o(0xa9400000 | reg | (reg+1) << 10 | reg << 5);
@@ -386,33 +387,37 @@ static void gen_sload(int reg, int size)
     }
 }
 
-static void gen_store(int sz, int dst, int bas, uint64_t off)
+static void arm64_strx(int sz, int dst, int bas, uint64_t off)
 {
     if (!(off & ~(0xfff << sz)))
         o(0x39000000 | dst | bas << 5 | off << (10 - sz) | sz << 30);
+        // str(*) x(dst),[x(bas],#(off)]
     else if (off < 256 || -off <= 256)
         o(0x38000000 | dst | bas << 5 | (off & 511) << 12 | sz << 30);
+        // stur(*) x(dst),[x(bas],#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
         o(0x38206800 | dst | bas << 5 | 30 << 16 | sz << 30);
+        // str(*) x(dst),[x(bas),x30]
     }
 }
 
-static void gen_fstore(int sz, int dst, int bas, uint64_t off)
+static void arm64_strv(int sz, int dst, int bas, uint64_t off)
 {
     if (!(off & ~(0xfff << sz)))
         o(0x3d000000 | dst | bas << 5 | off << (10 - sz) |
-          (sz & 4) << 21 | (sz & 3) << 30);
+          (sz & 4) << 21 | (sz & 3) << 30); // str (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
         o(0x3c000000 | dst | bas << 5 | (off & 511) << 12 |
-          (sz & 4) << 21 | (sz & 3) << 30);
+          (sz & 4) << 21 | (sz & 3) << 30); // stur (s|d|q)(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
         o(0x3c206800 | dst | bas << 5 | 30 << 16 | sz << 30 | (sz & 4) << 21);
+        // str (s|d|q)(dst),[x(bas),x30]
     }
 }
 
-static void gen_addr(int r, Sym *sym, unsigned long addend)
+static void arm64_sym(int r, Sym *sym, unsigned long addend)
 {
     // Currently TCC's linker does not generate COPY relocations for
     // STT_OBJECTs when tcc is invoked with "-run". This typically
@@ -449,35 +454,34 @@ ST_FUNC void load(int r, SValue *sv)
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
-            gen_fload(arm64_type_size(svtt), fltr(r), 29, svcul);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 29, svcul);
         else
-            gen_load(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                     intr(r), 29, svcul);
+            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
+                       intr(r), 29, svcul);
         return;
     }
 
     if ((svr & ~VT_VALMASK) == VT_LVAL && svrv < VT_CONST) {
         if (IS_FREG(r))
-            gen_fload(arm64_type_size(svtt),
-                      fltr(r), intr(svrv), 0);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), intr(svrv), 0);
         else
-            gen_load(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                     intr(r), intr(svrv), 0);
+            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
+                       intr(r), intr(svrv), 0);
         return;
     }
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
-        gen_addr(30, sv->sym, svcul); // use x30 for address
+        arm64_sym(30, sv->sym, svcul); // use x30 for address
         if (IS_FREG(r))
-            gen_fload(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30, 0);
         else
-            gen_load(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                     intr(r), 30, 0);
+            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
+                       intr(r), 30, 0);
         return;
     }
 
     if (svr == (VT_CONST | VT_SYM)) {
-        gen_addr(intr(r), sv->sym, svcul);
+        arm64_sym(intr(r), sv->sym, svcul);
         return;
     }
 
@@ -522,12 +526,12 @@ ST_FUNC void load(int r, SValue *sv)
     }
 
     if (svr == (VT_LLOCAL | VT_LVAL)) {
-        gen_load(0, 3, 30, 29, svcul); // use x30 for offset
+        arm64_ldrx(0, 3, 30, 29, svcul); // use x30 for offset
         if (IS_FREG(r))
-            gen_fload(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30, 0);
         else
-            gen_load(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                     intr(r), 30, 0);
+            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
+                       intr(r), 30, 0);
         return;
     }
 
@@ -544,26 +548,26 @@ ST_FUNC void store(int r, SValue *sv)
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
-            gen_fstore(arm64_type_size(svtt), fltr(r), 29, svcul);
+            arm64_strv(arm64_type_size(svtt), fltr(r), 29, svcul);
         else
-            gen_store(arm64_type_size(svtt), intr(r), 29, svcul);
+            arm64_strx(arm64_type_size(svtt), intr(r), 29, svcul);
         return;
     }
 
     if ((svr & ~VT_VALMASK) == VT_LVAL && svrv < VT_CONST) {
         if (IS_FREG(r))
-            gen_fstore(arm64_type_size(svtt), fltr(r), intr(svrv), 0);
+            arm64_strv(arm64_type_size(svtt), fltr(r), intr(svrv), 0);
         else
-            gen_store(arm64_type_size(svtt), intr(r), intr(svrv), 0);
+            arm64_strx(arm64_type_size(svtt), intr(r), intr(svrv), 0);
         return;
     }
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
-        gen_addr(30, sv->sym, svcul); // use x30 for address
+        arm64_sym(30, sv->sym, svcul); // use x30 for address
         if (IS_FREG(r))
-            gen_fstore(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_strv(arm64_type_size(svtt), fltr(r), 30, 0);
         else
-            gen_store(arm64_type_size(svtt), intr(r), 30, 0);
+            arm64_strx(arm64_type_size(svtt), intr(r), 30, 0);
         return;
     }
 
@@ -863,35 +867,35 @@ ST_FUNC void gfunc_call(int nb_args)
         if (a[i] & 1) {
             // struct replaced by pointer
             int r = get_reg(RC_INT);
-            gen_stack_addr(intr(r), a1[i]);
+            arm64_spoff(intr(r), a1[i]);
             vset(&vtop->type, r | VT_LVAL, 0);
             vswap();
             vstore();
             if (a[i] >= 32) {
                 // pointer on stack
                 r = get_reg(RC_INT);
-                gen_stack_addr(intr(r), a1[i]);
-                gen_store(3, intr(r), 31, (a[i] - 32) >> 1 << 1);
+                arm64_spoff(intr(r), a1[i]);
+                arm64_strx(3, intr(r), 31, (a[i] - 32) >> 1 << 1);
             }
         }
         else if (a[i] >= 32) {
             // value on stack
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
                 int r = get_reg(RC_INT);
-                gen_stack_addr(intr(r), a[i] - 32);
+                arm64_spoff(intr(r), a[i] - 32);
                 vset(&vtop->type, r | VT_LVAL, 0);
                 vswap();
                 vstore();
             }
             else if (is_float(vtop->type.t)) {
                 gv(RC_FLOAT);
-                gen_fstore(arm64_type_size(vtop[0].type.t),
+                arm64_strv(arm64_type_size(vtop[0].type.t),
                            fltr(vtop[0].r), 31, a[i] - 32);
             }
             else {
                 gv(RC_INT);
-                gen_store(arm64_type_size(vtop[0].type.t),
-                          intr(vtop[0].r), 31, a[i] - 32);
+                arm64_strx(arm64_type_size(vtop[0].type.t),
+                           intr(vtop[0].r), 31, a[i] - 32);
             }
         }
 
@@ -907,14 +911,14 @@ ST_FUNC void gfunc_call(int nb_args)
                 vtop->type.t = VT_PTR;
                 gaddrof();
                 gv(RC_R(a[i] / 2));
-                gen_sload(a[i] / 2, size);
+                arm64_ldrs(a[i] / 2, size);
             }
             else
                 gv(RC_R(a[i] / 2));
         }
         else if (a[i] < 16)
             // struct replaced by pointer in register
-            gen_stack_addr(a[i] / 2, a1[i]);
+            arm64_spoff(a[i] / 2, a1[i]);
         else if (a[i] < 32) {
             // value in floating-point registers
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
@@ -967,8 +971,7 @@ ST_FUNC void gfunc_call(int nb_args)
                 if (size > 8)
                     o(0xa9000500); // stp x0,x1,[x8]
                 else if (size)
-                    gen_store(size > 4 ? 3 : size > 2 ? 2 : size > 1,
-                              0, 8, 0);
+                    arm64_strx(size > 4 ? 3 : size > 2 ? 2 : size > 1, 0, 8, 0);
 
             }
             else if (a[0] == 16) {
@@ -1204,7 +1207,7 @@ ST_FUNC void greturn(void)
             int align, size = type_size(&func_vt, &align);
             gaddrof();
             gv(RC_R(0));
-            gen_sload(0, size);
+            arm64_ldrs(0, size);
         }
         else
             gv(RC_IRET);
