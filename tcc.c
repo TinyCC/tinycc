@@ -39,35 +39,29 @@ static void display_info(TCCState *s, int what)
         printf("tcc version %s ("
 #ifdef TCC_TARGET_I386
         "i386"
-# ifdef TCC_TARGET_PE
-        " Win32"
-# endif
 #elif defined TCC_TARGET_X86_64
         "x86-64"
-# ifdef TCC_TARGET_PE
-        " Win64"
-# endif
+#elif defined TCC_TARGET_C67
+        "C67"
 #elif defined TCC_TARGET_ARM
         "ARM"
 # ifdef TCC_ARM_HARDFLOAT
         " Hard Float"
-# endif
-# ifdef TCC_TARGET_PE
-        " WinCE"
 # endif
 #elif defined TCC_TARGET_ARM64
         "AArch64"
 # ifdef TCC_ARM_HARDFLOAT
         " Hard Float"
 # endif
-# ifdef TCC_TARGET_PE
-        " WinCE"
-# endif
 #endif
-#ifndef TCC_TARGET_PE
-# ifdef __linux
-        " Linux"
-# endif
+#ifdef TCC_TARGET_PE
+        ", mingw"
+#else
+ #ifdef __linux
+        ", Linux"
+ #else
+        ", Unknown"
+ #endif
 #endif
         ")\n", TCC_VERSION);
         break;
