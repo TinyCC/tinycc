@@ -4761,7 +4761,11 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                triggered by gcc.c-torture/execute/20000917-1.c */
             Sym *p;
             switch(vtop->type.t & VT_BTYPE) {
-            case VT_PTR:
+            /* case VT_PTR: */
+        	/* this breaks a compilation of the linux kernel v2.4.26 */
+        	/* pmd_t *new = ({ __asm__ __volatile__("ud2\n") ; ((pmd_t *)1); }); */
+        	/* Look a commit a80acab: Display error on statement expressions with complex return type */
+        	/* A pointer is not a complex return type */
             case VT_STRUCT:
             case VT_ENUM:
             case VT_FUNC:
