@@ -1760,6 +1760,7 @@ double ftab1[3] = { 1.2, 3.4, -5.6 };
 
 void float_test(void)
 {
+#if !defined(__arm__) || defined(__ARM_PCS_VFP)
     float fa, fb;
     double da, db;
     int a;
@@ -1785,6 +1786,7 @@ void float_test(void)
     b = 4000000000;
     db = b;
     printf("db = %f\n", db);
+#endif
 }
 
 int fib(int n)
