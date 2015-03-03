@@ -9,6 +9,14 @@
 void __set_app_type(int);
 void _controlfp(unsigned a, unsigned b);
 
+#ifndef __TRY__
+    #ifdef _WIN64
+	#define __TRY__
+    #else
+	#define __TRY__ void __try__(void**), *_sehrec[6]; __try__(_sehrec);
+    #endif
+#endif
+
 int _winstart(void)
 {
     __TRY__

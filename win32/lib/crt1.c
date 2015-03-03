@@ -16,6 +16,14 @@
 #define _PC_53          0x00010000 // 53 bits
 #define _PC_64          0x00000000 // 64 bits
 
+#ifndef __TRY__
+    #ifdef _WIN64
+	#define __TRY__
+    #else
+	#define __TRY__ void __try__(void**), *_sehrec[6]; __try__(_sehrec);
+    #endif
+#endif
+
 typedef struct
 {
     int newmode;
