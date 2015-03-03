@@ -45,6 +45,8 @@ static void help(void)
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
+           "  -P          do not output a #line directive\n"
+           "  -P1         use a #line directive in output instead of the gcc style\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"

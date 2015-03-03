@@ -3133,6 +3133,26 @@ ST_FUNC void preprocess_new(void)
     }
 }
 
+static void line_macro_output(BufferedFile *f, const char *s, TCCState *s1)
+{
+    switch (s1->Pflag) {
+	case LINE_MACRO_OUTPUT_FORMAT_STD:
+	    /* "tcc -E -P1" case */
+    	    fprintf(s1->ppfp, "# line %d \"%s\"\n", f->line_num, f->filename);
+    	    break;
+
+	case LINE_MACRO_OUTPUT_FORMAT_NONE:
+	    /* "tcc -E -P" case: don't output a line directive */
+	    break;
+
+	case LINE_MACRO_OUTPUT_FORMAT_GCC:
+	default:
+	    /* "tcc -E" case: a gcc standard by default */
+	    fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename, s);
+	    break;
+    }
+}
+
 /* Preprocess the current file */
 ST_FUNC int tcc_preprocess(TCCState *s1)
 {
@@ -3158,6 +3178,8 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
         if (tok == TOK_EOF) {
             break;
         } else if (file != file_ref) {
+    	    if (file_ref)
+		line_macro_output(file_ref, "", s1);
             goto print_line;
         } else if (tok == TOK_LINEFEED) {
             if (!token_seen)
@@ -3166,18 +3188,20 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
             token_seen = 0;
         } else if (!token_seen) {
             d = file->line_num - file->line_ref;
-            if (file != file_ref || d < 0 || d >= 8) {
+            if (file != file_ref || d >= 8) {
 print_line:
-                iptr_new = s1->include_stack_ptr;
-                s = iptr_new > iptr ? " 1"
-                  : iptr_new < iptr ? " 2"
-                  : iptr_new > s1->include_stack ? " 3"
-                  : ""
-                  ;
-                iptr = iptr_new;
-                fprintf(s1->ppfp, "# %d \"%s\"%s\n", file->line_num, file->filename, s);
+    		s = "";
+		if (tcc_state->Pflag == LINE_MACRO_OUTPUT_FORMAT_GCC) {
+            	    iptr_new = s1->include_stack_ptr;
+            	    s = iptr_new > iptr ? " 1"
+                    : iptr_new < iptr ? " 2"
+                    : iptr_new > s1->include_stack ? " 3"
+                    : ""
+                    ;
+                }
+        	line_macro_output(file, s, s1);
             } else {
-                while (d)
+                while (d > 0)
                     fputs("\n", s1->ppfp), --d;
             }
             file->line_ref = (file_ref = file)->line_num;

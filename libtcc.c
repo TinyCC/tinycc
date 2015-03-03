@@ -1647,6 +1647,7 @@ enum {
     TCC_OPTION_I,
     TCC_OPTION_D,
     TCC_OPTION_U,
+    TCC_OPTION_P,
     TCC_OPTION_L,
     TCC_OPTION_B,
     TCC_OPTION_l,
@@ -1695,6 +1696,7 @@ static const TCCOption tcc_options[] = {
     { "I", TCC_OPTION_I, TCC_OPTION_HAS_ARG },
     { "D", TCC_OPTION_D, TCC_OPTION_HAS_ARG },
     { "U", TCC_OPTION_U, TCC_OPTION_HAS_ARG },
+    { "P", TCC_OPTION_P, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "L", TCC_OPTION_L, TCC_OPTION_HAS_ARG },
     { "B", TCC_OPTION_B, TCC_OPTION_HAS_ARG },
     { "l", TCC_OPTION_l, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -1929,6 +1931,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     	    if (s->output_type)
                 tcc_warning("-E: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_PREPROCESS;
+            break;
+        case TCC_OPTION_P:
+            s->Pflag = atoi(optarg) + 1;
             break;
         case TCC_OPTION_MD:
             s->gen_deps = 1;

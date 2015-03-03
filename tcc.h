@@ -656,6 +656,11 @@ struct TCCState {
 
     /* output file for preprocessing (-E) */
     FILE *ppfp;
+    enum {
+	LINE_MACRO_OUTPUT_FORMAT_GCC,
+	LINE_MACRO_OUTPUT_FORMAT_NONE,
+	LINE_MACRO_OUTPUT_FORMAT_STD,
+    }    Pflag; 
 
     /* for -MD/-MF: collected dependencies for this compilation */
     char **target_deps;
