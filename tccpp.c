@@ -1049,6 +1049,55 @@ static int macro_is_equal(const int *a, const int *b)
     return !(*a || *b);
 }
 
+static void define_print(Sym *s, int is_undef)
+{
+    int c, t;
+    CValue cval;
+    const int *str;
+    Sym *arg;
+
+    if (tcc_state->dflag == 0 || !s || !tcc_state->ppfp)
+	return;
+
+    if (file) {
+	c = file->line_num - file->line_ref - 1;
+	if (c > 0) {
+    	    while (c--)
+    		fputs("\n", tcc_state->ppfp);
+	    file->line_ref = file->line_num;
+	}
+    }
+
+    if (is_undef) {
+	fprintf(tcc_state->ppfp, "// #undef %s\n", get_tok_str(s->v, NULL));
+	return;
+    }
+
+    fprintf(tcc_state->ppfp, "// #define %s", get_tok_str(s->v, NULL));
+    arg = s->next;
+    if (arg) {
+	char *sep = "(";
+	while (arg) {
+    	    fprintf(tcc_state->ppfp, "%s%s", sep, get_tok_str(arg->v & ~SYM_FIELD, NULL));
+    	    sep = ",";
+    	    arg = arg->next;
+	}
+	fprintf(tcc_state->ppfp, ")");
+    }
+
+    str = s->d;
+    if (str)
+        fprintf(tcc_state->ppfp, " ");
+
+    while (str) {
+        TOK_GET(&t, &str, &cval);
+        if (!t)
+            break;
+        fprintf(tcc_state->ppfp, "%s", get_tok_str(t, &cval));
+    }
+    fprintf(tcc_state->ppfp, "\n");
+}
+
 /* defines handling */
 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
 {
@@ -1062,6 +1111,7 @@ ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
     s->d = str;
     s->next = first_arg;
     table_ident[v - TOK_IDENT]->sym_define = s;
+    define_print(s, 0);
 }
 
 /* undefined a define symbol. Its name is just set to zero */
@@ -1069,8 +1119,10 @@ ST_FUNC void define_undef(Sym *s)
 {
     int v;
     v = s->v;
-    if (v >= TOK_IDENT && v < tok_ident)
+    if (v >= TOK_IDENT && v < tok_ident) {
+	define_print(s, 1);
         table_ident[v - TOK_IDENT]->sym_define = NULL;
+    }
     s->v = 0;
 }
 
@@ -1101,6 +1153,22 @@ ST_FUNC void free_defines(Sym *b)
         top = top1;
     }
     define_stack = b;
+}
+
+void print_defines(void)
+{
+    Sym *top, *s;
+    int v;
+
+    top = define_stack;
+    while (top) {
+        v = top->v;
+        if (v >= TOK_IDENT && v < tok_ident) {
+    	    s = table_ident[v - TOK_IDENT]->sym_define;
+    	    define_print(s, 0);
+        }
+        top = top->prev;
+    }
 }
 
 /* label lookup */
@@ -1192,23 +1260,6 @@ static int expr_preprocess(void)
     return c != 0;
 }
 
-#if defined(PARSE_DEBUG) || defined(PP_DEBUG)
-static void tok_print(int *str)
-{
-    int t;
-    CValue cval;
-
-    printf("<");
-    while (1) {
-        TOK_GET(&t, &str, &cval);
-        if (!t)
-            break;
-        printf("%s", get_tok_str(t, &cval));
-    }
-    printf(">\n");
-}
-#endif
-
 /* parse after #define */
 ST_FUNC void parse_define(void)
 {
@@ -1279,10 +1330,6 @@ ST_FUNC void parse_define(void)
     if (spc == 1)
         --str.len; /* remove trailing space */
     tok_str_add(&str, 0);
-#ifdef PP_DEBUG
-    printf("define %s %d: ", get_tok_str(v, NULL), t);
-    tok_print(str.str);
-#endif
     define_push(v, t, str.str, first);
 }
 
