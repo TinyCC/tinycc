@@ -869,6 +869,7 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
     /* undefine symbol by putting an invalid name */
     if (s)
         define_undef(s);
+    tcc_free(ts);
 }
 
 /* cleanup all static data used during compilation */
