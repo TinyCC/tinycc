@@ -1045,6 +1045,7 @@ LIBTCCAPI TCCState *tcc_new(void)
                                       ".dynhashtab", SHF_PRIVATE);
     s->alacarte_link = 1;
     s->nocommon = 1;
+    s->warn_implicit_function_declaration = 1;
 
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;

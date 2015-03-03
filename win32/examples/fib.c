@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>	// atoi()
 
 int fib(n)
 {
