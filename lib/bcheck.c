@@ -348,7 +348,9 @@ void __bound_init(void)
     int i;
     BoundEntry *page;
     unsigned long start, size;
-    int *p;
+
+    /* int *p; */
+    __PTRDIFF_TYPE__ *p;	/* 32 or 64 bit integer */
 
     /* save malloc hooks and install bound check hooks */
     install_malloc_hooks();
@@ -411,7 +413,7 @@ void __bound_init(void)
 #endif
 
     /* add all static bound check values */
-    p = (int *)&__bounds_start;
+    p = (__PTRDIFF_TYPE__ *)&__bounds_start;
     while (p[0] != 0) {
         __bound_new_region((void *)p[0], p[1]);
         p += 2;
