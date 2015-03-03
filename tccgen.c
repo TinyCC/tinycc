@@ -5525,10 +5525,30 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 
             /* gr: skip fields from same union - ugly. */
             while (f->next) {
+        	int align = 0;
+		int f_size = type_size(&f->type, &align);
+		int f_type = (f->type.t & VT_BTYPE);
+
                 ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
                 /* test for same offset */
                 if (f->next->c != f->c)
                     break;
+                if ((f_type == VT_STRUCT) && (f_size == 0)) {
+            	    /*
+            	       Lets assume a structure of size 0 can't be a member of the union.
+            	       This allow to compile the following code from a linux kernel v2.4.26
+			    typedef struct { } rwlock_t;
+			    struct fs_struct {
+			     int count;
+			     rwlock_t lock;
+			     int umask;
+			    };
+			    struct fs_struct init_fs = { { (1) }, (rwlock_t) {}, 0022, };
+			tcc-0.9.23 can succesfully compile this version of the kernel.
+			gcc don't have problems with this code too.
+            	    */
+                    break;
+                }
                 /* if yes, test for bitfield shift */
                 if ((f->type.t & VT_BITFIELD) && (f->next->type.t & VT_BITFIELD)) {
                     int bit_pos_1 = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
