@@ -2412,8 +2412,20 @@ static void gen_assign_cast(CType *dt)
     st = &vtop->type; /* source type */
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
-    if (sbt == VT_VOID || dbt == VT_VOID)
-        tcc_error("cannot cast from/to void");
+    if (sbt == VT_VOID || dbt == VT_VOID) {
+	if (sbt == VT_VOID && dbt == VT_VOID)
+	    ; /*
+	      It is Ok if both are void
+	      A test program:
+	        void func1() {}
+		void func2() {
+		  return func1();
+		}
+	      gcc accepts this program
+	      */
+	else
+    	    tcc_error("cannot cast from/to void");
+    }
     if (dt->t & VT_CONSTANT)
         tcc_warning("assignment of read-only location");
     switch(dbt) {
