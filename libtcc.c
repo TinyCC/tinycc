@@ -1662,6 +1662,7 @@ enum {
     TCC_OPTION_d,
     TCC_OPTION_float_abi,
     TCC_OPTION_static,
+    TCC_OPTION_std,
     TCC_OPTION_shared,
     TCC_OPTION_soname,
     TCC_OPTION_o,
@@ -1718,6 +1719,7 @@ static const TCCOption tcc_options[] = {
     { "mfloat-abi", TCC_OPTION_float_abi, TCC_OPTION_HAS_ARG },
 #endif
     { "static", TCC_OPTION_static, 0 },
+    { "std", TCC_OPTION_std, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "shared", TCC_OPTION_shared, 0 },
     { "soname", TCC_OPTION_soname, TCC_OPTION_HAS_ARG },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
@@ -1875,6 +1877,10 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
 #endif
         case TCC_OPTION_static:
             s->static_link = 1;
+            break;
+        case TCC_OPTION_std:
+    	    /* silently ignore, a current purpose:
+    	       allow to use a tcc as a reference compiler for "make test" */
             break;
         case TCC_OPTION_shared:
     	    if (s->output_type)
