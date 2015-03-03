@@ -72,7 +72,7 @@ static void display_info(TCCState *s, int what)
         ")\n", TCC_VERSION);
         break;
     case 1:
-        printf("install: %s/\n", s->tcc_lib_path);
+        printf("install: %s\n", s->tcc_lib_path);
         /* print_paths("programs", NULL, 0); */
         print_paths("crt", s->crt_paths, s->nb_crt_paths);
         print_paths("libraries", s->library_paths, s->nb_library_paths);
