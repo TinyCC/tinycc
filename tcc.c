@@ -24,9 +24,68 @@
 #include "tcc.h"
 #endif
 
-static void help(void)
+static void print_paths(const char *msg, char **paths, int nb_paths)
 {
-    printf("tcc version " TCC_VERSION " - Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
+    int i;
+    printf("%s:\n%s", msg, nb_paths ? "" : "  -\n");
+    for(i = 0; i < nb_paths; i++)
+        printf("  %s\n", paths[i]);
+}
+
+static void display_info(TCCState *s, int what)
+{
+    switch (what) {
+    case 0:
+        printf("tcc version %s ("
+#ifdef TCC_TARGET_I386
+        "i386"
+# ifdef TCC_TARGET_PE
+        " Win32"
+# endif
+#elif defined TCC_TARGET_X86_64
+        "x86-64"
+# ifdef TCC_TARGET_PE
+        " Win64"
+# endif
+#elif defined TCC_TARGET_ARM
+        "ARM"
+# ifdef TCC_ARM_HARDFLOAT
+        " Hard Float"
+# endif
+# ifdef TCC_TARGET_PE
+        " WinCE"
+# endif
+#elif defined TCC_TARGET_ARM64
+        "AArch64"
+# ifdef TCC_ARM_HARDFLOAT
+        " Hard Float"
+# endif
+# ifdef TCC_TARGET_PE
+        " WinCE"
+# endif
+#endif
+#ifndef TCC_TARGET_PE
+# ifdef __linux
+        " Linux"
+# endif
+#endif
+        ")\n", TCC_VERSION);
+        break;
+    case 1:
+        printf("install: %s/\n", s->tcc_lib_path);
+        /* print_paths("programs", NULL, 0); */
+        print_paths("crt", s->crt_paths, s->nb_crt_paths);
+        print_paths("libraries", s->library_paths, s->nb_library_paths);
+        print_paths("include", s->sysinclude_paths, s->nb_sysinclude_paths);
+        printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
+        break;
+    }
+}
+
+static void help(TCCState *s)
+{
+    display_info(s, 0);
+    printf("Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
            "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
            "       tcc [options...] -run infile [arguments...]\n"
            "General options:\n"
@@ -181,58 +240,6 @@ static char *default_outputfile(TCCState *s, const char *first_file)
     return tcc_strdup(buf);
 }
 
-static void print_paths(const char *msg, char **paths, int nb_paths)
-{
-    int i;
-    printf("%s:\n%s", msg, nb_paths ? "" : "  -\n");
-    for(i = 0; i < nb_paths; i++)
-        printf("  %s\n", paths[i]);
-}
-
-static void display_info(TCCState *s, int what)
-{
-    switch (what) {
-    case 0:
-        printf("tcc version %s ("
-#ifdef TCC_TARGET_I386
-        "i386"
-# ifdef TCC_TARGET_PE
-        " Win32"
-# endif
-#elif defined TCC_TARGET_X86_64
-        "x86-64"
-# ifdef TCC_TARGET_PE
-        " Win64"
-# endif
-#elif defined TCC_TARGET_ARM
-        "ARM"
-#elif defined TCC_TARGET_ARM64
-        "AArch64"
-# ifdef TCC_ARM_HARDFLOAT
-        " Hard Float"
-# endif
-# ifdef TCC_TARGET_PE
-        " WinCE"
-# endif
-#endif
-#ifndef TCC_TARGET_PE
-# ifdef __linux
-        " Linux"
-# endif
-#endif
-        ")\n", TCC_VERSION);
-        break;
-    case 1:
-        printf("install: %s/\n", s->tcc_lib_path);
-        /* print_paths("programs", NULL, 0); */
-        print_paths("crt", s->crt_paths, s->nb_crt_paths);
-        print_paths("libraries", s->library_paths, s->nb_library_paths);
-        print_paths("include", s->sysinclude_paths, s->nb_sysinclude_paths);
-        printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
-        break;
-    }
-}
-
 static int64_t getclock_us(void)
 {
 #ifdef _WIN32
@@ -259,7 +266,7 @@ int main(int argc, char **argv)
     tcc_set_environment(s);
 
     if (optind == 0) {
-        help();
+        help(s);
         return 1;
     }
 
