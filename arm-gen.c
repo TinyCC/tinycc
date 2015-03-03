@@ -217,7 +217,7 @@ static int regmask(int r) {
 
 /******************************************************/
 
-#ifdef TCC_ARM_EABI
+#if defined(TCC_ARM_EABI) && !defined(CONFIG_TCC_ELFINTERP)
 char *default_elfinterp(struct TCCState *s)
 {
     if (s->float_abi == ARM_HARD_FLOAT)
@@ -1199,11 +1199,13 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
 void gfunc_call(int nb_args)
 {
   int r, args_size;
-  int variadic, def_float_abi = float_abi;
+  int def_float_abi = float_abi;
   int todo;
   struct plan plan;
 
 #ifdef TCC_ARM_EABI
+  int variadic;
+
   if (float_abi == ARM_HARD_FLOAT) {
     variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
     if (variadic || floats_in_core_regs(&vtop[-nb_args]))
@@ -1255,8 +1257,11 @@ void gfunc_prolog(CType *func_type)
   Sym *sym,*sym2;
   int n, nf, size, align, struct_ret = 0;
   int addr, pn, sn; /* pn=core, sn=stack */
-  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
   CType ret_type;
+
+#ifdef TCC_ARM_EABI
+  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+#endif
 
   sym = func_type->ref;
   func_vt = sym->type;
@@ -1337,8 +1342,8 @@ void gfunc_prolog(CType *func_type)
       if (!sn && pn > 4)
         sn = (pn - 4);
     } else {
-from_stack:
 #ifdef TCC_ARM_EABI
+from_stack:
         sn = (sn + (align-1)/4) & -(align/4);
 #endif
       addr = (n + nf + sn) * 4;
