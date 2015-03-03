@@ -630,8 +630,9 @@ long long __fixxfdi (long double a1)
 #else
 /* Avoid including stdlib.h because it is not easily available when
    cross compiling */
+#include <stddef.h> /* size_t definition is needed for a x86_64-tcc to parse memset() */
 extern void *malloc(unsigned long long);
-void *memset(void *s, int c, size_t n);
+extern void *memset(void *s, int c, size_t n);
 extern void free(void*);
 extern void abort(void);
 #endif
