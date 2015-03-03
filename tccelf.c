@@ -2302,7 +2302,7 @@ static int final_sections_reloc(TCCState *s1)
     /* XXX: ignore sections with allocated relocations ? */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (s->reloc && s != s1->got)
+        if (s->reloc && s != s1->got && (s->sh_flags & SHF_ALLOC)) //gr
             relocate_section(s1, s);
     }
 
