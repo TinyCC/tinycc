@@ -3203,14 +3203,11 @@ static void line_macro_output(BufferedFile *f, const char *s, TCCState *s1)
 /* Preprocess the current file */
 ST_FUNC int tcc_preprocess(TCCState *s1)
 {
-    Sym *define_start;
-
     BufferedFile *file_ref, **iptr, **iptr_new;
     int token_seen, d;
     const char *s;
 
     preprocess_init(s1);
-    define_start = define_stack;
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS |
@@ -3258,6 +3255,5 @@ print_line:
         }
         fputs(get_tok_str(tok, &tokc), s1->ppfp);
     }
-    free_defines(define_start);
     return 0;
 }
