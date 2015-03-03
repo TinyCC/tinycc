@@ -2102,7 +2102,7 @@ int gtst(int inv, int t)
 	C67_NOP(5);
 	t = ind1;		//return where we need to patch
 
-    } else { /* VT_JMP || VT_JMPI */
+    } else if (v == VT_JMP || v == VT_JMPI) {
 	/* && or || optimization */
 	if ((v & 1) == inv) {
 	    /* insert vtop->c jump list in t */

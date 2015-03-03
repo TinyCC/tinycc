@@ -1418,7 +1418,7 @@ int gtst(int inv, int t)
     op|=encbranch(r,t,1);
     o(op);
     t=r;
-  } else { /* VT_JMP || VT_JMPI */
+  } else if (v == VT_JMP || v == VT_JMPI) {
     if ((v & 1) == inv) {
       if(!vtop->c.i)
 	vtop->c.i=t;
