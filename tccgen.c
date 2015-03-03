@@ -3148,14 +3148,14 @@ static int parse_btype(CType *type, AttributeDef *ad)
             }
             break;
         case TOK_ENUM:
-            struct_decl(&type1, VT_ENUM, t & VT_TYPEDEF);
+            struct_decl(&type1, VT_ENUM, t & (VT_TYPEDEF | VT_EXTERN));
         basic_type2:
             u = type1.t;
             type->ref = type1.ref;
             goto basic_type1;
         case TOK_STRUCT:
         case TOK_UNION:
-            struct_decl(&type1, VT_STRUCT, t & VT_TYPEDEF);
+            struct_decl(&type1, VT_STRUCT, t & (VT_TYPEDEF | VT_EXTERN));
             goto basic_type2;
 
             /* type modifiers */
