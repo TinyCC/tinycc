@@ -3139,7 +3139,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     Sym *define_start;
 
     BufferedFile *file_ref, **iptr, **iptr_new;
-    int token_seen, line_ref, d;
+    int token_seen, d;
     const char *s;
 
     preprocess_init(s1);
@@ -3149,7 +3149,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     parse_flags = PARSE_FLAG_ASM_COMMENTS | PARSE_FLAG_PREPROCESS |
         PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
     token_seen = 0;
-    line_ref = 0;
+    file->line_ref = 0;
     file_ref = NULL;
     iptr = s1->include_stack_ptr;
 
@@ -3162,10 +3162,10 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
         } else if (tok == TOK_LINEFEED) {
             if (!token_seen)
                 continue;
-            ++line_ref;
+            file->line_ref++;
             token_seen = 0;
         } else if (!token_seen) {
-            d = file->line_num - line_ref;
+            d = file->line_num - file->line_ref;
             if (file != file_ref || d < 0 || d >= 8) {
 print_line:
                 iptr_new = s1->include_stack_ptr;
@@ -3180,7 +3180,7 @@ print_line:
                 while (d)
                     fputs("\n", s1->ppfp), --d;
             }
-            line_ref = (file_ref = file)->line_num;
+            file->line_ref = (file_ref = file)->line_num;
             token_seen = tok != TOK_LINEFEED;
             if (!token_seen)
                 continue;

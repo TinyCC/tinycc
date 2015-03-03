@@ -500,6 +500,7 @@ typedef struct BufferedFile {
     int fd;
     struct BufferedFile *prev;
     int line_num;    /* current line number - here to simplify code */
+    int line_ref;    /* moved from tcc_preprocess(), needed for a right ouput in other places */
     int ifndef_macro;  /* #ifndef macro / #endif search */
     int ifndef_macro_saved; /* saved ifndef_macro */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
