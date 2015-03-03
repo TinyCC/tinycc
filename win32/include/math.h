@@ -515,21 +515,30 @@ extern "C" {
   __CRT_INLINE double __cdecl rint (double x)
   {
     double retval;
-    __asm__ ("frndint;": "=t" (retval) : "0" (x));
+    __asm__ (
+      "fldl    %1\n"
+      "frndint   \n"
+      "fstl    %0\n" : "=m" (retval) : "m" (x));
     return retval;
   }
 
   __CRT_INLINE float __cdecl rintf (float x)
   {
     float retval;
-    __asm__ ("frndint;" : "=t" (retval) : "0" (x) );
+    __asm__ (
+      "flds    %1\n"
+      "frndint   \n"
+      "fsts    %0\n" : "=m" (retval) : "m" (x));
     return retval;
   }
 
   __CRT_INLINE long double __cdecl rintl (long double x)
   {
     long double retval;
-    __asm__ ("frndint;" : "=t" (retval) : "0" (x) );
+    __asm__ (
+      "fldt    %1\n"
+      "frndint   \n"
+      "fstt    %0\n" : "=m" (retval) : "m" (x));
     return retval;
   }
 
@@ -537,48 +546,54 @@ extern "C" {
   __CRT_INLINE long __cdecl lrint (double x) 
   {
     long retval;  
-    __asm__ __volatile__							      \
-      ("fistpl %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("fldl   %1\n"                             \
+       "fistpl %0"  : "=m" (retval) : "m" (x));  \
       return retval;
   }
 
   __CRT_INLINE long __cdecl lrintf (float x) 
   {
     long retval;
-    __asm__ __volatile__							      \
-      ("fistpl %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("flds   %1\n"                             \
+       "fistpl %0"  : "=m" (retval) : "m" (x));  \
       return retval;
   }
 
   __CRT_INLINE long __cdecl lrintl (long double x) 
   {
     long retval;
-    __asm__ __volatile__							      \
-      ("fistpl %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("fldt   %1\n"                             \
+       "fistpl %0"  : "=m" (retval) : "m" (x));  \
       return retval;
   }
 
   __CRT_INLINE long long __cdecl llrint (double x) 
   {
     long long retval;
-    __asm__ __volatile__							      \
-      ("fistpll %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("fldl    %1\n"                            \
+       "fistpll %0"  : "=m" (retval) : "m" (x)); \
       return retval;
   }
 
   __CRT_INLINE long long __cdecl llrintf (float x) 
   {
     long long retval;
-    __asm__ __volatile__							      \
-      ("fistpll %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("flds   %1\n"                             \
+       "fistpll %0"  : "=m" (retval) : "m" (x)); \
       return retval;
   }
 
   __CRT_INLINE long long __cdecl llrintl (long double x) 
   {
     long long retval;
-    __asm__ __volatile__							      \
-      ("fistpll %0"  : "=m" (retval) : "t" (x) : "st");				      \
+    __asm__ __volatile__                         \
+      ("fldt    %1\n"                            \
+       "fistpll %0"  : "=m" (retval) : "m" (x)); \
       return retval;
   }
 
