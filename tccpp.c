@@ -3165,7 +3165,10 @@ ST_FUNC void preprocess_new(void)
         isidnum_table[i-CH_EOF] = isid(i) || isnum(i);
 
     /* add all tokens */
-    table_ident = NULL;
+    if (table_ident) {
+	tcc_free (table_ident);
+	table_ident = NULL;
+    }
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
     
     tok_ident = TOK_IDENT;

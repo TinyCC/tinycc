@@ -888,6 +888,7 @@ static void tcc_cleanup(void)
     for(i = 0; i < n; i++)
         tcc_free(table_ident[i]);
     tcc_free(table_ident);
+    table_ident = NULL;
 
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
