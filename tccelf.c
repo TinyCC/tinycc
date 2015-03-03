@@ -1588,12 +1588,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_USE_LIBGCC
         if (!s1->static_link) {
             tcc_add_file(s1, TCC_LIBGCC);
-            tcc_add_support(s1, "libtcc1.a");
-	} else
-            tcc_add_support(s1, "libtcc1.a");
-#else
-        tcc_add_support(s1, "libtcc1.a");
+        }
 #endif
+        tcc_add_support(s1, "libtcc1.a");
     }
 
     /* tcc_add_bcheck tries to relocate a call to __bound_init in _init so
