@@ -205,7 +205,11 @@
 # define CONFIG_TCCDIR "."
 #endif
 #ifndef CONFIG_LDDIR
-# define CONFIG_LDDIR "lib"
+# ifdef TCC_TARGET_X86_64
+#   define CONFIG_LDDIR "lib64"
+# else
+#   define CONFIG_LDDIR "lib"
+# endif
 #endif
 
 #ifdef CONFIG_MULTIARCHDIR
