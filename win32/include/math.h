@@ -597,6 +597,27 @@ extern "C" {
       return retval;
   }
 
+  #define FE_TONEAREST	0x0000
+  #define FE_DOWNWARD	0x0400
+  #define FE_UPWARD	0x0800
+  #define FE_TOWARDZERO	0x0c00
+
+  __CRT_INLINE double trunc (double _x)
+  {
+    double retval;
+    unsigned short saved_cw;
+    unsigned short tmp_cw;
+    __asm__ ("fnstcw %0;" : "=m" (saved_cw)); /* save FPU control word */
+    tmp_cw = (saved_cw & ~(FE_TONEAREST | FE_DOWNWARD | FE_UPWARD | FE_TOWARDZERO))
+	    | FE_TOWARDZERO;
+    __asm__ ("fldcw %0;" : : "m" (tmp_cw));
+    __asm__ ("fldl  %1;"
+             "frndint;"
+             "fstl  %0;" : "=m" (retval)  : "m" (_x)); /* round towards zero */
+    __asm__ ("fldcw %0;" : : "m" (saved_cw) ); /* restore saved control word */
+    return retval;
+  }
+
   /* 7.12.9.6 */
   /* round away from zero, regardless of fpu control word settings */
   extern double __cdecl round (double);
