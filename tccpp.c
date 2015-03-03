@@ -1626,7 +1626,12 @@ include_done:
     case TOK_LINE:
         next();
         if (tok != TOK_CINT)
-            tcc_error("#line");
+    	    tcc_error("A #line format is wrong");
+    case TOK_PPNUM:
+    	if (tok != TOK_CINT) {
+            char *p = tokc.cstr->data;
+    	    tokc.i = strtoul(p, (char **)&p, 10);
+	}
         file->line_num = tokc.i - 1; /* the line number will be incremented after */
         next();
         if (tok != TOK_LINEFEED) {
