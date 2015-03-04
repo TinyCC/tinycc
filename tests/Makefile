@@ -17,7 +17,6 @@ TESTS = \
  hello-run \
  libtest \
  test3 \
- $(BTESTS) \
  abitest \
  vla_test-run \
  moretests
