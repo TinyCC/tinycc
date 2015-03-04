@@ -77,9 +77,9 @@ ifeq ($(TOP),.)
 
 PROGS=tcc$(EXESUF)
 I386_CROSS = i386-linux-gnu-tcc$(EXESUF)
-WIN32_CROSS = i386-w64-mingw32-tcc$(EXESUF)
-WIN64_CROSS = x86_64-w64-mingw32-tcc$(EXESUF)
-WINCE_CROSS = arm-wince-mingw32ce-tcc$(EXESUF)
+WIN32_CROSS = i386-win-mingw32-tcc$(EXESUF)
+WIN64_CROSS = x86_64-win-mingw32-tcc$(EXESUF)
+WINCE_CROSS = arm-win-mingw32ce-tcc$(EXESUF)
 X64_CROSS = x86_64-linux-gnu-tcc$(EXESUF)
 ARM_FPA_CROSS = arm-linux-fpa-tcc$(EXESUF)
 ARM_FPA_LD_CROSS = arm-linux-fpa-ld-tcc$(EXESUF)
@@ -92,9 +92,9 @@ C67_CROSS = c67-tcc$(EXESUF)
 
 # Legacy symlinks for cross compilers
 $(I386_CROSS)_LINK = i386-tcc$(EXESUF)
-$(WIN32_CROSS)_LINK = i386-win32-tcc$(EXESUF)
-$(WIN64_CROSS)_LINK = x86_64-win32-tcc$(EXESUF)
-$(WINCE_CROSS)_LINK = arm-win32-tcc$(EXESUF)
+$(WIN32_CROSS)_LINK = i386-win-tcc$(EXESUF)
+$(WIN64_CROSS)_LINK = x86_64-win-tcc$(EXESUF)
+$(WINCE_CROSS)_LINK = arm-win-tcc$(EXESUF)
 $(X64_CROSS)_LINK = x86_64-tcc$(EXESUF)
 $(ARM_FPA_CROSS)_LINK = arm-fpa-tcc$(EXESUF)
 $(ARM_FPA_LD_CROSS)_LINK = arm-fpa-ld-tcc$(EXESUF)
@@ -116,34 +116,34 @@ ifdef CONFIG_WIN64
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN64_FILES)
 PROGS_CROSS=$(WIN32_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifdef CONFIG_WIN32
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
 NATIVE_FILES=$(WIN32_FILES)
 PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
+LIBTCC1_CROSS=lib/x86_64-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1=libtcc1.a
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 else ifeq ($(ARCH),arm64)
 NATIVE_FILES=$(ARM64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1=libtcc1.a
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a lib/i386/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 endif
 PROGS_CROSS_LINK=$(foreach PROG_CROSS,$(PROGS_CROSS),$($(PROG_CROSS)_LINK))
 
@@ -291,8 +291,8 @@ ifneq ($(ARCH),i386)
 	cp -r "$(tccdir)/include" "$(tccdir)/i386"
 endif
 	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
-	$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
-	$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
+	$(INSTALL) -m644 lib/i386-win/libtcc1.a "$(tccdir)/win32/lib/32"
+	$(INSTALL) -m644 lib/x86_64-win/libtcc1.a "$(tccdir)/win32/lib/64"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/win32/include"
 	cp -r "$(tccdir)/include" "$(tccdir)/win32"
 endif
@@ -330,8 +330,8 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
-	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/lib/32"
-	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/lib/64"
+	-$(INSTALL) -m644 lib/i386-win/libtcc1.a "$(tccdir)/lib/32"
+	-$(INSTALL) -m644 lib/x86_64-win/libtcc1.a "$(tccdir)/lib/64"
 endif
 
 uninstall:

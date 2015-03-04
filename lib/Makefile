@@ -8,10 +8,10 @@ VPATH = $(top_srcdir)/lib $(top_srcdir)/win32/lib
 
 ifndef TARGET # native library
  ifdef CONFIG_WIN64
-  TARGET = x86_64-win32
+  TARGET = x86_64-win
  else
  ifdef CONFIG_WIN32
-  TARGET = i386-win32
+  TARGET = i386-win
  else
  ifeq ($(ARCH),i386)
   TARGET = i386
@@ -57,14 +57,14 @@ PICFLAGS = -fPIC
 # correctly
 CFLAGS := $(filter-out -fstack-protector-strong,$(CFLAGS))
 
-ifeq "$(TARGET)" "i386-win32"
+ifeq "$(TARGET)" "i386-win"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
  PICFLAGS =
 else
-ifeq "$(TARGET)" "x86_64-win32"
+ifeq "$(TARGET)" "x86_64-win"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
@@ -126,4 +126,4 @@ $(DIR)/exists :
 	@echo $@ > $@
 
 clean :
-	rm -rfv i386-win32 x86_64-win32 i386 x86_64
+	rm -rfv i386-win x86_64-win i386 x86_64
