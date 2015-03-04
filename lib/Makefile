@@ -15,19 +15,12 @@ ifndef TARGET # native library
  else
  ifeq ($(ARCH),i386)
   TARGET = i386
-  ifneq ($(TARGETOS),Darwin)
-   XCC = $(CC)
-  endif
  else
  ifeq ($(ARCH),x86-64)
   TARGET = x86_64
-  ifneq ($(TARGETOS),Darwin)
-   XCC = $(CC)
-  endif
  else
  ifeq ($(ARCH),arm)
   TARGET = arm
-  XCC = $(CC)
  else
  ifeq ($(ARCH),arm64)
   TARGET = arm64
