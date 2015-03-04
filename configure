@@ -373,8 +373,16 @@ else
 fi
 
 # a final configuration tuning
-W_PRESENT="$($cc -v --help 2>&1 | grep deprecated-declarations)"
-if test -n "$W_PRESENT"; then  cc="$cc -Wno-deprecated-declarations"; fi
+W_OPTIONS="deprecated-declarations strict-aliasing pointer-sign sign-compare unused-result uninitialized"
+for i in $W_OPTIONS; do
+    O_PRESENT="$($cc -v --help 2>&1 | grep -- -W$i)"
+    if test -n "$O_PRESENT"; then  CFLAGS="$CFLAGS -Wno-$i"; fi
+done
+F_OPTIONS="strict-aliasing"
+for i in $F_OPTIONS; do
+    O_PRESENT="$($cc -v --help 2>&1 | grep -- -f$i)"
+    if test -n "$O_PRESENT"; then  CFLAGS="$CFLAGS -fno-$i"; fi
+done
 if test -z "$tcc_lddir" -a "$cpu" = "x86-64"; then tcc_lddir="lib64"; fi
 
 echo "Binary  directory   $bindir"
@@ -420,6 +428,12 @@ LDFLAGS=$LDFLAGS
 LIBSUF=$LIBSUF
 EXESUF=$EXESUF
 EOF
+if test "$mingw32" = "yes"; then
+cat >>config.mak <<EOF
+XCC=$cc
+XAR=$ar
+EOF
+fi
 
 print_inc() {
   if test -n "$2"; then
