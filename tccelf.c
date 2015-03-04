@@ -1587,7 +1587,7 @@ static inline int tcc_add_support(TCCState *s1, const char *filename)
 	"ARM"
     #endif
     #ifdef TCC_TARGET_ARM64
-	"ARM64"
+	"arm64"
     #endif
     #ifdef TCC_TARGET_C67
 	"C67"
