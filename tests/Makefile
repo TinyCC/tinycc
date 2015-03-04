@@ -45,6 +45,9 @@ ifeq ($(ARCH),i386)
 else ifneq ($(ARCH),x86-64)
  TESTS := $(filter-out vla_test-run,$(TESTS))
 endif
+ifeq ($(CONFIG_arm_eabi),yes)
+ TESTS := $(filter-out test3,$(TESTS))
+endif
 
 ifdef DISABLE_STATIC
  export LD_LIBRARY_PATH:=$(CURDIR)/..
@@ -213,10 +216,16 @@ abitest-cc$(EXESUF): abitest.c $(top_builddir)/$(LIBTCC)
 abitest-tcc$(EXESUF): abitest.c libtcc.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE $(LIBS) $(LDFLAGS) -I$(top_srcdir)
 
-abitest: abitest-cc$(EXESUF) abitest-tcc$(EXESUF)
+ABITESTS := abitest-cc$(EXESUF)
+ifneq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
+	ABITESTS += abitest-tcc$(EXESUF)
+endif
+
+abitest: $(ABITESTS)
 	@echo ------------ $@ ------------
 	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
-	./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
+	if [ $(CONFIG_arm_eabi) != "yes" ]; then \
+		./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"; fi
 
 vla_test$(EXESUF): vla_test.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS)

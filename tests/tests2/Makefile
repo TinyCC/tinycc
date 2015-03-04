@@ -100,6 +100,9 @@ TESTS =	\
 SKIP = 34_array_assignment.test
 
 # some tests do not pass on all platforms, remove them for now
+ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
+ SKIP += 22_floating_point.test
+endif
 ifeq ($(TARGETOS),Darwin)
  SKIP += 40_stdio.test
 endif
