@@ -173,6 +173,10 @@ for opt do
   ;;
   --enable-cygwin) mingw32="yes" ; cygwin="yes" ; cross_prefix="mingw32-" ; cpu=x86
   ;;
+  --enable-tcc32-mingw) mingw32="yes" ; cross_prefix="i386-win-" ; cpu=x86; cc=tcc
+  ;;
+  --enable-tcc64-mingw) mingw32="yes" ; cross_prefix="x86_64-win-" ; cpu=x86_64; cc=tcc
+  ;;
   --enable-cross) build_cross="yes"
   ;;
   --enable-assert) enable_assert="yes"
@@ -302,6 +306,8 @@ Advanced options (experts only):
   --disable-static         make libtcc.so instead of libtcc.a
   --disable-rpath          disable use of -rpath with the above
   --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a in dynamic link
+  --enable-tcc64-mingw     build windows version on linux with x86_64-win-tcc
+  --enable-tcc32-mingw     build windows version on linux with i386-win-tcc
   --enable-mingw32         build windows version on linux with mingw32
   --enable-cygwin          build windows version on windows with cygwin
   --enable-cross           build cross compilers
@@ -316,8 +322,10 @@ EOF
 exit 1
 fi
 
+if test "$cc" != "tcc"; then
+ ar="${cross_prefix}${ar}"
+fi
 cc="${cross_prefix}${cc}"
-ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
 
 CONFTEST=./conftest$EXESUF
