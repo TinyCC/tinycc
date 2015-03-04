@@ -101,6 +101,15 @@ $(ARM_FPA_LD_CROSS)_LINK = arm-fpa-ld-tcc$(EXESUF)
 $(ARM_VFP_CROSS)_LINK = arm-vfp-tcc$(EXESUF)
 $(ARM_EABI_CROSS)_LINK = arm-eabi-tcc$(EXESUF)
 
+ifeq ($(ARCH),i386)
+PROGS:=$($(I386_CROSS)_LINK)
+$($(I386_CROSS)_LINK)_TCC = yes
+endif
+ifeq ($(ARCH),x86-64)
+PROGS:=$($(X64_CROSS)_LINK)
+$($(X64_CROSS)_LINK)_TCC = yes
+endif
+
 CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
@@ -126,12 +135,12 @@ LIBTCC1_CROSS=lib/x86_64-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
-PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+PROGS_CROSS=$($(X64_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK)  $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),arm)
@@ -169,18 +178,18 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 %-tcc$(EXESUF): tcc.c
 	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
 	$(if $($@_LINK),ln -sf $@ $($@_LINK))
+	$(if $($@_TCC),ln -sf $@ tcc)
 
 # profiling version
 tcc_p$(EXESUF): $(NATIVE_FILES)
 	$(CC) -o $@ $< -DONE_SOURCE $(NATIVE_DEFINES) $(CPPFLAGS_P) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
 
-$(I386_CROSS): DEFINES = -DTCC_TARGET_I386 \
-    -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
-$(X64_CROSS): DEFINES = -DTCC_TARGET_X86_64
-$(WIN32_CROSS): DEFINES = -DTCC_TARGET_I386 -DTCC_TARGET_PE \
+$(I386_CROSS) $($(I386_CROSS)_LINK): DEFINES = -DTCC_TARGET_I386
+$(X64_CROSS) $($(X64_CROSS)_LINK): DEFINES = -DTCC_TARGET_X86_64
+$(WIN32_CROSS) $($(WIN32_CROSS)_LINK): DEFINES = -DTCC_TARGET_I386 -DTCC_TARGET_PE \
     -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" \
     -DCONFIG_TCC_LIBPATHS="\"{B}/lib/32;{B}/lib\""
-$(WIN64_CROSS): DEFINES = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE \
+$(WIN64_CROSS) $($(WIN64_CROSS)_LINK): DEFINES = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE \
     -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" \
     -DCONFIG_TCC_LIBPATHS="\"{B}/lib/64;{B}/lib\""
 $(WINCE_CROSS): DEFINES = -DTCC_TARGET_PE
@@ -237,6 +246,8 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 # TinyCC runtime libraries
 libtcc1.a : FORCE
 	$(MAKE) -C lib native
+	if test ! -d $(ARCH); then mkdir $(ARCH); fi
+	if test ! -L $(ARCH)/$@; then ln -s ../$@ $(ARCH)/$@; fi
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	$(MAKE) -C lib cross TARGET=$*
 
@@ -269,7 +280,8 @@ endif
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/include"
 ifneq ($(LIBTCC1),)
-	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
+	mkdir -p "$(tccdir)/$(ARCH)"
+	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)/$(ARCH)"
 endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
@@ -301,15 +313,11 @@ uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
 	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
-	rm -fv "$(tccdir)/include/tcclib.h"
-	rm -fv "$(docdir)/tcc-doc.html" "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
+	rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv "$(libdir)/libtcc.so*"
-	rm -rf "$(tccdir)/win32"
-	-rmdir $(tccdir)/include
-ifneq ($(ARCH),i386)
-	rm -rf "$(tccdir)/i386"
-endif
+	rm -rv "$(tccdir)"
+	rm -rv "$(docdir)"
 else
 # on windows
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
@@ -357,7 +365,9 @@ export LIBTCC1
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
-		*.exe a.out tags TAGS libtcc_test$(EXESUF)
+		*.exe a.out tags TAGS libtcc_test$(EXESUF) tcc
+	-rm -r $(ARCH)
+	-rm *-tcc
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@
