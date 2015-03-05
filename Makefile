@@ -158,6 +158,8 @@ endif
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
+$(PROGS) $(TCCLIBS): *.c *.h
+
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
 	$(CC) -o $@ $^ $(LIBS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
