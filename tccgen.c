@@ -5605,12 +5605,18 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 		(tok != '}' && tok != ',')) &&  tok != -1) {
             if (tok == '(')
                 parlevel++;
-            else if (tok == ')')
+            else if (tok == ')') {
+		if (parlevel == 0 && parlevel1 == 0)
+		    break;
                 parlevel--;
+            }
 	    else if (tok == '{')
 		parlevel1++;
-	    else if (tok == '}')
+	    else if (tok == '}') {
+		if (parlevel == 0 && parlevel1 == 0)
+		    break;
 		parlevel1--;
+	    }
             next();
         }
     } else {
