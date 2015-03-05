@@ -353,9 +353,9 @@ export LIBTCC1
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
-		*.exe a.out tags TAGS libtcc_test$(EXESUF) tcc
+		*.exe a.out tags TAGS libtcc_test$(EXESUF) tcc$(EXESUF)
 	-rm -r $(ARCH)
-	-rm *-tcc
+	-rm *-tcc$(EXESUF)
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
 	$(MAKE) -C lib $@
