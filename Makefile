@@ -168,7 +168,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 %-tcc$(EXESUF): tcc.c
 	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
 	$(if $($@_LINK),ln -sf $@ $($@_LINK))
-	$(if $($@_TCC),ln -sf $@ tcc)
+	$(if $($@_TCC),ln -sf $@ tcc$(EXESUF))
 
 # profiling version
 tcc_p$(EXESUF): $(NATIVE_FILES)
@@ -237,7 +237,7 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 libtcc1.a : FORCE
 	$(MAKE) -C lib native
 	if test ! -d $(ARCH); then mkdir $(ARCH); fi
-	if test ! -L $(ARCH)/$@; then ln -s ../$@ $(ARCH)/$@; fi
+	if test ! -L $(ARCH)/$@; then ln -sf ../$@ $(ARCH)/$@; fi
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 	$(MAKE) -C lib cross TARGET=$*
 
