@@ -257,11 +257,8 @@ install-strip: install
 ifndef CONFIG_WIN32
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(bindir)"
-ifeq ($(CC),tcc)
-	$(INSTALL) -m755 $(PROGS) $(PROGS_CROSS_LINK) "$(bindir)"
-else
 	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
-endif
+	cp -P tcc$(EXESUF) "$(bindir)"
 	mkdir -p "$(mandir)/man1"
 	-$(INSTALL) -m644 tcc.1 "$(mandir)/man1"
 	mkdir -p "$(infodir)"
@@ -300,6 +297,7 @@ endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
+	rm -fv "$(bindir)/tcc$(EXESUF)"
 	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
 	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
 	rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
