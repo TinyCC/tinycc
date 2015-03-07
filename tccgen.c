@@ -1476,16 +1476,31 @@ static void gen_opic(int op)
             c2 = c1; //c = c1, c1 = c2, c2 = c;
             l2 = l1; //l = l1, l1 = l2, l2 = l;
         }
-        /* Filter out NOP operations like x*1, x-0, x&-1... */
-        if (c2 && (((op == '*' || op == '/' || op == TOK_UDIV || 
-                     op == TOK_PDIV) && 
-                    l2 == 1) ||
-                   ((op == '+' || op == '-' || op == '|' || op == '^' || 
-                     op == TOK_SHL || op == TOK_SHR || op == TOK_SAR) && 
-                    l2 == 0) ||
-                   (op == '&' && 
-                    l2 == -1))) {
-            /* nothing to do */
+        if (!const_wanted &&
+            c1 && ((l1 == 0 &&
+                    (op == TOK_SHL || op == TOK_SHR || op == TOK_SAR)) ||
+                   (l1 == -1 && op == TOK_SAR))) {
+            /* treat (0 << x), (0 >> x) and (-1 >> x) as constant */
+            vtop--;
+        } else if (!const_wanted &&
+                   c2 && ((l2 == 0 && (op == '&' || op == '*')) ||
+                          (l2 == -1 && op == '|') ||
+                          (l2 == 0xffffffff && t2 != VT_LLONG && op == '|') ||
+                          (l2 == 1 && (op == '%' || op == TOK_UMOD)))) {
+            /* treat (x & 0), (x * 0), (x | -1) and (x % 1) as constant */
+            if (l2 == 1)
+                vtop->c.ll = 0;
+            vswap();
+            vtop--;
+        } else if (c2 && (((op == '*' || op == '/' || op == TOK_UDIV ||
+                          op == TOK_PDIV) &&
+                           l2 == 1) ||
+                          ((op == '+' || op == '-' || op == '|' || op == '^' ||
+                            op == TOK_SHL || op == TOK_SHR || op == TOK_SAR) &&
+                           l2 == 0) ||
+                          (op == '&' &&
+                           l2 == -1))) {
+            /* filter out NOP operations like x*1, x-0, x&-1... */
             vtop--;
         } else if (c2 && (op == '*' || op == TOK_PDIV || op == TOK_UDIV)) {
             /* try to use shifts instead of muls or divs */
