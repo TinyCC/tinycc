@@ -80,7 +80,7 @@ static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
-static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only, int *par_count_p);
 static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, char *asm_label, int scope);
 static int decl0(int l, int is_for_loop_init);
@@ -5111,7 +5111,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
    in arrays) */
 static void decl_designator(CType *type, Section *sec, unsigned long c, 
                             int *cur_index, Sym **cur_field, 
-                            int size_only)
+                            int size_only, int *par_count_p)
 {
     Sym *s, *f;
     int notfirst, index, index_last, align, l, nb_elems, elem_size;
@@ -5203,7 +5203,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             c += f->c;
         }
     }
-    decl_initializer(type, sec, c, 0, size_only);
+    decl_initializer(type, sec, c, 0, size_only, par_count_p);
 
     /* XXX: make it more general */
     if (!size_only && nb_elems > 1) {
@@ -5372,7 +5372,7 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
    dimension implicit array init handling). 'size_only' is true if
    size only evaluation is wanted (only for arrays). */
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
-                             int first, int size_only)
+                             int first, int size_only, int *par_count_p)
 {
     int index, array_length, n, no_oblock, nb, parlevel, parlevel1, i;
     int size1, align1, expr_type;
@@ -5468,7 +5468,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         } else {
             index = 0;
             while (tok != '}') {
-                decl_designator(type, sec, c, &index, NULL, size_only);
+                decl_designator(type, sec, c, &index, NULL, size_only, par_count_p);
                 if (n >= 0 && index >= n)
                     tcc_error("index too large");
                 /* must put zero in holes (note that doing it that way
@@ -5485,6 +5485,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                    same time) */
                 if (index >= n && no_oblock)
                     break;
+                if (*par_count_p != 0 && tok == ')') {
+		    skip(')');
+		    *par_count_p -= 1;
+		}
                 if (tok == '}')
                     break;
                 skip(',');
@@ -5541,7 +5545,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         index = 0;
         n = s->c;
         while (tok != '}') {
-            decl_designator(type, sec, c, NULL, &f, size_only);
+            decl_designator(type, sec, c, NULL, &f, size_only, &par_count);
             index = f->c;
             if (!size_only && array_length < index) {
                 init_putz(type, sec, c + array_length, 
@@ -5607,8 +5611,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             par_count--;
         }
     } else if (tok == '{') {
+	int par_count = 0;
         next();
-        decl_initializer(type, sec, c, first, size_only);
+        decl_initializer(type, sec, c, first, size_only, &par_count);
         skip('}');
     } else if (size_only) {
         /* just skip expression */
@@ -5680,6 +5685,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
        initializers handling */
     tok_str_new(&init_str);
     if (size < 0 || (flexible_array && has_init)) {
+	int par_count = 0;
         if (!has_init) 
             tcc_error("unknown type size");
         /* get all init string */
@@ -5715,7 +5721,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
         macro_ptr = init_str.str;
         next();
-        decl_initializer(type, NULL, 0, 1, 1);
+        decl_initializer(type, NULL, 0, 1, 1, &par_count);
         /* prepare second initializer parsing */
         macro_ptr = init_str.str;
         next();
@@ -5870,7 +5876,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #endif
     }
     if (has_init || (type->t & VT_VLA)) {
-        decl_initializer(type, sec, addr, 1, 0);
+	int par_count = 0;
+        decl_initializer(type, sec, addr, 1, 0, &par_count);
         /* restore parse state if needed */
         if (init_str.str) {
             tok_str_free(init_str.str);
