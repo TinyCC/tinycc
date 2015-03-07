@@ -495,8 +495,8 @@ ST_FUNC void load(int r, SValue *sv)
 
     if (svr == VT_CONST) {
         if ((svtt & VT_BTYPE) != VT_VOID)
-            arm64_movimm(intr(r),
-                         arm64_type_size(svtt) == 3 ? sv->c.ull : svcul);
+            arm64_movimm(intr(r), arm64_type_size(svtt) == 3 ?
+                         sv->c.ull : (uint32_t)svcul);
         return;
     }
 
