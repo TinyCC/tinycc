@@ -224,7 +224,7 @@ endif
 abitest: $(ABITESTS)
 	@echo ------------ $@ ------------
 	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
-	if [ $(CONFIG_arm_eabi) != "yes" ]; then \
+	if [ "$(CONFIG_arm_eabi)" != "yes" ]; then \
 		./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"; fi
 
 vla_test$(EXESUF): vla_test.c
