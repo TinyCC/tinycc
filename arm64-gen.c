@@ -1331,9 +1331,131 @@ ST_FUNC int gtst(int inv, int t)
     return gjmp(t);
 }
 
-static void arm64_gen_opil(int op, int l)
+static int arm64_iconst(uint64_t *val, SValue *sv)
 {
-    int x, a, b;
+    if ((sv->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
+        return 0;
+    if (val) {
+        int t = sv->type.t & (VT_BTYPE | VT_UNSIGNED);
+        // It's crazy how TCC has all these alternatives for storing a value:
+        if (t == (VT_LLONG | VT_UNSIGNED))
+            *val = sv->c.ull;
+        else if (t == VT_LLONG)
+            *val = sv->c.ll;
+        else if (t & VT_UNSIGNED)
+            *val = sv->c.ui;
+        else
+            *val = sv->c.i;
+    }
+    return 1;
+}
+
+static int arm64_gen_opic(int op, uint32_t l, int rev, uint64_t val,
+                          uint32_t x, uint32_t a)
+{
+    if (op == '-' && !rev) {
+        val = -val;
+        op = '+';
+    }
+    val = l ? val : (uint32_t)val;
+
+    switch (op) {
+
+    case '+': {
+        int s = l ? val >> 63 : val >> 31;
+        val = s ? -val : val;
+        val = l ? val : (uint32_t)val;
+        if (!(val & ~(uint64_t)0xfff))
+            o(0x11000000 | l << 31 | s << 30 | x | a << 5 | val << 10);
+        else if (!(val & ~(uint64_t)0xfff000))
+            o(0x11400000 | l << 31 | s << 30 | x | a << 5 | val >> 12 << 10);
+        else {
+            arm64_movimm(30, val); // use x30
+            o(0x0b1e0000 | l << 31 | s << 30 | x | a << 5);
+        }
+        return 1;
+      }
+
+    case '-':
+        if (!val)
+            o(0x4b0003e0 | l << 31 | x | a << 16); // neg
+        else if (val == (l ? (uint64_t)-1 : (uint32_t)-1))
+            o(0x2a2003e0 | l << 31 | x | a << 16); // mvn
+        else {
+            arm64_movimm(30, val); // use x30
+            o(0x4b0003c0 | l << 31 | x | a << 16); // sub
+        }
+        return 1;
+
+    case '^':
+        if (val == -1 || (val == 0xffffffff && !l)) {
+            o(0x2a2003e0 | l << 31 | x | a << 16); // mvn
+            return 1;
+        }
+        // fall through
+    case '&':
+    case '|': {
+        int e = arm64_encode_bimm64(l ? val : val | val << 32);
+        if (e < 0)
+            return 0;
+        o((op == '&' ? 0x12000000 :
+           op == '|' ? 0x32000000 : 0x52000000) |
+          l << 31 | x | a << 5 | (uint32_t)e << 10);
+        return 1;
+    }
+
+    case TOK_SAR:
+    case TOK_SHL:
+    case TOK_SHR: {
+        uint32_t n = 32 << l;
+        val = val & (n - 1);
+        if (rev)
+            return 0;
+        if (!val)
+            assert(0);
+        else if (op == TOK_SHL)
+            o(0x53000000 | l << 31 | l << 22 | x | a << 5 |
+              (n - val) << 16 | (n - 1 - val) << 10); // lsl
+        else
+            o(0x13000000 | (op == TOK_SHR) << 30 | l << 31 | l << 22 |
+              x | a << 5 | val << 16 | (n - 1) << 10); // lsr/asr
+        return 1;
+    }
+
+    }
+    return 0;
+}
+
+static void arm64_gen_opil(int op, uint32_t l)
+{
+    uint32_t x, a, b;
+
+    // Special treatment for operations with a constant operand:
+    {
+        uint64_t val;
+        int rev = 1;
+
+        if (arm64_iconst(0, &vtop[0])) {
+            vswap();
+            rev = 0;
+        }
+        if (arm64_iconst(&val, &vtop[-1])) {
+            gv(RC_INT);
+            a = intr(vtop[0].r);
+            --vtop;
+            x = get_reg(RC_INT);
+            ++vtop;
+            if (arm64_gen_opic(op, l, rev, val, intr(x), a)) {
+                vtop[0].r = x;
+                vswap();
+                --vtop;
+                return;
+            }
+        }
+        if (!rev)
+            vswap();
+    }
+
     gv2(RC_INT, RC_INT);
     assert(vtop[-1].r < VT_CONST && vtop[0].r < VT_CONST);
     a = intr(vtop[-1].r);
