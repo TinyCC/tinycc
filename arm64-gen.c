@@ -1771,6 +1771,54 @@ ST_FUNC void ggoto(void)
     --vtop;
 }
 
+ST_FUNC void gen_clear_cache(void)
+{
+    uint32_t beg, end, dsz, isz, p, lab1, b1;
+    gv2(RC_INT, RC_INT);
+    vpushi(0);
+    vtop->r = get_reg(RC_INT);
+    vpushi(0);
+    vtop->r = get_reg(RC_INT);
+    vpushi(0);
+    vtop->r = get_reg(RC_INT);
+    beg = intr(vtop[-4].r); // x0
+    end = intr(vtop[-3].r); // x1
+    dsz = intr(vtop[-2].r); // x2
+    isz = intr(vtop[-1].r); // x3
+    p = intr(vtop[0].r);    // x4
+    vtop -= 5;
+
+    o(0xd53b0020 | isz); // mrs x(isz),ctr_el0
+    o(0x52800080 | p); // mov w(p),#4
+    o(0x53104c00 | dsz | isz << 5); // ubfx w(dsz),w(isz),#16,#4
+    o(0x1ac02000 | dsz | p << 5 | dsz << 16); // lsl w(dsz),w(p),w(dsz)
+    o(0x12000c00 | isz | isz << 5); // and w(isz),w(isz),#15
+    o(0x1ac02000 | isz | p << 5 | isz << 16); // lsl w(isz),w(p),w(isz)
+    o(0x51000400 | p | dsz << 5); // sub w(p),w(dsz),#1
+    o(0x8a240004 | p | beg << 5 | p << 16); // bic x(p),x(beg),x(p)
+    b1 = ind; o(0x14000000); // b
+    lab1 = ind;
+    o(0xd50b7b20 | p); // dc cvau,x(p)
+    o(0x8b000000 | p | p << 5 | dsz << 16); // add x(p),x(p),x(dsz)
+    *(uint32_t *)(cur_text_section->data + b1) =
+        (0x14000000 | (ind - b1) >> 2);
+    o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
+    o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
+    o(0xd5033b9f); // dsb ish
+    o(0x51000400 | p | isz << 5); // sub w(p),w(isz),#1
+    o(0x8a240004 | p | beg << 5 | p << 16); // bic x(p),x(beg),x(p)
+    b1 = ind; o(0x14000000); // b
+    lab1 = ind;
+    o(0xd50b7520 | p); // ic ivau,x(p)
+    o(0x8b000000 | p | p << 5 | isz << 16); // add x(p),x(p),x(isz)
+    *(uint32_t *)(cur_text_section->data + b1) =
+        (0x14000000 | (ind - b1) >> 2);
+    o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
+    o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
+    o(0xd5033b9f); // dsb ish
+    o(0xd5033fdf); // isb
+}
+
 ST_FUNC void gen_vla_sp_save(int addr) {
     tcc_error("variable length arrays unsupported for this target");
 }

@@ -1387,6 +1387,7 @@ ST_FUNC void gen_opl(int op);
 ST_FUNC void greturn(void);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void gen_va_arg(CType *t);
+ST_FUNC void gen_clear_cache(void);
 #endif
 
 /* ------------ c67-gen.c ------------ */

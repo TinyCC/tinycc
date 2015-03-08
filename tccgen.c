@@ -3979,6 +3979,18 @@ ST_FUNC void unary(void)
         vtop->type = type;
         break;
     }
+    case TOK___arm64_clear_cache: {
+        next();
+        skip('(');
+        expr_eq();
+        skip(',');
+        expr_eq();
+        skip(')');
+        gen_clear_cache();
+        vpushi(0);
+        vtop->type.t = VT_VOID;
+        break;
+    }
 #endif
 
     case TOK_INC:

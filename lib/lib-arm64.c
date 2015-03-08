@@ -14,7 +14,7 @@
 
 void __clear_cache(char *beg, char *end)
 {
-#warning __clear_cache not yet implemented
+    __arm64_clear_cache(beg, end);
 }
 
 typedef struct {

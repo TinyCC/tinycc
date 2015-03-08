@@ -244,6 +244,7 @@
      DEF(TOK___chkstk, "__chkstk")
 #endif
 #ifdef TCC_TARGET_ARM64
+     DEF(TOK___arm64_clear_cache, "__arm64_clear_cache")
      DEF(TOK___addtf3, "__addtf3")
      DEF(TOK___subtf3, "__subtf3")
      DEF(TOK___multf3, "__multf3")
