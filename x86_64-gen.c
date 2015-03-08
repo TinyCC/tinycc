@@ -662,9 +662,10 @@ void gen_offs_sp(int b, int r, int d)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
     int size, align;
+    *regsize = 8;
     *ret_align = 1; // Never have to re-align return values for x86-64
     size = type_size(vt, &align);
     ret->ref = NULL;
@@ -1069,10 +1070,11 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
     int size, align, reg_count;
     *ret_align = 1; // Never have to re-align return values for x86-64
+    *regsize = 8;
     return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);
 }
 

@@ -1881,7 +1881,7 @@ static void gcall_or_jmp(int is_jmp)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize) {
     *ret_align = 1; // Never have to re-align return values for x86-64
     return 0;
 }

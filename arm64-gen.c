@@ -1196,7 +1196,7 @@ ST_FUNC void gen_va_arg(CType *t)
     }
 }
 
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *regsize)
 {
     return 0;
 }

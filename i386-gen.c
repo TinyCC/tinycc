@@ -376,12 +376,13 @@ static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
 #ifdef TCC_TARGET_PE
     int size, align;
 
     *ret_align = 1; // Never have to re-align return values for x86
+    *regsize = 4;
     size = type_size(vt, &align);
     if (size > 8) {
         return 0;

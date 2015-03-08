@@ -869,18 +869,20 @@ int floats_in_core_regs(SValue *sval)
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize) {
 #ifdef TCC_ARM_EABI
     int size, align;
     size = type_size(vt, &align);
     if (float_abi == ARM_HARD_FLOAT && !variadic &&
         (is_float(vt->t) || is_hgen_float_aggr(vt))) {
         *ret_align = 8;
+	*regsize = 8;
         ret->ref = NULL;
         ret->t = VT_DOUBLE;
         return (size + 7) >> 3;
     } else if (size <= 4) {
         *ret_align = 4;
+	*regsize = 4;
         ret->ref = NULL;
         ret->t = VT_INT;
         return 1;
@@ -1255,7 +1257,7 @@ void gfunc_call(int nb_args)
 void gfunc_prolog(CType *func_type)
 {
   Sym *sym,*sym2;
-  int n, nf, size, align, struct_ret = 0;
+  int n, nf, size, align, rs, struct_ret = 0;
   int addr, pn, sn; /* pn=core, sn=stack */
   CType ret_type;
 
@@ -1269,7 +1271,7 @@ void gfunc_prolog(CType *func_type)
 
   n = nf = 0;
   if ((func_vt.t & VT_BTYPE) == VT_STRUCT &&
-      !gfunc_sret(&func_vt, func_var, &ret_type, &align))
+      !gfunc_sret(&func_vt, func_var, &ret_type, &align, &rs))
   {
     n++;
     struct_ret = 1;
