@@ -2,7 +2,7 @@
  *  i386 specific functions for TCC assembler
  *
  *  Copyright (c) 2001, 2002 Fabrice Bellard
- *  Copyright (c) 2009 Frédéric Feret (x86_64 support)
+ *  Copyright (c) 2009 FrÃ©dÃ©ric Feret (x86_64 support)
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

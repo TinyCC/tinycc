@@ -27,15 +27,15 @@
 
  Author (name)              I agree (YES/NO)    Files/Features (optional)
  ------------------------------------------------------------------------------
- Daniel Glöckner            NO                  arm-gen.c
- Daniel Glöckner            YES                 not arm-gen.c
+ Daniel GlÃ¶ckner            NO                  arm-gen.c
+ Daniel GlÃ¶ckner            YES                 not arm-gen.c
  Edmund Grimley Evans          YES                 arm64
  Fabrice Bellard            YES                 original author
- Frédéric Féret             YES                 x86 64/16 bit asm
+ FrÃ©dÃ©ric FÃ©ret             YES                 x86 64/16 bit asm
  grischka                   YES                 tccpe.c
  Shinichiro Hamaji          YES                 x86_64-gen.c
  Thomas Preud'homme         YES                 arm-gen.c
- Timo VJ Lähde (Timppa)     ?                   tiny_libmaker.c
+ Timo VJ LÃ¤hde (Timppa)     ?                   tiny_libmaker.c
  TK                         ?                   tcccoff.c c67-gen.c
 
 

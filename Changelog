@@ -41,7 +41,7 @@ Platforms:
 - define __ARM_EABI__, __ARMEL__ and __ARM_PCS_VFP (Thomas Preud'homme)
 - provide a runtime library for ARM (Thomas Preud'homme)
 - vastly improved support for ARM hard float calling convention
-(Thomas Preud'homme, Daniel Glöckner)
+(Thomas Preud'homme, Daniel GlÃ¶ckner)
 - tcc can uses libtcc1 on ARM (Thomas Preud'homme)
 - use __fixdfdi for all float to integer conversion (grischka)
 - simplify startup code for unix platforms (grischka)
@@ -119,7 +119,7 @@ Bug fixes:
 - fix memory leak due to symbol attributes (mingodad)
 - partially fix bound checking of argv and arge (Thomas Preud'homme)
 - fix possible dereference when getting name of symbol (grischka)
-- fix va_list type definition on x86-64 (Daniel Glöckner)
+- fix va_list type definition on x86-64 (Daniel GlÃ¶ckner)
 - reduce number of scan-build false positive (mingodad)
 
 version 0.9.26:
@@ -134,7 +134,7 @@ User interface:
 Platforms:
 - Many improvements for x86-64 target (Shinichiro Hamaji, Michael Matz, grischka)
 - x86-64 assembler (Frederic Feret)
-- Many improvements for ARM target (Daniel Glöckner, Thomas Preud'homme)
+- Many improvements for ARM target (Daniel GlÃ¶ckner, Thomas Preud'homme)
 - Support WinCE PE ARM (Timo VJ Lahde)
 - Support ARM hardfloat calling convention (Thomas Preud'homme)
 - Support SELinux (Security-Enhanced Linux) (Henry Kroll III)
@@ -153,7 +153,7 @@ Features:
 version 0.9.25:
 
 - first support for x86-64 target (Shinichiro Hamaji)
-- support µClibc
+- support ÂµClibc
 - split tcc.c into tcc.h libtcc.c tccpp.c tccgen.c tcc.c
 - improved preprocess output with linenumbers and spaces preserved
 - tcc_relocate now copies code into user buffer
