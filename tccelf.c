@@ -1584,7 +1584,7 @@ static inline int tcc_add_support(TCCState *s1, const char *filename)
         "x86-64"
     #endif
     #ifdef TCC_TARGET_ARM
-	"ARM"
+	"arm"
     #endif
     #ifdef TCC_TARGET_ARM64
 	"arm64"
