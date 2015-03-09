@@ -4893,8 +4893,6 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
                         /* We assume that when a structure is returned in multiple
                            registers, their classes are consecutive values of the
                            suite s(n) = 2^n */
-			/* XXX This seems confused, if r == 0, this never
-			   changes r.  */
                         r <<= 1;
                         vtop->c.i += regsize;
                         vtop->r = VT_LOCAL | VT_LVAL;
