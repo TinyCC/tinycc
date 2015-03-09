@@ -688,11 +688,10 @@ void *__va_arg(__va_list_struct *ap,
     align = (align + 7) & ~7;
     switch (arg_type) {
     case __va_gen_reg:
-        if (ap->gp_offset < 48) {
-            ap->gp_offset += 8;
-            return ap->reg_save_area + ap->gp_offset - 8;
+        if (ap->gp_offset + size <= 48) {
+            ap->gp_offset += size;
+            return ap->reg_save_area + ap->gp_offset - size;
         }
-        size = 8;
         goto use_overflow_area;
 
     case __va_float_reg:
