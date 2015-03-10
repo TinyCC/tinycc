@@ -47,11 +47,12 @@ tcc_elfinterp=""
 tcc_lddir=
 confvars=
 cpu=
+host_os=Linux
 
 # OS specific
 targetos=`uname -s`
 case $targetos in
-  MINGW32*)  mingw32=yes;;
+  MINGW32*)  mingw32=yes; host_os=Windows; ;;
   DragonFly) noldl=yes;;
   OpenBSD)   noldl=yes;;
   FreeBSD)   noldl=yes;;
@@ -407,6 +408,7 @@ echo "cross compilers  $build_cross"
 if test "$build_cross" = "no"; then
 echo "Target CPU       $cpu"
 fi
+echo "Host OS          $host_os"
 echo "Target OS        $targetos"
 echo "Big Endian       $bigendian"
 echo "gprof enabled    $gprof"
@@ -435,6 +437,7 @@ CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 LIBSUF=$LIBSUF
 EXESUF=$EXESUF
+HOST_OS=$host_os
 EOF
 if test "$mingw32" = "yes"; then
 cat >>config.mak <<EOF
