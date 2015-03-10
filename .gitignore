@@ -61,6 +61,7 @@ lib/i386
 lib/x86_64-win32
 lib/i386-win32
 lib/arm
+lib/arm64
 tcc-doc.info
 conftest*
 tiny_libmaker
