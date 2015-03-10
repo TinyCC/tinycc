@@ -93,6 +93,7 @@ TESTS =	\
  71_macro_empty_arg.test \
  72_long_long_constant.test \
  73_arm64.test \
+ 74_nocode_wanted.test
 
 
 # 34_array_assignment.test -- array assignment is not in C standard

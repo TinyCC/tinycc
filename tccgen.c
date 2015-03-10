@@ -683,7 +683,7 @@ static void move_reg(int r, int s, int t)
 /* get address of vtop (vtop MUST BE an lvalue) */
 ST_FUNC void gaddrof(void)
 {
-    if (vtop->r & VT_REF)
+    if (vtop->r & VT_REF && !nocode_wanted)
         gv(RC_INT);
     vtop->r &= ~VT_LVAL;
     /* tricky: if saved lvalue, then we can go back to lvalue */
@@ -1848,7 +1848,7 @@ ST_FUNC void gen_op(int op)
         }
     }
     // Make sure that we have converted to an rvalue:
-    if (vtop->r & VT_LVAL)
+    if (vtop->r & VT_LVAL && !nocode_wanted)
         gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
 }
 
@@ -1951,7 +1951,7 @@ static void gen_cast(CType *type)
     }
 
     /* bitfields first get cast to ints */
-    if (vtop->type.t & VT_BITFIELD) {
+    if (vtop->type.t & VT_BITFIELD && !nocode_wanted) {
         gv(RC_INT);
     }
 
@@ -2057,7 +2057,7 @@ static void gen_cast(CType *type)
                 }
 #if !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_X86_64)
             } else if ((dbt & VT_BTYPE) == VT_LLONG) {
-                if ((sbt & VT_BTYPE) != VT_LLONG) {
+                if ((sbt & VT_BTYPE) != VT_LLONG && !nocode_wanted) {
                     /* scalar to long long */
                     /* machine independent conversion */
                     gv(RC_INT);
@@ -2085,7 +2085,7 @@ static void gen_cast(CType *type)
                        (dbt & VT_BTYPE) == VT_FUNC) {
                 if ((sbt & VT_BTYPE) != VT_LLONG &&
                     (sbt & VT_BTYPE) != VT_PTR &&
-                    (sbt & VT_BTYPE) != VT_FUNC) {
+                    (sbt & VT_BTYPE) != VT_FUNC && !nocode_wanted) {
                     /* need to convert from 32bit to 64bit */
                     gv(RC_INT);
                     if (sbt != (VT_INT | VT_UNSIGNED)) {
@@ -2115,7 +2115,7 @@ static void gen_cast(CType *type)
                 force_charshort_cast(dbt);
             } else if ((dbt & VT_BTYPE) == VT_INT) {
                 /* scalar to int */
-                if (sbt == VT_LLONG) {
+                if (sbt == VT_LLONG && !nocode_wanted) {
                     /* from long long: just take low order word */
                     lexpand();
                     vpop();
@@ -2614,15 +2614,15 @@ ST_FUNC void vstore(void)
         vpop();
 
     } else {
-#ifdef CONFIG_TCC_BCHECK
-        /* bound check case */
-        if (vtop[-1].r & VT_MUSTBOUND) {
-            vswap();
-            gbound();
-            vswap();
-        }
-#endif
         if (!nocode_wanted) {
+#ifdef CONFIG_TCC_BCHECK
+            /* bound check case */
+            if (vtop[-1].r & VT_MUSTBOUND) {
+                vswap();
+                gbound();
+                vswap();
+            }
+#endif
             rc = RC_INT;
             if (is_float(ft)) {
                 rc = RC_FLOAT;
@@ -2686,7 +2686,10 @@ ST_FUNC void inc(int post, int c)
     test_lvalue();
     vdup(); /* save lvalue */
     if (post) {
-        gv_dup(); /* duplicate value */
+        if (!nocode_wanted)
+            gv_dup(); /* duplicate value */
+        else
+            vdup(); /* duplicate value */
         vrotb(3);
         vrotb(3);
     }
@@ -3773,6 +3776,8 @@ ST_FUNC void unary(void)
                 gen_cast(&type);
             }
         } else if (tok == '{') {
+            if (nocode_wanted)
+                tcc_error("statement expression in global scope");
             /* save all registers */
             save_regs(0); 
             /* statement expression : we do not accept break/continue
@@ -3813,10 +3818,12 @@ ST_FUNC void unary(void)
             vtop->c.i = !vtop->c.i;
         } else if ((vtop->r & VT_VALMASK) == VT_CMP)
             vtop->c.i = vtop->c.i ^ 1;
-        else {
+        else if (!nocode_wanted) {
             save_regs(1);
             vseti(VT_JMP, gvtst(1, 0));
         }
+        else
+            vtop--;
         break;
     case '~':
         next();
@@ -3954,6 +3961,8 @@ ST_FUNC void unary(void)
 
 #ifdef TCC_TARGET_ARM64
     case TOK___va_start: {
+        if (!nocode_wanted)
+            tcc_error("statement in global scope");
         next();
         skip('(');
         expr_eq();
@@ -3967,6 +3976,8 @@ ST_FUNC void unary(void)
         break;
     }
     case TOK___va_arg: {
+        if (!nocode_wanted)
+            tcc_error("statement in global scope");
         CType type;
         next();
         skip('(');
@@ -3992,7 +4003,7 @@ ST_FUNC void unary(void)
         break;
     }
 #endif
-
+    /* pre operations */
     case TOK_INC:
     case TOK_DEC:
         t = tok;
