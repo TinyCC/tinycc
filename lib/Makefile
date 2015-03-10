@@ -25,7 +25,6 @@ ifndef TARGET # native library
  else
  ifeq ($(ARCH),arm64)
   TARGET = arm64
-  XCC = $(CC)
  else
  endif
  endif
