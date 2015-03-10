@@ -3961,7 +3961,7 @@ ST_FUNC void unary(void)
 
 #ifdef TCC_TARGET_ARM64
     case TOK___va_start: {
-        if (!nocode_wanted)
+        if (nocode_wanted)
             tcc_error("statement in global scope");
         next();
         skip('(');
@@ -3976,7 +3976,7 @@ ST_FUNC void unary(void)
         break;
     }
     case TOK___va_arg: {
-        if (!nocode_wanted)
+        if (nocode_wanted)
             tcc_error("statement in global scope");
         CType type;
         next();
