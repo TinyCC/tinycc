@@ -21,9 +21,11 @@ ifndef TARGET # native library
  else
  ifeq ($(ARCH),arm)
   TARGET = arm
+  XCC = $(CC)
  else
  ifeq ($(ARCH),arm64)
   TARGET = arm64
+  XCC = $(CC)
  else
  endif
  endif
