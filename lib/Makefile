@@ -108,12 +108,10 @@ ifeq ($(TARGETOS),Darwin)
  BCHECK_O =
 endif
 
-ifdef XAR
-AR = $(XAR)
-endif
+XAR ?= $(AR)
 
 $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
-	$(AR) rcs $@ $(OBJ)
+	$(XAR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%.o : %.S

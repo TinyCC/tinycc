@@ -137,7 +137,7 @@ LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$($(X64_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/x86_64/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
