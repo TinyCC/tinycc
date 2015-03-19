@@ -1155,7 +1155,7 @@ ST_FUNC void free_defines(Sym *b)
     define_stack = b;
 }
 
-void print_defines(void)
+ST_FUNC void print_defines(void)
 {
     Sym *top, *s;
     int v;

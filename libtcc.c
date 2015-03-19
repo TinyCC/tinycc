@@ -1338,6 +1338,8 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
+    if (output_type == TCC_OUTPUT_PREPROCESS)
+	print_defines();
 
     if (!s->nostdinc) {
         /* default include paths */

@@ -309,8 +309,6 @@ int main(int argc, char **argv)
         start_time = getclock_us();
 
     tcc_set_output_type(s, s->output_type);
-    if (s->output_type == TCC_OUTPUT_PREPROCESS)
-	print_defines();
 
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
