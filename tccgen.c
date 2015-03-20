@@ -3776,8 +3776,12 @@ ST_FUNC void unary(void)
                 gen_cast(&type);
             }
         } else if (tok == '{') {
+    	    /*
             if (nocode_wanted)
-                tcc_error("statement expression in global scope");
+                tcc_error("statement expression in global scope"); */
+	    /* this check breaks compilation of the linux 2.4.26 with the meesage:
+	       linux/include/net/tcp.h:945: error: statement expression in global scope */
+
             /* save all registers */
             save_regs(0); 
             /* statement expression : we do not accept break/continue
