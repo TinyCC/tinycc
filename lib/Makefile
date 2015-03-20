@@ -125,4 +125,4 @@ $(DIR)/exists :
 	@echo $@ > $@
 
 clean :
-	rm -rfv i386-win x86_64-win i386 x86_64
+	rm -rfv i386-win x86_64-win i386 x86_64 arm64

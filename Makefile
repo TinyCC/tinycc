@@ -137,12 +137,14 @@ LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$($(X64_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/x86_64/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a \
+    lib/arm64/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK)  $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a \
+    lib/arm64/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
@@ -296,11 +298,12 @@ endif
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/32"
 	mkdir -p "$(tccdir)/win32/lib/64"
-ifneq ($(ARCH),i386)
 	mkdir -p "$(tccdir)/i386"
+	mkdir -p "$(tccdir)/x86_64"
+	mkdir -p "$(tccdir)/arm64"
+	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
-	cp -r "$(tccdir)/include" "$(tccdir)/i386"
-endif
+	$(INSTALL) -m644 lib/x86_64/libtcc1.a "$(tccdir)/x86_64"
 	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win/libtcc1.a "$(tccdir)/win32/lib/32"
 	$(INSTALL) -m644 lib/x86_64-win/libtcc1.a "$(tccdir)/win32/lib/64"
@@ -366,7 +369,7 @@ export LIBTCC1
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
 		*.exe a.out tags TAGS libtcc_test$(EXESUF) tcc$(EXESUF)
-	-rm -r $(ARCH)
+	-rm -r $(ARCH) arm64
 	-rm *-tcc$(EXESUF)
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
