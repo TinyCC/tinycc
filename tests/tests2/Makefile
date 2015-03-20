@@ -111,6 +111,9 @@ ifdef CONFIG_WIN32
  SKIP += 24_math_library.test # don't have round()
  SKIP += 28_strings.test # don't have r/index() / strings.h
 endif
+ifeq ($(ARCH),x86-64)
+ SKIP += 73_arm64.test
+endif
 
 # Some tests might need arguments
 ARGS =
