@@ -179,7 +179,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF): tcc.c
-	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
+	$(CC) -o $@ $< -DONE_SOURCE $(if $($@_TCC),$(NATIVE_DEFINES),$(DEFINES)) $(CPPFLAGS) $(CFLAGS) $(LIBS) $(LDFLAGS)
 	$(if $($@_LINK),ln -sf $@ $($@_LINK))
 	$(if $($@_TCC),ln -sf $@ tcc$(EXESUF))
 
