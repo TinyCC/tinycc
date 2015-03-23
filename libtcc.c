@@ -540,7 +540,7 @@ ST_FUNC void put_extern_sym(Sym *sym, Section *section,
 
 /* add a new relocation entry to symbol 'sym' in section 's' */
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
-                     unsigned long addend)
+                     addr_t addend)
 {
     int c = 0;
     if (sym) {
