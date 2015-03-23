@@ -5546,33 +5546,26 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             s->c = array_length;
     } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
                (sec || !first || tok == '{')) {
-        int par_count;
 
         /* NOTE: the previous test is a specific case for automatic
            struct/union init */
         /* XXX: union needs only one init */
 
-        /* XXX: this test is incorrect for local initializers
-           beginning with ( without {. It would be much more difficult
-           to do it correctly (ideally, the expression parser should
-           be used in all cases) */
-        par_count = 0;
         if (tok == '(') {
             AttributeDef ad1;
             CType type1;
             next();
-            while (tok == '(') {
-                par_count++;
-                next();
-            }
-            if (!parse_btype(&type1, &ad1))
-                expect("cast");
-            type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
+            if (tok != '(') {
+        	if (!parse_btype(&type1, &ad1))
+            	    expect("cast");
+        	type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
 #if 0
-            if (!is_assignable_types(type, &type1))
-                tcc_error("invalid type for cast");
+        	if (!is_assignable_types(type, &type1))
+            	    tcc_error("invalid type for cast");
 #endif
-            skip(')');
+        	skip(')');
+    	    } else
+		unget_tok(tok);
         }
         no_oblock = 1;
         if (first || tok == '{') {
@@ -5646,10 +5639,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         if (!no_oblock)
             skip('}');
-        while (par_count) {
-            skip(')');
-            par_count--;
-        }
     } else if (tok == '{') {
         next();
         decl_initializer(type, sec, c, first, size_only);
