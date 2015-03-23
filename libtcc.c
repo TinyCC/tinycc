@@ -1662,6 +1662,7 @@ enum {
     TCC_OPTION_b,
     TCC_OPTION_g,
     TCC_OPTION_c,
+    TCC_OPTION_dumpversion,
     TCC_OPTION_d,
     TCC_OPTION_float_abi,
     TCC_OPTION_static,
@@ -1691,7 +1692,6 @@ enum {
     TCC_OPTION_MD,
     TCC_OPTION_MF,
     TCC_OPTION_x,
-    TCC_OPTION_dumpversion,
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
@@ -1717,6 +1717,7 @@ static const TCCOption tcc_options[] = {
 #endif
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
+    { "dumpversion", TCC_OPTION_dumpversion, 0},
     { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
 #ifdef TCC_TARGET_ARM
     { "mfloat-abi", TCC_OPTION_float_abi, TCC_OPTION_HAS_ARG },
@@ -1748,7 +1749,6 @@ static const TCCOption tcc_options[] = {
     { "MD", TCC_OPTION_MD, 0},
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
-    { "dumpversion", TCC_OPTION_dumpversion, 0},
     { NULL, 0, 0 },
 };
 
