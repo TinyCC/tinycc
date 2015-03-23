@@ -927,7 +927,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 	{
             long long diff;
             diff = (long long)val - addr;
-            if (diff <= -2147483647 || diff > 2147483647) {
+            if (diff < -2147483648 || diff > 2147483647) {
                 tcc_error("internal error: relocation failed");
             }
             *(int *)ptr += diff;
