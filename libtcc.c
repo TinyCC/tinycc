@@ -388,7 +388,7 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
 
 /* reserve at least 'size' bytes in section 'sec' from
    sec->data_offset. */
-ST_FUNC void *section_ptr_add(Section *sec, size_t size)
+ST_FUNC void *section_ptr_add(Section *sec, addr_t size)
 {
     size_t offset, offset1;
 
