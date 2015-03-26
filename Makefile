@@ -140,6 +140,7 @@ PROGS_CROSS=$($(X64_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a \
     lib/arm64/libtcc1.a
 LIBTCC1=libtcc1.a
+BCHECK=yes
 else ifeq ($(ARCH),x86-64)
 NATIVE_FILES=$(X86_64_FILES)
 PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK)  $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
@@ -284,6 +285,10 @@ ifneq ($(LIBTCC1),)
 	mkdir -p "$(tccdir)/$(ARCH)"
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)/$(ARCH)"
 endif
+ifneq ($(BCHECK),)
+	-mkdir -p "$(tccdir)/$(ARCH)"
+	$(INSTALL) -m644 lib/$(ARCH)/bcheck.o "$(tccdir)/$(ARCH)"
+endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
@@ -303,6 +308,7 @@ ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
+	$(INSTALL) -m644 lib/i386/bcheck.o "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/x86_64/libtcc1.a "$(tccdir)/x86-64"
 	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win/libtcc1.a "$(tccdir)/win32/lib/32"
