@@ -1568,7 +1568,7 @@ static int tcc_add_support(TCCState *s1, const char *filename)
 ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
-    unsigned long *ptr;
+    addr_t *ptr;
     Section *init_section;
     unsigned char *pinit;
     int sym_index;

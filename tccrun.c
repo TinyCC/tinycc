@@ -110,7 +110,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
-        void (*bound_new_region)(void *p, unsigned long size);
+        void (*bound_new_region)(void *p, addr_t size);
         int  (*bound_delete_region)(void *p);
         int i;
 

@@ -99,7 +99,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 #ifdef CONFIG_TCC_BCHECK
-static unsigned long func_bound_offset;
+static addr_t func_bound_offset;
 #endif
 
 /* XXX: make it faster ? */
@@ -587,16 +587,16 @@ ST_FUNC void gfunc_prolog(CType *func_type)
 /* generate function epilog */
 ST_FUNC void gfunc_epilog(void)
 {
-    int v, saved_ind;
+    addr_t v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check
      && func_bound_offset != lbounds_section->data_offset) {
-        int saved_ind;
-        int *bounds_ptr;
+        addr_t saved_ind;
+        addr_t *bounds_ptr;
         Sym *sym_data;
         /* add end of table info */
-        bounds_ptr = section_ptr_add(lbounds_section, sizeof(int));
+        bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
         *bounds_ptr = 0;
         /* generate bound local allocation */
         saved_ind = ind;
@@ -1058,8 +1058,8 @@ ST_FUNC void gen_bounded_ptr_add(void)
    also tested */
 ST_FUNC void gen_bounded_ptr_deref(void)
 {
-    int func;
-    int size, align;
+    addr_t func;
+    addr_t size, align;
     Elf32_Rel *rel;
     Sym *sym;
 

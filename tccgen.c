@@ -5781,11 +5781,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
         if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
-            unsigned long *bounds_ptr;
+            addr_t *bounds_ptr;
             /* add padding between regions */
             loc--;
             /* then add local bound info */
-            bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(unsigned long));
+            bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
             bounds_ptr[0] = addr;
             bounds_ptr[1] = size;
         }
@@ -5892,11 +5892,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds now because the symbol must be defined
            before for the relocation */
         if (tcc_state->do_bounds_check) {
-            unsigned long *bounds_ptr;
+            addr_t *bounds_ptr;
 
             greloc(bounds_section, sym, bounds_section->data_offset, R_DATA_PTR);
             /* then add global bound info */
-            bounds_ptr = section_ptr_add(bounds_section, 2 * sizeof(long));
+            bounds_ptr = section_ptr_add(bounds_section, 2 * sizeof(addr_t));
             bounds_ptr[0] = 0; /* relocated */
             bounds_ptr[1] = size;
         }
