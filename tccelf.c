@@ -1589,10 +1589,13 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
         pinit = section_ptr_add(init_section, 5);
         pinit[0] = 0xe8;
         put32(pinit + 1, -4);
-	tcc_add_support(s1, "bcheck.o");
 	sym_index = find_elf_sym(symtab_section, "__bound_init");
-	if (!sym_index)
-	    tcc_error("__bound_init not defined");
+	if (!sym_index) {
+	    tcc_add_support(s1, "bcheck.o");
+	    sym_index = find_elf_sym(symtab_section, "__bound_init");
+	    if (!sym_index) 
+		tcc_error("__bound_init not defined");
+	}
         put_elf_reloc(symtab_section, init_section,
                       init_section->data_offset - 4, R_386_PC32, sym_index);
     }
