@@ -81,7 +81,7 @@ void __bound_new_region(void *p, size_t size);
 int __bound_delete_region(void *p);
 
 #ifdef __attribute__
-  /* __attribute__ is redifened in system headers */
+  /* an __attribute__ macro is defined in the system headers */
   #undef __attribute__ 
 #endif
 #define FASTCALL __attribute__((regparm(3)))

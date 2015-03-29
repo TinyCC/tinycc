@@ -462,8 +462,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     if (!sym->c) {
         name = get_tok_str(sym->v, NULL);
 #ifdef CONFIG_TCC_BCHECK
-        char buf[32];
         if (tcc_state->do_bounds_check) {
+    	    char buf[32];
             /* XXX: avoid doing that for statics ? */
             /* if bound checking is activated, we change some function
                names by adding the "__bound" prefix */
