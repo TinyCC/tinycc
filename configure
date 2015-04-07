@@ -50,7 +50,7 @@ cpu=
 host_os=Linux
 
 # OS specific
-targetos=`uname -s`
+targetos=`uname`
 case $targetos in
   MINGW32*)  mingw32=yes; host_os=Windows; ;;
   DragonFly) noldl=yes;;
