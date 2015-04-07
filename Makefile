@@ -312,7 +312,7 @@ ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/64"
 	mkdir -p "$(tccdir)/i386"
 	mkdir -p "$(tccdir)/x86-64"
-ifneq ($(TARGETOS),Darwin)
+ifneq ($(HOST_OS),Darwin)
 	mkdir -p "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
 endif
