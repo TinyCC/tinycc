@@ -315,9 +315,9 @@ ifdef CONFIG_CROSS
 ifneq ($(HOST_OS),Darwin)
 	mkdir -p "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
+	$(INSTALL) -m644 lib/i386/bcheck.o "$(tccdir)/i386"
 endif
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
-	$(INSTALL) -m644 lib/i386/bcheck.o "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/x86_64/libtcc1.a "$(tccdir)/x86-64"
 	$(INSTALL) -m644 $(top_srcdir)/win32/lib/*.def "$(tccdir)/win32/lib"
 	$(INSTALL) -m644 lib/i386-win/libtcc1.a "$(tccdir)/win32/lib/32"
