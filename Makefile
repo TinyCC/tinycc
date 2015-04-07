@@ -142,11 +142,18 @@ LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 LIBTCC1=libtcc1.a
 BCHECK=yes
 else ifeq ($(ARCH),x86-64)
+ifeq ($(TARGETOS),Darwin)
 NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK)  $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a
+LIBTCC1=libtcc1.a
+else
+NATIVE_FILES=$(X86_64_FILES)
+PROGS_CROSS=$($(I386_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $(ARM_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a \
     lib/arm64/libtcc1.a
 LIBTCC1=libtcc1.a
+endif
 else ifeq ($(ARCH),arm)
 NATIVE_FILES=$(ARM_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
@@ -305,8 +312,10 @@ ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/64"
 	mkdir -p "$(tccdir)/i386"
 	mkdir -p "$(tccdir)/x86-64"
+ifneq ($(TARGETOS),Darwin)
 	mkdir -p "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
+endif
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/i386/bcheck.o "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/x86_64/libtcc1.a "$(tccdir)/x86-64"

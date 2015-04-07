@@ -47,7 +47,7 @@ tcc_elfinterp=""
 tcc_lddir=
 confvars=
 cpu=
-host_os=Linux
+host_os=`uname`
 
 # OS specific
 targetos=`uname`
