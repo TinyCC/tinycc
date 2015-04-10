@@ -2959,8 +2959,17 @@ static void struct_decl(CType *type, int u, int tdef)
                     type1 = btype;
                     if (tok != ':') {
                         type_decl(&type1, &ad, &v, TYPE_DIRECT | TYPE_ABSTRACT);
-                        if (v == 0 && (type1.t & VT_BTYPE) != VT_STRUCT)
-                            expect("identifier");
+                        if (v == 0) {
+                    	    if ((type1.t & VT_BTYPE) != VT_STRUCT)
+                        	expect("identifier");
+                    	    else {
+				int v = btype.ref->v;
+				if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+				    if (tcc_state->ms_extensions == 0)
+                        		expect("identifier");
+				}
+                    	    }
+                        }
                         if (type_size(&type1, &align) < 0) {
 			    if ((a == TOK_STRUCT) && (type1.t & VT_ARRAY) && c)
 			        flexible = 1;
@@ -6121,7 +6130,11 @@ static int decl0(int l, int is_for_loop_init)
         if (((btype.t & VT_BTYPE) == VT_ENUM ||
              (btype.t & VT_BTYPE) == VT_STRUCT) && 
             tok == ';') {
-            /* we accept no variable after */
+	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
+		int v = btype.ref->v;
+		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
+        	    tcc_warning("unnamed struct/union that defines no instances");
+	    }
             next();
             continue;
         }

@@ -602,6 +602,7 @@ struct TCCState {
     /* C language options */
     int char_is_unsigned;
     int leading_underscore;
+    int ms_extensions;		/* allow nested named struct w/o identifier behave like unnamed */
     
     /* warning switches */
     int warn_write_strings;

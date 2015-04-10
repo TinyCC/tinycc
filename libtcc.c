@@ -1463,6 +1463,7 @@ static const FlagDef flag_defs[] = {
     { offsetof(TCCState, char_is_unsigned), FD_INVERT, "signed-char" },
     { offsetof(TCCState, nocommon), FD_INVERT, "common" },
     { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
+    { offsetof(TCCState, ms_extensions), 0, "ms-extensions" },
 };
 
 /* set/reset a flag */
