@@ -1146,10 +1146,13 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     if (ext[0])
         ext++;
 
+    parse_flags = 0;
 #ifdef CONFIG_TCC_ASM
     /* if .S file, define __ASSEMBLER__ like gcc does */
-    if (!strcmp(ext, "S"))
+    if (!strcmp(ext, "S") || !strcmp(ext, "s")) {
         tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
+        parse_flags = PARSE_FLAG_ASM_FILE;
+    }
 #endif
 
     /* open the file */
