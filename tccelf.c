@@ -2689,18 +2689,14 @@ static int elf_output_file(TCCState *s1, const char *filename)
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
     if (s1->do_strip) {
-	const char *strip = "sstrip "; // super strip utility from ELFkickers
-	const char *null = " 2> /dev/null";
-	int len = strlen(strip) + strlen(filename) + strlen(null) + 1;
-	{
-	    int rc;
-	    char buf[len];
-	    sprintf(buf, "%s%s%s", strip, filename, null);
-	    rc = system(buf);
-	    if (rc) {
-		system(buf+1);	// call a strip utility from binutils
-	    }
-	}
+	int rc;
+	const char *strip_cmd = "sstrip "; // super strip utility from ELFkickers
+	const char *null_dev = " 2> /dev/null";
+	char buf[1050];
+	snprintf(buf, sizeof(buf), "%s%s%s", strip_cmd, filename, null_dev);
+	rc = system(buf);
+	if (rc)
+	    system(buf+1);	// call a strip utility from binutils
     }
  the_end:
     tcc_free(s1->symtab_to_dynsym);
