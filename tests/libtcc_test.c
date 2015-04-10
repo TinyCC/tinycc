@@ -16,6 +16,8 @@ int add(int a, int b)
 }
 
 char my_program[] =
+"#include <stdio.h> // printf()\n"
+"extern int add(int a, int b);\n"
 "int fib(int n)\n"
 "{\n"
 "    if (n <= 2)\n"

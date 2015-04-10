@@ -39,6 +39,7 @@ int getchar(void);
 char *gets(char *s);
 int ungetc(int c, FILE *stream);
 int fflush(FILE *stream);
+int putchar (int c);
 
 int printf(const char *format, ...);
 int fprintf(FILE *stream, const char *format, ...);
@@ -64,6 +65,7 @@ void *memcpy(void *dest, const void *src, size_t n);
 void *memmove(void *dest, const void *src, size_t n);
 void *memset(void *s, int c, size_t n);
 char *strdup(const char *s);
+size_t strlen(const char *s);
 
 /* dlfcn.h */
 #define RTLD_LAZY       0x001
