@@ -47,7 +47,12 @@ tcc_elfinterp=""
 tcc_lddir=
 confvars=
 cpu=
+
 host_os=`uname`
+case $host_os in
+  MINGW32*)  host_os=Windows; ;;
+  *) ;;
+esac
 
 # OS specific
 targetos=`uname`
@@ -170,13 +175,13 @@ for opt do
   ;;
   --enable-gprof) gprof="yes"
   ;;
-  --enable-mingw32) mingw32="yes" ; cross_prefix="i686-pc-mingw32-" ; cpu=x86
+  --enable-mingw32) mingw32="yes" ; cross_prefix="i686-pc-mingw32-" ; cpu=x86; targetos=Windows;
   ;;
-  --enable-cygwin) mingw32="yes" ; cygwin="yes" ; cross_prefix="mingw32-" ; cpu=x86
+  --enable-cygwin) mingw32="yes" ; cygwin="yes" ; cross_prefix="mingw32-" ; cpu=x86; targetos=Windows;
   ;;
-  --enable-tcc32-mingw) mingw32="yes" ; cross_prefix="i386-win-" ; cpu=x86; cc=tcc
+  --enable-tcc32-mingw) mingw32="yes" ; cross_prefix="i386-win-" ; cpu=x86; cc=tcc; targetos=Windows;
   ;;
-  --enable-tcc64-mingw) mingw32="yes" ; cross_prefix="x86_64-win-" ; cpu=x86_64; cc=tcc
+  --enable-tcc64-mingw) mingw32="yes" ; cross_prefix="x86_64-win-" ; cpu=x86_64; cc=tcc; targetos=Windows;
   ;;
   --enable-cross) build_cross="yes"
   ;;
@@ -210,7 +215,7 @@ classify_cpu "$cpu"
 
 # Checking for CFLAGS
 if test -z "$CFLAGS"; then
-    CFLAGS="-Wall -g -O2"
+    CFLAGS="-Wall -g -O0"
 fi
 
 if test "$mingw32" = "yes" ; then

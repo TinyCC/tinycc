@@ -1390,6 +1390,17 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_crt(s, "crti.o");
     }
 #endif
+
+#ifdef CONFIG_TCC_BCHECK
+    if (s->do_bounds_check && (output_type == TCC_OUTPUT_EXE))
+    {
+	/* XXX force a bcheck.o linking by compiling a function with a local array.
+	Otherwise bcheck.o may be not linked. */
+	
+        if (tcc_compile_string(s, "static void __bound_check_dummy_func(){int v[1];}") == -1)
+    	    tcc_warning("compiling __bound_check_dummy_func failed");
+    }
+#endif
     return 0;
 }
 

@@ -1569,9 +1569,6 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
     addr_t *ptr;
-    Section *init_section;
-    unsigned char *pinit;
-    int sym_index;
 
     if (0 == s1->do_bounds_check)
         return;
@@ -1585,19 +1582,23 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 #ifdef TCC_TARGET_I386
     if (s1->output_type != TCC_OUTPUT_MEMORY) {
         /* add 'call __bound_init()' in .init section */
-        init_section = find_section(s1, ".init");
-        pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        put32(pinit + 1, -4);
-	sym_index = find_elf_sym(symtab_section, "__bound_init");
-	if (!sym_index) {
-	    tcc_add_support(s1, "bcheck.o");
-	    sym_index = find_elf_sym(symtab_section, "__bound_init");
-	    if (!sym_index) 
-		tcc_error("__bound_init not defined");
-	}
-        put_elf_reloc(symtab_section, init_section,
+
+        /* XXX not called on MSYS, reason is unknown. For this
+           case a call to __bound_init is performed in bcheck.c
+           when __bound_ptr_add, __bound_new_region,
+           __bound_delete_region called */
+
+	int sym_index = find_elf_sym(symtab_section, "__bound_init");
+	if (sym_index) {
+    	    Section *init_section = find_section(s1, ".init");
+    	    unsigned char *pinit = section_ptr_add(init_section, 5);
+    	    pinit[0] = 0xe8;
+    	    put32(pinit + 1, -4);
+    	    put_elf_reloc(symtab_section, init_section,
                       init_section->data_offset - 4, R_386_PC32, sym_index);
+	}
+	else
+    	    tcc_warning("__bound_init not defined");
     }
 #endif
 #endif

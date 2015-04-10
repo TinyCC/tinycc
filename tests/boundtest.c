@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #define NB_ITS 1000000
 //#define NB_ITS 1

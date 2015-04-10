@@ -150,6 +150,7 @@ static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
 static void bound_error(const char *fmt, ...)
 {
     __bound_error_msg = fmt;
+    fprintf(stderr,"%s %s: %s\n", __FILE__, __FUNCTION__, fmt);
     *(int *)0 = 0; /* force a runtime error */
 }
 
@@ -164,6 +165,9 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
 {
     size_t addr = (size_t)p;
     BoundEntry *e;
+
+    __bound_init();
+
 #if defined(BOUND_DEBUG)
     printf("%s %s: 0x%x %d\n", __FILE__, __FUNCTION__, (int)p, offset);
 #endif
@@ -179,9 +183,7 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
     }
     addr += offset;
     if (addr >= e->size) {
-	#if defined(BOUND_DEBUG)
-	    printf("%s %s: 0x%zx is outside of the region\n", __FILE__, __FUNCTION__, p + offset);
-	#endif
+	fprintf(stderr,"%s %s: %p is outside of the region\n", __FILE__, __FUNCTION__, p + offset);
         return INVALID_POINTER; /* return an invalid pointer */
     }
     return p + offset;
@@ -195,6 +197,7 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)     \
     size_t addr = (size_t)p;                                            \
     BoundEntry *e;                                                      \
                                                                         \
+    __bound_init();							\
     e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];            \
     e = (BoundEntry *)((char *)e +                                      \
                        ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) &      \
@@ -205,8 +208,10 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)     \
         addr = (size_t)p - e->start;                                    \
     }                                                                   \
     addr += offset + dsize;                                             \
-    if (addr > e->size)                                                 \
+    if (addr > e->size) {                                               \
+	fprintf(stderr,"%s %s: %p is outside of the region\n", __FILE__, __FUNCTION__, p + offset); \
         return INVALID_POINTER; /* return an invalid pointer */         \
+    }									\
     return p + offset;                                                  \
 }
 
@@ -228,7 +233,7 @@ void FASTCALL __bound_local_new(void *p1)
 {
     size_t addr, size, fp, *p = p1;
 #ifdef BOUND_DEBUG
-    fprintf(stderr, "%s, %s start p1=%zx *p1=%zx\n", __FILE__, __FUNCTION__, p, *p);
+    fprintf(stderr, "%s, %s start p1=%p *p1=%p\n", __FILE__, __FUNCTION__, p, *p);
 #endif
     GET_CALLER_FP(fp);
     for(;;) {
@@ -364,6 +369,12 @@ void __bound_init(void)
     size_t start, size;
     size_t *p;
 
+    static int inited;
+    if (inited)
+	return;
+
+    inited = 1;
+
 #ifdef BOUND_DEBUG
     fprintf(stderr, "%s, %s() start\n", __FILE__, __FUNCTION__);
 #endif
@@ -444,7 +455,7 @@ void __bound_main_arg(void **p)
     void *start = p;
     while (*p++);
 #ifdef BOUND_DEBUG
-	fprintf(stderr, "%s, %s calling __bound_new_region(%p, %llx)\n", 
+	fprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, (void *) p - start);
 #endif
     __bound_new_region(start, (void *) p - start);
@@ -482,8 +493,10 @@ void __bound_new_region(void *p, size_t size)
     BoundEntry *page, *e, *e2;
     size_t t1_start, t1_end, i, t2_start, t2_end;
 
+    __bound_init();
+
 #ifdef BOUND_DEBUG
-    fprintf(stderr, "%s, %s(%p, %zx) start\n", 
+    fprintf(stderr, "%s, %s(%p, %p) start\n", 
            __FILE__, __FUNCTION__, p, size);
 #endif
 
@@ -594,6 +607,8 @@ int __bound_delete_region(void *p)
     size_t start, end, addr, size, empty_size;
     BoundEntry *page, *e, *e2;
     size_t t1_start, t1_end, t2_start, t2_end, i;
+
+    __bound_init();
 
 #ifdef BOUND_DEBUG
     fprintf(stderr, "%s %s() start\n", __FILE__, __FUNCTION__);
@@ -757,7 +772,7 @@ void *__bound_malloc(size_t size, const void *caller)
         return NULL;
 
 #ifdef BOUND_DEBUG
-    fprintf(stderr, "%s, %s calling __bound_new_region(%p, %llx)\n", 
+    fprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, ptr, size);
 #endif
     __bound_new_region(ptr, size);
@@ -791,7 +806,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
         return NULL;
 
 #ifdef BOUND_DEBUG
-    fprintf(stderr, "%s, %s calling __bound_new_region(%p, %llx)\n", 
+    fprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, ptr, size);
 #endif
     __bound_new_region(ptr, size);

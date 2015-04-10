@@ -89,7 +89,7 @@ $(ARM_FPA_LD_CROSS)_LINK = arm-fpa-ld-tcc$(EXESUF)
 $(ARM_VFP_CROSS)_LINK = arm-vfp-tcc$(EXESUF)
 $(ARM_EABI_CROSS)_LINK = arm-eabi-tcc$(EXESUF)
 
-ifeq ($(HOST_OS),Windows)
+ifeq ($(TARGETOS),Windows)
 ifeq ($(ARCH),i386)
 PROGS:=$($(WIN32_CROSS)_LINK)
 $($(WIN32_CROSS)_LINK)_TCC = yes
@@ -100,7 +100,7 @@ $($(WIN64_CROSS)_LINK)_TCC = yes
 endif
 endif
 
-ifeq ($(HOST_OS),Linux)
+ifeq ($(TARGETOS),Linux)
 ifeq ($(ARCH),i386)
 PROGS:=$($(I386_CROSS)_LINK)
 $($(I386_CROSS)_LINK)_TCC = yes
@@ -140,7 +140,6 @@ PROGS_CROSS=$($(X64_CROSS)_LINK) $($(WIN32_CROSS)_LINK) $($(WIN64_CROSS)_LINK) $
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a lib/x86_64/libtcc1.a \
     lib/arm64/libtcc1.a
 LIBTCC1=libtcc1.a
-BCHECK=yes
 else ifeq ($(ARCH),x86-64)
 ifeq ($(TARGETOS),Darwin)
 NATIVE_FILES=$(X86_64_FILES)
@@ -292,10 +291,6 @@ ifneq ($(LIBTCC1),)
 	mkdir -p "$(tccdir)/$(ARCH)"
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)/$(ARCH)"
 endif
-ifneq ($(BCHECK),)
-	-mkdir -p "$(tccdir)/$(ARCH)"
-	$(INSTALL) -m644 lib/$(ARCH)/bcheck.o "$(tccdir)/$(ARCH)"
-endif
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
@@ -315,7 +310,6 @@ ifdef CONFIG_CROSS
 ifneq ($(HOST_OS),Darwin)
 	mkdir -p "$(tccdir)/arm64"
 	$(INSTALL) -m644 lib/arm64/libtcc1.a "$(tccdir)/arm64"
-	$(INSTALL) -m644 lib/i386/bcheck.o "$(tccdir)/i386"
 endif
 	$(INSTALL) -m644 lib/i386/libtcc1.a "$(tccdir)/i386"
 	$(INSTALL) -m644 lib/x86_64/libtcc1.a "$(tccdir)/x86-64"
@@ -346,13 +340,14 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
 	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
+	$(INSTALLBIN) -m755 tcc.exe "$(tccdir)"
 	$(INSTALL) -m644 $(LIBTCC1) $(top_srcdir)/win32/lib/*.def "$(tccdir)/lib"
 	cp -r $(top_srcdir)/win32/include/. "$(tccdir)/include"
 	cp -r $(top_srcdir)/win32/examples/. "$(tccdir)/examples"
 	$(INSTALL) -m644 $(addprefix $(top_srcdir)/include/,$(TCC_INCLUDES)) $(top_srcdir)/tcclib.h "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html $(top_srcdir)/win32/tcc-win32.txt "$(tccdir)/doc"
 	$(INSTALL) -m644 $(top_srcdir)/libtcc.h $(LIBTCC_EXTRA) "$(tccdir)/libtcc"
-	$(INSTALL) -m644 $(LIBTCC) $(tccdir)
+	$(INSTALL) -m644 $(LIBTCC) "$(tccdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"
@@ -385,6 +380,9 @@ clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
 		*.exe a.out tags TAGS libtcc_test$(EXESUF) tcc$(EXESUF)
 	-rm -r $(ARCH) arm64
+ifeq ($(HOST_OS),Linux)
+	-rm -r ./C:
+endif
 	-rm *-tcc$(EXESUF)
 	$(MAKE) -C tests $@
 ifneq ($(LIBTCC1),)
