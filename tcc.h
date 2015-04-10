@@ -603,6 +603,8 @@ struct TCCState {
     int char_is_unsigned;
     int leading_underscore;
     int ms_extensions;		/* allow nested named struct w/o identifier behave like unnamed */
+    int old_struct_init_code;	/* use old algorithm to init array in struct when there is no '{' used.
+				   Liuux 2.4.26 can't find initrd when compiled with a new algorithm */
     
     /* warning switches */
     int warn_write_strings;
