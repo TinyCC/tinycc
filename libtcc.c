@@ -1177,13 +1177,13 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
 #ifdef CONFIG_TCC_ASM
     if (!strcmp(ext, "S")) {
-        /* preprocessed assembler */
+        /* non preprocessed assembler */
         ret = tcc_assemble(s1, 1);
         goto the_end;
     }
 
     if (!strcmp(ext, "s")) {
-        /* non preprocessed assembler */
+        /* preprocessed assembler */
         ret = tcc_assemble(s1, 0);
         goto the_end;
     }

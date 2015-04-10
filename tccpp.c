@@ -24,20 +24,7 @@
 /* global variables */
 
 ST_DATA int tok_flags;
-/* additional informations about token */
-#define TOK_FLAG_BOL   0x0001 /* beginning of line before */
-#define TOK_FLAG_BOF   0x0002 /* beginning of file before */
-#define TOK_FLAG_ENDIF 0x0004 /* a endif was found matching starting #ifdef */
-#define TOK_FLAG_EOF   0x0008 /* end of file */
-
 ST_DATA int parse_flags;
-#define PARSE_FLAG_PREPROCESS 0x0001 /* activate preprocessing */
-#define PARSE_FLAG_TOK_NUM    0x0002 /* return numbers instead of TOK_PPNUM */
-#define PARSE_FLAG_LINEFEED   0x0004 /* line feed is returned as a
-                                        token. line feed is also
-                                        returned at eof */
-#define PARSE_FLAG_ASM_COMMENTS 0x0008 /* '#' can be used for line comment */
-#define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
 
 ST_DATA struct BufferedFile *file;
 ST_DATA int ch, tok;
@@ -792,6 +779,8 @@ redo_start:
                     in_warn_or_error = 1;
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
+                else if (parse_flags & PARSE_FLAG_ASM_COMMENTS)
+            	    p = parse_line_comment(p);
             }
             break;
 _default:
@@ -1443,6 +1432,7 @@ ST_FUNC void preprocess(int is_bof)
     saved_parse_flags = parse_flags;
     parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | 
         PARSE_FLAG_LINEFEED;
+    parse_flags |= (saved_parse_flags & PARSE_FLAG_ASM_COMMENTS);
     next_nomacro();
  redo:
     switch(tok) {
@@ -1679,11 +1669,17 @@ include_done:
             char *p = tokc.cstr->data;
     	    tokc.i = strtoul(p, (char **)&p, 10);
 	}
-        file->line_num = tokc.i - 1; /* the line number will be incremented after */
+        i = file->line_num;
+        file->line_num = tokc.i - 1;
         next();
         if (tok != TOK_LINEFEED) {
-            if (tok != TOK_STR)
-                tcc_error("#line");
+            if (tok != TOK_STR) {
+        	if ((parse_flags & PARSE_FLAG_ASM_COMMENTS) == 0) {
+    		    file->line_num = i;
+            	    tcc_error("#line format is wrong");
+            	}
+            	break;
+            }
             pstrcpy(file->filename, sizeof(file->filename), 
                     (char *)tokc.cstr->data);
         }
@@ -1719,7 +1715,7 @@ include_done:
             /* '!' is ignored to allow C scripts. numbers are ignored
                to emulate cpp behaviour */
         } else {
-            if (!(saved_parse_flags & PARSE_FLAG_ASM_COMMENTS))
+            if (!(parse_flags & PARSE_FLAG_ASM_COMMENTS))
                 tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
             else {
                 /* this is a gas line comment in an 'S' file. */
