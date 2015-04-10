@@ -2020,6 +2020,7 @@ static void alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
                 s->sh_size = s->data_offset;
         } else if (s1->do_debug ||
             file_type == TCC_OUTPUT_OBJ ||
+            file_type == TCC_OUTPUT_EXE ||
             (s->sh_flags & SHF_ALLOC) ||
             i == (s1->nb_sections - 1)) {
             /* we output all sections if debug or object file */
