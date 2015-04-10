@@ -708,7 +708,7 @@ static void gbound(void)
             lval_type = vtop->r & (VT_LVAL_TYPE | VT_LVAL);
             /* must save type because we must set it to int to get pointer */
             type1 = vtop->type;
-            vtop->type.t = VT_INT;
+            vtop->type.t = VT_PTR;
             gaddrof();
             vpushi(0);
             gen_bounded_ptr_add();
@@ -1752,7 +1752,22 @@ ST_FUNC void gen_op(int op)
 #endif
             }
             gen_op('*');
-#ifdef CONFIG_TCC_BCHECK
+#if 0
+/* #ifdef CONFIG_TCC_BCHECK
+    The main reason to removing this code:
+	#include <stdio.h>
+	int main ()
+	{
+	    int v[10];
+	    int i = 10;
+	    int j = 9;
+	    fprintf(stderr, "v+i-j  = %p\n", v+i-j);
+	    fprintf(stderr, "v+(i-j)  = %p\n", v+(i-j));
+	}
+    When this code is on. then the output looks like 
+	v+i-j = 0xfffffffe
+	v+(i-j) = 0xbff84000
+    */
             /* if evaluating constant expression, no code should be
                generated, so no bound check */
             if (tcc_state->do_bounds_check && !const_wanted) {

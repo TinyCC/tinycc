@@ -625,6 +625,90 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
+#if defined(CONFIG_TCC_BCHECK)
+#ifndef TCC_TARGET_PE
+static addr_t func_bound_offset;
+static unsigned long func_bound_ind;
+#endif
+
+static void gen_static_call(int v)
+{
+    Sym *sym = external_global_sym(v, &func_old_type, 0);
+    oad(0xe8, -4);
+    greloc(cur_text_section, sym, ind-4, R_X86_64_PC32);
+}
+
+/* generate a bounded pointer addition */
+ST_FUNC void gen_bounded_ptr_add(void)
+{
+    /* save all temporary registers */
+    save_regs(0);
+
+    /* prepare fast x86_64 function call */
+    gv(RC_RAX);
+    o(0xc68948); // mov  %rax,%rsi ## second arg in %rsi, this must be size
+    vtop--;
+
+    gv(RC_RAX);
+    o(0xc78948); // mov  %rax,%rdi ## first arg in %rdi, this must be ptr
+    vtop--;
+
+    /* do a fast function call */
+    gen_static_call(TOK___bound_ptr_add);
+
+    /* returned pointer is in rax */
+    vtop++;
+    vtop->r = TREG_RAX | VT_BOUNDED;
+
+
+    /* relocation offset of the bounding function call point */
+    vtop->c.ull = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela))); 
+}
+
+/* patch pointer addition in vtop so that pointer dereferencing is
+   also tested */
+ST_FUNC void gen_bounded_ptr_deref(void)
+{
+    addr_t func;
+    int size, align;
+    ElfW(Rela) *rel;
+    Sym *sym;
+
+    size = 0;
+    /* XXX: put that code in generic part of tcc */
+    if (!is_float(vtop->type.t)) {
+        if (vtop->r & VT_LVAL_BYTE)
+            size = 1;
+        else if (vtop->r & VT_LVAL_SHORT)
+            size = 2;
+    }
+    if (!size)
+    size = type_size(&vtop->type, &align);
+    switch(size) {
+    case  1: func = TOK___bound_ptr_indir1; break;
+    case  2: func = TOK___bound_ptr_indir2; break;
+    case  4: func = TOK___bound_ptr_indir4; break;
+    case  8: func = TOK___bound_ptr_indir8; break;
+    case 12: func = TOK___bound_ptr_indir12; break;
+    case 16: func = TOK___bound_ptr_indir16; break;
+    default:
+        tcc_error("unhandled size when dereferencing bounded pointer");
+        func = 0;
+        break;
+    }
+
+    sym = external_global_sym(func, &func_old_type, 0);
+    if (!sym->c)
+        put_extern_sym(sym, NULL, 0, 0);
+
+    /* patch relocation */
+    /* XXX: find a better solution ? */
+
+    rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.ull);
+    rel->r_info = ELF64_R_INFO(sym->c, ELF64_R_TYPE(rel->r_info));
+}
+#endif
+
 #ifdef TCC_TARGET_PE
 
 #define REGN 4
@@ -1520,6 +1604,17 @@ void gfunc_prolog(CType *func_type)
         sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, param_addr);
     }
+
+#ifdef CONFIG_TCC_BCHECK
+    /* leave some room for bound checking code */
+    if (tcc_state->do_bounds_check) {
+        func_bound_offset = lbounds_section->data_offset;
+        func_bound_ind = ind;
+        oad(0xb8, 0); /* lbound section pointer */
+	o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
+	oad(0xb8, 0); /* call to function */
+    }
+#endif
 }
 
 /* generate function epilog */
@@ -1527,6 +1622,37 @@ void gfunc_epilog(void)
 {
     int v, saved_ind;
 
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check
+	&& func_bound_offset != lbounds_section->data_offset)
+    {
+        addr_t saved_ind;
+        addr_t *bounds_ptr;
+        Sym *sym_data;
+
+        /* add end of table info */
+        bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
+        *bounds_ptr = 0;
+
+        /* generate bound local allocation */
+        sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
+                               func_bound_offset, lbounds_section->data_offset);
+        saved_ind = ind;
+        ind = func_bound_ind;
+        greloc(cur_text_section, sym_data, ind + 1, R_386_32);
+        ind = ind + 5 + 3;
+        gen_static_call(TOK___bound_local_new);
+        ind = saved_ind;
+
+        /* generate bound check local freeing */
+        o(0x5250); /* save returned value, if any */
+        greloc(cur_text_section, sym_data, ind + 1, R_386_32);
+        oad(0xb8, 0); /* mov xxx, %rax */
+	o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
+        gen_static_call(TOK___bound_local_delete);
+        o(0x585a); /* restore returned value, if any */
+    }
+#endif
     o(0xc9); /* leave */
     if (func_ret_sub == 0) {
         o(0xc3); /* ret */
