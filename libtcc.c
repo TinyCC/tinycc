@@ -434,7 +434,10 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
     ElfW(Sym) *esym;
     const char *name;
     char buf1[256];
+
+#ifdef CONFIG_TCC_BCHECK
     char buf[32];
+#endif
 
     if (section == NULL)
         sh_num = SHN_UNDEF;
@@ -1397,11 +1400,11 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #ifdef CONFIG_TCC_BCHECK
     if (s->do_bounds_check && (output_type == TCC_OUTPUT_EXE))
     {
-	/* XXX force a bcheck.o linking by compiling a function with a local array.
-	Otherwise bcheck.o may be not linked. */
-	
-        if (tcc_compile_string(s, "static void __bound_check_dummy_func(){int v[1];}") == -1)
-    	    tcc_warning("compiling __bound_check_dummy_func failed");
+        /* force a bcheck.o linking */
+        addr_t func = TOK___bound_init;
+        Sym *sym = external_global_sym(func, &func_old_type, 0);
+        if (!sym->c)
+            put_extern_sym(sym, NULL, 0, 0);
     }
 #endif
     return 0;
