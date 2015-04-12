@@ -312,9 +312,8 @@ int main(int argc, char **argv)
 
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
-        const char *filename;
-
-        filename = s->files[i];
+        int filetype = *(unsigned char *)s->files[i];
+        const char *filename = s->files[i] + 1;
         if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
                 tcc_error_noabort("cannot find '%s'", filename);
@@ -323,7 +322,7 @@ int main(int argc, char **argv)
         } else {
             if (1 == s->verbose)
                 printf("-> %s\n", filename);
-            if (tcc_add_file(s, filename) < 0)
+            if (tcc_add_file(s, filename, filetype) < 0)
                 ret = 1;
             if (!first_file)
                 first_file = filename;

@@ -1115,7 +1115,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
 
-ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
+ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags, int filetype);
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 

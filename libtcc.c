@@ -1138,21 +1138,15 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
     return 0;
 }
 
-ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
+ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags, int filetype)
 {
-    const char *ext;
     ElfW(Ehdr) ehdr;
     int fd, ret, size;
-
-    /* find source file type with extension */
-    ext = tcc_fileextension(filename);
-    if (ext[0])
-        ext++;
 
     parse_flags = 0;
 #ifdef CONFIG_TCC_ASM
     /* if .S file, define __ASSEMBLER__ like gcc does */
-    if (!strcmp(ext, "S") || !strcmp(ext, "s")) {
+    if ((filetype == TCC_FILETYPE_ASM) || (filetype == TCC_FILETYPE_ASM_PP)) {
         tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
         parse_flags = PARSE_FLAG_ASM_FILE;
     }
@@ -1175,20 +1169,20 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         goto the_end;
     }
 
-    if (!ext[0] || !PATHCMP(ext, "c") || !PATHCMP(ext, "i")) {
+    if (filetype == TCC_FILETYPE_C) {
         /* C file assumed */
         ret = tcc_compile(s1);
         goto the_end;
     }
 
 #ifdef CONFIG_TCC_ASM
-    if (!strcmp(ext, "S")) {
+    if (filetype == TCC_FILETYPE_ASM_PP) {
         /* non preprocessed assembler */
         ret = tcc_assemble(s1, 1);
         goto the_end;
     }
 
-    if (!strcmp(ext, "s")) {
+    if (filetype == TCC_FILETYPE_ASM) {
         /* preprocessed assembler */
         ret = tcc_assemble(s1, 0);
         goto the_end;
@@ -1264,12 +1258,12 @@ the_end:
     return ret;
 }
 
-LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
+LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename, int filetype)
 {
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
-        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS);
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS, filetype);
     else
-        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR);
+        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR, filetype);
 }
 
 LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
@@ -1286,7 +1280,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
 
     for(i = 0; i < nb_paths; i++) {
         snprintf(buf, sizeof(buf), fmt, paths[i], filename);
-        if (tcc_add_file_internal(s, buf, flags) == 0)
+        if (tcc_add_file_internal(s, buf, flags, TCC_FILETYPE_BINARY) == 0)
             return 0;
     }
     return -1;
@@ -1782,6 +1776,37 @@ static void parse_option_D(TCCState *s1, const char *optarg)
     tcc_free(sym);
 }
 
+static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
+{
+    int len = strlen(filename);
+    char *p = tcc_malloc(len + 2);
+    if (filetype) {
+        *p = filetype;
+    }
+    else {
+        /* use a file extension to detect a filetype */
+        const char *ext = tcc_fileextension(filename);
+        if (ext[0]) {
+            ext++;
+            if (!strcmp(ext, "S"))
+                *p = TCC_FILETYPE_ASM_PP;
+            else
+            if (!strcmp(ext, "s"))
+                *p = TCC_FILETYPE_ASM;
+            else
+            if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
+                *p = TCC_FILETYPE_C;
+            else
+                *p = TCC_FILETYPE_BINARY;
+        }
+        else {
+            *p = TCC_FILETYPE_C;
+        }
+    }
+    strcpy(p+1, filename);
+    dynarray_add((void ***)&s->files, &s->nb_files, p);
+}
+
 PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
 {
     const TCCOption *popt;
@@ -1789,6 +1814,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     int run = 0;
     int pthread = 0;
     int optind = 0;
+    int filetype = 0;
 
     /* collect -Wl options for input such as "-Wl,-rpath -Wl,<path>" */
     CString linker_arg;
@@ -1798,8 +1824,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
 
         r = argv[optind++];
         if (r[0] != '-' || r[1] == '\0') {
-            /* add a new file */
-            dynarray_add((void ***)&s->files, &s->nb_files, tcc_strdup(r));
+            args_parser_add_file(s, r, filetype);
             if (run) {
                 optind--;
                 /* argv[0] will be this file */
@@ -1849,7 +1874,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             tcc_set_lib_path(s, optarg);
             break;
         case TCC_OPTION_l:
-            dynarray_add((void ***)&s->files, &s->nb_files, tcc_strdup(r));
+            args_parser_add_file(s, r, TCC_FILETYPE_BINARY);
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
@@ -1989,10 +2014,21 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         case TCC_OPTION_s:
             s->do_strip = 1;
             break;
+        case TCC_OPTION_x:
+            if (*optarg == 'c')
+                filetype = TCC_FILETYPE_C;
+            else
+            if (*optarg == 'a')
+                filetype = TCC_FILETYPE_ASM_PP;
+            else
+            if (*optarg == 'n')
+                filetype = 0;
+            else
+                tcc_warning("unsupported language '%s'", optarg);
+            break;
         case TCC_OPTION_O:
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:
-        case TCC_OPTION_x:
             /* ignored */
             break;
         default:
