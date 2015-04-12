@@ -290,8 +290,9 @@ int main(int argc, char **argv)
         if (s->nb_libraries != 0)
             tcc_error("cannot specify libraries with -c");
         /* accepts only a single input file */
-        if (s->nb_files != 1)
-            tcc_error("cannot specify multiple files with -c");
+        if ((s->nb_files != 1) && s->outfile) {
+            tcc_error("cannot specify multiple files with -c and -o");
+        }
     }
     
     if (s->output_type == TCC_OUTPUT_PREPROCESS) {
@@ -324,6 +325,28 @@ int main(int argc, char **argv)
                 printf("-> %s\n", filename);
             if (tcc_add_file(s, filename, filetype) < 0)
                 ret = 1;
+            else
+            if (s->output_type == TCC_OUTPUT_OBJ) {
+                const char *outfile = s->outfile;
+                if (!outfile)
+                    outfile = default_outputfile(s, filename);
+                ret = !!tcc_output_file(s, outfile);
+                if (!ret) {
+                    /* dump collected dependencies */
+                    if (s->gen_deps)
+                        gen_makedeps(s, outfile, s->deps_outfile);
+                    if ((i+1) < s->nb_files) {
+                        tcc_delete(s);
+                        s = tcc_new();
+                        tcc_parse_args(s, argc - 1, argv + 1);
+                        tcc_set_environment(s);
+                        if (s->output_type != TCC_OUTPUT_OBJ)
+                            tcc_error("interlnal error");
+                        tcc_set_output_type(s, s->output_type);
+                    }
+                }
+            }
+            else
             if (!first_file)
                 first_file = filename;
         }
@@ -343,7 +366,7 @@ int main(int argc, char **argv)
         } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
              if (s->outfile)
                 fclose(s->ppfp);
-        } else {
+        } else if (s->output_type != TCC_OUTPUT_OBJ) {
             if (!s->outfile)
                 s->outfile = default_outputfile(s, first_file);
             ret = !!tcc_output_file(s, s->outfile);
