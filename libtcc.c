@@ -1482,6 +1482,7 @@ static const FlagDef flag_defs[] = {
     { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
     { offsetof(TCCState, ms_extensions), 0, "ms-extensions" },
     { offsetof(TCCState, old_struct_init_code), 0, "old-struct-init-code" },
+    { offsetof(TCCState, dollars_in_identifiers), 0, "dollars-in-identifiers" },
 };
 
 /* set/reset a flag */

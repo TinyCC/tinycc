@@ -241,6 +241,9 @@ Allow a MS C compiler extensions to the language. Curretly this
 assume a nested named structure declaration without identifier behave
 like an unnamed one.
 
+@item -fdollars-in-identifiers
+Allow a dollars in identifiers
+
 @end table
 
 Warning options:
