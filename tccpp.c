@@ -1420,7 +1420,34 @@ static void pragma_parse(TCCState *s1)
             *s1->pack_stack_ptr = val;
             skip(')');
         }
+    } else if (tok == TOK_comment) {
+        if (s1->ms_extensions) {
+            next();
+            skip('(');
+            if (tok == TOK_lib) {
+                next();
+                skip(',');
+                if (tok != TOK_STR) {
+                    tcc_error("invalid library specification");
+                } else {
+                    int len = strlen((char *)tokc.cstr->data);
+                    char *file = tcc_malloc(len + 4); /* filetype, "-l", and \0 at the end */
+                    file[0] = TCC_FILETYPE_BINARY;
+                    file[1] = '-';
+                    file[2] = 'l';
+                    strcpy(&file[3],(char *)tokc.cstr->data);
+                    dynarray_add((void ***)&s1->files, &s1->nb_files, file);
+                }
+                next();
+                tok = TOK_LINEFEED;
+            } else {
+                tcc_warning("unknown #pragma %s", get_tok_str(tok, &tokc));
+            }
+        } else {
+            tcc_warning("#pragma comment(lib) is ignored");
+        }
     }
+    
 }
 
 /* is_bof is true if first non space token at beginning of file */

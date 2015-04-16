@@ -829,13 +829,31 @@ static int tcc_compile(TCCState *s1)
 
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
 {
+    int i;
     int len, ret;
     len = strlen(str);
 
     tcc_open_bf(s, "<string>", len);
     memcpy(file->buffer, str, len);
+
+    len = s->nb_files;
     ret = tcc_compile(s);
     tcc_close();
+
+    /* habdle #pragma comment(lib,) */
+    for(i = len; i < s->nb_files; i++) {
+        /* int filetype = *(unsigned char *)s->files[i]; */
+        const char *filename = s->files[i] + 1;
+        if (filename[0] == '-' && filename[1] == 'l') {
+            if (tcc_add_library(s, filename + 2) < 0) {
+                tcc_warning("cannot find '%s'", filename+2);
+                ret++;
+            }
+        }
+        tcc_free(s->files[i]);
+    }
+    s->nb_files = len;
+
     return ret;
 }
 

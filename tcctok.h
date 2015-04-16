@@ -153,6 +153,8 @@
      DEF(TOK_ASM_push, "push")
      DEF(TOK_ASM_pop, "pop")
 #endif
+     DEF(TOK_comment, "comment")
+     DEF(TOK_lib, "lib")
 
 /* builtin functions or variables */
 #ifndef TCC_ARM_EABI
