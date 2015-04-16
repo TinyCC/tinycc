@@ -265,7 +265,7 @@ int main(int argc, char **argv)
     }
 
     if (s->output_type == 0)
-        s->output_type = TCC_OUTPUT_EXE;
+	s->output_type = TCC_OUTPUT_EXE;
 
     if (s->option_m)
         exec_other_tcc(s, argv, s->option_m);
@@ -317,7 +317,7 @@ int main(int argc, char **argv)
         const char *filename = s->files[i] + 1;
         if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
-                tcc_error_noabort("cannot find '%s'", filename+2);
+                tcc_error_noabort("cannot find '%s'", filename);
                 ret = 1;
             }
         } else {
