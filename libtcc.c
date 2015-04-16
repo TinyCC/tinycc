@@ -846,7 +846,7 @@ LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
         const char *filename = s->files[i] + 1;
         if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
-                tcc_warning("cannot find '%s'", filename+2);
+                tcc_warning("cannot find library 'lib%s'", filename+2);
                 ret++;
             }
         }

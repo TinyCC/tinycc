@@ -1441,13 +1441,12 @@ static void pragma_parse(TCCState *s1)
                 next();
                 tok = TOK_LINEFEED;
             } else {
-                tcc_warning("unknown #pragma %s", get_tok_str(tok, &tokc));
+                tcc_warning("unknown specifier '%s' in #pragma comment", get_tok_str(tok, &tokc));
             }
         } else {
             tcc_warning("#pragma comment(lib) is ignored");
         }
     }
-    
 }
 
 /* is_bof is true if first non space token at beginning of file */
