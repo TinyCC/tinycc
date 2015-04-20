@@ -94,8 +94,8 @@ TESTS =	\
  72_long_long_constant.test \
  73_arm64.test \
  74_nocode_wanted.test \
- 75_array_in_struct_init.test
-
+ 75_array_in_struct_init.test \
+ 76_dollars_in_identifiers.test
 
 # 34_array_assignment.test -- array assignment is not in C standard
 
@@ -121,15 +121,19 @@ ARGS =
 31_args.test : ARGS = arg1 arg2 arg3 arg4 arg5
 46_grep.test : ARGS = '[^* ]*[:a:d: ]+\:\*-/: $$' 46_grep.c
 
+# Some tests might need different flags
+FLAGS =
+76_dollars_in_identifiers.test : FLAGS = -fdollars-in-identifiers
+
 all test: $(filter-out $(SKIP),$(TESTS))
 
 %.test: %.c
 	@echo Test: $*...
 
-	@$(TCC) -run $< $(ARGS) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output || true
+	@$(TCC) -run $(FLAGS) $< $(ARGS) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output || true
 	@diff -Nbu $*.expect $*.output && rm -f $*.output
 
-	@($(TCC) $< -o $*.exe && ./$*.exe $(ARGS)) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output2 || true
+	@($(TCC) $(FLAGS) $< -o $*.exe && ./$*.exe $(ARGS)) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output2 || true
 	@diff -Nbu $*.expect $*.output2 && rm -f $*.output2 $*.exe
 
 clean:
