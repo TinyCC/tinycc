@@ -95,7 +95,8 @@ TESTS =	\
  73_arm64.test \
  74_nocode_wanted.test \
  75_array_in_struct_init.test \
- 76_dollars_in_identifiers.test
+ 76_dollars_in_identifiers.test \
+ 77_push_pop_macro.test
 
 # 34_array_assignment.test -- array assignment is not in C standard
 

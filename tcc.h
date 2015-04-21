@@ -326,6 +326,7 @@
 typedef struct TokenSym {
     struct TokenSym *hash_next;
     struct Sym *sym_define; /* direct pointer to define */
+    struct Sym *sym_define_stack; /* direct pointer to a push_macro stack */
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */

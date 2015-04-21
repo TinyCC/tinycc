@@ -222,6 +222,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     table_ident[i] = ts;
     ts->tok = tok_ident++;
     ts->sym_define = NULL;
+    ts->sym_define_stack = NULL;
     ts->sym_label = NULL;
     ts->sym_struct = NULL;
     ts->sym_identifier = NULL;
@@ -1446,6 +1447,39 @@ static void pragma_parse(TCCState *s1)
         } else {
             tcc_warning("#pragma comment(lib) is ignored");
         }
+    } else if ((tok == TOK_push_macro) || (tok == TOK_pop_macro)) {
+            int push_macro = (tok == TOK_push_macro);
+            next();
+            skip('(');
+            if (tok != TOK_STR) {
+                expect("\"");
+            } else {
+                int len = strlen((char *)tokc.cstr->data);
+                tcc_open_bf(s1, "<push_pop_macro>", len);
+                memcpy(file->buffer, tokc.cstr->data, len);
+                ch = file->buf_ptr[0];
+                next_nomacro();
+                if (tok >= TOK_IDENT) {
+                    Sym *s = table_ident[tok - TOK_IDENT]->sym_define;
+                    Sym *ss = table_ident[tok - TOK_IDENT]->sym_define_stack;
+                    if (push_macro) {
+                        if (s) {
+                            s->prev_tok = ss;
+                            table_ident[tok - TOK_IDENT]->sym_define_stack = s;
+                        }
+                    } else {
+                        if (ss) {
+                            table_ident[tok - TOK_IDENT]->sym_define = ss;
+                            table_ident[tok - TOK_IDENT]->sym_define_stack = ss->prev_tok;
+                        }
+                    }
+                }
+                tcc_close();
+            }
+            next();
+            skip(')');
+    } else {
+        tcc_warning("unknown #pragma %s", get_tok_str(tok, &tokc));
     }
 }
 
