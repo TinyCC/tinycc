@@ -600,7 +600,8 @@ void store(int r, SValue *v)
 static void gcall_or_jmp(int is_jmp)
 {
     int r;
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
