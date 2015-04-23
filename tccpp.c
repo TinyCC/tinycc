@@ -1114,7 +1114,6 @@ ST_FUNC void define_undef(Sym *s)
 	define_print(s, 1);
         table_ident[v - TOK_IDENT]->sym_define = NULL;
     }
-    s->v = 0;
 }
 
 ST_INLN Sym *define_find(int v)
@@ -1378,9 +1377,7 @@ static inline void add_cached_include(TCCState *s1, const char *filename, int if
 
 static void pragma_parse(TCCState *s1)
 {
-    int val;
-
-    next();
+    next_nomacro();
     if (tok == TOK_pack) {
         /*
           This may be:
@@ -1399,7 +1396,7 @@ static void pragma_parse(TCCState *s1)
             }
             s1->pack_stack_ptr--;
         } else {
-            val = 0;
+            int val = 0;
             if (tok != ')') {
                 if (tok == TOK_ASM_push) {
                     next();
@@ -1408,18 +1405,17 @@ static void pragma_parse(TCCState *s1)
                     s1->pack_stack_ptr++;
                     skip(',');
                 }
-                if (tok != TOK_CINT) {
-                pack_error:
-                    tcc_error("invalid pack pragma");
-                }
+                if (tok != TOK_CINT)
+                    goto pragma_err;
                 val = tokc.i;
                 if (val < 1 || val > 16 || (val & (val - 1)) != 0)
-                    goto pack_error;
+                    goto pragma_err;
                 next();
             }
             *s1->pack_stack_ptr = val;
-            skip(')');
         }
+        if (tok != ')')
+            goto pragma_err;
     } else if (tok == TOK_comment) {
         if (s1->ms_extensions) {
             next();
@@ -1446,11 +1442,40 @@ static void pragma_parse(TCCState *s1)
         } else {
             tcc_warning("#pragma comment(lib) is ignored");
         }
+    } else if (tok == TOK_push_macro || tok == TOK_pop_macro) {
+        int t = tok, v;
+        Sym *s;
+
+        if (next_nomacro(), tok != '(')
+            goto pragma_err;
+        if (next_nomacro(), tok != TOK_STR)
+            goto pragma_err;
+        v = tok_alloc(tokc.cstr->data, tokc.cstr->size - 1)->tok;
+        if (next_nomacro(), tok != ')')
+            goto pragma_err;
+        if (t == TOK_push_macro) {
+            while (NULL == (s = define_find(v)))
+                define_push(v, 0, NULL, NULL);
+            s->type.ref = s; /* set push boundary */
+        } else {
+            for (s = define_stack; s; s = s->prev)
+                if (s->v == v && s->type.ref == s) {
+                    s->type.ref = NULL;
+                    break;
+                }
+        }
+        if (s)
+            table_ident[v - TOK_IDENT]->sym_define = s->d ? s : NULL;
+        else
+            tcc_warning("unbalanced #pragma pop_macro");
     } else if (tok == TOK_once) {
         add_cached_include(s1, file->filename, TOK_once);
     } else {
         tcc_warning("unknown #pragma %s", get_tok_str(tok, &tokc));
     }
+    return;
+pragma_err:
+    tcc_error("malformed #pragma directive");
 }
 
 /* is_bof is true if first non space token at beginning of file */
