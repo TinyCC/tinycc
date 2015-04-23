@@ -155,8 +155,6 @@
 #endif
      DEF(TOK_comment, "comment")
      DEF(TOK_lib, "lib")
-     DEF(TOK_push_macro, "push_macro")
-     DEF(TOK_pop_macro, "pop_macro")
      DEF(TOK_once, "once")
 
 /* builtin functions or variables */

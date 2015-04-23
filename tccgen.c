@@ -152,6 +152,7 @@ static inline Sym *sym_malloc(void)
 ST_INLN void sym_free(Sym *sym)
 {
     sym->next = sym_free_first;
+    tcc_free(sym->asm_label);
     sym_free_first = sym;
 }
 
