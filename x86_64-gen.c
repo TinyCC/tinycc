@@ -1568,7 +1568,6 @@ void gfunc_prolog(CType *func_type)
                 addr = (addr + align - 1) & -align;
                 param_addr = addr;
                 addr += size;
-                sse_param_index += reg_count;
             }
             break;
             
@@ -1592,7 +1591,6 @@ void gfunc_prolog(CType *func_type)
                 addr = (addr + align - 1) & -align;
                 param_addr = addr;
                 addr += size;
-                reg_param_index += reg_count;
             }
             break;
         }
