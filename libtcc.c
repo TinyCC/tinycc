@@ -1166,7 +1166,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags,
     /* if .S file, define __ASSEMBLER__ like gcc does */
     if ((filetype == TCC_FILETYPE_ASM) || (filetype == TCC_FILETYPE_ASM_PP)) {
         tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
-        parse_flags = PARSE_FLAG_ASM_FILE;
+        parse_flags = PARSE_FLAG_ASM_FILE | PARSE_FLAG_ASM_COMMENTS;
     }
 #endif
 
