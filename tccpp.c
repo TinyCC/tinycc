@@ -1060,7 +1060,7 @@ static void define_print(Sym *s, int is_undef)
     }
 
     if (is_undef) {
-	fprintf(tcc_state->ppfp, "// #undef %s\n", get_tok_str(s->v, NULL));
+        fprintf(tcc_state->ppfp, "// #undef %s", get_tok_str(s->v, NULL));
 	return;
     }
 
@@ -1086,7 +1086,6 @@ static void define_print(Sym *s, int is_undef)
             break;
         fprintf(tcc_state->ppfp, "%s", get_tok_str(t, &cval));
     }
-    fprintf(tcc_state->ppfp, "\n");
 }
 
 /* defines handling */
@@ -1468,6 +1467,21 @@ static void pragma_parse(TCCState *s1)
             table_ident[v - TOK_IDENT]->sym_define = s->d ? s : NULL;
         else
             tcc_warning("unbalanced #pragma pop_macro");
+
+        /* print info when tcc is called with "-E -dD" switches */
+        if (s1->dflag && s1->ppfp) {
+            if (file) {
+                int c = file->line_num - file->line_ref - 1;
+                if (c > 0) {
+                    while (c--)
+                    fputs("\n", tcc_state->ppfp);
+                    file->line_ref = file->line_num;
+                }
+            }
+            fprintf(s1->ppfp, "// #pragma %s_macro(\"%s\")",
+                (t == TOK_push_macro) ? "push" : "pop",
+                get_tok_str(v, NULL));
+        }
     } else if (tok == TOK_once) {
         add_cached_include(s1, file->filename, TOK_once);
     } else {
