@@ -4794,6 +4794,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
     } else if (tok == TOK_WHILE) {
         next();
         d = ind;
+        if (vla_flags & VLA_IN_SCOPE) {
+          gen_vla_sp_restore(*vla_sp_loc);
+          vla_flags |= VLA_NEED_NEW_FRAME;
+        }
         skip('(');
         gexpr();
         skip(')');
@@ -4958,6 +4962,13 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         /* compute jump */
         if (!csym)
             tcc_error("cannot continue");
+        if (vla_flags & VLA_IN_SCOPE) {
+          /* If VLAs are in use, save the current stack pointer and
+             reset the stack pointer to what it was at function entry
+             (label will restore stack pointer in inner scopes) */
+          vla_sp_save();
+          gen_vla_sp_restore(vla_sp_root_loc);
+        }
         *csym = gjmp(*csym);
         next();
         skip(';');
@@ -4980,6 +4991,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip(';');
         d = ind;
         c = ind;
+        if (vla_flags & VLA_IN_SCOPE) {
+          gen_vla_sp_restore(*vla_sp_loc);
+          vla_flags |= VLA_NEED_NEW_FRAME;
+        }
         a = 0;
         b = 0;
         if (tok != ';') {
@@ -4990,6 +5005,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         if (tok != ')') {
             e = gjmp(0);
             c = ind;
+            if (vla_flags & VLA_IN_SCOPE) {
+              gen_vla_sp_restore(*vla_sp_loc);
+              vla_flags |= VLA_NEED_NEW_FRAME;
+            }
             gexpr();
             vpop();
             gjmp_addr(d);
@@ -5008,6 +5027,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         a = 0;
         b = 0;
         d = ind;
+        if (vla_flags & VLA_IN_SCOPE) {
+          gen_vla_sp_restore(*vla_sp_loc);
+          vla_flags |= VLA_NEED_NEW_FRAME;
+        }
         block(&a, &b, case_sym, def_sym, case_reg, 0);
         skip(TOK_WHILE);
         skip('(');
