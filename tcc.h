@@ -1150,9 +1150,8 @@ ST_DATA TokenSym **table_ident;
 #define PARSE_FLAG_LINEFEED   0x0004 /* line feed is returned as a
                                         token. line feed is also
                                         returned at eof */
-#define PARSE_FLAG_ASM_COMMENTS 0x0008 /* '#' can be used for line comment */
+#define PARSE_FLAG_ASM_FILE 0x0008 /* we processing an asm file: '#' can be used for line comment, etc. */
 #define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
-#define PARSE_FLAG_ASM_FILE 0x0020 /* we processing an asm file */
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC char *get_tok_str(int v, CValue *cv);

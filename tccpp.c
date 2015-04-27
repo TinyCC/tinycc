@@ -779,7 +779,7 @@ redo_start:
                     in_warn_or_error = 1;
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
-                else if (parse_flags & PARSE_FLAG_ASM_COMMENTS)
+                else if (parse_flags & PARSE_FLAG_ASM_FILE)
             	    p = parse_line_comment(p);
             }
             else if (parse_flags & PARSE_FLAG_ASM_FILE)
@@ -1503,7 +1503,7 @@ ST_FUNC void preprocess(int is_bof)
     saved_parse_flags = parse_flags;
     parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | 
         PARSE_FLAG_LINEFEED;
-    parse_flags |= (saved_parse_flags & (PARSE_FLAG_ASM_FILE | PARSE_FLAG_ASM_COMMENTS));
+    parse_flags |= (saved_parse_flags & PARSE_FLAG_ASM_FILE);
     next_nomacro();
  redo:
     switch(tok) {
@@ -1745,7 +1745,7 @@ include_done:
         next();
         if (tok != TOK_LINEFEED) {
             if (tok != TOK_STR) {
-        	if ((parse_flags & PARSE_FLAG_ASM_COMMENTS) == 0) {
+        	if ((parse_flags & PARSE_FLAG_ASM_FILE) == 0) {
     		    file->line_num = i;
             	    tcc_error("#line format is wrong");
             	}
@@ -1786,7 +1786,7 @@ include_done:
             /* '!' is ignored to allow C scripts. numbers are ignored
                to emulate cpp behaviour */
         } else {
-            if (!(parse_flags & PARSE_FLAG_ASM_COMMENTS))
+            if (!(parse_flags & PARSE_FLAG_ASM_FILE))
                 tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
             else {
                 /* this is a gas line comment in an 'S' file. */
@@ -2346,7 +2346,7 @@ maybe_newline:
                 p++;
                 tok = TOK_TWOSHARPS;
             } else {
-                if (parse_flags & PARSE_FLAG_ASM_COMMENTS) {
+                if (parse_flags & PARSE_FLAG_ASM_FILE) {
                     p = parse_line_comment(p - 1);
                     goto redo_no_start;
                 } else {
@@ -2477,7 +2477,7 @@ maybe_newline:
         } else if (c == '.') {
             PEEKC(c, p);
             if (c != '.') {
-        	if ((parse_flags & PARSE_FLAG_ASM_COMMENTS) == 0)
+        	if ((parse_flags & PARSE_FLAG_ASM_FILE) == 0)
             	    expect("'.'");
         	tok = '.';
         	break;
@@ -3304,7 +3304,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     preprocess_init(s1);
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-    parse_flags &= (PARSE_FLAG_ASM_FILE | PARSE_FLAG_ASM_COMMENTS);
+    parse_flags &= PARSE_FLAG_ASM_FILE;
     parse_flags |= PARSE_FLAG_PREPROCESS | PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
     token_seen = 0;
     file->line_ref = 0;
