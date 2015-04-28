@@ -81,12 +81,36 @@ void test4()
   }
 }
 
+void test5()
+{
+  int count = 10;
+  int a[f()];
+  int c[f()];
+
+  c[0] = 42;
+
+  for(;count--;) {
+    int b[f()];
+    int i;
+    for (i=0; i<f(); i++) {
+      b[i] = count;
+    }
+  }
+
+  if (c[0] == 42) {
+    printf("OK\n");
+  } else {
+    printf("NOT OK\n");
+  }
+}
+
 int main(void)
 {
   test1();
   test2();
   test3();
   test4();
+  test5();
 
   return 0;
 }
