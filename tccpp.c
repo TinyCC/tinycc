@@ -2888,7 +2888,7 @@ static int macro_subst_tok(TokenString *tok_str,
                     goto redo;
                 }
             } else {
-                ch = file->buf_ptr[0];
+                ch = tcc_peekc_slow(file);
                 while (is_space(ch) || ch == '\n' || ch == '/')
 		  {
 		    if (ch == '/')
