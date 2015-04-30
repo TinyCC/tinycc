@@ -386,7 +386,7 @@ static int tcc_peekc_slow(BufferedFile *bf)
     if (bf->buf_ptr >= bf->buf_end) {
         if (bf->fd != -1) {
 #if defined(PARSE_DEBUG)
-            len = 8;
+            len = 1;
 #else
             len = IO_BUF_SIZE;
 #endif
