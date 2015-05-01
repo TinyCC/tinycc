@@ -2742,7 +2742,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 spc = 0;
                 while (*st) {
                     TOK_GET(&t, &st, &cval);
-                    if (!check_space(t, &spc))
+                    if (t != TOK_PLCHLDR && !check_space(t, &spc))
                         cstr_cat(&cstr, get_tok_str(t, &cval));
                 }
                 cstr.size -= spc;
