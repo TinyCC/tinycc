@@ -2977,6 +2977,8 @@ static int macro_subst_tok(TokenString *tok_str,
                         tok_str_add2(&str, tok, &tokc);
                     next_nomacro_spc();
                 }
+                if (parlevel)
+                    expect(")");
                 str.len -= spc;
                 if (str.len == 0)
                     tok_str_add(&str, TOK_PLCHLDR);
