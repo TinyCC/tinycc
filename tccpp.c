@@ -2889,7 +2889,8 @@ static int macro_subst_tok(TokenString *tok_str,
             if (macro_ptr) {
                 p = macro_ptr;
                 while (is_space(t = *p) || TOK_LINEFEED == t) {
-                    tok_str_add(&ws_str, t);
+                    if (saved_parse_flags & PARSE_FLAG_SPACES)
+                        tok_str_add(&ws_str, t);
                     ++p;
                 }
                 if (t == 0 && can_read_stream) {
