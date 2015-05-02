@@ -1254,6 +1254,7 @@ ST_FUNC void parse_define(void)
 {
     Sym *s, *first, **ps;
     int v, t, varg, is_vaargs, spc, ptok, macro_list_start;
+    int saved_parse_flags;
     TokenString str;
 
     v = tok;
@@ -1295,6 +1296,8 @@ ST_FUNC void parse_define(void)
     /* EOF testing necessary for '-D' handling */
     ptok = 0;
     macro_list_start = 1;
+    saved_parse_flags = parse_flags;
+    parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         if (macro_list_start && spc == 2 && tok == TOK_TWOSHARPS)
             tcc_error("'##' invalid at start of macro");
@@ -1314,6 +1317,7 @@ ST_FUNC void parse_define(void)
     skip:
         next_nomacro_spc();
     }
+    parse_flags = saved_parse_flags;
     if (ptok == TOK_TWOSHARPS)
         tcc_error("'##' invalid at end of macro");
     if (spc == 1)
@@ -2729,6 +2733,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
     CValue cval;
     TokenString str;
     CString cstr;
+    CString cstr2;
 
     tok_str_new(&str);
     last_tok = 0;
@@ -2757,9 +2762,13 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 printf("stringize: %s\n", (char *)cstr.data);
 #endif
                 /* add string */
-                cval.cstr = &cstr;
-                tok_str_add2(&str, TOK_STR, &cval);
+                cstr_new(&cstr2);
+                /* emulate GCC behaviour and parse escapes in the token string */
+                parse_escape_string(&cstr2, cstr.data, 0);
                 cstr_free(&cstr);
+                cval.cstr = &cstr2;
+                tok_str_add2(&str, TOK_STR, &cval);
+                cstr_free(cval.cstr);
             } else {
                 tok_str_add2(&str, t, &cval);
             }
@@ -2868,6 +2877,9 @@ static int macro_subst_tok(TokenString *tok_str,
         tok_str_add2(tok_str, t1, &cval);
         cstr_free(&cstr);
     } else {
+        int saved_parse_flags = parse_flags;
+        parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
+
         mstr = s->d;
         mstr_allocated = 0;
         if (s->type.t == MACRO_FUNC) {
@@ -2915,9 +2927,12 @@ static int macro_subst_tok(TokenString *tok_str,
 		  }
                 t = ch;
             }
-            if (t != '(') /* no macro subst */
+            if (t != '(') {
+                /* no macro subst */
+                parse_flags = saved_parse_flags;
                 return -1;
-                    
+            }
+
             /* argument macro */
             next_nomacro();
             next_nomacro();
@@ -2986,6 +3001,7 @@ static int macro_subst_tok(TokenString *tok_str,
             mstr_allocated = 1;
         }
         sym_push2(nested_list, s->v, 0, 0);
+        parse_flags = saved_parse_flags;
         macro_subst(tok_str, nested_list, mstr, can_read_stream);
         /* pop nested defined symbol */
         sa1 = *nested_list;
@@ -3107,6 +3123,9 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
         TOK_GET(&t, &ptr, &cval);
         if (t == 0)
             break;
+        if (t == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS)) {
+            tcc_error("stray '\\' in program");
+        }
         if (t == TOK_NOSUBST) {
             /* following token has already been subst'd. just copy it on */
             tok_str_add2(tok_str, TOK_NOSUBST, NULL);
