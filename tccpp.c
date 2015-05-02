@@ -3120,6 +3120,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             macro_ptr = (int *)ptr;
             tok = t;
             ret = macro_subst_tok(tok_str, nested_list, s, can_read_stream);
+            spc = tok_str->len && is_space(tok_str->str[tok_str->len-1]);
             ptr = (int *)macro_ptr;
             macro_ptr = ml.p;
             if (can_read_stream && *can_read_stream == &ml)
