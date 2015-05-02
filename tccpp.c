@@ -1296,7 +1296,7 @@ ST_FUNC void parse_define(void)
     ptok = 0;
     macro_list_start = 1;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
-        if (!macro_list_start && spc == 2 && tok == TOK_TWOSHARPS)
+        if (macro_list_start && spc == 2 && tok == TOK_TWOSHARPS)
             tcc_error("'##' invalid at start of macro");
         ptok = tok;
         /* remove spaces around ## and after '#' */
@@ -1310,9 +1310,9 @@ ST_FUNC void parse_define(void)
             goto skip;
         }
         tok_str_add2(&str, tok, &tokc);
+        macro_list_start = 0;
     skip:
         next_nomacro_spc();
-        macro_list_start = 0;
     }
     if (ptok == TOK_TWOSHARPS)
         tcc_error("'##' invalid at end of macro");
