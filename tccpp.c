@@ -2930,8 +2930,9 @@ static int macro_subst_tok(TokenString *tok_str,
                 /* NOTE: non zero sa->t indicates VA_ARGS */
                 while ((parlevel > 0 || 
                         (tok != ')' && 
-                         (tok != ',' || sa->type.t))) && 
-                       tok != -1) {
+                         (tok != ',' || sa->type.t)))) {
+                    if (tok == TOK_EOF || tok == 0)
+                        break;
                     if (tok == '(')
                         parlevel++;
                     else if (tok == ')')
