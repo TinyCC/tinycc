@@ -2877,19 +2877,26 @@ static int macro_subst_tok(TokenString *tok_str,
         tok_str_add2(tok_str, t1, &cval);
         cstr_free(&cstr);
     } else {
+        int mtok = tok;
         int saved_parse_flags = parse_flags;
         parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
 
         mstr = s->d;
         mstr_allocated = 0;
         if (s->type.t == MACRO_FUNC) {
+            TokenString ws_str; /* whitespace between macro name and
+                                 * argument list */
+            tok_str_new(&ws_str);
+            spc = 0;
             /* NOTE: we do not use next_nomacro to avoid eating the
                next token. XXX: find better solution */
         redo:
             if (macro_ptr) {
                 p = macro_ptr;
-                while (is_space(t = *p) || TOK_LINEFEED == t) 
+                while (is_space(t = *p) || TOK_LINEFEED == t) {
+                    tok_str_add(&ws_str, t);
                     ++p;
+                }
                 if (t == 0 && can_read_stream) {
                     /* end of macro stream: we must look at the token
                        after in the file */
@@ -2910,7 +2917,7 @@ static int macro_subst_tok(TokenString *tok_str,
                 while (is_space(ch) || ch == '\n' || ch == '/')
 		  {
 		    if (ch == '/')
-		      {
+		    {
 			int c;
 			uint8_t *p = file->buf_ptr;
 			PEEKC(c, p);
@@ -2921,18 +2928,29 @@ static int macro_subst_tok(TokenString *tok_str,
 			    p = parse_line_comment(p);
 			    file->buf_ptr = p - 1;
 			} else
-			  break;
-		      }
-		    cinp();
-		  }
+                            break;
+                        ch = ' ';
+                    }
+                    tok_str_add(&ws_str, ch);
+                    cinp();
+                }
                 t = ch;
             }
             if (t != '(') {
-                /* no macro subst */
+                /* not a macro substitution after all, restore the
+                 * macro token plus all whitespace we've read.
+                 * whitespace is intentionally not merged to preserve
+                 * newlines. */
+                int i;
+                tok_str_add(tok_str, mtok);
+                for(i=0; i<ws_str.len; i++)
+                    tok_str_add(tok_str, ws_str.str[i]);
+                tok_str_free(ws_str.str);
                 parse_flags = saved_parse_flags;
                 return -1;
+            } else {
+                tok_str_free(ws_str.str);
             }
-
             /* argument macro */
             next_nomacro();
             next_nomacro();
@@ -3101,7 +3119,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     Sym *s;
     int *macro_str1;
     const int *ptr;
-    int t, ret, spc;
+    int t, spc;
     CValue cval;
     struct macro_level ml;
     int force_blank;
@@ -3145,14 +3163,12 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
                 ml.prev = *can_read_stream, *can_read_stream = &ml;
             macro_ptr = (int *)ptr;
             tok = t;
-            ret = macro_subst_tok(tok_str, nested_list, s, can_read_stream);
+            macro_subst_tok(tok_str, nested_list, s, can_read_stream);
             spc = tok_str->len && is_space(tok_str->str[tok_str->len-1]);
             ptr = (int *)macro_ptr;
             macro_ptr = ml.p;
             if (can_read_stream && *can_read_stream == &ml)
                 *can_read_stream = ml.prev;
-            if (ret != 0)
-                goto no_subst;
             if (parse_flags & PARSE_FLAG_SPACES)
                 force_blank = 1;
         } else {
@@ -3199,6 +3215,13 @@ ST_FUNC void next(void)
                     macro_ptr = str.str;
                     macro_ptr_allocated = str.str;
                     goto redo;
+                } else {
+                    tok_str_add(&str, 0);
+                    if (str.len > 1) {
+                        macro_ptr = str.str + 1;
+                        macro_ptr_allocated = str.str;
+                    }
+                    tok = str.str[0];
                 }
             }
         }
