@@ -2271,7 +2271,13 @@ static inline void next_nomacro1(void)
         } else {
             file->buf_ptr = p;
             ch = *p;
-            handle_stray();
+            if (parse_flags & PARSE_FLAG_ACCEPT_STRAYS) {
+                if (handle_stray_noerror() != 0) {
+                    goto parse_simple;
+                }
+            } else {
+                handle_stray();
+            }
             p = file->buf_ptr;
             goto redo_no_start;
         }
@@ -3307,7 +3313,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags &= PARSE_FLAG_ASM_FILE;
-    parse_flags |= PARSE_FLAG_PREPROCESS | PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES;
+    parse_flags |= PARSE_FLAG_PREPROCESS | PARSE_FLAG_LINEFEED | PARSE_FLAG_SPACES | PARSE_FLAG_ACCEPT_STRAYS;
     token_seen = 0;
     file->line_ref = 0;
     file_ref = NULL;

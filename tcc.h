@@ -1152,6 +1152,7 @@ ST_DATA TokenSym **table_ident;
                                         returned at eof */
 #define PARSE_FLAG_ASM_FILE 0x0008 /* we processing an asm file: '#' can be used for line comment, etc. */
 #define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
+#define PARSE_FLAG_ACCEPT_STRAYS 0x0020 /* next() returns '\\' token */
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC char *get_tok_str(int v, CValue *cv);
