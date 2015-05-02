@@ -2890,7 +2890,7 @@ static int macro_subst_tok(TokenString *tok_str,
                 p = macro_ptr;
                 while (is_space(t = *p) || TOK_LINEFEED == t) {
                     if (saved_parse_flags & PARSE_FLAG_SPACES)
-                        tok_str_add(&ws_str, t);
+                         tok_str_add(&ws_str, t);
                     ++p;
                 }
                 if (t == 0 && can_read_stream) {
@@ -2927,7 +2927,8 @@ static int macro_subst_tok(TokenString *tok_str,
                             break;
                         ch = ' ';
                     }
-                    tok_str_add(&ws_str, ch);
+                    if (saved_parse_flags & PARSE_FLAG_SPACES)
+                        tok_str_add(&ws_str, ch);
                     cinp();
                 }
                 t = ch;
@@ -2995,8 +2996,30 @@ static int macro_subst_tok(TokenString *tok_str,
                     else
                         break;
                 }
-                if (tok != ',')
-                    expect(",");
+                /*
+                 * #define f(a) f(a)
+                 * #define h f(r
+                 * h 5)
+                 */
+                if (tok != ',') {
+                    /* Argh! Not a macro invocation after all, at this
+                     * point, so put everything back onto mstr that's
+                     * been skipped since we saw the '(' )*/
+                    tok_str_new(&str);
+                    tok_str_add(&str, mtok);
+                    tok_str_add(&str, '(');
+                    for (sa = s->next; sa; sa = sa->next) {
+                        int *p = sa->d;
+                        while (p && *p) {
+                            tok_str_add(&str, *p);
+                            p++;
+                        }
+                        mstr = str.str;
+                        /* leak memory */;
+                        mstr_allocated = 0;
+                        goto free_memory;
+                    }
+                }
                 next_nomacro();
             }
             if (sa) {
@@ -3006,6 +3029,7 @@ static int macro_subst_tok(TokenString *tok_str,
 
             /* now subst each arg */
             mstr = macro_arg_subst(nested_list, mstr, args);
+        free_memory:
             /* free memory */
             sa = args;
             while (sa) {
@@ -3057,8 +3081,6 @@ static inline int *macro_twosharps(const int *macro_str)
         TOK_GET(&tok, &ptr, &tokc);
         if (tok == 0)
             break;
-        if (tok == TOK_TWOSHARPS)
-            continue;
         if (tok == TOK_NOSUBST && start_of_nosubsts < 0)
             start_of_nosubsts = macro_str1.len;
         while (*ptr == TOK_TWOSHARPS) {
@@ -3078,13 +3100,15 @@ static inline int *macro_twosharps(const int *macro_str)
                 if (tok != TOK_PLCHLDR)
                     cstr_cat(&cstr, get_tok_str(tok, &tokc));
                 n = cstr.size;
-                if (t != TOK_PLCHLDR || tok == TOK_PLCHLDR)
+                if (t != TOK_PLCHLDR)
                     cstr_cat(&cstr, get_tok_str(t, &cval));
                 cstr_ccat(&cstr, '\0');
 
                 tcc_open_bf(tcc_state, ":paste:", cstr.size);
                 memcpy(file->buffer, cstr.data, cstr.size);
                 for (;;) {
+                    if (0 == *file->buf_ptr)
+                        break;
                     next_nomacro1();
                     if (0 == *file->buf_ptr)
                         break;
@@ -3095,13 +3119,22 @@ static inline int *macro_twosharps(const int *macro_str)
                 tcc_close();
                 cstr_free(&cstr);
             }
+            if (tok == TOK_TWOSHARPS) {
+                /* two sharps twosharped together tokenize to two
+                 * sharp tokens, not a twosharp token. */
+                /* That's fun to say, but is it actually true? GCC
+                 * stringifies #define a # ## # ## # to "## #" (and a
+                 * warning), while we produce "###" (no warning) */
+                tok_str_add(&macro_str1, '#');
+                tok = '#';
+            }
         }
         if (tok != TOK_NOSUBST) {
             tok_str_add2(&macro_str1, tok, &tokc);
             tok = ' ';
             start_of_nosubsts = -1;
-        }
-        tok_str_add2(&macro_str1, tok, &tokc);
+        } else
+            tok_str_add2(&macro_str1, tok, &tokc);
     }
     tok_str_add(&macro_str1, 0);
     return macro_str1.str;
@@ -3120,7 +3153,6 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     int t, spc;
     CValue cval;
     struct macro_level ml;
-    int force_blank;
     int gnucomma_index = -1;
     
     /* first scan for '##' operator handling */
@@ -3130,7 +3162,6 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     if (macro_str1) 
         ptr = macro_str1;
     spc = 0;
-    force_blank = 0;
 
     while (1) {
         /* NOTE: ptr == NULL can only happen if tokens are read from
@@ -3176,18 +3207,11 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             macro_ptr = ml.p;
             if (can_read_stream && *can_read_stream == &ml)
                 *can_read_stream = ml.prev;
-            if (parse_flags & PARSE_FLAG_SPACES)
-                force_blank = 1;
             if (old_len == tok_str->len)
                 tok_str_add(tok_str, TOK_PLCHLDR);
         } else {
         no_subst:
-            if (force_blank) {
-                tok_str_add(tok_str, ' ');
-                spc = 1;
-                force_blank = 0;
-            }
-            if (!check_space(t, &spc)) 
+            if (!check_space(t, &spc))
                 tok_str_add2(tok_str, t, &cval);
         }
         if (gnucomma_index != -1) {
