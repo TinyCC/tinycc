@@ -2786,25 +2786,18 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                     if (gnu_ext && s->type.t &&
                         last_tok == TOK_TWOSHARPS && 
                         str.len >= 2 && str.str[str.len - 2] == ',') {
-                        if (*st == TOK_PLCHLDR) {
-                            /* suppress ',' '##' */
-                            str.len -= 2;
-                        } else {
-                            /* suppress '##' and add variable */
-                            str.len--;
-                            goto add_var;
-                        }
-                    } else {
-                        int t1;
-                    add_var:
-                        for(;;) {
-                            TOK_GET(&t1, &st, &cval);
-                            if (!t1)
-                                break;
-                            tok_str_add2(&str, t1, &cval);
-                        }
+                        str.len -= 2;
+                        tok_str_add(&str, TOK_GNUCOMMA);
                     }
-                } else if (*st != TOK_PLCHLDR) {
+
+                    for(;;) {
+                        int t1;
+                        TOK_GET(&t1, &st, &cval);
+                        if (!t1)
+                            break;
+                        tok_str_add2(&str, t1, &cval);
+                    }
+                } else {
                     /* NOTE: the stream cannot be read when macro
                        substituing an argument */
                     macro_subst(&str, nested_list, st, NULL);
@@ -2817,6 +2810,8 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
         }
         last_tok = t;
     }
+    if (str.len == 0)
+        tok_str_add(&str, TOK_PLCHLDR);
     tok_str_add(&str, 0);
     return str.str;
 }
@@ -2982,9 +2977,9 @@ static int macro_subst_tok(TokenString *tok_str,
                         tok_str_add2(&str, tok, &tokc);
                     next_nomacro_spc();
                 }
-                if (!str.len)
-                    tok_str_add(&str, TOK_PLCHLDR);
                 str.len -= spc;
+                if (str.len == 0)
+                    tok_str_add(&str, TOK_PLCHLDR);
                 tok_str_add(&str, 0);
                 sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
                 sa1->d = str.str;
@@ -3123,6 +3118,7 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
     CValue cval;
     struct macro_level ml;
     int force_blank;
+    int gnucomma_index = -1;
     
     /* first scan for '##' operator handling */
     ptr = macro_str;
@@ -3150,8 +3146,16 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             TOK_GET(&t, &ptr, &cval);
             goto no_subst;
         }
+        if (t == TOK_GNUCOMMA) {
+            if (gnucomma_index != -1)
+                tcc_error("two GNU commas in the same macro");
+            gnucomma_index = tok_str->len;
+            tok_str_add(tok_str, ',');
+            TOK_GET(&t, &ptr, &cval);
+        }
         s = define_find(t);
         if (s != NULL) {
+            int old_len = tok_str->len;
             /* if nested substitution, do nothing */
             if (sym_find2(*nested_list, t)) {
                 /* and mark it as TOK_NOSUBST, so it doesn't get subst'd again */
@@ -3171,6 +3175,8 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
                 *can_read_stream = ml.prev;
             if (parse_flags & PARSE_FLAG_SPACES)
                 force_blank = 1;
+            if (old_len == tok_str->len)
+                tok_str_add(tok_str, TOK_PLCHLDR);
         } else {
         no_subst:
             if (force_blank) {
@@ -3181,6 +3187,15 @@ static void macro_subst(TokenString *tok_str, Sym **nested_list,
             if (!check_space(t, &spc)) 
                 tok_str_add2(tok_str, t, &cval);
         }
+        if (gnucomma_index != -1) {
+            if (tok_str->len >= gnucomma_index+2) {
+                if (tok_str->str[gnucomma_index+1] == TOK_PLCHLDR)
+                    tok_str->len -= 2;
+                gnucomma_index = -1;
+            }
+        }
+        if (tok_str->len && tok_str->str[tok_str->len-1] == TOK_PLCHLDR)
+            tok_str->len--;
     }
     if (macro_str1)
         tok_str_free(macro_str1);
