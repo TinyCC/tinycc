@@ -1703,12 +1703,14 @@ enum {
     TCC_OPTION_o,
     TCC_OPTION_r,
     TCC_OPTION_s,
+    TCC_OPTION_traditional,
     TCC_OPTION_Wl,
     TCC_OPTION_W,
     TCC_OPTION_O,
     TCC_OPTION_m,
     TCC_OPTION_f,
     TCC_OPTION_isystem,
+    TCC_OPTION_iwithprefix,
     TCC_OPTION_nostdinc,
     TCC_OPTION_nostdlib,
     TCC_OPTION_print_search_dirs,
@@ -1764,12 +1766,14 @@ static const TCCOption tcc_options[] = {
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
     { "s", TCC_OPTION_s, 0 },
+    { "traditional", TCC_OPTION_traditional, 0 },
     { "Wl,", TCC_OPTION_Wl, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG },
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
+    { "iwithprefix", TCC_OPTION_iwithprefix, TCC_OPTION_HAS_ARG },
     { "nostdinc", TCC_OPTION_nostdinc, 0 },
     { "nostdlib", TCC_OPTION_nostdlib, 0 },
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 },
@@ -1971,6 +1975,27 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         case TCC_OPTION_isystem:
             tcc_add_sysinclude_path(s, optarg);
             break;
+        case TCC_OPTION_iwithprefix:
+            if (1) {
+                char buf[1024];
+                int buf_size = sizeof(buf)-1;
+                char *p = &buf[0];
+
+                char *sysroot = "{B}/";
+                int len = strlen(sysroot);
+                if (len > buf_size)
+                    len = buf_size;
+                strncpy(p, sysroot, len);
+                p += len;
+                buf_size -= len;
+
+                len = strlen(optarg);
+                if (len > buf_size)
+                    len = buf_size;
+                strncpy(p, optarg, len+1);
+                tcc_add_sysinclude_path(s, buf);
+            }
+            break;
         case TCC_OPTION_nostdinc:
             s->nostdinc = 1;
             break;
@@ -2030,6 +2055,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             exit(0);
         case TCC_OPTION_s:
             s->do_strip = 1;
+            break;
+        case TCC_OPTION_traditional:
             break;
         case TCC_OPTION_x:
             if (*optarg == 'c')
