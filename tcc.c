@@ -264,9 +264,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (s->output_type == 0)
-	s->output_type = TCC_OUTPUT_EXE;
-
     if (s->option_m)
         exec_other_tcc(s, argv, s->option_m);
 

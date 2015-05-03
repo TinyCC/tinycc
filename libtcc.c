@@ -2057,10 +2057,14 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         }
     }
 
+    if (s->output_type == 0)
+	s->output_type = TCC_OUTPUT_EXE;
+
     if (pthread && s->output_type != TCC_OUTPUT_OBJ)
         tcc_set_options(s, "-lpthread");
 
-    tcc_set_linker(s, (const char *)linker_arg.data);
+    if (s->output_type == TCC_OUTPUT_EXE)
+	tcc_set_linker(s, (const char *)linker_arg.data);
     cstr_free(&linker_arg);
 
     return optind;
