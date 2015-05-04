@@ -464,12 +464,6 @@ typedef struct DLLReference {
 #define SYM_FIELD      0x20000000 /* struct/union field symbol space */
 #define SYM_FIRST_ANOM 0x10000000 /* first anonymous sym */
 
-#define VLA_SP_LOC_SET     0x01 /* Location of SP on stack has been allocated */
-#define VLA_SP_SAVED       0x02 /* SP has been saved to slot already */
-#define VLA_NEED_NEW_FRAME 0x04 /* Needs new frame for next VLA */
-#define VLA_IN_SCOPE       0x08 /* One or more VLAs are in scope */
-#define VLA_SCOPE_FLAGS    (VLA_SP_SAVED|VLA_NEED_NEW_FRAME|VLA_IN_SCOPE) /* Flags which are saved and restored upon entering and exiting a block */
-
 /* stored in 'Sym.c' field */
 #define FUNC_NEW       1 /* ansi function prototype */
 #define FUNC_OLD       2 /* old function prototype */

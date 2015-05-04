@@ -1126,11 +1126,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
     /* We align to 16 bytes rather than align */
     /* and ~15, %esp */
     o(0xf0e483);
-    /* mov %esp, r */
-    o(0x89);
-    o(0xe0 | r);
     vpop();
-    vset(type, r, 0);
 #endif
 }
 
