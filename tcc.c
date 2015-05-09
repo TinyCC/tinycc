@@ -55,31 +55,28 @@ static void display_info(TCCState *s, int what)
 # endif
 #endif
 #ifdef TCC_TARGET_PE
-        ", mingw"
+        " Windows"
 #else
- #ifdef __linux
-        ", Linux"
- #else
-        ", Unknown"
- #endif
+        " Linux"
 #endif
         ")\n", TCC_VERSION);
         break;
     case 1:
         printf("install: %s\n", s->tcc_lib_path);
         /* print_paths("programs", NULL, 0); */
-        print_paths("crt", s->crt_paths, s->nb_crt_paths);
-        print_paths("libraries", s->library_paths, s->nb_library_paths);
         print_paths("include", s->sysinclude_paths, s->nb_sysinclude_paths);
+        print_paths("libraries", s->library_paths, s->nb_library_paths);
+#ifndef TCC_TARGET_PE
+        print_paths("crt", s->crt_paths, s->nb_crt_paths);
         printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
+#endif
         break;
     }
 }
 
-static void help(TCCState *s)
+static void help(void)
 {
-    display_info(s, 0);
-    printf("Tiny C Compiler - Copyright (C) 2001-2006 Fabrice Bellard\n"
+    printf("Tiny C Compiler "TCC_VERSION" - Copyright (C) 2001-2006 Fabrice Bellard\n"
            "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
            "       tcc [options...] -run infile [arguments...]\n"
            "General options:\n"
@@ -94,13 +91,11 @@ static void help(TCCState *s)
            "  -dumpversion\n"
            "  -bench      show compilation statistics\n"
            "Preprocessor options:\n"
-           "  -E          preprocess only\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
-           "  -P          do not output a #line directive\n"
-           "  -P1         use a #line directive in output instead of the gcc style\n"
-           "  -dD         put a define directive in the output (inside a comment)\n"
+           "  -E          preprocess only\n"
+           "  -P[1]       no/alternative output of #line directives with -E\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
@@ -260,7 +255,7 @@ int main(int argc, char **argv)
     tcc_set_environment(s);
 
     if (optind == 0) {
-        help(s);
+        help();
         return 1;
     }
 

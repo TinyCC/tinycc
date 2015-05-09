@@ -19,7 +19,7 @@ TESTS = \
  test3 \
  abitest \
  vla_test-run \
- moretests
+ tests2-dir pp-dir
 
 BTESTS = test1b test3b btest
 
@@ -36,7 +36,7 @@ ifneq ($(ARCH),i386)
  TESTS := $(filter-out $(BTESTS),$(TESTS))
 endif
 ifdef CONFIG_WIN32
- TESTS := w32-prep $(filter-out $(BTESTS),$(TESTS))
+ TESTS := $(filter-out $(BTESTS),$(TESTS))
 endif
 ifeq ($(TARGETOS),Darwin)
  TESTS := $(filter-out hello-exe test3 $(BTESTS),$(TESTS))
@@ -60,9 +60,9 @@ ifeq ($(TARGETOS),Darwin)
 endif
 
 # run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
+TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -I$(TOP) -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
 endif
 XTCCFLAGS = -B$(TOP) -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 
@@ -97,17 +97,14 @@ hello-run: ../examples/ex1.c
 
 libtest: libtcc_test$(EXESUF) $(LIBTCC1)
 	@echo ------------ $@ ------------
-	./libtcc_test$(EXESUF) lib_path=..
+	./libtcc_test$(EXESUF) $(TCCFLAGS)
 
 libtcc_test$(EXESUF): libtcc_test.c $(top_builddir)/$(LIBTCC)
 	$(CC) -o $@ $^ $(CPPFLAGS) $(CFLAGS) $(NATIVE_DEFINES) $(LIBS) $(LINK_LIBTCC) $(LDFLAGS) -I$(top_srcdir)
 
-moretests:
+%-dir:
 	@echo ------------ $@ ------------
-	$(MAKE) -C tests2
-
-w32-prep:
-	cp ../libtcc1.a ../lib
+	$(MAKE) -k -C $*
 
 # test.ref - generate using cc
 test.ref: tcctest.c
@@ -223,9 +220,8 @@ endif
 
 abitest: $(ABITESTS)
 	@echo ------------ $@ ------------
-	./abitest-cc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"
-	if [ "$(CONFIG_arm_eabi)" != "yes" ]; then \
-		./abitest-tcc$(EXESUF) lib_path=.. include="$(top_srcdir)/include"; fi
+	./abitest-cc$(EXESUF) $(TCCFLAGS)
+	if [ "$(CONFIG_arm_eabi)" != "yes" ]; then ./abitest-tcc$(EXESUF) $(TCCFLAGS); fi
 
 vla_test$(EXESUF): vla_test.c
 	$(TCC) -o $@ $^ $(CPPFLAGS) $(CFLAGS)
@@ -253,5 +249,4 @@ clean:
 	$(MAKE) -C tests2 $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
 		*-cc *-tcc *.exe \
-		hello libtcc_test vla_test tcctest[1234] ex? tcc_g tcclib.h \
-		../lib/libtcc1.a
+		hello libtcc_test vla_test tcctest[1234] ex? tcc_g

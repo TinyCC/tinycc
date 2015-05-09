@@ -13,5 +13,7 @@ int main()
         printf("Error: 2147483647 < 0\n");
         return 2;
     }
+    else
+        printf("long long constant test ok.\n");
     return 0;
 }

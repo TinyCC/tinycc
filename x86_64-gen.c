@@ -1254,12 +1254,12 @@ void gfunc_call(int nb_args)
               in on the stack and swap it back to its original position
               if it is a register. */
             SValue tmp = vtop[0];
+            int arg_stored = 1;
+
             vtop[0] = vtop[-i];
             vtop[-i] = tmp;
-            
             mode = classify_x86_64_arg(&vtop->type, NULL, &size, &align, &reg_count);
             
-            int arg_stored = 1;
             switch (vtop->type.t & VT_BTYPE) {
             case VT_STRUCT:
                 if (mode == x86_64_mode_sse) {
@@ -1413,9 +1413,10 @@ void gfunc_call(int nb_args)
         } else if (mode == x86_64_mode_integer) {
             /* simple type */
             /* XXX: implicit cast ? */
+            int d;
             gen_reg -= reg_count;
             r = gv(RC_INT);
-            int d = arg_prepare_reg(gen_reg);
+            d = arg_prepare_reg(gen_reg);
             orex(1,d,r,0x89); /* mov */
             o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
             if (reg_count == 2) {
@@ -2225,7 +2226,6 @@ ST_FUNC void gen_vla_sp_restore(int addr) {
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-    int r;
 #ifdef TCC_TARGET_PE
     /* alloca does more than just adjust %rsp on Windows */
     vpush_global_sym(&func_old_type, TOK_alloca);
@@ -2233,6 +2233,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
     gfunc_call(1);
     vset(type, REG_IRET, 0);
 #else
+    int r;
     r = gv(RC_INT); /* allocation size */
     /* sub r,%rsp */
     o(0x2b48);

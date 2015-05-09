@@ -1767,17 +1767,18 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
             SHN_UNDEF, start_symbol);
 
+    tcc_add_pragma_libs(s1);
+
     if (0 == s1->nostdlib) {
         static const char *libs[] = {
-            "libtcc1.a", "msvcrt", "kernel32", "", "user32", "gdi32", NULL
+            "tcc1", "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
         const char **pp, *p;
         for (pp = libs; 0 != (p = *pp); ++pp) {
             if (0 == *p) {
                 if (PE_DLL != pe_type && PE_GUI != pe_type)
                     break;
-            } else if (pp == libs ? tcc_add_dll(s1, p, 0) : tcc_add_library(s1, p)) {
-                tcc_error_noabort("cannot find library: %s", p);
+            } else if (tcc_add_library_err(s1, p) < 0) {
                 break;
             }
         }
@@ -1805,8 +1806,8 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
     pe.filename = filename;
     pe.s1 = s1;
 
-    tcc_add_bcheck(s1);
     pe_add_runtime(s1, &pe);
+    tcc_add_bcheck(s1);
     relocate_common_syms(); /* assign bss adresses */
     tcc_add_linker_symbols(s1);
 

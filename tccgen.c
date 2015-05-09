@@ -59,7 +59,7 @@ ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
 ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
 ST_DATA int vla_sp_loc; /* Pointer to variable holding location to store stack pointer on the stack when modifying stack pointer */
 
-ST_DATA SValue __vstack[1+VSTACK_SIZE], *vtop;
+ST_DATA SValue __vstack[1+VSTACK_SIZE], *vtop, *pvtop;
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
@@ -68,7 +68,7 @@ ST_DATA CType func_vt; /* current function return type (used by return instructi
 ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
-ST_DATA char *funcname;
+ST_DATA const char *funcname;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 
@@ -116,6 +116,12 @@ ST_FUNC void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
         expect("lvalue");
+}
+
+ST_FUNC void check_vstack(void)
+{
+    if (pvtop != vtop)
+        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -4005,9 +4011,9 @@ ST_FUNC void unary(void)
         break;
     }
     case TOK___va_arg: {
+        CType type;
         if (nocode_wanted)
             tcc_error("statement in global scope");
-        CType type;
         next();
         skip('(');
         expr_eq();
@@ -5777,7 +5783,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* compute size */
         save_parse_state(&saved_parse_state);
 
-        macro_ptr = init_str.str;
+        begin_macro(&init_str, 0);
         next();
         decl_initializer(type, NULL, 0, 1, 1);
         /* prepare second initializer parsing */
@@ -5937,7 +5943,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         decl_initializer(type, sec, addr, 1, 0);
         /* restore parse state if needed */
         if (init_str.str) {
-            tok_str_free(init_str.str);
+            end_macro();
             restore_parse_state(&saved_parse_state);
         }
         /* patch flexible array member size back to -1, */
@@ -6018,6 +6024,7 @@ static void func_decl_list(Sym *func_sym)
 static void gen_function(Sym *sym)
 {
     int saved_nocode_wanted = nocode_wanted;
+
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
@@ -6034,11 +6041,9 @@ static void gen_function(Sym *sym)
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     gfunc_prolog(&sym->type);
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check
-        && !strcmp(get_tok_str(sym->v, NULL), "main")) {
+    if (tcc_state->do_bounds_check && !strcmp(funcname, "main")) {
         int i;
-
-        sym = local_stack;
+        Sym *sym;
         for (i = 0, sym = local_stack; i < 2; i++, sym = sym->prev) {
             if (sym->v & SYM_FIELD || sym->prev->v & SYM_FIELD)
                 break;
@@ -6075,14 +6080,16 @@ static void gen_function(Sym *sym)
     func_var = 0; /* for safety */
     ind = 0; /* for safety */
     nocode_wanted = saved_nocode_wanted;
+    check_vstack();
 }
 
 ST_FUNC void gen_inline_functions(void)
 {
     Sym *sym;
-    int *str, inline_generated, i;
+    int inline_generated, i, ln;
     struct InlineFunc *fn;
 
+    ln = file->line_num;
     /* iterate while inline function are referenced */
     for(;;) {
         inline_generated = 0;
@@ -6092,18 +6099,17 @@ ST_FUNC void gen_inline_functions(void)
             if (sym && sym->c) {
                 /* the function was used: generate its code and
                    convert it to a normal function */
-                str = fn->token_str;
                 fn->sym = NULL;
                 if (file)
                     pstrcpy(file->filename, sizeof file->filename, fn->filename);
                 sym->r = VT_SYM | VT_CONST;
                 sym->type.t &= ~VT_INLINE;
 
-                macro_ptr = str;
+                begin_macro(&fn->func_str, 0);
                 next();
                 cur_text_section = text_section;
                 gen_function(sym);
-                macro_ptr = NULL; /* fail safe */
+                end_macro();
 
                 inline_generated = 1;
             }
@@ -6111,10 +6117,12 @@ ST_FUNC void gen_inline_functions(void)
         if (!inline_generated)
             break;
     }
+    file->line_num = ln;
+    /* free tokens of unused inline functions */
     for (i = 0; i < tcc_state->nb_inline_fns; ++i) {
         fn = tcc_state->inline_fns[i];
-        str = fn->token_str;
-        tok_str_free(str);
+        if (fn->sym)
+            tok_str_free(fn->func_str.str);
     }
     dynarray_reset(&tcc_state->inline_fns, &tcc_state->nb_inline_fns);
 }
@@ -6267,19 +6275,22 @@ static int decl0(int l, int is_for_loop_init)
                    the compilation unit only if they are used */
                 if ((type.t & (VT_INLINE | VT_STATIC)) == 
                     (VT_INLINE | VT_STATIC)) {
-                    TokenString func_str;
                     int block_level;
                     struct InlineFunc *fn;
                     const char *filename;
                            
-                    tok_str_new(&func_str);
+                    filename = file ? file->filename : "";
+                    fn = tcc_malloc(sizeof *fn + strlen(filename));
+                    strcpy(fn->filename, filename);
+                    fn->sym = sym;
+                    tok_str_new(&fn->func_str);
                     
                     block_level = 0;
                     for(;;) {
                         int t;
                         if (tok == TOK_EOF)
                             tcc_error("unexpected end of file");
-                        tok_str_add_tok(&func_str);
+                        tok_str_add_tok(&fn->func_str);
                         t = tok;
                         next();
                         if (t == '{') {
@@ -6290,13 +6301,8 @@ static int decl0(int l, int is_for_loop_init)
                                 break;
                         }
                     }
-                    tok_str_add(&func_str, -1);
-                    tok_str_add(&func_str, 0);
-                    filename = file ? file->filename : "";
-                    fn = tcc_malloc(sizeof *fn + strlen(filename));
-                    strcpy(fn->filename, filename);
-                    fn->sym = sym;
-                    fn->token_str = func_str.str;
+                    tok_str_add(&fn->func_str, -1);
+                    tok_str_add(&fn->func_str, 0);
                     dynarray_add((void ***)&tcc_state->inline_fns, &tcc_state->nb_inline_fns, fn);
 
                 } else {

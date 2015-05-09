@@ -1605,6 +1605,8 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
+    tcc_add_pragma_libs(s1);
+
     /* add libc */
     if (!s1->nostdlib) {
         tcc_add_library(s1, "c");

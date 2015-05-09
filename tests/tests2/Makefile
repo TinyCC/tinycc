@@ -19,89 +19,9 @@ endif
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
 
-TESTS =	\
- 00_assignment.test \
- 01_comment.test \
- 02_printf.test \
- 03_struct.test \
- 04_for.test \
- 05_array.test \
- 06_case.test \
- 07_function.test \
- 08_while.test \
- 09_do_while.test \
- 10_pointer.test \
- 11_precedence.test \
- 12_hashdefine.test \
- 13_integer_literals.test \
- 14_if.test \
- 15_recursion.test \
- 16_nesting.test \
- 17_enum.test \
- 18_include.test \
- 19_pointer_arithmetic.test \
- 20_pointer_comparison.test \
- 21_char_array.test \
- 22_floating_point.test \
- 23_type_coercion.test \
- 24_math_library.test \
- 25_quicksort.test \
- 26_character_constants.test \
- 27_sizeof.test \
- 28_strings.test \
- 29_array_address.test \
- 30_hanoi.test \
- 31_args.test \
- 32_led.test \
- 33_ternary_op.test \
- 34_array_assignment.test \
- 35_sizeof.test \
- 36_array_initialisers.test \
- 37_sprintf.test \
- 38_multiple_array_index.test \
- 39_typedef.test \
- 40_stdio.test \
- 41_hashif.test \
- 42_function_pointer.test \
- 43_void_param.test \
- 44_scoped_declarations.test \
- 45_empty_for.test \
- 46_grep.test \
- 47_switch_return.test \
- 48_nested_break.test \
- 49_bracket_evaluation.test \
- 50_logical_second_arg.test \
- 51_static.test \
- 52_unnamed_enum.test \
- 54_goto.test \
- 55_lshift_type.test \
- 56_btype_excess-1.test \
- 57_btype_excess-2.test \
- 58_function_redefinition.test \
- 59_function_array.test \
- 60_enum_redefinition.test \
- 61_undefined_enum.test \
- 62_enumerator_redefinition.test \
- 63_local_enumerator_redefinition.test \
- 64_macro_nesting.test \
- 65_macro_concat_start.test \
- 66_macro_concat_end.test \
- 67_macro_concat.test \
- 68_macro_param_list_err_1.test \
- 69_macro_param_list_err_2.test \
- 70_floating_point_literals.test \
- 71_macro_empty_arg.test \
- 72_long_long_constant.test \
- 73_arm64.test \
- 74_nocode_wanted.test \
- 75_array_in_struct_init.test \
- 76_dollars_in_identifiers.test \
- 77_push_pop_macro.test \
- 78_vla_label.test \
- 79_vla_continue.test
+TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
 
 # 34_array_assignment.test -- array assignment is not in C standard
-
 SKIP = 34_array_assignment.test
 
 # some tests do not pass on all platforms, remove them for now
@@ -128,16 +48,29 @@ ARGS =
 FLAGS =
 76_dollars_in_identifiers.test : FLAGS = -fdollars-in-identifiers
 
+# Filter some always-warning
+FILTER =
+ifeq (-$(findstring arm,$(ARCH))-,-arm-)
+FILTER = 2>&1 | grep -v 'warning: soft float ABI currently not supported'
+endif
+
 all test: $(filter-out $(SKIP),$(TESTS))
 
-%.test: %.c
+%.test: %.c %.expect
 	@echo Test: $*...
-
-	@$(TCC) -run $(FLAGS) $< $(ARGS) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output || true
+# test -run
+	@$(TCC) $(FLAGS) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true
 	@diff -Nbu $*.expect $*.output && rm -f $*.output
+# test exe (disabled for speed)
+#	 @($(TCC) $(FLAGS) $< -o $*.exe && ./$*.exe $(ARGS)) $(FiLTER) >$*.output2 2>&1 ; \
+#	     diff -Nbu $*.expect $*.output2 && rm -f $*.output2 $*.exe
 
-	@($(TCC) $(FLAGS) $< -o $*.exe && ./$*.exe $(ARGS)) 2>&1 | grep -v 'warning: soft float ABI currently not supported: default to softfp' >$*.output2 || true
-	@diff -Nbu $*.expect $*.output2 && rm -f $*.output2 $*.exe
+# automatically generate .expect files with gcc:
+%.expect :
+	(gcc $*.c -o a.exe && ./a.exe $(ARGS)) >$*.expect 2>&1; rm -f a.exe
+
+# tell make not to delete
+.PRECIOUS: %.expect
 
 clean:
-	rm -vf fred.txt *.output* *.exe
+	rm -vf fred.txt *.output a.exe

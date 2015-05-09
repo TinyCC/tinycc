@@ -608,7 +608,10 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
 
     if (!s1->error_func) {
         /* default case: stderr */
+        if (s1->ppfp) /* print a newline during tcc -E */
+            fprintf(s1->ppfp, "\n"), fflush(s1->ppfp);
         fprintf(stderr, "%s\n", buf);
+        fflush(stderr); /* print error/warning now (win32) */
     } else {
         s1->error_func(s1->error_opaque, buf);
     }
@@ -672,7 +675,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     BufferedFile *bf;
     int buflen = initlen ? initlen : IO_BUF_SIZE;
 
-    bf = tcc_malloc(sizeof(BufferedFile) + buflen);
+    bf = tcc_mallocz(sizeof(BufferedFile) + buflen);
     bf->buf_ptr = bf->buffer;
     bf->buf_end = bf->buffer + initlen;
     bf->buf_end[0] = CH_EOB; /* put eob symbol */
@@ -681,7 +684,6 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     normalize_slashes(bf->filename);
 #endif
     bf->line_num = 1;
-    bf->ifndef_macro = 0;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     bf->fd = -1;
     bf->prev = file;
@@ -703,7 +705,7 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 {
     int fd;
     if (strcmp(filename, "-") == 0)
-        fd = 0, filename = "stdin";
+        fd = 0, filename = "<stdin>";
     else
         fd = open(filename, O_RDONLY | O_BINARY);
     if ((s1->verbose == 2 && fd >= 0) || s1->verbose == 3)
@@ -721,7 +723,6 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 static int tcc_compile(TCCState *s1)
 {
     Sym *define_start;
-    SValue *pvtop;
     char buf[512];
     volatile int section_sym;
 
@@ -797,14 +798,12 @@ static int tcc_compile(TCCState *s1)
 
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-        parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM;
-        pvtop = vtop;
+        parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
         next();
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
-        if (pvtop != vtop)
-            tcc_warning("internal compiler error: vstack leak? (%d)", vtop - pvtop);
+        check_vstack();
 
         /* end of translation unit info */
         if (s1->do_debug) {
@@ -829,31 +828,13 @@ static int tcc_compile(TCCState *s1)
 
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
 {
-    int i;
     int len, ret;
-    len = strlen(str);
 
+    len = strlen(str);
     tcc_open_bf(s, "<string>", len);
     memcpy(file->buffer, str, len);
-
-    len = s->nb_files;
     ret = tcc_compile(s);
     tcc_close();
-
-    /* habdle #pragma comment(lib,) */
-    for(i = len; i < s->nb_files; i++) {
-        /* int filetype = *(unsigned char *)s->files[i]; */
-        const char *filename = s->files[i] + 1;
-        if (filename[0] == '-' && filename[1] == 'l') {
-            if (tcc_add_library(s, filename + 2) < 0) {
-                tcc_warning("cannot find library 'lib%s'", filename+2);
-                ret++;
-            }
-        }
-        tcc_free(s->files[i]);
-    }
-    s->nb_files = len;
-
     return ret;
 }
 
@@ -896,20 +877,11 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
 /* cleanup all static data used during compilation */
 static void tcc_cleanup(void)
 {
-    int i, n;
     if (NULL == tcc_state)
         return;
     tcc_state = NULL;
 
-    /* free -D defines */
-    free_defines(NULL);
-
-    /* free tokens */
-    n = tok_ident - TOK_IDENT;
-    for(i = 0; i < n; i++)
-        tcc_free(table_ident[i]);
-    tcc_free(table_ident);
-    table_ident = NULL;
+    preprocess_delete();
 
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
@@ -917,8 +889,6 @@ static void tcc_cleanup(void)
     cstr_free(&tokcstr);
     /* reset symbol stack */
     sym_free_first = NULL;
-    /* cleanup from error/setjmp */
-    macro_ptr = NULL;
 }
 
 LIBTCCAPI TCCState *tcc_new(void)
@@ -1128,6 +1098,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_free(s1->deps_outfile);
     dynarray_reset(&s1->files, &s1->nb_files);
     dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
+    dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
 
 #ifdef TCC_IS_NATIVE
 # ifdef HAVE_SELINUX
@@ -1138,8 +1109,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 # endif
 #endif
 
-    if(s1->sym_attrs) tcc_free(s1->sym_attrs);
-
+    tcc_free(s1->sym_attrs);
     tcc_free(s1);
 }
 
@@ -1338,6 +1308,22 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     return -1;
 }
 
+PUB_FUNC int tcc_add_library_err(TCCState *s, const char *libname)
+{
+    int ret = tcc_add_library(s, libname);
+    if (ret < 0)
+        tcc_error_noabort("cannot find library 'lib%s'", libname);
+    return ret;
+}
+
+/* habdle #pragma comment(lib,) */
+ST_FUNC void tcc_add_pragma_libs(TCCState *s1)
+{
+    int i;
+    for (i = 0; i < s1->nb_pragma_libs; i++)
+        tcc_add_library_err(s1, s1->pragma_libs[i]);
+}
+
 LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 {
 #ifdef TCC_TARGET_PE
@@ -1355,8 +1341,6 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
-    if (output_type == TCC_OUTPUT_PREPROCESS)
-	print_defines();
 
     if (!s->nostdinc) {
         /* default include paths */
@@ -1694,7 +1678,6 @@ enum {
     TCC_OPTION_g,
     TCC_OPTION_c,
     TCC_OPTION_dumpversion,
-    TCC_OPTION_d,
     TCC_OPTION_float_abi,
     TCC_OPTION_static,
     TCC_OPTION_std,
@@ -1751,7 +1734,6 @@ static const TCCOption tcc_options[] = {
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
     { "dumpversion", TCC_OPTION_dumpversion, 0},
-    { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
 #ifdef TCC_TARGET_ARM
     { "mfloat-abi", TCC_OPTION_float_abi, TCC_OPTION_HAS_ARG },
 #endif
@@ -1878,8 +1860,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         case TCC_OPTION_HELP:
             return 0;
         case TCC_OPTION_I:
-            if (tcc_add_include_path(s, optarg) < 0)
-                tcc_error("too many include paths");
+            tcc_add_include_path(s, optarg);
             break;
         case TCC_OPTION_D:
             parse_option_D(s, optarg);
@@ -1923,14 +1904,6 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     	    if (s->output_type)
                 tcc_warning("-c: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_OBJ;
-            break;
-        case TCC_OPTION_d:
-    	    if (*optarg != 'D') {
-    		if (s->warn_unsupported)
-            	    goto unsupported_option;
-                 tcc_error("invalid option -- '%s'", r);
-    	    }
-            s->dflag = 1;
             break;
 #ifdef TCC_TARGET_ARM
         case TCC_OPTION_float_abi:

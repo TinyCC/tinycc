@@ -747,7 +747,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
 
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-    parse_flags = PARSE_FLAG_ASM_FILE;
+    parse_flags = PARSE_FLAG_ASM_FILE | PARSE_FLAG_TOK_STR;
     if (do_preprocess)
         parse_flags |= PARSE_FLAG_PREPROCESS;
     next();
