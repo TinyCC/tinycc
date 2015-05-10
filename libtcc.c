@@ -2048,6 +2048,15 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
                 tcc_warning("unsupported language '%s'", optarg);
             break;
         case TCC_OPTION_O:
+            if (1) {
+                int opt = atoi(optarg);
+                char *sym = "__OPTIMIZE__";
+                if (opt)
+                    tcc_define_symbol(s, sym, 0);
+                else
+                    tcc_undefine_symbol(s, sym);
+            }
+            break;
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:
             /* ignored */
