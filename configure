@@ -449,6 +449,12 @@ LIBSUF=$LIBSUF
 EXESUF=$EXESUF
 HOST_OS=$host_os
 EOF
+if test "$mingw32" = "yes" -a "$host_os" != "Windows" ; then
+cat >>config.mak <<EOF
+XCC=$cc
+XAR=$ar
+EOF
+fi
 
 print_inc() {
   if test -n "$2"; then
