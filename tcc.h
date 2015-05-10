@@ -1118,7 +1118,11 @@ ST_FUNC void tcc_close(void);
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags, int filetype);
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
+
+#ifndef TCC_TARGET_PE
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
+#endif
+
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 

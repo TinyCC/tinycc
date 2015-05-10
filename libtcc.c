@@ -1273,6 +1273,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
     return -1;
 }
 
+#ifndef TCC_TARGET_PE
 /* find and load a dll. Return non zero if not found */
 /* XXX: add '-rpath' option support ? */
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
@@ -1280,6 +1281,7 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
     return tcc_add_library_internal(s, "%s/%s", filename, flags,
         s->library_paths, s->nb_library_paths);
 }
+#endif
 
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
 {
