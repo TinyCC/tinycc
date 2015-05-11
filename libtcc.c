@@ -1111,6 +1111,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     tcc_free(s1->sym_attrs);
     tcc_free(s1);
+    tcc_memstats();
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
