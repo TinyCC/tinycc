@@ -3086,7 +3086,9 @@ static inline int *macro_twosharps(const int *ptr0)
             /* given 'a##b', remove nosubsts preceding 'b' */
             while ((t1 = *++ptr) == TOK_NOSUBST)
                 ;
-            if (t1 && t1 != TOK_TWOSHARPS) {
+            if (t1 && t1 != TOK_TWOSHARPS 
+                && t1 != ':') /* 'a##:' don't build a new token */
+            {
                 TOK_GET(&t1, &ptr, &cv1);
                 if (t != TOK_PLCHLDR || t1 != TOK_PLCHLDR) {
                     paste_tokens(t, &cval, t1, &cv1);
