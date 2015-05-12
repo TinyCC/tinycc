@@ -239,7 +239,7 @@ PUB_FUNC char *tcc_strdup(const char *str)
     return ptr;
 }
 
-PUB_FUNC void tcc_memstats(void)
+PUB_FUNC void tcc_memstats(int bench)
 {
 }
 
@@ -400,7 +400,7 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line)
     return ptr;
 }
 
-PUB_FUNC void tcc_memstats(void)
+PUB_FUNC void tcc_memstats(int bench)
 {
     if (mem_cur_size) {
         mem_debug_header_t *header = mem_debug_chain;
@@ -414,6 +414,8 @@ PUB_FUNC void tcc_memstats(void)
             header = header->next;
         }
     }
+    else if (bench)
+        fprintf(stderr, "mem_max_size= %d bytes\n", mem_max_size);
 }
 
 #undef MEM_DEBUG_MAGIC1
@@ -1211,6 +1213,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 LIBTCCAPI void tcc_delete(TCCState *s1)
 {
     int i;
+    int bench = s1->do_bench;
 
     tcc_cleanup();
 
@@ -1266,7 +1269,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     tcc_free(s1->sym_attrs);
     tcc_free(s1);
-    tcc_memstats();
+    tcc_memstats(bench);
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)

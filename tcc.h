@@ -1087,7 +1087,7 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #define realloc(p, s) use_tcc_realloc(p, s)
 #undef strdup
 #define strdup(s) use_tcc_strdup(s)
-PUB_FUNC void tcc_memstats(void);
+PUB_FUNC void tcc_memstats(int bench);
 PUB_FUNC void tcc_error_noabort(const char *fmt, ...);
 PUB_FUNC NORETURN void tcc_error(const char *fmt, ...);
 PUB_FUNC void tcc_warning(const char *fmt, ...);
