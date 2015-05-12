@@ -247,7 +247,6 @@ int main(int argc, char **argv)
     TCCState *s;
     int ret, optind, i, bench;
     int64_t start_time = 0;
-    const char *first_file = NULL;
 
     s = tcc_new();
 
@@ -286,7 +285,7 @@ int main(int argc, char **argv)
             tcc_error("cannot specify multiple files with -c and -o");
         }
     }
-    
+
     if (s->output_type == TCC_OUTPUT_PREPROCESS) {
         if (!s->outfile) {
             s->ppfp = stdout;
@@ -315,17 +314,16 @@ int main(int argc, char **argv)
         } else {
             if (1 == s->verbose)
                 printf("-> %s\n", filename);
+            if (!s->outfile)
+                s->outfile = default_outputfile(s, filename);
             if (tcc_add_file(s, filename, filetype) < 0)
                 ret = 1;
             else
             if (s->output_type == TCC_OUTPUT_OBJ) {
-                if (!s->outfile)
-                    s->outfile = default_outputfile(s, filename);
                 ret = !!tcc_output_file(s, s->outfile);
+                if (s->gen_deps && !ret)
+                    gen_makedeps(s, s->outfile, s->deps_outfile);
                 if (!ret) {
-                    /* dump collected dependencies */
-                    if (s->gen_deps)
-                        gen_makedeps(s, s->outfile, s->deps_outfile);
                     if ((i+1) < s->nb_files) {
                         tcc_delete(s);
                         s = tcc_new();
@@ -337,9 +335,6 @@ int main(int argc, char **argv)
                     }
                 }
             }
-            else
-            if (!first_file)
-                first_file = filename;
         }
     }
 
@@ -354,14 +349,11 @@ int main(int argc, char **argv)
             tcc_error_noabort("-run is not available in a cross compiler");
             ret = 1;
 #endif
-        } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-             if (s->outfile)
-                fclose(s->ppfp);
-        } else if (s->output_type != TCC_OUTPUT_OBJ) {
-            if (!s->outfile)
-                s->outfile = default_outputfile(s, first_file);
+        } else
+        if (s->output_type == TCC_OUTPUT_EXE ||
+            s->output_type == TCC_OUTPUT_DLL)
+        {
             ret = !!tcc_output_file(s, s->outfile);
-            /* dump collected dependencies */
             if (s->gen_deps && !ret)
                 gen_makedeps(s, s->outfile, s->deps_outfile);
         }

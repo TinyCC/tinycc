@@ -1217,6 +1217,10 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     tcc_cleanup();
 
+    /* close a preprocessor output */
+    if (s1->ppfp && s1->ppfp != stdout)
+        fclose(s1->ppfp);
+
     /* free all sections */
     for(i = 1; i < s1->nb_sections; i++)
         free_section(s1->sections[i]);

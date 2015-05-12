@@ -3332,12 +3332,10 @@ static void pp_line(TCCState *s1, BufferedFile *f, int level)
 /* Preprocess the current file */
 ST_FUNC int tcc_preprocess(TCCState *s1)
 {
-    Sym *define_start;
     BufferedFile **iptr;
     int token_seen, spcs, level;
 
     preprocess_init(s1);
-    define_start = define_stack;
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_PREPROCESS
@@ -3388,6 +3386,5 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
         fputs(get_tok_str(tok, &tokc), s1->ppfp);
     }
 
-    free_defines(define_start);
     return 0;
 }
