@@ -198,17 +198,10 @@ PUB_FUNC char *tcc_fileextension (const char *name)
 #undef malloc
 #undef realloc
 
-#ifdef MEM_DEBUG
-ST_DATA int mem_cur_size;
-ST_DATA int mem_max_size;
-unsigned malloc_usable_size(void*);
-#endif
+#ifndef MEM_DEBUG
 
 PUB_FUNC void tcc_free(void *ptr)
 {
-#ifdef MEM_DEBUG
-    mem_cur_size -= malloc_usable_size(ptr);
-#endif
     free(ptr);
 }
 
@@ -218,11 +211,6 @@ PUB_FUNC void *tcc_malloc(unsigned long size)
     ptr = malloc(size);
     if (!ptr && size)
         tcc_error("memory full (malloc)");
-#ifdef MEM_DEBUG
-    mem_cur_size += malloc_usable_size(ptr);
-    if (mem_cur_size > mem_max_size)
-        mem_max_size = mem_cur_size;
-#endif
     return ptr;
 }
 
@@ -237,18 +225,9 @@ PUB_FUNC void *tcc_mallocz(unsigned long size)
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 {
     void *ptr1;
-#ifdef MEM_DEBUG
-    mem_cur_size -= malloc_usable_size(ptr);
-#endif
     ptr1 = realloc(ptr, size);
     if (!ptr1 && size)
         tcc_error("memory full (realloc)");
-#ifdef MEM_DEBUG
-    /* NOTE: count not correct if alloc error, but not critical */
-    mem_cur_size += malloc_usable_size(ptr1);
-    if (mem_cur_size > mem_max_size)
-        mem_max_size = mem_cur_size;
-#endif
     return ptr1;
 }
 
@@ -262,10 +241,186 @@ PUB_FUNC char *tcc_strdup(const char *str)
 
 PUB_FUNC void tcc_memstats(void)
 {
-#ifdef MEM_DEBUG
-    printf("memory: %d bytes, max = %d bytes\n", mem_cur_size, mem_max_size);
-#endif
 }
+
+#else
+
+#define MEM_DEBUG_MAGIC1 0xFEEDDEB1
+#define MEM_DEBUG_MAGIC2 0xFEEDDEB2
+#define MEM_DEBUG_FILE_LEN 15
+
+struct mem_debug_header {
+    size_t      magic1;
+    size_t      size;
+    struct mem_debug_header *prev;
+    struct mem_debug_header *next;
+    size_t      line_num;
+    char        file_name[MEM_DEBUG_FILE_LEN + 1];
+    size_t      magic2;
+};
+
+typedef struct mem_debug_header mem_debug_header_t;
+
+static mem_debug_header_t *mem_debug_chain;
+static size_t mem_cur_size;
+static size_t mem_max_size;
+
+PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
+{
+    void *ptr;
+    mem_debug_header_t *header;
+
+    ptr = malloc(sizeof(mem_debug_header_t) + size);
+    if (!ptr)
+        tcc_error("memory full (malloc)");
+
+    mem_cur_size += size;
+    if (mem_cur_size > mem_max_size)
+        mem_max_size = mem_cur_size;
+
+    header = (mem_debug_header_t *)ptr;
+
+    header->magic1 = MEM_DEBUG_MAGIC1;
+    header->magic2 = MEM_DEBUG_MAGIC2;
+    header->size = size;
+    header->line_num = line;
+
+    strncpy(header->file_name, file, MEM_DEBUG_FILE_LEN);
+    header->file_name[MEM_DEBUG_FILE_LEN] = 0;
+
+    header->next = mem_debug_chain;
+    header->prev = NULL;
+
+    if (header->next)
+        header->next->prev = header;
+
+    mem_debug_chain = header;
+
+    ptr = (char *)ptr + sizeof(mem_debug_header_t);
+    return ptr;
+}
+
+PUB_FUNC void tcc_free_debug(void *ptr)
+{
+    mem_debug_header_t *header;
+
+    if (!ptr)
+        return;
+
+    ptr = (char *)ptr - sizeof(mem_debug_header_t);
+    header = (mem_debug_header_t *)ptr;
+    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
+        header->magic2 != MEM_DEBUG_MAGIC2 ||
+        header->size == (size_t)-1 )
+    {
+        tcc_error("tcc_free check failed");
+    }
+
+    mem_cur_size -= header->size;
+    header->size = (size_t)-1;
+    
+    if (header->next)
+        header->next->prev = header->prev;
+
+    if (header->prev)
+        header->prev->next = header->next;
+
+    if (header == mem_debug_chain)
+        mem_debug_chain = header->next;
+
+    free(ptr);
+}
+
+
+PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line)
+{
+    void *ptr;
+    ptr = tcc_malloc_debug(size,file,line);
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file, int line)
+{
+    mem_debug_header_t *header;
+    int mem_debug_chain_update = 0;
+
+    if (!ptr) {
+        ptr = tcc_malloc_debug(size, file, line);
+        return ptr;
+    }
+
+    ptr = (char *)ptr - sizeof(mem_debug_header_t);
+    header = (mem_debug_header_t *)ptr;
+    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
+        header->magic2 != MEM_DEBUG_MAGIC2 ||
+        header->size == (size_t)-1 )
+    {
+        check_error:
+            tcc_error("tcc_realloc check failed");
+    }
+
+    mem_debug_chain_update = (header == mem_debug_chain);
+
+    mem_cur_size -= header->size;
+    ptr = realloc(ptr, sizeof(mem_debug_header_t) + size);
+    if (!ptr)
+        tcc_error("memory full (realloc)");
+
+    header = (mem_debug_header_t *)ptr;
+    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
+        header->magic2 != MEM_DEBUG_MAGIC2)
+    {
+        goto check_error;
+    }
+
+    mem_cur_size += size;
+    if (mem_cur_size > mem_max_size)
+        mem_max_size = mem_cur_size;
+
+    header->size = size;
+    if (header->next)
+        header->next->prev = header;
+
+    if (header->prev)
+        header->prev->next = header;
+
+    if (mem_debug_chain_update)
+        mem_debug_chain = header;
+
+    ptr = (char *)ptr + sizeof(mem_debug_header_t);
+    return ptr;
+}
+
+PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line)
+{
+    char *ptr;
+    ptr = tcc_malloc_debug(strlen(str) + 1, file, line);
+    strcpy(ptr, str);
+    return ptr;
+}
+
+PUB_FUNC void tcc_memstats(void)
+{
+    if (mem_cur_size) {
+        mem_debug_header_t *header = mem_debug_chain;
+
+        fprintf(stderr, "MEM_DEBUG: mem_leak= %d bytes, mem_max_size= %d bytes\n",
+            mem_cur_size, mem_max_size);
+
+        while (header) {
+            fprintf(stderr, "  file %s, line %u: %u bytes\n",
+                header->file_name, header->line_num, header->size);
+            header = header->next;
+        }
+    }
+}
+
+#undef MEM_DEBUG_MAGIC1
+#undef MEM_DEBUG_MAGIC2
+#undef MEM_DEBUG_FILE_LEN
+
+#endif
 
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)

@@ -1052,11 +1052,6 @@ ST_DATA int tcc_ext;
 /* XXX: get rid of this ASAP */
 ST_DATA struct TCCState *tcc_state;
 
-#ifdef MEM_DEBUG
-ST_DATA int mem_cur_size;
-ST_DATA int mem_max_size;
-#endif
-
 #define AFF_PRINT_ERROR     0x0001 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x0002 /* load a referenced dll from another dll */
 #define AFF_PREPROCESS      0x0004 /* preprocess file */
@@ -1067,11 +1062,26 @@ PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s);
 PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);
 PUB_FUNC char *tcc_fileextension (const char *name);
+
+#ifndef MEM_DEBUG
 PUB_FUNC void tcc_free(void *ptr);
 PUB_FUNC void *tcc_malloc(unsigned long size);
 PUB_FUNC void *tcc_mallocz(unsigned long size);
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size);
 PUB_FUNC char *tcc_strdup(const char *str);
+#else
+#define tcc_free(ptr)           tcc_free_debug(ptr)
+#define tcc_malloc(size)        tcc_malloc_debug(size, __FILE__, __LINE__)
+#define tcc_mallocz(size)       tcc_mallocz_debug(size, __FILE__, __LINE__)
+#define tcc_realloc(ptr,size)   tcc_realloc_debug(ptr, size, __FILE__, __LINE__)
+#define tcc_strdup(str)         tcc_strdup_debug(str, __FILE__, __LINE__)
+PUB_FUNC void tcc_free_debug(void *ptr);
+PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line);
+PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line);
+PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file, int line);
+PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
+#endif
+
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)
 #define realloc(p, s) use_tcc_realloc(p, s)
