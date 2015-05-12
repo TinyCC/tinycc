@@ -245,12 +245,16 @@ static int64_t getclock_us(void)
 int main(int argc, char **argv)
 {
     TCCState *s;
-    int ret, optind, i, bench;
+    int ret, optind, i;
     int64_t start_time = 0;
 
     s = tcc_new();
 
     optind = tcc_parse_args(s, argc - 1, argv + 1);
+
+    if (s->do_bench)
+        start_time = getclock_us();
+
     tcc_set_environment(s);
 
     if (optind == 0) {
@@ -296,10 +300,6 @@ int main(int argc, char **argv)
         }
     }
 
-    bench = s->do_bench;
-    if (bench)
-        start_time = getclock_us();
-
     tcc_set_output_type(s, s->output_type);
 
     /* compile or add each files or library */
@@ -339,9 +339,6 @@ int main(int argc, char **argv)
     }
 
     if (0 == ret) {
-        if (bench)
-            tcc_print_stats(s, getclock_us() - start_time);
-
         if (s->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
             ret = tcc_run(s, argc - 1 - optind, argv + 1 + optind);
@@ -358,6 +355,9 @@ int main(int argc, char **argv)
                 gen_makedeps(s, s->outfile, s->deps_outfile);
         }
     }
+
+    if (s->do_bench)
+        tcc_print_stats(s, getclock_us() - start_time);
 
     tcc_delete(s);
     return ret;
