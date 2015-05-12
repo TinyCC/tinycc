@@ -319,14 +319,13 @@ int main(int argc, char **argv)
                 ret = 1;
             else
             if (s->output_type == TCC_OUTPUT_OBJ) {
-                const char *outfile = s->outfile;
-                if (!outfile)
-                    outfile = default_outputfile(s, filename);
-                ret = !!tcc_output_file(s, outfile);
+                if (!s->outfile)
+                    s->outfile = default_outputfile(s, filename);
+                ret = !!tcc_output_file(s, s->outfile);
                 if (!ret) {
                     /* dump collected dependencies */
                     if (s->gen_deps)
-                        gen_makedeps(s, outfile, s->deps_outfile);
+                        gen_makedeps(s, s->outfile, s->deps_outfile);
                     if ((i+1) < s->nb_files) {
                         tcc_delete(s);
                         s = tcc_new();
