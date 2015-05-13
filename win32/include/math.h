@@ -777,39 +777,5 @@ extern "C++" {
  *  which always returns true: yes, (NaN != NaN) is true).
  */
 
-#if __GNUC__ >= 3
-
-#define isgreater(x, y) __builtin_isgreater(x, y)
-#define isgreaterequal(x, y) __builtin_isgreaterequal(x, y)
-#define isless(x, y) __builtin_isless(x, y)
-#define islessequal(x, y) __builtin_islessequal(x, y)
-#define islessgreater(x, y) __builtin_islessgreater(x, y)
-#define isunordered(x, y) __builtin_isunordered(x, y)
-
-#else
-/*  helper  */
-__CRT_INLINE int  __cdecl
-__fp_unordered_compare (long double x, long double y){
-  unsigned short retval;
-  __asm__ ("fucom %%st(1);"
-	   "fnstsw;": "=a" (retval) : "t" (x), "u" (y));
-  return retval;
-}
-
-#define isgreater(x, y) ((__fp_unordered_compare(x, y) \
-			   & 0x4500) == 0)
-#define isless(x, y) ((__fp_unordered_compare (y, x) \
-                       & 0x4500) == 0)
-#define isgreaterequal(x, y) ((__fp_unordered_compare (x, y) \
-                               & FP_INFINITE) == 0)
-#define islessequal(x, y) ((__fp_unordered_compare(y, x) \
-			    & FP_INFINITE) == 0)
-#define islessgreater(x, y) ((__fp_unordered_compare(x, y) \
-			      & FP_SUBNORMAL) == 0)
-#define isunordered(x, y) ((__fp_unordered_compare(x, y) \
-			    & 0x4500) == 0x4500)
-
-#endif
-
 #endif /* End _MATH_H_ */
 
