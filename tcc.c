@@ -96,6 +96,7 @@ static void help(void)
            "  -Usym       undefine 'sym'\n"
            "  -E          preprocess only\n"
            "  -P[1]       no/alternative output of #line directives with -E\n"
+           "  -dD         dump defines\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"

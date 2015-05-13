@@ -1045,6 +1045,104 @@ static int macro_is_equal(const int *a, const int *b)
     return !(*a || *b);
 }
 
+static void pp_line(TCCState *s1, BufferedFile *f, int level)
+{
+    int d = f->line_num - f->line_ref;
+    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
+        || (level == 0 && f->line_ref && d < 8))
+    {
+        while (d > 0)
+            fputs("\n", s1->ppfp), --d;
+    }
+    else
+    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
+        fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
+    }
+    else {
+        fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
+            level > 0 ? " 1" : level < 0 ? " 2" : "");
+    }
+    f->line_ref = f->line_num;
+}
+
+static void tok_print(const char *msg, const int *str)
+{
+    FILE *pr = tcc_state->ppfp;
+    int t;
+    CValue cval;
+
+    fprintf(pr, "%s ", msg);
+    while (str) {
+        TOK_GET(&t, &str, &cval);
+        if (!t)
+            break;
+        fprintf(pr,"%s", get_tok_str(t, &cval));
+    }
+    fprintf(pr, "\n");
+}
+
+static int define_print_prepared(Sym *s)
+{
+    if (!s || !tcc_state->ppfp || tcc_state->dflag == 0)
+        return 0;
+
+    if (s->v < TOK_IDENT || s->v >= tok_ident)
+        return 0;
+
+    if (file) {
+        file->line_num--;
+        pp_line(tcc_state, file, 0);
+        file->line_ref = ++file->line_num;
+    }
+    return 1;
+}
+
+static void define_print(int v)
+{
+    FILE *pr = tcc_state->ppfp;
+    Sym *s, *a;
+
+    s = define_find(v);
+    if (define_print_prepared(s) == 0)
+        return;
+
+    fprintf(pr, "// #define %s", get_tok_str(v, NULL));
+    if (s->type.t == MACRO_FUNC) {
+        a = s->next;
+        fprintf(pr,"(");
+        if (a)
+            for (;;) {
+                fprintf(pr,"%s", get_tok_str(a->v & ~SYM_FIELD, NULL));
+                if (!(a = a->next))
+                    break;
+                fprintf(pr,",");
+            }
+        fprintf(pr,")");
+    }
+    tok_print("", s->d);
+}
+
+static void undef_print(int v)
+{
+    FILE *pr = tcc_state->ppfp;
+    Sym *s;
+
+    s = define_find(v);
+    if (define_print_prepared(s) == 0)
+        return;
+
+    fprintf(pr, "// #undef %s\n", get_tok_str(s->v, NULL));
+}
+
+ST_FUNC void print_defines(void)
+{
+    Sym *top = define_stack;
+    while (top) {
+        define_print(top->v);
+        top = top->prev;
+    }
+}
+
 /* defines handling */
 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
 {
@@ -1063,8 +1161,8 @@ ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
 /* undefined a define symbol. Its name is just set to zero */
 ST_FUNC void define_undef(Sym *s)
 {
-    int v;
-    v = s->v;
+    int v = s->v;
+    undef_print(v);
     if (v >= TOK_IDENT && v < tok_ident)
         table_ident[v - TOK_IDENT]->sym_define = NULL;
 }
@@ -1186,45 +1284,6 @@ static int expr_preprocess(void)
     return c != 0;
 }
 
-//#define PP_DEBUG
-
-#if defined(PARSE_DEBUG) || defined(PP_DEBUG)
-static void tok_print(const char *msg, const int *str)
-{
-    int t;
-    CValue cval;
-
-    printf("%s ", msg);
-    while (1) {
-        TOK_GET(&t, &str, &cval);
-        if (!t)
-            break;
-        printf("%s", get_tok_str(t, &cval));
-    }
-    printf("\n");
-}
-
-static void define_print(int v)
-{
-    Sym *s, *a;
-
-    s = define_find(v);
-    printf("#define %s", get_tok_str(v, NULL));
-    if (s->type.t == MACRO_FUNC) {
-        a = s->next;
-        printf("(");
-        if (a)
-            for (;;) {
-                printf("%s", get_tok_str(a->v & ~SYM_FIELD, NULL));
-                if (!(a = a->next))
-                    break;
-                printf(",");
-            }
-        printf(")");
-    }
-    tok_print("", s->d);
-}
-#endif
 
 /* parse after #define */
 ST_FUNC void parse_define(void)
@@ -1301,9 +1360,7 @@ ST_FUNC void parse_define(void)
 bad_twosharp:
         tcc_error("'##' cannot appear at either end of macro");
     define_push(v, t, str.str, first);
-#ifdef PP_DEBUG
     define_print(v);
-#endif
 }
 
 static inline int hash_cached_include(const char *filename)
@@ -3310,23 +3367,6 @@ ST_FUNC void preprocess_delete(void)
         tcc_free(table_ident[i]);
     tcc_free(table_ident);
     table_ident = NULL;
-}
-
-static void pp_line(TCCState *s1, BufferedFile *f, int level)
-{
-    int d;
-    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE)
-        return;
-    if (level == 0 && f->line_ref && (d = f->line_num - f->line_ref) < 8) {
-        while (d > 0)
-            fputs("\n", s1->ppfp), --d;
-    } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
-	fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
-    } else {
-        fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
-            level > 0 ? " 1" : level < 0 ? " 2" : "");
-    }
-    f->line_ref = f->line_num;
 }
 
 /* Preprocess the current file */
