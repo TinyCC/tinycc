@@ -34,6 +34,8 @@
 #define NB_REGS             9
 #endif
 
+typedef int RegArgs;
+
 #ifndef TCC_ARM_VERSION
 # define TCC_ARM_VERSION 5
 #endif
@@ -867,9 +869,14 @@ int floats_in_core_regs(SValue *sval)
   }
 }
 
+ST_FUNC int regargs_nregs(RegArgs *args)
+{
+    return *args;
+}
+
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize, RegArgs *args) {
 #ifdef TCC_ARM_EABI
     int size, align;
     size = type_size(vt, &align);
@@ -879,18 +886,20 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
 	*regsize = 8;
         ret->ref = NULL;
         ret->t = VT_DOUBLE;
-        return (size + 7) >> 3;
+        *args = (size + 7) >> 3;
     } else if (size <= 4) {
         *ret_align = 4;
 	*regsize = 4;
         ret->ref = NULL;
         ret->t = VT_INT;
-        return 1;
+        *args = 1;
     } else
-        return 0;
+        *args = 0;
 #else
-    return 0;
+    *args = 0;
 #endif
+
+    return *args != 0;
 }
 
 /* Parameters are classified according to how they are copied to their final
@@ -1260,6 +1269,7 @@ void gfunc_prolog(CType *func_type)
   int n, nf, size, align, rs, struct_ret = 0;
   int addr, pn, sn; /* pn=core, sn=stack */
   CType ret_type;
+  RegArgs dummy;
 
 #ifdef TCC_ARM_EABI
   struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
@@ -1271,7 +1281,7 @@ void gfunc_prolog(CType *func_type)
 
   n = nf = 0;
   if ((func_vt.t & VT_BTYPE) == VT_STRUCT &&
-      !gfunc_sret(&func_vt, func_var, &ret_type, &align, &rs))
+      !gfunc_sret(&func_vt, func_var, &ret_type, &align, &rs, &dummy))
   {
     n++;
     struct_ret = 1;

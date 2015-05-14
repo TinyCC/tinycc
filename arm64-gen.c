@@ -14,6 +14,8 @@
 // Number of registers available to allocator:
 #define NB_REGS 28 // x0-x18, x30, v0-v7
 
+typedef int RegArgs;
+
 #define TREG_R(x) (x) // x = 0..18
 #define TREG_R30  19
 #define TREG_F(x) (x + 20) // x = 0..7
@@ -1196,8 +1198,15 @@ ST_FUNC void gen_va_arg(CType *t)
     }
 }
 
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *regsize)
+ST_FUNC int regargs_nregs(RegArgs *args)
 {
+    return *args;
+}
+
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *regsize, RegArgs *args)
+{
+    *args = 0;
+
     return 0;
 }
 
