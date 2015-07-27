@@ -127,7 +127,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         for (i=0; i<argc; ++i)
             bound_new_region(argv[i], strlen(argv[i]));
 
-	errno = 0; /* clean errno value */
+        errno = 0; /* clean errno value */
         ret = (*prog_main)(argc, argv);
 
         /* unmark argv area */
@@ -139,7 +139,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     } else
 #endif
     {
-	errno = 0; /* clean errno value */
+        errno = 0; /* clean errno value */
         ret = (*prog_main)(argc, argv);
     }
     return ret;
@@ -652,7 +652,7 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
         if (rt_bound_error_msg && *rt_bound_error_msg)
             rt_error(uc, *rt_bound_error_msg);
         else
-	    rt_error(uc, "access violation");
+            rt_error(uc, "access violation");
         break;
     case EXCEPTION_STACK_OVERFLOW:
         rt_error(uc, "stack overflow");
@@ -697,12 +697,12 @@ static int rt_get_caller_pc(addr_t *paddr, CONTEXT *uc, int level)
     fp = uc->Ebp;
 #endif
     if (level > 0) {
-        for(i=1;i<level;i++) {
-	    /* XXX: check address validity with program info */
-	    if (fp <= 0x1000 || fp >= 0xc0000000)
-		return -1;
-	    fp = ((addr_t*)fp)[0];
-	}
+        for(i = 1; i < level; i++) {
+            /* XXX: check address validity with program info */
+            if (fp <= 0x1000 || fp >= 0xc0000000)
+                return -1;
+            fp = ((addr_t*)fp)[0];
+        }
         pc = ((addr_t*)fp)[1];
     }
     *paddr = pc;

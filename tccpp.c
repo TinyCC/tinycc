@@ -786,7 +786,7 @@ redo_start:
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-        	p = parse_line_comment(p);
+                p = parse_line_comment(p);
             break;
 _default:
         default:
@@ -1786,7 +1786,7 @@ _line_num:
             total_lines += file->line_num - n;
         file->line_num = n;
         if (s1->do_debug)
-    	    put_stabs(file->filename, N_BINCL, 0, 0, 0);
+            put_stabs(file->filename, N_BINCL, 0, 0, 0);
         break;
     case TOK_ERROR:
     case TOK_WARNING:
@@ -2272,7 +2272,7 @@ static void parse_number(const char *p)
         if (n & 0xffffffff00000000LL || must_64bit) {
             tok = TOK_CLLONG;
             n1 = n >> 32;
-	} else {
+        } else {
             tok = TOK_CINT;
             n1 = n;
         }
@@ -2538,7 +2538,7 @@ maybe_newline:
         } else if (c == '.') {
             PEEKC(c, p);
             if (c != '.')
-		expect("'.'");
+                expect("'.'");
             PEEKC(c, p);
             tok = TOK_DOTS;
         } else {

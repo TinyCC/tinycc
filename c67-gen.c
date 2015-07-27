@@ -30,13 +30,13 @@ typedef int RegArgs;
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
-#define RC_INT     0x0001	/* generic integer register */
-#define RC_FLOAT   0x0002	/* generic float register */
+#define RC_INT     0x0001    /* generic integer register */
+#define RC_FLOAT   0x0002    /* generic float register */
 #define RC_EAX     0x0004
 #define RC_ST0     0x0008
 #define RC_ECX     0x0010
 #define RC_EDX     0x0020
-#define RC_INT_BSIDE  0x00000040	/* generic integer register  on b side */
+#define RC_INT_BSIDE  0x00000040    /* generic integer register  on b side */
 #define RC_C67_A4     0x00000100
 #define RC_C67_A5     0x00000200
 #define RC_C67_B4     0x00000400
@@ -204,7 +204,7 @@ void C67_g(int c)
 #endif
     ind1 = ind + 4;
     if (ind1 > (int) cur_text_section->data_allocated)
-	section_realloc(cur_text_section, ind1);
+    section_realloc(cur_text_section, ind1);
     cur_text_section->data[ind] = c & 0xff;
     cur_text_section->data[ind + 1] = (c >> 8) & 0xff;
     cur_text_section->data[ind + 2] = (c >> 16) & 0xff;
@@ -218,26 +218,26 @@ void gsym_addr(int t, int a)
 {
     int n, *ptr;
     while (t) {
-	ptr = (int *) (cur_text_section->data + t);
-	{
-	    Sym *sym;
+    ptr = (int *) (cur_text_section->data + t);
+    {
+        Sym *sym;
 
-	    // extract 32 bit address from MVKH/MVKL
-	    n = ((*ptr >> 7) & 0xffff);
-	    n |= ((*(ptr + 1) >> 7) & 0xffff) << 16;
+        // extract 32 bit address from MVKH/MVKL
+        n = ((*ptr >> 7) & 0xffff);
+        n |= ((*(ptr + 1) >> 7) & 0xffff) << 16;
 
-	    // define a label that will be relocated
+        // define a label that will be relocated
 
-	    sym = get_sym_ref(&char_pointer_type, cur_text_section, a, 0);
-	    greloc(cur_text_section, sym, t, R_C60LO16);
-	    greloc(cur_text_section, sym, t + 4, R_C60HI16);
+        sym = get_sym_ref(&char_pointer_type, cur_text_section, a, 0);
+        greloc(cur_text_section, sym, t, R_C60LO16);
+        greloc(cur_text_section, sym, t + 4, R_C60HI16);
 
-	    // clear out where the pointer was
+        // clear out where the pointer was
 
-	    *ptr &= ~(0xffff << 7);
-	    *(ptr + 1) &= ~(0xffff << 7);
-	}
-	t = n;
+        *ptr &= ~(0xffff << 7);
+        *(ptr + 1) &= ~(0xffff << 7);
+    }
+    t = n;
     }
 }
 

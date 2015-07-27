@@ -451,7 +451,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
                 if (addr) {
                     sym->st_value = (addr_t)addr;
 #ifdef DEBUG_RELOC
-		    printf ("relocate_sym: %s -> 0x%lx\n", name, sym->st_value);
+            printf ("relocate_sym: %s -> 0x%lx\n", name, sym->st_value);
 #endif
                     goto found;
                 }
@@ -580,10 +580,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             {
                 int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
                 x = (*(int *) ptr) & 0xffffff;
-		if (sym->st_shndx == SHN_UNDEF)
-	            val = s1->plt->sh_addr;
+        if (sym->st_shndx == SHN_UNDEF)
+                val = s1->plt->sh_addr;
 #ifdef DEBUG_RELOC
-		printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
+        printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
 #endif
                 (*(int *)ptr) &= 0xff000000;
                 if (x & 0x800000)
@@ -595,8 +595,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 is_call = (type == R_ARM_CALL || (type == R_ARM_PC24 && is_bl));
                 x += val - addr;
 #ifdef DEBUG_RELOC
-		printf (" newx=0x%x name=%s\n", x,
-			(char *) symtab_section->link->data + sym->st_name);
+        printf (" newx=0x%x name=%s\n", x,
+            (char *) symtab_section->link->data + sym->st_name);
 #endif
                 h = x & 2;
                 th_ko = (x & 3) && (!blx_avail || !is_call);
@@ -797,21 +797,21 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:
-	    /* This check must match the one in build_got_entries, testing
-	       if we really need a PLT slot.  */
-	    if (sym->st_shndx == SHN_UNDEF)
-	        /* We've put the PLT slot offset into r_addend when generating
-		   it, and that's what we must use as relocation value (adjusted
-		   by section offset of course).  */
-		val = s1->plt->sh_addr + rel->r_addend;
+        /* This check must match the one in build_got_entries, testing
+           if we really need a PLT slot.  */
+        if (sym->st_shndx == SHN_UNDEF)
+            /* We've put the PLT slot offset into r_addend when generating
+           it, and that's what we must use as relocation value (adjusted
+           by section offset of course).  */
+        val = s1->plt->sh_addr + rel->r_addend;
 #ifdef DEBUG_RELOC
-	    printf ("reloc %d @ 0x%lx: val=0x%lx name=%s\n", type, addr, val,
-		    (char *) symtab_section->link->data + sym->st_name);
+        printf ("reloc %d @ 0x%lx: val=0x%lx name=%s\n", type, addr, val,
+            (char *) symtab_section->link->data + sym->st_name);
 #endif
             if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc)
-	      {
+          {
                 tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed (val=%lx, addr=%lx)", addr, val);
-	      }
+          }
             *(uint32_t *)ptr = 0x14000000 | (type == R_AARCH64_CALL26) << 31 |
                 ((val - addr) >> 2 & 0x3ffffff);
             break;
@@ -836,9 +836,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_AARCH64_JUMP_SLOT:
             /* They don't need addend */
 #ifdef DEBUG_RELOC
-	    printf ("reloc %d @ 0x%lx: val=0x%lx name=%s\n", type, addr,
-		    val - rel->r_addend,
-		    (char *) symtab_section->link->data + sym->st_name);
+        printf ("reloc %d @ 0x%lx: val=0x%lx name=%s\n", type, addr,
+            val - rel->r_addend,
+            (char *) symtab_section->link->data + sym->st_name);
 #endif
             *(addr_t *)ptr = val - rel->r_addend;
             break;
@@ -879,12 +879,12 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_64);
-		    qrel->r_addend = rel->r_addend;
+            qrel->r_addend = rel->r_addend;
                     qrel++;
                     break;
                 } else {
-		    qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-		    qrel->r_addend = *(long long *)ptr + val;
+            qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
+            qrel->r_addend = *(long long *)ptr + val;
                     qrel++;
                 }
             }
@@ -917,14 +917,14 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             goto plt32pc32;
 
         case R_X86_64_PLT32:
-	    /* We've put the PLT slot offset into r_addend when generating
-	       it, and that's what we must use as relocation value (adjusted
-	       by section offset of course).  */
-	    val = s1->plt->sh_addr + rel->r_addend;
-	    /* fallthrough.  */
+        /* We've put the PLT slot offset into r_addend when generating
+           it, and that's what we must use as relocation value (adjusted
+           by section offset of course).  */
+        val = s1->plt->sh_addr + rel->r_addend;
+        /* fallthrough.  */
 
-	plt32pc32:
-	{
+    plt32pc32:
+    {
             long long diff;
             diff = (long long)val - addr;
             if (diff < -2147483648LL || diff > 2147483647LL) {
@@ -1080,8 +1080,8 @@ static void build_got(TCCState *s1)
    and 'info' can be modifed if more precise info comes from the DLL.
    Returns offset of GOT or PLT slot.  */
 static unsigned long put_got_entry(TCCState *s1,
-				   int reloc_type, unsigned long size, int info,
-				   int sym_index)
+                   int reloc_type, unsigned long size, int info,
+                   int sym_index)
 {
     int index, need_plt_entry;
     const char *name;
@@ -1107,18 +1107,18 @@ static unsigned long put_got_entry(TCCState *s1,
 #endif
 
     if (need_plt_entry && !s1->plt) {
-	/* add PLT */
-	s1->plt = new_section(s1, ".plt", SHT_PROGBITS,
-			      SHF_ALLOC | SHF_EXECINSTR);
-	s1->plt->sh_entsize = 4;
+    /* add PLT */
+    s1->plt = new_section(s1, ".plt", SHT_PROGBITS,
+                  SHF_ALLOC | SHF_EXECINSTR);
+    s1->plt->sh_entsize = 4;
     }
 
     /* If a got/plt entry already exists for that symbol, no need to add one */
     if (sym_index < s1->nb_sym_attrs) {
-	if (need_plt_entry && s1->sym_attrs[sym_index].plt_offset)
-	  return s1->sym_attrs[sym_index].plt_offset;
-	else if (!need_plt_entry && s1->sym_attrs[sym_index].got_offset)
-	  return s1->sym_attrs[sym_index].got_offset;
+    if (need_plt_entry && s1->sym_attrs[sym_index].plt_offset)
+      return s1->sym_attrs[sym_index].plt_offset;
+    else if (!need_plt_entry && s1->sym_attrs[sym_index].got_offset)
+      return s1->sym_attrs[sym_index].got_offset;
     }
 
     symattr = alloc_sym_attr(s1, sym_index);
@@ -1135,7 +1135,7 @@ static unsigned long put_got_entry(TCCState *s1,
             Section *plt;
             uint8_t *p;
             int modrm;
-	    unsigned long relofs;
+        unsigned long relofs;
 
 #if defined(TCC_OUTPUT_DLL_WITH_PLT)
             modrm = 0x25;
@@ -1160,10 +1160,10 @@ static unsigned long put_got_entry(TCCState *s1,
                 put32(p + 8, PTR_SIZE * 2);
             }
 
-	    /* The PLT slot refers to the relocation entry it needs
-	       via offset.  The reloc entry is created below, so its
-	       offset is the current data_offset.  */
-	    relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
+        /* The PLT slot refers to the relocation entry it needs
+           via offset.  The reloc entry is created below, so its
+           offset is the current data_offset.  */
+        relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
             symattr->plt_offset = plt->data_offset;
             p = section_ptr_add(plt, 16);
             p[0] = 0xff; /* jmp *(got + x) */
@@ -1171,19 +1171,19 @@ static unsigned long put_got_entry(TCCState *s1,
             put32(p + 2, s1->got->data_offset);
             p[6] = 0x68; /* push $xxx */
 #ifdef TCC_TARGET_X86_64
-	    /* On x86-64, the relocation is referred to by _index_.  */
-	    put32(p + 7, relofs / sizeof (ElfW_Rel));
+        /* On x86-64, the relocation is referred to by _index_.  */
+        put32(p + 7, relofs / sizeof (ElfW_Rel));
 #else
             put32(p + 7, relofs);
 #endif
             p[11] = 0xe9; /* jmp plt_start */
             put32(p + 12, -(plt->data_offset));
 
-	    /* If this was an UNDEF symbol set the offset in the
-	       dynsymtab to the PLT slot, so that PC32 relocs to it
-	       can be resolved.  */
-	    if (sym->st_shndx == SHN_UNDEF)
-	        offset = plt->data_offset - 16;
+        /* If this was an UNDEF symbol set the offset in the
+           dynsymtab to the PLT slot, so that PC32 relocs to it
+           can be resolved.  */
+        if (sym->st_shndx == SHN_UNDEF)
+            offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_ARM)
         if (need_plt_entry) {
@@ -1220,7 +1220,7 @@ static unsigned long put_got_entry(TCCState *s1,
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
-	    if (sym->st_shndx == SHN_UNDEF)
+        if (sym->st_shndx == SHN_UNDEF)
                 offset = plt->data_offset - 16;
         }
 #elif defined(TCC_TARGET_ARM64)
@@ -1250,19 +1250,19 @@ static unsigned long put_got_entry(TCCState *s1,
 #error unsupported CPU
 #endif
     if (s1->dynsym) {
-	/* XXX This might generate multiple syms for name.  */
+    /* XXX This might generate multiple syms for name.  */
         index = put_elf_sym(s1->dynsym, offset,
                             size, info, 0, sym->st_shndx, name);
         /* Create the relocation (it's against the GOT for PLT
-	   and GOT relocs).  */
+       and GOT relocs).  */
         put_elf_reloc(s1->dynsym, s1->got,
                       s1->got->data_offset,
                       reloc_type, index);
     } else {
-	/* Without .dynsym (i.e. static link or memory output) we
-	   still need relocs against the generated got, so as to fill
-	   the entries with the symbol values (determined later).  */
-	put_elf_reloc(symtab_section, s1->got,
+    /* Without .dynsym (i.e. static link or memory output) we
+       still need relocs against the generated got, so as to fill
+       the entries with the symbol values (determined later).  */
+    put_elf_reloc(symtab_section, s1->got,
                       s1->got->data_offset,
                       reloc_type, sym_index);
     }
@@ -1324,8 +1324,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
                     build_got(s1);
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-		if (type != R_ARM_GOTOFF && type != R_ARM_GOTPC
-		    && sym->st_shndx == SHN_UNDEF) {
+        if (type != R_ARM_GOTOFF && type != R_ARM_GOTPC
+            && sym->st_shndx == SHN_UNDEF) {
                     unsigned long ofs;
                     /* look at the symbol got offset. If none, then add one */
                     if (type == R_ARM_GOT32)
@@ -1333,27 +1333,27 @@ ST_FUNC void build_got_entries(TCCState *s1)
                     else
                         reloc_type = R_ARM_JUMP_SLOT;
                     ofs = put_got_entry(s1, reloc_type, sym->st_size,
-				        sym->st_info, sym_index);
+                        sym->st_info, sym_index);
 #ifdef DEBUG_RELOC
                     printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
-			    (char *) symtab_section->link->data + sym->st_name,
-			    type, sym->st_shndx, ofs);
+                (char *) symtab_section->link->data + sym->st_name,
+                type, sym->st_shndx, ofs);
 #endif
-		    if (type != R_ARM_GOT32) {
-			addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
-						+ rel->r_offset);
-			/* x must be signed!  */
-			int x = *ptr & 0xffffff;
-			x = (x << 8) >> 8;
-			x <<= 2;
-			x += ofs;
-			x >>= 2;
+            if (type != R_ARM_GOT32) {
+            addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
+                        + rel->r_offset);
+            /* x must be signed!  */
+            int x = *ptr & 0xffffff;
+            x = (x << 8) >> 8;
+            x <<= 2;
+            x += ofs;
+            x >>= 2;
 #ifdef DEBUG_RELOC
-			printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
-				(*ptr & 0xff000000) | x, x);
+            printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
+                (*ptr & 0xff000000) | x, x);
 #endif
-			*ptr = (*ptr & 0xff000000) | x;
-		    }
+            *ptr = (*ptr & 0xff000000) | x;
+            }
                 }
                 break;
             case R_ARM_THM_JUMP24:
@@ -1397,22 +1397,22 @@ ST_FUNC void build_got_entries(TCCState *s1)
                               sym_index);
                 break;
 
-	    case R_AARCH64_JUMP26:
-	    case R_AARCH64_CALL26:
+        case R_AARCH64_JUMP26:
+        case R_AARCH64_CALL26:
                 if (!s1->got)
                     build_got(s1);
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                 if (sym->st_shndx == SHN_UNDEF) {
-		    unsigned long ofs;
-		    reloc_type = R_AARCH64_JUMP_SLOT;
+            unsigned long ofs;
+            reloc_type = R_AARCH64_JUMP_SLOT;
                     ofs = put_got_entry(s1, reloc_type, sym->st_size,
-					sym->st_info, sym_index);
-		    /* We store the place of the generated PLT slot
-		       in our addend.  */
-		    rel->r_addend += ofs;
+                    sym->st_info, sym_index);
+            /* We store the place of the generated PLT slot
+               in our addend.  */
+            rel->r_addend += ofs;
                 }
-		break;
+        break;
 #elif defined(TCC_TARGET_C67)
             case R_C60_GOT32:
             case R_C60_GOTOFF:
@@ -1439,29 +1439,29 @@ ST_FUNC void build_got_entries(TCCState *s1)
             case R_X86_64_PLT32:
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-		if (type == R_X86_64_PLT32 &&
-		    ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT)
-		  {
-		    rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
-		    break;
-		  }
+        if (type == R_X86_64_PLT32 &&
+            ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT)
+          {
+            rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
+            break;
+          }
 
                 if (!s1->got)
                     build_got(s1);
                 if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL ||
                     type == R_X86_64_PLT32) {
-		    unsigned long ofs;
+            unsigned long ofs;
                     /* look at the symbol got offset. If none, then add one */
                     if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL)
                         reloc_type = R_X86_64_GLOB_DAT;
                     else
                         reloc_type = R_X86_64_JUMP_SLOT;
                     ofs = put_got_entry(s1, reloc_type, sym->st_size,
-					sym->st_info, sym_index);
-		    if (type == R_X86_64_PLT32)
-		        /* We store the place of the generated PLT slot
-			   in our addend.  */
-		        rel->r_addend += ofs;
+                    sym->st_info, sym_index);
+            if (type == R_X86_64_PLT32)
+                /* We store the place of the generated PLT slot
+               in our addend.  */
+                rel->r_addend += ofs;
                 }
                 break;
 #else
@@ -1546,21 +1546,21 @@ static int tcc_add_support(TCCState *s1, const char *filename)
     snprintf(buf, sizeof(buf), "%s/%s/%s", s1->tcc_lib_path,
     /* an cpu specific path inside tcc_lib_path, mainly for keeping libtcc1.a */
     #ifdef TCC_TARGET_I386
-	"i386"
+    "i386"
     #endif
     #ifdef TCC_TARGET_X86_64
         "x86-64"
     #endif
     #ifdef TCC_TARGET_ARM
-	"arm"
+    "arm"
     #endif
     #ifdef TCC_TARGET_ARM64
-	"arm64"
+    "arm64"
     #endif
     #ifdef TCC_TARGET_C67
-	"C67"
+    "C67"
     #endif
-	,filename);
+    ,filename);
 
     return tcc_add_file(s1, buf, TCC_FILETYPE_BINARY);
 }
@@ -1587,17 +1587,17 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
            when __bound_ptr_add, __bound_new_region,
            __bound_delete_region called */
 
-	int sym_index = find_elf_sym(symtab_section, "__bound_init");
-	if (sym_index) {
-    	    Section *init_section = find_section(s1, ".init");
-    	    unsigned char *pinit = section_ptr_add(init_section, 5);
-    	    pinit[0] = 0xe8;
-    	    put32(pinit + 1, -4);
-    	    put_elf_reloc(symtab_section, init_section,
+    int sym_index = find_elf_sym(symtab_section, "__bound_init");
+    if (sym_index) {
+            Section *init_section = find_section(s1, ".init");
+            unsigned char *pinit = section_ptr_add(init_section, 5);
+            pinit[0] = 0xe8;
+            put32(pinit + 1, -4);
+            put_elf_reloc(symtab_section, init_section,
                       init_section->data_offset - 4, R_386_PC32, sym_index);
-	}
-	else
-    	    tcc_warning("__bound_init not defined");
+    }
+    else
+            tcc_warning("__bound_init not defined");
     }
 #endif
 }
@@ -1905,11 +1905,11 @@ static void export_global_syms(TCCState *s1)
     s1->symtab_to_dynsym = tcc_mallocz(sizeof(int) * nb_syms);
     for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
         if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
-	    name = (char *) symtab_section->link->data + sym->st_name;
-	    dynindex = put_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
-				   sym->st_info, 0, sym->st_shndx, name);
-	    index = sym - (ElfW(Sym) *) symtab_section->data;
-	    s1->symtab_to_dynsym[index] = dynindex;
+        name = (char *) symtab_section->link->data + sym->st_name;
+        dynindex = put_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
+                   sym->st_info, 0, sym->st_shndx, name);
+        index = sym - (ElfW(Sym) *) symtab_section->data;
+        s1->symtab_to_dynsym[index] = dynindex;
         }
     }
 }
@@ -2179,15 +2179,15 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                         file_offset += s->sh_size;
                 }
             }
-	    if (j == 0) {
-		/* Make the first PT_LOAD segment include the program
-		   headers itself (and the ELF header as well), it'll
-		   come out with same memory use but will make various
-		   tools like binutils strip work better.  */
-		ph->p_offset &= ~(ph->p_align - 1);
-		ph->p_vaddr &= ~(ph->p_align - 1);
-		ph->p_paddr &= ~(ph->p_align - 1);
-	    }
+        if (j == 0) {
+        /* Make the first PT_LOAD segment include the program
+           headers itself (and the ELF header as well), it'll
+           come out with same memory use but will make various
+           tools like binutils strip work better.  */
+        ph->p_offset &= ~(ph->p_align - 1);
+        ph->p_vaddr &= ~(ph->p_align - 1);
+        ph->p_paddr &= ~(ph->p_align - 1);
+        }
             ph->p_filesz = file_offset - ph->p_offset;
             ph->p_memsz = addr - ph->p_vaddr;
             ph++;
@@ -2662,10 +2662,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
             for_each_elem(s1->dynsym, 1, sym, ElfW(Sym)) {
                 if (sym->st_shndx == SHN_UNDEF) {
                     /* relocate to PLT if symbol corresponds to a PLT entry,
-		       but not if it's a weak symbol */
-		    if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
-		        sym->st_value = 0;
-		    else if (sym->st_value)
+               but not if it's a weak symbol */
+            if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
+                sym->st_value = 0;
+            else if (sym->st_value)
                         sym->st_value += s1->plt->sh_addr;
                 } else if (sym->st_shndx < SHN_LORESERVE) {
                     /* do symbol relocation */
@@ -2690,14 +2690,14 @@ static int elf_output_file(TCCState *s1, const char *filename)
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
     if (s1->do_strip) {
-	int rc;
-	const char *strip_cmd = "sstrip "; // super strip utility from ELFkickers
-	const char *null_dev = " 2> /dev/null";
-	char buf[1050];
-	snprintf(buf, sizeof(buf), "%s%s%s", strip_cmd, filename, null_dev);
-	rc = system(buf);
-	if (rc)
-	    system(buf+1);	// call a strip utility from binutils
+    int rc;
+    const char *strip_cmd = "sstrip "; // super strip utility from ELFkickers
+    const char *null_dev = " 2> /dev/null";
+    char buf[1050];
+    snprintf(buf, sizeof(buf), "%s%s%s", strip_cmd, filename, null_dev);
+    rc = system(buf);
+    if (rc)
+        system(buf+1);    // call a strip utility from binutils
     }
  the_end:
     tcc_free(s1->symtab_to_dynsym);

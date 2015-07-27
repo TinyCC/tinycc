@@ -370,7 +370,7 @@ struct syment
 #define  INCREF_COFF(x) ((((x)&~N_BTMASK_COFF)<<N_TSHIFT_COFF)|(DT_PTR<<N_BTSHFT_COFF)|(x&N_BTMASK_COFF))
 #define  DECREF_COFF(x) ((((x)>>N_TSHIFT_COFF)&~N_BTMASK_COFF)|((x)&N_BTMASK_COFF))
 
-
+
 /*------------------------------------------------------------------------*/
 /*  AUXILIARY SYMBOL ENTRY                                                */
 /*------------------------------------------------------------------------*/

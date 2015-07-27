@@ -477,18 +477,17 @@ void load(int r, SValue *sv)
             gen_modrm(r, VT_LOCAL, sv->sym, fc);
         } else if (v == VT_CMP) {
             orex(0,r,0,0);
-	    if ((fc & ~0x100) != TOK_NE)
-              oad(0xb8 + REG_VALUE(r), 0); /* mov $0, r */
-	    else
-              oad(0xb8 + REG_VALUE(r), 1); /* mov $1, r */
-	    if (fc & 0x100)
-	      {
-	        /* This was a float compare.  If the parity bit is
-		   set the result was unordered, meaning false for everything
-		   except TOK_NE, and true for TOK_NE.  */
-		fc &= ~0x100;
-		o(0x037a + (REX_BASE(r) << 8));
-	      }
+            if ((fc & ~0x100) != TOK_NE)
+                oad(0xb8 + REG_VALUE(r), 0); /* mov $0, r */
+            else
+                oad(0xb8 + REG_VALUE(r), 1); /* mov $1, r */
+            if (fc & 0x100) {
+                /* This was a float compare.  If the parity bit is
+                 * set the result was unordered, meaning false for everything
+                 * except TOK_NE, and true for TOK_NE.  */
+                fc &= ~0x100;
+                o(0x037a + (REX_BASE(r) << 8));
+            }
             orex(0,r,0, 0x0f); /* setxx %br */
             o(fc);
             o(0xc0 + REG_VALUE(r));
@@ -619,7 +618,7 @@ static void gcall_or_jmp(int is_jmp)
 {
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-	((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
+    ((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
@@ -1705,7 +1704,7 @@ void gfunc_prolog(CType *func_type)
             param_addr = addr;
             addr += size;
             break;
-	default: break; /* nothing to be done for x86_64_mode_none */
+        default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
                  VT_LOCAL | VT_LVAL, param_addr);
@@ -1717,8 +1716,8 @@ void gfunc_prolog(CType *func_type)
         func_bound_offset = lbounds_section->data_offset;
         func_bound_ind = ind;
         oad(0xb8, 0); /* lbound section pointer */
-	o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
-	oad(0xb8, 0); /* call to function */
+        o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
+        oad(0xb8, 0); /* call to function */
     }
 #endif
 }
@@ -1730,7 +1729,7 @@ void gfunc_epilog(void)
 
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check
-	&& func_bound_offset != lbounds_section->data_offset)
+        && func_bound_offset != lbounds_section->data_offset)
     {
         addr_t saved_ind;
         addr_t *bounds_ptr;
@@ -1754,7 +1753,7 @@ void gfunc_epilog(void)
         o(0x5250); /* save returned value, if any */
         greloc(cur_text_section, sym_data, ind + 1, R_386_32);
         oad(0xb8, 0); /* mov xxx, %rax */
-	o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
+        o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
         gen_static_call(TOK___bound_local_delete);
         o(0x585a); /* restore returned value, if any */
     }
@@ -1806,24 +1805,24 @@ int gtst(int inv, int t)
     v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
-	if (vtop->c.i & 0x100)
-	  {
-	    /* This was a float compare.  If the parity flag is set
-	       the result was unordered.  For anything except != this
-	       means false and we don't jump (anding both conditions).
-	       For != this means true (oring both).
-	       Take care about inverting the test.  We need to jump
-	       to our target if the result was unordered and test wasn't NE,
-	       otherwise if unordered we don't want to jump.  */
-	    vtop->c.i &= ~0x100;
-	    if (!inv == (vtop->c.i != TOK_NE))
-	      o(0x067a);  /* jp +6 */
-	    else
-	      {
-	        g(0x0f);
-		t = psym(0x8a, t); /* jp t */
-	      }
-	  }
+        if (vtop->c.i & 0x100)
+          {
+            /* This was a float compare.  If the parity flag is set
+               the result was unordered.  For anything except != this
+               means false and we don't jump (anding both conditions).
+               For != this means true (oring both).
+               Take care about inverting the test.  We need to jump
+               to our target if the result was unordered and test wasn't NE,
+               otherwise if unordered we don't want to jump.  */
+            vtop->c.i &= ~0x100;
+            if (!inv == (vtop->c.i != TOK_NE))
+              o(0x067a);  /* jp +6 */
+            else
+              {
+                g(0x0f);
+                t = psym(0x8a, t); /* jp t */
+              }
+          }
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
     } else if (v == VT_JMP || v == VT_JMPI) {

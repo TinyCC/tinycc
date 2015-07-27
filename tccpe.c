@@ -398,22 +398,22 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
         s = pe_export_name(s1, sym);
         if (n) {
             /* second try: */
-	    if (sym->st_other & ST_PE_STDCALL) {
+        if (sym->st_other & ST_PE_STDCALL) {
                 /* try w/0 stdcall deco (windows API convention) */
-	        p = strrchr(s, '@');
-	        if (!p || s[0] != '_')
-	            break;
-	        strcpy(buffer, s+1)[p-s-1] = 0;
-	    } else if (s[0] != '_') { /* try non-ansi function */
-	        buffer[0] = '_', strcpy(buffer + 1, s);
-	    } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
-	        strcpy(buffer, s + 6);
-	    } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
-	        strcpy(buffer, s + 6);
-	    } else {
-	        break;
-	    }
-	    s = buffer;
+            p = strrchr(s, '@');
+            if (!p || s[0] != '_')
+                break;
+            strcpy(buffer, s+1)[p-s-1] = 0;
+        } else if (s[0] != '_') { /* try non-ansi function */
+            buffer[0] = '_', strcpy(buffer + 1, s);
+        } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
+            strcpy(buffer, s + 6);
+        } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
+            strcpy(buffer, s + 6);
+        } else {
+            break;
+        }
+        s = buffer;
         }
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
         // printf("find (%d) %d %s\n", n, sym_index, s);
@@ -565,9 +565,9 @@ static int pe_write(struct pe_info *pe)
 #endif
     /* NT additional fields. */
 #if defined(TCC_TARGET_ARM)
-    0x00100000,	    /*DWORD   ImageBase; */
+    0x00100000,        /*DWORD   ImageBase; */
 #else
-    0x00400000,	    /*DWORD   ImageBase; */
+    0x00400000,        /*DWORD   ImageBase; */
 #endif
     0x00001000, /*DWORD   SectionAlignment; */
     0x00000200, /*DWORD   FileAlignment; */
@@ -1841,13 +1841,13 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
             pe.subsystem = s1->pe_subsystem;
 
         /* set default file/section alignment */
-	if (pe.subsystem == 1) {
-	    pe.section_align = 0x20;
-	    pe.file_align = 0x20;
-	} else {
-	    pe.section_align = 0x1000;
-	    pe.file_align = 0x200;
-	}
+        if (pe.subsystem == 1) {
+            pe.section_align = 0x20;
+            pe.file_align = 0x20;
+        } else {
+            pe.section_align = 0x1000;
+            pe.file_align = 0x200;
+        }
 
         if (s1->section_align != 0)
             pe.section_align = s1->section_align;
