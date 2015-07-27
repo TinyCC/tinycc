@@ -1,5 +1,9 @@
-    Indentation
+TinyCC Coding Style
+==========================
+Lines should be no more than 80 columns long.
 
+Indentation
+--------------------------------------
 Turn on a "fill tabs with spaces" option in your editor.
 
 Be also careful that some files are indented with 2 spaces (when they
