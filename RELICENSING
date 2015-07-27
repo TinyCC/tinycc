@@ -37,6 +37,7 @@
  Thomas Preud'homme         YES                 arm-gen.c
  Timo VJ Lähde (Timppa)     ?                   tiny_libmaker.c
  TK                         ?                   tcccoff.c c67-gen.c
+ waddlesplash				YES
 
 
  ------------------------------------------------------------------------------
