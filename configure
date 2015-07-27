@@ -337,7 +337,7 @@ strip="${cross_prefix}${strip}"
 CONFTEST=./conftest$EXESUF
 
 if test -z "$cross_prefix" ; then
-  if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
+  if ! $cc -o $CONFTEST $source_path/src/conftest.c 2>/dev/null ; then
     echo "configure: error: '$cc' failed to compile conftest.c."
   else
     bigendian="$($CONFTEST bigendian)"
@@ -560,7 +560,7 @@ fi
 version=`head $source_path/VERSION`
 echo "VERSION=$version" >>config.mak
 echo "#define TCC_VERSION \"$version\"" >> $TMPH
-echo "@set VERSION $version" > config.texi
+echo "@set VERSION $version" >docs/config.texi
 echo "SRC_PATH=$source_path" >>config.mak
 
 if test "$source_path_used" = "yes" ; then
@@ -573,9 +573,9 @@ else
 fi
 echo 'top_builddir=$(TOP)' >>config.mak
 
-diff $TMPH config.h >/dev/null 2>&1
+diff $TMPH src/config.h >/dev/null 2>&1
 if test $? -ne 0 ; then
-    mv -f $TMPH config.h
+    mv -f $TMPH src/config.h
 else
     echo "config.h is unchanged"
 fi

@@ -293,20 +293,20 @@
 
 #define TARGET_DEFS_ONLY
 #ifdef TCC_TARGET_I386
-# include "i386-gen.c"
+# include "x86/i386-gen.c"
 #endif
 #ifdef TCC_TARGET_X86_64
-# include "x86_64-gen.c"
+# include "x86/x86_64-gen.c"
 #endif
 #ifdef TCC_TARGET_ARM
-# include "arm-gen.c"
+# include "arm/arm-gen.c"
 #endif
 #ifdef TCC_TARGET_ARM64
-# include "arm64-gen.c"
+# include "arm/arm64-gen.c"
 #endif
 #ifdef TCC_TARGET_C67
 # include "coff.h"
-# include "c67-gen.c"
+# include "tms320c67c67-gen.c"
 #endif
 #undef TARGET_DEFS_ONLY
 

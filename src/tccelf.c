@@ -1549,7 +1549,7 @@ static int tcc_add_support(TCCState *s1, const char *filename)
     "i386"
     #endif
     #ifdef TCC_TARGET_X86_64
-        "x86-64"
+    "x86_64"
     #endif
     #ifdef TCC_TARGET_ARM
     "arm"

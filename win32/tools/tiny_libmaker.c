@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../elf.h"
+#include "../../src/elf.h"
 
 #ifdef TCC_TARGET_X86_64
 # define ELFCLASSW ELFCLASS64

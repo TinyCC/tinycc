@@ -2,7 +2,7 @@
 # Tiny C Compiler Makefile - tests
 #
 
-TOP = ..
+TOP = ../src
 include $(TOP)/Makefile
 SRCDIR = $(top_srcdir)/tests
 VPATH = $(SRCDIR) $(top_srcdir)
@@ -60,11 +60,11 @@ ifeq ($(TARGETOS),Darwin)
 endif
 
 # run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
+TCCFLAGS = -B$(TOP)/../lib -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/../include -L$(TOP)
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
+ TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/../include -L$(TOP)
 endif
-XTCCFLAGS = -B$(TOP) -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
+XTCCFLAGS = -B$(TOP)/../lib -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/../include
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
 RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
@@ -73,7 +73,7 @@ DISAS = objdump -d
 
 # libtcc test
 ifdef LIBTCC1
- LIBTCC1:=$(TOP)/$(LIBTCC1)
+ LIBTCC1:=$(TOP)/lib/$(LIBTCC1)
 endif
 
 all test : $(TESTS)

@@ -19,7 +19,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "tcc.h"
+#include "../tcc.h"
 
 /* #define NB_ASM_REGS 8 */
 #define MAX_OPERANDS 3

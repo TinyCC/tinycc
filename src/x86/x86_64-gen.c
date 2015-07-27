@@ -136,7 +136,7 @@ enum {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
-#include "tcc.h"
+#include "../tcc.h"
 #include <assert.h>
 
 ST_DATA const int reg_classes[NB_REGS] = {

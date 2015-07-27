@@ -5,7 +5,7 @@ a.out
 *.log
 tcc_g
 tcc
-/*-tcc
+/src/*-tcc
 tc2.c
 doc
 tc3s.c
@@ -63,7 +63,7 @@ lib/i386-win32
 lib/arm
 lib/arm64
 tcc-doc.info
-conftest*
+conftest*!conftest.c
 tiny_libmaker
 *.dSYM
 *~

@@ -3,7 +3,7 @@
 #
 
 TOP ?= .
-include $(TOP)/config.mak
+include $(TOP)/../config.mak
 VPATH = $(top_srcdir)
 
 CPPFLAGS += -I$(TOP) # for config.h
@@ -113,14 +113,14 @@ endif
 
 CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
-I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
-WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
-WIN64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h tccpe.c
-WINCE_FILES = $(CORE_FILES) arm-gen.c tccpe.c
-X86_64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h
-ARM_FILES = $(CORE_FILES) arm-gen.c
-ARM64_FILES = $(CORE_FILES) arm64-gen.c
-C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
+I386_FILES = $(CORE_FILES) x86/i386-gen.c x86/i386-asm.c x86/i386-asm.h x86/i386-tok.h
+WIN32_FILES = $(CORE_FILES) x86/i386-gen.c x86/i386-asm.c x86/i386-asm.h x86/i386-tok.h tccpe.c
+WIN64_FILES = $(CORE_FILES) x86/x86_64-gen.c x86/i386-asm.c x86/x86_64-asm.h tccpe.c
+WINCE_FILES = $(CORE_FILES) arm/arm-gen.c tccpe.c
+X86_64_FILES = $(CORE_FILES) x86/x86_64-gen.c x86/i386-asm.c x86/x86_64-asm.h
+ARM_FILES = $(CORE_FILES) arm/arm-gen.c
+ARM64_FILES = $(CORE_FILES) arm/arm64-gen.c
+C67_FILES = $(CORE_FILES) tms320c67/c67-gen.c tcccoff.c
 
 ifdef CONFIG_WIN64
 PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
@@ -249,18 +249,18 @@ libtcc.dll libtcc.def libtcc.a: $(LIBTCC_OBJ)
 endif
 
 # windows utilities
-tiny_impdef$(EXESUF): win32/tools/tiny_impdef.c
+tiny_impdef$(EXESUF): ../win32/tools/tiny_impdef.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
-tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
+tiny_libmaker$(EXESUF): ../win32/tools/tiny_libmaker.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # TinyCC runtime libraries
 libtcc1.a : FORCE
-	$(MAKE) -C lib native
+	$(MAKE) -C ../lib native
 	if test ! -d $(ARCH); then mkdir $(ARCH); fi
 	if test ! -L $(ARCH)/$@; then ln -sf ../$@ $(ARCH)/$@; fi
 lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
-	$(MAKE) -C lib cross TARGET=$*
+	$(MAKE) -C ../lib cross TARGET=$*
 
 FORCE:
 
@@ -360,21 +360,21 @@ uninstall:
 endif
 
 # documentation and man page
-tcc-doc.html: tcc-doc.texi
+tcc-doc.html: ../docs/tcc-doc.texi
 	-makeinfo --no-split --html --number-sections -o $@ $<
 
-tcc.1: tcc-doc.texi
+tcc.1: ../docs/tcc-doc.texi
 	-$(top_srcdir)/texi2pod.pl $< tcc.pod
-	-pod2man --section=1 --center="Tiny C Compiler" --release=`cat $(top_srcdir)/VERSION` tcc.pod > $@
+	-pod2man --section=1 --center="Tiny C Compiler" --release=`cat $(top_srcdir)/../VERSION` tcc.pod > $@
 
-tcc-doc.info: tcc-doc.texi
+tcc-doc.info: ../docs/tcc-doc.texi
 	-makeinfo $<
 
 # in tests subdir
 export LIBTCC1
 
 %est:
-	$(MAKE) -C tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
+	$(MAKE) -C ../tests $@ 'PROGS_CROSS=$(PROGS_CROSS)'
 
 clean:
 	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
@@ -384,9 +384,9 @@ ifeq ($(HOST_OS),Linux)
 	-rm -r ./C:
 endif
 	-rm *-tcc$(EXESUF)
-	$(MAKE) -C tests $@
+	$(MAKE) -C ../tests $@
 ifneq ($(LIBTCC1),)
-	$(MAKE) -C lib $@
+	$(MAKE) -C ../lib $@
 endif
 
 distclean: clean
@@ -404,7 +404,7 @@ TAGS:
 
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
-TCC-VERSION := tcc-$(shell cat $(top_srcdir)/VERSION)
+TCC-VERSION := tcc-$(shell cat $(top_srcdir)/../VERSION)
 tar:    tcc-doc.html
 	mkdir $(TCC-VERSION)
 	( cd $(TCC-VERSION) && git --git-dir ../.git checkout -f )

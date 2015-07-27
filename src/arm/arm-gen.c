@@ -151,7 +151,7 @@ enum float_abi {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
-#include "tcc.h"
+#include "../tcc.h"
 
 enum float_abi float_abi;
 

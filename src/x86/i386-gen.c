@@ -89,7 +89,7 @@ enum {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
-#include "tcc.h"
+#include "../tcc.h"
 
 ST_DATA const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_EAX,
