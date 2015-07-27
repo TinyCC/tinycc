@@ -36,7 +36,7 @@
      DEF(TOK_RESTRICT2, "__restrict")
      DEF(TOK_RESTRICT3, "__restrict__")
      DEF(TOK_EXTENSION, "__extension__") /* gcc keyword */
-     
+
      DEF(TOK_FLOAT, "float")
      DEF(TOK_DOUBLE, "double")
      DEF(TOK_BOOL, "_Bool")

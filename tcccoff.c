@@ -1,6 +1,6 @@
 /*
  *  COFF file handling for TCC
- * 
+ *
  *  Copyright (c) 2003, 2004 TK
  *  Copyright (c) 2004 Fabrice Bellard
  *
@@ -606,7 +606,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 		// put a .ef
 
 		strcpy(csym._n._n_name, ".ef");
-		csym.n_value = EndAddress[k];	// physical address  
+		csym.n_value = EndAddress[k];	// physical address
 		csym.n_scnum = CoffTextSectionNo;
 		csym.n_type = 0;
 		csym.n_sclass = C_FCN;

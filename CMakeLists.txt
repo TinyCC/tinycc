@@ -154,7 +154,7 @@ macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libt
     foreach(make_tcc_def ${TCC_NATIVE_DEFINITIONS})
       set(TCC_NATIVE_FLAGS ${TCC_NATIVE_FLAGS} -D${make_tcc_def})
     endforeach()
-    
+
     if (TCC_BUILD_NATIVE)
       add_library(libtcc
         libtcc.c
@@ -179,7 +179,7 @@ macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libt
       endif()
       install(TARGETS tcc libtcc RUNTIME DESTINATION ${EXE_PATH} LIBRARY DESTINATION ${NATIVE_LIB_PATH} ARCHIVE DESTINATION ${NATIVE_LIB_PATH})
       set_target_properties(tcc libtcc PROPERTIES COMPILE_DEFINITIONS "${TCC_NATIVE_DEFINITIONS}")
-      
+
       if("${libtcc_sources}" STRGREATER "")
         make_libtcc1("" tcc "${libtcc_ar}" "${TCC_NATIVE_DEFINITIONS}" "${libtcc_includes}" "${libtcc_sources}")
       endif()
@@ -188,7 +188,7 @@ macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libt
     add_executable(${cross_name}-tcc tcc.c)
     set_target_properties(${cross_name}-tcc PROPERTIES COMPILE_DEFINITIONS "ONE_SOURCE;${definitions}")
     install(TARGETS ${cross_name}-tcc RUNTIME DESTINATION ${EXE_PATH})
-    
+
     if("${libtcc_sources}" STRGREATER "")
       make_libtcc1(${cross_name} "${cross_name}-tcc" "${libtcc_ar}" "${definitions}" "${libtcc_includes}" "${libtcc_sources}")
     endif()

@@ -1179,7 +1179,7 @@ static unsigned long put_got_entry(TCCState *s1,
             p[11] = 0xe9; /* jmp plt_start */
             put32(p + 12, -(plt->data_offset));
 
-	    /* If this was an UNDEF symbol set the offset in the 
+	    /* If this was an UNDEF symbol set the offset in the
 	       dynsymtab to the PLT slot, so that PC32 relocs to it
 	       can be resolved.  */
 	    if (sym->st_shndx == SHN_UNDEF)

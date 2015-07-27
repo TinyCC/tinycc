@@ -1,6 +1,6 @@
 /*
  *  TMS320C67xx code generator for TCC
- * 
+ *
  *  Copyright (c) 2001, 2002 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -130,7 +130,7 @@ enum {
 #include "tcc.h"
 
 ST_DATA const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_FLOAT | RC_EAX, 
+    /* eax */ RC_INT | RC_FLOAT | RC_EAX,
     // only allow even regs for floats (allow for doubles)
     /* ecx */ RC_INT | RC_ECX,
     /* edx */ RC_INT | RC_INT_BSIDE | RC_FLOAT | RC_EDX,
@@ -161,7 +161,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 // although tcc thinks it is passing parameters on the stack,
 // the C67 really passes up to the first 10 params in special
 // regs or regs pairs (for 64 bit params).  So keep track of
-// the stack offsets so we can translate to the appropriate 
+// the stack offsets so we can translate to the appropriate
 // reg (pair)
 
 #define NoCallArgsPassedOnStack 10
@@ -246,7 +246,7 @@ void gsym(int t)
     gsym_addr(t, ind);
 }
 
-// these are regs that tcc doesn't really know about, 
+// these are regs that tcc doesn't really know about,
 // but assign them unique values so the mapping routines
 // can distinguish them
 
@@ -298,7 +298,7 @@ int C67_map_regn(int r)
     return 0;
 }
 
-// mapping from tcc reg number to 
+// mapping from tcc reg number to
 // C67 register to condition code field
 //
 // valid condition code regs are:
@@ -343,15 +343,15 @@ int C67_map_regs(int r)
     else if (r >= TREG_C67_A4 && r <= TREG_C67_B13)	// these form a pattern of alt pairs
 	return (r & 2) >> 1;
     else if (r == C67_A0)
-	return 0;		// set to A side 
+	return 0;		// set to A side
     else if (r == C67_B2)
-	return 1;		// set to B side 
+	return 1;		// set to B side
     else if (r == C67_B3)
 	return 1;		// set to B side
     else if (r == C67_SP)
-	return 0x1;		// set to SP (B15) B side 
+	return 0x1;		// set to SP (B15) B side
     else if (r == C67_FP)
-	return 0x0;		// set to FP (A15) A side 
+	return 0x0;		// set to FP (A15) A side
     else
 	ALWAYS_ASSERT(FALSE);
 
@@ -420,7 +420,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (5 << 9) |	//mode 5 = pos offset, base reg + off reg
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (0 << 7) |	//y D1/D2 A side
-	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -442,7 +442,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (5 << 9) |	//mode 5 = pos offset, base reg + off reg
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (0 << 7) |	//y D1/D2 A side
-	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -464,7 +464,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (5 << 9) |	//mode 5 = pos offset, base reg + off reg
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (0 << 7) |	//y D1/D2 A side
-	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -475,7 +475,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(b) << 7) |	//y D1/D2 base reg side
-	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -486,7 +486,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(b) << 7) |	//y D1/D2 base reg side
-	      (5 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (5 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -497,7 +497,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(b) << 7) |	//y D1/D2 base reg side
-	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (3 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -509,7 +509,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(b) << 7) |	//y D1/D2 base reg side
-	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (7 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(a) << 1) |	//side of src
 	      (0 << 0));	//parallel
@@ -641,7 +641,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(a) << 7) |	//y D1/D2  src side
-	      (2 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (2 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(b) << 1) |	//side of dst
 	      (0 << 0));	//parallel
@@ -652,7 +652,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(a) << 7) |	//y D1/D2  src side
-	      (0 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (0 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(b) << 1) |	//side of dst
 	      (0 << 0));	//parallel
@@ -674,7 +674,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (1 << 9) |	//mode 1 = pos cst offset
 	      (0 << 8) |	//r (LDDW bit 0)
 	      (C67_map_regs(a) << 7) |	//y D1/D2  src side
-	      (6 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU 
+	      (6 << 4) |	//ldst 3=STB, 5=STH 5, 7=STW, 6=LDW 4=LDH 2=LDB 0=LDHU 1=LDBU
 	      (1 << 2) |	//opcode
 	      (C67_map_regs(b) << 1) |	//side of dst
 	      (0 << 0));	//parallel
@@ -877,7 +877,7 @@ void C67_asm(char *s, int a, int b, int c)
 	C67_g((0 << 29) |	//creg
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
-	      (C67_map_regn(b) << 18) |	//src2   
+	      (C67_map_regn(b) << 18) |	//src2
 	      (0 << 13) |	//src1 NA
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x4a << 5) |	//opcode
@@ -890,7 +890,7 @@ void C67_asm(char *s, int a, int b, int c)
 	C67_g((0 << 29) |	//creg
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
-	      (C67_map_regn(b) << 18) |	//src2  
+	      (C67_map_regn(b) << 18) |	//src2
 	      (0 << 13) |	//src1 NA
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x49 << 5) |	//opcode
@@ -903,7 +903,7 @@ void C67_asm(char *s, int a, int b, int c)
 	C67_g((0 << 29) |	//creg
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
-	      (C67_map_regn(b) << 18) |	//src2  
+	      (C67_map_regn(b) << 18) |	//src2
 	      (0 << 13) |	//src1 NA
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x39 << 5) |	//opcode
@@ -958,7 +958,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x3 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -973,7 +973,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x7 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -988,7 +988,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x7f << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1003,7 +1003,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x7b << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1018,7 +1018,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x6f << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1033,7 +1033,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x10 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1048,7 +1048,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x18 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1063,7 +1063,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x11 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1078,7 +1078,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x19 << 5) |	//opcode
 	      (0x6 << 2) |	//opcode fixed
@@ -1093,7 +1093,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x1c << 7) |	//opcode
 	      (0x0 << 2) |	//opcode fixed
@@ -1108,7 +1108,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2 (possible x path)
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x0e << 7) |	//opcode
 	      (0x0 << 2) |	//opcode fixed
@@ -1138,7 +1138,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x37 << 6) |	//opcode
 	      (0x8 << 2) |	//opcode fixed
@@ -1153,7 +1153,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x27 << 6) |	//opcode
 	      (0x8 << 2) |	//opcode fixed
@@ -1168,7 +1168,7 @@ void C67_asm(char *s, int a, int b, int c)
 	      (0 << 28) |	//inv
 	      (C67_map_regn(c) << 23) |	//dst
 	      (C67_map_regn(b) << 18) |	//src2
-	      (C67_map_regn(a) << 13) |	//src1 
+	      (C67_map_regn(a) << 13) |	//src1
 	      (xpath << 12) |	//x cross path if opposite sides
 	      (0x33 << 6) |	//opcode
 	      (0x8 << 2) |	//opcode fixed
@@ -1597,7 +1597,7 @@ void load(int r, SValue * sv)
 	    size = 4;
 	}
 
-	// check if fc is a positive reference on the stack, 
+	// check if fc is a positive reference on the stack,
 	// if it is tcc is referencing what it thinks is a parameter
 	// on the stack, so check if it is really in a register.
 
@@ -1962,7 +1962,7 @@ void gfunc_call(int nb_args)
 // ending with B12:B13.
 //
 // When a call is made, if the caller has its parameters
-// in regs A4-B13 these must be saved before/as the call 
+// in regs A4-B13 these must be saved before/as the call
 // parameters are loaded and restored upon return (or if/when needed).
 
 /* generate function prolog of type 't' */
@@ -2033,7 +2033,7 @@ void gfunc_prolog(CType * func_type)
 
     TotalBytesPushedOnStack = -loc;
 
-    func_sub_sp_offset = ind;	// remember where we put the stack instruction 
+    func_sub_sp_offset = ind;	// remember where we put the stack instruction
     C67_ADDK(0, C67_SP);	//  ADDK.L2 loc,SP  (just put zero temporarily)
 
     C67_PUSH(C67_A0);
@@ -2049,11 +2049,11 @@ void gfunc_epilog(void)
 	C67_NOP(4);		// NOP wait for load
 	C67_IREG_B_REG(0, C67_CREG_ZERO, C67_B3);	//  B.S2  B3
 	C67_POP(C67_FP);
-	C67_ADDK(local, C67_SP);	//  ADDK.L2 loc,SP  
+	C67_ADDK(local, C67_SP);	//  ADDK.L2 loc,SP
 	C67_Adjust_ADDK((int *) (cur_text_section->data +
 				 func_sub_sp_offset),
 			-local + TotalBytesPushedOnStack);
-	C67_NOP(3);		// NOP 
+	C67_NOP(3);		// NOP
     }
 }
 

@@ -712,7 +712,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                     a32 = addr32 = 1;
             }
 #endif
-            if (b & 0xff00) 
+            if (b & 0xff00)
                 g(b >> 8);
             g(b);
             return;

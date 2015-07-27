@@ -681,7 +681,7 @@ ST_FUNC void gen_bounded_ptr_add(void)
 
 
     /* relocation offset of the bounding function call point */
-    vtop->c.ull = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela))); 
+    vtop->c.ull = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela)));
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -823,7 +823,7 @@ void gfunc_call(int nb_args)
     struct_size = args_size;
     for(i = 0; i < nb_args; i++) {
         SValue *sv;
-        
+
         --arg;
         sv = &vtop[-i];
         bt = (sv->type.t & VT_BTYPE);
@@ -897,7 +897,7 @@ void gfunc_call(int nb_args)
                     vtop->type.t = size > 4 ? VT_LLONG : size > 2 ? VT_INT
                         : size > 1 ? VT_SHORT : VT_BYTE;
                 }
-                
+
                 r = gv(RC_INT);
                 if (arg >= REGN) {
                     gen_offs_sp(0x89, r, arg*8);
@@ -911,7 +911,7 @@ void gfunc_call(int nb_args)
         vtop--;
     }
     save_regs(0);
-    
+
     /* Copy R10 and R11 into RCX and RDX, respectively */
     if (nb_args > 0) {
         o(0xd1894c); /* mov %r10, %rcx */
@@ -919,7 +919,7 @@ void gfunc_call(int nb_args)
             o(0xda894c); /* mov %r11, %rdx */
         }
     }
-    
+
     gcall_or_jmp(0);
     vtop--;
 }
@@ -1072,10 +1072,10 @@ static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int e
 {
     X86_64_Mode mode;
     Sym *f;
-    
+
     switch (ty->t & VT_BTYPE) {
     case VT_VOID: return x86_64_mode_none;
-    
+
     case VT_INT:
     case VT_BYTE:
     case VT_SHORT:
@@ -1084,12 +1084,12 @@ static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int e
     case VT_PTR:
     case VT_FUNC:
     case VT_ENUM: return x86_64_mode_integer;
-    
+
     case VT_FLOAT:
     case VT_DOUBLE: return x86_64_mode_sse;
-    
+
     case VT_LDOUBLE: return x86_64_mode_x87;
-      
+
     case VT_STRUCT:
         f = ty->ref;
 
@@ -1098,10 +1098,10 @@ static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int e
             if (f->c + offset >= start && f->c + offset < end)
                 mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type, f->c + offset, start, end));
         }
-        
+
         return mode;
     }
-    
+
     assert(0);
 }
 
@@ -1305,7 +1305,7 @@ void gfunc_call(int nb_args)
     args_size = 0;
     while (run_start != nb_args) {
         int run_gen_reg = gen_reg, run_sse_reg = sse_reg;
-        
+
         run_end = nb_args;
         stack_adjust = 0;
         for(i = run_start; (i < nb_args) && (run_end == nb_args); i++) {
@@ -1319,10 +1319,10 @@ void gfunc_call(int nb_args)
                     stack_adjust += size;
             }
         }
-        
+
         gen_reg = run_gen_reg;
         sse_reg = run_sse_reg;
-        
+
         /* adjust stack to align SSE boundary */
         if (stack_adjust &= 15) {
             /* fetch cpu flag before the following sub will change the value */
@@ -1334,7 +1334,7 @@ void gfunc_call(int nb_args)
             oad(0xec81, stack_adjust); /* sub $xxx, %rsp */
             args_size += stack_adjust;
         }
-        
+
         for(i = run_start; i < run_end;) {
             int arg_stored = regargs_nregs(&reg_args[i]) == 0;
             SValue tmp;
@@ -1344,7 +1344,7 @@ void gfunc_call(int nb_args)
                 ++i;
                 continue;
             }
-            
+
             /* Swap argument to top, it will possibly be changed here,
               and might use more temps. At the end of the loop we keep
               in on the stack and swap it back to its original position
@@ -1352,7 +1352,7 @@ void gfunc_call(int nb_args)
             tmp = vtop[0];
             vtop[0] = vtop[-i];
             vtop[-i] = tmp;
-            
+
             classify_x86_64_arg(&vtop->type, NULL, &size, &align, &args);
 
             switch (vtop->type.t & VT_BTYPE) {
@@ -1369,11 +1369,11 @@ void gfunc_call(int nb_args)
                 vstore();
                 args_size += size;
                 break;
-                
+
             case VT_LDOUBLE:
                 assert(0);
                 break;
-                
+
             case VT_FLOAT:
             case VT_DOUBLE:
                 r = gv(RC_FLOAT);
@@ -1384,7 +1384,7 @@ void gfunc_call(int nb_args)
                 o(0x24);
                 args_size += size;
                 break;
-                
+
             default:
                 /* simple type */
                 /* XXX: implicit cast ? */
@@ -1417,7 +1417,7 @@ void gfunc_call(int nb_args)
               break;
 
             vrotb(i+1);
-            
+
             if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
                 gv(RC_ST0);
                 oad(0xec8148, size); /* sub $xxx, %rsp */
@@ -1440,7 +1440,7 @@ void gfunc_call(int nb_args)
                 vstore();
                 args_size += size;
             }
-            
+
             vpop();
             memmove(reg_args + i, reg_args + i + 1, (nb_args - i - 1) * sizeof *reg_args);
             --nb_args;
@@ -1698,7 +1698,7 @@ void gfunc_prolog(CType *func_type)
                 addr += size;
             }
             break;
-            
+
         case x86_64_mode_memory:
         case x86_64_mode_x87:
             addr = (addr + align - 1) & -align;
@@ -2104,7 +2104,7 @@ void gen_opf(int op)
                 vswap();
             }
             assert(!(vtop[-1].r & VT_LVAL));
-            
+
             if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
                 o(0x66);
             if (op == TOK_EQ || op == TOK_NE)
@@ -2141,7 +2141,7 @@ void gen_opf(int op)
             ft = vtop->type.t;
             fc = vtop->c.ul;
             assert((ft & VT_BTYPE) != VT_LDOUBLE);
-            
+
             r = vtop->r;
             /* if saved lvalue, then we must reload it */
             if ((vtop->r & VT_VALMASK) == VT_LLOCAL) {
@@ -2153,14 +2153,14 @@ void gen_opf(int op)
                 load(r, &v1);
                 fc = 0;
             }
-            
+
             assert(!(vtop[-1].r & VT_LVAL));
             if (swapped) {
                 assert(vtop->r & VT_LVAL);
                 gv(RC_FLOAT);
                 vswap();
             }
-            
+
             if ((ft & VT_BTYPE) == VT_DOUBLE) {
                 o(0xf2);
             } else {
@@ -2168,7 +2168,7 @@ void gen_opf(int op)
             }
             o(0x0f);
             o(0x58 + a);
-            
+
             if (vtop->r & VT_LVAL) {
                 gen_modrm(vtop[-1].r, r, vtop->sym, fc);
             } else {
@@ -2231,7 +2231,7 @@ void gen_cvt_ftof(int t)
     ft = vtop->type.t;
     bt = ft & VT_BTYPE;
     tbt = t & VT_BTYPE;
-    
+
     if (bt == VT_FLOAT) {
         gv(RC_FLOAT);
         if (tbt == VT_DOUBLE) {

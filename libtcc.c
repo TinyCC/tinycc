@@ -318,7 +318,7 @@ PUB_FUNC void tcc_free_debug(void *ptr)
 
     mem_cur_size -= header->size;
     header->size = (size_t)-1;
-    
+
     if (header->next)
         header->next->prev = header->prev;
 

@@ -1266,7 +1266,7 @@ static int pe_check_symbols(struct pe_info *pe)
                     put_elf_reloc(symtab_section, text_section,
                         offset + 8, R_XXX_THUNKFIX, is->iat_index); // offset to IAT position
 #else
-                    put_elf_reloc(symtab_section, text_section, 
+                    put_elf_reloc(symtab_section, text_section,
                         offset + 2, R_XXX_THUNKFIX, is->iat_index);
 #endif
                     is->thk_offset = offset;

@@ -1,6 +1,6 @@
 /*
  *  TCC - Tiny C Compiler
- * 
+ *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -605,7 +605,7 @@ struct TCCState {
     int old_struct_init_code;	/* use old algorithm to init array in struct when there is no '{' used.
 				   Liuux 2.4.26 can't find initrd when compiled with a new algorithm */
     int dollars_in_identifiers;	/* allows '$' char in indentifiers */
-    
+
     /* warning switches */
     int warn_write_strings;
     int warn_unsupported;
@@ -631,7 +631,7 @@ struct TCCState {
 
     char *init_symbol; /* symbols to call at load-time (not used currently) */
     char *fini_symbol; /* symbols to call at unload-time (not used currently) */
-    
+
 #ifdef TCC_TARGET_I386
     int seg_size; /* 32. Can be 16 with i386 assembler (.code16) */
 #endif
@@ -885,7 +885,7 @@ struct TCCState {
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
-  
+
 /* assignement operators : normal operator or 0x80 */
 #define TOK_A_MOD 0xa5
 #define TOK_A_AND 0xa6

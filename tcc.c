@@ -1,6 +1,6 @@
 /*
  *  TCC - Tiny C Compiler
- * 
+ *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
