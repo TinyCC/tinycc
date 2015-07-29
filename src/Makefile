@@ -364,7 +364,7 @@ tcc-doc.html: ../docs/tcc-doc.texi
 	-makeinfo --no-split --html --number-sections -o $@ $<
 
 tcc.1: ../docs/tcc-doc.texi
-	-$(top_srcdir)/texi2pod.pl $< tcc.pod
+	-$(top_srcdir)/../docs/texi2pod.pl $< tcc.pod
 	-pod2man --section=1 --center="Tiny C Compiler" --release=`cat $(top_srcdir)/../VERSION` tcc.pod > $@
 
 tcc-doc.info: ../docs/tcc-doc.texi
