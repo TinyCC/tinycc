@@ -1,6 +1,6 @@
 /*
  *  CIL code generator for TCC
- *
+ * 
  *  Copyright (c) 2002 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -112,7 +112,7 @@ static void init_outfile(void)
 {
     if (!il_outfile) {
         il_outfile = stdout;
-        fprintf(il_outfile,
+        fprintf(il_outfile, 
                 ".assembly extern mscorlib\n"
                 "{\n"
                 ".ver 1:0:2411:0\n"
@@ -149,7 +149,7 @@ static void out_opi(int op, int c)
 }
 
 /* XXX: not complete */
-static void il_type_to_str(char *buf, int buf_size,
+static void il_type_to_str(char *buf, int buf_size, 
                            int t, const char *varstr)
 {
     int bt;
@@ -301,12 +301,12 @@ void load(int r, SValue *sv)
                 out_op(IL_OP_LDIND_U2);
             else
                 out_op(IL_OP_LDIND_I4);
-        }
+        } 
     } else {
         if (v == VT_CONST) {
             /* XXX: handle globals */
             if (fc >= -1 && fc <= 8) {
-                out_op(IL_OP_LDC_I4_M1 + fc + 1);
+                out_op(IL_OP_LDC_I4_M1 + fc + 1); 
             } else {
                 out_opi(IL_OP_LDC_I4, fc);
             }
@@ -430,10 +430,10 @@ void gfunc_prolog(int t)
     /* XXX: cannot do better now */
     fprintf(il_outfile, " .maxstack %d\n", NB_REGS);
     fprintf(il_outfile, " .locals (int32, int32, int32, int32, int32, int32, int32, int32)\n");
-
+    
     if (!strcmp(funcname, "main"))
         fprintf(il_outfile, " .entrypoint\n");
-
+        
     sym = sym_find((unsigned)t >> VT_STRUCT_SHIFT);
     func_call = sym->r;
 

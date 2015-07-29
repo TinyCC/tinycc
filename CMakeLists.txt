@@ -85,14 +85,14 @@ endif()
 
 file(STRINGS "VERSION" TCC_VERSION)
 list(GET TCC_VERSION 0 TCC_VERSION)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
-configure_file(src/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/src/config.h)
-configure_file(docs/config.texi.in ${CMAKE_CURRENT_SOURCE_DIR}/docs/config.texi)
+include_directories(${CMAKE_BINARY_DIR})
+configure_file(config.h.in config.h)
+configure_file(config.texi.in config.texi)
 
 # Utility variables
-set(I386_SOURCES src/x86/i386-gen.c src/x86/i386-asm.c src/x86/i386-asm.h src/x86/i386-tok.h)
-set(X86_64_SOURCES src/x86/x86_64-gen.c src/x86/i386-asm.c src/x86/x86_64-asm.h)
-set(ARM_SOURCES src/arm/arm_gen.c)
+set(I386_SOURCES i386-gen.c i386-asm.c i386-asm.h i386-tok.h)
+set(X86_64_SOURCES x86_64-gen.c i386-asm.c x86_64-asm.h)
+set(ARM_SOURCES arm_gen.c)
 
 set(LIBTCC1_I386_SOURCES lib/alloca86.S lib/alloca86-bt.S)
 set(LIBTCC1_WIN_SOURCES win32/lib/crt1.c win32/lib/wincrt1.c win32/lib/dllcrt1.c win32/lib/dllmain.c win32/lib/chkstk.S)
@@ -154,41 +154,41 @@ macro(make_tcc native_name cross_name cross_enabled definitions tcc_sources libt
     foreach(make_tcc_def ${TCC_NATIVE_DEFINITIONS})
       set(TCC_NATIVE_FLAGS ${TCC_NATIVE_FLAGS} -D${make_tcc_def})
     endforeach()
-
+    
     if (TCC_BUILD_NATIVE)
       add_library(libtcc
-        src/libtcc.c
-        src/tccpp.c
-        src/tccgen.c
-        src/tccelf.c
-        src/tccasm.c
-        src/tccrun.c
-        src/tcc.h
-        src/libtcc.h
-        src/tcctok.h
+        libtcc.c
+        tccpp.c
+        tccgen.c
+        tccelf.c
+        tccasm.c
+        tccrun.c
+        tcc.h
+        libtcc.h
+        tcctok.h
         ${tcc_sources}
       )
       set_target_properties(libtcc PROPERTIES OUTPUT_NAME tcc PREFIX lib)
       if(WIN32)
         set_target_properties(libtcc PROPERTIES LINK_FLAGS "-Wl,--output-def,libtcc.def")
       endif()
-      add_executable(tcc src/tcc.c)
+      add_executable(tcc tcc.c)
       target_link_libraries(tcc libtcc)
       if(NOT WIN32)
         target_link_libraries(tcc dl)
       endif()
       install(TARGETS tcc libtcc RUNTIME DESTINATION ${EXE_PATH} LIBRARY DESTINATION ${NATIVE_LIB_PATH} ARCHIVE DESTINATION ${NATIVE_LIB_PATH})
       set_target_properties(tcc libtcc PROPERTIES COMPILE_DEFINITIONS "${TCC_NATIVE_DEFINITIONS}")
-
+      
       if("${libtcc_sources}" STRGREATER "")
         make_libtcc1("" tcc "${libtcc_ar}" "${TCC_NATIVE_DEFINITIONS}" "${libtcc_includes}" "${libtcc_sources}")
       endif()
     endif()
   elseif(${cross_enabled})
-    add_executable(${cross_name}-tcc src/tcc.c)
+    add_executable(${cross_name}-tcc tcc.c)
     set_target_properties(${cross_name}-tcc PROPERTIES COMPILE_DEFINITIONS "ONE_SOURCE;${definitions}")
     install(TARGETS ${cross_name}-tcc RUNTIME DESTINATION ${EXE_PATH})
-
+    
     if("${libtcc_sources}" STRGREATER "")
       make_libtcc1(${cross_name} "${cross_name}-tcc" "${libtcc_ar}" "${definitions}" "${libtcc_includes}" "${libtcc_sources}")
     endif()
@@ -197,17 +197,17 @@ endmacro()
 
 make_tcc("Win32" i386-w64-mingw32 TCC_BUILD_WIN32
   "TCC_TARGET_I386;TCC_TARGET_PE"
-  "${I386_SOURCES};src/tccpe.c"
+  "${I386_SOURCES};tccpe.c"
   tiny_libmaker_32 "${LIBTCC1_I386_SOURCES};${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
 )
 make_tcc("Win64" x86_64-w64-mingw32 TCC_BUILD_WIN64
   "TCC_TARGET_X86_64;TCC_TARGET_PE"
-  "${X86_64_SOURCES};src/tccpe.c"
+  "${X86_64_SOURCES};tccpe.c"
   tiny_libmaker_64 "lib/alloca86_64.S;${LIBTCC1_WIN_SOURCES}" "win32/include;win32/include/winapi"
 )
 make_tcc("WinCE" arm-wince-mingw32ce TCC_BUILD_WINCE
   "TCC_TARGET_ARM;TCC_ARM_VERSION=${TCC_ARM_VERSION};TCC_TARGET_PE"
-  "${ARM_SOURCES};src/tccpe.c"
+  "${ARM_SOURCES};tccpe.c"
   "" "" ""
 )
 make_tcc("i386" i386-linux-gnu TCC_BUILD_I386
@@ -248,7 +248,7 @@ make_tcc("" arm-linux-gnu TCC_BUILD_ARM_VFP
 )
 make_tcc("" c67 TCC_BUILD_C67
   TCC_TARGET_C67
-  "c67-gen.c;src/tcccoff.c"
+  "c67-gen.c;tcccoff.c"
   "" "" ""
 )
 
@@ -257,14 +257,14 @@ add_subdirectory(tests)
 find_program(MAKEINFO NAMES makeinfo PATHS C:/MinGW/MSYS/1.0/bin)
 if(MAKEINFO)
   add_custom_command(OUTPUT tcc-doc.html
-    COMMAND ${MAKEINFO} --no-split --html -o tcc-doc.html ${CMAKE_CURRENT_SOURCE_DIR}/docs/tcc-doc.texi
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/docs/tcc-doc.texi
+    COMMAND ${MAKEINFO} --no-split --html -o tcc-doc.html ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
   )
   set(TCC_DOC_FILES tcc-doc.html)
   if(NOT WIN32)
     add_custom_command(OUTPUT tcc-doc.info
-      COMMAND ${MAKEINFO} -o tcc-doc.info ${CMAKE_CURRENT_SOURCE_DIR}/docs/tcc-doc.texi
-      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/docs/tcc-doc.texi
+      COMMAND ${MAKEINFO} -o tcc-doc.info ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tcc-doc.texi
     )
     set(TCC_DOC_FILES ${TCC_DOC_FILES} tcc-doc.info)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tcc-doc.info DESTINATION share/info)
@@ -290,3 +290,4 @@ else()
   install(DIRECTORY win32/include/ DESTINATION lib/tcc/win32/include)
   install(DIRECTORY include/ DESTINATION lib/tcc/win32/include)
 endif()
+

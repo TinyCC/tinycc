@@ -41,7 +41,7 @@ static int run_callback(const char *src, callback_type callback) {
   TCCState *s;
   int result;
   void *ptr;
-
+  
   s = tcc_new();
   if (!s)
     return -1;
@@ -54,14 +54,14 @@ static int run_callback(const char *src, callback_type callback) {
     return -1;
   if (tcc_relocate(s, TCC_RELOCATE_AUTO) == -1)
     return -1;
-
+  
   ptr = tcc_get_symbol(s, "f");
   if (!ptr)
     return -1;
   result = callback(ptr);
-
+  
   tcc_delete(s);
-
+  
   return result;
 }
 
@@ -89,7 +89,7 @@ RET_PRIMITIVE_TEST(longdouble, LONG_DOUBLE, LONG_DOUBLE_LITERAL(378943892.0))
 
 /*
  * ret_2float_test:
- *
+ * 
  * On x86-64, a struct with 2 floats should be packed into a single
  * SSE register (VT_DOUBLE is used for this purpose).
  */
@@ -117,7 +117,7 @@ static int ret_2float_test(void) {
 
 /*
  * ret_2double_test:
- *
+ * 
  * On x86-64, a struct with 2 doubles should be passed in two SSE
  * registers.
  */
@@ -281,7 +281,7 @@ static int reg_pack_test(void) {
   "  reg_pack_test_type r = {a.x*5, a.y*3};\n"
   "  return r;\n"
   "}\n";
-
+  
   return run_callback(src, reg_pack_test_callback);
 }
 
@@ -307,7 +307,7 @@ static int reg_pack_longlong_test(void) {
   "  reg_pack_longlong_test_type r = {a.x*5, a.y*3};\n"
   "  return r;\n"
   "}\n";
-
+  
   return run_callback(src, reg_pack_longlong_test_callback);
 }
 
@@ -365,13 +365,13 @@ static int sret_test(void) {
   "  sret_test_type r = {x.a*35, x.b*19, x.c*21};\n"
   "  return r;\n"
   "}\n";
-
+  
   return run_callback(src, sret_test_callback);
 }
 
 /*
  * one_member_union_test:
- *
+ * 
  * In the x86-64 ABI a union should always be passed on the stack. However
  * it appears that a single member union is treated by GCC as its member.
  */
@@ -399,7 +399,7 @@ static int one_member_union_test(void) {
 
 /*
  * two_member_union_test:
- *
+ * 
  * In the x86-64 ABI a union should always be passed on the stack.
  */
 typedef union two_member_union_test_type_u {int x; long y;} two_member_union_test_type;
@@ -430,7 +430,7 @@ static int two_member_union_test(void) {
 
 typedef struct many_struct_test_type_s {long long a, b, c;} many_struct_test_type;
 typedef many_struct_test_type (*many_struct_test_function_type) (many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type,many_struct_test_type);
-
+ 
 static int many_struct_test_callback(void *ptr) {
   many_struct_test_function_type f = (many_struct_test_function_type)ptr;
   many_struct_test_type v = {1, 2, 3};
@@ -457,7 +457,7 @@ static int many_struct_test(void) {
 
 typedef struct many_struct_test_2_type_s {int a, b;} many_struct_test_2_type;
 typedef many_struct_test_2_type (*many_struct_test_2_function_type) (many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type,many_struct_test_2_type);
-
+ 
 static int many_struct_test_2_callback(void *ptr) {
   many_struct_test_2_function_type f = (many_struct_test_2_function_type)ptr;
   many_struct_test_2_type v = {1,2};
@@ -598,7 +598,7 @@ static int arg_align_test_callback(void *ptr) {
 }
 
 static int arg_align_test(void) {
-  const char *src =
+  const char *src = 
   "long double f(long double a, int b, long double c, int d, long double e) {\n"
   "  return a + c + e;\n"
   "}\n";
@@ -621,7 +621,7 @@ int main(int argc, char **argv) {
   int i;
   const char *testname = NULL;
   int retval = EXIT_SUCCESS;
-
+  
   /* if tcclib.h and libtcc1.a are not installed, where can we find them */
   for (i = 1; i < argc; ++i) {
     if (!memcmp(argv[i], "run_test=", 9))

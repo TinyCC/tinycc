@@ -2,9 +2,9 @@
 # Tiny C Compiler Makefile for libtcc1.a
 #
 
-TOP = ../src
+TOP = ..
 include $(TOP)/Makefile
-VPATH = $(top_srcdir)/../lib $(top_srcdir)/../win32/lib
+VPATH = $(top_srcdir)/lib $(top_srcdir)/win32/lib
 
 ifndef TARGET # native library
  ifdef CONFIG_WIN64
@@ -37,7 +37,7 @@ endif
 BCHECK_O = bcheck.o
 DIR = $(TARGET)
 
-native : $(DIR)/libtcc1.a
+native : ../libtcc1.a
 cross : $(DIR)/libtcc1.a
 
 native : TCC = $(TOP)/tcc$(EXESUF)
@@ -61,26 +61,26 @@ CFLAGS := $(filter-out -fstack-protector-strong,$(CFLAGS))
 ifeq "$(TARGET)" "i386-win"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
- XCC ?= $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/../include
+ XCC ?= $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR ?= $(DIR)/tiny_libmaker$(EXESUF)
  PICFLAGS =
 else
 ifeq "$(TARGET)" "x86_64-win"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/../include
+ XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR ?= $(DIR)/tiny_libmaker$(EXESUF)
  PICFLAGS =
 else
 ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOP) -I$(top_srcdir)/../include
+ XCC ?= $(TCC) -B$(TOP)
 else
 ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOP) -I$(top_srcdir)/../include
+ XCC ?= $(TCC) -B$(TOP)
 else
 ifeq "$(TARGET)" "arm"
  OBJ = $(addprefix $(DIR)/,$(ARM_O))
@@ -110,7 +110,7 @@ endif
 
 XAR ?= $(AR)
 
-$(DIR)/libtcc1.a : $(OBJ) $(XAR)
+$(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 	$(XAR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)

@@ -1,6 +1,6 @@
 /*
  *  X86 code generator for TCC
- *
+ * 
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ typedef int RegArgs;
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 #define RC_EAX     0x0004
-#define RC_ST0     0x0008
+#define RC_ST0     0x0008 
 #define RC_ECX     0x0010
 #define RC_EDX     0x0020
 #define RC_IRET    RC_EAX /* function return: integer register */
@@ -89,7 +89,7 @@ enum {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
-#include "../tcc.h"
+#include "tcc.h"
 
 ST_DATA const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_EAX,
@@ -357,11 +357,11 @@ static void gcall_or_jmp(int is_jmp)
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
-            greloc(cur_text_section, vtop->sym,
+            greloc(cur_text_section, vtop->sym, 
                    ind + 1, R_386_PC32);
         } else {
             /* put an empty PC32 relocation */
-            put_elf_reloc(symtab_section, cur_text_section,
+            put_elf_reloc(symtab_section, cur_text_section, 
                           ind + 1, R_386_PC32, 0);
         }
         oad(0xe8 + is_jmp, vtop->c.ul - 4); /* call/jmp im */
@@ -417,7 +417,7 @@ ST_FUNC void gfunc_call(int nb_args)
 {
     int size, align, r, args_size, i, func_call;
     Sym *func_sym;
-
+    
     args_size = 0;
     for(i = 0;i < nb_args; i++) {
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
@@ -610,7 +610,7 @@ ST_FUNC void gfunc_epilog(void)
         /* generate bound local allocation */
         saved_ind = ind;
         ind = func_sub_sp_offset;
-        sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
+        sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
                                func_bound_offset, lbounds_section->data_offset);
         greloc(cur_text_section, sym_data,
                ind + 1, R_386_32);
@@ -637,8 +637,8 @@ ST_FUNC void gfunc_epilog(void)
         g(func_ret_sub >> 8);
     }
     /* align local size to word & save local variables */
-
-    v = (-loc + 3) & -4;
+    
+    v = (-loc + 3) & -4; 
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
 #ifdef TCC_TARGET_PE
@@ -741,7 +741,7 @@ ST_FUNC void gen_opi(int op)
             r = vtop[-1].r;
             fr = vtop[0].r;
             o((opc << 3) | 0x01);
-            o(0xc0 + r + fr * 8);
+            o(0xc0 + r + fr * 8); 
         }
         vtop--;
         if (op >= TOK_ULT && op <= TOK_GT) {
@@ -911,7 +911,7 @@ ST_FUNC void gen_opf(int op)
             load(TREG_ST0, vtop);
             swapped = !swapped;
         }
-
+        
         switch(op) {
         default:
         case '+':
@@ -972,7 +972,7 @@ ST_FUNC void gen_cvt_itof(int t)
         o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
-    } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
+    } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
                (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(0x6a); /* push $0 */
@@ -1060,7 +1060,7 @@ ST_FUNC void gen_bounded_ptr_add(void)
     vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;
     /* address of bounding function call point */
-    vtop->c.ul = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel));
+    vtop->c.ul = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel)); 
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is

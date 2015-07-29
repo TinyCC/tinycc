@@ -398,22 +398,22 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
         s = pe_export_name(s1, sym);
         if (n) {
             /* second try: */
-            if (sym->st_other & ST_PE_STDCALL) {
-                    /* try w/0 stdcall deco (windows API convention) */
-                p = strrchr(s, '@');
-                if (!p || s[0] != '_')
-                    break;
-                strcpy(buffer, s+1)[p-s-1] = 0;
-            } else if (s[0] != '_') { /* try non-ansi function */
-                buffer[0] = '_', strcpy(buffer + 1, s);
-            } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
-                strcpy(buffer, s + 6);
-            } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
-                strcpy(buffer, s + 6);
-            } else {
-                break;
-            }
-            s = buffer;
+	    if (sym->st_other & ST_PE_STDCALL) {
+                /* try w/0 stdcall deco (windows API convention) */
+	        p = strrchr(s, '@');
+	        if (!p || s[0] != '_')
+	            break;
+	        strcpy(buffer, s+1)[p-s-1] = 0;
+	    } else if (s[0] != '_') { /* try non-ansi function */
+	        buffer[0] = '_', strcpy(buffer + 1, s);
+	    } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
+	        strcpy(buffer, s + 6);
+	    } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
+	        strcpy(buffer, s + 6);
+	    } else {
+	        break;
+	    }
+	    s = buffer;
         }
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
         // printf("find (%d) %d %s\n", n, sym_index, s);
@@ -1266,7 +1266,7 @@ static int pe_check_symbols(struct pe_info *pe)
                     put_elf_reloc(symtab_section, text_section,
                         offset + 8, R_XXX_THUNKFIX, is->iat_index); // offset to IAT position
 #else
-                    put_elf_reloc(symtab_section, text_section,
+                    put_elf_reloc(symtab_section, text_section, 
                         offset + 2, R_XXX_THUNKFIX, is->iat_index);
 #endif
                     is->thk_offset = offset;
@@ -1636,7 +1636,7 @@ quit:
 
 /* ------------------------------------------------------------- */
 #define TINY_IMPDEF_GET_EXPORT_NAMES_ONLY
-#include "../win32/tools/tiny_impdef.c"
+#include "win32/tools/tiny_impdef.c"
 
 static int pe_load_dll(TCCState *s1, const char *dllname, int fd)
 {
@@ -1841,13 +1841,13 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
             pe.subsystem = s1->pe_subsystem;
 
         /* set default file/section alignment */
-        if (pe.subsystem == 1) {
-            pe.section_align = 0x20;
-            pe.file_align = 0x20;
-        } else {
-            pe.section_align = 0x1000;
-            pe.file_align = 0x200;
-        }
+	if (pe.subsystem == 1) {
+	    pe.section_align = 0x20;
+	    pe.file_align = 0x20;
+	} else {
+	    pe.section_align = 0x1000;
+	    pe.file_align = 0x200;
+	}
 
         if (s1->section_align != 0)
             pe.section_align = s1->section_align;

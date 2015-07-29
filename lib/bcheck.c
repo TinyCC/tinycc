@@ -1,6 +1,6 @@
 /*
  *  Tiny C Memory and bounds checker
- *
+ * 
  *  Copyright (c) 2002 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -88,7 +88,7 @@ int __bound_delete_region(void *p);
 
 #ifdef __attribute__
   /* an __attribute__ macro is defined in the system headers */
-  #undef __attribute__
+  #undef __attribute__ 
 #endif
 #define FASTCALL __attribute__((regparm(3)))
 
@@ -177,8 +177,8 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
     dprintf(stderr, "%s %s: %p %p\n", __FILE__, __FUNCTION__, p, offset);
 
     e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];
-    e = (BoundEntry *)((char *)e +
-                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    e = (BoundEntry *)((char *)e + 
+                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
                         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS)));
     addr -= e->start;
     if (addr > e->size) {
@@ -236,7 +236,7 @@ BOUND_PTR_INDIR(16)
 }
 
 /* called when entering a function to add all the local regions */
-void FASTCALL __bound_local_new(void *p1)
+void FASTCALL __bound_local_new(void *p1) 
 {
     size_t addr, size, fp, *p = p1;
 
@@ -255,7 +255,7 @@ void FASTCALL __bound_local_new(void *p1)
 }
 
 /* called when leaving a function to delete all the local regions */
-void FASTCALL __bound_local_delete(void *p1)
+void FASTCALL __bound_local_delete(void *p1) 
 {
     size_t addr, fp, *p = p1;
     GET_CALLER_FP(fp);
@@ -331,14 +331,14 @@ static void mark_invalid(size_t addr, size_t size)
 #if 0
     dprintf(stderr, "mark_invalid: start = %x %x\n", t2_start, t2_end);
 #endif
-
+    
     /* first we handle full pages */
     t1_start = (t2_start + BOUND_T2_SIZE - 1) >> BOUND_T2_BITS;
     t1_end = t2_end >> BOUND_T2_BITS;
 
     i = t2_start & (BOUND_T2_SIZE - 1);
     j = t2_end & (BOUND_T2_SIZE - 1);
-
+    
     if (t1_start == t1_end) {
         page = get_page(t2_start >> BOUND_T2_BITS);
         for(; i < j; i++) {
@@ -456,7 +456,7 @@ void __bound_main_arg(void **p)
     void *start = p;
     while (*p++);
 
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n",
+    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, (void *) p - start);
 
     __bound_new_region(start, (void *) p - start);
@@ -467,7 +467,7 @@ void __bound_exit(void)
     restore_malloc_hooks();
 }
 
-static inline void add_region(BoundEntry *e,
+static inline void add_region(BoundEntry *e, 
                               size_t start, size_t size)
 {
     BoundEntry *e1;
@@ -496,7 +496,7 @@ void __bound_new_region(void *p, size_t size)
 
     __bound_init();
 
-    dprintf(stderr, "%s, %s(%p, %p) start\n",
+    dprintf(stderr, "%s, %s(%p, %p) start\n", 
            __FILE__, __FUNCTION__, p, size);
 
     start = (size_t)p;
@@ -506,9 +506,9 @@ void __bound_new_region(void *p, size_t size)
 
     /* start */
     page = get_page(t1_start);
-    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
 
 
@@ -557,7 +557,7 @@ void __bound_new_region(void *p, size_t size)
 }
 
 /* delete a region */
-static inline void delete_region(BoundEntry *e,
+static inline void delete_region(BoundEntry *e, 
                                  void *p, size_t empty_size)
 {
     size_t addr;
@@ -612,9 +612,9 @@ int __bound_delete_region(void *p)
 
     start = (size_t)p;
     t1_start = start >> (BOUND_T2_BITS + BOUND_T3_BITS);
-    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-
+    
     /* find region size */
     page = __bound_t1[t1_start];
     e = (BoundEntry *)((char *)page + t2_start);
@@ -622,7 +622,7 @@ int __bound_delete_region(void *p)
     if (addr > e->size)
         e = __bound_find_region(e, p);
     /* test if invalid region */
-    if (e->size == EMPTY_SIZE || (size_t)p != e->start)
+    if (e->size == EMPTY_SIZE || (size_t)p != e->start) 
         return -1;
     /* compute the size we put in invalid regions */
     if (e->is_invalid)
@@ -634,7 +634,7 @@ int __bound_delete_region(void *p)
 
     /* now we can free each entry */
     t1_end = end >> (BOUND_T2_BITS + BOUND_T3_BITS);
-    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
 
     delete_region(e, p, empty_size);
@@ -690,8 +690,8 @@ static size_t get_region_size(void *p)
     BoundEntry *e;
 
     e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];
-    e = (BoundEntry *)((char *)e +
-                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) &
+    e = (BoundEntry *)((char *)e + 
+                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
                         ((BOUND_T2_SIZE - 1) << BOUND_E_BITS)));
     addr -= e->start;
     if (addr > e->size)
@@ -756,16 +756,16 @@ static void libc_free(void *ptr)
 void *__bound_malloc(size_t size, const void *caller)
 {
     void *ptr;
-
+    
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
     ptr = libc_malloc(size + 1);
-
+    
     if (!ptr)
         return NULL;
 
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n",
+    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, ptr, size);
 
     __bound_new_region(ptr, size);
@@ -792,13 +792,13 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
        be in fact not necessary */
     ptr = memalign(size + 1, align);
 #endif
-
+    
     install_malloc_hooks();
-
+    
     if (!ptr)
         return NULL;
 
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n",
+    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %p)\n", 
            __FILE__, __FUNCTION__, ptr, size);
 
     __bound_new_region(ptr, size);
@@ -862,8 +862,8 @@ static void bound_dump(void)
             e = page + j;
             /* do not print invalid or empty entries */
             if (e->size != EMPTY_SIZE && e->start != 0) {
-                fprintf(stderr, "%08x:",
-                       (i << (BOUND_T2_BITS + BOUND_T3_BITS)) +
+                fprintf(stderr, "%08x:", 
+                       (i << (BOUND_T2_BITS + BOUND_T3_BITS)) + 
                        (j << BOUND_T3_BITS));
                 do {
                     fprintf(stderr, " %08lx:%08lx", e->start, e->start + e->size);

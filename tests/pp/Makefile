@@ -2,7 +2,7 @@
 # credits: 01..13.c from the pcc cpp-tests suite
 #
 
-TCC = ../../src/tcc
+TCC = ../../tcc
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
 
 all test : $(TESTS)

@@ -19,7 +19,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "../tcc.h"
+#include "tcc.h"
 
 /* #define NB_ASM_REGS 8 */
 #define MAX_OPERANDS 3
@@ -712,7 +712,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                     a32 = addr32 = 1;
             }
 #endif
-            if (b & 0xff00)
+            if (b & 0xff00) 
                 g(b >> 8);
             g(b);
             return;

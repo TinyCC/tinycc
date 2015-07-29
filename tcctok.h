@@ -36,7 +36,7 @@
      DEF(TOK_RESTRICT2, "__restrict")
      DEF(TOK_RESTRICT3, "__restrict__")
      DEF(TOK_EXTENSION, "__extension__") /* gcc keyword */
-
+     
      DEF(TOK_FLOAT, "float")
      DEF(TOK_DOUBLE, "double")
      DEF(TOK_BOOL, "_Bool")
@@ -331,5 +331,5 @@
 #endif
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "x86/i386-tok.h"
+#include "i386-tok.h"
 #endif

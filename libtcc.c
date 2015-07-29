@@ -40,24 +40,24 @@ ST_DATA struct TCCState *tcc_state;
 #include "tccelf.c"
 #include "tccrun.c"
 #ifdef TCC_TARGET_I386
-#include "x86/i386-gen.c"
+#include "i386-gen.c"
 #endif
 #ifdef TCC_TARGET_ARM
-#include "arm/arm-gen.c"
+#include "arm-gen.c"
 #endif
 #ifdef TCC_TARGET_ARM64
-#include "arm/arm64-gen.c"
+#include "arm64-gen.c"
 #endif
 #ifdef TCC_TARGET_C67
-#include "tms320c67/c67-gen.c"
+#include "c67-gen.c"
 #endif
 #ifdef TCC_TARGET_X86_64
-#include "x86/x86_64-gen.c"
+#include "x86_64-gen.c"
 #endif
 #ifdef CONFIG_TCC_ASM
 #include "tccasm.c"
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "x86/i386-asm.c"
+#include "i386-asm.c"
 #endif
 #endif
 #ifdef TCC_TARGET_COFF
@@ -318,7 +318,7 @@ PUB_FUNC void tcc_free_debug(void *ptr)
 
     mem_cur_size -= header->size;
     header->size = (size_t)-1;
-
+    
     if (header->next)
         header->next->prev = header->prev;
 
@@ -672,7 +672,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         }
 #else
         if (! (sym->type.t & VT_STATIC))
-            other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
+	    other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
 #endif
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
@@ -2101,11 +2101,11 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->static_link = 1;
             break;
         case TCC_OPTION_std:
-            /* silently ignore, a current purpose:
-               allow to use a tcc as a reference compiler for "make test" */
+    	    /* silently ignore, a current purpose:
+    	       allow to use a tcc as a reference compiler for "make test" */
             break;
         case TCC_OPTION_shared:
-            if (s->output_type)
+    	    if (s->output_type)
                 tcc_warning("-shared: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_DLL;
             break;
@@ -2124,7 +2124,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             break;
         case TCC_OPTION_r:
             /* generate a .o merging several output files */
-            if (s->output_type)
+    	    if (s->output_type)
                 tcc_warning("-r: some compiler action already specified (%d)", s->output_type);
             s->option_r = 1;
             s->output_type = TCC_OUTPUT_OBJ;
@@ -2163,7 +2163,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->print_search_dirs = 1;
             break;
         case TCC_OPTION_run:
-            if (s->output_type)
+    	    if (s->output_type)
                 tcc_warning("-run: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_MEMORY;
             tcc_set_options(s, optarg);
@@ -2194,7 +2194,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             cstr_ccat(&linker_arg, '\0');
             break;
         case TCC_OPTION_E:
-            if (s->output_type)
+    	    if (s->output_type)
                 tcc_warning("-E: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_PREPROCESS;
             break;
@@ -2251,13 +2251,13 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     }
 
     if (s->output_type == 0)
-        s->output_type = TCC_OUTPUT_EXE;
+	s->output_type = TCC_OUTPUT_EXE;
 
     if (pthread && s->output_type != TCC_OUTPUT_OBJ)
         tcc_set_options(s, "-lpthread");
 
     if (s->output_type == TCC_OUTPUT_EXE)
-        tcc_set_linker(s, (const char *)linker_arg.data);
+	tcc_set_linker(s, (const char *)linker_arg.data);
     cstr_free(&linker_arg);
 
     return optind;

@@ -57,7 +57,7 @@ ALT(DEF_ASM_OP0L(stosb, 0xaa, 0, OPC_BWL))
 ALT(DEF_ASM_OP0L(sstob, 0xaa, 0, OPC_BWL))
 
      /* bits */
-
+     
 ALT(DEF_ASM_OP2(bsfw, 0x0fbc, 0, OPC_MODRM | OPC_WL, OPT_REGW | OPT_EA, OPT_REGW))
 ALT(DEF_ASM_OP2(bsrw, 0x0fbd, 0, OPC_MODRM | OPC_WL, OPT_REGW | OPT_EA, OPT_REGW))
 
@@ -91,7 +91,7 @@ ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WL, OPT_IM8, OPT_REGW | OPT_EA)
      DEF_ASM_OP0(repz, 0xf3)
      DEF_ASM_OP0(repne, 0xf2)
      DEF_ASM_OP0(repnz, 0xf2)
-
+             
      DEF_ASM_OP0(invd, 0x0f08)
      DEF_ASM_OP0(wbinvd, 0x0f09)
      DEF_ASM_OP0(cpuid, 0x0fa2)
@@ -236,7 +236,7 @@ ALT(DEF_ASM_OP1(jo, 0x70, 0, OPC_SHORTJMP | OPC_JMP | OPC_TEST, OPT_ADDR))
     DEF_ASM_OP1(loopz, 0xe1, 0, OPC_SHORTJMP, OPT_ADDR)
     DEF_ASM_OP1(loop, 0xe2, 0, OPC_SHORTJMP, OPT_ADDR)
     DEF_ASM_OP1(jecxz, 0xe3, 0, OPC_SHORTJMP, OPT_ADDR)
-
+     
      /* float */
      /* specific fcomp handling */
 ALT(DEF_ASM_OP0L(fcomp, 0xd8d9, 0, 0))
@@ -298,7 +298,7 @@ ALT(DEF_ASM_OP1(fldl, 0xdd, 0, OPC_MODRM, OPT_EA))
     DEF_ASM_OP1(fildll, 0xdf, 5, OPC_MODRM,OPT_EA)
     DEF_ASM_OP1(fldt, 0xdb, 5, OPC_MODRM, OPT_EA)
     DEF_ASM_OP1(fbld, 0xdf, 4, OPC_MODRM, OPT_EA)
-
+    
     /* fp store */
     DEF_ASM_OP1(fst, 0xddd0, 0, OPC_REG, OPT_ST)
     DEF_ASM_OP1(fstl, 0xddd0, 0, OPC_REG, OPT_ST)
@@ -380,7 +380,7 @@ ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWL, OPT_REG, OPT_REG | OPT
 
     /* pentium */
     DEF_ASM_OP1(cmpxchg8b, 0x0fc7, 1, OPC_MODRM, OPT_EA )
-
+    
     /* pentium pro */
     ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
 #ifdef I386_ASM_16
