@@ -25,8 +25,6 @@
 /* number of available registers */
 #define NB_REGS            24
 
-typedef int RegArgs;
-
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
@@ -1881,17 +1879,10 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
-ST_FUNC int regargs_nregs(RegArgs *args)
-{
-    return *args;
-}
-
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize, RegArgs *args) {
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize) {
     *ret_align = 1; // Never have to re-align return values for x86-64
-    *args = 0;
-
     return 0;
 }
 

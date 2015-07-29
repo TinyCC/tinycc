@@ -25,24 +25,6 @@
 /* number of available registers */
 #define NB_REGS         25
 #define NB_ASM_REGS     8
-#define REG_ARGS_MAX    2 /* at most 2 registers used for each argument */
-
-#ifdef TCC_TARGET_PE
-typedef int RegArgs;
-#else
-/* This struct stores the struct offsets at which %rax, %rdx, %xmm0, and
- * %xmm1 are to be stored.
- *
- * struct { long long l; double x; }: ireg = { 0, -1 } freg = { 8, -1 }
- * struct { double x; long long l; }: ireg = { 8, -1 } freg = { 0, -1 }
- * struct { long long l; long long l2; }: ireg = { 0, 8 } freg = { -1, -1 }
- * struct { double x; double x2; }: ireg = { -1, -1 } freg = { 0, 8 }
- */
-typedef struct {
-    int ireg[REG_ARGS_MAX];
-    int freg[REG_ARGS_MAX];
-} RegArgs;
-#endif
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -763,14 +745,9 @@ void gen_offs_sp(int b, int r, int d)
     }
 }
 
-ST_FUNC int regargs_nregs(RegArgs *args)
-{
-    return *args;
-}
-
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize, RegArgs *args)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
     int size, align;
     *regsize = 8;
@@ -778,22 +755,20 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
     size = type_size(vt, &align);
     ret->ref = NULL;
     if (size > 8) {
-        *args = 0;
+        return 0;
     } else if (size > 4) {
         ret->t = VT_LLONG;
-        *args = 1;
+        return 1;
     } else if (size > 2) {
         ret->t = VT_INT;
-        *args = 1;
+        return 1;
     } else if (size > 1) {
         ret->t = VT_SHORT;
-        *args = 1;
+        return 1;
     } else {
         ret->t = VT_BYTE;
-        *args = 1;
+        return 1;
     }
-
-    return *args != 0;
 }
 
 static int is_sse_float(int t) {
@@ -1066,9 +1041,7 @@ static X86_64_Mode classify_x86_64_merge(X86_64_Mode a, X86_64_Mode b)
         return x86_64_mode_sse;
 }
 
-/* classify the x86 eightbytes from byte index start to byte index
- * end, at offset offset from the root struct */
-static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int end)
+static X86_64_Mode classify_x86_64_inner(CType *ty)
 {
     X86_64_Mode mode;
     Sym *f;
@@ -1094,10 +1067,8 @@ static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int e
         f = ty->ref;
 
         mode = x86_64_mode_none;
-        while ((f = f->next) != NULL) {
-            if (f->c + offset >= start && f->c + offset < end)
-                mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type, f->c + offset, start, end));
-        }
+        for (f = f->next; f; f = f->next)
+            mode = classify_x86_64_merge(mode, classify_x86_64_inner(&f->type));
         
         return mode;
     }
@@ -1105,79 +1076,61 @@ static X86_64_Mode classify_x86_64_inner(CType *ty, int offset, int start, int e
     assert(0);
 }
 
-static X86_64_Mode classify_x86_64_arg_eightbyte(CType *ty, int offset)
+static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
 {
     X86_64_Mode mode;
-
-    assert((ty->t & VT_BTYPE) == VT_STRUCT);
-
-    mode = classify_x86_64_inner(ty, 0, offset, offset + 8);
-
-    return mode;
-}
-
-static void regargs_init(RegArgs *args)
-{
-    int i;
-    for(i=0; i<REG_ARGS_MAX; i++) {
-        args->ireg[i] = -1;
-        args->freg[i] = -1;
-    }
-}
-
-static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, RegArgs *args)
-{
-    X86_64_Mode mode = x86_64_mode_none;
     int size, align, ret_t = 0;
-    int ireg = 0, freg = 0;
-
-    if (args)
-        regargs_init(args);
-
+    
     if (ty->t & (VT_BITFIELD|VT_ARRAY)) {
         *psize = 8;
         *palign = 8;
-        if (args)
-            args->ireg[ireg++] = 0;
+        *reg_count = 1;
         ret_t = ty->t;
         mode = x86_64_mode_integer;
     } else {
         size = type_size(ty, &align);
         *psize = (size + 7) & ~7;
         *palign = (align + 7) & ~7;
-
+    
         if (size > 16) {
             mode = x86_64_mode_memory;
         } else {
-            int start;
-
-            for(start=0; start < size; start += 8) {
-                if ((ty->t & VT_BTYPE) == VT_STRUCT) {
-                    mode = classify_x86_64_arg_eightbyte(ty, start);
+            mode = classify_x86_64_inner(ty);
+            switch (mode) {
+            case x86_64_mode_integer:
+                if (size > 8) {
+                    *reg_count = 2;
+                    ret_t = VT_QLONG;
                 } else {
-                    mode = classify_x86_64_inner(ty, 0, 0, size);
-                }
-
-                if (mode == x86_64_mode_integer) {
-                    if (args)
-                        args->ireg[ireg++] = start;
+                    *reg_count = 1;
                     ret_t = (size > 4) ? VT_LLONG : VT_INT;
-                } else if (mode == x86_64_mode_sse) {
-                    if (args)
-                        args->freg[freg++] = start;
-                    ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
-                } else {
-                    ret_t = VT_LDOUBLE;
                 }
+                break;
+                
+            case x86_64_mode_x87:
+                *reg_count = 1;
+                ret_t = VT_LDOUBLE;
+                break;
+
+            case x86_64_mode_sse:
+                if (size > 8) {
+                    *reg_count = 2;
+                    ret_t = VT_QFLOAT;
+                } else {
+                    *reg_count = 1;
+                    ret_t = (size > 4) ? VT_DOUBLE : VT_FLOAT;
+                }
+                break;
+            default: break; /* nothing to be done for x86_64_mode_memory and x86_64_mode_none*/
             }
         }
     }
-
+    
     if (ret) {
         ret->ref = NULL;
         ret->t = ret_t;
     }
-
+    
     return mode;
 }
 
@@ -1187,8 +1140,8 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty)
     enum __va_arg_type {
         __va_gen_reg, __va_float_reg, __va_stack
     };
-    int size, align;
-    X86_64_Mode mode = classify_x86_64_arg(ty, NULL, &size, &align, NULL);
+    int size, align, reg_count;
+    X86_64_Mode mode = classify_x86_64_arg(ty, NULL, &size, &align, &reg_count);
     switch (mode) {
     default: return __va_stack;
     case x86_64_mode_integer: return __va_gen_reg;
@@ -1196,57 +1149,14 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty)
     }
 }
 
-static int regargs_iregs(RegArgs *args)
+/* Return the number of registers needed to return the struct, or 0 if
+   returning via struct pointer. */
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
-    int i;
-    int ret = 0;
-    for(i=0; i<REG_ARGS_MAX; i++) {
-        if(args->ireg[i] != -1)
-            ret++;
-    }
-
-    return ret;
-}
-
-static int regargs_fregs(RegArgs *args)
-{
-    int i;
-    int ret = 0;
-    for(i=0; i<REG_ARGS_MAX; i++) {
-        if(args->freg[i] != -1)
-            ret++;
-    }
-
-    return ret;
-}
-
-/* Count the total number of registers used by args */
-ST_FUNC int regargs_nregs(RegArgs *args)
-{
-    int i;
-    int ret = 0;
-    for(i=0; i<REG_ARGS_MAX; i++) {
-        if(args->ireg[i] != -1)
-            ret++;
-
-        if(args->freg[i] != -1)
-            ret++;
-    }
-
-    return ret;
-}
-
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize, RegArgs *args)
-{
-    int size, align;
-    X86_64_Mode mode;
+    int size, align, reg_count;
     *ret_align = 1; // Never have to re-align return values for x86-64
     *regsize = 8;
-
-    mode = classify_x86_64_arg(vt, ret, &size, &align, args);
-
-    return mode != x86_64_mode_memory &&
-        mode != x86_64_mode_none;
+    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);
 }
 
 #define REGN 6
@@ -1269,28 +1179,18 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, run_start, run_end, i;
+    int size, align, r, args_size, stack_adjust, run_start, run_end, i, reg_count;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
-    int sse_reg = 0, gen_reg = 0;
-    RegArgs *reg_args = alloca(nb_args * sizeof *reg_args);
+    int sse_reg, gen_reg;
 
     /* calculate the number of integer/float register arguments */
-    for(i = nb_args - 1; i >= 0; i--) {
-        int fregs, iregs;
-        mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_args[i]);
-        fregs = regargs_fregs(&reg_args[i]);
-        iregs = regargs_iregs(&reg_args[i]);
-
-        nb_sse_args += fregs;
-        nb_reg_args += iregs;
-
-        if (sse_reg + fregs > 8 || gen_reg + iregs > REGN) {
-            regargs_init(&reg_args[i]);
-        } else {
-            sse_reg += fregs;
-            gen_reg += iregs;
-        }
+    for(i = 0; i < nb_args; i++) {
+        mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
+        if (mode == x86_64_mode_sse)
+            nb_sse_args += reg_count;
+        else if (mode == x86_64_mode_integer)
+            nb_reg_args += reg_count;
     }
 
     /* arguments are collected in runs. Each run is a collection of 8-byte aligned arguments
@@ -1309,14 +1209,27 @@ void gfunc_call(int nb_args)
         run_end = nb_args;
         stack_adjust = 0;
         for(i = run_start; (i < nb_args) && (run_end == nb_args); i++) {
-            int stack = regargs_nregs(&reg_args[i]) == 0;
-            classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, NULL);
-
-            if (stack) {
+            mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
+            switch (mode) {
+            case x86_64_mode_memory:
+            case x86_64_mode_x87:
+            stack_arg:
                 if (align == 16)
                     run_end = i;
                 else
                     stack_adjust += size;
+                break;
+                
+            case x86_64_mode_sse:
+                sse_reg -= reg_count;
+                if (sse_reg + reg_count > 8) goto stack_arg;
+                break;
+            
+            case x86_64_mode_integer:
+                gen_reg -= reg_count;
+                if (gen_reg + reg_count > REGN) goto stack_arg;
+                break;
+	    default: break; /* nothing to be done for x86_64_mode_none */
             }
         }
         
@@ -1336,38 +1249,44 @@ void gfunc_call(int nb_args)
         }
         
         for(i = run_start; i < run_end;) {
-            int arg_stored = regargs_nregs(&reg_args[i]) == 0;
-            SValue tmp;
-            RegArgs args;
-
-            if (!arg_stored) {
-                ++i;
-                continue;
-            }
-            
             /* Swap argument to top, it will possibly be changed here,
               and might use more temps. At the end of the loop we keep
               in on the stack and swap it back to its original position
               if it is a register. */
-            tmp = vtop[0];
+            SValue tmp = vtop[0];
+            int arg_stored = 1;
+
             vtop[0] = vtop[-i];
             vtop[-i] = tmp;
+            mode = classify_x86_64_arg(&vtop->type, NULL, &size, &align, &reg_count);
             
-            classify_x86_64_arg(&vtop->type, NULL, &size, &align, &args);
-
             switch (vtop->type.t & VT_BTYPE) {
             case VT_STRUCT:
-                /* allocate the necessary size on stack */
-                o(0x48);
-                oad(0xec81, size); /* sub $xxx, %rsp */
-                /* generate structure store */
-                r = get_reg(RC_INT);
-                orex(1, r, 0, 0x89); /* mov %rsp, r */
-                o(0xe0 + REG_VALUE(r));
-                vset(&vtop->type, r | VT_LVAL, 0);
-                vswap();
-                vstore();
-                args_size += size;
+                if (mode == x86_64_mode_sse) {
+                    if (sse_reg > 8)
+                        sse_reg -= reg_count;
+                    else
+                        arg_stored = 0;
+                } else if (mode == x86_64_mode_integer) {
+                    if (gen_reg > REGN)
+                        gen_reg -= reg_count;
+                    else
+                        arg_stored = 0;
+                }
+                
+                if (arg_stored) {
+                    /* allocate the necessary size on stack */
+                    o(0x48);
+                    oad(0xec81, size); /* sub $xxx, %rsp */
+                    /* generate structure store */
+                    r = get_reg(RC_INT);
+                    orex(1, r, 0, 0x89); /* mov %rsp, r */
+                    o(0xe0 + REG_VALUE(r));
+                    vset(&vtop->type, r | VT_LVAL, 0);
+                    vswap();
+                    vstore();
+                    args_size += size;
+                }
                 break;
                 
             case VT_LDOUBLE:
@@ -1376,43 +1295,57 @@ void gfunc_call(int nb_args)
                 
             case VT_FLOAT:
             case VT_DOUBLE:
-                r = gv(RC_FLOAT);
-                o(0x50); /* push $rax */
-                /* movq %xmmN, (%rsp) */
-                o(0xd60f66);
-                o(0x04 + REG_VALUE(r)*8);
-                o(0x24);
-                args_size += size;
+                assert(mode == x86_64_mode_sse);
+                if (sse_reg > 8) {
+                    --sse_reg;
+                    r = gv(RC_FLOAT);
+                    o(0x50); /* push $rax */
+                    /* movq %xmmN, (%rsp) */
+                    o(0xd60f66);
+                    o(0x04 + REG_VALUE(r)*8);
+                    o(0x24);
+                    args_size += size;
+                } else {
+                    arg_stored = 0;
+                }
                 break;
                 
             default:
+                assert(mode == x86_64_mode_integer);
                 /* simple type */
                 /* XXX: implicit cast ? */
-                --gen_reg;
-                r = gv(RC_INT);
-                orex(0,r,0,0x50 + REG_VALUE(r)); /* push r */
-                args_size += size;
+                if (gen_reg > REGN) {
+                    --gen_reg;
+                    r = gv(RC_INT);
+                    orex(0,r,0,0x50 + REG_VALUE(r)); /* push r */
+                    args_size += size;
+                } else {
+                    arg_stored = 0;
+                }
                 break;
             }
-
-            /* And swap the argument back to its original position.  */
+            
+            /* And swap the argument back to it's original position.  */
             tmp = vtop[0];
             vtop[0] = vtop[-i];
             vtop[-i] = tmp;
 
-            vrotb(i+1);
-            assert((vtop->type.t == tmp.type.t) && (vtop->r == tmp.r));
-            vpop();
-            memmove(reg_args + i, reg_args + i + 1, (nb_args - i - 1) * sizeof *reg_args);
-            --nb_args;
-            --run_end;
+            if (arg_stored) {
+              vrotb(i+1);
+              assert((vtop->type.t == tmp.type.t) && (vtop->r == tmp.r));
+              vpop();
+              --nb_args;
+              --run_end;
+            } else {
+              ++i;
+            }
         }
 
         /* handle 16 byte aligned arguments at end of run */
         run_start = i = run_end;
         while (i < nb_args) {
             /* Rotate argument to top since it will always be popped */
-            mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, NULL);
+            mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
             if (align != 16)
               break;
 
@@ -1442,23 +1375,12 @@ void gfunc_call(int nb_args)
             }
             
             vpop();
-            memmove(reg_args + i, reg_args + i + 1, (nb_args - i - 1) * sizeof *reg_args);
             --nb_args;
         }
     }
-
+    
     /* XXX This should be superfluous.  */
     save_regs(0); /* save used temporary registers */
-
-    /* recalculate the number of register arguments there actually
-     * are. This is slow but more obviously correct than using the
-     * old counts. */
-    gen_reg = 0;
-    sse_reg = 0;
-    for(i = 0; i < nb_args; i++) {
-        gen_reg += regargs_iregs(&reg_args[i]);
-        sse_reg += regargs_fregs(&reg_args[i]);
-    }
 
     /* then, we prepare register passing arguments.
        Note that we cannot set RDX and RCX in this loop because gv()
@@ -1467,62 +1389,40 @@ void gfunc_call(int nb_args)
     assert(gen_reg <= REGN);
     assert(sse_reg <= 8);
     for(i = 0; i < nb_args; i++) {
-        RegArgs args;
-
-        args = reg_args[i];
-
+        mode = classify_x86_64_arg(&vtop->type, &type, &size, &align, &reg_count);
         /* Alter stack entry type so that gv() knows how to treat it */
-        if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-            int k;
-
-            for(k=REG_ARGS_MAX-1; k>=0; k--) {
-                if (args.freg[k] == -1)
-                    continue;
-
-                sse_reg--;
-                assert(sse_reg >= 0);
-
-                vdup();
-                vtop->type.t = VT_DOUBLE;
-                vtop->c.ull += args.freg[k];
-                gv(RC_XMM0 << sse_reg);
-                vpop();
-            }
-            for(k=REG_ARGS_MAX-1; k>=0; k--) {
-                int d;
-                if (args.ireg[k] == -1)
-                    continue;
-
-                gen_reg--;
-
-                vdup();
-                vtop->type.t = VT_LLONG;
-                vtop->c.ull += args.ireg[k];
-                r = gv(RC_INT);
-                d = arg_prepare_reg(gen_reg);
-                orex(1,d,r,0x89); /* mov */
-                o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-                vpop();
-            }
-        } else {
-            /* XXX is it really necessary to set vtop->type? */
-            classify_x86_64_arg(&vtop->type, &type, &size, &align, NULL);
-            vtop->type = type;
-            if (args.freg[0] != -1) {
+        vtop->type = type;
+        if (mode == x86_64_mode_sse) {
+            if (reg_count == 2) {
+                sse_reg -= 2;
+                gv(RC_FRET); /* Use pair load into xmm0 & xmm1 */
+                if (sse_reg) { /* avoid redundant movaps %xmm0, %xmm0 */
+                    /* movaps %xmm0, %xmmN */
+                    o(0x280f);
+                    o(0xc0 + (sse_reg << 3));
+                    /* movaps %xmm1, %xmmN */
+                    o(0x280f);
+                    o(0xc1 + ((sse_reg+1) << 3));
+                }
+            } else {
+                assert(reg_count == 1);
                 --sse_reg;
                 /* Load directly to register */
                 gv(RC_XMM0 << sse_reg);
-            } else if (args.ireg[0] != -1) {
-                int d;
-                /* simple type */
-                /* XXX: implicit cast ? */
-                gen_reg--;
-                r = gv(RC_INT);
-                d = arg_prepare_reg(gen_reg);
-                orex(1,d,r,0x89); /* mov */
-                o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-            } else {
-                assert(0);
+            }
+        } else if (mode == x86_64_mode_integer) {
+            /* simple type */
+            /* XXX: implicit cast ? */
+            int d;
+            gen_reg -= reg_count;
+            r = gv(RC_INT);
+            d = arg_prepare_reg(gen_reg);
+            orex(1,d,r,0x89); /* mov */
+            o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
+            if (reg_count == 2) {
+                d = arg_prepare_reg(gen_reg+1);
+                orex(1,d,vtop->r2,0x89); /* mov */
+                o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
             }
         }
         vtop--;
@@ -1563,7 +1463,7 @@ static void push_arg_reg(int i) {
 void gfunc_prolog(CType *func_type)
 {
     X86_64_Mode mode;
-    int i, addr, align, size;
+    int i, addr, align, size, reg_count;
     int param_addr = 0, reg_param_index, sse_param_index;
     Sym *sym;
     CType *type;
@@ -1583,37 +1483,31 @@ void gfunc_prolog(CType *func_type)
         /* count the number of seen parameters */
         sym = func_type->ref;
         while ((sym = sym->next) != NULL) {
-            RegArgs args;
-
             type = &sym->type;
-            mode = classify_x86_64_arg(type, NULL, &size, &align, &args);
-
+            mode = classify_x86_64_arg(type, NULL, &size, &align, &reg_count);
             switch (mode) {
             default:
             stack_arg:
                 seen_stack_size = ((seen_stack_size + align - 1) & -align) + size;
                 break;
-
+                
             case x86_64_mode_integer:
-            case x86_64_mode_sse: {
-                int stack = 0;
-
-                seen_sse_num += regargs_fregs(&args);
-                seen_reg_num += regargs_iregs(&args);
-
-                if (seen_reg_num > 8) {
+                if (seen_reg_num + reg_count <= 8) {
+                    seen_reg_num += reg_count;
+                } else {
                     seen_reg_num = 8;
-                    stack = 1;
-                }
-                if (seen_sse_num > 8) {
-                    seen_sse_num = 8;
-                    stack = 1;
-                }
-
-                if (stack)
                     goto stack_arg;
+                }
                 break;
-            }
+                
+            case x86_64_mode_sse:
+                if (seen_sse_num + reg_count <= 8) {
+                    seen_sse_num += reg_count;
+                } else {
+                    seen_sse_num = 8;
+                    goto stack_arg;
+                }
+                break;
             }
         }
 
@@ -1650,7 +1544,7 @@ void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
-    mode = classify_x86_64_arg(&func_vt, NULL, &size, &align, NULL);
+    mode = classify_x86_64_arg(&func_vt, NULL, &size, &align, &reg_count);
     if (mode == x86_64_mode_memory) {
         push_arg_reg(reg_param_index);
         func_vc = loc;
@@ -1658,39 +1552,18 @@ void gfunc_prolog(CType *func_type)
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
-        RegArgs args;
-        int reg_count_integer = 0;
-        int reg_count_sse = 0;
-        int arg_stored = 1;
-
         type = &sym->type;
-        mode = classify_x86_64_arg(type, NULL, &size, &align, &args);
-        reg_count_integer = regargs_iregs(&args);
-        reg_count_sse = regargs_fregs(&args);
-
+        mode = classify_x86_64_arg(type, NULL, &size, &align, &reg_count);
         switch (mode) {
-        case x86_64_mode_integer:
         case x86_64_mode_sse:
-            if (reg_count_integer || reg_count_sse) {
-                if ((reg_count_sse == 0 || sse_param_index + reg_count_sse <= 8) &&
-                    (reg_count_integer == 0 || reg_param_index + reg_count_integer <= REGN)) {
-                    /* argument fits into registers */
-                    arg_stored = 0;
-                }
-            }
-
-            if (!arg_stored) {
+            if (sse_param_index + reg_count <= 8) {
                 /* save arguments passed by register */
-                loc -= (reg_count_sse + reg_count_integer) * 8;
+                loc -= reg_count * 8;
                 param_addr = loc;
-                for (i = 0; i < reg_count_sse; ++i) {
+                for (i = 0; i < reg_count; ++i) {
                     o(0xd60f66); /* movq */
-                    gen_modrm(sse_param_index, VT_LOCAL, NULL, param_addr + args.freg[i]);
+                    gen_modrm(sse_param_index, VT_LOCAL, NULL, param_addr + i*8);
                     ++sse_param_index;
-                }
-                for (i = 0; i < reg_count_integer; ++i) {
-                    gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, param_addr + args.ireg[i]);
-                    ++reg_param_index;
                 }
             } else {
                 addr = (addr + align - 1) & -align;
@@ -1705,6 +1578,23 @@ void gfunc_prolog(CType *func_type)
             param_addr = addr;
             addr += size;
             break;
+            
+        case x86_64_mode_integer: {
+            if (reg_param_index + reg_count <= REGN) {
+                /* save arguments passed by register */
+                loc -= reg_count * 8;
+                param_addr = loc;
+                for (i = 0; i < reg_count; ++i) {
+                    gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, param_addr + i*8);
+                    ++reg_param_index;
+                }
+            } else {
+                addr = (addr + align - 1) & -align;
+                param_addr = addr;
+                addr += size;
+            }
+            break;
+        }
 	default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
@@ -1741,7 +1631,7 @@ void gfunc_epilog(void)
         *bounds_ptr = 0;
 
         /* generate bound local allocation */
-        sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
+        sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
                                func_bound_offset, lbounds_section->data_offset);
         saved_ind = ind;
         ind = func_bound_ind;
@@ -2343,7 +2233,8 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
     gfunc_call(1);
     vset(type, REG_IRET, 0);
 #else
-    int r = gv(RC_INT); /* allocation size */
+    int r;
+    r = gv(RC_INT); /* allocation size */
     /* sub r,%rsp */
     o(0x2b48);
     o(0xe0 | REG_VALUE(r));

@@ -24,8 +24,6 @@
 #define NB_REGS         4
 #define NB_ASM_REGS     8
 
-typedef int RegArgs;
-
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
@@ -376,14 +374,9 @@ static void gcall_or_jmp(int is_jmp)
 static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
 static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
-ST_FUNC int regargs_nregs(RegArgs *args)
-{
-    return *args;
-}
-
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize, RegArgs *args)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
 #ifdef TCC_TARGET_PE
     int size, align;
@@ -392,22 +385,20 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
     *regsize = 4;
     size = type_size(vt, &align);
     if (size > 8) {
-        *args = 0;
+        return 0;
     } else if (size > 4) {
         ret->ref = NULL;
         ret->t = VT_LLONG;
-        *args = 1;
+        return 1;
     } else {
         ret->ref = NULL;
         ret->t = VT_INT;
-        *args = 1;
+        return 1;
     }
 #else
     *ret_align = 1; // Never have to re-align return values for x86
-    *args = 0;
+    return 0;
 #endif
-
-    return *args != 0;
 }
 
 /* Generate function call. The function address is pushed first, then
