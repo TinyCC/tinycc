@@ -27,18 +27,23 @@
 
  Author (name)              I agree (YES/NO)    Files/Features (optional)
  ------------------------------------------------------------------------------
+ Adam Sampson               YES                 makefiles
  Daniel Glöckner            NO                  arm-gen.c
  Daniel Glöckner            YES                 not arm-gen.c
- Edmund Grimley Evans          YES                 arm64
+ Edmund Grimley Evans       YES                 arm64
  Fabrice Bellard            YES                 original author
  Frédéric Féret             YES                 x86 64/16 bit asm
  grischka                   YES                 tccpe.c
+ Kirill Smelkov             YES
+ mingodad                   YES
+ Pip Cet                    YES
  Shinichiro Hamaji          YES                 x86_64-gen.c
  Vincent Lefèvre            YES
  Thomas Preud'homme         YES                 arm-gen.c
  Timo VJ Lähde (Timppa)     ?                   tiny_libmaker.c
  TK                         ?                   tcccoff.c c67-gen.c
- waddlesplash				YES
+ Urs Janssen                YES
+ waddlesplash               YES
 
 
  ------------------------------------------------------------------------------
