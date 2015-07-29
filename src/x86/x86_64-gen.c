@@ -618,7 +618,7 @@ static void gcall_or_jmp(int is_jmp)
 {
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-    ((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
+        ((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
@@ -1806,7 +1806,7 @@ int gtst(int inv, int t)
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
         if (vtop->c.i & 0x100)
-          {
+        {
             /* This was a float compare.  If the parity flag is set
                the result was unordered.  For anything except != this
                means false and we don't jump (anding both conditions).
@@ -1816,13 +1816,12 @@ int gtst(int inv, int t)
                otherwise if unordered we don't want to jump.  */
             vtop->c.i &= ~0x100;
             if (!inv == (vtop->c.i != TOK_NE))
-              o(0x067a);  /* jp +6 */
-            else
-              {
+                o(0x067a);  /* jp +6 */
+            else {
                 g(0x0f);
                 t = psym(0x8a, t); /* jp t */
-              }
-          }
+            }
+        }
         g(0x0f);
         t = psym((vtop->c.i - 16) ^ inv, t);
     } else if (v == VT_JMP || v == VT_JMPI) {

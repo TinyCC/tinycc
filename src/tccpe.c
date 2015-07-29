@@ -398,22 +398,22 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
         s = pe_export_name(s1, sym);
         if (n) {
             /* second try: */
-        if (sym->st_other & ST_PE_STDCALL) {
-                /* try w/0 stdcall deco (windows API convention) */
-            p = strrchr(s, '@');
-            if (!p || s[0] != '_')
+            if (sym->st_other & ST_PE_STDCALL) {
+                    /* try w/0 stdcall deco (windows API convention) */
+                p = strrchr(s, '@');
+                if (!p || s[0] != '_')
+                    break;
+                strcpy(buffer, s+1)[p-s-1] = 0;
+            } else if (s[0] != '_') { /* try non-ansi function */
+                buffer[0] = '_', strcpy(buffer + 1, s);
+            } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
+                strcpy(buffer, s + 6);
+            } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
+                strcpy(buffer, s + 6);
+            } else {
                 break;
-            strcpy(buffer, s+1)[p-s-1] = 0;
-        } else if (s[0] != '_') { /* try non-ansi function */
-            buffer[0] = '_', strcpy(buffer + 1, s);
-        } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
-            strcpy(buffer, s + 6);
-        } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
-            strcpy(buffer, s + 6);
-        } else {
-            break;
-        }
-        s = buffer;
+            }
+            s = buffer;
         }
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
         // printf("find (%d) %d %s\n", n, sym_index, s);
@@ -565,9 +565,9 @@ static int pe_write(struct pe_info *pe)
 #endif
     /* NT additional fields. */
 #if defined(TCC_TARGET_ARM)
-    0x00100000,        /*DWORD   ImageBase; */
+    0x00100000,	    /*DWORD   ImageBase; */
 #else
-    0x00400000,        /*DWORD   ImageBase; */
+    0x00400000,	    /*DWORD   ImageBase; */
 #endif
     0x00001000, /*DWORD   SectionAlignment; */
     0x00000200, /*DWORD   FileAlignment; */

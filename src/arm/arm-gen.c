@@ -43,26 +43,26 @@ typedef int RegArgs;
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
-#define RC_INT 0x0001   /* generic integer register */
-#define RC_FLOAT 0x0002 /* generic float register */
-#define RC_R0 0x0004
-#define RC_R1 0x0008
-#define RC_R2 0x0010
-#define RC_R3 0x0020
-#define RC_R12 0x0040
-#define RC_F0 0x0080
-#define RC_F1 0x0100
-#define RC_F2 0x0200
-#define RC_F3 0x0400
+#define RC_INT     0x0001 /* generic integer register */
+#define RC_FLOAT   0x0002 /* generic float register */
+#define RC_R0      0x0004
+#define RC_R1      0x0008
+#define RC_R2      0x0010
+#define RC_R3      0x0020
+#define RC_R12     0x0040
+#define RC_F0      0x0080
+#define RC_F1      0x0100
+#define RC_F2      0x0200
+#define RC_F3      0x0400
 #ifdef TCC_ARM_VFP
-#define RC_F4 0x0800
-#define RC_F5 0x1000
-#define RC_F6 0x2000
-#define RC_F7 0x4000
+#define RC_F4      0x0800
+#define RC_F5      0x1000
+#define RC_F6      0x2000
+#define RC_F7      0x4000
 #endif
-#define RC_IRET RC_R0 /* function return: integer register */
-#define RC_LRET RC_R1 /* function return: second integer register */
-#define RC_FRET RC_F0 /* function return: float register */
+#define RC_IRET    RC_R0  /* function return: integer register */
+#define RC_LRET    RC_R1  /* function return: second integer register */
+#define RC_FRET    RC_F0  /* function return: float register */
 
 /* pretty names for the registers */
 enum {
@@ -1716,12 +1716,12 @@ void gen_opf(int op)
         }
         if (is_zero(-1)) {
             vswap();
-        switch(op) {
-          case TOK_LT: op = TOK_GT; break;
-          case TOK_GE: op = TOK_ULE; break;
-          case TOK_LE: op = TOK_GE; break;
-          case TOK_GT: op = TOK_ULT; break;
-        }
+            switch(op) {
+              case TOK_LT: op = TOK_GT; break;
+              case TOK_GE: op = TOK_ULE; break;
+              case TOK_LE: op = TOK_GE; break;
+              case TOK_GT: op = TOK_ULT; break;
+            }
         }
         x |= 0xB40040; /* fcmpX */
         if (op != TOK_EQ && op != TOK_NE)
@@ -1738,12 +1738,12 @@ void gen_opf(int op)
         }
         o(0xEEF1FA10); /* fmstat */
 
-      switch(op) {
+        switch(op) {
         case TOK_LE:  op = TOK_ULE; break;
         case TOK_LT:  op = TOK_ULT; break;
         case TOK_UGE: op = TOK_GE; break;
         case TOK_UGT: op = TOK_GT; break;
-      }
+        }
 
         vtop->r = VT_CMP;
         vtop->c.i = op;

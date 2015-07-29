@@ -1761,18 +1761,18 @@ ST_FUNC void gen_op(int op)
 #if 0
 /* #ifdef CONFIG_TCC_BCHECK
     The main reason to removing this code:
-    #include <stdio.h>
-    int main ()
-    {
-        int v[10];
-        int i = 10;
-        int j = 9;
-        fprintf(stderr, "v+i-j  = %p\n", v+i-j);
-        fprintf(stderr, "v+(i-j)  = %p\n", v+(i-j));
-    }
+        #include <stdio.h>
+        int main ()
+        {
+            int v[10];
+            int i = 10;
+            int j = 9;
+            fprintf(stderr, "v+i-j  = %p\n", v+i-j);
+            fprintf(stderr, "v+(i-j)  = %p\n", v+(i-j));
+        }
     When this code is on. then the output looks like
-    v+i-j = 0xfffffffe
-    v+(i-j) = 0xbff84000
+        v+i-j = 0xfffffffe
+        v+(i-j) = 0xbff84000
     */
             /* if evaluating constant expression, no code should be
                generated, so no bound check */
@@ -2450,18 +2450,18 @@ static void gen_assign_cast(CType *dt)
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
     if (sbt == VT_VOID || dbt == VT_VOID) {
-    if (sbt == VT_VOID && dbt == VT_VOID)
-        ; /*
-          It is Ok if both are void
-          A test program:
-            void func1() {}
-        void func2() {
-          return func1();
-        }
-          gcc accepts this program
-          */
-    else
-            tcc_error("cannot cast from/to void");
+        if (sbt == VT_VOID && dbt == VT_VOID)
+            ; /*
+              It is Ok if both are void
+              A test program:
+                void func1() {}
+                void func2() {
+                  return func1();
+                }
+              gcc accepts this program
+              */
+        else
+                tcc_error("cannot cast from/to void");
     }
     if (dt->t & VT_CONSTANT)
         tcc_warning("assignment of read-only location");
@@ -2542,7 +2542,7 @@ ST_FUNC void vstore(void)
     dbt = ft & VT_BTYPE;
     if ((((sbt == VT_INT || sbt == VT_SHORT) && dbt == VT_BYTE) ||
          (sbt == VT_INT && dbt == VT_SHORT))
-    && !(vtop->type.t & VT_BITFIELD)) {
+        && !(vtop->type.t & VT_BITFIELD)) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
         vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));
@@ -2764,20 +2764,20 @@ static void parse_attribute(AttributeDef *ad)
             next();
             skip(')');
             break;
-    case TOK_VISIBILITY1:
-    case TOK_VISIBILITY2:
+        case TOK_VISIBILITY1:
+        case TOK_VISIBILITY2:
             skip('(');
             if (tok != TOK_STR)
                 expect("visibility(\"default|hidden|internal|protected\")");
-        if (!strcmp (tokc.cstr->data, "default"))
-            ad->a.visibility = STV_DEFAULT;
-        else if (!strcmp (tokc.cstr->data, "hidden"))
-            ad->a.visibility = STV_HIDDEN;
-        else if (!strcmp (tokc.cstr->data, "internal"))
-            ad->a.visibility = STV_INTERNAL;
-        else if (!strcmp (tokc.cstr->data, "protected"))
-            ad->a.visibility = STV_PROTECTED;
-        else
+            if (!strcmp (tokc.cstr->data, "default"))
+                ad->a.visibility = STV_DEFAULT;
+            else if (!strcmp (tokc.cstr->data, "hidden"))
+                ad->a.visibility = STV_HIDDEN;
+            else if (!strcmp (tokc.cstr->data, "internal"))
+                ad->a.visibility = STV_INTERNAL;
+            else if (!strcmp (tokc.cstr->data, "protected"))
+                ad->a.visibility = STV_PROTECTED;
+            else
                 expect("visibility(\"default|hidden|internal|protected\")");
             next();
             skip(')');
@@ -2973,8 +2973,8 @@ static void struct_decl(CType *type, int u, int tdef)
             while (tok != '}') {
                 parse_btype(&btype, &ad);
                 while (1) {
-            if (flexible)
-                tcc_error("flexible array member '%s' not at the end of struct",
+                    if (flexible)
+                        tcc_error("flexible array member '%s' not at the end of struct",
                               get_tok_str(v, NULL));
                     bit_size = -1;
                     v = 0;
@@ -2990,14 +2990,14 @@ static void struct_decl(CType *type, int u, int tdef)
                                     if (tcc_state->ms_extensions == 0)
                                         expect("identifier");
                                 }
-                            }
+                                }
                         }
                         if (type_size(&type1, &align) < 0) {
-                if ((a == TOK_STRUCT) && (type1.t & VT_ARRAY) && c)
-                    flexible = 1;
-                else
-                    tcc_error("field '%s' has incomplete type",
-                                      get_tok_str(v, NULL));
+                            if ((a == TOK_STRUCT) && (type1.t & VT_ARRAY) && c)
+                                flexible = 1;
+                            else
+                                tcc_error("field '%s' has incomplete type",
+                                                  get_tok_str(v, NULL));
                         }
                         if ((type1.t & VT_BTYPE) == VT_FUNC ||
                             (type1.t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN | VT_INLINE)))
@@ -3807,11 +3807,11 @@ ST_FUNC void unary(void)
                 gen_cast(&type);
             }
         } else if (tok == '{') {
-            /*
+                /*
             if (nocode_wanted)
                 tcc_error("statement expression in global scope"); */
-        /* this check breaks compilation of the linux 2.4.26 with the meesage:
-           linux/include/net/tcp.h:945: error: statement expression in global scope */
+            /* this check breaks compilation of the linux 2.4.26 with the meesage:
+               linux/include/net/tcp.h:945: error: statement expression in global scope */
 
             /* save all registers */
             save_regs(0);
@@ -3872,12 +3872,12 @@ ST_FUNC void unary(void)
         if ((vtop->type.t & VT_BTYPE) == VT_PTR)
             tcc_error("pointer not accepted for unary plus");
         /* In order to force cast, we add zero, except for floating point
-       where we really need an noop (otherwise -0.0 will be transformed
-       into +0.0).  */
-    if (!is_float(vtop->type.t)) {
-        vpushi(0);
-        gen_op('+');
-    }
+           where we really need an noop (otherwise -0.0 will be transformed
+           into +0.0).  */
+        if (!is_float(vtop->type.t)) {
+            vpushi(0);
+            gen_op('+');
+        }
         break;
     case TOK_SIZEOF:
     case TOK_ALIGNOF1:
@@ -4050,20 +4050,20 @@ ST_FUNC void unary(void)
         next();
         unary();
         t = vtop->type.t & VT_BTYPE;
-    if (is_float(t)) {
+        if (is_float(t)) {
             /* In IEEE negate(x) isn't subtract(0,x), but rather
-           subtract(-0, x).  */
-        vpush(&vtop->type);
-        if (t == VT_FLOAT)
-            vtop->c.f = -0.0f;
-        else if (t == VT_DOUBLE)
-            vtop->c.d = -0.0;
-        else
-            vtop->c.ld = -0.0;
-    } else
-        vpushi(0);
-    vswap();
-    gen_op('-');
+               subtract(-0, x).  */
+            vpush(&vtop->type);
+            if (t == VT_FLOAT)
+                vtop->c.f = -0.0f;
+            else if (t == VT_DOUBLE)
+                vtop->c.d = -0.0;
+            else
+                vtop->c.ld = -0.0;
+        } else
+            vpushi(0);
+        vswap();
+        gen_op('-');
         break;
     case TOK_LAND:
         if (!gnu_ext)
@@ -4142,7 +4142,7 @@ ST_FUNC void unary(void)
         /* if forward reference, we must point to s */
         if (vtop->r & VT_SYM) {
             vtop->sym = s;
-        vtop->c.ptr_offset = 0;
+            vtop->c.ptr_offset = 0;
         }
         break;
     }
@@ -4312,10 +4312,10 @@ ST_FUNC void unary(void)
 
 
                 size = type_size(&s->type, &align);
-        /* We're writing whole regs often, make sure there's enough
-           space.  Assume register size is power of 2.  */
-        if (regsize > align)
-          align = regsize;
+                /* We're writing whole regs often, make sure there's enough
+                   space.  Assume register size is power of 2.  */
+                if (regsize > align)
+                  align = regsize;
                 loc = (loc - size) & -align;
                 addr = loc;
 #if defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_PE)
@@ -4610,16 +4610,16 @@ static void expr_cond(void)
                     (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
             } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
-        /* If one is a null ptr constant the result type
-           is the other.  */
-        if (is_null_pointer (vtop))
-          type = type1;
-        else if (is_null_pointer (&sv))
-          type = type2;
+                /* If one is a null ptr constant the result type
+                   is the other.  */
+                if (is_null_pointer (vtop))
+                  type = type1;
+                else if (is_null_pointer (&sv))
+                  type = type2;
                 /* XXX: test pointer compatibility, C99 has more elaborate
-           rules here.  */
-        else
-          type = type1;
+                   rules here.  */
+                else
+                  type = type1;
             } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
                 /* XXX: test function pointer compatibility */
                 type = bt1 == VT_FUNC ? type1 : type2;
@@ -4783,17 +4783,16 @@ static void label_or_decl(int l)
     int last_tok;
 
     /* fast test first */
-    if (tok >= TOK_UIDENT)
-      {
-    /* no need to save tokc because tok is an identifier */
-    last_tok = tok;
-    next();
-    if (tok == ':') {
+    if (tok >= TOK_UIDENT) {
+        /* no need to save tokc because tok is an identifier */
+        last_tok = tok;
+        next();
+        if (tok == ':') {
+            unget_tok(last_tok);
+            return;
+        }
         unget_tok(last_tok);
-        return;
     }
-    unget_tok(last_tok);
-      }
     decl(l);
 }
 
@@ -4891,10 +4890,10 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             Sym *p;
             switch(vtop->type.t & VT_BTYPE) {
             /* case VT_PTR: */
-            /* this breaks a compilation of the linux kernel v2.4.26 */
-            /* pmd_t *new = ({ __asm__ __volatile__("ud2\n") ; ((pmd_t *)1); }); */
-            /* Look a commit a80acab: Display error on statement expressions with complex return type */
-            /* A pointer is not a complex return type */
+                /* this breaks a compilation of the linux kernel v2.4.26 */
+                /* pmd_t *new = ({ __asm__ __volatile__("ud2\n") ; ((pmd_t *)1); }); */
+                /* Look a commit a80acab: Display error on statement expressions with complex return type */
+                /* A pointer is not a complex return type */
             case VT_STRUCT:
             case VT_ENUM:
             case VT_FUNC:
@@ -5642,38 +5641,38 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             AttributeDef ad1;
             CType type1;
             next();
-        if (tcc_state->old_struct_init_code) {
-        /* an old version of struct initialization.
-           It have a problems. But with a new version
-           linux 2.4.26 can't load ramdisk.
-         */
-            while (tok == '(') {
-                    par_count++;
-                    next();
-            }
-        if (!parse_btype(&type1, &ad1))
-                    expect("cast");
-            type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
-        #if 0
-        if (!is_assignable_types(type, &type1))
-                    tcc_error("invalid type for cast");
-        #endif
-        skip(')');
-            }
-            else
-            {
-              if (tok != '(') {
+            if (tcc_state->old_struct_init_code) {
+                /* an old version of struct initialization.
+                   It have a problems. But with a new version
+                   linux 2.4.26 can't load ramdisk.
+                 */
+                while (tok == '(') {
+                        par_count++;
+                        next();
+                }
             if (!parse_btype(&type1, &ad1))
+                expect("cast");
+                type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
+                #if 0
+                if (!is_assignable_types(type, &type1))
+            tcc_error("invalid type for cast");
+                #endif
+                skip(')');
+                }
+                else
+                {
+              if (tok != '(') {
+                if (!parse_btype(&type1, &ad1))
                     expect("cast");
-            type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
-        #if 0
-            if (!is_assignable_types(type, &type1))
-                    tcc_error("invalid type for cast");
-        #endif
-            skip(')');
-              } else
-        unget_tok(tok);
-        }
+                type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
+                #if 0
+                if (!is_assignable_types(type, &type1))
+                        tcc_error("invalid type for cast");
+                #endif
+                skip(')');
+                  } else
+                unget_tok(tok);
+            }
         }
 
         no_oblock = 1;
@@ -5699,28 +5698,28 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 
             /* gr: skip fields from same union - ugly. */
             while (f->next) {
-            int align = 0;
-        int f_size = type_size(&f->type, &align);
-        int f_type = (f->type.t & VT_BTYPE);
+                int align = 0;
+                int f_size = type_size(&f->type, &align);
+                int f_type = (f->type.t & VT_BTYPE);
 
                 ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
                 /* test for same offset */
                 if (f->next->c != f->c)
                     break;
                 if ((f_type == VT_STRUCT) && (f_size == 0)) {
-                    /*
-                       Lets assume a structure of size 0 can't be a member of the union.
-                       This allow to compile the following code from a linux kernel v2.4.26
-                typedef struct { } rwlock_t;
-                struct fs_struct {
-                 int count;
-                 rwlock_t lock;
-                 int umask;
-                };
-                struct fs_struct init_fs = { { (1) }, (rwlock_t) {}, 0022, };
-            tcc-0.9.23 can succesfully compile this version of the kernel.
-            gcc don't have problems with this code too.
-                    */
+                        /*
+                           Lets assume a structure of size 0 can't be a member of the union.
+                           This allow to compile the following code from a linux kernel v2.4.26
+                            typedef struct { } rwlock_t;
+                            struct fs_struct {
+                             int count;
+                             rwlock_t lock;
+                             int umask;
+                            };
+                            struct fs_struct init_fs = { { (1) }, (rwlock_t) {}, 0022, };
+                        tcc-0.9.23 can succesfully compile this version of the kernel.
+                        gcc don't have problems with this code too.
+                        */
                     break;
                 }
                 /* if yes, test for bitfield shift */
@@ -5760,21 +5759,21 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* just skip expression */
         parlevel = parlevel1 = 0;
         while ((parlevel > 0 || parlevel1 > 0 ||
-        (tok != '}' && tok != ',')) &&  tok != -1) {
+                (tok != '}' && tok != ',')) &&  tok != -1) {
             if (tok == '(')
                 parlevel++;
             else if (tok == ')') {
-        if (parlevel == 0 && parlevel1 == 0)
-            break;
+                if (parlevel == 0 && parlevel1 == 0)
+                    break;
                 parlevel--;
             }
-        else if (tok == '{')
-        parlevel1++;
-        else if (tok == '}') {
-        if (parlevel == 0 && parlevel1 == 0)
-            break;
-        parlevel1--;
-        }
+            else if (tok == '{')
+                parlevel1++;
+            else if (tok == '}') {
+                if (parlevel == 0 && parlevel1 == 0)
+                    break;
+                parlevel1--;
+            }
             next();
         }
     } else {
@@ -5995,12 +5994,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         } else {
             /* push global reference */
             sym = get_sym_ref(type, sec, addr, size);
-        vpushsym(type, sym);
+            vpushsym(type, sym);
         }
         /* patch symbol weakness */
         if (type->t & VT_WEAK)
             weaken_symbol(sym);
-    apply_visibility(sym, type);
+        apply_visibility(sym, type);
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
@@ -6236,11 +6235,11 @@ static int decl0(int l, int is_for_loop_init)
         if (((btype.t & VT_BTYPE) == VT_ENUM ||
              (btype.t & VT_BTYPE) == VT_STRUCT) &&
             tok == ';') {
-        if ((btype.t & VT_BTYPE) == VT_STRUCT) {
-        int v = btype.ref->v;
-        if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
-                tcc_warning("unnamed struct/union that defines no instances");
-        }
+            if ((btype.t & VT_BTYPE) == VT_STRUCT) {
+                int v = btype.ref->v;
+                if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
+                    tcc_warning("unnamed struct/union that defines no instances");
+            }
             next();
             continue;
         }
@@ -6286,7 +6285,7 @@ static int decl0(int l, int is_for_loop_init)
             if (ad.a.func_export)
                 type.t |= VT_EXPORT;
 #endif
-        type.t |= ad.a.visibility << VT_VIS_SHIFT;
+            type.t |= ad.a.visibility << VT_VIS_SHIFT;
 
             if (tok == '{') {
                 if (l == VT_LOCAL)
@@ -6327,10 +6326,10 @@ static int decl0(int l, int is_for_loop_init)
                     if (sym->type.t & VT_STATIC)
                         type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
 
-            /* If the definition has no visibility use the
-               one from prototype.  */
-            if (! (type.t & VT_VIS_MASK))
-                type.t |= sym->type.t & VT_VIS_MASK;
+                    /* If the definition has no visibility use the
+                       one from prototype.  */
+                    if (! (type.t & VT_VIS_MASK))
+                        type.t |= sym->type.t & VT_VIS_MASK;
 
                     if (!is_compatible_types(&sym->type, &type)) {
                     func_error1:

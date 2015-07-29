@@ -672,7 +672,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         }
 #else
         if (! (sym->type.t & VT_STATIC))
-        other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
+            other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
 #endif
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
@@ -2257,7 +2257,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
         tcc_set_options(s, "-lpthread");
 
     if (s->output_type == TCC_OUTPUT_EXE)
-    tcc_set_linker(s, (const char *)linker_arg.data);
+        tcc_set_linker(s, (const char *)linker_arg.data);
     cstr_free(&linker_arg);
 
     return optind;

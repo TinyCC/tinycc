@@ -21,9 +21,9 @@
 
 #include "tcc.h"
 
-#define MAXNSCNS 255 /* MAXIMUM NUMBER OF SECTIONS         */
+#define MAXNSCNS 255        /* MAXIMUM NUMBER OF SECTIONS         */
 #define MAX_STR_TABLE 1000000
-AOUTHDR o_filehdr; /* OPTIONAL (A.OUT) FILE HEADER       */
+AOUTHDR o_filehdr;          /* OPTIONAL (A.OUT) FILE HEADER       */
 
 SCNHDR section_header[MAXNSCNS];
 
@@ -94,21 +94,21 @@ ST_FUNC int tcc_output_coff(TCCState* s1, FILE* f)
     nb_syms = symtab_section->data_offset / sizeof(Elf32_Sym);
     coff_nb_syms = FindCoffSymbolIndex("XXXXXXXXXX1");
 
-    file_hdr.f_magic = COFF_C67_MAGIC;   /* magic number */
-    file_hdr.f_timdat = 0;               /* time & date stamp */
-    file_hdr.f_opthdr = sizeof(AOUTHDR); /* sizeof(optional hdr) */
-    file_hdr.f_flags = 0x1143; /* flags (copied from what code composer does) */
-    file_hdr.f_TargetID = 0x99; /* for C6x = 0x0099 */
+    file_hdr.f_magic = COFF_C67_MAGIC;        /* magic number */
+    file_hdr.f_timdat = 0;                    /* time & date stamp */
+    file_hdr.f_opthdr = sizeof(AOUTHDR);      /* sizeof(optional hdr) */
+    file_hdr.f_flags = 0x1143;                /* flags (copied from what code composer does) */
+    file_hdr.f_TargetID = 0x99;               /* for C6x = 0x0099 */
 
-    o_filehdr.magic = 0x0108;  /* see magic.h                          */
-    o_filehdr.vstamp = 0x0190; /* version stamp                        */
+    o_filehdr.magic = 0x0108;                 /* see magic.h                          */
+    o_filehdr.vstamp = 0x0190;                /* version stamp                        */
     o_filehdr.tsize =
-        stext->data_offset; /* text size in bytes, padded to FW bdry */
-    o_filehdr.dsize = sdata->data_offset; /* initialized data "  " */
-    o_filehdr.bsize = sbss->data_offset; /* uninitialized data "   " */
+        stext->data_offset;                   /* text size in bytes, padded to FW bdry */
+    o_filehdr.dsize = sdata->data_offset;     /* initialized data "  " */
+    o_filehdr.bsize = sbss->data_offset;      /* uninitialized data "   " */
     o_filehdr.entrypt = C67_main_entry_point; /* entry pt. */
-    o_filehdr.text_start = stext->sh_addr; /* base of text used for this file */
-    o_filehdr.data_start = sdata->sh_addr; /* base of data used for this file */
+    o_filehdr.text_start = stext->sh_addr;    /* base of text used for this file */
+    o_filehdr.data_start = sdata->sh_addr;    /* base of data used for this file */
 
     // create all the section headers
 

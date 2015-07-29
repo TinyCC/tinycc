@@ -492,25 +492,25 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASM_global:
     case TOK_ASM_weak:
     case TOK_ASM_hidden:
-    tok1 = tok;
-    do {
-            Sym *sym;
+        tok1 = tok;
+        do {
+                Sym *sym;
 
-            next();
-            sym = label_find(tok);
-            if (!sym) {
-                sym = label_push(&s1->asm_labels, tok, 0);
-                sym->type.t = VT_VOID;
-            }
-        if (tok1 != TOK_ASM_hidden)
-                sym->type.t &= ~VT_STATIC;
-            if (tok1 == TOK_ASM_weak)
-                sym->type.t |= VT_WEAK;
-        else if (tok1 == TOK_ASM_hidden)
-            sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
-            next();
-    } while (tok == ',');
-    break;
+                next();
+                sym = label_find(tok);
+                if (!sym) {
+                    sym = label_push(&s1->asm_labels, tok, 0);
+                    sym->type.t = VT_VOID;
+                }
+            if (tok1 != TOK_ASM_hidden)
+                    sym->type.t &= ~VT_STATIC;
+                if (tok1 == TOK_ASM_weak)
+                    sym->type.t |= VT_WEAK;
+            else if (tok1 == TOK_ASM_hidden)
+                sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
+                next();
+        } while (tok == ',');
+        break;
     case TOK_ASM_string:
     case TOK_ASM_ascii:
     case TOK_ASM_asciz:
@@ -536,12 +536,12 @@ static void asm_parse_directive(TCCState *s1)
                     break;
                 }
             }
-    }
-    break;
+        }
+        break;
     case TOK_ASM_text:
     case TOK_ASM_data:
     case TOK_ASM_bss:
-    {
+        {
             char sname[64];
             tok1 = tok;
             n = 0;
@@ -552,8 +552,8 @@ static void asm_parse_directive(TCCState *s1)
             }
             sprintf(sname, (n?".%s%d":".%s"), get_tok_str(tok1, NULL), n);
             use_section(s1, sname);
-    }
-    break;
+        }
+        break;
     case TOK_ASM_file:
         {
             char filename[512];
