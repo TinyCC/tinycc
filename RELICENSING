@@ -34,6 +34,8 @@
  Fabrice Bellard            YES                 original author
  Frédéric Féret             YES                 x86 64/16 bit asm
  grischka                   YES                 tccpe.c
+ Henry Kroll                YES
+ Joe Soroka                 YES
  Kirill Smelkov             YES
  mingodad                   YES
  Pip Cet                    YES
