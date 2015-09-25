@@ -13,6 +13,11 @@ typedef struct _GUID {
 } GUID;
 #endif
 
+#ifndef UUID_DEFINED
+#define UUID_DEFINED
+typedef GUID UUID;
+#endif
+
 #ifndef FAR
 #define FAR
 #endif
