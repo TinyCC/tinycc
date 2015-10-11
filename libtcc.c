@@ -1138,6 +1138,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);
 # endif
 #endif
+# if defined(__NetBSD__)
+#  define str(s) #s
+    tcc_define_symbol(s, "__NetBSD__", str( __NetBSD__));
+#  undef str
+# endif
 
     /* TinyCC & gcc defines */
 #if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
