@@ -742,7 +742,7 @@ ST_FUNC int gv(int rc)
         bit_pos = (vtop->type.t >> VT_STRUCT_SHIFT) & 0x3f;
         bit_size = (vtop->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
         /* remove bit field info to avoid loops */
-        vtop->type.t &= ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
+        vtop->type.t &= ~VT_BITFIELD & ((1 << VT_STRUCT_SHIFT) - 1);
         /* cast to int to propagate signedness in following ops */
         if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
             type.t = VT_LLONG;
@@ -2545,7 +2545,8 @@ ST_FUNC void vstore(void)
 	&& !(vtop->type.t & VT_BITFIELD)) {
         /* optimize char/short casts */
         delayed_cast = VT_MUSTCAST;
-        vtop->type.t = ft & (VT_TYPE & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT)));
+        vtop->type.t = (ft & VT_TYPE & ~VT_BITFIELD &
+                        ((1 << VT_STRUCT_SHIFT) - 1));
         /* XXX: factorize */
         if (ft & VT_CONSTANT)
             tcc_warning("assignment of read-only location");
@@ -2599,7 +2600,7 @@ ST_FUNC void vstore(void)
         bit_pos = (ft >> VT_STRUCT_SHIFT) & 0x3f;
         bit_size = (ft >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
         /* remove bit field info to avoid loops */
-        vtop[-1].type.t = ft & ~(VT_BITFIELD | (-1 << VT_STRUCT_SHIFT));
+        vtop[-1].type.t = ft & ~VT_BITFIELD & ((1 << VT_STRUCT_SHIFT) - 1);
 
         if((ft & VT_BTYPE) == VT_BOOL) {
             gen_cast(&vtop[-1].type);
