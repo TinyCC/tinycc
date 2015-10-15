@@ -587,6 +587,8 @@ ST_FUNC uint8_t *parse_comment(uint8_t *p)
                     file->buf_ptr = p;
                     c = handle_eob();
                     p = file->buf_ptr;
+                    if (c == CH_EOF)
+                        tcc_error("unexpected end of file in comment");
                     if (c == '\\') {
                         /* skip '\[\r]\n', otherwise just skip the stray */
                         while (c == '\\') {
