@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <string.h>
 
-void __clear_cache(char *beg, char *end)
+void __clear_cache(void *beg, void *end)
 {
     __arm64_clear_cache(beg, end);
 }

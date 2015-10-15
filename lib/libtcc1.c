@@ -721,7 +721,7 @@ void *__va_arg(__va_list_struct *ap,
 /* Flushing for tccrun */
 #if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_I386)
 
-void __clear_cache(char *beginning, char *end)
+void __clear_cache(void *beginning, void *end)
 {
 }
 
@@ -732,7 +732,7 @@ void __clear_cache(char *beginning, char *end)
 #include <sys/syscall.h>
 #include <stdio.h>
 
-void __clear_cache(char *beginning, char *end)
+void __clear_cache(void *beginning, void *end)
 {
 /* __ARM_NR_cacheflush is kernel private and should not be used in user space.
  * However, there is no ARM asm parser in tcc so we use it for now */

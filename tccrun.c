@@ -226,7 +226,7 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
-    extern void __clear_cache(char *beginning, char *end);
+    extern void __clear_cache(void *beginning, void *end);
 #ifndef PAGESIZE
 # define PAGESIZE 4096
 #endif
