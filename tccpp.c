@@ -2537,10 +2537,8 @@ maybe_newline:
             cstr_reset(&tokcstr);
             cstr_ccat(&tokcstr, '.');
             goto parse_num;
-        } else if (c == '.') {
+        } else if ((c == '.') && (p[1] == '.')){
             PEEKC(c, p);
-            if (c != '.')
-		expect("'.'");
             PEEKC(c, p);
             tok = TOK_DOTS;
         } else {
