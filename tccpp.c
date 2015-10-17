@@ -1621,7 +1621,6 @@ ST_FUNC void preprocess(int is_bof)
         for (i = -2; i < n; ++i) {
             char buf1[sizeof file->filename];
             CachedInclude *e;
-            BufferedFile **f;
             const char *path;
 
             if (i == -2) {
@@ -1651,8 +1650,7 @@ ST_FUNC void preprocess(int is_bof)
             pstrcat(buf1, sizeof(buf1), buf);
 
             if (tok == TOK_INCLUDE_NEXT)
-                for (f = s1->include_stack_ptr; f >= s1->include_stack; --f)
-                    if (0 == PATHCMP((*f)->filename, buf1)) {
+                    if (0 == PATHCMP(file->filename, buf1)) {
 #ifdef INC_DEBUG
                         printf("%s: #include_next skipping %s\n", file->filename, buf1);
 #endif
