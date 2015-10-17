@@ -1528,6 +1528,7 @@ ST_FUNC void preprocess(int is_bof)
     int i, c, n, saved_parse_flags;
     char buf[1024], *q;
     Sym *s;
+    int include_next_first_try = 1;
 
     saved_parse_flags = parse_flags;
     parse_flags = PARSE_FLAG_PREPROCESS
@@ -1617,6 +1618,7 @@ ST_FUNC void preprocess(int is_bof)
         /* store current file in stack, but increment stack later below */
         *s1->include_stack_ptr = file;
 
+     search_again:
         n = s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (i = -2; i < n; ++i) {
             char buf1[sizeof file->filename];
@@ -1650,14 +1652,22 @@ ST_FUNC void preprocess(int is_bof)
 
             pstrcat(buf1, sizeof(buf1), buf);
 
-            if (tok == TOK_INCLUDE_NEXT)
+            if (tok == TOK_INCLUDE_NEXT) {
                 for (f = s1->include_stack_ptr; f >= s1->include_stack; --f)
+            	  if (include_next_first_try) {
                     if (0 == PATHCMP((*f)->filename, buf1)) {
 #ifdef INC_DEBUG
                         printf("%s: #include_next skipping %s\n", file->filename, buf1);
 #endif
+			include_next_first_try++;
                         goto include_trynext;
                     }
+            	  } else {
+                    if (0 == PATHCMP(file->filename, buf1)) {
+                        goto include_trynext;
+                    }
+            	  }
+            }
 
             e = search_cached_include(s1, buf1);
             if (e && (define_find(e->ifndef_macro) || e->ifndef_macro == TOK_once)) {
@@ -1687,6 +1697,10 @@ include_trynext:
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
             ch = file->buf_ptr[0];
             goto the_end;
+        }
+        if (include_next_first_try > 1) {
+    	    include_next_first_try = 0;
+    	    goto search_again;
         }
         tcc_error("include file '%s' not found", buf);
 include_done:
