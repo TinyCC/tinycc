@@ -248,7 +248,7 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
                        sym_bind, sh_num, new_vis, esym_bind, esym->st_shndx, esym_vis);
 #endif
-                tcc_error_noabort("'%s' defined twice", name);
+                // tcc_error_noabort("'%s' defined twice", name);
             }
         } else {
         do_patch:
