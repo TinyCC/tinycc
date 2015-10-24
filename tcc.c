@@ -90,6 +90,8 @@ static void help(void)
            "  -vv         show included files (as sole argument: show search paths)\n"
            "  -dumpversion\n"
            "  -bench      show compilation statistics\n"
+           "  -xc -xa     specify type of the next infile\n"
+           "  -           use stdin pipe as infile\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
