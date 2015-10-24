@@ -20,7 +20,10 @@ typedef unsigned int uint32_t;
 typedef unsigned long long int uint64_t;
 #endif
 
+#ifndef NULL
 #define NULL ((void*)0)
+#endif
+
 #define offsetof(type, field) ((size_t)&((type *)0)->field)
 
 void *alloca(size_t size);
