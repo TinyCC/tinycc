@@ -1820,15 +1820,23 @@ ST_FUNC void gen_clear_cache(void)
 }
 
 ST_FUNC void gen_vla_sp_save(int addr) {
-    tcc_error("variable length arrays unsupported for this target");
+    uint32_t r = intr(get_reg(RC_INT));
+    o(0x910003e0 | r); // mov x(r),sp
+    arm64_strx(3, r, 29, addr);
 }
 
 ST_FUNC void gen_vla_sp_restore(int addr) {
-    tcc_error("variable length arrays unsupported for this target");
+    uint32_t r = intr(get_reg(RC_INT));
+    arm64_ldrx(0, 3, r, 29, addr);
+    o(0x9100001f | r << 5); // mov sp,x(r)
 }
 
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-    tcc_error("variable length arrays unsupported for this target");
+    uint32_t r = intr(gv(RC_INT));
+    o(0x91003c00 | r | r << 5); // add x(r),x(r),#15
+    o(0x927cec00 | r | r << 5); // bic x(r),x(r),#15
+    o(0xcb2063ff | r << 16); // sub sp,sp,x(r)
+    vpop();
 }
 
 /* end of A64 code generator */

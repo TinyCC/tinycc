@@ -41,8 +41,7 @@ endif
 ifeq ($(TARGETOS),Darwin)
  TESTS := $(filter-out hello-exe test3 $(BTESTS),$(TESTS))
 endif
-ifeq ($(ARCH),i386)
-else ifneq ($(ARCH),x86-64)
+ifeq (,$(filter arm64 i386 x86-64,$(ARCH)))
  TESTS := $(filter-out vla_test-run,$(TESTS))
 endif
 ifeq ($(CONFIG_arm_eabi),yes)
