@@ -313,13 +313,9 @@ extern "C" {
 
   extern int __cdecl __fpclassifyf (float);
   extern int __cdecl __fpclassify (double);
+  extern int __cdecl __fpclassifyl (long double);
 
-  __CRT_INLINE int __cdecl __fpclassifyl (long double x){
-    unsigned short sw;
-    __asm__ ("fxam; fstsw %%ax;" : "=a" (sw): "t" (x));
-    return sw & (FP_NAN | FP_NORMAL | FP_ZERO );
-  }
-
+/* Implemented at tcc/tcc_libm.h */
 #define fpclassify(x) (sizeof (x) == sizeof (float) ? __fpclassifyf (x)	  \
   : sizeof (x) == sizeof (double) ? __fpclassify (x) \
   : __fpclassifyl (x))
@@ -339,24 +335,12 @@ extern "C" {
 #define isnormal(x) (fpclassify(x) == FP_NORMAL)
 
   /* 7.12.3.6 The signbit macro */
-  __CRT_INLINE int __cdecl __signbit (double x) {
-    unsigned short stw;
-    __asm__ ( "fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
-    return stw & 0x0200;
-  }
 
-  __CRT_INLINE int __cdecl __signbitf (float x) {
-    unsigned short stw;
-    __asm__ ("fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
-    return stw & 0x0200;
-  }
+  extern int __cdecl __signbitf (float);
+  extern int __cdecl __signbit (double);
+  extern int __cdecl __signbitl (long double);
 
-  __CRT_INLINE int __cdecl __signbitl (long double x) {
-    unsigned short stw;
-    __asm__ ("fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
-    return stw & 0x0200;
-  }
-
+/* Implemented at tcc/tcc_libm.h */
 #define signbit(x) (sizeof (x) == sizeof (float) ? __signbitf (x)	\
   : sizeof (x) == sizeof (double) ? __signbit (x)	\
   : __signbitl (x))
@@ -745,6 +729,9 @@ extern "C++" {
  *  false whenever a NaN is involved, with the exception of the != op, 
  *  which always returns true: yes, (NaN != NaN) is true).
  */
+
+/* Mini libm (inline __fpclassify*, __signbit* and variants) */
+#include "tcc/tcc_libm.h"
 
 #endif /* End _MATH_H_ */
 
