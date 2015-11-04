@@ -922,18 +922,20 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_LSTR:
         {
             int nb_words;
-            CString *cstr;
+            CString cstr;
 
             nb_words = (sizeof(CString) + cv->cstr->size + 3) >> 2;
             while ((len + nb_words) > s->allocated_len)
                 str = tok_str_realloc(s);
-            cstr = (CString *)(str + len);
-            cstr->data = NULL;
-            cstr->size = cv->cstr->size;
-            cstr->data_allocated = NULL;
-            cstr->size_allocated = cstr->size;
-            memcpy((char *)cstr + sizeof(CString), 
-                   cv->cstr->data, cstr->size);
+            /* XXX: Insert the CString into the int array.
+               It may end up incorrectly aligned. */
+            cstr.data = 0;
+            cstr.size = cv->cstr->size;
+            cstr.data_allocated = 0;
+            cstr.size_allocated = cstr.size;
+            memcpy(str + len, &cstr, sizeof(CString));
+            memcpy((char *)(str + len) + sizeof(CString),
+                   cv->cstr->data, cstr.size);
             len += nb_words;
         }
         break;
@@ -1002,6 +1004,7 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     case TOK_LSTR:
     case TOK_PPNUM:
     case TOK_PPSTR:
+        /* XXX: Illegal cast: the pointer p may not be correctly aligned! */
         cv->cstr = (CString *)p;
         cv->cstr->data = (char *)p + sizeof(CString);
         p += (sizeof(CString) + cv->cstr->size + 3) >> 2;
