@@ -454,7 +454,7 @@ static Sym *external_sym(int v, CType *type, int r, char *asm_label)
     if (!s) {
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
-        s->asm_label = asm_label;
+        s->asm_label = asm_label ? tcc_strdup(asm_label) : 0;
         s->type.t |= VT_EXTERN;
     } else if (s->type.ref == func_old_type.ref) {
         s->type.ref = type->ref;
@@ -5908,7 +5908,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (v) {
             if (scope != VT_CONST || !sym) {
                 sym = sym_push(v, type, r | VT_SYM, 0);
-                sym->asm_label = asm_label;
+                sym->asm_label = asm_label ? tcc_strdup(asm_label) : 0;
             }
             /* update symbol definition */
             if (sec) {
@@ -6139,6 +6139,7 @@ static int decl0(int l, int is_for_loop_init)
     CType type, btype;
     Sym *sym;
     AttributeDef ad;
+    char *asm_label = 0; // associated asm label
 
     while (1) {
         if (!parse_btype(&btype, &ad)) {
@@ -6174,7 +6175,6 @@ static int decl0(int l, int is_for_loop_init)
             continue;
         }
         while (1) { /* iterate thru each declaration */
-            char *asm_label; // associated asm label
             type = btype;
             type_decl(&type, &ad, &v, TYPE_DIRECT);
 #if 0
@@ -6195,7 +6195,8 @@ static int decl0(int l, int is_for_loop_init)
                     func_decl_list(sym);
             }
 
-            asm_label = NULL;
+            tcc_free(asm_label);
+            asm_label = 0;
             if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
                 CString astr;
 
@@ -6373,8 +6374,10 @@ static int decl0(int l, int is_for_loop_init)
                     }
                 }
                 if (tok != ',') {
-                    if (is_for_loop_init)
+                    if (is_for_loop_init) {
+                        tcc_free(asm_label);
                         return 1;
+                    }
                     skip(';');
                     break;
                 }
@@ -6383,6 +6386,7 @@ static int decl0(int l, int is_for_loop_init)
             ad.a.aligned = 0;
         }
     }
+    tcc_free(asm_label);
     return 0;
 }
 
