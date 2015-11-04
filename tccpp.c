@@ -1032,6 +1032,19 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     *pp = p;
 }
 
+/* Calling this function is expensive, but it is not possible
+   to read a token string backwards. */
+static int tok_last(const int *str0, const int *str1)
+{
+    const int *str = str0;
+    int tok = 0;
+    CValue cval;
+
+    while (str < str1)
+        TOK_GET(&tok, &str, &cval);
+    return tok;
+}
+
 static int macro_is_equal(const int *a, const int *b)
 {
     char buf[STRING_MAX_SIZE + 1];
@@ -3266,7 +3279,9 @@ static void macro_subst(
                 end_macro ();
             }
 
-            spc = tok_str->len && is_space(tok_str->str[tok_str->len-1]);
+            spc = (tok_str->len &&
+                   is_space(tok_last(tok_str->str,
+                                     tok_str->str + tok_str->len)));
 
         } else {
 
