@@ -294,10 +294,10 @@
      DEF(TOK_memalign, "memalign")
      DEF(TOK_calloc, "calloc")
 # endif
-     DEF(TOK_memmove, "memmove")
      DEF(TOK_strlen, "strlen")
      DEF(TOK_strcpy, "strcpy")
 #endif
+ DEF(TOK_memmove, "memmove")
 
 /* Tiny Assembler */
  DEF_ASM(byte)
