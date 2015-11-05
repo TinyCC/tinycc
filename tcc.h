@@ -24,11 +24,6 @@
 #define _GNU_SOURCE
 #include "config.h"
 
-#ifdef CONFIG_TCCBOOT
-#include "tccboot.h"
-#define CONFIG_TCC_STATIC
-#else
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -82,8 +77,6 @@
 #  define PUB_FUNC LIBTCCAPI
 # endif
 #endif
-
-#endif /* !CONFIG_TCCBOOT */
 
 #ifndef O_BINARY
 # define O_BINARY 0
