@@ -316,7 +316,10 @@ extern "C" {
 
   __CRT_INLINE int __cdecl __fpclassifyl (long double x){
     unsigned short sw;
-    __asm__ ("fxam; fstsw %%ax;" : "=a" (sw): "t" (x));
+    __asm__ (
+        "fldt  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (sw): "m" (x));
     return sw & (FP_NAN | FP_NORMAL | FP_ZERO );
   }
 
@@ -337,8 +340,11 @@ extern "C" {
   __CRT_INLINE int __cdecl __isnan (double _x)
   {
     unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
+    __asm__ (
+        "fldl  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (sw) : "m" (_x));
+
     return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
       == FP_NAN;
   }
@@ -346,8 +352,11 @@ extern "C" {
   __CRT_INLINE int __cdecl __isnanf (float _x)
   {
     unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
+    __asm__ (
+        "flds  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (sw) : "m" (_x));
+
     return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
       == FP_NAN;
   }
@@ -355,8 +364,11 @@ extern "C" {
   __CRT_INLINE int __cdecl __isnanl (long double _x)
   {
     unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
+    __asm__ (
+        "fldt  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (sw) : "m" (_x));
+
     return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
       == FP_NAN;
   }
@@ -372,19 +384,28 @@ extern "C" {
   /* 7.12.3.6 The signbit macro */
   __CRT_INLINE int __cdecl __signbit (double x) {
     unsigned short stw;
-    __asm__ ( "fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
+    __asm__ ( 
+        "fldl  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (stw) : "m" (x));
     return stw & 0x0200;
   }
 
   __CRT_INLINE int __cdecl __signbitf (float x) {
     unsigned short stw;
-    __asm__ ("fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
+    __asm__ (
+        "flds  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (stw) : "m" (x));
     return stw & 0x0200;
   }
 
   __CRT_INLINE int __cdecl __signbitl (long double x) {
     unsigned short stw;
-    __asm__ ("fxam; fstsw %%ax;": "=a" (stw) : "t" (x));
+    __asm__ (
+        "fldt  %1 \n"
+        "fxam     \n"
+        "fstsw %0 \n" : "=a" (stw) : "m" (x));
     return stw & 0x0200;
   }
 
