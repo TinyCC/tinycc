@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
+#include <sys/stat.h>          // stat()
 
 #ifdef CONFIG_TCCASSERT
 #include <assert.h>
