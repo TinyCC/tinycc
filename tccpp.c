@@ -1544,7 +1544,6 @@ ST_FUNC void preprocess(int is_bof)
     int i, c, n, saved_parse_flags;
     char buf[1024], *q;
     Sym *s;
-    char *p3 = 0;
 
     saved_parse_flags = parse_flags;
     parse_flags = PARSE_FLAG_PREPROCESS
@@ -1631,19 +1630,15 @@ ST_FUNC void preprocess(int is_bof)
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
             tcc_error("#include recursion too deep");
-        /* store current file in stack, but increment stack later below */
-        *s1->include_stack_ptr = file;
 
-        #ifdef INC_DEBUG
-            if (tok == TOK_INCLUDE_NEXT)
-                printf("%s (1) include_next file %s\n", file->filename, buf);
-        #endif
+        i = -2;
+        if (tok == TOK_INCLUDE_NEXT)
+            i = file->inc_path_index + 1;
 
         n = s1->nb_include_paths + s1->nb_sysinclude_paths;
-        for (i = -2; i < n; ++i) {
+        for (; i < n; ++i) {
             char buf1[sizeof file->filename];
             CachedInclude *e;
-            BufferedFile **f;
             const char *path;
 
             if (i == -2) {
@@ -1666,86 +1661,36 @@ ST_FUNC void preprocess(int is_bof)
                     path = s1->include_paths[i];
                 else
                     path = s1->sysinclude_paths[i - s1->nb_include_paths];
+                if (path == 0) continue;
                 pstrcpy(buf1, sizeof(buf1), path);
                 pstrcat(buf1, sizeof(buf1), "/");
             }
 
-            #ifdef INC_DEBUG
-            if (tok == TOK_INCLUDE_NEXT)
-                printf("%s (2) include_next path <%s> name <%s>\n", file->filename, buf1, buf);
-            #endif
-
             pstrcat(buf1, sizeof(buf1), buf);
-
-            if (tok == TOK_INCLUDE_NEXT) {
-                char *p1 = buf1;
-                if ((p1[0] == '.') && IS_DIRSEP(p1[1])) p1 += 2;
-
-                if (p3) {
-                    if (0 == PATHCMP(p1, p3)) {
-                        #ifdef INC_DEBUG
-                        printf("%s (3) include_next skipping <%s>\n", file->filename, p1);
-                        #endif
-                        goto include_trynext;
-                    }
-                }
-                else {
-                    for (f = s1->include_stack_ptr; f >= s1->include_stack; --f) {
-                        char *p2 = (*f)->filename;
-                        if ((p2[0] == '.') && IS_DIRSEP(p2[1])) p2 += 2;
-                        if (0 == PATHCMP(p2, p1)) {
-                            p3 = p2;
-                            break;
-                        }
-                    }
-                    #ifdef INC_DEBUG
-                        printf("%s: (4) include_next skipping <%s> (p3=%p)\n", file->filename, buf1, p3);
-                    #endif
-                    goto include_trynext;
-                }
-                #ifdef INC_DEBUG
-                printf("%s (5) include_next considering <%s>\n", file->filename, buf1);
-                #endif
-            }
-
             e = search_cached_include(s1, buf1);
-            if (e && (define_find(e->ifndef_macro) || e->ifndef_macro == TOK_once)) {
-                /* no need to parse the include because the 'ifndef macro'
-                   is defined */
+            if (e && (define_find(e->ifndef_macro) || e->ifndef_macro == TOK_once))
+                break; /* no need to parse the include */
 
-                #ifdef INC_DEBUG
-                printf("%s: skipping cached <%s>\n", file->filename, buf1);
-                #endif
-                goto include_done;
-            }
-
-            if (tcc_open(s1, buf1) < 0) {
-                #ifdef INC_DEBUG
-                printf("%s: include open failed <%s>\n", file->filename, buf1);
-                #endif
-include_trynext:
+            if (tcc_open(s1, buf1) < 0)
                 continue;
-            }
 
-            #ifdef INC_DEBUG
-            printf("%s: including <%s>\n", file->prev->filename, file->filename);
-            #endif
+            file->inc_path_index = i;
+            *(s1->include_stack_ptr++) = file->prev;
 
             /* update target deps */
             dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
-                    tcc_strdup(buf1));
-            /* push current file in stack */
-            ++s1->include_stack_ptr;
+                tcc_strdup(buf1));
+
             /* add include file debug info */
             if (s1->do_debug)
                 put_stabs(file->filename, N_BINCL, 0, 0, 0);
+
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
             ch = file->buf_ptr[0];
-            goto the_end;
+            break;
         }
-        tcc_error("include file '%s' not found", buf);
-include_done:
-        break;
+        if (i >= n) tcc_error("include file '%s' not found", buf);
+        goto the_end;
     case TOK_IFNDEF:
         c = 1;
         goto do_ifdef;

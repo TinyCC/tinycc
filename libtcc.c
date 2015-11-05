@@ -841,6 +841,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     normalize_slashes(bf->filename);
 #endif
     bf->line_num = 1;
+    bf->inc_path_index = -2;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     bf->fd = -1;
     bf->prev = file;
@@ -1508,6 +1509,84 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
     return 0;
 }
 
+
+ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
+{
+/* check a preprocessor include dirs and remove not
+   existing dirs and duplicates:
+   - for each duplicate path keep just the first one
+   - remove each include_path that exists in sysinclude_paths
+*/
+    struct stat sysinc_stats[50]; // we don't use VLA in tcc code
+    struct stat inc_stats[50];
+    int num_sysinc = s->nb_sysinclude_paths;
+    int num_inc = s->nb_include_paths;
+    char** pp;
+    int i, j, r;
+
+    if ((num_sysinc > 50) || (num_inc > 50)) {
+        tcc_warning("fix a max number of the inc dirs");
+        if (num_sysinc > 50) num_sysinc = 50;
+        if (num_inc > 50)       num_inc = 50;
+    }
+
+    pp = s->sysinclude_paths;
+    for (i=0; i < num_sysinc; i++) {
+        struct stat *st = &sysinc_stats [i];
+        r = stat( pp [i], st);
+        if (r || !S_ISDIR(st->st_mode)) {
+            tcc_free( pp[i] );
+            pp[i] = 0;
+        }
+    }
+    pp = s->include_paths;
+    for (i=0; i < num_inc; i++) {
+        struct stat *st = &inc_stats [i];
+        r = stat( pp [i], st);
+        if (r || !S_ISDIR(st->st_mode)) {
+            tcc_free( pp[i] );
+            pp[i] = 0;
+        }
+    }
+
+    for (i=0; i < num_inc; i++) {
+        struct stat *st1 = &inc_stats [i];
+        for (j=i+1; j < num_inc; j++) {
+            struct stat *st2 = &inc_stats [j];
+            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+                pp = &s->include_paths[j];
+                if (*pp) {
+                    tcc_free( *pp );
+                    *pp = 0;
+                }
+            }
+        }
+        for (j=0; i < num_sysinc; i++) {
+            struct stat *st2 = &sysinc_stats [j];
+            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+                pp = &s->include_paths[i];
+                if (*pp) {
+                    tcc_free( *pp );
+                    *pp = 0;
+                }
+            }
+        }
+    }
+    for (i=0; i < num_sysinc; i++) {
+        struct stat *st1 = &sysinc_stats [i];
+        for (j=i+1; j < num_sysinc; j++) {
+            struct stat *st2 = &sysinc_stats [j];
+            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+                pp = &s->sysinclude_paths[j];
+                if (*pp) {
+                    tcc_free( *pp );
+                    *pp = 0;
+                }
+            }
+        }
+    }
+}
+
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
@@ -1573,6 +1652,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     }
 #endif
 
+    tcc_mormalize_inc_dirs(s);
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
         print_defines();
 

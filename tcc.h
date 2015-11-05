@@ -501,6 +501,7 @@ typedef struct BufferedFile {
     struct BufferedFile *prev;
     int line_num;    /* current line number - here to simplify code */
     int line_ref;    /* tcc -E: last printed line */
+    int inc_path_index;
     int ifndef_macro;  /* #ifndef macro / #endif search */
     int ifndef_macro_saved; /* saved ifndef_macro */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
