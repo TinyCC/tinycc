@@ -333,38 +333,7 @@ extern "C" {
   /* 7.12.3.4 */
   /* We don't need to worry about trucation here:
   A NaN stays a NaN. */
-
-  __CRT_INLINE int __cdecl __isnan (double _x)
-  {
-    unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
-    return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
-      == FP_NAN;
-  }
-
-  __CRT_INLINE int __cdecl __isnanf (float _x)
-  {
-    unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
-    return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
-      == FP_NAN;
-  }
-
-  __CRT_INLINE int __cdecl __isnanl (long double _x)
-  {
-    unsigned short sw;
-    __asm__ ("fxam;"
-      "fstsw %%ax": "=a" (sw) : "t" (_x));
-    return (sw & (FP_NAN | FP_NORMAL | FP_INFINITE | FP_ZERO | FP_SUBNORMAL))
-      == FP_NAN;
-  }
-
-
-#define isnan(x) (sizeof (x) == sizeof (float) ? __isnanf (x)	\
-  : sizeof (x) == sizeof (double) ? __isnan (x)	\
-  : __isnanl (x))
+#define isnan(x) (fpclassify(x) == FP_NAN)
 
   /* 7.12.3.5 */
 #define isnormal(x) (fpclassify(x) == FP_NORMAL)
