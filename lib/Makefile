@@ -100,7 +100,7 @@ endif
 endif
 endif
 
-XFLAGS = $(CPPFLAGS) $(CFLAGS) $(PICFLAGS) $(TGT)
+XFLAGS = $(filter-out -b,$(CPPFLAGS) $(CFLAGS) $(PICFLAGS) $(TGT))
 
 ifeq ($(TARGETOS),Darwin)
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
