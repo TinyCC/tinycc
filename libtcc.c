@@ -1510,6 +1510,20 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 }
 
 
+/* Windows stat* ( https://msdn.microsoft.com/en-us/library/14h5k7ff.aspx ):
+ * - st_gid, st_ino, st_uid: only valid on "unix" file systems (not FAT, NTFS, etc)
+ * - st_atime, st_ctime: not valid on FAT, valid on NTFS.
+ * - Other fields should be reasonably compatible (and S_ISDIR should work).
+ *
+ * BY_HANDLE_FILE_INFORMATION ( https://msdn.microsoft.com/en-us/library/windows/desktop/aa363788%28v=vs.85%29.aspx ):
+ * - File index (combined nFileIndexHigh and nFileIndexLow) _may_ change when the file is opened.
+ *   - But on NTFS: it's guaranteed to be the same value until the file is deleted.
+ * - On windows server 2012 there's a 128b file id, and the 64b one via
+ *   nFileIndex* is not guaranteed to be unique.
+ *
+ * - MS Docs suggest to that volume number with the file index could be used to
+ *   check if two handles refer to the same file.
+ */
 #ifndef _WIN32
 typedef struct stat                file_info_t;
 #else
@@ -1524,11 +1538,11 @@ int get_file_info(const char *fname, file_info_t *out_info)
     int rv = 1;
     HANDLE h = CreateFile(fname, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                           FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (h == INVALID_HANDLE_VALUE)
-        return rv;
 
-    rv = !GetFileInformationByHandle(h, out_info);
-    CloseHandle(h);
+    if (h != INVALID_HANDLE_VALUE) {
+        rv = !GetFileInformationByHandle(h, out_info);
+        CloseHandle(h);
+    }
     return rv;
 #endif
 }
