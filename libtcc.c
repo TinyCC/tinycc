@@ -1555,7 +1555,7 @@ int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
 #endif
 }
 
-ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
+ST_FUNC void tcc_normalize_inc_dirs(TCCState *s)
 {
 /* check a preprocessor include dirs and remove not
    existing dirs and duplicates:
@@ -1697,7 +1697,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     }
 #endif
 
-    tcc_mormalize_inc_dirs(s);
+    tcc_normalize_inc_dirs(s);
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
         print_defines();
 
