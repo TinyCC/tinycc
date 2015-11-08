@@ -1538,7 +1538,8 @@ int is_dir(file_info_t *info)
 #ifndef _WIN32
     return S_ISDIR(info->st_mode);
 #else
-    return info->dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY;
+    return (info->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ==
+           FILE_ATTRIBUTE_DIRECTORY;
 #endif
 }
 
