@@ -1510,6 +1510,50 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
 }
 
 
+#ifndef _WIN32
+typedef struct stat                file_info_t;
+#else
+typedef BY_HANDLE_FILE_INFORMATION file_info_t;
+#endif
+
+int get_file_info(const char *fname, file_info_t *out_info)
+{
+#ifndef _WIN32
+    return stat(fname, out_info);
+#else
+    int rv = 1;
+    HANDLE h = CreateFile(fname, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                          FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return rv;
+
+    rv = !GetFileInformationByHandle(h, out_info);
+    CloseHandle(h);
+    return rv;
+#endif
+}
+
+int is_dir(file_info_t *info)
+{
+#ifndef _WIN32
+    return S_ISDIR(info->st_mode);
+#else
+    return info->dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY;
+#endif
+}
+
+int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
+{
+#ifndef _WIN32
+    return fi1->st_dev == fi2->st_dev &&
+           fi1->st_ino == fi2->st_ino;
+#else
+    return fi1->dwVolumeSerialNumber == fi2->dwVolumeSerialNumber &&
+           fi1->nFileIndexHigh       == fi2->nFileIndexHigh &&
+           fi1->nFileIndexLow        == fi2->nFileIndexLow;
+#endif
+}
+
 ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
 {
 /* check a preprocessor include dirs and remove not
@@ -1517,8 +1561,8 @@ ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
    - for each duplicate path keep just the first one
    - remove each include_path that exists in sysinclude_paths
 */
-    struct stat sysinc_stats[50]; // we don't use VLA in tcc code
-    struct stat inc_stats[50];
+    file_info_t sysinc_stats[50]; // we don't use VLA in tcc code
+    file_info_t inc_stats[50];
     int num_sysinc = s->nb_sysinclude_paths;
     int num_inc = s->nb_include_paths;
     char** pp;
@@ -1532,28 +1576,28 @@ ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
 
     pp = s->sysinclude_paths;
     for (i=0; i < num_sysinc; i++) {
-        struct stat *st = &sysinc_stats [i];
-        r = stat( pp [i], st);
-        if (r || !S_ISDIR(st->st_mode)) {
+        file_info_t *st = &sysinc_stats [i];
+        r = get_file_info( pp [i], st);
+        if (r || !is_dir(st)) {
             tcc_free( pp[i] );
             pp[i] = 0;
         }
     }
     pp = s->include_paths;
     for (i=0; i < num_inc; i++) {
-        struct stat *st = &inc_stats [i];
-        r = stat( pp [i], st);
-        if (r || !S_ISDIR(st->st_mode)) {
+        file_info_t *st = &inc_stats [i];
+        r = get_file_info( pp [i], st);
+        if (r || !is_dir(st)) {
             tcc_free( pp[i] );
             pp[i] = 0;
         }
     }
 
     for (i=0; i < num_inc; i++) {
-        struct stat *st1 = &inc_stats [i];
+        file_info_t *st1 = &inc_stats [i];
         for (j=i+1; j < num_inc; j++) {
-            struct stat *st2 = &inc_stats [j];
-            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+            file_info_t *st2 = &inc_stats [j];
+            if (is_same_file(st1, st2)) {
                 pp = &s->include_paths[j];
                 if (*pp) {
                     tcc_free( *pp );
@@ -1562,8 +1606,8 @@ ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
             }
         }
         for (j=0; i < num_sysinc; i++) {
-            struct stat *st2 = &sysinc_stats [j];
-            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+            file_info_t *st2 = &sysinc_stats [j];
+            if (is_same_file(st1, st2)) {
                 pp = &s->include_paths[i];
                 if (*pp) {
                     tcc_free( *pp );
@@ -1573,10 +1617,10 @@ ST_FUNC void tcc_mormalize_inc_dirs(TCCState *s)
         }
     }
     for (i=0; i < num_sysinc; i++) {
-        struct stat *st1 = &sysinc_stats [i];
+        file_info_t *st1 = &sysinc_stats [i];
         for (j=i+1; j < num_sysinc; j++) {
-            struct stat *st2 = &sysinc_stats [j];
-            if ((st1->st_dev == st2->st_dev) && (st1->st_ino == st2->st_ino)) {
+            file_info_t *st2 = &sysinc_stats [j];
+            if (is_same_file(st1, st2)) {
                 pp = &s->sysinclude_paths[j];
                 if (*pp) {
                     tcc_free( *pp );
