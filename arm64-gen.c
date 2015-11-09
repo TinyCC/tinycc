@@ -286,26 +286,28 @@ static void arm64_spoff(int reg, uint64_t off)
     }
 }
 
-static void arm64_ldrx(int sg, int sz, int dst, int bas, uint64_t off)
+static void arm64_ldrx(int sg, int sz_, int dst, int bas, uint64_t off)
 {
+    uint32_t sz = sz_;
     if (sz >= 2)
         sg = 0;
-    if (!(off & ~(0xfff << sz)))
+    if (!(off & ~((uint32_t)0xfff << sz)))
         o(0x39400000 | dst | bas << 5 | off << (10 - sz) |
-          !!sg << 23 | sz << 30); // ldr(*) x(dst),[x(bas),#(off)]
+          (uint32_t)!!sg << 23 | sz << 30); // ldr(*) x(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
         o(0x38400000 | dst | bas << 5 | (off & 511) << 12 |
-          !!sg << 23 | sz << 30); // ldur(*) x(dst),[x(bas),#(off)]
+          (uint32_t)!!sg << 23 | sz << 30); // ldur(*) x(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x38206800 | dst | bas << 5 | 30 << 16 |
-          (!!sg + 1) << 22 | sz << 30); // ldr(*) x(dst),[x(bas),x30]
+        o(0x38206800 | dst | bas << 5 | (uint32_t)30 << 16 |
+          (uint32_t)(!!sg + 1) << 22 | sz << 30); // ldr(*) x(dst),[x(bas),x30]
     }
 }
 
-static void arm64_ldrv(int sz, int dst, int bas, uint64_t off)
+static void arm64_ldrv(int sz_, int dst, int bas, uint64_t off)
 {
-    if (!(off & ~(0xfff << sz)))
+    uint32_t sz = sz_;
+    if (!(off & ~((uint32_t)0xfff << sz)))
         o(0x3d400000 | dst | bas << 5 | off << (10 - sz) |
           (sz & 4) << 21 | (sz & 3) << 30); // ldr (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
@@ -313,13 +315,14 @@ static void arm64_ldrv(int sz, int dst, int bas, uint64_t off)
           (sz & 4) << 21 | (sz & 3) << 30); // ldur (s|d|q)(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x3c606800 | dst | bas << 5 | 30 << 16 | sz << 30 | (sz & 4) << 21);
-        // ldr (s|d|q)(dst),[x(bas),x30]
+        o(0x3c606800 | dst | bas << 5 | (uint32_t)30 << 16 |
+          sz << 30 | (sz & 4) << 21); // ldr (s|d|q)(dst),[x(bas),x30]
     }
 }
 
-static void arm64_ldrs(int reg, int size)
+static void arm64_ldrs(int reg_, int size)
 {
+    uint32_t reg = reg_;
     // Use x30 for intermediate value in some cases.
     switch (size) {
     default: assert(0); break;
@@ -395,9 +398,10 @@ static void arm64_ldrs(int reg, int size)
     }
 }
 
-static void arm64_strx(int sz, int dst, int bas, uint64_t off)
+static void arm64_strx(int sz_, int dst, int bas, uint64_t off)
 {
-    if (!(off & ~(0xfff << sz)))
+    uint32_t sz = sz_;
+    if (!(off & ~((uint32_t)0xfff << sz)))
         o(0x39000000 | dst | bas << 5 | off << (10 - sz) | sz << 30);
         // str(*) x(dst),[x(bas],#(off)]
     else if (off < 256 || -off <= 256)
@@ -405,14 +409,15 @@ static void arm64_strx(int sz, int dst, int bas, uint64_t off)
         // stur(*) x(dst),[x(bas],#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x38206800 | dst | bas << 5 | 30 << 16 | sz << 30);
+        o(0x38206800 | dst | bas << 5 | (uint32_t)30 << 16 | sz << 30);
         // str(*) x(dst),[x(bas),x30]
     }
 }
 
-static void arm64_strv(int sz, int dst, int bas, uint64_t off)
+static void arm64_strv(int sz_, int dst, int bas, uint64_t off)
 {
-    if (!(off & ~(0xfff << sz)))
+    uint32_t sz = sz_;
+    if (!(off & ~((uint32_t)0xfff << sz)))
         o(0x3d000000 | dst | bas << 5 | off << (10 - sz) |
           (sz & 4) << 21 | (sz & 3) << 30); // str (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
@@ -420,8 +425,8 @@ static void arm64_strv(int sz, int dst, int bas, uint64_t off)
           (sz & 4) << 21 | (sz & 3) << 30); // stur (s|d|q)(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x3c206800 | dst | bas << 5 | 30 << 16 | sz << 30 | (sz & 4) << 21);
-        // str (s|d|q)(dst),[x(bas),x30]
+        o(0x3c206800 | dst | bas << 5 | (uint32_t)30 << 16 |
+          sz << 30 | (sz & 4) << 21); // str (s|d|q)(dst),[x(bas),x30]
     }
 }
 
@@ -458,7 +463,8 @@ ST_FUNC void load(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_LVAL_TYPE;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (int32_t)sv->c.ul;
+    uint64_t svcul = (uint32_t)sv->c.ul;
+    svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
@@ -519,7 +525,7 @@ ST_FUNC void load(int r, SValue *sv)
             o(0xd10003a0 | intr(r) | -svcul << 10); // sub x(r),x29,#...
         else {
             arm64_movimm(30, -svcul); // use x30 for offset
-            o(0xcb0003a0 | intr(r) | 30 << 16); // sub x(r),x29,x30
+            o(0xcb0003a0 | intr(r) | (uint32_t)30 << 16); // sub x(r),x29,x30
         }
         return;
     }
@@ -552,7 +558,8 @@ ST_FUNC void store(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_LVAL_TYPE;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (int32_t)sv->c.ul;
+    uint64_t svcul = (uint32_t)sv->c.ul;
+    svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
@@ -594,7 +601,7 @@ static void arm64_gen_bl_or_b(int b)
         o(0x94000000); // bl .
     }
     else
-        o(0xd61f0000 | !b << 21 | intr(gv(RC_R30)) << 5); // br/blr
+        o(0xd61f0000 | (uint32_t)!b << 21 | intr(gv(RC_R30)) << 5); // br/blr
 }
 
 static int arm64_hfa_aux(CType *type, int *fsize, int num)
@@ -930,7 +937,7 @@ ST_FUNC void gfunc_call(int nb_args)
         else if (a[i] < 32) {
             // value in floating-point registers
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-                int j, sz, n = arm64_hfa(&vtop->type, &sz);
+                uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
                 vtop->type.t = VT_PTR;
                 gaddrof();
                 gv(RC_R30);
@@ -968,7 +975,7 @@ ST_FUNC void gfunc_call(int nb_args)
         if (bt == VT_BYTE || bt == VT_SHORT)
             // Promote small integers:
             o(0x13001c00 | (bt == VT_SHORT) << 13 |
-              !!(rt & VT_UNSIGNED) << 30); // [su]xt[bh] w0,w0
+              (uint32_t)!!(rt & VT_UNSIGNED) << 30); // [su]xt[bh] w0,w0
         else if (bt == VT_STRUCT && !(a[0] & 1)) {
             // A struct was returned in registers, so write it out:
             gv(RC_R(8));
@@ -983,7 +990,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
             }
             else if (a[0] == 16) {
-                int j, sz, n = arm64_hfa(return_type, &sz);
+                uint32_t j, sz, n = arm64_hfa(return_type, &sz);
                 for (j = 0; j < n; j++)
                     o(0x3d000100 |
                       (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
@@ -1053,14 +1060,14 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                                           (!(a[i] & 1) && size > 8)) * 8;
         }
         else if (a[i] < 32) {
-            int hfa = arm64_hfa(&sym->type, 0);
+            uint32_t hfa = arm64_hfa(&sym->type, 0);
             arm64_func_va_list_vr_offs = (a[i] / 2 - 16 +
                                           (hfa ? hfa : 1)) * 16;
         }
 
         // HFAs of float and double need to be written differently:
         if (16 <= a[i] && a[i] < 32 && (sym->type.t & VT_BTYPE) == VT_STRUCT) {
-            int j, sz, k = arm64_hfa(&sym->type, &sz);
+            uint32_t j, sz, k = arm64_hfa(&sym->type, &sz);
             if (sz < 16)
                 for (j = 0; j < k; j++) {
                     o(0x3d0003e0 | -(sz & 8) << 27 | (sz & 4) << 29 |
@@ -1196,7 +1203,8 @@ ST_FUNC void gen_va_arg(CType *t)
     }
 }
 
-ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *regsize)
+ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
+                       int *align, int *regsize)
 {
     return 0;
 }
@@ -1231,7 +1239,7 @@ ST_FUNC void greturn(void)
     }
     case 16:
         if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
-          int j, sz, n = arm64_hfa(&vtop->type, &sz);
+          uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
           gaddrof();
           gv(RC_R(0));
           for (j = 0; j < n; j++)
@@ -1304,7 +1312,7 @@ ST_FUNC int gtst(int inv, int t)
 {
     int bt = vtop->type.t & VT_BTYPE;
     if (bt == VT_LDOUBLE) {
-        int a, b, f = fltr(gv(RC_FLOAT));
+        uint32_t a, b, f = fltr(gv(RC_FLOAT));
         a = get_reg(RC_INT);
         vpushi(0);
         vtop[0].r = a;
@@ -1318,13 +1326,13 @@ ST_FUNC int gtst(int inv, int t)
         --vtop;
     }
     else if (bt == VT_FLOAT || bt == VT_DOUBLE) {
-        int a = fltr(gv(RC_FLOAT));
+        uint32_t a = fltr(gv(RC_FLOAT));
         o(0x1e202008 | a << 5 | (bt != VT_FLOAT) << 22); // fcmp
         o(0x54000040 | !!inv); // b.eq/b.ne .+8
     }
     else {
-        int ll = (bt == VT_PTR || bt == VT_LLONG);
-        int a = intr(gv(RC_INT));
+        uint32_t ll = (bt == VT_PTR || bt == VT_LLONG);
+        uint32_t a = intr(gv(RC_INT));
         o(0x34000040 | a | !!inv << 24 | ll << 31); // cbz/cbnz wA,.+8
     }
     --vtop;
@@ -1362,7 +1370,7 @@ static int arm64_gen_opic(int op, uint32_t l, int rev, uint64_t val,
     switch (op) {
 
     case '+': {
-        int s = l ? val >> 63 : val >> 31;
+        uint32_t s = l ? val >> 63 : val >> 31;
         val = s ? -val : val;
         val = l ? val : (uint32_t)val;
         if (!(val & ~(uint64_t)0xfff))
@@ -1470,7 +1478,8 @@ static void arm64_gen_opil(int op, uint32_t l)
     case '%':
         // Use x30 for quotient:
         o(0x1ac00c00 | l << 31 | 30 | a << 5 | b << 16); // sdiv
-        o(0x1b008000 | l << 31 | x | 30 << 5 | b << 16 | a << 10); // msub
+        o(0x1b008000 | l << 31 | x | (uint32_t)30 << 5 |
+          b << 16 | a << 10); // msub
         break;
     case '&':
         o(0x0a000000 | l << 31 | x | a << 5 | b << 16); // and
@@ -1549,7 +1558,8 @@ static void arm64_gen_opil(int op, uint32_t l)
     case TOK_UMOD:
         // Use x30 for quotient:
         o(0x1ac00800 | l << 31 | 30 | a << 5 | b << 16); // udiv
-        o(0x1b008000 | l << 31 | x | 30 << 5 | b << 16 | a << 10); // msub
+        o(0x1b008000 | l << 31 | x | (uint32_t)30 << 5 |
+          b << 16 | a << 10); // msub
         break;
     default:
         assert(0);
@@ -1568,7 +1578,7 @@ ST_FUNC void gen_opl(int op)
 
 ST_FUNC void gen_opf(int op)
 {
-    int x, a, b, dbl;
+    uint32_t x, a, b, dbl;
 
     if (vtop[0].type.t == VT_LDOUBLE) {
         CType type = vtop[0].type;
@@ -1596,7 +1606,7 @@ ST_FUNC void gen_opf(int op)
             vtop->type = type;
         else {
             o(0x7100001f); // cmp w0,#0
-            o(0x1a9f07e0 | cond << 12); // cset w0,(cond)
+            o(0x1a9f07e0 | (uint32_t)cond << 12); // cset w0,(cond)
         }
         return;
     }
@@ -1668,7 +1678,7 @@ ST_FUNC void gen_opf(int op)
 // Generate sign extension from 32 to 64 bits:
 ST_FUNC void gen_cvt_sxtw(void)
 {
-    int r = intr(gv(RC_INT));
+    uint32_t r = intr(gv(RC_INT));
     o(0x93407c00 | r | r << 5); // sxtw x(r),w(r)
 }
 
@@ -1690,12 +1700,13 @@ ST_FUNC void gen_cvt_itof(int t)
     else {
         int d, n = intr(gv(RC_INT));
         int s = !(vtop->type.t & VT_UNSIGNED);
-        int l = ((vtop->type.t & VT_BTYPE) == VT_LLONG);
+        uint32_t l = ((vtop->type.t & VT_BTYPE) == VT_LLONG);
         --vtop;
         d = get_reg(RC_FLOAT);
         ++vtop;
         vtop[0].r = d;
-        o(0x1e220000 | !s << 16 | (t != VT_FLOAT) << 22 | fltr(d) |
+        o(0x1e220000 | (uint32_t)!s << 16 |
+          (uint32_t)(t != VT_FLOAT) << 22 | fltr(d) |
           l << 31 | n << 5); // [us]cvtf [sd](d),[wx](n)
     }
 }
@@ -1716,14 +1727,14 @@ ST_FUNC void gen_cvt_ftoi(int t)
     }
     else {
         int d, n = fltr(gv(RC_FLOAT));
-        int l = ((vtop->type.t & VT_BTYPE) != VT_FLOAT);
+        uint32_t l = ((vtop->type.t & VT_BTYPE) != VT_FLOAT);
         --vtop;
         d = get_reg(RC_INT);
         ++vtop;
         vtop[0].r = d;
         o(0x1e380000 |
-          !!(t & VT_UNSIGNED) << 16 |
-          ((t & VT_BTYPE) == VT_LLONG) << 31 | intr(d) |
+          (uint32_t)!!(t & VT_UNSIGNED) << 16 |
+          (uint32_t)((t & VT_BTYPE) == VT_LLONG) << 31 | intr(d) |
           l << 22 | n << 5); // fcvtz[su] [wx](d),[sd](n)
     }
 }
