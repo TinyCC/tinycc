@@ -812,7 +812,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 	      {
                 tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed (val=%lx, addr=%lx)", addr, val);
 	      }
-            *(uint32_t *)ptr = 0x14000000 | (type == R_AARCH64_CALL26) << 31 |
+            *(uint32_t *)ptr = 0x14000000 |
+                (uint32_t)(type == R_AARCH64_CALL26) << 31 |
                 ((val - addr) >> 2 & 0x3ffffff);
             break;
         case R_AARCH64_ADR_GOT_PAGE: {
@@ -2435,7 +2436,8 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
                 offset++;
             }
             size = s->sh_size;
-            fwrite(s->data, 1, size, f);
+            if (size)
+                fwrite(s->data, 1, size, f);
             offset += size;
         }
     }
