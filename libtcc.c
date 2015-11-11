@@ -1569,81 +1569,34 @@ int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
 #endif
 }
 
+static void
+tcc_normalize_inc_dirs_aux(file_info_t *stats, size_t *pnum, char **path)
+{
+    size_t i, num = *pnum;
+    if (get_file_info(*path, &stats[num]) || !is_dir(&stats[num]))
+        goto remove;
+    for (i = 0; i < num; i++)
+        if (is_same_file(&stats[i], &stats[num]))
+            goto remove;
+    *pnum = num + 1;
+    return;
+ remove:
+    tcc_free(*path);
+    *path = 0;
+}
+
+/* Remove non-existent and duplicate directories from include paths. */
 ST_FUNC void tcc_normalize_inc_dirs(TCCState *s)
 {
-/* check a preprocessor include dirs and remove not
-   existing dirs and duplicates:
-   - for each duplicate path keep just the first one
-   - remove each include_path that exists in sysinclude_paths
-*/
-    file_info_t sysinc_stats[50]; // we don't use VLA in tcc code
-    file_info_t inc_stats[50];
-    int num_sysinc = s->nb_sysinclude_paths;
-    int num_inc = s->nb_include_paths;
-    char** pp;
-    int i, j, r;
-
-    if ((num_sysinc > 50) || (num_inc > 50)) {
-        tcc_warning("fix a max number of the inc dirs");
-        if (num_sysinc > 50) num_sysinc = 50;
-        if (num_inc > 50)       num_inc = 50;
-    }
-
-    pp = s->sysinclude_paths;
-    for (i=0; i < num_sysinc; i++) {
-        file_info_t *st = &sysinc_stats [i];
-        r = get_file_info( pp [i], st);
-        if (r || !is_dir(st)) {
-            tcc_free( pp[i] );
-            pp[i] = 0;
-        }
-    }
-    pp = s->include_paths;
-    for (i=0; i < num_inc; i++) {
-        file_info_t *st = &inc_stats [i];
-        r = get_file_info( pp [i], st);
-        if (r || !is_dir(st)) {
-            tcc_free( pp[i] );
-            pp[i] = 0;
-        }
-    }
-
-    for (i=0; i < num_inc; i++) {
-        file_info_t *st1 = &inc_stats [i];
-        for (j=i+1; j < num_inc; j++) {
-            file_info_t *st2 = &inc_stats [j];
-            if (is_same_file(st1, st2)) {
-                pp = &s->include_paths[j];
-                if (*pp) {
-                    tcc_free( *pp );
-                    *pp = 0;
-                }
-            }
-        }
-        for (j=0; i < num_sysinc; i++) {
-            file_info_t *st2 = &sysinc_stats [j];
-            if (is_same_file(st1, st2)) {
-                pp = &s->include_paths[i];
-                if (*pp) {
-                    tcc_free( *pp );
-                    *pp = 0;
-                }
-            }
-        }
-    }
-    for (i=0; i < num_sysinc; i++) {
-        file_info_t *st1 = &sysinc_stats [i];
-        for (j=i+1; j < num_sysinc; j++) {
-            file_info_t *st2 = &sysinc_stats [j];
-            if (is_same_file(st1, st2)) {
-                pp = &s->sysinclude_paths[j];
-                if (*pp) {
-                    tcc_free( *pp );
-                    *pp = 0;
-                }
-            }
-        }
-    }
+    file_info_t *stats =
+        tcc_malloc(((size_t)s->nb_sysinclude_paths + s->nb_include_paths) *
+                   sizeof(*stats));
+    size_t i, num = 0;
+    for (i = 0; i < s->nb_sysinclude_paths; i++)
+        tcc_normalize_inc_dirs_aux(stats, &num, &s->sysinclude_paths[i]);
+    for (i = 0; i < s->nb_include_paths; i++)
+        tcc_normalize_inc_dirs_aux(stats, &num, &s->include_paths[i]);
+    tcc_free(stats);
 }
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
