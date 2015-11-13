@@ -69,10 +69,10 @@ void test4()
   do {
     int a[f()];
 
-    addr[count] = a;
+    addr[--count] = a;
 
     continue;
-  } while(count--);
+  } while (count);
 
   if(addr[9] == addr[0]) {
     printf("OK\n");
