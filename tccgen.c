@@ -1394,33 +1394,38 @@ static void gen_opl(int op)
 }
 #endif
 
+static uint64_t gen_opic_sdiv(uint64_t a, uint64_t b)
+{
+    uint64_t x = (a >> 63 ? -a : a) / (b >> 63 ? -b : b);
+    return (a ^ b) >> 63 ? -x : x;
+}
+
+static int gen_opic_lt(uint64_t a, uint64_t b)
+{
+    return (a ^ (uint64_t)1 << 63) < (b ^ (uint64_t)1 << 63);
+}
+
 /* handle integer constant optimizations and various machine
    independent opt */
 static void gen_opic(int op)
 {
-    int c1, c2, t1, t2, n;
-    SValue *v1, *v2;
-    long long l1, l2;
-    typedef unsigned long long U;
+    SValue *v1 = vtop - 1;
+    SValue *v2 = vtop;
+    int t1 = v1->type.t & VT_BTYPE;
+    int t2 = v2->type.t & VT_BTYPE;
+    int c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    int c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    uint64_t l1 = c1 ? v1->c.i : 0;
+    uint64_t l2 = c2 ? v2->c.i : 0;
+    int shm = (t1 == VT_LLONG) ? 63 : 31;
 
-    v1 = vtop - 1;
-    v2 = vtop;
-    t1 = v1->type.t & VT_BTYPE;
-    t2 = v2->type.t & VT_BTYPE;
-
-    l1 = v1->c.i;
     if (t1 != VT_LLONG)
         l1 = ((uint32_t)l1 |
               (v1->type.t & VT_UNSIGNED ? 0 : -(l1 & 0x80000000)));
-
-    l2 = v2->c.i;
     if (t2 != VT_LLONG)
         l2 = ((uint32_t)l2 |
               (v2->type.t & VT_UNSIGNED ? 0 : -(l2 & 0x80000000)));
 
-    /* currently, we cannot do computations with forward symbols */
-    c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
-    c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if (c1 && c2) {
         switch(op) {
         case '+': l1 += l2; break;
@@ -1442,26 +1447,28 @@ static void gen_opic(int op)
                 goto general_case;
             }
             switch(op) {
-            default: l1 /= l2; break;
-            case '%': l1 %= l2; break;
-            case TOK_UDIV: l1 = (U)l1 / l2; break;
-            case TOK_UMOD: l1 = (U)l1 % l2; break;
+            default: l1 = gen_opic_sdiv(l1, l2); break;
+            case '%': l1 = l1 - l2 * gen_opic_sdiv(l1, l2); break;
+            case TOK_UDIV: l1 = l1 / l2; break;
+            case TOK_UMOD: l1 = l1 % l2; break;
             }
             break;
-        case TOK_SHL: l1 <<= l2; break;
-        case TOK_SHR: l1 = (U)l1 >> l2; break;
-        case TOK_SAR: l1 >>= l2; break;
+        case TOK_SHL: l1 <<= (l2 & shm); break;
+        case TOK_SHR: l1 >>= (l2 & shm); break;
+        case TOK_SAR:
+            l1 = (l1 >> 63) ? ~(~l1 >> (l2 & shm)) : l1 >> (l2 & shm);
+            break;
             /* tests */
-        case TOK_ULT: l1 = (U)l1 < (U)l2; break;
-        case TOK_UGE: l1 = (U)l1 >= (U)l2; break;
+        case TOK_ULT: l1 = l1 < l2; break;
+        case TOK_UGE: l1 = l1 >= l2; break;
         case TOK_EQ: l1 = l1 == l2; break;
         case TOK_NE: l1 = l1 != l2; break;
-        case TOK_ULE: l1 = (U)l1 <= (U)l2; break;
-        case TOK_UGT: l1 = (U)l1 > (U)l2; break;
-        case TOK_LT: l1 = l1 < l2; break;
-        case TOK_GE: l1 = l1 >= l2; break;
-        case TOK_LE: l1 = l1 <= l2; break;
-        case TOK_GT: l1 = l1 > l2; break;
+        case TOK_ULE: l1 = l1 <= l2; break;
+        case TOK_UGT: l1 = l1 > l2; break;
+        case TOK_LT: l1 = gen_opic_lt(l1, l2); break;
+        case TOK_GE: l1 = !gen_opic_lt(l1, l2); break;
+        case TOK_LE: l1 = !gen_opic_lt(l2, l1); break;
+        case TOK_GT: l1 = gen_opic_lt(l2, l1); break;
             /* logical */
         case TOK_LAND: l1 = l1 && l2; break;
         case TOK_LOR: l1 = l1 || l2; break;
@@ -1507,7 +1514,7 @@ static void gen_opic(int op)
         } else if (c2 && (op == '*' || op == TOK_PDIV || op == TOK_UDIV)) {
             /* try to use shifts instead of muls or divs */
             if (l2 > 0 && (l2 & (l2 - 1)) == 0) {
-                n = -1;
+                int n = -1;
                 while (l2) {
                     l2 >>= 1;
                     n++;
