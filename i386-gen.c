@@ -222,14 +222,14 @@ ST_FUNC void load(int r, SValue *sv)
 
     fr = sv->r;
     ft = sv->type.t;
-    fc = sv->c.ul;
+    fc = sv->c.i;
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
         if (v == VT_LLOCAL) {
             v1.type.t = VT_INT;
             v1.r = VT_LOCAL | VT_LVAL;
-            v1.c.ul = fc;
+            v1.c.i = fc;
             fr = r;
             if (!(reg_classes[fr] & RC_INT))
                 fr = get_reg(RC_INT);
@@ -297,7 +297,7 @@ ST_FUNC void store(int r, SValue *v)
 #endif
 
     ft = v->type.t;
-    fc = v->c.ul;
+    fc = v->c.i;
     fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
     /* XXX: incorrect if float reg to reg */
@@ -362,7 +362,7 @@ static void gcall_or_jmp(int is_jmp)
             put_elf_reloc(symtab_section, cur_text_section, 
                           ind + 1, R_386_PC32, 0);
         }
-        oad(0xe8 + is_jmp, vtop->c.ul - 4); /* call/jmp im */
+        oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
         r = gv(RC_INT);
@@ -671,7 +671,7 @@ ST_FUNC void gjmp_addr(int a)
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
 ST_FUNC int gtst(int inv, int t)
 {
-    int v, *p;
+    int v, t1, *p;
 
     v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
@@ -682,11 +682,13 @@ ST_FUNC int gtst(int inv, int t)
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
-            p = &vtop->c.i;
+            t1 = vtop->c.i;
+            p = &t1;
             while (*p != 0)
                 p = (int *)(cur_text_section->data + *p);
             *p = t;
-            t = vtop->c.i;
+            vtop->c.i = t1;
+            t = t1;
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
@@ -923,7 +925,7 @@ ST_FUNC void gen_opf(int op)
             break;
         }
         ft = vtop->type.t;
-        fc = vtop->c.ul;
+        fc = vtop->c.i;
         if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             o(0xde); /* fxxxp %st, %st(1) */
             o(0xc1 + (a << 3));
@@ -935,7 +937,7 @@ ST_FUNC void gen_opf(int op)
                 r = get_reg(RC_INT);
                 v1.type.t = VT_INT;
                 v1.r = VT_LOCAL | VT_LVAL;
-                v1.c.ul = fc;
+                v1.c.i = fc;
                 load(r, &v1);
                 fc = 0;
             }
@@ -1051,7 +1053,7 @@ ST_FUNC void gen_bounded_ptr_add(void)
     vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;
     /* address of bounding function call point */
-    vtop->c.ul = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel)); 
+    vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel));
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -1088,7 +1090,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
 
     /* patch relocation */
     /* XXX: find a better solution ? */
-    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.ul);
+    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
     sym = external_global_sym(func, &func_old_type, 0);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);

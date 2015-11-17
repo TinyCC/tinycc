@@ -1473,9 +1473,9 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     load(r2, v2);
     v2->r = r2;
 
-    if (sv->c.ui) {
+    if ((uint32_t)sv->c.i) {
         vpushv(v2);
-        vpushi(sv->c.ui);
+        vpushi(sv->c.i);
         gen_opi('+');
         *v2 = *vtop--;
     }

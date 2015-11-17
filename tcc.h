@@ -354,13 +354,8 @@ typedef union CValue {
     long double ld;
     double d;
     float f;
-    int i;
-    unsigned int ui;
-    unsigned int ul; /* address (should be unsigned long on 64 bit cpu) */
-    long long ll;
-    unsigned long long ull;
+    uint64_t i;
     struct CString *cstr;
-    addr_t ptr_offset;
     int tab[LDOUBLE_SIZE/4];
 } CValue;
 

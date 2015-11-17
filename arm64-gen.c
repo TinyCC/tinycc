@@ -463,7 +463,7 @@ ST_FUNC void load(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_LVAL_TYPE;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (uint32_t)sv->c.ul;
+    uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
@@ -502,7 +502,7 @@ ST_FUNC void load(int r, SValue *sv)
     if (svr == VT_CONST) {
         if ((svtt & VT_BTYPE) != VT_VOID)
             arm64_movimm(intr(r), arm64_type_size(svtt) == 3 ?
-                         sv->c.ull : (uint32_t)svcul);
+                         sv->c.i : (uint32_t)svcul);
         return;
     }
 
@@ -558,7 +558,7 @@ ST_FUNC void store(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_LVAL_TYPE;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (uint32_t)sv->c.ul;
+    uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
@@ -1344,16 +1344,10 @@ static int arm64_iconst(uint64_t *val, SValue *sv)
     if ((sv->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
         return 0;
     if (val) {
-        int t = sv->type.t & (VT_BTYPE | VT_UNSIGNED);
-        // It's crazy how TCC has all these alternatives for storing a value:
-        if (t == (VT_LLONG | VT_UNSIGNED))
-            *val = sv->c.ull;
-        else if (t == VT_LLONG)
-            *val = sv->c.ll;
-        else if (t & VT_UNSIGNED)
-            *val = sv->c.ui;
-        else
-            *val = sv->c.i;
+        int t = sv->type.t;
+        *val = ((t & VT_BTYPE) == VT_LLONG ? sv->c.i :
+                (uint32_t)sv->c.i |
+                (t & VT_UNSIGNED ? 0 : -(sv->c.i & 0x80000000)));
     }
     return 1;
 }

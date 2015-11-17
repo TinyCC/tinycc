@@ -528,7 +528,7 @@ void load(int r, SValue *sv)
 
   fr = sv->r;
   ft = sv->type.t;
-  fc = sv->c.ul;
+  fc = sv->c.i;
 
   if(fc>=0)
     sign=0;
@@ -543,14 +543,14 @@ void load(int r, SValue *sv)
     if(v == VT_LLOCAL) {
       v1.type.t = VT_PTR;
       v1.r = VT_LOCAL | VT_LVAL;
-      v1.c.ul = sv->c.ul;
+      v1.c.i = sv->c.i;
       load(base=14 /* lr */, &v1);
       fc=sign=0;
       v=VT_LOCAL;
     } else if(v == VT_CONST) {
       v1.type.t = VT_PTR;
       v1.r = fr&~VT_LVAL;
-      v1.c.ul = sv->c.ul;
+      v1.c.i = sv->c.i;
       v1.sym=sv->sym;
       load(base=14, &v1);
       fc=sign=0;
@@ -609,38 +609,38 @@ void load(int r, SValue *sv)
     }
   } else {
     if (v == VT_CONST) {
-      op=stuff_const(0xE3A00000|(intr(r)<<12),sv->c.ul);
+      op=stuff_const(0xE3A00000|(intr(r)<<12),sv->c.i);
       if (fr & VT_SYM || !op) {
         o(0xE59F0000|(intr(r)<<12));
         o(0xEA000000);
         if(fr & VT_SYM)
 	  greloc(cur_text_section, sv->sym, ind, R_ARM_ABS32);
-        o(sv->c.ul);
+        o(sv->c.i);
       } else
         o(op);
       return;
     } else if (v == VT_LOCAL) {
-      op=stuff_const(0xE28B0000|(intr(r)<<12),sv->c.ul);
+      op=stuff_const(0xE28B0000|(intr(r)<<12),sv->c.i);
       if (fr & VT_SYM || !op) {
 	o(0xE59F0000|(intr(r)<<12));
 	o(0xEA000000);
 	if(fr & VT_SYM) // needed ?
 	  greloc(cur_text_section, sv->sym, ind, R_ARM_ABS32);
-	o(sv->c.ul);
+	o(sv->c.i);
 	o(0xE08B0000|(intr(r)<<12)|intr(r));
       } else
 	o(op);
       return;
     } else if(v == VT_CMP) {
-      o(mapcc(sv->c.ul)|0x3A00001|(intr(r)<<12));
-      o(mapcc(negcc(sv->c.ul))|0x3A00000|(intr(r)<<12));
+      o(mapcc(sv->c.i)|0x3A00001|(intr(r)<<12));
+      o(mapcc(negcc(sv->c.i))|0x3A00000|(intr(r)<<12));
       return;
     } else if (v == VT_JMP || v == VT_JMPI) {
       int t;
       t = v & 1;
       o(0xE3A00000|(intr(r)<<12)|t);
       o(0xEA000000);
-      gsym(sv->c.ul);
+      gsym(sv->c.i);
       o(0xE3A00000|(intr(r)<<12)|(t^1));
       return;
     } else if (v < VT_CONST) {
@@ -667,7 +667,7 @@ void store(int r, SValue *sv)
 
   fr = sv->r;
   ft = sv->type.t;
-  fc = sv->c.ul;
+  fc = sv->c.i;
 
   if(fc>=0)
     sign=0;
@@ -686,7 +686,7 @@ void store(int r, SValue *sv)
     } else if(v == VT_CONST) {
       v1.type.t = ft;
       v1.r = fr&~VT_LVAL;
-      v1.c.ul = sv->c.ul;
+      v1.c.i = sv->c.i;
       v1.sym=sv->sym;
       load(base=14, &v1);
       fc=sign=0;
@@ -751,7 +751,7 @@ static void gcall_or_jmp(int is_jmp)
   if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
     uint32_t x;
     /* constant case */
-    x=encbranch(ind,ind+vtop->c.ul,0);
+    x=encbranch(ind,ind+vtop->c.i,0);
     if(x) {
       if (vtop->r & VT_SYM) {
 	/* relocation case */
@@ -765,7 +765,7 @@ static void gcall_or_jmp(int is_jmp)
       o(0xE51FF004);   // ldr pc,[pc,#-4]
       if (vtop->r & VT_SYM)
 	greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
-      o(vtop->c.ul);
+      o(vtop->c.i);
     }
   } else {
     /* otherwise, indirect call */

@@ -1567,14 +1567,14 @@ void load(int r, SValue * sv)
 
     fr = sv->r;
     ft = sv->type.t;
-    fc = sv->c.ul;
+    fc = sv->c.i;
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
 	if (v == VT_LLOCAL) {
 	    v1.type.t = VT_INT;
 	    v1.r = VT_LOCAL | VT_LVAL;
-	    v1.c.ul = fc;
+	    v1.c.i = fc;
 	    load(r, &v1);
 	    fr = r;
 	} else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
@@ -1726,7 +1726,7 @@ void store(int r, SValue * v)
     int fr, bt, ft, fc, size, t, element;
 
     ft = v->type.t;
-    fc = v->c.ul;
+    fc = v->c.i;
     fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
     /* XXX: incorrect if float reg to reg */
@@ -2106,13 +2106,12 @@ int gtst(int inv, int t)
 	/* && or || optimization */
 	if ((v & 1) == inv) {
 	    /* insert vtop->c jump list in t */
-	    p = &vtop->c.i;
 
 	    // I guess the idea is to traverse to the
 	    // null at the end of the list and store t
 	    // there
 
-	    n = *p;
+	    n = vtop->c.i;
 	    while (n != 0) {
 		p = (int *) (cur_text_section->data + n);
 
@@ -2304,7 +2303,7 @@ void gen_opf(int op)
 	gv2(RC_FLOAT, RC_FLOAT);	// make sure src2 is on b side
 
     ft = vtop->type.t;
-    fc = vtop->c.ul;
+    fc = vtop->c.i;
     r = vtop->r;
     fr = vtop[-1].r;
 

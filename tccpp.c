@@ -293,15 +293,15 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     case TOK_CINT:
     case TOK_CUINT:
         /* XXX: not quite exact, but only useful for testing */
-        sprintf(p, "%u", cv->ui);
+        sprintf(p, "%llu", (unsigned long long)cv->i);
         break;
     case TOK_CLLONG:
     case TOK_CULLONG:
         /* XXX: not quite exact, but only useful for testing  */
 #ifdef _WIN32
-        sprintf(p, "%u", (unsigned)cv->ull);
+        sprintf(p, "%u", (unsigned)cv->i);
 #else
-        sprintf(p, "%llu", cv->ull);
+        sprintf(p, "%llu", (unsigned long long)cv->i);
 #endif
         break;
     case TOK_LCHAR:
@@ -2287,9 +2287,9 @@ static void parse_number(const char *p)
         }
 
         if (tok == TOK_CINT || tok == TOK_CUINT)
-            tokc.ui = n;
+            tokc.i = n;
         else
-            tokc.ull = n;
+            tokc.i = n;
     }
     if (ch)
         tcc_error("invalid number\n");

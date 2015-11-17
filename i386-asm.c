@@ -1301,7 +1301,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
             cstr_ccat(add_str, '$');
         if (r & VT_SYM) {
             cstr_cat(add_str, get_tok_str(sv->sym->v, NULL));
-            if (sv->c.i != 0) {
+            if ((uint32_t)sv->c.i != 0) {
                 cstr_ccat(add_str, '+');
             } else {
                 return;
@@ -1310,10 +1310,10 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         val = sv->c.i;
         if (modifier == 'n')
             val = -val;
-        snprintf(buf, sizeof(buf), "%d", sv->c.i);
+        snprintf(buf, sizeof(buf), "%d", (int)sv->c.i);
         cstr_cat(add_str, buf);
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
-        snprintf(buf, sizeof(buf), "%d(%%ebp)", sv->c.i);
+        snprintf(buf, sizeof(buf), "%d(%%ebp)", (int)sv->c.i);
         cstr_cat(add_str, buf);
     } else if (r & VT_LVAL) {
         reg = r & VT_VALMASK;
@@ -1431,7 +1431,7 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                     if (op->is_llong) {
                         SValue sv;
                         sv = *op->vt;
-                        sv.c.ul += 4;
+                        sv.c.i += 4;
                         load(TREG_XDX, &sv);
                     }
                 }
@@ -1457,7 +1457,7 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                     if (op->is_llong) {
                         SValue sv;
                         sv = *op->vt;
-                        sv.c.ul += 4;
+                        sv.c.i += 4;
                         store(TREG_XDX, &sv);
                     }
                 }

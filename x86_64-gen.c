@@ -368,7 +368,7 @@ void load(int r, SValue *sv)
 
     fr = sv->r;
     ft = sv->type.t & ~VT_DEFSIGN;
-    fc = sv->c.ul;
+    fc = sv->c.i;
 
 #ifndef TCC_TARGET_PE
     /* we use indirect access via got */
@@ -393,7 +393,7 @@ void load(int r, SValue *sv)
         if (v == VT_LLOCAL) {
             v1.type.t = VT_PTR;
             v1.r = VT_LOCAL | VT_LVAL;
-            v1.c.ul = fc;
+            v1.c.i = fc;
             fr = r;
             if (!(reg_classes[fr] & (RC_INT|RC_R11)))
                 fr = get_reg(RC_INT);
@@ -449,7 +449,7 @@ void load(int r, SValue *sv)
 #endif
             } else if (is64_type(ft)) {
                 orex(1,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
-                gen_le64(sv->c.ull);
+                gen_le64(sv->c.i);
             } else {
                 orex(0,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_le32(fc);
@@ -531,7 +531,7 @@ void store(int r, SValue *v)
 #endif
 
     ft = v->type.t;
-    fc = v->c.ul;
+    fc = v->c.i;
     fr = v->r & VT_VALMASK;
     bt = ft & VT_BTYPE;
 
@@ -540,7 +540,7 @@ void store(int r, SValue *v)
     if (fr == VT_CONST && (v->r & VT_SYM)) {
         /* mov xx(%rip), %r11 */
         o(0x1d8b4c);
-        gen_gotpcrel(TREG_R11, v->sym, v->c.ul);
+        gen_gotpcrel(TREG_R11, v->sym, v->c.i);
         pic = is64_type(bt) ? 0x49 : 0x41;
     }
 #endif
@@ -601,7 +601,7 @@ static void gcall_or_jmp(int is_jmp)
 {
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-	((vtop->r & VT_SYM) || (vtop->c.ll-4) == (int)(vtop->c.ll-4))) {
+	((vtop->r & VT_SYM) || (vtop->c.i-4) == (int)(vtop->c.i-4))) {
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
@@ -615,7 +615,7 @@ static void gcall_or_jmp(int is_jmp)
             put_elf_reloc(symtab_section, cur_text_section,
                           ind + 1, R_X86_64_PC32, 0);
         }
-        oad(0xe8 + is_jmp, vtop->c.ul - 4); /* call/jmp im */
+        oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
         r = TREG_R11;
@@ -663,7 +663,7 @@ ST_FUNC void gen_bounded_ptr_add(void)
 
 
     /* relocation offset of the bounding function call point */
-    vtop->c.ull = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela))); 
+    vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela)));
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -705,7 +705,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     /* patch relocation */
     /* XXX: find a better solution ? */
 
-    rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.ull);
+    rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.i);
     rel->r_info = ELF64_R_INFO(sym->c, ELF64_R_TYPE(rel->r_info));
 }
 #endif
@@ -1691,7 +1691,7 @@ void gjmp_addr(int a)
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
 int gtst(int inv, int t)
 {
-    int v, *p;
+    int v, t1, *p;
 
     v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
@@ -1720,11 +1720,13 @@ int gtst(int inv, int t)
         /* && or || optimization */
         if ((v & 1) == inv) {
             /* insert vtop->c jump list in t */
-            p = &vtop->c.i;
+            t1 = vtop->c.i;
+            p = &t1;
             while (*p != 0)
                 p = (int *)(cur_text_section->data + *p);
             *p = t;
-            t = vtop->c.i;
+            vtop->c.i = t1;
+            t = t1;
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
@@ -1749,7 +1751,7 @@ void gen_opi(int op)
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        if (cc && (!ll || (int)vtop->c.ll == vtop->c.ll)) {
+        if (cc && (!ll || (int)vtop->c.i == vtop->c.i)) {
             /* constant case */
             vswap();
             r = gv(RC_INT);
@@ -1957,7 +1959,7 @@ void gen_opf(int op)
                 break;
             }
             ft = vtop->type.t;
-            fc = vtop->c.ul;
+            fc = vtop->c.i;
             o(0xde); /* fxxxp %st, %st(1) */
             o(0xc1 + (a << 3));
             vtop--;
@@ -1966,13 +1968,13 @@ void gen_opf(int op)
         if (op >= TOK_ULT && op <= TOK_GT) {
             /* if saved lvalue, then we must reload it */
             r = vtop->r;
-            fc = vtop->c.ul;
+            fc = vtop->c.i;
             if ((r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
                 r = get_reg(RC_INT);
                 v1.type.t = VT_PTR;
                 v1.r = VT_LOCAL | VT_LVAL;
-                v1.c.ul = fc;
+                v1.c.i = fc;
                 load(r, &v1);
                 fc = 0;
             }
@@ -2029,7 +2031,7 @@ void gen_opf(int op)
                 break;
             }
             ft = vtop->type.t;
-            fc = vtop->c.ul;
+            fc = vtop->c.i;
             assert((ft & VT_BTYPE) != VT_LDOUBLE);
             
             r = vtop->r;
@@ -2039,7 +2041,7 @@ void gen_opf(int op)
                 r = get_reg(RC_INT);
                 v1.type.t = VT_PTR;
                 v1.r = VT_LOCAL | VT_LVAL;
-                v1.c.ul = fc;
+                v1.c.i = fc;
                 load(r, &v1);
                 fc = 0;
             }
