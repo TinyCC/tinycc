@@ -3314,7 +3314,17 @@ static int parse_btype(CType *type, AttributeDef *ad)
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
             t |= (s->type.t & ~VT_TYPEDEF);
-            type->ref = s->type.ref;
+            if ((t & VT_ARRAY) &&
+                t & (VT_CONSTANT | VT_VOLATILE) & ~s->type.ref->type.t) {
+                /* This is a case like "typedef int T[1]; const T x;"
+                   in which which we must make a copy of the typedef
+                   type so that we can add the type qualifiers to it. */
+                type->ref = sym_push(SYM_FIELD, &s->type.ref->type,
+                                     0, s->type.ref->c);
+                type->ref->type.t |= t & (VT_CONSTANT | VT_VOLATILE);
+            }
+            else
+                type->ref = s->type.ref;
             if (s->r) {
                 /* get attributes from typedef */
                 if (0 == ad->a.aligned)
