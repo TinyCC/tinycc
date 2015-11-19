@@ -34,7 +34,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
-#include <sys/stat.h>          // stat()
+#include <sys/stat.h>          /* stat() */
 
 #ifdef CONFIG_TCCASSERT
 #include <assert.h>
@@ -704,7 +704,7 @@ struct TCCState {
     enum {
 	LINE_MACRO_OUTPUT_FORMAT_GCC,
 	LINE_MACRO_OUTPUT_FORMAT_NONE,
-	LINE_MACRO_OUTPUT_FORMAT_STD,
+	LINE_MACRO_OUTPUT_FORMAT_STD
     } Pflag; /* -P switch */
     int dflag; /* -dX value */
 
@@ -1033,8 +1033,8 @@ struct TCCState {
 #endif /* defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 */
 
 enum tcc_token {
-    TOK_LAST = TOK_IDENT - 1,
-#define DEF(id, str) id,
+    TOK_LAST = TOK_IDENT - 1
+#define DEF(id, str) ,id
 #include "tcctok.h"
 #undef DEF
 };

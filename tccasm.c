@@ -550,7 +550,10 @@ static void asm_parse_directive(TCCState *s1)
 		n = asm_int_expr(s1);
 		next();
             }
-            sprintf(sname, (n?".%s%d":".%s"), get_tok_str(tok1, NULL), n);
+            if (n)
+                sprintf(sname, ".%s%d", get_tok_str(tok1, NULL), n);
+            else
+                sprintf(sname, ".%s", get_tok_str(tok1, NULL));
             use_section(s1, sname);
 	}
 	break;

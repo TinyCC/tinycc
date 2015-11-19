@@ -1974,7 +1974,7 @@ enum {
     TCC_OPTION_E,
     TCC_OPTION_MD,
     TCC_OPTION_MF,
-    TCC_OPTION_x,
+    TCC_OPTION_x
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001

@@ -77,7 +77,7 @@ enum {
 
     TREG_ST0 = 24,
 
-    TREG_MEM = 0x20,
+    TREG_MEM = 0x20
 };
 
 #define REX_BASE(reg) (((reg) >> 3) & 1)
@@ -1703,7 +1703,7 @@ int gtst(int inv, int t)
 	       to our target if the result was unordered and test wasn't NE,
 	       otherwise if unordered we don't want to jump.  */
 	    vtop->c.i &= ~0x100;
-	    if (!inv == (vtop->c.i != TOK_NE))
+            if (inv == (vtop->c.i == TOK_NE))
 	      o(0x067a);  /* jp +6 */
 	    else
 	      {
