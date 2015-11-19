@@ -131,6 +131,51 @@
 #include "stab.h"
 #include "libtcc.h"
 
+static inline uint16_t read16le(unsigned char *p)
+{
+    return p[0] | (uint16_t)p[1] << 8;
+}
+
+static inline void write16le(unsigned char *p, uint16_t x)
+{
+    p[0] = x & 255;
+    p[1] = x >> 8 & 255;
+}
+
+static inline uint32_t read32le(unsigned char *p)
+{
+  return (p[0] | (uint32_t)p[1] << 8 |
+          (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24);
+}
+
+static inline void write32le(unsigned char *p, uint32_t x)
+{
+    p[0] = x & 255;
+    p[1] = x >> 8 & 255;
+    p[2] = x >> 16 & 255;
+    p[3] = x >> 24 & 255;
+}
+
+static inline uint64_t read64le(unsigned char *p)
+{
+  return (p[0] | (uint64_t)p[1] << 8 |
+          (uint64_t)p[2] << 16 | (uint64_t)p[3] << 24 |
+          (uint64_t)p[4] << 32 | (uint64_t)p[5] << 40 |
+          (uint64_t)p[6] << 48 | (uint64_t)p[7] << 56);
+}
+
+static inline void write64le(unsigned char *p, uint64_t x)
+{
+    p[0] = x & 255;
+    p[1] = x >> 8 & 255;
+    p[2] = x >> 16 & 255;
+    p[3] = x >> 24 & 255;
+    p[4] = x >> 32 & 255;
+    p[5] = x >> 40 & 255;
+    p[6] = x >> 48 & 255;
+    p[7] = x >> 56 & 255;
+}
+
 /* parser debug */
 /* #define PARSE_DEBUG */
 /* preprocessor debug */

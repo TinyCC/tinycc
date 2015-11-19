@@ -138,11 +138,10 @@ ST_FUNC void gen_le32(int c)
 /* output a symbol and patch all calls to it */
 ST_FUNC void gsym_addr(int t, int a)
 {
-    int n, *ptr;
     while (t) {
-        ptr = (int *)(cur_text_section->data + t);
-        n = *ptr; /* next value */
-        *ptr = a - t - 4;
+        unsigned char *ptr = cur_text_section->data + t;
+        uint32_t n = read32le(ptr); /* next value */
+        write32le(ptr, a - t - 4);
         t = n;
     }
 }
@@ -165,7 +164,7 @@ ST_FUNC int oad(int c, int s)
     ind1 = ind + 4;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(cur_text_section, ind1);
-    *(int *)(cur_text_section->data + ind) = s;
+    write32le(cur_text_section->data + ind, s);
     s = ind;
     ind = ind1;
     return s;
@@ -671,9 +670,7 @@ ST_FUNC void gjmp_addr(int a)
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
 ST_FUNC int gtst(int inv, int t)
 {
-    int v, t1, *p;
-
-    v = vtop->r & VT_VALMASK;
+    int v = vtop->r & VT_VALMASK;
     if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
         g(0x0f);
@@ -681,14 +678,12 @@ ST_FUNC int gtst(int inv, int t)
     } else if (v == VT_JMP || v == VT_JMPI) {
         /* && or || optimization */
         if ((v & 1) == inv) {
+            uint32_t n1, n = vtop->c.i;
             /* insert vtop->c jump list in t */
-            t1 = vtop->c.i;
-            p = &t1;
-            while (*p != 0)
-                p = (int *)(cur_text_section->data + *p);
-            *p = t;
-            vtop->c.i = t1;
-            t = t1;
+            while ((n1 = read32le(cur_text_section->data + n)))
+                n = n1;
+            write32le(cur_text_section->data + n, t);
+            t = vtop->c.i;
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);

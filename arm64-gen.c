@@ -110,7 +110,7 @@ ST_FUNC void o(unsigned int c)
     int ind1 = ind + 4;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(cur_text_section, ind1);
-    *(uint32_t *)(cur_text_section->data + ind) = c;
+    write32le(cur_text_section->data + ind, c);
     ind = ind1;
 }
 
@@ -237,12 +237,12 @@ ST_FUNC void gsym_addr(int t_, int a_)
     uint32_t t = t_;
     uint32_t a = a_;
     while (t) {
-        uint32_t *ptr = (uint32_t *)(cur_text_section->data + t);
-        uint32_t next = *ptr;
+        unsigned char *ptr = cur_text_section->data + t;
+        uint32_t next = read32le(ptr);
         if (a - t + 0x8000000 >= 0x10000000)
             tcc_error("branch out of range");
-        *ptr = (a - t == 4 ? 0xd503201f : // nop
-                0x14000000 | ((a - t) >> 2 & 0x3ffffff)); // b
+        write32le(ptr, (a - t == 4 ? 0xd503201f : // nop
+                        0x14000000 | ((a - t) >> 2 & 0x3ffffff))); // b
         t = next;
     }
 }
@@ -1177,8 +1177,7 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
         b2 = ind; o(0x14000000); // b lab2
         // lab1:
-        *(uint32_t *)(cur_text_section->data + b1) =
-            (0x5400000d | (ind - b1) << 3);
+        write32le(cur_text_section->data + b1, 0x5400000d | (ind - b1) << 3);
         o(0xb9001c00 | r1 | r0 << 5); // str w(r1),[x(r0),#28] // __vr_offs
         o(0xf9400800 | r1 | r0 << 5); // ldr x(r1),[x(r0),#16] // __vr_top
         if (hfa == 1 || fsize == 16)
@@ -1198,8 +1197,7 @@ ST_FUNC void gen_va_arg(CType *t)
               (uint32_t)(hfa != 3) << 21); // st(hfa) {v28.(s|d),...}[0],[x(r1)]
         }
         // lab2:
-        *(uint32_t *)(cur_text_section->data + b2) =
-            (0x14000000 | (ind - b2) >> 2);
+        write32le(cur_text_section->data + b2, 0x14000000 | (ind - b2) >> 2);
     }
 }
 
@@ -1259,14 +1257,13 @@ ST_FUNC void gfunc_epilog(void)
 {
     if (loc) {
         // Insert instructions to subtract size of stack frame from SP.
-        uint32_t *ptr =
-            (uint32_t *)(cur_text_section->data + arm64_func_sub_sp_offset);
+        unsigned char *ptr = cur_text_section->data + arm64_func_sub_sp_offset;
         uint64_t diff = (-loc + 15) & ~15;
         if (!(diff >> 24)) {
             if (diff & 0xfff) // sub sp,sp,#(diff & 0xfff)
-                ptr[0] = 0xd10003ff | (diff & 0xfff) << 10;
+                write32le(ptr, 0xd10003ff | (diff & 0xfff) << 10);
             if (diff >> 12) // sub sp,sp,#(diff >> 12),lsl #12
-                ptr[1] = 0xd14003ff | (diff >> 12) << 10;
+                write32le(ptr + 4, 0xd14003ff | (diff >> 12) << 10);
         }
         else {
             // In this case we may subtract more than necessary,
@@ -1281,9 +1278,9 @@ ST_FUNC void gfunc_epilog(void)
                 diff = (diff + 1) >> 1;
                 ++j;
             }
-            ptr[0] = 0xd2800010 | diff << 5 | i << 21;
+            write32le(ptr, 0xd2800010 | diff << 5 | i << 21);
             // mov x16,#(diff),lsl #(16 * i)
-            ptr[1] = 0xcb3063ff | j << 10;
+            write32le(ptr + 4, 0xcb3063ff | j << 10);
             // sub sp,sp,x16,lsl #(j)
         }
     }
@@ -1805,8 +1802,7 @@ ST_FUNC void gen_clear_cache(void)
     lab1 = ind;
     o(0xd50b7b20 | p); // dc cvau,x(p)
     o(0x8b000000 | p | p << 5 | dsz << 16); // add x(p),x(p),x(dsz)
-    *(uint32_t *)(cur_text_section->data + b1) =
-        (0x14000000 | (ind - b1) >> 2);
+    write32le(cur_text_section->data + b1, 0x14000000 | (ind - b1) >> 2);
     o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
     o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
     o(0xd5033b9f); // dsb ish
@@ -1816,8 +1812,7 @@ ST_FUNC void gen_clear_cache(void)
     lab1 = ind;
     o(0xd50b7520 | p); // ic ivau,x(p)
     o(0x8b000000 | p | p << 5 | isz << 16); // add x(p),x(p),x(isz)
-    *(uint32_t *)(cur_text_section->data + b1) =
-        (0x14000000 | (ind - b1) >> 2);
+    write32le(cur_text_section->data + b1, 0x14000000 | (ind - b1) >> 2);
     o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
     o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
     o(0xd5033b9f); // dsb ish

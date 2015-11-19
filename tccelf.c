@@ -528,7 +528,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     qrel++;
                 }
             }
-            *(int *)ptr += val;
+            write32le(ptr, read32le(ptr) + val);
             break;
         case R_386_PC32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
@@ -541,36 +541,36 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     break;
                 }
             }
-            *(int *)ptr += val - addr;
+            write32le(ptr, read32le(ptr) + val - addr);
             break;
         case R_386_PLT32:
-            *(int *)ptr += val - addr;
+            write32le(ptr, read32le(ptr) + val - addr);
             break;
         case R_386_GLOB_DAT:
         case R_386_JMP_SLOT:
-            *(int *)ptr = val;
+            write32le(ptr, val);
             break;
         case R_386_GOTPC:
-            *(int *)ptr += s1->got->sh_addr - addr;
+            write32le(ptr, read32le(ptr) + s1->got->sh_addr - addr);
             break;
         case R_386_GOTOFF:
-            *(int *)ptr += val - s1->got->sh_addr;
+            write32le(ptr, read32le(ptr) + val - s1->got->sh_addr);
             break;
         case R_386_GOT32:
             /* we load the got offset */
-            *(int *)ptr += s1->sym_attrs[sym_index].got_offset;
+            write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
             break;
         case R_386_16:
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY) {
             output_file:
                 tcc_error("can only produce 16-bit binary files");
             }
-            *(short *)ptr += val;
+            write16le(ptr, read16le(ptr) + val);
             break;
         case R_386_PC16:
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY)
                 goto output_file;
-            *(short *)ptr += val - addr;
+            write16le(ptr, read16le(ptr) + val - addr);
             break;
 #elif defined(TCC_TARGET_ARM)
         case R_ARM_PC24:
@@ -762,38 +762,38 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             break;
 #elif defined(TCC_TARGET_ARM64)
         case R_AARCH64_ABS64:
-            *(uint64_t *)ptr = val;
+            write64le(ptr, val);
             break;
         case R_AARCH64_ABS32:
-            *(uint32_t *)ptr = val;
+            write32le(ptr, val);
             break;
         case R_AARCH64_MOVW_UABS_G0_NC:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
-                (val & 0xffff) << 5;
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
+                            (val & 0xffff) << 5));
             break;
         case R_AARCH64_MOVW_UABS_G1_NC:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
-                (val >> 16 & 0xffff) << 5;
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
+                            (val >> 16 & 0xffff) << 5));
             break;
         case R_AARCH64_MOVW_UABS_G2_NC:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
-                (val >> 32 & 0xffff) << 5;
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
+                            (val >> 32 & 0xffff) << 5));
             break;
         case R_AARCH64_MOVW_UABS_G3:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffe0001f) |
-                (val >> 48 & 0xffff) << 5;
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
+                            (val >> 48 & 0xffff) << 5));
             break;
         case R_AARCH64_ADR_PREL_PG_HI21: {
             uint64_t off = (val >> 12) - (addr >> 12);
             if ((off + ((uint64_t)1 << 20)) >> 21)
                 tcc_error("R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0x9f00001f) |
-                (off & 0x1ffffc) << 3 | (off & 3) << 29;
+            write32le(ptr, ((read32le(ptr) & 0x9f00001f) |
+                            (off & 0x1ffffc) << 3 | (off & 3) << 29));
             break;
         }
         case R_AARCH64_ADD_ABS_LO12_NC:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xffc003ff) |
-                (val & 0xfff) << 10;
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) |
+                            (val & 0xfff) << 10));
             break;
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:
@@ -812,9 +812,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 	      {
                 tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed (val=%lx, addr=%lx)", addr, val);
 	      }
-            *(uint32_t *)ptr = 0x14000000 |
-                (uint32_t)(type == R_AARCH64_CALL26) << 31 |
-                ((val - addr) >> 2 & 0x3ffffff);
+            write32le(ptr, (0x14000000 |
+                            (uint32_t)(type == R_AARCH64_CALL26) << 31 |
+                            ((val - addr) >> 2 & 0x3ffffff)));
             break;
         case R_AARCH64_ADR_GOT_PAGE: {
             uint64_t off =
@@ -822,14 +822,15 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                    s1->sym_attrs[sym_index].got_offset) >> 12) - (addr >> 12));
             if ((off + ((uint64_t)1 << 20)) >> 21)
                 tcc_error("R_AARCH64_ADR_GOT_PAGE relocation failed");
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0x9f00001f) |
-                (off & 0x1ffffc) << 3 | (off & 3) << 29;
+            write32le(ptr, ((read32le(ptr) & 0x9f00001f) |
+                            (off & 0x1ffffc) << 3 | (off & 3) << 29));
             break;
         }
         case R_AARCH64_LD64_GOT_LO12_NC:
-            *(uint32_t *)ptr = (*(uint32_t *)ptr & 0xfff803ff) |
-                ((s1->got->sh_addr + s1->sym_attrs[sym_index].got_offset)
-                 & 0xff8) << 7;
+            write32le(ptr,
+                      ((read32le(ptr) & 0xfff803ff) |
+                       ((s1->got->sh_addr +
+                         s1->sym_attrs[sym_index].got_offset) & 0xff8) << 7));
             break;
         case R_AARCH64_COPY:
             break;
@@ -841,7 +842,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 		    val - rel->r_addend,
 		    (char *) symtab_section->link->data + sym->st_name);
 #endif
-            *(addr_t *)ptr = val - rel->r_addend;
+            write64le(ptr, val - rel->r_addend);
             break;
         default:
             fprintf(stderr, "FIXME: handle reloc type %x at %x [%p] to %x\n",
@@ -885,11 +886,11 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     break;
                 } else {
 		    qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-		    qrel->r_addend = *(long long *)ptr + val;
+		    qrel->r_addend = read64le(ptr) + val;
                     qrel++;
                 }
             }
-            *(long long *)ptr += val;
+            write64le(ptr, read64le(ptr) + val);
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
@@ -897,10 +898,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 /* XXX: this logic may depend on TCC's codegen
                    now TCC uses R_X86_64_32 even for a 64bit pointer */
                 qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-                qrel->r_addend = *(int *)ptr + val;
+                qrel->r_addend = read32le(ptr) + val;
                 qrel++;
             }
-            *(int *)ptr += val;
+            write32le(ptr, read32le(ptr) + val);
             break;
 
         case R_X86_64_PC32:
@@ -910,7 +911,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
-                    qrel->r_addend = *(int *)ptr;
+                    qrel->r_addend = read32le(ptr);
                     qrel++;
                     break;
                 }
@@ -931,24 +932,25 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             if (diff < -2147483648LL || diff > 2147483647LL) {
                 tcc_error("internal error: relocation failed");
             }
-            *(int *)ptr += diff;
+            write32le(ptr, read32le(ptr) + diff);
         }
             break;
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT:
             /* They don't need addend */
-            *(addr_t *)ptr = val - rel->r_addend;
+            write64le(ptr, val - rel->r_addend);
             break;
         case R_X86_64_GOTPCREL:
-            *(int *)ptr += (s1->got->sh_addr - addr +
-                            s1->sym_attrs[sym_index].got_offset - 4);
+            write32le(ptr, read32le(ptr) +
+                      (s1->got->sh_addr - addr +
+                       s1->sym_attrs[sym_index].got_offset - 4));
             break;
         case R_X86_64_GOTTPOFF:
-            *(int *)ptr += val - s1->got->sh_addr;
+            write32le(ptr, read32le(ptr) + val - s1->got->sh_addr);
             break;
         case R_X86_64_GOT32:
             /* we load the got offset */
-            *(int *)ptr += s1->sym_attrs[sym_index].got_offset;
+            write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
             break;
 #else
 #error unsupported processor
@@ -1032,23 +1034,6 @@ static struct sym_attr *alloc_sym_attr(TCCState *s1, int index)
     return &s1->sym_attrs[index];
 }
 
-/* XXX: suppress that */
-static void put32(unsigned char *p, uint32_t val)
-{
-    p[0] = val;
-    p[1] = val >> 8;
-    p[2] = val >> 16;
-    p[3] = val >> 24;
-}
-
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM) || \
-    defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-static uint32_t get32(unsigned char *p)
-{
-    return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
-}
-#endif
-
 static void build_got(TCCState *s1)
 {
     unsigned char *ptr;
@@ -1061,19 +1046,19 @@ static void build_got(TCCState *s1)
     ptr = section_ptr_add(s1->got, 3 * PTR_SIZE);
 #if PTR_SIZE == 4
     /* keep space for _DYNAMIC pointer, if present */
-    put32(ptr, 0);
+    write32le(ptr, 0);
     /* two dummy got entries */
-    put32(ptr + 4, 0);
-    put32(ptr + 8, 0);
+    write32le(ptr + 4, 0);
+    write32le(ptr + 8, 0);
 #else
     /* keep space for _DYNAMIC pointer, if present */
-    put32(ptr, 0);
-    put32(ptr + 4, 0);
+    write32le(ptr, 0);
+    write32le(ptr + 4, 0);
     /* two dummy got entries */
-    put32(ptr + 8, 0);
-    put32(ptr + 12, 0);
-    put32(ptr + 16, 0);
-    put32(ptr + 20, 0);
+    write32le(ptr + 8, 0);
+    write32le(ptr + 12, 0);
+    write32le(ptr + 16, 0);
+    write32le(ptr + 20, 0);
 #endif
 }
 
@@ -1155,10 +1140,10 @@ static unsigned long put_got_entry(TCCState *s1,
                 p = section_ptr_add(plt, 16);
                 p[0] = 0xff; /* pushl got + PTR_SIZE */
                 p[1] = modrm + 0x10;
-                put32(p + 2, PTR_SIZE);
+                write32le(p + 2, PTR_SIZE);
                 p[6] = 0xff; /* jmp *(got + PTR_SIZE * 2) */
                 p[7] = modrm;
-                put32(p + 8, PTR_SIZE * 2);
+                write32le(p + 8, PTR_SIZE * 2);
             }
 
 	    /* The PLT slot refers to the relocation entry it needs
@@ -1169,16 +1154,16 @@ static unsigned long put_got_entry(TCCState *s1,
             p = section_ptr_add(plt, 16);
             p[0] = 0xff; /* jmp *(got + x) */
             p[1] = modrm;
-            put32(p + 2, s1->got->data_offset);
+            write32le(p + 2, s1->got->data_offset);
             p[6] = 0x68; /* push $xxx */
 #ifdef TCC_TARGET_X86_64
 	    /* On x86-64, the relocation is referred to by _index_.  */
-	    put32(p + 7, relofs / sizeof (ElfW_Rel));
+	    write32le(p + 7, relofs / sizeof (ElfW_Rel));
 #else
-            put32(p + 7, relofs);
+            write32le(p + 7, relofs);
 #endif
             p[11] = 0xe9; /* jmp plt_start */
-            put32(p + 12, -(plt->data_offset));
+            write32le(p + 12, -(plt->data_offset));
 
 	    /* If this was an UNDEF symbol set the offset in the 
 	       dynsymtab to the PLT slot, so that PC32 relocs to it
@@ -1200,24 +1185,24 @@ static unsigned long put_got_entry(TCCState *s1,
             if (plt->data_offset == 0) {
                 /* first plt entry */
                 p = section_ptr_add(plt, 16);
-                put32(p,    0xe52de004); /* push {lr}         */
-                put32(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
-                put32(p+8,  0xe08fe00e); /* add lr, pc, lr    */
-                put32(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
+                write32le(p,    0xe52de004); /* push {lr}         */
+                write32le(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
+                write32le(p+8,  0xe08fe00e); /* add lr, pc, lr    */
+                write32le(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
             }
 
             symattr->plt_offset = plt->data_offset;
             if (symattr->plt_thumb_stub) {
                 p = section_ptr_add(plt, 20);
-                put32(p,   0x4778); /* bx pc */
-                put32(p+2, 0x46c0); /* nop   */
+                write32le(p,   0x4778); /* bx pc */
+                write32le(p+2, 0x46c0); /* nop   */
                 p += 4;
             } else
                 p = section_ptr_add(plt, 16);
-            put32(p,   0xe59fc004); /* ldr ip, [pc, #4] ; GOT entry offset */
-            put32(p+4, 0xe08fc00c); /* add ip, pc, ip ; addr of GOT entry  */
-            put32(p+8, 0xe59cf000); /* ldr pc, [ip] ; jump to GOT entry */
-            put32(p+12, s1->got->data_offset); /* GOT entry off once patched */
+            write32le(p,   0xe59fc004); /* ldr ip, [pc, #4] ; GOT entry offset */
+            write32le(p+4, 0xe08fc00c); /* add ip, pc, ip ; addr of GOT entry  */
+            write32le(p+8, 0xe59cf000); /* ldr pc, [ip] ; jump to GOT entry */
+            write32le(p+12, s1->got->data_offset); /* GOT entry off once patched */
 
             /* the symbol is modified so that it will be relocated to
                the PLT */
@@ -1237,8 +1222,8 @@ static unsigned long put_got_entry(TCCState *s1,
                 section_ptr_add(plt, 32);
             symattr->plt_offset = plt->data_offset;
             p = section_ptr_add(plt, 16);
-            put32(p, s1->got->data_offset);
-            put32(p + 4, (uint64_t)s1->got->data_offset >> 32);
+            write32le(p, s1->got->data_offset);
+            write32le(p + 4, (uint64_t)s1->got->data_offset >> 32);
 
             if (sym->st_shndx == SHN_UNDEF)
                 offset = plt->data_offset - 16;
@@ -1381,9 +1366,9 @@ ST_FUNC void build_got_entries(TCCState *s1)
                                   text_section->data_offset + 4, R_ARM_JUMP24,
                                   sym_index);
                     p = section_ptr_add(text_section, 8);
-                    put32(p,   0x4778); /* bx pc */
-                    put32(p+2, 0x46c0); /* nop   */
-                    put32(p+4, 0xeafffffe); /* b $sym */
+                    write32le(p,   0x4778); /* bx pc */
+                    write32le(p+2, 0x46c0); /* nop   */
+                    write32le(p+4, 0xeafffffe); /* b $sym */
                 }
 #elif defined(TCC_TARGET_ARM64)
                 //xx Other cases may be required here:
@@ -1595,7 +1580,7 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
     	    Section *init_section = find_section(s1, ".init");
     	    unsigned char *pinit = section_ptr_add(init_section, 5);
     	    pinit[0] = 0xe8;
-    	    put32(pinit + 1, -4);
+            write32le(pinit + 1, -4);
     	    put_elf_reloc(symtab_section, init_section,
                       init_section->data_offset - 4, R_386_PC32, sym_index);
 	}
@@ -1761,9 +1746,9 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     section_reserve(s1->got, offset + PTR_SIZE);
 #ifdef TCC_TARGET_X86_64
     /* only works for x86-64 */
-    put32(s1->got->data + offset + 4, sym->st_value >> 32);
+    write32le(s1->got->data + offset + 4, sym->st_value >> 32);
 #endif
-    put32(s1->got->data + offset, sym->st_value & 0xffffffff);
+    write32le(s1->got->data + offset, sym->st_value & 0xffffffff);
 }
 
 /* Perform relocation to GOT or PLT entries */
@@ -1930,20 +1915,20 @@ ST_FUNC void relocate_plt(TCCState *s1)
     p_end = p + s1->plt->data_offset;
     if (p < p_end) {
 #if defined(TCC_TARGET_I386)
-        put32(p + 2, get32(p + 2) + s1->got->sh_addr);
-        put32(p + 8, get32(p + 8) + s1->got->sh_addr);
+        write32le(p + 2, read32le(p + 2) + s1->got->sh_addr);
+        write32le(p + 8, read32le(p + 8) + s1->got->sh_addr);
         p += 16;
         while (p < p_end) {
-            put32(p + 2, get32(p + 2) + s1->got->sh_addr);
+            write32le(p + 2, read32le(p + 2) + s1->got->sh_addr);
             p += 16;
         }
 #elif defined(TCC_TARGET_X86_64)
         int x = s1->got->sh_addr - s1->plt->sh_addr - 6;
-        put32(p + 2, get32(p + 2) + x);
-        put32(p + 8, get32(p + 8) + x - 6);
+        write32le(p + 2, read32le(p + 2) + x);
+        write32le(p + 8, read32le(p + 8) + x - 6);
         p += 16;
         while (p < p_end) {
-            put32(p + 2, get32(p + 2) + x + s1->plt->data - p);
+            write32le(p + 2, read32le(p + 2) + x + s1->plt->data - p);
             p += 16;
         }
 #elif defined(TCC_TARGET_ARM)
@@ -1951,9 +1936,9 @@ ST_FUNC void relocate_plt(TCCState *s1)
         x=s1->got->sh_addr - s1->plt->sh_addr - 12;
         p += 16;
         while (p < p_end) {
-            if (get32(p) == 0x46c04778) /* PLT Thumb stub present */
+            if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
-            put32(p + 12, x + get32(p + 12) + s1->plt->data - p);
+            write32le(p + 12, x + read32le(p + 12) + s1->plt->data - p);
             p += 16;
         }
 #elif defined(TCC_TARGET_ARM64)
@@ -1962,32 +1947,32 @@ ST_FUNC void relocate_plt(TCCState *s1)
         uint64_t off = (got >> 12) - (plt >> 12);
         if ((off + ((uint32_t)1 << 20)) >> 21)
             tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", off, got, plt);
-        put32(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
-        put32(p + 4, (0x90000010 | // adrp x16,...
-                      (off & 0x1ffffc) << 3 | (off & 3) << 29));
-        put32(p + 8, (0xf9400211 | // ldr x17,[x16,#...]
-                      (got & 0xff8) << 7));
-        put32(p + 12, (0x91000210 | // add x16,x16,#...
-                       (got & 0xfff) << 10));
-        put32(p + 16, 0xd61f0220); // br x17
-        put32(p + 20, 0xd503201f); // nop
-        put32(p + 24, 0xd503201f); // nop
-        put32(p + 28, 0xd503201f); // nop
+        write32le(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
+        write32le(p + 4, (0x90000010 | // adrp x16,...
+			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
+        write32le(p + 8, (0xf9400211 | // ldr x17,[x16,#...]
+			  (got & 0xff8) << 7));
+        write32le(p + 12, (0x91000210 | // add x16,x16,#...
+			   (got & 0xfff) << 10));
+        write32le(p + 16, 0xd61f0220); // br x17
+        write32le(p + 20, 0xd503201f); // nop
+        write32le(p + 24, 0xd503201f); // nop
+        write32le(p + 28, 0xd503201f); // nop
         p += 32;
         while (p < p_end) {
             uint64_t pc = plt + (p - s1->plt->data);
             uint64_t addr = got +
-                (get32(p) | (uint64_t)get32(p + 4) << 32);
+                (read32le(p) | (uint64_t)read32le(p + 4) << 32);
             uint32_t off = (addr >> 12) - (pc >> 12);
             if ((off + ((uint32_t)1 << 20)) >> 21)
                 tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", off, addr, pc);
-            put32(p, (0x90000010 | // adrp x16,...
-                      (off & 0x1ffffc) << 3 | (off & 3) << 29));
-            put32(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
-                          (addr & 0xff8) << 7));
-            put32(p + 8, (0x91000210 | // add x16,x16,#...
-                          (addr & 0xfff) << 10));
-            put32(p + 12, 0xd61f0220); // br x17
+            write32le(p, (0x90000010 | // adrp x16,...
+			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
+            write32le(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
+			      (addr & 0xff8) << 7));
+            write32le(p + 8, (0x91000210 | // add x16,x16,#...
+			      (addr & 0xfff) << 10));
+            write32le(p + 12, 0xd61f0220); // br x17
             p += 16;
         }
 #elif defined(TCC_TARGET_C67)
@@ -2654,7 +2639,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             fill_dynamic(s1, &dyninf);
 
             /* put in GOT the dynamic section address and relocate PLT */
-            put32(s1->got->data, dynamic->sh_addr);
+            write32le(s1->got->data, dynamic->sh_addr);
             if (file_type == TCC_OUTPUT_EXE
 #if defined(TCC_OUTPUT_DLL_WITH_PLT)
                 || file_type == TCC_OUTPUT_DLL
