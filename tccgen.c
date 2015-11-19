@@ -2427,7 +2427,16 @@ static void type_to_str(char *buf, int buf_size,
         goto no_var;
     case VT_PTR:
         s = type->ref;
+        if (t & VT_ARRAY) {
+            snprintf(buf1, sizeof(buf1), "%s[%ld]", varstr ? varstr : "", s->c);
+            type_to_str(buf, buf_size, &s->type, buf1);
+            goto no_var;
+        }
         pstrcpy(buf1, sizeof(buf1), "*");
+        if (t & VT_CONSTANT)
+            pstrcat(buf1, buf_size, "const ");
+        if (t & VT_VOLATILE)
+            pstrcat(buf1, buf_size, "volatile ");
         if (varstr)
             pstrcat(buf1, sizeof(buf1), varstr);
         type_to_str(buf, buf_size, &s->type, buf1);
