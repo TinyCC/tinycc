@@ -4453,80 +4453,83 @@ static void expr_or(void)
     }
 }
 
-/* XXX: fix this mess */
-static void expr_land_const(void)
-{
-    expr_or();
-    while (tok == TOK_LAND) {
-        next();
-        expr_or();
-        gen_op(TOK_LAND);
-    }
-}
-
-/* XXX: fix this mess */
-static void expr_lor_const(void)
-{
-    expr_land_const();
-    while (tok == TOK_LOR) {
-        next();
-        expr_land_const();
-        gen_op(TOK_LOR);
-    }
-}
-
-/* only used if non constant */
 static void expr_land(void)
 {
-    int t;
-
     expr_or();
     if (tok == TOK_LAND) {
-        t = 0;
-        save_regs(1);
-        for(;;) {
-            t = gvtst(1, t);
-            if (tok != TOK_LAND) {
-                vseti(VT_JMPI, t);
-                break;
-            }
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+            CType ctb, cti;
+            ctb.t = VT_BOOL;
+            cti.t = VT_INT;
             next();
-            expr_or();
+            gen_cast(&ctb);
+            if (vtop->c.i) {
+                vpop();
+                expr_land();
+                gen_cast(&ctb);
+            } else {
+                expr_land();
+                vpop();
+            }
+            gen_cast(&cti);
+        } else {
+            int t = 0;
+            save_regs(1);
+            for(;;) {
+                t = gvtst(1, t);
+                if (tok != TOK_LAND) {
+                    vseti(VT_JMPI, t);
+                    break;
+                }
+                next();
+                expr_or();
+            }
         }
     }
 }
 
 static void expr_lor(void)
 {
-    int t;
-
     expr_land();
     if (tok == TOK_LOR) {
-        t = 0;
-        save_regs(1);
-        for(;;) {
-            t = gvtst(0, t);
-            if (tok != TOK_LOR) {
-                vseti(VT_JMP, t);
-                break;
-            }
+        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+            CType ctb, cti;
+            ctb.t = VT_BOOL;
+            cti.t = VT_INT;
             next();
-            expr_land();
+            gen_cast(&ctb);
+            if (vtop->c.i) {
+                expr_lor();
+                vpop();
+            } else {
+                vpop();
+                expr_lor();
+                gen_cast(&ctb);
+            }
+            gen_cast(&cti);
+        } else {
+            int t = 0;
+            save_regs(1);
+            for(;;) {
+                t = gvtst(0, t);
+                if (tok != TOK_LOR) {
+                    vseti(VT_JMP, t);
+                    break;
+                }
+                next();
+                expr_land();
+            }
         }
     }
 }
 
-/* XXX: better constant handling */
 static void expr_cond(void)
 {
     int tt, u, r1, r2, rc, t1, t2, bt1, bt2;
     SValue sv;
     CType type, type1, type2;
 
-    if (const_wanted)
-        expr_lor_const();
-    else
-        expr_lor();
+    expr_lor();
     if (tok == '?') {
         next();
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {

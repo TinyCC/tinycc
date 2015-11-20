@@ -17,9 +17,13 @@ void f2(void)
 {
     goto start;
     {
-        int a[1 ? 1 : 1]; /* not a variable-length array */
+        int a[1 && 1]; /* not a variable-length array */
+        int b[1 || 1]; /* not a variable-length array */
+        int c[1 ? 1 : 1]; /* not a variable-length array */
     start:
         a[0] = 0;
+        b[0] = 0;
+        c[0] = 0;
     }
 }
 

@@ -68,7 +68,6 @@ Not critical:
   to suppress VT_LOCAL and use a base register instead).
 - interactive mode / integrated debugger
 - fix preprocessor symbol redefinition
-- better constant opt (&&, ||, ?:)
 - add portable byte code generator and interpreter for other
   unsupported architectures.
 - C++: variable declaration in for, minimal 'class' support.
