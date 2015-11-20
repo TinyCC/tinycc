@@ -1961,9 +1961,8 @@ ST_FUNC void relocate_plt(TCCState *s1)
         p += 32;
         while (p < p_end) {
             uint64_t pc = plt + (p - s1->plt->data);
-            uint64_t addr = got +
-                (read32le(p) | (uint64_t)read32le(p + 4) << 32);
-            uint32_t off = (addr >> 12) - (pc >> 12);
+            uint64_t addr = got + read64le(p);
+            uint64_t off = (addr >> 12) - (pc >> 12);
             if ((off + ((uint32_t)1 << 20)) >> 21)
                 tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", off, addr, pc);
             write32le(p, (0x90000010 | // adrp x16,...
