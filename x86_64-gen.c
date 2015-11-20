@@ -1716,12 +1716,14 @@ int gtst(int inv, int t)
     } else if (v == VT_JMP || v == VT_JMPI) {
         /* && or || optimization */
         if ((v & 1) == inv) {
-            uint32_t n1, n = vtop->c.i;
             /* insert vtop->c jump list in t */
-            while ((n1 = read32le(cur_text_section->data + n)))
-                n = n1;
-            write32le(cur_text_section->data + n, t);
-            t = vtop->c.i;
+            uint32_t n1, n = vtop->c.i;
+            if (n) {
+                while ((n1 = read32le(cur_text_section->data + n)))
+                    n = n1;
+                write32le(cur_text_section->data + n, t);
+                t = vtop->c.i;
+            }
         } else {
             t = gjmp(t);
             gsym(vtop->c.i);
