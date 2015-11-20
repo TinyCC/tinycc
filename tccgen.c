@@ -81,7 +81,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg, int is_expr);
-static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, char *asm_label, int scope);
+static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
 static void expr_eq(void);
 static void unary_type(CType *type);
@@ -158,7 +158,6 @@ static inline Sym *sym_malloc(void)
 ST_INLN void sym_free(Sym *sym)
 {
     sym->next = sym_free_first;
-    tcc_free(sym->asm_label);
     sym_free_first = sym;
 }
 
@@ -173,7 +172,7 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
                           get_tok_str(v, NULL));
     }
     s = sym_malloc();
-    s->asm_label = NULL;
+    s->asm_label = 0;
     s->v = v;
     s->type.t = t;
     s->type.ref = NULL;
@@ -443,10 +442,8 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
     return s;
 }
 
-/* define a new external reference to a symbol 'v' with alternate asm
-   name 'asm_label' of type 'u'. 'asm_label' is equal to NULL if there
-   is no alternate name (most cases) */
-static Sym *external_sym(int v, CType *type, int r, char *asm_label)
+/* define a new external reference to a symbol 'v' */
+static Sym *external_sym(int v, CType *type, int r)
 {
     Sym *s;
 
@@ -454,7 +451,6 @@ static Sym *external_sym(int v, CType *type, int r, char *asm_label)
     if (!s) {
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
-        s->asm_label = asm_label ? tcc_strdup(asm_label) : 0;
         s->type.t |= VT_EXTERN;
     } else if (s->type.ref == func_old_type.ref) {
         s->type.ref = type->ref;
@@ -3386,16 +3382,21 @@ ST_FUNC void parse_asm_str(CString *astr)
     cstr_ccat(astr, '\0');
 }
 
-/* Parse an asm label and return the label
- * Don't forget to free the CString in the caller! */
-static void asm_label_instr(CString *astr)
+/* Parse an asm label and return the token */
+static int asm_label_instr(void)
 {
+    int v;
+    CString astr;
+
     next();
-    parse_asm_str(astr);
+    parse_asm_str(&astr);
     skip(')');
 #ifdef ASM_DEBUG
-    printf("asm_alias: \"%s\"\n", (char *)astr->data);
+    printf("asm_alias: \"%s\"\n", (char *)astr.data);
 #endif
+    v = tok_alloc(astr.data, astr.size - 1)->tok;
+    cstr_free(&astr);
+    return v;
 }
 
 static void post_type(CType *type, AttributeDef *ad)
@@ -3801,7 +3802,7 @@ ST_FUNC void unary(void)
         mk_pointer(&type);
         type.t |= VT_ARRAY;
         memset(&ad, 0, sizeof(AttributeDef));
-        decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, NULL, 0);
+        decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
         break;
     case '(':
         next();
@@ -3820,7 +3821,7 @@ ST_FUNC void unary(void)
                 if (!(type.t & VT_ARRAY))
                     r |= lvalue_type(type.t);
                 memset(&ad, 0, sizeof(AttributeDef));
-                decl_initializer_alloc(&type, &ad, r, 1, 0, NULL, 0);
+                decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
             } else {
                 if (sizeof_caller) {
                     vpush(&type);
@@ -4199,7 +4200,7 @@ ST_FUNC void unary(void)
                     break;
             }
             if (!s)
-                tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, NULL));
+                tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, &tokc));
             /* add field offset to pointer */
             vtop->type = char_pointer_type; /* change type to 'char *' */
             vpushi(s->c);
@@ -5742,14 +5743,12 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 /* parse an initializer for type 't' if 'has_init' is non zero, and
    allocate space in local or global data space ('r' is either
    VT_LOCAL or VT_CONST). If 'v' is non zero, then an associated
-   variable 'v' with an associated name represented by 'asm_label' of
-   scope 'scope' is declared before initializers are parsed. If 'v' is
-   zero, then a reference to the new object is put in the value stack.
-   If 'has_init' is 2, a special parsing is done to handle string
-   constants. */
+   variable 'v' of scope 'scope' is declared before initializers
+   are parsed. If 'v' is zero, then a reference to the new object
+   is put in the value stack. If 'has_init' is 2, a special parsing
+   is done to handle string constants. */
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, 
-                                   int has_init, int v, char *asm_label,
-                                   int scope)
+                                   int has_init, int v, int scope)
 {
     int size, align, addr, data_offset;
     int level;
@@ -5931,7 +5930,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (v) {
             if (scope != VT_CONST || !sym) {
                 sym = sym_push(v, type, r | VT_SYM, 0);
-                sym->asm_label = asm_label ? tcc_strdup(asm_label) : 0;
+                sym->asm_label = ad->asm_label;
             }
             /* update symbol definition */
             if (sec) {
@@ -6162,7 +6161,6 @@ static int decl0(int l, int is_for_loop_init)
     CType type, btype;
     Sym *sym;
     AttributeDef ad;
-    char *asm_label = 0; // associated asm label
 
     while (1) {
         if (!parse_btype(&btype, &ad)) {
@@ -6218,17 +6216,12 @@ static int decl0(int l, int is_for_loop_init)
                     func_decl_list(sym);
             }
 
-            tcc_free(asm_label);
-            asm_label = 0;
             if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
-                CString astr;
-
-                asm_label_instr(&astr);
-                asm_label = tcc_strdup(astr.data);
-                cstr_free(&astr);
-                
+                ad.asm_label = asm_label_instr();
                 /* parse one last attribute list, after asm label */
                 parse_attribute(&ad);
+                if (tok == '{')
+                    expect(";");
             }
 
             if (ad.a.weak)
@@ -6371,7 +6364,8 @@ static int decl0(int l, int is_for_loop_init)
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
-                        sym = external_sym(v, &type, r, asm_label);
+                        sym = external_sym(v, &type, r);
+                        sym->asm_label = ad.asm_label;
 
                         if (ad.alias_target) {
                             Section tsec;
@@ -6393,14 +6387,12 @@ static int decl0(int l, int is_for_loop_init)
                             r |= l;
                         if (has_init)
                             next();
-                        decl_initializer_alloc(&type, &ad, r, has_init, v, asm_label, l);
+                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
                     }
                 }
                 if (tok != ',') {
-                    if (is_for_loop_init) {
-                        tcc_free(asm_label);
+                    if (is_for_loop_init)
                         return 1;
-                    }
                     skip(';');
                     break;
                 }
@@ -6409,7 +6401,6 @@ static int decl0(int l, int is_for_loop_init)
             ad.a.aligned = 0;
         }
     }
-    tcc_free(asm_label);
     return 0;
 }
 

@@ -334,10 +334,18 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
         break;
 
     case TOK_CFLOAT:
+        cstr_cat(&cstr_buf, "<float>");
+        break;
     case TOK_CDOUBLE:
+	cstr_cat(&cstr_buf, "<double>");
+	break;
     case TOK_CLDOUBLE:
+	cstr_cat(&cstr_buf, "<long double>");
+	break;
     case TOK_LINENUM:
-        return NULL; /* should not happen */
+	cstr_cat(&cstr_buf, "<linenumber>");
+	break;
+        //return NULL; /* should not happen */
 
     /* above tokens have value, the ones below don't */
 
