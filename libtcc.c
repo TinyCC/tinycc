@@ -841,7 +841,6 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     normalize_slashes(bf->filename);
 #endif
     bf->line_num = 1;
-    bf->inc_path_index = -2;
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     bf->fd = -1;
     bf->prev = file;
@@ -1509,96 +1508,6 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
     return 0;
 }
 
-
-/* Windows stat* ( https://msdn.microsoft.com/en-us/library/14h5k7ff.aspx ):
- * - st_gid, st_ino, st_uid: only valid on "unix" file systems (not FAT, NTFS, etc)
- * - st_atime, st_ctime: not valid on FAT, valid on NTFS.
- * - Other fields should be reasonably compatible (and S_ISDIR should work).
- *
- * BY_HANDLE_FILE_INFORMATION ( https://msdn.microsoft.com/en-us/library/windows/desktop/aa363788%28v=vs.85%29.aspx ):
- * - File index (combined nFileIndexHigh and nFileIndexLow) _may_ change when the file is opened.
- *   - But on NTFS: it's guaranteed to be the same value until the file is deleted.
- * - On windows server 2012 there's a 128b file id, and the 64b one via
- *   nFileIndex* is not guaranteed to be unique.
- *
- * - MS Docs suggest to that volume number with the file index could be used to
- *   check if two handles refer to the same file.
- */
-#ifndef _WIN32
-typedef struct stat                file_info_t;
-#else
-typedef BY_HANDLE_FILE_INFORMATION file_info_t;
-#endif
-
-int get_file_info(const char *fname, file_info_t *out_info)
-{
-#ifndef _WIN32
-    return stat(fname, out_info);
-#else
-    int rv = 1;
-    HANDLE h = CreateFile(fname, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                          FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, NULL);
-
-    if (h != INVALID_HANDLE_VALUE) {
-        rv = !GetFileInformationByHandle(h, out_info);
-        CloseHandle(h);
-    }
-    return rv;
-#endif
-}
-
-int is_dir(file_info_t *info)
-{
-#ifndef _WIN32
-    return S_ISDIR(info->st_mode);
-#else
-    return (info->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ==
-           FILE_ATTRIBUTE_DIRECTORY;
-#endif
-}
-
-int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
-{
-#ifndef _WIN32
-    return fi1->st_dev == fi2->st_dev &&
-           fi1->st_ino == fi2->st_ino;
-#else
-    return fi1->dwVolumeSerialNumber == fi2->dwVolumeSerialNumber &&
-           fi1->nFileIndexHigh       == fi2->nFileIndexHigh &&
-           fi1->nFileIndexLow        == fi2->nFileIndexLow;
-#endif
-}
-
-static void
-tcc_normalize_inc_dirs_aux(file_info_t *stats, size_t *pnum, char **path)
-{
-    size_t i, num = *pnum;
-    if (get_file_info(*path, &stats[num]) || !is_dir(&stats[num]))
-        goto remove;
-    for (i = 0; i < num; i++)
-        if (is_same_file(&stats[i], &stats[num]))
-            goto remove;
-    *pnum = num + 1;
-    return;
- remove:
-    tcc_free(*path);
-    *path = 0;
-}
-
-/* Remove non-existent and duplicate directories from include paths. */
-ST_FUNC void tcc_normalize_inc_dirs(TCCState *s)
-{
-    file_info_t *stats =
-        tcc_malloc(((size_t)s->nb_sysinclude_paths + s->nb_include_paths) *
-                   sizeof(*stats));
-    size_t i, num = 0;
-    for (i = 0; i < s->nb_sysinclude_paths; i++)
-        tcc_normalize_inc_dirs_aux(stats, &num, &s->sysinclude_paths[i]);
-    for (i = 0; i < s->nb_include_paths; i++)
-        tcc_normalize_inc_dirs_aux(stats, &num, &s->include_paths[i]);
-    tcc_free(stats);
-}
-
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
@@ -1664,7 +1573,6 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     }
 #endif
 
-    tcc_normalize_inc_dirs(s);
     if (s->output_type == TCC_OUTPUT_PREPROCESS)
         print_defines();
 
