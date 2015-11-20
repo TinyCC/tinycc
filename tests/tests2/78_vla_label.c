@@ -1,8 +1,7 @@
 #include <stdio.h>
 
 /* This test segfaults as of April 27, 2015. */
-
-void f(int argc)
+void f1(int argc)
 {
   char test[argc];
   if(0)
@@ -13,9 +12,21 @@ void f(int argc)
   goto label;
 }
 
+/* This segfaulted on 2015-11-19. */
+void f2(void)
+{
+    goto start;
+    {
+        int a[1 ? 1 : 1]; /* not a variable-length array */
+    start:
+        a[0] = 0;
+    }
+}
+
 int main()
 {
-  f(2);
+  f1(2);
+  f2();
 
   return 0;
 }
