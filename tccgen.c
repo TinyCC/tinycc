@@ -4468,8 +4468,11 @@ static void expr_land(void)
                 expr_land();
                 gen_cast(&ctb);
             } else {
+                int saved_nocode_wanted = nocode_wanted;
+                nocode_wanted = 1;
                 expr_land();
                 vpop();
+                nocode_wanted = saved_nocode_wanted;
             }
             gen_cast(&cti);
         } else {
@@ -4499,8 +4502,11 @@ static void expr_lor(void)
             next();
             gen_cast(&ctb);
             if (vtop->c.i) {
+                int saved_nocode_wanted = nocode_wanted;
+                nocode_wanted = 1;
                 expr_lor();
                 vpop();
+                nocode_wanted = saved_nocode_wanted;
             } else {
                 vpop();
                 expr_lor();
@@ -4533,6 +4539,7 @@ static void expr_cond(void)
     if (tok == '?') {
         next();
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+            int saved_nocode_wanted = nocode_wanted;
             CType boolean;
             int c;
             boolean.t = VT_BOOL;
@@ -4540,16 +4547,27 @@ static void expr_cond(void)
             gen_cast(&boolean);
             c = vtop->c.i;
             vpop();
-            if (tok != ':' || !gnu_ext) {
+            if (c) {
+                if (tok != ':' || !gnu_ext) {
+                    vpop();
+                    gexpr();
+                }
+                skip(':');
+                nocode_wanted = 1;
+                expr_cond();
                 vpop();
-                gexpr();
+                nocode_wanted = saved_nocode_wanted;
+            } else {
+                vpop();
+                if (tok != ':' || !gnu_ext) {
+                    nocode_wanted = 1;
+                    gexpr();
+                    vpop();
+                    nocode_wanted = saved_nocode_wanted;
+                }
+                skip(':');
+                expr_cond();
             }
-            if (!c)
-                vpop();
-            skip(':');
-            expr_cond();
-            if (c)
-                vpop();
         }
         else {
             if (vtop != vstack) {

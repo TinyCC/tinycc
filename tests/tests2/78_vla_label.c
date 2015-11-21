@@ -27,10 +27,19 @@ void f2(void)
     }
 }
 
+void f3(void)
+{
+    printf("%d\n", 0 ? printf("x1\n") : 11);
+    printf("%d\n", 1 ? 12 : printf("x2\n"));
+    printf("%d\n", 0 && printf("x3\n"));
+    printf("%d\n", 1 || printf("x4\n"));
+}
+
 int main()
 {
   f1(2);
   f2();
+  f3();
 
   return 0;
 }
