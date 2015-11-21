@@ -44,7 +44,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
 
     switch(tok) {
     case TOK_PPNUM:
-        p = tokc.cstr->data;
+        p = tokc.str.data;
         n = strtoul(p, (char **)&p, 0);
         if (*p == 'b' || *p == 'f') {
             /* backward or forward label */
@@ -378,7 +378,7 @@ static void asm_parse_directive(TCCState *s1)
             uint64_t vl;
             const char *p;
 
-            p = tokc.cstr->data;
+            p = tokc.str.data;
             if (tok != TOK_PPNUM) {
             error_constant:
                 tcc_error("64 bit constant");
@@ -523,8 +523,8 @@ static void asm_parse_directive(TCCState *s1)
             for(;;) {
                 if (tok != TOK_STR)
                     expect("string constant");
-                p = tokc.cstr->data;
-                size = tokc.cstr->size;
+                p = tokc.str.data;
+                size = tokc.str.size;
                 if (t == TOK_ASM_ascii && size > 0)
                     size--;
                 for(i = 0; i < size; i++)
@@ -565,7 +565,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
 
             if (tok == TOK_STR)
-                pstrcat(filename, sizeof(filename), tokc.cstr->data);
+                pstrcat(filename, sizeof(filename), tokc.str.data);
             else
                 pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
 
@@ -583,7 +583,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
 
             if (tok == TOK_STR)
-                pstrcat(ident, sizeof(ident), tokc.cstr->data);
+                pstrcat(ident, sizeof(ident), tokc.str.data);
             else
                 pstrcat(ident, sizeof(ident), get_tok_str(tok, NULL));
 
@@ -629,7 +629,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
             skip(',');
             if (tok == TOK_STR) {
-                newtype = tokc.cstr->data;
+                newtype = tokc.str.data;
             } else {
                 if (tok == '@' || tok == '%')
                     skip(tok);
@@ -655,7 +655,7 @@ static void asm_parse_directive(TCCState *s1)
             sname[0] = '\0';
             while (tok != ';' && tok != TOK_LINEFEED && tok != ',') {
                 if (tok == TOK_STR)
-                    pstrcat(sname, sizeof(sname), tokc.cstr->data);
+                    pstrcat(sname, sizeof(sname), tokc.str.data);
                 else
                     pstrcat(sname, sizeof(sname), get_tok_str(tok, NULL));
                 next();
@@ -768,7 +768,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
         } else if (tok == TOK_PPNUM) {
             const char *p;
             int n;
-            p = tokc.cstr->data;
+            p = tokc.str.data;
             n = strtoul(p, (char **)&p, 10);
             if (*p != '\0')
                 expect("':'");
@@ -970,8 +970,8 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
             }
             if (tok != TOK_STR)
                 expect("string constant");
-            op->constraint = tcc_malloc(tokc.cstr->size);
-            strcpy(op->constraint, tokc.cstr->data);
+            op->constraint = tcc_malloc(tokc.str.size);
+            strcpy(op->constraint, tokc.str.data);
             next();
             skip('(');
             gexpr();
@@ -1038,7 +1038,7 @@ ST_FUNC void asm_instr(void)
                     for(;;) {
                         if (tok != TOK_STR)
                             expect("string constant");
-                        asm_clobber(clobber_regs, tokc.cstr->data);
+                        asm_clobber(clobber_regs, tokc.str.data);
                         next();
                         if (tok == ',') {
                             next();

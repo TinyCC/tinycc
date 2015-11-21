@@ -400,7 +400,11 @@ typedef union CValue {
     double d;
     float f;
     uint64_t i;
-    struct CString *cstr;
+    struct {
+        int size;
+        const void *data;
+        void *data_allocated;
+    } str;
     int tab[LDOUBLE_SIZE/4];
 } CValue;
 

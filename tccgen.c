@@ -2759,7 +2759,7 @@ static void parse_attribute(AttributeDef *ad)
             skip('(');
             if (tok != TOK_STR)
                 expect("section name");
-            ad->section = find_section(tcc_state, (char *)tokc.cstr->data);
+            ad->section = find_section(tcc_state, (char *)tokc.str.data);
             next();
             skip(')');
             break;
@@ -2769,7 +2769,7 @@ static void parse_attribute(AttributeDef *ad)
             if (tok != TOK_STR)
                 expect("alias(\"target\")");
             ad->alias_target = /* save string as token, for later */
-              tok_alloc((char*)tokc.cstr->data, tokc.cstr->size-1)->tok;
+              tok_alloc((char*)tokc.str.data, tokc.str.size-1)->tok;
             next();
             skip(')');
             break;
@@ -2778,13 +2778,13 @@ static void parse_attribute(AttributeDef *ad)
             skip('(');
             if (tok != TOK_STR)
                 expect("visibility(\"default|hidden|internal|protected\")");
-	    if (!strcmp (tokc.cstr->data, "default"))
+	    if (!strcmp (tokc.str.data, "default"))
 	        ad->a.visibility = STV_DEFAULT;
-	    else if (!strcmp (tokc.cstr->data, "hidden"))
+	    else if (!strcmp (tokc.str.data, "hidden"))
 	        ad->a.visibility = STV_HIDDEN;
-	    else if (!strcmp (tokc.cstr->data, "internal"))
+	    else if (!strcmp (tokc.str.data, "internal"))
 	        ad->a.visibility = STV_INTERNAL;
-	    else if (!strcmp (tokc.cstr->data, "protected"))
+	    else if (!strcmp (tokc.str.data, "protected"))
 	        ad->a.visibility = STV_PROTECTED;
 	    else
                 expect("visibility(\"default|hidden|internal|protected\")");
@@ -3376,7 +3376,7 @@ ST_FUNC void parse_asm_str(CString *astr)
     cstr_new(astr);
     while (tok == TOK_STR) {
         /* XXX: add \0 handling too ? */
-        cstr_cat(astr, tokc.cstr->data);
+        cstr_cat(astr, tokc.str.data);
         next();
     }
     cstr_ccat(astr, '\0');
@@ -5521,14 +5521,12 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             ) || (tok == TOK_STR && (t1->t & VT_BTYPE) == VT_BYTE)) {
             while (tok == TOK_STR || tok == TOK_LSTR) {
                 int cstr_len, ch;
-                CString *cstr;
 
-                cstr = tokc.cstr;
                 /* compute maximum number of chars wanted */
                 if (tok == TOK_STR)
-                    cstr_len = cstr->size;
+                    cstr_len = tokc.str.size;
                 else
-                    cstr_len = cstr->size / sizeof(nwchar_t);
+                    cstr_len = tokc.str.size / sizeof(nwchar_t);
                 cstr_len--;
                 nb = cstr_len;
                 if (n >= 0 && nb > (n - array_length))
@@ -5540,13 +5538,13 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                        string in global variable, we handle it
                        specifically */
                     if (sec && tok == TOK_STR && size1 == 1) {
-                        memcpy(sec->data + c + array_length, cstr->data, nb);
+                        memcpy(sec->data + c + array_length, tokc.str.data, nb);
                     } else {
                         for(i=0;i<nb;i++) {
                             if (tok == TOK_STR)
-                                ch = ((unsigned char *)cstr->data)[i];
+                                ch = ((unsigned char *)tokc.str.data)[i];
                             else
-                                ch = ((nwchar_t *)cstr->data)[i];
+                                ch = ((nwchar_t *)tokc.str.data)[i];
                             init_putv(t1, sec, c + (array_length + i) * size1,
                                       ch, EXPR_VAL);
                         }

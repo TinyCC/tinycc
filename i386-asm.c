@@ -330,7 +330,7 @@ static void parse_operand(TCCState *s1, Operand *op)
                 next();
                 if (tok != TOK_PPNUM)
                     goto reg_error;
-                p = tokc.cstr->data;
+                p = tokc.str.data;
                 reg = p[0] - '0';
                 if ((unsigned)reg >= 8 || p[1] != '\0')
                     goto reg_error;
