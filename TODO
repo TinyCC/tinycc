@@ -35,6 +35,9 @@ Portability:
 - it is assumed that int is 32-bit and sizeof(int) == 4
 - int is used when host or target size_t would make more sense
 - struct CString is written into an int array and ends up misaligned
+- TCC handles target floating-point (fp) values using the host's fp
+  arithmetic, which is simple and fast but may lead to exceptions
+  and inaccuracy and wrong representations when cross-compiling
 
 Linking:
 
