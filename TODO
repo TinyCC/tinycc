@@ -30,6 +30,19 @@ Bugs:
 - Fix the remaining libtcc memory leaks.
 - make libtcc fully reentrant (except for the compilation stage itself).
 
+Portability:
+
+- it is assumed that int is 32-bit and sizeof(int) == 4
+- int is used when host or target size_t would make more sense
+- struct CString is written into an int array and ends up misaligned
+
+Linking:
+
+- static linking does not work
+- with "-run" and libtcc, no PLT is used, so branches may be out of
+  range and relocations may fail; as a result libtest fails on arm64; see:
+  https://lists.gnu.org/archive/html/tinycc-devel/2015-03/msg00111.html
+
 Bound checking:
 
 - '-b' bug.
@@ -74,6 +87,8 @@ Not critical:
 - win32: __intxx. use resolve for bchecked malloc et al.
   check exception code (exception filter func).
 - handle void (__attribute__() *ptr)()
+- VLAs are implemented in a way that is not compatible with signals:
+  http://lists.gnu.org/archive/html/tinycc-devel/2015-11/msg00018.html
 
 Fixed (probably):
 
