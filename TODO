@@ -29,6 +29,8 @@ Bugs:
 - sizeof, alignof, typeof can still generate code in some cases.
 - Fix the remaining libtcc memory leaks.
 - make libtcc fully reentrant (except for the compilation stage itself).
+- struct/union/enum definitions in nested scopes (see also Debian bug #770657)
+- __STDC_IEC_559__: float f(void) { static float x = 0.0 / 0.0; return x; }
 
 Portability:
 
