@@ -255,7 +255,7 @@ tiny_libmaker$(EXESUF): win32/tools/tiny_libmaker.c
 	$(CC) -o $@ $< $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # TinyCC runtime libraries
-libtcc1.a : FORCE
+libtcc1.a : FORCE $(PROGS)
 	$(MAKE) -C lib native
 	if test ! -d $(ARCH); then mkdir $(ARCH); fi
 	if test ! -L $(ARCH)/$@; then ln -sf ../$@ $(ARCH)/$@; fi
