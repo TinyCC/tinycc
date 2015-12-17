@@ -941,6 +941,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             write64le(ptr, val - rel->r_addend);
             break;
         case R_X86_64_GOTPCREL:
+	case 41 /* R_X86_64_GOTPCRELX */:
+	case 42 /* R_X86_64_REX_GOTPCRELX */:
             write32le(ptr, read32le(ptr) +
                       (s1->got->sh_addr - addr +
                        s1->sym_attrs[sym_index].got_offset - 4));
@@ -1422,6 +1424,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
             case R_X86_64_GOT32:
             case R_X86_64_GOTTPOFF:
             case R_X86_64_GOTPCREL:
+	    case 41 /* R_X86_64_GOTPCRELX */:
+	    case 42 /* R_X86_64_REX_GOTPCRELX */:
             case R_X86_64_PLT32:
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
@@ -1437,13 +1441,13 @@ ST_FUNC void build_got_entries(TCCState *s1)
                     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                 }
                 if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL ||
-                    type == R_X86_64_PLT32) {
+                    type == R_X86_64_PLT32 || type == 41 || type == 42) {
 		    unsigned long ofs;
                     /* look at the symbol got offset. If none, then add one */
-                    if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL)
+		    if (type == R_X86_64_PLT32)
+		        reloc_type = R_X86_64_JUMP_SLOT;
+		    else
                         reloc_type = R_X86_64_GLOB_DAT;
-                    else
-                        reloc_type = R_X86_64_JUMP_SLOT;
                     ofs = put_got_entry(s1, reloc_type, sym->st_size,
 					sym->st_info, sym_index);
 		    if (type == R_X86_64_PLT32)
@@ -1769,6 +1773,8 @@ ST_FUNC void fill_got(TCCState *s1)
             switch (ELFW(R_TYPE) (rel->r_info)) {
                 case R_X86_64_GOT32:
                 case R_X86_64_GOTPCREL:
+		case 41 /* R_X86_64_GOTPCRELX */:
+		case 42 /* R_X86_64_REX_GOTPCRELX */:
                 case R_X86_64_PLT32:
                     fill_got_entry(s1, rel);
                     break;
