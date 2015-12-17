@@ -898,7 +898,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 /* XXX: this logic may depend on TCC's codegen
                    now TCC uses R_X86_64_32 even for a 64bit pointer */
                 qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-                qrel->r_addend = read32le(ptr) + val;
+		/* Use sign extension! */
+                qrel->r_addend = (int)read32le(ptr) + val;
                 qrel++;
             }
             write32le(ptr, read32le(ptr) + val);
@@ -911,7 +912,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
-                    qrel->r_addend = read32le(ptr);
+		    /* Use sign extension! */
+                    qrel->r_addend = (int)read32le(ptr);
                     qrel++;
                     break;
                 }
