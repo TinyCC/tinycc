@@ -1246,8 +1246,9 @@ typedef struct
 					   argument, returning the TLS
 					   offset for the symbol.  */
 #define R_386_IRELATIVE	   42		/* Adjust indirectly by program base */
+#define R_386_GOT32X       43		/* 32 bit GOT entry, relaxable */
 /* Keep this the last entry.  */
-#define R_386_NUM	   43
+#define R_386_NUM	   44
 
 /* SUN SPARC specific definitions.  */
 

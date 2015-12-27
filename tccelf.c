@@ -557,6 +557,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             write32le(ptr, read32le(ptr) + val - s1->got->sh_addr);
             break;
         case R_386_GOT32:
+        case R_386_GOT32X:
             /* we load the got offset */
             write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
             break;
@@ -571,6 +572,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY)
                 goto output_file;
             write16le(ptr, read16le(ptr) + val - addr);
+            break;
+        default:
+            fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",
+                type, (unsigned)addr, ptr, (unsigned)val);
             break;
 #elif defined(TCC_TARGET_ARM)
         case R_ARM_PC24:
@@ -1285,16 +1290,18 @@ ST_FUNC void build_got_entries(TCCState *s1)
             switch(type) {
 #if defined(TCC_TARGET_I386)
             case R_386_GOT32:
+            case R_386_GOT32X:
             case R_386_GOTOFF:
             case R_386_GOTPC:
             case R_386_PLT32:
                 if (!s1->got)
                     build_got(s1);
-                if (type == R_386_GOT32 || type == R_386_PLT32) {
+                if (type == R_386_GOT32 || type == R_386_GOT32X ||
+                    type == R_386_PLT32) {
                     sym_index = ELFW(R_SYM)(rel->r_info);
                     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                     /* look at the symbol got offset. If none, then add one */
-                    if (type == R_386_GOT32)
+                    if (type == R_386_GOT32 || type == R_386_GOT32X)
                         reloc_type = R_386_GLOB_DAT;
                     else
                         reloc_type = R_386_JMP_SLOT;
