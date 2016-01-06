@@ -58,9 +58,6 @@ make
 cp libtcc.a.hide libtcc.a
 make test
 
-  (On 64-bit architectures, misaligned access to struct CString is
-  expected.)
-
 - Test with Valgrind to detect some uses of uninitialised values:
 
 make clean
