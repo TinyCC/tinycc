@@ -3134,6 +3134,17 @@ ST_FUNC int is_btype_size(int bt)
   return bt == VT_SHORT || bt == VT_LONG || bt == VT_LLONG;
 }
 
+/* Add type qualifiers to a type. If the type is an array then the qualifiers
+   are added to the element type, copied because it could be a typedef. */
+static void parse_btype_qualify(CType *type, int qualifiers)
+{
+    while (type->t & VT_ARRAY) {
+        type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
+        type = &type->ref->type;
+    }
+    type->t |= qualifiers;
+}
+
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
  */
@@ -3232,13 +3243,17 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
-            t |= VT_CONSTANT;
+            type->t = t;
+            parse_btype_qualify(type, VT_CONSTANT);
+            t = type->t;
             next();
             break;
         case TOK_VOLATILE1:
         case TOK_VOLATILE2:
         case TOK_VOLATILE3:
-            t |= VT_VOLATILE;
+            type->t = t;
+            parse_btype_qualify(type, VT_VOLATILE);
+            t = type->t;
             next();
             break;
         case TOK_SIGNED1:
@@ -3309,18 +3324,14 @@ static int parse_btype(CType *type, AttributeDef *ad)
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
-            t |= (s->type.t & ~VT_TYPEDEF);
-            if ((t & VT_ARRAY) &&
-                t & (VT_CONSTANT | VT_VOLATILE) & ~s->type.ref->type.t) {
-                /* This is a case like "typedef int T[1]; const T x;"
-                   in which which we must make a copy of the typedef
-                   type so that we can add the type qualifiers to it. */
-                type->ref = sym_push(SYM_FIELD, &s->type.ref->type,
-                                     0, s->type.ref->c);
-                type->ref->type.t |= t & (VT_CONSTANT | VT_VOLATILE);
-            }
-            else
-                type->ref = s->type.ref;
+
+            type->t = ((s->type.t & ~VT_TYPEDEF) |
+                       (t & ~(VT_CONSTANT | VT_VOLATILE)));
+            type->ref = s->type.ref;
+            if (t & (VT_CONSTANT | VT_VOLATILE))
+                parse_btype_qualify(type, t & (VT_CONSTANT | VT_VOLATILE));
+            t = type->t;
+
             if (s->r) {
                 /* get attributes from typedef */
                 if (0 == ad->a.aligned)

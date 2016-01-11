@@ -28,4 +28,20 @@ int main()
    return 0;
 }
 
+/* "If the specification of an array type includes any type qualifiers,
+   the element type is so-qualified, not the array type." */
+
+typedef int A[3];
+extern A const ca;
+extern const A ca;
+extern const int ca[3];
+
+typedef A B[1][2];
+extern B const cb;
+extern const B cb;
+extern const int cb[1][2][3];
+
+extern B b;
+extern int b[1][2][3];
+
 /* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
