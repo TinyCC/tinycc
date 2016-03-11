@@ -5846,8 +5846,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (size < 0) 
             tcc_error("unknown type size");
     }
-    if (flexible_array)
-        size += flexible_array->type.ref->c * pointed_size(&flexible_array->type) + 1;
+    /* If there's a flex member and it was used in the initializer
+       adjust size.  */
+    if (flexible_array &&
+	flexible_array->type.ref->c > 0)
+        size += flexible_array->type.ref->c
+	        * pointed_size(&flexible_array->type);
     /* take into account specified alignment if bigger */
     if (ad->a.aligned) {
         if (ad->a.aligned > align)
