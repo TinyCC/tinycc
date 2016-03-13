@@ -288,6 +288,8 @@ GetModuleFileNameA
 GetModuleFileNameW
 GetModuleHandleA
 GetModuleHandleW
+GetModuleHandleExA
+GetModuleHandleExW
 GetNamedPipeHandleStateA
 GetNamedPipeHandleStateW
 GetNamedPipeInfo
@@ -554,6 +556,7 @@ RtlFillMemory
 RtlInstallFunctionTableCallback
 RtlMoveMemory
 RtlUnwind
+RtlUnwindEx
 RtlZeroMemory
 SMapLS
 SMapLS_IP_EBP_12

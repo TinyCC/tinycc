@@ -1966,6 +1966,66 @@ typedef DWORD LCID;
       PEXCEPTION_RECORD ExceptionRecord;
       PCONTEXT ContextRecord;
     } EXCEPTION_POINTERS,*PEXCEPTION_POINTERS;
+
+#ifdef __x86_64__
+
+    typedef EXCEPTION_DISPOSITION NTAPI EXCEPTION_ROUTINE (struct _EXCEPTION_RECORD *ExceptionRecord, PVOID EstablisherFrame, struct _CONTEXT *ContextRecord, PVOID DispatcherContext);
+#ifndef __PEXCEPTION_ROUTINE_DEFINED
+#define __PEXCEPTION_ROUTINE_DEFINED
+    typedef EXCEPTION_ROUTINE *PEXCEPTION_ROUTINE;
+#endif
+
+    /* http://msdn.microsoft.com/en-us/library/ms680597(VS.85).aspx */
+
+#define UNWIND_HISTORY_TABLE_SIZE 12
+
+  typedef struct _UNWIND_HISTORY_TABLE_ENTRY {
+    ULONG64 ImageBase;
+    PRUNTIME_FUNCTION FunctionEntry;
+  } UNWIND_HISTORY_TABLE_ENTRY, *PUNWIND_HISTORY_TABLE_ENTRY;
+
+#define UNWIND_HISTORY_TABLE_NONE    0
+#define UNWIND_HISTORY_TABLE_GLOBAL  1
+#define UNWIND_HISTORY_TABLE_LOCAL   2
+
+  typedef struct _UNWIND_HISTORY_TABLE {
+    ULONG Count;
+    UCHAR Search;
+    ULONG64 LowAddress;
+    ULONG64 HighAddress;
+    UNWIND_HISTORY_TABLE_ENTRY Entry[UNWIND_HISTORY_TABLE_SIZE];
+  } UNWIND_HISTORY_TABLE, *PUNWIND_HISTORY_TABLE;
+
+  /* http://msdn.microsoft.com/en-us/library/b6sf5kbd(VS.80).aspx */
+
+  struct _DISPATCHER_CONTEXT;
+  typedef struct _DISPATCHER_CONTEXT DISPATCHER_CONTEXT;
+  typedef struct _DISPATCHER_CONTEXT *PDISPATCHER_CONTEXT;
+
+  struct _DISPATCHER_CONTEXT {
+    ULONG64 ControlPc;
+    ULONG64 ImageBase;
+    PRUNTIME_FUNCTION FunctionEntry;
+    ULONG64 EstablisherFrame;
+    ULONG64 TargetIp;
+    PCONTEXT ContextRecord;
+    PEXCEPTION_ROUTINE LanguageHandler;
+    PVOID HandlerData;
+    /* http://www.nynaeve.net/?p=99 */
+    PUNWIND_HISTORY_TABLE HistoryTable;
+    ULONG ScopeIndex;
+    ULONG Fill0;
+  };
+
+  /* http://msdn.microsoft.com/en-us/library/ms680617(VS.85).aspx */
+
+  typedef struct _KNONVOLATILE_CONTEXT_POINTERS
+  {
+    PM128A FloatingContext[16];
+    PULONG64 IntegerContext[16];
+  } KNONVOLATILE_CONTEXT_POINTERS, *PKNONVOLATILE_CONTEXT_POINTERS;
+#endif /* defined(__x86_64__) */
+
     typedef PVOID PACCESS_TOKEN;
     typedef PVOID PSECURITY_DESCRIPTOR;
     typedef PVOID PSID;
@@ -4875,6 +4935,11 @@ typedef DWORD LCID;
       IMAGE_DATA_DIRECTORY ExportAddressTableJumps;
       IMAGE_DATA_DIRECTORY ManagedNativeHeader;
     } IMAGE_COR20_HEADER,*PIMAGE_COR20_HEADER;
+#endif
+
+#if defined (__x86_64__)
+    NTSYSAPI PRUNTIME_FUNCTION NTAPI RtlLookupFunctionEntry (DWORD64 ControlPc, PDWORD64 ImageBase, PUNWIND_HISTORY_TABLE HistoryTable);
+    NTSYSAPI VOID NTAPI RtlUnwindEx (PVOID TargetFrame, PVOID TargetIp, PEXCEPTION_RECORD ExceptionRecord, PVOID ReturnValue, PCONTEXT ContextRecord, PUNWIND_HISTORY_TABLE HistoryTable);
 #endif
 
 #include <string.h>
