@@ -4536,7 +4536,7 @@ static void expr_lor(void)
 
 static void expr_cond(void)
 {
-    int tt, u, r1, r2, rc, t1, t2, bt1, bt2;
+    int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv;
     SValue sv;
     CType type, type1, type2;
 
@@ -4655,10 +4655,17 @@ static void expr_cond(void)
                     (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_INT | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
             }
-                
+            /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
+               that `(expr ? a : b).mem` does not error  with "lvalue expected" */
+            islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
+
             /* now we convert second operand */
             gen_cast(&type);
-            if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+            if (islv) {
+                mk_pointer(&vtop->type);
+                gaddrof();
+            }
+            else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
                 gaddrof();
             rc = RC_INT;
             if (is_float(type.t)) {
@@ -4682,12 +4689,18 @@ static void expr_cond(void)
             /* put again first value and cast it */
             *vtop = sv;
             gen_cast(&type);
-            if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+            if (islv) {
+                mk_pointer(&vtop->type);
+                gaddrof();
+            }
+            else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
                 gaddrof();
             r1 = gv(rc);
             move_reg(r2, r1, type.t);
             vtop->r = r2;
             gsym(tt);
+            if (islv)
+                indir();
         }
     }
 }
