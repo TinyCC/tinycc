@@ -126,9 +126,6 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 #define NOSERVICE 1
 #define NOMCX 1
 #define NOIME 1
-#ifndef WIN32_LEAN_AND_MEAN
-# define WIN32_LEAN_AND_MEAN 1
-#endif
 #ifndef WINVER
 # define WINVER 0x0502
 #endif

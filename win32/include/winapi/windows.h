@@ -6,6 +6,10 @@
 #ifndef _WINDOWS_
 #define _WINDOWS_
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN 1
+#endif
+
 #ifndef WINVER
 #define WINVER 0x0502
 #endif
