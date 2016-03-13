@@ -277,16 +277,16 @@ ST_FUNC TokenSym *tok_alloc(const char *str, int len)
 /* XXX: float tokens */
 ST_FUNC const char *get_tok_str(int v, CValue *cv)
 {
-    static char buf[STRING_MAX_SIZE + 1];
     static CString cstr_buf;
     char *p;
     int i, len;
 
-    /* NOTE: to go faster, we give a fixed buffer for small strings */
-    cstr_reset(&cstr_buf);
-    cstr_buf.data = buf;
-    cstr_buf.size_allocated = sizeof(buf);
-    p = buf;
+    /* first time preallocate static cstr_buf, next time only reset position to start */
+    if (!cstr_buf.data_allocated)
+        cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
+    else
+        cstr_buf.size = 0;
+    p = cstr_buf.data;
 
     switch(v) {
     case TOK_CINT:
@@ -333,17 +333,20 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
 
     case TOK_CFLOAT:
         cstr_cat(&cstr_buf, "<float>");
+        cstr_ccat(&cstr_buf, '\0');
         break;
     case TOK_CDOUBLE:
 	cstr_cat(&cstr_buf, "<double>");
+        cstr_ccat(&cstr_buf, '\0');
 	break;
     case TOK_CLDOUBLE:
 	cstr_cat(&cstr_buf, "<long double>");
+        cstr_ccat(&cstr_buf, '\0');
 	break;
     case TOK_LINENUM:
 	cstr_cat(&cstr_buf, "<linenumber>");
+        cstr_ccat(&cstr_buf, '\0');
 	break;
-        //return NULL; /* should not happen */
 
     /* above tokens have value, the ones below don't */
 
@@ -368,13 +371,13 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
                     *p++ = q[0];
                     *p++ = q[1];
                     *p = '\0';
-                    return buf;
+                    return cstr_buf.data;
                 }
                 q += 3;
             }
         if (v >= 127) {
-            sprintf(buf, "<%02x>", v);
-            return buf;
+            sprintf(cstr_buf.data, "<%02x>", v);
+            return cstr_buf.data;
         }
         addv:
             *p++ = v;
@@ -1048,14 +1051,20 @@ static int tok_last(const int *str0, const int *str1)
 
 static int macro_is_equal(const int *a, const int *b)
 {
-    char buf[STRING_MAX_SIZE + 1];
+    static CString cstr_buf;
     CValue cv;
     int t;
     while (*a && *b) {
+        /* first time preallocate static cstr_buf, next time only reset position to start */
+        if (!cstr_buf.data_allocated)
+            cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
+        else
+            cstr_buf.size = 0;
         TOK_GET(&t, &a, &cv);
-        pstrcpy(buf, sizeof buf, get_tok_str(t, &cv));
+        cstr_cat(&cstr_buf, get_tok_str(t, &cv));
+        cstr_ccat(&cstr_buf, '\0');
         TOK_GET(&t, &b, &cv);
-        if (strcmp(buf, get_tok_str(t, &cv)))
+        if (strcmp(cstr_buf.data, get_tok_str(t, &cv)))
             return 0;
     }
     return !(*a || *b);
@@ -2785,7 +2794,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                      && 0 == check_space(t, &spc)) {
                         const char *s = get_tok_str(t, &cval);
                         while (*s) {
-                            if (t == TOK_PPSTR && *s != '\'')
+                            if (/*t == TOK_PPSTR &&*/ *s != '\'')
                                 add_char(&cstr, *s);
                             else
                                 cstr_ccat(&cstr, *s);
