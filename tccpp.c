@@ -2794,7 +2794,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                      && 0 == check_space(t, &spc)) {
                         const char *s = get_tok_str(t, &cval);
                         while (*s) {
-                            if (/*t == TOK_PPSTR &&*/ *s != '\'')
+                            if (t == TOK_PPSTR && *s != '\'')
                                 add_char(&cstr, *s);
                             else
                                 cstr_ccat(&cstr, *s);
