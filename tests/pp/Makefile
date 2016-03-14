@@ -2,8 +2,15 @@
 # credits: 01..13.c from the pcc cpp-tests suite
 #
 
-TCC = ../../tcc
+TOP = ../..
+include $(TOP)/Makefile
+
+TCC = $(TOP)/tcc
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
+
+ifdef CONFIG_WIN32
+ TCC = $(top_srcdir)/win32/tcc
+endif
 
 all test : $(TESTS)
 
