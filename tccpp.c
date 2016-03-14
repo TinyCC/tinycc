@@ -2550,15 +2550,12 @@ maybe_newline:
             cstr_reset(&tokcstr);
             cstr_ccat(&tokcstr, '.');
             goto parse_num;
-        } else if (c == '.') {
-            PEEKC(c, p);
-            if (c == '.') {
-                p++;
-                tok = TOK_DOTS;
-            } else {
-                *--p = '.'; /* may underflow into file->unget[] */
-                tok = '.';
-            }
+        } else if ((isidnum_table['.' - CH_EOF] & IS_ID) != 0) { /* asm mode */
+            *--p = c = '.';
+            goto parse_ident_fast;
+        } else if (c == '.' && p[1] == '.') {
+            p += 2;
+            tok = TOK_DOTS;
         } else {
             tok = '.';
         }
@@ -3342,8 +3339,9 @@ ST_FUNC void preprocess_init(TCCState *s1)
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
-    isidnum_table['$' - CH_EOF] =
+    isidnum_table['$' - CH_EOF] = (parse_flags & PARSE_FLAG_ASM_FILE) ||
         tcc_state->dollars_in_identifiers ? IS_ID : 0;
+    isidnum_table['.' - CH_EOF] = (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
 }
 
 ST_FUNC void preprocess_new(void)
