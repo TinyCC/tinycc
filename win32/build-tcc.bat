@@ -10,14 +10,14 @@ echo>..\config.h #define TCC_VERSION "%VERSION%"
 @if _%1_==_x64_ shift /1 && goto x86_64
 
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_I386
-@set CC=gcc -Os -s -fno-strict-aliasing
+@set CC=gcc -Os -s -fno-strict-aliasing -Wno-incompatible-pointer-types
 @if _%1_==_debug_ set CC=gcc -g -ggdb
 @set P=32
 @goto tools
 
 :x86_64
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
-@set CC=x86_64-w64-mingw32-gcc -Os -s -fno-strict-aliasing
+@set CC=x86_64-w64-mingw32-gcc -Os -s -fno-strict-aliasing -Wno-incompatible-pointer-types
 @if _%1_==_debug_ set CC=x86_64-w64-mingw32-gcc -g -ggdb
 @set P=64
 @goto tools
