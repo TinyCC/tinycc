@@ -1967,7 +1967,7 @@ typedef DWORD LCID;
       PCONTEXT ContextRecord;
     } EXCEPTION_POINTERS,*PEXCEPTION_POINTERS;
 
-#ifdef __x86_64__
+#ifdef __x86_64
 
     typedef EXCEPTION_DISPOSITION NTAPI EXCEPTION_ROUTINE (struct _EXCEPTION_RECORD *ExceptionRecord, PVOID EstablisherFrame, struct _CONTEXT *ContextRecord, PVOID DispatcherContext);
 #ifndef __PEXCEPTION_ROUTINE_DEFINED
@@ -2024,7 +2024,7 @@ typedef DWORD LCID;
     PM128A FloatingContext[16];
     PULONG64 IntegerContext[16];
   } KNONVOLATILE_CONTEXT_POINTERS, *PKNONVOLATILE_CONTEXT_POINTERS;
-#endif /* defined(__x86_64__) */
+#endif /* defined(__x86_64) */
 
     typedef PVOID PACCESS_TOKEN;
     typedef PVOID PSECURITY_DESCRIPTOR;
@@ -4937,7 +4937,7 @@ typedef DWORD LCID;
     } IMAGE_COR20_HEADER,*PIMAGE_COR20_HEADER;
 #endif
 
-#if defined (__x86_64__)
+#if defined (__x86_64)
     NTSYSAPI PRUNTIME_FUNCTION NTAPI RtlLookupFunctionEntry (DWORD64 ControlPc, PDWORD64 ImageBase, PUNWIND_HISTORY_TABLE HistoryTable);
     NTSYSAPI VOID NTAPI RtlUnwindEx (PVOID TargetFrame, PVOID TargetIp, PEXCEPTION_RECORD ExceptionRecord, PVOID ReturnValue, PCONTEXT ContextRecord, PUNWIND_HISTORY_TABLE HistoryTable);
 #endif
