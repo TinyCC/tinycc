@@ -2553,9 +2553,15 @@ maybe_newline:
         } else if ((isidnum_table['.' - CH_EOF] & IS_ID) != 0) { /* asm mode */
             *--p = c = '.';
             goto parse_ident_fast;
-        } else if (c == '.' && p[1] == '.') {
-            p += 2;
-            tok = TOK_DOTS;
+        } else if (c == '.') {
+            PEEKC(c, p);
+            if (c == '.') {
+                p++;
+                tok = TOK_DOTS;
+            } else {
+                *--p = '.'; /* may underflow into file->unget[] */
+                tok = '.';
+            }
         } else {
             tok = '.';
         }

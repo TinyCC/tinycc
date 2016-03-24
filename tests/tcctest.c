@@ -114,6 +114,11 @@ void num(int n);
 void forward_ref(void);
 int isid(int c);
 
+/* Line joining happens before tokenization, so the following
+   must be parsed as ellipsis.  */
+void funny_line_continuation (int, ..\
+. );
+
 #define A 2
 #define N 1234 + A
 #define pf printf
