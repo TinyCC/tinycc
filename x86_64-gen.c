@@ -369,6 +369,8 @@ void load(int r, SValue *sv)
     ft = sv->type.t & ~VT_DEFSIGN;
     fc = sv->c.i;
 
+    ft &= ~(VT_VOLATILE | VT_CONSTANT);
+
 #ifndef TCC_TARGET_PE
     /* we use indirect access via got */
     if ((fr & VT_VALMASK) == VT_CONST && (fr & VT_SYM) &&
@@ -532,6 +534,7 @@ void store(int r, SValue *v)
     ft = v->type.t;
     fc = v->c.i;
     fr = v->r & VT_VALMASK;
+    ft &= ~(VT_VOLATILE | VT_CONSTANT);
     bt = ft & VT_BTYPE;
 
 #ifndef TCC_TARGET_PE

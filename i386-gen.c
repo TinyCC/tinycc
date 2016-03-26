@@ -223,6 +223,8 @@ ST_FUNC void load(int r, SValue *sv)
     ft = sv->type.t;
     fc = sv->c.i;
 
+    ft &= ~(VT_VOLATILE | VT_CONSTANT);
+
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
         if (v == VT_LLOCAL) {
@@ -298,6 +300,7 @@ ST_FUNC void store(int r, SValue *v)
     ft = v->type.t;
     fc = v->c.i;
     fr = v->r & VT_VALMASK;
+    ft &= ~(VT_VOLATILE | VT_CONSTANT);
     bt = ft & VT_BTYPE;
     /* XXX: incorrect if float reg to reg */
     if (bt == VT_FLOAT) {

@@ -119,6 +119,8 @@ int isid(int c);
 void funny_line_continuation (int, ..\
 . );
 
+char via_volatile (char);
+
 #define A 2
 #define N 1234 + A
 #define pf printf
@@ -693,6 +695,8 @@ int main(int argc, char **argv)
     callsave_test();
     builtin_frame_address_test();
     intdiv_test();
+    if (via_volatile (42) != 42)
+      printf ("via_volatile broken\n");
     return 0; 
 }
 
@@ -2847,4 +2851,11 @@ void builtin_frame_address_test(void)
     printf("str: %s\n", str);
     bfa1(str-fp0);
 #endif
+}
+
+char via_volatile (char i)
+{
+  char volatile vi;
+  vi = i;
+  return vi;
 }
