@@ -3345,9 +3345,8 @@ ST_FUNC void preprocess_init(TCCState *s1)
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
-    isidnum_table['$' - CH_EOF] = (parse_flags & PARSE_FLAG_ASM_FILE) ||
+    isidnum_table['$' - CH_EOF] =
         tcc_state->dollars_in_identifiers ? IS_ID : 0;
-    isidnum_table['.' - CH_EOF] = (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
 }
 
 ST_FUNC void preprocess_new(void)
