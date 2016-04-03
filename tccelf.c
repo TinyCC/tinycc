@@ -576,6 +576,12 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_386_RELATIVE:
             /* do nothing */
             break;
+        case R_386_COPY:
+            /* This reloction must copy initialized data from the library
+            to the program .bss segment. Currently made like for ARM
+            (to remove noise of defaukt case). Is this true? 
+            */
+            break;
         default:
             fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
