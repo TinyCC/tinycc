@@ -2906,16 +2906,20 @@ static void parse_attribute(AttributeDef *ad)
 }
 
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
-static void struct_decl(CType *type, int u)
+static void struct_decl(CType *type, AttributeDef *ad, int u)
 {
     int a, v, size, align, maxalign, c, offset, flexible;
     int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
     Sym *s, *ss, *ass, **ps;
-    AttributeDef ad;
+    AttributeDef ad1;
     CType type1, btype;
 
     a = tok; /* save decl type */
     next();
+    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2) {
+        parse_attribute(ad);
+        next();
+    } 
     if (tok != '{') {
         v = tok;
         next();
@@ -2983,7 +2987,7 @@ static void struct_decl(CType *type, int u)
             offset = 0;
             flexible = 0;
             while (tok != '}') {
-                parse_btype(&btype, &ad);
+                parse_btype(&btype, &ad1);
                 while (1) {
 		    if (flexible)
 		        tcc_error("flexible array member '%s' not at the end of struct",
@@ -2992,7 +2996,7 @@ static void struct_decl(CType *type, int u)
                     v = 0;
                     type1 = btype;
                     if (tok != ':') {
-                        type_decl(&type1, &ad, &v, TYPE_DIRECT | TYPE_ABSTRACT);
+                        type_decl(&type1, &ad1, &v, TYPE_DIRECT | TYPE_ABSTRACT);
                         if (v == 0) {
                     	    if ((type1.t & VT_BTYPE) != VT_STRUCT)
                         	expect("identifier");
@@ -3028,10 +3032,10 @@ static void struct_decl(CType *type, int u)
                                   get_tok_str(v, NULL));
                     }
                     size = type_size(&type1, &align);
-                    if (ad.a.aligned) {
-                        if (align < ad.a.aligned)
-                            align = ad.a.aligned;
-                    } else if (ad.a.packed) {
+                    if (ad1.a.aligned) {
+                        if (align < ad1.a.aligned)
+                            align = ad1.a.aligned;
+                    } else if (ad1.a.packed) {
                         align = 1;
                     } else if (*tcc_state->pack_stack_ptr) {
                         if (align > *tcc_state->pack_stack_ptr)
@@ -3232,14 +3236,14 @@ static int parse_btype(CType *type, AttributeDef *ad)
             }
             break;
         case TOK_ENUM:
-            struct_decl(&type1, VT_ENUM);
+            struct_decl(&type1, ad, VT_ENUM);
         basic_type2:
             u = type1.t;
             type->ref = type1.ref;
             goto basic_type1;
         case TOK_STRUCT:
         case TOK_UNION:
-            struct_decl(&type1, VT_STRUCT);
+            struct_decl(&type1, ad, VT_STRUCT);
             goto basic_type2;
 
             /* type modifiers */
