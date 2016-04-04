@@ -242,7 +242,11 @@ assume a nested named structure declaration without identifier behave
 like an unnamed one.
 
 @item -fdollars-in-identifiers
-Allow a dollars in identifiers
+Allow a dollars in identifiers.
+
+@item -fnormalize-inc-dirs
+Be more gcc compatible and remove non-existent or duplicate directories
+from include paths. This helps to compile such packages as coreutils.
 
 @end table
 
