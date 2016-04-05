@@ -2340,6 +2340,8 @@ static inline void next_nomacro1(void)
     p = file->buf_ptr;
  redo_no_start:
     c = *p;
+    if (c & 0x80)
+        goto parse_ident_fast;
     switch(c) {
     case ' ':
     case '\t':
@@ -2444,6 +2446,12 @@ maybe_newline:
          || (parse_flags & PARSE_FLAG_ASM_FILE))
             goto parse_simple;
 
+#if (__TINYC__ || __GNUC__)
+    case 'a' ... 'z':
+    case 'A' ... 'K':
+    case 'M' ... 'Z':
+    case '_':
+#else
     case 'a': case 'b': case 'c': case 'd':
     case 'e': case 'f': case 'g': case 'h':
     case 'i': case 'j': case 'k': case 'l':
@@ -2459,6 +2467,7 @@ maybe_newline:
     case 'U': case 'V': case 'W': case 'X':
     case 'Y': case 'Z': 
     case '_':
+#endif
     parse_ident_fast:
         p1 = p;
         h = TOK_HASH_INIT;
@@ -3364,12 +3373,15 @@ ST_FUNC void preprocess_new(void)
     const char *p, *r;
 
     /* init isid table */
-    for(i = CH_EOF; i<256; i++)
+    for(i = CH_EOF; i<128; i++)
         isidnum_table[i - CH_EOF]
             = is_space(i) ? IS_SPC
             : isid(i) ? IS_ID
             : isnum(i) ? IS_NUM
             : 0;
+
+    for(i = 128; i<256; i++)
+        isidnum_table[i - CH_EOF] = IS_ID;
 
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
     
