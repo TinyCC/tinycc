@@ -3848,7 +3848,8 @@ ST_FUNC void unary(void)
             if (const_wanted)
                 tcc_error("expected constant");
             /* save all registers */
-            save_regs(0); 
+            if (!nocode_wanted)
+                save_regs(0);
             /* statement expression : we do not accept break/continue
                inside as GCC does */
             block(NULL, NULL, NULL, NULL, 0, 1);
@@ -4878,7 +4879,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         a = gvtst(1, 0);
         b = 0;
         block(&a, &b, case_sym, def_sym, case_reg, 0);
-        gjmp_addr(d);
+        if(!nocode_wanted)
+            gjmp_addr(d);
         gsym(a);
         gsym_addr(b, d);
     } else if (tok == '{') {
@@ -5070,7 +5072,8 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         }
         skip(')');
         block(&a, &b, case_sym, def_sym, case_reg, 0);
-        gjmp_addr(c);
+        if(!nocode_wanted)
+            gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
         scope_stack_bottom = scope_stack_bottom->next;
