@@ -2463,8 +2463,9 @@ maybe_newline:
         p1 = p;
         h = TOK_HASH_INIT;
         h = TOK_HASH_FUNC(h, c);
-        while (c = *++p, (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
-                         || (c == '.' && (parse_flags & PARSE_FLAG_ASM_FILE)))
+        isidnum_table['.' - CH_EOF] =
+            (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
+        while (c = *++p, isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
             h = TOK_HASH_FUNC(h, c);
         if (c != '\\') {
             TokenSym **pts;
@@ -2496,8 +2497,7 @@ maybe_newline:
             p--;
             PEEKC(c, p);
         parse_ident_slow:
-            while ((isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
-                   || (c == '.' && (parse_flags & PARSE_FLAG_ASM_FILE)))
+            while (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
             {
                 cstr_ccat(&tokcstr, c);
                 PEEKC(c, p);
@@ -2519,6 +2519,8 @@ maybe_newline:
             } else {
                 cstr_reset(&tokcstr);
                 cstr_ccat(&tokcstr, 'L');
+                isidnum_table['.' - CH_EOF] =
+                    (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
                 goto parse_ident_slow;
             }
         }
