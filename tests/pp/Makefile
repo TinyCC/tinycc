@@ -7,6 +7,7 @@ include $(TOP)/Makefile
 
 TCC = $(TOP)/tcc
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
+TESTS += $(patsubst %.S,%.test,$(wildcard *.S))
 
 ifdef CONFIG_WIN32
  TCC = $(top_srcdir)/win32/tcc
@@ -20,9 +21,18 @@ all test : $(TESTS)
 	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
 	    && rm -f $*.output
 
+%.test: %.S %.expect
+	@echo PPTest $* ...
+	@$(TCC) -E -P $< >$*.output 2>&1 ; \
+	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
+	    && rm -f $*.output
+
 # automatically generate .expect files with gcc:
-%.expect :
+%.expect: %.c
 	gcc -E -P $*.c >$*.expect 2>&1
+
+%.expect: %.S
+	gcc -E -P $*.S >$*.expect 2>&1
 
 # tell make not to delete
 .PRECIOUS: %.expect
