@@ -1092,7 +1092,7 @@ static void pp_line(TCCState *s1, BufferedFile *f, int level)
 
 static void tok_print(const char *msg, const int *str)
 {
-    FILE *pr = tcc_state->ppfp;
+    FILE *pr = tcc_state->dffp;
     int t;
     CValue cval;
 
@@ -1108,13 +1108,13 @@ static void tok_print(const char *msg, const int *str)
 
 static int define_print_prepared(Sym *s)
 {
-    if (!s || !tcc_state->ppfp || tcc_state->dflag == 0)
+    if (!s || !tcc_state->dffp || tcc_state->dflag == 0)
         return 0;
 
     if (s->v < TOK_IDENT || s->v >= tok_ident)
         return 0;
 
-    if (file) {
+    if (file && tcc_state->dflag == 'D') {
         file->line_num--;
         pp_line(tcc_state, file, 0);
         file->line_ref = ++file->line_num;
@@ -1124,7 +1124,7 @@ static int define_print_prepared(Sym *s)
 
 static void define_print(int v)
 {
-    FILE *pr = tcc_state->ppfp;
+    FILE *pr = tcc_state->dffp;
     Sym *s, *a;
 
     s = define_find(v);
@@ -1149,7 +1149,7 @@ static void define_print(int v)
 
 static void undef_print(int v)
 {
-    FILE *pr = tcc_state->ppfp;
+    FILE *pr = tcc_state->dffp;
     Sym *s;
 
     s = define_find(v);

@@ -1225,6 +1225,8 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     /* close a preprocessor output */
     if (s1->ppfp && s1->ppfp != stdout)
         fclose(s1->ppfp);
+    if (s1->dffp && s1->dffp != s1->ppfp)
+        fclose(s1->dffp);
 
     /* free all sections */
     for(i = 1; i < s1->nb_sections; i++)
@@ -2175,8 +2177,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->output_type = TCC_OUTPUT_OBJ;
             break;
         case TCC_OPTION_d:
-            if (*optarg == 'D')
-                s->dflag = 1;
+            if (*optarg == 'D' || *optarg == 'M')
+                s->dflag = *optarg;
             else {
                 if (s->warn_unsupported)
                     goto unsupported_option;

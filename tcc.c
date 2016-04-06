@@ -301,6 +301,9 @@ int main(int argc, char **argv)
             if (!s->ppfp)
                 tcc_error("could not write '%s'", s->outfile);
         }
+        s->dffp = s->ppfp;
+        if (s->dflag == 'M')
+            s->ppfp = NULL;
     }
 
     tcc_set_output_type(s, s->output_type);
