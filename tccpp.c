@@ -1444,6 +1444,8 @@ static inline void add_cached_include(TCCState *s1, const char *filename, int if
     s1->cached_includes_hash[h] = s1->nb_cached_includes;
 }
 
+#define ONCE_PREFIX "#ONCE#"
+
 static void pragma_parse(TCCState *s1)
 {
     next_nomacro();
@@ -1475,10 +1477,12 @@ static void pragma_parse(TCCState *s1)
             tcc_warning("unbalanced #pragma pop_macro");
 
     } else if (tok == TOK_once) {
-        char buf1[sizeof file->filename];
-
-        pstrcpy(buf1, sizeof(buf1), "#once#");
-        pstrcat(buf1, sizeof(buf1), file->filename);
+        char buf1[sizeof(file->filename) + sizeof(ONCE_PREFIX)];
+        strcpy(buf1, ONCE_PREFIX);
+        strcat(buf1, file->filename);
+#if PATHCMP==stricmp
+        strupr(buf1);
+#endif
         add_cached_include(s1, file->filename, tok_alloc(buf1, strlen(buf1))->tok);
     } else if (s1->ppfp) {
         /* tcc -E: keep pragmas below unchanged */
