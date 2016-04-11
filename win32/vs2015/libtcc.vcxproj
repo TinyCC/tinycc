@@ -156,6 +156,34 @@
   <ItemGroup>
     <ClCompile Include="..\..\libtcc.c" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\arm-gen.c" />
+    <ClInclude Include="..\..\arm64-gen.c" />
+    <ClInclude Include="..\..\c67-gen.c" />
+    <ClInclude Include="..\..\conftest.c" />
+    <ClInclude Include="..\..\i386-asm.c" />
+    <ClInclude Include="..\..\i386-gen.c" />
+    <ClInclude Include="..\..\il-gen.c" />
+    <ClInclude Include="..\..\tcc.h" />
+    <ClInclude Include="..\..\tccasm.c" />
+    <ClInclude Include="..\..\tcccoff.c" />
+    <ClInclude Include="..\..\tccelf.c" />
+    <ClInclude Include="..\..\tccgen.c" />
+    <ClInclude Include="..\..\tccpe.c" />
+    <ClInclude Include="..\..\tccpp.c" />
+    <ClInclude Include="..\..\tccrun.c" />
+    <ClInclude Include="..\..\x86_64-gen.c" />
+    <ClInclude Include="..\..\coff.h" />
+    <ClInclude Include="..\..\elf.h" />
+    <ClInclude Include="..\..\i386-asm.h" />
+    <ClInclude Include="..\..\i386-tok.h" />
+    <ClInclude Include="..\..\il-opcodes.h" />
+    <ClInclude Include="..\..\libtcc.h" />
+    <ClInclude Include="..\..\stab.h" />
+    <ClInclude Include="..\..\tcclib.h" />
+    <ClInclude Include="..\..\tcctok.h" />
+    <ClInclude Include="..\..\x86_64-asm.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
