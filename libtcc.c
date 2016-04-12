@@ -2081,44 +2081,6 @@ static void args_parser_add_file(TCCState *s, const char* filename, int filetype
     dynarray_add((void ***)&s->files, &s->nb_files, p);
 }
 
-ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv);
-
-ST_FUNC void args_parser_trim_ws()
-{
-    for (; ch != CH_EOF; inp()) {
-        if (ch != '\n' && ch != '\r' && !is_space(ch))
-            break;
-    }
-}
-
-ST_FUNC void args_parser_add_listfile(TCCState *s, const char *filename)
-{
-    char buf[sizeof file->filename], *pb = buf;
-    char **argv = NULL;
-    int argc = 0;
-
-    if (tcc_open(s, filename) < 0)
-        tcc_error("list file '%s' not found", filename);
-
-    for (ch = handle_eob(), args_parser_trim_ws(); ; inp()) {
-        /* on new line or buffer overflow */
-        if (ch == '\n' || ch == '\r' || ch == CH_EOF
-                || pb - buf >= sizeof(buf) - 1) {
-            if (pb > buf) {
-                *pb = 0, pb = buf;
-                dynarray_add((void ***)&argv, &argc, tcc_strdup(buf));
-                args_parser_trim_ws();
-            }
-        }
-        if (ch == CH_EOF)
-            break;
-        *pb++ = ch;
-    }
-    tcc_close();
-    tcc_parse_args1(s, argc, argv);
-    dynarray_reset(&argv, &argc);
-}
-
 ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
 {
     const TCCOption *popt;
@@ -2132,7 +2094,23 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
         if (r[0] != '-' || r[1] == '\0') {
             /* handle list files */
             if (r[0] == '@' && r[1]) {
-                args_parser_add_listfile(s, r + 1);
+                char buf[sizeof file->filename], *p;
+                char **argv = NULL;
+                int argc = 0;
+                FILE *fp;
+
+                fp = fopen(r + 1, "rb");
+                if (fp == NULL)
+                    tcc_error("list file '%s' not found", r + 1);
+                while (fgets(buf, sizeof buf, fp)) {
+                    p = trimfront(trimback(buf, strchr(buf, 0)));
+                    if (0 == *p || ';' == *p)
+                        continue;
+                    dynarray_add((void ***)&argv, &argc, tcc_strdup(p));
+                }
+                fclose(fp);
+                tcc_parse_args1(s, argc, argv);
+                dynarray_reset(&argv, &argc);
             } else {
                 args_parser_add_file(s, r, pas->filetype);
                 if (pas->run) {
