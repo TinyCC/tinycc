@@ -76,6 +76,13 @@
 #  define LIBTCCAPI __declspec(dllexport)
 #  define PUB_FUNC LIBTCCAPI
 # endif
+# ifdef _MSC_VER
+#  pragma warning (disable : 4244)  // conversion from 'uint64_t' to 'int', possible loss of data
+#  pragma warning (disable : 4267)  // conversion from 'size_t' to 'int', possible loss of data
+#  pragma warning (disable : 4996)  // The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name
+#  pragma warning (disable : 4018)  // signed/unsigned mismatch
+#  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
+# endif
 #endif
 
 #ifndef O_BINARY

@@ -63,10 +63,11 @@ tiny_libmaker lib/libtcc1.a libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o d
 del *.o
 
 :makedoc
-where makeinfo > nul 2>&1 || goto :skip_makedoc
+for /f "delims=" %%i in ('where makeinfo') do set minfo=perl "%%~i"
+if "%minfo%"=="" goto :skip_makedoc
 echo>..\config.texi @set VERSION %VERSION%
 if not exist doc md doc
-makeinfo --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi
+%minfo% --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi
 copy tcc-win32.txt doc
 copy ..\tests\libtcc_test.c examples
 :skip_makedoc
