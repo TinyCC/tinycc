@@ -92,6 +92,7 @@ static void help(void)
            "  -bench      show compilation statistics\n"
            "  -xc -xa     specify type of the next infile\n"
            "  -           use stdin pipe as infile\n"
+           "  @listfile   read line separated arguments from 'listfile'\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"

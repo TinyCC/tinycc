@@ -2081,28 +2081,65 @@ static void args_parser_add_file(TCCState *s, const char* filename, int filetype
     dynarray_add((void ***)&s->files, &s->nb_files, p);
 }
 
-PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
+ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv);
+
+ST_FUNC void args_parser_trim_ws()
+{
+    for (; ch != CH_EOF; inp()) {
+        if (ch != '\n' && ch != '\r' && !is_space(ch))
+            break;
+    }
+}
+
+ST_FUNC void args_parser_add_listfile(TCCState *s, const char *filename)
+{
+    char buf[sizeof file->filename], *pb = buf;
+    char **argv = NULL;
+    int argc = 0;
+
+    if (tcc_open(s, filename) < 0)
+        tcc_error("list file '%s' not found", filename);
+
+    for (ch = handle_eob(), args_parser_trim_ws(); ; inp()) {
+        /* on new line or buffer overflow */
+        if (ch == '\n' || ch == '\r' || ch == CH_EOF
+                || pb - buf >= sizeof(buf) - 1) {
+            if (pb > buf) {
+                *pb = 0, pb = buf;
+                dynarray_add((void ***)&argv, &argc, tcc_strdup(buf));
+                args_parser_trim_ws();
+            }
+        }
+        if (ch == CH_EOF)
+            break;
+        *pb++ = ch;
+    }
+    tcc_close();
+    tcc_parse_args1(s, argc, argv);
+    dynarray_reset(&argv, &argc);
+}
+
+ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
 {
     const TCCOption *popt;
     const char *optarg, *r;
-    int run = 0;
-    int pthread = 0;
     int optind = 0;
-    int filetype = 0;
-
-    /* collect -Wl options for input such as "-Wl,-rpath -Wl,<path>" */
-    CString linker_arg;
-    cstr_new(&linker_arg);
+    ParseArgsState *pas = s->parse_args_state;
 
     while (optind < argc) {
 
         r = argv[optind++];
         if (r[0] != '-' || r[1] == '\0') {
-            args_parser_add_file(s, r, filetype);
-            if (run) {
-                optind--;
-                /* argv[0] will be this file */
-                break;
+            /* handle list files */
+            if (r[0] == '@' && r[1]) {
+                args_parser_add_listfile(s, r + 1);
+            } else {
+                args_parser_add_file(s, r, pas->filetype);
+                if (pas->run) {
+                    optind--;
+                    /* argv[0] will be this file */
+                    break;
+                }
             }
             continue;
         }
@@ -2152,7 +2189,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             break;
         case TCC_OPTION_pthread:
             parse_option_D(s, "_REENTRANT");
-            pthread = 1;
+            pas->pthread = 1;
             break;
         case TCC_OPTION_bench:
             s->do_bench = 1;
@@ -2267,7 +2304,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
                 tcc_warning("-run: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_MEMORY;
             tcc_set_options(s, optarg);
-            run = 1;
+            pas->run = 1;
             break;
         case TCC_OPTION_v:
             do ++s->verbose; while (*optarg++ == 'v');
@@ -2288,10 +2325,10 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             s->rdynamic = 1;
             break;
         case TCC_OPTION_Wl:
-            if (linker_arg.size)
-                --linker_arg.size, cstr_ccat(&linker_arg, ',');
-            cstr_cat(&linker_arg, optarg);
-            cstr_ccat(&linker_arg, '\0');
+            if (pas->linker_arg.size)
+                --pas->linker_arg.size, cstr_ccat(&pas->linker_arg, ',');
+            cstr_cat(&pas->linker_arg, optarg);
+            cstr_ccat(&pas->linker_arg, '\0');
             break;
         case TCC_OPTION_E:
     	    if (s->output_type)
@@ -2317,13 +2354,13 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             break;
         case TCC_OPTION_x:
             if (*optarg == 'c')
-                filetype = TCC_FILETYPE_C;
+                pas->filetype = TCC_FILETYPE_C;
             else
             if (*optarg == 'a')
-                filetype = TCC_FILETYPE_ASM_PP;
+                pas->filetype = TCC_FILETYPE_ASM_PP;
             else
             if (*optarg == 'n')
-                filetype = 0;
+                pas->filetype = 0;
             else
                 tcc_warning("unsupported language '%s'", optarg);
             break;
@@ -2349,18 +2386,38 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             break;
         }
     }
+    return optind;
+}
+
+PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
+{
+    ParseArgsState *pas;
+    int ret, is_allocated = 0;
+
+    if (!s->parse_args_state) {
+        s->parse_args_state = tcc_mallocz(sizeof(ParseArgsState));
+        cstr_new(&s->parse_args_state->linker_arg);
+        is_allocated = 1;
+    }
+    pas = s->parse_args_state;
+
+    ret = tcc_parse_args1(s, argc, argv);
 
     if (s->output_type == 0)
-	s->output_type = TCC_OUTPUT_EXE;
+        s->output_type = TCC_OUTPUT_EXE;
 
-    if (pthread && s->output_type != TCC_OUTPUT_OBJ)
+    if (pas->pthread && s->output_type != TCC_OUTPUT_OBJ)
         tcc_set_options(s, "-lpthread");
 
     if (s->output_type == TCC_OUTPUT_EXE)
-	tcc_set_linker(s, (const char *)linker_arg.data);
-    cstr_free(&linker_arg);
+        tcc_set_linker(s, (const char *)pas->linker_arg.data);
 
-    return optind;
+    if (is_allocated) {
+        cstr_free(&pas->linker_arg);
+        tcc_free(pas);
+        s->parse_args_state = NULL;
+    }
+    return ret;
 }
 
 LIBTCCAPI int tcc_set_options(TCCState *s, const char *str)
