@@ -1072,20 +1072,18 @@ static int macro_is_equal(const int *a, const int *b)
 
 static void pp_line(TCCState *s1, BufferedFile *f, int level)
 {
-    int d = f->line_num - f->line_ref;
-    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
-        || (level == 0 && f->line_ref && d < 8))
-    {
-        while (d > 0)
-            fputs("\n", s1->ppfp), --d;
-    }
-    else
-    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
-        fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
-    }
-    else {
-        fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
-            level > 0 ? " 1" : level < 0 ? " 2" : "");
+    if (s1->ppfp) {
+        int d = f->line_num - f->line_ref;
+        if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
+            || (level == 0 && f->line_ref && d < 8)) {
+            while (d > 0)
+                fputs("\n", s1->ppfp), --d;
+        } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
+            fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
+        } else {
+            fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
+                level > 0 ? " 1" : level < 0 ? " 2" : "");
+        }
     }
     f->line_ref = f->line_num;
 }
@@ -3473,16 +3471,17 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
                 continue;
             }
             pp_line(s1, file, 0);
-            while (spcs)
+            while (s1->ppfp && spcs > 0)
                 fputs(" ", s1->ppfp), --spcs;
+            spcs = 0;
             token_seen = 1;
 
         } else if (tok == TOK_LINEFEED) {
             ++file->line_ref;
             token_seen = 0;
         }
-
-        fputs(get_tok_str(tok, &tokc), s1->ppfp);
+        if (s1->ppfp)
+            fputs(get_tok_str(tok, &tokc), s1->ppfp);
     }
 
     return 0;

@@ -303,13 +303,8 @@ int main(int argc, char **argv)
                 tcc_error("could not write '%s'", s->outfile);
         }
         s->dffp = s->ppfp;
-        if (s->dflag == 'M') {
-#ifndef TCC_TARGET_PE
-            s->ppfp = fopen("/dev/null", "w");
-#else
-            s->ppfp = fopen("nul", "w");
-#endif
-        }
+        if (s->dflag == 'M')
+            s->ppfp = NULL;
     }
 
     tcc_set_output_type(s, s->output_type);
