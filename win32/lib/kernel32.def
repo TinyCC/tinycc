@@ -619,6 +619,7 @@ SetFileApisToOEM
 SetFileAttributesA
 SetFileAttributesW
 SetFilePointer
+SetFilePointerEx
 SetFileTime
 SetHandleContext
 SetHandleCount

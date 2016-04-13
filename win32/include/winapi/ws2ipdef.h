@@ -7,6 +7,7 @@
 #define _INC_WS2IPDEF
 
 #include <in6addr.h>
+#include <ws2def.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,6 +45,7 @@ struct sockaddr_in6 {
 typedef struct sockaddr_in6 SOCKADDR_IN6;
 typedef struct sockaddr_in6 *PSOCKADDR_IN6;
 typedef struct sockaddr_in6 *LPSOCKADDR_IN6;
+typedef u_short ADDRESS_FAMILY;
 
 typedef struct _INTERFACE_INFO {
   u_long iiFlags;

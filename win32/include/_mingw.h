@@ -133,4 +133,8 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 # define _WIN32_WINNT 0x502
 #endif
 
+#define __C89_NAMELESS
+#define __MINGW_EXTENSION
+#define WINAPI_FAMILY_PARTITION(X) 1
+
 #endif /* __MINGW_H */
