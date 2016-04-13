@@ -3490,3 +3490,18 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
 
     return 0;
 }
+
+ST_FUNC char *trimfront(char *p)
+{
+    while (*p && (unsigned char)*p <= ' ')
+        ++p;
+    return p;
+}
+
+ST_FUNC char *trimback(char *a, char *e)
+{
+    while (e > a && (unsigned char)e[-1] <= ' ')
+        --e;
+    *e = 0;;
+    return a;
+}

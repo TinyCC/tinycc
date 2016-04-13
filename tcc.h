@@ -1263,6 +1263,8 @@ ST_FUNC void preprocess_delete(void);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
+ST_FUNC char *trimfront(char *p);
+ST_FUNC char *trimback(char *a, char *e);
 
 /* ------------ tccgen.c ------------ */
 

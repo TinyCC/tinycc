@@ -69,6 +69,4 @@ tiny_libmaker
 *~
 \#*
 .#*
-win32/include/*
-win32/lib/*
-win32/vs2015/*
+win32/*
