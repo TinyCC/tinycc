@@ -344,7 +344,7 @@ int main(int argc, char **argv)
                         tcc_parse_args(s, argc - 1, argv + 1);
                         tcc_set_environment(s);
                         if (s->output_type != TCC_OUTPUT_OBJ)
-                            tcc_error("interlnal error");
+                            tcc_error("internal error");
                         tcc_set_output_type(s, s->output_type);
                     }
                 }
