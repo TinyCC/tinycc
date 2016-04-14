@@ -796,8 +796,10 @@ redo_start:
                     in_warn_or_error = 1;
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
+                else if (parse_flags & PARSE_FLAG_ASM_FILE)
+                    p = parse_line_comment(p);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-        	p = parse_line_comment(p);
+                p = parse_line_comment(p);
             break;
 _default:
         default:
@@ -2743,6 +2745,8 @@ maybe_newline:
         p++;
         break;
     default:
+        if (parse_flags & PARSE_FLAG_ASM_FILE)
+            goto parse_simple;
         tcc_error("unrecognized character \\x%02x", c);
         break;
     }
