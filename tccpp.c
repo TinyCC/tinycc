@@ -1480,7 +1480,7 @@ static void pragma_parse(TCCState *s1)
         char buf1[sizeof(file->filename) + sizeof(ONCE_PREFIX)];
         strcpy(buf1, ONCE_PREFIX);
         strcat(buf1, file->filename);
-#if PATHCMP==stricmp
+#ifdef PATH_NOCASE
         strupr(buf1);
 #endif
         add_cached_include(s1, file->filename, tok_alloc(buf1, strlen(buf1))->tok);
