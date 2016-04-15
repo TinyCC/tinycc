@@ -235,7 +235,11 @@ static void set_pages_executable(void *ptr, unsigned long length)
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
+  #ifndef __PCC__
     __clear_cache(ptr, (char *)ptr + length);
+  #else
+    /* pcc 1.2.0.DEVEL 20141206 don't have such proc */
+  #endif
 #endif
 }
 

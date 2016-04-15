@@ -1061,7 +1061,7 @@ ST_FUNC void gen_bounded_ptr_add(void)
 ST_FUNC void gen_bounded_ptr_deref(void)
 {
     addr_t func;
-    addr_t size, align;
+    int  size, align;
     Elf32_Rel *rel;
     Sym *sym;
 
