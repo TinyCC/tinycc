@@ -1604,6 +1604,21 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
 
+    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+        if (!s->outfile) {
+            s->ppfp = stdout;
+        } else {
+            s->ppfp = fopen(s->outfile, "w");
+            if (!s->ppfp)
+                tcc_error("could not write '%s'", s->outfile);
+        }
+        s->dffp = s->ppfp;
+        if (s->dflag == 'M')
+            s->ppfp = NULL;
+    }
+    if (s->option_C && !s->ppfp)
+        s->option_C = 0;
+
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
@@ -1946,6 +1961,7 @@ enum {
     TCC_OPTION_b,
     TCC_OPTION_g,
     TCC_OPTION_c,
+    TCC_OPTION_C,
     TCC_OPTION_dumpversion,
     TCC_OPTION_d,
     TCC_OPTION_float_abi,
@@ -2003,6 +2019,7 @@ static const TCCOption tcc_options[] = {
 #endif
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
+    { "C", TCC_OPTION_C, 0 },
     { "dumpversion", TCC_OPTION_dumpversion, 0},
     { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
 #ifdef TCC_TARGET_ARM
@@ -2190,6 +2207,9 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
             if (s->output_type)
                 tcc_warning("-c: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_OBJ;
+            break;
+        case TCC_OPTION_C:
+            s->option_C = 1;
             break;
         case TCC_OPTION_d:
             if (*optarg == 'D' || *optarg == 'M')

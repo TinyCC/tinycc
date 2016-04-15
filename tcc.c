@@ -98,8 +98,9 @@ static void help(void)
            "  -Dsym[=val] define 'sym' with value 'val'\n"
            "  -Usym       undefine 'sym'\n"
            "  -E          preprocess only\n"
-           "  -P[1]       no/alternative output of #line directives with -E\n"
-           "  -d{D|M}     dump defines (only with -E)\n"
+           "    -P[1]       no/alternative output of #line directives\n"
+           "    -d{D|M}     dump defines\n"
+           "    -C          keep comments\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
@@ -292,19 +293,6 @@ int main(int argc, char **argv)
         if ((s->nb_files != 1) && s->outfile) {
             tcc_error("cannot specify multiple files with -c and -o");
         }
-    }
-
-    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-        if (!s->outfile) {
-            s->ppfp = stdout;
-        } else {
-            s->ppfp = fopen(s->outfile, "w");
-            if (!s->ppfp)
-                tcc_error("could not write '%s'", s->outfile);
-        }
-        s->dffp = s->ppfp;
-        if (s->dflag == 'M')
-            s->ppfp = NULL;
     }
 
     tcc_set_output_type(s, s->output_type);

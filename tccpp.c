@@ -524,13 +524,163 @@ ST_FUNC void minp(void)
         handle_stray();
 }
 
+static void pp_line(TCCState *s1, BufferedFile *f, int level)
+{
+    if (s1->ppfp) {
+        int d = f->line_num - f->line_ref;
+        if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
+            || (level == 0 && f->line_ref && d < 8)) {
+            while (d > 0)
+                fputs("\n", s1->ppfp), --d;
+        } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
+            fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
+        } else {
+            fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
+                level > 0 ? " 1" : level < 0 ? " 2" : "");
+        }
+    }
+    f->line_ref = f->line_num;
+}
+
+static uint8_t *parse_print_line_comment(uint8_t *p)
+{
+    int c;
+
+    if ((file->line_num - file->line_ref) > 0) {
+        fputc('\n', tcc_state->ppfp);
+        file->line_ref++;
+        pp_line(tcc_state, file, 0);
+    }
+    fputs("// ", tcc_state->ppfp);
+
+    for(;;) {
+        c = *p;
+    redo:
+        if (c == '\n' || c == CH_EOF)
+            break;
+        fputc(c, tcc_state->ppfp);
+        if (c == '\\') {
+            file->buf_ptr = p;
+            c = handle_eob();
+            p = file->buf_ptr;
+            if (c == '\\') {
+                PEEKC_EOB(c, p);
+                if (c == '\n') {
+                    file->line_num++;
+                    PEEKC_EOB(c, p);
+                } else if (c == '\r') {
+                    PEEKC_EOB(c, p);
+                    if (c == '\n') {
+                        file->line_num++;
+                        PEEKC_EOB(c, p);
+                    }
+                }
+            } else {
+                goto redo;
+            }
+        } else {
+            p++;
+        }
+    }
+    return p;
+}
+
+
+static uint8_t *parse_print_comment(uint8_t *p)
+{
+    int c;
+
+    if ((file->line_num - file->line_ref) > 0) {
+        fputc('\n', tcc_state->ppfp);
+        file->line_ref++;
+        pp_line(tcc_state, file, 0);
+    }
+    fputs("/*", tcc_state->ppfp);
+
+    for(;;) {
+        /* fast skip loop */
+        for(;;) {
+            c = *p;
+            if (c == '\n' || c == '*' || c == '\\')
+                break;
+            fputc(c, tcc_state->ppfp);
+            p++;
+        }
+        /* now we can handle all the cases */
+        if (c == '\n') {
+            fputc(c, tcc_state->ppfp);
+            file->line_num++;
+            p++;
+        } else if (c == '*') {
+            fputc(c, tcc_state->ppfp);
+            p++;
+            for(;;) {
+                c = *p;
+                if (c == '*') {
+                    fputc(c, tcc_state->ppfp);
+                    p++;
+                } else if (c == '/') {
+                    fputc(c, tcc_state->ppfp);
+                    goto end_of_comment;
+                } else if (c == '\\') {
+                    file->buf_ptr = p;
+                    c = handle_eob();
+                    p = file->buf_ptr;
+                    if (c == CH_EOF)
+                        tcc_error("unexpected end of file in comment");
+                    if (c == '\\') {
+                        /* skip '\[\r]\n', otherwise just skip the stray */
+                        while (c == '\\') {
+                            fputc(c, tcc_state->ppfp);
+                            PEEKC_EOB(c, p);
+                            if (c == '\n') {
+                                fputc(c, tcc_state->ppfp);
+                                file->line_num++;
+                                PEEKC_EOB(c, p);
+                            } else if (c == '\r') {
+                                PEEKC_EOB(c, p);
+                                if (c == '\n') {
+                                    fputc(c, tcc_state->ppfp);
+                                    file->line_num++;
+                                    PEEKC_EOB(c, p);
+                                }
+                            } else {
+                                goto after_star;
+                            }
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        after_star: ;
+        } else {
+            /* stray, eob or eof */
+            file->buf_ptr = p;
+            c = handle_eob();
+            p = file->buf_ptr;
+            if (c == CH_EOF)
+                tcc_error("unexpected end of file in comment");
+            if (c == '\\') {
+                fputc(c, tcc_state->ppfp);
+                p++;
+            }
+        }
+    }
+ end_of_comment:
+    p++;
+    file->line_ref = file->line_num;
+    return p;
+}
 
 /* single line C++ comments */
-static uint8_t *parse_line_comment(uint8_t *p)
+static uint8_t *parse_line_comment(uint8_t *p, int skip)
 {
     int c;
 
     p++;
+    if (tcc_state->option_C && !skip)
+        return parse_print_line_comment(p);
     for(;;) {
         c = *p;
     redo:
@@ -563,11 +713,13 @@ static uint8_t *parse_line_comment(uint8_t *p)
 }
 
 /* C comments */
-ST_FUNC uint8_t *parse_comment(uint8_t *p)
+ST_FUNC uint8_t *parse_comment(uint8_t *p, int skip)
 {
     int c;
-    
+
     p++;
+    if (tcc_state->option_C && !skip)
+        return parse_print_comment(p);
     for(;;) {
         /* fast skip loop */
         for(;;) {
@@ -774,9 +926,9 @@ redo_start:
             minp();
             p = file->buf_ptr;
             if (ch == '*') {
-                p = parse_comment(p);
+                p = parse_comment(p,1);
             } else if (ch == '/') {
-                p = parse_line_comment(p);
+                p = parse_line_comment(p,1);
             }
             break;
         case '#':
@@ -797,9 +949,9 @@ redo_start:
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
                 else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                    p = parse_line_comment(p);
+                    p = parse_line_comment(p,0);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                p = parse_line_comment(p);
+                p = parse_line_comment(p,0);
             break;
 _default:
         default:
@@ -1070,24 +1222,6 @@ static int macro_is_equal(const int *a, const int *b)
             return 0;
     }
     return !(*a || *b);
-}
-
-static void pp_line(TCCState *s1, BufferedFile *f, int level)
-{
-    if (s1->ppfp) {
-        int d = f->line_num - f->line_ref;
-        if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
-            || (level == 0 && f->line_ref && d < 8)) {
-            while (d > 0)
-                fputs("\n", s1->ppfp), --d;
-        } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
-            fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
-        } else {
-            fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
-                level > 0 ? " 1" : level < 0 ? " 2" : "");
-        }
-    }
-    f->line_ref = f->line_num;
 }
 
 static void tok_print(const char *msg, const int *str)
@@ -1848,7 +1982,7 @@ _line_num:
             goto ignore;
         tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
     ignore:
-        file->buf_ptr = parse_line_comment(file->buf_ptr);
+        file->buf_ptr = parse_line_comment(file->buf_ptr,0);
         goto the_end;
     }
     /* ignore other preprocess commands or #! for C scripts */
@@ -2444,7 +2578,7 @@ maybe_newline:
                 tok = TOK_TWOSHARPS;
             } else {
                 if (parse_flags & PARSE_FLAG_ASM_FILE) {
-                    p = parse_line_comment(p - 1);
+                    p = parse_line_comment(p - 1,0);
                     goto redo_no_start;
                 } else {
                     tok = '#';
@@ -2711,13 +2845,17 @@ maybe_newline:
     case '/':
         PEEKC(c, p);
         if (c == '*') {
-            p = parse_comment(p);
+            p = parse_comment(p,0);
             /* comments replaced by a blank */
             tok = ' ';
+            if (tcc_state->option_C)
+                goto redo_no_start;
             goto keep_tok_flags;
         } else if (c == '/') {
-            p = parse_line_comment(p);
+            p = parse_line_comment(p,0);
             tok = ' ';
+            if (tcc_state->option_C)
+                goto redo_no_start;
             goto keep_tok_flags;
         } else if (c == '=') {
             p++;
@@ -2939,10 +3077,10 @@ static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *w
                         uint8_t *p = file->buf_ptr;
                         PEEKC(c, p);
                         if (c == '*') {
-                            p = parse_comment(p);
+                            p = parse_comment(p,0);
                             file->buf_ptr = p - 1;
                         } else if (c == '/') {
-                            p = parse_line_comment(p);
+                            p = parse_line_comment(p,0);
                             file->buf_ptr = p - 1;
                         } else
                             break;
