@@ -84,6 +84,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_re
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
 static void expr_eq(void);
+static void expr_lor_const(void);
 static void unary_type(CType *type);
 static void vla_runtime_type_size(CType *type, int *a);
 static void vla_sp_restore(void);
@@ -3938,6 +3939,22 @@ ST_FUNC void unary(void)
         vtop->type.t |= VT_UNSIGNED;
         break;
 
+    case TOK_builtin_expect:
+        {
+            /* __builtin_expect is a no-op for now */
+            int saved_nocode_wanted;
+            next();
+            skip('(');
+            expr_eq();
+            skip(',');
+            saved_nocode_wanted = nocode_wanted;
+            nocode_wanted = 1;
+            expr_lor_const();
+            vpop();
+            nocode_wanted = saved_nocode_wanted;
+            skip(')');
+        }
+        break;
     case TOK_builtin_types_compatible_p:
         {
             CType type1, type2;
@@ -4463,6 +4480,26 @@ static void expr_or(void)
         next();
         expr_xor();
         gen_op('|');
+    }
+}
+
+/* XXX: fix this mess */
+static void expr_land_const(void)
+{
+    expr_or();
+    while (tok == TOK_LAND) {
+        next();
+        expr_or();
+        gen_op(TOK_LAND);
+    }
+}
+static void expr_lor_const(void)
+{
+    expr_land_const();
+    while (tok == TOK_LOR) {
+        next();
+        expr_land_const();
+        gen_op(TOK_LOR);
     }
 }
 
