@@ -542,134 +542,51 @@ static void pp_line(TCCState *s1, BufferedFile *f, int level)
     f->line_ref = f->line_num;
 }
 
-static uint8_t *parse_print_line_comment(uint8_t *p)
+static uint8_t *parse_print_comment(uint8_t *p, int is_line_comment)
 {
-    int c;
+    int c, star_count;
+    FILE *ppfp = tcc_state->ppfp;
 
     if ((file->line_num - file->line_ref) > 0) {
-        fputc('\n', tcc_state->ppfp);
+        fputc('\n', ppfp);
         file->line_ref++;
         pp_line(tcc_state, file, 0);
     }
-    fputs("// ", tcc_state->ppfp);
+    if (is_line_comment)
+        fputs("//", ppfp); else
+        fputs("/*", ppfp);
 
+    star_count = 0;
     for(;;) {
         c = *p;
-    redo:
-        if (c == '\n' || c == CH_EOF)
-            break;
-        fputc(c, tcc_state->ppfp);
         if (c == '\\') {
             file->buf_ptr = p;
             c = handle_eob();
             p = file->buf_ptr;
-            if (c == '\\') {
-                PEEKC_EOB(c, p);
-                if (c == '\n') {
-                    file->line_num++;
-                    PEEKC_EOB(c, p);
-                } else if (c == '\r') {
-                    PEEKC_EOB(c, p);
-                    if (c == '\n') {
-                        file->line_num++;
-                        PEEKC_EOB(c, p);
-                    }
-                }
-            } else {
-                goto redo;
-            }
-        } else {
-            p++;
         }
-    }
-    return p;
-}
-
-
-static uint8_t *parse_print_comment(uint8_t *p)
-{
-    int c;
-
-    if ((file->line_num - file->line_ref) > 0) {
-        fputc('\n', tcc_state->ppfp);
-        file->line_ref++;
-        pp_line(tcc_state, file, 0);
-    }
-    fputs("/*", tcc_state->ppfp);
-
-    for(;;) {
-        /* fast skip loop */
-        for(;;) {
-            c = *p;
-            if (c == '\n' || c == '*' || c == '\\')
+        if (c == CH_EOF) {
+            if (is_line_comment) break;
+            tcc_error("unexpected end of file in comment");
+        }
+        if (c == '*')
+            star_count++;
+        else {
+            if ((c == '/') && star_count && !is_line_comment)
                 break;
-            fputc(c, tcc_state->ppfp);
-            p++;
-        }
-        /* now we can handle all the cases */
-        if (c == '\n') {
-            fputc(c, tcc_state->ppfp);
-            file->line_num++;
-            p++;
-        } else if (c == '*') {
-            fputc(c, tcc_state->ppfp);
-            p++;
-            for(;;) {
-                c = *p;
-                if (c == '*') {
-                    fputc(c, tcc_state->ppfp);
-                    p++;
-                } else if (c == '/') {
-                    fputc(c, tcc_state->ppfp);
-                    goto end_of_comment;
-                } else if (c == '\\') {
-                    file->buf_ptr = p;
-                    c = handle_eob();
-                    p = file->buf_ptr;
-                    if (c == CH_EOF)
-                        tcc_error("unexpected end of file in comment");
-                    if (c == '\\') {
-                        /* skip '\[\r]\n', otherwise just skip the stray */
-                        while (c == '\\') {
-                            fputc(c, tcc_state->ppfp);
-                            PEEKC_EOB(c, p);
-                            if (c == '\n') {
-                                fputc(c, tcc_state->ppfp);
-                                file->line_num++;
-                                PEEKC_EOB(c, p);
-                            } else if (c == '\r') {
-                                PEEKC_EOB(c, p);
-                                if (c == '\n') {
-                                    fputc(c, tcc_state->ppfp);
-                                    file->line_num++;
-                                    PEEKC_EOB(c, p);
-                                }
-                            } else {
-                                goto after_star;
-                            }
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        after_star: ;
-        } else {
-            /* stray, eob or eof */
-            file->buf_ptr = p;
-            c = handle_eob();
-            p = file->buf_ptr;
-            if (c == CH_EOF)
-                tcc_error("unexpected end of file in comment");
-            if (c == '\\') {
-                fputc(c, tcc_state->ppfp);
-                p++;
+            star_count = 0;
+            if (c == '\n') {
+                if (is_line_comment) break;
+                file->line_num++;
             }
         }
+        fputc(c, ppfp);
+        p++;
     }
- end_of_comment:
-    p++;
-    file->line_ref = file->line_num;
+    if (!is_line_comment) {
+        fputc('/', ppfp);
+        p++;
+        file->line_ref = file->line_num;
+    }
     return p;
 }
 
@@ -680,7 +597,7 @@ static uint8_t *parse_line_comment(uint8_t *p, int skip)
 
     p++;
     if (tcc_state->option_C && !skip)
-        return parse_print_line_comment(p);
+        return parse_print_comment(p, 1);
     for(;;) {
         c = *p;
     redo:
@@ -719,7 +636,7 @@ ST_FUNC uint8_t *parse_comment(uint8_t *p, int skip)
 
     p++;
     if (tcc_state->option_C && !skip)
-        return parse_print_comment(p);
+        return parse_print_comment(p, 0);
     for(;;) {
         /* fast skip loop */
         for(;;) {
