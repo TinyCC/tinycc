@@ -60,13 +60,12 @@ endif
 
 # run local version of tcc with local libraries and includes
 TCCFLAGS = -B$(TOP) -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
-TCC = $(TOP)/tcc $(TCCFLAGS)
 ifdef CONFIG_WIN32
  TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir) -I$(top_srcdir)/include -L$(TOP)
- TCC = $(TOP)/win32/tcc $(TCCFLAGS)
 endif
 XTCCFLAGS = -B$(TOP) -B$(top_srcdir)/win32 -I$(TOP) -I$(top_srcdir) -I$(top_srcdir)/include
 
+TCC = $(TOP)/tcc $(TCCFLAGS)
 RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(top_srcdir)/tcc.c $(TCCFLAGS)
 
 DISAS = objdump -d

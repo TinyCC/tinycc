@@ -19,10 +19,6 @@ endif
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
 
-ifdef CONFIG_WIN32
- TCC = $(top_srcdir)/win32/tcc $(TCCFLAGS)
-endif
-
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
 
 # 34_array_assignment.test -- array assignment is not in C standard
