@@ -365,9 +365,10 @@ static inline void write64le(unsigned char *p, uint64_t x)
 #define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         256
 #define STRING_MAX_SIZE     1024
+#define TOKSTR_MAX_SIZE     256
 #define PACK_STACK_SIZE     8
 
-#define TOK_HASH_SIZE       8192 /* must be a power of two */
+#define TOK_HASH_SIZE       16384 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
@@ -1161,7 +1162,7 @@ PUB_FUNC void tcc_warning(const char *fmt, ...);
 ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data);
 ST_FUNC void dynarray_reset(void *pp, int *n);
 ST_FUNC void cstr_ccat(CString *cstr, int ch);
-ST_FUNC void cstr_cat(CString *cstr, const char *str);
+ST_FUNC void cstr_cat(CString *cstr, const char *str, int len);
 ST_FUNC void cstr_wccat(CString *cstr, int ch);
 ST_FUNC void cstr_new(CString *cstr);
 ST_FUNC void cstr_free(CString *cstr);
@@ -1246,7 +1247,7 @@ ST_INLN void tok_str_new(TokenString *s);
 ST_FUNC void tok_str_free(int *str);
 ST_FUNC void tok_str_add(TokenString *s, int t);
 ST_FUNC void tok_str_add_tok(TokenString *s);
-ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg);
+ST_INLN void define_push(int v, int macro_type, TokenString *str, Sym *first_arg);
 ST_FUNC void define_undef(Sym *s);
 ST_INLN Sym *define_find(int v);
 ST_FUNC void free_defines(Sym *b);

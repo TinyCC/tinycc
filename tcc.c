@@ -237,9 +237,10 @@ static char *default_outputfile(TCCState *s, const char *first_file)
 static int64_t getclock_us(void)
 {
 #ifdef _WIN32
-    struct _timeb tb;
-    _ftime(&tb);
-    return (tb.time * 1000LL + tb.millitm) * 1000LL;
+    LARGE_INTEGER frequency, t1;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&t1);
+    return t1.QuadPart * 1000000LL / frequency.QuadPart;
 #else
     struct timeval tv;
     gettimeofday(&tv, NULL);

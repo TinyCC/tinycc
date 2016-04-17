@@ -268,6 +268,8 @@ static size_t mem_max_size;
 PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
 {
     void *ptr;
+    int ofs;
+
     mem_debug_header_t *header;
 
     ptr = malloc(sizeof(mem_debug_header_t) + size);
@@ -285,7 +287,8 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     header->size = size;
     header->line_num = line;
 
-    strncpy(header->file_name, file, MEM_DEBUG_FILE_LEN);
+    ofs = strlen(file) - MEM_DEBUG_FILE_LEN;
+    strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
     header->file_name[MEM_DEBUG_FILE_LEN] = 0;
 
     header->next = mem_debug_chain;
@@ -473,13 +476,14 @@ static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char
             if (c == '{' && p[1] && p[2] == '}') {
                 c = p[1], p += 2;
                 if (c == 'B')
-                    cstr_cat(&str, s->tcc_lib_path);
+                    cstr_cat(&str, s->tcc_lib_path, -1);
             } else {
                 cstr_ccat(&str, c);
             }
         }
         cstr_ccat(&str, '\0');
-        dynarray_add(p_ary, p_nb_ary, str.data);
+        dynarray_add(p_ary, p_nb_ary, tcc_strdup(str.data));
+        cstr_free(&str);
         in = p+1;
     } while (*p);
 }
@@ -1042,8 +1046,6 @@ static void tcc_cleanup(void)
 
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
-    /* string buffer */
-    cstr_free(&tokcstr);
     /* reset symbol stack */
     sym_free_first = NULL;
 }
@@ -2325,8 +2327,7 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
         case TCC_OPTION_Wl:
             if (pas->linker_arg.size)
                 --pas->linker_arg.size, cstr_ccat(&pas->linker_arg, ',');
-            cstr_cat(&pas->linker_arg, optarg);
-            cstr_ccat(&pas->linker_arg, '\0');
+            cstr_cat(&pas->linker_arg, optarg, 0);
             break;
         case TCC_OPTION_E:
     	    if (s->output_type)

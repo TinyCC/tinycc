@@ -3395,7 +3395,7 @@ ST_FUNC void parse_asm_str(CString *astr)
     cstr_new(astr);
     while (tok == TOK_STR) {
         /* XXX: add \0 handling too ? */
-        cstr_cat(astr, tokc.str.data);
+        cstr_cat(astr, tokc.str.data, -1);
         next();
     }
     cstr_ccat(astr, '\0');

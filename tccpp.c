@@ -42,6 +42,8 @@ ST_DATA TokenSym **table_ident;
 
 static TokenSym *hash_ident[TOK_HASH_SIZE];
 static char token_buf[STRING_MAX_SIZE + 1];
+static CString cstr_buf;
+static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 /* isidnum_table flags: */
 #define IS_SPC 1
@@ -131,7 +133,7 @@ static void cstr_realloc(CString *cstr, int new_size)
     void *data;
 
     size = cstr->size_allocated;
-    if (size == 0)
+    if (size < 8)
         size = 8; /* no need to allocate a too small first string */
     while (size < new_size)
         size = size * 2;
@@ -152,16 +154,16 @@ ST_FUNC void cstr_ccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-ST_FUNC void cstr_cat(CString *cstr, const char *str)
+ST_FUNC void cstr_cat(CString *cstr, const char *str, int len)
 {
-    int c;
-    for(;;) {
-        c = *str;
-        if (c == '\0')
-            break;
-        cstr_ccat(cstr, c);
-        str++;
-    }
+    int size;
+    if (len <= 0)
+        len = strlen(str) + 1 + len;
+    size = cstr->size + len;
+    if (size > cstr->size_allocated)
+        cstr_realloc(cstr, size);
+    memcpy(((unsigned char *)cstr->data) + cstr->size, str, len);
+    cstr->size = size;
 }
 
 /* add a wide char */
@@ -231,7 +233,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
         table_ident = ptable;
     }
 
-    ts = tcc_malloc(sizeof(TokenSym) + len);
+    ts = tcc_realloc(0, sizeof(TokenSym) + len);
     table_ident[i] = ts;
     ts->tok = tok_ident++;
     ts->sym_define = NULL;
@@ -247,7 +249,8 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
 }
 
 #define TOK_HASH_INIT 1
-#define TOK_HASH_FUNC(h, c) ((h) * 263 + (c))
+#define TOK_HASH_FUNC(h, c) ((h) + ((h) << 5) + ((h) >> 27) + (c))
+
 
 /* find a token and add it if not found */
 ST_FUNC TokenSym *tok_alloc(const char *str, int len)
@@ -277,15 +280,10 @@ ST_FUNC TokenSym *tok_alloc(const char *str, int len)
 /* XXX: float tokens */
 ST_FUNC const char *get_tok_str(int v, CValue *cv)
 {
-    static CString cstr_buf;
     char *p;
     int i, len;
 
-    /* first time preallocate static cstr_buf, next time only reset position to start */
-    if (!cstr_buf.data_allocated)
-        cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
-    else
-        cstr_buf.size = 0;
+    cstr_reset(&cstr_buf);
     p = cstr_buf.data;
 
     switch(v) {
@@ -332,20 +330,16 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
         break;
 
     case TOK_CFLOAT:
-        cstr_cat(&cstr_buf, "<float>");
-        cstr_ccat(&cstr_buf, '\0');
+        cstr_cat(&cstr_buf, "<float>", 0);
         break;
     case TOK_CDOUBLE:
-	cstr_cat(&cstr_buf, "<double>");
-        cstr_ccat(&cstr_buf, '\0');
+	cstr_cat(&cstr_buf, "<double>", 0);
 	break;
     case TOK_CLDOUBLE:
-	cstr_cat(&cstr_buf, "<long double>");
-        cstr_ccat(&cstr_buf, '\0');
+	cstr_cat(&cstr_buf, "<long double>", 0);
 	break;
     case TOK_LINENUM:
-	cstr_cat(&cstr_buf, "<linenumber>");
-        cstr_ccat(&cstr_buf, '\0');
+	cstr_cat(&cstr_buf, "<linenumber>", 0);
 	break;
 
     /* above tokens have value, the ones below don't */
@@ -944,24 +938,36 @@ ST_INLN void tok_str_new(TokenString *s)
     s->last_line_num = -1;
 }
 
+ST_FUNC int *tok_str_dup(TokenString *s)
+{
+    int *str;
+
+    str = tcc_realloc(0, s->len * sizeof(int));
+    memcpy(str, s->str, s->len * sizeof(int));
+    return str;
+}
+
 ST_FUNC void tok_str_free(int *str)
 {
     tcc_free(str);
 }
 
-static int *tok_str_realloc(TokenString *s)
+ST_FUNC int *tok_str_realloc(TokenString *s, int new_size)
 {
-    int *str, len;
+    int *str, size;
 
-    if (s->allocated_len == 0) {
-        len = 8;
-    } else {
-        len = s->allocated_len * 2;
+    size = s->allocated_len;
+    if (size < 16)
+        size = 16;
+    while (size < new_size)
+        size = size * 2;
+    TCC_ASSERT((size & (size -1)) == 0);
+    if (size > s->allocated_len) {
+        str = tcc_realloc(s->str, size * sizeof(int));
+        s->allocated_len = size;
+        s->str = str;
     }
-    str = tcc_realloc(s->str, len * sizeof(int));
-    s->allocated_len = len;
-    s->str = str;
-    return str;
+    return s->str;
 }
 
 ST_FUNC void tok_str_add(TokenString *s, int t)
@@ -971,7 +977,7 @@ ST_FUNC void tok_str_add(TokenString *s, int t)
     len = s->len;
     str = s->str;
     if (len >= s->allocated_len)
-        str = tok_str_realloc(s);
+        str = tok_str_realloc(s, len + 1);
     str[len++] = t;
     s->len = len;
 }
@@ -984,8 +990,8 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     str = s->str;
 
     /* allocate space for worst case */
-    if (len + TOK_MAX_SIZE > s->allocated_len)
-        str = tok_str_realloc(s);
+    if (len + TOK_MAX_SIZE >= s->allocated_len)
+        str = tok_str_realloc(s, len + TOK_MAX_SIZE + 1);
     str[len++] = t;
     switch(t) {
     case TOK_CINT:
@@ -1004,8 +1010,8 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
             /* Insert the string into the int array. */
             size_t nb_words =
                 1 + (cv->str.size + sizeof(int) - 1) / sizeof(int);
-            while ((len + nb_words) > s->allocated_len)
-                str = tok_str_realloc(s);
+            if (len + nb_words >= s->allocated_len)
+                str = tok_str_realloc(s, len + nb_words + 1);
             str[len] = cv->str.size;
             memcpy(&str[len + 1], cv->str.data, cv->str.size);
             len += nb_words;
@@ -1122,18 +1128,13 @@ static int tok_last(const int *str0, const int *str1)
 
 static int macro_is_equal(const int *a, const int *b)
 {
-    static CString cstr_buf;
     CValue cv;
     int t;
     while (*a && *b) {
         /* first time preallocate static cstr_buf, next time only reset position to start */
-        if (!cstr_buf.data_allocated)
-            cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
-        else
-            cstr_buf.size = 0;
+        cstr_reset(&cstr_buf);
         TOK_GET(&t, &a, &cv);
-        cstr_cat(&cstr_buf, get_tok_str(t, &cv));
-        cstr_ccat(&cstr_buf, '\0');
+        cstr_cat(&cstr_buf, get_tok_str(t, &cv), 0);
         TOK_GET(&t, &b, &cv);
         if (strcmp(cstr_buf.data, get_tok_str(t, &cv)))
             return 0;
@@ -1220,16 +1221,18 @@ ST_FUNC void print_defines(void)
 }
 
 /* defines handling */
-ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
+ST_INLN void define_push(int v, int macro_type, TokenString *str, Sym *first_arg)
 {
     Sym *s;
 
-    s = define_find(v);
-    if (s && !macro_is_equal(s->d, str))
-        tcc_warning("%s redefined", get_tok_str(v, NULL));
+    if (str) {
+        s = define_find(v);
+        if (s && !macro_is_equal(s->d, str->str))
+            tcc_warning("%s redefined", get_tok_str(v, NULL));
+    }
 
     s = sym_push2(&define_stack, v, macro_type, 0);
-    s->d = str;
+    s->d = str ? tok_str_dup(str) : NULL;
     s->next = first_arg;
     table_ident[v - TOK_IDENT]->sym_define = s;
 }
@@ -1367,7 +1370,6 @@ ST_FUNC void parse_define(void)
     Sym *s, *first, **ps;
     int v, t, varg, is_vaargs, spc;
     int saved_parse_flags = parse_flags;
-    TokenString str;
 
     v = tok;
     if (v < TOK_IDENT)
@@ -1413,7 +1415,8 @@ ST_FUNC void parse_define(void)
         isidnum_table['.' - CH_EOF] =
             (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
     }
-    tok_str_new(&str);
+
+    tokstr_buf.len = 0;
     spc = 2;
     parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
@@ -1422,26 +1425,26 @@ ST_FUNC void parse_define(void)
             if (2 == spc)
                 goto bad_twosharp;
             if (1 == spc)
-                --str.len;
+                --tokstr_buf.len;
             spc = 3;
         } else if ('#' == tok) {
             spc = 4;
         } else if (check_space(tok, &spc)) {
             goto skip;
         }
-        tok_str_add2(&str, tok, &tokc);
+        tok_str_add2(&tokstr_buf, tok, &tokc);
     skip:
         next_nomacro_spc();
     }
 
     parse_flags = saved_parse_flags;
     if (spc == 1)
-        --str.len; /* remove trailing space */
-    tok_str_add(&str, 0);
+        --tokstr_buf.len; /* remove trailing space */
+    tok_str_add(&tokstr_buf, 0);
     if (3 == spc)
 bad_twosharp:
         tcc_error("'##' cannot appear at either end of macro");
-    define_push(v, t, str.str, first);
+    define_push(v, t, &tokstr_buf, first);
     define_print(v);
 }
 
@@ -2393,7 +2396,7 @@ static void parse_number(const char *p)
 /* return next token without macro substitution */
 static inline void next_nomacro1(void)
 {
-    int t, c, is_long;
+    int t, c, is_long, len;
     TokenSym *ts;
     uint8_t *p, *p1;
     unsigned int h;
@@ -2539,13 +2542,12 @@ maybe_newline:
         h = TOK_HASH_FUNC(h, c);
         while (c = *++p, isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
             h = TOK_HASH_FUNC(h, c);
+        len = p - p1;
         if (c != '\\') {
             TokenSym **pts;
-            int len;
 
             /* fast case : no stray found, so we have the full token
                and we have already hashed it */
-            len = p - p1;
             h &= (TOK_HASH_SIZE - 1);
             pts = &hash_ident[h];
             for(;;) {
@@ -2561,11 +2563,7 @@ maybe_newline:
         } else {
             /* slower case */
             cstr_reset(&tokcstr);
-
-            while (p1 < p) {
-                cstr_ccat(&tokcstr, *p1);
-                p1++;
-            }
+            cstr_cat(&tokcstr, p1, len);
             p--;
             PEEKC(c, p);
         parse_ident_slow:
@@ -2901,7 +2899,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 cval.str.data = cstr.data;
                 cval.str.data_allocated = cstr.data_allocated;
                 tok_str_add2(&str, TOK_PPSTR, &cval);
-                tcc_free(cval.str.data_allocated);
+                cstr_free(&cstr);
             } else {
         bad_stringy:
                 expect("macro parameter after '#'");
@@ -3063,8 +3061,7 @@ static int macro_subst_tok(
         t1 = TOK_STR;
     add_cstr1:
         cstr_new(&cstr);
-        cstr_cat(&cstr, cstrval);
-        cstr_ccat(&cstr, '\0');
+        cstr_cat(&cstr, cstrval, 0);
         cval.str.size = cstr.size;
         cval.str.data = cstr.data;
         cval.str.data_allocated = cstr.data_allocated;
@@ -3194,10 +3191,10 @@ int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
 
     cstr_new(&cstr);
     if (t1 != TOK_PLCHLDR)
-        cstr_cat(&cstr, get_tok_str(t1, v1));
+        cstr_cat(&cstr, get_tok_str(t1, v1), -1);
     n = cstr.size;
     if (t2 != TOK_PLCHLDR)
-        cstr_cat(&cstr, get_tok_str(t2, v2));
+        cstr_cat(&cstr, get_tok_str(t2, v2), -1);
     cstr_ccat(&cstr, '\0');
 
     tcc_open_bf(tcc_state, ":paste:", cstr.size);
@@ -3384,13 +3381,12 @@ ST_FUNC void next(void)
         /* if reading from file, try to substitute macros */
         s = define_find(tok);
         if (s) {
-            static TokenString str; /* using static string for speed */
             Sym *nested_list = NULL;
-            tok_str_new(&str);
+            tokstr_buf.len = 0;
             nested_list = NULL;
-            macro_subst_tok(&str, &nested_list, s, 1);
-            tok_str_add(&str, 0);
-            begin_macro(&str, 0);
+            macro_subst_tok(&tokstr_buf, &nested_list, s, 1);
+            tok_str_add(&tokstr_buf, 0);
+            begin_macro(&tokstr_buf, 2);
             goto redo;
         }
     }
@@ -3454,6 +3450,10 @@ ST_FUNC void preprocess_new(void)
         isidnum_table[i - CH_EOF] = IS_ID;
 
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
+    cstr_new(&cstr_buf);
+    cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
+    tok_str_new(&tokstr_buf);
+    tok_str_realloc(&tokstr_buf, TOKSTR_MAX_SIZE);
     
     tok_ident = TOK_IDENT;
     p = tcc_keywords;
@@ -3487,6 +3487,11 @@ ST_FUNC void preprocess_delete(void)
         tcc_free(table_ident[i]);
     tcc_free(table_ident);
     table_ident = NULL;
+
+    /* free static buffers */
+    cstr_free(&tokcstr);
+    cstr_free(&cstr_buf);
+    tok_str_free(tokstr_buf.str);
 }
 
 /* Preprocess the current file */

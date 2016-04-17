@@ -1300,7 +1300,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         if (!(r & VT_LVAL) && modifier != 'c' && modifier != 'n')
             cstr_ccat(add_str, '$');
         if (r & VT_SYM) {
-            cstr_cat(add_str, get_tok_str(sv->sym->v, NULL));
+            cstr_cat(add_str, get_tok_str(sv->sym->v, NULL), -1);
             if ((uint32_t)sv->c.i != 0) {
                 cstr_ccat(add_str, '+');
             } else {
@@ -1311,17 +1311,17 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         if (modifier == 'n')
             val = -val;
         snprintf(buf, sizeof(buf), "%d", (int)sv->c.i);
-        cstr_cat(add_str, buf);
+        cstr_cat(add_str, buf, -1);
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
         snprintf(buf, sizeof(buf), "%d(%%ebp)", (int)sv->c.i);
-        cstr_cat(add_str, buf);
+        cstr_cat(add_str, buf, -1);
     } else if (r & VT_LVAL) {
         reg = r & VT_VALMASK;
         if (reg >= VT_CONST)
             tcc_error("internal compiler error");
         snprintf(buf, sizeof(buf), "(%%%s)",
                  get_tok_str(TOK_ASM_eax + reg, NULL));
-        cstr_cat(add_str, buf);
+        cstr_cat(add_str, buf, -1);
     } else {
         /* register case */
         reg = r & VT_VALMASK;
@@ -1378,7 +1378,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 #endif
         }
         snprintf(buf, sizeof(buf), "%%%s", get_tok_str(reg, NULL));
-        cstr_cat(add_str, buf);
+        cstr_cat(add_str, buf, -1);
     }
 }
 
