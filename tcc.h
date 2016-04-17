@@ -371,6 +371,12 @@ static inline void write64le(unsigned char *p, uint64_t x)
 #define TOK_HASH_SIZE       16384 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
+#define TOKSYM_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenSym in table_ident */
+#define TOKSTR_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenString instances */
+#define CSTR_TAL_SIZE       (256 * 1024) /* allocator for tiny CString instances */
+#define TOKSYM_TAL_LIMIT    256 /* prefer unique limits to distinguish allocators debug msgs */
+#define TOKSTR_TAL_LIMIT    128 /* 32 * sizeof(int) */
+#define CSTR_TAL_LIMIT      1024
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -636,6 +642,42 @@ typedef struct ParseArgsState
     int filetype;
     CString linker_arg; /* collect -Wl options for input such as "-Wl,-rpath -Wl,<path>" */
 } ParseArgsState;
+
+#if !defined(MEM_DEBUG)
+#define tal_free(al, p) tal_free_impl(al, p)
+#define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size)
+#define TAL_DEBUG_PARAMS
+#else
+#define TAL_DEBUG 1
+#define tal_free(al, p) tal_free_impl(al, p, __FILE__, __LINE__)
+#define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size, __FILE__, __LINE__)
+#define TAL_DEBUG_PARAMS , const char *file, int line
+#define TAL_DEBUG_FILE_LEN 15
+#endif
+//#define TAL_INFO 1 /* collect and dump allocators stats */
+
+typedef struct TinyAlloc {
+    size_t  limit;
+    size_t  size;
+    uint8_t *buffer;
+    uint8_t *p;
+    size_t  nb_allocs;
+    struct TinyAlloc *next, *top;
+#ifdef TAL_INFO
+    size_t  nb_peak;
+    size_t  nb_total;
+    size_t  nb_missed;
+    uint8_t *peak_p;
+#endif
+} TinyAlloc;
+
+typedef struct tal_header_t {
+    size_t  size;
+#ifdef TAL_DEBUG
+    int     line_num; /* negative line_num used for double free check */
+    char    file_name[TAL_DEBUG_FILE_LEN + 1];
+#endif
+} tal_header_t;
 
 struct TCCState {
 

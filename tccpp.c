@@ -38,6 +38,10 @@ ST_DATA int total_bytes;
 ST_DATA int tok_ident;
 ST_DATA TokenSym **table_ident;
 
+ST_DATA TinyAlloc *toksym_alloc;
+ST_DATA TinyAlloc *tokstr_alloc;
+ST_DATA TinyAlloc *cstr_alloc;
+
 /* ------------------------------------------------------------------------- */
 
 static TokenSym *hash_ident[TOK_HASH_SIZE];
@@ -126,6 +130,159 @@ ST_FUNC void end_macro(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* Custom allocator for tiny objects */
+
+ST_FUNC TinyAlloc *tal_new(TinyAlloc **pal, size_t limit, size_t size)
+{
+    TinyAlloc *al = tcc_mallocz(sizeof(TinyAlloc));
+    al->p = al->buffer = tcc_malloc(size);
+    al->limit = limit;
+    al->size = size;
+    if (pal) *pal = al;
+    return al;
+}
+
+ST_FUNC void tal_delete(TinyAlloc *al)
+{
+    TinyAlloc *next;
+
+tail_call:
+    if (!al)
+        return;
+#ifdef TAL_INFO
+    fprintf(stderr, "limit=%5d, size=%5g MB, nb_peak=%6d, nb_total=%8d, nb_missed=%6d, usage=%5.1f%%\n",
+            al->limit, al->size / 1024.0 / 1024.0, al->nb_peak, al->nb_total, al->nb_missed,
+            (al->peak_p - al->buffer) * 100.0 / al->size);
+#endif
+#ifdef TAL_DEBUG
+    if (al->nb_allocs > 0) {
+        fprintf(stderr, "TAL_DEBUG: mem leak %d chunks (limit= %d)\n",
+                al->nb_allocs, al->limit);
+        uint8_t *p = al->buffer;
+        while (p < al->p) {
+            tal_header_t *header = (tal_header_t *)p;
+            if (header->line_num > 0) {
+                fprintf(stderr, "  file %s, line %u: %u bytes\n",
+                        header->file_name, header->line_num, header->size);
+            }
+            p += header->size + sizeof(tal_header_t);
+        }
+    }
+#endif
+    next = al->next;
+    tcc_free(al->buffer);
+    tcc_free(al);
+    al = next;
+    goto tail_call;
+}
+
+ST_FUNC void tal_free_impl(TinyAlloc *al, void *p TAL_DEBUG_PARAMS)
+{
+    if (!p)
+        return;
+tail_call:
+    if (al->buffer <= (uint8_t *)p && (uint8_t *)p < al->buffer + al->size) {
+#ifdef TAL_DEBUG
+        tal_header_t *header = (((tal_header_t *)p) - 1);
+        if (header->line_num < 0) {
+            fprintf(stderr, "TAL_DEBUG: file %s, line %u double frees chunk from\n",
+                    file, line);
+            fprintf(stderr, "  file %s, line %u: %u bytes\n",
+                    header->file_name, -header->line_num, header->size);
+        } else
+            header->line_num = -header->line_num;
+#endif
+        al->nb_allocs--;
+        if (!al->nb_allocs)
+            al->p = al->buffer;
+    } else if (al->next) {
+        al = al->next;
+        goto tail_call;
+    }
+    else
+        tcc_free(p);
+}
+
+ST_FUNC void *tal_realloc_impl(TinyAlloc **pal, void *p, size_t size TAL_DEBUG_PARAMS)
+{
+    tal_header_t *header;
+    void *ret;
+    int is_own;
+    size_t adj_size = (size + 3) & -4;
+    TinyAlloc *al = *pal;
+
+tail_call:
+    is_own = (al->buffer <= (uint8_t *)p && (uint8_t *)p < al->buffer + al->size);
+    if ((!p || is_own) && size <= al->limit) {
+        if (al->p + adj_size + sizeof(tal_header_t) < al->buffer + al->size) {
+            header = (tal_header_t *)al->p;
+            header->size = adj_size;
+#ifdef TAL_DEBUG
+            int ofs = strlen(file) - TAL_DEBUG_FILE_LEN;
+            strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), TAL_DEBUG_FILE_LEN);
+            header->file_name[TAL_DEBUG_FILE_LEN] = 0;
+            header->line_num = line;
+#endif
+            ret = al->p + sizeof(tal_header_t);
+            al->p += adj_size + sizeof(tal_header_t);
+            if (is_own) {
+                header = (((tal_header_t *)p) - 1);
+                memcpy(ret, p, header->size);
+#ifdef TAL_DEBUG
+                header->line_num = -header->line_num;
+#endif
+            } else {
+                al->nb_allocs++;
+            }
+#ifdef TAL_INFO
+            if (al->nb_peak < al->nb_allocs)
+                al->nb_peak = al->nb_allocs;
+            if (al->peak_p < al->p)
+                al->peak_p = al->p;
+            al->nb_total++;
+#endif
+            return ret;
+        } else if (al->top && is_own) {
+            al->nb_allocs--;
+            ret = tal_realloc(*pal, 0, size);
+            header = (((tal_header_t *)p) - 1);
+            memcpy(ret, p, header->size);
+#ifdef TAL_DEBUG
+            header->line_num = -header->line_num;
+#endif
+            return ret;
+        }
+        if (al->next) {
+            al = al->next;
+        } else {
+            TinyAlloc *bottom = al, *next = al->top ? al->top : al;
+
+            al = tal_new(pal, next->limit, next->size * 2);
+            al->next = next;
+            bottom->top = al;
+        }
+        goto tail_call;
+    }
+    if (is_own) {
+        al->nb_allocs--;
+        ret = tcc_malloc(size);
+        header = (((tal_header_t *)p) - 1);
+        memcpy(ret, p, header->size);
+#ifdef TAL_DEBUG
+        header->line_num = -header->line_num;
+#endif
+    } else if (al->next) {
+        al = al->next;
+        goto tail_call;
+    } else
+        ret = tcc_realloc(p, size);
+#ifdef TAL_INFO
+    al->nb_missed++;
+#endif
+    return ret;
+}
+
+/* ------------------------------------------------------------------------- */
 /* CString handling */
 static void cstr_realloc(CString *cstr, int new_size)
 {
@@ -137,7 +294,7 @@ static void cstr_realloc(CString *cstr, int new_size)
         size = 8; /* no need to allocate a too small first string */
     while (size < new_size)
         size = size * 2;
-    data = tcc_realloc(cstr->data_allocated, size);
+    data = tal_realloc(cstr_alloc, cstr->data_allocated, size);
     cstr->data_allocated = data;
     cstr->size_allocated = size;
     cstr->data = data;
@@ -185,7 +342,7 @@ ST_FUNC void cstr_new(CString *cstr)
 /* free string and reset it to NULL */
 ST_FUNC void cstr_free(CString *cstr)
 {
-    tcc_free(cstr->data_allocated);
+    tal_free(cstr_alloc, cstr->data_allocated);
     cstr_new(cstr);
 }
 
@@ -233,7 +390,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
         table_ident = ptable;
     }
 
-    ts = tcc_realloc(0, sizeof(TokenSym) + len);
+    ts = tal_realloc(toksym_alloc, 0, sizeof(TokenSym) + len);
     table_ident[i] = ts;
     ts->tok = tok_ident++;
     ts->sym_define = NULL;
@@ -942,14 +1099,14 @@ ST_FUNC int *tok_str_dup(TokenString *s)
 {
     int *str;
 
-    str = tcc_realloc(0, s->len * sizeof(int));
+    str = tal_realloc(tokstr_alloc, 0, s->len * sizeof(int));
     memcpy(str, s->str, s->len * sizeof(int));
     return str;
 }
 
 ST_FUNC void tok_str_free(int *str)
 {
-    tcc_free(str);
+    tal_free(tokstr_alloc, str);
 }
 
 ST_FUNC int *tok_str_realloc(TokenString *s, int new_size)
@@ -963,7 +1120,7 @@ ST_FUNC int *tok_str_realloc(TokenString *s, int new_size)
         size = size * 2;
     TCC_ASSERT((size & (size -1)) == 0);
     if (size > s->allocated_len) {
-        str = tcc_realloc(s->str, size * sizeof(int));
+        str = tal_realloc(tokstr_alloc, s->str, size * sizeof(int));
         s->allocated_len = size;
         s->str = str;
     }
@@ -3449,6 +3606,11 @@ ST_FUNC void preprocess_new(void)
     for(i = 128; i<256; i++)
         isidnum_table[i - CH_EOF] = IS_ID;
 
+    /* init allocators */
+    tal_new(&toksym_alloc, TOKSYM_TAL_LIMIT, TOKSYM_TAL_SIZE);
+    tal_new(&tokstr_alloc, TOKSTR_TAL_LIMIT, TOKSTR_TAL_SIZE);
+    tal_new(&cstr_alloc, CSTR_TAL_LIMIT, CSTR_TAL_SIZE);
+
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
     cstr_new(&cstr_buf);
     cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
@@ -3484,7 +3646,7 @@ ST_FUNC void preprocess_delete(void)
     /* free tokens */
     n = tok_ident - TOK_IDENT;
     for(i = 0; i < n; i++)
-        tcc_free(table_ident[i]);
+        tal_free(toksym_alloc, table_ident[i]);
     tcc_free(table_ident);
     table_ident = NULL;
 
@@ -3492,6 +3654,14 @@ ST_FUNC void preprocess_delete(void)
     cstr_free(&tokcstr);
     cstr_free(&cstr_buf);
     tok_str_free(tokstr_buf.str);
+
+    /* free allocators */
+    tal_delete(toksym_alloc);
+    toksym_alloc = NULL;
+    tal_delete(tokstr_alloc);
+    tokstr_alloc = NULL;
+    tal_delete(cstr_alloc);
+    cstr_alloc = NULL;
 }
 
 /* Preprocess the current file */
