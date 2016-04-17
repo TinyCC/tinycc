@@ -4,8 +4,8 @@ This a clone of the mob development repo at http://repo.or.cz/tinycc.git
 
 |Branch      |Status   |
 |------------|---------|
-|mob         | [![Build Status](https://travis-ci.org/wqweto/tinycc.svg?branch=mob)](https://travis-ci.org/wqweto/tinycc) |
-|dev         | [![Build Status](https://travis-ci.org/wqweto/tinycc.svg?branch=dev)](https://travis-ci.org/wqweto/tinycc) | 
+|mob         | [![Build Status](https://travis-ci.org/TinyCC/tinycc.svg?branch=mob)](https://travis-ci.org/TinyCC/tinycc) |
+|dev         | [![Build Status](https://travis-ci.org/TinyCC/tinycc.svg?branch=dev)](https://travis-ci.org/TinyCC/tinycc) | 
 
 ### License
 
