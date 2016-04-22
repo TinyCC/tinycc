@@ -511,7 +511,7 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
         sec->sh_addralign = 1;
         break;
     default:
-        sec->sh_addralign = 32; /* default conservative alignment */
+        sec->sh_addralign =  PTR_SIZE; /* gcc/pcc default aligment */
         break;
     }
 
