@@ -324,6 +324,8 @@
  DEF_ASMDIR(bss)
  DEF_ASMDIR(previous)
  DEF_ASMDIR(fill)
+ DEF_ASMDIR(rept)
+ DEF_ASMDIR(endr)
  DEF_ASMDIR(org)
  DEF_ASMDIR(quad)
 #if defined(TCC_TARGET_I386)
