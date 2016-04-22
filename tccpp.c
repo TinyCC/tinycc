@@ -242,7 +242,7 @@ tail_call:
             al->nb_total++;
 #endif
             return ret;
-        } else if (al->top && is_own) {
+        } else if (is_own) {
             al->nb_allocs--;
             ret = tal_realloc(*pal, 0, size);
             header = (((tal_header_t *)p) - 1);
