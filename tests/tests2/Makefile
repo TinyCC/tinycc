@@ -19,7 +19,7 @@ endif
 
 TCC = $(TOP)/tcc $(TCCFLAGS)
 
-TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
+TESTS = $(patsubst %.c,%.test,$(sort $(wildcard *.c)))
 
 # 34_array_assignment.test -- array assignment is not in C standard
 SKIP = 34_array_assignment.test
