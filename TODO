@@ -31,6 +31,7 @@ Bugs:
 - make libtcc fully reentrant (except for the compilation stage itself).
 - struct/union/enum definitions in nested scopes (see also Debian bug #770657)
 - __STDC_IEC_559__: float f(void) { static float x = 0.0 / 0.0; return x; }
+- preprocessor: #define Y(x) Z(x) {newline} #define X Y {newline} X(X(1))
 
 Portability:
 
@@ -93,6 +94,7 @@ Not critical:
 - handle void (__attribute__() *ptr)()
 - VLAs are implemented in a way that is not compatible with signals:
   http://lists.gnu.org/archive/html/tinycc-devel/2015-11/msg00018.html
+- output with -E should include spaces: #define n 0xe {newline} n+1
 
 Fixed (probably):
 
