@@ -3135,10 +3135,10 @@ static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *w
                 end_macro();
                 /* also, end of scope for nested defined symbol */
                 sa = *nested_list;
-                while (sa && sa->v == -1)
+                while (sa && sa->v == 0)
                     sa = sa->prev;
                 if (sa)
-                    sa->v = -1;
+                    sa->v = 0;
                 continue;
             }
         } else {
@@ -3330,7 +3330,7 @@ static int macro_subst_tok(
 
         sym_push2(nested_list, s->v, 0, 0);
         parse_flags = saved_parse_flags;
-        macro_subst(tok_str, nested_list, mstr, can_read_stream);
+        macro_subst(tok_str, nested_list, mstr, can_read_stream | 2);
 
         /* pop nested defined symbol */
         sa1 = *nested_list;
@@ -3454,7 +3454,7 @@ static void macro_subst(
     spc = nosubst = 0;
 
     /* first scan for '##' operator handling */
-    if (can_read_stream) {
+    if (can_read_stream & 1) {
         macro_str1 = macro_twosharps(ptr);
         if (macro_str1)
             ptr = macro_str1;
