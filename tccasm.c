@@ -824,6 +824,16 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
             opcode = tok;
             next();
             if (tok == ':') {
+                /* handle "extern void vide(void); __asm__("vide: ret");" as
+                "__asm__("globl vide\nvide: ret");" */
+                Sym *sym = sym_find(opcode);
+                if (sym && (sym->type.t & VT_EXTERN) && nocode_wanted) {
+                    sym = label_find(opcode);
+                    if (!sym) {
+                        sym = label_push(&s1->asm_labels, opcode, 0);
+                        sym->type.t = VT_VOID;
+                    }
+                }
                 /* new label */
                 asm_new_label(s1, opcode, 0);
                 next();
