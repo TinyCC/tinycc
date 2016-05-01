@@ -48,6 +48,7 @@ static TokenSym *hash_ident[TOK_HASH_SIZE];
 static char token_buf[STRING_MAX_SIZE + 1];
 static CString cstr_buf;
 static TokenString tokstr_buf;
+static TokenString tokstr_buf2;
 static unsigned char isidnum_table[256 - CH_EOF];
 /* isidnum_table flags: */
 #define IS_SPC 1
@@ -3539,10 +3540,51 @@ ST_FUNC void next(void)
         /* if reading from file, try to substitute macros */
         s = define_find(tok);
         if (s) {
-            Sym *nested_list = NULL;
-            tokstr_buf.len = 0;
-            nested_list = NULL;
-            macro_subst_tok(&tokstr_buf, &nested_list, s, 1);
+            if (tcc_state->output_type == TCC_OUTPUT_PREPROCESS)
+            {
+                int t = 0;
+                Sym *nested_list = NULL;
+                tokstr_buf2.len = 0;
+                macro_subst_tok(&tokstr_buf2, &nested_list, s, 1);
+                next_nomacro_spc();
+                if (tok >= TOK_IDENT) {
+                    s = define_find(tok);
+                    if (s) {
+                        nested_list = NULL;
+                        macro_subst_tok(&tokstr_buf2, &nested_list, s, 1);
+                    } else
+                        tok_str_add_tok(&tokstr_buf2);
+                } else
+                    tok_str_add_tok(&tokstr_buf2);
+
+                {
+                    const int *str  = tokstr_buf2.str;
+                    const int *str1 = tokstr_buf2.str + tokstr_buf2.len;
+                    int tok = 0;
+                    CValue cval;
+
+                    tokstr_buf.len = 0;
+                    while (str < str1) {
+                        if (tok != TOK_LINENUM)
+                            t = tok;
+                        TOK_GET(&tok, &str, &cval);
+                        if ((t == TOK_PPNUM) && ((tok == '+') || (tok == '-'))) {
+                            tok_str_add(&tokstr_buf, ' ');
+                            tok_str_add2(&tokstr_buf, tok, &cval);
+                        } else
+                        if ((t == TOK_INC || (t == TOK_DEC)) && ((tok == '+') || (tok == '-'))) {
+                            tok_str_add(&tokstr_buf, tok);
+                            tok_str_add(&tokstr_buf, ' ');
+                        } else
+                            tok_str_add2(&tokstr_buf, tok, &cval);
+                    }
+                }
+            }
+            else {
+                Sym *nested_list = NULL;
+                tokstr_buf.len = 0;
+                macro_subst_tok(&tokstr_buf, &nested_list, s, 1);
+            }
             tok_str_add(&tokstr_buf, 0);
             begin_macro(&tokstr_buf, 2);
             goto redo;
@@ -3617,6 +3659,8 @@ ST_FUNC void preprocess_new(void)
     cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
     tok_str_new(&tokstr_buf);
     tok_str_realloc(&tokstr_buf, TOKSTR_MAX_SIZE);
+    tok_str_new(&tokstr_buf2);
+    tok_str_realloc(&tokstr_buf2, TOKSTR_MAX_SIZE);
     
     tok_ident = TOK_IDENT;
     p = tcc_keywords;
@@ -3655,6 +3699,7 @@ ST_FUNC void preprocess_delete(void)
     cstr_free(&tokcstr);
     cstr_free(&cstr_buf);
     tok_str_free(tokstr_buf.str);
+    tok_str_free(tokstr_buf2.str);
 
     /* free allocators */
     tal_delete(toksym_alloc);

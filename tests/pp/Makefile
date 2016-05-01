@@ -6,17 +6,17 @@ TCC = ../../tcc
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
 TESTS += $(patsubst %.S,%.test,$(wildcard *.S))
 
-all test : $(TESTS)
+all test : $(sort $(TESTS))
 
 %.test: %.c %.expect
 	@echo PPTest $* ...
-	@$(TCC) -E -P $< >$*.output 2>&1 ; \
+	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
 	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
 	    && rm -f $*.output
 
 %.test: %.S %.expect
 	@echo PPTest $* ...
-	@$(TCC) -E -P $< >$*.output 2>&1 ; \
+	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
 	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
 	    && rm -f $*.output
 

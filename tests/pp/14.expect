@@ -1,0 +1,8 @@
+extern int printf(const char *format, ...);
+int main(void)
+{
+    int a = 0, b = -1;
+    int i1 = a +++ ++ b;
+    printf("i1 = %d\n", i1);
+    return 0x1e -1;
+}
