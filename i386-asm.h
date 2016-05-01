@@ -213,7 +213,7 @@ ALT(DEF_ASM_OP1(jmp, 0xff, 0, OPC_JMP | OPC_WL, OPT_REGW))
 #endif
 
 ALT(DEF_ASM_OP2(lcall, 0x9a, 0, 0, OPT_IM16, OPT_IM32))
-ALT(DEF_ASM_OP1(lcall, 0xff, 3, 0, OPT_EA))
+ALT(DEF_ASM_OP1(lcall, 0xff1f, 3, 0, OPT_EA))
 ALT(DEF_ASM_OP2(ljmp, 0xea, 0, 0, OPT_IM16, OPT_IM32))
 ALT(DEF_ASM_OP1(ljmp, 0xff, 5, 0, OPT_EA))
 
