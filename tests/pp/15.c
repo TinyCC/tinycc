@@ -19,3 +19,8 @@ return A + B;
 #define B1 C1+2
 #define C1 A1+3
 return A1 + B1;
+
+#define i() x
+#define n() 1
+i()i()n()n()i()
+i()+i()-n()+n()-

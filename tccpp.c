@@ -3644,12 +3644,61 @@ static void pp_debug_builtins(TCCState *s1)
         define_print(s1, v);
 }
 
+static int need_space(int prev_tok, int tok, const char *tokstr)
+{
+    const char *sp_chars = "";
+    if ((prev_tok >= TOK_IDENT || prev_tok == TOK_PPNUM) &&
+        (tok >= TOK_IDENT || tok == TOK_PPNUM))
+        return 1;
+    switch (prev_tok) {
+    case '+':
+        sp_chars = "+=";
+        break;
+    case '-':
+        sp_chars = "-=>";
+        break;
+    case '*':
+    case '/':
+    case '%':
+    case '^':
+    case '=':
+    case '!':
+    case TOK_A_SHL:
+    case TOK_A_SAR:
+        sp_chars = "=";
+        break;
+    case '&':
+        sp_chars = "&=";
+        break;
+    case '|':
+        sp_chars = "|=";
+        break;
+    case '<':
+        sp_chars = "<=";
+        break;
+    case '>':
+        sp_chars = ">=";
+        break;
+    case '.':
+        sp_chars = ".";
+        break;
+    case '#':
+        sp_chars = "#";
+        break;
+    case TOK_PPNUM:
+        sp_chars = "+-";
+        break;
+    }
+    return !!strchr(sp_chars, tokstr[0]);
+}
+
 /* Preprocess the current file */
 ST_FUNC int tcc_preprocess(TCCState *s1)
 {
     BufferedFile **iptr;
     int token_seen, spcs, level;
     Sym *define_start;
+    const char *tokstr;
 
     preprocess_init(s1);
     ch = file->buf_ptr[0];
@@ -3707,9 +3756,12 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
             ++file->line_ref;
         }
 
+        tokstr = get_tok_str(tok, &tokc);
+        if (!spcs && need_space(token_seen, tok, tokstr))
+            ++spcs;
         while (spcs)
             fputs(" ", s1->ppfp), --spcs;
-        fputs(get_tok_str(tok, &tokc), s1->ppfp);
+        fputs(tokstr, s1->ppfp);
 
         token_seen = tok;
     }
