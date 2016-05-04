@@ -167,9 +167,9 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
 {
     Sym *s;
     if (!tcc_state->no_type_redef_check) {
-        if (ps == &local_stack) {
-            for (s = *ps; s && s != scope_stack_bottom; s = s->prev)
-                if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM && s->v == v)
+        if ((ps == &local_stack) && !(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+            for (s = *ps; s != scope_stack_bottom; s = s->prev)
+                if (s->v == v)
                     tcc_error("incompatible types for redefinition of '%s'",
                               get_tok_str(v, NULL));
         }
