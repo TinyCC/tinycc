@@ -459,7 +459,10 @@ typedef struct AttributeDef {
 /* symbol management */
 typedef struct Sym {
     int v;    /* symbol token */
-    int asm_label;    /* associated asm label */
+    union {
+        int asm_label;    /* associated asm label */
+        int scope;  /* scope level for locals */
+    };
     union {
         long r;    /* associated register */
         struct Attribute a;
@@ -707,7 +710,6 @@ struct TCCState {
 				   Liuux 2.4.26 can't find initrd when compiled with a new algorithm */
     int dollars_in_identifiers;	/* allows '$' char in indentifiers */
     int normalize_inc_dirs;	/* remove non-existent or duplicate directories from include paths */
-    int no_type_redef_check;    /* no local vars redefinition check */
 
     /* warning switches */
     int warn_write_strings;

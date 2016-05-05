@@ -1764,7 +1764,6 @@ static const FlagDef flag_defs[] = {
     { offsetof(TCCState, old_struct_init_code), 0, "old-struct-init-code" },
     { offsetof(TCCState, dollars_in_identifiers), 0, "dollars-in-identifiers" },
     { offsetof(TCCState, normalize_inc_dirs), 0, "normalize-inc-dirs" },
-    { offsetof(TCCState, no_type_redef_check), FD_INVERT, "type-redefinition-check" },
 };
 
 /* set/reset a flag */
