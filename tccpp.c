@@ -49,6 +49,9 @@ static char token_buf[STRING_MAX_SIZE + 1];
 static CString cstr_buf;
 static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
+static int pp_debug_tok, pp_debug_symv;
+static void tok_print(const char *msg, const int *str);
+
 /* isidnum_table flags: */
 #define IS_SPC 1
 #define IS_ID  2
@@ -127,6 +130,21 @@ ST_FUNC void end_macro(void)
         if (str->alloc == 1)
             tcc_free(str);
     }
+}
+
+ST_FUNC char *trimfront(char *p)
+{
+    while (*p && (unsigned char)*p <= ' ')
+	++p;
+    return p;
+}
+
+ST_FUNC char *trimback(char *a, char *e)
+{
+    while (e > a && (unsigned char)e[-1] <= ' ')
+	--e;
+    *e = 0;;
+    return a;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -675,80 +693,12 @@ ST_FUNC void minp(void)
         handle_stray();
 }
 
-static void pp_line(TCCState *s1, BufferedFile *f, int level)
-{
-    if (s1->ppfp) {
-        int d = f->line_num - f->line_ref;
-        if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE
-            || (level == 0 && f->line_ref && d < 8)) {
-            while (d > 0)
-                fputs("\n", s1->ppfp), --d;
-        } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
-            fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
-        } else {
-            fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
-                level > 0 ? " 1" : level < 0 ? " 2" : "");
-        }
-    }
-    f->line_ref = f->line_num;
-}
-
-static uint8_t *parse_print_comment(uint8_t *p, int is_line_comment)
-{
-    int c, star_count;
-    FILE *ppfp = tcc_state->ppfp;
-
-    if ((file->line_num - file->line_ref) > 0) {
-        fputc('\n', ppfp);
-        file->line_ref++;
-        pp_line(tcc_state, file, 0);
-    }
-    if (is_line_comment)
-        fputs("//", ppfp); else
-        fputs("/*", ppfp);
-
-    star_count = 0;
-    for(;;) {
-        c = *p;
-        if (c == '\\') {
-            file->buf_ptr = p;
-            c = handle_eob();
-            p = file->buf_ptr;
-        }
-        if (c == CH_EOF) {
-            if (is_line_comment) break;
-            tcc_error("unexpected end of file in comment");
-        }
-        if (c == '*')
-            star_count++;
-        else {
-            if ((c == '/') && star_count && !is_line_comment)
-                break;
-            star_count = 0;
-            if (c == '\n') {
-                if (is_line_comment) break;
-                file->line_num++;
-            }
-        }
-        fputc(c, ppfp);
-        p++;
-    }
-    if (!is_line_comment) {
-        fputc('/', ppfp);
-        p++;
-        file->line_ref = file->line_num;
-    }
-    return p;
-}
-
 /* single line C++ comments */
-static uint8_t *parse_line_comment(uint8_t *p, int skip)
+static uint8_t *parse_line_comment(uint8_t *p)
 {
     int c;
 
     p++;
-    if (tcc_state->option_C && !skip)
-        return parse_print_comment(p, 1);
     for(;;) {
         c = *p;
     redo:
@@ -781,13 +731,11 @@ static uint8_t *parse_line_comment(uint8_t *p, int skip)
 }
 
 /* C comments */
-ST_FUNC uint8_t *parse_comment(uint8_t *p, int skip)
+ST_FUNC uint8_t *parse_comment(uint8_t *p)
 {
     int c;
 
     p++;
-    if (tcc_state->option_C && !skip)
-        return parse_print_comment(p, 0);
     for(;;) {
         /* fast skip loop */
         for(;;) {
@@ -994,9 +942,9 @@ redo_start:
             minp();
             p = file->buf_ptr;
             if (ch == '*') {
-                p = parse_comment(p,1);
+                p = parse_comment(p);
             } else if (ch == '/') {
-                p = parse_line_comment(p,1);
+                p = parse_line_comment(p);
             }
             break;
         case '#':
@@ -1017,9 +965,9 @@ redo_start:
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
                 else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                    p = parse_line_comment(p,0);
+                    p = parse_line_comment(p);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                p = parse_line_comment(p,0);
+                p = parse_line_comment(p);
             break;
 _default:
         default:
@@ -1287,6 +1235,10 @@ static int macro_is_equal(const int *a, const int *b)
 {
     CValue cv;
     int t;
+
+    if (!a || !b)
+        return 1;
+
     while (*a && *b) {
         /* first time preallocate static cstr_buf, next time only reset position to start */
         cstr_reset(&cstr_buf);
@@ -1299,106 +1251,25 @@ static int macro_is_equal(const int *a, const int *b)
     return !(*a || *b);
 }
 
-static void tok_print(const char *msg, const int *str)
-{
-    FILE *pr = tcc_state->dffp;
-    int t;
-    CValue cval;
-
-    fprintf(pr, "%s ", msg);
-    while (str) {
-        TOK_GET(&t, &str, &cval);
-        if (!t)
-            break;
-        fprintf(pr,"%s", get_tok_str(t, &cval));
-    }
-    fprintf(pr, "\n");
-}
-
-static int define_print_prepared(Sym *s)
-{
-    if (!s || !tcc_state->dffp || tcc_state->dflag == 0)
-        return 0;
-
-    if (s->v < TOK_IDENT || s->v >= tok_ident)
-        return 0;
-
-    if (file && tcc_state->dflag == 'D') {
-        file->line_num--;
-        pp_line(tcc_state, file, 0);
-        file->line_ref = ++file->line_num;
-    }
-    return 1;
-}
-
-static void define_print(int v)
-{
-    FILE *pr = tcc_state->dffp;
-    Sym *s, *a;
-
-    s = define_find(v);
-    if (define_print_prepared(s) == 0)
-        return;
-
-    fprintf(pr, "// #define %s", get_tok_str(v, NULL));
-    if (s->type.t == MACRO_FUNC) {
-        a = s->next;
-        fprintf(pr,"(");
-        if (a)
-            for (;;) {
-                fprintf(pr,"%s", get_tok_str(a->v & ~SYM_FIELD, NULL));
-                if (!(a = a->next))
-                    break;
-                fprintf(pr,",");
-            }
-        fprintf(pr,")");
-    }
-    tok_print("", s->d);
-}
-
-static void undef_print(int v)
-{
-    FILE *pr = tcc_state->dffp;
-    Sym *s;
-
-    s = define_find(v);
-    if (define_print_prepared(s) == 0)
-        return;
-
-    fprintf(pr, "// #undef %s\n", get_tok_str(s->v, NULL));
-}
-
-ST_FUNC void print_defines(void)
-{
-    Sym *top = define_stack;
-    while (top) {
-        define_print(top->v);
-        top = top->prev;
-    }
-}
-
 /* defines handling */
 ST_INLN void define_push(int v, int macro_type, TokenString *str, Sym *first_arg)
 {
-    Sym *s;
+    Sym *s, *o;
 
-    if (str) {
-        s = define_find(v);
-        if (s && !macro_is_equal(s->d, str->str))
-            tcc_warning("%s redefined", get_tok_str(v, NULL));
-    }
-
+    o = define_find(v);
     s = sym_push2(&define_stack, v, macro_type, 0);
     s->d = str ? tok_str_dup(str) : NULL;
     s->next = first_arg;
     table_ident[v - TOK_IDENT]->sym_define = s;
+
+    if (o && !macro_is_equal(o->d, s->d))
+	tcc_warning("%s redefined", get_tok_str(v, NULL));
 }
 
 /* undefined a define symbol. Its name is just set to zero */
 ST_FUNC void define_undef(Sym *s)
 {
     int v = s->v;
-    undef_print(v);
     if (v >= TOK_IDENT && v < tok_ident)
         table_ident[v - TOK_IDENT]->sym_define = NULL;
 }
@@ -1602,7 +1473,6 @@ ST_FUNC void parse_define(void)
 bad_twosharp:
         tcc_error("'##' cannot appear at either end of macro");
     define_push(v, t, &tokstr_buf, first);
-    define_print(v);
 }
 
 static inline int hash_cached_include(const char *filename)
@@ -1688,6 +1558,7 @@ static void pragma_parse(TCCState *s1)
             table_ident[v - TOK_IDENT]->sym_define = s->d ? s : NULL;
         else
             tcc_warning("unbalanced #pragma pop_macro");
+        pp_debug_tok = t, pp_debug_symv = v;
 
     } else if (tok == TOK_once) {
         char buf1[sizeof(file->filename) + sizeof(ONCE_PREFIX)];
@@ -1788,11 +1659,15 @@ ST_FUNC void preprocess(int is_bof)
  redo:
     switch(tok) {
     case TOK_DEFINE:
+        pp_debug_tok = tok;
         next_nomacro();
+        pp_debug_symv = tok;
         parse_define();
         break;
     case TOK_UNDEF:
+        pp_debug_tok = tok;
         next_nomacro();
+        pp_debug_symv = tok;
         s = define_find(tok);
         /* undefine symbol by putting an invalid name */
         if (s)
@@ -2059,7 +1934,7 @@ _line_num:
             goto ignore;
         tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
     ignore:
-        file->buf_ptr = parse_line_comment(file->buf_ptr,0);
+        file->buf_ptr = parse_line_comment(file->buf_ptr);
         goto the_end;
     }
     /* ignore other preprocess commands or #! for C scripts */
@@ -2655,7 +2530,7 @@ maybe_newline:
                 tok = TOK_TWOSHARPS;
             } else {
                 if (parse_flags & PARSE_FLAG_ASM_FILE) {
-                    p = parse_line_comment(p - 1,0);
+                    p = parse_line_comment(p - 1);
                     goto redo_no_start;
                 } else {
                     tok = '#';
@@ -2918,17 +2793,13 @@ maybe_newline:
     case '/':
         PEEKC(c, p);
         if (c == '*') {
-            p = parse_comment(p,0);
+            p = parse_comment(p);
             /* comments replaced by a blank */
             tok = ' ';
-            if (tcc_state->option_C)
-                goto redo_no_start;
             goto keep_tok_flags;
         } else if (c == '/') {
-            p = parse_line_comment(p,0);
+            p = parse_line_comment(p);
             tok = ' ';
-            if (tcc_state->option_C)
-                goto redo_no_start;
             goto keep_tok_flags;
         } else if (c == '=') {
             p++;
@@ -3150,10 +3021,10 @@ static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *w
                         uint8_t *p = file->buf_ptr;
                         PEEKC(c, p);
                         if (c == '*') {
-                            p = parse_comment(p,0);
+                            p = parse_comment(p);
                             file->buf_ptr = p - 1;
                         } else if (c == '/') {
-                            p = parse_line_comment(p,0);
+                            p = parse_line_comment(p);
                             file->buf_ptr = p - 1;
                         } else
                             break;
@@ -3570,8 +3441,6 @@ ST_INLN void unget_tok(int last_tok)
     tok = last_tok;
 }
 
-/* better than nothing, but needs extension to handle '-E' option
-   correctly too */
 ST_FUNC void preprocess_init(TCCState *s1)
 {
     s1->include_stack_ptr = s1->include_stack;
@@ -3585,8 +3454,7 @@ ST_FUNC void preprocess_init(TCCState *s1)
     s1->pack_stack_ptr = s1->pack_stack;
 
     isidnum_table['$' - CH_EOF] =
-        tcc_state->dollars_in_identifiers ? IS_ID : 0;
-
+        s1->dollars_in_identifiers ? IS_ID : 0;
     isidnum_table['.' - CH_EOF] =
         (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
 }
@@ -3665,11 +3533,122 @@ ST_FUNC void preprocess_delete(void)
     cstr_alloc = NULL;
 }
 
+/* ------------------------------------------------------------------------- */
+/* tcc -E [-P[1]] [-dD} support */
+
+static void tok_print(const char *msg, const int *str)
+{
+    FILE *fp;
+    int t;
+    CValue cval;
+
+    fp = tcc_state->ppfp;
+    if (!fp || !tcc_state->dflag)
+        fp = stdout;
+
+    fprintf(fp, "%s ", msg);
+    while (str) {
+	TOK_GET(&t, &str, &cval);
+	if (!t)
+	    break;
+	fprintf(fp,"%s", get_tok_str(t, &cval));
+    }
+    fprintf(fp, "\n");
+}
+
+static void pp_line(TCCState *s1, BufferedFile *f, int level)
+{
+    int d = f->line_num - f->line_ref;
+
+    if (s1->dflag & 4)
+	return;
+
+    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE) {
+	if (level == 0 && f->line_ref && d) {
+	    d = 1;
+	    goto simple;
+	}
+    } else if (level == 0 && f->line_ref && d < 8) {
+simple:
+	while (d > 0)
+	    fputs("\n", s1->ppfp), --d;
+    } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
+	fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
+    } else {
+	fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename,
+	    level > 0 ? " 1" : level < 0 ? " 2" : "");
+    }
+    f->line_ref = f->line_num;
+}
+
+static void define_print(TCCState *s1, int v)
+{
+    FILE *fp;
+    Sym *s;
+
+    s = define_find(v);
+    if (NULL == s || NULL == s->d)
+        return;
+
+    fp = s1->ppfp;
+    fprintf(fp, "#define %s", get_tok_str(v, NULL));
+    if (s->type.t == MACRO_FUNC) {
+        Sym *a = s->next;
+        fprintf(fp,"(");
+        if (a)
+            for (;;) {
+                fprintf(fp,"%s", get_tok_str(a->v & ~SYM_FIELD, NULL));
+                if (!(a = a->next))
+                    break;
+                fprintf(fp,",");
+            }
+        fprintf(fp,")");
+    }
+    tok_print("", s->d);
+}
+
+static void pp_debug_defines(TCCState *s1)
+{
+    int v, t;
+    const char *vs;
+    FILE *fp;
+
+    t = pp_debug_tok;
+    if (t == 0)
+        return;
+
+    file->line_num--;
+    pp_line(s1, file, 0);
+    file->line_ref = ++file->line_num;
+
+    fp = s1->ppfp;
+    v = pp_debug_symv;
+    vs = get_tok_str(v, NULL);
+    if (t == TOK_DEFINE) {
+        define_print(s1, v);
+    } else if (t == TOK_UNDEF) {
+        fprintf(fp, "#undef %s\n", vs);
+    } else if (t == TOK_push_macro) {
+        fprintf(fp, "#pragma push_macro(\"%s\")\n", vs);
+    } else if (t == TOK_pop_macro) {
+        fprintf(fp, "#pragma pop_macro(\"%s\")\n", vs);
+    }
+    pp_debug_tok = 0;
+}
+
+static void pp_debug_builtins(TCCState *s1)
+{
+    int v;
+    for (v = TOK_IDENT; v < tok_ident; ++v)
+        define_print(s1, v);
+}
+
 /* Preprocess the current file */
 ST_FUNC int tcc_preprocess(TCCState *s1)
 {
     BufferedFile **iptr;
     int token_seen, spcs, level;
+    Sym *define_start;
 
     preprocess_init(s1);
     ch = file->buf_ptr[0];
@@ -3680,12 +3659,19 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
                 | PARSE_FLAG_SPACES
                 | PARSE_FLAG_ACCEPT_STRAYS
                 ;
+    define_start = define_stack;
 
 #ifdef PP_BENCH
+    /* for PP benchmarks */
     do next(); while (tok != TOK_EOF); return 0;
 #endif
 
-    token_seen = spcs = 0;
+    if (s1->dflag & 1) {
+        pp_debug_builtins(s1);
+        s1->dflag &= ~1;
+    }
+
+    token_seen = TOK_LINEFEED, spcs = 0;
     pp_line(s1, file, 0);
 
     for (;;) {
@@ -3700,7 +3686,13 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
             pp_line(s1, file, level);
         }
 
-        if (0 == token_seen) {
+        if (s1->dflag) {
+            pp_debug_defines(s1);
+            if (s1->dflag & 4)
+                continue;
+        }
+
+        if (token_seen == TOK_LINEFEED) {
             if (tok == ' ') {
                 ++spcs;
                 continue;
@@ -3710,33 +3702,19 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
                 continue;
             }
             pp_line(s1, file, 0);
-            while (s1->ppfp && spcs > 0)
-                fputs(" ", s1->ppfp), --spcs;
-            spcs = 0;
-            token_seen = 1;
-
         } else if (tok == TOK_LINEFEED) {
             ++file->line_ref;
-            token_seen = 0;
         }
-        if (s1->ppfp)
-            fputs(get_tok_str(tok, &tokc), s1->ppfp);
-    }
 
+        while (spcs)
+            fputs(" ", s1->ppfp), --spcs;
+        fputs(get_tok_str(tok, &tokc), s1->ppfp);
+
+        token_seen = tok;
+    }
+    /* reset define stack, but keep -D and built-ins */
+    free_defines(define_start);
     return 0;
 }
 
-ST_FUNC char *trimfront(char *p)
-{
-    while (*p && (unsigned char)*p <= ' ')
-        ++p;
-    return p;
-}
-
-ST_FUNC char *trimback(char *a, char *e)
-{
-    while (e > a && (unsigned char)e[-1] <= ' ')
-        --e;
-    *e = 0;;
-    return a;
-}
+/* ------------------------------------------------------------------------- */
