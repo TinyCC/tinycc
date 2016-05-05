@@ -2303,7 +2303,9 @@ void c99_vla_test(int size1, int size2)
 #endif
 }
 
+#ifndef __TINYC__
 typedef __SIZE_TYPE__ uintptr_t;
+#endif
 
 void sizeof_test(void)
 {

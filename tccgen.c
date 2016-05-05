@@ -239,11 +239,10 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
             ps = &ts->sym_identifier;
         s->prev_tok = *ps;
         *ps = s;
-        if (local_scope) {
-            s->scope = local_scope;
-            if (s->prev_tok && s->prev_tok->scope == s->scope)
-                tcc_error("redeclaration of '%s'", get_tok_str(v & ~SYM_STRUCT, NULL));
-        }
+        s->scope = local_scope;
+        if (s->prev_tok && s->prev_tok->scope == s->scope)
+            tcc_error("redeclaration of '%s'",
+                get_tok_str(v & ~SYM_STRUCT, NULL));
     }
     return s;
 }
@@ -2929,6 +2928,8 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
             expect("struct/union/enum name");
         s = struct_find(v);
         if (s && s->type.t == a) {
+            if (0 == local_scope)
+                goto do_decl; /* compatibility with past behavior */
             if (tok != '{' && tok != ';')
                 goto do_decl; /* variable declaration: 'struct s x;' */
             if (s->scope == local_scope && (s->c == -1 || tok != '{'))

@@ -100,16 +100,19 @@ typedef __time64_t time_t;
 #define _TIME_T_DEFINED
 #endif
 
+#if 0 // defined in stddef.h
 typedef unsigned long size_t;
-#define _SIZE_T_DEFINED
 typedef long ssize_t;
-#define _SSIZE_T_DEFINED
-
-typedef unsigned int wint_t;
-typedef unsigned short wctype_t;
-#define _WCTYPE_T_DEFINED
 typedef unsigned short wchar_t;
+#endif
+#define _SIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
 #define _WCHAR_T_DEFINED
+
+typedef unsigned short wctype_t;
+typedef unsigned int wint_t;
+#define _WCTYPE_T_DEFINED
+#define _WINT_T
 
 typedef int errno_t;
 #define _ERRCODE_DEFINED
