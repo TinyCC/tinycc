@@ -2927,13 +2927,10 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
         if (v < TOK_IDENT)
             expect("struct/union/enum name");
         s = struct_find(v);
-        if (s && s->type.t == a) {
-            if (0 == local_scope)
-                goto do_decl; /* compatibility with past behavior */
-            if (tok != '{' && tok != ';')
-                goto do_decl; /* variable declaration: 'struct s x;' */
-            if (s->scope == local_scope && (s->c == -1 || tok != '{'))
-                goto do_decl; /* at least one must be incomplete type */
+        if (s && (s->scope == local_scope || (tok != '{' && tok != ';'))) {
+            if (s->type.t != a)
+                tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
+            goto do_decl;
         }
     } else {
         v = anon_sym++;
@@ -3435,8 +3432,6 @@ static void post_type(CType *type, AttributeDef *ad)
         plast = &first;
         arg_size = 0;
         if (tok != ')') {
-            int ls = local_scope;
-            local_scope = 1; /* for struct decl inside function params */
             for(;;) {
                 /* read param name and compute offset */
                 if (l != FUNC_OLD) {
@@ -3476,7 +3471,6 @@ static void post_type(CType *type, AttributeDef *ad)
                     break;
                 }
             }
-            local_scope = ls;
         }
         /* if no parameters, then old type prototype */
         if (l == 0)
@@ -6434,7 +6428,16 @@ static int decl0(int l, int is_for_loop_init)
                 if (btype.t & VT_TYPEDEF) {
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
-                    sym = sym_push(v, &type, 0, 0);
+                    sym = sym_find(v);
+                    if (sym && sym->scope == local_scope) {
+                        if (!is_compatible_types(&sym->type, &type)
+                            || !(sym->type.t & VT_TYPEDEF))
+                            tcc_error("incompatible redefinition of '%s'",
+                                get_tok_str(v, NULL));
+                        sym->type = type;
+                    } else {
+                        sym = sym_push(v, &type, 0, 0);
+                    }
                     sym->a = ad.a;
                     sym->type.t |= VT_TYPEDEF;
                 } else {

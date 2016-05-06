@@ -250,6 +250,7 @@ cache: tcc_g
 # clean
 clean:
 	$(MAKE) -C tests2 $@
+	$(MAKE) -C pp $@
 	rm -vf *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc \
 		*-cc *-tcc *.exe \
 		hello libtcc_test vla_test tcctest[1234] ex? tcc_g

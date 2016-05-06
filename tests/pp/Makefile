@@ -8,16 +8,18 @@ TESTS += $(patsubst %.S,%.test,$(wildcard *.S))
 
 all test : $(sort $(TESTS))
 
+DIFF_OPTS = -Nu -b -B -I "^\#"
+
 %.test: %.c %.expect
 	@echo PPTest $* ...
 	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
-	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
+	    diff $(DIFF_OPTS) $*.expect $*.output \
 	    && rm -f $*.output
 
 %.test: %.S %.expect
 	@echo PPTest $* ...
 	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
-	    diff -Nu -b -B -I "^#" $(EXTRA_DIFF_OPTS) $*.expect $*.output \
+	    diff $(DIFF_OPTS) $*.expect $*.output \
 	    && rm -f $*.output
 
 # automatically generate .expect files with gcc:
@@ -33,10 +35,8 @@ all test : $(sort $(TESTS))
 clean:
 	rm -vf *.output
 
-# 02.test : EXTRA_DIFF_OPTS = -w
-# 03.test : EXTRA_DIFF_OPTS = -w
-# 04.test : EXTRA_DIFF_OPTS = -w
-# 10.test : EXTRA_DIFF_OPTS = -w
+02.test : DIFF_OPTS += -w
+15.test : DIFF_OPTS += -w
 
 # diff options:
 # -b ighore space changes
