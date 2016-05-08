@@ -2641,6 +2641,7 @@ maybe_newline:
                   || c == '.'
                   || ((c == '+' || c == '-')
                       && (t == 'e' || t == 'E' || t == 'p' || t == 'P')
+                      && !(parse_flags & PARSE_FLAG_ASM_FILE)
                       )))
                 break;
         }
