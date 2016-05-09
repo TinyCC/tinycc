@@ -927,7 +927,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
 		    /* Use sign extension! */
-                    qrel->r_addend = (int)read32le(ptr);
+                    qrel->r_addend = (int)read32le(ptr) + rel->r_addend;
                     qrel++;
                     break;
                 }

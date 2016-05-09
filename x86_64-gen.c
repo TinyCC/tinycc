@@ -256,7 +256,7 @@ ST_FUNC int oad(int c, int s)
 ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
-        greloc(cur_text_section, sym, ind, R_X86_64_32);
+        greloca(cur_text_section, sym, ind, R_X86_64_32, c), c=0;
     gen_le32(c);
 }
 
@@ -264,7 +264,7 @@ ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 {
     if (r & VT_SYM)
-        greloc(cur_text_section, sym, ind, R_X86_64_64);
+        greloca(cur_text_section, sym, ind, R_X86_64_64, c), c=0;
     gen_le64(c);
 }
 
@@ -272,7 +272,7 @@ ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
-        greloc(cur_text_section, sym, ind, R_X86_64_PC32);
+        greloca(cur_text_section, sym, ind, R_X86_64_PC32, c-4), c=4;
     gen_le32(c-4);
 }
 
@@ -280,12 +280,7 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 static void gen_gotpcrel(int r, Sym *sym, int c)
 {
 #ifndef TCC_TARGET_PE
-    Section *sr;
-    ElfW(Rela) *rel;
-    greloc(cur_text_section, sym, ind, R_X86_64_GOTPCREL);
-    sr = cur_text_section->reloc;
-    rel = (ElfW(Rela) *)(sr->data + sr->data_offset - sizeof(ElfW(Rela)));
-    rel->r_addend = -4;
+    greloca(cur_text_section, sym, ind, R_X86_64_GOTPCREL, -4);
 #else
     tcc_error("internal error: no GOT on PE: %s %x %x | %02x %02x %02x\n",
         get_tok_str(sym->v, NULL), c, r,
@@ -608,16 +603,16 @@ static void gcall_or_jmp(int is_jmp)
         if (vtop->r & VT_SYM) {
             /* relocation case */
 #ifdef TCC_TARGET_PE
-            greloc(cur_text_section, vtop->sym, ind + 1, R_X86_64_PC32);
+            greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PC32, (int)(vtop->c.i-4));
 #else
-            greloc(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32);
+            greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32, (int)(vtop->c.i-4));
 #endif
         } else {
             /* put an empty PC32 relocation */
-            put_elf_reloc(symtab_section, cur_text_section,
-                          ind + 1, R_X86_64_PC32, 0);
+            put_elf_reloca(symtab_section, cur_text_section,
+                          ind + 1, R_X86_64_PC32, 0, (int)(vtop->c.i-4));
         }
-        oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
+        oad(0xe8 + is_jmp, 0); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
         r = TREG_R11;
@@ -637,8 +632,8 @@ static unsigned long func_bound_ind;
 static void gen_static_call(int v)
 {
     Sym *sym = external_global_sym(v, &func_old_type, 0);
-    oad(0xe8, -4);
-    greloc(cur_text_section, sym, ind-4, R_X86_64_PC32);
+    oad(0xe8, 0);
+    greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
 }
 
 /* generate a bounded pointer addition */
@@ -991,8 +986,8 @@ void gfunc_epilog(void)
     if (v >= 4096) {
         Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
         oad(0xb8, v); /* mov stacksize, %eax */
-        oad(0xe8, -4); /* call __chkstk, (does the stackframe too) */
-        greloc(cur_text_section, sym, ind-4, R_X86_64_PC32);
+        oad(0xe8, 0); /* call __chkstk, (does the stackframe too) */
+        greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
         o(0x90); /* fill for FUNC_PROLOG_SIZE = 11 bytes */
     } else {
         o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */
