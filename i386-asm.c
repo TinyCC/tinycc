@@ -1366,7 +1366,11 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         snprintf(buf, sizeof(buf), "%d", (int)sv->c.i);
         cstr_cat(add_str, buf, -1);
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
+#ifdef TCC_TARGET_X86_64
+        snprintf(buf, sizeof(buf), "%d(%%rbp)", (int)sv->c.i);
+#else
         snprintf(buf, sizeof(buf), "%d(%%ebp)", (int)sv->c.i);
+#endif
         cstr_cat(add_str, buf, -1);
     } else if (r & VT_LVAL) {
         reg = r & VT_VALMASK;

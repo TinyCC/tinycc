@@ -2411,24 +2411,24 @@ void local_label_test(void)
 }
 
 /* inline assembler test */
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__)
 
 /* from linux kernel */
 static char * strncat1(char * dest,const char * src,size_t count)
 {
-int d0, d1, d2, d3;
+long d0, d1, d2, d3;
 __asm__ __volatile__(
 	"repne\n\t"
 	"scasb\n\t"
-	"decl %1\n\t"
-	"movl %8,%3\n"
-	"1:\tdecl %3\n\t"
+	"dec %1\n\t"
+	"mov %8,%3\n"
+	"1:\tdec %3\n\t"
 	"js 2f\n\t"
 	"lodsb\n\t"
 	"stosb\n\t"
 	"testb %%al,%%al\n\t"
 	"jne 1b\n"
-	"2:\txorl %2,%2\n\t"
+	"2:\txor %2,%2\n\t"
 	"stosb"
 	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
 	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
@@ -2438,18 +2438,18 @@ return dest;
 
 static char * strncat2(char * dest,const char * src,size_t count)
 {
-int d0, d1, d2, d3;
+long d0, d1, d2, d3;
 __asm__ __volatile__(
 	"repne scasb\n\t" /* one-line repne prefix + string op */
-	"decl %1\n\t"
-	"movl %8,%3\n"
-	"1:\tdecl %3\n\t"
+	"dec %1\n\t"
+	"mov %8,%3\n"
+	"1:\tdec %3\n\t"
 	"js 2f\n\t"
 	"lodsb\n\t"
 	"stosb\n\t"
 	"testb %%al,%%al\n\t"
 	"jne 1b\n"
-	"2:\txorl %2,%2\n\t"
+	"2:\txor %2,%2\n\t"
 	"stosb"
 	: "=&S" (d0), "=&D" (d1), "=&a" (d2), "=&c" (d3)
 	: "0" (src),"1" (dest),"2" (0),"3" (0xffffffff), "g" (count)
@@ -2459,7 +2459,7 @@ return dest;
 
 static inline void * memcpy1(void * to, const void * from, size_t n)
 {
-int d0, d1, d2;
+long d0, d1, d2;
 __asm__ __volatile__(
 	"rep ; movsl\n\t"
 	"testb $2,%b4\n\t"
@@ -2477,7 +2477,7 @@ return (to);
 
 static inline void * memcpy2(void * to, const void * from, size_t n)
 {
-int d0, d1, d2;
+long d0, d1, d2;
 __asm__ __volatile__(
 	"rep movsl\n\t"  /* one-line rep prefix + string op */
 	"testb $2,%b4\n\t"
@@ -2516,14 +2516,28 @@ static __inline__ __const__ unsigned int swab32(unsigned int x)
 static __inline__ unsigned long long mul64(unsigned int a, unsigned int b)
 {
     unsigned long long res;
+#ifdef __x86_64__
+    /* Using the A constraint is wrong (it means rdx:rax, which is too large)
+       but still test the 32bit->64bit mull.  */
+    unsigned int resh, resl;
+    __asm__("mull %2" : "=a" (resl), "=d" (resh) : "a" (a), "r" (b));
+    res = ((unsigned long long)resh << 32) | resl;
+#else
     __asm__("mull %2" : "=A" (res) : "a" (a), "r" (b));
+#endif
     return res;
 }
 
 static __inline__ unsigned long long inc64(unsigned long long a)
 {
     unsigned long long res;
+#ifdef __x86_64__
+    /* Using the A constraint is wrong, and increments are tested
+       elsewere.  */
+    res = a + 1;
+#else
     __asm__("addl $1, %%eax ; adcl $0, %%edx" : "=A" (res) : "A" (a));
+#endif
     return res;
 }
 
