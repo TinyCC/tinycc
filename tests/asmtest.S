@@ -46,6 +46,16 @@ movl %eax, 0x100(%ebx,%edx,2)
 movl 0x100(%ebx,%edx,2), %edx
 movw %ax, 0x100(%ebx,%edx,2)
 
+movw $0x1122,%si
+movl $0x112233,%edx
+#ifdef __x86_64__
+mov $0x11223344,%rbx
+movq $0x11223344,%rbx
+mov $0x1122334455,%rbx
+movq $0x1122334455,%rbx
+movl $0x11334455,(%rbx)
+#endif
+
 mov %eax, 0x12(,%edx,2)
         
 #ifdef __i386__

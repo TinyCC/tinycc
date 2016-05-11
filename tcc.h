@@ -610,7 +610,7 @@ typedef struct CachedInclude {
 
 #ifdef CONFIG_TCC_ASM
 typedef struct ExprValue {
-    uint32_t v;
+    uint64_t v;
     Sym *sym;
 } ExprValue;
 

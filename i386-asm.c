@@ -83,13 +83,10 @@ enum {
     OPT_INDIR,  /* *(expr) */
     /* composite types */
     OPT_COMPOSITE_FIRST,
-    OPT_IM,     /* IM8 | IM16 | IM32 | IM64 */
+    OPT_IM,     /* IM8 | IM16 | IM32 */
     OPT_REG,    /* REG8 | REG16 | REG32 | REG64 */
     OPT_REGW,   /* REG16 | REG32 | REG64 */
-    OPT_IMW,    /* IM16 | IM32 | IM64 */
-#ifdef TCC_TARGET_X86_64
-    OPT_IMNO64, /* IM16 | IM32 */
-#endif
+    OPT_IMW,    /* IM16 | IM32 */
     /* can be ored with any OPT_xxx */
     OPT_EA = 0x80
 };
@@ -128,12 +125,10 @@ enum {
 #define OP_REG    (OP_REG8 | OP_REG16 | OP_REG32 | OP_REG64)
 
 #ifdef TCC_TARGET_X86_64
-# define OP_IM      OP_IM64
 # define TREG_XAX   TREG_RAX
 # define TREG_XCX   TREG_RCX
 # define TREG_XDX   TREG_RDX
 #else
-# define OP_IM      OP_IM32
 # define TREG_XAX   TREG_EAX
 # define TREG_XCX   TREG_ECX
 # define TREG_XDX   TREG_EDX
@@ -347,7 +342,7 @@ static void parse_operand(TCCState *s1, Operand *op)
         /* constant value */
         next();
         asm_expr(s1, &e);
-        op->type = OP_IM;
+        op->type = OP_IM32;
         op->e.v = e.v;
         op->e.sym = e.sym;
         if (!op->e.sym) {
@@ -358,8 +353,8 @@ static void parse_operand(TCCState *s1, Operand *op)
             if (op->e.v == (uint16_t)op->e.v)
                 op->type |= OP_IM16;
 #ifdef TCC_TARGET_X86_64
-            if (op->e.v == (uint32_t)op->e.v)
-                op->type |= OP_IM32;
+            if (op->e.v != (uint32_t)op->e.v)
+                op->type = OP_IM64;
 #endif
         }
     } else {
@@ -587,6 +582,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         }
         if (pa->nb_ops != nb_ops)
             continue;
+#ifdef TCC_TARGET_X86_64
+	/* Special case for moves.  Selecting the IM64->REG64 form
+	   should only be done if we really have an >32bit imm64, and that
+	   is hardcoded.  Ignore it here.  */
+	if (pa->opcode == 0xb0 && ops[0].type != OP_IM64
+	    && ops[1].type == OP_REG64)
+	    continue;
+#endif
         /* now decode and check each operand */
 	alltypes = 0;
         for(i = 0; i < nb_ops; i++) {
@@ -595,7 +598,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             op2 = op1 & 0x1f;
             switch(op2) {
             case OPT_IM:
-                v = OP_IM8 | OP_IM16 | OP_IM32 | OP_IM64;
+                v = OP_IM8 | OP_IM16 | OP_IM32;
                 break;
             case OPT_REG:
                 v = OP_REG8 | OP_REG16 | OP_REG32 | OP_REG64;
@@ -604,13 +607,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 v = OP_REG16 | OP_REG32 | OP_REG64;
                 break;
             case OPT_IMW:
-                v = OP_IM16 | OP_IM32 | OP_IM64;
-                break;
-#ifdef TCC_TARGET_X86_64
-            case OPT_IMNO64:
                 v = OP_IM16 | OP_IM32;
                 break;
-#endif
             default:
                 v = 1 << op2;
                 break;
@@ -647,7 +645,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #ifdef TCC_TARGET_X86_64
     /* XXX the autosize should rather be zero, to not have to adjust this
        all the time.  */
-    if ((pa->instr_type & OPC_WLQ) != OPC_WLQ)
+    if ((pa->instr_type & OPC_BWLQ) == OPC_B)
         autosize = NBWLX-2;
 #endif
     if (s == autosize) {
@@ -657,7 +655,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         }
         if (s == autosize) {
             if ((opcode == TOK_ASM_push || opcode == TOK_ASM_pop) &&
-                (ops[0].type & (OP_SEG | OP_IM8S | OP_IM32 | OP_IM64)))
+                (ops[0].type & (OP_SEG | OP_IM8S | OP_IM32)))
                 s = 2;
             else
                 tcc_error("cannot infer opcode suffix");
