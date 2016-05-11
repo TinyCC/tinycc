@@ -659,6 +659,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         } else if (pa->instr_type & OPC_TEST) {
             if (!(opcode >= pa->sym && opcode < pa->sym + NB_TEST_OPCODES))
                 continue;
+	    /* cmovxx is a test opcode but accepts multiple sizes.
+	       TCC doesn't accept the suffixed mnemonic, instead we 
+	       simply force size autodetection always.  */
+	    if (pa->instr_type & OPC_WLX)
+	        s = NBWLX - 1;
         } else if (pa->instr_type & OPC_B) {
 #ifdef TCC_TARGET_X86_64
 	    /* Some instructions don't have the full size but only
