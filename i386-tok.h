@@ -152,6 +152,9 @@
  DEF_ASM(movsbl)
  DEF_ASM(movswl)
 #ifdef TCC_TARGET_X86_64
+ DEF_ASM(movsbq)
+ DEF_ASM(movswq)
+ DEF_ASM(movzwq)
  DEF_ASM(movslq)
 #endif
 

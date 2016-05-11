@@ -86,6 +86,13 @@ movl %ebx, %fs
      movzb 0x1000, %eax
      movzb 0x1000, %ax
                 
+#ifdef __x86_64__
+     movzb 0x1000, %rax
+     movzbq 0x1000, %rbx
+     movsbq 0x1000, %rdx
+     movzwq 0x1000, %rdi
+     movswq 0x1000, %rdx
+#endif
         
 #ifdef __i386__
   pushl %eax
