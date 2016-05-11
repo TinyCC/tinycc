@@ -499,7 +499,7 @@ static inline void asm_modrm(int reg, Operand *op)
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, reg, v, op1, is_short_jmp, seg_prefix;
+    int i, modrm_index, reg, v, op1, seg_prefix;
     int nb_ops, s;
     Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
@@ -540,7 +540,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         next();
     }
 
-    is_short_jmp = 0;
     s = 0; /* avoid warning */
 
     /* optimize matching by using a lookup table (no hashing is needed
@@ -759,8 +758,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         jmp_disp = ops[0].e.v + sym->jnext - ind - 2 - (v >= 0xff);
         if (jmp_disp == (int8_t)jmp_disp) {
             /* OK to generate jump */
-            is_short_jmp = 1;
+	    ops[0].e.sym = 0;
             ops[0].e.v = jmp_disp;
+	    op_type[0] = OP_IM8S;
         } else {
         no_short_jump:
             if (pa->instr_type & OPC_JMP) {
@@ -861,10 +861,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                     gen_le16(ops[i].e.v);
             } else {
                 if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
-                    if (is_short_jmp)
-                        g(ops[i].e.v);
-                    else
-                        gen_disp32(&ops[i].e);
+		    gen_disp32(&ops[i].e);
                 } else {
 #ifdef TCC_TARGET_X86_64
                     if (v & OP_IM64)
