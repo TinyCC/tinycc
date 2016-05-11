@@ -46,8 +46,10 @@
 # define OPC_WLQ     0x1000  /* accepts w, l, q or no suffix */
 # define OPC_BWLQ    (OPC_B | OPC_WLQ) /* accepts b, w, l, q or no suffix */
 # define OPC_WLX     OPC_WLQ
+# define OPC_BWLX    OPC_BWLQ
 #else
 # define OPC_WLX     OPC_WL
+# define OPC_BWLX    OPC_BWL
 #endif
 
 #define OPC_GROUP_SHIFT 13
