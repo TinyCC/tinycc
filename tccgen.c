@@ -1699,7 +1699,9 @@ ST_FUNC void gen_op(int op)
     bt1 = t1 & VT_BTYPE;
     bt2 = t2 & VT_BTYPE;
         
-    if (bt1 == VT_PTR || bt2 == VT_PTR) {
+    if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+        tcc_error("operation on a struct");
+    } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relationnal op: must be both pointers */
         if (op >= TOK_ULT && op <= TOK_LOR) {
@@ -1820,8 +1822,6 @@ ST_FUNC void gen_op(int op)
             (t2 & (VT_BTYPE | VT_UNSIGNED)) == (VT_LLONG | VT_UNSIGNED))
             t |= VT_UNSIGNED;
         goto std_op;
-    } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
-        tcc_error("comparison of struct");
     } else {
         /* integer operations */
         t = VT_INT;
