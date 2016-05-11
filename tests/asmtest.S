@@ -236,6 +236,7 @@ lcall *(%rax)
 #endif
 
 jmp 0x1000
+jmp *(%edi)
 #ifdef __i386__
 jmp *%eax
 #else

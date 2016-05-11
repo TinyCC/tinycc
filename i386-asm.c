@@ -1042,13 +1042,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 g(0xE0 + ops[i].reg);
             }
 #endif
-#ifdef TCC_TARGET_X86_64
-        } else if (v & (OP_REG32 | OP_REG64)) {
-            if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
-                /* jmp $r */
-                g(0xE0 + ops[i].reg);
-            }
-#endif
         }
     }
 #ifdef I386_ASM_16
