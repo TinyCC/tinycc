@@ -76,15 +76,10 @@ ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WL, OPT_IM8, OPT_REGW | OPT_EA)
      /* prefixes */
      DEF_ASM_OP0(wait, 0x9b)
      DEF_ASM_OP0(fwait, 0x9b)
-#ifdef I386_ASM_16
-     DEF_ASM_OP0(a32, 0x67)
-     DEF_ASM_OP0(o32, 0x66)
-#else
      DEF_ASM_OP0(aword, 0x67)
      DEF_ASM_OP0(addr16, 0x67)
      ALT(DEF_ASM_OP0(word, 0x66))
      DEF_ASM_OP0(data16, 0x66)
-#endif
      DEF_ASM_OP0(lock, 0xf0)
      DEF_ASM_OP0(rep, 0xf3)
      DEF_ASM_OP0(repe, 0xf3)
@@ -208,9 +203,6 @@ ALT(DEF_ASM_OP1(call, 0xff, 2, OPC_MODRM, OPT_INDIR))
 ALT(DEF_ASM_OP1(call, 0xe8, 0, OPC_JMP, OPT_ADDR))
 ALT(DEF_ASM_OP1(jmp, 0xff, 4, OPC_MODRM, OPT_INDIR))
 ALT(DEF_ASM_OP1(jmp, 0xeb, 0, OPC_SHORTJMP | OPC_JMP, OPT_ADDR))
-#ifdef I386_ASM_16
-ALT(DEF_ASM_OP1(jmp, 0xff, 0, OPC_JMP | OPC_WL, OPT_REGW))
-#endif
 
 ALT(DEF_ASM_OP2(lcall, 0x9a, 0, 0, OPT_IM16, OPT_IM32))
 ALT(DEF_ASM_OP1(lcall, 0xff, 3, OPC_MODRM, OPT_EA))
@@ -364,11 +356,6 @@ ALT(DEF_ASM_OP2(lslw, 0x0f03, 0, OPC_MODRM | OPC_WL, OPT_EA | OPT_REG, OPT_REG))
     DEF_ASM_OP1(verr, 0x0f00, 4, OPC_MODRM, OPT_REG | OPT_EA)
     DEF_ASM_OP1(verw, 0x0f00, 5, OPC_MODRM, OPT_REG | OPT_EA)
 
-#ifdef I386_ASM_16
-    /* 386 */
-    DEF_ASM_OP0(loadall386, 0x0f07)
-#endif
-
     /* 486 */
     DEF_ASM_OP1(bswap, 0x0fc8, 0, OPC_REG, OPT_REG32 )
 ALT(DEF_ASM_OP2(xaddb, 0x0fc0, 0, OPC_MODRM | OPC_BWL, OPT_REG, OPT_REG | OPT_EA ))
@@ -383,15 +370,6 @@ ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWL, OPT_REG, OPT_REG | OPT
     
     /* pentium pro */
     ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WL, OPT_REGW | OPT_EA, OPT_REGW))
-#ifdef I386_ASM_16
-ALT(DEF_ASM_OP2(cmovno, 0x0f41, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmovc, 0x0f42, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmovnc, 0x0f43, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmovz, 0x0f44, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmovnz, 0x0f45, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmovna, 0x0f46, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-ALT(DEF_ASM_OP2(cmova, 0x0f47, 0, OPC_MODRM | OPC_TEST, OPT_REG32 | OPT_EA, OPT_REG32))
-#endif
     DEF_ASM_OP2(fcmovb, 0xdac0, 0, OPC_REG, OPT_ST, OPT_ST0 )
     DEF_ASM_OP2(fcmove, 0xdac8, 0, OPC_REG, OPT_ST, OPT_ST0 )
     DEF_ASM_OP2(fcmovbe, 0xdad0, 0, OPC_REG, OPT_ST, OPT_ST0 )
