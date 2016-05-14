@@ -156,6 +156,8 @@ movl %ebx, %fs
 
 addl $0x123, %eax
 add $0x123, %ebx
+add $-16, %ecx
+add $-0x123, %esi
 addl $0x123, 0x100
 addl $0x123, 0x100(%ebx)
 addl $0x123, 0x100(%ebx,%edx,2)
@@ -216,6 +218,8 @@ add (%ebx), %dl
     div %bl
     div %ecx, %eax
 
+and $15,%bx
+and $-20,%edx
 
 shl %edx
 shl $10, %edx
@@ -690,3 +694,6 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
 .type ft8,"function"
 
     pause
+.rept 6
+    nop
+.endr

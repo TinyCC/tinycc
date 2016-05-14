@@ -355,7 +355,7 @@ static void parse_operand(TCCState *s1, Operand *op)
             if (op->e.v == (uint16_t)op->e.v)
                 op->type |= OP_IM16;
 #ifdef TCC_TARGET_X86_64
-            if (op->e.v != (uint32_t)op->e.v)
+            if (op->e.v != (int32_t)op->e.v)
                 op->type = OP_IM64;
 #endif
         }
@@ -551,6 +551,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             if (!(opcode >= pa->sym && opcode < pa->sym + 8*NBWLX))
                 continue;
             s = (opcode - pa->sym) % NBWLX;
+	    if ((pa->instr_type & OPC_BWLX) == OPC_WLX)
+	        s++;
         } else if (pa->instr_type & OPC_SHIFT) {
             if (!(opcode >= pa->sym && opcode < pa->sym + 7*NBWLX))
                 continue;
