@@ -697,3 +697,4 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
 .rept 6
     nop
 .endr
+.fill 4,1,0x90
