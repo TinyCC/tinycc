@@ -27,7 +27,7 @@
 
 #define TOK_ASM_first TOK_ASM_clc
 #define TOK_ASM_last TOK_ASM_emms
-#define TOK_ASM_alllast TOK_ASM_pxor
+#define TOK_ASM_alllast TOK_ASM_subps
 
 #define OPC_JMP        0x01  /* jmp operand */
 #define OPC_B          0x02  /* only used with OPC_WL */
@@ -89,6 +89,7 @@ enum {
     OPT_REG,    /* REG8 | REG16 | REG32 | REG64 */
     OPT_REGW,   /* REG16 | REG32 | REG64 */
     OPT_IMW,    /* IM16 | IM32 */
+    OPT_MMXSSE, /* MMX | SSE */
     /* can be ored with any OPT_xxx */
     OPT_EA = 0x80
 };
@@ -512,6 +513,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     int op_type[3]; /* decoded op type */
     int alltypes;   /* OR of all operand types */
     int autosize;
+    int p66;
 
     /* force synthetic ';' after prefix instruction, so we can handle */
     /* one-line things like "rep stosb" instead of only "rep\nstosb" */
@@ -630,6 +632,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             case OPT_IMW:
                 v = OP_IM16 | OP_IM32;
                 break;
+	    case OPT_MMXSSE:
+		v = OP_MMX | OP_SSE;
+		break;
             default:
                 v = 1 << op2;
                 break;
@@ -693,7 +698,19 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     }
 #endif
     /* generate data16 prefix if needed */
+    p66 = 0;
     if (s == 1 || (pa->instr_type & OPC_D16))
+        p66 = 1;
+    else {
+	/* accepting mmx+sse in all operands --> needs 0x66 to
+	   switch to sse mode.  Accepting only sse in an operand --> is
+	   already SSE insn and needs 0x66/f2/f3 handling.  */
+        for (i = 0; i < nb_ops; i++)
+            if ((op_type[i] & (OP_MMX | OP_SSE)) == (OP_MMX | OP_SSE)
+	        && ops[i].type & OP_SSE)
+	        p66 = 1;
+    }
+    if (p66)
         g(0x66);
 #ifdef TCC_TARGET_X86_64
     if (s == 3 || (alltypes & OP_REG64)) {

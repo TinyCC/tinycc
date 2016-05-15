@@ -716,3 +716,105 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
     nop
 .endr
 .fill 4,1,0x90
+
+    movd %esi, %mm1
+    movd %edi, %xmm2
+    movd (%ebx), %mm3
+    movd (%ebx), %xmm3
+    movd %mm1, %esi
+    movd %xmm2, %edi
+    movd %mm3, (%edx)
+    movd %xmm3, (%edx)
+#ifdef __x86_64__
+    movd %rsi, %mm1
+    movd %rdi, %xmm2
+    movd (%rbx), %mm3
+    movd (%rbx), %xmm3
+    movd %mm1, %rsi
+    movd %xmm2, %rdi
+    movd %mm3, (%rdx)
+    movd %xmm3, (%rdx)
+#endif
+
+    movq (%ebp), %mm1
+    movq %mm2, (%edi)
+#ifdef __x86_64__
+    movq %rcx, %mm1
+    movq %rdx, %xmm2
+    /* movq mem64->xmm is encoded as f30f7e by GAS, but as
+       660f6e by tcc (which really is a movd and would need 
+       a REX.W prefix to be movq).  */
+    movq (%rsi), %xmm3
+    movq %mm1, %rdx
+    movq %xmm3, %rcx
+    movq %xmm4, (%rsi)
+#endif
+
+#define TEST_MMX_SSE(insn) \
+    insn %mm1, %mm2; \
+    insn %xmm2, %xmm3; \
+    insn (%ebx), %xmm3;
+#define TEST_MMX_SSE_I8(insn) \
+    TEST_MMX_SSE(insn) \
+    insn $0x42, %mm4; \
+    insn $0x42, %xmm4;
+
+    TEST_MMX_SSE(packssdw)
+    TEST_MMX_SSE(packsswb)
+    TEST_MMX_SSE(packuswb)
+    TEST_MMX_SSE(paddb)
+    TEST_MMX_SSE(paddw)
+    TEST_MMX_SSE(paddd)
+    TEST_MMX_SSE(paddsb)
+    TEST_MMX_SSE(paddsw)
+    TEST_MMX_SSE(paddusb)
+    TEST_MMX_SSE(paddusw)
+    TEST_MMX_SSE(pand)
+    TEST_MMX_SSE(pandn)
+    TEST_MMX_SSE(pcmpeqb)
+    TEST_MMX_SSE(pcmpeqw)
+    TEST_MMX_SSE(pcmpeqd)
+    TEST_MMX_SSE(pcmpgtb)
+    TEST_MMX_SSE(pcmpgtw)
+    TEST_MMX_SSE(pcmpgtd)
+    TEST_MMX_SSE(pmaddwd)
+    TEST_MMX_SSE(pmulhw)
+    TEST_MMX_SSE(pmullw)
+    TEST_MMX_SSE(por)
+    TEST_MMX_SSE(psllw)
+TEST_MMX_SSE_I8(psllw)
+    TEST_MMX_SSE(pslld)
+TEST_MMX_SSE_I8(pslld)
+    TEST_MMX_SSE(psllq)
+TEST_MMX_SSE_I8(psllq)
+    TEST_MMX_SSE(psraw)
+TEST_MMX_SSE_I8(psraw)
+    TEST_MMX_SSE(psrad)
+TEST_MMX_SSE_I8(psrad)
+    TEST_MMX_SSE(psrlw)
+TEST_MMX_SSE_I8(psrlw)
+    TEST_MMX_SSE(psrld)
+TEST_MMX_SSE_I8(psrld)
+    TEST_MMX_SSE(psrlq)
+TEST_MMX_SSE_I8(psrlq)
+    TEST_MMX_SSE(psubb)
+    TEST_MMX_SSE(psubw)
+    TEST_MMX_SSE(psubd)
+    TEST_MMX_SSE(psubsb)
+    TEST_MMX_SSE(psubsw)
+    TEST_MMX_SSE(psubusb)
+    TEST_MMX_SSE(psubusw)
+    TEST_MMX_SSE(punpckhbw)
+    TEST_MMX_SSE(punpckhwd)
+    TEST_MMX_SSE(punpckhdq)
+    TEST_MMX_SSE(punpcklbw)
+    TEST_MMX_SSE(punpcklwd)
+    TEST_MMX_SSE(punpckldq)
+    TEST_MMX_SSE(pxor)
+
+    cvtpi2ps %mm1, %xmm2
+    cvtpi2ps (%ebx), %xmm2
+    TEST_MMX_SSE(pmaxsw)
+    TEST_MMX_SSE(pmaxub)
+    TEST_MMX_SSE(pminsw)
+    TEST_MMX_SSE(pminub)
