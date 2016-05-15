@@ -221,8 +221,8 @@ ALT(DEF_ASM_OP1(setob, 0x0f90, 0, OPC_MODRM | OPC_TEST, OPT_REG8 | OPT_EA))
     DEF_ASM_OP0(leave, 0xc9)
     DEF_ASM_OP0(ret, 0xc3)
     DEF_ASM_OP0(retq, 0xc3)
-ALT(DEF_ASM_OP1(ret, 0xc2, 0, 0, OPT_IM16))
 ALT(DEF_ASM_OP1(retq, 0xc2, 0, 0, OPT_IM16))
+ALT(DEF_ASM_OP1(ret, 0xc2, 0, 0, OPT_IM16))
     DEF_ASM_OP0(lret, 0xcb)
 ALT(DEF_ASM_OP1(lret, 0xca, 0, 0, OPT_IM16))
 
@@ -394,11 +394,8 @@ ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WLX, OPT_REGW | OPT
     /* movd shouldn't accept REG64, but AMD64 spec uses it for 32 and 64 bit
        moves, so let's be compatible. */
 ALT(DEF_ASM_OP2(movd, 0x0f6e, 0, OPC_MODRM, OPT_EA | OPT_REG64, OPT_MMXSSE ))
-    /* The 6F movq needs to come before the 6E, so that it's used for
-       mem->mmx/sse.  6E is disassembled by GAS as movd, so there would
-       be discrepancies in the asmtest.S.  */
-ALT(DEF_ASM_OP2(movq, 0x0f6f, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX ))
 ALT(DEF_ASM_OP2(movq, 0x480f6e, 0, OPC_MODRM, OPT_REG64, OPT_MMXSSE ))
+ALT(DEF_ASM_OP2(movq, 0x0f6f, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX ))
 ALT(DEF_ASM_OP2(movd, 0x0f7e, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_REG32 ))
 ALT(DEF_ASM_OP2(movd, 0x0f7e, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_REG64 ))
 ALT(DEF_ASM_OP2(movq, 0x0f7f, 0, OPC_MODRM, OPT_MMX, OPT_EA | OPT_MMX ))

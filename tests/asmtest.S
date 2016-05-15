@@ -739,6 +739,7 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
     movq (%ebp), %mm1
     movq %mm2, (%edi)
     movq (%edi), %xmm3
+    movq %mm4, %mm5
 #ifdef __x86_64__
     movq %rcx, %mm1
     movq %rdx, %xmm2
