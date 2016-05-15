@@ -504,6 +504,45 @@ static inline int asm_modrm(int reg, Operand *op)
     return 0;
 }
 
+static void maybe_print_stats (void)
+{
+  static int already = 1;
+  if (!already)
+    /* print stats about opcodes */
+    {
+        const struct ASMInstr *pa;
+        int freq[4];
+        int op_vals[500];
+        int nb_op_vals, i, j;
+
+	already = 1;
+        nb_op_vals = 0;
+        memset(freq, 0, sizeof(freq));
+        for(pa = asm_instrs; pa->sym != 0; pa++) {
+            freq[pa->nb_ops]++;
+            //for(i=0;i<pa->nb_ops;i++) {
+                for(j=0;j<nb_op_vals;j++) {
+                    //if (pa->op_type[i] == op_vals[j])
+                    if (pa->instr_type == op_vals[j])
+                        goto found;
+                }
+                //op_vals[nb_op_vals++] = pa->op_type[i];
+                op_vals[nb_op_vals++] = pa->instr_type;
+            found: ;
+            //}
+        }
+        for(i=0;i<nb_op_vals;i++) {
+            int v = op_vals[i];
+            //if ((v & (v - 1)) != 0)
+                printf("%3d: %08x\n", i, v);
+        }
+        printf("size=%d nb=%d f0=%d f1=%d f2=%d f3=%d\n",
+               (int)sizeof(asm_instrs),
+	       (int)sizeof(asm_instrs) / (int)sizeof(ASMInstr),
+               freq[0], freq[1], freq[2], freq[3]);
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
@@ -515,6 +554,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     int autosize;
     int p66;
 
+    maybe_print_stats();
     /* force synthetic ';' after prefix instruction, so we can handle */
     /* one-line things like "rep stosb" instead of only "rep\nstosb" */
     if (opcode >= TOK_ASM_wait && opcode <= TOK_ASM_repnz)
