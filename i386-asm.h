@@ -390,11 +390,8 @@ ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WLX, OPT_REGW | OPT
     DEF_ASM_OP2(movq, 0x0f6f, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX )
 ALT(DEF_ASM_OP2(movd, 0x0f7e, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_REG32 ))
 ALT(DEF_ASM_OP2(movq, 0x0f7f, 0, OPC_MODRM, OPT_MMX, OPT_EA | OPT_MMX ))
-    /* Hack: movq d6 only accepts xmm->mem/xmm, we use MMXSSE in source
-       to get the 0x66 prefix that is added automatically.  The mmx->mem
-       is accepted by 0f7f above, and mmx->xmm doesn't exist (but is 
-       invalidly accepted by this entry).  */
-ALT(DEF_ASM_OP2(movq, 0x0fd6, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_SSE ))
+ALT(DEF_ASM_OP2(movq, 0x660fd6, 0, OPC_MODRM, OPT_SSE, OPT_EA | OPT_SSE ))
+ALT(DEF_ASM_OP2(movq, 0xf30f7e, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE ))
 
     DEF_ASM_OP2(packssdw, 0x0f6b, 0, OPC_MODRM, OPT_EA | OPT_MMXSSE, OPT_MMXSSE )
     DEF_ASM_OP2(packsswb, 0x0f63, 0, OPC_MODRM, OPT_EA | OPT_MMXSSE, OPT_MMXSSE )
