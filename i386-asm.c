@@ -29,19 +29,26 @@
 #define TOK_ASM_last TOK_ASM_emms
 #define TOK_ASM_alllast TOK_ASM_subps
 
-#define OPC_JMP        0x01  /* jmp operand */
-#define OPC_B          0x02  /* only used with OPC_WL */
-#define OPC_WL         0x04  /* accepts w, l or no suffix */
+#define OPC_B          0x01  /* only used with OPC_WL */
+#define OPC_WL         0x02  /* accepts w, l or no suffix */
 #define OPC_BWL        (OPC_B | OPC_WL) /* accepts b, w, l or no suffix */
-#define OPC_REG        0x08 /* register is added to opcode */
-#define OPC_MODRM      0x10 /* modrm encoding */
-#define OPC_FWAIT      0x20 /* add fwait opcode */
-#define OPC_TEST       0x40 /* test opcodes */
-#define OPC_SHIFT      0x80 /* shift opcodes */
-#define OPC_D16      0x0100 /* generate data16 prefix */
-#define OPC_ARITH    0x0200 /* arithmetic opcodes */
-#define OPC_SHORTJMP 0x0400 /* short jmp operand */
-#define OPC_FARITH   0x0800 /* FPU arithmetic opcodes */
+#define OPC_REG        0x04 /* register is added to opcode */
+#define OPC_MODRM      0x08 /* modrm encoding */
+
+#define OPCT_MASK      0x70
+#define OPC_FWAIT      0x10 /* add fwait opcode */
+#define OPC_SHIFT      0x20 /* shift opcodes */
+#define OPC_ARITH      0x30 /* arithmetic opcodes */
+#define OPC_FARITH     0x40 /* FPU arithmetic opcodes */
+#define OPC_TEST       0x50 /* test opcodes */
+#define OPC_JMP_TEST   0x60 /* A test and jmp opcode */
+#define OPC_JMP        0x70 /* A non-testing jmp opcode */
+#define OPCT_IS(v,i) (((v) & OPCT_MASK) == (i))
+
+#define OPC_SHORTJMP   0x80 /* short jmp operand */
+
+#define OPC_0F        0x100 /* Is secondary map (0x0f prefix) */
+#define OPC_D16      0x0800 /* generate data16 prefix */
 #ifdef TCC_TARGET_X86_64
 # define OPC_WLQ     0x1000  /* accepts w, l, q or no suffix */
 # define OPC_BWLQ    (OPC_B | OPC_WLQ) /* accepts b, w, l, q or no suffix */
@@ -211,11 +218,15 @@ static const uint8_t segment_prefixes[] = {
 
 static const ASMInstr asm_instrs[] = {
 #define ALT(x) x
+/* This removes a 0x0f in the second byte */
+#define O(o) ((((o) & 0xff00) == 0x0f00) ? ((((o) >> 8) & ~0xff) | ((o) & 0xff)) : (o))
+/* This constructs instr_type from opcode, type and group.  */
+#define T(o,i,g) ((i) | ((g) << OPC_GROUP_SHIFT) | ((((o) & 0xff00) == 0x0f00) ? OPC_0F : 0))
 #define DEF_ASM_OP0(name, opcode)
-#define DEF_ASM_OP0L(name, opcode, group, instr_type) { TOK_ASM_ ## name, opcode, (instr_type | group << OPC_GROUP_SHIFT), 0 },
-#define DEF_ASM_OP1(name, opcode, group, instr_type, op0) { TOK_ASM_ ## name, opcode, (instr_type | group << OPC_GROUP_SHIFT), 1, { op0 }},
-#define DEF_ASM_OP2(name, opcode, group, instr_type, op0, op1) { TOK_ASM_ ## name, opcode, (instr_type | group << OPC_GROUP_SHIFT), 2, { op0, op1 }},
-#define DEF_ASM_OP3(name, opcode, group, instr_type, op0, op1, op2) { TOK_ASM_ ## name, opcode, (instr_type | group << OPC_GROUP_SHIFT), 3, { op0, op1, op2 }},
+#define DEF_ASM_OP0L(name, opcode, group, instr_type) { TOK_ASM_ ## name, O(opcode), T(opcode, instr_type, group), 0 },
+#define DEF_ASM_OP1(name, opcode, group, instr_type, op0) { TOK_ASM_ ## name, O(opcode), T(opcode, instr_type, group), 1, { op0 }},
+#define DEF_ASM_OP2(name, opcode, group, instr_type, op0, op1) { TOK_ASM_ ## name, O(opcode), T(opcode, instr_type, group), 2, { op0, op1 }},
+#define DEF_ASM_OP3(name, opcode, group, instr_type, op0, op1, op2) { TOK_ASM_ ## name, O(opcode), T(opcode, instr_type, group), 3, { op0, op1, op2 }},
 #ifdef TCC_TARGET_X86_64
 # include "x86_64-asm.h"
 #else
@@ -594,12 +605,13 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     /* optimize matching by using a lookup table (no hashing is needed
        !) */
     for(pa = asm_instrs; pa->sym != 0; pa++) {
+	int it = pa->instr_type & OPCT_MASK;
         s = 0;
-        if (pa->instr_type & OPC_FARITH) {
+        if (it == OPC_FARITH) {
             v = opcode - pa->sym;
             if (!((unsigned)v < 8 * 6 && (v % 6) == 0))
                 continue;
-        } else if (pa->instr_type & OPC_ARITH) {
+        } else if (it == OPC_ARITH) {
             if (!(opcode >= pa->sym && opcode < pa->sym + 8*NBWLX))
                 continue;
             s = (opcode - pa->sym) % NBWLX;
@@ -612,11 +624,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 		    continue;
 	        s++;
 	      }
-        } else if (pa->instr_type & OPC_SHIFT) {
+        } else if (it == OPC_SHIFT) {
             if (!(opcode >= pa->sym && opcode < pa->sym + 7*NBWLX))
                 continue;
             s = (opcode - pa->sym) % NBWLX;
-        } else if (pa->instr_type & OPC_TEST) {
+        } else if (it == OPC_TEST || it == OPC_JMP_TEST) {
             if (!(opcode >= pa->sym && opcode < pa->sym + NB_TEST_OPCODES))
                 continue;
 	    /* cmovxx is a test opcode but accepts multiple sizes.
@@ -650,7 +662,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 	   should only be done if we really have an >32bit imm64, and that
 	   is hardcoded.  Ignore it here.  */
 	if (pa->opcode == 0xb0 && ops[0].type != OP_IM64
-	    && ops[1].type == OP_REG64)
+	    && ops[1].type == OP_REG64
+	    && !(pa->instr_type & OPC_0F))
 	    continue;
 #endif
         /* now decode and check each operand */
@@ -777,12 +790,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #endif
 
     /* now generates the operation */
-    if (pa->instr_type & OPC_FWAIT)
+    if (OPCT_IS(pa->instr_type, OPC_FWAIT))
         g(0x9b);
     if (seg_prefix)
         g(seg_prefix);
 
     v = pa->opcode;
+    if (pa->instr_type & OPC_0F)
+        v = ((v & ~0xff) << 8) | 0x0f00 | (v & 0xff);
     if ((v == 0x69 || v == 0x6b) && nb_ops == 2) {
         /* kludge for imul $im, %reg */
         nb_ops = 3;
@@ -802,25 +817,23 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     } else if (v <= 0x05) {
         /* arith case */
         v += ((opcode - TOK_ASM_addb) / NBWLX) << 3;
-    } else if ((pa->instr_type & (OPC_FARITH | OPC_MODRM)) == OPC_FARITH) {
+    } else if ((pa->instr_type & (OPCT_MASK | OPC_MODRM)) == OPC_FARITH) {
         /* fpu arith case */
         v += ((opcode - pa->sym) / 6) << 3;
     }
     if (pa->instr_type & OPC_REG) {
+        /* mov $im, %reg case */
+        if (v == 0xb0 && s >= 1)
+            v += 7;
         for(i = 0; i < nb_ops; i++) {
             if (op_type[i] & (OP_REG | OP_ST)) {
                 v += ops[i].reg;
                 break;
             }
         }
-        /* mov $im, %reg case */
-        if (pa->opcode == 0xb0 && s >= 1)
-            v += 7;
     }
     if (pa->instr_type & OPC_B)
         v += s >= 1;
-    if (pa->instr_type & OPC_TEST)
-        v += test_bits[opcode - pa->sym];
     if (pa->instr_type & OPC_SHORTJMP) {
         Sym *sym;
         int jmp_disp;
@@ -839,32 +852,36 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 	    op_type[0] = OP_IM8S;
         } else {
         no_short_jump:
-            if (pa->instr_type & OPC_JMP) {
-                /* long jump will be allowed. need to modify the
-                   opcode slightly */
-                if (v == 0xeb)
-                    v = 0xe9;
-                else
-                    v += 0x0f10;
-            } else {
-                tcc_error("invalid displacement");
-            }
+	    /* long jump will be allowed. need to modify the
+	       opcode slightly */
+	    if (v == 0xeb) /* jmp */
+	        v = 0xe9;
+	    else if (v == 0x70) /* jcc */
+	        v += 0x0f10;
+	    else
+	        tcc_error("invalid displacement");
         }
     }
-    op1 = v >> 8;
+    if (OPCT_IS(pa->instr_type, OPC_TEST)
+	|| OPCT_IS(pa->instr_type, OPC_JMP_TEST))
+        v += test_bits[opcode - pa->sym];
+    op1 = v >> 16;
+    if (op1)
+        g(op1);
+    op1 = (v >> 8) & 0xff;
     if (op1)
         g(op1);
     g(v);
 
     /* search which operand will used for modrm */
     modrm_index = 0;
-    if (pa->instr_type & OPC_SHIFT) {
+    if (OPCT_IS(pa->instr_type, OPC_SHIFT)) {
         reg = (opcode - pa->sym) / NBWLX;
         if (reg == 6)
             reg = 7;
-    } else if (pa->instr_type & OPC_ARITH) {
+    } else if (OPCT_IS(pa->instr_type, OPC_ARITH)) {
         reg = (opcode - pa->sym) / NBWLX;
-    } else if (pa->instr_type & OPC_FARITH) {
+    } else if (OPCT_IS(pa->instr_type, OPC_FARITH)) {
         reg = (opcode - pa->sym) / 6;
     } else {
         reg = (pa->instr_type >> OPC_GROUP_SHIFT) & 7;
@@ -902,7 +919,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
     /* emit constants */
 #ifndef TCC_TARGET_X86_64
-    if (pa->opcode == 0x9a || pa->opcode == 0xea) {
+    if (!(pa->instr_type & OPC_0F)
+	&& (pa->opcode == 0x9a || pa->opcode == 0xea)) {
         /* ljmp or lcall kludge */
 	gen_expr32(&ops[1].e);
         if (ops[0].e.sym)
@@ -938,7 +956,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             } else if (v & OP_IM64) {
                 gen_expr64(&ops[i].e);
 #endif
-            } else if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
+            } else if (OPCT_IS (pa->instr_type, OPC_JMP)
+		       || OPCT_IS (pa->instr_type, OPC_JMP_TEST)) {
                 gen_disp32(&ops[i].e);
             } else {
                 gen_expr32(&ops[i].e);
