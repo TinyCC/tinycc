@@ -48,7 +48,6 @@
 #define OPC_SHORTJMP   0x80 /* short jmp operand */
 
 #define OPC_0F        0x100 /* Is secondary map (0x0f prefix) */
-#define OPC_D16      0x0800 /* generate data16 prefix */
 #ifdef TCC_TARGET_X86_64
 # define OPC_WLQ     0x1000  /* accepts w, l, q or no suffix */
 # define OPC_BWLQ    (OPC_B | OPC_WLQ) /* accepts b, w, l, q or no suffix */
@@ -752,7 +751,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 #endif
     /* generate data16 prefix if needed */
     p66 = 0;
-    if (s == 1 || (pa->instr_type & OPC_D16))
+    if (s == 1)
         p66 = 1;
     else {
 	/* accepting mmx+sse in all operands --> needs 0x66 to
