@@ -42,7 +42,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
 {
     Sym *sym;
     int op, label;
-    long n;
+    unsigned long n;
     const char *p;
 
     switch(tok) {
