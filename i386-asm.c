@@ -552,7 +552,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 continue;
             s = (opcode - pa->sym) % NBWLX;
 	    if ((pa->instr_type & OPC_BWLX) == OPC_WLX)
+	      {
+		/* We need to reject the xxxb opcodes that we accepted above.
+		   Note that pa->sym for WLX opcodes is the 'w' token,
+		   to get the 'b' token subtract one.  */
+		if (((opcode - pa->sym + 1) % NBWLX) == 0)
+		    continue;
 	        s++;
+	      }
         } else if (pa->instr_type & OPC_SHIFT) {
             if (!(opcode >= pa->sym && opcode < pa->sym + 7*NBWLX))
                 continue;
