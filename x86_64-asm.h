@@ -207,9 +207,9 @@ ALT(DEF_ASM_OP3(shrdw, 0x0fad, 0, OPC_MODRM | OPC_WLX, OPT_CL, OPT_REGW, OPT_EA 
 ALT(DEF_ASM_OP2(shrdw, 0x0fad, 0, OPC_MODRM | OPC_WLX, OPT_REGW, OPT_EA | OPT_REGW))
 
 ALT(DEF_ASM_OP1(call, 0xff, 2, OPC_MODRM, OPT_INDIR))
-ALT(DEF_ASM_OP1(call, 0xe8, 0, OPC_JMP, OPT_ADDR))
+ALT(DEF_ASM_OP1(call, 0xe8, 0, 0, OPT_DISP))
 ALT(DEF_ASM_OP1(jmp, 0xff, 4, OPC_MODRM, OPT_INDIR))
-ALT(DEF_ASM_OP1(jmp, 0xeb, 0, OPC_SHORTJMP | OPC_JMP, OPT_ADDR))
+ALT(DEF_ASM_OP1(jmp, 0xeb, 0, 0, OPT_DISP8))
 
 ALT(DEF_ASM_OP1(lcall, 0xff, 3, OPC_MODRM, OPT_EA))
 ALT(DEF_ASM_OP1(ljmp, 0xff, 5, OPC_MODRM, OPT_EA))
@@ -226,13 +226,13 @@ ALT(DEF_ASM_OP1(ret, 0xc2, 0, 0, OPT_IM16))
     DEF_ASM_OP0(lret, 0xcb)
 ALT(DEF_ASM_OP1(lret, 0xca, 0, 0, OPT_IM16))
 
-ALT(DEF_ASM_OP1(jo, 0x70, 0, OPC_SHORTJMP | OPC_JMP_TEST, OPT_ADDR))
-    DEF_ASM_OP1(loopne, 0xe0, 0, OPC_SHORTJMP, OPT_ADDR)
-    DEF_ASM_OP1(loopnz, 0xe0, 0, OPC_SHORTJMP, OPT_ADDR)
-    DEF_ASM_OP1(loope, 0xe1, 0, OPC_SHORTJMP, OPT_ADDR)
-    DEF_ASM_OP1(loopz, 0xe1, 0, OPC_SHORTJMP, OPT_ADDR)
-    DEF_ASM_OP1(loop, 0xe2, 0, OPC_SHORTJMP, OPT_ADDR)
-    DEF_ASM_OP1(jecxz, 0x67e3, 0, OPC_SHORTJMP, OPT_ADDR)
+ALT(DEF_ASM_OP1(jo, 0x70, 0, OPC_TEST, OPT_DISP8))
+    DEF_ASM_OP1(loopne, 0xe0, 0, 0, OPT_DISP8)
+    DEF_ASM_OP1(loopnz, 0xe0, 0, 0, OPT_DISP8)
+    DEF_ASM_OP1(loope, 0xe1, 0, 0, OPT_DISP8)
+    DEF_ASM_OP1(loopz, 0xe1, 0, 0, OPT_DISP8)
+    DEF_ASM_OP1(loop, 0xe2, 0, 0, OPT_DISP8)
+    DEF_ASM_OP1(jecxz, 0x67e3, 0, 0, OPT_DISP8)
 
      /* float */
      /* specific fcomp handling */

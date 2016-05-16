@@ -41,11 +41,7 @@
 #define OPC_ARITH      0x30 /* arithmetic opcodes */
 #define OPC_FARITH     0x40 /* FPU arithmetic opcodes */
 #define OPC_TEST       0x50 /* test opcodes */
-#define OPC_JMP_TEST   0x60 /* A test and jmp opcode */
-#define OPC_JMP        0x70 /* A non-testing jmp opcode */
 #define OPCT_IS(v,i) (((v) & OPCT_MASK) == (i))
-
-#define OPC_SHORTJMP   0x80 /* short jmp operand */
 
 #define OPC_0F        0x100 /* Is secondary map (0x0f prefix) */
 #ifdef TCC_TARGET_X86_64
@@ -96,6 +92,8 @@ enum {
     OPT_REGW,   /* REG16 | REG32 | REG64 */
     OPT_IMW,    /* IM16 | IM32 */
     OPT_MMXSSE, /* MMX | SSE */
+    OPT_DISP,   /* Like OPT_ADDR, but emitted as displacement (for jumps) */
+    OPT_DISP8,  /* Like OPT_ADDR, but only 8bit (short jumps) */
     /* can be ored with any OPT_xxx */
     OPT_EA = 0x80
 };
@@ -627,7 +625,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             if (!(opcode >= pa->sym && opcode < pa->sym + 7*NBWLX))
                 continue;
             s = (opcode - pa->sym) % NBWLX;
-        } else if (it == OPC_TEST || it == OPC_JMP_TEST) {
+        } else if (it == OPC_TEST) {
             if (!(opcode >= pa->sym && opcode < pa->sym + NB_TEST_OPCODES))
                 continue;
 	    /* cmovxx is a test opcode but accepts multiple sizes.
@@ -686,6 +684,10 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 break;
 	    case OPT_MMXSSE:
 		v = OP_MMX | OP_SSE;
+		break;
+	    case OPT_DISP:
+	    case OPT_DISP8:
+		v = OP_ADDR;
 		break;
             default:
                 v = 1 << op2;
@@ -833,7 +835,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     }
     if (pa->instr_type & OPC_B)
         v += s >= 1;
-    if (pa->instr_type & OPC_SHORTJMP) {
+    if (nb_ops == 1 && pa->op_type[0] == OPT_DISP8) {
         Sym *sym;
         int jmp_disp;
 
@@ -861,8 +863,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 	        tcc_error("invalid displacement");
         }
     }
-    if (OPCT_IS(pa->instr_type, OPC_TEST)
-	|| OPCT_IS(pa->instr_type, OPC_JMP_TEST))
+    if (OPCT_IS(pa->instr_type, OPC_TEST))
         v += test_bits[opcode - pa->sym];
     op1 = v >> 16;
     if (op1)
@@ -955,8 +956,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             } else if (v & OP_IM64) {
                 gen_expr64(&ops[i].e);
 #endif
-            } else if (OPCT_IS (pa->instr_type, OPC_JMP)
-		       || OPCT_IS (pa->instr_type, OPC_JMP_TEST)) {
+	    } else if (pa->op_type[i] == OPT_DISP || pa->op_type[i] == OPT_DISP8) {
                 gen_disp32(&ops[i].e);
             } else {
                 gen_expr32(&ops[i].e);
