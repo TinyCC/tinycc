@@ -1280,17 +1280,18 @@ static int macro_is_equal(const int *a, const int *b)
 {
     CValue cv;
     int t;
+    static CString localbuf;
 
     if (!a || !b)
         return 1;
 
     while (*a && *b) {
-        /* first time preallocate static cstr_buf, next time only reset position to start */
-        cstr_reset(&cstr_buf);
+        /* first time preallocate static localbuf, next time only reset position to start */
+        cstr_reset(&localbuf);
         TOK_GET(&t, &a, &cv);
-        cstr_cat(&cstr_buf, get_tok_str(t, &cv), 0);
+        cstr_cat(&localbuf, get_tok_str(t, &cv), 0);
         TOK_GET(&t, &b, &cv);
-        if (strcmp(cstr_buf.data, get_tok_str(t, &cv)))
+        if (strcmp(localbuf.data, get_tok_str(t, &cv)))
             return 0;
     }
     return !(*a || *b);
