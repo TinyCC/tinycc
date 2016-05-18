@@ -3709,7 +3709,9 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
 
 #ifdef PP_BENCH
     /* for PP benchmarks */
-    do next(); while (tok != TOK_EOF); return 0;
+    do next(); while (tok != TOK_EOF);
+    free_defines(define_start);
+    return 0;
 #endif
 
     if (s1->dflag & 1) {
