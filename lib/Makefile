@@ -75,22 +75,22 @@ else
 ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(top_srcdir)
 else
 ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(top_srcdir)
 else
 ifeq "$(TARGET)" "arm"
  OBJ = $(addprefix $(DIR)/,$(ARM_O))
  TGT = -DTCC_TARGET_ARM
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(top_srcdir)
 else
 ifeq "$(TARGET)" "arm64"
  OBJ = $(addprefix $(DIR)/,$(ARM64_O))
  TGT = -DTCC_TARGET_ARM64
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(top_srcdir)
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
