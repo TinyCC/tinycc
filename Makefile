@@ -123,13 +123,13 @@ ARM64_FILES = $(CORE_FILES) arm64-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
 
 ifdef CONFIG_WIN64
-PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
+PROGS+=tiny_impdef$(EXESUF)
 NATIVE_FILES=$(WIN64_FILES)
 PROGS_CROSS=$(WIN32_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1_CROSS=lib/i386-win/libtcc1.a
 LIBTCC1=libtcc1.a
 else ifdef CONFIG_WIN32
-PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
+PROGS+=tiny_impdef$(EXESUF)
 NATIVE_FILES=$(WIN32_FILES)
 PROGS_CROSS=$(WIN64_CROSS) $(I386_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 LIBTCC1_CROSS=lib/x86_64-win/libtcc1.a
@@ -166,9 +166,7 @@ LIBTCC1_CROSS=lib/i386-win/libtcc1.a lib/x86_64-win/libtcc1.a lib/i386/libtcc1.a
 endif
 PROGS_CROSS_LINK=$(foreach PROG_CROSS,$(PROGS_CROSS),$($(PROG_CROSS)_LINK))
 
-ifeq ($(TARGETOS),Darwin)
 PROGS+=tiny_libmaker$(EXESUF)
-endif
 
 TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCC_EXTRA)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
