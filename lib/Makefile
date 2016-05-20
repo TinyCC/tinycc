@@ -68,7 +68,7 @@ else
 ifeq "$(TARGET)" "x86_64-win"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
+ XCC ?= $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
  XAR ?= $(DIR)/tiny_libmaker$(EXESUF)
  PICFLAGS =
 else

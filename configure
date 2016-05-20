@@ -520,8 +520,13 @@ if test "$noldl" = "yes" ; then
   echo "CONFIG_NOLDL=yes" >> config.mak
 fi
 if test "$mingw32" = "yes" ; then
-  echo "CONFIG_WIN32=yes" >> config.mak
-  echo "#define CONFIG_WIN32 1" >> $TMPH
+  if test "$cpu" = "x86-64"; then
+    echo "CONFIG_WIN64=yes" >> config.mak
+    echo "#define CONFIG_WIN64 1" >> $TMPH
+  else
+    echo "CONFIG_WIN32=yes" >> config.mak
+    echo "#define CONFIG_WIN32 1" >> $TMPH
+  fi
 fi
 if test "$cygwin" = "yes" ; then
   echo "#ifndef _WIN32" >> $TMPH

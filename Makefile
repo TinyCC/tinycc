@@ -271,10 +271,17 @@ else
 INSTALLBIN=$(INSTALL)
 endif
 
+ifdef CONFIG_WIN32
+CONFIG_WIN=yes
+endif
+ifdef CONFIG_WIN64
+CONFIG_WIN=yes
+endif
+
 install-strip: install
 	strip $(foreach PROG,$(PROGS),"$(bindir)"/$(PROG))
 
-ifndef CONFIG_WIN32
+ifndef CONFIG_WIN
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(bindir)"
 	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
