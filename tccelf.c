@@ -3076,6 +3076,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size)
             if(sym_index) {
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
                 if(sym->st_shndx == SHN_UNDEF) {
+            load_obj:
                     off = get_be32(ar_index + i * 4) + sizeof(ArchiveHeader);
                     ++bound;
                     lseek(fd, off, SEEK_SET);
@@ -3085,6 +3086,8 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size)
                         goto the_end;
                     }
                 }
+            } else if (s1->whole_archive) {
+                goto load_obj;
             }
         }
     } while(bound);

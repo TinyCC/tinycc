@@ -1406,9 +1406,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags,
     ret = tcc_load_ldscript(s1);
 #endif
     if (ret < 0)
-        tcc_error_noabort("unrecognized file type");
+        tcc_error_noabort("%s: unrecognized file type (error=%d)", filename, ret);
 
 the_end:
+    if (s1->verbose)
+        printf("+> %s\n", filename);
     tcc_close();
     return ret;
 }
@@ -2306,6 +2308,16 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
             s->rdynamic = 1;
             break;
         case TCC_OPTION_Wl:
+            if (optarg && *optarg == '-') {
+                int offs = 0;
+                if (!strncmp("-no", optarg+1, 3))
+                    offs += 3;
+                if (!strcmp("-whole-archive", optarg+1 + offs)) {
+                    args_parser_add_file(s, "", (offs == 0) ? TCC_FILETYPE_AR_WHOLE_ON :
+                        TCC_FILETYPE_AR_WHOLE_OFF);
+                    break;
+                }
+            }
             if (pas->linker_arg.size)
                 --pas->linker_arg.size, cstr_ccat(&pas->linker_arg, ',');
             cstr_cat(&pas->linker_arg, optarg, 0);
