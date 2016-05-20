@@ -596,24 +596,17 @@ rm -f $TMPN* $CONFTEST
 
 fn_makelink()
 {
-    tgt=$1/$2
-    case $2 in
-    */*) dn=${2%/*}
-         test -d $dn || mkdir -p $dn
-         case $1 in
-         /*) ;;
-          *) while test $dn ; do
-                tgt=../$tgt; dn=${dn#${dn%%/*}}; dn=${dn#/}
-             done
-             ;;
-         esac
-         ;;
-    esac
-    ln -sfn $tgt $2
+    SRCDIR=$(realpath $1)
+    DIR=$(dirname $2)
+    FILE=$(basename $2)
+    if test ! -d "$DIR"; then
+        mkdir -p "$DIR"
+    fi
+    ln -s $SRCDIR/$DIR/$FILE $DIR/
 }
 
 if test "$source_path_used" = "yes" ; then
-  FILES="Makefile lib/Makefile tests/Makefile tests/tests2/Makefile"
+  FILES="Makefile lib/Makefile tests/Makefile tests/tests2/* tests/pp/* tests/exsymtab/*"
   for f in $FILES ; do
     fn_makelink $source_path $f
   done
