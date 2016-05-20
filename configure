@@ -267,7 +267,7 @@ else
     bindir="${execprefix}/bin"
     fi
     if test x"$docdir" = x""; then
-    docdir="${sharedir}/doc/${tccdir}"
+    docdir="${sharedir}/doc"
     fi
     if test x"$mandir" = x""; then
     mandir="${sharedir}/man"
