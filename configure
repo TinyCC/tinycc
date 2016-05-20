@@ -163,6 +163,8 @@ for opt do
   ;;
   --elfinterp=*) tcc_elfinterp=`echo $opt | cut -d '=' -f 2`
   ;;
+  --ar=*) ar=`echo $opt | cut -d '=' -f 2`
+  ;;
   --cc=*) cc=`echo $opt | cut -d '=' -f 2`
   ;;
   --extra-cflags=*) CFLAGS="${opt#--extra-cflags=}"
@@ -305,6 +307,7 @@ Advanced options (experts only):
   --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]
   --sysroot=PREFIX         prepend PREFIX to library/include paths []
   --cc=CC                  use C compiler CC [$cc]
+  --ar=AR                  create archives using AR [$ar]
   --extra-cflags=          specify compiler flags [$CFLAGS]
   --extra-ldflags=         specify linker options []
   --cpu=CPU                CPU [$cpu]
@@ -414,6 +417,7 @@ echo "Doc directory       $docdir"
 echo "Target root prefix  $sysroot"
 echo "Source path      $source_path"
 echo "C compiler       $cc"
+echo "ar               $ar"
 echo "cross compilers  $build_cross"
 if test "$build_cross" = "no"; then
 echo "Target CPU       $cpu"
