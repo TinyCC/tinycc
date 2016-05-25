@@ -1262,11 +1262,8 @@ ST_INLN void define_push(int v, int macro_type, TokenString *str, Sym *first_arg
     s->next = first_arg;
     table_ident[v - TOK_IDENT]->sym_define = s;
 
-    if (o && !macro_is_equal(o->d, s->d)) {
-        file->line_num--;
-        tcc_warning("%s redefined", get_tok_str(v, NULL));
-        file->line_num++;
-    }
+    if (o && !macro_is_equal(o->d, s->d))
+	tcc_warning("%s redefined", get_tok_str(v, NULL));
 }
 
 /* undefined a define symbol. Its name is just set to zero */

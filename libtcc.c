@@ -753,7 +753,7 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
                 (*pf)->filename, (*pf)->line_num);
         if (f->line_num > 0) {
             strcat_printf(buf, sizeof(buf), "%s:%d: ",
-                f->filename, f->line_num);
+                f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
         } else {
             strcat_printf(buf, sizeof(buf), "%s: ",
                 f->filename);
