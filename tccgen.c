@@ -2523,10 +2523,13 @@ static void gen_assign_cast(CType *dt)
     case VT_LLONG:
         if (sbt == VT_PTR || sbt == VT_FUNC) {
             tcc_warning("assignment makes integer from pointer without a cast");
+        } else if (sbt == VT_STRUCT) {
+            goto case_VT_STRUCT;
         }
         /* XXX: more tests */
         break;
     case VT_STRUCT:
+    case_VT_STRUCT:
         tmp_type1 = *dt;
         tmp_type2 = *st;
         tmp_type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
