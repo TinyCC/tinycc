@@ -71,50 +71,69 @@ ArHdr arhdro = {
     ARFMAG
     };
 
+/* Returns 1 if s contains any of the chars of list, else 0 */
+int contains_any(const char *s, const char *list) {
+  const char *l;
+  for (; *s; s++) {
+      for (l = list; *l; l++) {
+          if (*s == *l)
+              return 1;
+      }
+  }
+  return 0;
+}
+
+int usage(int ret) {
+    fprintf(stderr, "usage: tiny_libmaker [rcsv] lib file...\n");
+    fprintf(stderr, "Always creates a new lib. [abdioptxN] are explicitly rejected.\n");
+    return ret;
+}
+
 int main(int argc, char **argv)
 {
     FILE *fi, *fh = NULL, *fo = NULL;
     ElfW(Ehdr) *ehdr;
     ElfW(Shdr) *shdr;
     ElfW(Sym) *sym;
-    int i, fsize, iarg;
+    int i, fsize, i_lib, i_obj;
     char *buf, *shstr, *symtab = NULL, *strtab = NULL;
     int symtabsize = 0;//, strtabsize = 0;
     char *anames = NULL;
     int *afpos = NULL;
     int istrlen, strpos = 0, fpos = 0, funccnt = 0, funcmax, hofs;
-    char afile[260], tfile[260], stmp[20];
+    char tfile[260], stmp[20];
     char *file, *name;
     int ret = 2;
+    char *ops_conflict = "habdioptxN";  // unsupported but destructive if ignored.
+    int verbose = 0;
 
-
-    strcpy(afile, "ar_test.a");
-    iarg = 1;
-
-    if (argc < 2)
-    {
-        printf("usage: tiny_libmaker [lib] file...\n");
-        return 1;
-    }
-    for (i=1; i<argc; i++) {
-        istrlen = strlen(argv[i]);
-        if (argv[i][istrlen-2] == '.') {
-            if(argv[i][istrlen-1] == 'a')
-                strcpy(afile, argv[i]);
-            else if(argv[i][istrlen-1] == 'o') {
-                iarg = i;
-                break;
-            }
+    i_lib = 0; i_obj = 0;  // will hold the index of the lib and first obj
+    for (i = 1; i < argc; i++) {
+        const char *a = argv[i];
+        if (*a == '-' && strstr(a, "."))
+            return usage(1);  // -x.y is always invalid (same as gnu ar)
+        if ((*a == '-') || (i == 1 && !strstr(a, "."))) {  // options argument
+            if (contains_any(a, ops_conflict))
+                return usage(1);
+            if (strstr(a, "v"))
+                verbose = 1;
+        } else {  // lib or obj files: don't abort - keep validating all args.
+            if (!i_lib)  // first file is the lib
+                i_lib = i;
+            else if (!i_obj)  // second file is the first obj
+                i_obj = i;
         }
     }
+    if (!i_obj)  // implies also no i_lib
+        return usage(1);
 
-    if ((fh = fopen(afile, "wb")) == NULL)
+    if ((fh = fopen(argv[i_lib], "wb")) == NULL)
     {
-        fprintf(stderr, "Can't open file %s \n", afile);
+        fprintf(stderr, "Can't open file %s \n", argv[i_lib]);
         goto the_end;
     }
 
-    sprintf(tfile, "%s.tmp", afile);
+    sprintf(tfile, "%s.tmp", argv[i_lib]);
     if ((fo = fopen(tfile, "wb+")) == NULL)
     {
         fprintf(stderr, "Can't create temporary file %s\n", tfile);
@@ -125,16 +144,19 @@ int main(int argc, char **argv)
     afpos = realloc(NULL, funcmax * sizeof *afpos); // 250 func
     memcpy(&arhdro.ar_mode, "100666", 6);
 
-    //iarg = 1;
-    while (iarg < argc)
+    // i_obj = first input object file
+    while (i_obj < argc)
     {
-        if (!strcmp(argv[iarg], "rcs")) {
-            iarg++;
+        if (*argv[i_obj] == '-') {  // by now, all options start with '-'
+            i_obj++;
             continue;
         }
-        if ((fi = fopen(argv[iarg], "rb")) == NULL)
+        if (verbose)
+            printf("a - %s\n", argv[i_obj]);
+
+        if ((fi = fopen(argv[i_obj], "rb")) == NULL)
         {
-            fprintf(stderr, "Can't open file %s \n", argv[iarg]);
+            fprintf(stderr, "Can't open file %s \n", argv[i_obj]);
             goto the_end;
         }
         fseek(fi, 0, SEEK_END);
@@ -144,13 +166,11 @@ int main(int argc, char **argv)
         fread(buf, fsize, 1, fi);
         fclose(fi);
 
-        //printf("%s:\n", argv[iarg]);
-
         // elf header
         ehdr = (ElfW(Ehdr) *)buf;
         if (ehdr->e_ident[4] != ELFCLASSW)
         {
-            fprintf(stderr, "Unsupported Elf Class: %s\n", argv[iarg]);
+            fprintf(stderr, "Unsupported Elf Class: %s\n", argv[i_obj]);
             goto the_end;
         }
 
@@ -202,7 +222,7 @@ int main(int argc, char **argv)
             }
         }
 
-        file = argv[iarg];
+        file = argv[i_obj];
         for (name = strchr(file, 0);
              name > file && name[-1] != '/' && name[-1] != '\\';
              --name);
@@ -217,7 +237,7 @@ int main(int argc, char **argv)
         fwrite(&arhdro, sizeof(arhdro), 1, fo);
         fwrite(buf, fsize, 1, fo);
         free(buf);
-        iarg++;
+        i_obj++;
         fpos += (fsize + sizeof(arhdro));
     }
     hofs = 8 + sizeof(arhdr) + strpos + (funccnt+1) * sizeof(int);
