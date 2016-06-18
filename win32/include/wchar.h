@@ -14,8 +14,10 @@
 extern "C" {
 #endif
 
+#ifndef WCHAR_MIN  /* also at stdint.h */
 #define WCHAR_MIN 0
 #define WCHAR_MAX ((wchar_t) -1) /* UINT16_MAX */
+#endif
 
 #ifndef __GNUC_VA_LIST
 #define __GNUC_VA_LIST
