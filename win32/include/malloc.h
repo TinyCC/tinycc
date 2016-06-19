@@ -82,7 +82,13 @@ extern "C" {
 #undef _alloca
 #define _alloca(x) __builtin_alloca((x))
 #else
-  void *__cdecl _alloca(size_t _Size);
+  /* tcc implements alloca internally and exposes it (since commit d778bde7).
+  /* alloca is declared at include/stddef.h (which is distributed with tcc).
+   */
+#ifdef _alloca
+#undef _alloca
+#endif
+#define _alloca(x) alloca((x))
 #endif
   _CRTIMP size_t __cdecl _get_sbh_threshold(void);
   _CRTIMP int __cdecl _set_sbh_threshold(size_t _NewValue);
