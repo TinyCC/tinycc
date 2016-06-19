@@ -124,7 +124,7 @@ int main(int argc, char **argv)
                 i_obj = i;
         }
     }
-    if (!i_obj)  // implies also no i_lib
+    if (!i_obj)  // i_obj implies also i_lib. we require both.
         return usage(1);
 
     if ((fh = fopen(argv[i_lib], "wb")) == NULL)
