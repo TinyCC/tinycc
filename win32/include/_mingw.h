@@ -58,6 +58,10 @@
 #define __CRT_UNALIGNED
 #define _CONST_RETURN
 
+#ifndef _TRUNCATE
+#define _TRUNCATE ((size_t)-1)
+#endif
+
 #define __CRT_STRINGIZE(_Value) #_Value
 #define _CRT_STRINGIZE(_Value) __CRT_STRINGIZE(_Value)
 #define __CRT_WIDE(_String) L ## _String
