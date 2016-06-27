@@ -661,6 +661,10 @@ struct TCCState {
     char **crt_paths;
     int nb_crt_paths;
 
+    /* -include files */
+    char **cmd_include_files;
+    int nb_cmd_include_files;
+
     /* error handling */
     void *error_opaque;
     void (*error_func)(void *opaque, const char *msg);

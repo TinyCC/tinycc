@@ -1518,6 +1518,7 @@ enum {
     TCC_OPTION_f,
     TCC_OPTION_isystem,
     TCC_OPTION_iwithprefix,
+    TCC_OPTION_include,
     TCC_OPTION_nostdinc,
     TCC_OPTION_nostdlib,
     TCC_OPTION_print_search_dirs,
@@ -1582,6 +1583,7 @@ static const TCCOption tcc_options[] = {
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
     { "iwithprefix", TCC_OPTION_iwithprefix, TCC_OPTION_HAS_ARG },
+    { "include", TCC_OPTION_include, TCC_OPTION_HAS_ARG },
     { "nostdinc", TCC_OPTION_nostdinc, 0 },
     { "nostdlib", TCC_OPTION_nostdlib, 0 },
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 },
@@ -1789,6 +1791,10 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             snprintf(buf, sizeof buf, "{B}/%s", optarg);
             tcc_add_sysinclude_path(s, buf);
             break;
+	case TCC_OPTION_include:
+	    dynarray_add((void ***)&s->cmd_include_files,
+			 &s->nb_cmd_include_files, tcc_strdup(optarg));
+	    break;
         case TCC_OPTION_nostdinc:
             s->nostdinc = 1;
             break;

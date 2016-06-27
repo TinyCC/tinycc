@@ -3480,6 +3480,20 @@ ST_FUNC void preprocess_start(TCCState *s1)
         s1->dollars_in_identifiers ? IS_ID : 0;
     isidnum_table['.' - CH_EOF] =
         (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
+    if (s1->nb_cmd_include_files) {
+	CString cstr;
+	int i;
+	cstr_new(&cstr);
+	for (i = 0; i < s1->nb_cmd_include_files; i++) {
+	    cstr_cat(&cstr, "#include \"", -1);
+	    cstr_cat(&cstr, s1->cmd_include_files[i], -1);
+	    cstr_cat(&cstr, "\"\n", -1);
+	}
+        *s1->include_stack_ptr++ = file;
+	tcc_open_bf(s1, "<command line>", cstr.size);
+	memcpy(file->buffer, cstr.data, cstr.size);
+	cstr_free(&cstr);
+    }
 }
 
 ST_FUNC void tccpp_new(TCCState *s)
