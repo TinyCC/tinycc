@@ -1511,6 +1511,7 @@ enum {
     TCC_OPTION_s,
     TCC_OPTION_traditional,
     TCC_OPTION_Wl,
+    TCC_OPTION_Wp,
     TCC_OPTION_W,
     TCC_OPTION_O,
     TCC_OPTION_mms_bitfields,
@@ -1578,6 +1579,7 @@ static const TCCOption tcc_options[] = {
     { "s", TCC_OPTION_s, 0 },
     { "traditional", TCC_OPTION_traditional, 0 },
     { "Wl,", TCC_OPTION_Wl, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "Wp,", TCC_OPTION_Wp, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "mms-bitfields", TCC_OPTION_mms_bitfields, 0}, /* must go before option 'm' */
@@ -1651,6 +1653,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
 
         r = argv[optind++];
 
+reparse:
         if (r[0] == '@' && r[1] != '\0') {
             args_parser_listfile(s, r + 1);
 	    continue;
@@ -1840,6 +1843,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             if (tcc_set_linker(s, linker_arg.data))
                 cstr_free(&linker_arg);
             break;
+	case TCC_OPTION_Wp:
+	    r = optarg;
+	    goto reparse;
         case TCC_OPTION_E:
             x = TCC_OUTPUT_PREPROCESS;
             goto set_output_type;
