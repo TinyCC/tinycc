@@ -2982,6 +2982,20 @@ ST_FUNC void inc(int post, int c)
         vpop(); /* if post op, return saved value */
 }
 
+static void parse_mult_str (CString *astr, const char *msg)
+{
+    /* read the string */
+    if (tok != TOK_STR)
+        expect(msg);
+    cstr_new(astr);
+    while (tok == TOK_STR) {
+        /* XXX: add \0 handling too ? */
+        cstr_cat(astr, tokc.str.data, -1);
+        next();
+    }
+    cstr_ccat(astr, '\0');
+}
+
 /* Parse GNUC __attribute__ extension. Currently, the following
    extensions are recognized:
    - aligned(n) : set data/function alignment.
@@ -2993,6 +3007,7 @@ ST_FUNC void inc(int post, int c)
 static void parse_attribute(AttributeDef *ad)
 {
     int t, n;
+    CString astr;
     
     while (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2) {
     next();
@@ -3007,39 +3022,37 @@ static void parse_attribute(AttributeDef *ad)
         case TOK_SECTION1:
         case TOK_SECTION2:
             skip('(');
-            if (tok != TOK_STR)
-                expect("section name");
-            ad->section = find_section(tcc_state, (char *)tokc.str.data);
-            next();
+	    parse_mult_str(&astr, "section name");
+            ad->section = find_section(tcc_state, (char *)astr.data);
             skip(')');
+	    cstr_free(&astr);
             break;
         case TOK_ALIAS1:
         case TOK_ALIAS2:
             skip('(');
-            if (tok != TOK_STR)
-                expect("alias(\"target\")");
+	    parse_mult_str(&astr, "alias(\"target\")");
             ad->alias_target = /* save string as token, for later */
-              tok_alloc((char*)tokc.str.data, tokc.str.size-1)->tok;
-            next();
+              tok_alloc((char*)astr.data, astr.size-1)->tok;
             skip(')');
+	    cstr_free(&astr);
             break;
 	case TOK_VISIBILITY1:
 	case TOK_VISIBILITY2:
             skip('(');
-            if (tok != TOK_STR)
-                expect("visibility(\"default|hidden|internal|protected\")");
-	    if (!strcmp (tokc.str.data, "default"))
+	    parse_mult_str(&astr,
+			   "visibility(\"default|hidden|internal|protected\")");
+	    if (!strcmp (astr.data, "default"))
 	        ad->a.visibility = STV_DEFAULT;
-	    else if (!strcmp (tokc.str.data, "hidden"))
+	    else if (!strcmp (astr.data, "hidden"))
 	        ad->a.visibility = STV_HIDDEN;
-	    else if (!strcmp (tokc.str.data, "internal"))
+	    else if (!strcmp (astr.data, "internal"))
 	        ad->a.visibility = STV_INTERNAL;
-	    else if (!strcmp (tokc.str.data, "protected"))
+	    else if (!strcmp (astr.data, "protected"))
 	        ad->a.visibility = STV_PROTECTED;
 	    else
                 expect("visibility(\"default|hidden|internal|protected\")");
-            next();
             skip(')');
+	    cstr_free(&astr);
             break;
         case TOK_ALIGNED1:
         case TOK_ALIGNED2:
@@ -3654,16 +3667,7 @@ static inline void convert_parameter_type(CType *pt)
 ST_FUNC void parse_asm_str(CString *astr)
 {
     skip('(');
-    /* read the string */
-    if (tok != TOK_STR)
-        expect("string constant");
-    cstr_new(astr);
-    while (tok == TOK_STR) {
-        /* XXX: add \0 handling too ? */
-        cstr_cat(astr, tokc.str.data, -1);
-        next();
-    }
-    cstr_ccat(astr, '\0');
+    parse_mult_str(astr, "string constant");
 }
 
 /* Parse an asm label and return the token */
