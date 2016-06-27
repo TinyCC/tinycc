@@ -212,7 +212,7 @@ static void gen_makedeps(TCCState *s, const char *target, const char *filename)
     if (!depout)
         tcc_error("could not open '%s'", filename);
 
-    fprintf(depout, "%s : \\\n", target);
+    fprintf(depout, "%s: \\\n", target);
     for (i=0; i<s->nb_target_deps; ++i)
         fprintf(depout, " %s \\\n", s->target_deps[i]);
     fprintf(depout, "\n");
