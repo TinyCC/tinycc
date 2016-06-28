@@ -335,6 +335,22 @@ static void use_section(TCCState *s1, const char *name)
     use_section1(s1, sec);
 }
 
+static void push_section(TCCState *s1, const char *name)
+{
+    Section *sec = find_section(s1, name);
+    sec->prev = cur_text_section;
+    use_section1(s1, sec);
+}
+
+static void pop_section(TCCState *s1)
+{
+    Section *prev = cur_text_section->prev;
+    if (!prev)
+        tcc_error(".popsection without .pushsection");
+    cur_text_section->prev = NULL;
+    use_section1(s1, prev);
+}
+
 static void asm_parse_directive(TCCState *s1)
 {
     int n, offset, v, size, tok1;
@@ -683,10 +699,12 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+    case TOK_ASMDIR_pushsection:
     case TOK_ASMDIR_section:
         {
             char sname[256];
 
+	    tok1 = tok;
             /* XXX: support more options */
             next();
             sname[0] = '\0';
@@ -711,7 +729,10 @@ static void asm_parse_directive(TCCState *s1)
                 }
             }
             last_text_section = cur_text_section;
-            use_section(s1, sname);
+	    if (tok1 == TOK_ASMDIR_section)
+	        use_section(s1, sname);
+	    else
+	        push_section(s1, sname);
         }
         break;
     case TOK_ASMDIR_previous:
@@ -725,6 +746,10 @@ static void asm_parse_directive(TCCState *s1)
             last_text_section = sec;
         }
         break;
+    case TOK_ASMDIR_popsection:
+	next();
+	pop_section(s1);
+	break;
 #ifdef TCC_TARGET_I386
     case TOK_ASMDIR_code16:
         {

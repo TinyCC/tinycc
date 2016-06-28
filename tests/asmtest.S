@@ -717,6 +717,16 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
 .endr
 .fill 4,1,0x90
 
+.section .text.one,"ax"
+nop
+.previous
+.pushsection .text.one,"ax"
+nop
+.pushsection .text.two,"ax"
+nop
+.popsection
+.popsection
+
     movd %esi, %mm1
     movd %edi, %xmm2
     movd (%ebx), %mm3

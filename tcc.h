@@ -448,8 +448,8 @@ typedef struct Section {
     int nb_hashed_syms;      /* used to resize the hash table */
     struct Section *link;    /* link to another section */
     struct Section *reloc;   /* corresponding section for relocation, if any */
-    struct Section *hash;     /* hash table for symbols */
-    struct Section *next;
+    struct Section *hash;    /* hash table for symbols */
+    struct Section *prev;    /* previous section on section stack */
     char name[1];           /* section name */
 } Section;
 

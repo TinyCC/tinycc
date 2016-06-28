@@ -323,6 +323,8 @@
  DEF_ASMDIR(data)
  DEF_ASMDIR(bss)
  DEF_ASMDIR(previous)
+ DEF_ASMDIR(pushsection)
+ DEF_ASMDIR(popsection)
  DEF_ASMDIR(fill)
  DEF_ASMDIR(rept)
  DEF_ASMDIR(endr)
