@@ -3250,7 +3250,10 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
             offset = 0;
             flexible = 0;
             while (tok != '}') {
-                parse_btype(&btype, &ad1);
+                if (!parse_btype(&btype, &ad1)) {
+		    skip(';');
+		    continue;
+		}
                 while (1) {
                 extra_bytes = 0;
 		    if (flexible)
