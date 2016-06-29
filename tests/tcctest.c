@@ -2600,6 +2600,14 @@ int fls64(unsigned long long x)
 }
 #endif
 
+void other_constraints_test(void)
+{
+    unsigned long ret;
+    int var;
+    __asm__ volatile ("movq %P1,%0" : "=r" (ret) : "p" (&var));
+    printf ("oc1: %d\n", ret == (unsigned long)&var);
+}
+
 unsigned int set;
 
 void asm_test(void)
@@ -2633,6 +2641,7 @@ void asm_test(void)
     s1.b = 43;
     printf("mconstraint: %d", mconstraint_test(&s2));
     printf(" %d %d\n", s1.a, s1.b);
+    other_constraints_test();
     set = 0xff;
     sigdelset1(&set, 2);
     sigaddset1(&set, 16);
