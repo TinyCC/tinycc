@@ -368,6 +368,7 @@ static void asm_parse_directive(TCCState *s1)
     sec = cur_text_section;
     switch(tok) {
     case TOK_ASMDIR_align:
+    case TOK_ASMDIR_balign:
     case TOK_ASMDIR_p2align:
     case TOK_ASMDIR_skip:
     case TOK_ASMDIR_space:
@@ -381,7 +382,7 @@ static void asm_parse_directive(TCCState *s1)
             n = 1 << n;
             tok1 = TOK_ASMDIR_align;
         }
-        if (tok1 == TOK_ASMDIR_align) {
+        if (tok1 == TOK_ASMDIR_align || tok1 == TOK_ASMDIR_balign) {
             if (n < 0 || (n & (n-1)) != 0)
                 tcc_error("alignment must be a positive power of two");
             offset = (ind + n - 1) & -n;

@@ -11,6 +11,7 @@
    .align 8
    .byte 1
 /* .align 16, 0x90 gas is too clever for us with 0x90 fill */
+   .balign 4, 0x92
    .align 16, 0x91 /* 0x91 tests the non-clever behaviour */
    .skip 3
    .skip 15, 0x90
