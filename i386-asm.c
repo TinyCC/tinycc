@@ -433,7 +433,7 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 }
 
 #ifdef TCC_TARGET_X86_64
-static void gen_expr64(ExprValue *pe)
+ST_FUNC void gen_expr64(ExprValue *pe)
 {
     gen_addr64(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }

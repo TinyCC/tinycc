@@ -407,6 +407,10 @@ static void asm_parse_directive(TCCState *s1)
         ind += size;
         break;
     case TOK_ASMDIR_quad:
+#ifdef TCC_TARGET_X86_64
+	size = 8;
+	goto asm_data;
+#else
         next();
         for(;;) {
             uint64_t vl;
@@ -433,6 +437,7 @@ static void asm_parse_directive(TCCState *s1)
             next();
         }
         break;
+#endif
     case TOK_ASMDIR_byte:
         size = 1;
         goto asm_data;
@@ -451,6 +456,10 @@ static void asm_parse_directive(TCCState *s1)
             if (sec->sh_type != SHT_NOBITS) {
                 if (size == 4) {
                     gen_expr32(&e);
+#ifdef TCC_TARGET_X86_64
+		} else if (size == 8) {
+		    gen_expr64(&e);
+#endif
                 } else {
                     if (e.sym)
                         expect("constant");

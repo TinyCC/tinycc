@@ -1526,6 +1526,9 @@ ST_FUNC int asm_int_expr(TCCState *s1);
 ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
 /* ------------ i386-asm.c ------------ */
 ST_FUNC void gen_expr32(ExprValue *pe);
+#ifdef TCC_TARGET_X86_64
+ST_FUNC void gen_expr64(ExprValue *pe);
+#endif
 ST_FUNC void asm_opcode(TCCState *s1, int opcode);
 ST_FUNC void asm_compute_constraints(ASMOperand *operands, int nb_operands, int nb_outputs, const uint8_t *clobber_regs, int *pout_reg);
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier);

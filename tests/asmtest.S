@@ -739,6 +739,7 @@ nop
    .long 145 + 2b
    .word 164, 0
    .org 2b+32
+   .quad 1b
 .popsection
 
     movd %esi, %mm1
