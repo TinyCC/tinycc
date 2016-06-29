@@ -727,6 +727,19 @@ nop
 .popsection
 .popsection
 
+1: ud2
+.pushsection __bug_table,"a"
+.align 8
+2: .long 1b - 2b
+   .long 0x600000 - 2b
+   .long 1b + 42
+   .long 43 + 1b
+   .long 2b + 144
+   .long 145 + 2b
+   .word 164, 0
+   .org 2b+32
+.popsection
+
     movd %esi, %mm1
     movd %edi, %xmm2
     movd (%ebx), %mm3

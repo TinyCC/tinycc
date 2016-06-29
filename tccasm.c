@@ -67,11 +67,13 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                     sym->type.t = VT_STATIC | VT_VOID;
                 }
             }
-            pe->v = 0;
-            pe->sym = sym;
+	    pe->v = 0;
+	    pe->sym = sym;
+	    pe->pcrel = 0;
         } else if (*p == '\0') {
             pe->v = n;
             pe->sym = NULL;
+	    pe->pcrel = 0;
         } else {
             tcc_error("invalid number syntax");
         }
@@ -97,6 +99,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
     case TOK_LCHAR:
 	pe->v = tokc.i;
 	pe->sym = NULL;
+	pe->pcrel = 0;
 	next();
 	break;
     case '(':
@@ -107,6 +110,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
     case '.':
         pe->v = 0;
         pe->sym = &sym_dot;
+	pe->pcrel = 0;
         sym_dot.type.t = VT_VOID | VT_STATIC;
         sym_dot.r = cur_text_section->sh_num;
         sym_dot.jnext = ind;
@@ -125,9 +129,11 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 /* if absolute symbol, no need to put a symbol value */
                 pe->v = sym->jnext;
                 pe->sym = NULL;
+		pe->pcrel = 0;
             } else {
                 pe->v = 0;
                 pe->sym = sym;
+		pe->pcrel = 0;
             }
             next();
         } else {
@@ -230,20 +236,21 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
             pe->v -= e2.v;
             /* NOTE: we are less powerful than gas in that case
                because we store only one symbol in the expression */
-            if (!pe->sym && !e2.sym) {
-                /* OK */
-            } else if (pe->sym && !e2.sym) {
-                /* OK */
-            } else if (pe->sym && e2.sym) {
-                if (pe->sym == e2.sym) { 
-                    /* OK */
-                } else if (pe->sym->r == e2.sym->r && pe->sym->r != 0) {
-                    /* we also accept defined symbols in the same section */
-                    pe->v += pe->sym->jnext - e2.sym->jnext;
-                } else {
-                    goto cannot_relocate;
-                }
-                pe->sym = NULL; /* same symbols can be subtracted to NULL */
+	    if (!e2.sym) {
+		/* OK */
+	    } else if (pe->sym == e2.sym) { 
+		/* OK */
+		pe->sym = NULL; /* same symbols can be subtracted to NULL */
+	    } else if (pe->sym && pe->sym->r == e2.sym->r && pe->sym->r != 0) {
+		/* we also accept defined symbols in the same section */
+		pe->v += pe->sym->jnext - e2.sym->jnext;
+		pe->sym = NULL;
+	    } else if (e2.sym->r == cur_text_section->sh_num) {
+		/* When subtracting a defined symbol in current section
+		   this actually makes the value PC-relative.  */
+		pe->v -= e2.sym->jnext - ind - 4;
+		pe->pcrel = 1;
+		e2.sym = NULL;
             } else {
             cannot_relocate:
                 tcc_error("invalid operation with label");
@@ -531,9 +538,15 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASMDIR_org:
         {
             unsigned long n;
+	    ExprValue e;
             next();
-            /* XXX: handle section symbols too */
-            n = asm_int_expr(s1);
+	    asm_expr(s1, &e);
+	    n = e.v;
+	    if (e.sym) {
+		if (e.sym->r != cur_text_section->sh_num)
+		  expect("constant or same-section symbol");
+		n += e.sym->jnext;
+	    }
             if (n < ind)
                 tcc_error("attempt to .org backwards");
             v = 0;
@@ -703,6 +716,7 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASMDIR_section:
         {
             char sname[256];
+	    int old_nb_section = s1->nb_sections;
 
 	    tok1 = tok;
             /* XXX: support more options */
@@ -733,6 +747,11 @@ static void asm_parse_directive(TCCState *s1)
 	        use_section(s1, sname);
 	    else
 	        push_section(s1, sname);
+	    /* If we just allocated a new section reset its alignment to
+	       1.  new_section normally acts for GCC compatibility and
+	       sets alignment to PTR_SIZE.  The assembler behaves different. */
+	    if (old_nb_section != s1->nb_sections)
+	        cur_text_section->sh_addralign = 1;
         }
         break;
     case TOK_ASMDIR_previous:

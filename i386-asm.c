@@ -356,8 +356,7 @@ static void parse_operand(TCCState *s1, Operand *op)
         next();
         asm_expr(s1, &e);
         op->type = OP_IM32;
-        op->e.v = e.v;
-        op->e.sym = e.sym;
+        op->e = e;
         if (!op->e.sym) {
             if (op->e.v == (uint8_t)op->e.v)
                 op->type |= OP_IM8;
@@ -378,8 +377,7 @@ static void parse_operand(TCCState *s1, Operand *op)
         op->shift = 0;
         if (tok != '(') {
             asm_expr(s1, &e);
-            op->e.v = e.v;
-            op->e.sym = e.sym;
+            op->e = e;
         } else {
             next();
             if (tok == '%') {
@@ -395,6 +393,7 @@ static void parse_operand(TCCState *s1, Operand *op)
                 op->e.v = e.v;
                 op->e.sym = e.sym;
             }
+	    op->e.pcrel = 0;
         }
         if (tok == '(') {
 	    int type = 0;
@@ -425,7 +424,12 @@ static void parse_operand(TCCState *s1, Operand *op)
 /* XXX: unify with C code output ? */
 ST_FUNC void gen_expr32(ExprValue *pe)
 {
-    gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
+    if (pe->pcrel)
+        /* If PC-relative, always set VT_SYM, even without symbol,
+	   so as to force a relocation to be emitted.  */
+	gen_addrpc32(VT_SYM, pe->sym, pe->v);
+    else
+	gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }
 
 #ifdef TCC_TARGET_X86_64
