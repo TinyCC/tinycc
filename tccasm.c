@@ -259,9 +259,51 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
     }
 }
 
+static inline void asm_expr_cmp(TCCState *s1, ExprValue *pe)
+{
+    int op;
+    ExprValue e2;
+
+    asm_expr_sum(s1, pe);
+    for(;;) {
+        op = tok;
+	if (op != TOK_EQ && op != TOK_NE
+	    && (op > TOK_GT || op < TOK_ULE))
+            break;
+        next();
+        asm_expr_sum(s1, &e2);
+        if (pe->sym || e2.sym)
+            tcc_error("invalid operation with label");
+        switch(op) {
+	case TOK_EQ:
+	    pe->v = pe->v == e2.v;
+	    break;
+	case TOK_NE:
+	    pe->v = pe->v != e2.v;
+	    break;
+	case TOK_LT:
+	    pe->v = (int64_t)pe->v < (int64_t)e2.v;
+	    break;
+	case TOK_GE:
+	    pe->v = (int64_t)pe->v >= (int64_t)e2.v;
+	    break;
+	case TOK_LE:
+	    pe->v = (int64_t)pe->v <= (int64_t)e2.v;
+	    break;
+	case TOK_GT:
+	    pe->v = (int64_t)pe->v > (int64_t)e2.v;
+	    break;
+        default:
+            break;
+        }
+	/* GAS compare results are -1/0 not 1/0.  */
+	pe->v = -(int64_t)pe->v;
+    }
+}
+
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe)
 {
-    asm_expr_sum(s1, pe);
+    asm_expr_cmp(s1, pe);
 }
 
 ST_FUNC int asm_int_expr(TCCState *s1)
@@ -391,6 +433,8 @@ static void asm_parse_directive(TCCState *s1)
             if (sec->sh_addralign < n)
                 sec->sh_addralign = n;
         } else {
+	    if (n < 0)
+	        n = 0;
             size = n;
         }
         v = 0;

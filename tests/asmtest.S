@@ -741,6 +741,12 @@ nop
    .org 2b+32
    .quad 1b
 .popsection
+3: mov %eax,%ecx
+4:
+.pushsection .text.three, "ax"
+nop
+.skip (-((4b-3b) > 0) * 2) , 0x90
+.popsection
 
     movd %esi, %mm1
     movd %edi, %xmm2
