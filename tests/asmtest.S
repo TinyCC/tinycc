@@ -607,6 +607,13 @@ int $0x10
     rdmsr
     rdpmc
     ud2
+#ifdef __x86_64__
+    syscall
+    sysret
+    lfence
+    mfence
+    sfence
+#endif
 
     emms
     movd %edx, %mm3

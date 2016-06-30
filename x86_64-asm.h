@@ -88,6 +88,9 @@ ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WLX, OPT_IM8, OPT_REGW | OPT_EA
      DEF_ASM_OP0(rdtsc, 0x0f31)
      DEF_ASM_OP0(rdmsr, 0x0f32)
      DEF_ASM_OP0(rdpmc, 0x0f33)
+
+     DEF_ASM_OP0(syscall, 0x0f05)
+     DEF_ASM_OP0(sysret, 0x0f07)
      DEF_ASM_OP0(ud2, 0x0f0b)
 
      /* NOTE: we took the same order as gas opcode definition order */
@@ -482,6 +485,9 @@ ALT(DEF_ASM_OP2(movhps, 0x0f17, 0, OPC_MODRM, OPT_SSE, OPT_EA | OPT_REG32 ))
     DEF_ASM_OP2(sqrtps, 0x0f51, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
     DEF_ASM_OP2(subps, 0x0f5c, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
 
+    DEF_ASM_OP0L(lfence, 0x0fae, 5, OPC_MODRM)
+    DEF_ASM_OP0L(mfence, 0x0fae, 6, OPC_MODRM)
+    DEF_ASM_OP0L(sfence, 0x0fae, 7, OPC_MODRM)
 #undef ALT
 #undef DEF_ASM_OP0
 #undef DEF_ASM_OP0L

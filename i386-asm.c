@@ -893,6 +893,15 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
     pc = 0;
     if (pa->instr_type & OPC_MODRM) {
+	if (!nb_ops) {
+	    /* A modrm opcode without operands is a special case (e.g. mfence).
+	       It has a group and acts as if there's an register operand 0
+	       (ax).  */
+	    i = 0;
+	    ops[i].type = OP_REG;
+	    ops[i].reg = 0;
+	    goto modrm_found;
+	}
         /* first look for an ea operand */
         for(i = 0;i < nb_ops; i++) {
             if (op_type[i] & OP_EA)
