@@ -315,7 +315,7 @@ opened with @code{dlopen()} needs to access executable symbols.
 Generate an object file combining all input files.
 
 @item -Wl,-rpath=path
-Put custom seatch path for dynamic libraries into executable.
+Put custom search path for dynamic libraries into executable.
 
 @item -Wl,--whole-archive
 Add a whole archive, not just the symbols of the archive that would
