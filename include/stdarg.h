@@ -30,7 +30,8 @@ void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);
 #else /* _WIN64 */
 typedef char *va_list;
 #define va_start(ap,last) __builtin_va_start(ap,last)
-#define va_arg(ap,type) (ap += 8, sizeof(type)<=8 ? *(type*)ap : **(type**)ap)
+#define va_arg(ap, t) ((sizeof(t) > 8 || (sizeof(t) & (sizeof(t) - 1))) \
+	? **(t **)((ap += 8) - 8) : *(t  *)((ap += 8) - 8))
 #define va_copy(dest, src) ((dest) = (src))
 #define va_end(ap)
 #endif

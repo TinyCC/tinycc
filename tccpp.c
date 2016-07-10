@@ -464,9 +464,6 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     switch(v) {
     case TOK_CINT:
     case TOK_CUINT:
-        /* XXX: not quite exact, but only useful for testing */
-        sprintf(p, "%llu", (unsigned long long)cv->i);
-        break;
     case TOK_CLLONG:
     case TOK_CULLONG:
         /* XXX: not quite exact, but only useful for testing  */

@@ -2228,7 +2228,6 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
     vpush_global_sym(&func_old_type, TOK_alloca);
     vswap(); /* Move alloca ref past allocation size */
     gfunc_call(1);
-    vset(type, REG_IRET, 0);
 #else
     int r;
     r = gv(RC_INT); /* allocation size */

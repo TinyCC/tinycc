@@ -4033,6 +4033,7 @@ ST_FUNC void unary(void)
                 tcc_error("__builtin_va_start expects a local variable");
             vtop->r &= ~(VT_LVAL | VT_REF);
             vtop->type = char_pointer_type;
+            vtop->c.i += 8;
             vstore();
         }
         break;
