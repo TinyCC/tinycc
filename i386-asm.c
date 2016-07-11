@@ -1285,7 +1285,8 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 
     r = sv->r;
     if ((r & VT_VALMASK) == VT_CONST) {
-        if (!(r & VT_LVAL) && modifier != 'c' && modifier != 'n')
+        if (!(r & VT_LVAL) && modifier != 'c' && modifier != 'n' &&
+	    modifier != 'P')
             cstr_ccat(add_str, '$');
         if (r & VT_SYM) {
             cstr_cat(add_str, get_tok_str(sv->sym->v, NULL), -1);
@@ -1489,9 +1490,16 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 #ifdef TCC_TARGET_X86_64
     } else if (reg >= TOK_ASM_rax && reg <= TOK_ASM_rdi) {
         reg -= TOK_ASM_rax;
+    } else if (1 && str[0] == 'r' &&
+	       (((str[1] == '8' || str[1] == '9') && str[2] == 0) ||
+		(str[1] == '1' && str[2] >= '0' && str[2] <= '5' &&
+		 str[3] == 0))) {
+	/* Do nothing for now.  We can't parse the high registers.  */
+	goto end;
 #endif
     } else {
         tcc_error("invalid clobber register '%s'", str);
     }
     clobber_regs[reg] = 1;
+end:;
 }

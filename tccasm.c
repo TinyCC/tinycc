@@ -1043,10 +1043,10 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             }
             modifier = 0;
             if (*str == 'c' || *str == 'n' ||
-                *str == 'b' || *str == 'w' ||
-                *str == 'h' || *str == 'k' || *str == 'q' ||
-		/* P in GCC would add "@PLT" to symbol refs in PIC mode
-		   Ignore this in TCC.  */
+                *str == 'b' || *str == 'w' || *str == 'h' || *str == 'k' ||
+		*str == 'q' ||
+		/* P in GCC would add "@PLT" to symbol refs in PIC mode,
+		   and make literal operands not be decorated with '$'.  */
 		*str == 'P')
                 modifier = *str++;
             index = find_constraint(operands, nb_operands, str, &str);
