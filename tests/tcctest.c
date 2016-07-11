@@ -2230,10 +2230,17 @@ int reltab[3] = { 1, 2, 3 };
 int *rel1 = &reltab[1];
 int *rel2 = &reltab[2];
 
+void getmyaddress(void)
+{
+    printf("in getmyaddress\n");
+}
+unsigned long theaddress = (unsigned long)getmyaddress;
 void relocation_test(void)
 {
+    void (*fptr)(void) = (void (*)(void))theaddress;
     printf("*rel1=%d\n", *rel1);
     printf("*rel2=%d\n", *rel2);
+    fptr();
 }
 
 void old_style_f(a,b,c)
