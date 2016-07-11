@@ -1017,6 +1017,7 @@ static inline int constraint_priority(const char *str)
         case 'N':
         case 'M':
         case 'I':
+	case 'e':
         case 'i':
         case 'm':
         case 'g':
@@ -1193,6 +1194,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
             op->reg = reg;
             regs_allocated[reg] |= reg_mask;
             break;
+	case 'e':
         case 'i':
             if (!((op->vt->r & (VT_VALMASK | VT_LVAL)) == VT_CONST))
                 goto try_next;
