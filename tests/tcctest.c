@@ -108,6 +108,7 @@ void cmp_comparison_test(void);
 void math_cmp_test(void);
 void callsave_test(void);
 void builtin_frame_address_test(void);
+void attrib_test(void);
 
 int fib(int n);
 void num(int n);
@@ -702,6 +703,7 @@ int main(int argc, char **argv)
     intdiv_test();
     if (via_volatile (42) != 42)
       printf ("via_volatile broken\n");
+    attrib_test();
     return 0; 
 }
 
@@ -2956,4 +2958,35 @@ char via_volatile (char i)
   char volatile vi;
   vi = i;
   return vi;
+}
+
+struct __attribute__((__packed__)) Spacked {
+    char a;
+    short b;
+    int c;
+};
+struct Spacked spacked;
+typedef struct __attribute__((__packed__)) {
+    char a;
+    short b;
+    int c;
+} Spacked2;
+Spacked2 spacked2;
+#ifdef BROKEN
+/* This doesn't work for now.  Requires adjusting field offsets/sizes
+   after parsing the struct members.  */
+typedef struct Spacked3_s {
+    char a;
+    short b;
+    int c;
+} __attribute__((__packed__)) Spacked3;
+Spacked3 spacked3;
+#endif
+void attrib_test(void)
+{
+  printf("attr: %d %d %d %d\n", sizeof(struct Spacked),
+	 sizeof(spacked), sizeof(Spacked2), sizeof(spacked2));
+#ifdef BROKEN
+  printf("attr: %d %d\n", sizeof(Spacked3), sizeof(spacked3));
+#endif
 }
