@@ -613,6 +613,7 @@ int $0x10
     lfence
     mfence
     sfence
+    clflush 0x1000(%rax,%rcx)
 #endif
 
     emms

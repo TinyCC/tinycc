@@ -488,6 +488,7 @@ ALT(DEF_ASM_OP2(movhps, 0x0f17, 0, OPC_MODRM, OPT_SSE, OPT_EA | OPT_REG32 ))
     DEF_ASM_OP0L(lfence, 0x0fae, 5, OPC_MODRM)
     DEF_ASM_OP0L(mfence, 0x0fae, 6, OPC_MODRM)
     DEF_ASM_OP0L(sfence, 0x0fae, 7, OPC_MODRM)
+    DEF_ASM_OP1(clflush, 0x0fae, 7, OPC_MODRM, OPT_EA)
 #undef ALT
 #undef DEF_ASM_OP0
 #undef DEF_ASM_OP0L
