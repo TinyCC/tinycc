@@ -91,6 +91,7 @@ ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WLX, OPT_IM8, OPT_REGW | OPT_EA
 
      DEF_ASM_OP0(syscall, 0x0f05)
      DEF_ASM_OP0(sysret, 0x0f07)
+     DEF_ASM_OP0L(sysretq, 0x480f07, 0, 0)
      DEF_ASM_OP0(ud2, 0x0f0b)
 
      /* NOTE: we took the same order as gas opcode definition order */
@@ -216,6 +217,8 @@ ALT(DEF_ASM_OP1(jmp, 0xeb, 0, 0, OPT_DISP8))
 
 ALT(DEF_ASM_OP1(lcall, 0xff, 3, OPC_MODRM, OPT_EA))
 ALT(DEF_ASM_OP1(ljmp, 0xff, 5, OPC_MODRM, OPT_EA))
+    DEF_ASM_OP1(ljmpw, 0x66ff, 5, OPC_MODRM, OPT_EA)
+    DEF_ASM_OP1(ljmpl, 0xff, 5, OPC_MODRM, OPT_EA)
 
 ALT(DEF_ASM_OP1(int, 0xcd, 0, 0, OPT_IM8))
 ALT(DEF_ASM_OP1(seto, 0x0f90, 0, OPC_MODRM | OPC_TEST, OPT_REG8 | OPT_EA))
@@ -374,9 +377,14 @@ ALT(DEF_ASM_OP2(lslw, 0x0f03, 0, OPC_MODRM | OPC_WLX, OPT_EA | OPT_REG, OPT_REG)
     DEF_ASM_OP1(str, 0x0f00, 1, OPC_MODRM, OPT_REG16| OPT_EA)
     DEF_ASM_OP1(verr, 0x0f00, 4, OPC_MODRM, OPT_REG | OPT_EA)
     DEF_ASM_OP1(verw, 0x0f00, 5, OPC_MODRM, OPT_REG | OPT_EA)
+    DEF_ASM_OP0L(swapgs, 0x0f01, 7, OPC_MODRM)
 
     /* 486 */
+    /* bswap can't be applied to 16bit regs */
     DEF_ASM_OP1(bswap, 0x0fc8, 0, OPC_REG, OPT_REG32 )
+    DEF_ASM_OP1(bswapl, 0x0fc8, 0, OPC_REG, OPT_REG32 )
+    DEF_ASM_OP1(bswapq, 0x480fc8, 0, OPC_REG, OPT_REG64 )
+
 ALT(DEF_ASM_OP2(xaddb, 0x0fc0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OPT_EA ))
 ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OPT_EA ))
     DEF_ASM_OP1(invlpg, 0x0f01, 7, OPC_MODRM, OPT_EA )
@@ -495,6 +503,10 @@ ALT(DEF_ASM_OP2(movhps, 0x0f17, 0, OPC_MODRM, OPT_SSE, OPT_EA | OPT_REG32 ))
     DEF_ASM_OP2(sqrtps, 0x0f51, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
     DEF_ASM_OP2(subps, 0x0f5c, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
 
+    DEF_ASM_OP1(prefetchnta, 0x0f18, 0, OPC_MODRM, OPT_EA)
+    DEF_ASM_OP1(prefetcht0, 0x0f18, 1, OPC_MODRM, OPT_EA)
+    DEF_ASM_OP1(prefetcht1, 0x0f18, 2, OPC_MODRM, OPT_EA)
+    DEF_ASM_OP1(prefetcht2, 0x0f18, 3, OPC_MODRM, OPT_EA)
     DEF_ASM_OP0L(lfence, 0x0fae, 5, OPC_MODRM)
     DEF_ASM_OP0L(mfence, 0x0fae, 6, OPC_MODRM)
     DEF_ASM_OP0L(sfence, 0x0fae, 7, OPC_MODRM)
