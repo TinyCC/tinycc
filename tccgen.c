@@ -2982,7 +2982,7 @@ ST_FUNC void inc(int post, int c)
         vpop(); /* if post op, return saved value */
 }
 
-static void parse_mult_str (CString *astr, const char *msg)
+ST_FUNC void parse_mult_str (CString *astr, const char *msg)
 {
     /* read the string */
     if (tok != TOK_STR)
