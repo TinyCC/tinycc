@@ -185,6 +185,7 @@
  DEF_WLX(btr)
  DEF_WLX(btc)
 
+ DEF_WLX(lar)
  DEF_WLX(lsl)
 
  /* generic FP ops */

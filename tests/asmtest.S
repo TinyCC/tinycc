@@ -625,8 +625,15 @@ int $0x10
     clflush 0x1000(%rax,%rcx)
     fxsaveq (%rdx)
     fxrstorq (%rcx)
+
 #endif
 
+    lar %ax,%dx
+    lar %eax,%dx
+    lar %ax,%edx
+    lar %eax,%edx
+    lar %ax,%rdx
+    lar %eax,%rdx
     emms
     movd %edx, %mm3
     movd 0x1000, %mm2

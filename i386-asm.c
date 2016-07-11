@@ -733,7 +733,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         autosize = NBWLX-2;
 #endif
     if (s == autosize) {
-        for(i = 0; s == autosize && i < nb_ops; i++) {
+	/* Check for register operands providing hints about the size.
+	   Start from the end, i.e. destination operands.  This matters
+	   only for opcodes accepting different sized registers, lar and lsl
+	   are such opcodes.  */
+        for(i = nb_ops - 1; s == autosize && i >= 0; i--) {
             if ((ops[i].type & OP_REG) && !(op_type[i] & (OP_CL | OP_DX)))
                 s = reg_to_size[ops[i].type & OP_REG];
         }
