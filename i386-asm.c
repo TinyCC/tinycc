@@ -1011,6 +1011,7 @@ static inline int constraint_priority(const char *str)
             pr = 2;
             break;
         case 'r':
+	case 'R':
 	case 'p':
             pr = 3;
             break;
@@ -1181,6 +1182,7 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
             }
             goto try_next;
         case 'r':
+	case 'R':
 	case 'p': /* A general address, for x86(64) any register is acceptable*/
             /* any general register */
             for(reg = 0; reg < 8; reg++) {
