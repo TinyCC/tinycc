@@ -347,6 +347,12 @@ ALT(DEF_ASM_OP1(fstsw, 0xdd, 7, OPC_MODRM | OPC_FWAIT, OPT_EA ))
     DEF_ASM_OP1(ffreep, 0xdfc0, 4, OPC_REG, OPT_ST )
     DEF_ASM_OP1(fxsave, 0x0fae, 0, OPC_MODRM, OPT_EA )
     DEF_ASM_OP1(fxrstor, 0x0fae, 1, OPC_MODRM, OPT_EA )
+    /* The *q forms of fxrstor/fxsave use a REX prefix.
+       If the operand would use extended registers we would have to modify
+       it instead of generating a second one.  Currently that's no
+       problem with TCC, we don't use extended registers.  */
+    DEF_ASM_OP1(fxsaveq, 0x480fae, 0, OPC_MODRM, OPT_EA )
+    DEF_ASM_OP1(fxrstorq, 0x480fae, 1, OPC_MODRM, OPT_EA )
 
     /* segments */
     DEF_ASM_OP2(arpl, 0x63, 0, OPC_MODRM, OPT_REG16, OPT_REG16 | OPT_EA)

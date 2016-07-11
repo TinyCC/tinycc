@@ -614,6 +614,8 @@ int $0x10
     mfence
     sfence
     clflush 0x1000(%rax,%rcx)
+    fxsaveq (%rdx)
+    fxrstorq (%rcx)
 #endif
 
     emms
