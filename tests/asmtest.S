@@ -622,6 +622,7 @@ int $0x10
     prefetcht0 (%rcx)
     prefetcht1 (%rsi)
     prefetcht2 (%rdi)
+    prefetchw (%rdi)
     clflush 0x1000(%rax,%rcx)
     fxsaveq (%rdx)
     fxrstorq (%rcx)
