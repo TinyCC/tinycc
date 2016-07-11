@@ -729,7 +729,7 @@ static void asm_parse_directive(TCCState *s1)
 
             next();
             skip(',');
-            while (tok != '\n' && tok != CH_EOF) {
+            while (tok != TOK_LINEFEED && tok != ';' && tok != CH_EOF) {
                 next();
             }
         }
