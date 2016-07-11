@@ -672,13 +672,19 @@ int $0x10
     lgdt 0x1000
     lidt 0x1000
     lldt 0x1000
-    lmsw 0x1000
-    lsl 0x1000, %ecx
-    ltr 0x1000
-    
     sgdt 0x1000
     sidt 0x1000
     sldt 0x1000
+#ifdef __x86_64__
+    lgdtq 0x1000
+    lidtq 0x1000
+    sgdtq 0x1000
+    sidtq 0x1000
+#endif
+
+    lmsw 0x1000
+    lsl 0x1000, %ecx
+    ltr 0x1000
     smsw 0x1000
     str 0x1000
     
