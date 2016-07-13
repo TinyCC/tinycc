@@ -3465,6 +3465,7 @@ ST_INLN void unget_tok(int last_tok)
 
 ST_FUNC void preprocess_start(TCCState *s1)
 {
+    char *buf;
     s1->include_stack_ptr = s1->include_stack;
     /* XXX: move that before to avoid having to initialize
        file->ifdef_stack_ptr ? */
@@ -3480,6 +3481,11 @@ ST_FUNC void preprocess_start(TCCState *s1)
         s1->dollars_in_identifiers ? IS_ID : 0;
     isidnum_table['.' - CH_EOF] =
         (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
+    buf = tcc_malloc(3 + strlen(file->filename));
+    sprintf(buf, "\"%s\"", file->filename);
+    tcc_undefine_symbol(s1, "__BASE_FILE__");
+    tcc_define_symbol(s1, "__BASE_FILE__", buf);
+    tcc_free(buf);
     if (s1->nb_cmd_include_files) {
 	CString cstr;
 	int i;
