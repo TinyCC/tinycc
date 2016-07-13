@@ -1446,6 +1446,13 @@ struct complexinit2 cix22 = {
 	.b = { 4001, 4002, 4003, 4004, 4005, 4006 }
 };
 
+typedef int arrtype1[];
+arrtype1 sinit19 = {1};
+arrtype1 sinit20 = {2,3};
+typedef int arrtype2[3];
+arrtype2 sinit21 = {4};
+arrtype2 sinit22 = {5,6,7};
+
 void init_test(void)
 {
     int linit1 = 2;
@@ -1546,6 +1553,13 @@ void init_test(void)
 	cix[0].b[2].a, cix[0].b[2].b);
     printf("cix2: %d %d\n", cix21.b[2], cix22.b[5]);
     printf("sizeof cix20 %d, cix21 %d, sizeof cix22 %d\n", sizeof cix20, sizeof cix21, sizeof cix22);
+
+    printf("arrtype1: %d %d %d\n", sinit19[0], sinit20[0], sinit20[1]);
+    printf("arrtype2: %d %d\n", sizeof(sinit19), sizeof(sinit20));
+    printf("arrtype3: %d %d %d\n", sinit21[0], sinit21[1], sinit21[2]);
+    printf("arrtype4: %d %d %d\n", sinit22[0], sinit22[1], sinit22[2]);
+    printf("arrtype5: %d %d\n", sizeof(sinit21), sizeof(sinit22));
+    printf("arrtype6: %d\n", sizeof(arrtype2));
 }
 
 

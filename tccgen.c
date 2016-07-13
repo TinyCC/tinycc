@@ -6657,6 +6657,14 @@ static int decl0(int l, int is_for_loop_init)
         }
         while (1) { /* iterate thru each declaration */
             type = btype;
+	    /* If the base type itself was an array type of unspecified
+	       size (like in 'typedef int arr[]; arr x = {1};') then
+	       we will overwrite the unknown size by the real one for
+	       this decl.  We need to unshare the ref symbol holding
+	       that size.  */
+	    if ((type.t & VT_ARRAY) && type.ref->c < 0) {
+		type.ref = sym_push(SYM_FIELD, &type.ref->type, 0, type.ref->c);
+	    }
             type_decl(&type, &ad, &v, TYPE_DIRECT);
 #if 0
             {
