@@ -4238,6 +4238,35 @@ ST_FUNC void unary(void)
             vpushi(is_compatible_types(&type1, &type2));
         }
         break;
+    case TOK_builtin_choose_expr:
+	{
+	    int saved_nocode_wanted, c;
+	    next();
+	    skip('(');
+	    c = expr_const();
+	    skip(',');
+	    if (!c) {
+		saved_nocode_wanted = nocode_wanted;
+		nocode_wanted = 1;
+	    }
+	    expr_eq();
+	    if (!c) {
+		vpop();
+		nocode_wanted = saved_nocode_wanted;
+	    }
+	    skip(',');
+	    if (c) {
+		saved_nocode_wanted = nocode_wanted;
+		nocode_wanted = 1;
+	    }
+	    expr_eq();
+	    if (c) {
+		vpop();
+		nocode_wanted = saved_nocode_wanted;
+	    }
+	    skip(')');
+	}
+        break;
     case TOK_builtin_constant_p:
         {
             int saved_nocode_wanted, res;

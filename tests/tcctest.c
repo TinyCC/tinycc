@@ -2685,6 +2685,9 @@ int constant_p_var;
 
 void builtin_test(void)
 {
+    short s;
+    int i;
+    long long ll;
 #if GCC_MAJOR >= 3
     COMPAT_TYPE(int, int);
     COMPAT_TYPE(int, unsigned int);
@@ -2704,6 +2707,16 @@ void builtin_test(void)
     printf("res = %d\n", __builtin_constant_p(1 + 2));
     printf("res = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res = %d\n", __builtin_constant_p(constant_p_var));
+    s = 1;
+    ll = 2;
+    i = __builtin_choose_expr (1 != 0, ll, s);
+    printf("bce: %d\n", i);
+    i = __builtin_choose_expr (1 != 1, ll, s);
+    printf("bce: %d\n", i);
+    i = sizeof (__builtin_choose_expr (1, ll, s));
+    printf("bce: %d\n", i);
+    i = sizeof (__builtin_choose_expr (0, ll, s));
+    printf("bce: %d\n", i);
 }
 
 #ifndef _WIN32
