@@ -1926,6 +1926,7 @@ ST_FUNC void gen_op(int op)
     int u, t1, t2, bt1, bt2, t;
     CType type1;
 
+redo:
     t1 = vtop[-1].type.t;
     t2 = vtop[0].type.t;
     bt1 = t1 & VT_BTYPE;
@@ -1933,6 +1934,18 @@ ST_FUNC void gen_op(int op)
         
     if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
         tcc_error("operation on a struct");
+    } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
+	if (bt2 == VT_FUNC) {
+	    mk_pointer(&vtop->type);
+	    gaddrof();
+	}
+	if (bt1 == VT_FUNC) {
+	    vswap();
+	    mk_pointer(&vtop->type);
+	    gaddrof();
+	    vswap();
+	}
+	goto redo;
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relationnal op: must be both pointers */
