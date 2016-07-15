@@ -3859,15 +3859,16 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         case TOK_RESTRICT2:
         case TOK_RESTRICT3:
             goto redo;
+	/* XXX: clarify attribute handling */
+	case TOK_ATTRIBUTE1:
+	case TOK_ATTRIBUTE2:
+	    parse_attribute(ad);
+	    break;
         }
         mk_pointer(type);
         type->t |= qualifiers;
     }
     
-    /* XXX: clarify attribute handling */
-    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
-        parse_attribute(ad);
-
     /* recursive type */
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     type1.t = 0; /* XXX: same as int */

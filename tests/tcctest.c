@@ -3031,3 +3031,10 @@ void attrib_test(void)
   printf("attr: %d %d\n", sizeof(Spacked3), sizeof(spacked3));
 #endif
 }
+extern __attribute__((__unused__)) char * __attribute__((__unused__)) *
+strange_attrib_placement (void);
+
+void * __attribute__((__unused__)) get_void_ptr (void *a)
+{
+  return a;
+}
