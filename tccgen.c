@@ -5774,19 +5774,10 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
 #define EXPR_CONST 1
 #define EXPR_ANY   2
 
-/* store a value or an expression directly in global data or in local array */
-static void init_putv(CType *type, Section *sec, unsigned long c, 
-                      int v, int expr_type)
+static void parse_init_elem(int expr_type)
 {
-    int saved_global_expr, bt, bit_pos, bit_size;
-    void *ptr;
-    unsigned long long bit_mask;
-    CType dtype;
-
+    int saved_global_expr;
     switch(expr_type) {
-    case EXPR_VAL:
-        vpushi(v);
-        break;
     case EXPR_CONST:
         /* compound literals must be allocated globally in this case */
         saved_global_expr = global_expr;
@@ -5801,18 +5792,29 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
         expr_eq();
         break;
     }
-    
+}
+
+/* store a value or an expression directly in global data or in local array */
+static void init_putv(CType *type, Section *sec, unsigned long c,
+                      int v, int expr_type)
+{
+    int bt, bit_pos, bit_size;
+    void *ptr;
+    unsigned long long bit_mask;
+    CType dtype;
+
     dtype = *type;
     dtype.t &= ~VT_CONSTANT; /* need to do that to avoid false warning */
 
     if (sec) {
+	int size, align;
         /* XXX: not portable */
         /* XXX: generate error if incorrect relocation */
         gen_assign_cast(&dtype);
         bt = type->t & VT_BTYPE;
-        /* we'll write at most 16 bytes */
-        if (c + 16 > sec->data_allocated) {
-            section_realloc(sec, c + 16);
+	size = type_size(type, &align);
+        if (c + size > sec->data_allocated) {
+            section_realloc(sec, c + size);
         }
         ptr = sec->data + c;
         /* XXX: make code faster ? */
@@ -5825,79 +5827,102 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
             bit_size = (vtop->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
             bit_mask = (1LL << bit_size) - 1;
         }
-        if ((vtop->r & VT_SYM) &&
-            (bt == VT_BYTE ||
-             bt == VT_SHORT ||
-             bt == VT_DOUBLE ||
-             bt == VT_LDOUBLE ||
+	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST) &&
+	    vtop->sym->v >= SYM_FIRST_ANOM &&
+	    /* XXX This rejects compount literals like
+	       '(void *){ptr}'.  The problem is that '&sym' is
+	       represented the same way, which would be ruled out
+	       by the SYM_FIRST_ANOM check above, but also '"string"'
+	       in 'char *p = "string"' is represented the same
+	       with the type being VT_PTR and the symbol being an
+	       anonymous one.  That is, there's no difference in vtop
+	       between '(void *){x}' and '&(void *){x}'.  Ignore
+	       pointer typed entities here.  Hopefully no real code
+	       will every use compound literals with scalar type.  */
+	    (vtop->type.t & VT_BTYPE) != VT_PTR) {
+	    /* These come from compound literals, memcpy stuff over.  */
+	    Section *ssec;
+	    ElfW(Sym) *esym;
+	    esym = &((ElfW(Sym) *)symtab_section->data)[vtop->sym->c];
+	    ssec = tcc_state->sections[esym->st_shndx];
+	    memmove (ptr, ssec->data + esym->st_value, size);
+	} else {
+	    if ((vtop->r & VT_SYM) &&
+		(bt == VT_BYTE ||
+		 bt == VT_SHORT ||
+		 bt == VT_DOUBLE ||
+		 bt == VT_LDOUBLE ||
 #if PTR_SIZE == 8
-             (bt == VT_LLONG && bit_size != 64) ||
-	     bt == VT_INT
+		 (bt == VT_LLONG && bit_size != 64) ||
+		 bt == VT_INT
 #else
-	     bt == VT_LLONG ||
-             (bt == VT_INT && bit_size != 32)
+		 bt == VT_LLONG ||
+		 (bt == VT_INT && bit_size != 32)
 #endif
-	    ))
-            tcc_error("initializer element is not computable at load time");
-        switch(bt) {
-            /* XXX: when cross-compiling we assume that each type has the
-               same representation on host and target, which is likely to
-               be wrong in the case of long double */
-        case VT_BOOL:
-            vtop->c.i = (vtop->c.i != 0);
-        case VT_BYTE:
-            *(char *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
-            break;
-        case VT_SHORT:
-            *(short *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
-            break;
-        case VT_DOUBLE:
-            *(double *)ptr = vtop->c.d;
-            break;
-        case VT_LDOUBLE:
-            if (sizeof(long double) == LDOUBLE_SIZE)
-                *(long double *)ptr = vtop->c.ld;
-            else if (sizeof(double) == LDOUBLE_SIZE)
-                *(double *)ptr = vtop->c.ld;
-            else
-                tcc_error("can't cross compile long double constants");
-            break;
+		))
+	      tcc_error("initializer element is not computable at load time");
+	    switch(bt) {
+		/* XXX: when cross-compiling we assume that each type has the
+		   same representation on host and target, which is likely to
+		   be wrong in the case of long double */
+	    case VT_BOOL:
+		vtop->c.i = (vtop->c.i != 0);
+	    case VT_BYTE:
+		*(char *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
+		break;
+	    case VT_SHORT:
+		*(short *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
+		break;
+	    case VT_DOUBLE:
+		*(double *)ptr = vtop->c.d;
+		break;
+	    case VT_LDOUBLE:
+                if (sizeof(long double) == LDOUBLE_SIZE)
+		    *(long double *)ptr = vtop->c.ld;
+		else if (sizeof(double) == LDOUBLE_SIZE)
+		    *(double *)ptr = vtop->c.ld;
+		else
+                    tcc_error("can't cross compile long double constants");
+		break;
 #if PTR_SIZE != 8
-        case VT_LLONG:
-            *(long long *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
-            break;
+	    case VT_LLONG:
+		*(long long *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
+		break;
 #else
-	case VT_LLONG:
+	    case VT_LLONG:
 #endif
-        case VT_PTR: {
-            addr_t val = (vtop->c.i & bit_mask) << bit_pos;
+	    case VT_PTR:
+		{
+		    addr_t val = (vtop->c.i & bit_mask) << bit_pos;
 #if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-            if (vtop->r & VT_SYM)
-                greloca(sec, vtop->sym, c, R_DATA_PTR, val);
-            else
-                *(addr_t *)ptr |= val;
+		    if (vtop->r & VT_SYM)
+		      greloca(sec, vtop->sym, c, R_DATA_PTR, val);
+		    else
+		      *(addr_t *)ptr |= val;
 #else
-            if (vtop->r & VT_SYM)
-                greloc(sec, vtop->sym, c, R_DATA_PTR);
-            *(addr_t *)ptr |= val;
+		    if (vtop->r & VT_SYM)
+		      greloc(sec, vtop->sym, c, R_DATA_PTR);
+		    *(addr_t *)ptr |= val;
 #endif
-            break;
-        }
-        default: {
-            int val = (vtop->c.i & bit_mask) << bit_pos;
+		    break;
+		}
+	    default:
+		{
+		    int val = (vtop->c.i & bit_mask) << bit_pos;
 #if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-            if (vtop->r & VT_SYM)
-                greloca(sec, vtop->sym, c, R_DATA_PTR, val);
-            else
-                *(int *)ptr |= val;
+		    if (vtop->r & VT_SYM)
+		      greloca(sec, vtop->sym, c, R_DATA_PTR, val);
+		    else
+		      *(int *)ptr |= val;
 #else
-            if (vtop->r & VT_SYM)
-                greloc(sec, vtop->sym, c, R_DATA_PTR);
-            *(int *)ptr |= val;
+		    if (vtop->r & VT_SYM)
+		      greloc(sec, vtop->sym, c, R_DATA_PTR);
+		    *(int *)ptr |= val;
 #endif
-            break;
-        }
-        }
+		    break;
+		}
+	    }
+	}
         vtop--;
     } else {
         vset(&dtype, VT_LOCAL|VT_LVAL, c);
@@ -6006,6 +6031,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                                 ch = ((unsigned char *)tokc.str.data)[i];
                             else
                                 ch = ((nwchar_t *)tokc.str.data)[i];
+			    vpushi(ch);
                             init_putv(t1, sec, c + (array_length + i) * size1,
                                       ch, EXPR_VAL);
                         }
@@ -6018,6 +6044,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                warning in this case since it is standard) */
             if (n < 0 || array_length < n) {
                 if (!size_only) {
+		    vpushi(0);
                     init_putv(t1, sec, c + (array_length * size1), 0, EXPR_VAL);
                 }
                 array_length++;
@@ -6058,14 +6085,14 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         if (n < 0)
             s->c = array_length;
     } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
-               (sec || !first || tok == '{')) {
+               (!first || tok == '{')) {
 
         /* NOTE: the previous test is a specific case for automatic
            struct/union init */
         /* XXX: union needs only one init */
 
         int par_count = 0;
-        if (tok == '(') {
+        if (0 && tok == '(') {
             AttributeDef ad1;
             CType type1;
             next();
@@ -6210,6 +6237,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         expr_type = EXPR_CONST;
         if (!sec)
             expr_type = EXPR_ANY;
+	parse_init_elem(expr_type);
         init_putv(type, sec, c, 0, expr_type);
     }
 }
