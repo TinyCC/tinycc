@@ -67,6 +67,16 @@ struct V gv3 = {((struct S){7,8,{9,10}}), {"hoho", 49}, 50};
 /* Initialization of a flex array member (warns in GCC) */
 struct W gw = {{1,2,3,4}, {1,2,3,4,5}};
 
+union UU {
+    u8 a;
+    u8 b;
+};
+struct SU {
+    union UU u;
+    u8 c;
+};
+struct SU gsu = {5,6};
+
 #include <stdio.h>
 void print_ (const char *name, const u8 *p, long size)
 {
@@ -133,6 +143,7 @@ int main()
   print(gv3);
   print(sinit16);
   print(gw);
+  print(gsu);
   foo(&gw);
   //printf("q: %s\n", q);
   return 0;

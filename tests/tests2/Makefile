@@ -53,7 +53,7 @@ all test: $(filter-out $(SKIP),$(TESTS))
 	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output
 
 # automatically generate .expect files with gcc:
-%.expect :
+%.expect : %.c
 	(gcc -w $*.c -o a.exe && ./a.exe $(ARGS)) >$*.expect 2>&1; rm -f a.exe
 
 # tell make not to delete

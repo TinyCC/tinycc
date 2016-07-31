@@ -3209,6 +3209,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
     } else {
         v = anon_sym++;
     }
+    /* Record the original enum/struct/union token.  */
     type1.t = a;
     type1.ref = NULL;
     /* we put an undefined size for struct/union */
@@ -5650,7 +5651,6 @@ static void block(int *bsym, int *csym, int is_expr)
     }
 }
 
-#define EXPR_VAL   0
 #define EXPR_CONST 1
 #define EXPR_ANY   2
 
@@ -5795,8 +5795,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
 }
 
 /* store a value or an expression directly in global data or in local array */
-static void init_putv(CType *type, Section *sec, unsigned long c,
-                      int v, int expr_type)
+static void init_putv(CType *type, Section *sec, unsigned long c)
 {
     int bt, bit_pos, bit_size;
     void *ptr;
@@ -6039,8 +6038,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                             else
                                 ch = ((nwchar_t *)tokc.str.data)[i];
 			    vpushi(ch);
-                            init_putv(t1, sec, c + (array_length + i) * size1,
-                                      ch, EXPR_VAL);
+                            init_putv(t1, sec, c + (array_length + i) * size1);
                         }
                     }
                 }
@@ -6052,7 +6050,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (n < 0 || array_length < n) {
                 if (!size_only) {
 		    vpushi(0);
-                    init_putv(t1, sec, c + (array_length * size1), 0, EXPR_VAL);
+                    init_putv(t1, sec, c + (array_length * size1));
                 }
                 array_length++;
             }
@@ -6092,57 +6090,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
-    } else if (1 && have_elem && is_compatible_types(type, &vtop->type)) {
-        /* currently, we always use constant expression for globals
-           (may change for scripting case) */
-	expr_type = !sec ? EXPR_ANY : EXPR_CONST;
-        init_putv(type, sec, c, 0, expr_type);
-    } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
-               (!first || tok == '{')) {
-
-        /* NOTE: the previous test is a specific case for automatic
-           struct/union init */
-        /* XXX: union needs only one init */
-
-        int par_count = 0;
-        if (0 && tok == '(') {
-            AttributeDef ad1;
-            CType type1;
-            next();
-	    if (tcc_state->old_struct_init_code) {
-		/* an old version of struct initialization.
-		   It have a problems. But with a new version
-		   linux 2.4.26 can't load ramdisk.
-		 */
-        	while (tok == '(') {
-            	    par_count++;
-            	    next();
-        	}
-		if (!parse_btype(&type1, &ad1))
-            	    expect("cast");
-        	type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
-		#if 0
-		if (!is_assignable_types(type, &type1))
-            	    tcc_error("invalid type for cast");
-		#endif
-		skip(')');
-    	    }
-    	    else
-    	    {
-              if (tok != '(') {
-        	if (!parse_btype(&type1, &ad1))
-            	    expect("cast");
-        	type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
-		#if 0
-        	if (!is_assignable_types(type, &type1))
-            	    tcc_error("invalid type for cast");
-		#endif
-        	skip(')');
-    	      } else
-		unget_tok(tok);
-	    }
-        }
-
+    } else if (have_elem && is_compatible_types(type, &vtop->type)) {
+        init_putv(type, sec, c);
+    } else if ((type->t & VT_BTYPE) == VT_STRUCT) {
         no_oblock = 1;
         if (first || tok == '{') {
             skip('{');
@@ -6165,44 +6115,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (index > array_length)
                 array_length = index;
 
-            /* gr: skip fields from same union - ugly. */
-            while (f->next) {
-        	int align = 0;
-		int f_size = type_size(&f->type, &align);
-		int f_type = (f->type.t & VT_BTYPE);
-
-                ///printf("index: %2d %08x -- %2d %08x\n", f->c, f->type.t, f->next->c, f->next->type.t);
-                /* test for same offset */
-                if (f->next->c != f->c)
-                    break;
-                if ((f_type == VT_STRUCT) && (f_size == 0)) {
-            	    /*
-            	       Lets assume a structure of size 0 can't be a member of the union.
-            	       This allow to compile the following code from a linux kernel v2.4.26
-			    typedef struct { } rwlock_t;
-			    struct fs_struct {
-			     int count;
-			     rwlock_t lock;
-			     int umask;
-			    };
-			    struct fs_struct init_fs = { { (1) }, (rwlock_t) {}, 0022, };
-			tcc-0.9.23 can succesfully compile this version of the kernel.
-			gcc don't have problems with this code too.
-            	    */
-                    break;
-                }
-                /* if yes, test for bitfield shift */
-                if ((f->type.t & VT_BITFIELD) && (f->next->type.t & VT_BITFIELD)) {
-                    int bit_pos_1 = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
-                    int bit_pos_2 = (f->next->type.t >> VT_STRUCT_SHIFT) & 0x3f;
-                    //printf("bitfield %d %d\n", bit_pos_1, bit_pos_2);
-                    if (bit_pos_1 != bit_pos_2)
-                        break;
-                }
-                f = f->next;
-            }
-
-            f = f->next;
+	    if (s->type.t == TOK_UNION)
+	        f = NULL;
+	    else
+	        f = f->next;
             if (no_oblock && f == NULL)
                 break;
             if (tok == '}')
@@ -6216,10 +6132,6 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
         if (!no_oblock)
             skip('}');
-        while (par_count) {
-            skip(')');
-            par_count--;
-        }
     } else if (tok == '{') {
         next();
 	if (have_elem)
@@ -6256,9 +6168,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	      expect("string constant");
 	    parse_init_elem(!sec ? EXPR_ANY : EXPR_CONST);
 	}
-        /* currently, we always use constant expression for globals
-           (may change for scripting case) */
-        init_putv(type, sec, c, 0, expr_type);
+        init_putv(type, sec, c);
     }
 }
 
