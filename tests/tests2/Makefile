@@ -54,7 +54,7 @@ all test: $(filter-out $(SKIP),$(TESTS))
 
 # automatically generate .expect files with gcc:
 %.expect :
-	(gcc $*.c -o a.exe && ./a.exe $(ARGS)) >$*.expect 2>&1; rm -f a.exe
+	(gcc -w $*.c -o a.exe && ./a.exe $(ARGS)) >$*.expect 2>&1; rm -f a.exe
 
 # tell make not to delete
 .PRECIOUS: %.expect

@@ -74,7 +74,7 @@ static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
-static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only, int have_elem);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
@@ -5650,13 +5650,37 @@ static void block(int *bsym, int *csym, int is_expr)
     }
 }
 
+#define EXPR_VAL   0
+#define EXPR_CONST 1
+#define EXPR_ANY   2
+
+static void parse_init_elem(int expr_type)
+{
+    int saved_global_expr;
+    switch(expr_type) {
+    case EXPR_CONST:
+        /* compound literals must be allocated globally in this case */
+        saved_global_expr = global_expr;
+        global_expr = 1;
+        expr_const1();
+        global_expr = saved_global_expr;
+        /* NOTE: symbols are accepted */
+        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST)
+            tcc_error("initializer element is not constant");
+        break;
+    case EXPR_ANY:
+        expr_eq();
+        break;
+    }
+}
+
 /* t is the array or struct type. c is the array or struct
    address. cur_index/cur_field is the pointer to the current
    value. 'size_only' is true if only size info is needed (only used
    in arrays) */
 static void decl_designator(CType *type, Section *sec, unsigned long c, 
                             int *cur_index, Sym **cur_field, 
-                            int size_only)
+                            int size_only, int have_elem)
 {
     Sym *s, *f;
     int notfirst, index, index_last, align, l, nb_elems, elem_size;
@@ -5748,7 +5772,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             c += f->c;
         }
     }
-    decl_initializer(type, sec, c, 0, size_only);
+    decl_initializer(type, sec, c, 0, size_only, have_elem);
 
     /* XXX: make it more general */
     if (!size_only && nb_elems > 1) {
@@ -5767,30 +5791,6 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             dst += elem_size;
             memcpy(dst, src, elem_size);
         }
-    }
-}
-
-#define EXPR_VAL   0
-#define EXPR_CONST 1
-#define EXPR_ANY   2
-
-static void parse_init_elem(int expr_type)
-{
-    int saved_global_expr;
-    switch(expr_type) {
-    case EXPR_CONST:
-        /* compound literals must be allocated globally in this case */
-        saved_global_expr = global_expr;
-        global_expr = 1;
-        expr_const1();
-        global_expr = saved_global_expr;
-        /* NOTE: symbols are accepted */
-        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST)
-            tcc_error("initializer element is not constant");
-        break;
-    case EXPR_ANY:
-        expr_eq();
-        break;
     }
 }
 
@@ -5957,7 +5957,7 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
    dimension implicit array init handling). 'size_only' is true if
    size only evaluation is wanted (only for arrays). */
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
-                             int first, int size_only)
+                             int first, int size_only, int have_elem)
 {
     int index, array_length, n, no_oblock, nb, parlevel, parlevel1, i;
     int size1, align1, expr_type;
@@ -5979,6 +5979,13 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         gen_vla_sp_save(c);
         vla_sp_loc = c;
         vlas_in_scope++;
+    } else if (!have_elem && tok != '{' && tok != TOK_LSTR &&
+	       tok != TOK_STR && !size_only) {
+	parse_init_elem(!sec ? EXPR_ANY : EXPR_CONST);
+	have_elem = 1;
+    }
+
+    if (type->t & VT_VLA) {
     } else if (type->t & VT_ARRAY) {
         s = type->ref;
         n = s->c;
@@ -6051,8 +6058,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             }
         } else {
             index = 0;
-            while (tok != '}') {
-                decl_designator(type, sec, c, &index, NULL, size_only);
+            while (tok != '}' || have_elem) {
+                decl_designator(type, sec, c, &index, NULL, size_only, have_elem);
+		have_elem = 0;
                 if (n >= 0 && index >= n)
                     tcc_error("index too large");
                 /* must put zero in holes (note that doing it that way
@@ -6084,6 +6092,11 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         /* patch type size if needed */
         if (n < 0)
             s->c = array_length;
+    } else if (1 && have_elem && is_compatible_types(type, &vtop->type)) {
+        /* currently, we always use constant expression for globals
+           (may change for scripting case) */
+	expr_type = !sec ? EXPR_ANY : EXPR_CONST;
+        init_putv(type, sec, c, 0, expr_type);
     } else if ((type->t & VT_BTYPE) == VT_STRUCT &&
                (!first || tok == '{')) {
 
@@ -6140,8 +6153,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         array_length = 0;
         index = 0;
         n = s->c;
-        while (tok != '}') {
-            decl_designator(type, sec, c, NULL, &f, size_only);
+        while (tok != '}' || have_elem) {
+            decl_designator(type, sec, c, NULL, &f, size_only, have_elem);
+	    have_elem = 0;
             index = f->c;
             if (!size_only && array_length < index) {
                 init_putz(type, sec, c + array_length, 
@@ -6208,7 +6222,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         }
     } else if (tok == '{') {
         next();
-        decl_initializer(type, sec, c, first, size_only);
+	if (have_elem)
+	  tcc_error("shouldn't have parsed init element");
+        decl_initializer(type, sec, c, first, size_only, 0);
         skip('}');
     } else if (size_only) {
         /* just skip expression */
@@ -6232,12 +6248,16 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             next();
         }
     } else {
+	if (!have_elem) {
+	    /* This should happen only when we haven't parsed
+	       the init element above for fear of committing a
+	       string constant to memory too early.  */
+	    if (tok != TOK_STR && tok != TOK_LSTR)
+	      expect("string constant");
+	    parse_init_elem(!sec ? EXPR_ANY : EXPR_CONST);
+	}
         /* currently, we always use constant expression for globals
            (may change for scripting case) */
-        expr_type = EXPR_CONST;
-        if (!sec)
-            expr_type = EXPR_ANY;
-	parse_init_elem(expr_type);
         init_putv(type, sec, c, 0, expr_type);
     }
 }
@@ -6314,7 +6334,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
         begin_macro(init_str, 1);
         next();
-        decl_initializer(type, NULL, 0, 1, 1);
+        decl_initializer(type, NULL, 0, 1, 1, 0);
         /* prepare second initializer parsing */
         macro_ptr = init_str->str;
         next();
@@ -6473,7 +6493,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #endif
     }
     if (has_init || (type->t & VT_VLA)) {
-        decl_initializer(type, sec, addr, 1, 0);
+        decl_initializer(type, sec, addr, 1, 0, 0);
         /* patch flexible array member size back to -1, */
         /* for possible subsequent similar declarations */
         if (flexible_array)
