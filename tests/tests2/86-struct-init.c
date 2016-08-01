@@ -77,6 +77,25 @@ struct SU {
 };
 struct SU gsu = {5,6};
 
+/* Unnamed struct/union members aren't ISO C, but it's a widely accepted
+   extension.  See below for further extensions to that under -fms-extension.*/
+union UV {
+    struct {u8 a,b;};
+    struct S s;
+};
+union UV guv = {{6,5}};
+union UV guv2 = {{.b = 7, .a = 8}};
+union UV guv3 = {.b = 8, .a = 7};
+
+/* Under -fms-extensions also the following is valid:
+union UV2 {
+    struct Anon {u8 a,b;};    // unnamed member, but tagged struct, ...
+    struct S s;
+};
+struct Anon gan = { 10, 11 }; // ... which makes it available here.
+union UV2 guv4 = {{4,3}};     // and the other inits from above as well
+*/
+
 #include <stdio.h>
 void print_ (const char *name, const u8 *p, long size)
 {
@@ -144,6 +163,10 @@ int main()
   print(sinit16);
   print(gw);
   print(gsu);
+  print(guv);
+  print(guv.b);
+  print(guv2);
+  print(guv3);
   foo(&gw);
   //printf("q: %s\n", q);
   return 0;

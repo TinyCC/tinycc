@@ -3181,6 +3181,22 @@ static void parse_attribute(AttributeDef *ad)
     }
 }
 
+static Sym * find_field (CType *type, int v)
+{
+    Sym *s = type->ref;
+    v |= SYM_FIELD;
+    while ((s = s->next) != NULL) {
+	if ((s->v & SYM_FIELD) && (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
+	    Sym *ret = find_field (&s->type, v);
+	    if (ret)
+	        return ret;
+	}
+	if (s->v == v)
+	  break;
+    }
+    return s;
+}
+
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
 static void struct_decl(CType *type, AttributeDef *ad, int u)
 {
@@ -3404,13 +3420,40 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
 #endif
                     }
                     if (v == 0 && (type1.t & VT_BTYPE) == VT_STRUCT) {
+			/* An anonymous struct/union.  Adjust member offsets
+			   to reflect the real offset of our containing struct.
+			   Also set the offset of this anon member inside
+			   the outer struct to be zero.  Via this it
+			   works when accessing the field offset directly
+			   (from base object), as well as when recursing
+			   members in initializer handling.  */
+			int v2 = btype.ref->v;
+			if (!(v2 & SYM_FIELD) &&
+			    (v2 & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+			    Sym **pps;
+			    /* This happens only with MS extensions.  The
+			       anon member has a named struct type, so it
+			       potentially is shared with other references.
+			       We need to unshare members so we can modify
+			       them.  */
+			    ass = type1.ref;
+			    type1.ref = sym_push(anon_sym++ | SYM_FIELD,
+						 &type1.ref->type, 0,
+						 type1.ref->c);
+			    pps = &type1.ref->next;
+			    while ((ass = ass->next) != NULL) {
+			        *pps = sym_push(ass->v, &ass->type, 0, ass->c);
+				pps = &((*pps)->next);
+			    }
+			    *pps = NULL;
+			}
                         ass = type1.ref;
-                        while ((ass = ass->next) != NULL) {
-                           ss = sym_push(ass->v, &ass->type, 0, offset + ass->c);
-                           *ps = ss;
-                           ps = &ss->next;
-                        }
-                    } else if (v) {
+                        while ((ass = ass->next) != NULL)
+			    ass->c += offset;
+			offset = 0;
+		        v = anon_sym++;
+		    }
+                    if (v) {
                         ss = sym_push(v | SYM_FIELD, &type1, 0, offset);
                         *ps = ss;
                         ps = &ss->next;
@@ -4536,13 +4579,7 @@ ST_FUNC void unary(void)
             next();
             if (tok == TOK_CINT || tok == TOK_CUINT)
                 expect("field name");
-            s = vtop->type.ref;
-            /* find field */
-            tok |= SYM_FIELD;
-            while ((s = s->next) != NULL) {
-                if (s->v == tok)
-                    break;
-            }
+	    s = find_field(&vtop->type, tok);
             if (!s)
                 tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, &tokc));
             /* add field offset to pointer */
@@ -5729,14 +5766,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
         struct_field:
             if ((type->t & VT_BTYPE) != VT_STRUCT)
                 expect("struct/union type");
-            s = type->ref;
-            l |= SYM_FIELD;
-            f = s->next;
-            while (f) {
-                if (f->v == l)
-                    break;
-                f = f->next;
-            }
+	    f = find_field(type, l);
             if (!f)
                 expect("field");
             if (!notfirst)
