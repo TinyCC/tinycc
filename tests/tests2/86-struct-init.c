@@ -96,6 +96,19 @@ struct Anon gan = { 10, 11 }; // ... which makes it available here.
 union UV2 guv4 = {{4,3}};     // and the other inits from above as well
 */
 
+struct in6_addr {
+    union {
+	u8 u6_addr8[16];
+	unsigned short u6_addr16[8];
+    } u;
+};
+struct flowi6 {
+    struct in6_addr saddr, daddr;
+};
+struct pkthdr {
+    struct in6_addr daddr, saddr;
+};
+struct pkthdr phdr = { { { 6,5,4,3 } }, { { 9,8,7,6 } } };
 #include <stdio.h>
 void print_ (const char *name, const u8 *p, long size)
 {
@@ -107,7 +120,7 @@ void print_ (const char *name, const u8 *p, long size)
 }
 #define print(x) print_(#x, (u8*)&x, sizeof (x))
 #if 1
-void foo (struct W *w)
+void foo (struct W *w, struct pkthdr *phdr_)
 {
   struct S ls = {1, 2, 3, 4};
   struct S ls2 = {1, 2, {3, 4}};
@@ -115,6 +128,9 @@ void foo (struct W *w)
   struct U lu = {3, 5,6,7,8, 4, "huhu", 43};
   struct U lu1 = {3, ls, 4, {"huhu", 43}};
   struct U lu2 = {3, (ls), 4, {"huhu", 43}};
+  const struct S *pls = &ls;
+  struct S ls21 = *pls;
+  struct U lu22 = {3, *pls, 4, {"huhu", 43}};
   /* Incomplete bracing.  */
   struct U lu21 = {3, ls, 4, "huhu", 43};
   /* Optional braces around scalar initializers.  Accepted, but with
@@ -129,20 +145,25 @@ void foo (struct W *w)
   /* Compund literal */
   struct V lv2 = {(struct S)w->t.s, {"hihi", 47}, 48};
   /* Parens around compound literal */
-  struct V lv3 = {((struct S){7,8,{9,10}}), w->t.t, 50};
+  struct V lv3 = {((struct S){7,8,{9,10}}), ((const struct W *)w)->t.t, 50};
+  const struct pkthdr *phdr = phdr_;
+  struct flowi6 flow = { .daddr = phdr->daddr, .saddr = phdr->saddr };
   print(ls);
   print(ls2);
   print(lt);
   print(lu);
   print(lu1);
   print(lu2);
+  print(ls21);
   print(lu21);
+  print(lu22);
   print(lu3);
   print(lu4);
   print(ls3);
   print(lv);
   print(lv2);
   print(lv3);
+  print(flow);
 }
 #endif
 
@@ -167,7 +188,8 @@ int main()
   print(guv.b);
   print(guv2);
   print(guv3);
-  foo(&gw);
+  print(phdr);
+  foo(&gw, &phdr);
   //printf("q: %s\n", q);
   return 0;
 }

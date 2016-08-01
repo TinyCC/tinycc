@@ -6012,7 +6012,10 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 
     if (have_elem &&
 	!(type->t & VT_ARRAY) &&
-	is_compatible_types(type, &vtop->type)) {
+	/* Use i_c_parameter_t, to strip toplevel qualifiers.
+	   The source type might have VT_CONSTANT set, which is
+	   of course assignable to a non-const elements.  */
+	is_compatible_parameter_types(type, &vtop->type)) {
         init_putv(type, sec, c);
     } else if (type->t & VT_ARRAY) {
         s = type->ref;
