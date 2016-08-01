@@ -74,7 +74,7 @@ static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
-static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only, int have_elem);
+static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
@@ -5675,12 +5675,12 @@ static void parse_init_elem(int expr_type)
 }
 
 /* t is the array or struct type. c is the array or struct
-   address. cur_index/cur_field is the pointer to the current
-   value. 'size_only' is true if only size info is needed (only used
+   address. cur_field is the pointer to the current
+   value, for arrays the 'c' member contains the current index.
+   'size_only' is true if only size info is needed (only used
    in arrays) */
 static void decl_designator(CType *type, Section *sec, unsigned long c, 
-                            int *cur_index, Sym **cur_field, 
-                            int size_only, int have_elem)
+                            Sym **cur_field, int size_only)
 {
     Sym *s, *f;
     int notfirst, index, index_last, align, l, nb_elems, elem_size;
@@ -5699,20 +5699,20 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             next();
             index = expr_const();
             if (index < 0 || (s->c >= 0 && index >= s->c))
-                expect("invalid index");
+                tcc_error("invalid index");
             if (tok == TOK_DOTS && gnu_ext) {
                 next();
                 index_last = expr_const();
                 if (index_last < 0 || 
                     (s->c >= 0 && index_last >= s->c) ||
                     index_last < index)
-                    expect("invalid index");
+                    tcc_error("invalid index");
             } else {
                 index_last = index;
             }
             skip(']');
             if (!notfirst)
-                *cur_index = index_last;
+		(*cur_field)->c = index_last;
             type = pointed_type(type);
             elem_size = type_size(type, &align);
             c += index * elem_size;
@@ -5758,7 +5758,9 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
         }
     } else {
         if (type->t & VT_ARRAY) {
-            index = *cur_index;
+	    index = (*cur_field)->c;
+	    if (type->ref->c >= 0 && index >= type->ref->c)
+	        tcc_error("index too large");
             type = pointed_type(type);
             c += index * type_size(type, &align);
         } else {
@@ -5772,7 +5774,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             c += f->c;
         }
     }
-    decl_initializer(type, sec, c, 0, size_only, have_elem);
+    decl_initializer(type, sec, c, 0, size_only);
 
     /* XXX: make it more general */
     if (!size_only && nb_elems > 1) {
@@ -5932,7 +5934,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 }
 
 /* put zeros for variable based init */
-static void init_putz(CType *t, Section *sec, unsigned long c, int size)
+static void init_putz(Section *sec, unsigned long c, int size)
 {
     if (sec) {
         /* nothing to do because globals are already set to zero */
@@ -5956,35 +5958,32 @@ static void init_putz(CType *t, Section *sec, unsigned long c, int size)
    dimension implicit array init handling). 'size_only' is true if
    size only evaluation is wanted (only for arrays). */
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
-                             int first, int size_only, int have_elem)
+                             int first, int size_only)
 {
     int index, array_length, n, no_oblock, nb, parlevel, parlevel1, i;
-    int size1, align1, expr_type;
+    int size1, align1;
+    int have_elem;
     Sym *s, *f;
+    Sym indexsym;
     CType *t1;
 
-    if (type->t & VT_VLA) {
-        int a;
-        
-        /* save current stack pointer */
-        if (vlas_in_scope == 0) {
-            if (vla_sp_root_loc == -1)
-                vla_sp_root_loc = (loc -= PTR_SIZE);
-            gen_vla_sp_save(vla_sp_root_loc);
-        }
-        
-        vla_runtime_type_size(type, &a);
-        gen_vla_alloc(type, a);
-        gen_vla_sp_save(c);
-        vla_sp_loc = c;
-        vlas_in_scope++;
-    } else if (!have_elem && tok != '{' && tok != TOK_LSTR &&
-	       tok != TOK_STR && !size_only) {
+    /* If we currently are at an '}' or ',' we have read an initializer
+       element in one of our callers, and not yet consumed it.  */
+    have_elem = tok == '}' || tok == ',';
+    if (!have_elem && tok != '{' &&
+	/* In case of strings we have special handling for arrays, so
+	   don't consume them as initializer value (which would commit them
+	   to some anonymous symbol).  */
+	tok != TOK_LSTR && tok != TOK_STR &&
+	!size_only) {
 	parse_init_elem(!sec ? EXPR_ANY : EXPR_CONST);
 	have_elem = 1;
     }
 
-    if (type->t & VT_VLA) {
+    if (have_elem &&
+	!(type->t & VT_ARRAY) &&
+	is_compatible_types(type, &vtop->type)) {
+        init_putv(type, sec, c);
     } else if (type->t & VT_ARRAY) {
         s = type->ref;
         n = s->c;
@@ -6055,44 +6054,60 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                 array_length++;
             }
         } else {
-            index = 0;
-            while (tok != '}' || have_elem) {
-                decl_designator(type, sec, c, &index, NULL, size_only, have_elem);
+	    indexsym.c = 0;
+	    f = &indexsym;
+
+          do_init_list:
+	    while (tok != '}' || have_elem) {
+		decl_designator(type, sec, c, &f, size_only);
 		have_elem = 0;
-                if (n >= 0 && index >= n)
-                    tcc_error("index too large");
-                /* must put zero in holes (note that doing it that way
-                   ensures that it even works with designators) */
-                if (!size_only && array_length < index) {
-                    init_putz(t1, sec, c + array_length * size1, 
-                              (index - array_length) * size1);
-                }
-                index++;
-                if (index > array_length)
-                    array_length = index;
-                /* special test for multi dimensional arrays (may not
-                   be strictly correct if designators are used at the
-                   same time) */
-                if (index >= n && no_oblock)
-                    break;
-                if (tok == '}')
-                    break;
-                skip(',');
-            }
+		index = f->c;
+		/* must put zero in holes (note that doing it that way
+		   ensures that it even works with designators) */
+		if (!size_only && array_length < index) {
+		    init_putz(sec, c + array_length * size1,
+			      (index - array_length) * size1);
+		}
+		if (type->t & VT_ARRAY) {
+		    index++;
+		    indexsym.c++;
+		} else {
+		    index = index + type_size(&f->type, &align1);
+		    if (s->type.t == TOK_UNION)
+		        f = NULL;
+		    else
+		        f = f->next;
+		}
+		if (index > array_length)
+		    array_length = index;
+
+		if (type->t & VT_ARRAY) {
+		    /* special test for multi dimensional arrays (may not
+		       be strictly correct if designators are used at the
+		       same time) */
+		    if (no_oblock && index >= n)
+		        break;
+		} else {
+		    if (no_oblock && f == NULL)
+		        break;
+		}
+		if (tok == '}')
+		    break;
+		skip(',');
+	    }
+        }
+        /* put zeros at the end */
+        if (!size_only && array_length < n) {
+            init_putz(sec, c + array_length * size1,
+                      (n - array_length) * size1);
         }
         if (!no_oblock)
             skip('}');
-        /* put zeros at the end */
-        if (!size_only && n >= 0 && array_length < n) {
-            init_putz(t1, sec, c + array_length * size1, 
-                      (n - array_length) * size1);
-        }
-        /* patch type size if needed */
+        /* patch type size if needed, which happens only for array types */
         if (n < 0)
             s->c = array_length;
-    } else if (have_elem && is_compatible_types(type, &vtop->type)) {
-        init_putv(type, sec, c);
     } else if ((type->t & VT_BTYPE) == VT_STRUCT) {
+	size1 = 1;
         no_oblock = 1;
         if (first || tok == '{') {
             skip('{');
@@ -6101,44 +6116,19 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         s = type->ref;
         f = s->next;
         array_length = 0;
-        index = 0;
         n = s->c;
-        while (tok != '}' || have_elem) {
-            decl_designator(type, sec, c, NULL, &f, size_only, have_elem);
-	    have_elem = 0;
-            index = f->c;
-            if (!size_only && array_length < index) {
-                init_putz(type, sec, c + array_length, 
-                          index - array_length);
-            }
-            index = index + type_size(&f->type, &align1);
-            if (index > array_length)
-                array_length = index;
-
-	    if (s->type.t == TOK_UNION)
-	        f = NULL;
-	    else
-	        f = f->next;
-            if (no_oblock && f == NULL)
-                break;
-            if (tok == '}')
-                break;
-            skip(',');
-        }
-        /* put zeros at the end */
-        if (!size_only && array_length < n) {
-            init_putz(type, sec, c + array_length, 
-                      n - array_length);
-        }
-        if (!no_oblock)
-            skip('}');
+	goto do_init_list;
     } else if (tok == '{') {
         next();
-	if (have_elem)
-	  tcc_error("shouldn't have parsed init element");
-        decl_initializer(type, sec, c, first, size_only, 0);
+        decl_initializer(type, sec, c, first, size_only);
         skip('}');
     } else if (size_only) {
+	/* If we supported only ISO C we wouldn't have to accept calling
+	   this on anything than an array size_only==1 (and even then
+	   only on the outermost level, so no recursion would be needed),
+	   because initializing a flex array member isn't supported.
+	   But GNU C supports it, so we need to recurse even into
+	   subfields of structs and arrays when size_only is set.  */
         /* just skip expression */
         parlevel = parlevel1 = 0;
         while ((parlevel > 0 || parlevel1 > 0 ||
@@ -6244,7 +6234,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
         begin_macro(init_str, 1);
         next();
-        decl_initializer(type, NULL, 0, 1, 1, 0);
+        decl_initializer(type, NULL, 0, 1, 1);
         /* prepare second initializer parsing */
         macro_ptr = init_str->str;
         next();
@@ -6402,8 +6392,23 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
 #endif
     }
-    if (has_init || (type->t & VT_VLA)) {
-        decl_initializer(type, sec, addr, 1, 0, 0);
+    if (type->t & VT_VLA) {
+        int a;
+
+        /* save current stack pointer */
+        if (vlas_in_scope == 0) {
+            if (vla_sp_root_loc == -1)
+                vla_sp_root_loc = (loc -= PTR_SIZE);
+            gen_vla_sp_save(vla_sp_root_loc);
+        }
+
+        vla_runtime_type_size(type, &a);
+        gen_vla_alloc(type, a);
+        gen_vla_sp_save(addr);
+        vla_sp_loc = addr;
+        vlas_in_scope++;
+    } else if (has_init) {
+        decl_initializer(type, sec, addr, 1, 0);
         /* patch flexible array member size back to -1, */
         /* for possible subsequent similar declarations */
         if (flexible_array)
@@ -6805,7 +6810,7 @@ static int decl0(int l, int is_for_loop_init)
                     }
                     has_init = (tok == '=');
                     if (has_init && (type.t & VT_VLA))
-                        tcc_error("Variable length array cannot be initialized");
+                        tcc_error("variable length array cannot be initialized");
                     if ((btype.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
                          !has_init && l == VT_CONST && type.ref->c < 0)) {
