@@ -2566,7 +2566,7 @@ static __inline__ void sigaddset1(unsigned int *set, int _sig)
 
 static __inline__ void sigdelset1(unsigned int *set, int _sig)
 {
-	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc");
+	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc", "flags");
 }
 
 static __inline__ __const__ unsigned int swab32(unsigned int x)

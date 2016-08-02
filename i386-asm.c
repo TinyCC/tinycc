@@ -347,7 +347,7 @@ static void parse_operand(TCCState *s1, Operand *op)
             goto no_skip;
         } else {
         reg_error:
-            tcc_error("unknown register");
+            tcc_error("unknown register %%%s", get_tok_str(tok, &tokc));
         }
         next();
     no_skip: ;
@@ -1487,7 +1487,8 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
     TokenSym *ts;
 
     if (!strcmp(str, "memory") ||
-        !strcmp(str, "cc"))
+        !strcmp(str, "cc") ||
+	!strcmp(str, "flags"))
         return;
     ts = tok_alloc(str, strlen(str));
     reg = ts->tok;
