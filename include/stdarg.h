@@ -27,6 +27,9 @@ void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);
 #define va_copy(dest, src) (*(dest) = *(src))
 #define va_end(ap)
 
+/* avoid conflicting definition for va_list on Macs. */
+#define _VA_LIST_T
+
 #else /* _WIN64 */
 typedef char *va_list;
 #define va_start(ap,last) __builtin_va_start(ap,last)
