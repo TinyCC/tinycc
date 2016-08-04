@@ -72,6 +72,10 @@ enum {
     OPT_DB,     /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_SEG,
     OPT_ST,
+#ifdef TCC_TARGET_X86_64
+    OPT_REG8_LOW, /* %spl,%bpl,%sil,%dil, encoded like ah,ch,dh,bh, but
+		     with REX prefix, not used in insn templates */
+#endif
     OPT_IM8,
     OPT_IM8S,
     OPT_IM16,
@@ -120,10 +124,12 @@ enum {
 #define OP_INDIR  (1 << OPT_INDIR)
 #ifdef TCC_TARGET_X86_64
 # define OP_REG64 (1 << OPT_REG64)
+# define OP_REG8_LOW (1 << OPT_REG8_LOW)
 # define OP_IM64  (1 << OPT_IM64)
 # define OP_EA32  (OP_EA << 1)
 #else
 # define OP_REG64 0
+# define OP_REG8_LOW 0
 # define OP_IM64  0
 # define OP_EA32  0
 #endif
@@ -272,6 +278,39 @@ static inline int get_reg_shift(TCCState *s1)
     return shift;
 }
 
+#ifdef TCC_TARGET_X86_64
+static int asm_parse_high_reg(int *type)
+{
+    int reg = -1;
+    if (tok >= TOK_IDENT && tok < tok_ident) {
+	const char *s = table_ident[tok - TOK_IDENT]->str;
+	char c;
+	if (*s++ != 'r')
+	  return -1;
+	/* Don't allow leading '0'.  */
+	if ((c = *s++) >= '1' && c <= '9')
+	  reg = c - '0';
+	else
+	  return -1;
+	if ((c = *s) >= '0' && c <= '5')
+	  s++, reg = reg * 10 + c - '0';
+	if (reg > 15)
+	  return -1;
+	if ((c = *s) == 0)
+	  *type = OP_REG64;
+	else if (c == 'b' && !s[1])
+	  *type = OP_REG8;
+	else if (c == 'w' && !s[1])
+	  *type = OP_REG16;
+	else if (c == 'd' && !s[1])
+	  *type = OP_REG32;
+	else
+	  return -1;
+    }
+    return reg;
+}
+#endif
+
 static int asm_parse_reg(int *type)
 {
     int reg = 0;
@@ -281,12 +320,17 @@ static int asm_parse_reg(int *type)
     next();
     if (tok >= TOK_ASM_eax && tok <= TOK_ASM_edi) {
         reg = tok - TOK_ASM_eax;
+	*type = OP_REG32;
 #ifdef TCC_TARGET_X86_64
-	*type = OP_EA32;
     } else if (tok >= TOK_ASM_rax && tok <= TOK_ASM_rdi) {
         reg = tok - TOK_ASM_rax;
+	*type = OP_REG64;
     } else if (tok == TOK_ASM_rip) {
-        reg = 8;
+        reg = -2; /* Probably should use different escape code. */
+	*type = OP_REG64;
+    } else if ((reg = asm_parse_high_reg(type)) >= 0
+	       && (*type == OP_REG32 || *type == OP_REG64)) {
+	;
 #endif
     } else {
     error_32:
@@ -345,6 +389,13 @@ static void parse_operand(TCCState *s1, Operand *op)
             if (op->reg == 0)
                 op->type |= OP_ST0;
             goto no_skip;
+#ifdef TCC_TARGET_X86_64
+	} else if (tok >= TOK_ASM_spl && tok <= TOK_ASM_dil) {
+	    op->type = OP_REG8 | OP_REG8_LOW;
+	    op->reg = 4 + tok - TOK_ASM_spl;
+        } else if ((op->reg = asm_parse_high_reg(&op->type)) >= 0) {
+	    ;
+#endif
         } else {
         reg_error:
             tcc_error("unknown register %%%s", get_tok_str(tok, &tokc));
@@ -411,7 +462,7 @@ static void parse_operand(TCCState *s1, Operand *op)
                     op->shift = get_reg_shift(s1);
                 }
             }
-	    if (type & OP_EA32)
+	    if (type & OP_REG32)
 	        op->type |= OP_EA32;
             skip(')');
         }
@@ -475,7 +526,7 @@ static inline int asm_modrm(int reg, Operand *op)
 #endif
 	gen_expr32(&op->e);
 #ifdef TCC_TARGET_X86_64
-    } else if (op->reg == 8) {
+    } else if (op->reg == -2) {
         ExprValue *pe = &op->e;
         g(0x05 + (reg << 3));
         gen_addrpc32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
@@ -515,6 +566,69 @@ static inline int asm_modrm(int reg, Operand *op)
     }
     return 0;
 }
+
+#ifdef TCC_TARGET_X86_64
+#define REX_W 0x48
+#define REX_R 0x44
+#define REX_X 0x42
+#define REX_B 0x41
+
+static void asm_rex(int width64, Operand *ops, int nb_ops, int *op_type,
+		    int regi, int rmi)
+{
+  unsigned char rex = width64 ? 0x48 : 0;
+  int saw_high_8bit = 0;
+  int i;
+  if (rmi == -1) {
+      /* No mod/rm byte, but we might have a register op nevertheless
+         (we will add it to the opcode later).  */
+      for(i = 0; i < nb_ops; i++) {
+	  if (op_type[i] & (OP_REG | OP_ST)) {
+	      if (ops[i].reg >= 8) {
+		  rex |= REX_B;
+		  ops[i].reg -= 8;
+	      } else if (ops[i].type & OP_REG8_LOW)
+		  rex |= 0x40;
+	      else if (ops[i].type & OP_REG8 && ops[i].reg >= 4)
+		  /* An 8 bit reg >= 4 without REG8 is ah/ch/dh/bh */
+		  saw_high_8bit = ops[i].reg;
+	      break;
+	  }
+      }
+  } else {
+      if (regi != -1) {
+	  if (ops[regi].reg >= 8) {
+	      rex |= REX_R;
+	      ops[regi].reg -= 8;
+	  } else if (ops[regi].type & OP_REG8_LOW)
+	      rex |= 0x40;
+	  else if (ops[regi].type & OP_REG8 && ops[regi].reg >= 4)
+	      /* An 8 bit reg >= 4 without REG8 is ah/ch/dh/bh */
+	      saw_high_8bit = ops[regi].reg;
+      }
+      if (ops[rmi].type & (OP_REG | OP_MMX | OP_SSE | OP_CR | OP_EA)) {
+	  if (ops[rmi].reg >= 8) {
+	      rex |= REX_B;
+	      ops[rmi].reg -= 8;
+	  } else if (ops[rmi].type & OP_REG8_LOW)
+	      rex |= 0x40;
+	  else if (ops[rmi].type & OP_REG8 && ops[rmi].reg >= 4)
+	      /* An 8 bit reg >= 4 without REG8 is ah/ch/dh/bh */
+	      saw_high_8bit = ops[rmi].reg;
+      }
+      if (ops[rmi].type & OP_EA && ops[rmi].reg2 >= 8) {
+	  rex |= REX_X;
+	  ops[rmi].reg2 -= 8;
+      }
+  }
+  if (rex) {
+      if (saw_high_8bit)
+	  tcc_error("can't encode register %%%ch when REX prefix is required",
+		    "acdb"[saw_high_8bit-4]);
+      g(rex);
+  }
+}
+#endif
 
 static void maybe_print_stats (void)
 {
@@ -558,13 +672,16 @@ static void maybe_print_stats (void)
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, reg, v, op1, seg_prefix, pc;
+    int i, modrm_index, modreg_index, reg, v, op1, seg_prefix, pc;
     int nb_ops, s;
     Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
     int alltypes;   /* OR of all operand types */
     int autosize;
     int p66;
+#ifdef TCC_TARGET_X86_64
+    int rex64;
+#endif
 
     maybe_print_stats();
     /* force synthetic ';' after prefix instruction, so we can handle */
@@ -775,6 +892,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     if (p66)
         g(0x66);
 #ifdef TCC_TARGET_X86_64
+    rex64 = 0;
     if (s == 3 || (alltypes & OP_REG64)) {
         /* generate REX prefix */
 	int default64 = 0;
@@ -794,7 +912,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 	      && opcode != TOK_ASM_popl && opcode != TOK_ASM_popq
 	      && opcode != TOK_ASM_call && opcode != TOK_ASM_jmp))
 	    && !default64)
-            g(0x48);
+            rex64 = 1;
     }
 #endif
 
@@ -830,6 +948,50 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         /* fpu arith case */
         v += ((opcode - pa->sym) / 6) << 3;
     }
+
+    /* search which operand will be used for modrm */
+    modrm_index = -1;
+    modreg_index = -1;
+    if (pa->instr_type & OPC_MODRM) {
+	if (!nb_ops) {
+	    /* A modrm opcode without operands is a special case (e.g. mfence).
+	       It has a group and acts as if there's an register operand 0
+	       (ax).  */
+	    i = 0;
+	    ops[i].type = OP_REG;
+	    ops[i].reg = 0;
+	    goto modrm_found;
+	}
+        /* first look for an ea operand */
+        for(i = 0;i < nb_ops; i++) {
+            if (op_type[i] & OP_EA)
+                goto modrm_found;
+        }
+        /* then if not found, a register or indirection (shift instructions) */
+        for(i = 0;i < nb_ops; i++) {
+            if (op_type[i] & (OP_REG | OP_MMX | OP_SSE | OP_INDIR))
+                goto modrm_found;
+        }
+#ifdef ASM_DEBUG
+        tcc_error("bad op table");
+#endif
+    modrm_found:
+        modrm_index = i;
+        /* if a register is used in another operand then it is
+           used instead of group */
+        for(i = 0;i < nb_ops; i++) {
+            int t = op_type[i];
+            if (i != modrm_index &&
+                (t & (OP_REG | OP_MMX | OP_SSE | OP_CR | OP_TR | OP_DB | OP_SEG))) {
+                modreg_index = i;
+                break;
+            }
+        }
+    }
+#ifdef TCC_TARGET_X86_64
+    asm_rex (rex64, ops, nb_ops, op_type, modreg_index, modrm_index);
+#endif
+
     if (pa->instr_type & OPC_REG) {
         /* mov $im, %reg case */
         if (v == 0xb0 && s >= 1)
@@ -881,8 +1043,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         g(op1);
     g(v);
 
-    /* search which operand will used for modrm */
-    modrm_index = 0;
     if (OPCT_IS(pa->instr_type, OPC_SHIFT)) {
         reg = (opcode - pa->sym) / NBWLX;
         if (reg == 6)
@@ -897,40 +1057,10 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
     pc = 0;
     if (pa->instr_type & OPC_MODRM) {
-	if (!nb_ops) {
-	    /* A modrm opcode without operands is a special case (e.g. mfence).
-	       It has a group and acts as if there's an register operand 0
-	       (ax).  */
-	    i = 0;
-	    ops[i].type = OP_REG;
-	    ops[i].reg = 0;
-	    goto modrm_found;
-	}
-        /* first look for an ea operand */
-        for(i = 0;i < nb_ops; i++) {
-            if (op_type[i] & OP_EA)
-                goto modrm_found;
-        }
-        /* then if not found, a register or indirection (shift instructions) */
-        for(i = 0;i < nb_ops; i++) {
-            if (op_type[i] & (OP_REG | OP_MMX | OP_SSE | OP_INDIR))
-                goto modrm_found;
-        }
-#ifdef ASM_DEBUG
-        tcc_error("bad op table");
-#endif
-    modrm_found:
-        modrm_index = i;
         /* if a register is used in another operand then it is
            used instead of group */
-        for(i = 0;i < nb_ops; i++) {
-            v = op_type[i];
-            if (i != modrm_index &&
-                (v & (OP_REG | OP_MMX | OP_SSE | OP_CR | OP_TR | OP_DB | OP_SEG))) {
-                reg = ops[i].reg;
-                break;
-            }
-        }
+	if (modreg_index >= 0)
+	    reg = ops[modreg_index].reg;
         pc = asm_modrm(reg, &ops[modrm_index]);
     }
 

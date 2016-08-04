@@ -76,6 +76,22 @@ movq %dr6, %rax
 movl %fs, %ecx
 movl %ebx, %fs
 
+#ifdef __x86_64__
+movq %r8, %r9
+movq %r10, %r11
+movq %r12, %r13
+movq %r14, %r15
+movq %rax, %r9
+movq %r15, %rsi
+inc %r9b
+dec %r10w
+not %r11d
+negq %r12
+decb %r13b
+incw %r14w
+notl %r15d
+#endif
+
      movsbl 0x1000, %eax
      movsbw 0x1000, %ax
      movswl 0x1000, %eax
@@ -183,6 +199,24 @@ addl $0x123, (3*8)(%esp)
 addl $0x123, (%ebp)
 addl $0x123, (%esp)
 cmpl $0x123, (%esp)
+
+#ifdef __x86_64__
+xor %bl,%ah
+xor %bl,%r8b
+xor %r9b,%bl
+xor %sil,%cl
+add %eax,(%r8d)
+add %ebx,(%r9)
+add %edx,(%r10d,%r11d)
+add %ecx,(%r12,%r13)
+add %esi,(%r14,%r15,4)
+add %edi,0x1000(%rbx,%r12,8)
+add %r11,0x1000(%ebp,%r9d,8)
+movb $12, %ah
+movb $13, %bpl
+movb $14, %dil
+movb $15, %r12b
+#endif
 
 add %eax, (%ebx)
 add (%ebx), %eax
@@ -796,10 +830,10 @@ nop
     movd %rdi, %xmm2
     movd (%rbx), %mm3
     movd (%rbx), %xmm3
-    movd %mm1, %rsi
+    movd %mm1, %r12
     movd %xmm2, %rdi
-    movd %mm3, (%rdx)
-    movd %xmm3, (%rdx)
+    movd %mm3, (%r8)
+    movd %xmm3, (%r13)
 #endif
 
     movq (%ebp), %mm1

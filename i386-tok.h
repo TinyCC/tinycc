@@ -93,6 +93,14 @@
  DEF_ASM(st)
  DEF_ASM(rip)
 
+#ifdef TCC_TARGET_X86_64
+ /* The four low parts of sp/bp/si/di that exist only on
+    x86-64 (encoding aliased to ah,ch,dh,dh when not using REX). */
+ DEF_ASM(spl)
+ DEF_ASM(bpl)
+ DEF_ASM(sil)
+ DEF_ASM(dil)
+#endif
  /* generic two operands */
  DEF_BWLX(mov)
 
