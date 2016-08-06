@@ -2565,6 +2565,14 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~VT_DEFSIGN;
         t2 &= ~VT_DEFSIGN;
     }
+    if ((t1 & VT_BTYPE) == VT_ENUM) {
+	/* An enum is compatible with (unsigned) int.  */
+	t1 = VT_INT | (t1 & ~VT_BTYPE);
+    }
+    if ((t2 & VT_BTYPE) == VT_ENUM) {
+	/* An enum is compatible with (unsigned) int.  */
+	t2 = VT_INT | (t2 & ~VT_BTYPE);
+    }
     /* XXX: bitfields ? */
     if (t1 != t2)
         return 0;
