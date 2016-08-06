@@ -279,12 +279,17 @@ static inline int get_reg_shift(TCCState *s1)
 }
 
 #ifdef TCC_TARGET_X86_64
-static int asm_parse_high_reg(int *type)
+static int asm_parse_numeric_reg(int *type)
 {
     int reg = -1;
     if (tok >= TOK_IDENT && tok < tok_ident) {
 	const char *s = table_ident[tok - TOK_IDENT]->str;
 	char c;
+	*type = OP_REG64;
+	if (*s == 'c') {
+	    s++;
+	    *type = OP_CR;
+	}
 	if (*s++ != 'r')
 	  return -1;
 	/* Don't allow leading '0'.  */
@@ -297,7 +302,9 @@ static int asm_parse_high_reg(int *type)
 	if (reg > 15)
 	  return -1;
 	if ((c = *s) == 0)
-	  *type = OP_REG64;
+	  ;
+	else if (*type != OP_REG64)
+	  return -1;
 	else if (c == 'b' && !s[1])
 	  *type = OP_REG8;
 	else if (c == 'w' && !s[1])
@@ -328,7 +335,7 @@ static int asm_parse_reg(int *type)
     } else if (tok == TOK_ASM_rip) {
         reg = -2; /* Probably should use different escape code. */
 	*type = OP_REG64;
-    } else if ((reg = asm_parse_high_reg(type)) >= 0
+    } else if ((reg = asm_parse_numeric_reg(type)) >= 0
 	       && (*type == OP_REG32 || *type == OP_REG64)) {
 	;
 #endif
@@ -393,7 +400,7 @@ static void parse_operand(TCCState *s1, Operand *op)
 	} else if (tok >= TOK_ASM_spl && tok <= TOK_ASM_dil) {
 	    op->type = OP_REG8 | OP_REG8_LOW;
 	    op->reg = 4 + tok - TOK_ASM_spl;
-        } else if ((op->reg = asm_parse_high_reg(&op->type)) >= 0) {
+        } else if ((op->reg = asm_parse_numeric_reg(&op->type)) >= 0) {
 	    ;
 #endif
         } else {

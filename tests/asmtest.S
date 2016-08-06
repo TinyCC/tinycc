@@ -72,6 +72,8 @@ mov %rcx, %cr3
 movq %cr3, %rax
 movq %db3, %rbx
 movq %dr6, %rax
+mov %cr8, %rsi
+mov %rdi, %cr8
 #endif
 movl %fs, %ecx
 movl %ebx, %fs
