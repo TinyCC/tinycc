@@ -869,6 +869,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             if ((opcode == TOK_ASM_push || opcode == TOK_ASM_pop) &&
                 (ops[0].type & (OP_SEG | OP_IM8S | OP_IM32)))
                 s = 2;
+	    else if ((opcode == TOK_ASM_push || opcode == TOK_ASM_pop) &&
+		     (ops[0].type & OP_EA))
+	        s = NBWLX - 2;
             else
                 tcc_error("cannot infer opcode suffix");
         }
