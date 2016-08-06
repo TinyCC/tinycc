@@ -5713,7 +5713,8 @@ static void parse_init_elem(int expr_type)
 
 /* t is the array or struct type. c is the array or struct
    address. cur_field is the pointer to the current
-   value, for arrays the 'c' member contains the current index.
+   value, for arrays the 'c' member contains the current start
+   index and the 'r' contains the end index (in case of range init).
    'size_only' is true if only size info is needed (only used
    in arrays) */
 static void decl_designator(CType *type, Section *sec, unsigned long c, 
@@ -5748,8 +5749,10 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
                 index_last = index;
             }
             skip(']');
-            if (!notfirst)
-		(*cur_field)->c = index_last;
+            if (!notfirst) {
+		(*cur_field)->c = index;
+		(*cur_field)->r = index_last;
+	    }
             type = pointed_type(type);
             elem_size = type_size(type, &align);
             c += index * elem_size;
@@ -5812,17 +5815,25 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
         uint8_t *src, *dst;
         int i;
 
-        if (!sec)
-            tcc_error("range init not supported yet for dynamic storage");
-        c_end = c + nb_elems * elem_size;
-        if (c_end > sec->data_allocated)
-            section_realloc(sec, c_end);
-        src = sec->data + c;
-        dst = src;
-        for(i = 1; i < nb_elems; i++) {
-            dst += elem_size;
-            memcpy(dst, src, elem_size);
-        }
+        if (!sec) {
+	    vset(type, VT_LOCAL|VT_LVAL, c);
+	    for (i = 1; i < nb_elems; i++) {
+		vset(type, VT_LOCAL|VT_LVAL, c + elem_size * i);
+		vswap();
+		vstore();
+	    }
+	    vpop();
+	} else {
+	    c_end = c + nb_elems * elem_size;
+	    if (c_end > sec->data_allocated)
+	        section_realloc(sec, c_end);
+	    src = sec->data + c;
+	    dst = src;
+	    for(i = 1; i < nb_elems; i++) {
+		dst += elem_size;
+		memcpy(dst, src, elem_size);
+	    }
+	}
     }
 }
 
@@ -6014,7 +6025,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	!(type->t & VT_ARRAY) &&
 	/* Use i_c_parameter_t, to strip toplevel qualifiers.
 	   The source type might have VT_CONSTANT set, which is
-	   of course assignable to a non-const elements.  */
+	   of course assignable to non-const elements.  */
 	is_compatible_parameter_types(type, &vtop->type)) {
         init_putv(type, sec, c);
     } else if (type->t & VT_ARRAY) {
@@ -6088,6 +6099,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             }
         } else {
 	    indexsym.c = 0;
+	    indexsym.r = 0;
 	    f = &indexsym;
 
           do_init_list:
@@ -6102,8 +6114,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 			      (index - array_length) * size1);
 		}
 		if (type->t & VT_ARRAY) {
-		    index++;
-		    indexsym.c++;
+		    index = indexsym.c = ++indexsym.r;
 		} else {
 		    index = index + type_size(&f->type, &align1);
 		    if (s->type.t == TOK_UNION)

@@ -148,6 +148,9 @@ void foo (struct W *w, struct pkthdr *phdr_)
   struct V lv3 = {((struct S){7,8,{9,10}}), ((const struct W *)w)->t.t, 50};
   const struct pkthdr *phdr = phdr_;
   struct flowi6 flow = { .daddr = phdr->daddr, .saddr = phdr->saddr };
+  int elt = 0x42;
+  /* Range init, overlapping */
+  struct T lt2 = { { [1 ... 5] = 9, [6 ... 10] = elt, [4 ... 7] = elt+1 }, 1 };
   print(ls);
   print(ls2);
   print(lt);
@@ -163,6 +166,7 @@ void foo (struct W *w, struct pkthdr *phdr_)
   print(lv);
   print(lv2);
   print(lv3);
+  print(lt2);
   print(flow);
 }
 #endif
