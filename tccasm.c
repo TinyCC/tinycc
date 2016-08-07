@@ -64,7 +64,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 if (!sym || sym->r) {
                     /* if the last label is defined, then define a new one */
                     sym = label_push(&s1->asm_labels, label, 0);
-                    sym->type.t = VT_STATIC | VT_VOID;
+                    sym->type.t = VT_STATIC | VT_VOID | VT_EXTERN;
                 }
             }
 	    pe->v = 0;
@@ -123,7 +123,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
             if (!sym) {
                 sym = label_push(&s1->asm_labels, tok, 0);
                 /* NOTE: by default, the symbol is global */
-                sym->type.t = VT_VOID;
+                sym->type.t = VT_VOID | VT_EXTERN;
             }
             if (sym->r == SHN_ABS) {
                 /* if absolute symbol, no need to put a symbol value */
@@ -317,14 +317,17 @@ ST_FUNC int asm_int_expr(TCCState *s1)
 
 /* NOTE: the same name space as C labels is used to avoid using too
    much memory when storing labels in TokenStrings */
-static void asm_new_label1(TCCState *s1, int label, int is_local,
+static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
                            int sh_num, int value)
 {
     Sym *sym;
 
     sym = label_find(label);
     if (sym) {
-        if (sym->r) {
+	/* A VT_EXTERN symbol, even if it has a section is considered
+	   overridable.  This is how we "define" .set targets.  Real
+	   definitions won't have VT_EXTERN set.  */
+        if (sym->r && !(sym->type.t & VT_EXTERN)) {
             /* the label is already defined */
             if (!is_local) {
                 tcc_error("assembler label '%s' already defined", 
@@ -337,15 +340,34 @@ static void asm_new_label1(TCCState *s1, int label, int is_local,
     } else {
     new_label:
         sym = label_push(&s1->asm_labels, label, 0);
-        sym->type.t = VT_STATIC | VT_VOID;
+	/* If we need a symbol to hold a value, mark it as
+	   tentative only (for .set).  If this is for a real label
+	   we'll remove VT_EXTERN.  */
+        sym->type.t = VT_STATIC | VT_VOID | VT_EXTERN;
     }
     sym->r = sh_num;
     sym->jnext = value;
+    return sym;
 }
 
-static void asm_new_label(TCCState *s1, int label, int is_local)
+static Sym* asm_new_label(TCCState *s1, int label, int is_local)
 {
-    asm_new_label1(s1, label, is_local, cur_text_section->sh_num, ind);
+    return asm_new_label1(s1, label, is_local, cur_text_section->sh_num, ind);
+}
+
+/* Set the value of LABEL to that of some expression (possibly
+   involving other symbols).  LABEL can be overwritten later still.  */
+static Sym* set_symbol(TCCState *s1, int label)
+{
+    Sym *sym;
+    long n;
+    ExprValue e;
+    next();
+    asm_expr(s1, &e);
+    n = e.v;
+    if (e.sym)
+	n += e.sym->jnext;
+    return asm_new_label1(s1, label, 0, e.sym ? e.sym->r : SHN_ABS, n);
 }
 
 static void asm_free_labels(TCCState *st)
@@ -356,6 +378,7 @@ static void asm_free_labels(TCCState *st)
     for(s = st->asm_labels; s != NULL; s = s1) {
         s1 = s->prev;
         /* define symbol value in object file */
+	s->type.t &= ~VT_EXTERN;
         if (s->r) {
             if (s->r == SHN_ABS)
                 sec = SECTION_ABS;
@@ -608,6 +631,15 @@ static void asm_parse_directive(TCCState *s1)
             goto zero_pad;
         }
         break;
+    case TOK_ASMDIR_set:
+	next();
+	tok1 = tok;
+	next();
+	/* Also accept '.set stuff', but don't do anything with this.
+	   It's used in GAS to set various features like '.set mips16'.  */
+	if (tok == ',')
+	    set_symbol(s1, tok1);
+	break;
     case TOK_ASMDIR_globl:
     case TOK_ASMDIR_global:
     case TOK_ASMDIR_weak:
@@ -620,7 +652,7 @@ static void asm_parse_directive(TCCState *s1)
             sym = label_find(tok);
             if (!sym) {
                 sym = label_push(&s1->asm_labels, tok, 0);
-                sym->type.t = VT_VOID;
+                sym->type.t = VT_VOID | VT_EXTERN;
             }
 	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
@@ -743,7 +775,7 @@ static void asm_parse_directive(TCCState *s1)
             sym = label_find(tok);
             if (!sym) {
                 sym = label_push(&s1->asm_labels, tok, 0);
-                sym->type.t = VT_VOID;
+                sym->type.t = VT_VOID | VT_EXTERN;
             }
 
             next();
@@ -875,6 +907,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
         } else if (tok >= TOK_ASMDIR_FIRST && tok <= TOK_ASMDIR_LAST) {
             asm_parse_directive(s1);
         } else if (tok == TOK_PPNUM) {
+	    Sym *sym;
             const char *p;
             int n;
             p = tokc.str.data;
@@ -882,7 +915,9 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
             if (*p != '\0')
                 expect("':'");
             /* new local label */
-            asm_new_label(s1, asm_get_local_label_name(s1, n), 1);
+            sym = asm_new_label(s1, asm_get_local_label_name(s1, n), 1);
+	    /* Remove the marker for tentative definitions.  */
+	    sym->type.t &= ~VT_EXTERN;
             next();
             skip(':');
             goto redo;
@@ -898,18 +933,16 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
                     sym = label_find(opcode);
                     if (!sym) {
                         sym = label_push(&s1->asm_labels, opcode, 0);
-                        sym->type.t = VT_VOID;
+                        sym->type.t = VT_VOID | VT_EXTERN;
                     }
                 }
                 /* new label */
-                asm_new_label(s1, opcode, 0);
+                sym = asm_new_label(s1, opcode, 0);
+		sym->type.t &= ~VT_EXTERN;
                 next();
                 goto redo;
             } else if (tok == '=') {
-                int n;
-                next();
-                n = asm_int_expr(s1);
-                asm_new_label1(s1, opcode, 0, SHN_ABS, n);
+		set_symbol(s1, opcode);
                 goto redo;
             } else {
                 asm_opcode(s1, opcode);

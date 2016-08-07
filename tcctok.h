@@ -308,6 +308,7 @@
  DEF_ASMDIR(align)
  DEF_ASMDIR(balign)
  DEF_ASMDIR(p2align)
+ DEF_ASMDIR(set)
  DEF_ASMDIR(skip)
  DEF_ASMDIR(space)
  DEF_ASMDIR(string)

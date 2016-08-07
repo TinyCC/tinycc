@@ -824,6 +824,17 @@ nop
 .skip (-((4b-3b) > 0) * 2) , 0x90
 .popsection
 
+.globl overrideme
+.weak overrideme
+  nop
+.globl notimplemented
+notimplemented:
+  ret
+.set overrideme, notimplemented
+overrideme = notimplemented
+overrideme:
+  ret
+
     movd %esi, %mm1
     movd %edi, %xmm2
     movd (%ebx), %mm3
