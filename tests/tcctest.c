@@ -2647,6 +2647,24 @@ void other_constraints_test(void)
     printf ("oc1: %d\n", ret == (unsigned long)&var);
 }
 
+/* Test global asm blocks playing with aliases.  */
+void base_func(void)
+{
+  printf ("asmc: base\n");
+}
+
+extern void override_func1 (void);
+extern void override_func2 (void);
+
+asm(".weak override_func1\n.set override_func1, base_func");
+asm(".set override_func1, base_func");
+asm(".set override_func2, base_func");
+
+void override_func2 (void)
+{
+  printf ("asmc: override2\n");
+}
+
 unsigned int set;
 
 void asm_test(void)
@@ -2655,6 +2673,10 @@ void asm_test(void)
     unsigned int val;
     struct struct123 s1;
     struct struct1231 s2 = { (unsigned long)&s1 };
+    /* Hide the outer base_func, but check later that the inline
+       asm block gets the outer one.  */
+    int base_func = 42;
+    void override_func3 (void);
 
     printf("inline asm:\n");
 
@@ -2692,6 +2714,12 @@ void asm_test(void)
     printf("set=0x%x\n", set);
     val = 0x01020304;
     printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));
+    override_func1();
+    override_func2();
+    /* The base_func ref from the following inline asm should find
+       the global one, not the local decl from this function.  */
+    asm volatile(".weak override_func3\n.set override_func3, base_func");
+    override_func3();
     return;
  label1:
     goto label2;

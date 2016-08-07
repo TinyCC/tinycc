@@ -35,6 +35,45 @@ ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess);
 static Sym sym_dot;
 
+/* Return a symbol we can use inside the assembler, having name NAME.
+   The assembler symbol table is different from the C symbol table
+   (and the Sym members are used differently).  But we must be able
+   to look up file-global C symbols from inside the assembler, e.g.
+   for global asm blocks to be able to refer to defined C symbols.
+
+   This routine gives back either an existing asm-internal
+   symbol, or a new one.  In the latter case the new asm-internal
+   symbol is initialized with info from the C symbol table.  */
+static Sym* get_asm_sym(int name)
+{
+    Sym *sym = label_find(name);
+    if (!sym) {
+	Sym *csym = sym_find(name);
+	sym = label_push(&tcc_state->asm_labels, name, 0);
+	sym->type.t = VT_VOID | VT_EXTERN;
+	/* We might be called for an asm block from inside a C routine
+	   and so might have local decls on the identifier stack.  Search
+	   for the first global one.  */
+	while (csym && csym->scope)
+	    csym = csym->prev_tok;
+	/* Now, if we have a defined global symbol copy over
+	   section and offset.  */
+	if (csym &&
+	    ((csym->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST)) &&
+	    csym->c) {
+	    ElfW(Sym) *esym;
+	    esym = &((ElfW(Sym) *)symtab_section->data)[csym->c];
+	    sym->r = esym->st_shndx;
+	    sym->jnext = esym->st_value;
+	    /* XXX can't yet store st_size anywhere.  */
+	    sym->type.t &= ~VT_EXTERN;
+	    /* Mark that this asm symbol doesn't need to be fed back.  */
+	    sym->type.t |= VT_IMPORT;
+	}
+    }
+    return sym;
+}
+
 /* We do not use the C expression parser to handle symbols. Maybe the
    C expression parser could be tweaked to do so. */
 
@@ -119,12 +158,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
     default:
         if (tok >= TOK_IDENT) {
             /* label case : if the label was not found, add one */
-            sym = label_find(tok);
-            if (!sym) {
-                sym = label_push(&s1->asm_labels, tok, 0);
-                /* NOTE: by default, the symbol is global */
-                sym->type.t = VT_VOID | VT_EXTERN;
-            }
+	    sym = get_asm_sym(tok);
             if (sym->r == SHN_ABS) {
                 /* if absolute symbol, no need to put a symbol value */
                 pe->v = sym->jnext;
@@ -359,7 +393,6 @@ static Sym* asm_new_label(TCCState *s1, int label, int is_local)
    involving other symbols).  LABEL can be overwritten later still.  */
 static Sym* set_symbol(TCCState *s1, int label)
 {
-    Sym *sym;
     long n;
     ExprValue e;
     next();
@@ -379,7 +412,7 @@ static void asm_free_labels(TCCState *st)
         s1 = s->prev;
         /* define symbol value in object file */
 	s->type.t &= ~VT_EXTERN;
-        if (s->r) {
+        if (s->r && !(s->type.t & VT_IMPORT)) {
             if (s->r == SHN_ABS)
                 sec = SECTION_ABS;
             else
@@ -649,11 +682,7 @@ static void asm_parse_directive(TCCState *s1)
             Sym *sym;
 
             next();
-            sym = label_find(tok);
-            if (!sym) {
-                sym = label_push(&s1->asm_labels, tok, 0);
-                sym->type.t = VT_VOID | VT_EXTERN;
-            }
+            sym = get_asm_sym(tok);
 	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASMDIR_weak)
@@ -772,12 +801,7 @@ static void asm_parse_directive(TCCState *s1)
             const char *newtype;
 
             next();
-            sym = label_find(tok);
-            if (!sym) {
-                sym = label_push(&s1->asm_labels, tok, 0);
-                sym->type.t = VT_VOID | VT_EXTERN;
-            }
-
+            sym = get_asm_sym(tok);
             next();
             skip(',');
             if (tok == TOK_STR) {
