@@ -387,7 +387,8 @@ struct Attribute {
         mode          : 4,
         weak          : 1,
         visibility    : 2,
-        fill          : 8; // 8 bits left to fit well in union below
+	unsigned_enum : 1,
+        fill          : 7; // 7 bits left to fit well in union below
 };
 
 /* GNUC attribute definition */

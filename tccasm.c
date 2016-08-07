@@ -612,7 +612,7 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASMDIR_global:
     case TOK_ASMDIR_weak:
     case TOK_ASMDIR_hidden:
-    tok1 = tok;
+	tok1 = tok;
 	do { 
             Sym *sym;
 

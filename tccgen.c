@@ -2565,13 +2565,20 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~VT_DEFSIGN;
         t2 &= ~VT_DEFSIGN;
     }
+    /* An enum is compatible with (unsigned) int.  Ideally we would
+       store the enums signedness in type->ref.a.<some_bit> and
+       only accept unsigned enums with unsigned int and vice versa.
+       But one of our callers (gen_assign_cast) always strips VT_UNSIGNED
+       from pointer target types, so we can't add it here either.  */
     if ((t1 & VT_BTYPE) == VT_ENUM) {
-	/* An enum is compatible with (unsigned) int.  */
-	t1 = VT_INT | (t1 & ~VT_BTYPE);
+	t1 = VT_INT;
+	if (type1->ref->a.unsigned_enum)
+	    t1 |= VT_UNSIGNED;
     }
     if ((t2 & VT_BTYPE) == VT_ENUM) {
-	/* An enum is compatible with (unsigned) int.  */
-	t2 = VT_INT | (t2 & ~VT_BTYPE);
+	t2 = VT_INT;
+	if (type2->ref->a.unsigned_enum)
+	    t2 |= VT_UNSIGNED;
     }
     /* XXX: bitfields ? */
     if (t1 != t2)
@@ -2766,15 +2773,23 @@ static void gen_assign_cast(CType *dt)
             (type2->t & VT_BTYPE) == VT_VOID) {
             /* void * can match anything */
         } else {
-            /* exact type match, except for unsigned */
+            /* exact type match, except for qualifiers */
             tmp_type1 = *type1;
             tmp_type2 = *type2;
-            tmp_type1.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT |
-                             VT_VOLATILE);
-            tmp_type2.t &= ~(VT_DEFSIGN | VT_UNSIGNED | VT_CONSTANT |
-                             VT_VOLATILE);
-            if (!is_compatible_types(&tmp_type1, &tmp_type2))
-                tcc_warning("assignment from incompatible pointer type");
+            tmp_type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
+            tmp_type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
+            if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
+		/* Like GCC don't warn by default for merely changes
+		   in pointer target signedness.  Do warn for different
+		   base types, though, in particular for unsigned enums
+		   and signed int targets.  */
+		if ((tmp_type1.t & (VT_DEFSIGN | VT_UNSIGNED)) !=
+		    (tmp_type2.t & (VT_DEFSIGN | VT_UNSIGNED)) &&
+		    (tmp_type1.t & VT_BTYPE) == (tmp_type2.t & VT_BTYPE))
+		    ;
+		else
+		    tcc_warning("assignment from incompatible pointer type");
+	    }
         }
         /* check const and volatile */
         if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT)) ||
@@ -3252,6 +3267,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
         c = 0;
         /* non empty enums are not allowed */
         if (a == TOK_ENUM) {
+	    int seen_neg = 0;
             for(;;) {
                 v = tok;
                 if (v < TOK_UIDENT)
@@ -3265,6 +3281,8 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                     next();
                     c = expr_const();
                 }
+		if (c < 0)
+		    seen_neg = 1;
                 /* enum symbols have static storage */
                 ss = sym_push(v, &int_type, VT_CONST, c);
                 ss->type.t |= VT_STATIC;
@@ -3276,6 +3294,8 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                 if (tok == '}')
                     break;
             }
+	    if (!seen_neg)
+	        s->a.unsigned_enum = 1;
             s->c = type_size(&int_type, &align);
             skip('}');
         } else {
