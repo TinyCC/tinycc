@@ -394,6 +394,9 @@ ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OP
     /* pentium */
     DEF_ASM_OP1(cmpxchg8b, 0x0fc7, 1, OPC_MODRM, OPT_EA )
 
+    /* AMD 64 */
+    DEF_ASM_OP1(cmpxchg16b, 0x480fc7, 1, OPC_MODRM, OPT_EA )
+
     /* pentium pro */
 ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WLX, OPT_REGW | OPT_EA, OPT_REGW))
 

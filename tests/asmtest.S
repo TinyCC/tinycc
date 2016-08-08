@@ -535,6 +535,9 @@ cmpxchgw %ax, 0x1000
 cmpxchgl %eax, 0x1000
 invlpg 0x1000
 cmpxchg8b 0x1002
+#ifdef __x86_64__
+cmpxchg16b (%rax)
+#endif
 
 fcmovb %st(5), %st
 fcmove %st(5), %st
