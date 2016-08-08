@@ -2677,6 +2677,7 @@ void asm_test(void)
        asm block gets the outer one.  */
     int base_func = 42;
     void override_func3 (void);
+    unsigned long asmret;
 
     printf("inline asm:\n");
 
@@ -2720,6 +2721,11 @@ void asm_test(void)
        the global one, not the local decl from this function.  */
     asm volatile(".weak override_func3\n.set override_func3, base_func");
     override_func3();
+    /* Check that we can also load structs of appropriate layout
+       into registers.  */
+    asm volatile("" : "=r" (asmret) : "0"(s2));
+    if (asmret != s2.addr)
+      printf("asmstr: failed\n");
     return;
  label1:
     goto label2;

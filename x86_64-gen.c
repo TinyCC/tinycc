@@ -382,6 +382,22 @@ void load(int r, SValue *sv)
             load(fr, &v1);
         }
         ll = 0;
+	/* Like GCC we can load from small enough properly sized
+	   structs and unions as well.
+	   XXX maybe move to generic operand handling, but should
+	   occur only with asm, so tccasm.c might also be a better place */
+	if ((ft & VT_BTYPE) == VT_STRUCT) {
+	    int align;
+	    switch (type_size(&sv->type, &align)) {
+		case 1: ft = VT_BYTE; break;
+		case 2: ft = VT_SHORT; break;
+		case 4: ft = VT_INT; break;
+		case 8: ft = VT_LLONG; break;
+		default:
+		    tcc_error("invalid aggregate type for register load");
+		    break;
+	    }
+	}
         if ((ft & VT_BTYPE) == VT_FLOAT) {
             b = 0x6e0f66;
             r = REG_VALUE(r); /* movd */
