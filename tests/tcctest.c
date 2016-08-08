@@ -44,7 +44,7 @@
 #define TCCLIB_INC <tcclib.h>
 #define TCCLIB_INC1 <tcclib
 #define TCCLIB_INC2 h>
-#define TCCLIB_INC3 "tcclib"
+#define TCCLIB_INC3 "tcclib.h"
 
 #include TCCLIB_INC
 
@@ -52,14 +52,24 @@
 
 #include TCCLIB_INC1.h>
 
-/* gcc 3.2 does not accept that (bug ?) */
-//#include TCCLIB_INC3 ".h"
+#include TCCLIB_INC3
 
 #include <tcclib.h>
 
 #include "tcclib.h"
 
 #include "tcctest.h"
+
+/* Test two more ways to include a file named like a pp-number */
+#define INC(name) <tests/name.h>
+#define funnyname 42test.h
+#define incdir tests/
+#define incname < incdir funnyname >
+#define __stringify(x) #x
+#define stringify(x) __stringify(x)
+#include INC(42test)
+#include incname
+#include stringify(funnyname)
 
 void intdiv_test();
 void string_test();
@@ -396,6 +406,11 @@ comment
     printf("%s\n", __BASE_FILE__);
     printf("%s\n", get_file_from_header());
     printf("%s\n", __FILE__);
+
+    /* Check that funnily named include was in fact included */
+    have_included_42test_h = 1;
+    have_included_42test_h_second = 1;
+    have_included_42test_h_third = 1;
 }
 
 

@@ -1737,34 +1737,27 @@ ST_FUNC void preprocess(int is_bof)
                 inp();
 #endif
         } else {
-            /* computed #include : either we have only strings or
-               we have anything enclosed in '<>' */
+	    int len;
+            /* computed #include : concatenate everything up to linefeed,
+	       the result must be one of the two accepted forms.
+	       Don't convert pp-tokens to tokens here.  */
+	    parse_flags = (PARSE_FLAG_PREPROCESS
+			   | PARSE_FLAG_LINEFEED
+			   | (parse_flags & PARSE_FLAG_ASM_FILE));
             next();
             buf[0] = '\0';
-            if (tok == TOK_STR) {
-                while (tok != TOK_LINEFEED) {
-                    if (tok != TOK_STR) {
-                    include_syntax:
-                        tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
-                    }
-                    pstrcat(buf, sizeof(buf), (char *)tokc.str.data);
-                    next();
-                }
-                c = '\"';
-            } else {
-                int len;
-                while (tok != TOK_LINEFEED) {
-                    pstrcat(buf, sizeof(buf), get_tok_str(tok, &tokc));
-                    next();
-                }
-                len = strlen(buf);
-                /* check syntax and remove '<>' */
-                if (len < 2 || buf[0] != '<' || buf[len - 1] != '>')
-                    goto include_syntax;
-                memmove(buf, buf + 1, len - 2);
-                buf[len - 2] = '\0';
-                c = '>';
-            }
+	    while (tok != TOK_LINEFEED) {
+		pstrcat(buf, sizeof(buf), get_tok_str(tok, &tokc));
+		next();
+	    }
+	    len = strlen(buf);
+	    /* check syntax and remove '<>|""' */
+	    if ((len < 2 || ((buf[0] != '"' || buf[len-1] != '"') &&
+			     (buf[0] != '<' || buf[len-1] != '>'))))
+	        tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
+	    c = buf[len-1];
+	    memmove(buf, buf + 1, len - 2);
+	    buf[len - 2] = '\0';
         }
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
