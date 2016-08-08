@@ -2678,6 +2678,9 @@ void asm_test(void)
     int base_func = 42;
     void override_func3 (void);
     unsigned long asmret;
+#ifdef BOOL_ISOC99
+    _Bool somebool;
+#endif
 
     printf("inline asm:\n");
 
@@ -2726,6 +2729,13 @@ void asm_test(void)
     asm volatile("" : "=r" (asmret) : "0"(s2));
     if (asmret != s2.addr)
       printf("asmstr: failed\n");
+#ifdef BOOL_ISOC99
+    /* Check that the typesize correctly sets the register size to
+       8 bit.  */
+    asm volatile("cmp %1,%2; sete %0" : "=a"(somebool) : "r"(1), "r"(2));
+    if (!somebool)
+      printf("asmbool: failed\n");
+#endif
     return;
  label1:
     goto label2;

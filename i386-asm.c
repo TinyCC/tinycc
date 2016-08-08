@@ -1478,7 +1478,8 @@ ST_FUNC void subst_asm_operand(CString *add_str,
             tcc_error("internal compiler error");
 
         /* choose register operand size */
-        if ((sv->type.t & VT_BTYPE) == VT_BYTE)
+        if ((sv->type.t & VT_BTYPE) == VT_BYTE ||
+	    (sv->type.t & VT_BTYPE) == VT_BOOL)
             size = 1;
         else if ((sv->type.t & VT_BTYPE) == VT_SHORT)
             size = 2;
