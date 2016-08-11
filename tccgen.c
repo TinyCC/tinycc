@@ -4922,7 +4922,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip(')');
         a = gvtst(1, 0);
         b = 0;
+        ++local_scope;
         block(&a, &b, case_sym, def_sym, case_reg, 0);
+        --local_scope;
         if(!nocode_wanted)
             gjmp_addr(d);
         gsym(a);
@@ -5060,7 +5062,9 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
         }
         skip(';');
-        rsym = gjmp(rsym); /* jmp */
+        /* jump unless last stmt in top-level block */
+        if (tok != '}' || local_scope != 1)
+            rsym = gjmp(rsym);
     } else if (tok == TOK_BREAK) {
         /* compute jump */
         if (!bsym)
