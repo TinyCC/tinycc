@@ -358,17 +358,26 @@ static Sym *__sym_malloc(void)
 static inline Sym *sym_malloc(void)
 {
     Sym *sym;
+#ifndef SYM_DEBUG
     sym = sym_free_first;
     if (!sym)
         sym = __sym_malloc();
     sym_free_first = sym->next;
     return sym;
+#else
+    sym = tcc_malloc(sizeof(Sym));
+    return sym;
+#endif
 }
 
 ST_INLN void sym_free(Sym *sym)
 {
+#ifndef SYM_DEBUG
     sym->next = sym_free_first;
     sym_free_first = sym;
+#else
+    tcc_free(sym);
+#endif
 }
 
 /* push, without hashing */
@@ -474,8 +483,9 @@ ST_FUNC Sym *global_identifier_push(int v, int t, int c)
     return s;
 }
 
-/* pop symbols until top reaches 'b' */
-ST_FUNC void sym_pop(Sym **ptop, Sym *b)
+/* pop symbols until top reaches 'b'.  If KEEP is non-zero don't really
+   pop them yet from the list, but do remove them from the token array.  */
+ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep)
 {
     Sym *s, *ss, **ps;
     TokenSym *ts;
@@ -495,10 +505,12 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b)
                 ps = &ts->sym_identifier;
             *ps = s->prev_tok;
         }
-        sym_free(s);
+	if (!keep)
+	    sym_free(s);
         s = ss;
     }
-    *ptop = b;
+    if (!keep)
+	*ptop = b;
 }
 
 static void weaken_symbol(Sym *sym)
@@ -5406,28 +5418,17 @@ static void block(int *bsym, int *csym, int is_expr)
         }
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel);
-        if(is_expr) {
-            /* XXX: this solution makes only valgrind happy...
-               triggered by gcc.c-torture/execute/20000917-1.c */
-            Sym *p;
-            switch(vtop->type.t & VT_BTYPE) {
-            /* case VT_PTR: */
-        	/* this breaks a compilation of the linux kernel v2.4.26 */
-        	/* pmd_t *new = ({ __asm__ __volatile__("ud2\n") ; ((pmd_t *)1); }); */
-        	/* Look a commit a80acab: Display error on statement expressions with complex return type */
-        	/* A pointer is not a complex return type */
-            case VT_STRUCT:
-            case VT_ENUM:
-            case VT_FUNC:
-                for(p=vtop->type.ref;p;p=p->prev)
-                    if(p->prev==s)
-                        tcc_error("unsupported expression type");
-            }
-        }
         /* pop locally defined symbols */
         --local_scope;
-        sym_pop(&local_stack, s);
-        
+	/* In the is_expr case (a statement expression is finished here),
+	   vtop might refer to symbols on the local_stack.  Either via the
+	   type or via vtop->sym.  We can't pop those nor any that in turn
+	   might be referred to.  To make it easier we don't roll back
+	   any symbols in that case; some upper level call to block() will
+	   do that.  We do have to remove such symbols from the lookup
+	   tables, though.  sym_pop will do that.  */
+	sym_pop(&local_stack, s, is_expr);
+
         /* Pop VLA frames and restore stack pointer if required */
         if (vlas_in_scope > saved_vlas_in_scope) {
             vla_sp_loc = saved_vlas_in_scope ? block_vla_sp_loc : vla_sp_root_loc;
@@ -5567,7 +5568,7 @@ static void block(int *bsym, int *csym, int is_expr)
         gsym(a);
         gsym_addr(b, c);
         --local_scope;
-        sym_pop(&local_stack, s);
+        sym_pop(&local_stack, s, 0);
 
     } else 
     if (tok == TOK_DO) {
@@ -6592,7 +6593,7 @@ static void gen_function(Sym *sym)
     label_pop(&global_label_stack, NULL);
     /* reset local stack */
     local_scope = 0;
-    sym_pop(&local_stack, NULL);
+    sym_pop(&local_stack, NULL, 0);
     /* end of function */
     /* patch symbol size */
     ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 

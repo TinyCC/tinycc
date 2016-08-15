@@ -2446,10 +2446,17 @@ void typeof_test(void)
     printf("a=%f b=%f c=%f\n", a, b, c);
 }
 
+
+struct hlist_node;
+struct hlist_head {
+    struct hlist_node *first, *last;
+};
+
 void statement_expr_test(void)
 {
     int a, i;
 
+    /* Basic stmt expr test */
     a = 0;
     for(i=0;i<10;i++) {
         a += 1 + 
@@ -2461,6 +2468,45 @@ void statement_expr_test(void)
     }
     printf("a=%d\n", a);
     
+    /* Test that symbols aren't freed prematurely.
+       With SYM_DEBUG valgrind will show a read from a freed
+       symbol, and tcc will show an (invalid) warning on the initialization
+       of 'ptr' below, if symbols are popped after the stmt expr.  */
+    void *v = (void*)39;
+    typeof(({
+	    (struct hlist_node *)v;
+	    })) x;
+    typeof (x)
+	ptr = (struct hlist_node *)v;
+
+    /* This part used to segfault when symbols were popped prematurely.
+       The symbols for the static local would be overwritten with
+       helper symbols from the pre-processor expansions in between.  */
+#define some_attr     __attribute__((aligned(1)))
+#define tps(str) ({                  \
+            static const char *t some_attr = str; \
+            t;                                    \
+          })
+    printf ("stmtexpr: %s %s\n",
+	    tps("somerandomlongstring"),
+	    tps("anotherlongstring"));
+
+    /* Test that the three decls of 't' don't interact.  */
+    int t = 40;
+    int b = ({ int t = 41; t; });
+    int c = ({ int t = 42; t; });
+
+    /* Test that aggregate return values work.  */
+    struct hlist_head h
+	= ({
+	   typedef struct hlist_head T;
+	   long pre = 48;
+	   T t = { (void*)43, (void*)44 };
+	   long post = 49;
+	   t;
+	   });
+    printf ("stmtexpr: %d %d %d\n", t, b, c);
+    printf ("stmtexpr: %ld %ld\n", (long)h.first, (long)h.last);
 }
 
 void local_label_test(void)

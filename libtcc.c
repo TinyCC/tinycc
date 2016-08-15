@@ -677,8 +677,8 @@ static int tcc_compile(TCCState *s1)
     s1->error_set_jmp_enabled = 0;
 
     free_inline_functions(s1);
-    sym_pop(&global_stack, NULL);
-    sym_pop(&local_stack, NULL);
+    sym_pop(&global_stack, NULL, 0);
+    sym_pop(&local_stack, NULL, 0);
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
