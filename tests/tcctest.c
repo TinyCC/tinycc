@@ -1470,6 +1470,10 @@ typedef int arrtype2[3];
 arrtype2 sinit21 = {4};
 arrtype2 sinit22 = {5,6,7};
 
+/* Address comparisons of non-weak symbols with zero can be const-folded */
+int sinit23[2] = { "astring" ? sizeof("astring") : -1,
+		   &sinit23 ? 42 : -1 };
+
 void init_test(void)
 {
     int linit1 = 2;
@@ -1484,6 +1488,9 @@ void init_test(void)
     int linit15[10] = { linit1, linit1 + 1, [6] = linit1 + 2, };
     struct linit16 { int a1, a2, a3, a4; } linit16 = { 1, .a3 = 2 };
     int linit17 = sizeof(linit17);
+    int zero = 0;
+    /* Addresses on non-weak symbols are non-zero, but not the access itself */
+    int linit18[2] = {&zero ? 1 : -1, zero ? -1 : 1 };
     
     printf("init_test:\n");
 
@@ -1577,6 +1584,9 @@ void init_test(void)
     printf("arrtype4: %d %d %d\n", sinit22[0], sinit22[1], sinit22[2]);
     printf("arrtype5: %d %d\n", sizeof(sinit21), sizeof(sinit22));
     printf("arrtype6: %d\n", sizeof(arrtype2));
+
+    printf("sinit23= %d %d\n", sinit23[0], sinit23[1]);
+    printf("linit18= %d %d\n", linit18[0], linit18[1]);
 }
 
 

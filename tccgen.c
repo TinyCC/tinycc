@@ -4979,7 +4979,9 @@ static void expr_cond(void)
     expr_lor();
     if (tok == '?') {
         next();
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	    (!(vtop->r & VT_SYM) ||
+	     !(vtop->sym->type.t & VT_WEAK))) {
             int saved_nocode_wanted = nocode_wanted;
             CType boolean;
             int c;
