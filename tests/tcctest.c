@@ -602,11 +602,16 @@ enum test {
     E5 = 1000,
 };
 
+struct S_enum {
+    enum {E6 = 42, E7, E8} e:8;
+};
 void enum_test()
 {
     enum test b1;
     /* The following should give no warning */
     unsigned *p = &b1;
+    struct S_enum s = {E7};
+    printf("enum: %d\n", s.e);
     printf("enum:\n%d %d %d %d %d %d\n",
            E0, E1, E2, E3, E4, E5);
     b1 = 1;
