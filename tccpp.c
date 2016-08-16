@@ -2401,10 +2401,7 @@ static void parse_number(const char *p)
                 tcc_error("integer constant overflow");
         }
 
-        if (tok == TOK_CINT || tok == TOK_CUINT)
-            tokc.i = n;
-        else
-            tokc.i = n;
+        tokc.i = n;
     }
     if (ch)
         tcc_error("invalid number\n");
