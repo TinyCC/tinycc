@@ -1441,7 +1441,8 @@ void gfunc_call(int nb_args)
         }
     }
 
-    oad(0xb8, nb_sse_args < 8 ? nb_sse_args : 8); /* mov nb_sse_args, %eax */
+    if (vtop->type.ref->c != FUNC_NEW) /* implies FUNC_OLD or FUNC_ELLIPSIS */
+        oad(0xb8, nb_sse_args < 8 ? nb_sse_args : 8); /* mov nb_sse_args, %eax */
     gcall_or_jmp(0);
     if (args_size)
         gadd_sp(args_size);
