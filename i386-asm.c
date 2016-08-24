@@ -423,7 +423,7 @@ static void parse_operand(TCCState *s1, Operand *op)
             if (op->e.v == (uint16_t)op->e.v)
                 op->type |= OP_IM16;
 #ifdef TCC_TARGET_X86_64
-            if (op->e.v != (int32_t)op->e.v)
+            if (op->e.v != (int32_t)op->e.v && op->e.v != (uint32_t)op->e.v)
                 op->type = OP_IM64;
 #endif
         }

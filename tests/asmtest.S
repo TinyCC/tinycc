@@ -49,6 +49,8 @@ movw %ax, 0x100(%ebx,%edx,2)
 
 movw $0x1122,%si
 movl $0x112233,%edx
+movl $0x80000000, %esi
+movl $-0x7fffffff, %edi
 #ifdef __x86_64__
 mov $0x11223344,%rbx
 movq $0x11223344,%rbx
