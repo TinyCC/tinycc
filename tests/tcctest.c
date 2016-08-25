@@ -2010,6 +2010,11 @@ void longlong_test(void)
     printf("%d %d %d %d\n", a > b, a < b, a >= b, a <= b);
 
     printf(LONG_LONG_FORMAT "\n", 0x123456789LLU);
+
+    /* long long pointer deref in argument passing test */
+    a = 0x123;
+    long long *p = &a;
+    llshift(*p, 5);
 }
 
 void manyarg_test(void)

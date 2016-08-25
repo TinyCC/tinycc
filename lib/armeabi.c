@@ -399,7 +399,7 @@ REGS_RETURN(ulldiv_t, ulldiv_t)
 REGS_RETURN(idiv_t, idiv_t)
 REGS_RETURN(uidiv_t, uidiv_t)
 
-AEABI_UXDIVMOD(uldivmod, unsigned long long, ulldiv_t, ULONG)
+AEABI_UXDIVMOD(uldivmod, unsigned long long, ulldiv_t, ULLONG)
 
 __AEABI_XDIVMOD(ldivmod, long long, uldivmod, lldiv_t, ulldiv_t, LLONG)
 

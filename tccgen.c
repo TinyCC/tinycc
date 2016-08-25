@@ -861,11 +861,6 @@ ST_FUNC int gv(int rc)
 #endif
                 if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
                            (vtop->r & VT_LVAL)) {
-                    /* We do not want to modifier the long long
-                       pointer here, so the safest (and less
-                       efficient) is to save all the other registers
-                       in the stack. XXX: totally inefficient. */
-                    save_regs(1);
                     /* load from memory */
                     vtop->type.t = load_type;
                     load(r, vtop);
