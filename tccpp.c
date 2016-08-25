@@ -53,11 +53,6 @@ static struct TinyAlloc *toksym_alloc;
 static struct TinyAlloc *tokstr_alloc;
 static struct TinyAlloc *cstr_alloc;
 
-/* isidnum_table flags: */
-#define IS_SPC 1
-#define IS_ID  2
-#define IS_NUM 4
-
 static TokenString *macro_stack;
 
 static const char tcc_keywords[] = 
@@ -819,6 +814,11 @@ ST_FUNC uint8_t *parse_comment(uint8_t *p)
     return p;
 }
 
+ST_FUNC void set_idnum(int c, int val)
+{
+    isidnum_table[c - CH_EOF] = val;
+}
+
 #define cinp minp
 
 static inline void skip_spaces(void)
@@ -1453,13 +1453,15 @@ ST_FUNC void parse_define(void)
     /* XXX: should check if same macro (ANSI) */
     first = NULL;
     t = MACRO_OBJ;
+    /* We have to parse the whole define as if not in asm mode, in particular
+       no line comment with '#' must be ignored.  Also for function
+       macros the argument list must be parsed without '.' being an ID
+       character.  */
+    parse_flags = ((parse_flags & ~PARSE_FLAG_ASM_FILE) | PARSE_FLAG_SPACES);
     /* '(' must be just after macro definition for MACRO_FUNC */
-    parse_flags |= PARSE_FLAG_SPACES;
     next_nomacro_spc();
     if (tok == '(') {
-        /* must be able to parse TOK_DOTS (in asm mode '.' can be part of identifier) */
-        parse_flags &= ~PARSE_FLAG_ASM_FILE;
-        isidnum_table['.' - CH_EOF] = 0;
+        set_idnum('.', 0);
         next_nomacro();
         ps = &first;
         if (tok != ')') for (;;) {
@@ -1487,14 +1489,17 @@ ST_FUNC void parse_define(void)
         }
         next_nomacro_spc();
         t = MACRO_FUNC;
-        parse_flags |= (saved_parse_flags & PARSE_FLAG_ASM_FILE);
-        isidnum_table['.' - CH_EOF] =
-            (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
     }
 
     tokstr_buf.len = 0;
     spc = 2;
     parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
+    /* The body of a macro definition should be parsed such that identifiers
+       are parsed like the file mode determines (i.e. with '.' being an
+       ID character in asm mode).  But '#' should be retained instead of
+       regarded as line comment leader, so still don't set ASM_FILE
+       in parse_flags. */
+    set_idnum('.', (saved_parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0);
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         /* remove spaces around ## and after '#' */
         if (TOK_TWOSHARPS == tok) {
@@ -2673,7 +2678,7 @@ maybe_newline:
         if (isnum(c)) {
             t = '.';
             goto parse_num;
-        } else if ((parse_flags & PARSE_FLAG_ASM_FILE)
+        } else if ((isidnum_table['.' - CH_EOF] & IS_ID)
                    && (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))) {
             *--p = c = '.';
             goto parse_ident_fast;
@@ -3470,10 +3475,8 @@ ST_FUNC void preprocess_start(TCCState *s1)
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
-    isidnum_table['$' - CH_EOF] =
-        s1->dollars_in_identifiers ? IS_ID : 0;
-    isidnum_table['.' - CH_EOF] =
-        (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
+    set_idnum('$', s1->dollars_in_identifiers ? IS_ID : 0);
+    set_idnum('.', (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0);
     buf = tcc_malloc(3 + strlen(file->filename));
     sprintf(buf, "\"%s\"", file->filename);
     tcc_undefine_symbol(s1, "__BASE_FILE__");
@@ -3505,14 +3508,14 @@ ST_FUNC void tccpp_new(TCCState *s)
 
     /* init isid table */
     for(i = CH_EOF; i<128; i++)
-        isidnum_table[i - CH_EOF]
-            = is_space(i) ? IS_SPC
+        set_idnum(i,
+            is_space(i) ? IS_SPC
             : isid(i) ? IS_ID
             : isnum(i) ? IS_NUM
-            : 0;
+            : 0);
 
     for(i = 128; i<256; i++)
-        isidnum_table[i - CH_EOF] = IS_ID;
+        set_idnum(i, IS_ID);
 
     /* init allocators */
     tal_new(&toksym_alloc, TOKSYM_TAL_LIMIT, TOKSYM_TAL_SIZE);

@@ -16,10 +16,17 @@
    .skip 3
    .skip 15, 0x90
    .string "hello\0world"
+/* Macro expansion should work like with C, the #n shouldn't be parsed
+   as asm line comment */
+#define __stringify(n) #n
+#define stringify(n) __stringify(n)
+   .skip 8,0x90
+   .asciz stringify(BLA)
+   .skip 8,0x90
 
+# 28 "asmtest.S"        # a line directive (and a line comment)
+        movl %eax, %ebx # some more asm comment
 /* some label tests */
-
-        movl %eax, %ebx
 L1:
         movl %eax, %ebx
         mov 0x10000, %eax
@@ -572,8 +579,8 @@ int $0x10
     pusha
     popa
 #endif
-    clc
-    cld
+    clc # another comment
+    cld # a comment with embedded ' tick
     cli
     clts
     cmc
@@ -676,8 +683,10 @@ int $0x10
     lar %eax,%dx
     lar %ax,%edx
     lar %eax,%edx
+#ifdef __x86_64__
     lar %ax,%rdx
     lar %eax,%rdx
+#endif
     emms
     movd %edx, %mm3
     movd 0x1000, %mm2
@@ -820,7 +829,11 @@ nop
    .long 145 + 2b
    .word 164, 0
    .org 2b+32
+#ifdef __x86_64__
    .quad 1b
+#else
+   .long 1b
+#endif
 .popsection
 3: mov %eax,%ecx
 4:

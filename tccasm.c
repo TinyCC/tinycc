@@ -916,6 +916,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_ASM_FILE | PARSE_FLAG_TOK_STR;
+    set_idnum('.', IS_ID);
     if (do_preprocess)
         parse_flags |= PARSE_FLAG_PREPROCESS;
     next();
@@ -1036,6 +1037,7 @@ static void tcc_assemble_inline(TCCState *s1, char *str, int len)
     tcc_close();
 
     parse_flags = saved_parse_flags;
+    set_idnum('.', (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0);
     macro_ptr = saved_macro_ptr;
 }
 
