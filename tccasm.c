@@ -43,19 +43,24 @@ static Sym sym_dot;
 
    This routine gives back either an existing asm-internal
    symbol, or a new one.  In the latter case the new asm-internal
-   symbol is initialized with info from the C symbol table.  */
-static Sym* get_asm_sym(int name)
+   symbol is initialized with info from the C symbol table.
+   
+   If CSYM is non-null we take symbol info from it, otherwise
+   we look up NAME in the C symbol table and use that.  */
+ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 {
     Sym *sym = label_find(name);
     if (!sym) {
-	Sym *csym = sym_find(name);
 	sym = label_push(&tcc_state->asm_labels, name, 0);
 	sym->type.t = VT_VOID | VT_EXTERN;
-	/* We might be called for an asm block from inside a C routine
-	   and so might have local decls on the identifier stack.  Search
-	   for the first global one.  */
-	while (csym && csym->scope)
-	    csym = csym->prev_tok;
+	if (!csym) {
+	    csym = sym_find(name);
+	    /* We might be called for an asm block from inside a C routine
+	       and so might have local decls on the identifier stack.  Search
+	       for the first global one.  */
+	    while (csym && csym->scope)
+	        csym = csym->prev_tok;
+	}
 	/* Now, if we have a defined global symbol copy over
 	   section and offset.  */
 	if (csym &&
@@ -63,6 +68,7 @@ static Sym* get_asm_sym(int name)
 	    csym->c) {
 	    ElfW(Sym) *esym;
 	    esym = &((ElfW(Sym) *)symtab_section->data)[csym->c];
+	    sym->c = csym->c;
 	    sym->r = esym->st_shndx;
 	    sym->jnext = esym->st_value;
 	    /* XXX can't yet store st_size anywhere.  */
@@ -158,7 +164,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
     default:
         if (tok >= TOK_IDENT) {
             /* label case : if the label was not found, add one */
-	    sym = get_asm_sym(tok);
+	    sym = get_asm_sym(tok, NULL);
             if (sym->r == SHN_ABS) {
                 /* if absolute symbol, no need to put a symbol value */
                 pe->v = sym->jnext;
@@ -682,7 +688,7 @@ static void asm_parse_directive(TCCState *s1)
             Sym *sym;
 
             next();
-            sym = get_asm_sym(tok);
+            sym = get_asm_sym(tok, NULL);
 	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASMDIR_weak)
@@ -801,7 +807,7 @@ static void asm_parse_directive(TCCState *s1)
             const char *newtype;
 
             next();
-            sym = get_asm_sym(tok);
+            sym = get_asm_sym(tok, NULL);
             next();
             skip(',');
             if (tok == TOK_STR) {

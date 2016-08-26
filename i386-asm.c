@@ -1437,10 +1437,19 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 	    modifier != 'P')
             cstr_ccat(add_str, '$');
         if (r & VT_SYM) {
-            cstr_cat(add_str, get_tok_str(sv->sym->v, NULL), -1);
+	    const char *name = get_tok_str(sv->sym->v, NULL);
+	    if (sv->sym->v >= SYM_FIRST_ANOM) {
+		/* In case of anonymuous symbols ("L.42", used
+		   for static data labels) we can't find them
+		   in the C symbol table when later looking up
+		   this name.  So enter them now into the asm label
+		   list when we still know the symbol.  */
+		get_asm_sym(tok_alloc(name, strlen(name))->tok, sv->sym);
+	    }
+            cstr_cat(add_str, name, -1);
             if ((uint32_t)sv->c.i == 0)
                 goto no_offset;
-            cstr_ccat(add_str, '+');
+	    cstr_ccat(add_str, '+');
         }
         val = sv->c.i;
         if (modifier == 'n')

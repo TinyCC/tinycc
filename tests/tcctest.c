@@ -2741,6 +2741,28 @@ void override_func2 (void)
   printf ("asmc: override2\n");
 }
 
+/* This checks a construct used by the linux kernel to encode
+   references to strings by PC relative references.  */
+extern int bug_table[] __attribute__((section("__bug_table")));
+char * get_asm_string (void)
+{
+  extern int some_symbol;
+  asm volatile (".globl some_symbol\n"
+		"jmp .+6\n"
+		"1:\n"
+		"some_symbol: .long 0\n"
+		".pushsection __bug_table, \"a\"\n"
+		".globl bug_table\n"
+		"bug_table:\n"
+		/* The first entry (1b-2b) is unused in this test,
+		   but we include it to check if cross-section
+		   PC-relative references work.  */
+		"2:\t.long 1b - 2b, %c0 - 2b\n"
+		".popsection\n" : : "i" ("A string"));
+  char * str = ((char*)bug_table) + bug_table[1];
+  return str;
+}
+
 unsigned int set;
 
 void asm_test(void)
@@ -2812,6 +2834,7 @@ void asm_test(void)
     if (!somebool)
       printf("asmbool: failed\n");
 #endif
+    printf("asmstr: %s\n", get_asm_string());
     return;
  label1:
     goto label2;
