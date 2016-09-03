@@ -2456,6 +2456,16 @@ void sizeof_test(void)
     printf("__alignof__(char) = %d\n", __alignof__(char));
     printf("__alignof__(unsigned char) = %d\n", __alignof__(unsigned char));
     printf("__alignof__(func) = %d\n", __alignof__ sizeof_test());
+
+    /* sizes of VLAs need to be evaluated even inside sizeof: */
+    a = 2;
+    printf("sizeof(char[1+2*a]) = %d\n", sizeof(char[1+2*a]));
+    /* And checking if sizeof compound literal works.  Parenthesized: */
+    printf("sizeof( (struct {int i; int j;}){4,5} ) = %d\n",
+	   sizeof( (struct {int i; int j;}){4,5} ));
+    /* And as direct sizeof argument (as unary expression): */
+    printf("sizeof (struct {short i; short j;}){4,5} = %d\n",
+	   sizeof (struct {short i; short j;}){4,5} );
 }
 
 void typeof_test(void)

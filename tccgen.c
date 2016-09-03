@@ -3792,7 +3792,7 @@ static int asm_label_instr(void)
     return v;
 }
 
-static void post_type(CType *type, AttributeDef *ad)
+static void post_type(CType *type, AttributeDef *ad, int storage)
 {
     int n, l, t1, arg_size, align;
     Sym **plast, *s, *first;
@@ -3870,6 +3870,7 @@ static void post_type(CType *type, AttributeDef *ad)
         type->t = VT_FUNC;
         type->ref = s;
     } else if (tok == '[') {
+	int saved_nocode_wanted = nocode_wanted;
         /* array definition */
         next();
         if (tok == TOK_RESTRICT1)
@@ -3877,9 +3878,16 @@ static void post_type(CType *type, AttributeDef *ad)
         n = -1;
         t1 = 0;
         if (tok != ']') {
-            if (!local_stack || nocode_wanted)
-                 vpushi(expr_const());
-            else gexpr();
+            if (!local_stack || (storage & VT_STATIC))
+                vpushi(expr_const());
+            else {
+		/* VLAs (which can only happen with local_stack && !VT_STATIC)
+		   length must always be evaluated, even under nocode_wanted,
+		   so that its size slot is initialized (e.g. under sizeof
+		   or typeof).  */
+		nocode_wanted = 0;
+		gexpr();
+	    }
             if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
                 n = vtop->c.i;
                 if (n < 0)
@@ -3892,7 +3900,7 @@ static void post_type(CType *type, AttributeDef *ad)
         }
         skip(']');
         /* parse next post type */
-        post_type(type, ad);
+        post_type(type, ad, storage);
         if (type->t == VT_FUNC)
             tcc_error("declaration of an array of functions");
         t1 |= type->t & VT_VLA;
@@ -3910,6 +3918,7 @@ static void post_type(CType *type, AttributeDef *ad)
         }
         if (n != -1)
             vpop();
+	nocode_wanted = saved_nocode_wanted;
                 
         /* we push an anonymous symbol which will contain the array
            element type */
@@ -3984,13 +3993,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
     }
     storage = type->t & VT_STORAGE;
     type->t &= ~VT_STORAGE;
-    if (storage & VT_STATIC) {
-        int saved_nocode_wanted = nocode_wanted;
-        nocode_wanted = 1;
-        post_type(type, ad);
-        nocode_wanted = saved_nocode_wanted;
-    } else
-        post_type(type, ad);
+    post_type(type, ad, storage);
     type->t |= storage;
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
