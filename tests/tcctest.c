@@ -2962,6 +2962,7 @@ void __attribute__((weak)) weak_test(void)
 	printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
 	printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
 	printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
+	printf("some_lib_func=%d\n", &some_lib_func ? some_lib_func() : 0);
 }
 
 int __attribute__((weak)) weak_f2() { return 222; }

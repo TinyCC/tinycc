@@ -6919,13 +6919,13 @@ static int decl0(int l, int is_for_loop_init)
 
                         if (ad.alias_target) {
                             Section tsec;
-                            Elf32_Sym *esym;
+                            ElfW(Sym) *esym;
                             Sym *alias_target;
 
                             alias_target = sym_find(ad.alias_target);
                             if (!alias_target || !alias_target->c)
                                 tcc_error("unsupported forward __alias__ attribute");
-                            esym = &((Elf32_Sym *)symtab_section->data)[alias_target->c];
+                            esym = &((ElfW(Sym) *)symtab_section->data)[alias_target->c];
                             tsec.sh_num = esym->st_shndx;
                             put_extern_sym2(sym, &tsec, esym->st_value, esym->st_size, 0);
                         }
