@@ -1787,6 +1787,13 @@ static void gen_opic(int op)
                     gen_opi(op);
             } else {
                 vtop--;
+		/* Ensure vtop isn't marked VT_CONST in case something
+		   up our callchain is interested in const-ness of the
+		   expression.  Also make it a non-LVAL if it was,
+		   so that further code can't accidentally generate
+		   a deref (happen only for buggy uses of e.g.
+		   gv() under nocode_wanted).  */
+		vtop->r &= ~(VT_VALMASK | VT_LVAL);
             }
         }
     }
@@ -5014,6 +5021,16 @@ static void expr_cond(void)
             }
         }
         else {
+	    /* XXX This doesn't handle nocode_wanted correctly at all.
+	       It unconditionally calls gv/gvtst and friends.  That's
+	       the case for many of the expr_ routines.  Currently
+	       that should generate only useless code, but depending
+	       on other operand handling this might also generate
+	       pointer derefs for lvalue conversions whose result
+	       is useless, but nevertheless can lead to segfault.
+
+	       Somewhen we need to overhaul the whole nocode_wanted
+	       handling.  */
             if (vtop != vstack) {
                 /* needed to avoid having different registers saved in
                    each branch */

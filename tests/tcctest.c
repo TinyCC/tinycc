@@ -1082,6 +1082,14 @@ static int toupper1(int a)
     return TOUPPER(a);
 }
 
+static unsigned int calc_vm_flags(unsigned int prot)
+{
+  unsigned int prot_bits;
+  /* This used to segfault in some revisions: */
+  prot_bits = ((0x1==0x00000001)?(prot&0x1):(prot&0x1)?0x00000001:0);
+  return prot_bits;
+}
+
 void bool_test()
 {
     int *s, a, b, t, f, i;
@@ -1154,6 +1162,7 @@ void bool_test()
         if (toupper1 (i) != TOUPPER (i))
             printf("error %d\n", i);
     }
+    printf ("bits = 0x%x\n", calc_vm_flags (0x1));
 }
 
 /* GCC accepts that */
@@ -2880,6 +2889,7 @@ void builtin_test(void)
     printf("res = %d\n", __builtin_constant_p(1 + 2));
     printf("res = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res = %d\n", __builtin_constant_p(constant_p_var));
+    printf("res = %d\n", __builtin_constant_p(100000 / constant_p_var));
     s = 1;
     ll = 2;
     i = __builtin_choose_expr (1 != 0, ll, s);
