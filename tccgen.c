@@ -4981,26 +4981,38 @@ static void expr_lor(void)
     }
 }
 
+/* Assuming vtop is a value used in a conditional context
+   (i.e. compared with zero) return 0 if it's false, 1 if
+   true and -1 if it can't be statically determined.  */
+static int condition_3way(void)
+{
+    int c = -1;
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	(!(vtop->r & VT_SYM) ||
+	 !(vtop->sym->type.t & VT_WEAK))) {
+	CType boolean;
+	boolean.t = VT_BOOL;
+	vdup();
+	gen_cast(&boolean);
+	c = vtop->c.i;
+	vpop();
+    }
+    return c;
+}
+
 static void expr_cond(void)
 {
     int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv;
+    int c;
     SValue sv;
     CType type, type1, type2;
 
     expr_lor();
     if (tok == '?') {
         next();
-        if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-	    (!(vtop->r & VT_SYM) ||
-	     !(vtop->sym->type.t & VT_WEAK))) {
+	c = condition_3way();
+        if (c >= 0) {
             int saved_nocode_wanted = nocode_wanted;
-            CType boolean;
-            int c;
-            boolean.t = VT_BOOL;
-            vdup();
-            gen_cast(&boolean);
-            c = vtop->c.i;
-            vpop();
             if (c) {
                 if (tok != ':' || !gnu_ext) {
                     vpop();
