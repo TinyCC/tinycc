@@ -5605,8 +5605,9 @@ static void block(int *bsym, int *csym, int is_expr)
         skip('(');
         gsym(b);
         gexpr();
-        c = gvtst(0, 0);
-        gsym_addr(c, d);
+	c = gvtst(0, 0);
+	if (!nocode_wanted)
+	    gsym_addr(c, d);
         skip(')');
         gsym(a);
         skip(';');
@@ -5678,7 +5679,10 @@ static void block(int *bsym, int *csym, int is_expr)
             gexpr();
             if ((vtop->type.t & VT_BTYPE) != VT_PTR)
                 expect("pointer");
-            ggoto();
+	    if (!nocode_wanted)
+                ggoto();
+	    else
+	        vtop--;
         } else if (tok >= TOK_UIDENT) {
             s = label_find(tok);
             /* put forward definition if needed */
@@ -5689,7 +5693,9 @@ static void block(int *bsym, int *csym, int is_expr)
                     s->r = LABEL_FORWARD;
             }
             vla_sp_restore_root();
-            if (s->r & LABEL_FORWARD) 
+	    if (nocode_wanted)
+	      ;
+	    else if (s->r & LABEL_FORWARD)
                 s->jnext = gjmp(s->jnext);
             else
                 gjmp_addr(s->jnext);
