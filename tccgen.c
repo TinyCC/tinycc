@@ -5367,7 +5367,7 @@ static int gcase(struct case_t **base, int len, int case_reg, int *bsym)
 
 static void block(int *bsym, int *csym, int is_expr)
 {
-    int a, b, c, d;
+    int a, b, c, d, cond;
     Sym *s;
 
     /* generate line number info */
@@ -5386,22 +5386,31 @@ static void block(int *bsym, int *csym, int is_expr)
 
     if (tok == TOK_IF) {
         /* if test */
+	int saved_nocode_wanted = nocode_wanted;
         next();
         skip('(');
         gexpr();
         skip(')');
-        a = gvtst(1, 0);
+	cond = condition_3way();
+	if (cond == 0)
+	    nocode_wanted |= 2;
+	a = gvtst(1, 0);
         block(bsym, csym, 0);
+	nocode_wanted = saved_nocode_wanted;
         c = tok;
         if (c == TOK_ELSE) {
             next();
+	    if (cond == 1)
+		nocode_wanted |= 2;
             d = gjmp(0);
             gsym(a);
             block(bsym, csym, 0);
             gsym(d); /* patch else jmp */
+	    nocode_wanted = saved_nocode_wanted;
         } else
             gsym(a);
     } else if (tok == TOK_WHILE) {
+	nocode_wanted &= ~2;
         next();
         d = ind;
         vla_sp_restore();
@@ -5564,6 +5573,7 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(';');
     } else if (tok == TOK_FOR) {
         int e;
+	nocode_wanted &= ~2;
         next();
         skip('(');
         s = local_stack;
@@ -5607,6 +5617,7 @@ static void block(int *bsym, int *csym, int is_expr)
 
     } else 
     if (tok == TOK_DO) {
+	nocode_wanted &= ~2;
         next();
         a = 0;
         b = 0;
@@ -5658,6 +5669,7 @@ static void block(int *bsym, int *csym, int is_expr)
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));
         if (!cur_switch)
             expect("switch");
+	nocode_wanted &= ~2;
         next();
         cr->v1 = cr->v2 = expr_const();
         if (gnu_ext && tok == TOK_DOTS) {
@@ -5735,6 +5747,7 @@ static void block(int *bsym, int *csym, int is_expr)
             vla_sp_restore();
             /* we accept this, but it is a mistake */
         block_after_label:
+	    nocode_wanted &= ~2;
             if (tok == '}') {
                 tcc_warning("deprecated use of label at end of compound statement");
             } else {

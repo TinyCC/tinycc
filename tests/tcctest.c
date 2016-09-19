@@ -88,6 +88,7 @@ void struct_test();
 void array_test();
 void expr_ptr_test();
 void bool_test();
+void optimize_out();
 void expr2_test();
 void constant_expr_test();
 void expr_cmp_test();
@@ -695,6 +696,7 @@ int main(int argc, char **argv)
     array_test();
     expr_ptr_test();
     bool_test();
+    optimize_out();
     expr2_test();
     constant_expr_test();
     expr_cmp_test();
@@ -1163,6 +1165,31 @@ void bool_test()
             printf("error %d\n", i);
     }
     printf ("bits = 0x%x\n", calc_vm_flags (0x1));
+}
+
+extern int undefined_function(void);
+extern int defined_function(void);
+
+void optimize_out(void)
+{
+  int i = 0 ? undefined_function() : defined_function();
+  printf ("oo:%d\n", i);
+  int j = 1 ? defined_function() : undefined_function();
+  printf ("oo:%d\n", j);
+  if (0)
+    printf("oo:%d\n", undefined_function());
+  else
+    printf("oo:%d\n", defined_function());
+  if (1)
+    printf("oo:%d\n", defined_function());
+  else
+    printf("oo:%d\n", undefined_function());
+}
+
+int defined_function(void)
+{
+  static int i = 40;
+  return i++;
 }
 
 /* GCC accepts that */
