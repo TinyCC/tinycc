@@ -5418,7 +5418,7 @@ static void block(int *bsym, int *csym, int is_expr)
         gsym(a);
         gsym_addr(b, d);
     } else if (tok == '{') {
-        Sym *llabel, *glabel;
+        Sym *llabel;
         int block_vla_sp_loc = vla_sp_loc, saved_vlas_in_scope = vlas_in_scope;
 
         next();
@@ -5426,10 +5426,6 @@ static void block(int *bsym, int *csym, int is_expr)
         s = local_stack;
         llabel = local_label_stack;
         ++local_scope;
-	/* Labels defined inside statement expressions aren't
-	   available from the outside, so record that as well.  */
-	if (is_expr)
-	  glabel = global_label_stack;
         
         /* handle local labels declarations */
         if (tok == TOK_LABEL) {
@@ -5455,8 +5451,6 @@ static void block(int *bsym, int *csym, int is_expr)
                 block(bsym, csym, is_expr);
             }
         }
-	if (is_expr)
-	  label_pop(&global_label_stack, glabel);
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel);
         /* pop locally defined symbols */
