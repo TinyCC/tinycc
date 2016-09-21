@@ -72,6 +72,13 @@ ST_DATA const char *funcname;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 
+ST_DATA struct switch_t {
+    struct case_t {
+        int v1, v2, sym;
+    } **p; int n; /* list of case ranges */
+    int def_sym; /* default symbol */
+} *cur_switch; /* current switch */
+
 /* ------------------------------------------------------------------------- */
 static void gen_cast(CType *type);
 static inline CType *pointed_type(CType *type);
@@ -80,7 +87,7 @@ static int parse_btype(CType *type, AttributeDef *ad);
 static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
-static void block(int *bsym, int *csym, int *case_sym, int *def_sym, int case_reg, int is_expr);
+static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
 static void expr_eq(void);
@@ -3859,7 +3866,7 @@ ST_FUNC void unary(void)
                 save_regs(0);
             /* statement expression : we do not accept break/continue
                inside as GCC does */
-            block(NULL, NULL, NULL, NULL, 0, 1);
+            block(NULL, NULL, 1);
             skip(')');
         } else {
             gexpr();
@@ -4876,8 +4883,10 @@ static void label_or_decl(int l)
     decl(l);
 }
 
-static void block(int *bsym, int *csym, int *case_sym, int *def_sym, 
-                  int case_reg, int is_expr)
+static int case_cmp(const void *a, const void *b)
+{ return (*(struct case_t**) a)->v1 - (*(struct case_t**) b)->v1; }
+
+static void block(int *bsym, int *csym, int is_expr)
 {
     int a, b, c, d;
     Sym *s;
@@ -4903,13 +4912,13 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         gexpr();
         skip(')');
         a = gvtst(1, 0);
-        block(bsym, csym, case_sym, def_sym, case_reg, 0);
+        block(bsym, csym, 0);
         c = tok;
         if (c == TOK_ELSE) {
             next();
             d = gjmp(0);
             gsym(a);
-            block(bsym, csym, case_sym, def_sym, case_reg, 0);
+            block(bsym, csym, 0);
             gsym(d); /* patch else jmp */
         } else
             gsym(a);
@@ -4923,7 +4932,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         a = gvtst(1, 0);
         b = 0;
         ++local_scope;
-        block(&a, &b, case_sym, def_sym, case_reg, 0);
+        block(&a, &b, 0);
         --local_scope;
         if(!nocode_wanted)
             gjmp_addr(d);
@@ -4960,7 +4969,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             if (tok != '}') {
                 if (is_expr)
                     vpop();
-                block(bsym, csym, case_sym, def_sym, case_reg, is_expr);
+                block(bsym, csym, is_expr);
             }
         }
         /* pop locally defined labels */
@@ -5115,7 +5124,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             gsym(e);
         }
         skip(')');
-        block(&a, &b, case_sym, def_sym, case_reg, 0);
+        block(&a, &b, 0);
         if(!nocode_wanted)
             gjmp_addr(c);
         gsym(a);
@@ -5130,7 +5139,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         b = 0;
         d = ind;
         vla_sp_restore();
-        block(&a, &b, case_sym, def_sym, case_reg, 0);
+        block(&a, &b, 0);
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
@@ -5142,58 +5151,65 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
         skip(';');
     } else
     if (tok == TOK_SWITCH) {
+        struct switch_t *saved, sw;
         next();
         skip('(');
         gexpr();
         /* XXX: other types than integer */
-        case_reg = gv(RC_INT);
+        c = gv(RC_INT);
         vpop();
         skip(')');
         a = 0;
         b = gjmp(0); /* jump to first case */
-        c = 0;
-        block(&a, csym, &b, &c, case_reg, 0);
-        /* if no default, jmp after switch */
-        if (c == 0)
-            c = ind;
-        /* default label */
-        gsym_addr(b, c);
+        sw.p = NULL; sw.n = 0; sw.def_sym = 0;
+        saved = cur_switch;
+        cur_switch = &sw; block(&a, csym, 0);
+        cur_switch = saved;
+        a = gjmp(a); /* add implicit break */
+        gsym(b);
+
+        qsort(sw.p, sw.n, sizeof(void*), case_cmp);
+        for (b = 0; b < sw.n; b++) {
+            int v = sw.p[b]->v1;
+            if (b && v <= d)
+                tcc_error("duplicate case value");
+            d = sw.p[b]->v2;
+
+            vseti(c, 0);
+            vpushi(v);
+            if (v == d) {
+                gen_op(TOK_EQ);
+                gsym_addr(gtst(0, 0), sw.p[b]->sym);
+            } else {
+                int e;
+                gen_op(TOK_GE);
+                e = gtst(1, 0);
+                vseti(c, 0);
+                vpushi(d);
+                gen_op(TOK_LE);
+                gsym_addr(gtst(0, 0), sw.p[b]->sym);
+                gsym(e);
+            }
+        }
+        if (sw.def_sym)
+            gjmp_addr(sw.def_sym);
         /* break label */
         gsym(a);
     } else
     if (tok == TOK_CASE) {
-        int v1, v2;
-        if (!case_sym)
+        struct case_t *cr = tcc_malloc(sizeof(struct case_t));
+        if (!cur_switch)
             expect("switch");
         next();
-        v1 = expr_const();
-        v2 = v1;
+        cr->v1 = cr->v2 = expr_const();
         if (gnu_ext && tok == TOK_DOTS) {
             next();
-            v2 = expr_const();
-            if (v2 < v1)
+            cr->v2 = expr_const();
+            if (cr->v2 < cr->v1)
                 tcc_warning("empty case range");
         }
-        /* since a case is like a label, we must skip it with a jmp */
-        b = gjmp(0);
-        gsym(*case_sym);
-        vseti(case_reg, 0);
-        vdup();
-        vpushi(v1);
-        if (v1 == v2) {
-            gen_op(TOK_EQ);
-            *case_sym = gtst(1, 0);
-        } else {
-            gen_op(TOK_GE);
-            *case_sym = gtst(1, 0);
-            vseti(case_reg, 0);
-            vpushi(v2);
-            gen_op(TOK_LE);
-            *case_sym = gtst(1, *case_sym);
-        }
-        case_reg = gv(RC_INT);
-        vpop();
-        gsym(b);
+        cr->sym = ind;
+        dynarray_add((void***) &cur_switch->p, &cur_switch->n, cr);
         skip(':');
         is_expr = 0;
         goto block_after_label;
@@ -5201,11 +5217,11 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
     if (tok == TOK_DEFAULT) {
         next();
         skip(':');
-        if (!def_sym)
+        if (!cur_switch)
             expect("switch");
-        if (*def_sym)
+        if (cur_switch->def_sym)
             tcc_error("too many 'default'");
-        *def_sym = ind;
+        cur_switch->def_sym = ind;
         is_expr = 0;
         goto block_after_label;
     } else
@@ -5261,7 +5277,7 @@ static void block(int *bsym, int *csym, int *case_sym, int *def_sym,
             } else {
                 if (is_expr)
                     vpop();
-                block(bsym, csym, case_sym, def_sym, case_reg, is_expr);
+                block(bsym, csym, is_expr);
             }
         } else {
             /* expression case */
@@ -6177,7 +6193,7 @@ static void gen_function(Sym *sym)
     }
 #endif
     rsym = 0;
-    block(NULL, NULL, NULL, NULL, 0, 0);
+    block(NULL, NULL, 0);
     gsym(rsym);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
