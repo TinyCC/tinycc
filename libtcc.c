@@ -1143,14 +1143,21 @@ LIBTCCAPI TCCState *tcc_new(void)
 # endif
 
     /* TinyCC & gcc defines */
-#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
+#if defined(TCC_TARGET_PE) && defined(TCC_TARGET_X86_64)
+    /* 64bit Windows. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long long");
     tcc_define_symbol(s, "__LLP64__", NULL);
-#else
+#elif defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
+    /* Other 64bit systems. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
     tcc_define_symbol(s, "__LP64__", NULL);
+#else
+    /* Other 32bit systems. */
+    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
+    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
+    tcc_define_symbol(s, "__ILP32__", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE
