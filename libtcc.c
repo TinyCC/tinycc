@@ -1122,6 +1122,12 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "_WIN32", NULL);
 # ifdef TCC_TARGET_X86_64
     tcc_define_symbol(s, "_WIN64", NULL);
+    /* Those are defined by Visual Studio */
+    tcc_define_symbol(s, "_M_X64", "100");
+    tcc_define_symbol(s, "_M_AMD64", "100");
+# else
+    /* Defined by Visual Studio. 300 == 80386. */
+    tcc_define_symbol(s, "_M_IX86", "300");
 # endif
 #else
     tcc_define_symbol(s, "__unix__", NULL);
