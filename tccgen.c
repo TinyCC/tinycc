@@ -4594,7 +4594,7 @@ ST_FUNC void unary(void)
                effect to generate code for it at the end of the
                compilation unit. Inline function as always
                generated in the text section. */
-            if (!s->c)
+            if (!s->c && !nocode_wanted)
                 put_extern_sym(s, text_section, 0, 0);
             r = VT_SYM | VT_CONST;
         } else {

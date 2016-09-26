@@ -1170,6 +1170,11 @@ void bool_test()
 extern int undefined_function(void);
 extern int defined_function(void);
 
+static inline void refer_to_undefined(void)
+{
+  undefined_function();
+}
+
 void optimize_out(void)
 {
   int i = 0 ? undefined_function() : defined_function();
@@ -1263,6 +1268,9 @@ void optimize_out(void)
     ;
   else
     undefined_function();
+
+  if (defined_function() && 0)
+    refer_to_undefined();
 
   if (1)
     return;
