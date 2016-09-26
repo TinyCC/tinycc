@@ -156,7 +156,7 @@ static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 
 /* XXX: make it faster ? */
-void g(int c)
+ST_FUNC void g(int c)
 {
     int ind1;
     ind1 = ind + 1;
@@ -166,7 +166,7 @@ void g(int c)
     ind = ind1;
 }
 
-void o(unsigned int c)
+ST_FUNC void o(unsigned int c)
 {
     while (c) {
         g(c);
@@ -174,13 +174,13 @@ void o(unsigned int c)
     }
 }
 
-void gen_le16(int v)
+ST_FUNC void gen_le16(int v)
 {
     g(v);
     g(v >> 8);
 }
 
-void gen_le32(int c)
+ST_FUNC void gen_le32(int c)
 {
     g(c);
     g(c >> 8);
@@ -188,7 +188,7 @@ void gen_le32(int c)
     g(c >> 24);
 }
 
-void gen_le64(int64_t c)
+ST_FUNC void gen_le64(int64_t c)
 {
     g(c);
     g(c >> 8);
@@ -200,7 +200,7 @@ void gen_le64(int64_t c)
     g(c >> 56);
 }
 
-void orex(int ll, int r, int r2, int b)
+static void orex(int ll, int r, int r2, int b)
 {
     if ((r & VT_VALMASK) >= VT_CONST)
         r = 0;
@@ -212,7 +212,7 @@ void orex(int ll, int r, int r2, int b)
 }
 
 /* output a symbol and patch all calls to it */
-void gsym_addr(int t, int a)
+ST_FUNC void gsym_addr(int t, int a)
 {
     while (t) {
         unsigned char *ptr = cur_text_section->data + t;

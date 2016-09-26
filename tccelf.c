@@ -1729,7 +1729,7 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
 #define EXTRA_RELITEMS  14
 
 /* move the relocation value from .dynsym to .got */
-void patch_dynsym_undef(TCCState *s1, Section *s)
+static void patch_dynsym_undef(TCCState *s1, Section *s)
 {
     uint32_t *gotd = (void *)s1->got->data;
     ElfW(Sym) *sym;
@@ -1748,7 +1748,7 @@ void patch_dynsym_undef(TCCState *s1, Section *s)
 #define EXTRA_RELITEMS 9
 
 /* zero plt offsets of weak symbols in .dynsym */
-void patch_dynsym_undef(TCCState *s1, Section *s)
+static void patch_dynsym_undef(TCCState *s1, Section *s)
 {
     ElfW(Sym) *sym;
 

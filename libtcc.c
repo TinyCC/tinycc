@@ -135,7 +135,7 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 
 /********************************************************/
 /* copy a string and truncate it. */
-PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
+ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
     int c;
@@ -155,7 +155,7 @@ PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 }
 
 /* strcat and truncate. */
-PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
+ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
 {
     int len;
     len = strlen(buf);
@@ -164,7 +164,7 @@ PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
     return buf;
 }
 
-PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num)
+ST_FUNC char *pstrncpy(char *out, const char *in, size_t num)
 {
     memcpy(out, in, num);
     out[num] = '\0';
@@ -1544,7 +1544,7 @@ typedef struct stat                file_info_t;
 typedef BY_HANDLE_FILE_INFORMATION file_info_t;
 #endif
 
-int get_file_info(const char *fname, file_info_t *out_info)
+static  int get_file_info(const char *fname, file_info_t *out_info)
 {
 #ifndef _WIN32
     return stat(fname, out_info);
@@ -1561,7 +1561,7 @@ int get_file_info(const char *fname, file_info_t *out_info)
 #endif
 }
 
-int is_dir(file_info_t *info)
+static int is_dir(file_info_t *info)
 {
 #ifndef _WIN32
     return S_ISDIR(info->st_mode);
@@ -1571,7 +1571,7 @@ int is_dir(file_info_t *info)
 #endif
 }
 
-int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
+static int is_same_file(const file_info_t *fi1, const file_info_t *fi2)
 {
 #ifndef _WIN32
     return fi1->st_dev == fi2->st_dev &&
