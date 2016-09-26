@@ -1184,6 +1184,57 @@ void optimize_out(void)
     printf("oo:%d\n", defined_function());
   else
     printf("oo:%d\n", undefined_function());
+  while (1) {
+      printf("oow:%d\n", defined_function());
+      break;
+      printf("oow:%d\n", undefined_function());
+  }
+  j = 1;
+  /* Following is a switch without {} block intentionally.  */
+  switch (j)
+    case 1: break;
+  printf ("oos:%d\n", defined_function());
+  /* The following break shouldn't lead to disabled code after
+     the while.  */
+  while (1)
+    break;
+  printf ("ool1:%d\n", defined_function());
+  /* Same for the other types of loops.  */
+  do
+    break;
+  while (1);
+  printf ("ool2:%d\n", defined_function());
+  for (;;)
+    break;
+  printf ("ool3:%d\n", defined_function());
+  /* Normal {} blocks without controlling statements
+     shouldn't reactivate code emission */
+  while (1) {
+	{
+	  break;
+	}
+      printf ("ool4:%d\n", undefined_function());
+  }
+  j = 1;
+  while (j) {
+      if (j == 0)
+	break; /* this break shouldn't disable code outside the if. */
+      printf("ool5:%d\n", defined_function());
+      j--;
+  }
+
+  j = 1;
+  while (j) {
+      if (1)
+	j--;
+      else
+	breakhere: break;
+      printf("ool6:%d\n", defined_function());
+      goto breakhere;
+  }
+  if (1)
+    return;
+  printf ("oor:%d\n", undefined_function());
 }
 
 int defined_function(void)
