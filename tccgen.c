@@ -4909,37 +4909,43 @@ static void expr_land(void)
 {
     expr_or();
     if (tok == TOK_LAND) {
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            CType ctb, cti;
-            ctb.t = VT_BOOL;
-            cti.t = VT_INT;
-            next();
-            gen_cast(&ctb);
-            if (vtop->c.i) {
-                vpop();
-                expr_land();
-                gen_cast(&ctb);
-            } else {
-                int saved_nocode_wanted = nocode_wanted;
-                nocode_wanted = 1;
-                expr_land();
-                vpop();
-                nocode_wanted = saved_nocode_wanted;
-            }
-            gen_cast(&cti);
-        } else {
-            int t = 0;
-            save_regs(1);
-            for(;;) {
-                t = gvtst(1, t);
-                if (tok != TOK_LAND) {
-                    vseti(VT_JMPI, t);
-                    break;
-                }
-                next();
-                expr_or();
-            }
-        }
+	int t = 0;
+	for(;;) {
+	    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+		CType ctb;
+		ctb.t = VT_BOOL;
+		gen_cast(&ctb);
+		if (vtop->c.i) {
+		    vpop();
+		} else {
+		    int saved_nocode_wanted = nocode_wanted;
+		    nocode_wanted = 1;
+		    while (tok == TOK_LAND) {
+			next();
+			expr_or();
+			vpop();
+		    }
+		    if (t)
+		      gsym(t);
+		    nocode_wanted = saved_nocode_wanted;
+		    gen_cast(&int_type);
+		    break;
+		}
+	    } else {
+		if (!t)
+		  save_regs(1);
+		t = gvtst(1, t);
+	    }
+	    if (tok != TOK_LAND) {
+		if (t)
+		  vseti(VT_JMPI, t);
+		else
+		  vpushi(1);
+		break;
+	    }
+	    next();
+	    expr_or();
+	}
     }
 }
 
@@ -4947,37 +4953,43 @@ static void expr_lor(void)
 {
     expr_land();
     if (tok == TOK_LOR) {
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-            CType ctb, cti;
-            ctb.t = VT_BOOL;
-            cti.t = VT_INT;
-            next();
-            gen_cast(&ctb);
-            if (vtop->c.i) {
-                int saved_nocode_wanted = nocode_wanted;
-                nocode_wanted = 1;
-                expr_lor();
-                vpop();
-                nocode_wanted = saved_nocode_wanted;
-            } else {
-                vpop();
-                expr_lor();
-                gen_cast(&ctb);
-            }
-            gen_cast(&cti);
-        } else {
-            int t = 0;
-            save_regs(1);
-            for(;;) {
-                t = gvtst(0, t);
-                if (tok != TOK_LOR) {
-                    vseti(VT_JMP, t);
-                    break;
-                }
-                next();
-                expr_land();
-            }
-        }
+	int t = 0;
+	for(;;) {
+	    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+		CType ctb;
+		ctb.t = VT_BOOL;
+		gen_cast(&ctb);
+		if (!vtop->c.i) {
+		    vpop();
+		} else {
+		    int saved_nocode_wanted = nocode_wanted;
+		    nocode_wanted = 1;
+		    while (tok == TOK_LOR) {
+			next();
+			expr_land();
+			vpop();
+		    }
+		    if (t)
+		      gsym(t);
+		    nocode_wanted = saved_nocode_wanted;
+		    gen_cast(&int_type);
+		    break;
+		}
+	    } else {
+		if (!t)
+		  save_regs(1);
+		t = gvtst(0, t);
+	    }
+	    if (tok != TOK_LOR) {
+		if (t)
+		  vseti(VT_JMP, t);
+		else
+		  vpushi(0);
+		break;
+	    }
+	    next();
+	    expr_land();
+	}
     }
 }
 

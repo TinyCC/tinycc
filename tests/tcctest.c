@@ -1232,6 +1232,38 @@ void optimize_out(void)
       printf("ool6:%d\n", defined_function());
       goto breakhere;
   }
+
+  /* Test that constants in logical && are optimized: */
+  i = 0 && undefined_function();
+  i = defined_function() && 0 && undefined_function();
+  if (0 && undefined_function())
+    undefined_function();
+  if (defined_function() && 0)
+    undefined_function();
+  if (0 && 0)
+    undefined_function();
+  if (defined_function() && 0 && undefined_function())
+    undefined_function();
+  /* The same for || : */
+  i = 1 || undefined_function();
+  i = defined_function() || 1 || undefined_function();
+  if (1 || undefined_function())
+    ;
+  else
+    undefined_function();
+  if (defined_function() || 1)
+    ;
+  else
+    undefined_function();
+  if (1 || 1)
+    ;
+  else
+    undefined_function();
+  if (defined_function() || 1 || undefined_function())
+    ;
+  else
+    undefined_function();
+
   if (1)
     return;
   printf ("oor:%d\n", undefined_function());
@@ -2544,6 +2576,13 @@ void sizeof_test(void)
     /* And as direct sizeof argument (as unary expression): */
     printf("sizeof (struct {short i; short j;}){4,5} = %d\n",
 	   sizeof (struct {short i; short j;}){4,5} );
+
+    /* sizeof(x && y) should be sizeof(int), even if constant
+       evaluating is possible. */
+    printf("sizeof(t && 0) = %d\n", sizeof(t && 0));
+    printf("sizeof(1 && 1) = %d\n", sizeof(1 && 1));
+    printf("sizeof(t || 1) = %d\n", sizeof(t || 1));
+    printf("sizeof(0 || 0) = %d\n", sizeof(0 || 0));
 }
 
 void typeof_test(void)
