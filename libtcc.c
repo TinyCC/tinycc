@@ -904,6 +904,9 @@ LIBTCCAPI TCCState *tcc_new(void)
 # endif
 #endif /* ndef TCC_TARGET_PE */
 
+    /* Some GCC builtins that are simple to express as macros.  */
+    tcc_define_symbol(s, "__builtin_extract_return_addr(x)", "x");
+
     return s;
 }
 
