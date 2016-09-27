@@ -242,7 +242,7 @@ ST_FUNC int oad(int c, int s)
 ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
-        greloca(cur_text_section, sym, ind, R_X86_64_32, c), c=0;
+        greloca(cur_text_section, sym, ind, R_X86_64_32S, c), c=0;
     gen_le32(c);
 }
 
