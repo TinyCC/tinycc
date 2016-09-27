@@ -178,8 +178,14 @@ endif
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
+ifdef ONE_SOURCE
+NATIVE_TCC_REQUISITES=tcc.o
+else
+NATIVE_TCC_REQUISITES=tcc.o $(LIBTCC)
+endif
+
 # Host Tiny C Compiler
-tcc$(EXESUF): tcc.o $(LIBTCC)
+tcc$(EXESUF): $(NATIVE_TCC_REQUISITES)
 	$(CC) -o $@ $^ $(LIBS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
@@ -226,6 +232,7 @@ else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)
 libtcc.o : NATIVE_DEFINES += -DONE_SOURCE
+tcc.o : NATIVE_DEFINES += -DONE_SOURCE
 endif
 
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
