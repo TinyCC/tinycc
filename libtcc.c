@@ -117,7 +117,7 @@ static void tcc_add_systemdir(TCCState *s)
 #endif
 
 #ifndef CONFIG_TCC_STATIC
-void dlclose(void *p)
+static void dlclose(void *p)
 {
     FreeLibrary((HMODULE)p);
 }
@@ -135,7 +135,7 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 
 /********************************************************/
 /* copy a string and truncate it. */
-PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
+ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
     int c;

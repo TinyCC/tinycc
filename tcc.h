@@ -1167,7 +1167,7 @@ ST_DATA struct TCCState *tcc_state;
 #define AFF_PREPROCESS      0x0004 /* preprocess file */
 
 /* public functions currently used by the tcc main function */
-PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s);
+ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s);
 ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s);
 ST_FUNC char *pstrncpy(char *out, const char *in, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);

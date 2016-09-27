@@ -28,7 +28,7 @@
 #include <io.h>
 #include <malloc.h>
 
-char *get_export_names(int fd);
+static char *get_export_names(int fd);
 #define tcc_free free
 #define tcc_realloc realloc
 
@@ -169,7 +169,7 @@ int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 /* -------------------------------------------------------------- */
 #endif
 
-char *get_export_names(int fd)
+static char *get_export_names(int fd)
 {
     int l, i, n, n0;
     char *p;

@@ -58,6 +58,7 @@
 
 #endif
 
+#if 0
 #ifdef _WIN32
 void dbg_printf (const char *fmt, ...)
 {
@@ -69,6 +70,7 @@ void dbg_printf (const char *fmt, ...)
     strcpy(buffer+x, "\n");
     OutputDebugString(buffer);
 }
+#endif
 #endif
 
 /* ----------------------------------------------------------- */
