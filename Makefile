@@ -412,7 +412,7 @@ tags:
 	ctags $(top_srcdir)/*.[ch] $(top_srcdir)/include/*.h $(top_srcdir)/lib/*.[chS]
 
 TAGS:
-	ctags -e $(top_srcdir)/*.[ch] $(top_srcdir)/include/*.h $(top_srcdir)/lib/*.[chS]
+	etags $(top_srcdir)/*.[ch] $(top_srcdir)/include/*.h $(top_srcdir)/lib/*.[chS]
 
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
