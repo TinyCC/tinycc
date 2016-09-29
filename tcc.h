@@ -1478,8 +1478,8 @@ ST_FUNC void g(int c);
 ST_FUNC int oad(int c, int s);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
-ST_FUNC void gen_addr32(int r, Sym *sym, int c);
-ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
+ST_FUNC void gen_addr32(int r, Sym *sym, long c);
+ST_FUNC void gen_addrpc32(int r, Sym *sym, long c);
 #endif
 
 #ifdef CONFIG_TCC_BCHECK

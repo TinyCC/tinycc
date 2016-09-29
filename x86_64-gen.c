@@ -239,7 +239,7 @@ ST_FUNC int oad(int c, int s)
     return s;
 }
 
-ST_FUNC void gen_addr32(int r, Sym *sym, int c)
+ST_FUNC void gen_addr32(int r, Sym *sym, long c)
 {
     if (r & VT_SYM)
         greloca(cur_text_section, sym, ind, R_X86_64_32S, c), c=0;
@@ -255,7 +255,7 @@ ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
+ST_FUNC void gen_addrpc32(int r, Sym *sym, long c)
 {
     if (r & VT_SYM)
         greloca(cur_text_section, sym, ind, R_X86_64_PC32, c-4), c=4;
