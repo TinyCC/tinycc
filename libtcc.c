@@ -2410,8 +2410,10 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     if (s->output_type == 0)
         s->output_type = TCC_OUTPUT_EXE;
 
-    if (pas->pthread && s->output_type != TCC_OUTPUT_OBJ)
-        tcc_set_options(s, "-lpthread");
+    if (pas->pthread && s->output_type != TCC_OUTPUT_OBJ) {
+      args_parser_add_file(s, "-lpthread", TCC_FILETYPE_BINARY);
+      s->nb_libraries++;
+    }
 
     if (s->output_type == TCC_OUTPUT_EXE)
         tcc_set_linker(s, (const char *)pas->linker_arg.data);
