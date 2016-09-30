@@ -695,6 +695,19 @@ ST_FUNC void gjmp_addr(int a)
     }
 }
 
+ST_FUNC void gtst_addr(int inv, int a)
+{
+    inv ^= (vtop--)->c.i;
+    a -= ind + 2;
+    if (a == (char)a) {
+        g(inv - 32);
+        g(a);
+    } else {
+        g(0x0f);
+        oad(inv - 16, a - 4);
+    }
+}
+
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
 ST_FUNC int gtst(int inv, int t)
 {

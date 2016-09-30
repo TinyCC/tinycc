@@ -5179,7 +5179,7 @@ static void block(int *bsym, int *csym, int is_expr)
             vpushi(v);
             if (v == d) {
                 gen_op(TOK_EQ);
-                gsym_addr(gtst(0, 0), sw.p[b]->sym);
+                gtst_addr(0, sw.p[b]->sym);
             } else {
                 int e;
                 gen_op(TOK_GE);
@@ -5187,7 +5187,7 @@ static void block(int *bsym, int *csym, int is_expr)
                 vseti(c, 0);
                 vpushi(d);
                 gen_op(TOK_LE);
-                gsym_addr(gtst(0, 0), sw.p[b]->sym);
+                gtst_addr(0, sw.p[b]->sym);
                 gsym(e);
             }
         }

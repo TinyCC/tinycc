@@ -1472,6 +1472,11 @@ ST_FUNC void gfunc_epilog(void);
 ST_FUNC int gjmp(int t);
 ST_FUNC void gjmp_addr(int a);
 ST_FUNC int gtst(int inv, int t);
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+ST_FUNC void gtst_addr(int inv, int a);
+#else
+#define gtst_addr(inv, a) gsym_addr(gtst(inv, 0), a)
+#endif
 ST_FUNC void gen_opi(int op);
 ST_FUNC void gen_opf(int op);
 ST_FUNC void gen_cvt_ftoi(int t);
