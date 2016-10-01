@@ -4,7 +4,7 @@
 
 TOP = ..
 include $(TOP)/Makefile
-VPATH = $(TOP)/lib $(TOP)/win32/lib
+VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 
 ifndef TARGET
  # we're building the native libtcc1.a
@@ -51,31 +51,31 @@ PICFLAGS = -fPIC
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
  XFLAGS = $(TGT)
 else ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
- XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
  XFLAGS = $(TGT)
 else ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(TOPSRC)
 else ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(TOPSRC)
 else ifeq "$(TARGET)" "arm"
  OBJ = $(addprefix $(DIR)/,$(ARM_O))
  TGT = -DTCC_TARGET_ARM
- XCC ?= $(TCC) -B$(TOP)
+ XCC ?= $(TCC) -B$(TOPSRC)
 else ifeq "$(TARGET)" "arm64"
  OBJ = $(addprefix $(DIR)/,$(ARM64_O))
  TGT = -DTCC_TARGET_ARM64
- XCC ?= $(TCC) -B$(top_srcdir)
+ XCC ?= $(TCC) -B$(TOPSRC)
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
@@ -99,7 +99,7 @@ $(DIR)/%.o : %.c
 $(DIR)/%.o : %.S
 	$(XCC) -c $< -o $@ $(XFLAGS)
 # windows : utilities
-$(DIR)/tiny_%$(EXESUF) : $(TOP)/win32/tools/tiny_%.c
+$(DIR)/tiny_%$(EXESUF) : $(TOPSRC)/win32/tools/tiny_%.c
 	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(TGT)
 
 $(OBJ) $(XAR) : $(DIR)/exists

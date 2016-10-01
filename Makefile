@@ -4,7 +4,8 @@
 
 TOP ?= .
 include $(TOP)/config.mak
-VPATH = $(TOP)
+VPATH = $(TOPSRC)
+CFLAGS += -I$(TOP)
 
 ifeq (-$(findstring gcc,$(CC))-,-gcc-)
  ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
@@ -206,7 +207,7 @@ libtcc.dll : $(LIBTCC_OBJ) tiny_impdef$(EXESUF)
 libtcc.dll : NATIVE_DEFINES += -DLIBTCC_AS_DLL
 
 # windows : utilities
-tiny_%$(EXESUF): $(SRCTOP)/win32/tools/tiny_%.c
+tiny_%$(EXESUF): $(TOPSRC)/win32/tools/tiny_%.c
 	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(NATIVE_DEFINES)
 
 ifneq ($(LIBTCC1),)
@@ -246,21 +247,21 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 ifneq ($(LIBTCC1),)
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
 endif
-	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) tcclib.h "$(tccdir)/include"
+	$(INSTALL) -m644 $(addprefix $(TOPSRC)/include/,$(TCC_INCLUDES)) $(TOPSRC)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
 	mkdir -p "$(includedir)"
-	$(INSTALL) -m644 libtcc.h "$(includedir)"
+	$(INSTALL) -m644 $(TOPSRC)/libtcc.h "$(includedir)"
 	mkdir -p "$(docdir)"
 	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/win32/lib/32"
 	mkdir -p "$(tccdir)/win32/lib/64"
-	$(INSTALL) -m644 win32/lib/*.def "$(tccdir)/win32/lib"
+	$(INSTALL) -m644 $(TOPSRC)/win32/lib/*.def "$(tccdir)/win32/lib"
 	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
 	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
-	cp -r win32/include/. "$(tccdir)/win32/include"
-	cp -r "$(tccdir)/include" "$(tccdir)/win32"
+	cp -r $(TOPSRC)/include/. "$(tccdir)/win32/include"
+	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/win32/include"
 endif
 
 uninstall:
@@ -282,13 +283,13 @@ install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
 	$(INSTALLBIN) -m755 $(PROGS) $(LIBTCC) "$(tccdir)"
-	$(INSTALL) -m644 libtcc1.a win32/lib/*.def "$(tccdir)/lib"
-	cp -r win32/include/. "$(tccdir)/include"
-	cp -r win32/examples/. "$(tccdir)/examples"
-	cp tests/libtcc_test.c "$(tccdir)/examples"
-	$(INSTALL) -m644 $(addprefix include/,$(TCC_INCLUDES)) tcclib.h "$(tccdir)/include"
-	$(INSTALL) -m644 tcc-doc.html win32/tcc-win32.txt "$(tccdir)/doc"
-	$(INSTALL) -m644 libtcc.h libtcc.def "$(tccdir)/libtcc"
+	$(INSTALL) -m644 libtcc1.a $(TOPSRC)/win32/lib/*.def "$(tccdir)/lib"
+	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/include"
+	cp -r $(TOPSRC)/win32/examples/. "$(tccdir)/examples"
+	cp $(TOPSRC)/tests/libtcc_test.c "$(tccdir)/examples"
+	$(INSTALL) -m644 $(addprefix $(TOPSRC)/include/,$(TCC_INCLUDES)) $(TOPSRC)/tcclib.h "$(tccdir)/include"
+	$(INSTALL) -m644 tcc-doc.html $(TOPSRC)/win32/tcc-win32.txt "$(tccdir)/doc"
+	$(INSTALL) -m644 $(TOPSRC)/libtcc.h libtcc.def "$(tccdir)/libtcc"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"

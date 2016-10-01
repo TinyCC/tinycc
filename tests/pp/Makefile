@@ -2,8 +2,13 @@
 # credits: 01..13.c from the pcc cpp-tests suite
 #
 
+TOP = ../..
+include $(TOP)/config.mak
+SRC = $(TOPSRC)/tests/pp
+VPATH = $(SRC)
+
 TCC = ../../tcc
-files = $(patsubst %.$1,%.test,$(wildcard *.$1))
+files = $(patsubst %.$1,%.test,$(notdir $(wildcard $(SRC)/*.$1)))
 TESTS = $(call files,c) $(call files,S)
 
 all test : $(sort $(TESTS))
@@ -13,13 +18,13 @@ DIFF_OPTS = -Nu -b -B -I "^\#"
 %.test: %.c %.expect
 	@echo PPTest $* ...
 	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
-	    diff $(DIFF_OPTS) $*.expect $*.output \
+	    diff $(DIFF_OPTS) $(SRC)/$*.expect $*.output \
 	    && rm -f $*.output
 
 %.test: %.S %.expect
 	@echo PPTest $* ...
 	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
-	    diff $(DIFF_OPTS) $*.expect $*.output \
+	    diff $(DIFF_OPTS) $(SRC)/$*.expect $*.output \
 	    && rm -f $*.output
 
 # automatically generate .expect files with gcc:

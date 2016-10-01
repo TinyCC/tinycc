@@ -519,11 +519,11 @@ echo "@set VERSION $version" > config.texi
 
 if test "$source_path_used" = "yes" ; then
     case $source_path in
-       /*) echo "SRCTOP=$source_path";;
-	*) echo "SRCTOP=\$(TOP)/$source_path";;
+       /*) echo "TOPSRC=$source_path";;
+	*) echo "TOPSRC=\$(TOP)/$source_path";;
      esac >>config.mak
 else
-     echo 'SRCTOP=$(TOP)' >>config.mak
+     echo 'TOPSRC=$(TOP)' >>config.mak
 fi
 
 diff $TMPH config.h >/dev/null 2>&1
@@ -553,7 +553,11 @@ fn_makelink()
 	 esac
 	 ;;
     esac
-    ln -sfn $tgt $2
+    if test "$mingw32" = "yes" ; then
+        cmd //c mklink `echo "$2 $tgt" | sed 's,/,\\\\,g'`
+    else
+        ln -sfn $tgt $2
+    fi
 }
 
 if test "$source_path_used" = "yes" ; then
