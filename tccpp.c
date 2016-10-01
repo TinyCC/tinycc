@@ -1282,22 +1282,24 @@ ST_INLN Sym *define_find(int v)
 /* free define stack until top reaches 'b' */
 ST_FUNC void free_defines(Sym *b)
 {
-    Sym *top, *top1;
-    int v;
-
-    top = define_stack;
-    while (top != b) {
-        top1 = top->prev;
-        /* do not free args or predefined defines */
-        if (top->d)
-            tok_str_free(top->d);
-        v = top->v;
-        if (v >= TOK_IDENT && v < tok_ident)
-            table_ident[v - TOK_IDENT]->sym_define = NULL;
+    while (define_stack != b) {
+        Sym *top = define_stack;
+        define_stack = top->prev;
+        tok_str_free(top->d);
+        define_undef(top);
         sym_free(top);
-        top = top1;
     }
-    define_stack = b;
+
+    /* restore remaining (-D or predefined) symbols */
+    while (b) {
+        int v = b->v;
+        if (v >= TOK_IDENT && v < tok_ident) {
+            Sym **d = &table_ident[v - TOK_IDENT]->sym_define;
+            if (!*d)
+                *d = b;
+        }
+        b = b->prev;
+    }
 }
 
 /* label lookup */

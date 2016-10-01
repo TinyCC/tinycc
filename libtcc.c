@@ -964,8 +964,8 @@ static int tcc_compile(TCCState *s1)
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
+        gen_inline_functions();
         check_vstack();
-
         /* end of translation unit info */
         if (s1->do_debug) {
             put_stabs_r(NULL, N_SO, 0, 0,
@@ -974,16 +974,10 @@ static int tcc_compile(TCCState *s1)
     }
 
     s1->error_set_jmp_enabled = 0;
-
-    /* reset define stack, but leave -Dsymbols (may be incorrect if
-       they are undefined) */
+    /* reset define stack, but keep -D and built-ins */
     free_defines(define_start);
-
-    gen_inline_functions();
-
     sym_pop(&global_stack, NULL);
     sym_pop(&local_stack, NULL);
-
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
