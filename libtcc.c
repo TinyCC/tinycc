@@ -1298,10 +1298,9 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
-    ElfW(Ehdr) ehdr;
-    int fd, ret, size;
-    int filetype = flags & 0x0F;
+    int ret, filetype;
 
+    filetype = flags & 0x0F;
     if (filetype == 0) {
         /* use a file extension to detect a filetype */
         const char *ext = tcc_fileextension(filename);
@@ -1320,16 +1319,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         }
     }
 
-    parse_flags = 0;
-#ifdef CONFIG_TCC_ASM
-    /* if .S file, define __ASSEMBLER__ like gcc does */
-    if (filetype == AFF_TYPE_ASM
-     || filetype == AFF_TYPE_ASMPP) {
-        tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
-        parse_flags = PARSE_FLAG_ASM_FILE;
-    }
-#endif
-
     /* open the file */
     ret = tcc_open(s1, filename);
     if (ret < 0) {
@@ -1342,96 +1331,76 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
             tcc_strdup(filename));
 
-    if (flags & AFF_PREPROCESS) {
-        ret = tcc_preprocess(s1);
-        goto the_end;
-    }
-
-    if (filetype == AFF_TYPE_C) {
-        /* C file assumed */
-        ret = tcc_compile(s1);
-        goto the_end;
-    }
-
+    parse_flags = 0;
 #ifdef CONFIG_TCC_ASM
-    if (filetype == AFF_TYPE_ASMPP) {
-        /* non preprocessed assembler */
-        ret = tcc_assemble(s1, 1);
-        goto the_end;
-    }
-
-    if (filetype == AFF_TYPE_ASM) {
-        /* preprocessed assembler */
-        ret = tcc_assemble(s1, 0);
-        goto the_end;
+    /* if .S file, define __ASSEMBLER__ like gcc does */
+    if (filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP) {
+        tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
+        parse_flags = PARSE_FLAG_ASM_FILE;
     }
 #endif
 
-    fd = file->fd;
-    /* assume executable format: auto guess file type */
-    size = read(fd, &ehdr, sizeof(ehdr));
-    lseek(fd, 0, SEEK_SET);
-    if (size <= 0) {
-        tcc_error_noabort("could not read header");
-        goto the_end;
-    }
+    if (flags & AFF_PREPROCESS) {
+        ret = tcc_preprocess(s1);
+    } else if (filetype == AFF_TYPE_C) {
+        ret = tcc_compile(s1);
+#ifdef CONFIG_TCC_ASM
+    } else if (filetype == AFF_TYPE_ASMPP) {
+        /* non preprocessed assembler */
+        ret = tcc_assemble(s1, 1);
+    } else if (filetype == AFF_TYPE_ASM) {
+        /* preprocessed assembler */
+        ret = tcc_assemble(s1, 0);
+#endif
+    } else {
+        ElfW(Ehdr) ehdr;
+        int fd, obj_type;
 
-    if (size == sizeof(ehdr) &&
-        ehdr.e_ident[0] == ELFMAG0 &&
-        ehdr.e_ident[1] == ELFMAG1 &&
-        ehdr.e_ident[2] == ELFMAG2 &&
-        ehdr.e_ident[3] == ELFMAG3) {
+        fd = file->fd;
+        obj_type = tcc_object_type(fd, &ehdr);
+        lseek(fd, 0, SEEK_SET);
 
         /* do not display line number if error */
         file->line_num = 0;
-        if (ehdr.e_type == ET_REL) {
-            ret = tcc_load_object_file(s1, fd, 0);
-            goto the_end;
 
-        }
+        switch (obj_type) {
+        case AFF_BINTYPE_REL:
+            ret = tcc_load_object_file(s1, fd, 0);
+            break;
 #ifndef TCC_TARGET_PE
-        if (ehdr.e_type == ET_DYN) {
+        case AFF_BINTYPE_DYN:
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
+                ret = 0;
 #ifdef TCC_IS_NATIVE
-                void *h;
-                h = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
-                if (h)
+                if (NULL == dlopen(filename, RTLD_GLOBAL | RTLD_LAZY))
+                    ret = -1;
 #endif
-                    ret = 0;
             } else {
                 ret = tcc_load_dll(s1, fd, filename,
                                    (flags & AFF_REFERENCED_DLL) != 0);
             }
-            goto the_end;
-        }
+            break;
 #endif
-        tcc_error_noabort("unrecognized ELF file");
-        goto the_end;
-    }
-
-    if (memcmp((char *)&ehdr, ARMAG, 8) == 0) {
-        file->line_num = 0; /* do not display line number if error */
-        ret = tcc_load_archive(s1, fd);
-        goto the_end;
-    }
-
+        case AFF_BINTYPE_AR:
+            ret = tcc_load_archive(s1, fd);
+            break;
 #ifdef TCC_TARGET_COFF
-    if (*(uint16_t *)(&ehdr) == COFF_C67_MAGIC) {
-        ret = tcc_load_coff(s1, fd);
-        goto the_end;
-    }
+        case AFF_BINTYPE_C67:
+            ret = tcc_load_coff(s1, fd);
+            break;
 #endif
-
+        default:
 #ifdef TCC_TARGET_PE
-    ret = pe_load_file(s1, filename, fd);
+            ret = pe_load_file(s1, filename, fd);
 #else
-    /* as GNU ld, consider it is an ld script if not recognized */
-    ret = tcc_load_ldscript(s1);
+            /* as GNU ld, consider it is an ld script if not recognized */
+            ret = tcc_load_ldscript(s1);
 #endif
-    if (ret < 0)
-        tcc_error_noabort("unrecognized file type");
-
-the_end:
+            if (ret < 0)
+                tcc_error_noabort("unrecognized file type");
+            break;
+        }
+    }
     tcc_close();
     return ret;
 }
@@ -1702,6 +1671,15 @@ static const FlagDef warning_defs[] = {
       "implicit-function-declaration" },
 };
 
+static int no_flag(const char **pp)
+{
+    const char *p = *pp;
+    if (*p != 'n' || *++p != 'o' || *++p != '-')
+        return 0;
+    *pp = p + 1;
+    return 1;
+}
+
 ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, int nb_flags,
                     const char *name, int value)
 {
@@ -1710,10 +1688,9 @@ ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, int nb_flags,
     const char *r;
 
     r = name;
-    if (r[0] == 'n' && r[1] == 'o' && r[2] == '-') {
-        r += 3;
+    if (no_flag(&r))
         value = !value;
-    }
+
     for(i = 0, p = flags; i < nb_flags; i++, p++) {
         if (!strcmp(r, p->name))
             goto found;
@@ -1789,6 +1766,7 @@ static int strstart(const char *val, const char **str)
 static int link_option(const char *str, const char *val, const char **ptr)
 {
     const char *p, *q;
+    int ret;
 
     /* there should be 1 or 2 dashes */
     if (*str++ != '-')
@@ -1799,6 +1777,13 @@ static int link_option(const char *str, const char *val, const char **ptr)
     /* then str & val should match (potentialy up to '=') */
     p = str;
     q = val;
+
+    ret = 1;
+    if (q[0] == '?') {
+        ++q;
+        if (no_flag(&p))
+            ret = -1;
+    }
 
     while (*q != '\0' && *q != '=') {
         if (*p != *q)
@@ -1816,7 +1801,7 @@ static int link_option(const char *str, const char *val, const char **ptr)
         p++;
     }
     *ptr = p;
-    return 1;
+    return ret;
 }
 
 static const char *skip_linker_arg(const char **str)
@@ -1842,6 +1827,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
         const char *p = NULL;
         char *end = NULL;
         int ignoring = 0;
+        int ret;
 
         if (link_option(option, "Bsymbolic", &p)) {
             s->symbolic = 1;
@@ -1915,6 +1901,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             } else
                 goto err;
 #endif
+        } else if (ret = link_option(option, "?whole-archive", &p), ret) {
+            s->alacarte_link = ret < 0;
         } else if (p) {
             return 0;
         } else {
@@ -2152,7 +2140,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             tcc_set_lib_path(s, optarg);
             break;
         case TCC_OPTION_l:
-            args_parser_add_file(s, optarg, AFF_TYPE_LIB);
+            args_parser_add_file(s, optarg, AFF_TYPE_LIBWH - s->alacarte_link);
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
@@ -2295,8 +2283,6 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             printf ("%s\n", TCC_VERSION);
             exit(0);
             break;
-        case TCC_OPTION_traditional:
-            break;
         case TCC_OPTION_x:
             if (*optarg == 'c')
                 s->filetype = AFF_TYPE_C;
@@ -2312,6 +2298,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             if (x > 0)
                 tcc_define_symbol(s, "__OPTIMIZE__", NULL);
             break;
+        case TCC_OPTION_traditional:
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:
         case TCC_OPTION_s:

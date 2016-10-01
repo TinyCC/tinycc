@@ -314,7 +314,8 @@ int main(int argc, char **argv)
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
         struct filespec *f = s->files[i];
-        if (f->type == AFF_TYPE_LIB) {
+        if (f->type >= AFF_TYPE_LIB) {
+            s->alacarte_link = f->type == AFF_TYPE_LIB;
             if (tcc_add_library_err(s, f->name) < 0)
                 ret = 1;
         } else {
@@ -323,10 +324,11 @@ int main(int argc, char **argv)
             s->filetype = f->type;
             if (tcc_add_file(s, f->name) < 0)
                 ret = 1;
-            s->filetype = AFF_TYPE_NONE;
             if (!first_file)
                 first_file = f->name;
         }
+        s->filetype = AFF_TYPE_NONE;
+        s->alacarte_link = 1;
     }
 
     if (0 == ret) {

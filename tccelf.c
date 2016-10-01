@@ -2725,6 +2725,25 @@ typedef struct SectionMergeInfo {
     uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
 
+ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h)
+{
+    int size = read(fd, h, sizeof *h);
+    if (size == sizeof *h && 0 == memcmp(h, ELFMAG, 4)) {
+        if (h->e_type == ET_REL)
+            return AFF_BINTYPE_REL;
+        if (h->e_type == ET_DYN)
+            return AFF_BINTYPE_DYN;
+    } else if (size >= 8) {
+        if (0 == memcmp(h, ARMAG, 8))
+            return AFF_BINTYPE_AR;
+#ifdef TCC_TARGET_COFF
+        if (((struct filehdr*)h)->f_magic == COFF_C67_MAGIC)
+            return AFF_BINTYPE_C67;
+#endif
+    }
+    return 0;
+}
+
 /* load an object file and merge it with current files */
 /* XXX: handle correctly stab (debug) info */
 ST_FUNC int tcc_load_object_file(TCCState *s1,
@@ -2746,15 +2765,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 
     stab_index = stabstr_index = 0;
 
-    if (read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
-        goto fail1;
-    if (ehdr.e_ident[0] != ELFMAG0 ||
-        ehdr.e_ident[1] != ELFMAG1 ||
-        ehdr.e_ident[2] != ELFMAG2 ||
-        ehdr.e_ident[3] != ELFMAG3)
-        goto fail1;
-    /* test if object file */
-    if (ehdr.e_type != ET_REL)
+    lseek(fd, file_offset, SEEK_SET);
+    if (tcc_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
         goto fail1;
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
@@ -3052,7 +3064,6 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size)
                 if(sym->st_shndx == SHN_UNDEF) {
                     off = get_be32(ar_index + i * 4) + sizeof(ArchiveHeader);
                     ++bound;
-                    lseek(fd, off, SEEK_SET);
                     if(tcc_load_object_file(s1, fd, off) < 0) {
                     fail:
                         ret = -1;
@@ -3105,14 +3116,12 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd)
             /* coff symbol table : we handle it */
             if(s1->alacarte_link)
                 return tcc_load_alacarte(s1, fd, size);
-        } else if (!strcmp(ar_name, "//") ||
-                   !strcmp(ar_name, "__.SYMDEF") ||
-                   !strcmp(ar_name, "__.SYMDEF/") ||
-                   !strcmp(ar_name, "ARFILENAMES/")) {
-            /* skip symbol table or archive names */
         } else {
-            if (tcc_load_object_file(s1, fd, file_offset) < 0)
-                return -1;
+            ElfW(Ehdr) ehdr;
+            if (tcc_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
+                if (tcc_load_object_file(s1, fd, file_offset) < 0)
+                    return -1;
+            }
         }
         lseek(fd, file_offset + size, SEEK_SET);
     }

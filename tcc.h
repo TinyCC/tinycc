@@ -1143,12 +1143,19 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_REFERENCED_DLL  0x20 /* load a referenced dll from another dll */
 #define AFF_PREPROCESS      0x40 /* preprocess file */
 /* combined with: */
-#define AFF_TYPE_NONE       0
-#define AFF_TYPE_C          1
-#define AFF_TYPE_ASM        2
-#define AFF_TYPE_ASMPP      3
-#define AFF_TYPE_BIN        4
-#define AFF_TYPE_LIB        5
+#define AFF_TYPE_NONE   0
+#define AFF_TYPE_C      1
+#define AFF_TYPE_ASM    2
+#define AFF_TYPE_ASMPP  3
+#define AFF_TYPE_BIN    4
+#define AFF_TYPE_LIB    5
+#define AFF_TYPE_LIBWH  6
+/* values from tcc_object_type(...) */
+#define AFF_BINTYPE_REL 1
+#define AFF_BINTYPE_DYN 2
+#define AFF_BINTYPE_AR  3
+#define AFF_BINTYPE_C67 4
+
 
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 
@@ -1348,6 +1355,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s);
 ST_FUNC void relocate_plt(TCCState *s1);
 
 ST_FUNC void tcc_add_linker_symbols(TCCState *s1);
+ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd);
 ST_FUNC void tcc_add_bcheck(TCCState *s1);
