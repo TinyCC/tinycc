@@ -4870,7 +4870,7 @@ extern "C" {
 #define CDS_RESET 0x40000000
 #define CDS_NORESET 0x10000000
 
-#include <tvout.h>
+//gr #include <tvout.h>
 
 #define DISP_CHANGE_SUCCESSFUL 0
 #define DISP_CHANGE_RESTART 1

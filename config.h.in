@@ -1,7 +1,0 @@
-#define CONFIG_TCCDIR "${CONFIG_TCCDIR}"
-#define TCC_VERSION "${TCC_VERSION}"
-
-#cmakedefine CONFIG_WIN32
-#cmakedefine CONFIG_WIN64
-#cmakedefine CONFIG_TCC_BCHECK
-#cmakedefine CONFIG_TCC_ASSERT
