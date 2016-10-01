@@ -223,9 +223,7 @@ static char *default_outputfile(TCCState *s, const char *first_file)
         strcpy(ext, ".exe");
     else
 #endif
-    if (( (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) ||
-          (s->output_type == TCC_OUTPUT_PREPROCESS) )
-        && *ext)
+    if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r && *ext)
         strcpy(ext, ".o");
     else
         strcpy(buf, "a.out");
@@ -252,6 +250,7 @@ int main(int argc, char **argv)
     TCCState *s;
     int ret, optind, i;
     int64_t start_time = 0;
+    const char *first_file = NULL;
 
     s = tcc_new();
 
@@ -290,12 +289,21 @@ int main(int argc, char **argv)
         if (s->nb_libraries != 0)
             tcc_error("cannot specify libraries with -c");
         /* accepts only a single input file */
-        if ((s->nb_files != 1) && s->outfile) {
-            tcc_error("cannot specify multiple files with -c and -o");
-        }
+        if (s->nb_files != 1)
+            tcc_error("cannot specify multiple files with -c");
     }
 
     tcc_set_output_type(s, s->output_type);
+
+    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+	if (!s->outfile) {
+	    s->ppfp = stdout;
+	} else {
+	    s->ppfp = fopen(s->outfile, "w");
+	    if (!s->ppfp)
+		tcc_error("could not write '%s'", s->outfile);
+	}
+    }
 
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
@@ -312,27 +320,10 @@ int main(int argc, char **argv)
         } else {
             if (1 == s->verbose)
                 printf("-> %s\n", filename);
-            if (!s->outfile)
-                s->outfile = default_outputfile(s, filename);
             if (tcc_add_file(s, filename, filetype) < 0)
                 ret = 1;
-            else
-            if (s->output_type == TCC_OUTPUT_OBJ) {
-                ret = !!tcc_output_file(s, s->outfile);
-                if (s->gen_deps && !ret)
-                    gen_makedeps(s, s->outfile, s->deps_outfile);
-                if (!ret) {
-                    if ((i+1) < s->nb_files) {
-                        tcc_delete(s);
-                        s = tcc_new();
-                        tcc_parse_args(s, argc - 1, argv + 1);
-                        tcc_set_environment(s);
-                        if (s->output_type != TCC_OUTPUT_OBJ)
-                            tcc_error("internal error");
-                        tcc_set_output_type(s, s->output_type);
-                    }
-                }
-            }
+            if (!first_file)
+                first_file = filename;
         }
     }
 
@@ -340,14 +331,10 @@ int main(int argc, char **argv)
         if (s->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
             ret = tcc_run(s, argc - 1 - optind, argv + 1 + optind);
-#else
-            tcc_error_noabort("-run is not available in a cross compiler");
-            ret = 1;
 #endif
-        } else
-        if (s->output_type == TCC_OUTPUT_EXE ||
-            s->output_type == TCC_OUTPUT_DLL)
-        {
+        } else {
+            if (!s->outfile)
+                s->outfile = default_outputfile(s, first_file);
             ret = !!tcc_output_file(s, s->outfile);
             if (s->gen_deps && !ret)
                 gen_makedeps(s, s->outfile, s->deps_outfile);

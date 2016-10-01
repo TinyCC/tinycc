@@ -1061,7 +1061,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 #else
     tcc_set_lib_path(s, CONFIG_TCCDIR);
 #endif
-    s->output_type = 0;
+
     preprocess_new();
     s->include_stack_ptr = s->include_stack;
 
@@ -1228,10 +1228,6 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     int bench = s1->do_bench;
 
     tcc_cleanup();
-
-    /* close a preprocessor output */
-    if (s1->ppfp && s1->ppfp != stdout)
-        fclose(s1->ppfp);
 
     /* free all sections */
     for(i = 1; i < s1->nb_sections; i++)
@@ -1608,16 +1604,6 @@ ST_FUNC void tcc_normalize_inc_dirs(TCCState *s)
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
-
-    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-        if (!s->outfile) {
-            s->ppfp = stdout;
-        } else {
-            s->ppfp = fopen(s->outfile, "w");
-            if (!s->ppfp)
-                tcc_error("could not write '%s'", s->outfile);
-        }
-    }
 
     if (!s->nostdinc) {
         /* default include paths */
@@ -2289,6 +2275,9 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
             s->print_search_dirs = 1;
             break;
         case TCC_OPTION_run:
+#ifndef TCC_IS_NATIVE
+            tcc_error("-run is not available in a cross compiler");
+#endif
     	    if (s->output_type)
                 tcc_warning("-run: some compiler action already specified (%d)", s->output_type);
             s->output_type = TCC_OUTPUT_MEMORY;
@@ -2397,7 +2386,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
       s->nb_libraries++;
     }
 
-    if (s->output_type == TCC_OUTPUT_EXE)
+    if (s->output_type == TCC_OUTPUT_EXE || s->output_type == TCC_OUTPUT_DLL)
         tcc_set_linker(s, (const char *)pas->linker_arg.data);
 
     if (is_allocated) {
