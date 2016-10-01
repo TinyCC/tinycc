@@ -762,10 +762,7 @@ struct TCCState {
     int do_bench; /* option -bench */
     int gen_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
-
-    int args_pthread; /* -pthread option */
-    CString linker_arg; /* collect -Wl options for input such as "-Wl,-rpath -Wl,<path>" */
-    int args_ref; /* tcc_parse_args recursive counter */
+    int option_pthread; /* -pthread option */
 };
 
 struct filespec {

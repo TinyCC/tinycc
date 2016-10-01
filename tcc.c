@@ -303,6 +303,9 @@ int main(int argc, char **argv)
 	    if (!s->ppfp)
 		tcc_error("could not write '%s'", s->outfile);
 	}
+    } else if (s->output_type != TCC_OUTPUT_OBJ) {
+	if (s->option_pthread)
+	    tcc_set_options(s, "-lpthread");
     }
 
     if (s->do_bench)
