@@ -247,13 +247,6 @@ static int64_t getclock_us(void)
 #endif
 }
 
-static void set_whole_archive(TCCState* s, int on)
-{
-    s->whole_archive = on;
-    if (1 == s->verbose)
-        printf("%cwhole-archive>\n", s->whole_archive? '+' : '-');
-}
-
 int main(int argc, char **argv)
 {
     TCCState *s;
@@ -308,14 +301,6 @@ int main(int argc, char **argv)
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
         int filetype = *(unsigned char *)s->files[i];
         const char *filename = s->files[i] + 1;
-        if (filetype == TCC_FILETYPE_AR_WHOLE_ON ||
-            filetype == TCC_FILETYPE_AR_WHOLE_OFF)
-        {
-            set_whole_archive(s, filetype == TCC_FILETYPE_AR_WHOLE_ON);
-            continue;
-        }
-        if (1 == s->verbose)
-            printf("-> %s\n", filename);
         if (filename[0] == '-' && filename[1] == 'l') {
             if (tcc_add_library(s, filename + 2) < 0) {
                 /* don't fail on -lm as it's harmless to skip math lib */
@@ -325,6 +310,8 @@ int main(int argc, char **argv)
                 }
             }
         } else {
+            if (1 == s->verbose)
+                printf("-> %s\n", filename);
             if (!s->outfile)
                 s->outfile = default_outputfile(s, filename);
             if (tcc_add_file(s, filename, filetype) < 0)
@@ -348,7 +335,6 @@ int main(int argc, char **argv)
             }
         }
     }
-    set_whole_archive(s, 0);
 
     if (0 == ret) {
         if (s->output_type == TCC_OUTPUT_MEMORY) {

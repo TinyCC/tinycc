@@ -53,8 +53,6 @@ LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename, int filetype);
 #define TCC_FILETYPE_C      2
 #define TCC_FILETYPE_ASM    3
 #define TCC_FILETYPE_ASM_PP 4
-#define TCC_FILETYPE_AR_WHOLE_OFF 5
-#define TCC_FILETYPE_AR_WHOLE_ON  6
 
 /* compile a string containing a C source. Return -1 if error. */
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *buf);
