@@ -135,7 +135,7 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 
 /********************************************************/
 /* copy a string and truncate it. */
-ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
+PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
     int c;
@@ -155,7 +155,7 @@ ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 }
 
 /* strcat and truncate. */
-ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
+PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
 {
     int len;
     len = strlen(buf);
@@ -164,7 +164,7 @@ ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
     return buf;
 }
 
-ST_FUNC char *pstrncpy(char *out, const char *in, size_t num)
+PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num)
 {
     memcpy(out, in, num);
     out[num] = '\0';

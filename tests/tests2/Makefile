@@ -1,22 +1,11 @@
 TOP = ../..
 include $(TOP)/Makefile
 
-# clear CFLAGS and LDFLAGS
-CFLAGS :=
-LDFLAGS :=
-
+# run local version of tcc with local libraries and includes
+TCCFLAGS = -B$(TOP) -I$(TOP)
 ifdef CONFIG_WIN32
- TCCFLAGS = -B$(top_srcdir)/win32 -I$(top_srcdir)/include -L$(TOP)
-else
- TCCFLAGS = -B$(TOP) -I$(top_srcdir)/include -lm
+ TCCFLAGS = -B$(TOP)/win32 -I$(TOP)/include -I$(TOP) -L$(TOP)
 endif
-
-ifeq ($(TARGETOS),Darwin)
- CFLAGS += -Wl,-flat_namespace,-undefined,warning
- TCCFLAGS += -D_ANSI_SOURCE
- export MACOSX_DEPLOYMENT_TARGET:=10.2
-endif
-
 TCC = $(TOP)/tcc $(TCCFLAGS)
 
 TESTS = $(patsubst %.c,%.test,$(sort $(wildcard *.c)))
@@ -48,8 +37,7 @@ ARGS =
 46_grep.test : ARGS = '[^* ]*[:a:d: ]+\:\*-/: $$' 46_grep.c
 
 # Some tests might need different flags
-FLAGS =
-76_dollars_in_identifiers.test : FLAGS = -fdollars-in-identifiers
+76_dollars_in_identifiers.test : TCCFLAGS += -fdollars-in-identifiers
 
 # Filter some always-warning
 FILTER =
@@ -62,7 +50,7 @@ all test: $(filter-out $(SKIP),$(TESTS))
 %.test: %.c %.expect
 	@echo Test: $*...
 # test -run
-	@$(TCC) $(FLAGS) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true
+	@$(TCC) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true
 	@diff -Nbu $*.expect $*.output && rm -f $*.output
 # test exe (disabled for speed)
 #	 @($(TCC) $(FLAGS) $< -o $*.exe && ./$*.exe $(ARGS)) $(FiLTER) >$*.output2 2>&1 ; \
@@ -76,4 +64,4 @@ all test: $(filter-out $(SKIP),$(TESTS))
 .PRECIOUS: %.expect
 
 clean:
-	rm -vf fred.txt *.output a.exe
+	rm -f fred.txt *.output a.exe

@@ -1,4 +1,3 @@
-@echo off
 @rem ----------------------------------------------------
 @rem batch file to build tcc using mingw gcc
 @rem ----------------------------------------------------
@@ -10,26 +9,25 @@ echo>..\config.h #define TCC_VERSION "%VERSION%"
 @if _%1_==_x64_ shift /1 && goto x86_64
 
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_I386
-@set CC=gcc -Os -s -fno-strict-aliasing -Wno-incompatible-pointer-types
+@set CC=gcc -Os -s -fno-strict-aliasing
 @if _%1_==_debug_ set CC=gcc -g -ggdb
 @set P=32
 @goto tools
 
 :x86_64
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
-@set CC=x86_64-w64-mingw32-gcc -Os -s -fno-strict-aliasing -Wno-incompatible-pointer-types
+@set CC=x86_64-w64-mingw32-gcc -Os -s -fno-strict-aliasing
 @if _%1_==_debug_ set CC=x86_64-w64-mingw32-gcc -g -ggdb
 @set P=64
 @goto tools
 
 :tools
-echo will use %CC% %target%
 %CC% %target% tools/tiny_impdef.c -o tiny_impdef.exe
 %CC% %target% tools/tiny_libmaker.c -o tiny_libmaker.exe
 
 :libtcc
 if not exist libtcc mkdir libtcc
-copy ..\libtcc.h libtcc\libtcc.h > nul
+copy ..\libtcc.h libtcc\libtcc.h
 %CC% %target% -shared -DLIBTCC_AS_DLL -DONE_SOURCE ../libtcc.c -o libtcc.dll -Wl,-out-implib,libtcc/libtcc.a
 tiny_impdef libtcc.dll -o libtcc/libtcc.def
 
@@ -37,7 +35,7 @@ tiny_impdef libtcc.dll -o libtcc/libtcc.def
 %CC% %target% ../tcc.c -o tcc.exe -ltcc -Llibtcc
 
 :copy_std_includes
-copy ..\include\*.h include > nul
+copy ..\include\*.h include
 
 :libtcc1.a
 .\tcc %target% -c ../lib/libtcc1.c
@@ -61,13 +59,10 @@ tiny_libmaker lib/libtcc1.a libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o d
 
 :the_end
 del *.o
+copy ..\tests\libtcc_test.c examples
 
 :makedoc
-for /f "delims=" %%i in ('where makeinfo') do set minfo=perl "%%~i"
-if "%minfo%"=="" goto :skip_makedoc
-echo>..\config.texi @set VERSION %VERSION%
 if not exist doc md doc
-%minfo% --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi
 copy tcc-win32.txt doc
-copy ..\tests\libtcc_test.c examples
-:skip_makedoc
+echo>..\config.texi @set VERSION %VERSION%
+makeinfo --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi

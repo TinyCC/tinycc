@@ -4,37 +4,31 @@
 
 TOP = ..
 include $(TOP)/Makefile
-VPATH = $(top_srcdir)/lib $(top_srcdir)/win32/lib
+VPATH = $(TOP)/lib $(TOP)/win32/lib
 
-ifndef TARGET # native library
+ifndef TARGET
+ # we're building the native libtcc1.a
  ifdef CONFIG_WIN64
-  TARGET = x86_64-win
- else
- ifdef CONFIG_WIN32
-  TARGET = i386-win
- else
- ifeq ($(ARCH),i386)
+  TARGET = x86_64-win32
+  # using tcc
+ else ifdef CONFIG_WIN32
+  TARGET = i386-win32
+  # using tcc
+ else ifeq ($(ARCH),i386)
   TARGET = i386
- else
- ifeq ($(ARCH),x86-64)
+  XCC = $(CC) # using gcc
+ else ifeq ($(ARCH),x86-64)
   TARGET = x86_64
- else
- ifeq ($(ARCH),arm)
+  XCC = $(CC) # using gcc
+ else ifeq ($(ARCH),arm)
   TARGET = arm
-  XCC = $(CC)
- else
- ifeq ($(ARCH),arm64)
+  XCC = $(CC) # using gcc
+ else ifeq ($(ARCH),arm64)
   TARGET = arm64
- else
  endif
- endif
- endif
- endif
- endif
- endif
+ BCHECK_O = bcheck.o
 endif
 
-BCHECK_O = bcheck.o
 DIR = $(TARGET)
 
 native : ../libtcc1.a
@@ -54,53 +48,39 @@ ARM64_O = lib-arm64.o
 # into shared libraries
 PICFLAGS = -fPIC
 
-# don't compile with -fstack-protector-strong, TCC doesn't handle it
-# correctly
-CFLAGS := $(filter-out -fstack-protector-strong,$(CFLAGS))
-
-ifeq "$(TARGET)" "i386-win"
+ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
- XCC ?= $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
- XAR ?= $(DIR)/tiny_libmaker$(EXESUF)
- PICFLAGS =
-else
-ifeq "$(TARGET)" "x86_64-win"
+ XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ XFLAGS = $(TGT)
+else ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(WIN64_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
- XCC ?= $(TCC) -B$(top_srcdir)/win32 -I$(top_srcdir)/include
- XAR ?= $(DIR)/tiny_libmaker$(EXESUF)
- PICFLAGS =
-else
-ifeq "$(TARGET)" "i386"
+ XCC = $(TCC) -B$(TOP)/win32 -I$(TOP)/include
+ XAR = $(DIR)/tiny_libmaker$(EXESUF)
+ XFLAGS = $(TGT)
+else ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(top_srcdir)
-else
-ifeq "$(TARGET)" "x86_64"
+ XCC ?= $(TCC) -B$(TOP)
+else ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(top_srcdir)
-else
-ifeq "$(TARGET)" "arm"
+ XCC ?= $(TCC) -B$(TOP)
+else ifeq "$(TARGET)" "arm"
  OBJ = $(addprefix $(DIR)/,$(ARM_O))
  TGT = -DTCC_TARGET_ARM
- XCC ?= $(TCC) -B$(top_srcdir)
-else
-ifeq "$(TARGET)" "arm64"
+ XCC ?= $(TCC) -B$(TOP)
+else ifeq "$(TARGET)" "arm64"
  OBJ = $(addprefix $(DIR)/,$(ARM64_O))
  TGT = -DTCC_TARGET_ARM64
  XCC ?= $(TCC) -B$(top_srcdir)
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
-endif
-endif
-endif
-endif
-endif
 
-XFLAGS = $(filter-out -b,$(CPPFLAGS) $(CFLAGS) $(PICFLAGS) $(TGT))
+XFLAGS ?= $(CFLAGS) $(PICFLAGS) $(TGT)
 
 ifeq ($(TARGETOS),Darwin)
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
@@ -108,21 +88,25 @@ ifeq ($(TARGETOS),Darwin)
  BCHECK_O =
 endif
 
-XAR ?= $(AR)
+ifdef XAR
+AR = $(XAR)
+endif
 
 $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
-	$(XAR) rcs $@ $(OBJ)
+	$(AR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)
 $(DIR)/%.o : %.S
 	$(XCC) -c $< -o $@ $(XFLAGS)
-$(DIR)/%$(EXESUF) : $(TOP)/win32/tools/%.c
-	$(CC) -o $@ $< $(XFLAGS) $(LDFLAGS)
+# windows : utilities
+$(DIR)/tiny_%$(EXESUF) : $(TOP)/win32/tools/tiny_%.c
+	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(TGT)
 
 $(OBJ) $(XAR) : $(DIR)/exists
-$(DIR)/exists :
+
+%/exists :
 	mkdir -p $(DIR)
 	@echo $@ > $@
 
 clean :
-	rm -rfv i386-win x86_64-win i386 x86_64 arm64
+	rm -rfv i386-win32 x86_64-win32 i386 x86_64 arm arm64

@@ -281,6 +281,11 @@
 # define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 #endif
 
+/* target specific subdir for libtcc1.a */
+#ifndef TCC_ARCH_DIR
+# define TCC_ARCH_DIR ""
+#endif
+
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 
@@ -1068,9 +1073,9 @@ ST_DATA int tcc_ext;
 ST_DATA struct TCCState *tcc_state;
 
 /* public functions currently used by the tcc main function */
-ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s);
-ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s);
-ST_FUNC char *pstrncpy(char *out, const char *in, size_t num);
+PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s);
+PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s);
+PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);
 PUB_FUNC char *tcc_fileextension (const char *name);
 

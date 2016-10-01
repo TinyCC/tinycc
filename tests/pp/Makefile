@@ -3,9 +3,8 @@
 #
 
 TCC = ../../tcc
-
-TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
-TESTS += $(patsubst %.S,%.test,$(wildcard *.S))
+files = $(patsubst %.$1,%.test,$(wildcard *.$1))
+TESTS = $(call files,c) $(call files,S)
 
 all test : $(sort $(TESTS))
 
@@ -25,10 +24,10 @@ DIFF_OPTS = -Nu -b -B -I "^\#"
 
 # automatically generate .expect files with gcc:
 %.expect: %.c
-	gcc -E -P $*.c >$*.expect 2>&1
+	gcc -E -P $< >$*.expect 2>&1
 
 %.expect: %.S
-	gcc -E -P $*.S >$*.expect 2>&1
+	gcc -E -P $< >$*.expect 2>&1
 
 # tell make not to delete
 .PRECIOUS: %.expect
