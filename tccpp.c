@@ -971,9 +971,9 @@ redo_start:
                 else if (tok == TOK_LINEFEED)
                     goto redo_start;
                 else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                    p = parse_line_comment(p);
+                    p = parse_line_comment(p - 1);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                p = parse_line_comment(p);
+                p = parse_line_comment(p - 1);
             break;
 _default:
         default:
@@ -1954,7 +1954,7 @@ _line_num:
             goto ignore;
         tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
     ignore:
-        file->buf_ptr = parse_line_comment(file->buf_ptr);
+        file->buf_ptr = parse_line_comment(file->buf_ptr - 1);
         goto the_end;
     }
     /* ignore other preprocess commands or #! for C scripts */
