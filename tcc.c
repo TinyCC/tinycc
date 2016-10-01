@@ -307,23 +307,17 @@ int main(int argc, char **argv)
 
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
-        int filetype = *(unsigned char *)s->files[i];
-        const char *filename = s->files[i] + 1;
-        if (filename[0] == '-' && filename[1] == 'l') {
-            if (tcc_add_library(s, filename + 2) < 0) {
-                /* don't fail on -lm as it's harmless to skip math lib */
-                if (strcmp(filename + 2, "m")) {
-                    tcc_error_noabort("cannot find library 'lib%s'", filename + 2);
-                    ret = 1;
-                }
-            }
+        struct filespec *f = s->files[i];
+        if (f->type == 'l') {
+            if (tcc_add_library_err(s, f->name) < 0)
+                ret = 1;
         } else {
             if (1 == s->verbose)
-                printf("-> %s\n", filename);
-            if (tcc_add_file(s, filename, filetype) < 0)
+                printf("-> %s\n", f->name);
+            if (tcc_add_file(s, f->name, f->type) < 0)
                 ret = 1;
             if (!first_file)
-                first_file = filename;
+                first_file = f->name;
         }
     }
 

@@ -1304,7 +1304,8 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags,
     parse_flags = 0;
 #ifdef CONFIG_TCC_ASM
     /* if .S file, define __ASSEMBLER__ like gcc does */
-    if ((filetype == TCC_FILETYPE_ASM) || (filetype == TCC_FILETYPE_ASM_PP)) {
+    if (filetype == TCC_FILETYPE_ASM
+     || filetype == TCC_FILETYPE_ASM_PP) {
         tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
         parse_flags = PARSE_FLAG_ASM_FILE;
     }
@@ -2048,33 +2049,29 @@ static void parse_option_D(TCCState *s1, const char *optarg)
 
 static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
 {
-    int len = strlen(filename);
-    char *p = tcc_malloc(len + 2);
-    if (filetype) {
-        *p = filetype;
-    }
-    else {
+    struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
+
+    if (filetype == 0) {
         /* use a file extension to detect a filetype */
         const char *ext = tcc_fileextension(filename);
         if (ext[0]) {
             ext++;
             if (!strcmp(ext, "S"))
-                *p = TCC_FILETYPE_ASM_PP;
+                filetype = TCC_FILETYPE_ASM_PP;
+            else if (!strcmp(ext, "s"))
+                filetype = TCC_FILETYPE_ASM;
+            else if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
+                filetype = TCC_FILETYPE_C;
             else
-            if (!strcmp(ext, "s"))
-                *p = TCC_FILETYPE_ASM;
-            else
-            if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
-                *p = TCC_FILETYPE_C;
-            else
-                *p = TCC_FILETYPE_BINARY;
-        }
-        else {
-            *p = TCC_FILETYPE_C;
+                filetype = TCC_FILETYPE_BINARY;
+        } else {
+            filetype = TCC_FILETYPE_C;
         }
     }
-    strcpy(p+1, filename);
-    dynarray_add((void ***)&s->files, &s->nb_files, p);
+
+    f->type = filetype;
+    strcpy(f->name, filename);
+    dynarray_add((void ***)&s->files, &s->nb_files, f);
 }
 
 ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
@@ -2158,7 +2155,7 @@ ST_FUNC int tcc_parse_args1(TCCState *s, int argc, char **argv)
             tcc_set_lib_path(s, optarg);
             break;
         case TCC_OPTION_l:
-            args_parser_add_file(s, r, TCC_FILETYPE_BINARY);
+            args_parser_add_file(s, optarg, 'l');
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
