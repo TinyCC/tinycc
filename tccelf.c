@@ -236,11 +236,14 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
                 /* keep first-found weak definition, ignore subsequents */
             } else if (sym_vis == STV_HIDDEN || sym_vis == STV_INTERNAL) {
                 /* ignore hidden symbols after */
-            } else if (esym->st_shndx == SHN_COMMON
-                    && (sh_num < SHN_LORESERVE || sh_num == SHN_COMMON)) {
-                /* gr: Happens with 'tcc ... -static tcctest.c' on e.g. Ubuntu 6.01
-                   No idea if this is the correct solution ... */
+            } else if ((esym->st_shndx == SHN_COMMON
+                            || esym->st_shndx == bss_section->sh_num)
+                        && (sh_num < SHN_LORESERVE
+                            && sh_num != bss_section->sh_num)) {
+                /* data symbol gets precedence over common/bss */
                 goto do_patch;
+            } else if (sh_num == SHN_COMMON || sh_num == bss_section->sh_num) {
+                /* data symbol keeps precedence over common/bss */
             } else if (s == tcc_state->dynsymtab_section) {
                 /* we accept that two DLL define the same symbol */
             } else {
@@ -248,7 +251,7 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
                        sym_bind, sh_num, new_vis, esym_bind, esym->st_shndx, esym_vis);
 #endif
-                tcc_error_noabort("'%s' defined twice... may be -fcommon is needed?", name);
+                tcc_error_noabort("'%s' defined twice", name);
             }
         } else {
         do_patch:
