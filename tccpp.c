@@ -2633,21 +2633,26 @@ maybe_newline:
     case '0': case '1': case '2': case '3':
     case '4': case '5': case '6': case '7':
     case '8': case '9':
-        cstr_reset(&tokcstr);
+        t = c;
+        PEEKC(c, p);
         /* after the first digit, accept digits, alpha, '.' or sign if
            prefixed by 'eEpP' */
     parse_num:
+        cstr_reset(&tokcstr);
         for(;;) {
-            t = c;
-            cstr_ccat(&tokcstr, c);
-            PEEKC(c, p);
+            cstr_ccat(&tokcstr, t);
             if (!((isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
                   || c == '.'
                   || ((c == '+' || c == '-')
-                      && (t == 'e' || t == 'E' || t == 'p' || t == 'P')
-                      && !(parse_flags & PARSE_FLAG_ASM_FILE)
-                      )))
+                      && (((t == 'e' || t == 'E')
+                            && !(parse_flags & PARSE_FLAG_ASM_FILE
+                                /* 0xe+1 is 3 tokens in asm */
+                                && ((char*)tokcstr.data)[0] == '0'
+                                && toup(((char*)tokcstr.data)[1]) == 'X'))
+                          || t == 'p' || t == 'P'))))
                 break;
+            t = c;
+            PEEKC(c, p);
         }
         /* We add a trailing '\0' to ease parsing */
         cstr_ccat(&tokcstr, '\0');
@@ -2660,8 +2665,7 @@ maybe_newline:
         /* special dot handling because it can also start a number */
         PEEKC(c, p);
         if (isnum(c)) {
-            cstr_reset(&tokcstr);
-            cstr_ccat(&tokcstr, '.');
+            t = '.';
             goto parse_num;
         } else if ((parse_flags & PARSE_FLAG_ASM_FILE)
                    && (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))) {
