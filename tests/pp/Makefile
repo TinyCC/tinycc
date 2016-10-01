@@ -3,6 +3,7 @@
 #
 
 TCC = ../../tcc
+
 TESTS = $(patsubst %.c,%.test,$(wildcard *.c))
 TESTS += $(patsubst %.S,%.test,$(wildcard *.S))
 
@@ -35,8 +36,8 @@ DIFF_OPTS = -Nu -b -B -I "^\#"
 clean:
 	rm -vf *.output
 
-02.test : DIFF_OPTS += -w
-15.test : DIFF_OPTS += -w
+# 02.test : DIFF_OPTS += -w
+# 15.test : DIFF_OPTS += -w
 
 # diff options:
 # -b ighore space changes

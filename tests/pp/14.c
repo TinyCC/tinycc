@@ -1,11 +1,13 @@
-extern int printf(const char *format, ...);
-#define P ++
-#define n(x) x
+#define W Z
+#define Z(X) W(X,2)
+#define Y(X) Z(X)
+#define X Y
+return X(X(1));
 
-int main(void)
-{
-    int a = 0, b = -1;
-    int i1 = a P+P b;
-    printf("i1 = %d\n", i1);
-    return n(0x1e)n(-1);
-}
+#define P Q
+#define Q(n) P(n,2)
+return P(1);
+
+#define A (B * B)
+#define B (A + A)
+return A + B;
