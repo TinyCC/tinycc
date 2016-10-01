@@ -2018,7 +2018,6 @@ static void alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
                 s->sh_size = s->data_offset;
         } else if (s1->do_debug ||
             file_type == TCC_OUTPUT_OBJ ||
-            file_type == TCC_OUTPUT_EXE ||
             (s->sh_flags & SHF_ALLOC) ||
             i == (s1->nb_sections - 1)) {
             /* we output all sections if debug or object file */
@@ -2688,16 +2687,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
 
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
-    if (s1->do_strip) {
-	int rc;
-	const char *strip_cmd = "sstrip "; // super strip utility from ELFkickers
-	const char *null_dev = " 2> /dev/null";
-	char buf[1050];
-	snprintf(buf, sizeof(buf), "%s%s%s", strip_cmd, filename, null_dev);
-	rc = system(buf);
-	if (rc)
-	    system(buf+1);	// call a strip utility from binutils
-    }
  the_end:
     tcc_free(s1->symtab_to_dynsym);
     tcc_free(sec_order);
