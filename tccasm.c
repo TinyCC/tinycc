@@ -488,25 +488,25 @@ static void asm_parse_directive(TCCState *s1)
     case TOK_ASMDIR_rept:
         {
             int repeat;
-            TokenString init_str;
+            TokenString *init_str;
             ParseState saved_parse_state = {0};
             next();
             repeat = asm_int_expr(s1);
-            tok_str_new(&init_str);
+            init_str = tok_str_alloc();
             next();
             while ((tok != TOK_ASMDIR_endr) && (tok != CH_EOF)) {
-                tok_str_add_tok(&init_str);
+                tok_str_add_tok(init_str);
                 next();
             }
             if (tok == CH_EOF) tcc_error("we at end of file, .endr not found");
             next();
-            tok_str_add(&init_str, -1);
-            tok_str_add(&init_str, 0);
+            tok_str_add(init_str, -1);
+            tok_str_add(init_str, 0);
             save_parse_state(&saved_parse_state);
-            begin_macro(&init_str, 0);
+            begin_macro(init_str, 1);
             while (repeat-- > 0) {
                 tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS));
-                macro_ptr = init_str.str;
+                macro_ptr = init_str->str;
             }
             end_macro();
             restore_parse_state(&saved_parse_state);

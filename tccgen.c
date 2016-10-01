@@ -5857,7 +5857,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     int size, align, addr, data_offset;
     int level;
     ParseState saved_parse_state = {0};
-    TokenString init_str;
+    TokenString *init_str = NULL;
     Section *sec;
     Sym *flexible_array;
 
@@ -5879,15 +5879,15 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
        (e.g. string pointers or ISOC99 compound
        literals). It also simplifies local
        initializers handling */
-    tok_str_new(&init_str);
     if (size < 0 || (flexible_array && has_init)) {
         if (!has_init) 
             tcc_error("unknown type size");
         /* get all init string */
+        init_str = tok_str_alloc();
         if (has_init == 2) {
             /* only get strings */
             while (tok == TOK_STR || tok == TOK_LSTR) {
-                tok_str_add_tok(&init_str);
+                tok_str_add_tok(init_str);
                 next();
             }
         } else {
@@ -5895,7 +5895,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             while (level > 0 || (tok != ',' && tok != ';')) {
                 if (tok < 0)
                     tcc_error("unexpected end of file in initializer");
-                tok_str_add_tok(&init_str);
+                tok_str_add_tok(init_str);
                 if (tok == '{')
                     level++;
                 else if (tok == '}') {
@@ -5908,17 +5908,17 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 next();
             }
         }
-        tok_str_add(&init_str, -1);
-        tok_str_add(&init_str, 0);
+        tok_str_add(init_str, -1);
+        tok_str_add(init_str, 0);
         
         /* compute size */
         save_parse_state(&saved_parse_state);
 
-        begin_macro(&init_str, 0);
+        begin_macro(init_str, 1);
         next();
         decl_initializer(type, NULL, 0, 1, 1);
         /* prepare second initializer parsing */
-        macro_ptr = init_str.str;
+        macro_ptr = init_str->str;
         next();
         
         /* if still unknown size, error */
@@ -6076,17 +6076,17 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     }
     if (has_init || (type->t & VT_VLA)) {
         decl_initializer(type, sec, addr, 1, 0);
-        /* restore parse state if needed */
-        if (init_str.str) {
-            end_macro();
-            restore_parse_state(&saved_parse_state);
-        }
         /* patch flexible array member size back to -1, */
         /* for possible subsequent similar declarations */
         if (flexible_array)
             flexible_array->type.ref->c = -1;
     }
  no_alloc: ;
+    /* restore parse state if needed */
+    if (init_str) {
+        end_macro();
+        restore_parse_state(&saved_parse_state);
+    }
 }
 
 static void put_func_debug(Sym *sym)

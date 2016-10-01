@@ -2199,8 +2199,6 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
                 s->dflag = 3;
             else if (*optarg == 'M')
                 s->dflag = 7;
-            else if (*optarg == 'b')
-                s->dflag = 8;
             else
                 goto unsupported_option;
             break;
