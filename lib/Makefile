@@ -8,11 +8,12 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 
 ifndef TARGET
  # we're building the native libtcc1.a
- ifdef CONFIG_WIN64
-  TARGET = x86_64-win32
-  # using tcc
- else ifdef CONFIG_WIN32
-  TARGET = i386-win32
+ ifdef CONFIG_WIN32
+  ifeq ($(ARCH),x86-64)
+   TARGET = x86_64-win32
+  else
+   TARGET = i386-win32
+  endif
   # using tcc
  else ifeq ($(ARCH),i386)
   TARGET = i386

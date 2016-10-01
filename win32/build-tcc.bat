@@ -5,19 +5,17 @@
 @set /p VERSION= < ..\VERSION
 echo>..\config.h #define TCC_VERSION "%VERSION%"
 
-@if _%1_==_AMD64_ shift /1 && goto x86_64
-@if _%1_==_x64_ shift /1 && goto x86_64
+@if _%PROCESSOR_ARCHITECTURE%_==_AMD64_ goto x86_64
+@if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ goto x86_64
 
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_I386
-@set CC=gcc -Os -s -fno-strict-aliasing
-@if _%1_==_debug_ set CC=gcc -g -ggdb
+@set CC=gcc -m32 -Os -s -fno-strict-aliasing
 @set P=32
 @goto tools
 
 :x86_64
 @set target=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
-@set CC=x86_64-w64-mingw32-gcc -Os -s -fno-strict-aliasing
-@if _%1_==_debug_ set CC=x86_64-w64-mingw32-gcc -g -ggdb
+@set CC=gcc -m64 -Os -s -fno-strict-aliasing
 @set P=64
 @goto tools
 
@@ -36,6 +34,8 @@ tiny_impdef libtcc.dll -o libtcc/libtcc.def
 
 :copy_std_includes
 copy ..\include\*.h include
+copy ..\tcclib.h include
+copy ..\tests\libtcc_test.c examples
 
 :libtcc1.a
 .\tcc %target% -c ../lib/libtcc1.c
@@ -59,10 +59,9 @@ tiny_libmaker lib/libtcc1.a libtcc1.o alloca86_64.o crt1.o wincrt1.o dllcrt1.o d
 
 :the_end
 del *.o
-copy ..\tests\libtcc_test.c examples
 
 :makedoc
 if not exist doc md doc
 copy tcc-win32.txt doc
 echo>..\config.texi @set VERSION %VERSION%
-makeinfo --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi
+makeinfo --html --no-split -o doc\tcc-doc.html ../tcc-doc.texi || echo *** tcc-doc.html was not built ***

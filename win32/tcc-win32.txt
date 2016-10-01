@@ -54,7 +54,7 @@
         tcc examples/libtcc_test.c -I libtcc libtcc/libtcc.def
 
     - Compiling with MinGW:
-        gcc examples/libtcc_test.c -I libtcc libtcc.dll
+        gcc examples/libtcc_test.c -I libtcc libtcc.dll -o libtcc_test.exe
 
     - Compiling with MSVC:
         lib /def:libtcc\libtcc.def /out:libtcc.lib
