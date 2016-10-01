@@ -1674,16 +1674,6 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_crt(s, "crti.o");
     }
 #endif
-#ifdef CONFIG_TCC_BCHECK
-    if (s->do_bounds_check && (output_type == TCC_OUTPUT_EXE))
-    {
-        /* force a bcheck.o linking */
-        addr_t func = TOK___bound_init;
-        Sym *sym = external_global_sym(func, &func_old_type, 0);
-        if (!sym->c)
-            put_extern_sym(sym, NULL, 0, 0);
-    }
-#endif
     if (s->normalize_inc_dirs)
         tcc_normalize_inc_dirs(s);
     return 0;

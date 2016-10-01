@@ -1580,35 +1580,29 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
     addr_t *ptr;
+    int sym_index;
 
     if (0 == s1->do_bounds_check)
         return;
-
     /* XXX: add an object file to do that */
     ptr = section_ptr_add(bounds_section, sizeof(*ptr));
     *ptr = 0;
     add_elf_sym(symtab_section, 0, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 bounds_section->sh_num, "__bounds_start");
+    /* pull bcheck.o from libtcc1.a */
+    sym_index = add_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                SHN_UNDEF, "__bound_init");
     if (s1->output_type != TCC_OUTPUT_MEMORY) {
         /* add 'call __bound_init()' in .init section */
-
-        /* XXX not called on MSYS, reason is unknown. For this
-           case a call to __bound_init is performed in bcheck.c
-           when __bound_ptr_add, __bound_new_region,
-           __bound_delete_region called */
-
-	int sym_index = find_elf_sym(symtab_section, "__bound_init");
-	if (sym_index) {
-    	    Section *init_section = find_section(s1, ".init");
-    	    unsigned char *pinit = section_ptr_add(init_section, 5);
-    	    pinit[0] = 0xe8;
-            write32le(pinit + 1, -4);
-    	    put_elf_reloc(symtab_section, init_section,
-                      init_section->data_offset - 4, R_386_PC32, sym_index);
-	}
-	else
-    	    tcc_warning("__bound_init not defined");
+        Section *init_section = find_section(s1, ".init");
+        unsigned char *pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        write32le(pinit + 1, -4);
+        put_elf_reloc(symtab_section, init_section,
+            init_section->data_offset - 4, R_386_PC32, sym_index);
+            /* R_386_PC32 = R_X86_64_PC32 = 2 */
     }
 #endif
 }
@@ -1616,8 +1610,8 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
+    tcc_add_bcheck(s1);
     tcc_add_pragma_libs(s1);
-
     /* add libc */
     if (!s1->nostdlib) {
         tcc_add_library(s1, "c");
@@ -1627,14 +1621,6 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         }
 #endif
         tcc_add_support(s1, "libtcc1.a");
-    }
-
-    /* tcc_add_bcheck tries to relocate a call to __bound_init in _init so
-       libtcc1.a must be loaded before for __bound_init to be defined and
-       crtn.o must be loaded after to not finalize _init too early. */
-    tcc_add_bcheck(s1);
-
-    if (!s1->nostdlib) {
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tcc_add_crt(s1, "crtn.o");

@@ -289,7 +289,6 @@
      DEF(TOK___bound_main_arg, "__bound_main_arg")
      DEF(TOK___bound_local_new, "__bound_local_new")
      DEF(TOK___bound_local_delete, "__bound_local_delete")
-     DEF(TOK___bound_init, "__bound_init")
 # ifdef TCC_TARGET_PE
      DEF(TOK_malloc, "malloc")
      DEF(TOK_free, "free")

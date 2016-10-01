@@ -6179,19 +6179,6 @@ static void gen_function(Sym *sym)
     gfunc_prolog(&sym->type);
     local_scope = 0;
 
-#ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check && !strcmp(funcname, "main")) {
-        int i;
-        Sym *sym;
-        for (i = 0, sym = local_stack; i < 2; i++, sym = sym->prev) {
-            if (sym->v & SYM_FIELD || sym->prev->v & SYM_FIELD)
-                break;
-            vpush_global_sym(&func_old_type, TOK___bound_main_arg);
-            vset(&sym->type, sym->r, sym->c);
-            gfunc_call(1);
-        }
-    }
-#endif
     rsym = 0;
     block(NULL, NULL, 0);
     gsym(rsym);

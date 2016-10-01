@@ -92,11 +92,9 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
-    int ret;
 
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
-
     prog_main = tcc_get_symbol_err(s1, s1->runtime_main);
 
 #ifdef CONFIG_TCC_BACKTRACE
@@ -106,13 +104,15 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     }
 #endif
 
+    errno = 0; /* clean errno value */
+
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
         void (*bound_new_region)(void *p, addr_t size);
         int  (*bound_delete_region)(void *p);
-        int i;
+        int i, ret;
 
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
@@ -121,28 +121,24 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
         bound_new_region = tcc_get_symbol_err(s1, "__bound_new_region");
         bound_delete_region = tcc_get_symbol_err(s1, "__bound_delete_region");
+
         bound_init();
         /* mark argv area as valid */
         bound_new_region(argv, argc*sizeof(argv[0]));
         for (i=0; i<argc; ++i)
-            bound_new_region(argv[i], strlen(argv[i]));
+            bound_new_region(argv[i], strlen(argv[i]) + 1);
 
-	errno = 0; /* clean errno value */
         ret = (*prog_main)(argc, argv);
 
         /* unmark argv area */
         for (i=0; i<argc; ++i)
             bound_delete_region(argv[i]);
         bound_delete_region(argv);
-
         bound_exit();
-    } else
-#endif
-    {
-	errno = 0; /* clean errno value */
-        ret = (*prog_main)(argc, argv);
+        return ret;
     }
-    return ret;
+#endif
+    return (*prog_main)(argc, argv);
 }
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,

@@ -1809,8 +1809,8 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
     pe.filename = filename;
     pe.s1 = s1;
 
-    pe_add_runtime(s1, &pe);
     tcc_add_bcheck(s1);
+    pe_add_runtime(s1, &pe);
     relocate_common_syms(); /* assign bss adresses */
     tcc_add_linker_symbols(s1);
 

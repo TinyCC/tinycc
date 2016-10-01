@@ -31,7 +31,7 @@ p3:
 #else
     pop     %rdx
     mov     %rdi,%rax
-    movl    %rax,%rsi	# size, a second parm to the __bound_new_region
+    mov     %rax,%rsi	# size, a second parm to the __bound_new_region
 
     add     $15,%rax
     and     $-16,%rax
