@@ -616,7 +616,6 @@ struct TCCState {
     int old_struct_init_code;	/* use old algorithm to init array in struct when there is no '{' used.
 				   Liuux 2.4.26 can't find initrd when compiled with a new algorithm */
     int dollars_in_identifiers;	/* allows '$' char in indentifiers */
-    int normalize_inc_dirs;	/* remove non-existent or duplicate directories from include paths */
 
     /* warning switches */
     int warn_write_strings;

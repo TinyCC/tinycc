@@ -1783,7 +1783,6 @@ ST_FUNC void preprocess(int is_bof)
                 /* search in all the include paths */
                 int j = i - 2, k = j - s1->nb_include_paths;
                 path = k < 0 ? s1->include_paths[j] : s1->sysinclude_paths[k];
-                if (path == 0) continue;
                 pstrcpy(buf1, sizeof(buf1), path);
                 pstrcat(buf1, sizeof(buf1), "/");
             }
