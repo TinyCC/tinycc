@@ -1948,7 +1948,10 @@ static void force_charshort_cast(int t)
         vpushi((1 << bits) - 1);
         gen_op('&');
     } else {
-        bits = 32 - bits;
+        if ((vtop->type.t & VT_BTYPE) == VT_LLONG)
+            bits = 64 - bits;
+        else
+            bits = 32 - bits;
         vpushi(bits);
         gen_op(TOK_SHL);
         /* result must be signed or the SAR is converted to an SHL

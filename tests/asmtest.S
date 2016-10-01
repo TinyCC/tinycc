@@ -696,6 +696,7 @@ int $0x10
     inc %eax
 #endif
 
+#ifndef _WIN32
 ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
     xor %eax, %eax
     ret
@@ -708,6 +709,7 @@ ft1: ft2: ft3: ft4: ft5: ft6: ft7: ft8: ft9:
 .type ft6,@function
 .type ft7,%function
 .type ft8,"function"
+#endif
 
     pause
 .rept 6
