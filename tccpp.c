@@ -50,6 +50,7 @@ static CString cstr_buf;
 static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 static int pp_debug_tok, pp_debug_symv;
+static int pp_once;
 static void tok_print(const char *msg, const int *str);
 
 /* isidnum_table flags: */
@@ -1474,26 +1475,25 @@ bad_twosharp:
     define_push(v, t, &tokstr_buf, first);
 }
 
-static inline int hash_cached_include(const char *filename)
+static CachedInclude *search_cached_include(TCCState *s1, const char *filename, int add)
 {
     const unsigned char *s;
     unsigned int h;
+    CachedInclude *e;
+    int i;
 
     h = TOK_HASH_INIT;
     s = (unsigned char *) filename;
     while (*s) {
+#ifdef _WIN32
+        h = TOK_HASH_FUNC(h, toup(*s));
+#else
         h = TOK_HASH_FUNC(h, *s);
+#endif
         s++;
     }
     h &= (CACHED_INCLUDES_HASH_SIZE - 1);
-    return h;
-}
 
-static CachedInclude *search_cached_include(TCCState *s1, const char *filename)
-{
-    CachedInclude *e;
-    int i, h;
-    h = hash_cached_include(filename);
     i = s1->cached_includes_hash[h];
     for(;;) {
         if (i == 0)
@@ -1503,30 +1503,21 @@ static CachedInclude *search_cached_include(TCCState *s1, const char *filename)
             return e;
         i = e->hash_next;
     }
-    return NULL;
-}
+    if (!add)
+        return NULL;
 
-static inline void add_cached_include(TCCState *s1, const char *filename, int ifndef_macro)
-{
-    CachedInclude *e;
-    int h;
-
-    if (search_cached_include(s1, filename))
-        return;
-#ifdef INC_DEBUG
-    printf("adding cached '%s' %s\n", filename, get_tok_str(ifndef_macro, NULL));
-#endif
     e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
     strcpy(e->filename, filename);
-    e->ifndef_macro = ifndef_macro;
+    e->ifndef_macro = e->once = 0;
     dynarray_add((void ***)&s1->cached_includes, &s1->nb_cached_includes, e);
     /* add in hash table */
-    h = hash_cached_include(filename);
     e->hash_next = s1->cached_includes_hash[h];
     s1->cached_includes_hash[h] = s1->nb_cached_includes;
+#ifdef INC_DEBUG
+    printf("adding cached '%s'\n", filename);
+#endif
+    return e;
 }
-
-#define ONCE_PREFIX "#ONCE#"
 
 static void pragma_parse(TCCState *s1)
 {
@@ -1560,13 +1551,8 @@ static void pragma_parse(TCCState *s1)
         pp_debug_tok = t, pp_debug_symv = v;
 
     } else if (tok == TOK_once) {
-        char buf1[sizeof(file->filename) + sizeof(ONCE_PREFIX)];
-        strcpy(buf1, ONCE_PREFIX);
-        strcat(buf1, file->filename);
-#ifdef PATH_NOCASE
-        strupr(buf1);
-#endif
-        add_cached_include(s1, file->filename, tok_alloc(buf1, strlen(buf1))->tok);
+        search_cached_include(s1, file->filename, 1)->once = pp_once;
+
     } else if (s1->ppfp) {
         /* tcc -E: keep pragmas below unchanged */
         unget_tok(' ');
@@ -1767,10 +1753,10 @@ ST_FUNC void preprocess(int is_bof)
             }
 
             pstrcat(buf1, sizeof(buf1), buf);
-            e = search_cached_include(s1, buf1);
-            if (e && define_find(e->ifndef_macro)) {
+            e = search_cached_include(s1, buf1, 0);
+            if (e && (define_find(e->ifndef_macro) || e->once == pp_once)) {
                 /* no need to parse the include because the 'ifndef macro'
-                   is defined */
+                   is defined (or had #pragma once) */
 #ifdef INC_DEBUG
                 printf("%s: skipping cached %s\n", file->filename, buf1);
 #endif
@@ -2484,7 +2470,8 @@ static inline void next_nomacro1(void)
 #ifdef INC_DEBUG
                     printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
 #endif
-                    add_cached_include(s1, file->filename, file->ifndef_macro_saved);
+                    search_cached_include(s1, file->filename, 1)
+                        ->ifndef_macro = file->ifndef_macro_saved;
                     tok_flags &= ~TOK_FLAG_ENDIF;
                 }
 
@@ -3445,6 +3432,7 @@ ST_FUNC void preprocess_init(TCCState *s1)
        file->ifdef_stack_ptr ? */
     s1->ifdef_stack_ptr = s1->ifdef_stack;
     file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+    pp_once++;
 
     pvtop = vtop = vstack - 1;
     s1->pack_stack[0] = 0;

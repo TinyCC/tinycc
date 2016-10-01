@@ -101,7 +101,6 @@
 # define IS_DIRSEP(c) (c == '/' || c == '\\')
 # define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
 # define PATHCMP stricmp
-# define PATH_NOCASE
 #else
 # define IS_DIRSEP(c) (c == '/')
 # define IS_ABSPATH(p) IS_DIRSEP(p[0])
@@ -602,11 +601,12 @@ typedef struct InlineFunc {
    inclusion if the include file is protected by #ifndef ... #endif */
 typedef struct CachedInclude {
     int ifndef_macro;
+    int once;
     int hash_next; /* -1 if none */
     char filename[1]; /* path specified in #include */
 } CachedInclude;
 
-#define CACHED_INCLUDES_HASH_SIZE 512
+#define CACHED_INCLUDES_HASH_SIZE 32
 
 #ifdef CONFIG_TCC_ASM
 typedef struct ExprValue {
