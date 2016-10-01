@@ -3219,7 +3219,7 @@ static int macro_subst_tok(
 static int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
 {
     CString cstr;
-    int n;
+    int n, ret = 1;
 
     cstr_new(&cstr);
     if (t1 != TOK_PLCHLDR)
@@ -3237,15 +3237,15 @@ static int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
             break;
         if (is_space(tok))
             continue;
-        tcc_warning("pasting <%.*s> and <%s> does not give a valid preprocessing token",
-            n, cstr.data, (char*)cstr.data + n);
+        tcc_warning("pasting \"%.*s\" and \"%s\" does not give a valid"
+            " preprocessing token", n, cstr.data, (char*)cstr.data + n);
+        ret = 0;
         break;
     }
     tcc_close();
-
     //printf("paste <%s>\n", (char*)cstr.data);
     cstr_free(&cstr);
-    return 0;
+    return ret;
 }
 
 /* handle the '##' operator. Return NULL if no '##' seen. Otherwise
@@ -3284,13 +3284,15 @@ static inline int *macro_twosharps(const int *ptr0)
             /* given 'a##b', remove nosubsts preceding 'b' */
             while ((t1 = *++ptr) == TOK_NOSUBST)
                 ;
-            if (t1 && t1 != TOK_TWOSHARPS 
-                && t1 != ':') /* 'a##:' don't build a new token */
-            {
+            if (t1 && t1 != TOK_TWOSHARPS) {
                 TOK_GET(&t1, &ptr, &cv1);
                 if (t != TOK_PLCHLDR || t1 != TOK_PLCHLDR) {
-                    paste_tokens(t, &cval, t1, &cv1);
-                    t = tok, cval = tokc;
+                    if (paste_tokens(t, &cval, t1, &cv1)) {
+                        t = tok, cval = tokc;
+                    } else {
+                        tok_str_add2(&macro_str1, t, &cval);
+                        t = t1, cval = cv1;
+                    }
                 }
             }
         }
