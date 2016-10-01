@@ -3645,52 +3645,22 @@ static void pp_debug_builtins(TCCState *s1)
         define_print(s1, v);
 }
 
-static int need_space(int prev_tok, int tok, const char *tokstr)
+/* Add a space between tokens a and b to avoid unwanted textual pasting */
+static int pp_need_space(int a, int b)
 {
-    const char *sp_chars = "";
-    if ((prev_tok >= TOK_IDENT || prev_tok == TOK_PPNUM) &&
-        (tok >= TOK_IDENT || tok == TOK_PPNUM))
-        return 1;
-    switch (prev_tok) {
-    case '+':
-        sp_chars = "+=";
-        break;
-    case '-':
-        sp_chars = "-=>";
-        break;
-    case '*':
-    case '/':
-    case '%':
-    case '^':
-    case '=':
-    case '!':
-    case TOK_A_SHL:
-    case TOK_A_SAR:
-        sp_chars = "=";
-        break;
-    case '&':
-        sp_chars = "&=";
-        break;
-    case '|':
-        sp_chars = "|=";
-        break;
-    case '<':
-        sp_chars = "<=";
-        break;
-    case '>':
-        sp_chars = ">=";
-        break;
-    case '.':
-        sp_chars = ".";
-        break;
-    case '#':
-        sp_chars = "#";
-        break;
-    case TOK_PPNUM:
-        sp_chars = "+-";
-        break;
-    }
-    return !!strchr(sp_chars, tokstr[0]);
+    return 'E' == a ? '+' == b || '-' == b
+        : '+' == a ? TOK_INC == b || '+' == b
+        : '-' == a ? TOK_DEC == b || '-' == b
+        : a >= TOK_IDENT ? b >= TOK_IDENT
+        : 0;
+}
+
+/* maybe hex like 0x1e */
+static int pp_check_he0xE(int t, const char *p)
+{
+    if (t == TOK_PPNUM && toup(strchr(p, 0)[-1]) == 'E')
+        return 'E';
+    return t;
 }
 
 /* Preprocess the current file */
@@ -3698,8 +3668,8 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
 {
     BufferedFile **iptr;
     int token_seen, spcs, level;
+    const char *p;
     Sym *define_start;
-    const char *tokstr;
 
     preprocess_init(s1);
     ch = file->buf_ptr[0];
@@ -3761,16 +3731,14 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
             pp_line(s1, file, 0);
         } else if (tok == TOK_LINEFEED) {
             ++file->line_ref;
+        } else {
+            spcs = pp_need_space(token_seen, tok);
         }
 
-        tokstr = get_tok_str(tok, &tokc);
-        if (!spcs && need_space(token_seen, tok, tokstr))
-            ++spcs;
         while (spcs)
             fputs(" ", s1->ppfp), --spcs;
-        fputs(tokstr, s1->ppfp);
-
-        token_seen = tok;
+        fputs(p = get_tok_str(tok, &tokc), s1->ppfp);
+        token_seen = pp_check_he0xE(tok, p);;
     }
     /* reset define stack, but keep -D and built-ins */
     free_defines(define_start);

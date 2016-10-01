@@ -331,7 +331,11 @@ int main(int argc, char **argv)
         s->alacarte_link = 1;
     }
 
-    if (0 == ret) {
+    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+        if (s->outfile)
+            fclose(s->ppfp);
+
+    } else if (0 == ret) {
         if (s->do_bench)
             tcc_print_stats(s, getclock_us() - start_time);
         if (s->output_type == TCC_OUTPUT_MEMORY) {
