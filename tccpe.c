@@ -1566,6 +1566,23 @@ quit:
 }
 
 /* ------------------------------------------------------------- */
+
+static char *trimfront(char *p)
+{
+    while (*p && (unsigned char)*p <= ' ')
+	++p;
+    return p;
+}
+
+static char *trimback(char *a, char *e)
+{
+    while (e > a && (unsigned char)e[-1] <= ' ')
+	--e;
+    *e = 0;;
+    return a;
+}
+
+/* ------------------------------------------------------------- */
 static int pe_load_def(TCCState *s1, int fd)
 {
     int state = 0, ret = -1, dllindex = 0, ord;
