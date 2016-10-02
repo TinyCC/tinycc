@@ -3250,13 +3250,104 @@ static Sym * find_field (CType *type, int v)
     return s;
 }
 
+static void struct_layout(CType *type, AttributeDef *ad)
+{
+    int align, maxalign, offset, c;
+    Sym *f;
+    maxalign = 1;
+    offset = 0;
+    c = 0;
+    for (f = type->ref->next; f; f = f->next) {
+	int extra_bytes = f->c;
+	int bit_pos;
+	int size = type_size(&f->type, &align);
+	if (f->type.t & VT_BITFIELD)
+	  bit_pos = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
+	else
+	  bit_pos = 0;
+	if (f->r) {
+	    align = f->r;
+	} else if (ad->a.packed) {
+	    align = 1;
+	}
+	if (extra_bytes) c += extra_bytes;
+	else if (bit_pos == 0) {
+	    if (type->ref->type.t == TOK_STRUCT) {
+		c = (c + align - 1) & -align;
+		offset = c;
+		if (size > 0)
+		  c += size;
+	    } else {
+		offset = 0;
+		if (size > c)
+		  c = size;
+	    }
+	    if (align > maxalign)
+	      maxalign = align;
+	}
+#if 0
+	printf("set field %s offset=%d",
+	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset);
+	if (f->type.t & VT_BITFIELD) {
+	    printf(" pos=%d size=%d",
+		   (f->type.t >> VT_STRUCT_SHIFT) & 0x3f,
+		   (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
+	}
+	printf("\n");
+#endif
+
+	if (f->v & SYM_FIRST_ANOM && (f->type.t & VT_BTYPE) == VT_STRUCT) {
+	    Sym *ass;
+	    /* An anonymous struct/union.  Adjust member offsets
+	       to reflect the real offset of our containing struct.
+	       Also set the offset of this anon member inside
+	       the outer struct to be zero.  Via this it
+	       works when accessing the field offset directly
+	       (from base object), as well as when recursing
+	       members in initializer handling.  */
+	    int v2 = f->type.ref->v;
+	    if (!(v2 & SYM_FIELD) &&
+		(v2 & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+		Sym **pps;
+		/* This happens only with MS extensions.  The
+		   anon member has a named struct type, so it
+		   potentially is shared with other references.
+		   We need to unshare members so we can modify
+		   them.  */
+		ass = f->type.ref;
+		f->type.ref = sym_push(anon_sym++ | SYM_FIELD,
+				       &f->type.ref->type, 0,
+				       f->type.ref->c);
+		pps = &f->type.ref->next;
+		while ((ass = ass->next) != NULL) {
+		    *pps = sym_push(ass->v, &ass->type, 0, ass->c);
+		    pps = &((*pps)->next);
+		}
+		*pps = NULL;
+	    }
+	    ass = f->type.ref;
+	    while ((ass = ass->next) != NULL)
+	      ass->c += offset;
+	    f->c = 0;
+	} else {
+	    f->c = offset;
+	}
+
+	f->r = 0;
+    }
+    /* store size and alignment */
+    type->ref->c = (c + maxalign - 1) & -maxalign;
+    type->ref->r = maxalign;
+}
+
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
 static void struct_decl(CType *type, AttributeDef *ad, int u)
 {
-    int a, v, size, align, maxalign, offset, flexible, extra_bytes;
+    int extra_bytes;
+    int a, v, size, align, flexible, alignoverride;
     long c;
-    int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
-    Sym *s, *ss, *ass, **ps;
+    int bit_size, bit_pos, bsize, bt, prevbt;
+    Sym *s, *ss, **ps;
     AttributeDef ad1;
     CType type1, btype;
 
@@ -3343,11 +3434,9 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
             s->c = type_size(seen_wide ? &size_type : &int_type, &align);
             skip('}');
         } else {
-            maxalign = 1;
             ps = &s->next;
             prevbt = VT_INT;
             bit_pos = 0;
-            offset = 0;
             flexible = 0;
             while (tok != '}') {
                 if (!parse_btype(&btype, &ad1)) {
@@ -3355,7 +3444,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
 		    continue;
 		}
                 while (1) {
-                extra_bytes = 0;
+		    extra_bytes = 0;
 		    if (flexible)
 		        tcc_error("flexible array member '%s' not at the end of struct",
                               get_tok_str(v, NULL));
@@ -3399,16 +3488,17 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                                   get_tok_str(v, NULL));
                     }
                     size = type_size(&type1, &align);
+		    /* Only remember non-default alignment.  */
+		    alignoverride = 0;
                     if (ad1.a.aligned) {
                         if (align < ad1.a.aligned)
-                            align = ad1.a.aligned;
+                            alignoverride = ad1.a.aligned;
                     } else if (ad1.a.packed || ad->a.packed) {
-                        align = 1;
+                        alignoverride = 1;
                     } else if (*tcc_state->pack_stack_ptr) {
                         if (align > *tcc_state->pack_stack_ptr)
-                            align = *tcc_state->pack_stack_ptr;
+                            alignoverride = *tcc_state->pack_stack_ptr;
                     }
-                    lbit_pos = 0;
                     if (bit_size >= 0) {
                         bt = type1.t & VT_BTYPE;
                         if (bt != VT_INT && 
@@ -3437,96 +3527,42 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                             if ((bit_pos + bit_size) > bsize ||
                                 bt != prevbt || a == TOK_UNION)
                                 bit_pos = 0;
-                            lbit_pos = bit_pos;
                             /* XXX: handle LSB first */
                             type1.t |= VT_BITFIELD | 
                                 (bit_pos << VT_STRUCT_SHIFT) |
                                 (bit_size << (VT_STRUCT_SHIFT + 6));
-                            bit_pos += bit_size;
                             /* without ms-bitfields, allocate the
                              * minimum number of bytes necessary,
                              * adding single bytes as needed */
                             if (!tcc_state->ms_bitfields) {
-                                if (lbit_pos == 0)
+                                if (bit_pos == 0)
                                     /* minimum bytes for new bitfield */
                                     size = (bit_size + 7) / 8;
                                 else {
                                     /* enough spare bits already allocated? */
-                                    bit_size = (lbit_pos - 1) % 8 + 1 + bit_size;
-                                    if (bit_size > 8) /* doesn't fit */
-                                        extra_bytes = (bit_size - 1) / 8;
+                                    int add_size = (bit_pos - 1) % 8 + 1 + bit_size;
+                                    if (add_size > 8) /* doesn't fit */
+                                        extra_bytes = (add_size - 1) / 8;
                                 }
                             }
+                            bit_pos += bit_size;
                         }
                         prevbt = bt;
                     } else {
                         bit_pos = 0;
                     }
                     if (v != 0 || (type1.t & VT_BTYPE) == VT_STRUCT) {
-                        /* add new memory data only if starting bit
-                           field or adding bytes to existing bit field */
-                        if (extra_bytes) c += extra_bytes;
-                        else if (lbit_pos == 0) {
-                            if (a == TOK_STRUCT) {
-                                c = (c + align - 1) & -align;
-                                offset = c;
-                                if (size > 0)
-                                    c += size;
-                            } else {
-                                offset = 0;
-                                if (size > c)
-                                    c = size;
-                            }
-                            if (align > maxalign)
-                                maxalign = align;
-                        }
-#if 0
-                        printf("add field %s offset=%d", 
-                               get_tok_str(v, NULL), offset);
-                        if (type1.t & VT_BITFIELD) {
-                            printf(" pos=%d size=%d", 
-                                   (type1.t >> VT_STRUCT_SHIFT) & 0x3f,
-                                   (type1.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f);
-                        }
-                        printf("\n");
-#endif
+                        /* Remember we've seen a real field to check
+			   for placement of flexible array member. */
+			c = 1;
                     }
                     if (v == 0 && (type1.t & VT_BTYPE) == VT_STRUCT) {
-			/* An anonymous struct/union.  Adjust member offsets
-			   to reflect the real offset of our containing struct.
-			   Also set the offset of this anon member inside
-			   the outer struct to be zero.  Via this it
-			   works when accessing the field offset directly
-			   (from base object), as well as when recursing
-			   members in initializer handling.  */
-			int v2 = btype.ref->v;
-			if (!(v2 & SYM_FIELD) &&
-			    (v2 & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
-			    Sym **pps;
-			    /* This happens only with MS extensions.  The
-			       anon member has a named struct type, so it
-			       potentially is shared with other references.
-			       We need to unshare members so we can modify
-			       them.  */
-			    ass = type1.ref;
-			    type1.ref = sym_push(anon_sym++ | SYM_FIELD,
-						 &type1.ref->type, 0,
-						 type1.ref->c);
-			    pps = &type1.ref->next;
-			    while ((ass = ass->next) != NULL) {
-			        *pps = sym_push(ass->v, &ass->type, 0, ass->c);
-				pps = &((*pps)->next);
-			    }
-			    *pps = NULL;
-			}
-                        ass = type1.ref;
-                        while ((ass = ass->next) != NULL)
-			    ass->c += offset;
-			offset = 0;
+			/* See struct_layout for special casing
+			   anonymous member of struct type.  */
 		        v = anon_sym++;
 		    }
                     if (v) {
-                        ss = sym_push(v | SYM_FIELD, &type1, 0, offset);
+                        ss = sym_push(v | SYM_FIELD, &type1, alignoverride, extra_bytes);
                         *ps = ss;
                         ps = &ss->next;
                     }
@@ -3537,9 +3573,9 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                 skip(';');
             }
             skip('}');
-            /* store size and alignment */
-            s->c = (c + maxalign - 1) & -maxalign; 
-            s->r = maxalign;
+	    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
+	        parse_attribute(ad);
+	    struct_layout(type, ad);
         }
     }
 }
