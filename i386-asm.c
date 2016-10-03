@@ -1493,7 +1493,8 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         else if ((sv->type.t & VT_BTYPE) == VT_SHORT)
             size = 2;
 #ifdef TCC_TARGET_X86_64
-        else if ((sv->type.t & VT_BTYPE) == VT_LLONG)
+        else if ((sv->type.t & VT_BTYPE) == VT_LLONG ||
+		 (sv->type.t & VT_BTYPE) == VT_PTR)
             size = 8;
 #endif
         else
