@@ -946,6 +946,12 @@ void expr_ptr_test()
         j = -1;
         printf("%d\n", sp[j].i);
     }
+#ifdef __LP64__
+    i = 1;
+    p = (int*)0x100000000UL + i;
+    i = ((long)p) >> 32;
+    printf("largeptr: %p %d\n", p, i);
+#endif
 }
 
 void expr_cmp_test()

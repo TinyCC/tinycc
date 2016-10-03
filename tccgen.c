@@ -1659,10 +1659,10 @@ static void gen_opic(int op)
     uint64_t l2 = c2 ? v2->c.i : 0;
     int shm = (t1 == VT_LLONG) ? 63 : 31;
 
-    if (t1 != VT_LLONG)
+    if (t1 != VT_LLONG && (PTR_SIZE != 8 || t1 != VT_PTR))
         l1 = ((uint32_t)l1 |
               (v1->type.t & VT_UNSIGNED ? 0 : -(l1 & 0x80000000)));
-    if (t2 != VT_LLONG)
+    if (t2 != VT_LLONG && (PTR_SIZE != 8 || t2 != VT_PTR))
         l2 = ((uint32_t)l2 |
               (v2->type.t & VT_UNSIGNED ? 0 : -(l2 & 0x80000000)));
 
