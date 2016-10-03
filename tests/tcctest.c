@@ -2909,10 +2909,15 @@ char * get_asm_string (void)
 
 unsigned int set;
 
+void fancy_copy (unsigned *in, unsigned *out)
+{
+  asm volatile ("" : "=r" (*out) : "0" (*in));
+}
+
 void asm_test(void)
 {
     char buf[128];
-    unsigned int val;
+    unsigned int val, val2;
     struct struct123 s1;
     struct struct1231 s2 = { (unsigned long)&s1 };
     /* Hide the outer base_func, but check later that the inline
@@ -2979,6 +2984,9 @@ void asm_test(void)
       printf("asmbool: failed\n");
 #endif
     printf("asmstr: %s\n", get_asm_string());
+    val = 43;
+    fancy_copy (&val, &val2);
+    printf ("fancycpy(%d)=%d\n", val, val2);
     return;
  label1:
     goto label2;

@@ -1605,8 +1605,10 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                         SValue sv;
                         sv = *op->vt;
                         sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
+			sv.type.t = VT_PTR;
                         load(out_reg, &sv);
 
+			sv = *op->vt;
                         sv.r = (sv.r & ~VT_VALMASK) | out_reg;
                         store(op->reg, &sv);
                     }
