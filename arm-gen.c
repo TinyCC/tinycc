@@ -1047,6 +1047,7 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
 {
   int size, align, r, i, nb_extra_sval = 0;
   struct param_plan *pplan;
+  int pass = 0;
 
    /* Several constraints require parameters to be copied in a specific order:
       - structures are copied to the stack before being loaded in a reg;
@@ -1063,8 +1064,14 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
       - parameters assigned to VFP regs be copied before structures assigned to
         VFP regs as the copy might use an even numbered VFP reg that already
         holds part of a structure. */
+again:
   for(i = 0; i < NB_CLASSES; i++) {
     for(pplan = plan->clsplans[i]; pplan; pplan = pplan->prev) {
+
+      if (pass
+          && (i != CORE_CLASS || pplan->sval->r < VT_CONST))
+        continue;
+
       vpushv(pplan->sval);
       pplan->sval->r = pplan->sval->r2 = VT_CONST; /* disable entry */
       switch(i) {
@@ -1169,6 +1176,10 @@ static int copy_params(int nb_args, struct plan *plan, int todo)
       vtop--;
     }
   }
+
+  /* second pass to restore registers that were saved on stack by accident */
+  if (++pass < 2)
+    goto again;
 
   /* Manually free remaining registers since next parameters are loaded
    * manually, without the help of gv(int). */
