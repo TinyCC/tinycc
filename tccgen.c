@@ -4888,6 +4888,52 @@ static int case_cmp(const void *pa, const void *pb)
     return a < b ? -1 : a > b;
 }
 
+static void gcase(struct case_t **base, int len, int case_reg, int *bsym)
+{
+    struct case_t *p;
+    int e;
+    if (len <= 4) {
+        while (len--) {
+            p = *base++;
+            vseti(case_reg, 0);
+            vpushi(p->v2);
+            if (p->v1 == p->v2) {
+                gen_op(TOK_EQ);
+                gtst_addr(0, p->sym);
+            } else {
+                gen_op(TOK_LE);
+                e = gtst(1, 0);
+                vseti(case_reg, 0);
+                vpushi(p->v1);
+                gen_op(TOK_GE);
+                gtst_addr(0, p->sym);
+                gsym(e);
+            }
+        }
+    } else {
+        p = base[len/2];
+        /* mid */
+        vseti(case_reg, 0);
+        vpushi(p->v2);
+        gen_op(TOK_LE);
+        e = gtst(1, 0);
+        vseti(case_reg, 0);
+        vpushi(p->v1);
+        gen_op(TOK_GE);
+        gtst_addr(0, p->sym);
+        /* left */
+        gcase(base, len/2, case_reg, bsym);
+        if (cur_switch->def_sym)
+            gjmp_addr(cur_switch->def_sym);
+        else
+            *bsym = gjmp(*bsym);
+        /* right */
+        gsym(e);
+        e = len/2 + 1;
+        gcase(base + e, len - e, case_reg, bsym);
+    }
+}
+
 static void block(int *bsym, int *csym, int is_expr)
 {
     int a, b, c, d;
@@ -5166,35 +5212,17 @@ static void block(int *bsym, int *csym, int is_expr)
         sw.p = NULL; sw.n = 0; sw.def_sym = 0;
         saved = cur_switch;
         cur_switch = &sw; block(&a, csym, 0);
-        cur_switch = saved;
         a = gjmp(a); /* add implicit break */
+        /* case lookup */
         gsym(b);
-
         qsort(sw.p, sw.n, sizeof(void*), case_cmp);
-        for (b = 0; b < sw.n; b++) {
-            int v = sw.p[b]->v1;
-            if (b && v <= d)
+        for (b = 1; b < sw.n; b++)
+            if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
                 tcc_error("duplicate case value");
-            d = sw.p[b]->v2;
-
-            vseti(c, 0);
-            vpushi(v);
-            if (v == d) {
-                gen_op(TOK_EQ);
-                gtst_addr(0, sw.p[b]->sym);
-            } else {
-                int e;
-                gen_op(TOK_GE);
-                e = gtst(1, 0);
-                vseti(c, 0);
-                vpushi(d);
-                gen_op(TOK_LE);
-                gtst_addr(0, sw.p[b]->sym);
-                gsym(e);
-            }
-        }
+        gcase(sw.p, sw.n, c, &a);
         if (sw.def_sym)
             gjmp_addr(sw.def_sym);
+        cur_switch = saved;
         /* break label */
         gsym(a);
     } else
