@@ -851,6 +851,8 @@ void gfunc_call(int nb_args)
             struct_size += size;
         } else {
             if (is_sse_float(vtop->type.t)) {
+		if (tcc_state->nosse)
+		  tcc_error("SSE disabled");
                 gv(RC_XMM0); /* only use one float register */
                 if (arg >= REGN) {
                     /* movq %xmm0, j*8(%rsp) */
@@ -961,6 +963,8 @@ void gfunc_prolog(CType *func_type)
             if (reg_param_index < REGN) {
                 /* save arguments passed by register */
                 if ((bt == VT_FLOAT) || (bt == VT_DOUBLE)) {
+		    if (tcc_state->nosse)
+		      tcc_error("SSE disabled");
                     o(0xd60f66); /* movq */
                     gen_modrm(reg_param_index, VT_LOCAL, NULL, addr);
                 } else {
@@ -1207,6 +1211,9 @@ void gfunc_call(int nb_args)
         else if (mode == x86_64_mode_integer)
             nb_reg_args += reg_count;
     }
+
+    if (nb_sse_args && tcc_state->nosse)
+      tcc_error("SSE disabled but floating point arguments passed");
 
     /* arguments are collected in runs. Each run is a collection of 8-byte aligned arguments
        and ended by a 16-byte aligned argument. This is because, from the point of view of
@@ -1541,8 +1548,10 @@ void gfunc_prolog(CType *func_type)
         /* save all register passing arguments */
         for (i = 0; i < 8; i++) {
             loc -= 16;
-            o(0xd60f66); /* movq */
-            gen_modrm(7 - i, VT_LOCAL, NULL, loc);
+	    if (!tcc_state->nosse) {
+		o(0xd60f66); /* movq */
+		gen_modrm(7 - i, VT_LOCAL, NULL, loc);
+	    }
             /* movq $0, loc+8(%rbp) */
             o(0x85c748);
             gen_le32(loc + 8);
@@ -1572,6 +1581,8 @@ void gfunc_prolog(CType *func_type)
         mode = classify_x86_64_arg(type, NULL, &size, &align, &reg_count);
         switch (mode) {
         case x86_64_mode_sse:
+	    if (tcc_state->nosse)
+	        tcc_error("SSE disabled but floating point arguments used");
             if (sse_param_index + reg_count <= 8) {
                 /* save arguments passed by register */
                 loc -= reg_count * 8;

@@ -643,6 +643,9 @@ struct TCCState {
 #ifdef TCC_TARGET_I386
     int seg_size; /* 32. Can be 16 with i386 assembler (.code16) */
 #endif
+#ifdef TCC_TARGET_X86_64
+    int nosse; /* For -mno-sse support. */
+#endif
 
     /* array of all loaded dlls (including those referenced by loaded dlls) */
     DLLReference **loaded_dlls;
