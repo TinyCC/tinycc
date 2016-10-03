@@ -5995,9 +5995,35 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 	    /* These come from compound literals, memcpy stuff over.  */
 	    Section *ssec;
 	    ElfW(Sym) *esym;
+	    ElfW_Rel *rel;
 	    esym = &((ElfW(Sym) *)symtab_section->data)[vtop->sym->c];
 	    ssec = tcc_state->sections[esym->st_shndx];
 	    memmove (ptr, ssec->data + esym->st_value, size);
+	    if (ssec->reloc) {
+		/* We need to copy over all memory contents, and that
+		   includes relocations.  Use the fact that relocs are
+		   created it order, so look from the end of relocs
+		   until we hit one before the copied region.  */
+		int num_relocs = ssec->reloc->data_offset / sizeof(*rel);
+		rel = (ElfW_Rel*)(ssec->reloc->data + ssec->reloc->data_offset);
+		while (num_relocs--) {
+		    rel--;
+		    if (rel->r_offset >= esym->st_value + size)
+		      continue;
+		    if (rel->r_offset < esym->st_value)
+		      break;
+		    put_elf_reloca(symtab_section, sec,
+				   c + rel->r_offset - esym->st_value,
+				   ELFW(R_TYPE)(rel->r_info),
+				   ELFW(R_SYM)(rel->r_info),
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
+				   rel->r_addend
+#else
+				   0
+#endif
+				  );
+		}
+	    }
 	} else {
 	    if ((vtop->r & VT_SYM) &&
 		(bt == VT_BYTE ||

@@ -109,6 +109,21 @@ struct pkthdr {
     struct in6_addr daddr, saddr;
 };
 struct pkthdr phdr = { { { 6,5,4,3 } }, { { 9,8,7,6 } } };
+
+struct Wrap {
+    void *func;
+};
+int global;
+void inc_global (void)
+{
+  global++;
+}
+
+struct Wrap global_wrap[] = {
+    ((struct Wrap) {inc_global}),
+    inc_global,
+};
+
 #include <stdio.h>
 void print_ (const char *name, const u8 *p, long size)
 {
@@ -171,6 +186,19 @@ void foo (struct W *w, struct pkthdr *phdr_)
 }
 #endif
 
+void test_compound_with_relocs (void)
+{
+  struct Wrap local_wrap[] = {
+      ((struct Wrap) {inc_global}),
+      inc_global,
+  };
+  void (*p)(void);
+  p = global_wrap[0].func; p();
+  p = global_wrap[1].func; p();
+  p = local_wrap[0].func; p();
+  p = local_wrap[1].func; p();
+}
+
 int main()
 {
   print(ce);
@@ -195,5 +223,6 @@ int main()
   print(phdr);
   foo(&gw, &phdr);
   //printf("q: %s\n", q);
+  test_compound_with_relocs();
   return 0;
 }
