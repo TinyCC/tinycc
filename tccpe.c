@@ -1447,6 +1447,7 @@ static void pe_print_sections(TCCState *s1, const char *fname)
 /* ------------------------------------------------------------- */
 /* helper function for load/store to insert one more indirection */
 
+#ifndef TCC_TARGET_ARM
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
 {
     Sym *sym;
@@ -1486,6 +1487,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     v2->r |= sv->r & VT_LVAL;
     return v2;
 }
+#endif
 
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t value)
 {

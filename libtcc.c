@@ -116,7 +116,7 @@ static void tcc_add_systemdir(TCCState *s)
 }
 #endif
 
-#ifndef CONFIG_TCC_STATIC
+#if defined TCC_IS_NATIVE && !defined CONFIG_TCC_STATIC
 static void dlclose(void *p)
 {
     FreeLibrary((HMODULE)p);
@@ -481,8 +481,10 @@ static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char
                 cstr_ccat(&str, c);
             }
         }
-        cstr_ccat(&str, '\0');
-        dynarray_add(p_ary, p_nb_ary, tcc_strdup(str.data));
+        if (str.size) {
+            cstr_ccat(&str, '\0');
+            dynarray_add(p_ary, p_nb_ary, tcc_strdup(str.data));
+        }
         cstr_free(&str);
         in = p+1;
     } while (*p);

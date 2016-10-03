@@ -69,58 +69,6 @@ if test -z "$source_path" -o "$source_path" = "." ; then
     source_path_used="no"
 fi
 
-cpu=`uname -m`
-if test $mingw32=yes; then
-    if test "$PROCESSOR_ARCHITEW6432" = "AMD64" \
-	 -o "$PROCESSOR_ARCHITECTURE" = "AMD64"; then
-	cpu="x86_64"
-    fi
-fi
-
-case "$cpu" in
-x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
-    cpu="x86"
-  ;;
-  x86_64|amd64)
-    cpu="x86-64"
-  ;;
-  arm*)
-    case "$cpu" in
-      arm|armv4l)
-	cpuver=4
-      ;;
-      armv5tel|armv5tejl)
-	cpuver=5
-      ;;
-      armv6j|armv6l)
-	cpuver=6
-      ;;
-      armv7a|armv7l)
-	cpuver=7
-      ;;
-    esac
-    cpu="armv4l"
-  ;;
-  aarch64)
-    cpu="aarch64"
-  ;;
-  alpha)
-    cpu="alpha"
-  ;;
-  "Power Macintosh"|ppc|ppc64)
-    cpu="powerpc"
-  ;;
-  mips)
-    cpu="mips"
-  ;;
-  s390)
-    cpu="s390"
-  ;;
-  *)
-  cpu="unknown"
-  ;;
-esac
-
 for opt do
   eval opt=\"$opt\"
   case "$opt" in
@@ -195,12 +143,61 @@ for opt do
   esac
 done
 
+if test -z "$cpu" ; then
+    if test -n "$ARCH" ; then
+	cpu="$ARCH"
+    else
+	cpu=`uname -m`
+    fi
+fi
+
+case "$cpu" in
+  x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
+    cpu="x86"
+  ;;
+  x86_64|amd64)
+    cpu="x86-64"
+  ;;
+  arm*)
+    case "$cpu" in
+      arm|armv4l)
+	cpuver=4
+      ;;
+      armv5tel|armv5tejl)
+	cpuver=5
+      ;;
+      armv6j|armv6l)
+	cpuver=6
+      ;;
+      armv7a|armv7l)
+	cpuver=7
+      ;;
+    esac
+    cpu="armv4l"
+  ;;
+  aarch64)
+    cpu="aarch64"
+  ;;
+  alpha)
+    cpu="alpha"
+  ;;
+  "Power Macintosh"|ppc|ppc64)
+    cpu="powerpc"
+  ;;
+  mips)
+    cpu="mips"
+  ;;
+  s390)
+    cpu="s390"
+  ;;
+  *)
+  cpu="unknown"
+  ;;
+esac
+
 # Checking for CFLAGS
 if test -z "$CFLAGS"; then
     CFLAGS="-Wall -g -O2"
-    if test "$mingw32" = "yes" -a "$cpu" = "x86-64"; then
-	CFLAGS="-m64 $CFLAGS"
-    fi
 fi
 
 if test "$mingw32" = "yes" ; then
@@ -238,11 +235,8 @@ else
     if test x"$bindir" = x""; then
       bindir="${execprefix}/bin"
     fi
-    if test x"$tccdir" = x""; then
-      tccdir="tcc"
-    fi
     if test x"$docdir" = x""; then
-      docdir="${sharedir}/doc/${tccdir}"
+      docdir="${sharedir}/doc"
     fi
     if test x"$mandir" = x""; then
       mandir="${sharedir}/man"
@@ -250,7 +244,9 @@ else
     if test x"$infodir" = x""; then
       infodir="${sharedir}/info"
     fi
-    tccdir="${libdir}/${tccdir}"
+    if test x"$tccdir" = x""; then
+      tccdir="${libdir}/tcc"
+    fi
 fi # mingw32
 
 if test x"$includedir" = x""; then
@@ -284,6 +280,7 @@ Advanced options (experts only):
   --ar=AR                  create archives using AR [$ar]
   --extra-cflags=          specify compiler flags [$CFLAGS]
   --extra-ldflags=         specify linker options []
+  --cpu=CPU                CPU [$cpu]
   --strip-binaries         strip symbol tables from resulting binaries
   --disable-static         make libtcc.so instead of libtcc.a
   --disable-rpath          disable use of -rpath with the above
@@ -317,9 +314,9 @@ if test -z "$cross_prefix" ; then
     if test "$mingw32" = "no" ; then
       triplet="$($CONFTEST triplet)"
       if test -f "/usr/lib/$triplet/crti.o" ; then
-	tcc_lddir="lib/$triplet"
+	tcc_lddir="lib"
 	multiarch_triplet="$triplet"
-      elif test -f "/usr/lib64/crti.o" ; then
+      elif test "$cpu" != "x86" -a -f "/usr/lib64/crti.o" ; then
 	tcc_lddir="lib64"
       fi
 

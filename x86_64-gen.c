@@ -1069,8 +1069,8 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
         
         return mode;
     }
-    
     assert(0);
+    return 0;
 }
 
 static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *palign, int *reg_count)
