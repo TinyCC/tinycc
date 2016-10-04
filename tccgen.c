@@ -533,17 +533,35 @@ static void vdup(void)
     vpushv(vtop);
 }
 
+/* save registers up to (vtop - n) stack entry */
+ST_FUNC void save_regs(int n)
+{
+    SValue *p, *p1;
+    for(p = vstack, p1 = vtop - n; p <= p1; p++)
+        save_reg(p->r);
+}
+
 /* save r to the memory stack, and mark it as being free */
 ST_FUNC void save_reg(int r)
 {
+    save_reg_upstack(r, 0);
+}
+
+/* save r to the memory stack, and mark it as being free,
+   if seen up to (vtop - n) stack entry */
+ST_FUNC void save_reg_upstack(int r, int n)
+{
     int l, saved, size, align;
-    SValue *p, sv;
+    SValue *p, *p1, sv;
     CType *type;
+
+    if ((r &= VT_VALMASK) >= VT_CONST)
+        return;
 
     /* modify all stack values */
     saved = 0;
     l = 0;
-    for(p=vstack;p<=vtop;p++) {
+    for(p = vstack, p1 = vtop - n; p <= p1; p++) {
         if ((p->r & VT_VALMASK) == r ||
             ((p->type.t & VT_BTYPE) == VT_LLONG && (p->r2 & VT_VALMASK) == r)) {
             /* must save value on stack if not already done */
@@ -657,20 +675,6 @@ ST_FUNC int get_reg(int rc)
     }
     /* Should never comes here */
     return -1;
-}
-
-/* save registers up to (vtop - n) stack entry */
-ST_FUNC void save_regs(int n)
-{
-    int r;
-    SValue *p, *p1;
-    p1 = vtop - n;
-    for(p = vstack;p <= p1; p++) {
-        r = p->r & VT_VALMASK;
-        if (r < VT_CONST) {
-            save_reg(r);
-        }
-    }
 }
 
 /* move register 's' (of type 't') to 'r', and flush previous value of r to memory
@@ -859,13 +863,17 @@ ST_FUNC int gv(int rc)
                     vpushi(ll >> 32); /* second word */
                 } else
 #endif
-                if (r >= VT_CONST || /* XXX: test to VT_CONST incorrect ? */
-                           (vtop->r & VT_LVAL)) {
+                if (vtop->r & VT_LVAL) {
                     /* We do not want to modifier the long long
                        pointer here, so the safest (and less
                        efficient) is to save all the other registers
                        in the stack. XXX: totally inefficient. */
+               #if 0
                     save_regs(1);
+               #else
+                    /* lvalue_save: save only if used further down the stack */
+                    save_reg_upstack(vtop->r, 1);
+               #endif
                     /* load from memory */
                     vtop->type.t = load_type;
                     load(r, vtop);

@@ -1177,7 +1177,8 @@ again:
     }
   }
 
-  /* second pass to restore registers that were saved on stack by accident */
+  /* second pass to restore registers that were saved on stack by accident.
+     Maybe redundant after the "lvalue_save" patch in tccgen.c:gv() */
   if (++pass < 2)
     goto again;
 

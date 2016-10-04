@@ -1953,6 +1953,11 @@ long long int value(struct S *v)
     return ((long long int)v->item);
 }
 
+long long llfunc2(long long x, long long y, int z)
+{
+    return x * y * z;
+}
+
 void longlong_test(void)
 {
     long long a, b, c;
@@ -1999,15 +2004,17 @@ void longlong_test(void)
     }
     lloptest(0x80000000, 0);
 
-    /* another long long spill test */
     {
-        long long *p, v;
+        long long *p, v, **pp;
         v = 1;
         p = &v;
         p[0]++;
-        printf("%lld\n", *p);
-    }
+        printf("another long long spill test : %lld\n", *p);
+        pp = &p;
 
+        v = llfunc2(**pp, **pp, ia);
+        printf("a long long function (arm-)reg-args test : %lld\n", v);
+    }
     a = 68719476720LL;
     b = 4294967295LL;
     printf("%d %d %d %d\n", a > b, a < b, a >= b, a <= b);

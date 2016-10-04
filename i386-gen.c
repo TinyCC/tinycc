@@ -848,6 +848,8 @@ ST_FUNC void gen_opi(int op)
         fr = vtop[0].r;
         vtop--;
         save_reg(TREG_EDX);
+        /* save EAX too if used otherwise */
+        save_reg_upstack(TREG_EAX, 1);
         if (op == TOK_UMULL) {
             o(0xf7); /* mul fr */
             o(0xe0 + fr);
