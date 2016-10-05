@@ -18,10 +18,6 @@ else
  endif
 endif
 
-CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC
-LIBS_P=
-LDFLAGS_P = $(LDFLAGS)
-
 LIBTCC = libtcc.a
 LIBTCC1 = libtcc1.a
 LINK_LIBTCC =
@@ -49,6 +45,10 @@ ifeq ($(TARGETOS),Darwin)
  CFLAGS += -Wl,-flat_namespace,-undefined,warning
  export MACOSX_DEPLOYMENT_TARGET:=10.2
 endif
+
+CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
+LIBS_P= $(LIBS)
+LDFLAGS_P = $(LDFLAGS)
 
 CONFIG_$(ARCH) = yes
 NATIVE_DEFINES_$(CONFIG_i386) += -DTCC_TARGET_I386
@@ -136,8 +136,8 @@ endif
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # Host Tiny C Compiler
-tcc$(EXESUF): tcc.c $(LIBTCC)
-	$(CC) -o $@ $^ $(LIBS) $(NATIVE_DEFINES) $(CFLAGS) $(LDFLAGS) $(LINK_LIBTCC)
+tcc$(EXESUF): tcc.o $(LIBTCC)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF): tcc.c
@@ -182,7 +182,6 @@ else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)
 libtcc.o : NATIVE_DEFINES += -DONE_SOURCE
-tcc.o : NATIVE_DEFINES += -DONE_SOURCE
 endif
 
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
@@ -269,7 +268,7 @@ uninstall:
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv $(libdir)/libtcc.so*
 	rm -rv "$(tccdir)"
-	rm -rv "$(docdir)"
+	rm -fv "$(docdir)/tcc-doc.html"
 else
 # on windows
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)

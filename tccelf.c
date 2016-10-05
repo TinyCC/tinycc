@@ -450,7 +450,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
 #if defined TCC_IS_NATIVE && !defined _WIN32
                 void *addr;
                 name = (char *) symtab_section->link->data + sym->st_name;
-                addr = resolve_sym(s1, name);
+                addr = dlsym(RTLD_DEFAULT, name);
                 if (addr) {
                     sym->st_value = (addr_t)addr;
 #ifdef DEBUG_RELOC
@@ -576,15 +576,18 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 goto output_file;
             write16le(ptr, read16le(ptr) + val - addr);
             break;
-        case R_386_RELATIVE:
-            /* do nothing */
+
+#ifdef TCC_TARGET_PE
+        case R_386_RELATIVE: /* handled in pe_relocate_rva() */
             break;
+#endif
         case R_386_COPY:
             /* This reloction must copy initialized data from the library
             to the program .bss segment. Currently made like for ARM
             (to remove noise of defaukt case). Is this true? 
             */
             break;
+
         default:
             fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
@@ -773,6 +776,10 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             /* Nothing to do.  Normally used to indicate a dependency
                on a certain symbol (like for exception handling under EABI).  */
             break;
+#ifdef TCC_TARGET_PE
+	case R_ARM_RELATIVE: /* handled in pe_relocate_rva() */
+	    break;
+#endif
         default:
             fprintf(stderr,"FIXME: handle reloc type %x at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
@@ -973,6 +980,11 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             /* we load the got offset */
             write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
             break;
+#ifdef TCC_TARGET_PE
+	case R_X86_64_RELATIVE: /* handled in pe_relocate_rva() */
+	    break;
+#endif
+
 #else
 #error unsupported processor
 #endif

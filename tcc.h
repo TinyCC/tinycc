@@ -76,6 +76,7 @@
 #  pragma warning (disable : 4018)  // signed/unsigned mismatch
 #  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
 # endif
+# undef CONFIG_TCC_STATIC
 #endif
 
 #ifndef O_BINARY
@@ -1052,6 +1053,10 @@ static inline int toup(int c)
 # define PUB_FUNC
 #endif
 
+#ifdef TCC_PROFILE /* profile all functions */
+# define static
+#endif
+
 #ifdef ONE_SOURCE
 #define ST_INLN static inline
 #define ST_FUNC static
@@ -1559,9 +1564,7 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 ST_FUNC void *dlopen(const char *filename, int flag);
 ST_FUNC void dlclose(void *p);
 ST_FUNC const char *dlerror(void);
-ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
-#elif !defined _WIN32
-ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol);
+ST_FUNC void *dlsym(int flag, const char *symbol);
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE

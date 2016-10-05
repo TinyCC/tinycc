@@ -748,7 +748,7 @@ static TCCSyms tcc_syms[] = {
     { NULL, NULL },
 };
 
-ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol)
+ST_FUNC void *dlsym(int flag, const char *symbol)
 {
     TCCSyms *p;
     p = tcc_syms;
@@ -758,13 +758,6 @@ ST_FUNC void *resolve_sym(TCCState *s1, const char *symbol)
         p++;
     }
     return NULL;
-}
-
-#elif !defined(_WIN32)
-
-ST_FUNC void *resolve_sym(TCCState *s1, const char *sym)
-{
-    return dlsym(RTLD_DEFAULT, sym);
 }
 
 #endif /* CONFIG_TCC_STATIC */

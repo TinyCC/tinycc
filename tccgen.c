@@ -54,6 +54,7 @@ ST_DATA Sym *define_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
 static int local_scope;
+static int in_sizeof;
 
 ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
 ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
@@ -3762,7 +3763,6 @@ ST_FUNC void unary(void)
     CType type;
     Sym *s;
     AttributeDef ad;
-    static int in_sizeof = 0;
 
     sizeof_caller = in_sizeof;
     in_sizeof = 0;
@@ -5235,6 +5235,7 @@ static void block(int *bsym, int *csym, int is_expr)
         gcase(sw.p, sw.n, c, &a);
         if (sw.def_sym)
             gjmp_addr(sw.def_sym);
+        dynarray_reset(&sw.p, &sw.n);
         cur_switch = saved;
         /* break label */
         gsym(a);
