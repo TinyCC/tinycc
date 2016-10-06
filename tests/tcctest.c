@@ -2939,6 +2939,7 @@ void asm_test(void)
 #ifdef BOOL_ISOC99
     _Bool somebool;
 #endif
+    register int regvar asm("%esi");
 
     printf("inline asm:\n");
 
@@ -3001,6 +3002,8 @@ void asm_test(void)
     val = 44;
     fancy_copy2 (&val, &val2);
     printf ("fancycpy2(%d)=%d\n", val, val2);
+    asm volatile ("mov $0x4243, %%esi" : "=r" (regvar));
+    printf ("regvar=%x\n", regvar);
     return;
  label1:
     goto label2;

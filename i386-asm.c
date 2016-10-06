@@ -1185,6 +1185,28 @@ static const char *skip_constraint_modifiers(const char *p)
     return p;
 }
 
+/* If T (a token) is of the form "%reg" returns the register
+   number and type, otherwise return -1.  */
+ST_FUNC int asm_parse_regvar (int t)
+{
+    const char *s;
+    Operand op;
+    if (t < TOK_IDENT)
+        return -1;
+    s = table_ident[t - TOK_IDENT]->str;
+    if (s[0] != '%')
+        return -1;
+    t = tok_alloc(s+1, strlen(s)-1)->tok;
+    unget_tok(t);
+    unget_tok('%');
+    parse_operand(tcc_state, &op);
+    /* Accept only integer regs for now.  */
+    if (op.type & OP_REG)
+        return op.reg;
+    else
+        return -1;
+}
+
 #define REG_OUT_MASK 0x01
 #define REG_IN_MASK  0x02
 
@@ -1227,6 +1249,11 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                 tcc_error("cannot reference twice the same operand");
             operands[k].input_index = i;
             op->priority = 5;
+	} else if ((op->vt->r & VT_VALMASK) == VT_LOCAL
+		   && op->vt->sym
+		   && (reg = op->vt->sym->r & VT_VALMASK) < VT_CONST) {
+	    op->priority = 1;
+	    op->reg = reg;
         } else {
             op->priority = constraint_priority(str);
         }
@@ -1274,6 +1301,12 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
         } else {
             reg_mask = REG_IN_MASK;
         }
+	if (op->reg >= 0) {
+	    if (is_reg_allocated(op->reg))
+	        tcc_error("asm regvar requests register that's taken already");
+	    reg = op->reg;
+	    goto reg_found;
+	}
     try_next:
         c = *str++;
         switch(c) {

@@ -386,7 +386,7 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c)
     Sym *s;
 
     s = sym_malloc();
-    s->asm_label = 0;
+    s->scope = 0;
     s->v = v;
     s->type.t = t;
     s->type.ref = NULL;
@@ -577,6 +577,7 @@ static void vsetc(CType *type, int r, CValue *vc)
     vtop->r = r;
     vtop->r2 = VT_CONST;
     vtop->c = *vc;
+    vtop->sym = NULL;
 }
 
 /* push constant of type "type" with useless value */
@@ -4599,11 +4600,17 @@ ST_FUNC void unary(void)
             r = VT_SYM | VT_CONST;
         } else {
             r = s->r;
+	    /* A symbol that has a register is a local register variable,
+	       which starts out as VT_LOCAL value.  */
+	    if ((r & VT_VALMASK) < VT_CONST)
+	      r = (r & ~VT_VALMASK) | VT_LOCAL;
         }
         vset(&s->type, r, s->c);
-        /* if forward reference, we must point to s */
+        /* Point to s as backpointer (even without r&VT_SYM).
+	   Will be used by at least the x86 inline asm parser for
+	   regvars.  */
+	vtop->sym = s;
         if (vtop->r & VT_SYM) {
-            vtop->sym = s;
             vtop->c.i = 0;
         }
         break;
@@ -6462,6 +6469,13 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #endif
         if (v) {
             /* local variable */
+#ifdef CONFIG_TCC_ASM
+	    if (ad->asm_label) {
+		int reg = asm_parse_regvar(ad->asm_label);
+		if (reg >= 0)
+		    r = (r & ~VT_VALMASK) | reg;
+	    }
+#endif
             sym_push(v, type, r, addr);
         } else {
             /* push local reference */
