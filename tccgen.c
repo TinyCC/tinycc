@@ -5111,16 +5111,21 @@ static void block(int *bsym, int *csym, int is_expr)
                     else
                         r = RC_IRET;
 
-                    for (;;) {
+                    if (ret_nregs == 1)
                         gv(r);
-                        if (--ret_nregs == 0)
-                            break;
-                        /* We assume that when a structure is returned in multiple
-                           registers, their classes are consecutive values of the
-                           suite s(n) = 2^n */
-                        r <<= 1;
-                        vtop->c.i += regsize;
-                        vtop->r = VT_LOCAL | VT_LVAL;
+                    else {
+                        for (;;) {
+                            vdup();
+                            gv(r);
+                            vpop();
+                            if (--ret_nregs == 0)
+                              break;
+                            /* We assume that when a structure is returned in multiple
+                               registers, their classes are consecutive values of the
+                               suite s(n) = 2^n */
+                            r <<= 1;
+                            vtop->c.i += regsize;
+                        }
                     }
                 }
             } else if (is_float(func_vt.t)) {
