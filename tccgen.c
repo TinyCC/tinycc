@@ -5538,7 +5538,12 @@ static void init_putv(CType *type, Section *sec, unsigned long c,
             *(double *)ptr = vtop->c.d;
             break;
         case VT_LDOUBLE:
-            *(long double *)ptr = vtop->c.ld;
+            if (sizeof(long double) == LDOUBLE_SIZE)
+                *(long double *)ptr = vtop->c.ld;
+            else if (sizeof(double) == LDOUBLE_SIZE)
+                *(double *)ptr = vtop->c.ld;
+            else
+                tcc_error("can't cross compile long double constants");
             break;
         case VT_LLONG:
             *(long long *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
