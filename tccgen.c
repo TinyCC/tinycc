@@ -6019,6 +6019,12 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 		      continue;
 		    if (rel->r_offset < esym->st_value)
 		      break;
+		    /* Note: if the same fields are initialized multiple
+		       times (possible with designators) then we possibly
+		       add multiple relocations for the same offset here.
+		       That would lead to wrong code, the last reloc needs
+		       to win.  We clean this up later after the whole
+		       initializer is parsed.  */
 		    put_elf_reloca(symtab_section, sec,
 				   c + rel->r_offset - esym->st_value,
 				   ELFW(R_TYPE)(rel->r_info),
@@ -6602,7 +6608,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         vla_sp_loc = addr;
         vlas_in_scope++;
     } else if (has_init) {
+	size_t oldreloc_offset = 0;
+	if (sec && sec->reloc)
+	  oldreloc_offset = sec->reloc->data_offset;
         decl_initializer(type, sec, addr, 1, 0);
+	if (sec && sec->reloc)
+	  squeeze_multi_relocs(sec, oldreloc_offset);
         /* patch flexible array member size back to -1, */
         /* for possible subsequent similar declarations */
         if (flexible_array)

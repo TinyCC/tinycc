@@ -1384,6 +1384,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1);
 
 ST_FUNC void build_got_entries(TCCState *s1);
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
+ST_FUNC void squeeze_multi_relocs(Section *sec, size_t oldrelocoffset);
+
 ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err);
 #if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
 ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);

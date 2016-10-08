@@ -199,6 +199,25 @@ void test_compound_with_relocs (void)
   p = local_wrap[1].func; p();
 }
 
+void sys_ni(void) { printf("ni\n"); }
+void sys_one(void) { printf("one\n"); }
+void sys_two(void) { printf("two\n"); }
+void sys_three(void) { printf("three\n"); }
+typedef void (*fptr)(void);
+const fptr table[3] = {
+    [0 ... 2] = &sys_ni,
+    [0] = sys_one,
+    [1] = sys_two,
+    [2] = sys_three,
+};
+
+void test_multi_relocs(void)
+{
+  int i;
+  for (i = 0; i < sizeof(table)/sizeof(table[0]); i++)
+    table[i]();
+}
+
 int main()
 {
   print(ce);
@@ -224,5 +243,6 @@ int main()
   foo(&gw, &phdr);
   //printf("q: %s\n", q);
   test_compound_with_relocs();
+  test_multi_relocs();
   return 0;
 }
