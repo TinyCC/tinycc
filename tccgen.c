@@ -2244,6 +2244,7 @@ ST_FUNC int type_size(CType *type, int *a)
 ST_FUNC void vla_runtime_type_size(CType *type, int *a)
 {
     if (type->t & VT_VLA) {
+        type_size(&type->ref->type, a);
         vset(&int_type, VT_LOCAL|VT_LVAL, type->ref->c);
     } else {
         vpushi(type_size(type, a));
