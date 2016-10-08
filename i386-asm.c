@@ -21,9 +21,7 @@
 
 #include "tcc.h"
 
-/* #define NB_ASM_REGS 8 */
 #define MAX_OPERANDS 3
-#define NB_SAVED_REGS 3
 
 #define TOK_ASM_first TOK_ASM_clc
 #define TOK_ASM_last TOK_ASM_emms
@@ -279,11 +277,11 @@ static inline int get_reg_shift(TCCState *s1)
 }
 
 #ifdef TCC_TARGET_X86_64
-static int asm_parse_numeric_reg(int *type)
+static int asm_parse_numeric_reg(int t, int *type)
 {
     int reg = -1;
-    if (tok >= TOK_IDENT && tok < tok_ident) {
-	const char *s = table_ident[tok - TOK_IDENT]->str;
+    if (t >= TOK_IDENT && t < tok_ident) {
+	const char *s = table_ident[t - TOK_IDENT]->str;
 	char c;
 	*type = OP_REG64;
 	if (*s == 'c') {
@@ -335,7 +333,7 @@ static int asm_parse_reg(int *type)
     } else if (tok == TOK_ASM_rip) {
         reg = -2; /* Probably should use different escape code. */
 	*type = OP_REG64;
-    } else if ((reg = asm_parse_numeric_reg(type)) >= 0
+    } else if ((reg = asm_parse_numeric_reg(tok, type)) >= 0
 	       && (*type == OP_REG32 || *type == OP_REG64)) {
 	;
 #endif
@@ -400,7 +398,7 @@ static void parse_operand(TCCState *s1, Operand *op)
 	} else if (tok >= TOK_ASM_spl && tok <= TOK_ASM_dil) {
 	    op->type = OP_REG8 | OP_REG8_LOW;
 	    op->reg = 4 + tok - TOK_ASM_spl;
-        } else if ((op->reg = asm_parse_numeric_reg(&op->type)) >= 0) {
+        } else if ((op->reg = asm_parse_numeric_reg(tok, &op->type)) >= 0) {
 	    ;
 #endif
         } else {
@@ -1586,7 +1584,18 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
     uint8_t regs_allocated[NB_ASM_REGS];
     ASMOperand *op;
     int i, reg;
-    static uint8_t reg_saved[NB_SAVED_REGS] = { 3, 6, 7 };
+
+    /* Strictly speaking %Xbp and %Xsp should be included in the
+       call-preserved registers, but currently it doesn't matter.  */
+#ifdef TCC_TARGET_X86_64
+#ifdef TCC_TARGET_PE
+    static uint8_t reg_saved[] = { 3, 6, 7, 12, 13, 14, 15 };
+#else
+    static uint8_t reg_saved[] = { 3, 12, 13, 14, 15 };
+#endif
+#else
+    static uint8_t reg_saved[] = { 3, 6, 7 };
+#endif
 
     /* mark all used registers */
     memcpy(regs_allocated, clobber_regs, sizeof(regs_allocated));
@@ -1597,9 +1606,11 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
     }
     if (!is_output) {
         /* generate reg save code */
-        for(i = 0; i < NB_SAVED_REGS; i++) {
+        for(i = 0; i < sizeof(reg_saved)/sizeof(reg_saved[0]); i++) {
             reg = reg_saved[i];
             if (regs_allocated[reg]) {
+		if (reg >= 8)
+		  g(0x41), reg-=8;
                 g(0x50 + reg);
             }
         }
@@ -1658,9 +1669,11 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
             }
         }
         /* generate reg restore code */
-        for(i = NB_SAVED_REGS - 1; i >= 0; i--) {
+        for(i = sizeof(reg_saved)/sizeof(reg_saved[0]) - 1; i >= 0; i--) {
             reg = reg_saved[i];
             if (regs_allocated[reg]) {
+		if (reg >= 8)
+		  g(0x41), reg-=8;
                 g(0x58 + reg);
             }
         }
@@ -1671,6 +1684,9 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 {
     int reg;
     TokenSym *ts;
+#ifdef TCC_TARGET_X86_64
+    int type;
+#endif
 
     if (!strcmp(str, "memory") ||
         !strcmp(str, "cc") ||
@@ -1685,16 +1701,11 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 #ifdef TCC_TARGET_X86_64
     } else if (reg >= TOK_ASM_rax && reg <= TOK_ASM_rdi) {
         reg -= TOK_ASM_rax;
-    } else if (1 && str[0] == 'r' &&
-	       (((str[1] == '8' || str[1] == '9') && str[2] == 0) ||
-		(str[1] == '1' && str[2] >= '0' && str[2] <= '5' &&
-		 str[3] == 0))) {
-	/* Do nothing for now.  We can't parse the high registers.  */
-	goto end;
+    } else if ((reg = asm_parse_numeric_reg(reg, &type)) >= 0) {
+	;
 #endif
     } else {
         tcc_error("invalid clobber register '%s'", str);
     }
     clobber_regs[reg] = 1;
-end:;
 }

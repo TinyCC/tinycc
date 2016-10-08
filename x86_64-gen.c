@@ -24,7 +24,7 @@
 
 /* number of available registers */
 #define NB_REGS         25
-#define NB_ASM_REGS     8
+#define NB_ASM_REGS     16
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does

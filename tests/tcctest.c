@@ -2925,6 +2925,29 @@ void fancy_copy2 (unsigned *in, unsigned *out)
   asm volatile ("mov %0,(%1)" : : "r" (*in), "r" (out) : "memory");
 }
 
+#ifdef __x86_64__
+void clobber_r12(void)
+{
+    asm volatile("mov $1, %%r12" ::: "r12");
+}
+#endif
+
+void test_high_clobbers(void)
+{
+#ifdef __x86_64__
+    register long val asm("r12");
+    long val2;
+    /* This tests if asm clobbers correctly save/restore callee saved
+       registers if they are clobbered and if it's the high 8 x86-64
+       registers.  This is fragile for GCC as the constraints do not
+       correctly capture the data flow, but good enough for us.  */
+    asm volatile("mov $0x4542, %%r12" : "=r" (val):: "memory");
+    clobber_r12();
+    asm volatile("mov %%r12, %0" : "=r" (val2) : "r" (val): "memory");
+    printf("asmhc: 0x%x\n", val2);
+#endif
+}
+
 void asm_test(void)
 {
     char buf[128];
@@ -3004,6 +3027,7 @@ void asm_test(void)
     printf ("fancycpy2(%d)=%d\n", val, val2);
     asm volatile ("mov $0x4243, %%esi" : "=r" (regvar));
     printf ("regvar=%x\n", regvar);
+    test_high_clobbers();
     return;
  label1:
     goto label2;
