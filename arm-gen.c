@@ -79,6 +79,8 @@ enum {
     TREG_F6,
     TREG_F7,
 #endif
+    TREG_SP = 13,
+    TREG_LR,
 };
 
 #ifdef TCC_ARM_VFP
@@ -406,24 +408,26 @@ static uint32_t vfpr(int r)
 {
   if(r<TREG_F0 || r>TREG_F7)
     tcc_error("compiler error! register %i is no vfp register",r);
-  return r-5;
+  return r - TREG_F0;
 }
 #else
 static uint32_t fpr(int r)
 {
   if(r<TREG_F0 || r>TREG_F3)
     tcc_error("compiler error! register %i is no fpa register",r);
-  return r-5;
+  return r - TREG_F0;
 }
 #endif
 
 static uint32_t intr(int r)
 {
-  if(r==4)
+  if(r == TREG_R12)
     return 12;
-  if((r<0 || r>4) && r!=14)
-    tcc_error("compiler error! register %i is no int register",r);
-  return r;
+  if(r >= TREG_R0 && r <= TREG_R3)
+    return r - TREG_R0;
+  if (r >= TREG_SP && r <= TREG_LR)
+    return r + (13 - TREG_SP);
+  tcc_error("compiler error! register %i is no int register",r);
 }
 
 static void calcaddr(uint32_t *base, int *off, int *sgn, int maxoff, unsigned shift)
@@ -544,7 +548,8 @@ void load(int r, SValue *sv)
       v1.type.t = VT_PTR;
       v1.r = VT_LOCAL | VT_LVAL;
       v1.c.i = sv->c.i;
-      load(base=14 /* lr */, &v1);
+      load(TREG_LR, &v1);
+      base = 14; /* lr */
       fc=sign=0;
       v=VT_LOCAL;
     } else if(v == VT_CONST) {
@@ -552,7 +557,8 @@ void load(int r, SValue *sv)
       v1.r = fr&~VT_LVAL;
       v1.c.i = sv->c.i;
       v1.sym=sv->sym;
-      load(base=14, &v1);
+      load(TREG_LR, &v1);
+      base = 14; /* lr */
       fc=sign=0;
       v=VT_LOCAL;
     } else if(v < VT_CONST) {
@@ -678,7 +684,7 @@ void store(int r, SValue *sv)
 
   v = fr & VT_VALMASK;
   if (fr & VT_LVAL || fr == VT_LOCAL) {
-    uint32_t base = 0xb;
+    uint32_t base = 0xb; /* fp */
     if(v < VT_CONST) {
       base=intr(v);
       v=VT_LOCAL;
@@ -688,7 +694,8 @@ void store(int r, SValue *sv)
       v1.r = fr&~VT_LVAL;
       v1.c.i = sv->c.i;
       v1.sym=sv->sym;
-      load(base=14, &v1);
+      load(TREG_LR, &v1);
+      base = 14; /* lr */
       fc=sign=0;
       v=VT_LOCAL;
     }
