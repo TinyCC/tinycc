@@ -1026,10 +1026,67 @@ struct aligntest4 {
     double a[0];
 };
 
+struct __attribute__((aligned(16))) aligntest5
+{
+    int i;
+};
+struct aligntest6
+{
+    int i;
+} __attribute__((aligned(16)));
+struct aligntest7
+{
+    int i;
+};
+struct aligntest5 altest5[2];
+struct aligntest6 altest6[2];
+int pad1;
+/* altest7 is correctly aligned to 16 bytes also with TCC,
+   but __alignof__ returns the wrong result (4) because we
+   can't store the alignment yet when specified on symbols
+   directly (it's stored in the type so we'd need to make
+   a copy of it).
+struct aligntest7 altest7[2] __attribute__((aligned(16)));*/
+
+struct Large {
+    unsigned long flags;
+    union {
+	void *u1;
+	int *u2;
+    };
+
+    struct {
+	union {
+	    unsigned long index;
+	    void *freelist;
+	};
+	union {
+	    unsigned long counters;
+	    struct {
+		int bla;
+	    };
+	};
+    };
+
+    union {
+	struct {
+	    long u3;
+	    long u4;
+	};
+	void *u5;
+	struct {
+	    unsigned long compound_head;
+	    unsigned int compound_dtor;
+	    unsigned int compound_order;
+	};
+    };
+} __attribute__((aligned(2 * sizeof(long))));
+
 void struct_test()
 {
     struct1 *s;
     union union2 u;
+    struct Large ls;
 
     printf("struct:\n");
     printf("sizes: %d %d %d %d\n",
@@ -1037,6 +1094,7 @@ void struct_test()
            sizeof(struct struct2),
            sizeof(union union1),
            sizeof(union union2));
+    printf("offsets: %d\n", (int)((char*)&st1.u.v1 - (char*)&st1));
     st1.f1 = 1;
     st1.f2 = 2;
     st1.f3 = 3;
@@ -1065,10 +1123,27 @@ void struct_test()
            sizeof(struct aligntest3), __alignof__(struct aligntest3));
     printf("aligntest4 sizeof=%d alignof=%d\n",
            sizeof(struct aligntest4), __alignof__(struct aligntest4));
+    printf("aligntest5 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest5), __alignof__(struct aligntest5));
+    printf("aligntest6 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest6), __alignof__(struct aligntest6));
+    printf("aligntest7 sizeof=%d alignof=%d\n",
+           sizeof(struct aligntest7), __alignof__(struct aligntest7));
+    printf("altest5 sizeof=%d alignof=%d\n",
+           sizeof(altest5), __alignof__(altest5));
+    printf("altest6 sizeof=%d alignof=%d\n",
+           sizeof(altest6), __alignof__(altest6));
+    /*printf("altest7 sizeof=%d alignof=%d\n",
+           sizeof(altest7), __alignof__(altest7));*/
            
     /* empty structures (GCC extension) */
     printf("sizeof(struct empty) = %d\n", sizeof(struct empty));
     printf("alignof(struct empty) = %d\n", __alignof__(struct empty));
+
+    printf("Large: sizeof=%d\n", sizeof(ls));
+    memset(&ls, 0, sizeof(ls));
+    ls.compound_head = 42;
+    printf("Large: offsetof(compound_head)=%d\n", (int)((char*)&ls.compound_head - (char*)&ls));
 }
 
 /* XXX: depend on endianness */
@@ -3547,11 +3622,22 @@ typedef struct Spacked3_s {
     int c;
 } __attribute__((__packed__)) Spacked3;
 Spacked3 spacked3;
+struct gate_struct64 {
+    unsigned short offset_low;
+    unsigned short segment;
+    unsigned ist : 3, zero0 : 5, type : 5, dpl : 2, p : 1;
+    unsigned short offset_middle;
+    unsigned offset_high;
+    unsigned zero1;
+} __attribute__((packed));
+typedef struct gate_struct64 gate_desc;
+gate_desc a_gate_desc;
 void attrib_test(void)
 {
   printf("attr: %d %d %d %d\n", sizeof(struct Spacked),
 	 sizeof(spacked), sizeof(Spacked2), sizeof(spacked2));
   printf("attr: %d %d\n", sizeof(Spacked3), sizeof(spacked3));
+  printf("attr: %d %d\n", sizeof(gate_desc), sizeof(a_gate_desc));
 }
 extern __attribute__((__unused__)) char * __attribute__((__unused__)) *
 strange_attrib_placement (void);

@@ -3239,7 +3239,9 @@ static Sym * find_field (CType *type, int v)
     Sym *s = type->ref;
     v |= SYM_FIELD;
     while ((s = s->next) != NULL) {
-	if ((s->v & SYM_FIELD) && (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
+	if ((s->v & SYM_FIELD) &&
+	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
+	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
 	    Sym *ret = find_field (&s->type, v);
 	    if (ret)
 	        return ret;
@@ -3250,44 +3252,131 @@ static Sym * find_field (CType *type, int v)
     return s;
 }
 
+static void struct_add_offset (Sym *s, int offset)
+{
+    while ((s = s->next) != NULL) {
+	if ((s->v & SYM_FIELD) &&
+	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
+	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
+	    struct_add_offset(s->type.ref, offset);
+	} else
+	  s->c += offset;
+    }
+}
+
 static void struct_layout(CType *type, AttributeDef *ad)
 {
-    int align, maxalign, offset, c;
+    int align, maxalign, offset, c, bit_pos;
     Sym *f;
-    maxalign = 1;
+    if (ad->a.aligned)
+      maxalign = ad->a.aligned;
+    else
+      maxalign = 1;
     offset = 0;
     c = 0;
+    bit_pos = 0;
     for (f = type->ref->next; f; f = f->next) {
-	int extra_bytes = f->c;
-	int bit_pos;
-	int size = type_size(&f->type, &align);
-	if (f->type.t & VT_BITFIELD)
-	  bit_pos = (f->type.t >> VT_STRUCT_SHIFT) & 0x3f;
-	else
-	  bit_pos = 0;
-	if (f->r) {
+	int extra_bytes = 0;
+	int typealign, bit_size;
+	int size = type_size(&f->type, &typealign);
+	int pcc = !tcc_state->ms_bitfields;
+	if (f->type.t & VT_BITFIELD) {
+	    bit_size = (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
+	    /* without ms-bitfields, allocate the
+	     * minimum number of bytes necessary,
+	     * adding single bytes as needed */
+	    if (!tcc_state->ms_bitfields) {
+		if (bit_pos == 0)
+		  /* minimum bytes for new bitfield */
+		  size = (bit_size + 7) / 8;
+		else {
+		    /* enough spare bits already allocated? */
+		    int add_size = (bit_pos - 1) % 8 + 1 + bit_size;
+		    if (add_size > 8) /* doesn't fit */
+		      extra_bytes = (add_size - 1) / 8;
+		}
+	    }
+	} else
+	  bit_size = -1;
+	if (bit_size == 0 && pcc) {
+	    /* Zero-width bit-fields in PCC mode aren't affected
+	       by any packing (attribute or pragma).  */
+	    align = typealign;
+	} else if (f->r > 1) {
 	    align = f->r;
-	} else if (ad->a.packed) {
+	} else if (ad->a.packed || f->r == 1) {
 	    align = 1;
+	    typealign = 1;
+	} else {
+	    align = typealign;
 	}
-	if (extra_bytes) c += extra_bytes;
-	else if (bit_pos == 0) {
+	/*if (extra_bytes) c += extra_bytes;
+	else*/ if (bit_size < 0) {
+	    int addbytes = (bit_pos + 7) >> 3;
 	    if (type->ref->type.t == TOK_STRUCT) {
-		c = (c + align - 1) & -align;
+		c = (c + addbytes + align - 1) & -align;
 		offset = c;
 		if (size > 0)
 		  c += size;
 	    } else {
 		offset = 0;
+		if (addbytes > c)
+		  c = addbytes;
 		if (size > c)
 		  c = size;
 	    }
 	    if (align > maxalign)
 	      maxalign = align;
+	    bit_pos = 0;
+	} else {
+	    /* A bit-field.  Layout is more complicated.  There are two
+	       options TCC implements: PCC compatible and MS compatible
+	       (PCC compatible is what GCC uses for almost all targets).  */
+	    if (!bit_pos) {
+		if (type->ref->type.t == TOK_STRUCT) {
+		    /* Don't align c here.  That's only to be done
+		       in certain cases.  */
+		    offset = c;
+		} else {
+		    offset = 0;
+		}
+	    }
+	    if (pcc) {
+		/* In PCC layout a non-packed bit-field is placed adjacent
+		   to the preceding bit-fields, except if it would overflow
+		   its container (depending on base type) or it's a zero-width
+		   bit-field.  Packed non-zero-width bit-fields always are
+		   placed adjacent.  */
+		if (typealign != 1 &&
+		    (bit_pos + bit_size > size * 8 ||
+		     bit_size == 0)) {
+		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
+		    offset = c;
+		    bit_pos = 0;
+		}
+		/* In PCC layout named bit-fields influence the alignment
+		   of the containing struct using the base types alignment,
+		   except for packed fields or zero-width fields.  */
+		if (bit_size > 0) {
+		    if (align > maxalign)
+		      maxalign = align;
+		    if (typealign > maxalign)
+		      maxalign = typealign;
+		}
+	    } else {
+		tcc_error("ms bit-field layout not implemented");
+	    }
+	    f->type.t = (f->type.t & ~(0x3f << VT_STRUCT_SHIFT))
+		        | (bit_pos << VT_STRUCT_SHIFT);
+	    bit_pos += bit_size;
+	    if (bit_pos >= size * 8) {
+		c += size;
+		bit_pos -= size * 8;
+	    }
 	}
 #if 0
-	printf("set field %s offset=%d",
-	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset);
+	printf("set field %s offset=%d c=%d",
+	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset, c);
 	if (f->type.t & VT_BITFIELD) {
 	    printf(" pos=%d size=%d",
 		   (f->type.t >> VT_STRUCT_SHIFT) & 0x3f,
@@ -3325,9 +3414,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		}
 		*pps = NULL;
 	    }
-	    ass = f->type.ref;
-	    while ((ass = ass->next) != NULL)
-	      ass->c += offset;
+	    struct_add_offset(f->type.ref, offset);
 	    f->c = 0;
 	} else {
 	    f->c = offset;
@@ -3336,7 +3423,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	f->r = 0;
     }
     /* store size and alignment */
-    type->ref->c = (c + maxalign - 1) & -maxalign;
+    type->ref->c = (c + ((bit_pos + 7) >> 3) + maxalign - 1) & -maxalign;
     type->ref->r = maxalign;
 }
 
@@ -3515,11 +3602,6 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                         } else if (bit_size == bsize) {
                             /* no need for bit fields */
                             bit_pos = 0;
-                        } else if (bit_size == 0) {
-                            /* XXX: what to do if only padding in a
-                               structure ? */
-                            /* zero size: means to pad */
-                            bit_pos = 0;
                         } else {
                             /* if type change, union, or will overrun
                              * allignment slot, start at a newly
@@ -3531,20 +3613,6 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                             type1.t |= VT_BITFIELD | 
                                 (bit_pos << VT_STRUCT_SHIFT) |
                                 (bit_size << (VT_STRUCT_SHIFT + 6));
-                            /* without ms-bitfields, allocate the
-                             * minimum number of bytes necessary,
-                             * adding single bytes as needed */
-                            if (!tcc_state->ms_bitfields) {
-                                if (bit_pos == 0)
-                                    /* minimum bytes for new bitfield */
-                                    size = (bit_size + 7) / 8;
-                                else {
-                                    /* enough spare bits already allocated? */
-                                    int add_size = (bit_pos - 1) % 8 + 1 + bit_size;
-                                    if (add_size > 8) /* doesn't fit */
-                                        extra_bytes = (add_size - 1) / 8;
-                                }
-                            }
                             bit_pos += bit_size;
                         }
                         prevbt = bt;
@@ -3560,6 +3628,11 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
 			/* See struct_layout for special casing
 			   anonymous member of struct type.  */
 		        v = anon_sym++;
+		    }
+		    if (v == 0 && bit_size >= 0) {
+			/* Need to remember anon bit-fields as well.
+			   They influence layout.  */
+			v = anon_sym++;
 		    }
                     if (v) {
                         ss = sym_push(v | SYM_FIELD, &type1, alignoverride, extra_bytes);
