@@ -349,6 +349,8 @@ void load(int r, SValue *sv)
     fr = sv->r;
     ft = sv->type.t & ~VT_DEFSIGN;
     fc = sv->c.i;
+    if (fc != sv->c.i && (fr & VT_SYM))
+      tcc_error("64 bit addend in load");
 
     ft &= ~(VT_VOLATILE | VT_CONSTANT);
 
@@ -528,9 +530,11 @@ void store(int r, SValue *v)
     v = pe_getimport(v, &v2);
 #endif
 
+    fr = v->r & VT_VALMASK;
     ft = v->type.t;
     fc = v->c.i;
-    fr = v->r & VT_VALMASK;
+    if (fc != v->c.i && (fr & VT_SYM))
+      tcc_error("64 bit addend in store");
     ft &= ~(VT_VOLATILE | VT_CONSTANT);
     bt = ft & VT_BTYPE;
 

@@ -1775,8 +1775,13 @@ static void gen_opic(int op)
             /* symbol + constant case */
             if (op == '-')
                 l2 = -l2;
+	    l2 += vtop[-1].c.i;
+	    /* The backends can't always deal with addends to symbols
+	       larger than +-1<<31.  Don't construct such.  */
+	    if ((int)l2 != l2)
+	        goto general_case;
             vtop--;
-            vtop->c.i += l2;
+            vtop->c.i = l2;
         } else {
         general_case:
             if (!nocode_wanted) {

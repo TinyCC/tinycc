@@ -2429,6 +2429,19 @@ void getmyaddress(void)
 {
     printf("in getmyaddress\n");
 }
+
+#ifdef __LP64__
+long __pa_symbol(void)
+{
+    /* This 64bit constant was handled incorrectly, it was used as addend
+       (which can hold 64bit just fine) in connection with a symbol,
+       and TCC generates wrong code for that (displacements are 32bit only).
+       This effectively is "+ 0x80000000", and if addresses of globals
+       are below 2GB the result should be a number without high 32 bits set.  */
+       return ((long)(((unsigned long)(&rel1))) - (0xffffffff80000000UL));
+}
+#endif
+
 unsigned long theaddress = (unsigned long)getmyaddress;
 void relocation_test(void)
 {
@@ -2436,6 +2449,9 @@ void relocation_test(void)
     printf("*rel1=%d\n", *rel1);
     printf("*rel2=%d\n", *rel2);
     fptr();
+#ifdef __LP64__
+    printf("pa_symbol=0x%lx\n", __pa_symbol() >> 63);
+#endif
 }
 
 void old_style_f(a,b,c)
