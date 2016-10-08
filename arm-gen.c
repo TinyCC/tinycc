@@ -776,6 +776,15 @@ static void gcall_or_jmp(int is_jmp)
   }
 }
 
+static int unalias_ldbl(int btype)
+{
+#if LDOUBLE_SIZE == 8
+    if (btype == VT_LDOUBLE)
+      btype = VT_DOUBLE;
+#endif
+    return btype;
+}
+
 /* Return whether a structure is an homogeneous float aggregate or not.
    The answer is true if all the elements of the structure are of the same
    primitive float type and there is less than 4 elements.
@@ -788,9 +797,9 @@ static int is_hgen_float_aggr(CType *type)
     int btype, nb_fields = 0;
 
     ref = type->ref->next;
-    btype = ref->type.t & VT_BTYPE;
+    btype = unalias_ldbl(ref->type.t & VT_BTYPE);
     if (btype == VT_FLOAT || btype == VT_DOUBLE) {
-      for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
+      for(; ref && btype == unalias_ldbl(ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
       return !ref && nb_fields <= 4;
     }
   }
