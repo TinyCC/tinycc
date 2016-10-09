@@ -6334,7 +6334,7 @@ static int decl0(int l, int is_for_loop_init)
             }
             /* special test for old K&R protos without explicit int
                type. Only accepted when defining global data */
-            if (l == VT_LOCAL || tok < TOK_DEFINE)
+            if (l == VT_LOCAL || tok < TOK_UIDENT)
                 break;
             btype.t = VT_INT;
         }

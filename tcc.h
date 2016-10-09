@@ -324,12 +324,6 @@
 #define TOK_HASH_SIZE       16384 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
-#define TOKSYM_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenSym in table_ident */
-#define TOKSTR_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenString instances */
-#define CSTR_TAL_SIZE       (256 * 1024) /* allocator for tiny CString instances */
-#define TOKSYM_TAL_LIMIT    256 /* prefer unique limits to distinguish allocators debug msgs */
-#define TOKSTR_TAL_LIMIT    128 /* 32 * sizeof(int) */
-#define CSTR_TAL_LIMIT      1024
 
 /* token symbol management */
 typedef struct TokenSym {
@@ -1021,40 +1015,13 @@ enum tcc_token {
 #undef DEF
 };
 
+/* keywords: tok >= TOK_IDENT && tok < TOK_UIDENT */
 #define TOK_UIDENT TOK_DEFINE
 
-/* space exlcuding newline */
-static inline int is_space(int ch)
-{
-    return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
-}
+/* -------------------------------------------- */
 
-static inline int isid(int c)
-{
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-}
-
-static inline int isnum(int c)
-{
-    return c >= '0' && c <= '9';
-}
-
-static inline int isoct(int c)
-{
-    return c >= '0' && c <= '7';
-}
-
-static inline int toup(int c)
-{
-    return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
-}
-
-#ifndef PUB_FUNC
+#ifndef PUB_FUNC /* functions used by tcc.c but not in libtcc.h */
 # define PUB_FUNC
-#endif
-
-#ifdef TCC_PROFILE /* profile all functions */
-# define static
 #endif
 
 #ifdef ONE_SOURCE
@@ -1065,6 +1032,10 @@ static inline int toup(int c)
 #define ST_INLN
 #define ST_FUNC
 #define ST_DATA extern
+#endif
+
+#ifdef TCC_PROFILE /* profile all functions */
+# define static
 #endif
 
 /* ------------ libtcc.c ------------ */
@@ -1239,6 +1210,23 @@ ST_FUNC void preprocess_delete(void);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
+
+/* space exlcuding newline */
+static inline int is_space(int ch) {
+    return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
+}
+static inline int isid(int c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+static inline int isnum(int c) {
+    return c >= '0' && c <= '9';
+}
+static inline int isoct(int c) {
+    return c >= '0' && c <= '7';
+}
+static inline int toup(int c) {
+    return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
+}
 
 /* ------------ tccgen.c ------------ */
 
@@ -1422,49 +1410,23 @@ ST_FUNC void gen_vla_sp_save(int addr);
 ST_FUNC void gen_vla_sp_restore(int addr);
 ST_FUNC void gen_vla_alloc(CType *type, int align);
 
-static inline uint16_t read16le(unsigned char *p)
-{
+static inline uint16_t read16le(unsigned char *p) {
     return p[0] | (uint16_t)p[1] << 8;
 }
-
-static inline void write16le(unsigned char *p, uint16_t x)
-{
-    p[0] = x & 255;
-    p[1] = x >> 8 & 255;
+static inline void write16le(unsigned char *p, uint16_t x) {
+    p[0] = x & 255, p[1] = x >> 8 & 255;
 }
-
-static inline uint32_t read32le(unsigned char *p)
-{
-  return (p[0] | (uint32_t)p[1] << 8 |
-	  (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24);
+static inline uint32_t read32le(unsigned char *p) {
+  return read16le(p) | (uint32_t)read16le(p + 2) << 16;
 }
-
-static inline void write32le(unsigned char *p, uint32_t x)
-{
-    p[0] = x & 255;
-    p[1] = x >> 8 & 255;
-    p[2] = x >> 16 & 255;
-    p[3] = x >> 24 & 255;
+static inline void write32le(unsigned char *p, uint32_t x) {
+    write16le(p, x), write16le(p + 2, x >> 16);
 }
-
-static inline uint64_t read64le(unsigned char *p)
-{
-  return (p[0] | (uint64_t)p[1] << 8 |
-	  (uint64_t)p[2] << 16 | (uint64_t)p[3] << 24 |
-	  (uint64_t)p[4] << 32 | (uint64_t)p[5] << 40 |
-	  (uint64_t)p[6] << 48 | (uint64_t)p[7] << 56);
+static inline uint64_t read64le(unsigned char *p) {
+  return read32le(p) | (uint64_t)read32le(p + 4) << 32;
 }
-
-static inline void write64le(unsigned char *p, uint64_t x)
-{
-    p[0] = x & 255;
-    p[1] = x >> 8 & 255;
-    p[2] = x >> 16 & 255;
-    p[3] = x >> 24 & 255;
-    p[4] = x >> 32 & 255;
-    p[5] = x >> 40 & 255;
-    p[6] = x >> 48 & 255;
-    p[7] = x >> 56 & 255;
+static inline void write64le(unsigned char *p, uint64_t x) {
+    write32le(p, x), write32le(p + 4, x >> 32);
 }
 
 /* ------------ i386-gen.c ------------ */

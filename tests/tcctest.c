@@ -2573,6 +2573,10 @@ void asm_test(void)
     unsigned int val;
 
     printf("inline asm:\n");
+
+    // parse 0x1E-1 as 3 tokens in asm mode
+    asm volatile ("mov $0x1E-1,%eax");
+
     /* test the no operand case */
     asm volatile ("xorl %eax, %eax");
 

@@ -127,12 +127,19 @@ ST_FUNC void expect(const char *msg)
 #define TAL_DEBUG_PARAMS
 #else
 #define TAL_DEBUG 1
+//#define TAL_INFO 1 /* collect and dump allocators stats */
 #define tal_free(al, p) tal_free_impl(al, p, __FILE__, __LINE__)
 #define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size, __FILE__, __LINE__)
 #define TAL_DEBUG_PARAMS , const char *file, int line
 #define TAL_DEBUG_FILE_LEN 15
 #endif
-//#define TAL_INFO 1 /* collect and dump allocators stats */
+
+#define TOKSYM_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenSym in table_ident */
+#define TOKSTR_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenString instances */
+#define CSTR_TAL_SIZE       (256 * 1024) /* allocator for tiny CString instances */
+#define TOKSYM_TAL_LIMIT    256 /* prefer unique limits to distinguish allocators debug msgs */
+#define TOKSTR_TAL_LIMIT    128 /* 32 * sizeof(int) */
+#define CSTR_TAL_LIMIT      1024
 
 typedef struct TinyAlloc {
     size_t  limit;
@@ -3039,7 +3046,8 @@ static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *w
                             break;
                         ch = ' ';
                     }
-                    tok_str_add(ws_str, ch);
+                    if (!(ch == '\f' || ch == '\v' || ch == '\r'))
+                        tok_str_add(ws_str, ch);
                     cinp();
                 }
             }
@@ -3569,15 +3577,13 @@ static void tok_print(const char *msg, const int *str)
 static void pp_line(TCCState *s1, BufferedFile *f, int level)
 {
     int d = f->line_num - f->line_ref;
+
     if (s1->dflag & 4)
 	return;
+
     if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE) {
-	if (level == 0 && f->line_ref && d) {
-	    d = 1;
-	    goto simple;
-	}
+        ;
     } else if (level == 0 && f->line_ref && d < 8) {
-simple:
 	while (d > 0)
 	    fputs("\n", s1->ppfp), --d;
     } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {

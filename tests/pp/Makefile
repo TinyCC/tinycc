@@ -40,8 +40,8 @@ DIFF_OPTS = -Nu -b -B -I "^\#"
 clean:
 	rm -vf *.output
 
-# 02.test : DIFF_OPTS += -w
-# 15.test : DIFF_OPTS += -w
+02.test : DIFF_OPTS += -w
+15.test : DIFF_OPTS += -I"^XXX:"
 
 # diff options:
 # -b ighore space changes
