@@ -379,7 +379,7 @@ typedef struct SValue {
 struct Attribute {
     unsigned
         func_call     : 3, /* calling convention (0..5), see below */
-        aligned       : 5, /* alignement (0..16) */
+        aligned       : 5, /* alignment as log2+1 (0 == unspecified) */
         packed        : 1,
         func_export   : 1,
         func_import   : 1,
