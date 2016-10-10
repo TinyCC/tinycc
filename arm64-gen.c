@@ -1826,7 +1826,10 @@ ST_FUNC void gen_vla_sp_save(int addr) {
 }
 
 ST_FUNC void gen_vla_sp_restore(int addr) {
-    uint32_t r = intr(get_reg(RC_INT));
+    // Use x30 because this function can be called when there
+    // is a live return value in x0 but there is nothing on
+    // the value stack to prevent get_reg from returning x0.
+    uint32_t r = 30;
     arm64_ldrx(0, 3, r, 29, addr);
     o(0x9100001f | r << 5); // mov sp,x(r)
 }
