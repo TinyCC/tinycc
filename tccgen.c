@@ -4902,7 +4902,7 @@ static int case_cmp(const void *pa, const void *pb)
     return a < b ? -1 : a > b;
 }
 
-static void gcase(struct case_t **base, int len, int case_reg, int *bsym)
+static int gcase(struct case_t **base, int len, int case_reg, int *bsym)
 {
     struct case_t *p;
     int e;
@@ -4910,17 +4910,25 @@ static void gcase(struct case_t **base, int len, int case_reg, int *bsym)
         while (len--) {
             p = *base++;
             vseti(case_reg, 0);
+            vdup();
             vpushi(p->v2);
             if (p->v1 == p->v2) {
                 gen_op(TOK_EQ);
                 gtst_addr(0, p->sym);
+                case_reg = gv(RC_INT);
+                vpop();
             } else {
                 gen_op(TOK_LE);
                 e = gtst(1, 0);
+                case_reg = gv(RC_INT);
+                vpop();
                 vseti(case_reg, 0);
+                vdup();
                 vpushi(p->v1);
                 gen_op(TOK_GE);
                 gtst_addr(0, p->sym);
+                case_reg = gv(RC_INT);
+                vpop();
                 gsym(e);
             }
         }
@@ -4928,15 +4936,21 @@ static void gcase(struct case_t **base, int len, int case_reg, int *bsym)
         p = base[len/2];
         /* mid */
         vseti(case_reg, 0);
+        vdup();
         vpushi(p->v2);
         gen_op(TOK_LE);
         e = gtst(1, 0);
+        case_reg = gv(RC_INT);
+        vpop();
         vseti(case_reg, 0);
+        vdup();
         vpushi(p->v1);
         gen_op(TOK_GE);
         gtst_addr(0, p->sym);
+        case_reg = gv(RC_INT);
+        vpop();
         /* left */
-        gcase(base, len/2, case_reg, bsym);
+        case_reg = gcase(base, len/2, case_reg, bsym);
         if (cur_switch->def_sym)
             gjmp_addr(cur_switch->def_sym);
         else
@@ -4944,8 +4958,9 @@ static void gcase(struct case_t **base, int len, int case_reg, int *bsym)
         /* right */
         gsym(e);
         e = len/2 + 1;
-        gcase(base + e, len - e, case_reg, bsym);
+        case_reg = gcase(base + e, len - e, case_reg, bsym);
     }
+    return case_reg;
 }
 
 static void block(int *bsym, int *csym, int is_expr)
