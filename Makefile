@@ -302,7 +302,7 @@ tcc-doc.html: tcc-doc.texi
 	-makeinfo --no-split --html --number-sections -o $@ $<
 
 tcc.1: tcc-doc.texi
-	-./texi2pod.pl $< tcc.pod
+	-$(TOPSRC)/texi2pod.pl $< tcc.pod
 	-pod2man --section=1 --center="Tiny C Compiler" --release="$(VERSION)" tcc.pod > $@
 
 tcc-doc.info: tcc-doc.texi
