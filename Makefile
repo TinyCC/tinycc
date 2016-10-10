@@ -24,7 +24,6 @@ LINK_LIBTCC =
 LIBS =
 
 ifdef CONFIG_WIN32
- STRIP_BINARIES = yes
  LIBTCC = libtcc.dll
 else
  LIBS=-lm
@@ -228,7 +227,10 @@ else
 endif
 
 install-strip: install
-	strip $(foreach PROG,$(PROGS),"$(bindir)"/$(PROG))
+	$(STRIP) $(foreach PROG,$(PROGS),"$(bindir)"/$(PROG))
+ifdef CONFIG_WIN32
+	$(STRIP) "$(bindir)/$(LIBTCC)"
+endif
 
 ifndef CONFIG_WIN32
 install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
