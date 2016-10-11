@@ -592,13 +592,22 @@ ST_FUNC void store(int r, SValue *sv)
 
 static void arm64_gen_bl_or_b(int b)
 {
+    // Currently TCC's linker does not generate a PLT when TCC is invoked
+    // with "-run". This means functions can be out of range if we try to
+    // call them in the usual way. Until the linker is fixed, work around
+    // this by using R_AARCH64_MOVW_UABS_G* relocations; see arm64_sym.
+    int avoid_call26 = 1;
+
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-        assert(!b);
-        if (vtop->r & VT_SYM)
+        assert(!b && (vtop->r & VT_SYM));
+        if (avoid_call26) {
+            arm64_sym(30, vtop->sym, 0);
+            o(0xd63f03c0); // blr x30
+        }
+        else {
             greloc(cur_text_section, vtop->sym, ind, R_AARCH64_CALL26);
-        else
-            assert(0);
-        o(0x94000000); // bl .
+            o(0x94000000); // bl .
+        }
     }
     else
         o(0xd61f0000 | (uint32_t)!b << 21 | intr(gv(RC_R30)) << 5); // br/blr
