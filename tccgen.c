@@ -4906,35 +4906,9 @@ static int gcase(struct case_t **base, int len, int case_reg, int *bsym)
 {
     struct case_t *p;
     int e;
-    if (len <= 4) {
-        while (len--) {
-            p = *base++;
-            vseti(case_reg, 0);
-            vdup();
-            vpushi(p->v2);
-            if (p->v1 == p->v2) {
-                gen_op(TOK_EQ);
-                gtst_addr(0, p->sym);
-                case_reg = gv(RC_INT);
-                vpop();
-            } else {
-                gen_op(TOK_LE);
-                e = gtst(1, 0);
-                case_reg = gv(RC_INT);
-                vpop();
-                vseti(case_reg, 0);
-                vdup();
-                vpushi(p->v1);
-                gen_op(TOK_GE);
-                gtst_addr(0, p->sym);
-                case_reg = gv(RC_INT);
-                vpop();
-                gsym(e);
-            }
-        }
-    } else {
+    while (len > 4) {
+        /* binary search */
         p = base[len/2];
-        /* mid */
         vseti(case_reg, 0);
         vdup();
         vpushi(p->v2);
@@ -4946,19 +4920,43 @@ static int gcase(struct case_t **base, int len, int case_reg, int *bsym)
         vdup();
         vpushi(p->v1);
         gen_op(TOK_GE);
-        gtst_addr(0, p->sym);
+        gtst_addr(0, p->sym); /* v1 <= x <= v2 */
         case_reg = gv(RC_INT);
         vpop();
-        /* left */
+        /* x < v1 */
         case_reg = gcase(base, len/2, case_reg, bsym);
         if (cur_switch->def_sym)
             gjmp_addr(cur_switch->def_sym);
         else
             *bsym = gjmp(*bsym);
-        /* right */
+        /* x > v2 */
         gsym(e);
         e = len/2 + 1;
-        case_reg = gcase(base + e, len - e, case_reg, bsym);
+        base += e; len -= e;
+    }
+    /* linear scan */
+    while (len--) {
+        p = *base++;
+        vseti(case_reg, 0);
+        vdup();
+        vpushi(p->v2);
+        if (p->v1 == p->v2) {
+            gen_op(TOK_EQ);
+            gtst_addr(0, p->sym);
+        } else {
+            gen_op(TOK_LE);
+            e = gtst(1, 0);
+            case_reg = gv(RC_INT);
+            vpop();
+            vseti(case_reg, 0);
+            vdup();
+            vpushi(p->v1);
+            gen_op(TOK_GE);
+            gtst_addr(0, p->sym);
+            gsym(e);
+        }
+        case_reg = gv(RC_INT);
+        vpop();
     }
     return case_reg;
 }
@@ -5245,7 +5243,8 @@ static void block(int *bsym, int *csym, int is_expr)
         b = gjmp(0); /* jump to first case */
         sw.p = NULL; sw.n = 0; sw.def_sym = 0;
         saved = cur_switch;
-        cur_switch = &sw; block(&a, csym, 0);
+        cur_switch = &sw;
+        block(&a, csym, 0);
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
