@@ -134,6 +134,21 @@ ST_FUNC void check_vstack(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* vstack debugging aid */
+
+#if 0
+void pv (const char *lbl, int a, int b)
+{
+    int i;
+    for (i = a; i < a + b; ++i) {
+        SValue *p = &vtop[-i];
+        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+    }
+}
+#endif
+
+/* ------------------------------------------------------------------------- */
 /* symbol allocator */
 static Sym *__sym_malloc(void)
 {
@@ -1212,6 +1227,7 @@ static void gen_opl(int op)
     case '*':
     case '+':
     case '-':
+        //pv("gen_opl A",0,2);
         t = vtop->type.t;
         vswap();
         lexpand();
@@ -1226,6 +1242,7 @@ static void gen_opl(int op)
         vtop[-3] = tmp;
         vswap();
         /* stack: H1 H2 L1 L2 */
+        //pv("gen_opl B",0,4);
         if (op == '*') {
             vpushv(vtop - 1);
             vpushv(vtop - 1);
@@ -1760,6 +1777,11 @@ ST_FUNC void gen_op(int op)
                 vswap();
                 swap(&t1, &t2);
             }
+#if PTR_SIZE == 4
+            if ((vtop[0].type.t & VT_BTYPE) == VT_LLONG)
+                /* XXX: truncate here because gen_opl can't handle ptr + long long */
+                gen_cast(&int_type);
+#endif
             type1 = vtop[-1].type;
             type1.t &= ~VT_ARRAY;
             if (vtop[-1].type.t & VT_VLA)
