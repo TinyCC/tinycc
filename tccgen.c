@@ -4676,9 +4676,9 @@ static void expr_cond(void)
 #endif
                 }
                 else
-                    rc = RC_INT;
-                    gv(rc);
-                    save_regs(1);
+		    rc = RC_INT;
+		gv(rc);
+		save_regs(1);
             }
             if (tok == ':' && gnu_ext) {
                 gv_dup();
