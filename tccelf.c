@@ -791,6 +791,9 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_AARCH64_ABS32:
             write32le(ptr, val);
             break;
+	case R_AARCH64_PREL32:
+	    write32le(ptr, val - addr);
+	    break;
         case R_AARCH64_MOVW_UABS_G0_NC:
             write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
                             (val & 0xffff) << 5));
