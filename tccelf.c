@@ -826,7 +826,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_AARCH64_CALL26:
 	    /* This check must match the one in build_got_entries, testing
 	       if we really need a PLT slot.  */
-	    if (sym->st_shndx == SHN_UNDEF)
+	    if (sym->st_shndx == SHN_UNDEF ||
+		s1->output_type == TCC_OUTPUT_MEMORY)
 	        /* We've put the PLT slot offset into r_addend when generating
 		   it, and that's what we must use as relocation value (adjusted
 		   by section offset of course).  */
@@ -1423,19 +1424,20 @@ ST_FUNC void build_got_entries(TCCState *s1)
 
 	    case R_AARCH64_JUMP26:
 	    case R_AARCH64_CALL26:
-                if (!s1->got)
-                    build_got(s1);
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                if (sym->st_shndx == SHN_UNDEF) {
+		if (!s1->got)
+		    build_got(s1);
+		sym_index = ELFW(R_SYM)(rel->r_info);
+		sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+		if (sym->st_shndx == SHN_UNDEF ||
+		    s1->output_type == TCC_OUTPUT_MEMORY) {
 		    unsigned long ofs;
 		    reloc_type = R_AARCH64_JUMP_SLOT;
-                    ofs = put_got_entry(s1, reloc_type, sym->st_size,
+		    ofs = put_got_entry(s1, reloc_type, sym->st_size,
 					sym->st_info, sym_index);
 		    /* We store the place of the generated PLT slot
 		       in our addend.  */
 		    rel->r_addend += ofs;
-                }
+		}
 		break;
 #elif defined(TCC_TARGET_C67)
             case R_C60_GOT32:
