@@ -23,8 +23,177 @@
 /* Define this to get some debug output during relocation processing.  */
 #undef DEBUG_RELOC
 
+/********************************************************/
+/* global variables */
+
+ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
+ST_DATA Section *cur_text_section; /* current section where function code is generated */
+#ifdef CONFIG_TCC_ASM
+ST_DATA Section *last_text_section; /* to handle .previous asm directive */
+#endif
+#ifdef CONFIG_TCC_BCHECK
+/* bound check related sections */
+ST_DATA Section *bounds_section; /* contains global data bound description */
+ST_DATA Section *lbounds_section; /* contains local data bound description */
+#endif
+/* symbol sections */
+ST_DATA Section *symtab_section, *strtab_section;
+/* debug sections */
+ST_DATA Section *stab_section, *stabstr_section;
+
 /* XXX: avoid static variable */
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
+
+/* ------------------------------------------------------------------------- */
+
+ST_FUNC void tccelf_new(TCCState *s)
+{
+    /* no section zero */
+    dynarray_add((void ***)&s->sections, &s->nb_sections, NULL);
+
+    /* create standard sections */
+    text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
+
+    /* symbols are always generated for linking stage */
+    symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
+                                ".strtab",
+                                ".hashtab", SHF_PRIVATE);
+    strtab_section = symtab_section->link;
+    s->symtab = symtab_section;
+
+    /* private symbol table for dynamic symbols */
+    s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE,
+                                      ".dynstrtab",
+                                      ".dynhashtab", SHF_PRIVATE);
+}
+
+static void free_section(Section *s)
+{
+    tcc_free(s->data);
+}
+
+ST_FUNC void tccelf_delete(TCCState *s1)
+{
+    int i;
+
+    /* free all sections */
+    for(i = 1; i < s1->nb_sections; i++)
+        free_section(s1->sections[i]);
+    dynarray_reset(&s1->sections, &s1->nb_sections);
+
+    for(i = 0; i < s1->nb_priv_sections; i++)
+        free_section(s1->priv_sections[i]);
+    dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
+
+    /* free any loaded DLLs */
+#ifdef TCC_IS_NATIVE
+    for ( i = 0; i < s1->nb_loaded_dlls; i++) {
+        DLLReference *ref = s1->loaded_dlls[i];
+        if ( ref->handle )
+# ifdef _WIN32
+            FreeLibrary((HMODULE)ref->handle);
+# else
+            dlclose(ref->handle);
+# endif
+    }
+#endif
+    /* free loaded dlls array */
+    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
+}
+
+ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
+{
+    Section *sec;
+
+    sec = tcc_mallocz(sizeof(Section) + strlen(name));
+    strcpy(sec->name, name);
+    sec->sh_type = sh_type;
+    sec->sh_flags = sh_flags;
+    switch(sh_type) {
+    case SHT_HASH:
+    case SHT_REL:
+    case SHT_RELA:
+    case SHT_DYNSYM:
+    case SHT_SYMTAB:
+    case SHT_DYNAMIC:
+        sec->sh_addralign = 4;
+        break;
+    case SHT_STRTAB:
+        sec->sh_addralign = 1;
+        break;
+    default:
+        sec->sh_addralign =  PTR_SIZE; /* gcc/pcc default aligment */
+        break;
+    }
+
+    if (sh_flags & SHF_PRIVATE) {
+        dynarray_add((void ***)&s1->priv_sections, &s1->nb_priv_sections, sec);
+    } else {
+        sec->sh_num = s1->nb_sections;
+        dynarray_add((void ***)&s1->sections, &s1->nb_sections, sec);
+    }
+
+    return sec;
+}
+
+/* realloc section and set its content to zero */
+ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
+{
+    unsigned long size;
+    unsigned char *data;
+
+    size = sec->data_allocated;
+    if (size == 0)
+        size = 1;
+    while (size < new_size)
+        size = size * 2;
+    data = tcc_realloc(sec->data, size);
+    memset(data + sec->data_allocated, 0, size - sec->data_allocated);
+    sec->data = data;
+    sec->data_allocated = size;
+}
+
+/* reserve at least 'size' bytes in section 'sec' from
+   sec->data_offset. */
+ST_FUNC void *section_ptr_add(Section *sec, addr_t size)
+{
+    size_t offset, offset1;
+
+    offset = sec->data_offset;
+    offset1 = offset + size;
+    if (offset1 > sec->data_allocated)
+        section_realloc(sec, offset1);
+    sec->data_offset = offset1;
+    return sec->data + offset;
+}
+
+/* reserve at least 'size' bytes from section start */
+ST_FUNC void section_reserve(Section *sec, unsigned long size)
+{
+    if (size > sec->data_allocated)
+        section_realloc(sec, size);
+    if (size > sec->data_offset)
+        sec->data_offset = size;
+}
+
+/* return a reference to a section, and create it if it does not
+   exists */
+ST_FUNC Section *find_section(TCCState *s1, const char *name)
+{
+    Section *sec;
+    int i;
+    for(i = 1; i < s1->nb_sections; i++) {
+        sec = s1->sections[i];
+        if (!strcmp(name, sec->name))
+            return sec;
+    }
+    /* sections are created as PROGBITS */
+    return new_section(s1, name, SHT_PROGBITS, SHF_ALLOC);
+}
+
+/* ------------------------------------------------------------------------- */
 
 ST_FUNC int put_elf_str(Section *s, const char *sym)
 {

@@ -1095,17 +1095,6 @@ ST_FUNC void cstr_new(CString *cstr);
 ST_FUNC void cstr_free(CString *cstr);
 ST_FUNC void cstr_reset(CString *cstr);
 
-ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
-ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
-ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
-ST_FUNC void section_reserve(Section *sec, unsigned long size);
-ST_FUNC Section *find_section(TCCState *s1, const char *name);
-
-ST_FUNC void put_extern_sym2(Sym *sym, Section *section, addr_t value, unsigned long size, int can_add_underscore);
-ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
-ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
-ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
-
 ST_INLN void sym_free(Sym *sym);
 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c);
 ST_FUNC Sym *sym_find2(Sym *s, int v);
@@ -1151,6 +1140,9 @@ PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
 PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv);
 PUB_FUNC void tcc_set_environment(TCCState *s);
+#ifdef _WIN32
+ST_FUNC char *normalize_slashes(char *path);
+#endif
 
 /* ------------ tccpp.c ------------ */
 
@@ -1232,21 +1224,6 @@ static inline int toup(int c) {
 
 /* ------------ tccgen.c ------------ */
 
-ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
-ST_DATA Section *cur_text_section; /* current section where function code is generated */
-#ifdef CONFIG_TCC_ASM
-ST_DATA Section *last_text_section; /* to handle .previous asm directive */
-#endif
-#ifdef CONFIG_TCC_BCHECK
-/* bound check related sections */
-ST_DATA Section *bounds_section; /* contains global data bound description */
-ST_DATA Section *lbounds_section; /* contains local data bound description */
-#endif
-/* symbol sections */
-ST_DATA Section *symtab_section, *strtab_section;
-/* debug sections */
-ST_DATA Section *stab_section, *stabstr_section;
-
 #define SYM_POOL_NB (8192 / sizeof(Sym))
 ST_DATA Sym *sym_free_first;
 ST_DATA void **sym_pools;
@@ -1270,6 +1247,9 @@ ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA const char *funcname;
+
+ST_FUNC void tccgen_start(TCCState *s1);
+ST_FUNC void tccgen_end(TCCState *s1);
 
 ST_FUNC void check_vstack(void);
 ST_INLN int is_float(int t);
@@ -1335,7 +1315,34 @@ typedef struct {
     unsigned int n_value;        /* value of symbol */
 } Stab_Sym;
 
+ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
+ST_DATA Section *cur_text_section; /* current section where function code is generated */
+#ifdef CONFIG_TCC_ASM
+ST_DATA Section *last_text_section; /* to handle .previous asm directive */
+#endif
+#ifdef CONFIG_TCC_BCHECK
+/* bound check related sections */
+ST_DATA Section *bounds_section; /* contains global data bound description */
+ST_DATA Section *lbounds_section; /* contains local data bound description */
+#endif
+/* symbol sections */
+ST_DATA Section *symtab_section, *strtab_section;
+/* debug sections */
+ST_DATA Section *stab_section, *stabstr_section;
+
+ST_FUNC void tccelf_new(TCCState *s);
+ST_FUNC void tccelf_delete(TCCState *s);
+ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
+ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
+ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
+ST_FUNC void section_reserve(Section *sec, unsigned long size);
+ST_FUNC Section *find_section(TCCState *s1, const char *name);
 ST_FUNC Section *new_symtab(TCCState *s1, const char *symtab_name, int sh_type, int sh_flags, const char *strtab_name, const char *hash_name, int hash_sh_flags);
+
+ST_FUNC void put_extern_sym2(Sym *sym, Section *section, addr_t value, unsigned long size, int can_add_underscore);
+ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
+ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
+ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);
 ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size, int info, int other, int shndx, const char *name);

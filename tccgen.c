@@ -30,20 +30,6 @@
 */
 ST_DATA int rsym, anon_sym, ind, loc;
 
-ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
-ST_DATA Section *cur_text_section; /* current section where function code is generated */
-#ifdef CONFIG_TCC_ASM
-ST_DATA Section *last_text_section; /* to handle .previous asm directive */
-#endif
-#ifdef CONFIG_TCC_BCHECK
-/* bound check related sections */
-ST_DATA Section *bounds_section; /* contains global data bound description */
-ST_DATA Section *lbounds_section; /* contains local data bound description */
-#endif
-/* symbol sections */
-ST_DATA Section *symtab_section, *strtab_section;
-/* debug sections */
-ST_DATA Section *stab_section, *stabstr_section;
 ST_DATA Sym *sym_free_first;
 ST_DATA void **sym_pools;
 ST_DATA int nb_sym_pools;
@@ -55,6 +41,7 @@ ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
 static int local_scope;
 static int in_sizeof;
+static int section_sym;
 
 ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
 ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
@@ -147,6 +134,217 @@ void pv (const char *lbl, int a, int b)
     }
 }
 #endif
+
+/* ------------------------------------------------------------------------- */
+ST_FUNC void tccgen_start(TCCState *s1)
+{
+    cur_text_section = NULL;
+    funcname = "";
+    anon_sym = SYM_FIRST_ANOM;
+    section_sym = 0;
+    nocode_wanted = 1;
+
+    /* define some often used types */
+    int_type.t = VT_INT;
+    char_pointer_type.t = VT_BYTE;
+    mk_pointer(&char_pointer_type);
+#if PTR_SIZE == 4
+    size_type.t = VT_INT;
+#else
+    size_type.t = VT_LLONG;
+#endif
+    func_old_type.t = VT_FUNC;
+    func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
+
+    if (s1->do_debug) {
+        char buf[512];
+
+        /* file info: full path + filename */
+        section_sym = put_elf_sym(symtab_section, 0, 0,
+                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                                  text_section->sh_num, NULL);
+        getcwd(buf, sizeof(buf));
+#ifdef _WIN32
+        normalize_slashes(buf);
+#endif
+        pstrcat(buf, sizeof(buf), "/");
+        put_stabs_r(buf, N_SO, 0, 0,
+                    text_section->data_offset, text_section, section_sym);
+        put_stabs_r(file->filename, N_SO, 0, 0,
+                    text_section->data_offset, text_section, section_sym);
+    }
+    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
+       symbols can be safely used */
+    put_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
+                SHN_ABS, file->filename);
+
+#ifdef TCC_TARGET_ARM
+    arm_init(s1);
+#endif
+
+#if 0
+    /* define 'void *alloca(unsigned int)' builtin function */
+    {
+        Sym *s1;
+
+        p = anon_sym++;
+        sym = sym_push(p, mk_pointer(VT_VOID), FUNC_CDECL, FUNC_NEW);
+        s1 = sym_push(SYM_FIELD, VT_UNSIGNED | VT_INT, 0, 0);
+        s1->next = NULL;
+        sym->next = s1;
+        sym_push(TOK_alloca, VT_FUNC | (p << VT_STRUCT_SHIFT), VT_CONST, 0);
+    }
+#endif
+}
+
+ST_FUNC void tccgen_end(TCCState *s1)
+{
+    check_vstack();
+    /* end of translation unit info */
+    if (s1->do_debug) {
+        put_stabs_r(NULL, N_SO, 0, 0,
+                    text_section->data_offset, text_section, section_sym);
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* update sym->c so that it points to an external symbol in section
+   'section' with value 'value' */
+
+ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
+                            addr_t value, unsigned long size,
+                            int can_add_underscore)
+{
+    int sym_type, sym_bind, sh_num, info, other;
+    ElfW(Sym) *esym;
+    const char *name;
+    char buf1[256];
+
+#ifdef CONFIG_TCC_BCHECK
+    char buf[32];
+#endif
+
+    if (section == NULL)
+        sh_num = SHN_UNDEF;
+    else if (section == SECTION_ABS)
+        sh_num = SHN_ABS;
+    else
+        sh_num = section->sh_num;
+
+    if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
+        sym_type = STT_FUNC;
+    } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
+        sym_type = STT_NOTYPE;
+    } else {
+        sym_type = STT_OBJECT;
+    }
+
+    if (sym->type.t & VT_STATIC)
+        sym_bind = STB_LOCAL;
+    else {
+        if (sym->type.t & VT_WEAK)
+            sym_bind = STB_WEAK;
+        else
+            sym_bind = STB_GLOBAL;
+    }
+
+    if (!sym->c) {
+        name = get_tok_str(sym->v, NULL);
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) {
+            /* XXX: avoid doing that for statics ? */
+            /* if bound checking is activated, we change some function
+               names by adding the "__bound" prefix */
+            switch(sym->v) {
+#ifdef TCC_TARGET_PE
+            /* XXX: we rely only on malloc hooks */
+            case TOK_malloc:
+            case TOK_free:
+            case TOK_realloc:
+            case TOK_memalign:
+            case TOK_calloc:
+#endif
+            case TOK_memcpy:
+            case TOK_memmove:
+            case TOK_memset:
+            case TOK_strlen:
+            case TOK_strcpy:
+            case TOK_alloca:
+                strcpy(buf, "__bound_");
+                strcat(buf, name);
+                name = buf;
+                break;
+            }
+        }
+#endif
+        other = 0;
+
+#ifdef TCC_TARGET_PE
+        if (sym->type.t & VT_EXPORT)
+            other |= ST_PE_EXPORT;
+        if (sym_type == STT_FUNC && sym->type.ref) {
+            Sym *ref = sym->type.ref;
+            if (ref->a.func_export)
+                other |= ST_PE_EXPORT;
+            if (ref->a.func_call == FUNC_STDCALL && can_add_underscore) {
+                sprintf(buf1, "_%s@%d", name, ref->a.func_args * PTR_SIZE);
+                name = buf1;
+                other |= ST_PE_STDCALL;
+                can_add_underscore = 0;
+            }
+        } else {
+            if (find_elf_sym(tcc_state->dynsymtab_section, name))
+                other |= ST_PE_IMPORT;
+            if (sym->type.t & VT_IMPORT)
+                other |= ST_PE_IMPORT;
+        }
+#else
+        if (! (sym->type.t & VT_STATIC))
+	    other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
+#endif
+        if (tcc_state->leading_underscore && can_add_underscore) {
+            buf1[0] = '_';
+            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
+            name = buf1;
+        }
+        if (sym->asm_label) {
+            name = get_tok_str(sym->asm_label, NULL);
+        }
+        info = ELFW(ST_INFO)(sym_bind, sym_type);
+        sym->c = add_elf_sym(symtab_section, value, size, info, other, sh_num, name);
+    } else {
+        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+        esym->st_value = value;
+        esym->st_size = size;
+        esym->st_shndx = sh_num;
+    }
+}
+
+ST_FUNC void put_extern_sym(Sym *sym, Section *section,
+                           addr_t value, unsigned long size)
+{
+    put_extern_sym2(sym, section, value, size, 1);
+}
+
+/* add a new relocation entry to symbol 'sym' in section 's' */
+ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
+                     addr_t addend)
+{
+    int c = 0;
+    if (sym) {
+        if (0 == sym->c)
+            put_extern_sym(sym, NULL, 0, 0);
+        c = sym->c;
+    }
+    /* now we can add ELF relocation info */
+    put_elf_reloca(symtab_section, s, offset, type, c, addend);
+}
+
+ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type)
+{
+    greloca(s, sym, offset, type, 0);
+}
 
 /* ------------------------------------------------------------------------- */
 /* symbol allocator */
@@ -6607,3 +6805,5 @@ ST_FUNC void decl(int l)
 {
     decl0(l, 0);
 }
+
+/* ------------------------------------------------------------------------- */

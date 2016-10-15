@@ -82,7 +82,7 @@ ST_FUNC void asm_global_instr(void)
 
 /********************************************************/
 #ifdef _WIN32
-static char *normalize_slashes(char *path)
+ST_FUNC char *normalize_slashes(char *path)
 {
     char *p;
     for (p = path; *p; ++p)
@@ -113,13 +113,6 @@ static void tcc_add_systemdir(TCCState *s)
     char buf[1000];
     GetSystemDirectory(buf, sizeof buf);
     tcc_add_library_path(s, normalize_slashes(buf));
-}
-#endif
-
-#if defined TCC_IS_NATIVE
-static void dlclose(void *p)
-{
-    FreeLibrary((HMODULE)p);
 }
 #endif
 
@@ -492,239 +485,6 @@ static void tcc_split_path(TCCState *s, void ***p_ary, int *p_nb_ary, const char
 
 /********************************************************/
 
-ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
-{
-    Section *sec;
-
-    sec = tcc_mallocz(sizeof(Section) + strlen(name));
-    strcpy(sec->name, name);
-    sec->sh_type = sh_type;
-    sec->sh_flags = sh_flags;
-    switch(sh_type) {
-    case SHT_HASH:
-    case SHT_REL:
-    case SHT_RELA:
-    case SHT_DYNSYM:
-    case SHT_SYMTAB:
-    case SHT_DYNAMIC:
-        sec->sh_addralign = 4;
-        break;
-    case SHT_STRTAB:
-        sec->sh_addralign = 1;
-        break;
-    default:
-        sec->sh_addralign =  PTR_SIZE; /* gcc/pcc default aligment */
-        break;
-    }
-
-    if (sh_flags & SHF_PRIVATE) {
-        dynarray_add((void ***)&s1->priv_sections, &s1->nb_priv_sections, sec);
-    } else {
-        sec->sh_num = s1->nb_sections;
-        dynarray_add((void ***)&s1->sections, &s1->nb_sections, sec);
-    }
-
-    return sec;
-}
-
-static void free_section(Section *s)
-{
-    tcc_free(s->data);
-}
-
-/* realloc section and set its content to zero */
-ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
-{
-    unsigned long size;
-    unsigned char *data;
-
-    size = sec->data_allocated;
-    if (size == 0)
-        size = 1;
-    while (size < new_size)
-        size = size * 2;
-    data = tcc_realloc(sec->data, size);
-    memset(data + sec->data_allocated, 0, size - sec->data_allocated);
-    sec->data = data;
-    sec->data_allocated = size;
-}
-
-/* reserve at least 'size' bytes in section 'sec' from
-   sec->data_offset. */
-ST_FUNC void *section_ptr_add(Section *sec, addr_t size)
-{
-    size_t offset, offset1;
-
-    offset = sec->data_offset;
-    offset1 = offset + size;
-    if (offset1 > sec->data_allocated)
-        section_realloc(sec, offset1);
-    sec->data_offset = offset1;
-    return sec->data + offset;
-}
-
-/* reserve at least 'size' bytes from section start */
-ST_FUNC void section_reserve(Section *sec, unsigned long size)
-{
-    if (size > sec->data_allocated)
-        section_realloc(sec, size);
-    if (size > sec->data_offset)
-        sec->data_offset = size;
-}
-
-/* return a reference to a section, and create it if it does not
-   exists */
-ST_FUNC Section *find_section(TCCState *s1, const char *name)
-{
-    Section *sec;
-    int i;
-    for(i = 1; i < s1->nb_sections; i++) {
-        sec = s1->sections[i];
-        if (!strcmp(name, sec->name))
-            return sec;
-    }
-    /* sections are created as PROGBITS */
-    return new_section(s1, name, SHT_PROGBITS, SHF_ALLOC);
-}
-
-/* update sym->c so that it points to an external symbol in section
-   'section' with value 'value' */
-ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
-                            addr_t value, unsigned long size,
-                            int can_add_underscore)
-{
-    int sym_type, sym_bind, sh_num, info, other;
-    ElfW(Sym) *esym;
-    const char *name;
-    char buf1[256];
-
-#ifdef CONFIG_TCC_BCHECK
-    char buf[32];
-#endif
-
-    if (section == NULL)
-        sh_num = SHN_UNDEF;
-    else if (section == SECTION_ABS)
-        sh_num = SHN_ABS;
-    else
-        sh_num = section->sh_num;
-
-    if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
-        sym_type = STT_FUNC;
-    } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
-        sym_type = STT_NOTYPE;
-    } else {
-        sym_type = STT_OBJECT;
-    }
-
-    if (sym->type.t & VT_STATIC)
-        sym_bind = STB_LOCAL;
-    else {
-        if (sym->type.t & VT_WEAK)
-            sym_bind = STB_WEAK;
-        else
-            sym_bind = STB_GLOBAL;
-    }
-
-    if (!sym->c) {
-        name = get_tok_str(sym->v, NULL);
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) {
-            /* XXX: avoid doing that for statics ? */
-            /* if bound checking is activated, we change some function
-               names by adding the "__bound" prefix */
-            switch(sym->v) {
-#ifdef TCC_TARGET_PE
-            /* XXX: we rely only on malloc hooks */
-            case TOK_malloc:
-            case TOK_free:
-            case TOK_realloc:
-            case TOK_memalign:
-            case TOK_calloc:
-#endif
-            case TOK_memcpy:
-            case TOK_memmove:
-            case TOK_memset:
-            case TOK_strlen:
-            case TOK_strcpy:
-            case TOK_alloca:
-                strcpy(buf, "__bound_");
-                strcat(buf, name);
-                name = buf;
-                break;
-            }
-        }
-#endif
-        other = 0;
-
-#ifdef TCC_TARGET_PE
-        if (sym->type.t & VT_EXPORT)
-            other |= ST_PE_EXPORT;
-        if (sym_type == STT_FUNC && sym->type.ref) {
-            Sym *ref = sym->type.ref;
-            if (ref->a.func_export)
-                other |= ST_PE_EXPORT;
-            if (ref->a.func_call == FUNC_STDCALL && can_add_underscore) {
-                sprintf(buf1, "_%s@%d", name, ref->a.func_args * PTR_SIZE);
-                name = buf1;
-                other |= ST_PE_STDCALL;
-                can_add_underscore = 0;
-            }
-        } else {
-            if (find_elf_sym(tcc_state->dynsymtab_section, name))
-                other |= ST_PE_IMPORT;
-            if (sym->type.t & VT_IMPORT)
-                other |= ST_PE_IMPORT;
-        }
-#else
-        if (! (sym->type.t & VT_STATIC))
-	    other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
-#endif
-        if (tcc_state->leading_underscore && can_add_underscore) {
-            buf1[0] = '_';
-            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
-            name = buf1;
-        }
-        if (sym->asm_label) {
-            name = get_tok_str(sym->asm_label, NULL);
-        }
-        info = ELFW(ST_INFO)(sym_bind, sym_type);
-        sym->c = add_elf_sym(symtab_section, value, size, info, other, sh_num, name);
-    } else {
-        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-        esym->st_value = value;
-        esym->st_size = size;
-        esym->st_shndx = sh_num;
-    }
-}
-
-ST_FUNC void put_extern_sym(Sym *sym, Section *section,
-                           addr_t value, unsigned long size)
-{
-    put_extern_sym2(sym, section, value, size, 1);
-}
-
-/* add a new relocation entry to symbol 'sym' in section 's' */
-ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
-                     addr_t addend)
-{
-    int c = 0;
-    if (sym) {
-        if (0 == sym->c)
-            put_extern_sym(sym, NULL, 0, 0);
-        c = sym->c;
-    }
-    /* now we can add ELF relocation info */
-    put_elf_reloca(symtab_section, s, offset, type, c, addend);
-}
-
-ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type)
-{
-    greloca(s, sym, offset, type, 0);
-}
-
-/********************************************************/
-
 static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
 {
     int len;
@@ -886,79 +646,18 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 static int tcc_compile(TCCState *s1)
 {
     Sym *define_start;
-    char buf[512];
-    volatile int section_sym;
 
-#ifdef INC_DEBUG
-    printf("%s: **** new file\n", file->filename);
-#endif
     preprocess_init(s1);
-
-    cur_text_section = NULL;
-    funcname = "";
-    anon_sym = SYM_FIRST_ANOM;
-
-    /* file info: full path + filename */
-    section_sym = 0; /* avoid warning */
-    if (s1->do_debug) {
-        section_sym = put_elf_sym(symtab_section, 0, 0,
-                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
-                                  text_section->sh_num, NULL);
-        getcwd(buf, sizeof(buf));
-#ifdef _WIN32
-        normalize_slashes(buf);
-#endif
-        pstrcat(buf, sizeof(buf), "/");
-        put_stabs_r(buf, N_SO, 0, 0,
-                    text_section->data_offset, text_section, section_sym);
-        put_stabs_r(file->filename, N_SO, 0, 0,
-                    text_section->data_offset, text_section, section_sym);
-    }
-    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
-       symbols can be safely used */
-    put_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
-                SHN_ABS, file->filename);
-
-    /* define some often used types */
-    int_type.t = VT_INT;
-
-    char_pointer_type.t = VT_BYTE;
-    mk_pointer(&char_pointer_type);
-
-#if PTR_SIZE == 4
-    size_type.t = VT_INT;
-#else
-    size_type.t = VT_LLONG;
-#endif
-
-    func_old_type.t = VT_FUNC;
-    func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
-#ifdef TCC_TARGET_ARM
-    arm_init(s1);
-#endif
-
-#if 0
-    /* define 'void *alloca(unsigned int)' builtin function */
-    {
-        Sym *s1;
-
-        p = anon_sym++;
-        sym = sym_push(p, mk_pointer(VT_VOID), FUNC_CDECL, FUNC_NEW);
-        s1 = sym_push(SYM_FIELD, VT_UNSIGNED | VT_INT, 0, 0);
-        s1->next = NULL;
-        sym->next = s1;
-        sym_push(TOK_alloca, VT_FUNC | (p << VT_STRUCT_SHIFT), VT_CONST, 0);
-    }
-#endif
-
     define_start = define_stack;
-    nocode_wanted = 1;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
         s1->error_set_jmp_enabled = 1;
 
+        tccgen_start(s1);
+#ifdef INC_DEBUG
+        printf("%s: **** new file\n", file->filename);
+#endif
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
@@ -967,12 +666,7 @@ static int tcc_compile(TCCState *s1)
         if (tok != TOK_EOF)
             expect("declaration");
         gen_inline_functions();
-        check_vstack();
-        /* end of translation unit info */
-        if (s1->do_debug) {
-            put_stabs_r(NULL, N_SO, 0, 0,
-                        text_section->data_offset, text_section, section_sym);
-        }
+        tccgen_end(s1);
     }
 
     s1->error_set_jmp_enabled = 0;
@@ -1049,21 +743,37 @@ static void tcc_cleanup(void)
 LIBTCCAPI TCCState *tcc_new(void)
 {
     TCCState *s;
-    char buffer[100];
-    int a,b,c;
-
     tcc_cleanup();
 
     s = tcc_mallocz(sizeof(TCCState));
     if (!s)
         return NULL;
     tcc_state = s;
+
+    s->alacarte_link = 1;
+    s->nocommon = 1;
+    s->warn_implicit_function_declaration = 1;
+
+#ifdef CHAR_IS_UNSIGNED
+    s->char_is_unsigned = 1;
+#endif
+#ifdef TCC_TARGET_I386
+    s->seg_size = 32;
+#endif
+#ifdef TCC_IS_NATIVE
+    s->runtime_main = "main";
+#endif
+    /* enable this if you want symbols with leading underscore on windows: */
+#if 0 /* def TCC_TARGET_PE */
+    s->leading_underscore = 1;
+#endif
 #ifdef _WIN32
     tcc_set_lib_path_w32(s);
 #else
     tcc_set_lib_path(s, CONFIG_TCCDIR);
 #endif
 
+    tccelf_new(s);
     preprocess_new();
     s->include_stack_ptr = s->include_stack;
 
@@ -1073,11 +783,13 @@ LIBTCCAPI TCCState *tcc_new(void)
     define_push(TOK___FILE__, MACRO_OBJ, NULL, NULL);
     define_push(TOK___DATE__, MACRO_OBJ, NULL, NULL);
     define_push(TOK___TIME__, MACRO_OBJ, NULL, NULL);
-
-    /* define __TINYC__ 92X  */
-    sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
-    sprintf(buffer, "%d", a*10000 + b*100 + c);
-    tcc_define_symbol(s, "__TINYC__", buffer);
+    {
+        /* define __TINYC__ 92X  */
+        char buffer[32]; int a,b,c;
+        sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
+        sprintf(buffer, "%d", a*10000 + b*100 + c);
+        tcc_define_symbol(s, "__TINYC__", buffer);
+    }
 
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
@@ -1178,82 +890,22 @@ LIBTCCAPI TCCState *tcc_new(void)
 #else
     tcc_define_symbol(s, "__WINT_TYPE__", "unsigned int");
 #endif
-#endif
-
-#ifndef TCC_TARGET_PE
     /* glibc defines */
     tcc_define_symbol(s, "__REDIRECT(name, proto, alias)", "name proto __asm__ (#alias)");
     tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)", "name proto __asm__ (#alias) __THROW");
-    /* paths for crt objects */
-    tcc_split_path(s, (void ***)&s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
 #endif
 
-    /* no section zero */
-    dynarray_add((void ***)&s->sections, &s->nb_sections, NULL);
-
-    /* create standard sections */
-    text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
-    data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-    bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
-
-    /* symbols are always generated for linking stage */
-    symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
-                                ".strtab",
-                                ".hashtab", SHF_PRIVATE);
-    strtab_section = symtab_section->link;
-    s->symtab = symtab_section;
-
-    /* private symbol table for dynamic symbols */
-    s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE,
-                                      ".dynstrtab",
-                                      ".dynhashtab", SHF_PRIVATE);
-    s->alacarte_link = 1;
-    s->nocommon = 1;
-    s->warn_implicit_function_declaration = 1;
-
-#ifdef CHAR_IS_UNSIGNED
-    s->char_is_unsigned = 1;
-#endif
-    /* enable this if you want symbols with leading underscore on windows: */
-#if 0 /* def TCC_TARGET_PE */
-    s->leading_underscore = 1;
-#endif
-#ifdef TCC_TARGET_I386
-    s->seg_size = 32;
-#endif
-#ifdef TCC_IS_NATIVE
-    s->runtime_main = "main";
-#endif
     return s;
 }
 
 LIBTCCAPI void tcc_delete(TCCState *s1)
 {
-    int i;
     int bench = s1->do_bench;
 
     tcc_cleanup();
 
-    /* free all sections */
-    for(i = 1; i < s1->nb_sections; i++)
-        free_section(s1->sections[i]);
-    dynarray_reset(&s1->sections, &s1->nb_sections);
-
-    for(i = 0; i < s1->nb_priv_sections; i++)
-        free_section(s1->priv_sections[i]);
-    dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
-
-    /* free any loaded DLLs */
-#ifdef TCC_IS_NATIVE
-    for ( i = 0; i < s1->nb_loaded_dlls; i++) {
-        DLLReference *ref = s1->loaded_dlls[i];
-        if ( ref->handle )
-            dlclose(ref->handle);
-    }
-#endif
-
-    /* free loaded dlls array */
-    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
+    /* free sections */
+    tccelf_delete(s1);
 
     /* free library paths */
     dynarray_reset(&s1->library_paths, &s1->nb_library_paths);
@@ -1287,6 +939,68 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_free(s1->sym_attrs);
     tcc_free(s1);
     tcc_memstats(bench);
+}
+
+LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
+{
+    s->output_type = output_type;
+
+    /* always elf for objects */
+    if (output_type == TCC_OUTPUT_OBJ)
+        s->output_format = TCC_OUTPUT_FORMAT_ELF;
+
+    if (s->char_is_unsigned)
+        tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
+
+    if (!s->nostdinc) {
+        /* default include paths */
+        /* -isystem paths have already been handled */
+        tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
+    }
+
+#ifdef CONFIG_TCC_BCHECK
+    /* if bound checking, then add corresponding sections */
+    if (s->do_bounds_check) {
+        /* define symbol */
+        tcc_define_symbol(s, "__BOUNDS_CHECKING_ON", NULL);
+        /* create bounds sections */
+        bounds_section = new_section(s, ".bounds",
+                                     SHT_PROGBITS, SHF_ALLOC);
+        lbounds_section = new_section(s, ".lbounds",
+                                      SHT_PROGBITS, SHF_ALLOC);
+    }
+#endif
+    /* add debug sections */
+    if (s->do_debug) {
+        /* stab symbols */
+        stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
+        stab_section->sh_entsize = sizeof(Stab_Sym);
+        stabstr_section = new_section(s, ".stabstr", SHT_STRTAB, 0);
+        put_elf_str(stabstr_section, "");
+        stab_section->link = stabstr_section;
+        /* put first entry */
+        put_stabs("", 0, 0, 0, 0);
+    }
+
+    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
+
+#ifdef TCC_TARGET_PE
+# ifdef _WIN32
+    if (!s->nostdlib && output_type != TCC_OUTPUT_OBJ)
+        tcc_add_systemdir(s);
+# endif
+#else
+    /* paths for crt objects */
+    tcc_split_path(s, (void ***)&s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
+    /* add libc crt1/crti objects */
+    if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
+        !s->nostdlib) {
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crt1.o");
+        tcc_add_crt(s, "crti.o");
+    }
+#endif
+    return 0;
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
@@ -1499,66 +1213,6 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
     add_elf_sym(symtab_section, (uintptr_t)val, 0,
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
         SHN_ABS, name);
-#endif
-    return 0;
-}
-
-LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
-{
-    s->output_type = output_type;
-
-    /* always elf for objects */
-    if (output_type == TCC_OUTPUT_OBJ)
-        s->output_format = TCC_OUTPUT_FORMAT_ELF;
-
-    if (s->char_is_unsigned)
-        tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
-
-    if (!s->nostdinc) {
-        /* default include paths */
-        /* -isystem paths have already been handled */
-        tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
-    }
-
-#ifdef CONFIG_TCC_BCHECK
-    /* if bound checking, then add corresponding sections */
-    if (s->do_bounds_check) {
-        /* define symbol */
-        tcc_define_symbol(s, "__BOUNDS_CHECKING_ON", NULL);
-        /* create bounds sections */
-        bounds_section = new_section(s, ".bounds",
-                                     SHT_PROGBITS, SHF_ALLOC);
-        lbounds_section = new_section(s, ".lbounds",
-                                      SHT_PROGBITS, SHF_ALLOC);
-    }
-#endif
-    /* add debug sections */
-    if (s->do_debug) {
-        /* stab symbols */
-        stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
-        stab_section->sh_entsize = sizeof(Stab_Sym);
-        stabstr_section = new_section(s, ".stabstr", SHT_STRTAB, 0);
-        put_elf_str(stabstr_section, "");
-        stab_section->link = stabstr_section;
-        /* put first entry */
-        put_stabs("", 0, 0, 0, 0);
-    }
-
-    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
-
-#ifdef TCC_TARGET_PE
-# ifdef _WIN32
-    if (!s->nostdlib && output_type != TCC_OUTPUT_OBJ)
-        tcc_add_systemdir(s);
-# endif
-#else
-    /* add libc crt1/crti objects */
-    if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
-        !s->nostdlib) {
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt1.o");
-        tcc_add_crt(s, "crti.o");
-    }
 #endif
     return 0;
 }
