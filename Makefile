@@ -315,13 +315,13 @@ test:
 	$(MAKE) -C tests
 
 clean:
-	rm -vf $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
+	rm -f $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
 	    lib*.def *.exe *.dll a.out tags TAGS libtcc_test$(EXESUF) tcc$(EXESUF)
 	$(MAKE) -C tests $@
 	$(MAKE) -C lib $@
 
 distclean: clean
-	rm -vf config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
+	rm -f config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
 
 config.mak:
 	@echo "Please run ./configure."

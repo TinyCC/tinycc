@@ -38,7 +38,7 @@ DIFF_OPTS = -Nu -b -B -I "^\#"
 .PRECIOUS: %.expect
 
 clean:
-	rm -vf *.output
+	rm -f *.output
 
 02.test : DIFF_OPTS += -w
 15.test : DIFF_OPTS += -I"^XXX:"
