@@ -56,8 +56,21 @@ static void display_info(TCCState *s, int what)
 #endif
 #ifdef TCC_TARGET_PE
         " Windows"
-#else
+#elif defined(__APPLE__)
+        /* Current Apple OS name as of 2016 */
+        " macOS"
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+        " FreeBSD"
+#elif defined(__DragonFly__)
+        " DragonFly"
+#elif defined(__NetBSD__)
+        " NetBSD"
+#elif defined(__OpenBSD__)
+        " OpenBSD"
+#elif defined(__linux__)
         " Linux"
+#else
+        " Unidentified system"
 #endif
         ")\n", TCC_VERSION);
         break;
