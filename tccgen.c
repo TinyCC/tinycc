@@ -3104,10 +3104,14 @@ static void parse_attribute(AttributeDef *ad)
                 case TOK_MODE_DI:
                     ad->a.mode = VT_LLONG + 1;
                     break;
+                case TOK_MODE_QI:
+                    ad->a.mode = VT_BYTE + 1;
+                    break;
                 case TOK_MODE_HI:
                     ad->a.mode = VT_SHORT + 1;
                     break;
                 case TOK_MODE_SI:
+                case TOK_MODE_word:
                     ad->a.mode = VT_INT + 1;
                     break;
                 default:

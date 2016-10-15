@@ -117,10 +117,14 @@
      DEF(TOK_FASTCALL1, "fastcall")
      DEF(TOK_FASTCALL2, "__fastcall")
      DEF(TOK_FASTCALL3, "__fastcall__")
+
      DEF(TOK_MODE, "__mode__")
+     DEF(TOK_MODE_QI, "__QI__")
      DEF(TOK_MODE_DI, "__DI__")
      DEF(TOK_MODE_HI, "__HI__")
      DEF(TOK_MODE_SI, "__SI__")
+     DEF(TOK_MODE_word, "__word__")
+
      DEF(TOK_DLLEXPORT, "dllexport")
      DEF(TOK_DLLIMPORT, "dllimport")
      DEF(TOK_NORETURN1, "noreturn")

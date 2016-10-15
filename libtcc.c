@@ -885,15 +885,28 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* wint_t is unsigned int by default, but (signed) int on BSDs
        and unsigned short on windows.  Other OSes might have still
        other conventions, sigh.  */
-#if defined(__FreeBSD__) || defined (__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__)
+# if defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
+  || defined(__NetBSD__) || defined(__OpenBSD__)
     tcc_define_symbol(s, "__WINT_TYPE__", "int");
-#else
+# else
     tcc_define_symbol(s, "__WINT_TYPE__", "unsigned int");
-#endif
+# endif
+# if 0
     /* glibc defines */
-    tcc_define_symbol(s, "__REDIRECT(name, proto, alias)", "name proto __asm__ (#alias)");
-    tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)", "name proto __asm__ (#alias) __THROW");
-#endif
+    tcc_define_symbol(s, "__REDIRECT(name, proto, alias)",
+        "name proto __asm__ (#alias)");
+    tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)",
+        "name proto __asm__ (#alias) __THROW");
+# endif
+# if 1
+    /* define __GNUC__ to have some useful stuff from sys/cdefs.h */
+    tcc_define_symbol(s, "__GNUC__", "2");
+    tcc_define_symbol(s, "__GNUC_MINOR__", "1");
+    tcc_define_symbol(s, "__builtin_alloca", "alloca");
+    tcc_define_symbol(s, "__builtin_memcpy", "memcpy");
+    tcc_define_symbol(s, "__USER_LABEL_PREFIX__", "");
+# endif
+#endif /* ndef TCC_TARGET_PE */
 
     return s;
 }
