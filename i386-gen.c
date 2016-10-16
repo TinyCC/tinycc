@@ -754,9 +754,9 @@ ST_FUNC void gen_opi(int op)
             c = vtop->c.i;
             if (c == (char)c) {
                 /* generate inc and dec for smaller code */
-                if (c==1 && opc==0) {
+                if (c==1 && opc==0 && op != TOK_ADDC1) {
                     o (0x40 | r); // inc
-                } else if (c==1 && opc==5) {
+                } else if (c==1 && opc==5 && op != TOK_SUBC1) {
                     o (0x48 | r); // dec
                 } else {
                     o(0x83);

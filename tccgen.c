@@ -1209,19 +1209,25 @@ static int reg_fret(int t)
     return REG_FRET;
 }
 
-/* expand long long on stack in two int registers */
+/* expand long long on stack in two ints */
 static void lexpand(void)
 {
-    int u;
-
+    int u, v;
     u = vtop->type.t & (VT_DEFSIGN | VT_UNSIGNED);
-    gv(RC_INT);
-    vdup();
-    vtop[0].r = vtop[-1].r2;
-    vtop[0].r2 = VT_CONST;
-    vtop[-1].r2 = VT_CONST;
-    vtop[0].type.t = VT_INT | u;
-    vtop[-1].type.t = VT_INT | u;
+    v = vtop->r & (VT_VALMASK | VT_LVAL);
+    if (v == VT_CONST) {
+        vdup();
+        vtop[0].c.i >>= 32;
+    } else if (v == (VT_LVAL|VT_CONST) || v == (VT_LVAL|VT_LOCAL)) {
+        vdup();
+        vtop[0].c.i += 4;
+    } else {
+        gv(RC_INT);
+        vdup();
+        vtop[0].r = vtop[-1].r2;
+        vtop[0].r2 = vtop[-1].r2 = VT_CONST;
+    }
+    vtop[0].type.t = vtop[-1].type.t = VT_INT | u;
 }
 
 #ifdef TCC_TARGET_ARM
