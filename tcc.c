@@ -62,7 +62,7 @@ static void display_info(TCCState *s, int what)
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         " FreeBSD"
 #elif defined(__DragonFly__)
-        " DragonFly"
+        " DragonFly BSD"
 #elif defined(__NetBSD__)
         " NetBSD"
 #elif defined(__OpenBSD__)
