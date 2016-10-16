@@ -1209,7 +1209,7 @@ static int reg_fret(int t)
     return REG_FRET;
 }
 
-/* expand long long on stack in two ints */
+/* expand 64bit on stack in two ints */
 static void lexpand(void)
 {
     int u, v;
@@ -1258,6 +1258,7 @@ ST_FUNC void lexpand_nr(void)
 }
 #endif
 
+#if !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_ARM64)
 /* build a long long from two ints */
 static void lbuild(int t)
 {
@@ -1266,6 +1267,7 @@ static void lbuild(int t)
     vtop[-1].type.t = t;
     vpop();
 }
+#endif
 
 /* rotate n first stack elements to the bottom 
    I1 ... In -> I2 ... In I1 [top is right]
@@ -1329,6 +1331,7 @@ static void gv_dup(void)
     SValue sv;
 
     t = vtop->type.t;
+#if !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_ARM64)
     if ((t & VT_BTYPE) == VT_LLONG) {
         lexpand();
         gv_dup();
@@ -1343,7 +1346,9 @@ static void gv_dup(void)
         vswap();
         lbuild(t);
         vswap();
-    } else {
+    } else
+#endif
+    {
         /* duplicate value */
         rc = RC_INT;
         sv.type.t = VT_INT;
