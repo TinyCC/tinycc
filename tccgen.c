@@ -2315,7 +2315,7 @@ static void gen_cast(CType *type)
                 }
 #if !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_X86_64)
             } else if ((dbt & VT_BTYPE) == VT_LLONG) {
-                if ((sbt & VT_BTYPE) != VT_LLONG && !nocode_wanted) {
+                if ((sbt & VT_BTYPE) != VT_LLONG) {
                     /* scalar to long long */
                     /* machine independent conversion */
                     gv(RC_INT);
@@ -2343,7 +2343,7 @@ static void gen_cast(CType *type)
                        (dbt & VT_BTYPE) == VT_FUNC) {
                 if ((sbt & VT_BTYPE) != VT_LLONG &&
                     (sbt & VT_BTYPE) != VT_PTR &&
-                    (sbt & VT_BTYPE) != VT_FUNC && !nocode_wanted) {
+                    (sbt & VT_BTYPE) != VT_FUNC) {
                     /* need to convert from 32bit to 64bit */
                     gv(RC_INT);
                     if (sbt != (VT_INT | VT_UNSIGNED)) {
@@ -2373,7 +2373,7 @@ static void gen_cast(CType *type)
                 force_charshort_cast(dbt);
             } else if ((dbt & VT_BTYPE) == VT_INT) {
                 /* scalar to int */
-                if (sbt == VT_LLONG && !nocode_wanted) {
+                if ((sbt & VT_BTYPE) == VT_LLONG) {
                     /* from long long: just take low order word */
                     lexpand();
                     vpop();
