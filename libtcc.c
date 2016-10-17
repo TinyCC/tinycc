@@ -670,13 +670,13 @@ static int tcc_compile(TCCState *s1)
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
+        /* reset define stack, but keep -D and built-ins */
+        free_defines(define_start);
         tccgen_end(s1);
     }
     s1->error_set_jmp_enabled = 0;
 
     free_inline_functions(s1);
-    /* reset define stack, but keep -D and built-ins */
-    free_defines(define_start);
     sym_pop(&global_stack, NULL);
     sym_pop(&local_stack, NULL);
     return s1->nb_errors != 0 ? -1 : 0;
