@@ -647,7 +647,7 @@ static int tcc_compile(TCCState *s1)
 {
     Sym *define_start;
 
-    preprocess_init(s1);
+    preprocess_start(s1);
     define_start = define_stack;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
@@ -665,11 +665,11 @@ static int tcc_compile(TCCState *s1)
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
-        gen_inline_functions();
         tccgen_end(s1);
     }
-
     s1->error_set_jmp_enabled = 0;
+
+    free_inline_functions(s1);
     /* reset define stack, but keep -D and built-ins */
     free_defines(define_start);
     sym_pop(&global_stack, NULL);
@@ -730,10 +730,8 @@ static void tcc_cleanup(void)
 {
     if (NULL == tcc_state)
         return;
+    tccpp_delete(tcc_state);
     tcc_state = NULL;
-
-    preprocess_delete();
-
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
     /* reset symbol stack */
@@ -743,6 +741,7 @@ static void tcc_cleanup(void)
 LIBTCCAPI TCCState *tcc_new(void)
 {
     TCCState *s;
+
     tcc_cleanup();
 
     s = tcc_mallocz(sizeof(TCCState));
@@ -772,10 +771,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #else
     tcc_set_lib_path(s, CONFIG_TCCDIR);
 #endif
-
     tccelf_new(s);
-    preprocess_new();
-    s->include_stack_ptr = s->include_stack;
+    tccpp_new(s);
 
     /* we add dummy defines for some special macros to speed up tests
        and to have working defined() */
@@ -830,12 +827,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "_WIN32", NULL);
 # ifdef TCC_TARGET_X86_64
     tcc_define_symbol(s, "_WIN64", NULL);
-    /* Those are defined by Visual Studio */
-    tcc_define_symbol(s, "_M_X64", "100");
-    tcc_define_symbol(s, "_M_AMD64", "100");
-# else
-    /* Defined by Visual Studio. 300 == 80386. */
-    tcc_define_symbol(s, "_M_IX86", "300");
 # endif
 #else
     tcc_define_symbol(s, "__unix__", NULL);
@@ -894,10 +885,8 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* define __GNUC__ to have some useful stuff from sys/cdefs.h
        that are unconditionally used in FreeBSDs other system headers :/ */
     tcc_define_symbol(s, "__GNUC__", "2");
-    tcc_define_symbol(s, "__GNUC_MINOR__", "1");
+    tcc_define_symbol(s, "__GNUC_MINOR__", "7");
     tcc_define_symbol(s, "__builtin_alloca", "alloca");
-    tcc_define_symbol(s, "__builtin_memcpy", "memcpy");
-    tcc_define_symbol(s, "__USER_LABEL_PREFIX__", "");
 #  endif
 # else
     tcc_define_symbol(s, "__WINT_TYPE__", "unsigned int");
@@ -973,27 +962,16 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     }
 
 #ifdef CONFIG_TCC_BCHECK
-    /* if bound checking, then add corresponding sections */
     if (s->do_bounds_check) {
+        /* if bound checking, then add corresponding sections */
+        tccelf_bounds_new(s);
         /* define symbol */
         tcc_define_symbol(s, "__BOUNDS_CHECKING_ON", NULL);
-        /* create bounds sections */
-        bounds_section = new_section(s, ".bounds",
-                                     SHT_PROGBITS, SHF_ALLOC);
-        lbounds_section = new_section(s, ".lbounds",
-                                      SHT_PROGBITS, SHF_ALLOC);
     }
 #endif
-    /* add debug sections */
     if (s->do_debug) {
-        /* stab symbols */
-        stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
-        stab_section->sh_entsize = sizeof(Stab_Sym);
-        stabstr_section = new_section(s, ".stabstr", SHT_STRTAB, 0);
-        put_elf_str(stabstr_section, "");
-        stab_section->link = stabstr_section;
-        /* put first entry */
-        put_stabs("", 0, 0, 0, 0);
+        /* add debug sections */
+        tccelf_stab_new(s);
     }
 
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
@@ -1205,7 +1183,7 @@ PUB_FUNC int tcc_add_library_err(TCCState *s, const char *libname)
 {
     int ret = tcc_add_library(s, libname);
     if (ret < 0)
-        tcc_error_noabort("cannot find library 'lib%s'", libname);
+        tcc_error_noabort("library 'lib%s' not found", libname);
     return ret;
 }
 
@@ -1939,18 +1917,17 @@ LIBTCCAPI int tcc_set_options(TCCState *s, const char *r)
     return ret;
 }
 
-PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time)
+PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time)
 {
-    double tt;
-    tt = (double)total_time / 1000000.0;
-    if (tt < 0.001)
-        tt = 0.001;
+    if (total_time < 1)
+        total_time = 1;
     if (total_bytes < 1)
         total_bytes = 1;
-    fprintf(stderr, "%d idents, %d lines, %d bytes, %0.3f s, %d lines/s, %0.1f MB/s\n",
+    fprintf(stderr, "%d idents, %d lines, %d bytes, %0.3f s, %u lines/s, %0.1f MB/s\n",
            tok_ident - TOK_IDENT, total_lines, total_bytes,
-           tt, (int)(total_lines / tt),
-           total_bytes / tt / 1000000.0);
+           (double)total_time/1000,
+           (unsigned)total_lines*1000/total_time,
+           (double)total_bytes/1000/total_time);
 }
 
 PUB_FUNC void tcc_set_environment(TCCState *s)

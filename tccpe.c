@@ -20,6 +20,9 @@
 
 #include "tcc.h"
 
+#define PE_MERGE_DATA
+/* #define PE_PRINT_SECTIONS */
+
 #ifndef _WIN32
 #define stricmp strcasecmp
 #define strnicmp strncasecmp
@@ -28,9 +31,6 @@
 #ifndef MAX_PATH
 #define MAX_PATH 260
 #endif
-
-#define PE_MERGE_DATA
-/* #define PE_PRINT_SECTIONS */
 
 #ifdef TCC_TARGET_X86_64
 # define ADDR3264 ULONGLONG
@@ -832,7 +832,7 @@ static void pe_build_imports(struct pe_info *pe)
                     if (dllref) {
                         if ( !dllref->handle )
                             dllref->handle = LoadLibrary(dllref->name);
-                        v = (ADDR3264)GetProcAddress(dllref->handle, ordinal?(LPCSTR)NULL+ordinal:name);
+                        v = (ADDR3264)GetProcAddress(dllref->handle, ordinal?(char*)0+ordinal:name);
                     }
                     if (!v)
                         tcc_error_noabort("can't build symbol '%s'", name);
@@ -1073,6 +1073,9 @@ static int pe_assign_addresses (struct pe_info *pe)
     int *section_order;
     struct section_info *si;
     Section *s;
+
+    if (PE_DLL == pe->type)
+        pe->reloc = new_section(pe->s1, ".reloc", SHT_PROGBITS, 0);
 
     // pe->thunk = new_section(pe->s1, ".iedat", SHT_PROGBITS, SHF_ALLOC);
 
@@ -1801,7 +1804,54 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
     pe->type = pe_type;
 }
 
-ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
+static void pe_set_options(TCCState * s1, struct pe_info *pe)
+{
+    if (PE_DLL == pe->type) {
+        /* XXX: check if is correct for arm-pe target */
+        pe->imagebase = 0x10000000;
+    } else {
+#if defined(TCC_TARGET_ARM)
+        pe->imagebase = 0x00010000;
+#else
+        pe->imagebase = 0x00400000;
+#endif
+    }
+
+#if defined(TCC_TARGET_ARM)
+    /* we use "console" subsystem by default */
+    pe->subsystem = 9;
+#else
+    if (PE_DLL == pe->type || PE_GUI == pe->type)
+        pe->subsystem = 2;
+    else
+        pe->subsystem = 3;
+#endif
+    /* Allow override via -Wl,-subsystem=... option */
+    if (s1->pe_subsystem != 0)
+        pe->subsystem = s1->pe_subsystem;
+
+    /* set default file/section alignment */
+    if (pe->subsystem == 1) {
+        pe->section_align = 0x20;
+        pe->file_align = 0x20;
+    } else {
+        pe->section_align = 0x1000;
+        pe->file_align = 0x200;
+    }
+
+    if (s1->section_align != 0)
+        pe->section_align = s1->section_align;
+    if (s1->pe_file_align != 0)
+        pe->file_align = s1->pe_file_align;
+
+    if ((pe->subsystem >= 10) && (pe->subsystem <= 12))
+        pe->imagebase = 0;
+
+    if (s1->has_text_addr)
+        pe->imagebase = s1->text_addr;
+}
+
+ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 {
     int ret;
     struct pe_info pe;
@@ -1815,56 +1865,12 @@ ST_FUNC int pe_output_file(TCCState * s1, const char *filename)
     pe_add_runtime(s1, &pe);
     relocate_common_syms(); /* assign bss adresses */
     tcc_add_linker_symbols(s1);
+    pe_set_options(s1, &pe);
 
     ret = pe_check_symbols(&pe);
     if (ret)
         ;
     else if (filename) {
-        if (PE_DLL == pe.type) {
-            pe.reloc = new_section(pe.s1, ".reloc", SHT_PROGBITS, 0);
-            /* XXX: check if is correct for arm-pe target */
-            pe.imagebase = 0x10000000;
-        } else {
-#if defined(TCC_TARGET_ARM)
-            pe.imagebase = 0x00010000;
-#else
-            pe.imagebase = 0x00400000;
-#endif
-        }
-
-#if defined(TCC_TARGET_ARM)
-        /* we use "console" subsystem by default */
-        pe.subsystem = 9;
-#else
-        if (PE_DLL == pe.type || PE_GUI == pe.type)
-            pe.subsystem = 2;
-        else
-            pe.subsystem = 3;
-#endif
-        /* Allow override via -Wl,-subsystem=... option */
-        if (s1->pe_subsystem != 0)
-            pe.subsystem = s1->pe_subsystem;
-
-        /* set default file/section alignment */
-	if (pe.subsystem == 1) {
-	    pe.section_align = 0x20;
-	    pe.file_align = 0x20;
-	} else {
-	    pe.section_align = 0x1000;
-	    pe.file_align = 0x200;
-	}
-
-        if (s1->section_align != 0)
-            pe.section_align = s1->section_align;
-        if (s1->pe_file_align != 0)
-            pe.file_align = s1->pe_file_align;
-
-        if ((pe.subsystem >= 10) && (pe.subsystem <= 12))
-            pe.imagebase = 0;
-
-        if (s1->has_text_addr)
-            pe.imagebase = s1->text_addr;
-
         pe_assign_addresses(&pe);
         relocate_syms(s1, 0);
         for (i = 1; i < s1->nb_sections; ++i) {

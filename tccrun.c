@@ -23,20 +23,28 @@
 /* only native compiler supports -run */
 #ifdef TCC_IS_NATIVE
 
+#ifndef _WIN32
+# include <sys/mman.h>
+#endif
+
 #ifdef CONFIG_TCC_BACKTRACE
+# ifndef _WIN32
+#  include <signal.h>
+#  ifndef __OpenBSD__
+#   include <sys/ucontext.h>
+#  endif
+# else
+#  define ucontext_t CONTEXT
+# endif
 ST_DATA int rt_num_callers = 6;
 ST_DATA const char **rt_bound_error_msg;
 ST_DATA void *rt_prog_main;
-#endif
-
-#ifdef _WIN32
-#define ucontext_t CONTEXT
+static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level);
+static void rt_error(ucontext_t *uc, const char *fmt, ...);
+static void set_exception_handler(void);
 #endif
 
 static void set_pages_executable(void *ptr, unsigned long length);
-static void set_exception_handler(void);
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level);
-static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
 #ifdef _WIN64

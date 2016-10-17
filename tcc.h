@@ -30,35 +30,29 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
-#include <signal.h>
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
-#include <sys/stat.h>          /* stat() */
 
 #ifndef _WIN32
 # include <unistd.h>
 # include <sys/time.h>
-# ifndef __OpenBSD__
-#  include <sys/ucontext.h>
-# endif
-# include <sys/mman.h>
 # ifndef CONFIG_TCC_STATIC
 #  include <dlfcn.h>
 # endif
 /* XXX: need to define this to use them in non ISOC99 context */
  extern float strtof (const char *__nptr, char **__endptr);
  extern long double strtold (const char *__nptr, char **__endptr);
+
 #else /* on _WIN32: */
 # include <windows.h>
-# include <sys/timeb.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */
 # ifdef __GNUC__
 #  include <stdint.h>
 # endif
 # define inline __inline
-# define inp next_inp
+# define inp next_inp /* inp is an intrinsic on msvc */
 # define snprintf _snprintf
 # define vsnprintf _vsnprintf
 # ifndef __GNUC__
@@ -109,30 +103,7 @@
 #define PATHSEP ':'
 #endif
 
-#include "elf.h"
-#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-# define ELFCLASSW ELFCLASS64
-# define ElfW(type) Elf##64##_##type
-# define ELFW(type) ELF##64##_##type
-# define ElfW_Rel ElfW(Rela)
-# define SHT_RELX SHT_RELA
-# define REL_SECTION_FMT ".rela%s"
-/* XXX: DLL with PLT would only work with x86-64 for now */
-# define TCC_OUTPUT_DLL_WITH_PLT
-#else
-# define ELFCLASSW ELFCLASS32
-# define ElfW(type) Elf##32##_##type
-# define ELFW(type) ELF##32##_##type
-# define ElfW_Rel ElfW(Rel)
-# define SHT_RELX SHT_REL
-# define REL_SECTION_FMT ".rel%s"
-#endif
-
-/* target address type */
-#define addr_t ElfW(Addr)
-
-#include "stab.h"
-#include "libtcc.h"
+/* -------------------------------------------- */
 
 /* parser debug */
 /* #define PARSE_DEBUG */
@@ -291,6 +262,32 @@
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
+
+/* -------------------------------------------- */
+
+#include "libtcc.h"
+#include "elf.h"
+#include "stab.h"
+
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
+# define ELFCLASSW ELFCLASS64
+# define ElfW(type) Elf##64##_##type
+# define ELFW(type) ELF##64##_##type
+# define ElfW_Rel ElfW(Rela)
+# define SHT_RELX SHT_RELA
+# define REL_SECTION_FMT ".rela%s"
+/* XXX: DLL with PLT would only work with x86-64 for now */
+# define TCC_OUTPUT_DLL_WITH_PLT
+#else
+# define ELFCLASSW ELFCLASS32
+# define ElfW(type) Elf##32##_##type
+# define ELFW(type) ELF##32##_##type
+# define ElfW_Rel ElfW(Rel)
+# define SHT_RELX SHT_REL
+# define REL_SECTION_FMT ".rel%s"
+#endif
+/* target address type */
+#define addr_t ElfW(Addr)
 
 /* -------------------------------------------- */
 /* include the target specific definitions */
@@ -1137,7 +1134,7 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 
-PUB_FUNC void tcc_print_stats(TCCState *s, int64_t total_time);
+PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);
 PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv);
 PUB_FUNC void tcc_set_environment(TCCState *s);
 #ifdef _WIN32
@@ -1198,9 +1195,9 @@ ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next_nomacro(void);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
-ST_FUNC void preprocess_init(TCCState *s1);
-ST_FUNC void preprocess_new(void);
-ST_FUNC void preprocess_delete(void);
+ST_FUNC void preprocess_start(TCCState *s1);
+ST_FUNC void tccpp_new(TCCState *s);
+ST_FUNC void tccpp_delete(TCCState *s);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
@@ -1250,8 +1247,9 @@ ST_DATA const char *funcname;
 
 ST_FUNC void tccgen_start(TCCState *s1);
 ST_FUNC void tccgen_end(TCCState *s1);
-
+ST_FUNC void free_inline_functions(TCCState *s);
 ST_FUNC void check_vstack(void);
+
 ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
@@ -1290,7 +1288,6 @@ ST_FUNC void expr_prod(void);
 ST_FUNC void expr_sum(void);
 ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
-ST_FUNC void gen_inline_functions(void);
 ST_FUNC void decl(int l);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
@@ -1332,6 +1329,9 @@ ST_DATA Section *stab_section, *stabstr_section;
 
 ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
+ST_FUNC void tccelf_bounds_new(TCCState *s);
+ST_FUNC void tccelf_stab_new(TCCState *s);
+
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size);

@@ -3458,7 +3458,7 @@ ST_INLN void unget_tok(int last_tok)
     tok = last_tok;
 }
 
-ST_FUNC void preprocess_init(TCCState *s1)
+ST_FUNC void preprocess_start(TCCState *s1)
 {
     s1->include_stack_ptr = s1->include_stack;
     /* XXX: move that before to avoid having to initialize
@@ -3477,10 +3477,13 @@ ST_FUNC void preprocess_init(TCCState *s1)
         (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0;
 }
 
-ST_FUNC void preprocess_new(void)
+ST_FUNC void tccpp_new(TCCState *s)
 {
     int i, c;
     const char *p, *r;
+
+    /* might be used in error() before preprocess_start() */
+    s->include_stack_ptr = s->include_stack;
 
     /* init isid table */
     for(i = CH_EOF; i<128; i++)
@@ -3518,7 +3521,7 @@ ST_FUNC void preprocess_new(void)
     }
 }
 
-ST_FUNC void preprocess_delete(void)
+ST_FUNC void tccpp_delete(TCCState *s)
 {
     int i, n;
 
@@ -3683,7 +3686,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     const char *p;
     Sym *define_start;
 
-    preprocess_init(s1);
+    preprocess_start(s1);
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_PREPROCESS

@@ -90,6 +90,7 @@ ST_FUNC void vpush64(int ty, unsigned long long v);
 ST_FUNC void vpush(CType *type);
 ST_FUNC int gvtst(int inv, int t);
 ST_FUNC int is_btype_size(int bt);
+static void gen_inline_functions(TCCState *s);
 
 ST_INLN int is_float(int t)
 {
@@ -182,24 +183,11 @@ ST_FUNC void tccgen_start(TCCState *s1)
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
-
-#if 0
-    /* define 'void *alloca(unsigned int)' builtin function */
-    {
-        Sym *s1;
-
-        p = anon_sym++;
-        sym = sym_push(p, mk_pointer(VT_VOID), FUNC_CDECL, FUNC_NEW);
-        s1 = sym_push(SYM_FIELD, VT_UNSIGNED | VT_INT, 0, 0);
-        s1->next = NULL;
-        sym->next = s1;
-        sym_push(TOK_alloca, VT_FUNC | (p << VT_STRUCT_SHIFT), VT_CONST, 0);
-    }
-#endif
 }
 
 ST_FUNC void tccgen_end(TCCState *s1)
 {
+    gen_inline_functions(s1);
     check_vstack();
     /* end of translation unit info */
     if (s1->do_debug) {
@@ -6513,7 +6501,7 @@ static void gen_function(Sym *sym)
     check_vstack();
 }
 
-ST_FUNC void gen_inline_functions(void)
+static void gen_inline_functions(TCCState *s)
 {
     Sym *sym;
     int inline_generated, i, ln;
@@ -6523,8 +6511,8 @@ ST_FUNC void gen_inline_functions(void)
     /* iterate while inline function are referenced */
     for(;;) {
         inline_generated = 0;
-        for (i = 0; i < tcc_state->nb_inline_fns; ++i) {
-            fn = tcc_state->inline_fns[i];
+        for (i = 0; i < s->nb_inline_fns; ++i) {
+            fn = s->inline_fns[i];
             sym = fn->sym;
             if (sym && sym->c) {
                 /* the function was used: generate its code and
@@ -6548,13 +6536,18 @@ ST_FUNC void gen_inline_functions(void)
             break;
     }
     file->line_num = ln;
+}
+
+ST_FUNC void free_inline_functions(TCCState *s)
+{
+    int i;
     /* free tokens of unused inline functions */
-    for (i = 0; i < tcc_state->nb_inline_fns; ++i) {
-        fn = tcc_state->inline_fns[i];
+    for (i = 0; i < s->nb_inline_fns; ++i) {
+        struct InlineFunc *fn = s->inline_fns[i];
         if (fn->sym)
             tok_str_free(fn->func_str.str);
     }
-    dynarray_reset(&tcc_state->inline_fns, &tcc_state->nb_inline_fns);
+    dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */

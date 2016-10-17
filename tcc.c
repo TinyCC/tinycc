@@ -244,17 +244,14 @@ static char *default_outputfile(TCCState *s, const char *first_file)
     return tcc_strdup(buf);
 }
 
-static int64_t getclock_us(void)
+static unsigned getclock_ms(void)
 {
 #ifdef _WIN32
-    LARGE_INTEGER frequency, t1;
-    QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&t1);
-    return t1.QuadPart * 1000000LL / frequency.QuadPart;
+    return GetTickCount();
 #else
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000LL + tv.tv_usec;
+    return tv.tv_sec*1000 + (tv.tv_usec+500)/1000;
 #endif
 }
 
@@ -262,7 +259,7 @@ int main(int argc, char **argv)
 {
     TCCState *s;
     int ret, optind, i;
-    int64_t start_time = 0;
+    unsigned start_time = 0;
     const char *first_file = NULL;
 
     s = tcc_new();
@@ -322,7 +319,7 @@ int main(int argc, char **argv)
     }
 
     if (s->do_bench)
-        start_time = getclock_us();
+        start_time = getclock_ms();
 
     /* compile or add each files or library */
     for(i = ret = 0; i < s->nb_files && ret == 0; i++) {
@@ -349,8 +346,6 @@ int main(int argc, char **argv)
             fclose(s->ppfp);
 
     } else if (0 == ret) {
-        if (s->do_bench)
-            tcc_print_stats(s, getclock_us() - start_time);
         if (s->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
             ret = tcc_run(s, argc - 1 - optind, argv + 1 + optind);
@@ -364,6 +359,8 @@ int main(int argc, char **argv)
         }
     }
 
+    if (s->do_bench)
+        tcc_print_stats(s, getclock_ms() - start_time);
     tcc_delete(s);
     return ret;
 }

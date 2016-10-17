@@ -31,8 +31,9 @@
 #define __int16 short
 #define __int32 int
 #define __int64 long long
+#define _HAVE_INT64
 
-#define __cdecl __attribute__((__cdecl__))
+#define __cdecl
 #define __declspec(x) __attribute__((x))
 #define __unaligned __attribute__((packed))
 #define __fastcall __attribute__((fastcall))
@@ -71,12 +72,15 @@
 #define __stdcall
 #define _AMD64_ 1
 #define __x86_64 1
+#define _M_X64 100 /* Visual Studio */
+#define _M_AMD64 100 /* Visual Studio */
 #define USE_MINGW_SETJMP_TWO_ARGS
 #define mingw_getsp tinyc_getbp
 #define __TRY__
 #else
 #define __stdcall __attribute__((__stdcall__))
 #define _X86_ 1
+#define _M_IX86 300 /* Visual Studio */
 #define WIN32 1
 #define _USE_32BIT_TIME_T
 #define __TRY__ void __try__(void**), *_sehrec[6]; __try__(_sehrec);
@@ -89,34 +93,36 @@
 #define _WCHAR_T_DEFINED
 #define _UINTPTR_T_DEFINED
 #define _INTPTR_T_DEFINED
-
 #define _INTEGRAL_MAX_BITS 64
 
-typedef long __time32_t;
+#ifndef _TIME32_T_DEFINED
 #define _TIME32_T_DEFINED
-typedef __int64 __time64_t;
+typedef long __time32_t;
+#endif
+
+#ifndef _TIME64_T_DEFINED
 #define _TIME64_T_DEFINED
+typedef long long __time64_t;
+#endif
+
+#ifndef _TIME_T_DEFINED
+#define _TIME_T_DEFINED
 #ifdef _USE_32BIT_TIME_T
 typedef __time32_t time_t;
-#define _TIME_T_DEFINED
 #else
 typedef __time64_t time_t;
-#define _TIME_T_DEFINED
+#endif
 #endif
 
-#if 0 // defined in stddef.h
-typedef unsigned long size_t;
-typedef long ssize_t;
-typedef unsigned short wchar_t;
-#endif
-#define _SIZE_T_DEFINED
-#define _SSIZE_T_DEFINED
-#define _WCHAR_T_DEFINED
-
-typedef unsigned short wctype_t;
-typedef unsigned int wint_t;
+#ifndef _WCTYPE_T_DEFINED
 #define _WCTYPE_T_DEFINED
+typedef wchar_t wctype_t;
+#endif
+
+#ifndef _WINT_T
 #define _WINT_T
+typedef __WINT_TYPE__ wint_t;
+#endif
 
 typedef int errno_t;
 #define _ERRCODE_DEFINED

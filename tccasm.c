@@ -868,7 +868,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     Sym *define_start;
     int ret;
 
-    preprocess_init(s1);
+    preprocess_start(s1);
 
     /* default section is text */
     cur_text_section = text_section;

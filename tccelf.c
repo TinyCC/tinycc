@@ -69,6 +69,28 @@ ST_FUNC void tccelf_new(TCCState *s)
                                       ".dynhashtab", SHF_PRIVATE);
 }
 
+#ifdef CONFIG_TCC_BCHECK
+ST_FUNC void tccelf_bounds_new(TCCState *s)
+{
+    /* create bounds sections */
+    bounds_section = new_section(s, ".bounds",
+                                 SHT_PROGBITS, SHF_ALLOC);
+    lbounds_section = new_section(s, ".lbounds",
+                                  SHT_PROGBITS, SHF_ALLOC);
+}
+#endif
+
+ST_FUNC void tccelf_stab_new(TCCState *s)
+{
+    stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
+    stab_section->sh_entsize = sizeof(Stab_Sym);
+    stabstr_section = new_section(s, ".stabstr", SHT_STRTAB, 0);
+    put_elf_str(stabstr_section, "");
+    stab_section->link = stabstr_section;
+    /* put first entry */
+    put_stabs("", 0, 0, 0, 0);
+}
+
 static void free_section(Section *s)
 {
     tcc_free(s->data);
@@ -616,7 +638,7 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
             name = (char *) strtab_section->data + sym->st_name;
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
-#if defined TCC_IS_NATIVE && !defined _WIN32
+#if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
                 void *addr;
                 name = (char *) symtab_section->link->data + sym->st_name;
                 addr = dlsym(RTLD_DEFAULT, name);
@@ -1786,7 +1808,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     tcc_add_pragma_libs(s1);
     /* add libc */
     if (!s1->nostdlib) {
-        tcc_add_library(s1, "c");
+        tcc_add_library_err(s1, "c");
 #ifdef CONFIG_USE_LIBGCC
         if (!s1->static_link) {
             tcc_add_file(s1, TCC_LIBGCC);
