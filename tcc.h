@@ -173,24 +173,19 @@
 # define CONFIG_TCCDIR "."
 #endif
 #ifndef CONFIG_LDDIR
-# ifdef TCC_TARGET_X86_64
-#   define CONFIG_LDDIR "lib64"
-# else
-#   define CONFIG_LDDIR "lib"
-# endif
+# define CONFIG_LDDIR "lib"
 #endif
-
-#ifdef CONFIG_MULTIARCHDIR
-# define USE_MUADIR(s) s "/" CONFIG_MULTIARCHDIR
-# define ALSO_MUADIR(s) s "/" CONFIG_MULTIARCHDIR ":" s
+#ifdef CONFIG_TRIPLET
+# define USE_TRIPLET(s) s "/" CONFIG_TRIPLET
+# define ALSO_TRIPLET(s) USE_TRIPLET(s) ":" s
 #else
-# define USE_MUADIR(s) s
-# define ALSO_MUADIR(s) s
+# define USE_TRIPLET(s) s
+# define ALSO_TRIPLET(s) s
 #endif
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX USE_MUADIR(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
+# define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
 #endif
 
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
@@ -202,8 +197,8 @@
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         "{B}/include" \
-    ":" ALSO_MUADIR(CONFIG_SYSROOT "/usr/local/include") \
-    ":" ALSO_MUADIR(CONFIG_SYSROOT "/usr/include")
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
 # endif
 #endif
 
@@ -213,9 +208,9 @@
 #  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        ALSO_MUADIR(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" ALSO_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
-    ":" ALSO_MUADIR(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
+        ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
 # endif
 #endif
 
@@ -261,7 +256,7 @@
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
-#define TCC_LIBGCC USE_MUADIR(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
+#define TCC_LIBGCC USE_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 
 /* -------------------------------------------- */
 

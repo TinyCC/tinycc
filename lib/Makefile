@@ -41,22 +41,21 @@ cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BCHECK_O)
 ARM_O = libtcc1.o armeabi.o alloca-arm.o
-WIN32_O = $(I386_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
-WIN64_O = $(X86_64_O) crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 ARM64_O = lib-arm64.o
+WIN32_O = crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 
 # build TCC runtime library to contain PIC code, so it can be linked
 # into shared libraries
 PICFLAGS = -fPIC
 
 ifeq "$(TARGET)" "i386-win32"
- OBJ = $(addprefix $(DIR)/,$(WIN32_O))
+ OBJ = $(addprefix $(DIR)/,$(I386_O) $(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
  XFLAGS = $(TGT)
 else ifeq "$(TARGET)" "x86_64-win32"
- OBJ = $(addprefix $(DIR)/,$(WIN64_O))
+ OBJ = $(addprefix $(DIR)/,$(X86_64_O) $(WIN32_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
@@ -110,4 +109,4 @@ $(OBJ) $(XAR) : $(DIR)/exists
 	@echo $@ > $@
 
 clean :
-	rm -rfv i386-win32 x86_64-win32 i386 x86_64 arm arm64
+	rm -rf i386-win32 x86_64-win32 i386 x86_64 arm arm64

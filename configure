@@ -42,6 +42,7 @@ tcc_sysincludepaths=""
 tcc_libpaths=""
 tcc_crtprefix=""
 tcc_elfinterp=""
+triplet=
 tcc_lddir=
 confvars=
 cpu=
@@ -115,6 +116,8 @@ for opt do
   --crtprefix=*) tcc_crtprefix=`echo $opt | cut -d '=' -f 2`
   ;;
   --elfinterp=*) tcc_elfinterp=`echo $opt | cut -d '=' -f 2`
+  ;;
+  --triplet=*) triplet=`echo $opt | cut -d '=' -f 2`
   ;;
   --cpu=*) cpu=`echo $opt | cut -d '=' -f 2`
   ;;
@@ -293,6 +296,7 @@ Advanced options (experts only):
   --libpaths=...           specify system library paths, colon separated
   --crtprefix=...          specify locations of crt?.o, colon separated
   --elfinterp=...          specify elf interpreter
+  --triplet=...            specify system library/include directory triplet
 EOF
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -312,12 +316,18 @@ if test -z "$cross_prefix" ; then
     gcc_major="$($CONFTEST version)"
     gcc_minor="$($CONFTEST minor)"
     if test "$mingw32" = "no" ; then
-      triplet="$($CONFTEST triplet)"
-      if test -f "/usr/lib/$triplet/crti.o" ; then
-	tcc_lddir="lib"
-	multiarch_triplet="$triplet"
-      elif test "$cpu" != "x86" -a -f "/usr/lib64/crti.o" ; then
-	tcc_lddir="lib64"
+
+      if test -z "$triplet"; then
+        tt="$($CONFTEST triplet)"
+        if test -n "$tt" -a -f "/usr/lib/$tt/crti.o" ; then
+          triplet="$tt"
+        fi
+      fi
+
+      if test -z "$triplet"; then
+        if test ! -f "/usr/lib/crti.o" -a -f "/usr/lib64/crti.o" ; then
+          tcc_lddir="lib64"
+        fi
       fi
 
       if test "$cpu" = "armv4l" ; then
@@ -331,20 +341,9 @@ if test -z "$cross_prefix" ; then
 	fi
       fi
 
-#      multiarch_triplet=${libc_dir#*/}
-#      multiarch_triplet=${multiarch_triplet%/}
-#      tcc_lddir="${libc_dir%%/*}"
-#      if test -n "$multiarch_triplet" ; then
-#        tcc_lddir="$tcc_lddir/$multiarch_triplet"
-#      fi
-
       if test -f "/lib/ld-uClibc.so.0" ; then
 	confvars="$confvars uClibc"
       fi
-
-#      if test -z "$tcc_elfinterp" ; then
-#        tcc_elfinterp="$(ldd $CONFTEST | grep '/ld-.*.so' | sed 's,\s*\(\S\+\).*,\1,')"
-#      fi
 
     fi
   fi
@@ -374,6 +373,8 @@ for i in $F_OPTIONS; do
 done
 rm -f cc_help.txt
 
+fcho() { if test -n "$2"; then echo "$1$2"; else echo "$1-"; fi }
+
 echo "Binary  directory   $bindir"
 echo "TinyCC directory    $tccdir"
 echo "Library directory   $libdir"
@@ -381,15 +382,16 @@ echo "Include directory   $includedir"
 echo "Manual directory    $mandir"
 echo "Info directory      $infodir"
 echo "Doc directory       $docdir"
-echo "Target root prefix  $sysroot"
+fcho "Target root prefix  " "$sysroot"
 echo "Source path         $source_path"
 echo "C compiler          $cc"
 echo "Target OS           $targetos"
 echo "CPU                 $cpu"
 echo "Big Endian          $bigendian"
-echo "gprof enabled       $gprof"
-echo "cross compilers     $build_cross"
-echo "use libgcc          $use_libgcc"
+echo "Profiling           $gprof"
+echo "Cross compilers     $build_cross"
+echo "Use libgcc          $use_libgcc"
+fcho "Triplet             " "$triplet"
 
 echo "Creating config.mak and config.h"
 
@@ -437,7 +439,7 @@ print_mak CONFIG_TCC_LIBPATHS "$tcc_libpaths"
 print_mak CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
 print_mak CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
 print_mak CONFIG_LDDIR "$tcc_lddir"
-print_mak CONFIG_MULTIARCHDIR "$multiarch_triplet"
+print_mak CONFIG_TRIPLET "$triplet"
 
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
 echo "#define GCC_MINOR $gcc_minor" >> $TMPH

@@ -90,17 +90,17 @@ ARM64_FILES = $(CORE_FILES) arm64-gen.c
 C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
 
 ifdef CONFIG_WIN32
- PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
-ifeq ($(ARCH),x86-64)
- NATIVE_FILES=$(WIN64_FILES)
- PROGS_CROSS=$(WIN32_CROSS)
- LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
-else
- NATIVE_FILES=$(WIN32_FILES)
- PROGS_CROSS=$(WIN64_CROSS)
- LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
-endif
- PROGS_CROSS+=$(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+ PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF) $(LIBTCC)
+ ifeq ($(ARCH),x86-64)
+  NATIVE_FILES=$(WIN64_FILES)
+  PROGS_CROSS=$(WIN32_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+  LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
+ else
+  NATIVE_FILES=$(WIN32_FILES)
+  PROGS_CROSS=$(WIN64_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
+  LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
+ endif
+
 else ifeq ($(ARCH),i386)
 NATIVE_FILES=$(I386_FILES)
 PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
@@ -217,39 +217,32 @@ lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
 FORCE:
 
 # install
-TCC_INCLUDES = stdarg.h stddef.h stdbool.h float.h varargs.h
-INSTALL=install
-
-ifdef STRIP_BINARIES
- INSTALLBIN=$(INSTALL) -s
-else
- INSTALLBIN=$(INSTALL)
-endif
+INSTALL = install
+INSTALLBIN = install $(STRIP_$(STRIP_BINARIES))
+STRIP_yes = -s
 
 install-strip: install
-	$(STRIP) $(foreach PROG,$(PROGS),"$(bindir)"/$(PROG))
-ifdef CONFIG_WIN32
-	$(STRIP) "$(bindir)/$(LIBTCC)"
-endif
+install-strip: STRIP_BINARIES = yes
 
 ifndef CONFIG_WIN32
-install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
+install:
 	mkdir -p "$(bindir)"
 	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
-	mkdir -p "$(mandir)/man1"
-	-$(INSTALL) -m644 tcc.1 "$(mandir)/man1"
-	mkdir -p "$(infodir)"
-	-$(INSTALL) -m644 tcc-doc.info "$(infodir)"
 	mkdir -p "$(tccdir)"
-	mkdir -p "$(tccdir)/include"
 ifneq ($(LIBTCC1),)
 	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
 endif
-	$(INSTALL) -m644 $(addprefix $(TOPSRC)/include/,$(TCC_INCLUDES)) $(TOPSRC)/tcclib.h "$(tccdir)/include"
+	mkdir -p "$(tccdir)/include"
+	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 $(TOPSRC)/libtcc.h "$(includedir)"
+
+	mkdir -p "$(mandir)/man1"
+	-$(INSTALL) -m644 tcc.1 "$(mandir)/man1"
+	mkdir -p "$(infodir)"
+	-$(INSTALL) -m644 tcc-doc.info "$(infodir)"
 	mkdir -p "$(docdir)"
 	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
 ifdef CONFIG_CROSS
@@ -264,28 +257,25 @@ endif
 
 uninstall:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
-	rm -fv $(foreach P,$(LIBTCC1),"$(tccdir)/$P")
-	rm -fv $(foreach P,$(TCC_INCLUDES),"$(tccdir)/include/$P")
-	rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
-	rm -fv $(libdir)/libtcc.so*
-	rm -rv "$(tccdir)"
+	rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(docdir)/tcc-doc.html"
+	rm -rv "$(tccdir)"
 else
 # on windows
-install: $(PROGS) $(TCCLIBS) $(TCCDOCS)
+install:
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/lib"
 	mkdir -p "$(tccdir)/include"
 	mkdir -p "$(tccdir)/examples"
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
-	$(INSTALLBIN) -m755 $(PROGS) $(LIBTCC) "$(tccdir)"
+	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
 	$(INSTALL) -m644 libtcc1.a $(TOPSRC)/win32/lib/*.def "$(tccdir)/lib"
 	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/include"
 	cp -r $(TOPSRC)/win32/examples/. "$(tccdir)/examples"
 	cp $(TOPSRC)/tests/libtcc_test.c "$(tccdir)/examples"
-	$(INSTALL) -m644 $(addprefix $(TOPSRC)/include/,$(TCC_INCLUDES)) $(TOPSRC)/tcclib.h "$(tccdir)/include"
+	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/include"
 	$(INSTALL) -m644 tcc-doc.html $(TOPSRC)/win32/tcc-win32.txt "$(tccdir)/doc"
 	$(INSTALL) -m644 $(TOPSRC)/libtcc.h libtcc.def "$(tccdir)/libtcc"
 ifdef CONFIG_CROSS
