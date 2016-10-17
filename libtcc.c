@@ -1657,6 +1657,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
     int optind = 0;
     int run = 0;
     int x;
+    int last_o = -1;
     CString linker_arg; /* collect -Wl options */
     char buf[1024];
 
@@ -1887,9 +1888,7 @@ reparse:
                 tcc_warning("unsupported language '%s'", optarg);
             break;
         case TCC_OPTION_O:
-            x = atoi(optarg);
-            if (x > 0)
-                tcc_define_symbol(s, "__OPTIMIZE__", NULL);
+            last_o = atoi(optarg);
             break;
         case TCC_OPTION_mms_bitfields:
             s->ms_bitfields = 1;
@@ -1907,6 +1906,9 @@ unsupported_option:
             break;
         }
     }
+
+    if (last_o > 0)
+        tcc_define_symbol(s, "__OPTIMIZE__", NULL);
 
     if (linker_arg.size) {
         r = linker_arg.data;
