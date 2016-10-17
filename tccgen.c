@@ -3610,8 +3610,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
 		    alignoverride = 0;
                     if (ad1.a.aligned) {
 			int speca = 1 << (ad1.a.aligned - 1);
-                        if (align < speca)
-                            alignoverride = speca;
+			alignoverride = speca;
                     } else if (ad1.a.packed || ad->a.packed) {
                         alignoverride = 1;
                     } else if (*tcc_state->pack_stack_ptr) {
