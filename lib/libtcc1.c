@@ -700,9 +700,6 @@ void *__va_arg(__va_list_struct *ap,
         return ap->overflow_arg_area - size;
 
     default: /* should never happen */
-#ifndef __TINYC__
-        fprintf(stderr, "unknown ABI type for __va_arg\n");
-#endif
         abort();
     }
 }
