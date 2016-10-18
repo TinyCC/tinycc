@@ -2964,6 +2964,56 @@ void test_high_clobbers(void)
 #endif
 }
 
+static long cpu_number;
+void trace_console(long len, long len2)
+{
+    /* This generated invalid code when the emission of the switch
+       table isn't disabled.  The asms are necessary to show the bug,
+       normal statements don't work (they need to generate some code
+       even under nocode_wanted, which normal statements don't do,
+       but asms do).  Also at least these number of cases is necessary
+       to generate enough "random" bytes.  They ultimately are enough
+       to create invalid instruction patterns to which the first
+       skip-to-decision-table jump jumps.  If decision table emission
+       is disabled all of this is no problem.
+
+       It also is necessary that the switches are in a statement expression
+       (which has the property of not being enterable from outside. no
+       matter what).  */
+    if (0
+        &&
+            ({
+              long pscr_ret__;
+              switch(len) {
+                case 4:
+                    {
+                       long pfo_ret__;
+                       switch (len2) {
+                         case 8:	printf("bla"); pfo_ret__ = 42; break;
+                       }
+                       pscr_ret__ = pfo_ret__;
+                    }
+                  break;
+                case 8:
+                    {
+                       long pfo_ret__;
+                       switch (len2) {
+                         case 1:asm("movq %1,%0": "=r" (pfo_ret__)	: "m" (cpu_number));	break;
+                         case 2:asm("movq %1,%0": "=r" (pfo_ret__)	: "m" (cpu_number));	break;
+                         case 4:asm("movq %1,%0": "=r" (pfo_ret__)	: "m" (cpu_number));	break;
+                         case 8:asm("movq %1,%0": "=r" (pfo_ret__)	: "m" (cpu_number));	break;
+                         default: printf("impossible\n");
+                       }
+                       pscr_ret__ = pfo_ret__;
+                    };
+                  break;
+              }
+              pscr_ret__;
+            }))
+      {
+        printf("huh?\n");
+      }
+}
 void asm_test(void)
 {
     char buf[128];
@@ -3044,6 +3094,7 @@ void asm_test(void)
     asm volatile ("mov $0x4243, %%esi" : "=r" (regvar));
     printf ("regvar=%x\n", regvar);
     test_high_clobbers();
+    trace_console(8, 8);
     return;
  label1:
     goto label2;

@@ -5692,13 +5692,15 @@ static void block(int *bsym, int *csym, int is_expr)
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
-        qsort(sw.p, sw.n, sizeof(void*), case_cmp);
-        for (b = 1; b < sw.n; b++)
-            if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
-                tcc_error("duplicate case value");
-        gcase(sw.p, sw.n, c, &a);
-        if (sw.def_sym)
-            gjmp_addr(sw.def_sym);
+	if (!nocode_wanted) {
+	    qsort(sw.p, sw.n, sizeof(void*), case_cmp);
+	    for (b = 1; b < sw.n; b++)
+	        if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
+	            tcc_error("duplicate case value");
+	    gcase(sw.p, sw.n, c, &a);
+	    if (sw.def_sym)
+	      gjmp_addr(sw.def_sym);
+	}
         dynarray_reset(&sw.p, &sw.n);
         cur_switch = saved;
         /* break label */
