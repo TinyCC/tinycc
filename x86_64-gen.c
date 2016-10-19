@@ -893,6 +893,22 @@ void gfunc_call(int nb_args)
     }
     
     gcall_or_jmp(0);
+    /* other compilers don't clear the upper bits when returning char/short */
+    bt = vtop->type.ref->type.t & (VT_BTYPE | VT_UNSIGNED);
+    if (bt == (VT_BYTE | VT_UNSIGNED))
+        o(0xc0b60f);  /* movzbl %al, %eax */
+    else if (bt == VT_BYTE)
+        o(0xc0be0f); /* movsbl %al, %eax */
+    else if (bt == VT_SHORT)
+        o(0x98); /* cwtl */
+    else if (bt == (VT_SHORT | VT_UNSIGNED))
+        o(0xc0b70f);  /* movzbl %al, %eax */
+#if 0 /* handled in gen_cast() */
+    else if (bt == VT_INT)
+        o(0x9848); /* cltq */
+    else if (bt == (VT_INT | VT_UNSIGNED))
+        o(0xc089); /* mov %eax,%eax */
+#endif
     vtop--;
 }
 

@@ -735,12 +735,8 @@ struct TCCState {
 
 #ifdef TCC_IS_NATIVE
     const char *runtime_main;
-    /* for tcc_relocate */
-    void *runtime_mem;
-# ifdef HAVE_SELINUX
-    void *write_mem;
-    unsigned long mem_size;
-# endif
+    void **runtime_mem;
+    int nb_runtime_mem;
 #endif
 
     /* used by main and tcc_parse_args only */
@@ -1532,13 +1528,13 @@ ST_FUNC void dlclose(void *p);
 ST_FUNC const char *dlerror(void);
 ST_FUNC void *dlsym(int flag, const char *symbol);
 #endif
-
 #ifdef CONFIG_TCC_BACKTRACE
 ST_DATA int rt_num_callers;
 ST_DATA const char **rt_bound_error_msg;
 ST_DATA void *rt_prog_main;
 ST_FUNC void tcc_set_num_callers(int n);
 #endif
+ST_FUNC void tcc_run_free(TCCState *s1);
 #endif
 
 /********************************************************/

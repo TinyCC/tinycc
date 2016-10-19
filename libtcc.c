@@ -931,12 +931,8 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
 
 #ifdef TCC_IS_NATIVE
-# ifdef HAVE_SELINUX
-    munmap (s1->write_mem, s1->mem_size);
-    munmap (s1->runtime_mem, s1->mem_size);
-# else
-    tcc_free(s1->runtime_mem);
-# endif
+    /* free runtime memory */
+    tcc_run_free(s1);
 #endif
 
     tcc_free(s1->sym_attrs);

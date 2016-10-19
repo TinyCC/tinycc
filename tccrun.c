@@ -48,7 +48,8 @@ static void set_pages_executable(void *ptr, unsigned long length);
 static int tcc_relocate_ex(TCCState *s1, void *ptr);
 
 #ifdef _WIN64
-static void win64_add_function_table(TCCState *s1);
+static void *win64_add_function_table(TCCState *s1);
+static void win64_del_function_table(void *);
 #endif
 
 /* ------------------------------------------------------------- */
@@ -57,14 +58,14 @@ static void win64_add_function_table(TCCState *s1);
 
 LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 {
-    int ret;
+    int size;  void *mem;
 
     if (TCC_RELOCATE_AUTO != ptr)
         return tcc_relocate_ex(s1, ptr);
 
-    ret = tcc_relocate_ex(s1, NULL);
-    if (ret < 0)
-        return ret;
+    size = tcc_relocate_ex(s1, NULL);
+    if (size < 0)
+        return -1;
 
 #ifdef HAVE_SELINUX
     {   /* Use mmap instead of malloc for Selinux.  Ref:
@@ -72,28 +73,50 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 
         char tmpfname[] = "/tmp/.tccrunXXXXXX";
         int fd = mkstemp (tmpfname);
+        void *wr_mem;
 
-        s1->mem_size = ret;
         unlink (tmpfname);
-        ftruncate (fd, s1->mem_size);
+        ftruncate (fd, size);
 
-        s1->write_mem = mmap (NULL, ret, PROT_READ|PROT_WRITE,
+        wr_mem = mmap (NULL, size, PROT_READ|PROT_WRITE,
             MAP_SHARED, fd, 0);
-        if (s1->write_mem == MAP_FAILED)
+        if (wr_mem == MAP_FAILED)
             tcc_error("/tmp not writeable");
-
-        s1->runtime_mem = mmap (NULL, ret, PROT_READ|PROT_EXEC,
+        mem = mmap (NULL, size, PROT_READ|PROT_EXEC,
             MAP_SHARED, fd, 0);
-        if (s1->runtime_mem == MAP_FAILED)
+        if (mem == MAP_FAILED)
             tcc_error("/tmp not executable");
 
-        ret = tcc_relocate_ex(s1, s1->write_mem);
+        tcc_relocate_ex(s1, wr_mem);
+        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
+        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, wr_mem);
+        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, mem);
     }
 #else
-    s1->runtime_mem = tcc_malloc(ret);
-    ret = tcc_relocate_ex(s1, s1->runtime_mem);
+    mem = tcc_malloc(size);
+    tcc_relocate_ex(s1, mem); /* no more errors expected */
+    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, mem);
 #endif
-    return ret;
+    return 0;
+}
+
+ST_FUNC void tcc_run_free(TCCState *s1)
+{
+    int i;
+
+    for (i = 0; i < s1->nb_runtime_mem; ++i) {
+#ifdef HAVE_SELINUX
+        int size = (int)(addr_t)s1->runtime_mem[i];
+        munmap(s1->runtime_mem[++i], size);
+        munmap(s1->runtime_mem[++i], size);
+#else
+# ifdef _WIN64
+        win64_del_function_table(*(void**)s1->runtime_mem[i]);
+# endif
+        tcc_free(s1->runtime_mem[i]);
+#endif
+    }
+    tcc_free(s1->runtime_mem);
 }
 
 /* launch the compiled program with the given arguments */
@@ -173,15 +196,17 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     }
 
     offset = 0, mem = (addr_t)ptr;
+#ifdef _WIN64
+    offset += sizeof (void*);
+#endif
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
             continue;
-        length = s->data_offset;
-        s->sh_addr = mem ? (mem + offset + 15) & ~15 : 0;
-        offset = (offset + length + 15) & ~15;
+        offset = (offset + 15) & ~15;
+        s->sh_addr = mem ? mem + offset : 0;
+        offset += s->data_offset;
     }
-    offset += 16;
 
     /* relocate symbols */
     relocate_syms(s1, 1);
@@ -199,6 +224,10 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     }
     relocate_plt(s1);
 
+#ifdef _WIN64
+    *(void**)ptr = win64_add_function_table(s1);
+#endif
+
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
@@ -214,10 +243,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         if (s->sh_flags & SHF_EXECINSTR)
             set_pages_executable(ptr, length);
     }
-
-#ifdef _WIN64
-    win64_add_function_table(s1);
-#endif
     return 0;
 }
 
@@ -246,6 +271,31 @@ static void set_pages_executable(void *ptr, unsigned long length)
   #endif
 #endif
 }
+
+#ifdef _WIN64
+static void *win64_add_function_table(TCCState *s1)
+{
+    void *p = NULL;
+    int r;
+    if (s1->uw_pdata) {
+        p = (void*)s1->uw_pdata->sh_addr;
+        r = RtlAddFunctionTable(
+            (RUNTIME_FUNCTION*)p,
+            s1->uw_pdata->data_offset / sizeof (RUNTIME_FUNCTION),
+            text_section->sh_addr
+            );
+        s1->uw_pdata = NULL;
+    }
+    return p;;
+}
+
+static void win64_del_function_table(void *p)
+{
+    if (p) {
+        RtlDeleteFunctionTable((RUNTIME_FUNCTION*)p);
+    }
+}
+#endif
 
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
@@ -684,17 +734,6 @@ static void set_exception_handler(void)
 {
     SetUnhandledExceptionFilter(cpu_exception_handler);
 }
-
-#ifdef _WIN64
-static void win64_add_function_table(TCCState *s1)
-{
-    RtlAddFunctionTable(
-        (RUNTIME_FUNCTION*)s1->uw_pdata->sh_addr,
-        s1->uw_pdata->data_offset / sizeof (RUNTIME_FUNCTION),
-        text_section->sh_addr
-        );
-}
-#endif
 
 /* return the PC at frame level 'level'. Return non zero if not found */
 static int rt_get_caller_pc(addr_t *paddr, CONTEXT *uc, int level)
