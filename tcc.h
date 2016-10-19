@@ -1312,6 +1312,7 @@ ST_DATA Section *last_text_section; /* to handle .previous asm directive */
 /* bound check related sections */
 ST_DATA Section *bounds_section; /* contains global data bound description */
 ST_DATA Section *lbounds_section; /* contains local data bound description */
+ST_FUNC void tccelf_bounds_new(TCCState *s);
 #endif
 /* symbol sections */
 ST_DATA Section *symtab_section, *strtab_section;
@@ -1320,7 +1321,6 @@ ST_DATA Section *stab_section, *stabstr_section;
 
 ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
-ST_FUNC void tccelf_bounds_new(TCCState *s);
 ST_FUNC void tccelf_stab_new(TCCState *s);
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);

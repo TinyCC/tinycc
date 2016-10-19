@@ -255,7 +255,6 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
-    extern void __clear_cache(void *beginning, void *end);
 #ifndef PAGESIZE
 # define PAGESIZE 4096
 #endif
@@ -263,12 +262,12 @@ static void set_pages_executable(void *ptr, unsigned long length)
     start = (addr_t)ptr & ~(PAGESIZE - 1);
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
-    mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC);
-  #ifndef __PCC__
-    __clear_cache(ptr, (char *)ptr + length);
-  #else
-    /* pcc 1.2.0.DEVEL 20141206 don't have such proc */
-  #endif
+    if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC))
+        tcc_error("mprotect failed: did you mean to configure --with-selinux?");
+#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
+    { extern void __clear_cache(void *beginning, void *end);
+      __clear_cache(ptr, (char *)ptr + length); }
+#endif
 #endif
 }
 

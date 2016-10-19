@@ -1025,8 +1025,7 @@ ST_FUNC void gen_cvt_itof(int t)
 /* convert fp to int 't' type */
 ST_FUNC void gen_cvt_ftoi(int t)
 {
- #ifndef COMMIT_4ad186c5ef61_IS_FIXED
-    /* a good version but it takes a more time to execute */
+#if 1
     gv(RC_FLOAT);
     save_reg(TREG_EAX);
     save_reg(TREG_EDX);
@@ -1034,19 +1033,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
     vtop->r = TREG_EAX; /* mark reg as used */
     if (t == VT_LLONG)
         vtop->r2 = TREG_EDX;
- #else
-    /* a new version with a bug: t2a = 44100312 */
-    /*
-    #include<stdio.h>
-    int main() {
-	int t1 = 176401255;
-	float f = 0.25f;
-	int t2a = (int)(t1 * f); // must be 44100313
-	int t2b = (int)(t1 * (float)0.25f);
-	printf("t2a=%d t2b=%d \n",t2a,t2b);
-	return 0;
-    }
-    */
+#else
     int bt = vtop->type.t & VT_BTYPE;
     if (bt == VT_FLOAT)
         vpush_global_sym(&func_old_type, TOK___fixsfdi);
@@ -1059,7 +1046,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
     vpushi(0);
     vtop->r = REG_IRET;
     vtop->r2 = REG_LRET;
- #endif
+#endif
 }
 
 /* convert from one floating point type to another */

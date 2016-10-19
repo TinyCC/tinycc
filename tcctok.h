@@ -242,10 +242,7 @@
      DEF(TOK___fixsfdi, "__fixsfdi")
      DEF(TOK___fixdfdi, "__fixdfdi")
      DEF(TOK___fixxfdi, "__fixxfdi")
-
- #ifndef COMMIT_4ad186c5ef61_IS_FIXED
      DEF(TOK___tcc_cvt_ftol, "__tcc_cvt_ftol")
- #endif
 #endif
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64

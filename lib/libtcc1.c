@@ -28,8 +28,6 @@ the Free Software Foundation, 59 Temple Place - Suite 330,
 Boston, MA 02111-1307, USA.  
 */
 
-#include <stdint.h>
-
 #define W_TYPE_SIZE   32
 #define BITS_PER_UNIT 8
 
@@ -480,7 +478,6 @@ long long __ashldi3(long long a, int b)
 #endif
 }
 
-#ifndef COMMIT_4ad186c5ef61_IS_FIXED
 long long __tcc_cvt_ftol(long double x)
 {
     unsigned c0, c1;
@@ -492,7 +489,6 @@ long long __tcc_cvt_ftol(long double x)
     __asm__ __volatile__ ("fldcw %0" : : "m" (c0));
     return ret;
 }
-#endif
 
 #endif /* !__x86_64__ */
 
@@ -638,24 +634,24 @@ long long __fixxfdi (long double a1)
 #if defined(TCC_TARGET_X86_64) && !defined(_WIN64)
 
 #ifndef __TINYC__
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+# include <stdlib.h>
+# include <stdio.h>
+# include <string.h>
+# undef __va_start
+# undef __va_arg
+# undef __va_copy
+# undef __va_end
 #else
-/* Avoid including stdlib.h because it is not easily available when
-   cross compiling */
-#include <stddef.h> /* size_t definition is needed for a x86_64-tcc to parse memset() */
-extern void *malloc(unsigned long long);
-extern void *memset(void *s, int c, size_t n);
-extern void free(void*);
+/* Avoid include files, they may not be available when cross compiling */
+extern void *memset(void *s, int c, __SIZE_TYPE__ n);
 extern void abort(void);
 #endif
 
+/* This should be in sync with our include/stdarg.h */
 enum __va_arg_type {
     __va_gen_reg, __va_float_reg, __va_stack
 };
 
-//This should be in sync with the declaration on our include/stdarg.h
 /* GCC compatible definition of va_list. */
 typedef struct {
     unsigned int gp_offset;
@@ -666,11 +662,6 @@ typedef struct {
     };
     char *reg_save_area;
 } __va_list_struct;
-
-#undef __va_start
-#undef __va_arg
-#undef __va_copy
-#undef __va_end
 
 void __va_start(__va_list_struct *ap, void *fp)
 {
@@ -705,33 +696,25 @@ void *__va_arg(__va_list_struct *ap,
     case __va_stack:
     use_overflow_area:
         ap->overflow_arg_area += size;
-        ap->overflow_arg_area = (char*)((intptr_t)(ap->overflow_arg_area + align - 1) & -(intptr_t)align);
+        ap->overflow_arg_area = (char*)((long long)(ap->overflow_arg_area + align - 1) & -align);
         return ap->overflow_arg_area - size;
 
-    default:
+    default: /* should never happen */
 #ifndef __TINYC__
         fprintf(stderr, "unknown ABI type for __va_arg\n");
 #endif
         abort();
     }
 }
-
 #endif /* __x86_64__ */
 
-/* Flushing for tccrun */
-#if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_I386)
-
-void __clear_cache(void *beginning, void *end)
-{
-}
-
-#elif defined(TCC_TARGET_ARM)
-
+#ifdef TCC_TARGET_ARM
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <stdio.h>
 
+/* Flushing for tccrun */
 void __clear_cache(void *beginning, void *end)
 {
 /* __ARM_NR_cacheflush is kernel private and should not be used in user space.
@@ -747,7 +730,4 @@ void __clear_cache(void *beginning, void *end)
              "ret");
 #endif
 }
-
-#else
-#warning __clear_cache not defined for this architecture, avoid using tcc -run
-#endif
+#endif /* arm */
