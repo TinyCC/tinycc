@@ -1508,6 +1508,7 @@ ST_FUNC void parse_define(void)
             if (1 == spc)
                 --tokstr_buf.len;
             spc = 3;
+	    tok = TOK_PPJOIN;
         } else if ('#' == tok) {
             spc = 4;
         } else if (check_space(tok, &spc)) {
@@ -2958,10 +2959,10 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 int l0 = str.len;
                 st = s->d;
                 /* if '##' is present before or after, no arg substitution */
-                if (*macro_str == TOK_TWOSHARPS || t1 == TOK_TWOSHARPS) {
+                if (*macro_str == TOK_PPJOIN || t1 == TOK_PPJOIN) {
                     /* special case for var arg macros : ## eats the ','
                        if empty VA_ARGS variable. */
-                    if (t1 == TOK_TWOSHARPS && t0 == ',' && gnu_ext && s->type.t) {
+                    if (t1 == TOK_PPJOIN && t0 == ',' && gnu_ext && s->type.t) {
                         if (*st == 0) {
                             /* suppress ',' '##' */
                             str.len -= 2;
@@ -3277,7 +3278,7 @@ static inline int *macro_twosharps(const int *ptr0)
     /* we search the first '##' */
     for (ptr = ptr0;;) {
         TOK_GET(&t, &ptr, &cval);
-        if (t == TOK_TWOSHARPS)
+        if (t == TOK_PPJOIN)
             break;
         if (t == 0)
             return NULL;
@@ -3290,9 +3291,9 @@ static inline int *macro_twosharps(const int *ptr0)
         TOK_GET(&t, &ptr, &cval);
         if (t == 0)
             break;
-        if (t == TOK_TWOSHARPS)
+        if (t == TOK_PPJOIN)
             continue;
-        while (*ptr == TOK_TWOSHARPS) {
+        while (*ptr == TOK_PPJOIN) {
             int t1; CValue cv1;
             /* given 'a##b', remove nosubsts preceding 'a' */
             if (start_of_nosubsts >= 0)
@@ -3300,7 +3301,7 @@ static inline int *macro_twosharps(const int *ptr0)
             /* given 'a##b', remove nosubsts preceding 'b' */
             while ((t1 = *++ptr) == TOK_NOSUBST)
                 ;
-            if (t1 && t1 != TOK_TWOSHARPS) {
+            if (t1 && t1 != TOK_PPJOIN) {
                 TOK_GET(&t1, &ptr, &cv1);
                 if (t != TOK_PLCHLDR || t1 != TOK_PLCHLDR) {
                     if (paste_tokens(t, &cval, t1, &cv1)) {
@@ -3346,7 +3347,7 @@ static void macro_subst(
     spc = nosubst = 0;
 
     /* first scan for '##' operator handling */
-    if (can_read_stream & 1) {
+    if (can_read_stream) {
         macro_str1 = macro_twosharps(ptr);
         if (macro_str1)
             ptr = macro_str1;

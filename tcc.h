@@ -899,6 +899,7 @@ struct filespec {
 #define TOK_TWOSHARPS 0xca /* ## preprocessing token */
 #define TOK_PLCHLDR  0xcb /* placeholder token as defined in C99 */
 #define TOK_NOSUBST  0xcc /* means following token has already been pp'd */
+#define TOK_PPJOIN   0xce /* A '##' in the right position to mean pasting */
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
