@@ -606,6 +606,24 @@ enum test {
 struct S_enum {
     enum {E6 = 42, E7, E8} e:8;
 };
+
+enum ELong {
+    /* This is either 0 on L32 machines, or a large number
+       on L64 machines.  We should be able to store this.  */
+    EL_large = (unsigned long)0xf000 << 32,
+};
+
+enum { BIASU = -1U<<31 };
+enum { BIASS = -1 << 31 };
+
+static int getint(int i)
+{
+  if (i)
+    return 0;
+  else
+    return (int)(-1U << 31);
+}
+
 void enum_test()
 {
     enum test b1;
@@ -617,6 +635,16 @@ void enum_test()
            E0, E1, E2, E3, E4, E5);
     b1 = 1;
     printf("b1=%d\n", b1);
+    printf("enum large: %ld\n", EL_large);
+
+    if (getint(0) == BIASU)
+      printf("enum unsigned: ok\n");
+    else
+      printf("enum unsigned: wrong\n");
+    if (getint(0) == BIASS)
+      printf("enum unsigned: ok\n");
+    else
+      printf("enum unsigned: wrong\n");
 }
 
 typedef int *my_ptr;
@@ -1727,10 +1755,45 @@ void init_test(void)
     printf("linit18= %d %d\n", linit18[0], linit18[1]);
 }
 
+void switch_uc(unsigned char uc)
+{
+	switch (uc) {
+	    case 0xfb ... 0xfe:
+		printf("ucsw:1\n");
+		break;
+	    case 0xff:
+		printf("ucsw:2\n");
+		break;
+	    case 0 ... 5:
+		printf("ucsw:3\n");
+		break;
+	    default:
+		printf("ucsw: broken!\n");
+	}
+}
+
+void switch_sc(signed char sc)
+{
+	switch (sc) {
+	    case -5 ... -2:
+		printf("scsw:1\n");
+		break;
+	    case -1:
+		printf("scsw:2\n");
+		break;
+	    case 0 ... 5:
+		printf("scsw:3\n");
+		break;
+	    default:
+		printf("scsw: broken!\n");
+	}
+}
 
 void switch_test()
 {
     int i;
+    unsigned long long ull;
+    long long ll;
 
     for(i=0;i<15;i++) {
         switch(i) {
@@ -1753,6 +1816,60 @@ void switch_test()
         }
     }
     printf("\n");
+
+    for (i = 1; i <= 5; i++) {
+	ull = (unsigned long long)i << 61;
+	switch (ull) {
+	    case 1ULL << 61:
+		printf("ullsw:1\n");
+		break;
+	    case 2ULL << 61:
+		printf("ullsw:2\n");
+		break;
+	    case 3ULL << 61:
+		printf("ullsw:3\n");
+		break;
+	    case 4ULL << 61:
+		printf("ullsw:4\n");
+		break;
+	    case 5ULL << 61:
+		printf("ullsw:5\n");
+		break;
+	    default:
+		printf("ullsw: broken!\n");
+	}
+    }
+
+    for (i = 1; i <= 5; i++) {
+	ll = (long long)i << 61;
+	switch (ll) {
+	    case 1LL << 61:
+		printf("llsw:1\n");
+		break;
+	    case 2LL << 61:
+		printf("llsw:2\n");
+		break;
+	    case 3LL << 61:
+		printf("llsw:3\n");
+		break;
+	    case 4LL << 61:
+		printf("llsw:4\n");
+		break;
+	    case 5LL << 61:
+		printf("llsw:5\n");
+		break;
+	    default:
+		printf("llsw: broken!\n");
+	}
+    }
+
+    for (i = -5; i <= 5; i++) {
+	switch_uc((unsigned char)i);
+    }
+
+    for (i = -5; i <= 5; i++) {
+	switch_sc ((signed char)i);
+    }
 }
 
 /* ISOC99 _Bool type */
