@@ -3266,7 +3266,7 @@ static void struct_add_offset (Sym *s, int offset)
 
 static void struct_layout(CType *type, AttributeDef *ad)
 {
-    int align, maxalign, offset, c, bit_pos;
+    int align, maxalign, offset, c, bit_pos, bt, prevbt;
     Sym *f;
     if (ad->a.aligned)
       maxalign = ad->a.aligned;
@@ -3275,6 +3275,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
     offset = 0;
     c = 0;
     bit_pos = 0;
+    prevbt = VT_STRUCT; /* make it never match */
     for (f = type->ref->next; f; f = f->next) {
 	int extra_bytes = 0;
 	int typealign, bit_size;
@@ -3312,7 +3313,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	}
 	/*if (extra_bytes) c += extra_bytes;
 	else*/ if (bit_size < 0) {
-	    int addbytes = (bit_pos + 7) >> 3;
+	    int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
 	    if (type->ref->type.t == TOK_STRUCT) {
 		c = (c + addbytes + align - 1) & -align;
 		offset = c;
@@ -3328,6 +3329,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	    if (align > maxalign)
 	      maxalign = align;
 	    bit_pos = 0;
+	    prevbt = VT_STRUCT;
 	} else {
 	    /* A bit-field.  Layout is more complicated.  There are two
 	       options TCC implements: PCC compatible and MS compatible
@@ -3347,9 +3349,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		   its container (depending on base type) or it's a zero-width
 		   bit-field.  Packed non-zero-width bit-fields always are
 		   placed adjacent.  */
-		if (typealign != 1 &&
-		    (bit_pos + bit_size > size * 8 ||
-		     bit_size == 0)) {
+		if ((typealign != 1 &&
+		     bit_pos + bit_size > size * 8) ||
+		    bit_size == 0) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    offset = c;
 		    bit_pos = 0;
@@ -3364,12 +3366,31 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		      maxalign = typealign;
 		}
 	    } else {
-		tcc_error("ms bit-field layout not implemented");
+		bt = f->type.t & VT_BTYPE;
+		if (
+		    ((
+		      bit_pos + bit_size > size * 8) ||
+		     (bit_size == 0 && prevbt == bt) ||
+		     (bit_size > 0 && bt != prevbt))) {
+		    c = (c + typealign - 1) & -typealign;
+		    offset = c;
+		    bit_pos = 0;
+		    /* In MS bitfield mode a bit-field run always uses
+		       at least as many bits as the underlying type.  */
+		    c += size;
+		}
+		if (bit_size > 0 || prevbt == bt) {
+		    if (align > maxalign)
+		      maxalign = align;
+		    if (typealign > maxalign)
+		      maxalign = typealign;
+		}
+		prevbt = bt;
 	    }
 	    f->type.t = (f->type.t & ~(0x3f << VT_STRUCT_SHIFT))
 		        | (bit_pos << VT_STRUCT_SHIFT);
 	    bit_pos += bit_size;
-	    if (bit_pos >= size * 8) {
+	    if (pcc && bit_pos >= size * 8) {
 		c += size;
 		bit_pos -= size * 8;
 	    }
@@ -3573,6 +3594,8 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                         if (v && bit_size == 0)
                             tcc_error("zero width for bit-field '%s'", 
                                   get_tok_str(v, NULL));
+			if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
+			    parse_attribute(&ad1);
                     }
                     size = type_size(&type1, &align);
 		    /* Only remember non-default alignment.  */
