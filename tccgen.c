@@ -6234,7 +6234,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+        if (tcc_state->do_bounds_check && ((type->t & VT_ARRAY) || (type->t & VT_BTYPE) == VT_STRUCT)) {
             loc--;
         }
 #endif
@@ -6244,7 +6244,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+        if (tcc_state->do_bounds_check && ((type->t & VT_ARRAY) || (type->t & VT_BTYPE) == VT_STRUCT)) {
             addr_t *bounds_ptr;
             /* add padding between regions */
             loc--;
