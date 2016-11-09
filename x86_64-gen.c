@@ -1658,7 +1658,7 @@ void gfunc_epilog(void)
         o(0x5250); /* save returned value, if any */
         greloc(cur_text_section, sym_data, ind + 1, R_386_32);
         oad(0xb8, 0); /* mov xxx, %rax */
-	o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
+        o(0xc78948);  /* mov %rax,%rdi # first arg in %rdi, this must be ptr */
         gen_static_call(TOK___bound_local_delete);
         o(0x585a); /* restore returned value, if any */
     }
