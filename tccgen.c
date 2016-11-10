@@ -4488,7 +4488,7 @@ ST_FUNC void unary(void)
                 vtop->r |= lvalue_type(vtop->type.t);
 #ifdef CONFIG_TCC_BCHECK
                 /* if bound checking, the referenced pointer must be checked */
-                if (tcc_state->do_bounds_check)
+                if (tcc_state->do_bounds_check && (vtop->r & VT_VALMASK) != VT_LOCAL)
                     vtop->r |= VT_MUSTBOUND;
 #endif
             }
@@ -6234,7 +6234,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check && ((type->t & VT_ARRAY) || (type->t & VT_BTYPE) == VT_STRUCT)) {
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
             loc--;
         }
 #endif
@@ -6244,7 +6244,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (tcc_state->do_bounds_check && ((type->t & VT_ARRAY) || (type->t & VT_BTYPE) == VT_STRUCT)) {
+        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
             addr_t *bounds_ptr;
             /* add padding between regions */
             loc--;
