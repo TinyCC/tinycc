@@ -1124,8 +1124,7 @@ ST_FUNC void end_macro(void)
         str->alloc = 3; /* just mark as finished */
     } else {
         tok_str_free(str->str);
-        if (str->alloc == 1)
-            tal_free(tokstr_alloc, str);
+        tal_free(tokstr_alloc, str);
     }
 }
 

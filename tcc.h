@@ -532,7 +532,7 @@ typedef struct TokenString {
 
 /* inline functions */
 typedef struct InlineFunc {
-    TokenString func_str;
+    TokenString *func_str;
     Sym *sym;
     char filename[1];
 } InlineFunc;
