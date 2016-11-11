@@ -6544,10 +6544,8 @@ ST_FUNC void free_inline_functions(TCCState *s)
     /* free tokens of unused inline functions */
     for (i = 0; i < s->nb_inline_fns; ++i) {
         struct InlineFunc *fn = s->inline_fns[i];
-        if (fn->sym) {
-            tok_str_free(fn->func_str->str);
-            tal_free(tokstr_alloc, fn->func_str);
-        }
+        if (fn->sym)
+            tok_str_free(fn->func_str);
     }
     dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
