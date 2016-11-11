@@ -3267,6 +3267,7 @@ static void struct_add_offset (Sym *s, int offset)
 static void struct_layout(CType *type, AttributeDef *ad)
 {
     int align, maxalign, offset, c, bit_pos, bt, prevbt;
+    int pcc = !tcc_state->ms_bitfields;
     Sym *f;
     if (ad->a.aligned)
       maxalign = ad->a.aligned;
@@ -3280,13 +3281,12 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	int extra_bytes = 0;
 	int typealign, bit_size;
 	int size = type_size(&f->type, &typealign);
-	int pcc = !tcc_state->ms_bitfields;
 	if (f->type.t & VT_BITFIELD) {
 	    bit_size = (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
 	    /* without ms-bitfields, allocate the
 	     * minimum number of bytes necessary,
 	     * adding single bytes as needed */
-	    if (!tcc_state->ms_bitfields) {
+	    if (0 && !tcc_state->ms_bitfields) {
 		if (bit_pos == 0)
 		  /* minimum bytes for new bitfield */
 		  size = (bit_size + 7) / 8;
@@ -3311,55 +3311,59 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	} else {
 	    align = typealign;
 	}
-	/*if (extra_bytes) c += extra_bytes;
-	else*/ if (bit_size < 0) {
-	    int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
+	if (extra_bytes) c += extra_bytes;
+	else if (bit_size < 0) {
+	    prevbt = VT_STRUCT;
 	    if (type->ref->type.t == TOK_STRUCT) {
+		int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
 		c = (c + addbytes + align - 1) & -align;
 		offset = c;
 		if (size > 0)
 		  c += size;
 	    } else {
+            union_tail:
 		offset = 0;
-		if (addbytes > c)
-		  c = addbytes;
 		if (size > c)
 		  c = size;
 	    }
 	    if (align > maxalign)
 	      maxalign = align;
 	    bit_pos = 0;
-	    prevbt = VT_STRUCT;
+	} else if (type->ref->type.t != TOK_STRUCT) {
+	    if (pcc)
+	      size = (bit_size + 7) >> 3;
+	    f->type.t = (f->type.t & ~(0x3f << VT_STRUCT_SHIFT))
+		        | (0 << VT_STRUCT_SHIFT);
+	    goto union_tail;
 	} else {
 	    /* A bit-field.  Layout is more complicated.  There are two
 	       options TCC implements: PCC compatible and MS compatible
 	       (PCC compatible is what GCC uses for almost all targets).  */
-	    if (!bit_pos) {
-		if (type->ref->type.t == TOK_STRUCT) {
-		    /* Don't align c here.  That's only to be done
-		       in certain cases.  */
-		    offset = c;
-		} else {
-		    offset = 0;
-		}
-	    }
 	    if (pcc) {
 		/* In PCC layout a non-packed bit-field is placed adjacent
 		   to the preceding bit-fields, except if it would overflow
 		   its container (depending on base type) or it's a zero-width
 		   bit-field.  Packed non-zero-width bit-fields always are
 		   placed adjacent.  */
-		if ((typealign != 1 &&
-		     bit_pos + bit_size > size * 8) ||
-		    bit_size == 0) {
+		int ofs = (c * 8 + bit_pos) % (typealign * 8);
+		int ofs2 = ofs + bit_size + (typealign * 8) - 1;
+		/*if ((typealign != 1 &&
+		     //bit_pos + bit_size > size * 8) ||
+		     (((c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign)
+		      != ((c + ((bit_pos + bit_size + 7) >> 3) + typealign - 1) & -typealign))) ||
+		    bit_size == 0 ||
+		    (bit_pos + bit_size > size * 8)
+			) {*/
+		if (bit_size == 0 ||
+		    (typealign != 1 && (ofs2 / (typealign * 8)) > ((size*8)/(typealign*8)))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
-		    offset = c;
 		    bit_pos = 0;
 		}
+		offset = c;
 		/* In PCC layout named bit-fields influence the alignment
 		   of the containing struct using the base types alignment,
 		   except for packed fields or zero-width fields.  */
-		if (bit_size > 0) {
+		if (!(f->v & SYM_FIRST_ANOM)) {
 		    if (align > maxalign)
 		      maxalign = align;
 		    if (typealign > maxalign)
@@ -3444,7 +3448,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	f->r = 0;
     }
     /* store size and alignment */
-    type->ref->c = (c + ((bit_pos + 7) >> 3) + maxalign - 1) & -maxalign;
+    type->ref->c = (c + (pcc ? (bit_pos + 7) >> 3 : 0)
+		    + maxalign - 1) & -maxalign;
     type->ref->r = maxalign;
 }
 
