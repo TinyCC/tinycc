@@ -542,6 +542,27 @@ ST_FUNC void put_stabd(int type, int other, int desc)
     put_stabs(NULL, type, other, desc, 0);
 }
 
+static struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
+{
+    int n;
+    struct sym_attr *tab;
+
+    if (index >= s1->nb_sym_attrs) {
+        if (!alloc)
+            return NULL;
+        /* find immediately bigger power of 2 and reallocate array */
+        n = 1;
+        while (index >= n)
+            n *= 2;
+        tab = tcc_realloc(s1->sym_attrs, n * sizeof(*s1->sym_attrs));
+        s1->sym_attrs = tab;
+        memset(s1->sym_attrs + s1->nb_sym_attrs, 0,
+               (n - s1->nb_sym_attrs) * sizeof(*s1->sym_attrs));
+        s1->nb_sym_attrs = n;
+    }
+    return &s1->sym_attrs[index];
+}
+
 /* Browse each elem of type <type> in section <sec> starting at elem <startoff>
    using variable <elem> */
 #define for_each_elem(sec, startoff, elem, type) \
@@ -768,25 +789,6 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
     return count;
 }
 
-static struct sym_attr *alloc_sym_attr(TCCState *s1, int index)
-{
-    int n;
-    struct sym_attr *tab;
-
-    if (index >= s1->nb_sym_attrs) {
-        /* find immediately bigger power of 2 and reallocate array */
-        n = 1;
-        while (index >= n)
-            n *= 2;
-        tab = tcc_realloc(s1->sym_attrs, n * sizeof(*s1->sym_attrs));
-        s1->sym_attrs = tab;
-        memset(s1->sym_attrs + s1->nb_sym_attrs, 0,
-               (n - s1->nb_sym_attrs) * sizeof(*s1->sym_attrs));
-        s1->nb_sym_attrs = n;
-    }
-    return &s1->sym_attrs[index];
-}
-
 static void build_got(TCCState *s1)
 {
     unsigned char *ptr;
@@ -851,7 +853,7 @@ static unsigned long put_got_entry(TCCState *s1, int dyn_reloc_type,
 	  return s1->sym_attrs[sym_index].got_offset;
     }
 
-    symattr = alloc_sym_attr(s1, sym_index);
+    symattr = get_sym_attr(s1, sym_index, 1);
 
     /* create the GOT entry */
     ptr = section_ptr_add(s1->got, PTR_SIZE);
@@ -2619,7 +2621,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                    switch to ARM mode. We set bit plt_thumb_stub of the
                    attribute of a symbol to indicate such a case. */
                 if (type == R_ARM_THM_JUMP24)
-                    alloc_sym_attr(s1, sym_index)->plt_thumb_stub = 1;
+                    get_sym_attr(s1, sym_index, 1)->plt_thumb_stub = 1;
 #endif
             }
             break;

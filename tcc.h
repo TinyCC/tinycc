@@ -570,6 +570,7 @@ typedef struct ASMOperand {
 } ASMOperand;
 #endif
 
+/* extra symbol attributes (not in symbol table) */
 struct sym_attr {
     unsigned long got_offset;
     unsigned long plt_offset;
@@ -708,8 +709,6 @@ struct TCCState {
     /* got & plt handling */
     Section *got;
     Section *plt;
-    struct sym_attr *sym_attrs;
-    int nb_sym_attrs;
     /* give the correspondance from symtab indexes to dynsym indexes */
     int *symtab_to_dynsym;
 
@@ -719,6 +718,9 @@ struct TCCState {
     Section *dynsym;
     /* copy of the gobal symtab_section variable */
     Section *symtab;
+    /* extra attributes (eg. GOT/PLT value) for symtab symbols */
+    struct sym_attr *sym_attrs;
+    int nb_sym_attrs;
     /* tiny assembler state */
     Sym *asm_labels;
 
