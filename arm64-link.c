@@ -65,14 +65,6 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
             return;
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:
-	    /* This check must match the one in build_got_entries, testing
-	       if we really need a PLT slot.  */
-	    if (sym->st_shndx == SHN_UNDEF ||
-                sym->st_shndx == SHN_ABS)
-	        /* We've put the PLT slot offset into r_addend when generating
-		   it, and that's what we must use as relocation value (adjusted
-		   by section offset of course).  */
-		val = s1->plt->sh_addr + rel->r_addend;
 #ifdef DEBUG_RELOC
 	    printf ("reloc %d @ 0x%lx: val=0x%lx name=%s\n", type, addr, val,
 		    (char *) symtab_section->link->data + sym->st_name);

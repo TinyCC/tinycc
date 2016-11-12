@@ -75,11 +75,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
             goto plt32pc32;
 
         case R_X86_64_PLT32:
-	    /* We've put the PLT slot offset into r_addend when generating
-	       it, and that's what we must use as relocation value (adjusted
-	       by section offset of course).  */
-	    val = s1->plt->sh_addr + rel->r_addend;
-	    /* fallthrough.  */
+	    /* fallthrough: val already holds the PLT slot address */
 
 	plt32pc32:
 	{

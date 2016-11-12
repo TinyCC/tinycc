@@ -43,8 +43,6 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
             {
                 int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
                 x = (*(int *) ptr) & 0xffffff;
-		if (sym->st_shndx == SHN_UNDEF || sym->st_shndx == SHN_ABS)
-	            val = s1->plt->sh_addr;
 #ifdef DEBUG_RELOC
 		printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
 #endif
@@ -140,8 +138,6 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
                 }
 
                 /* Compute final offset */
-                if (to_plt && !is_call) /* Point to 1st instr of Thumb stub */
-                    x -= 4;
                 x += val - addr;
                 if (!to_thumb && is_call) {
                     blx_bit = 0; /* bl -> blx */

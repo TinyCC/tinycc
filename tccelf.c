@@ -654,8 +654,8 @@ ST_FUNC void relocate_common_syms(void)
    true and output error if undefined symbol. */
 ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
 {
-    ElfW(Sym) *sym, *esym;
-    int sym_bind, sh_num, sym_index;
+    ElfW(Sym) *sym;
+    int sym_bind, sh_num;
     const char *name;
 
     for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
@@ -676,15 +676,9 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
                     goto found;
                 }
 #endif
-            } else if (s1->dynsym) {
-                /* if dynamic symbol exist, then use it */
-                sym_index = find_elf_sym(s1->dynsym, name);
-                if (sym_index) {
-                    esym = &((ElfW(Sym) *)s1->dynsym->data)[sym_index];
-                    sym->st_value = esym->st_value;
-                    goto found;
-                }
-            }
+            /* if dynamic symbol exist, it will be used in relocate_section */
+            } else if (s1->dynsym && find_elf_sym(s1->dynsym, name))
+                goto found;
             /* XXX: _fp_hw seems to be part of the ABI, so we ignore
                it */
             if (!strcmp(name, "_fp_hw"))
@@ -714,7 +708,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
     ElfW(Sym) *sym;
     int type, sym_index;
     unsigned char *ptr;
-    addr_t val, addr;
+    addr_t tgt, addr;
+    struct sym_attr *symattr;
 
     relocate_init(sr);
     for_each_elem(sr, 0, rel, ElfW_Rel) {
@@ -722,14 +717,22 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
 
         sym_index = ELFW(R_SYM)(rel->r_info);
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-        val = sym->st_value;
-#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-        val += rel->r_addend;
-#endif
         type = ELFW(R_TYPE)(rel->r_info);
+        symattr = get_sym_attr(s1, sym_index, 0);
+        tgt = sym->st_value;
+	/* If static relocation to a dynamic symbol, relocate to PLT entry.
+           Note 1: in tcc -run mode we go through PLT to avoid range issues
+           Note 2: symbols compiled with libtcc and later added with
+           tcc_add_symbol are not dynamic and thus have symattr NULL */
+        if (relocs_info[type].gotplt_entry != NO_GOTPLT_ENTRY &&
+            relocs_info[type].code_reloc && symattr && symattr->plt_offset)
+            tgt = s1->plt->sh_addr + symattr->plt_offset;
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
+        tgt += rel->r_addend;
+#endif
         addr = s->sh_addr + rel->r_offset;
 
-	relocate(s1, rel, type, ptr, addr, val);
+	relocate(s1, rel, type, ptr, addr, tgt);
     }
     /* if the relocation is allocated, we change its symbol table */
     if (sr->sh_flags & SHF_ALLOC)
@@ -1030,7 +1033,6 @@ ST_FUNC void build_got_entries(TCCState *s1)
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, reloc_type, sym_index;
-    unsigned long ofs;
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -1075,38 +1077,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 reloc_type = R_JMP_SLOT;
             else
                 reloc_type = R_GLOB_DAT;
-            ofs = put_got_entry(s1, reloc_type, type, sym->st_size,
-                                sym->st_info, sym_index);
-
-#ifdef DEBUG_RELOC
-            printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
-                    (char *) symtab_section->link->data + sym->st_name, type,
-                    sym->st_shndx, ofs);
-#endif
-
-#if defined (TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
-            /* We store the place of the generated PLT slot in our addend.  */
-            if (relocs_info[type].pltoff_addend)
-                rel->r_addend += ofs;
-
-#elif defined (TCC_TARGET_ARM)
-            if (type == R_ARM_PC24 || type == R_ARM_CALL ||
-                type == R_ARM_JUMP24 || type == R_ARM_PLT32) {
-                addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
-                                        + rel->r_offset);
-                /* x must be signed!  */
-                int x = *ptr & 0xffffff;
-                x = (x << 8) >> 8;
-                x <<= 2;
-                x += ofs;
-                x >>= 2;
-#ifdef DEBUG_RELOC
-                printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
-                        (*ptr & 0xff000000) | x, x);
-#endif
-                *ptr = (*ptr & 0xff000000) | x;
-            }
-#endif
+            put_got_entry(s1, reloc_type, type, sym->st_size, sym->st_info,
+                          sym_index);
         }
     }
 }
