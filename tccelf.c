@@ -394,12 +394,17 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
     sym_type = ELFW(ST_TYPE)(info);
     sym_vis = ELFW(ST_VISIBILITY)(other);
 
+    sym_index = find_elf_sym(s, name);
+    esym = &((ElfW(Sym) *)s->data)[sym_index];
+    if (sym_index && esym->st_value == value && esym->st_size == size
+	&& esym->st_info == info && esym->st_other == other
+	&& esym->st_shndx == sh_num)
+        return sym_index;
+
     if (sym_bind != STB_LOCAL) {
         /* we search global or weak symbols */
-        sym_index = find_elf_sym(s, name);
         if (!sym_index)
             goto do_def;
-        esym = &((ElfW(Sym) *)s->data)[sym_index];
         if (esym->st_shndx != SHN_UNDEF) {
             esym_bind = ELFW(ST_BIND)(esym->st_info);
             /* propagate the most constraining visibility */
@@ -2058,7 +2063,7 @@ static void bind_exe_dynsyms(TCCState *s1)
         } else if (s1->rdynamic && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
             /* if -rdynamic option, then export all non local symbols */
             name = (char *) symtab_section->link->data + sym->st_name;
-            put_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
+            add_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
                         0, sym->st_shndx, name);
         }
     }
@@ -2081,7 +2086,7 @@ static void bind_libs_dynsyms(TCCState *s1)
                 -rdynamic ? */
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         if (sym_index && sym->st_shndx != SHN_UNDEF)
-            put_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
+            add_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
                         0, sym->st_shndx, name);
         else if (esym->st_shndx == SHN_UNDEF) {
             /* weak symbols can stay undefined */
