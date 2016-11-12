@@ -1375,7 +1375,7 @@ ST_FUNC void put_stabn(int type, int other, int desc, int value);
 ST_FUNC void put_stabd(int type, int other, int desc);
 
 ST_FUNC void relocate_common_syms(void);
-ST_FUNC void relocate_syms(TCCState *s1, int do_resolve);
+ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
 ST_FUNC void relocate_plt(TCCState *s1);
 

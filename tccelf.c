@@ -652,13 +652,13 @@ ST_FUNC void relocate_common_syms(void)
 
 /* relocate symbol table, resolve undefined symbols if do_resolve is
    true and output error if undefined symbol. */
-ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
+ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
 {
     ElfW(Sym) *sym;
     int sym_bind, sh_num;
     const char *name;
 
-    for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
+    for_each_elem(symtab, 1, sym, ElfW(Sym)) {
         sh_num = sym->st_shndx;
         if (sh_num == SHN_UNDEF) {
             name = (char *) strtab_section->data + sym->st_name;
@@ -1898,7 +1898,7 @@ static int final_sections_reloc(TCCState *s1)
     int i;
     Section *s;
 
-    relocate_syms(s1, 0);
+    relocate_syms(s1, s1->symtab, 0);
 
     if (s1->nb_errors != 0)
         return -1;

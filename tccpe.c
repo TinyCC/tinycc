@@ -1872,7 +1872,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
         ;
     else if (filename) {
         pe_assign_addresses(&pe);
-        relocate_syms(s1, 0);
+        relocate_syms(s1, s1->symtab, 0);
         for (i = 1; i < s1->nb_sections; ++i) {
             Section *s = s1->sections[i];
             if (s->reloc) {

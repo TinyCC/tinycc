@@ -211,7 +211,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     }
 
     /* relocate symbols */
-    relocate_syms(s1, 1);
+    relocate_syms(s1, s1->symtab, 1);
     if (s1->nb_errors)
         return -1;
 
