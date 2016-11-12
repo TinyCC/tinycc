@@ -1485,6 +1485,11 @@ ST_FUNC void gen_clear_cache(void);
 #ifdef TCC_TARGET_C67
 #endif
 
+/* ------------ xxx-link.c ------------ */
+
+ST_FUNC void relocate_init(Section *sr);
+ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val);
+
 /* ------------ tcccoff.c ------------ */
 
 #ifdef TCC_TARGET_COFF

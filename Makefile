@@ -80,14 +80,14 @@ C67_CROSS = c67-tcc$(EXESUF)
 
 CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
-I386_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h
-WIN32_FILES = $(CORE_FILES) i386-gen.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
-WIN64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h tccpe.c
-WINCE_FILES = $(CORE_FILES) arm-gen.c tccpe.c
-X86_64_FILES = $(CORE_FILES) x86_64-gen.c i386-asm.c x86_64-asm.h
-ARM_FILES = $(CORE_FILES) arm-gen.c
-ARM64_FILES = $(CORE_FILES) arm64-gen.c
-C67_FILES = $(CORE_FILES) c67-gen.c tcccoff.c
+I386_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h
+WIN32_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
+WIN64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-link.c i386-asm.c x86_64-asm.h tccpe.c
+WINCE_FILES = $(CORE_FILES) arm-gen.c arm-link.c tccpe.c
+X86_64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-link.c i386-asm.c x86_64-asm.h
+ARM_FILES = $(CORE_FILES) arm-gen.c arm-link.c
+ARM64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
+C67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
 ifdef CONFIG_WIN32
  PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF) $(LIBTCC)
