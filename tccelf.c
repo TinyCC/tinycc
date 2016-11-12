@@ -665,11 +665,9 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
-                void *addr;
-                name = (char *) symtab_section->link->data + sym->st_name;
-                addr = dlsym(RTLD_DEFAULT, name);
+                void *addr = dlsym(RTLD_DEFAULT, name);
                 if (addr) {
-                    sym->st_value = (addr_t)addr;
+                    sym->st_value = (addr_t) addr;
 #ifdef DEBUG_RELOC
 		    printf ("relocate_sym: %s -> 0x%lx\n", name, sym->st_value);
 #endif
@@ -686,11 +684,10 @@ ST_FUNC void relocate_syms(TCCState *s1, int do_resolve)
             /* only weak symbols are accepted to be undefined. Their
                value is zero */
             sym_bind = ELFW(ST_BIND)(sym->st_info);
-            if (sym_bind == STB_WEAK) {
+            if (sym_bind == STB_WEAK)
                 sym->st_value = 0;
-            } else {
+            else
                 tcc_error_noabort("undefined symbol '%s'", name);
-            }
         } else if (sh_num < SHN_LORESERVE) {
             /* add section base */
             sym->st_value += s1->sections[sym->st_shndx]->sh_addr;
