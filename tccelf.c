@@ -1295,44 +1295,35 @@ static void build_got(TCCState *s1)
 #endif
 }
 
-/* put a got or plt entry corresponding to a symbol in symtab_section. 'size'
-   and 'info' can be modifed if more precise info comes from the DLL.
-   Returns offset of GOT or PLT slot.  */
+/* Create a GOT and (for function call) a PLT entry corresponding to a symbol
+   in s1->symtab. When creating the dynamic symbol table entry for the GOT
+   relocation, use 'size' and 'info' for the corresponding symbol metadata.
+   Returns the offset of the GOT or (if any) PLT entry. */
 static unsigned long put_got_entry(TCCState *s1,
 				   int reloc_type, unsigned long size, int info,
 				   int sym_index)
 {
-    int index, need_plt_entry;
+    int index, need_plt_entry = 0;
     const char *name;
     ElfW(Sym) *sym;
     unsigned long offset;
     int *ptr;
+    size_t got_offset;
     struct sym_attr *symattr;
+
+    need_plt_entry = (reloc_type == R_JMP_SLOT);
 
     if (!s1->got)
         build_got(s1);
 
-    need_plt_entry =
-#ifdef TCC_TARGET_X86_64
-        (reloc_type == R_X86_64_JUMP_SLOT);
-#elif defined(TCC_TARGET_I386)
-        (reloc_type == R_386_JMP_SLOT);
-#elif defined(TCC_TARGET_ARM)
-        (reloc_type == R_ARM_JUMP_SLOT);
-#elif defined(TCC_TARGET_ARM64)
-        (reloc_type == R_AARCH64_JUMP_SLOT);
-#else
-        0;
-#endif
-
+    /* create PLT if needed */
     if (need_plt_entry && !s1->plt) {
-	/* add PLT */
 	s1->plt = new_section(s1, ".plt", SHT_PROGBITS,
 			      SHF_ALLOC | SHF_EXECINSTR);
 	s1->plt->sh_entsize = 4;
     }
 
-    /* If a got/plt entry already exists for that symbol, no need to add one */
+    /* already a GOT and/or PLT entry, no need to add one */
     if (sym_index < s1->nb_sym_attrs) {
 	if (need_plt_entry && s1->sym_attrs[sym_index].plt_offset)
 	  return s1->sym_attrs[sym_index].plt_offset;
@@ -1342,152 +1333,161 @@ static unsigned long put_got_entry(TCCState *s1,
 
     symattr = alloc_sym_attr(s1, sym_index);
 
-    /* Only store the GOT offset if it's not generated for the PLT entry.  */
-    if (!need_plt_entry)
-        symattr->got_offset = s1->got->data_offset;
+    /* create the GOT entry */
+    ptr = section_ptr_add(s1->got, PTR_SIZE);
+    *ptr = 0;
+    got_offset = OFFSET_FROM_SECTION_START (s1->got, ptr);
 
-    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+    /* In case a function is both called and its address taken 2 GOT entries
+       are created, one for taking the address (GOT) and the other for the PLT
+       entry (PLTGOT). We don't record the offset of the PLTGOT entry in the
+       got_offset field since it might overwrite the offset of a GOT entry.
+       Besides, for PLT entry the static relocation is against the PLT entry
+       and the dynamic relocation for PLTGOT is created in this function. */
+    if (!need_plt_entry)
+        symattr->got_offset = got_offset;
+
+    sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
     name = (char *) symtab_section->link->data + sym->st_name;
     offset = sym->st_value;
+
+    /* create PLT entry */
+    if (need_plt_entry) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
-        if (need_plt_entry) {
-            Section *plt;
-            uint8_t *p;
-            int modrm;
-	    unsigned long relofs;
+        Section *plt;
+        uint8_t *p;
+        int modrm;
+        unsigned long relofs;
 
 #if defined(TCC_OUTPUT_DLL_WITH_PLT)
+        modrm = 0x25;
+#else
+        /* if we build a DLL, we add a %ebx offset */
+        if (s1->output_type == TCC_OUTPUT_DLL)
+            modrm = 0xa3;
+        else
             modrm = 0x25;
-#else
-            /* if we build a DLL, we add a %ebx offset */
-            if (s1->output_type == TCC_OUTPUT_DLL)
-                modrm = 0xa3;
-            else
-                modrm = 0x25;
 #endif
 
-            /* add a PLT entry */
-            plt = s1->plt;
-            if (plt->data_offset == 0) {
-                /* first plt entry */
-                p = section_ptr_add(plt, 16);
-                p[0] = 0xff; /* pushl got + PTR_SIZE */
-                p[1] = modrm + 0x10;
-                write32le(p + 2, PTR_SIZE);
-                p[6] = 0xff; /* jmp *(got + PTR_SIZE * 2) */
-                p[7] = modrm;
-                write32le(p + 8, PTR_SIZE * 2);
-            }
-
-	    /* The PLT slot refers to the relocation entry it needs
-	       via offset.  The reloc entry is created below, so its
-	       offset is the current data_offset.  */
-	    relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
-            symattr->plt_offset = plt->data_offset;
+        plt = s1->plt;
+        /* empty PLT: create PLT0 entry that pushes the library indentifier
+           (GOT + PTR_SIZE) and jumps to ld.so resolution routine
+           (GOT + 2 * PTR_SIZE) */
+        if (plt->data_offset == 0) {
             p = section_ptr_add(plt, 16);
-            p[0] = 0xff; /* jmp *(got + x) */
-            p[1] = modrm;
-            write32le(p + 2, s1->got->data_offset);
-            p[6] = 0x68; /* push $xxx */
+            p[0] = 0xff; /* pushl got + PTR_SIZE */
+            p[1] = modrm + 0x10;
+            write32le(p + 2, PTR_SIZE);
+            p[6] = 0xff; /* jmp *(got + PTR_SIZE * 2) */
+            p[7] = modrm;
+            write32le(p + 8, PTR_SIZE * 2);
+        }
+
+        /* The PLT slot refers to the relocation entry it needs via offset.
+           The reloc entry is created below, so its offset is the current
+           data_offset */
+        relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
+        symattr->plt_offset = plt->data_offset;
+
+        /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
+        p = section_ptr_add(plt, 16);
+        p[0] = 0xff; /* jmp *(got + x) */
+        p[1] = modrm;
+        write32le(p + 2, got_offset);
+        p[6] = 0x68; /* push $xxx */
 #ifdef TCC_TARGET_X86_64
-	    /* On x86-64, the relocation is referred to by _index_.  */
-	    write32le(p + 7, relofs / sizeof (ElfW_Rel));
+	/* On x86-64, the relocation is referred to by _index_ */
+        write32le(p + 7, relofs / sizeof (ElfW_Rel));
 #else
-            write32le(p + 7, relofs);
+        write32le(p + 7, relofs);
 #endif
-            p[11] = 0xe9; /* jmp plt_start */
-            write32le(p + 12, -(plt->data_offset));
+        p[11] = 0xe9; /* jmp plt_start */
+        write32le(p + 12, -(plt->data_offset));
 
-	    /* If this was an UNDEF symbol set the offset in the 
-	       dynsymtab to the PLT slot, so that PC32 relocs to it
-	       can be resolved.  */
-	    if (sym->st_shndx == SHN_UNDEF)
-	        offset = plt->data_offset - 16;
-        }
+        /* If this was an UNDEF symbol set the offset in the dynsymtab to the
+           PLT slot, so that PC32 relocs to it can be resolved */
+        if (sym->st_shndx == SHN_UNDEF)
+            offset = plt->data_offset - 16;
 #elif defined(TCC_TARGET_ARM)
-        if (need_plt_entry) {
-            Section *plt;
-            uint8_t *p;
+        Section *plt;
+        uint8_t *p;
 
-            /* if we build a DLL, we add a %ebx offset */
-            if (s1->output_type == TCC_OUTPUT_DLL)
-                tcc_error("DLLs unimplemented!");
+        /* when building a DLL, GOT entry accesses must be done relative to
+           start of GOT (see x86_64 examble above)  */
+        if (s1->output_type == TCC_OUTPUT_DLL)
+            tcc_error("DLLs unimplemented!");
 
-            /* add a PLT entry */
-            plt = s1->plt;
-            if (plt->data_offset == 0) {
-                /* first plt entry */
-                p = section_ptr_add(plt, 16);
-                write32le(p,    0xe52de004); /* push {lr}         */
-                write32le(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
-                write32le(p+8,  0xe08fe00e); /* add lr, pc, lr    */
-                write32le(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
-            }
-
-            symattr->plt_offset = plt->data_offset;
-            if (symattr->plt_thumb_stub) {
-                p = section_ptr_add(plt, 20);
-                write32le(p,   0x4778); /* bx pc */
-                write32le(p+2, 0x46c0); /* nop   */
-                p += 4;
-            } else
-                p = section_ptr_add(plt, 16);
-            write32le(p,   0xe59fc004); /* ldr ip, [pc, #4] ; GOT entry offset */
-            write32le(p+4, 0xe08fc00c); /* add ip, pc, ip ; addr of GOT entry  */
-            write32le(p+8, 0xe59cf000); /* ldr pc, [ip] ; jump to GOT entry */
-            write32le(p+12, s1->got->data_offset); /* GOT entry off once patched */
-
-            /* the symbol is modified so that it will be relocated to
-               the PLT */
-	    if (sym->st_shndx == SHN_UNDEF)
-                offset = plt->data_offset - 16;
-        }
-#elif defined(TCC_TARGET_ARM64)
-        if (need_plt_entry) {
-            Section *plt;
-            uint8_t *p;
-
-            if (s1->output_type == TCC_OUTPUT_DLL)
-                tcc_error("DLLs unimplemented!");
-
-            plt = s1->plt;
-            if (plt->data_offset == 0)
-                section_ptr_add(plt, 32);
-            symattr->plt_offset = plt->data_offset;
+        plt = s1->plt;
+        /* empty PLT: create PLT0 entry that push address of call site and
+           jump to ld.so resolution routine (GOT + 8) */
+        if (plt->data_offset == 0) {
             p = section_ptr_add(plt, 16);
-            write32le(p, s1->got->data_offset);
-            write32le(p + 4, (uint64_t)s1->got->data_offset >> 32);
-
-            if (sym->st_shndx == SHN_UNDEF)
-                offset = plt->data_offset - 16;
+            write32le(p,    0xe52de004); /* push {lr}         */
+            write32le(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
+            write32le(p+8,  0xe08fe00e); /* add lr, pc, lr    */
+            write32le(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
         }
+
+        symattr->plt_offset = plt->data_offset;
+        if (symattr->plt_thumb_stub) {
+            p = section_ptr_add(plt, 4);
+            write32le(p,   0x4778); /* bx pc */
+            write32le(p+2, 0x46c0); /* nop   */
+        }
+        p = section_ptr_add(plt, 16);
+        /* Jump to GOT entry where ld.so initially put address of PLT0 */
+        write32le(p,   0xe59fc004); /* ldr ip, [pc, #4] */
+        write32le(p+4, 0xe08fc00c); /* add ip, pc, ip */
+        write32le(p+8, 0xe59cf000); /* ldr pc, [ip] */
+	/* p + 12 contains offset to GOT entry once patched by relocate_plt */
+        write32le(p+12, got_offset);
+
+        /* the symbol is modified so that it will be relocated to the PLT */
+	if (sym->st_shndx == SHN_UNDEF)
+            offset = plt->data_offset - 16;
+#elif defined(TCC_TARGET_ARM64)
+        Section *plt;
+        uint8_t *p;
+
+        if (s1->output_type == TCC_OUTPUT_DLL)
+            tcc_error("DLLs unimplemented!");
+
+        plt = s1->plt;
+        if (plt->data_offset == 0)
+            section_ptr_add(plt, 32);
+        symattr->plt_offset = plt->data_offset;
+        p = section_ptr_add(plt, 16);
+        write32le(p, got_offset);
+        write32le(p + 4, (uint64_t) got_offset >> 32);
+
+        if (sym->st_shndx == SHN_UNDEF)
+            offset = plt->data_offset - 16;
 #elif defined(TCC_TARGET_C67)
-    if (s1->dynsym) {
         tcc_error("C67 got not implemented");
-    }
 #else
 #error unsupported CPU
 #endif
-    if (s1->dynsym) {
-	/* XXX This might generate multiple syms for name.  */
-        index = put_elf_sym(s1->dynsym, offset,
-                            size, info, 0, sym->st_shndx, name);
-        /* Create the relocation (it's against the GOT for PLT
-	   and GOT relocs).  */
-        put_elf_reloc(s1->dynsym, s1->got,
-                      s1->got->data_offset,
-                      reloc_type, index);
-    } else {
-	/* Without .dynsym (i.e. static link or memory output) we
-	   still need relocs against the generated got, so as to fill
-	   the entries with the symbol values (determined later).  */
-	put_elf_reloc(symtab_section, s1->got,
-                      s1->got->data_offset,
-                      reloc_type, sym_index);
     }
-    /* And now create the GOT slot itself.  */
-    ptr = section_ptr_add(s1->got, PTR_SIZE);
-    *ptr = 0;
+
+    /* Create the GOT relocation that will insert the address of the object or
+       function of interest in the GOT entry. This is a static relocation for
+       memory output (dlsym will give us the address of symbols) and dynamic
+       relocation otherwise (executable and DLLs). The relocation should be
+       done lazily for GOT entry with *_JUMP_SLOT relocation type (the one
+       associated to a PLT entry) but is currently done at load time for an
+       unknown reason. */
+    if (s1->dynsym) {
+        /* create the dynamic symbol table entry that the relocation refers to
+           in its r_info field to identify the symbol */
+	/* XXX This might generate multiple syms for name.  */
+        index = put_elf_sym(s1->dynsym, offset, size, info, 0, sym->st_shndx,
+                            name);
+        put_elf_reloc(s1->dynsym, s1->got, got_offset, reloc_type, index);
+    } else {
+	put_elf_reloc(symtab_section, s1->got, got_offset, reloc_type,
+                      sym_index);
+    }
+
     if (need_plt_entry)
       return symattr->plt_offset;
     else
