@@ -2077,14 +2077,13 @@ static void bind_libs_dynsyms(TCCState *s1)
     for_each_elem(s1->dynsymtab_section, 1, esym, ElfW(Sym)) {
         name = (char *) s1->dynsymtab_section->link->data + esym->st_name;
         sym_index = find_elf_sym(symtab_section, name);
-        if (sym_index) {
-            /* XXX: avoid adding a symbol if already present because of
-               -rdynamic ? */
-            sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-            if (sym->st_shndx != SHN_UNDEF)
-                put_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
-                            sym->st_info, 0, sym->st_shndx, name);
-        } else if (esym->st_shndx == SHN_UNDEF) {
+        /* XXX: avoid adding a symbol if already present because of
+                -rdynamic ? */
+        sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+        if (sym_index && sym->st_shndx != SHN_UNDEF)
+            put_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
+                        0, sym->st_shndx, name);
+        else if (esym->st_shndx == SHN_UNDEF) {
             /* weak symbols can stay undefined */
             if (ELFW(ST_BIND)(esym->st_info) != STB_WEAK)
                 tcc_warning("undefined dynamic symbol '%s'", name);
