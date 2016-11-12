@@ -383,8 +383,8 @@ ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
-ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
-                       int info, int other, int sh_num, const char *name)
+ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
+                       int info, int other, int shndx, const char *name)
 {
     ElfW(Sym) *esym;
     int sym_bind, sym_index, sym_type, esym_bind;
@@ -398,7 +398,7 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
     esym = &((ElfW(Sym) *)s->data)[sym_index];
     if (sym_index && esym->st_value == value && esym->st_size == size
 	&& esym->st_info == info && esym->st_other == other
-	&& esym->st_shndx == sh_num)
+	&& esym->st_shndx == shndx)
         return sym_index;
 
     if (sym_bind != STB_LOCAL) {
@@ -420,7 +420,7 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
             esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
                              | new_vis;
             other = esym->st_other; /* in case we have to patch esym */
-            if (sh_num == SHN_UNDEF) {
+            if (shndx == SHN_UNDEF) {
                 /* ignore adding of undefined symbol if the
                    corresponding symbol is already defined */
             } else if (sym_bind == STB_GLOBAL && esym_bind == STB_WEAK) {
@@ -434,25 +434,25 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
                 /* ignore hidden symbols after */
             } else if ((esym->st_shndx == SHN_COMMON
                             || esym->st_shndx == bss_section->sh_num)
-                        && (sh_num < SHN_LORESERVE
-                            && sh_num != bss_section->sh_num)) {
+                        && (shndx < SHN_LORESERVE
+                            && shndx != bss_section->sh_num)) {
                 /* data symbol gets precedence over common/bss */
                 goto do_patch;
-            } else if (sh_num == SHN_COMMON || sh_num == bss_section->sh_num) {
+            } else if (shndx == SHN_COMMON || shndx == bss_section->sh_num) {
                 /* data symbol keeps precedence over common/bss */
             } else if (s == tcc_state->dynsymtab_section) {
                 /* we accept that two DLL define the same symbol */
             } else {
 #if 0
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
-                       sym_bind, sh_num, new_vis, esym_bind, esym->st_shndx, esym_vis);
+                       sym_bind, shndx, new_vis, esym_bind, esym->st_shndx, esym_vis);
 #endif
                 tcc_error_noabort("'%s' defined twice", name);
             }
         } else {
         do_patch:
             esym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
-            esym->st_shndx = sh_num;
+            esym->st_shndx = shndx;
             new_undef_sym = 1;
             esym->st_value = value;
             esym->st_size = size;
@@ -462,7 +462,7 @@ ST_FUNC int add_elf_sym(Section *s, addr_t value, unsigned long size,
     do_def:
         sym_index = put_elf_sym(s, value, size,
                                 ELFW(ST_INFO)(sym_bind, sym_type), other,
-                                sh_num, name);
+                                shndx, name);
     }
     return sym_index;
 }
@@ -1274,7 +1274,7 @@ static void build_got(TCCState *s1)
     /* if no got, then create it */
     s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     s1->got->sh_entsize = 4;
-    add_elf_sym(symtab_section, 0, 4, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
+    set_elf_sym(symtab_section, 0, 4, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
                 0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
     ptr = section_ptr_add(s1->got, 3 * PTR_SIZE);
 #if PTR_SIZE == 4
@@ -1760,11 +1760,11 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
         end_offset = s->data_offset;
     }
 
-    add_elf_sym(symtab_section,
+    set_elf_sym(symtab_section,
                 0, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 s->sh_num, sym_start);
-    add_elf_sym(symtab_section,
+    set_elf_sym(symtab_section,
                 end_offset, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 s->sh_num, sym_end);
@@ -1789,11 +1789,11 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
     /* XXX: add an object file to do that */
     ptr = section_ptr_add(bounds_section, sizeof(*ptr));
     *ptr = 0;
-    add_elf_sym(symtab_section, 0, 0,
+    set_elf_sym(symtab_section, 0, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 bounds_section->sh_num, "__bounds_start");
     /* pull bcheck.o from libtcc1.a */
-    sym_index = add_elf_sym(symtab_section, 0, 0,
+    sym_index = set_elf_sym(symtab_section, 0, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_UNDEF, "__bound_init");
     if (s1->output_type != TCC_OUTPUT_MEMORY) {
@@ -1838,15 +1838,15 @@ ST_FUNC void tcc_add_linker_symbols(TCCState *s1)
     int i;
     Section *s;
 
-    add_elf_sym(symtab_section,
+    set_elf_sym(symtab_section,
                 text_section->data_offset, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 text_section->sh_num, "_etext");
-    add_elf_sym(symtab_section,
+    set_elf_sym(symtab_section,
                 data_section->data_offset, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 data_section->sh_num, "_edata");
-    add_elf_sym(symtab_section,
+    set_elf_sym(symtab_section,
                 bss_section->data_offset, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 bss_section->sh_num, "_end");
@@ -1877,12 +1877,12 @@ ST_FUNC void tcc_add_linker_symbols(TCCState *s1)
                 p++;
             }
             snprintf(buf, sizeof(buf), "__start_%s", s->name);
-            add_elf_sym(symtab_section,
+            set_elf_sym(symtab_section,
                         0, 0,
                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                         s->sh_num, buf);
             snprintf(buf, sizeof(buf), "__stop_%s", s->name);
-            add_elf_sym(symtab_section,
+            set_elf_sym(symtab_section,
                         s->data_offset, 0,
                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                         s->sh_num, buf);
@@ -2063,7 +2063,7 @@ static void bind_exe_dynsyms(TCCState *s1)
         } else if (s1->rdynamic && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
             /* if -rdynamic option, then export all non local symbols */
             name = (char *) symtab_section->link->data + sym->st_name;
-            add_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
+            set_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
                         0, sym->st_shndx, name);
         }
     }
@@ -2087,7 +2087,7 @@ static void bind_libs_dynsyms(TCCState *s1)
                 -rdynamic ? */
         sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
         if (sym_index && sym->st_shndx != SHN_UNDEF)
-            add_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
+            set_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
                         0, sym->st_shndx, name);
         else if (esym->st_shndx == SHN_UNDEF) {
             /* weak symbols can stay undefined */
@@ -3159,7 +3159,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         }
         /* add symbol */
         name = (char *) strtab + sym->st_name;
-        sym_index = add_elf_sym(symtab_section, sym->st_value, sym->st_size,
+        sym_index = set_elf_sym(symtab_section, sym->st_value, sym->st_size,
                                 sym->st_info, sym->st_other,
                                 sym->st_shndx, name);
         old_to_new_syms[i] = sym_index;
@@ -3430,7 +3430,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         if (sym_bind == STB_LOCAL)
             continue;
         name = (char *) dynstr + sym->st_name;
-        add_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
+        set_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
                     sym->st_info, sym->st_other, sym->st_shndx, name);
     }
 

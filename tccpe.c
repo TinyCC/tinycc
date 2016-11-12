@@ -1494,7 +1494,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
 
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t value)
 {
-    return add_elf_sym(
+    return set_elf_sym(
         s1->dynsymtab_section,
         value,
         dllindex, /* st_size */
@@ -1770,7 +1770,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     /* grab the startup code from libtcc1 */
     if (TCC_OUTPUT_MEMORY != s1->output_type || PE_GUI == pe_type)
-        add_elf_sym(symtab_section,
+        set_elf_sym(symtab_section,
             0, 0,
             ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
             SHN_UNDEF, start_symbol);

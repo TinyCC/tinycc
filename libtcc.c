@@ -1199,7 +1199,7 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
        So it is handled here as if it were in a DLL. */
     pe_putimport(s, 0, name, (uintptr_t)val);
 #else
-    add_elf_sym(symtab_section, (uintptr_t)val, 0,
+    set_elf_sym(symtab_section, (uintptr_t)val, 0,
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
         SHN_ABS, name);
 #endif
