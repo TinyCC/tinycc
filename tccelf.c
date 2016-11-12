@@ -1421,11 +1421,12 @@ static unsigned long put_got_entry(TCCState *s1,
         /* empty PLT: create PLT0 entry that push address of call site and
            jump to ld.so resolution routine (GOT + 8) */
         if (plt->data_offset == 0) {
-            p = section_ptr_add(plt, 16);
+            p = section_ptr_add(plt, 20);
             write32le(p,    0xe52de004); /* push {lr}         */
-            write32le(p+4,  0xe59fe010); /* ldr lr, [pc, #16] */
+            write32le(p+4,  0xe59fe004); /* ldr lr, [pc, #4] */
             write32le(p+8,  0xe08fe00e); /* add lr, pc, lr    */
             write32le(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
+            /* p+16 is set in relocate_plt */
         }
 
         symattr->plt_offset = plt->data_offset;
@@ -2151,7 +2152,8 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
 #elif defined(TCC_TARGET_ARM)
         int x = s1->got->sh_addr - s1->plt->sh_addr - 12;
-        p += 16;
+        write32le(s1->plt->data + 16, x - 16);
+        p += 20;
         while (p < p_end) {
             if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
