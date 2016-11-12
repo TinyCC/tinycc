@@ -117,6 +117,7 @@ enum {
 #define R_DATA_32   R_C60_32
 #define R_DATA_PTR  R_C60_32
 #define R_JMP_SLOT  R_C60_JMP_SLOT
+#define R_GLOB_DAT  R_C60_GLOB_DAT
 #define R_COPY      R_C60_COPY
 
 #define ELF_START_ADDR 0x00000400

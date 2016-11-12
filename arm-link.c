@@ -1,6 +1,30 @@
 #include "tcc.h"
 #define HAVE_SECTION_RELOC
 
+ST_DATA struct reloc_info relocs_info[] = {
+    INIT_RELOC_INFO (R_ARM_PC24, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_CALL, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_JUMP24, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_PLT32, 1, ALWAYS_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_THM_PC22, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_THM_JUMP24, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_MOVT_ABS, 0, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_MOVW_ABS_NC, 0, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_THM_MOVT_ABS, 0, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_THM_MOVW_ABS_NC, 0, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_PREL31, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_ABS32, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_REL32, 0, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_GOTPC, 0, BUILD_GOT_ONLY, 0)
+    INIT_RELOC_INFO (R_ARM_GOTOFF, 0, BUILD_GOT_ONLY, 0)
+    INIT_RELOC_INFO (R_ARM_GOT32, 0, ALWAYS_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_COPY, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_V4BX, 1, AUTO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_GLOB_DAT, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_JUMP_SLOT, 1, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_ARM_NONE, 0, NO_GOTPLT_ENTRY, 0)
+};
+
 void relocate_init(Section *sr) {}
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val)
@@ -19,8 +43,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
             {
                 int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
                 x = (*(int *) ptr) & 0xffffff;
-		if (sym->st_shndx == SHN_UNDEF ||
-                    s1->output_type == TCC_OUTPUT_MEMORY)
+		if (sym->st_shndx == SHN_UNDEF || sym->st_shndx == SHN_ABS)
 	            val = s1->plt->sh_addr;
 #ifdef DEBUG_RELOC
 		printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
@@ -88,6 +111,33 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
                 to_plt = (val >= plt->sh_addr) &&
                          (val < plt->sh_addr + plt->data_offset);
                 is_call = (type == R_ARM_THM_PC22);
+
+                if (!to_thumb && !to_plt && !is_call) {
+                    int index;
+                    uint8_t *p;
+                    char *name, buf[1024];
+                    Section *text_section;
+
+                    name = (char *) symtab_section->link->data + sym->st_name;
+                    text_section = s1->sections[sym->st_shndx];
+                    /* Modify reloc to target a thumb stub to switch to ARM */
+                    snprintf(buf, sizeof(buf), "%s_from_thumb", name);
+                    index = put_elf_sym(symtab_section,
+                                        text_section->data_offset + 1,
+                                        sym->st_size, sym->st_info, 0,
+                                        sym->st_shndx, buf);
+                    to_thumb = 1;
+                    val = text_section->data_offset + 1;
+                    rel->r_info = ELFW(R_INFO)(index, type);
+                    /* Create a thumb stub function to switch to ARM mode */
+                    put_elf_reloc(symtab_section, text_section,
+                                  text_section->data_offset + 4, R_ARM_JUMP24,
+                                  sym_index);
+                    p = section_ptr_add(text_section, 8);
+                    write32le(p,   0x4778); /* bx pc */
+                    write32le(p+2, 0x46c0); /* nop   */
+                    write32le(p+4, 0xeafffffe); /* b $sym */
+                }
 
                 /* Compute final offset */
                 if (to_plt && !is_call) /* Point to 1st instr of Thumb stub */

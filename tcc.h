@@ -1305,6 +1305,26 @@ typedef struct {
     unsigned int n_value;        /* value of symbol */
 } Stab_Sym;
 
+/* Wether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
+   that unknown relocation don't create a GOT or PLT entry */
+enum gotplt_entry {
+    NO_GOTPLT_ENTRY,	/* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
+    BUILD_GOT_ONLY,	/* only build GOT (eg. TPOFF relocs) */
+    AUTO_GOTPLT_ENTRY,	/* generate if sym is UNDEF */
+    ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
+};
+
+/* what kind of relocation is it */
+struct reloc_info {
+    int code_reloc;	/* if false, that's a data reloc */
+    int gotplt_entry;	/* wether and when to create a GOT/PLT entry */
+    int pltoff_addend;	/* wether to store the PLT offset in addend */
+};
+
+#define INIT_RELOC_INFO(rtype, code_reloc, gotplt_entry, pltoff_addend) \
+  [rtype] = {code_reloc, gotplt_entry, pltoff_addend},
+ST_DATA struct reloc_info relocs_info[];
+
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM

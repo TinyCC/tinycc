@@ -1,6 +1,23 @@
 #include "tcc.h"
 #define HAVE_SECTION_RELOC
 
+ST_DATA struct reloc_info relocs_info[] = {
+    INIT_RELOC_INFO (R_AARCH64_ABS32, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_ABS64, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G0_NC, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G1_NC, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G2_NC, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G3, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_ADR_PREL_PG_HI21, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_ADD_ABS_LO12_NC, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_JUMP26, 1, AUTO_GOTPLT_ENTRY, 1)
+    INIT_RELOC_INFO (R_AARCH64_CALL26, 1, AUTO_GOTPLT_ENTRY, 1)
+    INIT_RELOC_INFO (R_AARCH64_ADR_GOT_PAGE, 0, ALWAYS_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_LD64_GOT_LO12_NC, 0, ALWAYS_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_GLOB_DAT, 0, NO_GOTPLT_ENTRY, 0)
+    INIT_RELOC_INFO (R_AARCH64_JUMP_SLOT, 1, NO_GOTPLT_ENTRY, 0)
+};
+
 void relocate_init(Section *sr) {}
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val)
@@ -51,7 +68,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
 	    /* This check must match the one in build_got_entries, testing
 	       if we really need a PLT slot.  */
 	    if (sym->st_shndx == SHN_UNDEF ||
-                s1->output_type == TCC_OUTPUT_MEMORY)
+                sym->st_shndx == SHN_ABS)
 	        /* We've put the PLT slot offset into r_addend when generating
 		   it, and that's what we must use as relocation value (adjusted
 		   by section offset of course).  */

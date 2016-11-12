@@ -1022,6 +1022,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, reloc_type, sym_index;
+    unsigned long ofs;
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -1034,222 +1035,70 @@ ST_FUNC void build_got_entries(TCCState *s1)
             type = ELFW(R_TYPE)(rel->r_info);
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-            switch(type) {
-#if defined(TCC_TARGET_I386)
-            case R_386_PC16:
-            case R_386_PC32:
-            case R_386_GOT32:
-            case R_386_GOT32X:
-            case R_386_GOTOFF:
-            case R_386_GOTPC:
-            case R_386_PLT32:
-                if (sym->st_shndx != SHN_UNDEF && type != R_386_GOT32 &&
-                    type != R_386_GOT32X && type != R_386_GOTOFF &&
-                    type != R_386_GOTPC && type != R_386_PLT32)
-                    break;
+            if (relocs_info[type].gotplt_entry == NO_GOTPLT_ENTRY)
+                continue;
 
-                if (!s1->got)
-                    build_got(s1);
+            /* Proceed with PLT/GOT [entry] creation if any of the following
+               condition is met:
+               - it is an undefined reference (dynamic relocation needed)
+               - symbol is absolute (probably created by tcc_add_symbol)
+               - relocation requires a PLT/GOT (BUILD_GOTPLT_ENTRY or
+                 ALWAYS_GOTPLT_ENTRY). */
+            if (sym->st_shndx != SHN_UNDEF &&
+                sym->st_shndx != SHN_ABS &&
+                relocs_info[type].gotplt_entry == AUTO_GOTPLT_ENTRY)
+                continue;
 
-                if (type != R_386_GOTOFF && type != R_386_GOTPC) {
-                    /* look at the symbol got offset. If none, then add one */
-                    if (type == R_386_GOT32 || type == R_386_GOT32X)
-                        reloc_type = R_386_GLOB_DAT;
-                    else
-                        reloc_type = R_386_JMP_SLOT;
-                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                                  sym_index);
-                }
-                break;
-#elif defined(TCC_TARGET_ARM)
-            case R_ARM_PC24:
-            case R_ARM_CALL:
-            case R_ARM_JUMP24:
-            case R_ARM_PLT32:
-            case R_ARM_THM_PC22:
-            case R_ARM_MOVT_ABS:
-            case R_ARM_MOVW_ABS_NC:
-            case R_ARM_THM_MOVT_ABS:
-            case R_ARM_THM_MOVW_ABS_NC:
-            case R_ARM_PREL31:
-            case R_ARM_REL32:
-            case R_ARM_GOTPC:
-            case R_ARM_GOTOFF:
-            case R_ARM_GOT32:
-            case R_ARM_V4BX:
-                if (sym->st_shndx != SHN_UNDEF && type != R_ARM_GOT32 &&
-                    type != R_ARM_GOTOFF && type != R_ARM_GOTPC &&
-                    type != R_ARM_PLT32)
-                    break;
-
-                if (!s1->got)
-                    build_got(s1);
-		if (type != R_ARM_GOTOFF && type != R_ARM_GOTPC
-		    && (sym->st_shndx == SHN_UNDEF
-                        || s1->output_type == TCC_OUTPUT_MEMORY)) {
-                    unsigned long ofs;
-                    /* look at the symbol got offset. If none, then add one */
-                    if (type == R_ARM_GOT32 || type == R_ARM_MOVT_ABS ||
-                        type == R_ARM_MOVW_ABS_NC ||
-                        type == R_ARM_THM_MOVT_ABS ||
-                        type == R_ARM_THM_MOVW_ABS_NC || type == R_ARM_ABS32 ||
-                        type == R_ARM_REL32)
-                        reloc_type = R_ARM_GLOB_DAT;
-                    else
-                        reloc_type = R_ARM_JUMP_SLOT;
-                    ofs = put_got_entry(s1, reloc_type, sym->st_size,
-				        sym->st_info, sym_index);
-#ifdef DEBUG_RELOC
-                    printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
-			    (char *) symtab_section->link->data + sym->st_name,
-			    type, sym->st_shndx, ofs);
-#endif
-		    if (type == R_ARM_PC24 || type == R_ARM_CALL ||
-			type == R_ARM_JUMP24 || type == R_ARM_PLT32) {
-			addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
-						+ rel->r_offset);
-			/* x must be signed!  */
-			int x = *ptr & 0xffffff;
-			x = (x << 8) >> 8;
-			x <<= 2;
-			x += ofs;
-			x >>= 2;
-#ifdef DEBUG_RELOC
-			printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
-				(*ptr & 0xff000000) | x, x);
-#endif
-			*ptr = (*ptr & 0xff000000) | x;
-		    }
-                }
-                break;
-            case R_ARM_THM_JUMP24:
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                /* We are relocating a jump from thumb code to arm code */
-                if (sym->st_shndx != SHN_UNDEF && !(sym->st_value & 1)) {
-                    int index;
-                    uint8_t *p;
-                    char *name, buf[1024];
-                    Section *text_section;
-
-                    name = (char *) symtab_section->link->data + sym->st_name;
-                    text_section = s1->sections[sym->st_shndx];
-                    /* Modify reloc to target a thumb stub to switch to ARM */
-                    snprintf(buf, sizeof(buf), "%s_from_thumb", name);
-                    index = put_elf_sym(symtab_section,
-                                        text_section->data_offset + 1,
-                                        sym->st_size, sym->st_info, 0,
-                                        sym->st_shndx, buf);
-                    rel->r_info = ELFW(R_INFO)(index, type);
-                    /* Create a thumb stub fonction to switch to ARM mode */
-                    put_elf_reloc(symtab_section, text_section,
-                                  text_section->data_offset + 4, R_ARM_JUMP24,
-                                  sym_index);
-                    p = section_ptr_add(text_section, 8);
-                    write32le(p,   0x4778); /* bx pc */
-                    write32le(p+2, 0x46c0); /* nop   */
-                    write32le(p+4, 0xeafffffe); /* b $sym */
-                }
-#elif defined(TCC_TARGET_ARM64)
-                //xx Other cases may be required here:
-            case R_AARCH64_ADR_GOT_PAGE:
-            case R_AARCH64_LD64_GOT_LO12_NC:
-                if (!s1->got)
-                    build_got(s1);
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                reloc_type = R_AARCH64_GLOB_DAT;
-                put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                              sym_index);
-                break;
-
-	    case R_AARCH64_JUMP26:
-	    case R_AARCH64_CALL26:
-		if (!s1->got)
-		    build_got(s1);
-		sym_index = ELFW(R_SYM)(rel->r_info);
-		sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-		if (sym->st_shndx == SHN_UNDEF ||
-		    s1->output_type == TCC_OUTPUT_MEMORY) {
-		    unsigned long ofs;
-		    reloc_type = R_AARCH64_JUMP_SLOT;
-		    ofs = put_got_entry(s1, reloc_type, sym->st_size,
-					sym->st_info, sym_index);
-		    /* We store the place of the generated PLT slot
-		       in our addend.  */
-		    rel->r_addend += ofs;
-		}
-		break;
-#elif defined(TCC_TARGET_C67)
-            case R_C60_GOT32:
-            case R_C60_GOTOFF:
-            case R_C60_GOTPC:
-            case R_C60_PLT32:
-                if (!s1->got)
-                    build_got(s1);
-                if (type == R_C60_GOT32 || type == R_C60_PLT32) {
-                    sym_index = ELFW(R_SYM)(rel->r_info);
-                    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                    /* look at the symbol got offset. If none, then add one */
-                    if (type == R_C60_GOT32)
-                        reloc_type = R_C60_GLOB_DAT;
-                    else
-                        reloc_type = R_C60_JMP_SLOT;
-                    put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                                  sym_index);
-                }
-                break;
-#elif defined(TCC_TARGET_X86_64)
-            case R_X86_64_32:
-            case R_X86_64_32S:
-            case R_X86_64_64:
-            case R_X86_64_PC32:
-            case R_X86_64_GOT32:
-            case R_X86_64_GOTTPOFF:
-            case R_X86_64_GOTPCREL:
-            case R_X86_64_GOTPCRELX:
-            case R_X86_64_REX_GOTPCRELX:
-            case R_X86_64_PLT32:
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                if ((type == R_X86_64_32 || type == R_X86_64_32S ||
-                     type == R_X86_64_64 || type == R_X86_64_PC32) &&
-                    sym->st_shndx != SHN_UNDEF)
-                    break;
-
-                if (type == R_X86_64_PLT32 &&
-                    ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT) {
-                    rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
-                    break;
-                }
-
-                if (!s1->got)
-                    build_got(s1);
-                if (type != R_X86_64_GOTTPOFF) {
-                    unsigned long ofs;
-                    /* look at the symbol got offset. If none, then add one */
-                    if (type == R_X86_64_GOT32 || type == R_X86_64_GOTPCREL ||
-                        type == R_X86_64_GOTPCRELX ||
-                        type == R_X86_64_REX_GOTPCRELX ||
-                        type == R_X86_64_32 || type == R_X86_64_32S ||
-                        type == R_X86_64_64)
-                        reloc_type = R_X86_64_GLOB_DAT;
-                    else
-                        reloc_type = R_X86_64_JUMP_SLOT;
-                    ofs = put_got_entry(s1, reloc_type, sym->st_size,
-                                        sym->st_info, sym_index);
-                    if (type == R_X86_64_PLT32)
-                        /* We store the place of the generated PLT slot
-                           in our addend.  */
-                        rel->r_addend += ofs;
-                }
-                break;
-#else
-#error unsupported CPU
-#endif
-            default:
-                break;
+#ifdef TCC_TARGET_X86_64
+            if (type == R_X86_64_PLT32 &&
+                ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT) {
+                rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
+                continue;
             }
+#endif
+
+            if (!s1->got)
+                build_got(s1);
+
+            if (relocs_info[type].gotplt_entry == BUILD_GOT_ONLY)
+                continue;
+
+            if (relocs_info[type].code_reloc)
+                reloc_type = R_JMP_SLOT;
+            else
+                reloc_type = R_GLOB_DAT;
+            ofs = put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
+                                sym_index);
+
+#ifdef DEBUG_RELOC
+            printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
+                    (char *) symtab_section->link->data + sym->st_name, type,
+                    sym->st_shndx, ofs);
+#endif
+
+#if defined (TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
+            /* We store the place of the generated PLT slot in our addend.  */
+            if (relocs_info[type].pltoff_addend)
+                rel->r_addend += ofs;
+
+#elif defined (TCC_TARGET_ARM)
+            if (type == R_ARM_PC24 || type == R_ARM_CALL ||
+                type == R_ARM_JUMP24 || type == R_ARM_PLT32) {
+                addr_t *ptr = (addr_t*)(s1->sections[s->sh_info]->data
+                                        + rel->r_offset);
+                /* x must be signed!  */
+                int x = *ptr & 0xffffff;
+                x = (x << 8) >> 8;
+                x <<= 2;
+                x += ofs;
+                x >>= 2;
+#ifdef DEBUG_RELOC
+                printf ("insn=0x%x --> 0x%x (x==0x%x)\n", *ptr,
+                        (*ptr & 0xff000000) | x, x);
+#endif
+                *ptr = (*ptr & 0xff000000) | x;
+            }
+#endif
         }
     }
 }
