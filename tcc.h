@@ -1527,7 +1527,7 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 ST_FUNC void *dlopen(const char *filename, int flag);
 ST_FUNC void dlclose(void *p);
 ST_FUNC const char *dlerror(void);
-ST_FUNC void *dlsym(int flag, const char *symbol);
+ST_FUNC void *dlsym(void *handle, const char *symbol);
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
 ST_DATA int rt_num_callers;
