@@ -819,19 +819,19 @@ static void build_got(TCCState *s1)
    in s1->symtab. When creating the dynamic symbol table entry for the GOT
    relocation, use 'size' and 'info' for the corresponding symbol metadata.
    Returns the offset of the GOT or (if any) PLT entry. */
-static unsigned long put_got_entry(TCCState *s1,
-				   int reloc_type, unsigned long size, int info,
-				   int sym_index)
+static unsigned long put_got_entry(TCCState *s1, int dyn_reloc_type,
+                                   int reloc_type, unsigned long size,
+                                   int info, int sym_index)
 {
     int index, need_plt_entry = 0;
     const char *name;
-    ElfW(Sym) *sym;
+    ElfW(Sym) *sym, *esym;
     unsigned long offset;
     int *ptr;
     size_t got_offset;
     struct sym_attr *symattr;
 
-    need_plt_entry = (reloc_type == R_JMP_SLOT);
+    need_plt_entry = (dyn_reloc_type == R_JMP_SLOT);
 
     if (!s1->got)
         build_got(s1);
@@ -1001,13 +1001,19 @@ static unsigned long put_got_entry(TCCState *s1,
         /* create the dynamic symbol table entry that the relocation refers to
            in its r_info field to identify the symbol */
 	/* XXX This might generate multiple syms for name.  */
-        index = put_elf_sym(s1->dynsym, offset, size, info, 0, sym->st_shndx,
-                            name);
-        put_elf_reloc(s1->dynsym, s1->got, got_offset, reloc_type, index);
-    } else {
-	put_elf_reloc(symtab_section, s1->got, got_offset, reloc_type,
+        index = find_elf_sym (s1->dynsym, name);
+        if (index) {
+            esym = (ElfW(Sym) *) s1->dynsym->data + index;
+            esym->st_value = offset;
+
+        } else if (s1->output_type == TCC_OUTPUT_MEMORY ||
+                   relocs_info[reloc_type].gotplt_entry == ALWAYS_GOTPLT_ENTRY)
+            index = put_elf_sym(s1->dynsym, offset, size, info, 0,
+                                sym->st_shndx, name);
+        put_elf_reloc(s1->dynsym, s1->got, got_offset, dyn_reloc_type, index);
+    } else
+	put_elf_reloc(symtab_section, s1->got, got_offset, dyn_reloc_type,
                       sym_index);
-    }
 
     if (need_plt_entry)
       return symattr->plt_offset;
@@ -1067,8 +1073,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 reloc_type = R_JMP_SLOT;
             else
                 reloc_type = R_GLOB_DAT;
-            ofs = put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                                sym_index);
+            ofs = put_got_entry(s1, reloc_type, type, sym->st_size,
+                                sym->st_info, sym_index);
 
 #ifdef DEBUG_RELOC
             printf ("maybegot: %s, %d, %d --> ofs=0x%x\n",
@@ -1420,15 +1426,17 @@ static void bind_exe_dynsyms(TCCState *s1)
                      * of the function wanted by the caller of dlsym instead of
                      * the address of the function that would return that
                      * address */
-                    put_got_entry(s1, R_JMP_SLOT, esym->st_size,
-                                  ELFW(ST_INFO)(STB_GLOBAL,STT_FUNC),
-                                  sym - (ElfW(Sym) *)symtab_section->data);
+                    put_elf_sym(s1->dynsym, 0, esym->st_size,
+                                ELFW(ST_INFO)(STB_GLOBAL,STT_FUNC), 0, 0,
+                                name);
                 } else if (type == STT_OBJECT) {
                     unsigned long offset;
                     ElfW(Sym) *dynsym;
                     offset = bss_section->data_offset;
                     /* XXX: which alignment ? */
                     offset = (offset + 16 - 1) & -16;
+                    set_elf_sym (s1->symtab, offset, esym->st_size,
+                                 esym->st_info, 0, bss_section->sh_num, name);
                     index = put_elf_sym(s1->dynsym, offset, esym->st_size,
                                         esym->st_info, 0, bss_section->sh_num,
                                         name);
