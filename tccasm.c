@@ -977,7 +977,8 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             }
             modifier = 0;
             if (*str == 'c' || *str == 'n' ||
-                *str == 'b' || *str == 'w' || *str == 'h')
+                *str == 'b' || *str == 'w' ||
+                *str == 'h' || *str == 'k')
                 modifier = *str++;
             index = find_constraint(operands, nb_operands, str, &str);
             if (index < 0)
@@ -1029,7 +1030,8 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
             skip('(');
             gexpr();
             if (is_output) {
-                test_lvalue();
+                if (!(vtop->type.t & VT_ARRAY))
+                    test_lvalue();
             } else {
                 /* we want to avoid LLOCAL case, except when the 'm'
                    constraint is used. Note that it may come from

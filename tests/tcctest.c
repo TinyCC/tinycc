@@ -2565,12 +2565,33 @@ static __inline__ unsigned long long inc64(unsigned long long a)
     return res;
 }
 
+struct struct123 {
+    int a;
+    int b;
+};
+struct struct1231 {
+    unsigned long addr;
+};
+
+unsigned long mconstraint_test(struct struct1231 *r)
+{
+    unsigned long ret;
+    unsigned int a[2];
+    a[0] = 0;
+    __asm__ volatile ("lea %2,%0; movl 4(%0),%k0; addl %2,%k0; movl $51,%2; movl $52,4%2; movl $63,%1"
+	             : "=&r" (ret), "=m" (a)
+	             : "m" (*(struct struct123 *)r->addr));
+    return ret + a[0];
+}
+
 unsigned int set;
 
 void asm_test(void)
 {
     char buf[128];
     unsigned int val;
+    struct struct123 s1;
+    struct struct1231 s2 = { (unsigned long)&s1 };
 
     printf("inline asm:\n");
 
@@ -2592,6 +2613,10 @@ void asm_test(void)
     printf("mul64=0x%Lx\n", mul64(0x12345678, 0xabcd1234));
     printf("inc64=0x%Lx\n", inc64(0x12345678ffffffff));
 
+    s1.a = 42;
+    s1.b = 43;
+    printf("mconstraint: %d", mconstraint_test(&s2));
+    printf(" %d %d\n", s1.a, s1.b);
     set = 0xff;
     sigdelset1(&set, 2);
     sigaddset1(&set, 16);
@@ -2600,9 +2625,6 @@ void asm_test(void)
     goto label1;
  label2:
     __asm__("btsl %1,%0" : "=m"(set) : "Ir"(20) : "cc");
-#ifdef __GNUC__ // works strange with GCC 4.3
-    set=0x1080fd;
-#endif
     printf("set=0x%x\n", set);
     val = 0x01020304;
     printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));

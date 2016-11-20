@@ -176,7 +176,7 @@ $(ARM64_CROSS): $(ARM64_FILES)
 # libtcc generation and test
 ifndef ONE_SOURCE
 LIBTCC_OBJ = $(filter-out tcc.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
-LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES),$(NATIVE_FILES))
+LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES) i386-asm.c,$(NATIVE_FILES))
 else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)

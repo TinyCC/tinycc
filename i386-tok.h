@@ -35,6 +35,7 @@
  DEF_ASM(rbp)
  DEF_ASM(rsi)
  DEF_ASM(rdi)
+ DEF_ASM(rip)
 #endif
  DEF_ASM(mm0)
  DEF_ASM(mm1)

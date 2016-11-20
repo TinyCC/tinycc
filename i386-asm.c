@@ -276,6 +276,8 @@ static int asm_parse_reg(int *type)
 	*type = OP_EA32;
     } else if (tok >= TOK_ASM_rax && tok <= TOK_ASM_rdi) {
         reg = tok - TOK_ASM_rax;
+    } else if (tok == TOK_ASM_rip) {
+        reg = 8;
 #endif
     } else {
     error_32:
@@ -444,7 +446,7 @@ static void gen_disp32(ExprValue *pe)
 }
 
 /* generate the modrm operand */
-static inline void asm_modrm(int reg, Operand *op)
+static inline int asm_modrm(int reg, Operand *op)
 {
     int mod, reg1, reg2, sib_reg1;
 
@@ -459,6 +461,13 @@ static inline void asm_modrm(int reg, Operand *op)
 	g(0x05 + (reg << 3));
 #endif
 	gen_expr32(&op->e);
+#ifdef TCC_TARGET_X86_64
+    } else if (op->reg == 8) {
+        ExprValue *pe = &op->e;
+        g(0x05 + (reg << 3));
+        gen_addrpc32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
+        return ind;
+#endif
     } else {
         sib_reg1 = op->reg;
         /* fist compute displacement encoding */
@@ -491,12 +500,13 @@ static inline void asm_modrm(int reg, Operand *op)
 	    gen_expr32(&op->e);
         }
     }
+    return 0;
 }
 
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, reg, v, op1, seg_prefix;
+    int i, modrm_index, reg, v, op1, seg_prefix, pc;
     int nb_ops, s;
     Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
@@ -802,6 +812,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     } else {
         reg = (pa->instr_type >> OPC_GROUP_SHIFT) & 7;
     }
+
+    pc = 0;
     if (pa->instr_type & OPC_MODRM) {
         /* first look for an ea operand */
         for(i = 0;i < nb_ops; i++) {
@@ -828,8 +840,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 break;
             }
         }
-
-        asm_modrm(reg, &ops[modrm_index]);
+        pc = asm_modrm(reg, &ops[modrm_index]);
     }
 
     /* emit constants */
@@ -858,30 +869,29 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
                 else
                     v = OP_IM64;
             }
+
+            if ((v & (OP_IM8 | OP_IM8S | OP_IM16)) && ops[i].e.sym)
+                tcc_error("cannot relocate");
+
             if (v & (OP_IM8 | OP_IM8S)) {
-                if (ops[i].e.sym)
-                    goto error_relocate;
                 g(ops[i].e.v);
             } else if (v & OP_IM16) {
-                if (ops[i].e.sym)
-                error_relocate:
-                    tcc_error("cannot relocate");
-                else
-                    gen_le16(ops[i].e.v);
-            } else {
-                if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
-		    gen_disp32(&ops[i].e);
-                } else {
+                gen_le16(ops[i].e.v);
 #ifdef TCC_TARGET_X86_64
-                    if (v & OP_IM64)
-                        gen_expr64(&ops[i].e);
-                    else
+            } else if (v & OP_IM64) {
+                gen_expr64(&ops[i].e);
 #endif
-                        gen_expr32(&ops[i].e);
-                }
+            } else if (pa->instr_type & (OPC_JMP | OPC_SHORTJMP)) {
+                gen_disp32(&ops[i].e);
+            } else {
+                gen_expr32(&ops[i].e);
             }
         }
     }
+
+    /* after immediate operands, adjust pc-relative address */
+    if (pc)
+        *(int*)(text_section->data + pc - 4) -= ind - pc;
 }
 
 /* return the constraint priority (we allocate first the lowest
@@ -1189,17 +1199,20 @@ ST_FUNC void subst_asm_operand(CString *add_str,
             cstr_ccat(add_str, '$');
         if (r & VT_SYM) {
             cstr_cat(add_str, get_tok_str(sv->sym->v, NULL), -1);
-            if ((uint32_t)sv->c.i != 0) {
-                cstr_ccat(add_str, '+');
-            } else {
-                return;
-            }
+            if ((uint32_t)sv->c.i == 0)
+                goto no_offset;
+            cstr_ccat(add_str, '+');
         }
         val = sv->c.i;
         if (modifier == 'n')
             val = -val;
         snprintf(buf, sizeof(buf), "%d", (int)sv->c.i);
         cstr_cat(add_str, buf, -1);
+    no_offset:;
+#ifdef TCC_TARGET_X86_64
+        if (r & VT_LVAL)
+            cstr_cat(add_str, "(%rip)", -1);
+#endif
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
 #ifdef TCC_TARGET_X86_64
         snprintf(buf, sizeof(buf), "%d(%%rbp)", (int)sv->c.i);
@@ -1212,7 +1225,12 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         if (reg >= VT_CONST)
             tcc_error("internal compiler error");
         snprintf(buf, sizeof(buf), "(%%%s)",
-                 get_tok_str(TOK_ASM_eax + reg, NULL));
+#ifdef TCC_TARGET_X86_64
+                 get_tok_str(TOK_ASM_rax + reg, NULL)
+#else
+                 get_tok_str(TOK_ASM_eax + reg, NULL)
+#endif
+		 );
         cstr_cat(add_str, buf, -1);
     } else {
         /* register case */
@@ -1244,6 +1262,8 @@ ST_FUNC void subst_asm_operand(CString *add_str,
             size = -1;
         } else if (modifier == 'w') {
             size = 2;
+        } else if (modifier == 'k') {
+            size = 4;
 #ifdef TCC_TARGET_X86_64
         } else if (modifier == 'q') {
             size = 8;
@@ -1311,7 +1331,8 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                        output cases) */
                     SValue sv;
                     sv = *op->vt;
-                    sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
+                    sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL | VT_LVAL;
+                    sv.type.t = VT_PTR;
                     load(op->reg, &sv);
                 } else if (i >= nb_outputs || op->is_rw) {
                     /* load value in register */
