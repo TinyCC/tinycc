@@ -722,7 +722,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     qrel++;
                 }
             }
-            write32le(ptr, read32le(ptr) + val);
+            add32le(ptr, val);
             break;
         case R_386_PC32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
@@ -735,25 +735,25 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     break;
                 }
             }
-            write32le(ptr, read32le(ptr) + val - addr);
+            add32le(ptr, val - addr);
             break;
         case R_386_PLT32:
-            write32le(ptr, read32le(ptr) + val - addr);
+            add32le(ptr, val - addr);
             break;
         case R_386_GLOB_DAT:
         case R_386_JMP_SLOT:
             write32le(ptr, val);
             break;
         case R_386_GOTPC:
-            write32le(ptr, read32le(ptr) + s1->got->sh_addr - addr);
+            add32le(ptr, s1->got->sh_addr - addr);
             break;
         case R_386_GOTOFF:
-            write32le(ptr, read32le(ptr) + val - s1->got->sh_addr);
+            add32le(ptr, val - s1->got->sh_addr);
             break;
         case R_386_GOT32:
         case R_386_GOT32X:
             /* we load the got offset */
-            write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
+            add32le(ptr, s1->sym_attrs[sym_index].got_offset);
             break;
         case R_386_16:
             if (s1->output_format != TCC_OUTPUT_FORMAT_BINARY) {
@@ -1110,7 +1110,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                     qrel++;
                 }
             }
-            write64le(ptr, read64le(ptr) + val);
+            add64le(ptr, val);
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
@@ -1122,7 +1122,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
                 qrel->r_addend = (int)read32le(ptr) + val;
                 qrel++;
             }
-            write32le(ptr, read32le(ptr) + val);
+            add32le(ptr, val);
             break;
 
         case R_X86_64_PC32:
@@ -1154,7 +1154,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
             if (diff < -2147483648LL || diff > 2147483647LL) {
                 tcc_error("internal error: relocation failed");
             }
-            write32le(ptr, read32le(ptr) + diff);
+            add32le(ptr, diff);
         }
             break;
         case R_X86_64_GLOB_DAT:
@@ -1165,16 +1165,15 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         case R_X86_64_GOTPCREL:
 	case R_X86_64_GOTPCRELX:
 	case R_X86_64_REX_GOTPCRELX:
-            write32le(ptr, read32le(ptr) +
-                      (s1->got->sh_addr - addr +
-                       s1->sym_attrs[sym_index].got_offset - 4));
+            add32le(ptr, s1->got->sh_addr - addr
+                    + s1->sym_attrs[sym_index].got_offset - 4);
             break;
         case R_X86_64_GOTTPOFF:
-            write32le(ptr, read32le(ptr) + val - s1->got->sh_addr);
+            add32le(ptr, val - s1->got->sh_addr);
             break;
         case R_X86_64_GOT32:
             /* we load the got offset */
-            write32le(ptr, read32le(ptr) + s1->sym_attrs[sym_index].got_offset);
+            add32le(ptr, s1->sym_attrs[sym_index].got_offset);
             break;
 #ifdef TCC_TARGET_PE
 	case R_X86_64_RELATIVE: /* handled in pe_relocate_rva() */
@@ -2126,30 +2125,29 @@ ST_FUNC void relocate_plt(TCCState *s1)
     p_end = p + s1->plt->data_offset;
     if (p < p_end) {
 #if defined(TCC_TARGET_I386)
-        write32le(p + 2, read32le(p + 2) + s1->got->sh_addr);
-        write32le(p + 8, read32le(p + 8) + s1->got->sh_addr);
+        add32le(p + 2, s1->got->sh_addr);
+        add32le(p + 8, s1->got->sh_addr);
         p += 16;
         while (p < p_end) {
-            write32le(p + 2, read32le(p + 2) + s1->got->sh_addr);
+            add32le(p + 2, s1->got->sh_addr);
             p += 16;
         }
 #elif defined(TCC_TARGET_X86_64)
         int x = s1->got->sh_addr - s1->plt->sh_addr - 6;
-        write32le(p + 2, read32le(p + 2) + x);
-        write32le(p + 8, read32le(p + 8) + x - 6);
+        add32le(p + 2, x);
+        add32le(p + 8, x - 6);
         p += 16;
         while (p < p_end) {
-            write32le(p + 2, read32le(p + 2) + x + s1->plt->data - p);
+            add32le(p + 2, x + s1->plt->data - p);
             p += 16;
         }
 #elif defined(TCC_TARGET_ARM)
-        int x;
-        x=s1->got->sh_addr - s1->plt->sh_addr - 12;
+        int x = s1->got->sh_addr - s1->plt->sh_addr - 12;
         p += 16;
         while (p < p_end) {
             if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
-            write32le(p + 12, x + read32le(p + 12) + s1->plt->data - p);
+            add32le(p + 12, x + s1->plt->data - p);
             p += 16;
         }
 #elif defined(TCC_TARGET_ARM64)

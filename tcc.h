@@ -1423,11 +1423,17 @@ static inline uint32_t read32le(unsigned char *p) {
 static inline void write32le(unsigned char *p, uint32_t x) {
     write16le(p, x), write16le(p + 2, x >> 16);
 }
+static inline void add32le(unsigned char *p, int32_t x) {
+    write32le(p, read32le(p) + x);
+}
 static inline uint64_t read64le(unsigned char *p) {
   return read32le(p) | (uint64_t)read32le(p + 4) << 32;
 }
 static inline void write64le(unsigned char *p, uint64_t x) {
     write32le(p, x), write32le(p + 4, x >> 32);
+}
+static inline void add64le(unsigned char *p, int64_t x) {
+    write64le(p, read64le(p) + x);
 }
 
 /* ------------ i386-gen.c ------------ */
