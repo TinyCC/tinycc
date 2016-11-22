@@ -237,12 +237,12 @@ Do not generate common symbols for uninitialized data.
 Add a leading underscore at the beginning of each C symbol.
 
 @item -fms-extensions
-Allow a MS C compiler extensions to the language. Curretly this
-assume a nested named structure declaration without identifier behave
-like an unnamed one.
+Allow a MS C compiler extensions to the language. Currently this
+assumes a nested named structure declaration without an identifier
+behaves like an unnamed one.
 
 @item -fdollars-in-identifiers
-Allow a dollars in identifiers
+Allow dollar signs in identifiers
 
 @end table
 
