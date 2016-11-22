@@ -176,6 +176,10 @@ In a script, it gives the following header:
 #!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
 @end example
 
+@item -mms-bitfields
+Use an algorithm for bitfield alignment consistent with MSVC. Default is
+gcc's algorithm.
+
 @item -mfloat-abi (ARM only)
 Select the float ABI. Possible values: @code{softfp} and @code{hard}
 

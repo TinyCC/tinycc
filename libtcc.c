@@ -752,6 +752,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     s->alacarte_link = 1;
     s->nocommon = 1;
     s->warn_implicit_function_declaration = 1;
+    s->ms_bitfields = 0;
 
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
@@ -1508,6 +1509,7 @@ enum {
     TCC_OPTION_Wl,
     TCC_OPTION_W,
     TCC_OPTION_O,
+    TCC_OPTION_mms_bitfields,
     TCC_OPTION_m,
     TCC_OPTION_f,
     TCC_OPTION_isystem,
@@ -1571,6 +1573,7 @@ static const TCCOption tcc_options[] = {
     { "Wl,", TCC_OPTION_Wl, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+    { "mms-bitfields", TCC_OPTION_mms_bitfields, 0}, /* must go before option 'm' */
     { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG },
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
@@ -1853,6 +1856,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
             x = atoi(optarg);
             if (x > 0)
                 tcc_define_symbol(s, "__OPTIMIZE__", NULL);
+            break;
+        case TCC_OPTION_mms_bitfields:
+            s->ms_bitfields = 1;
             break;
         case TCC_OPTION_traditional:
         case TCC_OPTION_pedantic:

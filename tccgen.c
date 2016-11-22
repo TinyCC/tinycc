@@ -3154,7 +3154,7 @@ static void parse_attribute(AttributeDef *ad)
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
 static void struct_decl(CType *type, AttributeDef *ad, int u)
 {
-    int a, v, size, align, maxalign, c, offset, flexible;
+    int a, v, size, align, maxalign, c, offset, flexible, extra_bytes;
     int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
     Sym *s, *ss, *ass, **ps;
     AttributeDef ad1;
@@ -3235,6 +3235,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
             while (tok != '}') {
                 parse_btype(&btype, &ad1);
                 while (1) {
+                extra_bytes = 0;
 		    if (flexible)
 		        tcc_error("flexible array member '%s' not at the end of struct",
                               get_tok_str(v, NULL));
@@ -3310,9 +3311,9 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                             /* zero size: means to pad */
                             bit_pos = 0;
                         } else {
-                            /* we do not have enough room ?
-                               did the type change?
-                               is it a union? */
+                            /* if type change, union, or will overrun
+                             * allignment slot, start at a newly
+                             * alligned slot */
                             if ((bit_pos + bit_size) > bsize ||
                                 bt != prevbt || a == TOK_UNION)
                                 bit_pos = 0;
@@ -3322,15 +3323,30 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                                 (bit_pos << VT_STRUCT_SHIFT) |
                                 (bit_size << (VT_STRUCT_SHIFT + 6));
                             bit_pos += bit_size;
+                            /* without ms-bitfields, allocate the
+                             * minimum number of bytes necessary,
+                             * adding single bytes as needed */
+                            if (!tcc_state->ms_bitfields) {
+                                if (lbit_pos == 0)
+                                    /* minimum bytes for new bitfield */
+                                    size = (bit_size + 7) / 8;
+                                else {
+                                    /* enough spare bits already allocated? */
+                                    bit_size = (lbit_pos - 1) % 8 + 1 + bit_size;
+                                    if (bit_size > 8) /* doesn't fit */
+                                        extra_bytes = (bit_size - 1) / 8;
+                                }
+                            }
                         }
                         prevbt = bt;
                     } else {
                         bit_pos = 0;
                     }
                     if (v != 0 || (type1.t & VT_BTYPE) == VT_STRUCT) {
-                        /* add new memory data only if starting
-                           bit field */
-                        if (lbit_pos == 0) {
+                        /* add new memory data only if starting bit
+                           field or adding bytes to existing bit field */
+                        if (extra_bytes) c += extra_bytes;
+                        else if (lbit_pos == 0) {
                             if (a == TOK_STRUCT) {
                                 c = (c + align - 1) & -align;
                                 offset = c;

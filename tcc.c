@@ -97,6 +97,7 @@ static void help(void)
            "  -o outfile  set output filename\n"
            "  -run        run compiled source\n"
            "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
+           "  -mms-bitfields  use bitfield alignment consistent with MSVC\n"
            "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
            "  -v          show version\n"
