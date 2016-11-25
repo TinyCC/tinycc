@@ -3047,7 +3047,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             }
         }
         /* not found: create new section */
-        s = new_section(s1, sh_name, sh->sh_type, sh->sh_flags);
+        s = new_section(s1, sh_name, sh->sh_type, sh->sh_flags & ~SHF_GROUP);
         /* take as much info as possible from the section. sh_link and
            sh_info will be updated later */
         s->sh_addralign = sh->sh_addralign;
