@@ -3279,26 +3279,11 @@ static void struct_layout(CType *type, AttributeDef *ad)
     prevbt = VT_STRUCT; /* make it never match */
     prev_bit_size = 0;
     for (f = type->ref->next; f; f = f->next) {
-	int extra_bytes = 0;
 	int typealign, bit_size;
 	int size = type_size(&f->type, &typealign);
-	if (f->type.t & VT_BITFIELD) {
-	    bit_size = (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
-	    /* without ms-bitfields, allocate the
-	     * minimum number of bytes necessary,
-	     * adding single bytes as needed */
-	    if (0 && !tcc_state->ms_bitfields) {
-		if (bit_pos == 0)
-		  /* minimum bytes for new bitfield */
-		  size = (bit_size + 7) / 8;
-		else {
-		    /* enough spare bits already allocated? */
-		    int add_size = (bit_pos - 1) % 8 + 1 + bit_size;
-		    if (add_size > 8) /* doesn't fit */
-		      extra_bytes = (add_size - 1) / 8;
-		}
-	    }
-	} else
+	if (f->type.t & VT_BITFIELD)
+	  bit_size = (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
+	else
 	  bit_size = -1;
 	if (bit_size == 0 && pcc) {
 	    /* Zero-width bit-fields in PCC mode aren't affected
@@ -3312,35 +3297,39 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	} else {
 	    align = typealign;
 	}
-	if (extra_bytes) c += extra_bytes;
-	else if (bit_size < 0) {
+	if (type->ref->type.t != TOK_STRUCT) {
+	    if (pcc && bit_size >= 0)
+	      size = (bit_size + 7) >> 3;
+	    /* Bit position is already zero from our caller.  */
+	    offset = 0;
+	    if (size > c)
+	      c = size;
+	} else if (bit_size < 0) {
+	    int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
 	    prevbt = VT_STRUCT;
 	    prev_bit_size = 0;
-	    if (type->ref->type.t == TOK_STRUCT) {
-		int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
-		c = (c + addbytes + align - 1) & -align;
-		offset = c;
-		if (size > 0)
-		  c += size;
-	    } else {
-            union_tail:
-		offset = 0;
-		if (size > c)
-		  c = size;
-	    }
-	    if (align > maxalign)
-	      maxalign = align;
+	    c = (c + addbytes + align - 1) & -align;
+	    offset = c;
+	    if (size > 0)
+	      c += size;
 	    bit_pos = 0;
-	} else if (type->ref->type.t != TOK_STRUCT) {
-	    if (pcc)
-	      size = (bit_size + 7) >> 3;
-	    f->type.t = (f->type.t & ~(0x3f << VT_STRUCT_SHIFT))
-		        | (0 << VT_STRUCT_SHIFT);
-	    goto union_tail;
 	} else {
 	    /* A bit-field.  Layout is more complicated.  There are two
 	       options TCC implements: PCC compatible and MS compatible
-	       (PCC compatible is what GCC uses for almost all targets).  */
+	       (PCC compatible is what GCC uses for almost all targets).
+	       In PCC layout the overall size of the struct (in c) is
+	       _excluding_ the current run of bit-fields (that is,
+	       there's at least additional bit_pos bits after c).  In
+	       MS layout c does include the current run of bit-fields.
+	       
+	       This matters for calculating the natural alignment buckets
+	       in PCC mode.  */
+
+	    /* 'align' will be used to influence records alignment,
+	       so it's the max of specified and type alignment, except
+	       in certain cases that depend on the mode.  */
+	    if (align < typealign)
+	      align = typealign;
 	    if (pcc) {
 		/* In PCC layout a non-packed bit-field is placed adjacent
 		   to the preceding bit-fields, except if it would overflow
@@ -3349,15 +3338,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		   placed adjacent.  */
 		int ofs = (c * 8 + bit_pos) % (typealign * 8);
 		int ofs2 = ofs + bit_size + (typealign * 8) - 1;
-		/*if ((typealign != 1 &&
-		     //bit_pos + bit_size > size * 8) ||
-		     (((c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign)
-		      != ((c + ((bit_pos + bit_size + 7) >> 3) + typealign - 1) & -typealign))) ||
-		    bit_size == 0 ||
-		    (bit_pos + bit_size > size * 8)
-			) {*/
 		if (bit_size == 0 ||
-		    (typealign != 1 && (ofs2 / (typealign * 8)) > (size/typealign))) {
+		    (typealign != 1 &&
+		     (ofs2 / (typealign * 8)) > (size/typealign))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    bit_pos = 0;
 		}
@@ -3366,33 +3349,28 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		   of the containing struct using the base types alignment,
 		   except for packed fields (which here have correct
 		   align/typealign).  */
-		if (!(f->v & SYM_FIRST_ANOM)) {
-		    if (align > maxalign)
-		      maxalign = align;
-		    if (typealign > maxalign)
-		      maxalign = typealign;
-		}
+		if ((f->v & SYM_FIRST_ANOM))
+		  align = 1;
 	    } else {
 		bt = f->type.t & VT_BTYPE;
-		if (
-		    ((
-		      bit_pos + bit_size > size * 8) ||
-		     (bit_size == 0 && prevbt == bt) ||
-		     (bit_size > 0 && bt != prevbt))) {
+		if ((bit_pos + bit_size > size * 8) ||
+		    (bit_size > 0) == (bt != prevbt)) {
 		    c = (c + typealign - 1) & -typealign;
 		    offset = c;
 		    bit_pos = 0;
 		    /* In MS bitfield mode a bit-field run always uses
-		       at least as many bits as the underlying type.  */
+		       at least as many bits as the underlying type.
+		       To start a new run it's also required that this
+		       or the last bit-field had non-zero width.  */
 		    if (bit_size || prev_bit_size)
 		      c += size;
 		}
-		if (bit_size > 0 || prevbt == bt) {
-		    if (align > maxalign)
-		      maxalign = align;
-		    if (typealign > maxalign)
-		      maxalign = typealign;
-		}
+		/* In MS layout the records alignment is normally
+		   influenced by the field, except for a zero-width
+		   field at the start of a run (but by further zero-width
+		   fields it is again).  */
+		if (bit_size == 0 && prevbt != bt)
+		  align = 1;
 		prevbt = bt;
 		prev_bit_size = bit_size;
 	    }
@@ -3404,6 +3382,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		bit_pos -= size * 8;
 	    }
 	}
+	if (align > maxalign)
+	  maxalign = align;
 #if 0
 	printf("set field %s offset=%d c=%d",
 	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset, c);
@@ -3461,10 +3441,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
 static void struct_decl(CType *type, AttributeDef *ad, int u)
 {
-    int extra_bytes;
     int a, v, size, align, flexible, alignoverride;
     long c;
-    int bit_size, bit_pos, bsize, bt, prevbt;
+    int bit_size, bsize, bt;
     Sym *s, *ss, **ps;
     AttributeDef ad1;
     CType type1, btype;
@@ -3553,8 +3532,6 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
             skip('}');
         } else {
             ps = &s->next;
-            prevbt = VT_INT;
-            bit_pos = 0;
             flexible = 0;
             while (tok != '}') {
                 if (!parse_btype(&btype, &ad1)) {
@@ -3562,7 +3539,6 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
 		    continue;
 		}
                 while (1) {
-		    extra_bytes = 0;
 		    if (flexible)
 		        tcc_error("flexible array member '%s' not at the end of struct",
                               get_tok_str(v, NULL));
@@ -3634,41 +3610,27 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                                   get_tok_str(v, NULL));
                         } else if (bit_size == bsize) {
                             /* no need for bit fields */
-                            bit_pos = 0;
+                            ;
                         } else {
-                            /* if type change, union, or will overrun
-                             * allignment slot, start at a newly
-                             * alligned slot */
-                            if ((bit_pos + bit_size) > bsize ||
-                                bt != prevbt || a == TOK_UNION)
-                                bit_pos = 0;
-                            /* XXX: handle LSB first */
                             type1.t |= VT_BITFIELD | 
-                                (bit_pos << VT_STRUCT_SHIFT) |
+                                (0 << VT_STRUCT_SHIFT) |
                                 (bit_size << (VT_STRUCT_SHIFT + 6));
-                            bit_pos += bit_size;
                         }
-                        prevbt = bt;
-                    } else {
-                        bit_pos = 0;
                     }
                     if (v != 0 || (type1.t & VT_BTYPE) == VT_STRUCT) {
                         /* Remember we've seen a real field to check
 			   for placement of flexible array member. */
 			c = 1;
                     }
-                    if (v == 0 && (type1.t & VT_BTYPE) == VT_STRUCT) {
-			/* See struct_layout for special casing
-			   anonymous member of struct type.  */
+		    /* If member is a struct or bit-field, enforce
+		       placing into the struct (as anonymous).  */
+                    if (v == 0 &&
+			((type1.t & VT_BTYPE) == VT_STRUCT ||
+			 bit_size >= 0)) {
 		        v = anon_sym++;
 		    }
-		    if (v == 0 && bit_size >= 0) {
-			/* Need to remember anon bit-fields as well.
-			   They influence layout.  */
-			v = anon_sym++;
-		    }
                     if (v) {
-                        ss = sym_push(v | SYM_FIELD, &type1, alignoverride, extra_bytes);
+                        ss = sym_push(v | SYM_FIELD, &type1, alignoverride, 0);
                         *ps = ss;
                         ps = &ss->next;
                     }
