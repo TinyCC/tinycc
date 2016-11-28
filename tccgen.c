@@ -3266,7 +3266,7 @@ static void struct_add_offset (Sym *s, int offset)
 
 static void struct_layout(CType *type, AttributeDef *ad)
 {
-    int align, maxalign, offset, c, bit_pos, bt, prevbt;
+    int align, maxalign, offset, c, bit_pos, bt, prevbt, prev_bit_size;
     int pcc = !tcc_state->ms_bitfields;
     Sym *f;
     if (ad->a.aligned)
@@ -3277,6 +3277,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
     c = 0;
     bit_pos = 0;
     prevbt = VT_STRUCT; /* make it never match */
+    prev_bit_size = 0;
     for (f = type->ref->next; f; f = f->next) {
 	int extra_bytes = 0;
 	int typealign, bit_size;
@@ -3314,6 +3315,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	if (extra_bytes) c += extra_bytes;
 	else if (bit_size < 0) {
 	    prevbt = VT_STRUCT;
+	    prev_bit_size = 0;
 	    if (type->ref->type.t == TOK_STRUCT) {
 		int addbytes = pcc ? (bit_pos + 7) >> 3 : 0;
 		c = (c + addbytes + align - 1) & -align;
@@ -3355,14 +3357,15 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		    (bit_pos + bit_size > size * 8)
 			) {*/
 		if (bit_size == 0 ||
-		    (typealign != 1 && (ofs2 / (typealign * 8)) > ((size*8)/(typealign*8)))) {
+		    (typealign != 1 && (ofs2 / (typealign * 8)) > (size/typealign))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    bit_pos = 0;
 		}
 		offset = c;
 		/* In PCC layout named bit-fields influence the alignment
 		   of the containing struct using the base types alignment,
-		   except for packed fields or zero-width fields.  */
+		   except for packed fields (which here have correct
+		   align/typealign).  */
 		if (!(f->v & SYM_FIRST_ANOM)) {
 		    if (align > maxalign)
 		      maxalign = align;
@@ -3381,7 +3384,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		    bit_pos = 0;
 		    /* In MS bitfield mode a bit-field run always uses
 		       at least as many bits as the underlying type.  */
-		    c += size;
+		    if (bit_size || prev_bit_size)
+		      c += size;
 		}
 		if (bit_size > 0 || prevbt == bt) {
 		    if (align > maxalign)
@@ -3390,6 +3394,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		      maxalign = typealign;
 		}
 		prevbt = bt;
+		prev_bit_size = bit_size;
 	    }
 	    f->type.t = (f->type.t & ~(0x3f << VT_STRUCT_SHIFT))
 		        | (bit_pos << VT_STRUCT_SHIFT);
