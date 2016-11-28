@@ -325,8 +325,10 @@ if test -z "$cross_prefix" ; then
       fi
 
       if test -z "$triplet"; then
-        if test ! -f "/usr/lib/crti.o" -a -f "/usr/lib64/crti.o" ; then
-          tcc_lddir="lib64"
+        if test $cpu = "x86-64" -o $cpu = "aarch64" ; then
+          if test -f "/usr/lib64/crti.o" ; then
+            tcc_lddir="lib64"
+          fi
         fi
       fi
 
@@ -401,7 +403,6 @@ prefix=$prefix
 bindir=\$(DESTDIR)$bindir
 tccdir=\$(DESTDIR)$tccdir
 libdir=\$(DESTDIR)$libdir
-ln_libdir=$libdir
 includedir=\$(DESTDIR)$includedir
 mandir=\$(DESTDIR)$mandir
 infodir=\$(DESTDIR)$infodir
