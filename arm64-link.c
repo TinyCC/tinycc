@@ -88,9 +88,8 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
 		    (char *) symtab_section->link->data + sym->st_name);
 #endif
             if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc)
-	      {
-                tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed (val=%lx, addr=%lx)", addr, val);
-	      }
+                tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed"
+                          " (val=%lx, addr=%lx)", val, addr);
             write32le(ptr, (0x14000000 |
                             (uint32_t)(type == R_AARCH64_CALL26) << 31 |
                             ((val - addr) >> 2 & 0x3ffffff)));
