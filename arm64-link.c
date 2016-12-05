@@ -40,11 +40,10 @@ void relocate_init(Section *sr) {}
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val)
 {
-    ElfW(Sym) *sym;
-    int sym_index;
-
-    sym_index = ELFW(R_SYM)(rel->r_info);
-    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+    int sym_index = ELFW(R_SYM)(rel->r_info);
+#ifdef DEBUG_RELOC
+    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+#endif
 
     switch(type) {
         case R_AARCH64_ABS64:
