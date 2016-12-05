@@ -41,20 +41,6 @@
 #define CHAR_IS_UNSIGNED
 
 /******************************************************/
-/* ELF defines */
-
-#define EM_TCC_TARGET EM_AARCH64
-
-#define R_DATA_32  R_AARCH64_ABS32
-#define R_DATA_PTR R_AARCH64_ABS64
-#define R_JMP_SLOT R_AARCH64_JUMP_SLOT
-#define R_GLOB_DAT R_AARCH64_GLOB_DAT
-#define R_COPY     R_AARCH64_COPY
-
-#define ELF_START_ADDR 0x00400000
-#define ELF_PAGE_SIZE 0x1000
-
-/******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
 #include "tcc.h"

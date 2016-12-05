@@ -1,8 +1,27 @@
-#include "tcc.h"
+#ifdef TARGET_DEFS_ONLY
+
+#define EM_TCC_TARGET EM_386
+
+/* relocation type for 32 bit data relocation */
+#define R_DATA_32   R_386_32
+#define R_DATA_PTR  R_386_32
+#define R_JMP_SLOT  R_386_JMP_SLOT
+#define R_GLOB_DAT  R_386_GLOB_DAT
+#define R_COPY      R_386_COPY
+
+#define R_NUM       R_386_NUM
+
+#define ELF_START_ADDR 0x08048000
+#define ELF_PAGE_SIZE  0x1000
+
 #define HAVE_SECTION_RELOC
 
+#else /* !TARGET_DEFS_ONLY */
+
+#include "tcc.h"
+
 static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
-ST_DATA struct reloc_info relocs_info[] = {
+ST_DATA struct reloc_info relocs_info[R_NUM] = {
     INIT_RELOC_INFO (R_386_32, 0, NO_GOTPLT_ENTRY, 0)
     INIT_RELOC_INFO (R_386_PC32, 1, AUTO_GOTPLT_ENTRY, 0)
     INIT_RELOC_INFO (R_386_PLT32, 1, ALWAYS_GOTPLT_ENTRY, 0)
@@ -101,3 +120,5 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
             return;
     }
 }
+
+#endif /* !TARGET_DEFS_ONLY */

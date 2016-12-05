@@ -290,19 +290,24 @@
 #define TARGET_DEFS_ONLY
 #ifdef TCC_TARGET_I386
 # include "i386-gen.c"
+# include "i386-link.c"
 #endif
 #ifdef TCC_TARGET_X86_64
 # include "x86_64-gen.c"
+# include "x86_64-link.c"
 #endif
 #ifdef TCC_TARGET_ARM
 # include "arm-gen.c"
+# include "arm-link.c"
 #endif
 #ifdef TCC_TARGET_ARM64
 # include "arm64-gen.c"
+# include "arm64-link.c"
 #endif
 #ifdef TCC_TARGET_C67
 # include "coff.h"
 # include "c67-gen.c"
+# include "c67-link.c"
 #endif
 #undef TARGET_DEFS_ONLY
 
@@ -1325,7 +1330,7 @@ struct reloc_info {
 
 #define INIT_RELOC_INFO(rtype, code_reloc, gotplt_entry, pltoff_addend) \
   [rtype] = {code_reloc, gotplt_entry, pltoff_addend},
-ST_DATA struct reloc_info relocs_info[];
+ST_DATA struct reloc_info relocs_info[R_NUM];
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */

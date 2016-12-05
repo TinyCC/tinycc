@@ -2456,6 +2456,8 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_AARCH64_TLS_TPREL64  1030	/* TP-relative offset, 64 bit.  */
 #define R_AARCH64_TLSDESC      1031	/* TLS Descriptor.  */
 #define R_AARCH64_IRELATIVE    1032	/* STT_GNU_IFUNC relocation.  */
+/* Keep this the last entry.  */
+#define R_AARCH64_NUM          1033
 
 /* ARM relocs.  */
 
@@ -2547,6 +2549,8 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_C60_RELATIVE  8               /* Adjust by program base */
 #define R_C60_GOTOFF    9               /* 32 bit offset to GOT */
 #define R_C60_GOTPC     10              /* 32 bit PC relative offset to GOT */
+/* Keep this the last entry.  */
+#define R_C60_NUM       11
 
 #define R_C60HI16      0x55       /* high 16 bit MVKH embedded */
 #define R_C60LO16      0x54       /* low 16 bit MVKL embedded */
@@ -2900,7 +2904,7 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_X86_64_REX_GOTPCRELX	42      /* like GOTPCRELX, but a REX prefix
 					   is present */
 
-#define R_X86_64_NUM		39
+#define R_X86_64_NUM		43
 
 
 /* AM33 relocations.  */
