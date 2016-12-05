@@ -1042,6 +1042,10 @@ ST_FUNC void build_got_entries(TCCState *s1)
             type = ELFW(R_TYPE)(rel->r_info);
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+
+            if (type >= R_NUM || !relocs_info[type].known)
+                tcc_error("Unknown relocation: %d\n", type);
+
             if (relocs_info[type].gotplt_entry == NO_GOTPLT_ENTRY)
                 continue;
 
