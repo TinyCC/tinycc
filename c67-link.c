@@ -20,6 +20,8 @@
 
 #include "tcc.h"
 
+ST_DATA struct reloc_info relocs_info[R_NUM];
+
 void relocate_init(Section *sr) {}
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val)
