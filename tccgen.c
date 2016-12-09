@@ -92,6 +92,7 @@ ST_FUNC void vpush(CType *type);
 ST_FUNC int gvtst(int inv, int t);
 ST_FUNC int is_btype_size(int bt);
 static void gen_inline_functions(TCCState *s);
+static void skip_or_save_block(TokenString **str);
 
 ST_INLN int is_float(int t)
 {
@@ -4689,6 +4690,76 @@ ST_FUNC void unary(void)
         next();
         break;
 
+    case TOK_GENERIC:
+    {
+	CType controlling_type;
+	int has_default = 0;
+	int has_match = 0;
+	CType cur_type;
+	AttributeDef ad_tmp;
+	int learn = 0;
+	TokenString *str = NULL;
+	ParseState saved_parse_state;
+
+	next();
+	skip('(');
+	expr_type(&controlling_type, 1);
+	if (controlling_type.t & VT_ARRAY)
+		controlling_type.t = VT_PTR;
+	controlling_type.t &= ~VT_CONSTANT;
+	for (;;) {
+	    learn = 0;
+	    skip(',');
+	    if (tok == TOK_DEFAULT) {
+		if (has_default)
+		    tcc_error("too many 'default'");
+		if (!has_match) {
+		    has_default = 1;
+		    learn = 1;
+		}
+		next();
+	    } else {
+		int itmp;
+
+		parse_btype(&cur_type, &ad_tmp);
+		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
+		if (compare_types(&controlling_type, &cur_type, 0)) {
+		    if (has_match) {
+			tcc_error("type march twice");
+		    }
+		    if (has_default)
+			tok_str_free(str);
+		    has_match = 1;
+		    learn = 1;
+		}
+	    }
+	    skip(':');
+	    if (learn) {
+		skip_or_save_block(&str);
+	    } else {
+		skip_or_save_block(NULL);
+	    }
+	    if (tok == ',')
+		continue;
+	    else if (tok == ')')
+		break;
+	}
+	if (!has_match && !has_default) {
+	    char buf[256];
+
+	    type_to_str(buf, 256, &controlling_type, NULL);
+	    tcc_error("_Generic sellector of type '%s' is not compatible with any assosiation",
+		      buf);
+	}
+	skip(')');
+	save_parse_state(&saved_parse_state);
+	begin_macro(str, 1);
+	next();
+	expr_eq();
+	end_macro();
+	restore_parse_state(&saved_parse_state);
+	break;
+    }
     // special qnan , snan and infinity values
     case TOK___NAN__:
         vpush64(VT_DOUBLE, 0x7ff8000000000000ULL);
