@@ -15,6 +15,7 @@
 #define ELF_PAGE_SIZE  0x200000
 
 #define HAVE_SECTION_RELOC
+#define PCRELATIVE_DLLPLT 1
 
 #else /* !TARGET_DEFS_ONLY */
 

@@ -1052,11 +1052,21 @@ ST_FUNC void build_got_entries(TCCState *s1)
             /* Proceed with PLT/GOT [entry] creation if any of the following
                condition is met:
                - it is an undefined reference (dynamic relocation needed)
-               - symbol is absolute (probably created by tcc_add_symbol)
+               - symbol is absolute (probably created by tcc_add_symbol and
+                 thus might be too far from application code)
                - relocation requires a PLT/GOT (BUILD_GOTPLT_ENTRY or
                  ALWAYS_GOTPLT_ENTRY). */
             if (sym->st_shndx != SHN_UNDEF &&
                 sym->st_shndx != SHN_ABS &&
+                relocs_info[type].gotplt_entry == AUTO_GOTPLT_ENTRY)
+                continue;
+
+            /* Building a dynamic library but target is not capable of PC
+               relative PLT entries. It can thus only use PLT entries if
+               it expects one to be used (ALWAYS_GOTPLT_ENTRY). */
+            if (sym->st_shndx == SHN_UNDEF &&
+                s1->output_type == TCC_OUTPUT_DLL &&
+                !PCRELATIVE_DLLPLT &&
                 relocs_info[type].gotplt_entry == AUTO_GOTPLT_ENTRY)
                 continue;
 

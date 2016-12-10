@@ -15,6 +15,7 @@
 #define ELF_PAGE_SIZE  0x1000
 
 #define HAVE_SECTION_RELOC
+#define PCRELATIVE_DLLPLT 1
 
 enum float_abi {
     ARM_SOFTFP_FLOAT,
