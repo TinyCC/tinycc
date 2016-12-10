@@ -721,8 +721,8 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
            Note 1: in tcc -run mode we go through PLT to avoid range issues
            Note 2: symbols compiled with libtcc and later added with
            tcc_add_symbol are not dynamic and thus have symattr NULL */
-        if (relocs_info[type].gotplt_entry != NO_GOTPLT_ENTRY &&
-            relocs_info[type].code_reloc && symattr && symattr->plt_offset)
+        if (gotplt_entry_type(type) != NO_GOTPLT_ENTRY &&
+            code_reloc(type) && symattr && symattr->plt_offset)
             tgt = s1->plt->sh_addr + symattr->plt_offset;
 #if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
         tgt += rel->r_addend;
@@ -1010,7 +1010,7 @@ static unsigned long put_got_entry(TCCState *s1, int dyn_reloc_type,
 
         } else if (s1->output_type == TCC_OUTPUT_MEMORY ||
                    ELFW(ST_BIND)(sym->st_info) == STB_WEAK ||
-                   relocs_info[reloc_type].gotplt_entry == ALWAYS_GOTPLT_ENTRY)
+                   gotplt_entry_type(reloc_type) == ALWAYS_GOTPLT_ENTRY)
             index = put_elf_sym(s1->dynsym, offset, size, info, 0,
                                 sym->st_shndx, name);
         else
@@ -1032,7 +1032,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
     Section *s;
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
-    int i, type, reloc_type, sym_index;
+    int i, type, gotplt_entry, reloc_type, sym_index;
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -1043,13 +1043,11 @@ ST_FUNC void build_got_entries(TCCState *s1)
             continue;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
+            gotplt_entry = gotplt_entry_type(type);
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
-            if (type >= R_NUM || !relocs_info[type].known)
-                tcc_error("Unknown relocation: %d\n", type);
-
-            if (relocs_info[type].gotplt_entry == NO_GOTPLT_ENTRY)
+            if (gotplt_entry == NO_GOTPLT_ENTRY)
                 continue;
 
             /* Proceed with PLT/GOT [entry] creation if any of the following
@@ -1061,7 +1059,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
                  ALWAYS_GOTPLT_ENTRY). */
             if (sym->st_shndx != SHN_UNDEF &&
                 sym->st_shndx != SHN_ABS &&
-                relocs_info[type].gotplt_entry == AUTO_GOTPLT_ENTRY)
+                gotplt_entry == AUTO_GOTPLT_ENTRY)
                 continue;
 
             /* Building a dynamic library but target is not capable of PC
@@ -1070,7 +1068,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
             if (sym->st_shndx == SHN_UNDEF &&
                 s1->output_type == TCC_OUTPUT_DLL &&
                 !PCRELATIVE_DLLPLT &&
-                relocs_info[type].gotplt_entry == AUTO_GOTPLT_ENTRY)
+                gotplt_entry == AUTO_GOTPLT_ENTRY)
                 continue;
 
 #ifdef TCC_TARGET_X86_64
@@ -1084,10 +1082,10 @@ ST_FUNC void build_got_entries(TCCState *s1)
             if (!s1->got)
                 build_got(s1);
 
-            if (relocs_info[type].gotplt_entry == BUILD_GOT_ONLY)
+            if (gotplt_entry == BUILD_GOT_ONLY)
                 continue;
 
-            if (relocs_info[type].code_reloc)
+            if (code_reloc(type))
                 reloc_type = R_JMP_SLOT;
             else
                 reloc_type = R_GLOB_DAT;

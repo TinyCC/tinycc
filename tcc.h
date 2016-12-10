@@ -1312,26 +1312,6 @@ typedef struct {
     unsigned int n_value;        /* value of symbol */
 } Stab_Sym;
 
-/* Wether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
-   that unknown relocation don't create a GOT or PLT entry */
-enum gotplt_entry {
-    NO_GOTPLT_ENTRY,	/* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
-    BUILD_GOT_ONLY,	/* only build GOT (eg. TPOFF relocs) */
-    AUTO_GOTPLT_ENTRY,	/* generate if sym is UNDEF */
-    ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
-};
-
-/* what kind of relocation is it */
-struct reloc_info {
-    int known;          /* true for known relocation */
-    int code_reloc;	/* if false, that's a data reloc */
-    int gotplt_entry;	/* wether and when to create a GOT/PLT entry */
-};
-
-#define INIT_RELOC_INFO(rtype, code_reloc, gotplt_entry) \
-  [rtype] = {1, code_reloc, gotplt_entry},
-ST_DATA struct reloc_info relocs_info[R_NUM];
-
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
@@ -1406,6 +1386,20 @@ ST_FUNC void minp(void);
 ST_INLN void inp(void);
 ST_FUNC int handle_eob(void);
 #endif
+
+/* ------------ xxx-link.c ------------ */
+
+/* Wether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
+   that unknown relocation don't create a GOT or PLT entry */
+enum gotplt_entry {
+    NO_GOTPLT_ENTRY,	/* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
+    BUILD_GOT_ONLY,	/* only build GOT (eg. TPOFF relocs) */
+    AUTO_GOTPLT_ENTRY,	/* generate if sym is UNDEF */
+    ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
+};
+
+ST_FUNC int code_reloc (int reloc_type);
+ST_FUNC int gotplt_entry_type (int reloc_type);
 
 /* ------------ xxx-gen.c ------------ */
 

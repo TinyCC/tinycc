@@ -21,17 +21,52 @@
 
 #include "tcc.h"
 
-ST_DATA struct reloc_info relocs_info[R_NUM] = {
-    INIT_RELOC_INFO (R_C60_32, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60LO16, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60HI16, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60_GOTOFF, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_C60_GOTPC, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_C60_GOT32, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60_PLT32, 1, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60_GLOB_DAT, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_C60_JMP_SLOT, 1, NO_GOTPLT_ENTRY)
-};
+/* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+   relocations, returns -1. */
+int code_reloc (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_C60_32:
+	case R_C60LO16:
+	case R_C60HI16:
+        case R_C60_GOT32:
+        case R_C60_GOTOFF:
+        case R_C60_GOTPC:
+        case R_C60_COPY:
+            return 0;
+
+        case R_C60_PLT32:
+            return 1;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
+/* Returns an enumerator to describe wether and when the relocation needs a
+   GOT and/or PLT entry to be created. See tcc.h for a description of the
+   different values. */
+int gotplt_entry_type (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_C60_32:
+	case R_C60LO16:
+	case R_C60HI16:
+        case R_C60_COPY:
+            return NO_GOTPLT_ENTRY;
+
+        case R_C60_GOTOFF:
+        case R_C60_GOTPC:
+            return BUILD_GOT_ONLY;
+
+        case R_C60_PLT32:
+        case R_C60_GOT32:
+            return ALWAYS_GOTPLT_ENTRY;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
 
 void relocate_init(Section *sr) {}
 

@@ -21,20 +21,64 @@
 
 #include "tcc.h"
 
+/* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+   relocations, returns -1. */
+int code_reloc (int reloc_type)
+{
+    switch (reloc_type) {
+	case R_386_16:
+        case R_386_32:
+	case R_386_GOTPC:
+	case R_386_GOTOFF:
+	case R_386_GOT32:
+	case R_386_GOT32X:
+	case R_386_GLOB_DAT:
+	case R_386_COPY:
+            return 0;
+
+	case R_386_PC16:
+	case R_386_PC32:
+	case R_386_PLT32:
+	case R_386_JMP_SLOT:
+            return 1;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
+/* Returns an enumerator to describe wether and when the relocation needs a
+   GOT and/or PLT entry to be created. See tcc.h for a description of the
+   different values. */
+int gotplt_entry_type (int reloc_type)
+{
+    switch (reloc_type) {
+	case R_386_16:
+        case R_386_32:
+	case R_386_GLOB_DAT:
+	case R_386_JMP_SLOT:
+	case R_386_COPY:
+            return NO_GOTPLT_ENTRY;
+
+	case R_386_PC16:
+	case R_386_PC32:
+            return AUTO_GOTPLT_ENTRY;
+
+	case R_386_GOTPC:
+	case R_386_GOTOFF:
+            return BUILD_GOT_ONLY;
+
+	case R_386_GOT32:
+	case R_386_GOT32X:
+	case R_386_PLT32:
+            return ALWAYS_GOTPLT_ENTRY;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
 static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
-ST_DATA struct reloc_info relocs_info[R_NUM] = {
-    INIT_RELOC_INFO (R_386_32, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_PC32, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_PLT32, 1, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_GLOB_DAT, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_JMP_SLOT, 1, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_GOTPC, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_386_GOTOFF, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_386_GOT32, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_GOT32X, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_16, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_386_PC16, 1, AUTO_GOTPLT_ENTRY)
-};
 
 void relocate_init(Section *sr)
 {

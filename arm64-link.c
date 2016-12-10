@@ -20,22 +20,66 @@
 
 #include "tcc.h"
 
-ST_DATA struct reloc_info relocs_info[R_NUM] = {
-    INIT_RELOC_INFO (R_AARCH64_ABS32, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_ABS64, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G0_NC, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G1_NC, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G2_NC, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_MOVW_UABS_G3, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_ADR_PREL_PG_HI21, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_ADD_ABS_LO12_NC, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_JUMP26, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_CALL26, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_ADR_GOT_PAGE, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_LD64_GOT_LO12_NC, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_GLOB_DAT, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_AARCH64_JUMP_SLOT, 1, NO_GOTPLT_ENTRY)
-};
+/* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+   relocations, returns -1. */
+int code_reloc (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_AARCH64_ABS32:
+        case R_AARCH64_ABS64:
+        case R_AARCH64_MOVW_UABS_G0_NC:
+        case R_AARCH64_MOVW_UABS_G1_NC:
+        case R_AARCH64_MOVW_UABS_G2_NC:
+        case R_AARCH64_MOVW_UABS_G3:
+        case R_AARCH64_ADR_PREL_PG_HI21:
+        case R_AARCH64_ADD_ABS_LO12_NC:
+        case R_AARCH64_ADR_GOT_PAGE:
+        case R_AARCH64_LD64_GOT_LO12_NC:
+        case R_AARCH64_GLOB_DAT:
+        case R_AARCH64_COPY:
+            return 0;
+
+        case R_AARCH64_JUMP26:
+        case R_AARCH64_CALL26:
+        case R_AARCH64_JUMP_SLOT:
+            return 1;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
+/* Returns an enumerator to describe wether and when the relocation needs a
+   GOT and/or PLT entry to be created. See tcc.h for a description of the
+   different values. */
+int gotplt_entry_type (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_AARCH64_ABS32:
+        case R_AARCH64_ABS64:
+        case R_AARCH64_MOVW_UABS_G0_NC:
+        case R_AARCH64_MOVW_UABS_G1_NC:
+        case R_AARCH64_MOVW_UABS_G2_NC:
+        case R_AARCH64_MOVW_UABS_G3:
+        case R_AARCH64_ADR_PREL_PG_HI21:
+        case R_AARCH64_ADD_ABS_LO12_NC:
+        case R_AARCH64_GLOB_DAT:
+        case R_AARCH64_JUMP_SLOT:
+        case R_AARCH64_COPY:
+            return NO_GOTPLT_ENTRY;
+
+        case R_AARCH64_JUMP26:
+        case R_AARCH64_CALL26:
+            return AUTO_GOTPLT_ENTRY;
+
+        case R_AARCH64_ADR_GOT_PAGE:
+        case R_AARCH64_LD64_GOT_LO12_NC:
+            return ALWAYS_GOTPLT_ENTRY;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
 
 void relocate_init(Section *sr) {}
 

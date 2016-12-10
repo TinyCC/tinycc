@@ -26,29 +26,80 @@ enum float_abi {
 
 #include "tcc.h"
 
-ST_DATA struct reloc_info relocs_info[R_NUM] = {
-    INIT_RELOC_INFO (R_ARM_PC24, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_CALL, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_JUMP24, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_PLT32, 1, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_THM_PC22, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_THM_JUMP24, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_MOVT_ABS, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_MOVW_ABS_NC, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_THM_MOVT_ABS, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_THM_MOVW_ABS_NC, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_PREL31, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_ABS32, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_REL32, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_GOTPC, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_ARM_GOTOFF, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_ARM_GOT32, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_COPY, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_V4BX, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_GLOB_DAT, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_JUMP_SLOT, 1, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_ARM_NONE, 0, NO_GOTPLT_ENTRY)
-};
+/* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+   relocations, returns -1. */
+int code_reloc (int reloc_type)
+{
+    switch (reloc_type) {
+	case R_ARM_MOVT_ABS:
+	case R_ARM_MOVW_ABS_NC:
+	case R_ARM_THM_MOVT_ABS:
+	case R_ARM_THM_MOVW_ABS_NC:
+	case R_ARM_ABS32:
+	case R_ARM_REL32:
+	case R_ARM_GOTPC:
+	case R_ARM_GOTOFF:
+	case R_ARM_GOT32:
+	case R_ARM_COPY:
+	case R_ARM_GLOB_DAT:
+	case R_ARM_NONE:
+            return 0;
+
+        case R_ARM_PC24:
+        case R_ARM_CALL:
+	case R_ARM_JUMP24:
+	case R_ARM_PLT32:
+	case R_ARM_THM_PC22:
+	case R_ARM_THM_JUMP24:
+	case R_ARM_PREL31:
+	case R_ARM_V4BX:
+	case R_ARM_JUMP_SLOT:
+            return 1;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
+/* Returns an enumerator to describe wether and when the relocation needs a
+   GOT and/or PLT entry to be created. See tcc.h for a description of the
+   different values. */
+int gotplt_entry_type (int reloc_type)
+{
+    switch (reloc_type) {
+	case R_ARM_NONE:
+	case R_ARM_COPY:
+	case R_ARM_GLOB_DAT:
+	case R_ARM_JUMP_SLOT:
+            return NO_GOTPLT_ENTRY;
+
+        case R_ARM_PC24:
+        case R_ARM_CALL:
+	case R_ARM_JUMP24:
+	case R_ARM_PLT32:
+	case R_ARM_THM_PC22:
+	case R_ARM_THM_JUMP24:
+	case R_ARM_MOVT_ABS:
+	case R_ARM_MOVW_ABS_NC:
+	case R_ARM_THM_MOVT_ABS:
+	case R_ARM_THM_MOVW_ABS_NC:
+	case R_ARM_PREL31:
+	case R_ARM_ABS32:
+	case R_ARM_REL32:
+	case R_ARM_V4BX:
+            return AUTO_GOTPLT_ENTRY;
+
+	case R_ARM_GOTPC:
+	case R_ARM_GOTOFF:
+            return BUILD_GOT_ONLY;
+
+	case R_ARM_GOT32:
+            return ALWAYS_GOTPLT_ENTRY;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
 
 void relocate_init(Section *sr) {}
 

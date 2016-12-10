@@ -21,21 +21,66 @@
 
 #include "tcc.h"
 
+/* Returns 1 for a code relocation, 0 for a data relocation. For unknown
+   relocations, returns -1. */
+int code_reloc (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_X86_64_32:
+        case R_X86_64_32S:
+        case R_X86_64_64:
+        case R_X86_64_GOTPCREL:
+        case R_X86_64_GOTPCRELX:
+        case R_X86_64_REX_GOTPCRELX:
+        case R_X86_64_GOTTPOFF:
+        case R_X86_64_GOT32:
+        case R_X86_64_GLOB_DAT:
+        case R_X86_64_COPY:
+            return 0;
+
+        case R_X86_64_PC32:
+        case R_X86_64_PLT32:
+        case R_X86_64_JUMP_SLOT:
+            return 1;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
+/* Returns an enumerator to describe wether and when the relocation needs a
+   GOT and/or PLT entry to be created. See tcc.h for a description of the
+   different values. */
+int gotplt_entry_type (int reloc_type)
+{
+    switch (reloc_type) {
+        case R_X86_64_GLOB_DAT:
+        case R_X86_64_JUMP_SLOT:
+        case R_X86_64_COPY:
+            return NO_GOTPLT_ENTRY;
+
+        case R_X86_64_32:
+        case R_X86_64_32S:
+        case R_X86_64_64:
+        case R_X86_64_PC32:
+            return AUTO_GOTPLT_ENTRY;
+
+        case R_X86_64_GOTTPOFF:
+            return BUILD_GOT_ONLY;
+
+        case R_X86_64_GOT32:
+        case R_X86_64_GOTPCREL:
+        case R_X86_64_GOTPCRELX:
+	case R_X86_64_REX_GOTPCRELX:
+        case R_X86_64_PLT32:
+            return ALWAYS_GOTPLT_ENTRY;
+    }
+
+    tcc_error ("Unknown relocation type: %d", reloc_type);
+    return -1;
+}
+
 static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
-ST_DATA struct reloc_info relocs_info[R_NUM] = {
-    INIT_RELOC_INFO (R_X86_64_64, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_32, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_32S, 0, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_PC32, 1, AUTO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_PLT32, 1, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_GLOB_DAT, 0, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_JUMP_SLOT, 1, NO_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_GOTPCREL, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_GOTPCRELX, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_REX_GOTPCRELX, 0, ALWAYS_GOTPLT_ENTRY)
-    INIT_RELOC_INFO (R_X86_64_GOTTPOFF, 0, BUILD_GOT_ONLY)
-    INIT_RELOC_INFO (R_X86_64_GOT32, 0, ALWAYS_GOTPLT_ENTRY)
-};
 
 void relocate_init(Section *sr)
 {
