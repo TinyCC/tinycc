@@ -1009,6 +1009,7 @@ static unsigned long put_got_entry(TCCState *s1, int dyn_reloc_type,
             esym->st_value = offset;
 
         } else if (s1->output_type == TCC_OUTPUT_MEMORY ||
+                   ELFW(ST_BIND)(sym->st_info) == STB_WEAK ||
                    relocs_info[reloc_type].gotplt_entry == ALWAYS_GOTPLT_ENTRY)
             index = put_elf_sym(s1->dynsym, offset, size, info, 0,
                                 sym->st_shndx, name);
