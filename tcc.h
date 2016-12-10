@@ -1326,11 +1326,10 @@ struct reloc_info {
     int known;          /* true for known relocation */
     int code_reloc;	/* if false, that's a data reloc */
     int gotplt_entry;	/* wether and when to create a GOT/PLT entry */
-    int pltoff_addend;	/* wether to store the PLT offset in addend */
 };
 
-#define INIT_RELOC_INFO(rtype, code_reloc, gotplt_entry, pltoff_addend) \
-  [rtype] = {1, code_reloc, gotplt_entry, pltoff_addend},
+#define INIT_RELOC_INFO(rtype, code_reloc, gotplt_entry) \
+  [rtype] = {1, code_reloc, gotplt_entry},
 ST_DATA struct reloc_info relocs_info[R_NUM];
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
