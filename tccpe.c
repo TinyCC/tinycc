@@ -703,6 +703,7 @@ static int pe_write(struct pe_info *pe)
         pe_header.opthdr.SizeOfStackReserve = pe->s1->pe_stack_size;
     if (PE_DLL == pe->type)
         pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
+    pe_header.filehdr.Characteristics |= pe->s1->pe_characteristics;
 
     sum = 0;
     pe_fwrite(&pe_header, sizeof pe_header, op, &sum);

@@ -1370,6 +1370,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "soname=", &p)) {
             s->soname = copy_linker_arg(p);
 #ifdef TCC_TARGET_PE
+        } else if (link_option(option, "large-address-aware", &p)) {
+            s->pe_characteristics |= 0x20;
         } else if (link_option(option, "file-alignment=", &p)) {
             s->pe_file_align = strtoul(p, &end, 16);
         } else if (link_option(option, "stack=", &p)) {
