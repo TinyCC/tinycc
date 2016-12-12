@@ -35,7 +35,6 @@
  DEF_ASM(rbp)
  DEF_ASM(rsi)
  DEF_ASM(rdi)
- DEF_ASM(rip)
 #endif
  DEF_ASM(mm0)
  DEF_ASM(mm1)
@@ -92,6 +91,7 @@
  DEF_ASM(fs)
  DEF_ASM(gs)
  DEF_ASM(st)
+ DEF_ASM(rip)
 
  /* generic two operands */
  DEF_BWLX(mov)
