@@ -1121,7 +1121,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
     /* after immediate operands, adjust pc-relative address */
     if (pc)
-        add32le(text_section->data + pc - 4, pc - ind);
+        add32le(cur_text_section->data + pc - 4, pc - ind);
 }
 
 /* return the constraint priority (we allocate first the lowest
