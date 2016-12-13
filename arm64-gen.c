@@ -1326,7 +1326,8 @@ static int arm64_iconst(uint64_t *val, SValue *sv)
         return 0;
     if (val) {
         int t = sv->type.t;
-        *val = ((t & VT_BTYPE) == VT_LLONG ? sv->c.i :
+	int bt = t & VT_BTYPE;
+        *val = ((bt == VT_LLONG || bt == VT_PTR) ? sv->c.i :
                 (uint32_t)sv->c.i |
                 (t & VT_UNSIGNED ? 0 : -(sv->c.i & 0x80000000)));
     }
