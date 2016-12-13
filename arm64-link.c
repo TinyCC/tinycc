@@ -27,6 +27,7 @@ int code_reloc (int reloc_type)
     switch (reloc_type) {
         case R_AARCH64_ABS32:
         case R_AARCH64_ABS64:
+	case R_AARCH64_PREL32:
         case R_AARCH64_MOVW_UABS_G0_NC:
         case R_AARCH64_MOVW_UABS_G1_NC:
         case R_AARCH64_MOVW_UABS_G2_NC:
@@ -57,6 +58,7 @@ int gotplt_entry_type (int reloc_type)
     switch (reloc_type) {
         case R_AARCH64_ABS32:
         case R_AARCH64_ABS64:
+	case R_AARCH64_PREL32:
         case R_AARCH64_MOVW_UABS_G0_NC:
         case R_AARCH64_MOVW_UABS_G1_NC:
         case R_AARCH64_MOVW_UABS_G2_NC:
@@ -165,6 +167,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
         case R_AARCH64_ABS32:
             write32le(ptr, val);
             return;
+	case R_AARCH64_PREL32:
+	    write32le(ptr, val - addr);
+	    return;
         case R_AARCH64_MOVW_UABS_G0_NC:
             write32le(ptr, ((read32le(ptr) & 0xffe0001f) |
                             (val & 0xffff) << 5));
