@@ -5819,14 +5819,16 @@ static void block(int *bsym, int *csym, int is_expr)
         vla_sp_restore();
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
-	nocode_wanted = saved_nocode_wanted;
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
-        gexpr();
-	c = gvtst(0, 0);
-	if (!nocode_wanted)
+	gexpr();
+	if (!nocode_wanted) {
+	    c = gvtst(0, 0);
 	    gsym_addr(c, d);
+	} else
+	  vtop--;
+	nocode_wanted = saved_nocode_wanted;
         skip(')');
         gsym(a);
         skip(';');
