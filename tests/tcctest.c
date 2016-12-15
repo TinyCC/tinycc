@@ -1634,15 +1634,6 @@ void bitfield_test(void)
     st2.f3 = a;
     st2.f2++;
     printf("%lld %lld %lld\n", st2.f1, st2.f2, st2.f3);
-    struct sbf3 {
-        int f1 : 7;
-        int f2 : 1;
-        char f3;
-        int f4 : 8;
-        int f5 : 1;
-        int f6 : 16;
-    } st3;
-    printf("sizeof(st3) = %d\n", sizeof(st3));
 }
 
 #ifdef __x86_64__

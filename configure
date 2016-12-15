@@ -38,6 +38,7 @@ bigendian="no"
 mingw32="no"
 LIBSUF=".a"
 EXESUF=""
+DLLSUF=".so"
 tcc_sysincludepaths=""
 tcc_libpaths=""
 tcc_crtprefix=""
@@ -222,6 +223,7 @@ if test "$mingw32" = "yes" ; then
     infodir="${sharedir}/info"
     LIBSUF=".lib"
     EXESUF=".exe"
+    DLLSUF=".dll"
 else
     if test -z "$prefix" ; then
       prefix="/usr/local"
@@ -416,6 +418,7 @@ CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 LIBSUF=$LIBSUF
 EXESUF=$EXESUF
+DLLSUF=$DLLSUF
 EOF
 
 print_inc() {

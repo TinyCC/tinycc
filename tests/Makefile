@@ -13,6 +13,7 @@ TESTS = \
  hello-run \
  libtest \
  test3 \
+ dlltest \
  abitest \
  vla_test-run \
  tests2-dir \
@@ -39,6 +40,9 @@ ifeq (,$(filter arm64 i386 x86-64,$(ARCH)))
 endif
 ifeq ($(CONFIG_arm_eabi),yes)
  TESTS := $(filter-out test3,$(TESTS))
+endif
+ifeq (,$(filter i386 x86-64,$(ARCH)))
+ TESTS := $(filter-out dlltest,$(TESTS))
 endif
 
 # run local version of tcc with local libraries and includes
@@ -125,6 +129,22 @@ test4: tcctest.c test.ref
 	$(TCC) -static -o tcctest2 $<
 	./tcctest2 > test2.out
 	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
+
+# use tcc to create libtcc.so/.dll and the tcc(.exe) frontend and run them
+dlltest:
+	@echo ------------ $@ ------------
+	$(TCC) -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL ../libtcc.c $(LIBS) -shared -o libtcc2$(DLLSUF)
+	$(TCC) $(NATIVE_DEFINES) ../tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
+	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run ../examples/ex1.c
+ifndef CONFIG_WIN32
+	@echo ------------ $@ with PIC ------------
+	$(CC) $(CFLAGS) -fPIC -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL -c ../libtcc.c
+	$(TCC) libtcc.o $(LIBS) -shared -o libtcc2$(DLLSUF)
+	$(TCC) $(NATIVE_DEFINES) ../tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
+	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run ../examples/ex1.c
+endif
+	@rm tcc2$(EXESUF) libtcc2$(DLLSUF)
+
 
 # memory and bound check auto test
 BOUNDS_OK  = 1 4 8 10 14
