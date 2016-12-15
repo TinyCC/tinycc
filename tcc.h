@@ -271,8 +271,6 @@
 # define ElfW_Rel ElfW(Rela)
 # define SHT_RELX SHT_RELA
 # define REL_SECTION_FMT ".rela%s"
-/* XXX: DLL with PLT would only work with x86-64 for now */
-# define TCC_OUTPUT_DLL_WITH_PLT
 #else
 # define ELFCLASSW ELFCLASS32
 # define ElfW(type) Elf##32##_##type
@@ -577,8 +575,10 @@ typedef struct ASMOperand {
 
 /* extra symbol attributes (not in symbol table) */
 struct sym_attr {
-    unsigned long got_offset;
-    unsigned long plt_offset;
+    unsigned got_offset;
+    unsigned plt_offset;
+    int plt_sym;
+    int dyn_index;
 #ifdef TCC_TARGET_ARM
     unsigned char plt_thumb_stub:1;
 #endif
@@ -633,7 +633,7 @@ struct TCCState {
     addr_t text_addr; /* address of text section */
     int has_text_addr;
 
-    unsigned long section_align; /* section alignment */
+    unsigned section_align; /* section alignment */
 
     char *init_symbol; /* symbols to call at load-time (not used currently) */
     char *fini_symbol; /* symbols to call at unload-time (not used currently) */
@@ -714,8 +714,6 @@ struct TCCState {
     /* got & plt handling */
     Section *got;
     Section *plt;
-    /* give the correspondance from symtab indexes to dynsym indexes */
-    int *symtab_to_dynsym;
 
     /* temporary dynamic symbol sections (for dll loading) */
     Section *dynsymtab_section;
@@ -1332,9 +1330,6 @@ ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
 ST_FUNC void tccelf_stab_new(TCCState *s);
 
-/* return offset of 'ptr' from start of section 'sec' */
-#define OFFSET_FROM_SECTION_START(sec, ptr) ((size_t)ptr - (size_t)sec->data)
-
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
@@ -1362,17 +1357,16 @@ ST_FUNC void put_stabd(int type, int other, int desc);
 ST_FUNC void relocate_common_syms(void);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
-ST_FUNC void relocate_plt(TCCState *s1);
 
 ST_FUNC void tcc_add_linker_symbols(TCCState *s1);
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd);
 ST_FUNC void tcc_add_bcheck(TCCState *s1);
-
-ST_FUNC void build_got_entries(TCCState *s1);
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 
+ST_FUNC void build_got_entries(TCCState *s1);
+ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err);
 #if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
 ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
@@ -1400,6 +1394,10 @@ enum gotplt_entry {
 
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC int gotplt_entry_type (int reloc_type);
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
+ST_FUNC void relocate_init(Section *sr);
+ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val);
+ST_FUNC void relocate_plt(TCCState *s1);
 
 /* ------------ xxx-gen.c ------------ */
 
@@ -1505,11 +1503,6 @@ ST_FUNC void gen_clear_cache(void);
 /* ------------ c67-gen.c ------------ */
 #ifdef TCC_TARGET_C67
 #endif
-
-/* ------------ xxx-link.c ------------ */
-
-ST_FUNC void relocate_init(Section *sr);
-ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val);
 
 /* ------------ tcccoff.c ------------ */
 

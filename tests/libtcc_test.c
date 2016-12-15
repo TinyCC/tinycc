@@ -15,9 +15,12 @@ int add(int a, int b)
     return a + b;
 }
 
+const char hello[] = "Hello World!";
+
 char my_program[] =
 "#include <tcclib.h>\n" /* include the "Simple libc header for TCC" */
 "extern int add(int a, int b);\n"
+"extern const char hello[];\n"
 "int fib(int n)\n"
 "{\n"
 "    if (n <= 2)\n"
@@ -28,7 +31,7 @@ char my_program[] =
 "\n"
 "int foo(int n)\n"
 "{\n"
-"    printf(\"Hello World!\\n\");\n"
+"    printf(\"%s\\n\", hello);\n"
 "    printf(\"fib(%d) = %d\\n\", n, fib(n));\n"
 "    printf(\"add(%d, %d) = %d\\n\", n, 2 * n, add(n, 2 * n));\n"
 "    return 0;\n"
@@ -65,9 +68,10 @@ int main(int argc, char **argv)
     if (tcc_compile_string(s, my_program) == -1)
         return 1;
 
-    /* as a test, we add a symbol that the compiled program can use.
+    /* as a test, we add symbols that the compiled program can use.
        You may also open a dll with tcc_add_dll() and use symbols from that */
     tcc_add_symbol(s, "add", add);
+    tcc_add_symbol(s, "hello", hello);
 
     /* relocate the code */
     if (tcc_relocate(s, TCC_RELOCATE_AUTO) < 0)

@@ -14,8 +14,8 @@
 #define ELF_START_ADDR 0x00008000
 #define ELF_PAGE_SIZE  0x1000
 
-#define HAVE_SECTION_RELOC
 #define PCRELATIVE_DLLPLT 1
+#define RELOCATE_DLLPLT 0
 
 enum float_abi {
     ARM_SOFTFP_FLOAT,
@@ -99,6 +99,69 @@ int gotplt_entry_type (int reloc_type)
 
     tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
+}
+
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+{
+    Section *plt = s1->plt;
+    uint8_t *p;
+    unsigned plt_offset;
+
+    /* when building a DLL, GOT entry accesses must be done relative to
+       start of GOT (see x86_64 examble above)  */
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_error("DLLs unimplemented!");
+
+    /* empty PLT: create PLT0 entry that push address of call site and
+       jump to ld.so resolution routine (GOT + 8) */
+    if (plt->data_offset == 0) {
+        p = section_ptr_add(plt, 20);
+        write32le(p,    0xe52de004); /* push {lr}         */
+        write32le(p+4,  0xe59fe004); /* ldr lr, [pc, #4] */
+        write32le(p+8,  0xe08fe00e); /* add lr, pc, lr    */
+        write32le(p+12, 0xe5bef008); /* ldr pc, [lr, #8]! */
+        /* p+16 is set in relocate_plt */
+    }
+    plt_offset = plt->data_offset;
+
+    if (attr->plt_thumb_stub) {
+        p = section_ptr_add(plt, 4);
+        write32le(p,   0x4778); /* bx pc */
+        write32le(p+2, 0x46c0); /* nop   */
+    }
+    p = section_ptr_add(plt, 16);
+    /* Jump to GOT entry where ld.so initially put address of PLT0 */
+    write32le(p,   0xe59fc004); /* ldr ip, [pc, #4] */
+    write32le(p+4, 0xe08fc00c); /* add ip, pc, ip */
+    write32le(p+8, 0xe59cf000); /* ldr pc, [ip] */
+    /* p + 12 contains offset to GOT entry once patched by relocate_plt */
+    write32le(p+12, got_offset);
+    return plt_offset;
+}
+
+/* relocate the PLT: compute addresses and offsets in the PLT now that final
+   address for PLT and GOT are known (see fill_program_header) */
+ST_FUNC void relocate_plt(TCCState *s1)
+{
+    uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
+
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
+
+    if (p < p_end) {
+        int x = s1->got->sh_addr - s1->plt->sh_addr - 12;
+        write32le(s1->plt->data + 16, x - 16);
+        p += 20;
+        while (p < p_end) {
+            if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
+                p += 4;
+            add32le(p + 12, x + s1->plt->data - p);
+            p += 16;
+        }
+    }
 }
 
 void relocate_init(Section *sr) {}

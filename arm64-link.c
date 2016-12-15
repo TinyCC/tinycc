@@ -13,8 +13,8 @@
 #define ELF_START_ADDR 0x00400000
 #define ELF_PAGE_SIZE 0x1000
 
-#define HAVE_SECTION_RELOC
 #define PCRELATIVE_DLLPLT 1
+#define RELOCATE_DLLPLT 1
 
 #else /* !TARGET_DEFS_ONLY */
 
@@ -79,6 +79,74 @@ int gotplt_entry_type (int reloc_type)
 
     tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
+}
+
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+{
+    Section *plt = s1->plt;
+    uint8_t *p;
+    unsigned plt_offset;
+
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_error("DLLs unimplemented!");
+
+    if (plt->data_offset == 0) {
+        section_ptr_add(plt, 32);
+    }
+    plt_offset = plt->data_offset;
+
+    p = section_ptr_add(plt, 16);
+    write32le(p, got_offset);
+    write32le(p + 4, (uint64_t) got_offset >> 32);
+    return plt_offset;
+}
+
+/* relocate the PLT: compute addresses and offsets in the PLT now that final
+   address for PLT and GOT are known (see fill_program_header) */
+ST_FUNC void relocate_plt(TCCState *s1)
+{
+    uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
+
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
+
+    if (p < p_end) {
+        uint64_t plt = s1->plt->sh_addr;
+        uint64_t got = s1->got->sh_addr;
+        uint64_t off = (got >> 12) - (plt >> 12);
+        if ((off + ((uint32_t)1 << 20)) >> 21)
+            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", off, got, plt);
+        write32le(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
+        write32le(p + 4, (0x90000010 | // adrp x16,...
+			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
+        write32le(p + 8, (0xf9400211 | // ldr x17,[x16,#...]
+			  (got & 0xff8) << 7));
+        write32le(p + 12, (0x91000210 | // add x16,x16,#...
+			   (got & 0xfff) << 10));
+        write32le(p + 16, 0xd61f0220); // br x17
+        write32le(p + 20, 0xd503201f); // nop
+        write32le(p + 24, 0xd503201f); // nop
+        write32le(p + 28, 0xd503201f); // nop
+        p += 32;
+        while (p < p_end) {
+            uint64_t pc = plt + (p - s1->plt->data);
+            uint64_t addr = got + read64le(p);
+            uint64_t off = (addr >> 12) - (pc >> 12);
+            if ((off + ((uint32_t)1 << 20)) >> 21)
+                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", off, addr, pc);
+            write32le(p, (0x90000010 | // adrp x16,...
+			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
+            write32le(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
+			      (addr & 0xff8) << 7));
+            write32le(p + 8, (0x91000210 | // add x16,x16,#...
+			      (addr & 0xfff) << 10));
+            write32le(p + 12, 0xd61f0220); // br x17
+            p += 16;
+        }
+    }
 }
 
 void relocate_init(Section *sr) {}

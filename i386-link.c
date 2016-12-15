@@ -14,8 +14,8 @@
 #define ELF_START_ADDR 0x08048000
 #define ELF_PAGE_SIZE  0x1000
 
-#define HAVE_SECTION_RELOC
 #define PCRELATIVE_DLLPLT 0
+#define RELOCATE_DLLPLT 0
 
 #else /* !TARGET_DEFS_ONLY */
 
@@ -26,6 +26,7 @@
 int code_reloc (int reloc_type)
 {
     switch (reloc_type) {
+	case R_386_RELATIVE:
 	case R_386_16:
         case R_386_32:
 	case R_386_GOTPC:
@@ -53,6 +54,7 @@ int code_reloc (int reloc_type)
 int gotplt_entry_type (int reloc_type)
 {
     switch (reloc_type) {
+	case R_386_RELATIVE:
 	case R_386_16:
         case R_386_32:
 	case R_386_GLOB_DAT:
@@ -78,6 +80,73 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+{
+    Section *plt = s1->plt;
+    uint8_t *p;
+    int modrm;
+    unsigned plt_offset, relofs;
+
+    /* on i386 if we build a DLL, we add a %ebx offset */
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        modrm = 0xa3;
+    else
+        modrm = 0x25;
+
+    /* empty PLT: create PLT0 entry that pushes the library indentifier
+       (GOT + PTR_SIZE) and jumps to ld.so resolution routine
+       (GOT + 2 * PTR_SIZE) */
+    if (plt->data_offset == 0) {
+        p = section_ptr_add(plt, 16);
+        p[0] = 0xff; /* pushl got + PTR_SIZE */
+        p[1] = modrm + 0x10;
+        write32le(p + 2, PTR_SIZE);
+        p[6] = 0xff; /* jmp *(got + PTR_SIZE * 2) */
+        p[7] = modrm;
+        write32le(p + 8, PTR_SIZE * 2);
+    }
+    plt_offset = plt->data_offset;
+
+    /* The PLT slot refers to the relocation entry it needs via offset.
+       The reloc entry is created below, so its offset is the current
+       data_offset */
+    relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
+
+    /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
+    p = section_ptr_add(plt, 16);
+    p[0] = 0xff; /* jmp *(got + x) */
+    p[1] = modrm;
+    write32le(p + 2, got_offset);
+    p[6] = 0x68; /* push $xxx */
+    write32le(p + 7, relofs);
+    p[11] = 0xe9; /* jmp plt_start */
+    write32le(p + 12, -(plt->data_offset));
+    return plt_offset;
+}
+
+/* relocate the PLT: compute addresses and offsets in the PLT now that final
+   address for PLT and GOT are known (see fill_program_header) */
+ST_FUNC void relocate_plt(TCCState *s1)
+{
+    uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
+
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
+
+    if (p < p_end) {
+        add32le(p + 2, s1->got->sh_addr);
+        add32le(p + 8, s1->got->sh_addr);
+        p += 16;
+        while (p < p_end) {
+            add32le(p + 2, s1->got->sh_addr);
+            p += 16;
+        }
+    }
+}
+
 static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
 
 void relocate_init(Section *sr)
@@ -94,7 +163,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
     switch (type) {
         case R_386_32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
-                esym_index = s1->symtab_to_dynsym[sym_index];
+                esym_index = s1->sym_attrs[sym_index].dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_386_32);
@@ -110,7 +179,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, add
         case R_386_PC32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = s1->symtab_to_dynsym[sym_index];
+                esym_index = s1->sym_attrs[sym_index].dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_386_PC32);

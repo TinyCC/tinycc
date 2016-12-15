@@ -14,8 +14,8 @@
 #define ELF_START_ADDR 0x00000400
 #define ELF_PAGE_SIZE  0x1000
 
-#define HAVE_SECTION_RELOC
 #define PCRELATIVE_DLLPLT 0
+#define RELOCATE_DLLPLT 0
 
 #else /* !TARGET_DEFS_ONLY */
 
@@ -66,6 +66,32 @@ int gotplt_entry_type (int reloc_type)
 
     tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
+}
+
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+{
+    tcc_error("C67 got not implemented");
+    return 0;
+}
+
+/* relocate the PLT: compute addresses and offsets in the PLT now that final
+   address for PLT and GOT are known (see fill_program_header) */
+ST_FUNC void relocate_plt(TCCState *s1)
+{
+    uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
+
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
+
+    if (p < p_end) {
+        /* XXX: TODO */
+        while (p < p_end) {
+            /* XXX: TODO */
+        }
+   }
 }
 
 void relocate_init(Section *sr) {}

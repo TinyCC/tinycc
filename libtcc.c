@@ -941,7 +941,6 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_run_free(s1);
 #endif
 
-    tcc_free(s1->sym_attrs);
     tcc_free(s1);
     tcc_memstats(bench);
 }
