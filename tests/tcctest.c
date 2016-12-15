@@ -610,7 +610,7 @@ struct S_enum {
 enum ELong {
     /* This is either 0 on L32 machines, or a large number
        on L64 machines.  We should be able to store this.  */
-    EL_large = (unsigned long)0xf000 << 32,
+    EL_large = ((unsigned long)0xf000 << 31) << 1,
 };
 
 enum { BIASU = -1U<<31 };
@@ -2028,6 +2028,11 @@ void bitfield_test(void)
     else 
         printf("st1.f2 != -1\n");
 
+#ifndef __i386__
+    /* on i386 we don't correctly support long long bit-fields.
+       The bitfields can straddle long long boundaries (at least with
+       GCC bitfield layout) and code generation isn't prepared for this
+       (would have to work with two words in that case).  */
     /* bit sizes below must be bigger than 32 since GCC doesn't allow
        long-long bitfields whose size is not bigger than int */
     struct sbf2 {
@@ -2042,6 +2047,19 @@ void bitfield_test(void)
     st2.f3 = a;
     st2.f2++;
     printf("%lld %lld %lld\n", st2.f1, st2.f2, st2.f3);
+#endif
+#if 0
+    Disabled for now until further clarification re GCC compatibility
+    struct sbf3 {
+        int f1 : 7;
+        int f2 : 1;
+        char f3;
+        int f4 : 8;
+        int f5 : 1;
+        int f6 : 16;
+    } st3;
+    printf("sizeof(st3) = %d\n", sizeof(st3));
+#endif
 }
 
 #ifdef __x86_64__
@@ -3100,7 +3118,7 @@ void other_constraints_test(void)
 {
     unsigned long ret;
     int var;
-    __asm__ volatile ("movq %P1,%0" : "=r" (ret) : "p" (&var));
+    __asm__ volatile ("mov %P1,%0" : "=r" (ret) : "p" (&var));
     printf ("oc1: %d\n", ret == (unsigned long)&var);
 }
 
@@ -3182,6 +3200,7 @@ void test_high_clobbers(void)
 static long cpu_number;
 void trace_console(long len, long len2)
 {
+#ifdef __x86_64__
     /* This generated invalid code when the emission of the switch
        table isn't disabled.  The asms are necessary to show the bug,
        normal statements don't work (they need to generate some code
@@ -3228,6 +3247,7 @@ void trace_console(long len, long len2)
       {
         printf("huh?\n");
       }
+#endif
 }
 void asm_test(void)
 {

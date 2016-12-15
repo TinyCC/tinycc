@@ -694,14 +694,27 @@ ST_FUNC void gjmp_addr(int a)
 
 ST_FUNC void gtst_addr(int inv, int a)
 {
-    inv ^= (vtop--)->c.i;
-    a -= ind + 2;
-    if (a == (char)a) {
-        g(inv - 32);
-        g(a);
-    } else {
-        g(0x0f);
-        oad(inv - 16, a - 4);
+    int v = vtop->r & VT_VALMASK;
+    if (v == VT_CMP) {
+	inv ^= (vtop--)->c.i;
+	a -= ind + 2;
+	if (a == (char)a) {
+	    g(inv - 32);
+	    g(a);
+	} else {
+	    g(0x0f);
+	    oad(inv - 16, a - 4);
+	}
+    } else if ((v & ~1) == VT_JMP) {
+	if ((v & 1) != inv) {
+	    gjmp_addr(a);
+	    gsym(vtop->c.i);
+	} else {
+	    gsym(vtop->c.i);
+	    o(0x05eb);
+	    gjmp_addr(a);
+	}
+	vtop--;
     }
 }
 
