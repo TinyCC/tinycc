@@ -762,7 +762,7 @@ struct TCCState {
     int nb_libraries; /* number of libs thereof */
     int filetype;
     char *outfile; /* output filename */
-    char *option_m; /* only -m32/-m64 handled */
+    int cross_target; /* -m32/-m64 */
     int print_search_dirs; /* option */
     int option_r; /* option -r */
     int do_bench; /* option -bench */

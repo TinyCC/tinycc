@@ -186,13 +186,13 @@ tail_call:
 #ifdef TAL_DEBUG
     if (al->nb_allocs > 0) {
         uint8_t *p;
-        fprintf(stderr, "TAL_DEBUG: mem leak %d chunks (limit= %d)\n",
+        fprintf(stderr, "TAL_DEBUG: memory leak %d chunk(s) (limit= %d)\n",
                 al->nb_allocs, al->limit);
         p = al->buffer;
         while (p < al->p) {
             tal_header_t *header = (tal_header_t *)p;
             if (header->line_num > 0) {
-                fprintf(stderr, "%s:%d: chunk of %d bytes\n",
+                fprintf(stderr, "%s:%d: chunk of %d bytes leaked\n",
                         header->file_name, header->line_num, header->size);
             }
             p += header->size + sizeof(tal_header_t);

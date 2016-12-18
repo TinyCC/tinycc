@@ -245,7 +245,14 @@ PUB_FUNC void tcc_memstats(int bench)
 
 #define MEM_DEBUG_MAGIC1 0xFEEDDEB1
 #define MEM_DEBUG_MAGIC2 0xFEEDDEB2
-#define MEM_DEBUG_FILE_LEN 15
+#define MEM_DEBUG_MAGIC3 0xFEEDDEB3
+#define MEM_DEBUG_FILE_LEN 40
+#define MEM_DEBUG_CHECK3(header) \
+    ((mem_debug_header_t*)((char*)header + header->size))->magic3
+#define MEM_USER_PTR(header) \
+    ((char *)header + offsetof(mem_debug_header_t, magic3))
+#define MEM_HEADER_PTR(ptr) \
+    (mem_debug_header_t *)((char*)ptr - offsetof(mem_debug_header_t, magic3))
 
 struct mem_debug_header {
     unsigned magic1;
@@ -255,6 +262,7 @@ struct mem_debug_header {
     int line_num;
     char file_name[MEM_DEBUG_FILE_LEN + 1];
     unsigned magic2;
+    unsigned magic3;
 };
 
 typedef struct mem_debug_header mem_debug_header_t;
@@ -263,75 +271,69 @@ static mem_debug_header_t *mem_debug_chain;
 static unsigned mem_cur_size;
 static unsigned mem_max_size;
 
+static mem_debug_header_t *malloc_check(void *ptr, const char *msg)
+{
+    mem_debug_header_t * header = MEM_HEADER_PTR(ptr);
+    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
+        header->magic2 != MEM_DEBUG_MAGIC2 ||
+        MEM_DEBUG_CHECK3(header) != MEM_DEBUG_MAGIC3 ||
+        header->size == (unsigned)-1) {
+        fprintf(stderr, "%s check failed\n", msg);
+        if (header->magic1 == MEM_DEBUG_MAGIC1)
+            fprintf(stderr, "%s:%u: block allocated here.\n",
+                header->file_name, header->line_num);
+        exit(1);
+    }
+    return header;
+}
+
 PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
 {
-    void *ptr;
     int ofs;
-
     mem_debug_header_t *header;
 
-    ptr = malloc(sizeof(mem_debug_header_t) + size);
-    if (!ptr)
+    header = malloc(sizeof(mem_debug_header_t) + size);
+    if (!header)
         tcc_error("memory full (malloc)");
-
-    mem_cur_size += size;
-    if (mem_cur_size > mem_max_size)
-        mem_max_size = mem_cur_size;
-
-    header = (mem_debug_header_t *)ptr;
 
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
     header->size = size;
+    MEM_DEBUG_CHECK3(header) = MEM_DEBUG_MAGIC3;
     header->line_num = line;
-
     ofs = strlen(file) - MEM_DEBUG_FILE_LEN;
     strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
     header->file_name[MEM_DEBUG_FILE_LEN] = 0;
 
     header->next = mem_debug_chain;
     header->prev = NULL;
-
     if (header->next)
         header->next->prev = header;
-
     mem_debug_chain = header;
 
-    ptr = (char *)ptr + sizeof(mem_debug_header_t);
-    return ptr;
+    mem_cur_size += size;
+    if (mem_cur_size > mem_max_size)
+        mem_max_size = mem_cur_size;
+
+    return MEM_USER_PTR(header);
 }
 
 PUB_FUNC void tcc_free_debug(void *ptr)
 {
     mem_debug_header_t *header;
-
     if (!ptr)
         return;
-
-    ptr = (char *)ptr - sizeof(mem_debug_header_t);
-    header = (mem_debug_header_t *)ptr;
-    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
-        header->magic2 != MEM_DEBUG_MAGIC2 ||
-        header->size == (unsigned)-1 )
-    {
-        tcc_error("tcc_free check failed");
-    }
-
+    header = malloc_check(ptr, "tcc_free");
     mem_cur_size -= header->size;
     header->size = (unsigned)-1;
-    
     if (header->next)
         header->next->prev = header->prev;
-
     if (header->prev)
         header->prev->next = header->next;
-
     if (header == mem_debug_chain)
         mem_debug_chain = header->next;
-
-    free(ptr);
+    free(header);
 }
-
 
 PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line)
 {
@@ -345,52 +347,26 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
 {
     mem_debug_header_t *header;
     int mem_debug_chain_update = 0;
-
-    if (!ptr) {
-        ptr = tcc_malloc_debug(size, file, line);
-        return ptr;
-    }
-
-    ptr = (char *)ptr - sizeof(mem_debug_header_t);
-    header = (mem_debug_header_t *)ptr;
-    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
-        header->magic2 != MEM_DEBUG_MAGIC2 ||
-        header->size == (unsigned)-1 )
-    {
-        check_error:
-            tcc_error("tcc_realloc check failed");
-    }
-
-    mem_debug_chain_update = (header == mem_debug_chain);
-
-    mem_cur_size -= header->size;
-    ptr = realloc(ptr, sizeof(mem_debug_header_t) + size);
     if (!ptr)
+        return tcc_malloc_debug(size, file, line);
+    header = malloc_check(ptr, "tcc_realloc");
+    mem_cur_size -= header->size;
+    mem_debug_chain_update = (header == mem_debug_chain);
+    header = realloc(header, sizeof(mem_debug_header_t) + size);
+    if (!header)
         tcc_error("memory full (realloc)");
-
-    header = (mem_debug_header_t *)ptr;
-    if (header->magic1 != MEM_DEBUG_MAGIC1 ||
-        header->magic2 != MEM_DEBUG_MAGIC2)
-    {
-        goto check_error;
-    }
-
+    header->size = size;
+    MEM_DEBUG_CHECK3(header) = MEM_DEBUG_MAGIC3;
+    if (header->next)
+        header->next->prev = header;
+    if (header->prev)
+        header->prev->next = header;
+    if (mem_debug_chain_update)
+        mem_debug_chain = header;
     mem_cur_size += size;
     if (mem_cur_size > mem_max_size)
         mem_max_size = mem_cur_size;
-
-    header->size = size;
-    if (header->next)
-        header->next->prev = header;
-
-    if (header->prev)
-        header->prev->next = header;
-
-    if (mem_debug_chain_update)
-        mem_debug_chain = header;
-
-    ptr = (char *)ptr + sizeof(mem_debug_header_t);
-    return ptr;
+    return MEM_USER_PTR(header);
 }
 
 PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line)
@@ -405,10 +381,8 @@ PUB_FUNC void tcc_memstats(int bench)
 {
     if (mem_cur_size) {
         mem_debug_header_t *header = mem_debug_chain;
-
         fprintf(stderr, "MEM_DEBUG: mem_leak= %d bytes, mem_max_size= %d bytes\n",
             mem_cur_size, mem_max_size);
-
         while (header) {
             fprintf(stderr, "%s:%u: error: %u bytes leaked\n",
                 header->file_name, header->line_num, header->size);
@@ -417,16 +391,10 @@ PUB_FUNC void tcc_memstats(int bench)
 #if MEM_DEBUG-0 == 2
         exit(2);
 #endif
-    }
-    else if (bench)
+    } else if (bench)
         fprintf(stderr, "mem_max_size= %d bytes\n", mem_max_size);
 }
-
-#undef MEM_DEBUG_MAGIC1
-#undef MEM_DEBUG_MAGIC2
-#undef MEM_DEBUG_FILE_LEN
-
-#endif
+#endif /* MEM_DEBUG */
 
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)
@@ -760,7 +728,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     s->alacarte_link = 1;
     s->nocommon = 1;
     s->warn_implicit_function_declaration = 1;
-    s->ms_bitfields = 0;
 
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
@@ -1231,14 +1198,6 @@ typedef struct FlagDef {
     const char *name;
 } FlagDef;
 
-static const FlagDef warning_defs[] = {
-    { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
-    { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
-    { offsetof(TCCState, warn_error), 0, "error" },
-    { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
-      "implicit-function-declaration" },
-};
-
 static int no_flag(const char **pp)
 {
     const char *p = *pp;
@@ -1248,73 +1207,35 @@ static int no_flag(const char **pp)
     return 1;
 }
 
-ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, int nb_flags,
-                    const char *name, int value)
+ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, const char *name)
 {
-    int i;
+    int value, ret;
     const FlagDef *p;
     const char *r;
 
+    value = 1;
     r = name;
     if (no_flag(&r))
-        value = !value;
+        value = 0;
 
-    for(i = 0, p = flags; i < nb_flags; i++, p++) {
-        if (!strcmp(r, p->name))
-            goto found;
-    }
-    return -1;
- found:
-    if (p->flags & FD_INVERT)
-        value = !value;
-    *(int *)((uint8_t *)s + p->offset) = value;
-    return 0;
-}
-
-/* set/reset a warning */
-static int tcc_set_warning(TCCState *s, const char *warning_name, int value)
-{
-    int i;
-    const FlagDef *p;
-
-    if (!strcmp(warning_name, "all")) {
-        for(i = 0, p = warning_defs; i < countof(warning_defs); i++, p++) {
-            if (p->flags & WD_ALL)
-                *(int *)((uint8_t *)s + p->offset) = 1;
+    for (ret = -1, p = flags; p->name; ++p) {
+        if (ret) {
+            if (strcmp(r, p->name))
+                continue;
+        } else {
+            if (0 == (p->flags & WD_ALL))
+                continue;
         }
-        return 0;
-    } else {
-        return set_flag(s, warning_defs, countof(warning_defs),
-                        warning_name, value);
+        if (p->offset) {
+            *(int*)((char *)s + p->offset) =
+                p->flags & FD_INVERT ? !value : value;
+            if (ret)
+                return 0;
+        } else {
+            ret = 0;
+        }
     }
-}
-
-static const FlagDef flag_defs[] = {
-    { offsetof(TCCState, char_is_unsigned), 0, "unsigned-char" },
-    { offsetof(TCCState, char_is_unsigned), FD_INVERT, "signed-char" },
-    { offsetof(TCCState, nocommon), FD_INVERT, "common" },
-    { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
-    { offsetof(TCCState, ms_extensions), 0, "ms-extensions" },
-    { offsetof(TCCState, old_struct_init_code), 0, "old-struct-init-code" },
-    { offsetof(TCCState, dollars_in_identifiers), 0, "dollars-in-identifiers" },
-};
-
-/* set/reset a flag */
-static int tcc_set_flag(TCCState *s, const char *flag_name, int value)
-{
-    return set_flag(s, flag_defs, countof(flag_defs),
-                    flag_name, value);
-}
-
-static const FlagDef m_defs[] = {
-#ifdef TCC_TARGET_X86_64
-    { offsetof(TCCState, nosse), FD_INVERT, "sse" },
-#endif
-    { 0, 0, " no flag" },
-};
-static int tcc_set_m_flag(TCCState *s, const char *flag_name, int value)
-{
-    return set_flag(s, m_defs, countof(m_defs), flag_name, value);
+    return ret;
 }
 
 static int strstart(const char *val, const char **str)
@@ -1517,7 +1438,6 @@ enum {
     TCC_OPTION_c,
     TCC_OPTION_dumpversion,
     TCC_OPTION_d,
-    TCC_OPTION_float_abi,
     TCC_OPTION_static,
     TCC_OPTION_std,
     TCC_OPTION_shared,
@@ -1530,7 +1450,7 @@ enum {
     TCC_OPTION_Wp,
     TCC_OPTION_W,
     TCC_OPTION_O,
-    TCC_OPTION_mms_bitfields,
+    TCC_OPTION_mfloat_abi,
     TCC_OPTION_m,
     TCC_OPTION_f,
     TCC_OPTION_isystem,
@@ -1578,9 +1498,6 @@ static const TCCOption tcc_options[] = {
     { "c", TCC_OPTION_c, 0 },
     { "dumpversion", TCC_OPTION_dumpversion, 0},
     { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
-#ifdef TCC_TARGET_ARM
-    { "mfloat-abi", TCC_OPTION_float_abi, TCC_OPTION_HAS_ARG },
-#endif
     { "static", TCC_OPTION_static, 0 },
     { "std", TCC_OPTION_std, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "shared", TCC_OPTION_shared, 0 },
@@ -1598,8 +1515,10 @@ static const TCCOption tcc_options[] = {
     { "Wp,", TCC_OPTION_Wp, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "O", TCC_OPTION_O, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
-    { "mms-bitfields", TCC_OPTION_mms_bitfields, 0}, /* must go before option 'm' */
-    { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG },
+#ifdef TCC_TARGET_ARM
+    { "mfloat-abi", TCC_OPTION_mfloat_abi, TCC_OPTION_HAS_ARG },
+#endif
+    { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
     { "iwithprefix", TCC_OPTION_iwithprefix, TCC_OPTION_HAS_ARG },
@@ -1615,6 +1534,35 @@ static const TCCOption tcc_options[] = {
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
     { NULL, 0, 0 },
+};
+
+static const FlagDef options_W[] = {
+    { 0, 0, "all" },
+    { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
+    { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
+    { offsetof(TCCState, warn_error), 0, "error" },
+    { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
+      "implicit-function-declaration" },
+    { 0, 0, NULL }
+};
+
+static const FlagDef options_f[] = {
+    { offsetof(TCCState, char_is_unsigned), 0, "unsigned-char" },
+    { offsetof(TCCState, char_is_unsigned), FD_INVERT, "signed-char" },
+    { offsetof(TCCState, nocommon), FD_INVERT, "common" },
+    { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
+    { offsetof(TCCState, ms_extensions), 0, "ms-extensions" },
+    { offsetof(TCCState, old_struct_init_code), 0, "old-struct-init-code" },
+    { offsetof(TCCState, dollars_in_identifiers), 0, "dollars-in-identifiers" },
+    { 0, 0, NULL }
+};
+
+static const FlagDef options_m[] = {
+    { offsetof(TCCState, ms_bitfields), 0, "ms-bitfields" },
+#ifdef TCC_TARGET_X86_64
+    { offsetof(TCCState, nosse), FD_INVERT, "sse" },
+#endif
+    { 0, 0, NULL }
 };
 
 static void parse_option_D(TCCState *s1, const char *optarg)
@@ -1766,18 +1714,6 @@ reparse:
             else
                 goto unsupported_option;
             break;
-#ifdef TCC_TARGET_ARM
-        case TCC_OPTION_float_abi:
-            /* tcc doesn't support soft float yet */
-            if (!strcmp(optarg, "softfp")) {
-                s->float_abi = ARM_SOFTFP_FLOAT;
-                tcc_undefine_symbol(s, "__ARM_PCS_VFP");
-            } else if (!strcmp(optarg, "hard"))
-                s->float_abi = ARM_HARD_FLOAT;
-            else
-                tcc_error("unsupported float abi '%s'", optarg);
-            break;
-#endif
         case TCC_OPTION_static:
             s->static_link = 1;
             break;
@@ -1790,12 +1726,6 @@ reparse:
             goto set_output_type;
         case TCC_OPTION_soname:
             s->soname = tcc_strdup(optarg);
-            break;
-        case TCC_OPTION_m:
-	    if (!strcmp(optarg, "32") || !strcmp(optarg, "64"))
-	        s->option_m = tcc_strdup(optarg);
-	    else if (tcc_set_m_flag(s, optarg, 1) < 0)
-	        goto unsupported_option;
             break;
         case TCC_OPTION_o:
             if (s->outfile) {
@@ -1841,11 +1771,31 @@ reparse:
             do ++s->verbose; while (*optarg++ == 'v');
             break;
         case TCC_OPTION_f:
-            if (tcc_set_flag(s, optarg, 1) < 0)
+            if (set_flag(s, options_f, optarg) < 0)
+                goto unsupported_option;
+            break;
+#ifdef TCC_TARGET_ARM
+        case TCC_OPTION_mfloat_abi:
+            /* tcc doesn't support soft float yet */
+            if (!strcmp(optarg, "softfp")) {
+                s->float_abi = ARM_SOFTFP_FLOAT;
+                tcc_undefine_symbol(s, "__ARM_PCS_VFP");
+            } else if (!strcmp(optarg, "hard"))
+                s->float_abi = ARM_HARD_FLOAT;
+            else
+                tcc_error("unsupported float abi '%s'", optarg);
+            break;
+#endif
+        case TCC_OPTION_m:
+            if (set_flag(s, options_m, optarg) == 0)
+                break;
+            else if (x = atoi(optarg), x == 32 || x == 64)
+                s->cross_target = x;
+            else
                 goto unsupported_option;
             break;
         case TCC_OPTION_W:
-            if (tcc_set_warning(s, optarg, 1) < 0)
+            if (set_flag(s, options_W, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
@@ -1892,9 +1842,6 @@ reparse:
             break;
         case TCC_OPTION_O:
             last_o = atoi(optarg);
-            break;
-        case TCC_OPTION_mms_bitfields:
-            s->ms_bitfields = 1;
             break;
         case TCC_OPTION_traditional:
         case TCC_OPTION_pedantic:

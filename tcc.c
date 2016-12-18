@@ -97,16 +97,11 @@ static void help(void)
            "  -o outfile  set output filename\n"
            "  -run        run compiled source\n"
            "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
-           "  -mms-bitfields  use bitfield alignment consistent with MSVC\n"
            "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
            "  -w          disable all warnings\n"
            "  -v          show version\n"
            "  -vv         show included files (as sole argument: show search paths)\n"
-           "  -dumpversion\n"
            "  -bench      show compilation statistics\n"
-           "  -xc -xa     specify type of the next infile\n"
-           "  -           use stdin pipe as infile\n"
-           "  @listfile   read arguments from listfile\n"
            "Preprocessor options:\n"
            "  -Idir       add include path 'dir'\n"
            "  -Dsym[=val] define 'sym' with value 'val'\n"
@@ -117,12 +112,12 @@ static void help(void)
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"
-           "  -pthread    link with -lpthread and -D_REENTRANT (POSIX Linux)\n"
            "  -r          generate (relocatable) object file\n"
-           "  -rdynamic   export all global symbols to dynamic linker\n"
            "  -shared     generate a shared library\n"
+           "  -rdynamic   export all global symbols to dynamic linker\n"
            "  -soname     set name for shared library to be used at runtime\n"
            "  -static     static linking\n"
+           "  -pthread    link with -lpthread and -D_REENTRANT (POSIX Linux)\n"
            "  -Wl,-opt[=val]  set linker option (see manual)\n"
            "Debugger options:\n"
            "  -g          generate runtime debug info\n"
@@ -133,11 +128,24 @@ static void help(void)
            "  -bt N       show N callers in stack traces\n"
 #endif
            "Misc options:\n"
+           "  -x[c|a|n]   specify type of the next infile\n"
            "  -nostdinc   do not use standard system include paths\n"
            "  -nostdlib   do not link with standard crt and libraries\n"
-           "  -Bdir       use 'dir' as tcc internal library and include path\n"
+           "  -Bdir       use 'dir' as tcc's private library/include path\n"
            "  -MD         generate target dependencies for make\n"
            "  -MF depfile put generated dependencies here\n"
+           "  -dumpversion  print version\n"
+           "  -           use stdin pipe as infile\n"
+           "  @listfile   read arguments from listfile\n"
+           "Target specific options:\n"
+           "  -m32/64     execute i386/x86-64 cross compiler\n"
+           "  -mms-bitfields  use MSVC bitfield layout\n"
+#ifdef TCC_TARGET_ARM
+           "  -mfloat-abi hard/softfp on arm\n"
+#endif
+#ifdef TCC_TARGET_X86_64
+           "  -mno-sse    disable floats on x86-64\n"
+#endif
            );
 }
 
@@ -155,10 +163,10 @@ static int execvp_win32(const char *prog, char **argv)
 }
 #define execvp execvp_win32
 #endif
-static void exec_other_tcc(TCCState *s, char **argv, const char *optarg)
+static void exec_other_tcc(TCCState *s, char **argv, int option)
 {
     char child_path[4096], *child_name; const char *target;
-    switch (atoi(optarg)) {
+    switch (option) {
 #ifdef TCC_TARGET_I386
         case 32: break;
         case 64: target = "x86_64";
@@ -179,14 +187,10 @@ static void exec_other_tcc(TCCState *s, char **argv, const char *optarg)
                 execvp(argv[0] = child_path, argv);
             }
             tcc_error("'%s' not found", child_name);
-        case 0: /* ignore -march etc. */
-            break;
-        default:
-            tcc_warning("unsupported option \"-m%s\"", optarg);
     }
 }
 #else
-#define exec_other_tcc(s, argv, optarg)
+#define exec_other_tcc(s, argv, option)
 #endif
 
 static void gen_makedeps(TCCState *s, const char *target, const char *filename)
@@ -274,8 +278,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (s->option_m)
-        exec_other_tcc(s, argv, s->option_m);
+    if (s->cross_target)
+        exec_other_tcc(s, argv, s->cross_target);
 
     if (s->verbose)
         display_info(s, 0);
