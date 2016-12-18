@@ -146,6 +146,7 @@ ST_FUNC void tccgen_start(TCCState *s1)
     funcname = "";
     anon_sym = SYM_FIRST_ANOM;
     section_sym = 0;
+    const_wanted = 0;
     nocode_wanted = 1;
 
     /* define some often used types */
@@ -4457,16 +4458,14 @@ ST_FUNC void unary(void)
     case TOK_builtin_expect:
         {
             /* __builtin_expect is a no-op for now */
-            int saved_nocode_wanted;
             next();
             skip('(');
             expr_eq();
             skip(',');
-            saved_nocode_wanted = nocode_wanted;
-            nocode_wanted = 1;
+            nocode_wanted++;
             expr_lor_const();
             vpop();
-            nocode_wanted = saved_nocode_wanted;
+            nocode_wanted--;
             skip(')');
         }
         break;
@@ -4486,45 +4485,41 @@ ST_FUNC void unary(void)
         break;
     case TOK_builtin_choose_expr:
 	{
-	    int saved_nocode_wanted;
 	    int64_t c;
 	    next();
 	    skip('(');
 	    c = expr_const64();
 	    skip(',');
 	    if (!c) {
-		saved_nocode_wanted = nocode_wanted;
-		nocode_wanted = 1;
+		nocode_wanted++;
 	    }
 	    expr_eq();
 	    if (!c) {
 		vpop();
-		nocode_wanted = saved_nocode_wanted;
+		nocode_wanted--;
 	    }
 	    skip(',');
 	    if (c) {
-		saved_nocode_wanted = nocode_wanted;
-		nocode_wanted = 1;
+		nocode_wanted++;
 	    }
 	    expr_eq();
 	    if (c) {
 		vpop();
-		nocode_wanted = saved_nocode_wanted;
+		nocode_wanted--;
 	    }
 	    skip(')');
 	}
         break;
     case TOK_builtin_constant_p:
         {
-            int saved_nocode_wanted, res;
+            int res;
             next();
             skip('(');
-            saved_nocode_wanted = nocode_wanted;
-            nocode_wanted = 1;
+            nocode_wanted++;
             gexpr();
             res = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
             vpop();
-            nocode_wanted = saved_nocode_wanted;
+            nocode_wanted--;
             skip(')');
             vpushi(res);
         }
@@ -5054,14 +5049,13 @@ static void expr_land(void)
 		if (vtop->c.i) {
 		    vpop();
 		} else {
-		    int saved_nocode_wanted = nocode_wanted;
-		    nocode_wanted = 1;
+		    nocode_wanted++;
 		    while (tok == TOK_LAND) {
 			next();
 			expr_or();
 			vpop();
 		    }
-		    nocode_wanted = saved_nocode_wanted;
+		    nocode_wanted--;
 		    if (t)
 		      gsym(t);
 		    gen_cast(&int_type);
@@ -5098,14 +5092,13 @@ static void expr_lor(void)
 		if (!vtop->c.i) {
 		    vpop();
 		} else {
-		    int saved_nocode_wanted = nocode_wanted;
-		    nocode_wanted = 1;
+		    nocode_wanted++;
 		    while (tok == TOK_LOR) {
 			next();
 			expr_land();
 			vpop();
 		    }
-		    nocode_wanted = saved_nocode_wanted;
+		    nocode_wanted--;
 		    if (t)
 		      gsym(t);
 		    gen_cast(&int_type);
@@ -5153,7 +5146,6 @@ static void expr_cond(void)
     int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv, c, g;
     SValue sv;
     CType type, type1, type2;
-    int saved_nocode_wanted = nocode_wanted;
 
     expr_lor();
     if (tok == '?') {
@@ -5186,7 +5178,7 @@ static void expr_cond(void)
 
         if (1) {
             if (c == 0)
-                nocode_wanted = 1;
+                nocode_wanted++;
             if (!g)
                 gexpr();
 
@@ -5199,11 +5191,14 @@ static void expr_cond(void)
             if (c < 0)
                 u = gjmp(0);
             gsym(tt);
-            nocode_wanted = saved_nocode_wanted;
+
+            if (c == 0)
+                nocode_wanted--;
             if (c == 1)
-                nocode_wanted = 1;
+                nocode_wanted++;
             expr_cond();
-            nocode_wanted = saved_nocode_wanted;
+            if (c == 1)
+                nocode_wanted--;
 
             type2 = vtop->type;
             t1 = type1.t;
@@ -5355,38 +5350,31 @@ ST_FUNC void gexpr(void)
 /* parse an expression and return its type without any side effect. */
 static void expr_type(CType *type)
 {
-    int saved_nocode_wanted;
 
-    saved_nocode_wanted = nocode_wanted;
-    nocode_wanted = 1;
+    nocode_wanted++;
     gexpr();
     *type = vtop->type;
     vpop();
-    nocode_wanted = saved_nocode_wanted;
+    nocode_wanted--;
 }
 
 /* parse a unary expression and return its type without any side
    effect. */
 static void unary_type(CType *type)
 {
-    int a;
-
-    a = nocode_wanted;
-    nocode_wanted = 1;
+    nocode_wanted++;
     unary();
     *type = vtop->type;
     vpop();
-    nocode_wanted = a;
+    nocode_wanted--;
 }
 
 /* parse a constant expression and return value in vtop.  */
 static void expr_const1(void)
 {
-    int a;
-    a = const_wanted;
-    const_wanted = 1;
+    const_wanted++;
     expr_cond();
-    const_wanted = a;
+    const_wanted--;
 }
 
 /* parse an integer constant and return its value. */
@@ -5552,7 +5540,7 @@ static void block(int *bsym, int *csym, int is_expr)
         else
             a = gvtst(1, 0);
         if (cond == 0)
-	    nocode_wanted |= 2;
+	    nocode_wanted |= 0x20000000;
         block(bsym, csym, 0);
 	if (cond != 1)
 	    nocode_wanted = saved_nocode_wanted;
@@ -5562,7 +5550,7 @@ static void block(int *bsym, int *csym, int is_expr)
             d = gjmp(0);
             gsym(a);
 	    if (cond == 1)
-	        nocode_wanted |= 2;
+	        nocode_wanted |= 0x20000000;
             block(bsym, csym, 0);
             gsym(d); /* patch else jmp */
 	    if (cond != 0)
@@ -5571,7 +5559,7 @@ static void block(int *bsym, int *csym, int is_expr)
             gsym(a);
     } else if (tok == TOK_WHILE) {
 	int saved_nocode_wanted;
-	nocode_wanted &= ~2;
+	nocode_wanted &= ~0x20000000;
         next();
         d = ind;
         vla_sp_restore();
@@ -5718,7 +5706,7 @@ static void block(int *bsym, int *csym, int is_expr)
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
             rsym = gjmp(rsym);
-	nocode_wanted |= 2;
+	nocode_wanted |= 0x20000000;
     } else if (tok == TOK_BREAK) {
         /* compute jump */
         if (!bsym)
@@ -5726,7 +5714,7 @@ static void block(int *bsym, int *csym, int is_expr)
         *bsym = gjmp(*bsym);
         next();
         skip(';');
-	nocode_wanted |= 2;
+	nocode_wanted |= 0x20000000;
     } else if (tok == TOK_CONTINUE) {
         /* compute jump */
         if (!csym)
@@ -5738,7 +5726,7 @@ static void block(int *bsym, int *csym, int is_expr)
     } else if (tok == TOK_FOR) {
         int e;
 	int saved_nocode_wanted;
-	nocode_wanted &= ~2;
+	nocode_wanted &= ~0x20000000;
         next();
         skip('(');
         s = local_stack;
@@ -5784,7 +5772,7 @@ static void block(int *bsym, int *csym, int is_expr)
     } else 
     if (tok == TOK_DO) {
 	int saved_nocode_wanted;
-	nocode_wanted &= ~2;
+	nocode_wanted &= ~0x20000000;
         next();
         a = 0;
         b = 0;
@@ -5844,7 +5832,7 @@ static void block(int *bsym, int *csym, int is_expr)
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));
         if (!cur_switch)
             expect("switch");
-	nocode_wanted &= ~2;
+	nocode_wanted &= ~0x20000000;
         next();
         cr->v1 = cr->v2 = expr_const64();
         if (gnu_ext && tok == TOK_DOTS) {
@@ -5917,7 +5905,7 @@ static void block(int *bsym, int *csym, int is_expr)
             vla_sp_restore();
             /* we accept this, but it is a mistake */
         block_after_label:
-	    nocode_wanted &= ~2;
+	    nocode_wanted &= ~0x20000000;
             if (tok == '}') {
                 tcc_warning("deprecated use of label at end of compound statement");
             } else {
@@ -6833,8 +6821,6 @@ static void func_decl_list(Sym *func_sym)
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
-    int saved_nocode_wanted = nocode_wanted;
-
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     /* NOTE: we patch the symbol size later */
@@ -6881,7 +6867,7 @@ static void gen_function(Sym *sym)
     func_vt.t = VT_VOID; /* for safety */
     func_var = 0; /* for safety */
     ind = 0; /* for safety */
-    nocode_wanted = saved_nocode_wanted;
+    nocode_wanted = 1;
     check_vstack();
 }
 
