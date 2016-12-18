@@ -248,20 +248,20 @@ PUB_FUNC void tcc_memstats(int bench)
 #define MEM_DEBUG_FILE_LEN 15
 
 struct mem_debug_header {
-    size_t      magic1;
-    size_t      size;
+    unsigned magic1;
+    unsigned size;
     struct mem_debug_header *prev;
     struct mem_debug_header *next;
-    size_t      line_num;
-    char        file_name[MEM_DEBUG_FILE_LEN + 1];
-    size_t      magic2;
+    int line_num;
+    char file_name[MEM_DEBUG_FILE_LEN + 1];
+    unsigned magic2;
 };
 
 typedef struct mem_debug_header mem_debug_header_t;
 
 static mem_debug_header_t *mem_debug_chain;
-static size_t mem_cur_size;
-static size_t mem_max_size;
+static unsigned mem_cur_size;
+static unsigned mem_max_size;
 
 PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
 {
@@ -312,13 +312,13 @@ PUB_FUNC void tcc_free_debug(void *ptr)
     header = (mem_debug_header_t *)ptr;
     if (header->magic1 != MEM_DEBUG_MAGIC1 ||
         header->magic2 != MEM_DEBUG_MAGIC2 ||
-        header->size == (size_t)-1 )
+        header->size == (unsigned)-1 )
     {
         tcc_error("tcc_free check failed");
     }
 
     mem_cur_size -= header->size;
-    header->size = (size_t)-1;
+    header->size = (unsigned)-1;
     
     if (header->next)
         header->next->prev = header->prev;
@@ -355,7 +355,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     header = (mem_debug_header_t *)ptr;
     if (header->magic1 != MEM_DEBUG_MAGIC1 ||
         header->magic2 != MEM_DEBUG_MAGIC2 ||
-        header->size == (size_t)-1 )
+        header->size == (unsigned)-1 )
     {
         check_error:
             tcc_error("tcc_realloc check failed");
@@ -414,6 +414,9 @@ PUB_FUNC void tcc_memstats(int bench)
                 header->file_name, header->line_num, header->size);
             header = header->next;
         }
+#if MEM_DEBUG-0 == 2
+        exit(2);
+#endif
     }
     else if (bench)
         fprintf(stderr, "mem_max_size= %d bytes\n", mem_max_size);

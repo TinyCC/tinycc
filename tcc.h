@@ -71,6 +71,7 @@
 #  pragma warning (disable : 4996)  // The POSIX name for this item is deprecated. Instead, use the ISO C and C++ conformant name
 #  pragma warning (disable : 4018)  // signed/unsigned mismatch
 #  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
+#  define ssize_t intptr_t
 # endif
 # undef CONFIG_TCC_STATIC
 #endif

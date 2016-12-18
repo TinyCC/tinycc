@@ -137,22 +137,22 @@ ST_FUNC void expect(const char *msg)
 #define CSTR_TAL_LIMIT      1024
 
 typedef struct TinyAlloc {
-    size_t  limit;
-    size_t  size;
+    unsigned  limit;
+    unsigned  size;
     uint8_t *buffer;
     uint8_t *p;
-    size_t  nb_allocs;
+    unsigned  nb_allocs;
     struct TinyAlloc *next, *top;
 #ifdef TAL_INFO
-    size_t  nb_peak;
-    size_t  nb_total;
-    size_t  nb_missed;
+    unsigned  nb_peak;
+    unsigned  nb_total;
+    unsigned  nb_missed;
     uint8_t *peak_p;
 #endif
 } TinyAlloc;
 
 typedef struct tal_header_t {
-    size_t  size;
+    unsigned  size;
 #ifdef TAL_DEBUG
     int     line_num; /* negative line_num used for double free check */
     char    file_name[TAL_DEBUG_FILE_LEN + 1];
@@ -161,7 +161,7 @@ typedef struct tal_header_t {
 
 /* ------------------------------------------------------------------------- */
 
-ST_FUNC TinyAlloc *tal_new(TinyAlloc **pal, size_t limit, size_t size)
+static TinyAlloc *tal_new(TinyAlloc **pal, unsigned limit, unsigned size)
 {
     TinyAlloc *al = tcc_mallocz(sizeof(TinyAlloc));
     al->p = al->buffer = tcc_malloc(size);
@@ -171,7 +171,7 @@ ST_FUNC TinyAlloc *tal_new(TinyAlloc **pal, size_t limit, size_t size)
     return al;
 }
 
-ST_FUNC void tal_delete(TinyAlloc *al)
+static void tal_delete(TinyAlloc *al)
 {
     TinyAlloc *next;
 
@@ -192,11 +192,14 @@ tail_call:
         while (p < al->p) {
             tal_header_t *header = (tal_header_t *)p;
             if (header->line_num > 0) {
-                fprintf(stderr, "  file %s, line %u: %u bytes\n",
+                fprintf(stderr, "%s:%d: chunk of %d bytes\n",
                         header->file_name, header->line_num, header->size);
             }
             p += header->size + sizeof(tal_header_t);
         }
+#if MEM_DEBUG-0 == 2
+        exit(2);
+#endif
     }
 #endif
     next = al->next;
@@ -206,7 +209,7 @@ tail_call:
     goto tail_call;
 }
 
-ST_FUNC void tal_free_impl(TinyAlloc *al, void *p TAL_DEBUG_PARAMS)
+static void tal_free_impl(TinyAlloc *al, void *p TAL_DEBUG_PARAMS)
 {
     if (!p)
         return;
@@ -215,10 +218,10 @@ tail_call:
 #ifdef TAL_DEBUG
         tal_header_t *header = (((tal_header_t *)p) - 1);
         if (header->line_num < 0) {
-            fprintf(stderr, "TAL_DEBUG: file %s, line %u double frees chunk from\n",
+            fprintf(stderr, "%s:%d: TAL_DEBUG: double frees chunk from\n",
                     file, line);
-            fprintf(stderr, "  file %s, line %u: %u bytes\n",
-                    header->file_name, -header->line_num, header->size);
+            fprintf(stderr, "%s:%d: %d bytes\n",
+                    header->file_name, (int)-header->line_num, (int)header->size);
         } else
             header->line_num = -header->line_num;
 #endif
@@ -233,12 +236,12 @@ tail_call:
         tcc_free(p);
 }
 
-ST_FUNC void *tal_realloc_impl(TinyAlloc **pal, void *p, size_t size TAL_DEBUG_PARAMS)
+static void *tal_realloc_impl(TinyAlloc **pal, void *p, unsigned size TAL_DEBUG_PARAMS)
 {
     tal_header_t *header;
     void *ret;
     int is_own;
-    size_t adj_size = (size + 3) & -4;
+    unsigned adj_size = (size + 3) & -4;
     TinyAlloc *al = *pal;
 
 tail_call:

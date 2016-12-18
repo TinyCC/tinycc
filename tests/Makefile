@@ -5,7 +5,7 @@
 TOP = ..
 include $(TOP)/Makefile
 VPATH = $(TOPSRC)/tests $(TOPSRC) $(TOP)
-CFLAGS = -I$(TOPSRC) -I$(TOP)
+CFLAGS := $(filter-out -W% -g% -O%,$(CFLAGS)) -I$(TOPSRC)
 
 # what tests to run
 TESTS = \
@@ -13,6 +13,7 @@ TESTS = \
  hello-run \
  libtest \
  test3 \
+ memtest \
  dlltest \
  abitest \
  vla_test-run \
@@ -144,6 +145,12 @@ ifndef CONFIG_WIN32
 	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run ../examples/ex1.c
 endif
 	@rm tcc2$(EXESUF) libtcc2$(DLLSUF)
+
+memtest:
+	@echo ------------ $@ ------------
+	$(CC) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -DMEM_DEBUG=2 ../tcc.c $(LIBS) -o memtest-tcc$(EXESUF)
+	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE ../tcc.c $(LIBS)
+	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -run ../tcc.c $(TCCFLAGS) tcctest.c
 
 
 # memory and bound check auto test

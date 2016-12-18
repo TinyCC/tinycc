@@ -5288,8 +5288,8 @@ static void expr_cond(void)
 
             /* this is horrible, but we must also convert first
                operand */
-            vpushv(&sv);
-            if (c != 2) {
+            if (c != 0) {
+                *vtop = sv;
                 gen_cast(&type);
                 if (islv) {
                     mk_pointer(&vtop->type);
@@ -5298,17 +5298,14 @@ static void expr_cond(void)
                     gaddrof();
             }
 
-            if (c != 0)
-                vswap();
-            vtop--;
             if (c < 0) {
                 r1 = gv(rc);
                 move_reg(r2, r1, type.t);
                 vtop->r = r2;
+                gsym(tt);
+                if (islv)
+                    indir();
             }
-            gsym(tt);
-            if (islv)
-                indir();
         }
     }
 }
