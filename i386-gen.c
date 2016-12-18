@@ -79,7 +79,7 @@ enum {
 #include "tcc.h"
 
 /* define to 1/0 to [not] have EBX as 4th register */
-#define USE_EBX 1
+#define USE_EBX 0
 
 ST_DATA const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_EAX,
@@ -636,7 +636,15 @@ ST_FUNC void gfunc_epilog(void)
         o(0x585a); /* restore returned value, if any */
     }
 #endif
-    o(0x5b * USE_EBX); /* pop ebx */
+
+    /* align local size to word & save local variables */
+    v = (-loc + 3) & -4;
+
+#if USE_EBX
+    o(0x8b);
+    gen_modrm(TREG_EBX, VT_LOCAL, NULL, -(v+4));
+#endif
+
     o(0xc9); /* leave */
     if (func_ret_sub == 0) {
         o(0xc3); /* ret */
@@ -645,9 +653,6 @@ ST_FUNC void gfunc_epilog(void)
         g(func_ret_sub);
         g(func_ret_sub >> 8);
     }
-    /* align local size to word & save local variables */
-    
-    v = (-loc + 3) & -4; 
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
 #ifdef TCC_TARGET_PE

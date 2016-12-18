@@ -5164,8 +5164,8 @@ static void expr_cond(void)
 #endif
             } else
                 rc = RC_INT;
-            save_regs(1);
             gv(rc);
+            save_regs(1);
             if (g)
                 gv_dup();
             tt = gvtst(1, 0);
