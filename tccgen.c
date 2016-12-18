@@ -5150,72 +5150,62 @@ static int condition_3way(void)
 
 static void expr_cond(void)
 {
-    int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv;
-    int c;
+    int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv, c, g;
     SValue sv;
     CType type, type1, type2;
+    int saved_nocode_wanted = nocode_wanted;
 
     expr_lor();
     if (tok == '?') {
         next();
 	c = condition_3way();
-        if (c >= 0) {
-            int saved_nocode_wanted = nocode_wanted;
-            if (c) {
-                if (tok != ':' || !gnu_ext) {
-                    vpop();
-                    gexpr();
-                }
-                skip(':');
-                nocode_wanted = 1;
-                expr_cond();
-                vpop();
-                nocode_wanted = saved_nocode_wanted;
-            } else {
-                vpop();
-                if (tok != ':' || !gnu_ext) {
-                    nocode_wanted = 1;
-                    gexpr();
-                    vpop();
-                    nocode_wanted = saved_nocode_wanted;
-                }
-                skip(':');
-                expr_cond();
-            }
-        }
-        else {
-            if (vtop != vstack) {
-                /* needed to avoid having different registers saved in
-                   each branch */
-                if (is_float(vtop->type.t)) {
-                    rc = RC_FLOAT;
+        g = (tok == ':' && gnu_ext);
+        if (c < 0) {
+            /* needed to avoid having different registers saved in
+               each branch */
+            if (is_float(vtop->type.t)) {
+                rc = RC_FLOAT;
 #ifdef TCC_TARGET_X86_64
-                    if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-                        rc = RC_ST0;
-                    }
-#endif
+                if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+                    rc = RC_ST0;
                 }
-                else
-		    rc = RC_INT;
-		gv(rc);
-		save_regs(1);
-            }
-            if (tok == ':' && gnu_ext) {
+#endif
+            } else
+                rc = RC_INT;
+            save_regs(1);
+            gv(rc);
+            if (g)
                 gv_dup();
-                tt = gvtst(1, 0);
-            } else {
-                tt = gvtst(1, 0);
+            tt = gvtst(1, 0);
+
+        } else {
+            if (!g)
+                vpop();
+            tt = 0;
+        }
+
+        if (1) {
+            if (c == 0)
+                nocode_wanted = 1;
+            if (!g)
                 gexpr();
-            }
+
             type1 = vtop->type;
             sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
-            u = gjmp(0);
-            gsym(tt);
-            expr_cond();
-            type2 = vtop->type;
 
+            u = 0;
+            if (c < 0)
+                u = gjmp(0);
+            gsym(tt);
+            nocode_wanted = saved_nocode_wanted;
+            if (c == 1)
+                nocode_wanted = 1;
+            expr_cond();
+            nocode_wanted = saved_nocode_wanted;
+
+            type2 = vtop->type;
             t1 = type1.t;
             bt1 = t1 & VT_BTYPE;
             t2 = type2.t;
@@ -5224,6 +5214,7 @@ static void expr_cond(void)
             if (is_float(bt1) || is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
                     type.t = VT_LDOUBLE;
+
                 } else if (bt1 == VT_DOUBLE || bt2 == VT_DOUBLE) {
                     type.t = VT_DOUBLE;
                 } else {
@@ -5267,15 +5258,18 @@ static void expr_cond(void)
             /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
                that `(expr ? a : b).mem` does not error  with "lvalue expected" */
             islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
+            islv &= c < 0;
 
             /* now we convert second operand */
-            gen_cast(&type);
-            if (islv) {
-                mk_pointer(&vtop->type);
-                gaddrof();
+            if (c != 1) {
+                gen_cast(&type);
+                if (islv) {
+                    mk_pointer(&vtop->type);
+                    gaddrof();
+                } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                    gaddrof();
             }
-            else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
-                gaddrof();
+
             rc = RC_INT;
             if (is_float(type.t)) {
                 rc = RC_FLOAT;
@@ -5287,26 +5281,36 @@ static void expr_cond(void)
             } else if ((type.t & VT_BTYPE) == VT_LLONG) {
                 /* for long longs, we use fixed registers to avoid having
                    to handle a complicated move */
-                rc = RC_IRET; 
+                rc = RC_IRET;
             }
-            
-            r2 = gv(rc);
+
+            tt = r2 = 0;
+            if (c < 0) {
+                r2 = gv(rc);
+                tt = gjmp(0);
+            }
+            gsym(u);
+
             /* this is horrible, but we must also convert first
                operand */
-            tt = gjmp(0);
-            gsym(u);
-            /* put again first value and cast it */
-            *vtop = sv;
-            gen_cast(&type);
-            if (islv) {
-                mk_pointer(&vtop->type);
-                gaddrof();
+            vpushv(&sv);
+            if (c != 2) {
+                gen_cast(&type);
+                if (islv) {
+                    mk_pointer(&vtop->type);
+                    gaddrof();
+                } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                    gaddrof();
             }
-            else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
-                gaddrof();
-            r1 = gv(rc);
-            move_reg(r2, r1, type.t);
-            vtop->r = r2;
+
+            if (c != 0)
+                vswap();
+            vtop--;
+            if (c < 0) {
+                r1 = gv(rc);
+                move_reg(r2, r1, type.t);
+                vtop->r = r2;
+            }
             gsym(tt);
             if (islv)
                 indir();
