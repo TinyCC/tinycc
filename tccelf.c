@@ -956,32 +956,39 @@ ST_FUNC void build_got_entries(TCCState *s1)
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
             if (gotplt_entry == NO_GOTPLT_ENTRY) {
-#ifdef TCC_TARGET_I386
-                if (type == R_386_32 && sym->st_shndx == SHN_UNDEF) {
-                    /* the i386 generator uses the plt address for function
-                       pointers into .so.  This may break pointer equality
-                       but helps to keep it simple */
-                    char *name = (char *)symtab_section->link->data + sym->st_name;
-                    int index = find_elf_sym(s1->dynsymtab_section, name);
-                    ElfW(Sym) *esym = (ElfW(Sym) *)s1->dynsymtab_section->data + index;
-                    if (index
-                        && (ELFW(ST_TYPE)(esym->st_info) == STT_FUNC
-                            || (ELFW(ST_TYPE)(esym->st_info) == STT_NOTYPE
-                                && ELFW(ST_TYPE)(sym->st_info) == STT_FUNC)))
-                        goto jmp_slot;
-                }
-#endif
                 continue;
             }
 
-            /* Automatically create PLT/GOT [entry] it is an undefined reference
-               (resolved at runtime), or the symbol is absolute, probably created
-               by tcc_add_symbol, and thus on 64-bit targets might be too far
-               from application code */
+            /* Automatically create PLT/GOT [entry] if it is an undefined
+	       reference (resolved at runtime), or the symbol is absolute,
+	       probably created by tcc_add_symbol, and thus on 64-bit
+	       targets might be too far from application code.  */
             if (gotplt_entry == AUTO_GOTPLT_ENTRY) {
                 if (sym->st_shndx == SHN_UNDEF) {
+                    ElfW(Sym) *esym;
+		    int dynindex;
                     if (s1->output_type == TCC_OUTPUT_DLL && ! PCRELATIVE_DLLPLT)
                         continue;
+		    /* Relocations for UNDEF symbols would normally need
+		       to be transferred into the executable or shared object.
+		       If that were done AUTO_GOTPLT_ENTRY wouldn't exist.
+		       But TCC doesn't do that (at least for exes), so we
+		       need to resolve all such relocs locally.  And that
+		       means PLT slots for functions in DLLs and COPY relocs for
+		       data symbols.  COPY relocs were generated in
+		       bind_exe_dynsyms (and the symbol adjusted to be defined),
+		       and for functions we were generated a dynamic symbol
+		       of function type.  */
+		    if (s1->dynsym) {
+			/* dynsym isn't set for -run :-/  */
+			dynindex = get_sym_attr(s1, sym_index, 0)->dyn_index;
+			esym = (ElfW(Sym) *)s1->dynsym->data + dynindex;
+			if (dynindex
+			    && (ELFW(ST_TYPE)(esym->st_info) == STT_FUNC
+				|| (ELFW(ST_TYPE)(esym->st_info) == STT_NOTYPE
+				    && ELFW(ST_TYPE)(sym->st_info) == STT_FUNC)))
+			    goto jmp_slot;
+		    }
                 } else if (!(sym->st_shndx == SHN_ABS && PTR_SIZE == 8))
                     continue;
             }
@@ -994,9 +1001,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
             }
 #endif
             if (code_reloc(type)) {
-#ifdef TCC_TARGET_I386
             jmp_slot:
-#endif
                 reloc_type = R_JMP_SLOT;
             } else
                 reloc_type = R_GLOB_DAT;
@@ -1278,9 +1283,12 @@ static void bind_exe_dynsyms(TCCState *s1)
                      * of the function wanted by the caller of dlsym instead of
                      * the address of the function that would return that
                      * address */
-                    put_elf_sym(s1->dynsym, 0, esym->st_size,
-                                ELFW(ST_INFO)(STB_GLOBAL,STT_FUNC), 0, 0,
-                                name);
+                    int dynindex
+		      = put_elf_sym(s1->dynsym, 0, esym->st_size,
+				    ELFW(ST_INFO)(STB_GLOBAL,STT_FUNC), 0, 0,
+				    name);
+		    int index = sym - (ElfW(Sym) *) symtab_section->data;
+		    get_sym_attr(s1, index, 1)->dyn_index = dynindex;
                 } else if (type == STT_OBJECT) {
                     unsigned long offset;
                     ElfW(Sym) *dynsym;

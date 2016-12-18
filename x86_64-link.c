@@ -61,6 +61,9 @@ int gotplt_entry_type (int reloc_type)
 	case R_X86_64_RELATIVE:
             return NO_GOTPLT_ENTRY;
 
+	/* The following relocs wouldn't normally need GOT or PLT
+	   slots, but we need them for simplicity in the link
+	   editor part.  See our caller for comments.  */
         case R_X86_64_32:
         case R_X86_64_32S:
         case R_X86_64_64:

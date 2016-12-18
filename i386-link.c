@@ -56,11 +56,16 @@ int gotplt_entry_type (int reloc_type)
     switch (reloc_type) {
 	case R_386_RELATIVE:
 	case R_386_16:
-        case R_386_32:
 	case R_386_GLOB_DAT:
 	case R_386_JMP_SLOT:
 	case R_386_COPY:
             return NO_GOTPLT_ENTRY;
+
+        case R_386_32:
+	    /* This relocations shouldn't normally need GOT or PLT
+	       slots if it weren't for simplicity in the code generator.
+	       See our caller for comments.  */
+            return AUTO_GOTPLT_ENTRY;
 
 	case R_386_PC16:
 	case R_386_PC32:
