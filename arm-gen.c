@@ -214,7 +214,8 @@ void o(uint32_t i)
 {
   /* this is a good place to start adding big-endian support*/
   int ind1;
-
+  if (nocode_wanted)
+    return;
   ind1 = ind + 4;
   if (!cur_text_section)
     tcc_error("compiler error! This happens f.ex. if the compiler\n"
@@ -1411,6 +1412,8 @@ void gfunc_epilog(void)
 int gjmp(int t)
 {
   int r;
+  if (nocode_wanted)
+    return t;
   r=ind;
   o(0xE0000000|encbranch(r,t,1));
   return r;
@@ -1427,9 +1430,13 @@ int gtst(int inv, int t)
 {
   int v, r;
   uint32_t op;
+
   v = vtop->r & VT_VALMASK;
   r=ind;
-  if (v == VT_CMP) {
+
+  if (nocode_wanted) {
+    ;
+  } else if (v == VT_CMP) {
     op=mapcc(inv?negcc(vtop->c.i):vtop->c.i);
     op|=encbranch(r,t,1);
     o(op);

@@ -182,7 +182,8 @@ FILE *f = NULL;
 void C67_g(int c)
 {
     int ind1;
-
+    if (nocode_wanted)
+        return;
 #ifdef ASSEMBLY_LISTING_C67
     fprintf(f, " %08X", c);
 #endif
@@ -2038,6 +2039,8 @@ void gfunc_epilog(void)
 int gjmp(int t)
 {
     int ind1 = ind;
+    if (nocode_wanted)
+        return t;
 
     C67_MVKL(C67_A0, t);	//r=reg to load,  constant
     C67_MVKH(C67_A0, t);	//r=reg to load,  constant
@@ -2070,7 +2073,9 @@ int gtst(int inv, int t)
     int v, *p;
 
     v = vtop->r & VT_VALMASK;
-    if (v == VT_CMP) {
+    if (nocode_wanted) {
+        ;
+    } else if (v == VT_CMP) {
 	/* fast case : can jump directly since flags are set */
 	// C67 uses B2 sort of as flags register
 	ind1 = ind;

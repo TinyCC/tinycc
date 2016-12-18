@@ -70,8 +70,8 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
-
-#define psym oad
+/* generate jmp to a label */
+#define gjmp2(instr,lbl) oad(instr,lbl)
 
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
@@ -100,6 +100,8 @@ static unsigned long func_bound_ind;
 ST_FUNC void g(int c)
 {
     int ind1;
+    if (nocode_wanted)
+        return;
     ind1 = ind + 1;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(cur_text_section, ind1);
@@ -145,23 +147,16 @@ ST_FUNC void gsym(int t)
     gsym_addr(t, ind);
 }
 
-/* psym is used to put an instruction with a data field which is a
-   reference to a symbol. It is in fact the same as oad ! */
-#define psym oad
-
 /* instruction + 4 bytes data. Return the address of the data */
 ST_FUNC int oad(int c, int s)
 {
-    int ind1;
-
+    int t;
+    if (nocode_wanted)
+        return s;
     o(c);
-    ind1 = ind + 4;
-    if (ind1 > cur_text_section->data_allocated)
-        section_realloc(cur_text_section, ind1);
-    write32le(cur_text_section->data + ind, s);
-    s = ind;
-    ind = ind1;
-    return s;
+    t = ind;
+    gen_le32(s);
+    return t;
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
@@ -676,7 +671,7 @@ ST_FUNC void gfunc_epilog(void)
 /* generate a jump to a label */
 ST_FUNC int gjmp(int t)
 {
-    return psym(0xe9, t);
+    return gjmp2(0xe9, t);
 }
 
 /* generate a jump to a fixed address */
@@ -722,10 +717,12 @@ ST_FUNC void gtst_addr(int inv, int a)
 ST_FUNC int gtst(int inv, int t)
 {
     int v = vtop->r & VT_VALMASK;
-    if (v == VT_CMP) {
+    if (nocode_wanted) {
+        ;
+    } else if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
         g(0x0f);
-        t = psym((vtop->c.i - 16) ^ inv, t);
+        t = gjmp2((vtop->c.i - 16) ^ inv, t);
     } else if (v == VT_JMP || v == VT_JMPI) {
         /* && or || optimization */
         if ((v & 1) == inv) {

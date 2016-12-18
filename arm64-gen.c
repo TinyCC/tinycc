@@ -95,6 +95,8 @@ static uint32_t fltr(int r)
 ST_FUNC void o(unsigned int c)
 {
     int ind1 = ind + 4;
+    if (nocode_wanted)
+        return;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(cur_text_section, ind1);
     write32le(cur_text_section->data + ind, c);
@@ -1278,6 +1280,8 @@ ST_FUNC void gfunc_epilog(void)
 ST_FUNC int gjmp(int t)
 {
     int r = ind;
+    if (nocode_wanted)
+        return t;
     o(t);
     return r;
 }

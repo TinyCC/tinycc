@@ -69,6 +69,7 @@ ST_DATA struct switch_t {
 } *cur_switch; /* current switch */
 
 /* ------------------------------------------------------------------------- */
+
 static void gen_cast(CType *type);
 static inline CType *pointed_type(CType *type);
 static int is_compatible_types(CType *type1, CType *type2);
@@ -322,11 +323,16 @@ ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
                      addr_t addend)
 {
     int c = 0;
+
+    if (nocode_wanted && s == cur_text_section)
+        return;
+
     if (sym) {
         if (0 == sym->c)
             put_extern_sym(sym, NULL, 0, 0);
         c = sym->c;
     }
+
     /* now we can add ELF relocation info */
     put_elf_reloca(symtab_section, s, offset, type, c, addend);
 }
@@ -774,6 +780,8 @@ ST_FUNC void save_reg_upstack(int r, int n)
 
     if ((r &= VT_VALMASK) >= VT_CONST)
         return;
+    if (nocode_wanted)
+        return;
 
     /* modify all stack values */
     saved = 0;
@@ -865,6 +873,8 @@ ST_FUNC int get_reg(int rc)
     /* find a free register */
     for(r=0;r<NB_REGS;r++) {
         if (reg_classes[r] & rc) {
+            if (nocode_wanted)
+                return r;
             for(p=vstack;p<=vtop;p++) {
                 if ((p->r & VT_VALMASK) == r ||
                     (p->r2 & VT_VALMASK) == r)
@@ -913,7 +923,7 @@ static void move_reg(int r, int s, int t)
 /* get address of vtop (vtop MUST BE an lvalue) */
 ST_FUNC void gaddrof(void)
 {
-    if (vtop->r & VT_REF && !nocode_wanted)
+    if (vtop->r & VT_REF)
         gv(RC_INT);
     vtop->r &= ~VT_LVAL;
     /* tricky: if saved lvalue, then we can go back to lvalue */
@@ -1317,7 +1327,7 @@ ST_FUNC void vpop(void)
     v = vtop->r & VT_VALMASK;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     /* for x86, we need to pop the FP stack */
-    if (v == TREG_ST0 && !nocode_wanted) {
+    if (v == TREG_ST0) {
         o(0xd8dd); /* fstp %st(0) */
     } else
 #endif
@@ -1607,7 +1617,7 @@ static void gen_opl(int op)
                 b = gvtst(0, 0);
             } else {
 #if defined(TCC_TARGET_I386)
-                b = psym(0x850f, 0);
+                b = gjmp2(0x850f, 0);
 #elif defined(TCC_TARGET_ARM)
                 b = ind;
                 o(0x1A000000 | encbranch(ind, 0, 1));
@@ -1789,23 +1799,12 @@ static void gen_opic(int op)
             vtop->c.i = l2;
         } else {
         general_case:
-            if (!nocode_wanted) {
                 /* call low level op generator */
                 if (t1 == VT_LLONG || t2 == VT_LLONG ||
                     (PTR_SIZE == 8 && (t1 == VT_PTR || t2 == VT_PTR)))
                     gen_opl(op);
                 else
                     gen_opi(op);
-            } else {
-                vtop--;
-		/* Ensure vtop isn't marked VT_CONST in case something
-		   up our callchain is interested in const-ness of the
-		   expression.  Also make it a non-LVAL if it was,
-		   so that further code can't accidentally generate
-		   a deref (happen only for buggy uses of e.g.
-		   gv() under nocode_wanted).  */
-		vtop->r &= ~(VT_VALMASK | VT_LVAL);
-            }
         }
     }
 }
@@ -1866,11 +1865,7 @@ static void gen_opif(int op)
         vtop--;
     } else {
     general_case:
-        if (!nocode_wanted) {
-            gen_opf(op);
-        } else {
-            vtop--;
-        }
+        gen_opf(op);
     }
 }
 
@@ -2149,7 +2144,7 @@ redo:
         }
     }
     // Make sure that we have converted to an rvalue:
-    if (vtop->r & VT_LVAL && !nocode_wanted)
+    if (vtop->r & VT_LVAL)
         gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
 }
 
@@ -2255,7 +2250,7 @@ static void gen_cast(CType *type)
     }
 
     /* bitfields first get cast to ints */
-    if (vtop->type.t & VT_BITFIELD && !nocode_wanted) {
+    if (vtop->type.t & VT_BITFIELD) {
         gv(RC_INT);
     }
 
@@ -2331,7 +2326,7 @@ static void gen_cast(CType *type)
         } else if (p && dbt == VT_BOOL) {
             vtop->r = VT_CONST;
             vtop->c.i = 1;
-        } else if (!nocode_wanted) {
+        } else {
             /* non constant case: generate code */
             if (sf && df) {
                 /* convert from fp to fp */
@@ -2883,7 +2878,6 @@ ST_FUNC void vstore(void)
         /* if structure, only generate pointer */
         /* structure assignment : generate memcpy */
         /* XXX: optimize if small size */
-        if (!nocode_wanted) {
             size = type_size(&vtop->type, &align);
 
             /* destination */
@@ -2910,10 +2904,7 @@ ST_FUNC void vstore(void)
             /* type size */
             vpushi(size);
             gfunc_call(3);
-        } else {
-            vswap();
-            vpop();
-        }
+
         /* leave source on stack */
     } else if (ft & VT_BITFIELD) {
         /* bitfield store handling */
@@ -2961,7 +2952,6 @@ ST_FUNC void vstore(void)
         vpop();
 
     } else {
-        if (!nocode_wanted) {
 #ifdef CONFIG_TCC_BCHECK
             /* bound check case */
             if (vtop[-1].r & VT_MUSTBOUND) {
@@ -3020,7 +3010,7 @@ ST_FUNC void vstore(void)
             } else {
                 store(r, vtop - 1);
             }
-        }
+
         vswap();
         vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
         vtop->r |= delayed_cast;
@@ -3033,10 +3023,7 @@ ST_FUNC void inc(int post, int c)
     test_lvalue();
     vdup(); /* save lvalue */
     if (post) {
-        if (!nocode_wanted)
-            gv_dup(); /* duplicate value */
-        else
-            vdup(); /* duplicate value */
+        gv_dup(); /* duplicate value */
         vrotb(3);
         vrotb(3);
     }
@@ -4189,7 +4176,7 @@ ST_FUNC void indir(void)
             return;
         expect("pointer");
     }
-    if ((vtop->r & VT_LVAL) && !nocode_wanted)
+    if (vtop->r & VT_LVAL)
         gv(RC_INT);
     vtop->type = *pointed_type(&vtop->type);
     /* Arrays and functions are never lvalues */
@@ -4382,8 +4369,7 @@ ST_FUNC void unary(void)
             if (const_wanted)
                 tcc_error("expected constant");
             /* save all registers */
-            if (!nocode_wanted)
-                save_regs(0);
+            save_regs(0);
             /* statement expression : we do not accept break/continue
                inside as GCC does */
             block(NULL, NULL, 1);
@@ -4610,8 +4596,6 @@ ST_FUNC void unary(void)
 
 #ifdef TCC_TARGET_ARM64
     case TOK___va_start: {
-        if (nocode_wanted)
-            tcc_error("statement in global scope");
         next();
         skip('(');
         expr_eq();
@@ -4626,8 +4610,6 @@ ST_FUNC void unary(void)
     }
     case TOK___va_arg: {
         CType type;
-        if (nocode_wanted)
-            tcc_error("statement in global scope");
         next();
         skip('(');
         expr_eq();
@@ -4906,11 +4888,7 @@ ST_FUNC void unary(void)
             if (sa)
                 tcc_error("too few arguments to function");
             skip(')');
-            if (!nocode_wanted) {
-                gfunc_call(nb_args);
-            } else {
-                vtop -= (nb_args + 1);
-            }
+            gfunc_call(nb_args);
 
             /* return value */
             for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
@@ -5083,9 +5061,9 @@ static void expr_land(void)
 			expr_or();
 			vpop();
 		    }
+		    nocode_wanted = saved_nocode_wanted;
 		    if (t)
 		      gsym(t);
-		    nocode_wanted = saved_nocode_wanted;
 		    gen_cast(&int_type);
 		    break;
 		}
@@ -5127,9 +5105,9 @@ static void expr_lor(void)
 			expr_land();
 			vpop();
 		    }
+		    nocode_wanted = saved_nocode_wanted;
 		    if (t)
 		      gsym(t);
-		    nocode_wanted = saved_nocode_wanted;
 		    gen_cast(&int_type);
 		    break;
 		}
@@ -5206,16 +5184,6 @@ static void expr_cond(void)
             }
         }
         else {
-	    /* XXX This doesn't handle nocode_wanted correctly at all.
-	       It unconditionally calls gv/gvtst and friends.  That's
-	       the case for many of the expr_ routines.  Currently
-	       that should generate only useless code, but depending
-	       on other operand handling this might also generate
-	       pointer derefs for lvalue conversions whose result
-	       is useless, but nevertheless can lead to segfault.
-
-	       Somewhen we need to overhaul the whole nocode_wanted
-	       handling.  */
             if (vtop != vstack) {
                 /* needed to avoid having different registers saved in
                    each branch */
@@ -5575,19 +5543,22 @@ static void block(int *bsym, int *csym, int is_expr)
         gexpr();
         skip(')');
 	cond = condition_3way();
-	if (cond == 0)
+        if (cond == 1)
+            a = 0, vpop();
+        else
+            a = gvtst(1, 0);
+        if (cond == 0)
 	    nocode_wanted |= 2;
-	a = gvtst(1, 0);
         block(bsym, csym, 0);
 	if (cond != 1)
 	    nocode_wanted = saved_nocode_wanted;
         c = tok;
         if (c == TOK_ELSE) {
             next();
-	    if (cond == 1)
-		nocode_wanted |= 2;
             d = gjmp(0);
             gsym(a);
+	    if (cond == 1)
+	        nocode_wanted |= 2;
             block(bsym, csym, 0);
             gsym(d); /* patch else jmp */
 	    if (cond != 0)
@@ -5610,8 +5581,7 @@ static void block(int *bsym, int *csym, int is_expr)
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
         --local_scope;
-        if(!nocode_wanted)
-            gjmp_addr(d);
+        gjmp_addr(d);
         gsym(a);
         gsym_addr(b, d);
     } else if (tok == '{') {
@@ -5801,8 +5771,7 @@ static void block(int *bsym, int *csym, int is_expr)
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
-        if(!nocode_wanted)
-            gjmp_addr(c);
+        gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
         --local_scope;
@@ -5823,11 +5792,8 @@ static void block(int *bsym, int *csym, int is_expr)
         skip('(');
         gsym(b);
 	gexpr();
-	if (!nocode_wanted) {
-	    c = gvtst(0, 0);
-	    gsym_addr(c, d);
-	} else
-	  vtop--;
+	c = gvtst(0, 0);
+	gsym_addr(c, d);
 	nocode_wanted = saved_nocode_wanted;
         skip(')');
         gsym(a);
@@ -5852,21 +5818,19 @@ static void block(int *bsym, int *csym, int is_expr)
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
-	if (!nocode_wanted) {
-	    qsort(sw.p, sw.n, sizeof(void*), case_cmp);
-	    for (b = 1; b < sw.n; b++)
-	        if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
-	            tcc_error("duplicate case value");
-	    /* Our switch table sorting is signed, so the compared
-	       value needs to be as well when it's 64bit.  */
-	    if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
-	        switchval.type.t &= ~VT_UNSIGNED;
-	    vpushv(&switchval);
-	    gcase(sw.p, sw.n, &a);
-	    vpop();
-	    if (sw.def_sym)
-	      gjmp_addr(sw.def_sym);
-	}
+        qsort(sw.p, sw.n, sizeof(void*), case_cmp);
+        for (b = 1; b < sw.n; b++)
+            if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
+                tcc_error("duplicate case value");
+        /* Our switch table sorting is signed, so the compared
+           value needs to be as well when it's 64bit.  */
+        if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
+            switchval.type.t &= ~VT_UNSIGNED;
+        vpushv(&switchval);
+        gcase(sw.p, sw.n, &a);
+        vpop();
+        if (sw.def_sym)
+          gjmp_addr(sw.def_sym);
         dynarray_reset(&sw.p, &sw.n);
         cur_switch = saved;
         /* break label */
@@ -5910,10 +5874,7 @@ static void block(int *bsym, int *csym, int is_expr)
             gexpr();
             if ((vtop->type.t & VT_BTYPE) != VT_PTR)
                 expect("pointer");
-	    if (!nocode_wanted)
-                ggoto();
-	    else
-	        vtop--;
+            ggoto();
         } else if (tok >= TOK_UIDENT) {
             s = label_find(tok);
             /* put forward definition if needed */
@@ -5924,9 +5885,7 @@ static void block(int *bsym, int *csym, int is_expr)
                     s->r = LABEL_FORWARD;
             }
             vla_sp_restore_root();
-	    if (nocode_wanted)
-	      ;
-	    else if (s->r & LABEL_FORWARD)
+	    if (s->r & LABEL_FORWARD)
                 s->jnext = gjmp(s->jnext);
             else
                 gjmp_addr(s->jnext);
@@ -6893,6 +6852,7 @@ static void gen_function(Sym *sym)
 
     rsym = 0;
     block(NULL, NULL, 0);
+    nocode_wanted = 0;
     gsym(rsym);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
