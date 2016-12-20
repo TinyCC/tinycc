@@ -43,6 +43,7 @@ ST_DATA TokenSym **table_ident;
 static TokenSym *hash_ident[TOK_HASH_SIZE];
 static char token_buf[STRING_MAX_SIZE + 1];
 static CString cstr_buf;
+static CString macro_equal_buf;
 static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 static int pp_debug_tok, pp_debug_symv;
@@ -1283,18 +1284,17 @@ static int macro_is_equal(const int *a, const int *b)
 {
     CValue cv;
     int t;
-    static CString localbuf;
 
     if (!a || !b)
         return 1;
 
     while (*a && *b) {
-        /* first time preallocate static localbuf, next time only reset position to start */
-        cstr_reset(&localbuf);
+        /* first time preallocate macro_equal_buf, next time only reset position to start */
+        cstr_reset(&macro_equal_buf);
         TOK_GET(&t, &a, &cv);
-        cstr_cat(&localbuf, get_tok_str(t, &cv), 0);
+        cstr_cat(&macro_equal_buf, get_tok_str(t, &cv), 0);
         TOK_GET(&t, &b, &cv);
-        if (strcmp(localbuf.data, get_tok_str(t, &cv)))
+        if (strcmp(macro_equal_buf.data, get_tok_str(t, &cv)))
             return 0;
     }
     return !(*a || *b);
@@ -3568,6 +3568,7 @@ ST_FUNC void tccpp_delete(TCCState *s)
     /* free static buffers */
     cstr_free(&tokcstr);
     cstr_free(&cstr_buf);
+    cstr_free(&macro_equal_buf);
     tok_str_free_str(tokstr_buf.str);
 
     /* free allocators */
