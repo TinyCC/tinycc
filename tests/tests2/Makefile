@@ -59,7 +59,7 @@ all test: $(filter-out $(SKIP),$(TESTS))
 	    $(TCC) $< -o ./$*.exe $(FILTER) 2>&1 && \
 	    ./$*.exe $(ARGS) >$*.output 2>&1 || true; \
 	  fi
-	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output
+	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output $*.exe
 
 # automatically generate .expect files with gcc:
 %.expect : %.c

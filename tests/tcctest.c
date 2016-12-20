@@ -1404,6 +1404,15 @@ void optimize_out(void)
   if (defined_function() && 0)
     refer_to_undefined();
 
+  if (0) {
+      (void)sizeof( ({
+		     do { } while (0);
+		     0;
+		     }) );
+      undefined_function();
+  }
+
+  /* Leave the "if(1)return; printf()" in this order and last in the function */
   if (1)
     return;
   printf ("oor:%d\n", undefined_function());
@@ -3251,6 +3260,28 @@ void trace_console(long len, long len2)
       }
 #endif
 }
+
+void test_asm_dead_code(void)
+{
+  long rdi;
+  /* Try to make sure that xdi contains a zero, and hence will
+     lead to a segfault if the next asm is evaluated without
+     arguments being set up.  */
+  asm volatile ("" : "=D" (rdi) : "0" (0));
+  (void)sizeof (({
+      int var;
+      /* This shouldn't trigger a segfault, either the argument
+         registers need to be set up and the asm emitted despite
+	 this being in an unevaluated context, or both the argument
+	 setup _and_ the asm emission need to be suppressed.  The latter
+	 is better.  Disabling asm code gen when suppression is on
+	 also fixes the above trace_console bug, but that came earlier
+	 than asm suppression.  */
+      asm volatile ("movl $0,(%0)" : : "D" (&var) : "memory");
+      var;
+  }));
+}
+
 void asm_test(void)
 {
     char buf[128];
@@ -3334,6 +3365,7 @@ void asm_test(void)
     printf ("regvar=%x\n", regvar);
     test_high_clobbers();
     trace_console(8, 8);
+    test_asm_dead_code();
     return;
  label1:
     goto label2;

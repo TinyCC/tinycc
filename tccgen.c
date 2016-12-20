@@ -575,8 +575,16 @@ static void vsetc(CType *type, int r, CValue *vc)
         tcc_error("memory full (vstack)");
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
-       because it would complicate the code generator. */
-    if (vtop >= vstack) {
+       because it would complicate the code generator.
+
+       Don't do this when nocode_wanted.  vtop might come from
+       !nocode_wanted regions (see 88_codeopt.c) and transforming
+       it to a register without actually generating code is wrong
+       as their value might still be used for real.  All values
+       we push under nocode_wanted will eventually be popped
+       again, so that the VT_CMP/VT_JMP value will be in vtop
+       when code is unsuppressed again.  */
+    if (vtop >= vstack && !nocode_wanted) {
         v = vtop->r & VT_VALMASK;
         if (v == VT_CMP || (v & ~1) == VT_JMP)
             gv(RC_INT);
@@ -4367,13 +4375,18 @@ ST_FUNC void unary(void)
                 gen_cast(&type);
             }
         } else if (tok == '{') {
+	    int saved_nocode_wanted = nocode_wanted;
             if (const_wanted)
                 tcc_error("expected constant");
             /* save all registers */
             save_regs(0);
             /* statement expression : we do not accept break/continue
-               inside as GCC does */
+               inside as GCC does.  We do retain the nocode_wanted state,
+	       as statement expressions can't ever be entered from the
+	       outside, so any reactivation of code emission (from labels
+	       or loop heads) can be disabled again after the end of it. */
             block(NULL, NULL, 1);
+	    nocode_wanted = saved_nocode_wanted;
             skip(')');
         } else {
             gexpr();

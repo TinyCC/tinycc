@@ -32,7 +32,7 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 }
 
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
-static int tcc_assemble_internal(TCCState *s1, int do_preprocess);
+static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
 static Sym sym_dot;
 
 /* Return a symbol we can use inside the assembler, having name NAME.
@@ -462,7 +462,7 @@ static void pop_section(TCCState *s1)
     use_section1(s1, prev);
 }
 
-static void asm_parse_directive(TCCState *s1)
+static void asm_parse_directive(TCCState *s1, int global)
 {
     int n, offset, v, size, tok1;
     Section *sec;
@@ -644,7 +644,8 @@ static void asm_parse_directive(TCCState *s1)
             save_parse_state(&saved_parse_state);
             begin_macro(init_str, 1);
             while (repeat-- > 0) {
-                tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS));
+                tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS),
+				      global);
                 macro_ptr = init_str->str;
             }
             end_macro();
@@ -913,13 +914,9 @@ static void asm_parse_directive(TCCState *s1)
 
 
 /* assemble a file */
-static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
+static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
 {
-    int saved_nocode_wanted;
     int opcode;
-
-    saved_nocode_wanted = nocode_wanted;
-    nocode_wanted = 0;
 
     /* XXX: undefine C labels */
 
@@ -940,7 +937,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
             while (tok != TOK_LINEFEED)
                 next();
         } else if (tok >= TOK_ASMDIR_FIRST && tok <= TOK_ASMDIR_LAST) {
-            asm_parse_directive(s1);
+            asm_parse_directive(s1, global);
         } else if (tok == TOK_PPNUM) {
 	    Sym *sym;
             const char *p;
@@ -964,7 +961,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
                 /* handle "extern void vide(void); __asm__("vide: ret");" as
                 "__asm__("globl vide\nvide: ret");" */
                 Sym *sym = sym_find(opcode);
-                if (sym && (sym->type.t & VT_EXTERN) && saved_nocode_wanted) {
+                if (sym && (sym->type.t & VT_EXTERN) && global) {
                     sym = label_find(opcode);
                     if (!sym) {
                         sym = label_push(&s1->asm_labels, opcode, 0);
@@ -993,7 +990,6 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess)
 
     asm_free_labels(s1);
 
-    nocode_wanted = saved_nocode_wanted;
     return 0;
 }
 
@@ -1017,7 +1013,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
                 ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
                 SHN_ABS, file->filename);
 
-    ret = tcc_assemble_internal(s1, do_preprocess);
+    ret = tcc_assemble_internal(s1, do_preprocess, 1);
 
     cur_text_section->data_offset = ind;
 
@@ -1032,7 +1028,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 /* assemble the string 'str' in the current C compilation unit without
    C preprocessing. NOTE: str is modified by modifying the '\0' at the
    end */
-static void tcc_assemble_inline(TCCState *s1, char *str, int len)
+static void tcc_assemble_inline(TCCState *s1, char *str, int len, int global)
 {
     int saved_parse_flags;
     const int *saved_macro_ptr;
@@ -1044,7 +1040,7 @@ static void tcc_assemble_inline(TCCState *s1, char *str, int len)
     memcpy(file->buffer, str, len);
 
     macro_ptr = NULL;
-    tcc_assemble_internal(s1, 0);
+    tcc_assemble_internal(s1, 0, global);
     tcc_close();
 
     parse_flags = saved_parse_flags;
@@ -1277,7 +1273,7 @@ ST_FUNC void asm_instr(void)
                  clobber_regs, out_reg);    
 
     /* assemble the string with tcc internal assembler */
-    tcc_assemble_inline(tcc_state, astr1.data, astr1.size - 1);
+    tcc_assemble_inline(tcc_state, astr1.data, astr1.size - 1, 0);
 
     /* restore the current C token */
     next();
@@ -1299,7 +1295,10 @@ ST_FUNC void asm_instr(void)
 ST_FUNC void asm_global_instr(void)
 {
     CString astr;
+    int saved_nocode_wanted = nocode_wanted;
 
+    /* Global asm blocks are always emitted.  */
+    nocode_wanted = 0;
     next();
     parse_asm_str(&astr);
     skip(')');
@@ -1315,7 +1314,7 @@ ST_FUNC void asm_global_instr(void)
     ind = cur_text_section->data_offset;
 
     /* assemble the string with tcc internal assembler */
-    tcc_assemble_inline(tcc_state, astr.data, astr.size - 1);
+    tcc_assemble_inline(tcc_state, astr.data, astr.size - 1, 1);
     
     cur_text_section->data_offset = ind;
 
@@ -1323,5 +1322,6 @@ ST_FUNC void asm_global_instr(void)
     next();
 
     cstr_free(&astr);
+    nocode_wanted = saved_nocode_wanted;
 }
 #endif /* CONFIG_TCC_ASM */
