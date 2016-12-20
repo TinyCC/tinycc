@@ -2667,6 +2667,9 @@ int reltab[3] = { 1, 2, 3 };
 int *rel1 = &reltab[1];
 int *rel2 = &reltab[2];
 
+#ifdef _WIN64
+void relocation_test(void) {}
+#else
 void getmyaddress(void)
 {
     printf("in getmyaddress\n");
@@ -2695,6 +2698,7 @@ void relocation_test(void)
     printf("pa_symbol=0x%lx\n", __pa_symbol() >> 63);
 #endif
 }
+#endif
 
 void old_style_f(a,b,c)
      int a, b;
@@ -3127,8 +3131,10 @@ void other_constraints_test(void)
 {
     unsigned long ret;
     int var;
+#ifndef _WIN64
     __asm__ volatile ("mov %P1,%0" : "=r" (ret) : "p" (&var));
     printf ("oc1: %d\n", ret == (unsigned long)&var);
+#endif
 }
 
 #ifndef _WIN32
@@ -3203,8 +3209,10 @@ void test_high_clobbers(void)
        correctly capture the data flow, but good enough for us.  */
     asm volatile("mov $0x4542, %%r12" : "=r" (val):: "memory");
     clobber_r12();
+#ifndef _WIN64
     asm volatile("mov %%r12, %0" : "=r" (val2) : "r" (val): "memory");
     printf("asmhc: 0x%x\n", val2);
+#endif
 #endif
 }
 

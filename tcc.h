@@ -72,6 +72,9 @@
 #  pragma warning (disable : 4018)  // signed/unsigned mismatch
 #  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
 #  define ssize_t intptr_t
+#  define __attribute__(x) __declspec x
+#  define aligned align
+# else
 # endif
 # undef CONFIG_TCC_STATIC
 #endif

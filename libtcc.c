@@ -262,7 +262,7 @@ struct mem_debug_header {
     int line_num;
     char file_name[MEM_DEBUG_FILE_LEN + 1];
     unsigned magic2;
-    unsigned magic3;
+    __attribute__((aligned(16))) unsigned magic3;
 };
 
 typedef struct mem_debug_header mem_debug_header_t;

@@ -134,23 +134,23 @@ test4: tcctest.c test.ref
 # use tcc to create libtcc.so/.dll and the tcc(.exe) frontend and run them
 dlltest:
 	@echo ------------ $@ ------------
-	$(TCC) -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL ../libtcc.c $(LIBS) -shared -o libtcc2$(DLLSUF)
-	$(TCC) $(NATIVE_DEFINES) ../tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
-	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run ../examples/ex1.c
+	$(TCC) -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL $(TOPSRC)/libtcc.c $(LIBS) -shared -o libtcc2$(DLLSUF)
+	$(TCC) $(NATIVE_DEFINES) $(TOPSRC)/tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
+	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run $(TOPSRC)/examples/ex1.c
 ifndef CONFIG_WIN32
 	@echo ------------ $@ with PIC ------------
-	$(CC) $(CFLAGS) -fPIC -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL -c ../libtcc.c
+	$(CC) $(CFLAGS) -fPIC -DONE_SOURCE $(NATIVE_DEFINES) -DLIBTCC_AS_DLL -c $(TOPSRC)/libtcc.c
 	$(TCC) libtcc.o $(LIBS) -shared -o libtcc2$(DLLSUF)
-	$(TCC) $(NATIVE_DEFINES) ../tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
-	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run ../examples/ex1.c
+	$(TCC) $(NATIVE_DEFINES) $(TOPSRC)/tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
+	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run $(TOPSRC)/examples/ex1.c
 endif
 	@rm tcc2$(EXESUF) libtcc2$(DLLSUF)
 
 memtest:
 	@echo ------------ $@ ------------
-	$(CC) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -DMEM_DEBUG=2 ../tcc.c $(LIBS) -o memtest-tcc$(EXESUF)
-	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE ../tcc.c $(LIBS)
-	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -run ../tcc.c $(TCCFLAGS) tcctest.c
+	$(CC) $(CFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -DMEM_DEBUG=2 $(TOPSRC)/tcc.c $(LIBS) -o memtest-tcc$(EXESUF)
+	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE $(TOPSRC)/tcc.c $(LIBS)
+	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -DONE_SOURCE -run $(TOPSRC)/tcc.c $(TCCFLAGS) $(TOPSRC)/tests/tcctest.c
 
 
 # memory and bound check auto test

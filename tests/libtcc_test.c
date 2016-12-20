@@ -15,11 +15,15 @@ int add(int a, int b)
     return a + b;
 }
 
+/* this strinc is referenced by the generated code */
 const char hello[] = "Hello World!";
 
 char my_program[] =
 "#include <tcclib.h>\n" /* include the "Simple libc header for TCC" */
 "extern int add(int a, int b);\n"
+"#ifdef _WIN32\n" /* dynamically linked data needs 'dllimport' */
+" __attribute__((dllimport))\n"
+"#endif\n"
 "extern const char hello[];\n"
 "int fib(int n)\n"
 "{\n"

@@ -14,16 +14,14 @@ ifndef TARGET
   else
    TARGET = i386-win32
   endif
-  # using tcc
  else ifeq ($(ARCH),i386)
   TARGET = i386
-  XCC = $(CC) # using gcc
  else ifeq ($(ARCH),x86-64)
   TARGET = x86_64
-  XCC = $(CC) # using gcc
  else ifeq ($(ARCH),arm)
   TARGET = arm
-  XCC = $(CC) # using gcc
+  # using gcc, need asm
+  XCC = $(CC)
  else ifeq ($(ARCH),arm64)
   TARGET = arm64
  endif
@@ -44,22 +42,16 @@ ARM_O = libtcc1.o armeabi.o alloca-arm.o
 ARM64_O = lib-arm64.o
 WIN32_O = crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 
-# build TCC runtime library to contain PIC code, so it can be linked
-# into shared libraries
-PICFLAGS = -fPIC
-
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(I386_O) $(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
- XFLAGS = $(TGT)
 else ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O) $(WIN32_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
- XFLAGS = $(TGT)
 else ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
@@ -80,7 +72,10 @@ else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
 
-XFLAGS ?= $(CFLAGS) $(PICFLAGS) $(TGT)
+XFLAGS = $(TGT)
+ifeq "$(XCC)" "$(CC)"
+ XFLAGS += $(CFLAGS)
+endif
 
 ifeq ($(TARGETOS),Darwin)
  XAR = $(DIR)/tiny_libmaker$(EXESUF)

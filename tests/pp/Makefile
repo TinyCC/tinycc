@@ -15,15 +15,18 @@ all test : $(sort $(TESTS))
 
 DIFF_OPTS = -Nu -b -B -I "^\#"
 
+# Filter source directory in warnings/errors (out-of-tree builds)
+FILTER = 2>&1 | sed 's,$(SRC)/,,g'
+
 %.test: %.c %.expect
 	@echo PPTest $* ...
-	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
+	-@$(TCC) -E -P $< $(FILTER) >$*.output 2>&1 ; \
 	    diff $(DIFF_OPTS) $(SRC)/$*.expect $*.output \
 	    && rm -f $*.output
 
 %.test: %.S %.expect
 	@echo PPTest $* ...
-	-@$(TCC) -E -P $< >$*.output 2>&1 ; \
+	-@$(TCC) -E -P $< $(FILTER) >$*.output 2>&1 ; \
 	    diff $(DIFF_OPTS) $(SRC)/$*.expect $*.output \
 	    && rm -f $*.output
 
