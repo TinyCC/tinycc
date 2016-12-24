@@ -32,10 +32,10 @@ FILTER = 2>&1 | sed 's,$(SRC)/,,g'
 
 # automatically generate .expect files with gcc:
 %.expect: %.c
-	gcc -E -P $< >$*.expect 2>&1
+	$(CC) -E -P $< >$*.expect 2>&1
 
 %.expect: %.S
-	gcc -E -P $< >$*.expect 2>&1
+	$(CC) -E -P $< >$*.expect 2>&1
 
 # tell make not to delete
 .PRECIOUS: %.expect
