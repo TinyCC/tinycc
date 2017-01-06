@@ -174,6 +174,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     return (*prog_main)(argc, argv);
 }
 
+#ifdef TCC_TARGET_X86_64
+ #define SECTION_ALIGNMENT 511
+#else
+ #define SECTION_ALIGNMENT 15
+#endif
+
 /* relocate code. Return -1 on error, required size if ptr is NULL,
    otherwise copy code into buffer passed by the caller */
 static int tcc_relocate_ex(TCCState *s1, void *ptr)
@@ -205,7 +211,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
             continue;
-        offset = (offset + 15) & ~15;
+        offset = (offset + SECTION_ALIGNMENT) & ~SECTION_ALIGNMENT;
         s->sh_addr = mem ? mem + offset : 0;
         offset += s->data_offset;
     }
