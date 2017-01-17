@@ -5681,100 +5681,52 @@ special_math_val:
     }
 }
 
-ST_FUNC void expr_prod(void)
+static int precedence(int tok)
 {
-    int t;
-
-    unary();
-    while (tok == '*' || tok == '/' || tok == '%') {
-        t = tok;
-        next();
-        unary();
-        gen_op(t);
+    switch (tok) {
+	case '|': return 1;
+	case '^': return 2;
+	case '&': return 3;
+	case TOK_EQ: case TOK_NE: return 4;
+relat: case TOK_ULT: case TOK_UGE: return 5;
+	case TOK_SHL: case TOK_SAR: return 6;
+	case '+': case '-': return 7;
+	case '*': case '/': case '%': return 8;
+	default:
+	    if (tok >= TOK_ULE && tok <= TOK_GT)
+	        goto relat;
+	    return 0;
     }
 }
 
-ST_FUNC void expr_sum(void)
+static unsigned char prec[256];
+ST_FUNC void init_prec(void)
 {
-    int t;
-
-    expr_prod();
-    while (tok == '+' || tok == '-') {
-        t = tok;
-        next();
-        expr_prod();
-        gen_op(t);
-    }
+    int i;
+    for (i = 0; i < 256; i++)
+	prec[i] = precedence(i);
 }
 
-static void expr_shift(void)
+#define precedence(i) ((unsigned)i < 256 ? prec[i] : 0)
+
+static void expr_infix(int p)
 {
-    int t;
-
-    expr_sum();
-    while (tok == TOK_SHL || tok == TOK_SAR) {
-        t = tok;
-        next();
-        expr_sum();
-        gen_op(t);
-    }
-}
-
-static void expr_cmp(void)
-{
-    int t;
-
-    expr_shift();
-    while ((tok >= TOK_ULE && tok <= TOK_GT) ||
-           tok == TOK_ULT || tok == TOK_UGE) {
-        t = tok;
-        next();
-        expr_shift();
-        gen_op(t);
-    }
-}
-
-static void expr_cmpeq(void)
-{
-    int t;
-
-    expr_cmp();
-    while (tok == TOK_EQ || tok == TOK_NE) {
-        t = tok;
-        next();
-        expr_cmp();
-        gen_op(t);
-    }
-}
-
-static void expr_and(void)
-{
-    expr_cmpeq();
-    while (tok == '&') {
-        next();
-        expr_cmpeq();
-        gen_op('&');
-    }
-}
-
-static void expr_xor(void)
-{
-    expr_and();
-    while (tok == '^') {
-        next();
-        expr_and();
-        gen_op('^');
+    int t = tok, p2, p3;
+    while ((p2 = precedence(t)) >= p) {
+	next();
+	unary();
+	while ((p3 = precedence(tok)) > p2) {
+	    expr_infix(p3);
+	}
+	gen_op(t);
+	t = tok;
     }
 }
 
 static void expr_or(void)
 {
-    expr_xor();
-    while (tok == '|') {
-        next();
-        expr_xor();
-        gen_op('|');
-    }
+    unary();
+    expr_infix(1);
 }
 
 static int condition_3way(void);
