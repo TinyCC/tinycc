@@ -1406,7 +1406,6 @@ static void alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
     /* Allocate strings for section names */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        s->sh_name = put_elf_str(strsec, s->name);
         /* when generating a DLL, we include relocations but we may
            patch them */
         if (file_type == TCC_OUTPUT_DLL &&
@@ -1420,11 +1419,14 @@ static void alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
         } else if (s1->do_debug ||
             file_type == TCC_OUTPUT_OBJ ||
             (s->sh_flags & SHF_ALLOC) ||
-            i == (s1->nb_sections - 1)) {
+	    i == (s1->nb_sections - 1)) {
             /* we output all sections if debug or object file */
             s->sh_size = s->data_offset;
         }
+	if (s->sh_size || (s->sh_flags & SHF_ALLOC))
+            s->sh_name = put_elf_str(strsec, s->name);
     }
+    strsec->sh_size = strsec->data_offset;
 }
 
 /* Info to be copied in dynamic section */
@@ -1898,6 +1900,51 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
     return 0;
 }
 
+/* Sort section headers by assigned sh_addr, remove sections
+   that we aren't going to output.  */
+static void tidy_section_headers(TCCState *s1, int *sec_order)
+{
+    int i, nnew, l, *backmap;
+    Section **snew, *s;
+    ElfW(Sym) *sym;
+
+    snew = tcc_malloc(s1->nb_sections * sizeof(snew[0]));
+    backmap = tcc_malloc(s1->nb_sections * sizeof(backmap[0]));
+    for (i = 0, nnew = 0, l = s1->nb_sections; i < s1->nb_sections; i++) {
+	s = s1->sections[sec_order[i]];
+	if (!i || s->sh_name) {
+	    backmap[sec_order[i]] = nnew;
+	    snew[nnew] = s;
+	    ++nnew;
+	} else {
+	    backmap[sec_order[i]] = 0;
+	    snew[--l] = s;
+	}
+    }
+    for (i = 0; i < nnew; i++) {
+	s = snew[i];
+	if (s) {
+	    s->sh_num = i;
+            if (s->sh_type == SHT_RELX)
+		s->sh_info = backmap[s->sh_info];
+	}
+    }
+
+    for_each_elem(symtab_section, 1, sym, ElfW(Sym))
+	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
+	    sym->st_shndx = backmap[sym->st_shndx];
+    for_each_elem(s1->dynsym, 1, sym, ElfW(Sym))
+	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
+	    sym->st_shndx = backmap[sym->st_shndx];
+
+    for (i = 0; i < s1->nb_sections; i++)
+	sec_order[i] = i;
+    tcc_free(s1->sections);
+    s1->sections = snew;
+    s1->nb_sections = nnew;
+    tcc_free(backmap);
+}
+
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
@@ -2068,6 +2115,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         ret = final_sections_reloc(s1);
         if (ret)
             goto the_end;
+	tidy_section_headers(s1, sec_order);
     }
 
     /* Perform relocation to GOT or PLT entries */
@@ -2076,6 +2124,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
+    s1->nb_sections = shnum;
  the_end:
     tcc_free(sec_order);
     tcc_free(phdr);
