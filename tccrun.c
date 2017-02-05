@@ -155,7 +155,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     return (*prog_main)(argc, argv);
 }
 
-#ifdef TCC_TARGET_X86_64
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
  #define RUN_SECTION_ALIGNMENT 63
 #else
  #define RUN_SECTION_ALIGNMENT 15
@@ -166,9 +166,8 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 static int tcc_relocate_ex(TCCState *s1, void *ptr)
 {
     Section *s;
-    unsigned long offset, length;
+    unsigned offset, length, fill, i, k;
     addr_t mem;
-    int i;
 
     if (NULL == ptr) {
         s1->nb_errors = 0;
@@ -185,17 +184,33 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
     }
 
     offset = 0, mem = (addr_t)ptr;
-    mem += -(int)mem & RUN_SECTION_ALIGNMENT;
+    fill = -mem & RUN_SECTION_ALIGNMENT;
 #ifdef _WIN64
     offset += sizeof (void*);
 #endif
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (0 == (s->sh_flags & SHF_ALLOC))
-            continue;
-        offset = (offset + RUN_SECTION_ALIGNMENT) & ~RUN_SECTION_ALIGNMENT;
-        s->sh_addr = mem ? mem + offset : 0;
-        offset += s->data_offset;
+    for (k = 0; k < 2; ++k) {
+        for(i = 1; i < s1->nb_sections; i++) {
+            s = s1->sections[i];
+            if (0 == (s->sh_flags & SHF_ALLOC))
+                continue;
+            if (k != !(s->sh_flags & SHF_EXECINSTR))
+                continue;
+            offset += fill;
+            s->sh_addr = mem ? mem + offset : 0;
+#if 0
+            if (mem)
+                printf("%-16s +%02lx %p %04x\n",
+                    s->name, fill, (void*)s->sh_addr, (unsigned)s->data_offset);
+#endif
+            offset += s->data_offset;
+            fill = -(mem + offset) & 15;
+        }
+#if RUN_SECTION_ALIGNMENT > 15
+        /* To avoid that x86 processors would reload cached instructions each time
+           when data is written in the near, we need to make sure that code and data
+           do not share the same 64 byte unit */
+        fill = -(mem + offset) & RUN_SECTION_ALIGNMENT;
+#endif
     }
 
     /* relocate symbols */
@@ -223,7 +238,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr)
         if (0 == (s->sh_flags & SHF_ALLOC))
             continue;
         length = s->data_offset;
-        // printf("%-12s %08lx %04x\n", s->name, s->sh_addr, length);
         ptr = (void*)s->sh_addr;
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
