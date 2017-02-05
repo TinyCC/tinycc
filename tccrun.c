@@ -60,7 +60,7 @@ static void win64_del_function_table(void *);
 
 LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
 {
-    int size;  void *mem;
+    int size;
 
     if (TCC_RELOCATE_AUTO != ptr)
         return tcc_relocate_ex(s1, ptr);
@@ -70,35 +70,17 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
         return -1;
 
 #ifdef HAVE_SELINUX
-    {   /* Use mmap instead of malloc for Selinux.  Ref:
-           http://www.gnu.org/s/libc/manual/html_node/File-Size.html */
-
-        char tmpfname[] = "/tmp/.tccrunXXXXXX";
-        int fd = mkstemp (tmpfname);
-        void *wr_mem;
-
-        unlink (tmpfname);
-        ftruncate (fd, size);
-
-        wr_mem = mmap (NULL, size, PROT_READ|PROT_WRITE,
-            MAP_SHARED, fd, 0);
-        if (wr_mem == MAP_FAILED)
-            tcc_error("/tmp not writeable");
-        mem = mmap (NULL, size, PROT_READ|PROT_EXEC,
-            MAP_SHARED, fd, 0);
-        if (mem == MAP_FAILED)
-            tcc_error("/tmp not executable");
-
-        tcc_relocate_ex(s1, wr_mem);
-        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
-        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, wr_mem);
-        dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, mem);
-    }
+    /* Use mmap instead of malloc for Selinux. */
+    ptr = mmap (NULL, size, PROT_READ|PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (ptr == MAP_FAILED)
+        tcc_error("tccrun: could not map memory");
+    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
 #else
-    mem = tcc_malloc(size);
-    tcc_relocate_ex(s1, mem); /* no more errors expected */
-    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, mem);
+    ptr = tcc_malloc(size);
 #endif
+    tcc_relocate_ex(s1, ptr); /* no more errors expected */
+    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, ptr);
     return 0;
 }
 
@@ -108,13 +90,12 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 
     for (i = 0; i < s1->nb_runtime_mem; ++i) {
 #ifdef HAVE_SELINUX
-        int size = (int)(addr_t)s1->runtime_mem[i];
-        munmap(s1->runtime_mem[++i], size);
-        munmap(s1->runtime_mem[++i], size);
+        unsigned size = (unsigned)(addr_t)s1->runtime_mem[i++];
+        munmap(s1->runtime_mem[i], size);
 #else
-# ifdef _WIN64
+#ifdef _WIN64
         win64_del_function_table(*(void**)s1->runtime_mem[i]);
-# endif
+#endif
         tcc_free(s1->runtime_mem[i]);
 #endif
     }
@@ -264,19 +245,19 @@ static void set_pages_executable(void *ptr, unsigned long length)
     unsigned long old_protect;
     VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
 #else
+    void __clear_cache(void *beginning, void *end);
+    addr_t start, end;
 #ifndef PAGESIZE
 # define PAGESIZE 4096
 #endif
-    addr_t start, end;
     start = (addr_t)ptr & ~(PAGESIZE - 1);
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC))
         tcc_error("mprotect failed: did you mean to configure --with-selinux?");
-#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
-    { extern void __clear_cache(void *beginning, void *end);
-      __clear_cache(ptr, (char *)ptr + length); }
-#endif
+# if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
+    __clear_cache(ptr, (char *)ptr + length);
+# endif
 #endif
 }
 
