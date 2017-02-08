@@ -13,7 +13,7 @@ extern "C" {
 #include <ctype.h>
 #define ANYSIZE_ARRAY 1
 
-#include <specstrings.h>
+//gr #include <specstrings.h>
 
 #define RESTRICTED_POINTER
 

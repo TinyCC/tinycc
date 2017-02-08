@@ -122,7 +122,7 @@ typedef CONST void *LPCVOID;
 #include <winnt.h>
 #endif
 
-#include <specstrings.h>
+//gr #include <specstrings.h>
 
   typedef UINT_PTR WPARAM;
   typedef LONG_PTR LPARAM;

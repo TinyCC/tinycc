@@ -67,11 +67,11 @@
 #include <winbase.h>
 #include <wingdi.h>
 #include <winuser.h>
-#include <winnls.h>
+//gr #include <winnls.h>
 #include <wincon.h>
 #include <winver.h>
 #include <winreg.h>
-#include <winnetwk.h>
+//gr #include <winnetwk.h>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #include <cderr.h>
@@ -104,7 +104,7 @@
 #endif
 #endif
 
-#include <stralign.h>
+//gr #include <stralign.h>
 
 #ifdef INC_OLE2
 #include <ole2.h>
