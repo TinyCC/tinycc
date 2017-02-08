@@ -1193,9 +1193,9 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
     return 0;
 }
 
-ST_FUNC void greturn(void)
+ST_FUNC void gfunc_return(CType *func_type)
 {
-    CType *t = &func_vt;
+    CType *t = func_type;
     unsigned long a;
 
     arm64_pcs(0, &t, &a);
@@ -1203,8 +1203,8 @@ ST_FUNC void greturn(void)
     case -1:
         break;
     case 0:
-        if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
-            int align, size = type_size(&func_vt, &align);
+        if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
+            int align, size = type_size(func_type, &align);
             gaddrof();
             gv(RC_R(0));
             arm64_ldrs(0, size);
@@ -1213,7 +1213,7 @@ ST_FUNC void greturn(void)
             gv(RC_IRET);
         break;
     case 1: {
-        CType type = func_vt;
+        CType type = *func_type;
         mk_pointer(&type);
         vset(&type, VT_LOCAL | VT_LVAL, func_vc);
         indir();
@@ -1222,7 +1222,7 @@ ST_FUNC void greturn(void)
         break;
     }
     case 16:
-        if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
+        if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
           uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
           gaddrof();
           gv(RC_R(0));
@@ -1237,6 +1237,7 @@ ST_FUNC void greturn(void)
     default:
       assert(0);
     }
+    vtop--;
 }
 
 ST_FUNC void gfunc_epilog(void)

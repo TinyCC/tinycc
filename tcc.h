@@ -1273,7 +1273,6 @@ ST_FUNC void check_vstack(void);
 ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
-ST_FUNC void swap(int *p, int *q);
 ST_FUNC void vpushi(int v);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, long v);
@@ -1519,7 +1518,7 @@ ST_FUNC void gen_cvt_itof1(int t);
 #ifdef TCC_TARGET_ARM64
 ST_FUNC void gen_cvt_sxtw(void);
 ST_FUNC void gen_opl(int op);
-ST_FUNC void greturn(void);
+ST_FUNC void gfunc_return(CType *func_type);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void gen_va_arg(CType *t);
 ST_FUNC void gen_clear_cache(void);

@@ -752,25 +752,21 @@ void gen_offs_sp(int b, int r, int d)
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
     int size, align;
-    *regsize = 8;
     *ret_align = 1; // Never have to re-align return values for x86-64
+    *regsize = 8;
     size = type_size(vt, &align);
-    ret->ref = NULL;
-    if (size > 8) {
+    if (size > 8 || (size & (size - 1)))
         return 0;
-    } else if (size > 4) {
+    if (size == 8)
         ret->t = VT_LLONG;
-        return 1;
-    } else if (size > 2) {
+    else if (size == 4)
         ret->t = VT_INT;
-        return 1;
-    } else if (size > 1) {
+    else if (size == 2)
         ret->t = VT_SHORT;
-        return 1;
-    } else {
+    else
         ret->t = VT_BYTE;
-        return 1;
-    }
+    ret->ref = NULL;
+    return 1;
 }
 
 static int is_sse_float(int t) {

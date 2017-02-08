@@ -396,21 +396,21 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
 {
 #ifdef TCC_TARGET_PE
     int size, align;
-
     *ret_align = 1; // Never have to re-align return values for x86
     *regsize = 4;
     size = type_size(vt, &align);
-    if (size > 8) {
+    if (size > 8 || (size & (size - 1)))
         return 0;
-    } else if (size > 4) {
-        ret->ref = NULL;
+    if (size == 8)
         ret->t = VT_LLONG;
-        return 1;
-    } else {
-        ret->ref = NULL;
+    else if (size == 4)
         ret->t = VT_INT;
-        return 1;
-    }
+    else if (size == 2)
+        ret->t = VT_SHORT;
+    else
+        ret->t = VT_BYTE;
+    ret->ref = NULL;
+    return 1;
 #else
     *ret_align = 1; // Never have to re-align return values for x86
     return 0;
@@ -547,7 +547,8 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     func_var = (sym->c == FUNC_ELLIPSIS);
 #ifdef TCC_TARGET_PE
     size = type_size(&func_vt,&align);
-    if (((func_vt.t & VT_BTYPE) == VT_STRUCT) && (size > 8)) {
+    if (((func_vt.t & VT_BTYPE) == VT_STRUCT)
+        && (size > 8 || (size & (size - 1)))) {
 #else
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
 #endif
