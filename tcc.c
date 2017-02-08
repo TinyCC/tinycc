@@ -153,9 +153,39 @@ static void help(void)
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #ifdef _WIN32
 #include <process.h>
+
+static char *str_replace(const char *str, const char *p, const char *r)
+{
+    const char *s, *s0;
+    char *d, *d0;
+    int sl, pl, rl;
+
+    sl = strlen(str);
+    pl = strlen(p);
+    rl = strlen(r);
+    for (d0 = NULL;; d0 = tcc_malloc(sl + 1)) {
+        for (d = d0, s = str; s0 = s, s = strstr(s, p), s; s += pl) {
+            if (d) {
+                memcpy(d, s0, sl = s - s0), d += sl;
+                memcpy(d, r, rl), d += rl;
+            } else
+                sl += rl - pl;
+        }
+        if (d) {
+            strcpy(d, s0);
+            return d0;
+        }
+    }
+}
+
 static int execvp_win32(const char *prog, char **argv)
 {
-    int ret = _spawnvp(P_NOWAIT, prog, (const char *const*)argv);
+    int ret; char **p;
+    /* replace all " by \" */
+    for (p = argv; *p; ++p)
+        if (strchr(*p, '"'))
+            *p = str_replace(*p, "\"", "\\\"");
+    ret = _spawnvp(P_NOWAIT, prog, (const char *const*)argv);
     if (-1 == ret)
         return ret;
     cwait(&ret, ret, WAIT_CHILD);
@@ -165,28 +195,33 @@ static int execvp_win32(const char *prog, char **argv)
 #endif
 static void exec_other_tcc(TCCState *s, char **argv, int option)
 {
-    char child_path[4096], *child_name; const char *target;
+    char child_path[4096], *a0 = argv[0]; const char *target;
+    int l;
+
     switch (option) {
+
 #ifdef TCC_TARGET_I386
         case 32: break;
         case 64: target = "x86_64";
 #else
         case 64: break;
         case 32: target = "i386";
+
 #endif
-            pstrcpy(child_path, sizeof child_path - 40, argv[0]);
-            child_name = tcc_basename(child_path);
-            strcpy(child_name, target);
+            l = tcc_basename(a0) - a0;
+            snprintf(child_path, sizeof child_path,
 #ifdef TCC_TARGET_PE
-            strcat(child_name, "-win32");
+                "%.*s%s-win32-tcc"
+#else
+                "%.*s%s-tcc"
 #endif
-            strcat(child_name, "-tcc");
-            if (strcmp(argv[0], child_path)) {
+                , l, a0, target);
+            if (strcmp(a0, child_path)) {
                 if (s->verbose > 0)
-                    printf("tcc: using '%s'\n", child_name), fflush(stdout);
+                    printf("tcc: using '%s'\n", child_path + l), fflush(stdout);
                 execvp(argv[0] = child_path, argv);
             }
-            tcc_error("'%s' not found", child_name);
+            tcc_error("'%s' not found", child_path + l);
     }
 }
 #else
@@ -196,15 +231,13 @@ static void exec_other_tcc(TCCState *s, char **argv, int option)
 static void gen_makedeps(TCCState *s, const char *target, const char *filename)
 {
     FILE *depout;
-    char buf[1024], *ext;
+    char buf[1024];
     int i;
 
     if (!filename) {
-        /* compute filename automatically
-         * dir/file.o -> dir/file.d             */
-        pstrcpy(buf, sizeof(buf), target);
-        ext = tcc_fileextension(buf);
-        pstrcpy(ext, sizeof(buf) - (ext-buf), ".d");
+        /* compute filename automatically: dir/file.o -> dir/file.d */
+        snprintf(buf, sizeof buf, "%.*s.d",
+            (int)(tcc_fileextension(target) - target), target);
         filename = buf;
     }
 
@@ -231,7 +264,7 @@ static char *default_outputfile(TCCState *s, const char *first_file)
 
     if (first_file && strcmp(first_file, "-"))
         name = tcc_basename(first_file);
-    pstrcpy(buf, sizeof(buf), name);
+    snprintf(buf, sizeof(buf), "%s", name);
     ext = tcc_fileextension(buf);
 #ifdef TCC_TARGET_PE
     if (s->output_type == TCC_OUTPUT_DLL)
@@ -245,7 +278,6 @@ static char *default_outputfile(TCCState *s, const char *first_file)
         strcpy(ext, ".o");
     else
         strcpy(buf, "a.out");
-
     return tcc_strdup(buf);
 }
 

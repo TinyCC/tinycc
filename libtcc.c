@@ -133,7 +133,7 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 
 /********************************************************/
 /* copy a string and truncate it. */
-PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
+ST_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 {
     char *q, *q_end;
     int c;
@@ -153,7 +153,7 @@ PUB_FUNC char *pstrcpy(char *buf, int buf_size, const char *s)
 }
 
 /* strcat and truncate. */
-PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
+ST_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
 {
     int len;
     len = strlen(buf);
@@ -162,7 +162,7 @@ PUB_FUNC char *pstrcat(char *buf, int buf_size, const char *s)
     return buf;
 }
 
-PUB_FUNC char *pstrncpy(char *out, const char *in, size_t num)
+ST_FUNC char *pstrncpy(char *out, const char *in, size_t num)
 {
     memcpy(out, in, num);
     out[num] = '\0';
@@ -1157,7 +1157,7 @@ PUB_FUNC int tcc_add_library_err(TCCState *s, const char *libname)
 {
     int ret = tcc_add_library(s, libname);
     if (ret < 0)
-        tcc_error_noabort("library 'lib%s' not found", libname);
+        tcc_error_noabort("library '%s' not found", libname);
     return ret;
 }
 
