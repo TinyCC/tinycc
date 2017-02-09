@@ -71,15 +71,19 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -88,6 +92,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>ONE_SOURCE;LIBTCC_AS_DLL;TCC_TARGET_PE;TCC_TARGET_I386;WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBTCC_EXPORTS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -96,6 +101,12 @@
     <PostBuildEvent>
       <Command>copy $(TargetPath) $(SolutionDir)..</Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)PreBuild.bat</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generate config.h</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -104,6 +115,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>ONE_SOURCE;LIBTCC_AS_DLL;TCC_TARGET_PE;TCC_TARGET_X86_64;_DEBUG;_WINDOWS;_USRDLL;LIBTCC_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -112,6 +124,12 @@
     <PostBuildEvent>
       <Command>copy $(TargetPath) $(SolutionDir)..</Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)PreBuild.bat</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generate config.h</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -132,6 +150,12 @@
     <PostBuildEvent>
       <Command>copy $(TargetPath) $(SolutionDir)..</Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)PreBuild.bat</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generate config.h</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -152,6 +176,12 @@
     <PostBuildEvent>
       <Command>copy $(TargetPath) $(SolutionDir)..</Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>$(ProjectDir)PreBuild.bat</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generate config.h</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\libtcc.c" />
