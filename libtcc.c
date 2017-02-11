@@ -1310,11 +1310,15 @@ static const char *skip_linker_arg(const char **str)
     return s2;
 }
 
-static char *copy_linker_arg(const char *p)
+static void copy_linker_arg(char **pp, const char *s, int sep)
 {
-    const char *q = p;
+    const char *q = s;
+    char *p = *pp;
+    int l = 0;
+    if (p && sep)
+        p[l = strlen(p)] = sep, ++l;
     skip_linker_arg(&q);
-    return pstrncpy(tcc_malloc(q - p + 1), p, q - p);
+    pstrncpy(l + (*pp = tcc_realloc(p, q - s + l + 1)), s, q - s);
 }
 
 /* set linker options */
@@ -1332,14 +1336,14 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "nostdlib", &p)) {
             s->nostdlib = 1;
         } else if (link_option(option, "fini=", &p)) {
-            s->fini_symbol = copy_linker_arg(p);
+            copy_linker_arg(&s->fini_symbol, p, 0);
             ignoring = 1;
         } else if (link_option(option, "image-base=", &p)
                 || link_option(option, "Ttext=", &p)) {
             s->text_addr = strtoull(p, &end, 16);
             s->has_text_addr = 1;
         } else if (link_option(option, "init=", &p)) {
-            s->init_symbol = copy_linker_arg(p);
+            copy_linker_arg(&s->init_symbol, p, 0);
             ignoring = 1;
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
@@ -1364,11 +1368,11 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "O", &p)) {
             ignoring = 1;
         } else if (link_option(option, "rpath=", &p)) {
-            s->rpath = copy_linker_arg(p);
+            copy_linker_arg(&s->rpath, p, ':');
         } else if (link_option(option, "section-alignment=", &p)) {
             s->section_align = strtoul(p, &end, 16);
         } else if (link_option(option, "soname=", &p)) {
-            s->soname = copy_linker_arg(p);
+            copy_linker_arg(&s->soname, p, 0);
 #ifdef TCC_TARGET_PE
         } else if (link_option(option, "large-address-aware", &p)) {
             s->pe_characteristics |= 0x20;
