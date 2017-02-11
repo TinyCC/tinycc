@@ -56,8 +56,6 @@ int code_reloc (int reloc_type)
 int gotplt_entry_type (int reloc_type)
 {
     switch (reloc_type) {
-        case R_AARCH64_ABS32:
-        case R_AARCH64_ABS64:
 	case R_AARCH64_PREL32:
         case R_AARCH64_MOVW_UABS_G0_NC:
         case R_AARCH64_MOVW_UABS_G1_NC:
@@ -70,6 +68,8 @@ int gotplt_entry_type (int reloc_type)
         case R_AARCH64_COPY:
             return NO_GOTPLT_ENTRY;
 
+        case R_AARCH64_ABS32:
+        case R_AARCH64_ABS64:
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:
             return AUTO_GOTPLT_ENTRY;
