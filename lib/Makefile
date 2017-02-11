@@ -22,6 +22,7 @@ ifndef TARGET
   TARGET = arm
   # using gcc, need asm
   XCC = $(CC)
+  XFLAGS = $(CFLAGS) -fPIC
  else ifeq ($(ARCH),arm64)
   TARGET = arm64
  endif
@@ -72,11 +73,6 @@ else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
 
-XFLAGS = $(TGT)
-ifeq "$(XCC)" "$(CC)"
- XFLAGS += $(CFLAGS)
-endif
-
 ifeq ($(TARGETOS),Darwin)
  XAR = $(DIR)/tiny_libmaker$(EXESUF)
  XFLAGS += -D_ANSI_SOURCE
@@ -90,9 +86,9 @@ endif
 $(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
 	$(AR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
-	$(XCC) -c $< -o $@ $(XFLAGS)
+	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
 $(DIR)/%.o : %.S
-	$(XCC) -c $< -o $@ $(XFLAGS)
+	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
 # windows : utilities
 $(DIR)/tiny_%$(EXESUF) : $(TOPSRC)/win32/tools/tiny_%.c
 	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(TGT)
