@@ -56,8 +56,8 @@ all test: $(filter-out $(SKIP),$(TESTS))
 	@if test -z "$(NORUN)"; then \
 	    $(TCC) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true; \
 	  else \
-	    $(TCC) $< -o ./$*.exe $(FILTER) 2>&1 && \
-	    ./$*.exe $(ARGS) >$*.output 2>&1 || true; \
+	    $(TCC) $< -o ./$*.exe $(FILTER) >$*.output 2>&1; \
+	    ./$*.exe $(ARGS) >>$*.output 2>&1 || true; \
 	  fi
 	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output $*.exe
 
