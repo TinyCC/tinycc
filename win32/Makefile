@@ -3,10 +3,10 @@
 # It requires Cygwin 64 and gcc to bootstrap a first tcc version which is used
 # by a second stage to compile tcc it self.
 # Generated binaries do not require cygwin to run.
-# You can launch 'tarball' target to build a tar.gz you can install on any Windows
-# machines.
+# You can launch 'tarball' target to build a tar.gz you can install on any
+# Windows machines.
 
-ARCH	= 64
+ARCH	= $(shell if `gcc -v 2>&1 | grep Target | grep -q x86_64`; then echo 64; else echo 32; fi)
 VERSION	= $(shell cat ../VERSION)
 BOOTCC	= gcc
 CFLAGS	= -s -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE -DONE_SOURCE
@@ -20,6 +20,7 @@ PREFIX	= i386
 endif
 
 all: pre bootstrap libs rebuild
+	@chmod 775 *.exe
 	@ls -ls *.exe
 
 pre:
@@ -90,11 +91,11 @@ rebuild:
 	@echo Rebuild using tcc itself - default $(ARCH)bits
 	@./$(PREFIX)-win32-tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c libtcc.dll
 	@./$(PREFIX)-win32-tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -o tiny_libmaker.exe tools/tiny_libmaker.c
-	@./tcc -m64 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
-	@./tcc -m64 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o i386-win32-tcc.exe ../tcc.c
-	@./tcc -m64 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tiny_libmaker32.exe tools/tiny_libmaker.c
-	@./tcc -m64 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o x86_64-win32-tcc.exe ../tcc.c
-	@./tcc -m64 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tiny_libmaker64.exe tools/tiny_libmaker.c
+	@./tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
+	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
+	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
+	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tiny_libmaker32.exe tools/tiny_libmaker.c
+	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tiny_libmaker64.exe tools/tiny_libmaker.c
 
 PHONY += rebuild
 
