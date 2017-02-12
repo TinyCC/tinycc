@@ -1614,7 +1614,7 @@ static void gen_opl(int op)
         if (op != TOK_EQ) {
             /* generate non equal test */
             /* XXX: NOT PORTABLE yet */
-            if (a == 0) {
+            if (op1 == TOK_NE) {
                 b = gvtst(0, 0);
             } else {
 #if defined(TCC_TARGET_I386)
@@ -1622,10 +1622,8 @@ static void gen_opl(int op)
 #elif defined(TCC_TARGET_ARM)
                 b = ind;
                 o(0x1A000000 | encbranch(ind, 0, 1));
-#elif defined(TCC_TARGET_C67) || defined(TCC_TARGET_ARM64)
-                tcc_error("not implemented");
 #else
-#error not supported
+                tcc_error("not implemented");
 #endif
             }
         }
