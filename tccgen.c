@@ -1608,23 +1608,15 @@ static void gen_opl(int op)
         a = 0;
         b = 0;
         gen_op(op1);
-        if (op1 != TOK_NE) {
+        if (op == TOK_NE) {
+            b = gvtst(0, 0);
+        } else {
             a = gvtst(1, 0);
-        }
-        if (op != TOK_EQ) {
-            /* generate non equal test */
-            /* XXX: NOT PORTABLE yet */
-            if (op1 == TOK_NE) {
+            if (op != TOK_EQ) {
+                /* generate non equal test */
+                vpushi(TOK_NE);
+                vtop->r = VT_CMP;
                 b = gvtst(0, 0);
-            } else {
-#if defined(TCC_TARGET_I386)
-                b = gjmp2(0x850f, 0);
-#elif defined(TCC_TARGET_ARM)
-                b = ind;
-                o(0x1A000000 | encbranch(ind, 0, 1));
-#else
-                tcc_error("not implemented");
-#endif
             }
         }
         /* compare low. Always unsigned */
@@ -4724,23 +4716,13 @@ ST_FUNC void unary(void)
                 tcc_warning("implicit declaration of function '%s'", name);
             s = external_global_sym(t, &func_old_type, 0); 
         }
-        if ((s->type.t & (VT_STATIC | VT_INLINE | VT_BTYPE)) ==
-            (VT_STATIC | VT_INLINE | VT_FUNC)) {
-            /* if referencing an inline function, then we generate a
-               symbol to it if not already done. It will have the
-               effect to generate code for it at the end of the
-               compilation unit. Inline function as always
-               generated in the text section. */
-            if (!s->c && !nocode_wanted)
-                put_extern_sym(s, text_section, 0, 0);
-            r = VT_SYM | VT_CONST;
-        } else {
-            r = s->r;
-	    /* A symbol that has a register is a local register variable,
-	       which starts out as VT_LOCAL value.  */
-	    if ((r & VT_VALMASK) < VT_CONST)
-	      r = (r & ~VT_VALMASK) | VT_LOCAL;
-        }
+
+        r = s->r;
+        /* A symbol that has a register is a local register variable,
+           which starts out as VT_LOCAL value.  */
+        if ((r & VT_VALMASK) < VT_CONST)
+            r = (r & ~VT_VALMASK) | VT_LOCAL;
+
         vset(&s->type, r, s->c);
         /* Point to s as backpointer (even without r&VT_SYM).
 	   Will be used by at least the x86 inline asm parser for
@@ -4822,7 +4804,7 @@ ST_FUNC void unary(void)
             s = vtop->type.ref;
             next();
             sa = s->next; /* first parameter */
-            nb_args = 0;
+            nb_args = regsize = 0;
             ret.r2 = VT_CONST;
             /* compute first implicit argument if a structure is returned */
             if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
@@ -5849,7 +5831,7 @@ static void block(int *bsym, int *csym, int is_expr)
                 tcc_warning("empty case range");
         }
         cr->sym = ind;
-        dynarray_add((void***) &cur_switch->p, &cur_switch->n, cr);
+        dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         skip(':');
         is_expr = 0;
         goto block_after_label;
@@ -6897,7 +6879,6 @@ static void gen_inline_functions(TCCState *s)
                 fn->sym = NULL;
                 if (file)
                     pstrcpy(file->filename, sizeof file->filename, fn->filename);
-                sym->r = VT_SYM | VT_CONST;
                 sym->type.t &= ~VT_INLINE;
 
                 begin_macro(fn->func_str, 1);
@@ -7038,8 +7019,6 @@ static int decl0(int l, int is_for_loop_init)
                         goto func_error1;
 
                     ref = sym->type.ref;
-                    if (0 == ref->a.func_proto)
-                        tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
 
                     /* use func_call from prototype if not defined */
                     if (ref->a.func_call != FUNC_CDECL
@@ -7064,14 +7043,19 @@ static int decl0(int l, int is_for_loop_init)
                         tcc_error("incompatible types for redefinition of '%s'", 
                               get_tok_str(v, NULL));
                     }
-                    type.ref->a.func_proto = 0;
+                    if (ref->a.func_body)
+                        tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
                     /* if symbol is already defined, then put complete type */
                     sym->type = type;
+
                 } else {
                     /* put function symbol */
                     sym = global_identifier_push(v, type.t, 0);
                     sym->type.ref = type.ref;
                 }
+
+                sym->type.ref->a.func_body = 1;
+                sym->r = VT_SYM | VT_CONST;
 
                 /* static inline functions are just recorded as a kind
                    of macro. Their code will be emitted at the end of
@@ -7106,14 +7090,13 @@ static int decl0(int l, int is_for_loop_init)
                     }
                     tok_str_add(fn->func_str, -1);
                     tok_str_add(fn->func_str, 0);
-                    dynarray_add((void ***)&tcc_state->inline_fns, &tcc_state->nb_inline_fns, fn);
+                    dynarray_add(&tcc_state->inline_fns, &tcc_state->nb_inline_fns, fn);
 
                 } else {
                     /* compute text section */
                     cur_text_section = ad.section;
                     if (!cur_text_section)
                         cur_text_section = text_section;
-                    sym->r = VT_SYM | VT_CONST;
                     gen_function(sym);
                 }
                 break;
@@ -7138,7 +7121,6 @@ static int decl0(int l, int is_for_loop_init)
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
                         /* external function definition */
                         /* specific case for func_call attribute */
-                        ad.a.func_proto = 1;
                         type.ref->a = ad.a;
                     } else if (!(type.t & VT_ARRAY)) {
                         /* not lvalue if array */

@@ -53,8 +53,4 @@ p3:
     ret
 #endif
 
-/* mark stack as nonexecutable */
-#if defined __ELF__ && defined __linux__
-    .section    .note.GNU-stack,"",@progbits
-#endif
 /* ---------------------------------------------- */

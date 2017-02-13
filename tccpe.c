@@ -691,6 +691,10 @@ static int pe_write(struct pe_info *pe)
             psh->PointerToRawData = file_offset;
             file_offset = pe_file_align(pe, file_offset + si->data_size);
             psh->SizeOfRawData = file_offset - psh->PointerToRawData;
+            if (si->cls == sec_text)
+                pe_header.opthdr.SizeOfCode += psh->SizeOfRawData;
+            else
+                pe_header.opthdr.SizeOfInitializedData += psh->SizeOfRawData;
         }
     }
 
@@ -753,7 +757,7 @@ static struct import_symbol *pe_add_import(struct pe_info *pe, int sym_index)
     }
     p = tcc_mallocz(sizeof *p);
     p->dll_index = dll_index;
-    dynarray_add((void***)&pe->imp_info, &pe->imp_count, p);
+    dynarray_add(&pe->imp_info, &pe->imp_count, p);
 
 found_dll:
     i = dynarray_assoc ((void**)p->symbols, p->sym_count, sym_index);
@@ -761,7 +765,7 @@ found_dll:
         return p->symbols[i];
 
     s = tcc_mallocz(sizeof *s);
-    dynarray_add((void***)&p->symbols, &p->sym_count, s);
+    dynarray_add(&p->symbols, &p->sym_count, s);
     s->sym_index = sym_index;
     return s;
 }
@@ -904,7 +908,7 @@ static void pe_build_exports(struct pe_info *pe)
             p = tcc_malloc(sizeof *p);
             p->index = sym_index;
             p->name = name;
-            dynarray_add((void***)&sorted, &sym_count, p);
+            dynarray_add(&sorted, &sym_count, p);
         }
 #if 0
         if (sym->st_other & ST_PE_EXPORT)
@@ -1515,7 +1519,7 @@ static int add_dllref(TCCState *s1, const char *dllname)
             return i + 1;
     dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
     strcpy(dllref->name, dllname);
-    dynarray_add((void ***) &s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
     return s1->nb_loaded_dlls;
 }
 

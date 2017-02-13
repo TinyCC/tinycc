@@ -403,13 +403,13 @@ PUB_FUNC void tcc_memstats(int bench)
 /********************************************************/
 /* dynarrays */
 
-ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
+ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)
 {
     int nb, nb_alloc;
     void **pp;
 
     nb = *nb_ptr;
-    pp = *ptab;
+    pp = *(void ***)ptab;
     /* every power of two we double array size */
     if ((nb & (nb - 1)) == 0) {
         if (!nb)
@@ -417,7 +417,7 @@ ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
         else
             nb_alloc = nb * 2;
         pp = tcc_realloc(pp, nb_alloc * sizeof(void *));
-        *ptab = pp;
+        *(void***)ptab = pp;
     }
     pp[nb++] = data;
     *nb_ptr = nb;
@@ -1013,7 +1013,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     }
 
     /* update target deps */
-    dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
+    dynarray_add(&s1->target_deps, &s1->nb_target_deps,
             tcc_strdup(filename));
 
     parse_flags = 0;
@@ -1586,7 +1586,7 @@ static void args_parser_add_file(TCCState *s, const char* filename, int filetype
     struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
     f->type = filetype;
     strcpy(f->name, filename);
-    dynarray_add((void ***)&s->files, &s->nb_files, f);
+    dynarray_add(&s->files, &s->nb_files, f);
 }
 
 /* read list file */
@@ -1611,8 +1611,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv)
 {
     const TCCOption *popt;
     const char *optarg, *r;
+    const char *run = NULL;
     int optind = 0;
-    int run = 0;
     int x;
     int last_o = -1;
     CString linker_arg; /* collect -Wl options */
@@ -1631,8 +1631,10 @@ reparse:
         }
 
         if (r[0] != '-' || r[1] == '\0') {
-            args_parser_add_file(s, r, s->filetype);
+            if (r[0] != '@') /* allow "tcc file(s) -run @ args ..." */
+                args_parser_add_file(s, r, s->filetype);
             if (run) {
+                tcc_set_options(s, run);
                 optind--;
                 /* argv[0] will be this file */
                 break;
@@ -1753,7 +1755,7 @@ reparse:
             tcc_add_sysinclude_path(s, buf);
             break;
 	case TCC_OPTION_include:
-	    dynarray_add((void ***)&s->cmd_include_files,
+	    dynarray_add(&s->cmd_include_files,
 			 &s->nb_cmd_include_files, tcc_strdup(optarg));
 	    break;
         case TCC_OPTION_nostdinc:
@@ -1769,8 +1771,7 @@ reparse:
 #ifndef TCC_IS_NATIVE
             tcc_error("-run is not available in a cross compiler");
 #endif
-            tcc_set_options(s, optarg);
-            run = 1;
+            run = optarg;
             x = TCC_OUTPUT_MEMORY;
             goto set_output_type;
         case TCC_OPTION_v:
@@ -1903,7 +1904,7 @@ LIBTCCAPI int tcc_set_options(TCCState *s, const char *r)
         }
         cstr_ccat(&str, 0);
         //printf("<%s>\n", str.data), fflush(stdout);
-        dynarray_add((void ***)&argv, &argc, tcc_strdup(str.data));
+        dynarray_add(&argv, &argc, tcc_strdup(str.data));
         cstr_free(&str);
     }
     ret = tcc_parse_args(s, argc, argv);

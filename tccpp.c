@@ -1566,7 +1566,7 @@ static CachedInclude *search_cached_include(TCCState *s1, const char *filename, 
     e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
     strcpy(e->filename, filename);
     e->ifndef_macro = e->once = 0;
-    dynarray_add((void ***)&s1->cached_includes, &s1->nb_cached_includes, e);
+    dynarray_add(&s1->cached_includes, &s1->nb_cached_includes, e);
     /* add in hash table */
     e->hash_next = s1->cached_includes_hash[h];
     s1->cached_includes_hash[h] = s1->nb_cached_includes;
@@ -1665,7 +1665,7 @@ static void pragma_parse(TCCState *s1)
         if (tok != TOK_STR)
             goto pragma_err;
         file = tcc_strdup((char *)tokc.str.data);
-        dynarray_add((void ***)&s1->pragma_libs, &s1->nb_pragma_libs, file);
+        dynarray_add(&s1->pragma_libs, &s1->nb_pragma_libs, file);
         next();
         if (tok != ')')
             goto pragma_err;
@@ -1820,7 +1820,7 @@ ST_FUNC void preprocess(int is_bof)
             printf("%s: including %s\n", file->prev->filename, file->filename);
 #endif
             /* update target deps */
-            dynarray_add((void ***)&s1->target_deps, &s1->nb_target_deps,
+            dynarray_add(&s1->target_deps, &s1->nb_target_deps,
                     tcc_strdup(buf1));
             /* push current file in stack */
             ++s1->include_stack_ptr;

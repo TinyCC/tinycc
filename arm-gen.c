@@ -341,7 +341,7 @@ void stuff_const_harder(uint32_t op, uint32_t v) {
   }
 }
 
-ST_FUNC uint32_t encbranch(int pos, int addr, int fail)
+uint32_t encbranch(int pos, int addr, int fail)
 {
   addr-=pos+8;
   addr/=4;

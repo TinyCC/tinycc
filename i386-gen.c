@@ -70,9 +70,6 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
-/* generate jmp to a label */
-#define gjmp2(instr,lbl) oad(instr,lbl)
-
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
@@ -148,7 +145,7 @@ ST_FUNC void gsym(int t)
 }
 
 /* instruction + 4 bytes data. Return the address of the data */
-ST_FUNC int oad(int c, int s)
+static int oad(int c, int s)
 {
     int t;
     if (nocode_wanted)
@@ -158,6 +155,9 @@ ST_FUNC int oad(int c, int s)
     gen_le32(s);
     return t;
 }
+
+/* generate jmp to a label */
+#define gjmp2(instr,lbl) oad(instr,lbl)
 
 /* output constant with relocation if 'r & VT_SYM' is true */
 ST_FUNC void gen_addr32(int r, Sym *sym, long c)

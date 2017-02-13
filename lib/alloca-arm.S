@@ -8,4 +8,3 @@ alloca:
 	mov	r0, sp
 	mov	pc, lr
 	.size	alloca, .-alloca
-	.section	.note.GNU-stack,"",%progbits

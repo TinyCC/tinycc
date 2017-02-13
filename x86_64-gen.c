@@ -224,7 +224,7 @@ static int is64_type(int t)
 }
 
 /* instruction + 4 bytes data. Return the address of the data */
-ST_FUNC int oad(int c, int s)
+static int oad(int c, int s)
 {
     int t;
     if (nocode_wanted)

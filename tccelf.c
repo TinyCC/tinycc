@@ -49,7 +49,7 @@ static int new_undef_sym = 0; /* Is there a new undefined sym since last new_und
 ST_FUNC void tccelf_new(TCCState *s)
 {
     /* no section zero */
-    dynarray_add((void ***)&s->sections, &s->nb_sections, NULL);
+    dynarray_add(&s->sections, &s->nb_sections, NULL);
 
     /* create standard sections */
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
@@ -153,10 +153,10 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
     }
 
     if (sh_flags & SHF_PRIVATE) {
-        dynarray_add((void ***)&s1->priv_sections, &s1->nb_priv_sections, sec);
+        dynarray_add(&s1->priv_sections, &s1->nb_priv_sections, sec);
     } else {
         sec->sh_num = s1->nb_sections;
-        dynarray_add((void ***)&s1->sections, &s1->nb_sections, sec);
+        dynarray_add(&s1->sections, &s1->nb_sections, sec);
     }
 
     return sec;
@@ -1896,7 +1896,7 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
 static int elf_output_file(TCCState *s1, const char *filename)
 {
     int i, ret, phnum, shnum, file_type, file_offset, *sec_order;
-    struct dyn_inf dyninf;
+    struct dyn_inf dyninf = {0};
     ElfW(Phdr) *phdr;
     ElfW(Sym) *sym;
     Section *strsec, *interp, *dynamic, *dynstr;
@@ -1912,7 +1912,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
     phdr = NULL;
     sec_order = NULL;
     interp = dynamic = dynstr = NULL; /* avoid warning */
-    dyninf.dyn_rel_off = 0; /* avoid warning */
 
     if (file_type != TCC_OUTPUT_OBJ) {
         relocate_common_syms();
@@ -2595,7 +2594,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
     dllref->level = level;
     strcpy(dllref->name, soname);
-    dynarray_add((void ***)&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
 
     /* add dynamic symbols in dynsym_section */
     for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {
@@ -2825,9 +2824,9 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
                     goto lib_parse_error;
                 if (group) {
                     /* Add the filename *and* the libname to avoid future conversions */
-                    dynarray_add((void ***) &libs, &nblibs, tcc_strdup(filename));
+                    dynarray_add(&libs, &nblibs, tcc_strdup(filename));
                     if (libname[0] != '\0')
-                        dynarray_add((void ***) &libs, &nblibs, tcc_strdup(libname));
+                        dynarray_add(&libs, &nblibs, tcc_strdup(libname));
                 }
             }
         }
