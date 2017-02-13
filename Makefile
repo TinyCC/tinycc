@@ -26,14 +26,16 @@ LINK_LIBTCC =
 LIBS =
 
 ifdef CONFIG_WIN32
- LIBTCC = libtcc.dll
+ ifneq ($(DISABLE_STATIC),no)
+  LIBTCC = libtcc.dll
+ endif
 else
  LIBS=-lm
  ifndef CONFIG_NOLDL
   LIBS+=-ldl
  endif
  # make libtcc as static or dynamic library?
- ifdef DISABLE_STATIC
+ ifeq ($(DISABLE_STATIC),yes)
   LIBTCC=libtcc.so
   ifndef DISABLE_RPATH
    LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
@@ -92,7 +94,7 @@ ARM64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
 C67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
 ifdef CONFIG_WIN32
- PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF) $(LIBTCC)
+ PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
  ifeq ($(ARCH),x86-64)
   NATIVE_FILES=$(WIN64_FILES)
   PROGS_CROSS=$(WIN32_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
@@ -272,14 +274,14 @@ install:
 	mkdir -p "$(tccdir)/examples"
 	mkdir -p "$(tccdir)/doc"
 	mkdir -p "$(tccdir)/libtcc"
-	$(INSTALLBIN) -m755 $(PROGS) "$(tccdir)"
+	$(INSTALLBIN) -m755 $(PROGS) $(subst libtcc.a,,$(LIBTCC)) "$(tccdir)"
 	$(INSTALL) -m644 libtcc1.a $(TOPSRC)/win32/lib/*.def "$(tccdir)/lib"
 	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/include"
 	cp -r $(TOPSRC)/win32/examples/. "$(tccdir)/examples"
 	cp $(TOPSRC)/tests/libtcc_test.c "$(tccdir)/examples"
 	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/include"
-	$(INSTALL) -m644 tcc-doc.html $(TOPSRC)/win32/tcc-win32.txt "$(tccdir)/doc"
-	$(INSTALL) -m644 $(TOPSRC)/libtcc.h libtcc.def "$(tccdir)/libtcc"
+	$(INSTALL) -m644 $(TOPSRC)/libtcc.h $(subst .dll,.def,$(LIBTCC)) "$(tccdir)/libtcc"
+	-$(INSTALL) -m644 $(TOPSRC)/win32/tcc-win32.txt tcc-doc.html "$(tccdir)/doc"
 ifdef CONFIG_CROSS
 	mkdir -p "$(tccdir)/lib/32"
 	mkdir -p "$(tccdir)/lib/64"

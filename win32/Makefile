@@ -110,7 +110,7 @@ tarball:
 	@cp -r lib $(TARNAME)
 	@cp -r libtcc $(TARNAME)
 	@cp -r tools $(TARNAME)
-	@cp -r vs2015 $(TARNAME)
+#	 @cp -r vs2015 $(TARNAME)
 	@cp -r build-tcc.bat $(TARNAME)
 	@cp -r i386-win32-tcc.exe $(TARNAME)
 	@cp -r libtcc.def $(TARNAME)

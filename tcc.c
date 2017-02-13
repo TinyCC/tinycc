@@ -109,6 +109,7 @@ static void help(void)
            "  -E          preprocess only\n"
            "  -P[1]       no / alternative #line output with -E\n"
            "  -dD -dM     output #define directives with -E\n"
+           "  -include file  include file above each input file\n"
            "Linker options:\n"
            "  -Ldir       add library path 'dir'\n"
            "  -llib       link with dynamic or static library 'lib'\n"

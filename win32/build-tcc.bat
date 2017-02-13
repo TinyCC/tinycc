@@ -1,10 +1,11 @@
 @rem ------------------------------------------------------
-@rem batch file to build tcc using mingw gcc or tcc itself
+@rem batch file to build tcc using mingw, msvc or tcc itself
 @rem ------------------------------------------------------
 
 @echo off
 
-set CC=gcc -Os -s -fno-strict-aliasing
+set CC=gcc -Os -s
+
 set T=32
 if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
 if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
@@ -16,13 +17,28 @@ goto :a0
 :usage
 echo usage: build-tcc.bat [ options ... ]
 echo options:
-echo   -c prog              use prog (gcc or tcc) to compile tcc
+echo   -c prog              use prog (gcc/tcc/cl) to compile tcc
 echo   -c "prog options"    use prog with options to compile tcc
 echo   -t 32/64             force 32/64 bit default target
 echo   -v "version"         set tcc version
 echo   -i dir               install tcc into dir
 echo   -d                   create tcc-doc.html too (needs makeinfo)
 exit /B 1
+
+:cl
+@echo off
+set CMD=cl
+:c0
+set ARG=%1
+set ARG=%ARG:.dll=.lib%
+if (%1)==(-shared) set ARG=-LD
+if (%1)==(-o) shift && set ARG=-Fe%2
+set CMD=%CMD% %ARG%
+shift
+if not (%1)==() goto :c0
+echo on
+%CMD% -O1 -W2 -Zi -MT -GS- -nologo -link -opt:ref,icf
+@exit /B %ERRORLEVEL%
 
 :a2
 shift
@@ -31,6 +47,7 @@ shift
 :a0
 if not (%1)==(-c) goto :a3
 set CC=%~2
+if (%2)==(cl) set CC=@call :cl
 goto :a2
 :a3
 if not (%1)==(-t) goto :a4

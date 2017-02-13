@@ -3,7 +3,7 @@ static void kb_wait_1(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 while (1)
@@ -17,7 +17,7 @@ static void kb_wait_2(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 for (;;)
@@ -31,7 +31,7 @@ static void kb_wait_2_1(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 do {
@@ -46,7 +46,7 @@ static void kb_wait_2_2(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 label:
@@ -61,7 +61,7 @@ static void kb_wait_3(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 int i = 1;
@@ -78,7 +78,7 @@ static void kb_wait_4(void)
 {
     unsigned long timeout = 2;
     do {
-        (1 ? 
+        (1 ?
             printf("timeout=%ld\n", timeout) :
             ({
                 switch(timeout) {

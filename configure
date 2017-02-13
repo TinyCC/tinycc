@@ -19,6 +19,7 @@ TMPH=$TMPN.h
 # default parameters
 build_cross="no"
 use_libgcc="no"
+disable_static=""
 prefix=""
 execprefix=""
 bindir=""
@@ -53,6 +54,7 @@ targetos=`uname`
 case $targetos in
   MINGW*)    mingw32=yes;;
   MSYS*)     mingw32=yes;;
+  CYGWIN*)   mingw32=yes; cygwin=yes; cross_prefix="mingw32-";;
   DragonFly) noldl=yes;;
   OpenBSD)   noldl=yes;;
   FreeBSD)   noldl=yes;;
@@ -69,6 +71,8 @@ source_path_used="yes"
 if test -z "$source_path" -o "$source_path" = "." ; then
     source_path=`pwd`
     source_path_used="no"
+    # mingw compilers might not understand cygwin paths
+    if test $cygwin = "yes"; then source_path="."; fi
 fi
 
 for opt do
@@ -126,11 +130,11 @@ for opt do
   ;;
   --enable-mingw32) mingw32="yes" ; cross_prefix="i686-pc-mingw32-" ; cpu=x86
   ;;
-  --enable-cygwin) mingw32="yes" ; cygwin="yes" ; cross_prefix="mingw32-" ; cpu=x86
-  ;;
   --enable-cross) build_cross="yes"
   ;;
   --disable-static) disable_static="yes"
+  ;;
+  --enable-static) disable_static="no"
   ;;
   --disable-rpath) disable_rpath="yes"
   ;;
@@ -288,12 +292,12 @@ Advanced options (experts only):
   --cpu=CPU                CPU [$cpu]
   --strip-binaries         strip symbol tables from resulting binaries
   --disable-static         make libtcc.so instead of libtcc.a
+  --enable-static          make libtcc.a instead of libtcc.dll (win32)
   --disable-rpath          disable use of -rpath with the above
   --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a in dynamic link
   --enable-mingw32         build windows version on linux with mingw32
-  --enable-cygwin          build windows version on windows with cygwin
   --enable-cross           build cross compilers
-  --with-selinux           use mmap for exec mem [needs writable /tmp]
+  --with-selinux           use mmap for executable memory (with tcc -run)
   --sysincludepaths=...    specify system include paths, colon separated
   --libpaths=...           specify system library paths, colon separated
   --crtprefix=...          specify locations of crt?.o, colon separated
@@ -309,15 +313,16 @@ ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
 
 CONFTEST=./conftest$EXESUF
+if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
+  echo "configure: error: '$cc' failed to compile conftest.c."
+else
+  gcc_major="$($CONFTEST version)"
+  gcc_minor="$($CONFTEST minor)"
+fi
 
 if test -z "$cross_prefix" ; then
-  if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
-    echo "configure: error: '$cc' failed to compile conftest.c."
-  else
-    bigendian="$($CONFTEST bigendian)"
-    gcc_major="$($CONFTEST version)"
-    gcc_minor="$($CONFTEST minor)"
-    if test "$mingw32" = "no" ; then
+  bigendian="$($CONFTEST bigendian)"
+  if test "$mingw32" = "no" ; then
 
       if test -z "$triplet"; then
         tt="$($CONFTEST triplet)"
@@ -348,8 +353,6 @@ if test -z "$cross_prefix" ; then
       if test -f "/lib/ld-uClibc.so.0" ; then
 	confvars="$confvars uClibc"
       fi
-
-    fi
   fi
 else
   # if cross compiling, cannot launch a program, so make a static guess
@@ -365,7 +368,7 @@ for i in $W_OPTIONS; do
     O_PRESENT="$(grep -- -W$i cc_help.txt)"
     if test -n "$O_PRESENT"; then  CFLAGS="$CFLAGS -W$i"; fi
 done
-W_OPTIONS="deprecated-declarations strict-aliasing pointer-sign sign-compare unused-result uninitialized"
+W_OPTIONS="pointer-sign sign-compare unused-result"
 for i in $W_OPTIONS; do
     O_PRESENT="$(grep -- -W$i cc_help.txt)"
     if test -n "$O_PRESENT"; then  CFLAGS="$CFLAGS -Wno-$i"; fi
@@ -481,12 +484,6 @@ fi
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=yes" >> config.mak
 fi
-if test "$cygwin" = "yes" ; then
-  echo "#ifndef _WIN32" >> $TMPH
-  echo "# define _WIN32" >> $TMPH
-  echo "#endif" >> $TMPH
-  echo "AR=ar" >> config.mak
-fi
 if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> config.mak
   echo "#define WORDS_BIGENDIAN 1" >> $TMPH
@@ -498,8 +495,8 @@ fi
 if test "$build_cross" = "yes" ; then
   echo "CONFIG_CROSS=yes" >> config.mak
 fi
-if test "$disable_static" = "yes" ; then
-  echo "DISABLE_STATIC=yes" >> config.mak
+if test -n "$disable_static" ; then
+  echo "DISABLE_STATIC=$disable_static" >> config.mak
 fi
 if test "$disable_rpath" = "yes" ; then
   echo "DISABLE_RPATH=yes" >> config.mak

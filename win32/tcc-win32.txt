@@ -107,23 +107,26 @@
     Compilation from source:
     ------------------------
     * You can use the MinGW and MSYS tools available at
-
         http://www.mingw.org
 
       Untar the TCC archive and type in the MSYS shell:
-
         ./configure [--prefix installpath]
         make
         make install
 
-    The default install location is c:\Program Files\tcc
+      The default install location is c:\Program Files\tcc
 
     * Alternatively you can compile TCC with just GCC from MinGW using
+        > build-tcc.bat (from the win32 directory)
 
-        build-tcc.bat (from the win32 directory)
+      Also MSVC can be used with the "VSTools Developer Command Prompt":
+        > build-tcc.bat -c cl
 
-      To install, copy the entire contents of the win32 directory to
-      where you want.
+      or with a tcc (needs to be in a different directory)
+        > build-tcc.bat -c some-tcc-dir\tcc.exe
+
+      Also you can copy/install everything into another directory:
+        > build-tcc.bat -i <dir>
 
 
     Limitations:

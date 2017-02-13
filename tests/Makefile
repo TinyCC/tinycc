@@ -187,7 +187,7 @@ speedtest: ex2 ex3
 
 weaktest: tcctest.c test.ref
 	$(TCC) -c $< -o weaktest.tcc.o
-	$(CC) -c $< -o weaktest.gcc.o -I. $(CFLAGS)
+	$(CC) -c $< -o weaktest.gcc.o $(NATIVE_DEFINES) $(CFLAGS) -w -O0 -std=gnu99 -fno-omit-frame-pointer
 	objdump -t weaktest.tcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.tcc.o.txt
 	objdump -t weaktest.gcc.o | grep ' w ' | sed -e 's/.* \([a-zA-Z0-9_]*\)$$/\1/' | LC_ALL=C sort > weaktest.gcc.o.txt
 	diff weaktest.gcc.o.txt weaktest.tcc.o.txt && echo "Weak Auto Test OK"
@@ -254,7 +254,8 @@ cache: tcc_g
 # clean
 clean:
 	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc \
-*-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234] ex? tcc_g
+	      *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234] \
+	      ex? tcc_g *.def weaktest.*.txt
 	$(MAKE) -C tests2 $@
 	$(MAKE) -C pp $@
 

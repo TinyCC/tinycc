@@ -2,16 +2,8 @@ TODO list:
 
 Bugs:
 
-- fix macro substitution with nested definitions (ShangHongzhang)
 - FPU st(0) is left unclean (kwisatz haderach). Incompatible with
   optimized gcc/msc code
-
-- constructors
-- cast bug (Peter Wang)
-- define incomplete type if defined several times (Peter Wang).
-- test binutils/gcc compile
-- tci patch + argument.
-- see -lxxx bug (Michael Charity).
 - see transparent union pb in /urs/include/sys/socket.h
 - precise behaviour of typeof with arrays ? (__put_user macro)
   but should suffice for most cases)
@@ -26,11 +18,10 @@ Bugs:
 - finish varargs.h support (gcc 3.2 testsuite issue)
 - fix static functions declared inside block
 - fix multiple unions init
-- sizeof, alignof, typeof can still generate code in some cases.
-- Fix the remaining libtcc memory leaks.
 - make libtcc fully reentrant (except for the compilation stage itself).
 - struct/union/enum definitions in nested scopes (see also Debian bug #770657)
 - __STDC_IEC_559__: float f(void) { static float x = 0.0 / 0.0; return x; }
+- memory may be leaked after errors (longjmp).
 
 Portability:
 
@@ -42,14 +33,10 @@ Portability:
 
 Linking:
 
-- static linking does not work
-- with "-run" and libtcc, no PLT is used, so branches may be out of
-  range and relocations may fail; as a result libtest fails on arm64; see:
-  https://lists.gnu.org/archive/html/tinycc-devel/2015-03/msg00111.html
+- static linking (-static) does not work
 
 Bound checking:
 
-- '-b' bug.
 - fix bound exit on RedHat 7.3
 - setjmp is not supported properly in bound checking.
 - fix bound check code with '&' on local variables (currently done
@@ -61,11 +48,10 @@ Missing features:
 
 - disable-asm and disable-bcheck options
 - __builtin_expect()
-- improve '-E' option.
 - atexit (Nigel Horne)
-- packed attribute
 - C99: add complex types (gcc 3.2 testsuite issue)
 - postfix compound literals (see 20010124-1.c)
+- interactive mode / integrated debugger
 
 Optimizations:
 
@@ -81,9 +67,8 @@ Not critical:
   normative example - only relevant when using gotos! -> must add
   boolean variable to tell if compound literal was already
   initialized).
-- add PowerPC or ARM code generator and improve codegen for RISC (need
+- add PowerPC generator and improve codegen for RISC (need
   to suppress VT_LOCAL and use a base register instead).
-- interactive mode / integrated debugger
 - fix preprocessor symbol redefinition
 - add portable byte code generator and interpreter for other
   unsupported architectures.
@@ -108,3 +93,8 @@ Fixed (probably):
 - #include_next support for /usr/include/limits ?
 - function pointers/lvalues in ? : (linux kernel net/core/dev.c)
 - win32: add __stdcall, check GetModuleHandle for dlls.
+- macro substitution with nested definitions (ShangHongzhang)
+- with "-run" and libtcc, a PLT is now built.
+- '-E' option was improved
+- packed attribute is now supported
+- ARM and ARM64 code generators have been added.

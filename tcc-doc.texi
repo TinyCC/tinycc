@@ -176,28 +176,14 @@ In a script, it gives the following header:
 #!/usr/local/bin/tcc -run -L/usr/X11R6/lib -lX11
 @end example
 
-@item -mms-bitfields
-Use an algorithm for bitfield alignment consistent with MSVC. Default is
-gcc's algorithm.
-
-@item -mfloat-abi (ARM only)
-Select the float ABI. Possible values: @code{softfp} and @code{hard}
-
-@item -dumpversion
-Print only the compiler version and nothing else.
-
 @item -v
 Display TCC version.
 
 @item -vv
-Show included files.  As sole argument, print search dirs (as below).
+Show included files.  As sole argument, print search dirs.  -vvv shows tries too.
 
 @item -bench
 Display compilation statistics.
-
-@item -print-search-dirs
-Print the configured installation directory and a list of library
-and include directories tcc will search.
 
 @end table
 
@@ -220,6 +206,10 @@ also be defined: @option{-DF(a)=a+1}
 
 @item -Usym
 Undefine preprocessor symbol @samp{sym}.
+
+@item -E
+Preprocess only, to stdout or file (with -o).
+
 @end table
 
 Compilation flags:
@@ -337,6 +327,9 @@ Modify executable layout.
 @item -Wl,-Bsymbolic
 Set DT_SYMBOLIC tag.
 
+@item -Wl,-(no-)whole-archive
+Turn on/off linking of all objects in archives.
+
 @end table
 
 Debugger options:
@@ -369,6 +362,31 @@ Generate makefile fragment with dependencies.
 
 @item -MF depfile
 Use @file{depfile} as output for -MD.
+
+@item -print-search-dirs
+Print the configured installation directory and a list of library
+and include directories tcc will search.
+
+@item -dumpversion
+Print version.
+
+@end table
+
+Target specific options:
+
+@table @option
+@item -mms-bitfields
+Use an algorithm for bitfield alignment consistent with MSVC. Default is
+gcc's algorithm.
+
+@item -mfloat-abi (ARM only)
+Select the float ABI. Possible values: @code{softfp} and @code{hard}
+
+@item -mno-sse
+Do not use sse registers on x86-64
+
+@item -m32, -m64
+Pass command line to the i386/x86-64 cross compiler.
 
 @end table
 

@@ -1,7 +1,7 @@
 #ifndef _TCC_LIBM_H_
 #define _TCC_LIBM_H_
 
-#include "../include/math.h"
+#include "../math.h"
 
 /* TCC uses 8 bytes for double and long double, so effectively the l variants
  * are never used. For now, they just run the normal (double) variant.
