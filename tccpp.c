@@ -1342,7 +1342,8 @@ ST_FUNC void free_defines(Sym *b)
         sym_free(top);
     }
 
-    /* restore remaining (-D or predefined) symbols */
+    /* restore remaining (-D or predefined) symbols if they were
+       #undef'd in the file */
     while (b) {
         int v = b->v;
         if (v >= TOK_IDENT && v < tok_ident) {
@@ -3468,24 +3469,23 @@ ST_INLN void unget_tok(int last_tok)
 ST_FUNC void preprocess_start(TCCState *s1)
 {
     char *buf;
+
     s1->include_stack_ptr = s1->include_stack;
-    /* XXX: move that before to avoid having to initialize
-       file->ifdef_stack_ptr ? */
     s1->ifdef_stack_ptr = s1->ifdef_stack;
     file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     pp_once++;
-
     pvtop = vtop = vstack - 1;
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
     set_idnum('$', s1->dollars_in_identifiers ? IS_ID : 0);
     set_idnum('.', (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0);
+
     buf = tcc_malloc(3 + strlen(file->filename));
     sprintf(buf, "\"%s\"", file->filename);
-    tcc_undefine_symbol(s1, "__BASE_FILE__");
     tcc_define_symbol(s1, "__BASE_FILE__", buf);
     tcc_free(buf);
+
     if (s1->nb_cmd_include_files) {
 	CString cstr;
 	int i;
@@ -3557,6 +3557,9 @@ ST_FUNC void tccpp_delete(TCCState *s)
     while (macro_stack)
         end_macro();
     macro_ptr = NULL;
+
+    while (file)
+        tcc_close();
 
     /* free tokens */
     n = tok_ident - TOK_IDENT;
@@ -3712,7 +3715,9 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     const char *p;
     Sym *define_start;
 
+    define_start = define_stack;
     preprocess_start(s1);
+
     ch = file->buf_ptr[0];
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_PREPROCESS
@@ -3721,7 +3726,6 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
                 | PARSE_FLAG_SPACES
                 | PARSE_FLAG_ACCEPT_STRAYS
                 ;
-    define_start = define_stack;
 
     /* Credits to Fabrice Bellard's initial revision to demonstrate its
        capability to compile and run itself, provided all numbers are

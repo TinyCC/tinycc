@@ -999,13 +999,12 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     Sym *define_start;
     int ret;
 
+    define_start = define_stack;
     preprocess_start(s1);
 
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
-
-    define_start = define_stack;
 
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
        symbols can be safely used */

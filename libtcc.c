@@ -32,6 +32,8 @@ ST_DATA int tcc_ext = 1;
 /* XXX: get rid of this ASAP */
 ST_DATA struct TCCState *tcc_state;
 
+static int nb_states;
+
 /********************************************************/
 
 #ifdef ONE_SOURCE
@@ -509,6 +511,7 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
         /* default case: stderr */
         if (s1->ppfp) /* print a newline during tcc -E */
             fprintf(s1->ppfp, "\n"), fflush(s1->ppfp);
+        fflush(stdout); /* flush -v output */
         fprintf(stderr, "%s\n", buf);
         fflush(stderr); /* print error/warning now (win32) */
     } else {
@@ -623,17 +626,18 @@ static int tcc_compile(TCCState *s1)
 {
     Sym *define_start;
 
-    preprocess_start(s1);
     define_start = define_stack;
-
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
         s1->error_set_jmp_enabled = 1;
 
+        preprocess_start(s1);
         tccgen_start(s1);
+
 #ifdef INC_DEBUG
         printf("%s: **** new file\n", file->filename);
 #endif
+
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
@@ -641,13 +645,17 @@ static int tcc_compile(TCCState *s1)
         decl(VT_CONST);
         if (tok != TOK_EOF)
             expect("declaration");
-        /* reset define stack, but keep -D and built-ins */
+        /* free defines here already on behalf of of M.M.'s possibly existing
+           experimental preprocessor implementation. The normal call below
+           is still there to free after error-longjmp */
         free_defines(define_start);
         tccgen_end(s1);
     }
     s1->error_set_jmp_enabled = 0;
 
     free_inline_functions(s1);
+    /* reset define stack, but keep -D and built-ins */
+    free_defines(define_start);
     sym_pop(&global_stack, NULL, 0);
     sym_pop(&local_stack, NULL, 0);
     return s1->nb_errors != 0 ? -1 : 0;
@@ -724,6 +732,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     if (!s)
         return NULL;
     tcc_state = s;
+    ++nb_states;
 
     s->alacarte_link = 1;
     s->nocommon = 1;
@@ -897,6 +906,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->cached_includes, &s1->nb_cached_includes);
     dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
+    dynarray_reset(&s1->cmd_include_files, &s1->nb_cmd_include_files);
 
     tcc_free(s1->tcc_lib_path);
     tcc_free(s1->soname);
@@ -915,7 +925,8 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 
     tcc_free(s1);
-    tcc_memstats(bench);
+    if (0 == --nb_states)
+        tcc_memstats(bench);
 }
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)

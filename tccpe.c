@@ -770,6 +770,16 @@ found_dll:
     return s;
 }
 
+void pe_free_imports(struct pe_info *pe)
+{
+    int i;
+    for (i = 0; i < pe->imp_count; ++i) {
+        struct pe_import_info *p = pe->imp_info[i];
+        dynarray_reset(&p->symbols, &p->sym_count);
+    }
+    dynarray_reset(&pe->imp_info, &pe->imp_count);
+}
+
 /*----------------------------------------------------------------------------*/
 static void pe_build_imports(struct pe_info *pe)
 {
@@ -861,9 +871,7 @@ static void pe_build_imports(struct pe_info *pe)
             ent_ptr += sizeof (ADDR3264);
         }
         dll_ptr += sizeof(IMAGE_IMPORT_DESCRIPTOR);
-        dynarray_reset(&p->symbols, &p->sym_count);
     }
-    dynarray_reset(&pe->imp_info, &pe->imp_count);
 }
 
 /* ------------------------------------------------------------- */
@@ -1896,6 +1904,8 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
         pe_build_imports(&pe);
 #endif
     }
+
+    pe_free_imports(&pe);
 
 #ifdef PE_PRINT_SECTIONS
     pe_print_sections(s1, "tcc.log");
