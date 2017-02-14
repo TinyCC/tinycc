@@ -128,6 +128,16 @@
       Also you can copy/install everything into another directory:
         > build-tcc.bat -i <dir>
 
+    * You can also bootstrap a native tcc Windows toolchain with cygwin.
+       https://www.cygwin.com/
+
+      Install Base, gcc, make
+      Launch Cygwin Terminal
+        > make
+      or to force 32bit executables (including 64bit backend)
+        > make TARGET=32
+      or to force 64bit executables (including 32bit backend)
+        > make TARGET=64
 
     Limitations:
     ------------

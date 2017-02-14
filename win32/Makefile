@@ -19,6 +19,16 @@ NATIVE	= -m$(ARCH) -DTCC_TARGET_I386
 PREFIX	= i386
 endif
 
+TARGET	= $(ARCH)
+
+ifeq ($(TARGET), 64)
+TFLAGS	= -m$(TARGET) -DTCC_TARGET_X86_64
+TPREFIX	= x86_64
+else
+TFLAGS	= -m$(TARGET) -DTCC_TARGET_I386
+TPREFIX	= i386
+endif
+
 all: pre bootstrap libs rebuild
 	@chmod 775 *.exe
 	@ls -ls *.exe
@@ -70,7 +80,7 @@ lib/32/libtcc1.a: tiny_libmaker32.exe
 	@./tiny_libmaker32 lib/32/libtcc1.a libtcc1.o alloca86.o alloca86-bt.o crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
 	@rm *.o
 
-lib/64/libtcc1.a: tcc.exe tiny_libmaker64.exe
+lib/64/libtcc1.a: tiny_libmaker64.exe
 	@echo Building $*.a with tcc -m64
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/libtcc1.c 
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64.S 
@@ -88,14 +98,14 @@ libs: lib/32/libtcc1.a lib/64/libtcc1.a
 PHONY += libs
 
 rebuild:
-	@echo Rebuild using tcc itself - default $(ARCH)bits
-	@./$(PREFIX)-win32-tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c libtcc.dll
-	@./$(PREFIX)-win32-tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -o tiny_libmaker.exe tools/tiny_libmaker.c
-	@./tcc $(NATIVE) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
-	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
-	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
-	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tiny_libmaker32.exe tools/tiny_libmaker.c
-	@./tcc -m$(ARCH) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tiny_libmaker64.exe tools/tiny_libmaker.c
+	@echo Rebuild using tcc itself - default $(TARGET)bits
+	@./$(TPREFIX)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c
+	@./$(TPREFIX)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tiny_libmaker.exe tools/tiny_libmaker.c
+	@./tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
+	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
+	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
+	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tiny_libmaker32.exe tools/tiny_libmaker.c
+	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tiny_libmaker64.exe tools/tiny_libmaker.c
 
 PHONY += rebuild
 
@@ -110,7 +120,6 @@ tarball:
 	@cp -r lib $(TARNAME)
 	@cp -r libtcc $(TARNAME)
 	@cp -r tools $(TARNAME)
-#	 @cp -r vs2015 $(TARNAME)
 	@cp -r build-tcc.bat $(TARNAME)
 	@cp -r i386-win32-tcc.exe $(TARNAME)
 	@cp -r libtcc.def $(TARNAME)
@@ -128,4 +137,4 @@ tarball:
 PHONY += tarball
 
 clean:
-	rm -f *.o *.exe *.dll lib/*/*.a
+	rm -f *.o *.exe *.dll lib/*/*.a *.pdb *.obj *.exp *.def *.lib
