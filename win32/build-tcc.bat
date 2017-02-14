@@ -3,12 +3,13 @@
 @rem ------------------------------------------------------
 
 @echo off
+setlocal
 
+set VSCOMNTOOLS=%VS150COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS140COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS130COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS120COMNTOOLS%
 set CC=gcc -Os -s
-
-set T=32
-if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
-if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
 set /p VERSION= < ..\VERSION
 set INST=
 set DOC=no
@@ -68,6 +69,17 @@ goto :a1
 :a7
 if not (%1)==() goto :usage
 
+if not "%CC%"=="@call :cl" goto :p1
+if %T%_==32_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\vcvars32.bat"
+if %T%_==64_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\amd64\vcvars64.bat"
+if %T%_==_ set T=32& if %Platform%_==X64_ set T=64
+:p1
+if not %T%_==_ goto :p2
+set T=32
+if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
+if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
+:p2
+
 set D32=-DTCC_TARGET_PE -DTCC_TARGET_I386
 set D64=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
 if %T%==64 goto :t64
@@ -85,6 +97,9 @@ set PX=i386-win32
 
 @echo on
 
+@if %CLVARS%_==_ goto :config.h
+call %CLVARS%
+
 :config.h
 echo>..\config.h #define TCC_VERSION "%VERSION%"
 echo>> ..\config.h #ifdef TCC_TARGET_X86_64
@@ -93,7 +108,7 @@ echo>> ..\config.h #else
 echo>> ..\config.h #define CONFIG_TCC_LIBPATHS "{B}/lib/32;{B}/lib"
 echo>> ..\config.h #endif
 
-for %%f in (*tcc.exe tiny_*.exe *tcc.dll) do @del %%f
+@del /q *tcc.exe tiny_*.exe *tcc.dll
 
 :compiler
 %CC% -o libtcc.dll -shared ..\libtcc.c %D% -DONE_SOURCE -DLIBTCC_AS_DLL
@@ -153,7 +168,7 @@ cmd /c makeinfo --html --no-split ../tcc-doc.texi -o doc/tcc-doc.html
 :doc-done
 
 :files-done
-for %%f in (*.o *.def *-m??.exe) do @del %%f
+@del /q *.o *.def *-m??.exe
 
 :copy-install
 @if (%INST%)==() goto :the_end
