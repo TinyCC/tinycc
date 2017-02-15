@@ -26,7 +26,7 @@ ifeq ($(ARCH),x86-64)
  SKIP += 73_arm64.test
 endif
 ifeq (,$(filter i386 x86-64,$(ARCH)))
- SKIP += 85-asm-outside-function.test
+ SKIP += 85_asm-outside-function.test
 endif
 
 # Some tests might need arguments
