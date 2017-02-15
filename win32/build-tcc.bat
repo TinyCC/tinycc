@@ -137,10 +137,12 @@ copy>nul tiny_libmaker.exe tiny_libmaker-m%T%.exe
 %CC% -o tiny_libmaker-m%TX%.exe tools\tiny_libmaker.c %DX%
 
 :libtcc1.a
-@set O1=libtcc1.o crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o bcheck.o
+@set O1=libtcc1.o crt1.o wincrt1.o crt1_w.o wincrt1_w.o dllcrt1.o dllmain.o chkstk.o bcheck.o
 .\tcc -m32 %D32% -c ../lib/libtcc1.c
 .\tcc -m32 %D32% -c lib/crt1.c
+.\tcc -m32 %D32% -c lib/crt1.c -D_UNICODE -DUNICODE -o crt1_w.o
 .\tcc -m32 %D32% -c lib/wincrt1.c
+.\tcc -m32 %D32% -c lib/wincrt1.c -D_UNICODE -DUNICODE -o wincrt1_w.o
 .\tcc -m32 %D32% -c lib/dllcrt1.c
 .\tcc -m32 %D32% -c lib/dllmain.c
 .\tcc -m32 %D32% -c lib/chkstk.S
@@ -151,7 +153,9 @@ tiny_libmaker-m32 lib/32/libtcc1.a %O1% alloca86.o alloca86-bt.o
 @if errorlevel 1 goto :the_end
 .\tcc -m64 %D64% -c ../lib/libtcc1.c
 .\tcc -m64 %D64% -c lib/crt1.c
+.\tcc -m64 %D64% -c lib/crt1.c -D_UNICODE -DUNICODE -o crt1_w.o
 .\tcc -m64 %D64% -c lib/wincrt1.c
+.\tcc -m64 %D64% -c lib/wincrt1.c -D_UNICODE -DUNICODE -o wincrt1_w.o
 .\tcc -m64 %D64% -c lib/dllcrt1.c
 .\tcc -m64 %D64% -c lib/dllmain.c
 .\tcc -m64 %D64% -c lib/chkstk.S

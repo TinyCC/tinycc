@@ -1759,34 +1759,46 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
     int pe_type = 0;
+    int unicode_entry = 0;
 
     if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
         pe_type = PE_GUI;
+    else
+    if (find_elf_sym(symtab_section, PE_STDSYM("wWinMain","@16"))) {
+        pe_type = PE_GUI;
+        unicode_entry = PE_GUI;
+    }
     else
     if (TCC_OUTPUT_DLL == s1->output_type) {
         pe_type = PE_DLL;
         /* need this for 'tccelf.c:relocate_section()' */
         s1->output_type = TCC_OUTPUT_EXE;
     }
-    else
+    else {
         pe_type = PE_EXE;
+        if (find_elf_sym(symtab_section, "wmain"))
+            unicode_entry = PE_EXE;
+    }
 
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
-        ? PE_GUI == pe_type ? "__runwinmain" : "_main"
+        ? PE_GUI == pe_type ? (unicode_entry ? "__runwwinmain" : "__runwinmain")
+            : (unicode_entry ? "__runwmain" : "__runmain")
         : PE_DLL == pe_type ? PE_STDSYM("__dllstart","@12")
-        : PE_GUI == pe_type ? "__winstart" : "__start"
+            : PE_GUI == pe_type ? (unicode_entry ? "__wwinstart": "__winstart")
+                : (unicode_entry ? "__wstart" : "__start")
         ;
 
     if (!s1->leading_underscore || strchr(start_symbol, '@'))
         ++start_symbol;
 
     /* grab the startup code from libtcc1 */
-    if (TCC_OUTPUT_MEMORY != s1->output_type || PE_GUI == pe_type)
-        set_elf_sym(symtab_section,
-            0, 0,
-            ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-            SHN_UNDEF, start_symbol);
+    /* only (PE_Dll == pe_type) doesn't need it,
+       (TCC_OUTPUT_MEMORY == s1->output_type && PE_Dll == pe_type) is illegal */
+    set_elf_sym(symtab_section,
+        0, 0,
+        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+        SHN_UNDEF, start_symbol);
 
     tcc_add_pragma_libs(s1);
 

@@ -1,5 +1,8 @@
 //+---------------------------------------------------------------------------
 
+// _UNICODE for tchar.h, UNICODE for API
+#include <tchar.h>
+
 #include <windows.h>
 #include <stdlib.h>
 
@@ -9,10 +12,28 @@
 void __set_app_type(int);
 void _controlfp(unsigned a, unsigned b);
 
-int _winstart(void)
+#ifdef _UNICODE
+#define __tgetmainargs __wgetmainargs
+#define _twinstart _wwinstart
+#define _runtwinmain _runwwinmain
+int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
+#else
+#define __tgetmainargs __getmainargs
+#define _twinstart _winstart
+#define _runtwinmain _runwinmain
+#endif
+
+typedef struct
+{
+    int newmode;
+} _startupinfo; // CLI Vs GUI
+
+int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int globb, _startupinfo*);
+
+int _twinstart(void)
 {
     __TRY__
-    char *szCmd;
+    _TCHAR *szCmd;
     STARTUPINFO startinfo;
     int fShow;
     int ret;
@@ -22,19 +43,19 @@ int _winstart(void)
 
     szCmd = GetCommandLine();
     if (szCmd) {
-        while (' ' == *szCmd)
+        while (__T(' ') == *szCmd)
             szCmd++;
-        if ('\"' == *szCmd) {
+        if (__T('\"') == *szCmd) {
             while (*++szCmd)
-                if ('\"' == *szCmd) {
+                if (__T('\"') == *szCmd) {
                     szCmd++;
                     break;
                 }
         } else {
-            while (*szCmd && ' ' != *szCmd)
+            while (*szCmd && __T(' ') != *szCmd)
                 szCmd++;
         }
-        while (' ' == *szCmd)
+        while (__T(' ') == *szCmd)
             szCmd++;
     }
 
@@ -43,22 +64,30 @@ int _winstart(void)
     if (0 == (startinfo.dwFlags & STARTF_USESHOWWINDOW))
         fShow = SW_SHOWDEFAULT;
 
-    ret = WinMain(GetModuleHandle(NULL), NULL, szCmd, fShow);
+    ret = _tWinMain(GetModuleHandle(NULL), NULL, szCmd, fShow);
     exit(ret);
 }
 
-int _runwinmain(int argc, char **argv)
+int _runtwinmain(int argc0, /* as tcc passed in */ char **argv0)
 {
-    char *szCmd, *p;
+    _TCHAR *szCmd, *p;
+
+    int argc;
+    _TCHAR **argv;
+    _TCHAR **env;
+    _startupinfo start_info;
+
+    start_info.newmode = 0;
+    __tgetmainargs(&argc, &argv, &env, 0, &start_info);
 
     p = GetCommandLine();
     szCmd = NULL;
-    if (argc > 1)
-        szCmd = strstr(p, argv[1]);
+    if (argc0 > 1)
+        szCmd = _tcsstr(p, argv[argc - argc0 + 1]);
     if (NULL == szCmd)
-        szCmd = "";
-    else if (szCmd > p && szCmd[-1] == '\"')
+        szCmd = __T("");
+    else if (szCmd > p && szCmd[-1] == __T('\"'))
         --szCmd;
     _controlfp(0x10000, 0x30000);
-    return WinMain(GetModuleHandle(NULL), NULL, szCmd, SW_SHOWDEFAULT);
+    return _tWinMain(GetModuleHandle(NULL), NULL, szCmd, SW_SHOWDEFAULT);
 }
