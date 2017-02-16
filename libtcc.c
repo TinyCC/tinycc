@@ -1377,6 +1377,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             ignoring = 1;
         } else if (link_option(option, "rpath=", &p)) {
             copy_linker_arg(&s->rpath, p, ':');
+        } else if (link_option(option, "enable-new-dtags", &p)) {
+            s->enable_new_dtags = 1;
         } else if (link_option(option, "section-alignment=", &p)) {
             s->section_align = strtoul(p, &end, 16);
         } else if (link_option(option, "soname=", &p)) {

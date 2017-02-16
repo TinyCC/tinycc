@@ -1968,7 +1968,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
             }
 
             if (s1->rpath)
-                put_dt(dynamic, DT_RPATH, put_elf_str(dynstr, s1->rpath));
+                put_dt(dynamic, s1->enable_new_dtags ? DT_RUNPATH : DT_RPATH,
+                    put_elf_str(dynstr, s1->rpath));
 
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */

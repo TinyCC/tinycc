@@ -605,6 +605,7 @@ struct TCCState {
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */
     char *rpath; /* as specified on the command line (-Wl,-rpath=) */
+    int enable_new_dtags; /* ditto, (-Wl,--enable-new-dtags) */
 
     /* output type, see TCC_OUTPUT_XXX */
     int output_type;

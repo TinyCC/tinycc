@@ -307,6 +307,10 @@ Generate an object file combining all input files.
 @item -Wl,-rpath=path
 Put custom search path for dynamic libraries into executable.
 
+@item -Wl,--enable-new-dtags
+When putting a custom search path for dynamic libraries into the executable,
+create the new ELF dynamic tag DT_RUNPATH instead of the old legacy DT_RPATH.
+
 @item -Wl,--oformat=fmt
 Use @var{fmt} as output format. The supported output formats are:
 @table @code
