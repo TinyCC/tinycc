@@ -101,6 +101,7 @@ rebuild:
 	@echo Rebuild using tcc itself - default $(TARGET)bits
 	@./$(TPREFIX)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c
 	@./$(TPREFIX)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tiny_libmaker.exe tools/tiny_libmaker.c
+	@./$(TPREFIX)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tiny_impdef.exe   tools/tiny_impdef.c
 	@./tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
 	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
 	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
@@ -127,6 +128,7 @@ tarball:
 	@cp -r Makefile $(TARNAME)
 	@cp -r tcc.exe $(TARNAME)
 	@cp -r tcc-win32.txt $(TARNAME)
+	@cp -r tiny_impdef.exe $(TARNAME)
 	@cp -r tiny_libmaker.exe $(TARNAME)
 	@cp -r tiny_libmaker32.exe $(TARNAME)
 	@cp -r tiny_libmaker64.exe $(TARNAME)
