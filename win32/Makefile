@@ -34,6 +34,10 @@ all: pre bootstrap libs rebuild
 	@ls -ls *.exe
 
 pre:
+	@echo ARCH=x86-64 1> ../config.mak
+	@echo TARGETOS=Windows  1>> ../config.mak
+	@echo CONFIG_WIN32=yes 1>> ../config.mak
+	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak
 	@echo "#define TCC_VERSION \"$(VERSION)\"" 1>../config.h
 	@echo "#ifdef TCC_TARGET_X86_64" 1>>../config.h
 	@echo "#define CONFIG_TCC_LIBPATHS \"{B}/lib/64;{B}/lib\"" 1>>../config.h
@@ -109,6 +113,11 @@ rebuild:
 	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tiny_libmaker64.exe tools/tiny_libmaker.c
 
 PHONY += rebuild
+
+test:
+	@(cd ../tests/tests2; $(MAKE) -k TCC=../../win32/tcc)
+
+PHONY += test
 
 TARNAME	= tcc-$(VERSION)-$(PREFIX)-win32
 
