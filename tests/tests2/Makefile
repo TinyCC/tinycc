@@ -28,6 +28,9 @@ endif
 ifeq (,$(filter i386 x86-64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
+ifeq ($(TARGETOS),Windows)
+ SKIP += 76_dollars_in_identifiers.test
+endif
 
 # Some tests might need arguments
 ARGS =
