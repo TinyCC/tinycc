@@ -27,7 +27,7 @@ LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque,
     void (*error_func)(void *opaque, const char *msg));
 
 /* set options as from command line (multiple supported) */
-LIBTCCAPI int tcc_set_options(TCCState *s, const char *str);
+LIBTCCAPI void tcc_set_options(TCCState *s, const char *str);
 
 /*****************************/
 /* preprocessor */

@@ -2,6 +2,7 @@ TODO list:
 
 Bugs:
 
+- i386 fastcall is mostly wrong
 - FPU st(0) is left unclean (kwisatz haderach). Incompatible with
   optimized gcc/msc code
 - see transparent union pb in /urs/include/sys/socket.h

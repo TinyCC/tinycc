@@ -1005,6 +1005,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
+    nocode_wanted = 0;
 
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
        symbols can be safely used */

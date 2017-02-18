@@ -39,7 +39,7 @@
     For the 'Hello DLL' example type
 
 	tcc -shared dll.c
-	tiny_impdef dll.dll (optional)
+	tcc -impdef dll.dll (optional)
         tcc hello_dll.c dll.def
 
 
@@ -66,10 +66,10 @@
     To link with Windows system DLLs, TCC uses import definition
     files (.def) instead of libraries.
 
-    The included 'tiny_impdef' program may be used to make additional 
-    .def files for any DLL. For example:
+    The now built-in 'tiny_impdef' program may be used to make
+    additional .def files for any DLL. For example
 
-        tiny_impdef.exe opengl32.dll
+        tcc -impdef [-v] opengl32.dll [-o opengl32.def]
 
     Put opengl32.def into the tcc/lib directory.  Specify -lopengl32 at
     the TCC commandline to link a program that uses opengl32.dll.
@@ -98,10 +98,10 @@
 
     Tiny Libmaker:
     --------------
-    The included tiny_libmaker tool by Timovj Lahde can be used as
+    The now built-in tiny_libmaker tool by Timovj Lahde can be used as
     'ar' replacement to make a library from several object files:
 
-	tiny_libmaker [rcs] library objectfiles ...
+	tcc -ar [rcsv] library objectfiles ...
 
 
     Compilation from source:
@@ -143,14 +143,12 @@
     ------------
     - On the object file level, currently TCC supports only the ELF format,
       not COFF as used by MinGW and MSVC.  It is not possible to exchange
-      object files or libraries between TCC and these compilers.  However
-      libraries for TCC from objects by TCC can be made using tiny_libmaker
-      or MinGW's ar.
+      object files or libraries between TCC and these compilers.
+
+      However libraries for TCC from objects by TCC can be made using
+        tcc -ar lib.a files.o ,,,
 
     - No leading underscore is generated in the ELF symbols.
-
-    - Bounds checking (option -b) is not supported on 64-bit OS.
-
 
     Documentation and License:
     --------------------------

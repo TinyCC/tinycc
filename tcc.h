@@ -767,17 +767,19 @@ struct TCCState {
     int nb_libraries; /* number of libs thereof */
     int filetype;
     char *outfile; /* output filename */
-    int cross_target; /* -m32/-m64 */
-    int print_search_dirs; /* option */
     int option_r; /* option -r */
     int do_bench; /* option -bench */
     int gen_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
     int option_pthread; /* -pthread option */
+    int argc;
+    char **argv;
 };
 
 struct filespec {
-    char type, name[1];
+    char type;
+    char alacarte;
+    char name[1];
 };
 
 /* The current value can be: */
@@ -1091,7 +1093,7 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #define realloc(p, s) use_tcc_realloc(p, s)
 #undef strdup
 #define strdup(s) use_tcc_strdup(s)
-PUB_FUNC void tcc_memstats(int bench);
+PUB_FUNC void tcc_memcheck(void);
 PUB_FUNC void tcc_error_noabort(const char *fmt, ...);
 PUB_FUNC NORETURN void tcc_error(const char *fmt, ...);
 PUB_FUNC void tcc_warning(const char *fmt, ...);
@@ -1131,13 +1133,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_TYPE_ASMPP  3
 #define AFF_TYPE_BIN    4
 #define AFF_TYPE_LIB    5
-#define AFF_TYPE_LIBWH  6
 /* values from tcc_object_type(...) */
 #define AFF_BINTYPE_REL 1
 #define AFF_BINTYPE_DYN 2
 #define AFF_BINTYPE_AR  3
 #define AFF_BINTYPE_C67 4
-
 
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 
@@ -1149,11 +1149,20 @@ ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 
 PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);
-PUB_FUNC int tcc_parse_args(TCCState *s, int argc, char **argv);
+PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv, int optind);
 PUB_FUNC void tcc_set_environment(TCCState *s);
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path);
 #endif
+
+/* tcc_parse_args return codes: */
+#define OPT_HELP 1
+#define OPT_V 3
+#define OPT_PRINT_DIRS 4
+#define OPT_AR 5
+#define OPT_IMPDEF 6
+#define OPT_M32 32
+#define OPT_M64 64
 
 /* ------------ tccpp.c ------------ */
 
@@ -1567,6 +1576,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);
 #ifdef TCC_TARGET_X86_64
 ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 #endif
+PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 /* symbol properties stored in Elf32_Sym->st_other */
 # define ST_PE_EXPORT 0x10
 # define ST_PE_IMPORT 0x20
@@ -1593,6 +1603,16 @@ ST_DATA void *rt_prog_main;
 ST_FUNC void tcc_set_num_callers(int n);
 #endif
 ST_FUNC void tcc_run_free(TCCState *s1);
+#endif
+
+/* ------------ tcctools.c ----------------- */
+#if 0 /* included in tcc.c */
+ST_FUNC int tcc_tool_ar(TCCState *s, int argc, char **argv);
+#ifdef TCC_TARGET_PE
+ST_FUNC int tcc_tool_impdef(TCCState *s, int argc, char **argv);
+#endif
+ST_FUNC void tcc_tool_cross(TCCState *s, char **argv, int option);
+ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename);
 #endif
 
 /********************************************************/

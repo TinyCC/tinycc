@@ -3431,7 +3431,7 @@ void builtin_test(void)
     i = sizeof (__builtin_choose_expr (0, ll, s));
     printf("bce: %d\n", i);
 
-    printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
+    //printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
 }
 
 #ifndef _WIN32

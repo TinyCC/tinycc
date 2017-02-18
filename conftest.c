@@ -1,9 +1,9 @@
 #include <stdio.h>
 
 /* Define architecture */
-#if defined(__i386__)
+#if defined(__i386__) || defined _M_IX86
 # define TRIPLET_ARCH "i386"
-#elif defined(__x86_64__)
+#elif defined(__x86_64__) || defined _M_AMD64
 # define TRIPLET_ARCH "x86_64"
 #elif defined(__arm__)
 # define TRIPLET_ARCH "arm"
@@ -18,6 +18,8 @@
 # define TRIPLET_OS "linux"
 #elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
 # define TRIPLET_OS "kfreebsd"
+#elif defined _WIN32
+# define TRIPLET_OS "win32"
 #elif !defined (__GNU__)
 # define TRIPLET_OS "unknown"
 #endif
@@ -33,7 +35,9 @@
 # define TRIPLET_ABI "gnu"
 #endif
 
-#ifdef __GNU__
+#if defined _WIN32
+# define TRIPLET TRIPLET_ARCH "-" TRIPLET_OS
+#elif defined __GNU__
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_ABI
 #else
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_OS "-" TRIPLET_ABI
@@ -59,6 +63,13 @@ int main(int argc, char *argv[])
         case 'v':
             printf("%d\n", __GNUC__);
             break;
+#elif defined __TINYC__
+        case 'v':
+            puts("0");
+            break;
+        case 'm':
+            printf("%d\n", __TINYC__);
+            break;
 #else
         case 'm':
         case 'v':
@@ -68,9 +79,8 @@ int main(int argc, char *argv[])
         case 't':
             puts(TRIPLET);
             break;
-        case -1:
-            /* to test -Wno-unused-result */
-            fread(NULL, 1, 1, NULL);
+
+        default:
             break;
     }
     return 0;

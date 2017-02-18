@@ -7,6 +7,7 @@ User interface:
 - -mms-bitfields option (David Mertens)
 - -include <file> option (Michael Matz)
 - @listfile support (Vlad Vissoultchev)
+- tcc -ar/-impdef - formerly tiny_xxx tools integrated (grischka)
 - CPATH, C_INCLUDE_PATH and LD_LIBRARY_PATH environment variables support
   (Andrew Aladjev, Urs Janssen)
 

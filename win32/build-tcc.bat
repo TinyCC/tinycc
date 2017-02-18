@@ -5,10 +5,6 @@
 @echo off
 setlocal
 
-set VSCOMNTOOLS=%VS150COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS140COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS130COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS120COMNTOOLS%
 set CC=gcc -Os -s
 set /p VERSION= < ..\VERSION
 set INST=
@@ -70,10 +66,17 @@ goto :a1
 if not (%1)==() goto :usage
 
 if not "%CC%"=="@call :cl" goto :p1
+set VSCOMNTOOLS=%VS150COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS140COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS130COMNTOOLS%
+if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS120COMNTOOLS%
 if %T%_==32_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\vcvars32.bat"
 if %T%_==64_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\amd64\vcvars64.bat"
 if %T%_==_ set T=32& if %Platform%_==X64_ set T=64
+if %CLVARS%_==_ goto :p1
+if exist %CLVARS% call %CLVARS%
 :p1
+
 if not %T%_==_ goto :p2
 set T=32
 if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
@@ -97,9 +100,6 @@ set PX=i386-win32
 
 @echo on
 
-@if %CLVARS%_==_ goto :config.h
-call %CLVARS%
-
 :config.h
 echo>..\config.h #define TCC_VERSION "%VERSION%"
 echo>> ..\config.h #ifdef TCC_TARGET_X86_64
@@ -108,17 +108,13 @@ echo>> ..\config.h #else
 echo>> ..\config.h #define CONFIG_TCC_LIBPATHS "{B}/lib/32;{B}/lib"
 echo>> ..\config.h #endif
 
-@del /q *tcc.exe tiny_*.exe *tcc.dll
+for %%f in (*tcc.exe *tcc.dll) do @del %%f
 
 :compiler
 %CC% -o libtcc.dll -shared ..\libtcc.c %D% -DONE_SOURCE -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D%
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX% -DONE_SOURCE
-
-:tools
-%CC% -o tiny_impdef.exe tools\tiny_impdef.c %D%
-%CC% -o tiny_libmaker.exe tools\tiny_libmaker.c %D%
 
 @if (%TCC_FILES%)==(no) goto :files-done
 
@@ -129,12 +125,11 @@ if not exist lib\64 mkdir lib\64
 copy>nul ..\include\*.h include
 copy>nul ..\tcclib.h include
 copy>nul ..\libtcc.h libtcc
-tiny_impdef libtcc.dll -o libtcc\libtcc.def
 copy>nul ..\tests\libtcc_test.c examples
 copy>nul tcc-win32.txt doc
 
-copy>nul tiny_libmaker.exe tiny_libmaker-m%T%.exe
-%CC% -o tiny_libmaker-m%TX%.exe tools\tiny_libmaker.c %DX%
+.\tcc -impdef libtcc.dll -o libtcc\libtcc.def
+@if errorlevel 1 goto :the_end
 
 :libtcc1.a
 @set O1=libtcc1.o crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o bcheck.o
@@ -149,7 +144,7 @@ copy>nul tiny_libmaker.exe tiny_libmaker-m%T%.exe
 .\tcc -m32 %D32% -w -c ../lib/bcheck.c
 .\tcc -m32 %D32% -c ../lib/alloca86.S
 .\tcc -m32 %D32% -c ../lib/alloca86-bt.S
-tiny_libmaker-m32 lib/32/libtcc1.a %O1% alloca86.o alloca86-bt.o
+.\tcc -m32 -ar lib/32/libtcc1.a %O1% alloca86.o alloca86-bt.o
 @if errorlevel 1 goto :the_end
 .\tcc -m64 %D64% -c ../lib/libtcc1.c
 .\tcc -m64 %D64% -c lib/crt1.c
@@ -162,7 +157,7 @@ tiny_libmaker-m32 lib/32/libtcc1.a %O1% alloca86.o alloca86-bt.o
 .\tcc -m64 %D64% -w -c ../lib/bcheck.c
 .\tcc -m64 %D64% -c ../lib/alloca86_64.S
 .\tcc -m64 %D64% -c ../lib/alloca86_64-bt.S
-tiny_libmaker-m64 lib/64/libtcc1.a %O1% alloca86_64.o alloca86_64-bt.o
+.\tcc -m64 -ar lib/64/libtcc1.a %O1% alloca86_64.o alloca86_64-bt.o
 @if errorlevel 1 goto :the_end
 
 :tcc-doc.html
@@ -172,7 +167,7 @@ cmd /c makeinfo --html --no-split ../tcc-doc.texi -o doc/tcc-doc.html
 :doc-done
 
 :files-done
-@del /q *.o *.def *-m??.exe
+for %%f in (*.o *.def) do @del %%f
 
 :copy-install
 @if (%INST%)==() goto :the_end

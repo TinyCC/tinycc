@@ -20,9 +20,6 @@ ifndef TARGET
   TARGET = x86_64
  else ifeq ($(ARCH),arm)
   TARGET = arm
-  # using gcc, need asm
-  XCC = $(CC)
-  XFLAGS = $(CFLAGS) -fPIC
  else ifeq ($(ARCH),arm64)
   TARGET = arm64
  endif
@@ -37,6 +34,9 @@ cross : $(DIR)/libtcc1.a
 native : TCC = $(TOP)/tcc$(EXESUF)
 cross : TCC = $(TOP)/$(TARGET)-tcc$(EXESUF)
 
+XCC = $(TCC) -B$(TOPSRC)
+XAR = $(TCC) -ar
+
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BCHECK_O)
 ARM_O = libtcc1.o armeabi.o alloca-arm.o
@@ -47,53 +47,43 @@ ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(I386_O) $(WIN32_O))
  TGT = -DTCC_TARGET_I386 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
- XAR = $(DIR)/tiny_libmaker$(EXESUF)
 else ifeq "$(TARGET)" "x86_64-win32"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O) $(WIN32_O))
  TGT = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
  XCC = $(TCC) -B$(TOPSRC)/win32 -I$(TOPSRC)/include
- XAR = $(DIR)/tiny_libmaker$(EXESUF)
 else ifeq "$(TARGET)" "i386"
  OBJ = $(addprefix $(DIR)/,$(I386_O))
  TGT = -DTCC_TARGET_I386
- XCC ?= $(TCC) -B$(TOPSRC)
 else ifeq "$(TARGET)" "x86_64"
  OBJ = $(addprefix $(DIR)/,$(X86_64_O))
  TGT = -DTCC_TARGET_X86_64
- XCC ?= $(TCC) -B$(TOPSRC)
 else ifeq "$(TARGET)" "arm"
  OBJ = $(addprefix $(DIR)/,$(ARM_O))
  TGT = -DTCC_TARGET_ARM
- XCC ?= $(TCC) -B$(TOPSRC)
+ # using gcc, need asm
+ XCC = $(CC)
+ XFLAGS = $(CFLAGS) -fPIC
+ XAR = $(AR)
 else ifeq "$(TARGET)" "arm64"
  OBJ = $(addprefix $(DIR)/,$(ARM64_O))
  TGT = -DTCC_TARGET_ARM64
- XCC ?= $(TCC) -B$(TOPSRC)
 else
  $(error libtcc1.a not supported on target '$(TARGET)')
 endif
 
 ifeq ($(TARGETOS),Darwin)
- XAR = $(DIR)/tiny_libmaker$(EXESUF)
  XFLAGS += -D_ANSI_SOURCE
  BCHECK_O =
 endif
 
-ifdef XAR
-AR = $(XAR)
-endif
-
-$(DIR)/libtcc1.a ../libtcc1.a : $(OBJ) $(XAR)
-	$(AR) rcs $@ $(OBJ)
+$(DIR)/libtcc1.a ../libtcc1.a : $(OBJ)
+	$(XAR) rcs $@ $(OBJ)
 $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
 $(DIR)/%.o : %.S
 	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
-# windows : utilities
-$(DIR)/tiny_%$(EXESUF) : $(TOPSRC)/win32/tools/tiny_%.c
-	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(TGT)
 
-$(OBJ) $(XAR) : $(DIR)/exists
+$(OBJ) : $(DIR)/exists
 
 %/exists :
 	mkdir -p $(DIR)

@@ -28,6 +28,7 @@ LIBS =
 ifdef CONFIG_WIN32
  ifneq ($(DISABLE_STATIC),no)
   LIBTCC = libtcc.dll
+  LIBTCCDEF = libtcc.def
  endif
 else
  LIBS=-lm
@@ -82,7 +83,7 @@ ARM_CROSS = $(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CRO
 ARM64_CROSS = arm64-tcc$(EXESUF)
 C67_CROSS = c67-tcc$(EXESUF)
 
-CORE_FILES = tcc.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
+CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
 I386_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h
 WIN32_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
@@ -94,7 +95,6 @@ ARM64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
 C67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
 ifdef CONFIG_WIN32
- PROGS+=tiny_impdef$(EXESUF) tiny_libmaker$(EXESUF)
  ifeq ($(ARCH),x86-64)
   NATIVE_FILES=$(WIN64_FILES)
   PROGS_CROSS=$(WIN32_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
@@ -124,11 +124,7 @@ NATIVE_FILES=$(ARM64_FILES)
 PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS) $(WINCE_CROSS)
 endif
 
-ifeq ($(TARGETOS),Darwin)
- PROGS += tiny_libmaker$(EXESUF)
-endif
-
-TCCLIBS = $(LIBTCC1) $(LIBTCC)
+TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCCDEF)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 ifdef CONFIG_CROSS
@@ -179,13 +175,15 @@ $(ARM64_CROSS): $(ARM64_FILES)
 
 # libtcc generation and test
 ifndef ONE_SOURCE
-LIBTCC_OBJ = $(filter-out tcc.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
+LIBTCC_OBJ = $(filter-out tcc.o tcctools.o,$(patsubst %.c,%.o,$(filter %.c,$(NATIVE_FILES))))
 LIBTCC_INC = $(filter %.h,$(CORE_FILES)) $(filter-out $(CORE_FILES) i386-asm.c,$(NATIVE_FILES))
 else
 LIBTCC_OBJ = libtcc.o
 LIBTCC_INC = $(NATIVE_FILES)
 libtcc.o : NATIVE_DEFINES += -DONE_SOURCE
 endif
+
+tcc.o : tcctools.c
 
 $(LIBTCC_OBJ) tcc.o : %.o : %.c $(LIBTCC_INC)
 	$(CC) -o $@ -c $< $(NATIVE_DEFINES) $(CFLAGS)
@@ -199,9 +197,11 @@ libtcc.so: $(LIBTCC_OBJ)
 libtcc.so: CFLAGS+=-fPIC
 
 # windows : libtcc.dll
-libtcc.dll : $(LIBTCC_OBJ) tiny_impdef$(EXESUF)
+libtcc.dll : $(LIBTCC_OBJ)
 	$(CC) -shared $(LIBTCC_OBJ) -o $@ $(LDFLAGS)
-	./tiny_impdef $@
+
+libtcc.def : libtcc.dll tcc$(EXESUF)
+	./tcc$(EXESUF) -impdef $< -o $@
 
 libtcc.dll : NATIVE_DEFINES += -DLIBTCC_AS_DLL
 
