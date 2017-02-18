@@ -1436,6 +1436,7 @@ typedef struct TCCOption {
 
 enum {
     TCC_OPTION_HELP,
+    TCC_OPTION_HELP2,
     TCC_OPTION_v,
     TCC_OPTION_I,
     TCC_OPTION_D,
@@ -1494,6 +1495,7 @@ static const TCCOption tcc_options[] = {
     { "h", TCC_OPTION_HELP, 0 },
     { "-help", TCC_OPTION_HELP, 0 },
     { "?", TCC_OPTION_HELP, 0 },
+    { "hh", TCC_OPTION_HELP2, 0 },
     { "v", TCC_OPTION_v, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "I", TCC_OPTION_I, TCC_OPTION_HAS_ARG },
     { "D", TCC_OPTION_D, TCC_OPTION_HAS_ARG },
@@ -1726,6 +1728,8 @@ reparse:
         switch(popt->index) {
         case TCC_OPTION_HELP:
             return OPT_HELP;
+        case TCC_OPTION_HELP2:
+            return OPT_HELP2;
         case TCC_OPTION_I:
             tcc_add_include_path(s, optarg);
             break;

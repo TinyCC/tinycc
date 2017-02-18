@@ -25,83 +25,128 @@
 #endif
 #include "tcctools.c"
 
-static void help(void)
-{
-    printf("Tiny C Compiler "TCC_VERSION" - Copyright (C) 2001-2006 Fabrice Bellard\n"
-           "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
-           "       tcc [options...] -run infile [arguments...]\n"
-           "General options:\n"
-           "  -c          compile only - generate an object file\n"
-           "  -o outfile  set output filename\n"
-           "  -run        run compiled source\n"
-           "  -fflag      set or reset (with 'no-' prefix) 'flag' (see man page)\n"
-           "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see man page)\n"
-           "  -w          disable all warnings\n"
-           "  -v          show version\n"
-           "  -vv         show included files (as sole argument show search paths)\n"
-           "  -h          show this help\n"
-           "  -bench      show compilation statistics\n"
-           "Preprocessor options:\n"
-           "  -Idir       add include path 'dir'\n"
-           "  -Dsym[=val] define 'sym' with value 'val'\n"
-           "  -Usym       undefine 'sym'\n"
-           "  -E          preprocess only\n"
-           "  -P[1]       no / alternative #line output with -E\n"
-           "  -dD -dM     output #define directives with -E\n"
-           "  -include file  include file above each input file\n"
-           "Linker options:\n"
-           "  -Ldir       add library path 'dir'\n"
-           "  -llib       link with dynamic or static library 'lib'\n"
-           "  -r          generate (relocatable) object file\n"
-           "  -shared     generate a shared library\n"
-           "  -rdynamic   export all global symbols to dynamic linker\n"
-           "  -soname     set name for shared library to be used at runtime\n"
-           "  -static     static linking\n"
-           "  -pthread    link with -lpthread and -D_REENTRANT (POSIX Linux)\n"
-           "  -Wl,-opt[=val]  set linker option (see manual)\n"
-           "Debugger options:\n"
-           "  -g          generate runtime debug info\n"
+static const char help[] =
+    "Tiny C Compiler "TCC_VERSION" - Copyright (C) 2001-2006 Fabrice Bellard\n"
+    "Usage: tcc [options...] [-o outfile] [-c] infile(s)...\n"
+    "       tcc [options...] -run infile [arguments...]\n"
+    "General options:\n"
+    "  -c          compile only - generate an object file\n"
+    "  -o outfile  set output filename\n"
+    "  -run        run compiled source\n"
+    "  -fflag      set or reset (with 'no-' prefix) 'flag' (see tcc -hh)\n"
+    "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see tcc -hh)\n"
+    "  -w          disable all warnings\n"
+    "  -v -vv      show version, show search paths or loaded files\n"
+    "  -h -hh      show this, show more help\n"
+    "  -bench      show compilation statistics\n"
+    "  -           use stdin pipe as infile\n"
+    "  @listfile   read arguments from listfile\n"
+    "Preprocessor options:\n"
+    "  -Idir       add include path 'dir'\n"
+    "  -Dsym[=val] define 'sym' with value 'val'\n"
+    "  -Usym       undefine 'sym'\n"
+    "  -E          preprocess only\n"
+    "Linker options:\n"
+    "  -Ldir       add library path 'dir'\n"
+    "  -llib       link with dynamic or static library 'lib'\n"
+    "  -r          generate (relocatable) object file\n"
+    "  -shared     generate a shared library/dll\n"
+    "  -rdynamic   export all global symbols to dynamic linker\n"
+    "  -soname     set name for shared library to be used at runtime\n"
+    "  -Wl,-opt[=val]  set linker option (see tcc -hh)\n"
+    "Debugger options:\n"
+    "  -g          generate runtime debug info\n"
 #ifdef CONFIG_TCC_BCHECK
-           "  -b          compile with built-in memory and bounds checker (implies -g)\n"
+    "  -b          compile with built-in memory and bounds checker (implies -g)\n"
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
-           "  -bt N       show N callers in stack traces\n"
+    "  -bt N       show N callers in stack traces\n"
 #endif
-           "Misc options:\n"
-           "  -x[c|a|n]   specify type of the next infile\n"
-           "  -nostdinc   do not use standard system include paths\n"
-           "  -nostdlib   do not link with standard crt and libraries\n"
-           "  -Bdir       use 'dir' as tcc's private library/include path\n"
-           "  -MD         generate target dependencies for make\n"
-           "  -MF depfile put generated dependencies here\n"
-           "  -dumpversion  print version\n"
-           "  -           use stdin pipe as infile\n"
-           "  @listfile   read arguments from listfile\n"
-           "Target specific options:\n"
-           "  -m32/64     execute i386/x86-64 cross compiler\n"
-           "  -mms-bitfields  use MSVC bitfield layout\n"
+    "Misc. options:\n"
+    "  -x[c|a|n]   specify type of the next infile\n"
+    "  -nostdinc   do not use standard system include paths\n"
+    "  -nostdlib   do not link with standard crt and libraries\n"
+    "  -Bdir       set tcc's private include/library dir\n"
+    "  -MD         generate dependency file for make\n"
+    "  -MF file    specify dependency file name\n"
+    "  -m32/64     defer to i386/x86_64 cross compiler\n"
+    "Tools:\n"
+    "  create library  : tcc -ar [rcsv] lib.a files\n"
+#ifdef TCC_TARGET_PE
+    "  create def file : tcc -impdef lib.dll [-v] [-o lib.def]\n"
+#endif
+    ;
+
+static const char help2[] =
+    "Tiny C Compiler "TCC_VERSION" - More Options\n"
+    "Special options:\n"
+    "  -P -P1                        with -E: no/alternative #line output\n"
+    "  -dD -dM                       with -E: output #define directives\n"
+    "  -pthread                      same as -D_REENTRANT and -lpthread\n"
+    "  -On                           same as -D__OPTIMIZE__ for n > 0\n"
+    "  -Wp,-opt                      same as -opt\n"
+    "  -include file                 include 'file' above each input file\n"
+    "  -isystem dir                  add 'dir' to system include path\n"
+    "  -iwithprefix dir              set tcc's private include/library subdir\n"
+    "  -static                       link to static libraries (not recommended)\n"
+    "  -dumpversion                  print version\n"
+    "  -print-search-dirs            print search paths\n"
+    "Ignored options:\n"
+    "  --param  -pedantic  -pipe  -s  -std  -traditional\n"
+    "-W... warnings:\n"
+    "  all                           turn on some (*) warnings\n"
+    "  error                         stop after first warning\n"
+    "  unsupported                   warn about ignored options, pragmas, etc.\n"
+    "  write-strings                 strings are const\n"
+    "  implicit-function-declaration   warn for missing prototype (*)\n"
+    "-f[no-]... flags:\n"
+    "  unsigned-char                 default char is unsigned\n"
+    "  signed-char                   default char is signed\n"
+    "  common                        use common section instead of bss\n"
+    "  leading-underscore            decorate extern symbols\n"
+    "  ms-extensions                 allow struct w/o identifier\n"
+    "  dollars-in-identifiers        allow '$' in C symbols\n"
+    "  old-struct-init-code          some hack for parsing initializers\n"
+    "-m... target specific options:\n"
+    "  ms-bitfields                  use MSVC bitfield layout\n"
 #ifdef TCC_TARGET_ARM
-           "  -mfloat-abi hard/softfp on arm\n"
+    "  float-abi                     hard/softfp on arm\n"
 #endif
 #ifdef TCC_TARGET_X86_64
-           "  -mno-sse    disable floats on x86-64\n"
+    "  no-sse                        disable floats on x86_64\n"
 #endif
-           "Tools:\n"
-           "  create library    : tcc -ar [rcsv] lib.a files\n"
+    "-Wl,... linker options:\n"
+    "  -nostdlib                     do not link with standard crt/libs\n"
+    "  -[no-]whole-archive           load lib(s) fully/only as needed\n"
+    "  -image-base= -Ttext=          set base address of executable\n"
+    "  -section-alignment=           set section alignment in executable\n"
 #ifdef TCC_TARGET_PE
-           "  create .def file  : tcc -impdef lib.dll [-v] [-o lib.def]\n"
+    "  -file-alignment=              set PE file alignment\n"
+    "  -stack=                       set PE stack reserve\n"
+    "  -large-address-aware          set related PE option\n"
+    "  -subsystem=[console gui]      set PE subsystem\n"
+    "  -oformat=[pe-* binary]        set executable output format\n"
+    "Predefined macros:\n"
+    "  tcc -E -dM - < nul\n"
+#else
+    "  -rpath=                       set dynamic library seach path\n"
+    "  -enable-new-dtags             set DT_RUNPATH instead of DT_RPATH\n"
+    "  -soname=                      set DT_SONAME elf tag\n"
+    "  -Bsymbolic                    set DT_SYMBOLIC elf tag\n"
+    "  -oformat=[elf32/64-* binary]  set executable output format\n"
+    "  -init= -fini= -as-needed -O   (ignored)\n"
+    "Predefined macros:\n"
+    "  tcc -E -dM - < /dev/null\n"
 #endif
-           );
-}
+    "See also the manual for more details.\n"
+    ;
 
-
-static void version(void)
-{
-    printf("tcc version %s ("
+static const char version[] =
+    "tcc version "TCC_VERSION" ("
 #ifdef TCC_TARGET_I386
         "i386"
 #elif defined TCC_TARGET_X86_64
-        "x86-64"
+        "x86_64"
 #elif defined TCC_TARGET_C67
         "C67"
 #elif defined TCC_TARGET_ARM
@@ -133,8 +178,8 @@ static void version(void)
 #else
         " Unidentified system"
 #endif
-        ")\n", TCC_VERSION);
-}
+    ")\n"
+    ;
 
 static void print_dirs(const char *msg, char **paths, int nb_paths)
 {
@@ -205,11 +250,13 @@ redo:
 
     if (n == 0) {
         if (opt == OPT_HELP)
-            return help(), 1;
+            return printf(help), 1;
+        if (opt == OPT_HELP2)
+            return printf(help2), 1;
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)
-            version();
+            printf(version);
         if (opt == OPT_AR)
             return tcc_tool_ar(s, argc, argv);
 #ifdef TCC_TARGET_PE

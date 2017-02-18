@@ -1157,6 +1157,7 @@ ST_FUNC char *normalize_slashes(char *path);
 
 /* tcc_parse_args return codes: */
 #define OPT_HELP 1
+#define OPT_HELP2 2
 #define OPT_V 3
 #define OPT_PRINT_DIRS 4
 #define OPT_AR 5
