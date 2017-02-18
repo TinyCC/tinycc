@@ -17,6 +17,7 @@ Platforms:
 - provide a runtime library for ARM (Thomas Preud'homme)
 - many x86-64 ABI fixes incl. XMM register passing and tests (James Lyon)
 - ABI tests with native compiler using libtcc (James Lyon)
+- UNICODE startup code supports wmain and wWinMain (YX Hao)
 
 Features:
 - VLA (variable length array) improved (James Lyon, Pip Cet)

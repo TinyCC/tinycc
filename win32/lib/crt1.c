@@ -65,24 +65,23 @@ void _tstart(void)
     exit(ret);
 }
 
-void _runtmain(int argc0, /* as tcc passed in */ char **argv0)
+int _runtmain(int argc, /* as tcc passed in */ char **argv)
 {
-    __TRY__
-    int argc, ret;
-    _TCHAR **argv;
-    _TCHAR **env;
-    _startupinfo start_info;
+#ifdef UNICODE
+    int wargc;
+    _TCHAR **wargv, **wenv;
+    _startupinfo start_info = {0};
 
-    __set_app_type(_CONSOLE_APP);
+    __tgetmainargs(&wargc, &wargv, &wenv, _dowildcard, &start_info);
+    if (argc < wargc)
+        wargv += wargc - argc;
+#define argv wargv
+#endif
 
 #ifdef __i386
     _controlfp(_PC_53, _MCW_PC);
 #endif
-
-    start_info.newmode = 0;
-    __tgetmainargs( &argc, &argv, &env, _dowildcard, &start_info);
-    ret = _tmain(argc0, argv + argc - argc0, env);
-    exit(ret);
+    return _tmain(argc, argv, NULL);
 }
 
 // =============================================

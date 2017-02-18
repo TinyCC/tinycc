@@ -41,7 +41,7 @@ I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BCHECK_O)
 ARM_O = libtcc1.o armeabi.o alloca-arm.o
 ARM64_O = lib-arm64.o
-WIN32_O = crt1.o wincrt1.o dllcrt1.o dllmain.o chkstk.o
+WIN32_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 
 ifeq "$(TARGET)" "i386-win32"
  OBJ = $(addprefix $(DIR)/,$(I386_O) $(WIN32_O))

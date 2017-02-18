@@ -744,9 +744,6 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifdef TCC_TARGET_I386
     s->seg_size = 32;
 #endif
-#ifdef TCC_IS_NATIVE
-    s->runtime_main = "main";
-#endif
     /* enable this if you want symbols with leading underscore on windows: */
 #if 0 /* def TCC_TARGET_PE */
     s->leading_underscore = 1;

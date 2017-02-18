@@ -68,22 +68,25 @@ int _twinstart(void)
     exit(ret);
 }
 
-int _runtwinmain(int argc0, /* as tcc passed in */ char **argv0)
+int _runtwinmain(int argc, /* as tcc passed in */ char **argv)
 {
     _TCHAR *szCmd, *p;
 
-    int argc;
-    _TCHAR **argv;
-    _TCHAR **env;
-    _startupinfo start_info;
+#ifdef UNICODE
+    int wargc;
+    _TCHAR **wargv, **wenv;
+    _startupinfo start_info = {0};
 
-    start_info.newmode = 0;
-    __tgetmainargs(&argc, &argv, &env, 0, &start_info);
+    __tgetmainargs(&wargc, &wargv, &wenv, 0, &start_info);
+    if (argc < wargc)
+        wargv += wargc - argc;
+#define argv wargv
+#endif
 
     p = GetCommandLine();
     szCmd = NULL;
-    if (argc0 > 1)
-        szCmd = _tcsstr(p, argv[argc - argc0 + 1]);
+    if (argc > 1)
+        szCmd = _tcsstr(p, argv[1]);
     if (NULL == szCmd)
         szCmd = __T("");
     else if (szCmd > p && szCmd[-1] == __T('\"'))

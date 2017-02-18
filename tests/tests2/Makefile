@@ -28,9 +28,6 @@ endif
 ifeq (,$(filter i386 x86-64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
-ifeq ($(TARGETOS),Windows)
- SKIP += 76_dollars_in_identifiers.test
-endif
 
 # Some tests might need arguments
 ARGS =
@@ -42,7 +39,8 @@ NORUN =
 42_function_pointer.test : NORUN = true
 
 # Some tests might need different flags
-76_dollars_in_identifiers.test : TCCFLAGS += -fdollars-in-identifiers
+FLAGS =
+76_dollars_in_identifiers.test : FLAGS += -fdollars-in-identifiers
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'
@@ -57,9 +55,9 @@ all test: $(filter-out $(SKIP),$(TESTS))
 	@echo Test: $*...
 # test -run
 	@if test -z "$(NORUN)"; then \
-	    $(TCC) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true; \
+	    $(TCC) $(FLAGS) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true; \
 	  else \
-	    $(TCC) $< -o ./$*.exe $(FILTER) >$*.output 2>&1; \
+	    $(TCC) $(FLAGS) $< -o ./$*.exe $(FILTER) >$*.output 2>&1; \
 	    ./$*.exe $(ARGS) >>$*.output 2>&1 || true; \
 	  fi
 	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output $*.exe
