@@ -957,7 +957,7 @@ void gfunc_prolog(CType *func_type)
             if (reg_param_index < REGN) {
                 gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             }
-            sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL | VT_REF, addr);
+            sym_push(sym->v & ~SYM_FIELD, type, VT_LLOCAL | VT_LVAL, addr);
         } else {
             if (reg_param_index < REGN) {
                 /* save arguments passed by register */

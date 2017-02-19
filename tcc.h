@@ -825,7 +825,6 @@ struct filespec {
 #define VT_CMP       0x0033  /* the value is stored in processor flags (in vc) */
 #define VT_JMP       0x0034  /* value is the consequence of jmp true (even) */
 #define VT_JMPI      0x0035  /* value is the consequence of jmp false (odd) */
-#define VT_REF       0x0040  /* value is pointer to structure rather than address */
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
 #define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for

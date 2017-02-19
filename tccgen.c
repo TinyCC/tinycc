@@ -1026,8 +1026,6 @@ static void move_reg(int r, int s, int t)
 /* get address of vtop (vtop MUST BE an lvalue) */
 ST_FUNC void gaddrof(void)
 {
-    if (vtop->r & VT_REF)
-        gv(RC_INT);
     vtop->r &= ~VT_LVAL;
     /* tricky: if saved lvalue, then we can go back to lvalue */
     if ((vtop->r & VT_VALMASK) == VT_LLOCAL)
@@ -1237,13 +1235,7 @@ ST_FUNC int gv(int rc)
                 t = vtop->type.t;
                 t1 = t;
                 /* compute memory access type */
-                if (vtop->r & VT_REF)
-#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-                    t = VT_PTR;
-#else
-                    t = VT_INT;
-#endif
-                else if (vtop->r & VT_LVAL_BYTE)
+                if (vtop->r & VT_LVAL_BYTE)
                     t = VT_BYTE;
                 else if (vtop->r & VT_LVAL_SHORT)
                     t = VT_SHORT;
@@ -4616,7 +4608,7 @@ ST_FUNC void unary(void)
             skip(')');
             if ((vtop->r & VT_VALMASK) != VT_LOCAL)
                 tcc_error("__builtin_va_start expects a local variable");
-            vtop->r &= ~(VT_LVAL | VT_REF);
+            vtop->r &= ~VT_LVAL;
             vtop->type = char_pointer_type;
             vtop->c.i += 8;
             vstore();
