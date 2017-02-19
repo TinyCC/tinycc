@@ -4443,7 +4443,7 @@ ST_FUNC void unary(void)
            there and in function calls. */
         /* arrays can also be used although they are not lvalues */
         if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
-            !(vtop->type.t & VT_ARRAY) && !(vtop->type.t & VT_LLOCAL))
+            !(vtop->type.t & VT_ARRAY))
             test_lvalue();
         mk_pointer(&vtop->type);
         gaddrof();
@@ -5954,12 +5954,15 @@ static void parse_init_elem(int expr_type)
         global_expr = 1;
         expr_const1();
         global_expr = saved_global_expr;
-        /* NOTE: symbols are accepted */
-        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST
+        /* NOTE: symbols are accepted, as well as lvalue for anon symbols
+	   (compound literals).  */
+        if (((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST
+	     && ((vtop->r & (VT_SYM|VT_LVAL)) != (VT_SYM|VT_LVAL)
+		 || vtop->sym->v < SYM_FIRST_ANOM))
 #ifdef TCC_TARGET_PE
             || (vtop->type.t & VT_IMPORT)
 #endif
-            )
+	    )
             tcc_error("initializer element is not constant");
         break;
     case EXPR_ANY:
@@ -6711,6 +6714,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             /* push global reference */
             sym = get_sym_ref(type, sec, addr, size);
 	    vpushsym(type, sym);
+	    vtop->r |= r;
         }
 
 #ifdef CONFIG_TCC_BCHECK
