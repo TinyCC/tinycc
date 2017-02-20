@@ -6,6 +6,7 @@ User interface:
 - -Wl,-(no-)whole-archive linker option (Reuben Thomas)
 - -mms-bitfields option (David Mertens)
 - -include <file> option (Michael Matz)
+- -mno-sse on x86-64 disables use of SSE instructions
 - @listfile support (Vlad Vissoultchev)
 - tcc -ar/-impdef - formerly tiny_xxx tools integrated (grischka)
 - CPATH, C_INCLUDE_PATH and LD_LIBRARY_PATH environment variables support
@@ -19,6 +20,7 @@ Platforms:
 - many x86_64 ABI fixes incl. XMM register passing and tests (James Lyon)
 - ABI tests with native compiler using libtcc (James Lyon)
 - UNICODE startup code supports wmain and wWinMain (YX Hao)
+- shared libraries for x86_64 (Michael Matz)
 
 Features:
 - VLA (variable length array) improved (James Lyon, Pip Cet)
@@ -29,6 +31,9 @@ Features:
 - #pragma once support (Sergey Korshunoff, Vlad Vissoultchev, ...)
 - switch/case code improved (Zdenek Pavlas)
 - ~15% faster by TinyAlloc fast memory allocator (Vlad Vissoultchev)
+- standard conforming (and GCC compatible) struct initialization
+   (Michael Matz)
+- bit-field layout made compatible with GCC (Michael Matz)
 
 Licensing:
 - TinyCC partly relicensed to MIT license (See RELICENSING file).
