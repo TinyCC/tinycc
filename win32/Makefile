@@ -24,11 +24,9 @@ TARGET	= $(CPU)
 ifeq ($(TARGET), 64)
 TFLAGS	= -m$(TARGET) -DTCC_TARGET_X86_64
 TARCH	= x86_64
-CARCH	= x86-64
 else
 TFLAGS	= -m$(TARGET) -DTCC_TARGET_I386
 TARCH	= i386
-CARCH	= i386
 endif
 
 all: pre bootstrap libs rebuild
@@ -36,7 +34,7 @@ all: pre bootstrap libs rebuild
 	@ls -ls *.exe
 
 pre:
-	@echo ARCH=$(CARCH) 1> ../config.mak
+	@echo ARCH=$(TARCH) 1> ../config.mak
 	@echo TARGETOS=Windows  1>> ../config.mak
 	@echo CONFIG_WIN32=yes 1>> ../config.mak
 	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak

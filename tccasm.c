@@ -926,10 +926,13 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
     set_idnum('.', IS_ID);
     if (do_preprocess)
         parse_flags |= PARSE_FLAG_PREPROCESS;
-    next();
     for(;;) {
+        next();
         if (tok == TOK_EOF)
             break;
+        /* generate line number info */
+        if (global && s1->do_debug)
+            tcc_debug_line(s1);
         parse_flags |= PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     redo:
         if (tok == '#') {
@@ -981,15 +984,12 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
             }
         }
         /* end of line */
-        if (tok != ';' && tok != TOK_LINEFEED){
+        if (tok != ';' && tok != TOK_LINEFEED)
             expect("end of line");
-        }
         parse_flags &= ~PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
-        next();
     }
 
     asm_free_labels(s1);
-
     return 0;
 }
 
@@ -1001,24 +1001,19 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 
     define_start = define_stack;
     preprocess_start(s1);
+    tcc_debug_start(s1);
 
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
 
-    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
-       symbols can be safely used */
-    put_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
-                SHN_ABS, file->filename);
-
     ret = tcc_assemble_internal(s1, do_preprocess, 1);
 
     cur_text_section->data_offset = ind;
 
+    tcc_debug_end(s1);
     free_defines(define_start); 
-
     return ret;
 }
 

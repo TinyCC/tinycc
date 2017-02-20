@@ -140,6 +140,88 @@ void pv (const char *lbl, int a, int b)
 #endif
 
 /* ------------------------------------------------------------------------- */
+/* start of translation unit info */
+ST_FUNC void tcc_debug_start(TCCState *s1)
+{
+    if (s1->do_debug) {
+        char buf[512];
+
+        /* file info: full path + filename */
+        section_sym = put_elf_sym(symtab_section, 0, 0,
+                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                                  text_section->sh_num, NULL);
+        getcwd(buf, sizeof(buf));
+#ifdef _WIN32
+        normalize_slashes(buf);
+#endif
+        pstrcat(buf, sizeof(buf), "/");
+        put_stabs_r(buf, N_SO, 0, 0,
+                    text_section->data_offset, text_section, section_sym);
+        put_stabs_r(file->filename, N_SO, 0, 0,
+                    text_section->data_offset, text_section, section_sym);
+        last_ind = 0;
+        last_line_num = 0;
+    }
+
+    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
+       symbols can be safely used */
+    put_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
+                SHN_ABS, file->filename);
+}
+
+/* put end of translation unit info */
+ST_FUNC void tcc_debug_end(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabs_r(NULL, N_SO, 0, 0,
+        text_section->data_offset, text_section, section_sym);
+
+}
+
+/* generate line number info */
+ST_FUNC void tcc_debug_line(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    if ((last_line_num != file->line_num || last_ind != ind)) {
+        put_stabn(N_SLINE, 0, file->line_num, ind - func_ind);
+        last_ind = ind;
+        last_line_num = file->line_num;
+    }
+}
+
+/* put function symbol */
+ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
+{
+    char buf[512];
+
+    if (!s1->do_debug)
+        return;
+
+    /* stabs info */
+    /* XXX: we put here a dummy type */
+    snprintf(buf, sizeof(buf), "%s:%c1",
+             funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
+    put_stabs_r(buf, N_FUN, 0, file->line_num, 0,
+                cur_text_section, sym->c);
+    /* //gr gdb wants a line at the function */
+    put_stabn(N_SLINE, 0, file->line_num, 0);
+
+    last_ind = 0;
+    last_line_num = 0;
+}
+
+/* put function size */
+ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabn(N_FUN, 0, 0, size);
+}
+
+/* ------------------------------------------------------------------------- */
 ST_FUNC void tccgen_start(TCCState *s1)
 {
     cur_text_section = NULL;
@@ -161,28 +243,7 @@ ST_FUNC void tccgen_start(TCCState *s1)
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, FUNC_CDECL, FUNC_OLD);
 
-    if (s1->do_debug) {
-        char buf[512];
-
-        /* file info: full path + filename */
-        section_sym = put_elf_sym(symtab_section, 0, 0,
-                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
-                                  text_section->sh_num, NULL);
-        getcwd(buf, sizeof(buf));
-#ifdef _WIN32
-        normalize_slashes(buf);
-#endif
-        pstrcat(buf, sizeof(buf), "/");
-        put_stabs_r(buf, N_SO, 0, 0,
-                    text_section->data_offset, text_section, section_sym);
-        put_stabs_r(file->filename, N_SO, 0, 0,
-                    text_section->data_offset, text_section, section_sym);
-    }
-    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
-       symbols can be safely used */
-    put_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
-                SHN_ABS, file->filename);
+    tcc_debug_start(s1);
 
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
@@ -194,10 +255,7 @@ ST_FUNC void tccgen_end(TCCState *s1)
     gen_inline_functions(s1);
     check_vstack();
     /* end of translation unit info */
-    if (s1->do_debug) {
-        put_stabs_r(NULL, N_SO, 0, 0,
-                    text_section->data_offset, text_section, section_sym);
-    }
+    tcc_debug_end(s1);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -5567,12 +5625,8 @@ static void block(int *bsym, int *csym, int is_expr)
     Sym *s;
 
     /* generate line number info */
-    if (tcc_state->do_debug &&
-        (last_line_num != file->line_num || last_ind != ind)) {
-        put_stabn(N_SLINE, 0, file->line_num, ind - func_ind);
-        last_ind = ind;
-        last_line_num = file->line_num;
-    }
+    if (tcc_state->do_debug)
+        tcc_debug_line(tcc_state);
 
     if (is_expr) {
         /* default return value is (void) */
@@ -6741,22 +6795,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     }
 }
 
-static void put_func_debug(Sym *sym)
-{
-    char buf[512];
-
-    /* stabs info */
-    /* XXX: we put here a dummy type */
-    snprintf(buf, sizeof(buf), "%s:%c1", 
-             funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
-    put_stabs_r(buf, N_FUN, 0, file->line_num, 0,
-                cur_text_section, sym->c);
-    /* //gr gdb wants a line at the function */
-    put_stabn(N_SLINE, 0, file->line_num, 0); 
-    last_ind = 0;
-    last_line_num = 0;
-}
-
 /* parse an old style function declaration list */
 /* XXX: check multiple parameter */
 static void func_decl_list(Sym *func_sym)
@@ -6820,15 +6858,12 @@ static void gen_function(Sym *sym)
     vla_sp_loc = -1;
     vla_sp_root_loc = -1;
     /* put debug symbol */
-    if (tcc_state->do_debug)
-        put_func_debug(sym);
-
+    tcc_debug_funcstart(tcc_state, sym);
     /* push a dummy symbol to enable local sym storage */
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(&sym->type);
     local_scope = 0;
-
     rsym = 0;
     block(NULL, NULL, 0);
     nocode_wanted = 0;
@@ -6847,9 +6882,7 @@ static void gen_function(Sym *sym)
     if (sym->type.t & VT_WEAK)
         weaken_symbol(sym);
     apply_visibility(sym, &sym->type);
-    if (tcc_state->do_debug) {
-        put_stabn(N_FUN, 0, 0, ind - func_ind);
-    }
+    tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */
     cur_text_section = NULL;
     funcname = ""; /* for safety */

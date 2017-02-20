@@ -163,8 +163,8 @@ case "$cpu" in
   x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
     cpu="x86"
   ;;
-  x86_64|amd64)
-    cpu="x86-64"
+  x86_64|amd64|x86-64)
+    cpu="x86_64"
   ;;
   arm*)
     case "$cpu" in
@@ -332,7 +332,7 @@ if test -z "$cross_prefix" ; then
       fi
 
       if test -z "$triplet"; then
-        if test $cpu = "x86-64" -o $cpu = "aarch64" ; then
+        if test $cpu = "x86_64" -o $cpu = "aarch64" ; then
           if test -f "/usr/lib64/crti.o" ; then
             tcc_lddir="lib64"
           fi
@@ -453,8 +453,8 @@ echo "#define GCC_MINOR $gcc_minor" >> $TMPH
 
 if test "$cpu" = "x86" ; then
   echo "ARCH=i386" >> config.mak
-elif test "$cpu" = "x86-64" ; then
-  echo "ARCH=x86-64" >> config.mak
+elif test "$cpu" = "x86_64" ; then
+  echo "ARCH=x86_64" >> config.mak
 elif test "$cpu" = "armv4l" ; then
   echo "ARCH=arm" >> config.mak
   echo "#define TCC_ARM_VERSION $cpuver" >> $TMPH

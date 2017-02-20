@@ -73,15 +73,18 @@ int _runtmain(int argc, /* as tcc passed in */ char **argv)
     _startupinfo start_info = {0};
 
     __tgetmainargs(&wargc, &wargv, &wenv, _dowildcard, &start_info);
+    /* may be wrong when tcc has received wildcards (*.c) */
     if (argc < wargc)
         wargv += wargc - argc;
+    else
+        argc = wargc;
 #define argv wargv
 #endif
 
 #ifdef __i386
     _controlfp(_PC_53, _MCW_PC);
 #endif
-    return _tmain(argc, argv, NULL);
+    return _tmain(argc, argv, _tenviron);
 }
 
 // =============================================

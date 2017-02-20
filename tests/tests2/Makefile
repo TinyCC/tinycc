@@ -22,10 +22,10 @@ endif
 ifeq ($(TARGETOS),Darwin)
  SKIP += 40_stdio.test
 endif
-ifeq ($(ARCH),x86-64)
+ifeq ($(ARCH),x86_64)
  SKIP += 73_arm64.test
 endif
-ifeq (,$(filter i386 x86-64,$(ARCH)))
+ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
 

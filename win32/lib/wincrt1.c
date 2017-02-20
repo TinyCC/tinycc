@@ -80,6 +80,8 @@ int _runtwinmain(int argc, /* as tcc passed in */ char **argv)
     __tgetmainargs(&wargc, &wargv, &wenv, 0, &start_info);
     if (argc < wargc)
         wargv += wargc - argc;
+    else
+        argc = wargc;
 #define argv wargv
 #endif
 

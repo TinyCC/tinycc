@@ -387,10 +387,10 @@ gcc's algorithm.
 Select the float ABI. Possible values: @code{softfp} and @code{hard}
 
 @item -mno-sse
-Do not use sse registers on x86-64
+Do not use sse registers on x86_64
 
 @item -m32, -m64
-Pass command line to the i386/x86-64 cross compiler.
+Pass command line to the i386/x86_64 cross compiler.
 
 @end table
 

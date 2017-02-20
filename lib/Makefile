@@ -9,14 +9,14 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 ifndef TARGET
  # we're building the native libtcc1.a
  ifdef CONFIG_WIN32
-  ifeq ($(ARCH),x86-64)
+  ifeq ($(ARCH),x86_64)
    TARGET = x86_64-win32
   else
    TARGET = i386-win32
   endif
  else ifeq ($(ARCH),i386)
   TARGET = i386
- else ifeq ($(ARCH),x86-64)
+ else ifeq ($(ARCH),x86_64)
   TARGET = x86_64
  else ifeq ($(ARCH),arm)
   TARGET = arm
@@ -82,6 +82,9 @@ $(DIR)/%.o : %.c
 	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
 $(DIR)/%.o : %.S
 	$(XCC) -c $< -o $@ $(TGT) $(XFLAGS)
+
+$(DIR)/crt1w.o : crt1.c
+$(DIR)/wincrt1w.o : wincrt1.c
 
 $(OBJ) : $(DIR)/exists
 

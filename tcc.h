@@ -615,9 +615,7 @@ struct TCCState {
     /* C language options */
     int char_is_unsigned;
     int leading_underscore;
-    int ms_extensions;		/* allow nested named struct w/o identifier behave like unnamed */
-    int old_struct_init_code;	/* use old algorithm to init array in struct when there is no '{' used.
-				   Liuux 2.4.26 can't find initrd when compiled with a new algorithm */
+    int ms_extensions;	/* allow nested named struct w/o identifier behave like unnamed */
     int dollars_in_identifiers;	/* allows '$' char in indentifiers */
     int ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
@@ -1147,10 +1145,8 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
-
 PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);
 PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv, int optind);
-PUB_FUNC void tcc_set_environment(TCCState *s);
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path);
 #endif
@@ -1276,8 +1272,15 @@ ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA const char *funcname;
 
+ST_FUNC void tcc_debug_start(TCCState *s1);
+ST_FUNC void tcc_debug_end(TCCState *s1);
+ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
+ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
+ST_FUNC void tcc_debug_line(TCCState *s1);
+
 ST_FUNC void tccgen_start(TCCState *s1);
 ST_FUNC void tccgen_end(TCCState *s1);
+
 ST_FUNC void free_inline_functions(TCCState *s);
 ST_FUNC void check_vstack(void);
 

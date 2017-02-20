@@ -139,6 +139,18 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 #define NOSERVICE 1
 #define NOMCX 1
 #define NOIME 1
+#define __INTRIN_H_
+#ifndef DUMMYUNIONNAME
+#  define DUMMYUNIONNAME
+#  define DUMMYUNIONNAME1
+#  define DUMMYUNIONNAME2
+#  define DUMMYUNIONNAME3
+#  define DUMMYUNIONNAME4
+#  define DUMMYUNIONNAME5
+#endif
+#ifndef DUMMYSTRUCTNAME
+#  define DUMMYSTRUCTNAME
+#endif
 #ifndef WINVER
 # define WINVER 0x0502
 #endif
