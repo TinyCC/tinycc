@@ -114,12 +114,21 @@ notl %r15d
      movzb 0x1000, %eax
      movzb 0x1000, %ax
                 
+     mov $0x12345678,%eax
+
 #ifdef __x86_64__
      movzb 0x1000, %rax
      movzbq 0x1000, %rbx
      movsbq 0x1000, %rdx
      movzwq 0x1000, %rdi
      movswq 0x1000, %rdx
+     movslq %eax, %rcx
+     mov $0x12345678,%rax
+     mov $0x12345678,%rdx
+     mov $0x12345678,%r10
+     mov $0x123456789abcdef0,%rax
+     mov $0x123456789abcdef0,%rcx
+     mov $0x123456789abcdef0,%r11
 #endif
         
 #ifdef __i386__
@@ -546,6 +555,7 @@ invlpg 0x1000
 cmpxchg8b 0x1002
 #ifdef __x86_64__
 cmpxchg16b (%rax)
+cmpxchg16b (%r10,%r11)
 #endif
 
 fcmovb %st(5), %st
@@ -569,6 +579,7 @@ fucomip %st(5), %st
  cmovne %ax, %si
 #ifdef __x86_64__
  bswapq %rsi
+ bswapq %r10
  cmovz %rdi,%rbx
 #endif
 
@@ -675,7 +686,9 @@ int $0x10
     prefetchw (%rdi)
     clflush 0x1000(%rax,%rcx)
     fxsaveq (%rdx)
+    fxsaveq (%r11)
     fxrstorq (%rcx)
+    fxrstorq (%r10)
 
 #endif
 
@@ -751,6 +764,9 @@ int $0x10
     sidtq 0x1000
 
     swapgs
+
+    str %rdx
+    str %r9
 #endif
 
     lmsw 0x1000
@@ -879,6 +895,7 @@ overrideme:
 #ifdef __x86_64__
     movq %rcx, %mm1
     movq %rdx, %xmm2
+    movq %r13, %xmm3
     /* movq mem64->xmm is encoded as f30f7e by GAS, but as
        660f6e by tcc (which really is a movd and would need 
        a REX.W prefix to be movq).  */

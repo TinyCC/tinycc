@@ -42,6 +42,7 @@
 #define OPCT_IS(v,i) (((v) & OPCT_MASK) == (i))
 
 #define OPC_0F        0x100 /* Is secondary map (0x0f prefix) */
+#define OPC_48        0x200 /* Always has REX prefix */
 #ifdef TCC_TARGET_X86_64
 # define OPC_WLQ     0x1000  /* accepts w, l, q or no suffix */
 # define OPC_BWLQ    (OPC_B | OPC_WLQ) /* accepts b, w, l, q or no suffix */
@@ -785,7 +786,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 	   should only be done if we really have an >32bit imm64, and that
 	   is hardcoded.  Ignore it here.  */
 	if (pa->opcode == 0xb0 && ops[0].type != OP_IM64
-	    && ops[1].type == OP_REG64
+	    && (ops[1].type & OP_REG) == OP_REG64
 	    && !(pa->instr_type & OPC_0F))
 	    continue;
 #endif
@@ -901,14 +902,16 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         g(0x66);
 #ifdef TCC_TARGET_X86_64
     rex64 = 0;
-    if (s == 3 || (alltypes & OP_REG64)) {
+    if (pa->instr_type & OPC_48)
+        rex64 = 1;
+    else if (s == 3 || (alltypes & OP_REG64)) {
         /* generate REX prefix */
 	int default64 = 0;
 	for(i = 0; i < nb_ops; i++) {
-	    if (op_type[i] == OP_REG64) {
+	    if (op_type[i] == OP_REG64 && pa->opcode != 0xb8) {
 		/* If only 64bit regs are accepted in one operand
 		   this is a default64 instruction without need for
-		   REX prefixes.  */
+		   REX prefixes, except for movabs(0xb8).  */
 		default64 = 1;
 		break;
 	    }

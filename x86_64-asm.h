@@ -106,8 +106,8 @@ ALT(DEF_ASM_OP2(movb, 0x8a, 0, OPC_MODRM | OPC_BWLX, OPT_EA | OPT_REG, OPT_REG))
    the full movabs form (64bit immediate).  For IM32->REG64 we prefer
    the 0xc7 opcode.  So disallow all 64bit forms and code the rest by hand. */
 ALT(DEF_ASM_OP2(movb, 0xb0, 0, OPC_REG | OPC_BWLX, OPT_IM, OPT_REG))
-ALT(DEF_ASM_OP2(mov,  0x48b8, 0, OPC_REG, OPT_IM64, OPT_REG64))
-ALT(DEF_ASM_OP2(movq, 0x48b8, 0, OPC_REG, OPT_IM64, OPT_REG64))
+ALT(DEF_ASM_OP2(mov,  0xb8, 0, OPC_REG, OPT_IM64, OPT_REG64))
+ALT(DEF_ASM_OP2(movq, 0xb8, 0, OPC_REG, OPT_IM64, OPT_REG64))
 ALT(DEF_ASM_OP2(movb, 0xc6, 0, OPC_MODRM | OPC_BWLX, OPT_IM, OPT_REG | OPT_EA))
 
 ALT(DEF_ASM_OP2(movw, 0x8c, 0, OPC_MODRM | OPC_WLX, OPT_SEG, OPT_EA | OPT_REG))
@@ -123,7 +123,7 @@ ALT(DEF_ASM_OP2(movsbl, 0x0fbe, 0, OPC_MODRM, OPT_REG8 | OPT_EA, OPT_REG32))
 ALT(DEF_ASM_OP2(movsbq, 0x0fbe, 0, OPC_MODRM, OPT_REG8 | OPT_EA, OPT_REGW))
 ALT(DEF_ASM_OP2(movswl, 0x0fbf, 0, OPC_MODRM, OPT_REG16 | OPT_EA, OPT_REG32))
 ALT(DEF_ASM_OP2(movswq, 0x0fbf, 0, OPC_MODRM, OPT_REG16 | OPT_EA, OPT_REG))
-ALT(DEF_ASM_OP2(movslq, 0x4863, 0, OPC_MODRM, OPT_REG32 | OPT_EA, OPT_REG))
+ALT(DEF_ASM_OP2(movslq, 0x63, 0, OPC_MODRM, OPT_REG32 | OPT_EA, OPT_REG))
 ALT(DEF_ASM_OP2(movzbw, 0x0fb6, 0, OPC_MODRM | OPC_WLX, OPT_REG8 | OPT_EA, OPT_REGW))
 ALT(DEF_ASM_OP2(movzwl, 0x0fb7, 0, OPC_MODRM, OPT_REG16 | OPT_EA, OPT_REG32))
 ALT(DEF_ASM_OP2(movzwq, 0x0fb7, 0, OPC_MODRM, OPT_REG16 | OPT_EA, OPT_REG))
@@ -354,8 +354,8 @@ ALT(DEF_ASM_OP1(fstsw, 0xdd, 7, OPC_MODRM | OPC_FWAIT, OPT_EA ))
        If the operand would use extended registers we would have to modify
        it instead of generating a second one.  Currently that's no
        problem with TCC, we don't use extended registers.  */
-    DEF_ASM_OP1(fxsaveq, 0x480fae, 0, OPC_MODRM, OPT_EA )
-    DEF_ASM_OP1(fxrstorq, 0x480fae, 1, OPC_MODRM, OPT_EA )
+    DEF_ASM_OP1(fxsaveq, 0x0fae, 0, OPC_MODRM | OPC_48, OPT_EA )
+    DEF_ASM_OP1(fxrstorq, 0x0fae, 1, OPC_MODRM | OPC_48, OPT_EA )
 
     /* segments */
     DEF_ASM_OP2(arpl, 0x63, 0, OPC_MODRM, OPT_REG16, OPT_REG16 | OPT_EA)
@@ -376,7 +376,7 @@ ALT(DEF_ASM_OP2(lslw, 0x0f03, 0, OPC_MODRM | OPC_WLX, OPT_EA | OPT_REG, OPT_REG)
     DEF_ASM_OP1(smsw, 0x0f01, 4, OPC_MODRM, OPT_REG | OPT_EA)
     DEF_ASM_OP1(str, 0x0f00, 1, OPC_MODRM, OPT_REG32 | OPT_EA)
 ALT(DEF_ASM_OP1(str, 0x660f00, 1, OPC_MODRM, OPT_REG16))
-ALT(DEF_ASM_OP1(str, 0x480f00, 1, OPC_MODRM, OPT_REG64))
+ALT(DEF_ASM_OP1(str, 0x0f00, 1, OPC_MODRM | OPC_48, OPT_REG64))
     DEF_ASM_OP1(verr, 0x0f00, 4, OPC_MODRM, OPT_REG | OPT_EA)
     DEF_ASM_OP1(verw, 0x0f00, 5, OPC_MODRM, OPT_REG | OPT_EA)
     DEF_ASM_OP0L(swapgs, 0x0f01, 7, OPC_MODRM)
@@ -385,7 +385,7 @@ ALT(DEF_ASM_OP1(str, 0x480f00, 1, OPC_MODRM, OPT_REG64))
     /* bswap can't be applied to 16bit regs */
     DEF_ASM_OP1(bswap, 0x0fc8, 0, OPC_REG, OPT_REG32 )
     DEF_ASM_OP1(bswapl, 0x0fc8, 0, OPC_REG, OPT_REG32 )
-    DEF_ASM_OP1(bswapq, 0x480fc8, 0, OPC_REG, OPT_REG64 )
+    DEF_ASM_OP1(bswapq, 0x0fc8, 0, OPC_REG | OPC_48, OPT_REG64 )
 
 ALT(DEF_ASM_OP2(xaddb, 0x0fc0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OPT_EA ))
 ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OPT_EA ))
@@ -395,7 +395,7 @@ ALT(DEF_ASM_OP2(cmpxchgb, 0x0fb0, 0, OPC_MODRM | OPC_BWLX, OPT_REG, OPT_REG | OP
     DEF_ASM_OP1(cmpxchg8b, 0x0fc7, 1, OPC_MODRM, OPT_EA )
 
     /* AMD 64 */
-    DEF_ASM_OP1(cmpxchg16b, 0x480fc7, 1, OPC_MODRM, OPT_EA )
+    DEF_ASM_OP1(cmpxchg16b, 0x0fc7, 1, OPC_MODRM | OPC_48, OPT_EA )
 
     /* pentium pro */
 ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WLX, OPT_REGW | OPT_EA, OPT_REGW))
@@ -420,7 +420,7 @@ ALT(DEF_ASM_OP2(cmovo, 0x0f40, 0, OPC_MODRM | OPC_TEST | OPC_WLX, OPT_REGW | OPT
     /* movd shouldn't accept REG64, but AMD64 spec uses it for 32 and 64 bit
        moves, so let's be compatible. */
 ALT(DEF_ASM_OP2(movd, 0x0f6e, 0, OPC_MODRM, OPT_EA | OPT_REG64, OPT_MMXSSE ))
-ALT(DEF_ASM_OP2(movq, 0x480f6e, 0, OPC_MODRM, OPT_REG64, OPT_MMXSSE ))
+ALT(DEF_ASM_OP2(movq, 0x0f6e, 0, OPC_MODRM | OPC_48, OPT_REG64, OPT_MMXSSE ))
 ALT(DEF_ASM_OP2(movq, 0x0f6f, 0, OPC_MODRM, OPT_EA | OPT_MMX, OPT_MMX ))
 ALT(DEF_ASM_OP2(movd, 0x0f7e, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_REG32 ))
 ALT(DEF_ASM_OP2(movd, 0x0f7e, 0, OPC_MODRM, OPT_MMXSSE, OPT_EA | OPT_REG64 ))
