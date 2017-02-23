@@ -13,6 +13,7 @@ User interface:
   (Andrew Aladjev, Urs Janssen)
 
 Platforms:
+- Bootstrap native Windows 32/64 compiler using Cygwin+gcc (Christian Jullien)
 - new AARCH64 (arm64) target (Edmund Grimley Evans)
 - vastly improved support for ARM hard float calling convention
    (Thomas Preud'homme, Daniel Glöckner)

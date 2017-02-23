@@ -46,6 +46,7 @@
  TK                         ?                   tcccoff.c c67-gen.c
  Urs Janssen                YES
  waddlesplash               YES
+ Christian Jullien          YES                 Windows Cygwin build and tests
 
 
  ------------------------------------------------------------------------------
