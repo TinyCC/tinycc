@@ -254,13 +254,15 @@
 # define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 #endif
 
-/* target specific subdir for libtcc1.a */
-#ifndef TCC_ARCH_DIR
-# define TCC_ARCH_DIR ""
+/* (target specific) libtcc1.a */
+#ifndef TCC_LIBTCC1
+# define TCC_LIBTCC1 "libtcc1.a"
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
+#if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
 #define TCC_LIBGCC USE_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
+#endif
 
 /* -------------------------------------------- */
 
@@ -285,6 +287,26 @@
 #endif
 /* target address type */
 #define addr_t ElfW(Addr)
+
+/* -------------------------------------------- */
+
+#ifndef PUB_FUNC /* functions used by tcc.c but not in libtcc.h */
+# define PUB_FUNC
+#endif
+
+#ifdef ONE_SOURCE
+#define ST_INLN static inline
+#define ST_FUNC static
+#define ST_DATA static
+#else
+#define ST_INLN
+#define ST_FUNC
+#define ST_DATA extern
+#endif
+
+#ifdef TCC_PROFILE /* profile all functions */
+# define static
+#endif
 
 /* -------------------------------------------- */
 /* include the target specific definitions */
@@ -1031,26 +1053,6 @@ enum tcc_token {
 /* keywords: tok >= TOK_IDENT && tok < TOK_UIDENT */
 #define TOK_UIDENT TOK_DEFINE
 
-/* -------------------------------------------- */
-
-#ifndef PUB_FUNC /* functions used by tcc.c but not in libtcc.h */
-# define PUB_FUNC
-#endif
-
-#ifdef ONE_SOURCE
-#define ST_INLN static inline
-#define ST_FUNC static
-#define ST_DATA static
-#else
-#define ST_INLN
-#define ST_FUNC
-#define ST_DATA extern
-#endif
-
-#ifdef TCC_PROFILE /* profile all functions */
-# define static
-#endif
-
 /* ------------ libtcc.c ------------ */
 
 /* use GNU C extensions */
@@ -1137,12 +1139,9 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_BINTYPE_AR  3
 #define AFF_BINTYPE_C67 4
 
+
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
-
-#ifndef TCC_TARGET_PE
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
-#endif
-
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);

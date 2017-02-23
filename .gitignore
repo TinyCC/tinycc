@@ -17,9 +17,10 @@ a.out
 tcc_g
 tcc
 *-tcc
+libtcc*.def
 
-config.h
-config.mak
+config*.h
+config*.mak
 config.texi
 conftest*
 tags
@@ -28,13 +29,6 @@ tcc.1
 tcc.pod
 tcc-doc.html
 tcc-doc.info
-
-lib/x86_64
-lib/i386
-lib/x86_64-win32
-lib/i386-win32
-lib/arm
-lib/arm64
 
 win32/doc
 win32/libtcc
@@ -60,5 +54,3 @@ tests/libtcc_test
 tests/vla_test
 tests/hello
 tests/tests2/fred.txt
-
-libtcc*.def

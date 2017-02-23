@@ -1063,7 +1063,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 static int tcc_add_support(TCCState *s1, const char *filename)
 {
     char buf[1024];
-    snprintf(buf, sizeof(buf), "%s/"TCC_ARCH_DIR"%s", s1->tcc_lib_path, filename);
+    snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
     return tcc_add_file(s1, buf);
 }
 
@@ -1106,12 +1106,15 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     /* add libc */
     if (!s1->nostdlib) {
         tcc_add_library_err(s1, "c");
-#ifdef CONFIG_USE_LIBGCC
+#ifdef TCC_LIBGCC
         if (!s1->static_link) {
-            tcc_add_file(s1, TCC_LIBGCC);
+            if (TCC_LIBGCC[0] == '/')
+                tcc_add_file(s1, TCC_LIBGCC);
+            else
+                tcc_add_dll(s1, TCC_LIBGCC, 0);
         }
 #endif
-        tcc_add_support(s1, "libtcc1.a");
+        tcc_add_support(s1, TCC_LIBTCC1);
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tcc_add_crt(s1, "crtn.o");
@@ -2758,12 +2761,13 @@ static int ld_next(TCCState *s1, char *name, int name_size)
 
 static int ld_add_file(TCCState *s1, const char filename[])
 {
-    int ret;
-
-    ret = tcc_add_file_internal(s1, filename, AFF_TYPE_BIN);
-    if (ret)
-        ret = tcc_add_dll(s1, filename, 0);
-    return ret;
+    if (filename[0] == '/') {
+        if (CONFIG_SYSROOT[0] == '\0'
+            && tcc_add_file_internal(s1, filename, AFF_TYPE_BIN) == 0)
+            return 0;
+        filename = tcc_basename(filename);
+    }
+    return tcc_add_dll(s1, filename, 0);
 }
 
 static inline int new_undef_syms(void)

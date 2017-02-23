@@ -2147,3 +2147,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 /*************************************************************/
 #endif
 /*************************************************************/
+
+#ifndef TCC_IS_NATIVE
+#include "arm-asm.c"
+#endif

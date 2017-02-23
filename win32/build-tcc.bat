@@ -85,17 +85,17 @@ if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
 
 set D32=-DTCC_TARGET_PE -DTCC_TARGET_I386
 set D64=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
+set P32=i386-win32
+set P64=x86_64-win32
 if %T%==64 goto :t64
 set D=%D32%
 set DX=%D64%
-set TX=64
-set PX=x86_64-win32
+set PX=%P64%
 goto :t96
 :t64
 set D=%D64%
 set DX=%D32%
-set TX=32
-set PX=i386-win32
+set PX=%P32%
 :t96
 
 @echo on
@@ -103,9 +103,9 @@ set PX=i386-win32
 :config.h
 echo>..\config.h #define TCC_VERSION "%VERSION%"
 echo>> ..\config.h #ifdef TCC_TARGET_X86_64
-echo>> ..\config.h #define CONFIG_TCC_LIBPATHS "{B}/lib/64;{B}/lib"
+echo>> ..\config.h #define TCC_LIBTCC1 "libtcc1-64.a"
 echo>> ..\config.h #else
-echo>> ..\config.h #define CONFIG_TCC_LIBPATHS "{B}/lib/32;{B}/lib"
+echo>> ..\config.h #define TCC_LIBTCC1 "libtcc1-32.a"
 echo>> ..\config.h #endif
 
 for %%f in (*tcc.exe *tcc.dll) do @del %%f
@@ -120,8 +120,6 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 
 if not exist libtcc mkdir libtcc
 if not exist doc mkdir doc
-if not exist lib\32 mkdir lib\32
-if not exist lib\64 mkdir lib\64
 copy>nul ..\include\*.h include
 copy>nul ..\tcclib.h include
 copy>nul ..\libtcc.h libtcc
@@ -144,7 +142,7 @@ copy>nul tcc-win32.txt doc
 .\tcc -m32 %D32% -w -c ../lib/bcheck.c
 .\tcc -m32 %D32% -c ../lib/alloca86.S
 .\tcc -m32 %D32% -c ../lib/alloca86-bt.S
-.\tcc -m32 -ar lib/32/libtcc1.a %O1% alloca86.o alloca86-bt.o
+.\tcc -m32 -ar lib/libtcc1-32.a %O1% alloca86.o alloca86-bt.o
 @if errorlevel 1 goto :the_end
 .\tcc -m64 %D64% -c ../lib/libtcc1.c
 .\tcc -m64 %D64% -c lib/crt1.c
@@ -157,7 +155,7 @@ copy>nul tcc-win32.txt doc
 .\tcc -m64 %D64% -w -c ../lib/bcheck.c
 .\tcc -m64 %D64% -c ../lib/alloca86_64.S
 .\tcc -m64 %D64% -c ../lib/alloca86_64-bt.S
-.\tcc -m64 -ar lib/64/libtcc1.a %O1% alloca86_64.o alloca86_64-bt.o
+.\tcc -m64 -ar lib/libtcc1-64.a %O1% alloca86_64.o alloca86_64-bt.o
 @if errorlevel 1 goto :the_end
 
 :tcc-doc.html
@@ -172,9 +170,9 @@ for %%f in (*.o *.def) do @del %%f
 :copy-install
 @if (%INST%)==() goto :the_end
 if not exist %INST% mkdir %INST%
-@for %%f in (*tcc.exe tiny_*.exe *tcc.dll) do copy>nul %%f %INST%
-@for %%f in (include lib examples libtcc doc) do xcopy>nul /s/i/q/y %%f %INST%\%%f
-del %INST%\lib\*.c %INST%\lib\*.S
+@if not exist %INST%\lib mkdir %INST%\lib
+for %%f in (*tcc.exe *tcc.dll lib\*.a lib\*.def) do @copy>nul %%f %INST%\%%f
+for %%f in (include examples libtcc doc) do @xcopy>nul /s/i/q/y %%f %INST%\%%f
 
 :the_end
 exit /B %ERRORLEVEL%

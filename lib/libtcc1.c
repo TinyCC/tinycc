@@ -693,7 +693,7 @@ void *__va_arg(__va_list_struct *ap,
 }
 #endif /* __x86_64__ */
 
-#ifdef TCC_TARGET_ARM
+#if defined TCC_TARGET_ARM && !defined __TINYC__
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/syscall.h>

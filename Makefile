@@ -6,7 +6,6 @@ TOP ?= .
 include $(TOP)/config.mak
 VPATH = $(TOPSRC)
 CFLAGS += -I$(TOP)
-
 CFLAGS += $(CPPFLAGS)
 
 ifeq (-$(findstring gcc,$(CC))-,-gcc-)
@@ -66,71 +65,28 @@ NATIVE_DEFINES_$(CONFIG_arm_vfp) += -DTCC_ARM_VFP
 NATIVE_DEFINES_$(CONFIG_arm64) += -DTCC_TARGET_ARM64
 NATIVE_DEFINES += $(NATIVE_DEFINES_yes)
 
+# --------------------------------------------------------------------------
+# running top Makefile
 ifeq ($(TOP),.)
-
-PROGS=tcc$(EXESUF)
-I386_CROSS = i386-tcc$(EXESUF)
-WIN32_CROSS = i386-win32-tcc$(EXESUF)
-WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
-WINCE_CROSS = arm-wince-tcc$(EXESUF)
-X64_CROSS = x86_64-tcc$(EXESUF)
-ARM_FPA_CROSS = arm-fpa-tcc$(EXESUF)
-ARM_FPA_LD_CROSS = arm-fpa-ld-tcc$(EXESUF)
-ARM_VFP_CROSS = arm-vfp-tcc$(EXESUF)
-ARM_EABI_CROSS = arm-eabi-tcc$(EXESUF)
-ARM_EABIHF_CROSS = arm-eabihf-tcc$(EXESUF)
-ARM_CROSS = $(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS)
-ARM64_CROSS = arm64-tcc$(EXESUF)
-C67_CROSS = c67-tcc$(EXESUF)
 
 CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
-I386_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h
-WIN32_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h tccpe.c
-WIN64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-link.c i386-asm.c x86_64-asm.h tccpe.c
-WINCE_FILES = $(CORE_FILES) arm-gen.c arm-link.c tccpe.c
-X86_64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-link.c i386-asm.c x86_64-asm.h
-ARM_FILES = $(CORE_FILES) arm-gen.c arm-link.c
-ARM64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
-C67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
+i386_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h
+i386-win32_FILES = $(i386_FILES) tccpe.c
+x86_64_FILES = $(CORE_FILES) x86_64-gen.c x86_64-link.c i386-asm.c x86_64-asm.h
+x86_64-win32_FILES = $(x86_64_FILES) tccpe.c
+arm_FILES = $(CORE_FILES) arm-gen.c arm-link.c
+arm-wince_FILES = $(arm_FILES) tccpe.c
+arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
+c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
-ifdef CONFIG_WIN32
- ifeq ($(ARCH),x86_64)
-  NATIVE_FILES=$(WIN64_FILES)
-  PROGS_CROSS=$(WIN32_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-  LIBTCC1_CROSS=lib/i386-win32/libtcc1.a
- else
-  NATIVE_FILES=$(WIN32_FILES)
-  PROGS_CROSS=$(WIN64_CROSS) $(X64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-  LIBTCC1_CROSS=lib/x86_64-win32/libtcc1.a
- endif
+CFGWIN = $(if $(CONFIG_WIN32),-win)
+NATIVE_TARGET = $(ARCH)$(if $(CONFIG_WIN32),-win$(if $(eq $(ARCH),arm),ce,32))
+NATIVE_FILES = $($(NATIVE_TARGET)_FILES)
 
-else ifeq ($(ARCH),i386)
-NATIVE_FILES=$(I386_FILES)
-PROGS_CROSS=$(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
-
-else ifeq ($(ARCH),x86_64)
-NATIVE_FILES=$(X86_64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-LIBTCC1_CROSS=lib/i386-win32/libtcc1.a lib/x86_64-win32/libtcc1.a
-
-else ifeq ($(ARCH),arm)
-NATIVE_FILES=$(ARM_FILES)
-PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM64_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-
-else ifeq ($(ARCH),arm64)
-NATIVE_FILES=$(ARM64_FILES)
-PROGS_CROSS=$(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS) $(ARM_CROSS) $(C67_CROSS) $(WINCE_CROSS)
-endif
-
+PROGS = tcc$(EXESUF)
 TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCCDEF)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
-
-ifdef CONFIG_CROSS
- PROGS += $(PROGS_CROSS)
- TCCLIBS += $(LIBTCC1_CROSS)
-endif
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
@@ -138,40 +94,9 @@ all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 tcc$(EXESUF): tcc.o $(LIBTCC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS) $(LINK_LIBTCC)
 
-# Cross Tiny C Compilers
-%-tcc$(EXESUF): tcc.c
-	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
-
 # profiling version
 tcc_p$(EXESUF): $(NATIVE_FILES)
 	$(CC) -o $@ $< -DONE_SOURCE $(NATIVE_DEFINES) $(CPPFLAGS_P) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
-
-$(I386_CROSS): DEFINES = -DTCC_TARGET_I386 \
-    -DCONFIG_TCCDIR="\"$(tccdir)/i386\""
-$(X64_CROSS) : DEFINES = -DTCC_TARGET_X86_64
-    -DCONFIG_TCCDIR="\"$(tccdir)/x86_64\""
-$(WIN32_CROSS) : DEFINES = -DTCC_TARGET_I386 -DTCC_TARGET_PE \
-    -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" \
-    -DCONFIG_TCC_LIBPATHS="\"{B}/lib/32;{B}/lib\""
-$(WIN64_CROSS) : DEFINES = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE \
-    -DCONFIG_TCCDIR="\"$(tccdir)/win32\"" \
-    -DCONFIG_TCC_LIBPATHS="\"{B}/lib/64;{B}/lib\""
-$(WINCE_CROSS): DEFINES = -DTCC_TARGET_ARM -DTCC_TARGET_PE
-$(C67_CROSS): DEFINES = -DTCC_TARGET_C67 -w # disable warnigs
-$(ARM_FPA_CROSS): DEFINES = -DTCC_TARGET_ARM
-$(ARM_FPA_LD_CROSS)$(EXESUF): DEFINES = -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12
-$(ARM_VFP_CROSS): DEFINES = -DTCC_TARGET_ARM -DTCC_ARM_VFP
-$(ARM_EABI_CROSS): DEFINES = -DTCC_TARGET_ARM -DTCC_ARM_EABI -DTCC_ARM_VFP
-$(ARM64_CROSS): DEFINES = -DTCC_TARGET_ARM64
-
-$(I386_CROSS) : $(I386_FILES)
-$(X64_CROSS)  : $(X86_64_FILES)
-$(WIN32_CROSS) : $(WIN32_FILES)
-$(WIN64_CROSS) : $(WIN64_FILES)
-$(WINCE_CROSS) : $(WINCE_FILES)
-$(C67_CROSS)  : $(C67_FILES)
-$(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS): $(ARM_FILES)
-$(ARM64_CROSS): $(ARM64_FILES)
 
 # libtcc generation and test
 ifndef ONE_SOURCE
@@ -205,20 +130,142 @@ libtcc.def : libtcc.dll tcc$(EXESUF)
 
 libtcc.dll : NATIVE_DEFINES += -DLIBTCC_AS_DLL
 
-# windows : utilities
-tiny_%$(EXESUF): $(TOPSRC)/win32/tools/tiny_%.c
-	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) $(NATIVE_DEFINES)
-
-ifneq ($(LIBTCC1),)
 # TinyCC runtime libraries
-$(LIBTCC1) : FORCE $(PROGS)
-	$(MAKE) -C lib native
-endif
-
-lib/%/libtcc1.a : FORCE $(PROGS_CROSS)
-	$(MAKE) -C lib cross TARGET=$*
+libtcc1.a : FORCE tcc$(EXESUF)
+	$(MAKE) -C lib TARGET=$(NATIVE_TARGET)
 
 FORCE:
+install: install-native$(CFGWIN)
+uninstall: uninstall-native$(CFGWIN)
+
+# cross compilers
+# --------------------------------------------------------------------------
+ifdef CONFIG_CROSS
+
+I386_CROSS = i386-tcc$(EXESUF)
+X64_CROSS = x86_64-tcc$(EXESUF)
+WIN32_CROSS = i386-win32-tcc$(EXESUF)
+WIN64_CROSS = x86_64-win32-tcc$(EXESUF)
+WINCE_CROSS = arm-wince-tcc$(EXESUF)
+C67_CROSS = c67-tcc$(EXESUF)
+ARM64_CROSS = arm64-tcc$(EXESUF)
+ARM_FPA_CROSS = arm-fpa-tcc$(EXESUF)
+ARM_FPA_LD_CROSS = arm-fpa-ld-tcc$(EXESUF)
+ARM_VFP_CROSS = arm-vfp-tcc$(EXESUF)
+ARM_EABI_CROSS = arm-eabi-tcc$(EXESUF)
+ARM_EABIHF_CROSS = arm-eabihf-tcc$(EXESUF)
+# ARM_CROSS = $(ARM_FPA_CROSS) $(ARM_FPA_LD_CROSS) $(ARM_VFP_CROSS) $(ARM_EABI_CROSS) $(ARM_EABIHF_CROSS)
+ARM_CROSS = $(ARM_EABIHF_CROSS)
+
+$(I386_CROSS)   : $(i386_FILES)
+$(X64_CROSS)    : $(x86_64_FILES)
+$(WIN32_CROSS)  : $(i386-win32_FILES)
+$(WIN64_CROSS)  : $(x86_64-win32_FILES)
+$(WINCE_CROSS)  : $(arm-wince_FILES)
+$(ARM_CROSS)    : $(arm_FILES)
+$(ARM64_CROSS)  : $(arm64_FILES)
+$(C67_CROSS)    : $(c67_FILES)
+
+$(I386_CROSS)   : T = i386
+$(X64_CROSS)    : T = x86_64
+$(WIN32_CROSS)  : T = i386-win32
+$(WIN64_CROSS)  : T = x86_64-win32
+$(WINCE_CROSS)  : T = arm-wince
+$(ARM64_CROSS)  : T = arm64
+$(C67_CROSS)    : T = c67
+$(ARM_EABIHF_CROSS) : T = arm-eabihf
+
+$(I386_CROSS)   : DEFINES += -DTCC_TARGET_I386
+$(X64_CROSS)    : DEFINES += -DTCC_TARGET_X86_64
+$(WIN32_CROSS)  : DEFINES += -DTCC_TARGET_PE -DTCC_TARGET_I386
+$(WIN64_CROSS)  : DEFINES += -DTCC_TARGET_PE -DTCC_TARGET_X86_64
+$(WINCE_CROSS)  : DEFINES += -DTCC_TARGET_PE -DTCC_TARGET_ARM -DTCC_ARM_EABI -DTCC_ARM_VFP -DTCC_ARM_HARDFLOAT
+$(ARM64_CROSS)  : DEFINES += -DTCC_TARGET_ARM64
+$(C67_CROSS)    : DEFINES += -DTCC_TARGET_C67 -w # disable warnigs
+$(ARM_CROSS)    : DEFINES += -DTCC_TARGET_ARM
+$(ARM_FPA_LD_CROSS) : DEFINES += -DLDOUBLE_SIZE=12
+$(ARM_VFP_CROSS)    : DEFINES += -DTCC_ARM_VFP
+$(ARM_EABI_CROSS)   : DEFINES += -DTCC_ARM_VFP -DTCC_ARM_EABI
+$(ARM_EABIHF_CROSS) : DEFINES += -DTCC_ARM_VFP -DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
+
+DEFINES += $(DEF-$T) $(DEF-all)
+DEFINES += $(if $(ROOT-$T),-DCONFIG_SYSROOT="\"$(ROOT-$T)\"")
+DEFINES += $(if $(CRT-$T),-DCONFIG_TCC_CRTPREFIX="\"$(CRT-$T)\"")
+DEFINES += $(if $(LIB-$T),-DCONFIG_TCC_LIBPATHS="\"$(LIB-$T)\"")
+DEFINES += $(if $(INC-$T),-DCONFIG_TCC_SYSINCLUDEPATHS="\"$(INC-$T)\"")
+DEFINES += $(DEF-$(or $(findstring win,$T),unx))
+
+ifeq ($(CONFIG_WIN32),yes)
+DEF-win += -DTCC_LIBTCC1="\"libtcc1-$T.a\""
+DEF-unx += -DTCC_LIBTCC1="\"lib/libtcc1-$T.a\""
+else
+DEF-all += -DTCC_LIBTCC1="\"libtcc1-$T.a\""
+DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
+endif
+
+DEF-$(NATIVE_TARGET) += $(NATIVE_DEFINES)
+
+# For a (non-windows-) cross compiler to really work
+# you need to create a file 'config-cross.mak'
+# ----------------------------------------------------
+# Example config-cross.mak:
+#
+# windows -> i386-linux cross-compiler
+# (it expects the linux files in <prefix>/i386-linux)
+#
+# ROOT-i386 = {B}/i386-linux
+# CRT-i386 = $(ROOT-i386)/usr/lib
+# LIB-i386 = $(ROOT-i386)/lib:$(ROOT-i386)/usr/lib
+# INC-i386 = {B}/lib/include:$(ROOT-i386)/usr/include
+# DEF-i386 += -D__linux__
+#
+# ----------------------------------------------------
+
+-include config-cross.mak
+
+# cross tcc to build
+PROGS_CROSS = $(I386_CROSS) $(X64_CROSS) $(WIN32_CROSS) $(WIN64_CROSS)
+PROGS_CROSS += $(ARM_CROSS) $(ARM64_CROSS) $(WINCE_CROSS) $(C67_CROSS)
+
+# cross libtcc1.a targets to build
+LIBTCC1_TARGETS = i386 x86_64 i386-win32 x86_64-win32 arm-eabihf arm64 arm-wince
+
+all : $(foreach l,$(LIBTCC1_TARGETS),lib/libtcc1-$l.a)
+all : $(PROGS_CROSS)
+
+# Cross Tiny C Compilers
+%-tcc$(EXESUF): tcc.c
+	$(CC) -o $@ $< -DONE_SOURCE $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
+
+# Cross libtcc1.a
+lib/libtcc1-%.a : FORCE %-tcc$(EXESUF)
+	$(MAKE) -C lib TARGET=$* CROSS=yes
+
+# install cross progs & libs
+install-cross:
+	$(INSTALLBIN) -m755 $(PROGS_CROSS) "$(bindir)"
+	mkdir -p "$(tccdir)/win32/include"
+	cp -r $(TOPSRC)/include/. "$(tccdir)/win32/include"
+	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/win32/include"
+	mkdir -p "$(tccdir)/win32/lib"
+	$(INSTALL) -m644 $(TOPSRC)/win32/lib/*.def "$(tccdir)/win32/lib"
+install-cross-lib-%:
+	$(INSTALL) -m644 lib/libtcc1-$*.a "$(tccdir)$(libtcc1dir)"
+install-cross-lib-%-win32 install-cross-lib-%-wince: libtcc1dir = /win32/lib
+
+# install cross progs & libs on windows
+install-cross-win:
+	$(INSTALLBIN) -m755 $(PROGS_CROSS) "$(tccdir)"
+	mkdir -p "$(tccdir)/lib/include"
+	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/lib/include"
+install-cross-win-lib-%:
+	$(INSTALL) -m644 lib/libtcc1-$*.a "$(tccdir)/lib"
+
+install: install-cross$(CFGWIN)
+install: $(foreach t,$(LIBTCC1_TARGETS),install-cross$(CFGWIN)-lib-$t)
+
+endif # def CONFIG_CROSS
+# --------------------------------------------------------------------------
 
 # install
 INSTALL = install
@@ -228,46 +275,32 @@ STRIP_yes = -s
 install-strip: install
 install-strip: STRIP_BINARIES = yes
 
-ifndef CONFIG_WIN32
-install:
+install-native:
 	mkdir -p "$(bindir)"
 	$(INSTALLBIN) -m755 $(PROGS) "$(bindir)"
 	mkdir -p "$(tccdir)"
-ifneq ($(LIBTCC1),)
-	$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)"
-endif
+	$(if $(LIBTCC1),$(INSTALL) -m644 $(LIBTCC1) "$(tccdir)")
 	mkdir -p "$(tccdir)/include"
 	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/include"
 	mkdir -p "$(libdir)"
 	$(INSTALL) -m644 $(LIBTCC) "$(libdir)"
 	mkdir -p "$(includedir)"
 	$(INSTALL) -m644 $(TOPSRC)/libtcc.h "$(includedir)"
-
 	mkdir -p "$(mandir)/man1"
 	-$(INSTALL) -m644 tcc.1 "$(mandir)/man1"
 	mkdir -p "$(infodir)"
 	-$(INSTALL) -m644 tcc-doc.info "$(infodir)"
 	mkdir -p "$(docdir)"
 	-$(INSTALL) -m644 tcc-doc.html "$(docdir)"
-ifdef CONFIG_CROSS
-	mkdir -p "$(tccdir)/win32/lib/32"
-	mkdir -p "$(tccdir)/win32/lib/64"
-	$(INSTALL) -m644 $(TOPSRC)/win32/lib/*.def "$(tccdir)/win32/lib"
-	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/win32/lib/32"
-	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/win32/lib/64"
-	cp -r $(TOPSRC)/include/. "$(tccdir)/win32/include"
-	cp -r $(TOPSRC)/win32/include/. "$(tccdir)/win32/include"
-endif
 
-uninstall:
+uninstall-native:
 	rm -fv $(foreach P,$(PROGS),"$(bindir)/$P")
 	rm -fv "$(libdir)/$(LIBTCC)" "$(includedir)/libtcc.h"
 	rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	rm -fv "$(docdir)/tcc-doc.html"
 	rm -rv "$(tccdir)"
-else
-# on windows
-install:
+
+install-native-win:
 	mkdir -p "$(tccdir)"
 	mkdir -p "$(tccdir)/lib"
 	mkdir -p "$(tccdir)/include"
@@ -282,16 +315,9 @@ install:
 	$(INSTALL) -m644 $(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h "$(tccdir)/include"
 	$(INSTALL) -m644 $(TOPSRC)/libtcc.h $(subst .dll,.def,$(LIBTCC)) "$(tccdir)/libtcc"
 	-$(INSTALL) -m644 $(TOPSRC)/win32/tcc-win32.txt tcc-doc.html "$(tccdir)/doc"
-ifdef CONFIG_CROSS
-	mkdir -p "$(tccdir)/lib/32"
-	mkdir -p "$(tccdir)/lib/64"
-	-$(INSTALL) -m644 lib/i386-win32/libtcc1.a "$(tccdir)/lib/32"
-	-$(INSTALL) -m644 lib/x86_64-win32/libtcc1.a "$(tccdir)/lib/64"
-endif
 
-uninstall:
+uninstall-native-win:
 	rm -rfv "$(tccdir)/"*
-endif
 
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
@@ -309,8 +335,9 @@ test:
 	$(MAKE) -C tests
 
 clean:
-	rm -f $(PROGS) tcc_p$(EXESUF) tcc.pod *~ *.o *.a *.so* *.out *.log \
-	    lib*.def *.exe *.dll a.out tags TAGS libtcc_test$(EXESUF) tcc$(EXESUF)
+	rm -f $(PROGS) $(PROGS_CROSS) tcc_p$(EXESUF) tcc.pod \
+	    *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out \
+	    tags TAGS libtcc_test$(EXESUF)
 	$(MAKE) -C tests $@
 	$(MAKE) -C lib $@
 
