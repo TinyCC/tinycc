@@ -40,18 +40,17 @@ pre:
 	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak
 	@echo "#define TCC_VERSION \"$(VERSION)\"" 1>../config.h
 	@echo "#ifdef TCC_TARGET_X86_64" 1>>../config.h
-	@echo "#define CONFIG_TCC_LIBPATHS \"{B}/lib/64;{B}/lib\"" 1>>../config.h
+	@echo "#define TCC_LIBTCC1 \"libtcc1-64.a\"" 1>>../config.h
 	@echo "#else" 1>>../config.h
-	@echo "#define CONFIG_TCC_LIBPATHS \"{B}/lib/32;{B}/lib\"" 1>>../config.h
+	@echo "#define TCC_LIBTCC1 \"libtcc1-32.a\"" 1>>../config.h
 	@echo "#endif" 1>>../config.h
 	@echo @set VERSION $(VERSION) 1>../config.texi
 	@rm -f *tcc.exe tiny_*.exe *tcc.dll
 	@rm -r -f libtcc
-	@rm -r -f libtcc doc lib/32 lib/64
+	@rm -r -f libtcc doc lib
 	@mkdir libtcc
 	@mkdir doc
-	@mkdir lib/32
-	@mkdir lib/64
+	@mkdir lib
 	@cp ../include/*.h include
 	@cp ../tcclib.h include
 	@cp ../libtcc.h include
@@ -69,7 +68,7 @@ bootstrap:
 
 PHONY += bootstrap
 
-lib/32/libtcc1.a:
+lib/libtcc1-32.a:
 	@echo Building $*.a with tcc -m32
 	@./tcc -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/libtcc1.c 
 	@./tcc -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/alloca86.S 
@@ -81,10 +80,10 @@ lib/32/libtcc1.a:
 	@./tcc -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllcrt1.c 
 	@./tcc -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllmain.c 
 	@./tcc -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/chkstk.S
-	@./tcc -m32 -ar lib/32/libtcc1.a libtcc1.o alloca86.o alloca86-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
+	@./tcc -m32 -ar lib/libtcc1-32.a libtcc1.o alloca86.o alloca86-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 	@rm *.o
 
-lib/64/libtcc1.a:
+lib/libtcc1-64.a:
 	@echo Building $*.a with tcc -m64
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/libtcc1.c 
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64.S 
@@ -96,10 +95,10 @@ lib/64/libtcc1.a:
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllcrt1.c 
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllmain.c 
 	@./tcc -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/chkstk.S 
-	@./tcc -m64 -ar lib/64/libtcc1.a libtcc1.o alloca86_64.o alloca86_64-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
+	@./tcc -m64 -ar lib/libtcc1-64.a libtcc1.o alloca86_64.o alloca86_64-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 	@rm *.o
 
-libs: lib/32/libtcc1.a lib/64/libtcc1.a
+libs: lib/libtcc1-32.a lib/libtcc1-64.a
 
 PHONY += libs
 
