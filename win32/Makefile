@@ -45,12 +45,10 @@ pre:
 	@echo "#define TCC_LIBTCC1 \"libtcc1-32.a\"" 1>>../config.h
 	@echo "#endif" 1>>../config.h
 	@echo @set VERSION $(VERSION) 1>../config.texi
-	@rm -f *tcc.exe tiny_*.exe *tcc.dll
-	@rm -r -f libtcc
-	@rm -r -f libtcc doc lib
+	@rm -f *tcc.exe tiny_*.exe *tcc.dll lib/*.a
+	@rm -r -f libtcc doc
 	@mkdir libtcc
 	@mkdir doc
-	@mkdir lib
 	@cp ../include/*.h include
 	@cp ../tcclib.h include
 	@cp ../libtcc.h include
@@ -141,4 +139,4 @@ tarball:
 PHONY += tarball
 
 clean:
-	rm -f *.o *.exe *.dll lib/*/*.a *.pdb *.obj *.exp *.def *.lib
+	rm -f *.o *.exe *.dll lib/*.a *.pdb *.obj *.exp *.def *.lib
