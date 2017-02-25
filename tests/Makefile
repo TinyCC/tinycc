@@ -17,6 +17,7 @@ TESTS = \
  dlltest \
  abitest \
  vla_test-run \
+ cross-test \
  tests2-dir \
  pp-dir
 
@@ -45,22 +46,21 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  TESTS := $(filter-out dlltest,$(TESTS))
 endif
-
-# run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
-ifdef CONFIG_WIN32
- TCCFLAGS = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
- PATH := $(CURDIR)/$(TOP):$(PATH) # for libtcc_test to find libtcc.dll
+ifndef CONFIG_CROSS
+ TESTS := $(filter-out cross-%,$(TESTS))
 endif
 
-TCC = $(TOP)/tcc $(TCCFLAGS)
-RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(TOPSRC)/tcc.c $(TCCFLAGS)
+ifdef CONFIG_WIN32
+ PATH := $(CURDIR)/$(TOP);$(PATH) # for libtcc_test to find libtcc.dll
+endif
 
 ifeq ($(TARGETOS),Darwin)
  CFLAGS += -Wl,-flat_namespace,-undefined,warning
  TCCFLAGS += -D_ANSI_SOURCE
  export MACOSX_DEPLOYMENT_TARGET:=10.2
 endif
+
+RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 
 DISAS = objdump -d
 
@@ -235,6 +235,16 @@ vla_test$(EXESUF): vla_test.c
 vla_test-run: vla_test$(EXESUF)
 	@echo ------------ $@ ------------
 	./vla_test$(EXESUF)
+
+cross-test :
+	@echo ------------ $@ ------------
+	$(TOP)/i386-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
+	$(TOP)/x86_64-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
+	$(TOP)/arm-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
+	$(TOP)/c67-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
+	$(TOP)/i386-win32-tcc$(EXESUF) $(TCCFLAGS-win) $(TOPSRC)/win32/examples/hello_win.c && echo "ok"
+	$(TOP)/x86_64-win32-tcc$(EXESUF) $(TCCFLAGS-win) $(TOPSRC)/win32/examples/hello_win.c && echo "ok"
+	$(TOP)/arm-wince-tcc$(EXESUF) $(TCCFLAGS-win) -c $(TOPSRC)/win32/examples/hello_win.c && echo "ok"
 
 # targets for development
 %.bin: %.c tcc

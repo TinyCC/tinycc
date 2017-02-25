@@ -1,14 +1,7 @@
 TOP = ../..
-include $(TOP)/config.mak
+include $(TOP)/Makefile
 SRC = $(TOPSRC)/tests/tests2
 VPATH = $(SRC)
-
-# run local version of tcc with local libraries and includes
-TCCFLAGS = -B$(TOP) -I$(TOPSRC)/include
-ifdef CONFIG_WIN32
- TCCFLAGS = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -L$(TOP)
-endif
-TCC = $(TOP)/tcc $(TCCFLAGS)
 
 TESTS = $(patsubst %.c,%.test,$(sort $(notdir $(wildcard $(SRC)/*.c))))
 

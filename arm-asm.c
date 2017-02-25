@@ -17,6 +17,11 @@ ST_FUNC void gen_le32(int c);
 #else
 /*************************************************************/
 
+static void asm_error(void)
+{
+    tcc_error("ARM asm not implemented.");
+}
+
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
 {
@@ -49,10 +54,12 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
+    asm_error();
 }
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
 {
+    asm_error();
 }
 
 /* generate prolog and epilog code for asm statement */
@@ -61,6 +68,7 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          uint8_t *clobber_regs,
                          int out_reg)
 {
+    asm_error();
 }
 
 ST_FUNC void asm_compute_constraints(ASMOperand *operands,
@@ -68,14 +76,17 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
 {
+    asm_error();
 }
 
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 {
+    asm_error();
 }
 
 ST_FUNC int asm_parse_regvar (int t)
 {
+    asm_error();
     return -1;
 }
 

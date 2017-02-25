@@ -1519,7 +1519,7 @@ ST_FUNC void gen_opl(int op);
 /* ------------ arm-gen.c ------------ */
 #ifdef TCC_TARGET_ARM
 #if defined(TCC_ARM_EABI) && !defined(CONFIG_TCC_ELFINTERP)
-ST_FUNC char *default_elfinterp(struct TCCState *s);
+PUB_FUNC char *default_elfinterp(struct TCCState *s);
 #endif
 ST_FUNC void arm_init(struct TCCState *s);
 ST_FUNC void gen_cvt_itof1(int t);

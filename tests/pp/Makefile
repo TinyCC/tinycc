@@ -3,11 +3,10 @@
 #
 
 TOP = ../..
-include $(TOP)/config.mak
+include $(TOP)/Makefile
 SRC = $(TOPSRC)/tests/pp
 VPATH = $(SRC)
 
-TCC = ../../tcc
 files = $(patsubst %.$1,%.test,$(notdir $(wildcard $(SRC)/*.$1)))
 TESTS = $(call files,c) $(call files,S)
 

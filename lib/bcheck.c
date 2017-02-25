@@ -49,7 +49,7 @@
     || defined(__DragonFly__) || defined(__dietlibc__) \
     || defined(__UCLIBC__) || defined(__OpenBSD__) || defined(__NetBSD__) \
     || defined(_WIN32) || defined(TCC_UCLIBC)
-#warning Bound checking does not support malloc (etc.) in this environment.
+//#warning Bound checking does not support malloc (etc.) in this environment.
 #undef CONFIG_TCC_MALLOC_HOOKS
 #undef HAVE_MEMALIGN
 #endif
