@@ -51,7 +51,7 @@ ifndef CONFIG_CROSS
 endif
 
 ifdef CONFIG_WIN32
- PATH := $(CURDIR)/$(TOP);$(PATH) # for libtcc_test to find libtcc.dll
+ PATH := $(CURDIR)/$(TOP):$(PATH) # for libtcc_test to find libtcc.dll
 endif
 
 ifeq ($(TARGETOS),Darwin)
