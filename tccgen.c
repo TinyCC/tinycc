@@ -81,12 +81,10 @@ static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl0(int l, int is_for_loop_init);
 static void expr_eq(void);
-static void unary_type(CType *type);
 static void vla_runtime_type_size(CType *type, int *a);
 static void vla_sp_restore(void);
 static void vla_sp_restore_root(void);
 static int is_compatible_parameter_types(CType *type1, CType *type2);
-static void expr_type(CType *type);
 static inline int64_t expr_const64(void);
 ST_FUNC void vpush64(int ty, unsigned long long v);
 ST_FUNC void vpush(CType *type);
@@ -4255,6 +4253,20 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
     }
 }
 
+/* parse an expression and return its type without any side effect.
+   If UNRY we parse an unary expression, otherwise a full one.  */
+static void expr_type(CType *type, int unry)
+{
+    nocode_wanted++;
+    if (unry)
+        unary();
+    else
+        gexpr();
+    *type = vtop->type;
+    vpop();
+    nocode_wanted--;
+}
+
 /* parse an expression of the form '(type)' or '(expr)' and return its
    type */
 static void parse_expr_type(CType *type)
@@ -4266,7 +4278,7 @@ static void parse_expr_type(CType *type)
     if (parse_btype(type, &ad)) {
         type_decl(type, &ad, &n, TYPE_ABSTRACT);
     } else {
-        expr_type(type);
+        expr_type(type, 0);
     }
     skip(')');
 }
@@ -4501,7 +4513,7 @@ ST_FUNC void unary(void)
         t = tok;
         next();
         in_sizeof++;
-        unary_type(&type); // Perform a in_sizeof = 0;
+        expr_type(&type, 1); // Perform a in_sizeof = 0;
         size = type_size(&type, &align);
         if (t == TOK_SIZEOF) {
             if (!(type.t & VT_VLA)) {
@@ -5327,28 +5339,6 @@ ST_FUNC void gexpr(void)
         vpop();
         next();
     }
-}
-
-/* parse an expression and return its type without any side effect. */
-static void expr_type(CType *type)
-{
-
-    nocode_wanted++;
-    gexpr();
-    *type = vtop->type;
-    vpop();
-    nocode_wanted--;
-}
-
-/* parse a unary expression and return its type without any side
-   effect. */
-static void unary_type(CType *type)
-{
-    nocode_wanted++;
-    unary();
-    *type = vtop->type;
-    vpop();
-    nocode_wanted--;
 }
 
 /* parse a constant expression and return value in vtop.  */
