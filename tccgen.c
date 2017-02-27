@@ -4142,7 +4142,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         mk_pointer(type);
         type->t |= qualifiers;
     }
-    
+
     /* recursive type */
     /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
     type1.t = 0; /* XXX: same as int */
@@ -4288,6 +4288,27 @@ static void vpush_tokc(int t)
     type.t = t;
     type.ref = 0;
     vsetc(&type, VT_CONST, &tokc);
+}
+
+static void parse_builtin_params(int nc, const char *args)
+{
+    char c, sep = '(';
+    CType t;
+    if (nc)
+        nocode_wanted++;
+    next();
+    while ((c = *args++)) {
+	skip(sep);
+	sep = ',';
+	switch (c) {
+	    case 'e': expr_eq(); continue;
+	    case 't': parse_type(&t); vpush(&t); continue;
+	    default: tcc_error("internal error"); break;
+	}
+    }
+    skip(')');
+    if (nc)
+        nocode_wanted--;
 }
 
 ST_FUNC void unary(void)
@@ -4497,30 +4518,17 @@ ST_FUNC void unary(void)
         break;
 
     case TOK_builtin_expect:
-        {
-            /* __builtin_expect is a no-op for now */
-            next();
-            skip('(');
-            expr_eq();
-            skip(',');
-            expr_eq();
-            vpop();
-            skip(')');
-        }
+	/* __builtin_expect is a no-op for now */
+	parse_builtin_params(0, "ee");
+	vpop();
         break;
     case TOK_builtin_types_compatible_p:
-        {
-            CType type1, type2;
-            next();
-            skip('(');
-            parse_type(&type1);
-            skip(',');
-            parse_type(&type2);
-            skip(')');
-            type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
-            type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
-            vpushi(is_compatible_types(&type1, &type2));
-        }
+	parse_builtin_params(0, "tt");
+	vtop[-1].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
+	vtop[0].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
+	n = is_compatible_types(&vtop[-1].type, &vtop[0].type);
+	vtop -= 2;
+	vpushi(n);
         break;
     case TOK_builtin_choose_expr:
 	{
@@ -4550,18 +4558,10 @@ ST_FUNC void unary(void)
 	}
         break;
     case TOK_builtin_constant_p:
-        {
-            int res;
-            next();
-            skip('(');
-            nocode_wanted++;
-            expr_eq();
-            res = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
-            vpop();
-            nocode_wanted--;
-            skip(')');
-            vpushi(res);
-        }
+	parse_builtin_params(1, "e");
+	n = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+	vtop--;
+	vpushi(n);
         break;
     case TOK_builtin_frame_address:
     case TOK_builtin_return_address:
@@ -4599,43 +4599,27 @@ ST_FUNC void unary(void)
 #ifdef TCC_TARGET_X86_64
 #ifdef TCC_TARGET_PE
     case TOK_builtin_va_start:
-        {
-            next();
-            skip('(');
-            expr_eq();
-            skip(',');
-            expr_eq();
-            skip(')');
-            if ((vtop->r & VT_VALMASK) != VT_LOCAL)
-                tcc_error("__builtin_va_start expects a local variable");
-            vtop->r &= ~VT_LVAL;
-            vtop->type = char_pointer_type;
-            vtop->c.i += 8;
-            vstore();
-        }
+	parse_builtin_params(0, "ee");
+	if ((vtop->r & VT_VALMASK) != VT_LOCAL)
+	  tcc_error("__builtin_va_start expects a local variable");
+	vtop->r &= ~VT_LVAL;
+	vtop->type = char_pointer_type;
+	vtop->c.i += 8;
+	vstore();
         break;
 #else
     case TOK_builtin_va_arg_types:
-        {
-            CType type;
-            next();
-            skip('(');
-            parse_type(&type);
-            skip(')');
-            vpushi(classify_x86_64_va_arg(&type));
-        }
+	parse_builtin_params(0, "t");
+	vpushi(classify_x86_64_va_arg(&vtop->type));
+	vswap();
+	vpop();
         break;
 #endif
 #endif
 
 #ifdef TCC_TARGET_ARM64
     case TOK___va_start: {
-        next();
-        skip('(');
-        expr_eq();
-        skip(',');
-        expr_eq();
-        skip(')');
+	parse_builtin_params(0, "ee");
         //xx check types
         gen_va_start();
         vpushi(0);
@@ -4644,24 +4628,16 @@ ST_FUNC void unary(void)
     }
     case TOK___va_arg: {
         CType type;
-        next();
-        skip('(');
-        expr_eq();
-        skip(',');
-        parse_type(&type);
-        skip(')');
+	parse_builtin_params(0, "et");
+	type = vtop->type;
+	vpop();
         //xx check types
         gen_va_arg(&type);
         vtop->type = type;
         break;
     }
     case TOK___arm64_clear_cache: {
-        next();
-        skip('(');
-        expr_eq();
-        skip(',');
-        expr_eq();
-        skip(')');
+	parse_builtin_params(0, "ee");
         gen_clear_cache();
         vpushi(0);
         vtop->type.t = VT_VOID;
@@ -4717,7 +4693,7 @@ ST_FUNC void unary(void)
         vpushsym(&s->type, s);
         next();
         break;
-    
+
     // special qnan , snan and infinity values
     case TOK___NAN__:
         vpush64(VT_DOUBLE, 0x7ff8000000000000ULL);
