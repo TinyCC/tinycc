@@ -1230,10 +1230,13 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     case TOK_CUINT:
     case TOK_CCHAR:
     case TOK_LCHAR:
-    case TOK_CFLOAT:
     case TOK_LINENUM:
         tab[0] = *p++;
+	cv->i = (*t == TOK_CUINT) ? (unsigned)cv->i : (int)cv->i;
         break;
+    case TOK_CFLOAT:
+	tab[0] = *p++;
+	break;
     case TOK_STR:
     case TOK_LSTR:
     case TOK_PPNUM:

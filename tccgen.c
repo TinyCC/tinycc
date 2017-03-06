@@ -4297,14 +4297,6 @@ static void parse_type(CType *type)
     type_decl(type, &ad, &n, TYPE_ABSTRACT);
 }
 
-static void vpush_tokc(int t)
-{
-    CType type;
-    type.t = t;
-    type.ref = 0;
-    vsetc(&type, VT_CONST, &tokc);
-}
-
 static void parse_builtin_params(int nc, const char *args)
 {
     char c, sep = '(';
@@ -4345,33 +4337,32 @@ ST_FUNC void unary(void)
     case TOK_CINT:
     case TOK_CCHAR: 
     case TOK_LCHAR:
-        vpushi(tokc.i);
+	t = VT_INT;
+ push_tokc:
+	type.t = t;
+	type.ref = 0;
+	vsetc(&type, VT_CONST, &tokc);
         next();
         break;
     case TOK_CUINT:
-        vpush_tokc(VT_INT | VT_UNSIGNED);
-        next();
-        break;
+        t = VT_INT | VT_UNSIGNED;
+        goto push_tokc;
     case TOK_CLLONG:
-        vpush_tokc(VT_LLONG);
-        next();
-        break;
+        t = VT_LLONG;
+	goto push_tokc;
     case TOK_CULLONG:
-        vpush_tokc(VT_LLONG | VT_UNSIGNED);
-        next();
-        break;
+        t =VT_LLONG | VT_UNSIGNED;
+	goto push_tokc;
     case TOK_CFLOAT:
-        vpush_tokc(VT_FLOAT);
-        next();
-        break;
+        t = VT_FLOAT;
+	goto push_tokc;
     case TOK_CDOUBLE:
-        vpush_tokc(VT_DOUBLE);
-        next();
-        break;
+        t = VT_DOUBLE;
+	goto push_tokc;
     case TOK_CLDOUBLE:
-        vpush_tokc(VT_LDOUBLE);
-        next();
-        break;
+        t = VT_LDOUBLE;
+	goto push_tokc;
+
     case TOK___FUNCTION__:
         if (!gnu_ext)
             goto tok_identifier;

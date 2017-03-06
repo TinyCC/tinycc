@@ -3720,8 +3720,6 @@ typedef struct __attribute__((__packed__)) {
     int c;
 } Spacked2;
 Spacked2 spacked2;
-/* This doesn't work for now.  Requires adjusting field offsets/sizes
-   after parsing the struct members.  */
 typedef struct Spacked3_s {
     char a;
     short b;
@@ -3753,4 +3751,25 @@ strange_attrib_placement (void);
 void * __attribute__((__unused__)) get_void_ptr (void *a)
 {
   return a;
+}
+
+/* This part checks for a bug in TOK_GET (used for inline expansion),
+   where the large long long constant left the the high bits set for
+   the integer constant token.  */
+static inline
+int __get_order(unsigned long long size)
+{
+  int order;
+  size -= 0xffff880000000000ULL; // this const left high bits set in the token
+    {
+      struct S { int i : 1; } s; // constructed for this '1'
+    }
+  order = size;
+  return order;
+}
+
+/* This just forces the above inline function to be actually emitted.  */
+int force_get_order(unsigned long s)
+{
+    return __get_order(s);
 }
