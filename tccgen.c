@@ -74,7 +74,7 @@ static void gen_cast(CType *type);
 static inline CType *pointed_type(CType *type);
 static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
-static void type_decl(CType *type, AttributeDef *ad, int *v, int td);
+static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int is_expr);
@@ -3586,7 +3586,8 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                     v = 0;
                     type1 = btype;
                     if (tok != ':') {
-                        type_decl(&type1, &ad1, &v, TYPE_DIRECT | TYPE_ABSTRACT);
+			if (tok != ';')
+                            type_decl(&type1, &ad1, &v, TYPE_DIRECT);
                         if (v == 0) {
                     	    if ((type1.t & VT_BTYPE) != VT_STRUCT)
                         	expect("identifier");
@@ -3964,7 +3965,7 @@ static int asm_label_instr(void)
     return v;
 }
 
-static void post_type(CType *type, AttributeDef *ad, int storage)
+static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 {
     int n, l, t1, arg_size, align;
     Sym **plast, *s, *first;
@@ -3972,25 +3973,25 @@ static void post_type(CType *type, AttributeDef *ad, int storage)
     CType pt;
 
     if (tok == '(') {
-        /* function declaration */
+        /* function type, or recursive declarator (return if so) */
         next();
-        l = 0;
+	if (td && !(td & TYPE_ABSTRACT))
+	  return 0;
+	if (tok == ')')
+	  l = 0;
+	else if (parse_btype(&pt, &ad1))
+	  l = FUNC_NEW;
+	else if (td)
+	  return 0;
+	else
+	  l = FUNC_OLD;
         first = NULL;
         plast = &first;
         arg_size = 0;
-        if (tok != ')') {
+        if (l) {
             for(;;) {
                 /* read param name and compute offset */
                 if (l != FUNC_OLD) {
-                    if (!parse_btype(&pt, &ad1)) {
-                        if (l) {
-                            tcc_error("invalid type");
-                        } else {
-                            l = FUNC_OLD;
-                            goto old_proto;
-                        }
-                    }
-                    l = FUNC_NEW;
                     if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
                         break;
                     type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
@@ -3998,7 +3999,6 @@ static void post_type(CType *type, AttributeDef *ad, int storage)
                         tcc_error("parameter declared as void");
                     arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
                 } else {
-                old_proto:
                     n = tok;
                     if (n < TOK_UIDENT)
                         expect("identifier");
@@ -4017,10 +4017,11 @@ static void post_type(CType *type, AttributeDef *ad, int storage)
                     next();
                     break;
                 }
+		if (l == FUNC_NEW && !parse_btype(&pt, &ad1))
+		    tcc_error("invalid type");
             }
-        }
-        /* if no parameters, then old type prototype */
-        if (l == 0)
+        } else
+            /* if no parameters, then old type prototype */
             l = FUNC_OLD;
         skip(')');
         /* NOTE: const is ignored in returned type as it has a special
@@ -4072,7 +4073,7 @@ static void post_type(CType *type, AttributeDef *ad, int storage)
         }
         skip(']');
         /* parse next post type */
-        post_type(type, ad, storage);
+        post_type(type, ad, storage, 0);
         if (type->t == VT_FUNC)
             tcc_error("declaration of an array of functions");
         t1 |= type->t & VT_VLA;
@@ -4098,20 +4099,25 @@ static void post_type(CType *type, AttributeDef *ad, int storage)
         type->t = (t1 ? VT_VLA : VT_ARRAY) | VT_PTR;
         type->ref = s;
     }
+    return 1;
 }
 
-/* Parse a type declaration (except basic type), and return the type
+/* Parse a type declarator (except basic type), and return the type
    in 'type'. 'td' is a bitmask indicating which kind of type decl is
    expected. 'type' should contain the basic type. 'ad' is the
    attribute definition of the basic type. It can be modified by
-   type_decl(). 
- */
-static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
+   type_decl().  If this (possibly abstract) declarator is a pointer chain
+   it returns the innermost pointed to type (equals *type, but is a different
+   pointer), otherwise returns type itself, that's used for recursive calls.  */
+static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
 {
-    Sym *s;
-    CType type1, *type2;
+    CType *post, *ret;
     int qualifiers, storage;
 
+    /* recursive type, remove storage bits first, apply them later again */
+    storage = type->t & VT_STORAGE;
+    type->t &= ~VT_STORAGE;
+    post = ret = type;
     while (tok == '*') {
         qualifiers = 0;
     redo:
@@ -4139,51 +4145,38 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         }
         mk_pointer(type);
         type->t |= qualifiers;
+	if (ret == type)
+	    /* innermost pointed to type is the one for the first derivation */
+	    ret = pointed_type(type);
     }
 
-    /* recursive type */
-    /* XXX: incorrect if abstract type for functions (e.g. 'int ()') */
-    type1.t = 0; /* XXX: same as int */
     if (tok == '(') {
-        next();
-        /* XXX: this is not correct to modify 'ad' at this point, but
-           the syntax is not clear */
-        if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
-            parse_attribute(ad);
-        type_decl(&type1, ad, v, td);
-        skip(')');
+	/* This is possibly a parameter type list for abstract declarators
+	   ('int ()'), use post_type for testing this.  */
+	if (!post_type(type, ad, 0, td)) {
+	    /* It's not, so it's a nested declarator, and the post operations
+	       apply to the innermost pointed to type (if any).  */
+	    /* XXX: this is not correct to modify 'ad' at this point, but
+	       the syntax is not clear */
+	    if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
+	      parse_attribute(ad);
+	    post = type_decl(type, ad, v, td);
+	    skip(')');
+	}
+    } else if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
+	/* type identifier */
+	*v = tok;
+	next();
     } else {
-        /* type identifier */
-        if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
-            *v = tok;
-            next();
-        } else {
-            if (!(td & TYPE_ABSTRACT))
-                expect("identifier");
-            *v = 0;
-        }
+	if (!(td & TYPE_ABSTRACT))
+	  expect("identifier");
+	*v = 0;
     }
-    storage = type->t & VT_STORAGE;
-    type->t &= ~VT_STORAGE;
-    post_type(type, ad, storage);
-    type->t |= storage;
+    post_type(post, ad, storage, 0);
     if (tok == TOK_ATTRIBUTE1 || tok == TOK_ATTRIBUTE2)
         parse_attribute(ad);
-    
-    if (!type1.t)
-        return;
-    /* append type at the end of type1 */
-    type2 = &type1;
-    for(;;) {
-        s = type2->ref;
-        type2 = &s->type;
-        if (!type2->t) {
-            *type2 = *type;
-            break;
-        }
-    }
-    *type = type1;
     type->t |= storage;
+    return ret;
 }
 
 /* compute the lvalue VT_LVAL_xxx needed to match type t. */
@@ -6924,7 +6917,7 @@ static int decl0(int l, int is_for_loop_init)
 #if 0
             {
                 char buf[500];
-                type_to_str(buf, sizeof(buf), t, get_tok_str(v, NULL));
+                type_to_str(buf, sizeof(buf), &type, get_tok_str(v, NULL));
                 printf("type = '%s'\n", buf);
             }
 #endif
