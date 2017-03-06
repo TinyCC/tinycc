@@ -5970,7 +5970,6 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
 {
     Sym *s, *f;
     int notfirst, index, index_last, align, l, nb_elems, elem_size;
-    CType type1;
 
     notfirst = 0;
     elem_size = 0;
@@ -6022,10 +6021,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
                 expect("field");
             if (!notfirst)
                 *cur_field = f;
-            /* XXX: fix this mess by using explicit storage field */
-            type1 = f->type;
-            type1.t |= (type->t & ~VT_TYPE);
-            type = &type1;
+	    type = &f->type;
             c += f->c;
         }
         notfirst = 1;
@@ -6050,10 +6046,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
 	        *cur_field = f = f->next;
             if (!f)
                 tcc_error("too many field init");
-            /* XXX: fix this mess by using explicit storage field */
-            type1 = f->type;
-            type1.t |= (type->t & ~VT_TYPE);
-            type = &type1;
+	    type = &f->type;
             c += f->c;
         }
     }
