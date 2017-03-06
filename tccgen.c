@@ -5902,6 +5902,42 @@ static void block(int *bsym, int *csym, int is_expr)
     }
 }
 
+/* This skips over a stream of tokens containing balanced {} and ()
+   pairs, stopping at outer ',' ';' and '}'.  If STR then allocates
+   and stores the skipped tokens in *STR.  This doesn't check if
+   () and {} are nested correctly, i.e. "({)}" is accepted.  */
+static void skip_or_save_block(TokenString **str)
+{
+    int level = 0;
+    if (str)
+      *str = tok_str_alloc();
+
+    while ((level > 0 || (tok != '}' && tok != ',' && tok != ';'))) {
+	int t;
+	if (tok == TOK_EOF) {
+	     if (str || level > 0)
+	       tcc_error("unexpected end of file");
+	     else
+	       break;
+	}
+	if (str)
+	  tok_str_add_tok(*str);
+	t = tok;
+	next();
+	if (t == '{' || t == '(') {
+	    level++;
+	} else if (t == '}' || t == ')') {
+	    level--;
+	    if (level == 0)
+	      break;
+	}
+    }
+    if (str) {
+	tok_str_add(*str, -1);
+	tok_str_add(*str, 0);
+    }
+}
+
 #define EXPR_CONST 1
 #define EXPR_ANY   2
 
@@ -6256,7 +6292,7 @@ static void init_putz(Section *sec, unsigned long c, int size)
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
                              int first, int size_only)
 {
-    int index, array_length, n, no_oblock, nb, parlevel, parlevel1, i;
+    int index, array_length, n, no_oblock, nb, i;
     int size1, align1;
     int have_elem;
     Sym *s, *f;
@@ -6429,25 +6465,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	   But GNU C supports it, so we need to recurse even into
 	   subfields of structs and arrays when size_only is set.  */
         /* just skip expression */
-        parlevel = parlevel1 = 0;
-        while ((parlevel > 0 || parlevel1 > 0 ||
-		(tok != '}' && tok != ',')) &&  tok != -1) {
-            if (tok == '(')
-                parlevel++;
-            else if (tok == ')') {
-		if (parlevel == 0 && parlevel1 == 0)
-		    break;
-                parlevel--;
-            }
-	    else if (tok == '{')
-		parlevel1++;
-	    else if (tok == '}') {
-		if (parlevel == 0 && parlevel1 == 0)
-		    break;
-		parlevel1--;
-	    }
-            next();
-        }
+	do {
+	    skip_or_save_block(NULL);
+	} while (tok != '}' && tok != ',' && tok != -1);
     } else {
 	if (!have_elem) {
 	    /* This should happen only when we haven't parsed
@@ -6472,7 +6492,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                                    int has_init, int v, int scope)
 {
     int size, align, addr, data_offset;
-    int level;
     ParseState saved_parse_state = {0};
     TokenString *init_str = NULL;
     Section *sec;
@@ -6500,33 +6519,18 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (!has_init) 
             tcc_error("unknown type size");
         /* get all init string */
-        init_str = tok_str_alloc();
         if (has_init == 2) {
+	    init_str = tok_str_alloc();
             /* only get strings */
             while (tok == TOK_STR || tok == TOK_LSTR) {
                 tok_str_add_tok(init_str);
                 next();
             }
+	    tok_str_add(init_str, -1);
+	    tok_str_add(init_str, 0);
         } else {
-            level = 0;
-            while (level > 0 || (tok != ',' && tok != ';')) {
-                if (tok < 0)
-                    tcc_error("unexpected end of file in initializer");
-                tok_str_add_tok(init_str);
-                if (tok == '{')
-                    level++;
-                else if (tok == '}') {
-                    level--;
-                    if (level <= 0) {
-                        next();
-                        break;
-                    }
-                }
-                next();
-            }
+	    skip_or_save_block(&init_str);
         }
-        tok_str_add(init_str, -1);
-        tok_str_add(init_str, 0);
         
         /* compute size */
         save_parse_state(&saved_parse_state);
@@ -7029,7 +7033,6 @@ static int decl0(int l, int is_for_loop_init)
                    the compilation unit only if they are used */
                 if ((type.t & (VT_INLINE | VT_STATIC)) == 
                     (VT_INLINE | VT_STATIC)) {
-                    int block_level;
                     struct InlineFunc *fn;
                     const char *filename;
                            
@@ -7037,28 +7040,9 @@ static int decl0(int l, int is_for_loop_init)
                     fn = tcc_malloc(sizeof *fn + strlen(filename));
                     strcpy(fn->filename, filename);
                     fn->sym = sym;
-                    fn->func_str = tok_str_alloc();
-                    
-                    block_level = 0;
-                    for(;;) {
-                        int t;
-                        if (tok == TOK_EOF)
-                            tcc_error("unexpected end of file");
-                        tok_str_add_tok(fn->func_str);
-                        t = tok;
-                        next();
-                        if (t == '{') {
-                            block_level++;
-                        } else if (t == '}') {
-                            block_level--;
-                            if (block_level == 0)
-                                break;
-                        }
-                    }
-                    tok_str_add(fn->func_str, -1);
-                    tok_str_add(fn->func_str, 0);
-                    dynarray_add(&tcc_state->inline_fns, &tcc_state->nb_inline_fns, fn);
-
+		    skip_or_save_block(&fn->func_str);
+                    dynarray_add(&tcc_state->inline_fns,
+				 &tcc_state->nb_inline_fns, fn);
                 } else {
                     /* compute text section */
                     cur_text_section = ad.section;
