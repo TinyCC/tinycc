@@ -79,7 +79,7 @@ static void parse_expr_type(CType *type);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
-static int decl0(int l, int is_for_loop_init);
+static int decl0(int l, int is_for_loop_init, Sym *);
 static void expr_eq(void);
 static void vla_runtime_type_size(CType *type, int *a);
 static void vla_sp_restore(void);
@@ -3617,7 +3617,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                                       get_tok_str(v, NULL));
                         }
                         if ((type1.t & VT_BTYPE) == VT_FUNC ||
-                            (type1.t & (VT_TYPEDEF | VT_STATIC | VT_EXTERN | VT_INLINE)))
+                            (type1.t & VT_STORAGE))
                             tcc_error("invalid type for '%s'", 
                                   get_tok_str(v, NULL));
                     }
@@ -4012,7 +4012,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                     n = tok;
                     if (n < TOK_UIDENT)
                         expect("identifier");
-                    pt.t = VT_INT;
+                    pt.t = VT_VOID; /* invalid type */
                     next();
                 }
                 convert_parameter_type(&pt);
@@ -5697,7 +5697,7 @@ static void block(int *bsym, int *csym, int is_expr)
         ++local_scope;
         if (tok != ';') {
             /* c99 for-loop init decl? */
-            if (!decl0(VT_LOCAL, 1)) {
+            if (!decl0(VT_LOCAL, 1, NULL)) {
                 /* no, regular for-loop init expr */
                 gexpr();
                 vpop();
@@ -6718,55 +6718,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     }
 }
 
-/* parse an old style function declaration list */
-/* XXX: check multiple parameter */
-static void func_decl_list(Sym *func_sym)
-{
-    AttributeDef ad;
-    int v;
-    Sym *s;
-    CType btype, type;
-
-    /* parse each declaration */
-    while (tok != '{' && tok != ';' && tok != ',' && tok != TOK_EOF &&
-           tok != TOK_ASM1 && tok != TOK_ASM2 && tok != TOK_ASM3) {
-        if (!parse_btype(&btype, &ad)) 
-            expect("declaration list");
-        if (((btype.t & VT_BTYPE) == VT_ENUM ||
-             (btype.t & VT_BTYPE) == VT_STRUCT) && 
-            tok == ';') {
-            /* we accept no variable after */
-        } else {
-            for(;;) {
-                type = btype;
-                type_decl(&type, &ad, &v, TYPE_DIRECT);
-                /* find parameter in function parameter list */
-                s = func_sym->next;
-                while (s != NULL) {
-                    if ((s->v & ~SYM_FIELD) == v)
-                        goto found;
-                    s = s->next;
-                }
-                tcc_error("declaration for parameter '%s' but no such parameter",
-                      get_tok_str(v, NULL));
-            found:
-                /* check that no storage specifier except 'register' was given */
-                if (type.t & VT_STORAGE)
-                    tcc_error("storage class specified for '%s'", get_tok_str(v, NULL)); 
-                convert_parameter_type(&type);
-                /* we can add the type (NOTE: it could be local to the function) */
-                s->type = type;
-                /* accept other parameters */
-                if (tok == ',')
-                    next();
-                else
-                    break;
-            }
-        }
-        skip(';');
-    }
-}
-
 /* parse a function defined by symbol 'sym' and generate its code in
    'cur_text_section' */
 static void gen_function(Sym *sym)
@@ -6860,8 +6811,9 @@ ST_FUNC void free_inline_functions(TCCState *s)
     dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
 
-/* 'l' is VT_LOCAL or VT_CONST to define default storage type */
-static int decl0(int l, int is_for_loop_init)
+/* 'l' is VT_LOCAL or VT_CONST to define default storage type, or VT_CMP
+   if parsing old style parameter decl list (and FUNC_SYM is set then) */
+static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 {
     int v, has_init, r;
     CType type, btype;
@@ -6872,9 +6824,8 @@ static int decl0(int l, int is_for_loop_init)
         if (!parse_btype(&btype, &ad)) {
             if (is_for_loop_init)
                 return 0;
-            /* skip redundant ';' */
-            /* XXX: find more elegant solution */
-            if (tok == ';') {
+            /* skip redundant ';' if not in old parameter decl scope */
+            if (tok == ';' && l != VT_CMP) {
                 next();
                 continue;
             }
@@ -6886,7 +6837,7 @@ static int decl0(int l, int is_for_loop_init)
             }
             /* special test for old K&R protos without explicit int
                type. Only accepted when defining global data */
-            if (l == VT_LOCAL || tok < TOK_UIDENT)
+            if (l != VT_CONST || tok < TOK_UIDENT)
                 break;
             btype.t = VT_INT;
         }
@@ -6926,8 +6877,8 @@ static int decl0(int l, int is_for_loop_init)
                 /* if old style function prototype, we accept a
                    declaration list */
                 sym = type.ref;
-                if (sym->c == FUNC_OLD)
-                    func_decl_list(sym);
+                if (sym->c == FUNC_OLD && l == VT_CONST)
+                    decl0(VT_CMP, 0, sym);
             }
 
             if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
@@ -6953,16 +6904,20 @@ static int decl0(int l, int is_for_loop_init)
 	    type.t |= ad.a.visibility << VT_VIS_SHIFT;
 
             if (tok == '{') {
-                if (l == VT_LOCAL)
+                if (l != VT_CONST)
                     tcc_error("cannot use local functions");
                 if ((type.t & VT_BTYPE) != VT_FUNC)
                     expect("function definition");
 
-                /* reject abstract declarators in function definition */
+                /* reject abstract declarators in function definition
+		   make old style params without decl have int type */
                 sym = type.ref;
-                while ((sym = sym->next) != NULL)
+                while ((sym = sym->next) != NULL) {
                     if (!(sym->v & ~SYM_FIELD))
-                       expect("identifier");
+                        expect("identifier");
+		    if (sym->type.t == VT_VOID)
+		        sym->type = int_type;
+		}
                 
                 /* XXX: cannot do better now: convert extern line to static inline */
                 if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
@@ -7036,7 +6991,23 @@ static int decl0(int l, int is_for_loop_init)
                 }
                 break;
             } else {
-                if (type.t & VT_TYPEDEF) {
+		if (l == VT_CMP) {
+		    /* find parameter in function parameter list */
+		    for (sym = func_sym->next; sym; sym = sym->next)
+			if ((sym->v & ~SYM_FIELD) == v)
+			    goto found;
+		    tcc_error("declaration for parameter '%s' but no such parameter",
+			      get_tok_str(v, NULL));
+found:
+		    if (type.t & VT_STORAGE) /* 'register' is okay */
+		        tcc_error("storage class specified for '%s'",
+				  get_tok_str(v, NULL));
+		    if (sym->type.t != VT_VOID)
+		        tcc_error("redefinition of parameter '%s'",
+				  get_tok_str(v, NULL));
+		    convert_parameter_type(&type);
+		    sym->type = type;
+		} else if (type.t & VT_TYPEDEF) {
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
                     sym = sym_find(v);
@@ -7110,7 +7081,7 @@ static int decl0(int l, int is_for_loop_init)
 
 ST_FUNC void decl(int l)
 {
-    decl0(l, 0);
+    decl0(l, 0, NULL);
 }
 
 /* ------------------------------------------------------------------------- */
