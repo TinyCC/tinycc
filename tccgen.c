@@ -76,6 +76,7 @@ static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad);
 static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
+static void init_putv(CType *type, Section *sec, unsigned long c);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
@@ -302,8 +303,6 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         sh_num = SHN_UNDEF;
     else if (section == SECTION_ABS)
         sh_num = SHN_ABS;
-    else if (section == SECTION_COMMON)
-        sh_num = SHN_COMMON;
     else
         sh_num = section->sh_num;
 
@@ -1065,7 +1064,7 @@ static void gbound(void)
    register value (such as structures). */
 ST_FUNC int gv(int rc)
 {
-    int r, bit_pos, bit_size, size, align, i;
+    int r, bit_pos, bit_size, size, align;
     int rc2;
 
     /* NOTE: get_reg can modify vstack[] */
@@ -1096,44 +1095,15 @@ ST_FUNC int gv(int rc)
     } else {
         if (is_float(vtop->type.t) && 
             (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-            Sym *sym;
-            int *ptr;
             unsigned long offset;
-#if defined(TCC_TARGET_ARM) && !defined(TCC_ARM_VFP)
-            CValue check;
-#endif
-            
-            /* XXX: unify with initializers handling ? */
             /* CPUs usually cannot use float constants, so we store them
                generically in data segment */
             size = type_size(&vtop->type, &align);
-            offset = (data_section->data_offset + align - 1) & -align;
-            data_section->data_offset = offset;
-            /* XXX: not portable yet */
-#if defined(__i386__) || defined(__x86_64__)
-            /* Zero pad x87 tenbyte long doubles */
-            if (size == LDOUBLE_SIZE) {
-                vtop->c.tab[2] &= 0xffff;
-#if LDOUBLE_SIZE == 16
-                vtop->c.tab[3] = 0;
-#endif
-            }
-#endif
-            ptr = section_ptr_add(data_section, size);
-            size = size >> 2;
-#if defined(TCC_TARGET_ARM) && !defined(TCC_ARM_VFP)
-            check.d = 1;
-            if(check.tab[0])
-                for(i=0;i<size;i++)
-                    ptr[i] = vtop->c.tab[size-1-i];
-            else
-#endif
-            for(i=0;i<size;i++)
-                ptr[i] = vtop->c.tab[i];
-            sym = get_sym_ref(&vtop->type, data_section, offset, size << 2);
-            vtop->r |= VT_LVAL | VT_SYM;
-            vtop->sym = sym;
-            vtop->c.i = 0;
+	    offset = section_add(data_section, size, align);
+            vpush_ref(&vtop->type, data_section, offset, size);
+	    vswap();
+	    init_putv(&vtop->type, data_section, offset);
+	    vtop->r |= VT_LVAL;
         }
 #ifdef CONFIG_TCC_BCHECK
         if (vtop->r & VT_MUSTBOUND) 
@@ -4351,7 +4321,7 @@ ST_FUNC void unary(void)
         t = VT_LLONG;
 	goto push_tokc;
     case TOK_CULLONG:
-        t =VT_LLONG | VT_UNSIGNED;
+        t = VT_LLONG | VT_UNSIGNED;
 	goto push_tokc;
     case TOK_CFLOAT:
         t = VT_FLOAT;
@@ -6098,9 +6068,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
         gen_assign_cast(&dtype);
         bt = type->t & VT_BTYPE;
 	size = type_size(type, &align);
-        if (c + size > sec->data_allocated) {
-            section_realloc(sec, c + size);
-        }
+	section_reserve(sec, c + size);
         ptr = sec->data + c;
         /* XXX: make code faster ? */
         if (!(type->t & VT_BITFIELD)) {
@@ -6189,6 +6157,9 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 		break;
 	    case VT_SHORT:
 		*(short *)ptr |= (vtop->c.i & bit_mask) << bit_pos;
+		break;
+	    case VT_FLOAT:
+		*(float*)ptr = vtop->c.f;
 		break;
 	    case VT_DOUBLE:
 		*(double *)ptr = vtop->c.d;
@@ -6475,7 +6446,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, 
                                    int has_init, int v, int scope)
 {
-    int size, align, addr, data_offset;
+    int size, align, addr;
     ParseState saved_parse_state = {0};
     TokenString *init_str = NULL;
     Section *sec;
@@ -6624,41 +6595,24 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
 
         if (sec) {
-            data_offset = sec->data_offset;
-            data_offset = (data_offset + align - 1) & -align;
-            addr = data_offset;
-            /* very important to increment global pointer at this time
-               because initializers themselves can create new initializers */
-            data_offset += size;
+	    addr = section_add(sec, size, align);
 #ifdef CONFIG_TCC_BCHECK
             /* add padding if bound check */
             if (tcc_state->do_bounds_check)
-                data_offset++;
+                section_add(sec, 1, 1);
 #endif
-            sec->data_offset = data_offset;
-            /* allocate section space to put the data */
-            if (sec->sh_type != SHT_NOBITS && 
-                data_offset > sec->data_allocated)
-                section_realloc(sec, data_offset);
-            /* align section if needed */
-            if (align > sec->sh_addralign)
-                sec->sh_addralign = align;
         } else {
-            addr = 0; /* avoid warning */
+            addr = align; /* SHN_COMMON is special, symbol value is align */
+	    sec = common_section;
         }
 
         if (v) {
-            if (scope != VT_CONST || !sym) {
+            if (!sym) {
                 sym = sym_push(v, type, r | VT_SYM, 0);
                 sym->asm_label = ad->asm_label;
             }
             /* update symbol definition */
-            if (sec) {
-                put_extern_sym(sym, sec, addr, size);
-            } else {
-                put_extern_sym(sym, SECTION_COMMON, align, size);
-            }
-
+	    put_extern_sym(sym, sec, addr, size);
         } else {
             /* push global reference */
             sym = get_sym_ref(type, sec, addr, size);

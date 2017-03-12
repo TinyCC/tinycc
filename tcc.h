@@ -470,7 +470,6 @@ typedef struct Sym {
 
 /* special flag, too */
 #define SECTION_ABS ((void *)1)
-#define SECTION_COMMON ((void *)2)
 
 typedef struct Section {
     unsigned long data_offset; /* current data offset */
@@ -1360,6 +1359,7 @@ typedef struct {
 } Stab_Sym;
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
+ST_DATA Section *common_section;
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
 ST_DATA Section *last_text_section; /* to handle .previous asm directive */
@@ -1381,6 +1381,7 @@ ST_FUNC void tccelf_stab_new(TCCState *s);
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
+ST_FUNC size_t section_add(Section *sec, addr_t size, int align);
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
 ST_FUNC void section_reserve(Section *sec, unsigned long size);
 ST_FUNC Section *find_section(TCCState *s1, const char *name);

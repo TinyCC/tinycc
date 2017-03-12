@@ -27,6 +27,7 @@
 /* global variables */
 
 ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
+ST_DATA Section *common_section;
 ST_DATA Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_ASM
 ST_DATA Section *last_text_section; /* to handle .previous asm directive */
@@ -55,6 +56,8 @@ ST_FUNC void tccelf_new(TCCState *s)
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
+    common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
+    common_section->sh_num = SHN_COMMON;
 
     /* symbols are always generated for linking stage */
     symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
@@ -208,17 +211,27 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size)
     sec->data_allocated = size;
 }
 
+/* reserve at least 'size' bytes aligned per 'align' in section
+   'sec' from current offset, and return the aligned offset */
+ST_FUNC size_t section_add(Section *sec, addr_t size, int align)
+{
+    size_t offset, offset1;
+
+    offset = (sec->data_offset + align - 1) & -align;
+    offset1 = offset + size;
+    if (sec->sh_type != SHT_NOBITS && offset1 > sec->data_allocated)
+        section_realloc(sec, offset1);
+    sec->data_offset = offset1;
+    if (align > sec->sh_addralign)
+        sec->sh_addralign = align;
+    return offset;
+}
+
 /* reserve at least 'size' bytes in section 'sec' from
    sec->data_offset. */
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size)
 {
-    size_t offset, offset1;
-
-    offset = sec->data_offset;
-    offset1 = offset + size;
-    if (offset1 > sec->data_allocated)
-        section_realloc(sec, offset1);
-    sec->data_offset = offset1;
+    size_t offset = section_add(sec, size, 1);
     return sec->data + offset;
 }
 
@@ -702,18 +715,13 @@ static void sort_syms(TCCState *s1, Section *s)
 ST_FUNC void relocate_common_syms(void)
 {
     ElfW(Sym) *sym;
-    unsigned long offset, align;
 
     for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
         if (sym->st_shndx == SHN_COMMON) {
-            /* align symbol */
-            align = sym->st_value;
-            offset = bss_section->data_offset;
-            offset = (offset + align - 1) & -align;
-            sym->st_value = offset;
+            /* symbol alignment is in st_value for SHN_COMMONs */
+	    sym->st_value = section_add(bss_section, sym->st_size,
+					sym->st_value);
             sym->st_shndx = bss_section->sh_num;
-            offset += sym->st_size;
-            bss_section->data_offset = offset;
         }
     }
 }
