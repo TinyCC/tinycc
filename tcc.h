@@ -721,7 +721,8 @@ struct TCCState {
     enum {
 	LINE_MACRO_OUTPUT_FORMAT_GCC,
 	LINE_MACRO_OUTPUT_FORMAT_NONE,
-	LINE_MACRO_OUTPUT_FORMAT_STD
+	LINE_MACRO_OUTPUT_FORMAT_STD,
+    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
     } Pflag; /* -P switch */
     char dflag; /* -dX value */
 
@@ -1446,7 +1447,7 @@ ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC int gotplt_entry_type (int reloc_type);
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
 ST_FUNC void relocate_init(Section *sr);
-ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val);
+ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 ST_FUNC void relocate_plt(TCCState *s1);
 
 /* ------------ xxx-gen.c ------------ */

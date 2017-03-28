@@ -1021,35 +1021,6 @@ ST_FUNC void restore_parse_state(ParseState *s)
     tokc = s->tokc;
 }
 
-/* return the number of additional 'ints' necessary to store the
-   token */
-static inline int tok_size(const int *p)
-{
-    switch(*p) {
-        /* 4 bytes */
-    case TOK_CINT:
-    case TOK_CUINT:
-    case TOK_CCHAR:
-    case TOK_LCHAR:
-    case TOK_CFLOAT:
-    case TOK_LINENUM:
-        return 1 + 1;
-    case TOK_STR:
-    case TOK_LSTR:
-    case TOK_PPNUM:
-    case TOK_PPSTR:
-        return 1 + ((sizeof(CString) + ((CString *)(p+1))->size + 3) >> 2);
-    case TOK_CDOUBLE:
-    case TOK_CLLONG:
-    case TOK_CULLONG:
-        return 1 + 2;
-    case TOK_CLDOUBLE:
-        return 1 + LDOUBLE_SIZE / 4;
-    default:
-        return 1 + 0;
-    }
-}
-
 /* token string handling */
 
 ST_INLN void tok_str_new(TokenString *s)
@@ -2615,7 +2586,7 @@ maybe_newline:
         } else {
             /* slower case */
             cstr_reset(&tokcstr);
-            cstr_cat(&tokcstr, p1, len);
+            cstr_cat(&tokcstr, (char *) p1, len);
             p--;
             PEEKC(c, p);
         parse_ident_slow:
@@ -3732,7 +3703,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     /* Credits to Fabrice Bellard's initial revision to demonstrate its
        capability to compile and run itself, provided all numbers are
        given as decimals. tcc -E -P10 will do. */
-    if (s1->Pflag == 1 + 10)
+    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
         parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
 
 #ifdef PP_BENCH

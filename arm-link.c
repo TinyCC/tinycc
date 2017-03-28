@@ -166,7 +166,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 
 void relocate_init(Section *sr) {}
 
-void relocate(TCCState *s1, ElfW_Rel *rel, int type, char *ptr, addr_t addr, addr_t val)
+void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     ElfW(Sym) *sym;
     int sym_index;

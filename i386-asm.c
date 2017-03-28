@@ -221,7 +221,7 @@ static const uint8_t segment_prefixes[] = {
 static const ASMInstr asm_instrs[] = {
 #define ALT(x) x
 /* This removes a 0x0f in the second byte */
-#define O(o) ((((o) & 0xff00) == 0x0f00) ? ((((o) >> 8) & ~0xff) | ((o) & 0xff)) : (o))
+#define O(o) ((uint64_t) ((((o) & 0xff00) == 0x0f00) ? ((((o) >> 8) & ~0xff) | ((o) & 0xff)) : (o)))
 /* This constructs instr_type from opcode, type and group.  */
 #define T(o,i,g) ((i) | ((g) << OPC_GROUP_SHIFT) | ((((o) & 0xff00) == 0x0f00) ? OPC_0F : 0))
 #define DEF_ASM_OP0(name, opcode)
@@ -278,7 +278,7 @@ static inline int get_reg_shift(TCCState *s1)
 }
 
 #ifdef TCC_TARGET_X86_64
-static int asm_parse_numeric_reg(int t, int *type)
+static int asm_parse_numeric_reg(int t, unsigned int *type)
 {
     int reg = -1;
     if (t >= TOK_IDENT && t < tok_ident) {
@@ -317,7 +317,7 @@ static int asm_parse_numeric_reg(int t, int *type)
 }
 #endif
 
-static int asm_parse_reg(int *type)
+static int asm_parse_reg(unsigned int *type)
 {
     int reg = 0;
     *type = 0;
@@ -453,7 +453,7 @@ static void parse_operand(TCCState *s1, Operand *op)
 	    op->e.pcrel = 0;
         }
         if (tok == '(') {
-	    int type = 0;
+	    unsigned int type = 0;
             next();
             if (tok != ',') {
                 op->reg = asm_parse_reg(&type);
@@ -1688,7 +1688,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
     int reg;
     TokenSym *ts;
 #ifdef TCC_TARGET_X86_64
-    int type;
+    unsigned int type;
 #endif
 
     if (!strcmp(str, "memory") ||

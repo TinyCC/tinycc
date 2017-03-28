@@ -69,7 +69,7 @@ else
 endif
 
 ifeq ($(TARGETOS),Darwin)
- CFLAGS += -Wl,-flat_namespace,-undefined,warning
+ LDFLAGS += -flat_namespace -undefined warning
  export MACOSX_DEPLOYMENT_TARGET:=10.2
 endif
 

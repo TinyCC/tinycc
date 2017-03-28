@@ -787,7 +787,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         tgt += rel->r_addend;
 #endif
         addr = s->sh_addr + rel->r_offset;
-	relocate(s1, rel, type, ptr, addr, tgt);
+        relocate(s1, rel, type, ptr, addr, tgt);
     }
     /* if the relocation is allocated, we change its symbol table */
     if (sr->sh_flags & SHF_ALLOC)
