@@ -37,6 +37,7 @@ cygwin="no"
 gprof="no"
 bigendian="no"
 mingw32="no"
+osx="no"
 LIBSUF=".a"
 EXESUF=""
 DLLSUF=".so"
@@ -52,6 +53,7 @@ cpu=
 # OS specific
 targetos=`uname`
 case $targetos in
+  Darwin)    osx=yes;;
   MINGW*)    mingw32=yes;;
   MSYS*)     mingw32=yes;;
   CYGWIN*)   mingw32=yes; cygwin=yes; cross_prefix="mingw32-";;
@@ -255,6 +257,9 @@ else
     fi
     if test x"$tccdir" = x""; then
       tccdir="${libdir}/tcc"
+    fi
+    if test "$osx" = "yes" ; then
+	DLLSUF=".dylib"
     fi
 fi # mingw32
 
@@ -485,6 +490,9 @@ if test "$noldl" = "yes" ; then
 fi
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=yes" >> config.mak
+fi
+if test "$osx" = "yes" ; then
+  echo "CONFIG_OSX=yes" >> config.mak
 fi
 if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> config.mak
