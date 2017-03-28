@@ -159,6 +159,8 @@ static const char version[] =
 #endif
 #ifdef TCC_TARGET_PE
         " Windows"
+#elif defined(TCC_TARGET_MACHO)
+        " Darwin"
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         " FreeBSD"
 #else
