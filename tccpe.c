@@ -396,9 +396,11 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
     char buffer[200];
     const char *s, *p;
     int sym_index = 0, n = 0;
+    int a, err = 0;
 
     do {
         s = pe_export_name(s1, sym);
+        a = 0;
         if (n) {
             /* second try: */
 	    if (sym->st_other & ST_PE_STDCALL) {
@@ -409,19 +411,24 @@ static int pe_find_import(TCCState * s1, ElfW(Sym) *sym)
 	        strcpy(buffer, s+1)[p-s-1] = 0;
 	    } else if (s[0] != '_') { /* try non-ansi function */
 	        buffer[0] = '_', strcpy(buffer + 1, s);
-	    } else if (0 == memcmp(s, "__imp__", 7)) { /* mingw 2.0 */
-	        strcpy(buffer, s + 6);
-	    } else if (0 == memcmp(s, "_imp___", 7)) { /* mingw 3.7 */
-	        strcpy(buffer, s + 6);
+	    } else if (0 == memcmp(s, "__imp_", 6)) { /* mingw 2.0 */
+	        strcpy(buffer, s + 6), a = 1;
+	    } else if (0 == memcmp(s, "_imp__", 6)) { /* mingw 3.7 */
+	        strcpy(buffer, s + 6), a = 1;
 	    } else {
-	        break;
+	        continue;
 	    }
 	    s = buffer;
         }
         sym_index = find_elf_sym(s1->dynsymtab_section, s);
         // printf("find (%d) %d %s\n", n, sym_index, s);
+        if (sym_index
+            && ELFW(ST_TYPE)(sym->st_info) == STT_OBJECT
+            && 0 == (sym->st_other & ST_PE_IMPORT)
+            && 0 == a
+            ) err = -1, sym_index = 0;
     } while (0 == sym_index && ++n < 2);
-    return sym_index;
+    return n == 2 ? err : sym_index;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1239,7 +1246,7 @@ static int pe_check_symbols(struct pe_info *pe)
             int imp_sym = pe_find_import(pe->s1, sym);
             struct import_symbol *is;
 
-            if (0 == imp_sym)
+            if (imp_sym <= 0)
                 goto not_found;
 
             if (type == STT_NOTYPE) {
@@ -1313,7 +1320,8 @@ static int pe_check_symbols(struct pe_info *pe)
             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
                 /* STB_WEAK undefined symbols are accepted */
                 continue;
-            tcc_error_noabort("undefined symbol '%s'", name);
+            tcc_error_noabort("undefined symbol '%s'%s", name,
+                imp_sym < 0 ? ", missing __declspec(dllimport)?":"");
             ret = -1;
 
         } else if (pe->s1->rdynamic
@@ -1470,23 +1478,12 @@ static void pe_print_sections(TCCState *s1, const char *fname)
 #ifndef TCC_TARGET_ARM
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
 {
-    Sym *sym;
-    ElfW(Sym) *esym;
     int r2;
-
     if ((sv->r & (VT_VALMASK|VT_SYM)) != (VT_CONST|VT_SYM) || (sv->r2 != VT_CONST))
         return sv;
-    sym = sv->sym;
-    if ((sym->type.t & (VT_EXTERN|VT_STATIC)) != VT_EXTERN)
+    if (!(sv->sym->type.t & VT_IMPORT))
         return sv;
-    if (!sym->c)
-        put_extern_sym(sym, NULL, 0, 0);
-    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-    if (!(esym->st_other & ST_PE_IMPORT))
-        return sv;
-
-    // printf("import %04x %04x %04x %s\n", sv->type.t, sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));
-
+    // printf("import %04x %04x %04x %s\n", sv->type.t, sv->sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));
     memset(v2, 0, sizeof *v2);
     v2->type.t = VT_PTR;
     v2->r = VT_CONST | VT_SYM | VT_LVAL;
@@ -1495,14 +1492,12 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     r2 = get_reg(RC_INT);
     load(r2, v2);
     v2->r = r2;
-
     if ((uint32_t)sv->c.i) {
         vpushv(v2);
         vpushi(sv->c.i);
         gen_opi('+');
         *v2 = *vtop--;
     }
-
     v2->type.t = sv->type.t;
     v2->r |= sv->r & VT_LVAL;
     return v2;

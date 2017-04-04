@@ -259,6 +259,33 @@ ST_FUNC void tccgen_end(TCCState *s1)
 }
 
 /* ------------------------------------------------------------------------- */
+/* apply storage attibutes to Elf symbol */
+
+static void update_storage(Sym *sym)
+{
+    int t;
+    ElfW(Sym) *esym;
+
+    if (0 == sym->c)
+        return;
+
+    t = sym->type.t;
+    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+
+    if (t & VT_VIS_MASK)
+        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
+            | ((t & VT_VIS_MASK) >> VT_VIS_SHIFT);
+
+    if (t & VT_WEAK)
+        esym->st_info = ELFW(ST_INFO)(STB_WEAK, ELFW(ST_TYPE)(esym->st_info));
+
+#ifdef TCC_TARGET_PE
+    if (t & VT_EXPORT)
+        esym->st_other |= ST_PE_EXPORT;
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
 /* update sym->c so that it points to an external symbol in section
    'section' with value 'value' */
 
@@ -266,11 +293,10 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
                             addr_t value, unsigned long size,
                             int can_add_underscore)
 {
-    int sym_type, sym_bind, sh_num, info, other;
+    int sym_type, sym_bind, sh_num, info, other, t;
     ElfW(Sym) *esym;
     const char *name;
     char buf1[256];
-
 #ifdef CONFIG_TCC_BCHECK
     char buf[32];
 #endif
@@ -279,25 +305,10 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         sh_num = SHN_UNDEF;
     else if (section == SECTION_ABS)
         sh_num = SHN_ABS;
+    else if (section == SECTION_COMMON)
+        sh_num = SHN_COMMON;
     else
         sh_num = section->sh_num;
-
-    if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
-        sym_type = STT_FUNC;
-    } else if ((sym->type.t & VT_BTYPE) == VT_VOID) {
-        sym_type = STT_NOTYPE;
-    } else {
-        sym_type = STT_OBJECT;
-    }
-
-    if (sym->type.t & VT_STATIC)
-        sym_bind = STB_LOCAL;
-    else {
-        if (sym->type.t & VT_WEAK)
-            sym_bind = STB_WEAK;
-        else
-            sym_bind = STB_GLOBAL;
-    }
 
     if (!sym->c) {
         name = get_tok_str(sym->v, NULL);
@@ -328,39 +339,39 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
             }
         }
 #endif
+        t = sym->type.t;
+        if ((t & VT_BTYPE) == VT_FUNC) {
+            sym_type = STT_FUNC;
+        } else if ((t & VT_BTYPE) == VT_VOID) {
+            sym_type = STT_NOTYPE;
+        } else {
+            sym_type = STT_OBJECT;
+        }
+        if (t & VT_STATIC)
+            sym_bind = STB_LOCAL;
+        else
+            sym_bind = STB_GLOBAL;
         other = 0;
-
 #ifdef TCC_TARGET_PE
-        if (sym->type.t & VT_EXPORT)
-            other |= ST_PE_EXPORT;
         if (sym_type == STT_FUNC && sym->type.ref) {
             Sym *ref = sym->type.ref;
-            if (ref->a.func_export)
-                other |= ST_PE_EXPORT;
             if (ref->a.func_call == FUNC_STDCALL && can_add_underscore) {
                 sprintf(buf1, "_%s@%d", name, ref->a.func_args * PTR_SIZE);
                 name = buf1;
                 other |= ST_PE_STDCALL;
                 can_add_underscore = 0;
             }
-        } else {
-            if (find_elf_sym(tcc_state->dynsymtab_section, name))
-                other |= ST_PE_IMPORT;
-            if (sym->type.t & VT_IMPORT)
-                other |= ST_PE_IMPORT;
         }
-#else
-        if (! (sym->type.t & VT_STATIC))
-	    other = (sym->type.t & VT_VIS_MASK) >> VT_VIS_SHIFT;
+        if (t & VT_IMPORT)
+            other |= ST_PE_IMPORT;
 #endif
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
             pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
             name = buf1;
         }
-        if (sym->asm_label) {
+        if (sym->asm_label)
             name = get_tok_str(sym->asm_label, NULL);
-        }
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = set_elf_sym(symtab_section, value, size, info, other, sh_num, name);
     } else {
@@ -369,6 +380,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         esym->st_size = size;
         esym->st_shndx = sh_num;
     }
+    update_storage(sym);
 }
 
 ST_FUNC void put_extern_sym(Sym *sym, Section *section,
@@ -578,41 +590,6 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep)
     }
     if (!keep)
 	*ptop = b;
-}
-
-static void weaken_symbol(Sym *sym)
-{
-    sym->type.t |= VT_WEAK;
-    if (sym->c > 0) {
-        int esym_type;
-        ElfW(Sym) *esym;
-        
-        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-        esym_type = ELFW(ST_TYPE)(esym->st_info);
-        esym->st_info = ELFW(ST_INFO)(STB_WEAK, esym_type);
-    }
-}
-
-static void apply_visibility(Sym *sym, CType *type)
-{
-    int vis = sym->type.t & VT_VIS_MASK;
-    int vis2 = type->t & VT_VIS_MASK;
-    if (vis == (STV_DEFAULT << VT_VIS_SHIFT))
-        vis = vis2;
-    else if (vis2 == (STV_DEFAULT << VT_VIS_SHIFT))
-        ;
-    else
-        vis = (vis < vis2) ? vis : vis2;
-    sym->type.t &= ~VT_VIS_MASK;
-    sym->type.t |= vis;
-
-    if (sym->c > 0) {
-        ElfW(Sym) *esym;
-        
-        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-	vis >>= VT_VIS_SHIFT;
-        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1)) | vis;
-    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -831,31 +808,49 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
     return s;
 }
 
+/* Merge some storage attributes.  */
+static void patch_storage(Sym *sym, CType *type)
+{
+    int t;
+    if (!is_compatible_types(&sym->type, type))
+        tcc_error("incompatible types for redefinition of '%s'",
+              get_tok_str(sym->v, NULL));
+    t = type->t;
+#ifdef TCC_TARGET_PE
+    if ((sym->type.t ^ t) & VT_IMPORT)
+        tcc_error("incompatible dll linkage for redefinition of '%s'",
+            get_tok_str(sym->v, NULL));
+#endif
+    sym->type.t |= t & (VT_EXPORT|VT_WEAK);
+    if (t & VT_VIS_MASK) {
+        int vis = sym->type.t & VT_VIS_MASK;
+        int vis2 = t & VT_VIS_MASK;
+        if (vis == (STV_DEFAULT << VT_VIS_SHIFT))
+            vis = vis2;
+        else if (vis2 != (STV_DEFAULT << VT_VIS_SHIFT))
+            vis = (vis < vis2) ? vis : vis2;
+        sym->type.t = (sym->type.t & ~VT_VIS_MASK) | vis;
+    }
+}
+
 /* define a new external reference to a symbol 'v' */
 static Sym *external_sym(int v, CType *type, int r)
 {
     Sym *s;
-
     s = sym_find(v);
     if (!s) {
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
         s->type.t |= VT_EXTERN;
-    } else if (s->type.ref == func_old_type.ref) {
-        s->type.ref = type->ref;
-        s->r = r | VT_CONST | VT_SYM;
-        s->type.t |= VT_EXTERN;
-    } else if (!is_compatible_types(&s->type, type)) {
-        tcc_error("incompatible types for redefinition of '%s'", 
-              get_tok_str(v, NULL));
+    } else {
+        if (s->type.ref == func_old_type.ref) {
+            s->type.ref = type->ref;
+            s->r = r | VT_CONST | VT_SYM;
+            s->type.t |= VT_EXTERN;
+        }
+        patch_storage(s, type);
+        update_storage(s);
     }
-    /* Merge some storage attributes.  */
-    if (type->t & VT_WEAK)
-        weaken_symbol(s);
-
-    if (type->t & VT_VIS_MASK)
-        apply_visibility(s, type);
-
     return s;
 }
 
@@ -1164,7 +1159,6 @@ ST_FUNC int gv(int rc)
             rc2 = RC_QRET;
 #endif
 #endif
-
         /* need to reload if:
            - constant
            - lvalue (need to dereference pointer)
@@ -3733,7 +3727,7 @@ static void parse_btype_qualify(CType *type, int qualifiers)
  */
 static int parse_btype(CType *type, AttributeDef *ad)
 {
-    int t, u, bt_size, complete, type_found, typespec_found;
+    int t, u, bt_size, complete, type_found, typespec_found, g;
     Sym *s;
     CType type1;
 
@@ -3865,15 +3859,18 @@ static int parse_btype(CType *type, AttributeDef *ad)
 
             /* storage */
         case TOK_EXTERN:
-            t |= VT_EXTERN;
-            next();
-            break;
+            g = VT_EXTERN;
+            goto storage;
         case TOK_STATIC:
-            t |= VT_STATIC;
-            next();
-            break;
+            g = VT_STATIC;
+            goto storage;
         case TOK_TYPEDEF:
-            t |= VT_TYPEDEF;
+            g = VT_TYPEDEF;
+            goto storage;
+       storage:
+            if (t & (VT_EXTERN|VT_STATIC|VT_TYPEDEF) & ~g)
+                tcc_error("multiple storage classes");
+            t |= g;
             next();
             break;
         case TOK_INLINE1:
@@ -4203,6 +4200,7 @@ static void type_decl(CType *type, AttributeDef *ad, int *v, int td)
         }
     }
     *type = type1;
+    type->t |= storage;
 }
 
 /* compute the lvalue VT_LVAL_xxx needed to match type t. */
@@ -5986,7 +5984,11 @@ static void parse_init_elem(int expr_type)
         expr_const1();
         global_expr = saved_global_expr;
         /* NOTE: symbols are accepted */
-        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST)
+        if ((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST
+#ifdef TCC_TARGET_PE
+            || (vtop->type.t & VT_IMPORT)
+#endif
+            )
             tcc_error("initializer element is not constant");
         break;
     case EXPR_ANY:
@@ -6656,16 +6658,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             vset(type, r, addr);
         }
     } else {
-        Sym *sym;
-
-        sym = NULL;
+        Sym *sym = NULL;
         if (v && scope == VT_CONST) {
             /* see if the symbol was already defined */
             sym = sym_find(v);
             if (sym) {
-                if (!is_compatible_types(&sym->type, type))
-                    tcc_error("incompatible types for redefinition of '%s'", 
-                          get_tok_str(v, NULL));
+                patch_storage(sym, type);
                 if (sym->type.t & VT_EXTERN) {
                     /* if the variable is extern, it was not allocated */
                     sym->type.t &= ~VT_EXTERN;
@@ -6675,16 +6673,18 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                         sym->type.ref->c < 0 &&
                         type->ref->c >= 0)
                         sym->type.ref->c = type->ref->c;
-                } else {
+                } else if (!has_init) {
                     /* we accept several definitions of the same
                        global variable. this is tricky, because we
                        must play with the SHN_COMMON type of the symbol */
-                    /* XXX: should check if the variable was already
-                       initialized. It is incorrect to initialized it
-                       twice */
                     /* no init data, we won't add more to the symbol */
-                    if (!has_init)
-                        goto no_alloc;
+                    update_storage(sym);
+                    goto no_alloc;
+                } else if (sym->c) {
+                    ElfW(Sym) *esym;
+                    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+                    if (esym->st_shndx == data_section->sh_num)
+                        tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
                 }
             }
         }
@@ -6697,6 +6697,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             else if (tcc_state->nocommon)
                 sec = bss_section;
         }
+
         if (sec) {
             data_offset = sec->data_offset;
             data_offset = (data_offset + align - 1) & -align;
@@ -6730,22 +6731,15 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             if (sec) {
                 put_extern_sym(sym, sec, addr, size);
             } else {
-                ElfW(Sym) *esym;
-                /* put a common area */
-                put_extern_sym(sym, NULL, align, size);
-                /* XXX: find a nicer way */
-                esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
-                esym->st_shndx = SHN_COMMON;
+                put_extern_sym(sym, SECTION_COMMON, align, size);
             }
+
         } else {
             /* push global reference */
             sym = get_sym_ref(type, sec, addr, size);
 	    vpushsym(type, sym);
         }
-        /* patch symbol weakness */
-        if (type->t & VT_WEAK)
-            weaken_symbol(sym);
-	apply_visibility(sym, type);
+
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
@@ -6760,6 +6754,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
 #endif
     }
+
     if (type->t & VT_VLA) {
         int a;
 
@@ -6775,6 +6770,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         gen_vla_sp_save(addr);
         vla_sp_loc = addr;
         vlas_in_scope++;
+
     } else if (has_init) {
 	size_t oldreloc_offset = 0;
 	if (sec && sec->reloc)
@@ -6787,7 +6783,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (flexible_array)
             flexible_array->type.ref->c = -1;
     }
- no_alloc: ;
+
+ no_alloc:
     /* restore parse state if needed */
     if (init_str) {
         end_macro();
@@ -6878,10 +6875,6 @@ static void gen_function(Sym *sym)
     /* patch symbol size */
     ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
         ind - func_ind;
-    /* patch symbol weakness (this definition overrules any prototype) */
-    if (sym->type.t & VT_WEAK)
-        weaken_symbol(sym);
-    apply_visibility(sym, &sym->type);
     tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */
     cur_text_section = NULL;
@@ -7022,10 +7015,14 @@ static int decl0(int l, int is_for_loop_init)
             if (ad.a.weak)
                 type.t |= VT_WEAK;
 #ifdef TCC_TARGET_PE
-            if (ad.a.func_import)
-                type.t |= VT_IMPORT;
-            if (ad.a.func_export)
-                type.t |= VT_EXPORT;
+            if (ad.a.func_import || ad.a.func_export) {
+                if (type.t & (VT_STATIC|VT_TYPEDEF))
+                    tcc_error("cannot have dll linkage with static or typedef");
+                if (ad.a.func_export)
+                    type.t |= VT_EXPORT;
+                else if ((type.t & VT_BTYPE) != VT_FUNC)
+                    type.t |= VT_IMPORT|VT_EXTERN;
+            }
 #endif
 	    type.t |= ad.a.visibility << VT_VIS_SHIFT;
 
@@ -7058,10 +7055,6 @@ static int decl0(int l, int is_for_loop_init)
                      && type.ref->a.func_call == FUNC_CDECL)
                         type.ref->a.func_call = ref->a.func_call;
 
-                    /* use export from prototype */
-                    if (ref->a.func_export)
-                        type.ref->a.func_export = 1;
-
                     /* use static from prototype */
                     if (sym->type.t & VT_STATIC)
                         type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
@@ -7070,6 +7063,9 @@ static int decl0(int l, int is_for_loop_init)
 		       one from prototype.  */
 		    if (! (type.t & VT_VIS_MASK))
 		        type.t |= sym->type.t & VT_VIS_MASK;
+
+                    /* apply other storage attributes from prototype */
+                    type.t |= sym->type.t & (VT_EXPORT|VT_WEAK);
 
                     if (!is_compatible_types(&sym->type, &type)) {
                     func_error1:
@@ -7134,7 +7130,7 @@ static int decl0(int l, int is_for_loop_init)
                 }
                 break;
             } else {
-                if (btype.t & VT_TYPEDEF) {
+                if (type.t & VT_TYPEDEF) {
                     /* save typedefed type  */
                     /* XXX: test storage specifiers ? */
                     sym = sym_find(v);
@@ -7148,7 +7144,6 @@ static int decl0(int l, int is_for_loop_init)
                         sym = sym_push(v, &type, 0, 0);
                     }
                     sym->a = ad.a;
-                    sym->type.t |= VT_TYPEDEF;
                 } else {
                     r = 0;
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
@@ -7162,7 +7157,7 @@ static int decl0(int l, int is_for_loop_init)
                     has_init = (tok == '=');
                     if (has_init && (type.t & VT_VLA))
                         tcc_error("variable length array cannot be initialized");
-                    if ((btype.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
+                    if ((type.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
                          !has_init && l == VT_CONST && type.ref->c < 0)) {
                         /* external variable or function */
@@ -7171,7 +7166,6 @@ static int decl0(int l, int is_for_loop_init)
                            extern */
                         sym = external_sym(v, &type, r);
                         sym->asm_label = ad.asm_label;
-
                         if (ad.alias_target) {
                             Section tsec;
                             ElfW(Sym) *esym;
@@ -7185,7 +7179,6 @@ static int decl0(int l, int is_for_loop_init)
                             put_extern_sym2(sym, &tsec, esym->st_value, esym->st_size, 0);
                         }
                     } else {
-                        type.t |= (btype.t & VT_STATIC); /* Retain "static". */
                         if (type.t & VT_STATIC)
                             r |= VT_CONST;
                         else

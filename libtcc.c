@@ -1299,6 +1299,8 @@ static int link_option(const char *str, const char *val, const char **ptr)
         if (*p != ',' && *p != '=')
             return 0;
         p++;
+    } else if (*p) {
+        return 0;
     }
     *ptr = p;
     return ret;
@@ -1369,6 +1371,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             ignoring = 1;
         } else if (link_option(option, "O", &p)) {
             ignoring = 1;
+        } else if (link_option(option, "export-all-symbols", &p)) {
+            s->rdynamic = 1;
         } else if (link_option(option, "rpath=", &p)) {
             copy_linker_arg(&s->rpath, p, ':');
         } else if (link_option(option, "enable-new-dtags", &p)) {
@@ -1390,7 +1394,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
                 s->pe_subsystem = 1;
             } else if (!strcmp(p, "console")) {
                 s->pe_subsystem = 3;
-            } else if (!strcmp(p, "gui")) {
+            } else if (!strcmp(p, "gui") || !strcmp(p, "windows")) {
                 s->pe_subsystem = 2;
             } else if (!strcmp(p, "posix")) {
                 s->pe_subsystem = 7;
