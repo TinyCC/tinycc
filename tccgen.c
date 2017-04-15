@@ -5923,69 +5923,58 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
                             Sym **cur_field, int size_only)
 {
     Sym *s, *f;
-    int notfirst, index, index_last, align, l, nb_elems, elem_size;
+    int index, index_last, align, l, nb_elems, elem_size;
 
-    notfirst = 0;
     elem_size = 0;
     nb_elems = 1;
     if (gnu_ext && (l = is_label()) != 0)
         goto struct_field;
-    while (tok == '[' || tok == '.') {
+    /* NOTE: we only support ranges for last designator */
+    while (nb_elems == 1 && (tok == '[' || tok == '.')) {
         if (tok == '[') {
             if (!(type->t & VT_ARRAY))
                 expect("array type");
-            s = type->ref;
             next();
-            index = expr_const();
-            if (index < 0 || (s->c >= 0 && index >= s->c))
-                tcc_error("invalid index");
+            index = index_last = expr_const();
             if (tok == TOK_DOTS && gnu_ext) {
                 next();
                 index_last = expr_const();
-                if (index_last < 0 || 
-                    (s->c >= 0 && index_last >= s->c) ||
-                    index_last < index)
-                    tcc_error("invalid index");
-            } else {
-                index_last = index;
             }
             skip(']');
-            if (!notfirst) {
+            s = type->ref;
+	    if (index < 0 || (s->c >= 0 && index_last >= s->c) ||
+		index_last < index)
+	        tcc_error("invalid index");
+            if (cur_field) {
 		(*cur_field)->c = index;
 		(*cur_field)->r = index_last;
 	    }
             type = pointed_type(type);
             elem_size = type_size(type, &align);
             c += index * elem_size;
-            /* NOTE: we only support ranges for last designator */
             nb_elems = index_last - index + 1;
-            if (nb_elems != 1) {
-                notfirst = 1;
-                break;
-            }
         } else {
             next();
             l = tok;
-            next();
         struct_field:
+            next();
             if ((type->t & VT_BTYPE) != VT_STRUCT)
                 expect("struct/union type");
 	    f = find_field(type, l);
             if (!f)
                 expect("field");
-            if (!notfirst)
+            if (cur_field)
                 *cur_field = f;
 	    type = &f->type;
             c += f->c;
         }
-        notfirst = 1;
+        cur_field = NULL;
     }
-    if (notfirst) {
+    if (!cur_field) {
         if (tok == '=') {
             next();
-        } else {
-            if (!gnu_ext)
-                expect("=");
+        } else if (!gnu_ext) {
+	    expect("=");
         }
     } else {
         if (type->t & VT_ARRAY) {
