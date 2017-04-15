@@ -3023,7 +3023,7 @@ static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *w
         if (macro_ptr) {
             p = macro_ptr, t = *p;
             if (ws_str) {
-                while (is_space(t) || TOK_LINEFEED == t)
+                while (is_space(t) || TOK_LINEFEED == t || TOK_PLCHLDR == t)
                     tok_str_add(ws_str, t), t = *++p;
             }
             if (t == 0 && can_read_stream) {
@@ -3152,7 +3152,9 @@ static int macro_subst_tok(
             } else {
                 tok_str_free_str(ws_str.str);
             }
-            next_nomacro(); /* eat '(' */
+	    do {
+		next_nomacro(); /* eat '(' */
+	    } while (tok == TOK_PLCHLDR);
 
             /* argument macro */
             args = NULL;
