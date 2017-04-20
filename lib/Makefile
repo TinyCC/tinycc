@@ -30,6 +30,10 @@ ifeq ($(TARGETOS),Darwin)
  BCHECK_O =
 endif
 
+ifeq ($(CONFIG_musl),yes)
+ BCHECK_O =
+endif
+
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BCHECK_O)
 ARM_O = libtcc1.o armeabi.o alloca-arm.o

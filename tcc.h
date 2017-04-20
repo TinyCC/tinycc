@@ -136,7 +136,7 @@
 
 #if !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
-    !defined(CONFIG_USE_LIBGCC)
+    !defined(CONFIG_USE_LIBGCC) && !defined(TCC_MUSL)
 #define CONFIG_TCC_BCHECK /* enable bound checking code */
 #endif
 
@@ -239,11 +239,23 @@
 # elif defined(TCC_UCLIBC)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-uClibc.so.0" /* is there a uClibc for x86_64 ? */
 # elif defined TCC_TARGET_ARM64
-#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-aarch64.so.1"
+#  if defined(TCC_MUSL)
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-aarch64.so.1"
+#  else
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-linux-aarch64.so.1"
+#  endif
 # elif defined(TCC_TARGET_X86_64)
-#  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
+#  if defined(TCC_MUSL)
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-x86_64.so.1"
+#  else
+#   define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
+#  endif
 # elif !defined(TCC_ARM_EABI)
-#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
+#  if defined(TCC_MUSL)
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-arm.so.1"
+#  else
+#   define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
+#  endif
 # endif
 #endif
 

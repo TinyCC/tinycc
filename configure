@@ -352,6 +352,8 @@ if test -z "$cross_prefix" ; then
 
       if test -f "/lib/ld-uClibc.so.0" ; then
 	confvars="$confvars uClibc"
+      elif test -f "/lib/ld-musl-$cpu.so.1"; then
+        confvars="$confvars musl"
       fi
   fi
 else

@@ -851,6 +851,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__ILP32__", NULL);
 #endif
 
+#if defined(TCC_MUSL)
+    tcc_define_symbol(s, "__builtin_va_list", "void *");
+#endif /* TCC_MUSL */
+
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "__WCHAR_TYPE__", "unsigned short");
     tcc_define_symbol(s, "__WINT_TYPE__", "unsigned short");
