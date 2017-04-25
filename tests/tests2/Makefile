@@ -5,23 +5,6 @@ VPATH = $(SRC)
 
 TESTS = $(patsubst %.c,%.test,$(sort $(notdir $(wildcard $(SRC)/*.c))))
 
-# 34_array_assignment.test -- array assignment is not in C standard
-SKIP = 34_array_assignment.test
-
-# some tests do not pass on all platforms, remove them for now
-ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
- SKIP += 22_floating_point.test
-endif
-ifeq ($(TARGETOS),Darwin)
- SKIP += 40_stdio.test
-endif
-ifeq ($(ARCH),x86_64)
- SKIP += 73_arm64.test
-endif
-ifeq (,$(filter i386 x86_64,$(ARCH)))
- SKIP += 85_asm-outside-function.test
-endif
-
 # Some tests might need arguments
 ARGS =
 31_args.test : ARGS = arg1 arg2 arg3 arg4 arg5
@@ -40,6 +23,22 @@ FILTER = 2>&1 | sed 's,$(SRC)/,,g'
 # Filter some always-warning
 ifeq (-$(findstring arm,$(ARCH))-,-arm-)
 FILTER += 2>&1 | grep -v 'warning: soft float ABI currently not supported'
+endif
+
+# some tests do not pass on all platforms, remove them for now
+SKIP = 34_array_assignment.test # array assignment is not in C standard
+ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
+ SKIP += 22_floating_point.test
+endif
+ifdef CONFIG_OSX
+ SKIP += 40_stdio.test 42_function_pointer.test
+ FLAGS += -w
+endif
+ifeq ($(ARCH),x86_64)
+ SKIP += 73_arm64.test
+endif
+ifeq (,$(filter i386 x86_64,$(ARCH)))
+ SKIP += 85_asm-outside-function.test
 endif
 
 all test: $(filter-out $(SKIP),$(TESTS))

@@ -906,10 +906,6 @@ ST_FUNC void save_reg_upstack(int r, int n)
 #else
                     type = &int_type;
 #endif
-                if ((type->t & VT_BTYPE) == VT_FLOAT) {
-                    /* cast to DOUBLE to avoid precision loss */
-                    type->t = (type->t & ~VT_BTYPE) | VT_DOUBLE;
-                }
                 size = type_size(type, &align);
                 loc = (loc - size) & -align;
                 sv.type.t = type->t;
@@ -2383,11 +2379,6 @@ static void gen_cast(CType *type)
                      vpushi(0);
                      gen_op(TOK_NE);
                 } else {
-                    if (sbt == VT_FLOAT) {
-                        /* cast to DOUBLE to avoid precision loss */
-                        gen_cvt_ftof(VT_DOUBLE);
-                        vtop->type.t = (vtop->type.t & ~VT_BTYPE) | VT_DOUBLE;
-                    }
                     /* we handle char/short/etc... with generic code */
                     if (dbt != (VT_INT | VT_UNSIGNED) &&
                         dbt != (VT_LLONG | VT_UNSIGNED) &&

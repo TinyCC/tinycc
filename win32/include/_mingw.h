@@ -165,5 +165,6 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 #define __C89_NAMELESS
 #define __MINGW_EXTENSION
 #define WINAPI_FAMILY_PARTITION(X) 1
+#define MINGW_HAS_SECURE_API
 
 #endif /* __MINGW_H */

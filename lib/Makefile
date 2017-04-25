@@ -7,6 +7,7 @@ include $(TOP)/Makefile
 VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
+BIN = $(TOP)/libtcc1$(if $(CROSS_TARGET),-$(CROSS_TARGET)).a
 
 TCC = $(TOP)/$(X)tcc$(EXESUF)
 XCC = $(TCC)
@@ -25,25 +26,24 @@ ifeq ($(X),)
  endif
 endif
 
-ifeq ($(TARGETOS),Darwin)
+ifdef CONFIG_OSX
  XFLAGS += -D_ANSI_SOURCE
- BCHECK_O =
 endif
 
 ifeq ($(CONFIG_musl),yes)
  BCHECK_O =
 endif
 
-I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BCHECK_O)
-X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BCHECK_O)
+I386_O = libtcc1.o alloca86.o alloca86-bt.o
+X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o
 ARM_O = libtcc1.o armeabi.o alloca-arm.o
 ARM64_O = lib-arm64.o
 WIN_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o
 
-OBJ-i386 = $(I386_O)
+OBJ-i386 = $(I386_O) $(BCHECK_O)
 TGT-i386 = -DTCC_TARGET_I386
 
-OBJ-x86_64 = $(X86_64_O)
+OBJ-x86_64 = $(X86_64_O) $(BCHECK_O)
 TGT-x86_64 = -DTCC_TARGET_X86_64
 
 OBJ-x86_64-osx = $(X86_64_O)
@@ -55,16 +55,14 @@ TGT-arm = -DTCC_TARGET_ARM
 OBJ-arm64 = $(ARM64_O)
 TGT-arm64 = -DTCC_TARGET_ARM64
 
-OBJ-i386-win32 = $(I386_O) chkstk.o $(WIN_O)
+OBJ-i386-win32 = $(I386_O) chkstk.o bcheck.o $(WIN_O)
 TGT-i386-win32 = -DTCC_TARGET_I386 -DTCC_TARGET_PE
 
-OBJ-x86_64-win32 = $(X86_64_O) chkstk.o $(WIN_O)
+OBJ-x86_64-win32 = $(X86_64_O) chkstk.o bcheck.o $(WIN_O)
 TGT-x86_64-win32 = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
 
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
 TGT-arm-wince = -DTCC_TARGET_ARM -DTCC_TARGET_PE
-
-all : $(BIN)
 
 $(BIN) : $(patsubst %.o,$(X)%.o,$(OBJ-$T))
 	$(XAR) rcs $@ $^

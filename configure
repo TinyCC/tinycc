@@ -33,7 +33,7 @@ cross_prefix=""
 cc="gcc"
 ar="ar"
 strip="strip"
-cygwin="no"
+noldl="no"
 gprof="no"
 bigendian="no"
 mingw32="no"
@@ -53,28 +53,26 @@ cpu=
 # OS specific
 targetos=`uname`
 case $targetos in
-  Darwin)    osx=yes;;
-  MINGW*)    mingw32=yes;;
-  MSYS*)     mingw32=yes;;
-  CYGWIN*)   mingw32=yes; cygwin=yes; cross_prefix="mingw32-";;
-  DragonFly) noldl=yes;;
-  OpenBSD)   noldl=yes;;
-  FreeBSD)   noldl=yes;;
-  NetBSD)    noldl=yes;;
-  *) ;;
+  Darwin)
+    osx=yes
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    mingw32=yes
+    ;;
+  DragonFly|OpenBSD|FreeBSD|NetBSD)
+    noldl=yes
+    ;;
+  *)
+    ;;
 esac
 
 # find source path
-# XXX: we assume an absolute path is given when launching configure, 
-# except in './configure' case.
 source_path=${0%configure}
 source_path=${source_path%/}
 source_path_used="yes"
 if test -z "$source_path" -o "$source_path" = "." ; then
     source_path=`pwd`
     source_path_used="no"
-    # mingw compilers might not understand cygwin paths
-    if test $cygwin = "yes"; then source_path="."; fi
 fi
 
 for opt do
@@ -130,7 +128,7 @@ for opt do
   ;;
   --enable-gprof) gprof="yes"
   ;;
-  --enable-mingw32) mingw32="yes" ; cross_prefix="i686-pc-mingw32-" ; cpu=x86
+  --enable-mingw32) mingw32="yes"
   ;;
   --enable-cross) build_cross="yes"
   ;;
@@ -211,6 +209,12 @@ if test -z "$CFLAGS"; then
 fi
 
 if test "$mingw32" = "yes" ; then
+    if test "$source_path_used" = "no"; then
+      source_path="."
+    fi
+    if test "$cc" = gcc; then
+      test -z "$LDFLAGS" && LDFLAGS="-static"
+    fi
     if test x"$tccdir" = x""; then
       tccdir="tcc"
     fi

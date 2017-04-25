@@ -5,7 +5,7 @@
 TOP = ..
 include $(TOP)/Makefile
 VPATH = $(TOPSRC)/tests $(TOPSRC) $(TOP)
-CFLAGS := $(filter-out -W% -g% -O%,$(CFLAGS)) -I$(TOPSRC)
+CFLAGS := $(filter-out -W% -g% -O%,$(CFLAGS)) -I$(TOPSRC) $(LDFLAGS)
 
 # what tests to run
 TESTS = \
@@ -34,8 +34,8 @@ endif
 ifdef CONFIG_WIN32
  TESTS := $(filter-out $(BTESTS),$(TESTS))
 endif
-ifeq ($(TARGETOS),Darwin)
- TESTS := $(filter-out hello-exe test3 $(BTESTS),$(TESTS))
+ifdef CONFIG_OSX # -run only
+ TESTS := hello-run libtest tests2-dir pp-dir
 endif
 ifeq (,$(filter arm64 i386 x86_64,$(ARCH)))
  TESTS := $(filter-out vla_test-run,$(TESTS))
@@ -51,28 +51,23 @@ ifndef CONFIG_CROSS
 endif
 
 ifdef CONFIG_WIN32
- PATH := $(CURDIR)/$(TOP):$(PATH) # for libtcc_test to find libtcc.dll
-endif
-
-ifeq ($(TARGETOS),Darwin)
- CFLAGS += -Wl,-flat_namespace,-undefined,warning
- TCCFLAGS += -D_ANSI_SOURCE
- export MACOSX_DEPLOYMENT_TARGET:=10.2
+ SEP = $(if $(findstring :\,$(PATH)),;,:)
+ PATH := $(CURDIR)/$(TOP)$(SEP)$(PATH) # for libtcc_test to find libtcc.dll
 endif
 
 RUN_TCC = $(NATIVE_DEFINES) -DONE_SOURCE -run $(TOPSRC)/tcc.c $(TCCFLAGS)
-
 DISAS = objdump -d
+DUMPTCC = (set -x; $(TOP)/tcc -vv; ldd $(TOP)/tcc; exit 1)
 
 all test : clean-s $(TESTS)
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
-	$(TCC) $< -o hello$(EXESUF) || ($(TOP)/tcc -vv; exit 1) && ./hello$(EXESUF)
+	$(TCC) $< -o hello$(EXESUF) && ./hello$(EXESUF) || $(DUMPTCC)
 
 hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------
-	$(TCC) -run $<
+	$(TCC) -run $< || $(DUMPTCC)
 
 libtest: libtcc_test$(EXESUF)
 	@echo ------------ $@ ------------
@@ -263,11 +258,11 @@ cache: tcc_g
 
 # clean
 clean:
-	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc \
-	      *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234] \
-	      ex? tcc_g *.def weaktest.*.txt
-	$(MAKE) -C tests2 $@
-	$(MAKE) -C pp $@
+	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc
+	rm -f *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234]
+	rm -f ex? tcc_g weaktest.*.txt *.def
+	@$(MAKE) -C tests2 $@
+	@$(MAKE) -C pp $@
 
 # silent clean, used before running tests
 clean-s:

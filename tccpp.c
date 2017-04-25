@@ -1021,8 +1021,38 @@ ST_FUNC void restore_parse_state(ParseState *s)
     tokc = s->tokc;
 }
 
-/* token string handling */
+#if 0
+/* return the number of additional 'ints' necessary to store the
+   token */
+static inline int tok_size(const int *p)
+{
+    switch(*p) {
+        /* 4 bytes */
+    case TOK_CINT:
+    case TOK_CUINT:
+    case TOK_CCHAR:
+    case TOK_LCHAR:
+    case TOK_CFLOAT:
+    case TOK_LINENUM:
+        return 1 + 1;
+    case TOK_STR:
+    case TOK_LSTR:
+    case TOK_PPNUM:
+    case TOK_PPSTR:
+        return 1 + ((sizeof(CString) + ((CString *)(p+1))->size + 3) >> 2);
+    case TOK_CDOUBLE:
+    case TOK_CLLONG:
+    case TOK_CULLONG:
+        return 1 + 2;
+    case TOK_CLDOUBLE:
+        return 1 + LDOUBLE_SIZE / 4;
+    default:
+        return 1 + 0;
+    }
+}
+#endif
 
+/* token string handling */
 ST_INLN void tok_str_new(TokenString *s)
 {
     s->str = NULL;

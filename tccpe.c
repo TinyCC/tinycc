@@ -28,10 +28,6 @@
 #define strnicmp strncasecmp
 #endif
 
-#ifndef MAX_PATH
-#define MAX_PATH 260
-#endif
-
 #ifdef TCC_TARGET_X86_64
 # define ADDR3264 ULONGLONG
 # define REL_TYPE_DIRECT R_X86_64_64
@@ -907,7 +903,7 @@ static void pe_build_exports(struct pe_info *pe)
     struct pe_sort_sym **sorted, *p;
 
     FILE *op;
-    char buf[MAX_PATH];
+    char buf[260];
     const char *dllname;
     const char *name;
 

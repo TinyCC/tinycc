@@ -1054,6 +1054,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         /* do not display line number if error */
         file->line_num = 0;
 
+#ifdef TCC_TARGET_MACHO
+        if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), "dylib"))
+            obj_type = AFF_BINTYPE_DYN;
+#endif
+
         switch (obj_type) {
         case AFF_BINTYPE_REL:
             ret = tcc_load_object_file(s1, fd, 0);
@@ -1081,19 +1086,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             break;
 #endif
         default:
-#if defined(TCC_TARGET_MACHO)
-            if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                ret = 0;
-#ifdef TCC_IS_NATIVE
-                if (NULL == dlopen(filename, RTLD_GLOBAL | RTLD_LAZY)) {
-                    ret = -1;
-                }
-#endif /* TCC_TARGET_MACHO */
-            } else {
-                ret = tcc_load_dll(s1, fd, filename,
-                                   (flags & AFF_REFERENCED_DLL) != 0);
-            }
-#elif defined(TCC_TARGET_PE)
+#ifdef TCC_TARGET_PE
             ret = pe_load_file(s1, filename, fd);
 #else
             /* as GNU ld, consider it is an ld script if not recognized */
@@ -1155,12 +1148,12 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
 /* the library name is the same as the argument of the '-l' option */
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 {
-#if defined(TCC_TARGET_MACHO)
-    const char *libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
-    const char **pp = s->static_link ? libs + 1 : libs;
-#elif defined(TCC_TARGET_PE)
+#if defined TCC_TARGET_PE
     const char *libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 4 : libs;
+#elif defined TCC_TARGET_MACHO
+    const char *libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
+    const char **pp = s->static_link ? libs + 1 : libs;
 #else
     const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;

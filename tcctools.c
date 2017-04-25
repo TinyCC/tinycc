@@ -304,15 +304,15 @@ the_end:
 ST_FUNC int tcc_tool_impdef(TCCState *s1, int argc, char **argv)
 {
     int ret, v, i;
-    char infile[MAX_PATH];
-    char outfile[MAX_PATH];
+    char infile[260];
+    char outfile[260];
 
     const char *file;
     char *p, *q;
     FILE *fp, *op;
 
 #ifdef _WIN32
-    char path[MAX_PATH];
+    char path[260];
 #endif
 
     infile[0] = outfile[0] = 0;

@@ -5,7 +5,7 @@
 @echo off
 setlocal
 
-set CC=gcc -Os -s
+set CC=gcc -Os -s -static
 set /p VERSION= < ..\VERSION
 set INST=
 set DOC=no

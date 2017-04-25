@@ -87,13 +87,13 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
 {
     Sym *sym;
     int op, label;
-    unsigned long n;
+    uint64_t n;
     const char *p;
 
     switch(tok) {
     case TOK_PPNUM:
         p = tokc.str.data;
-        n = strtoul(p, (char **)&p, 0);
+        n = strtoull(p, (char **)&p, 0);
         if (*p == 'b' || *p == 'f') {
             /* backward or forward label */
             label = asm_get_local_label_name(s1, n);
