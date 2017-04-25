@@ -1792,7 +1792,8 @@ ST_FUNC void preprocess(int is_bof)
                 /* search in file's dir if "header.h" */
                 if (c != '\"')
                     continue;
-                path = file->filename;
+                /* https://savannah.nongnu.org/bugs/index.php?50847 */
+                path = file->filename2;
                 pstrncpy(buf1, path, tcc_basename(path) - path);
 
             } else {

@@ -546,6 +546,7 @@ typedef struct BufferedFile {
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
     int include_next_index; /* next search path */
     char filename[1024];    /* filename */
+    char filename2[1024];    /* filename not modified by # line directive */
     unsigned char unget[4];
     unsigned char buffer[1]; /* extra size for CH_EOB char */
 } BufferedFile;
