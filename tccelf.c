@@ -989,7 +989,11 @@ ST_FUNC void build_got_entries(TCCState *s1)
 				    && ELFW(ST_TYPE)(sym->st_info) == STT_FUNC)))
 			    goto jmp_slot;
 		    }
-                } else if (!(sym->st_shndx == SHN_ABS && PTR_SIZE == 8))
+                } else if (!(sym->st_shndx == SHN_ABS
+#ifndef TCC_TARGET_ARM
+			&& PTR_SIZE == 8
+#endif
+			))
                     continue;
             }
 
