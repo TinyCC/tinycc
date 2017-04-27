@@ -9,7 +9,7 @@
 CPU	= $(shell if `gcc -v 2>&1 | grep Target | grep -q x86_64`; then echo 64; else echo 32; fi)
 VERSION	= $(shell cat ../VERSION)
 BOOTCC	= gcc
-CFLAGS	= -s -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE -DONE_SOURCE
+CFLAGS	= -s -static -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE -DONE_SOURCE
 
 ifeq ($(CPU), 64)
 NATIVE	= -m$(CPU) -DTCC_TARGET_X86_64
