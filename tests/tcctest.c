@@ -2069,6 +2069,12 @@ void bitfield_test(void)
     } st3;
     printf("sizeof(st3) = %d\n", sizeof(st3));
 #endif
+    struct sbf4 {
+	int x : 31;
+	char y : 2;
+    } st4;
+    st4.y = 1;
+    printf("st4.y == %d\n", st4.y);
 }
 
 #ifdef __x86_64__

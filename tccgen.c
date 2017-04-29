@@ -3387,7 +3387,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		int ofs = (c * 8 + bit_pos) % (typealign * 8);
 		int ofs2 = ofs + bit_size + (typealign * 8) - 1;
 		if (bit_size == 0 ||
-		    (typealign != 1 &&
+		    ((typealign != 1 || size == 1) &&
 		     (ofs2 / (typealign * 8)) > (size/typealign))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    bit_pos = 0;
