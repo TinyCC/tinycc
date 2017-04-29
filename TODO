@@ -13,7 +13,6 @@ Bugs:
 - transform functions to function pointers in function parameters
   (net/ipv4/ip_output.c)
 - fix function pointer type display
-- check lcc test suite -> fix bitfield binary operations
 - check section alignment in C
 - fix invalid cast in comparison 'if (v == (int8_t)v)'
 - finish varargs.h support (gcc 3.2 testsuite issue)
