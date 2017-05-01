@@ -3391,6 +3391,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		     (ofs2 / (typealign * 8)) > (size/typealign))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    bit_pos = 0;
+		} else while (bit_pos + bit_size > size * 8) {
+		    c += size;
+		    bit_pos -= size * 8;
 		}
 		offset = c;
 		/* In PCC layout named bit-fields influence the alignment

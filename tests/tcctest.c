@@ -2082,6 +2082,12 @@ void bitfield_test(void)
 	char c;
     } st5 = { 1, 2, 3, 4, -3, 6 };
     printf("st5 = %d %d %d %d %d %d\n", st5.a, st5.b, st5.x, st5.y, st5.z, st5.c);
+    struct sbf6 {
+	short x : 12;
+	unsigned char y : 2;
+    } st6;
+    st6.y = 1;
+    printf("st6.y == %d\n", st6.y);
 }
 
 #ifdef __x86_64__
