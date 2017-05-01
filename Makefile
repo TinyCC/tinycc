@@ -177,7 +177,7 @@ LIBTCC_SRC = $(filter-out tcc.c tcctools.c arm-asm.c,$(filter %.c,$($T_FILES)))
 ifeq ($(ONE_SOURCE),yes)
 LIBTCC_OBJ = $(X)libtcc.o
 LIBTCC_INC = $($T_FILES)
-TCC_FILES = tcc.c
+TCC_FILES = $(X)tcc.o
 $(X)libtcc.o $T-tcc$(EXESUF) : DEFINES += -DONE_SOURCE
 else
 LIBTCC_OBJ = $(patsubst %.c,$(X)%.o,$(LIBTCC_SRC))
