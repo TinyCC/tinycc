@@ -6075,7 +6075,7 @@ static void decl_designator(CType *type, Section *sec, unsigned long c,
             c += index * type_size(type, &align);
         } else {
             f = *cur_field;
-	    while (f && (f->v & SYM_FIRST_ANOM))
+	    while (f && (f->v & SYM_FIRST_ANOM) && (f->type.t & VT_BITFIELD))
 	        *cur_field = f = f->next;
             if (!f)
                 tcc_error("too many field init");
