@@ -4013,7 +4013,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
         if (tok == '[') {
             next();
             skip(']'); /* only handle simple "[]" */
-            type->t |= VT_PTR;
+            mk_pointer(type);
         }
         /* we push a anonymous symbol which will contain the function prototype */
         ad->a.func_args = arg_size;

@@ -176,6 +176,11 @@ static int onetwothree = 123;
 #define B3 4
 #endif
 
+#ifdef __TINYC__
+/* We try to handle this syntax.  Make at least sure it doesn't segfault.  */
+char invalid_function_def()[] {}
+#endif
+
 #define __INT64_C(c)	c ## LL
 #define INT64_MIN	(-__INT64_C(9223372036854775807)-1)
 
