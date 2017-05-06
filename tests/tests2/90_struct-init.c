@@ -217,7 +217,40 @@ void test_multi_relocs(void)
   for (i = 0; i < sizeof(table)/sizeof(table[0]); i++)
     table[i]();
 }
+
+/* Following is from GCC gcc.c-torture/execute/20050613-1.c.  */
 
+struct SEA { int i; int j; int k; int l; };
+struct SEB { struct SEA a; int r[1]; };
+struct SEC { struct SEA a; int r[0]; };
+struct SED { struct SEA a; int r[]; };
+
+static void
+test_correct_filling (struct SEA *x)
+{
+  static int i;
+  if (x->i != 0 || x->j != 5 || x->k != 0 || x->l != 0)
+    printf("sea_fill%d: wrong\n", i);
+  else
+    printf("sea_fill%d: okay\n", i);
+  i++;
+}
+
+int
+test_zero_init (void)
+{
+  /* The peculiarity here is that only a.j is initialized.  That
+     means that all other members must be zero initialized.  TCC
+     once didn't do that for sub-level designators.  */
+  struct SEB b = { .a.j = 5 };
+  struct SEC c = { .a.j = 5 };
+  struct SED d = { .a.j = 5 };
+  test_correct_filling (&b.a);
+  test_correct_filling (&c.a);
+  test_correct_filling (&d.a);
+  return 0;
+}
+
 int main()
 {
   print(ce);
@@ -244,5 +277,6 @@ int main()
   //printf("q: %s\n", q);
   test_compound_with_relocs();
   test_multi_relocs();
+  test_zero_init();
   return 0;
 }
