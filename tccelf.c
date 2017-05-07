@@ -906,11 +906,30 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
     name = (char *) symtab_section->link->data + sym->st_name;
 
     if (s1->dynsym) {
-        if (0 == attr->dyn_index)
-            attr->dyn_index = set_elf_sym(s1->dynsym, sym->st_value, size,
-                                          info, 0, sym->st_shndx, name);
-        put_elf_reloc(s1->dynsym, s1->got, got_offset, dyn_reloc_type,
-                      attr->dyn_index);
+	if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
+	    /* Hack alarm.  We don't want to emit dynamic symbols
+	       and symbol based relocs for STB_LOCAL symbols, but rather
+	       want to resolve them directly.  At this point the symbol
+	       values aren't final yet, so we must defer this.  We will later
+	       have to create a RELATIVE reloc anyway, so we misuse the
+	       relocation slot to smuggle the symbol reference until
+	       fill_local_got_entries.  Not that the sym_index is
+	       relative to symtab_section, not s1->dynsym!  Nevertheless
+	       we use s1->dyn_sym so that if this is the first call
+	       that got->reloc is correctly created.  Also note that
+	       RELATIVE relocs are not normally created for the .got,
+	       so the types serves as a marker for later (and is retained
+	       also for the final output, which is okay because then the
+	       got is just normal data).  */
+	    put_elf_reloc(s1->dynsym, s1->got, got_offset, R_RELATIVE,
+			  sym_index);
+	} else {
+	    if (0 == attr->dyn_index)
+                attr->dyn_index = set_elf_sym(s1->dynsym, sym->st_value, size,
+					      info, 0, sym->st_shndx, name);
+	    put_elf_reloc(s1->dynsym, s1->got, got_offset, dyn_reloc_type,
+			  attr->dyn_index);
+	}
     } else {
         put_elf_reloc(symtab_section, s1->got, got_offset, dyn_reloc_type,
                       sym_index);
@@ -1006,8 +1025,9 @@ ST_FUNC void build_got_entries(TCCState *s1)
             }
 
 #ifdef TCC_TARGET_X86_64
-            if (type == R_X86_64_PLT32 &&
-                ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT) {
+            if ((type == R_X86_64_PLT32 || type == R_X86_64_PC32) &&
+                (ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT ||
+		 ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)) {
                 rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
                 continue;
             }
@@ -1267,6 +1287,30 @@ ST_FUNC void fill_got(TCCState *s1)
                     break;
             }
         }
+    }
+}
+
+/* See put_got_entry for a description.  This is the second stage
+   where GOT references to local defined symbols are rewritten.  */
+static void fill_local_got_entries(TCCState *s1)
+{
+    ElfW_Rel *rel;
+    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {
+	if (ELFW(R_TYPE)(rel->r_info) == R_RELATIVE) {
+	    int sym_index = ELFW(R_SYM) (rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];
+	    struct sym_attr *attr = get_sym_attr(s1, sym_index, 0);
+	    unsigned offset = attr->got_offset;
+	    if (offset != rel->r_offset - s1->got->sh_addr)
+	      tcc_error_noabort("huh");
+	    rel->r_info = ELFW(R_INFO)(0, R_RELATIVE);
+#if SHT_RELX == SHT_RELA
+	    rel->r_addend = sym->st_value;
+#else
+	    /* All our REL architectures also happen to be 32bit LE.  */
+	    write32le(s1->got->data + offset, sym->st_value);
+#endif
+	}
     }
 }
 
@@ -2129,6 +2173,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
     /* Perform relocation to GOT or PLT entries */
     if (file_type == TCC_OUTPUT_EXE && s1->static_link)
         fill_got(s1);
+    else if (s1->got)
+        fill_local_got_entries(s1);
 
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
