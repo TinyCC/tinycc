@@ -637,10 +637,13 @@ int main(int argc, char **argv) {
   RUN_TEST(ret_longdouble_test);
   RUN_TEST(ret_2float_test);
   RUN_TEST(ret_2double_test);
-  /* RUN_TEST(ret_8plus2double_test); currently broken on x86_64 */
-  /* RUN_TEST(ret_6plus2longlong_test); currently broken on x86_64 */
-  /* RUN_TEST(ret_mixed_test); currently broken on x86_64 */
-  /* RUN_TEST(ret_mixed2_test); currently broken on x86_64 */
+#if !defined __x86_64__ || defined _WIN32
+  /* currently broken on x86_64 linux */
+  RUN_TEST(ret_8plus2double_test);
+  RUN_TEST(ret_6plus2longlong_test);
+  RUN_TEST(ret_mixed_test);
+  RUN_TEST(ret_mixed2_test);
+#endif
   RUN_TEST(ret_mixed3_test);
   RUN_TEST(reg_pack_test);
   RUN_TEST(reg_pack_longlong_test);

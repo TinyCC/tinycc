@@ -4578,9 +4578,12 @@ ST_FUNC void unary(void)
 #ifdef TCC_TARGET_PE
     case TOK_builtin_va_start:
 	parse_builtin_params(0, "ee");
-	if ((vtop->r & VT_VALMASK) != VT_LOCAL)
-	  tcc_error("__builtin_va_start expects a local variable");
-	vtop->r &= ~VT_LVAL;
+        r = vtop->r & VT_VALMASK;
+        if (r == VT_LLOCAL)
+            r = VT_LOCAL;
+        if (r != VT_LOCAL)
+            tcc_error("__builtin_va_start expects a local variable");
+        vtop->r = r;
 	vtop->type = char_pointer_type;
 	vtop->c.i += 8;
 	vstore();
@@ -6169,7 +6172,11 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
                 if (sizeof(long double) == LDOUBLE_SIZE)
 		    *(long double *)ptr = vtop->c.ld;
 		else if (sizeof(double) == LDOUBLE_SIZE)
-		    *(double *)ptr = vtop->c.ld;
+		    *(double *)ptr = (double)vtop->c.ld;
+#if (defined __i386__ || defined __x86_64__) && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+                else if (sizeof (long double) >= 10)
+                    memcpy(memset(ptr, 0, LDOUBLE_SIZE), &vtop->c.ld, 10);
+#endif
 		else
                     tcc_error("can't cross compile long double constants");
 		break;

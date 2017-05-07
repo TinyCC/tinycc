@@ -17,61 +17,54 @@ XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
 XFLAGS = $(XFLAGS$(XCFG))
 XCFG = $(or $(findstring -win,$T),-unx)
 
-ifeq ($(X),)
- BCHECK_O = bcheck.o
- ifeq "$T" "arm"
-  XCC = $(CC)
-  XAR = $(AR)
-  XFLAGS = $(CFLAGS) -fPIC
- endif
+# using gcc ("make armlib-usegcc=no" to use tcc)
+armlib-usegcc ?= no
+
+ifeq "$($(X)$(T)lib-usegcc)" "yes"
+ XCC = $(CC)
+ XAR = $(AR)
+ XFLAGS = $(CFLAGS) -fPIC
+endif
+
+# only for native compiler
+$(X)BCHECK_O = bcheck.o
+
+ifeq ($(CONFIG_musl),yes)
+ BCHECK_O =
 endif
 
 ifdef CONFIG_OSX
  XFLAGS += -D_ANSI_SOURCE
 endif
 
-ifeq ($(CONFIG_musl),yes)
- BCHECK_O =
-endif
-
 I386_O = libtcc1.o alloca86.o alloca86-bt.o
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o
-ARM_O = libtcc1.o armeabi.o alloca-arm.o
+ARM_O = libtcc1.o armeabi.o alloca-arm.o armflush.o
 ARM64_O = lib-arm64.o
 WIN_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o
 
 OBJ-i386 = $(I386_O) $(BCHECK_O)
-TGT-i386 = -DTCC_TARGET_I386
-
-OBJ-x86_64 = $(X86_64_O) $(BCHECK_O)
-TGT-x86_64 = -DTCC_TARGET_X86_64
-
-OBJ-x86_64-osx = $(X86_64_O)
-TGT-x86_64-osx = -DTCC_TARGET_X86_64 -DTCC_TARGET_MACHO
-
-OBJ-arm = $(ARM_O)
-TGT-arm = -DTCC_TARGET_ARM
-
-OBJ-arm64 = $(ARM64_O)
-TGT-arm64 = -DTCC_TARGET_ARM64
-
+OBJ-x86_64 = $(X86_64_O) va_list.o $(BCHECK_O)
+OBJ-x86_64-osx = $(X86_64_O) va_list.o
 OBJ-i386-win32 = $(I386_O) chkstk.o bcheck.o $(WIN_O)
-TGT-i386-win32 = -DTCC_TARGET_I386 -DTCC_TARGET_PE
-
 OBJ-x86_64-win32 = $(X86_64_O) chkstk.o bcheck.o $(WIN_O)
-TGT-x86_64-win32 = -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
-
+OBJ-arm64 = $(ARM64_O)
+OBJ-arm = $(ARM_O)
+OBJ-arm-fpa = $(ARM_O)
+OBJ-arm-fpa-ld = $(ARM_O)
+OBJ-arm-vfp = $(ARM_O)
+OBJ-arm-eabi = $(ARM_O)
+OBJ-arm-eabihf = $(ARM_O)
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
-TGT-arm-wince = -DTCC_TARGET_ARM -DTCC_TARGET_PE
 
 $(BIN) : $(patsubst %.o,$(X)%.o,$(OBJ-$T))
 	$(XAR) rcs $@ $^
 
 $(X)%.o : %.c
-	$(XCC) -c $< -o $@ $(TGT-$T) $(XFLAGS)
+	$(XCC) -c $< -o $@ $(DEFINES) $(XFLAGS)
 
 $(X)%.o : %.S
-	$(XCC) -c $< -o $@ $(TGT-$T) $(XFLAGS)
+	$(XCC) -c $< -o $@ $(DEFINES) $(XFLAGS)
 
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c

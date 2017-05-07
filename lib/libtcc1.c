@@ -550,6 +550,13 @@ unsigned long long __fixunssfdi (float a1)
         return 0;
 }
 
+long long __fixsfdi (float a1)
+{
+    long long ret; int s;
+    ret = __fixunssfdi((s = a1 >= 0) ? a1 : -a1);
+    return s ? ret : -ret;
+}
+
 unsigned long long __fixunsdfdi (double a1)
 {
     register union double_long dl1;
@@ -575,6 +582,14 @@ unsigned long long __fixunsdfdi (double a1)
         return 0;
 }
 
+long long __fixdfdi (double a1)
+{
+    long long ret; int s;
+    ret = __fixunsdfdi((s = a1 >= 0) ? a1 : -a1);
+    return s ? ret : -ret;
+}
+
+#ifndef TCC_TARGET_ARM
 unsigned long long __fixunsxfdi (long double a1)
 {
     register union ldouble_long dl1;
@@ -598,121 +613,10 @@ unsigned long long __fixunsxfdi (long double a1)
         return 0;
 }
 
-long long __fixsfdi (float a1)
-{
-    long long ret; int s;
-    ret = __fixunssfdi((s = a1 >= 0) ? a1 : -a1);
-    return s ? ret : -ret;
-}
-
-long long __fixdfdi (double a1)
-{
-    long long ret; int s;
-    ret = __fixunsdfdi((s = a1 >= 0) ? a1 : -a1);
-    return s ? ret : -ret;
-}
-
 long long __fixxfdi (long double a1)
 {
     long long ret; int s;
     ret = __fixunsxfdi((s = a1 >= 0) ? a1 : -a1);
     return s ? ret : -ret;
 }
-
-#if defined(TCC_TARGET_X86_64) && !defined(_WIN64)
-
-#ifndef __TINYC__
-# include <stdlib.h>
-# include <stdio.h>
-# include <string.h>
-# undef __va_start
-# undef __va_arg
-# undef __va_copy
-# undef __va_end
-#else
-/* Avoid include files, they may not be available when cross compiling */
-extern void *memset(void *s, int c, __SIZE_TYPE__ n);
-extern void abort(void);
-#endif
-
-/* This should be in sync with our include/stdarg.h */
-enum __va_arg_type {
-    __va_gen_reg, __va_float_reg, __va_stack
-};
-
-/* GCC compatible definition of va_list. */
-typedef struct {
-    unsigned int gp_offset;
-    unsigned int fp_offset;
-    union {
-        unsigned int overflow_offset;
-        char *overflow_arg_area;
-    };
-    char *reg_save_area;
-} __va_list_struct;
-
-void __va_start(__va_list_struct *ap, void *fp)
-{
-    memset(ap, 0, sizeof(__va_list_struct));
-    *ap = *(__va_list_struct *)((char *)fp - 16);
-    ap->overflow_arg_area = (char *)fp + ap->overflow_offset;
-    ap->reg_save_area = (char *)fp - 176 - 16;
-}
-
-void *__va_arg(__va_list_struct *ap,
-               enum __va_arg_type arg_type,
-               int size, int align)
-{
-    size = (size + 7) & ~7;
-    align = (align + 7) & ~7;
-    switch (arg_type) {
-    case __va_gen_reg:
-        if (ap->gp_offset + size <= 48) {
-            ap->gp_offset += size;
-            return ap->reg_save_area + ap->gp_offset - size;
-        }
-        goto use_overflow_area;
-
-    case __va_float_reg:
-        if (ap->fp_offset < 128 + 48) {
-            ap->fp_offset += 16;
-            return ap->reg_save_area + ap->fp_offset - 16;
-        }
-        size = 8;
-        goto use_overflow_area;
-
-    case __va_stack:
-    use_overflow_area:
-        ap->overflow_arg_area += size;
-        ap->overflow_arg_area = (char*)((long long)(ap->overflow_arg_area + align - 1) & -align);
-        return ap->overflow_arg_area - size;
-
-    default: /* should never happen */
-        abort();
-    }
-}
-#endif /* __x86_64__ */
-
-#if defined TCC_TARGET_ARM && !defined __TINYC__
-#define _GNU_SOURCE
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <stdio.h>
-
-/* Flushing for tccrun */
-void __clear_cache(void *beginning, void *end)
-{
-/* __ARM_NR_cacheflush is kernel private and should not be used in user space.
- * However, there is no ARM asm parser in tcc so we use it for now */
-#if 1
-    syscall(__ARM_NR_cacheflush, beginning, end, 0);
-#else
-    __asm__ ("push {r7}\n\t"
-             "mov r7, #0xf0002\n\t"
-             "mov r2, #0\n\t"
-             "swi 0\n\t"
-             "pop {r7}\n\t"
-             "ret");
-#endif
-}
-#endif /* arm */
+#endif /* !ARM */

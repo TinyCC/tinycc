@@ -195,14 +195,14 @@ $(X)arm-gen.o : arm-asm.c
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
-	$(CC) -o $@ $^ $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
+	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF): FORCE
 	@$(MAKE) --no-print-directory $@ CROSS_TARGET=$* ONE_SOURCE=$(or $(ONE_SOURCE),yes)
 
 $(CROSS_TARGET)-tcc$(EXESUF): $(TCC_FILES)
-	$(CC) -o $@ $^ $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 # profiling version
 tcc_p$(EXESUF): $($T_FILES)
@@ -214,13 +214,14 @@ libtcc.a: $(LIBTCC_OBJ)
 
 # dynamic libtcc library
 libtcc.so: $(LIBTCC_OBJ)
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
 
 libtcc.so: CFLAGS+=-fPIC
+libtcc.so: LDFLAGS+=-fPIC
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
-	$(CC) -shared -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 libtcc.def : libtcc.dll tcc$(EXESUF)
 	./tcc$(EXESUF) -impdef $< -o $@
@@ -229,12 +230,13 @@ libtcc.dll : DEFINES += -DLIBTCC_AS_DLL
 
 # TinyCC runtime libraries
 libtcc1.a : tcc$(EXESUF) FORCE
-	@$(MAKE) -C lib
+	@$(MAKE) -C lib DEFINES="$(DEF-$T)"
 
 # Cross libtcc1.a
 libtcc1-%.a : %-tcc$(EXESUF) FORCE
-	@$(MAKE) -C lib CROSS_TARGET=$*
+	@$(MAKE) -C lib DEFINES="$(DEF-$*)" CROSS_TARGET=$*
 
+.PRECIOUS: libtcc1-%.a
 FORCE:
 
 # --------------------------------------------------------------------------

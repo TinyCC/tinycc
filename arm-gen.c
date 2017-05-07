@@ -179,6 +179,7 @@ ST_FUNC void arm_init(struct TCCState *s)
 #define func_ldouble_type func_old_type
 ST_FUNC void arm_init(struct TCCState *s)
 {
+#if 0
 #if !defined (TCC_ARM_VFP)
     tcc_warning("Support for FPA is deprecated and will be removed in next"
                 " release");
@@ -186,6 +187,7 @@ ST_FUNC void arm_init(struct TCCState *s)
 #if !defined (TCC_ARM_EABI)
     tcc_warning("Support for OABI is deprecated and will be removed in next"
                 " release");
+#endif
 #endif
 }
 #endif
