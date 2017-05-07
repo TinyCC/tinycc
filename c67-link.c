@@ -8,6 +8,7 @@
 #define R_JMP_SLOT  R_C60_JMP_SLOT
 #define R_GLOB_DAT  R_C60_GLOB_DAT
 #define R_COPY      R_C60_COPY
+#define R_RELATIVE  R_C60_RELATIVE
 
 #define R_NUM       R_C60_NUM
 

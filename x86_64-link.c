@@ -8,6 +8,7 @@
 #define R_JMP_SLOT  R_X86_64_JUMP_SLOT
 #define R_GLOB_DAT  R_X86_64_GLOB_DAT
 #define R_COPY      R_X86_64_COPY
+#define R_RELATIVE  R_X86_64_RELATIVE
 
 #define R_NUM       R_X86_64_NUM
 
