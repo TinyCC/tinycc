@@ -6955,7 +6955,8 @@ found:
                     has_init = (tok == '=');
                     if (has_init && (type.t & VT_VLA))
                         tcc_error("variable length array cannot be initialized");
-                    if ((type.t & VT_EXTERN) || ((type.t & VT_BTYPE) == VT_FUNC) ||
+                    if (((type.t & VT_EXTERN) && (!has_init || l != VT_CONST)) ||
+			((type.t & VT_BTYPE) == VT_FUNC) ||
                         ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
                          !has_init && l == VT_CONST && type.ref->c < 0)) {
                         /* external variable or function */
