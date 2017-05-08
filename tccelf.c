@@ -870,7 +870,7 @@ static void build_got(TCCState *s1)
    relocation, use 'size' and 'info' for the corresponding symbol metadata.
    Returns the offset of the GOT or (if any) PLT entry. */
 static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
-                                       int reloc_type, unsigned long size,
+                                       unsigned long size,
                                        int info, int sym_index)
 {
     int need_plt_entry;
@@ -1044,7 +1044,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
             if (gotplt_entry == BUILD_GOT_ONLY)
                 continue;
 
-            attr = put_got_entry(s1, reloc_type, type, sym->st_size, sym->st_info,
+            attr = put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
                                  sym_index);
 
             if (reloc_type == R_JMP_SLOT)
