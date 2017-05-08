@@ -203,7 +203,7 @@ static int regmask(int r) {
 /******************************************************/
 
 #if defined(TCC_ARM_EABI) && !defined(CONFIG_TCC_ELFINTERP)
-char *default_elfinterp(struct TCCState *s)
+const char *default_elfinterp(struct TCCState *s)
 {
     if (s->float_abi == ARM_HARD_FLOAT)
         return "/lib/ld-linux-armhf.so.3";
@@ -2150,6 +2150,6 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 #endif
 /*************************************************************/
 
-#ifndef TCC_IS_NATIVE
+// #ifndef TCC_IS_NATIVE
 #include "arm-asm.c"
-#endif
+// #endif
