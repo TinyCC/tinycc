@@ -26,6 +26,7 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
     char buf[64];
     TokenSym *ts;
 
+    (void) s1;  /* not used */
     snprintf(buf, sizeof(buf), "L..%u", n);
     ts = tok_alloc(buf, strlen(buf));
     return ts->tok;
@@ -434,6 +435,7 @@ static void asm_free_labels(TCCState *st)
 
 static void use_section1(TCCState *s1, Section *sec)
 {
+    (void) s1;  /* not used */
     cur_text_section->data_offset = ind;
     cur_text_section = sec;
     ind = cur_text_section->data_offset;

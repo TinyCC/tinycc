@@ -1127,6 +1127,8 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
             init_section->data_offset - 4, R_386_PC32, sym_index);
             /* R_386_PC32 = R_X86_64_PC32 = 2 */
     }
+#else
+    (void) s1;  /* not used */
 #endif
 }
 
@@ -2758,7 +2760,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 #define LD_TOK_EOF  (-1)
 
 /* return next ld script token */
-static int ld_next(TCCState *s1, char *name, int name_size)
+static int ld_next(char *name, int name_size)
 {
     int c;
     char *q;
@@ -2903,10 +2905,10 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
     group = !strcmp(cmd, "GROUP");
     if (!as_needed)
         new_undef_syms();
-    t = ld_next(s1, filename, sizeof(filename));
+    t = ld_next(filename, sizeof(filename));
     if (t != '(')
         expect("(");
-    t = ld_next(s1, filename, sizeof(filename));
+    t = ld_next(filename, sizeof(filename));
     for(;;) {
         libname[0] = '\0';
         if (t == LD_TOK_EOF) {
@@ -2916,7 +2918,7 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         } else if (t == ')') {
             break;
         } else if (t == '-') {
-            t = ld_next(s1, filename, sizeof(filename));
+            t = ld_next(filename, sizeof(filename));
             if ((t != LD_TOK_NAME) || (filename[0] != 'l')) {
                 tcc_error_noabort("library name expected");
                 ret = -1;
@@ -2951,9 +2953,9 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
                 }
             }
         }
-        t = ld_next(s1, filename, sizeof(filename));
+        t = ld_next(filename, sizeof(filename));
         if (t == ',') {
-            t = ld_next(s1, filename, sizeof(filename));
+            t = ld_next(filename, sizeof(filename));
         }
     }
     if (group && !as_needed) {
@@ -2979,7 +2981,7 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
 
     ch = handle_eob();
     for(;;) {
-        t = ld_next(s1, cmd, sizeof(cmd));
+        t = ld_next(cmd, sizeof(cmd));
         if (t == LD_TOK_EOF)
             return 0;
         else if (t != LD_TOK_NAME)
@@ -2992,11 +2994,11 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
         } else if (!strcmp(cmd, "OUTPUT_FORMAT") ||
                    !strcmp(cmd, "TARGET")) {
             /* ignore some commands */
-            t = ld_next(s1, cmd, sizeof(cmd));
+            t = ld_next(cmd, sizeof(cmd));
             if (t != '(')
                 expect("(");
             for(;;) {
-                t = ld_next(s1, filename, sizeof(filename));
+                t = ld_next(filename, sizeof(filename));
                 if (t == LD_TOK_EOF) {
                     tcc_error_noabort("unexpected end of file");
                     return -1;
