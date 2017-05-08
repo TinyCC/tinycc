@@ -601,7 +601,7 @@ typedef struct ExprValue {
 
 #define MAX_ASM_OPERANDS 30
 typedef struct ASMOperand {
-    int id; /* GCC 3 optionnal identifier (0 if number only supported */
+    int id; /* GCC 3 optional identifier (0 if number only supported */
     char *constraint;
     char asm_str[16]; /* computed asm string for operand */
     SValue *vt; /* C value of the expression */
@@ -651,7 +651,7 @@ struct TCCState {
     int char_is_unsigned;
     int leading_underscore;
     int ms_extensions;	/* allow nested named struct w/o identifier behave like unnamed */
-    int dollars_in_identifiers;	/* allows '$' char in indentifiers */
+    int dollars_in_identifiers;	/* allows '$' char in identifiers */
     int ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
     /* warning switches */
@@ -768,7 +768,7 @@ struct TCCState {
     Section *dynsymtab_section;
     /* exported dynamic symbol section */
     Section *dynsym;
-    /* copy of the gobal symtab_section variable */
+    /* copy of the global symtab_section variable */
     Section *symtab;
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
@@ -945,7 +945,7 @@ struct filespec {
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
   
-/* assignement operators : normal operator or 0x80 */
+/* assignment operators : normal operator or 0x80 */
 #define TOK_A_MOD 0xa5
 #define TOK_A_AND 0xa6
 #define TOK_A_MUL 0xaa
@@ -968,7 +968,7 @@ struct filespec {
 #define TOK_EOF       (-1)  /* end of file */
 #define TOK_LINEFEED  10    /* line feed */
 
-/* all identificators and strings have token above that */
+/* all identifiers and strings have token above that */
 #define TOK_IDENT 256
 
 #define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
@@ -1241,7 +1241,7 @@ ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
 
-/* space exlcuding newline */
+/* space excluding newline */
 static inline int is_space(int ch) {
     return ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r';
 }

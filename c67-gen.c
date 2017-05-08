@@ -2225,7 +2225,7 @@ void gen_opi(int op)
 	r = vtop[-1].r;
 	fr = vtop[0].r;
 	vtop--;
-	C67_MPYI(fr, r);	// 32 bit bultiply  fr,r,fr
+	C67_MPYI(fr, r);	// 32 bit multiply  fr,r,fr
 	C67_NOP(8);		// NOP 8 for worst case
 	break;
     case TOK_SHL:
@@ -2282,7 +2282,7 @@ void gen_opi(int op)
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
-   two operands are guaranted to have the same floating point type */
+   two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {

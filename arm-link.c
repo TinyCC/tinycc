@@ -62,7 +62,7 @@ int code_reloc (int reloc_type)
     return -1;
 }
 
-/* Returns an enumerator to describe wether and when the relocation needs a
+/* Returns an enumerator to describe whether and when the relocation needs a
    GOT and/or PLT entry to be created. See tcc.h for a description of the
    different values. */
 int gotplt_entry_type (int reloc_type)
@@ -109,7 +109,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     unsigned plt_offset;
 
     /* when building a DLL, GOT entry accesses must be done relative to
-       start of GOT (see x86_64 examble above)  */
+       start of GOT (see x86_64 example above)  */
     if (s1->output_type == TCC_OUTPUT_DLL)
         tcc_error("DLLs unimplemented!");
 

@@ -1333,7 +1333,7 @@ static int pe_check_symbols(struct pe_info *pe)
 #ifdef PE_PRINT_SECTIONS
 static void pe_print_section(FILE * f, Section * s)
 {
-    /* just if you'r curious */
+    /* just if you're curious */
     BYTE *p, *e, b;
     int i, n, l, m;
     p = s->data;
@@ -1976,7 +1976,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 
     tcc_add_bcheck(s1);
     pe_add_runtime(s1, &pe);
-    relocate_common_syms(); /* assign bss adresses */
+    relocate_common_syms(); /* assign bss addresses */
     tcc_add_linker_symbols(s1);
     pe_set_options(s1, &pe);
 

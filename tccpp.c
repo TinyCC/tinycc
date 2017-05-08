@@ -2993,10 +2993,10 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 } else {
             add_var:
                     /* NOTE: the stream cannot be read when macro
-                       substituing an argument */
+                       substituting an argument */
                     macro_subst(&str, nested_list, st, 0);
                 }
-                if (str.len == l0) /* exanded to empty string */
+                if (str.len == l0) /* expanded to empty string */
                     tok_str_add(&str, TOK_PLCHLDR);
             } else {
                 tok_str_add(&str, t);

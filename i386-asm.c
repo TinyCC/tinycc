@@ -1473,7 +1473,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
         if (r & VT_SYM) {
 	    const char *name = get_tok_str(sv->sym->v, NULL);
 	    if (sv->sym->v >= SYM_FIRST_ANOM) {
-		/* In case of anonymuous symbols ("L.42", used
+		/* In case of anonymous symbols ("L.42", used
 		   for static data labels) we can't find them
 		   in the C symbol table when later looking up
 		   this name.  So enter them now into the asm label

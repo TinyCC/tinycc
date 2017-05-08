@@ -22,7 +22,7 @@ struct filehdr {
 /*------------------------------------------------------------------------*/
 #define  F_RELFLG   0x01       /* relocation info stripped from file       */
 #define  F_EXEC     0x02       /* file is executable (no unresolved refs)  */
-#define  F_LNNO     0x04       /* line nunbers stripped from file          */
+#define  F_LNNO     0x04       /* line numbers stripped from file          */
 #define  F_LSYMS    0x08       /* local symbols stripped from file         */
 #define  F_GSP10    0x10       /* 34010 version                            */
 #define  F_GSP20    0x20       /* 34020 version                            */

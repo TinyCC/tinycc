@@ -316,14 +316,14 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
     }
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtionnal 3
+/* generate a modrm reference. 'op_reg' contains the addtional 3
    opcode bits */
 static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 {
     gen_modrm_impl(op_reg, r, sym, c, 0);
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtionnal 3
+/* generate a modrm reference. 'op_reg' contains the addtional 3
    opcode bits */
 static void gen_modrm64(int opcode, int op_reg, int r, Sym *sym, int c)
 {
@@ -1923,7 +1923,7 @@ void gen_opl(int op)
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
-   two operands are guaranted to have the same floating point type */
+   two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {

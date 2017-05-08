@@ -257,7 +257,7 @@ ST_FUNC void tccgen_end(TCCState *s1)
 }
 
 /* ------------------------------------------------------------------------- */
-/* apply storage attibutes to Elf symbol */
+/* apply storage attributes to Elf symbol */
 
 static void update_storage(Sym *sym)
 {
@@ -1532,7 +1532,7 @@ static void gen_opl(int op)
             c = (int)vtop->c.i;
             /* constant: simpler */
             /* NOTE: all comments are for SHL. the other cases are
-               done by swaping words */
+               done by swapping words */
             vpop();
             if (op != TOK_SHL)
                 vswap();
@@ -1973,7 +1973,7 @@ redo:
 	goto redo;
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
-        /* relationnal op: must be both pointers */
+        /* relational op: must be both pointers */
         if (op >= TOK_ULT && op <= TOK_LOR) {
             check_comparison_pointer_types(vtop - 1, vtop, op);
             /* pointers are handled are unsigned */
@@ -2137,7 +2137,7 @@ redo:
         else
             gen_opic(op);
         if (op >= TOK_ULT && op <= TOK_GT) {
-            /* relationnal op: the result is an int */
+            /* relational op: the result is an int */
             vtop->type.t = VT_INT;
         } else {
             vtop->type.t = t;
@@ -2794,7 +2794,7 @@ static void gen_assign_cast(CType *dt)
             goto type_ok;
         }
         type1 = pointed_type(dt);
-        /* a function is implicitely a function pointer */
+        /* a function is implicitly a function pointer */
         if (sbt == VT_FUNC) {
             if ((type1->t & VT_BTYPE) != VT_VOID &&
                 !is_compatible_types(pointed_type(dt), st))
@@ -6086,7 +6086,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
         }
 	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST) &&
 	    vtop->sym->v >= SYM_FIRST_ANOM &&
-	    /* XXX This rejects compount literals like
+	    /* XXX This rejects compound literals like
 	       '(void *){ptr}'.  The problem is that '&sym' is
 	       represented the same way, which would be ruled out
 	       by the SYM_FIRST_ANOM check above, but also '"string"'

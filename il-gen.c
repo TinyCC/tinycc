@@ -602,7 +602,7 @@ void gen_opi(int op)
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
-   two operands are guaranted to have the same floating point type */
+   two operands are guaranteed to have the same floating point type */
 void gen_opf(int op)
 {
     /* same as integer */

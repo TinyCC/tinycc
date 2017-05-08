@@ -813,7 +813,7 @@ struct avail_regs {
    and the parameter is a single float.
 
    avregs: opaque structure to keep track of available VFP co-processor regs
-   align: alignment contraints for the param, as returned by type_size()
+   align: alignment constraints for the param, as returned by type_size()
    size: size of the parameter, as returned by type_size() */
 int assign_vfpreg(struct avail_regs *avregs, int align, int size)
 {
@@ -823,7 +823,7 @@ int assign_vfpreg(struct avail_regs *avregs, int align, int size)
     return -1;
   if (align >> 3) { /* double alignment */
     first_reg = avregs->first_free_reg;
-    /* alignment contraint not respected so use next reg and record hole */
+    /* alignment constraint not respected so use next reg and record hole */
     if (first_reg & 1)
       avregs->avail[avregs->last_hole++] = first_reg++;
   } else { /* no special alignment (float or array of float) */
@@ -1653,7 +1653,7 @@ static int is_zero(int i)
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
- *    two operands are guaranted to have the same floating point type */
+ *    two operands are guaranteed to have the same floating point type */
 void gen_opf(int op)
 {
   uint32_t x;

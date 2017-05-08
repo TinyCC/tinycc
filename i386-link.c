@@ -49,7 +49,7 @@ int code_reloc (int reloc_type)
     return -1;
 }
 
-/* Returns an enumerator to describe wether and when the relocation needs a
+/* Returns an enumerator to describe whether and when the relocation needs a
    GOT and/or PLT entry to be created. See tcc.h for a description of the
    different values. */
 int gotplt_entry_type (int reloc_type)
@@ -99,7 +99,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     else
         modrm = 0x25;
 
-    /* empty PLT: create PLT0 entry that pushes the library indentifier
+    /* empty PLT: create PLT0 entry that pushes the library identifier
        (GOT + PTR_SIZE) and jumps to ld.so resolution routine
        (GOT + 2 * PTR_SIZE) */
     if (plt->data_offset == 0) {
@@ -229,9 +229,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             /* do nothing */
             return;
         case R_386_COPY:
-            /* This reloction must copy initialized data from the library
+            /* This relocation must copy initialized data from the library
             to the program .bss segment. Currently made like for ARM
-            (to remove noise of defaukt case). Is this true? 
+            (to remove noise of default case). Is this true?
             */
             return;
         default:

@@ -1176,7 +1176,7 @@ PUB_FUNC int tcc_add_library_err(TCCState *s, const char *libname)
     return ret;
 }
 
-/* habdle #pragma comment(lib,) */
+/* handle #pragma comment(lib,) */
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1)
 {
     int i;
@@ -1287,7 +1287,7 @@ static int link_option(const char *str, const char *val, const char **ptr)
     if (*str == '-')
         str++;
 
-    /* then str & val should match (potentialy up to '=') */
+    /* then str & val should match (potentially up to '=') */
     p = str;
     q = val;
 

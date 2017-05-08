@@ -221,7 +221,7 @@ typedef struct
 #define EM_68HC12	53		/* Motorola M68HC12 */
 #define EM_MMA		54		/* Fujitsu MMA Multimedia Accelerator*/
 #define EM_PCP		55		/* Siemens PCP */
-#define EM_NCPU		56		/* Sony nCPU embeeded RISC */
+#define EM_NCPU		56		/* Sony nCPU embedded RISC */
 #define EM_NDR1		57		/* Denso NDR1 microprocessor */
 #define EM_STARCORE	58		/* Motorola Start*Core processor */
 #define EM_ME16		59		/* Toyota ME16 processor */
@@ -342,7 +342,7 @@ typedef struct
 #define SHT_FINI_ARRAY	  15		/* Array of destructors */
 #define SHT_PREINIT_ARRAY 16		/* Array of pre-constructors */
 #define SHT_GROUP	  17		/* Section group */
-#define SHT_SYMTAB_SHNDX  18		/* Extended section indeces */
+#define SHT_SYMTAB_SHNDX  18		/* Extended section indices */
 #define	SHT_NUM		  19		/* Number of defined types.  */
 #define SHT_LOOS	  0x60000000	/* Start OS-specific.  */
 #define SHT_GNU_ATTRIBUTES 0x6ffffff5	/* Object attributes.  */
@@ -871,7 +871,7 @@ typedef struct
 #define	VER_NDX_LORESERVE	0xff00	/* Beginning of reserved entries.  */
 #define	VER_NDX_ELIMINATE	0xff01	/* Symbol is to be eliminated.  */
 
-/* Auxialiary version information.  */
+/* Auxiliary version information.  */
 
 typedef struct
 {
@@ -1776,9 +1776,9 @@ typedef Elf32_Addr Elf32_Conflict;
 #define EFA_PARISC_1_1		    0x0210 /* PA-RISC 1.1 big-endian.  */
 #define EFA_PARISC_2_0		    0x0214 /* PA-RISC 2.0 big-endian.  */
 
-/* Additional section indeces.  */
+/* Additional section indices.  */
 
-#define SHN_PARISC_ANSI_COMMON	0xff00	   /* Section for tenatively declared
+#define SHN_PARISC_ANSI_COMMON	0xff00	   /* Section for tentatively declared
 					      symbols in ANSI C.  */
 #define SHN_PARISC_HUGE_COMMON	0xff01	   /* Common blocks in huge model.  */
 
@@ -1957,7 +1957,7 @@ typedef Elf32_Addr Elf32_Conflict;
 
 /* Legal values for sh_type field of Elf64_Shdr.  */
 
-/* These two are primerily concerned with ECOFF debugging info.  */
+/* These two are primarily concerned with ECOFF debugging info.  */
 #define SHT_ALPHA_DEBUG		0x70000001
 #define SHT_ALPHA_REGINFO	0x70000002
 

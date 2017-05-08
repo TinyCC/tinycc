@@ -174,7 +174,7 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, long c)
     gen_le32(c - 4);
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtionnal 3
+/* generate a modrm reference. 'op_reg' contains the addtional 3
    opcode bits */
 static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 {
@@ -890,7 +890,7 @@ ST_FUNC void gen_opi(int op)
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
-   two operands are guaranted to have the same floating point type */
+   two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
 ST_FUNC void gen_opf(int op)
 {
