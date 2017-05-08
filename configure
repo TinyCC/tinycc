@@ -374,7 +374,7 @@ fi
 
 # a final configuration tuning
 $cc -v --help > cc_help.txt 2>&1
-W_OPTIONS="declaration-after-statement"
+W_OPTIONS="declaration-after-statement undef strict-prototypes write-strings"
 for i in $W_OPTIONS; do
     O_PRESENT="$(grep -- -W$i cc_help.txt)"
     if test -n "$O_PRESENT"; then  CFLAGS="$CFLAGS -W$i"; fi

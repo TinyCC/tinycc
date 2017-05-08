@@ -101,7 +101,7 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
     char tfile[260], stmp[20];
     char *file, *name;
     int ret = 2;
-    char *ops_conflict = "habdioptxN";  // unsupported but destructive if ignored.
+    const char *ops_conflict = "habdioptxN";  // unsupported but destructive if ignored.
     int verbose = 0;
 
     i_lib = 0; i_obj = 0;  // will hold the index of the lib and first obj
