@@ -129,7 +129,7 @@ static const char help2[] =
     "Predefined macros:\n"
     "  tcc -E -dM - < nul\n"
 #else
-    "  -rpath=                       set dynamic library seach path\n"
+    "  -rpath=                       set dynamic library search path\n"
     "  -enable-new-dtags             set DT_RUNPATH instead of DT_RPATH\n"
     "  -soname=                      set DT_SONAME elf tag\n"
     "  -Bsymbolic                    set DT_SYMBOLIC elf tag\n"
