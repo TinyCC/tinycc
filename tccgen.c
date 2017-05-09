@@ -3285,6 +3285,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 {
     int align, maxalign, offset, c, bit_pos, bt, prevbt, prev_bit_size;
     int pcc = !tcc_state->ms_bitfields;
+    int packwarn = tcc_state->warn_gcc_compat;
+    int typealign, bit_size, size;
+
     Sym *f;
     if (ad->a.aligned)
       maxalign = 1 << (ad->a.aligned - 1);
@@ -3295,9 +3298,10 @@ static void struct_layout(CType *type, AttributeDef *ad)
     bit_pos = 0;
     prevbt = VT_STRUCT; /* make it never match */
     prev_bit_size = 0;
+    size = 0;
+
     for (f = type->ref->next; f; f = f->next) {
-	int typealign, bit_size;
-	int size = type_size(&f->type, &typealign);
+	size = type_size(&f->type, &typealign);
 	if (f->type.t & VT_BITFIELD)
 	  bit_size = (f->type.t >> (VT_STRUCT_SHIFT + 6)) & 0x3f;
 	else
@@ -3358,13 +3362,20 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		int ofs = (c * 8 + bit_pos) % (typealign * 8);
 		int ofs2 = ofs + bit_size + (typealign * 8) - 1;
 		if (bit_size == 0 ||
-		    ((typealign != 1 || size == 1) &&
+		    (typealign != 1 &&
 		     (ofs2 / (typealign * 8)) > (size/typealign))) {
 		    c = (c + ((bit_pos + 7) >> 3) + typealign - 1) & -typealign;
 		    bit_pos = 0;
 		} else if (bit_pos + bit_size > size * 8) {
 		    c += bit_pos >> 3;
 		    bit_pos &= 7;
+                    if (bit_pos + bit_size > size * 8) {
+                        c += 1, bit_pos = 0;
+                        if ((ad->a.packed || f->r) && packwarn) {
+                            tcc_warning("struct layout not compatible with GCC (internal limitation)");
+                            packwarn = 0;
+                        }
+                    }
 		}
 		offset = c;
 		/* In PCC layout named bit-fields influence the alignment
@@ -3407,8 +3418,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	if (align > maxalign)
 	  maxalign = align;
 #if 0
-	printf("set field %s offset=%d c=%d",
-	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset, c);
+	printf("set field %s offset=%d",
+	       get_tok_str(f->v & ~SYM_FIELD, NULL), offset);
 	if (f->type.t & VT_BITFIELD) {
 	    printf(" pos=%d size=%d",
 		   (f->type.t >> VT_STRUCT_SHIFT) & 0x3f,
@@ -3458,6 +3469,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
     type->ref->c = (c + (pcc ? (bit_pos + 7) >> 3 : 0)
 		    + maxalign - 1) & -maxalign;
     type->ref->r = maxalign;
+    if (offset + size > type->ref->c)
+        tcc_warning("will touch memory past end of the struct (internal limitation)");
 }
 
 /* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
@@ -3615,7 +3628,7 @@ static void struct_decl(CType *type, AttributeDef *ad, int u)
                     } else if (ad1.a.packed || ad->a.packed) {
                         alignoverride = 1;
                     } else if (*tcc_state->pack_stack_ptr) {
-                        if (align > *tcc_state->pack_stack_ptr)
+                        if (align >= *tcc_state->pack_stack_ptr)
                             alignoverride = *tcc_state->pack_stack_ptr;
                     }
                     if (bit_size >= 0) {

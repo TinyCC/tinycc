@@ -660,6 +660,7 @@ struct TCCState {
     int warn_error;
     int warn_none;
     int warn_implicit_function_declaration;
+    int warn_gcc_compat;
 
     /* compile with debug symbol (and use them if error during execution) */
     int do_debug;

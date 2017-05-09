@@ -1578,6 +1578,7 @@ static const FlagDef options_W[] = {
     { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
     { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
     { offsetof(TCCState, warn_error), 0, "error" },
+    { offsetof(TCCState, warn_gcc_compat), 0, "gcc-compat" },
     { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
       "implicit-function-declaration" },
     { 0, 0, NULL }
