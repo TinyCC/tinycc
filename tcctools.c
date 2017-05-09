@@ -390,7 +390,7 @@ usage:
     }
 
     if (v)
-        printf("<- %s (%d symbol%s)\n", outfile, i, "s" + (i<2));
+        printf("<- %s (%d symbol%s)\n", outfile, i, "s"[i<2]);
 
     ret = 0;
 

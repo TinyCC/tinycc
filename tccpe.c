@@ -965,7 +965,7 @@ static void pe_build_exports(struct pe_info *pe)
     } else {
         fprintf(op, "LIBRARY %s\n\nEXPORTS\n", dllname);
         if (pe->s1->verbose)
-            printf("<- %s (%d symbol%s)\n", buf, sym_count, "s" + (sym_count < 2));
+            printf("<- %s (%d symbol%s)\n", buf, sym_count, "s"[sym_count < 2]);
     }
 #endif
 
