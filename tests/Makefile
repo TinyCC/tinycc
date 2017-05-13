@@ -46,7 +46,7 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  TESTS := $(filter-out dlltest,$(TESTS))
 endif
-ifndef CONFIG_CROSS
+ifndef CONFIG_cross
  TESTS := $(filter-out cross-%,$(TESTS))
 endif
 

@@ -381,7 +381,7 @@ struct pe_info {
 
 static const char *pe_export_name(TCCState *s1, ElfW(Sym) *sym)
 {
-    const char *name = symtab_section->link->data + sym->st_name;
+    const char *name = (char*)symtab_section->link->data + sym->st_name;
     if (s1->leading_underscore && name[0] == '_' && !(sym->st_other & ST_PE_STDCALL))
         return name + 1;
     return name;
@@ -835,7 +835,7 @@ static void pe_build_imports(struct pe_info *pe)
                 int sym_index = p->symbols[k]->sym_index;
                 ElfW(Sym) *imp_sym = (ElfW(Sym) *)pe->s1->dynsymtab_section->data + sym_index;
                 ElfW(Sym) *org_sym = (ElfW(Sym) *)symtab_section->data + iat_index;
-                const char *name = pe->s1->dynsymtab_section->link->data + imp_sym->st_name;
+                const char *name = (char*)pe->s1->dynsymtab_section->link->data + imp_sym->st_name;
                 int ordinal;
 
                 org_sym->st_value = thk_ptr;
@@ -1237,7 +1237,7 @@ static int pe_check_symbols(struct pe_info *pe)
         sym = (ElfW(Sym) *)symtab_section->data + sym_index;
         if (sym->st_shndx == SHN_UNDEF) {
 
-            const char *name = symtab_section->link->data + sym->st_name;
+            const char *name = (char*)symtab_section->link->data + sym->st_name;
             unsigned type = ELFW(ST_TYPE)(sym->st_info);
             int imp_sym = pe_find_import(pe->s1, sym);
             struct import_symbol *is;
@@ -1648,7 +1648,7 @@ static int pe_load_res(TCCState *s1, int fd)
 
     if (hdr.filehdr.Machine != IMAGE_FILE_MACHINE
         || hdr.filehdr.NumberOfSections != 1
-        || strcmp(hdr.sectionhdr.Name, ".rsrc") != 0)
+        || strcmp((char*)hdr.sectionhdr.Name, ".rsrc") != 0)
         goto quit;
 
     rsrc_section = new_section(s1, ".rsrc", SHT_PROGBITS, SHF_ALLOC);

@@ -122,28 +122,16 @@
 
 /* target selection */
 /* #define TCC_TARGET_I386   *//* i386 code generator */
+/* #define TCC_TARGET_X86_64 *//* x86-64 code generator */
 /* #define TCC_TARGET_ARM    *//* ARMv4 code generator */
 /* #define TCC_TARGET_ARM64  *//* ARMv8 code generator */
 /* #define TCC_TARGET_C67    *//* TMS320C67xx code generator */
-/* #define TCC_TARGET_X86_64 *//* x86-64 code generator */
 
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
     !defined(TCC_TARGET_X86_64)
 #define TCC_TARGET_I386
-#endif
-
-#if !defined(TCC_UCLIBC) && !defined(TCC_TARGET_ARM) && \
-    !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
-    !defined(CONFIG_USE_LIBGCC) && !defined(TCC_MUSL)
-#define CONFIG_TCC_BCHECK /* enable bound checking code */
-#endif
-
-/* define it to include assembler support */
-#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64) && \
-    !defined(TCC_TARGET_C67)
-#define CONFIG_TCC_ASM
 #endif
 
 /* object format selection */
@@ -166,6 +154,10 @@
 
 #if defined TCC_IS_NATIVE && !defined CONFIG_TCCBOOT
 # define CONFIG_TCC_BACKTRACE
+# if (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64) \
+  && !defined TCC_UCLIBC && !defined TCC_MUSL
+# define CONFIG_TCC_BCHECK /* enable bound checking code */
+# endif
 #endif
 
 /* ------------ path configuration ------------ */
@@ -282,24 +274,6 @@
 #include "elf.h"
 #include "stab.h"
 
-#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
-# define ELFCLASSW ELFCLASS64
-# define ElfW(type) Elf##64##_##type
-# define ELFW(type) ELF##64##_##type
-# define ElfW_Rel ElfW(Rela)
-# define SHT_RELX SHT_RELA
-# define REL_SECTION_FMT ".rela%s"
-#else
-# define ELFCLASSW ELFCLASS32
-# define ElfW(type) Elf##32##_##type
-# define ELFW(type) ELF##32##_##type
-# define ElfW_Rel ElfW(Rel)
-# define SHT_RELX SHT_REL
-# define REL_SECTION_FMT ".rel%s"
-#endif
-/* target address type */
-#define addr_t ElfW(Addr)
-
 /* -------------------------------------------- */
 
 #ifndef PUB_FUNC /* functions used by tcc.c but not in libtcc.h */
@@ -335,6 +309,7 @@
 #ifdef TCC_TARGET_ARM
 # include "arm-gen.c"
 # include "arm-link.c"
+# include "arm-asm.c"
 #endif
 #ifdef TCC_TARGET_ARM64
 # include "arm64-gen.c"
@@ -346,6 +321,26 @@
 # include "c67-link.c"
 #endif
 #undef TARGET_DEFS_ONLY
+
+/* -------------------------------------------- */
+
+#if PTR_SIZE == 8
+# define ELFCLASSW ELFCLASS64
+# define ElfW(type) Elf##64##_##type
+# define ELFW(type) ELF##64##_##type
+# define ElfW_Rel ElfW(Rela)
+# define SHT_RELX SHT_RELA
+# define REL_SECTION_FMT ".rela%s"
+#else
+# define ELFCLASSW ELFCLASS32
+# define ElfW(type) Elf##32##_##type
+# define ELFW(type) ELF##32##_##type
+# define ElfW_Rel ElfW(Rel)
+# define SHT_RELX SHT_REL
+# define REL_SECTION_FMT ".rel%s"
+#endif
+/* target address type */
+#define addr_t ElfW(Addr)
 
 /* -------------------------------------------- */
 
@@ -1390,7 +1385,9 @@ ST_FUNC Section *new_symtab(TCCState *s1, const char *symtab_name, int sh_type, 
 
 ST_FUNC void put_extern_sym2(Sym *sym, Section *section, addr_t value, unsigned long size, int can_add_underscore);
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
+#if PTR_SIZE == 4
 ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
+#endif
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);

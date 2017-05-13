@@ -583,7 +583,7 @@ static void arm64_gen_bl_or_b(int b)
 {
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         assert(!b && (vtop->r & VT_SYM));
-	greloc(cur_text_section, vtop->sym, ind, R_AARCH64_CALL26);
+	greloca(cur_text_section, vtop->sym, ind, R_AARCH64_CALL26, 0);
 	o(0x94000000); // bl .
     }
     else

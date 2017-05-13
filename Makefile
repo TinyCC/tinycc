@@ -10,15 +10,8 @@ endif
 
 include $(TOP)/config.mak
 
-ifeq (-$(findstring gcc,$(CC))-,-gcc-)
- ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
-  CFLAGS += -D_FORTIFY_SOURCE=0
- endif
-else
- ifeq (-$(findstring clang,$(CC))-,-clang-)
-  # make clang accept gnuisms in libtcc1.c
-  CFLAGS+=-fheinous-gnu-extensions
- endif
+ifeq (-$(CC)-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-gcc-4--)
+ CFLAGS += -D_FORTIFY_SOURCE=0
 endif
 
 LIBTCC = libtcc.a
@@ -30,7 +23,7 @@ CFLAGS += $(CPPFLAGS)
 VPATH = $(TOPSRC)
 
 ifdef CONFIG_WIN32
- ifneq ($(DISABLE_STATIC),no)
+ ifneq ($(CONFIG_static),yes)
   LIBTCC = libtcc$(DLLSUF)
   LIBTCCDEF = libtcc.def
  endif
@@ -38,14 +31,14 @@ ifdef CONFIG_WIN32
  NATIVE_TARGET = $(ARCH)-win$(if $(findstring arm,$(ARCH)),ce,32)
 else
  LIBS=-lm
- ifndef CONFIG_NOLDL
+ ifneq ($(CONFIG_ldl),no)
   LIBS+=-ldl
  endif
  # make libtcc as static or dynamic library?
- ifeq ($(DISABLE_STATIC),yes)
+ ifeq ($(CONFIG_static),no)
   LIBTCC=libtcc$(DLLSUF)
   export LD_LIBRARY_PATH := $(CURDIR)/$(TOP)
-  ifndef DISABLE_RPATH
+  ifneq ($(CONFIG_rpath),no)
    LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
   endif
  endif
@@ -78,6 +71,8 @@ NATIVE_DEFINES_$(CONFIG_WIN32) += -DTCC_TARGET_PE
 NATIVE_DEFINES_$(CONFIG_OSX) += -DTCC_TARGET_MACHO
 NATIVE_DEFINES_$(CONFIG_uClibc) += -DTCC_UCLIBC
 NATIVE_DEFINES_$(CONFIG_musl) += -DTCC_MUSL
+NATIVE_DEFINES_$(CONFIG_libgcc) += -DCONFIG_USE_LIBGCC
+NATIVE_DEFINES_$(CONFIG_selinux) += -DHAVE_SELINUX
 NATIVE_DEFINES_$(CONFIG_arm) += -DTCC_TARGET_ARM
 NATIVE_DEFINES_$(CONFIG_arm_eabihf) += -DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
 NATIVE_DEFINES_$(CONFIG_arm_eabi) += -DTCC_ARM_EABI
@@ -114,7 +109,7 @@ cross-%: %-tcc$(EXESUF) libtcc1-%.a ;
 install: install$(CFGWIN)
 uninstall: uninstall$(CFGWIN)
 
-ifdef CONFIG_CROSS
+ifdef CONFIG_cross
 all : cross
 endif
 
@@ -172,7 +167,7 @@ arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
 # libtcc sources
-LIBTCC_SRC = $(filter-out tcc.c tcctools.c arm-asm.c,$(filter %.c,$($T_FILES)))
+LIBTCC_SRC = $(filter-out tcc.c tcctools.c,$(filter %.c,$($T_FILES)))
 
 ifeq ($(ONE_SOURCE),yes)
 LIBTCC_OBJ = $(X)libtcc.o
@@ -191,7 +186,6 @@ $(X)%.o : %.c $(LIBTCC_INC)
 
 # additional dependencies
 $(X)tcc.o : tcctools.c
-$(X)arm-gen.o : arm-asm.c
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
@@ -255,10 +249,10 @@ tcc-doc.info: tcc-doc.texi
 # install
 
 INSTALL = install -m644
-INSTALLBIN = install -m755 $(STRIP_$(STRIP_BINARIES))
+INSTALLBIN = install -m755 $(STRIP_$(CONFIG_strip))
 STRIP_yes = -s
 install-strip: install
-install-strip: STRIP_BINARIES = yes
+install-strip: CONFIG_strip = yes
 
 TRY-INSTALL = $(if $(wildcard $1),mkdir -p $2 && $(INSTALL) $1 $2)
 LIBTCC1_W = $(wildcard $(filter %-win32.a %-wince.a,$(LIBTCC1_CROSS)))

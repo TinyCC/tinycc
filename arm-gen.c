@@ -34,8 +34,8 @@
 #define NB_REGS             9
 #endif
 
-#ifndef TCC_ARM_VERSION
-# define TCC_ARM_VERSION 5
+#ifndef TCC_CPU_VERSION
+# define TCC_CPU_VERSION 5
 #endif
 
 /* a register can belong to several classes. The classes must be
@@ -2149,7 +2149,3 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 /*************************************************************/
 #endif
 /*************************************************************/
-
-// #ifndef TCC_IS_NATIVE
-#include "arm-asm.c"
-// #endif

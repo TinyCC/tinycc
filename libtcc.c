@@ -44,10 +44,12 @@ static int nb_states;
 #ifdef TCC_TARGET_I386
 #include "i386-gen.c"
 #include "i386-link.c"
+#include "i386-asm.c"
 #endif
 #ifdef TCC_TARGET_ARM
 #include "arm-gen.c"
 #include "arm-link.c"
+#include "arm-asm.c"
 #endif
 #ifdef TCC_TARGET_ARM64
 #include "arm64-gen.c"
@@ -60,12 +62,10 @@ static int nb_states;
 #ifdef TCC_TARGET_X86_64
 #include "x86_64-gen.c"
 #include "x86_64-link.c"
+#include "i386-asm.c"
 #endif
 #ifdef CONFIG_TCC_ASM
 #include "tccasm.c"
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-#include "i386-asm.c"
-#endif
 #endif
 #ifdef TCC_TARGET_COFF
 #include "tcccoff.c"
@@ -702,7 +702,6 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
 {
     TokenSym *ts;
     Sym *s;
-    (void) s1;  /* not used */
     ts = tok_alloc(sym, strlen(sym));
     s = define_find(ts->tok);
     /* undefine symbol by putting an invalid name */
@@ -836,12 +835,12 @@ LIBTCCAPI TCCState *tcc_new(void)
 # endif
 
     /* TinyCC & gcc defines */
-#if defined(TCC_TARGET_PE) && defined(TCC_TARGET_X86_64)
+#if defined(TCC_TARGET_PE) && PTR_SIZE == 8
     /* 64bit Windows. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long long");
     tcc_define_symbol(s, "__LLP64__", NULL);
-#elif defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
+#elif PTR_SIZE == 8
     /* Other 64bit systems. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
@@ -1192,7 +1191,6 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s, const char *name, const void *val)
        So it is handled here as if it were in a DLL. */
     pe_putimport(s, 0, name, (uintptr_t)val);
 #else
-    (void) s;  /* not used */
     set_elf_sym(symtab_section, (uintptr_t)val, 0,
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
         SHN_ABS, name);
@@ -1367,7 +1365,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
             if (strstart("pe-", &p)) {
-#elif defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_X86_64)
+#elif PTR_SIZE == 8
             if (strstart("elf64-", &p)) {
 #else
             if (strstart("elf32-", &p)) {
@@ -1987,7 +1985,6 @@ LIBTCCAPI void tcc_set_options(TCCState *s, const char *r)
 
 PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time)
 {
-    (void) s;  /* not used */
     if (total_time < 1)
         total_time = 1;
     if (total_bytes < 1)

@@ -17,6 +17,8 @@ ST_FUNC void gen_le32(int c);
 #else
 /*************************************************************/
 
+#include "tcc.h"
+
 static void asm_error(void)
 {
     tcc_error("ARM asm not implemented.");

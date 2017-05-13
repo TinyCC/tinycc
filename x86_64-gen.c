@@ -25,6 +25,7 @@
 /* number of available registers */
 #define NB_REGS         25
 #define NB_ASM_REGS     16
+#define CONFIG_TCC_ASM
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -264,17 +265,15 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, long c)
 /* output got address with relocation */
 static void gen_gotpcrel(int r, Sym *sym, int c)
 {
-#ifndef TCC_TARGET_PE
-    greloca(cur_text_section, sym, ind, R_X86_64_GOTPCREL, -4);
-#else
+#ifdef TCC_TARGET_PE
     tcc_error("internal error: no GOT on PE: %s %x %x | %02x %02x %02x\n",
         get_tok_str(sym->v, NULL), c, r,
         cur_text_section->data[ind-3],
         cur_text_section->data[ind-2],
         cur_text_section->data[ind-1]
         );
-    greloc(cur_text_section, sym, ind, R_X86_64_PC32);
 #endif
+    greloca(cur_text_section, sym, ind, R_X86_64_GOTPCREL, -4);
     gen_le32(0);
     if (c) {
         /* we use add c, %xxx for displacement */
@@ -1661,14 +1660,14 @@ void gfunc_epilog(void)
                                func_bound_offset, lbounds_section->data_offset);
         saved_ind = ind;
         ind = func_bound_ind;
-        greloc(cur_text_section, sym_data, ind + 1, R_386_32);
+        greloca(cur_text_section, sym_data, ind + 1, R_X86_64_64, 0);
         ind = ind + 5 + 3;
         gen_static_call(TOK___bound_local_new);
         ind = saved_ind;
 
         /* generate bound check local freeing */
         o(0x5250); /* save returned value, if any */
-        greloc(cur_text_section, sym_data, ind + 1, R_386_32);
+        greloca(cur_text_section, sym_data, ind + 1, R_X86_64_64, 0);
         oad(0xb8, 0); /* mov xxx, %rax */
         o(0xc78948);  /* mov %rax,%rdi # first arg in %rdi, this must be ptr */
         gen_static_call(TOK___bound_local_delete);

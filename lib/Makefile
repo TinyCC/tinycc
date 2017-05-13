@@ -17,7 +17,7 @@ XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
 XFLAGS = $(XFLAGS$(XCFG))
 XCFG = $(or $(findstring -win,$T),-unx)
 
-# using gcc ("make armlib-usegcc=no" to use tcc)
+# in order to use gcc, tyoe: make <target>lib-usegcc=yes
 armlib-usegcc ?= no
 
 ifeq "$($(X)$(T)lib-usegcc)" "yes"

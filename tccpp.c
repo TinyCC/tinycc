@@ -3557,7 +3557,6 @@ ST_FUNC void tccpp_delete(TCCState *s)
 {
     int i, n;
 
-    (void) s;  /* not used */
     /* free -D and compiler defines */
     free_defines(NULL);
 

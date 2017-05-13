@@ -23,6 +23,7 @@
 /* number of available registers */
 #define NB_REGS         5
 #define NB_ASM_REGS     8
+#define CONFIG_TCC_ASM
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -329,6 +330,7 @@ static void gadd_sp(int val)
     }
 }
 
+#if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_PE
 static void gen_static_call(int v)
 {
     Sym *sym;
@@ -337,6 +339,7 @@ static void gen_static_call(int v)
     oad(0xe8, -4);
     greloc(cur_text_section, sym, ind-4, R_386_PC32);
 }
+#endif
 
 /* 'is_jmp' is '1' if it is a jump */
 static void gcall_or_jmp(int is_jmp)

@@ -190,7 +190,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 if (x & 0x800000)
                     x -= 0x1000000;
                 x <<= 2;
-                blx_avail = (TCC_ARM_VERSION >= 5);
+                blx_avail = (TCC_CPU_VERSION >= 5);
                 is_thumb = val & 1;
                 is_bl = (*(unsigned *) ptr) >> 24 == 0xeb;
                 is_call = (type == R_ARM_CALL || (type == R_ARM_PC24 && is_bl));
