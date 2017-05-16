@@ -41,6 +41,7 @@ int code_reloc (int reloc_type)
         case R_X86_64_GLOB_DAT:
         case R_X86_64_COPY:
         case R_X86_64_RELATIVE:
+        case R_X86_64_GOTOFF64:
             return 0;
 
         case R_X86_64_PC32:
@@ -84,6 +85,7 @@ int gotplt_entry_type (int reloc_type)
         case R_X86_64_GOT64:
         case R_X86_64_GOTPC32:
         case R_X86_64_GOTPC64:
+        case R_X86_64_GOTOFF64:
         case R_X86_64_GOTPCREL:
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
@@ -280,6 +282,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_X86_64_GOT64:
             /* we load the got offset */
             add64le(ptr, s1->sym_attrs[sym_index].got_offset);
+            break;
+        case R_X86_64_GOTOFF64:
+            add64le(ptr, val - s1->got->sh_addr);
             break;
         case R_X86_64_RELATIVE:
             /* do nothing */
