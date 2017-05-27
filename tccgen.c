@@ -3471,7 +3471,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
     type->ref->c = (c + (pcc ? (bit_pos + 7) >> 3 : 0)
 		    + maxalign - 1) & -maxalign;
     type->ref->r = maxalign;
-    if (offset + size > type->ref->c)
+    if (offset + size > type->ref->c && type->ref->c)
         tcc_warning("will touch memory past end of the struct (internal limitation)");
 }
 
