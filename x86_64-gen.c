@@ -1196,209 +1196,119 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, run_start, run_end, i, reg_count;
+    int size, align, r, args_size, stack_adjust, i, reg_count;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
+    char _onstack[nb_args], *onstack = _onstack;
 
-    /* calculate the number of integer/float register arguments */
-    for(i = 0; i < nb_args; i++) {
+    /* calculate the number of integer/float register arguments, remember
+       arguments to be passed via stack (in onstack[]), and also remember
+       if we have to align the stack pointer to 16 (onstack[i] == 2).  Needs
+       to be done in a left-to-right pass over arguments.  */
+    stack_adjust = 0;
+    for(i = nb_args - 1; i >= 0; i--) {
         mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
-        if (mode == x86_64_mode_sse)
+        if (mode == x86_64_mode_sse && nb_sse_args + reg_count <= 8) {
             nb_sse_args += reg_count;
-        else if (mode == x86_64_mode_integer)
+	    onstack[i] = 0;
+	} else if (mode == x86_64_mode_integer && nb_reg_args + reg_count <= REGN) {
             nb_reg_args += reg_count;
+	    onstack[i] = 0;
+	} else if (mode == x86_64_mode_none) {
+	    onstack[i] = 0;
+	} else {
+	    if (align == 16 && (stack_adjust &= 15)) {
+		onstack[i] = 2;
+		stack_adjust = 0;
+	    } else
+	      onstack[i] = 1;
+	    stack_adjust += size;
+	}
     }
 
     if (nb_sse_args && tcc_state->nosse)
       tcc_error("SSE disabled but floating point arguments passed");
 
-    /* arguments are collected in runs. Each run is a collection of 8-byte aligned arguments
-       and ended by a 16-byte aligned argument. This is because, from the point of view of
-       the callee, argument alignment is computed from the bottom up. */
+    /* fetch cpu flag before generating any code */
+    if (vtop >= vstack && (vtop->r & VT_VALMASK) == VT_CMP)
+      gv(RC_INT);
+
     /* for struct arguments, we need to call memcpy and the function
        call breaks register passing arguments we are preparing.
        So, we process arguments which will be passed by stack first. */
     gen_reg = nb_reg_args;
     sse_reg = nb_sse_args;
-    run_start = 0;
     args_size = 0;
-    while (run_start != nb_args) {
-        int run_gen_reg = gen_reg, run_sse_reg = sse_reg;
-        
-        run_end = nb_args;
-        stack_adjust = 0;
-        for(i = run_start; (i < nb_args) && (run_end == nb_args); i++) {
-            mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
-            switch (mode) {
-            case x86_64_mode_memory:
-            case x86_64_mode_x87:
-            stack_arg:
-                if (align == 16)
-                    run_end = i;
-                else
-                    stack_adjust += size;
-                break;
-                
-            case x86_64_mode_sse:
-                sse_reg -= reg_count;
-                if (sse_reg + reg_count > 8) goto stack_arg;
-                break;
-            
-            case x86_64_mode_integer:
-                gen_reg -= reg_count;
-                if (gen_reg + reg_count > REGN) goto stack_arg;
-                break;
-	    default: break; /* nothing to be done for x86_64_mode_none */
-            }
+    stack_adjust &= 15;
+    for (i = 0; i < nb_args;) {
+	mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
+	if (!onstack[i]) {
+	    ++i;
+	    continue;
+	}
+        /* Possibly adjust stack to align SSE boundary.  We're processing
+	   args from right to left while allocating happens left to right
+	   (stack grows down), so the adjustment needs to happen _after_
+	   an argument that requires it.  */
+        if (stack_adjust) {
+	    o(0x50); /* push %rax; aka sub $8,%rsp */
+            args_size += 8;
+	    stack_adjust = 0;
         }
-        
-        gen_reg = run_gen_reg;
-        sse_reg = run_sse_reg;
-        
-        /* adjust stack to align SSE boundary */
-        if (stack_adjust &= 15) {
-            /* fetch cpu flag before the following sub will change the value */
-            if (vtop >= vstack && (vtop->r & VT_VALMASK) == VT_CMP)
-                gv(RC_INT);
+	if (onstack[i] == 2)
+	  stack_adjust = 1;
 
-            stack_adjust = 16 - stack_adjust;
-            o(0x48);
-            oad(0xec81, stack_adjust); /* sub $xxx, %rsp */
-            args_size += stack_adjust;
-        }
-        
-        for(i = run_start; i < run_end;) {
-            /* Swap argument to top, it will possibly be changed here,
-              and might use more temps. At the end of the loop we keep
-              in on the stack and swap it back to its original position
-              if it is a register. */
-            SValue tmp = vtop[0];
-            int arg_stored = 1;
+	vrotb(i+1);
 
-            vtop[0] = vtop[-i];
-            vtop[-i] = tmp;
-            mode = classify_x86_64_arg(&vtop->type, NULL, &size, &align, &reg_count);
-            
-            switch (vtop->type.t & VT_BTYPE) {
-            case VT_STRUCT:
-                if (mode == x86_64_mode_sse) {
-                    if (sse_reg > 8)
-                        sse_reg -= reg_count;
-                    else
-                        arg_stored = 0;
-                } else if (mode == x86_64_mode_integer) {
-                    if (gen_reg > REGN)
-                        gen_reg -= reg_count;
-                    else
-                        arg_stored = 0;
-                }
-                
-                if (arg_stored) {
-                    /* allocate the necessary size on stack */
-                    o(0x48);
-                    oad(0xec81, size); /* sub $xxx, %rsp */
-                    /* generate structure store */
-                    r = get_reg(RC_INT);
-                    orex(1, r, 0, 0x89); /* mov %rsp, r */
-                    o(0xe0 + REG_VALUE(r));
-                    vset(&vtop->type, r | VT_LVAL, 0);
-                    vswap();
-                    vstore();
-                    args_size += size;
-                }
-                break;
-                
-            case VT_LDOUBLE:
-                assert(0);
-                break;
-                
-            case VT_FLOAT:
-            case VT_DOUBLE:
-                assert(mode == x86_64_mode_sse);
-                if (sse_reg > 8) {
-                    --sse_reg;
-                    r = gv(RC_FLOAT);
-                    o(0x50); /* push $rax */
-                    /* movq %xmmN, (%rsp) */
-                    o(0xd60f66);
-                    o(0x04 + REG_VALUE(r)*8);
-                    o(0x24);
-                    args_size += size;
-                } else {
-                    arg_stored = 0;
-                }
-                break;
-                
-            default:
-                assert(mode == x86_64_mode_integer);
-                /* simple type */
-                /* XXX: implicit cast ? */
-                if (gen_reg > REGN) {
-                    --gen_reg;
-                    r = gv(RC_INT);
-                    orex(0,r,0,0x50 + REG_VALUE(r)); /* push r */
-                    args_size += size;
-                } else {
-                    arg_stored = 0;
-                }
-                break;
-            }
-            
-            /* And swap the argument back to it's original position.  */
-            tmp = vtop[0];
-            vtop[0] = vtop[-i];
-            vtop[-i] = tmp;
+	switch (vtop->type.t & VT_BTYPE) {
+	    case VT_STRUCT:
+		/* allocate the necessary size on stack */
+		o(0x48);
+		oad(0xec81, size); /* sub $xxx, %rsp */
+		/* generate structure store */
+		r = get_reg(RC_INT);
+		orex(1, r, 0, 0x89); /* mov %rsp, r */
+		o(0xe0 + REG_VALUE(r));
+		vset(&vtop->type, r | VT_LVAL, 0);
+		vswap();
+		vstore();
+		break;
 
-            if (arg_stored) {
-              vrotb(i+1);
-              assert((vtop->type.t == tmp.type.t) && (vtop->r == tmp.r));
-              vpop();
-              --nb_args;
-              --run_end;
-            } else {
-              ++i;
-            }
-        }
-
-        /* handle 16 byte aligned arguments at end of run */
-        run_start = i = run_end;
-        while (i < nb_args) {
-            /* Rotate argument to top since it will always be popped */
-            mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
-            if (align != 16)
-              break;
-
-            vrotb(i+1);
-            
-            if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+	    case VT_LDOUBLE:
                 gv(RC_ST0);
                 oad(0xec8148, size); /* sub $xxx, %rsp */
                 o(0x7cdb); /* fstpt 0(%rsp) */
                 g(0x24);
                 g(0x00);
-                args_size += size;
-            } else {
-                assert(mode == x86_64_mode_memory);
+		break;
 
-                /* allocate the necessary size on stack */
-                o(0x48);
-                oad(0xec81, size); /* sub $xxx, %rsp */
-                /* generate structure store */
-                r = get_reg(RC_INT);
-                orex(1, r, 0, 0x89); /* mov %rsp, r */
-                o(0xe0 + REG_VALUE(r));
-                vset(&vtop->type, r | VT_LVAL, 0);
-                vswap();
-                vstore();
-                args_size += size;
-            }
-            
-            vpop();
-            --nb_args;
-        }
+	    case VT_FLOAT:
+	    case VT_DOUBLE:
+		assert(mode == x86_64_mode_sse);
+		r = gv(RC_FLOAT);
+		o(0x50); /* push $rax */
+		/* movq %xmmN, (%rsp) */
+		o(0xd60f66);
+		o(0x04 + REG_VALUE(r)*8);
+		o(0x24);
+		break;
+
+	    default:
+		assert(mode == x86_64_mode_integer);
+		/* simple type */
+		/* XXX: implicit cast ? */
+		r = gv(RC_INT);
+		orex(0,r,0,0x50 + REG_VALUE(r)); /* push r */
+		break;
+	}
+	args_size += size;
+
+	vpop();
+	--nb_args;
+	onstack++;
     }
-    
+
     /* XXX This should be superfluous.  */
     save_regs(0); /* save used temporary registers */
 
