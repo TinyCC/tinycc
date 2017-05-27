@@ -558,6 +558,36 @@ static int stdarg_test(void) {
   return run_callback(src, stdarg_test_callback);
 }
 
+typedef struct {long long a, b;} stdarg_many_test_struct_type;
+typedef void (*stdarg_many_test_function_type) (int, int, int, int, int,
+						stdarg_many_test_struct_type,
+						int, int, ...);
+
+static int stdarg_many_test_callback(void *ptr)
+{
+  stdarg_many_test_function_type f = (stdarg_many_test_function_type)ptr;
+  int x;
+  stdarg_many_test_struct_type l = {10, 11};
+  f(1, 2, 3, 4, 5, l, 6, 7, &x, 44);
+  return x == 44 ? 0 : -1;
+}
+
+static int stdarg_many_test(void)
+{
+  const char *src =
+  "#include <stdarg.h>\n"
+  "typedef struct {long long a, b;} stdarg_many_test_struct_type;\n"
+  "void f (int a, int b, int c, int d, int e, stdarg_many_test_struct_type l, int f, int g, ...){\n"
+  "  va_list ap;\n"
+  "  int *p;\n"
+  "  va_start (ap, g);\n"
+  "  p = va_arg(ap, int*);\n"
+  "  *p = va_arg(ap, int);\n"
+  "  va_end (ap);\n"
+  "}\n";
+  return run_callback(src, stdarg_many_test_callback);
+}
+
 /*
  * Test Win32 stdarg handling, since the calling convention will pass a pointer
  * to the struct and the stdarg pointer must point to that pointer initially.
@@ -654,6 +684,7 @@ int main(int argc, char **argv) {
   RUN_TEST(many_struct_test_2);
   RUN_TEST(many_struct_test_3);
   RUN_TEST(stdarg_test);
+  RUN_TEST(stdarg_many_test);
   RUN_TEST(stdarg_struct_test);
   RUN_TEST(arg_align_test);
   return retval;

@@ -1423,21 +1423,15 @@ void gfunc_prolog(CType *func_type)
                 break;
                 
             case x86_64_mode_integer:
-                if (seen_reg_num + reg_count <= 8) {
-                    seen_reg_num += reg_count;
-                } else {
-                    seen_reg_num = 8;
-                    goto stack_arg;
-                }
+                if (seen_reg_num + reg_count > REGN)
+		    goto stack_arg;
+		seen_reg_num += reg_count;
                 break;
                 
             case x86_64_mode_sse:
-                if (seen_sse_num + reg_count <= 8) {
-                    seen_sse_num += reg_count;
-                } else {
-                    seen_sse_num = 8;
-                    goto stack_arg;
-                }
+                if (seen_sse_num + reg_count > 8)
+		    goto stack_arg;
+		seen_sse_num += reg_count;
                 break;
             }
         }
