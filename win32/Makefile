@@ -111,6 +111,7 @@ PHONY += rebuild
 
 test:
 	@(cd ../tests/tests2; $(MAKE) -k TCC=../../win32/tcc)
+	@(cd ../tests/pp;     $(MAKE) -k TCC=../../win32/tcc)
 
 PHONY += test
 
