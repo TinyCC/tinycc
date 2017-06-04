@@ -110,8 +110,8 @@ rebuild:
 PHONY += rebuild
 
 test:
-	@(cd ../tests/tests2; $(MAKE) -k TCC=../../win32/tcc)
-	@(cd ../tests/pp;     $(MAKE) -k TCC=../../win32/tcc)
+	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/tcc hello-exe hello-run)
+	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/tcc vla_test-run tests2-dir pp-dir)
 
 PHONY += test
 
