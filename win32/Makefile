@@ -104,7 +104,7 @@ rebuild:
 	@echo Rebuild using tcc itself - default $(TARGET)bits
 	@./$(TARCH)-win32-tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c
 	@./tcc $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
-	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
+	@./tcc -m32 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
 	@./tcc -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
 
 PHONY += rebuild
@@ -112,6 +112,10 @@ PHONY += rebuild
 test:
 	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/tcc hello-exe hello-run)
 	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/tcc vla_test-run tests2-dir pp-dir)
+ifeq ($(CPU), 64)
+	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/i386-win32-tcc hello-exe hello-run)
+	@(cd ../tests; $(MAKE) -k TCC=$(PWD)/i386-win32-tcc vla_test-run tests2-dir pp-dir)
+endif
 
 PHONY += test
 
