@@ -48,6 +48,7 @@ static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 static int pp_debug_tok, pp_debug_symv;
 static int pp_once;
+static int pp_expr;
 static void tok_print(const char *msg, const int *str);
 
 static struct TinyAlloc *toksym_alloc;
@@ -127,7 +128,7 @@ ST_FUNC void expect(const char *msg)
 #define tal_free(al, p) tal_free_impl(al, p, __FILE__, __LINE__)
 #define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size, __FILE__, __LINE__)
 #define TAL_DEBUG_PARAMS , const char *file, int line
-#define TAL_DEBUG_FILE_LEN 15
+#define TAL_DEBUG_FILE_LEN 40
 #endif
 
 #define TOKSYM_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenSym in table_ident */
@@ -1056,7 +1057,7 @@ static inline int tok_size(const int *p)
 ST_INLN void tok_str_new(TokenString *s)
 {
     s->str = NULL;
-    s->len = 0;
+    s->len = s->lastlen = 0;
     s->allocated_len = 0;
     s->last_line_num = -1;
 }
@@ -1142,7 +1143,7 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
 {
     int len, *str;
 
-    len = s->len;
+    len = s->lastlen = s->len;
     str = s->str;
 
     /* allocate space for worst case */
@@ -1269,19 +1270,6 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
         break;
     }
     *pp = p;
-}
-
-/* Calling this function is expensive, but it is not possible
-   to read a token string backwards. */
-static int tok_last(const int *str0, const int *str1)
-{
-    const int *str = str0;
-    int tok = 0;
-    CValue cval;
-
-    while (str < str1)
-        TOK_GET(&tok, &str, &cval);
-    return tok;
 }
 
 static int macro_is_equal(const int *a, const int *b)
@@ -1418,6 +1406,7 @@ static int expr_preprocess(void)
     TokenString *str;
     
     str = tok_str_alloc();
+    pp_expr = 1;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         next(); /* do macro subst */
         if (tok == TOK_DEFINED) {
@@ -1425,9 +1414,14 @@ static int expr_preprocess(void)
             t = tok;
             if (t == '(') 
                 next_nomacro();
+            if (tok < TOK_IDENT)
+                expect("identifier");
             c = define_find(tok) != 0;
-            if (t == '(')
+            if (t == '(') {
                 next_nomacro();
+                if (tok != ')')
+                    expect("')'");
+            }
             tok = TOK_CINT;
             tokc.i = c;
         } else if (tok >= TOK_IDENT) {
@@ -1437,6 +1431,7 @@ static int expr_preprocess(void)
         }
         tok_str_add_tok(str);
     }
+    pp_expr = 0;
     tok_str_add(str, -1); /* simulate end of file */
     tok_str_add(str, 0);
     /* now evaluate C constant expression */
@@ -1456,7 +1451,7 @@ ST_FUNC void parse_define(void)
     int saved_parse_flags = parse_flags;
 
     v = tok;
-    if (v < TOK_IDENT)
+    if (v < TOK_IDENT || v == TOK_DEFINED)
         tcc_error("invalid macro name '%s'", get_tok_str(tok, &tokc));
     /* XXX: should check if same macro (ANSI) */
     first = NULL;
@@ -3403,23 +3398,26 @@ static void macro_subst(
                 macro_str = macro_ptr;
                 end_macro ();
             }
-
-            spc = (tok_str->len &&
-                   is_space(tok_last(tok_str->str,
-                                     tok_str->str + tok_str->len)));
-
+            if (tok_str->len)
+                spc = is_space(t = tok_str->str[tok_str->lastlen]);
         } else {
-
             if (t == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
                 tcc_error("stray '\\' in program");
-
 no_subst:
             if (!check_space(t, &spc))
                 tok_str_add2(tok_str, t, &cval);
-            nosubst = 0;
+
+            if (nosubst) {
+                if (nosubst > 1 && (spc || (++nosubst == 3 && t == '(')))
+                    continue;
+                nosubst = 0;
+            }
             if (t == TOK_NOSUBST)
                 nosubst = 1;
         }
+        /* GCC supports 'defined' as result of a macto substitution */
+        if (t == TOK_DEFINED && pp_expr)
+            nosubst = 2;
     }
 }
 
