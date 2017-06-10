@@ -98,7 +98,7 @@ static const char help2[] =
     "  error                         stop after first warning\n"
     "  unsupported                   warn about ignored options, pragmas, etc.\n"
     "  write-strings                 strings are const\n"
-    "  implicit-function-declaration   warn for missing prototype (*)\n"
+    "  implicit-function-declaration warn for missing prototype (*)\n"
     "-f[no-]... flags:\n"
     "  unsigned-char                 default char is unsigned\n"
     "  signed-char                   default char is signed\n"
