@@ -5878,7 +5878,7 @@ static void skip_or_save_block(TokenString **str)
     if (str)
       *str = tok_str_alloc();
 
-    while ((level > 0 || (tok != '}' && tok != ',' && tok != ';'))) {
+    while ((level > 0 || (tok != '}' && tok != ',' && tok != ';' && tok != ')'))) {
 	int t;
 	if (tok == TOK_EOF) {
 	     if (str || level > 0)
