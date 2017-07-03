@@ -2829,7 +2829,8 @@ static void gen_assign_cast(CType *dt)
 	    }
         }
         /* check const and volatile */
-        if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT)) ||
+        if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT) &&
+	     ((type2->t & VT_BTYPE) != VT_BYTE || tcc_state->warn_write_strings)) ||
             (!(type1->t & VT_VOLATILE) && (type2->t & VT_VOLATILE)))
             tcc_warning("assignment discards qualifiers from pointer target type");
         break;
@@ -4381,8 +4382,7 @@ ST_FUNC void unary(void)
         /* string parsing */
         t = VT_BYTE;
     str_init:
-        if (tcc_state->warn_write_strings)
-            t |= VT_CONSTANT;
+        t |= VT_CONSTANT;
         type.t = t;
         mk_pointer(&type);
         type.t |= VT_ARRAY;
