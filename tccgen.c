@@ -5867,11 +5867,13 @@ static void block(int *bsym, int *csym, int is_expr)
 }
 
 /* This skips over a stream of tokens containing balanced {} and ()
-   pairs, stopping at outer ',' ';' and '}'.  If STR then allocates
-   and stores the skipped tokens in *STR.  This doesn't check if
-   () and {} are nested correctly, i.e. "({)}" is accepted.  */
+   pairs, stopping at outer ',' ';' and '}' (or matching '}' if we started
+   with a '{').  If STR then allocates and stores the skipped tokens
+   in *STR.  This doesn't check if () and {} are nested correctly,
+   i.e. "({)}" is accepted.  */
 static void skip_or_save_block(TokenString **str)
 {
+    int braces = tok == '{';
     int level = 0;
     if (str)
       *str = tok_str_alloc();
@@ -5892,7 +5894,7 @@ static void skip_or_save_block(TokenString **str)
 	    level++;
 	} else if (t == '}' || t == ')') {
 	    level--;
-	    if (level == 0)
+	    if (level == 0 && braces && t == '}')
 	      break;
 	}
     }
@@ -6413,9 +6415,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	   But GNU C supports it, so we need to recurse even into
 	   subfields of structs and arrays when size_only is set.  */
         /* just skip expression */
-	do {
-	    skip_or_save_block(NULL);
-	} while (tok != '}' && tok != ',' && tok != -1);
+        skip_or_save_block(NULL);
     } else {
 	if (!have_elem) {
 	    /* This should happen only when we haven't parsed
