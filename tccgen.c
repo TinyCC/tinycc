@@ -4908,6 +4908,7 @@ ST_FUNC void unary(void)
 	if (controlling_type.t & VT_ARRAY)
 		controlling_type.t = VT_PTR;
 	controlling_type.t &= ~VT_CONSTANT;
+	controlling_type.t &= ~VT_VOLATILE;
 	for (;;) {
 	    learn = 0;
 	    skip(',');
