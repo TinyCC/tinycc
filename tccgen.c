@@ -4950,7 +4950,7 @@ ST_FUNC void unary(void)
 	    char buf[256];
 
 	    type_to_str(buf, 256, &controlling_type, NULL);
-	    tcc_error("_Generic sellector of type '%s' is not compatible with any assosiation",
+	    tcc_error("_Generic selector of type '%s' is not compatible with any assosiation",
 		      buf);
 	}
 	skip(')');
