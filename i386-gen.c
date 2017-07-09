@@ -161,14 +161,14 @@ static int oad(int c, int s)
 #define gjmp2(instr,lbl) oad(instr,lbl)
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-ST_FUNC void gen_addr32(int r, Sym *sym, long c)
+ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_386_32);
     gen_le32(c);
 }
 
-ST_FUNC void gen_addrpc32(int r, Sym *sym, long c)
+ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloc(cur_text_section, sym, ind, R_386_PC32);
@@ -477,7 +477,7 @@ ST_FUNC void gfunc_call(int nb_args)
     }
     save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
-    func_call = func_sym->a.func_call;
+    func_call = func_sym->f.func_call;
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
         func_call == FUNC_FASTCALLW) {
@@ -525,7 +525,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     CType *type;
 
     sym = func_type->ref;
-    func_call = sym->a.func_call;
+    func_call = sym->f.func_call;
     addr = 8;
     loc = 0;
     func_vc = 0;
@@ -547,7 +547,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
-    func_var = (sym->c == FUNC_ELLIPSIS);
+    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
 #ifdef TCC_TARGET_PE
     size = type_size(&func_vt,&align);
     if (((func_vt.t & VT_BTYPE) == VT_STRUCT)

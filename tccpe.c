@@ -1477,7 +1477,7 @@ ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
     int r2;
     if ((sv->r & (VT_VALMASK|VT_SYM)) != (VT_CONST|VT_SYM) || (sv->r2 != VT_CONST))
         return sv;
-    if (!(sv->sym->type.t & VT_IMPORT))
+    if (!sv->sym->a.dllimport)
         return sv;
     // printf("import %04x %04x %04x %s\n", sv->type.t, sv->sym->type.t, sv->r, get_tok_str(sv->sym->v, NULL));
     memset(v2, 0, sizeof *v2);

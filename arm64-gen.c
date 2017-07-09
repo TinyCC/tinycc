@@ -428,7 +428,7 @@ static void arm64_sym(int r, Sym *sym, unsigned long addend)
     // relocation and use only relocations with unlimited range.
     int avoid_adrp = 1;
 
-    if (avoid_adrp || (sym->type.t & VT_WEAK)) {
+    if (avoid_adrp || sym->a.weak) {
         // (GCC uses a R_AARCH64_ABS64 in this case.)
         greloca(cur_text_section, sym, ind, R_AARCH64_MOVW_UABS_G0_NC, addend);
         o(0xd2800000 | r); // mov x(rt),#0,lsl #0

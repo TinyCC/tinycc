@@ -1221,7 +1221,7 @@ void gfunc_call(int nb_args)
   int variadic;
 
   if (float_abi == ARM_HARD_FLOAT) {
-    variadic = (vtop[-nb_args].type.ref->c == FUNC_ELLIPSIS);
+    variadic = (vtop[-nb_args].type.ref->f.func_type == FUNC_ELLIPSIS);
     if (variadic || floats_in_core_regs(&vtop[-nb_args]))
       float_abi = ARM_SOFTFP_FLOAT;
   }
@@ -1279,7 +1279,7 @@ void gfunc_prolog(CType *func_type)
 
   sym = func_type->ref;
   func_vt = sym->type;
-  func_var = (func_type->ref->c == FUNC_ELLIPSIS);
+  func_var = (func_type->ref->f.func_type == FUNC_ELLIPSIS);
 
   n = nf = 0;
   if ((func_vt.t & VT_BTYPE) == VT_STRUCT &&

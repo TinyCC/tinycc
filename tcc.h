@@ -407,49 +407,59 @@ typedef struct SValue {
     			      result of unary() for an identifier. */
 } SValue;
 
-struct Attribute {
+/* symbol attributes */
+struct SymAttr {
+    unsigned short
+    aligned     : 5, /* alignment as log2+1 (0 == unspecified) */
+    packed      : 1,
+    weak        : 1,
+    visibility  : 2,
+    dllexport   : 1,
+    dllimport   : 1,
+    unsigned_enum : 1,
+    unused      : 4;
+};
+
+/* function attributes or temporary attributes for parsing */
+struct FuncAttr {
     unsigned
-        func_call     : 3, /* calling convention (0..5), see below */
-        aligned       : 5, /* alignment as log2+1 (0 == unspecified) */
-        packed        : 1,
-        func_export   : 1,
-        func_import   : 1,
-        func_args     : 5,
-        func_body     : 1,
-        mode          : 4,
-        weak          : 1,
-        visibility    : 2,
-	unsigned_enum : 1,
-        fill          : 7; // 7 bits left to fit well in union below
+    func_call   : 3, /* calling convention (0..5), see below */
+    func_type   : 2, /* FUNC_OLD/NEW/ELLIPSIS */
+    func_body   : 1, /* body was defined */
+    func_args   : 8; /* PE __stdcall args */
 };
 
 /* GNUC attribute definition */
 typedef struct AttributeDef {
-    struct Attribute a;
+    struct SymAttr a;
+    struct FuncAttr f;
     struct Section *section;
-    int alias_target;    /* token */
-    int asm_label;    /* associated asm label */
+    int alias_target; /* token */
+    int asm_label; /* associated asm label */
+    char attr_mode; /* __attribute__((__mode__(...))) */
 } AttributeDef;
 
 /* symbol management */
 typedef struct Sym {
-    int v;    /* symbol token */
+    int v; /* symbol token */
+    unsigned short r; /* associated register or VT_CONST/VT_LOCAL and LVAL type */
+    struct SymAttr a; /* symbol attributes */
     union {
-        int asm_label;    /* associated asm label */
-        int scope;  /* scope level for locals */
+        struct {
+            int c; /* associated number or Elf symbol index */
+            union {
+                int sym_scope; /* scope level for locals */
+                int jnext; /* next jump label */
+                struct FuncAttr f; /* function attributes */
+            };
+        };
+        long long enum_val; /* enum constant if IS_ENUM_VAL */
+        int *d; /* define token stream */
     };
-    union {
-        long r;    /* associated register or VT_CONST/VT_LOCAL and LVAL type */
-        struct Attribute a;
-    };
-    union {
-        long c;    /* associated number */
-        int *d;   /* define token stream */
-    };
-    CType type;    /* associated type */
+    CType type; /* associated type */
     union {
         struct Sym *next; /* next related symbol (for fields and anoms) */
-        long jnext; /* next jump label */
+        int asm_label; /* associated asm label */
     };
     struct Sym *prev; /* prev symbol in stack */
     struct Sym *prev_tok; /* previous symbol for this token */
@@ -498,12 +508,12 @@ typedef struct DLLReference {
 #define SYM_FIELD      0x20000000 /* struct/union field symbol space */
 #define SYM_FIRST_ANOM 0x10000000 /* first anonymous sym */
 
-/* stored in 'Sym.c' field */
+/* stored in 'Sym->f.func_type' field */
 #define FUNC_NEW       1 /* ansi function prototype */
 #define FUNC_OLD       2 /* old function prototype */
 #define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
 
-/* stored in 'Sym.r' field */
+/* stored in 'Sym->f.func_call' field */
 #define FUNC_CDECL     0 /* standard c call */
 #define FUNC_STDCALL   1 /* pascal c call */
 #define FUNC_FASTCALL1 2 /* first param in %eax */
@@ -834,53 +844,48 @@ struct filespec {
 
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */
-#define VT_INT              0  /* integer type */
+#define VT_VOID             0  /* void type */
 #define VT_BYTE             1  /* signed byte type */
 #define VT_SHORT            2  /* short type */
-#define VT_VOID             3  /* void type */
-#define VT_PTR              4  /* pointer */
-#define VT_ENUM             5  /* enum definition */
+#define VT_INT              3  /* integer type */
+#define VT_LLONG            4  /* 64 bit integer */
+#define VT_PTR              5  /* pointer */
 #define VT_FUNC             6  /* function type */
 #define VT_STRUCT           7  /* struct/union definition */
-#define VT_FLOAT            8  /* IEEE float */
-#define VT_DOUBLE           9  /* IEEE double */
-#define VT_LDOUBLE         10  /* IEEE long double */
-#define VT_BOOL            11  /* ISOC99 boolean type */
-#define VT_LLONG           12  /* 64 bit integer */
-#define VT_LONG            13  /* long integer (NEVER USED as type, only
-                                  during parsing) */
+#define VT_ENUM             8  /* enum definition */
+#define VT_FLOAT            9  /* IEEE float */
+#define VT_DOUBLE          10  /* IEEE double */
+#define VT_LDOUBLE         11  /* IEEE long double */
+#define VT_BOOL            12  /* ISOC99 boolean type */
+#define VT_LONG            13  /* long integer (NEVER USED as type, only during parsing) */
 #define VT_QLONG           14  /* 128-bit integer. Only used for x86-64 ABI */
 #define VT_QFLOAT          15  /* 128-bit float. Only used for x86-64 ABI */
+
 #define VT_UNSIGNED    0x0010  /* unsigned type */
-#define VT_ARRAY       0x0020  /* array type (also has VT_PTR) */
-#define VT_BITFIELD    0x0040  /* bitfield modifier */
-#define VT_CONSTANT    0x0800  /* const modifier */
-#define VT_VOLATILE    0x1000  /* volatile modifier */
-#define VT_DEFSIGN     0x2000  /* signed type */
-#define VT_VLA     0x00020000  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_DEFSIGN     0x0020  /* explicitly signed or unsigned */
+#define VT_ARRAY       0x0040  /* array type (also has VT_PTR) */
+#define VT_BITFIELD    0x0080  /* bitfield modifier */
+#define VT_CONSTANT    0x0100  /* const modifier */
+#define VT_VOLATILE    0x0200  /* volatile modifier */
+#define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_UNION (VT_STRUCT|VT_UNSIGNED) /* VT_STRUCT type with some modifier */
 
 /* storage */
-#define VT_EXTERN  0x00000080  /* extern definition */
-#define VT_STATIC  0x00000100  /* static variable */
-#define VT_TYPEDEF 0x00000200  /* typedef definition */
-#define VT_INLINE  0x00000400  /* inline definition */
-#define VT_IMPORT  0x00004000  /* win32: extern data imported from dll */
-#define VT_EXPORT  0x00008000  /* win32: data exported from dll */
-#define VT_WEAK    0x00010000  /* weak symbol */
-#define VT_TLS     0x00040000  /* thread-local storage */
-#define VT_VIS_SHIFT    19     /* shift for symbol visibility, overlapping
-				  bitfield values, because bitfields never
-				  have linkage and hence never have
-				  visibility.  */
-#define VT_VIS_SIZE      2     /* We have four visibilities.  */
-#define VT_VIS_MASK (((1 << VT_VIS_SIZE)-1) << VT_VIS_SHIFT)
+#define VT_EXTERN  0x00001000  /* extern definition */
+#define VT_STATIC  0x00002000  /* static variable */
+#define VT_TYPEDEF 0x00004000  /* typedef definition */
+#define VT_INLINE  0x00008000  /* inline definition */
+/* currently unused: 0x0800, 0x000[1248]0000  */
 
-#define VT_STRUCT_SHIFT 19     /* shift for bitfield shift values (max: 32 - 2*6) */
-
+#define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
+#define VT_STRUCT_MASK (((1 << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
+#define BIT_POS(t) (((t) >> VT_STRUCT_SHIFT) & 0x3f)
+#define BIT_SIZE(t) (((t) >> (VT_STRUCT_SHIFT + 6)) & 0x3f)
 
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_IMPORT | VT_EXPORT | VT_WEAK | VT_VIS_MASK)
-#define VT_TYPE (~(VT_STORAGE))
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_STRUCT_MASK)
+#define VT_TYPE (~VT_STORAGE)
+
 
 /* token values */
 
@@ -1117,13 +1122,13 @@ ST_FUNC void cstr_free(CString *cstr);
 ST_FUNC void cstr_reset(CString *cstr);
 
 ST_INLN void sym_free(Sym *sym);
-ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, long c);
+ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
 ST_FUNC Sym *sym_find2(Sym *s, int v);
-ST_FUNC Sym *sym_push(int v, CType *type, int r, long c);
+ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
 ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
 ST_INLN Sym *struct_find(int v);
 ST_INLN Sym *sym_find(int v);
-ST_FUNC Sym *global_identifier_push(int v, int t, long c);
+ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
@@ -1296,7 +1301,7 @@ ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void vpushi(int v);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
-ST_FUNC void vset(CType *type, int r, long v);
+ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
 ST_FUNC void vpush_global_sym(CType *type, int v);
 ST_FUNC void vrote(SValue *e, int n);
@@ -1513,8 +1518,8 @@ static inline void add64le(unsigned char *p, int64_t x) {
 ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
-ST_FUNC void gen_addr32(int r, Sym *sym, long c);
-ST_FUNC void gen_addrpc32(int r, Sym *sym, long c);
+ST_FUNC void gen_addr32(int r, Sym *sym, int c);
+ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 #endif
 
 #ifdef CONFIG_TCC_BCHECK

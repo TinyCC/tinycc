@@ -239,7 +239,7 @@ static int oad(int c, int s)
 /* generate jmp to a label */
 #define gjmp2(instr,lbl) oad(instr,lbl)
 
-ST_FUNC void gen_addr32(int r, Sym *sym, long c)
+ST_FUNC void gen_addr32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloca(cur_text_section, sym, ind, R_X86_64_32S, c), c=0;
@@ -255,7 +255,7 @@ ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 }
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-ST_FUNC void gen_addrpc32(int r, Sym *sym, long c)
+ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
         greloca(cur_text_section, sym, ind, R_X86_64_PC32, c-4), c=4;
@@ -950,7 +950,7 @@ void gfunc_prolog(CType *func_type)
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
-    func_var = (sym->c == FUNC_ELLIPSIS);
+    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
     size = gfunc_arg_size(&func_vt);
     if (!using_regs(size)) {
         gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
@@ -988,7 +988,7 @@ void gfunc_prolog(CType *func_type)
     }
 
     while (reg_param_index < REGN) {
-        if (func_type->ref->c == FUNC_ELLIPSIS) {
+        if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
             gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             addr += 8;
         }
@@ -1393,7 +1393,7 @@ void gfunc_call(int nb_args)
         }
     }
 
-    if (vtop->type.ref->c != FUNC_NEW) /* implies FUNC_OLD or FUNC_ELLIPSIS */
+    if (vtop->type.ref->f.func_type != FUNC_NEW) /* implies FUNC_OLD or FUNC_ELLIPSIS */
         oad(0xb8, nb_sse_args < 8 ? nb_sse_args : 8); /* mov nb_sse_args, %eax */
     gcall_or_jmp(0);
     if (args_size)
@@ -1425,7 +1425,7 @@ void gfunc_prolog(CType *func_type)
     func_sub_sp_offset = ind;
     func_ret_sub = 0;
 
-    if (func_type->ref->c == FUNC_ELLIPSIS) {
+    if (sym->f.func_type == FUNC_ELLIPSIS) {
         int seen_reg_num, seen_sse_num, seen_stack_size;
         seen_reg_num = seen_sse_num = 0;
         /* frame pointer and return address */

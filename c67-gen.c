@@ -1951,12 +1951,12 @@ void gfunc_prolog(CType * func_type)
     CType *type;
 
     sym = func_type->ref;
-    func_call = sym->r;
+    func_call = sym->f.func_call;
     addr = 8;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
     func_vt = sym->type;
-    func_var = (sym->c == FUNC_ELLIPSIS);
+    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
 	func_vc = addr;
 	addr += 4;

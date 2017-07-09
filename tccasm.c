@@ -58,7 +58,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    /* We might be called for an asm block from inside a C routine
 	       and so might have local decls on the identifier stack.  Search
 	       for the first global one.  */
-	    while (csym && csym->scope)
+	    while (csym && csym->sym_scope)
 	        csym = csym->prev_tok;
 	}
 	/* Now, if we have a defined global symbol copy over
@@ -74,7 +74,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    /* XXX can't yet store st_size anywhere.  */
 	    sym->type.t &= ~VT_EXTERN;
 	    /* Mark that this asm symbol doesn't need to be fed back.  */
-	    sym->type.t |= VT_IMPORT;
+	    sym->a.dllimport = 1;
 	}
     }
     return sym;
@@ -418,7 +418,7 @@ static void asm_free_labels(TCCState *st)
         s1 = s->prev;
         /* define symbol value in object file */
 	s->type.t &= ~VT_EXTERN;
-        if (s->r && !(s->type.t & VT_IMPORT)) {
+        if (s->r && !s->a.dllimport) {
             if (s->r == SHN_ABS)
                 sec = SECTION_ABS;
             else
@@ -693,9 +693,9 @@ static void asm_parse_directive(TCCState *s1, int global)
 	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASMDIR_weak)
-                sym->type.t |= VT_WEAK;
+                sym->a.weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)
-	        sym->type.t |= STV_HIDDEN << VT_VIS_SHIFT;
+	        sym->a.visibility = STV_HIDDEN;
             next();
 	} while (tok == ',');
 	break;
