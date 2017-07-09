@@ -2980,18 +2980,29 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                             str.len--;
                             goto add_var;
                         }
-                    } else {
-                        for(;;) {
-                            int t1;
-                            TOK_GET(&t1, &st, &cval);
-                            if (t1 <= 0)
-                                break;
-                            tok_str_add2(&str, t1, &cval);
-                        }
                     }
                 } else {
             add_var:
-                    macro_subst(&str, nested_list, st);
+		    if (!s->next) {
+			/* Expand arguments tokens and store them.  In most
+			   cases we could also re-expand each argument if
+			   used multiple times, but not if the argument
+			   contains the __COUNTER__ macro.  */
+			TokenString str2;
+			sym_push2(&s->next, s->v, s->type.t, 0);
+			tok_str_new(&str2);
+			macro_subst(&str2, nested_list, st);
+			tok_str_add(&str2, 0);
+			s->next->d = str2.str;
+		    }
+		    st = s->next->d;
+                }
+                for(;;) {
+                    int t2;
+                    TOK_GET(&t2, &st, &cval);
+                    if (t2 <= 0)
+                        break;
+                    tok_str_add2(&str, t2, &cval);
                 }
                 if (str.len == l0) /* expanded to empty string */
                     tok_str_add(&str, TOK_PLCHLDR);
@@ -3180,11 +3191,13 @@ static int macro_subst_tok(
     CValue cval;
     CString cstr;
     char buf[32];
+    static int counter;
     
     /* if symbol is a macro, prepare substitution */
     /* special macros */
-    if (tok == TOK___LINE__) {
-        snprintf(buf, sizeof(buf), "%d", file->line_num);
+    if (tok == TOK___LINE__ || tok == TOK___COUNTER__) {
+        t = tok == TOK___LINE__ ? file->line_num : counter++;
+        snprintf(buf, sizeof(buf), "%d", t);
         cstrval = buf;
         t1 = TOK_PPNUM;
         goto add_cstr1;
@@ -3316,6 +3329,10 @@ static int macro_subst_tok(
             while (sa) {
                 sa1 = sa->prev;
                 tok_str_free_str(sa->d);
+                if (sa->next) {
+                    tok_str_free_str(sa->next->d);
+                    sym_free(sa->next);
+                }
                 sym_free(sa);
                 sa = sa1;
             }
