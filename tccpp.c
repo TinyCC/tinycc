@@ -2901,8 +2901,7 @@ ST_FUNC void next_nomacro(void)
 static void macro_subst(
     TokenString *tok_str,
     Sym **nested_list,
-    const int *macro_str,
-    int can_read_stream
+    const int *macro_str
     );
 
 /* substitute arguments in replacement lists in macro_str by the values in
@@ -2992,9 +2991,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                     }
                 } else {
             add_var:
-                    /* NOTE: the stream cannot be read when macro
-                       substituting an argument */
-                    macro_subst(&str, nested_list, st, 0);
+                    macro_subst(&str, nested_list, st);
                 }
                 if (str.len == l0) /* expanded to empty string */
                     tok_str_add(&str, TOK_PLCHLDR);
@@ -3015,235 +3012,6 @@ static char const ab_month_name[12][4] =
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-
-/* peek or read [ws_str == NULL] next token from function macro call,
-   walking up macro levels up to the file if necessary */
-static int next_argstream(Sym **nested_list, int can_read_stream, TokenString *ws_str)
-{
-    int t;
-    const int *p;
-    Sym *sa;
-
-    for (;;) {
-        if (macro_ptr) {
-            p = macro_ptr, t = *p;
-            if (ws_str) {
-                while (is_space(t) || TOK_LINEFEED == t || TOK_PLCHLDR == t)
-                    tok_str_add(ws_str, t), t = *++p;
-            }
-            if (t == 0) {
-                end_macro();
-                /* also, end of scope for nested defined symbol */
-                sa = *nested_list;
-                while (sa && sa->v == 0)
-                    sa = sa->prev;
-                if (sa)
-                    sa->v = 0;
-                continue;
-            }
-        } else {
-            ch = handle_eob();
-            if (ws_str) {
-                while (is_space(ch) || ch == '\n' || ch == '/') {
-                    if (ch == '/') {
-                        int c;
-                        uint8_t *p = file->buf_ptr;
-                        PEEKC(c, p);
-                        if (c == '*') {
-                            p = parse_comment(p);
-                            file->buf_ptr = p - 1;
-                        } else if (c == '/') {
-                            p = parse_line_comment(p);
-                            file->buf_ptr = p - 1;
-                        } else
-                            break;
-                        ch = ' ';
-                    }
-                    if (!(ch == '\f' || ch == '\v' || ch == '\r'))
-                        tok_str_add(ws_str, ch);
-                    cinp();
-                }
-            }
-            t = ch;
-        }
-
-        if (ws_str)
-            return t;
-        next_nomacro_spc();
-        return tok;
-    }
-}
-
-/* do macro substitution of current token with macro 's' and add
-   result to (tok_str,tok_len). 'nested_list' is the list of all
-   macros we got inside to avoid recursing. Return non zero if no
-   substitution needs to be done */
-static int macro_subst_tok(
-    TokenString *tok_str,
-    Sym **nested_list,
-    Sym *s,
-    int can_read_stream)
-{
-    Sym *args, *sa, *sa1;
-    int parlevel, *mstr, t, t1, spc;
-    TokenString str;
-    char *cstrval;
-    CValue cval;
-    CString cstr;
-    char buf[32];
-    
-    /* if symbol is a macro, prepare substitution */
-    /* special macros */
-    if (tok == TOK___LINE__) {
-        snprintf(buf, sizeof(buf), "%d", file->line_num);
-        cstrval = buf;
-        t1 = TOK_PPNUM;
-        goto add_cstr1;
-    } else if (tok == TOK___FILE__) {
-        cstrval = file->filename;
-        goto add_cstr;
-    } else if (tok == TOK___DATE__ || tok == TOK___TIME__) {
-        time_t ti;
-        struct tm *tm;
-
-        time(&ti);
-        tm = localtime(&ti);
-        if (tok == TOK___DATE__) {
-            snprintf(buf, sizeof(buf), "%s %2d %d", 
-                     ab_month_name[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
-        } else {
-            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", 
-                     tm->tm_hour, tm->tm_min, tm->tm_sec);
-        }
-        cstrval = buf;
-    add_cstr:
-        t1 = TOK_STR;
-    add_cstr1:
-        cstr_new(&cstr);
-        cstr_cat(&cstr, cstrval, 0);
-        cval.str.size = cstr.size;
-        cval.str.data = cstr.data;
-        tok_str_add2(tok_str, t1, &cval);
-        cstr_free(&cstr);
-    } else {
-        int saved_parse_flags = parse_flags;
-
-        mstr = s->d;
-        if (s->type.t == MACRO_FUNC) {
-            /* whitespace between macro name and argument list */
-            TokenString ws_str;
-            tok_str_new(&ws_str);
-
-            spc = 0;
-            parse_flags |= PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED
-                | PARSE_FLAG_ACCEPT_STRAYS;
-
-            /* get next token from argument stream */
-            t = next_argstream(nested_list, can_read_stream, &ws_str);
-            if (t != '(') {
-                /* not a macro substitution after all, restore the
-                 * macro token plus all whitespace we've read.
-                 * whitespace is intentionally not merged to preserve
-                 * newlines. */
-                parse_flags = saved_parse_flags;
-                tok_str_add(tok_str, tok);
-                if (parse_flags & PARSE_FLAG_SPACES) {
-                    int i;
-                    for (i = 0; i < ws_str.len; i++)
-                        tok_str_add(tok_str, ws_str.str[i]);
-                }
-                tok_str_free_str(ws_str.str);
-                return 0;
-            } else {
-                tok_str_free_str(ws_str.str);
-            }
-	    do {
-		next_nomacro(); /* eat '(' */
-	    } while (tok == TOK_PLCHLDR);
-
-            /* argument macro */
-            args = NULL;
-            sa = s->next;
-            /* NOTE: empty args are allowed, except if no args */
-            for(;;) {
-                do {
-                    next_argstream(nested_list, can_read_stream, NULL);
-                } while (is_space(tok) || TOK_LINEFEED == tok);
-    empty_arg:
-                /* handle '()' case */
-                if (!args && !sa && tok == ')')
-                    break;
-                if (!sa)
-                    tcc_error("macro '%s' used with too many args",
-                          get_tok_str(s->v, 0));
-                tok_str_new(&str);
-                parlevel = spc = 0;
-                /* NOTE: non zero sa->t indicates VA_ARGS */
-                while ((parlevel > 0 || 
-                        (tok != ')' && 
-                         (tok != ',' || sa->type.t)))) {
-                    if (tok == TOK_EOF || tok == 0)
-                        break;
-                    if (tok == '(')
-                        parlevel++;
-                    else if (tok == ')')
-                        parlevel--;
-                    if (tok == TOK_LINEFEED)
-                        tok = ' ';
-                    if (!check_space(tok, &spc))
-                        tok_str_add2(&str, tok, &tokc);
-                    next_argstream(nested_list, can_read_stream, NULL);
-                }
-                if (parlevel)
-                    expect(")");
-                str.len -= spc;
-                tok_str_add(&str, -1);
-                tok_str_add(&str, 0);
-                sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
-                sa1->d = str.str;
-                sa = sa->next;
-                if (tok == ')') {
-                    /* special case for gcc var args: add an empty
-                       var arg argument if it is omitted */
-                    if (sa && sa->type.t && gnu_ext)
-                        goto empty_arg;
-                    break;
-                }
-                if (tok != ',')
-                    expect(",");
-            }
-            if (sa) {
-                tcc_error("macro '%s' used with too few args",
-                      get_tok_str(s->v, 0));
-            }
-
-            parse_flags = saved_parse_flags;
-
-            /* now subst each arg */
-            mstr = macro_arg_subst(nested_list, mstr, args);
-            /* free memory */
-            sa = args;
-            while (sa) {
-                sa1 = sa->prev;
-                tok_str_free_str(sa->d);
-                sym_free(sa);
-                sa = sa1;
-            }
-        }
-
-        sym_push2(nested_list, s->v, 0, 0);
-        parse_flags = saved_parse_flags;
-        macro_subst(tok_str, nested_list, mstr, can_read_stream | 2);
-
-        /* pop nested defined symbol */
-        sa1 = *nested_list;
-        *nested_list = sa1->prev;
-        sym_free(sa1);
-        if (mstr != s->d)
-            tok_str_free_str(mstr);
-    }
-    return 0;
-}
 
 static int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
 {
@@ -3338,35 +3106,255 @@ static inline int *macro_twosharps(const int *ptr0)
     return macro_str1.str;
 }
 
+/* peek or read [ws_str == NULL] next token from function macro call,
+   walking up macro levels up to the file if necessary */
+static int next_argstream(Sym **nested_list, TokenString *ws_str)
+{
+    int t;
+    const int *p;
+    Sym *sa;
+
+    for (;;) {
+        if (macro_ptr) {
+            p = macro_ptr, t = *p;
+            if (ws_str) {
+                while (is_space(t) || TOK_LINEFEED == t || TOK_PLCHLDR == t)
+                    tok_str_add(ws_str, t), t = *++p;
+            }
+            if (t == 0) {
+                end_macro();
+                /* also, end of scope for nested defined symbol */
+                sa = *nested_list;
+                while (sa && sa->v == 0)
+                    sa = sa->prev;
+                if (sa)
+                    sa->v = 0;
+                continue;
+            }
+        } else {
+            ch = handle_eob();
+            if (ws_str) {
+                while (is_space(ch) || ch == '\n' || ch == '/') {
+                    if (ch == '/') {
+                        int c;
+                        uint8_t *p = file->buf_ptr;
+                        PEEKC(c, p);
+                        if (c == '*') {
+                            p = parse_comment(p);
+                            file->buf_ptr = p - 1;
+                        } else if (c == '/') {
+                            p = parse_line_comment(p);
+                            file->buf_ptr = p - 1;
+                        } else
+                            break;
+                        ch = ' ';
+                    }
+                    if (!(ch == '\f' || ch == '\v' || ch == '\r'))
+                        tok_str_add(ws_str, ch);
+                    cinp();
+                }
+            }
+            t = ch;
+        }
+
+        if (ws_str)
+            return t;
+        next_nomacro_spc();
+        return tok;
+    }
+}
+
+/* do macro substitution of current token with macro 's' and add
+   result to (tok_str,tok_len). 'nested_list' is the list of all
+   macros we got inside to avoid recursing. Return non zero if no
+   substitution needs to be done */
+static int macro_subst_tok(
+    TokenString *tok_str,
+    Sym **nested_list,
+    Sym *s)
+{
+    Sym *args, *sa, *sa1;
+    int parlevel, *mstr, t, t1, spc;
+    TokenString str;
+    char *cstrval;
+    CValue cval;
+    CString cstr;
+    char buf[32];
+    
+    /* if symbol is a macro, prepare substitution */
+    /* special macros */
+    if (tok == TOK___LINE__) {
+        snprintf(buf, sizeof(buf), "%d", file->line_num);
+        cstrval = buf;
+        t1 = TOK_PPNUM;
+        goto add_cstr1;
+    } else if (tok == TOK___FILE__) {
+        cstrval = file->filename;
+        goto add_cstr;
+    } else if (tok == TOK___DATE__ || tok == TOK___TIME__) {
+        time_t ti;
+        struct tm *tm;
+
+        time(&ti);
+        tm = localtime(&ti);
+        if (tok == TOK___DATE__) {
+            snprintf(buf, sizeof(buf), "%s %2d %d", 
+                     ab_month_name[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
+        } else {
+            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", 
+                     tm->tm_hour, tm->tm_min, tm->tm_sec);
+        }
+        cstrval = buf;
+    add_cstr:
+        t1 = TOK_STR;
+    add_cstr1:
+        cstr_new(&cstr);
+        cstr_cat(&cstr, cstrval, 0);
+        cval.str.size = cstr.size;
+        cval.str.data = cstr.data;
+        tok_str_add2(tok_str, t1, &cval);
+        cstr_free(&cstr);
+    } else {
+        int saved_parse_flags = parse_flags;
+	int *joined_str = NULL;
+
+        mstr = s->d;
+        if (s->type.t == MACRO_FUNC) {
+            /* whitespace between macro name and argument list */
+            TokenString ws_str;
+            tok_str_new(&ws_str);
+
+            spc = 0;
+            parse_flags |= PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED
+                | PARSE_FLAG_ACCEPT_STRAYS;
+
+            /* get next token from argument stream */
+            t = next_argstream(nested_list, &ws_str);
+            if (t != '(') {
+                /* not a macro substitution after all, restore the
+                 * macro token plus all whitespace we've read.
+                 * whitespace is intentionally not merged to preserve
+                 * newlines. */
+                parse_flags = saved_parse_flags;
+                tok_str_add(tok_str, tok);
+                if (parse_flags & PARSE_FLAG_SPACES) {
+                    int i;
+                    for (i = 0; i < ws_str.len; i++)
+                        tok_str_add(tok_str, ws_str.str[i]);
+                }
+                tok_str_free_str(ws_str.str);
+                return 0;
+            } else {
+                tok_str_free_str(ws_str.str);
+            }
+	    do {
+		next_nomacro(); /* eat '(' */
+	    } while (tok == TOK_PLCHLDR);
+
+            /* argument macro */
+            args = NULL;
+            sa = s->next;
+            /* NOTE: empty args are allowed, except if no args */
+            for(;;) {
+                do {
+                    next_argstream(nested_list, NULL);
+                } while (is_space(tok) || TOK_LINEFEED == tok);
+    empty_arg:
+                /* handle '()' case */
+                if (!args && !sa && tok == ')')
+                    break;
+                if (!sa)
+                    tcc_error("macro '%s' used with too many args",
+                          get_tok_str(s->v, 0));
+                tok_str_new(&str);
+                parlevel = spc = 0;
+                /* NOTE: non zero sa->t indicates VA_ARGS */
+                while ((parlevel > 0 || 
+                        (tok != ')' && 
+                         (tok != ',' || sa->type.t)))) {
+                    if (tok == TOK_EOF || tok == 0)
+                        break;
+                    if (tok == '(')
+                        parlevel++;
+                    else if (tok == ')')
+                        parlevel--;
+                    if (tok == TOK_LINEFEED)
+                        tok = ' ';
+                    if (!check_space(tok, &spc))
+                        tok_str_add2(&str, tok, &tokc);
+                    next_argstream(nested_list, NULL);
+                }
+                if (parlevel)
+                    expect(")");
+                str.len -= spc;
+                tok_str_add(&str, -1);
+                tok_str_add(&str, 0);
+                sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
+                sa1->d = str.str;
+                sa = sa->next;
+                if (tok == ')') {
+                    /* special case for gcc var args: add an empty
+                       var arg argument if it is omitted */
+                    if (sa && sa->type.t && gnu_ext)
+                        goto empty_arg;
+                    break;
+                }
+                if (tok != ',')
+                    expect(",");
+            }
+            if (sa) {
+                tcc_error("macro '%s' used with too few args",
+                      get_tok_str(s->v, 0));
+            }
+
+            parse_flags = saved_parse_flags;
+
+            /* now subst each arg */
+            mstr = macro_arg_subst(nested_list, mstr, args);
+            /* free memory */
+            sa = args;
+            while (sa) {
+                sa1 = sa->prev;
+                tok_str_free_str(sa->d);
+                sym_free(sa);
+                sa = sa1;
+            }
+        }
+
+        sym_push2(nested_list, s->v, 0, 0);
+        parse_flags = saved_parse_flags;
+        joined_str = macro_twosharps(mstr);
+        macro_subst(tok_str, nested_list, joined_str ? joined_str : mstr);
+
+        /* pop nested defined symbol */
+        sa1 = *nested_list;
+        *nested_list = sa1->prev;
+        sym_free(sa1);
+	if (joined_str)
+	    tok_str_free_str(joined_str);
+        if (mstr != s->d)
+            tok_str_free_str(mstr);
+    }
+    return 0;
+}
+
 /* do macro substitution of macro_str and add result to
    (tok_str,tok_len). 'nested_list' is the list of all macros we got
    inside to avoid recursing. */
 static void macro_subst(
     TokenString *tok_str,
     Sym **nested_list,
-    const int *macro_str,
-    int can_read_stream
+    const int *macro_str
     )
 {
     Sym *s;
-    const int *ptr;
     int t, spc, nosubst;
     CValue cval;
-    int *macro_str1 = NULL;
     
-    /* first scan for '##' operator handling */
-    ptr = macro_str;
     spc = nosubst = 0;
 
-    /* first scan for '##' operator handling */
-    if (can_read_stream) {
-        macro_str1 = macro_twosharps(ptr);
-        if (macro_str1)
-            ptr = macro_str1;
-    }
-
     while (1) {
-        TOK_GET(&t, &ptr, &cval);
+        TOK_GET(&t, &macro_str, &cval);
         if (t <= 0)
             break;
 
@@ -3384,18 +3372,18 @@ static void macro_subst(
 
             {
                 TokenString str;
-                str.str = (int*)ptr;
+                str.str = (int*)macro_str;
                 begin_macro(&str, 2);
 
                 tok = t;
-                macro_subst_tok(tok_str, nested_list, s, can_read_stream);
+                macro_subst_tok(tok_str, nested_list, s);
 
                 if (str.alloc == 3) {
                     /* already finished by reading function macro arguments */
                     break;
                 }
 
-                ptr = macro_ptr;
+                macro_str = macro_ptr;
                 end_macro ();
             }
 
@@ -3416,9 +3404,6 @@ no_subst:
                 nosubst = 1;
         }
     }
-    if (macro_str1)
-        tok_str_free_str(macro_str1);
-
 }
 
 /* return next token with macro substitution */
@@ -3446,7 +3431,7 @@ ST_FUNC void next(void)
         if (s) {
             Sym *nested_list = NULL;
             tokstr_buf.len = 0;
-            macro_subst_tok(&tokstr_buf, &nested_list, s, 1);
+            macro_subst_tok(&tokstr_buf, &nested_list, s);
             tok_str_add(&tokstr_buf, 0);
             begin_macro(&tokstr_buf, 2);
             goto redo;
