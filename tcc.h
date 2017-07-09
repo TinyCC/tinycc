@@ -416,8 +416,7 @@ struct SymAttr {
     visibility  : 2,
     dllexport   : 1,
     dllimport   : 1,
-    unsigned_enum : 1,
-    unused      : 4;
+    unused      : 5;
 };
 
 /* function attributes or temporary attributes for parsing */
@@ -852,14 +851,13 @@ struct filespec {
 #define VT_PTR              5  /* pointer */
 #define VT_FUNC             6  /* function type */
 #define VT_STRUCT           7  /* struct/union definition */
-#define VT_ENUM             8  /* enum definition */
-#define VT_FLOAT            9  /* IEEE float */
-#define VT_DOUBLE          10  /* IEEE double */
-#define VT_LDOUBLE         11  /* IEEE long double */
-#define VT_BOOL            12  /* ISOC99 boolean type */
-#define VT_LONG            13  /* long integer (NEVER USED as type, only during parsing) */
-#define VT_QLONG           14  /* 128-bit integer. Only used for x86-64 ABI */
-#define VT_QFLOAT          15  /* 128-bit float. Only used for x86-64 ABI */
+#define VT_FLOAT            8  /* IEEE float */
+#define VT_DOUBLE           9  /* IEEE double */
+#define VT_LDOUBLE         10  /* IEEE long double */
+#define VT_BOOL            11  /* ISOC99 boolean type */
+#define VT_LONG            12  /* long integer (NEVER USED as type, only during parsing) */
+#define VT_QLONG           13  /* 128-bit integer. Only used for x86-64 ABI */
+#define VT_QFLOAT          14  /* 128-bit float. Only used for x86-64 ABI */
 
 #define VT_UNSIGNED    0x0010  /* unsigned type */
 #define VT_DEFSIGN     0x0020  /* explicitly signed or unsigned */
@@ -868,7 +866,6 @@ struct filespec {
 #define VT_CONSTANT    0x0100  /* const modifier */
 #define VT_VOLATILE    0x0200  /* volatile modifier */
 #define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_UNION (VT_STRUCT|VT_UNSIGNED) /* VT_STRUCT type with some modifier */
 
 /* storage */
 #define VT_EXTERN  0x00001000  /* extern definition */
@@ -882,9 +879,17 @@ struct filespec {
 #define BIT_POS(t) (((t) >> VT_STRUCT_SHIFT) & 0x3f)
 #define BIT_SIZE(t) (((t) >> (VT_STRUCT_SHIFT + 6)) & 0x3f)
 
+#define VT_UNION    (1 << VT_STRUCT_SHIFT | VT_STRUCT)
+#define VT_ENUM     (2 << VT_STRUCT_SHIFT) /* integral type is an enum really */
+#define VT_ENUM_VAL (3 << VT_STRUCT_SHIFT) /* integral type is an enum constant really */
+
+#define IS_ENUM(t) ((t & VT_STRUCT_MASK) == VT_ENUM)
+#define IS_ENUM_VAL(t) ((t & VT_STRUCT_MASK) == VT_ENUM_VAL)
+#define IS_UNION(t) ((t & (VT_STRUCT_MASK|VT_BTYPE)) == VT_UNION)
+
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_STRUCT_MASK)
-#define VT_TYPE (~VT_STORAGE)
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
+#define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
 
 
 /* token values */

@@ -86,7 +86,7 @@ static void expr_eq(void);
 static void vla_runtime_type_size(CType *type, int *a);
 static void vla_sp_restore(void);
 static void vla_sp_restore_root(void);
-static int is_compatible_parameter_types(CType *type1, CType *type2);
+static int is_compatible_unqualified_types(CType *type1, CType *type2);
 static inline int64_t expr_const64(void);
 ST_FUNC void vpush64(int ty, unsigned long long v);
 ST_FUNC void vpush(CType *type);
@@ -1087,10 +1087,8 @@ ST_FUNC int gv(int rc)
             bits = 64;
         } else
             type.t = VT_INT;
-        if((vtop->type.t & VT_UNSIGNED) ||
-           (vtop->type.t & VT_BTYPE) == VT_BOOL ||
-	   (((vtop->type.t & VT_BTYPE) == VT_ENUM) &&
-	    vtop->type.ref->a.unsigned_enum))
+        if((vtop->type.t & VT_UNSIGNED)
+            || (vtop->type.t & VT_BTYPE) == VT_BOOL)
             type.t |= VT_UNSIGNED;
         gen_cast(&type);
         /* generate shifts */
@@ -2479,6 +2477,8 @@ ST_FUNC int type_size(CType *type, int *a)
             *a = PTR_SIZE;
             return PTR_SIZE;
         }
+    } else if (IS_ENUM(type->t) && type->ref->c == -1) {
+        return -1; /* incomplete enum */
     } else if (bt == VT_LDOUBLE) {
         *a = LDOUBLE_ALIGN;
         return LDOUBLE_SIZE;
@@ -2508,10 +2508,6 @@ ST_FUNC int type_size(CType *type, int *a)
     } else if (bt == VT_QLONG || bt == VT_QFLOAT) {
         *a = 8;
         return 16;
-    } else if (bt == VT_ENUM) {
-	*a = 4;
-	/* Enums might be incomplete, so don't just return '4' here.  */
-	return type->ref->c;
     } else {
         /* char, void, function, _Bool */
         *a = 1;
@@ -2554,7 +2550,7 @@ ST_FUNC void mk_pointer(CType *type)
 {
     Sym *s;
     s = sym_push(SYM_FIELD, type, 0, -1);
-    type->t = VT_PTR | (type->t & ~VT_TYPE);
+    type->t = VT_PTR | (type->t & VT_STORAGE);
     type->ref = s;
 }
 
@@ -2578,7 +2574,7 @@ static int is_compatible_func(CType *type1, CType *type2)
     while (s1 != NULL) {
         if (s2 == NULL)
             return 0;
-        if (!is_compatible_parameter_types(&s1->type, &s2->type))
+        if (!is_compatible_unqualified_types(&s1->type, &s2->type))
             return 0;
         s1 = s1->next;
         s2 = s2->next;
@@ -2609,21 +2605,7 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~VT_DEFSIGN;
         t2 &= ~VT_DEFSIGN;
     }
-    /* An enum is compatible with (unsigned) int.  Ideally we would
-       store the enums signedness in type->ref.a.<some_bit> and
-       only accept unsigned enums with unsigned int and vice versa.
-       But one of our callers (gen_assign_cast) always strips VT_UNSIGNED
-       from pointer target types, so we can't add it here either.  */
-    if ((t1 & VT_BTYPE) == VT_ENUM) {
-	t1 = VT_INT;
-	if (type1->ref->a.unsigned_enum)
-	    t1 |= VT_UNSIGNED;
-    }
-    if ((t2 & VT_BTYPE) == VT_ENUM) {
-	t2 = VT_INT;
-	if (type2->ref->a.unsigned_enum)
-	    t2 |= VT_UNSIGNED;
-    }
+
     /* XXX: bitfields ? */
     if (t1 != t2)
         return 0;
@@ -2652,7 +2634,7 @@ static int is_compatible_types(CType *type1, CType *type2)
 
 /* return true if type1 and type2 are the same (ignoring qualifiers).
 */
-static int is_compatible_parameter_types(CType *type1, CType *type2)
+static int is_compatible_unqualified_types(CType *type1, CType *type2)
 {
     return compare_types(type1,type2,1);
 }
@@ -2690,6 +2672,10 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "inline ");
     buf_size -= strlen(buf);
     buf += strlen(buf);
+    if (IS_ENUM(type->t)) {
+        tstr = "enum ";
+        goto tstruct;
+    }
     switch(bt) {
     case VT_VOID:
         tstr = "void";
@@ -2723,12 +2709,11 @@ static void type_to_str(char *buf, int buf_size,
     add_tstr:
         pstrcat(buf, buf_size, tstr);
         break;
-    case VT_ENUM:
     case VT_STRUCT:
-        if (bt == VT_STRUCT)
-            tstr = "struct ";
-        else
-            tstr = "enum ";
+        tstr = "struct ";
+        if (IS_UNION(t))
+            tstr = "union ";
+    tstruct:
         pstrcat(buf, buf_size, tstr);
         v = type->ref->v & ~SYM_STRUCT;
         if (v >= SYM_FIRST_ANOM)
@@ -2827,21 +2812,16 @@ static void gen_assign_cast(CType *dt)
             (type2->t & VT_BTYPE) == VT_VOID) {
             /* void * can match anything */
         } else {
+            //printf("types %08x %08x\n", type1->t, type2->t);
             /* exact type match, except for qualifiers */
-            tmp_type1 = *type1;
-            tmp_type2 = *type2;
-            tmp_type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
-            tmp_type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
-            if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
+            if (!is_compatible_unqualified_types(type1, type2)) {
 		/* Like GCC don't warn by default for merely changes
 		   in pointer target signedness.  Do warn for different
 		   base types, though, in particular for unsigned enums
 		   and signed int targets.  */
-		if ((tmp_type1.t & (VT_DEFSIGN | VT_UNSIGNED)) !=
-		    (tmp_type2.t & (VT_DEFSIGN | VT_UNSIGNED)) &&
-		    (tmp_type1.t & VT_BTYPE) == (tmp_type2.t & VT_BTYPE))
-		    ;
-		else
+		if ((type1->t & VT_BTYPE) != (type2->t & VT_BTYPE)
+                    || IS_ENUM(type1->t) || IS_ENUM(type2->t)
+                    )
 		    tcc_warning("assignment from incompatible pointer type");
 	    }
         }
@@ -3486,7 +3466,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
         tcc_warning("will touch memory past end of the struct (internal limitation)");
 }
 
-/* enum/struct/union declaration. u is either VT_ENUM or VT_STRUCT */
+/* enum/struct/union declaration. u is VT_ENUM/VT_STRUCT/VT_UNION */
 static void struct_decl(CType *type, int u)
 {
     int v, c, size, align, flexible, alignoverride;
@@ -3506,9 +3486,11 @@ static void struct_decl(CType *type, int u)
             expect("struct/union/enum name");
         s = struct_find(v);
         if (s && (s->sym_scope == local_scope || tok != '{')) {
-            if ((s->type.t & (VT_BTYPE|VT_UNION)) != u)
-                tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
-            goto do_decl;
+            if (u == s->type.t)
+                goto do_decl;
+            if (u == VT_ENUM && IS_ENUM(s->type.t))
+                goto do_decl;
+            tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
         }
     } else {
         v = anon_sym++;
@@ -3520,7 +3502,7 @@ static void struct_decl(CType *type, int u)
     s = sym_push(v | SYM_STRUCT, &type1, 0, -1);
     s->r = 0; /* default alignment is zero as gcc */
 do_decl:
-    type->t = u & VT_BTYPE; /* VT_UNION becomes VT_STRUCT */
+    type->t = s->type.t;
     type->ref = s;
 
     if (tok == '{') {
@@ -3528,13 +3510,15 @@ do_decl:
         if (s->c != -1)
             tcc_error("struct/union/enum already defined");
         /* cannot be empty */
-        c = 0;
         /* non empty enums are not allowed */
+        ps = &s->next;
         if (u == VT_ENUM) {
-	    int seen_neg = 0;
-	    int seen_wide = 0;
+            long long ll = 0, pl = 0, nl = 0;
+	    CType t;
+            t.ref = s;
+            /* enum symbols have static storage */
+            t.t = VT_INT|VT_STATIC|VT_ENUM_VAL;
             for(;;) {
-		CType *t = &int_type;
                 v = tok;
                 if (v < TOK_UIDENT)
                     expect("identifier");
@@ -3545,38 +3529,48 @@ do_decl:
                 next();
                 if (tok == '=') {
                     next();
-#if PTR_SIZE == 8
-		    c = expr_const64();
-#else
-		    /* We really want to support long long enums
-		       on i386 as well, but the Sym structure only
-		       holds a 'long' for associated constants,
-		       and enlarging it would bump its size (no
-		       available padding).  So punt for now.  */
-                    c = expr_const();
-#endif
+		    ll = expr_const64();
                 }
-		if (c < 0)
-		    seen_neg = 1;
-		if (c != (int)c && (unsigned long)c != (unsigned int)c)
-		    seen_wide = 1, t = &size_type;
-                /* enum symbols have static storage */
-                ss = sym_push(v, t, VT_CONST, c);
-                ss->type.t |= VT_STATIC;
+                ss = sym_push(v, &t, VT_CONST, 0);
+                ss->enum_val = ll;
+                *ps = ss, ps = &ss->next;
+                if (ll < nl)
+                    nl = ll;
+                if (ll > pl)
+                    pl = ll;
                 if (tok != ',')
                     break;
                 next();
-                c++;
+                ll++;
                 /* NOTE: we accept a trailing comma */
                 if (tok == '}')
                     break;
             }
-	    if (!seen_neg)
-	        s->a.unsigned_enum = 1;
-            s->c = type_size(seen_wide ? &size_type : &int_type, &align);
             skip('}');
+            /* set integral type of the enum */
+            t.t = VT_INT;
+            if (nl == 0) {
+                if (pl != (unsigned)pl)
+                    t.t = VT_LLONG;
+                t.t |= VT_UNSIGNED;
+            } else if (pl != (int)pl || nl != (int)nl)
+                t.t = VT_LLONG;
+            s->type.t = type->t = t.t | VT_ENUM;
+            s->c = 0;
+            /* set type for enum members */
+            for (ss = s->next; ss; ss = ss->next) {
+                ll = ss->enum_val;
+                if (ll == (int)ll) /* default is int if it fits */
+                    continue;
+                if (t.t & VT_UNSIGNED) {
+                    ss->type.t |= VT_UNSIGNED;
+                    if (ll == (unsigned)ll)
+                        continue;
+                }
+                ss->type.t = (ss->type.t & ~VT_BTYPE) | VT_LLONG;
+            }
         } else {
-            ps = &s->next;
+            c = 0;
             flexible = 0;
             while (tok != '}') {
                 if (!parse_btype(&btype, &ad1)) {
@@ -3646,7 +3640,6 @@ do_decl:
                             bt != VT_BYTE && 
                             bt != VT_SHORT &&
                             bt != VT_BOOL &&
-                            bt != VT_ENUM &&
                             bt != VT_LLONG)
                             tcc_error("bitfields must have scalar type");
                         bsize = size * 8;
@@ -3657,9 +3650,9 @@ do_decl:
                             /* no need for bit fields */
                             ;
                         } else {
-                            type1.t |= VT_BITFIELD | 
-                                (0 << VT_STRUCT_SHIFT) |
-                                (bit_size << (VT_STRUCT_SHIFT + 6));
+                            type1.t = (type1.t & ~VT_STRUCT_MASK)
+                                | VT_BITFIELD
+                                | (bit_size << (VT_STRUCT_SHIFT + 6));
                         }
                     }
                     if (v != 0 || (type1.t & VT_BTYPE) == VT_STRUCT) {
@@ -4124,6 +4117,7 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
     storage = type->t & VT_STORAGE;
     type->t &= ~VT_STORAGE;
     post = ret = type;
+
     while (tok == '*') {
         qualifiers = 0;
     redo:
@@ -4813,8 +4807,11 @@ ST_FUNC void unary(void)
 	   Will be used by at least the x86 inline asm parser for
 	   regvars.  */
 	vtop->sym = s;
-        if (vtop->r & VT_SYM) {
+
+        if (r & VT_SYM) {
             vtop->c.i = 0;
+        } else if (r == VT_CONST && IS_ENUM_VAL(s->type.t)) {
+            vtop->c.i = s->enum_val;
         }
         break;
     }
@@ -6352,7 +6349,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	/* Use i_c_parameter_t, to strip toplevel qualifiers.
 	   The source type might have VT_CONSTANT set, which is
 	   of course assignable to non-const elements.  */
-	is_compatible_parameter_types(type, &vtop->type)) {
+	is_compatible_unqualified_types(type, &vtop->type)) {
         init_putv(type, sec, c);
     } else if (type->t & VT_ARRAY) {
         s = type->ref;
@@ -6858,16 +6855,18 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 break;
             btype.t = VT_INT;
         }
-        if (((btype.t & VT_BTYPE) == VT_ENUM ||
-             (btype.t & VT_BTYPE) == VT_STRUCT) && 
-            tok == ';') {
+        if (tok == ';') {
 	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
 		int v = btype.ref->v;
 		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
         	    tcc_warning("unnamed struct/union that defines no instances");
+                next();
+                continue;
 	    }
-            next();
-            continue;
+            if (IS_ENUM(btype.t)) {
+                next();
+                continue;
+            }
         }
         while (1) { /* iterate thru each declaration */
             type = btype;

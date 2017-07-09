@@ -415,9 +415,11 @@ void load(int r, SValue *sv)
         } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
             b = 0xb70f;   /* movzwl */
         } else {
-            assert(((ft & VT_BTYPE) == VT_INT) || ((ft & VT_BTYPE) == VT_LLONG)
-                   || ((ft & VT_BTYPE) == VT_PTR) || ((ft & VT_BTYPE) == VT_ENUM)
-                   || ((ft & VT_BTYPE) == VT_FUNC));
+            assert(((ft & VT_BTYPE) == VT_INT)
+                   || ((ft & VT_BTYPE) == VT_LLONG)
+                   || ((ft & VT_BTYPE) == VT_PTR)
+                   || ((ft & VT_BTYPE) == VT_FUNC)
+                );
             ll = is64_type(ft);
             b = 0x8b;
         }
@@ -1092,7 +1094,7 @@ static X86_64_Mode classify_x86_64_inner(CType *ty)
     case VT_BOOL:
     case VT_PTR:
     case VT_FUNC:
-    case VT_ENUM: return x86_64_mode_integer;
+        return x86_64_mode_integer;
     
     case VT_FLOAT:
     case VT_DOUBLE: return x86_64_mode_sse;

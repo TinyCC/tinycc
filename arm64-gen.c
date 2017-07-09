@@ -249,7 +249,6 @@ static int arm64_type_size(int t)
     case VT_BYTE: return 0;
     case VT_SHORT: return 1;
     case VT_PTR: return 3;
-    case VT_ENUM: return 2;
     case VT_FUNC: return 3;
     case VT_FLOAT: return 2;
     case VT_DOUBLE: return 3;
