@@ -27,10 +27,6 @@ p2:
 
     sub     %rax,%rsp
     mov     %rsp,%rax
-#ifdef TCC_TARGET_PE
-    add     $32,%rax
-#endif
-
 p3:
     push    %rdx
     ret

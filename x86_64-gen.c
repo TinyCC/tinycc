@@ -728,13 +728,13 @@ static int arg_prepare_reg(int idx) {
       return arg_regs[idx];
 }
 
-static int func_scratch;
+static int func_scratch, func_alloca;
 
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
 
-void gen_offs_sp(int b, int r, int d)
+static void gen_offs_sp(int b, int r, int d)
 {
     orex(1,0,r & 0x100 ? 0 : r, b);
     if (d == (char)d) {
@@ -746,6 +746,11 @@ void gen_offs_sp(int b, int r, int d)
     }
 }
 
+static int using_regs(int size)
+{
+    return !(size > 8 || (size & (size - 1)));
+}
+
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
@@ -754,7 +759,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
     *ret_align = 1; // Never have to re-align return values for x86-64
     *regsize = 8;
     size = type_size(vt, &align);
-    if (size > 8 || (size & (size - 1)))
+    if (!using_regs(size))
         return 0;
     if (size == 8)
         ret->t = VT_LLONG;
@@ -774,7 +779,7 @@ static int is_sse_float(int t) {
     return bt == VT_DOUBLE || bt == VT_FLOAT;
 }
 
-int gfunc_arg_size(CType *type) {
+static int gfunc_arg_size(CType *type) {
     int align;
     if (type->t & (VT_ARRAY|VT_BITFIELD))
         return 8;
@@ -801,7 +806,7 @@ void gfunc_call(int nb_args)
         bt = (sv->type.t & VT_BTYPE);
         size = gfunc_arg_size(&sv->type);
 
-        if (size <= 8)
+        if (using_regs(size))
             continue; /* arguments smaller than 8 bytes passed in registers or on stack */
 
         if (bt == VT_STRUCT) {
@@ -835,7 +840,7 @@ void gfunc_call(int nb_args)
         bt = (vtop->type.t & VT_BTYPE);
 
         size = gfunc_arg_size(&vtop->type);
-        if (size > 8) {
+        if (!using_regs(size)) {
             /* align to stack align size */
             size = (size + 15) & ~15;
             if (arg >= REGN) {
@@ -895,6 +900,12 @@ void gfunc_call(int nb_args)
     }
     
     gcall_or_jmp(0);
+
+    if ((vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
+        /* need to add the "func_scratch" area after alloca */
+        o(0x0548), gen_le32(func_alloca), func_alloca = ind - 4;
+    }
+
     /* other compilers don't clear the upper bits when returning char/short */
     bt = vtop->type.ref->type.t & (VT_BTYPE | VT_UNSIGNED);
     if (bt == (VT_BYTE | VT_UNSIGNED))
@@ -926,6 +937,7 @@ void gfunc_prolog(CType *func_type)
 
     func_ret_sub = 0;
     func_scratch = 0;
+    func_alloca = 0;
     loc = 0;
 
     addr = PTR_SIZE * 2;
@@ -940,7 +952,7 @@ void gfunc_prolog(CType *func_type)
     func_vt = sym->type;
     func_var = (sym->c == FUNC_ELLIPSIS);
     size = gfunc_arg_size(&func_vt);
-    if (size > 8) {
+    if (!using_regs(size)) {
         gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
         func_vc = addr;
         reg_param_index++;
@@ -952,7 +964,7 @@ void gfunc_prolog(CType *func_type)
         type = &sym->type;
         bt = type->t & VT_BTYPE;
         size = gfunc_arg_size(type);
-        if (size > 8) {
+        if (!using_regs(size)) {
             if (reg_param_index < REGN) {
                 gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             }
@@ -1013,6 +1025,13 @@ void gfunc_epilog(void)
         o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */
         o(0xec8148);  /* sub rsp, stacksize */
         gen_le32(v);
+    }
+
+    /* add the "func_scratch" area after each alloca seen */
+    while (func_alloca) {
+        unsigned char *ptr = cur_text_section->data + func_alloca;
+        func_alloca = read32le(ptr);
+        write32le(ptr, func_scratch);
     }
 
     cur_text_section->data_offset = saved_ind;

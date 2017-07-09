@@ -210,7 +210,7 @@ ST_FUNC void load(int r, SValue *sv)
 #endif
 
     fr = sv->r;
-    ft = sv->type.t;
+    ft = sv->type.t & ~VT_DEFSIGN;
     fc = sv->c.i;
 
     ft &= ~(VT_VOLATILE | VT_CONSTANT);

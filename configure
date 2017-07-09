@@ -161,7 +161,7 @@ fi
 
 case "$cpu" in
   x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
-    cpu="x86"
+    cpu="i386"
   ;;
   x86_64|amd64|x86-64)
     cpu="x86_64"
@@ -184,7 +184,7 @@ case "$cpu" in
     cpu="arm"
   ;;
   aarch64)
-    cpu="arm64"
+    cpu="aarch64"
   ;;
   alpha)
     cpu="alpha"
@@ -301,7 +301,7 @@ Advanced options (experts only):
   --disable-static         make libtcc.so instead of libtcc.a
   --enable-static          make libtcc.a instead of libtcc.dll (win32)
   --disable-rpath          disable use of -rpath with the above
-  --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a in dynamic link
+  --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a
   --enable-mingw32         build windows version on linux with mingw32
   --enable-cross           build cross compilers
   --with-selinux           use mmap for executable memory (with tcc -run)
@@ -340,7 +340,7 @@ if test -z "$cross_prefix" ; then
       fi
 
       if test -z "$triplet"; then
-        if test $cpu = "x86_64" -o $cpu = "arm64" ; then
+        if test $cpu = "x86_64" -o $cpu = "aarch64" ; then
           if test -f "/usr/lib64/crti.o" ; then
             tcc_lddir="lib64"
           fi
@@ -473,13 +473,11 @@ print_mak_int TCC_CPU_VERSION "$cpuver"
 
 echo "#define GCC_MAJOR $gcc_major" >> $TMPH
 echo "#define GCC_MINOR $gcc_minor" >> $TMPH
-
-if test "$cpu" = "x86" ; then
-  echo "ARCH=i386" >> config.mak
+if test "$cpu" = "aarch64" ; then
+  echo "ARCH=arm64" >> config.mak
 else
   echo "ARCH=$cpu" >> config.mak
 fi
-
 echo "TARGETOS=$targetos" >> config.mak
 
 for v in $confvars ; do

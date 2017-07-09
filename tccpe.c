@@ -1547,11 +1547,7 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
     IMAGE_DOS_HEADER dh;
     IMAGE_FILE_HEADER ih;
     DWORD sig, ref, addr, ptr, namep;
-#ifdef TCC_TARGET_X86_64
-    IMAGE_OPTIONAL_HEADER64 oh;
-#else
-    IMAGE_OPTIONAL_HEADER32 oh;
-#endif
+
     int pef_hdroffset, opt_hdroffset, sec_hdroffset;
 
     n = n0 = 0;
@@ -1562,7 +1558,6 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
     if (fd < 0)
         goto the_end_1;
     ret = 1;
-
     if (!read_mem(fd, 0, &dh, sizeof dh))
         goto the_end;
     if (!read_mem(fd, dh.e_lfanew, &sig, sizeof sig))
@@ -1572,22 +1567,26 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
     pef_hdroffset = dh.e_lfanew + sizeof sig;
     if (!read_mem(fd, pef_hdroffset, &ih, sizeof ih))
         goto the_end;
-    if (IMAGE_FILE_MACHINE != ih.Machine) {
-        if (ih.Machine == 0x014C)
-            ret = 32;
-        else if (ih.Machine == 0x8664)
-            ret = 64;
-        goto the_end;
-    }
     opt_hdroffset = pef_hdroffset + sizeof ih;
-    sec_hdroffset = opt_hdroffset + sizeof oh;
-    if (!read_mem(fd, opt_hdroffset, &oh, sizeof oh))
+    if (ih.Machine == 0x014C) {
+        IMAGE_OPTIONAL_HEADER32 oh;
+        sec_hdroffset = opt_hdroffset + sizeof oh;
+        if (!read_mem(fd, opt_hdroffset, &oh, sizeof oh))
+            goto the_end;
+        if (IMAGE_DIRECTORY_ENTRY_EXPORT >= oh.NumberOfRvaAndSizes)
+            goto the_end_0;
+        addr = oh.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+    } else if (ih.Machine == 0x8664) {
+        IMAGE_OPTIONAL_HEADER64 oh;
+        sec_hdroffset = opt_hdroffset + sizeof oh;
+        if (!read_mem(fd, opt_hdroffset, &oh, sizeof oh))
+            goto the_end;
+        if (IMAGE_DIRECTORY_ENTRY_EXPORT >= oh.NumberOfRvaAndSizes)
+            goto the_end_0;
+        addr = oh.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+    } else
         goto the_end;
 
-    if (IMAGE_DIRECTORY_ENTRY_EXPORT >= oh.NumberOfRvaAndSizes)
-        goto the_end_0;
-
-    addr = oh.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
     //printf("addr: %08x\n", addr);
     for (i = 0; i < ih.NumberOfSections; ++i) {
         if (!read_mem(fd, sec_hdroffset + i * sizeof ish, &ish, sizeof ish))

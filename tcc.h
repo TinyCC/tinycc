@@ -41,10 +41,11 @@
 #  include <dlfcn.h>
 # endif
 /* XXX: need to define this to use them in non ISOC99 context */
- extern float strtof (const char *__nptr, char **__endptr);
- extern long double strtold (const char *__nptr, char **__endptr);
+extern float strtof (const char *__nptr, char **__endptr);
+extern long double strtold (const char *__nptr, char **__endptr);
+#endif
 
-#else /* on _WIN32: */
+#ifdef _WIN32
 # include <windows.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */
@@ -52,7 +53,6 @@
 #  include <stdint.h>
 # endif
 # define inline __inline
-# define inp next_inp /* inp is an intrinsic on msvc */
 # define snprintf _snprintf
 # define vsnprintf _vsnprintf
 # ifndef __GNUC__
@@ -65,6 +65,7 @@
 #  define LIBTCCAPI __declspec(dllexport)
 #  define PUB_FUNC LIBTCCAPI
 # endif
+# define inp next_inp /* inp is an intrinsic on msvc/mingw */
 # ifdef _MSC_VER
 #  pragma warning (disable : 4244)  // conversion from 'uint64_t' to 'int', possible loss of data
 #  pragma warning (disable : 4267)  // conversion from 'size_t' to 'int', possible loss of data
@@ -72,9 +73,6 @@
 #  pragma warning (disable : 4018)  // signed/unsigned mismatch
 #  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
 #  define ssize_t intptr_t
-#  define __attribute__(x) __declspec x
-#  define aligned align
-# else
 # endif
 # undef CONFIG_TCC_STATIC
 #endif
@@ -83,12 +81,12 @@
 # define O_BINARY 0
 #endif
 
-#ifdef __GNUC__
-# define NORETURN __attribute__ ((noreturn))
-#elif defined _MSC_VER
+#ifdef _MSC_VER
 # define NORETURN __declspec(noreturn)
+# define ALIGNED(x) __declspec(align(x))
 #else
-# define NORETURN
+# define NORETURN __attribute__((noreturn))
+# define ALIGNED(x) __attribute__((aligned(x)))
 #endif
 
 #ifdef _WIN32
@@ -540,7 +538,7 @@ typedef struct BufferedFile {
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
     int include_next_index; /* next search path */
     char filename[1024];    /* filename */
-    char filename2[1024];    /* filename not modified by # line directive */
+    char *true_filename; /* filename not modified by # line directive */
     unsigned char unget[4];
     unsigned char buffer[1]; /* extra size for CH_EOB char */
 } BufferedFile;

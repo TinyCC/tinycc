@@ -151,8 +151,8 @@ DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
 endif
 endif
 
-# include custom cross-compiler configuration (see make help)
--include config-cross.mak
+# include custom configuration (see make help)
+-include config-extra.mak
 
 CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
@@ -318,7 +318,7 @@ install-win : INSTALL = cp
 
 # uninstall on windows
 uninstall-win:
-	rm -r "$(tccdir)/"*
+	rm -r "$(tccdir)"
 
 # --------------------------------------------------------------------------
 # other stuff
@@ -374,19 +374,24 @@ help:
 	@echo "   build one specific cross compiler for 'TARGET', as in"
 	@echo "   $(TCC_X)"
 	@echo ""
-	@echo "Cross compiler configuration:"
-	@echo "   make will read custom configuration for cross compilers from a file"
-	@echo "   'config-cross.mak' if present.  For example for a windows->i386-linux"
-	@echo "   cross-compiler that expects the linux files in <tccdir>/i386-linux:"
+	@echo "Custom configuration:"
+	@echo "   The makefile includes a file 'config-extra.mak' if it is present."
+	@echo "   This file may contain some custom configuration.  For example:"
 	@echo ""
-	@echo "   ROOT-i386 = {B}/i386-linux"
-	@echo "   CRT-i386  = {B}/i386-linux/usr/lib"
-	@echo "   LIB-i386  = {B}/i386-linux/lib:{B}/i386-linux/usr/lib"
-	@echo "   INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
-	@echo "   DEF-i386  += -D__linux__"
+	@echo "      NATIVE_DEFINES += -D..."
+	@echo ""
+	@echo "   Or for example to configure the search paths for a cross-compiler"
+	@echo "   that expects the linux files in <tccdir>/i386-linux:"
+	@echo ""
+	@echo "      ROOT-i386 = {B}/i386-linux"
+	@echo "      CRT-i386  = {B}/i386-linux/usr/lib"
+	@echo "      LIB-i386  = {B}/i386-linux/lib:{B}/i386-linux/usr/lib"
+	@echo "      INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
+	@echo "      DEF-i386  += -D__linux__"
 	@echo ""
 	@echo "Other supported make targets:"
 	@echo "   install install-strip test tags ETAGS tar clean distclean help"
+	@echo ""
 
 # --------------------------------------------------------------------------
 endif # ($(INCLUDED),no)
