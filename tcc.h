@@ -450,6 +450,7 @@ typedef struct Sym {
                 int sym_scope; /* scope level for locals */
                 int jnext; /* next jump label */
                 struct FuncAttr f; /* function attributes */
+                int auxtype; /* bitfield access type */
             };
         };
         long long enum_val; /* enum constant if IS_ENUM_VAL */

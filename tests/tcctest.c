@@ -1050,8 +1050,8 @@ int pad1;
    but __alignof__ returns the wrong result (4) because we
    can't store the alignment yet when specified on symbols
    directly (it's stored in the type so we'd need to make
-   a copy of it).
-struct aligntest7 altest7[2] __attribute__((aligned(16)));*/
+   a copy of it). -- FIXED */
+struct aligntest7 altest7[2] __attribute__((aligned(16)));
 
 struct aligntest8
 {
@@ -1161,8 +1161,8 @@ void struct_test()
            sizeof(altest5), __alignof__(altest5));
     printf("altest6 sizeof=%d alignof=%d\n",
            sizeof(altest6), __alignof__(altest6));
-    /*printf("altest7 sizeof=%d alignof=%d\n",
-           sizeof(altest7), __alignof__(altest7));*/
+    printf("altest7 sizeof=%d alignof=%d\n",
+           sizeof(altest7), __alignof__(altest7));
            
     /* empty structures (GCC extension) */
     printf("sizeof(struct empty) = %d\n", sizeof(struct empty));
