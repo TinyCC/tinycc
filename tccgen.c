@@ -6861,6 +6861,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 sym = sym_push(v, type, r | VT_SYM, 0);
                 patch_storage(sym, ad, NULL);
             }
+            /* Local statics have a scope until now (for
+               warnings), remove it here.  */
+            sym->sym_scope = 0;
             /* update symbol definition */
 	    put_extern_sym(sym, sec, addr, size);
         } else {
@@ -7257,6 +7260,9 @@ found:
                                 tcc_error("unsupported forward __alias__ attribute");
                             esym = &((ElfW(Sym) *)symtab_section->data)[alias_target->c];
                             tsec.sh_num = esym->st_shndx;
+                            /* Local statics have a scope until now (for
+                               warnings), remove it here.  */
+                            sym->sym_scope = 0;
                             put_extern_sym2(sym, &tsec, esym->st_value, esym->st_size, 0);
                         }
                     } else {

@@ -3205,6 +3205,34 @@ char * get_asm_string (void)
   char * str = ((char*)bug_table) + bug_table[1];
   return str;
 }
+
+/* This checks another constructs with local labels.  */
+extern unsigned char alld_stuff[];
+asm(".data\n"
+    ".byte 41\n"
+    "alld_stuff:\n"
+    "661:\n"
+    ".byte 42\n"
+    "662:\n"
+    ".pushsection .data.ignore\n"
+    ".long 661b - .\n" /* This reference to 661 generates an external sym
+                          which shouldn't somehow overwrite the offset that's
+                          already determined for it.  */
+    ".popsection\n"
+    ".byte 662b - 661b\n"  /* So that this value is undeniably 1.  */);
+
+void asm_local_label_diff (void)
+{
+  printf ("asm_local_label_diff: %d %d\n", alld_stuff[0], alld_stuff[1]);
+}
+
+/* This checks that static local variables are available from assembler.  */
+void asm_local_statics (void)
+{
+  static int localint = 41;
+  asm("incl %0" : "+m" (localint));
+  printf ("asm_local_statics: %d\n", localint);
+}
 #endif
 
 unsigned int set;
@@ -3378,6 +3406,8 @@ void asm_test(void)
     asm volatile(".weak override_func3\n.set override_func3, base_func");
     override_func3();
     printf("asmstr: %s\n", get_asm_string());
+    asm_local_label_diff();
+    asm_local_statics();
 #endif
     /* Check that we can also load structs of appropriate layout
        into registers.  */
