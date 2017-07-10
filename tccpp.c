@@ -480,6 +480,8 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     switch(v) {
     case TOK_CINT:
     case TOK_CUINT:
+    case TOK_CLONG:
+    case TOK_CULONG:
     case TOK_CLLONG:
     case TOK_CULLONG:
         /* XXX: not quite exact, but only useful for testing  */
@@ -1014,6 +1016,10 @@ static inline int tok_size(const int *p)
     case TOK_LCHAR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
+#ifndef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG;
+    case TOK_CULONG;
+#endif
         return 1 + 1;
     case TOK_STR:
     case TOK_LSTR:
@@ -1023,6 +1029,10 @@ static inline int tok_size(const int *p)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
+#ifdef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG;
+    case TOK_CULONG;
+#endif
         return 1 + 2;
     case TOK_CLDOUBLE:
         return 1 + LDOUBLE_SIZE / 4;
@@ -1138,6 +1148,10 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_LCHAR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
+#ifndef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG:
+    case TOK_CULONG:
+#endif
         str[len++] = cv->tab[0];
         break;
     case TOK_PPNUM:
@@ -1158,6 +1172,10 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
+#ifdef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG:
+    case TOK_CULONG:
+#endif
 #if LDOUBLE_SIZE == 8
     case TOK_CLDOUBLE:
 #endif
@@ -1213,6 +1231,10 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     case TOK_CCHAR:
     case TOK_LCHAR:
     case TOK_LINENUM:
+#ifndef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG:
+    case TOK_CULONG:
+#endif
         tab[0] = *p++;
 	cv->i = (*t == TOK_CUINT) ? (unsigned)cv->i : (int)cv->i;
         break;
@@ -1230,6 +1252,10 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
+#ifdef TCC_LONG_ARE_64_BIT
+    case TOK_CLONG:
+    case TOK_CULONG:
+#endif
         n = 2;
         goto copy;
     case TOK_CLDOUBLE:
@@ -2407,9 +2433,7 @@ static void parse_number(const char *p)
                 if (lcount && *(p - 1) != ch)
                     tcc_error("incorrect integer suffix: %s", p1);
                 lcount++;
-#if !defined TCC_TARGET_X86_64 || defined TCC_TARGET_PE
                 if (lcount == 2)
-#endif
                     must_64bit = 1;
                 ch = *p++;
             } else if (t == 'U') {
@@ -2426,6 +2450,13 @@ static void parse_number(const char *p)
         if (n & 0xffffffff00000000LL || must_64bit) {
             tok = TOK_CLLONG;
             n1 = n >> 32;
+	} else if (lcount) {
+#ifdef TCC_LONG_ARE_64_BIT
+	    n1 = n >> 32;
+#else
+            n1 = n;
+#endif
+	    tok = TOK_CLONG;
 	} else {
             tok = TOK_CINT;
             n1 = n;
@@ -2435,7 +2466,9 @@ static void parse_number(const char *p)
         if (ucount || ((n1 >> 31) && (b != 10))) {
             if (tok == TOK_CLLONG)
                 tok = TOK_CULLONG;
-            else
+            else if (tok == TOK_CLONG)
+                tok = TOK_CULONG;
+	    else
                 tok = TOK_CUINT;
         /* If decimal and no unsigned suffix, bump to 64 bits or throw error */
         } else if (n1 >> 31) {

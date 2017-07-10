@@ -42,6 +42,7 @@ ST_DATA Sym *local_label_stack;
 static int local_scope;
 static int in_sizeof;
 static int section_sym;
+static int inside_generic;
 
 ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
 ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
@@ -2218,6 +2219,10 @@ redo:
     } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
         /* cast to biggest op */
         t = VT_LLONG;
+	/* check if we need to keep type as long or as long long */
+	if ((t1 & VT_LONG &&  (t2 & (VT_BTYPE | VT_LONG)) != VT_LLONG) ||
+	    (t2 & VT_LONG &&  (t1 & (VT_BTYPE | VT_LONG)) != VT_LLONG))
+	  t |= VT_LONG;
         /* convert to unsigned if it does not fit in a long long */
         if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
             (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
@@ -2226,7 +2231,11 @@ redo:
     } else {
         /* integer operations */
         t = VT_INT;
-        /* convert to unsigned if it does not fit in an integer */
+
+	if ((t1 & VT_LONG) || (t2 & VT_LONG))
+	  t |= VT_LONG;
+
+	/* convert to unsigned if it does not fit in an integer */
         if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
             (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
             t |= VT_UNSIGNED;
@@ -2723,6 +2732,11 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~(VT_CONSTANT | VT_VOLATILE);
         t2 &= ~(VT_CONSTANT | VT_VOLATILE);
     }
+
+    if (!inside_generic) {
+        t1 &= ~VT_LONG;
+        t2 &= ~VT_LONG;
+    }
     /* Default Vs explicit signedness only matters for char */
     if ((t1 & VT_BTYPE) != VT_BYTE) {
         t1 &= ~VT_DEFSIGN;
@@ -2799,6 +2813,12 @@ static void type_to_str(char *buf, int buf_size,
         tstr = "enum ";
         goto tstruct;
     }
+
+    if (!bt && VT_LONG & t) {
+      tstr = "long";
+      goto add_tstr;
+    }
+
     switch(bt) {
     case VT_VOID:
         tstr = "void";
@@ -2814,9 +2834,6 @@ static void type_to_str(char *buf, int buf_size,
         goto add_tstr;
     case VT_INT:
         tstr = "int";
-        goto add_tstr;
-    case VT_LONG:
-        tstr = "long";
         goto add_tstr;
     case VT_LLONG:
         tstr = "long long";
@@ -3960,10 +3977,10 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_LONG:
             if ((t & VT_BTYPE) == VT_DOUBLE) {
 #ifndef TCC_TARGET_PE
-                t = (t & ~VT_BTYPE) | VT_LDOUBLE;
+	      t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LDOUBLE;
 #endif
-            } else if ((t & VT_BTYPE) == VT_LONG) {
-                t = (t & ~VT_BTYPE) | VT_LLONG;
+            } else if (t &  VT_LONG) {
+	      t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LLONG;
             } else {
                 u = VT_LONG;
                 goto basic_type;
@@ -3984,11 +4001,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
             u = VT_FLOAT;
             goto basic_type;
         case TOK_DOUBLE:
-            if ((t & VT_BTYPE) == VT_LONG) {
+            if (t & VT_LONG) {
 #ifdef TCC_TARGET_PE
-                t = (t & ~VT_BTYPE) | VT_DOUBLE;
+		t = (t & ~(VT_LONG | VT_BTYPE)) | VT_DOUBLE;
 #else
-                t = (t & ~VT_BTYPE) | VT_LDOUBLE;
+		t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LDOUBLE;
 #endif
             } else {
                 u = VT_DOUBLE;
@@ -4122,7 +4139,7 @@ the_end:
     }
 
     /* long is never used as type */
-    if ((t & VT_BTYPE) == VT_LONG)
+    if (t & VT_LONG)
 #if PTR_SIZE == 8 && !defined TCC_TARGET_PE
         t = (t & ~VT_BTYPE) | VT_LLONG;
 #else
@@ -4552,7 +4569,16 @@ ST_FUNC void unary(void)
     case TOK_CLDOUBLE:
         t = VT_LDOUBLE;
 	goto push_tokc;
-
+    case TOK_CLONG:
+    case TOK_CULONG:
+	#ifdef TCC_LONG_ARE_64_BIT
+	t = VT_LLONG | VT_LONG;
+	#else
+	t = VT_INT | VT_LONG;
+	#endif
+	if (tok == TOK_CULONG)
+	    t |= VT_UNSIGNED;
+	goto push_tokc;
     case TOK___FUNCTION__:
         if (!gnu_ext)
             goto tok_identifier;
@@ -4906,8 +4932,9 @@ ST_FUNC void unary(void)
 
 	next();
 	skip('(');
+	inside_generic = 1;
 	expr_type(&controlling_type, expr_eq);
-	controlling_type.t &= ~(VT_CONSTANT|VT_VOLATILE|VT_ARRAY);
+	controlling_type.t &= ~(VT_CONSTANT | VT_VOLATILE | VT_ARRAY);
 	for (;;) {
 	    learn = 0;
 	    skip(',');
@@ -4926,7 +4953,7 @@ ST_FUNC void unary(void)
 		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
 		if (compare_types(&controlling_type, &cur_type, 0)) {
 		    if (has_match) {
-		      // tcc_error("type match twice");
+		      tcc_error("type match twice");
 		    }
 		    has_match = 1;
 		    learn = 1;
@@ -4950,6 +4977,7 @@ ST_FUNC void unary(void)
 	}
 	begin_macro(str, 1);
 	next();
+	inside_generic = 0;
 	expr_eq();
 	if (tok != TOK_EOF)
 	    expect(",");

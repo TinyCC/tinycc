@@ -849,7 +849,6 @@ struct filespec {
 #define VT_DOUBLE           9  /* IEEE double */
 #define VT_LDOUBLE         10  /* IEEE long double */
 #define VT_BOOL            11  /* ISOC99 boolean type */
-#define VT_LONG            12  /* long integer (NEVER USED as type, only during parsing) */
 #define VT_QLONG           13  /* 128-bit integer. Only used for x86-64 ABI */
 #define VT_QFLOAT          14  /* 128-bit float. Only used for x86-64 ABI */
 
@@ -860,6 +859,7 @@ struct filespec {
 #define VT_CONSTANT    0x0100  /* const modifier */
 #define VT_VOLATILE    0x0200  /* volatile modifier */
 #define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_LONG	       0x0800
 
 /* storage */
 #define VT_EXTERN  0x00001000  /* extern definition */
@@ -939,7 +939,16 @@ struct filespec {
 #define TOK_TWOSHARPS 0xca /* ## preprocessing token */
 #define TOK_PLCHLDR  0xcb /* placeholder token as defined in C99 */
 #define TOK_NOSUBST  0xcc /* means following token has already been pp'd */
-#define TOK_PPJOIN   0xce /* A '##' in the right position to mean pasting */
+#define TOK_PPJOIN   0xcd /* A '##' in the right position to mean pasting */
+
+#define TOK_CLONG   0xce /* long constant */
+#define TOK_CULONG  0xcf /* unsigned long constant */
+
+
+#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
+    #define TCC_LONG_ARE_64_BIT
+#endif
+
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
