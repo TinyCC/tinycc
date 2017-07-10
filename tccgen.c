@@ -3683,7 +3683,7 @@ static void struct_decl(CType *type, int u)
         v = anon_sym++;
     }
     /* Record the original enum/struct/union token.  */
-    type1.t = u;
+    type1.t = u == VT_ENUM ? u | VT_INT | VT_UNSIGNED : u;
     type1.ref = NULL;
     /* we put an undefined size for struct/union */
     s = sym_push(v | SYM_STRUCT, &type1, 0, -1);
@@ -3736,7 +3736,7 @@ do_decl:
             skip('}');
             /* set integral type of the enum */
             t.t = VT_INT;
-            if (nl == 0) {
+            if (nl >= 0) {
                 if (pl != (unsigned)pl)
                     t.t = VT_LLONG;
                 t.t |= VT_UNSIGNED;
