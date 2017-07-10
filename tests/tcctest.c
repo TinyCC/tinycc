@@ -2899,6 +2899,11 @@ struct hlist_head {
     struct hlist_node *first, *last;
 };
 
+void consume_ulong (unsigned long i)
+{
+    i = 0;
+}
+
 void statement_expr_test(void)
 {
     int a, i;
@@ -2954,6 +2959,9 @@ void statement_expr_test(void)
 	   });
     printf ("stmtexpr: %d %d %d\n", t, b, c);
     printf ("stmtexpr: %ld %ld\n", (long)h.first, (long)h.last);
+
+    /* Test that we can give out addresses of local labels.  */
+    consume_ulong(({ __label__ __here; __here: (unsigned long)&&__here; }));
 }
 
 void local_label_test(void)

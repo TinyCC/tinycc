@@ -5861,7 +5861,7 @@ static void block(int *bsym, int *csym, int is_expr)
             }
         }
         /* pop locally defined labels */
-        label_pop(&local_label_stack, llabel);
+        label_pop(&local_label_stack, llabel, is_expr);
         /* pop locally defined symbols */
         --local_scope;
 	/* In the is_expr case (a statement expression is finished here),
@@ -6948,7 +6948,7 @@ static void gen_function(Sym *sym)
     gsym(rsym);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
-    label_pop(&global_label_stack, NULL);
+    label_pop(&global_label_stack, NULL, 0);
     /* reset local stack */
     local_scope = 0;
     sym_pop(&local_stack, NULL, 0);

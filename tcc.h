@@ -1234,7 +1234,7 @@ ST_INLN Sym *define_find(int v);
 ST_FUNC void free_defines(Sym *b);
 ST_FUNC Sym *label_find(int v);
 ST_FUNC Sym *label_push(Sym **ptop, int v, int flags);
-ST_FUNC void label_pop(Sym **ptop, Sym *slast);
+ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep);
 ST_FUNC void parse_define(void);
 ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next_nomacro(void);

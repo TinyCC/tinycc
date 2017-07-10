@@ -1376,7 +1376,7 @@ ST_FUNC Sym *label_push(Sym **ptop, int v, int flags)
 
 /* pop labels until element last is reached. Look if any labels are
    undefined. Define symbols if '&&label' was used. */
-ST_FUNC void label_pop(Sym **ptop, Sym *slast)
+ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
 {
     Sym *s, *s1;
     for(s = *ptop; s != slast; s = s1) {
@@ -1395,9 +1395,11 @@ ST_FUNC void label_pop(Sym **ptop, Sym *slast)
         }
         /* remove label */
         table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
-        sym_free(s);
+        if (!keep)
+            sym_free(s);
     }
-    *ptop = slast;
+    if (!keep)
+        *ptop = slast;
 }
 
 /* eval an expression for #if/#elif */
