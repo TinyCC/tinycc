@@ -1658,24 +1658,28 @@ static void pragma_parse(TCCState *s1)
             goto pragma_err;
 
     } else if (tok == TOK_comment) {
-        char *file;
+        char *p; int t;
         next();
         skip('(');
-        if (tok != TOK_lib)
-            goto pragma_warn;
+        t = tok;
         next();
         skip(',');
         if (tok != TOK_STR)
             goto pragma_err;
-        file = tcc_strdup((char *)tokc.str.data);
-        dynarray_add(&s1->pragma_libs, &s1->nb_pragma_libs, file);
+        p = tcc_strdup((char *)tokc.str.data);
         next();
         if (tok != ')')
             goto pragma_err;
-    } else {
-pragma_warn:
-        if (s1->warn_unsupported)
-            tcc_warning("#pragma %s is ignored", get_tok_str(tok, &tokc));
+        if (t == TOK_lib) {
+            dynarray_add(&s1->pragma_libs, &s1->nb_pragma_libs, p);
+        } else {
+            if (t == TOK_option)
+                tcc_set_options(s1, p);
+            tcc_free(p);
+        }
+
+    } else if (s1->warn_unsupported) {
+        tcc_warning("#pragma %s is ignored", get_tok_str(tok, &tokc));
     }
     return;
 

@@ -1801,6 +1801,8 @@ reparse:
                 s->dflag = 3;
             else if (*optarg == 'M')
                 s->dflag = 7;
+            else if (isnum(*optarg))
+                g_debug = atoi(optarg);
             else
                 goto unsupported_option;
             break;

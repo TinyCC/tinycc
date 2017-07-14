@@ -57,6 +57,7 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA const char *funcname;
+ST_DATA int g_debug;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
 
@@ -1083,8 +1084,7 @@ static void load_packed_bf(CType *type, int bit_pos, int bit_size)
 {
     int n, o, bits;
     save_reg_upstack(vtop->r, 1);
-    vpushi(0); // B X
-    vtop->type.t |= type->t;
+    vpush64(type->t & VT_BTYPE, 0); // B X
     bits = 0, o = bit_pos >> 3, bit_pos &= 7;
     do {
         vswap(); // X B
@@ -1113,7 +1113,7 @@ static void load_packed_bf(CType *type, int bit_pos, int bit_size)
 }
 
 /* single-byte store mode for packed or otherwise unaligned bitfields */
-void store_packed_bf(int bit_pos, int bit_size)
+static void store_packed_bf(int bit_pos, int bit_size)
 {
     int bits, n, o, m, c;
 
@@ -1148,7 +1148,7 @@ void store_packed_bf(int bit_pos, int bit_size)
     vpop(), vpop();
 }
 
-int adjust_bf(SValue *sv, int bit_pos, int bit_size)
+static int adjust_bf(SValue *sv, int bit_pos, int bit_size)
 {
     int t;
     if (0 == sv->type.ref)
@@ -2781,7 +2781,7 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "inline ");
     buf_size -= strlen(buf);
     buf += strlen(buf);
-    if (IS_ENUM(type->t)) {
+    if (IS_ENUM(t)) {
         tstr = "enum ";
         goto tstruct;
     }
@@ -3405,9 +3405,12 @@ static void struct_layout(CType *type, AttributeDef *ad)
 //#define BF_DEBUG
 
     for (f = type->ref->next; f; f = f->next) {
-        if (f->type.t & VT_BITFIELD)
+        if (f->type.t & VT_BITFIELD) {
             bit_size = BIT_SIZE(f->type.t);
-        else
+            /* in pcc mode, long long bitfields have type int if they fit */
+            if (pcc && (f->type.t & VT_BTYPE) == VT_LLONG && bit_size <= 32)
+                f->type.t = (f->type.t & ~VT_BTYPE) | VT_INT;
+        } else
             bit_size = -1;
         size = type_size(&f->type, &align);
         a = f->a.aligned ? 1 << (f->a.aligned - 1) : 0;
@@ -3476,16 +3479,10 @@ static void struct_layout(CType *type, AttributeDef *ad)
                         goto new_field;
                 }
 
-                /* in pcc mode, long long bitfields have type int if they fit */
-                if (size == 8 && bit_size <= 32) {
-                    f->type.t = (f->type.t & ~VT_BTYPE) | VT_INT;
-                    size = 4;
-                }
-                if (bit_pos >= size * 8) {
-	            c += size;
-	            bit_pos -= size * 8;
-                }
+                while (bit_pos >= align * 8)
+                    c += align, bit_pos -= align * 8;
                 offset = c;
+
 		/* In PCC layout named bit-fields influence the alignment
 		   of the containing struct using the base types alignment,
 		   except for packed fields (which here have correct align).  */
@@ -3576,14 +3573,20 @@ static void struct_layout(CType *type, AttributeDef *ad)
     if (pcc)
         c += (bit_pos + 7) >> 3;
 
-    a = ad->a.aligned ? 1 << (ad->a.aligned - 1) : 0;
+    /* store size and alignment */
+    a = bt = ad->a.aligned ? 1 << (ad->a.aligned - 1) : 1;
     if (a < maxalign)
         a = maxalign;
-    c = (c + a - 1) & -a;
-
-    /* store size and alignment */
-    type->ref->c = c;
     type->ref->r = a;
+    if (pragma_pack && pragma_pack < maxalign) {
+        /* can happen if individual align for some member was given.  In
+           this case MSVC ignores maxalign when aligning the size */
+        a = pragma_pack;
+        if (a < bt)
+            a = bt;
+    }
+    c = (c + a - 1) & -a;
+    type->ref->c = c;
 
 #ifdef BF_DEBUG
     printf("struct size %-2d align %-2d\n\n", c, a), fflush(stdout);
@@ -3603,7 +3606,6 @@ static void struct_layout(CType *type, AttributeDef *ad)
             continue;
         bit_pos = BIT_POS(f->type.t);
         size = type_size(&f->type, &align);
-
         if (bit_pos + bit_size <= size * 8 && f->c + size <= c)
             continue;
 
@@ -3637,19 +3639,20 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		        | (bit_pos << VT_STRUCT_SHIFT);
             if (s != size)
                 f->auxtype = t.t;
+#ifdef BF_DEBUG
+            printf("FIX field %s offset %-2d size %-2d align %-2d "
+                "pos %-2d bits %-2d\n",
+                get_tok_str(f->v & ~SYM_FIELD, NULL),
+                cx, s, align, px, bit_size);
+#endif
         } else {
             /* fall back to load/store single-byte wise */
             f->auxtype = VT_STRUCT;
-        }
-
 #ifdef BF_DEBUG
-       printf("FIX field %s offset %-2d size %-2d align %-2d "
-            "pos %-2d bits %-2d %s\n",
-             get_tok_str(f->v & ~SYM_FIELD, NULL),
-             cx, s, align, px, bit_size,
-             f->auxtype == VT_PTR ? " byte-wise" : ""
-             );
+            printf("FIX field %s : load byte-wise\n",
+                 get_tok_str(f->v & ~SYM_FIELD, NULL));
 #endif
+        }
     }
 }
 
@@ -4915,9 +4918,9 @@ ST_FUNC void unary(void)
 		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
 		if (compare_types(&controlling_type, &cur_type, 0)) {
 		    if (has_match) {
-			tcc_error("type march twice");
+			// tcc_error("type march twice");
 		    }
-		    if (has_default)
+		    if (str)
 			tok_str_free(str);
 		    has_match = 1;
 		    learn = 1;

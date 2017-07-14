@@ -18,6 +18,9 @@ NORUN =
 FLAGS =
 76_dollars_in_identifiers.test : FLAGS += -fdollars-in-identifiers
 
+# Always generate certain .expects (don't put these in the GIT),
+GEN-ALWAYS = 95_bitfields.expect
+
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'
 # Filter some always-warning
@@ -40,26 +43,55 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
+ifeq (-$(findstring gcc,$(CC)-)-,--)
+ SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
+endif
+ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
+ SKIP += 95_bitfields_ms.test # type_align is differnt on 32bit-non-windows
+endif
 
-all test: $(filter-out $(SKIP),$(TESTS))
+all test tests2.all: $(filter-out $(SKIP),$(TESTS)) ;
 
 %.test: %.c %.expect
 	@echo Test: $*...
-# test -run
-	@if test -z "$(NORUN)"; then \
-	    $(TCC) $(FLAGS) -run $< $(ARGS) $(FILTER) >$*.output 2>&1 || true; \
-	  else \
-	    $(TCC) $(FLAGS) $< -o ./$*.exe $(FILTER) >$*.output 2>&1; \
-	    ./$*.exe $(ARGS) >>$*.output 2>&1 || true; \
-	  fi
-	@diff -Nbu $(SRC)/$*.expect $*.output && rm -f $*.output $*.exe
+	@$(if $(NORUN),\
+	    ($(TCC) $(FLAGS) $< -o a.exe && ./a.exe $(ARGS)),\
+	    $(TCC) $(FLAGS) -run $< $(ARGS)\
+	   ) $(FILTER) >$*.output 2>&1 || true
+	@diff -Nbu $(filter %.expect,$^) $*.output \
+	    && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
+
+F1 = $(or $(filter $1_%,$(TESTS)),$1_???.test)
+F2 = $1 UPDATE="$(patsubst %.test,%.expect,$1)"
+
+# run single test and update .expect file, e.g. "make tests2.37+"
+tests2.%+:
+	@$(MAKE) $(call F2,$(call F1,$*)) --no-print-directory
+
+# run single test, e.g. "make tests2.37"
+tests2.%:
+	@$(MAKE) $(call F1,$*) --no-print-directory
 
 # automatically generate .expect files with gcc:
-%.expect : # %.c
-	(gcc -w $*.c -o a.exe && ./a.exe $(ARGS)) $(FILTER) >$*.expect 2>&1; rm -f a.exe
+%.expect :
+	@echo Generating: $@
+	@$(CC) -w -std=gnu99 $(FLAGS) $(SRC)/$*.c -o a.exe
+	@./a.exe $(ARGS) $(FILTER) >$@ 2>&1
+	@rm -f a.exe
+
+# using the ms compiler for the really ms-compatible bitfields
+MS-CC = cl
+95_bitfields_ms.expect :
+	@echo Generating: $@
+	@$(MS-CC) $(basename $@).c
+	@./$(basename $@).exe >$@ 2>&1
+	@rm -f *.exe *.obj *.pdb
 
 # tell make not to delete
 .PRECIOUS: %.expect
 
+$(sort $(GEN-ALWAYS) $(UPDATE)) : force
+force:
+
 clean:
-	rm -f fred.txt *.output a.exe
+	rm -f fred.txt *.output a.exe $(GEN-ALWAYS)

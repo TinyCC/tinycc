@@ -345,9 +345,12 @@ tar:    tcc-doc.html
 config.mak:
 	$(if $(wildcard $@),,@echo "Please run ./configure." && exit 1)
 
-# in tests subdir
+# run all tests
 test:
 	$(MAKE) -C tests
+# run test(s) from tests2 subdir (see make help)
+tests2.%:
+	$(MAKE) -C tests/tests2 $@
 
 clean:
 	rm -f $(PROGS) $(PROGS_CROSS) tcc_p$(EXESUF) tcc.pod
@@ -389,8 +392,14 @@ help:
 	@echo "      INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
 	@echo "      DEF-i386  += -D__linux__"
 	@echo ""
+	@echo "make test"
+	@echo "   run all tests"
+	@echo ""
+	@echo "make tests2.all / make tests2.37 / make tests2.37+"
+	@echo "   run all/single test(s) from tests2, optionally update .expect"
+	@echo ""
 	@echo "Other supported make targets:"
-	@echo "   install install-strip test tags ETAGS tar clean distclean help"
+	@echo "   install install-strip tags ETAGS tar clean distclean help"
 	@echo ""
 
 # --------------------------------------------------------------------------

@@ -167,6 +167,7 @@
      DEF(TOK_push_macro, "push_macro")
      DEF(TOK_pop_macro, "pop_macro")
      DEF(TOK_once, "once")
+     DEF(TOK_option, "option")
 
 /* builtin functions or variables */
 #ifndef TCC_ARM_EABI
