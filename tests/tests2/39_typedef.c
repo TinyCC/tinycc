@@ -44,4 +44,22 @@ extern const int cb[1][2][3];
 extern B b;
 extern int b[1][2][3];
 
+/* Funny but valid function declaration.  */
+typedef int functype (int);
+extern functype func;
+int func(int i)
+{
+   return i + 1;
+}
+
+/* Even funnier function decl and definition using typeof.  */
+int set_anon_super(void);
+int set_anon_super(void)
+{
+   return 42;
+}
+typedef int sas_type (void);
+extern typeof(set_anon_super) set_anon_super;
+extern sas_type set_anon_super;
+
 /* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
