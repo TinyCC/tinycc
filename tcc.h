@@ -813,6 +813,7 @@ struct TCCState {
     int option_pthread; /* -pthread option */
     int argc;
     char **argv;
+    int do_test;
 };
 
 struct filespec {

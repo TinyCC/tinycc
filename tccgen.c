@@ -50,7 +50,9 @@ ST_DATA int vla_sp_loc; /* Pointer to variable holding location to store stack p
 ST_DATA SValue __vstack[1+VSTACK_SIZE], *vtop, *pvtop;
 
 ST_DATA int const_wanted; /* true if constant wanted */
-ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
+ST_DATA int nocode_wanted; /* no code generation wanted */
+#define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
+#define STATIC_DATA_WANTED (nocode_wanted & 0xC0000000) /* only static data output */
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
@@ -230,7 +232,7 @@ ST_FUNC void tccgen_start(TCCState *s1)
     anon_sym = SYM_FIRST_ANOM;
     section_sym = 0;
     const_wanted = 0;
-    nocode_wanted = 1;
+    nocode_wanted = 0x80000000;
 
     /* define some often used types */
     int_type.t = VT_INT;
@@ -1206,14 +1208,12 @@ ST_FUNC int gv(int rc)
     } else {
         if (is_float(vtop->type.t) && 
             (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-            unsigned long offset;
             /* CPUs usually cannot use float constants, so we store them
                generically in data segment */
             size = type_size(&vtop->type, &align);
-	    offset = section_add(data_section, size, align);
-            vpush_ref(&vtop->type, data_section, offset, size);
+            vpush_ref(&vtop->type, data_section, data_section->data_offset, size);
 	    vswap();
-	    init_putv(&vtop->type, data_section, offset);
+	    init_putv(&vtop->type, data_section, data_section->data_offset);
 	    vtop->r |= VT_LVAL;
         }
 #ifdef CONFIG_TCC_BCHECK
@@ -2329,6 +2329,11 @@ static void gen_cvt_ftoi1(int t)
 static void force_charshort_cast(int t)
 {
     int bits, dbt;
+
+    /* cannot cast static initializers */
+    if (STATIC_DATA_WANTED)
+	return;
+
     dbt = t & VT_BTYPE;
     /* XXX: add optimization if lvalue : just change type and offset */
     if (dbt == VT_BYTE)
@@ -3405,12 +3410,9 @@ static void struct_layout(CType *type, AttributeDef *ad)
 //#define BF_DEBUG
 
     for (f = type->ref->next; f; f = f->next) {
-        if (f->type.t & VT_BITFIELD) {
+        if (f->type.t & VT_BITFIELD)
             bit_size = BIT_SIZE(f->type.t);
-            /* in pcc mode, long long bitfields have type int if they fit */
-            if (pcc && (f->type.t & VT_BTYPE) == VT_LLONG && bit_size <= 32)
-                f->type.t = (f->type.t & ~VT_BTYPE) | VT_INT;
-        } else
+        else
             bit_size = -1;
         size = type_size(&f->type, &align);
         a = f->a.aligned ? 1 << (f->a.aligned - 1) : 0;
@@ -3478,6 +3480,10 @@ static void struct_layout(CType *type, AttributeDef *ad)
                     if (ofs > size / align)
                         goto new_field;
                 }
+
+                /* in pcc mode, long long bitfields have type int if they fit */
+                if (size == 8 && bit_size <= 32)
+                    f->type.t = (f->type.t & ~VT_BTYPE) | VT_INT, size = 4;
 
                 while (bit_pos >= align * 8)
                     c += align, bit_pos -= align * 8;
@@ -4558,8 +4564,10 @@ ST_FUNC void unary(void)
             type.t |= VT_ARRAY;
             type.ref->c = len;
             vpush_ref(&type, data_section, data_section->data_offset, len);
-            ptr = section_ptr_add(data_section, len);
-            memcpy(ptr, funcname, len);
+            if (!NODATA_WANTED) {
+                ptr = section_ptr_add(data_section, len);
+                memcpy(ptr, funcname, len);
+            }
             next();
         }
         break;
@@ -6314,7 +6322,7 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
 		vstore();
 	    }
 	    vpop();
-	} else {
+        } else if (!NODATA_WANTED) {
 	    c_end = c + nb_elems * elem_size;
 	    if (c_end > sec->data_allocated)
 	        section_realloc(sec, c_end);
@@ -6348,9 +6356,25 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
         /* XXX: generate error if incorrect relocation */
         gen_assign_cast(&dtype);
         bt = type->t & VT_BTYPE;
+
+        if ((vtop->r & VT_SYM)
+            && bt != VT_PTR
+            && bt != VT_FUNC
+            && (bt != (PTR_SIZE == 8 ? VT_LLONG : VT_INT)
+                || (type->t & VT_BITFIELD))
+            && !((vtop->r & VT_CONST) && vtop->sym->v >= SYM_FIRST_ANOM)
+            )
+            tcc_error("initializer element is not computable at load time");
+
+        if (NODATA_WANTED) {
+            vtop--;
+            return;
+        }
+
 	size = type_size(type, &align);
 	section_reserve(sec, c + size);
         ptr = sec->data + c;
+
         /* XXX: make code faster ? */
 	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST) &&
 	    vtop->sym->v >= SYM_FIRST_ANOM &&
@@ -6404,20 +6428,6 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 		}
 	    }
 	} else {
-            if ((vtop->r & VT_SYM) &&
-		(bt == VT_BYTE ||
-		 bt == VT_SHORT ||
-		 bt == VT_DOUBLE ||
-		 bt == VT_LDOUBLE ||
-#if PTR_SIZE == 8
-		 bt == VT_INT ||
-#else
-		 bt == VT_LLONG ||
-#endif
-                 (type->t & VT_BITFIELD)
-		))
-	      tcc_error("initializer element is not computable at load time");
-
             if (type->t & VT_BITFIELD) {
                 int bit_pos, bit_size, bits, n;
                 unsigned char *p, v, m;
@@ -6598,7 +6608,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                        string in global variable, we handle it
                        specifically */
                     if (sec && tok == TOK_STR && size1 == 1) {
-                        memcpy(sec->data + c + len, tokc.str.data, nb);
+                        if (!NODATA_WANTED)
+                            memcpy(sec->data + c + len, tokc.str.data, nb);
                     } else {
                         for(i=0;i<nb;i++) {
                             if (tok == TOK_STR)
@@ -6714,6 +6725,13 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     Section *sec;
     Sym *flexible_array;
     Sym *sym = NULL;
+    int saved_nocode_wanted = nocode_wanted;
+#ifdef CONFIG_TCC_BCHECK
+    int bcheck = tcc_state->do_bounds_check && !NODATA_WANTED;
+#endif
+
+    if (type->t & VT_STATIC)
+        nocode_wanted |= NODATA_WANTED ? 0x40000000 : 0x80000000;
 
     flexible_array = NULL;
     if ((type->t & VT_BTYPE) == VT_STRUCT) {
@@ -6779,10 +6797,14 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     } else if (ad->a.packed) {
         align = 1;
     }
+
+    if (NODATA_WANTED)
+        size = 0, align = 1;
+
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+        if (bcheck && (type->t & VT_ARRAY)) {
             loc--;
         }
 #endif
@@ -6792,7 +6814,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
            '&' operators, so we add only arrays */
-        if (tcc_state->do_bounds_check && (type->t & VT_ARRAY)) {
+        if (bcheck && (type->t & VT_ARRAY)) {
             addr_t *bounds_ptr;
             /* add padding between regions */
             loc--;
@@ -6860,7 +6882,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 	    addr = section_add(sec, size, align);
 #ifdef CONFIG_TCC_BCHECK
             /* add padding if bound check */
-            if (tcc_state->do_bounds_check)
+            if (bcheck)
                 section_add(sec, 1, 1);
 #endif
         } else {
@@ -6888,7 +6910,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds now because the symbol must be defined
            before for the relocation */
-        if (tcc_state->do_bounds_check) {
+        if (bcheck) {
             addr_t *bounds_ptr;
 
             greloca(bounds_section, sym, bounds_section->data_offset, R_DATA_PTR, 0);
@@ -6902,6 +6924,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
     if (type->t & VT_VLA) {
         int a;
+
+        if (NODATA_WANTED)
+            goto no_alloc;
 
         /* save current stack pointer */
         if (vlas_in_scope == 0) {
@@ -6935,6 +6960,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         end_macro();
         restore_parse_state(&saved_parse_state);
     }
+
+    nocode_wanted = saved_nocode_wanted;
 }
 
 /* parse a function defined by symbol 'sym' and generate its code in
@@ -6978,7 +7005,7 @@ static void gen_function(Sym *sym)
     func_vt.t = VT_VOID; /* for safety */
     func_var = 0; /* for safety */
     ind = 0; /* for safety */
-    nocode_wanted = 1;
+    nocode_wanted = 0x80000000;
     check_vstack();
 }
 

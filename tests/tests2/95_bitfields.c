@@ -58,7 +58,7 @@
     struct M P __s {
         long long x : 45;
         long long : 2;
-        long long y : 35;
+        long long y : 30;
         unsigned long long z : 38;
         char a; short b;
     };

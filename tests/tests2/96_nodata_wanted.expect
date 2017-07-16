@@ -1,0 +1,24 @@
+/*-* test 1: initializer not computable 1 */
+test 1:3: error: initializer element is not computable at load time
+
+/*-* test 2: initializer not computable 2 */
+test 2:3: error: initializer element is not computable at load time
+
+/*-* test 3: initializer not computable 3 */
+test 3:2: error: initializer element is not computable at load time
+
+/*-* test 4: 2 cast warnings */
+test 4:2: warning: assignment makes integer from pointer without a cast
+test 4:2: warning: nonportable conversion from pointer to char/short
+
+/*-* test 5; nodata_wanted test */
+suppression off
+  static data: 8 - 8.0 - 8.0 - main - static string
+  static bitfields: 333 44 555555 6 7
+  data length is not 0
+suppression on
+  data length is 0
+returns 0
+
+/*-* test 6: some test */
+returns 34

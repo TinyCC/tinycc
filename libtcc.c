@@ -634,11 +634,9 @@ static int tcc_compile(TCCState *s1)
 
         preprocess_start(s1);
         tccgen_start(s1);
-
 #ifdef INC_DEBUG
         printf("%s: **** new file\n", file->filename);
 #endif
-
         ch = file->buf_ptr[0];
         tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
@@ -1801,6 +1799,8 @@ reparse:
                 s->dflag = 3;
             else if (*optarg == 'M')
                 s->dflag = 7;
+            else if (*optarg == 'T')
+                s->do_test = argc;
             else if (isnum(*optarg))
                 g_debug = atoi(optarg);
             else
