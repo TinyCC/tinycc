@@ -282,8 +282,10 @@ redo:
         n = s->nb_files;
         if (n == 0)
             tcc_error("no input files\n");
+#ifdef TCC_IS_NATIVE
         if (s->do_test)
             tcc_tool_test(s, argc, argv); /* maybe never returns */
+#endif
 
         if (s->output_type == TCC_OUTPUT_PREPROCESS) {
             if (!s->outfile) {
