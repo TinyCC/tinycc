@@ -556,15 +556,6 @@ typedef struct BufferedFile {
 #define CH_EOB   '\\'       /* end of buffer or '\0' char in file */
 #define CH_EOF   (-1)   /* end of file */
 
-/* parsing state (used to save parser state to reparse part of the
-   source several times) */
-typedef struct ParseState {
-    const int *macro_ptr;
-    int line_num;
-    int tok;
-    CValue tokc;
-} ParseState;
-
 /* used to record tokens */
 typedef struct TokenString {
     int *str;
@@ -572,6 +563,7 @@ typedef struct TokenString {
     int lastlen;
     int allocated_len;
     int last_line_num;
+    int save_line_num;
     /* used to chain token-strings with begin/end_macro() */
     struct TokenString *prev;
     const int *prev_ptr;
@@ -675,6 +667,7 @@ struct TCCState {
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/
 #endif
+    int run_test; /* nth test to run with -dt -run */
 
     addr_t text_addr; /* address of text section */
     int has_text_addr;
@@ -813,7 +806,6 @@ struct TCCState {
     int option_pthread; /* -pthread option */
     int argc;
     char **argv;
-    int do_test;
 };
 
 struct filespec {
@@ -1145,14 +1137,13 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 /* flags: */
 #define AFF_PRINT_ERROR     0x10 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x20 /* load a referenced dll from another dll */
-#define AFF_PREPROCESS      0x40 /* preprocess file */
-/* combined with: */
+#define AFF_TYPE_BIN        0x40 /* file to add is binary */
+/* s->filetype: */
 #define AFF_TYPE_NONE   0
 #define AFF_TYPE_C      1
 #define AFF_TYPE_ASM    2
 #define AFF_TYPE_ASMPP  3
-#define AFF_TYPE_BIN    4
-#define AFF_TYPE_LIB    5
+#define AFF_TYPE_LIB    4
 /* values from tcc_object_type(...) */
 #define AFF_BINTYPE_REL 1
 #define AFF_BINTYPE_DYN 2
@@ -1220,9 +1211,7 @@ ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC const char *get_tok_str(int v, CValue *cv);
 ST_FUNC void begin_macro(TokenString *str, int alloc);
 ST_FUNC void end_macro(void);
-ST_FUNC void set_idnum(int c, int val);
-ST_FUNC void save_parse_state(ParseState *s);
-ST_FUNC void restore_parse_state(ParseState *s);
+ST_FUNC int set_idnum(int c, int val);
 ST_INLN void tok_str_new(TokenString *s);
 ST_FUNC TokenString *tok_str_alloc(void);
 ST_FUNC void tok_str_free(TokenString *s);
@@ -1241,7 +1230,8 @@ ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next_nomacro(void);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
-ST_FUNC void preprocess_start(TCCState *s1);
+ST_FUNC void preprocess_start(TCCState *s1, int is_asm);
+ST_FUNC void preprocess_end(TCCState *s1);
 ST_FUNC void tccpp_new(TCCState *s);
 ST_FUNC void tccpp_delete(TCCState *s);
 ST_FUNC int tcc_preprocess(TCCState *s1);
@@ -1298,9 +1288,7 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
 ST_FUNC void tcc_debug_line(TCCState *s1);
 
-ST_FUNC void tccgen_start(TCCState *s1);
-ST_FUNC void tccgen_end(TCCState *s1);
-
+ST_FUNC int tccgen_compile(TCCState *s1);
 ST_FUNC void free_inline_functions(TCCState *s);
 ST_FUNC void check_vstack(void);
 
@@ -1342,7 +1330,6 @@ ST_FUNC void expr_prod(void);
 ST_FUNC void expr_sum(void);
 ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
-ST_FUNC void decl(int l);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67
 ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsigned long size);
 #endif

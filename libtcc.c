@@ -508,8 +508,9 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
 
     if (!s1->error_func) {
         /* default case: stderr */
-        if (s1->ppfp) /* print a newline during tcc -E */
-            fprintf(s1->ppfp, "\n"), fflush(s1->ppfp);
+        if (s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
+            /* print a newline during tcc -E */
+            printf("\n"), fflush(stdout);
         fflush(stdout); /* flush -v output */
         fprintf(stderr, "%s\n", buf);
         fflush(stderr); /* print error/warning now (win32) */
@@ -587,6 +588,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     bf->fd = -1;
     bf->prev = file;
     file = bf;
+    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
 }
 
 ST_FUNC void tcc_close(void)
@@ -622,36 +624,36 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
     return fd;
 }
 
-/* compile the C file opened in 'file'. Return non zero if errors. */
+/* compile the file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s1)
 {
     Sym *define_start;
+    int filetype, is_asm;
 
     define_start = define_stack;
+    filetype = s1->filetype;
+    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
         s1->error_set_jmp_enabled = 1;
 
-        preprocess_start(s1);
-        tccgen_start(s1);
-#ifdef INC_DEBUG
-        printf("%s: **** new file\n", file->filename);
+        preprocess_start(s1, is_asm);
+        if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
+            tcc_preprocess(s1);
+        } else if (is_asm) {
+#ifdef CONFIG_TCC_ASM
+            tcc_assemble(s1, filetype == AFF_TYPE_ASMPP);
+#else
+            tcc_error_noabort("asm not supported");
 #endif
-        ch = file->buf_ptr[0];
-        tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
-        parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
-        next();
-        decl(VT_CONST);
-        if (tok != TOK_EOF)
-            expect("declaration");
-        /* free defines here already on behalf of of M.M.'s possibly existing
-           experimental preprocessor implementation. The normal call below
-           is still there to free after error-longjmp */
-        free_defines(define_start);
-        tccgen_end(s1);
+        } else {
+            tccgen_compile(s1);
+        }
     }
     s1->error_set_jmp_enabled = 0;
 
+    preprocess_end(s1);
     free_inline_functions(s1);
     /* reset define stack, but keep -D and built-ins */
     free_defines(define_start);
@@ -689,10 +691,8 @@ LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *valu
     memcpy(file->buffer + len1 + 1, value, len2);
 
     /* parse with define parser */
-    ch = file->buf_ptr[0];
     next_nomacro();
     parse_define();
-
     tcc_close();
 }
 
@@ -713,6 +713,8 @@ static void tcc_cleanup(void)
 {
     if (NULL == tcc_state)
         return;
+    while (file)
+        tcc_close();
     tccpp_delete(tcc_state);
     tcc_state = NULL;
     /* free sym_pools */
@@ -993,26 +995,7 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
-    int ret, filetype;
-
-    filetype = flags & 0x0F;
-    if (filetype == 0) {
-        /* use a file extension to detect a filetype */
-        const char *ext = tcc_fileextension(filename);
-        if (ext[0]) {
-            ext++;
-            if (!strcmp(ext, "S"))
-                filetype = AFF_TYPE_ASMPP;
-            else if (!strcmp(ext, "s"))
-                filetype = AFF_TYPE_ASM;
-            else if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
-                filetype = AFF_TYPE_C;
-            else
-                filetype = AFF_TYPE_BIN;
-        } else {
-            filetype = AFF_TYPE_C;
-        }
-    }
+    int ret;
 
     /* open the file */
     ret = tcc_open(s1, filename);
@@ -1026,26 +1009,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     dynarray_add(&s1->target_deps, &s1->nb_target_deps,
             tcc_strdup(filename));
 
-    parse_flags = 0;
-    /* if .S file, define __ASSEMBLER__ like gcc does */
-    if (filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP) {
-        tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
-        parse_flags = PARSE_FLAG_ASM_FILE;
-    }
-
-    if (flags & AFF_PREPROCESS) {
-        ret = tcc_preprocess(s1);
-    } else if (filetype == AFF_TYPE_C) {
-        ret = tcc_compile(s1);
-#ifdef CONFIG_TCC_ASM
-    } else if (filetype == AFF_TYPE_ASMPP) {
-        /* non preprocessed assembler */
-        ret = tcc_assemble(s1, 1);
-    } else if (filetype == AFF_TYPE_ASM) {
-        /* preprocessed assembler */
-        ret = tcc_assemble(s1, 0);
-#endif
-    } else {
+    if (flags & AFF_TYPE_BIN) {
         ElfW(Ehdr) ehdr;
         int fd, obj_type;
 
@@ -1098,6 +1062,8 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
                 tcc_error_noabort("unrecognized file type");
             break;
         }
+    } else {
+        ret = tcc_compile(s1);
     }
     tcc_close();
     return ret;
@@ -1105,10 +1071,27 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
 LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
 {
-    if (s->output_type == TCC_OUTPUT_PREPROCESS)
-        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | AFF_PREPROCESS | s->filetype);
-    else
-        return tcc_add_file_internal(s, filename, AFF_PRINT_ERROR | s->filetype);
+    int filetype = s->filetype;
+    int flags = AFF_PRINT_ERROR;
+    if (filetype == 0) {
+        /* use a file extension to detect a filetype */
+        const char *ext = tcc_fileextension(filename);
+        if (ext[0]) {
+            ext++;
+            if (!strcmp(ext, "S"))
+                filetype = AFF_TYPE_ASMPP;
+            else if (!strcmp(ext, "s"))
+                filetype = AFF_TYPE_ASM;
+            else if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
+                filetype = AFF_TYPE_C;
+            else
+                flags |= AFF_TYPE_BIN;
+        } else {
+            filetype = AFF_TYPE_C;
+        }
+        s->filetype = filetype;
+    }
+    return tcc_add_file_internal(s, filename, flags);
 }
 
 LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
@@ -1799,8 +1782,8 @@ reparse:
                 s->dflag = 3;
             else if (*optarg == 'M')
                 s->dflag = 7;
-            else if (*optarg == 'T')
-                s->do_test = argc;
+            else if (*optarg == 't')
+                s->dflag = 16;
             else if (isnum(*optarg))
                 g_debug = atoi(optarg);
             else

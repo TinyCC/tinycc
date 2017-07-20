@@ -91,6 +91,7 @@ static const char help2[] =
     "  -static                       link to static libraries (not recommended)\n"
     "  -dumpversion                  print version\n"
     "  -print-search-dirs            print search paths\n"
+    "  -dt                           with -run/-E: auto-define 'test_...' macros\n"
     "Ignored options:\n"
     "  --param  -pedantic  -pipe  -s  -std  -traditional\n"
     "-W... warnings:\n"
@@ -244,18 +245,21 @@ static unsigned getclock_ms(void)
 #endif
 }
 
-int main(int argc, char **argv)
+int main(int argc0, char **argv0)
 {
     TCCState *s;
-    int ret, opt, n = 0;
+    int ret, opt, n = 0, t = 0;
     unsigned start_time = 0;
     const char *first_file;
+    int argc; char **argv;
+    FILE *ppfp = stdout;
 
 redo:
+    argc = argc0, argv = argv0;
     s = tcc_new();
     opt = tcc_parse_args(s, &argc, &argv, 1);
 
-    if (n == 0) {
+    if ((n | t) == 0) {
         if (opt == OPT_HELP)
             return printf(help), 1;
         if (opt == OPT_HELP2)
@@ -282,17 +286,11 @@ redo:
         n = s->nb_files;
         if (n == 0)
             tcc_error("no input files\n");
-#ifdef TCC_IS_NATIVE
-        if (s->do_test)
-            tcc_tool_test(s, argc, argv); /* maybe never returns */
-#endif
 
         if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-            if (!s->outfile) {
-                s->ppfp = stdout;
-            } else {
-                s->ppfp = fopen(s->outfile, "w");
-                if (!s->ppfp)
+            if (s->outfile) {
+                ppfp = fopen(s->outfile, "w");
+                if (!ppfp)
                     tcc_error("could not write '%s'", s->outfile);
             }
         } else if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) {
@@ -313,6 +311,11 @@ redo:
     if (s->output_type == 0)
         s->output_type = TCC_OUTPUT_EXE;
     tcc_set_output_type(s, s->output_type);
+    s->ppfp = ppfp;
+
+    if ((s->output_type == TCC_OUTPUT_MEMORY
+      || s->output_type == TCC_OUTPUT_PREPROCESS) && (s->dflag & 16))
+        s->dflag |= t ? 32 : 0, s->run_test = ++t, n = s->nb_files;
 
     /* compile or add each files or library */
     for (first_file = NULL, ret = 0;;) {
@@ -338,8 +341,7 @@ redo:
     }
 
     if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-        if (s->outfile)
-            fclose(s->ppfp);
+        ;
     } else if (0 == ret) {
         if (s->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
@@ -355,10 +357,18 @@ redo:
         }
     }
 
-    if (s->do_bench && ret == 0 && n == 0)
+    if (t)
+        ret = 0;
+    if (s->run_test)
+        t = 0;
+    if (s->do_bench && (n | t | ret) == 0)
         tcc_print_stats(s, getclock_ms() - start_time);
     tcc_delete(s);
     if (ret == 0 && n)
         goto redo; /* compile more files with -c */
+    if (t)
+        goto redo; /* run more tests with -dt -run */
+    if (ppfp && ppfp != stdout)
+        fclose(ppfp);
     return ret;
 }

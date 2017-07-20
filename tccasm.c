@@ -628,20 +628,16 @@ static void asm_parse_directive(TCCState *s1, int global)
         {
             int repeat;
             TokenString *init_str;
-            ParseState saved_parse_state = {0};
             next();
             repeat = asm_int_expr(s1);
             init_str = tok_str_alloc();
-            next();
-            while ((tok != TOK_ASMDIR_endr) && (tok != CH_EOF)) {
+            while (next(), tok != TOK_ASMDIR_endr) {
+                if (tok == CH_EOF)
+                    tcc_error("we at end of file, .endr not found");
                 tok_str_add_tok(init_str);
-                next();
             }
-            if (tok == CH_EOF) tcc_error("we at end of file, .endr not found");
-            next();
             tok_str_add(init_str, -1);
             tok_str_add(init_str, 0);
-            save_parse_state(&saved_parse_state);
             begin_macro(init_str, 1);
             while (repeat-- > 0) {
                 tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS),
@@ -649,7 +645,7 @@ static void asm_parse_directive(TCCState *s1, int global)
                 macro_ptr = init_str->str;
             }
             end_macro();
-            restore_parse_state(&saved_parse_state);
+            next();
             break;
         }
     case TOK_ASMDIR_org:
@@ -917,13 +913,10 @@ static void asm_parse_directive(TCCState *s1, int global)
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
 {
     int opcode;
+    int saved_parse_flags = parse_flags;
 
     /* XXX: undefine C labels */
-
-    ch = file->buf_ptr[0];
-    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
     parse_flags = PARSE_FLAG_ASM_FILE | PARSE_FLAG_TOK_STR;
-    set_idnum('.', IS_ID);
     if (do_preprocess)
         parse_flags |= PARSE_FLAG_PREPROCESS;
     for(;;) {
@@ -990,30 +983,22 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
     }
 
     asm_free_labels(s1);
+    parse_flags = saved_parse_flags;
     return 0;
 }
 
 /* Assemble the current file */
 ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 {
-    Sym *define_start;
     int ret;
-
-    define_start = define_stack;
-    preprocess_start(s1);
     tcc_debug_start(s1);
-
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
-
     ret = tcc_assemble_internal(s1, do_preprocess, 1);
-
     cur_text_section->data_offset = ind;
-
     tcc_debug_end(s1);
-    free_defines(define_start); 
     return ret;
 }
 
@@ -1025,21 +1010,16 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
    end */
 static void tcc_assemble_inline(TCCState *s1, char *str, int len, int global)
 {
-    int saved_parse_flags;
-    const int *saved_macro_ptr;
-
-    saved_parse_flags = parse_flags;
-    saved_macro_ptr = macro_ptr;
+    const int *saved_macro_ptr = macro_ptr;
+    int dotid = set_idnum('.', IS_ID);
 
     tcc_open_bf(s1, ":asm:", len);
     memcpy(file->buffer, str, len);
-
     macro_ptr = NULL;
     tcc_assemble_internal(s1, 0, global);
     tcc_close();
 
-    parse_flags = saved_parse_flags;
-    set_idnum('.', (parse_flags & PARSE_FLAG_ASM_FILE) ? IS_ID : 0);
+    set_idnum('.', dotid);
     macro_ptr = saved_macro_ptr;
 }
 

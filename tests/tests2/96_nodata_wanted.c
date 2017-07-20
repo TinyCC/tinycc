@@ -1,36 +1,35 @@
 /*****************************************************************************/
 /* test 'nodata_wanted' data output suppression */
 
-/*-* test 1: initializer not computable 1 */
+#if defined test_static_data_error
 void foo() {
     if (1) {
-	static short w = (int)&foo; /* error */
+	static short w = (int)&foo; /* initializer not computable */
     }
 }
 
-/*-* test 2: initializer not computable 2 */
+#elif defined test_static_nodata_error
 void foo() {
     if (0) {
-	static short w = (int)&foo; /* error */
+	static short w = (int)&foo; /* initializer not computable */
     }
 }
 
-/*-* test 3: initializer not computable 3 */
+#elif defined test_global_data_error
 void foo();
-static short w = (int)&foo; /* error */
+static short w = (int)&foo; /* initializer not computable */
 
 
-/*-* test 4: 2 cast warnings */
+#elif defined test_local_data_noerror
 void foo() {
-    short w = &foo; /* no error */
+    short w = &foo; /* 2 cast warnings */
 }
 
-/*-* test 5; nodata_wanted test */
+#elif defined test_data_suppression
 #include <stdio.h>
 
-#define DATA_LBL(s) \
-    __asm__(".global d"#s",t"#s"\n.data\nd"#s":\n.text\nt"#s":\n"); \
-    extern char d##s[],t##s[];
+#define ASMLABELS(s) \
+    __asm__(".global d"#s",t"#s"\n.data\nd"#s":\n.text\nt"#s":\n")
 
 #define PROG \
         static void *p = (void*)&main;\
@@ -47,28 +46,29 @@ void foo() {
 
 int main()
 {
+    extern char ds1[],ts1[];
+    extern char ds2[],ts2[];
+    extern char de1[],te1[];
+    extern char de2[],te2[];
+
     printf("suppression off\n");
-    DATA_LBL(s1);
     if (1) {
+        ASMLABELS(s1);
         PROG
+        ASMLABELS(e1);
     }
-    DATA_LBL(e1);
     printf("  data length is %s\n", de1 - ds1 ? "not 0":"0");
-    //printf("  text length is %s\n", te1 - ts1 ? "not 0":"0");
+    printf("  text length is %s\n", te1 - ts1 ? "not 0":"0");
 
     printf("suppression on\n");
-    DATA_LBL(s2);
     if (0) {
+        ASMLABELS(s2);
         PROG
+        ASMLABELS(e2);
     }
-    DATA_LBL(e2);
     printf("  data length is %x\n", de2 - ds2);
-    //printf("  text length is %X\n", te2 - ts2);
+    printf("  text length is %X\n", te2 - ts2);
     return 0;
 }
 
-/*-* test 6: some test */
-int main()
-{
-    return 34;
-}
+#endif

@@ -20,7 +20,7 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
-ifeq (-$(findstring gcc,$(CC)-)-,--)
+ifeq (-$(findstring gcc,$(CC))-,--)
  SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
 endif
 ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
@@ -40,8 +40,9 @@ NORUN =
 FLAGS =
 76_dollars_in_identifiers.test : FLAGS += -fdollars-in-identifiers
 
-# run the source file cut into snippets
-96_nodata_wanted.test : FLAGS = -dT
+# These tests run several snippets from the same file one by one
+60_errors_and_warnings.test : FLAGS += -dt
+96_nodata_wanted.test : FLAGS += -dt
 
 # Always generate certain .expects (don't put these in the GIT),
 GEN-ALWAYS =
@@ -90,8 +91,8 @@ F2 = $1 UPDATE="$(patsubst %.test,%.expect,$1)"
 	@$(call GEN,$(SRC)/$*.c) $(FILTER) >$@ 2>&1
 	@rm -f *.exe *.obj *.pdb
 
-# using TCC for .expect if -dT in FLAGS
-GEN = $(if $(findstring -dT,$(FLAGS)),$(GEN-TCC),$(GEN-CC))
+# using TCC for .expect if -dt in FLAGS
+GEN = $(if $(filter -dt,$(FLAGS)),$(GEN-TCC),$(GEN-CC))
 GEN-CC = $(CC) -w -std=gnu99 $(FLAGS) $1 -o a.exe && ./a.exe $(ARGS)
 GEN-TCC = $(TCC) $(FLAGS) -run $1 $(ARGS)
 GEN-MSC = $(MS-CC) $1 && ./$(basename $@).exe

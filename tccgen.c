@@ -84,6 +84,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+static void decl(int l);
 static int decl0(int l, int is_for_loop_init, Sym *);
 static void expr_eq(void);
 static void vla_runtime_type_size(CType *type, int *a);
@@ -91,9 +92,9 @@ static void vla_sp_restore(void);
 static void vla_sp_restore_root(void);
 static int is_compatible_unqualified_types(CType *type1, CType *type2);
 static inline int64_t expr_const64(void);
-ST_FUNC void vpush64(int ty, unsigned long long v);
-ST_FUNC void vpush(CType *type);
-ST_FUNC int gvtst(int inv, int t);
+static void vpush64(int ty, unsigned long long v);
+static void vpush(CType *type);
+static int gvtst(int inv, int t);
 static void gen_inline_functions(TCCState *s);
 static void skip_or_save_block(TokenString **str);
 static void gv_dup(void);
@@ -225,7 +226,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 }
 
 /* ------------------------------------------------------------------------- */
-ST_FUNC void tccgen_start(TCCState *s1)
+ST_FUNC int tccgen_compile(TCCState *s1)
 {
     cur_text_section = NULL;
     funcname = "";
@@ -253,14 +254,22 @@ ST_FUNC void tccgen_start(TCCState *s1)
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
-}
 
-ST_FUNC void tccgen_end(TCCState *s1)
-{
+#ifdef INC_DEBUG
+    printf("%s: **** new file\n", file->filename);
+#endif
+
+    parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
+    next();
+    decl(VT_CONST);
+    if (tok != TOK_EOF)
+        expect("declaration");
+
     gen_inline_functions(s1);
     check_vstack();
     /* end of translation unit info */
     tcc_debug_end(s1);
+    return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -4441,15 +4450,11 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
     }
 }
 
-/* parse an expression and return its type without any side effect.
-   If UNRY we parse an unary expression, otherwise a full one.  */
-static void expr_type(CType *type, int unry)
+/* parse an expression and return its type without any side effect. */
+static void expr_type(CType *type, void (*expr_fn)(void))
 {
     nocode_wanted++;
-    if (unry)
-        unary();
-    else
-        gexpr();
+    expr_fn();
     *type = vtop->type;
     vpop();
     nocode_wanted--;
@@ -4466,7 +4471,7 @@ static void parse_expr_type(CType *type)
     if (parse_btype(type, &ad)) {
         type_decl(type, &ad, &n, TYPE_ABSTRACT);
     } else {
-        expr_type(type, 0);
+        expr_type(type, gexpr);
     }
     skip(')');
 }
@@ -4694,7 +4699,7 @@ ST_FUNC void unary(void)
         t = tok;
         next();
         in_sizeof++;
-        expr_type(&type, 1); // Perform a in_sizeof = 0;
+        expr_type(&type, unary); /* Perform a in_sizeof = 0; */
         s = vtop[1].sym; /* hack: accessing previous vtop */
         size = type_size(&type, &align);
         if (s && s->a.aligned)
@@ -4896,70 +4901,60 @@ ST_FUNC void unary(void)
 	CType controlling_type;
 	int has_default = 0;
 	int has_match = 0;
-	CType cur_type;
-	AttributeDef ad_tmp;
 	int learn = 0;
 	TokenString *str = NULL;
-	ParseState saved_parse_state;
 
 	next();
 	skip('(');
-	expr_type(&controlling_type, 1);
-	if (controlling_type.t & VT_ARRAY)
-		controlling_type.t = VT_PTR;
-	controlling_type.t &= ~VT_CONSTANT;
-	controlling_type.t &= ~VT_VOLATILE;
+	expr_type(&controlling_type, expr_eq);
+	controlling_type.t &= ~(VT_CONSTANT|VT_VOLATILE|VT_ARRAY);
 	for (;;) {
 	    learn = 0;
 	    skip(',');
 	    if (tok == TOK_DEFAULT) {
 		if (has_default)
 		    tcc_error("too many 'default'");
-		if (!has_match) {
-		    has_default = 1;
+		has_default = 1;
+		if (!has_match)
 		    learn = 1;
-		}
 		next();
 	    } else {
+	        AttributeDef ad_tmp;
 		int itmp;
-
+	        CType cur_type;
 		parse_btype(&cur_type, &ad_tmp);
 		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
 		if (compare_types(&controlling_type, &cur_type, 0)) {
 		    if (has_match) {
 		      // tcc_error("type match twice");
 		    }
-		    if (str)
-			tok_str_free(str);
 		    has_match = 1;
 		    learn = 1;
 		}
 	    }
 	    skip(':');
 	    if (learn) {
+		if (str)
+		    tok_str_free(str);
 		skip_or_save_block(&str);
 	    } else {
 		skip_or_save_block(NULL);
 	    }
-	    if (tok == ',')
-		continue;
-	    else if (tok == ')')
+	    if (tok == ')')
 		break;
 	}
-	if (!has_match && !has_default) {
-	    char buf[256];
-
-	    type_to_str(buf, 256, &controlling_type, NULL);
-	    tcc_error("_Generic selector of type '%s' is not compatible with any assosiation",
-		      buf);
+	if (!str) {
+	    char buf[60];
+	    type_to_str(buf, sizeof buf, &controlling_type, NULL);
+	    tcc_error("type '%s' does not match any association", buf);
 	}
-	skip(')');
-	save_parse_state(&saved_parse_state);
 	begin_macro(str, 1);
 	next();
 	expr_eq();
+	if (tok != TOK_EOF)
+	    expect(",");
 	end_macro();
-	restore_parse_state(&saved_parse_state);
+        next();
 	break;
     }
     // special qnan , snan and infinity values
@@ -5599,7 +5594,9 @@ ST_FUNC void gexpr(void)
 static void expr_const1(void)
 {
     const_wanted++;
+    nocode_wanted++;
     expr_cond();
+    nocode_wanted--;
     const_wanted--;
 }
 
@@ -6721,8 +6718,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                                    int has_init, int v, int scope)
 {
     int size, align, addr;
-    ParseState saved_parse_state = {0};
     TokenString *init_str = NULL;
+
     Section *sec;
     Sym *flexible_array;
     Sym *sym = NULL;
@@ -6768,10 +6765,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         } else {
 	    skip_or_save_block(&init_str);
         }
-        
-        /* compute size */
-        save_parse_state(&saved_parse_state);
+        unget_tok(0);
 
+        /* compute size */
         begin_macro(init_str, 1);
         next();
         decl_initializer(type, NULL, 0, 1, 1);
@@ -6959,7 +6955,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     /* restore parse state if needed */
     if (init_str) {
         end_macro();
-        restore_parse_state(&saved_parse_state);
+        next();
     }
 
     nocode_wanted = saved_nocode_wanted;
@@ -7328,7 +7324,7 @@ found:
     return 0;
 }
 
-ST_FUNC void decl(int l)
+static void decl(int l)
 {
     decl0(l, 0, NULL);
 }
