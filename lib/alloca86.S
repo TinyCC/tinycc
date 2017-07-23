@@ -10,7 +10,7 @@ alloca:
     and     $-4,%eax
     jz      p3
 
-#ifdef TCC_TARGET_PE
+#ifdef _WIN32
 p1:
     cmp     $4096,%eax
     jbe     p2

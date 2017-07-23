@@ -87,8 +87,10 @@
 # define P
 #endif
 
+printf("\n\n" + 2*top);
 #define TEST 1
 #include SELF
+top = 0;
 #define TEST 2
 #include SELF
 #define TEST 3
@@ -99,7 +101,6 @@
 #include SELF
 #define TEST 6
 #include SELF
-printf("\n\n");
 
 #if PACK
 # pragma pack(pop)
@@ -174,7 +175,7 @@ void dump(void *p, int s)
 
 #define TEST_STRUCT(v1,v2,v3,v4,v5) { \
         struct __s _s, *s = & _s; \
-        printf("---- TEST %d%s%s%s ----\n", \
+        printf("\n---- TEST %d%s%s%s ----\n" + top, \
             TEST, MS_BF?" - MS-BITFIELDS":"", \
             PACK?" - PACKED":"", \
             ALIGN?" - WITH ALIGN":""); \
@@ -184,7 +185,7 @@ void dump(void *p, int s)
         s->x = v1, s->y = v2, s->z = v3, s->a += v4, ++s->a, s->b = v5; \
         printf("bits as set : "), dump(s, sizeof *s); \
         printf("values      :"), pv(x), pv(y), pv(z), pv(a), pv(b), printf("\n"); \
-        printf("align/size  : %d %d\n\n", alignof(struct __s),sizeof(struct __s)); \
+        printf("align/size  : %d %d\n", alignof(struct __s),sizeof(struct __s)); \
     }
 
 #ifdef _MSC_VER
@@ -202,6 +203,8 @@ void dump(void *p, int s)
 #endif
 
 #define SELF "95_bitfields.c"
+
+int top = 1;
 
 int main()
 {

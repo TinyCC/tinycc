@@ -18,10 +18,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifdef ONE_SOURCE
-#include "libtcc.c"
-#else
 #include "tcc.h"
+#if ONE_SOURCE
+# include "libtcc.c"
 #endif
 #include "tcctools.c"
 
@@ -335,12 +334,14 @@ redo:
         }
         s->filetype = 0;
         s->alacarte_link = 1;
-        if (ret || --n == 0
+        if (--n == 0 || ret
             || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))
             break;
     }
 
-    if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+    if (s->run_test) {
+        t = 0;
+    } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
         ;
     } else if (0 == ret) {
         if (s->output_type == TCC_OUTPUT_MEMORY) {
@@ -357,10 +358,6 @@ redo:
         }
     }
 
-    if (t)
-        ret = 0;
-    if (s->run_test)
-        t = 0;
     if (s->do_bench && (n | t | ret) == 0)
         tcc_print_stats(s, getclock_ms() - start_time);
     tcc_delete(s);

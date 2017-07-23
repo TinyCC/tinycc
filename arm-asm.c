@@ -70,7 +70,6 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          uint8_t *clobber_regs,
                          int out_reg)
 {
-    asm_error();
 }
 
 ST_FUNC void asm_compute_constraints(ASMOperand *operands,
@@ -78,7 +77,6 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
 {
-    asm_error();
 }
 
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)

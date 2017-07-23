@@ -1,6 +1,6 @@
 /* va_list.c - tinycc support for va_list on X86_64 */
 
-#if defined TCC_TARGET_X86_64
+#if defined __x86_64__
 
 /* Avoid include files, they may not be available when cross compiling */
 extern void *memset(void *s, int c, __SIZE_TYPE__ n);

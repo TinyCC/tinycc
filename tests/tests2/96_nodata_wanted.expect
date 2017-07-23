@@ -11,12 +11,15 @@
 96_nodata_wanted.c:25: warning: assignment makes integer from pointer without a cast
 96_nodata_wanted.c:25: warning: nonportable conversion from pointer to char/short
 
-[test_data_suppression]
-suppression off
-  static data: 8 - 8.0 - 8.0 - main - static string
-  static bitfields: 333 44 555555 6 7
-  data length is not 0
-  text length is not 0
-suppression on
-  data length is 0
-  text length is 0
+[test_data_suppression_off]
+data:
+  8 - 8.0 - 8.0 - main - static string
+  333 44 555555 6 7
+size of data/text:
+  non-zero/non-zero
+# 111/193
+
+[test_data_suppression_on]
+size of data/text:
+  zero/zero
+# 0/0

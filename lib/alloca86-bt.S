@@ -11,7 +11,7 @@ __bound_alloca:
     and     $-4,%eax
     jz      p6
 
-#ifdef TCC_TARGET_PE
+#ifdef _WIN32
 p4:
     cmp     $4096,%eax
     jbe     p5

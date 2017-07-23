@@ -173,11 +173,12 @@ ifeq ($(ONE_SOURCE),yes)
 LIBTCC_OBJ = $(X)libtcc.o
 LIBTCC_INC = $($T_FILES)
 TCC_FILES = $(X)tcc.o
-$(X)libtcc.o $T-tcc$(EXESUF) : DEFINES += -DONE_SOURCE
+tcc.o : DEFINES += -DONE_SOURCE=0
 else
 LIBTCC_OBJ = $(patsubst %.c,$(X)%.o,$(LIBTCC_SRC))
 LIBTCC_INC = $(filter %.h %-gen.c %-link.c,$($T_FILES))
 TCC_FILES = $(X)tcc.o $(LIBTCC_OBJ)
+$(TCC_FILES) : DEFINES += -DONE_SOURCE=0
 endif
 
 # target specific object rule
@@ -200,7 +201,7 @@ $(CROSS_TARGET)-tcc$(EXESUF): $(TCC_FILES)
 
 # profiling version
 tcc_p$(EXESUF): $($T_FILES)
-	$(CC) -o $@ $< $(DEFINES) -DONE_SOURCE $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
+	$(CC) -o $@ $< $(DEFINES) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
 
 # static libtcc library
 libtcc.a: $(LIBTCC_OBJ)

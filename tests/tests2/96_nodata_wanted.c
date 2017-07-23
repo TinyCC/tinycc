@@ -25,50 +25,60 @@ void foo() {
     short w = &foo; /* 2 cast warnings */
 }
 
-#elif defined test_data_suppression
+#elif defined test_data_suppression_off || defined test_data_suppression_on
+
+#if defined test_data_suppression_on
+# define SKIP 1
+#else
+# define SKIP 0
+#endif
+
 #include <stdio.h>
-
-#define ASMLABELS(s) \
-    __asm__(".global d"#s",t"#s"\n.data\nd"#s":\n.text\nt"#s":\n")
-
-#define PROG \
-        static void *p = (void*)&main;\
-        static char cc[] = "static string";\
-        static double d = 8.0;\
-        static struct __attribute__((packed)) {\
-            unsigned x : 12;\
-            unsigned char y : 7;\
-            unsigned z : 28, a: 4, b: 5;\
-        } s = { 0x333,0x44,0x555555,6,7 };\
-        printf("  static data: %d - %.1f - %.1f - %s - %s\n",\
-            sizeof 8.0, 8.0, d, __FUNCTION__, cc);\
-        printf("  static bitfields: %x %x %x %x %x\n", s.x, s.y, s.z, s.a, s.b);
+/* some gcc headers #define __attribute__ to empty if it's not gcc */
+#undef __attribute__
 
 int main()
 {
-    extern char ds1[],ts1[];
-    extern char ds2[],ts2[];
-    extern char de1[],te1[];
-    extern char de2[],te2[];
+    __label__ ts0, te0, ts1, te1;
+    int tl, dl;
 
-    printf("suppression off\n");
-    if (1) {
-        ASMLABELS(s1);
-        PROG
-        ASMLABELS(e1);
-    }
-    printf("  data length is %s\n", de1 - ds1 ? "not 0":"0");
-    printf("  text length is %s\n", te1 - ts1 ? "not 0":"0");
+    static char ds0 = 0;
+    static char de0 = 0;
+    /* get reference size of empty jmp */
+ts0:;
+    if (!SKIP) {}
+te0:;
+    dl = -(&de0 - &ds0);
+    tl = -(&&te0 - &&ts0);
 
-    printf("suppression on\n");
-    if (0) {
-        ASMLABELS(s2);
-        PROG
-        ASMLABELS(e2);
+    /* test data and code suppression */
+    static char ds1 = 0;
+ts1:;
+    if (!SKIP) {
+        static void *p = (void*)&main;
+        static char cc[] = "static string";
+        static double d = 8.0;
+
+        static struct __attribute__((packed)) {
+            unsigned x : 12;
+            unsigned char y : 7;
+            unsigned z : 28, a: 4, b: 5;
+        } s = { 0x333,0x44,0x555555,6,7 };
+
+        printf("data:\n");
+        printf("  %d - %.1f - %.1f - %s - %s\n",
+            sizeof 8.0, 8.0, d, __FUNCTION__, cc);
+        printf("  %x %x %x %x %x\n",
+            s.x, s.y, s.z, s.a, s.b);
     }
-    printf("  data length is %x\n", de2 - ds2);
-    printf("  text length is %X\n", te2 - ts2);
-    return 0;
+te1:;
+    static char de1 = 0;
+
+    dl += &de1 - &ds1;
+    tl += &&te1 - &&ts1;
+    printf("size of data/text:\n  %s/%s\n",
+        dl ? "non-zero":"zero", tl ? "non-zero":"zero");
+    printf("# %d/%d\n", dl, tl);
 }
 
 #endif

@@ -5,7 +5,7 @@
 
 alloca:
     pop     %rdx
-#ifdef TCC_TARGET_PE
+#ifdef _WIN32
     mov     %rcx,%rax
 #else
     mov     %rdi,%rax
@@ -14,7 +14,7 @@ alloca:
     and     $-16,%rax
     jz      p3
 
-#ifdef TCC_TARGET_PE
+#ifdef _WIN32
 p1:
     cmp     $4096,%rax
     jbe     p2

@@ -1218,12 +1218,16 @@ ST_FUNC int gv(int rc)
     } else {
         if (is_float(vtop->type.t) && 
             (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+            unsigned long offset;
             /* CPUs usually cannot use float constants, so we store them
                generically in data segment */
             size = type_size(&vtop->type, &align);
-            vpush_ref(&vtop->type, data_section, data_section->data_offset, size);
+            if (NODATA_WANTED)
+                size = 0, align = 1;
+            offset = section_add(data_section, size, align);
+            vpush_ref(&vtop->type, data_section, offset, size);
 	    vswap();
-	    init_putv(&vtop->type, data_section, data_section->data_offset);
+	    init_putv(&vtop->type, data_section, offset);
 	    vtop->r |= VT_LVAL;
         }
 #ifdef CONFIG_TCC_BCHECK
@@ -3518,8 +3522,11 @@ static void struct_layout(CType *type, AttributeDef *ad)
 		/* In PCC layout named bit-fields influence the alignment
 		   of the containing struct using the base types alignment,
 		   except for packed fields (which here have correct align).  */
-		if (f->v & SYM_FIRST_ANOM)
+		if (f->v & SYM_FIRST_ANOM
+                    // && bit_size // ??? gcc on ARM/rpi does that
+                    )
 		    align = 1;
+
 	    } else {
 		bt = f->type.t & VT_BTYPE;
 		if ((bit_pos + bit_size > size * 8)
@@ -3610,7 +3617,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
     if (a < maxalign)
         a = maxalign;
     type->ref->r = a;
-    if (pragma_pack && pragma_pack < maxalign) {
+    if (pragma_pack && pragma_pack < maxalign && 0 == pcc) {
         /* can happen if individual align for some member was given.  In
            this case MSVC ignores maxalign when aligning the size */
         a = pragma_pack;

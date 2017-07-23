@@ -36,7 +36,7 @@ static int nb_states;
 
 /********************************************************/
 
-#ifdef ONE_SOURCE
+#if ONE_SOURCE
 #include "tccpp.c"
 #include "tccgen.c"
 #include "tccelf.c"
@@ -58,6 +58,7 @@ static int nb_states;
 #ifdef TCC_TARGET_C67
 #include "c67-gen.c"
 #include "c67-link.c"
+#include "tcccoff.c"
 #endif
 #ifdef TCC_TARGET_X86_64
 #include "x86_64-gen.c"
@@ -66,9 +67,6 @@ static int nb_states;
 #endif
 #ifdef CONFIG_TCC_ASM
 #include "tccasm.c"
-#endif
-#ifdef TCC_TARGET_COFF
-#include "tcccoff.c"
 #endif
 #ifdef TCC_TARGET_PE
 #include "tccpe.c"

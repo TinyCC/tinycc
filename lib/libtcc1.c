@@ -107,10 +107,10 @@ union float_long {
 };
 
 /* XXX: we don't support several builtin supports for now */
-#if !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_ARM)
+#if !defined __x86_64__ && !defined __arm__
 
 /* XXX: use gcc/tcc intrinsic ? */
-#if defined(TCC_TARGET_I386)
+#if defined __i386__
 #define sub_ddmmss(sh, sl, ah, al, bh, bl) \
   __asm__ ("subl %5,%1\n\tsbbl %3,%0"					\
 	   : "=r" ((USItype) (sh)),					\
@@ -589,7 +589,7 @@ long long __fixdfdi (double a1)
     return s ? ret : -ret;
 }
 
-#ifndef TCC_TARGET_ARM
+#ifndef __arm__
 unsigned long long __fixunsxfdi (long double a1)
 {
     register union ldouble_long dl1;

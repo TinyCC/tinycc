@@ -24,7 +24,7 @@ ifeq (-$(findstring gcc,$(CC))-,--)
  SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
 endif
 ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
- SKIP += 95_bitfields_ms.test # type_align is differnt on 32bit-non-windows
+ SKIP += 95_bitfields%.test # type_align is differnt on 32bit-non-windows
 endif
 
 # Some tests might need arguments
@@ -46,7 +46,7 @@ FLAGS =
 
 # Always generate certain .expects (don't put these in the GIT),
 GEN-ALWAYS =
-GEN-ALWAYS += 95_bitfields.expect
+# GEN-ALWAYS += 95_bitfields.expect # does not work
 
 # using the ms compiler for the really ms-compatible bitfields
 95_bitfields_ms.test : GEN = $(GEN-MSC)
@@ -67,7 +67,7 @@ all test tests2.all: $(filter-out $(SKIP),$(TESTS)) ;
 T1 = $(TCC) $(FLAGS) $< -o a.exe && ./a.exe $(ARGS)
 T2 = $(TCC) $(FLAGS) -run $< $(ARGS)
 T3 = $(FILTER) >$*.output 2>&1 || true \
-     && diff -Nbu $(filter %.expect,$^) $*.output \
+     && diff -Nbu -I "^\#" $(filter %.expect,$^) $*.output \
      && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
 
 # run single test and update .expect file, e.g. "make tests2.37+"

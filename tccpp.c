@@ -49,6 +49,7 @@ static unsigned char isidnum_table[256 - CH_EOF];
 static int pp_debug_tok, pp_debug_symv;
 static int pp_once;
 static int pp_expr;
+static int pp_counter;
 static void tok_print(const char *msg, const int *str);
 
 static struct TinyAlloc *toksym_alloc;
@@ -1409,7 +1410,7 @@ ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
 }
 
 /* fake the nth "#if defined test_..." for tcc -dt -run */
-static void maybe_run_test(TCCState *s, int *c)
+static void maybe_run_test(TCCState *s)
 {
     const char *p;
     if (s->include_stack_ptr != s->include_stack)
@@ -1420,7 +1421,7 @@ static void maybe_run_test(TCCState *s, int *c)
     if (0 != --s->run_test)
         return;
     fprintf(s->ppfp, "\n[%s]\n" + !(s->dflag & 32), p), fflush(s->ppfp);
-    *c = 1;
+    define_push(tok, MACRO_OBJ, NULL, NULL);
 }
 
 /* eval an expression for #if/#elif */
@@ -1440,9 +1441,9 @@ static int expr_preprocess(void)
                 next_nomacro();
             if (tok < TOK_IDENT)
                 expect("identifier");
-            c = define_find(tok) != 0;
             if (tcc_state->run_test)
-                maybe_run_test(tcc_state, &c);
+                maybe_run_test(tcc_state);
+            c = define_find(tok) != 0;
             if (t == '(') {
                 next_nomacro();
                 if (tok != ')')
@@ -3222,18 +3223,17 @@ static int macro_subst_tok(
     Sym *s)
 {
     Sym *args, *sa, *sa1;
-    int parlevel, *mstr, t, t1, spc;
+    int parlevel, t, t1, spc;
     TokenString str;
     char *cstrval;
     CValue cval;
     CString cstr;
     char buf[32];
-    static int counter;
-    
+
     /* if symbol is a macro, prepare substitution */
     /* special macros */
     if (tok == TOK___LINE__ || tok == TOK___COUNTER__) {
-        t = tok == TOK___LINE__ ? file->line_num : counter++;
+        t = tok == TOK___LINE__ ? file->line_num : pp_counter++;
         snprintf(buf, sizeof(buf), "%d", t);
         cstrval = buf;
         t1 = TOK_PPNUM;
@@ -3264,11 +3264,11 @@ static int macro_subst_tok(
         cval.str.data = cstr.data;
         tok_str_add2(tok_str, t1, &cval);
         cstr_free(&cstr);
-    } else {
+    } else if (s->d) {
         int saved_parse_flags = parse_flags;
 	int *joined_str = NULL;
+        int *mstr = s->d;
 
-        mstr = s->d;
         if (s->type.t == MACRO_FUNC) {
             /* whitespace between macro name and argument list */
             TokenString ws_str;
@@ -3523,6 +3523,9 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     s1->include_stack_ptr = s1->include_stack;
     s1->ifdef_stack_ptr = s1->ifdef_stack;
     file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+    pp_expr = 0;
+    pp_counter = 0;
+    pp_debug_tok = pp_debug_symv = 0;
     pp_once++;
     pvtop = vtop = vstack - 1;
     s1->pack_stack[0] = 0;

@@ -111,10 +111,10 @@ echo>> ..\config.h #endif
 for %%f in (*tcc.exe *tcc.dll) do @del %%f
 
 :compiler
-%CC% -o libtcc.dll -shared ..\libtcc.c %D% -DONE_SOURCE -DLIBTCC_AS_DLL
+%CC% -o libtcc.dll -shared ..\libtcc.c %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
-%CC% -o tcc.exe ..\tcc.c libtcc.dll %D%
-%CC% -o %PX%-tcc.exe ..\tcc.c %DX% -DONE_SOURCE
+%CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE=0
+%CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 
 @if (%TCC_FILES%)==(no) goto :files-done
 
@@ -131,30 +131,30 @@ copy>nul tcc-win32.txt doc
 
 :libtcc1.a
 @set O1=libtcc1.o crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o bcheck.o
-.\tcc -m32 %D32% -c ../lib/libtcc1.c
-.\tcc -m32 %D32% -c lib/crt1.c
-.\tcc -m32 %D32% -c lib/crt1w.c
-.\tcc -m32 %D32% -c lib/wincrt1.c
-.\tcc -m32 %D32% -c lib/wincrt1w.c
-.\tcc -m32 %D32% -c lib/dllcrt1.c
-.\tcc -m32 %D32% -c lib/dllmain.c
-.\tcc -m32 %D32% -c lib/chkstk.S
-.\tcc -m32 %D32% -w -c ../lib/bcheck.c
-.\tcc -m32 %D32% -c ../lib/alloca86.S
-.\tcc -m32 %D32% -c ../lib/alloca86-bt.S
+.\tcc -m32 -c ../lib/libtcc1.c
+.\tcc -m32 -c lib/crt1.c
+.\tcc -m32 -c lib/crt1w.c
+.\tcc -m32 -c lib/wincrt1.c
+.\tcc -m32 -c lib/wincrt1w.c
+.\tcc -m32 -c lib/dllcrt1.c
+.\tcc -m32 -c lib/dllmain.c
+.\tcc -m32 -c lib/chkstk.S
+.\tcc -m32 -w -c ../lib/bcheck.c
+.\tcc -m32 -c ../lib/alloca86.S
+.\tcc -m32 -c ../lib/alloca86-bt.S
 .\tcc -m32 -ar lib/libtcc1-32.a %O1% alloca86.o alloca86-bt.o
 @if errorlevel 1 goto :the_end
-.\tcc -m64 %D64% -c ../lib/libtcc1.c
-.\tcc -m64 %D64% -c lib/crt1.c
-.\tcc -m64 %D64% -c lib/crt1w.c
-.\tcc -m64 %D64% -c lib/wincrt1.c
-.\tcc -m64 %D64% -c lib/wincrt1w.c
-.\tcc -m64 %D64% -c lib/dllcrt1.c
-.\tcc -m64 %D64% -c lib/dllmain.c
-.\tcc -m64 %D64% -c lib/chkstk.S
-.\tcc -m64 %D64% -w -c ../lib/bcheck.c
-.\tcc -m64 %D64% -c ../lib/alloca86_64.S
-.\tcc -m64 %D64% -c ../lib/alloca86_64-bt.S
+.\tcc -m64 -c ../lib/libtcc1.c
+.\tcc -m64 -c lib/crt1.c
+.\tcc -m64 -c lib/crt1w.c
+.\tcc -m64 -c lib/wincrt1.c
+.\tcc -m64 -c lib/wincrt1w.c
+.\tcc -m64 -c lib/dllcrt1.c
+.\tcc -m64 -c lib/dllmain.c
+.\tcc -m64 -c lib/chkstk.S
+.\tcc -m64 -w -c ../lib/bcheck.c
+.\tcc -m64 -c ../lib/alloca86_64.S
+.\tcc -m64 -c ../lib/alloca86_64-bt.S
 .\tcc -m64 -ar lib/libtcc1-64.a %O1% alloca86_64.o alloca86_64-bt.o
 @if errorlevel 1 goto :the_end
 

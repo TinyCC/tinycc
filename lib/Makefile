@@ -29,7 +29,7 @@ endif
 # only for native compiler
 $(X)BCHECK_O = bcheck.o
 
-ifeq ($(CONFIG_musl),yes)
+ifeq ($(CONFIG_musl)$(CONFIG_uClibc),yes)
  BCHECK_O =
 endif
 
@@ -61,10 +61,10 @@ $(BIN) : $(patsubst %.o,$(X)%.o,$(OBJ-$T))
 	$(XAR) rcs $@ $^
 
 $(X)%.o : %.c
-	$(XCC) -c $< -o $@ $(DEFINES) $(XFLAGS)
+	$(XCC) -c $< -o $@ $(XFLAGS)
 
 $(X)%.o : %.S
-	$(XCC) -c $< -o $@ $(DEFINES) $(XFLAGS)
+	$(XCC) -c $< -o $@ $(XFLAGS)
 
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c

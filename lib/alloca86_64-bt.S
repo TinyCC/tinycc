@@ -4,7 +4,7 @@
 .globl __bound_alloca
 __bound_alloca:
 
-#ifdef TCC_TARGET_PE
+#ifdef _WIN32
     # bound checking is not implemented
     pop     %rdx
     mov     %rcx,%rax
