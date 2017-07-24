@@ -42,7 +42,6 @@ ST_DATA Sym *local_label_stack;
 static int local_scope;
 static int in_sizeof;
 static int section_sym;
-static int inside_generic;
 
 ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
 ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
@@ -2737,10 +2736,6 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t2 &= ~(VT_CONSTANT | VT_VOLATILE);
     }
 
-    if (!inside_generic) {
-        t1 &= ~VT_LONG;
-        t2 &= ~VT_LONG;
-    }
     /* Default Vs explicit signedness only matters for char */
     if ((t1 & VT_BTYPE) != VT_BYTE) {
         t1 &= ~VT_DEFSIGN;
@@ -4939,7 +4934,6 @@ ST_FUNC void unary(void)
 
 	next();
 	skip('(');
-	inside_generic = 1;
 	expr_type(&controlling_type, expr_eq);
 	controlling_type.t &= ~(VT_CONSTANT | VT_VOLATILE | VT_ARRAY);
 	for (;;) {
@@ -4984,7 +4978,6 @@ ST_FUNC void unary(void)
 	}
 	begin_macro(str, 1);
 	next();
-	inside_generic = 0;
 	expr_eq();
 	if (tok != TOK_EOF)
 	    expect(",");
