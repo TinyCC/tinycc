@@ -9,7 +9,8 @@
 CPU	= $(shell if `gcc -v 2>&1 | grep Target | grep -q x86_64`; then echo 64; else echo 32; fi)
 VERSION	= $(shell cat ../VERSION)
 BOOTCC	= gcc
-CFLAGS	= -s -static -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE -DONE_SOURCE
+CFLAGS	= -s -static -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE
+WINPWD	= `cygpath --mixed $(PWD)`
 
 ifeq ($(CPU), 64)
 NATIVE	= -m$(CPU) -DTCC_TARGET_X86_64
@@ -39,6 +40,7 @@ pre:
 	@echo CONFIG_WIN32=yes 1>> ../config.mak
 	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak
 	@echo "#define TCC_VERSION \"$(VERSION)\"" 1>../config.h
+	@echo "#define CONFIG_TCCDIR \"$(WINPWD)\"" 1>>../config.h
 	@echo "#ifdef TCC_TARGET_X86_64" 1>>../config.h
 	@echo "#define TCC_LIBTCC1 \"libtcc1-64.a\"" 1>>../config.h
 	@echo "#else" 1>>../config.h
@@ -102,10 +104,10 @@ PHONY += libs
 
 rebuild:
 	@echo Rebuild using tcc itself - default $(TARGET)bits
-	@./$(TARCH)-win32-tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -o tcc.exe ../tcc.c
-	@./tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -DONE_SOURCE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
-	@./tcc -O2 -m$(TARGET) -DTCC_TARGET_PE -DONE_SOURCE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
+	@./$(TARCH)-win32-tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -o tcc.exe ../tcc.c
+	@./tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
+	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
+	@./tcc -O2 -m$(TARGET) -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
 
 PHONY += rebuild
 
