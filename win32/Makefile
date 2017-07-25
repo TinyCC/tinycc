@@ -11,6 +11,7 @@ VERSION	= $(shell cat ../VERSION)
 BOOTCC	= gcc
 CFLAGS	= -s -static -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE
 #WINPWD	= `cygpath --mixed $(PWD)`
+#@echo "#define CONFIG_TCCDIR \"$(WINPWD)\""
 
 ifeq ($(CPU), 64)
 NATIVE	= -m$(CPU) -DTCC_TARGET_X86_64
@@ -40,7 +41,6 @@ pre:
 	@echo CONFIG_WIN32=yes 1>> ../config.mak
 	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak
 	@echo "#define TCC_VERSION \"$(VERSION)\"" 1>../config.h
-	#@echo "#define CONFIG_TCCDIR \"$(WINPWD)\"" 1>>../config.h
 	@echo "#ifdef TCC_TARGET_X86_64" 1>>../config.h
 	@echo "#define TCC_LIBTCC1 \"libtcc1-64.a\"" 1>>../config.h
 	@echo "#else" 1>>../config.h
