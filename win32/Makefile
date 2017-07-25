@@ -10,7 +10,7 @@ CPU	= $(shell if `gcc -v 2>&1 | grep Target | grep -q x86_64`; then echo 64; els
 VERSION	= $(shell cat ../VERSION)
 BOOTCC	= gcc
 CFLAGS	= -s -static -fno-strict-aliasing -Wno-incompatible-pointer-types -DTCC_TARGET_PE
-WINPWD	= `cygpath --mixed $(PWD)`
+#WINPWD	= `cygpath --mixed $(PWD)`
 
 ifeq ($(CPU), 64)
 NATIVE	= -m$(CPU) -DTCC_TARGET_X86_64
@@ -40,7 +40,7 @@ pre:
 	@echo CONFIG_WIN32=yes 1>> ../config.mak
 	@echo TOPSRC=$$\(TOP\) 1>> ../config.mak
 	@echo "#define TCC_VERSION \"$(VERSION)\"" 1>../config.h
-	@echo "#define CONFIG_TCCDIR \"$(WINPWD)\"" 1>>../config.h
+	#@echo "#define CONFIG_TCCDIR \"$(WINPWD)\"" 1>>../config.h
 	@echo "#ifdef TCC_TARGET_X86_64" 1>>../config.h
 	@echo "#define TCC_LIBTCC1 \"libtcc1-64.a\"" 1>>../config.h
 	@echo "#else" 1>>../config.h
@@ -70,31 +70,31 @@ PHONY += bootstrap
 
 lib/libtcc1-32.a:
 	@echo Building $*.a with tcc -m32
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/libtcc1.c 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/alloca86.S 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/alloca86-bt.S 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/crt1.c 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/crt1w.c
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/wincrt1.c 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/wincrt1w.c
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllcrt1.c 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllmain.c 
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/chkstk.S
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/libtcc1.c 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/alloca86.S 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c ../lib/alloca86-bt.S 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/crt1.c 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/crt1w.c
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/wincrt1.c 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/wincrt1w.c
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllcrt1.c 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/dllmain.c 
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -c lib/chkstk.S
 	@./tcc -m32 -ar lib/libtcc1-32.a libtcc1.o alloca86.o alloca86-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 	@rm *.o
 
 lib/libtcc1-64.a:
 	@echo Building $*.a with tcc -m64
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/libtcc1.c 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64.S 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64-bt.S 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/crt1.c 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/crt1w.c
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/wincrt1.c 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/wincrt1w.c
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllcrt1.c 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllmain.c 
-	@./tcc -O2 -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/chkstk.S 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/libtcc1.c 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64.S 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c ../lib/alloca86_64-bt.S 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/crt1.c 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/crt1w.c
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/wincrt1.c 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/wincrt1w.c
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllcrt1.c 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/dllmain.c 
+	@./tcc -O2 -B. -m64 -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -c lib/chkstk.S 
 	@./tcc -m64 -ar lib/libtcc1-64.a libtcc1.o alloca86_64.o alloca86_64-bt.o crt1.o wincrt1.o crt1w.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 	@rm *.o
 
@@ -104,10 +104,10 @@ PHONY += libs
 
 rebuild:
 	@echo Rebuild using tcc itself - default $(TARGET)bits
-	@./$(TARCH)-win32-tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -o tcc.exe ../tcc.c
-	@./tcc -O2 $(TFLAGS) -DTCC_TARGET_PE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
-	@./tcc -O2 -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386   -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
-	@./tcc -O2 -m$(TARGET) -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
+	@./$(TARCH)-win32-tcc -O2 -B. $(TFLAGS) -DTCC_TARGET_PE -o tcc.exe ../tcc.c
+	@./tcc -O2 -B. $(TFLAGS) -DTCC_TARGET_PE -DLIBTCC_AS_DLL -o libtcc.dll -shared ../libtcc.c
+	@./tcc -O2 -B. -m32 -DTCC_TARGET_PE -DTCC_TARGET_I386 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe i386-win32-tcc.exe
+	@./tcc -O2 -B. -m$(TARGET) -DTCC_TARGET_PE -DTCC_TARGET_X86_64 -o tmp-tcc.exe ../tcc.c && mv tmp-tcc.exe x86_64-win32-tcc.exe
 
 PHONY += rebuild
 
