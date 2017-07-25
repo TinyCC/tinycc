@@ -848,8 +848,8 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__LP64__", NULL);
 #else
     /* Other 32bit systems. */
-    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
-    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
+    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned int");
+    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "int");
     tcc_define_symbol(s, "__ILP32__", NULL);
 #endif
 
