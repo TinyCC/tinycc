@@ -2,18 +2,11 @@
 #define _STDDEF_H
 
 typedef __SIZE_TYPE__ size_t;
+typedef __PTRDIFF_TYPE__ ssize_t;
 typedef __WCHAR_TYPE__ wchar_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
-
-#ifdef __ILP32__
-typedef int ssize_t;
-typedef int intptr_t;
-typedef unsigned int uintptr_t;
-#else
-typedef __PTRDIFF_TYPE__ ssize_t;
 typedef __PTRDIFF_TYPE__ intptr_t;
 typedef __SIZE_TYPE__ uintptr_t;
-#endif
 
 #ifndef __int8_t_defined
 #define __int8_t_defined
