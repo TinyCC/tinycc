@@ -2105,13 +2105,79 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                     tcc_warning("unknown escape sequence: \'\\x%x\'", c);
                 break;
             }
+        } else if (is_long && c >= 0x80) {
+            /* assume we are processing UTF-8 sequence */
+            /* reference: The Unicode Standard, Version 10.0, ch3.9 */
+
+            int cont; /* count of continuation bytes */
+            int skip; /* how many bytes should skip when error occured */
+            int i;
+
+            /* decode leading byte */
+            if (c < 0xC2) {
+	            skip = 1; goto invalid_utf8_sequence;
+            } else if (c <= 0xDF) {
+	            cont = 1; n = c & 0x1f;
+            } else if (c <= 0xEF) {
+	            cont = 2; n = c & 0xf;
+            } else if (c <= 0xF4) {
+	            cont = 3; n = c & 0x7;
+            } else {
+	            skip = 1; goto invalid_utf8_sequence;
+            }
+
+            /* decode continuation bytes */
+            for (i = 1; i <= cont; i++) {
+                int l = 0x80, h = 0xBF;
+
+                /* adjust limit for second byte */
+                if (i == 1) {
+                    switch (c) {
+                    case 0xE0: l = 0xA0; break;
+                    case 0xED: h = 0x9F; break;
+                    case 0xF0: l = 0x90; break;
+                    case 0xF4: h = 0x8F; break;
+                    }
+                }
+
+                if (p[i] < l || p[i] > h) {
+                    skip = i; goto invalid_utf8_sequence;
+                }
+
+                n = (n << 6) | (p[i] & 0x3f);
+            }
+
+            /* advance pointer */
+            p += 1 + cont;
+            c = n;
+            goto add_char_nonext;
+
+            /* error handling */
+        invalid_utf8_sequence:
+            tcc_warning("ill-formed UTF-8 subsequence starting with: \'\\x%x\'", c);
+            c = 0xFFFD;
+            p += skip;
+            goto add_char_nonext;
+
         }
         p++;
     add_char_nonext:
         if (!is_long)
             cstr_ccat(outstr, c);
-        else
+        else {
+#ifdef TCC_TARGET_PE
+            /* store as UTF-16 */
+            if (c < 0x10000) {
+                cstr_wccat(outstr, c);
+            } else {
+                c -= 0x10000;
+                cstr_wccat(outstr, (c >> 10) + 0xD800);
+                cstr_wccat(outstr, (c & 0x3FF) + 0xDC00);
+            }
+#else
             cstr_wccat(outstr, c);
+#endif
+        }
     }
     /* add a trailing '\0' */
     if (!is_long)
