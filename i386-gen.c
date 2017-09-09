@@ -345,17 +345,9 @@ static void gen_static_call(int v)
 static void gcall_or_jmp(int is_jmp)
 {
     int r;
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-        /* constant case */
-        if (vtop->r & VT_SYM) {
-            /* relocation case */
-            greloc(cur_text_section, vtop->sym, 
-                   ind + 1, R_386_PC32);
-        } else {
-            /* put an empty PC32 relocation */
-            put_elf_reloc(symtab_section, cur_text_section, 
-                          ind + 1, R_386_PC32, 0);
-        }
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (vtop->r & VT_SYM)) {
+        /* constant and relocation case */
+        greloc(cur_text_section, vtop->sym, ind + 1, R_386_PC32);
         oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
