@@ -346,7 +346,6 @@ static void gcall_or_jmp(int is_jmp)
 {
     int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-        int rt;
         /* constant case */
         if (vtop->r & VT_SYM) {
             /* relocation case */
@@ -358,6 +357,14 @@ static void gcall_or_jmp(int is_jmp)
                           ind + 1, R_386_PC32, 0);
         }
         oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
+    } else {
+        /* otherwise, indirect call */
+        r = gv(RC_INT);
+        o(0xff); /* call/jmp *r */
+        o(0xd0 + r + (is_jmp << 4));
+    }
+    if (!is_jmp) {
+        int rt;
         /* extend the return value to the whole register if necessary
            visual studio and gcc do not always set the whole eax register
            when assigning the return value of a function  */
@@ -382,11 +389,6 @@ static void gcall_or_jmp(int is_jmp)
             default:
                 break;
         }
-    } else {
-        /* otherwise, indirect call */
-        r = gv(RC_INT);
-        o(0xff); /* call/jmp *r */
-        o(0xd0 + r + (is_jmp << 4));
     }
 }
 
