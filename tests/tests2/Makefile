@@ -17,6 +17,9 @@ endif
 ifeq ($(ARCH),x86_64)
  SKIP += 73_arm64.test
 endif
+ifeq (,$(filter i386,$(ARCH)))
+ SKIP += 98_al_ax_extend.test
+endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
 endif
