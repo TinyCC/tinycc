@@ -172,7 +172,7 @@ void test_fastcall_invoke()
 {
     SET_TRAP_HANDLER(check_fastcall_invoke_0);
     ((void __fastcall (*)(void)) TRAP)();
-    
+
     SET_TRAP_HANDLER(check_fastcall_invoke_1);
     ((void __fastcall (*)(unsigned)) TRAP)(0x11111111);
 
@@ -231,27 +231,27 @@ void test_fastcall_espdiff()
     x = ((typeof(&check_fastcall_espdiff_0))SAFECALL)();
     assert(x == 0);
     assert(ESPDIFF == 0);
-    
+
     SET_SAFECALL_TARGET(check_fastcall_espdiff_1);
     x = ((typeof(&check_fastcall_espdiff_1))SAFECALL)(1);
     assert(x == 1);
     assert(ESPDIFF == 0);
-    
+
     SET_SAFECALL_TARGET(check_fastcall_espdiff_2);
     x = ((typeof(&check_fastcall_espdiff_2))SAFECALL)(1, 2);
     assert(x == 1 + 2);
     assert(ESPDIFF == 0);
-    
+
     SET_SAFECALL_TARGET(check_fastcall_espdiff_3);
     x = ((typeof(&check_fastcall_espdiff_3))SAFECALL)(1, 2, 3);
     assert(x == 1 + 2 + 3);
     assert(ESPDIFF == 1*4);
-    
+
     SET_SAFECALL_TARGET(check_fastcall_espdiff_4);
     x = ((typeof(&check_fastcall_espdiff_4))SAFECALL)(1, 2, 3, 4);
     assert(x == 1 + 2 + 3 + 4);
     assert(ESPDIFF == 2*4);
-    
+
     SET_SAFECALL_TARGET(check_fastcall_espdiff_5);
     x = ((typeof(&check_fastcall_espdiff_5))SAFECALL)(1, 2, 3, 4, 5);
     assert(x == 1 + 2 + 3 + 4 + 5);
@@ -262,11 +262,11 @@ int main()
 {
 #define N 10000
     int i;
-    
+
     for (i = 1; i <= N; i++) {
         test_fastcall_espdiff();
     }
-    
+
     for (i = 1; i <= N; i++) {
         test_fastcall_invoke();
     }

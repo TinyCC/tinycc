@@ -26,7 +26,7 @@ int main()
     short (*fpss)(void) = ss;
     unsigned char (*fpuc)(void) = uc;
     signed char (*fpsc)(void) = sc;
-    
+
     printf("%08X %08X\n", us() + 1, fpus() + 1);
     printf("%08X %08X\n", ss() + 1, fpss() + 1);
     printf("%08X %08X\n", uc() + 1, fpuc() + 1);
@@ -36,6 +36,6 @@ int main()
     printf("%08X %08X\n", fpss() + 1, ss() + 1);
     printf("%08X %08X\n", fpuc() + 1, uc() + 1);
     printf("%08X %08X\n", fpsc() + 1, sc() + 1);
-    
+
     return 0;
 }
