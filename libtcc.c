@@ -836,21 +836,21 @@ LIBTCCAPI TCCState *tcc_new(void)
 # endif
 
     /* TinyCC & gcc defines */
-#if defined(TCC_TARGET_PE) && PTR_SIZE == 8
+#if PTR_SIZE == 4
+    /* 32bit systems. */
+    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned int");
+    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "int");
+    tcc_define_symbol(s, "__ILP32__", NULL);
+#elif LONG_SIZE == 4
     /* 64bit Windows. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long long");
     tcc_define_symbol(s, "__LLP64__", NULL);
-#elif PTR_SIZE == 8
+#else
     /* Other 64bit systems. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
     tcc_define_symbol(s, "__LP64__", NULL);
-#else
-    /* Other 32bit systems. */
-    tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned int");
-    tcc_define_symbol(s, "__PTRDIFF_TYPE__", "int");
-    tcc_define_symbol(s, "__ILP32__", NULL);
 #endif
 
 #if defined(TCC_MUSL)

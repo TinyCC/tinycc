@@ -89,7 +89,7 @@ static const unsigned char tok_two_chars[] =
     '^','=', TOK_A_XOR,
     '|','=', TOK_A_OR,
     '-','>', TOK_ARROW,
-    '.','.', 0xa8, // C++ token ?
+    '.','.', TOK_TWODOTS,
     '#','#', TOK_TWOSHARPS,
     0
 };
@@ -1017,23 +1017,18 @@ static inline int tok_size(const int *p)
     case TOK_LCHAR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
-#ifndef TCC_LONG_ARE_64_BIT
-    case TOK_CLONG;
-    case TOK_CULONG;
-#endif
         return 1 + 1;
     case TOK_STR:
     case TOK_LSTR:
     case TOK_PPNUM:
     case TOK_PPSTR:
         return 1 + ((sizeof(CString) + ((CString *)(p+1))->size + 3) >> 2);
+    case TOK_CLONG:
+    case TOK_CULONG:
+	return 1 + LONG_SIZE / 4;
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
-#ifdef TCC_LONG_ARE_64_BIT
-    case TOK_CLONG;
-    case TOK_CULONG;
-#endif
         return 1 + 2;
     case TOK_CLDOUBLE:
         return 1 + LDOUBLE_SIZE / 4;
@@ -1149,7 +1144,7 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_LCHAR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
-#ifndef TCC_LONG_ARE_64_BIT
+#if LONG_SIZE == 4
     case TOK_CLONG:
     case TOK_CULONG:
 #endif
@@ -1173,7 +1168,7 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
-#ifdef TCC_LONG_ARE_64_BIT
+#if LONG_SIZE == 8
     case TOK_CLONG:
     case TOK_CULONG:
 #endif
@@ -1227,17 +1222,20 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
 
     tab = cv->tab;
     switch(*t = *p++) {
+#if LONG_SIZE == 4
+    case TOK_CLONG:
+#endif
     case TOK_CINT:
-    case TOK_CUINT:
     case TOK_CCHAR:
     case TOK_LCHAR:
     case TOK_LINENUM:
-#ifndef TCC_LONG_ARE_64_BIT
-    case TOK_CLONG:
+        cv->i = *p++;
+        break;
+#if LONG_SIZE == 4
     case TOK_CULONG:
 #endif
-        tab[0] = *p++;
-	cv->i = (*t == TOK_CUINT) ? (unsigned)cv->i : (int)cv->i;
+    case TOK_CUINT:
+        cv->i = (unsigned)*p++;
         break;
     case TOK_CFLOAT:
 	tab[0] = *p++;
@@ -1253,7 +1251,7 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
-#ifdef TCC_LONG_ARE_64_BIT
+#if LONG_SIZE == 8
     case TOK_CLONG:
     case TOK_CULONG:
 #endif
@@ -2206,23 +2204,24 @@ static void parse_string(const char *s, int len)
         tcc_free(p);
 
     if (sep == '\'') {
-        int char_size;
+        int char_size, i, n, c;
         /* XXX: make it portable */
         if (!is_long)
-            char_size = 1;
+            tok = TOK_CCHAR, char_size = 1;
         else
-            char_size = sizeof(nwchar_t);
-        if (tokcstr.size <= char_size)
+            tok = TOK_LCHAR, char_size = sizeof(nwchar_t);
+        n = tokcstr.size / char_size - 1;
+        if (n < 1)
             tcc_error("empty character constant");
-        if (tokcstr.size > 2 * char_size)
+        if (n > 1)
             tcc_warning("multi-character character constant");
-        if (!is_long) {
-            tokc.i = *(int8_t *)tokcstr.data;
-            tok = TOK_CCHAR;
-        } else {
-            tokc.i = *(nwchar_t *)tokcstr.data;
-            tok = TOK_LCHAR;
+        for (c = i = 0; i < n; ++i) {
+            if (is_long)
+                c = ((nwchar_t *)tokcstr.data)[i];
+            else
+                c = (c << 8) | ((char *)tokcstr.data)[i];
         }
+        tokc.i = c;
     } else {
         tokc.str.size = tokcstr.size;
         tokc.str.data = tokcstr.data;
@@ -2456,7 +2455,7 @@ static void parse_number(const char *p)
         }
     } else {
         unsigned long long n, n1;
-        int lcount, ucount, must_64bit;
+        int lcount, ucount, ov = 0;
         const char *p1;
 
         /* integer number */
@@ -2483,14 +2482,13 @@ static void parse_number(const char *p)
             n1 = n;
             n = n * b + t;
             /* detect overflow */
-            /* XXX: this test is not reliable */
-            if (n < n1)
-                tcc_error("integer constant overflow");
+            if (n1 >= 0x1000000000000000ULL && n / b != n1)
+                ov = 1;
         }
 
         /* Determine the characteristics (unsigned and/or 64bit) the type of
            the constant must have according to the constant suffix(es) */
-        lcount = ucount = must_64bit = 0;
+        lcount = ucount = 0;
         p1 = p;
         for(;;) {
             t = toup(ch);
@@ -2500,8 +2498,6 @@ static void parse_number(const char *p)
                 if (lcount && *(p - 1) != ch)
                     tcc_error("incorrect integer suffix: %s", p1);
                 lcount++;
-                if (lcount == 2)
-                    must_64bit = 1;
                 ch = *p++;
             } else if (t == 'U') {
                 if (ucount >= 1)
@@ -2513,38 +2509,36 @@ static void parse_number(const char *p)
             }
         }
 
-        /* Whether 64 bits are needed to hold the constant's value */
-        if (n & 0xffffffff00000000LL || must_64bit) {
-            tok = TOK_CLLONG;
-            n1 = n >> 32;
-	} else if (lcount) {
-#ifdef TCC_LONG_ARE_64_BIT
-	    n1 = n >> 32;
-#else
-            n1 = n;
-#endif
-	    tok = TOK_CLONG;
-	} else {
-            tok = TOK_CINT;
-            n1 = n;
+        /* Determine if it needs 64 bits and/or unsigned in order to fit */
+        if (ucount == 0 && b == 10) {
+            if (lcount <= (LONG_SIZE == 4)) {
+                if (n >= 0x80000000U)
+                    lcount = (LONG_SIZE == 4) + 1;
+            }
+            if (n >= 0x8000000000000000ULL)
+                ov = 1, ucount = 1;
+        } else {
+            if (lcount <= (LONG_SIZE == 4)) {
+                if (n >= 0x100000000ULL)
+                    lcount = (LONG_SIZE == 4) + 1;
+                else if (n >= 0x80000000U)
+                    ucount = 1;
+            }
+            if (n >= 0x8000000000000000ULL)
+                ucount = 1;
         }
 
-        /* Whether type must be unsigned to hold the constant's value */
-        if (ucount || ((n1 >> 31) && (b != 10))) {
-            if (tok == TOK_CLLONG)
-                tok = TOK_CULLONG;
-            else if (tok == TOK_CLONG)
-                tok = TOK_CULONG;
-	    else
-                tok = TOK_CUINT;
-        /* If decimal and no unsigned suffix, bump to 64 bits or throw error */
-        } else if (n1 >> 31) {
-            if (tok == TOK_CINT)
+        if (ov)
+            tcc_warning("integer constant overflow");
+
+        tok = TOK_CINT;
+	if (lcount) {
+            tok = TOK_CLONG;
+            if (lcount == 2)
                 tok = TOK_CLLONG;
-            else
-                tcc_error("integer constant overflow");
-        }
-
+	}
+	if (ucount)
+	    ++tok; /* TOK_CU... */
         tokc.i = n;
     }
     if (ch)

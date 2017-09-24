@@ -9,11 +9,10 @@ User interface:
 - -mno-sse on x86-64 disables use of SSE instructions
 - @listfile support (Vlad Vissoultchev)
 - tcc -ar/-impdef - formerly tiny_xxx tools integrated (grischka)
-- CPATH, C_INCLUDE_PATH and LD_LIBRARY_PATH environment variables support
+- CPATH, C_INCLUDE_PATH and LIBRARY_PATH environment variables support
   (Andrew Aladjev, Urs Janssen)
 
 Platforms:
-- Bootstrap native Windows 32/64 compiler using Cygwin+gcc (Christian Jullien)
 - new AARCH64 (arm64) target (Edmund Grimley Evans)
 - vastly improved support for ARM hard float calling convention
    (Thomas Preud'homme, Daniel Glöckner)
@@ -22,6 +21,7 @@ Platforms:
 - ABI tests with native compiler using libtcc (James Lyon)
 - UNICODE startup code supports wmain and wWinMain (YX Hao)
 - shared libraries for x86_64 (Michael Matz)
+- Bootstrap native Windows 32/64 compiler using Cygwin+gcc (Christian Jullien)
 
 Features:
 - VLA (variable length array) improved (James Lyon, Pip Cet)
@@ -35,6 +35,8 @@ Features:
 - standard conforming (and GCC compatible) struct initialization
    (Michael Matz)
 - bit-field layout made compatible with GCC (Michael Matz)
+- UTF8 in string literals supported (Zdenek Pavlas)
+_ _Generic(...) supported (Matthias Gatto)
 
 Licensing:
 - TinyCC partly relicensed to MIT license (See RELICENSING file).

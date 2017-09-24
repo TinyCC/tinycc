@@ -361,6 +361,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* target address type */
 #define addr_t ElfW(Addr)
 
+#if PTR_SIZE == 8 && !defined TCC_TARGET_PE
+# define LONG_SIZE 8
+#else
+# define LONG_SIZE 4
+#endif
+
 /* -------------------------------------------- */
 
 #define INCLUDE_STACK_SIZE  32
@@ -880,14 +886,14 @@ struct filespec {
 #define VT_CONSTANT    0x0100  /* const modifier */
 #define VT_VOLATILE    0x0200  /* volatile modifier */
 #define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_LONG	       0x0800
+#define VT_LONG        0x0800  /* long type (also has VT_INT rsp. VT_LLONG) */
 
 /* storage */
 #define VT_EXTERN  0x00001000  /* extern definition */
 #define VT_STATIC  0x00002000  /* static variable */
 #define VT_TYPEDEF 0x00004000  /* typedef definition */
 #define VT_INLINE  0x00008000  /* inline definition */
-/* currently unused: 0x0800, 0x000[1248]0000  */
+/* currently unused: 0x000[1248]0000  */
 
 #define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
 #define VT_STRUCT_MASK (((1 << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
@@ -905,7 +911,6 @@ struct filespec {
 /* type mask (except storage) */
 #define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
 #define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
-
 
 /* token values */
 
@@ -947,6 +952,7 @@ struct filespec {
 #define TOK_PPNUM   0xbe /* preprocessor number */
 #define TOK_PPSTR   0xbf /* preprocessor string */
 #define TOK_LINENUM 0xc0 /* line number info */
+#define TOK_TWODOTS 0xa8 /* C++ token ? */
 /* <-- */
 
 #define TOK_UMULL    0xc2 /* unsigned 32x32 -> 64 mul */
@@ -961,15 +967,8 @@ struct filespec {
 #define TOK_PLCHLDR  0xcb /* placeholder token as defined in C99 */
 #define TOK_NOSUBST  0xcc /* means following token has already been pp'd */
 #define TOK_PPJOIN   0xcd /* A '##' in the right position to mean pasting */
-
-#define TOK_CLONG   0xce /* long constant */
-#define TOK_CULONG  0xcf /* unsigned long constant */
-
-
-#if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
-    #define TCC_LONG_ARE_64_BIT
-#endif
-
+#define TOK_CLONG    0xce /* long constant */
+#define TOK_CULONG   0xcf /* unsigned long constant */
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */

@@ -61,7 +61,7 @@ ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc 
 ST_DATA const char *funcname;
 ST_DATA int g_debug;
 
-ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
+ST_DATA CType char_pointer_type, func_old_type, int_type, size_type, ptrdiff_type;
 
 ST_DATA struct switch_t {
     struct case_t {
@@ -240,9 +240,14 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     char_pointer_type.t = VT_BYTE;
     mk_pointer(&char_pointer_type);
 #if PTR_SIZE == 4
-    size_type.t = VT_INT;
+    size_type.t = VT_INT | VT_UNSIGNED;
+    ptrdiff_type.t = VT_INT;
+#elif LONG_SIZE == 4
+    size_type.t = VT_LLONG | VT_UNSIGNED;
+    ptrdiff_type.t = VT_LLONG;
 #else
-    size_type.t = VT_LLONG;
+    size_type.t = VT_LONG | VT_LLONG | VT_UNSIGNED;
+    ptrdiff_type.t = VT_LONG | VT_LLONG;
 #endif
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
@@ -2127,12 +2132,7 @@ redo:
             }
             vrott(3);
             gen_opic(op);
-            /* set to integer type */
-#if PTR_SIZE == 8
-            vtop->type.t = VT_LLONG;
-#else
-            vtop->type.t = VT_INT; 
-#endif
+            vtop->type.t = ptrdiff_type.t;
             vswap();
             gen_op(TOK_PDIV);
         } else {
@@ -2218,14 +2218,15 @@ redo:
         t = bt1 == VT_LLONG ? VT_LLONG : VT_INT;
         if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (t | VT_UNSIGNED))
           t |= VT_UNSIGNED;
+        t |= (VT_LONG & t1);
         goto std_op;
     } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
         /* cast to biggest op */
-        t = VT_LLONG;
-	/* check if we need to keep type as long or as long long */
-	if ((t1 & VT_LONG &&  (t2 & (VT_BTYPE | VT_LONG)) != VT_LLONG) ||
-	    (t2 & VT_LONG &&  (t1 & (VT_BTYPE | VT_LONG)) != VT_LLONG))
-	  t |= VT_LONG;
+        t = VT_LLONG | VT_LONG;
+        if (bt1 == VT_LLONG)
+            t &= t1;
+        if (bt2 == VT_LLONG)
+            t &= t2;
         /* convert to unsigned if it does not fit in a long long */
         if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
             (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
@@ -2233,12 +2234,8 @@ redo:
         goto std_op;
     } else {
         /* integer operations */
-        t = VT_INT;
-
-	if ((t1 & VT_LONG) || (t2 & VT_LONG))
-	  t |= VT_LONG;
-
-	/* convert to unsigned if it does not fit in an integer */
+        t = VT_INT | (VT_LONG & (t1 | t2));
+        /* convert to unsigned if it does not fit in an integer */
         if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
             (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
             t |= VT_UNSIGNED;
@@ -2741,7 +2738,6 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t1 &= ~VT_DEFSIGN;
         t2 &= ~VT_DEFSIGN;
     }
-
     /* XXX: bitfields ? */
     if (t1 != t2)
         return 0;
@@ -2790,14 +2786,7 @@ static void type_to_str(char *buf, int buf_size,
     t = type->t;
     bt = t & VT_BTYPE;
     buf[0] = '\0';
-    if (t & VT_CONSTANT)
-        pstrcat(buf, buf_size, "const ");
-    if (t & VT_VOLATILE)
-        pstrcat(buf, buf_size, "volatile ");
-    if ((t & (VT_DEFSIGN | VT_UNSIGNED)) == (VT_DEFSIGN | VT_UNSIGNED))
-        pstrcat(buf, buf_size, "unsigned ");
-    else if (t & VT_DEFSIGN)
-        pstrcat(buf, buf_size, "signed ");
+
     if (t & VT_EXTERN)
         pstrcat(buf, buf_size, "extern ");
     if (t & VT_STATIC)
@@ -2806,17 +2795,20 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "typedef ");
     if (t & VT_INLINE)
         pstrcat(buf, buf_size, "inline ");
+    if (t & VT_VOLATILE)
+        pstrcat(buf, buf_size, "volatile ");
+    if (t & VT_CONSTANT)
+        pstrcat(buf, buf_size, "const ");
+
+    if (((t & VT_DEFSIGN) && bt == VT_BYTE)
+        || ((t & VT_UNSIGNED)
+            && (bt == VT_SHORT || bt == VT_INT || bt == VT_LLONG)
+            && !IS_ENUM(t)
+            ))
+        pstrcat(buf, buf_size, (t & VT_UNSIGNED) ? "unsigned " : "signed ");
+
     buf_size -= strlen(buf);
     buf += strlen(buf);
-    if (IS_ENUM(t)) {
-        tstr = "enum ";
-        goto tstruct;
-    }
-
-    if (!bt && VT_LONG & t) {
-      tstr = "long";
-      goto add_tstr;
-    }
 
     switch(bt) {
     case VT_VOID:
@@ -2833,10 +2825,16 @@ static void type_to_str(char *buf, int buf_size,
         goto add_tstr;
     case VT_INT:
         tstr = "int";
-        goto add_tstr;
+        goto maybe_long;
     case VT_LLONG:
         tstr = "long long";
-        goto add_tstr;
+    maybe_long:
+        if (t & VT_LONG)
+            tstr = "long";
+        if (!IS_ENUM(t))
+            goto add_tstr;
+        tstr = "enum ";
+        goto tstruct;
     case VT_FLOAT:
         tstr = "float";
         goto add_tstr;
@@ -2902,7 +2900,7 @@ static void type_to_str(char *buf, int buf_size,
    casts if needed. */
 static void gen_assign_cast(CType *dt)
 {
-    CType *st, *type1, *type2, tmp_type1, tmp_type2;
+    CType *st, *type1, *type2;
     char buf1[256], buf2[256];
     int dbt, sbt;
 
@@ -2958,7 +2956,7 @@ static void gen_assign_cast(CType *dt)
 		   in pointer target signedness.  Do warn for different
 		   base types, though, in particular for unsigned enums
 		   and signed int targets.  */
-		if ((type1->t & VT_BTYPE) != (type2->t & VT_BTYPE)
+		if ((type1->t & (VT_BTYPE|VT_LONG)) != (type2->t & (VT_BTYPE|VT_LONG))
                     || IS_ENUM(type1->t) || IS_ENUM(type2->t)
                     )
 		    tcc_warning("assignment from incompatible pointer type");
@@ -2982,11 +2980,7 @@ static void gen_assign_cast(CType *dt)
         break;
     case VT_STRUCT:
     case_VT_STRUCT:
-        tmp_type1 = *dt;
-        tmp_type2 = *st;
-        tmp_type1.t &= ~(VT_CONSTANT | VT_VOLATILE);
-        tmp_type2.t &= ~(VT_CONSTANT | VT_VOLATILE);
-        if (!is_compatible_types(&tmp_type1, &tmp_type2)) {
+        if (!is_compatible_unqualified_types(dt, st)) {
         error:
             type_to_str(buf1, sizeof(buf1), st, NULL);
             type_to_str(buf2, sizeof(buf2), dt, NULL);
@@ -3775,10 +3769,10 @@ do_decl:
             t.t = VT_INT;
             if (nl >= 0) {
                 if (pl != (unsigned)pl)
-                    t.t = VT_LLONG;
+                    t.t = (LONG_SIZE==8 ? VT_LLONG|VT_LONG : VT_LLONG);
                 t.t |= VT_UNSIGNED;
             } else if (pl != (int)pl || nl != (int)nl)
-                t.t = VT_LLONG;
+                t.t = (LONG_SIZE==8 ? VT_LLONG|VT_LONG : VT_LLONG);
             s->type.t = type->t = t.t | VT_ENUM;
             s->c = 0;
             /* set type for enum members */
@@ -3791,7 +3785,8 @@ do_decl:
                     if (ll == (unsigned)ll)
                         continue;
                 }
-                ss->type.t = (ss->type.t & ~VT_BTYPE) | VT_LLONG;
+                ss->type.t = (ss->type.t & ~VT_BTYPE)
+                    | (LONG_SIZE==8 ? VT_LLONG|VT_LONG : VT_LLONG);
             }
         } else {
             c = 0;
@@ -3964,7 +3959,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
                 bt = u;
             }
             if (u != VT_INT)
-                t = (t & ~VT_BTYPE) | u;
+                t = (t & ~(VT_BTYPE|VT_LONG)) | u;
             typespec_found = 1;
             break;
         case TOK_VOID:
@@ -3978,11 +3973,9 @@ static int parse_btype(CType *type, AttributeDef *ad)
             goto basic_type;
         case TOK_LONG:
             if ((t & VT_BTYPE) == VT_DOUBLE) {
-#ifndef TCC_TARGET_PE
-	      t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LDOUBLE;
-#endif
-            } else if (t &  VT_LONG) {
-	      t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LLONG;
+                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
+            } else if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LLONG;
             } else {
                 u = VT_LONG;
                 goto basic_type;
@@ -4003,12 +3996,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
             u = VT_FLOAT;
             goto basic_type;
         case TOK_DOUBLE:
-            if (t & VT_LONG) {
-#ifdef TCC_TARGET_PE
-		t = (t & ~(VT_LONG | VT_BTYPE)) | VT_DOUBLE;
-#else
-		t = (t & ~(VT_LONG | VT_BTYPE)) | VT_LDOUBLE;
-#endif
+            if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
             } else {
                 u = VT_DOUBLE;
                 goto basic_type;
@@ -4098,7 +4087,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
             parse_attribute(ad);
             if (ad->attr_mode) {
                 u = ad->attr_mode -1;
-                t = (t & ~VT_BTYPE) | u;
+                t = (t & ~(VT_BTYPE|VT_LONG)) | u;
             }
             break;
             /* GNUC typeof */
@@ -4118,7 +4107,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
-            t &= ~VT_BTYPE;
+            t &= ~(VT_BTYPE|VT_LONG);
             u = t & ~(VT_CONSTANT | VT_VOLATILE), t ^= u;
             type->t = (s->type.t & ~VT_TYPEDEF) | u;
             type->ref = s->type.ref;
@@ -4139,13 +4128,13 @@ the_end:
         if ((t & (VT_DEFSIGN|VT_BTYPE)) == VT_BYTE)
             t |= VT_UNSIGNED;
     }
-
-    /* long is never used as type */
-    if (t & VT_LONG)
-#if PTR_SIZE == 8 && !defined TCC_TARGET_PE
-        t = (t & ~VT_BTYPE) | VT_LLONG;
-#else
-        t = (t & ~VT_BTYPE) | VT_INT;
+    /* VT_LONG is used just as a modifier for VT_INT / VT_LLONG */
+    bt = t & (VT_BTYPE|VT_LONG);
+    if (bt == VT_LONG)
+        t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
+#ifdef TCC_TARGET_PE
+    if (bt == VT_LDOUBLE)
+        t = (t & ~(VT_BTYPE|VT_LONG)) | VT_DOUBLE;
 #endif
     type->t = t;
     return type_found;
@@ -4544,9 +4533,13 @@ ST_FUNC void unary(void)
     case TOK_EXTENSION:
         next();
         goto tok_next;
+    case TOK_LCHAR:
+#ifdef TCC_TARGET_PE
+        t = VT_SHORT|VT_UNSIGNED;
+        goto push_tokc;
+#endif
     case TOK_CINT:
     case TOK_CCHAR: 
-    case TOK_LCHAR:
 	t = VT_INT;
  push_tokc:
 	type.t = t;
@@ -4572,14 +4565,10 @@ ST_FUNC void unary(void)
         t = VT_LDOUBLE;
 	goto push_tokc;
     case TOK_CLONG:
+        t = (LONG_SIZE == 8 ? VT_LLONG : VT_INT) | VT_LONG;
+	goto push_tokc;
     case TOK_CULONG:
-	#ifdef TCC_LONG_ARE_64_BIT
-	t = VT_LLONG | VT_LONG;
-	#else
-	t = VT_INT | VT_LONG;
-	#endif
-	if (tok == TOK_CULONG)
-	    t |= VT_UNSIGNED;
+        t = (LONG_SIZE == 8 ? VT_LLONG : VT_INT) | VT_LONG | VT_UNSIGNED;
 	goto push_tokc;
     case TOK___FUNCTION__:
         if (!gnu_ext)
@@ -5491,7 +5480,11 @@ static void expr_cond(void)
                 }
             } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
                 /* cast to biggest op */
-                type.t = VT_LLONG;
+                type.t = VT_LLONG | VT_LONG;
+                if (bt1 == VT_LLONG)
+                    type.t &= t1;
+                if (bt2 == VT_LLONG)
+                    type.t &= t2;
                 /* convert to unsigned if it does not fit in a long long */
                 if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
                     (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
@@ -5518,7 +5511,7 @@ static void expr_cond(void)
                 type.t = VT_VOID;
             } else {
                 /* integer operations */
-                type.t = VT_INT;
+                type.t = VT_INT | (VT_LONG & (t1 | t2));
                 /* convert to unsigned if it does not fit in an integer */
                 if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
                     (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
@@ -6490,20 +6483,20 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 		*(double *)ptr = vtop->c.d;
 		break;
 	    case VT_LDOUBLE:
-                if (sizeof(long double) == LDOUBLE_SIZE)
-		    *(long double *)ptr = vtop->c.ld;
-		else if (sizeof(double) == LDOUBLE_SIZE)
-		    *(double *)ptr = (double)vtop->c.ld;
 #if (defined __i386__ || defined __x86_64__) && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
-                else if (sizeof (long double) >= 10)
-                    memcpy(memset(ptr, 0, LDOUBLE_SIZE), &vtop->c.ld, 10);
+                if (sizeof (long double) >= 10) /* zero pad ten-byte LD */
+                    memcpy(ptr, &vtop->c.ld, 10);
 #ifdef __TINYC__
                 else if (sizeof (long double) == sizeof (double))
-                    __asm__("fldl %1\nfstpt %0\n" : "=m"
-                        (memset(ptr, 0, LDOUBLE_SIZE), ptr) : "m" (vtop->c.ld));
+                    __asm__("fldl %1\nfstpt %0\n" : "=m" (ptr) : "m" (vtop->c.ld));
 #endif
+                else
 #endif
-		else
+                if (sizeof(long double) == LDOUBLE_SIZE)
+		    *(long double*)ptr = vtop->c.ld;
+                else if (sizeof(double) == LDOUBLE_SIZE)
+		    *(double *)ptr = (double)vtop->c.ld;
+                else
                     tcc_error("can't cross compile long double constants");
 		break;
 #if PTR_SIZE != 8

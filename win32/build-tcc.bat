@@ -113,7 +113,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 :compiler
 %CC% -o libtcc.dll -shared ..\libtcc.c %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
-%CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE=0
+%CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 
 @if (%TCC_FILES%)==(no) goto :files-done
