@@ -669,7 +669,7 @@ are supported.
 
 Since version 0.9.16, TinyCC integrates its own assembler. TinyCC
 assembler supports a gas-like syntax (GNU assembler). You can
-desactivate assembler support if you want a smaller TinyCC executable
+deactivate assembler support if you want a smaller TinyCC executable
 (the C compiler does not rely on the assembler).
 
 TinyCC Assembler is used to handle files with @file{.S} (C
@@ -1046,7 +1046,7 @@ All symbols are stored in hashed symbol stacks. Each symbol stack
 contains @code{Sym} structures.
 
 @code{Sym.v} contains the symbol name (remember
-an idenfier is also a token, so a string is never necessary to store
+an identifier is also a token, so a string is never necessary to store
 it). @code{Sym.t} gives the type of the symbol. @code{Sym.r} is usually
 the register in which the corresponding variable is stored. @code{Sym.c} is
 usually a constant associated to the symbol like its address for normal
@@ -1089,7 +1089,7 @@ global stack.
 
 @section Sections
 
-The generated code and datas are written in sections. The structure
+The generated code and data are written in sections. The structure
 @code{Section} contains all the necessary information for a given
 section. @code{new_section()} creates a new section. ELF file semantics
 is assumed for each section.
@@ -1276,13 +1276,13 @@ should generate a function prolog/epilog.
 
 @item gen_opi(op)
 must generate the binary integer operation @var{op} on the two top
-entries of the stack which are guaranted to contain integer types.
+entries of the stack which are guaranteed to contain integer types.
 
 The result value should be put on the stack.
 
 @item gen_opf(op)
 same as @code{gen_opi()} for floating point operations. The two top
-entries of the stack are guaranted to contain floating point values of
+entries of the stack are guaranteed to contain floating point values of
 same types.
 
 @item gen_cvt_itof()
