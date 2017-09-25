@@ -1453,7 +1453,7 @@ ST_FUNC int handle_eob(void);
 
 /* ------------ xxx-link.c ------------ */
 
-/* Wether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
+/* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
    that unknown relocation don't create a GOT or PLT entry */
 enum gotplt_entry {
     NO_GOTPLT_ENTRY,	/* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */

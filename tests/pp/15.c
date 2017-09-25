@@ -14,5 +14,5 @@ return n(0x1E)n(-1);
 // unlike gcc but correct
 XXX: return n(x)+n(x)-n(1)+n(1)-2;
 
-// unlile gcc, but cannot appear in valid C
+// unlike gcc, but cannot appear in valid C
 XXX: return n(x)n(x)n(1)n(2)n(x);

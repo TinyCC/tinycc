@@ -89,10 +89,10 @@ struct trapframe {
 /////////////////////////////////////////////////////////////////////////
 //////////                SAFECALL FRAMEWORK
 /////////////////////////////////////////////////////////////////////////
-// this framwork will convert any calling convention to cdecl
+// this framework will convert any calling convention to cdecl
 // usage: first set call target with 'SET_SAFECALL_TARGET(x)'
-//        then cast 'SAFECALL' to target funtion pointer type and invoke it
-//        after calling, 'ESPDIFF' is the differance of old and new esp
+//        then cast 'SAFECALL' to target function pointer type and invoke it
+//        after calling, 'ESPDIFF' is the difference of old and new esp
 
 void *SYMBOL(sc_call_target);
 unsigned SYMBOL(sc_retn_addr);

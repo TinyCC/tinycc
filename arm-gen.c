@@ -1783,7 +1783,7 @@ static uint32_t is_fconst()
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
-   two operands are guaranted to have the same floating point type */
+   two operands are guaranteed to have the same floating point type */
 void gen_opf(int op)
 {
   uint32_t x, r, r2, c1, c2;

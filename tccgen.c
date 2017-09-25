@@ -3637,7 +3637,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
         if (bit_pos + bit_size <= size * 8 && f->c + size <= c)
             continue;
 
-        /* try to access the field using a differnt type */
+        /* try to access the field using a different type */
         c0 = -1, s = align = 1;
         for (;;) {
             px = f->c * 8 + bit_pos;

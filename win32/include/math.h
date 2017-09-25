@@ -327,7 +327,7 @@ extern "C" {
 #define isinf(x) (fpclassify(x) == FP_INFINITE)
 
   /* 7.12.3.4 */
-  /* We don't need to worry about trucation here:
+  /* We don't need to worry about truncation here:
   A NaN stays a NaN. */
 #define isnan(x) (fpclassify(x) == FP_NAN)
 

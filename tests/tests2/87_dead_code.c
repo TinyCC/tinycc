@@ -9,7 +9,7 @@ static void kb_wait_1(void)
       /* Here the else arm is a statement expression that's supposed
          to be suppressed.  The label inside the while would unsuppress
 	 code generation again if not handled correctly.  And that
-	 would wreak havok to the cond-expression because there's no
+	 would wreak havoc to the cond-expression because there's no
 	 jump-around emitted, the whole statement expression really
 	 needs to not generate code (perhaps except useless forward jumps).  */
       (1 ? 

@@ -384,7 +384,7 @@ void macro_test(void)
     MF_s("hi");
     MF_t("hi");
     
-    /* test macro substituion inside args (should not eat stream) */
+    /* test macro substitution inside args (should not eat stream) */
     printf("qq=%d\n", qq(qq)(2));
 
     /* test zero argument case. NOTE: gcc 2.95.x does not accept a
@@ -404,7 +404,7 @@ comment
        substituted */
     TEST2();
 
-    /* And again when the name and parenthes are separated by a
+    /* And again when the name and parentheses are separated by a
        comment.  */
     TEST2 /* the comment */ ();
 
@@ -3117,7 +3117,7 @@ static __inline__ unsigned long long inc64(unsigned long long a)
     unsigned long long res;
 #ifdef __x86_64__
     /* Using the A constraint is wrong, and increments are tested
-       elsewere.  */
+       elsewhere.  */
     res = a + 1;
 #else
     __asm__("addl $1, %%eax ; adcl $0, %%edx" : "=A" (res) : "A" (a));

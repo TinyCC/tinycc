@@ -194,7 +194,7 @@ extern "C" {
   }
  
   /* Register sizes are different between 32/64 bit mode. So we have to do this for _WIN64 and _WIN32
-     seperatly.  */
+     separately.  */
  
 #ifdef _WIN64
   __CRT_INLINE void __writecr0(unsigned __int64 Data)

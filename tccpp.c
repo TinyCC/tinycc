@@ -2108,7 +2108,7 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
             /* reference: The Unicode Standard, Version 10.0, ch3.9 */
 
             int cont; /* count of continuation bytes */
-            int skip; /* how many bytes should skip when error occured */
+            int skip; /* how many bytes should skip when error occurred */
             int i;
 
             /* decode leading byte */
@@ -3517,7 +3517,7 @@ no_subst:
             if (t == TOK_NOSUBST)
                 nosubst = 1;
         }
-        /* GCC supports 'defined' as result of a macto substitution */
+        /* GCC supports 'defined' as result of a macro substitution */
         if (t == TOK_DEFINED && pp_expr)
             nosubst = 2;
     }

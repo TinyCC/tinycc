@@ -175,7 +175,7 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
     gen_le32(c - 4);
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtional 3
+/* generate a modrm reference. 'op_reg' contains the additional 3
    opcode bits */
 static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 {

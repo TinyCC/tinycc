@@ -314,14 +314,14 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
     }
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtional 3
+/* generate a modrm reference. 'op_reg' contains the additional 3
    opcode bits */
 static void gen_modrm(int op_reg, int r, Sym *sym, int c)
 {
     gen_modrm_impl(op_reg, r, sym, c, 0);
 }
 
-/* generate a modrm reference. 'op_reg' contains the addtional 3
+/* generate a modrm reference. 'op_reg' contains the additional 3
    opcode bits */
 static void gen_modrm64(int opcode, int op_reg, int r, Sym *sym, int c)
 {

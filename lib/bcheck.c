@@ -244,7 +244,7 @@ BOUND_PTR_INDIR(16)
 
 #if defined(__GNUC__) && (__GNUC__ >= 6)
 /*
- * At least gcc 6.2 complains when __builtin_frame_address is used whith
+ * At least gcc 6.2 complains when __builtin_frame_address is used with
  * nonzero argument.
  */
 #pragma GCC diagnostic push

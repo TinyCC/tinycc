@@ -425,7 +425,7 @@ static int two_member_union_test(void) {
 }
 
 /*
- * Win64 calling convetntion test.
+ * Win64 calling convention test.
  */
 
 typedef struct many_struct_test_type_s {long long a, b, c;} many_struct_test_type;

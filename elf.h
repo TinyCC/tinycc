@@ -232,7 +232,7 @@ typedef struct
 
 #define EM_FX66		66		/* Siemens FX66 microcontroller */
 #define EM_ST9PLUS	67		/* STMicroelectronics ST9+ 8/16 mc */
-#define EM_ST7		68		/* STmicroelectronics ST7 8 bit mc */
+#define EM_ST7		68		/* STMicroelectronics ST7 8 bit mc */
 #define EM_68HC16	69		/* Motorola MC68HC16 microcontroller */
 #define EM_68HC11	70		/* Motorola MC68HC11 microcontroller */
 #define EM_68HC08	71		/* Motorola MC68HC08 microcontroller */
@@ -817,7 +817,7 @@ typedef struct
 #define	DF_1_EDITED	0x00200000	/* Object is modified after built.  */
 #define	DF_1_NORELOC	0x00400000
 #define	DF_1_SYMINTPOSE	0x00800000	/* Object has individual interposers.  */
-#define	DF_1_GLOBAUDIT	0x01000000	/* Global auditin required.  */
+#define	DF_1_GLOBAUDIT	0x01000000	/* Global auditing required.  */
 #define	DF_1_SINGLETON	0x02000000	/* Singleton symbols are used.  */
 
 /* Flags for the feature selection in DT_FEATURE_1.  */
@@ -1313,7 +1313,7 @@ typedef struct
 #define R_SPARC_LM22		36	/* Low middle 22 bits of ... */
 #define R_SPARC_PC_HH22		37	/* Top 22 bits of pc rel 64 bit */
 #define R_SPARC_PC_HM10		38	/* High middle 10 bit of ... */
-#define R_SPARC_PC_LM22		39	/* Low miggle 22 bits of ... */
+#define R_SPARC_PC_LM22		39	/* Low middle 22 bits of ... */
 #define R_SPARC_WDISP16		40	/* PC relative 16 bit shifted */
 #define R_SPARC_WDISP19		41	/* PC relative 19 bit shifted */
 #define R_SPARC_GLOB_JMP	42	/* was part of v9 ABI but was removed */
