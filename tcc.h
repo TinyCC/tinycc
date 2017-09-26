@@ -1,6 +1,6 @@
 /*
  *  TCC - Tiny C Compiler
- * 
+ *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -703,7 +703,7 @@ struct TCCState {
 
     char *init_symbol; /* symbols to call at load-time (not used currently) */
     char *fini_symbol; /* symbols to call at unload-time (not used currently) */
-    
+
 #ifdef TCC_TARGET_I386
     int seg_size; /* 32. Can be 16 with i386 assembler (.code16) */
 #endif
@@ -972,7 +972,7 @@ struct filespec {
 
 #define TOK_SHL   0x01 /* shift left */
 #define TOK_SAR   0x02 /* signed shift right */
-  
+
 /* assignment operators : normal operator or 0x80 */
 #define TOK_A_MOD 0xa5
 #define TOK_A_AND 0xa6
@@ -1508,13 +1508,13 @@ static inline uint16_t read16le(unsigned char *p) {
     return p[0] | (uint16_t)p[1] << 8;
 }
 static inline void write16le(unsigned char *p, uint16_t x) {
-    p[0] = x & 255, p[1] = x >> 8 & 255;
+    p[0] = x & 255;  p[1] = x >> 8 & 255;
 }
 static inline uint32_t read32le(unsigned char *p) {
   return read16le(p) | (uint32_t)read16le(p + 2) << 16;
 }
 static inline void write32le(unsigned char *p, uint32_t x) {
-    write16le(p, x), write16le(p + 2, x >> 16);
+    write16le(p, x);  write16le(p + 2, x >> 16);
 }
 static inline void add32le(unsigned char *p, int32_t x) {
     write32le(p, read32le(p) + x);
@@ -1523,7 +1523,7 @@ static inline uint64_t read64le(unsigned char *p) {
   return read32le(p) | (uint64_t)read32le(p + 4) << 32;
 }
 static inline void write64le(unsigned char *p, uint64_t x) {
-    write32le(p, x), write32le(p + 4, x >> 32);
+    write32le(p, x);  write32le(p + 4, x >> 32);
 }
 static inline void add64le(unsigned char *p, int64_t x) {
     write64le(p, read64le(p) + x);
