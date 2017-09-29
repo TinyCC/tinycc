@@ -181,6 +181,7 @@ static void print_search_dirs(TCCState *s)
 {
     printf("install: %s\n", s->tcc_lib_path);
     /* print_dirs("programs", NULL, 0); */
+    print_dirs("tcc-include", s->tccinclude_paths, s->nb_tccinclude_paths);
     print_dirs("include", s->sysinclude_paths, s->nb_sysinclude_paths);
     print_dirs("libraries", s->library_paths, s->nb_library_paths);
 #ifndef TCC_TARGET_PE

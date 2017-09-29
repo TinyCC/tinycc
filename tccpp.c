@@ -1803,7 +1803,8 @@ ST_FUNC void preprocess(int is_bof)
         /* store current file in stack, but increment stack later below */
         *s1->include_stack_ptr = file;
         i = tok == TOK_INCLUDE_NEXT ? file->include_next_index : 0;
-        n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
+        n = 2 + s1->nb_tccinclude_paths + s1->nb_include_paths +
+            s1->nb_sysinclude_paths;
         for (; i < n; ++i) {
             char buf1[sizeof file->filename];
             CachedInclude *e;
@@ -1825,8 +1826,14 @@ ST_FUNC void preprocess(int is_bof)
 
             } else {
                 /* search in all the include paths */
-                int j = i - 2, k = j - s1->nb_include_paths;
-                path = k < 0 ? s1->include_paths[j] : s1->sysinclude_paths[k];
+                int k, j = i - 2;
+
+                if (j < (k = s1->nb_tccinclude_paths))
+                    path = s1->tccinclude_paths[j];
+                else if ((j -= k) < s1->nb_include_paths)
+                    path = s1->include_paths[j];
+                else if ((j -= s1->nb_include_paths) < s1->nb_sysinclude_paths)
+                    path = s1->sysinclude_paths[j];
                 pstrcpy(buf1, sizeof(buf1), path);
                 pstrcat(buf1, sizeof(buf1), "/");
             }
