@@ -17,8 +17,9 @@ typedef struct {
 } __va_list_struct;
 
 /* Avoid conflicting definition for va_list on musl libc */
-#ifndef __DEFINED_va_list
+#if !defined __DEFINED_va_list || defined __TCC_NEEDS_va_list
 typedef __va_list_struct va_list[1];
+#undef __DEFINED_va_list
 #define __DEFINED_va_list
 #endif
 

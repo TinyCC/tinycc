@@ -854,7 +854,11 @@ LIBTCCAPI TCCState *tcc_new(void)
 #endif
 
 #if defined(TCC_MUSL)
-    tcc_define_symbol(s, "__builtin_va_list", "void *");
+    tcc_define_symbol(s, "__TCC_NEEDS_va_list", "");
+    tcc_define_symbol(s, "__builtin_va_list", "va_list");
+    tcc_define_symbol(s, "__DEFINED_va_list", "");
+    tcc_define_symbol(s, "__DEFINED___isoc_va_list", "");
+    tcc_define_symbol(s, "__isoc_va_list", "void *");
 #endif /* TCC_MUSL */
 
 #ifdef TCC_TARGET_PE
