@@ -33,31 +33,25 @@ int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int glob
 int _twinstart(void)
 {
     __TRY__
-    _TCHAR *szCmd;
+    _TCHAR *szCmd, *p;
     STARTUPINFO startinfo;
+    _startupinfo start_info_con = {0};
     int fShow;
     int ret;
 
     __set_app_type(__GUI_APP);
     _controlfp(0x10000, 0x30000);
 
-    szCmd = GetCommandLine();
-    if (szCmd) {
-        while (__T(' ') == *szCmd)
-            szCmd++;
-        if (__T('\"') == *szCmd) {
-            while (*++szCmd)
-                if (__T('\"') == *szCmd) {
-                    szCmd++;
-                    break;
-                }
-        } else {
-            while (*szCmd && __T(' ') != *szCmd)
-                szCmd++;
-        }
-        while (__T(' ') == *szCmd)
-            szCmd++;
-    }
+    start_info_con.newmode = 0;
+    __tgetmainargs(&__argc, &__targv, &_tenviron, 0, &start_info_con);
+
+    p = GetCommandLine();
+    if (__argc > 1)
+        szCmd = _tcsstr(p, __targv[1]);
+    if (NULL == szCmd)
+        szCmd = __T("");
+    else if (szCmd > p && szCmd[-1] == __T('\"'))
+        --szCmd;
 
     GetStartupInfo(&startinfo);
     fShow = startinfo.wShowWindow;
@@ -73,22 +67,23 @@ int _runtwinmain(int argc, /* as tcc passed in */ char **argv)
     _TCHAR *szCmd, *p;
 
 #ifdef UNICODE
-    int wargc;
-    _TCHAR **wargv, **wenv;
     _startupinfo start_info = {0};
 
-    __tgetmainargs(&wargc, &wargv, &wenv, 0, &start_info);
-    if (argc < wargc)
-        wargv += wargc - argc;
-    else
-        argc = wargc;
-#define argv wargv
+    __tgetmainargs(&__argc, &__targv, &_tenviron, 0, &start_info);
+    /* may be wrong when tcc has received wildcards (*.c) */
+    if (argc < __argc) {
+        __targv += __argc - argc;
+        __argc = argc;
+    }
+#else
+    __argc = argc;
+    __targv = argv;
 #endif
 
     p = GetCommandLine();
     szCmd = NULL;
     if (argc > 1)
-        szCmd = _tcsstr(p, argv[1]);
+        szCmd = _tcsstr(p, __targv[1]);
     if (NULL == szCmd)
         szCmd = __T("");
     else if (szCmd > p && szCmd[-1] == __T('\"'))

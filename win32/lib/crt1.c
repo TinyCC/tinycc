@@ -44,9 +44,7 @@ int _dowildcard;
 void _tstart(void)
 {
     __TRY__
-    int argc, ret;
-    _TCHAR **argv;
-    _TCHAR **env;
+    int ret;
     _startupinfo start_info;
 
     // Sets the current application type
@@ -60,31 +58,31 @@ void _tstart(void)
 #endif
 
     start_info.newmode = 0;
-    __tgetmainargs( &argc, &argv, &env, _dowildcard, &start_info);
-    ret = _tmain(argc, argv, env);
+    __tgetmainargs( &__argc, &__targv, &_tenviron, _dowildcard, &start_info);
+    ret = _tmain(__argc, __targv, _tenviron);
     exit(ret);
 }
 
 int _runtmain(int argc, /* as tcc passed in */ char **argv)
 {
 #ifdef UNICODE
-    int wargc;
-    _TCHAR **wargv, **wenv;
     _startupinfo start_info = {0};
 
-    __tgetmainargs(&wargc, &wargv, &wenv, _dowildcard, &start_info);
+    __tgetmainargs(&__argc, &__targv, &_tenviron, _dowildcard, &start_info);
     /* may be wrong when tcc has received wildcards (*.c) */
-    if (argc < wargc)
-        wargv += wargc - argc;
-    else
-        argc = wargc;
-#define argv wargv
+    if (argc < __argc) {
+        __targv += __argc - argc;
+        __argc = argc;
+    }
+#else
+    __argc = argc;
+    __targv = argv;
 #endif
 
 #ifdef __i386
     _controlfp(_PC_53, _MCW_PC);
 #endif
-    return _tmain(argc, argv, _tenviron);
+    return _tmain(__argc, __targv, _tenviron);
 }
 
 // =============================================
