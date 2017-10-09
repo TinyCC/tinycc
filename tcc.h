@@ -208,6 +208,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
     ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
+# else
+#  define CONFIG_TCC_SYSINCLUDEPATHS ""
 # endif
 #endif
 
