@@ -32,9 +32,6 @@ LIBTCCAPI void tcc_set_options(TCCState *s, const char *str);
 /*****************************/
 /* preprocessor */
 
-/* add in tcc include path, searched before anything else */
-LIBTCCAPI int tcc_add_tccinclude_path(TCCState *s, const char *pathname);
-
 /* add include path */
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname);
 

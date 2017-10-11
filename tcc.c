@@ -86,7 +86,6 @@ static const char help2[] =
     "  -Wp,-opt                      same as -opt\n"
     "  -include file                 include 'file' above each input file\n"
     "  -isystem dir                  add 'dir' to system include path\n"
-    "  -iwithprefix dir              set tcc's private include/library subdir\n"
     "  -static                       link to static libraries (not recommended)\n"
     "  -dumpversion                  print version\n"
     "  -print-search-dirs            print search paths\n"
@@ -181,7 +180,6 @@ static void print_search_dirs(TCCState *s)
 {
     printf("install: %s\n", s->tcc_lib_path);
     /* print_dirs("programs", NULL, 0); */
-    print_dirs("tcc-include", s->tccinclude_paths, s->nb_tccinclude_paths);
     print_dirs("include", s->sysinclude_paths, s->nb_sysinclude_paths);
     print_dirs("libraries", s->library_paths, s->nb_library_paths);
 #ifndef TCC_TARGET_PE
@@ -197,7 +195,7 @@ static void set_environment(TCCState *s)
 
     path = getenv("C_INCLUDE_PATH");
     if(path != NULL) {
-        tcc_add_include_path(s, path);
+        tcc_add_sysinclude_path(s, path);
     }
     path = getenv("CPATH");
     if(path != NULL) {
@@ -278,6 +276,7 @@ redo:
             return 0;
         if (opt == OPT_PRINT_DIRS) {
             /* initialize search dirs */
+            set_environment(s);
             tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
             print_search_dirs(s);
             return 0;

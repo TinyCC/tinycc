@@ -104,10 +104,8 @@ static void tcc_set_lib_path_w32(TCCState *s)
     char path[1024], *p;
     GetModuleFileNameA(tcc_module, path, sizeof path);
     p = tcc_basename(normalize_slashes(strlwr(path)));
-    if (p - 5 > path && 0 == strncmp(p - 5, "/bin/", 5))
-        p -= 5;
-    else if (p > path)
-        p--;
+    if (p > path)
+        --p;
     *p = 0;
     tcc_set_lib_path(s, path);
 }
@@ -440,7 +438,7 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
         CString str;
 
         cstr_new(&str);
-        for (p = in; c = *p, c != '\0' && c != PATHSEP; ++p) {
+        for (p = in; c = *p, c != '\0' && c != PATHSEP[0]; ++p) {
             if (c == '{' && p[1] && p[2] == '}') {
                 c = p[1], p += 2;
                 if (c == 'B')
@@ -804,6 +802,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #endif
 #elif defined(TCC_TARGET_ARM64)
     tcc_define_symbol(s, "__aarch64__", NULL);
+#elif defined TCC_TARGET_C67
+    tcc_define_symbol(s, "__C67__", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE
@@ -827,13 +827,13 @@ LIBTCCAPI TCCState *tcc_new(void)
 # if defined(__FreeBSD_kernel__)
     tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);
 # endif
-#endif
 # if defined(__NetBSD__)
     tcc_define_symbol(s, "__NetBSD__", "__NetBSD__");
 # endif
 # if defined(__OpenBSD__)
     tcc_define_symbol(s, "__OpenBSD__", "__OpenBSD__");
 # endif
+#endif
 
     /* TinyCC & gcc defines */
 #if PTR_SIZE == 4
@@ -852,14 +852,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
     tcc_define_symbol(s, "__LP64__", NULL);
 #endif
-
-#if defined(TCC_MUSL)
-    tcc_define_symbol(s, "__TCC_NEEDS_va_list", "");
-    tcc_define_symbol(s, "__builtin_va_list", "va_list");
-    tcc_define_symbol(s, "__DEFINED_va_list", "");
-    tcc_define_symbol(s, "__DEFINED___isoc_va_list", "");
-    tcc_define_symbol(s, "__isoc_va_list", "void *");
-#endif /* TCC_MUSL */
 
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "__WCHAR_TYPE__", "unsigned short");
@@ -887,6 +879,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__REDIRECT_NTH(name, proto, alias)",
         "name proto __asm__ (#alias) __THROW");
 # endif
+# if defined(TCC_MUSL)
+    tcc_define_symbol(s, "__DEFINED_va_list", "");
+    tcc_define_symbol(s, "__DEFINED___isoc_va_list", "");
+    tcc_define_symbol(s, "__isoc_va_list", "void *");
+# endif /* TCC_MUSL */
     /* Some GCC builtins that are simple to express as macros.  */
     tcc_define_symbol(s, "__builtin_extract_return_addr(x)", "x");
 #endif /* ndef TCC_TARGET_PE */
@@ -906,7 +903,6 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
     /* free include paths */
     dynarray_reset(&s1->cached_includes, &s1->nb_cached_includes);
-    dynarray_reset(&s1->tccinclude_paths, &s1->nb_tccinclude_paths);
     dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
     dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
     dynarray_reset(&s1->cmd_include_files, &s1->nb_cmd_include_files);
@@ -947,7 +943,6 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
-        tcc_add_tccinclude_path(s, CONFIG_TCC_TCCINCLUDEPATHS);
         tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
     }
 
@@ -982,12 +977,6 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_crt(s, "crti.o");
     }
 #endif
-    return 0;
-}
-
-LIBTCCAPI int tcc_add_tccinclude_path(TCCState *s, const char *pathname)
-{
-    tcc_split_path(s, &s->tccinclude_paths, &s->nb_tccinclude_paths, pathname);
     return 0;
 }
 
@@ -1547,7 +1536,6 @@ static const TCCOption tcc_options[] = {
     { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
-    { "iwithprefix", TCC_OPTION_iwithprefix, TCC_OPTION_HAS_ARG },
     { "include", TCC_OPTION_include, TCC_OPTION_HAS_ARG },
     { "nostdinc", TCC_OPTION_nostdinc, 0 },
     { "nostdlib", TCC_OPTION_nostdlib, 0 },
@@ -1682,7 +1670,6 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
     int last_o = -1;
     int x;
     CString linker_arg; /* collect -Wl options */
-    char buf[1024];
     int tool = 0, arg_start = 0, noaction = optind;
     char **argv = *pargv;
     int argc = *pargc;
@@ -1826,10 +1813,6 @@ reparse:
             goto set_output_type;
         case TCC_OPTION_isystem:
             tcc_add_sysinclude_path(s, optarg);
-            break;
-        case TCC_OPTION_iwithprefix:
-            snprintf(buf, sizeof buf, "{B}/%s", optarg);
-            tcc_add_tccinclude_path(s, buf);
             break;
 	case TCC_OPTION_include:
 	    dynarray_add(&s->cmd_include_files,

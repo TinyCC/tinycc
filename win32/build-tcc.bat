@@ -4,13 +4,31 @@
 
 @echo off
 setlocal
-
-set CC=gcc -Os -s -static
+if (%1)==(-clean) goto :cleanup
+set CC=gcc
 set /p VERSION= < ..\VERSION
 set INST=
+set BIN=
 set DOC=no
+set EXES_ONLY=no
 goto :a0
-
+:a2
+shift
+:a3
+shift
+:a0
+if not (%1)==(-c) goto :a1
+set CC=%~2
+if (%2)==(cl) set CC=@call :cl
+goto :a2
+:a1
+if (%1)==(-t) set T=%2&& goto :a2
+if (%1)==(-v) set VERSION=%~2&& goto :a2
+if (%1)==(-i) set INST=%2&& goto :a2
+if (%1)==(-b) set BIN=%2&& goto :a2
+if (%1)==(-d) set DOC=yes&& goto :a3
+if (%1)==(-x) set EXES_ONLY=yes&& goto :a3
+if (%1)==() goto :p1
 :usage
 echo usage: build-tcc.bat [ options ... ]
 echo options:
@@ -18,9 +36,34 @@ echo   -c prog              use prog (gcc/tcc/cl) to compile tcc
 echo   -c "prog options"    use prog with options to compile tcc
 echo   -t 32/64             force 32/64 bit default target
 echo   -v "version"         set tcc version
-echo   -i dir               install tcc into dir
+echo   -i tccdir            install tcc into tccdir
+echo   -b bindir            optionally install binaries into bindir elsewhere
 echo   -d                   create tcc-doc.html too (needs makeinfo)
+echo   -x                   just create the executables
+echo   -clean               delete all previously produced files and directories
 exit /B 1
+
+@rem ------------------------------------------------------
+@rem sub-routines
+
+:cleanup
+set LOG=echo
+%LOG% removing files:
+for %%f in (*tcc.exe libtcc.dll lib\*.a) do call :del_file %%f
+for %%f in (..\config.h ..\config.texi) do call :del_file %%f
+for %%f in (include\*.h) do @if exist ..\%%f call :del_file %%f
+for %%f in (include\tcclib.h examples\libtcc_test.c) do call :del_file %%f
+for %%f in (*.o *.obj *.def *.pdb *.lib *.exp *.ilk) do call :del_file %%f
+%LOG% removing directories:
+for %%f in (doc libtcc) do call :del_dir %%f
+%LOG% done.
+exit /B 0
+:del_file
+if exist %1 del %1 && %LOG%   %1
+exit /B 0
+:del_dir
+if exist %1 rmdir /Q/S %1 && %LOG%   %1
+exit /B 0
 
 :cl
 @echo off
@@ -37,52 +80,16 @@ echo on
 %CMD% -O1 -W2 -Zi -MT -GS- -nologo -link -opt:ref,icf
 @exit /B %ERRORLEVEL%
 
-:a2
-shift
-:a1
-shift
-:a0
-if not (%1)==(-c) goto :a3
-set CC=%~2
-if (%2)==(cl) set CC=@call :cl
-goto :a2
-:a3
-if not (%1)==(-t) goto :a4
-set T=%2
-goto :a2
-:a4
-if not (%1)==(-v) goto :a5
-set VERSION=%~2
-goto :a2
-:a5
-if not (%1)==(-i) goto :a6
-set INST=%2
-goto :a2
-:a6
-if not (%1)==(-d) goto :a7
-set DOC=yes
-goto :a1
-:a7
-if not (%1)==() goto :usage
+@rem ------------------------------------------------------
+@rem main program
 
-if not "%CC%"=="@call :cl" goto :p1
-set VSCOMNTOOLS=%VS150COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS140COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS130COMNTOOLS%
-if "%VSCOMNTOOLS%"=="" set VSCOMNTOOLS=%VS120COMNTOOLS%
-if %T%_==32_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\vcvars32.bat"
-if %T%_==64_ set CLVARS="%VSCOMNTOOLS%..\..\VC\bin\amd64\vcvars64.bat"
-if %T%_==_ set T=32& if %Platform%_==X64_ set T=64
-if %CLVARS%_==_ goto :p1
-if exist %CLVARS% call %CLVARS%
 :p1
-
 if not %T%_==_ goto :p2
 set T=32
 if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
 if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
 :p2
-
+if "%CC:~-3%"=="gcc" set CC=%CC% -Os -s -static
 set D32=-DTCC_TARGET_PE -DTCC_TARGET_I386
 set D64=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
 set P32=i386-win32
@@ -91,13 +98,14 @@ if %T%==64 goto :t64
 set D=%D32%
 set DX=%D64%
 set PX=%P64%
-goto :t96
+goto :p3
 :t64
 set D=%D64%
 set DX=%D32%
 set PX=%P32%
-:t96
+goto :p3
 
+:p3
 @echo on
 
 :config.h
@@ -116,7 +124,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 
-@if (%TCC_FILES%)==(no) goto :files-done
+@if (%EXES_ONLY%)==(yes) goto :files-done
 
 if not exist libtcc mkdir libtcc
 if not exist doc mkdir doc
@@ -170,8 +178,11 @@ for %%f in (*.o *.def) do @del %%f
 :copy-install
 @if (%INST%)==() goto :the_end
 if not exist %INST% mkdir %INST%
+@if (%BIN%)==() set BIN=%INST%
+if not exist %BIN% mkdir %BIN%
+for %%f in (*tcc.exe *tcc.dll) do @copy>nul %%f %BIN%\%%f
 @if not exist %INST%\lib mkdir %INST%\lib
-for %%f in (*tcc.exe *tcc.dll lib\*.a lib\*.def) do @copy>nul %%f %INST%\%%f
+for %%f in (lib\*.a lib\*.def) do @copy>nul %%f %INST%\%%f
 for %%f in (include examples libtcc doc) do @xcopy>nul /s/i/q/y %%f %INST%\%%f
 
 :the_end

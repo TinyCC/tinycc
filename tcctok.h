@@ -120,6 +120,8 @@
      DEF(TOK_FASTCALL1, "fastcall")
      DEF(TOK_FASTCALL2, "__fastcall")
      DEF(TOK_FASTCALL3, "__fastcall__")
+     DEF(TOK_REGPARM1, "regparm")
+     DEF(TOK_REGPARM2, "__regparm__")
 
      DEF(TOK_MODE, "__mode__")
      DEF(TOK_MODE_QI, "__QI__")
@@ -134,23 +136,19 @@
      DEF(TOK_NORETURN2, "__noreturn__")
      DEF(TOK_VISIBILITY1, "visibility")
      DEF(TOK_VISIBILITY2, "__visibility__")
+
      DEF(TOK_builtin_types_compatible_p, "__builtin_types_compatible_p")
      DEF(TOK_builtin_choose_expr, "__builtin_choose_expr")
      DEF(TOK_builtin_constant_p, "__builtin_constant_p")
      DEF(TOK_builtin_frame_address, "__builtin_frame_address")
      DEF(TOK_builtin_return_address, "__builtin_return_address")
      DEF(TOK_builtin_expect, "__builtin_expect")
-#ifdef TCC_TARGET_X86_64
-#ifdef TCC_TARGET_PE
+     /*DEF(TOK_builtin_va_list, "__builtin_va_list")*/
+#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
      DEF(TOK_builtin_va_start, "__builtin_va_start")
-#else
+#elif defined TCC_TARGET_X86_64
      DEF(TOK_builtin_va_arg_types, "__builtin_va_arg_types")
-#endif
-#endif
-     DEF(TOK_REGPARM1, "regparm")
-     DEF(TOK_REGPARM2, "__regparm__")
-
-#ifdef TCC_TARGET_ARM64
+#elif defined TCC_TARGET_ARM64
      DEF(TOK___va_start, "__va_start")
      DEF(TOK___va_arg, "__va_arg")
 #endif

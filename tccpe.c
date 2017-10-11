@@ -26,10 +26,12 @@
 #ifndef _WIN32
 #define stricmp strcasecmp
 #define strnicmp strncasecmp
+#include <sys/stat.h> /* chmod() */
 #endif
 
 #ifdef TCC_TARGET_X86_64
 # define ADDR3264 ULONGLONG
+# define PE_IMAGE_REL IMAGE_REL_BASED_DIR64
 # define REL_TYPE_DIRECT R_X86_64_64
 # define R_XXX_THUNKFIX R_X86_64_PC32
 # define R_XXX_RELATIVE R_X86_64_RELATIVE
@@ -38,6 +40,7 @@
 
 #elif defined TCC_TARGET_ARM
 # define ADDR3264 DWORD
+# define PE_IMAGE_REL IMAGE_REL_BASED_HIGHLOW
 # define REL_TYPE_DIRECT R_ARM_ABS32
 # define R_XXX_THUNKFIX R_ARM_ABS32
 # define R_XXX_RELATIVE R_ARM_RELATIVE
@@ -46,6 +49,7 @@
 
 #elif defined TCC_TARGET_I386
 # define ADDR3264 DWORD
+# define PE_IMAGE_REL IMAGE_REL_BASED_HIGHLOW
 # define REL_TYPE_DIRECT R_386_32
 # define R_XXX_THUNKFIX R_386_32
 # define R_XXX_RELATIVE R_386_RELATIVE
@@ -54,22 +58,6 @@
 
 #endif
 
-#if 0
-#ifdef _WIN32
-void dbg_printf (const char *fmt, ...)
-{
-    char buffer[4000];
-    va_list arg;
-    int x;
-    va_start(arg, fmt);
-    x = vsprintf (buffer, fmt, arg);
-    strcpy(buffer+x, "\n");
-    OutputDebugString(buffer);
-}
-#endif
-#endif
-
-/* ----------------------------------------------------------- */
 #ifndef IMAGE_NT_SIGNATURE
 /* ----------------------------------------------------------- */
 /* definitions below are from winnt.h */
@@ -241,14 +229,19 @@ typedef struct _IMAGE_BASE_RELOCATION {
 #define IMAGE_REL_BASED_MIPS_JMPADDR     5
 #define IMAGE_REL_BASED_SECTION          6
 #define IMAGE_REL_BASED_REL32            7
+#define IMAGE_REL_BASED_DIR64           10
 
 #pragma pack(pop)
 
 /* ----------------------------------------------------------- */
 #endif /* ndef IMAGE_NT_SIGNATURE */
 /* ----------------------------------------------------------- */
-#pragma pack(push, 1)
 
+#ifndef IMAGE_REL_BASED_DIR64
+# define IMAGE_REL_BASED_DIR64 10
+#endif
+
+#pragma pack(push, 1)
 struct pe_header
 {
     IMAGE_DOS_HEADER doshdr;
@@ -281,7 +274,6 @@ struct pe_rsrc_reloc {
     DWORD size;
     WORD type;
 };
-
 #pragma pack(pop)
 
 /* ------------------------------------------------------------- */
@@ -732,6 +724,9 @@ static int pe_write(struct pe_info *pe)
     fseek(op, offsetof(struct pe_header, opthdr.CheckSum), SEEK_SET);
     pe_fwrite(&pe_header.opthdr.CheckSum, sizeof pe_header.opthdr.CheckSum, op, NULL);
     fclose (op);
+#ifndef _WIN32
+    chmod(pe->filename, 0777);
+#endif
 
     if (2 == pe->s1->verbose)
         printf("-------------------------------\n");
@@ -1017,7 +1012,7 @@ static void pe_build_reloc (struct pe_info *pe)
             }
             if ((addr -= offset)  < (1<<12)) { /* one block spans 4k addresses */
                 WORD *wp = section_ptr_add(pe->reloc, sizeof (WORD));
-                *wp = addr | IMAGE_REL_BASED_HIGHLOW<<12;
+                *wp = addr | PE_IMAGE_REL<<12;
                 ++count;
                 continue;
             }
@@ -1471,7 +1466,7 @@ static void pe_print_sections(TCCState *s1, const char *fname)
 /* ------------------------------------------------------------- */
 /* helper function for load/store to insert one more indirection */
 
-#ifndef TCC_TARGET_ARM
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2)
 {
     int r2;

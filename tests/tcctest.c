@@ -3235,6 +3235,7 @@ void asm_local_statics (void)
 }
 #endif
 
+static
 unsigned int set;
 
 void fancy_copy (unsigned *in, unsigned *out)
@@ -3247,7 +3248,7 @@ void fancy_copy2 (unsigned *in, unsigned *out)
   asm volatile ("mov %0,(%1)" : : "r" (*in), "r" (out) : "memory");
 }
 
-#ifdef __x86_64__
+#if defined __x86_64__ && !defined _WIN64
 void clobber_r12(void)
 {
     asm volatile("mov $1, %%r12" ::: "r12");
@@ -3256,7 +3257,7 @@ void clobber_r12(void)
 
 void test_high_clobbers(void)
 {
-#ifdef __x86_64__
+#if defined __x86_64__ && !defined _WIN64
     register long val asm("r12");
     long val2;
     /* This tests if asm clobbers correctly save/restore callee saved
@@ -3265,10 +3266,8 @@ void test_high_clobbers(void)
        correctly capture the data flow, but good enough for us.  */
     asm volatile("mov $0x4542, %%r12" : "=r" (val):: "memory");
     clobber_r12();
-#ifndef _WIN64
     asm volatile("mov %%r12, %0" : "=r" (val2) : "r" (val): "memory");
     printf("asmhc: 0x%x\n", val2);
-#endif
 #endif
 }
 

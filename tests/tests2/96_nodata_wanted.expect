@@ -17,9 +17,7 @@ data:
   333 44 555555 6 7
 size of data/text:
   non-zero/non-zero
-# 111/193
 
 [test_data_suppression_on]
 size of data/text:
   zero/zero
-# 0/0

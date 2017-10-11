@@ -3,5 +3,3 @@ return A+++B;
 return A+ ++B;
 return A+++ +B;
 return 0x1E -1;
-XXX: return x+x-1 +1 -2;
-XXX: return x x 1 2 x;

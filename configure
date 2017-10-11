@@ -56,7 +56,6 @@ case $targetos in
     DLLSUF=".dylib"
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    confvars="$confvars WIN32"
     mingw32=yes
     ;;
   DragonFly|OpenBSD|FreeBSD|NetBSD)
@@ -126,8 +125,6 @@ for opt do
   ;;
   --cpu=*) cpu=`echo $opt | cut -d '=' -f 2`
   ;;
-  --enable-mingw32) confvars="$confvars WIN32"; mingw32="yes"
-  ;;
   --enable-cross) confvars="$confvars cross"
   ;;
   --disable-static) confvars="$confvars static=no"
@@ -141,6 +138,8 @@ for opt do
   --with-libgcc) confvars="$confvars libgcc"
   ;;
   --with-selinux) confvars="$confvars selinux"
+  ;;
+  --config-mingw32*) mingw32=$(echo "$opt=yes" | cut -d '=' -f 2)
   ;;
   --config-*) confvars="$confvars ${opt#--config-}"; suggest="no"
   ;;
@@ -216,22 +215,12 @@ if test "$mingw32" = "yes" ; then
     if test "$cc" = gcc; then
       test -z "$LDFLAGS" && LDFLAGS="-static"
     fi
-    if test x"$tccdir" = x""; then
-      tccdir="tcc"
-    fi
-    if test -z "$prefix" ; then
-      prefix="C:/Program Files/${tccdir}"
-    fi
-    if test -z "$sharedir" ; then
-      sharedir="${prefix}"
-    fi
-    execprefix="$prefix"
-    bindir="${prefix}"
-    tccdir="${prefix}"
-    libdir="${prefix}/lib"
-    docdir="${sharedir}/doc"
-    mandir="${sharedir}/man"
-    infodir="${sharedir}/info"
+    test -z "$prefix" && prefix="C:/Program Files/tcc"
+    test -z "$tccdir" && tccdir="${prefix}"
+    test -z "$bindir" && bindir="${tccdir}"
+    test -z "$docdir" && docdir="${tccdir}/doc"
+    test -z "$libdir" && libdir="${tccdir}/libtcc"
+    confvars="$confvars WIN32"
     LIBSUF=".lib"
     EXESUF=".exe"
     DLLSUF=".dll"
@@ -263,11 +252,10 @@ else
     if test x"$tccdir" = x""; then
       tccdir="${libdir}/tcc"
     fi
+    if test x"$includedir" = x""; then
+      includedir="${prefix}/include"
+    fi
 fi # mingw32
-
-if test x"$includedir" = x""; then
-  includedir="${prefix}/include"
-fi
 
 if test x"$show_help" = "xyes" ; then
 cat << EOF
@@ -302,7 +290,6 @@ Advanced options (experts only):
   --enable-static          make libtcc.a instead of libtcc.dll (win32)
   --disable-rpath          disable use of -rpath with the above
   --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a
-  --enable-mingw32         build windows version on linux with mingw32
   --enable-cross           build cross compilers
   --with-selinux           use mmap for executable memory (with tcc -run)
   --sysincludepaths=...    specify system include paths, colon separated
@@ -310,7 +297,7 @@ Advanced options (experts only):
   --crtprefix=...          specify locations of crt?.o, colon separated
   --elfinterp=...          specify elf interpreter
   --triplet=...            specify system library/include directory triplet
-  --config-uClibc,-musl... enable specific configuration for some systems
+  --config-uClibc,-musl,-mingw32... enable system specific configurations
 EOF
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -320,15 +307,14 @@ cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
 
-CONFTEST=./conftest$EXESUF
-if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
-  echo "configure: error: '$cc' failed to compile conftest.c."
-else
-  gcc_major="$($CONFTEST version)"
-  gcc_minor="$($CONFTEST minor)"
-fi
-
 if test -z "$cross_prefix" ; then
+  CONFTEST=./conftest$EXESUF
+  if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
+    echo "configure: error: '$cc' failed to compile conftest.c."
+  else
+    gcc_major="$($CONFTEST version)"
+    gcc_minor="$($CONFTEST minor)"
+  fi
   bigendian="$($CONFTEST bigendian)"
   if test "$mingw32" = "no" ; then
 
@@ -401,13 +387,13 @@ fi
 
 fcho() { if test -n "$2"; then echo "$1$2"; fi }
 
-echo "Binary  directory   $bindir"
-echo "TinyCC directory    $tccdir"
-echo "Library directory   $libdir"
-echo "Include directory   $includedir"
-echo "Manual directory    $mandir"
-echo "Info directory      $infodir"
-echo "Doc directory       $docdir"
+fcho "Binary directory    " "$bindir"
+fcho "TinyCC directory    " "$tccdir"
+fcho "Library directory   " "$libdir"
+fcho "Include directory   " "$includedir"
+fcho "Manual directory    " "$mandir"
+fcho "Info directory      " "$infodir"
+fcho "Doc directory       " "$docdir"
 fcho "Target root prefix  " "$sysroot"
 echo "Source path         $source_path"
 echo "C compiler          $cc ($gcc_major.$gcc_minor)"
@@ -471,8 +457,6 @@ print_mak CONFIG_LDDIR "$tcc_lddir"
 print_mak CONFIG_TRIPLET "$triplet"
 print_mak_int TCC_CPU_VERSION "$cpuver"
 
-echo "#define GCC_MAJOR $gcc_major" >> $TMPH
-echo "#define GCC_MINOR $gcc_minor" >> $TMPH
 if test "$cpu" = "aarch64" ; then
   echo "ARCH=arm64" >> config.mak
 else

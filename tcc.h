@@ -101,10 +101,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define IS_DIRSEP(c) (c == '/' || c == '\\')
 # define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
 # define PATHCMP stricmp
+# define PATHSEP ";"
 #else
 # define IS_DIRSEP(c) (c == '/')
 # define IS_ABSPATH(p) IS_DIRSEP(p[0])
 # define PATHCMP strcmp
+# define PATHSEP ":"
 #endif
 
 /* -------------------------------------------- */
@@ -195,21 +197,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
 
 /* system include paths */
-#ifndef CONFIG_TCC_TCCINCLUDEPATHS
-# ifdef TCC_TARGET_PE
-#  define CONFIG_TCC_TCCINCLUDEPATHS "{B}/include;{B}/include/winapi"
-# else
-#  define CONFIG_TCC_TCCINCLUDEPATHS "{B}/include"
-# endif
-#endif
-
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
-# ifndef TCC_TARGET_PE
-#  define CONFIG_TCC_SYSINCLUDEPATHS \
-    ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
+# ifdef TCC_TARGET_PE
+#  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include"PATHSEP"{B}/include/winapi"
 # else
-#  define CONFIG_TCC_SYSINCLUDEPATHS ""
+#  define CONFIG_TCC_SYSINCLUDEPATHS \
+        "{B}/include" \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
 # endif
 #endif
 
@@ -281,12 +276,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
 #define TCC_LIBGCC USE_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
-#endif
-
-#ifdef TCC_TARGET_PE
-#define PATHSEP ';'
-#else
-#define PATHSEP ':'
 #endif
 
 /* -------------------------------------------- */
@@ -722,10 +711,7 @@ struct TCCState {
     DLLReference **loaded_dlls;
     int nb_loaded_dlls;
 
-    /* include paths, search order */
-    char **tccinclude_paths;
-    int nb_tccinclude_paths;
-
+    /* include paths */
     char **include_paths;
     int nb_include_paths;
 
@@ -1616,7 +1602,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd);
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t value);
-#ifndef TCC_TARGET_ARM
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 ST_FUNC SValue *pe_getimport(SValue *sv, SValue *v2);
 #endif
 #ifdef TCC_TARGET_X86_64
@@ -1628,7 +1614,6 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 # define ST_PE_IMPORT 0x20
 # define ST_PE_STDCALL 0x40
 #endif
-
 /* ------------ tccrun.c ----------------- */
 #ifdef TCC_IS_NATIVE
 #ifdef CONFIG_TCC_STATIC

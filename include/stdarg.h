@@ -16,12 +16,7 @@ typedef struct {
     char *reg_save_area;
 } __va_list_struct;
 
-/* Avoid conflicting definition for va_list on musl libc */
-#if !defined __DEFINED_va_list || defined __TCC_NEEDS_va_list
 typedef __va_list_struct va_list[1];
-#undef __DEFINED_va_list
-#define __DEFINED_va_list
-#endif
 
 void __va_start(__va_list_struct *ap, void *fp);
 void *__va_arg(__va_list_struct *ap, int arg_type, int size, int align);

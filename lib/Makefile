@@ -7,20 +7,20 @@ include $(TOP)/Makefile
 VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
-BIN = $(TOP)/libtcc1$(if $(CROSS_TARGET),-$(CROSS_TARGET)).a
+BIN = $(TOP)/$(X)libtcc1.a
 
-TCC = $(TOP)/$(X)tcc$(EXESUF)
-XCC = $(TCC)
-XAR = $(TCC) -ar
+XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
+XCC = $(XTCC)
+XAR = $(XTCC) -ar
 XFLAGS-unx = -B$(TOPSRC)
 XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
 XFLAGS = $(XFLAGS$(XCFG))
 XCFG = $(or $(findstring -win,$T),-unx)
 
-# in order to use gcc, tyoe: make <target>lib-usegcc=yes
-armlib-usegcc ?= no
+# in order to use gcc, tyoe: make <target>-libtcc1-usegcc=yes
+arm-libtcc1-usegcc ?= no
 
-ifeq "$($(X)$(T)lib-usegcc)" "yes"
+ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XCC = $(CC)
  XAR = $(AR)
  XFLAGS = $(CFLAGS) -fPIC

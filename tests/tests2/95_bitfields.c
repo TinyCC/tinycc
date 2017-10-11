@@ -70,7 +70,7 @@
 {
     struct M P __s {
 	int a;
-	char b;
+	signed char b;
 	int x : 12, y : 4, : 0, : 4, z : 3;
 	char d;
     };

@@ -75,6 +75,8 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    sym->type.t &= ~VT_EXTERN;
 	    /* Mark that this asm symbol doesn't need to be fed back.  */
 	    sym->a.dllimport = 1;
+	} else {
+	    sym->type.t |= VT_STATIC;
 	}
     }
     return sym;

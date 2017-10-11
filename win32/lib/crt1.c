@@ -16,11 +16,6 @@
 #define _PC_53          0x00010000 // 53 bits
 #define _PC_64          0x00000000 // 64 bits
 
-typedef struct
-{
-    int newmode;
-} _startupinfo;
-
 #ifdef _UNICODE
 #define __tgetmainargs __wgetmainargs
 #define _tstart _wstart
@@ -33,6 +28,7 @@ typedef struct
 #define _runtmain _runmain
 #endif
 
+typedef struct { int newmode; } _startupinfo;
 int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int globb, _startupinfo*);
 void __cdecl __set_app_type(int apptype);
 unsigned int __cdecl _controlfp(unsigned int new_value, unsigned int mask);
@@ -44,23 +40,19 @@ int _dowildcard;
 void _tstart(void)
 {
     __TRY__
-    int ret;
-    _startupinfo start_info;
+    _startupinfo start_info = {0};
 
     // Sets the current application type
     __set_app_type(_CONSOLE_APP);
 
     // Set default FP precision to 53 bits (8-byte double)
-    // _MCW_PC (Precision control) is not supported on
-    // the ARM and x64 architectures
-#ifdef __i386
+    // _MCW_PC (Precision control) is not supported on ARM
+#if defined __i386__ || defined __x86_64__
     _controlfp(_PC_53, _MCW_PC);
 #endif
 
-    start_info.newmode = 0;
     __tgetmainargs( &__argc, &__targv, &_tenviron, _dowildcard, &start_info);
-    ret = _tmain(__argc, __targv, _tenviron);
-    exit(ret);
+    exit(_tmain(__argc, __targv, _tenviron));
 }
 
 int _runtmain(int argc, /* as tcc passed in */ char **argv)
@@ -78,8 +70,7 @@ int _runtmain(int argc, /* as tcc passed in */ char **argv)
     __argc = argc;
     __targv = argv;
 #endif
-
-#ifdef __i386
+#if defined __i386__ || defined __x86_64__
     _controlfp(_PC_53, _MCW_PC);
 #endif
     return _tmain(__argc, __targv, _tenviron);

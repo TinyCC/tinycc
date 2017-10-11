@@ -116,6 +116,12 @@ ST_FUNC int ieee_finite(double d)
     return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
 }
 
+/* compiling intel long double natively */
+#if (defined __i386__ || defined __x86_64__) \
+    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+# define TCC_IS_NATIVE_387
+#endif
+
 ST_FUNC void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
@@ -267,9 +273,6 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
     next();
     decl(VT_CONST);
-    if (tok != TOK_EOF)
-        expect("declaration");
-
     gen_inline_functions(s1);
     check_vstack();
     /* end of translation unit info */
@@ -2411,6 +2414,9 @@ static void gen_cast(CType *type)
         df = is_float(dbt);
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
         p = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == (VT_CONST | VT_SYM);
+#if !defined TCC_IS_NATIVE && !defined TCC_IS_NATIVE_387
+        c &= dbt != VT_LDOUBLE;
+#endif
         if (c) {
             /* constant case: we can do it now */
             /* XXX: in ISOC, cannot do it if error in convert */
@@ -3096,6 +3102,8 @@ ST_FUNC void vstore(void)
             /* ... and discard */
             vpop();
         }
+    } else if (dbt == VT_VOID) {
+        --vtop;
     } else {
 #ifdef CONFIG_TCC_BCHECK
             /* bound check case */
@@ -5925,7 +5933,10 @@ static void block(int *bsym, int *csym, int is_expr)
         if (tok != ';') {
             gexpr();
             gen_assign_cast(&func_vt);
-            gfunc_return(&func_vt);
+            if ((func_vt.t & VT_BTYPE) == VT_VOID)
+                vtop--;
+            else
+                gfunc_return(&func_vt);
         }
         skip(';');
         /* jump unless last stmt in top-level block */
@@ -6483,7 +6494,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 		*(double *)ptr = vtop->c.d;
 		break;
 	    case VT_LDOUBLE:
-#if (defined __i386__ || defined __x86_64__) && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+#if defined TCC_IS_NATIVE_387
                 if (sizeof (long double) >= 10) /* zero pad ten-byte LD */
                     memcpy(ptr, &vtop->c.ld, 10);
 #ifdef __TINYC__
@@ -7091,17 +7102,22 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 next();
                 continue;
             }
-            if (l == VT_CONST &&
-                (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
+            if (l != VT_CONST)
+                break;
+            if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
                 /* global asm block */
                 asm_global_instr();
                 continue;
             }
-            /* special test for old K&R protos without explicit int
-               type. Only accepted when defining global data */
-            if (l != VT_CONST || tok < TOK_UIDENT)
+            if (tok >= TOK_UIDENT) {
+               /* special test for old K&R protos without explicit int
+                  type. Only accepted when defining global data */
+                btype.t = VT_INT;
+            } else {
+                if (tok != TOK_EOF)
+                    expect("declaration");
                 break;
-            btype.t = VT_INT;
+            }
         }
         if (tok == ';') {
 	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {

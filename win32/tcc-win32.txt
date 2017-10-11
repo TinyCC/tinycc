@@ -108,6 +108,8 @@
     ------------------------
     * You can use the MinGW and MSYS tools available at
         http://www.mingw.org
+        http://www.mingw-w64.org
+        http://www.msys2.org
 
       Untar the TCC archive and type in the MSYS shell:
         ./configure [--prefix installpath]
@@ -116,28 +118,21 @@
 
       The default install location is c:\Program Files\tcc
 
+      Cygwin can be used too with its mingw cross-compiler installed:
+        ./configure --cross-prefix=i686-w64-mingw32-
+        (the prefix may vary)
+
     * Alternatively you can compile TCC with just GCC from MinGW using
         > build-tcc.bat (from the win32 directory)
 
       Also MSVC can be used with the "VSTools Developer Command Prompt":
         > build-tcc.bat -c cl
 
-      or with a tcc (needs to be in a different directory)
+      or with an existing tcc (needs to be in a different directory)
         > build-tcc.bat -c some-tcc-dir\tcc.exe
 
       Also you can copy/install everything into another directory:
         > build-tcc.bat -i <dir>
-
-    * You can also bootstrap a native tcc Windows toolchain with cygwin.
-       https://www.cygwin.com/
-
-      Install Base, gcc, make
-      Launch Cygwin Terminal
-        > make
-      or to force 32bit executables (including 64bit backend)
-        > make TARGET=32
-      or to force 64bit executables (including 32bit backend)
-        > make TARGET=64
 
     Limitations:
     ------------

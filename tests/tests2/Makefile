@@ -70,7 +70,7 @@ all test tests2.all: $(filter-out $(SKIP),$(TESTS)) ;
 T1 = $(TCC) $(FLAGS) $< -o a.exe && ./a.exe $(ARGS)
 T2 = $(TCC) $(FLAGS) -run $< $(ARGS)
 T3 = $(FILTER) >$*.output 2>&1 || true \
-     && diff -Nbu -I "^\#" $(filter %.expect,$^) $*.output \
+     && diff -Nbu $(filter %.expect,$^) $*.output \
      && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
 
 # run single test and update .expect file, e.g. "make tests2.37+"
