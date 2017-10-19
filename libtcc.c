@@ -1020,7 +1020,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         file->line_num = 0;
 
 #ifdef TCC_TARGET_MACHO
-        if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), "dylib"))
+        if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), ".dylib"))
             obj_type = AFF_BINTYPE_DYN;
 #endif
 
