@@ -247,10 +247,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
     }
     relocate_plt(s1);
 
-#ifdef _WIN64
-    *(void**)ptr = win64_add_function_table(s1);
-#endif
-
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (0 == (s->sh_flags & SHF_ALLOC))
@@ -267,6 +263,11 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
         if (s->sh_flags & SHF_EXECINSTR)
             set_pages_executable((char*)ptr + ptr_diff, length);
     }
+
+#ifdef _WIN64
+    *(void**)mem = win64_add_function_table(s1);
+#endif
+
     return 0;
 }
 
