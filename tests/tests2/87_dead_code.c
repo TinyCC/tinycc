@@ -26,6 +26,36 @@ static void kb_wait_1(void)
       timeout--;
   } while (timeout);
 }
+
+static int global;
+
+static void foo(int i)
+{
+  global+=i;
+  printf ("g=%d\n", global);
+}
+
+static int check(void)
+{
+  printf ("check %d\n", global);
+  return 1;
+}
+
+static void dowhile(void)
+{
+  do {
+      foo(1);
+      if (global == 1) {
+	  continue;
+      } else if (global == 2) {
+	  continue;
+      }
+      /* The following break shouldn't disable the check() call,
+         as it's reachable by the continues above.  */
+      break;
+  } while (check());
+}
+
 int main (void)
 {
   int i = 1;
@@ -118,5 +148,8 @@ enterloop3:
 	  printf ("error4\n");
       }
   }
+
+  dowhile();
+
   return 0;
 }

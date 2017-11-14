@@ -6088,6 +6088,8 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
+	if (b)
+	    nocode_wanted = saved_nocode_wanted;
 	gexpr();
 	c = gvtst(0, 0);
 	gsym_addr(c, d);
