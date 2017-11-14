@@ -257,7 +257,8 @@ ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 /* output constant with relocation if 'r & VT_SYM' is true */
 ST_FUNC void gen_addrpc32(int r, Sym *sym, int c)
 {
-    greloca(cur_text_section, sym, ind, R_X86_64_PC32, 0);
+    if (r & VT_SYM)
+        greloca(cur_text_section, sym, ind, R_X86_64_PC32, c-4), c=4;
     gen_le32(c-4);
 }
 
