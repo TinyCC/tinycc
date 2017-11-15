@@ -288,12 +288,18 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
     op_reg = REG_VALUE(op_reg) << 3;
     if ((r & VT_VALMASK) == VT_CONST) {
         /* constant memory reference */
-        o(0x05 | op_reg);
-        if (is_got) {
-            gen_gotpcrel(r, sym, c);
-        } else {
-            gen_addrpc32(r, sym, c);
-        }
+	if (!(r & VT_SYM)) {
+	    /* Absolute memory reference */
+	    o(0x04 | op_reg); /* [sib] | destreg */
+	    oad(0x25, c);     /* disp32 */
+	} else {
+	    o(0x05 | op_reg); /* (%rip)+disp32 | destreg */
+	    if (is_got) {
+		gen_gotpcrel(r, sym, c);
+	    } else {
+		gen_addrpc32(r, sym, c);
+	    }
+	}
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
         /* currently, we use only ebp as base */
         if (c == (char)c) {
@@ -381,6 +387,19 @@ void load(int r, SValue *sv)
                 fr = get_reg(RC_INT);
             load(fr, &v1);
         }
+	if (fc != sv->c.i) {
+	    /* If the addends doesn't fit into a 32bit signed
+	       we must use a 64bit move.  We've checked above
+	       that this doesn't have a sym associated.  */
+	    v1.type.t = VT_LLONG;
+	    v1.r = VT_CONST;
+	    v1.c.i = sv->c.i;
+	    fr = r;
+	    if (!(reg_classes[fr] & (RC_INT|RC_R11)))
+	        fr = get_reg(RC_INT);
+	    load(fr, &v1);
+	    fc = 0;
+	}
         ll = 0;
 	/* Like GCC we can load from small enough properly sized
 	   structs and unions as well.
