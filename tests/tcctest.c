@@ -3345,6 +3345,25 @@ void test_asm_dead_code(void)
   }));
 }
 
+void test_asm_call(void)
+{
+#if defined __x86_64__ && !defined _WIN64
+  static char str[] = "PATH";
+  char *s;
+  /* This tests if a reference to an undefined symbol from an asm
+     block, which isn't otherwise referenced in this file, is correctly
+     regarded as global symbol, so that it's resolved by other object files
+     or libraries.  We chose getenv here, which isn't used anywhere else
+     in this file.  (If we used e.g. printf, which is used we already
+     would have a global symbol entry, not triggering the bug which is
+     tested here).  */
+  /* two pushes so stack remains aligned */
+  asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi; call getenv; pop %%rdi; pop %%rdi"
+		: "=a" (s) : "r" (str));
+  printf("asmd: %s\n", s);
+#endif
+}
+
 void asm_test(void)
 {
     char buf[128];
@@ -3431,6 +3450,7 @@ void asm_test(void)
     test_high_clobbers();
     trace_console(8, 8);
     test_asm_dead_code();
+    test_asm_call();
     return;
  label1:
     goto label2;
