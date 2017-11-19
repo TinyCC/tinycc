@@ -52,7 +52,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
     Sym *sym = label_find(name);
     if (!sym) {
 	sym = label_push(&tcc_state->asm_labels, name, 0);
-	sym->type.t = VT_VOID | VT_EXTERN;
+	sym->type.t = VT_VOID | VT_STATIC | VT_EXTERN;
 	if (!csym) {
 	    csym = sym_find(name);
 	    /* We might be called for an asm block from inside a C routine
@@ -72,7 +72,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    sym->r = esym->st_shndx;
 	    sym->jnext = esym->st_value;
 	    /* XXX can't yet store st_size anywhere.  */
-	    sym->type.t &= ~VT_EXTERN;
+	    sym->type.t = VT_VOID | (csym->type.t & VT_STATIC);
 	    /* Mark that this asm symbol doesn't need to be fed back.  */
 	    sym->a.dllimport = 1;
 	}
@@ -409,6 +409,24 @@ static Sym* set_symbol(TCCState *s1, int label)
     return asm_new_label1(s1, label, 0, e.sym ? e.sym->r : SHN_ABS, n);
 }
 
+/* Patch ELF symbol associated with SYM based on the assemblers
+   understanding.  */
+static void patch_binding(Sym *sym)
+{
+    ElfW(Sym) *esym;
+    if (0 == sym->c)
+        return;
+    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+    if (sym->a.visibility)
+        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
+            | sym->a.visibility;
+
+    esym->st_info = ELFW(ST_INFO)(sym->a.weak ? STB_WEAK
+				  : (sym->type.t & VT_STATIC) ? STB_LOCAL
+				  : STB_GLOBAL,
+				  ELFW(ST_TYPE)(esym->st_info));
+}
+
 static void asm_free_labels(TCCState *st)
 {
     Sym *s, *s1;
@@ -418,13 +436,17 @@ static void asm_free_labels(TCCState *st)
         s1 = s->prev;
         /* define symbol value in object file */
 	s->type.t &= ~VT_EXTERN;
-        if (s->r && !s->a.dllimport) {
-            if (s->r == SHN_ABS)
-                sec = SECTION_ABS;
-            else
-                sec = st->sections[s->r];
-            put_extern_sym2(s, sec, s->jnext, 0, 0);
-        }
+	if (!s->a.dllimport) {
+	    if (s->r) {
+		if (s->r == SHN_ABS)
+		  sec = SECTION_ABS;
+		else
+		  sec = st->sections[s->r];
+		put_extern_sym2(s, sec, s->jnext, 0, 0);
+	    } else /* undefined symbols are global */
+	        s->type.t &= ~VT_STATIC;
+	}
+	patch_binding(s);
         /* remove label */
         table_ident[s->v - TOK_IDENT]->sym_label = NULL;
         sym_free(s);
