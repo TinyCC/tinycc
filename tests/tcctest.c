@@ -3358,7 +3358,13 @@ void test_asm_call(void)
      would have a global symbol entry, not triggering the bug which is
      tested here).  */
   /* two pushes so stack remains aligned */
-  asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi; call getenv; pop %%rdi; pop %%rdi"
+  asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi;"
+#if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__))
+		"call getenv@plt;"
+#else
+		"call getenv;"
+#endif
+		"pop %%rdi; pop %%rdi"
 		: "=a" (s) : "r" (str));
   printf("asmd: %s\n", s);
 #endif
