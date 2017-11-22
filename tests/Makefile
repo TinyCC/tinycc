@@ -16,6 +16,7 @@ TESTS = \
  memtest \
  dlltest \
  abitest \
+ asm-c-connect-test \
  vla_test-run \
  cross-test \
  tests2-dir \
@@ -44,7 +45,7 @@ ifeq ($(CONFIG_arm_eabi),yes)
  TESTS := $(filter-out test3,$(TESTS))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
- TESTS := $(filter-out dlltest,$(TESTS))
+ TESTS := $(filter-out dlltest asm-c-connect-test,$(TESTS))
 endif
 ifndef CONFIG_cross
  TESTS := $(filter-out cross-%,$(TESTS))
@@ -231,6 +232,13 @@ vla_test-run: vla_test$(EXESUF)
 	@echo ------------ $@ ------------
 	./vla_test$(EXESUF)
 
+asm-c-connect$(EXESUF): asm-c-connect-1.c asm-c-connect-2.c
+	$(TCC) -o $@ $^
+
+asm-c-connect-test: asm-c-connect$(EXESUF)
+	@echo ------------ $@ ------------
+	./asm-c-connect$(EXESUF)
+
 cross-test :
 	@echo ------------ $@ ------------
 	$(TOP)/i386-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
@@ -264,6 +272,7 @@ cache: tcc_g
 clean:
 	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc
 	rm -f *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234]
+	rm -f asm-c-connect$(EXESUF)
 	rm -f ex? tcc_g weaktest.*.txt *.def
 	@$(MAKE) -C tests2 $@
 	@$(MAKE) -C pp $@

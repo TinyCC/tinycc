@@ -275,6 +275,11 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     decl(VT_CONST);
     gen_inline_functions(s1);
     check_vstack();
+
+#ifdef CONFIG_TCC_ASM
+    asm_free_labels(s1);
+#endif
+
     /* end of translation unit info */
     tcc_debug_end(s1);
     return 0;

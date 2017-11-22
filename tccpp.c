@@ -432,6 +432,7 @@ static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
     ts->sym_label = NULL;
     ts->sym_struct = NULL;
     ts->sym_identifier = NULL;
+    ts->sym_asm_label = NULL;
     ts->len = len;
     ts->hash_next = NULL;
     memcpy(ts->str, str, len);

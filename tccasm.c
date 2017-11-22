@@ -31,9 +31,26 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
     return ts->tok;
 }
 
-ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
 static Sym sym_dot;
+
+static Sym *asm_label_find(int v)
+{
+    v -= TOK_IDENT;
+    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+        return NULL;
+    return table_ident[v]->sym_asm_label;
+}
+
+static Sym *asm_label_push(Sym **ptop, int v)
+{
+    Sym *s, **ps;
+    s = sym_push2(ptop, v, 0, 0);
+    ps = &table_ident[v - TOK_IDENT]->sym_asm_label;
+    s->prev_tok = *ps;
+    *ps = s;
+    return s;
+}
 
 /* Return a symbol we can use inside the assembler, having name NAME.
    The assembler symbol table is different from the C symbol table
@@ -49,10 +66,10 @@ static Sym sym_dot;
    we look up NAME in the C symbol table and use that.  */
 ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 {
-    Sym *sym = label_find(name);
+    Sym *sym = asm_label_find(name);
     if (!sym) {
-	sym = label_push(&tcc_state->asm_labels, name, 0);
-	sym->type.t = VT_VOID | VT_STATIC | VT_EXTERN;
+	sym = asm_label_push(&tcc_state->asm_labels, name);
+	sym->type.t = VT_VOID | VT_EXTERN;
 	if (!csym) {
 	    csym = sym_find(name);
 	    /* We might be called for an asm block from inside a C routine
@@ -75,6 +92,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    sym->type.t = VT_VOID | (csym->type.t & VT_STATIC);
 	    /* Mark that this asm symbol doesn't need to be fed back.  */
 	    sym->a.dllimport = 1;
+	    sym->a.dllexport = !(csym->type.t & VT_STATIC);
 	}
     }
     return sym;
@@ -97,7 +115,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         if (*p == 'b' || *p == 'f') {
             /* backward or forward label */
             label = asm_get_local_label_name(s1, n);
-            sym = label_find(label);
+            sym = asm_label_find(label);
             if (*p == 'b') {
                 /* backward : find the last corresponding defined label */
                 if (sym && sym->r == 0)
@@ -108,7 +126,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 /* forward */
                 if (!sym || sym->r) {
                     /* if the last label is defined, then define a new one */
-                    sym = label_push(&s1->asm_labels, label, 0);
+                    sym = asm_label_push(&s1->asm_labels, label);
                     sym->type.t = VT_STATIC | VT_VOID | VT_EXTERN;
                 }
             }
@@ -355,14 +373,12 @@ ST_FUNC int asm_int_expr(TCCState *s1)
     return e.v;
 }
 
-/* NOTE: the same name space as C labels is used to avoid using too
-   much memory when storing labels in TokenStrings */
 static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
                            int sh_num, int value)
 {
     Sym *sym;
 
-    sym = label_find(label);
+    sym = asm_label_find(label);
     if (sym) {
 	/* A VT_EXTERN symbol, even if it has a section is considered
 	   overridable.  This is how we "define" .set targets.  Real
@@ -379,11 +395,11 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
         }
     } else {
     new_label:
-        sym = label_push(&s1->asm_labels, label, 0);
+        sym = asm_label_push(&s1->asm_labels, label);
 	/* If we need a symbol to hold a value, mark it as
 	   tentative only (for .set).  If this is for a real label
 	   we'll remove VT_EXTERN.  */
-        sym->type.t = VT_STATIC | VT_VOID | VT_EXTERN;
+        sym->type.t = VT_VOID | (is_local ? VT_STATIC : 0) | VT_EXTERN;
     }
     sym->r = sh_num;
     sym->jnext = value;
@@ -427,28 +443,53 @@ static void patch_binding(Sym *sym)
 				  ELFW(ST_TYPE)(esym->st_info));
 }
 
-static void asm_free_labels(TCCState *st)
+ST_FUNC void asm_free_labels(TCCState *st)
 {
     Sym *s, *s1;
     Section *sec;
 
     for(s = st->asm_labels; s != NULL; s = s1) {
+	int was_ext = s->type.t & VT_EXTERN;
         s1 = s->prev;
-        /* define symbol value in object file */
+        /* define symbol value in object file and care for updating
+	   the C and asm symbols */
 	s->type.t &= ~VT_EXTERN;
 	if (!s->a.dllimport) {
+	    Sym *csym = sym_find(s->v);
+	    ElfW(Sym) *esym = NULL;
+	    if (csym) {
+		s->a.dllexport |= !(csym->type.t & VT_STATIC);
+		if (csym->c) {
+		    esym = &((ElfW(Sym) *)symtab_section->data)[csym->c];
+		    if (s->c) {
+			/* We have generated code and possibly relocs
+			   referencing the symtab entry s->c (the asm
+			   ELF symbol).  If that's undefined but the C
+			   symbol is defined, copy over the info.  */
+			ElfW(Sym) *asm_esym = &((ElfW(Sym) *)symtab_section->data)[s->c];
+			if (asm_esym->st_shndx == SHN_UNDEF) {
+			    *asm_esym = *esym;
+			}
+		    }
+		}
+	    }
+	    if (!s->a.dllexport)
+	      s->type.t |= VT_STATIC;
 	    if (s->r) {
 		if (s->r == SHN_ABS)
 		  sec = SECTION_ABS;
 		else
 		  sec = st->sections[s->r];
-		put_extern_sym2(s, sec, s->jnext, 0, 0);
+		/* !was_ext so that we run into an multi-def error if
+		   we defined it in C and in asm (non-tentatively) */
+		if (!esym || esym->st_shndx == SHN_UNDEF || !was_ext)
+		    put_extern_sym2(s, sec, s->jnext, 0, 0);
 	    } else /* undefined symbols are global */
-	        s->type.t &= ~VT_STATIC;
+	        s->type.t &= ~VT_STATIC, s->a.dllexport = 1;
+	    patch_binding(s);
 	}
-	patch_binding(s);
         /* remove label */
-        table_ident[s->v - TOK_IDENT]->sym_label = NULL;
+        table_ident[s->v - TOK_IDENT]->sym_asm_label = NULL;
         sym_free(s);
     }
     st->asm_labels = NULL;
@@ -709,7 +750,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             next();
             sym = get_asm_sym(tok, NULL);
 	    if (tok1 != TOK_ASMDIR_hidden)
-                sym->type.t &= ~VT_STATIC;
+                sym->type.t &= ~VT_STATIC, sym->a.dllexport = 1;
             if (tok1 == TOK_ASMDIR_weak)
                 sym->a.weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)
@@ -804,7 +845,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             Sym *sym;
 
             next();
-            sym = label_find(tok);
+            sym = asm_label_find(tok);
             if (!sym) {
                 tcc_error("label not found: %s", get_tok_str(tok, NULL));
             }
@@ -980,9 +1021,9 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
                 "__asm__("globl vide\nvide: ret");" */
                 Sym *sym = sym_find(opcode);
                 if (sym && (sym->type.t & VT_EXTERN) && global) {
-                    sym = label_find(opcode);
+                    sym = asm_label_find(opcode);
                     if (!sym) {
-                        sym = label_push(&s1->asm_labels, opcode, 0);
+                        sym = asm_label_push(&s1->asm_labels, opcode);
                         sym->type.t = VT_VOID | VT_EXTERN;
                     }
                 }
@@ -1004,7 +1045,6 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
         parse_flags &= ~PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     }
 
-    asm_free_labels(s1);
     parse_flags = saved_parse_flags;
     return 0;
 }
@@ -1019,6 +1059,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
     ret = tcc_assemble_internal(s1, do_preprocess, 1);
+    asm_free_labels(s1);
     cur_text_section->data_offset = ind;
     tcc_debug_end(s1);
     return ret;

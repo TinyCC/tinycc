@@ -383,6 +383,7 @@ typedef struct TokenSym {
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
+    struct Sym *sym_asm_label; /* direct pointer to asm label */
     int tok; /* token number */
     int len;
     char str[1];
@@ -1584,6 +1585,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 ST_FUNC int asm_int_expr(TCCState *s1);
 ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
+ST_FUNC void asm_free_labels(TCCState *st);
 /* ------------ i386-asm.c ------------ */
 ST_FUNC void gen_expr32(ExprValue *pe);
 #ifdef TCC_TARGET_X86_64
