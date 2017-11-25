@@ -91,8 +91,8 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	    /* XXX can't yet store st_size anywhere.  */
 	    sym->type.t = VT_VOID | (csym->type.t & VT_STATIC);
 	    /* Mark that this asm symbol doesn't need to be fed back.  */
-	    sym->a.dllimport = 1;
-	    sym->a.dllexport = !(csym->type.t & VT_STATIC);
+	    sym->a.asmcsym = 1;
+	    sym->a.asmexport = !(csym->type.t & VT_STATIC);
 	}
     }
     return sym;
@@ -454,11 +454,11 @@ ST_FUNC void asm_free_labels(TCCState *st)
         /* define symbol value in object file and care for updating
 	   the C and asm symbols */
 	s->type.t &= ~VT_EXTERN;
-	if (!s->a.dllimport) {
+	if (!s->a.asmcsym) {
 	    Sym *csym = sym_find(s->v);
 	    ElfW(Sym) *esym = NULL;
 	    if (csym) {
-		s->a.dllexport |= !(csym->type.t & VT_STATIC);
+		s->a.asmexport |= !(csym->type.t & VT_STATIC);
 		if (csym->c) {
 		    esym = &((ElfW(Sym) *)symtab_section->data)[csym->c];
 		    if (s->c) {
@@ -473,7 +473,7 @@ ST_FUNC void asm_free_labels(TCCState *st)
 		    }
 		}
 	    }
-	    if (!s->a.dllexport)
+	    if (!s->a.asmexport)
 	      s->type.t |= VT_STATIC;
 	    if (s->r) {
 		if (s->r == SHN_ABS)
@@ -485,7 +485,7 @@ ST_FUNC void asm_free_labels(TCCState *st)
 		if (!esym || esym->st_shndx == SHN_UNDEF || !was_ext)
 		    put_extern_sym2(s, sec, s->jnext, 0, 0);
 	    } else /* undefined symbols are global */
-	        s->type.t &= ~VT_STATIC, s->a.dllexport = 1;
+	        s->type.t &= ~VT_STATIC, s->a.asmexport = 1;
 	    patch_binding(s);
 	}
         /* remove label */
@@ -750,7 +750,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             next();
             sym = get_asm_sym(tok, NULL);
 	    if (tok1 != TOK_ASMDIR_hidden)
-                sym->type.t &= ~VT_STATIC, sym->a.dllexport = 1;
+                sym->type.t &= ~VT_STATIC, sym->a.asmexport = 1;
             if (tok1 == TOK_ASMDIR_weak)
                 sym->a.weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)

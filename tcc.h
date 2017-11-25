@@ -440,7 +440,9 @@ struct SymAttr {
     visibility  : 2,
     dllexport   : 1,
     dllimport   : 1,
-    unused      : 5;
+    asmcsym     : 1,
+    asmexport   : 1,
+    unused      : 3;
 };
 
 /* function attributes or temporary attributes for parsing */
