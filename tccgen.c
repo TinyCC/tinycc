@@ -286,14 +286,23 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 }
 
 /* ------------------------------------------------------------------------- */
+ST_FUNC ElfSym *elfsym(Sym *s)
+{
+  if (!s || !s->c)
+    return NULL;
+  if (s->c == -1)
+    return &tcc_state->esym_dot;
+  else
+    return &((ElfSym *)symtab_section->data)[s->c];
+}
+
 /* apply storage attributes to Elf symbol */
 
 static void update_storage(Sym *sym)
 {
-    ElfW(Sym) *esym;
-    if (0 == sym->c)
+    ElfSym *esym = elfsym(sym);
+    if (!esym)
         return;
-    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
     if (sym->a.visibility)
         esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
             | sym->a.visibility;
@@ -325,7 +334,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
                             int can_add_underscore)
 {
     int sym_type, sym_bind, sh_num, info, other, t;
-    ElfW(Sym) *esym;
+    ElfSym *esym;
     const char *name;
     char buf1[256];
 #ifdef CONFIG_TCC_BCHECK
@@ -402,7 +411,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = set_elf_sym(symtab_section, value, size, info, other, sh_num, name);
     } else {
-        esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+        esym = elfsym(sym);
         esym->st_value = value;
         esym->st_size = size;
         esym->st_shndx = sh_num;
@@ -569,21 +578,26 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
 }
 
 /* push a global identifier */
-ST_FUNC Sym *global_identifier_push(int v, int t, int c)
+ST_FUNC Sym *global_identifier_push_1(Sym **ptop, int v, int t, int c)
 {
     Sym *s, **ps;
-    s = sym_push2(&global_stack, v, t, c);
+    s = sym_push2(ptop, v, t, c);
     /* don't record anonymous symbol */
     if (v < SYM_FIRST_ANOM) {
         ps = &table_ident[v - TOK_IDENT]->sym_identifier;
         /* modify the top most local identifier, so that
            sym_identifier will point to 's' when popped */
-        while (*ps != NULL)
+        while (*ps != NULL && (*ps)->sym_scope)
             ps = &(*ps)->prev_tok;
-        s->prev_tok = NULL;
+        s->prev_tok = *ps;
         *ps = s;
     }
     return s;
+}
+
+static Sym *global_identifier_push(int v, int t, int c)
+{
+    return global_identifier_push_1(&global_stack, v, t, c);
 }
 
 /* pop symbols until top reaches 'b'.  If KEEP is non-zero don't really
@@ -834,9 +848,13 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
 /* Merge some storage attributes.  */
 static void patch_storage(Sym *sym, AttributeDef *ad, CType *type)
 {
-    if (type && !is_compatible_types(&sym->type, type))
-        tcc_error("incompatible types for redefinition of '%s'",
-            get_tok_str(sym->v, NULL));
+    if (type) {
+	if ((sym->type.t & VT_BTYPE) == VT_VOID) /* from asm */
+	    sym->type = *type;
+	else if (!is_compatible_types(&sym->type, type))
+	    tcc_error("incompatible types for redefinition of '%s'",
+                      get_tok_str(sym->v, NULL));
+    }
 #ifdef TCC_TARGET_PE
     if (sym->a.dllimport != ad->a.dllimport)
         tcc_error("incompatible dll linkage for redefinition of '%s'",
@@ -6426,9 +6444,9 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 	    (vtop->type.t & VT_BTYPE) != VT_PTR) {
 	    /* These come from compound literals, memcpy stuff over.  */
 	    Section *ssec;
-	    ElfW(Sym) *esym;
+	    ElfSym *esym;
 	    ElfW_Rel *rel;
-	    esym = &((ElfW(Sym) *)symtab_section->data)[vtop->sym->c];
+	    esym = elfsym(vtop->sym);
 	    ssec = tcc_state->sections[esym->st_shndx];
 	    memmove (ptr, ssec->data + esym->st_value, size);
 	    if (ssec->reloc) {
@@ -6895,8 +6913,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                     /* no init data, we won't add more to the symbol */
                     goto no_alloc;
                 } else if (sym->c) {
-                    ElfW(Sym) *esym;
-                    esym = &((ElfW(Sym) *)symtab_section->data)[sym->c];
+                    ElfSym *esym = elfsym(sym);
                     if (esym->st_shndx == data_section->sh_num)
                         tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
                 }
@@ -7030,8 +7047,7 @@ static void gen_function(Sym *sym)
     sym_pop(&local_stack, NULL, 0);
     /* end of function */
     /* patch symbol size */
-    ((ElfW(Sym) *)symtab_section->data)[sym->c].st_size = 
-        ind - func_ind;
+    elfsym(sym)->st_size = ind - func_ind;
     tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */
     cur_text_section = NULL;
@@ -7209,6 +7225,11 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 sym = sym_find(v);
                 if (sym) {
                     Sym *ref;
+		    /* If type is VT_VOID the symbol was created by tccasm
+		       first, and we see the first reference from C now. */
+		    if ((sym->type.t & VT_BTYPE) == VT_VOID)
+		        sym->type = type;
+
                     if ((sym->type.t & VT_BTYPE) != VT_FUNC)
                         goto func_error1;
 
@@ -7330,12 +7351,12 @@ found:
                         sym = external_sym(v, &type, r, &ad);
                         if (ad.alias_target) {
                             Section tsec;
-                            ElfW(Sym) *esym;
+                            ElfSym *esym;
                             Sym *alias_target;
                             alias_target = sym_find(ad.alias_target);
-                            if (!alias_target || !alias_target->c)
+                            esym = elfsym(alias_target);
+                            if (!esym)
                                 tcc_error("unsupported forward __alias__ attribute");
-                            esym = &((ElfW(Sym) *)symtab_section->data)[alias_target->c];
                             tsec.sh_num = esym->st_shndx;
                             /* Local statics have a scope until now (for
                                warnings), remove it here.  */

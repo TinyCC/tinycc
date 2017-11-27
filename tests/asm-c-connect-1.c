@@ -14,11 +14,13 @@ static int x1_c(void)
 
 asm(".text;"_"x1: call "_"x1_c; ret");
 
+void callx4(void);
 int main(int argc, char *argv[])
 {
     asm("call "_"x1");
     asm("call "_"x2");
     asm("call "_"x3");
+    callx4();
     return 0;
 }
 
@@ -30,3 +32,8 @@ int x2(void)
 }
 
 extern int x3(void);
+
+void x4(void)
+{
+    printf("x4\n");
+}

@@ -356,6 +356,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 /* target address type */
 #define addr_t ElfW(Addr)
+#define ElfSym ElfW(Sym)
 
 #if PTR_SIZE == 8 && !defined TCC_TARGET_PE
 # define LONG_SIZE 8
@@ -383,7 +384,6 @@ typedef struct TokenSym {
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
-    struct Sym *sym_asm_label; /* direct pointer to asm label */
     int tok; /* token number */
     int len;
     char str[1];
@@ -440,9 +440,8 @@ struct SymAttr {
     visibility  : 2,
     dllexport   : 1,
     dllimport   : 1,
-    asmcsym     : 1,
     asmexport   : 1,
-    unused      : 3;
+    unused      : 4;
 };
 
 /* function attributes or temporary attributes for parsing */
@@ -799,6 +798,7 @@ struct TCCState {
     int nb_sym_attrs;
     /* tiny assembler state */
     Sym *asm_labels;
+    ElfSym esym_dot;
 
 #ifdef TCC_TARGET_PE
     /* PE info */
@@ -1147,7 +1147,7 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
 ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
 ST_INLN Sym *struct_find(int v);
 ST_INLN Sym *sym_find(int v);
-ST_FUNC Sym *global_identifier_push(int v, int t, int c);
+ST_FUNC Sym *global_identifier_push_1(Sym **, int v, int t, int c);
 
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
@@ -1316,6 +1316,7 @@ ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void vpushi(int v);
+ST_FUNC ElfSym *elfsym(Sym *);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
@@ -1618,6 +1619,8 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 # define ST_PE_IMPORT 0x20
 # define ST_PE_STDCALL 0x40
 #endif
+#define ST_ASM_SET 0x04
+
 /* ------------ tccrun.c ----------------- */
 #ifdef TCC_IS_NATIVE
 #ifdef CONFIG_TCC_STATIC

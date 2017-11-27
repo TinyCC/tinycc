@@ -500,12 +500,13 @@ ST_FUNC void gen_expr64(ExprValue *pe)
 static void gen_disp32(ExprValue *pe)
 {
     Sym *sym = pe->sym;
-    if (sym && sym->r == cur_text_section->sh_num) {
+    ElfSym *esym = elfsym(sym);
+    if (esym && esym->st_shndx == cur_text_section->sh_num) {
         /* same section: we can output an absolute value. Note
            that the TCC compiler behaves differently here because
            it always outputs a relocation to ease (future) code
            elimination in the linker */
-        gen_le32(pe->v + sym->jnext - ind - 4);
+        gen_le32(pe->v + esym->st_value - ind - 4);
     } else {
         if (sym && sym->type.t == VT_VOID) {
             sym->type.t = VT_FUNC;
@@ -1017,16 +1018,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
     if (pa->instr_type & OPC_B)
         v += s >= 1;
     if (nb_ops == 1 && pa->op_type[0] == OPT_DISP8) {
-        Sym *sym;
+	ElfSym *esym;
         int jmp_disp;
 
         /* see if we can really generate the jump with a byte offset */
-        sym = ops[0].e.sym;
-        if (!sym)
+	esym = elfsym(ops[0].e.sym);
+        if (!esym || esym->st_shndx != cur_text_section->sh_num)
             goto no_short_jump;
-        if (sym->r != cur_text_section->sh_num)
-            goto no_short_jump;
-        jmp_disp = ops[0].e.v + sym->jnext - ind - 2 - (v >= 0xff);
+        jmp_disp = ops[0].e.v + esym->st_value - ind - 2 - (v >= 0xff);
         if (jmp_disp == (int8_t)jmp_disp) {
             /* OK to generate jump */
 	    ops[0].e.sym = 0;

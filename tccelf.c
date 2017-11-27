@@ -310,7 +310,8 @@ static void rebuild_hash(Section *s, unsigned int nb_buckets)
 
     sym = (ElfW(Sym) *)s->data + 1;
     for(sym_index = 1; sym_index < nb_syms; sym_index++) {
-        if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
+        if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL
+	    || sym->st_shndx == SHN_UNDEF) {
             h = elf_hash(strtab + sym->st_name) % nb_buckets;
             *ptr = hash[h];
             hash[h] = sym_index;
@@ -349,8 +350,9 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
         int *ptr, *base;
         ptr = section_ptr_add(hs, sizeof(int));
         base = (int *)hs->data;
-        /* only add global or weak symbols */
-        if (ELFW(ST_BIND)(info) != STB_LOCAL) {
+        /* only add global, weak or undef symbols.  The latter might
+	   become global late (from asm references).  */
+        if (ELFW(ST_BIND)(info) != STB_LOCAL || shndx == SHN_UNDEF) {
             /* add another hashing entry */
             nbuckets = base[0];
             h = elf_hash((unsigned char *) name) % nbuckets;
@@ -486,6 +488,10 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
                 /* data symbol keeps precedence over common/bss */
             } else if (s == tcc_state->dynsymtab_section) {
                 /* we accept that two DLL define the same symbol */
+	    } else if (esym->st_other & ST_ASM_SET) {
+		/* If the existing symbol came from an asm .set
+		   we can override.  */
+		goto do_patch;
             } else {
 #if 0
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
