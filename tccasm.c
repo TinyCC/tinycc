@@ -44,11 +44,11 @@ static Sym *asm_label_find(int v)
 
 static Sym *asm_label_push(int v, int t)
 {
-    Sym *sym = global_identifier_push_1(&tcc_state->asm_labels, v, t, 0);
+    Sym *sym = global_identifier_push(v, t, 0);
     /* We always add VT_EXTERN, for sym definition that's tentative
        (for .set, removed for real defs), for mere references it's correct
        as is.  */
-    sym->type.t |= VT_VOID | VT_EXTERN;
+    sym->type.t |= VT_ASM | VT_EXTERN;
     sym->r = VT_CONST | VT_SYM;
     return sym;
 }
@@ -149,7 +149,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         pe->v = 0;
         pe->sym = &sym_dot;
 	pe->pcrel = 0;
-        sym_dot.type.t = VT_VOID | VT_STATIC;
+        sym_dot.type.t = VT_ASM | VT_STATIC;
 	sym_dot.c = -1;
         tcc_state->esym_dot.st_shndx = cur_text_section->sh_num;
         tcc_state->esym_dot.st_value = ind;
@@ -371,7 +371,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
 	   definitions won't have VT_EXTERN set.  */
         if (esym && esym->st_shndx != SHN_UNDEF && !(sym->type.t & VT_EXTERN)) {
             /* the label is already defined */
-            if (!is_local) {
+            if (is_local != 1) {
                 tcc_error("assembler label '%s' already defined", 
                       get_tok_str(label, NULL));
             } else {
@@ -381,13 +381,22 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
         }
     } else {
     new_label:
-        sym = asm_label_push(label, is_local ? VT_STATIC : 0);
+        sym = asm_label_push(label, is_local == 1 ? VT_STATIC : 0);
     }
     if (!sym->c)
       put_extern_sym2(sym, NULL, 0, 0, 0);
     esym = elfsym(sym);
     esym->st_shndx = sh_num;
     esym->st_value = value;
+
+    if (is_local != 2)
+        sym->type.t &= ~VT_EXTERN;
+
+    if (IS_ASM_SYM(sym) && !(sym->type.t & VT_ASM_GLOBAL)) {
+        sym->type.t |= VT_STATIC;
+        update_storage(sym);
+    }
+
     return sym;
 }
 
@@ -410,37 +419,9 @@ static Sym* set_symbol(TCCState *s1, int label)
     esym = elfsym(e.sym);
     if (esym)
 	n += esym->st_value;
-    sym = asm_new_label1(s1, label, 0, esym ? esym->st_shndx : SHN_ABS, n);
+    sym = asm_new_label1(s1, label, 2, esym ? esym->st_shndx : SHN_ABS, n);
     elfsym(sym)->st_other |= ST_ASM_SET;
     return sym;
-}
-
-ST_FUNC void asm_free_labels(TCCState *st)
-{
-    Sym *s, *s1;
-
-    for(s = st->asm_labels; s != NULL; s = s1) {
-	ElfSym *esym = elfsym(s);
-        s1 = s->prev;
-        /* Possibly update binding and visibility from asm directives
-	   if the symbol has no C decl (type is VT_VOID).*/
-	s->type.t &= ~VT_EXTERN;
-	if (esym && s->type.t == VT_VOID) {
-	    if (!s->a.asmexport && esym->st_shndx != SHN_UNDEF)
-	        s->type.t |= VT_STATIC;
-	    if (s->a.visibility)
-	        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
-		                 | s->a.visibility;
-	    esym->st_info = ELFW(ST_INFO)(s->a.weak ? STB_WEAK
-					  : (s->type.t & VT_STATIC) ? STB_LOCAL
-					  : STB_GLOBAL,
-					  ELFW(ST_TYPE)(esym->st_info));
-	}
-        /* remove label */
-        table_ident[s->v - TOK_IDENT]->sym_identifier = s->prev_tok;
-        sym_free(s);
-    }
-    st->asm_labels = NULL;
 }
 
 static void use_section1(TCCState *s1, Section *sec)
@@ -696,15 +677,18 @@ static void asm_parse_directive(TCCState *s1, int global)
 	tok1 = tok;
 	do { 
             Sym *sym;
-
             next();
             sym = get_asm_sym(tok, NULL);
-	    if (tok1 != TOK_ASMDIR_hidden)
-                sym->type.t &= ~VT_STATIC, sym->a.asmexport = 1;
+	    if (tok1 != TOK_ASMDIR_hidden) {
+                sym->type.t &= ~VT_STATIC;
+                if (IS_ASM_SYM(sym))
+                    sym->type.t |= VT_ASM_GLOBAL;
+            }
             if (tok1 == TOK_ASMDIR_weak)
                 sym->a.weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)
 	        sym->a.visibility = STV_HIDDEN;
+            update_storage(sym);
             next();
 	} while (tok == ',');
 	break;
@@ -947,7 +931,6 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
         } else if (tok >= TOK_ASMDIR_FIRST && tok <= TOK_ASMDIR_LAST) {
             asm_parse_directive(s1, global);
         } else if (tok == TOK_PPNUM) {
-	    Sym *sym;
             const char *p;
             int n;
             p = tokc.str.data;
@@ -955,9 +938,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
             if (*p != '\0')
                 expect("':'");
             /* new local label */
-            sym = asm_new_label(s1, asm_get_local_label_name(s1, n), 1);
-	    /* Remove the marker for tentative definitions.  */
-	    sym->type.t &= ~VT_EXTERN;
+            asm_new_label(s1, asm_get_local_label_name(s1, n), 1);
             next();
             skip(':');
             goto redo;
@@ -967,8 +948,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
             next();
             if (tok == ':') {
                 /* new label */
-                Sym *sym = asm_new_label(s1, opcode, 0);
-		sym->type.t &= ~VT_EXTERN;
+                asm_new_label(s1, opcode, 0);
                 next();
                 goto redo;
             } else if (tok == '=') {
@@ -998,7 +978,6 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
     ret = tcc_assemble_internal(s1, do_preprocess, 1);
-    asm_free_labels(s1);
     cur_text_section->data_offset = ind;
     tcc_debug_end(s1);
     return ret;

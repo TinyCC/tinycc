@@ -440,8 +440,7 @@ struct SymAttr {
     visibility  : 2,
     dllexport   : 1,
     dllimport   : 1,
-    asmexport   : 1,
-    unused      : 4;
+    unused      : 5;
 };
 
 /* function attributes or temporary attributes for parsing */
@@ -796,8 +795,8 @@ struct TCCState {
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
     int nb_sym_attrs;
+
     /* tiny assembler state */
-    Sym *asm_labels;
     ElfSym esym_dot;
 
 #ifdef TCC_TARGET_PE
@@ -910,6 +909,11 @@ struct filespec {
 /* type mask (except storage) */
 #define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
 #define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
+
+/* symbol was created by tccasm.c first */
+#define VT_ASM (VT_VOID | VT_UNSIGNED)
+#define VT_ASM_GLOBAL VT_DEFSIGN
+#define IS_ASM_SYM(sym) (((sym)->type.t & (VT_BTYPE | VT_ASM)) == VT_ASM)
 
 /* token values */
 
@@ -1147,7 +1151,7 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
 ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
 ST_INLN Sym *struct_find(int v);
 ST_INLN Sym *sym_find(int v);
-ST_FUNC Sym *global_identifier_push_1(Sym **, int v, int t, int c);
+ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
@@ -1317,6 +1321,7 @@ ST_FUNC int ieee_finite(double d);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void vpushi(int v);
 ST_FUNC ElfSym *elfsym(Sym *);
+ST_FUNC void update_storage(Sym *sym);
 ST_FUNC Sym *external_global_sym(int v, CType *type, int r);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vswap(void);
@@ -1588,7 +1593,6 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 ST_FUNC int asm_int_expr(TCCState *s1);
 ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
-ST_FUNC void asm_free_labels(TCCState *st);
 /* ------------ i386-asm.c ------------ */
 ST_FUNC void gen_expr32(ExprValue *pe);
 #ifdef TCC_TARGET_X86_64

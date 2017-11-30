@@ -275,11 +275,6 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     decl(VT_CONST);
     gen_inline_functions(s1);
     check_vstack();
-
-#ifdef CONFIG_TCC_ASM
-    asm_free_labels(s1);
-#endif
-
     /* end of translation unit info */
     tcc_debug_end(s1);
     return 0;
@@ -297,28 +292,42 @@ ST_FUNC ElfSym *elfsym(Sym *s)
 }
 
 /* apply storage attributes to Elf symbol */
-
-static void update_storage(Sym *sym)
+ST_FUNC void update_storage(Sym *sym)
 {
-    ElfSym *esym = elfsym(sym);
+    ElfSym *esym;
+    int sym_bind, old_sym_bind;
+
+    esym = elfsym(sym);
     if (!esym)
         return;
+
     if (sym->a.visibility)
         esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
             | sym->a.visibility;
-    if (sym->a.weak)
-        esym->st_info = ELFW(ST_INFO)(STB_WEAK, ELFW(ST_TYPE)(esym->st_info));
+
+    if (sym->type.t & VT_STATIC)
+        sym_bind = STB_LOCAL;
+    else if (sym->a.weak)
+        sym_bind = STB_WEAK;
+    else
+        sym_bind = STB_GLOBAL;
+    old_sym_bind = ELFW(ST_BIND)(esym->st_info);
+    if (sym_bind != old_sym_bind) {
+        esym->st_info = ELFW(ST_INFO)(sym_bind, ELFW(ST_TYPE)(esym->st_info));
+    }
+
 #ifdef TCC_TARGET_PE
     if (sym->a.dllimport)
         esym->st_other |= ST_PE_IMPORT;
     if (sym->a.dllexport)
         esym->st_other |= ST_PE_EXPORT;
 #endif
+
 #if 0
-    printf("storage %s: vis=%d weak=%d exp=%d imp=%d\n",
+    printf("storage %s: bind=%c vis=%d exp=%d imp=%d\n",
         get_tok_str(sym->v, NULL),
+        sym_bind == STB_WEAK ? 'w' : sym_bind == STB_LOCAL ? 'l' : 'g',
         sym->a.visibility,
-        sym->a.weak,
         sym->a.dllexport,
         sym->a.dllimport
         );
@@ -578,10 +587,10 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
 }
 
 /* push a global identifier */
-ST_FUNC Sym *global_identifier_push_1(Sym **ptop, int v, int t, int c)
+ST_FUNC Sym *global_identifier_push(int v, int t, int c)
 {
     Sym *s, **ps;
-    s = sym_push2(ptop, v, t, c);
+    s = sym_push2(&global_stack, v, t, c);
     /* don't record anonymous symbol */
     if (v < SYM_FIRST_ANOM) {
         ps = &table_ident[v - TOK_IDENT]->sym_identifier;
@@ -593,11 +602,6 @@ ST_FUNC Sym *global_identifier_push_1(Sym **ptop, int v, int t, int c)
         *ps = s;
     }
     return s;
-}
-
-static Sym *global_identifier_push(int v, int t, int c)
-{
-    return global_identifier_push_1(&global_stack, v, t, c);
 }
 
 /* pop symbols until top reaches 'b'.  If KEEP is non-zero don't really
@@ -841,6 +845,9 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
         s = global_identifier_push(v, type->t | VT_EXTERN, 0);
         s->type.ref = type->ref;
         s->r = r | VT_CONST | VT_SYM;
+    } else if (IS_ASM_SYM(s)) {
+        s->type.t = type->t | (s->type.t & VT_EXTERN);
+        s->type.ref = type->ref;
     }
     return s;
 }
@@ -849,7 +856,7 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
 static void patch_storage(Sym *sym, AttributeDef *ad, CType *type)
 {
     if (type) {
-	if ((sym->type.t & VT_BTYPE) == VT_VOID) /* from asm */
+	if (IS_ASM_SYM(sym))
 	    sym->type = *type;
 	else if (!is_compatible_types(&sym->type, type))
 	    tcc_error("incompatible types for redefinition of '%s'",
@@ -5026,7 +5033,7 @@ ST_FUNC void unary(void)
         if (t < TOK_UIDENT)
             expect("identifier");
         s = sym_find(t);
-        if (!s) {
+        if (!s || IS_ASM_SYM(s)) {
             const char *name = get_tok_str(t, NULL);
             if (tok != '(')
                 tcc_error("'%s' undeclared", name);
@@ -7223,12 +7230,8 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
                 
                 sym = sym_find(v);
-                if (sym) {
+                if (sym && !IS_ASM_SYM(sym)) {
                     Sym *ref;
-		    /* If type is VT_VOID the symbol was created by tccasm
-		       first, and we see the first reference from C now. */
-		    if ((sym->type.t & VT_BTYPE) == VT_VOID)
-		        sym->type = type;
 
                     if ((sym->type.t & VT_BTYPE) != VT_FUNC)
                         goto func_error1;
@@ -7261,15 +7264,14 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                         tcc_error("redefinition of '%s'", get_tok_str(v, NULL));
                     /* if symbol is already defined, then put complete type */
                     sym->type = type;
+                    sym->r = VT_SYM | VT_CONST;
 
                 } else {
                     /* put function symbol */
-                    sym = global_identifier_push(v, type.t, 0);
-                    sym->type.ref = type.ref;
+                    sym = external_global_sym(v, &type, 0);
                 }
 
                 sym->type.ref->f.func_body = 1;
-                sym->r = VT_SYM | VT_CONST;
                 patch_storage(sym, &ad, NULL);
 
                 /* static inline functions are just recorded as a kind

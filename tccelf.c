@@ -310,8 +310,7 @@ static void rebuild_hash(Section *s, unsigned int nb_buckets)
 
     sym = (ElfW(Sym) *)s->data + 1;
     for(sym_index = 1; sym_index < nb_syms; sym_index++) {
-        if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL
-	    || sym->st_shndx == SHN_UNDEF) {
+        if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
             h = elf_hash(strtab + sym->st_name) % nb_buckets;
             *ptr = hash[h];
             hash[h] = sym_index;
@@ -350,9 +349,8 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
         int *ptr, *base;
         ptr = section_ptr_add(hs, sizeof(int));
         base = (int *)hs->data;
-        /* only add global, weak or undef symbols.  The latter might
-	   become global late (from asm references).  */
-        if (ELFW(ST_BIND)(info) != STB_LOCAL || shndx == SHN_UNDEF) {
+        /* only add global or weak symbols. */
+        if (ELFW(ST_BIND)(info) != STB_LOCAL) {
             /* add another hashing entry */
             nbuckets = base[0];
             h = elf_hash((unsigned char *) name) % nbuckets;
@@ -390,7 +388,7 @@ ST_FUNC int find_elf_sym(Section *s, const char *name)
     while (sym_index != 0) {
         sym = &((ElfW(Sym) *)s->data)[sym_index];
         name1 = (char *) s->link->data + sym->st_name;
-        if (!strcmp(name, name1))
+        if (!strcmp(name, name1) && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL)
             return sym_index;
         sym_index = ((int *)hs->data)[2 + nbuckets + sym_index];
     }
