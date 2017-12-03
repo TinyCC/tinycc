@@ -577,10 +577,13 @@ fucomip %st(5), %st
  cmovs 0x1000, %eax
  cmovns %edx, %edi
  cmovne %ax, %si
+ cmovbw %ax, %di
+ cmovnbel %edx, %ecx
 #ifdef __x86_64__
  bswapq %rsi
  bswapq %r10
  cmovz %rdi,%rbx
+ cmovpeq %rsi, %rdx
 #endif
 
 int $3

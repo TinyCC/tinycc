@@ -727,6 +727,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
     s = 0; /* avoid warning */
 
+again:
     /* optimize matching by using a lookup table (no hashing is needed
        !) */
     for(pa = asm_instrs; pa->sym != 0; pa++) {
@@ -757,8 +758,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             if (!(opcode >= pa->sym && opcode < pa->sym + NB_TEST_OPCODES))
                 continue;
 	    /* cmovxx is a test opcode but accepts multiple sizes.
-	       TCC doesn't accept the suffixed mnemonic, instead we 
-	       simply force size autodetection always.  */
+	       The suffixes aren't encoded in the table, instead we
+	       simply force size autodetection always and deal with suffixed
+	       variants below when we don't find e.g. "cmovzl".  */
 	    if (pa->instr_type & OPC_WLX)
 	        s = NBWLX - 1;
         } else if (pa->instr_type & OPC_B) {
@@ -844,8 +846,16 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
             tcc_error("bad operand with opcode '%s'",
                   get_tok_str(opcode, NULL));
         } else {
-            tcc_error("unknown opcode '%s'",
-                  get_tok_str(opcode, NULL));
+	    /* Special case for cmovcc, we accept size suffixes but ignore
+	       them, but we don't want them to blow up our tables.  */
+	    TokenSym *ts = table_ident[opcode - TOK_IDENT];
+	    if (ts->len >= 6
+		&& strchr("wlq", ts->str[ts->len-1])
+		&& !memcmp(ts->str, "cmov", 4)) {
+		opcode = tok_alloc(ts->str, ts->len-1)->tok;
+		goto again;
+	    }
+            tcc_error("unknown opcode '%s'", ts->str);
         }
     }
     /* if the size is unknown, then evaluate it (OPC_B or OPC_WL case) */
