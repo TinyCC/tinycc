@@ -448,7 +448,6 @@ struct FuncAttr {
     unsigned
     func_call   : 3, /* calling convention (0..5), see below */
     func_type   : 2, /* FUNC_OLD/NEW/ELLIPSIS */
-    func_body   : 1, /* body was defined */
     func_args   : 8; /* PE __stdcall args */
 };
 
