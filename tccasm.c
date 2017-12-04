@@ -422,9 +422,10 @@ ST_FUNC void asm_free_labels(TCCState *st)
     for(s = st->asm_labels; s != NULL; s = s1) {
 	ElfSym *esym = elfsym(s);
         s1 = s->prev;
-        /* Possibly update binding and visibility from asm directives.  */
+        /* Possibly update binding and visibility from asm directives
+	   if the symbol has no C decl (type is VT_VOID).*/
 	s->type.t &= ~VT_EXTERN;
-	if (esym) {
+	if (esym && s->type.t == VT_VOID) {
 	    if (!s->a.asmexport && esym->st_shndx != SHN_UNDEF)
 	        s->type.t |= VT_STATIC;
 	    if (s->a.visibility)

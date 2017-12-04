@@ -235,9 +235,16 @@ vla_test-run: vla_test$(EXESUF)
 asm-c-connect$(EXESUF): asm-c-connect-1.c asm-c-connect-2.c
 	$(TCC) -o $@ $^
 
-asm-c-connect-test: asm-c-connect$(EXESUF)
+asm-c-connect-%.o: asm-c-connect-%.c
+	$(TCC) -c -o $@ $<
+
+asm-c-connect-sep$(EXESUF): asm-c-connect-1.o asm-c-connect-2.o
+	$(TCC) -o $@ $^
+
+asm-c-connect-test: asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
 	@echo ------------ $@ ------------
 	./asm-c-connect$(EXESUF)
+	./asm-c-connect-sep$(EXESUF)
 
 cross-test :
 	@echo ------------ $@ ------------
