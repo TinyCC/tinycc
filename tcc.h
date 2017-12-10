@@ -911,7 +911,6 @@ struct filespec {
 
 /* symbol was created by tccasm.c first */
 #define VT_ASM (VT_VOID | VT_UNSIGNED)
-#define VT_ASM_GLOBAL VT_DEFSIGN
 #define IS_ASM_SYM(sym) (((sym)->type.t & (VT_BTYPE | VT_ASM)) == VT_ASM)
 
 /* token values */
@@ -1426,11 +1425,10 @@ ST_FUNC void put_stabs_r(const char *str, int type, int other, int desc, unsigne
 ST_FUNC void put_stabn(int type, int other, int desc, int value);
 ST_FUNC void put_stabd(int type, int other, int desc);
 
-ST_FUNC void relocate_common_syms(void);
+ST_FUNC void resolve_regular_syms(void);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
 
-ST_FUNC void tcc_add_linker_symbols(TCCState *s1);
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd);

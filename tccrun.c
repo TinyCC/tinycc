@@ -188,8 +188,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
         pe_output_file(s1, NULL);
 #else
         tcc_add_runtime(s1);
-        relocate_common_syms();
-        tcc_add_linker_symbols(s1);
+	resolve_regular_syms();
         build_got_entries(s1);
 #endif
         if (s1->nb_errors)

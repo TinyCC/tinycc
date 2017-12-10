@@ -42,13 +42,12 @@ static Sym *asm_label_find(int v)
     return sym;
 }
 
-static Sym *asm_label_push(int v, int t)
+static Sym *asm_label_push(int v)
 {
-    Sym *sym = global_identifier_push(v, t, 0);
     /* We always add VT_EXTERN, for sym definition that's tentative
        (for .set, removed for real defs), for mere references it's correct
        as is.  */
-    sym->type.t |= VT_ASM | VT_EXTERN;
+    Sym *sym = global_identifier_push(v, VT_ASM | VT_EXTERN | VT_STATIC, 0);
     sym->r = VT_CONST | VT_SYM;
     return sym;
 }
@@ -67,7 +66,7 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 {
     Sym *sym = asm_label_find(name);
     if (!sym) {
-	sym = asm_label_push(name, 0);
+	sym = asm_label_push(name);
 	if (csym)
 	  sym->c = csym->c;
     }
@@ -102,7 +101,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 /* forward */
                 if (!sym || (sym->c && elfsym(sym)->st_shndx != SHN_UNDEF)) {
                     /* if the last label is defined, then define a new one */
-		    sym = asm_label_push(label, VT_STATIC);
+		    sym = asm_label_push(label);
                 }
             }
 	    pe->v = 0;
@@ -381,7 +380,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
         }
     } else {
     new_label:
-        sym = asm_label_push(label, is_local == 1 ? VT_STATIC : 0);
+        sym = asm_label_push(label);
     }
     if (!sym->c)
       put_extern_sym2(sym, NULL, 0, 0, 0);
@@ -391,11 +390,6 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
 
     if (is_local != 2)
         sym->type.t &= ~VT_EXTERN;
-
-    if (IS_ASM_SYM(sym) && !(sym->type.t & VT_ASM_GLOBAL)) {
-        sym->type.t |= VT_STATIC;
-        update_storage(sym);
-    }
 
     return sym;
 }
@@ -679,11 +673,8 @@ static void asm_parse_directive(TCCState *s1, int global)
             Sym *sym;
             next();
             sym = get_asm_sym(tok, NULL);
-	    if (tok1 != TOK_ASMDIR_hidden) {
+	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
-                if (IS_ASM_SYM(sym))
-                    sym->type.t |= VT_ASM_GLOBAL;
-            }
             if (tok1 == TOK_ASMDIR_weak)
                 sym->a.weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)

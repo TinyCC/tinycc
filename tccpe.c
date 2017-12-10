@@ -1970,8 +1970,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 
     tcc_add_bcheck(s1);
     pe_add_runtime(s1, &pe);
-    relocate_common_syms(); /* assign bss addresses */
-    tcc_add_linker_symbols(s1);
+    resolve_regular_syms();
     pe_set_options(s1, &pe);
 
     ret = pe_check_symbols(&pe);
