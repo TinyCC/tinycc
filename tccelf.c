@@ -130,6 +130,59 @@ ST_FUNC void tccelf_delete(TCCState *s1)
     tcc_free(s1->sym_attrs);
 }
 
+/* save section data state */
+ST_FUNC void tccelf_begin_file(TCCState *s1)
+{
+    Section *s; int i;
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        s->sh_offset = s->data_offset;
+    }
+    /* disable symbol hashing during compilation */
+    s = s1->symtab, s->reloc = s->hash, s->hash = NULL;
+#if defined TCC_TARGET_X86_64 && defined TCC_TARGET_PE
+    s1->uw_sym = 0;
+#endif
+}
+
+/* At the end of compilation, convert any UNDEF syms to global, and merge
+   with previously existing symbols */
+ST_FUNC void tccelf_end_file(TCCState *s1)
+{
+    Section *s = s1->symtab;
+    int first_sym, nb_syms, *tr, i;
+
+    first_sym = s->sh_offset / sizeof (ElfSym);
+    nb_syms = s->data_offset / sizeof (ElfSym) - first_sym;
+    s->data_offset = s->sh_offset;
+    s->link->data_offset = s->link->sh_offset;
+    s->hash = s->reloc, s->reloc = NULL;
+    tr = tcc_mallocz(nb_syms * sizeof *tr);
+
+    for (i = 0; i < nb_syms; ++i) {
+        ElfSym *sym = (ElfSym*)s->data + first_sym + i;
+        if (sym->st_shndx == SHN_UNDEF
+            && ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
+            sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
+        tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
+            sym->st_other, sym->st_shndx, s->link->data + sym->st_name);
+    }
+    /* now update relocations */
+    for (i = 1; i < s1->nb_sections; i++) {
+        Section *sr = s1->sections[i];
+        if (sr->sh_type == SHT_RELX && sr->link == s) {
+            ElfW_Rel *rel = (ElfW_Rel*)(sr->data + sr->sh_offset);
+            ElfW_Rel *rel_end = (ElfW_Rel*)(sr->data + sr->data_offset);
+            for (; rel < rel_end; ++rel) {
+                int n = ELFW(R_SYM)(rel->r_info) - first_sym;
+                //if (n < 0) tcc_error("internal: invalid symbol index in relocation");
+                rel->r_info = ELFW(R_INFO)(tr[n], ELFW(R_TYPE)(rel->r_info));
+            }
+        }
+    }
+    tcc_free(tr);
+}
+
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)
 {
     Section *sec;
@@ -269,7 +322,7 @@ ST_FUNC int put_elf_str(Section *s, const char *sym)
     len = strlen(sym) + 1;
     offset = s->data_offset;
     ptr = section_ptr_add(s, len);
-    memcpy(ptr, sym, len);
+    memmove(ptr, sym, len);
     return offset;
 }
 
@@ -335,7 +388,7 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
     Section *hs;
 
     sym = section_ptr_add(s, sizeof(ElfW(Sym)));
-    if (name)
+    if (name && name[0])
         name_offset = put_elf_str(s->link, name);
     else
         name_offset = 0;
@@ -356,7 +409,7 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
         if (ELFW(ST_BIND)(info) != STB_LOCAL) {
             /* add another hashing entry */
             nbuckets = base[0];
-            h = elf_hash((unsigned char *) name) % nbuckets;
+            h = elf_hash((unsigned char *)s->link->data + name_offset) % nbuckets;
             *ptr = base[2 + h];
             base[2 + h] = sym_index;
             base[1]++;
@@ -373,7 +426,7 @@ ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
     return sym_index;
 }
 
-static int find_elf_sym_1(Section *s, const char *name, int onlydef)
+ST_FUNC int find_elf_sym(Section *s, const char *name)
 {
     ElfW(Sym) *sym;
     Section *hs;
@@ -389,19 +442,11 @@ static int find_elf_sym_1(Section *s, const char *name, int onlydef)
     while (sym_index != 0) {
         sym = &((ElfW(Sym) *)s->data)[sym_index];
         name1 = (char *) s->link->data + sym->st_name;
-        if (!strcmp(name, name1) && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL
-	    && (!onlydef || sym->st_shndx != SHN_UNDEF))
+        if (!strcmp(name, name1))
             return sym_index;
         sym_index = ((int *)hs->data)[2 + nbuckets + sym_index];
     }
     return 0;
-}
-
-/* find global ELF symbol 'name' and return its index. Return 0 if not
-   found. */
-ST_FUNC int find_elf_sym(Section *s, const char *name)
-{
-    return find_elf_sym_1(s, name, 0);
 }
 
 /* return elf symbol value, signal error if 'err' is nonzero */
@@ -447,17 +492,15 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
     sym_type = ELFW(ST_TYPE)(info);
     sym_vis = ELFW(ST_VISIBILITY)(other);
 
-    sym_index = find_elf_sym(s, name);
-    esym = &((ElfW(Sym) *)s->data)[sym_index];
-    if (sym_index && esym->st_value == value && esym->st_size == size
-	&& esym->st_info == info && esym->st_other == other
-	&& esym->st_shndx == shndx)
-        return sym_index;
-
     if (sym_bind != STB_LOCAL) {
         /* we search global or weak symbols */
+        sym_index = find_elf_sym(s, name);
         if (!sym_index)
             goto do_def;
+        esym = &((ElfW(Sym) *)s->data)[sym_index];
+        if (esym->st_value == value && esym->st_size == size && esym->st_info == info
+            && esym->st_other == other && esym->st_shndx == shndx)
+            return sym_index;
         if (esym->st_shndx != SHN_UNDEF) {
             esym_bind = ELFW(ST_BIND)(esym->st_info);
             /* propagate the most constraining visibility */
@@ -1220,11 +1263,8 @@ static void tcc_add_linker_symbols(TCCState *s1)
     }
 }
 
-/* Do final regular symbol preparation (for those coming from .c/.o/.s files,
-   not from shared libs)  */
-ST_FUNC void resolve_regular_syms(void)
+ST_FUNC void resolve_common_syms(TCCState *s1)
 {
-    int rebuild = 0;
     ElfW(Sym) *sym;
 
     /* Allocate common symbols in BSS.  */
@@ -1238,27 +1278,7 @@ ST_FUNC void resolve_regular_syms(void)
     }
 
     /* Now assign linker provided symbols their value.  */
-    tcc_add_linker_symbols(tcc_state);
-
-    /* And finally resolve still UNDEF symbols (for multi-file mode),
-       and globalize those that are still UNDEF.  */
-    rebuild_hash(symtab_section, 0);
-    for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
-	if (sym->st_shndx == SHN_UNDEF) {
-            const char *name = (char *) symtab_section->link->data + sym->st_name;
-	    int symndx = find_elf_sym_1(symtab_section, name, 1);
-            if (symndx) {
-                *sym = ((ElfSym *)symtab_section->data)[symndx];
-		rebuild = 1;
-	    } else if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
-		sym->st_info
-		    = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
-		rebuild = 1;
-	    }
-	}
-    }
-    if (rebuild)
-	rebuild_hash(symtab_section, 0);
+    tcc_add_linker_symbols(s1);
 }
 
 static void tcc_output_binary(TCCState *s1, FILE *f,
@@ -2051,7 +2071,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     if (file_type != TCC_OUTPUT_OBJ) {
         /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
         tcc_add_runtime(s1);
-	resolve_regular_syms();
+	resolve_common_syms(s1);
 
         if (!s1->static_link) {
             if (file_type == TCC_OUTPUT_EXE) {
@@ -2092,14 +2112,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
             }
         }
         build_got_entries(s1);
-    } else {
-	for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
-	    if (sym->st_shndx == SHN_UNDEF
-		&& ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
-		sym->st_info
-		    = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
-	    }
-	}
     }
 
     /* we add a section for symbols */

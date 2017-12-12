@@ -1633,7 +1633,7 @@ static int pe_load_res(TCCState *s1, int fd)
 {
     struct pe_rsrc_header hdr;
     Section *rsrc_section;
-    int i, ret = -1;
+    int i, ret = -1, sym_index;
     BYTE *ptr;
     unsigned offs;
 
@@ -1651,8 +1651,8 @@ static int pe_load_res(TCCState *s1, int fd)
     if (!read_mem(fd, offs, ptr, hdr.sectionhdr.SizeOfRawData))
         goto quit;
     offs = hdr.sectionhdr.PointerToRelocations;
-    for (i = 0; i < hdr.sectionhdr.NumberOfRelocations; ++i)
-    {
+    sym_index = put_elf_sym(symtab_section, 0, 0, 0, 0, rsrc_section->sh_num, ".rsrc");
+    for (i = 0; i < hdr.sectionhdr.NumberOfRelocations; ++i) {
         struct pe_rsrc_reloc rel;
         if (!read_mem(fd, offs, &rel, sizeof rel))
             goto quit;
@@ -1660,7 +1660,7 @@ static int pe_load_res(TCCState *s1, int fd)
         if (rel.type != RSRC_RELTYPE)
             goto quit;
         put_elf_reloc(symtab_section, rsrc_section,
-            rel.offset, R_XXX_RELATIVE, 0);
+            rel.offset, R_XXX_RELATIVE, sym_index);
         offs += sizeof rel;
     }
     ret = 0;
@@ -1779,9 +1779,9 @@ static unsigned pe_add_uwwind_info(TCCState *s1)
     if (NULL == s1->uw_pdata) {
         s1->uw_pdata = find_section(tcc_state, ".pdata");
         s1->uw_pdata->sh_addralign = 4;
-        s1->uw_sym = put_elf_sym(symtab_section, 0, 0, 0, 0, text_section->sh_num, NULL);
     }
-
+    if (0 == s1->uw_sym)
+        s1->uw_sym = put_elf_sym(symtab_section, 0, 0, 0, 0, text_section->sh_num, ".uw_base");
     if (0 == s1->uw_offs) {
         /* As our functions all have the same stackframe, we use one entry for all */
         static const unsigned char uw_info[] = {
@@ -1970,7 +1970,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 
     tcc_add_bcheck(s1);
     pe_add_runtime(s1, &pe);
-    resolve_regular_syms();
+    resolve_common_syms(s1);
     pe_set_options(s1, &pe);
 
     ret = pe_check_symbols(&pe);

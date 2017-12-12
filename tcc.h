@@ -1397,6 +1397,8 @@ ST_DATA Section *stab_section, *stabstr_section;
 ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
 ST_FUNC void tccelf_stab_new(TCCState *s);
+ST_FUNC void tccelf_begin_file(TCCState *s1);
+ST_FUNC void tccelf_end_file(TCCState *s1);
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
@@ -1425,7 +1427,7 @@ ST_FUNC void put_stabs_r(const char *str, int type, int other, int desc, unsigne
 ST_FUNC void put_stabn(int type, int other, int desc, int value);
 ST_FUNC void put_stabd(int type, int other, int desc);
 
-ST_FUNC void resolve_regular_syms(void);
+ST_FUNC void resolve_common_syms(TCCState *s1);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
 

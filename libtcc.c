@@ -486,7 +486,7 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap)
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
             strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
-        if (f->line_num > 0) {
+        if (s1->error_set_jmp_enabled) {
             strcat_printf(buf, sizeof(buf), "%s:%d: ",
                 f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
         } else {
@@ -629,6 +629,7 @@ static int tcc_compile(TCCState *s1)
     define_start = define_stack;
     filetype = s1->filetype;
     is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    tccelf_begin_file(s1);
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         s1->nb_errors = 0;
@@ -655,6 +656,7 @@ static int tcc_compile(TCCState *s1)
     free_defines(define_start);
     sym_pop(&global_stack, NULL, 0);
     sym_pop(&local_stack, NULL, 0);
+    tccelf_end_file(s1);
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
@@ -1015,9 +1017,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         fd = file->fd;
         obj_type = tcc_object_type(fd, &ehdr);
         lseek(fd, 0, SEEK_SET);
-
-        /* do not display line number if error */
-        file->line_num = 0;
 
 #ifdef TCC_TARGET_MACHO
         if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), ".dylib"))
