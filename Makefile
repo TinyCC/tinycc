@@ -239,14 +239,15 @@ FORCE:
 # --------------------------------------------------------------------------
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	-makeinfo --no-split --html --number-sections -o $@ $<
+	makeinfo --no-split --html --number-sections -o $@ $< || true
 
 tcc.1: tcc-doc.texi
-	-$(TOPSRC)/texi2pod.pl $< tcc.pod
-	-pod2man --section=1 --center="Tiny C Compiler" --release="$(VERSION)" tcc.pod > $@
+	$(TOPSRC)/texi2pod.pl $< tcc.pod \
+	&& pod2man --section=1 --center="Tiny C Compiler" --release="$(VERSION)" tcc.pod >tmp.1 \
+	&& mv tmp.1 $@ || rm -f tmp.1
 
 tcc-doc.info: tcc-doc.texi
-	-makeinfo $<
+	makeinfo $< || true
 
 # --------------------------------------------------------------------------
 # install
@@ -304,7 +305,7 @@ ifneq "$(wildcard $(LIBTCC1_U))" ""
 endif
 
 # the msys-git shell works to configure && make except it does not have install
-ifeq ($(CONFIG_WIN32)-$(shell which install >/dev/null 2>&1 || echo no),yes-no)
+ifeq "$(and $(CONFIG_WIN32),$(shell which install >/dev/null 2>&1 || echo no))" "no"
 install-win : INSTALL = cp
 install-win : INSTALLBIN = cp
 endif
@@ -349,10 +350,10 @@ tests2.%:
 	$(MAKE) -C tests/tests2 $@
 
 clean:
-	rm -f $(PROGS) $(PROGS_CROSS) tcc_p$(EXESUF) tcc.pod
+	rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
 	rm -f  *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS
-	@$(MAKE) -C tests $@
 	@$(MAKE) -C lib $@
+	@$(MAKE) -C tests $@
 
 distclean: clean
 	rm -f config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html

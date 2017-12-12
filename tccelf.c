@@ -38,12 +38,17 @@ ST_DATA Section *bounds_section; /* contains global data bound description */
 ST_DATA Section *lbounds_section; /* contains local data bound description */
 #endif
 /* symbol sections */
-ST_DATA Section *symtab_section, *strtab_section;
+ST_DATA Section *symtab_section;
 /* debug sections */
 ST_DATA Section *stab_section, *stabstr_section;
 
 /* XXX: avoid static variable */
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
+
+/* special flag to indicate that the section should not be linked to the other ones */
+#define SHF_PRIVATE 0x80000000
+/* section is dynsymtab_section */
+#define SHF_DYNSYM 0x40000000
 
 /* ------------------------------------------------------------------------- */
 
@@ -63,11 +68,10 @@ ST_FUNC void tccelf_new(TCCState *s)
     symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
                                 ".strtab",
                                 ".hashtab", SHF_PRIVATE);
-    strtab_section = symtab_section->link;
     s->symtab = symtab_section;
 
     /* private symbol table for dynamic symbols */
-    s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE,
+    s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE|SHF_DYNSYM,
                                       ".dynstrtab",
                                       ".dynhashtab", SHF_PRIVATE);
     get_sym_attr(s, 0, 1);
@@ -128,6 +132,8 @@ ST_FUNC void tccelf_delete(TCCState *s1)
     /* free loaded dlls array */
     dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
     tcc_free(s1->sym_attrs);
+
+    symtab_section = NULL; /* for tccrun.c:rt_printline() */
 }
 
 /* save section data state */
@@ -536,7 +542,7 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
                 goto do_patch;
             } else if (shndx == SHN_COMMON || shndx == bss_section->sh_num) {
                 /* data symbol keeps precedence over common/bss */
-            } else if (s == tcc_state->dynsymtab_section) {
+            } else if (s->sh_flags & SHF_DYNSYM) {
                 /* we accept that two DLL define the same symbol */
 	    } else if (esym->st_other & ST_ASM_SET) {
 		/* If the existing symbol came from an asm .set
@@ -779,7 +785,7 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
     for_each_elem(symtab, 1, sym, ElfW(Sym)) {
         sh_num = sym->st_shndx;
         if (sh_num == SHN_UNDEF) {
-            name = (char *) strtab_section->data + sym->st_name;
+            name = (char *) s1->symtab->link->data + sym->st_name;
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE

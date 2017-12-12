@@ -287,6 +287,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             add64le(ptr, val - s1->got->sh_addr);
             break;
         case R_X86_64_RELATIVE:
+#ifdef TCC_TARGET_PE
+            add32le(ptr, val - s1->pe_imagebase);
+#endif
             /* do nothing */
             break;
     }

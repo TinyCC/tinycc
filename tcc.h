@@ -489,14 +489,6 @@ typedef struct Sym {
 } Sym;
 
 /* section definition */
-/* XXX: use directly ELF structure for parameters ? */
-/* special flag to indicate that the section should not be linked to
-   the other ones */
-#define SHF_PRIVATE 0x80000000
-
-/* special flag, too */
-#define SECTION_ABS ((void *)1)
-
 typedef struct Section {
     unsigned long data_offset; /* current data offset */
     unsigned char *data;       /* section data */
@@ -795,15 +787,13 @@ struct TCCState {
     struct sym_attr *sym_attrs;
     int nb_sym_attrs;
 
-    /* tiny assembler state */
-    ElfSym esym_dot;
-
 #ifdef TCC_TARGET_PE
     /* PE info */
     int pe_subsystem;
     unsigned pe_characteristics;
     unsigned pe_file_align;
     unsigned pe_stack_size;
+    addr_t pe_imagebase;
 # ifdef TCC_TARGET_X86_64
     Section *uw_pdata;
     int uw_sym;
@@ -1390,7 +1380,7 @@ ST_DATA Section *lbounds_section; /* contains local data bound description */
 ST_FUNC void tccelf_bounds_new(TCCState *s);
 #endif
 /* symbol sections */
-ST_DATA Section *symtab_section, *strtab_section;
+ST_DATA Section *symtab_section;
 /* debug sections */
 ST_DATA Section *stab_section, *stabstr_section;
 
@@ -1408,7 +1398,7 @@ ST_FUNC void section_reserve(Section *sec, unsigned long size);
 ST_FUNC Section *find_section(TCCState *s1, const char *name);
 ST_FUNC Section *new_symtab(TCCState *s1, const char *symtab_name, int sh_type, int sh_flags, const char *strtab_name, const char *hash_name, int hash_sh_flags);
 
-ST_FUNC void put_extern_sym2(Sym *sym, Section *section, addr_t value, unsigned long size, int can_add_underscore);
+ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size, int can_add_underscore);
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
 #if PTR_SIZE == 4
 ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
@@ -1551,6 +1541,9 @@ ST_FUNC void gen_bounded_ptr_deref(void);
 #ifdef TCC_TARGET_X86_64
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c);
 ST_FUNC void gen_opl(int op);
+#ifdef TCC_TARGET_PE
+ST_FUNC void gen_vla_result(int addr);
+#endif
 #endif
 
 /* ------------ arm-gen.c ------------ */

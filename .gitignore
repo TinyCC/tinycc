@@ -41,16 +41,17 @@ win32/include/stddef.h
 win32/include/varargs.h
 win32/include/tcclib.h
 
-tests/test.out*
-tests/test*.out
 tests/tcctest[1234]
 tests/tcctest.gcc
+tests/*.out*
 tests/*.ref
 tests/*.txt
 tests/*.gcc
 tests/*-cc*
 tests/*-tcc*
 tests/libtcc_test
+tests/asm-c-connect
+tests/asm-c-connect-sep
 tests/vla_test
 tests/hello
 tests/tests2/fred.txt

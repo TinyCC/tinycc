@@ -182,9 +182,9 @@ static void print_search_dirs(TCCState *s)
     /* print_dirs("programs", NULL, 0); */
     print_dirs("include", s->sysinclude_paths, s->nb_sysinclude_paths);
     print_dirs("libraries", s->library_paths, s->nb_library_paths);
+    printf("libtcc1:\n  %s/"TCC_LIBTCC1"\n", s->tcc_lib_path);
 #ifndef TCC_TARGET_PE
     print_dirs("crt", s->crt_paths, s->nb_crt_paths);
-    printf("libtcc1:\n  %s/"TCC_LIBTCC1"\n", s->tcc_lib_path);
     printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
 #endif
 }

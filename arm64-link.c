@@ -240,6 +240,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 #endif
             write64le(ptr, val - rel->r_addend);
             return;
+        case R_AARCH64_RELATIVE:
+#ifdef TCC_TARGET_PE
+            add32le(ptr, val - s1->pe_imagebase);
+#endif
+            /* do nothing */
+            return;
         default:
             fprintf(stderr, "FIXME: handle reloc type %x at %x [%p] to %x\n",
                     type, (unsigned)addr, ptr, (unsigned)val);

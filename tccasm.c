@@ -32,7 +32,8 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 }
 
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
-static Sym sym_dot;
+static Sym* asm_new_label(TCCState *s1, int label, int is_local);
+static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
 static Sym *asm_label_find(int v)
 {
@@ -71,6 +72,16 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 	  sym->c = csym->c;
     }
     return sym;
+}
+
+static Sym* asm_section_sym(TCCState *s1, Section *sec)
+{
+    char buf[100];
+    int label = tok_alloc(buf,
+        snprintf(buf, sizeof buf, "L.%s", sec->name)
+        )->tok;
+    Sym *sym = asm_label_find(label);
+    return sym ? sym : asm_new_label1(s1, label, 1, sec->sh_num, 0);
 }
 
 /* We do not use the C expression parser to handle symbols. Maybe the
@@ -145,13 +156,9 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         skip(')');
         break;
     case '.':
-        pe->v = 0;
-        pe->sym = &sym_dot;
-	pe->pcrel = 0;
-        sym_dot.type.t = VT_ASM | VT_STATIC;
-	sym_dot.c = -1;
-        tcc_state->esym_dot.st_shndx = cur_text_section->sh_num;
-        tcc_state->esym_dot.st_value = ind;
+        pe->v = ind;
+        pe->sym = asm_section_sym(s1, cur_text_section);
+        pe->pcrel = 0;
         next();
         break;
     default:
@@ -368,29 +375,26 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
 	/* A VT_EXTERN symbol, even if it has a section is considered
 	   overridable.  This is how we "define" .set targets.  Real
 	   definitions won't have VT_EXTERN set.  */
-        if (esym && esym->st_shndx != SHN_UNDEF && !(sym->type.t & VT_EXTERN)) {
+        if (esym && esym->st_shndx != SHN_UNDEF) {
             /* the label is already defined */
-            if (is_local != 1) {
-                tcc_error("assembler label '%s' already defined", 
-                      get_tok_str(label, NULL));
-            } else {
-                /* redefinition of local labels is possible */
+            if (IS_ASM_SYM(sym)
+                && (is_local == 1 || (sym->type.t & VT_EXTERN)))
                 goto new_label;
-            }
+            if (!(sym->type.t & VT_EXTERN))
+                tcc_error("assembler label '%s' already defined",
+                          get_tok_str(label, NULL));
         }
     } else {
     new_label:
         sym = asm_label_push(label);
     }
     if (!sym->c)
-      put_extern_sym2(sym, NULL, 0, 0, 0);
+      put_extern_sym2(sym, SHN_UNDEF, 0, 0, 0);
     esym = elfsym(sym);
     esym->st_shndx = sh_num;
     esym->st_value = value;
-
     if (is_local != 2)
         sym->type.t &= ~VT_EXTERN;
-
     return sym;
 }
 

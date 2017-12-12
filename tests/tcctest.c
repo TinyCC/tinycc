@@ -3370,6 +3370,37 @@ void test_asm_call(void)
 #endif
 }
 
+#if defined __x86_64__
+# define RX "(%rip)"
+#else
+# define RX
+#endif
+
+void asm_dot_test(void)
+{
+    int x;
+    for (x = 1;; ++x) {
+        int r = x;
+        switch (x) {
+        case 1:
+            asm(".text; lea S"RX",%eax; lea ."RX",%ecx; sub %ecx,%eax; S=.; jmp p0");
+        case 2:
+            asm(".text; jmp .+6; .int 123; mov .-4"RX",%eax; jmp p0");
+	case 3:
+            asm(".data; Y=.; .int 999; X=Y; .int 456; X=.-4");
+            asm(".text; mov X"RX",%eax; jmp p0");
+        case 4:
+            asm(".data; X=.; .int 789; Y=.; .int 999");
+            asm(".text; mov X"RX",%eax; X=Y; jmp p0");
+        case 0:
+	    asm(".text; p0=.; mov %%eax,%0;" : "=m"(r)); break;
+	}
+        if (r == x)
+            break;
+        printf("asm_dot_test %d: %d\n", x, r);
+    }
+}
+
 void asm_test(void)
 {
     char buf[128];
@@ -3457,6 +3488,7 @@ void asm_test(void)
     trace_console(8, 8);
     test_asm_dead_code();
     test_asm_call();
+    asm_dot_test();
     return;
  label1:
     goto label2;

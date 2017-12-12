@@ -51,9 +51,8 @@ ifndef CONFIG_cross
  TESTS := $(filter-out cross-%,$(TESTS))
 endif
 
-ifdef CONFIG_WIN32
- SEP = $(if $(findstring :\,$(PATH)),;,:)
- PATH := $(CURDIR)/$(TOP)$(SEP)$(PATH) # for libtcc_test to find libtcc.dll
+ifeq ($(OS),Windows_NT) # for libtcc_test to find libtcc.dll
+ PATH := $(CURDIR)/$(TOP)$(if $(findstring :\,$(PATH)),;,:)$(PATH)
 endif
 
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
@@ -243,8 +242,9 @@ asm-c-connect-sep$(EXESUF): asm-c-connect-1.o asm-c-connect-2.o
 
 asm-c-connect-test: asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
 	@echo ------------ $@ ------------
-	./asm-c-connect$(EXESUF)
-	./asm-c-connect-sep$(EXESUF)
+	./asm-c-connect$(EXESUF) > asm-c-connect.out1 && cat asm-c-connect.out1
+	./asm-c-connect-sep$(EXESUF) > asm-c-connect.out2 && cat asm-c-connect.out2
+	@diff -u asm-c-connect.out1 asm-c-connect.out2 && echo "ok"
 
 cross-test :
 	@echo ------------ $@ ------------

@@ -382,6 +382,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             /* Nothing to do.  Normally used to indicate a dependency
                on a certain symbol (like for exception handling under EABI).  */
             return;
+        case R_ARM_RELATIVE:
+#ifdef TCC_TARGET_PE
+            add32le(ptr, val - s1->pe_imagebase);
+#endif
+            /* do nothing */
+            return;
         default:
             fprintf(stderr,"FIXME: handle reloc type %x at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);

@@ -285,10 +285,7 @@ ST_FUNC ElfSym *elfsym(Sym *s)
 {
   if (!s || !s->c)
     return NULL;
-  if (s->c == -1)
-    return &tcc_state->esym_dot;
-  else
-    return &((ElfSym *)symtab_section->data)[s->c];
+  return &((ElfSym *)symtab_section->data)[s->c];
 }
 
 /* apply storage attributes to Elf symbol */
@@ -338,24 +335,17 @@ ST_FUNC void update_storage(Sym *sym)
 /* update sym->c so that it points to an external symbol in section
    'section' with value 'value' */
 
-ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
+ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
                             addr_t value, unsigned long size,
                             int can_add_underscore)
 {
-    int sym_type, sym_bind, sh_num, info, other, t;
+    int sym_type, sym_bind, info, other, t;
     ElfSym *esym;
     const char *name;
     char buf1[256];
 #ifdef CONFIG_TCC_BCHECK
     char buf[32];
 #endif
-
-    if (section == NULL)
-        sh_num = SHN_UNDEF;
-    else if (section == SECTION_ABS)
-        sh_num = SHN_ABS;
-    else
-        sh_num = section->sh_num;
 
     if (!sym->c) {
         name = get_tok_str(sym->v, NULL);
@@ -431,7 +421,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, Section *section,
 ST_FUNC void put_extern_sym(Sym *sym, Section *section,
                            addr_t value, unsigned long size)
 {
-    put_extern_sym2(sym, section, value, size, 1);
+    int sh_num = section ? section->sh_num : SHN_UNDEF;
+    put_extern_sym2(sym, sh_num, value, size, 1);
 }
 
 /* add a new relocation entry to symbol 'sym' in section 's' */
@@ -848,6 +839,7 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
     } else if (IS_ASM_SYM(s)) {
         s->type.t = type->t | (s->type.t & VT_EXTERN);
         s->type.ref = type->ref;
+        update_storage(s);
     }
     return s;
 }
@@ -862,9 +854,12 @@ static void patch_type(Sym *sym, CType *type)
     }
 
     if (IS_ASM_SYM(sym)) {
-        sym->type = *type;
+        /* stay static if both are static */
+        sym->type.t = type->t & (sym->type.t | ~VT_STATIC);
+        sym->type.ref = type->ref;
+    }
 
-    } else if (!is_compatible_types(&sym->type, type)) {
+    if (!is_compatible_types(&sym->type, type)) {
         tcc_error("incompatible types for redefinition of '%s'",
                   get_tok_str(sym->v, NULL));
 
@@ -876,10 +871,11 @@ static void patch_type(Sym *sym, CType *type)
                 get_tok_str(sym->v, NULL));
 
         if (0 == (type->t & VT_EXTERN)) {
-            /* put complete type */
-            sym->type = *type;
-            /* use static from prototype */
-            sym->type.t |= static_proto;
+            /* put complete type, use static from prototype */
+            sym->type.t = (type->t & ~VT_STATIC) | static_proto;
+            if (type->t & VT_INLINE)
+                sym->type.t = type->t;
+            sym->type.ref = type->ref;
         }
 
     } else {
@@ -6570,8 +6566,10 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
                     memcpy(ptr, &vtop->c.ld, 10);
 #ifdef __TINYC__
                 else if (sizeof (long double) == sizeof (double))
-                    __asm__("fldl %1\nfstpt %0\n" : "=m" (ptr) : "m" (vtop->c.ld));
+                    __asm__("fldl %1\nfstpt %0\n" : "=m" (*ptr) : "m" (vtop->c.ld));
 #endif
+                else if (vtop->c.ld == 0.0)
+                    ;
                 else
 #endif
                 if (sizeof(long double) == LDOUBLE_SIZE)
@@ -7019,6 +7017,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
         vla_runtime_type_size(type, &a);
         gen_vla_alloc(type, a);
+#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
+        /* on _WIN64, because of the function args scratch area, the
+           result of alloca differs from RSP and is returned in RAX.  */
+        gen_vla_result(addr), addr = (loc -= PTR_SIZE);
+#endif
         gen_vla_sp_save(addr);
         vla_sp_loc = addr;
         vlas_in_scope++;
@@ -7337,18 +7340,16 @@ found:
                         type.t |= VT_EXTERN;
                         sym = external_sym(v, &type, r, &ad);
                         if (ad.alias_target) {
-                            Section tsec;
                             ElfSym *esym;
                             Sym *alias_target;
                             alias_target = sym_find(ad.alias_target);
                             esym = elfsym(alias_target);
                             if (!esym)
                                 tcc_error("unsupported forward __alias__ attribute");
-                            tsec.sh_num = esym->st_shndx;
                             /* Local statics have a scope until now (for
                                warnings), remove it here.  */
                             sym->sym_scope = 0;
-                            put_extern_sym2(sym, &tsec, esym->st_value, esym->st_size, 0);
+                            put_extern_sym2(sym, esym->st_shndx, esym->st_value, esym->st_size, 0);
                         }
                     } else {
                         if (type.t & VT_STATIC)

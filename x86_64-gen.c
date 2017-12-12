@@ -1034,6 +1034,7 @@ void gfunc_epilog(void)
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
     /* align local size to word & save local variables */
+    func_scratch = (func_scratch + 15) & -16;
     v = (func_scratch + -loc + 15) & -16;
 
     if (v >= 4096) {
@@ -2221,6 +2222,14 @@ ST_FUNC void gen_vla_sp_save(int addr) {
 ST_FUNC void gen_vla_sp_restore(int addr) {
     gen_modrm64(0x8b, TREG_RSP, VT_LOCAL, NULL, addr);
 }
+
+#ifdef TCC_TARGET_PE
+/* Save result of gen_vla_alloc onto the stack */
+ST_FUNC void gen_vla_result(int addr) {
+    /* mov %rax,addr(%rbp)*/
+    gen_modrm64(0x89, TREG_RAX, VT_LOCAL, NULL, addr);
+}
+#endif
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {

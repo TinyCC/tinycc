@@ -374,7 +374,7 @@ usage:
     if (v)
         printf("-> %s\n", file);
 
-    op = fopen(outfile, "w");
+    op = fopen(outfile, "wb");
     if (NULL == op) {
         fprintf(stderr, "tcc: impdef: could not create output file: %s\n", outfile);
         goto the_end;

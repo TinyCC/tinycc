@@ -238,6 +238,10 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
     if (0 == mem)
         return offset + RUN_SECTION_ALIGNMENT;
 
+#ifdef TCC_TARGET_PE
+    s1->pe_imagebase = mem;
+#endif
+
     /* relocate each section */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -306,11 +310,11 @@ static void *win64_add_function_table(TCCState *s1)
         RtlAddFunctionTable(
             (RUNTIME_FUNCTION*)p,
             s1->uw_pdata->data_offset / sizeof (RUNTIME_FUNCTION),
-            text_section->sh_addr
+            s1->pe_imagebase
             );
         s1->uw_pdata = NULL;
     }
-    return p;;
+    return p;
 }
 
 static void win64_del_function_table(void *p)
@@ -439,7 +443,7 @@ no_stabs:
                 if (wanted_pc >= sym->st_value &&
                     wanted_pc < sym->st_value + sym->st_size) {
                     pstrcpy(last_func_name, sizeof(last_func_name),
-                            (char *) strtab_section->data + sym->st_name);
+                            (char *) symtab_section->link->data + sym->st_name);
                     func_addr = sym->st_value;
                     goto found;
                 }

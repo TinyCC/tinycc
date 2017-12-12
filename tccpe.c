@@ -954,7 +954,7 @@ static void pe_build_exports(struct pe_info *pe)
     /* automatically write exports to <output-filename>.def */
     pstrcpy(buf, sizeof buf, pe->filename);
     strcpy(tcc_fileextension(buf), ".def");
-    op = fopen(buf, "w");
+    op = fopen(buf, "wb");
     if (NULL == op) {
         tcc_error_noabort("could not create '%s': %s", buf, strerror(errno));
     } else {
@@ -967,7 +967,7 @@ static void pe_build_exports(struct pe_info *pe)
     for (ord = 0; ord < sym_count; ++ord)
     {
         p = sorted[ord], sym_index = p->index, name = p->name;
-        /* insert actual address later in pe_relocate_rva */
+        /* insert actual address later in relocate_section() */
         put_elf_reloc(symtab_section, pe->thunk,
             func_o, R_XXX_RELATIVE, sym_index);
         *(DWORD*)(pe->thunk->data + name_o)
@@ -1179,26 +1179,6 @@ static int pe_assign_addresses (struct pe_info *pe)
 
     tcc_free(section_order);
     return 0;
-}
-
-/* ------------------------------------------------------------- */
-static void pe_relocate_rva (struct pe_info *pe, Section *s)
-{
-    Section *sr = s->reloc;
-    ElfW_Rel *rel, *rel_end;
-    rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
-    for(rel = (ElfW_Rel *)sr->data; rel < rel_end; rel++) {
-        if (ELFW(R_TYPE)(rel->r_info) == R_XXX_RELATIVE) {
-            int sym_index = ELFW(R_SYM)(rel->r_info);
-            DWORD addr = s->sh_addr;
-            if (sym_index) {
-                ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
-                addr = sym->st_value;
-            }
-            // printf("reloc rva %08x %08x %s\n", (DWORD)rel->r_offset, addr, s->name);
-            *(DWORD*)(s->data + rel->r_offset) += addr - pe->imagebase;
-        }
-    }
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1830,7 +1810,7 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 
     /* put relocations on it */
     for (n = o + sizeof *p; o < n; o += sizeof p->BeginAddress)
-        put_elf_reloc(symtab_section, pd, o,  R_X86_64_RELATIVE, s1->uw_sym);
+        put_elf_reloc(symtab_section, pd, o, R_XXX_RELATIVE, s1->uw_sym);
 }
 #endif
 /* ------------------------------------------------------------- */
@@ -1979,11 +1959,11 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     else if (filename) {
         pe_assign_addresses(&pe);
         relocate_syms(s1, s1->symtab, 0);
+        s1->pe_imagebase = pe.imagebase;
         for (i = 1; i < s1->nb_sections; ++i) {
             Section *s = s1->sections[i];
             if (s->reloc) {
                 relocate_section(s1, s);
-                pe_relocate_rva(&pe, s);
             }
         }
         pe.start_addr = (DWORD)
@@ -1999,6 +1979,9 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
         pe.thunk = data_section;
         pe_build_imports(&pe);
         s1->runtime_main = pe.start_symbol;
+#ifdef TCC_TARGET_X86_64
+        s1->uw_pdata = find_section(s1, ".pdata");
+#endif
 #endif
     }
 
