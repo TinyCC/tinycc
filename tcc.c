@@ -298,8 +298,10 @@ redo:
             if (n > 1 && s->outfile)
                 tcc_error("cannot specify output file with -c many files");
         } else {
-            if (s->option_pthread)
+            if (s->option_pthread) {
                 tcc_set_options(s, "-lpthread");
+		n = s->nb_files;
+	    }
         }
 
         if (s->do_bench)
