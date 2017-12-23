@@ -1742,14 +1742,13 @@ reparse:
             tcc_set_lib_path(s, optarg);
             break;
         case TCC_OPTION_l:
-add_lib:
             args_parser_add_file(s, optarg, AFF_TYPE_LIB);
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
             parse_option_D(s, "_REENTRANT");
-	    optarg = "pthread";
-	    goto add_lib;
+            s->option_pthread = 1;
+            break;
         case TCC_OPTION_bench:
             s->do_bench = 1;
             break;

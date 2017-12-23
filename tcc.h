@@ -817,6 +817,7 @@ struct TCCState {
     int do_bench; /* option -bench */
     int gen_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
+    int option_pthread; /* -pthread option */
     int argc;
     char **argv;
 };
