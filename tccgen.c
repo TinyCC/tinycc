@@ -5051,17 +5051,18 @@ ST_FUNC void unary(void)
     }
     // special qnan , snan and infinity values
     case TOK___NAN__:
-        vpush64(VT_DOUBLE, 0x7ff8000000000000ULL);
+        n = 0x7fc00000;
+special_math_val:
+	vpushi(n);
+	vtop->type.t = VT_FLOAT;
         next();
         break;
     case TOK___SNAN__:
-        vpush64(VT_DOUBLE, 0x7ff0000000000001ULL);
-        next();
-        break;
+	n = 0x7f800001;
+	goto special_math_val;
     case TOK___INF__:
-        vpush64(VT_DOUBLE, 0x7ff0000000000000ULL);
-        next();
-        break;
+	n = 0x7f800000;
+	goto special_math_val;
 
     default:
     tok_identifier:
