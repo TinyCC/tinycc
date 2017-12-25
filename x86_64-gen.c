@@ -1508,16 +1508,23 @@ void gfunc_prolog(Sym *func_sym)
             }
         }
 
-        loc -= 16;
-        /* movl $0x????????, -0x10(%rbp) */
-        o(0xf045c7);
+        loc -= 24;
+        /* movl $0x????????, -0x18(%rbp) */
+        o(0xe845c7);
         gen_le32(seen_reg_num * 8);
-        /* movl $0x????????, -0xc(%rbp) */
-        o(0xf445c7);
+        /* movl $0x????????, -0x14(%rbp) */
+        o(0xec45c7);
         gen_le32(seen_sse_num * 16 + 48);
-        /* movl $0x????????, -0x8(%rbp) */
-        o(0xf845c7);
-        gen_le32(seen_stack_size);
+	/* leaq $0x????????, %r11 */
+	o(0x9d8d4c);
+	gen_le32(seen_stack_size);
+	/* movq %r11, -0x10(%rbp) */
+	o(0xf05d894c);
+	/* leaq $-192(%rbp), %r11 */
+	o(0x9d8d4c);
+	gen_le32(-176 - 24);
+	/* movq %r11, -0x8(%rbp) */
+	o(0xf85d894c);
 
         /* save all register passing arguments */
         for (i = 0; i < 8; i++) {

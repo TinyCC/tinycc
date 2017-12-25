@@ -5348,12 +5348,12 @@ ST_FUNC void unary(void)
 	vpushi(classify_x86_64_va_arg(&vtop->type));
 	vswap();
 	vpop();
-        break;
+	break;
 #endif
 #endif
 
 #ifdef TCC_TARGET_ARM64
-    case TOK___va_start: {
+    case TOK_builtin_va_start: {
 	parse_builtin_params(0, "ee");
         //xx check types
         gen_va_start();
@@ -5361,7 +5361,7 @@ ST_FUNC void unary(void)
         vtop->type.t = VT_VOID;
         break;
     }
-    case TOK___va_arg: {
+    case TOK_builtin_va_arg: {
 	parse_builtin_params(0, "et");
 	type = vtop->type;
 	vpop();

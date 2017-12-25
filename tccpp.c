@@ -3611,6 +3611,8 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
         cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
     if (s1->output_type == TCC_OUTPUT_MEMORY)
         cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
+    if (!is_asm && s1->output_type != TCC_OUTPUT_PREPROCESS)
+        cstr_cat(&cstr, "#include \"tcc_predefs.h\"\n", -1);
     if (s1->cmdline_incl.size)
         cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
     //printf("%s\n", (char*)cstr.data);
