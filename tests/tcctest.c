@@ -2234,6 +2234,9 @@ void float_test(void)
     double da, db;
     int a;
     unsigned int b;
+    static double nan2 = 0.0/0.0;
+    static double inf1 = 1.0/0.0;
+    static double inf2 = 1e5000;
 
     printf("float_test:\n");
     printf("sizeof(float) = %d\n", sizeof(float));
@@ -2255,6 +2258,7 @@ void float_test(void)
     b = 4000000000;
     db = b;
     printf("db = %f\n", db);
+    printf("nan != nan = %d, inf1 = %f, inf2 = %f\n", nan2 != nan2, inf1, inf2);
 #endif
 }
 

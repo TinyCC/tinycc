@@ -2049,9 +2049,10 @@ static void gen_opif(int op)
         case '*': f1 *= f2; break;
         case '/': 
             if (f2 == 0.0) {
-                if (const_wanted)
-                    tcc_error("division by zero in constant");
-                goto general_case;
+		/* If not in initializer we need to potentially generate
+		   FP exceptions at runtime, otherwise we want to fold.  */
+                if (!const_wanted)
+                    goto general_case;
             }
             f1 /= f2; 
             break;
