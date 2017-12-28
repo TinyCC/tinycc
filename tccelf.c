@@ -1832,7 +1832,7 @@ static int final_sections_reloc(TCCState *s1)
     /* XXX: ignore sections with allocated relocations ? */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-#if defined(TCC_TARGET_I386) || defined(TCC_MUSL)
+#if defined(TCC_TARGET_I386)
         if (s->reloc && s != s1->got && (s->sh_flags & SHF_ALLOC)) //gr
         /* On X86 gdb 7.3 works in any case but gdb 6.6 will crash if SHF_ALLOC
         checking is removed */
