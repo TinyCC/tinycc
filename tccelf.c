@@ -1531,7 +1531,7 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
             prepare_dynamic_rel(s1, s)) {
                 if (s1->sections[s->sh_info]->sh_flags & SHF_EXECINSTR)
                     textrel = 1;
-        } else if (s1->do_debug ||
+        } else if ((s1->do_debug && s->sh_type != SHT_RELX) ||
             file_type == TCC_OUTPUT_OBJ ||
             (s->sh_flags & SHF_ALLOC) ||
 	    i == (s1->nb_sections - 1)) {
@@ -1832,14 +1832,7 @@ static int final_sections_reloc(TCCState *s1)
     /* XXX: ignore sections with allocated relocations ? */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-#if defined(TCC_TARGET_I386)
-        if (s->reloc && s != s1->got && (s->sh_flags & SHF_ALLOC)) //gr
-        /* On X86 gdb 7.3 works in any case but gdb 6.6 will crash if SHF_ALLOC
-        checking is removed */
-#else
         if (s->reloc && s != s1->got)
-        /* On X86_64 gdb 7.3 will crash if SHF_ALLOC checking is present */
-#endif
             relocate_section(s1, s);
     }
 
