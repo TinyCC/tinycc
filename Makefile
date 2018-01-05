@@ -349,6 +349,9 @@ test:
 tests2.%:
 	$(MAKE) -C tests/tests2 $@
 
+testspp.%:
+	$(MAKE) -C tests/pp $@
+
 clean:
 	rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
 	rm -f  *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS
@@ -394,6 +397,8 @@ help:
 	@echo ""
 	@echo "make tests2.all / make tests2.37 / make tests2.37+"
 	@echo "   run all/single test(s) from tests2, optionally update .expect"
+	@echo "make testspp.all / make testspp.17"
+	@echo "   run all/single test(s) from tests/pp"
 	@echo ""
 	@echo "Other supported make targets:"
 	@echo "   install install-strip tags ETAGS tar clean distclean help"

@@ -10,7 +10,7 @@ VPATH = $(SRC)
 files = $(patsubst %.$1,%.test,$(notdir $(wildcard $(SRC)/*.$1)))
 TESTS = $(call files,c) $(call files,S)
 
-all test : $(sort $(TESTS))
+all test testspp.all: $(sort $(TESTS))
 
 DIFF_OPTS = -Nu -b -B
 
@@ -28,6 +28,8 @@ FILTER = 2>&1 | sed 's,$(SRC)/,,g'
 	-@$(TCC) -E -P $< $(FILTER) >$*.output 2>&1 ; \
 	    diff $(DIFF_OPTS) $(SRC)/$*.expect $*.output \
 	    && rm -f $*.output
+
+testspp.%: %.test ;
 
 # automatically generate .expect files with gcc:
 %.expect: # %.c
