@@ -873,6 +873,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         sym_index = ELFW(R_SYM)(rel->r_info);
         type = ELFW(R_TYPE)(rel->r_info);
         switch(type) {
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
 #if defined(TCC_TARGET_I386)
         case R_386_32:
             if (!get_sym_attr(s1, sym_index, 0)->dyn_index
@@ -896,6 +897,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
             if (get_sym_attr(s1, sym_index, 0)->dyn_index)
                 count++;
             break;
+#endif
         default:
             break;
         }
