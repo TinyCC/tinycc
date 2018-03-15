@@ -335,7 +335,7 @@ if test -z "$cross_prefix" ; then
 
       if test "$cpu" = "arm" ; then
 	if test "${triplet%eabihf}" != "$triplet" ; then
-	   confvars="$confvars arm_eabihf"
+	   confvars="$confvars arm_eabihf arm_vfp"
 	elif test "${triplet%eabi}" != "$triplet" ; then
 	   confvars="$confvars arm_eabi"
 	fi
