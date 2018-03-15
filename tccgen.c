@@ -19,7 +19,6 @@
  */
 
 #include "tcc.h"
-
 /********************************************************/
 /* global variables */
 
@@ -2938,17 +2937,26 @@ static void type_to_str(char *buf, int buf_size,
         break;
     case VT_FUNC:
         s = type->ref;
-        type_to_str(buf, buf_size, &s->type, varstr);
-        pstrcat(buf, buf_size, "(");
+        buf1[0]=0;
+        if (varstr && '*' == *varstr) {
+            pstrcat(buf1, sizeof(buf1), "(");
+            pstrcat(buf1, sizeof(buf1), varstr);
+            pstrcat(buf1, sizeof(buf1), ")");
+        }
+        pstrcat(buf1, buf_size, "(");
         sa = s->next;
         while (sa != NULL) {
-            type_to_str(buf1, sizeof(buf1), &sa->type, NULL);
-            pstrcat(buf, buf_size, buf1);
+            char buf2[256];
+            type_to_str(buf2, sizeof(buf2), &sa->type, NULL);
+            pstrcat(buf1, sizeof(buf1), buf2);
             sa = sa->next;
             if (sa)
-                pstrcat(buf, buf_size, ", ");
+                pstrcat(buf1, sizeof(buf1), ", ");
         }
-        pstrcat(buf, buf_size, ")");
+        if (s->f.func_type == FUNC_ELLIPSIS)
+            pstrcat(buf1, sizeof(buf1), ", ...");
+        pstrcat(buf1, sizeof(buf1), ")");
+        type_to_str(buf, buf_size, &s->type, buf1);
         goto no_var;
     case VT_PTR:
         s = type->ref;
@@ -5005,6 +5013,8 @@ ST_FUNC void unary(void)
 	skip('(');
 	expr_type(&controlling_type, expr_eq);
 	controlling_type.t &= ~(VT_CONSTANT | VT_VOLATILE | VT_ARRAY);
+	if ((controlling_type.t & VT_BTYPE) == VT_FUNC)
+	  mk_pointer(&controlling_type);
 	for (;;) {
 	    learn = 0;
 	    skip(',');

@@ -20,6 +20,12 @@ int b_f()
 	return 10;
 }
 
+typedef int (*fptr)(int);
+int foo(int i)
+{
+  return i;
+}
+
 typedef int int_type1;
 
 #define gen_sw(a) _Generic(a, const char *: 1, default: 8, int: 123);
@@ -59,6 +65,8 @@ int main()
 	printf("%s\n", _Generic(i + 2L, long: "long", int: "int",
 				long long: "long long"));
 	i = _Generic(l, long: 1, int: 2);
+	printf("%d\n", i);
+	i = _Generic(foo, fptr: 3, int: 4);
 	printf("%d\n", i);
 	return 0;
 }
