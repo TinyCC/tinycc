@@ -4348,8 +4348,23 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	int saved_nocode_wanted = nocode_wanted;
         /* array definition */
         next();
-        if (tok == TOK_RESTRICT1)
-            next();
+	while (1) {
+	    /* XXX The optional type-quals and static should only be accepted
+	       in parameter decls.  The '*' as well, and then even only
+	       in prototypes (not function defs).  */
+	    switch (tok) {
+	    case TOK_RESTRICT1: case TOK_RESTRICT2: case TOK_RESTRICT3:
+	    case TOK_CONST1:
+	    case TOK_VOLATILE1:
+	    case TOK_STATIC:
+	    case '*':
+		next();
+		continue;
+	    default:
+		break;
+	    }
+	    break;
+	}
         n = -1;
         t1 = 0;
         if (tok != ']') {
