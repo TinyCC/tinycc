@@ -2633,18 +2633,22 @@ static void gen_cast(CType *type)
                     tcc_warning("nonportable conversion from pointer to char/short");
                 }
                 force_charshort_cast(dbt);
-#if PTR_SIZE == 4
             } else if ((dbt & VT_BTYPE) == VT_INT) {
                 /* scalar to int */
                 if ((sbt & VT_BTYPE) == VT_LLONG) {
+#if PTR_SIZE == 4
                     /* from long long: just take low order word */
                     lexpand();
                     vpop();
-                } 
+#else
+		    vpushi(0xffffffff);
+		    vtop->type.t |= VT_UNSIGNED;
+		    gen_op('&');
+#endif
+                }
                 /* if lvalue and single word type, nothing to do because
                    the lvalue already contains the real type size (see
                    VT_LVAL_xxx constants) */
-#endif
             }
         }
     } else if ((dbt & VT_BTYPE) == VT_PTR && !(vtop->r & VT_LVAL)) {

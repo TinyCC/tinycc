@@ -2491,6 +2491,11 @@ void longlong_test(void)
     a = 0x123;
     long long *p = &a;
     llshift(*p, 5);
+
+    /* shortening followed by widening */
+    unsigned long long u = 0x8000000000000001ULL;
+    u = (unsigned)(u + 1);
+    printf("long long u=" ULONG_LONG_FORMAT "\n", u);
 }
 
 void manyarg_test(void)
