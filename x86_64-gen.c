@@ -1639,6 +1639,12 @@ void gfunc_epilog(void)
 
 #endif /* not PE */
 
+ST_FUNC void gen_fill_nops(int bytes)
+{
+    while (bytes--)
+      g(0x90);
+}
+
 /* generate a jump to a label */
 int gjmp(int t)
 {

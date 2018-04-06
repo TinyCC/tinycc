@@ -157,6 +157,12 @@ static int oad(int c, int s)
     return t;
 }
 
+ST_FUNC void gen_fill_nops(int bytes)
+{
+    while (bytes--)
+      g(0x90);
+}
+
 /* generate jmp to a label */
 #define gjmp2(instr,lbl) oad(instr,lbl)
 

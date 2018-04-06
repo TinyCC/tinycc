@@ -1276,6 +1276,16 @@ ST_FUNC void gfunc_epilog(void)
     o(0xd65f03c0); // ret
 }
 
+ST_FUNC void gen_fill_nops(int bytes)
+{
+    if ((bytes & 3))
+      tcc_error("alignment of code section not multiple of 4");
+    while (bytes > 0) {
+	o(0xd503201f); // nop
+	bytes -= 4;
+    }
+}
+
 // Generate forward branch to label:
 ST_FUNC int gjmp(int t)
 {

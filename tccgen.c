@@ -7088,6 +7088,13 @@ static void gen_function(Sym *sym)
 {
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
+    if (sym->a.aligned) {
+	size_t newoff = section_add(cur_text_section, 0,
+				    1 << (sym->a.aligned - 1));
+	if (ind != newoff)
+	  gen_fill_nops(newoff - ind);
+	ind = newoff;
+    }
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
     funcname = get_tok_str(sym->v, NULL);

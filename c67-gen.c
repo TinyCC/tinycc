@@ -2035,6 +2035,16 @@ void gfunc_epilog(void)
     }
 }
 
+ST_FUNC void gen_fill_nops(int bytes)
+{
+    if ((bytes & 3))
+      tcc_error("alignment of code section not multiple of 4");
+    while (bytes > 0) {
+	C67_NOP(4);
+	bytes -= 4;
+    }
+}
+
 /* generate a jump to a label */
 int gjmp(int t)
 {

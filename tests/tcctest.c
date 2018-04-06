@@ -2270,6 +2270,8 @@ int fib(int n)
         return fib(n-1) + fib(n-2);
 }
 
+void __attribute__((aligned(16))) aligned_function(int i) {}
+
 void funcptr_test()
 {
     void (*func)(int);
@@ -2300,6 +2302,10 @@ void funcptr_test()
     func(42);
     (func + diff)(42);
     (num + a)(43);
+
+    /* Check that we can align functions */
+    func = aligned_function;
+    printf("aligned_function (should be zero): %d\n", ((int)func) & 15);
 }
 
 void lloptest(long long a, long long b)
