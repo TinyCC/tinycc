@@ -3992,11 +3992,11 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
     if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
         parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
 
-#ifdef PP_BENCH
-    /* for PP benchmarks */
-    do next(); while (tok != TOK_EOF);
-    return 0;
-#endif
+    if (s1->do_bench) {
+	/* for PP benchmarks */
+	do next(); while (tok != TOK_EOF);
+	return 0;
+    }
 
     if (s1->dflag & 1) {
         pp_debug_builtins(s1);
