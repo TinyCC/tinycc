@@ -81,9 +81,9 @@ extern "C" {
 #else
 #define _fstat _fstat64i32
 #define _fstati64 _fstat64
-#define _stat _stat64i32
+#define _stat _stat64
 #define _stati64 _stat64
-#define _wstat _wstat64i32
+#define _wstat _wstat64
 #define _wstati64 _wstat64
 #endif
 

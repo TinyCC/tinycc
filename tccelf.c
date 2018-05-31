@@ -1364,6 +1364,8 @@ ST_FUNC void fill_got(TCCState *s1)
 static void fill_local_got_entries(TCCState *s1)
 {
     ElfW_Rel *rel;
+    if (!s1->got->reloc)
+        return;
     for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {
 	if (ELFW(R_TYPE)(rel->r_info) == R_RELATIVE) {
 	    int sym_index = ELFW(R_SYM) (rel->r_info);
@@ -2443,8 +2445,11 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         a = (Stab_Sym *)(s->data + sm_table[stab_index].offset);
         b = (Stab_Sym *)(s->data + s->data_offset);
         o = sm_table[stabstr_index].offset;
-        while (a < b)
-            a->n_strx += o, a++;
+        while (a < b) {
+            if (a->n_strx)
+                a->n_strx += o;
+            a++;
+        }
     }
 
     /* second short pass to update sh_link and sh_info fields of new

@@ -169,9 +169,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 }
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+/* To avoid that x86 processors would reload cached instructions
+   each time when data is written in the near, we need to make
+   sure that code and data do not share the same 64 byte unit */
  #define RUN_SECTION_ALIGNMENT 63
 #else
- #define RUN_SECTION_ALIGNMENT 15
+ #define RUN_SECTION_ALIGNMENT 0
 #endif
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
@@ -179,8 +182,8 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
 {
     Section *s;
-    unsigned offset, length, fill, i, k;
-    addr_t mem;
+    unsigned offset, length, align, max_align, i, k, f;
+    addr_t mem, addr;
 
     if (NULL == ptr) {
         s1->nb_errors = 0;
@@ -195,39 +198,32 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
             return -1;
     }
 
-    offset = 0, mem = (addr_t)ptr;
-    fill = -mem & RUN_SECTION_ALIGNMENT;
+    offset = max_align = 0, mem = (addr_t)ptr;
 #ifdef _WIN64
-    offset += sizeof (void*);
+    offset += sizeof (void*); /* space for function_table pointer */
 #endif
     for (k = 0; k < 2; ++k) {
+        f = 0, addr = k ? mem : mem + ptr_diff;
         for(i = 1; i < s1->nb_sections; i++) {
             s = s1->sections[i];
             if (0 == (s->sh_flags & SHF_ALLOC))
                 continue;
             if (k != !(s->sh_flags & SHF_EXECINSTR))
                 continue;
-            offset += fill;
-            if (!mem)
-                s->sh_addr = 0;
-            else if (s->sh_flags & SHF_EXECINSTR)
-                s->sh_addr = mem + offset + ptr_diff;
-            else
-                s->sh_addr = mem + offset;
+            align = s->sh_addralign - 1;
+            if (++f == 1 && align < RUN_SECTION_ALIGNMENT)
+                align = RUN_SECTION_ALIGNMENT;
+            if (max_align < align)
+                max_align = align;
+            offset += -(addr + offset) & align;
+            s->sh_addr = mem ? addr + offset : 0;
+            offset += s->data_offset;
 #if 0
             if (mem)
-                printf("%-16s +%02lx %p %04x\n",
-                    s->name, fill, (void*)s->sh_addr, (unsigned)s->data_offset);
+                printf("%-16s %p  len %04x  align %2d\n",
+                    s->name, (void*)s->sh_addr, (unsigned)s->data_offset, align + 1);
 #endif
-            offset += s->data_offset;
-            fill = -(mem + offset) & 15;
         }
-#if RUN_SECTION_ALIGNMENT > 15
-        /* To avoid that x86 processors would reload cached instructions each time
-           when data is written in the near, we need to make sure that code and data
-           do not share the same 64 byte unit */
-        fill = -(mem + offset) & RUN_SECTION_ALIGNMENT;
-#endif
     }
 
     /* relocate symbols */
@@ -236,7 +232,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
         return -1;
 
     if (0 == mem)
-        return offset + RUN_SECTION_ALIGNMENT;
+        return offset + max_align;
 
 #ifdef TCC_TARGET_PE
     s1->pe_imagebase = mem;

@@ -4294,7 +4294,6 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                     type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
                     if ((pt.t & VT_BTYPE) == VT_VOID)
                         tcc_error("parameter declared as void");
-                    arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
                 } else {
                     n = tok;
                     if (n < TOK_UIDENT)
@@ -4303,6 +4302,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                     next();
                 }
                 convert_parameter_type(&pt);
+                arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
                 s = sym_push(n | SYM_FIELD, &pt, 0, 0);
                 *plast = s;
                 plast = &s->next;
@@ -6856,11 +6856,16 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     Sym *sym = NULL;
     int saved_nocode_wanted = nocode_wanted;
 #ifdef CONFIG_TCC_BCHECK
-    int bcheck = tcc_state->do_bounds_check && !NODATA_WANTED;
+    int bcheck;
 #endif
 
-    if (type->t & VT_STATIC)
-        nocode_wanted |= NODATA_WANTED ? 0x40000000 : 0x80000000;
+    /* Always allocate static or global variables */
+    if (v && (r & VT_VALMASK) == VT_CONST)
+        nocode_wanted |= 0x80000000;
+
+#ifdef CONFIG_TCC_BCHECK
+    bcheck = tcc_state->do_bounds_check && !NODATA_WANTED;
+#endif
 
     flexible_array = NULL;
     if ((type->t & VT_BTYPE) == VT_STRUCT) {
@@ -6926,7 +6931,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         align = 1;
     }
 
-    if (NODATA_WANTED)
+    if (!v && NODATA_WANTED)
         size = 0, align = 1;
 
     if ((r & VT_VALMASK) == VT_LOCAL) {
@@ -7088,9 +7093,7 @@ static void gen_function(Sym *sym)
     if (sym->a.aligned) {
 	size_t newoff = section_add(cur_text_section, 0,
 				    1 << (sym->a.aligned - 1));
-	if (ind != newoff)
-	  gen_fill_nops(newoff - ind);
-	ind = newoff;
+	gen_fill_nops(newoff - ind);
     }
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);

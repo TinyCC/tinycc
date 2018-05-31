@@ -21,3 +21,6 @@ size of data/text:
 [test_data_suppression_on]
 size of data/text:
   zero/zero
+
+[test_static_data]
+a = 1

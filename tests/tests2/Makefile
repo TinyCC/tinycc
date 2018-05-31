@@ -3,7 +3,9 @@ include $(TOP)/Makefile
 SRC = $(TOPSRC)/tests/tests2
 VPATH = $(SRC)
 
-TESTS = $(patsubst %.c,%.test,$(sort $(notdir $(wildcard $(SRC)/*.c))))
+TESTS = $(patsubst %.c,%.test,\
+    $(sort $(notdir $(wildcard $(SRC)/??_*.c)))\
+    $(sort $(notdir $(wildcard $(SRC)/???_*.c))))
 
 # some tests do not pass on all platforms, remove them for now
 SKIP = 34_array_assignment.test # array assignment is not in C standard

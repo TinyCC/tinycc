@@ -877,19 +877,18 @@ void gfunc_call(int nb_args)
             if (is_sse_float(vtop->type.t)) {
 		if (tcc_state->nosse)
 		  tcc_error("SSE disabled");
-                gv(RC_XMM0); /* only use one float register */
                 if (arg >= REGN) {
+                    gv(RC_XMM0);
                     /* movq %xmm0, j*8(%rsp) */
                     gen_offs_sp(0xd60f66, 0x100, arg*8);
                 } else {
-                    /* movaps %xmm0, %xmmN */
-                    o(0x280f);
-                    o(0xc0 + (arg << 3));
+                    /* Load directly to xmmN register */
+                    gv(RC_XMM0 << arg);
                     d = arg_prepare_reg(arg);
-                    /* mov %xmm0, %rxx */
+                    /* mov %xmmN, %rxx */
                     o(0x66);
                     orex(1,d,0, 0x7e0f);
-                    o(0xc0 + REG_VALUE(d));
+                    o(0xc0 + arg*8 + REG_VALUE(d));
                 }
             } else {
                 if (bt == VT_STRUCT) {
