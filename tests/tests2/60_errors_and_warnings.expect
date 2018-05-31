@@ -26,3 +26,21 @@
 
 [test_74_non_const_init]
 60_errors_and_warnings.c:49: error: initializer element is not constant
+
+[test_pointer_assignment]
+60_errors_and_warnings.c:79: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:82: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:86: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:88: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:91: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:92: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:94: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:95: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:98: warning: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:99: warning: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:103: warning: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:104: warning: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:109: warning: assignment of read-only location
+
+[test_enum_compat]
+60_errors_and_warnings.c:119: error: incompatible types for redefinition of 'f3'

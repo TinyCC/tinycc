@@ -2795,8 +2795,6 @@ static int is_compatible_func(CType *type1, CType *type2)
 
 /* return true if type1 and type2 are the same.  If unqualified is
    true, qualifiers on the types are ignored.
-
-   - enums are not checked as gcc __builtin_types_compatible_p () 
  */
 static int compare_types(CType *type1, CType *type2, int unqualified)
 {
@@ -2828,6 +2826,8 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         return (type1->ref == type2->ref);
     } else if (bt1 == VT_FUNC) {
         return is_compatible_func(type1, type2);
+    } else if (IS_ENUM(type1->t) || IS_ENUM(type2->t)) {
+        return type1->ref == type2->ref;
     } else {
         return 1;
     }
@@ -2988,22 +2988,14 @@ static void gen_assign_cast(CType *dt)
 {
     CType *st, *type1, *type2;
     char buf1[256], buf2[256];
-    int dbt, sbt;
+    int dbt, sbt, qualwarn, lvl;
 
     st = &vtop->type; /* source type */
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
     if (sbt == VT_VOID || dbt == VT_VOID) {
 	if (sbt == VT_VOID && dbt == VT_VOID)
-	    ; /*
-	      It is Ok if both are void
-	      A test program:
-	        void func1() {}
-		void func2() {
-		  return func1();
-		}
-	      gcc accepts this program
-	      */
+	    ; /* It is Ok if both are void */
 	else
     	    tcc_error("cannot cast from/to void");
     }
@@ -3014,43 +3006,49 @@ static void gen_assign_cast(CType *dt)
         /* special cases for pointers */
         /* '0' can also be a pointer */
         if (is_null_pointer(vtop))
-            goto type_ok;
+            break;
         /* accept implicit pointer to integer cast with warning */
         if (is_integer_btype(sbt)) {
             tcc_warning("assignment makes pointer from integer without a cast");
-            goto type_ok;
+            break;
         }
         type1 = pointed_type(dt);
-        /* a function is implicitly a function pointer */
-        if (sbt == VT_FUNC) {
-            if ((type1->t & VT_BTYPE) != VT_VOID &&
-                !is_compatible_types(pointed_type(dt), st))
-                tcc_warning("assignment from incompatible pointer type");
-            goto type_ok;
-        }
-        if (sbt != VT_PTR)
+        if (sbt == VT_PTR)
+            type2 = pointed_type(st);
+        else if (sbt == VT_FUNC)
+            type2 = st; /* a function is implicitly a function pointer */
+        else
             goto error;
-        type2 = pointed_type(st);
-        if ((type1->t & VT_BTYPE) == VT_VOID || 
-            (type2->t & VT_BTYPE) == VT_VOID) {
-            /* void * can match anything */
-        } else {
-            //printf("types %08x %08x\n", type1->t, type2->t);
-            /* exact type match, except for qualifiers */
-            if (!is_compatible_unqualified_types(type1, type2)) {
+        if (is_compatible_types(type1, type2))
+            break;
+        for (qualwarn = lvl = 0;; ++lvl) {
+            if (((type2->t & VT_CONSTANT) && !(type1->t & VT_CONSTANT)) ||
+                ((type2->t & VT_VOLATILE) && !(type1->t & VT_VOLATILE)))
+                qualwarn = 1;
+            dbt = type1->t & (VT_BTYPE|VT_LONG);
+            sbt = type2->t & (VT_BTYPE|VT_LONG);
+            if (dbt != VT_PTR || sbt != VT_PTR)
+                break;
+            type1 = pointed_type(type1);
+            type2 = pointed_type(type2);
+        }
+        if (!is_compatible_unqualified_types(type1, type2)) {
+            if ((dbt == VT_VOID || sbt == VT_VOID) && lvl == 0) {
+                /* void * can match anything */
+            } else if (dbt == sbt
+                && is_integer_btype(sbt & VT_BTYPE)
+                && IS_ENUM(type1->t) + IS_ENUM(type2->t)
+                    + !!((type1->t ^ type2->t) & VT_UNSIGNED) < 2) {
 		/* Like GCC don't warn by default for merely changes
 		   in pointer target signedness.  Do warn for different
 		   base types, though, in particular for unsigned enums
 		   and signed int targets.  */
-		if ((type1->t & (VT_BTYPE|VT_LONG)) != (type2->t & (VT_BTYPE|VT_LONG))
-                    || IS_ENUM(type1->t) || IS_ENUM(type2->t)
-                    )
-		    tcc_warning("assignment from incompatible pointer type");
-	    }
+            } else {
+                tcc_warning("assignment from incompatible pointer type");
+                break;
+            }
         }
-        /* check const and volatile */
-        if ((!(type1->t & VT_CONSTANT) && (type2->t & VT_CONSTANT)) ||
-            (!(type1->t & VT_VOLATILE) && (type2->t & VT_VOLATILE)))
+        if (qualwarn)
             tcc_warning("assignment discards qualifiers from pointer target type");
         break;
     case VT_BYTE:
@@ -3074,7 +3072,6 @@ static void gen_assign_cast(CType *dt)
         }
         break;
     }
- type_ok:
     gen_cast(dt);
 }
 
