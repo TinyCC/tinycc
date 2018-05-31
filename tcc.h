@@ -638,7 +638,6 @@ struct sym_attr {
 };
 
 struct TCCState {
-
     int verbose; /* if true, display some information during compilation */
     int nostdinc; /* if true, no standard headers are added */
     int nostdlib; /* if true, no standard libraries are added */
@@ -646,7 +645,7 @@ struct TCCState {
     int static_link; /* if true, static linking is performed */
     int rdynamic; /* if true, all symbols are exported */
     int symbolic; /* if true, resolve symbols in the current module first */
-    int alacarte_link; /* if true, only link in referenced objects from archive */
+    int filetype; /* file type for compilation (NONE,C,ASM) */
 
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */
@@ -811,7 +810,6 @@ struct TCCState {
     struct filespec **files; /* files seen on command line */
     int nb_files; /* number thereof */
     int nb_libraries; /* number of libs thereof */
-    int filetype;
     char *outfile; /* output filename */
     int option_r; /* option -r */
     int do_bench; /* option -bench */
@@ -824,7 +822,6 @@ struct TCCState {
 
 struct filespec {
     char type;
-    char alacarte;
     char name[1];
 };
 
@@ -1150,12 +1147,14 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_PRINT_ERROR     0x10 /* print error if file not found */
 #define AFF_REFERENCED_DLL  0x20 /* load a referenced dll from another dll */
 #define AFF_TYPE_BIN        0x40 /* file to add is binary */
+#define AFF_WHOLE_ARCHIVE   0x80 /* load all objects from archive */
 /* s->filetype: */
 #define AFF_TYPE_NONE   0
 #define AFF_TYPE_C      1
 #define AFF_TYPE_ASM    2
-#define AFF_TYPE_ASMPP  3
-#define AFF_TYPE_LIB    4
+#define AFF_TYPE_ASMPP  4
+#define AFF_TYPE_LIB    8
+#define AFF_TYPE_MASK   (15 | AFF_TYPE_BIN)
 /* values from tcc_object_type(...) */
 #define AFF_BINTYPE_REL 1
 #define AFF_BINTYPE_DYN 2
@@ -1423,7 +1422,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s);
 
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
-ST_FUNC int tcc_load_archive(TCCState *s1, int fd);
+ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC void tcc_add_bcheck(TCCState *s1);
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 

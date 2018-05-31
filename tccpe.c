@@ -1866,8 +1866,6 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
         SHN_UNDEF, start_symbol);
 
-    tcc_add_pragma_libs(s1);
-
     if (0 == s1->nostdlib) {
         static const char *libs[] = {
             TCC_LIBTCC1, "msvcrt", "kernel32", "", "user32", "gdi32", NULL
@@ -1948,7 +1946,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     pe.filename = filename;
     pe.s1 = s1;
 
-    tcc_add_bcheck(s1);
+    tcc_add_runtime(s1);
     pe_add_runtime(s1, &pe);
     resolve_common_syms(s1);
     pe_set_options(s1, &pe);

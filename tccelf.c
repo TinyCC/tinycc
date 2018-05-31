@@ -1146,7 +1146,6 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 s->sh_num, sym_end);
 }
-#endif
 
 static int tcc_add_support(TCCState *s1, const char *filename)
 {
@@ -1154,6 +1153,7 @@ static int tcc_add_support(TCCState *s1, const char *filename)
     snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
     return tcc_add_file(s1, buf);
 }
+#endif
 
 ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
@@ -1189,8 +1189,10 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
+    s1->filetype = 0;
     tcc_add_bcheck(s1);
     tcc_add_pragma_libs(s1);
+#ifndef TCC_TARGET_PE
     /* add libc */
     if (!s1->nostdlib) {
         tcc_add_library_err(s1, "c");
@@ -1207,6 +1209,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tcc_add_crt(s1, "crtn.o");
     }
+#endif
 }
 
 /* add various standard linker symbols (must be done after the
@@ -2628,7 +2631,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
 }
 
 /* load a '.a' file */
-ST_FUNC int tcc_load_archive(TCCState *s1, int fd)
+ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
 {
     ArchiveHeader hdr;
     char ar_size[11];
@@ -2662,10 +2665,10 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd)
         size = (size + 1) & ~1;
         if (!strcmp(ar_name, "/")) {
             /* coff symbol table : we handle it */
-            if(s1->alacarte_link)
+            if (alacarte)
                 return tcc_load_alacarte(s1, fd, size, 4);
 	} else if (!strcmp(ar_name, "/SYM64/")) {
-            if(s1->alacarte_link)
+            if (alacarte)
                 return tcc_load_alacarte(s1, fd, size, 8);
         } else {
             ElfW(Ehdr) ehdr;

@@ -621,14 +621,13 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 }
 
 /* compile the file opened in 'file'. Return non zero if errors. */
-static int tcc_compile(TCCState *s1)
+static int tcc_compile(TCCState *s1, int filetype)
 {
     Sym *define_start;
-    int filetype, is_asm;
+    int is_asm;
 
     define_start = define_stack;
-    filetype = s1->filetype;
-    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    is_asm = !!(filetype & (AFF_TYPE_ASM|AFF_TYPE_ASMPP));
     tccelf_begin_file(s1);
 
     if (setjmp(s1->error_jmp_buf) == 0) {
@@ -640,7 +639,7 @@ static int tcc_compile(TCCState *s1)
             tcc_preprocess(s1);
         } else if (is_asm) {
 #ifdef CONFIG_TCC_ASM
-            tcc_assemble(s1, filetype == AFF_TYPE_ASMPP);
+            tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
 #else
             tcc_error_noabort("asm not supported");
 #endif
@@ -667,7 +666,7 @@ LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
     len = strlen(str);
     tcc_open_bf(s, "<string>", len);
     memcpy(file->buffer, str, len);
-    ret = tcc_compile(s);
+    ret = tcc_compile(s, s->filetype);
     tcc_close();
     return ret;
 }
@@ -733,7 +732,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_state = s;
     ++nb_states;
 
-    s->alacarte_link = 1;
     s->nocommon = 1;
     s->warn_implicit_function_declaration = 1;
     s->ms_extensions = 1;
@@ -1042,7 +1040,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             break;
 #endif
         case AFF_BINTYPE_AR:
-            ret = tcc_load_archive(s1, fd);
+            ret = tcc_load_archive(s1, fd, !(flags & AFF_WHOLE_ARCHIVE));
             break;
 #ifdef TCC_TARGET_COFF
         case AFF_BINTYPE_C67:
@@ -1061,7 +1059,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             break;
         }
     } else {
-        ret = tcc_compile(s1);
+        ret = tcc_compile(s1, flags);
     }
     tcc_close();
     return ret;
@@ -1070,8 +1068,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
 {
     int filetype = s->filetype;
-    int flags = AFF_PRINT_ERROR;
-    if (filetype == 0) {
+    if (0 == (filetype & AFF_TYPE_MASK)) {
         /* use a file extension to detect a filetype */
         const char *ext = tcc_fileextension(filename);
         if (ext[0]) {
@@ -1083,13 +1080,12 @@ LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
             else if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
                 filetype = AFF_TYPE_C;
             else
-                flags |= AFF_TYPE_BIN;
+                filetype |= AFF_TYPE_BIN;
         } else {
             filetype = AFF_TYPE_C;
         }
-        s->filetype = filetype;
     }
-    return tcc_add_file_internal(s, filename, flags);
+    return tcc_add_file_internal(s, filename, filetype | AFF_PRINT_ERROR);
 }
 
 LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
@@ -1141,9 +1137,10 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;
 #endif
+    int flags = s->filetype & AFF_WHOLE_ARCHIVE;
     while (*pp) {
         if (0 == tcc_add_library_internal(s, *pp,
-            libraryname, 0, s->library_paths, s->nb_library_paths))
+            libraryname, flags, s->library_paths, s->nb_library_paths))
             return 0;
         ++pp;
     }
@@ -1409,7 +1406,10 @@ static int tcc_set_linker(TCCState *s, const char *option)
                 goto err;
 #endif
         } else if (ret = link_option(option, "?whole-archive", &p), ret) {
-            s->alacarte_link = ret < 0;
+            if (ret > 0)
+                s->filetype |= AFF_WHOLE_ARCHIVE;
+            else
+                s->filetype &= ~AFF_WHOLE_ARCHIVE;
         } else if (p) {
             return 0;
         } else {
@@ -1595,7 +1595,6 @@ static void args_parser_add_file(TCCState *s, const char* filename, int filetype
 {
     struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
     f->type = filetype;
-    f->alacarte = s->alacarte_link;
     strcpy(f->name, filename);
     dynarray_add(&s->files, &s->nb_files, f);
 }
@@ -1742,7 +1741,7 @@ reparse:
             tcc_set_lib_path(s, optarg);
             break;
         case TCC_OPTION_l:
-            args_parser_add_file(s, optarg, AFF_TYPE_LIB);
+            args_parser_add_file(s, optarg, AFF_TYPE_LIB | (s->filetype & ~AFF_TYPE_MASK));
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
@@ -1896,14 +1895,18 @@ reparse:
             exit(0);
             break;
         case TCC_OPTION_x:
+            x = 0;
             if (*optarg == 'c')
-                s->filetype = AFF_TYPE_C;
+                x = AFF_TYPE_C;
             else if (*optarg == 'a')
-                s->filetype = AFF_TYPE_ASMPP;
+                x = AFF_TYPE_ASMPP;
+            else if (*optarg == 'b')
+                x = AFF_TYPE_BIN;
             else if (*optarg == 'n')
-                s->filetype = AFF_TYPE_NONE;
+                x = AFF_TYPE_NONE;
             else
                 tcc_warning("unsupported language '%s'", optarg);
+            s->filetype = x | (s->filetype & ~AFF_TYPE_MASK);
             break;
         case TCC_OPTION_O:
             last_o = atoi(optarg);
