@@ -73,6 +73,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  pragma warning (disable : 4018)  // signed/unsigned mismatch
 #  pragma warning (disable : 4146)  // unary minus operator applied to unsigned type, result still unsigned
 #  define ssize_t intptr_t
+#  ifdef _X86_
+#   define __i386__ 1
+#  endif
+#  ifdef _AMD64_
+#   define __x86_64__ 1
+#  endif
 # endif
 # undef CONFIG_TCC_STATIC
 #endif
@@ -95,6 +101,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #else
 # define NORETURN __attribute__((noreturn))
 # define ALIGNED(x) __attribute__((aligned(x)))
+#endif
+
+/* gnu headers use to #define __attribute__ to empty for non-gcc compilers */
+#ifdef __TINYC__
+# undef __attribute__
 #endif
 
 #ifdef _WIN32
@@ -133,7 +144,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
     !defined(TCC_TARGET_X86_64)
-# if defined __x86_64__ || defined _AMD64_
+# if defined __x86_64__
 #  define TCC_TARGET_X86_64
 # elif defined __arm__
 #  define TCC_TARGET_ARM
@@ -151,9 +162,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* only native compiler supports -run */
 #if defined _WIN32 == defined TCC_TARGET_PE
-# if (defined __i386__ || defined _X86_) && defined TCC_TARGET_I386
+# if defined __i386__ && defined TCC_TARGET_I386
 #  define TCC_IS_NATIVE
-# elif (defined __x86_64__ || defined _AMD64_) && defined TCC_TARGET_X86_64
+# elif defined __x86_64__ && defined TCC_TARGET_X86_64
 #  define TCC_IS_NATIVE
 # elif defined __arm__ && defined TCC_TARGET_ARM
 #  define TCC_IS_NATIVE
@@ -1179,7 +1190,9 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_BINTYPE_C67 4
 
 
+#ifndef TCC_TARGET_PE
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
+#endif
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);

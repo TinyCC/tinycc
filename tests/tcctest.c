@@ -2466,6 +2466,11 @@ long long llfunc2(long long x, long long y, int z)
     return x * y * z;
 }
 
+void check_opl_save_regs(char *a, long long b, int c)
+{
+    *a = b < 0 && !c;
+}
+
 void longlong_test(void)
 {
     long long a, b, c;
@@ -2538,6 +2543,11 @@ void longlong_test(void)
     unsigned long long u = 0x8000000000000001ULL;
     u = (unsigned)(u + 1);
     printf("long long u=" ULONG_LONG_FORMAT "\n", u);
+
+    /* was a problem with missing save_regs in gen_opl on 32-bit platforms */
+    char cc = 78;
+    check_opl_save_regs(&cc, -1, 0);
+    printf("check_opl_save_regs: %d\n", cc);
 }
 
 void manyarg_test(void)

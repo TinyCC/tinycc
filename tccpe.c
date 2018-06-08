@@ -231,6 +231,17 @@ typedef struct _IMAGE_BASE_RELOCATION {
 #define IMAGE_REL_BASED_REL32            7
 #define IMAGE_REL_BASED_DIR64           10
 
+#define IMAGE_SCN_CNT_CODE                  0x00000020
+#define IMAGE_SCN_CNT_INITIALIZED_DATA      0x00000040
+#define IMAGE_SCN_CNT_UNINITIALIZED_DATA    0x00000080
+#define IMAGE_SCN_MEM_DISCARDABLE           0x02000000
+#define IMAGE_SCN_MEM_SHARED                0x10000000
+#define IMAGE_SCN_MEM_EXECUTE               0x20000000
+#define IMAGE_SCN_MEM_READ                  0x40000000
+#define IMAGE_SCN_MEM_WRITE                 0x80000000
+#define IMAGE_SCN_TYPE_NOLOAD               0x00000002
+#define IMAGE_SCN_LNK_REMOVE                0x00000800
+
 #pragma pack(pop)
 
 /* ----------------------------------------------------------- */
@@ -279,17 +290,6 @@ struct pe_rsrc_reloc {
 /* ------------------------------------------------------------- */
 /* internal temporary structures */
 
-/*
-#define IMAGE_SCN_CNT_CODE                  0x00000020
-#define IMAGE_SCN_CNT_INITIALIZED_DATA      0x00000040
-#define IMAGE_SCN_CNT_UNINITIALIZED_DATA    0x00000080
-#define IMAGE_SCN_MEM_DISCARDABLE           0x02000000
-#define IMAGE_SCN_MEM_SHARED                0x10000000
-#define IMAGE_SCN_MEM_EXECUTE               0x20000000
-#define IMAGE_SCN_MEM_READ                  0x40000000
-#define IMAGE_SCN_MEM_WRITE                 0x80000000
-*/
-
 enum {
     sec_text = 0,
     sec_data ,
@@ -303,6 +303,7 @@ enum {
     sec_last
 };
 
+#if 0
 static const DWORD pe_sec_flags[] = {
     0x60000020, /* ".text"     , */
     0xC0000040, /* ".data"     , */
@@ -314,13 +315,14 @@ static const DWORD pe_sec_flags[] = {
     0x42000802, /* ".stab"     , */
     0x42000040, /* ".reloc"    , */
 };
+#endif
 
 struct section_info {
     int cls, ord;
     char name[32];
     DWORD sh_addr;
     DWORD sh_size;
-    DWORD sh_flags;
+    DWORD pe_flags;
     unsigned char *data;
     DWORD data_size;
     IMAGE_SECTION_HEADER ish;
@@ -656,9 +658,6 @@ static int pe_write(struct pe_info *pe)
             case sec_pdata:
                 pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_EXCEPTION, addr, size);
                 break;
-
-            case sec_stab:
-                break;
         }
 
         if (pe->thunk == pe->s1->sections[si->ord]) {
@@ -676,7 +675,7 @@ static int pe_write(struct pe_info *pe)
 
         strncpy((char*)psh->Name, sh_name, sizeof psh->Name);
 
-        psh->Characteristics = pe_sec_flags[si->cls];
+        psh->Characteristics = si->pe_flags;
         psh->VirtualAddress = addr;
         psh->Misc.VirtualSize = size;
         pe_header.opthdr.SizeOfImage =
@@ -1064,15 +1063,15 @@ static int pe_section_class(Section *s)
                 return sec_idata;
             if (0 == strcmp(name, ".pdata"))
                 return sec_pdata;
-            return sec_other;
         } else if (type == SHT_NOBITS) {
             if (flags & SHF_WRITE)
                 return sec_bss;
         }
+        return sec_other;
     } else {
         if (0 == strcmp(name, ".reloc"))
             return sec_reloc;
-        if (0 == strncmp(name, ".stab", 5)) /* .stab and .stabstr */
+        if (0 == memcmp(name, ".stab", 5))
             return sec_stab;
     }
     return -1;
@@ -1129,7 +1128,21 @@ static int pe_assign_addresses (struct pe_info *pe)
         si->cls = c;
         si->ord = k;
         si->sh_addr = s->sh_addr = addr = pe_virtual_align(pe, addr);
-        si->sh_flags = s->sh_flags;
+
+        si->pe_flags = IMAGE_SCN_MEM_READ;
+        if (s->sh_flags & SHF_EXECINSTR)
+            si->pe_flags |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE;
+        else if (s->sh_type == SHT_NOBITS)
+            si->pe_flags |= IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+        else
+            si->pe_flags |= IMAGE_SCN_CNT_INITIALIZED_DATA;
+        if (s->sh_flags & SHF_WRITE)
+            si->pe_flags |= IMAGE_SCN_MEM_WRITE;
+        if (0 == (s->sh_flags & SHF_ALLOC)) {
+            si->pe_flags |= IMAGE_SCN_MEM_DISCARDABLE;
+            if (c == sec_stab)
+                si->pe_flags |= 0x802; //IMAGE_SCN_TYPE_NOLOAD|IMAGE_SCN_LNK_REMOVE
+        }
 
         if (c == sec_data && NULL == pe->thunk)
             pe->thunk = s;
@@ -1153,9 +1166,8 @@ static int pe_assign_addresses (struct pe_info *pe)
             si->sh_size = s->data_offset;
             ++pe->sec_count;
         }
-        // printf("%08x %05x %s\n", si->sh_addr, si->sh_size, si->name);
+        //printf("%08x %05x %s %08x\n", si->sh_addr, si->sh_size, si->name, si->pe_flags);
     }
-
 #if 0
     for (i = 1; i < pe->s1->nb_sections; ++i) {
         Section *s = pe->s1->sections[i];

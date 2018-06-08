@@ -700,9 +700,11 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
     Sym *s;
     ts = tok_alloc(sym, strlen(sym));
     s = define_find(ts->tok);
-    /* undefine symbol by putting an invalid name */
-    if (s)
+    if (s) {
         define_undef(s);
+        tok_str_free_str(s->d);
+        s->d = NULL;
+    }
 }
 
 /* cleanup all static data used during compilation */
@@ -1118,6 +1120,7 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
         s->library_paths, s->nb_library_paths);
 }
 
+#ifndef TCC_TARGET_PE
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
 {
     if (-1 == tcc_add_library_internal(s, "%s/%s",
@@ -1125,6 +1128,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)
         tcc_error_noabort("file '%s' not found", filename);
     return 0;
 }
+#endif
 
 /* the library name is the same as the argument of the '-l' option */
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)

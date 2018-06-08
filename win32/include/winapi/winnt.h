@@ -1310,7 +1310,7 @@ typedef DWORD LCID;
 #define INITIAL_MXCSR 0x1f80
 #define INITIAL_FPCSR 0x027f
 
-  typedef DECLSPEC_ALIGN(16) struct _M128A {
+  typedef struct DECLSPEC_ALIGN(16) _M128A {
     ULONGLONG Low;
     LONGLONG High;
   } M128A,*PM128A;
@@ -1336,7 +1336,7 @@ typedef DWORD LCID;
 
 #define LEGACY_SAVE_AREA_LENGTH sizeof(XMM_SAVE_AREA32)
 
-  typedef DECLSPEC_ALIGN(16) struct _CONTEXT {
+  typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     DWORD64 P1Home;
     DWORD64 P2Home;
     DWORD64 P3Home;
@@ -3150,7 +3150,7 @@ typedef DWORD LCID;
       DWORD Type;
     } MEMORY_BASIC_INFORMATION32,*PMEMORY_BASIC_INFORMATION32;
 
-    typedef DECLSPEC_ALIGN(16) struct _MEMORY_BASIC_INFORMATION64 {
+    typedef struct DECLSPEC_ALIGN(16) _MEMORY_BASIC_INFORMATION64 {
       ULONGLONG BaseAddress;
       ULONGLONG AllocationBase;
       DWORD AllocationProtect;
@@ -4949,7 +4949,7 @@ typedef DWORD LCID;
 
 #ifdef _WIN64
     typedef struct _SLIST_ENTRY *PSLIST_ENTRY;
-    typedef DECLSPEC_ALIGN(16) struct _SLIST_ENTRY {
+    typedef struct DECLSPEC_ALIGN(16) _SLIST_ENTRY {
       PSLIST_ENTRY Next;
     } SLIST_ENTRY;
 #else
@@ -4961,7 +4961,7 @@ typedef DWORD LCID;
 
 #if defined(_WIN64)
 
-    typedef DECLSPEC_ALIGN(16) struct _SLIST_HEADER {
+    typedef struct DECLSPEC_ALIGN(16) _SLIST_HEADER {
       ULONGLONG Alignment;
       ULONGLONG Region;
     } SLIST_HEADER;

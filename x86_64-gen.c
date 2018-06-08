@@ -206,7 +206,7 @@ ST_FUNC void gsym_addr(int t, int a)
     while (t) {
         unsigned char *ptr = cur_text_section->data + t;
         uint32_t n = read32le(ptr); /* next value */
-        write32le(ptr, a - t - 4);
+        write32le(ptr, a < 0 ? -a : a - t - 4);
         t = n;
     }
 }
@@ -909,7 +909,7 @@ void gfunc_call(int nb_args)
 
     if ((vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
         /* need to add the "func_scratch" area after alloca */
-        o(0x0548), gen_le32(func_alloca), func_alloca = ind - 4;
+        o(0x48); func_alloca = oad(0x05, func_alloca); /* sub $NN, %rax */
     }
 
     /* other compilers don't clear the upper bits when returning char/short */
@@ -1037,11 +1037,7 @@ void gfunc_epilog(void)
     }
 
     /* add the "func_scratch" area after each alloca seen */
-    while (func_alloca) {
-        unsigned char *ptr = cur_text_section->data + func_alloca;
-        func_alloca = read32le(ptr);
-        write32le(ptr, func_scratch);
-    }
+    gsym_addr(func_alloca, -func_scratch);
 
     cur_text_section->data_offset = saved_ind;
     pe_add_unwind_data(ind, saved_ind, v);

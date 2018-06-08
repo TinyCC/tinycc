@@ -171,7 +171,7 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
             && ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
             sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
         tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
-            sym->st_other, sym->st_shndx, s->link->data + sym->st_name);
+            sym->st_other, sym->st_shndx, (char*)s->link->data + sym->st_name);
     }
     /* now update relocations */
     for (i = 1; i < s1->nb_sections; i++) {
@@ -865,17 +865,13 @@ static void relocate_rel(TCCState *s1, Section *sr)
    their space */
 static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 {
+    int count = 0;
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     ElfW_Rel *rel;
-    int type, count;
-
-    count = 0;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
         int sym_index = ELFW(R_SYM)(rel->r_info);
-#endif
-        type = ELFW(R_TYPE)(rel->r_info);
+        int type = ELFW(R_TYPE)(rel->r_info);
         switch(type) {
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
 #if defined(TCC_TARGET_I386)
         case R_386_32:
             if (!get_sym_attr(s1, sym_index, 0)->dyn_index
@@ -899,7 +895,6 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
             if (get_sym_attr(s1, sym_index, 0)->dyn_index)
                 count++;
             break;
-#endif
         default:
             break;
         }
@@ -909,6 +904,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         sr->sh_flags |= SHF_ALLOC;
         sr->sh_size = count * sizeof(ElfW_Rel);
     }
+#endif
     return count;
 }
 

@@ -1990,6 +1990,7 @@ static void gen_opl(int op)
         vtop[-1] = vtop[-2];
         vtop[-2] = tmp;
         /* stack: L1 L2 H1 H2 */
+        save_regs(4);
         /* compare high */
         op1 = op;
         /* when values are equal, we need to compare low words. since
@@ -2205,7 +2206,7 @@ static void gen_opif(int op)
 {
     int c1, c2;
     SValue *v1, *v2;
-#if defined _MSC_VER && defined _AMD64_
+#if defined _MSC_VER && defined __x86_64__
     /* avoid bad optimization with f1 -= f2 for f1:-0.0, f2:0.0 */
     volatile
 #endif
@@ -4497,6 +4498,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                     if (n < TOK_UIDENT)
                         expect("identifier");
                     pt.t = VT_VOID; /* invalid type */
+                    pt.ref = NULL;
                     next();
                 }
                 convert_parameter_type(&pt);
@@ -6113,7 +6115,7 @@ static void gcase(struct case_t **base, int len, int *bsym)
     struct case_t *p;
     int e;
     int ll = (vtop->type.t & VT_BTYPE) == VT_LLONG;
-    while (len > 4) {
+    while (len > 8) {
         /* binary search */
         p = base[len/2];
         vdup();
@@ -7538,10 +7540,10 @@ static void gen_function(Sym *sym)
 static void gen_inline_functions(TCCState *s)
 {
     Sym *sym;
-    int inline_generated, i, ln;
+    int inline_generated, i;
     struct InlineFunc *fn;
 
-    ln = file->line_num;
+    tcc_open_bf(s, ":inline:", 0);
     /* iterate while inline function are referenced */
     do {
         inline_generated = 0;
@@ -7564,7 +7566,7 @@ static void gen_inline_functions(TCCState *s)
             }
         }
     } while (inline_generated);
-    file->line_num = ln;
+    tcc_close();
 }
 
 ST_FUNC void free_inline_functions(TCCState *s)

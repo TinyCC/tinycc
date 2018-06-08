@@ -1119,9 +1119,9 @@ ST_FUNC void end_macro(void)
     macro_stack = str->prev;
     macro_ptr = str->prev_ptr;
     file->line_num = str->save_line_num;
-    if (str->alloc == 2) {
-        str->alloc = 3; /* just mark as finished */
-    } else {
+    if (str->alloc != 0) {
+        if (str->alloc == 2)
+            str->str = NULL; /* don't free */
         tok_str_free(str);
     }
 }
@@ -1345,7 +1345,7 @@ ST_FUNC void free_defines(Sym *b)
         int v = b->v;
         if (v >= TOK_IDENT && v < tok_ident) {
             Sym **d = &table_ident[v - TOK_IDENT]->sym_define;
-            if (!*d)
+            if (!*d && b->d)
                 *d = b;
         }
         b = b->prev;
@@ -1799,9 +1799,9 @@ ST_FUNC void preprocess(int is_bof)
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
             tcc_error("#include recursion too deep");
-        /* store current file in stack, but increment stack later below */
-        *s1->include_stack_ptr = file;
-        i = tok == TOK_INCLUDE_NEXT ? file->include_next_index : 0;
+        /* push current file on stack */
+        *s1->include_stack_ptr++ = file;
+        i = tok == TOK_INCLUDE_NEXT ? file->include_next_index: 0;
         n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (; i < n; ++i) {
             char buf1[sizeof file->filename];
@@ -1849,10 +1849,10 @@ ST_FUNC void preprocess(int is_bof)
             printf("%s: including %s\n", file->prev->filename, file->filename);
 #endif
             /* update target deps */
-            dynarray_add(&s1->target_deps, &s1->nb_target_deps,
+            if (s1->gen_deps) {
+                dynarray_add(&s1->target_deps, &s1->nb_target_deps,
                     tcc_strdup(buf1));
-            /* push current file in stack */
-            ++s1->include_stack_ptr;
+            }
             /* add include file debug info */
             if (s1->do_debug)
                 put_stabs(file->filename, N_BINCL, 0, 0, 0);
@@ -1862,6 +1862,7 @@ ST_FUNC void preprocess(int is_bof)
         }
         tcc_error("include file '%s' not found", buf);
 include_done:
+        --s1->include_stack_ptr;
         break;
     case TOK_IFNDEF:
         c = 1;
@@ -3486,14 +3487,14 @@ static void macro_subst(
             }
 
             {
-                TokenString str;
-                str.str = (int*)macro_str;
-                begin_macro(&str, 2);
+                TokenString *str = tok_str_alloc();
+                str->str = (int*)macro_str;
+                begin_macro(str, 2);
 
                 tok = t;
                 macro_subst_tok(tok_str, nested_list, s);
 
-                if (str.alloc == 3) {
+                if (macro_stack != str) {
                     /* already finished by reading function macro arguments */
                     break;
                 }
@@ -3554,7 +3555,7 @@ ST_FUNC void next(void)
             tokstr_buf.len = 0;
             macro_subst_tok(&tokstr_buf, &nested_list, s);
             tok_str_add(&tokstr_buf, 0);
-            begin_macro(&tokstr_buf, 2);
+            begin_macro(&tokstr_buf, 0);
             goto redo;
         }
     }
@@ -3593,6 +3594,7 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     pp_debug_tok = pp_debug_symv = 0;
     pp_once++;
     pvtop = vtop = vstack - 1;
+    memset(vtop, 0, sizeof *vtop);
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
@@ -3628,13 +3630,8 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
 /* cleanup from error/setjmp */
 ST_FUNC void preprocess_end(TCCState *s1)
 {
-    /* Normally macro_stack is NULL here, except if an
-       error was thrown; then it can point to allocated storage
-       or to some stack variables, but those are unwound via
-       setjmp already, so can't be accessed.  Only two choices:
-       either we leak memory or we access invalid memory.  The
-       former is the better choice.  */
-    macro_stack = NULL;
+    while (macro_stack)
+        end_macro();
     macro_ptr = NULL;
 }
 

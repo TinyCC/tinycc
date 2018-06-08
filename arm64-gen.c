@@ -91,9 +91,6 @@ static uint32_t fltr(int r)
     return r - TREG_F(0);
 }
 
-#define dprintf(x) ((void)(tcc_state->verbose == 2 && printf x))
-//#define dprintf(x)
-
 // Add an instruction to text section:
 ST_FUNC void o(unsigned int c)
 {
@@ -103,7 +100,6 @@ ST_FUNC void o(unsigned int c)
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(cur_text_section, ind1);
     write32le(cur_text_section->data + ind, c);
-    dprintf(("o %04x : %08x\n", ind, c)); //gr
     ind = ind1;
 }
 
@@ -236,7 +232,6 @@ ST_FUNC void gsym_addr(int t_, int a_)
             tcc_error("branch out of range");
         write32le(ptr, (a - t == 4 ? 0xd503201f : // nop
                         0x14000000 | ((a - t) >> 2 & 0x3ffffff))); // b
-        dprintf((". gsym TARG=%04x ADDR=%04x\n", t, a)); //gr
         t = next;
     }
 }
@@ -1296,7 +1291,6 @@ ST_FUNC void gen_fill_nops(int bytes)
 ST_FUNC int gjmp(int t)
 {
     int r = ind;
-    dprintf((". gjmp T=%04x\n", t)); //gr
     if (nocode_wanted)
         return t;
     o(t);
@@ -1308,7 +1302,6 @@ ST_FUNC void gjmp_addr(int a)
 {
     assert(a - ind + 0x8000000 < 0x10000000);
     o(0x14000000 | ((a - ind) >> 2 & 0x3ffffff));
-    dprintf((". gjmp_addr T=%04x\n", a)); //gr
 }
 
 ST_FUNC int gjmp_append(int n, int t)
@@ -1330,7 +1323,6 @@ void arm64_vset_VT_CMP(int op)
     if (op >= TOK_ULT && op <= TOK_GT) {
         vtop->cmp_r = vtop->r;
         vset_VT_CMP(0x80);
-        dprintf((". set VT_CMP OP(%s) R=%x\n", get_tok_str(op, 0), vtop->cmp_r));
     }
 }
 
@@ -1339,7 +1331,6 @@ static void arm64_gen_opil(int op, uint32_t l);
 static void arm64_load_cmp(int r, SValue *sv)
 {
     sv->r = sv->cmp_r;
-    dprintf((". load VT_CMP OP(%x), R=%x/%x\n", (int)sv->c.i, sv->r, r));
     if (sv->c.i & 1) {
         vpushi(1);
         arm64_gen_opil('^', 0);
@@ -1348,7 +1339,6 @@ static void arm64_load_cmp(int r, SValue *sv)
         load(r, sv);
         sv->r = r;
     }
-    dprintf((". load VT_CMP done\n")); //gr
 }
 
 ST_FUNC int gjmp_cond(int op, int t)
@@ -1357,7 +1347,6 @@ ST_FUNC int gjmp_cond(int op, int t)
 
     int inv = op & 1;
     vtop->r = vtop->cmp_r;
-    dprintf((". gjmp_cond OP(%x) R=%x T=%04x\n", op, vtop->r, t)); //gr
 
     if (bt == VT_LDOUBLE) {
         uint32_t a, b, f = fltr(gv(RC_FLOAT));
