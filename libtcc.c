@@ -1365,6 +1365,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             ignoring = 1;
         } else if (link_option(option, "export-all-symbols", &p)) {
             s->rdynamic = 1;
+        } else if (link_option(option, "export-dynamic", &p)) {
+            s->rdynamic = 1;
         } else if (link_option(option, "rpath=", &p)) {
             copy_linker_arg(&s->rpath, p, ':');
         } else if (link_option(option, "enable-new-dtags", &p)) {
