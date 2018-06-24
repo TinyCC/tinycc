@@ -988,7 +988,8 @@ void gfunc_prolog(CType *func_type)
             if (reg_param_index < REGN) {
                 gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             }
-            sym_push(sym->v & ~SYM_FIELD, type, VT_LLOCAL | VT_LVAL, addr);
+            sym_push(sym->v & ~SYM_FIELD, type,
+		     VT_LLOCAL | lvalue_type(type->t), addr);
         } else {
             if (reg_param_index < REGN) {
                 /* save arguments passed by register */
@@ -1001,7 +1002,8 @@ void gfunc_prolog(CType *func_type)
                     gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
                 }
             }
-            sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL, addr);
+            sym_push(sym->v & ~SYM_FIELD, type,
+		     VT_LOCAL | lvalue_type(type->t), addr);
         }
         addr += 8;
         reg_param_index++;
@@ -1567,7 +1569,7 @@ void gfunc_prolog(CType *func_type)
 	default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
-                 VT_LOCAL | VT_LVAL, param_addr);
+                 VT_LOCAL | lvalue_type(type->t), param_addr);
     }
 
 #ifdef CONFIG_TCC_BCHECK
