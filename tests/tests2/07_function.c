@@ -15,6 +15,11 @@ void qfunc()
    printf("qfunc()\n");
 }
 
+void zfunc()
+{
+   ((void (*)(void))0) ();
+}
+
 int main()
 {
    printf("%d\n", myfunc(3));
