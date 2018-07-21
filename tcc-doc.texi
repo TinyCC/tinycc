@@ -548,6 +548,7 @@ instead of
 @cindex stdcall attribute
 @cindex regparm attribute
 @cindex dllexport attribute
+@cindex nodecorate attribute
 
 @item The keyword @code{__attribute__} is handled to specify variable or
 function attributes. The following attributes are supported:
@@ -574,6 +575,8 @@ between 1 and 3. The first @var{n} function parameters are respectively put in
 registers @code{%eax}, @code{%edx} and @code{%ecx}.
 
   @item @code{dllexport}: export function from dll/executable (win32 only)
+
+  @item @code{nodecorate}: do not apply any decorations that would otherwise be applied when exporting function from dll/executable (win32 only)
 
   @end itemize
 

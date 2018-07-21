@@ -391,6 +391,9 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
 #ifdef TCC_TARGET_PE
         if (sym_type == STT_FUNC && sym->type.ref) {
             Sym *ref = sym->type.ref;
+            if (ref->a.nodecorate) {
+                can_add_underscore = 0;
+            }
             if (ref->f.func_call == FUNC_STDCALL && can_add_underscore) {
                 sprintf(buf1, "_%s@%d", name, ref->f.func_args * PTR_SIZE);
                 name = buf1;
@@ -3437,6 +3440,9 @@ redo:
             break;
         case TOK_DLLEXPORT:
             ad->a.dllexport = 1;
+            break;
+        case TOK_NODECORATE:
+            ad->a.nodecorate = 1;
             break;
         case TOK_DLLIMPORT:
             ad->a.dllimport = 1;

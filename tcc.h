@@ -439,8 +439,9 @@ struct SymAttr {
     weak        : 1,
     visibility  : 2,
     dllexport   : 1,
+    nodecorate  : 1,
     dllimport   : 1,
-    unused      : 5;
+    unused      : 4;
 };
 
 /* function attributes or temporary attributes for parsing */
