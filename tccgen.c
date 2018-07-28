@@ -4180,7 +4180,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
                 u = ad->attr_mode -1;
                 t = (t & ~(VT_BTYPE|VT_LONG)) | u;
             }
-            break;
+            continue;
             /* GNUC typeof */
         case TOK_TYPEOF1:
         case TOK_TYPEOF2:

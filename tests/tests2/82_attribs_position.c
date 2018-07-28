@@ -16,4 +16,25 @@ void __attribute__((stdcall)) foo (void)
 {
 }
 
-int main () { return 0; }
+/* The actual attribute isn't important, must just be
+   parsable.  */
+#define ATTR __attribute__((__noinline__))
+int ATTR actual_function() {
+  return 42;
+}
+
+extern int printf (const char *, ...);
+int main()
+{
+    void *function_pointer = &actual_function;
+
+    int a = ((ATTR int(*) (void)) function_pointer)();
+    printf("%i\n", a);
+
+    /* In the following we once misparsed 'ATTR *' is a btype
+       and hence the whole type was garbled.  */
+    int b = ( (int(ATTR *)(void))  function_pointer)();
+    printf("%i\n", b);
+
+    return 0;
+}
