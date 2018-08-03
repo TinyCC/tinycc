@@ -3916,6 +3916,7 @@ do_decl:
                                       get_tok_str(v, NULL));
                         }
                         if ((type1.t & VT_BTYPE) == VT_FUNC ||
+			    (type1.t & VT_BTYPE) == VT_VOID ||
                             (type1.t & VT_STORAGE))
                             tcc_error("invalid type for '%s'", 
                                   get_tok_str(v, NULL));
@@ -7362,6 +7363,9 @@ found:
                     }
                     sym->a = ad.a;
                     sym->f = ad.f;
+		} else if ((type.t & VT_BTYPE) == VT_VOID
+			   && !(type.t & VT_EXTERN)) {
+		    tcc_error("declaration of void object");
                 } else {
                     r = 0;
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
