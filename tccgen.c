@@ -7118,6 +7118,15 @@ static void gen_function(Sym *sym)
     local_scope = 0;
     rsym = 0;
     block(NULL, NULL, 0);
+    if (!(nocode_wanted & 0x20000000)
+	&& ((func_vt.t & VT_BTYPE) == VT_INT)
+	&& !strcmp (funcname, "main"))
+      {
+	nocode_wanted = 0;
+	vpushi(0);
+	gen_assign_cast(&func_vt);
+	gfunc_return(&func_vt);
+      }
     nocode_wanted = 0;
     gsym(rsym);
     gfunc_epilog();
