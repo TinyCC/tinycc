@@ -68,5 +68,8 @@ int main()
 	printf("%d\n", i);
 	i = _Generic(foo, fptr: 3, int: 4);
 	printf("%d\n", i);
+
+	(void)_Generic((int(*)[2]){0}, int(*)[2]:0, int(*)[4]:0); //shouldn't match twice
+
 	return 0;
 }

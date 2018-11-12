@@ -2820,11 +2820,14 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     if (t1 != t2)
         return 0;
     /* test more complicated cases */
-    bt1 = t1 & VT_BTYPE;
+    bt1 = t1 & (VT_BTYPE | (unqualified ? 0 : VT_ARRAY) );
     if (bt1 == VT_PTR) {
         type1 = pointed_type(type1);
         type2 = pointed_type(type2);
         return is_compatible_types(type1, type2);
+    } else if (bt1 & VT_ARRAY) {
+        return type1->ref->c < 0 || type2->ref->c < 0
+            || type1->ref->c == type2->ref->c;
     } else if (bt1 == VT_STRUCT) {
         return (type1->ref == type2->ref);
     } else if (bt1 == VT_FUNC) {
