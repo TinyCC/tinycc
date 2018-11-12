@@ -290,7 +290,7 @@ redo:
             tcc_error("no input files\n");
 
         if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-            if (s->outfile) {
+            if (s->outfile && 0!=strcmp("-",s->outfile)) {
                 ppfp = fopen(s->outfile, "w");
                 if (!ppfp)
                     tcc_error("could not write '%s'", s->outfile);
