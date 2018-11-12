@@ -2964,7 +2964,10 @@ static void type_to_str(char *buf, int buf_size,
     case VT_PTR:
         s = type->ref;
         if (t & VT_ARRAY) {
-            snprintf(buf1, sizeof(buf1), "%s[%d]", varstr ? varstr : "", s->c);
+            if (varstr && '*' == *varstr)
+                snprintf(buf1, sizeof(buf1), "(%s)[%d]", varstr, s->c);
+            else
+                snprintf(buf1, sizeof(buf1), "%s[%d]", varstr ? varstr : "", s->c);
             type_to_str(buf, buf_size, &s->type, buf1);
             goto no_var;
         }

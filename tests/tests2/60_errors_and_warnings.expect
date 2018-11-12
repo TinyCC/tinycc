@@ -44,3 +44,12 @@
 
 [test_enum_compat]
 60_errors_and_warnings.c:119: error: incompatible types for redefinition of 'f3'
+
+[test_ptr_to_str]
+60_errors_and_warnings.c:122: error: type 'const int **' does not match any association
+
+[test_fnptr_to_str]
+60_errors_and_warnings.c:124: error: type 'int (*(*)(float, char))(double, int)' does not match any association
+
+[test_array_to_str]
+60_errors_and_warnings.c:126: error: type 'int (*)[3]' does not match any association
