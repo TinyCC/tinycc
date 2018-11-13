@@ -71,5 +71,8 @@ int main()
 
 	(void)_Generic((int(*)[2]){0}, int(*)[2]:0, int(*)[4]:0); //shouldn't match twice
 
+	//should accept ({ }) in the controlling expr of _Generic even in const_wanted contexts
+	struct { _Bool x_0: _Generic(({0;}),default:1); } my_x;
+
 	return 0;
 }

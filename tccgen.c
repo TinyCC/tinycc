@@ -5033,13 +5033,16 @@ ST_FUNC void unary(void)
 	int has_match = 0;
 	int learn = 0;
 	TokenString *str = NULL;
+	int saved_const_wanted = const_wanted;
 
 	next();
 	skip('(');
+	const_wanted = 0;
 	expr_type(&controlling_type, expr_eq);
 	controlling_type.t &= ~(VT_CONSTANT | VT_VOLATILE | VT_ARRAY);
 	if ((controlling_type.t & VT_BTYPE) == VT_FUNC)
 	  mk_pointer(&controlling_type);
+	const_wanted = saved_const_wanted;
 	for (;;) {
 	    learn = 0;
 	    skip(',');
