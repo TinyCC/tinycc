@@ -74,5 +74,8 @@ int main()
 	//should accept ({ }) in the controlling expr of _Generic even in const_wanted contexts
 	struct { _Bool x_0: _Generic(({0;}),default:1); } my_x;
 
+	_Generic((__typeof((float const)((float const){42}))*){0}, float*: 0); //casts lose top-level qualifiers
+	int const x = 42; __typeof((__typeof(x))x) *xp = 0; (void)_Generic(xp, int*: 0); //casts lose top-level qualifiers
+
 	return 0;
 }
