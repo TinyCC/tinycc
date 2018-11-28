@@ -5663,7 +5663,6 @@ static void expr_cond(void)
             /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
                that `(expr ? a : b).mem` does not error  with "lvalue expected" */
             islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
-            islv &= c < 0;
 
             /* now we convert second operand */
             if (c != 1) {
@@ -5708,7 +5707,7 @@ static void expr_cond(void)
                     gaddrof();
             }
 
-            if (c < 0) {
+            if (c < 0 || islv) {
                 r1 = gv(rc);
                 move_reg(r2, r1, type.t);
                 vtop->r = r2;
