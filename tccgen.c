@@ -2096,9 +2096,11 @@ static inline int is_null_pointer(SValue *p)
     return ((p->type.t & VT_BTYPE) == VT_INT && (uint32_t)p->c.i == 0) ||
         ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.i == 0) ||
         ((p->type.t & VT_BTYPE) == VT_PTR &&
-         (PTR_SIZE == 4 ? (uint32_t)p->c.i == 0 : p->c.i == 0));
+         (PTR_SIZE == 4 ? (uint32_t)p->c.i == 0 : p->c.i == 0) &&
+         ((pointed_type(&p->type)->t&VT_BTYPE)==VT_VOID) &&
+         0==(pointed_type(&p->type)->t&(VT_CONSTANT|VT_VOLATILE))
+         );
 }
-
 static inline int is_integer_btype(int bt)
 {
     return (bt == VT_BYTE || bt == VT_SHORT || 
@@ -5588,6 +5590,7 @@ static void expr_cond(void)
             bt2 = t2 & VT_BTYPE;
             type.ref = NULL;
 
+
             /* cast operands to correct type according to ISOC rules */
             if (is_float(bt1) || is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
@@ -5610,16 +5613,30 @@ static void expr_cond(void)
                     (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
             } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
-		/* If one is a null ptr constant the result type
-		   is the other.  */
-		if (is_null_pointer (vtop))
-		  type = type1;
-		else if (is_null_pointer (&sv))
-		  type = type2;
-                /* XXX: test pointer compatibility, C99 has more elaborate
-		   rules here.  */
-		else
-		  type = type1;
+                /* http://port70.net/~nsz/c/c99/n1256.html#6.5.15p6 */
+                /* If one is a null ptr constant the result type
+                   is the other.  */
+                if (is_null_pointer (vtop)) type = type1;
+                else if (is_null_pointer (&sv)) type = type2;
+                else{
+                    int pbt1 = (pointed_type(&type1)->t&VT_BTYPE);
+                    int pbt2 = (pointed_type(&type2)->t&VT_BTYPE);
+                    /*pointers to void get preferred, otherwise the pointed to types minus qualifs should be compatible*/
+                    type = (pbt1==VT_VOID) ? type1 : type2;
+                    if (pbt1!=VT_VOID && pbt2!=VT_VOID){
+                        if(!compare_types(pointed_type(&type1), pointed_type(&type2),1/*unqualif*/))
+                            tcc_warning("pointer type mismatch in conditional expression\n");
+                    }
+                    /*qualifs combine*/
+                    pointed_type(&type)->t |= 0
+                          |(pointed_type(&type1)->t&(VT_CONSTANT|VT_VOLATILE))
+                          |(pointed_type(&type2)->t&(VT_CONSTANT|VT_VOLATILE));
+                    /*pointers to incomplete arrays get converted to pointers to completed ones if possible*/
+                    if ( (pointed_type(&type1)->t&VT_ARRAY) )
+                        pointed_type(&type)->ref->c =
+                            0<pointed_type(&type1)->ref->c ?
+                            pointed_type(&type1)->ref->c : pointed_type(&type2)->ref->c;
+                }
             } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
                 /* XXX: test function pointer compatibility */
                 type = bt1 == VT_FUNC ? type1 : type2;

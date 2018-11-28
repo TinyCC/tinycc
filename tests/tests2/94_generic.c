@@ -77,5 +77,23 @@ int main()
 	_Generic((__typeof((float const)((float const){42}))*){0}, float*: 0); //casts lose top-level qualifiers
 	int const x = 42; __typeof((__typeof(x))x) *xp = 0; (void)_Generic(xp, int*: 0); //casts lose top-level qualifiers
 
+	//TEST TERNARY:
+	//Same type
+	_Generic( 0?(long*)0:(long*)0,  long*: (void)0);
+	//combining of qualifiers
+	_Generic( 0?(long volatile*)0:(long const*)0,  long const volatile*: (void)0);
+	//nul-ptr constant selects other type
+	_Generic( 0?(long*)0:0,			long*: (void)0);
+	_Generic( 0?(long*)0:(void*)0, long*: (void)0);
+
+	//void ptrs get chosen preferentially; qualifs still combine
+	_Generic( 0?(int volatile*)0: (void const*)1, void volatile const*: (void)0);
+	//like gcc but not clang, don't treat (void* const as the null-ptr constant)
+	_Generic( 0?(int volatile*)0: (void const*)0, void volatile const*: (void)0);
+
+	//ptrs to incomplete types get completed
+	(void)(sizeof(struct { int x:_Generic( 0?(int (*)[4])0 : (int (*)[])0, int (*)[4]:+1, int (*)[5]:(void)0); }));
+	(void)(sizeof(struct { int x:_Generic( 0?(int (*)[])0 : (int (*)[4])0, int (*)[4]:+1, int (*)[5]:(void)0); }));
+
 	return 0;
 }
