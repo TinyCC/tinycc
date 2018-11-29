@@ -6,20 +6,24 @@ static void f (void){}
 void (*fp)(void) = f;
 void call_fp()
 {
-	(fp?f:f)();
-	(fp?fp:fp)();
-	(fp?fp:&f)();
-	(fp?&f:fp)();
-	(fp?&f:&f)();
-	_Generic(0?arr:arr, char*: (void)0);
-	_Generic(0?&arr[0]:arr, char*: (void)0);
-	_Generic(0?arr:&arr[0], char*: (void)0);
-	_Generic(1?arr:arr, char*: (void)0);
-	_Generic(1?&arr[0]:arr, char*: (void)0);
-	_Generic(1?arr:&arr[0], char*: (void)0);
-	_Generic((__typeof(1?f:f)*){0}, void (**)(void): (void)0);
-	(fp?&f:f)();
-	(fp?f:&f)();
+    (fp?f:f)();
+    (fp?fp:fp)();
+    (fp?fp:&f)();
+    (fp?&f:fp)();
+    (fp?&f:&f)();
+    _Generic(0?arr:arr, char*: (void)0);
+    _Generic(0?&arr[0]:arr, char*: (void)0);
+    _Generic(0?arr:&arr[0], char*: (void)0);
+    _Generic(1?arr:arr, char*: (void)0);
+    _Generic(1?&arr[0]:arr, char*: (void)0);
+    _Generic(1?arr:&arr[0], char*: (void)0);
+    _Generic((__typeof(1?f:f)*){0}, void (**)(void): (void)0);
+    (fp?&f:f)();
+    (fp?f:&f)();
+    _Generic((__typeof(fp?0L:(void)0)*){0}, void*: (void)0);
+
+    //Should cleanly fail, not segfault:
+    /*(fp?f:1);*/
 }
 
 int main()

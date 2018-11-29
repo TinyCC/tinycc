@@ -5598,7 +5598,9 @@ static void expr_cond(void)
 
 
             /* cast operands to correct type according to ISOC rules */
-            if (is_float(bt1) || is_float(bt2)) {
+            if (bt1 == VT_VOID || bt2 == VT_VOID) {
+                type.t = VT_VOID; /* NOTE: as an extension, we accept void on only one side */
+            }else if (is_float(bt1) || is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
                     type.t = VT_LDOUBLE;
 
@@ -5625,8 +5627,11 @@ static void expr_cond(void)
                 if (is_null_pointer (vtop)) type = type1;
                 else if (is_null_pointer (&sv)) type = type2;
                 else{
-                    int pbt1 = (pointed_type(&type1)->t&VT_BTYPE);
-                    int pbt2 = (pointed_type(&type2)->t&VT_BTYPE);
+                    int pbt1, pbt2;
+                    if (bt1!=bt2)
+                        tcc_error("incompatible types in conditional expressions");
+                    pbt1 = (pointed_type(&type1)->t&VT_BTYPE);
+                    pbt2 = (pointed_type(&type2)->t&VT_BTYPE);
                     /*pointers to void get preferred, otherwise the pointed to types minus qualifs should be compatible*/
                     type = (pbt1==VT_VOID) ? type1 : type2;
                     if (pbt1!=VT_VOID && pbt2!=VT_VOID){
@@ -5652,9 +5657,6 @@ static void expr_cond(void)
             } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
                 /* XXX: test structure compatibility */
                 type = bt1 == VT_STRUCT ? type1 : type2;
-            } else if (bt1 == VT_VOID || bt2 == VT_VOID) {
-                /* NOTE: as an extension, we accept void on only one side */
-                type.t = VT_VOID;
             } else {
                 /* integer operations */
                 type.t = VT_INT | (VT_LONG & (t1 | t2));
