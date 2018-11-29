@@ -5627,6 +5627,12 @@ static void expr_cond(void)
                         if(!compare_types(pointed_type(&type1), pointed_type(&type2),1/*unqualif*/))
                             tcc_warning("pointer type mismatch in conditional expression\n");
                     }
+                    {   /*copy the pointer target symbol*/
+                        Sym *s;
+                        s = sym_push(SYM_FIELD, pointed_type(&type), 0, -1);
+                        type.t = VT_PTR | (type.t & VT_STORAGE);
+                        type.ref = s;
+                    }
                     /*qualifs combine*/
                     pointed_type(&type)->t |= 0
                           |(pointed_type(&type1)->t&(VT_CONSTANT|VT_VOLATILE))

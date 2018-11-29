@@ -95,5 +95,12 @@ int main()
 	(void)(sizeof(struct { int x:_Generic( 0?(int (*)[4])0 : (int (*)[])0, int (*)[4]:+1, int (*)[5]:(void)0); }));
 	(void)(sizeof(struct { int x:_Generic( 0?(int (*)[])0 : (int (*)[4])0, int (*)[4]:+1, int (*)[5]:(void)0); }));
 
+	{
+		char **argv;
+		_Generic(argv, char**: (void)0);
+		_Generic(0?(char const*)0:argv[0], char const*: (void)0);
+		_Generic(argv, char**: (void)0);
+	}
+
 	return 0;
 }
