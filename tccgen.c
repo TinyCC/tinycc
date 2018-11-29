@@ -5565,7 +5565,10 @@ static void expr_cond(void)
             if (!g)
                 gexpr();
 
-            type1 = vtop->type;
+            if ( ((type1=vtop->type).t&VT_BTYPE)==VT_FUNC ) {
+                mk_pointer(&vtop->type);
+                type1=vtop->type;
+            }
             sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
@@ -5583,7 +5586,10 @@ static void expr_cond(void)
             if (c == 1)
                 nocode_wanted--;
 
-            type2 = vtop->type;
+            if ( ((type2=vtop->type).t&VT_BTYPE)==VT_FUNC ) {
+                mk_pointer(&vtop->type);
+                type2=vtop->type;
+            }
             t1 = type1.t;
             bt1 = t1 & VT_BTYPE;
             t2 = type2.t;
@@ -5643,9 +5649,6 @@ static void expr_cond(void)
                             0<pointed_type(&type1)->ref->c ?
                             pointed_type(&type1)->ref->c : pointed_type(&type2)->ref->c;
                 }
-            } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
-                /* XXX: test function pointer compatibility */
-                type = bt1 == VT_FUNC ? type1 : type2;
             } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
                 /* XXX: test structure compatibility */
                 type = bt1 == VT_STRUCT ? type1 : type2;
