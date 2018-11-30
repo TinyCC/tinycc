@@ -2097,8 +2097,8 @@ static inline int is_null_pointer(SValue *p)
         ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.i == 0) ||
         ((p->type.t & VT_BTYPE) == VT_PTR &&
          (PTR_SIZE == 4 ? (uint32_t)p->c.i == 0 : p->c.i == 0) &&
-         ((pointed_type(&p->type)->t&VT_BTYPE)==VT_VOID) &&
-         0==(pointed_type(&p->type)->t&(VT_CONSTANT|VT_VOLATILE))
+         ((pointed_type(&p->type)->t & VT_BTYPE) == VT_VOID) &&
+         0 == (pointed_type(&p->type)->t & (VT_CONSTANT | VT_VOLATILE))
          );
 }
 static inline int is_integer_btype(int bt)
@@ -2823,7 +2823,7 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     if (t1 != t2)
         return 0;
     /* test more complicated cases */
-    bt1 = t1 & (VT_BTYPE | (unqualified ? 0 : VT_ARRAY) );
+    bt1 = t1 & (VT_BTYPE | VT_ARRAY);
     if (bt1 == VT_PTR) {
         type1 = pointed_type(type1);
         type2 = pointed_type(type2);
@@ -5565,10 +5565,9 @@ static void expr_cond(void)
             if (!g)
                 gexpr();
 
-            if ( ((type1=vtop->type).t&VT_BTYPE)==VT_FUNC ) {
+            if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
                 mk_pointer(&vtop->type);
-                type1=vtop->type;
-            }
+	    type1 = vtop->type;
             sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
@@ -5586,10 +5585,9 @@ static void expr_cond(void)
             if (c == 1)
                 nocode_wanted--;
 
-            if ( ((type2=vtop->type).t&VT_BTYPE)==VT_FUNC ) {
+            if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
                 mk_pointer(&vtop->type);
-                type2=vtop->type;
-            }
+	    type2=vtop->type;
             t1 = type1.t;
             bt1 = t1 & VT_BTYPE;
             t2 = type2.t;
@@ -5600,7 +5598,7 @@ static void expr_cond(void)
             /* cast operands to correct type according to ISOC rules */
             if (bt1 == VT_VOID || bt2 == VT_VOID) {
                 type.t = VT_VOID; /* NOTE: as an extension, we accept void on only one side */
-            }else if (is_float(bt1) || is_float(bt2)) {
+            } else if (is_float(bt1) || is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
                     type.t = VT_LDOUBLE;
 
@@ -5626,33 +5624,48 @@ static void expr_cond(void)
                    is the other.  */
                 if (is_null_pointer (vtop)) type = type1;
                 else if (is_null_pointer (&sv)) type = type2;
-                else{
-                    int pbt1, pbt2;
-                    if (bt1!=bt2)
-                        tcc_error("incompatible types in conditional expressions");
-                    pbt1 = (pointed_type(&type1)->t&VT_BTYPE);
-                    pbt2 = (pointed_type(&type2)->t&VT_BTYPE);
-                    /*pointers to void get preferred, otherwise the pointed to types minus qualifs should be compatible*/
-                    type = (pbt1==VT_VOID) ? type1 : type2;
-                    if (pbt1!=VT_VOID && pbt2!=VT_VOID){
-                        if(!compare_types(pointed_type(&type1), pointed_type(&type2),1/*unqualif*/))
+                else if (bt1 != bt2)
+		    tcc_error("incompatible types in conditional expressions");
+		else {
+		    CType *pt1 = pointed_type(&type1);
+		    CType *pt2 = pointed_type(&type2);
+                    int pbt1 = pt1->t & VT_BTYPE;
+                    int pbt2 = pt2->t & VT_BTYPE;
+		    int newquals, copied = 0;
+		    /* pointers to void get preferred, otherwise the
+		       pointed to types minus qualifs should be compatible */
+                    type = (pbt1 == VT_VOID) ? type1 : type2;
+                    if (pbt1 != VT_VOID && pbt2 != VT_VOID) {
+                        if(!compare_types(pt1, pt2, 1/*unqualif*/))
                             tcc_warning("pointer type mismatch in conditional expression\n");
                     }
-                    {   /*copy the pointer target symbol*/
-                        Sym *s;
-                        s = sym_push(SYM_FIELD, pointed_type(&type), 0, -1);
-                        type.t = VT_PTR | (type.t & VT_STORAGE);
-                        type.ref = s;
-                    }
-                    /*qualifs combine*/
-                    pointed_type(&type)->t |= 0
-                          |(pointed_type(&type1)->t&(VT_CONSTANT|VT_VOLATILE))
-                          |(pointed_type(&type2)->t&(VT_CONSTANT|VT_VOLATILE));
-                    /*pointers to incomplete arrays get converted to pointers to completed ones if possible*/
-                    if ( (pointed_type(&type1)->t&VT_ARRAY) )
+                    /* combine qualifs */
+		    newquals = ((pt1->t | pt2->t) & (VT_CONSTANT | VT_VOLATILE));
+		    if ((~pointed_type(&type)->t & (VT_CONSTANT | VT_VOLATILE))
+			& newquals)
+		      {
+			/* copy the pointer target symbol */
+			type.ref = sym_push(SYM_FIELD, &type.ref->type,
+					    0, type.ref->c);
+			copied = 1;
+			pointed_type(&type)->t |= newquals;
+		      }
+                    /* pointers to incomplete arrays get converted to
+		       pointers to completed ones if possible */
+		    if (pt1->t & VT_ARRAY
+			&& pt2->t & VT_ARRAY
+			&& pointed_type(&type)->ref->c < 0
+			&& (pt1->ref->c > 0 || pt2->ref->c > 0))
+		      {
+			if (!copied)
+			  type.ref = sym_push(SYM_FIELD, &type.ref->type,
+					      0, type.ref->c);
+			pointed_type(&type)->ref =
+			    sym_push(SYM_FIELD, &pointed_type(&type)->ref->type,
+				     0, pointed_type(&type)->ref->c);
                         pointed_type(&type)->ref->c =
-                            0<pointed_type(&type1)->ref->c ?
-                            pointed_type(&type1)->ref->c : pointed_type(&type2)->ref->c;
+			    0 < pt1->ref->c ? pt1->ref->c : pt2->ref->c;
+		      }
                 }
             } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
                 /* XXX: test structure compatibility */
