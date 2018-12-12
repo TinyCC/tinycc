@@ -4829,6 +4829,7 @@ ST_FUNC void unary(void)
     case TOK_SIZEOF:
     case TOK_ALIGNOF1:
     case TOK_ALIGNOF2:
+    case TOK_ALIGNOF3:
         t = tok;
         next();
         in_sizeof++;

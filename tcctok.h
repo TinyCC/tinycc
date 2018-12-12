@@ -53,6 +53,7 @@
      DEF(TOK_ATTRIBUTE2, "__attribute__")
      DEF(TOK_ALIGNOF1, "__alignof")
      DEF(TOK_ALIGNOF2, "__alignof__")
+     DEF(TOK_ALIGNOF3, "_Alignof")
      DEF(TOK_TYPEOF1, "typeof")
      DEF(TOK_TYPEOF2, "__typeof")
      DEF(TOK_TYPEOF3, "__typeof__")
