@@ -866,12 +866,14 @@ static void relocate_rel(TCCState *s1, Section *sr)
 static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 {
     ElfW_Rel *rel;
-    int sym_index, type, count;
+    int type, count;
 
     count = 0;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
-        sym_index = ELFW(R_SYM)(rel->r_info);
         type = ELFW(R_TYPE)(rel->r_info);
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
+        int sym_index = ELFW(R_SYM)(rel->r_info);
+#endif
         switch(type) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
 #if defined(TCC_TARGET_I386)
