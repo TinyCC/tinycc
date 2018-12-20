@@ -456,15 +456,9 @@ struct FuncAttr {
     func_args   : 8; /* PE __stdcall args */
 };
 
-/* GNUC attribute definition */
-typedef struct AttributeDef {
-    struct SymAttr a;
-    struct FuncAttr f;
-    struct Section *section;
-    int alias_target; /* token */
-    int asm_label; /* associated asm label */
-    char attr_mode; /* __attribute__((__mode__(...))) */
-} AttributeDef;
+typedef struct ScopeTacker {
+    struct ScopeTacker *prev;
+} ScopeTacker;
 
 /* symbol management */
 typedef struct Sym {
@@ -476,7 +470,10 @@ typedef struct Sym {
             int c; /* associated number or Elf symbol index */
             union {
                 int sym_scope; /* scope level for locals */
-                int jnext; /* next jump label */
+		struct {
+		    ScopeTacker *scope;
+		    int jnext; /* next jump label */
+		};
                 struct FuncAttr f; /* function attributes */
                 int auxtype; /* bitfield access type */
             };
@@ -589,6 +586,18 @@ typedef struct TokenString {
     const int *prev_ptr;
     char alloc;
 } TokenString;
+
+/* GNUC attribute definition */
+typedef struct AttributeDef {
+    struct SymAttr a;
+    struct FuncAttr f;
+    struct Section *section;
+    Sym *cleanup_func;
+    int should_remember;
+    int alias_target; /* token */
+    int asm_label; /* associated asm label */
+    char attr_mode; /* __attribute__((__mode__(...))) */
+} AttributeDef;
 
 /* inline functions */
 typedef struct InlineFunc {
@@ -1278,6 +1287,8 @@ static inline int toup(int c) {
 ST_DATA Sym *sym_free_first;
 ST_DATA void **sym_pools;
 ST_DATA int nb_sym_pools;
+
+ST_DATA ScopeTacker *scope_tracker;
 
 ST_DATA Sym *global_stack;
 ST_DATA Sym *local_stack;

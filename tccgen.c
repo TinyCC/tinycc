@@ -38,7 +38,13 @@ ST_DATA Sym *local_stack;
 ST_DATA Sym *define_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
+
 static int local_scope;
+#define SCOPE_TCK_STORE_SIZE 1024
+ST_DATA ScopeTacker *scope_tracker;
+static ScopeTacker scope_tck_store[SCOPE_TCK_STORE_SIZE];
+static int scope_tck_idx;
+
 static int in_sizeof;
 static int section_sym;
 
@@ -77,7 +83,29 @@ ST_DATA struct temp_local_variable {
 	short size;
 	short align;
 } arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
+
 short nb_temp_local_vars;
+static struct cleanup {
+    ScopeTacker *scope;
+    struct {
+	Sym *var;
+	Sym *func;
+    } *syms;
+    int nb_cleanup;
+} *cleanup_info;
+
+static struct cleanup **cleanup_info_store;
+static int cleanup_idx;
+
+static struct CleanupGoto {
+    Sym *s;
+    ScopeTacker *scope;
+    int jnext;
+    int is_valide;
+} **cleanup_goto_info;
+
+static int last_cleanup_goto;
+
 /* ------------------------------------------------------------------------- */
 
 static void gen_cast(CType *type);
@@ -107,6 +135,57 @@ static void skip_or_save_block(TokenString **str);
 static void gv_dup(void);
 static int get_temp_local_var(int size,int align);
 static void clear_temp_local_var_list();
+
+static void incr_local_scope(void)
+{
+    ScopeTacker *tmp = scope_tracker;
+
+    ++local_scope;
+    /* if we have more scopes that SCOPE_TCK_STORE_SIZE  */
+    /* cleanup will not work at all, but it should be a very rare case */
+    /* and I don't want to add too much complexiy for handeling case */
+    /* that should not happen */
+    if (scope_tck_idx < SCOPE_TCK_STORE_SIZE) {
+	scope_tracker = &scope_tck_store[scope_tck_idx];
+	scope_tracker->prev = tmp;
+	++scope_tck_idx;
+    }
+}
+
+static void decr_local_scope(void)
+{
+    if (scope_tracker)
+	scope_tracker = scope_tracker->prev;
+    --local_scope;
+}
+
+static void reset_local_scope(void)
+{
+    if (cleanup_info) {
+	for (int i = 0; i < cleanup_idx; ++i) {
+	    cleanup_info = cleanup_info_store[i];
+	    tcc_free(cleanup_info->syms);
+	    tcc_free(cleanup_info);
+	}
+	cleanup_info = NULL;
+	cleanup_idx = 0;
+	tcc_free(cleanup_info_store);
+	cleanup_info_store = NULL;
+	dynarray_reset(&cleanup_goto_info, &last_cleanup_goto);
+    }
+    scope_tracker = NULL;
+    local_scope = 0;
+    scope_tck_idx = 0;
+}
+
+int is_scope_a_parent_of(ScopeTacker *parent, ScopeTacker *child)
+{
+    for (ScopeTacker *cur = parent->prev; cur; cur = cur->prev) {
+	if (cur == child)
+	    return 1;
+    }
+    return 0;
+}
 
 ST_INLN int is_float(int t)
 {
@@ -3392,6 +3471,23 @@ redo:
         t = tok;
         next();
         switch(t) {
+	case TOK_CLEANUP1:
+	case TOK_CLEANUP2:
+	{
+	    Sym *s;
+
+	    skip('(');
+	    s = sym_find(tok);
+	    if (!s) {
+	      tcc_warning("implicit declaration of function '%s'",
+			  get_tok_str(tok, &tokc));
+	      s = external_global_sym(tok, &func_old_type, 0);
+	    }
+	    ad->cleanup_func = s;
+	    next();
+            skip(')');
+	    break;
+	}
         case TOK_SECTION1:
         case TOK_SECTION2:
             skip('(');
@@ -4541,6 +4637,8 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
 	    ret = pointed_type(type);
     }
 
+    if (ad->cleanup_func)
+	ad->should_remember = 1;
     if (tok == '(') {
 	/* This is possibly a parameter type list for abstract declarators
 	   ('int ()'), use post_type for testing this.  */
@@ -4691,6 +4789,59 @@ static void parse_builtin_params(int nc, const char *args)
     if (nc)
         nocode_wanted--;
 }
+
+static void try_call_scope_cleanup(ScopeTacker *scope)
+{
+    if (!cleanup_info)
+	return;
+
+    if (cleanup_info->scope != scope) {
+	for (int i = 0; i < cleanup_idx; ++i) {
+	    cleanup_info = cleanup_info_store[i];
+	    if (cleanup_info->scope == scope)
+		goto found;
+	}
+	return;
+    }
+  found:
+    for (int i = cleanup_info->nb_cleanup - 1; i >= 0; --i) {
+	Sym *fs = cleanup_info->syms[i].func;
+	Sym *vs = cleanup_info->syms[i].var;
+
+	vpushsym(&fs->type, fs);
+	if (is_float(vs->type.t)) {
+	    vs->type.t = VT_INT;
+	}
+	vset(&vs->type, vs->r, vs->c);
+	vtop->sym = vs;
+	gaddrof();
+	gfunc_param_typed(fs, vs);
+	gfunc_call(1);
+    }
+}
+
+static void try_call_cleanup_goto(ScopeTacker *dest_scope)
+{
+    if (!cleanup_info)
+	return;
+    for (ScopeTacker *cur_scope_tracker = scope_tracker;
+	 cur_scope_tracker && cur_scope_tracker != dest_scope;
+	 cur_scope_tracker = cur_scope_tracker->prev) {
+	try_call_scope_cleanup(cur_scope_tracker);
+    }
+}
+
+static void try_call_all_cleanup(void)
+{
+    if (!cleanup_info)
+	return;
+    for (ScopeTacker *cur_scope_tracker = scope_tracker;
+	 cur_scope_tracker;
+	 cur_scope_tracker = cur_scope_tracker->prev) {
+      try_call_scope_cleanup(cur_scope_tracker);
+    }
+}
+
 
 ST_FUNC void unary(void)
 {
@@ -6075,11 +6226,11 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(')');
         a = gvtst(1, 0);
         b = 0;
-        ++local_scope;
+	incr_local_scope();
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
-        --local_scope;
+	decr_local_scope();
         gjmp_addr(d);
         gsym(a);
         gsym_addr(b, d);
@@ -6091,7 +6242,7 @@ static void block(int *bsym, int *csym, int is_expr)
         /* record local declaration stack position */
         s = local_stack;
         llabel = local_label_stack;
-        ++local_scope;
+	incr_local_scope();
         
         /* handle local labels declarations */
         while (tok == TOK_LABEL) {
@@ -6120,10 +6271,36 @@ static void block(int *bsym, int *csym, int is_expr)
                 block(bsym, csym, is_expr);
             }
         }
+
+	if (cleanup_info) {
+	    int jmp = 0;
+
+	    jmp = gjmp(jmp);
+
+	    for (int i = 0; i < last_cleanup_goto; ++i) {
+		struct CleanupGoto *cur = cleanup_goto_info[i];
+
+		if (!cur->is_valide)
+		    continue;
+		if (scope_tracker == cur->scope ||
+		    is_scope_a_parent_of(cur->scope, scope_tracker)) {
+		    gsym(cur->jnext);
+		    try_call_scope_cleanup(scope_tracker);
+		    cur->jnext = 0;
+		    cur->jnext = gjmp(cur->jnext);
+		}
+	    }
+
+	    gsym(jmp);
+	    if (!nocode_wanted) {
+		try_call_scope_cleanup(scope_tracker);
+	    }
+	}
+
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel, is_expr);
         /* pop locally defined symbols */
-        --local_scope;
+	decr_local_scope();
 	/* In the is_expr case (a statement expression is finished here),
 	   vtop might refer to symbols on the local_stack.  Either via the
 	   type or via vtop->sym.  We can't pop those nor any that in turn
@@ -6146,11 +6323,14 @@ static void block(int *bsym, int *csym, int is_expr)
         if (tok != ';') {
             gexpr();
             gen_assign_cast(&func_vt);
+	    try_call_all_cleanup();
             if ((func_vt.t & VT_BTYPE) == VT_VOID)
                 vtop--;
             else
                 gfunc_return(&func_vt);
-        }
+        } else {
+	    try_call_all_cleanup();
+	}
         skip(';');
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
@@ -6179,7 +6359,7 @@ static void block(int *bsym, int *csym, int is_expr)
         next();
         skip('(');
         s = local_stack;
-        ++local_scope;
+	incr_local_scope();
         if (tok != ';') {
             /* c99 for-loop init decl? */
             if (!decl0(VT_LOCAL, 1, NULL)) {
@@ -6215,7 +6395,7 @@ static void block(int *bsym, int *csym, int is_expr)
         gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
-        --local_scope;
+	decr_local_scope();
         sym_pop(&local_stack, s, 0);
 
     } else 
@@ -6319,21 +6499,42 @@ static void block(int *bsym, int *csym, int is_expr)
                 expect("pointer");
             ggoto();
         } else if (tok >= TOK_UIDENT) {
-            s = label_find(tok);
-            /* put forward definition if needed */
-            if (!s) {
-                s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+	    s = label_find(tok);
+            if (!s || s->jnext == -1) {
+		/* put forward definition if needed */
+		if (!s)
+		    s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+		if (cleanup_info) {
+		    struct CleanupGoto *cur =
+			tcc_malloc(sizeof(struct CleanupGoto));
+
+		    cur->s = s;
+		    cur->is_valide = 1;
+		    s->jnext = -1;
+		    cur->jnext = 0;
+		    cur->scope = scope_tracker;
+		    cur->jnext = gjmp(cur->jnext);
+		    dynarray_add(&cleanup_goto_info, &last_cleanup_goto, cur);
+		    vla_sp_restore_root();
+		    goto out_goto;
+		}
             } else {
+		if (cleanup_info && is_scope_a_parent_of(scope_tracker,
+							 s->scope))
+		    try_call_cleanup_goto(s->scope);
+
                 if (s->r == LABEL_DECLARED)
                     s->r = LABEL_FORWARD;
             }
-            vla_sp_restore_root();
+
+	    vla_sp_restore_root();
 	    if (s->r & LABEL_FORWARD)
-                s->jnext = gjmp(s->jnext);
-            else
-                gjmp_addr(s->jnext);
-            next();
-        } else {
+		s->jnext = gjmp(s->jnext);
+	    else
+		gjmp_addr(s->jnext);
+	  out_goto:
+	    next();
+	} else {
             expect("label identifier");
         }
         skip(';');
@@ -6346,10 +6547,21 @@ static void block(int *bsym, int *csym, int is_expr)
 	    next();
             s = label_find(b);
             if (s) {
+		int is_gen = 0;
+
                 if (s->r == LABEL_DEFINED)
                     tcc_error("duplicate label '%s'", get_tok_str(s->v, NULL));
-                gsym(s->jnext);
+		for (int i = 0; i < last_cleanup_goto; ++i) {
+		    struct CleanupGoto *cur = cleanup_goto_info[i];
+		    if (cur->s == s) {
+			cur->is_valide = 0;
+			gsym(cur->jnext);
+			is_gen = 1;
+		    }
+		}
                 s->r = LABEL_DEFINED;
+		if (!is_gen)
+		    gsym(s->jnext);
             } else {
                 s = label_push(&global_label_stack, b, LABEL_DEFINED);
             }
@@ -7085,6 +7297,28 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 	    }
 #endif
             sym = sym_push(v, type, r, addr);
+	    if (ad->cleanup_func) {
+		int nb_cleanup;
+
+		if (!cleanup_info || cleanup_info->scope != scope_tracker) {
+		    cleanup_info = tcc_malloc(sizeof(struct cleanup));
+		    dynarray_add(&cleanup_info_store, &cleanup_idx,
+				 cleanup_info);
+		    cleanup_info ->scope = scope_tracker;
+		    cleanup_info->nb_cleanup = 0;
+		    cleanup_info->syms = NULL;
+		}
+		nb_cleanup = cleanup_info->nb_cleanup + 1;
+		cleanup_info->syms = tcc_realloc(cleanup_info->syms,
+						 nb_cleanup *
+						 sizeof(*cleanup_info->syms));
+		cleanup_info->syms[nb_cleanup - 1].func = ad->cleanup_func;
+		cleanup_info->syms[nb_cleanup - 1].var = sym;
+		cleanup_info->nb_cleanup = nb_cleanup;
+		if (!ad->should_remember)
+		    ad->cleanup_func = NULL;
+	    }
+
             sym->a = ad->a;
         } else {
             /* push local reference */
@@ -7226,7 +7460,7 @@ static void gen_function(Sym *sym)
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(&sym->type);
-    local_scope = 0;
+    reset_local_scope();
     rsym = 0;
 	clear_temp_local_var_list();
     block(NULL, NULL, 0);
@@ -7245,7 +7479,7 @@ static void gen_function(Sym *sym)
     cur_text_section->data_offset = ind;
     label_pop(&global_label_stack, NULL, 0);
     /* reset local stack */
-    local_scope = 0;
+    reset_local_scope();
     sym_pop(&local_stack, NULL, 0);
     /* end of function */
     /* patch symbol size */

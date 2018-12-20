@@ -1367,6 +1367,7 @@ ST_FUNC Sym *label_push(Sym **ptop, int v, int flags)
     Sym *s, **ps;
     s = sym_push2(ptop, v, 0, 0);
     s->r = flags;
+    s->scope = scope_tracker;
     ps = &table_ident[v - TOK_IDENT]->sym_label;
     if (ptop == &global_label_stack) {
         /* modify the top most local identifier, so that
