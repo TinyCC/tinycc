@@ -368,7 +368,7 @@ fi
 if ! echo "$cc" | grep -q "tcc"; then
   OPT1="-Wdeclaration-after-statement -fno-strict-aliasing"
   # we want -Wno- but gcc does not always reject unknown -Wno- options
-  OPT2="-Wpointer-sign -Wsign-compare -Wunused-result"
+  OPT2="-Wpointer-sign -Wsign-compare -Wunused-result -Wformat-truncation"
   if echo "$cc" | grep -q "clang"; then
     OPT1="$OPT1 -fheinous-gnu-extensions"
     OPT2="$OPT2 -Wstring-plus-int"
