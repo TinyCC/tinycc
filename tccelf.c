@@ -870,10 +870,10 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 
     count = 0;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
-        type = ELFW(R_TYPE)(rel->r_info);
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
         int sym_index = ELFW(R_SYM)(rel->r_info);
 #endif
+        type = ELFW(R_TYPE)(rel->r_info);
         switch(type) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
 #if defined(TCC_TARGET_I386)
