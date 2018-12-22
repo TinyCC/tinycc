@@ -254,7 +254,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  endif
 # elif !defined(TCC_ARM_EABI)
 #  if defined(TCC_MUSL)
-#   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-arm.so.1"
+#   if defined(TCC_TARGET_I386)
+#     define CONFIG_TCC_ELFINTERP "/lib/ld-musl-i386.so.1"
+#    else
+#     define CONFIG_TCC_ELFINTERP "/lib/ld-musl-arm.so.1"
+#    endif
 #  else
 #   define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
 #  endif
