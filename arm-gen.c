@@ -739,25 +739,28 @@ static void gadd_sp(int val)
 static void gcall_or_jmp(int is_jmp)
 {
   int r;
+  uint32_t x;
   if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-    uint32_t x;
     /* constant case */
-    x=encbranch(ind,ind+vtop->c.i,0);
-    if(x) {
-      if (vtop->r & VT_SYM) {
-	/* relocation case */
-	greloc(cur_text_section, vtop->sym, ind, R_ARM_PC24);
-      } else
-	put_elf_reloc(symtab_section, cur_text_section, ind, R_ARM_PC24, 0);
-      o(x|(is_jmp?0xE0000000:0xE1000000));
-    } else {
-      if(!is_jmp)
-	o(0xE28FE004); // add lr,pc,#4
-      o(0xE51FF004);   // ldr pc,[pc,#-4]
-      if (vtop->r & VT_SYM)
-	greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
-      o(vtop->c.i);
-    }
+	if(vtop->r & VT_SYM){
+		x=encbranch(ind,ind+vtop->c.i,0);
+		if(x) {
+		/* relocation case */
+		  greloc(cur_text_section, vtop->sym, ind, R_ARM_PC24);
+		  o(x|(is_jmp?0xE0000000:0xE1000000));
+		} else {
+			if(!is_jmp)
+				o(0xE28FE004); // add lr,pc,#4
+			o(0xE51FF004);   // ldr pc,[pc,#-4]
+			greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
+			o(vtop->c.i);
+		}
+	}else{
+		if(!is_jmp)
+			o(0xE28FE004); // add lr,pc,#4
+		o(0xE51FF004);   // ldr pc,[pc,#-4]
+		o(vtop->c.i);
+	}
   } else {
     /* otherwise, indirect call */
     r = gv(RC_INT);
