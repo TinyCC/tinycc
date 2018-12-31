@@ -846,6 +846,52 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
     return s;
 }
 
+/* Merge symbol attributes.  */
+static void merge_symattr(struct SymAttr *sa, struct SymAttr *sa1)
+{
+    if (sa1->aligned && !sa->aligned)
+      sa->aligned = sa1->aligned;
+    sa->packed |= sa1->packed;
+    sa->weak |= sa1->weak;
+    if (sa1->visibility != STV_DEFAULT) {
+	int vis = sa->visibility;
+	if (vis == STV_DEFAULT
+	    || vis > sa1->visibility)
+	  vis = sa1->visibility;
+	sa->visibility = vis;
+    }
+    sa->dllexport |= sa1->dllexport;
+    sa->nodecorate |= sa1->nodecorate;
+    sa->dllimport |= sa1->dllimport;
+}
+
+/* Merge function attributes.  */
+static void merge_funcattr(struct FuncAttr *fa, struct FuncAttr *fa1)
+{
+    if (fa1->func_call && !fa->func_call)
+      fa->func_call = fa1->func_call;
+    if (fa1->func_type && !fa->func_type)
+      fa->func_type = fa1->func_type;
+    if (fa1->func_args && !fa->func_args)
+      fa->func_args = fa1->func_args;
+}
+
+/* Merge attributes.  */
+static void merge_attr(AttributeDef *ad, AttributeDef *ad1)
+{
+    merge_symattr(&ad->a, &ad1->a);
+    merge_funcattr(&ad->f, &ad1->f);
+
+    if (ad1->section)
+      ad->section = ad1->section;
+    if (ad1->alias_target)
+      ad->alias_target = ad1->alias_target;
+    if (ad1->asm_label)
+      ad->asm_label = ad1->asm_label;
+    if (ad1->attr_mode)
+      ad->attr_mode = ad1->attr_mode;
+}
+
 /* Merge some type attributes.  */
 static void patch_type(Sym *sym, CType *type)
 {
@@ -905,20 +951,8 @@ static void patch_storage(Sym *sym, AttributeDef *ad, CType *type)
     if (sym->a.dllimport != ad->a.dllimport)
         tcc_error("incompatible dll linkage for redefinition of '%s'",
             get_tok_str(sym->v, NULL));
-    sym->a.dllexport |= ad->a.dllexport;
 #endif
-    sym->a.weak |= ad->a.weak;
-    if (ad->a.visibility) {
-        int vis = sym->a.visibility;
-        int vis2 = ad->a.visibility;
-        if (vis == STV_DEFAULT)
-            vis = vis2;
-        else if (vis2 != STV_DEFAULT)
-            vis = (vis < vis2) ? vis : vis2;
-        sym->a.visibility = vis;
-    }
-    if (ad->a.aligned)
-        sym->a.aligned = ad->a.aligned;
+    merge_symattr(&sym->a, &ad->a);
     if (ad->asm_label)
         sym->asm_label = ad->asm_label;
     update_storage(sym);
@@ -4000,14 +4034,8 @@ do_decl:
 
 static void sym_to_attr(AttributeDef *ad, Sym *s)
 {
-    if (s->a.aligned && 0 == ad->a.aligned)
-        ad->a.aligned = s->a.aligned;
-    if (s->f.func_call && 0 == ad->f.func_call)
-        ad->f.func_call = s->f.func_call;
-    if (s->f.func_type && 0 == ad->f.func_type)
-        ad->f.func_type = s->f.func_type;
-    if (s->a.packed)
-        ad->a.packed = 1;
+    merge_symattr(&ad->a, &s->a);
+    merge_funcattr(&ad->f, &s->f);
 }
 
 /* Add type qualifiers to a type. If the type is an array then the qualifiers
@@ -4294,9 +4322,10 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	  l = 0;
 	else if (parse_btype(&pt, &ad1))
 	  l = FUNC_NEW;
-	else if (td)
-	  return 0;
-	else
+	else if (td) {
+	    merge_attr (ad, &ad1);
+	    return 0;
+	} else
 	  l = FUNC_OLD;
         first = NULL;
         plast = &first;
