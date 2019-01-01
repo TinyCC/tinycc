@@ -67,7 +67,7 @@
 #include <winbase.h>
 #include <wingdi.h>
 #include <winuser.h>
-//gr #include <winnls.h>
+#include <winnls.h>
 #include <wincon.h>
 #include <winver.h>
 #include <winreg.h>
