@@ -1,0 +1,20 @@
+c: a
+c: o
+oo: 2.600000
+c: f
+str: I don't think this should be print(but gcc got it wrong too)
+because what if free was call inside cleanup function
+should be print before
+str: that
+str: this should appear only once
+str: -that2
+str: -that
+---- 0
+---- 1
+str: plop
+str: tata !
+str: 3
+str: 2
+str: 1
+str: last goto out
+str: wololo
