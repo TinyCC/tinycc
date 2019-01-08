@@ -1321,9 +1321,11 @@ ST_FUNC void vpush_global_sym(CType *type, int v);
 ST_FUNC void vrote(SValue *e, int n);
 ST_FUNC void vrott(int n);
 ST_FUNC void vrotb(int n);
+#if PTR_SIZE == 4
+ST_FUNC void lexpand(void);
+#endif
 #ifdef TCC_TARGET_ARM
 ST_FUNC int get_reg_ex(int rc, int rc2);
-ST_FUNC void lexpand_nr(void);
 #endif
 ST_FUNC void vpushv(SValue *v);
 ST_FUNC void save_reg(int r);

@@ -1141,7 +1141,7 @@ again:
               /* XXX: implicit cast ? */
               size=4;
               if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG) {
-                lexpand_nr();
+                lexpand();
                 size = 8;
                 r = gv(RC_INT);
                 o(0xE52D0004|(intr(r)<<12)); /* push r */
@@ -1165,7 +1165,7 @@ again:
 
         case CORE_CLASS:
           if ((pplan->sval->type.t & VT_BTYPE) == VT_LLONG) {
-            lexpand_nr();
+            lexpand();
             gv(regmask(pplan->end));
             pplan->sval->r2 = vtop->r;
             vtop--;

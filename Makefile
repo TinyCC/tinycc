@@ -164,6 +164,12 @@ x86_64-win32_FILES = $(x86_64_FILES) tccpe.c
 x86_64-osx_FILES = $(x86_64_FILES)
 arm_FILES = $(CORE_FILES) arm-gen.c arm-link.c arm-asm.c
 arm-wince_FILES = $(arm_FILES) tccpe.c
+arm-eabihf_FILES = $(arm_FILES)
+arm-fpa_FILES     = $(arm_FILES)
+arm-fpa-ld_FILES  = $(arm_FILES)
+arm-vfp_FILES     = $(arm_FILES)
+arm-eabi_FILES    = $(arm_FILES)
+arm-eabihf_FILES  = $(arm_FILES)
 arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 
