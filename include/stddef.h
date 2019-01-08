@@ -8,8 +8,6 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef __PTRDIFF_TYPE__ intptr_t;
 typedef __SIZE_TYPE__ uintptr_t;
 
-typedef union { long long __ll; long double __ld; } max_align_t;
-
 #ifndef __int8_t_defined
 #define __int8_t_defined
 typedef signed char int8_t;
