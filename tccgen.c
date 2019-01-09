@@ -6094,7 +6094,7 @@ static void block(int *bsym, int *csym, int is_expr)
         ++local_scope;
         
         /* handle local labels declarations */
-        if (tok == TOK_LABEL) {
+        while (tok == TOK_LABEL) {
             next();
             for(;;) {
                 if (tok < TOK_UIDENT)
