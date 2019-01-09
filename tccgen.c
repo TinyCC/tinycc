@@ -70,6 +70,14 @@ ST_DATA struct switch_t {
     int def_sym; /* default symbol */
 } *cur_switch; /* current switch */
 
+#define MAX_TEMP_LOCAL_VARIABLE_NUMBER 0x4
+/*list of temporary local variables on the stack in current function. */
+ST_DATA struct temp_local_variable {
+	int location; //offset on stack. Svalue.c.i
+	short size;
+	short align;
+} arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
+short nb_temp_local_vars;
 /* ------------------------------------------------------------------------- */
 
 static void gen_cast(CType *type);
@@ -97,6 +105,8 @@ static int gvtst(int inv, int t);
 static void gen_inline_functions(TCCState *s);
 static void skip_or_save_block(TokenString **str);
 static void gv_dup(void);
+static int get_temp_local_var(int size,int align);
+static void clear_temp_local_var_list();
 
 ST_INLN int is_float(int t)
 {
@@ -1033,10 +1043,10 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     type = &int_type;
 #endif
                 size = type_size(type, &align);
-                loc = (loc - size) & -align;
+				l=get_temp_local_var(size,align);
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
-                sv.c.i = loc;
+                sv.c.i = l;
                 store(r, &sv);
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
                 /* x86 specific: need to pop fp register ST0 if saved */
@@ -1051,7 +1061,6 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     store(p->r2, &sv);
                 }
 #endif
-                l = loc;
                 saved = 1;
             }
             /* mark that stack entry as being saved on the stack */
@@ -1132,6 +1141,56 @@ ST_FUNC int get_reg(int rc)
     }
     /* Should never comes here */
     return -1;
+}
+
+/* find a free temporary local variable (return the offset on stack) match the size and align. If none, add new temporary stack variable*/
+static int get_temp_local_var(int size,int align){
+	int i;
+	struct temp_local_variable *temp_var;
+	int found_var;
+	SValue *p;
+	int r;
+	char free;
+	char found;
+	found=0;
+	for(i=0;i<nb_temp_local_vars;i++){
+		temp_var=&arr_temp_local_vars[i];
+		if(temp_var->size<size||align!=temp_var->align){
+			continue;
+		}
+		/*check if temp_var is free*/
+		free=1;
+		for(p=vstack;p<=vtop;p++) {
+			r=p->r&VT_VALMASK;
+			if(r==VT_LOCAL||r==VT_LLOCAL){
+				if(p->c.i==temp_var->location){
+					free=0;
+					break;
+				}
+			}
+		}
+		if(free){
+			found_var=temp_var->location;
+			found=1;
+			break;
+		}
+	}
+	if(!found){
+		loc = (loc - size) & -align;
+		if(nb_temp_local_vars<MAX_TEMP_LOCAL_VARIABLE_NUMBER){
+			temp_var=&arr_temp_local_vars[i];
+			temp_var->location=loc;
+			temp_var->size=size;
+			temp_var->align=align;
+			nb_temp_local_vars++;
+		}
+		found_var=loc;
+	}
+	return found_var;
+}
+
+static void clear_temp_local_var_list(){
+	nb_temp_local_vars=0;
 }
 
 /* move register 's' (of type 't') to 'r', and flush previous value of r to memory
@@ -7169,6 +7228,7 @@ static void gen_function(Sym *sym)
     gfunc_prolog(&sym->type);
     local_scope = 0;
     rsym = 0;
+	clear_temp_local_var_list();
     block(NULL, NULL, 0);
     if (!(nocode_wanted & 0x20000000)
 	&& ((func_vt.t & VT_BTYPE) == VT_INT)
