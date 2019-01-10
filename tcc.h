@@ -651,6 +651,7 @@ struct TCCState {
     int rdynamic; /* if true, all symbols are exported */
     int symbolic; /* if true, resolve symbols in the current module first */
     int filetype; /* file type for compilation (NONE,C,ASM) */
+    int cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */

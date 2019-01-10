@@ -733,6 +733,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     ++nb_states;
 
     s->nocommon = 1;
+    s->cversion = 199901; /* default unless -std=c11 is supplied */
     s->warn_implicit_function_declaration = 1;
     s->ms_extensions = 1;
 
@@ -1790,8 +1791,16 @@ reparse:
             s->static_link = 1;
             break;
         case TCC_OPTION_std:
-    	    /* silently ignore, a current purpose:
-    	       allow to use a tcc as a reference compiler for "make test" */
+            if (*optarg == '=') {
+                ++optarg;
+                if (strcmp(optarg, "c11") == 0) {
+                   tcc_undefine_symbol(s, "__STDC_VERSION__");
+                   tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
+                   s->cversion = 201112;
+                }
+            }
+    	      /* silently ignore other values, a current purpose:
+    	         allow to use a tcc as a reference compiler for "make test" */
             break;
         case TCC_OPTION_shared:
             x = TCC_OUTPUT_DLL;

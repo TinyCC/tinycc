@@ -33,6 +33,8 @@ static const char help[] =
     "  -o outfile  set output filename\n"
     "  -run        run compiled source\n"
     "  -fflag      set or reset (with 'no-' prefix) 'flag' (see tcc -hh)\n"
+    "  -std=c99    Conform to the ISO 1999 C standard (default).\n"
+    "  -std=c11    Conform to the ISO 2011 C standard.\n"
     "  -Wwarning   set or reset (with 'no-' prefix) 'warning' (see tcc -hh)\n"
     "  -w          disable all warnings\n"
     "  -v -vv      show version, show search paths or loaded files\n"
