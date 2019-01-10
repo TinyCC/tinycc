@@ -903,7 +903,6 @@ void gfunc_call(int nb_args)
         vtop--;
     }
     save_regs(0);
-    
     /* Copy R10 and R11 into RCX and RDX, respectively */
     if (nb_args > 0) {
         o(0xd1894c); /* mov %r10, %rcx */
