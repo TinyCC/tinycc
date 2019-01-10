@@ -4890,6 +4890,9 @@ ST_FUNC void unary(void)
     case TOK_ALIGNOF1:
     case TOK_ALIGNOF2:
     case TOK_ALIGNOF3:
+	if (tcc_state->cversion != 201112 &&
+	    tok == TOK_ALIGNOF3)
+	    goto tok_identifier;
         t = tok;
         next();
         in_sizeof++;
@@ -5099,6 +5102,8 @@ ST_FUNC void unary(void)
 	TokenString *str = NULL;
 	int saved_const_wanted = const_wanted;
 
+	if (tcc_state->cversion != 201112)
+	    goto tok_identifier;
 	next();
 	skip('(');
 	const_wanted = 0;
