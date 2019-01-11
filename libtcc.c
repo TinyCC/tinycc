@@ -1608,7 +1608,7 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
     CString str;
     for(;;) {
         while (c = (unsigned char)*r, c && c <= ' ')
-	    ++r;
+          ++r;
         if (c == 0)
             break;
         q = 0;
@@ -1681,7 +1681,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
         r = argv[optind];
         if (r[0] == '@' && r[1] != '\0') {
             args_parser_listfile(s, r + 1, optind, &argc, &argv);
-	    continue;
+            continue;
         }
         optind++;
         if (tool) {
@@ -1792,15 +1792,42 @@ reparse:
             break;
         case TCC_OPTION_std:
             if (*optarg == '=') {
-                ++optarg;
-                if (strcmp(optarg, "c11") == 0) {
+                if (strcmp(optarg, "=c11") == 0) {
                    tcc_undefine_symbol(s, "__STDC_VERSION__");
                    tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
+                   /*
+                    * The integer constant 1, intended to indicate
+                    * that the implementation does not support atomic
+                    * types (including the _Atomic type qualiﬁer) and
+                    * the <stdatomic.h> header.
+                    */
+                   tcc_define_symbol(s, "__STDC_NO_ATOMICS__", "1");
+                   /*
+                    * The integer constant 1, intended to indicate
+                    * that the implementation does not support complex
+                    * types or the <complex.h> header.
+                    */
+                   tcc_define_symbol(s, "__STDC_NO_COMPLEX__", "1");
+                   /*
+                    * The integer constant 1, intended to indicate
+                    * that the implementation does not support the
+                    * <threads.h> header.
+                    */
+                   tcc_define_symbol(s, "__STDC_NO_THREADS__", "1");
+                   /*
+                    * __STDC_NO_VLA__, tcc supports VLA.
+                    * The integer constant 1, intended to indicate
+                    * that the implementation does not support
+                    * variable length arrays or variably modiﬁed
+                    * types.
+                    */
                    s->cversion = 201112;
                 }
             }
-    	      /* silently ignore other values, a current purpose:
-    	         allow to use a tcc as a reference compiler for "make test" */
+            /*
+             * silently ignore other values, a current purpose:
+             * allow to use a tcc as a reference compiler for "make test"
+             */
             break;
         case TCC_OPTION_shared:
             x = TCC_OUTPUT_DLL;
@@ -1823,10 +1850,10 @@ reparse:
         case TCC_OPTION_isystem:
             tcc_add_sysinclude_path(s, optarg);
             break;
-	case TCC_OPTION_include:
-	    dynarray_add(&s->cmd_include_files,
-			 &s->nb_cmd_include_files, tcc_strdup(optarg));
-	    break;
+        case TCC_OPTION_include:
+            dynarray_add(&s->cmd_include_files,
+                         &s->nb_cmd_include_files, tcc_strdup(optarg));
+            break;
         case TCC_OPTION_nostdinc:
             s->nostdinc = 1;
             break;
@@ -1886,9 +1913,9 @@ reparse:
             if (tcc_set_linker(s, linker_arg.data))
                 cstr_free(&linker_arg);
             break;
-	case TCC_OPTION_Wp:
-	    r = optarg;
-	    goto reparse;
+        case TCC_OPTION_Wp:
+            r = optarg;
+            goto reparse;
         case TCC_OPTION_E:
             x = TCC_OUTPUT_PREPROCESS;
             goto set_output_type;
