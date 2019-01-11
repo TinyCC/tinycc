@@ -948,7 +948,7 @@ ST_FUNC void gfunc_call(int nb_args)
             vswap();
     }
 
-    save_regs(1);
+    save_regs(0);
     arm64_gen_bl_or_b(0);
     --vtop;
     if (stack)

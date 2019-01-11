@@ -1187,7 +1187,7 @@ again:
 
   /* Manually free remaining registers since next parameters are loaded
    * manually, without the help of gv(int). */
-  save_regs(nb_args+1);
+  save_regs(nb_args);
 
   if(todo) {
     o(0xE8BD0000|todo); /* pop {todo} */

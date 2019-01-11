@@ -475,7 +475,7 @@ ST_FUNC void gfunc_call(int nb_args)
         }
         vtop--;
     }
-    save_regs(1); /* save used temporary registers */
+    save_regs(0); /* save used temporary registers */
     func_sym = vtop->type.ref;
     func_call = func_sym->f.func_call;
     /* fast call case */
