@@ -42,16 +42,11 @@ NORUN =
 42_function_pointer.test : NORUN = true
 
 # Some tests might need different flags
-33_ternary_op.test : FLAGS += -std=c11
-
 FLAGS =
 76_dollars_in_identifiers.test : FLAGS += -fdollars-in-identifiers
 
 # These tests run several snippets from the same file one by one
-60_errors_and_warnings.test : FLAGS += -dt -std=c11
-
-94_generic.test : FLAGS += -std=c11
-
+60_errors_and_warnings.test : FLAGS += -dt
 96_nodata_wanted.test : FLAGS += -dt
 
 # Always generate certain .expects (don't put these in the GIT),
