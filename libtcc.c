@@ -1793,35 +1793,62 @@ reparse:
         case TCC_OPTION_std:
             if (*optarg == '=') {
                 if (strcmp(optarg, "=c11") == 0) {
-                   tcc_undefine_symbol(s, "__STDC_VERSION__");
-                   tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
-                   /*
-                    * The integer constant 1, intended to indicate
-                    * that the implementation does not support atomic
-                    * types (including the _Atomic type qualiﬁer) and
-                    * the <stdatomic.h> header.
-                    */
-                   tcc_define_symbol(s, "__STDC_NO_ATOMICS__", "1");
-                   /*
-                    * The integer constant 1, intended to indicate
-                    * that the implementation does not support complex
-                    * types or the <complex.h> header.
-                    */
-                   tcc_define_symbol(s, "__STDC_NO_COMPLEX__", "1");
-                   /*
-                    * The integer constant 1, intended to indicate
-                    * that the implementation does not support the
-                    * <threads.h> header.
-                    */
-                   tcc_define_symbol(s, "__STDC_NO_THREADS__", "1");
-                   /*
-                    * __STDC_NO_VLA__, tcc supports VLA.
-                    * The integer constant 1, intended to indicate
-                    * that the implementation does not support
-                    * variable length arrays or variably modiﬁed
-                    * types.
-                    */
-                   s->cversion = 201112;
+                    tcc_undefine_symbol(s, "__STDC_VERSION__");
+                    tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
+                    /*
+                     * The integer constant 1, intended to indicate
+                     * that the implementation does not support atomic
+                     * types (including the _Atomic type qualiﬁer) and
+                     * the <stdatomic.h> header.
+                     */
+                    tcc_define_symbol(s, "__STDC_NO_ATOMICS__", "1");
+                    /*
+                     * The integer constant 1, intended to indicate
+                     * that the implementation does not support complex
+                     * types or the <complex.h> header.
+                     */
+                    tcc_define_symbol(s, "__STDC_NO_COMPLEX__", "1");
+                    /*
+                     * The integer constant 1, intended to indicate
+                     * that the implementation does not support the
+                     * <threads.h> header.
+                     */
+                    tcc_define_symbol(s, "__STDC_NO_THREADS__", "1");
+                    /*
+                     * __STDC_NO_VLA__, tcc supports VLA.
+                     * The integer constant 1, intended to indicate
+                     * that the implementation does not support
+                     * variable length arrays or variably modiﬁed
+                     * types.
+                     */
+#if !defined(TCC_TARGET_PE)
+                    /*
+                     * An integer constant of the form yyyymmL (for
+                     * example, 199712L). If this symbol is deﬁned,
+                     * then every character in the Unicode required
+                     * set, when stored in an object of type
+                     * wchar_t, has the same value as the short
+                     * identiﬁer of that character.
+                     */
+                    tcc_define_symbol(s, "__STDC_ISO_10646__", "201605L");
+                    /*
+                     * The integer constant 1, intended to indicate
+                     * that values of type char16_t are UTF−16
+                     * encoded. If some other encoding is used, the
+                     * macro shall not be deﬁned and the actual
+                     * encoding used is implementation deﬁned.
+                     */
+                    tcc_define_symbol(s, "__STDC_UTF_16__", "1");
+                    /*
+                     * The integer constant 1, intended to indicate
+                     * that values of type char32_t are UTF−32
+                     * encoded. If some other encoding is used, the
+                     * macro shall not be deﬁned and the actual
+                     * encoding used is implementationdeﬁned.
+                     */
+                    tcc_define_symbol(s, "__STDC_UTF_32__", "1");
+#endif /* !TCC_TARGET_PE */
+                    s->cversion = 201112;
                 }
             }
             /*
