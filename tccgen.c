@@ -40,10 +40,13 @@ ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
 
 static int local_scope;
-#define SCOPE_TCK_STORE_SIZE 1024
+#define SCOPE_TCK_STORE_SIZE 512
 ST_DATA ScopeTacker *scope_tracker;
 static ScopeTacker scope_tck_store[SCOPE_TCK_STORE_SIZE];
-static int scope_tck_idx;
+static int scope_tck_store_len;
+
+static ScopeTacker **scope_tck_2nd_store;
+static int scope_tck_2nd_store_len;
 
 static int in_sizeof;
 static int section_sym;
@@ -141,15 +144,15 @@ static void incr_local_scope(void)
     ScopeTacker *tmp = scope_tracker;
 
     ++local_scope;
-    /* if we have more scopes that SCOPE_TCK_STORE_SIZE  */
-    /* cleanup will not work at all, but it should be a very rare case */
-    /* and I don't want to add too much complexiy for handeling case */
-    /* that should not happen */
-    if (scope_tck_idx < SCOPE_TCK_STORE_SIZE) {
-	scope_tracker = &scope_tck_store[scope_tck_idx];
-	scope_tracker->prev = tmp;
-	++scope_tck_idx;
+    if (scope_tck_store_len >= SCOPE_TCK_STORE_SIZE) {
+      scope_tracker = tcc_malloc(sizeof(ScopeTacker));
+      dynarray_add(&scope_tck_2nd_store,
+		   &scope_tck_2nd_store_len, scope_tracker);
+    } else {
+      scope_tracker = &scope_tck_store[scope_tck_store_len];
+      ++scope_tck_store_len;
     }
+    scope_tracker->prev = tmp;
 }
 
 static void decr_local_scope(void)
@@ -175,7 +178,9 @@ static void reset_local_scope(void)
     }
     scope_tracker = NULL;
     local_scope = 0;
-    scope_tck_idx = 0;
+    scope_tck_store_len = 0;
+    if (scope_tck_2nd_store_len)
+      dynarray_reset(&scope_tck_2nd_store, &scope_tck_2nd_store_len);
 }
 
 int is_scope_a_parent_of(ScopeTacker *parent, ScopeTacker *child)
