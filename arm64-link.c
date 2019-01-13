@@ -215,7 +215,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_AARCH64_ADR_GOT_PAGE: {
             uint64_t off =
                 (((s1->got->sh_addr +
-                   s1->sym_attrs[sym_index].got_offset) >> 12) - (addr >> 12));
+                   get_sym_attr(s1, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
             if ((off + ((uint64_t)1 << 20)) >> 21)
                 tcc_error("R_AARCH64_ADR_GOT_PAGE relocation failed");
             write32le(ptr, ((read32le(ptr) & 0x9f00001f) |
@@ -226,7 +226,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             write32le(ptr,
                       ((read32le(ptr) & 0xfff803ff) |
                        ((s1->got->sh_addr +
-                         s1->sym_attrs[sym_index].got_offset) & 0xff8) << 7));
+                         get_sym_attr(s1, sym_index, 0)->got_offset) & 0xff8) << 7));
             return;
         case R_AARCH64_COPY:
             return;

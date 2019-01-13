@@ -365,7 +365,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             return;
         case R_ARM_GOT32:
             /* we load the got offset */
-            *(int *)ptr += s1->sym_attrs[sym_index].got_offset;
+            *(int *)ptr += get_sym_attr(s1, sym_index, 0)->got_offset;
             return;
         case R_ARM_COPY:
             return;

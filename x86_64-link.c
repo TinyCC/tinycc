@@ -179,7 +179,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
     switch (type) {
         case R_X86_64_64:
             if (s1->output_type == TCC_OUTPUT_DLL) {
-                esym_index = s1->sym_attrs[sym_index].dyn_index;
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_64);
@@ -210,7 +210,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_X86_64_PC32:
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = s1->sym_attrs[sym_index].dyn_index;
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
@@ -243,7 +243,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_X86_64_PC64:
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = s1->sym_attrs[sym_index].dyn_index;
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC64);
@@ -264,7 +264,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
             add32le(ptr, s1->got->sh_addr - addr +
-                         s1->sym_attrs[sym_index].got_offset - 4);
+                         get_sym_attr(s1, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
             add32le(ptr, s1->got->sh_addr - addr + rel->r_addend);
@@ -277,11 +277,11 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             break;
         case R_X86_64_GOT32:
             /* we load the got offset */
-            add32le(ptr, s1->sym_attrs[sym_index].got_offset);
+            add32le(ptr, get_sym_attr(s1, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOT64:
             /* we load the got offset */
-            add64le(ptr, s1->sym_attrs[sym_index].got_offset);
+            add64le(ptr, get_sym_attr(s1, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOTOFF64:
             add64le(ptr, val - s1->got->sh_addr);
