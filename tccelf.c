@@ -2246,13 +2246,25 @@ LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename)
     return ret;
 }
 
+ssize_t full_read(int fd, void *buf, size_t count) {
+    char *cbuf = buf;
+    size_t rnum = 0;
+    while (1) {
+        ssize_t num = read(fd, cbuf, count-rnum);
+        if (num < 0) return num;
+        if (num == 0) return rnum;
+        rnum += num;
+        cbuf += num;
+    }
+}
+
 static void *load_data(int fd, unsigned long file_offset, unsigned long size)
 {
     void *data;
 
     data = tcc_malloc(size);
     lseek(fd, file_offset, SEEK_SET);
-    read(fd, data, size);
+    full_read(fd, data, size);
     return data;
 }
 
@@ -2265,7 +2277,7 @@ typedef struct SectionMergeInfo {
 
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h)
 {
-    int size = read(fd, h, sizeof *h);
+    int size = full_read(fd, h, sizeof *h);
     if (size == sizeof *h && 0 == memcmp(h, ELFMAG, 4)) {
         if (h->e_type == ET_REL)
             return AFF_BINTYPE_REL;
@@ -2434,7 +2446,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             unsigned char *ptr;
             lseek(fd, file_offset + sh->sh_offset, SEEK_SET);
             ptr = section_ptr_add(s, size);
-            read(fd, ptr, size);
+            full_read(fd, ptr, size);
         } else {
             s->data_offset += size;
         }
@@ -2606,7 +2618,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
     ElfW(Sym) *sym;
 
     data = tcc_malloc(size);
-    if (read(fd, data, size) != size)
+    if (full_read(fd, data, size) != size)
         goto fail;
     nsyms = entrysize == 4 ? get_be32(data) : get_be64(data);
     ar_index = data + entrysize;
@@ -2650,10 +2662,10 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
     unsigned long file_offset;
 
     /* skip magic which was already checked */
-    read(fd, magic, sizeof(magic));
+    full_read(fd, magic, sizeof(magic));
 
     for(;;) {
-        len = read(fd, &hdr, sizeof(hdr));
+        len = full_read(fd, &hdr, sizeof(hdr));
         if (len == 0)
             break;
         if (len != sizeof(hdr)) {
@@ -2706,7 +2718,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     const char *name, *soname;
     DLLReference *dllref;
 
-    read(fd, &ehdr, sizeof(ehdr));
+    full_read(fd, &ehdr, sizeof(ehdr));
 
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
