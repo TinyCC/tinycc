@@ -1213,8 +1213,7 @@ ST_FUNC void tok_str_add_tok(TokenString *s)
     tok_str_add2(s, tok, &tokc);
 }
 
-/* get a token from an integer array and increment pointer
-   accordingly. we code it as a macro to avoid pointer aliasing. */
+/* get a token from an integer array and increment pointer. */
 static inline void TOK_GET(int *t, const int **pp, CValue *cv)
 {
     const int *p = *pp;
