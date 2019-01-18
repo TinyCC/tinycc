@@ -1,5 +1,6 @@
 c: a
 c: o
+glob_i: 65536
 oo: 2.600000
 c: f
 str: I don't think this should be print(but gcc got it wrong too)

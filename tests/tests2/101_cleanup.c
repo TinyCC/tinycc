@@ -1,5 +1,26 @@
 #include <tcclib.h>
 
+static int glob_i = 0;
+
+void incr_glob_i(int *i)
+{
+  glob_i += *i;
+}
+
+#define INCR_GI {						\
+    int i __attribute__ ((__cleanup__(incr_glob_i))) = 1;	\
+  }
+
+#define INCR_GI0 INCR_GI INCR_GI INCR_GI INCR_GI
+#define INCR_GI1 INCR_GI0 INCR_GI0 INCR_GI0 INCR_GI0
+#define INCR_GI2 INCR_GI1 INCR_GI1 INCR_GI1 INCR_GI1
+#define INCR_GI3 INCR_GI2 INCR_GI2 INCR_GI2 INCR_GI2
+#define INCR_GI4 INCR_GI3 INCR_GI3 INCR_GI3 INCR_GI3
+#define INCR_GI5 INCR_GI4 INCR_GI4 INCR_GI4 INCR_GI4
+#define INCR_GI6 INCR_GI5 INCR_GI5 INCR_GI5 INCR_GI5
+#define INCR_GI7 INCR_GI6 INCR_GI6 INCR_GI6 INCR_GI6
+
+
 void check2(char **hum);
 
 void check(int *j)
@@ -103,7 +124,9 @@ int main()
 	__attribute__ ((__cleanup__(check_oh_i))) char oh_i = 'o', o = 'a';
     }
 
-  naaaaaaaa:
+    INCR_GI7;
+    printf("glob_i: %d\n", glob_i);
+ naaaaaaaa:
     if (!chk) {
 	__attribute__ ((__cleanup__(check_oh_i))) char oh_i = 'f';
 	double __attribute__ ((__cleanup__(goto_hell))) f = 2.6;
