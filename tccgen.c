@@ -165,7 +165,9 @@ static void decr_local_scope(void)
 static void reset_local_scope(void)
 {
     if (cleanup_info) {
-	for (int i = 0; i < cleanup_idx; ++i) {
+	int i = 0;
+
+	for (; i < cleanup_idx; ++i) {
 	    cleanup_info = cleanup_info_store[i];
 	    tcc_free(cleanup_info->syms);
 	    tcc_free(cleanup_info);
@@ -185,7 +187,9 @@ static void reset_local_scope(void)
 
 int is_scope_a_parent_of(ScopeTacker *parent, ScopeTacker *child)
 {
-    for (ScopeTacker *cur = parent->prev; cur; cur = cur->prev) {
+    ScopeTacker *cur = parent->prev;
+
+    for (; cur; cur = cur->prev) {
 	if (cur == child)
 	    return 1;
     }
@@ -4797,11 +4801,15 @@ static void parse_builtin_params(int nc, const char *args)
 
 static void try_call_scope_cleanup(ScopeTacker *scope)
 {
+    int i;
+
     if (!cleanup_info)
 	return;
 
     if (cleanup_info->scope != scope) {
-	for (int i = 0; i < cleanup_idx; ++i) {
+	int i = 0;
+
+	for (; i < cleanup_idx; ++i) {
 	    cleanup_info = cleanup_info_store[i];
 	    if (cleanup_info->scope == scope)
 		goto found;
@@ -4809,7 +4817,7 @@ static void try_call_scope_cleanup(ScopeTacker *scope)
 	return;
     }
   found:
-    for (int i = cleanup_info->nb_cleanup - 1; i >= 0; --i) {
+    for (i = cleanup_info->nb_cleanup - 1; i >= 0; --i) {
 	Sym *fs = cleanup_info->syms[i].func;
 	Sym *vs = cleanup_info->syms[i].var;
 
@@ -4827,9 +4835,11 @@ static void try_call_scope_cleanup(ScopeTacker *scope)
 
 static void try_call_cleanup_goto(ScopeTacker *dest_scope)
 {
+    ScopeTacker *cur_scope_tracker;
+
     if (!cleanup_info)
 	return;
-    for (ScopeTacker *cur_scope_tracker = scope_tracker;
+    for (cur_scope_tracker = scope_tracker;
 	 cur_scope_tracker && cur_scope_tracker != dest_scope;
 	 cur_scope_tracker = cur_scope_tracker->prev) {
 	try_call_scope_cleanup(cur_scope_tracker);
@@ -4838,9 +4848,11 @@ static void try_call_cleanup_goto(ScopeTacker *dest_scope)
 
 static void try_call_all_cleanup(void)
 {
+    ScopeTacker *cur_scope_tracker;
+
     if (!cleanup_info)
 	return;
-    for (ScopeTacker *cur_scope_tracker = scope_tracker;
+    for (cur_scope_tracker = scope_tracker;
 	 cur_scope_tracker;
 	 cur_scope_tracker = cur_scope_tracker->prev) {
       try_call_scope_cleanup(cur_scope_tracker);
@@ -6279,10 +6291,11 @@ static void block(int *bsym, int *csym, int is_expr)
 
 	if (cleanup_info) {
 	    int jmp = 0;
+	    int i;
 
 	    jmp = gjmp(jmp);
 
-	    for (int i = 0; i < last_cleanup_goto; ++i) {
+	    for (i = 0; i < last_cleanup_goto; ++i) {
 		struct CleanupGoto *cur = cleanup_goto_info[i];
 
 		if (!cur->is_valide)
@@ -6553,10 +6566,11 @@ static void block(int *bsym, int *csym, int is_expr)
             s = label_find(b);
             if (s) {
 		int is_gen = 0;
+		int i;
 
                 if (s->r == LABEL_DEFINED)
                     tcc_error("duplicate label '%s'", get_tok_str(s->v, NULL));
-		for (int i = 0; i < last_cleanup_goto; ++i) {
+		for (i = 0; i < last_cleanup_goto; ++i) {
 		    struct CleanupGoto *cur = cleanup_goto_info[i];
 		    if (cur->s == s) {
 			cur->is_valide = 0;
