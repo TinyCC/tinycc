@@ -93,7 +93,7 @@ static const char help2[] =
     "  -print-search-dirs            print search paths\n"
     "  -dt                           with -run/-E: auto-define 'test_...' macros\n"
     "Ignored options:\n"
-    "  --param  -pedantic  -pipe  -s  -std  -traditional\n"
+    "  --param  -pedantic  -pipe  -s  -traditional\n"
     "-W... warnings:\n"
     "  all                           turn on some (*) warnings\n"
     "  error                         stop after first warning\n"
