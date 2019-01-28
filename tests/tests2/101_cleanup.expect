@@ -10,6 +10,11 @@ str: that
 str: this should appear only once
 str: -that2
 str: -that
+str: test2
+str: one
+---- 1
+str: two
+str: three
 ---- 0
 ---- 1
 str: plop

@@ -1,5 +1,4 @@
-#include <tcclib.h>
-
+extern int printf(const char*, ...);
 static int glob_i = 0;
 
 void incr_glob_i(int *i)
@@ -115,6 +114,41 @@ void test_ret2()
   }
 }
 
+void test2(void) {
+    int chk = 0;
+again:
+    if (!chk) {
+        char * __attribute__ ((cleanup(check2))) stop_that = "test2";
+        chk++;
+        goto again;
+    }
+}
+
+int test3(void) {
+    char * __attribute__ ((cleanup(check2))) stop_that = "three";
+    int chk = 0;
+
+    if (chk) {
+        {
+          outside:
+	    {
+            char * __attribute__ ((cleanup(check2))) stop_that = "two";
+            printf("---- %d\n", chk);
+	    }
+        }
+    }
+    if (!chk)
+    {
+        char * __attribute__ ((cleanup(check2))) stop_that = "one";
+
+        if (!chk) {
+            chk = 1;
+            goto outside;
+        }
+    }
+    return 0;
+}
+
 int main()
 {
     int i __attribute__ ((__cleanup__(check))) = 0, not_i;
@@ -138,6 +172,8 @@ int main()
     printf("because what if free was call inside cleanup function\n", test());
     test_ret();
     test_ret2();
+    test2();
+    test3();
     return i;
 }
 
