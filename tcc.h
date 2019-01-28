@@ -456,10 +456,6 @@ struct FuncAttr {
     func_args   : 8; /* PE __stdcall args */
 };
 
-typedef struct ScopeTacker {
-    struct ScopeTacker *prev;
-} ScopeTacker;
-
 /* symbol management */
 typedef struct Sym {
     int v; /* symbol token */
@@ -470,20 +466,19 @@ typedef struct Sym {
             int c; /* associated number or Elf symbol index */
             union {
                 int sym_scope; /* scope level for locals */
-		struct {
-		    ScopeTacker *scope;
-		    int jnext; /* next jump label */
-		};
+		int jnext; /* next jump label */
                 struct FuncAttr f; /* function attributes */
                 int auxtype; /* bitfield access type */
             };
         };
         long long enum_val; /* enum constant if IS_ENUM_VAL */
         int *d; /* define token stream */
+	struct Sym *ncl; /* next cleanup */
     };
     CType type; /* associated type */
     union {
         struct Sym *next; /* next related symbol (for fields and anoms) */
+	struct Sym *cleanupstate; /* in defined labels */
         int asm_label; /* associated asm label */
     };
     struct Sym *prev; /* prev symbol in stack */
@@ -593,7 +588,6 @@ typedef struct AttributeDef {
     struct FuncAttr f;
     struct Section *section;
     Sym *cleanup_func;
-    int should_remember;
     int alias_target; /* token */
     int asm_label; /* associated asm label */
     char attr_mode; /* __attribute__((__mode__(...))) */
@@ -1287,8 +1281,6 @@ static inline int toup(int c) {
 ST_DATA Sym *sym_free_first;
 ST_DATA void **sym_pools;
 ST_DATA int nb_sym_pools;
-
-ST_DATA ScopeTacker *scope_tracker;
 
 ST_DATA Sym *global_stack;
 ST_DATA Sym *local_stack;
