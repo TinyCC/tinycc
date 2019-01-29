@@ -113,15 +113,6 @@ static void gv_dup(void);
 static int get_temp_local_var(int size,int align);
 static void clear_temp_local_var_list();
 
-static void incr_local_scope(void)
-{
-    ++local_scope;
-}
-
-static void decr_local_scope(void)
-{
-    --local_scope;
-}
 
 static void reset_local_scope(void)
 {
@@ -6152,11 +6143,11 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(')');
         a = gvtst(1, 0);
         b = 0;
-	incr_local_scope();
+	++local_scope;
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
-	decr_local_scope();
+	--local_scope;
         gjmp_addr(d);
         gsym(a);
         gsym_addr(b, d);
@@ -6170,8 +6161,8 @@ static void block(int *bsym, int *csym, int is_expr)
         s = local_stack;
         llabel = local_label_stack;
         lcleanup = current_cleanups;
-        incr_local_scope();
-        
+	++local_scope;
+
         /* handle local labels declarations */
         while (tok == TOK_LABEL) {
             next();
@@ -6232,7 +6223,7 @@ static void block(int *bsym, int *csym, int is_expr)
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel, is_expr);
         /* pop locally defined symbols */
-	decr_local_scope();
+	--local_scope;
 	/* In the is_expr case (a statement expression is finished here),
 	   vtop might refer to symbols on the local_stack.  Either via the
 	   type or via vtop->sym.  We can't pop those nor any that in turn
@@ -6291,7 +6282,7 @@ static void block(int *bsym, int *csym, int is_expr)
         next();
         skip('(');
         s = local_stack;
-	incr_local_scope();
+	++local_scope;
         if (tok != ';') {
             /* c99 for-loop init decl? */
             if (!decl0(VT_LOCAL, 1, NULL)) {
@@ -6327,7 +6318,7 @@ static void block(int *bsym, int *csym, int is_expr)
         gjmp_addr(c);
         gsym(a);
         gsym_addr(b, c);
-	decr_local_scope();
+	--local_scope;
         sym_pop(&local_stack, s, 0);
 
     } else 
