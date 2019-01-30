@@ -6275,6 +6275,7 @@ static void block(int *bsym, int *csym, int is_expr)
         *csym = gjmp(*csym);
         next();
         skip(';');
+        nocode_wanted |= 0x20000000;
     } else if (tok == TOK_FOR) {
         int e;
 	int saved_nocode_wanted;
@@ -7670,7 +7671,6 @@ found:
                 }
                 next();
             }
-            ad.a.aligned = 0;
         }
     }
     return 0;

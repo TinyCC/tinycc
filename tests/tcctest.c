@@ -1374,6 +1374,12 @@ void optimize_out(void)
       printf("ool6:%d\n", defined_function());
       goto breakhere;
   }
+  j = 1;
+  while (j) {
+      j--;
+      continue;
+      printf("ool7:%d\n", undefined_function());
+  }
 
   /* Test that constants in logical && are optimized: */
   i = 0 && undefined_function();
