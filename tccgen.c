@@ -6119,8 +6119,7 @@ static void block(int *bsym, int *csym, int is_expr)
         block(bsym, csym, 0);
 	if (cond != 1)
 	    nocode_wanted = saved_nocode_wanted;
-        c = tok;
-        if (c == TOK_ELSE) {
+        if (tok == TOK_ELSE) {
             next();
             d = gjmp(0);
             gsym(a);
