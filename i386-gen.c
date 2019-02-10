@@ -369,6 +369,7 @@ static void gcall_or_jmp(int is_jmp)
         rt = vtop->type.ref->type.t;
         switch (rt & VT_BTYPE) {
             case VT_BYTE:
+            case VT_BOOL:
                 if (rt & VT_UNSIGNED) {
                     o(0xc0b60f); /* movzx %al, %eax */
                 }

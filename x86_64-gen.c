@@ -920,7 +920,7 @@ void gfunc_call(int nb_args)
 
     /* other compilers don't clear the upper bits when returning char/short */
     bt = vtop->type.ref->type.t & (VT_BTYPE | VT_UNSIGNED);
-    if (bt == (VT_BYTE | VT_UNSIGNED))
+    if (bt == (VT_BYTE | VT_UNSIGNED) || (bt & VT_TYPE) == VT_BOOL)
         o(0xc0b60f);  /* movzbl %al, %eax */
     else if (bt == VT_BYTE)
         o(0xc0be0f); /* movsbl %al, %eax */
@@ -1230,7 +1230,7 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, i, reg_count;
+    int size, align, r, args_size, stack_adjust, i, reg_count, bt;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
@@ -1413,6 +1413,21 @@ void gfunc_call(int nb_args)
     gcall_or_jmp(0);
     if (args_size)
         gadd_sp(args_size);
+    /* other compilers don't clear the upper bits when returning char/short,
+       TCC does so for convenience.  When we'd stay purely within TCC compiled
+       code we wouldn't need this, but for compatibility we have to extend.
+       Ideally TCC wouldn't extend at return statements to not do double
+       extensions, or would understand sub-int types during expression
+       evaluation.  */
+    bt = vtop->type.ref->type.t & (VT_BTYPE | VT_UNSIGNED);
+    if (bt == (VT_BYTE | VT_UNSIGNED) || (bt & VT_TYPE) == VT_BOOL)
+        o(0xc0b60f);  /* movzbl %al, %eax */
+    else if (bt == VT_BYTE)
+        o(0xc0be0f); /* movsbl %al, %eax */
+    else if (bt == VT_SHORT)
+        o(0x98); /* cwtl */
+    else if (bt == (VT_SHORT | VT_UNSIGNED))
+        o(0xc0b70f);  /* movzwl %al, %eax */
     vtop--;
 }
 
