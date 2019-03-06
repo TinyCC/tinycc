@@ -6942,6 +6942,8 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                     " optionally enclosed in braces");
             skip('{');
             no_oblock = 0;
+	    if (tok == ',')
+		tcc_error("unexpected ','");
         }
 
         /* only parse strings here if correct type (otherwise: handle
