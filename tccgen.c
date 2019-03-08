@@ -571,6 +571,14 @@ ST_INLN Sym *sym_find(int v)
     return table_ident[v]->sym_identifier;
 }
 
+static int sym_scope(Sym *s)
+{
+  if (IS_ENUM_VAL (s->type.t))
+    return s->type.ref->sym_scope;
+  else
+    return s->sym_scope;
+}
+
 /* push a given symbol on the symbol stack */
 ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
 {
@@ -596,7 +604,7 @@ ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
         s->prev_tok = *ps;
         *ps = s;
         s->sym_scope = local_scope;
-        if (s->prev_tok && s->prev_tok->sym_scope == s->sym_scope)
+        if (s->prev_tok && sym_scope(s->prev_tok) == s->sym_scope)
             tcc_error("redeclaration of '%s'",
                 get_tok_str(v & ~SYM_STRUCT, NULL));
     }
@@ -919,7 +927,7 @@ static void merge_attr(AttributeDef *ad, AttributeDef *ad1)
 /* Merge some type attributes.  */
 static void patch_type(Sym *sym, CType *type)
 {
-    if (!(type->t & VT_EXTERN)) {
+    if (!(type->t & VT_EXTERN) || IS_ENUM_VAL(sym->type.t)) {
         if (!(sym->type.t & VT_EXTERN))
             tcc_error("redefinition of '%s'", get_tok_str(sym->v, NULL));
         sym->type.t &= ~VT_EXTERN;

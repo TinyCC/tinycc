@@ -53,3 +53,9 @@
 
 [test_array_to_str]
 60_errors_and_warnings.c:126: error: type 'int (*)[3]' does not match any association
+
+[test_duplicate_def_1]
+60_errors_and_warnings.c:128: error: redefinition of 'L'
+
+[test_duplicate_def_2]
+60_errors_and_warnings.c:131: error: redeclaration of 'L'
