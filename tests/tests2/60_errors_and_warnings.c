@@ -130,4 +130,15 @@ static enum myenum { L = -1 } L;
 void foo(void) {
 static enum myenum { L = -1 } L;                                                
 }
+#elif defined test_abstract_decls
+int bar(const char *());     // abstract declarator here is okay
+int bar (const char *(*g)()) // should match this 'g' argument
+{
+  g();
+  return 42;
+}
+int foo(int ())              // abstract decl is wrong in definitions
+{
+  return 0;
+}
 #endif

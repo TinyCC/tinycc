@@ -59,3 +59,6 @@
 
 [test_duplicate_def_2]
 60_errors_and_warnings.c:131: error: redeclaration of 'L'
+
+[test_abstract_decls]
+60_errors_and_warnings.c:141: error: identifier expected

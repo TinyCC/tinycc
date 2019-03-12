@@ -4591,12 +4591,14 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
 	    parse_attribute(ad);
 	    post = type_decl(type, ad, v, td);
 	    skip(')');
-	}
+	} else
+	  goto abstract;
     } else if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
 	/* type identifier */
 	*v = tok;
 	next();
     } else {
+  abstract:
 	if (!(td & TYPE_ABSTRACT))
 	  expect("identifier");
 	*v = 0;
