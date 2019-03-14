@@ -59,7 +59,9 @@ RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
 DUMPTCC = (set -x; $(TOP)/tcc -vv; ldd $(TOP)/tcc; exit 1)
 
-all test : clean-s $(TESTS)
+all test :
+	$(MAKE) clean-s
+	$(MAKE) $(TESTS)
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
