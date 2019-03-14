@@ -2622,6 +2622,19 @@ void stdarg_for_libc(const char *fmt, ...)
     va_end(args);
 }
 
+void stdarg_syntax(int n, ...)
+{
+    int i;
+    va_list ap;
+    if (1)
+      va_start(ap, n);
+    else
+      ;
+    i = va_arg(ap, int);
+    printf("stdarg_void_expr: %d\n", i);
+    (va_end(ap));
+}
+
 void stdarg_test(void)
 {
     LONG_DOUBLE ld = 1234567891234LL;
@@ -2669,6 +2682,7 @@ void stdarg_test(void)
     bob.profile = 42;
     stdarg_for_struct(bob, bob, bob, bob.profile);
     stdarg_for_libc("stdarg_for_libc: %s %.2f %d\n", "string", 1.23, 456);
+    stdarg_syntax(1, 17);
 }
 
 void whitespace_test(void)
