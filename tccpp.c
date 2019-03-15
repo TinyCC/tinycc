@@ -3625,8 +3625,13 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
 /* cleanup from error/setjmp */
 ST_FUNC void preprocess_end(TCCState *s1)
 {
-    while (macro_stack)
-        end_macro();
+    /* Normally macro_stack is NULL here, except if an
+       error was thrown; then it can point to allocated storage
+       or to some stack variables, but those are unwound via
+       setjmp already, so can't be accessed.  Only two choices:
+       either we leak memory or we access invalid memory.  The
+       former is the better choice.  */
+    macro_stack = NULL;
     macro_ptr = NULL;
 }
 
