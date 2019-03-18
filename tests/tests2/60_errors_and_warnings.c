@@ -140,5 +140,15 @@ int bar (const char *(*g)()) // should match this 'g' argument
 int foo(int ())              // abstract decl is wrong in definitions
 {
   return 0;
+#elif defined test_invalid_1
+void f(char*);
+void g(void) {
+  f((char[]){1, ,});
 }
+#elif defined test_invalid_2
+int ga = 0.42 { 2 };
+#elif defined test_invalid_3
+struct S { int a, b; };
+struct T { struct S x; };
+struct T gt = { 42 a: 1, 43 };
 #endif

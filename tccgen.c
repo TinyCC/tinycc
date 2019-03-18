@@ -93,7 +93,7 @@ static int parse_btype(CType *type, AttributeDef *ad);
 static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void init_putv(CType *type, Section *sec, unsigned long c);
-static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+static void decl_initializer(CType *type, Section *sec, unsigned long c, int flags);
 static void block(int *bsym, int *csym, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static void decl(int l);
@@ -6596,14 +6596,18 @@ static void init_putz(Section *sec, unsigned long c, int size)
     }
 }
 
+#define DIF_FIRST     1
+#define DIF_SIZE_ONLY 2
+#define DIF_HAVE_ELEM 4
+
 /* t is the array or struct type. c is the array or struct
    address. cur_field is the pointer to the current
    field, for arrays the 'c' member contains the current start
-   index.  'size_only' is true if only size info is needed (only used
-   in arrays).  al contains the already initialized length of the
+   index.  'flags' is as in decl_initializer.
+   'al' contains the already initialized length of the
    current container (starting at c).  This returns the new length of that.  */
 static int decl_designator(CType *type, Section *sec, unsigned long c,
-                           Sym **cur_field, int size_only, int al)
+                           Sym **cur_field, int flags, int al)
 {
     Sym *s, *f;
     int index, index_last, align, l, nb_elems, elem_size;
@@ -6611,6 +6615,8 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
 
     elem_size = 0;
     nb_elems = 1;
+    if (flags & DIF_HAVE_ELEM)
+        goto no_designator;
     if (gnu_ext && (l = is_label()) != 0)
         goto struct_field;
     /* NOTE: we only support ranges for last designator */
@@ -6659,6 +6665,7 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
 	    expect("=");
         }
     } else {
+    no_designator:
         if (type->t & VT_ARRAY) {
 	    index = (*cur_field)->c;
 	    if (type->ref->c >= 0 && index >= type->ref->c)
@@ -6677,12 +6684,12 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
     }
     /* must put zero in holes (note that doing it that way
        ensures that it even works with designators) */
-    if (!size_only && c - corig > al)
+    if (!(flags & DIF_SIZE_ONLY) && c - corig > al)
 	init_putz(sec, corig + al, c - corig - al);
-    decl_initializer(type, sec, c, 0, size_only);
+    decl_initializer(type, sec, c, flags & ~DIF_FIRST);
 
     /* XXX: make it more general */
-    if (!size_only && nb_elems > 1) {
+    if (!(flags & DIF_SIZE_ONLY) && nb_elems > 1) {
         unsigned long c_end;
         uint8_t *src, *dst;
         int i;
@@ -6905,33 +6912,29 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 
 /* 't' contains the type and storage info. 'c' is the offset of the
    object in section 'sec'. If 'sec' is NULL, it means stack based
-   allocation. 'first' is true if array '{' must be read (multi
-   dimension implicit array init handling). 'size_only' is true if
+   allocation. 'flags & DIF_FIRST' is true if array '{' must be read (multi
+   dimension implicit array init handling). 'flags & DIF_SIZE_ONLY' is true if
    size only evaluation is wanted (only for arrays). */
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
-                             int first, int size_only)
+                             int flags)
 {
     int len, n, no_oblock, nb, i;
     int size1, align1;
-    int have_elem;
     Sym *s, *f;
     Sym indexsym;
     CType *t1;
 
-    /* If we currently are at an '}' or ',' we have read an initializer
-       element in one of our callers, and not yet consumed it.  */
-    have_elem = tok == '}' || tok == ',';
-    if (!have_elem && tok != '{' &&
+    if (!(flags & DIF_HAVE_ELEM) && tok != '{' &&
 	/* In case of strings we have special handling for arrays, so
 	   don't consume them as initializer value (which would commit them
 	   to some anonymous symbol).  */
 	tok != TOK_LSTR && tok != TOK_STR &&
-	!size_only) {
+	!(flags & DIF_SIZE_ONLY)) {
 	parse_init_elem(!sec ? EXPR_ANY : EXPR_CONST);
-	have_elem = 1;
+        flags |= DIF_HAVE_ELEM;
     }
 
-    if (have_elem &&
+    if ((flags & DIF_HAVE_ELEM) &&
 	!(type->t & VT_ARRAY) &&
 	/* Use i_c_parameter_t, to strip toplevel qualifiers.
 	   The source type might have VT_CONSTANT set, which is
@@ -6945,15 +6948,13 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         size1 = type_size(t1, &align1);
 
         no_oblock = 1;
-        if ((first && tok != TOK_LSTR && tok != TOK_STR) || 
+        if (((flags & DIF_FIRST) && tok != TOK_LSTR && tok != TOK_STR) ||
             tok == '{') {
             if (tok != '{')
                 tcc_error("character array initializer must be a literal,"
                     " optionally enclosed in braces");
             skip('{');
             no_oblock = 0;
-	    if (tok == ',')
-		tcc_error("unexpected ','");
         }
 
         /* only parse strings here if correct type (otherwise: handle
@@ -6978,7 +6979,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
                 nb = cstr_len;
                 if (n >= 0 && nb > (n - len))
                     nb = n - len;
-                if (!size_only) {
+                if (!(flags & DIF_SIZE_ONLY)) {
                     if (cstr_len > nb)
                         tcc_warning("initializer-string for array is too long");
                     /* in order to go faster for common case (char
@@ -7004,7 +7005,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             /* only add trailing zero if enough storage (no
                warning in this case since it is standard) */
             if (n < 0 || len < n) {
-                if (!size_only) {
+                if (!(flags & DIF_SIZE_ONLY)) {
 		    vpushi(0);
                     init_putv(t1, sec, c + (len * size1));
                 }
@@ -7017,9 +7018,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 
           do_init_list:
 	    len = 0;
-	    while (tok != '}' || have_elem) {
-		len = decl_designator(type, sec, c, &f, size_only, len);
-		have_elem = 0;
+	    while (tok != '}' || (flags & DIF_HAVE_ELEM)) {
+		len = decl_designator(type, sec, c, &f, flags, len);
+		flags &= ~DIF_HAVE_ELEM;
 		if (type->t & VT_ARRAY) {
 		    ++indexsym.c;
 		    /* special test for multi dimensional arrays (may not
@@ -7042,7 +7043,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
 	    }
         }
         /* put zeros at the end */
-	if (!size_only && len < n*size1)
+	if (!(flags & DIF_SIZE_ONLY) && len < n*size1)
 	    init_putz(sec, c + len, n*size1 - len);
         if (!no_oblock)
             skip('}');
@@ -7052,7 +7053,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
     } else if ((type->t & VT_BTYPE) == VT_STRUCT) {
 	size1 = 1;
         no_oblock = 1;
-        if (first || tok == '{') {
+        if ((flags & DIF_FIRST) || tok == '{') {
             skip('{');
             no_oblock = 0;
         }
@@ -7061,20 +7062,22 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         n = s->c;
 	goto do_init_list;
     } else if (tok == '{') {
+        if (flags & DIF_HAVE_ELEM)
+          skip(';');
         next();
-        decl_initializer(type, sec, c, first, size_only);
+        decl_initializer(type, sec, c, flags & ~DIF_HAVE_ELEM);
         skip('}');
-    } else if (size_only) {
+    } else if ((flags & DIF_SIZE_ONLY)) {
 	/* If we supported only ISO C we wouldn't have to accept calling
-	   this on anything than an array size_only==1 (and even then
+	   this on anything than an array if DIF_SIZE_ONLY (and even then
 	   only on the outermost level, so no recursion would be needed),
 	   because initializing a flex array member isn't supported.
 	   But GNU C supports it, so we need to recurse even into
-	   subfields of structs and arrays when size_only is set.  */
+	   subfields of structs and arrays when DIF_SIZE_ONLY is set.  */
         /* just skip expression */
         skip_or_save_block(NULL);
     } else {
-	if (!have_elem) {
+	if (!(flags & DIF_HAVE_ELEM)) {
 	    /* This should happen only when we haven't parsed
 	       the init element above for fear of committing a
 	       string constant to memory too early.  */
@@ -7154,7 +7157,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* compute size */
         begin_macro(init_str, 1);
         next();
-        decl_initializer(type, NULL, 0, 1, 1);
+        decl_initializer(type, NULL, 0, DIF_FIRST | DIF_SIZE_ONLY);
         /* prepare second initializer parsing */
         macro_ptr = init_str->str;
         next();
@@ -7321,7 +7324,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 	size_t oldreloc_offset = 0;
 	if (sec && sec->reloc)
 	  oldreloc_offset = sec->reloc->data_offset;
-        decl_initializer(type, sec, addr, 1, 0);
+        decl_initializer(type, sec, addr, DIF_FIRST);
 	if (sec && sec->reloc)
 	  squeeze_multi_relocs(sec, oldreloc_offset);
         /* patch flexible array member size back to -1, */

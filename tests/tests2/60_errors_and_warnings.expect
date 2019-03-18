@@ -62,3 +62,12 @@
 
 [test_abstract_decls]
 60_errors_and_warnings.c:141: error: identifier expected
+
+[test_invalid_1]
+60_errors_and_warnings.c:146: error: identifier expected
+
+[test_invalid_2]
+60_errors_and_warnings.c:149: error: ';' expected (got "{")
+
+[test_invalid_3]
+60_errors_and_warnings.c:153: error: ',' expected (got "a")
