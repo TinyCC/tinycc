@@ -71,3 +71,6 @@
 
 [test_invalid_3]
 60_errors_and_warnings.c:153: error: ',' expected (got "a")
+
+[test_conflicting_types]
+60_errors_and_warnings.c:159: error: conflicting types for 'i'

@@ -151,4 +151,13 @@ int ga = 0.42 { 2 };
 struct S { int a, b; };
 struct T { struct S x; };
 struct T gt = { 42 a: 1, 43 };
+#elif defined test_conflicting_types
+int i;
+void foo(void) {
+    int i;
+      {
+        extern double i;
+        i = 42.2;
+      }
+}
 #endif

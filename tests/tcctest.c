@@ -77,6 +77,7 @@ void expr_test();
 void macro_test();
 void recursive_macro_test();
 void scope_test();
+void scope_test2();
 void forward_test();
 void funcptr_test();
 void loop_test();
@@ -718,6 +719,7 @@ int main(int argc, char **argv)
     macro_test();
     recursive_macro_test();
     scope_test();
+    scope_test2();
     forward_test();
     funcptr_test();
     loop_test();
@@ -798,6 +800,20 @@ void scope_test()
         }
     }
     printf("g5=%d\n", g);
+}
+
+int st2_i;
+int *st2_p = &st2_i;
+void scope_test2()
+{
+    char a[50];
+    st2_i = 42;
+    for (int st2_i = 1; st2_i < 10; st2_i++) {
+        extern int st2_i;
+        st2_i++;
+        printf("exloc: %d\n", st2_i);
+    }
+    printf("exloc: %d\n", *st2_p);
 }
 
 void array_test()
