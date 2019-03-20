@@ -4172,6 +4172,22 @@ static int parse_btype(CType *type, AttributeDef *ad)
         case TOK_INT:
             u = VT_INT;
             goto basic_type;
+        case TOK_ALIGNAS:
+            { int n;
+            next();
+            /* TODO: _Alignas(type) -> _Alignas(_Alignof(type)) */
+            if (tok == '(') {
+                next();
+                n = expr_const();
+                if (n <= 0 || (n & (n - 1)) != 0)
+                    tcc_error("alignment must be a positive power of two");
+                skip(')');
+            } else {
+                 expect("(");
+            }
+            ad->a.aligned = exact_log2p1(n);
+          }
+          continue;
         case TOK_LONG:
             if ((t & VT_BTYPE) == VT_DOUBLE) {
                 t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
@@ -4281,7 +4297,11 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t |= VT_INLINE;
             next();
             break;
-
+        case TOK_NORETURN3:
+            /* currently, no need to handle it because tcc does not
+               track unused objects */
+            next();
+            break;
             /* GNUC attribute */
         case TOK_ATTRIBUTE1:
         case TOK_ATTRIBUTE2:
@@ -4569,6 +4589,22 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
         case TOK_RESTRICT2:
         case TOK_RESTRICT3:
             goto redo;
+        case TOK_ALIGNAS:
+            { int n;
+            next();
+            /* TODO: _Alignas(type) -> _Alignas(_Alignof(type)) */
+            if (tok == '(') {
+                next();
+                n = expr_const();
+                if (n <= 0 || (n & (n - 1)) != 0)
+                    tcc_error("alignment must be a positive power of two");
+                skip(')');
+            } else {
+                expect("(");
+            }
+            ad->a.aligned = exact_log2p1(n);
+          }
+          break;
 	/* XXX: clarify attribute handling */
 	case TOK_ATTRIBUTE1:
 	case TOK_ATTRIBUTE2:
