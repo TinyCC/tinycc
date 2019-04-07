@@ -2782,7 +2782,7 @@ ST_FUNC int type_size(CType *type, int *a)
             *a = PTR_SIZE;
             return PTR_SIZE;
         }
-    } else if (IS_ENUM(type->t) && type->ref->c == -1) {
+    } else if (IS_ENUM(type->t) && type->ref->c < 0) {
         return -1; /* incomplete enum */
     } else if (bt == VT_LDOUBLE) {
         *a = LDOUBLE_ALIGN;
@@ -3934,6 +3934,7 @@ do_decl:
         next();
         if (s->c != -1)
             tcc_error("struct/union/enum already defined");
+        s->c = -2;
         /* cannot be empty */
         /* non empty enums are not allowed */
         ps = &s->next;

@@ -74,3 +74,6 @@
 
 [test_conflicting_types]
 60_errors_and_warnings.c:159: error: conflicting types for 'i'
+
+[test_nested_types]
+60_errors_and_warnings.c:166: error: struct/union/enum already defined

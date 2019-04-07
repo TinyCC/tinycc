@@ -160,4 +160,10 @@ void foo(void) {
         i = 42.2;
       }
 }
+#elif defined test_nested_types
+union u {
+    union u {
+        int i;
+    } m;
+};
 #endif
