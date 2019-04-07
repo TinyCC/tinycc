@@ -4521,6 +4521,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
             } else {
                 if (!is_integer_btype(vtop->type.t & VT_BTYPE))
                     tcc_error("size of variable length array should be an integer");
+                n = 0;
                 t1 = VT_VLA;
             }
         }
@@ -4532,6 +4533,8 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
         t1 |= type->t & VT_VLA;
         
         if (t1 & VT_VLA) {
+            if (n < 0)
+              tcc_error("need explicit inner array size in VLAs");
             loc -= type_size(&int_type, &align);
             loc &= -align;
             n = loc;

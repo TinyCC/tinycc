@@ -77,3 +77,6 @@
 
 [test_nested_types]
 60_errors_and_warnings.c:166: error: struct/union/enum already defined
+
+[test_vla_1]
+60_errors_and_warnings.c:173: error: need explicit inner array size in VLAs

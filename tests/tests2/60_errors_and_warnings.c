@@ -166,4 +166,10 @@ union u {
         int i;
     } m;
 };
+#elif defined test_vla_1
+int X=1;
+
+int main(void) {
+  int t[][][X];
+}
 #endif
