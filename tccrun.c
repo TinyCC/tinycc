@@ -117,7 +117,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **);
 
-    s1->runtime_main = "main";
+    s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && !find_elf_sym(s1->symtab, s1->runtime_main))
         return 0;
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
