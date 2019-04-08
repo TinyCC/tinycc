@@ -80,3 +80,6 @@
 
 [test_vla_1]
 60_errors_and_warnings.c:173: error: need explicit inner array size in VLAs
+
+[test_invalid_alignas]
+60_errors_and_warnings.c:177: error: identifier expected

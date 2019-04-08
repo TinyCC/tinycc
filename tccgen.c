@@ -4176,20 +4176,25 @@ static int parse_btype(CType *type, AttributeDef *ad)
             goto basic_type;
         case TOK_ALIGNAS:
             { int n;
-            next();
-            /* TODO: _Alignas(type) -> _Alignas(_Alignof(type)) */
-            if (tok == '(') {
-                next();
-                n = expr_const();
-                if (n <= 0 || (n & (n - 1)) != 0)
+              AttributeDef ad1;
+              next();
+              skip('(');
+              memset(&ad1, 0, sizeof(AttributeDef));
+              if (parse_btype(&type1, &ad1)) {
+                  type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
+                  if (ad1.a.aligned)
+                    n = 1 << (ad1.a.aligned - 1);
+                  else
+                    type_size(&type1, &n);
+              } else {
+                  n = expr_const();
+                  if (n <= 0 || (n & (n - 1)) != 0)
                     tcc_error("alignment must be a positive power of two");
-                skip(')');
-            } else {
-                 expect("(");
+              }
+              skip(')');
+              ad->a.aligned = exact_log2p1(n);
             }
-            ad->a.aligned = exact_log2p1(n);
-          }
-          continue;
+            continue;
         case TOK_LONG:
             if ((t & VT_BTYPE) == VT_DOUBLE) {
                 t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
@@ -4594,22 +4599,6 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
         case TOK_RESTRICT2:
         case TOK_RESTRICT3:
             goto redo;
-        case TOK_ALIGNAS:
-            { int n;
-            next();
-            /* TODO: _Alignas(type) -> _Alignas(_Alignof(type)) */
-            if (tok == '(') {
-                next();
-                n = expr_const();
-                if (n <= 0 || (n & (n - 1)) != 0)
-                    tcc_error("alignment must be a positive power of two");
-                skip(')');
-            } else {
-                expect("(");
-            }
-            ad->a.aligned = exact_log2p1(n);
-          }
-          break;
 	/* XXX: clarify attribute handling */
 	case TOK_ATTRIBUTE1:
 	case TOK_ATTRIBUTE2:

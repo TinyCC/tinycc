@@ -172,4 +172,7 @@ int X=1;
 int main(void) {
   int t[][][X];
 }
+#elif defined test_invalid_alignas
+/* _Alignas is no type qualifier */
+void * _Alignas(16) p1;
 #endif
