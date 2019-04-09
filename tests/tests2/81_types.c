@@ -39,5 +39,17 @@ int f5 (fptr5 fp, fptr1 i)
 {
   return fp(i);
 }
+typedef int intx4[4];
+int f8 (intx4, int);
 int f8 (int ([4]), int);
+int f8 (int y[4], int i)
+{
+  return y[i];
+}
+int f9 (int (*)(int), int);
+int f9 (int ((int)), int);
+int f9 (int f(int), int i)
+{
+  return f(i);
+}
 int main () { return 0; }
