@@ -3588,7 +3588,7 @@ redo:
     goto redo;
 }
 
-static Sym * find_field (CType *type, int v)
+static Sym * find_field (CType *type, int v, int *cumofs)
 {
     Sym *s = type->ref;
     v |= SYM_FIELD;
@@ -3596,26 +3596,16 @@ static Sym * find_field (CType *type, int v)
 	if ((s->v & SYM_FIELD) &&
 	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
 	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
-	    Sym *ret = find_field (&s->type, v);
-	    if (ret)
+	    Sym *ret = find_field (&s->type, v, cumofs);
+	    if (ret) {
+                *cumofs += s->c;
 	        return ret;
+            }
 	}
 	if (s->v == v)
 	  break;
     }
     return s;
-}
-
-static void struct_add_offset (Sym *s, int offset)
-{
-    while ((s = s->next) != NULL) {
-	if ((s->v & SYM_FIELD) &&
-	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
-	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
-	    struct_add_offset(s->type.ref, offset);
-	} else
-	  s->c += offset;
-    }
 }
 
 static void struct_layout(CType *type, AttributeDef *ad)
@@ -3767,41 +3757,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 	printf("\n");
 #endif
 
-	if (f->v & SYM_FIRST_ANOM && (f->type.t & VT_BTYPE) == VT_STRUCT) {
-	    Sym *ass;
-	    /* An anonymous struct/union.  Adjust member offsets
-	       to reflect the real offset of our containing struct.
-	       Also set the offset of this anon member inside
-	       the outer struct to be zero.  Via this it
-	       works when accessing the field offset directly
-	       (from base object), as well as when recursing
-	       members in initializer handling.  */
-	    int v2 = f->type.ref->v;
-	    if (!(v2 & SYM_FIELD) &&
-		(v2 & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
-		Sym **pps;
-		/* This happens only with MS extensions.  The
-		   anon member has a named struct type, so it
-		   potentially is shared with other references.
-		   We need to unshare members so we can modify
-		   them.  */
-		ass = f->type.ref;
-		f->type.ref = sym_push(anon_sym++ | SYM_FIELD,
-				       &f->type.ref->type, 0,
-				       f->type.ref->c);
-		pps = &f->type.ref->next;
-		while ((ass = ass->next) != NULL) {
-		    *pps = sym_push(ass->v, &ass->type, 0, ass->c);
-		    pps = &((*pps)->next);
-		}
-		*pps = NULL;
-	    }
-	    struct_add_offset(f->type.ref, offset);
-	    f->c = 0;
-	} else {
-	    f->c = offset;
-	}
-
+        f->c = offset;
 	f->r = 0;
     }
 
@@ -5331,7 +5287,7 @@ special_math_val:
             inc(1, tok);
             next();
         } else if (tok == '.' || tok == TOK_ARROW || tok == TOK_CDOUBLE) {
-            int qualifiers;
+            int qualifiers, cumofs = 0;
             /* field */ 
             if (tok == TOK_ARROW) 
                 indir();
@@ -5346,12 +5302,12 @@ special_math_val:
             next();
             if (tok == TOK_CINT || tok == TOK_CUINT)
                 expect("field name");
-	    s = find_field(&vtop->type, tok);
+	    s = find_field(&vtop->type, tok, &cumofs);
             if (!s)
                 tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, &tokc));
             /* add field offset to pointer */
             vtop->type = char_pointer_type; /* change type to 'char *' */
-            vpushi(s->c);
+            vpushi(cumofs + s->c);
             gen_op('+');
             /* change type to field type, and set to lvalue */
             vtop->type = s->type;
@@ -6674,19 +6630,20 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
             c += index * elem_size;
             nb_elems = index_last - index + 1;
         } else {
+            int cumofs = 0;
             next();
             l = tok;
         struct_field:
             next();
             if ((type->t & VT_BTYPE) != VT_STRUCT)
                 expect("struct/union type");
-	    f = find_field(type, l);
+	    f = find_field(type, l, &cumofs);
             if (!f)
                 expect("field");
             if (cur_field)
                 *cur_field = f;
 	    type = &f->type;
-            c += f->c;
+            c += cumofs + f->c;
         }
         cur_field = NULL;
     }
