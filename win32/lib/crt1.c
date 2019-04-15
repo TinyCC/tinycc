@@ -4,6 +4,7 @@
 // _UNICODE for tchar.h, UNICODE for API
 #include <tchar.h>
 
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -37,9 +38,19 @@ extern int _tmain(int argc, _TCHAR * argv[], _TCHAR * env[]);
 /* Allow command-line globbing with "int _dowildcard = 1;" in the user source */
 int _dowildcard;
 
+#ifdef __x86_64__
+static LONG WINAPI catch_sig(EXCEPTION_POINTERS *ex)
+{
+  return _XcptFilter(ex->ExceptionRecord->ExceptionCode, ex);
+}
+#endif
+
 void _tstart(void)
 {
     __TRY__
+#ifdef __x86_64__
+     SetUnhandledExceptionFilter(catch_sig);
+#endif
     _startupinfo start_info = {0};
 
     // Sets the current application type

@@ -26,6 +26,13 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
 typedef struct { int newmode; } _startupinfo;
 int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int globb, _startupinfo*);
 
+#ifdef __x86_64__
+static LONG WINAPI catch_sig(EXCEPTION_POINTERS *ex)
+{
+  return _XcptFilter(ex->ExceptionRecord->ExceptionCode, ex);
+}
+#endif
+
 static int go_winmain(TCHAR *arg1)
 {
     STARTUPINFO si;
@@ -54,6 +61,9 @@ static int go_winmain(TCHAR *arg1)
 int _twinstart(void)
 {
     __TRY__
+#ifdef __x86_64__
+     SetUnhandledExceptionFilter(catch_sig);
+#endif
     _startupinfo start_info_con = {0};
     __set_app_type(__GUI_APP);
     __tgetmainargs(&__argc, &__targv, &_tenviron, 0, &start_info_con);
