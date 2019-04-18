@@ -48,9 +48,7 @@ static Sym *asm_label_push(int v)
     /* We always add VT_EXTERN, for sym definition that's tentative
        (for .set, removed for real defs), for mere references it's correct
        as is.  */
-    Sym *sym = global_identifier_push(v, VT_ASM | VT_EXTERN | VT_STATIC, 0);
-    sym->r = VT_CONST | VT_SYM;
-    return sym;
+    return global_identifier_push(v, VT_ASM | VT_EXTERN | VT_STATIC, 0);
 }
 
 /* Return a symbol we can use inside the assembler, having name NAME.

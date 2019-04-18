@@ -649,7 +649,7 @@ static unsigned long func_bound_ind;
 
 static void gen_static_call(int v)
 {
-    Sym *sym = external_global_sym(v, &func_old_type, 0);
+    Sym *sym = external_global_sym(v, &func_old_type);
     oad(0xe8, 0);
     greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
 }
@@ -713,7 +713,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
         break;
     }
 
-    sym = external_global_sym(func, &func_old_type, 0);
+    sym = external_global_sym(func, &func_old_type);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
 
@@ -1031,7 +1031,7 @@ void gfunc_epilog(void)
     v = (func_scratch + -loc + 15) & -16;
 
     if (v >= 4096) {
-        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
+        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type);
         oad(0xb8, v); /* mov stacksize, %eax */
         oad(0xe8, 0); /* call __chkstk, (does the stackframe too) */
         greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);

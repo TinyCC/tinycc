@@ -616,11 +616,12 @@ ST_FUNC Sym *global_identifier_push(int v, int t, int c)
 {
     Sym *s, **ps;
     s = sym_push2(&global_stack, v, t, c);
+    s->r = VT_CONST | VT_SYM;
     /* don't record anonymous symbol */
     if (v < SYM_FIRST_ANOM) {
         ps = &table_ident[v - TOK_IDENT]->sym_identifier;
-        /* modify the top most local identifier, so that
-           sym_identifier will point to 's' when popped */
+        /* modify the top most local identifier, so that sym_identifier will
+           point to 's' when popped; happens when called from inline asm */
         while (*ps != NULL && (*ps)->sym_scope)
             ps = &(*ps)->prev_tok;
         s->prev_tok = *ps;
@@ -846,9 +847,8 @@ ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsign
     Sym *sym;
 
     v = anon_sym++;
-    sym = global_identifier_push(v, type->t | VT_STATIC, 0);
-    sym->type.ref = type->ref;
-    sym->r = VT_CONST | VT_SYM;
+    sym = sym_push(v, type, VT_CONST | VT_SYM, 0);
+    sym->type.t |= VT_STATIC;
     put_extern_sym(sym, sec, offset, size);
     return sym;
 }
@@ -860,7 +860,7 @@ static void vpush_ref(CType *type, Section *sec, unsigned long offset, unsigned 
 }
 
 /* define a new external reference to a symbol 'v' of type 'u' */
-ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
+ST_FUNC Sym *external_global_sym(int v, CType *type)
 {
     Sym *s;
 
@@ -869,7 +869,6 @@ ST_FUNC Sym *external_global_sym(int v, CType *type, int r)
         /* push forward reference */
         s = global_identifier_push(v, type->t | VT_EXTERN, 0);
         s->type.ref = type->ref;
-        s->r = r | VT_CONST | VT_SYM;
     } else if (IS_ASM_SYM(s)) {
         s->type.t = type->t | (s->type.t & VT_EXTERN);
         s->type.ref = type->ref;
@@ -1001,7 +1000,6 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
             tcc_error("conflicting types for '%s'", get_tok_str(s->v, NULL));
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
-        s->type.t |= VT_EXTERN;
         s->a = ad->a;
         s->sym_scope = 0;
     } else {
@@ -1018,7 +1016,7 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
 /* push a reference to global symbol v */
 ST_FUNC void vpush_global_sym(CType *type, int v)
 {
-    vpushsym(type, external_global_sym(v, type, 0));
+    vpushsym(type, external_global_sym(v, type));
 }
 
 /* save registers up to (vtop - n) stack entry */
@@ -3427,7 +3425,7 @@ redo:
 	    if (!s) {
 	      tcc_warning("implicit declaration of function '%s'",
 			  get_tok_str(tok, &tokc));
-	      s = external_global_sym(tok, &func_old_type, 0);
+	      s = external_global_sym(tok, &func_old_type);
 	    }
 	    ad->cleanup_func = s;
 	    next();
@@ -5258,7 +5256,7 @@ special_math_val:
 #endif
             )
                 tcc_warning("implicit declaration of function '%s'", name);
-            s = external_global_sym(t, &func_old_type, 0); 
+            s = external_global_sym(t, &func_old_type);
         }
 
         r = s->r;
@@ -7265,8 +7263,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 	    put_extern_sym(sym, sec, addr, size);
         } else {
             /* push global reference */
-            sym = get_sym_ref(type, sec, addr, size);
-	    vpushsym(type, sym);
+            vpush_ref(type, sec, addr, size);
+            sym = vtop->sym;
 	    vtop->r |= r;
         }
 
@@ -7556,14 +7554,12 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
 
                 /* put function symbol */
-                sym = external_global_sym(v, &type, 0);
-                type.t &= ~VT_EXTERN;
-                patch_storage(sym, &ad, &type);
+                sym = external_sym(v, &type, 0, &ad);
 
                 /* static inline functions are just recorded as a kind
                    of macro. Their code will be emitted at the end of
                    the compilation unit only if they are used */
-                if ((type.t & (VT_INLINE | VT_STATIC)) == 
+                if ((type.t & (VT_INLINE | VT_STATIC)) ==
                     (VT_INLINE | VT_STATIC)) {
                     struct InlineFunc *fn;
                     const char *filename;

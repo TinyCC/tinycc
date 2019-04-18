@@ -341,7 +341,7 @@ static void gen_static_call(int v)
 {
     Sym *sym;
 
-    sym = external_global_sym(v, &func_old_type, 0);
+    sym = external_global_sym(v, &func_old_type);
     oad(0xe8, -4);
     greloc(cur_text_section, sym, ind-4, R_386_PC32);
 }
@@ -1125,7 +1125,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     /* patch relocation */
     /* XXX: find a better solution ? */
     rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
-    sym = external_global_sym(func, &func_old_type, 0);
+    sym = external_global_sym(func, &func_old_type);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
