@@ -7445,6 +7445,19 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
     AttributeDef ad, adbase;
 
     while (1) {
+	if (tok == TOK_STATIC_ASSERT) {
+	    int c;
+
+	    next();
+	    skip('(');
+	    c = expr_const();
+	    skip(',');
+	    if (c == 0)
+		tcc_error("%s", get_tok_str(tok, &tokc));
+	    next();
+	    skip(')');
+	    continue;
+	}
         if (!parse_btype(&btype, &adbase)) {
             if (is_for_loop_init)
                 return 0;

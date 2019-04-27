@@ -38,6 +38,7 @@
      DEF(TOK_EXTENSION, "__extension__") /* gcc keyword */
 
      DEF(TOK_GENERIC, "_Generic")
+     DEF(TOK_STATIC_ASSERT, "_Static_assert")
 
      DEF(TOK_FLOAT, "float")
      DEF(TOK_DOUBLE, "double")
