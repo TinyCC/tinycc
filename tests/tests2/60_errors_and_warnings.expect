@@ -83,3 +83,6 @@
 
 [test_invalid_alignas]
 60_errors_and_warnings.c:177: error: identifier expected
+
+[test_static_assert]
+60_errors_and_warnings.c:183: error: "ONE is not 1"
