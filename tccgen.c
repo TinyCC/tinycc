@@ -94,7 +94,7 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void init_putv(CType *type, Section *sec, unsigned long c);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int flags);
-static void block(int *bsym, int *csym, int is_expr);
+static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static void decl(int l);
 static int decl0(int l, int is_for_loop_init, Sym *);
@@ -4891,7 +4891,7 @@ ST_FUNC void unary(void)
 	       as statement expressions can't ever be entered from the
 	       outside, so any reactivation of code emission (from labels
 	       or loop heads) can be disabled again after the end of it. */
-            block(NULL, NULL, 1);
+            block(NULL, NULL, NULL, NULL, 1);
 	    nocode_wanted = saved_nocode_wanted;
             skip(')');
         } else {
@@ -6083,7 +6083,7 @@ static void gcase(struct case_t **base, int len, int *bsym)
     }
 }
 
-static void block(int *bsym, int *csym, int is_expr)
+static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 {
     int a, b, c, d, cond;
     Sym *s;
@@ -6112,7 +6112,7 @@ static void block(int *bsym, int *csym, int is_expr)
             a = gvtst(1, 0);
         if (cond == 0)
 	    nocode_wanted |= 0x20000000;
-        block(bsym, csym, 0);
+        block(bsym, bcl, csym, ccl, 0);
 	if (cond != 1)
 	    nocode_wanted = saved_nocode_wanted;
         if (tok == TOK_ELSE) {
@@ -6121,7 +6121,7 @@ static void block(int *bsym, int *csym, int is_expr)
             gsym(a);
 	    if (cond == 1)
 	        nocode_wanted |= 0x20000000;
-            block(bsym, csym, 0);
+            block(bsym, bcl, csym, ccl, 0);
             gsym(d); /* patch else jmp */
 	    if (cond != 0)
 		nocode_wanted = saved_nocode_wanted;
@@ -6140,7 +6140,7 @@ static void block(int *bsym, int *csym, int is_expr)
         b = 0;
 	++local_scope;
 	saved_nocode_wanted = nocode_wanted;
-        block(&a, &b, 0);
+        block(&a, current_cleanups, &b, current_cleanups, 0);
 	nocode_wanted = saved_nocode_wanted;
 	--local_scope;
         gjmp_addr(d);
@@ -6182,7 +6182,7 @@ static void block(int *bsym, int *csym, int is_expr)
             if (tok != '}') {
                 if (is_expr)
                     vpop();
-                block(bsym, csym, is_expr);
+                block(bsym, bcl, csym, ccl, is_expr);
             }
         }
 
@@ -6258,6 +6258,7 @@ static void block(int *bsym, int *csym, int is_expr)
         /* compute jump */
         if (!bsym)
             tcc_error("cannot break");
+	try_call_scope_cleanup(bcl);
         *bsym = gjmp(*bsym);
         next();
         skip(';');
@@ -6266,6 +6267,7 @@ static void block(int *bsym, int *csym, int is_expr)
         /* compute jump */
         if (!csym)
             tcc_error("cannot continue");
+	try_call_scope_cleanup(ccl);
         vla_sp_restore_root();
         *csym = gjmp(*csym);
         next();
@@ -6309,7 +6311,7 @@ static void block(int *bsym, int *csym, int is_expr)
         }
         skip(')');
 	saved_nocode_wanted = nocode_wanted;
-        block(&a, &b, 0);
+        block(&a, current_cleanups, &b, current_cleanups, 0);
 	nocode_wanted = saved_nocode_wanted;
         gjmp_addr(c);
         gsym(a);
@@ -6327,7 +6329,7 @@ static void block(int *bsym, int *csym, int is_expr)
         d = ind;
         vla_sp_restore();
 	saved_nocode_wanted = nocode_wanted;
-        block(&a, &b, 0);
+        block(&a, current_cleanups, &b, current_cleanups, 0);
         skip(TOK_WHILE);
         skip('(');
         gsym(b);
@@ -6355,7 +6357,7 @@ static void block(int *bsym, int *csym, int is_expr)
         sw.p = NULL; sw.n = 0; sw.def_sym = 0;
         saved = cur_switch;
         cur_switch = &sw;
-        block(&a, csym, 0);
+        block(&a, current_cleanups, csym, ccl, 0);
 	nocode_wanted = saved_nocode_wanted;
         a = gjmp(a); /* add implicit break */
         /* case lookup */
@@ -6477,7 +6479,7 @@ static void block(int *bsym, int *csym, int is_expr)
             } else {
                 if (is_expr)
                     vpop();
-                block(bsym, csym, is_expr);
+                block(bsym, bcl, csym, ccl, is_expr);
             }
         } else {
             /* expression case */
@@ -7357,7 +7359,7 @@ static void gen_function(Sym *sym)
     reset_local_scope();
     rsym = 0;
 	clear_temp_local_var_list();
-    block(NULL, NULL, 0);
+	block(NULL, NULL, NULL, NULL, 0);
     if (!(nocode_wanted & 0x20000000)
 	&& ((func_vt.t & VT_BTYPE) == VT_INT)
 	&& !strcmp (funcname, "main"))
