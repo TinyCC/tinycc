@@ -912,9 +912,6 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
         next();
         if (tok == TOK_EOF)
             break;
-        /* generate line number info */
-        if (global && s1->do_debug)
-            tcc_debug_line(s1);
         parse_flags |= PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     redo:
         if (tok == '#') {
@@ -1148,7 +1145,6 @@ ST_FUNC void asm_instr(void)
     uint8_t clobber_regs[NB_ASM_REGS];
     Section *sec;
 
-    next();
     /* since we always generate the asm() instruction, we can ignore
        volatile */
     if (tok == TOK_VOLATILE1 || tok == TOK_VOLATILE2 || tok == TOK_VOLATILE3) {

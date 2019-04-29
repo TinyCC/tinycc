@@ -382,11 +382,6 @@ void gsym_addr(int t, int a)
   }
 }
 
-void gsym(int t)
-{
-  gsym_addr(t, ind);
-}
-
 #ifdef TCC_ARM_VFP
 static uint32_t vfpr(int r)
 {

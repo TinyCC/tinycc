@@ -44,6 +44,7 @@ static int ncleanups;
 
 static int local_scope;
 static int in_sizeof;
+static int in_generic;
 static int section_sym;
 
 ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
@@ -56,6 +57,24 @@ ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
 #define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
 #define STATIC_DATA_WANTED (nocode_wanted & 0xC0000000) /* only static data output */
+
+/* Automagical code suppression ----> */
+#define CODE_OFF() (nocode_wanted |= 0x20000000)
+#define CODE_ON() (nocode_wanted &= ~0x20000000)
+
+/* Clear 'nocode_wanted' at label if it was used */
+ST_FUNC void gsym(int t) { if (t) { gsym_addr(t, ind); CODE_ON(); }}
+static int gind(void) { CODE_ON(); return ind; }
+
+/* Set 'nocode_wanted' after unconditional jumps */
+static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
+static int gjmp_acs(int t) { t = gjmp(t); CODE_OFF(); return t; }
+
+/* These are #undef'd at the end of this file */
+#define gjmp_addr gjmp_addr_acs
+#define gjmp gjmp_acs
+/* <---- */
+
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
@@ -3544,8 +3563,7 @@ redo:
             break;
         case TOK_NORETURN1:
         case TOK_NORETURN2:
-            /* currently, no need to handle it because tcc does not
-               track unused objects */
+            ad->f.func_noreturn = 1;
             break;
         case TOK_CDECL1:
         case TOK_CDECL2:
@@ -4129,7 +4147,7 @@ static void parse_btype_qualify(CType *type, int qualifiers)
  */
 static int parse_btype(CType *type, AttributeDef *ad)
 {
-    int t, u, bt, st, type_found, typespec_found, g;
+    int t, u, bt, st, type_found, typespec_found, g, n;
     Sym *s;
     CType type1;
 
@@ -4336,6 +4354,14 @@ static int parse_btype(CType *type, AttributeDef *ad)
             s = sym_find(tok);
             if (!s || !(s->type.t & VT_TYPEDEF))
                 goto the_end;
+
+            n = tok, next();
+            if (tok == ':' && !in_generic) {
+                /* ignore if it's a label */
+                unget_tok(n);
+                goto the_end;
+            }
+
             t &= ~(VT_BTYPE|VT_LONG);
             u = t & ~(VT_CONSTANT | VT_VOLATILE), t ^= u;
             type->t = (s->type.t & ~VT_TYPEDEF) | u;
@@ -4345,7 +4371,6 @@ static int parse_btype(CType *type, AttributeDef *ad)
             t = type->t;
             /* get attributes from typedef */
             sym_to_attr(ad, s);
-            next();
             typespec_found = 1;
             st = bt = -2;
             break;
@@ -5237,7 +5262,11 @@ ST_FUNC void unary(void)
 	        AttributeDef ad_tmp;
 		int itmp;
 	        CType cur_type;
+
+                in_generic++;
 		parse_btype(&cur_type, &ad_tmp);
+                in_generic--;
+
 		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
 		if (compare_types(&controlling_type, &cur_type, 0)) {
 		    if (has_match) {
@@ -5501,6 +5530,8 @@ special_math_val:
                 }
                 vset(&s->type, VT_LOCAL | VT_LVAL, addr);
             }
+            if (s->f.func_noreturn)
+                CODE_OFF();
         } else {
             break;
         }
@@ -5603,86 +5634,50 @@ static void expr_or(void)
     }
 }
 
+static int condition_3way(void);
+
+static void expr_landor(void(*e_fn)(void), int e_op, int i)
+{
+    int t = 0, cc = 1, f = 0, c;
+    for(;;) {
+        c = f ? i : condition_3way();
+        if (c < 0) {
+	    save_regs(1), cc = 0;
+        } else if (c != i) {
+            nocode_wanted++, f = 1;
+        }
+        if (tok != e_op) {
+            if (cc || f) {
+                vpop();
+                vpushi(i ^ f);
+                gsym(t);
+                nocode_wanted -= f;
+            } else {
+                vseti(VT_JMP + i, gvtst(i, t));
+            }
+	    break;
+        }
+        if (c < 0)
+            t = gvtst(i, t);
+        else
+            vpop();
+        next();
+        e_fn();
+    }
+}
+
 static void expr_land(void)
 {
     expr_or();
-    if (tok == TOK_LAND) {
-	int t = 0;
-	for(;;) {
-	    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-                gen_cast_s(VT_BOOL);
-		if (vtop->c.i) {
-		    vpop();
-		} else {
-		    nocode_wanted++;
-		    while (tok == TOK_LAND) {
-			next();
-			expr_or();
-			vpop();
-		    }
-		    nocode_wanted--;
-		    if (t)
-		      gsym(t);
-		    gen_cast_s(VT_INT);
-		    break;
-		}
-	    } else {
-		if (!t)
-		  save_regs(1);
-		t = gvtst(1, t);
-	    }
-	    if (tok != TOK_LAND) {
-		if (t)
-		  vseti(VT_JMPI, t);
-		else
-		  vpushi(1);
-		break;
-	    }
-	    next();
-	    expr_or();
-	}
-    }
+    if (tok == TOK_LAND)
+        expr_landor(expr_or, TOK_LAND, 1);
 }
 
 static void expr_lor(void)
 {
     expr_land();
-    if (tok == TOK_LOR) {
-	int t = 0;
-	for(;;) {
-	    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-                gen_cast_s(VT_BOOL);
-		if (!vtop->c.i) {
-		    vpop();
-		} else {
-		    nocode_wanted++;
-		    while (tok == TOK_LOR) {
-			next();
-			expr_land();
-			vpop();
-		    }
-		    nocode_wanted--;
-		    if (t)
-		      gsym(t);
-		    gen_cast_s(VT_INT);
-		    break;
-		}
-	    } else {
-		if (!t)
-		  save_regs(1);
-		t = gvtst(0, t);
-	    }
-	    if (tok != TOK_LOR) {
-		if (t)
-		  vseti(VT_JMP, t);
-		else
-		  vpushi(0);
-		break;
-	    }
-	    next();
-	    expr_land();
-	}
-    }
+    if (tok == TOK_LOR)
+        expr_landor(expr_land, TOK_LOR, 0);
 }
 
 /* Assuming vtop is a value used in a conditional context
@@ -5706,15 +5701,25 @@ static void expr_cond(void)
     int tt, u, r1, r2, rc, t1, t2, bt1, bt2, islv, c, g;
     SValue sv;
     CType type, type1, type2;
+    int ncw_prev;
 
     expr_lor();
     if (tok == '?') {
         next();
 	c = condition_3way();
         g = (tok == ':' && gnu_ext);
-        if (c < 0) {
+        tt = 0;
+        if (!g) {
+            if (c < 0) {
+                save_regs(1);
+                tt = gvtst(1, 0);
+            } else {
+                vpop();
+            }
+        } else if (c < 0) {
             /* needed to avoid having different registers saved in
                each branch */
+            rc = RC_INT;
             if (is_float(vtop->type.t)) {
                 rc = RC_FLOAT;
 #ifdef TCC_TARGET_X86_64
@@ -5722,20 +5727,14 @@ static void expr_cond(void)
                     rc = RC_ST0;
                 }
 #endif
-            } else
-                rc = RC_INT;
+            }
             gv(rc);
             save_regs(1);
-            if (g)
-                gv_dup();
-            tt = gvtst(1, 0);
-
-        } else {
-            if (!g)
-                vpop();
-            tt = 0;
+            gv_dup();
+            tt = gvtst(0, 0);
         }
 
+        ncw_prev = nocode_wanted;
         if (1) {
             if (c == 0)
                 nocode_wanted++;
@@ -5747,20 +5746,21 @@ static void expr_cond(void)
 	    type1 = vtop->type;
             sv = *vtop; /* save value to handle it later */
             vtop--; /* no vpop so that FP stack is not flushed */
-            skip(':');
 
-            u = 0;
-            if (c < 0)
+            if (g) {
+                u = tt;
+            } else if (c < 0) {
                 u = gjmp(0);
-            gsym(tt);
+                gsym(tt);
+            } else
+                u = 0;
 
-            if (c == 0)
-                nocode_wanted--;
+            nocode_wanted = ncw_prev;
             if (c == 1)
                 nocode_wanted++;
+            skip(':');
             expr_cond();
-            if (c == 1)
-                nocode_wanted--;
+
 
             if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
                 mk_pointer(&vtop->type);
@@ -5770,7 +5770,6 @@ static void expr_cond(void)
             t2 = type2.t;
             bt2 = t2 & VT_BTYPE;
             type.ref = NULL;
-
 
             /* cast operands to correct type according to ISOC rules */
             if (bt1 == VT_VOID || bt2 == VT_VOID) {
@@ -5902,15 +5901,17 @@ static void expr_cond(void)
                     gaddrof();
             }
 
-            if (c < 0 || islv) {
+            if (c < 0) {
                 r1 = gv(rc);
                 move_reg(r2, r1, type.t);
                 vtop->r = r2;
                 gsym(tt);
-                if (islv)
-                    indir();
             }
+
+            if (islv)
+                indir();
         }
+        nocode_wanted = ncw_prev;
     }
 }
 
@@ -5982,25 +5983,8 @@ ST_FUNC int expr_const(void)
     return c;
 }
 
-/* return the label token if current token is a label, otherwise
-   return zero */
-static int is_label(void)
-{
-    int last_tok;
-
-    /* fast test first */
-    if (tok < TOK_UIDENT)
-        return 0;
-    /* no need to save tokc because tok is an identifier */
-    last_tok = tok;
-    next();
-    if (tok == ':') {
-        return last_tok;
-    } else {
-        unget_tok(last_tok);
-        return 0;
-    }
-}
+/* ------------------------------------------------------------------------- */
+/* return from function */
 
 #ifndef TCC_TARGET_ARM64
 static void gfunc_return(CType *func_type)
@@ -6135,14 +6119,54 @@ static void gcase(struct case_t **base, int len, int *bsym)
     }
 }
 
+/* call 'func' for each __attribute__((cleanup(func))) */
+static void block_cleanup(Sym *lcleanup, int lncleanups)
+{
+    int jmp = 0;
+    Sym *g, **pg;
+    for (pg = &pending_gotos; (g = *pg) && g->c > lncleanups;) {
+        if (g->prev_tok->r & LABEL_FORWARD) {
+            Sym *pcl = g->next;
+            if (!jmp)
+                jmp = gjmp(0);
+            gsym(pcl->jnext);
+            try_call_scope_cleanup(lcleanup);
+            pcl->jnext = gjmp(0);
+            if (!lncleanups)
+                goto remove_pending;
+            g->c = lncleanups;
+            pg = &g->prev;
+        } else {
+    remove_pending:
+            *pg = g->prev;
+            sym_free(g);
+        }
+    }
+    gsym(jmp);
+    try_call_scope_cleanup(lcleanup);
+    current_cleanups = lcleanup;
+    ncleanups = lncleanups;
+}
+
+static void check_func_return(void)
+{
+    if ((func_vt.t & VT_BTYPE) == VT_VOID)
+        return;
+    if (!strcmp (funcname, "main")
+        && (func_vt.t & VT_BTYPE) == VT_INT) {
+        /* main returns 0 by default */
+        vpushi(0);
+        gen_assign_cast(&func_vt);
+        gfunc_return(&func_vt);
+    } else {
+        tcc_warning("function might return no value: '%s'", funcname);
+    }
+}
+
 static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 {
-    int a, b, c, d, cond;
+    int a, b, c, d, e, t;
     Sym *s;
-
-    /* generate line number info */
-    if (tcc_state->do_debug)
-        tcc_debug_line(tcc_state);
 
     if (is_expr) {
         /* default return value is (void) */
@@ -6150,60 +6174,42 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         vtop->type.t = VT_VOID;
     }
 
-    if (tok == TOK_IF) {
-        /* if test */
-	int saved_nocode_wanted = nocode_wanted;
-        next();
+    t = tok, next();
+
+    if (t == TOK_IF) {
         skip('(');
         gexpr();
         skip(')');
-	cond = condition_3way();
-        if (cond == 1)
-            a = 0, vpop();
-        else
-            a = gvtst(1, 0);
-        if (cond == 0)
-	    nocode_wanted |= 0x20000000;
+        a = gvtst(1, 0);
         block(bsym, bcl, csym, ccl, 0);
-	if (cond != 1)
-	    nocode_wanted = saved_nocode_wanted;
         if (tok == TOK_ELSE) {
-            next();
             d = gjmp(0);
             gsym(a);
-	    if (cond == 1)
-	        nocode_wanted |= 0x20000000;
+            next();
             block(bsym, bcl, csym, ccl, 0);
             gsym(d); /* patch else jmp */
-	    if (cond != 0)
-		nocode_wanted = saved_nocode_wanted;
-        } else
+        } else {
             gsym(a);
-    } else if (tok == TOK_WHILE) {
-	int saved_nocode_wanted;
-	nocode_wanted &= ~0x20000000;
-        next();
-        d = ind;
+        }
+
+    } else if (t == TOK_WHILE) {
+        d = gind();
         vla_sp_restore();
         skip('(');
         gexpr();
         skip(')');
         a = gvtst(1, 0);
         b = 0;
-	++local_scope;
-	saved_nocode_wanted = nocode_wanted;
         block(&a, current_cleanups, &b, current_cleanups, 0);
-	nocode_wanted = saved_nocode_wanted;
-	--local_scope;
         gjmp_addr(d);
-        gsym(a);
         gsym_addr(b, d);
-    } else if (tok == '{') {
+        gsym(a);
+
+    } else if (t == '{') {
         Sym *llabel, *lcleanup;
         int block_vla_sp_loc = vla_sp_loc, saved_vlas_in_scope = vlas_in_scope;
         int lncleanups = ncleanups;
 
-        next();
         /* record local declaration stack position */
         s = local_stack;
         llabel = local_label_stack;
@@ -6212,25 +6218,18 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 
         /* handle local labels declarations */
         while (tok == TOK_LABEL) {
-            next();
-            for(;;) {
+            do {
+                next();
                 if (tok < TOK_UIDENT)
                     expect("label identifier");
                 label_push(&local_label_stack, tok, LABEL_DECLARED);
                 next();
-                if (tok == ',') {
-                    next();
-                } else {
-                    skip(';');
-                    break;
-                }
-            }
+            } while (tok == ',');
+            skip(';');
         }
+
         while (tok != '}') {
-	    if ((a = is_label()))
-		unget_tok(a);
-	    else
-	        decl(VT_LOCAL);
+	    decl(VT_LOCAL);
             if (tok != '}') {
                 if (is_expr)
                     vpop();
@@ -6238,39 +6237,12 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             }
         }
 
-        if (current_cleanups != lcleanup) {
-            int jmp = 0;
-            Sym *g, **pg;
+        if (current_cleanups != lcleanup)
+            block_cleanup(lcleanup, lncleanups);
 
-            for (pg = &pending_gotos; (g = *pg) && g->c > lncleanups;)
-              if (g->prev_tok->r & LABEL_FORWARD) {
-                  Sym *pcl = g->next;
-                  if (!jmp)
-                    jmp = gjmp(0);
-                  gsym(pcl->jnext);
-                  try_call_scope_cleanup(lcleanup);
-                  pcl->jnext = gjmp(0);
-                  if (!lncleanups)
-                    goto remove_pending;
-                  g->c = lncleanups;
-                  pg = &g->prev;
-              } else {
-                remove_pending:
-                  *pg = g->prev;
-                  sym_free(g);
-              }
-            gsym(jmp);
-            if (!nocode_wanted) {
-                try_call_scope_cleanup(lcleanup);
-            }
-        }
-
-        current_cleanups = lcleanup;
-        ncleanups = lncleanups;
         /* pop locally defined labels */
         label_pop(&local_label_stack, llabel, is_expr);
-        /* pop locally defined symbols */
-	--local_scope;
+
 	/* In the is_expr case (a statement expression is finished here),
 	   vtop might refer to symbols on the local_stack.  Either via the
 	   type or via vtop->sym.  We can't pop those nor any that in turn
@@ -6278,6 +6250,8 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 	   any symbols in that case; some upper level call to block() will
 	   do that.  We do have to remove such symbols from the lookup
 	   tables, though.  sym_pop will do that.  */
+
+        /* pop locally defined symbols */
 	sym_pop(&local_stack, s, is_expr);
 
         /* Pop VLA frames and restore stack pointer if required */
@@ -6287,52 +6261,49 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         }
         vlas_in_scope = saved_vlas_in_scope;
 
+        if (0 == --local_scope && !nocode_wanted)
+            check_func_return();
         next();
-    } else if (tok == TOK_RETURN) {
-        next();
-        if (tok != ';') {
-            gexpr();
-            gen_assign_cast(&func_vt);
-	    try_call_scope_cleanup(NULL);
-            if ((func_vt.t & VT_BTYPE) == VT_VOID)
-                vtop--;
-            else
-                gfunc_return(&func_vt);
-        } else {
-	    try_call_scope_cleanup(NULL);
-	}
+
+    } else if (t == TOK_RETURN) {
+        a = tok != ';';
+        b = (func_vt.t & VT_BTYPE) != VT_VOID;
+        if (a)
+            gexpr(), gen_assign_cast(&func_vt);
+	try_call_scope_cleanup(NULL);
+        if (a && b)
+            gfunc_return(&func_vt);
+        else if (a)
+            vtop--;
+        else if (b)
+            tcc_warning("'return' with no value.");
         skip(';');
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
             rsym = gjmp(rsym);
-	nocode_wanted |= 0x20000000;
-    } else if (tok == TOK_BREAK) {
+        CODE_OFF();
+
+    } else if (t == TOK_BREAK) {
         /* compute jump */
         if (!bsym)
             tcc_error("cannot break");
 	try_call_scope_cleanup(bcl);
         *bsym = gjmp(*bsym);
-        next();
         skip(';');
-	nocode_wanted |= 0x20000000;
-    } else if (tok == TOK_CONTINUE) {
+
+    } else if (t == TOK_CONTINUE) {
         /* compute jump */
         if (!csym)
             tcc_error("cannot continue");
 	try_call_scope_cleanup(ccl);
         vla_sp_restore_root();
         *csym = gjmp(*csym);
-        next();
         skip(';');
-        nocode_wanted |= 0x20000000;
-    } else if (tok == TOK_FOR) {
-        int e;
-	int saved_nocode_wanted;
+
+    } else if (t == TOK_FOR) {
 	Sym *lcleanup = current_cleanups;
 	int lncleanups = ncleanups;
 
-	nocode_wanted &= ~0x20000000;
-        next();
         skip('(');
         s = local_stack;
 	++local_scope;
@@ -6345,11 +6316,9 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             }
         }
         skip(';');
-        d = ind;
-        c = ind;
+        a = b = 0;
+        c = d = gind();
         vla_sp_restore();
-        a = 0;
-        b = 0;
         if (tok != ';') {
             gexpr();
             a = gvtst(1, 0);
@@ -6357,55 +6326,43 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         skip(';');
         if (tok != ')') {
             e = gjmp(0);
-            c = ind;
+            d = gind();
             vla_sp_restore();
             gexpr();
             vpop();
-            gjmp_addr(d);
+            gjmp_addr(c);
             gsym(e);
         }
         skip(')');
-	saved_nocode_wanted = nocode_wanted;
         block(&a, current_cleanups, &b, current_cleanups, 0);
-	nocode_wanted = saved_nocode_wanted;
-        gjmp_addr(c);
+        gjmp_addr(d);
+        gsym_addr(b, d);
         gsym(a);
-        gsym_addr(b, c);
 	--local_scope;
 	try_call_scope_cleanup(lcleanup);
 	ncleanups = lncleanups;
 	current_cleanups = lcleanup;
         sym_pop(&local_stack, s, 0);
 
-    } else 
-    if (tok == TOK_DO) {
-	int saved_nocode_wanted;
-	nocode_wanted &= ~0x20000000;
-        next();
-        a = 0;
-        b = 0;
-        d = ind;
+    } else if (t == TOK_DO) {
+        a = b = 0;
+        d = gind();
         vla_sp_restore();
-	saved_nocode_wanted = nocode_wanted;
         block(&a, current_cleanups, &b, current_cleanups, 0);
+        gsym(b);
         skip(TOK_WHILE);
         skip('(');
-        gsym(b);
-	if (b)
-	    nocode_wanted = saved_nocode_wanted;
 	gexpr();
+        skip(')');
+        skip(';');
 	c = gvtst(0, 0);
 	gsym_addr(c, d);
-	nocode_wanted = saved_nocode_wanted;
-        skip(')');
         gsym(a);
-        skip(';');
-    } else
-    if (tok == TOK_SWITCH) {
+
+    } else if (t == TOK_SWITCH) {
         struct switch_t *saved, sw;
-	int saved_nocode_wanted = nocode_wanted;
 	SValue switchval;
-        next();
+
         skip('(');
         gexpr();
         skip(')');
@@ -6416,7 +6373,6 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         saved = cur_switch;
         cur_switch = &sw;
         block(&a, current_cleanups, csym, ccl, 0);
-	nocode_wanted = saved_nocode_wanted;
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
@@ -6437,13 +6393,11 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         cur_switch = saved;
         /* break label */
         gsym(a);
-    } else
-    if (tok == TOK_CASE) {
+
+    } else if (t == TOK_CASE) {
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));
         if (!cur_switch)
             expect("switch");
-	nocode_wanted &= ~0x20000000;
-        next();
         cr->v1 = cr->v2 = expr_const64();
         if (gnu_ext && tok == TOK_DOTS) {
             next();
@@ -6451,25 +6405,23 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             if (cr->v2 < cr->v1)
                 tcc_warning("empty case range");
         }
-        cr->sym = ind;
+        cr->sym = gind();
         dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         skip(':');
         is_expr = 0;
         goto block_after_label;
-    } else 
-    if (tok == TOK_DEFAULT) {
-        next();
-        skip(':');
+
+    } else if (t == TOK_DEFAULT) {
         if (!cur_switch)
             expect("switch");
         if (cur_switch->def_sym)
             tcc_error("too many 'default'");
-        cur_switch->def_sym = ind;
+        cur_switch->def_sym = gind();
+        skip(':');
         is_expr = 0;
         goto block_after_label;
-    } else
-    if (tok == TOK_GOTO) {
-        next();
+
+    } else if (t == TOK_GOTO) {
         if (tok == '*' && gnu_ext) {
             /* computed goto */
             next();
@@ -6500,18 +6452,20 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 		gjmp_addr(s->jnext);
 	    }
 	    next();
-	} else {
+
+        } else {
             expect("label identifier");
         }
         skip(';');
-    } else if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+
+    } else if (t == TOK_ASM1 || t == TOK_ASM2 || t == TOK_ASM3) {
         asm_instr();
+
     } else {
-        b = is_label();
-        if (b) {
+        if (tok == ':' && t >= TOK_UIDENT) {
             /* label case */
 	    next();
-            s = label_find(b);
+            s = label_find(t);
             if (s) {
                 if (s->r == LABEL_DEFINED)
                     tcc_error("duplicate label '%s'", get_tok_str(s->v, NULL));
@@ -6524,14 +6478,14 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 		} else
 		  gsym(s->jnext);
             } else {
-                s = label_push(&global_label_stack, b, LABEL_DEFINED);
+                s = label_push(&global_label_stack, t, LABEL_DEFINED);
             }
-            s->jnext = ind;
-	    s->cleanupstate = current_cleanups;
+            s->jnext = gind();
+            s->cleanupstate = current_cleanups;
+
+    block_after_label:
             vla_sp_restore();
             /* we accept this, but it is a mistake */
-        block_after_label:
-	    nocode_wanted &= ~0x20000000;
             if (tok == '}') {
                 tcc_warning("deprecated use of label at end of compound statement");
             } else {
@@ -6539,9 +6493,11 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
                     vpop();
                 block(bsym, bcl, csym, ccl, is_expr);
             }
+
         } else {
             /* expression case */
-            if (tok != ';') {
+            if (t != ';') {
+                unget_tok(t);
                 if (is_expr) {
                     vpop();
                     gexpr();
@@ -6549,8 +6505,8 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
                     gexpr();
                     vpop();
                 }
+                skip(';');
             }
-            skip(';');
         }
     }
 }
@@ -6661,10 +6617,17 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
 
     elem_size = 0;
     nb_elems = 1;
+
     if (flags & DIF_HAVE_ELEM)
         goto no_designator;
-    if (gnu_ext && (l = is_label()) != 0)
-        goto struct_field;
+
+    if (gnu_ext && tok >= TOK_UIDENT) {
+        l = tok, next();
+        if (tok == ':')
+            goto struct_field;
+        unget_tok(l);
+    }
+
     /* NOTE: we only support ranges for last designator */
     while (nb_elems == 1 && (tok == '[' || tok == '.')) {
         if (tok == '[') {
@@ -7413,19 +7376,10 @@ static void gen_function(Sym *sym)
     gfunc_prolog(&sym->type);
     reset_local_scope();
     rsym = 0;
-	clear_temp_local_var_list();
-	block(NULL, NULL, NULL, NULL, 0);
-    if (!(nocode_wanted & 0x20000000)
-	&& ((func_vt.t & VT_BTYPE) == VT_INT)
-	&& !strcmp (funcname, "main"))
-      {
-	nocode_wanted = 0;
-	vpushi(0);
-	gen_assign_cast(&func_vt);
-	gfunc_return(&func_vt);
-      }
-    nocode_wanted = 0;
+    clear_temp_local_var_list();
+    block(NULL, NULL, NULL, NULL, 0);
     gsym(rsym);
+    nocode_wanted = 0;
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     label_pop(&global_label_stack, NULL, 0);
@@ -7745,4 +7699,7 @@ static void decl(int l)
     decl0(l, 0, NULL);
 }
 
+/* ------------------------------------------------------------------------- */
+#undef gjmp_addr
+#undef gjmp
 /* ------------------------------------------------------------------------- */

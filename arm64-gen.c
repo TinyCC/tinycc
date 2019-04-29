@@ -236,12 +236,6 @@ ST_FUNC void gsym_addr(int t_, int a_)
     }
 }
 
-// Patch all branches in list pointed to by t to branch to current location:
-ST_FUNC void gsym(int t)
-{
-    gsym_addr(t, ind);
-}
-
 static int arm64_type_size(int t)
 {
     switch (t & VT_BTYPE) {

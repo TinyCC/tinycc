@@ -45,6 +45,7 @@ int convert_like_real (tree convs)
       break;
     };
    printf("unsigned enum bit-fields broken\n");
+   return 0;
 }
 
 int main()

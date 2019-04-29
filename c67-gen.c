@@ -226,11 +226,6 @@ void gsym_addr(int t, int a)
     }
 }
 
-void gsym(int t)
-{
-    gsym_addr(t, ind);
-}
-
 // these are regs that tcc doesn't really know about, 
 // but assign them unique values so the mapping routines
 // can distinguish them

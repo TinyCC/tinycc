@@ -41,7 +41,7 @@
 #define __MSVCRT__ 1
 #undef _MSVCRT_
 #define __MINGW_IMPORT extern __declspec(dllimport)
-#define __MINGW_ATTRIB_NORETURN
+#define __MINGW_ATTRIB_NORETURN __declspec(noreturn)
 #define __MINGW_ATTRIB_CONST
 #define __MINGW_ATTRIB_DEPRECATED
 #define __MINGW_ATTRIB_MALLOC
@@ -138,7 +138,7 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 /* for winapi */
 #define _ANONYMOUS_UNION
 #define _ANONYMOUS_STRUCT
-#define DECLSPEC_NORETURN
+#define DECLSPEC_NORETURN __declspec(noreturn)
 #define DECLARE_STDCALL_P(type) __stdcall type
 #define NOSERVICE 1
 #define NOMCX 1

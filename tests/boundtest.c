@@ -209,6 +209,7 @@ int test16()
     printf("alloca: %s\n", strcpy(alloca(strlen(demo)+1),demo) );
 
     fprintf(stderr, "%s end\n", __FUNCTION__);
+    return 0;
 }
 
 /* error */
@@ -227,6 +228,7 @@ int test17()
     printf("alloca: %s\n", strcpy(alloca(strlen(demo)),demo) );
 
     fprintf(stderr, "%s end\n", __FUNCTION__);
+    return 0;
 }
 
 int (*table_test[])(void) = {

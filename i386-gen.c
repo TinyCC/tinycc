@@ -140,11 +140,6 @@ ST_FUNC void gsym_addr(int t, int a)
     }
 }
 
-ST_FUNC void gsym(int t)
-{
-    gsym_addr(t, ind);
-}
-
 /* instruction + 4 bytes data. Return the address of the data */
 static int oad(int c, int s)
 {

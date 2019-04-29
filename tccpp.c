@@ -3527,6 +3527,9 @@ no_subst:
 /* return next token with macro substitution */
 ST_FUNC void next(void)
 {
+    /* generate line number info */
+    if (tcc_state->do_debug)
+        tcc_debug_line(tcc_state);
  redo:
     if (parse_flags & PARSE_FLAG_SPACES)
         next_nomacro_spc();

@@ -211,12 +211,6 @@ ST_FUNC void gsym_addr(int t, int a)
     }
 }
 
-void gsym(int t)
-{
-    gsym_addr(t, ind);
-}
-
-
 static int is64_type(int t)
 {
     return ((t & VT_BTYPE) == VT_PTR ||

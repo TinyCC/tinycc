@@ -60,6 +60,7 @@ void *__va_arg(__va_list_struct *ap,
 
     default: /* should never happen */
         abort();
+        return 0;
     }
 }
 #endif

@@ -179,7 +179,7 @@ static int onetwothree = 123;
 
 #ifdef __TINYC__
 /* We try to handle this syntax.  Make at least sure it doesn't segfault.  */
-char invalid_function_def()[] {}
+char invalid_function_def()[] {return 0;}
 #endif
 
 #define __INT64_C(c)	c ## LL
@@ -572,6 +572,7 @@ void goto_test()
     printf("goto:\n");
     i = 0;
     /* This needs to parse as label, not as start of decl.  */
+ typedef_and_label x;
  typedef_and_label:
  s_loop:
     if (i >= 10) 
@@ -3767,6 +3768,7 @@ int fcompare (double a, double b, int code)
     case 4: return a > b;
     case 5: return a <= b;
   }
+  return 0;
 }
 
 void math_cmp_test(void)
