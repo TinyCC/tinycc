@@ -4,7 +4,7 @@ glob_i: 65536
 oo: 2.600000
 c: f
 str: I don't think this should be print(but gcc got it wrong too)
-because what if free was call inside cleanup function
+because what if free was call inside cleanup function I don't think this should be print(but gcc got it wrong too)
 should be print before
 str: that
 str: this should appear only once
@@ -15,6 +15,39 @@ str: one
 ---- 1
 str: two
 str: three
+-- loop 0 --
+100
+100
+100
+100
+100
+100
+100
+100
+100
+100
+10
+-- loop 1 --
+200
+200
+200
+200
+200
+200
+200
+200
+200
+200
+10
+-- loop 2 --
+300
+0
+-- loop 3 --
+400
+500
+400
+after break
+1000
 ---- 0
 ---- 1
 str: plop

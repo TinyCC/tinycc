@@ -149,10 +149,53 @@ int test3(void) {
     return 0;
 }
 
+void cl(int *ip)
+{
+    printf("%d\n", *ip);
+}
+
+void loop_cleanups(void)
+{
+    __attribute__((cleanup(cl))) int l = 1000;
+
+    printf("-- loop 0 --\n");
+    for ( __attribute__((cleanup(cl))) int i = 0; i < 10; ++i) {
+        __attribute__((cleanup(cl))) int j = 100;
+    }
+
+    printf("-- loop 1 --\n");
+    for (__attribute__((cleanup(cl))) int i = 0; i < 10; ++i) {
+        __attribute__((cleanup(cl)))  int j = 200;
+        continue;
+    }
+
+    printf("-- loop 2 --\n");
+    for (__attribute__((cleanup(cl))) int i = 0; i < 10; ++i) {
+        __attribute__((cleanup(cl))) int j = 300;
+        break;
+    }
+
+    printf("-- loop 3 --\n");
+    for (int i = 0; i < 2; ++i) {
+	__attribute__((cleanup(cl))) int j = 400;
+	switch (i) {
+	case 0:
+	    continue;
+	default:
+	{
+	    __attribute__((cleanup(cl))) int jj = 500;
+	    break;
+	}
+	}
+    }
+    printf("after break\n");
+}
+
 int main()
 {
     int i __attribute__ ((__cleanup__(check))) = 0, not_i;
     int chk = 0;
+    (void)not_i;
 
     {
 	__attribute__ ((__cleanup__(check_oh_i))) char oh_i = 'o', o = 'a';
@@ -169,11 +212,12 @@ int main()
 	goto naaaaaaaa;
     }
     i = 105;
-    printf("because what if free was call inside cleanup function\n", test());
+    printf("because what if free was call inside cleanup function %s\n", test());
     test_ret();
     test_ret2();
     test2();
     test3();
+    loop_cleanups();
     return i;
 }
 
