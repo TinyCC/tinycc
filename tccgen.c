@@ -6276,6 +6276,9 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
     } else if (tok == TOK_FOR) {
         int e;
 	int saved_nocode_wanted;
+	Sym *lcleanup = current_cleanups;
+	int lncleanups = ncleanups;
+
 	nocode_wanted &= ~0x20000000;
         next();
         skip('(');
@@ -6317,6 +6320,9 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         gsym(a);
         gsym_addr(b, c);
 	--local_scope;
+	try_call_scope_cleanup(lcleanup);
+	ncleanups = lncleanups;
+	current_cleanups = lcleanup;
         sym_pop(&local_stack, s, 0);
 
     } else 
