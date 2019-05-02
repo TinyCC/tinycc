@@ -7456,6 +7456,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 		tcc_error("%s", get_tok_str(tok, &tokc));
 	    next();
 	    skip(')');
+            skip(';');
 	    continue;
 	}
         if (!parse_btype(&btype, &adbase)) {

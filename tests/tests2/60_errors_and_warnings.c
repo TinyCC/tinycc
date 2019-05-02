@@ -179,7 +179,7 @@ void * _Alignas(16) p1;
 #elif defined test_static_assert
 
 #define ONE 0
- _Static_assert(ONE == 0, "don't show me this")
- _Static_assert(ONE == 1, "ONE is not 1")
+ _Static_assert(ONE == 0, "don't show me this");
+ _Static_assert(ONE == 1, "ONE is not 1");
 
 #endif
