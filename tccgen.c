@@ -1001,6 +1001,7 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
         /* push forward reference */
         s = sym_push(v, type, r | VT_CONST | VT_SYM, 0);
         s->a = ad->a;
+        s->asm_label = ad->asm_label;
         s->sym_scope = 0;
     } else {
         if (s->type.ref == func_old_type.ref) {
