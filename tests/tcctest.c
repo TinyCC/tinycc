@@ -3438,10 +3438,10 @@ void asm_dot_test(void)
         case 2:
             asm(".text; jmp .+6; .int 123; mov .-4"RX",%eax; jmp p0");
 	case 3:
-            asm(".data; Y=.; .int 999; X=Y; .int 456; X=.-4");
+            asm(".pushsection \".data\"; Y=.; .int 999; X=Y; .int 456; X=.-4; .popsection");
             asm(".text; mov X"RX",%eax; jmp p0");
         case 4:
-            asm(".data; X=.; .int 789; Y=.; .int 999");
+            asm(".data; X=.; .int 789; Y=.; .int 999; .previous");
             asm(".text; mov X"RX",%eax; X=Y; jmp p0");
         case 0:
 	    asm(".text; p0=.; mov %%eax,%0;" : "=m"(r)); break;

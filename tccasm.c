@@ -1146,6 +1146,7 @@ ST_FUNC void asm_instr(void)
     ASMOperand operands[MAX_ASM_OPERANDS];
     int nb_outputs, nb_operands, i, must_subst, out_reg;
     uint8_t clobber_regs[NB_ASM_REGS];
+    Section *sec;
 
     next();
     /* since we always generate the asm() instruction, we can ignore
@@ -1220,8 +1221,15 @@ ST_FUNC void asm_instr(void)
     asm_gen_code(operands, nb_operands, nb_outputs, 0, 
                  clobber_regs, out_reg);    
 
+    /* We don't allow switching section within inline asm to
+       bleed out to surrounding code.  */
+    sec = cur_text_section;
     /* assemble the string with tcc internal assembler */
     tcc_assemble_inline(tcc_state, astr1.data, astr1.size - 1, 0);
+    if (sec != cur_text_section) {
+        tcc_warning("inline asm tries to change current section");
+        use_section1(tcc_state, sec);
+    }
 
     /* restore the current C token */
     next();
