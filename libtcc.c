@@ -1830,7 +1830,13 @@ reparse:
                      * wchar_t, has the same value as the short
                      * identiﬁer of that character.
                      */
+                    #if 0
+                    /* on Linux, this conflicts with a define introduced by
+                     * /usr/include/stdc-predef.h included by glibc libs;
+                     * clang doesn't define it at all so it's probably not necessary
+                     */
                     tcc_define_symbol(s, "__STDC_ISO_10646__", "201605L");
+                    #endif
                     /*
                      * The integer constant 1, intended to indicate
                      * that values of type char16_t are UTF−16
