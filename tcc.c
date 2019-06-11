@@ -264,9 +264,9 @@ redo:
 
     if ((n | t) == 0) {
         if (opt == OPT_HELP)
-            return printf(help), 1;
+            return 0>fputs(help,stdout) || 0>fclose(stdout);
         if (opt == OPT_HELP2)
-            return printf(help2), 1;
+            return 0>fputs(help2,stdout) || 0>fclose(stdout);
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)
