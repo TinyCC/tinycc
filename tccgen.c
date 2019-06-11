@@ -945,7 +945,7 @@ static void patch_type(Sym *sym, CType *type)
     } else if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
         int static_proto = sym->type.t & VT_STATIC;
         /* warn if static follows non-static function declaration */
-        if ((type->t & VT_STATIC) && !static_proto && !(type->t & VT_INLINE))
+        if ((type->t & VT_STATIC) && !static_proto && !((type->t|sym->type.t) & VT_INLINE))
             tcc_warning("static storage ignored for redefinition of '%s'",
                 get_tok_str(sym->v, NULL));
 
@@ -7411,13 +7411,16 @@ static void gen_inline_functions(TCCState *s)
         for (i = 0; i < s->nb_inline_fns; ++i) {
             fn = s->inline_fns[i];
             sym = fn->sym;
-            if (sym && sym->c) {
+            if (sym && (sym->c || (sym->type.t&VT_INSTINL) )){
                 /* the function was used: generate its code and
                    convert it to a normal function */
                 fn->sym = NULL;
                 if (file)
                     pstrcpy(file->filename, sizeof file->filename, fn->filename);
                 sym->type.t &= ~VT_INLINE;
+
+                if (sym->type.t&VT_INSTINL)
+                    sym->type.t &= ~VT_STATIC;
 
                 begin_macro(fn->func_str, 1);
                 next();
@@ -7563,18 +7566,45 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     expect("function definition");
 
                 /* reject abstract declarators in function definition
-		   make old style params without decl have int type */
+                   make old style params without decl have int type */
                 sym = type.ref;
                 while ((sym = sym->next) != NULL) {
                     if (!(sym->v & ~SYM_FIELD))
                         expect("identifier");
-		    if (sym->type.t == VT_VOID)
-		        sym->type = int_type;
-		}
-                
-                /* XXX: cannot do better now: convert extern line to static inline */
-                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
-                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+                    if (sym->type.t == VT_VOID)
+                        sym->type = int_type;
+                }
+                sym = type.ref;
+                sym = sym_find(v);
+                /* temporarily convert even extern inlines to statics */
+                if (!sym){
+                    if( (type.t & VT_EXTERN) && (type.t & VT_INLINE) ){
+                        type.t |= VT_INSTINL;
+                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC | VT_FAKESTC;
+                    }else if ( type.t & VT_INLINE ){
+                        if(!(type.t&VT_STATIC)) type.t |= VT_FAKESTC;
+                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+                    }
+                }else{
+                    if ( !(type.t & VT_STATIC) && !(sym->type.t & VT_STATIC) ){
+                        if(
+                                ((type.t & VT_INLINE) != (sym->type.t & VT_INLINE)) ||
+                                ( (type.t & VT_INLINE) &&  (type.t & VT_EXTERN) )
+                          ){
+                            /* noninline decl + inline def OR inline decl + noinline def OR
+                               inline explicitly extern def ALL instantiate the inline */
+                            type.t |= sym->type.t | VT_INSTINL;
+                            type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+                        }
+                    }else{
+                        /*(extern on nonstatic defs following static decls are turned into true static defs)*/
+                    }
+                    if ( sym->type.t & VT_INLINE ){
+                        if(!(type.t&VT_STATIC)) type.t |= VT_FAKESTC;
+                        type.t |= sym->type.t;
+                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+                    }
+                }
 
                 /* put function symbol */
                 sym = external_sym(v, &type, 0, &ad);
@@ -7582,7 +7612,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 /* static inline functions are just recorded as a kind
                    of macro. Their code will be emitted at the end of
                    the compilation unit only if they are used */
-                if ((type.t & (VT_INLINE | VT_STATIC)) ==
+                if ((sym->type.t & (VT_INLINE | VT_STATIC)) ==
                     (VT_INLINE | VT_STATIC)) {
                     struct InlineFunc *fn;
                     const char *filename;
@@ -7658,8 +7688,16 @@ found:
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
+                        int t = type.t;
                         type.t |= VT_EXTERN;
                         sym = external_sym(v, &type, r, &ad);
+
+                        if ( (!(sym->type.t&VT_STATIC) || sym->type.t&VT_FAKESTC ) &&
+                                ( ((sym->type.t&VT_INLINE)!=(t&VT_INLINE)) ||
+                                  ( (t&VT_INLINE) && (t&VT_EXTERN) ) )
+                           ){
+                            sym->type.t |= VT_INSTINL;
+                        }
                         if (ad.alias_target) {
                             ElfSym *esym;
                             Sym *alias_target;

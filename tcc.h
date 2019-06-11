@@ -886,7 +886,9 @@ struct filespec {
 #define VT_STATIC  0x00002000  /* static variable */
 #define VT_TYPEDEF 0x00004000  /* typedef definition */
 #define VT_INLINE  0x00008000  /* inline definition */
-/* currently unused: 0x000[1248]0000  */
+#define VT_INSTINL 0x00010000  /* the inline should be visibly instantiated */
+#define VT_FAKESTC 0x00020000  /* is marked static because it's inline */
+/* currently unused: 0x000[48]0000  */
 
 #define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
 #define VT_STRUCT_MASK (((1 << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
@@ -902,7 +904,7 @@ struct filespec {
 #define IS_UNION(t) ((t & (VT_STRUCT_MASK|VT_BTYPE)) == VT_UNION)
 
 /* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
+#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE | VT_INSTINL | VT_FAKESTC )
 #define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
 
 /* symbol was created by tccasm.c first */
