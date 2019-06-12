@@ -1474,7 +1474,7 @@ typedef DWORD LCID;
 #if(defined(_X86_) && !defined(__x86_64))
   __CRT_INLINE VOID MemoryBarrier(VOID) {
     LONG Barrier;
-    __asm__ __volatile__("xchgl %eax,%0 "
+    __asm__ __volatile__("xchgl %%eax,%0 "
       :"=r" (Barrier));
   }
 #define YieldProcessor() __asm__ __volatile__("rep nop ");
@@ -1486,7 +1486,7 @@ typedef DWORD LCID;
 #define PF_NON_TEMPORAL_LEVEL_ALL
 
   __CRT_INLINE VOID DbgRaiseAssertionFailure(void) {
-    __asm__ __volatile__("int 0x2c ");
+    __asm__ __volatile__("int $0x2c ");
   }
   PVOID GetCurrentFiber(void);
   __CRT_INLINE PVOID GetCurrentFiber(void)

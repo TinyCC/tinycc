@@ -51,7 +51,7 @@
 #define __GNUC_VA_LIST
 
 #define _CRTIMP extern
-#define __CRT_INLINE extern __inline__
+#define __CRT_INLINE static __inline__
 
 #define _CRT_ALIGN(x) __attribute__((aligned(x)))
 #define DECLSPEC_ALIGN(x) __attribute__((aligned(x)))
