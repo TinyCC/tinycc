@@ -2270,7 +2270,6 @@ static void *load_data(int fd, unsigned long file_offset, unsigned long size)
 typedef struct SectionMergeInfo {
     Section *s;            /* corresponding existing section */
     unsigned long offset;  /* offset of the new section in the existing section */
-    unsigned long oldlen;  /* size of existing section before adding this one */
     uint8_t new_section;       /* true if section 's' was added */
     uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
@@ -2421,7 +2420,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         }
 
         /* align start of section */
-	sm_table[i].oldlen = s->data_offset;
         offset = s->data_offset;
 
         if (0 == strcmp(sh_name, ".stab")) {
@@ -2479,15 +2477,9 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         if (sh->sh_link > 0)
             s->link = sm_table[sh->sh_link].s;
         if (sh->sh_type == SHT_RELX) {
-	    if (sm_table[sh->sh_info].s) {
-		s->sh_info = sm_table[sh->sh_info].s->sh_num;
-		/* update backward link */
-		s1->sections[s->sh_info]->reloc = s;
-	    } else {
-		/* we haven't read the target of relocs, so cancel them */
-		s->data_offset = sm_table[i].oldlen;
-		sm_table[i].s = NULL;
-	    }
+            s->sh_info = sm_table[sh->sh_info].s->sh_num;
+            /* update backward link */
+            s1->sections[s->sh_info]->reloc = s;
         }
     }
     sm = sm_table;
