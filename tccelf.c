@@ -928,8 +928,7 @@ static void build_got(TCCState *s1)
    relocation, use 'size' and 'info' for the corresponding symbol metadata.
    Returns the offset of the GOT or (if any) PLT entry. */
 static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
-                                       unsigned long size,
-                                       int info, int sym_index)
+                                       int sym_index)
 {
     int need_plt_entry;
     const char *name;
@@ -983,8 +982,9 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
 			  sym_index);
 	} else {
 	    if (0 == attr->dyn_index)
-                attr->dyn_index = set_elf_sym(s1->dynsym, sym->st_value, size,
-					      info, 0, sym->st_shndx, name);
+                attr->dyn_index = set_elf_sym(s1->dynsym, sym->st_value,
+                                              sym->st_size, sym->st_info, 0,
+                                              sym->st_shndx, name);
 	    put_elf_reloc(s1->dynsym, s1->got, got_offset, dyn_reloc_type,
 			  attr->dyn_index);
 	}
@@ -1104,8 +1104,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
             if (gotplt_entry == BUILD_GOT_ONLY)
                 continue;
 
-            attr = put_got_entry(s1, reloc_type, sym->st_size, sym->st_info,
-                                 sym_index);
+            attr = put_got_entry(s1, reloc_type, sym_index);
 
             if (reloc_type == R_JMP_SLOT)
                 rel->r_info = ELFW(R_INFO)(attr->plt_sym, type);
