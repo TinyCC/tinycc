@@ -1005,6 +1005,7 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
     Sym *s;
     s = sym_find(v);
     if (!s || (!IS_ASM_SYM(s) && !(s->type.t & VT_EXTERN)
+               && (!(type->t & VT_EXTERN) || s->sym_scope)
                && (s->type.t & VT_BTYPE) != VT_FUNC)) {
         if (s && !is_compatible_types(&s->type, type))
             tcc_error("conflicting types for '%s'", get_tok_str(s->v, NULL));

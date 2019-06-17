@@ -816,6 +816,16 @@ void scope_test2()
     printf("exloc: %d\n", *st2_p);
 }
 
+/* C has tentative definition, and they may be repeated.  */
+extern int st_global1;
+int st_global1=42;
+extern int st_global1;
+int st_global1;
+extern int st_global2;
+int st_global2;
+extern int st_global2;
+int st_global2;
+
 void array_test()
 {
     int i, j, a[4];
