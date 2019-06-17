@@ -957,8 +957,12 @@ static void patch_type(Sym *sym, CType *type)
 
         /* Force external definition if unequal inline specifier
            or an explicit extern one.  */
-        if ((type->t & VT_INLINE) != (sym->type.t & VT_INLINE)
-            || (type->t | sym->type.t) & VT_EXTERN) {
+        if ((sym->type.t | type->t) & VT_STATIC) {
+            type->t |= sym->type.t & VT_INLINE;
+            sym->type.t |= type->t & VT_INLINE;
+        } else if (((type->t & VT_INLINE) != (sym->type.t & VT_INLINE)
+             || (type->t | sym->type.t) & VT_EXTERN)
+            && !static_proto) {
             type->t &= ~VT_INLINE;
             sym->type.t &= ~VT_INLINE;
         }
