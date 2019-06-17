@@ -7422,9 +7422,9 @@ static void gen_inline_functions(TCCState *s)
         for (i = 0; i < s->nb_inline_fns; ++i) {
             fn = s->inline_fns[i];
             sym = fn->sym;
-            if (sym && (sym->c || !(sym->type.t & VT_INLINE) )){
-                /* the function was used or forced: generate its code and
-                   convert it to a normal function */
+            if (sym && (sym->c || !(sym->type.t & (VT_INLINE | VT_STATIC)) )) {
+                /* the function was used or forced (and then not internal):
+                   generate its code and convert it to a normal function */
                 fn->sym = NULL;
                 if (file)
                     pstrcpy(file->filename, sizeof file->filename, fn->filename);
