@@ -947,7 +947,11 @@ static void patch_type(Sym *sym, CType *type)
     } else if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
         int static_proto = sym->type.t & VT_STATIC;
         /* warn if static follows non-static function declaration */
-        if ((type->t & VT_STATIC) && !static_proto)
+        if ((type->t & VT_STATIC) && !static_proto
+            /* XXX this test for inline shouldn't be here.  Until we
+               implement gnu-inline mode again it silences a warning for
+               mingw caused by our workarounds.  */
+            && !((type->t | sym->type.t) & VT_INLINE))
             tcc_warning("static storage ignored for redefinition of '%s'",
                 get_tok_str(sym->v, NULL));
 
@@ -959,9 +963,9 @@ static void patch_type(Sym *sym, CType *type)
             sym->type.t &= ~VT_INLINE;
         }
         if (0 == (type->t & VT_EXTERN)) {
-            /* put complete type, use static from prototype */
+            /* put complete type, use static from prototype, but don't
+               overwrite type.ref, it might contain parameter names */
             sym->type.t = (type->t & ~VT_STATIC) | static_proto;
-            sym->type.ref = type->ref;
         }
     } else {
         if ((sym->type.t & VT_ARRAY) && type->ref->c >= 0) {
@@ -7578,6 +7582,9 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 
                 /* put function symbol */
                 sym = external_sym(v, &type, 0, &ad);
+                /* This is the def, so overwrite any other parameter names
+                   we got from prototypes.  */
+                sym->type.ref = type.ref;
                 if (sym->c && elfsym(sym)->st_shndx != SHN_UNDEF
                     && !(elfsym(sym)->st_other & ST_ASM_SET))
                   tcc_error("redefinition of '%s'", get_tok_str(sym->v, NULL));
