@@ -1455,6 +1455,9 @@ int defined_function(void)
 static int tab_reinit[];
 static int tab_reinit[10];
 
+static int tentative_ar[];
+static int tentative_ar[] = {1,2,3};
+
 //int cinit1; /* a global variable can be defined several times without error ! */
 int cinit1; 
 int cinit1; 

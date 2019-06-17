@@ -325,7 +325,8 @@ ST_FUNC void update_storage(Sym *sym)
         esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
             | sym->a.visibility;
 
-    if (sym->type.t & VT_STATIC)
+    if ((sym->type.t & VT_STATIC)
+        || (sym->type.t & (VT_EXTERN | VT_INLINE)) == VT_INLINE)
         sym_bind = STB_LOCAL;
     else if (sym->a.weak)
         sym_bind = STB_WEAK;
@@ -407,7 +408,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
         } else {
             sym_type = STT_OBJECT;
         }
-        if (t & VT_STATIC)
+        if ((t & VT_STATIC) || (t & (VT_EXTERN | VT_INLINE)) == VT_INLINE)
             sym_bind = STB_LOCAL;
         else
             sym_bind = STB_GLOBAL;
@@ -926,7 +927,8 @@ static void merge_attr(AttributeDef *ad, AttributeDef *ad1)
 /* Merge some type attributes.  */
 static void patch_type(Sym *sym, CType *type)
 {
-    if (!(type->t & VT_EXTERN) || IS_ENUM_VAL(sym->type.t)) {
+    if ((!(type->t & VT_EXTERN) || IS_ENUM_VAL(sym->type.t))
+        && (type->t & VT_BTYPE) != VT_FUNC) {
         if (!(sym->type.t & VT_EXTERN))
             tcc_error("redefinition of '%s'", get_tok_str(sym->v, NULL));
         sym->type.t &= ~VT_EXTERN;
@@ -945,18 +947,22 @@ static void patch_type(Sym *sym, CType *type)
     } else if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
         int static_proto = sym->type.t & VT_STATIC;
         /* warn if static follows non-static function declaration */
-        if ((type->t & VT_STATIC) && !static_proto && !((type->t|sym->type.t) & VT_INLINE))
+        if ((type->t & VT_STATIC) && !static_proto)
             tcc_warning("static storage ignored for redefinition of '%s'",
                 get_tok_str(sym->v, NULL));
 
+        /* Force external definition if unequal inline specifier
+           or an explicit extern one.  */
+        if ((type->t & VT_INLINE) != (sym->type.t & VT_INLINE)
+            || (type->t | sym->type.t) & VT_EXTERN) {
+            type->t &= ~VT_INLINE;
+            sym->type.t &= ~VT_INLINE;
+        }
         if (0 == (type->t & VT_EXTERN)) {
             /* put complete type, use static from prototype */
             sym->type.t = (type->t & ~VT_STATIC) | static_proto;
-            if (type->t & VT_INLINE)
-                sym->type.t = type->t;
             sym->type.ref = type->ref;
         }
-
     } else {
         if ((sym->type.t & VT_ARRAY) && type->ref->c >= 0) {
             /* set array size if it was omitted in extern declaration */
@@ -7411,17 +7417,12 @@ static void gen_inline_functions(TCCState *s)
         for (i = 0; i < s->nb_inline_fns; ++i) {
             fn = s->inline_fns[i];
             sym = fn->sym;
-            if (sym && (sym->c || (sym->type.t&VT_INSTINL) )){
-                /* the function was used: generate its code and
+            if (sym && (sym->c || !(sym->type.t & VT_INLINE) )){
+                /* the function was used or forced: generate its code and
                    convert it to a normal function */
                 fn->sym = NULL;
                 if (file)
                     pstrcpy(file->filename, sizeof file->filename, fn->filename);
-                sym->type.t &= ~VT_INLINE;
-
-                if (sym->type.t&VT_INSTINL)
-                    sym->type.t &= ~VT_STATIC;
-
                 begin_macro(fn->func_str, 1);
                 next();
                 cur_text_section = text_section;
@@ -7574,46 +7575,17 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     if (sym->type.t == VT_VOID)
                         sym->type = int_type;
                 }
-                sym = type.ref;
-                sym = sym_find(v);
-                /* temporarily convert even extern inlines to statics */
-                if (!sym){
-                    if( (type.t & VT_EXTERN) && (type.t & VT_INLINE) ){
-                        type.t |= VT_INSTINL;
-                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC | VT_FAKESTC;
-                    }else if ( type.t & VT_INLINE ){
-                        if(!(type.t&VT_STATIC)) type.t |= VT_FAKESTC;
-                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
-                    }
-                }else{
-                    if ( !(type.t & VT_STATIC) && !(sym->type.t & VT_STATIC) ){
-                        if(
-                                ((type.t & VT_INLINE) != (sym->type.t & VT_INLINE)) ||
-                                ( (type.t & VT_INLINE) &&  (type.t & VT_EXTERN) )
-                          ){
-                            /* noninline decl + inline def OR inline decl + noinline def OR
-                               inline explicitly extern def ALL instantiate the inline */
-                            type.t |= sym->type.t | VT_INSTINL;
-                            type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
-                        }
-                    }else{
-                        /*(extern on nonstatic defs following static decls are turned into true static defs)*/
-                    }
-                    if ( sym->type.t & VT_INLINE ){
-                        if(!(type.t&VT_STATIC)) type.t |= VT_FAKESTC;
-                        type.t |= sym->type.t;
-                        type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
-                    }
-                }
 
                 /* put function symbol */
                 sym = external_sym(v, &type, 0, &ad);
+                if (sym->c && elfsym(sym)->st_shndx != SHN_UNDEF
+                    && !(elfsym(sym)->st_other & ST_ASM_SET))
+                  tcc_error("redefinition of '%s'", get_tok_str(sym->v, NULL));
 
                 /* static inline functions are just recorded as a kind
                    of macro. Their code will be emitted at the end of
                    the compilation unit only if they are used */
-                if ((sym->type.t & (VT_INLINE | VT_STATIC)) ==
-                    (VT_INLINE | VT_STATIC)) {
+                if ((sym->type.t & (VT_INLINE | VT_EXTERN)) == VT_INLINE) {
                     struct InlineFunc *fn;
                     const char *filename;
                            
@@ -7688,16 +7660,9 @@ found:
                         /* NOTE: as GCC, uninitialized global static
                            arrays of null size are considered as
                            extern */
-                        int t = type.t;
-                        type.t |= VT_EXTERN;
+                        if ((type.t & VT_BTYPE) != VT_FUNC)
+                          type.t |= VT_EXTERN;
                         sym = external_sym(v, &type, r, &ad);
-
-                        if ( (!(sym->type.t&VT_STATIC) || sym->type.t&VT_FAKESTC ) &&
-                                ( ((sym->type.t&VT_INLINE)!=(t&VT_INLINE)) ||
-                                  ( (t&VT_INLINE) && (t&VT_EXTERN) ) )
-                           ){
-                            sym->type.t |= VT_INSTINL;
-                        }
                         if (ad.alias_target) {
                             ElfSym *esym;
                             Sym *alias_target;
@@ -7717,7 +7682,8 @@ found:
                             r |= l;
                         if (has_init)
                             next();
-                        else if (l == VT_CONST)
+                        else if (l == VT_CONST
+                                 && (type.t & VT_BTYPE) != VT_FUNC)
                             /* uninitialized global variables may be overridden */
                             type.t |= VT_EXTERN;
                         decl_initializer_alloc(&type, &ad, r, has_init, v, l);
