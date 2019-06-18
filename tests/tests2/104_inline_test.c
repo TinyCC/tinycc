@@ -3,9 +3,6 @@
 #include <signal.h>
 #include <errno.h>
 
-#if defined(_WIN32)
-#endif
-
 #if __linux__ || __APPLE__
 #define SYS_WHICH_NM "which nm >/dev/null 2>&1"
 #define TCC_COMPILER "../../tcc"
