@@ -3,9 +3,44 @@
 #include <signal.h>
 #include <errno.h>
 
-extern char const cfileContents[];
-char c[]="/tmp/tcc-XXXXXX.c";
-char o[]="/tmp/tcc-XXXXXX.o";
+#if defined(_WIN32)
+#endif
+
+#if __linux__ || __APPLE__
+#define SYS_WHICH_NM "which nm >/dev/null 2>&1"
+#define TCC_COMPILER "../../tcc"
+#define SYS_AWK
+
+char c[]="/tmp/tcc-XXXXXX"; char o[]="/tmp/tcc-XXXXXX";
+static int mktempfile(char *buf)
+{
+	return mkstemps(buf,0);
+}
+#elif defined(_WIN32)
+#define SYS_WHICH_NM  "which nm >nul 2>&1"
+
+#if defined(_WIN64)
+#define TCC_COMPILER "..\\..\\win32\\x86_64-win32-tcc"
+#else
+#define TCC_COMPILER "..\\..\\win32\\i386-win32-tcc"
+#endif
+
+char c[1024]; char o[1024];
+static int mktempfile(char *buf)
+{
+        /*
+         * WARNING, this simplified 'mktemp' like function
+         * create two temporary Windows files having always
+         * the same name. It is enought for tcc test suite.
+         */
+        if (buf == c) {
+                sprintf(c, "%s\\tcc-temp1", getenv("LOCALAPPDATA"));
+        } else {
+                sprintf(o, "%s\\tcc-temp2", getenv("LOCALAPPDATA"));
+        }
+}
+#endif
+
 void rmh(int Sig)
 {
 	remove(c);
@@ -24,22 +59,23 @@ int str2file(char const *fnm, char const *str)
 int main(int C, char **V)
 {
 	int r=0;
-	if (system("which nm >/dev/null 2>&1")){ return 0; }
+	if (system(SYS_WHICH_NM)){ return 0; }
    	signal(SIGINT,SIG_IGN);
 	signal(SIGTERM,SIG_IGN);
-	if(0>mkstemps(c,2)) return perror("mkstemps"),1;
-	if(0>mkstemps(o,2)){
+	if(0>mktempfile(c)) return perror("mkstemps"),1;
+	if(0>mktempfile(o)){
 		if(0>remove(c)) perror("remove");
 		return perror("mkstemps"),1;
 	}
    	signal(SIGINT,rmh);
 	signal(SIGTERM,rmh);
+	extern char const cfileContents[];
 	if(0>str2file(c, cfileContents)) { perror("write");r=1;goto out;}
 	char buf[1024];
-	sprintf(buf, "%s -c %s -o %s", V[1]?V[1]:"../../tcc", c, o); if(0!=system(buf)){ r=1;goto out;}
-	sprintf(buf, "nm -Ptx %s > %s", o, c); if(system(buf)) {r=1;goto out;}
-	sprintf(buf, "awk '{ if($2 == \"T\") print $1 }' %s > %s", c, o); if(system(buf)) {r=1;goto out;}
-	sprintf(buf, "sort %s", o); if(system(buf)) {r=1;goto out;}
+        sprintf(buf, "%s -c -xc %s -o %s", V[1]?V[1]:TCC_COMPILER, c, o); if(0!=system(buf)){ r=1;goto out;}
+        sprintf(buf, "nm -Ptx %s > %s", o, c); if(system(buf)) {r=1;goto out;}
+        sprintf(buf, "gawk '{ if($2 == \"T\") print $1 }' %s > %s", c, o); if(system(buf)) {r=1;goto out;}
+        sprintf(buf, "sort %s", o); if(system(buf)) {r=1;goto out;}
 out:
 	remove(c);
 	remove(o);
@@ -175,4 +211,3 @@ char const cfileContents[]=
 "}\n"
 "\n"
 ;
-
