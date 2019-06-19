@@ -1234,7 +1234,7 @@ void gfunc_call(int nb_args)
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
-    char _onstack[nb_args], *onstack = _onstack;
+    char _onstack[nb_args ? nb_args : 1], *onstack = _onstack;
 
     /* calculate the number of integer/float register arguments, remember
        arguments to be passed via stack (in onstack[]), and also remember
