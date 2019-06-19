@@ -3,6 +3,9 @@ include $(TOP)/Makefile
 SRC = $(TOPSRC)/tests/tests2
 VPATH = $(SRC)
 
+# used by 104_inline_test.c
+export TESTED_TCC = $(TCC)
+
 TESTS = $(patsubst %.c,%.test,\
     $(sort $(notdir $(wildcard $(SRC)/??_*.c)))\
     $(sort $(notdir $(wildcard $(SRC)/???_*.c))))

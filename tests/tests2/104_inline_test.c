@@ -1,83 +1,53 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
-#include <errno.h>
 
-#if __linux__ || __APPLE__
-#define SYS_WHICH_NM "which nm >/dev/null 2>&1"
-#define TCC_COMPILER "../../tcc"
-#define SYS_AWK
-
-char c[]="/tmp/tcc-XXXXXX"; char o[]="/tmp/tcc-XXXXXX";
-static int mktempfile(char *buf)
+int str2file(const char *str, const char *fname)
 {
-	return mkstemps(buf,0);
+	FILE *f = fopen(fname, "wb");
+	return !(f && fputs(str, f) >= 0 && fclose(f) == 0);
 }
-#elif defined(_WIN32)
-#define SYS_WHICH_NM  "which nm >nul 2>&1"
 
-#if defined(_WIN64)
-#define TCC_COMPILER "..\\..\\win32\\x86_64-win32-tcc"
-#else
-#define TCC_COMPILER "..\\..\\win32\\i386-win32-tcc"
-#endif
+/*
+ * Wrap this sh script, which is compared to .expect (x.c is cFileContents):
+ * tcc -c x.c && nm -Ptx x.o | awk '{ if($2 == "T") print $1 }' | LC_ALL=C sort
+ * FIXME: Makefile should do it directly without this wrapper.
+ *
+ * Uses: sh, nm, awk, sort.
+ * Good enough: we use fixed temp files at CWD to avoid abs path conversions
+ * between *nix/Windows representations (shell, FILE APIs, tcc CLI arguments).
+ */
+#define TMP_SCRIPT "tmp-t104.sh"
+#define TMP_C      "tmp-t104.c"
+#define TMP_O      "tmp-t104.o"
 
-char c[1024]; char o[1024];
-static int mktempfile(char *buf)
+int main(int argc, char **argv)
 {
-        /*
-         * WARNING, this simplified 'mktemp' like function
-         * create two temporary Windows files having always
-         * the same name. It is enought for tcc test suite.
-         */
-        if (buf == c) {
-                sprintf(c, "%s\\tcc-temp1", getenv("LOCALAPPDATA"));
-        } else {
-                sprintf(o, "%s\\tcc-temp2", getenv("LOCALAPPDATA"));
-        }
-}
-#endif
-
-void rmh(int Sig)
-{
-	remove(c);
-	remove(o);
-	signal(Sig,SIG_DFL);
-	raise(Sig);
-}
-int str2file(char const *fnm, char const *str)
-{
-	FILE *f;
-	if(0==(f=fopen(fnm,"w"))) return -1;
-	if(0>fputs(str,f)) return -1;
-	if(0>fclose(f)) return -1;
-	return 0;
-}
-int main(int C, char **V)
-{
-	int r=0;
-	if (system(SYS_WHICH_NM)){ return 0; }
-   	signal(SIGINT,SIG_IGN);
-	signal(SIGTERM,SIG_IGN);
-	if(0>mktempfile(c)) return perror("mkstemps"),1;
-	if(0>mktempfile(o)){
-		if(0>remove(c)) perror("remove");
-		return perror("mkstemps"),1;
-	}
-   	signal(SIGINT,rmh);
-	signal(SIGTERM,rmh);
 	extern char const cfileContents[];
-	if(0>str2file(c, cfileContents)) { perror("write");r=1;goto out;}
-	char buf[1024];
-        sprintf(buf, "%s -c -xc %s -o %s", V[1]?V[1]:TCC_COMPILER, c, o); if(0!=system(buf)){ r=1;goto out;}
-        sprintf(buf, "nm -Ptx %s > %s", o, c); if(system(buf)) {r=1;goto out;}
-        sprintf(buf, "gawk '{ if($2 == \"T\") print $1 }' %s > %s", c, o); if(system(buf)) {r=1;goto out;}
-        sprintf(buf, "sort %s", o); if(system(buf)) {r=1;goto out;}
-out:
-	remove(c);
-	remove(o);
+	const char *tcc;
+	char script[1024];
+	int r = 1;
+	/* errors at system(..) or the script show at the diff to .expect */
+
+	/* TESTED_TCC is path/to/tcc + arguments */
+	if (!(tcc = argc > 1 ? argv[1] : getenv("TESTED_TCC")))
+		return fputs("unknown tcc executable", stderr), 1;
+
+	sprintf(script,
+	        "%s -c "TMP_C" -o "TMP_O" || exit 1\n"
+	        "nm -Ptx "TMP_O" | awk '{ if($2 == \"T\") print $1 }' | LC_ALL=C sort\n"
+	        , tcc);
+
+	if (str2file(cfileContents, TMP_C) || str2file(script, TMP_SCRIPT))
+		perror("create "TMP_C"/"TMP_SCRIPT);
+	else
+		r = system("sh "TMP_SCRIPT);
+
+	remove(TMP_SCRIPT);
+	remove(TMP_C);
+	remove(TMP_O);
 	return r;
 }
+
 char const cfileContents[]=
 "inline void inline_inline_2decl_only(void);\n"
 "inline void inline_inline_2decl_only(void);\n"
