@@ -889,7 +889,7 @@ struct filespec {
 /* currently unused: 0x000[1248]0000  */
 
 #define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
-#define VT_STRUCT_MASK (((1 << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
+#define VT_STRUCT_MASK (((1U << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
 #define BIT_POS(t) (((t) >> VT_STRUCT_SHIFT) & 0x3f)
 #define BIT_SIZE(t) (((t) >> (VT_STRUCT_SHIFT + 6)) & 0x3f)
 
