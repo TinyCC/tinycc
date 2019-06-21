@@ -3,9 +3,6 @@ include $(TOP)/Makefile
 SRC = $(TOPSRC)/tests/tests2
 VPATH = $(SRC)
 
-# used by 104_inline_test.c
-export TESTED_TCC = $(TCC)
-
 TESTS = $(patsubst %.c,%.test,\
     $(sort $(notdir $(wildcard $(SRC)/??_*.c)))\
     $(sort $(notdir $(wildcard $(SRC)/???_*.c))))
@@ -58,6 +55,10 @@ GEN-ALWAYS =
 
 # using the ms compiler for the really ms-compatible bitfields
 95_bitfields_ms.test : GEN = $(GEN-MSC)
+
+# this test compiles/links two files:
+104_inline.test : FLAGS += 104+_inline.c
+104_inline.test : GEN = $(GEN-TCC)
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'
