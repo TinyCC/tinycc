@@ -45,25 +45,26 @@ static int nb_states;
 #include "i386-gen.c"
 #include "i386-link.c"
 #include "i386-asm.c"
-#endif
-#ifdef TCC_TARGET_ARM
+#elif defined(TCC_TARGET_ARM)
 #include "arm-gen.c"
 #include "arm-link.c"
 #include "arm-asm.c"
-#endif
-#ifdef TCC_TARGET_ARM64
+#elif defined(TCC_TARGET_ARM64)
 #include "arm64-gen.c"
 #include "arm64-link.c"
-#endif
-#ifdef TCC_TARGET_C67
+#elif defined(TCC_TARGET_C67)
 #include "c67-gen.c"
 #include "c67-link.c"
 #include "tcccoff.c"
-#endif
-#ifdef TCC_TARGET_X86_64
+#elif defined(TCC_TARGET_X86_64)
 #include "x86_64-gen.c"
 #include "x86_64-link.c"
 #include "i386-asm.c"
+#elif defined(TCC_TARGET_RISCV64)
+#include "riscv64-gen.c"
+#include "riscv64-link.c"
+#else
+#error unknown target
 #endif
 #ifdef CONFIG_TCC_ASM
 #include "tccasm.c"

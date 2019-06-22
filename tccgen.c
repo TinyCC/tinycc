@@ -1548,11 +1548,13 @@ ST_FUNC int gv(int rc)
         r = vtop->r & VT_VALMASK;
         rc2 = (rc & RC_FLOAT) ? RC_FLOAT : RC_INT;
 #ifndef TCC_TARGET_ARM64
+#ifndef TCC_TARGET_RISCV64 /* XXX: remove the whole LRET/QRET class */
         if (rc == RC_IRET)
             rc2 = RC_LRET;
 #ifdef TCC_TARGET_X86_64
         else if (rc == RC_FRET)
             rc2 = RC_QRET;
+#endif
 #endif
 #endif
         /* need to reload if:
@@ -2552,7 +2554,7 @@ redo:
 /* generic itof for unsigned long long case */
 static void gen_cvt_itof1(int t)
 {
-#ifdef TCC_TARGET_ARM64
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
     gen_cvt_itof(t);
 #else
     if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
@@ -2580,7 +2582,7 @@ static void gen_cvt_itof1(int t)
 /* generic ftoi for unsigned long long case */
 static void gen_cvt_ftoi1(int t)
 {
-#ifdef TCC_TARGET_ARM64
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
     gen_cvt_ftoi(t);
 #else
     int st;
@@ -2802,7 +2804,7 @@ static void gen_cast(CType *type)
                     /* need to convert from 32bit to 64bit */
                     gv(RC_INT);
                     if (sbt != (VT_INT | VT_UNSIGNED)) {
-#if defined(TCC_TARGET_ARM64)
+#if defined(TCC_TARGET_ARM64) || defined(TCC_TARGET_RISCV64)
                         gen_cvt_sxtw();
 #elif defined(TCC_TARGET_X86_64)
                         int r = gv(RC_INT);
@@ -5469,12 +5471,14 @@ special_math_val:
 #endif
                 } else {
 #ifndef TCC_TARGET_ARM64
+#ifndef TCC_TARGET_RISCV64
 #ifdef TCC_TARGET_X86_64
                     if ((ret.type.t & VT_BTYPE) == VT_QLONG)
 #else
                     if ((ret.type.t & VT_BTYPE) == VT_LLONG)
 #endif
                         ret.r2 = REG_LRET;
+#endif
 #endif
                     ret.r = REG_IRET;
                 }
@@ -6015,6 +6019,7 @@ ST_FUNC int expr_const(void)
 /* return from function */
 
 #ifndef TCC_TARGET_ARM64
+#ifndef TCC_TARGET_RISCV64
 static void gfunc_return(CType *func_type)
 {
     if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
@@ -6078,6 +6083,7 @@ static void gfunc_return(CType *func_type)
     }
     vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
 }
+#endif
 #endif
 
 static void check_func_return(void)
