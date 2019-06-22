@@ -73,7 +73,7 @@
 60_errors_and_warnings.c:153: error: ',' expected (got "a")
 
 [test_conflicting_types]
-60_errors_and_warnings.c:159: error: conflicting types for 'i'
+60_errors_and_warnings.c:159: error: incompatible types for redefinition of 'i'
 
 [test_nested_types]
 60_errors_and_warnings.c:166: error: struct/union/enum already defined
@@ -100,4 +100,35 @@
 60_errors_and_warnings.c:196: error: declaration of an array of functions
 
 [test_incomplete_array_array]
-60_errors_and_warnings.c:199: error: unknown type size
+
+[test_extern_array]
+60_errors_and_warnings.c:212: error: incompatible types for redefinition of 'x'
+
+[test_func_1]
+hello: a = 123
+
+[test_func_2]
+hello: a = 123
+
+[test_func_3]
+60_errors_and_warnings.c:241: warning: static storage ignored for redefinition of 'hello'
+hello: a = 123
+
+[test_func_4]
+hello: a = 123
+
+[test_func_5]
+60_errors_and_warnings.c:241: error: incompatible types for redefinition of 'hello'
+
+[test_var_1]
+main : 1 ; 1
+main : 2 ; 2
+bar  : 3 ; 3
+
+[test_var_2]
+main : 1 ; 1
+main : 2 ; 2
+bar  : 3 ; 3
+
+[test_var_3]
+60_errors_and_warnings.c:273: error: incompatible types for redefinition of 'xxx'

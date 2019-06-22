@@ -38,7 +38,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, in
 static Sym *asm_label_find(int v)
 {
     Sym *sym = sym_find(v);
-    while (sym && sym->sym_scope)
+    while (sym && sym->sym_scope && !(sym->type.t & VT_STATIC))
         sym = sym->prev_tok;
     return sym;
 }

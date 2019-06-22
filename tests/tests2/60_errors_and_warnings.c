@@ -196,6 +196,82 @@ void * _Alignas(16) p1;
   const f t[3];
 
 #elif defined test_incomplete_array_array
-  int t[][3];
+  int t[][3]; // gr: not an error, see below
 
+/******************************************************************/
+#elif defined test_extern_array
+int iii[] = { 1,2,3 };
+extern int iii[];
+int x[];
+int x[2];
+int x[];
+int x[2];
+int x[];
+extern int x[2];
+extern int x[];
+int x[3];
+
+/******************************************************************/
+#elif defined test_func_1 \
+ || defined test_func_2 \
+ || defined test_func_3 \
+ || defined test_func_4 \
+ || defined test_func_5
+#if defined test_func_1
+int hello(int);
+#elif defined test_func_4
+static int hello(int);
+#endif
+int main () {
+#if defined test_func_5
+    static
+#endif
+    int hello(int);
+    hello(123);
+    return 0;
+}
+int printf(const char*, ...);
+#if defined test_func_3
+static int hello(int a)
+#elif defined test_func_5
+int hello(int a, int b)
+#else
+int hello(int a)
+#endif
+{ printf("%s: a = %d\n", __FUNCTION__, a); return 0; }
+
+/******************************************************************/
+#elif defined test_var_1 \
+   || defined test_var_2 \
+   || defined test_var_3
+#define P(n,v) printf("%-5s: %d ; %d\n", __FUNCTION__, n, v)
+#if defined test_var_1
+int xxx[];
+#endif
+int bar();
+int printf(const char*, ...);
+int main ()
+{
+#if !defined test_var_3
+    int xxx = 2;
+#endif
+    {
+        extern int xxx[
+#if defined test_var_3
+        2
+#endif
+        ];
+        P(1, xxx[0]);
+        xxx[0] += 2;
+    }
+#if !defined test_var_3
+    P(2, xxx);
+#endif
+    bar(123);
+    return 0;
+}
+int xxx[1] = {1};
+int bar() { P(3, xxx[0]); return 0; }
+
+/******************************************************************/
 #endif
