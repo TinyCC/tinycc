@@ -57,7 +57,7 @@ GEN-ALWAYS =
 95_bitfields_ms.test : GEN = $(GEN-MSC)
 
 # this test compiles/links two files:
-104_inline.test : FLAGS += 104+_inline.c
+104_inline.test : FLAGS += $(SRC)/104+_inline.c
 104_inline.test : GEN = $(GEN-TCC)
 
 # Filter source directory in warnings/errors (out-of-tree builds)
