@@ -430,9 +430,15 @@ typedef struct SValue {
     unsigned short r;      /* register + flags */
     unsigned short r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
-    CValue c;              /* constant, if VT_CONST */
-    struct Sym *sym;       /* symbol, if (VT_SYM | VT_CONST), or if
-    			      result of unary() for an identifier. */
+    union {
+      struct { int jtrue, jfalse; }; /* forward jmps */
+      CValue c;         /* constant, if VT_CONST */
+    };
+    union {
+      struct { unsigned short cmp_op, cmp_r; }; /* VT_CMP operation */
+      struct Sym *sym;  /* symbol, if (VT_SYM | VT_CONST), or if */
+    };                  /* result of unary() for an identifier. */
+
 } SValue;
 
 /* symbol attributes */
@@ -1322,6 +1328,7 @@ ST_FUNC ElfSym *elfsym(Sym *);
 ST_FUNC void update_storage(Sym *sym);
 ST_FUNC Sym *external_global_sym(int v, CType *type);
 ST_FUNC void vset(CType *type, int r, int v);
+ST_FUNC void vset_VT_CMP(int op);
 ST_FUNC void vswap(void);
 ST_FUNC void vpush_global_sym(CType *type, int v);
 ST_FUNC void vrote(SValue *e, int n);
@@ -1490,12 +1497,8 @@ ST_FUNC void gfunc_epilog(void);
 ST_FUNC void gen_fill_nops(int);
 ST_FUNC int gjmp(int t);
 ST_FUNC void gjmp_addr(int a);
-ST_FUNC int gtst(int inv, int t);
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-ST_FUNC void gtst_addr(int inv, int a);
-#else
-#define gtst_addr(inv, a) gsym_addr(gtst(inv, 0), a)
-#endif
+ST_FUNC int gjmp_cond(int op, int t);
+ST_FUNC int gjmp_append(int n, int t);
 ST_FUNC void gen_opi(int op);
 ST_FUNC void gen_opf(int op);
 ST_FUNC void gen_cvt_ftoi(int t);

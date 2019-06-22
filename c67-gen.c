@@ -2072,15 +2072,13 @@ void gjmp_addr(int a)
 }
 
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
-int gtst(int inv, int t)
+ST_FUNC int gjmp_cond(int op, int t)
 {
-    int ind1, n;
-    int v, *p;
+        int ind1;
+        int inv = op & 1;
+        if (nocode_wanted)
+            return t;
 
-    v = vtop->r & VT_VALMASK;
-    if (nocode_wanted) {
-        ;
-    } else if (v == VT_CMP) {
 	/* fast case : can jump directly since flags are set */
 	// C67 uses B2 sort of as flags register
 	ind1 = ind;
@@ -2098,16 +2096,18 @@ int gtst(int inv, int t)
 	C67_NOP(5);
 	t = ind1;		//return where we need to patch
 
-    } else if (v == VT_JMP || v == VT_JMPI) {
-	/* && or || optimization */
-	if ((v & 1) == inv) {
+        return t;
+}
+
+ST_FUNC int gjmp_append(int n0, int t)
+{
+    if (n0) {
+            int n = n0, *p;
 	    /* insert vtop->c jump list in t */
 
 	    // I guess the idea is to traverse to the
 	    // null at the end of the list and store t
 	    // there
-
-	    n = vtop->c.i;
 	    while (n != 0) {
 		p = (int *) (cur_text_section->data + n);
 
@@ -2117,14 +2117,8 @@ int gtst(int inv, int t)
 	    }
 	    *p |= (t & 0xffff) << 7;
 	    *(p + 1) |= ((t >> 16) & 0xffff) << 7;
-	    t = vtop->c.i;
-
-	} else {
-	    t = gjmp(t);
-	    gsym(vtop->c.i);
-	}
+	    t = n0;
     }
-    vtop--;
     return t;
 }
 
@@ -2200,10 +2194,8 @@ void gen_opi(int op)
 	    ALWAYS_ASSERT(FALSE);
 
 	vtop--;
-	if (op >= TOK_ULT && op <= TOK_GT) {
-	    vtop->r = VT_CMP;
-	    vtop->c.i = op;
-	}
+	if (op >= TOK_ULT && op <= TOK_GT)
+            vset_VT_CMP(0x80);
 	break;
     case '-':
     case TOK_SUBC1:		/* sub with carry generation */
@@ -2359,7 +2351,7 @@ void gen_opf(int op)
 	} else {
 	    ALWAYS_ASSERT(FALSE);
 	}
-	vtop->r = VT_CMP;	// tell TCC that result is in "flags" actually B2
+        vset_VT_CMP(0x80);
     } else {
 	if (op == '+') {
 	    if ((ft & VT_BTYPE) == VT_DOUBLE) {

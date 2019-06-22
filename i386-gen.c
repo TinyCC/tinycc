@@ -261,10 +261,10 @@ ST_FUNC void load(int r, SValue *sv)
                 o(0xe8 + r); /* mov %ebp, r */
             }
         } else if (v == VT_CMP) {
-            oad(0xb8 + r, 0); /* mov $0, r */
             o(0x0f); /* setxx %br */
             o(fc);
             o(0xc0 + r);
+            o(0xc0b60f + r * 0x90000); /* movzbl %al, %eax */
         } else if (v == VT_JMP || v == VT_JMPI) {
             t = v & 1;
             oad(0xb8 + r, t); /* mov $1, r */
@@ -692,63 +692,39 @@ ST_FUNC void gjmp_addr(int a)
     }
 }
 
-ST_FUNC void gtst_addr(int inv, int a)
+#if 0
+/* generate a jump to a fixed address */
+ST_FUNC void gjmp_cond_addr(int a, int op)
 {
-    int v = vtop->r & VT_VALMASK;
-    if (v == VT_CMP) {
-	inv ^= (vtop--)->c.i;
-	a -= ind + 2;
-	if (a == (char)a) {
-	    g(inv - 32);
-	    g(a);
-	} else {
-	    g(0x0f);
-	    oad(inv - 16, a - 4);
-	}
-    } else if ((v & ~1) == VT_JMP) {
-	if ((v & 1) != inv) {
-	    gjmp_addr(a);
-	    gsym(vtop->c.i);
-	} else {
-	    gsym(vtop->c.i);
-	    o(0x05eb);
-	    gjmp_addr(a);
-	}
-	vtop--;
-    }
+    int r = a - ind - 2;
+    if (r == (char)r)
+        g(op - 32), g(r);
+    else
+        g(0x0f), gjmp2(op - 16, r - 4);
 }
+#endif
 
-/* generate a test. set 'inv' to invert test. Stack entry is popped */
-ST_FUNC int gtst(int inv, int t)
+ST_FUNC int gjmp_append(int n, int t)
 {
-    int v = vtop->r & VT_VALMASK;
-    if (nocode_wanted) {
-        ;
-    } else if (v == VT_CMP) {
-        /* fast case : can jump directly since flags are set */
-        g(0x0f);
-        t = gjmp2((vtop->c.i - 16) ^ inv, t);
-    } else if (v == VT_JMP || v == VT_JMPI) {
-        /* && or || optimization */
-        if ((v & 1) == inv) {
-            /* insert vtop->c jump list in t */
-            uint32_t n1, n = vtop->c.i;
-            if (n) {
-                while ((n1 = read32le(cur_text_section->data + n)))
-                    n = n1;
-                write32le(cur_text_section->data + n, t);
-                t = vtop->c.i;
-            }
-        } else {
-            t = gjmp(t);
-            gsym(vtop->c.i);
-        }
+    void *p;
+    /* insert vtop->c jump list in t */
+    if (n) {
+        uint32_t n1 = n, n2;
+        while ((n2 = read32le(p = cur_text_section->data + n1)))
+            n1 = n2;
+        write32le(p, t);
+        t = n;
     }
-    vtop--;
     return t;
 }
 
-/* generate an integer binary operation */
+ST_FUNC int gjmp_cond(int op, int t)
+{
+    g(0x0f);
+    t = gjmp2(op - 16, t);
+    return t;
+}
+
 ST_FUNC void gen_opi(int op)
 {
     int r, fr, opc, c;
@@ -766,10 +742,9 @@ ST_FUNC void gen_opi(int op)
             c = vtop->c.i;
             if (c == (char)c) {
                 /* generate inc and dec for smaller code */
-                if (c==1 && opc==0 && op != TOK_ADDC1) {
-                    o (0x40 | r); // inc
-                } else if (c==1 && opc==5 && op != TOK_SUBC1) {
-                    o (0x48 | r); // dec
+                if ((c == 1 || c == -1) && (op == '+' || op == '-')) {
+                    opc = (c == 1) ^ (op == '+');
+                    o (0x40 | (opc << 3) | r); // inc,dec
                 } else {
                     o(0x83);
                     o(0xc0 | (opc << 3) | r);
@@ -787,10 +762,8 @@ ST_FUNC void gen_opi(int op)
             o(0xc0 + r + fr * 8); 
         }
         vtop--;
-        if (op >= TOK_ULT && op <= TOK_GT) {
-            vtop->r = VT_CMP;
-            vtop->c.i = op;
-        }
+        if (op >= TOK_ULT && op <= TOK_GT)
+            vset_VT_CMP(op);
         break;
     case '-':
     case TOK_SUBC1: /* sub with carry generation */
@@ -948,8 +921,7 @@ ST_FUNC void gen_opf(int op)
             op = TOK_EQ;
         }
         vtop--;
-        vtop->r = VT_CMP;
-        vtop->c.i = op;
+        vset_VT_CMP(op);
     } else {
         /* no memory reference possible for long double operations */
         if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {

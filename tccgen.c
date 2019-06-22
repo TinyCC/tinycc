@@ -681,13 +681,8 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep)
 }
 
 /* ------------------------------------------------------------------------- */
-
-static void vsetc(CType *type, int r, CValue *vc)
+static void vcheck_cmp(void)
 {
-    int v;
-
-    if (vtop >= vstack + (VSTACK_SIZE - 1))
-        tcc_error("memory full (vstack)");
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
        because it would complicate the code generator.
@@ -698,15 +693,17 @@ static void vsetc(CType *type, int r, CValue *vc)
        as their value might still be used for real.  All values
        we push under nocode_wanted will eventually be popped
        again, so that the VT_CMP/VT_JMP value will be in vtop
-       when code is unsuppressed again.
+       when code is unsuppressed again. */
 
-       Same logic below in vswap(); */
-    if (vtop >= vstack && !nocode_wanted) {
-        v = vtop->r & VT_VALMASK;
-        if (v == VT_CMP || (v & ~1) == VT_JMP)
-            gv(RC_INT);
-    }
+    if (vtop->r == VT_CMP && !nocode_wanted)
+        gv(RC_INT);
+}
 
+static void vsetc(CType *type, int r, CValue *vc)
+{
+    if (vtop >= vstack + (VSTACK_SIZE - 1))
+        tcc_error("memory full (vstack)");
+    vcheck_cmp();
     vtop++;
     vtop->type = *type;
     vtop->r = r;
@@ -718,12 +715,8 @@ static void vsetc(CType *type, int r, CValue *vc)
 ST_FUNC void vswap(void)
 {
     SValue tmp;
-    /* cannot vswap cpu flags. See comment at vsetc() above */
-    if (vtop >= vstack && !nocode_wanted) {
-        int v = vtop->r & VT_VALMASK;
-        if (v == VT_CMP || (v & ~1) == VT_JMP)
-            gv(RC_INT);
-    }
+
+    vcheck_cmp();
     tmp = vtop[0];
     vtop[0] = vtop[-1];
     vtop[-1] = tmp;
@@ -740,9 +733,10 @@ ST_FUNC void vpop(void)
         o(0xd8dd); /* fstp %st(0) */
     } else
 #endif
-    if (v == VT_JMP || v == VT_JMPI) {
+    if (v == VT_CMP) {
         /* need to put correct jump if && or || without test */
-        gsym(vtop->c.i);
+        gsym(vtop->jtrue);
+        gsym(vtop->jfalse);
     }
     vtop--;
 }
@@ -823,6 +817,7 @@ ST_FUNC void vrotb(int n)
     int i;
     SValue tmp;
 
+    vcheck_cmp();
     tmp = vtop[-n + 1];
     for(i=-n+1;i!=0;i++)
         vtop[i] = vtop[i+1];
@@ -837,6 +832,7 @@ ST_FUNC void vrote(SValue *e, int n)
     int i;
     SValue tmp;
 
+    vcheck_cmp();
     tmp = *e;
     for(i = 0;i < n - 1; i++)
         e[-i] = e[-i - 1];
@@ -851,6 +847,75 @@ ST_FUNC void vrott(int n)
     vrote(vtop, n);
 }
 
+/* ------------------------------------------------------------------------- */
+/* vtop->r = VT_CMP means CPU-flags have been set from comparison or test. */
+
+/* called from generators to set the result from relational ops  */
+ST_FUNC void vset_VT_CMP(int op)
+{
+    vtop->r = VT_CMP;
+    vtop->cmp_op = op;
+    vtop->jfalse = 0;
+    vtop->jtrue = 0;
+}
+
+/* called once before asking generators to load VT_CMP to a register */
+static void vset_VT_JMP(void)
+{
+    int op = vtop->cmp_op;
+    if (vtop->jtrue || vtop->jfalse) {
+        /* we need to jump to 'mov $0,%R' or 'mov $1,%R' */
+        int inv = op & (op < 2); /* small optimization */
+        vseti(VT_JMP+inv, gvtst(inv, 0));
+    } else {
+        /* otherwise convert flags (rsp. 0/1) to register */
+        vtop->c.i = op;
+        if (op < 2) /* doesn't seem to happen */
+            vtop->r = VT_CONST;
+    }
+}
+
+/* Set CPU Flags, doesn't yet jump */
+static void gvtst_set(int inv, int t)
+{
+    int *p;
+    if (vtop->r != VT_CMP) {
+        vpushi(0);
+        gen_op(TOK_NE);
+        if (vtop->r != VT_CMP) /* must be VT_CONST then */
+            vset_VT_CMP(vtop->c.i != 0);
+    }
+    p = inv ? &vtop->jfalse : &vtop->jtrue;
+    *p = gjmp_append(*p, t);
+}
+
+/* Generate value test
+ *
+ * Generate a test for any value (jump, comparison and integers) */
+static int gvtst(int inv, int t)
+{
+    int op, u, x;
+
+    gvtst_set(inv, t);
+
+    t = vtop->jtrue, u = vtop->jfalse;
+    if (inv)
+        x = u, u = t, t = x;
+    op = vtop->cmp_op;
+
+    /* jump to the wanted target */
+    if (op > 1)
+        t = gjmp_cond(op ^ inv, t);
+    else if (op != inv)
+        t = gjmp(t);
+    /* resolve complementary jumps to here */
+    gsym(u);
+
+    vtop--;
+    return t;
+}
+
+/* ------------------------------------------------------------------------- */
 /* push a symbol value of TYPE */
 static inline void vpushsym(CType *type, Sym *sym)
 {
@@ -1591,6 +1656,8 @@ ST_FUNC int gv(int rc)
                 /* restore wanted type */
                 vtop->type.t = t1;
             } else {
+                if (vtop->r == VT_CMP)
+                    vset_VT_JMP();
                 /* one register type load */
                 load(r, vtop);
             }
@@ -1608,13 +1675,10 @@ ST_FUNC int gv(int rc)
 /* generate vtop[-1] and vtop[0] in resp. classes rc1 and rc2 */
 ST_FUNC void gv2(int rc1, int rc2)
 {
-    int v;
-
     /* generate more generic register first. But VT_JMP or VT_CMP
        values must be generated first in all cases to avoid possible
        reload errors */
-    v = vtop[0].r & VT_VALMASK;
-    if (v != VT_CMP && (v & ~1) != VT_JMP && rc1 <= rc2) {
+    if (vtop->r != VT_CMP && rc1 <= rc2) {
         vswap();
         gv(rc1);
         vswap();
@@ -1747,26 +1811,6 @@ static void gv_dup(void)
         if (r != r1)
             vtop->r = r1;
     }
-}
-
-/* Generate value test
- *
- * Generate a test for any value (jump, comparison and integers) */
-ST_FUNC int gvtst(int inv, int t)
-{
-    int v = vtop->r & VT_VALMASK;
-    if (v != VT_CMP && v != VT_JMP && v != VT_JMPI) {
-        vpushi(0);
-        gen_op(TOK_NE);
-    }
-    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
-        /* constant jmp optimization */
-        if ((vtop->c.i != 0) != inv)
-            t = gjmp(t);
-        vtop--;
-        return t;
-    }
-    return gtst(inv, t);
 }
 
 #if PTR_SIZE == 4
@@ -1974,8 +2018,8 @@ static void gen_opl(int op)
             a = gvtst(1, 0);
             if (op != TOK_EQ) {
                 /* generate non equal test */
-                vpushi(TOK_NE);
-                vtop->r = VT_CMP;
+                vpushi(0);
+                vset_VT_CMP(TOK_NE);
                 b = gvtst(0, 0);
             }
         }
@@ -1990,9 +2034,12 @@ static void gen_opl(int op)
         else if (op1 == TOK_GE)
             op1 = TOK_UGE;
         gen_op(op1);
-        a = gvtst(1, a);
-        gsym(b);
-        vseti(VT_JMPI, a);
+#if 0//def TCC_TARGET_I386
+        if (op == TOK_NE) { gsym(b); break; }
+        if (op == TOK_EQ) { gsym(a); break; }
+#endif
+        gvtst_set(1, a);
+        gvtst_set(0, b);
         break;
     }
 }
@@ -5001,11 +5048,12 @@ ST_FUNC void unary(void)
         if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             gen_cast_s(VT_BOOL);
             vtop->c.i = !vtop->c.i;
-        } else if ((vtop->r & VT_VALMASK) == VT_CMP)
-            vtop->c.i ^= 1;
-        else {
-            save_regs(1);
-            vseti(VT_JMP, gvtst(1, 0));
+        } else if (vtop->r == VT_CMP) {
+            vtop->cmp_op ^= 1;
+            n = vtop->jfalse, vtop->jfalse = vtop->jtrue, vtop->jtrue = n;
+        } else {
+            vpushi(0);
+            gen_op(TOK_EQ);
         }
         break;
     case '~':
@@ -5035,7 +5083,9 @@ ST_FUNC void unary(void)
         next();
         in_sizeof++;
         expr_type(&type, unary); /* Perform a in_sizeof = 0; */
-        s = vtop[1].sym; /* hack: accessing previous vtop */
+        s = NULL;
+        if (vtop[1].r & VT_SYM)
+            s = vtop[1].sym; /* hack: accessing previous vtop */
         size = type_size(&type, &align);
         if (s && s->a.aligned)
             align = 1 << (s->a.aligned - 1);
@@ -5653,7 +5703,7 @@ static void expr_landor(void(*e_fn)(void), int e_op, int i)
                 gsym(t);
                 nocode_wanted -= f;
             } else {
-                vseti(VT_JMP + i, gvtst(i, t));
+                gvtst_set(i, t);
             }
 	    break;
         }
@@ -5694,6 +5744,16 @@ static int condition_3way(void)
 	vpop();
     }
     return c;
+}
+
+static int is_cond_bool(SValue *sv)
+{
+    if ((sv->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST
+        && (sv->type.t & VT_BTYPE) == VT_INT)
+        return (unsigned)sv->c.i < 2;
+    if (sv->r == VT_CMP)
+        return 1;
+    return 0;
 }
 
 static void expr_cond(void)
@@ -5741,6 +5801,12 @@ static void expr_cond(void)
             if (!g)
                 gexpr();
 
+            if (c < 0 && vtop->r == VT_CMP) {
+                t1 = gvtst(0, 0);
+                vpushi(0);
+                gvtst_set(0, t1);
+            }
+
             if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
                 mk_pointer(&vtop->type);
 	    type1 = vtop->type;
@@ -5761,6 +5827,22 @@ static void expr_cond(void)
             skip(':');
             expr_cond();
 
+            if (c < 0 && is_cond_bool(vtop) && is_cond_bool(&sv)) {
+                if (sv.r == VT_CMP) {
+                    t1 = sv.jtrue;
+                    t2 = u;
+                } else {
+                    t1 = gvtst(0, 0);
+                    t2 = gjmp(0);
+                    gsym(u);
+                    vpushv(&sv);
+                }
+                gvtst_set(0, t1);
+                gvtst_set(1, t2);
+                nocode_wanted = ncw_prev;
+                //  tcc_warning("two conditions expr_cond");
+                return;
+            }
 
             if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
                 mk_pointer(&vtop->type);
@@ -6059,12 +6141,16 @@ static int case_cmp(const void *pa, const void *pb)
     return a < b ? -1 : a > b;
 }
 
+static void gtst_addr(int t, int a)
+{
+    gsym_addr(gvtst(0, t), a);
+}
+
 static void gcase(struct case_t **base, int len, int *bsym)
 {
     struct case_t *p;
     int e;
     int ll = (vtop->type.t & VT_BTYPE) == VT_LLONG;
-    gv(RC_INT);
     while (len > 4) {
         /* binary search */
         p = base[len/2];
@@ -6074,7 +6160,7 @@ static void gcase(struct case_t **base, int len, int *bsym)
 	else
 	    vpushi(p->v2);
         gen_op(TOK_LE);
-        e = gtst(1, 0);
+        e = gvtst(1, 0);
         vdup();
 	if (ll)
 	    vpushll(p->v1);
@@ -6084,10 +6170,6 @@ static void gcase(struct case_t **base, int len, int *bsym)
         gtst_addr(0, p->sym); /* v1 <= x <= v2 */
         /* x < v1 */
         gcase(base, len/2, bsym);
-        if (cur_switch->def_sym)
-            gjmp_addr(cur_switch->def_sym);
-        else
-            *bsym = gjmp(*bsym);
         /* x > v2 */
         gsym(e);
         e = len/2 + 1;
@@ -6106,7 +6188,7 @@ static void gcase(struct case_t **base, int len, int *bsym)
             gtst_addr(0, p->sym);
         } else {
             gen_op(TOK_LE);
-            e = gtst(1, 0);
+            e = gvtst(1, 0);
             vdup();
 	    if (ll)
 	        vpushll(p->v1);
@@ -6117,6 +6199,7 @@ static void gcase(struct case_t **base, int len, int *bsym)
             gsym(e);
         }
     }
+    *bsym = gjmp(*bsym);
 }
 
 /* call 'func' for each __attribute__((cleanup(func))) */
@@ -6367,15 +6450,17 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         gexpr();
         skip(')');
 	switchval = *vtop--;
-        a = 0;
-        b = gjmp(0); /* jump to first case */
+
         sw.p = NULL; sw.n = 0; sw.def_sym = 0;
         saved = cur_switch;
         cur_switch = &sw;
+        a = 0;
+        b = gjmp(0); /* jump to first case */
         block(&a, current_cleanups, csym, ccl, 0);
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
+
         qsort(sw.p, sw.n, sizeof(void*), case_cmp);
         for (b = 1; b < sw.n; b++)
             if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
@@ -6385,14 +6470,17 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
             switchval.type.t &= ~VT_UNSIGNED;
         vpushv(&switchval);
-        gcase(sw.p, sw.n, &a);
+        gv(RC_INT);
+        d = 0, gcase(sw.p, sw.n, &d);
         vpop();
         if (sw.def_sym)
-          gjmp_addr(sw.def_sym);
-        dynarray_reset(&sw.p, &sw.n);
-        cur_switch = saved;
+            gsym_addr(d, sw.def_sym);
+        else
+            gsym(d);
         /* break label */
         gsym(a);
+        dynarray_reset(&sw.p, &sw.n);
+        cur_switch = saved;
 
     } else if (t == TOK_CASE) {
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));

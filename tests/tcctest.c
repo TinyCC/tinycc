@@ -3777,6 +3777,7 @@ void math_cmp_test(void)
   double one = 1.0;
   double two = 2.0;
   int comp = 0;
+  int v;
 #define bug(a,b,op,iop,part) printf("Test broken: %s %s %s %s %d\n", #a, #b, #op, #iop, part)
 
   /* This asserts that "a op b" is _not_ true, but "a iop b" is true.
@@ -3798,7 +3799,8 @@ void math_cmp_test(void)
   if ((a iop b) || comp) \
     ; \
   else \
-    bug (a,b,op,iop,5);
+    bug (a,b,op,iop,5); \
+  if (v = !(a op b), !v) bug(a,b,op,iop,7);
 
   /* Equality tests.  */
   FCMP(nan, nan, ==, !=, 0);
