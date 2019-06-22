@@ -39,17 +39,11 @@ ST_DATA Sym *define_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
 
-static Sym *all_cleanups, *current_cleanups, *pending_gotos;
-static int ncleanups;
-
+static Sym *all_cleanups, *pending_gotos;
 static int local_scope;
 static int in_sizeof;
 static int in_generic;
 static int section_sym;
-
-ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
-ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
-ST_DATA int vla_sp_loc; /* Pointer to variable holding location to store stack pointer on the stack when modifying stack pointer */
 
 ST_DATA SValue __vstack[1+VSTACK_SIZE], *vtop, *pvtop;
 
@@ -91,6 +85,8 @@ ST_DATA struct switch_t {
 	int sym;
     } **p; int n; /* list of case ranges */
     int def_sym; /* default symbol */
+    int *bsym;
+    struct scope *scope;
 } *cur_switch; /* current switch */
 
 #define MAX_TEMP_LOCAL_VARIABLE_NUMBER 0x4
@@ -101,6 +97,14 @@ ST_DATA struct temp_local_variable {
 	short align;
 } arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
 short nb_temp_local_vars;
+
+static struct scope {
+    struct scope *prev;
+    struct { int loc, num; } vla;
+    struct { Sym *s; int n; } cl;
+    int *bsym, *csym;
+    Sym *lstk, *llstk;
+} *cur_scope, *loop_scope, *root_scope;
 
 /* ------------------------------------------------------------------------- */
 
@@ -113,14 +117,12 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void init_putv(CType *type, Section *sec, unsigned long c);
 static void decl_initializer(CType *type, Section *sec, unsigned long c, int flags);
-static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr);
+static void block(int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static void decl(int l);
 static int decl0(int l, int is_for_loop_init, Sym *);
 static void expr_eq(void);
 static void vla_runtime_type_size(CType *type, int *a);
-static void vla_sp_restore(void);
-static void vla_sp_restore_root(void);
 static int is_compatible_unqualified_types(CType *type1, CType *type2);
 static inline int64_t expr_const64(void);
 static void vpush64(int ty, unsigned long long v);
@@ -131,15 +133,6 @@ static void skip_or_save_block(TokenString **str);
 static void gv_dup(void);
 static int get_temp_local_var(int size,int align);
 static void clear_temp_local_var_list();
-
-
-static void reset_local_scope(void)
-{
-    if (current_cleanups)
-      tcc_error("ICE current_cleanups");
-    sym_pop(&all_cleanups, NULL, 0);
-    local_scope = 0;
-}
 
 ST_INLN int is_float(int t)
 {
@@ -2937,18 +2930,6 @@ ST_FUNC void vla_runtime_type_size(CType *type, int *a)
     }
 }
 
-static void vla_sp_restore(void) {
-    if (vlas_in_scope) {
-        gen_vla_sp_restore(vla_sp_loc);
-    }
-}
-
-static void vla_sp_restore_root(void) {
-    if (vlas_in_scope) {
-        gen_vla_sp_restore(vla_sp_root_loc);
-    }
-}
-
 /* return the pointed type of t */
 static inline CType *pointed_type(CType *type)
 {
@@ -4843,43 +4824,6 @@ static void parse_builtin_params(int nc, const char *args)
         nocode_wanted--;
 }
 
-static void try_call_scope_cleanup(Sym *stop)
-{
-    Sym *cls = current_cleanups;
-
-    for (; cls != stop; cls = cls->ncl) {
-	Sym *fs = cls->next;
-	Sym *vs = cls->prev_tok;
-
-	vpushsym(&fs->type, fs);
-	vset(&vs->type, vs->r, vs->c);
-	vtop->sym = vs;
-        mk_pointer(&vtop->type);
-	gaddrof();
-	gfunc_call(1);
-    }
-}
-
-static void try_call_cleanup_goto(Sym *cleanupstate)
-{
-    Sym *oc, *cc;
-    int ocd, ccd;
-
-    if (!current_cleanups)
-	return;
-
-    /* search NCA of both cleanup chains given parents and initial depth */
-    ocd = cleanupstate ? cleanupstate->v & ~SYM_FIELD : 0;
-    for (ccd = ncleanups, oc = cleanupstate; ocd > ccd; --ocd, oc = oc->ncl)
-      ;
-    for (cc = current_cleanups; ccd > ocd; --ccd, cc = cc->ncl)
-      ;
-    for (; cc != oc; cc = cc->ncl, oc = oc->ncl, --ccd)
-      ;
-
-    try_call_scope_cleanup(cc);
-}
-
 ST_FUNC void unary(void)
 {
     int n, t, align, size, r, sizeof_caller;
@@ -5015,7 +4959,7 @@ ST_FUNC void unary(void)
 	       as statement expressions can't ever be entered from the
 	       outside, so any reactivation of code emission (from labels
 	       or loop heads) can be disabled again after the end of it. */
-            block(NULL, NULL, NULL, NULL, 1);
+            block(1);
 	    nocode_wanted = saved_nocode_wanted;
             skip(')');
         } else {
@@ -6134,6 +6078,24 @@ static void gfunc_return(CType *func_type)
 }
 #endif
 
+static void check_func_return(void)
+{
+    if ((func_vt.t & VT_BTYPE) == VT_VOID)
+        return;
+    if (!strcmp (funcname, "main")
+        && (func_vt.t & VT_BTYPE) == VT_INT) {
+        /* main returns 0 by default */
+        vpushi(0);
+        gen_assign_cast(&func_vt);
+        gfunc_return(&func_vt);
+    } else {
+        tcc_warning("function might return no value: '%s'", funcname);
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* switch/case */
+
 static int case_cmp(const void *pa, const void *pb)
 {
     int64_t a = (*(struct case_t**) pa)->v1;
@@ -6202,22 +6164,62 @@ static void gcase(struct case_t **base, int len, int *bsym)
     *bsym = gjmp(*bsym);
 }
 
+/* ------------------------------------------------------------------------- */
+/* __attribute__((cleanup(fn))) */
+
+static void try_call_scope_cleanup(Sym *stop)
+{
+    Sym *cls = cur_scope->cl.s;
+
+    for (; cls != stop; cls = cls->ncl) {
+	Sym *fs = cls->next;
+	Sym *vs = cls->prev_tok;
+
+	vpushsym(&fs->type, fs);
+	vset(&vs->type, vs->r, vs->c);
+	vtop->sym = vs;
+        mk_pointer(&vtop->type);
+	gaddrof();
+	gfunc_call(1);
+    }
+}
+
+static void try_call_cleanup_goto(Sym *cleanupstate)
+{
+    Sym *oc, *cc;
+    int ocd, ccd;
+
+    if (!cur_scope->cl.s)
+	return;
+
+    /* search NCA of both cleanup chains given parents and initial depth */
+    ocd = cleanupstate ? cleanupstate->v & ~SYM_FIELD : 0;
+    for (ccd = cur_scope->cl.n, oc = cleanupstate; ocd > ccd; --ocd, oc = oc->ncl)
+      ;
+    for (cc = cur_scope->cl.s; ccd > ocd; --ccd, cc = cc->ncl)
+      ;
+    for (; cc != oc; cc = cc->ncl, oc = oc->ncl, --ccd)
+      ;
+
+    try_call_scope_cleanup(cc);
+}
+
 /* call 'func' for each __attribute__((cleanup(func))) */
-static void block_cleanup(Sym *lcleanup, int lncleanups)
+static void block_cleanup(struct scope *o)
 {
     int jmp = 0;
     Sym *g, **pg;
-    for (pg = &pending_gotos; (g = *pg) && g->c > lncleanups;) {
+    for (pg = &pending_gotos; (g = *pg) && g->c > o->cl.n;) {
         if (g->prev_tok->r & LABEL_FORWARD) {
             Sym *pcl = g->next;
             if (!jmp)
                 jmp = gjmp(0);
             gsym(pcl->jnext);
-            try_call_scope_cleanup(lcleanup);
+            try_call_scope_cleanup(o->cl.s);
             pcl->jnext = gjmp(0);
-            if (!lncleanups)
+            if (!o->cl.n)
                 goto remove_pending;
-            g->c = lncleanups;
+            g->c = o->cl.n;
             pg = &g->prev;
         } else {
     remove_pending:
@@ -6226,27 +6228,96 @@ static void block_cleanup(Sym *lcleanup, int lncleanups)
         }
     }
     gsym(jmp);
-    try_call_scope_cleanup(lcleanup);
-    current_cleanups = lcleanup;
-    ncleanups = lncleanups;
+    try_call_scope_cleanup(o->cl.s);
 }
 
-static void check_func_return(void)
+/* ------------------------------------------------------------------------- */
+/* VLA */
+
+static void vla_restore(int loc)
 {
-    if ((func_vt.t & VT_BTYPE) == VT_VOID)
+    if (loc)
+        gen_vla_sp_restore(loc);
+}
+
+static void vla_leave(struct scope *o)
+{
+    if (o->vla.num < cur_scope->vla.num)
+        vla_restore(o->vla.loc);
+}
+
+/* ------------------------------------------------------------------------- */
+/* local scopes */
+
+void new_scope(struct scope *o)
+{
+    /* copy and link previous scope */
+    *o = *cur_scope;
+    o->prev = cur_scope;
+    cur_scope = o;
+
+    /* record local declaration stack position */
+    o->lstk = local_stack;
+    o->llstk = local_label_stack;
+
+    ++local_scope;
+}
+
+void prev_scope(struct scope *o, int is_expr)
+{
+    vla_leave(o->prev);
+
+    if (o->cl.s != o->prev->cl.s)
+        block_cleanup(o->prev);
+
+    /* pop locally defined labels */
+    label_pop(&local_label_stack, o->llstk, is_expr);
+
+    /* In the is_expr case (a statement expression is finished here),
+       vtop might refer to symbols on the local_stack.  Either via the
+       type or via vtop->sym.  We can't pop those nor any that in turn
+       might be referred to.  To make it easier we don't roll back
+       any symbols in that case; some upper level call to block() will
+       do that.  We do have to remove such symbols from the lookup
+       tables, though.  sym_pop will do that.  */
+
+    /* pop locally defined symbols */
+    sym_pop(&local_stack, o->lstk, is_expr);
+
+    cur_scope = o->prev;
+    --local_scope;
+}
+
+/* leave a scope via break/continue(/goto) */
+void leave_scope(struct scope *o)
+{
+    if (!o)
         return;
-    if (!strcmp (funcname, "main")
-        && (func_vt.t & VT_BTYPE) == VT_INT) {
-        /* main returns 0 by default */
-        vpushi(0);
-        gen_assign_cast(&func_vt);
-        gfunc_return(&func_vt);
-    } else {
-        tcc_warning("function might return no value: '%s'", funcname);
+    try_call_scope_cleanup(o->cl.s);
+    vla_leave(o);
+}
+
+/* ------------------------------------------------------------------------- */
+/* call block from 'for do while' loops */
+
+static void lblock(int *bsym, int *csym)
+{
+    struct scope *lo = loop_scope, *co = cur_scope;
+    int *b = co->bsym, *c = co->csym;
+    if (csym) {
+        co->csym = csym;
+        loop_scope = co;
+    }
+    co->bsym = bsym;
+    block(0);
+    co->bsym = b;
+    if (csym) {
+        co->csym = c;
+        loop_scope = lo;
     }
 }
 
-static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
+static void block(int is_expr)
 {
     int a, b, c, d, e, t;
     Sym *s;
@@ -6257,6 +6328,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         vtop->type.t = VT_VOID;
     }
 
+again:
     t = tok, next();
 
     if (t == TOK_IF) {
@@ -6264,12 +6336,12 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         gexpr();
         skip(')');
         a = gvtst(1, 0);
-        block(bsym, bcl, csym, ccl, 0);
+        block(0);
         if (tok == TOK_ELSE) {
             d = gjmp(0);
             gsym(a);
             next();
-            block(bsym, bcl, csym, ccl, 0);
+            block(0);
             gsym(d); /* patch else jmp */
         } else {
             gsym(a);
@@ -6277,27 +6349,19 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 
     } else if (t == TOK_WHILE) {
         d = gind();
-        vla_sp_restore();
         skip('(');
         gexpr();
         skip(')');
         a = gvtst(1, 0);
         b = 0;
-        block(&a, current_cleanups, &b, current_cleanups, 0);
+        lblock(&a, &b);
         gjmp_addr(d);
         gsym_addr(b, d);
         gsym(a);
 
     } else if (t == '{') {
-        Sym *llabel, *lcleanup;
-        int block_vla_sp_loc = vla_sp_loc, saved_vlas_in_scope = vlas_in_scope;
-        int lncleanups = ncleanups;
-
-        /* record local declaration stack position */
-        s = local_stack;
-        llabel = local_label_stack;
-        lcleanup = current_cleanups;
-	++local_scope;
+        struct scope o;
+        new_scope(&o);
 
         /* handle local labels declarations */
         while (tok == TOK_LABEL) {
@@ -6316,35 +6380,13 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             if (tok != '}') {
                 if (is_expr)
                     vpop();
-                block(bsym, bcl, csym, ccl, is_expr);
+                block(is_expr);
             }
         }
 
-        if (current_cleanups != lcleanup)
-            block_cleanup(lcleanup, lncleanups);
+        prev_scope(&o, is_expr);
 
-        /* pop locally defined labels */
-        label_pop(&local_label_stack, llabel, is_expr);
-
-	/* In the is_expr case (a statement expression is finished here),
-	   vtop might refer to symbols on the local_stack.  Either via the
-	   type or via vtop->sym.  We can't pop those nor any that in turn
-	   might be referred to.  To make it easier we don't roll back
-	   any symbols in that case; some upper level call to block() will
-	   do that.  We do have to remove such symbols from the lookup
-	   tables, though.  sym_pop will do that.  */
-
-        /* pop locally defined symbols */
-	sym_pop(&local_stack, s, is_expr);
-
-        /* Pop VLA frames and restore stack pointer if required */
-        if (vlas_in_scope > saved_vlas_in_scope) {
-            vla_sp_loc = saved_vlas_in_scope ? block_vla_sp_loc : vla_sp_root_loc;
-            vla_sp_restore();
-        }
-        vlas_in_scope = saved_vlas_in_scope;
-
-        if (0 == --local_scope && !nocode_wanted)
+        if (0 == local_scope && !nocode_wanted)
             check_func_return();
         next();
 
@@ -6353,7 +6395,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         b = (func_vt.t & VT_BTYPE) != VT_VOID;
         if (a)
             gexpr(), gen_assign_cast(&func_vt);
-	try_call_scope_cleanup(NULL);
+        leave_scope(root_scope);
         if (a && b)
             gfunc_return(&func_vt);
         else if (a)
@@ -6368,28 +6410,28 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
 
     } else if (t == TOK_BREAK) {
         /* compute jump */
-        if (!bsym)
+        if (!cur_scope->bsym)
             tcc_error("cannot break");
-	try_call_scope_cleanup(bcl);
-        *bsym = gjmp(*bsym);
+        if (!cur_switch || cur_scope->bsym != cur_switch->bsym)
+            leave_scope(loop_scope);
+        else
+            leave_scope(cur_switch->scope);
+        *cur_scope->bsym = gjmp(*cur_scope->bsym);
         skip(';');
 
     } else if (t == TOK_CONTINUE) {
         /* compute jump */
-        if (!csym)
+        if (!cur_scope->csym)
             tcc_error("cannot continue");
-	try_call_scope_cleanup(ccl);
-        vla_sp_restore_root();
-        *csym = gjmp(*csym);
+        leave_scope(loop_scope);
+        *cur_scope->csym = gjmp(*cur_scope->csym);
         skip(';');
 
     } else if (t == TOK_FOR) {
-	Sym *lcleanup = current_cleanups;
-	int lncleanups = ncleanups;
+        struct scope o;
+        new_scope(&o);
 
         skip('(');
-        s = local_stack;
-	++local_scope;
         if (tok != ';') {
             /* c99 for-loop init decl? */
             if (!decl0(VT_LOCAL, 1, NULL)) {
@@ -6401,7 +6443,6 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         skip(';');
         a = b = 0;
         c = d = gind();
-        vla_sp_restore();
         if (tok != ';') {
             gexpr();
             a = gvtst(1, 0);
@@ -6410,28 +6451,22 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         if (tok != ')') {
             e = gjmp(0);
             d = gind();
-            vla_sp_restore();
             gexpr();
             vpop();
             gjmp_addr(c);
             gsym(e);
         }
         skip(')');
-        block(&a, current_cleanups, &b, current_cleanups, 0);
+        lblock(&a, &b);
         gjmp_addr(d);
         gsym_addr(b, d);
         gsym(a);
-	--local_scope;
-	try_call_scope_cleanup(lcleanup);
-	ncleanups = lncleanups;
-	current_cleanups = lcleanup;
-        sym_pop(&local_stack, s, 0);
+        prev_scope(&o, 0);
 
     } else if (t == TOK_DO) {
         a = b = 0;
         d = gind();
-        vla_sp_restore();
-        block(&a, current_cleanups, &b, current_cleanups, 0);
+        lblock(&a, &b);
         gsym(b);
         skip(TOK_WHILE);
         skip('(');
@@ -6446,17 +6481,23 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         struct switch_t *saved, sw;
 	SValue switchval;
 
+        sw.p = NULL;
+        sw.n = 0;
+        sw.def_sym = 0;
+        sw.bsym = &a;
+        sw.scope = cur_scope;
+
+        saved = cur_switch;
+        cur_switch = &sw;
+
         skip('(');
         gexpr();
         skip(')');
 	switchval = *vtop--;
 
-        sw.p = NULL; sw.n = 0; sw.def_sym = 0;
-        saved = cur_switch;
-        cur_switch = &sw;
         a = 0;
         b = gjmp(0); /* jump to first case */
-        block(&a, current_cleanups, csym, ccl, 0);
+        lblock(&a, NULL);
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
@@ -6465,6 +6506,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         for (b = 1; b < sw.n; b++)
             if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
                 tcc_error("duplicate case value");
+
         /* Our switch table sorting is signed, so the compared
            value needs to be as well when it's 64bit.  */
         if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
@@ -6479,6 +6521,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             gsym(d);
         /* break label */
         gsym(a);
+
         dynarray_reset(&sw.p, &sw.n);
         cur_switch = saved;
 
@@ -6510,6 +6553,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
         goto block_after_label;
 
     } else if (t == TOK_GOTO) {
+        vla_restore(root_scope->vla.loc);
         if (tok == '*' && gnu_ext) {
             /* computed goto */
             next();
@@ -6517,6 +6561,7 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             if ((vtop->type.t & VT_BTYPE) != VT_PTR)
                 expect("pointer");
             ggoto();
+
         } else if (tok >= TOK_UIDENT) {
 	    s = label_find(tok);
 	    /* put forward definition if needed */
@@ -6525,11 +6570,10 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
             else if (s->r == LABEL_DECLARED)
               s->r = LABEL_FORWARD;
 
-	    vla_sp_restore_root();
 	    if (s->r & LABEL_FORWARD) {
 		/* start new goto chain for cleanups, linked via label->next */
-		if (current_cleanups) {
-                    sym_push2(&pending_gotos, SYM_FIELD, 0, ncleanups);
+		if (cur_scope->cl.s && !nocode_wanted) {
+                    sym_push2(&pending_gotos, SYM_FIELD, 0, cur_scope->cl.n);
                     pending_gotos->prev_tok = s;
                     s = sym_push2(&s->next, SYM_FIELD, 0, 0);
                     pending_gotos->next = s;
@@ -6569,17 +6613,15 @@ static void block(int *bsym, Sym *bcl, int *csym, Sym *ccl, int is_expr)
                 s = label_push(&global_label_stack, t, LABEL_DEFINED);
             }
             s->jnext = gind();
-            s->cleanupstate = current_cleanups;
+            s->cleanupstate = cur_scope->cl.s;
 
     block_after_label:
-            vla_sp_restore();
+            vla_restore(cur_scope->vla.loc);
             /* we accept this, but it is a mistake */
             if (tok == '}') {
                 tcc_warning("deprecated use of label at end of compound statement");
             } else {
-                if (is_expr)
-                    vpop();
-                block(bsym, bcl, csym, ccl, is_expr);
+                goto again;
             }
 
         } else {
@@ -7317,11 +7359,12 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #endif
             sym = sym_push(v, type, r, addr);
 	    if (ad->cleanup_func) {
-		Sym *cls = sym_push2(&all_cleanups, SYM_FIELD | ++ncleanups, 0, 0);
+		Sym *cls = sym_push2(&all_cleanups,
+                    SYM_FIELD | ++cur_scope->cl.n, 0, 0);
 		cls->prev_tok = sym;
 		cls->next = ad->cleanup_func;
-		cls->ncl = current_cleanups;
-		current_cleanups = cls;
+		cls->ncl = cur_scope->cl.s;
+		cur_scope->cl.s = cls;
 	    }
 
             sym->a = ad->a;
@@ -7398,10 +7441,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             goto no_alloc;
 
         /* save current stack pointer */
-        if (vlas_in_scope == 0) {
-            if (vla_sp_root_loc == -1)
-                vla_sp_root_loc = (loc -= PTR_SIZE);
-            gen_vla_sp_save(vla_sp_root_loc);
+        if (root_scope->vla.loc == 0) {
+            struct scope *v = cur_scope;
+            gen_vla_sp_save(loc -= PTR_SIZE);
+            do v->vla.loc = loc; while ((v = v->prev));
         }
 
         vla_runtime_type_size(type, &a);
@@ -7412,8 +7455,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         gen_vla_result(addr), addr = (loc -= PTR_SIZE);
 #endif
         gen_vla_sp_save(addr);
-        vla_sp_loc = addr;
-        vlas_in_scope++;
+        cur_scope->vla.loc = addr;
+        cur_scope->vla.num++;
 
     } else if (has_init) {
 	size_t oldreloc_offset = 0;
@@ -7442,6 +7485,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
+    /* Initialize VLA state */
+    struct scope f = { 0 };
+    cur_scope = root_scope = &f;
+
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
@@ -7451,32 +7498,32 @@ static void gen_function(Sym *sym)
     }
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
+
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
-    /* Initialize VLA state */
-    vla_sp_loc = -1;
-    vla_sp_root_loc = -1;
+
     /* put debug symbol */
     tcc_debug_funcstart(tcc_state, sym);
     /* push a dummy symbol to enable local sym storage */
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(&sym->type);
-    reset_local_scope();
+    local_scope = 0;
     rsym = 0;
     clear_temp_local_var_list();
-    block(NULL, NULL, NULL, NULL, 0);
+    block(0);
     gsym(rsym);
     nocode_wanted = 0;
     gfunc_epilog();
     cur_text_section->data_offset = ind;
-    label_pop(&global_label_stack, NULL, 0);
     /* reset local stack */
-    reset_local_scope();
     sym_pop(&local_stack, NULL, 0);
-    /* end of function */
+    local_scope = 0;
+    label_pop(&global_label_stack, NULL, 0);
+    sym_pop(&all_cleanups, NULL, 0);
     /* patch symbol size */
     elfsym(sym)->st_size = ind - func_ind;
+    /* end of function */
     tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */
     cur_text_section = NULL;
