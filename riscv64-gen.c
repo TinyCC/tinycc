@@ -107,16 +107,38 @@ ST_FUNC void load(int r, SValue *sv)
     int v = fr & VT_VALMASK;
     int rr = ireg(r);
     int fc = sv->c.i;
-    if (v == VT_CONST) {
-        if (fr & VT_SYM)
-          tcc_error("unimp: load(sym)");
-        if (is_float(sv->type.t))
-          tcc_error("unimp: load(float)");
+    if (fr & VT_LVAL) {
+        if (v == VT_LOCAL) {
+            if (((unsigned)fc + (1 << 11)) >> 12)
+              tcc_error("unimp: load(large local ofs) (0x%x)", fc);
+            EI(0x03, 3, rr, 8, fc); // ld RR, fc(s0)
+        } else {
+            tcc_error("unimp: load(non-local lval)");
+        }
+    } else if (v == VT_CONST) {
+        int rb = 0;
         if (fc != sv->c.i)
           tcc_error("unimp: load(very large const)");
         if (((unsigned)fc + (1 << 11)) >> 12)
           tcc_error("unimp: load(large const) (0x%x)", fc);
-        EI(0x13, 0, rr, 0, fc);      // addi R, x0, FC
+        if (fr & VT_SYM) {
+            static Sym label;
+            greloca(cur_text_section, vtop->sym, ind,
+                    R_RISCV_PCREL_HI20, fc);
+            if (!label.v) {
+                label.v = tok_alloc(".L0 ", 4)->tok;
+                label.type.t = VT_VOID | VT_STATIC;
+            }
+            label.c = 0; /* force new local ELF symbol */
+            put_extern_sym(&label, cur_text_section, ind, 0);
+            o(0x17 | (rr << 7));   // auipc RR, 0 %call(func)
+            greloca(cur_text_section, &label, ind,
+                    R_RISCV_PCREL_LO12_I, 0);
+            rb = rr;
+        }
+        if (is_float(sv->type.t))
+          tcc_error("unimp: load(float)");
+        EI(0x13, 0, rr, rb, fc);      // addi R, x0|R, FC
     } else
       tcc_error("unimp: load(non-const)");
 }
@@ -126,9 +148,39 @@ ST_FUNC void store(int r, SValue *sv)
     tcc_error("implement me: %s", __FUNCTION__);
 }
 
+static void gcall(void)
+{
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+        ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
+        /* constant symbolic case -> simple relocation */
+        greloca(cur_text_section, vtop->sym, ind,
+                R_RISCV_CALL_PLT, (int)vtop->c.i);
+        o(0x17 | (1 << 7));   // auipc ra, 0 %call(func)
+        o(0x80e7);             // jalr  ra, 0 %call(func)
+    } else {
+        tcc_error("unimp: indirect call");
+    }
+}
+
 ST_FUNC void gfunc_call(int nb_args)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int i, align, size, aireg;
+    aireg = 0;
+    for (i = 0; i < nb_args; i++) {
+        size = type_size(&vtop[-i].type, &align);
+        if (size > 8 || ((vtop[-i].type.t & VT_BTYPE) == VT_STRUCT)
+            || is_float(vtop[-i].type.t))
+          tcc_error("unimp: call arg %d wrong type", nb_args - i);
+        if (aireg >= 8)
+          tcc_error("unimp: too many register args");
+        vrotb(i+1);
+        gv(RC_R(aireg));
+        vrott(i+1);
+        aireg++;
+    }
+    vrotb(nb_args + 1);
+    gcall();
+    vtop -= nb_args + 1;
 }
 
 static int func_sub_sp_offset;
@@ -143,9 +195,9 @@ ST_FUNC void gfunc_prolog(CType *func_type)
 
     sym = func_type->ref;
     func_vt = sym->type;
-    loc = -16; /* for saved ra, and s0 */
+    loc = -16; // for ra and s0
     func_sub_sp_offset = ind;
-    ind += 3 * 4;
+    ind += 4 * 4;
     if (sym->f.func_type == FUNC_ELLIPSIS) {
         tcc_error("unimp: vararg prologue");
     }
@@ -180,7 +232,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                 if (is_float(type->t)) {
                     tcc_error("unimp: float args");
                 } else {
-                    ES(0x23, 3, 2, 10 + aireg, -loc + i*8); // sd aX, loc(sp) // XXX
+                    ES(0x23, 3, 8, 10 + aireg, loc + i*8); // sd aX, loc(s0) // XXX
                 }
             }
         }
@@ -227,6 +279,7 @@ ST_FUNC void gfunc_epilog(void)
     EI(0x13, 0, 2, 2, -v);     // addi sp, sp, -v
     ES(0x23, 3, 2, 1, v - 8);  // sd ra, v-8(sp)
     ES(0x23, 3, 2, 8, v - 16); // sd s0, v-16(sp)
+    EI(0x13, 0, 8, 2, v);      // addi s0, sp, v
     ind = saved_ind;
 }
 
