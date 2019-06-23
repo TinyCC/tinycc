@@ -4,7 +4,7 @@
 #define NB_REGS 16 // x10-x17 aka a0-a7, f10-f17 aka fa0-fa7
 
 #define TREG_R(x) (x) // x = 0..7
-#define TREG_F(x) (x + 10) // x = 0..7
+#define TREG_F(x) (x + 8) // x = 0..7
 
 // Register classes sorted from more general to more precise:
 #define RC_INT (1 << 0)
@@ -29,6 +29,9 @@
 
 #else
 #include "tcc.h"
+#include <assert.h>
+
+#define XLEN 8
 
 ST_DATA const int reg_classes[NB_REGS] = {
   RC_INT | RC_R(0),
@@ -49,15 +52,47 @@ ST_DATA const int reg_classes[NB_REGS] = {
   RC_FLOAT | RC_F(7)
 };
 
+static int ireg(int r)
+{
+    assert(r >= 0 && r < 8);
+    return r + 10;  // tccrX --> aX == x(10+X)
+}
+
+ST_FUNC void o(unsigned int c)
+{
+    int ind1 = ind + 4;
+    if (nocode_wanted)
+        return;
+    if (ind1 > cur_text_section->data_allocated)
+        section_realloc(cur_text_section, ind1);
+    write32le(cur_text_section->data + ind, c);
+    ind = ind1;
+}
+
+static void EI(uint32_t opcode, uint32_t func3,
+               uint32_t rd, uint32_t rs1, uint32_t imm)
+{
+    assert(! ((imm + (1 << 11)) >> 12));
+    o(opcode | (func3 << 12) | (rd << 7) | (rs1 << 15) | (imm << 20));
+}
+
+static void ES(uint32_t opcode, uint32_t func3,
+               uint32_t rs1, uint32_t rs2, uint32_t imm)
+{
+    assert(! ((imm + (1 << 11)) >> 12));
+    o(opcode | (func3 << 12) | ((imm & 0x1f) << 7) | (rs1 << 15)
+      | (rs2 << 20) | ((imm >> 5) << 25));
+}
+
 // Patch all branches in list pointed to by t to branch to a:
 ST_FUNC void gsym_addr(int t_, int a_)
 {
     uint32_t t = t_;
     uint32_t a = a_;
-    tcc_error("implement me");
     while (t) {
         unsigned char *ptr = cur_text_section->data + t;
         uint32_t next = read32le(ptr);
+        tcc_error("implement me: %s", __FUNCTION__);
         if (a - t + 0x8000000 >= 0x10000000)
             tcc_error("branch out of range");
         write32le(ptr, (a - t == 4 ? 0xd503201f : // nop
@@ -68,46 +103,146 @@ ST_FUNC void gsym_addr(int t_, int a_)
 
 ST_FUNC void load(int r, SValue *sv)
 {
-    tcc_error("implement me");
+    int fr = sv->r;
+    int v = fr & VT_VALMASK;
+    int rr = ireg(r);
+    int fc = sv->c.i;
+    if (v == VT_CONST) {
+        if (fr & VT_SYM)
+          tcc_error("unimp: load(sym)");
+        if (is_float(sv->type.t))
+          tcc_error("unimp: load(float)");
+        if (fc != sv->c.i)
+          tcc_error("unimp: load(very large const)");
+        if (((unsigned)fc + (1 << 11)) >> 12)
+          tcc_error("unimp: load(large const) (0x%x)", fc);
+        EI(0x13, 0, rr, 0, fc);      // addi R, x0, FC
+    } else
+      tcc_error("unimp: load(non-const)");
 }
 
 ST_FUNC void store(int r, SValue *sv)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gfunc_call(int nb_args)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
+
+static int func_sub_sp_offset;
+
 ST_FUNC void gfunc_prolog(CType *func_type)
 {
-    tcc_error("implement me");
+    int i, addr, align, size;
+    int param_addr = 0;
+    int aireg, afreg;
+    Sym *sym;
+    CType *type;
+
+    sym = func_type->ref;
+    func_vt = sym->type;
+    loc = -16; /* for saved ra, and s0 */
+    func_sub_sp_offset = ind;
+    ind += 3 * 4;
+    if (sym->f.func_type == FUNC_ELLIPSIS) {
+        tcc_error("unimp: vararg prologue");
+    }
+
+    aireg = afreg = 0;
+    addr = 0; // XXX not correct
+    /* if the function returns a structure, then add an
+       implicit pointer parameter */
+    size = type_size(&func_vt, &align);
+    if (size > 2 * XLEN) {
+        tcc_error("unimp: struct return");
+        func_vc = loc;
+    }
+    /* define parameters */
+    while ((sym = sym->next) != NULL) {
+        type = &sym->type;
+        size = type_size(type, &align);
+        if (size > 2 * XLEN) {
+          from_stack:
+            addr = (addr + align - 1) & -align;
+            param_addr = addr;
+            addr += size;
+        } else {
+            int regcount = 1;
+            if (size > XLEN)
+              regcount++;
+            if (regcount + (is_float(type->t) ? afreg : aireg) >= 8)
+              goto from_stack;
+            loc -= regcount * 8;
+            param_addr = loc;
+            for (i = 0; i < regcount; i++) {
+                if (is_float(type->t)) {
+                    tcc_error("unimp: float args");
+                } else {
+                    ES(0x23, 3, 2, 10 + aireg, -loc + i*8); // sd aX, loc(sp) // XXX
+                }
+            }
+        }
+        sym_push(sym->v & ~SYM_FIELD, type,
+                 VT_LOCAL | lvalue_type(type->t), param_addr);
+    }
 }
-ST_FUNC void gen_va_start(void)
-{
-    tcc_error("implement me");
-}
-ST_FUNC void gen_va_arg(CType *t)
-{
-    tcc_error("implement me");
-}
+
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
-                       int *align, int *regsize)
+                       int *ret_align, int *regsize)
 {
-    tcc_error("implement me");
+    /* generic code can only deal with structs of pow(2) sizes
+       (it always deals with whole registers), so go through our own
+       code.  */
+    return 0;
 }
+
 ST_FUNC void gfunc_return(CType *func_type)
 {
-    tcc_error("implement me");
+    int align, size = type_size(func_type, &align);
+    if ((func_type->t & VT_BTYPE) == VT_STRUCT
+        || size > 2 * XLEN) {
+        tcc_error("unimp: struct or large return");
+    }
+    if (is_float(func_type->t))
+      gv(RC_FRET);
+    else
+      gv(RC_IRET);
+    vtop--;
 }
+
 ST_FUNC void gfunc_epilog(void)
 {
-    tcc_error("implement me");
+    int v, saved_ind;
+
+    v = (-loc + 15) & -16;
+
+    EI(0x03, 3, 1, 2, v - 8);  // ld ra, v-8(sp)
+    EI(0x03, 3, 8, 2, v - 16); // ld s0, v-16(sp)
+    EI(0x13, 0, 2, 2, v);      // addi sp, sp, v
+    EI(0x67, 0, 0, 1, 0);      // jalr x0, 0(x1), aka ret
+    saved_ind = ind;
+    ind = func_sub_sp_offset;
+    EI(0x13, 0, 2, 2, -v);     // addi sp, sp, -v
+    ES(0x23, 3, 2, 1, v - 8);  // sd ra, v-8(sp)
+    ES(0x23, 3, 2, 8, v - 16); // sd s0, v-16(sp)
+    ind = saved_ind;
 }
+
+ST_FUNC void gen_va_start(void)
+{
+    tcc_error("implement me: %s", __FUNCTION__);
+}
+
+ST_FUNC void gen_va_arg(CType *t)
+{
+    tcc_error("implement me: %s", __FUNCTION__);
+}
+
 ST_FUNC void gen_fill_nops(int bytes)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
     if ((bytes & 3))
       tcc_error("alignment of code section not multiple of 4");
 }
@@ -115,79 +250,82 @@ ST_FUNC void gen_fill_nops(int bytes)
 // Generate forward branch to label:
 ST_FUNC int gjmp(int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 // Generate branch to known address:
 ST_FUNC void gjmp_addr(int a)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC int gjmp_cond(int op, int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC int gjmp_append(int n, int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC int gtst(int inv, int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
+
 ST_FUNC void gen_opi(int op)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_opl(int op)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_opf(int op)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
+
 ST_FUNC void gen_cvt_sxtw(void)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_cvt_itof(int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_cvt_ftof(int t)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void ggoto(void)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
+
 ST_FUNC void gen_vla_sp_save(int addr)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_vla_sp_restore(int addr)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 
 ST_FUNC void gen_vla_alloc(CType *type, int align)
 {
-    tcc_error("implement me");
+    tcc_error("implement me: %s", __FUNCTION__);
 }
 #endif

@@ -205,7 +205,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
                            | (((val - addr) & 0xfff) << 20));
         return;
     case R_RISCV_PCREL_HI20:
+#ifdef DEBUG_RELOC
         printf("PCREL_HI20: val=%lx addr=%lx\n", val, addr);
+#endif
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
           tcc_error("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx",
@@ -226,7 +228,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
                        | ((off64 & 0xfffff) << 12));
         return;
     case R_RISCV_PCREL_LO12_I:
+#ifdef DEBUG_RELOC
         printf("PCREL_LO12_I: val=%lx addr=%lx\n", val, addr);
+#endif
         if (val != last_hi.addr)
           tcc_error("unsupported hi/lo pcrel reloc scheme");
         val = last_hi.val;
