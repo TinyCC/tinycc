@@ -60,6 +60,7 @@ int gotplt_entry_type (int reloc_type)
     case R_RISCV_RELAX:
     case R_RISCV_RVC_BRANCH:
     case R_RISCV_RVC_JUMP:
+    case R_RISCV_JUMP_SLOT:
         return NO_GOTPLT_ENTRY;
 
     case R_RISCV_BRANCH:
@@ -282,6 +283,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_32:
         write32le(ptr, val);
         return;
+    case R_RISCV_JUMP_SLOT:
     case R_RISCV_64:
         write64le(ptr, val);
         return;
