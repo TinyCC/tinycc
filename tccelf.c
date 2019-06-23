@@ -1232,6 +1232,13 @@ static void tcc_add_linker_symbols(TCCState *s1)
                 bss_section->data_offset, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 bss_section->sh_num, "_end");
+#ifdef TCC_TARGET_RISCV64
+    /* XXX should be .sdata+0x800, not .data+0x800 */
+    set_elf_sym(symtab_section,
+                0x800, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                data_section->sh_num, "__global_pointer$");
+#endif
 #ifndef TCC_TARGET_PE
     /* horrible new standard ldscript defines */
     add_init_array_defines(s1, ".preinit_array");
@@ -2541,6 +2548,9 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                 if (!sym_index && !sm->link_once
 #ifdef TCC_TARGET_ARM
                     && type != R_ARM_V4BX
+#elif defined TCC_TARGET_RISCV64
+                    && type != R_RISCV_ALIGN
+                    && type != R_RISCV_RELAX
 #endif
                    ) {
                 invalid_reloc:

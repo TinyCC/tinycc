@@ -170,6 +170,10 @@ void relocate_init(Section *sr)
     qrel = (ElfW_Rel *) sr->data;
 }
 
+void relocate_fini(Section *sr)
+{
+}
+
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     int sym_index, esym_index;
