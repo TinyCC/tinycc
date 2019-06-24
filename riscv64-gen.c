@@ -33,6 +33,8 @@
 
 #define XLEN 8
 
+#define TREG_RA 17
+
 ST_DATA const int reg_classes[NB_REGS] = {
   RC_INT | RC_R(0),
   RC_INT | RC_R(1),
@@ -54,13 +56,15 @@ ST_DATA const int reg_classes[NB_REGS] = {
 
 static int ireg(int r)
 {
+    if (r == TREG_RA)
+      return 1; // ra
     assert(r >= 0 && r < 8);
     return r + 10;  // tccrX --> aX == x(10+X)
 }
 
 static int is_ireg(int r)
 {
-    return r < 8;
+    return r < 8 || r == TREG_RA;
 }
 
 static int is_freg(int r)
@@ -121,20 +125,22 @@ ST_FUNC void load(int r, SValue *sv)
     int rr = ireg(r);
     int fc = sv->c.i;
     if (fr & VT_LVAL) {
+        int bt = sv->type.t & VT_BTYPE;
+        int align, size = type_size(&sv->type, &align);
+        int func3;
+        if (is_float(bt))
+          tcc_error("unimp: load-local(float)");
+        else if (bt == VT_FUNC)
+          size = PTR_SIZE;
+        func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
+        if (size < 8 && (sv->type.t & VT_UNSIGNED))
+          func3 |= 4;
         if (v == VT_LOCAL) {
-            int bt = sv->type.t & VT_BTYPE;
-            int align, size = type_size(&sv->type, &align);
-            int func3;
             if (((unsigned)fc + (1 << 11)) >> 12)
               tcc_error("unimp: load(large local ofs) (0x%x)", fc);
-            if (is_float(bt))
-              tcc_error("unimp: load-local(float)");
-            else if (bt == VT_FUNC)
-              size = PTR_SIZE;
-            func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
-            if (size < 8 && (sv->type.t & VT_UNSIGNED))
-              func3 |= 4;
             EI(0x03, func3, rr, 8, fc); // l[bhwd][u] RR, fc(s0)
+        } else if (v < VT_CONST) {
+            EI(0x03, func3, rr, ireg(v), 0); // l[bhwd][u] RR, 0(V)
         } else {
             tcc_error("unimp: load(non-local lval)");
         }
@@ -162,6 +168,10 @@ ST_FUNC void load(int r, SValue *sv)
         if (is_float(sv->type.t))
           tcc_error("unimp: load(float)");
         EI(0x13, 0, rr, rb, fc);      // addi R, x0|R, FC
+    } else if (v == VT_LOCAL) {
+        if (((unsigned)fc + (1 << 11)) >> 12)
+          tcc_error("unimp: load(addr large local ofs) (0x%x)", fc);
+        EI(0x13, 0, rr, 8, fc); // addi R, s0, FC
     } else if (v < VT_CONST) {
         /* reg-reg */
         if (is_freg(r) && is_freg(v))
@@ -195,6 +205,10 @@ ST_FUNC void store(int r, SValue *sv)
           tcc_error("unimp: large sized store");
         ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
            8, rr, fc); // s[bhwd] RR, fc(s0)
+    } else if (fr < VT_CONST) {
+        int ptrreg = ireg(fr);
+        ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
+           ptrreg, rr, 0); // s[bhwd] RR, 0(PTRREG)
     } else
       tcc_error("implement me: %s(!local)", __FUNCTION__);
 }
@@ -208,8 +222,14 @@ static void gcall(void)
                 R_RISCV_CALL_PLT, (int)vtop->c.i);
         o(0x17 | (1 << 7));   // auipc ra, 0 %call(func)
         o(0x80e7);             // jalr  ra, 0 %call(func)
+    } else if ((vtop->r & VT_VALMASK) < VT_CONST) {
+        int r = ireg(vtop->r & VT_VALMASK);
+        EI(0x67, 0, 1, r, 0);      // jalr ra, 0(R)
     } else {
-        tcc_error("unimp: indirect call");
+        int r = TREG_RA;
+        load(r, vtop);
+        r = ireg(r);
+        EI(0x67, 0, 1, r, 0);      // jalr ra, 0(R)
     }
 }
 
@@ -401,6 +421,7 @@ static void gen_opil(int op, int ll)
 {
     int a, b, d;
     int inv = 0;
+    int func3 = 0, func7 = 0;
     /* XXX We could special-case some constant args.  */
     gv2(RC_INT, RC_INT);
     a = ireg(vtop[-1].r);
@@ -413,13 +434,10 @@ static void gen_opil(int op, int ll)
     switch (op) {
     case '%':
     case '&':
-    case '*':
-    case '-':
     case '/':
     case '^':
     case '|':
     case TOK_SAR:
-    case TOK_SHL:
     case TOK_SHR:
     case TOK_UDIV:
     case TOK_PDIV:
@@ -429,6 +447,15 @@ static void gen_opil(int op, int ll)
 
     case '+':
         o(0x33 | (d << 7) | (a << 15) | (b << 20)); // add d, a, b
+        break;
+    case '-':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); //sub d, a, b
+        break;
+    case TOK_SHL:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (1 << 12)); //sll d, a, b
+        break;
+    case '*':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25)); //mul d, a, b
         break;
 
     case TOK_ULT:
@@ -483,7 +510,8 @@ ST_FUNC void gen_opf(int op)
 
 ST_FUNC void gen_cvt_sxtw(void)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    /* XXX on risc-v the registers are usually sign-extended already.
+       Let's try to not do anything here.  */
 }
 
 ST_FUNC void gen_cvt_itof(int t)
