@@ -150,11 +150,46 @@ for opt do
   esac
 done
 
+cc="${cross_prefix}${cc}"
+ar="${cross_prefix}${ar}"
+strip="${cross_prefix}${strip}"
+
+
+PPIF_TEMPLATE="
+int ppif(void) {
+#if %s
+    return 0;
+#else
+    PPIF_FALSE;
+#endif
+}
+"
+
+# Succeeds when preprocessor condition `#if $1` is true.
+# if $2 is not empty, prints to stderr `checking whether $2... <yes/no>`
+# Works also when $cc is a cross compiler to any foreign platform.
+# E.g. ppif "defined(__GNUC__) && (GCC_MAJOR >= 3)"
+#   or ppif "defined(_WIN32)" "target is Windows"
+ppif() {
+    [ -z "${2-}" ] || printf "checking whether %s... " "$2" >&2
+    printf "$PPIF_TEMPLATE" "$1" > ppif.c \
+    && $cc -o ppif.o -c ppif.c 2>/dev/null
+    ppif_rv=$?
+    rm ppif.c ppif.o 2>/dev/null
+    [ -z "${2-}" ] || { [ 0 = $ppif_rv ] && echo yes || echo no; } >&2
+    return $ppif_rv
+}
+
+
 if test -z "$cpu" ; then
     if test -n "$ARCH" ; then
-	cpu="$ARCH"
+        cpu="$ARCH"
+    elif ppif "defined(__x86_64__)"; then
+        cpu="x86_64"
+    elif ppif "defined(__i386__)"; then
+        cpu="i386"
     else
-	cpu=`uname -m`
+        cpu=`uname -m`
     fi
 fi
 
@@ -302,10 +337,6 @@ EOF
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
 fi
-
-cc="${cross_prefix}${cc}"
-ar="${cross_prefix}${ar}"
-strip="${cross_prefix}${strip}"
 
 if test -z "$cross_prefix" ; then
   CONFTEST=./conftest$EXESUF
