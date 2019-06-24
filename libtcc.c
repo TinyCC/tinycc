@@ -809,6 +809,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__aarch64__", NULL);
 #elif defined TCC_TARGET_C67
     tcc_define_symbol(s, "__C67__", NULL);
+#elif defined TCC_TARGET_RISCV64
+    tcc_define_symbol(s, "__riscv", NULL);
+    tcc_define_symbol(s, "__riscv_xlen", "64");
 #endif
 
 #ifdef TCC_TARGET_PE
@@ -857,6 +860,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
     tcc_define_symbol(s, "__LP64__", NULL);
 #endif
+    tcc_define_symbol(s, "__SIZEOF_POINTER__", PTR_SIZE == 4 ? "4" : "8");
 
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "__WCHAR_TYPE__", "unsigned short");

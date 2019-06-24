@@ -875,8 +875,12 @@ static void gvtst_set(int inv, int t)
     if (vtop->r != VT_CMP) {
         vpushi(0);
         gen_op(TOK_NE);
-        if (vtop->r != VT_CMP) /* must be VT_CONST then */
-            vset_VT_CMP(vtop->c.i != 0);
+        if (vtop->r == VT_CMP) /* must be VT_CONST otherwise */
+          ;
+        else if (vtop->r == VT_CONST)
+          vset_VT_CMP(vtop->c.i != 0);
+        else
+          tcc_error("ICE");
     }
     p = inv ? &vtop->jfalse : &vtop->jtrue;
     *p = gjmp_append(*p, t);

@@ -58,6 +58,16 @@ static int ireg(int r)
     return r + 10;  // tccrX --> aX == x(10+X)
 }
 
+static int is_ireg(int r)
+{
+    return r < 8;
+}
+
+static int is_freg(int r)
+{
+    return r >= 8 && r < 16;
+}
+
 ST_FUNC void o(unsigned int c)
 {
     int ind1 = ind + 4;
@@ -92,11 +102,14 @@ ST_FUNC void gsym_addr(int t_, int a_)
     while (t) {
         unsigned char *ptr = cur_text_section->data + t;
         uint32_t next = read32le(ptr);
-        tcc_error("implement me: %s", __FUNCTION__);
-        if (a - t + 0x8000000 >= 0x10000000)
-            tcc_error("branch out of range");
-        write32le(ptr, (a - t == 4 ? 0xd503201f : // nop
-                        0x14000000 | ((a - t) >> 2 & 0x3ffffff))); // b
+        uint32_t r = a - t, imm;
+        if ((r + (1 << 21)) & ~((1U << 22) - 2))
+          tcc_error("out-of-range branch chain");
+        imm =   (((r >> 12) &  0xff) << 12)
+            | (((r >> 11) &     1) << 20)
+            | (((r >>  1) & 0x3ff) << 21)
+            | (((r >> 20) &     1) << 31);
+        write32le(ptr, r == 4 ? 0x33 : 0x6f | imm); // nop || j imm
         t = next;
     }
 }
@@ -109,9 +122,19 @@ ST_FUNC void load(int r, SValue *sv)
     int fc = sv->c.i;
     if (fr & VT_LVAL) {
         if (v == VT_LOCAL) {
+            int bt = sv->type.t & VT_BTYPE;
+            int align, size = type_size(&sv->type, &align);
+            int func3;
             if (((unsigned)fc + (1 << 11)) >> 12)
               tcc_error("unimp: load(large local ofs) (0x%x)", fc);
-            EI(0x03, 3, rr, 8, fc); // ld RR, fc(s0)
+            if (is_float(bt))
+              tcc_error("unimp: load-local(float)");
+            else if (bt == VT_FUNC)
+              size = PTR_SIZE;
+            func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
+            if (size < 8 && (sv->type.t & VT_UNSIGNED))
+              func3 |= 4;
+            EI(0x03, func3, rr, 8, fc); // l[bhwd][u] RR, fc(s0)
         } else {
             tcc_error("unimp: load(non-local lval)");
         }
@@ -139,13 +162,41 @@ ST_FUNC void load(int r, SValue *sv)
         if (is_float(sv->type.t))
           tcc_error("unimp: load(float)");
         EI(0x13, 0, rr, rb, fc);      // addi R, x0|R, FC
+    } else if (v < VT_CONST) {
+        /* reg-reg */
+        if (is_freg(r) && is_freg(v))
+          tcc_error("unimp load: float reg-reg move");
+        else if (is_ireg(r) && is_ireg(v))
+          EI(0x13, 0, rr, ireg(v), 0); // addi RR, V, 0 == mv RR, V
+        else
+          tcc_error("ICE: inter-unit reg-reg move");
+    } else if (v == VT_CMP) {  // we rely on cmp_r to be the correct result
+        EI(0x13, 0, rr, vtop->cmp_r, 0); // mv RR, CMP_R
     } else
       tcc_error("unimp: load(non-const)");
 }
 
 ST_FUNC void store(int r, SValue *sv)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int fr = sv->r & VT_VALMASK;
+    int rr = ireg(r);
+    int fc = sv->c.i;
+    int ft = sv->type.t;
+    int bt = ft & VT_BTYPE;
+    int align, size = type_size(&sv->type, &align);
+    if (fr == VT_LOCAL) {
+        if (((unsigned)fc + (1 << 11)) >> 12)
+          tcc_error("unimp: store(large local off) (0x%x)", fc);
+        if (is_float(bt))
+          tcc_error("unimp: store(float)");
+        if (bt == VT_STRUCT)
+          tcc_error("unimp: store(struct)");
+        if (size > 8)
+          tcc_error("unimp: large sized store");
+        ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
+           8, rr, fc); // s[bhwd] RR, fc(s0)
+    } else
+      tcc_error("implement me: %s(!local)", __FUNCTION__);
 }
 
 static void gcall(void)
@@ -174,7 +225,7 @@ ST_FUNC void gfunc_call(int nb_args)
         if (aireg >= 8)
           tcc_error("unimp: too many register args");
         vrotb(i+1);
-        gv(RC_R(aireg));
+        gv(RC_R(nb_args - 1 - aireg));
         vrott(i+1);
         aireg++;
     }
@@ -233,6 +284,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                     tcc_error("unimp: float args");
                 } else {
                     ES(0x23, 3, 8, 10 + aireg, loc + i*8); // sd aX, loc(s0) // XXX
+                    aireg++;
                 }
             }
         }
@@ -303,38 +355,125 @@ ST_FUNC void gen_fill_nops(int bytes)
 // Generate forward branch to label:
 ST_FUNC int gjmp(int t)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    if (nocode_wanted)
+      return t;
+    o(t);
+    return ind - 4;
 }
 
 // Generate branch to known address:
 ST_FUNC void gjmp_addr(int a)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    uint32_t r = a - ind, imm;
+    if ((r + (1 << 21)) & ~((1U << 22) - 2))
+      tcc_error("out-of-range jump");
+    imm =   (((r >> 12) &  0xff) << 12)
+          | (((r >> 11) &     1) << 20)
+          | (((r >>  1) & 0x3ff) << 21)
+          | (((r >> 20) &     1) << 31);
+    o(0x6f | imm); // jal x0, imm ==  j imm
 }
 
 ST_FUNC int gjmp_cond(int op, int t)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int inv = op & 1;
+    assert(op == TOK_EQ || op == TOK_NE);
+    assert(vtop->cmp_r >= 10 && vtop->cmp_r < 18);
+    o(0x63 | (!inv << 12) | (vtop->cmp_r << 15) | (8 << 7)); // bne/beq x0,r,+4
+    return gjmp(t);
 }
 
 ST_FUNC int gjmp_append(int n, int t)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    void *p;
+    /* insert jump list n into t */
+    if (n) {
+        uint32_t n1 = n, n2;
+        while ((n2 = read32le(p = cur_text_section->data + n1)))
+            n1 = n2;
+        write32le(p, t);
+        t = n;
+    }
+    return t;
 }
 
-ST_FUNC int gtst(int inv, int t)
+static void gen_opil(int op, int ll)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int a, b, d;
+    int inv = 0;
+    /* XXX We could special-case some constant args.  */
+    gv2(RC_INT, RC_INT);
+    a = ireg(vtop[-1].r);
+    b = ireg(vtop[0].r);
+    vtop -= 2;
+    d = get_reg(RC_INT);
+    vtop++;
+    vtop[0].r = d;
+    d = ireg(d);
+    switch (op) {
+    case '%':
+    case '&':
+    case '*':
+    case '-':
+    case '/':
+    case '^':
+    case '|':
+    case TOK_SAR:
+    case TOK_SHL:
+    case TOK_SHR:
+    case TOK_UDIV:
+    case TOK_PDIV:
+    case TOK_UMOD:
+    default:
+        tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
+
+    case '+':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20)); // add d, a, b
+        break;
+
+    case TOK_ULT:
+    case TOK_UGE:
+    case TOK_ULE:
+    case TOK_UGT:
+    case TOK_LT:
+    case TOK_GE:
+    case TOK_LE:
+    case TOK_GT:
+        if (op & 1) { // remove [U]GE,GT
+            inv = 1;
+            op--;
+        }
+        if ((op & 7) == 6) { // [U]LE
+            int t = a; a = b; b = t;
+            inv ^= 1;
+        }
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (((op > TOK_UGT) ? 2 : 3) << 12)); // slt[u] d, a, b
+        if (inv)
+          EI(0x13, 4, d, d, 1); // xori d, d, 1
+        vset_VT_CMP(TOK_NE);
+        vtop->cmp_r = d;
+        break;
+    case TOK_NE:
+    case TOK_EQ:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); // sub d, a, b
+        if (op == TOK_NE)
+          o(0x33 | (3 << 12) | (d << 7) | (0 << 15) | (d << 20)); // sltu d, x0, d == snez d,d
+        else
+          EI(0x13, 3, d, d, 1); // sltiu d, d, 1 == seqz d,d
+        vset_VT_CMP(TOK_NE);
+        vtop->cmp_r = d;
+        break;
+    }
 }
 
 ST_FUNC void gen_opi(int op)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    gen_opil(op, 0);
 }
 
 ST_FUNC void gen_opl(int op)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    gen_opil(op, 1);
 }
 
 ST_FUNC void gen_opf(int op)
