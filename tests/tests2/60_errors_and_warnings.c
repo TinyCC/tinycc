@@ -182,4 +182,20 @@ void * _Alignas(16) p1;
  _Static_assert(ONE == 0, "don't show me this");
  _Static_assert(ONE == 1, "ONE is not 1");
 
+#elif defined test_void_array
+ void t[3];
+
+#elif defined test_incomplete_enum_array
+  enum e t[3];
+
+#elif defined test_incomplete_struct_array
+  struct s t[3];
+
+#elif defined test_const_fun_array
+  typedef void f(void);
+  const f t[3];
+
+#elif defined test_incomplete_array_array
+  int t[][3];
+
 #endif

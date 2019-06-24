@@ -4377,7 +4377,7 @@ static int asm_label_instr(void)
 
 static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 {
-    int n, l, t1, arg_size, align;
+    int n, l, t1, arg_size, align, unused_align;
     Sym **plast, *s, *first;
     AttributeDef ad1;
     CType pt;
@@ -4503,10 +4503,15 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
         skip(']');
         /* parse next post type */
         post_type(type, ad, storage, 0);
-        if (type->t == VT_FUNC)
+
+        if ((type->t & VT_BTYPE) == VT_FUNC)
             tcc_error("declaration of an array of functions");
+        if ((type->t & VT_BTYPE) == VT_VOID
+            || type_size(type, &unused_align) < 0)
+            tcc_error("declaration of an array of incomplete type elements");
+
         t1 |= type->t & VT_VLA;
-        
+
         if (t1 & VT_VLA) {
             if (n < 0)
               tcc_error("need explicit inner array size in VLAs");
