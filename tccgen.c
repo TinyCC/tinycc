@@ -5914,6 +5914,7 @@ static void expr_cond(void)
                 tt = gjmp(0);
             }
             gsym(u);
+            nocode_wanted = ncw_prev;
 
             /* this is horrible, but we must also convert first
                operand */
@@ -5937,7 +5938,6 @@ static void expr_cond(void)
             if (islv)
                 indir();
         }
-        nocode_wanted = ncw_prev;
     }
 }
 
