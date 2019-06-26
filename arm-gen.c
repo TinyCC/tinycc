@@ -404,9 +404,9 @@ static uint32_t intr(int r)
     return 12;
   if(r >= TREG_R0 && r <= TREG_R3)
     return r - TREG_R0;
-  if (r >= TREG_SP && r <= TREG_LR)
-    return r + (13 - TREG_SP);
-  tcc_error("compiler error! register %i is no int register",r);
+  if (!(r >= TREG_SP && r <= TREG_LR))
+    tcc_error("compiler error! register %i is no int register",r);
+  return r + (13 - TREG_SP);
 }
 
 static void calcaddr(uint32_t *base, int *off, int *sgn, int maxoff, unsigned shift)
