@@ -7685,9 +7685,13 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 
 #ifdef TCC_TARGET_PE
             if (ad.a.dllimport || ad.a.dllexport) {
-                if (type.t & (VT_STATIC|VT_TYPEDEF))
-                    tcc_error("cannot have dll linkage with static or typedef");
-                if (ad.a.dllimport) {
+                if (type.t & VT_STATIC)
+                    tcc_error("cannot have dll linkage with static");
+                if (type.t & VT_TYPEDEF) {
+                    tcc_warning("'%s' attribute ignored for typedef",
+                        ad.a.dllimport ? (ad.a.dllimport = 0, "dllimport") :
+                        (ad.a.dllexport = 0, "dllexport"));
+                } else if (ad.a.dllimport) {
                     if ((type.t & VT_BTYPE) == VT_FUNC)
                         ad.a.dllimport = 0;
                     else
