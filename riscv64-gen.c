@@ -34,6 +34,7 @@
 #define XLEN 8
 
 #define TREG_RA 17
+#define TREG_SP 18
 
 ST_DATA const int reg_classes[NB_REGS] = {
   RC_INT | RC_R(0),
@@ -58,13 +59,21 @@ static int ireg(int r)
 {
     if (r == TREG_RA)
       return 1; // ra
+    if (r == TREG_SP)
+      return 2; // sp
     assert(r >= 0 && r < 8);
     return r + 10;  // tccrX --> aX == x(10+X)
 }
 
 static int is_ireg(int r)
 {
-    return r < 8 || r == TREG_RA;
+    return r < 8 || r == TREG_RA || r == TREG_SP;
+}
+
+static int freg(int r)
+{
+    assert(r >= 8 && r < 16);
+    return r - 8 + 10;  // tccfX --> faX == f(10+X)
 }
 
 static int is_freg(int r)
@@ -122,37 +131,71 @@ ST_FUNC void load(int r, SValue *sv)
 {
     int fr = sv->r;
     int v = fr & VT_VALMASK;
-    int rr = ireg(r);
+    int rr = is_ireg(r) ? ireg(r) : freg(r);
     int fc = sv->c.i;
+    int bt = sv->type.t & VT_BTYPE;
+    int align, size = type_size(&sv->type, &align);
     if (fr & VT_LVAL) {
-        int bt = sv->type.t & VT_BTYPE;
-        int align, size = type_size(&sv->type, &align);
-        int func3;
-        if (is_float(bt))
-          tcc_error("unimp: load-local(float)");
-        else if (bt == VT_FUNC)
-          size = PTR_SIZE;
-        func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
-        if (size < 8 && (sv->type.t & VT_UNSIGNED))
-          func3 |= 4;
+        int func3, opcode = 0x03;
+        if (is_freg(r)) {
+            assert(bt == VT_DOUBLE || bt == VT_FLOAT);
+            opcode = 0x07;
+            func3 = bt == VT_DOUBLE ? 3 : 2;
+        } else {
+            assert(is_ireg(r));
+            if (bt == VT_FUNC)
+              size = PTR_SIZE;
+            func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
+            if (size < 8 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
+              func3 |= 4;
+        }
         if (v == VT_LOCAL) {
             if (((unsigned)fc + (1 << 11)) >> 12)
               tcc_error("unimp: load(large local ofs) (0x%x)", fc);
-            EI(0x03, func3, rr, 8, fc); // l[bhwd][u] RR, fc(s0)
+            EI(opcode, func3, rr, 8, fc); // l[bhwd][u]/fl[wd] RR, fc(s0)
         } else if (v < VT_CONST) {
-            EI(0x03, func3, rr, ireg(v), 0); // l[bhwd][u] RR, 0(V)
+            /*if (((unsigned)fc + (1 << 11)) >> 12)
+              tcc_error("unimp: load(large addend) (0x%x)", fc);*/
+            fc = 0; // XXX store ofs in LVAL(reg)
+            EI(opcode, func3, rr, ireg(v), fc); // l[bhwd][u] RR, 0(V)
+        } else if (v == VT_CONST && (fr & VT_SYM)) {
+            static Sym label;
+            int addend = 0, tempr;
+            if (1 || ((unsigned)fc + (1 << 11)) >> 12)
+              addend = fc, fc = 0;
+
+            greloca(cur_text_section, sv->sym, ind,
+                    R_RISCV_PCREL_HI20, addend);
+            if (!label.v) {
+                label.v = tok_alloc(".L0 ", 4)->tok;
+                label.type.t = VT_VOID | VT_STATIC;
+            }
+            label.c = 0; /* force new local ELF symbol */
+            put_extern_sym(&label, cur_text_section, ind, 0);
+            tempr = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+            o(0x17 | (tempr << 7));   // auipc TR, 0 %pcrel_hi(sym)+addend
+            greloca(cur_text_section, &label, ind,
+                    R_RISCV_PCREL_LO12_I, 0);
+            EI(opcode, func3, rr, tempr, fc); // l[bhwd][u] RR, fc(TR)
+        } else if (v == VT_LLOCAL) {
+            int tempr = rr;
+            if (((unsigned)fc + (1 << 11)) >> 12)
+              tcc_error("unimp: load(large local ofs) (0x%x)", fc);
+            if (!is_ireg(r))
+              tempr = ireg(get_reg(RC_INT));
+            EI(0x03, 3, tempr, 8, fc); // ld TEMPR, fc(s0)
+            EI(opcode, func3, rr, tempr, 0); // l[bhwd][u] RR, 0(TEMPR)
         } else {
             tcc_error("unimp: load(non-local lval)");
         }
     } else if (v == VT_CONST) {
         int rb = 0;
+        assert(!is_float(sv->type.t) && is_ireg(r));
         if (fc != sv->c.i)
           tcc_error("unimp: load(very large const)");
-        if (((unsigned)fc + (1 << 11)) >> 12)
-          tcc_error("unimp: load(large const) (0x%x)", fc);
         if (fr & VT_SYM) {
             static Sym label;
-            greloca(cur_text_section, vtop->sym, ind,
+            greloca(cur_text_section, sv->sym, ind,
                     R_RISCV_PCREL_HI20, fc);
             if (!label.v) {
                 label.v = tok_alloc(".L0 ", 4)->tok;
@@ -164,24 +207,42 @@ ST_FUNC void load(int r, SValue *sv)
             greloca(cur_text_section, &label, ind,
                     R_RISCV_PCREL_LO12_I, 0);
             rb = rr;
+            fc = 0;
         }
         if (is_float(sv->type.t))
           tcc_error("unimp: load(float)");
-        EI(0x13, 0, rr, rb, fc);      // addi R, x0|R, FC
+        if (((unsigned)fc + (1 << 11)) >> 12)
+            o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
+        EI(0x13, 0, rr, rb, fc << 20 >> 20);      // addi R, x0|R, FC
     } else if (v == VT_LOCAL) {
+        assert(is_ireg(r));
         if (((unsigned)fc + (1 << 11)) >> 12)
           tcc_error("unimp: load(addr large local ofs) (0x%x)", fc);
         EI(0x13, 0, rr, 8, fc); // addi R, s0, FC
     } else if (v < VT_CONST) {
         /* reg-reg */
+        //assert(!fc); XXX support offseted regs
         if (is_freg(r) && is_freg(v))
-          tcc_error("unimp load: float reg-reg move");
+          o(0x53 | (rr << 7) | (freg(v) << 15) | (freg(v) << 20) | ((bt == VT_DOUBLE ? 0x11 : 0x10) << 25)); //fsgnj.[sd] RR, V, V == fmv.[sd] RR, V
         else if (is_ireg(r) && is_ireg(v))
           EI(0x13, 0, rr, ireg(v), 0); // addi RR, V, 0 == mv RR, V
-        else
-          tcc_error("ICE: inter-unit reg-reg move");
+        else {
+            int func7 = is_ireg(r) ? 0x70 : 0x78;
+            if (size == 8)
+              func7 |= 1;
+            assert(size == 4 || size == 8);
+            o(0x53 | (rr << 7) | ((is_freg(v) ? freg(v) : ireg(v)) << 15)
+              | (func7 << 25)); // fmv.{w.x, x.w, d.x, x.d} RR, VR
+        }
     } else if (v == VT_CMP) {  // we rely on cmp_r to be the correct result
         EI(0x13, 0, rr, vtop->cmp_r, 0); // mv RR, CMP_R
+    } else if ((v & ~1) == VT_JMP) {
+        int t = v & 1;
+        assert(is_ireg(r));
+        EI(0x13, 0, rr, 0, t);      // addi RR, x0, t
+        gjmp_addr(ind + 8);
+        gsym(fc);
+        EI(0x13, 0, rr, 0, t ^ 1);  // addi RR, x0, !t
     } else
       tcc_error("unimp: load(non-const)");
 }
@@ -189,26 +250,58 @@ ST_FUNC void load(int r, SValue *sv)
 ST_FUNC void store(int r, SValue *sv)
 {
     int fr = sv->r & VT_VALMASK;
-    int rr = ireg(r);
+    int rr = is_ireg(r) ? ireg(r) : freg(r);
     int fc = sv->c.i;
     int ft = sv->type.t;
     int bt = ft & VT_BTYPE;
     int align, size = type_size(&sv->type, &align);
+    assert(!is_float(bt) || is_freg(r));
+    if (bt == VT_STRUCT)
+      tcc_error("unimp: store(struct)");
+    if (size > 8)
+      tcc_error("unimp: large sized store");
+    assert(sv->r & VT_LVAL);
     if (fr == VT_LOCAL) {
         if (((unsigned)fc + (1 << 11)) >> 12)
           tcc_error("unimp: store(large local off) (0x%x)", fc);
-        if (is_float(bt))
-          tcc_error("unimp: store(float)");
-        if (bt == VT_STRUCT)
-          tcc_error("unimp: store(struct)");
-        if (size > 8)
-          tcc_error("unimp: large sized store");
-        ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-           8, rr, fc); // s[bhwd] RR, fc(s0)
+        if (is_freg(r))
+          ES(0x27, size == 4 ? 2 : 3, 8, rr, fc); // fs[wd] RR, fc(s0)
+        else
+          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
+             8, rr, fc); // s[bhwd] RR, fc(s0)
     } else if (fr < VT_CONST) {
         int ptrreg = ireg(fr);
-        ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-           ptrreg, rr, 0); // s[bhwd] RR, 0(PTRREG)
+        /*if (((unsigned)fc + (1 << 11)) >> 12)
+          tcc_error("unimp: store(large addend) (0x%x)", fc);*/
+        fc = 0; // XXX support offsets regs
+        if (is_freg(r))
+          ES(0x27, size == 4 ? 2 : 3, ptrreg, rr, fc); // fs[wd] RR, fc(PTRREG)
+        else
+          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
+             ptrreg, rr, fc); // s[bhwd] RR, fc(PTRREG)
+    } else if (sv->r == (VT_CONST | VT_SYM | VT_LVAL)) {
+        static Sym label;
+        int tempr, addend = 0;
+        if (1 || ((unsigned)fc + (1 << 11)) >> 12)
+          addend = fc, fc = 0;
+
+        tempr = ireg(get_reg(RC_INT));
+        greloca(cur_text_section, sv->sym, ind,
+                R_RISCV_PCREL_HI20, addend);
+        if (!label.v) {
+            label.v = tok_alloc(".L0 ", 4)->tok;
+            label.type.t = VT_VOID | VT_STATIC;
+        }
+        label.c = 0; /* force new local ELF symbol */
+        put_extern_sym(&label, cur_text_section, ind, 0);
+        o(0x17 | (tempr << 7));   // auipc TEMPR, 0 %pcrel_hi(sym)+addend
+        greloca(cur_text_section, &label, ind,
+                R_RISCV_PCREL_LO12_S, 0);
+        if (is_freg(r))
+          ES(0x27, size == 4 ? 2 : 3, tempr, rr, fc); // fs[wd] RR, fc(TEMPR)
+        else
+          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
+             tempr, rr, fc); // s[bhwd] RR, fc(TEMPR)
     } else
       tcc_error("implement me: %s(!local)", __FUNCTION__);
 }
@@ -235,23 +328,68 @@ static void gcall(void)
 
 ST_FUNC void gfunc_call(int nb_args)
 {
-    int i, align, size, aireg;
-    aireg = 0;
+    int i, align, size, aireg, afreg;
+    int info[nb_args ? nb_args : 1];
+    int stack_adj = 0, ofs;
+    SValue *sv;
+    Sym *sa;
+    aireg = afreg = 0;
+    sa = vtop[-nb_args].type.ref->next;
     for (i = 0; i < nb_args; i++) {
-        size = type_size(&vtop[-i].type, &align);
-        if (size > 8 || ((vtop[-i].type.t & VT_BTYPE) == VT_STRUCT)
-            || is_float(vtop[-i].type.t))
+        int *pareg;
+        sv = &vtop[1 + i - nb_args];
+        sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
+        size = type_size(&sv->type, &align);
+        if (size > 8 || ((sv->type.t & VT_BTYPE) == VT_STRUCT))
           tcc_error("unimp: call arg %d wrong type", nb_args - i);
-        if (aireg >= 8)
-          tcc_error("unimp: too many register args");
-        vrotb(i+1);
-        gv(RC_R(nb_args - 1 - aireg));
-        vrott(i+1);
-        aireg++;
+        pareg = sa && is_float(sv->type.t) ? &afreg : &aireg;
+        if (*pareg < 8) {
+            info[i] = *pareg + (sa && is_float(sv->type.t) ? 8 : 0);
+            (*pareg)++;
+        } else {
+            info[i] = 16;
+            stack_adj += (size + align - 1) & -align;
+        }
+        if (sa)
+          sa = sa->next;
+    }
+    stack_adj = (stack_adj + 15) & -16;
+    if (stack_adj) {
+        EI(0x13, 0, 2, 2, -stack_adj);      // addi sp, sp, -adj
+        for (i = ofs = 0; i < nb_args; i++) {
+            if (1 && info[i] >= 16) {
+                vrotb(nb_args - i);
+                size = type_size(&vtop->type, &align);
+                /* Once we support offseted regs we can do this:
+                     vset(&vtop->type, TREG_SP | VT_LVAL, ofs);
+                   to construct the lvalue for the outgoing stack slot,
+                   until then we have to jump through hoops.  */
+                vset(&char_pointer_type, TREG_SP, 0);
+                vpushi(ofs);
+                gen_op('+');
+                indir();
+                vtop->type = vtop[-1].type;
+                vswap();
+                vstore();
+                vrott(nb_args - i);
+                ofs += (size + align - 1) & -align;
+                ofs = (ofs + 7) & -8;
+            }
+        }
+    }
+    for (i = 0; i < nb_args; i++) {
+        int r = info[nb_args - 1 - i];
+        if (r < 16) {
+            vrotb(i+1);
+            gv(r < 8 ? RC_R(r) : RC_F(r - 8));
+            vrott(i+1);
+        }
     }
     vrotb(nb_args + 1);
     gcall();
     vtop -= nb_args + 1;
+    if (stack_adj)
+      EI(0x13, 0, 2, 2, stack_adj);      // addi sp, sp, adj
 }
 
 static int func_sub_sp_offset;
@@ -433,10 +571,6 @@ static void gen_opil(int op, int ll)
     d = ireg(d);
     switch (op) {
     case '%':
-    case '&':
-    case '/':
-    case '^':
-    case '|':
     case TOK_SAR:
     case TOK_SHR:
     case TOK_UDIV:
@@ -456,6 +590,18 @@ static void gen_opil(int op, int ll)
         break;
     case '*':
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25)); //mul d, a, b
+        break;
+    case '/':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (4 << 12)); //div d, a, b
+        break;
+    case '&':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (7 << 12)); // and d, a, b
+        break;
+    case '^':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (4 << 12)); // xor d, a, b
+        break;
+    case '|':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (6 << 12)); // or d, a, b
         break;
 
     case TOK_ULT:

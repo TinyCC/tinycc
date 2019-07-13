@@ -360,7 +360,7 @@ if test -z "$cross_prefix" ; then
       fi
 
       if test -z "$triplet"; then
-        if test $cpu = "x86_64" -o $cpu = "aarch64" ; then
+        if test $cpu = "x86_64" -o $cpu = "aarch64" -o $cpu = "riscv64" ; then
           if test -f "/usr/lib64/crti.o" ; then
             tcc_lddir="lib64"
           fi
