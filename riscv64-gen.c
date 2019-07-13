@@ -651,7 +651,63 @@ ST_FUNC void gen_opl(int op)
 
 ST_FUNC void gen_opf(int op)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int rs1, rs2, rd, dbl, invert;
+    gv2(RC_FLOAT, RC_FLOAT);
+    assert(vtop->type.t == VT_DOUBLE || vtop->type.t == VT_FLOAT);
+    dbl = vtop->type.t == VT_DOUBLE;
+    rs1 = freg(vtop[-1].r);
+    rs2 = freg(vtop->r);
+    vtop--;
+    invert = 0;
+    switch(op) {
+    default:
+        assert(0);
+    case '+':
+        op = 0; // fadd
+    arithop:
+        rd = get_reg(RC_FLOAT);
+        vtop->r = rd;
+        rd = freg(rd);
+        o(0x53 | (rd << 7) | (rs1 << 15) | (rs2 << 20) | (7 << 12) | (dbl << 25) | (op << 27)); // fop.[sd] RD, RS1, RS2 (dyn rm)
+        break;
+    case '-':
+        op = 1; // fsub
+        goto arithop;
+    case '*':
+        op = 2; // fmul
+        goto arithop;
+    case '/':
+        op = 3; // fdiv
+        goto arithop;
+    case TOK_EQ:
+        op = 2; // EQ
+    cmpop:
+        rd = get_reg(RC_INT);
+        vtop->r = rd;
+        rd = ireg(rd);
+        o(0x53 | (rd << 7) | (rs1 << 15) | (rs2 << 20) | (op << 12) | (dbl << 25) | (0x14 << 27)); // fcmp.[sd] RD, RS1, RS2 (op == eq/lt/le)
+        if (invert)
+          EI(0x13, 4, rd, rd, 1); // xori RD, 1
+        break;
+    case TOK_NE:
+        invert = 1;
+        op = 2; // EQ
+        goto cmpop;
+    case TOK_LT:
+        op = 1; // LT
+        goto cmpop;
+    case TOK_LE:
+        op = 0; // LE
+        goto cmpop;
+    case TOK_GT:
+        op = 1; // LT
+        rd = rs1, rs1 = rs2, rs2 = rd;
+        goto cmpop;
+    case TOK_GE:
+        op = 0; // LE
+        rd = rs1, rs1 = rs2, rs2 = rd;
+        goto cmpop;
+    }
 }
 
 ST_FUNC void gen_cvt_sxtw(void)
@@ -670,9 +726,21 @@ ST_FUNC void gen_cvt_ftoi(int t)
     tcc_error("implement me: %s", __FUNCTION__);
 }
 
-ST_FUNC void gen_cvt_ftof(int t)
+ST_FUNC void gen_cvt_ftof(int dt)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int st = vtop->type.t & VT_BTYPE, rs, rd;
+    dt &= VT_BTYPE;
+    assert (dt == VT_FLOAT || dt == VT_DOUBLE);
+    assert (st == VT_FLOAT || st == VT_DOUBLE);
+    if (st == dt)
+      return;
+    rs = gv(RC_FLOAT);
+    rd = get_reg(RC_FLOAT);
+    if (dt == VT_DOUBLE)
+      EI(0x53, 7, freg(rd), freg(rs), 0x21 << 5); // fcvt.d.s RD, RS (dyn rm)
+    else
+      EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS
+    vtop->r = rd;
 }
 
 ST_FUNC void ggoto(void)
