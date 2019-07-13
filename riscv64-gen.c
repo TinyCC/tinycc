@@ -432,14 +432,16 @@ ST_FUNC void gfunc_prolog(CType *func_type)
         } else {
             int regcount = 1;
             if (size > XLEN)
-              regcount++;
+              regcount++, tcc_error("unimp: scalars > 64bit");
             if (regcount + (is_float(type->t) ? afreg : aireg) >= 8)
               goto from_stack;
-            loc -= regcount * 8;
+            loc -= regcount * 8; // XXX could reserve only 'size' bytes
             param_addr = loc;
             for (i = 0; i < regcount; i++) {
                 if (is_float(type->t)) {
-                    tcc_error("unimp: float args");
+                    assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
+                    ES(0x27, size == 4 ? 2 : 3, 8, 10 + afreg, loc + i*8); // fs[wd] FAi, loc(s0)
+                    afreg++;
                 } else {
                     ES(0x23, 3, 8, 10 + aireg, loc + i*8); // sd aX, loc(s0) // XXX
                     aireg++;
