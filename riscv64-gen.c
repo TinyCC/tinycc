@@ -345,24 +345,45 @@ ST_FUNC void gfunc_call(int nb_args)
     int i, align, size, aireg, afreg;
     int info[nb_args ? nb_args : 1];
     int stack_adj = 0, ofs;
+    int force_stack = 0;
     SValue *sv;
     Sym *sa;
     aireg = afreg = 0;
     sa = vtop[-nb_args].type.ref->next;
     for (i = 0; i < nb_args; i++) {
-        int *pareg;
+        int *pareg, nregs, infreg = 0;
         sv = &vtop[1 + i - nb_args];
         sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
         size = type_size(&sv->type, &align);
-        if (size > 8 || ((sv->type.t & VT_BTYPE) == VT_STRUCT))
+        if ((size > 8 && ((sv->type.t & VT_BTYPE) != VT_LDOUBLE))
+            || ((sv->type.t & VT_BTYPE) == VT_STRUCT))
           tcc_error("unimp: call arg %d wrong type", nb_args - i);
-        pareg = sa && is_float(sv->type.t) ? &afreg : &aireg;
-        if (*pareg < 8) {
-            info[i] = *pareg + (sa && is_float(sv->type.t) ? 8 : 0);
+        nregs = 1;
+        if ((sv->type.t & VT_BTYPE) == VT_LDOUBLE) {
+          infreg = 0, nregs = 2;
+          if (!sa) {
+              aireg = (aireg + 1) & ~1;
+          }
+        } else
+          infreg = sa && is_float(sv->type.t);
+        pareg = infreg ? &afreg : &aireg;
+        if ((*pareg < 8) && !force_stack) {
+            info[i] = *pareg + (infreg ? 8 : 0);
             (*pareg)++;
+            if (nregs == 1)
+              ;
+            else if (*pareg < 8)
+              (*pareg)++;
+            else {
+                info[i] |= 16;
+                stack_adj += 8;
+                tcc_error("unimp: param passing half in reg, half on stack");
+            }
         } else {
-            info[i] = 16;
+            info[i] = 32;
             stack_adj += (size + align - 1) & -align;
+            if (!sa)
+              force_stack = 1;
         }
         if (sa)
           sa = sa->next;
@@ -371,7 +392,7 @@ ST_FUNC void gfunc_call(int nb_args)
     if (stack_adj) {
         EI(0x13, 0, 2, 2, -stack_adj);      // addi sp, sp, -adj
         for (i = ofs = 0; i < nb_args; i++) {
-            if (1 && info[i] >= 16) {
+            if (1 && info[i] >= 32) {
                 vrotb(nb_args - i);
                 size = type_size(&vtop->type, &align);
                 /* Once we support offseted regs we can do this:
@@ -393,9 +414,20 @@ ST_FUNC void gfunc_call(int nb_args)
     }
     for (i = 0; i < nb_args; i++) {
         int r = info[nb_args - 1 - i];
-        if (r < 16) {
+        if (r < 32) {
+            r &= 15;
             vrotb(i+1);
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
+            if (vtop->r2 < VT_CONST) {
+                assert((vtop->type.t & VT_BTYPE) == VT_LDOUBLE);
+                assert(vtop->r < 7);
+                if (vtop->r2 != 1 + vtop->r) {
+                    /* XXX we'd like to have 'gv' move directly into
+                       the right class instead of us fixing it up.  */
+                    EI(0x13, 0, ireg(vtop->r) + 1, ireg(vtop->r2), 0); // mv Ra+1, RR2
+                    vtop->r2 = 1 + vtop->r;
+                }
+            }
             vrott(i+1);
         }
     }
