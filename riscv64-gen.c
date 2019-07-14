@@ -191,12 +191,10 @@ ST_FUNC void load(int r, SValue *sv)
     } else if (v == VT_CONST) {
         int rb = 0;
         assert(!is_float(sv->type.t) && is_ireg(r));
-        if (fc != sv->c.i)
-          tcc_error("unimp: load(very large const)");
         if (fr & VT_SYM) {
             static Sym label;
             greloca(cur_text_section, sv->sym, ind,
-                    R_RISCV_PCREL_HI20, fc);
+                    R_RISCV_PCREL_HI20, sv->c.i);
             if (!label.v) {
                 label.v = tok_alloc(".L0 ", 4)->tok;
                 label.type.t = VT_VOID | VT_STATIC;
@@ -208,9 +206,25 @@ ST_FUNC void load(int r, SValue *sv)
                     R_RISCV_PCREL_LO12_I, 0);
             rb = rr;
             fc = 0;
+            sv->c.i = 0;
         }
         if (is_float(sv->type.t))
           tcc_error("unimp: load(float)");
+        if (fc != sv->c.i) {
+            int64_t si = sv->c.i;
+            uint32_t pi;
+            si >>= 32;
+            if (si != 0)
+              tcc_error("unimp: load(very large const)");
+            /* A 32bit unsigned constant.  lui always sign extends, so we need
+               tricks.  */
+            pi = (uint32_t)sv->c.i;
+            o(0x37 | (rr << 7) | (((pi + 0x80000) & 0xfff00000) >> 8)); // lui RR, up(fc)>>8
+            EI(0x13, 0, rr, rr,  (((pi + 0x200) & 0x000ffc00) >> 8) | (-((int)(pi + 0x200) & 0x80000) >> 8)); // addi RR, RR, mid(fc)
+            EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
+            fc = (pi & 0x3ff) | (-((int)(pi & 0x200)));
+            rb = rr;
+        }
         if (((unsigned)fc + (1 << 11)) >> 12)
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
         EI(0x13, 0, rr, rb, fc << 20 >> 20);      // addi R, x0|R, FC
@@ -575,9 +589,7 @@ static void gen_opil(int op, int ll)
     case '%':
     case TOK_SAR:
     case TOK_SHR:
-    case TOK_UDIV:
     case TOK_PDIV:
-    case TOK_UMOD:
     default:
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
 
@@ -604,6 +616,12 @@ static void gen_opil(int op, int ll)
         break;
     case '|':
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (6 << 12)); // or d, a, b
+        break;
+    case TOK_UMOD:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (7 << 12)); //remu d, a, b
+        break;
+    case TOK_UDIV:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (5 << 12)); //divu d, a, b
         break;
 
     case TOK_ULT:

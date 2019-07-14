@@ -2840,6 +2840,9 @@ static void gen_cast(CType *type)
                     lexpand();
                     vpop();
 #else
+                    /* XXX some architectures (e.g. risc-v) would like it
+                       better for this merely being a 32-to-64 sign or zero-
+                       extension.  */
 		    vpushi(0xffffffff);
 		    vtop->type.t |= VT_UNSIGNED;
 		    gen_op('&');
