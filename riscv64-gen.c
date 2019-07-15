@@ -359,8 +359,8 @@ static void gcall(void)
                 R_RISCV_CALL_PLT, (int)vtop->c.i);
         o(0x17 | (1 << 7));   // auipc ra, 0 %call(func)
         o(0x80e7);             // jalr  ra, 0 %call(func)
-    } else if ((vtop->r & VT_VALMASK) < VT_CONST) {
-        int r = ireg(vtop->r & VT_VALMASK);
+    } else if (vtop->r < VT_CONST) {
+        int r = ireg(vtop->r);
         EI(0x67, 0, 1, r, 0);      // jalr ra, 0(R)
     } else {
         int r = TREG_RA;
