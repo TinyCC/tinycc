@@ -19,6 +19,7 @@
 
 #else /* !TARGET_DEFS_ONLY */
 
+//#define DEBUG_RELOC
 #include "tcc.h"
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
@@ -177,9 +178,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     uint64_t off64;
     uint32_t off32;
     int sym_index = ELFW(R_SYM)(rel->r_info);
-#ifdef DEBUG_RELOC
     ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-#endif
 
     switch(type) {
     case R_RISCV_ALIGN:
@@ -223,8 +222,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
 #endif
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
-          tcc_error("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx",
-                    off64, ((int64_t)(off64 + ((uint64_t)1 << 20)) >> 21));
+          tcc_error("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx sym=%s",
+                    off64, ((int64_t)(off64 + ((uint64_t)1 << 20)) >> 21),
+                    symtab_section->link->data + sym->st_name);
         write32le(ptr, (read32le(ptr) & 0xfff)
                        | ((off64 & 0xfffff) << 12));
         last_hi.addr = addr;

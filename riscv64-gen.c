@@ -189,12 +189,22 @@ ST_FUNC void load(int r, SValue *sv)
             tcc_error("unimp: load(non-local lval)");
         }
     } else if (v == VT_CONST) {
-        int rb = 0, do32bit = 8;
+        int rb = 0, do32bit = 8, doload = 0;
         assert(!is_float(sv->type.t) && is_ireg(r));
         if (fr & VT_SYM) {
             static Sym label;
-            greloca(cur_text_section, sv->sym, ind,
-                    R_RISCV_PCREL_HI20, sv->c.i);
+            if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
+                greloca(cur_text_section, sv->sym, ind,
+                        R_RISCV_PCREL_HI20, sv->c.i);
+                fc = 0;
+                sv->c.i = 0;
+            } else {
+                if (((unsigned)fc + (1 << 11)) >> 12)
+                  tcc_error("unimp: large addend for global address");
+                greloca(cur_text_section, sv->sym, ind,
+                        R_RISCV_GOT_HI20, 0);
+                doload = 1;
+            }
             if (!label.v) {
                 label.v = tok_alloc(".L0 ", 4)->tok;
                 label.type.t = VT_VOID | VT_STATIC;
@@ -205,8 +215,6 @@ ST_FUNC void load(int r, SValue *sv)
             greloca(cur_text_section, &label, ind,
                     R_RISCV_PCREL_LO12_I, 0);
             rb = rr;
-            fc = 0;
-            sv->c.i = 0;
             do32bit = 0;
         }
         if (is_float(sv->type.t))
@@ -244,7 +252,12 @@ ST_FUNC void load(int r, SValue *sv)
         }
         if (((unsigned)fc + (1 << 11)) >> 12)
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
-        EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20);   // addi[w] R, x0|R, FC
+        if (doload) {
+          EI(0x03, 3, rr, rr, 0); // ld RR, 0(RR)
+          if (fc)
+            EI(0x13 | do32bit, 0, rr, rr, fc << 20 >> 20); // addi[w] R, x0|R, FC
+        } else
+          EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20); // addi[w] R, x0|R, FC
     } else if (v == VT_LOCAL) {
         assert(is_ireg(r));
         if (((unsigned)fc + (1 << 11)) >> 12)
@@ -636,7 +649,6 @@ static void gen_opil(int op, int ll)
     d = ireg(d);
     ll = ll ? 0 : 8;
     switch (op) {
-    case '%':
     case TOK_PDIV:
     default:
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
@@ -670,6 +682,9 @@ static void gen_opil(int op, int ll)
         break;
     case '|':
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (6 << 12)); // or d, a, b
+        break;
+    case '%':
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (6 << 12)); //rem d, a, b
         break;
     case TOK_UMOD:
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (7 << 12)); //remu d, a, b

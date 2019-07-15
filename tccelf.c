@@ -1910,6 +1910,8 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
 #else
     ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
 #endif
+#elif defined TCC_TARGET_RISCV64
+    ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
 #endif
     switch(file_type) {
     default:
