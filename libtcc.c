@@ -812,6 +812,12 @@ LIBTCCAPI TCCState *tcc_new(void)
 #elif defined TCC_TARGET_RISCV64
     tcc_define_symbol(s, "__riscv", NULL);
     tcc_define_symbol(s, "__riscv_xlen", "64");
+    tcc_define_symbol(s, "__riscv_flen", "64");
+    tcc_define_symbol(s, "__riscv_div", NULL);
+    tcc_define_symbol(s, "__riscv_mul", NULL);
+    tcc_define_symbol(s, "__riscv_fdiv", NULL);
+    tcc_define_symbol(s, "__riscv_fsqrt", NULL);
+    tcc_define_symbol(s, "__riscv_float_abi_double", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE
