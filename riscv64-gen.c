@@ -215,17 +215,32 @@ ST_FUNC void load(int r, SValue *sv)
             int64_t si = sv->c.i;
             uint32_t pi;
             si >>= 32;
-            if (si != 0)
-              tcc_error("unimp: load(very large const)");
-            /* A 32bit unsigned constant.  lui always sign extends, so we need
-               tricks.  */
-            pi = (uint32_t)sv->c.i;
-            o(0x37 | (rr << 7) | (((pi + 0x80000) & 0xfff00000) >> 8)); // lui RR, up(fc)>>8
-            EI(0x13, 0, rr, rr,  (((pi + 0x200) & 0x000ffc00) >> 8) | (-((int)(pi + 0x200) & 0x80000) >> 8)); // addi RR, RR, mid(fc)
-            EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
-            fc = (pi & 0x3ff) | (-((int)(pi & 0x200)));
-            rb = rr;
-            do32bit = 0;
+            if (si != 0) {
+                pi = si;
+                if (fc < 0)
+                  pi++;
+                o(0x37 | (rr << 7) | (((pi + 0x800) & 0xfffff000))); // lui RR, up(up(fc))
+                EI(0x13, 0, rr, rr, (int)pi << 20 >> 20);   // addi RR, RR, lo(up(fc))
+                EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
+                EI(0x13, 0, rr, rr, (fc + (1 << 19)) >> 20);  // addi RR, RR, up(lo(fc))
+                EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
+                fc = fc << 12 >> 12;
+                EI(0x13, 0, rr, rr, fc >> 8);  // addi RR, RR, lo1(lo(fc))
+                EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
+                fc &= 0xff;
+                rb = rr;
+                do32bit = 0;
+            } else {
+                /* A 32bit unsigned constant.  lui always sign extends, so we need
+                   tricks.  */
+                pi = (uint32_t)sv->c.i;
+                o(0x37 | (rr << 7) | (((pi + 0x80000) & 0xfff00000) >> 8)); // lui RR, up(fc)>>8
+                EI(0x13, 0, rr, rr,  (((pi + 0x200) & 0x000ffc00) >> 8) | (-((int)(pi + 0x200) & 0x80000) >> 8)); // addi RR, RR, mid(fc)
+                EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
+                fc = (pi & 0x3ff) | (-((int)(pi & 0x200)));
+                rb = rr;
+                do32bit = 0;
+            }
         }
         if (((unsigned)fc + (1 << 11)) >> 12)
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
@@ -619,6 +634,7 @@ static void gen_opil(int op, int ll)
     vtop++;
     vtop[0].r = d;
     d = ireg(d);
+    ll = ll ? 0 : 8;
     switch (op) {
     case '%':
     case TOK_PDIV:
@@ -632,10 +648,10 @@ static void gen_opil(int op, int ll)
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); //sub d, a, b
         break;
     case TOK_SAR:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (5 << 12) | (1 << 30)); //sra d, a, b
+        o(0x33 | ll | (d << 7) | (a << 15) | (b << 20) | (5 << 12) | (1 << 30)); //sra d, a, b
         break;
     case TOK_SHR:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (5 << 12)); //srl d, a, b
+        o(0x33 | ll | (d << 7) | (a << 15) | (b << 20) | (5 << 12)); //srl d, a, b
         break;
     case TOK_SHL:
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (1 << 12)); //sll d, a, b
