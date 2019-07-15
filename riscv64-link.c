@@ -37,8 +37,14 @@ int code_reloc (int reloc_type)
     case R_RISCV_PCREL_LO12_I:
     case R_RISCV_PCREL_LO12_S:
     case R_RISCV_32_PCREL:
+    case R_RISCV_SET6:
+    case R_RISCV_SUB6:
+    case R_RISCV_ADD16:
     case R_RISCV_ADD32:
+    case R_RISCV_ADD64:
+    case R_RISCV_SUB16:
     case R_RISCV_SUB32:
+    case R_RISCV_SUB64:
     case R_RISCV_32:
     case R_RISCV_64:
         return 0;
@@ -61,6 +67,10 @@ int gotplt_entry_type (int reloc_type)
     case R_RISCV_RVC_BRANCH:
     case R_RISCV_RVC_JUMP:
     case R_RISCV_JUMP_SLOT:
+    case R_RISCV_SET6:
+    case R_RISCV_SUB6:
+    case R_RISCV_ADD16:
+    case R_RISCV_SUB16:
         return NO_GOTPLT_ENTRY;
 
     case R_RISCV_BRANCH:
@@ -70,7 +80,9 @@ int gotplt_entry_type (int reloc_type)
     case R_RISCV_PCREL_LO12_S:
     case R_RISCV_32_PCREL:
     case R_RISCV_ADD32:
+    case R_RISCV_ADD64:
     case R_RISCV_SUB32:
+    case R_RISCV_SUB64:
     case R_RISCV_32:
     case R_RISCV_64:
     case R_RISCV_JAL:
@@ -287,11 +299,29 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_64:
         write64le(ptr, val);
         return;
+    case R_RISCV_ADD64:
+        write64le(ptr, read64le(ptr) + val);
+        return;
     case R_RISCV_ADD32:
         write32le(ptr, read32le(ptr) + val);
         return;
+    case R_RISCV_SUB64:
+        write64le(ptr, read64le(ptr) - val);
+        return;
     case R_RISCV_SUB32:
         write32le(ptr, read32le(ptr) - val);
+        return;
+    case R_RISCV_ADD16:
+        write16le(ptr, read16le(ptr) + val);
+        return;
+    case R_RISCV_SUB16:
+        write16le(ptr, read16le(ptr) - val);
+        return;
+    case R_RISCV_SET6:
+        *ptr = (*ptr & ~0x3f) | (val & 0x3f);
+        return;
+    case R_RISCV_SUB6:
+        *ptr = (*ptr & ~0x3f) | ((*ptr - val) & 0x3f);
         return;
 
     case R_RISCV_32_PCREL:
