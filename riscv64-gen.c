@@ -621,8 +621,6 @@ static void gen_opil(int op, int ll)
     d = ireg(d);
     switch (op) {
     case '%':
-    case TOK_SAR:
-    case TOK_SHR:
     case TOK_PDIV:
     default:
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
@@ -632,6 +630,12 @@ static void gen_opil(int op, int ll)
         break;
     case '-':
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); //sub d, a, b
+        break;
+    case TOK_SAR:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (5 << 12) | (1 << 30)); //sra d, a, b
+        break;
+    case TOK_SHR:
+        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (5 << 12)); //srl d, a, b
         break;
     case TOK_SHL:
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (1 << 12)); //sll d, a, b
