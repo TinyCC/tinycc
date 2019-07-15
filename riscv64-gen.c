@@ -189,7 +189,7 @@ ST_FUNC void load(int r, SValue *sv)
             tcc_error("unimp: load(non-local lval)");
         }
     } else if (v == VT_CONST) {
-        int rb = 0;
+        int rb = 0, do32bit = 8;
         assert(!is_float(sv->type.t) && is_ireg(r));
         if (fr & VT_SYM) {
             static Sym label;
@@ -207,6 +207,7 @@ ST_FUNC void load(int r, SValue *sv)
             rb = rr;
             fc = 0;
             sv->c.i = 0;
+            do32bit = 0;
         }
         if (is_float(sv->type.t))
           tcc_error("unimp: load(float)");
@@ -224,10 +225,11 @@ ST_FUNC void load(int r, SValue *sv)
             EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
             fc = (pi & 0x3ff) | (-((int)(pi & 0x200)));
             rb = rr;
+            do32bit = 0;
         }
         if (((unsigned)fc + (1 << 11)) >> 12)
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
-        EI(0x13, 0, rr, rb, fc << 20 >> 20);      // addi R, x0|R, FC
+        EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20);   // addi[w] R, x0|R, FC
     } else if (v == VT_LOCAL) {
         assert(is_ireg(r));
         if (((unsigned)fc + (1 << 11)) >> 12)
