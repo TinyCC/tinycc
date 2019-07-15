@@ -824,16 +824,20 @@ ST_FUNC void ggoto(void)
 
 ST_FUNC void gen_vla_sp_save(int addr)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    ES(0x23, 3, 8, 2, addr); // sd sp, fc(s0)
 }
 
 ST_FUNC void gen_vla_sp_restore(int addr)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    EI(0x03, 3, 2, 8, addr); // ld sp, fc(s0)
 }
 
 ST_FUNC void gen_vla_alloc(CType *type, int align)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int rr = ireg(gv(RC_INT));
+    EI(0x13, 0, rr, rr, 15);   // addi RR, RR, 15
+    EI(0x13, 7, rr, rr, -16);  // andi, RR, RR, -16
+    o(0x33 | (2 << 7) | (2 << 15) | (rr << 20) | (0x20 << 25)); //sub sp, sp, rr
+    vpop();
 }
 #endif
