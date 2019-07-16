@@ -273,5 +273,27 @@ int main ()
 int xxx[1] = {1};
 int bar() { P(3, xxx[0]); return 0; }
 
+#elif defined test_var_4
+struct yyy { int y; };
+struct zzz;
+void f1() {
+    extern char *x;
+    extern char **xx;
+    extern struct yyy y;
+    extern struct yyy *yy;
+    extern struct zzz z;
+    extern struct zzz *zz;
+}
+void f2() {
+    extern char *x;
+    extern char **xx;
+    extern struct yyy y;
+    extern struct yyy *yy;
+    extern struct zzz z;
+    extern struct zzz *zz;
+}
+struct yyy y, *yy;
+struct zzz { int z; } z, *zz;
+
 /******************************************************************/
 #endif

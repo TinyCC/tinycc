@@ -132,3 +132,5 @@ bar  : 3 ; 3
 
 [test_var_3]
 60_errors_and_warnings.c:273: error: incompatible types for redefinition of 'xxx'
+
+[test_var_4]

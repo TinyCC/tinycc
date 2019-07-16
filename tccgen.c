@@ -1096,18 +1096,24 @@ static Sym *sym_copy(Sym *s0, Sym **ps)
     return s;
 }
 
-/* copy a list of syms */
-static void sym_copy_ref(Sym *s0, Sym **ps)
+/* copy s->type.ref to stack 'ps' for VT_FUNC and VT_PTR */
+static void sym_copy_ref(Sym *s, Sym **ps)
 {
-    Sym *s, **sp = &s0->type.ref;
-    for (s = *sp, *sp = NULL; s; s = s->next)
-        sp = &(*sp = sym_copy(s, ps))->next;
+    int bt = s->type.t & VT_BTYPE;
+    if (bt == VT_FUNC || bt == VT_PTR) {
+        Sym **sp = &s->type.ref;
+        for (s = *sp, *sp = NULL; s; s = s->next) {
+            Sym *s2 = sym_copy(s, ps);
+            sp = &(*sp = s2)->next;
+            sym_copy_ref(s2, ps);
+        }
+    }
 }
 
 /* define a new external reference to a symbol 'v' */
 static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
 {
-    Sym *s; int bt;
+    Sym *s;
 
     /* look for global symbol */
     s = sym_find(v);
@@ -1121,16 +1127,14 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
         s->a = ad->a;
         s->asm_label = ad->asm_label;
         s->type.ref = type->ref;
-        bt = s->type.t & (VT_BTYPE|VT_ARRAY);
-        /* copy type to the global stack also */
-        if (local_scope && (bt == VT_FUNC || (bt & VT_ARRAY)))
+        /* copy type to the global stack */
+        if (local_stack)
             sym_copy_ref(s, &global_stack);
     } else {
         patch_storage(s, ad, type);
-        bt = s->type.t & VT_BTYPE;
     }
-    /* push variables to local scope if any */
-    if (local_stack && bt != VT_FUNC)
+    /* push variables on local_stack if any */
+    if (local_stack && (s->type.t & VT_BTYPE) != VT_FUNC)
         s = sym_copy(s, &local_stack);
     return s;
 }
