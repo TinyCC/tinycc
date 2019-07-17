@@ -150,9 +150,16 @@ ST_FUNC void load(int r, SValue *sv)
               func3 |= 4;
         }
         if (v == VT_LOCAL) {
-            if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: load(large local ofs) (0x%x)", fc);
-            EI(opcode, func3, rr, 8, fc); // l[bhwd][u]/fl[wd] RR, fc(s0)
+            int br = 8; // s0
+            if (fc != sv->c.i)
+              tcc_error("unimp: load1(giant local ofs) (0x%llx)", (long long)sv->c.i);
+            if (((unsigned)fc + (1 << 11)) >> 12) {
+                br = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+                o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
+                o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
+                fc = fc << 20 >> 20;
+            }
+            EI(opcode, func3, rr, br, fc); // l[bhwd][u]/fl[wd] RR, fc(BR)
         } else if (v < VT_CONST) {
             /*if (((unsigned)fc + (1 << 11)) >> 12)
               tcc_error("unimp: load(large addend) (0x%x)", fc);*/
@@ -178,12 +185,16 @@ ST_FUNC void load(int r, SValue *sv)
                     R_RISCV_PCREL_LO12_I, 0);
             EI(opcode, func3, rr, tempr, fc); // l[bhwd][u] RR, fc(TR)
         } else if (v == VT_LLOCAL) {
-            int tempr = rr;
-            if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: load(large local ofs) (0x%x)", fc);
-            if (!is_ireg(r))
-              tempr = ireg(get_reg(RC_INT));
-            EI(0x03, 3, tempr, 8, fc); // ld TEMPR, fc(s0)
+            int br = 8, tempr = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+            if (fc != sv->c.i)
+              tcc_error("unimp: load2(giant local ofs) (0x%llx)", (long long)sv->c.i);
+            if (((unsigned)fc + (1 << 11)) >> 12) {
+                br = tempr;
+                o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
+                o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
+                fc = fc << 20 >> 20;
+            }
+            EI(0x03, 3, tempr, br, fc); // ld TEMPR, fc(BR)
             EI(opcode, func3, rr, tempr, 0); // l[bhwd][u] RR, 0(TEMPR)
         } else {
             tcc_error("unimp: load(non-local lval)");
@@ -259,10 +270,17 @@ ST_FUNC void load(int r, SValue *sv)
         } else
           EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20); // addi[w] R, x0|R, FC
     } else if (v == VT_LOCAL) {
+        int br = 8; // s0
         assert(is_ireg(r));
-        if (((unsigned)fc + (1 << 11)) >> 12)
-          tcc_error("unimp: load(addr large local ofs) (0x%x)", fc);
-        EI(0x13, 0, rr, 8, fc); // addi R, s0, FC
+        if (fc != sv->c.i)
+          tcc_error("unimp: load(addr giant local ofs) (0xll%x)", (long long)sv->c.i);
+        if (((unsigned)fc + (1 << 11)) >> 12) {
+            o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
+            o(0x33 | (rr << 7) | (rr << 15) | (8 << 20)); // add RR, RR, s0
+            fc = fc << 20 >> 20;
+            br = rr;
+        }
+        EI(0x13, 0, rr, br, fc); // addi R, s0, FC
     } else if (v < VT_CONST) {
         /* reg-reg */
         //assert(!fc); XXX support offseted regs
@@ -306,13 +324,20 @@ ST_FUNC void store(int r, SValue *sv)
       tcc_error("unimp: large sized store");
     assert(sv->r & VT_LVAL);
     if (fr == VT_LOCAL) {
-        if (((unsigned)fc + (1 << 11)) >> 12)
-          tcc_error("unimp: store(large local off) (0x%x)", fc);
+        int br = 8; // s0
+        if (fc != sv->c.i)
+          tcc_error("unimp: store(giant local off) (0x%llx)", (long long)sv->c.i);
+        if (((unsigned)fc + (1 << 11)) >> 12) {
+            br = ireg(get_reg(RC_INT));
+            o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
+            o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
+            fc = fc << 20 >> 20;
+        }
         if (is_freg(r))
-          ES(0x27, size == 4 ? 2 : 3, 8, rr, fc); // fs[wd] RR, fc(s0)
+          ES(0x27, size == 4 ? 2 : 3, br, rr, fc); // fs[wd] RR, fc(base)
         else
           ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-             8, rr, fc); // s[bhwd] RR, fc(s0)
+             br, rr, fc); // s[bhwd] RR, fc(base)
     } else if (fr < VT_CONST) {
         int ptrreg = ireg(fr);
         /*if (((unsigned)fc + (1 << 11)) >> 12)
@@ -482,7 +507,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     func_vt = sym->type;
     loc = -16; // for ra and s0
     func_sub_sp_offset = ind;
-    ind += 4 * 4;
+    ind += 5 * 4;
     if (sym->f.func_type == FUNC_ELLIPSIS) {
         tcc_error("unimp: vararg prologue");
     }
@@ -554,20 +579,40 @@ ST_FUNC void gfunc_return(CType *func_type)
 
 ST_FUNC void gfunc_epilog(void)
 {
-    int v, saved_ind;
+    int v, saved_ind, d, large_ofs_ind;
 
-    v = (-loc + 15) & -16;
+    d = v = (-loc + 15) & -16;
 
-    EI(0x03, 3, 1, 2, v - 8);  // ld ra, v-8(sp)
-    EI(0x03, 3, 8, 2, v - 16); // ld s0, v-16(sp)
-    EI(0x13, 0, 2, 2, v);      // addi sp, sp, v
+    if (v >= (1 << 11)) {
+        d = 16;
+        o(0x37 | (5 << 7) | ((0x800 + (v-16)) & 0xfffff000)); //lui t0, upper(v)
+        EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
+        o(0x33 | (2 << 7) | (2 << 15) | (5 << 20)); //add sp, sp, t0
+    }
+    EI(0x03, 3, 1, 2, d - 8);  // ld ra, v-8(sp)
+    EI(0x03, 3, 8, 2, d - 16); // ld s0, v-16(sp)
+    EI(0x13, 0, 2, 2, d);      // addi sp, sp, v
     EI(0x67, 0, 0, 1, 0);      // jalr x0, 0(x1), aka ret
+    if (v >= (1 << 11)) {
+        large_ofs_ind = ind;
+        EI(0x13, 0, 8, 2, d);      // addi s0, sp, d
+        o(0x37 | (5 << 7) | ((0x800 + (v-16)) & 0xfffff000)); //lui t0, upper(v)
+        EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
+        o(0x33 | (2 << 7) | (2 << 15) | (5 << 20) | (0x20 << 25)); //sub sp, sp, t0
+        gjmp_addr(func_sub_sp_offset + 5*4);
+    }
     saved_ind = ind;
+
     ind = func_sub_sp_offset;
-    EI(0x13, 0, 2, 2, -v);     // addi sp, sp, -v
-    ES(0x23, 3, 2, 1, v - 8);  // sd ra, v-8(sp)
-    ES(0x23, 3, 2, 8, v - 16); // sd s0, v-16(sp)
-    EI(0x13, 0, 8, 2, v);      // addi s0, sp, v
+    EI(0x13, 0, 2, 2, -d);     // addi sp, sp, -d
+    ES(0x23, 3, 2, 1, d - 8);  // sd ra, d-8(sp)
+    ES(0x23, 3, 2, 8, d - 16); // sd s0, d-16(sp)
+    if (v < (1 << 11))
+      EI(0x13, 0, 8, 2, d);      // addi s0, sp, d
+    else
+      gjmp_addr(large_ofs_ind);
+    if ((ind - func_sub_sp_offset) != 5*4)
+      EI(0x13, 0, 0, 0, 0);      // addi x0, x0, 0 == nop
     ind = saved_ind;
 }
 
@@ -601,13 +646,17 @@ ST_FUNC int gjmp(int t)
 ST_FUNC void gjmp_addr(int a)
 {
     uint32_t r = a - ind, imm;
-    if ((r + (1 << 21)) & ~((1U << 22) - 2))
-      tcc_error("out-of-range jump");
-    imm =   (((r >> 12) &  0xff) << 12)
-          | (((r >> 11) &     1) << 20)
-          | (((r >>  1) & 0x3ff) << 21)
-          | (((r >> 20) &     1) << 31);
-    o(0x6f | imm); // jal x0, imm ==  j imm
+    if ((r + (1 << 21)) & ~((1U << 22) - 2)) {
+        o(0x17 | (5 << 7) | (((r + 0x800) & 0xfffff000))); // lui RR, up(r)
+        r = (int)r << 20 >> 20;
+        EI(0x67, 0, 0, 5, r);      // jalr x0, r(t0)
+    } else {
+        imm = (((r >> 12) &  0xff) << 12)
+            | (((r >> 11) &     1) << 20)
+            | (((r >>  1) & 0x3ff) << 21)
+            | (((r >> 20) &     1) << 31);
+        o(0x6f | imm); // jal x0, imm ==  j imm
+    }
 }
 
 ST_FUNC int gjmp_cond(int op, int t)
