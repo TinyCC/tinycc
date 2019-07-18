@@ -1172,8 +1172,7 @@ ST_FUNC void save_reg_upstack(int r, int n)
     saved = 0;
     l = 0;
     for(p = vstack, p1 = vtop - n; p <= p1; p++) {
-        if ((p->r & VT_VALMASK) == r ||
-            ((p->type.t & VT_BTYPE) == VT_LLONG && (p->r2 & VT_VALMASK) == r)) {
+        if ((p->r & VT_VALMASK) == r || (p->r2 & VT_VALMASK) == r) {
             /* must save value on stack if not already done */
             if (!saved) {
                 /* NOTE: must reload 'r' because r might be equal to r2 */
@@ -1199,13 +1198,11 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     o(0xd8dd); /* fstp %st(0) */
                 }
 #endif
-#if PTR_SIZE == 4
                 /* special long long case */
-                if ((type->t & VT_BTYPE) == VT_LLONG) {
-                    sv.c.i += 4;
+                if ((p->r2 & VT_VALMASK) < VT_CONST) {
+                    sv.c.i += PTR_SIZE;
                     store(p->r2, &sv);
                 }
-#endif
                 saved = 1;
             }
             /* mark that stack entry as being saved on the stack */
@@ -2702,7 +2699,7 @@ static void gen_cast(CType *type)
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
         p = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == (VT_CONST | VT_SYM);
 #if !defined TCC_IS_NATIVE && !defined TCC_IS_NATIVE_387
-        c &= dbt != VT_LDOUBLE;
+        c &= (dbt != VT_LDOUBLE) | !!nocode_wanted;
 #endif
         if (c) {
             /* constant case: we can do it now */

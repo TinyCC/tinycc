@@ -1,7 +1,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 // Number of registers available to allocator:
-#define NB_REGS 16 // x10-x17 aka a0-a7, f10-f17 aka fa0-fa7
+#define NB_REGS 19 // x10-x17 aka a0-a7, f10-f17 aka fa0-fa7, xxx, ra, sp
 
 #define TREG_R(x) (x) // x = 0..7
 #define TREG_F(x) (x + 8) // x = 0..7
@@ -52,7 +52,10 @@ ST_DATA const int reg_classes[NB_REGS] = {
   RC_FLOAT | RC_F(4),
   RC_FLOAT | RC_F(5),
   RC_FLOAT | RC_F(6),
-  RC_FLOAT | RC_F(7)
+  RC_FLOAT | RC_F(7),
+  0,
+  1 << TREG_RA,
+  1 << TREG_SP
 };
 
 static int ireg(int r)
@@ -201,7 +204,7 @@ ST_FUNC void load(int r, SValue *sv)
         }
     } else if (v == VT_CONST) {
         int rb = 0, do32bit = 8, doload = 0;
-        assert(!is_float(sv->type.t) && is_ireg(r));
+        assert(!is_float(sv->type.t) && is_ireg(r) || bt == VT_LDOUBLE);
         if (fr & VT_SYM) {
             static Sym label;
             if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
@@ -228,7 +231,7 @@ ST_FUNC void load(int r, SValue *sv)
             rb = rr;
             do32bit = 0;
         }
-        if (is_float(sv->type.t))
+        if (is_float(sv->type.t) && bt != VT_LDOUBLE)
           tcc_error("unimp: load(float)");
         if (fc != sv->c.i) {
             int64_t si = sv->c.i;
@@ -317,7 +320,11 @@ ST_FUNC void store(int r, SValue *sv)
     int ft = sv->type.t;
     int bt = ft & VT_BTYPE;
     int align, size = type_size(&sv->type, &align);
-    assert(!is_float(bt) || is_freg(r));
+    assert(!is_float(bt) || is_freg(r) || bt == VT_LDOUBLE);
+    /* long doubles are in two integer registers, but the load/store
+       primitives only deal with one, so do as if it's one reg.  */
+    if (bt == VT_LDOUBLE)
+      size = align = 8;
     if (bt == VT_STRUCT)
       tcc_error("unimp: store(struct)");
     if (size > 8)
@@ -399,28 +406,33 @@ ST_FUNC void gfunc_call(int nb_args)
 {
     int i, align, size, aireg, afreg;
     int info[nb_args ? nb_args : 1];
-    int stack_adj = 0, ofs;
+    int stack_adj = 0, tempspace = 0, ofs, splitofs = 0;
     int force_stack = 0;
     SValue *sv;
     Sym *sa;
     aireg = afreg = 0;
     sa = vtop[-nb_args].type.ref->next;
     for (i = 0; i < nb_args; i++) {
-        int *pareg, nregs, infreg = 0;
+        int *pareg, nregs, infreg = 0, byref = 0, tempofs;
         sv = &vtop[1 + i - nb_args];
         sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
         size = type_size(&sv->type, &align);
-        if ((size > 8 && ((sv->type.t & VT_BTYPE) != VT_LDOUBLE))
-            || ((sv->type.t & VT_BTYPE) == VT_STRUCT))
-          tcc_error("unimp: call arg %d wrong type", nb_args - i);
-        nregs = 1;
+        if (size > 16) {
+            tempspace = (tempspace + align - 1) & -align;
+            tempofs = tempspace;
+            tempspace += size;
+            size = align = 8;
+            byref = 1;
+        } else if (size > 8)
+          nregs = 2;
+        else
+          nregs = 1;
         if ((sv->type.t & VT_BTYPE) == VT_LDOUBLE) {
-          infreg = 0, nregs = 2;
-          if (!sa) {
-              aireg = (aireg + 1) & ~1;
-          }
+          infreg = 0;
         } else
           infreg = sa && is_float(sv->type.t);
+        if (!infreg && !sa && align == 2*XLEN && size <= 2*XLEN)
+          aireg = (aireg + 1) & ~1;
         pareg = infreg ? &afreg : &aireg;
         if ((*pareg < 8) && !force_stack) {
             info[i] = *pareg + (infreg ? 8 : 0);
@@ -432,7 +444,6 @@ ST_FUNC void gfunc_call(int nb_args)
             else {
                 info[i] |= 16;
                 stack_adj += 8;
-                tcc_error("unimp: param passing half in reg, half on stack");
             }
         } else {
             info[i] = 32;
@@ -440,43 +451,76 @@ ST_FUNC void gfunc_call(int nb_args)
             if (!sa)
               force_stack = 1;
         }
+        if (byref)
+          info[i] |= 64 | (tempofs << 7);
         if (sa)
           sa = sa->next;
     }
     stack_adj = (stack_adj + 15) & -16;
-    if (stack_adj) {
-        EI(0x13, 0, 2, 2, -stack_adj);      // addi sp, sp, -adj
+    tempspace = (tempspace + 15) & -16;
+    if (stack_adj + tempspace) {
+        EI(0x13, 0, 2, 2, -(stack_adj + tempspace));   // addi sp, sp, -adj
         for (i = ofs = 0; i < nb_args; i++) {
-            if (1 && info[i] >= 32) {
+            if (info[i] >= 32) {
                 vrotb(nb_args - i);
                 size = type_size(&vtop->type, &align);
-                /* Once we support offseted regs we can do this:
-                     vset(&vtop->type, TREG_SP | VT_LVAL, ofs);
-                   to construct the lvalue for the outgoing stack slot,
-                   until then we have to jump through hoops.  */
-                vset(&char_pointer_type, TREG_SP, 0);
-                vpushi(ofs);
-                gen_op('+');
-                indir();
-                vtop->type = vtop[-1].type;
-                vswap();
-                vstore();
+                if (info[i] & 64) {
+                    vset(&char_pointer_type, TREG_SP, 0);
+                    vpushi(stack_adj + (info[i] >> 7));
+                    gen_op('+');
+                    vpushv(vtop); // this replaces the old argument
+                    vrott(3);
+                    indir();
+                    vtop->type = vtop[-1].type;
+                    vswap();
+                    vstore();
+                    vpop();
+                    size = align = 8;
+                }
+                if (info[i] & 32) {
+                    /* Once we support offseted regs we can do this:
+                       vset(&vtop->type, TREG_SP | VT_LVAL, ofs);
+                       to construct the lvalue for the outgoing stack slot,
+                       until then we have to jump through hoops.  */
+                    vset(&char_pointer_type, TREG_SP, 0);
+                    ofs = (ofs + align - 1) & -align;
+                    vpushi(ofs);
+                    gen_op('+');
+                    indir();
+                    vtop->type = vtop[-1].type;
+                    vswap();
+                    vstore();
+                    vtop->r = vtop->r2 = VT_CONST; // this arg is done
+                    ofs += size;
+                }
                 vrott(nb_args - i);
-                ofs += (size + align - 1) & -align;
-                ofs = (ofs + 7) & -8;
+            } else if (info[i] & 16) {
+                assert(!splitofs);
+                splitofs = ofs;
+                ofs += 8;
             }
         }
     }
     for (i = 0; i < nb_args; i++) {
         int r = info[nb_args - 1 - i];
-        if (r < 32) {
+        if (!(r & 32)) {
+            CType origtype;
             r &= 15;
             vrotb(i+1);
+            origtype = vtop->type;
+            size = type_size(&vtop->type, &align);
+            if (size > 8 && (vtop->type.t & VT_BTYPE) == VT_STRUCT)
+              vtop->type.t = VT_LDOUBLE; // force loading a pair of regs
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
-            if (vtop->r2 < VT_CONST) {
-                assert((vtop->type.t & VT_BTYPE) == VT_LDOUBLE);
-                assert(vtop->r < 7);
-                if (vtop->r2 != 1 + vtop->r) {
+            vtop->type = origtype;
+            if (size > 8) {
+                assert((vtop->type.t & VT_BTYPE) == VT_LDOUBLE
+                       || (vtop->type.t & VT_BTYPE) == VT_STRUCT);
+                assert(vtop->r2 < VT_CONST);
+                if (info[nb_args - 1 - i] & 16) {
+                    ES(0x23, 3, 2, ireg(vtop->r2), splitofs); // sd t0, ofs(sp)
+                } else if (vtop->r2 != 1 + vtop->r) {
+                    assert(vtop->r < 7);
                     /* XXX we'd like to have 'gv' move directly into
                        the right class instead of us fixing it up.  */
                     EI(0x13, 0, ireg(vtop->r) + 1, ireg(vtop->r2), 0); // mv Ra+1, RR2
@@ -489,8 +533,8 @@ ST_FUNC void gfunc_call(int nb_args)
     vrotb(nb_args + 1);
     gcall();
     vtop -= nb_args + 1;
-    if (stack_adj)
-      EI(0x13, 0, 2, 2, stack_adj);      // addi sp, sp, adj
+    if (stack_adj + tempspace)
+      EI(0x13, 0, 2, 2, stack_adj + tempspace);      // addi sp, sp, adj
 }
 
 static int func_sub_sp_offset;
@@ -514,12 +558,14 @@ ST_FUNC void gfunc_prolog(CType *func_type)
 
     aireg = afreg = 0;
     addr = 0; // XXX not correct
-    /* if the function returns a structure, then add an
+    /* if the function returns by reference, then add an
        implicit pointer parameter */
     size = type_size(&func_vt, &align);
     if (size > 2 * XLEN) {
-        tcc_error("unimp: struct return");
+        loc -= 8;
         func_vc = loc;
+        ES(0x23, 3, 8, 10 + aireg, loc); // sd a0, loc(s0)
+        aireg++;
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
@@ -531,22 +577,30 @@ ST_FUNC void gfunc_prolog(CType *func_type)
             param_addr = addr;
             addr += size;
         } else {
-            int regcount = 1;
-            if (size > XLEN)
-              regcount++, tcc_error("unimp: scalars > 64bit");
-            if (regcount + (is_float(type->t) ? afreg : aireg) >= 8)
+            int regcount = 1, *pareg = &aireg;
+            if (is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE)
+              pareg = &afreg;
+            if (regcount + *pareg > 8)
               goto from_stack;
+            if (size > XLEN)
+              regcount++;
             loc -= regcount * 8; // XXX could reserve only 'size' bytes
             param_addr = loc;
             for (i = 0; i < regcount; i++) {
-                if (is_float(type->t)) {
-                    assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
-                    ES(0x27, size == 4 ? 2 : 3, 8, 10 + afreg, loc + i*8); // fs[wd] FAi, loc(s0)
-                    afreg++;
-                } else {
-                    ES(0x23, 3, 8, 10 + aireg, loc + i*8); // sd aX, loc(s0) // XXX
-                    aireg++;
+                if (*pareg >= 8) {
+                    assert(i == 1 && regcount == 2 && !(addr & 7));
+                    EI(0x03, 3, 5, 8, addr); // ld t0, addr(s0)
+                    addr += 8;
+                    ES(0x23, 3, 8, 5, loc + i*8); // sd t0, loc(s0)
+                    continue;
                 }
+                if (pareg == &afreg) {
+                    assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
+                    ES(0x27, size == 4 ? 2 : 3, 8, 10 + *pareg, loc + i*8); // fs[wd] FAi, loc(s0)
+                } else {
+                    ES(0x23, 3, 8, 10 + *pareg, loc + i*8); // sd aX, loc(s0) // XXX
+                }
+                (*pareg)++;
             }
         }
         sym_push(sym->v & ~SYM_FIELD, type,
@@ -560,17 +614,42 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
     /* generic code can only deal with structs of pow(2) sizes
        (it always deals with whole registers), so go through our own
        code.  */
-    return 0;
+    int align, size = type_size(vt, &align);
+    *ret_align = 1;
+    *regsize = 8;
+    if (size > 16)
+      return 0;
+    if (size > 8)
+      ret->t = VT_LDOUBLE;
+    else if (size > 4)
+      ret->t = VT_LLONG;
+    else if (size > 2)
+      ret->t = VT_INT;
+    else if (size > 1)
+      ret->t = VT_SHORT;
+    else
+      ret->t = VT_BYTE;
+    return (size + 7) / 8;
 }
 
 ST_FUNC void gfunc_return(CType *func_type)
 {
-    int align, size = type_size(func_type, &align);
-    if ((func_type->t & VT_BTYPE) == VT_STRUCT
-        || size > 2 * XLEN) {
-        tcc_error("unimp: struct or large return");
+    int align, size = type_size(func_type, &align), nregs;
+    CType type = *func_type;
+    if (size > 2 * XLEN) {
+        mk_pointer(&type);
+        vset(&type, VT_LOCAL | VT_LVAL, func_vc);
+        indir();
+        vswap();
+        vstore();
+        vpop();
+        return;
     }
-    if (is_float(func_type->t))
+    nregs = (size + 7) / 8;
+    if (nregs == 2)
+      vtop->type.t = VT_LDOUBLE;
+
+    if (is_float(func_type->t) && (vtop->type.t & VT_BTYPE) != VT_LDOUBLE)
       gv(RC_FRET);
     else
       gv(RC_IRET);
@@ -868,17 +947,32 @@ ST_FUNC void gen_cvt_ftof(int dt)
 {
     int st = vtop->type.t & VT_BTYPE, rs, rd;
     dt &= VT_BTYPE;
-    assert (dt == VT_FLOAT || dt == VT_DOUBLE);
-    assert (st == VT_FLOAT || st == VT_DOUBLE);
     if (st == dt)
       return;
-    rs = gv(RC_FLOAT);
-    rd = get_reg(RC_FLOAT);
-    if (dt == VT_DOUBLE)
-      EI(0x53, 7, freg(rd), freg(rs), 0x21 << 5); // fcvt.d.s RD, RS (dyn rm)
-    else
-      EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS
-    vtop->r = rd;
+    if (dt == VT_LDOUBLE || st == VT_LDOUBLE) {
+        int func = (dt == VT_LDOUBLE) ?
+            (st == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
+            (st == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
+        vpush_global_sym(&func_old_type, func);
+        vrott(2);
+        gfunc_call(1);
+        vpushi(0);
+        vtop->type.t = dt;
+        if (dt == VT_LDOUBLE)
+          vtop->r = REG_IRET, vtop->r2 = REG_IRET+1;
+        else
+          vtop->r = REG_FRET;
+    } else {
+        assert (dt == VT_FLOAT || dt == VT_DOUBLE);
+        assert (st == VT_FLOAT || st == VT_DOUBLE);
+        rs = gv(RC_FLOAT);
+        rd = get_reg(RC_FLOAT);
+        if (dt == VT_DOUBLE)
+          EI(0x53, 7, freg(rd), freg(rs), 0x21 << 5); // fcvt.d.s RD, RS (dyn rm)
+        else
+          EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS
+        vtop->r = rd;
+    }
 }
 
 ST_FUNC void ggoto(void)
