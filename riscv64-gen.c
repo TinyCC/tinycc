@@ -95,11 +95,17 @@ ST_FUNC void o(unsigned int c)
     ind = ind1;
 }
 
+static void EIu(uint32_t opcode, uint32_t func3,
+               uint32_t rd, uint32_t rs1, uint32_t imm)
+{
+    o(opcode | (func3 << 12) | (rd << 7) | (rs1 << 15) | (imm << 20));
+}
+
 static void EI(uint32_t opcode, uint32_t func3,
                uint32_t rd, uint32_t rs1, uint32_t imm)
 {
     assert(! ((imm + (1 << 11)) >> 12));
-    o(opcode | (func3 << 12) | (rd << 7) | (rs1 << 15) | (imm << 20));
+    EIu(opcode, func3, rd, rs1, imm);
 }
 
 static void ES(uint32_t opcode, uint32_t func3,
@@ -157,7 +163,7 @@ ST_FUNC void load(int r, SValue *sv)
             if (fc != sv->c.i)
               tcc_error("unimp: load1(giant local ofs) (0x%llx)", (long long)sv->c.i);
             if (((unsigned)fc + (1 << 11)) >> 12) {
-                br = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+                br = is_ireg(r) ? rr : 5;
                 o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
                 o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
                 fc = fc << 20 >> 20;
@@ -182,13 +188,13 @@ ST_FUNC void load(int r, SValue *sv)
             }
             label.c = 0; /* force new local ELF symbol */
             put_extern_sym(&label, cur_text_section, ind, 0);
-            tempr = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+            tempr = is_ireg(r) ? rr : 5;
             o(0x17 | (tempr << 7));   // auipc TR, 0 %pcrel_hi(sym)+addend
             greloca(cur_text_section, &label, ind,
                     R_RISCV_PCREL_LO12_I, 0);
             EI(opcode, func3, rr, tempr, fc); // l[bhwd][u] RR, fc(TR)
         } else if (v == VT_LLOCAL) {
-            int br = 8, tempr = is_ireg(r) ? rr : ireg(get_reg(RC_INT));
+            int br = 8, tempr = is_ireg(r) ? rr : 5;
             if (fc != sv->c.i)
               tcc_error("unimp: load2(giant local ofs) (0x%llx)", (long long)sv->c.i);
             if (((unsigned)fc + (1 << 11)) >> 12) {
@@ -333,7 +339,7 @@ ST_FUNC void store(int r, SValue *sv)
         if (fc != sv->c.i)
           tcc_error("unimp: store(giant local off) (0x%llx)", (long long)sv->c.i);
         if (((unsigned)fc + (1 << 11)) >> 12) {
-            br = ireg(get_reg(RC_INT));
+            br = 5; // t0
             o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
             o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
             fc = fc << 20 >> 20;
@@ -353,13 +359,13 @@ ST_FUNC void store(int r, SValue *sv)
         else
           ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
              ptrreg, rr, fc); // s[bhwd] RR, fc(PTRREG)
-    } else if (sv->r == (VT_CONST | VT_SYM | VT_LVAL)) {
+    } else if ((sv->r & ~VT_LVAL_TYPE) == (VT_CONST | VT_SYM | VT_LVAL)) {
         static Sym label;
         int tempr, addend = 0;
         if (1 || ((unsigned)fc + (1 << 11)) >> 12)
           addend = fc, fc = 0;
 
-        tempr = ireg(get_reg(RC_INT));
+        tempr = 5; // t0
         greloca(cur_text_section, sv->sym, ind,
                 R_RISCV_PCREL_HI20, addend);
         if (!label.v) {
@@ -380,23 +386,24 @@ ST_FUNC void store(int r, SValue *sv)
       tcc_error("implement me: %s(!local)", __FUNCTION__);
 }
 
-static void gcall(void)
+static void gcall_or_jmp(int docall)
 {
+    int tr = docall ? 1 : 5; // ra or t0
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
         ((vtop->r & VT_SYM) && vtop->c.i == (int)vtop->c.i)) {
         /* constant symbolic case -> simple relocation */
         greloca(cur_text_section, vtop->sym, ind,
                 R_RISCV_CALL_PLT, (int)vtop->c.i);
-        o(0x17 | (1 << 7));   // auipc ra, 0 %call(func)
-        o(0x80e7);             // jalr  ra, 0 %call(func)
+        o(0x17 | (tr << 7));   // auipc TR, 0 %call(func)
+        EI(0x67, 0, tr, tr, 0);// jalr  TR, r(TR)
     } else if (vtop->r < VT_CONST) {
         int r = ireg(vtop->r);
-        EI(0x67, 0, 1, r, 0);      // jalr ra, 0(R)
+        EI(0x67, 0, tr, r, 0);      // jalr TR, 0(R)
     } else {
         int r = TREG_RA;
         load(r, vtop);
         r = ireg(r);
-        EI(0x67, 0, 1, r, 0);      // jalr ra, 0(R)
+        EI(0x67, 0, tr, r, 0);      // jalr TR, 0(R)
     }
 }
 
@@ -536,7 +543,7 @@ ST_FUNC void gfunc_call(int nb_args)
         }
     }
     vrotb(nb_args + 1);
-    gcall();
+    gcall_or_jmp(1);
     vtop -= nb_args + 1;
     if (stack_adj + tempspace)
       EI(0x13, 0, 2, 2, stack_adj + tempspace);      // addi sp, sp, adj
@@ -725,9 +732,12 @@ ST_FUNC void gen_va_arg(CType *t)
 
 ST_FUNC void gen_fill_nops(int bytes)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
     if ((bytes & 3))
       tcc_error("alignment of code section not multiple of 4");
+    while (bytes > 0) {
+        EI(0x13, 0, 0, 0, 0);      // addi x0, x0, 0 == nop
+        bytes -= 4;
+    }
 }
 
 // Generate forward branch to label:
@@ -795,7 +805,6 @@ static void gen_opil(int op, int ll)
     d = ireg(d);
     ll = ll ? 0 : 8;
     switch (op) {
-    case TOK_PDIV:
     default:
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
 
@@ -835,6 +844,7 @@ static void gen_opil(int op, int ll)
     case TOK_UMOD:
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (7 << 12)); //remu d, a, b
         break;
+    case TOK_PDIV:
     case TOK_UDIV:
         o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (5 << 12)); //divu d, a, b
         break;
@@ -887,6 +897,38 @@ ST_FUNC void gen_opl(int op)
 ST_FUNC void gen_opf(int op)
 {
     int rs1, rs2, rd, dbl, invert;
+    if (vtop[0].type.t == VT_LDOUBLE) {
+        CType type = vtop[0].type;
+        int func = 0;
+        int cond = -1;
+        switch (op) {
+        case '*': func = TOK___multf3; break;
+        case '+': func = TOK___addtf3; break;
+        case '-': func = TOK___subtf3; break;
+        case '/': func = TOK___divtf3; break;
+        case TOK_EQ: func = TOK___eqtf2; cond = 1; break;
+        case TOK_NE: func = TOK___netf2; cond = 0; break;
+        case TOK_LT: func = TOK___lttf2; cond = 10; break;
+        case TOK_GE: func = TOK___getf2; cond = 11; break;
+        case TOK_LE: func = TOK___letf2; cond = 12; break;
+        case TOK_GT: func = TOK___gttf2; cond = 13; break;
+        default: assert(0); break;
+        }
+        vpush_global_sym(&func_old_type, func);
+        vrott(3);
+        gfunc_call(2);
+        vpushi(0);
+        vtop->r = REG_IRET;
+        vtop->r2 = cond < 0 ? TREG_R(1) : VT_CONST;
+        if (cond < 0)
+            vtop->type = type;
+        else {
+            vpushi(0);
+            gen_opil(op, 1);
+        }
+        return;
+    }
+
     gv2(RC_FLOAT, RC_FLOAT);
     assert(vtop->type.t == VT_DOUBLE || vtop->type.t == VT_FLOAT);
     dbl = vtop->type.t == VT_DOUBLE;
@@ -953,12 +995,54 @@ ST_FUNC void gen_cvt_sxtw(void)
 
 ST_FUNC void gen_cvt_itof(int t)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int rr = ireg(gv(RC_INT)), dr;
+    int u = vtop->type.t & VT_UNSIGNED;
+    int l = (vtop->type.t & VT_BTYPE) == VT_LLONG;
+    if (t == VT_LDOUBLE) {
+        int func = l ?
+          (u ? TOK___floatunditf : TOK___floatditf) :
+          (u ? TOK___floatunsitf : TOK___floatsitf);
+        vpush_global_sym(&func_old_type, func);
+        vrott(2);
+        gfunc_call(1);
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+        vtop->r2 = TREG_R(1);
+    } else {
+        vtop--;
+        dr = get_reg(RC_FLOAT);
+        vtop++;
+        vtop->r = dr;
+        dr = freg(dr);
+        EIu(0x53, 7, dr, rr, ((0x68 | (t == VT_DOUBLE ? 1 : 0)) << 5) | (u ? 1 : 0) | (l ? 2 : 0)); // fcvt.[sd].[wl][u]
+    }
 }
 
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    int ft = vtop->type.t & VT_BTYPE;
+    int l = (t & VT_BTYPE) == VT_LLONG;
+    int u = t & VT_UNSIGNED;
+    if (ft == VT_LDOUBLE) {
+        int func = l ?
+          (u ? TOK___fixunstfdi : TOK___fixtfdi) :
+          (u ? TOK___fixunstfsi : TOK___fixtfsi);
+        vpush_global_sym(&func_old_type, func);
+        vrott(2);
+        gfunc_call(1);
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+    } else {
+        int rr = freg(gv(RC_FLOAT)), dr;
+        vtop--;
+        dr = get_reg(RC_INT);
+        vtop++;
+        vtop->r = dr;
+        dr = ireg(dr);
+        EIu(0x53, 7, dr, rr, ((0x60 | (ft == VT_DOUBLE ? 1 : 0)) << 5) | (u ? 1 : 0) | (l ? 2 : 0)); // fcvt.[wl][u].[sd]
+    }
 }
 
 ST_FUNC void gen_cvt_ftof(int dt)
@@ -995,7 +1079,8 @@ ST_FUNC void gen_cvt_ftof(int dt)
 
 ST_FUNC void ggoto(void)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    gcall_or_jmp(0);
+    vtop--;
 }
 
 ST_FUNC void gen_vla_sp_save(int addr)

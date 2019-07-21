@@ -2839,7 +2839,7 @@ static void gen_cast(CType *type)
 #if defined(TCC_TARGET_RISCV64)
                         /* RISC-V keeps 32bit vals in registers sign-extended.
                            So here we need a zero-extension.  */
-                        vtop->type.t = dbt;
+                        vtop->type.t = VT_LLONG;
                         vpushi(32);
                         gen_op(TOK_SHL);
                         vpushi(32);
@@ -5522,6 +5522,9 @@ special_math_val:
 #ifdef TCC_TARGET_X86_64
                     if ((ret.type.t & VT_BTYPE) == VT_QFLOAT)
                       ret.r2 = REG_QRET;
+#elif defined TCC_TARGET_RISCV64
+                    if ((ret.type.t & VT_BTYPE) == VT_LDOUBLE)
+                      ret.r2 = ret.r + 1;
 #endif
                 } else {
 #ifndef TCC_TARGET_ARM64

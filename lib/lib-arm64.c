@@ -24,10 +24,12 @@ void *memcpy(void*,void*,__SIZE_TYPE__);
 #include <string.h>
 #endif
 
+#ifndef __riscv
 void __clear_cache(void *beg, void *end)
 {
     __arm64_clear_cache(beg, end);
 }
+#endif
 
 typedef struct {
     uint64_t x0, x1;
