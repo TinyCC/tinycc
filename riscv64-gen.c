@@ -203,8 +203,8 @@ ST_FUNC void load(int r, SValue *sv)
             tcc_error("unimp: load(non-local lval)");
         }
     } else if (v == VT_CONST) {
-        int rb = 0, do32bit = 8, doload = 0;
-        assert(!is_float(sv->type.t) && is_ireg(r) || bt == VT_LDOUBLE);
+        int rb = 0, do32bit = 8, doload = 0, zext = 0;
+        assert((!is_float(sv->type.t) && is_ireg(r)) || bt == VT_LDOUBLE);
         if (fr & VT_SYM) {
             static Sym label;
             if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
@@ -252,16 +252,10 @@ ST_FUNC void load(int r, SValue *sv)
                 fc &= 0xff;
                 rb = rr;
                 do32bit = 0;
-            } else {
-                /* A 32bit unsigned constant.  lui always sign extends, so we need
-                   tricks.  */
-                pi = (uint32_t)sv->c.i;
-                o(0x37 | (rr << 7) | (((pi + 0x80000) & 0xfff00000) >> 8)); // lui RR, up(fc)>>8
-                EI(0x13, 0, rr, rr,  (((pi + 0x200) & 0x000ffc00) >> 8) | (-((int)(pi + 0x200) & 0x80000) >> 8)); // addi RR, RR, mid(fc)
-                EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
-                fc = (pi & 0x3ff) | (-((int)(pi & 0x200)));
-                rb = rr;
-                do32bit = 0;
+            } else if (bt == VT_LLONG) {
+                /* A 32bit unsigned constant for a 64bit type.
+                   lui always sign extends, so we need to do an explicit zext.*/
+                zext = 1;
             }
         }
         if (((unsigned)fc + (1 << 11)) >> 12)
@@ -272,6 +266,10 @@ ST_FUNC void load(int r, SValue *sv)
             EI(0x13 | do32bit, 0, rr, rr, fc << 20 >> 20); // addi[w] R, x0|R, FC
         } else
           EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20); // addi[w] R, x0|R, FC
+        if (zext) {
+            EI(0x13, 1, rr, rr, 32); // slli RR, RR, 32
+            EI(0x13, 5, rr, rr, 32); // srli RR, RR, 32
+        }
     } else if (v == VT_LOCAL) {
         int br = 8; // s0
         assert(is_ireg(r));

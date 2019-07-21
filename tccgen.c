@@ -2835,6 +2835,16 @@ static void gen_cast(CType *type)
 #else
 #error
 #endif
+                    } else if (sbt & VT_UNSIGNED) {
+#if defined(TCC_TARGET_RISCV64)
+                        /* RISC-V keeps 32bit vals in registers sign-extended.
+                           So here we need a zero-extension.  */
+                        vtop->type.t = dbt;
+                        vpushi(32);
+                        gen_op(TOK_SHL);
+                        vpushi(32);
+                        gen_op(TOK_SHR);
+#endif
                     }
                 }
 #endif
