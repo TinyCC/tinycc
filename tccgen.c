@@ -6783,13 +6783,14 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
             c += index * elem_size;
             nb_elems = index_last - index + 1;
         } else {
-            int cumofs = 0;
+            int cumofs;
             next();
             l = tok;
         struct_field:
             next();
             if ((type->t & VT_BTYPE) != VT_STRUCT)
                 expect("struct/union type");
+            cumofs = 0;
 	    f = find_field(type, l, &cumofs);
             if (!f)
                 expect("field");

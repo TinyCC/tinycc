@@ -175,6 +175,12 @@ void foo (struct W *w, struct pkthdr *phdr_)
   struct T lt2 = { { [1 ... 5] = 9, [6 ... 10] = elt, [4 ... 7] = elt+1 }, 1 };
   struct SSU lssu1 = { 5, 3 };
   struct SSU lssu2 = { .y = 5, .x = 3 };
+  /* designated initializers in GNU form */
+#if defined(__GNUC__) || defined(__TINYC__)
+  struct S ls4 = {a: 1, b: 2, c: {3, 4}};
+#else
+  struct S ls4 = {.a = 1, .b = 2, .c = {3, 4}};
+#endif
   print(ls);
   print(ls2);
   print(lt);
@@ -194,6 +200,7 @@ void foo (struct W *w, struct pkthdr *phdr_)
   print(lssu1);
   print(lssu2);
   print(flow);
+  print(ls4);
 }
 #endif
 
