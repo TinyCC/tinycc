@@ -5159,6 +5159,20 @@ ST_FUNC void unary(void)
             }
         }
         break;
+#ifdef TCC_TARGET_RISCV64
+    case TOK_builtin_va_start:
+        parse_builtin_params(0, "ee");
+        r = vtop->r & VT_VALMASK;
+        if (r == VT_LLOCAL)
+            r = VT_LOCAL;
+        if (r != VT_LOCAL)
+            tcc_error("__builtin_va_start expects a local variable");
+        vtop->r = r;
+	vtop->type = char_pointer_type;
+	vtop->c.i = 0;
+	vstore();
+        break;
+#endif
 #ifdef TCC_TARGET_X86_64
 #ifdef TCC_TARGET_PE
     case TOK_builtin_va_start:
@@ -5972,7 +5986,7 @@ static void expr_cond(void)
 
             if (c < 0) {
                 r1 = gv(rc);
-                move_reg(r2, r1, type.t);
+                move_reg(r2, r1, islv ? VT_PTR : type.t);
                 vtop->r = r2;
                 gsym(tt);
             }

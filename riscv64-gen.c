@@ -418,12 +418,15 @@ ST_FUNC void gfunc_call(int nb_args)
         sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
         size = type_size(&sv->type, &align);
         if (size > 16) {
+            if (align < XLEN)
+              align = XLEN;
             tempspace = (tempspace + align - 1) & -align;
             tempofs = tempspace;
             tempspace += size;
             size = align = 8;
             byref = 1;
-        } else if (size > 8)
+        }
+        if (size > 8)
           nregs = 2;
         else
           nregs = 1;
@@ -447,6 +450,8 @@ ST_FUNC void gfunc_call(int nb_args)
             }
         } else {
             info[i] = 32;
+            if (align < XLEN)
+              align = XLEN;
             stack_adj += (size + align - 1) & -align;
             if (!sa)
               force_stack = 1;
@@ -478,6 +483,8 @@ ST_FUNC void gfunc_call(int nb_args)
                     size = align = 8;
                 }
                 if (info[i] & 32) {
+                    if (align < XLEN)
+                      align = XLEN;
                     /* Once we support offseted regs we can do this:
                        vset(&vtop->type, TREG_SP | VT_LVAL, ofs);
                        to construct the lvalue for the outgoing stack slot,
@@ -537,7 +544,7 @@ ST_FUNC void gfunc_call(int nb_args)
       EI(0x13, 0, 2, 2, stack_adj + tempspace);      // addi sp, sp, adj
 }
 
-static int func_sub_sp_offset;
+static int func_sub_sp_offset, num_va_regs;
 
 ST_FUNC void gfunc_prolog(CType *func_type)
 {
@@ -552,9 +559,6 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     loc = -16; // for ra and s0
     func_sub_sp_offset = ind;
     ind += 5 * 4;
-    if (sym->f.func_type == FUNC_ELLIPSIS) {
-        tcc_error("unimp: vararg prologue");
-    }
 
     aireg = afreg = 0;
     addr = 0; // XXX not correct
@@ -569,10 +573,17 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
+        int byref = 0;
         type = &sym->type;
         size = type_size(type, &align);
         if (size > 2 * XLEN) {
+            type = &char_pointer_type;
+            size = align = byref = 8;
+        }
+        if (size > 2 * XLEN) {
           from_stack:
+            if (align < XLEN)
+              align = XLEN;
             addr = (addr + align - 1) & -align;
             param_addr = addr;
             addr += size;
@@ -603,8 +614,16 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                 (*pareg)++;
             }
         }
-        sym_push(sym->v & ~SYM_FIELD, type,
-                 VT_LOCAL | lvalue_type(type->t), param_addr);
+        sym_push(sym->v & ~SYM_FIELD, &sym->type,
+                 (byref ? VT_LLOCAL : VT_LOCAL) | lvalue_type(sym->type.t),
+                 param_addr);
+    }
+    num_va_regs = 0;
+    if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
+        for (; aireg < 8; aireg++) {
+            num_va_regs++;
+            ES(0x23, 3, 8, 10 + aireg, -8 + num_va_regs * 8); // sd aX, loc(s0)
+        }
     }
 }
 
@@ -620,7 +639,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
     if (size > 16)
       return 0;
     if (size > 8)
-      ret->t = VT_LDOUBLE;
+      ret->t = VT_LLONG;
     else if (size > 4)
       ret->t = VT_LLONG;
     else if (size > 2)
@@ -660,6 +679,7 @@ ST_FUNC void gfunc_epilog(void)
 {
     int v, saved_ind, d, large_ofs_ind;
 
+    loc = (loc - num_va_regs * 8);
     d = v = (-loc + 15) & -16;
 
     if (v >= (1 << 11)) {
@@ -668,13 +688,13 @@ ST_FUNC void gfunc_epilog(void)
         EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
         o(0x33 | (2 << 7) | (2 << 15) | (5 << 20)); //add sp, sp, t0
     }
-    EI(0x03, 3, 1, 2, d - 8);  // ld ra, v-8(sp)
-    EI(0x03, 3, 8, 2, d - 16); // ld s0, v-16(sp)
+    EI(0x03, 3, 1, 2, d - 8 - num_va_regs * 8);  // ld ra, v-8(sp)
+    EI(0x03, 3, 8, 2, d - 16 - num_va_regs * 8); // ld s0, v-16(sp)
     EI(0x13, 0, 2, 2, d);      // addi sp, sp, v
     EI(0x67, 0, 0, 1, 0);      // jalr x0, 0(x1), aka ret
     if (v >= (1 << 11)) {
         large_ofs_ind = ind;
-        EI(0x13, 0, 8, 2, d);      // addi s0, sp, d
+        EI(0x13, 0, 8, 2, d - num_va_regs * 8);      // addi s0, sp, d
         o(0x37 | (5 << 7) | ((0x800 + (v-16)) & 0xfffff000)); //lui t0, upper(v)
         EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
         o(0x33 | (2 << 7) | (2 << 15) | (5 << 20) | (0x20 << 25)); //sub sp, sp, t0
@@ -684,10 +704,10 @@ ST_FUNC void gfunc_epilog(void)
 
     ind = func_sub_sp_offset;
     EI(0x13, 0, 2, 2, -d);     // addi sp, sp, -d
-    ES(0x23, 3, 2, 1, d - 8);  // sd ra, d-8(sp)
-    ES(0x23, 3, 2, 8, d - 16); // sd s0, d-16(sp)
+    ES(0x23, 3, 2, 1, d - 8 - num_va_regs * 8);  // sd ra, d-8(sp)
+    ES(0x23, 3, 2, 8, d - 16 - num_va_regs * 8); // sd s0, d-16(sp)
     if (v < (1 << 11))
-      EI(0x13, 0, 8, 2, d);      // addi s0, sp, d
+      EI(0x13, 0, 8, 2, d - num_va_regs * 8);      // addi s0, sp, d
     else
       gjmp_addr(large_ofs_ind);
     if ((ind - func_sub_sp_offset) != 5*4)
