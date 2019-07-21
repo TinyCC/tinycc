@@ -155,7 +155,7 @@ ST_FUNC void load(int r, SValue *sv)
             if (bt == VT_FUNC)
               size = PTR_SIZE;
             func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
-            if (size < 8 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
+            if (size < 4 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
               func3 |= 4;
         }
         if (v == VT_LOCAL) {
