@@ -1604,7 +1604,7 @@ ST_FUNC void gen_clear_cache(void);
 #ifdef TCC_TARGET_RISCV64
 ST_FUNC void gen_cvt_sxtw(void);
 ST_FUNC void gen_opl(int op);
-ST_FUNC void gfunc_return(CType *func_type);
+//ST_FUNC void gfunc_return(CType *func_type);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void gen_va_arg(CType *t);
 #endif

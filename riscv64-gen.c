@@ -147,8 +147,8 @@ ST_FUNC void load(int r, SValue *sv)
     if (fr & VT_LVAL) {
         int func3, opcode = 0x03, doload = 0;
         if (is_freg(r)) {
-            assert(bt == VT_DOUBLE || bt == VT_FLOAT);
             opcode = 0x07;
+            assert(bt == VT_DOUBLE || bt == VT_FLOAT);
             func3 = bt == VT_DOUBLE ? 3 : 2;
         } else {
             assert(is_ireg(r));
@@ -433,6 +433,33 @@ static void gcall_or_jmp(int docall)
     }
 }
 
+static int pass_in_freg(CType *type, int regs)
+{
+    int tr;
+    int toplevel = !regs;
+    if ((type->t & VT_BTYPE) == VT_STRUCT) {
+        Sym *f;
+        if (type->ref->type.t == VT_UNION)
+          return toplevel ? 0 : -1;
+        for (f = type->ref->next; f; f = f->next) {
+            tr = pass_in_freg(&f->type, regs);
+            if (tr < 0 || (regs + tr) > 2)
+              return toplevel ? 0 : -1;
+            regs += tr;
+        }
+        return regs;
+    } else if (type->t & VT_ARRAY) {
+        if (type->ref->c < 0 || type->ref->c > 2)
+          return toplevel ? 0 : -1;
+        tr = pass_in_freg(&type->ref->type, regs);
+        tr *= type->ref->c;
+        if (tr < 0 || (regs + tr) > 2)
+          return toplevel ? 0 : -1;
+        return regs + tr;
+    }
+    return is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE;
+}
+
 ST_FUNC void gfunc_call(int nb_args)
 {
     int i, align, size, aireg, afreg;
@@ -461,14 +488,15 @@ ST_FUNC void gfunc_call(int nb_args)
           nregs = 2;
         else
           nregs = 1;
-        if ((sv->type.t & VT_BTYPE) == VT_LDOUBLE) {
+        if (!sa) {
           infreg = 0;
-        } else
-          infreg = sa && is_float(sv->type.t);
+        } else {
+          infreg = pass_in_freg(&sv->type, 0);
+        }
         if (!infreg && !sa && align == 2*XLEN && size <= 2*XLEN)
           aireg = (aireg + 1) & ~1;
         pareg = infreg ? &afreg : &aireg;
-        if ((*pareg < 8) && !force_stack) {
+        if ((*pareg < 8 && (!infreg || (*pareg + nregs) <= 8)) && !force_stack) {
             info[i] = *pareg + (infreg ? 8 : 0);
             (*pareg)++;
             if (nregs == 1)
@@ -547,7 +575,38 @@ ST_FUNC void gfunc_call(int nb_args)
             vrotb(i+1);
             origtype = vtop->type;
             size = type_size(&vtop->type, &align);
-            if (size > 8 && (vtop->type.t & VT_BTYPE) == VT_STRUCT)
+            if (r >= 8 && (vtop->r & VT_LVAL)) {
+                int infreg = pass_in_freg(&vtop->type, 0);
+                int loadt = vtop->type.t & VT_BTYPE;
+                if (loadt == VT_STRUCT) {
+                    if (infreg == 1)
+                      loadt = size == 4 ? VT_FLOAT : VT_DOUBLE;
+                    else
+                      loadt = size == 8 ? VT_FLOAT : VT_DOUBLE;
+                }
+                vtop->type.t = loadt;
+                assert (infreg && infreg <= 2);
+                save_reg_upstack(r, 1);
+                if (infreg > 1) {
+                    save_reg_upstack(r + 1, 1);
+                    test_lvalue();
+                }
+                load(r, vtop);
+                vset(&origtype, r, 0);
+                vswap();
+                if (infreg > 1) {
+                    assert(r + 1 < 16);
+                    gaddrof();
+                    mk_pointer(&vtop->type);
+                    vpushi(1);
+                    gen_op('+');
+                    indir();
+                    load(r + 1, vtop);
+                    vtop[-1].r2 = r + 1;
+                }
+                vtop--;
+            } else {
+            if (r < 8 && size > 8 && (vtop->type.t & VT_BTYPE) == VT_STRUCT)
               vtop->type.t = VT_LDOUBLE; // force loading a pair of regs
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
             vtop->type = origtype;
@@ -564,6 +623,7 @@ ST_FUNC void gfunc_call(int nb_args)
                     EI(0x13, 0, ireg(vtop->r) + 1, ireg(vtop->r2), 0); // mv Ra+1, RR2
                     vtop->r2 = 1 + vtop->r;
                 }
+            }
             }
             vrott(i+1);
         }
@@ -621,11 +681,14 @@ ST_FUNC void gfunc_prolog(CType *func_type)
             addr += size;
         } else {
             int regcount = 1, *pareg = &aireg;
-            if (is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE)
+            if ((regcount = pass_in_freg(type, 0)))
               pareg = &afreg;
+            else {
+                regcount = 1;
+            }
             if (regcount + *pareg > 8)
               goto from_stack;
-            if (size > XLEN)
+            if (size > XLEN && pareg == &aireg)
               regcount++;
             loc -= regcount * 8; // XXX could reserve only 'size' bytes
             param_addr = loc;
@@ -638,8 +701,8 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                     continue;
                 }
                 if (pareg == &afreg) {
-                    assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
-                    ES(0x27, size == 4 ? 2 : 3, 8, 10 + *pareg, loc + i*8); // fs[wd] FAi, loc(s0)
+                    //assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
+                    ES(0x27, (size / regcount) == 4 ? 2 : 3, 8, 10 + *pareg, loc + i*(size / regcount)); // fs[wd] FAi, loc(s0)
                 } else {
                     ES(0x23, 3, 8, 10 + *pareg, loc + i*8); // sd aX, loc(s0) // XXX
                 }
@@ -666,11 +729,17 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
     /* generic code can only deal with structs of pow(2) sizes
        (it always deals with whole registers), so go through our own
        code.  */
-    int align, size = type_size(vt, &align);
+    int align, size = type_size(vt, &align), infreg;
     *ret_align = 1;
     *regsize = 8;
     if (size > 16)
       return 0;
+    infreg = pass_in_freg(vt, 0);
+    if (infreg) {
+        *regsize = size / infreg;
+        ret->t = (size / infreg) == 4 ? VT_FLOAT : VT_DOUBLE;
+        return infreg;
+    }
     if (size > 8)
       ret->t = VT_LLONG;
     else if (size > 4)
@@ -684,7 +753,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
     return (size + 7) / 8;
 }
 
-ST_FUNC void gfunc_return(CType *func_type)
+ST_FUNC void gfunc_return2(CType *func_type)
 {
     int align, size = type_size(func_type, &align), nregs;
     CType type = *func_type;
@@ -697,9 +766,12 @@ ST_FUNC void gfunc_return(CType *func_type)
         vpop();
         return;
     }
-    nregs = (size + 7) / 8;
-    if (nregs == 2)
-      vtop->type.t = VT_LDOUBLE;
+    nregs = pass_in_freg(func_type, 0);
+    if (!nregs) {
+        nregs = (size + 7) / 8;
+        if (nregs == 2)
+          vtop->type.t = VT_LDOUBLE;
+    }
 
     if (is_float(func_type->t) && (vtop->type.t & VT_BTYPE) != VT_LDOUBLE)
       gv(RC_FRET);
