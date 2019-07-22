@@ -1067,7 +1067,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
         vtop++;
         vtop->r = dr;
         dr = ireg(dr);
-        EIu(0x53, 7, dr, rr, ((0x60 | (ft == VT_DOUBLE ? 1 : 0)) << 5) | (u ? 1 : 0) | (l ? 2 : 0)); // fcvt.[wl][u].[sd]
+        EIu(0x53, 1, dr, rr, ((0x60 | (ft == VT_DOUBLE ? 1 : 0)) << 5) | (u ? 1 : 0) | (l ? 2 : 0)); // fcvt.[wl][u].[sd] rtz
     }
 }
 
@@ -1080,7 +1080,7 @@ ST_FUNC void gen_cvt_ftof(int dt)
     if (dt == VT_LDOUBLE || st == VT_LDOUBLE) {
         int func = (dt == VT_LDOUBLE) ?
             (st == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
-            (st == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
+            (dt == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
         vpush_global_sym(&func_old_type, func);
         vrott(2);
         gfunc_call(1);
