@@ -5180,9 +5180,7 @@ ST_FUNC void unary(void)
             r = VT_LOCAL;
         if (r != VT_LOCAL)
             tcc_error("__builtin_va_start expects a local variable");
-        vtop->r = r;
-	vtop->type = char_pointer_type;
-	vtop->c.i = 0;
+        gen_va_start();
 	vstore();
         break;
 #endif

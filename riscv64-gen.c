@@ -576,7 +576,7 @@ ST_FUNC void gfunc_call(int nb_args)
       EI(0x13, 0, 2, 2, stack_adj + tempspace);      // addi sp, sp, adj
 }
 
-static int func_sub_sp_offset, num_va_regs;
+static int func_sub_sp_offset, num_va_regs, func_va_list_ofs;
 
 ST_FUNC void gfunc_prolog(CType *func_type)
 {
@@ -650,6 +650,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                  (byref ? VT_LLOCAL : VT_LOCAL) | lvalue_type(sym->type.t),
                  param_addr);
     }
+    func_va_list_ofs = addr;
     num_va_regs = 0;
     if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
         for (; aireg < 8; aireg++) {
@@ -749,7 +750,8 @@ ST_FUNC void gfunc_epilog(void)
 
 ST_FUNC void gen_va_start(void)
 {
-    tcc_error("implement me: %s", __FUNCTION__);
+    vtop--;
+    vset(&char_pointer_type, VT_LOCAL, func_va_list_ofs);
 }
 
 ST_FUNC void gen_va_arg(CType *t)
