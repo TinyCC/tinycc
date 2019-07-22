@@ -2867,12 +2867,15 @@ static void gen_cast(CType *type)
                     lexpand();
                     vpop();
 #else
-                    /* XXX some architectures (e.g. risc-v) would like it
-                       better for this merely being a 32-to-64 sign or zero-
-                       extension.  */
-		    vpushi(0xffffffff);
-		    vtop->type.t |= VT_UNSIGNED;
-		    gen_op('&');
+                    if (dbt & VT_UNSIGNED) {
+                        /* XXX some architectures (e.g. risc-v) would like it
+                           better for this merely being a 32-to-64 sign or zero-
+                           extension.  */
+                        vpushi(0xffffffff);
+                        vtop->type.t |= VT_UNSIGNED;
+                        gen_op('&');
+                    } else {
+                    }
 #endif
                 }
                 /* if lvalue and single word type, nothing to do because
@@ -5253,7 +5256,7 @@ ST_FUNC void unary(void)
 	        vtop->c.f = -1.0 * 0.0;
 	    else if (t == VT_DOUBLE)
 	        vtop->c.d = -1.0 * 0.0;
-	    else
+            else
 	        vtop->c.ld = -1.0 * 0.0;
 	} else
 	    vpushi(0);

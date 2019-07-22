@@ -1633,6 +1633,7 @@ void cast_test()
     unsigned b,d;
     short s;
     char *p = NULL;
+    unsigned long ul = 0x80000000UL;
     p -= 0x700000000042;
 
     printf("cast_test:\n");
@@ -1685,6 +1686,9 @@ void cast_test()
     /* from integers to pointers */
     printf("%p %p %p %p\n",
            (void *)a, (void *)b, (void *)c, (void *)d);
+
+    /* int to int with sign set */
+    printf("0x%lx\n", (unsigned long)(int)ul);
 }
 
 /* initializers tests */
