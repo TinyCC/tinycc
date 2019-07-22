@@ -145,7 +145,7 @@ ST_FUNC void load(int r, SValue *sv)
     int bt = sv->type.t & VT_BTYPE;
     int align, size = type_size(&sv->type, &align);
     if (fr & VT_LVAL) {
-        int func3, opcode = 0x03;
+        int func3, opcode = 0x03, doload = 0;
         if (is_freg(r)) {
             assert(bt == VT_DOUBLE || bt == VT_FLOAT);
             opcode = 0x07;
@@ -176,12 +176,19 @@ ST_FUNC void load(int r, SValue *sv)
             EI(opcode, func3, rr, ireg(v), fc); // l[bhwd][u] RR, 0(V)
         } else if (v == VT_CONST && (fr & VT_SYM)) {
             static Sym label;
-            int addend = 0, tempr;
-            if (1 || ((unsigned)fc + (1 << 11)) >> 12)
-              addend = fc, fc = 0;
-
-            greloca(cur_text_section, sv->sym, ind,
-                    R_RISCV_PCREL_HI20, addend);
+            int tempr;
+            if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
+                greloca(cur_text_section, sv->sym, ind,
+                        R_RISCV_PCREL_HI20, sv->c.i);
+                fc = 0;
+                sv->c.i = 0;
+            } else {
+                if (((unsigned)fc + (1 << 11)) >> 12)
+                  tcc_error("unimp: large addend for global address");
+                greloca(cur_text_section, sv->sym, ind,
+                        R_RISCV_GOT_HI20, 0);
+                doload = 1;
+            }
             if (!label.v) {
                 label.v = tok_alloc(".L0 ", 4)->tok;
                 label.type.t = VT_VOID | VT_STATIC;
@@ -192,6 +199,12 @@ ST_FUNC void load(int r, SValue *sv)
             o(0x17 | (tempr << 7));   // auipc TR, 0 %pcrel_hi(sym)+addend
             greloca(cur_text_section, &label, ind,
                     R_RISCV_PCREL_LO12_I, 0);
+            if (doload) {
+                EI(0x03, 3, tempr, tempr, 0); // ld TR, 0(TR)
+                if (fc)
+                  EI(0x13, 0, tempr, tempr, fc << 20 >> 20); // addi TR, TR, FC
+                fc = 0;
+            }
             EI(opcode, func3, rr, tempr, fc); // l[bhwd][u] RR, fc(TR)
         } else if (v == VT_LLOCAL) {
             int br = 8, tempr = is_ireg(r) ? rr : 5;
@@ -361,13 +374,20 @@ ST_FUNC void store(int r, SValue *sv)
              ptrreg, rr, fc); // s[bhwd] RR, fc(PTRREG)
     } else if ((sv->r & ~VT_LVAL_TYPE) == (VT_CONST | VT_SYM | VT_LVAL)) {
         static Sym label;
-        int tempr, addend = 0;
-        if (1 || ((unsigned)fc + (1 << 11)) >> 12)
-          addend = fc, fc = 0;
-
+        int tempr, doload = 0;
         tempr = 5; // t0
-        greloca(cur_text_section, sv->sym, ind,
-                R_RISCV_PCREL_HI20, addend);
+        if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
+            greloca(cur_text_section, sv->sym, ind,
+                    R_RISCV_PCREL_HI20, sv->c.i);
+            fc = 0;
+            sv->c.i = 0;
+        } else {
+            if (((unsigned)fc + (1 << 11)) >> 12)
+              tcc_error("unimp: large addend for global address");
+            greloca(cur_text_section, sv->sym, ind,
+                    R_RISCV_GOT_HI20, 0);
+            doload = 1;
+        }
         if (!label.v) {
             label.v = tok_alloc(".L0 ", 4)->tok;
             label.type.t = VT_VOID | VT_STATIC;
@@ -376,7 +396,13 @@ ST_FUNC void store(int r, SValue *sv)
         put_extern_sym(&label, cur_text_section, ind, 0);
         o(0x17 | (tempr << 7));   // auipc TEMPR, 0 %pcrel_hi(sym)+addend
         greloca(cur_text_section, &label, ind,
-                R_RISCV_PCREL_LO12_S, 0);
+                doload ? R_RISCV_PCREL_LO12_I : R_RISCV_PCREL_LO12_S, 0);
+        if (doload) {
+            EI(0x03, 3, tempr, tempr, 0); // ld TR, 0(TR)
+            if (fc)
+              EI(0x13, 0, tempr, tempr, fc << 20 >> 20); // addi TR, TR, FC
+            fc = 0;
+        }
         if (is_freg(r))
           ES(0x27, size == 4 ? 2 : 3, tempr, rr, fc); // fs[wd] RR, fc(TEMPR)
         else
