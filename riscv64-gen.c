@@ -184,7 +184,7 @@ ST_FUNC void load(int r, SValue *sv)
                 sv->c.i = 0;
             } else {
                 if (((unsigned)fc + (1 << 11)) >> 12)
-                  tcc_error("unimp: large addend for global address");
+                  tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
                 greloca(cur_text_section, sv->sym, ind,
                         R_RISCV_GOT_HI20, 0);
                 doload = 1;
@@ -233,7 +233,7 @@ ST_FUNC void load(int r, SValue *sv)
                 sv->c.i = 0;
             } else {
                 if (((unsigned)fc + (1 << 11)) >> 12)
-                  tcc_error("unimp: large addend for global address");
+                  tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
                 greloca(cur_text_section, sv->sym, ind,
                         R_RISCV_GOT_HI20, 0);
                 doload = 1;
@@ -383,7 +383,7 @@ ST_FUNC void store(int r, SValue *sv)
             sv->c.i = 0;
         } else {
             if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: large addend for global address");
+              tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
             greloca(cur_text_section, sv->sym, ind,
                     R_RISCV_GOT_HI20, 0);
             doload = 1;
@@ -569,6 +569,7 @@ ST_FUNC void gfunc_call(int nb_args)
         }
     }
     vrotb(nb_args + 1);
+    save_regs(nb_args + 1);
     gcall_or_jmp(1);
     vtop -= nb_args + 1;
     if (stack_adj + tempspace)
@@ -1081,9 +1082,24 @@ ST_FUNC void gen_cvt_ftof(int dt)
         int func = (dt == VT_LDOUBLE) ?
             (st == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
             (dt == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
+        /* We can't use gfunc_call, as func_old_type works like vararg
+           functions, and on riscv unnamed float args are passed like
+           integers.  But we really need them in the float argument registers
+           for extendsftf2/extenddftf2.  So, do it explicitely.  */
+        save_regs(1);
+        if (dt == VT_LDOUBLE)
+          gv(RC_F(0));
+        else {
+            gv(RC_R(0));
+            assert(vtop->r2 < 7);
+            if (vtop->r2 != 1 + vtop->r) {
+                EI(0x13, 0, ireg(vtop->r) + 1, ireg(vtop->r2), 0); // mv Ra+1, RR2
+                vtop->r2 = 1 + vtop->r;
+            }
+        }
         vpush_global_sym(&func_old_type, func);
-        vrott(2);
-        gfunc_call(1);
+        gcall_or_jmp(1);
+        vtop -= 2;
         vpushi(0);
         vtop->type.t = dt;
         if (dt == VT_LDOUBLE)
