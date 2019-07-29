@@ -87,10 +87,10 @@ int gotplt_entry_type (int reloc_type)
     case R_RISCV_32:
     case R_RISCV_64:
     case R_RISCV_JAL:
+    case R_RISCV_CALL_PLT:
         return AUTO_GOTPLT_ENTRY;
 
     case R_RISCV_GOT_HI20:
-    case R_RISCV_CALL_PLT:
         return ALWAYS_GOTPLT_ENTRY;
     }
 
