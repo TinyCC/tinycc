@@ -457,7 +457,8 @@ static int pass_in_freg(CType *type, int regs)
           return toplevel ? 0 : -1;
         return regs + tr;
     }
-    return is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE;
+    return is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE
+           ? 1 : toplevel ? 0 : -1;
 }
 
 ST_FUNC void gfunc_call(int nb_args)
