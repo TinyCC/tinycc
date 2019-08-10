@@ -5490,7 +5490,7 @@ special_math_val:
                 variadic = (s->f.func_type == FUNC_ELLIPSIS);
                 ret_nregs = gfunc_sret(&s->type, variadic, &ret.type,
                                        &ret_align, &regsize);
-                if (!ret_nregs) {
+                if (ret_nregs <= 0) {
                     /* get some space for the returned structure */
                     size = type_size(&s->type, &align);
 #ifdef TCC_TARGET_ARM64
@@ -5509,14 +5509,17 @@ special_math_val:
                        problems */
                     vseti(VT_LOCAL, loc);
                     ret.c = vtop->c;
-                    nb_args++;
+                    if (ret_nregs < 0)
+                      vtop--;
+                    else
+                      nb_args++;
                 }
             } else {
                 ret_nregs = 1;
                 ret.type = s->type;
             }
 
-            if (ret_nregs) {
+            if (ret_nregs > 0) {
                 /* return in register */
                 if (is_float(ret.type.t)) {
                     ret.r = reg_fret(ret.type.t);
@@ -5559,34 +5562,41 @@ special_math_val:
             skip(')');
             gfunc_call(nb_args);
 
-            /* return value */
-            for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
-                vsetc(&ret.type, r, &ret.c);
-                vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
-            }
-
-            /* handle packed struct return */
-            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && ret_nregs) {
-                int addr, offset;
-
-                size = type_size(&s->type, &align);
-		/* We're writing whole regs often, make sure there's enough
-		   space.  Assume register size is power of 2.  */
-		if (regsize > align)
-		  align = regsize;
-                loc = (loc - size) & -align;
-                addr = loc;
-                offset = 0;
-                for (;;) {
-                    vset(&ret.type, VT_LOCAL | VT_LVAL, addr + offset);
-                    vswap();
-                    vstore();
-                    vtop--;
-                    if (--ret_nregs == 0)
-                        break;
-                    offset += regsize;
+            if (ret_nregs < 0) {
+                vsetc(&ret.type, ret.r, &ret.c);
+#ifdef TCC_TARGET_RISCV64
+                arch_transfer_ret_regs(1);
+#endif
+            } else {
+                /* return value */
+                for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
+                    vsetc(&ret.type, r, &ret.c);
+                    vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
                 }
-                vset(&s->type, VT_LOCAL | VT_LVAL, addr);
+
+                /* handle packed struct return */
+                if (((s->type.t & VT_BTYPE) == VT_STRUCT) && ret_nregs) {
+                    int addr, offset;
+
+                    size = type_size(&s->type, &align);
+                    /* We're writing whole regs often, make sure there's enough
+                       space.  Assume register size is power of 2.  */
+                    if (regsize > align)
+                      align = regsize;
+                    loc = (loc - size) & -align;
+                    addr = loc;
+                    offset = 0;
+                    for (;;) {
+                        vset(&ret.type, VT_LOCAL | VT_LVAL, addr + offset);
+                        vswap();
+                        vstore();
+                        vtop--;
+                        if (--ret_nregs == 0)
+                          break;
+                        offset += regsize;
+                    }
+                    vset(&s->type, VT_LOCAL | VT_LVAL, addr);
+                }
             }
             if (s->f.func_noreturn)
                 CODE_OFF();
@@ -6090,7 +6100,11 @@ static void gfunc_return(CType *func_type)
         int ret_align, ret_nregs, regsize;
         ret_nregs = gfunc_sret(func_type, func_var, &ret_type,
                                &ret_align, &regsize);
-        if (0 == ret_nregs) {
+        if (ret_nregs < 0) {
+#ifdef TCC_TARGET_RISCV64
+            arch_transfer_ret_regs(0);
+#endif
+        } else if (0 == ret_nregs) {
             /* if returning structure, must copy it to implicit
                first pointer arg location */
             type = *func_type;

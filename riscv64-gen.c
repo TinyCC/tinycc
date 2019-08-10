@@ -433,32 +433,36 @@ static void gcall_or_jmp(int docall)
     }
 }
 
-static int pass_in_freg(CType *type, int regs)
+static void reg_pass(CType *type, int *rc, int *fieldofs, int ofs)
 {
-    int tr;
-    int toplevel = !regs;
     if ((type->t & VT_BTYPE) == VT_STRUCT) {
         Sym *f;
         if (type->ref->type.t == VT_UNION)
-          return toplevel ? 0 : -1;
-        for (f = type->ref->next; f; f = f->next) {
-            tr = pass_in_freg(&f->type, regs);
-            if (tr < 0 || (regs + tr) > 2)
-              return toplevel ? 0 : -1;
-            regs += tr;
-        }
-        return regs;
+          rc[0] = -1;
+        else for (f = type->ref->next; f; f = f->next)
+          reg_pass(&f->type, rc, fieldofs, ofs + f->c);
     } else if (type->t & VT_ARRAY) {
         if (type->ref->c < 0 || type->ref->c > 2)
-          return toplevel ? 0 : -1;
-        tr = pass_in_freg(&type->ref->type, regs);
-        tr *= type->ref->c;
-        if (tr < 0 || (regs + tr) > 2)
-          return toplevel ? 0 : -1;
-        return regs + tr;
-    }
-    return is_float(type->t) && (type->t & VT_BTYPE) != VT_LDOUBLE
-           ? 1 : toplevel ? 0 : -1;
+          rc[0] = -1;
+        else {
+            int a, sz = type_size(&type->ref->type, &a);
+            reg_pass(&type->ref->type, rc, fieldofs, ofs);
+            if (rc[0] > 2 || (rc[0] == 2 && type->ref->c > 1))
+              rc[0] = -1;
+            else if (type->ref->c == 2 && rc[0] && rc[1] == RC_FLOAT) {
+              rc[++rc[0]] = RC_FLOAT;
+              fieldofs[rc[0]] = ((ofs + sz) << 4)
+                                | (type->ref->type.t & VT_BTYPE);
+            } else if (type->ref->c == 2)
+              rc[0] = -1;
+        }
+    } else if (rc[0] == 2 || rc[0] < 0 || (type->t & VT_BTYPE) == VT_LDOUBLE)
+      rc[0] = -1;
+    else if (!rc[0] || rc[1] == RC_FLOAT || is_float(type->t)) {
+      rc[++rc[0]] = is_float(type->t) ? RC_FLOAT : RC_INT;
+      fieldofs[rc[0]] = (ofs << 4) | (type->t & VT_BTYPE);
+    } else
+      rc[0] = -1;
 }
 
 ST_FUNC void gfunc_call(int nb_args)
@@ -472,7 +476,9 @@ ST_FUNC void gfunc_call(int nb_args)
     aireg = afreg = 0;
     sa = vtop[-nb_args].type.ref->next;
     for (i = 0; i < nb_args; i++) {
-        int *pareg, nregs, infreg = 0, byref = 0, tempofs;
+        int *pareg, nregs, byref = 0, tempofs;
+        int prc[3], fieldofs[3];
+        prc[0] = 0;
         sv = &vtop[1 + i - nb_args];
         sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
         size = type_size(&sv->type, &align);
@@ -490,31 +496,43 @@ ST_FUNC void gfunc_call(int nb_args)
         else
           nregs = 1;
         if (!sa) {
-          infreg = 0;
+          prc[0] = nregs, prc[1] = prc[2] = RC_INT;
         } else {
-          infreg = pass_in_freg(&sv->type, 0);
+          reg_pass(&sv->type, prc, fieldofs, 0);
+          if (prc[0] < 0)
+            prc[0] = nregs, prc[1] = prc[2] = RC_INT;
         }
-        if (!infreg && !sa && align == 2*XLEN && size <= 2*XLEN)
+        if (!sa && align == 2*XLEN && size <= 2*XLEN)
           aireg = (aireg + 1) & ~1;
-        pareg = infreg ? &afreg : &aireg;
-        if ((*pareg < 8 && (!infreg || (*pareg + nregs) <= 8)) && !force_stack) {
-            info[i] = *pareg + (infreg ? 8 : 0);
-            (*pareg)++;
-            if (nregs == 1)
-              ;
-            else if (*pareg < 8)
-              (*pareg)++;
-            else {
-                info[i] |= 16;
-                stack_adj += 8;
-            }
-        } else {
+        nregs = prc[0];
+        assert(nregs);
+        if (!nregs
+            || (prc[1] == RC_INT && aireg >= 8)
+            || (prc[1] == RC_FLOAT && afreg >= 8)
+            || (nregs == 2 && prc[2] == RC_FLOAT && afreg >= 7)
+            || (nregs == 2 && prc[1] != prc[2] && (afreg >= 8 || aireg >= 8))
+            || force_stack) {
             info[i] = 32;
             if (align < XLEN)
               align = XLEN;
             stack_adj += (size + align - 1) & -align;
             if (!sa)
               force_stack = 1;
+        } else {
+            if (prc[1] == RC_FLOAT)
+              info[i] = 8 + afreg++;
+            else
+              info[i] = aireg++;
+            if (nregs == 2) {
+                if (prc[2] == RC_FLOAT)
+                  info[i] |= (1 + 8 + afreg++) << 7;
+                else if (aireg < 8)
+                  info[i] |= (1 + aireg++) << 7;
+                else {
+                    info[i] |= 16;
+                    stack_adj += 8;
+                }
+            }
         }
         if (byref)
           info[i] |= 64 | (tempofs << 7);
@@ -569,62 +587,72 @@ ST_FUNC void gfunc_call(int nb_args)
         }
     }
     for (i = 0; i < nb_args; i++) {
-        int r = info[nb_args - 1 - i];
+        int r = info[nb_args - 1 - i], r2 = r;
         if (!(r & 32)) {
             CType origtype;
+            int prc[3], fieldofs[3], loadt;
+            prc[0] = 0;
             r &= 15;
+            r2 = r2 & 64 ? 0 : r2 >> 7;
             vrotb(i+1);
             origtype = vtop->type;
             size = type_size(&vtop->type, &align);
-            if (r >= 8 && (vtop->r & VT_LVAL)) {
-                int infreg = pass_in_freg(&vtop->type, 0);
-                int loadt = vtop->type.t & VT_BTYPE;
-                if (loadt == VT_STRUCT) {
-                    if (infreg == 1)
-                      loadt = size == 4 ? VT_FLOAT : VT_DOUBLE;
-                    else
-                      loadt = size == 8 ? VT_FLOAT : VT_DOUBLE;
-                }
-                vtop->type.t = loadt;
-                assert (infreg && infreg <= 2);
-                save_reg_upstack(r, 1);
-                if (infreg > 1) {
-                    save_reg_upstack(r + 1, 1);
-                    test_lvalue();
-                }
-                load(r, vtop);
-                vset(&origtype, r, 0);
-                vswap();
-                if (infreg > 1) {
-                    assert(r + 1 < 16);
-                    gaddrof();
-                    mk_pointer(&vtop->type);
-                    vpushi(1);
-                    gen_op('+');
-                    indir();
-                    load(r + 1, vtop);
-                    vtop[-1].r2 = r + 1;
-                }
-                vtop--;
-            } else {
-            if (r < 8 && size > 8 && (vtop->type.t & VT_BTYPE) == VT_STRUCT)
-              vtop->type.t = VT_LDOUBLE; // force loading a pair of regs
+            reg_pass(&vtop->type, prc, fieldofs, 0);
+            if (prc[0] <= 0 || (!r2 && prc[0] > 1)) {
+                prc[0] = (size + 7) >> 3;
+                prc[1] = prc[2] = RC_INT;
+                fieldofs[1] = (0 << 4) | (size <= 1 ? VT_BYTE : size <= 2 ? VT_SHORT : size <= 4 ? VT_INT : VT_LLONG);
+                fieldofs[2] = (8 << 4) | (size <= 9 ? VT_BYTE : size <= 10 ? VT_SHORT : size <= 12 ? VT_INT : VT_LLONG);
+            }
+            loadt = vtop->type.t & VT_BTYPE;
+            if (loadt == VT_STRUCT) {
+                loadt = fieldofs[1] & VT_BTYPE;
+            }
+            if (info[nb_args - 1 - i] & 16) {
+                assert(!r2);
+                r2 = 1 + TREG_RA;
+            }
+            if (loadt == VT_LDOUBLE) {
+                assert(r2);
+                r2--;
+            } else if (r2) {
+                test_lvalue();
+                vpushv(vtop);
+            }
+            vtop->type.t = loadt;
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
             vtop->type = origtype;
-            if (size > 8) {
-                assert((vtop->type.t & VT_BTYPE) == VT_LDOUBLE
-                       || (vtop->type.t & VT_BTYPE) == VT_STRUCT);
-                assert(vtop->r2 < VT_CONST);
-                if (info[nb_args - 1 - i] & 16) {
-                    ES(0x23, 3, 2, ireg(vtop->r2), splitofs); // sd t0, ofs(sp)
-                } else if (vtop->r2 != 1 + vtop->r) {
-                    assert(vtop->r < 7);
-                    /* XXX we'd like to have 'gv' move directly into
-                       the right class instead of us fixing it up.  */
-                    EI(0x13, 0, ireg(vtop->r) + 1, ireg(vtop->r2), 0); // mv Ra+1, RR2
-                    vtop->r2 = 1 + vtop->r;
+
+            if (r2 && loadt != VT_LDOUBLE) {
+                r2--;
+                assert(r2 < 16 || r2 == TREG_RA);
+                vswap();
+                gaddrof();
+                vtop->type = char_pointer_type;
+                vpushi(fieldofs[2] >> 4);
+                gen_op('+');
+                indir();
+                vtop->type = origtype;
+                loadt = vtop->type.t & VT_BTYPE;
+                if (loadt == VT_STRUCT) {
+                    loadt = fieldofs[2] & VT_BTYPE;
                 }
+                save_reg_upstack(r2, 1);
+                vtop->type.t = loadt;
+                load(r2, vtop);
+                assert(r2 < VT_CONST);
+                vtop--;
+                vtop->r2 = r2;
             }
+            if (info[nb_args - 1 - i] & 16) {
+                ES(0x23, 3, 2, ireg(vtop->r2), splitofs); // sd t0, ofs(sp)
+                vtop->r2 = VT_CONST;
+            } else if (loadt == VT_LDOUBLE && vtop->r2 != r2) {
+                assert(vtop->r2 <= 7 && r2 <= 7);
+                /* XXX we'd like to have 'gv' move directly into
+                   the right class instead of us fixing it up.  */
+                EI(0x13, 0, ireg(r2), ireg(vtop->r2), 0); // mv Ra+1, RR2
+                vtop->r2 = r2;
             }
             vrott(i+1);
         }
@@ -681,19 +709,29 @@ ST_FUNC void gfunc_prolog(CType *func_type)
             param_addr = addr;
             addr += size;
         } else {
-            int regcount = 1, *pareg = &aireg;
-            if ((regcount = pass_in_freg(type, 0)))
-              pareg = &afreg;
-            else {
-                regcount = 1;
+            int regcount, *pareg;
+            int prc[3], fieldofs[3];
+            prc[0] = 0;
+            reg_pass(type, prc, fieldofs, 0);
+            if (prc[0] <= 0) {
+                prc[0] = (size + 7) >> 3;
+                prc[1] = prc[2] = RC_INT;
+                fieldofs[1] = (0 << 4) | (size <= 1 ? VT_BYTE : size <= 2 ? VT_SHORT : size <= 4 ? VT_INT : VT_LLONG);
+                fieldofs[2] = (8 << 4) | (size <= 9 ? VT_BYTE : size <= 10 ? VT_SHORT : size <= 12 ? VT_INT : VT_LLONG);
             }
-            if (regcount + *pareg > 8)
+            regcount = prc[0];
+            if (!regcount
+                || (prc[1] == RC_INT && aireg >= 8)
+                || (prc[1] == RC_FLOAT && afreg >= 8)
+                || (regcount == 2 && prc[2] == RC_FLOAT && afreg >= 7)
+                || (regcount == 2 && prc[1] != prc[2] && (afreg >= 8 || aireg >= 8)))
               goto from_stack;
-            if (size > XLEN && pareg == &aireg)
-              regcount++;
+            if (size > XLEN)
+              assert(regcount == 2);
             loc -= regcount * 8; // XXX could reserve only 'size' bytes
             param_addr = loc;
             for (i = 0; i < regcount; i++) {
+                pareg = prc[1+i] == RC_INT ? &aireg : &afreg;
                 if (*pareg >= 8) {
                     assert(i == 1 && regcount == 2 && !(addr & 7));
                     EI(0x03, 3, 5, 8, addr); // ld t0, addr(s0)
@@ -703,11 +741,10 @@ ST_FUNC void gfunc_prolog(CType *func_type)
                 }
                 if (pareg == &afreg) {
                     //assert(type->t == VT_FLOAT || type->t == VT_DOUBLE);
-                    ES(0x27, (size / regcount) == 4 ? 2 : 3, 8, 10 + *pareg, loc + i*(size / regcount)); // fs[wd] FAi, loc(s0)
+                    ES(0x27, (size / regcount) == 4 ? 2 : 3, 8, 10 + afreg++, loc + (fieldofs[i+1] >> 4)); // fs[wd] FAi, loc(s0)
                 } else {
-                    ES(0x23, 3, 8, 10 + *pareg, loc + i*8); // sd aX, loc(s0) // XXX
+                    ES(0x23, 3, 8, 10 + aireg++, loc + i*8); // sd aX, loc(s0) // XXX
                 }
-                (*pareg)++;
             }
         }
         sym_push(sym->v & ~SYM_FIELD, &sym->type,
@@ -727,57 +764,50 @@ ST_FUNC void gfunc_prolog(CType *func_type)
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
                        int *ret_align, int *regsize)
 {
-    /* generic code can only deal with structs of pow(2) sizes
-       (it always deals with whole registers), so go through our own
-       code.  */
-    int align, size = type_size(vt, &align), infreg;
+    int align, size = type_size(vt, &align), infreg, nregs;
+    int prc[3], fieldofs[3];
     *ret_align = 1;
     *regsize = 8;
     if (size > 16)
       return 0;
-    infreg = pass_in_freg(vt, 0);
-    if (infreg) {
-        *regsize = size / infreg;
-        ret->t = (size / infreg) == 4 ? VT_FLOAT : VT_DOUBLE;
-        return infreg;
+    prc[0] = 0;
+    reg_pass(vt, prc, fieldofs, 0);
+    if (prc[0] <= 0) {
+        prc[0] = (size + 7) >> 3;
+        prc[1] = prc[2] = RC_INT;
+        fieldofs[1] = (0 << 4) | (size <= 1 ? VT_BYTE : size <= 2 ? VT_SHORT : size <= 4 ? VT_INT : VT_LLONG);
+        fieldofs[2] = (8 << 4) | (size <= 9 ? VT_BYTE : size <= 10 ? VT_SHORT : size <= 12 ? VT_INT : VT_LLONG);
     }
-    if (size > 8)
-      ret->t = VT_LLONG;
-    else if (size > 4)
-      ret->t = VT_LLONG;
-    else if (size > 2)
-      ret->t = VT_INT;
-    else if (size > 1)
-      ret->t = VT_SHORT;
-    else
-      ret->t = VT_BYTE;
-    return (size + 7) / 8;
+    nregs = prc[0];
+    assert(nregs > 0);
+    if (nregs == 2 && prc[1] != prc[2])
+      return -1;  /* generic code can't deal with this case */
+    if (prc[1] == RC_FLOAT) {
+        *regsize = size / nregs;
+    }
+    ret->t = fieldofs[1] & VT_BTYPE;
+    return nregs;
 }
 
-ST_FUNC void gfunc_return2(CType *func_type)
+ST_FUNC void arch_transfer_ret_regs(int aftercall)
 {
-    int align, size = type_size(func_type, &align), nregs;
-    CType type = *func_type;
-    if (size > 2 * XLEN) {
-        mk_pointer(&type);
-        vset(&type, VT_LOCAL | VT_LVAL, func_vc);
-        indir();
-        vswap();
-        vstore();
-        vpop();
-        return;
-    }
-    nregs = pass_in_freg(func_type, 0);
-    if (!nregs) {
-        nregs = (size + 7) / 8;
-        if (nregs == 2)
-          vtop->type.t = VT_LDOUBLE;
-    }
-
-    if (is_float(func_type->t) && (vtop->type.t & VT_BTYPE) != VT_LDOUBLE)
-      gv(RC_FRET);
+    int prc[3], fieldofs[3];
+    prc[0] = 0;
+    reg_pass(&vtop->type, prc, fieldofs, 0);
+    assert(prc[0] == 2 && prc[1] != prc[2] && !(fieldofs[1] >> 4));
+    assert(vtop->r == (VT_LOCAL | VT_LVAL));
+    vpushv(vtop);
+    vtop->type.t = fieldofs[1] & VT_BTYPE;
+    if (aftercall)
+      store(prc[1] == RC_INT ? REG_IRET : REG_FRET, vtop);
     else
-      gv(RC_IRET);
+      load(prc[1] == RC_INT ? REG_IRET : REG_FRET, vtop);
+    vtop->c.i += fieldofs[2] >> 4;
+    vtop->type.t = fieldofs[2] & VT_BTYPE;
+    if (aftercall)
+      store(prc[2] == RC_INT ? REG_IRET : REG_FRET, vtop);
+    else
+      load(prc[2] == RC_INT ? REG_IRET : REG_FRET, vtop);
     vtop--;
 }
 
