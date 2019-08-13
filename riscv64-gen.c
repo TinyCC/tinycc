@@ -70,7 +70,7 @@ static int ireg(int r)
 
 static int is_ireg(int r)
 {
-    return r < 8 || r == TREG_RA || r == TREG_SP;
+    return (unsigned)r < 8 || r == TREG_RA || r == TREG_SP;
 }
 
 static int freg(int r)
@@ -136,6 +136,53 @@ ST_FUNC void gsym_addr(int t_, int a_)
     }
 }
 
+static int load_symofs(int r, SValue *sv, int forstore)
+{
+    static Sym label;
+    int rr, doload = 0;
+    int fc = sv->c.i, v = sv->r & VT_VALMASK;
+    if (sv->r & VT_SYM) {
+        assert(v == VT_CONST);
+        if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
+            greloca(cur_text_section, sv->sym, ind,
+                    R_RISCV_PCREL_HI20, sv->c.i);
+            sv->c.i = 0;
+        } else {
+            if (((unsigned)fc + (1 << 11)) >> 12)
+              tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
+            greloca(cur_text_section, sv->sym, ind,
+                    R_RISCV_GOT_HI20, 0);
+            doload = 1;
+        }
+        if (!label.v) {
+            label.v = tok_alloc(".L0 ", 4)->tok;
+            label.type.t = VT_VOID | VT_STATIC;
+        }
+        label.c = 0; /* force new local ELF symbol */
+        put_extern_sym(&label, cur_text_section, ind, 0);
+        rr = is_ireg(r) ? ireg(r) : 5;
+        o(0x17 | (rr << 7));   // auipc RR, 0 %pcrel_hi(sym)+addend
+        greloca(cur_text_section, &label, ind,
+                doload || !forstore
+                  ? R_RISCV_PCREL_LO12_I : R_RISCV_PCREL_LO12_S, 0);
+        if (doload) {
+            EI(0x03, 3, rr, rr, 0); // ld RR, 0(RR)
+        }
+    } else if (v == VT_LOCAL || v == VT_LLOCAL) {
+        rr = 8; // s0
+        if (fc != sv->c.i)
+          tcc_error("unimp: store(giant local off) (0x%llx)", (long long)sv->c.i);
+        if (((unsigned)fc + (1 << 11)) >> 12) {
+            rr = is_ireg(r) ? ireg(r) : 5; // t0
+            o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
+            o(0x33 | (rr << 7) | (rr << 15) | (8 << 20)); // add RR, RR, s0
+            sv->c.i = fc << 20 >> 20;
+        }
+    } else
+      tcc_error("uhh");
+    return rr;
+}
+
 ST_FUNC void load(int r, SValue *sv)
 {
     int fr = sv->r;
@@ -145,109 +192,37 @@ ST_FUNC void load(int r, SValue *sv)
     int bt = sv->type.t & VT_BTYPE;
     int align, size = type_size(&sv->type, &align);
     if (fr & VT_LVAL) {
-        int func3, opcode = 0x03, doload = 0;
-        if (is_freg(r)) {
-            opcode = 0x07;
-            assert(bt == VT_DOUBLE || bt == VT_FLOAT);
-            func3 = bt == VT_DOUBLE ? 3 : 2;
-        } else {
-            assert(is_ireg(r));
-            if (bt == VT_FUNC)
-              size = PTR_SIZE;
-            func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
-            if (size < 4 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
-              func3 |= 4;
-        }
-        if (v == VT_LOCAL) {
-            int br = 8; // s0
-            if (fc != sv->c.i)
-              tcc_error("unimp: load1(giant local ofs) (0x%llx)", (long long)sv->c.i);
-            if (((unsigned)fc + (1 << 11)) >> 12) {
-                br = is_ireg(r) ? rr : 5;
-                o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
-                o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
-                fc = fc << 20 >> 20;
-            }
-            EI(opcode, func3, rr, br, fc); // l[bhwd][u]/fl[wd] RR, fc(BR)
+        int func3, opcode = is_freg(r) ? 0x07 : 0x03, br;
+        assert (!is_freg(r) || bt == VT_FLOAT || bt == VT_DOUBLE);
+        if (bt == VT_FUNC) /* XXX should be done in generic code */
+          size = PTR_SIZE;
+        func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
+        if (size < 4 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
+          func3 |= 4;
+        if (v == VT_LOCAL || (fr & VT_SYM)) {
+            br = load_symofs(r, sv, 0);
+            fc = sv->c.i;
         } else if (v < VT_CONST) {
+            br = ireg(v);
             /*if (((unsigned)fc + (1 << 11)) >> 12)
               tcc_error("unimp: load(large addend) (0x%x)", fc);*/
             fc = 0; // XXX store ofs in LVAL(reg)
-            EI(opcode, func3, rr, ireg(v), fc); // l[bhwd][u] RR, 0(V)
-        } else if (v == VT_CONST && (fr & VT_SYM)) {
-            static Sym label;
-            int tempr;
-            if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
-                greloca(cur_text_section, sv->sym, ind,
-                        R_RISCV_PCREL_HI20, sv->c.i);
-                fc = 0;
-                sv->c.i = 0;
-            } else {
-                if (((unsigned)fc + (1 << 11)) >> 12)
-                  tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
-                greloca(cur_text_section, sv->sym, ind,
-                        R_RISCV_GOT_HI20, 0);
-                doload = 1;
-            }
-            if (!label.v) {
-                label.v = tok_alloc(".L0 ", 4)->tok;
-                label.type.t = VT_VOID | VT_STATIC;
-            }
-            label.c = 0; /* force new local ELF symbol */
-            put_extern_sym(&label, cur_text_section, ind, 0);
-            tempr = is_ireg(r) ? rr : 5;
-            o(0x17 | (tempr << 7));   // auipc TR, 0 %pcrel_hi(sym)+addend
-            greloca(cur_text_section, &label, ind,
-                    R_RISCV_PCREL_LO12_I, 0);
-            if (doload) {
-                EI(0x03, 3, tempr, tempr, 0); // ld TR, 0(TR)
-                if (fc)
-                  EI(0x13, 0, tempr, tempr, fc << 20 >> 20); // addi TR, TR, FC
-                fc = 0;
-            }
-            EI(opcode, func3, rr, tempr, fc); // l[bhwd][u] RR, fc(TR)
         } else if (v == VT_LLOCAL) {
-            int br = 8, tempr = is_ireg(r) ? rr : 5;
-            if (fc != sv->c.i)
-              tcc_error("unimp: load2(giant local ofs) (0x%llx)", (long long)sv->c.i);
-            if (((unsigned)fc + (1 << 11)) >> 12) {
-                br = tempr;
-                o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
-                o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
-                fc = fc << 20 >> 20;
-            }
-            EI(0x03, 3, tempr, br, fc); // ld TEMPR, fc(BR)
-            EI(opcode, func3, rr, tempr, 0); // l[bhwd][u] RR, 0(TEMPR)
+            br = load_symofs(r, sv, 0);
+            fc = sv->c.i;
+            EI(0x03, 3, rr, br, fc); // ld RR, fc(BR)
+            br = rr;
+            fc = 0;
         } else {
             tcc_error("unimp: load(non-local lval)");
         }
+        EI(opcode, func3, rr, br, fc); // l[bhwd][u] / fl[wd] RR, fc(BR)
     } else if (v == VT_CONST) {
-        int rb = 0, do32bit = 8, doload = 0, zext = 0;
+        int rb = 0, do32bit = 8, zext = 0;
         assert((!is_float(sv->type.t) && is_ireg(r)) || bt == VT_LDOUBLE);
         if (fr & VT_SYM) {
-            static Sym label;
-            if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
-                greloca(cur_text_section, sv->sym, ind,
-                        R_RISCV_PCREL_HI20, sv->c.i);
-                fc = 0;
-                sv->c.i = 0;
-            } else {
-                if (((unsigned)fc + (1 << 11)) >> 12)
-                  tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
-                greloca(cur_text_section, sv->sym, ind,
-                        R_RISCV_GOT_HI20, 0);
-                doload = 1;
-            }
-            if (!label.v) {
-                label.v = tok_alloc(".L0 ", 4)->tok;
-                label.type.t = VT_VOID | VT_STATIC;
-            }
-            label.c = 0; /* force new local ELF symbol */
-            put_extern_sym(&label, cur_text_section, ind, 0);
-            o(0x17 | (rr << 7));   // auipc RR, 0 %call(func)
-            greloca(cur_text_section, &label, ind,
-                    R_RISCV_PCREL_LO12_I, 0);
-            rb = rr;
+            rb = load_symofs(r, sv, 0);
+            fc = sv->c.i;
             do32bit = 0;
         }
         if (is_float(sv->type.t) && bt != VT_LDOUBLE)
@@ -279,30 +254,18 @@ ST_FUNC void load(int r, SValue *sv)
         }
         if (((unsigned)fc + (1 << 11)) >> 12)
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)), rb = rr; //lui RR, upper(fc)
-        if (doload) {
-          EI(0x03, 3, rr, rr, 0); // ld RR, 0(RR)
-          if (fc)
-            EI(0x13 | do32bit, 0, rr, rr, fc << 20 >> 20); // addi[w] R, x0|R, FC
-        } else
+        if (fc || (rr != rb) || do32bit || (fr & VT_SYM))
           EI(0x13 | do32bit, 0, rr, rb, fc << 20 >> 20); // addi[w] R, x0|R, FC
         if (zext) {
             EI(0x13, 1, rr, rr, 32); // slli RR, RR, 32
             EI(0x13, 5, rr, rr, 32); // srli RR, RR, 32
         }
     } else if (v == VT_LOCAL) {
-        int br = 8; // s0
+        int br = load_symofs(r, sv, 0);
         assert(is_ireg(r));
-        if (fc != sv->c.i)
-          tcc_error("unimp: load(addr giant local ofs) (0xll%x)", (long long)sv->c.i);
-        if (((unsigned)fc + (1 << 11)) >> 12) {
-            o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
-            o(0x33 | (rr << 7) | (rr << 15) | (8 << 20)); // add RR, RR, s0
-            fc = fc << 20 >> 20;
-            br = rr;
-        }
+        fc = sv->c.i;
         EI(0x13, 0, rr, br, fc); // addi R, s0, FC
-    } else if (v < VT_CONST) {
-        /* reg-reg */
+    } else if (v < VT_CONST) { /* reg-reg */
         //assert(!fc); XXX support offseted regs
         if (is_freg(r) && is_freg(v))
           o(0x53 | (rr << 7) | (freg(v) << 15) | (freg(v) << 20) | ((bt == VT_DOUBLE ? 0x11 : 0x10) << 25)); //fsgnj.[sd] RR, V, V == fmv.[sd] RR, V
@@ -332,10 +295,9 @@ ST_FUNC void load(int r, SValue *sv)
 ST_FUNC void store(int r, SValue *sv)
 {
     int fr = sv->r & VT_VALMASK;
-    int rr = is_ireg(r) ? ireg(r) : freg(r);
+    int rr = is_ireg(r) ? ireg(r) : freg(r), ptrreg;
     int fc = sv->c.i;
-    int ft = sv->type.t;
-    int bt = ft & VT_BTYPE;
+    int bt = sv->type.t & VT_BTYPE;
     int align, size = type_size(&sv->type, &align);
     assert(!is_float(bt) || is_freg(r) || bt == VT_LDOUBLE);
     /* long doubles are in two integer registers, but the load/store
@@ -347,69 +309,19 @@ ST_FUNC void store(int r, SValue *sv)
     if (size > 8)
       tcc_error("unimp: large sized store");
     assert(sv->r & VT_LVAL);
-    if (fr == VT_LOCAL) {
-        int br = 8; // s0
-        if (fc != sv->c.i)
-          tcc_error("unimp: store(giant local off) (0x%llx)", (long long)sv->c.i);
-        if (((unsigned)fc + (1 << 11)) >> 12) {
-            br = 5; // t0
-            o(0x37 | (br << 7) | ((0x800 + fc) & 0xfffff000)); //lui BR, upper(fc)
-            o(0x33 | (br << 7) | (br << 15) | (8 << 20)); // add BR, BR, s0
-            fc = fc << 20 >> 20;
-        }
-        if (is_freg(r))
-          ES(0x27, size == 4 ? 2 : 3, br, rr, fc); // fs[wd] RR, fc(base)
-        else
-          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-             br, rr, fc); // s[bhwd] RR, fc(base)
+    if (fr == VT_LOCAL || (sv->r & VT_SYM)) {
+        ptrreg = load_symofs(-1, sv, 1);
+        fc = sv->c.i;
     } else if (fr < VT_CONST) {
-        int ptrreg = ireg(fr);
+        ptrreg = ireg(fr);
         /*if (((unsigned)fc + (1 << 11)) >> 12)
           tcc_error("unimp: store(large addend) (0x%x)", fc);*/
         fc = 0; // XXX support offsets regs
-        if (is_freg(r))
-          ES(0x27, size == 4 ? 2 : 3, ptrreg, rr, fc); // fs[wd] RR, fc(PTRREG)
-        else
-          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-             ptrreg, rr, fc); // s[bhwd] RR, fc(PTRREG)
-    } else if ((sv->r & ~VT_LVAL_TYPE) == (VT_CONST | VT_SYM | VT_LVAL)) {
-        static Sym label;
-        int tempr, doload = 0;
-        tempr = 5; // t0
-        if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
-            greloca(cur_text_section, sv->sym, ind,
-                    R_RISCV_PCREL_HI20, sv->c.i);
-            fc = 0;
-            sv->c.i = 0;
-        } else {
-            if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
-            greloca(cur_text_section, sv->sym, ind,
-                    R_RISCV_GOT_HI20, 0);
-            doload = 1;
-        }
-        if (!label.v) {
-            label.v = tok_alloc(".L0 ", 4)->tok;
-            label.type.t = VT_VOID | VT_STATIC;
-        }
-        label.c = 0; /* force new local ELF symbol */
-        put_extern_sym(&label, cur_text_section, ind, 0);
-        o(0x17 | (tempr << 7));   // auipc TEMPR, 0 %pcrel_hi(sym)+addend
-        greloca(cur_text_section, &label, ind,
-                doload ? R_RISCV_PCREL_LO12_I : R_RISCV_PCREL_LO12_S, 0);
-        if (doload) {
-            EI(0x03, 3, tempr, tempr, 0); // ld TR, 0(TR)
-            if (fc)
-              EI(0x13, 0, tempr, tempr, fc << 20 >> 20); // addi TR, TR, FC
-            fc = 0;
-        }
-        if (is_freg(r))
-          ES(0x27, size == 4 ? 2 : 3, tempr, rr, fc); // fs[wd] RR, fc(TEMPR)
-        else
-          ES(0x23, size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3,
-             tempr, rr, fc); // s[bhwd] RR, fc(TEMPR)
     } else
       tcc_error("implement me: %s(!local)", __FUNCTION__);
+    ES(is_freg(r) ? 0x27 : 0x23,                          // fs... | s...
+       size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3, // ... [wd] | [bhwd]
+       ptrreg, rr, fc);                                   // RR, fc(base)
 }
 
 static void gcall_or_jmp(int docall)
@@ -533,7 +445,7 @@ ST_FUNC void gfunc_call(int nb_args)
                 }
                 if (!byref) {
                     assert((fieldofs[2] >> 4) < 2048);
-                  info[i] |= fieldofs[2] << (12 + 4); // includes offset
+                    info[i] |= fieldofs[2] << (12 + 4); // includes offset
                 }
             }
         }
