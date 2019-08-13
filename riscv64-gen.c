@@ -101,6 +101,12 @@ static void EIu(uint32_t opcode, uint32_t func3,
     o(opcode | (func3 << 12) | (rd << 7) | (rs1 << 15) | (imm << 20));
 }
 
+static void ER(uint32_t opcode, uint32_t func3,
+               uint32_t rd, uint32_t rs1, uint32_t rs2, uint32_t func7)
+{
+    o(opcode | func3 << 12 | rd << 7 | rs1 << 15 | rs2 << 20 | func7 << 25);
+}
+
 static void EI(uint32_t opcode, uint32_t func3,
                uint32_t rd, uint32_t rs1, uint32_t imm)
 {
@@ -175,7 +181,7 @@ static int load_symofs(int r, SValue *sv, int forstore)
         if (((unsigned)fc + (1 << 11)) >> 12) {
             rr = is_ireg(r) ? ireg(r) : 5; // t0
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
-            o(0x33 | (rr << 7) | (rr << 15) | (8 << 20)); // add RR, RR, s0
+            ER(0x33, 0, rr, rr, 8, 0); // add RR, RR, s0
             sv->c.i = fc << 20 >> 20;
         }
     } else
@@ -268,7 +274,7 @@ ST_FUNC void load(int r, SValue *sv)
     } else if (v < VT_CONST) { /* reg-reg */
         //assert(!fc); XXX support offseted regs
         if (is_freg(r) && is_freg(v))
-          o(0x53 | (rr << 7) | (freg(v) << 15) | (freg(v) << 20) | ((bt == VT_DOUBLE ? 0x11 : 0x10) << 25)); //fsgnj.[sd] RR, V, V == fmv.[sd] RR, V
+          ER(0x53, 0, rr, freg(v), freg(v), bt == VT_DOUBLE ? 0x11 : 0x10); //fsgnj.[sd] RR, V, V == fmv.[sd] RR, V
         else if (is_ireg(r) && is_ireg(v))
           EI(0x13, 0, rr, ireg(v), 0); // addi RR, V, 0 == mv RR, V
         else {
@@ -696,7 +702,7 @@ ST_FUNC void gfunc_epilog(void)
         d = 16;
         o(0x37 | (5 << 7) | ((0x800 + (v-16)) & 0xfffff000)); //lui t0, upper(v)
         EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
-        o(0x33 | (2 << 7) | (2 << 15) | (5 << 20)); //add sp, sp, t0
+        ER(0x33, 0, 2, 2, 5, 0); // add sp, sp, t0
     }
     EI(0x03, 3, 1, 2, d - 8 - num_va_regs * 8);  // ld ra, v-8(sp)
     EI(0x03, 3, 8, 2, d - 16 - num_va_regs * 8); // ld s0, v-16(sp)
@@ -707,7 +713,7 @@ ST_FUNC void gfunc_epilog(void)
         EI(0x13, 0, 8, 2, d - num_va_regs * 8);      // addi s0, sp, d
         o(0x37 | (5 << 7) | ((0x800 + (v-16)) & 0xfffff000)); //lui t0, upper(v)
         EI(0x13, 0, 5, 5, (v-16) << 20 >> 20); // addi t0, t0, lo(v)
-        o(0x33 | (2 << 7) | (2 << 15) | (5 << 20) | (0x20 << 25)); //sub sp, sp, t0
+        ER(0x33, 0, 2, 2, 5, 0x20); // sub sp, sp, t0
         gjmp_addr(func_sub_sp_offset + 5*4);
     }
     saved_ind = ind;
@@ -849,7 +855,7 @@ static void gen_opil(int op, int ll)
                     if (fc)
                       gen_opil('-', ll), a = ireg(vtop++->r);
                     if (op == TOK_NE)
-                      o(0x33 | (3 << 12) | (ireg(d) << 7) | (0 << 15) | (a << 20)); // sltu d, x0, a == snez d,a
+                      ER(0x33, 3, ireg(d), 0, a, 0); //sltu d, x0, a == snez d,a
                     else
                       EI(0x13, 3, ireg(d), a, 1); // sltiu d, a, 1 == seqz d,a
                     --vtop;
@@ -871,44 +877,44 @@ static void gen_opil(int op, int ll)
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
 
     case '+':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20)); // add d, a, b
+        ER(0x33, 0, d, a, b, 0); // add d, a, b
         break;
     case '-':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); //sub d, a, b
+        ER(0x33, 0, d, a, b, 0x20); // sub d, a, b
         break;
     case TOK_SAR:
-        o(0x33 | ll | (d << 7) | (a << 15) | (b << 20) | (5 << 12) | (1 << 30)); //sra d, a, b
+        ER(0x33 | ll, 5, d, a, b, 0x20); // sra d, a, b
         break;
     case TOK_SHR:
-        o(0x33 | ll | (d << 7) | (a << 15) | (b << 20) | (5 << 12)); //srl d, a, b
+        ER(0x33 | ll, 5, d, a, b, 0); // srl d, a, b
         break;
     case TOK_SHL:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (1 << 12)); //sll d, a, b
+        ER(0x33, 1, d, a, b, 0); // sll d, a, b
         break;
     case '*':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25)); //mul d, a, b
+        ER(0x33, 0, d, a, b, 1); // mul d, a, b
         break;
     case '/':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (4 << 12)); //div d, a, b
+        ER(0x33, 4, d, a, b, 1); // div d, a, b
         break;
     case '&':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (7 << 12)); // and d, a, b
+        ER(0x33, 7, d, a, b, 0); // and d, a, b
         break;
     case '^':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (4 << 12)); // xor d, a, b
+        ER(0x33, 4, d, a, b, 0); // xor d, a, b
         break;
     case '|':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (6 << 12)); // or d, a, b
+        ER(0x33, 6, d, a, b, 0); // or d, a, b
         break;
     case '%':
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (6 << 12)); //rem d, a, b
+        ER(0x33, 6, d, a, b, 1); // rem d, a, b
         break;
     case TOK_UMOD:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (7 << 12)); //remu d, a, b
+        ER(0x33, 7, d, a, b, 1); // remu d, a, b
         break;
     case TOK_PDIV:
     case TOK_UDIV:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x01 << 25) | (5 << 12)); //divu d, a, b
+        ER(0x33, 5, d, a, b, 1); // divu d, a, b
         break;
 
     case TOK_ULT:
@@ -927,7 +933,7 @@ static void gen_opil(int op, int ll)
             int t = a; a = b; b = t;
             inv ^= 1;
         }
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (((op > TOK_UGT) ? 2 : 3) << 12)); // slt[u] d, a, b
+        ER(0x33, (op > TOK_UGT) ? 2 : 3, d, a, b, 0); // slt[u] d, a, b
         if (inv)
           EI(0x13, 4, d, d, 1); // xori d, d, 1
         vset_VT_CMP(TOK_NE);
@@ -935,9 +941,9 @@ static void gen_opil(int op, int ll)
         break;
     case TOK_NE:
     case TOK_EQ:
-        o(0x33 | (d << 7) | (a << 15) | (b << 20) | (0x20 << 25)); // sub d, a, b
+        ER(0x33, 0, d, a, b, 0x20); // sub d, a, b
         if (op == TOK_NE)
-          o(0x33 | (3 << 12) | (d << 7) | (0 << 15) | (d << 20)); // sltu d, x0, d == snez d,d
+          ER(0x33, 3, d, 0, d, 0); // sltu d, x0, d == snez d,d
         else
           EI(0x13, 3, d, d, 1); // sltiu d, d, 1 == seqz d,d
         vset_VT_CMP(TOK_NE);
@@ -1007,7 +1013,7 @@ ST_FUNC void gen_opf(int op)
         rd = get_reg(RC_FLOAT);
         vtop->r = rd;
         rd = freg(rd);
-        o(0x53 | (rd << 7) | (rs1 << 15) | (rs2 << 20) | (7 << 12) | (dbl << 25) | (op << 27)); // fop.[sd] RD, RS1, RS2 (dyn rm)
+        ER(0x53, 7, rd, rs1, rs2, dbl | (op << 2)); // fop.[sd] RD, RS1, RS2 (dyn rm)
         break;
     case '-':
         op = 1; // fsub
@@ -1024,7 +1030,7 @@ ST_FUNC void gen_opf(int op)
         rd = get_reg(RC_INT);
         vtop->r = rd;
         rd = ireg(rd);
-        o(0x53 | (rd << 7) | (rs1 << 15) | (rs2 << 20) | (op << 12) | (dbl << 25) | (0x14 << 27)); // fcmp.[sd] RD, RS1, RS2 (op == eq/lt/le)
+        ER(0x53, op, rd, rs1, rs2, dbl | 0x50); // fcmp.[sd] RD, RS1, RS2 (op == eq/lt/le)
         if (invert)
           EI(0x13, 4, rd, rd, 1); // xori RD, 1
         break;
@@ -1175,7 +1181,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align)
     int rr = ireg(gv(RC_INT));
     EI(0x13, 0, rr, rr, 15);   // addi RR, RR, 15
     EI(0x13, 7, rr, rr, -16);  // andi, RR, RR, -16
-    o(0x33 | (2 << 7) | (2 << 15) | (rr << 20) | (0x20 << 25)); //sub sp, sp, rr
+    ER(0x33, 0, 2, 2, rr, 0x20); // sub sp, sp, rr
     vpop();
 }
 #endif
