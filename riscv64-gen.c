@@ -794,8 +794,70 @@ static void gen_opil(int op, int ll)
 {
     int a, b, d;
     int inv = 0;
-    int func3 = 0, func7 = 0;
-    /* XXX We could special-case some constant args.  */
+    int func3 = 0;
+    ll = ll ? 0 : 8;
+    if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+        int fc = vtop->c.i;
+        if (fc == vtop->c.i && !(((unsigned)fc + (1 << 11)) >> 12)) {
+            int cll = 0;
+            vswap();
+            gv(RC_INT);
+            a = ireg(vtop[0].r);
+            --vtop;
+            d = get_reg(RC_INT);
+            ++vtop;
+            vswap();
+            switch (op) {
+                case '-':
+                    if (fc <= -(1 << 11))
+                      break;
+                    fc = -fc;
+                case '+':
+                    func3 = 0; // addi d, a, fc
+                do_cop:
+                    EI(0x13 | cll, func3, ireg(d), a, fc);
+                    --vtop;
+                    vtop[0].r = d;
+                    return;
+                case TOK_LE:
+                    if (fc >= (1 << 11) - 1)
+                      break;
+                    ++fc;
+                case TOK_LT:  func3 = 2; goto do_cop; // slti d, a, fc
+                case TOK_ULE:
+                    if (fc >= (1 << 11) - 1)
+                      break;
+                    ++fc;
+                case TOK_ULT: func3 = 3; goto do_cop; // sltiu d, a, fc
+                case '^':     func3 = 4; goto do_cop; // xori d, a, fc
+                case '|':     func3 = 6; goto do_cop; // ori  d, a, fc
+                case '&':     func3 = 7; goto do_cop; // andi d, a, fc
+                case TOK_SHL: func3 = 1; fc &= 63; goto do_cop; // slli d, a, fc
+                case TOK_SHR: func3 = 5; cll = ll; fc &= 63; goto do_cop; // srli d, a, fc
+                case TOK_SAR: func3 = 5; cll = ll; fc = 1024 | (fc & 63); goto do_cop;
+
+                case TOK_UGE:
+                case TOK_UGT:
+                case TOK_GE:
+                case TOK_GT:
+                    gen_opil(op - 1, ll);
+                    EI(0x13, 4, ireg(vtop->r), ireg(vtop->r), 1);// xori d, d, 1
+                    return;
+
+                case TOK_NE:
+                case TOK_EQ:
+                    if (fc)
+                      gen_opil('-', ll), a = ireg(vtop++->r);
+                    if (op == TOK_NE)
+                      o(0x33 | (3 << 12) | (ireg(d) << 7) | (0 << 15) | (a << 20)); // sltu d, x0, a == snez d,a
+                    else
+                      EI(0x13, 3, ireg(d), a, 1); // sltiu d, a, 1 == seqz d,a
+                    --vtop;
+                    vtop[0].r = d;
+                    return;
+            }
+        }
+    }
     gv2(RC_INT, RC_INT);
     a = ireg(vtop[-1].r);
     b = ireg(vtop[0].r);
@@ -804,7 +866,6 @@ static void gen_opil(int op, int ll)
     vtop++;
     vtop[0].r = d;
     d = ireg(d);
-    ll = ll ? 0 : 8;
     switch (op) {
     default:
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));

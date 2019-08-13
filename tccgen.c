@@ -2151,7 +2151,7 @@ static void gen_opic(int op)
     } else {
         /* if commutative ops, put c2 as constant */
         if (c1 && (op == '+' || op == '&' || op == '^' || 
-                   op == '|' || op == '*')) {
+                   op == '|' || op == '*' || op == TOK_EQ || op == TOK_NE)) {
             vswap();
             c2 = c1; //c = c1, c1 = c2, c2 = c;
             l2 = l1; //l = l1, l1 = l2, l2 = l;
