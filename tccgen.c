@@ -5797,19 +5797,6 @@ static void expr_cond(void)
         } else if (c < 0) {
             /* needed to avoid having different registers saved in
                each branch */
-            rc = RC_INT;
-            if (is_float(vtop->type.t)) {
-                rc = RC_FLOAT;
-#ifdef TCC_TARGET_X86_64
-                if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-                    rc = RC_ST0;
-                }
-#elif defined TCC_TARGET_RISCV64
-                if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE)
-                  rc = RC_INT;
-#endif
-            }
-            gv(rc);
             save_regs(1);
             gv_dup();
             tt = gvtst(0, 0);
