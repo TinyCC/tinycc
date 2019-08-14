@@ -285,8 +285,42 @@ ST_FUNC void load(int r, SValue *sv)
             o(0x53 | (rr << 7) | ((is_freg(v) ? freg(v) : ireg(v)) << 15)
               | (func7 << 25)); // fmv.{w.x, x.w, d.x, x.d} RR, VR
         }
-    } else if (v == VT_CMP) {  // we rely on cmp_r to be the correct result
-        EI(0x13, 0, rr, vtop->cmp_r, 0); // mv RR, CMP_R
+    } else if (v == VT_CMP) {
+        int op = vtop->cmp_op;
+        int a = vtop->cmp_r & 0xff;
+        int b = (vtop->cmp_r >> 8) & 0xff;
+        int inv = 0;
+        switch (op) {
+            case TOK_ULT:
+            case TOK_UGE:
+            case TOK_ULE:
+            case TOK_UGT:
+            case TOK_LT:
+            case TOK_GE:
+            case TOK_LE:
+            case TOK_GT:
+                if (op & 1) { // remove [U]GE,GT
+                    inv = 1;
+                    op--;
+                }
+                if ((op & 7) == 6) { // [U]LE
+                    int t = a; a = b; b = t;
+                    inv ^= 1;
+                }
+                ER(0x33, (op > TOK_UGT) ? 2 : 3, rr, a, b, 0); // slt[u] d, a, b
+                if (inv)
+                  EI(0x13, 4, rr, rr, 1); // xori d, d, 1
+                break;
+            case TOK_NE:
+            case TOK_EQ:
+                if (rr != a || b)
+                  ER(0x33, 0, rr, a, b, 0x20); // sub d, a, b
+                if (op == TOK_NE)
+                  ER(0x33, 3, rr, 0, rr, 0); // sltu d, x0, d == snez d,d
+                else
+                  EI(0x13, 3, rr, rr, 1); // sltiu d, d, 1 == seqz d,d
+                break;
+        }
     } else if ((v & ~1) == VT_JMP) {
         int t = v & 1;
         assert(is_ireg(r));
@@ -775,10 +809,22 @@ ST_FUNC void gjmp_addr(int a)
 
 ST_FUNC int gjmp_cond(int op, int t)
 {
-    int inv = op & 1;
-    assert(op == TOK_EQ || op == TOK_NE);
-    assert(vtop->cmp_r >= 10 && vtop->cmp_r < 18);
-    o(0x63 | (!inv << 12) | (vtop->cmp_r << 15) | (8 << 7)); // bne/beq x0,r,+4
+    int tmp;
+    int a = vtop->cmp_r & 0xff;
+    int b = (vtop->cmp_r >> 8) & 0xff;
+    switch (op) {
+        case TOK_ULT: op = 6; break;
+        case TOK_UGE: op = 7; break;
+        case TOK_ULE: op = 7; tmp = a; a = b; b = tmp; break;
+        case TOK_UGT: op = 6; tmp = a; a = b; b = tmp; break;
+        case TOK_LT:  op = 4; break;
+        case TOK_GE:  op = 5; break;
+        case TOK_LE:  op = 5; tmp = a; a = b; b = tmp; break;
+        case TOK_GT:  op = 4; tmp = a; a = b; b = tmp; break;
+        case TOK_NE:  op = 1; break;
+        case TOK_EQ:  op = 0; break;
+    }
+    o(0x63 | (op ^ 1) << 12 | a << 15 | b << 20 | 8 << 7); // bOP a,b,+4
     return gjmp(t);
 }
 
@@ -799,7 +845,6 @@ ST_FUNC int gjmp_append(int n, int t)
 static void gen_opil(int op, int ll)
 {
     int a, b, d;
-    int inv = 0;
     int func3 = 0;
     ll = ll ? 0 : 8;
     if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
@@ -823,7 +868,11 @@ static void gen_opil(int op, int ll)
                 do_cop:
                     EI(0x13 | cll, func3, ireg(d), a, fc);
                     --vtop;
-                    vtop[0].r = d;
+                    if (op >= TOK_ULT && op <= TOK_GT) {
+                      vset_VT_CMP(TOK_NE);
+                      vtop->cmp_r = ireg(d) | 0 << 8;
+                    } else
+                      vtop[0].r = d;
                     return;
                 case TOK_LE:
                     if (fc >= (1 << 11) - 1)
@@ -847,19 +896,16 @@ static void gen_opil(int op, int ll)
                 case TOK_GE:
                 case TOK_GT:
                     gen_opil(op - 1, ll);
-                    EI(0x13, 4, ireg(vtop->r), ireg(vtop->r), 1);// xori d, d, 1
+                    vtop->cmp_op ^= 1;
                     return;
 
                 case TOK_NE:
                 case TOK_EQ:
                     if (fc)
                       gen_opil('-', ll), a = ireg(vtop++->r);
-                    if (op == TOK_NE)
-                      ER(0x33, 3, ireg(d), 0, a, 0); //sltu d, x0, a == snez d,a
-                    else
-                      EI(0x13, 3, ireg(d), a, 1); // sltiu d, a, 1 == seqz d,a
                     --vtop;
-                    vtop[0].r = d;
+                    vset_VT_CMP(op);
+                    vtop->cmp_r = a | 0 << 8;
                     return;
             }
         }
@@ -874,7 +920,13 @@ static void gen_opil(int op, int ll)
     d = ireg(d);
     switch (op) {
     default:
+        if (op >= TOK_ULT && op <= TOK_GT) {
+            vset_VT_CMP(op);
+            vtop->cmp_r = a | b << 8;
+            break;
+        }
         tcc_error("implement me: %s(%s)", __FUNCTION__, get_tok_str(op, NULL));
+        break;
 
     case '+':
         ER(0x33, 0, d, a, b, 0); // add d, a, b
@@ -915,39 +967,6 @@ static void gen_opil(int op, int ll)
     case TOK_PDIV:
     case TOK_UDIV:
         ER(0x33, 5, d, a, b, 1); // divu d, a, b
-        break;
-
-    case TOK_ULT:
-    case TOK_UGE:
-    case TOK_ULE:
-    case TOK_UGT:
-    case TOK_LT:
-    case TOK_GE:
-    case TOK_LE:
-    case TOK_GT:
-        if (op & 1) { // remove [U]GE,GT
-            inv = 1;
-            op--;
-        }
-        if ((op & 7) == 6) { // [U]LE
-            int t = a; a = b; b = t;
-            inv ^= 1;
-        }
-        ER(0x33, (op > TOK_UGT) ? 2 : 3, d, a, b, 0); // slt[u] d, a, b
-        if (inv)
-          EI(0x13, 4, d, d, 1); // xori d, d, 1
-        vset_VT_CMP(TOK_NE);
-        vtop->cmp_r = d;
-        break;
-    case TOK_NE:
-    case TOK_EQ:
-        ER(0x33, 0, d, a, b, 0x20); // sub d, a, b
-        if (op == TOK_NE)
-          ER(0x33, 3, d, 0, d, 0); // sltu d, x0, d == snez d,d
-        else
-          EI(0x13, 3, d, d, 1); // sltiu d, d, 1 == seqz d,d
-        vset_VT_CMP(TOK_NE);
-        vtop->cmp_r = d;
         break;
     }
 }
