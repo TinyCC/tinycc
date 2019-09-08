@@ -4402,9 +4402,8 @@ static int parse_btype(CType *type, AttributeDef *ad)
             next();
             break;
         case TOK_NORETURN3:
-            /* currently, no need to handle it because tcc does not
-               track unused objects */
             next();
+            ad->f.func_noreturn = 1;
             break;
             /* GNUC attribute */
         case TOK_ATTRIBUTE1:
