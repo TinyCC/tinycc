@@ -3569,7 +3569,7 @@ again:
             if (ds <= ss)
                 goto done;
             /* ss <= 4 here */
-            if (ds <= 4 && dbt != (VT_SHORT | VT_UNSIGNED) && sbt != VT_BYTE) {
+            if (ds <= 4 && !(dbt == (VT_SHORT | VT_UNSIGNED) && sbt == VT_BYTE)) {
                 gv(RC_INT);
                 goto done; /* no 64bit envolved */
             }

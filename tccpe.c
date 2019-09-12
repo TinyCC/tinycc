@@ -825,7 +825,7 @@ static void pe_build_imports(struct pe_info *pe)
 
         dllindex = p->dll_index;
         if (dllindex)
-            name = (dllref = pe->s1->loaded_dlls[dllindex-1])->name;
+            name = tcc_basename((dllref = pe->s1->loaded_dlls[dllindex-1])->name);
         else
             name = "", dllref = NULL;
 
@@ -1763,7 +1763,7 @@ static int pe_load_dll(TCCState *s1, const char *filename)
     if (ret) {
         return -1;
     } else if (p) {
-        index = add_dllref(s1, tcc_basename(filename));
+        index = add_dllref(s1, filename);
         for (q = p; *q; q += 1 + strlen(q))
             pe_putimport(s1, index, q, 0);
         tcc_free(p);
