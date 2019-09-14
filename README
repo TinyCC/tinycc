@@ -12,14 +12,14 @@ Features:
   -O0'.
 
 - UNLIMITED! Any C dynamic library can be used directly. TCC is
-  heading torward full ISOC99 compliance. TCC can of course compile
+  heading toward full ISOC99 compliance. TCC can of course compile
   itself.
 
 - SAFE! tcc includes an optional memory and bound checker. Bound
   checked code can be mixed freely with standard code.
 
 - Compile and execute C source directly. No linking or assembly
-  necessary. Full C preprocessor included. 
+  necessary. Full C preprocessor included.
 
 - C script supported : just add '#!/usr/local/bin/tcc -run' at the first
   line of your C source, and execute it directly from the command
