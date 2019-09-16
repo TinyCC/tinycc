@@ -471,10 +471,41 @@ ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err)
     return sym->st_value;
 }
 
+/* list elf symbol names and values */
+ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
+    void (*symbol_cb)(void *ctx, const char *name, const void *val))
+{
+    ElfW(Sym) *sym;
+    Section *symtab;
+    int sym_index, end_sym;
+    const char *name;
+    unsigned char sym_vis, sym_bind;
+
+    symtab = s->symtab;
+    end_sym = symtab->data_offset / sizeof (ElfSym);
+    for (sym_index = 0; sym_index < end_sym; ++sym_index) {
+        sym = &((ElfW(Sym) *)symtab->data)[sym_index];
+        if (sym->st_value) {
+            name = (char *) symtab->link->data + sym->st_name;
+            sym_bind = ELFW(ST_BIND)(sym->st_info);
+            sym_vis = ELFW(ST_VISIBILITY)(sym->st_other);
+            if (sym_bind == STB_GLOBAL && sym_vis == STV_DEFAULT)
+                symbol_cb(ctx, name, (void*)(uintptr_t)sym->st_value);
+        }
+    }
+}
+
 /* return elf symbol value */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
 {
     return (void*)(uintptr_t)get_elf_sym_addr(s, name, 0);
+}
+
+/* list elf symbol names and values */
+LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
+    void (*symbol_cb)(void *ctx, const char *name, const void *val))
+{
+    list_elf_symbols(s, ctx, symbol_cb);
 }
 
 #if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
