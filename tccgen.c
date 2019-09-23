@@ -5629,6 +5629,12 @@ special_math_val:
                     }
                     vset(&s->type, VT_LOCAL | VT_LVAL, addr);
                 }
+
+                /* Promote char/short return values. This is matters only
+                   for calling function that were not compiled by TCC */
+                t = s->type.t & VT_BTYPE;
+                if (t == VT_BYTE || t == VT_SHORT || t == VT_BOOL)
+                    vtop->r |= BFVAL(VT_MUSTCAST, 1);
             }
             if (s->f.func_noreturn)
                 CODE_OFF();

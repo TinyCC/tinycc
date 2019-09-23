@@ -3316,6 +3316,9 @@ void override_func2 (void)
 extern int bug_table[] __attribute__((section("__bug_table")));
 char * get_asm_string (void)
 {
+#ifdef __i386__
+  char *str = "(not tested)";
+#else
   extern int some_symbol;
   asm volatile (".globl some_symbol\n"
 		"jmp .+6\n"
@@ -3330,6 +3333,7 @@ char * get_asm_string (void)
 		"2:\t.long 1b - 2b, %c0 - 2b\n"
 		".popsection\n" : : "i" ("A string"));
   char * str = ((char*)bug_table) + bug_table[1];
+#endif
   return str;
 }
 

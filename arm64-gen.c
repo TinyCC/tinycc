@@ -959,11 +959,7 @@ ST_FUNC void gfunc_call(int nb_args)
     {
         int rt = return_type->t;
         int bt = rt & VT_BTYPE;
-        if (bt == VT_BYTE || bt == VT_SHORT)
-            // Promote small integers:
-            o(0x13001c00 | (bt == VT_SHORT) << 13 |
-              (uint32_t)!!(rt & VT_UNSIGNED) << 30); // [su]xt[bh] w0,w0
-        else if (bt == VT_STRUCT && !(a[0] & 1)) {
+        if (bt == VT_STRUCT && !(a[0] & 1)) {
             // A struct was returned in registers, so write it out:
             gv(RC_R(8));
             --vtop;
