@@ -6,8 +6,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "libtcc.h"
+
+void handle_error(void *opaque, const char *msg)
+{
+    fprintf(opaque, "%s\n", msg);
+}
 
 /* this function is called by the generated code */
 int add(int a, int b)
@@ -52,6 +58,14 @@ int main(int argc, char **argv)
         fprintf(stderr, "Could not create tcc state\n");
         exit(1);
     }
+
+    assert(tcc_get_error_func(s) == NULL);
+    assert(tcc_get_error_opaque(s) == NULL);
+
+    tcc_set_error_func(s, stderr, handle_error);
+
+    assert(tcc_get_error_func(s) == handle_error);
+    assert(tcc_get_error_opaque(s) == stderr);
 
     /* if tcclib.h and libtcc1.a are not installed, where can we find them */
     for (i = 1; i < argc; ++i) {
