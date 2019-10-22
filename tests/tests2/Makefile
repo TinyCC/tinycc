@@ -60,6 +60,9 @@ GEN-ALWAYS =
 104_inline.test : FLAGS += $(SRC)/104+_inline.c
 104_inline.test : GEN = $(GEN-TCC)
 
+# this test needs pthread
+106_pthread.test: FLAGS += -pthread
+
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'
 # Filter some always-warning
