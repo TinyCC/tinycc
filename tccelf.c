@@ -42,6 +42,34 @@ ST_DATA Section *symtab_section;
 /* debug sections */
 ST_DATA Section *stab_section, *stabstr_section;
 
+/* elf version information */
+ST_DATA int nb_version_sym;
+struct sym_info_struct {
+  char *name;
+  ElfW(Sym) esym;
+};
+ST_DATA struct def_need_struct {
+  char *lib;
+  char *version;
+  unsigned int nb_sym_info;
+  struct sym_info_struct *sym_info;
+} *version_sym;
+ST_DATA int nb_need;
+ST_DATA int dt_verneednum;
+ST_DATA struct need_struct {
+  int offset;
+  char *lib;
+  int n_aux;
+  struct aux_struct {
+    int offset;
+    char *version;
+    int other;
+  } *aux;
+} *need;
+ST_DATA ElfW(Half) next_version = 1;
+ST_DATA Section *versym_section;
+ST_DATA Section *verneed_section;
+
 /* XXX: avoid static variable */
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
 
@@ -61,6 +89,10 @@ ST_FUNC void tccelf_new(TCCState *s)
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
+    versym_section = new_section(s, ".gnu.version", SHT_GNU_versym, SHF_ALLOC);
+    versym_section->sh_entsize = sizeof(ElfW(Half));
+    verneed_section = new_section(s, ".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC);
+    verneed_section->sh_info = 2;
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
 
@@ -198,13 +230,18 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
     sec->sh_type = sh_type;
     sec->sh_flags = sh_flags;
     switch(sh_type) {
+    case SHT_GNU_versym:
+        sec->sh_addralign = 2;
+        break;
     case SHT_HASH:
     case SHT_REL:
     case SHT_RELA:
     case SHT_DYNSYM:
     case SHT_SYMTAB:
     case SHT_DYNAMIC:
-        sec->sh_addralign = 4;
+    case SHT_GNU_verneed:
+    case SHT_GNU_verdef:
+        sec->sh_addralign = PTR_SIZE;
         break;
     case SHT_STRTAB:
         sec->sh_addralign = 1;
@@ -515,6 +552,220 @@ ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
     return (void*)(uintptr_t)get_elf_sym_addr(s, name, 1);
 }
 #endif
+
+ST_FUNC void
+save_def_need_index (int *n_def_need, struct def_need_struct **def_need,
+                     unsigned int n, const char *lib, const char *version)
+{
+    /* add index in table */
+    if (*n_def_need < n + 1) {
+        *def_need = (struct def_need_struct *)
+            tcc_realloc (*def_need,
+                         (n + 1) * sizeof (struct def_need_struct));
+        while (*n_def_need < n + 1) {
+            (*def_need)[*n_def_need].lib = NULL;
+            (*def_need)[*n_def_need].version = NULL;
+            (*def_need)[*n_def_need].nb_sym_info = 0;
+            (*def_need)[*n_def_need].sym_info = NULL;
+            (*n_def_need)++;
+        }
+    }
+    if ((*def_need)[n].lib == NULL) {
+        (*def_need)[n].lib = tcc_strdup (lib);
+        (*def_need)[n].version = tcc_strdup (version);
+    }
+}
+
+ST_FUNC void
+free_def_need (int n_def_need, struct def_need_struct *def_need)
+{
+    int i;
+
+    for (i = 0; i < n_def_need; i++) {
+        tcc_free (def_need[i].lib);
+        tcc_free (def_need[i].version);
+    }
+    tcc_free (def_need);
+}
+
+ST_FUNC void
+add_version_sym (Section *s, int sym_index, int n_def_need,
+                 struct def_need_struct *def_need, const char *name, unsigned int n)
+{
+    int i, j;
+    ElfW(Sym) *esym;
+  
+    /* check if present */
+    esym = &((ElfW(Sym) *)s->data)[sym_index];
+    for (i = 0; i < nb_version_sym; i++) {
+        for (j = 0; j < version_sym[i].nb_sym_info; j++) {
+            if (strcmp (version_sym[i].sym_info[j].name, name) == 0) {
+  	        if (memcmp (&version_sym[i].sym_info[j].esym, esym, sizeof (ElfW(Sym))) == 0) {
+                    return;
+                }
+                version_sym[i].nb_sym_info--;
+                tcc_free (version_sym[i].sym_info[j].name);
+                for (; j < version_sym[i].nb_sym_info; j++) {
+                    version_sym[i].sym_info[j] = version_sym[i].sym_info[j + 1];
+    	        }
+            }
+        }
+    }
+    /* add new value */
+    for (i = 0; i < nb_version_sym; i++) {
+        if (strcmp (def_need[n].lib,
+        	    version_sym[i].lib) == 0 &&
+            strcmp (def_need[n].version,
+        	    version_sym[i].version) == 0) {
+            break;
+        }
+    }
+    if (i == nb_version_sym) {
+        version_sym = (struct def_need_struct *)
+            tcc_realloc (version_sym,
+                         (nb_version_sym + 1) * sizeof (struct def_need_struct));
+        version_sym[nb_version_sym].lib = tcc_strdup (def_need[n].lib);
+        version_sym[nb_version_sym].version = tcc_strdup (def_need[n].version);
+        version_sym[nb_version_sym].nb_sym_info = 0;
+        version_sym[nb_version_sym].sym_info = NULL;
+        nb_version_sym++;
+    }
+    version_sym[i].sym_info = (struct sym_info_struct *)
+        tcc_realloc (version_sym[i].sym_info,
+        	     (version_sym[i].nb_sym_info + 1) * sizeof (struct sym_info_struct));
+    version_sym[i].sym_info[version_sym[i].nb_sym_info].name = tcc_strdup (name);
+    version_sym[i].sym_info[version_sym[i].nb_sym_info].esym = *esym;
+    version_sym[i].nb_sym_info++;
+}
+
+static void
+add_need_sym (Section *s, const char *soname, const char *version, const char *name, int sym_index)
+{
+    int i;
+    unsigned long size;
+    void *ptr;
+    int ver_index = 0;
+    struct need_struct *verlib = NULL;
+    ElfW(Half) vers;
+
+    if (soname) {
+        for (i = 0; i < nb_need; i++) {
+            if (strcmp (soname, need[i].lib) == 0) {
+                verlib = &need[i];
+                break;
+            }
+        }
+        if (verlib == NULL) {
+            need = (struct need_struct *)
+                tcc_realloc (need, (nb_need + 1) * sizeof (struct need_struct));
+            need[nb_need].offset = put_elf_str(s->link, soname);
+            need[nb_need].lib = tcc_strdup (soname);
+            need[nb_need].n_aux = 0;
+            need[nb_need].aux = NULL;
+            verlib = &need[nb_need];
+            nb_need++;
+        }
+        for (i = 0; i < verlib->n_aux; i++) {
+            if (strcmp (version, verlib->aux[i].version) == 0) {
+                ver_index = verlib->aux[i].other;
+            }
+        }
+        if (ver_index == 0) {
+            verlib->aux = (struct aux_struct *)
+                tcc_realloc (verlib->aux, (verlib->n_aux + 1) * sizeof (struct aux_struct));
+            verlib->aux[verlib->n_aux].offset = put_elf_str(s->link, version);
+            verlib->aux[verlib->n_aux].version = tcc_strdup (version);
+            ver_index = verlib->aux[verlib->n_aux].other = ++next_version;
+            verlib->n_aux++;
+        }
+    }
+    /* update versym section */
+    size = versym_section->data_offset / sizeof (vers);
+    for (i = size; i < (sym_index + 1); i++) {
+        ptr = section_ptr_add (versym_section, sizeof (vers));
+        vers = 0;
+        memcpy (ptr, &vers, sizeof (vers));
+    }
+    ptr = versym_section->data + sym_index * sizeof (vers);
+    vers = ver_index;
+    memcpy (ptr, &vers, sizeof (vers));
+}
+
+static void
+version_add (TCCState *s)
+{
+    int i, j, found;
+    ElfW(Sym) *sym;
+    ElfW(Verneed) verneed;
+    ElfW(Vernaux) aux;
+    Section *symtab;
+    int sym_index, end_sym;
+    const char *name;
+    void *ptr;
+
+    /* add needed symbols */
+    symtab = s->dynsym;
+    end_sym = symtab->data_offset / sizeof (ElfSym);
+    for (sym_index = 0; sym_index < end_sym; ++sym_index) {
+        sym = &((ElfW(Sym) *)symtab->data)[sym_index];
+        name = (char *) symtab->link->data + sym->st_name;
+        found = 0;
+        for (i = 0; !found && i < nb_version_sym; i++) {
+            for (j = 0; !found && j < version_sym[i].nb_sym_info; j++) {
+        	if (strcmp (version_sym[i].sym_info[j].name, name) == 0) {
+        	   found = 1;
+        	   add_need_sym (symtab, version_sym[i].lib, version_sym[i].version, name, sym_index);
+        	}
+            }
+        }
+        if (!found) {
+            add_need_sym (symtab, NULL, NULL, NULL, sym_index);
+        }
+        symtab = s->dynsym; /* symtab can be realocated by add_need_sym */
+    }
+    /* generate verneed section */
+    for (i = 0; i < nb_need; i++) {
+        verneed.vn_version = 1;
+        verneed.vn_cnt = need[i].n_aux;
+        verneed.vn_file = need[i].offset;
+        verneed.vn_aux = sizeof (verneed);
+        verneed.vn_next = i == nb_need - 1 ? 0 : sizeof (verneed) + need[i].n_aux * sizeof (aux);
+        ptr = section_ptr_add (verneed_section, sizeof (verneed));
+        memcpy (ptr, &verneed, sizeof (verneed));
+        for (j = 0; j < need[i].n_aux; j++) {
+            aux.vna_hash = elf_hash (need[i].aux[j].version);
+            aux.vna_flags = 0;
+            aux.vna_other = need[i].aux[j].other;
+            aux.vna_name = need[i].aux[j].offset;
+            aux.vna_next = j == need[i].n_aux - 1 ? 0 : sizeof (aux);
+            ptr = section_ptr_add (verneed_section, sizeof (aux));
+            memcpy (ptr, &aux, sizeof (aux));
+        }
+    }
+    /* free all info */
+    for (i = 0; i < nb_version_sym; i++) {
+        for (j = 0; j < version_sym[i].nb_sym_info; j++) {
+            tcc_free (version_sym[i].sym_info[j].name);
+        }
+        tcc_free (version_sym[i].lib);
+        tcc_free (version_sym[i].version);
+        tcc_free (version_sym[i].sym_info);
+    }
+    tcc_free (version_sym);
+    nb_version_sym = 0;
+    version_sym = NULL;
+    for (i = 0; i < nb_need; i++) {
+        tcc_free (need[i].lib);
+        for (j = 0; j < need[i].n_aux; j++) {
+            tcc_free (need[i].aux[j].version);
+        }
+        tcc_free (need[i].aux);
+    }
+    tcc_free (need);
+    dt_verneednum = nb_need;
+    nb_need = 0;
+    need = NULL;
+}
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
@@ -1855,6 +2106,9 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
 #endif
 #endif
+    put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
+    put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
+    put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
     if (s1->do_debug)
         put_dt(dynamic, DT_DEBUG, 0);
     put_dt(dynamic, DT_NULL, 0);
@@ -2137,6 +2391,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
                                     ".dynstr",
                                     ".hash", SHF_ALLOC);
             dynstr = s1->dynsym->link;
+	    versym_section->link = s1->dynsym;
+	    verneed_section->link = dynstr;
 
             /* add dynamic section */
             dynamic = new_section(s1, ".dynamic", SHT_DYNAMIC,
@@ -2157,6 +2413,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             }
         }
         build_got_entries(s1);
+	version_add (s1);
     }
 
     /* we add a section for symbols */
@@ -2752,7 +3009,16 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     int i, j, nb_syms, nb_dts, sym_bind, ret;
     ElfW(Sym) *sym, *dynsym;
     ElfW(Dyn) *dt, *dynamic;
+    int nb_versyms;
+    ElfW(Verdef) *verdef, *vdef;
+    ElfW(Verneed) *verneed, *vneed;
+    ElfW(Half) *versym, *vsym;
     unsigned char *dynstr;
+    uint32_t next;
+    int sym_index;
+    char *lib, *version;
+    int n_def_need = 0;
+    struct def_need_struct *def_need = NULL;
     const char *name, *soname;
     DLLReference *dllref;
 
@@ -2774,6 +3040,10 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     dynamic = NULL;
     dynsym = NULL; /* avoid warning */
     dynstr = NULL; /* avoid warning */
+    nb_versyms = 0;
+    verdef = NULL;
+    verneed = NULL;
+    versym = NULL;
     for(i = 0, sh = shdr; i < ehdr.e_shnum; i++, sh++) {
         switch(sh->sh_type) {
         case SHT_DYNAMIC:
@@ -2786,6 +3056,16 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
             sh1 = &shdr[sh->sh_link];
             dynstr = load_data(fd, sh1->sh_offset, sh1->sh_size);
             break;
+        case SHT_GNU_verdef:
+	    verdef = load_data(fd, sh->sh_offset, sh->sh_size);
+	    break;
+        case SHT_GNU_verneed:
+	    verneed = load_data(fd, sh->sh_offset, sh->sh_size);
+	    break;
+        case SHT_GNU_versym:
+            nb_versyms = sh->sh_size / sizeof(ElfW(Half));
+	    versym = load_data(fd, sh->sh_offset, sh->sh_size);
+	    break;
         default:
             break;
         }
@@ -2812,6 +3092,81 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         }
     }
 
+    if (nb_versyms != nb_syms) {
+      tcc_free (versym);
+      versym = NULL;
+    }
+
+#define	DEBUG_VERSION	0
+
+    if (versym && verdef) {
+      lib = NULL;
+      vdef = verdef;
+      do {
+        ElfW(Verdaux) *verdaux =
+	  (ElfW(Verdaux) *) (((char *) vdef) + vdef->vd_aux);
+
+#if DEBUG_VERSION
+	printf ("verdef: version:%u flags:%u index:%u, hash:%u\n",
+	        vdef->vd_version, vdef->vd_flags, vdef->vd_ndx,
+		vdef->vd_hash);
+#endif
+	for (i = 0; i < vdef->vd_cnt; i++) {
+          version = (char *) dynstr + verdaux->vda_name;
+	  
+	  if (lib == NULL) {
+	    lib = version;
+	  }
+	  else {
+            save_def_need_index (&n_def_need, &def_need,
+			         vdef->vd_ndx, lib, version);
+	  }
+#if DEBUG_VERSION
+	  printf ("  verdaux(%u): %s\n", vdef->vd_ndx, version);
+#endif
+	  verdaux = (ElfW(Verdaux) *) (((char *) verdaux) + verdaux->vda_next);
+	}
+        next = vdef->vd_next;
+        vdef = (ElfW(Verdef) *) (((char *) vdef) + next);
+      } while (next);
+    }
+    if (versym && verneed) {
+      vneed = verneed;
+      do {
+        ElfW(Vernaux) *vernaux =
+	  (ElfW(Vernaux) *) (((char *) vneed) + vneed->vn_aux);
+
+        lib = (char *) dynstr + vneed->vn_file;
+#if DEBUG_VERSION
+	printf ("verneed: %u %s\n", vneed->vn_version, lib);
+#endif
+	for (i = 0; i < vneed->vn_cnt; i++) {
+	  if ((vernaux->vna_other & 0x8000) == 0) { /* hidden */
+            version = (char *) dynstr + vernaux->vna_name;
+            save_def_need_index (&n_def_need, &def_need,
+			         vernaux->vna_other, lib, version);
+#if DEBUG_VERSION
+	    printf ("  vernaux(%u): %u %u %s\n",
+		    vernaux->vna_other, vernaux->vna_hash,
+		    vernaux->vna_flags, version);
+#endif
+	  }
+	  vernaux = (ElfW(Vernaux) *) (((char *) vernaux) + vernaux->vna_next);
+	}
+        next = vneed->vn_next;
+        vneed = (ElfW(Verneed) *) (((char *) vneed) + next);
+      } while (next);
+    }
+
+#if DEBUG_VERSION
+    for (i = 0; i < n_def_need; i++) {
+      if (def_need[i].lib) {
+        printf ("%d: lib: %s, version %s\n",
+		i, def_need[i].lib, def_need[i].version);
+      }
+    }
+#endif
+
     /* add the dll and its level */
     dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
     dllref->level = level;
@@ -2819,13 +3174,18 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
 
     /* add dynamic symbols in dynsym_section */
-    for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {
+    for(i = 1, sym = dynsym + 1, vsym = versym + 1; i < nb_syms; i++, sym++, vsym++) {
         sym_bind = ELFW(ST_BIND)(sym->st_info);
         if (sym_bind == STB_LOCAL)
             continue;
         name = (char *) dynstr + sym->st_name;
-        set_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
-                    sym->st_info, sym->st_other, sym->st_shndx, name);
+        sym_index = set_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
+                                sym->st_info, sym->st_other, sym->st_shndx, name);
+	if (versym && n_def_need && (*vsym & 0x8000) == 0 &&
+	    *vsym > 0 && *vsym < n_def_need &&
+	    def_need[*vsym].lib) {
+	  add_version_sym (s1->dynsymtab_section, sym_index, n_def_need, def_need, name, *vsym);
+	}
     }
 
     /* load all referenced DLLs */
@@ -2849,9 +3209,13 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     }
     ret = 0;
  the_end:
+    free_def_need (n_def_need, def_need);
     tcc_free(dynstr);
     tcc_free(dynsym);
     tcc_free(dynamic);
+    tcc_free(verdef);
+    tcc_free(verneed);
+    tcc_free(versym);
     tcc_free(shdr);
     return ret;
 }
