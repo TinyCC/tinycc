@@ -2627,7 +2627,9 @@ static void gen_cvt_ftoi1(int t)
         gfunc_call(1);
         vpushi(0);
         vtop->r = REG_IRET;
+#if PTR_SIZE == 4
         vtop->r2 = REG_LRET;
+#endif
     } else {
         gen_cvt_ftoi(t);
     }
