@@ -31,6 +31,9 @@ endif
 ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
  SKIP += 95_bitfields%.test # type_align is different on 32bit-non-windows
 endif
+ifneq (-$(CONFIG_WIN32)$(CONFIG_WIN64)-,--)
+ SKIP += 106_pthread.test # No pthread support
+endif
 
 # Some tests might need arguments
 ARGS =
@@ -62,6 +65,7 @@ GEN-ALWAYS =
 
 # this test needs pthread
 106_pthread.test: FLAGS += -pthread
+106_pthread.test: NORUN = true
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'
