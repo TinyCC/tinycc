@@ -92,7 +92,6 @@ ST_FUNC void tccelf_new(TCCState *s)
     versym_section = new_section(s, ".gnu.version", SHT_GNU_versym, SHF_ALLOC);
     versym_section->sh_entsize = sizeof(ElfW(Half));
     verneed_section = new_section(s, ".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC);
-    verneed_section->sh_info = 2;
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
 
@@ -724,6 +723,7 @@ version_add (TCCState *s)
         symtab = s->dynsym; /* symtab can be realocated by add_need_sym */
     }
     /* generate verneed section */
+    verneed_section->sh_info = nb_need;
     for (i = 0; i < nb_need; i++) {
         verneed.vn_version = 1;
         verneed.vn_cnt = need[i].n_aux;
