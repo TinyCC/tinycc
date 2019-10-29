@@ -339,9 +339,7 @@ ST_FUNC void section_reserve(Section *sec, unsigned long size)
         sec->data_offset = size;
 }
 
-/* return a reference to a section, and create it if it does not
-   exists */
-ST_FUNC Section *find_section(TCCState *s1, const char *name)
+static Section *find_section_create (TCCState *s1, const char *name, int create)
 {
     Section *sec;
     int i;
@@ -351,7 +349,14 @@ ST_FUNC Section *find_section(TCCState *s1, const char *name)
             return sec;
     }
     /* sections are created as PROGBITS */
-    return new_section(s1, name, SHT_PROGBITS, SHF_ALLOC);
+    return create ? new_section(s1, name, SHT_PROGBITS, SHF_ALLOC) : NULL;
+}
+
+/* return a reference to a section, and create it if it does not
+   exists */
+ST_FUNC Section *find_section(TCCState *s1, const char *name)
+{
+    return find_section_create (s1, name, 1);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1436,6 +1441,30 @@ static int tcc_add_support(TCCState *s1, const char *filename)
 }
 #endif
 
+static void add_array (const char *section, TCCState *s1, Sym *sym)
+{
+    Section *s;
+    unsigned char *ptr;
+
+    s = find_section(s1, section);
+    if (s) {
+       s->sh_flags |= SHF_WRITE;
+       ptr = section_ptr_add(s, PTR_SIZE);
+       memset (ptr, 0, PTR_SIZE);
+       put_elf_reloc (s1->symtab, s, ptr - s->data, R_DATA_PTR, sym->c);
+    }
+}
+
+ST_FUNC void add_init_array (TCCState *s1, Sym *sym)
+{
+    add_array (".init_array", s1, sym);
+}
+
+ST_FUNC void add_fini_array (TCCState *s1, Sym *sym)
+{
+    add_array (".fini_array", s1, sym);
+}
+
 ST_FUNC void tcc_add_bcheck(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BCHECK
@@ -2081,6 +2110,7 @@ static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
 static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
 {
     Section *dynamic = dyninf->dynamic;
+    Section *s;
 
     /* put dynamic section entries */
     put_dt(dynamic, DT_HASH, s1->dynsym->hash->sh_addr);
@@ -2109,6 +2139,29 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
     put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
     put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
+    s = find_section_create (s1, ".preinit_array", 0);
+    if (s && s->data_offset) {
+        put_dt(dynamic, DT_PREINIT_ARRAY, s->sh_addr);
+        put_dt(dynamic, DT_PREINIT_ARRAYSZ, s->data_offset);
+    }
+    s = find_section_create (s1, ".init_array", 0);
+    if (s && s->data_offset) {
+        put_dt(dynamic, DT_INIT_ARRAY, s->sh_addr);
+        put_dt(dynamic, DT_INIT_ARRAYSZ, s->data_offset);
+    }
+    s = find_section_create (s1, ".fini_array", 0);
+    if (s && s->data_offset) {
+        put_dt(dynamic, DT_FINI_ARRAY, s->sh_addr);
+        put_dt(dynamic, DT_FINI_ARRAYSZ, s->data_offset);
+    }
+    s = find_section_create (s1, ".init", 0);
+    if (s && s->data_offset) {
+        put_dt(dynamic, DT_INIT, s->sh_addr);
+    }
+    s = find_section_create (s1, ".fini", 0);
+    if (s && s->data_offset) {
+        put_dt(dynamic, DT_FINI, s->sh_addr);
+    }
     if (s1->do_debug)
         put_dt(dynamic, DT_DEBUG, 0);
     put_dt(dynamic, DT_NULL, 0);

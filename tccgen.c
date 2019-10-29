@@ -3578,6 +3578,14 @@ redo:
             skip(')');
 	    break;
 	}
+       case TOK_CONSTRUCTOR1:
+       case TOK_CONSTRUCTOR2:
+            ad->a.constructor = 1;
+            break;
+       case TOK_DESTRUCTOR1:
+       case TOK_DESTRUCTOR2:
+            ad->a.destructor = 1;
+            break;
         case TOK_SECTION1:
         case TOK_SECTION2:
             skip('(');
@@ -7560,7 +7568,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
 /* parse a function defined by symbol 'sym' and generate its code in
    'cur_text_section' */
-static void gen_function(Sym *sym)
+static void gen_function(Sym *sym, AttributeDef *ad)
 {
     /* Initialize VLA state */
     struct scope f = { 0 };
@@ -7575,6 +7583,13 @@ static void gen_function(Sym *sym)
     }
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
+
+    if (ad && ad->a.constructor) {
+        add_init_array (tcc_state, sym);
+    }
+    if (ad && ad->a.destructor) {
+        add_fini_array (tcc_state, sym);
+    }
 
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
@@ -7634,7 +7649,7 @@ static void gen_inline_functions(TCCState *s)
                 begin_macro(fn->func_str, 1);
                 next();
                 cur_text_section = text_section;
-                gen_function(sym);
+                gen_function(sym, NULL);
                 end_macro();
 
                 inline_generated = 1;
@@ -7814,7 +7829,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     cur_text_section = ad.section;
                     if (!cur_text_section)
                         cur_text_section = text_section;
-                    gen_function(sym);
+                    gen_function(sym, &ad);
                 }
                 break;
             } else {

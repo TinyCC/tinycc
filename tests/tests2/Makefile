@@ -33,6 +33,7 @@ ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
 endif
 ifneq (-$(CONFIG_WIN32)$(CONFIG_WIN64)-,--)
  SKIP += 106_pthread.test # No pthread support
+ SKIP += 108_constructor.test # No contructor/destructor support
 endif
 
 # Some tests might need arguments
@@ -66,6 +67,9 @@ GEN-ALWAYS =
 # this test needs pthread
 106_pthread.test: FLAGS += -pthread
 106_pthread.test: NORUN = true
+
+# constructor/destructor
+108_constructor.test: NORUN = true
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed 's,$(SRC)/,,g'

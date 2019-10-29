@@ -468,7 +468,9 @@ struct SymAttr {
     dllexport   : 1,
     nodecorate  : 1,
     dllimport   : 1,
-    unused      : 4;
+    constructor : 1,
+    destructor  : 1,
+    unused      : 2;
 };
 
 /* function attributes or temporary attributes for parsing */
@@ -1442,6 +1444,9 @@ ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned l
 ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
 #endif
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
+
+ST_FUNC void add_init_array (TCCState *s1, Sym *sym);
+ST_FUNC void add_fini_array (TCCState *s1, Sym *sym);
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);
 ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size, int info, int other, int shndx, const char *name);
