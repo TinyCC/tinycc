@@ -1775,7 +1775,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
 
 ST_FUNC void gen_cvt_ftof(int t)
 {
-    int f = vtop[0].type.t;
+    int f = vtop[0].type.t & VT_BTYPE;
     assert(t == VT_FLOAT || t == VT_DOUBLE || t == VT_LDOUBLE);
     assert(f == VT_FLOAT || f == VT_DOUBLE || f == VT_LDOUBLE);
     if (t == f)

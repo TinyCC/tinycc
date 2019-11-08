@@ -1,6 +1,19 @@
 #include <stdio.h>
 #include <math.h>
 
+float fd;
+
+int
+test()
+{
+   // was an internal tcc compiler error with arm64 backend until 2019-11-08
+   if (fd < 5.5) {
+     return 1;
+   } else {
+     return 0;
+   }
+}
+
 int main()
 {
    // variables
