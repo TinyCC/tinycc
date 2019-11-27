@@ -590,7 +590,7 @@ version_add (TCCState *s)
         struct sym_version *sv = &sym_versions[i];
         int n_same_libs = 0, prev;
         size_t vnofs;
-        ElfW(Vernaux) *vna;
+        ElfW(Vernaux) *vna = vna;
         if (sv->out_index < 1)
           continue;
         vnofs = section_add(verneed_section, sizeof(*vn), 1);
