@@ -33,7 +33,6 @@ ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
 endif
 ifneq (-$(CONFIG_WIN32)$(CONFIG_WIN64)-,--)
  SKIP += 106_pthread.test # No pthread support
- SKIP += 108_constructor.test # No contructor/destructor support
 endif
 
 # Some tests might need arguments

@@ -23,6 +23,11 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
 #define _runtwinmain _runwinmain
 #endif
 
+extern void (*__init_array_start[]) (void);
+extern void (*__init_array_end[]) (void);
+extern void (*__fini_array_start[]) (void);
+extern void (*__fini_array_end[]) (void);
+
 typedef struct { int newmode; } _startupinfo;
 int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int globb, _startupinfo*);
 
@@ -31,6 +36,8 @@ static int go_winmain(TCHAR *arg1)
     STARTUPINFO si;
     _TCHAR *szCmd, *p;
     int fShow;
+    int retval;
+    int i;
 
     GetStartupInfo(&si);
     if (si.dwFlags & STARTF_USESHOWWINDOW)
@@ -48,7 +55,16 @@ static int go_winmain(TCHAR *arg1)
 #if defined __i386__ || defined __x86_64__
     _controlfp(0x10000, 0x30000);
 #endif
-    return _tWinMain(GetModuleHandle(NULL), NULL, szCmd, fShow);
+    i = 0;
+    while (&__init_array_start[i] != __init_array_end) {
+        (*__init_array_start[i++])();
+    }
+    retval = _tWinMain(GetModuleHandle(NULL), NULL, szCmd, fShow);
+    i = 0;
+    while (&__fini_array_end[i] != __fini_array_start) {
+        (*__fini_array_end[--i])();
+    }
+    return retval;
 }
 
 static LONG WINAPI catch_sig(EXCEPTION_POINTERS *ex)

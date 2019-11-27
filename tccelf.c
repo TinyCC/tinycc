@@ -1256,7 +1256,6 @@ static void put_dt(Section *dynamic, int dt, addr_t val)
     dyn->d_un.d_val = val;
 }
 
-#ifndef TCC_TARGET_PE
 static void add_init_array_defines(TCCState *s1, const char *section_name)
 {
     Section *s;
@@ -1285,6 +1284,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
                 s->sh_num, sym_end);
 }
 
+#ifndef TCC_TARGET_PE
 static int tcc_add_support(TCCState *s1, const char *filename)
 {
     char buf[1024];
@@ -1402,12 +1402,10 @@ static void tcc_add_linker_symbols(TCCState *s1)
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 data_section->sh_num, "__global_pointer$");
 #endif
-#ifndef TCC_TARGET_PE
     /* horrible new standard ldscript defines */
     add_init_array_defines(s1, ".preinit_array");
     add_init_array_defines(s1, ".init_array");
     add_init_array_defines(s1, ".fini_array");
-#endif
 
     /* add start and stop symbols for sections whose name can be
        expressed in C */
