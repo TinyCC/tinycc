@@ -493,19 +493,19 @@ typedef struct Sym {
             int c; /* associated number or Elf symbol index */
             union {
                 int sym_scope; /* scope level for locals */
-		int jnext; /* next jump label */
+    int jnext; /* next jump label */
                 struct FuncAttr f; /* function attributes */
                 int auxtype; /* bitfield access type */
             };
         };
         long long enum_val; /* enum constant if IS_ENUM_VAL */
         int *d; /* define token stream */
-	struct Sym *ncl; /* next cleanup */
+  struct Sym *ncl; /* next cleanup */
     };
     CType type; /* associated type */
     union {
         struct Sym *next; /* next related symbol (for fields and anoms) */
-	struct Sym *cleanupstate; /* in defined labels */
+  struct Sym *cleanupstate; /* in defined labels */
         int asm_label; /* associated asm label */
     };
     struct Sym *prev; /* prev symbol in stack */
@@ -673,20 +673,20 @@ struct sym_attr {
 };
 
 struct TCCState {
-    int verbose; /* if true, display some information during compilation */
-    int nostdinc; /* if true, no standard headers are added */
-    int nostdlib; /* if true, no standard libraries are added */
-    int nocommon; /* if true, do not use common symbols for .bss data */
-    int static_link; /* if true, static linking is performed */
-    int rdynamic; /* if true, all symbols are exported */
-    int symbolic; /* if true, resolve symbols in the current module first */
-    int filetype; /* file type for compilation (NONE,C,ASM) */
-    int cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
+    unsigned char verbose; /* if true, display some information during compilation */
+    unsigned char nostdinc; /* if true, no standard headers are added */
+    unsigned char nostdlib; /* if true, no standard libraries are added */
+    unsigned char nocommon; /* if true, do not use common symbols for .bss data */
+    unsigned char static_link; /* if true, static linking is performed */
+    unsigned char rdynamic; /* if true, all symbols are exported */
+    unsigned char symbolic; /* if true, resolve symbols in the current module first */
+    unsigned char filetype; /* file type for compilation (NONE,C,ASM) */
+    unsigned int  cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */
     char *rpath; /* as specified on the command line (-Wl,-rpath=) */
-    int enable_new_dtags; /* ditto, (-Wl,--enable-new-dtags) */
+    unsigned char enable_new_dtags; /* ditto, (-Wl,--enable-new-dtags) */
 
     /* output type, see TCC_OUTPUT_XXX */
     int output_type;
@@ -694,33 +694,33 @@ struct TCCState {
     int output_format;
 
     /* C language options */
-    int char_is_unsigned;
-    int leading_underscore;
-    int ms_extensions;	/* allow nested named struct w/o identifier behave like unnamed */
-    int dollars_in_identifiers;	/* allows '$' char in identifiers */
-    int ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
+    unsigned char char_is_unsigned;
+    unsigned char leading_underscore;
+    unsigned char ms_extensions; /* allow nested named struct w/o identifier behave like unnamed */
+    unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
+    unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
     /* warning switches */
-    int warn_write_strings;
-    int warn_unsupported;
-    int warn_error;
-    int warn_none;
-    int warn_implicit_function_declaration;
-    int warn_gcc_compat;
+    unsigned char warn_write_strings;
+    unsigned char warn_unsupported;
+    unsigned char warn_error;
+    unsigned char warn_none;
+    unsigned char warn_implicit_function_declaration;
+    unsigned char warn_gcc_compat;
 
     /* compile with debug symbol (and use them if error during execution) */
-    int do_debug;
+    unsigned char do_debug;
 #ifdef CONFIG_TCC_BCHECK
     /* compile with built-in memory and bounds checker */
-    int do_bounds_check;
+    unsigned char do_bounds_check;
 #endif
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/
 #endif
-    int run_test; /* nth test to run with -dt -run */
+    unsigned char run_test; /* nth test to run with -dt -run */
 
     addr_t text_addr; /* address of text section */
-    int has_text_addr;
+    unsigned char has_text_addr;
 
     unsigned section_align; /* section alignment */
 
@@ -847,11 +847,11 @@ struct TCCState {
     int nb_files; /* number thereof */
     int nb_libraries; /* number of libs thereof */
     char *outfile; /* output filename */
-    int option_r; /* option -r */
-    int do_bench; /* option -bench */
+    unsigned char option_r; /* option -r */
+    unsigned char do_bench; /* option -bench */
     int gen_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
-    int option_pthread; /* -pthread option */
+    unsigned char option_pthread; /* -pthread option */
     int argc;
     char **argv;
 };
