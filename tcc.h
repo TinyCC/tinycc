@@ -493,19 +493,19 @@ typedef struct Sym {
             int c; /* associated number or Elf symbol index */
             union {
                 int sym_scope; /* scope level for locals */
-    int jnext; /* next jump label */
+                int jnext; /* next jump label */
                 struct FuncAttr f; /* function attributes */
                 int auxtype; /* bitfield access type */
             };
         };
         long long enum_val; /* enum constant if IS_ENUM_VAL */
         int *d; /* define token stream */
-  struct Sym *ncl; /* next cleanup */
+        struct Sym *ncl; /* next cleanup */
     };
     CType type; /* associated type */
     union {
         struct Sym *next; /* next related symbol (for fields and anoms) */
-  struct Sym *cleanupstate; /* in defined labels */
+        struct Sym *cleanupstate; /* in defined labels */
         int asm_label; /* associated asm label */
     };
     struct Sym *prev; /* prev symbol in stack */
@@ -717,7 +717,7 @@ struct TCCState {
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/
 #endif
-    unsigned char run_test; /* nth test to run with -dt -run */
+    int run_test; /* nth test to run with -dt -run */
 
     addr_t text_addr; /* address of text section */
     unsigned char has_text_addr;
