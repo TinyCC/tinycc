@@ -1247,7 +1247,7 @@ ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, const char *name)
                 continue;
         }
         if (p->offset) {
-            *(int*)((char *)s + p->offset) =
+            *((unsigned char *)s + p->offset) =
                 p->flags & FD_INVERT ? !value : value;
             if (ret)
                 return 0;
