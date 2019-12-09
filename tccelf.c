@@ -49,13 +49,14 @@ struct sym_version {
     int out_index;
     int prev_same_lib;
 };
-static int nb_sym_versions;
-static struct sym_version *sym_versions;
-static int nb_sym_to_version;
-static int *sym_to_version;
-static int dt_verneednum;
-static Section *versym_section;
-static Section *verneed_section;
+
+#define nb_sym_versions     s1->nb_sym_versions
+#define sym_versions        s1->sym_versions
+#define nb_sym_to_version   s1->nb_sym_to_version
+#define sym_to_version      s1->sym_to_version
+#define dt_verneednum       s1->dt_verneednum
+#define versym_section      s1->versym_section
+#define verneed_section     s1->verneed_section
 
 /* XXX: avoid static variable */
 static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
@@ -76,9 +77,6 @@ ST_FUNC void tccelf_new(TCCState *s)
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
-    versym_section = new_section(s, ".gnu.version", SHT_GNU_versym, SHF_ALLOC);
-    versym_section->sh_entsize = sizeof(ElfW(Half));
-    verneed_section = new_section(s, ".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC);
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
 
@@ -126,17 +124,15 @@ ST_FUNC void tccelf_delete(TCCState *s1)
 {
     int i;
 
+#ifndef ELF_OBJ_ONLY
     /* free symbol versions */
     for (i = 0; i < nb_sym_versions; i++) {
         tcc_free(sym_versions[i].version);
         tcc_free(sym_versions[i].lib);
     }
     tcc_free(sym_versions);
-    sym_versions = NULL;
-    nb_sym_versions = 0;
     tcc_free(sym_to_version);
-    sym_to_version = NULL;
-    nb_sym_to_version = 0;
+#endif
 
     /* free all sections */
     for(i = 1; i < s1->nb_sections; i++)
@@ -556,6 +552,7 @@ ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 }
 #endif
 
+#ifndef ELF_OBJ_ONLY
 static void
 version_add (TCCState *s)
 {
@@ -566,6 +563,15 @@ version_add (TCCState *s)
     int sym_index, end_sym, nb_versions = 2, nb_entries = 0;
     ElfW(Half) *versym;
     const char *name;
+    TCCState *s1 = s;
+
+    if (0 == nb_sym_versions)
+        return;
+    versym_section = new_section(s1, ".gnu.version", SHT_GNU_versym, SHF_ALLOC);
+    versym_section->sh_entsize = sizeof(ElfW(Half));
+    verneed_section = new_section(s1, ".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC);
+    versym_section->link = s1->dynsym;
+    verneed_section->link = s1->dynsym->link;
 
     /* add needed symbols */
     symtab = s->dynsym;
@@ -590,7 +596,7 @@ version_add (TCCState *s)
         struct sym_version *sv = &sym_versions[i];
         int n_same_libs = 0, prev;
         size_t vnofs;
-        ElfW(Vernaux) *vna = vna;
+        ElfW(Vernaux) *vna = 0;
         if (sv->out_index < 1)
           continue;
         vnofs = section_add(verneed_section, sizeof(*vn), 1);
@@ -623,6 +629,7 @@ version_add (TCCState *s)
     verneed_section->sh_info = nb_entries;
     dt_verneednum = nb_entries;
 }
+#endif
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
@@ -970,7 +977,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
     unsigned char *ptr;
     addr_t tgt, addr;
 
-    relocate_init(sr);
+    qrel = (ElfW_Rel *)sr->data;
 
     for_each_elem(sr, 0, rel, ElfW_Rel) {
         ptr = s->data + rel->r_offset;
@@ -989,6 +996,7 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         sr->link = s1->dynsym;
 }
 
+#ifndef ELF_OBJ_ONLY
 /* relocate relocation table in 'sr' */
 static void relocate_rel(TCCState *s1, Section *sr)
 {
@@ -1255,6 +1263,7 @@ static void put_dt(Section *dynamic, int dt, addr_t val)
     dyn->d_tag = dt;
     dyn->d_un.d_val = val;
 }
+#endif
 
 static void add_init_array_defines(TCCState *s1, const char *section_name)
 {
@@ -1459,6 +1468,7 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
     }
 }
 
+#ifndef ELF_OBJ_ONLY
 ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
 {
     int sym_index = ELFW(R_SYM) (rel->r_info);
@@ -1661,6 +1671,7 @@ static void export_global_syms(TCCState *s1)
         }
     }
 }
+#endif
 
 /* Allocate strings for section names and decide if an unallocated section
    should be output.
@@ -1676,6 +1687,7 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
         s = s1->sections[i];
         /* when generating a DLL, we include relocations but we may
            patch them */
+#ifndef ELF_OBJ_ONLY
         if (file_type == TCC_OUTPUT_DLL &&
             s->sh_type == SHT_RELX &&
             !(s->sh_flags & SHF_ALLOC) &&
@@ -1683,7 +1695,9 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
             prepare_dynamic_rel(s1, s)) {
                 if (s1->sections[s->sh_info]->sh_flags & SHF_EXECINSTR)
                     textrel = 1;
-        } else if ((s1->do_debug && s->sh_type != SHT_RELX) ||
+        } else
+#endif
+        if ((s1->do_debug && s->sh_type != SHT_RELX) ||
             file_type == TCC_OUTPUT_OBJ ||
             (s->sh_flags & SHF_ALLOC) ||
 	    i == (s1->nb_sections - 1)) {
@@ -1890,6 +1904,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
     return file_offset;
 }
 
+#ifndef ELF_OBJ_ONLY
 static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
                                  Section *dynamic)
 {
@@ -1964,9 +1979,11 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
 #endif
 #endif
-    put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
-    put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
-    put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
+    if (versym_section) {
+        put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
+        put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
+        put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
+    }
     s = find_section_create (s1, ".preinit_array", 0);
     if (s && s->data_offset) {
         put_dt(dynamic, DT_PREINIT_ARRAY, s->sh_addr);
@@ -2026,6 +2043,7 @@ static int final_sections_reloc(TCCState *s1)
     }
     return 0;
 }
+#endif
 
 /* Create an ELF file on disk.
    This function handle ELF specific layout requirements */
@@ -2183,6 +2201,7 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
     return 0;
 }
 
+#ifndef ELF_OBJ_ONLY
 /* Sort section headers by assigned sh_addr, remove sections
    that we aren't going to output.  */
 static void tidy_section_headers(TCCState *s1, int *sec_order)
@@ -2228,17 +2247,16 @@ static void tidy_section_headers(TCCState *s1, int *sec_order)
     s1->nb_sections = nnew;
     tcc_free(backmap);
 }
+#endif
 
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
 {
-    int i, ret, phnum, shnum, file_type, file_offset, *sec_order;
+    int ret, phnum, shnum, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
     ElfW(Phdr) *phdr;
-    ElfW(Sym) *sym;
     Section *strsec, *interp, *dynamic, *dynstr;
-    int textrel;
 
     file_type = s1->output_type;
     s1->nb_errors = 0;
@@ -2246,8 +2264,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
     phdr = NULL;
     sec_order = NULL;
     interp = dynamic = dynstr = NULL; /* avoid warning */
-    textrel = 0;
 
+#ifndef ELF_OBJ_ONLY
     if (file_type != TCC_OUTPUT_OBJ) {
         /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
         tcc_add_runtime(s1);
@@ -2272,9 +2290,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
                                     ".dynstr",
                                     ".hash", SHF_ALLOC);
             dynstr = s1->dynsym->link;
-	    versym_section->link = s1->dynsym;
-	    verneed_section->link = dynstr;
-
             /* add dynamic section */
             dynamic = new_section(s1, ".dynamic", SHT_DYNAMIC,
                                   SHF_ALLOC | SHF_WRITE);
@@ -2296,15 +2311,18 @@ static int elf_output_file(TCCState *s1, const char *filename)
         build_got_entries(s1);
 	version_add (s1);
     }
+#endif
 
     /* we add a section for symbols */
     strsec = new_section(s1, ".shstrtab", SHT_STRTAB, 0);
     put_elf_str(strsec, "");
 
     /* Allocate strings for section names */
-    textrel = alloc_sec_names(s1, file_type, strsec);
+    ret = alloc_sec_names(s1, file_type, strsec);
 
+#ifndef ELF_OBJ_ONLY
     if (dynamic) {
+        int i;
         /* add a list of needed dlls */
         for(i = 0; i < s1->nb_loaded_dlls; i++) {
             DLLReference *dllref = s1->loaded_dlls[i];
@@ -2321,7 +2339,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */
-            if (textrel)
+            if (ret)
                 put_dt(dynamic, DT_TEXTREL, 0);
         }
 
@@ -2336,6 +2354,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         dynamic->sh_size = dynamic->data_offset;
         dynstr->sh_size = dynstr->data_offset;
     }
+#endif
 
     /* compute number of program headers */
     if (file_type == TCC_OUTPUT_OBJ)
@@ -2361,11 +2380,13 @@ static int elf_output_file(TCCState *s1, const char *filename)
     file_offset = layout_sections(s1, phdr, phnum, interp, strsec, &dyninf,
                                   sec_order);
 
+#ifndef ELF_OBJ_ONLY
     /* Fill remaining program header and finalize relocation related to dynamic
        linking. */
     if (file_type != TCC_OUTPUT_OBJ) {
         fill_unloadable_phdr(phdr, phnum, interp, dynamic);
         if (dynamic) {
+            ElfW(Sym) *sym;
             dynamic->data_offset = dyninf.data_offset;
             fill_dynamic(s1, &dyninf);
 
@@ -2397,10 +2418,12 @@ static int elf_output_file(TCCState *s1, const char *filename)
         else if (s1->got)
             fill_local_got_entries(s1);
     }
+#endif
 
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
     s1->nb_sections = shnum;
+    goto the_end;
  the_end:
     tcc_free(sec_order);
     tcc_free(phdr);
@@ -2885,10 +2908,10 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
     return 0;
 }
 
-#ifndef TCC_TARGET_PE
+#ifndef ELF_OBJ_ONLY
 /* Set LV[I] to the global index of sym-version (LIB,VERSION).  Maybe resizes
    LV, maybe create a new entry for (LIB,VERSION).  */
-static void set_ver_to_ver(int *n, int **lv, int i, char *lib, char *version)
+static void set_ver_to_ver(TCCState *s1, int *n, int **lv, int i, char *lib, char *version)
 {
     while (i >= *n) {
         *lv = tcc_realloc(*lv, (*n + 1) * sizeof(**lv));
@@ -2919,7 +2942,7 @@ static void set_ver_to_ver(int *n, int **lv, int i, char *lib, char *version)
 /* Associates symbol SYM_INDEX (in dynsymtab) with sym-version index
    VERNDX.  */
 static void
-set_sym_version(int sym_index, int verndx)
+set_sym_version(TCCState *s1, int sym_index, int verndx)
 {
     if (sym_index >= nb_sym_to_version) {
         int newelems = sym_index ? sym_index * 2 : 1;
@@ -2933,6 +2956,90 @@ set_sym_version(int sym_index, int verndx)
       sym_to_version[sym_index] = verndx;
 }
 
+struct versym_info {
+    int nb_versyms;
+    ElfW(Verdef) *verdef;
+    ElfW(Verneed) *verneed;
+    ElfW(Half) *versym;
+    int nb_local_ver, *local_ver;
+};
+
+
+static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
+{
+    char *lib, *version;
+    uint32_t next;
+    int i;
+
+#define	DEBUG_VERSION 0
+
+    if (v->versym && v->verdef) {
+      ElfW(Verdef) *vdef = v->verdef;
+      lib = NULL;
+      do {
+        ElfW(Verdaux) *verdaux =
+	  (ElfW(Verdaux) *) (((char *) vdef) + vdef->vd_aux);
+
+#if DEBUG_VERSION
+	printf ("verdef: version:%u flags:%u index:%u, hash:%u\n",
+	        vdef->vd_version, vdef->vd_flags, vdef->vd_ndx,
+		vdef->vd_hash);
+#endif
+	if (vdef->vd_cnt) {
+          version = dynstr + verdaux->vda_name;
+
+	  if (lib == NULL)
+	    lib = version;
+	  else
+            set_ver_to_ver(s1, &v->nb_local_ver, &v->local_ver, vdef->vd_ndx,
+                           lib, version);
+#if DEBUG_VERSION
+	  printf ("  verdaux(%u): %s\n", vdef->vd_ndx, version);
+#endif
+	}
+        next = vdef->vd_next;
+        vdef = (ElfW(Verdef) *) (((char *) vdef) + next);
+      } while (next);
+    }
+    if (v->versym && v->verneed) {
+      ElfW(Verneed) *vneed = v->verneed;
+      do {
+        ElfW(Vernaux) *vernaux =
+	  (ElfW(Vernaux) *) (((char *) vneed) + vneed->vn_aux);
+
+        lib = dynstr + vneed->vn_file;
+#if DEBUG_VERSION
+	printf ("verneed: %u %s\n", vneed->vn_version, lib);
+#endif
+	for (i = 0; i < vneed->vn_cnt; i++) {
+	  if ((vernaux->vna_other & 0x8000) == 0) { /* hidden */
+              version = dynstr + vernaux->vna_name;
+              set_ver_to_ver(s1, &v->nb_local_ver, &v->local_ver, vernaux->vna_other,
+                             lib, version);
+#if DEBUG_VERSION
+	    printf ("  vernaux(%u): %u %u %s\n",
+		    vernaux->vna_other, vernaux->vna_hash,
+		    vernaux->vna_flags, version);
+#endif
+	  }
+	  vernaux = (ElfW(Vernaux) *) (((char *) vernaux) + vernaux->vna_next);
+	}
+        next = vneed->vn_next;
+        vneed = (ElfW(Verneed) *) (((char *) vneed) + next);
+      } while (next);
+    }
+
+#if DEBUG_VERSION
+    for (i = 0; i < v->nb_local_ver; i++) {
+      if (v->local_ver[i] > 0) {
+        printf ("%d: lib: %s, version %s\n",
+		i, sym_versions[v->local_ver[i]].lib,
+                sym_versions[v->local_ver[i]].version);
+      }
+    }
+#endif
+}
+
 /* load a DLL and all referenced DLLs. 'level = 0' means that the DLL
    is referenced by the user (so it should be added as DT_NEEDED in
    the generated ELF file) */
@@ -2943,17 +3050,12 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     int i, j, nb_syms, nb_dts, sym_bind, ret;
     ElfW(Sym) *sym, *dynsym;
     ElfW(Dyn) *dt, *dynamic;
-    int nb_versyms;
-    ElfW(Verdef) *verdef, *vdef;
-    ElfW(Verneed) *verneed, *vneed;
-    ElfW(Half) *versym, *vsym;
+
     char *dynstr;
-    uint32_t next;
     int sym_index;
-    char *lib, *version;
-    int nb_local_ver = 0, *local_ver = NULL;
     const char *name, *soname;
     DLLReference *dllref;
+    struct versym_info v;
 
     full_read(fd, &ehdr, sizeof(ehdr));
 
@@ -2973,10 +3075,8 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     dynamic = NULL;
     dynsym = NULL; /* avoid warning */
     dynstr = NULL; /* avoid warning */
-    nb_versyms = 0;
-    verdef = NULL;
-    verneed = NULL;
-    versym = NULL;
+    memset(&v, 0, sizeof v);
+
     for(i = 0, sh = shdr; i < ehdr.e_shnum; i++, sh++) {
         switch(sh->sh_type) {
         case SHT_DYNAMIC:
@@ -2990,14 +3090,14 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
             dynstr = load_data(fd, sh1->sh_offset, sh1->sh_size);
             break;
         case SHT_GNU_verdef:
-	    verdef = load_data(fd, sh->sh_offset, sh->sh_size);
+	    v.verdef = load_data(fd, sh->sh_offset, sh->sh_size);
 	    break;
         case SHT_GNU_verneed:
-	    verneed = load_data(fd, sh->sh_offset, sh->sh_size);
+	    v.verneed = load_data(fd, sh->sh_offset, sh->sh_size);
 	    break;
         case SHT_GNU_versym:
-            nb_versyms = sh->sh_size / sizeof(ElfW(Half));
-	    versym = load_data(fd, sh->sh_offset, sh->sh_size);
+            v.nb_versyms = sh->sh_size / sizeof(ElfW(Half));
+	    v.versym = load_data(fd, sh->sh_offset, sh->sh_size);
 	    break;
         default:
             break;
@@ -3025,78 +3125,10 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         }
     }
 
-    if (nb_versyms != nb_syms) {
-      tcc_free (versym);
-      versym = NULL;
-    }
-
-#define	DEBUG_VERSION	0
-
-    if (versym && verdef) {
-      lib = NULL;
-      vdef = verdef;
-      do {
-        ElfW(Verdaux) *verdaux =
-	  (ElfW(Verdaux) *) (((char *) vdef) + vdef->vd_aux);
-
-#if DEBUG_VERSION
-	printf ("verdef: version:%u flags:%u index:%u, hash:%u\n",
-	        vdef->vd_version, vdef->vd_flags, vdef->vd_ndx,
-		vdef->vd_hash);
-#endif
-	if (vdef->vd_cnt) {
-          version = dynstr + verdaux->vda_name;
-	  
-	  if (lib == NULL)
-	    lib = version;
-	  else
-            set_ver_to_ver(&nb_local_ver, &local_ver, vdef->vd_ndx,
-                           lib, version);
-#if DEBUG_VERSION
-	  printf ("  verdaux(%u): %s\n", vdef->vd_ndx, version);
-#endif
-	}
-        next = vdef->vd_next;
-        vdef = (ElfW(Verdef) *) (((char *) vdef) + next);
-      } while (next);
-    }
-    if (versym && verneed) {
-      vneed = verneed;
-      do {
-        ElfW(Vernaux) *vernaux =
-	  (ElfW(Vernaux) *) (((char *) vneed) + vneed->vn_aux);
-
-        lib = dynstr + vneed->vn_file;
-#if DEBUG_VERSION
-	printf ("verneed: %u %s\n", vneed->vn_version, lib);
-#endif
-	for (i = 0; i < vneed->vn_cnt; i++) {
-	  if ((vernaux->vna_other & 0x8000) == 0) { /* hidden */
-              version = dynstr + vernaux->vna_name;
-              set_ver_to_ver(&nb_local_ver, &local_ver, vernaux->vna_other,
-                             lib, version);
-#if DEBUG_VERSION
-	    printf ("  vernaux(%u): %u %u %s\n",
-		    vernaux->vna_other, vernaux->vna_hash,
-		    vernaux->vna_flags, version);
-#endif
-	  }
-	  vernaux = (ElfW(Vernaux) *) (((char *) vernaux) + vernaux->vna_next);
-	}
-        next = vneed->vn_next;
-        vneed = (ElfW(Verneed) *) (((char *) vneed) + next);
-      } while (next);
-    }
-
-#if DEBUG_VERSION
-    for (i = 0; i < nb_local_ver; i++) {
-      if (local_ver[i] > 0) {
-        printf ("%d: lib: %s, version %s\n",
-		i, sym_versions[local_ver[i]].lib,
-                sym_version[local_ver[i]].version);
-      }
-    }
-#endif
+    if (v.nb_versyms != nb_syms)
+        tcc_free (v.versym), v.versym = NULL;
+    else
+        store_version(s1, &v, dynstr);
 
     /* add the dll and its level */
     dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
@@ -3105,17 +3137,18 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
 
     /* add dynamic symbols in dynsym_section */
-    for(i = 1, sym = dynsym + 1, vsym = versym + 1; i < nb_syms; i++, sym++, vsym++) {
+    for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {
         sym_bind = ELFW(ST_BIND)(sym->st_info);
         if (sym_bind == STB_LOCAL)
             continue;
         name = dynstr + sym->st_name;
         sym_index = set_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
                                 sym->st_info, sym->st_other, sym->st_shndx, name);
-	if (versym && (*vsym & 0x8000) == 0 &&
-	    *vsym > 0 && *vsym < nb_local_ver) {
-          set_sym_version(sym_index, local_ver[*vsym]);
-	}
+        if (v.versym) {
+            ElfW(Half) vsym = v.versym[i];
+            if ((vsym & 0x8000) == 0 && vsym > 0 && vsym < v.nb_local_ver)
+                set_sym_version(s1, sym_index, v.local_ver[vsym]);
+        }
     }
 
     /* load all referenced DLLs */
@@ -3139,14 +3172,14 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     }
     ret = 0;
  the_end:
-    tcc_free(local_ver);
     tcc_free(dynstr);
     tcc_free(dynsym);
     tcc_free(dynamic);
-    tcc_free(verdef);
-    tcc_free(verneed);
-    tcc_free(versym);
     tcc_free(shdr);
+    tcc_free(v.local_ver);
+    tcc_free(v.verdef);
+    tcc_free(v.verneed);
+    tcc_free(v.versym);
     return ret;
 }
 
@@ -3406,4 +3439,4 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1)
     }
     return 0;
 }
-#endif /* !TCC_TARGET_PE */
+#endif /* !ELF_OBJ_ONLY */

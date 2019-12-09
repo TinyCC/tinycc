@@ -824,6 +824,9 @@ struct TCCState {
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
     int nb_sym_attrs;
+    /* ptr to next reloc entry reused */
+    ElfW_Rel *qrel;
+#   define qrel s1->qrel
 
 #ifdef TCC_TARGET_PE
     /* PE info */
@@ -837,6 +840,17 @@ struct TCCState {
     int uw_sym;
     unsigned uw_offs;
 # endif
+# define ELF_OBJ_ONLY
+#endif
+
+#ifndef ELF_OBJ_ONLY
+    int nb_sym_versions;
+    struct sym_version *sym_versions;
+    int nb_sym_to_version;
+    int *sym_to_version;
+    int dt_verneednum;
+    Section *versym_section;
+    Section *verneed_section;
 #endif
 
 #ifdef TCC_IS_NATIVE
@@ -1475,7 +1489,9 @@ ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 
+#ifndef ELF_OBJ_ONLY
 ST_FUNC void build_got_entries(TCCState *s1);
+#endif
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC void squeeze_multi_relocs(Section *sec, size_t oldrelocoffset);
 
@@ -1506,12 +1522,13 @@ enum gotplt_entry {
     ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
 };
 
+#ifndef ELF_OBJ_ONLY
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC int gotplt_entry_type (int reloc_type);
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
-ST_FUNC void relocate_init(Section *sr);
-ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 ST_FUNC void relocate_plt(TCCState *s1);
+#endif
+ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 
 /* ------------ xxx-gen.c ------------ */
 

@@ -161,12 +161,6 @@ ST_FUNC void relocate_plt(TCCState *s1)
     }
 }
 
-void relocate_init(Section *sr) {}
-
-void relocate_fini(Section *sr)
-{
-}
-
 struct pcrel_hi {
     addr_t addr, val;
 };

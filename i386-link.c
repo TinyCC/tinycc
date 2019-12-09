@@ -22,6 +22,7 @@
 
 #include "tcc.h"
 
+#ifndef ELF_OBJ_ONLY
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
 int code_reloc (int reloc_type)
@@ -152,17 +153,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
     }
 }
-
-static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
-
-void relocate_init(Section *sr)
-{
-    qrel = (ElfW_Rel *) sr->data;
-}
-
-void relocate_fini(Section *sr)
-{
-}
+#endif
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
