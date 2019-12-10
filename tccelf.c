@@ -2795,59 +2795,78 @@ typedef struct ArchiveHeader {
     char ar_fmag[2];            /* should contain ARFMAG */
 } ArchiveHeader;
 
-static int get_be32(const uint8_t *b)
+#define ARFMAG "`\n"
+
+static unsigned long long get_be(const uint8_t *b, int n)
 {
-    return b[3] | (b[2] << 8) | (b[1] << 16) | (b[0] << 24);
+    unsigned long long ret = 0;
+    while (n)
+        ret = (ret << 8) | *b++, --n;
+    return ret;
 }
 
-static long get_be64(const uint8_t *b)
+static int read_ar_header(int fd, int offset, ArchiveHeader *hdr)
 {
-  long long ret = get_be32(b);
-  ret = (ret << 32) | (unsigned)get_be32(b+4);
-  return (long)ret;
+    char *p, *e;
+    int len;
+    lseek(fd, offset, SEEK_SET);
+    len = full_read(fd, hdr, sizeof(ArchiveHeader));
+    if (len != sizeof(ArchiveHeader))
+        return len ? -1 : 0;
+    p = hdr->ar_name;
+    for (e = p + sizeof hdr->ar_name; e > p && e[-1] == ' ';)
+        --e;
+    *e = '\0';
+    hdr->ar_size[sizeof hdr->ar_size-1] = 0;
+    return len;
 }
 
 /* load only the objects which resolve undefined symbols */
 static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
 {
-    long i, bound, nsyms, sym_index, off, ret;
+    int i, bound, nsyms, sym_index, len, ret = -1;
+    unsigned long long off;
     uint8_t *data;
     const char *ar_names, *p;
     const uint8_t *ar_index;
     ElfW(Sym) *sym;
-    Section *s;
+    ArchiveHeader hdr;
 
     data = tcc_malloc(size);
     if (full_read(fd, data, size) != size)
-        goto fail;
-    nsyms = entrysize == 4 ? get_be32(data) : get_be64(data);
+        goto the_end;
+    nsyms = get_be(data, entrysize);
     ar_index = data + entrysize;
     ar_names = (char *) ar_index + nsyms * entrysize;
 
     do {
         bound = 0;
-        for(p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
-            s = symtab_section;
+        for (p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
+            Section *s = symtab_section;
             sym_index = find_elf_sym(s, p);
-            if(sym_index == 0) {
+#ifdef TCC_TARGET_PE /* windows DLL's don't have UNDEF syms */
+            if (sym_index == 0) {
                 s = s1->dynsymtab_section;
                 sym_index = find_elf_sym(s, p);
             }
-            if(sym_index) {
-                sym = &((ElfW(Sym) *)s->data)[sym_index];
-                if(sym->st_shndx == SHN_UNDEF) {
-                    off = (entrysize == 4
-                           ? get_be32(ar_index + i * 4)
-                           : get_be64(ar_index + i * 8))
-                          + sizeof(ArchiveHeader);
-                    ++bound;
-                    if(tcc_load_object_file(s1, fd, off) < 0) {
-                    fail:
-                        ret = -1;
-                        goto the_end;
-                    }
-                }
+#endif
+            if (!sym_index)
+                continue;
+            sym = &((ElfW(Sym) *)s->data)[sym_index];
+            if(sym->st_shndx != SHN_UNDEF)
+                continue;
+            off = get_be(ar_index + i * entrysize, entrysize);
+            len = read_ar_header(fd, off, &hdr);
+            if (len <= 0 || memcmp(hdr.ar_fmag, ARFMAG, 2)) {
+                tcc_error_noabort("invalid archive");
+                goto the_end;
             }
+            off += len;
+            if (s1->verbose == 2)
+                printf("   -> %s\n", hdr.ar_name);
+            if (tcc_load_object_file(s1, fd, off) < 0)
+                goto the_end;
+            ++bound;
         }
     } while(bound);
     ret = 0;
@@ -2860,52 +2879,41 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
 {
     ArchiveHeader hdr;
-    char ar_size[11];
-    char ar_name[17];
-    char magic[8];
-    int size, len, i;
+    /* char magic[8]; */
+    int size, len;
     unsigned long file_offset;
+    ElfW(Ehdr) ehdr;
 
     /* skip magic which was already checked */
-    full_read(fd, magic, sizeof(magic));
+    /* full_read(fd, magic, sizeof(magic)); */
+    file_offset = sizeof ARMAG - 1;
 
     for(;;) {
-        len = full_read(fd, &hdr, sizeof(hdr));
+        len = read_ar_header(fd, file_offset, &hdr);
         if (len == 0)
-            break;
-        if (len != sizeof(hdr)) {
+            return 0;
+        if (len < 0) {
             tcc_error_noabort("invalid archive");
             return -1;
         }
-        memcpy(ar_size, hdr.ar_size, sizeof(hdr.ar_size));
-        ar_size[sizeof(hdr.ar_size)] = '\0';
-        size = strtol(ar_size, NULL, 0);
-        memcpy(ar_name, hdr.ar_name, sizeof(hdr.ar_name));
-        for(i = sizeof(hdr.ar_name) - 1; i >= 0; i--) {
-            if (ar_name[i] != ' ')
-                break;
-        }
-        ar_name[i + 1] = '\0';
-        file_offset = lseek(fd, 0, SEEK_CUR);
+        file_offset += len;
+        size = strtol(hdr.ar_size, NULL, 0);
         /* align to even */
         size = (size + 1) & ~1;
-        if (!strcmp(ar_name, "/")) {
+        if (alacarte) {
             /* coff symbol table : we handle it */
-            if (alacarte)
+            if (!strcmp(hdr.ar_name, "/"))
                 return tcc_load_alacarte(s1, fd, size, 4);
-	} else if (!strcmp(ar_name, "/SYM64/")) {
-            if (alacarte)
+            if (!strcmp(hdr.ar_name, "/SYM64/"))
                 return tcc_load_alacarte(s1, fd, size, 8);
-        } else {
-            ElfW(Ehdr) ehdr;
-            if (tcc_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
-                if (tcc_load_object_file(s1, fd, file_offset) < 0)
-                    return -1;
-            }
+        } else if (tcc_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
+            if (s1->verbose == 2)
+                printf("   -> %s\n", hdr.ar_name);
+            if (tcc_load_object_file(s1, fd, file_offset) < 0)
+                return -1;
         }
-        lseek(fd, file_offset + size, SEEK_SET);
+        file_offset += size;
     }
-    return 0;
 }
 
 #ifndef ELF_OBJ_ONLY
