@@ -77,7 +77,15 @@ static void *(*calloc_redir) (size_t, size_t) = NULL;
 static void (*free_redir) (void *) = NULL;
 static void *(*realloc_redir) (void *, size_t) = NULL;
 static void *(*memalign_redir) (size_t, size_t) = NULL;
+static int pool_index = 0;
+static unsigned char initial_pool[256];
 #endif
+
+#define TCC_TYPE_NONE           (0)
+#define TCC_TYPE_MALLOC         (1)
+#define TCC_TYPE_CALLOC         (2)
+#define TCC_TYPE_REALLOC        (3)
+#define TCC_TYPE_MEMALIGN       (4)
 
 /* this pointer is generated when bound check is incorrect */
 #define INVALID_POINTER ((void *)(-2))
@@ -87,6 +95,7 @@ struct tree_node {
     Tree * left, * right;
     size_t start;
     size_t size;
+    size_t type;
     size_t is_invalid; /* true if pointers outside region are invalid */
 };
 
@@ -104,6 +113,7 @@ void splay_printtree(Tree * t, int d);
 
 /* external interface */
 void __bound_init(void);
+void __bound_exit(void);
 
 #ifdef __attribute__
   /* an __attribute__ macro is defined in the system headers */
@@ -138,6 +148,7 @@ static alloca_list_type *alloca_list = NULL;
 
 static int inited = 0;
 static int print_calls = 0;
+static int print_heap = 0;
 static int never_fatal = 0;
 static int no_checking = 0;
 
@@ -281,10 +292,10 @@ void FASTCALL __bound_local_new(void *p1)
             addr += fp;
             size = p[1];
             dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
-                    __FILE__, __FUNCTION__, addr, (unsigned long) size);
+                    __FILE__, __FUNCTION__, (void *) addr, (unsigned long) size);
+            tree = splay_insert(addr, size, tree);
         }
         p += 2;
-        tree = splay_insert(addr, size, tree);
     }
     POST_SEM ();
 }
@@ -306,9 +317,10 @@ void FASTCALL __bound_local_delete(void *p1)
             break;
         if (addr == 1) {
             while (alloca_list && alloca_list->fp == fp) {
+                alloca_list_type *next = alloca_list->next;
+
                 dprintf(stderr, "%s, %s() remove alloca/vla %p\n",
                         __FILE__, __FUNCTION__, alloca_list->p);
-                alloca_list_type *next = alloca_list->next;
                 tree = splay_delete ((size_t) alloca_list->p, tree);
 #if MALLOC_REDIR
                 free_redir (alloca_list);
@@ -322,16 +334,12 @@ void FASTCALL __bound_local_delete(void *p1)
             addr += fp;
             dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
                     __FILE__, __FUNCTION__, (void *) addr, (unsigned long) p[1]);
+            tree = splay_delete(addr, tree);
         }
         p += 2;
-        tree = splay_delete(addr, tree);
     }
     POST_SEM ();
 }
-
-#if defined(__GNUC__) && (__GNUC__ >= 6)
-#pragma GCC diagnostic pop
-#endif
 
 void __bound_init(void)
 {
@@ -341,6 +349,7 @@ void __bound_init(void)
     inited = 1;
 
     print_calls = getenv ("TCC_BOUNDS_PRINT_CALLS") != NULL;
+    print_heap = getenv ("TCC_BOUNDS_PRINT_HEAP") != NULL;
     never_fatal = getenv ("TCC_BOUNDS_NEVER_FATAL") != NULL;
 
     dprintf(stderr, "%s, %s() start\n", __FILE__, __FUNCTION__);
@@ -431,34 +440,55 @@ void __bound_main_arg(char **p)
     POST_SEM ();
 }
 
-void __bound_exit(void)
+void __attribute__((destructor)) __bound_exit(void)
 {
     int i;
+    static const char * const alloc_type[] = {
+        "", "malloc", "calloc", "realloc", "memalign"
+    };
 
     dprintf(stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
-    while (tree) {
-      tree = splay_delete (tree->start, tree);
-    }
+
+    if (inited) {
+#if !defined(_WIN32)
+        if (print_heap) {
+            extern void __libc_freeres ();
+            __libc_freeres ();
+        }
+#endif
+    
 #if TREE_REUSE
-    while (tree_free_list) {
-        Tree *next = tree_free_list->left;
+        while (tree_free_list) {
+            Tree *next = tree_free_list->left;
 #if MALLOC_REDIR
-        free_redir (tree_free_list);
+            free_redir (tree_free_list);
 #else
-        free (tree_free_list);
+            free (tree_free_list);
 #endif
-        tree_free_list = next;
-    }
+            tree_free_list = next;
+        }
 #endif
-    for (i = 0; i < FREE_REUSE_SIZE; i++) {
+        for (i = 0; i < FREE_REUSE_SIZE; i++) {
+            if (free_reuse_list[i]) {
+                tree = splay_delete ((size_t) free_reuse_list[i], tree);
 #if MALLOC_REDIR
-        free_redir (free_reuse_list[i]);
+                free_redir (free_reuse_list[i]);
 #else
-        free (free_reuse_list[i]);
+                free (free_reuse_list[i]);
 #endif
+             }
+        }
+        while (tree) {
+            if (print_heap && tree->type != 0) {
+                fprintf (stderr, "%s, %s() %s found size %ld\n",
+                         __FILE__, __FUNCTION__, alloc_type[tree->type],
+                         (unsigned long) tree->size);
+            }
+            tree = splay_delete (tree->start, tree);
+        }
+        EXIT_SEM ();
+        inited = 0;
     }
-    EXIT_SEM ();
-    inited = 0;
 }
 
 /* XXX: we should use a malloc which ensure that it is unlikely that
@@ -475,15 +505,11 @@ void *__bound_malloc(size_t size, const void *caller)
 #if MALLOC_REDIR
     /* This will catch the first dlsym call from __bound_init */
     if (malloc_redir == NULL) {
-        static int pool_index = 0;
-        static unsigned char pool[256];
-        void *retval;
-
-        retval = &pool[pool_index];
+        ptr = &initial_pool[pool_index];
         pool_index = (pool_index + size + 7) & ~8;
         dprintf (stderr, "%s, %s initial (%p, 0x%x)\n",
-                 __FILE__, __FUNCTION__, retval, (unsigned)size);
-        return retval;
+                 __FILE__, __FUNCTION__, ptr, (unsigned)size);
+        return ptr;
     }
 #endif
     /* we allocate one more byte to ensure the regions will be
@@ -501,6 +527,9 @@ void *__bound_malloc(size_t size, const void *caller)
 
     if (ptr) {
         tree = splay_insert ((size_t) ptr, size, tree);
+        if (tree->start == (size_t) ptr) {
+            tree->type = TCC_TYPE_MALLOC;
+        }
     }
     POST_SEM ();
     return ptr;
@@ -542,6 +571,9 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
         dprintf(stderr, "%s, %s (%p, 0x%x)\n",
                 __FILE__, __FUNCTION__, ptr, (unsigned)size);
         tree = splay_insert((size_t) ptr, size, tree);
+        if (tree->start == (size_t) ptr) {
+            tree->type = TCC_TYPE_MEMALIGN;
+        }
     }
     POST_SEM ();
     return ptr;
@@ -556,7 +588,12 @@ void __bound_free(void *ptr, const void *caller)
     size_t addr = (size_t) ptr;
     void *p;
 
-    if (ptr == NULL || tree == NULL)
+    if (ptr == NULL || tree == NULL
+#if MALLOC_REDIR
+        || ((unsigned char *) ptr >= &initial_pool[0] &&
+            (unsigned char *) ptr < &initial_pool[sizeof(initial_pool)])
+#endif
+        )
         return;
 
     dprintf(stderr, "%s, %s (%p)\n", __FILE__, __FUNCTION__, ptr);
@@ -593,9 +630,6 @@ void *realloc(void *ptr, size_t size)
 void *__bound_realloc(void *ptr, size_t size, const void *caller)
 #endif
 {
-    void *ptr1;
-    size_t last_size;
-
     if (size == 0) {
 #if MALLOC_REDIR
         free(ptr);
@@ -603,39 +637,39 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         __bound_free(ptr, caller);
 #endif
         return NULL;
-    } else {
+    }
+    else if (ptr == NULL) {
+#if MALLOC_REDIR
+        ptr = realloc_redir (ptr, size);
+#else
+        ptr = realloc (ptr, size);
+#endif
         WAIT_SEM ();
-        tree = splay ((size_t) ptr, tree);
-        if (tree->start != (size_t) ptr) {
-#if MALLOC_REDIR
-            ptr = realloc_redir (ptr, size);
-#else
-            ptr = realloc (ptr, size);
-#endif
-            if (ptr) {
-                tree = splay_insert ((size_t) ptr, size, tree);
+        if (ptr) {
+            tree = splay_insert ((size_t) ptr, size, tree);
+            if (tree->start == (size_t) ptr) {
+                tree->type = TCC_TYPE_REALLOC;
             }
-            POST_SEM ();
-            return ptr;
         }
-        else {
-            last_size = tree->size;
-            POST_SEM ();
+        POST_SEM ();
+        return ptr;
+    }
+    else {
+        WAIT_SEM ();
+        tree = splay_delete ((size_t) ptr, tree);
 #if MALLOC_REDIR
-            ptr1 = malloc(size);
+        ptr = realloc_redir (ptr, size);
 #else
-            ptr1 = __bound_malloc(size, caller);
+        ptr = realloc (ptr, size);
 #endif
-            if (ptr == NULL || ptr1 == NULL)
-                return ptr1;
-            memcpy(ptr1, ptr, last_size < size ? last_size : size);
-#if MALLOC_REDIR
-            free(ptr);
-#else
-            __bound_free(ptr, caller);
-#endif
-            return ptr1;
+        if (ptr) {
+            tree = splay_insert ((size_t) ptr, size, tree);
+            if (tree->start == (size_t) ptr) {
+                tree->type = TCC_TYPE_REALLOC;
+            }
         }
+        POST_SEM ();
+        return ptr;
     }
 }
 
@@ -649,12 +683,29 @@ void *__bound_calloc(size_t nmemb, size_t size)
 
     size *= nmemb;
 #if MALLOC_REDIR
-    ptr = malloc(size);
+    /* This will catch the first dlsym call from __bound_init */
+    if (malloc_redir == NULL) {
+        ptr = &initial_pool[pool_index];
+        pool_index = (pool_index + size + 7) & ~8;
+        dprintf (stderr, "%s, %s initial (%p, 0x%x)\n",
+                 __FILE__, __FUNCTION__, ptr, (unsigned)size);
+        memset (ptr, 0, size);
+        return ptr;
+    }
+#endif
+#if MALLOC_REDIR
+    ptr = malloc_redir(size + 1);
 #else
-    ptr = __bound_malloc(size, NULL);
+    ptr = malloc(size + 1);
 #endif
     if (ptr) {
         memset (ptr, 0, size);
+        WAIT_SEM ();
+        tree = splay_insert ((size_t) ptr, size, tree);
+        if (tree->start == (size_t) ptr) {
+            tree->type = TCC_TYPE_CALLOC;
+        }
+        POST_SEM ();
     }
     return ptr;
 }
@@ -700,6 +751,7 @@ void __bound_new_region(void *p, size_t size)
     dprintf(stderr, "%s, %s (%p, 0x%x)\n",
             __FILE__, __FUNCTION__, p, (unsigned)size);
     WAIT_SEM ();
+    GET_CALLER_FP (fp);
     last = NULL;
     cur = alloca_list;
     while (cur && cur->fp == fp) {
@@ -710,7 +762,7 @@ void __bound_new_region(void *p, size_t size)
                 last->next = cur->next;
             }
             else {
-                alloca_list->next = cur->next;
+                alloca_list = cur->next;
             }
             tree = splay_delete((size_t)p, tree);
 #if MALLOC_REDIR
@@ -718,6 +770,7 @@ void __bound_new_region(void *p, size_t size)
 #else
             free (cur);
 #endif
+            break;
         }
         last = cur;
         cur = cur->next;
@@ -729,7 +782,6 @@ void __bound_new_region(void *p, size_t size)
     cur = malloc (sizeof (alloca_list_type));
 #endif
     if (cur) {
-        GET_CALLER_FP (fp);
         cur->fp = fp;
         cur->p = p;
         cur->next = alloca_list;
@@ -737,6 +789,11 @@ void __bound_new_region(void *p, size_t size)
     }
     POST_SEM ();
 }
+
+#if defined(__GNUC__) && (__GNUC__ >= 6)
+#pragma GCC diagnostic pop
+#endif
+
 
 /* some useful checked functions */
 
@@ -1005,6 +1062,7 @@ static Tree * splay_insert(size_t addr, size_t size, Tree * t)
     }
     new->start = addr;
     new->size = size;
+    new->type = TCC_TYPE_NONE;
     new->is_invalid = 0;
     return new;
 }

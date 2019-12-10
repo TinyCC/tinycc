@@ -354,8 +354,19 @@ fault}.
 Generate additional support code to check
 memory allocations and array/pointer bounds. @option{-g} is implied. Note
 that the generated code is slower and bigger in this case.
+The bound checking code is not included in shared libaries. The main executable should always be compiled with the @option{-b}.
 
-Note: @option{-b} is only available on i386 when using libtcc for the moment.
+There are three environment variables that can be used:
+@table @option
+@item TCC_BOUNDS_PRINT_CALLS
+Print bound checking calls. Can be used for debugging.
+@item TCC_BOUNDS_PRINT_HEAP
+Print heap objects that are not freed at exit of program.
+@item TCC_BOUNDS_NEVER_FATAL
+Try to continue in case of a bound checking error.
+@end table
+
+Note: @option{-b} is only available on i386 (linux and windows) and x86_64 (linux and windows) when using libtcc for the moment.
 
 @item -bt N
 Display N callers in stack traces. This is useful with @option{-g} or
