@@ -68,18 +68,18 @@ OBJ-riscv64 = $(RISCV64_O) $(DSO_O)
 
 OBJB-i386 = $(BCHECK_O)
 OBJB-x86_64 = $(BCHECK_O)
-OBJB-x86_64-osx =
+OBJB-x86_64-osx = dummy.o
 OBJB-i386-win32 = bcheck.o
 OBJB-x86_64-win32 = bcheck.o
-OBJB-arm64 =
-OBJB-arm =
-OBJB-arm-fpa =
-OBJB-arm-fpa-ld =
-OBJB-arm-vfp =
-OBJB-arm-eabi =
-OBJB-arm-eabihf =
-OBJB-arm-wince =
-OBJB-riscv64 =
+OBJB-arm64 = dummy.o
+OBJB-arm = dummy.o
+OBJB-arm-fpa = dummy.o
+OBJB-arm-fpa-ld = dummy.o
+OBJB-arm-vfp = dummy.o
+OBJB-arm-eabi = dummy.o
+OBJB-arm-eabihf = dummy.o
+OBJB-arm-wince = dummy.o
+OBJB-riscv64 = dummy.o
 
 all: $(BIN) $(BINB)
 
