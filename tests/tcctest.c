@@ -3971,6 +3971,7 @@ int force_get_order(unsigned long s)
 /* Test failed when using bounds checking */
 void bounds_check1_test (void)
 {
+#ifndef __arm__	/* gcc bug om arm */
     struct s {
         int x;
         long long y;
@@ -3979,4 +3980,5 @@ void bounds_check1_test (void)
     s->y = 20;
     pv(x);
     pv(y);
+#endif
 }
