@@ -249,7 +249,15 @@ libtcc1.a : tcc$(EXESUF) FORCE
 %-libtcc1.a : %-tcc$(EXESUF) FORCE
 	@$(MAKE) -C lib DEFINES='$(DEF-$*)' CROSS_TARGET=$*
 
-.PRECIOUS: %-libtcc1.a
+# TinyCC runtime libraries
+libtccb1.a : tcc$(EXESUF) FORCE
+	@$(MAKE) -C lib DEFINES='$(DEF-$T)'
+
+# Cross libtcc1.a
+%-libtccb1.a : %-tcc$(EXESUF) FORCE
+	@$(MAKE) -C lib DEFINES='$(DEF-$*)' CROSS_TARGET=$*
+
+.PRECIOUS: %-libtcc1.a %-libtccb1.a
 FORCE:
 
 # --------------------------------------------------------------------------
