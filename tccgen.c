@@ -1193,10 +1193,6 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     type = &int_type;
 #endif
                 size = type_size(type, &align);
-                if ((p->r2 & VT_VALMASK) < VT_CONST) {
-                    size *= 2;
-                    align *= 2;
-                }
                 l=get_temp_local_var(size,align);
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
@@ -1208,8 +1204,11 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     o(0xd8dd); /* fstp %st(0) */
                 }
 #endif
-                /* special long long case */
-                if ((p->r2 & VT_VALMASK) < VT_CONST) {
+                /* special long long case.  Ideally r2 would always
+		   be VT_CONST is the type is smaller than a double-word
+		   type.  Not all routines (e.g. gen_cast with _ftoi) are
+		   careful to clear r2, though.  */
+                if ((p->r2 & VT_VALMASK) < VT_CONST && size > PTR_SIZE) {
                     sv.c.i += PTR_SIZE;
                     store(p->r2, &sv);
                 }
