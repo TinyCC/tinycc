@@ -74,6 +74,7 @@ enum {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
+#define USING_GLOBALS
 #include "tcc.h"
 
 /* define to 1/0 to [not] have EBX as 4th register */
@@ -1030,7 +1031,8 @@ ST_FUNC void gen_cvt_ftoi(int t)
     gfunc_call(1);
     vpushi(0);
     vtop->r = REG_IRET;
-    vtop->r2 = REG_LRET;
+    if ((t & VT_BTYPE) == VT_LLONG)
+        vtop->r2 = REG_LRET;
 }
 
 /* convert from one floating point type to another */

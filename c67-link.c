@@ -39,8 +39,6 @@ int code_reloc (int reloc_type)
         case R_C60_PLT32:
             return 1;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 
@@ -64,8 +62,6 @@ int gotplt_entry_type (int reloc_type)
         case R_C60_GOT32:
             return ALWAYS_GOTPLT_ENTRY;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 

@@ -18,6 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#define USING_GLOBALS
 #include "tcc.h"
 
 /********************************************************/
@@ -54,7 +55,6 @@ static void tok_print(const char *msg, const int *str);
 
 static struct TinyAlloc *toksym_alloc;
 static struct TinyAlloc *tokstr_alloc;
-static struct TinyAlloc *cstr_alloc;
 
 static TokenString *macro_stack;
 
@@ -331,7 +331,7 @@ static void cstr_realloc(CString *cstr, int new_size)
         size = 8; /* no need to allocate a too small first string */
     while (size < new_size)
         size = size * 2;
-    cstr->data = tal_realloc(cstr_alloc, cstr->data, size);
+    cstr->data = tcc_realloc(cstr->data, size);
     cstr->size_allocated = size;
 }
 
@@ -377,7 +377,7 @@ ST_FUNC void cstr_new(CString *cstr)
 /* free string and reset it to NULL */
 ST_FUNC void cstr_free(CString *cstr)
 {
-    tal_free(cstr_alloc, cstr->data);
+    tcc_free(cstr->data);
     cstr_new(cstr);
 }
 
@@ -385,6 +385,24 @@ ST_FUNC void cstr_free(CString *cstr)
 ST_FUNC void cstr_reset(CString *cstr)
 {
     cstr->size = 0;
+}
+
+ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
+{
+    va_list v;
+    int len, size;
+
+    va_start(v, fmt);
+    len = vsnprintf(NULL, 0, fmt, v);
+    va_end(v);
+    size = cstr->size + len + 1;
+    if (size > cstr->size_allocated)
+        cstr_realloc(cstr, size);
+    va_start(v, fmt);
+    vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
+    va_end(v);
+    cstr->size += len;
+    return len;
 }
 
 /* XXX: unicode ? */
@@ -1338,18 +1356,6 @@ ST_FUNC void free_defines(Sym *b)
         define_undef(top);
         sym_free(top);
     }
-
-    /* restore remaining (-D or predefined) symbols if they were
-       #undef'd in the file */
-    while (b) {
-        int v = b->v;
-        if (v >= TOK_IDENT && v < tok_ident) {
-            Sym **d = &table_ident[v - TOK_IDENT]->sym_define;
-            if (!*d && b->d)
-                *d = b;
-        }
-        b = b->prev;
-    }
 }
 
 /* label lookup */
@@ -1855,7 +1861,7 @@ ST_FUNC void preprocess(int is_bof)
             }
             /* add include file debug info */
             if (s1->do_debug)
-                put_stabs(file->filename, N_BINCL, 0, 0, 0);
+                put_stabs(tcc_state, file->filename, N_BINCL, 0, 0, 0);
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
             ch = file->buf_ptr[0];
             goto the_end;
@@ -1964,7 +1970,7 @@ include_done:
             total_lines += file->line_num - n;
         file->line_num = n;
         if (s1->do_debug)
-    	    put_stabs(file->filename, N_BINCL, 0, 0, 0);
+            put_stabs(tcc_state, file->filename, N_BINCL, 0, 0, 0);
         break;
     case TOK_ERROR:
     case TOK_WARNING:
@@ -2278,7 +2284,7 @@ static void parse_number(const char *p)
             q--;
             ch = *p++;
             b = 16;
-        } else if (tcc_ext && (ch == 'b' || ch == 'B')) {
+        } else if (tcc_state->tcc_ext && (ch == 'b' || ch == 'B')) {
             q--;
             ch = *p++;
             b = 2;
@@ -2622,7 +2628,7 @@ static inline void next_nomacro1(void)
 
                 /* add end of include file debug info */
                 if (tcc_state->do_debug) {
-                    put_stabd(N_EINCL, 0, 0);
+                    put_stabd(tcc_state, N_EINCL, 0, 0);
                 }
                 /* pop include stack */
                 tcc_close();
@@ -3584,7 +3590,8 @@ ST_INLN void unget_tok(int last_tok)
 ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
 {
     CString cstr;
-    int i;
+
+    tccpp_new(s1);
 
     s1->include_stack_ptr = s1->include_stack;
     s1->ifdef_stack_ptr = s1->ifdef_stack;
@@ -3602,26 +3609,18 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     set_idnum('.', is_asm ? IS_ID : 0);
 
     cstr_new(&cstr);
-    cstr_cat(&cstr, "\"", -1);
-    cstr_cat(&cstr, file->filename, -1);
-    cstr_cat(&cstr, "\"", 0);
-    tcc_define_symbol(s1, "__BASE_FILE__", cstr.data);
-
-    cstr_reset(&cstr);
-    for (i = 0; i < s1->nb_cmd_include_files; i++) {
-        cstr_cat(&cstr, "#include \"", -1);
-        cstr_cat(&cstr, s1->cmd_include_files[i], -1);
-        cstr_cat(&cstr, "\"\n", -1);
-    }
-    if (cstr.size) {
-        *s1->include_stack_ptr++ = file;
-	tcc_open_bf(s1, "<command line>", cstr.size);
-	memcpy(file->buffer, cstr.data, cstr.size);
-    }
-    cstr_free(&cstr);
-
     if (is_asm)
-        tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
+        cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
+    cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
+    if (s1->cmdline_defs.size)
+        cstr_cat(&cstr, s1->cmdline_defs.data, s1->cmdline_defs.size);
+    //printf("%s\n", (char*)s1->cmdline_defs.data);
+    if (s1->cmdline_incl.size)
+        cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
+    *s1->include_stack_ptr++ = file;
+    tcc_open_bf(s1, "<command line>", cstr.size);
+    memcpy(file->buffer, cstr.data, cstr.size);
+    cstr_free(&cstr);
 
     parse_flags = is_asm ? PARSE_FLAG_ASM_FILE : 0;
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
@@ -3633,16 +3632,17 @@ ST_FUNC void preprocess_end(TCCState *s1)
     while (macro_stack)
         end_macro();
     macro_ptr = NULL;
+
+    while (file)
+        tcc_close();
+
+    tccpp_delete(s1);
 }
 
 ST_FUNC void tccpp_new(TCCState *s)
 {
     int i, c;
     const char *p, *r;
-
-    /* might be used in error() before preprocess_start() */
-    s->include_stack_ptr = s->include_stack;
-    s->ppfp = stdout;
 
     /* init isid table */
     for(i = CH_EOF; i<128; i++)
@@ -3658,9 +3658,10 @@ ST_FUNC void tccpp_new(TCCState *s)
     /* init allocators */
     tal_new(&toksym_alloc, TOKSYM_TAL_LIMIT, TOKSYM_TAL_SIZE);
     tal_new(&tokstr_alloc, TOKSTR_TAL_LIMIT, TOKSTR_TAL_SIZE);
-    tal_new(&cstr_alloc, CSTR_TAL_LIMIT, CSTR_TAL_SIZE);
 
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
+    memset(s->cached_includes_hash, 0, sizeof s->cached_includes_hash);
+
     cstr_new(&cstr_buf);
     cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
     tok_str_new(&tokstr_buf);
@@ -3678,14 +3679,22 @@ ST_FUNC void tccpp_new(TCCState *s)
         tok_alloc(p, r - p - 1);
         p = r;
     }
+
+    /* we add dummy defines for some special macros to speed up tests
+       and to have working defined() */
+    define_push(TOK___LINE__, MACRO_OBJ, NULL, NULL);
+    define_push(TOK___FILE__, MACRO_OBJ, NULL, NULL);
+    define_push(TOK___DATE__, MACRO_OBJ, NULL, NULL);
+    define_push(TOK___TIME__, MACRO_OBJ, NULL, NULL);
+    define_push(TOK___COUNTER__, MACRO_OBJ, NULL, NULL);
 }
 
 ST_FUNC void tccpp_delete(TCCState *s)
 {
     int i, n;
 
-    /* free -D and compiler defines */
     free_defines(NULL);
+    dynarray_reset(&s->cached_includes, &s->nb_cached_includes);
 
     /* free tokens */
     n = tok_ident - TOK_IDENT;
@@ -3705,8 +3714,6 @@ ST_FUNC void tccpp_delete(TCCState *s)
     toksym_alloc = NULL;
     tal_delete(tokstr_alloc);
     tokstr_alloc = NULL;
-    tal_delete(cstr_alloc);
-    cstr_alloc = NULL;
 }
 
 /* ------------------------------------------------------------------------- */

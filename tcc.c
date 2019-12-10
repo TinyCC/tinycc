@@ -250,7 +250,7 @@ static unsigned getclock_ms(void)
 
 int main(int argc0, char **argv0)
 {
-    TCCState *s;
+    TCCState *s, *s1;
     int ret, opt, n = 0, t = 0;
     unsigned start_time = 0;
     const char *first_file;
@@ -259,14 +259,14 @@ int main(int argc0, char **argv0)
 
 redo:
     argc = argc0, argv = argv0;
-    s = tcc_new();
+    s = s1 = tcc_new();
     opt = tcc_parse_args(s, &argc, &argv, 1);
 
     if ((n | t) == 0) {
         if (opt == OPT_HELP)
-            return 0>fputs(help,stdout) || 0>fclose(stdout);
+            return fputs(help, stdout), 1;
         if (opt == OPT_HELP2)
-            return 0>fputs(help2,stdout) || 0>fclose(stdout);
+            return fputs(help2, stdout), 1;
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)

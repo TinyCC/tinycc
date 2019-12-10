@@ -36,15 +36,29 @@
 # else
 #  define ucontext_t CONTEXT
 # endif
-ST_DATA int rt_num_callers = 6;
-ST_DATA const char **rt_bound_error_msg;
-ST_DATA void *rt_prog_main;
+
 static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level);
 static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static void set_exception_handler(void);
+
+#ifdef _WIN32
+static DWORD s1_for_run_idx;
+void set_s1_for_run(TCCState *s)
+{
+    if (!s1_for_run_idx)
+        s1_for_run_idx = TlsAlloc();
+    TlsSetValue(s1_for_run_idx, s);
+}
+#define get_s1_for_run() ((TCCState*)TlsGetValue(s1_for_run_idx))
+#else
+/* XXX: add tls support for linux */
+static TCCState *s1_for_run;
+#define set_s1_for_run(s) (s1_for_run = s)
+#define get_s1_for_run() s1_for_run
+#endif
 #endif
 
-static void set_pages_executable(void *ptr, unsigned long length);
+static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length);
 static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff);
 
 #ifdef _WIN64
@@ -110,6 +124,8 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 #endif
     }
     tcc_free(s1->runtime_mem);
+    if (get_s1_for_run() == s1)
+        set_s1_for_run(NULL);
 }
 
 /* launch the compiled program with the given arguments */
@@ -127,7 +143,9 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug) {
         set_exception_handler();
-        rt_prog_main = prog_main;
+        s1->rt_prog_main = prog_main;
+        /* set global state pointer for exception handlers*/
+        set_s1_for_run(s1);
     }
 #endif
 
@@ -142,7 +160,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         int ret;
 
         /* set error function */
-        rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
+        s1->rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = tcc_get_symbol_err(s1, "__bound_init");
         bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
@@ -255,7 +273,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
             memcpy(ptr, s->data, length);
         /* mark executable sections as executable in memory */
         if (s->sh_flags & SHF_EXECINSTR)
-            set_pages_executable((char*)ptr + ptr_diff, length);
+            set_pages_executable(s1, (char*)ptr + ptr_diff, length);
     }
 
 #ifdef _WIN64
@@ -268,7 +286,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
 /* ------------------------------------------------------------- */
 /* allow to run code in memory */
 
-static void set_pages_executable(void *ptr, unsigned long length)
+static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length)
 {
 #ifdef _WIN32
     unsigned long old_protect;
@@ -319,14 +337,9 @@ static void win64_del_function_table(void *p)
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
 
-ST_FUNC void tcc_set_num_callers(int n)
-{
-    rt_num_callers = n;
-}
-
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static addr_t rt_printline(addr_t wanted_pc, const char *msg)
+static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
 {
     char func_name[128], last_func_name[128];
     addr_t func_addr, last_pc, pc;
@@ -341,7 +354,7 @@ static addr_t rt_printline(addr_t wanted_pc, const char *msg)
     if (stab_section) {
         stab_len = stab_section->data_offset;
         stab_sym = (Stab_Sym *)stab_section->data;
-        stab_str = (char *) stabstr_section->data;
+        stab_str = (char *) stab_section->link->data;
     }
 
     func_name[0] = '\0';
@@ -473,6 +486,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
     va_list ap;
     addr_t pc;
     int i;
+    TCCState *s1 = get_s1_for_run();
 
     fprintf(stderr, "Runtime error: ");
     va_start(ap, fmt);
@@ -480,11 +494,14 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
     va_end(ap);
     fprintf(stderr, "\n");
 
-    for(i=0;i<rt_num_callers;i++) {
+    if (!s1)
+        return;
+
+    for(i=0;i<s1->rt_num_callers;i++) {
         if (rt_get_caller_pc(&pc, uc, i) < 0)
             break;
-        pc = rt_printline(pc, i ? "by" : "at");
-        if (pc == (addr_t)rt_prog_main && pc)
+        pc = rt_printline(s1, pc, i ? "by" : "at");
+        if (pc == (addr_t)s1->rt_prog_main && pc)
             break;
     }
 }
@@ -496,6 +513,7 @@ static void rt_error(ucontext_t *uc, const char *fmt, ...)
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
 {
     ucontext_t *uc = puc;
+    TCCState *s1;
 
     switch(signum) {
     case SIGFPE:
@@ -511,8 +529,9 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
         break;
     case SIGBUS:
     case SIGSEGV:
-        if (rt_bound_error_msg && *rt_bound_error_msg)
-            rt_error(uc, *rt_bound_error_msg);
+        s1 = get_s1_for_run();
+        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
+            rt_error(uc, *s1->rt_bound_error_msg);
         else
             rt_error(uc, "dereferencing invalid pointer");
         break;
@@ -728,10 +747,12 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 {
     EXCEPTION_RECORD *er = ex_info->ExceptionRecord;
     CONTEXT *uc = ex_info->ContextRecord;
+    TCCState *s1;
     switch (er->ExceptionCode) {
     case EXCEPTION_ACCESS_VIOLATION:
-        if (rt_bound_error_msg && *rt_bound_error_msg)
-            rt_error(uc, *rt_bound_error_msg);
+        s1 = get_s1_for_run();
+        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
+            rt_error(uc, *s1->rt_bound_error_msg);
         else
 	    rt_error(uc, "access violation");
         break;

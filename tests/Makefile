@@ -12,6 +12,7 @@ TESTS = \
  hello-exe \
  hello-run \
  libtest \
+ libtest_mt \
  test3 \
  memtest \
  dlltest \
@@ -71,11 +72,11 @@ hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------
 	$(TCC) -run $< || $(DUMPTCC)
 
-libtest: libtcc_test$(EXESUF)
+libtes%: libtcc_tes%$(EXESUF)
 	@echo ------------ $@ ------------
-	./libtcc_test$(EXESUF) $(TCCFLAGS)
+	./libtcc_tes$*$(EXESUF) $(TCCFLAGS)
 
-libtcc_test$(EXESUF): libtcc_test.c $(LIBTCC)
+libtcc_tes%$(EXESUF): libtcc_tes%.c $(LIBTCC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 %-dir:
@@ -283,7 +284,7 @@ clean:
 	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc
 	rm -f *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234]
 	rm -f asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
-	rm -f ex? tcc_g weaktest.*.txt *.def
+	rm -f ex? tcc_g weaktest.*.txt *.def libtcc_test_mt
 	@$(MAKE) -C tests2 $@
 	@$(MAKE) -C pp $@
 

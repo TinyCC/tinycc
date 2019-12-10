@@ -53,7 +53,6 @@ int code_reloc (int reloc_type)
     case R_RISCV_CALL_PLT:
         return 1;
     }
-    tcc_error ("Unknown relocation type in code_reloc: %d", reloc_type);
     return -1;
 }
 
@@ -93,8 +92,6 @@ int gotplt_entry_type (int reloc_type)
     case R_RISCV_GOT_HI20:
         return ALWAYS_GOTPLT_ENTRY;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 

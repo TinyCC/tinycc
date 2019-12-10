@@ -40,12 +40,12 @@ int FuncEntries[MAX_FUNCS];
 
 int OutputTheSection(Section * sect);
 short int GetCoffFlags(const char *s);
-void SortSymbolTable(void);
+void SortSymbolTable(TCCState *s1);
 Section *FindSection(TCCState * s1, const char *sname);
 
 int C67_main_entry_point;
 
-int FindCoffSymbolIndex(const char *func_name);
+int FindCoffSymbolIndex(TCCState * s1, const char *func_name);
 int nb_syms;
 
 typedef struct {
@@ -92,7 +92,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     sbss = FindSection(s1, ".bss");
 
     nb_syms = symtab_section->data_offset / sizeof(Elf32_Sym);
-    coff_nb_syms = FindCoffSymbolIndex("XXXXXXXXXX1");
+    coff_nb_syms = FindCoffSymbolIndex(s1, "XXXXXXXXXX1");
 
     file_hdr.f_magic = COFF_C67_MAGIC;	/* magic number */
     file_hdr.f_timdat = 0;	/* time & date stamp */
@@ -366,7 +366,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     // finally global symbols
 
     if (s1->do_debug)
-	SortSymbolTable();
+	SortSymbolTable(s1);
 
     // write line no data
 
@@ -437,7 +437,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 			// output a function begin
 
 			CoffLineNo.l_addr.l_symndx =
-			    FindCoffSymbolIndex(func_name);
+			    FindCoffSymbolIndex(s1, func_name);
 			CoffLineNo.l_lnno = 0;
 
 			fwrite(&CoffLineNo, 6, 1, f);
@@ -690,7 +690,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 // group the symbols in order of filename, func1, func2, etc
 // finally global symbols
 
-void SortSymbolTable(void)
+void SortSymbolTable(TCCState *s1)
 {
     int i, j, k, n = 0;
     Elf32_Sym *p, *p2, *NewTable;
@@ -770,7 +770,7 @@ void SortSymbolTable(void)
 }
 
 
-int FindCoffSymbolIndex(const char *func_name)
+int FindCoffSymbolIndex(TCCState *s1, const char *func_name)
 {
     int i, n = 0;
     Elf32_Sym *p;

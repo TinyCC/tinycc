@@ -111,6 +111,7 @@ enum {
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
+#define USING_GLOBALS
 #include "tcc.h"
 
 ST_DATA const int reg_classes[NB_REGS] = {

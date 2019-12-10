@@ -57,8 +57,6 @@ int code_reloc (int reloc_type)
 	case R_ARM_JUMP_SLOT:
             return 1;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 
@@ -97,8 +95,6 @@ int gotplt_entry_type (int reloc_type)
 	case R_ARM_GOT32:
             return ALWAYS_GOTPLT_ENTRY;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 
@@ -252,24 +248,24 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     int index;
                     uint8_t *p;
                     char *name, buf[1024];
-                    Section *text_section;
+                    Section *text;
 
                     name = (char *) symtab_section->link->data + sym->st_name;
-                    text_section = s1->sections[sym->st_shndx];
+                    text = s1->sections[sym->st_shndx];
                     /* Modify reloc to target a thumb stub to switch to ARM */
                     snprintf(buf, sizeof(buf), "%s_from_thumb", name);
                     index = put_elf_sym(symtab_section,
-                                        text_section->data_offset + 1,
+                                        text->data_offset + 1,
                                         sym->st_size, sym->st_info, 0,
                                         sym->st_shndx, buf);
                     to_thumb = 1;
-                    val = text_section->data_offset + 1;
+                    val = text->data_offset + 1;
                     rel->r_info = ELFW(R_INFO)(index, type);
                     /* Create a thumb stub function to switch to ARM mode */
-                    put_elf_reloc(symtab_section, text_section,
-                                  text_section->data_offset + 4, R_ARM_JUMP24,
+                    put_elf_reloc(symtab_section, text,
+                                  text->data_offset + 4, R_ARM_JUMP24,
                                   sym_index);
-                    p = section_ptr_add(text_section, 8);
+                    p = section_ptr_add(text, 8);
                     write32le(p,   0x4778); /* bx pc */
                     write32le(p+2, 0x46c0); /* nop   */
                     write32le(p+4, 0xeafffffe); /* b $sym */

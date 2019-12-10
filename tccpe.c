@@ -602,6 +602,7 @@ static int pe_write(struct pe_info *pe)
     DWORD file_offset, sum;
     struct section_info *si;
     IMAGE_SECTION_HEADER *psh;
+    TCCState *s1 = pe->s1;
 
     op = fopen(pe->filename, "wb");
     if (NULL == op) {
@@ -784,6 +785,7 @@ static void pe_build_imports(struct pe_info *pe)
     int thk_ptr, ent_ptr, dll_ptr, sym_cnt, i;
     DWORD rva_base = pe->thunk->sh_addr - pe->imagebase;
     int ndlls = pe->imp_count;
+    TCCState *s1 = pe->s1;
 
     for (sym_cnt = i = 0; i < ndlls; ++i)
         sym_cnt += pe->imp_info[i]->sym_count;
@@ -895,6 +897,7 @@ static void pe_build_exports(struct pe_info *pe)
     IMAGE_EXPORT_DIRECTORY *hdr;
     int sym_count, ord;
     struct pe_sort_sym **sorted, *p;
+    TCCState *s1 = pe->s1;
 
     FILE *op;
     char buf[260];
@@ -1195,7 +1198,7 @@ static int pe_assign_addresses (struct pe_info *pe)
 
 /*----------------------------------------------------------------------------*/
 
-static int pe_isafunc(int sym_index)
+static int pe_isafunc(TCCState *s1, int sym_index)
 {
     Section *sr = text_section->reloc;
     ElfW_Rel *rel, *rel_end;
@@ -1215,6 +1218,7 @@ static int pe_check_symbols(struct pe_info *pe)
     ElfW(Sym) *sym;
     int sym_index, sym_end;
     int ret = 0;
+    TCCState *s1 = pe->s1;
 
     pe_align_section(text_section, 8);
 
@@ -1234,7 +1238,7 @@ static int pe_check_symbols(struct pe_info *pe)
 
             if (type == STT_NOTYPE) {
                 /* symbols from assembler have no type, find out which */
-                if (pe_isafunc(sym_index))
+                if (pe_isafunc(s1, sym_index))
                     type = STT_FUNC;
                 else
                     type = STT_OBJECT;
@@ -1769,7 +1773,7 @@ ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd)
 static unsigned pe_add_uwwind_info(TCCState *s1)
 {
     if (NULL == s1->uw_pdata) {
-        s1->uw_pdata = find_section(tcc_state, ".pdata");
+        s1->uw_pdata = find_section(s1, ".pdata");
         s1->uw_pdata->sh_addralign = 4;
     }
     if (0 == s1->uw_sym)

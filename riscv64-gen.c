@@ -28,6 +28,7 @@
 #define CHAR_IS_UNSIGNED
 
 #else
+#define USING_GLOBALS
 #include "tcc.h"
 #include <assert.h>
 

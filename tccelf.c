@@ -26,22 +26,6 @@
 /********************************************************/
 /* global variables */
 
-ST_DATA Section *text_section, *data_section, *bss_section; /* predefined sections */
-ST_DATA Section *common_section;
-ST_DATA Section *cur_text_section; /* current section where function code is generated */
-#ifdef CONFIG_TCC_ASM
-ST_DATA Section *last_text_section; /* to handle .previous asm directive */
-#endif
-#ifdef CONFIG_TCC_BCHECK
-/* bound check related sections */
-ST_DATA Section *bounds_section; /* contains global data bound description */
-ST_DATA Section *lbounds_section; /* contains local data bound description */
-#endif
-/* symbol sections */
-ST_DATA Section *symtab_section;
-/* debug sections */
-ST_DATA Section *stab_section, *stabstr_section;
-
 /* elf version information */
 struct sym_version {
     char *lib;
@@ -58,9 +42,6 @@ struct sym_version {
 #define versym_section      s1->versym_section
 #define verneed_section     s1->verneed_section
 
-/* XXX: avoid static variable */
-static int new_undef_sym = 0; /* Is there a new undefined sym since last new_undef_sym() */
-
 /* special flag to indicate that the section should not be linked to the other ones */
 #define SHF_PRIVATE 0x80000000
 /* section is dynsymtab_section */
@@ -70,6 +51,7 @@ static int new_undef_sym = 0; /* Is there a new undefined sym since last new_und
 
 ST_FUNC void tccelf_new(TCCState *s)
 {
+    TCCState *s1 = s;
     /* no section zero */
     dynarray_add(&s->sections, &s->nb_sections, NULL);
 
@@ -96,6 +78,7 @@ ST_FUNC void tccelf_new(TCCState *s)
 #ifdef CONFIG_TCC_BCHECK
 ST_FUNC void tccelf_bounds_new(TCCState *s)
 {
+    TCCState *s1 = s;
     /* create bounds sections */
     bounds_section = new_section(s, ".bounds",
                                  SHT_PROGBITS, SHF_ALLOC);
@@ -106,13 +89,13 @@ ST_FUNC void tccelf_bounds_new(TCCState *s)
 
 ST_FUNC void tccelf_stab_new(TCCState *s)
 {
+    TCCState *s1 = s;
     stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
     stab_section->sh_entsize = sizeof(Stab_Sym);
-    stabstr_section = new_section(s, ".stabstr", SHT_STRTAB, 0);
-    put_elf_str(stabstr_section, "");
-    stab_section->link = stabstr_section;
+    stab_section->link = new_section(s, ".stabstr", SHT_STRTAB, 0);
+    put_elf_str(stab_section->link, "");
     /* put first entry */
-    put_stabs("", 0, 0, 0, 0);
+    put_stabs(s, "", 0, 0, 0, 0);
 }
 
 static void free_section(Section *s)
@@ -220,6 +203,7 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
     Section *sec;
 
     sec = tcc_mallocz(sizeof(Section) + strlen(name));
+    sec->s1 = s1;
     strcpy(sec->name, name);
     sec->sh_type = sh_type;
     sec->sh_flags = sh_flags;
@@ -492,13 +476,13 @@ ST_FUNC int find_elf_sym(Section *s, const char *name)
 }
 
 /* return elf symbol value, signal error if 'err' is nonzero */
-ST_FUNC addr_t get_elf_sym_addr(TCCState *s, const char *name, int err)
+ST_FUNC addr_t get_elf_sym_addr(TCCState *s1, const char *name, int err)
 {
     int sym_index;
     ElfW(Sym) *sym;
 
-    sym_index = find_elf_sym(s->symtab, name);
-    sym = &((ElfW(Sym) *)s->symtab->data)[sym_index];
+    sym_index = find_elf_sym(s1->symtab, name);
+    sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
             tcc_error("%s not defined", name);
@@ -554,7 +538,7 @@ ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 
 #ifndef ELF_OBJ_ONLY
 static void
-version_add (TCCState *s)
+version_add (TCCState *s1)
 {
     int i;
     ElfW(Sym) *sym;
@@ -563,7 +547,6 @@ version_add (TCCState *s)
     int sym_index, end_sym, nb_versions = 2, nb_entries = 0;
     ElfW(Half) *versym;
     const char *name;
-    TCCState *s1 = s;
 
     if (0 == nb_sym_versions)
         return;
@@ -574,14 +557,14 @@ version_add (TCCState *s)
     verneed_section->link = s1->dynsym->link;
 
     /* add needed symbols */
-    symtab = s->dynsym;
+    symtab = s1->dynsym;
     end_sym = symtab->data_offset / sizeof (ElfSym);
     versym = section_ptr_add(versym_section, end_sym * sizeof(ElfW(Half)));
     for (sym_index = 0; sym_index < end_sym; ++sym_index) {
         int dllindex, verndx;
         sym = &((ElfW(Sym) *)symtab->data)[sym_index];
         name = (char *) symtab->link->data + sym->st_name;
-        dllindex = find_elf_sym(s->dynsymtab_section, name);
+        dllindex = find_elf_sym(s1->dynsymtab_section, name);
         verndx = (dllindex && dllindex < nb_sym_to_version)
                  ? sym_to_version[dllindex] : -1;
         if (verndx >= 0) {
@@ -636,6 +619,7 @@ version_add (TCCState *s)
 ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
                        int info, int other, int shndx, const char *name)
 {
+    TCCState *s1 = s->s1;
     ElfW(Sym) *esym;
     int sym_bind, sym_index, sym_type, esym_bind;
     unsigned char sym_vis, esym_vis, new_vis;
@@ -705,7 +689,7 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
         do_patch:
             esym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
             esym->st_shndx = shndx;
-            new_undef_sym = 1;
+            s1->new_undef_sym = 1;
             esym->st_value = value;
             esym->st_size = size;
             esym->st_other = other;
@@ -723,6 +707,7 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
 ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
                             int type, int symbol, addr_t addend)
 {
+    TCCState *s1 = s->s1;
     char buf[256];
     Section *sr;
     ElfW_Rel *rel;
@@ -733,7 +718,7 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
         snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);
         /* if the symtab is allocated, then we consider the relocation
            are also */
-        sr = new_section(tcc_state, buf, SHT_RELX, symtab->sh_flags);
+        sr = new_section(s->s1, buf, SHT_RELX, symtab->sh_flags);
         sr->sh_entsize = sizeof(ElfW_Rel);
         sr->link = symtab;
         sr->sh_info = s->sh_num;
@@ -744,10 +729,9 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
     rel->r_info = ELFW(R_INFO)(symbol, type);
 #if SHT_RELX == SHT_RELA
     rel->r_addend = addend;
-#else
-    if (addend)
-        tcc_error("non-zero addend on REL architecture");
 #endif
+    if (SHT_RELX != SHT_RELA && addend)
+        tcc_error("non-zero addend on REL architecture");
 }
 
 ST_FUNC void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
@@ -795,14 +779,14 @@ ST_FUNC void squeeze_multi_relocs(Section *s, size_t oldrelocoffset)
 
 /* put stab debug information */
 
-ST_FUNC void put_stabs(const char *str, int type, int other, int desc,
+ST_FUNC void put_stabs(TCCState *s1, const char *str, int type, int other, int desc,
                       unsigned long value)
 {
     Stab_Sym *sym;
 
     sym = section_ptr_add(stab_section, sizeof(Stab_Sym));
     if (str) {
-        sym->n_strx = put_elf_str(stabstr_section, str);
+        sym->n_strx = put_elf_str(stab_section->link, str);
     } else {
         sym->n_strx = 0;
     }
@@ -812,23 +796,23 @@ ST_FUNC void put_stabs(const char *str, int type, int other, int desc,
     sym->n_value = value;
 }
 
-ST_FUNC void put_stabs_r(const char *str, int type, int other, int desc,
+ST_FUNC void put_stabs_r(TCCState *s1, const char *str, int type, int other, int desc,
                         unsigned long value, Section *sec, int sym_index)
 {
-    put_stabs(str, type, other, desc, value);
+    put_stabs(s1, str, type, other, desc, value);
     put_elf_reloc(symtab_section, stab_section,
                   stab_section->data_offset - sizeof(unsigned int),
                   R_DATA_32, sym_index);
 }
 
-ST_FUNC void put_stabn(int type, int other, int desc, int value)
+ST_FUNC void put_stabn(TCCState *s1, int type, int other, int desc, int value)
 {
-    put_stabs(NULL, type, other, desc, value);
+    put_stabs(s1, NULL, type, other, desc, value);
 }
 
-ST_FUNC void put_stabd(int type, int other, int desc)
+ST_FUNC void put_stabd(TCCState *s1, int type, int other, int desc)
 {
-    put_stabs(NULL, type, other, desc, 0);
+    put_stabs(s1, NULL, type, other, desc, 0);
 }
 
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
@@ -1180,6 +1164,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
+            if (gotplt_entry == -1)
+                tcc_error ("Unknown relocation type for got: %d", type);
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
@@ -1235,7 +1221,10 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 continue;
             }
 #endif
-            if (code_reloc(type)) {
+            reloc_type = code_reloc(type);
+            if (reloc_type == -1)
+                tcc_error ("Unknown relocation type: %d", type);
+            else if (reloc_type != 0) {
             jmp_slot:
                 reloc_type = R_JMP_SLOT;
             } else
@@ -3194,13 +3183,27 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 #define LD_TOK_NAME 256
 #define LD_TOK_EOF  (-1)
 
+static int ld_inp(TCCState *s1)
+{
+    char b;
+    if (s1->cc != -1) {
+        int c = s1->cc;
+        s1->cc = -1;
+        return c;
+    }
+    if (1 == read(s1->fd, &b, 1))
+        return b;
+    return CH_EOF;
+}
+
 /* return next ld script token */
 static int ld_next(TCCState *s1, char *name, int name_size)
 {
-    int c;
+    int c, d, ch;
     char *q;
 
  redo:
+    ch = ld_inp(s1);
     switch(ch) {
     case ' ':
     case '\t':
@@ -3208,13 +3211,15 @@ static int ld_next(TCCState *s1, char *name, int name_size)
     case '\v':
     case '\r':
     case '\n':
-        inp();
         goto redo;
     case '/':
-        minp();
-        if (ch == '*') {
-            file->buf_ptr = parse_comment(file->buf_ptr);
-            ch = file->buf_ptr[0];
+        ch = ld_inp(s1);
+        if (ch == '*') { /* comment */
+            for (d = 0;; d = ch) {
+                ch = ld_inp(s1);
+                if (ch == CH_EOF || (ch == '/' && d == '*'))
+                    break;
+            }
             goto redo;
         } else {
             q = name;
@@ -3223,10 +3228,6 @@ static int ld_next(TCCState *s1, char *name, int name_size)
         }
         break;
     case '\\':
-        ch = handle_eob();
-        if (ch != '\\')
-            goto redo;
-        /* fall through */
     /* case 'a' ... 'z': */
     case 'a':
        case 'b':
@@ -3296,8 +3297,9 @@ static int ld_next(TCCState *s1, char *name, int name_size)
             if ((q - name) < name_size - 1) {
                 *q++ = ch;
             }
-            minp();
+            ch = ld_inp(s1);
         }
+        s1->cc = ch;
         *q = '\0';
         c = LD_TOK_NAME;
         break;
@@ -3306,7 +3308,6 @@ static int ld_next(TCCState *s1, char *name, int name_size)
         break;
     default:
         c = ch;
-        inp();
         break;
     }
     return c;
@@ -3323,14 +3324,6 @@ static int ld_add_file(TCCState *s1, const char filename[])
     return tcc_add_dll(s1, filename, 0);
 }
 
-static inline int new_undef_syms(void)
-{
-    int ret = 0;
-    ret = new_undef_sym;
-    new_undef_sym = 0;
-    return ret;
-}
-
 static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
 {
     char filename[1024], libname[1024];
@@ -3339,7 +3332,7 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
 
     group = !strcmp(cmd, "GROUP");
     if (!as_needed)
-        new_undef_syms();
+        s1->new_undef_sym = 0;
     t = ld_next(s1, filename, sizeof(filename));
     if (t != '(')
         expect("(");
@@ -3394,9 +3387,9 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         }
     }
     if (group && !as_needed) {
-        while (new_undef_syms()) {
+        while (s1->new_undef_sym) {
             int i;
-
+            s1->new_undef_sym = 0;
             for (i = 0; i < nblibs; i ++)
                 ld_add_file(s1, libs[i]);
         }
@@ -3408,13 +3401,14 @@ lib_parse_error:
 
 /* interpret a subset of GNU ldscripts to handle the dummy libc.so
    files */
-ST_FUNC int tcc_load_ldscript(TCCState *s1)
+ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd)
 {
     char cmd[64];
     char filename[1024];
     int t, ret;
 
-    ch = handle_eob();
+    s1->fd = fd;
+    s1->cc = -1;
     for(;;) {
         t = ld_next(s1, cmd, sizeof(cmd));
         if (t == LD_TOK_EOF)

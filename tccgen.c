@@ -18,7 +18,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#define USING_GLOBALS
 #include "tcc.h"
+
 /********************************************************/
 /* global variables */
 
@@ -29,15 +31,15 @@
 */
 ST_DATA int rsym, anon_sym, ind, loc;
 
-ST_DATA Sym *sym_free_first;
-ST_DATA void **sym_pools;
-ST_DATA int nb_sym_pools;
-
 ST_DATA Sym *global_stack;
 ST_DATA Sym *local_stack;
 ST_DATA Sym *define_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *local_label_stack;
+
+static Sym *sym_free_first;
+static void **sym_pools;
+static int nb_sym_pools;
 
 static Sym *all_cleanups, *pending_gotos;
 static int local_scope;
@@ -106,6 +108,18 @@ static struct scope {
     Sym *lstk, *llstk;
 } *cur_scope, *loop_scope, *root_scope;
 
+/********************************************************/
+#ifndef CONFIG_TCC_ASM
+ST_FUNC void asm_instr(void)
+{
+    tcc_error("inline asm() not supported");
+}
+ST_FUNC void asm_global_instr(void)
+{
+    tcc_error("inline asm() not supported");
+}
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 static void gen_cast(CType *type);
@@ -129,6 +143,7 @@ static void vpush64(int ty, unsigned long long v);
 static void vpush(CType *type);
 static int gvtst(int inv, int t);
 static void gen_inline_functions(TCCState *s);
+static void free_inline_functions(TCCState *s);
 static void skip_or_save_block(TokenString **str);
 static void gv_dup(void);
 static int get_temp_local_var(int size,int align);
@@ -200,9 +215,9 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
         normalize_slashes(buf);
 #endif
         pstrcat(buf, sizeof(buf), "/");
-        put_stabs_r(buf, N_SO, 0, 0,
+        put_stabs_r(s1, buf, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
-        put_stabs_r(file->filename, N_SO, 0, 0,
+        put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         last_ind = 0;
         last_line_num = 0;
@@ -220,7 +235,7 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
 {
     if (!s1->do_debug)
         return;
-    put_stabs_r(NULL, N_SO, 0, 0,
+    put_stabs_r(s1, NULL, N_SO, 0, 0,
         text_section->data_offset, text_section, section_sym);
 
 }
@@ -231,7 +246,7 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
     if (!s1->do_debug)
         return;
     if ((last_line_num != file->line_num || last_ind != ind)) {
-        put_stabn(N_SLINE, 0, file->line_num, ind - func_ind);
+        put_stabn(s1, N_SLINE, 0, file->line_num, ind - func_ind);
         last_ind = ind;
         last_line_num = file->line_num;
     }
@@ -249,10 +264,10 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
     /* XXX: we put here a dummy type */
     snprintf(buf, sizeof(buf), "%s:%c1",
              funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
-    put_stabs_r(buf, N_FUN, 0, file->line_num, 0,
+    put_stabs_r(s1, buf, N_FUN, 0, file->line_num, 0,
                 cur_text_section, sym->c);
     /* //gr gdb wants a line at the function */
-    put_stabn(N_SLINE, 0, file->line_num, 0);
+    put_stabn(s1, N_SLINE, 0, file->line_num, 0);
 
     last_ind = 0;
     last_line_num = 0;
@@ -263,7 +278,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 {
     if (!s1->do_debug)
         return;
-    put_stabn(N_FUN, 0, 0, size);
+    put_stabn(s1, N_FUN, 0, 0, size);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -314,6 +329,21 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     /* end of translation unit info */
     tcc_debug_end(s1);
     return 0;
+}
+
+ST_FUNC void tccgen_finish(TCCState *s1, int f)
+{
+    if (f == 1) {
+        free_inline_functions(s1);
+        sym_pop(&global_stack, NULL, 0);
+        sym_pop(&local_stack, NULL, 0);
+    }
+
+    if (f == 2) {
+        /* free sym_pools */
+        dynarray_reset(&sym_pools, &nb_sym_pools);
+        sym_free_first = NULL;
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -7684,7 +7714,7 @@ static void gen_inline_functions(TCCState *s)
     tcc_close();
 }
 
-ST_FUNC void free_inline_functions(TCCState *s)
+static void free_inline_functions(TCCState *s)
 {
     int i;
     /* free tokens of unused inline functions */

@@ -31,7 +31,7 @@ ifdef CONFIG_WIN32
  CFGWIN = -win
  NATIVE_TARGET = $(ARCH)-win$(if $(findstring arm,$(ARCH)),ce,32)
 else
- LIBS=-lm
+ LIBS=-lm -lpthread
  ifneq ($(CONFIG_ldl),no)
   LIBS+=-ldl
  endif

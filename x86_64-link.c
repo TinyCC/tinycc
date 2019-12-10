@@ -52,8 +52,6 @@ int code_reloc (int reloc_type)
         case R_X86_64_JUMP_SLOT:
             return 1;
     }
-
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 
@@ -95,7 +93,6 @@ int gotplt_entry_type (int reloc_type)
             return ALWAYS_GOTPLT_ENTRY;
     }
 
-    tcc_error ("Unknown relocation type: %d", reloc_type);
     return -1;
 }
 
