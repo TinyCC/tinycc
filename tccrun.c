@@ -137,30 +137,23 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (s1->do_bounds_check) {
         void (*bound_init)(void);
         void (*bound_exit)(void);
-        void (*bound_new_region)(void *p, addr_t size);
-        int  (*bound_delete_region)(void *p);
-        int i, ret;
+        void (*bounds_add_static_var)(size_t *p);
+        size_t *bounds_start;
+        int ret;
 
         /* set error function */
         rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
         /* XXX: use .init section so that it also work in binary ? */
         bound_init = tcc_get_symbol_err(s1, "__bound_init");
         bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
-        bound_new_region = tcc_get_symbol_err(s1, "__bound_new_region");
-        bound_delete_region = tcc_get_symbol_err(s1, "__bound_delete_region");
+        bounds_add_static_var = tcc_get_symbol_err(s1, "__bounds_add_static_var");
+        bounds_start = tcc_get_symbol_err(s1, "__bounds_start");
 
         bound_init();
-        /* mark argv area as valid */
-        bound_new_region(argv, argc*sizeof(argv[0]));
-        for (i=0; i<argc; ++i)
-            bound_new_region(argv[i], strlen(argv[i]) + 1);
+        bounds_add_static_var (bounds_start);
 
         ret = (*prog_main)(argc, argv);
 
-        /* unmark argv area */
-        for (i=0; i<argc; ++i)
-            bound_delete_region(argv[i]);
-        bound_delete_region(argv);
         bound_exit();
         return ret;
     }

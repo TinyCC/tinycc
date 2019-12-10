@@ -1317,42 +1317,13 @@ ST_FUNC void add_fini_array (TCCState *s1, Sym *sym)
     add_array (".fini_array", s1, sym);
 }
 
-ST_FUNC void tcc_add_bcheck(TCCState *s1)
-{
-#ifdef CONFIG_TCC_BCHECK
-    addr_t *ptr;
-    int sym_index;
-
-    if (0 == s1->do_bounds_check)
-        return;
-    /* XXX: add an object file to do that */
-    ptr = section_ptr_add(bounds_section, sizeof(*ptr));
-    *ptr = 0;
-    set_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                bounds_section->sh_num, "__bounds_start");
-    /* pull bcheck.o from libtcc1.a */
-    sym_index = set_elf_sym(symtab_section, 0, 0,
-                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                SHN_UNDEF, "__bound_init");
-    if (s1->output_type != TCC_OUTPUT_MEMORY) {
-        /* add 'call __bound_init()' in .init section */
-        Section *init_section = find_section(s1, ".init");
-        unsigned char *pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        write32le(pinit + 1, -4);
-        put_elf_reloc(symtab_section, init_section,
-            init_section->data_offset - 4, R_386_PC32, sym_index);
-            /* R_386_PC32 = R_X86_64_PC32 = 2 */
-    }
-#endif
-}
-
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
     s1->filetype = 0;
+#ifdef CONFIG_TCC_BCHECK
     tcc_add_bcheck(s1);
+#endif
     tcc_add_pragma_libs(s1);
 #ifndef TCC_TARGET_PE
     /* add libc */
@@ -1364,6 +1335,13 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_file(s1, TCC_LIBGCC);
             else
                 tcc_add_dll(s1, TCC_LIBGCC, 0);
+        }
+#endif
+#ifdef CONFIG_TCC_BCHECK
+        if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
+            tcc_add_library_err(s1, "pthread");
+            tcc_add_library_err(s1, "dl");
+            tcc_add_support(s1, TCC_LIBTCCB1);
         }
 #endif
         tcc_add_support(s1, TCC_LIBTCC1);
@@ -2814,6 +2792,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
     const char *ar_names, *p;
     const uint8_t *ar_index;
     ElfW(Sym) *sym;
+    Section *s;
 
     data = tcc_malloc(size);
     if (full_read(fd, data, size) != size)
@@ -2825,14 +2804,19 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
     do {
         bound = 0;
         for(p = ar_names, i = 0; i < nsyms; i++, p += strlen(p)+1) {
-            sym_index = find_elf_sym(symtab_section, p);
+            s = symtab_section;
+            sym_index = find_elf_sym(s, p);
+            if(sym_index == 0) {
+                s = s1->dynsymtab_section;
+                sym_index = find_elf_sym(s, p);
+            }
             if(sym_index) {
-                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                sym = &((ElfW(Sym) *)s->data)[sym_index];
                 if(sym->st_shndx == SHN_UNDEF) {
                     off = (entrysize == 4
-			   ? get_be32(ar_index + i * 4)
-			   : get_be64(ar_index + i * 8))
-			  + sizeof(ArchiveHeader);
+                           ? get_be32(ar_index + i * 4)
+                           : get_be64(ar_index + i * 8))
+                          + sizeof(ArchiveHeader);
                     ++bound;
                     if(tcc_load_object_file(s1, fd, off) < 0) {
                     fail:

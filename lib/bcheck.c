@@ -34,20 +34,15 @@
 #include <unistd.h>
 #endif
 
-/* #define BOUND_DEBUG */
+#define BOUND_DEBUG
 
 #ifdef BOUND_DEBUG
- #define dprintf(a...) fprintf(a)
+ #define dprintf(a...) if (print_calls) fprintf(a)
 #else
  #define dprintf(a...)
 #endif
 
-/* define so that bound array is static (faster, but use memory if
-   bound checking not used) */
-/* #define BOUND_STATIC */
-
-/* use malloc hooks. Currently the code cannot be reliable if no hooks */
-#define CONFIG_TCC_MALLOC_HOOKS
+/* Check memalign */
 #define HAVE_MEMALIGN
 
 #if defined(__FreeBSD__) \
@@ -57,42 +52,58 @@
  || defined(__NetBSD__) \
  || defined(__dietlibc__) \
  || defined(_WIN32)
-//#warning Bound checking does not support malloc (etc.) in this environment.
-#undef CONFIG_TCC_MALLOC_HOOKS
 #undef HAVE_MEMALIGN
+#define INIT_SEM()
+#define EXIT_SEM()
+#define WAIT_SEM()
+#define POST_SEM()
+#define HAS_ENVIRON 0
+#define MALLOC_REDIR    (0)
+#else
+#include <sys/mman.h>
+#include <errno.h>
+#include <semaphore.h>
+static sem_t bounds_sem;
+#define INIT_SEM()  sem_init (&bounds_sem, 0, 1)
+#define EXIT_SEM()  sem_destroy (&bounds_sem)
+#define WAIT_SEM()  while (sem_wait (&bounds_sem) < 0 && errno == EINTR);
+#define POST_SEM()  sem_post (&bounds_sem)
+#define HAS_ENVIRON 0 /* Disabled for now */
+#define __USE_GNU       /* get RTLD_NEXT */
+#include <dlfcn.h>
+#define MALLOC_REDIR    (1)
+static void *(*malloc_redir) (size_t) = NULL;
+static void *(*calloc_redir) (size_t, size_t) = NULL;
+static void (*free_redir) (void *) = NULL;
+static void *(*realloc_redir) (void *, size_t) = NULL;
+static void *(*memalign_redir) (size_t, size_t) = NULL;
 #endif
-
-#define BOUND_T1_BITS 13
-#define BOUND_T2_BITS 11
-#define BOUND_T3_BITS (sizeof(size_t)*8 - BOUND_T1_BITS - BOUND_T2_BITS)
-#define BOUND_E_BITS  (sizeof(size_t))
-
-#define BOUND_T1_SIZE ((size_t)1 << BOUND_T1_BITS)
-#define BOUND_T2_SIZE ((size_t)1 << BOUND_T2_BITS)
-#define BOUND_T3_SIZE ((size_t)1 << BOUND_T3_BITS)
-
-#define BOUND_T23_BITS (BOUND_T2_BITS + BOUND_T3_BITS)
-#define BOUND_T23_SIZE ((size_t)1 << BOUND_T23_BITS)
-
 
 /* this pointer is generated when bound check is incorrect */
 #define INVALID_POINTER ((void *)(-2))
-/* size of an empty region */
-#define EMPTY_SIZE  ((size_t)(-1))
-/* size of an invalid region */
-#define INVALID_SIZE      0
 
-typedef struct BoundEntry {
+typedef struct tree_node Tree;
+struct tree_node {
+    Tree * left, * right;
     size_t start;
     size_t size;
-    struct BoundEntry *next;
     size_t is_invalid; /* true if pointers outside region are invalid */
-} BoundEntry;
+};
+
+typedef struct alloca_list_struct {
+    size_t fp;
+    void *p;
+    struct alloca_list_struct *next;
+} alloca_list_type;
+
+static Tree * splay (size_t addr, Tree *t);
+static Tree * splay_end (size_t addr, Tree *t);
+static Tree * splay_insert(size_t addr, size_t size, Tree * t);
+static Tree * splay_delete(size_t addr, Tree *t);
+void splay_printtree(Tree * t, int d);
 
 /* external interface */
 void __bound_init(void);
-void __bound_new_region(void *p, size_t size);
-int __bound_delete_region(void *p);
 
 #ifdef __attribute__
   /* an __attribute__ macro is defined in the system headers */
@@ -100,64 +111,40 @@ int __bound_delete_region(void *p);
 #endif
 #define FASTCALL __attribute__((regparm(3)))
 
+#if !MALLOC_REDIR
 void *__bound_malloc(size_t size, const void *caller);
 void *__bound_memalign(size_t size, size_t align, const void *caller);
 void __bound_free(void *ptr, const void *caller);
 void *__bound_realloc(void *ptr, size_t size, const void *caller);
-static void *libc_malloc(size_t size);
-static void libc_free(void *ptr);
-static void install_malloc_hooks(void);
-static void restore_malloc_hooks(void);
-
-#ifdef CONFIG_TCC_MALLOC_HOOKS
-static void *saved_malloc_hook;
-static void *saved_free_hook;
-static void *saved_realloc_hook;
-static void *saved_memalign_hook;
+void *__bound_calloc(size_t nmemb, size_t size);
 #endif
 
-/* TCC definitions */
-extern char __bounds_start; /* start of static bounds table */
+#define FREE_REUSE_SIZE (100)
+static int free_reuse_index = 0;
+static void *free_reuse_list[FREE_REUSE_SIZE];
+
 /* error message, just for TCC */
 const char *__bound_error_msg;
 
 /* runtime error output */
 extern void rt_error(size_t pc, const char *fmt, ...);
 
-#ifdef BOUND_STATIC
-static BoundEntry *__bound_t1[BOUND_T1_SIZE]; /* page table */
-#else
-static BoundEntry **__bound_t1; /* page table */
+static Tree *tree = NULL;
+#define TREE_REUSE      (1)
+#if TREE_REUSE
+static Tree *tree_free_list = NULL;
 #endif
-static BoundEntry *__bound_empty_t2;   /* empty page, for unused pages */
-static BoundEntry *__bound_invalid_t2; /* invalid page, for invalid pointers */
+static alloca_list_type *alloca_list = NULL;
 
-static BoundEntry *__bound_find_region(BoundEntry *e1, void *p)
+static int inited = 0;
+static int print_calls = 0;
+static int never_fatal = 0;
+static int no_checking = 0;
+
+/* enable/disable checking. This can be used for signal handlers. */
+void __bound_checking (int no_check)
 {
-    size_t addr, tmp;
-    BoundEntry *e;
-
-    e = e1;
-    while (e != NULL) {
-        addr = (size_t)p;
-        addr -= e->start;
-        if (addr <= e->size) {
-            /* put region at the head */
-            tmp = e1->start;
-            e1->start = e->start;
-            e->start = tmp;
-            tmp = e1->size;
-            e1->size = e->size;
-            e->size = tmp;
-            return e1;
-        }
-        e = e->next;
-    }
-    /* no entry found: return empty entry or invalid entry */
-    if (e1->is_invalid)
-        return __bound_invalid_t2;
-    else
-        return __bound_empty_t2;
+    no_checking = no_check;
 }
 
 /* print a bound error message */
@@ -165,7 +152,8 @@ static void bound_error(const char *fmt, ...)
 {
     __bound_error_msg = fmt;
     fprintf(stderr,"%s %s: %s\n", __FILE__, __FUNCTION__, fmt);
-    *(void **)0 = 0; /* force a runtime error */
+    if (never_fatal == 0)
+        *(void **)0 = 0; /* force a runtime error */
 }
 
 static void bound_alloc_error(void)
@@ -178,61 +166,74 @@ static void bound_alloc_error(void)
 void * FASTCALL __bound_ptr_add(void *p, size_t offset)
 {
     size_t addr = (size_t)p;
-    BoundEntry *e;
 
-    dprintf(stderr, "%s %s: %p %x\n",
-        __FILE__, __FUNCTION__, p, (unsigned)offset);
-
-    __bound_init();
-
-    e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];
-    e = (BoundEntry *)((char *)e + 
-                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-                        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS)));
-    addr -= e->start;
-    if (addr > e->size) {
-        e = __bound_find_region(e, p);
-        addr = (size_t)p - e->start;
+    if (no_checking) {
+        return p + offset;
     }
-    addr += offset;
-    if (addr >= e->size) {
-	fprintf(stderr,"%s %s: %p is outside of the region\n",
-            __FILE__, __FUNCTION__, p + offset);
-        return INVALID_POINTER; /* return an invalid pointer */
+
+    dprintf(stderr, "%s %s: %p 0x%x\n",
+            __FILE__, __FUNCTION__, p, (unsigned)offset);
+
+    WAIT_SEM ();
+    if (tree) {
+        tree = splay (addr, tree);
+        addr -= tree->start;
+        if (addr >= tree->size) {
+            addr = (size_t)p;
+            tree = splay_end (addr, tree);
+            addr -= tree->start;
+        }
+        if (addr <= tree->size) {
+            addr += offset;
+            if (tree->is_invalid || addr >= tree->size) {
+                fprintf(stderr,"%s %s: %p is outside of the region\n",
+                        __FILE__, __FUNCTION__, p + offset);
+                if (never_fatal == 0) {
+                    POST_SEM ();
+                    return INVALID_POINTER; /* return an invalid pointer */
+                }
+            }
+        }
     }
+    POST_SEM ();
     return p + offset;
 }
 
 /* return '(p + offset)' for pointer indirection (the resulting must
    be strictly inside the region */
-#define BOUND_PTR_INDIR(dsize)                                          \
-void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)     \
-{                                                                       \
-    size_t addr = (size_t)p;                                            \
-    BoundEntry *e;                                                      \
-                                                                        \
-    dprintf(stderr, "%s %s: %p %x start\n",                             \
-        __FILE__, __FUNCTION__, p, (unsigned)offset);	                \
-									\
-    __bound_init();							\
-    e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];            \
-    e = (BoundEntry *)((char *)e +                                      \
-                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) &      \
-                        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS)));        \
-    addr -= e->start;                                                   \
-    if (addr > e->size) {                                               \
-        e = __bound_find_region(e, p);                                  \
-        addr = (size_t)p - e->start;                                    \
-    }                                                                   \
-    addr += offset + dsize;                                             \
-    if (addr > e->size) {                                               \
-	fprintf(stderr,"%s %s: %p is outside of the region\n",          \
-            __FILE__, __FUNCTION__, p + offset);                        \
-        return INVALID_POINTER; /* return an invalid pointer */         \
-    }									\
-    dprintf(stderr, "%s %s: return p+offset = %p\n",                    \
-        __FILE__, __FUNCTION__, p + offset);                            \
-    return p + offset;                                                  \
+#define BOUND_PTR_INDIR(dsize)                                              \
+void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)         \
+{                                                                           \
+    size_t addr = (size_t)p;                                                \
+                                                                            \
+    if (no_checking) {                                                      \
+        return p + offset;                                                  \
+    }                                                                       \
+    dprintf(stderr, "%s %s: %p 0x%x start\n",                               \
+            __FILE__, __FUNCTION__, p, (unsigned)offset);                   \
+    WAIT_SEM ();                                                            \
+    if (tree) {                                                             \
+        tree = splay (addr, tree);                                          \
+        addr -= tree->start;                                                \
+        if (addr >= tree->size) {                                           \
+            addr = (size_t)p;                                               \
+            tree = splay_end (addr, tree);                                  \
+            addr -= tree->start;                                            \
+        }                                                                   \
+        if (addr <= tree->size) {                                           \
+            addr += offset + dsize;                                         \
+            if (tree->is_invalid || addr > tree->size) {                    \
+                fprintf(stderr,"%s %s: %p is outside of the region\n",      \
+                    __FILE__, __FUNCTION__, p + offset);                    \
+                if (never_fatal == 0) {                                     \
+                    POST_SEM ();                                            \
+                    return INVALID_POINTER; /* return an invalid pointer */ \
+                }                                                           \
+            }                                                               \
+        }                                                                   \
+    }                                                                       \
+    POST_SEM ();                                                            \
+    return p + offset;                                                      \
 }
 
 BOUND_PTR_INDIR(1)
@@ -262,547 +263,258 @@ void FASTCALL __bound_local_new(void *p1)
 {
     size_t addr, size, fp, *p = p1;
 
-    dprintf(stderr, "%s, %s start p1=%p\n", __FILE__, __FUNCTION__, p);
+    if (no_checking)
+         return;
     GET_CALLER_FP(fp);
+    dprintf(stderr, "%s, %s local new p1=%p fp=%p\n",
+           __FILE__, __FUNCTION__, p, (void *)fp);
+    WAIT_SEM ();
     for(;;) {
         addr = p[0];
         if (addr == 0)
             break;
-        addr += fp;
-        size = p[1];
+        if (addr == 1) {
+            dprintf(stderr, "%s, %s() alloca/vla used\n",
+                    __FILE__, __FUNCTION__);
+        }
+        else {
+            addr += fp;
+            size = p[1];
+            dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
+                    __FILE__, __FUNCTION__, addr, (unsigned long) size);
+        }
         p += 2;
-        __bound_new_region((void *)addr, size);
+        tree = splay_insert(addr, size, tree);
     }
-    dprintf(stderr, "%s, %s end\n", __FILE__, __FUNCTION__);
+    POST_SEM ();
 }
 
 /* called when leaving a function to delete all the local regions */
 void FASTCALL __bound_local_delete(void *p1) 
 {
     size_t addr, fp, *p = p1;
+
+    if (no_checking)
+         return;
     GET_CALLER_FP(fp);
+    dprintf(stderr, "%s, %s local delete p1=%p fp=%p\n",
+            __FILE__, __FUNCTION__, p, (void *)fp);
+    WAIT_SEM ();
     for(;;) {
         addr = p[0];
         if (addr == 0)
             break;
-        addr += fp;
+        if (addr == 1) {
+            while (alloca_list && alloca_list->fp == fp) {
+                dprintf(stderr, "%s, %s() remove alloca/vla %p\n",
+                        __FILE__, __FUNCTION__, alloca_list->p);
+                alloca_list_type *next = alloca_list->next;
+                tree = splay_delete ((size_t) alloca_list->p, tree);
+#if MALLOC_REDIR
+                free_redir (alloca_list);
+#else
+                free (alloca_list);
+#endif
+                alloca_list = next;
+            }
+        }
+        else {
+            addr += fp;
+            dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
+                    __FILE__, __FUNCTION__, (void *) addr, (unsigned long) p[1]);
+        }
         p += 2;
-        __bound_delete_region((void *)addr);
+        tree = splay_delete(addr, tree);
     }
+    POST_SEM ();
 }
 
 #if defined(__GNUC__) && (__GNUC__ >= 6)
 #pragma GCC diagnostic pop
 #endif
 
-static BoundEntry *__bound_new_page(void)
-{
-    BoundEntry *page;
-    size_t i;
-
-    page = libc_malloc(sizeof(BoundEntry) * BOUND_T2_SIZE);
-    if (!page)
-        bound_alloc_error();
-    for(i=0;i<BOUND_T2_SIZE;i++) {
-        /* put empty entries */
-        page[i].start = 0;
-        page[i].size = EMPTY_SIZE;
-        page[i].next = NULL;
-        page[i].is_invalid = 0;
-    }
-    return page;
-}
-
-/* currently we use malloc(). Should use bound_new_page() */
-static BoundEntry *bound_new_entry(void)
-{
-    BoundEntry *e;
-    e = libc_malloc(sizeof(BoundEntry));
-    return e;
-}
-
-static void bound_free_entry(BoundEntry *e)
-{
-    libc_free(e);
-}
-
-static BoundEntry *get_page(size_t index)
-{
-    BoundEntry *page;
-    page = __bound_t1[index];
-    if (!page || page == __bound_empty_t2 || page == __bound_invalid_t2) {
-        /* create a new page if necessary */
-        page = __bound_new_page();
-        __bound_t1[index] = page;
-    }
-    return page;
-}
-
-/* mark a region as being invalid (can only be used during init) */
-static void mark_invalid(size_t addr, size_t size)
-{
-    size_t start, end;
-    BoundEntry *page;
-    size_t t1_start, t1_end, i, j, t2_start, t2_end;
-
-    start = addr;
-    end = addr + size;
-
-    t2_start = (start + BOUND_T3_SIZE - 1) >> BOUND_T3_BITS;
-    if (end != 0)
-        t2_end = end >> BOUND_T3_BITS;
-    else
-        t2_end = 1 << (BOUND_T1_BITS + BOUND_T2_BITS);
-
-#if 0
-    dprintf(stderr, "mark_invalid: start = %x %x\n", t2_start, t2_end);
-#endif
-    
-    /* first we handle full pages */
-    t1_start = (t2_start + BOUND_T2_SIZE - 1) >> BOUND_T2_BITS;
-    t1_end = t2_end >> BOUND_T2_BITS;
-
-    i = t2_start & (BOUND_T2_SIZE - 1);
-    j = t2_end & (BOUND_T2_SIZE - 1);
-    
-    if (t1_start == t1_end) {
-        page = get_page(t2_start >> BOUND_T2_BITS);
-        for(; i < j; i++) {
-            page[i].size = INVALID_SIZE;
-            page[i].is_invalid = 1;
-        }
-    } else {
-        if (i > 0) {
-            page = get_page(t2_start >> BOUND_T2_BITS);
-            for(; i < BOUND_T2_SIZE; i++) {
-                page[i].size = INVALID_SIZE;
-                page[i].is_invalid = 1;
-            }
-        }
-        for(i = t1_start; i < t1_end; i++) {
-            __bound_t1[i] = __bound_invalid_t2;
-        }
-        if (j != 0) {
-            page = get_page(t1_end);
-            for(i = 0; i < j; i++) {
-                page[i].size = INVALID_SIZE;
-                page[i].is_invalid = 1;
-            }
-        }
-    }
-}
-
 void __bound_init(void)
 {
-    size_t i;
-    BoundEntry *page;
-    size_t start, size;
-    size_t *p;
-
-    static int inited;
     if (inited)
-	return;
+        return;
 
     inited = 1;
 
+    print_calls = getenv ("TCC_BOUNDS_PRINT_CALLS") != NULL;
+    never_fatal = getenv ("TCC_BOUNDS_NEVER_FATAL") != NULL;
+
     dprintf(stderr, "%s, %s() start\n", __FILE__, __FUNCTION__);
 
+    INIT_SEM ();
+
+#if MALLOC_REDIR
+    {
+        void *addr = RTLD_NEXT;
+
+        /* tcc -run required RTLD_DEFAULT. Normal usage requires RTLD_NEXT */
+        *(void **) (&malloc_redir) = dlsym (addr, "malloc");
+        if (malloc_redir == NULL) {
+            dprintf(stderr, "%s, %s() use RTLD_DEFAULT\n",
+                    __FILE__, __FUNCTION__);
+            addr = RTLD_DEFAULT;
+            *(void **) (&malloc_redir) = dlsym (addr, "malloc");
+        }
+        *(void **) (&calloc_redir) = dlsym (addr, "calloc");
+        *(void **) (&free_redir) = dlsym (addr, "free");
+        *(void **) (&realloc_redir) = dlsym (addr, "realloc");
+        *(void **) (&memalign_redir) = dlsym (addr, "memalign");
+        dprintf(stderr, "%s, %s() malloc_redir %p\n",
+                __FILE__, __FUNCTION__, malloc_redir);
+        dprintf(stderr, "%s, %s() free_redir %p\n",
+                __FILE__, __FUNCTION__, free_redir);
+        dprintf(stderr, "%s, %s() realloc_redir %p\n",
+                __FILE__, __FUNCTION__, realloc_redir);
+        dprintf(stderr, "%s, %s() memalign_redir %p\n",
+                __FILE__, __FUNCTION__, memalign_redir);
+    }
+#endif
+
+    tree = NULL;
+
     /* save malloc hooks and install bound check hooks */
-    install_malloc_hooks();
-
-#ifndef BOUND_STATIC
-    __bound_t1 = libc_malloc(BOUND_T1_SIZE * sizeof(BoundEntry *));
-    if (!__bound_t1)
-        bound_alloc_error();
-#endif
-    __bound_empty_t2 = __bound_new_page();
-    for(i=0;i<BOUND_T1_SIZE;i++) {
-        __bound_t1[i] = __bound_empty_t2;
-    }
-
-    page = __bound_new_page();
-    for(i=0;i<BOUND_T2_SIZE;i++) {
-        /* put invalid entries */
-        page[i].start = 0;
-        page[i].size = INVALID_SIZE;
-        page[i].next = NULL;
-        page[i].is_invalid = 1;
-    }
-    __bound_invalid_t2 = page;
-
-    /* invalid pointer zone */
-    start = (size_t)INVALID_POINTER & ~(BOUND_T23_SIZE - 1);
-    size = BOUND_T23_SIZE;
-    mark_invalid(start, size);
-
-#if defined(CONFIG_TCC_MALLOC_HOOKS)
-    /* malloc zone is also marked invalid. can only use that with
-     * hooks because all libs should use the same malloc. The solution
-     * would be to build a new malloc for tcc.
-     *
-     * usually heap (= malloc zone) comes right after bss, i.e. after _end, but
-     * not always - either if we are running from under `tcc -b -run`, or if
-     * address space randomization is turned on(a), heap start will be separated
-     * from bss end.
-     *
-     * So sbrk(0) will be a good approximation for start_brk:
-     *
-     *   - if we are a separately compiled program, __bound_init() runs early,
-     *     and sbrk(0) should be equal or very near to start_brk(b) (in case other
-     *     constructors malloc something), or
-     *
-     *   - if we are running from under `tcc -b -run`, sbrk(0) will return
-     *     start of heap portion which is under this program control, and not
-     *     mark as invalid earlier allocated memory.
-     *
-     *
-     * (a) /proc/sys/kernel/randomize_va_space = 2, on Linux;
-     *     usually turned on by default.
-     *
-     * (b) on Linux >= v3.3, the alternative is to read
-     *     start_brk from /proc/self/stat
-     */
-    start = (size_t)sbrk(0);
-    size = 128 * 0x100000;
-    mark_invalid(start, size);
-#endif
-
-    /* add all static bound check values */
-    p = (size_t *)&__bounds_start;
-    while (p[0] != 0) {
-        __bound_new_region((void *)p[0], p[1]);
-        p += 2;
-    }
+    memset (free_reuse_list, 0, sizeof (free_reuse_list));
 
     dprintf(stderr, "%s, %s() end\n\n", __FILE__, __FUNCTION__);
 }
 
-void __bound_main_arg(void **p)
+void __bounds_add_static_var (size_t *p)
 {
-    void *start = p;
-    while (*p++);
+    dprintf(stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
+    /* add all static bound check values */
+    WAIT_SEM ();
+    while (p[0] != 0) {
+        dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
+                __FILE__, __FUNCTION__, (void *) p[0], (unsigned long) p[1]);
+        tree = splay_insert(p[0], p[1], tree);
+        p += 2;
+    }
+    POST_SEM ();
+}
 
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p %x)\n",
-            __FILE__, __FUNCTION__, start, (unsigned)((void *)p - start));
+void __bound_main_arg(char **p)
+{
+    char *start = (char *) p;
 
-    __bound_new_region(start, (void *) p - start);
+    WAIT_SEM ();
+    while (*p) {
+        dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
+                __FILE__, __FUNCTION__, *p, (unsigned long)(strlen (*p) + 1));
+        tree = splay_insert((size_t) *p, strlen (*p) + 1, tree);
+        p++;
+    }
+    dprintf(stderr, "%s, %s() argv (%p 0x%lx)\n",
+            __FILE__, __FUNCTION__, start, (unsigned long)((char *) p - start));
+    tree = splay_insert((size_t) start, (char *) p - start, tree);
+
+#if HAS_ENVIRON
+    {
+        extern char **environ;
+
+        p = environ;
+        start = (char *) p;
+        while (*p) {
+            dprintf(stderr, "%s, %s() (%p 0x%lx)\n",
+                    __FILE__, __FUNCTION__, *p, (unsigned long)(strlen (*p) + 1));
+            tree = splay_insert((size_t) *p, strlen (*p) + 1, tree);
+            p++;
+        }
+        dprintf(stderr, "%s, %s() environ(%p 0x%lx)\n",
+                __FILE__, __FUNCTION__, start, (unsigned long)((char *) p - start));
+        tree = splay_insert((size_t) start, (char *) p - start, tree);
+    }
+#endif
+    POST_SEM ();
 }
 
 void __bound_exit(void)
 {
+    int i;
+
     dprintf(stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
-    restore_malloc_hooks();
-}
-
-static inline void add_region(BoundEntry *e, 
-                              size_t start, size_t size)
-{
-    BoundEntry *e1;
-    if (e->start == 0) {
-        /* no region : add it */
-        e->start = start;
-        e->size = size;
-    } else {
-        /* already regions in the list: add it at the head */
-        e1 = bound_new_entry();
-        e1->start = e->start;
-        e1->size = e->size;
-        e1->next = e->next;
-        e->start = start;
-        e->size = size;
-        e->next = e1;
+    while (tree) {
+      tree = splay_delete (tree->start, tree);
     }
-}
-
-/* create a new region. It should not already exist in the region list */
-void __bound_new_region(void *p, size_t size)
-{
-    size_t start, end;
-    BoundEntry *page, *e, *e2;
-    size_t t1_start, t1_end, i, t2_start, t2_end;
-
-    dprintf(stderr, "%s, %s(%p, %x) start\n",
-        __FILE__, __FUNCTION__, p, (unsigned)size);
-
-    __bound_init();
-
-    start = (size_t)p;
-    end = start + size;
-    t1_start = start >> (BOUND_T2_BITS + BOUND_T3_BITS);
-    t1_end = end >> (BOUND_T2_BITS + BOUND_T3_BITS);
-
-    /* start */
-    page = get_page(t1_start);
-    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-
-
-    e = (BoundEntry *)((char *)page + t2_start);
-    add_region(e, start, size);
-
-    if (t1_end == t1_start) {
-        /* same ending page */
-        e2 = (BoundEntry *)((char *)page + t2_end);
-        if (e2 > e) {
-            e++;
-            for(;e<e2;e++) {
-                e->start = start;
-                e->size = size;
-            }
-            add_region(e, start, size);
-        }
-    } else {
-        /* mark until end of page */
-        e2 = page + BOUND_T2_SIZE;
-        e++;
-        for(;e<e2;e++) {
-            e->start = start;
-            e->size = size;
-        }
-        /* mark intermediate pages, if any */
-        for(i=t1_start+1;i<t1_end;i++) {
-            page = get_page(i);
-            e2 = page + BOUND_T2_SIZE;
-            for(e=page;e<e2;e++) {
-                e->start = start;
-                e->size = size;
-            }
-        }
-        /* last page */
-        page = get_page(t1_end);
-        e2 = (BoundEntry *)((char *)page + t2_end);
-        for(e=page;e<e2;e++) {
-            e->start = start;
-            e->size = size;
-        }
-        add_region(e, start, size);
-    }
-
-    dprintf(stderr, "%s, %s end\n", __FILE__, __FUNCTION__);
-}
-
-/* delete a region */
-static inline void delete_region(BoundEntry *e, void *p, size_t empty_size)
-{
-    size_t addr;
-    BoundEntry *e1;
-
-    addr = (size_t)p;
-    addr -= e->start;
-    if (addr <= e->size) {
-        /* region found is first one */
-        e1 = e->next;
-        if (e1 == NULL) {
-            /* no more region: mark it empty */
-            e->start = 0;
-            e->size = empty_size;
-        } else {
-            /* copy next region in head */
-            e->start = e1->start;
-            e->size = e1->size;
-            e->next = e1->next;
-            bound_free_entry(e1);
-        }
-    } else {
-        /* find the matching region */
-        for(;;) {
-            e1 = e;
-            e = e->next;
-            /* region not found: do nothing */
-            if (e == NULL)
-                break;
-            addr = (size_t)p - e->start;
-            if (addr <= e->size) {
-                /* found: remove entry */
-                e1->next = e->next;
-                bound_free_entry(e);
-                break;
-            }
-        }
-    }
-}
-
-/* WARNING: 'p' must be the starting point of the region. */
-/* return non zero if error */
-int __bound_delete_region(void *p)
-{
-    size_t start, end, addr, size, empty_size;
-    BoundEntry *page, *e, *e2;
-    size_t t1_start, t1_end, t2_start, t2_end, i;
-
-    dprintf(stderr, "%s %s() start\n", __FILE__, __FUNCTION__);
-
-    __bound_init();
-
-    start = (size_t)p;
-    t1_start = start >> (BOUND_T2_BITS + BOUND_T3_BITS);
-    t2_start = (start >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-    
-    /* find region size */
-    page = __bound_t1[t1_start];
-    e = (BoundEntry *)((char *)page + t2_start);
-    addr = start - e->start;
-    if (addr > e->size)
-        e = __bound_find_region(e, p);
-    /* test if invalid region */
-    if (e->size == EMPTY_SIZE || (size_t)p != e->start) 
-        return -1;
-    /* compute the size we put in invalid regions */
-    if (e->is_invalid)
-        empty_size = INVALID_SIZE;
-    else
-        empty_size = EMPTY_SIZE;
-    size = e->size;
-    end = start + size;
-
-    /* now we can free each entry */
-    t1_end = end >> (BOUND_T2_BITS + BOUND_T3_BITS);
-    t2_end = (end >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS);
-
-    delete_region(e, p, empty_size);
-    if (t1_end == t1_start) {
-        /* same ending page */
-        e2 = (BoundEntry *)((char *)page + t2_end);
-        if (e2 > e) {
-            e++;
-            for(;e<e2;e++) {
-                e->start = 0;
-                e->size = empty_size;
-            }
-            delete_region(e, p, empty_size);
-        }
-    } else {
-        /* mark until end of page */
-        e2 = page + BOUND_T2_SIZE;
-        e++;
-        for(;e<e2;e++) {
-            e->start = 0;
-            e->size = empty_size;
-        }
-        /* mark intermediate pages, if any */
-        /* XXX: should free them */
-        for(i=t1_start+1;i<t1_end;i++) {
-            page = get_page(i);
-            e2 = page + BOUND_T2_SIZE;
-            for(e=page;e<e2;e++) {
-                e->start = 0;
-                e->size = empty_size;
-            }
-        }
-        /* last page */
-        page = get_page(t1_end);
-        e2 = (BoundEntry *)((char *)page + t2_end);
-        for(e=page;e<e2;e++) {
-            e->start = 0;
-            e->size = empty_size;
-        }
-        delete_region(e, p, empty_size);
-    }
-
-    dprintf(stderr, "%s %s() end\n", __FILE__, __FUNCTION__);
-
-    return 0;
-}
-
-/* return the size of the region starting at p, or EMPTY_SIZE if non
-   existent region. */
-static size_t get_region_size(void *p)
-{
-    size_t addr = (size_t)p;
-    BoundEntry *e;
-
-    e = __bound_t1[addr >> (BOUND_T2_BITS + BOUND_T3_BITS)];
-    e = (BoundEntry *)((char *)e + 
-                       ((addr >> (BOUND_T3_BITS - BOUND_E_BITS)) & 
-                        ((BOUND_T2_SIZE - 1) << BOUND_E_BITS)));
-    addr -= e->start;
-    if (addr > e->size)
-        e = __bound_find_region(e, p);
-    if (e->start != (size_t)p)
-        return EMPTY_SIZE;
-    return e->size;
-}
-
-/* patched memory functions */
-
-/* force compiler to perform stores coded up to this point */
-#define barrier()   __asm__ __volatile__ ("": : : "memory")
-
-static void install_malloc_hooks(void)
-{
-#ifdef CONFIG_TCC_MALLOC_HOOKS
-    saved_malloc_hook = __malloc_hook;
-    saved_free_hook = __free_hook;
-    saved_realloc_hook = __realloc_hook;
-    saved_memalign_hook = __memalign_hook;
-    __malloc_hook = __bound_malloc;
-    __free_hook = __bound_free;
-    __realloc_hook = __bound_realloc;
-    __memalign_hook = __bound_memalign;
-
-    barrier();
+#if TREE_REUSE
+    while (tree_free_list) {
+        Tree *next = tree_free_list->left;
+#if MALLOC_REDIR
+        free_redir (tree_free_list);
+#else
+        free (tree_free_list);
 #endif
-}
-
-static void restore_malloc_hooks(void)
-{
-#ifdef CONFIG_TCC_MALLOC_HOOKS
-    __malloc_hook = saved_malloc_hook;
-    __free_hook = saved_free_hook;
-    __realloc_hook = saved_realloc_hook;
-    __memalign_hook = saved_memalign_hook;
-
-    barrier();
+        tree_free_list = next;
+    }
 #endif
-}
-
-static void *libc_malloc(size_t size)
-{
-    void *ptr;
-    restore_malloc_hooks();
-    ptr = malloc(size);
-    install_malloc_hooks();
-    return ptr;
-}
-
-static void libc_free(void *ptr)
-{
-    restore_malloc_hooks();
-    free(ptr);
-    install_malloc_hooks();
+    for (i = 0; i < FREE_REUSE_SIZE; i++) {
+#if MALLOC_REDIR
+        free_redir (free_reuse_list[i]);
+#else
+        free (free_reuse_list[i]);
+#endif
+    }
+    EXIT_SEM ();
+    inited = 0;
 }
 
 /* XXX: we should use a malloc which ensure that it is unlikely that
    two malloc'ed data have the same address if 'free' are made in
    between. */
+#if MALLOC_REDIR
+void *malloc(size_t size)
+#else
 void *__bound_malloc(size_t size, const void *caller)
+#endif
 {
     void *ptr;
     
+#if MALLOC_REDIR
+    /* This will catch the first dlsym call from __bound_init */
+    if (malloc_redir == NULL) {
+        static int pool_index = 0;
+        static unsigned char pool[256];
+        void *retval;
+
+        retval = &pool[pool_index];
+        pool_index = (pool_index + size + 7) & ~8;
+        dprintf (stderr, "%s, %s initial (%p, 0x%x)\n",
+                 __FILE__, __FUNCTION__, retval, (unsigned)size);
+        return retval;
+    }
+#endif
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
-    ptr = libc_malloc(size + 1);
+    WAIT_SEM ();
+#if MALLOC_REDIR
+    ptr = malloc_redir (size);
+#else
+    ptr = malloc(size + 1);
+#endif
     
-    if (!ptr)
-        return NULL;
+    dprintf(stderr, "%s, %s (%p, 0x%x)\n",
+            __FILE__, __FUNCTION__, ptr, (unsigned)size);
 
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %x)\n",
-           __FILE__, __FUNCTION__, ptr, (unsigned)size);
-
-    __bound_new_region(ptr, size);
+    if (ptr) {
+        tree = splay_insert ((size_t) ptr, size, tree);
+    }
+    POST_SEM ();
     return ptr;
 }
 
+#if MALLOC_REDIR
+void *memalign(size_t size, size_t align)
+#else
 void *__bound_memalign(size_t size, size_t align, const void *caller)
+#endif
 {
     void *ptr;
 
-    restore_malloc_hooks();
+    WAIT_SEM ();
 
 #ifndef HAVE_MEMALIGN
     if (align > 4) {
@@ -810,103 +522,229 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
         ptr = NULL;
     } else {
         /* we suppose that malloc aligns to at least four bytes */
+#if MALLOC_REDIR
+        ptr = malloc_redir(size + 1);
+#else
         ptr = malloc(size + 1);
+#endif
     }
 #else
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
+#if MALLOC_REDIR
+    ptr = memalign_redir(size + 1, align);
+#else
     ptr = memalign(size + 1, align);
 #endif
-    
-    install_malloc_hooks();
-    
-    if (!ptr)
-        return NULL;
-
-    dprintf(stderr, "%s, %s calling __bound_new_region(%p, %x)\n",
-           __FILE__, __FUNCTION__, ptr, (unsigned)size);
-
-    __bound_new_region(ptr, size);
+#endif
+    if (ptr) {
+        dprintf(stderr, "%s, %s (%p, 0x%x)\n",
+                __FILE__, __FUNCTION__, ptr, (unsigned)size);
+        tree = splay_insert((size_t) ptr, size, tree);
+    }
+    POST_SEM ();
     return ptr;
 }
 
+#if MALLOC_REDIR
+void free(void *ptr)
+#else
 void __bound_free(void *ptr, const void *caller)
+#endif
 {
-    if (ptr == NULL)
-        return;
-    if (__bound_delete_region(ptr) != 0)
-        bound_error("freeing invalid region");
+    size_t addr = (size_t) ptr;
+    void *p;
 
-    libc_free(ptr);
+    if (ptr == NULL || tree == NULL)
+        return;
+
+    dprintf(stderr, "%s, %s (%p)\n", __FILE__, __FUNCTION__, ptr);
+
+    WAIT_SEM ();
+    tree = splay (addr, tree);
+    if (tree->start == addr) {
+        if (tree->is_invalid) {
+            bound_error("freeing invalid region");
+            POST_SEM ();
+            return;
+        }
+        tree->is_invalid = 1;
+        memset (ptr, 0x5a, tree->size);
+        p = free_reuse_list[free_reuse_index];
+        free_reuse_list[free_reuse_index] = ptr;
+        free_reuse_index = (free_reuse_index + 1) % FREE_REUSE_SIZE;
+        if (p) {
+            tree = splay_delete((size_t)p, tree);
+        }
+        ptr = p;
+    }
+#if MALLOC_REDIR
+    free_redir (ptr);
+#else
+    free(ptr);
+#endif
+    POST_SEM ();
 }
 
+#if MALLOC_REDIR
+void *realloc(void *ptr, size_t size)
+#else
 void *__bound_realloc(void *ptr, size_t size, const void *caller)
+#endif
 {
     void *ptr1;
-    size_t old_size;
+    size_t last_size;
 
     if (size == 0) {
+#if MALLOC_REDIR
+        free(ptr);
+#else
         __bound_free(ptr, caller);
+#endif
         return NULL;
     } else {
-        ptr1 = __bound_malloc(size, caller);
-        if (ptr == NULL || ptr1 == NULL)
-            return ptr1;
-        old_size = get_region_size(ptr);
-        if (old_size == EMPTY_SIZE)
-            bound_error("realloc'ing invalid pointer");
-        memcpy(ptr1, ptr, old_size);
-        __bound_free(ptr, caller);
-        return ptr1;
-    }
-}
-
-#ifndef CONFIG_TCC_MALLOC_HOOKS
-void *__bound_calloc(size_t nmemb, size_t size)
-{
-    void *ptr;
-    size = size * nmemb;
-    ptr = __bound_malloc(size, NULL);
-    if (!ptr)
-        return NULL;
-    memset(ptr, 0, size);
-    return ptr;
-}
+        WAIT_SEM ();
+        tree = splay ((size_t) ptr, tree);
+        if (tree->start != (size_t) ptr) {
+#if MALLOC_REDIR
+            ptr = realloc_redir (ptr, size);
+#else
+            ptr = realloc (ptr, size);
 #endif
-
-#if 0
-static void bound_dump(void)
-{
-    BoundEntry *page, *e;
-    size_t i, j;
-
-    fprintf(stderr, "region dump:\n");
-    for(i=0;i<BOUND_T1_SIZE;i++) {
-        page = __bound_t1[i];
-        for(j=0;j<BOUND_T2_SIZE;j++) {
-            e = page + j;
-            /* do not print invalid or empty entries */
-            if (e->size != EMPTY_SIZE && e->start != 0) {
-                fprintf(stderr, "%08x:", 
-                       (i << (BOUND_T2_BITS + BOUND_T3_BITS)) + 
-                       (j << BOUND_T3_BITS));
-                do {
-                    fprintf(stderr, " %08lx:%08lx", e->start, e->start + e->size);
-                    e = e->next;
-                } while (e != NULL);
-                fprintf(stderr, "\n");
+            if (ptr) {
+                tree = splay_insert ((size_t) ptr, size, tree);
             }
+            POST_SEM ();
+            return ptr;
+        }
+        else {
+            last_size = tree->size;
+            POST_SEM ();
+#if MALLOC_REDIR
+            ptr1 = malloc(size);
+#else
+            ptr1 = __bound_malloc(size, caller);
+#endif
+            if (ptr == NULL || ptr1 == NULL)
+                return ptr1;
+            memcpy(ptr1, ptr, last_size < size ? last_size : size);
+#if MALLOC_REDIR
+            free(ptr);
+#else
+            __bound_free(ptr, caller);
+#endif
+            return ptr1;
         }
     }
 }
+
+#if MALLOC_REDIR
+void *calloc(size_t nmemb, size_t size)
+#else
+void *__bound_calloc(size_t nmemb, size_t size)
 #endif
+{
+    void *ptr;
+
+    size *= nmemb;
+#if MALLOC_REDIR
+    ptr = malloc(size);
+#else
+    ptr = __bound_malloc(size, NULL);
+#endif
+    if (ptr) {
+        memset (ptr, 0, size);
+    }
+    return ptr;
+}
+
+#if !defined(_WIN32)
+void *__bound_mmap (void *start, size_t size, int prot,
+                    int flags, int fd, off_t offset)
+{
+    void *result;
+
+    dprintf(stderr, "%s, %s (%p, 0x%x)\n",
+            __FILE__, __FUNCTION__, start, (unsigned)size);
+    result = mmap (start, size, prot, flags, fd, offset);
+    if (result) {
+        WAIT_SEM ();
+        tree = splay_insert((size_t)result, size, tree);
+        POST_SEM ();
+    }
+    return result;
+}
+
+int __bound_munmap (void *start, size_t size)
+{
+    int result;
+
+    dprintf(stderr, "%s, %s (%p, 0x%x)\n",
+            __FILE__, __FUNCTION__, start, (unsigned)size);
+    WAIT_SEM ();
+    tree = splay_delete ((size_t) start, tree);
+    POST_SEM ();
+    result = munmap (start, size);
+    return result;
+}
+#endif
+
+/* used by alloca */
+void __bound_new_region(void *p, size_t size)
+{
+    size_t fp;
+    alloca_list_type *last;
+    alloca_list_type *cur;
+
+    dprintf(stderr, "%s, %s (%p, 0x%x)\n",
+            __FILE__, __FUNCTION__, p, (unsigned)size);
+    WAIT_SEM ();
+    last = NULL;
+    cur = alloca_list;
+    while (cur && cur->fp == fp) {
+        if (cur->p == p) {
+            dprintf(stderr, "%s, %s() remove alloca/vla %p\n",
+                    __FILE__, __FUNCTION__, alloca_list->p);
+            if (last) {
+                last->next = cur->next;
+            }
+            else {
+                alloca_list->next = cur->next;
+            }
+            tree = splay_delete((size_t)p, tree);
+#if MALLOC_REDIR
+            free_redir (cur);
+#else
+            free (cur);
+#endif
+        }
+        last = cur;
+        cur = cur->next;
+    }
+    tree = splay_insert((size_t)p, size, tree);
+#if MALLOC_REDIR
+    cur = malloc_redir (sizeof (alloca_list_type));
+#else
+    cur = malloc (sizeof (alloca_list_type));
+#endif
+    if (cur) {
+        GET_CALLER_FP (fp);
+        cur->fp = fp;
+        cur->p = p;
+        cur->next = alloca_list;
+        alloca_list = cur;
+    }
+    POST_SEM ();
+}
 
 /* some useful checked functions */
 
 /* check that (p ... p + size - 1) lies inside 'p' region, if any */
 static void __bound_check(const void *p, size_t size)
 {
+    if (no_checking)
+        return;
     if (size == 0)
         return;
     p = __bound_ptr_add((void *)p, size - 1);
@@ -918,18 +756,14 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
 {
     void* p;
 
-    dprintf(stderr, "%s %s: start, dst=%p src=%p size=%x\n",
-            __FILE__, __FUNCTION__, dst, src, (unsigned)size);
-
     __bound_check(dst, size);
     __bound_check(src, size);
     /* check also region overlap */
-    if (src >= dst && src < dst + size)
+    if (no_checking == 0 && src >= dst && src < dst + size)
         bound_error("overlapping regions in memcpy()");
 
     p = memcpy(dst, src, size);
 
-    dprintf(stderr, "%s %s: end, p=%p\n", __FILE__, __FUNCTION__, p);
     return p;
 }
 
@@ -969,11 +803,253 @@ char *__bound_strcpy(char *dst, const char *src)
     size_t len;
     void *p;
 
-    dprintf(stderr, "%s %s: strcpy start, dst=%p src=%p\n",
-            __FILE__, __FUNCTION__, dst, src);
     len = __bound_strlen(src);
     p = __bound_memcpy(dst, src, len + 1);
-    dprintf(stderr, "%s %s: strcpy end, p = %p\n",
-            __FILE__, __FUNCTION__, p);
     return p;
+}
+
+/*
+           An implementation of top-down splaying with sizes
+             D. Sleator <sleator@cs.cmu.edu>, January 1994.
+
+  This extends top-down-splay.c to maintain a size field in each node.
+  This is the number of nodes in the subtree rooted there.  This makes
+  it possible to efficiently compute the rank of a key.  (The rank is
+  the number of nodes to the left of the given key.)  It it also
+  possible to quickly find the node of a given rank.  Both of these
+  operations are illustrated in the code below.  The remainder of this
+  introduction is taken from top-down-splay.c.
+
+  "Splay trees", or "self-adjusting search trees" are a simple and
+  efficient data structure for storing an ordered set.  The data
+  structure consists of a binary tree, with no additional fields.  It
+  allows searching, insertion, deletion, deletemin, deletemax,
+  splitting, joining, and many other operations, all with amortized
+  logarithmic performance.  Since the trees adapt to the sequence of
+  requests, their performance on real access patterns is typically even
+  better.  Splay trees are described in a number of texts and papers
+  [1,2,3,4].
+
+  The code here is adapted from simple top-down splay, at the bottom of
+  page 669 of [2].  It can be obtained via anonymous ftp from
+  spade.pc.cs.cmu.edu in directory /usr/sleator/public.
+
+  The chief modification here is that the splay operation works even if the
+  item being splayed is not in the tree, and even if the tree root of the
+  tree is NULL.  So the line:
+
+                              t = splay(i, t);
+
+  causes it to search for item with key i in the tree rooted at t.  If it's
+  there, it is splayed to the root.  If it isn't there, then the node put
+  at the root is the last one before NULL that would have been reached in a
+  normal binary search for i.  (It's a neighbor of i in the tree.)  This
+  allows many other operations to be easily implemented, as shown below.
+
+  [1] "Data Structures and Their Algorithms", Lewis and Denenberg,
+       Harper Collins, 1991, pp 243-251.
+  [2] "Self-adjusting Binary Search Trees" Sleator and Tarjan,
+       JACM Volume 32, No 3, July 1985, pp 652-686.
+  [3] "Data Structure and Algorithm Analysis", Mark Weiss,
+       Benjamin Cummins, 1992, pp 119-130.
+  [4] "Data Structures, Algorithms, and Performance", Derick Wood,
+       Addison-Wesley, 1993, pp 367-375
+*/
+
+/* Code adapted for tcc */
+
+#define compare(start,tstart,tsize) (start < tstart ? -1 : \
+                                     start >= tstart+tsize  ? 1 : 0)
+
+/* This is the comparison.                                       */
+/* Returns <0 if i<j, =0 if i=j, and >0 if i>j                   */
+ 
+static Tree * splay (size_t addr, Tree *t)
+/* Splay using the key start (which may or may not be in the tree.) */
+/* The starting root is t, and the tree used is defined by rat  */
+{
+    Tree N, *l, *r, *y;
+    int comp;
+    
+    if (t == NULL) return t;
+    N.left = N.right = NULL;
+    l = r = &N;
+ 
+    for (;;) {
+        comp = compare(addr, t->start, t->size);
+        if (comp < 0) {
+            y = t->left;
+            if (y == NULL) break;
+            if (compare(addr, y->start, y->size) < 0) {
+                t->left = y->right;                    /* rotate right */
+                y->right = t;
+                t = y;
+                if (t->left == NULL) break;
+            }
+            r->left = t;                               /* link right */
+            r = t;
+            t = t->left;
+        } else if (comp > 0) {
+            y = t->right;
+            if (y == NULL) break;
+            if (compare(addr, y->start, y->size) > 0) {
+                t->right = y->left;                    /* rotate left */
+                y->left = t;
+                t = y;
+                if (t->right == NULL) break;
+            }
+            l->right = t;                              /* link left */
+            l = t;
+            t = t->right;
+        } else {
+            break;
+        }
+    }
+    l->right = t->left;                                /* assemble */
+    r->left = t->right;
+    t->left = N.right;
+    t->right = N.left;
+
+    return t;
+}
+
+#define compare_end(start,tend) (start < tend ? -1 : \
+                                 start > tend  ? 1 : 0)
+
+static Tree * splay_end (size_t addr, Tree *t)
+/* Splay using the key start (which may or may not be in the tree.) */
+/* The starting root is t, and the tree used is defined by rat  */
+{
+    Tree N, *l, *r, *y;
+    int comp;
+    
+    if (t == NULL) return t;
+    N.left = N.right = NULL;
+    l = r = &N;
+ 
+    for (;;) {
+        comp = compare_end(addr, t->start + t->size);
+        if (comp < 0) {
+            y = t->left;
+            if (y == NULL) break;
+            if (compare_end(addr, y->start + y->size) < 0) {
+                t->left = y->right;                    /* rotate right */
+                y->right = t;
+                t = y;
+                if (t->left == NULL) break;
+            }
+            r->left = t;                               /* link right */
+            r = t;
+            t = t->left;
+        } else if (comp > 0) {
+            y = t->right;
+            if (y == NULL) break;
+            if (compare_end(addr, y->start + y->size) > 0) {
+                t->right = y->left;                    /* rotate left */
+                y->left = t;
+                t = y;
+                if (t->right == NULL) break;
+            }
+            l->right = t;                              /* link left */
+            l = t;
+            t = t->right;
+        } else {
+            break;
+        }
+    }
+    l->right = t->left;                                /* assemble */
+    r->left = t->right;
+    t->left = N.right;
+    t->right = N.left;
+
+    return t;
+}
+
+static Tree * splay_insert(size_t addr, size_t size, Tree * t)
+/* Insert key start into the tree t, if it is not already there. */
+/* Return a pointer to the resulting tree.                   */
+{
+    Tree * new;
+
+    if (t != NULL) {
+        t = splay(addr,t);
+        if (compare(addr, t->start, t->size)==0) {
+            return t;  /* it's already there */
+        }
+    }
+#if TREE_REUSE
+    if (tree_free_list) {
+          new = tree_free_list;
+          tree_free_list = new->left;
+    }
+    else
+#endif
+    {
+#if MALLOC_REDIR
+        new = (Tree *) malloc_redir (sizeof (Tree));
+#else
+        new = (Tree *) malloc (sizeof (Tree));
+#endif
+    }
+    if (new == NULL) {bound_alloc_error();}
+    if (t == NULL) {
+        new->left = new->right = NULL;
+    } else if (compare(addr, t->start, t->size) < 0) {
+        new->left = t->left;
+        new->right = t;
+        t->left = NULL;
+    } else {
+        new->right = t->right;
+        new->left = t;
+        t->right = NULL;
+    }
+    new->start = addr;
+    new->size = size;
+    new->is_invalid = 0;
+    return new;
+}
+
+#define compare_destroy(start,tstart) (start < tstart ? -1 : \
+                                       start > tstart  ? 1 : 0)
+
+static Tree * splay_delete(size_t addr, Tree *t)
+/* Deletes addr from the tree if it's there.               */
+/* Return a pointer to the resulting tree.              */
+{
+    Tree * x;
+
+    if (t==NULL) return NULL;
+    t = splay(addr,t);
+    if (compare_destroy(addr, t->start) == 0) {               /* found it */
+        if (t->left == NULL) {
+            x = t->right;
+        } else {
+            x = splay(addr, t->left);
+            x->right = t->right;
+        }
+#if TREE_REUSE
+        t->left = tree_free_list;
+        tree_free_list = t;
+#else
+#if MALLOC_REDIR
+        free_redir(t);
+#else
+        free(t);
+#endif
+#endif
+        return x;
+    } else {
+        return t;                         /* It wasn't there */
+    }
+}
+
+void splay_printtree(Tree * t, int d)
+{
+    int i;
+    if (t == NULL) return;
+    splay_printtree(t->right, d+1);
+    for (i=0; i<d; i++) fprintf(stderr," ");
+    fprintf(stderr,"%p(0x%lx:%u)\n",
+            (void *) t->start, (unsigned long) t->size, (unsigned)t->is_invalid);
+    splay_printtree(t->left, d+1);
 }

@@ -1264,8 +1264,9 @@ void gfunc_call(int nb_args)
 }
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(CType *func_type)
+void gfunc_prolog(Sym *func_sym)
 {
+  CType *func_type = &func_sym->type;
   Sym *sym,*sym2;
   int n, nf, size, align, rs, struct_ret = 0;
   int addr, pn, sn; /* pn=core, sn=stack */

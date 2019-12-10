@@ -405,6 +405,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             case TOK_strlen:
             case TOK_strcpy:
             case TOK_alloca:
+            case TOK_mmap:
+            case TOK_munmap:
                 strcpy(buf, "__bound_");
                 strcat(buf, name);
                 name = buf;
@@ -1191,7 +1193,11 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     type = &int_type;
 #endif
                 size = type_size(type, &align);
-				l=get_temp_local_var(size,align);
+                if ((p->r2 & VT_VALMASK) < VT_CONST) {
+                    size *= 2;
+                    align *= 2;
+                }
+                l=get_temp_local_var(size,align);
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
                 sv.c.i = l;
@@ -1375,7 +1381,7 @@ static void gbound(void)
 
     vtop->r &= ~VT_MUSTBOUND;
     /* if lvalue, then use checking code before dereferencing */
-    if (vtop->r & VT_LVAL) {
+    if ((vtop->r & VT_LVAL) && !nocode_wanted) {
         /* if not VT_BOUNDED value, then make one */
         if (!(vtop->r & VT_BOUNDED)) {
             lval_type = vtop->r & (VT_LVAL_TYPE | VT_LVAL);
@@ -5478,6 +5484,15 @@ special_math_val:
             Sym *sa;
             int nb_args, ret_nregs, ret_align, regsize, variadic;
 
+#ifdef CONFIG_TCC_BCHECK
+           if (tcc_state->do_bounds_check && (vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
+               addr_t *bounds_ptr;
+
+               bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
+               bounds_ptr[0] = 1; /* marks alloca/vla used */
+               bounds_ptr[1] = 0;
+           }
+#endif
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
                 /* pointer test (no array accepted) */
@@ -7413,7 +7428,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (bcheck && (type->t & VT_ARRAY)) {
+        if (bcheck && ((type->t & VT_ARRAY) ||
+                       (type->t & VT_BTYPE) == VT_STRUCT)) {
             loc--;
         }
 #endif
@@ -7422,8 +7438,9 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds */
         /* XXX: currently, since we do only one pass, we cannot track
-           '&' operators, so we add only arrays */
-        if (bcheck && (type->t & VT_ARRAY)) {
+           '&' operators, so we add only arrays/structs/unions */
+        if (bcheck && ((type->t & VT_ARRAY) ||
+                       (type->t & VT_BTYPE) == VT_STRUCT)) {
             addr_t *bounds_ptr;
             /* add padding between regions */
             loc--;
@@ -7542,6 +7559,15 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         gen_vla_sp_save(addr);
         cur_scope->vla.loc = addr;
         cur_scope->vla.num++;
+#ifdef CONFIG_TCC_BCHECK
+        if (bcheck) {
+            addr_t *bounds_ptr;
+
+            bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
+            bounds_ptr[0] = 1; /* marks alloca/vla used */
+            bounds_ptr[1] = 0;
+        }
+#endif
 
     } else if (has_init) {
 	size_t oldreloc_offset = 0;
@@ -7599,7 +7625,7 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     /* push a dummy symbol to enable local sym storage */
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
-    gfunc_prolog(&sym->type);
+    gfunc_prolog(sym);
     local_scope = 0;
     rsym = 0;
     clear_temp_local_var_list();

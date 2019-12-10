@@ -123,6 +123,7 @@ void math_cmp_test(void);
 void callsave_test(void);
 void builtin_frame_address_test(void);
 void attrib_test(void);
+void bounds_check1_test(void);
 
 int fib(int n);
 void num(int n);
@@ -771,6 +772,7 @@ int main(int argc, char **argv)
     if (via_volatile (42) != 42)
       printf ("via_volatile broken\n");
     attrib_test();
+    bounds_check1_test();
     return 0; 
 }
 
@@ -3884,7 +3886,9 @@ void builtin_frame_address_test(void)
 
     printf("str: %s\n", str);
 #ifndef __riscv
+#ifndef __BOUNDS_CHECKING_ON
     bfa1(str-fp0);
+#endif
 #endif
 #endif
 }
@@ -3960,4 +3964,19 @@ int __get_order(unsigned long long size)
 int force_get_order(unsigned long s)
 {
     return __get_order(s);
+}
+
+#define pv(m) printf(sizeof (s->m + 0) == 8 ? "%016lx\n" : "%02x\n", s->m)
+
+/* Test failed when using bounds checking */
+void bounds_check1_test (void)
+{
+    struct s {
+        int x;
+        long long y;
+    } _s, *s = &_s;
+    s->x = 10;
+    s->y = 20;
+    pv(x);
+    pv(y);
 }

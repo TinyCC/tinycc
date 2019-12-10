@@ -614,8 +614,9 @@ ST_FUNC void gfunc_call(int nb_args)
 
 static int func_sub_sp_offset, num_va_regs, func_va_list_ofs;
 
-ST_FUNC void gfunc_prolog(CType *func_type)
+ST_FUNC void gfunc_prolog(Sym *func_sym)
 {
+    CType *func_type = &func_sym->type;
     int i, addr, align, size;
     int param_addr = 0;
     int areg[2];

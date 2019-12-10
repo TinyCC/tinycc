@@ -512,10 +512,12 @@ ST_FUNC void gfunc_call(int nb_args)
 #endif
 
 /* generate function prolog of type 't' */
-ST_FUNC void gfunc_prolog(CType *func_type)
+ST_FUNC void gfunc_prolog(Sym *func_sym)
 {
+    CType *func_type = &func_sym->type;
     int addr, align, size, func_call, fastcall_nb_regs;
     int param_index, param_addr;
+    int n_arg = 0;
     uint8_t *fastcall_regs_ptr;
     Sym *sym;
     CType *type;
@@ -558,6 +560,7 @@ ST_FUNC void gfunc_prolog(CType *func_type)
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
+        n_arg++;
         type = &sym->type;
         size = type_size(type, &align);
         size = (size + 3) & ~3;
@@ -597,6 +600,12 @@ ST_FUNC void gfunc_prolog(CType *func_type)
         func_bound_ind = ind;
         oad(0xb8, 0); /* lbound section pointer */
         oad(0xb8, 0); /* call to function */
+        if (n_arg >= 2 && strcmp (get_tok_str(func_sym->v, NULL), "main") == 0) {
+            o(0x0c458b);  /* mov  0x12(%ebp),%eax */
+            o(0x50);      /* push %eax */
+            gen_static_call(TOK___bound_main_arg);
+            o(0x04c483);  /* add  $0x4,%esp */
+        }
     }
 #endif
 }
@@ -1003,6 +1012,7 @@ ST_FUNC void gen_cvt_itof(int t)
         o(0x2404db); /* fildl (%esp) */
         o(0x04c483); /* add $4, %esp */
     }
+    vtop->r2 = VT_CONST;
     vtop->r = TREG_ST0;
 }
 
@@ -1040,14 +1050,87 @@ ST_FUNC void ggoto(void)
 /* bound check support functions */
 #ifdef CONFIG_TCC_BCHECK
 
+ST_FUNC void tcc_add_bcheck(TCCState *s1)
+{
+    addr_t *ptr;
+    int loc_glob;
+    int sym_index;
+    int bsym_index;
+
+    if (0 == s1->do_bounds_check)
+        return;
+    /* XXX: add an object file to do that */
+    ptr = section_ptr_add(bounds_section, sizeof(*ptr));
+    *ptr = 0;
+    loc_glob = s1->output_type != TCC_OUTPUT_MEMORY ? STB_LOCAL : STB_GLOBAL;
+    bsym_index = set_elf_sym(symtab_section, 0, 0,
+                             ELFW(ST_INFO)(loc_glob, STT_NOTYPE), 0,
+                             bounds_section->sh_num, "__bounds_start");
+    /* pull bcheck.o from libtcc1.a */
+    sym_index = set_elf_sym(symtab_section, 0, 0,
+                            ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                            SHN_UNDEF, "__bound_init");
+    if (s1->output_type != TCC_OUTPUT_MEMORY) {
+        /* add 'call __bound_init()' in .init section */
+        Section *init_section = find_section(s1, ".init");
+        unsigned char *pinit;
+#ifdef TCC_TARGET_PE
+        pinit = section_ptr_add(init_section, 3);
+        pinit[0] = 0x55;        /* push %rbp */
+        pinit[1] = 0x89;        /* mov %esp,%ebp */
+        pinit[2] = 0xe5;
+#endif
+        pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        write32le(pinit + 1, -4);
+        put_elf_reloc(symtab_section, init_section,
+            init_section->data_offset - 4, R_386_PC32, sym_index);
+            /* R_386_PC32 = R_X86_64_PC32 = 2 */
+        pinit = section_ptr_add(init_section, 6);
+        pinit[0] = 0xb8;        /* mov xx,%eax */
+        write32le(pinit + 1, 0);
+        pinit[5] = 0x50;        /* push %eax */
+        put_elf_reloc(symtab_section, init_section,
+                init_section->data_offset - 5, R_386_32, bsym_index);
+        sym_index = set_elf_sym(symtab_section, 0, 0,
+                        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                        SHN_UNDEF, "__bounds_add_static_var");
+        pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        write32le(pinit + 1, -4);
+        put_elf_reloc(symtab_section, init_section,
+            init_section->data_offset - 4, R_386_PC32, sym_index);
+                /* R_386_PC32 = R_X86_64_PC32 = 2 */
+        pinit = section_ptr_add(init_section, 3);
+        pinit[0] = 0x83;        /* add  $0x4,%esp */
+        pinit[1] = 0xc4;
+        pinit[2] = 0x04;
+#ifdef TCC_TARGET_PE
+        {
+            int init_index = set_elf_sym(symtab_section,
+                                         0, 0,
+                                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                                         init_section->sh_num, "__init_start");
+            Sym sym;
+            init_section->sh_flags |= SHF_EXECINSTR;
+            pinit = section_ptr_add(init_section, 2);
+            pinit[0] = 0xc9;        /* leave */
+            pinit[1] = 0xc3;        /* ret */
+            sym.c = init_index;
+            add_init_array (s1, &sym);
+        }
+#endif
+    }
+}
+
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
+    /* save all temporary registers */
+    save_regs(0);
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
-    /* save all temporary registers */
     vtop -= 2;
-    save_regs(0);
     /* do a fast function call */
     gen_static_call(TOK___bound_ptr_add);
     /* returned pointer is in eax */

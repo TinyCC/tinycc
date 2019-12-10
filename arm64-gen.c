@@ -996,8 +996,9 @@ static int arm64_func_va_list_gr_offs;
 static int arm64_func_va_list_vr_offs;
 static int arm64_func_sub_sp_offset;
 
-ST_FUNC void gfunc_prolog(CType *func_type)
+ST_FUNC void gfunc_prolog(Sym *func_sym)
 {
+    CType *func_type = &func_sym->type;
     int n = 0;
     int i = 0;
     Sym *sym;

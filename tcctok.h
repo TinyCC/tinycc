@@ -312,6 +312,8 @@
      DEF(TOK_memalign, "memalign")
      DEF(TOK_calloc, "calloc")
 # endif
+     DEF(TOK_mmap, "mmap")
+     DEF(TOK_munmap, "munmap")
      DEF(TOK_strlen, "strlen")
      DEF(TOK_strcpy, "strcpy")
 #endif

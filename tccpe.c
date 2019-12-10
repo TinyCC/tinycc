@@ -1880,15 +1880,29 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     if (0 == s1->nostdlib) {
         static const char *libs[] = {
-            TCC_LIBTCC1, "msvcrt", "kernel32", "", "user32", "gdi32", NULL
+            TCC_LIBTCC1,
+#ifdef CONFIG_TCC_BCHECK
+            TCC_LIBTCCB1,
+#endif
+            "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
         const char **pp, *p;
         for (pp = libs; 0 != (p = *pp); ++pp) {
+#ifdef CONFIG_TCC_BCHECK
+            if (pp == libs + 1 &&
+                (s1->do_bounds_check == 0 || s1->output_type == TCC_OUTPUT_DLL)) {
+                continue;
+            }
+#endif
             if (0 == *p) {
                 if (PE_DLL != pe_type && PE_GUI != pe_type)
                     break;
             } else if (pp == libs && tcc_add_dll(s1, p, 0) >= 0) {
                 continue;
+#ifdef CONFIG_TCC_BCHECK
+            } else if (pp == libs + 1 && tcc_add_dll(s1, p, 0) >= 0) {
+                continue;
+#endif
             } else {
                 tcc_add_library_err(s1, p);
             }

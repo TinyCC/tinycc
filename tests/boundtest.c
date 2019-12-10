@@ -81,7 +81,6 @@ int test5(void)
 }
 
 /* error */
-/* XXX: currently: bug */
 int test6(void)
 {
     int i, sum = 0;
@@ -253,9 +252,19 @@ int (*table_test[])(void) = {
 
 int main(int argc, char **argv)
 {
+    int i;
+    char *cp;
     int index;
     int (*ftest)(void);
     int index_max = sizeof(table_test)/sizeof(table_test[0]);
+
+    /* check bounds checking main arg */
+    for (i = 0; i < argc; i++) {
+        cp = argv[i];
+        while (*cp) {
+            cp++;
+        }
+    }
 
     if (argc < 2) {
         printf(

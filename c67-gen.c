@@ -1939,8 +1939,9 @@ void gfunc_call(int nb_args)
 // parameters are loaded and restored upon return (or if/when needed).
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(CType * func_type)
+void gfunc_prolog(Sym *func_sym)
 {
+    CType *func_type = &func_sym->type;
     int addr, align, size, func_call, i;
     Sym *sym;
     CType *type;

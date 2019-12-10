@@ -292,6 +292,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #ifndef TCC_LIBTCC1
 # define TCC_LIBTCC1 "libtcc1.a"
 #endif
+#ifndef TCC_LIBTCCB1
+# define TCC_LIBTCCB1 "libtccb1.a"
+#endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
@@ -1202,6 +1205,9 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 #endif
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
+#ifdef CONFIG_TCC_BCHECK
+ST_FUNC void tcc_add_bcheck(TCCState *s1);
+#endif
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
 PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);
@@ -1518,7 +1524,7 @@ ST_FUNC void load(int r, SValue *sv);
 ST_FUNC void store(int r, SValue *v);
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *regsize);
 ST_FUNC void gfunc_call(int nb_args);
-ST_FUNC void gfunc_prolog(CType *func_type);
+ST_FUNC void gfunc_prolog(Sym *func_sym);
 ST_FUNC void gfunc_epilog(void);
 ST_FUNC void gen_fill_nops(int);
 ST_FUNC int gjmp(int t);

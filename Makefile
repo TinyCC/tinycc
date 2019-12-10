@@ -16,6 +16,7 @@ endif
 
 LIBTCC = libtcc.a
 LIBTCC1 = libtcc1.a
+LIBTCCB1 = libtccb1.a
 LINK_LIBTCC =
 LIBS =
 CFLAGS += -I$(TOP)
@@ -86,7 +87,7 @@ ifeq ($(INCLUDED),no)
 # running top Makefile
 
 PROGS = tcc$(EXESUF)
-TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCCDEF)
+TCCLIBS = $(LIBTCC1) $(LIBTCCB1) $(LIBTCC) $(LIBTCCDEF)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
@@ -100,11 +101,15 @@ TCC_X += riscv64
 LIBTCC1_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince
 LIBTCC1_X += riscv64
 
+# cross libtccb1.a targets to build
+LIBTCCB1_X = i386 x86_64 i386-win32 x86_64-win32 
+
 PROGS_CROSS = $(foreach X,$(TCC_X),$X-tcc$(EXESUF))
 LIBTCC1_CROSS = $(foreach X,$(LIBTCC1_X),$X-libtcc1.a)
+LIBTCCB1_CROSS = $(foreach X,$(LIBTCCB1_X),$X-libtcc1.a)
 
 # build cross compilers & libs
-cross: $(LIBTCC1_CROSS) $(PROGS_CROSS)
+cross: $(LIBTCC1_CROSS) $(LIBTCCB1_CROSS) $(PROGS_CROSS)
 
 # build specific cross compiler & lib
 cross-%: %-tcc$(EXESUF) %-libtcc1.a ;
@@ -148,10 +153,10 @@ DEFINES += $(DEF-$(or $(findstring win,$T),unx))
 
 ifneq ($(X),)
 ifeq ($(CONFIG_WIN32),yes)
-DEF-win += -DTCC_LIBTCC1="\"$(X)libtcc1.a\""
-DEF-unx += -DTCC_LIBTCC1="\"lib/$(X)libtcc1.a\""
+DEF-win += -DTCC_LIBTCC1="\"$(X)libtcc1.a\"" -DTCC_LIBTCCB1="\"$(X)libtccb1.a\""
+DEF-unx += -DTCC_LIBTCC1="\"lib/$(X)libtcc1.a\"" -DTCC_LIBTCCB1="\"lib/$(X)libtccb1.a\""
 else
-DEF-all += -DTCC_LIBTCC1="\"$(X)libtcc1.a\""
+DEF-all += -DTCC_LIBTCC1="\"$(X)libtcc1.a\"" -DTCC_LIBTCCB1="\"$(X)libtccb1.a\""
 DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
 endif
 endif
@@ -269,6 +274,8 @@ STRIP_yes = -s
 
 LIBTCC1_W = $(filter %-win32-libtcc1.a %-wince-libtcc1.a,$(LIBTCC1_CROSS))
 LIBTCC1_U = $(filter-out $(LIBTCC1_W),$(LIBTCC1_CROSS))
+LIBTCCB1_W = $(filter %-win32-libtccb1.a %-wince-libtccb1.a,$(LIBTCCB1_CROSS))
+LIBTCCB1_U = $(filter-out $(LIBTCCB1_W),$(LIBTCCB1_CROSS))
 IB = $(if $1,mkdir -p $2 && $(INSTALLBIN) $1 $2)
 IBw = $(call IB,$(wildcard $1),$2)
 IF = $(if $1,mkdir -p $2 && $(INSTALL) $1 $2)
@@ -279,6 +286,7 @@ IR = mkdir -p $2 && cp -r $1/. $2
 install-unx:
 	$(call IBw,$(PROGS) $(PROGS_CROSS),"$(bindir)")
 	$(call IFw,$(LIBTCC1) $(LIBTCC1_U),"$(tccdir)")
+	$(call IFw,$(LIBTCCB1) $(LIBTCCB1_U),"$(tccdir)")
 	$(call IF,$(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h,"$(tccdir)/include")
 	$(call $(if $(findstring .so,$(LIBTCC)),IBw,IFw),$(LIBTCC),"$(libdir)")
 	$(call IF,$(TOPSRC)/libtcc.h,"$(includedir)")
@@ -304,6 +312,7 @@ install-win:
 	$(call IBw,$(PROGS) $(PROGS_CROSS) $(subst libtcc.a,,$(LIBTCC)),"$(bindir)")
 	$(call IF,$(TOPSRC)/win32/lib/*.def,"$(tccdir)/lib")
 	$(call IFw,libtcc1.a $(LIBTCC1_W),"$(tccdir)/lib")
+	$(call IFw,libtccb1.a $(LIBTCCB1_W),"$(tccdir)/lib")
 	$(call IF,$(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h,"$(tccdir)/include")
 	$(call IR,$(TOPSRC)/win32/include,"$(tccdir)/include")
 	$(call IR,$(TOPSRC)/win32/examples,"$(tccdir)/examples")
