@@ -27,6 +27,7 @@ p2:
 
     sub     %rax,%rsp
     mov     %rsp,%rax
+    add     $32,%rax
 p3:
     push    %rdx
     ret
