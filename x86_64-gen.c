@@ -652,7 +652,7 @@ static void gen_bounds_call(int v)
 #endif
 }
 
-ST_FUNC void tcc_add_bcheck(TCCState *s1)
+ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec)
 {
     addr_t *ptr;
     int loc_glob;
@@ -662,14 +662,14 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
     if (0 == s1->do_bounds_check)
         return;
     /* XXX: add an object file to do that */
-    ptr = section_ptr_add(bounds_section, sizeof(*ptr));
+    ptr = section_ptr_add(bound_sec, sizeof(*ptr));
     *ptr = 0;
     loc_glob = s1->output_type != TCC_OUTPUT_MEMORY ? STB_LOCAL : STB_GLOBAL;
-    bsym_index = set_elf_sym(symtab_section, 0, 0,
+    bsym_index = set_elf_sym(sym_sec, 0, 0,
                 ELFW(ST_INFO)(loc_glob, STT_NOTYPE), 0,
-                bounds_section->sh_num, "__bounds_start");
+                bound_sec->sh_num, "__bounds_start");
     /* pull bcheck.o from libtcc1.a */
-    sym_index = set_elf_sym(symtab_section, 0, 0,
+    sym_index = set_elf_sym(sym_sec, 0, 0,
                 ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                 SHN_UNDEF, "__bound_init");
     if (s1->output_type != TCC_OUTPUT_MEMORY) {
@@ -690,7 +690,7 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
         pinit = section_ptr_add(init_section, 5);
         pinit[0] = 0xe8;
         write32le(pinit + 1, -4);
-        put_elf_reloc(symtab_section, init_section,
+        put_elf_reloc(sym_sec, init_section,
             init_section->data_offset - 4, R_386_PC32, sym_index);
             /* R_386_PC32 = R_X86_64_PC32 = 2 */
         pinit = section_ptr_add(init_section, 13);
@@ -706,20 +706,20 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
         pinit[11] = 0x89;
         pinit[12] = 0xc7;
 #endif
-        put_elf_reloc(symtab_section, init_section,
+        put_elf_reloc(sym_sec, init_section,
                 init_section->data_offset - 11, R_X86_64_64, bsym_index);
-        sym_index = set_elf_sym(symtab_section, 0, 0,
+        sym_index = set_elf_sym(sym_sec, 0, 0,
                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                         SHN_UNDEF, "__bounds_add_static_var");
         pinit = section_ptr_add(init_section, 5);
         pinit[0] = 0xe8;
         write32le(pinit + 1, -4);
-        put_elf_reloc(symtab_section, init_section,
+        put_elf_reloc(sym_sec, init_section,
             init_section->data_offset - 4, R_386_PC32, sym_index);
                 /* R_386_PC32 = R_X86_64_PC32 = 2 */
 #ifdef TCC_TARGET_PE
         {
-            int init_index = set_elf_sym(symtab_section,
+            int init_index = set_elf_sym(sym_sec,
                                          0, 0,
                                          ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
                                          init_section->sh_num, "__init_start");

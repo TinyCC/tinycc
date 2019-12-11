@@ -3886,9 +3886,7 @@ void builtin_frame_address_test(void)
 
     printf("str: %s\n", str);
 #ifndef __riscv
-#ifndef __BOUNDS_CHECKING_ON
     bfa1(str-fp0);
-#endif
 #endif
 #endif
 }
@@ -3966,12 +3964,11 @@ int force_get_order(unsigned long s)
     return __get_order(s);
 }
 
-#define pv(m) printf(sizeof (s->m + 0) == 8 ? "%016lx\n" : "%02x\n", s->m)
+#define pv(m) printf(sizeof (s->m + 0) == 8 ? "%016llx\n" : "%02x\n", s->m)
 
 /* Test failed when using bounds checking */
 void bounds_check1_test (void)
 {
-#ifndef __arm__	/* gcc bug om arm */
     struct s {
         int x;
         long long y;
@@ -3980,5 +3977,4 @@ void bounds_check1_test (void)
     s->y = 20;
     pv(x);
     pv(y);
-#endif
 }

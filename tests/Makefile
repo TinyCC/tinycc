@@ -30,11 +30,14 @@ BTESTS = test1b test3b btest
 # btest -- works on i386 (including win32)
 
 # bounds-checking is supported only on i386
-ifneq ($(ARCH),i386)
- TESTS := $(filter-out $(BTESTS),$(TESTS))
+ifeq ($(ARCH),i386)
+ TESTS += $(BTESTS)
+endif
+ifeq ($(ARCH),x86_64)
+ TESTS += $(BTESTS)
 endif
 ifdef CONFIG_WIN32
- TESTS := $(filter-out $(BTESTS),$(TESTS))
+ TESTS += $(BTESTS)
 endif
 ifdef CONFIG_OSX # -run only
  TESTS := hello-run libtest tests2-dir pp-dir
@@ -158,7 +161,8 @@ BOUNDS_FAIL= 2 5 6 7 9 11 12 13 15 17
 
 btest: boundtest.c
 	@echo ------------ $@ ------------
-	@for i in $(BOUNDS_OK); do \
+	@ulimit -c 0; \
+	for i in $(BOUNDS_OK); do \
 	   echo ; echo --- boundtest $$i ---; \
 	   if $(TCC) -b -run $< $$i ; then \
 	       echo succeeded as expected; \

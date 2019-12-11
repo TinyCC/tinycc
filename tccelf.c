@@ -1320,7 +1320,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
     s1->filetype = 0;
 #ifdef CONFIG_TCC_BCHECK
-    tcc_add_bcheck(s1);
+    tcc_add_bcheck(s1, bounds_section, symtab_section);
 #endif
     tcc_add_pragma_libs(s1);
 #ifndef TCC_TARGET_PE

@@ -1249,7 +1249,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 #endif
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 #ifdef CONFIG_TCC_BCHECK
-ST_FUNC void tcc_add_bcheck(TCCState *s1);
+ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec);
 #endif
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
