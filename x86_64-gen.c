@@ -1025,7 +1025,7 @@ void gfunc_call(int nb_args)
 
     if ((vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
         /* need to add the "func_scratch" area after alloca */
-        o(0x48); func_alloca = oad(0x05, func_alloca); /* sub $NN, %rax */
+        o(0x48); func_alloca = oad(0x2d, func_alloca); /* sub $NN, %rax */
     }
 
     /* other compilers don't clear the upper bits when returning char/short */

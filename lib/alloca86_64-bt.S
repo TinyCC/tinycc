@@ -5,7 +5,6 @@
 __bound_alloca:
 
 #ifdef _WIN32
-    # bound checking is not implemented
     pop     %rdx
     mov     %rcx,%rax
     add     $15,%rax
@@ -23,8 +22,18 @@ p2:
 
     sub     %rax,%rsp
     mov     %rsp,%rax
-    add     $32,%rax
 
+    push    %rdx
+    push    %rax
+    mov     %rcx,%rdx
+    mov     %rax,%rcx
+    sub     $20,%rsp
+    call   __bound_new_region
+    add     $20,%rsp
+    pop     %rax
+    pop     %rdx
+
+    add     $32,%rax
 p3:
     push    %rdx
     ret
