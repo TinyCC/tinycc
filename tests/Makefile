@@ -77,7 +77,7 @@ hello-run: ../examples/ex1.c
 
 libtes%: libtcc_tes%$(EXESUF)
 	@echo ------------ $@ ------------
-	./libtcc_tes$*$(EXESUF) $(TCCFLAGS)
+	./libtcc_tes$*$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES)
 
 libtcc_tes%$(EXESUF): libtcc_tes%.c $(LIBTCC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)

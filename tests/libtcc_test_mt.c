@@ -102,6 +102,14 @@ void parse_args(TCCState *s)
                 tcc_add_include_path(s, a+2);
             else if (a[1] == 'L')
                 tcc_add_library_path(s, a+2);
+            else if (a[1] == 'D') {
+                char *eq = strchr(a+2, '=');
+                if (eq) {
+                    *eq = 0;
+                    tcc_define_symbol(s, a+2, eq+1);
+                    *eq = '=';
+                }
+            }
         }
     }
 }
