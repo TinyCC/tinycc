@@ -59,6 +59,13 @@ ifeq ($(OS),Windows_NT) # for libtcc_test to find libtcc.dll
  PATH := $(CURDIR)/$(TOP)$(if $(findstring :\,$(PATH)),;,:)$(PATH)
 endif
 
+ifeq ($(ARCH),arm)
+# tcctest refers to the alignment of functions, and with thumb mode
+# the low bit of code addresses selects the mode, so the "alignment"
+# of functions via bit masking comes out as 1.  Just disable thumb.
+test.ref: CFLAGS+=-marm
+endif
+
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
 DUMPTCC = (set -x; $(TOP)/tcc -vv; ldd $(TOP)/tcc; exit 1)
