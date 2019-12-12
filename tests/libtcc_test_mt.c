@@ -108,7 +108,8 @@ void parse_args(TCCState *s)
                     *eq = 0;
                     tcc_define_symbol(s, a+2, eq+1);
                     *eq = '=';
-                }
+                } else
+                  tcc_define_symbol(s, a+2, NULL);
             }
         }
     }
