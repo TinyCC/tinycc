@@ -142,9 +142,6 @@ ST_DATA const int reg_classes[NB_REGS] = {
 
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
-static int nested_call;
-static int call_used_nr_reg;
-static int call_used_regs[20];
 
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
@@ -654,218 +651,19 @@ static void gen_bounds_call(int v)
 #endif
 }
 
-ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec)
-{
-    addr_t *ptr;
-    int loc_glob;
-    int sym_index;
-    int bsym_index;
-
-    if (0 == s1->do_bounds_check)
-        return;
-    /* XXX: add an object file to do that */
-    ptr = section_ptr_add(bound_sec, sizeof(*ptr));
-    *ptr = 0;
-    loc_glob = s1->output_type != TCC_OUTPUT_MEMORY ? STB_LOCAL : STB_GLOBAL;
-    bsym_index = set_elf_sym(sym_sec, 0, 0,
-                ELFW(ST_INFO)(loc_glob, STT_NOTYPE), 0,
-                bound_sec->sh_num, "__bounds_start");
-    /* pull bcheck.o from libtcc1.a */
-    sym_index = set_elf_sym(sym_sec, 0, 0,
-                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                SHN_UNDEF, "__bound_init");
-    if (s1->output_type != TCC_OUTPUT_MEMORY) {
-        /* add 'call __bound_init()' in .init section */
-        Section *init_section = find_section(s1, ".init");
-        unsigned char *pinit;
-#ifdef TCC_TARGET_PE
-        pinit = section_ptr_add(init_section, 8);
-        pinit[0] = 0x55;        /* push %rbp */
-        pinit[1] = 0x48;        /* mov %rsp,%rpb */
-        pinit[2] = 0x89;
-        pinit[3] = 0xe5;
-        pinit[4] = 0x48;        /* sub $0x10,%rsp */
-        pinit[5] = 0x83;
-        pinit[6] = 0xec;
-        pinit[7] = 0x10;
-#endif
-        pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        write32le(pinit + 1, -4);
-        put_elf_reloc(sym_sec, init_section,
-            init_section->data_offset - 4, R_386_PC32, sym_index);
-            /* R_386_PC32 = R_X86_64_PC32 = 2 */
-        pinit = section_ptr_add(init_section, 13);
-        pinit[0] = 0x48;        /* mov xx,%rax */
-        pinit[1] = 0xb8;
-        write64le(pinit + 2, 0);
-#ifdef TCC_TARGET_PE
-        pinit[10] = 0x48;        /* mov %rax,%rcx */
-        pinit[11] = 0x89;
-        pinit[12] = 0xc1;
-#else
-        pinit[10] = 0x48;        /* mov %rax,%rdi */
-        pinit[11] = 0x89;
-        pinit[12] = 0xc7;
-#endif
-        put_elf_reloc(sym_sec, init_section,
-                init_section->data_offset - 11, R_X86_64_64, bsym_index);
-        sym_index = set_elf_sym(sym_sec, 0, 0,
-                        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                        SHN_UNDEF, "__bounds_add_static_var");
-        pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        write32le(pinit + 1, -4);
-        put_elf_reloc(sym_sec, init_section,
-            init_section->data_offset - 4, R_386_PC32, sym_index);
-                /* R_386_PC32 = R_X86_64_PC32 = 2 */
-#ifdef TCC_TARGET_PE
-        {
-            int init_index = set_elf_sym(sym_sec,
-                                         0, 0,
-                                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                                         init_section->sh_num, "__init_start");
-            Sym sym;
-            init_section->sh_flags |= SHF_EXECINSTR;
-            pinit = section_ptr_add(init_section, 2);
-            pinit[0] = 0xc9;        /* leave */
-            pinit[1] = 0xc3;        /* ret */
-            sym.c = init_index;
-            add_init_array (s1, &sym);
-        }
-#endif
-    }
-}
-
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
-    int i;
-
-    nested_call++;
-
-    /* save all temporary registers */
-    save_regs(0);
-
-    for (i = 0; i < call_used_nr_reg; i++) {
-        switch (call_used_regs[i]) {
-        case TREG_RAX: case TREG_RCX: case TREG_RDX: case TREG_RSP:
-        case TREG_RSI: case TREG_RDI:
-            o(0x50 + call_used_regs[i]);    /* push reg */
-            break;
-        case TREG_R8: case TREG_R9: case TREG_R10: case TREG_R11:
-            o(0x5041 + (call_used_regs[i] - TREG_R8) * 0x100);  /* push reg */
-            break;
-        case TREG_XMM0: case TREG_XMM1: case TREG_XMM2: case TREG_XMM3:
-        case TREG_XMM4: case TREG_XMM5: case TREG_XMM6: case TREG_XMM7:
-            o(0x10ec8348);             /* sub $10,%rsp */
-                                       /* vmovdqu %xmmx,(%rsp) */
-            o(0x047ffac5 + (call_used_regs[i] - TREG_XMM0) * 0x8000000); o(0x24);
-            break;
-        }
-    }
-
-    if (nested_call > 1) {
-#ifdef TCC_TARGET_PE
-        o(0x5152);       /* push %rdx/%rcx */
-        o(0x51415041);   /* push %r8/%r9 */
-#else
-        o(0x51525657);   /* push %rdi/%rsi/%rdx/%rcx */
-#endif
-    }
-    /* prepare fast x86_64 function call */
-    gv(RC_RAX);
-#ifdef TCC_TARGET_PE
-    o(0xc28948); // mov  %rax,%rdx ## second arg in %rdx, this must be size
-#else
-    o(0xc68948); // mov  %rax,%rsi ## second arg in %rsi, this must be size
-#endif
-    vtop--;
-
-    gv(RC_RAX);
-#ifdef TCC_TARGET_PE
-    o(0xc18948); // mov  %rax,%rcx ## first arg in %rcx, this must be ptr
-#else
-    o(0xc78948); // mov  %rax,%rdi ## first arg in %rdi, this must be ptr
-#endif
-    vtop--;
-
-    /* add line, filename */
-#ifdef TCC_TARGET_PE
-    o(0xc0c749);   /* mov $xx,%r8 */
-#else
-    o(0xba);       /* mov $xx,%edx */
-#endif
-    gen_le32 (file->line_num);
-    {
-        static addr_t offset;
-        static char last_filename[1024];
-        Sym *sym_data;
-
-        if (strcmp (last_filename, file->filename) != 0) {
-            void *ptr;
-            int len = strlen (file->filename) + 1;
-
-            offset = data_section->data_offset;
-            ptr = section_ptr_add(data_section, len);
-            memcpy (ptr, file->filename, len);
-            memcpy (last_filename, file->filename, len);
-        }
-#ifdef TCC_TARGET_PE
-        o(0xb949);   /* mov $xx,%r9 */
-#else
-        o(0xb948);   /* mov $xx,%rcx */
-#endif
-        gen_le64 (0);
-        sym_data = get_sym_ref(&char_pointer_type, data_section,
-                               offset, data_section->data_offset);
-        greloca(cur_text_section, sym_data, ind - 8, R_X86_64_64, 0);
-    }
-
-#ifdef TCC_TARGET_PE
-    o(0x20ec8348); /* sub $20, %rsp */
-#endif
-
-    /* do a fast function call */
-    gen_bounds_call(TOK___bound_ptr_add);
-
-#ifdef TCC_TARGET_PE
-    o(0x20c48348); /* add $20, %rsp */
-#endif
-
-    if (nested_call > 1) {
-#ifdef TCC_TARGET_PE
-        o(0x58415941);   /* pop %r9/%r8 */
-        o(0x5a59);       /* pop %rcx/%rdx */
-#else
-        o(0x5f5e5a59);   /* pop $rcx/%rdx/%rsi/%rdi */
-#endif
-    }
+    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
+    vrott(3);
+    gfunc_call(2);
+    vpushi(0);
     /* returned pointer is in rax */
-    vtop++;
     vtop->r = TREG_RAX | VT_BOUNDED;
-
-    for (i = call_used_nr_reg - 1; i >= 0; i--) {
-        switch (call_used_regs[i]) {
-        case TREG_RAX: case TREG_RCX: case TREG_RDX: case TREG_RSP:
-        case TREG_RSI: case TREG_RDI:
-            o(0x58 + call_used_regs[i]);    /* pop reg */
-            break;
-        case TREG_R8: case TREG_R9: case TREG_R10: case TREG_R11:
-            o(0x5841 + (call_used_regs[i] - TREG_R8) * 0x100);  /* pop reg */
-            break;
-        case TREG_XMM0: case TREG_XMM1: case TREG_XMM2: case TREG_XMM3:
-        case TREG_XMM4: case TREG_XMM5: case TREG_XMM6: case TREG_XMM7:
-                                       /* vmovdqu (%rsp),%xmmx */
-            o(0x046ffac5 + (call_used_regs[i] - TREG_XMM0) * 0x8000000); o(0x24);
-            o(0x10c48348);             /* add $10,%rsp */
-            break;
-        }
-    }
-
+    if (nocode_wanted)
+        return;
     /* relocation offset of the bounding function call point */
     vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela)));
-    nested_call--;
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -877,6 +675,9 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     ElfW(Rela) *rel;
     Sym *sym;
 
+    if (nocode_wanted)
+        return;
+
     size = 0;
     /* XXX: put that code in generic part of tcc */
     if (!is_float(vtop->type.t)) {
@@ -886,7 +687,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
             size = 2;
     }
     if (!size)
-    size = type_size(&vtop->type, &align);
+        size = type_size(&vtop->type, &align);
     switch(size) {
     case  1: func = TOK___bound_ptr_indir1; break;
     case  2: func = TOK___bound_ptr_indir2; break;
@@ -895,18 +696,17 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     case 12: func = TOK___bound_ptr_indir12; break;
     case 16: func = TOK___bound_ptr_indir16; break;
     default:
-        tcc_error("unhandled size when dereferencing bounded pointer");
-        func = 0;
-        break;
+        /* may happen with struct member access */
+        return;
+        //tcc_error("unhandled size when dereferencing bounded pointer");
+        //func = 0;
+        //break;
     }
-
     sym = external_global_sym(func, &func_old_type);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
-
     /* patch relocation */
     /* XXX: find a better solution ? */
-
     rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.i);
     rel->r_info = ELF64_R_INFO(sym->c, ELF64_R_TYPE(rel->r_info));
 }
@@ -992,6 +792,11 @@ void gfunc_call(int nb_args)
     int size, r, args_size, i, d, bt, struct_size;
     int arg;
 
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gbound_args(nb_args);
+#endif
+
     args_size = (nb_args < REGN ? REGN : nb_args) * PTR_SIZE;
     arg = nb_args;
 
@@ -1051,7 +856,6 @@ void gfunc_call(int nb_args)
             } else {
                 d = arg_prepare_reg(arg);
                 gen_offs_sp(0x8d, d, struct_size);
-                call_used_regs[call_used_nr_reg++] = d;
             }
             struct_size += size;
         } else {
@@ -1070,7 +874,6 @@ void gfunc_call(int nb_args)
                     o(0x66);
                     orex(1,d,0, 0x7e0f);
                     o(0xc0 + arg*8 + REG_VALUE(d));
-                    call_used_regs[call_used_nr_reg++] = d;
                 }
             } else {
                 if (bt == VT_STRUCT) {
@@ -1086,7 +889,6 @@ void gfunc_call(int nb_args)
                     d = arg_prepare_reg(arg);
                     orex(1,d,r,0x89); /* mov */
                     o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-                    call_used_regs[call_used_nr_reg++] = d;
                 }
             }
         }
@@ -1105,7 +907,12 @@ void gfunc_call(int nb_args)
 
     if ((vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
         /* need to add the "func_scratch" area after alloca */
-        o(0x48); func_alloca = oad(0x2d, func_alloca); /* sub $NN, %rax */
+        o(0x48); func_alloca = oad(0x05, func_alloca); /* add $NN, %rax */
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check)
+            gen_bounds_call(TOK___bound_alloca_nr); /* new region */
+#endif
+
     }
 
     /* other compilers don't clear the upper bits when returning char/short */
@@ -1125,7 +932,6 @@ void gfunc_call(int nb_args)
         o(0xc089); /* mov %eax,%eax */
 #endif
     vtop--;
-    call_used_nr_reg = 0;
 }
 
 
@@ -1141,7 +947,7 @@ void gfunc_prolog(Sym *func_sym)
     int n_arg = 0;
 
     func_ret_sub = 0;
-    func_scratch = 0;
+    func_scratch = 32;
     func_alloca = 0;
     loc = 0;
 
@@ -1228,6 +1034,10 @@ void gfunc_epilog(void)
 {
     int v, saved_ind;
 
+    /* align local size to word & save local variables */
+    func_scratch = (func_scratch + 15) & -16;
+    loc = (loc & -16) - func_scratch;
+
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check
         && func_bound_offset != lbounds_section->data_offset)
@@ -1273,9 +1083,7 @@ void gfunc_epilog(void)
 
     saved_ind = ind;
     ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
-    /* align local size to word & save local variables */
-    func_scratch = (func_scratch + 15) & -16;
-    v = (func_scratch + -loc + 15) & -16;
+    v = -loc;
 
     if (v >= 4096) {
         Sym *sym = external_global_sym(TOK___chkstk, &func_old_type);
@@ -1479,6 +1287,11 @@ void gfunc_call(int nb_args)
     int sse_reg, gen_reg;
     char _onstack[nb_args ? nb_args : 1], *onstack = _onstack;
 
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gbound_args(nb_args);
+#endif
+
     /* calculate the number of integer/float register arguments, remember
        arguments to be passed via stack (in onstack[]), and also remember
        if we have to align the stack pointer to 16 (onstack[i] == 2).  Needs
@@ -1611,14 +1424,11 @@ void gfunc_call(int nb_args)
                     o(0x280f);
                     o(0xc0 + (sse_reg << 3));
                 }
-                call_used_regs[call_used_nr_reg++] = sse_reg + TREG_XMM0;
-                call_used_regs[call_used_nr_reg++] = sse_reg + 1 + TREG_XMM0;
             } else {
                 assert(reg_count == 1);
                 --sse_reg;
                 /* Load directly to register */
                 gv(RC_XMM0 << sse_reg);
-                call_used_regs[call_used_nr_reg++] = sse_reg + TREG_XMM0;
             }
         } else if (mode == x86_64_mode_integer) {
             /* simple type */
@@ -1629,12 +1439,10 @@ void gfunc_call(int nb_args)
             d = arg_prepare_reg(gen_reg);
             orex(1,d,r,0x89); /* mov */
             o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
-            call_used_regs[call_used_nr_reg++] = d;
             if (reg_count == 2) {
                 d = arg_prepare_reg(gen_reg+1);
                 orex(1,d,vtop->r2,0x89); /* mov */
                 o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
-                call_used_regs[call_used_nr_reg++] = d;
             }
         }
         vtop--;
@@ -1677,7 +1485,6 @@ void gfunc_call(int nb_args)
     else if (bt == (VT_SHORT | VT_UNSIGNED))
         o(0xc0b70f);  /* movzwl %al, %eax */
     vtop--;
-    call_used_nr_reg = 0;
 }
 
 

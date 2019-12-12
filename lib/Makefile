@@ -7,8 +7,6 @@ include $(TOP)/Makefile
 VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
-BIN = $(TOP)/$(X)libtcc1.a
-BINB = $(TOP)/$(X)libtccb1.a
 
 XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
 XCC = $(XTCC)
@@ -20,8 +18,6 @@ XCFG = $(or $(findstring -win,$T),-unx)
 
 # in order to use gcc, tyoe: make <target>-libtcc1-usegcc=yes
 arm-libtcc1-usegcc ?= no
-x86_64-libtcc1-usegcc ?= no
-i386-libtcc1-usegcc ?= no
 
 ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XCC = $(CC)
@@ -42,8 +38,6 @@ ifdef CONFIG_OSX
  XFLAGS += -D_ANSI_SOURCE
 endif
 
-XFLAGS += -g
-
 I386_O = libtcc1.o alloca86.o alloca86-bt.o
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o
 ARM_O = libtcc1.o armeabi.o alloca-arm.o armflush.o
@@ -51,11 +45,11 @@ ARM64_O = lib-arm64.o
 RISCV64_O = lib-arm64.o
 WIN_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o
 
-OBJ-i386 = $(I386_O) $(DSO_O)
-OBJ-x86_64 = $(X86_64_O) va_list.o $(DSO_O)
+OBJ-i386 = $(I386_O) $(BCHECK_O) $(DSO_O)
+OBJ-x86_64 = $(X86_64_O) va_list.o $(BCHECK_O) $(DSO_O)
 OBJ-x86_64-osx = $(X86_64_O) va_list.o
-OBJ-i386-win32 = $(I386_O) chkstk.o $(WIN_O)
-OBJ-x86_64-win32 = $(X86_64_O) chkstk.o (WIN_O)
+OBJ-i386-win32 = $(I386_O) chkstk.o bcheck.o $(WIN_O)
+OBJ-x86_64-win32 = $(X86_64_O) chkstk.o bcheck.o $(WIN_O)
 OBJ-arm64 = $(ARM64_O) $(DSO_O)
 OBJ-arm = $(ARM_O) $(DSO_O)
 OBJ-arm-fpa = $(ARM_O) $(DSO_O)
@@ -66,27 +60,14 @@ OBJ-arm-eabihf = $(ARM_O) $(DSO_O)
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
 OBJ-riscv64 = $(RISCV64_O) $(DSO_O)
 
-OBJB-i386 = $(BCHECK_O)
-OBJB-x86_64 = $(BCHECK_O)
-OBJB-x86_64-osx = dummy.o
-OBJB-i386-win32 = bcheck.o
-OBJB-x86_64-win32 = bcheck.o
-OBJB-arm64 = dummy.o
-OBJB-arm = dummy.o
-OBJB-arm-fpa = dummy.o
-OBJB-arm-fpa-ld = dummy.o
-OBJB-arm-vfp = dummy.o
-OBJB-arm-eabi = dummy.o
-OBJB-arm-eabihf = dummy.o
-OBJB-arm-wince = dummy.o
-OBJB-riscv64 = dummy.o
+OBJ-extra = $(filter bcheck.o,$(OBJ-$T))
+OBJ-libtcc1 = $(addprefix $(X),$(filter-out $(OBJ-extra),$(OBJ-$T)))
 
-all: $(BIN) $(BINB)
+ALL = $(addprefix $(TOP)/,$(X)libtcc1.a $(OBJ-extra))
 
-$(BIN) : $(patsubst %.o,$(X)%.o,$(OBJ-$T))
-	$(XAR) rcs $@ $^
+all: $(ALL)
 
-$(BINB) : $(patsubst %.o,$(X)%.o,$(OBJB-$T))
+$(TOP)/$(X)libtcc1.a : $(OBJ-libtcc1)
 	$(XAR) rcs $@ $^
 
 $(X)%.o : %.c
@@ -95,8 +76,12 @@ $(X)%.o : %.c
 $(X)%.o : %.S
 	$(XCC) -c $< -o $@ $(XFLAGS)
 
+$(TOP)/%.o : %.c
+	$(XCC) -c $< -o $@ $(XFLAGS)
+
+$(TOP)/bcheck.o : XFLAGS += -g
+
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c
-
 clean :
-	rm -f *.a *.o $(BIN) $(BINB)
+	rm -f *.a *.o $(ALL)

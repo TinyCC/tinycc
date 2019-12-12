@@ -287,4 +287,89 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
     }
 }
 
+#ifdef CONFIG_TCC_BCHECK
+ST_FUNC void tcc_add_bcheck(TCCState *s1)
+{
+    addr_t *ptr;
+    int loc_glob;
+    int sym_index;
+    int bsym_index;
+
+    if (0 == s1->do_bounds_check)
+        return;
+    /* XXX: add an object file to do that */
+    ptr = section_ptr_add(bounds_section, sizeof(*ptr));
+    *ptr = 0;
+    loc_glob = s1->output_type != TCC_OUTPUT_MEMORY ? STB_LOCAL : STB_GLOBAL;
+    bsym_index = set_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(loc_glob, STT_NOTYPE), 0,
+                bounds_section->sh_num, "__bounds_start");
+    /* pull bcheck.o from libtcc1.a */
+    sym_index = set_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                SHN_UNDEF, "__bound_init");
+    if (s1->output_type != TCC_OUTPUT_MEMORY) {
+        /* add 'call __bound_init()' in .init section */
+        Section *init_section = find_section(s1, ".init");
+        unsigned char *pinit;
+#ifdef TCC_TARGET_PE
+        pinit = section_ptr_add(init_section, 8);
+        pinit[0] = 0x55;        /* push %rbp */
+        pinit[1] = 0x48;        /* mov %rsp,%rpb */
+        pinit[2] = 0x89;
+        pinit[3] = 0xe5;
+        pinit[4] = 0x48;        /* sub $0x10,%rsp */
+        pinit[5] = 0x83;
+        pinit[6] = 0xec;
+        pinit[7] = 0x10;
+#endif
+        pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        write32le(pinit + 1, -4);
+        put_elf_reloc(symtab_section, init_section,
+            init_section->data_offset - 4, R_386_PC32, sym_index);
+            /* R_386_PC32 = R_X86_64_PC32 = 2 */
+        pinit = section_ptr_add(init_section, 13);
+        pinit[0] = 0x48;        /* mov xx,%rax */
+        pinit[1] = 0xb8;
+        write64le(pinit + 2, 0);
+#ifdef TCC_TARGET_PE
+        pinit[10] = 0x48;        /* mov %rax,%rcx */
+        pinit[11] = 0x89;
+        pinit[12] = 0xc1;
+#else
+        pinit[10] = 0x48;        /* mov %rax,%rdi */
+        pinit[11] = 0x89;
+        pinit[12] = 0xc7;
+#endif
+        put_elf_reloc(symtab_section, init_section,
+                init_section->data_offset - 11, R_X86_64_64, bsym_index);
+        sym_index = set_elf_sym(symtab_section, 0, 0,
+                        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                        SHN_UNDEF, "__bounds_add_static_var");
+        pinit = section_ptr_add(init_section, 5);
+        pinit[0] = 0xe8;
+        write32le(pinit + 1, -4);
+        put_elf_reloc(symtab_section, init_section,
+            init_section->data_offset - 4, R_386_PC32, sym_index);
+                /* R_386_PC32 = R_X86_64_PC32 = 2 */
+#ifdef TCC_TARGET_PE
+        {
+            int init_index = set_elf_sym(symtab_section,
+                                         0, 0,
+                                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                                         init_section->sh_num, "__init_start");
+            Sym sym;
+            init_section->sh_flags |= SHF_EXECINSTR;
+            pinit = section_ptr_add(init_section, 2);
+            pinit[0] = 0xc9;        /* leave */
+            pinit[1] = 0xc3;        /* ret */
+            sym.c = init_index;
+            add_init_array (s1, &sym);
+        }
+#endif
+    }
+}
+#endif
+
 #endif /* !TARGET_DEFS_ONLY */

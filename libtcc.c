@@ -1545,7 +1545,6 @@ static const TCCOption tcc_options[] = {
 #endif
 #ifdef CONFIG_TCC_BCHECK
     { "b", TCC_OPTION_b, 0 },
-    { "ba", TCC_OPTION_ba, 0 },
 #endif
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "c", TCC_OPTION_c, 0 },
@@ -1801,9 +1800,6 @@ reparse:
         case TCC_OPTION_b:
             s->do_bounds_check = 1;
             s->do_debug = 1;
-            break;
-        case TCC_OPTION_ba:
-            s->do_bounds_check_address = 1;
             break;
 #endif
         case TCC_OPTION_g:

@@ -1230,6 +1230,11 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     type = &int_type;
 #endif
                 size = type_size(type, &align);
+#ifdef CONFIG_TCC_BCHECK
+                if (tcc_state->do_bounds_check)
+                    l = loc = (loc - size) & -align;
+                else
+#endif
                 l=get_temp_local_var(size,align);
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
@@ -1417,7 +1422,7 @@ static void gbound(void)
 
     vtop->r &= ~VT_MUSTBOUND;
     /* if lvalue, then use checking code before dereferencing */
-    if ((vtop->r & VT_LVAL) && !nocode_wanted) {
+    if (vtop->r & VT_LVAL) {
         /* if not VT_BOUNDED value, then make one */
         if (!(vtop->r & VT_BOUNDED)) {
             lval_type = vtop->r & (VT_LVAL_TYPE | VT_LVAL);
@@ -1433,6 +1438,19 @@ static void gbound(void)
         /* then check for dereferencing */
         gen_bounded_ptr_deref();
     }
+}
+
+/* we need to call __bound_ptr_add before we start to load function
+   args into registers */
+ST_FUNC void gbound_args(int nb_args)
+{
+    int i;
+    for (i = 1; i <= nb_args; ++i)
+        if (vtop[1 - i].r & VT_MUSTBOUND) {
+            vrotb(i);
+            gbound();
+            vrott(i);
+        }
 }
 #endif
 
@@ -2499,25 +2517,7 @@ redo:
             }
             gen_op('*');
 #ifdef CONFIG_TCC_BCHECK
-    /* The main reason to removing this code:
-	#include <stdio.h>
-	int main ()
-	{
-	    int v[10];
-	    int i = 10;
-	    int j = 9;
-	    fprintf(stderr, "v+i-j  = %p\n", v+i-j);
-	    fprintf(stderr, "v+(i-j)  = %p\n", v+(i-j));
-	}
-    When this code is on. then the output looks like 
-	v+i-j = 0xfffffffe
-	v+(i-j) = 0xbff84000
-    This should now work in updated bcheck.c version.
-    */
-            /* if evaluating constant expression, no code should be
-               generated, so no bound check */
-            if (tcc_state->do_bounds_check && tcc_state->do_bounds_check_address
-                && !const_wanted && !nocode_wanted) {
+            if (tcc_state->do_bounds_check && !const_wanted) {
                 /* if bounded pointers, we generate a special code to
                    test bounds */
                 if (op == '-') {
@@ -2525,6 +2525,7 @@ redo:
                     vswap();
                     gen_op('-');
                 }
+                vtop[-1].r &= ~VT_MUSTBOUND;
                 gen_bounded_ptr_add();
             } else
 #endif

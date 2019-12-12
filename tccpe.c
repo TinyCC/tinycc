@@ -1836,6 +1836,12 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 #define PE_STDSYM(n,s) "_" n s
 #endif
 
+static void tcc_add_support(TCCState *s1, const char *filename)
+{
+    if (tcc_add_dll(s1, filename, 0) < 0)
+        tcc_error_noabort("%s not found", filename);
+}
+
 static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
     const char *start_symbol;
@@ -1884,35 +1890,21 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     if (0 == s1->nostdlib) {
         static const char *libs[] = {
-            TCC_LIBTCC1,
-#ifdef CONFIG_TCC_BCHECK
-            TCC_LIBTCCB1,
-#endif
             "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
         const char **pp, *p;
+#ifdef TCC_IS_NATIVE
+        if (s1->do_bounds_check)
+            tcc_add_support(s1, "bcheck.o");
+#endif
+        tcc_add_support(s1, TCC_LIBTCC1);
         for (pp = libs; 0 != (p = *pp); ++pp) {
-#ifdef CONFIG_TCC_BCHECK
-            if (pp == libs + 1 &&
-                (s1->do_bounds_check == 0 || s1->output_type == TCC_OUTPUT_DLL)) {
-                continue;
-            }
-#endif
-            if (0 == *p) {
-                if (PE_DLL != pe_type && PE_GUI != pe_type)
-                    break;
-            } else if (pp == libs && tcc_add_dll(s1, p, 0) >= 0) {
-                continue;
-#ifdef CONFIG_TCC_BCHECK
-            } else if (pp == libs + 1 && tcc_add_dll(s1, p, 0) >= 0) {
-                continue;
-#endif
-            } else {
+            if (*p)
                 tcc_add_library_err(s1, p);
-            }
+            else if (PE_DLL != pe_type && PE_GUI != pe_type)
+                break;
         }
     }
-
     if (TCC_OUTPUT_MEMORY == s1->output_type)
         pe_type = PE_RUN;
     pe->type = pe_type;

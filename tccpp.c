@@ -392,16 +392,15 @@ ST_FUNC void cstr_reset(CString *cstr)
 ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
 {
     va_list v;
-    va_list vc;
     int len, size;
 
     va_start(v, fmt);
-    va_copy (vc, v);
-    len = vsnprintf(NULL, 0, fmt, vc);
-    va_end(vc);
+    len = vsnprintf(NULL, 0, fmt, v);
+    va_end(v);
     size = cstr->size + len + 1;
     if (size > cstr->size_allocated)
         cstr_realloc(cstr, size);
+    va_start(v, fmt);
     vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
     va_end(v);
     cstr->size += len;

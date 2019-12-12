@@ -24,12 +24,8 @@ p1:
     jmp p1
 p2:
 #endif
-
     sub     %rax,%rsp
     mov     %rsp,%rax
-#ifdef _WIN32
-    add     $32,%rax
-#endif
 p3:
     push    %rdx
     ret

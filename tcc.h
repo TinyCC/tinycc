@@ -292,9 +292,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #ifndef TCC_LIBTCC1
 # define TCC_LIBTCC1 "libtcc1.a"
 #endif
-#ifndef TCC_LIBTCCB1
-# define TCC_LIBTCCB1 "libtccb1.a"
-#endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
@@ -720,7 +717,6 @@ struct TCCState {
 #ifdef CONFIG_TCC_BCHECK
     /* compile with built-in memory and bounds checker */
     unsigned char do_bounds_check;
-    unsigned char do_bounds_check_address;
 #endif
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/
@@ -1250,7 +1246,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 #endif
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 #ifdef CONFIG_TCC_BCHECK
-ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec);
+ST_FUNC void tcc_add_bcheck(TCCState *s1);
 #endif
 ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
 PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
@@ -1436,6 +1432,9 @@ ST_FUNC Sym *get_sym_ref(CType *type, Section *sec, unsigned long offset, unsign
 #endif
 #if defined TCC_TARGET_X86_64 && !defined TCC_TARGET_PE
 ST_FUNC int classify_x86_64_va_arg(CType *ty);
+#endif
+#ifdef CONFIG_TCC_BCHECK
+ST_FUNC void gbound_args(int nb_args);
 #endif
 
 /* ------------ tccelf.c ------------ */

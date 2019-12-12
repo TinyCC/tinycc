@@ -205,6 +205,9 @@ void __bound_checking (int no_check)
     no_checking = no_check;
 }
 
+#define no_FASTCALL
+//#define no_checking 1
+
 /* print a bound error message */
 static void bound_error(const char *fmt, ...)
 {
@@ -221,8 +224,7 @@ static void bound_alloc_error(void)
 
 /* return '(p + offset)' for pointer arithmetic (a pointer can reach
    the end of a region in this case */
-void * FASTCALL __bound_ptr_add(void *p, size_t offset,
-                                size_t line, const char *filename)
+void * no_FASTCALL __bound_ptr_add(void *p, size_t offset)
 {
     size_t addr = (size_t)p;
 
@@ -230,8 +232,8 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset,
         return p + offset;
     }
 
-    dprintf(stderr, "%s %s (%s:%u): %p 0x%x\n",
-            __FILE__, __FUNCTION__, filename, line, p, (unsigned)offset);
+    dprintf(stderr, "%s %s : %p 0x%x\n",
+            __FILE__, __FUNCTION__, p, (unsigned)offset);
 
     WAIT_SEM ();
     INCR_COUNT(bound_ptr_add_count);
@@ -250,8 +252,10 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset,
         if (addr <= tree->size) {
             addr += offset;
             if (tree->is_invalid || addr > tree->size) {
-                fprintf(stderr,"%s %s (%s:%u): %p is outside of the region\n",
-                        __FILE__, __FUNCTION__, filename, line, p + offset);
+        #if 0
+                fprintf(stderr,"%s %s : %p is outside of the region\n",
+                        __FILE__, __FUNCTION__, p + offset);
+        #endif
                 if (never_fatal == 0) {
                     POST_SEM ();
                     return INVALID_POINTER; /* return an invalid pointer */
@@ -266,16 +270,15 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset,
 /* return '(p + offset)' for pointer indirection (the resulting must
    be strictly inside the region */
 #define BOUND_PTR_INDIR(dsize)                                                 \
-void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset,            \
-                                            size_t line, const char *filename) \
+void * no_FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)         \
 {                                                                              \
     size_t addr = (size_t)p;                                                   \
                                                                                \
     if (no_checking) {                                                         \
         return p + offset;                                                     \
     }                                                                          \
-    dprintf(stderr, "%s %s (%s:%u): %p 0x%x start\n",                          \
-            __FILE__, __FUNCTION__, filename, line,  p, (unsigned)offset);     \
+    dprintf(stderr, "%s %s : %p 0x%x start\n",                                 \
+            __FILE__, __FUNCTION__, p, (unsigned)offset);                      \
     WAIT_SEM ();                                                               \
     INCR_COUNT(bound_ptr_indir ## dsize ## _count);                            \
     if (tree) {                                                                \
@@ -293,8 +296,8 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset,            \
         if (addr <= tree->size) {                                              \
             addr += offset + dsize;                                            \
             if (tree->is_invalid || addr > tree->size) {                       \
-                fprintf(stderr,"%s %s (%s:%u): %p is outside of the region\n", \
-                    __FILE__, __FUNCTION__, filename, line, p + offset);       \
+                fprintf(stderr,"%s %s : %p is outside of the region\n",        \
+                    __FILE__, __FUNCTION__, p + offset);                       \
                 if (never_fatal == 0) {                                        \
                     POST_SEM ();                                               \
                     return INVALID_POINTER; /* return an invalid pointer */    \
@@ -907,7 +910,7 @@ static void __bound_check(const void *p, size_t size, const char *function)
         return;
     if (size == 0)
         return;
-    p = __bound_ptr_add((void *)p, size, 0, function);
+    p = __bound_ptr_add((void *)p, size);
     if (p == INVALID_POINTER)
         bound_error("invalid pointer");
 }
@@ -959,7 +962,7 @@ int __bound_strlen(const char *s)
     INCR_COUNT(bound_strlen_count);
     while (*p++);
     len = (p - s) - 1;
-    p = __bound_ptr_indir1((char *)s, len, 0, "strlen");
+    p = __bound_ptr_indir1((char *)s, len);
     if (p == INVALID_POINTER)
         bound_error("bad pointer in strlen()");
     return len;

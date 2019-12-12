@@ -1321,7 +1321,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
     s1->filetype = 0;
 #ifdef CONFIG_TCC_BCHECK
-    tcc_add_bcheck(s1, bounds_section, symtab_section);
+    tcc_add_bcheck(s1);
 #endif
     tcc_add_pragma_libs(s1);
 #ifndef TCC_TARGET_PE
@@ -1340,7 +1340,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
             tcc_add_library_err(s1, "pthread");
             tcc_add_library_err(s1, "dl");
-            tcc_add_support(s1, TCC_LIBTCCB1);
+            tcc_add_support(s1, "bcheck.o");
         }
 #endif
         tcc_add_support(s1, TCC_LIBTCC1);

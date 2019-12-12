@@ -425,6 +425,11 @@ ST_FUNC void gfunc_call(int nb_args)
     int size, align, r, args_size, i, func_call;
     Sym *func_sym;
     
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gbound_args(nb_args);
+#endif
+
     args_size = 0;
     for(i = 0;i < nb_args; i++) {
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
@@ -1051,119 +1056,18 @@ ST_FUNC void ggoto(void)
 
 /* bound check support functions */
 #ifdef CONFIG_TCC_BCHECK
-
-ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec)
-{
-    addr_t *ptr;
-    int loc_glob;
-    int sym_index;
-    int bsym_index;
-
-    if (0 == s1->do_bounds_check)
-        return;
-    /* XXX: add an object file to do that */
-    ptr = section_ptr_add(bound_sec, sizeof(*ptr));
-    *ptr = 0;
-    loc_glob = s1->output_type != TCC_OUTPUT_MEMORY ? STB_LOCAL : STB_GLOBAL;
-    bsym_index = set_elf_sym(sym_sec, 0, 0,
-                             ELFW(ST_INFO)(loc_glob, STT_NOTYPE), 0,
-                             bound_sec->sh_num, "__bounds_start");
-    /* pull bcheck.o from libtcc1.a */
-    sym_index = set_elf_sym(sym_sec, 0, 0,
-                            ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                            SHN_UNDEF, "__bound_init");
-    if (s1->output_type != TCC_OUTPUT_MEMORY) {
-        /* add 'call __bound_init()' in .init section */
-        Section *init_section = find_section(s1, ".init");
-        unsigned char *pinit;
-#ifdef TCC_TARGET_PE
-        pinit = section_ptr_add(init_section, 3);
-        pinit[0] = 0x55;        /* push %rbp */
-        pinit[1] = 0x89;        /* mov %esp,%ebp */
-        pinit[2] = 0xe5;
-#endif
-        pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        write32le(pinit + 1, -4);
-        put_elf_reloc(sym_sec, init_section,
-            init_section->data_offset - 4, R_386_PC32, sym_index);
-            /* R_386_PC32 = R_X86_64_PC32 = 2 */
-        pinit = section_ptr_add(init_section, 6);
-        pinit[0] = 0xb8;        /* mov xx,%eax */
-        write32le(pinit + 1, 0);
-        pinit[5] = 0x50;        /* push %eax */
-        put_elf_reloc(sym_sec, init_section,
-                init_section->data_offset - 5, R_386_32, bsym_index);
-        sym_index = set_elf_sym(sym_sec, 0, 0,
-                        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                        SHN_UNDEF, "__bounds_add_static_var");
-        pinit = section_ptr_add(init_section, 5);
-        pinit[0] = 0xe8;
-        write32le(pinit + 1, -4);
-        put_elf_reloc(sym_sec, init_section,
-            init_section->data_offset - 4, R_386_PC32, sym_index);
-                /* R_386_PC32 = R_X86_64_PC32 = 2 */
-        pinit = section_ptr_add(init_section, 3);
-        pinit[0] = 0x83;        /* add  $0x4,%esp */
-        pinit[1] = 0xc4;
-        pinit[2] = 0x04;
-#ifdef TCC_TARGET_PE
-        {
-            int init_index = set_elf_sym(sym_sec,
-                                         0, 0,
-                                         ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-                                         init_section->sh_num, "__init_start");
-            Sym sym;
-            init_section->sh_flags |= SHF_EXECINSTR;
-            pinit = section_ptr_add(init_section, 2);
-            pinit[0] = 0xc9;        /* leave */
-            pinit[1] = 0xc3;        /* ret */
-            sym.c = init_index;
-            add_init_array (s1, &sym);
-        }
-#endif
-    }
-}
-
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
-    /* save all temporary registers */
-    save_regs(0);
-    /* prepare fast i386 function call (args in eax and edx) */
-    gv2(RC_EAX, RC_EDX);
-    vtop -= 2;
-    /* add line, filename */
-    {
-        static addr_t offset;
-        static char last_filename[1024];
-        Sym *sym_data;
-
-        if (strcmp (last_filename, file->filename) != 0) {
-            void *ptr;
-            int len = strlen (file->filename) + 1;
-
-            offset = data_section->data_offset;
-            ptr = section_ptr_add(data_section, len);
-            memcpy (ptr, file->filename, len);
-            memcpy (last_filename, file->filename, len);
-        }
-        o(0xb9);   /* mov $xx,%ecx */
-        gen_le32 (0);
-        sym_data = get_sym_ref(&char_pointer_type, data_section,
-                               offset, data_section->data_offset);
-        greloca(cur_text_section, sym_data, ind - 4, R_386_32, 0);
-        o(0x51);   /* push %ecx */
-    }
-    o(0xb9);       /* mov $xx,%ecx */
-    gen_le32 (file->line_num);
-    /* do a fast function call */
-    gen_static_call(TOK___bound_ptr_add);
-    o(0x04c483);   /* add $4,%esp */
+    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
+    vrott(3);
+    gfunc_call(2);
+    vpushi(0);
     /* returned pointer is in eax */
-    vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;
-    /* address of bounding function call point */
+    if (nocode_wanted)
+        return;
+    /* relocation offset of the bounding function call point */
     vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel));
 }
 
@@ -1175,6 +1079,9 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     int  size, align;
     Elf32_Rel *rel;
     Sym *sym;
+
+    if (nocode_wanted)
+        return;
 
     size = 0;
     /* XXX: put that code in generic part of tcc */
@@ -1194,17 +1101,18 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     case 12: func = TOK___bound_ptr_indir12; break;
     case 16: func = TOK___bound_ptr_indir16; break;
     default:
-        tcc_error("unhandled size when dereferencing bounded pointer");
-        func = 0;
-        break;
+        /* may happen with struct member access */
+        return;
+        //tcc_error("unhandled size when dereferencing bounded pointer");
+        //func = 0;
+        //break;
     }
-
-    /* patch relocation */
-    /* XXX: find a better solution ? */
-    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
     sym = external_global_sym(func, &func_old_type);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
+    /* patch relocation */
+    /* XXX: find a better solution ? */
+    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
     rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
 }
 #endif
