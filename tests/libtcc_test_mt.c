@@ -32,6 +32,8 @@ void sleep_ms(unsigned n)
     Sleep(n);
 }
 #else
+#include <sys/time.h>
+#include <unistd.h>
 #include <pthread.h>
 #define TF_TYPE(func, param) void* func(void *param)
 typedef TF_TYPE(ThreadFunc, x);
