@@ -1130,6 +1130,24 @@ ST_FUNC void gen_bounded_ptr_add(void)
 {
     /* save all temporary registers */
     save_regs(0);
+    /* trick to get line/file_name in code */
+    o(0xb8);
+    gen_le32 (file->line_num);
+    {
+        int i;
+        int len;
+        char *cp = file->filename;
+        while (*cp) cp++;
+        while (cp != file->filename && cp[-1] != '/') cp--;
+        len = strlen (cp);
+        while (len > 0) {
+            memcpy (&i, cp, 4);
+            o(0xb8);
+            gen_le32 (i);
+            cp += 4;
+            len -= 4;
+        }
+    }
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     vtop -= 2;
@@ -1199,22 +1217,31 @@ ST_FUNC void gen_vla_sp_restore(int addr) {
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-#ifdef TCC_TARGET_PE
-    /* alloca does more than just adjust %rsp on Windows */
-    vpush_global_sym(&func_old_type, TOK_alloca);
-    vswap(); /* Move alloca ref past allocation size */
-    gfunc_call(1);
-#else
-    int r;
-    r = gv(RC_INT); /* allocation size */
-    /* sub r,%rsp */
-    o(0x2b);
-    o(0xe0 | r);
-    /* We align to 16 bytes rather than align */
-    /* and ~15, %esp */
-    o(0xf0e483);
-    vpop();
+    int use_call = 0;
+
+#if defined(CONFIG_TCC_BCHECK)
+    use_call = tcc_state->do_bounds_check;
 #endif
+#ifdef TCC_TARGET_PE    /* alloca does more than just adjust %rsp on Windows */
+    use_call = 1;
+#endif
+    if (use_call)
+    {
+        vpush_global_sym(&func_old_type, TOK_alloca);
+        vswap(); /* Move alloca ref past allocation size */
+        gfunc_call(1);
+    }
+    else {
+        int r;
+        r = gv(RC_INT); /* allocation size */
+        /* sub r,%rsp */
+        o(0x2b);
+        o(0xe0 | r);
+        /* We align to 16 bytes rather than align */
+        /* and ~15, %esp */
+        o(0xf0e483);
+        vpop();
+    }
 }
 
 /* end of X86 code generator */

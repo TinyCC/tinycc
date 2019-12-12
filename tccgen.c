@@ -2491,9 +2491,8 @@ redo:
 #endif
             }
             gen_op('*');
-#if 0
-/* #ifdef CONFIG_TCC_BCHECK
-    The main reason to removing this code:
+#ifdef CONFIG_TCC_BCHECK
+    /* The main reason to removing this code:
 	#include <stdio.h>
 	int main ()
 	{
@@ -2506,10 +2505,11 @@ redo:
     When this code is on. then the output looks like 
 	v+i-j = 0xfffffffe
 	v+(i-j) = 0xbff84000
+    This should now work in updated bcheck.c version.
     */
             /* if evaluating constant expression, no code should be
                generated, so no bound check */
-            if (tcc_state->do_bounds_check && !const_wanted) {
+            if (tcc_state->do_bounds_check && !const_wanted && !nocode_wanted) {
                 /* if bounded pointers, we generate a special code to
                    test bounds */
                 if (op == '-') {

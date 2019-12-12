@@ -456,11 +456,13 @@ char *pmatch(char *line, char *pattern)
             while (*l && (e = pmatch(l, p)))
                l = e;               /* Get longest match   */
             while (*p++ != ENDPAT); /* Skip over pattern   */
-            while (l >= are) {      /* Try to match rest   */
+            while (l > are) {       /* Try to match rest   */
                if (e = pmatch(l, p))
                   return(e);
                --l;                 /* Nope, try earlier   */
             }
+            if (e = pmatch(l, p))
+               return(e);
             return(0);              /* Nothing else worked */
 
          default:

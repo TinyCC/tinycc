@@ -591,7 +591,7 @@ version_add (TCCState *s1)
             prev = sv->prev_same_lib;
             if (sv->out_index > 0) {
                 vna = section_ptr_add(verneed_section, sizeof(*vna));
-                vna->vna_hash = elf_hash (sv->version);
+                vna->vna_hash = elf_hash ((const unsigned char *)sv->version);
                 vna->vna_flags = 0;
                 vna->vna_other = sv->out_index;
                 sv->out_index = -2;
@@ -599,7 +599,8 @@ version_add (TCCState *s1)
                 vna->vna_next = sizeof (*vna);
                 n_same_libs++;
             }
-            sv = &sym_versions[prev];
+            if (prev >= 0)
+                sv = &sym_versions[prev];
         } while(prev >= 0);
         vna->vna_next = 0;
         vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);

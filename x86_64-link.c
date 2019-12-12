@@ -155,7 +155,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         add32le(p + 8, x - 6);
         p += 16;
         while (p < p_end) {
-            add32le(p + 2, x + s1->plt->data - p);
+            add32le(p + 2, x + (s1->plt->data - p));
             p += 16;
         }
     }

@@ -196,7 +196,7 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
         }
         if (addr <= tree->size) {
             addr += offset;
-            if (tree->is_invalid || addr >= tree->size) {
+            if (tree->is_invalid || addr > tree->size) {
                 fprintf(stderr,"%s %s: %p is outside of the region\n",
                         __FILE__, __FUNCTION__, p + offset);
                 if (never_fatal == 0) {
@@ -804,7 +804,7 @@ static void __bound_check(const void *p, size_t size)
         return;
     if (size == 0)
         return;
-    p = __bound_ptr_add((void *)p, size - 1);
+    p = __bound_ptr_add((void *)p, size);
     if (p == INVALID_POINTER)
         bound_error("invalid pointer");
 }

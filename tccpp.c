@@ -111,7 +111,9 @@ ST_FUNC void expect(const char *msg)
 /* ------------------------------------------------------------------------- */
 /* Custom allocator for tiny objects */
 
+#ifndef __BOUNDS_CHECKING_ON
 #define USE_TAL
+#endif
 
 #ifndef USE_TAL
 #define tal_free(al, p) tcc_free(p)
@@ -390,15 +392,16 @@ ST_FUNC void cstr_reset(CString *cstr)
 ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
 {
     va_list v;
+    va_list vc;
     int len, size;
 
     va_start(v, fmt);
-    len = vsnprintf(NULL, 0, fmt, v);
-    va_end(v);
+    va_copy (vc, v);
+    len = vsnprintf(NULL, 0, fmt, vc);
+    va_end(vc);
     size = cstr->size + len + 1;
     if (size > cstr->size_allocated)
         cstr_realloc(cstr, size);
-    va_start(v, fmt);
     vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
     va_end(v);
     cstr->size += len;

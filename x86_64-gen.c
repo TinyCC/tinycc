@@ -142,7 +142,9 @@ ST_DATA const int reg_classes[NB_REGS] = {
 
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
-static int in_call;
+static int nested_call;
+static int call_used_nr_reg;
+static int call_used_regs[20];
 
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
@@ -738,15 +740,55 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1, Section *bound_sec, Section *sym_sec)
 /* generate a bounded pointer addition */
 ST_FUNC void gen_bounded_ptr_add(void)
 {
+    int i;
+
+    nested_call++;
+
     /* save all temporary registers */
     save_regs(0);
 
-    if (in_call) {
-        o(0x51525657); /* push $rdi/%rsi/%rdx/%rcx */
-        o(0x51415041); /* push $r8/%r9 */
-        o(0x53415241); /* push $r10/%r11 */
+    for (i = 0; i < call_used_nr_reg; i++) {
+        switch (call_used_regs[i]) {
+        case TREG_RAX: case TREG_RCX: case TREG_RDX: case TREG_RSP:
+        case TREG_RSI: case TREG_RDI:
+            o(0x50 + call_used_regs[i]);    /* push reg */
+            break;
+        case TREG_R8: case TREG_R9: case TREG_R10: case TREG_R11:
+            o(0x5041 + (call_used_regs[i] - TREG_R8) * 0x100);  /* push reg */
+            break;
+        case TREG_XMM0: case TREG_XMM1: case TREG_XMM2: case TREG_XMM3:
+        case TREG_XMM4: case TREG_XMM5: case TREG_XMM6: case TREG_XMM7:
+            o(0x10ec8348);             /* sub $10,%rsp */
+                                       /* vmovdqu %xmmx,(%rsp) */
+            o(0x047ffac5 + (call_used_regs[i] - TREG_XMM0) * 0x8000000); o(0x24);
+            break;
+        }
     }
 
+    if (nested_call > 1) {
+#ifdef TCC_TARGET_PE
+        o(0x5152);   /* push %rcx/%rdx */
+#else
+        o(0x5657);   /* push %rdi/%rsi */
+#endif
+    }
+    /* trick to get line/file_name in code */
+    o(0xb8);
+    gen_le32 (file->line_num);
+    {
+        int len;
+        char *cp = file->filename;
+        while (*cp) cp++;
+        while (cp != file->filename && cp[-1] != '/') cp--;
+        len = strlen (cp);
+        while (len > 0) {
+            memcpy (&i, cp, 4);
+            o(0xb8);
+            gen_le32 (i);
+            cp += 4;
+            len -= 4;
+        }
+    }
     /* prepare fast x86_64 function call */
     gv(RC_RAX);
 #ifdef TCC_TARGET_PE
@@ -775,18 +817,38 @@ ST_FUNC void gen_bounded_ptr_add(void)
     o(0x20c48348); /* add $20, %rsp */
 #endif
 
+    if (nested_call > 1) {
+#ifdef TCC_TARGET_PE
+        o(0x5a59);   /* pop %rcx/%rdx */
+#else
+        o(0x5f5e);   /* pop %rsi/%rdi */
+#endif
+    }
     /* returned pointer is in rax */
     vtop++;
     vtop->r = TREG_RAX | VT_BOUNDED;
 
-    if (in_call) {
-        o(0x5a415b41); /* pop $r11/%r10 */
-        o(0x58415941); /* pop $r9/%r8 */
-        o(0x5f5e5a59); /* pop $rcx/$rdx/$rsi/%rdi */
+    for (i = call_used_nr_reg - 1; i >= 0; i--) {
+        switch (call_used_regs[i]) {
+        case TREG_RAX: case TREG_RCX: case TREG_RDX: case TREG_RSP:
+        case TREG_RSI: case TREG_RDI:
+            o(0x58 + call_used_regs[i]);    /* pop reg */
+            break;
+        case TREG_R8: case TREG_R9: case TREG_R10: case TREG_R11:
+            o(0x5841 + (call_used_regs[i] - TREG_R8) * 0x100);  /* pop reg */
+            break;
+        case TREG_XMM0: case TREG_XMM1: case TREG_XMM2: case TREG_XMM3:
+        case TREG_XMM4: case TREG_XMM5: case TREG_XMM6: case TREG_XMM7:
+                                       /* vmovdqu (%rsp),%xmmx */
+            o(0x046ffac5 + (call_used_regs[i] - TREG_XMM0) * 0x8000000); o(0x24);
+            o(0x10c48348);             /* add $10,%rsp */
+            break;
+        }
     }
 
     /* relocation offset of the bounding function call point */
     vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela)));
+    nested_call--;
 }
 
 /* patch pointer addition in vtop so that pointer dereferencing is
@@ -913,8 +975,6 @@ void gfunc_call(int nb_args)
     int size, r, args_size, i, d, bt, struct_size;
     int arg;
 
-    in_call = 1;
-
     args_size = (nb_args < REGN ? REGN : nb_args) * PTR_SIZE;
     arg = nb_args;
 
@@ -974,6 +1034,7 @@ void gfunc_call(int nb_args)
             } else {
                 d = arg_prepare_reg(arg);
                 gen_offs_sp(0x8d, d, struct_size);
+                call_used_regs[call_used_nr_reg++] = d;
             }
             struct_size += size;
         } else {
@@ -992,6 +1053,7 @@ void gfunc_call(int nb_args)
                     o(0x66);
                     orex(1,d,0, 0x7e0f);
                     o(0xc0 + arg*8 + REG_VALUE(d));
+                    call_used_regs[call_used_nr_reg++] = d;
                 }
             } else {
                 if (bt == VT_STRUCT) {
@@ -1007,6 +1069,7 @@ void gfunc_call(int nb_args)
                     d = arg_prepare_reg(arg);
                     orex(1,d,r,0x89); /* mov */
                     o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
+                    call_used_regs[call_used_nr_reg++] = d;
                 }
             }
         }
@@ -1045,7 +1108,7 @@ void gfunc_call(int nb_args)
         o(0xc089); /* mov %eax,%eax */
 #endif
     vtop--;
-    in_call = 0;
+    call_used_nr_reg = 0;
 }
 
 
@@ -1399,8 +1462,6 @@ void gfunc_call(int nb_args)
     int sse_reg, gen_reg;
     char _onstack[nb_args ? nb_args : 1], *onstack = _onstack;
 
-    in_call = 1;
-
     /* calculate the number of integer/float register arguments, remember
        arguments to be passed via stack (in onstack[]), and also remember
        if we have to align the stack pointer to 16 (onstack[i] == 2).  Needs
@@ -1533,11 +1594,14 @@ void gfunc_call(int nb_args)
                     o(0x280f);
                     o(0xc0 + (sse_reg << 3));
                 }
+                call_used_regs[call_used_nr_reg++] = sse_reg + TREG_XMM0;
+                call_used_regs[call_used_nr_reg++] = sse_reg + 1 + TREG_XMM0;
             } else {
                 assert(reg_count == 1);
                 --sse_reg;
                 /* Load directly to register */
                 gv(RC_XMM0 << sse_reg);
+                call_used_regs[call_used_nr_reg++] = sse_reg + TREG_XMM0;
             }
         } else if (mode == x86_64_mode_integer) {
             /* simple type */
@@ -1548,10 +1612,12 @@ void gfunc_call(int nb_args)
             d = arg_prepare_reg(gen_reg);
             orex(1,d,r,0x89); /* mov */
             o(0xc0 + REG_VALUE(r) * 8 + REG_VALUE(d));
+            call_used_regs[call_used_nr_reg++] = d;
             if (reg_count == 2) {
                 d = arg_prepare_reg(gen_reg+1);
                 orex(1,d,vtop->r2,0x89); /* mov */
                 o(0xc0 + REG_VALUE(vtop->r2) * 8 + REG_VALUE(d));
+                call_used_regs[call_used_nr_reg++] = d;
             }
         }
         vtop--;
@@ -1594,7 +1660,7 @@ void gfunc_call(int nb_args)
     else if (bt == (VT_SHORT | VT_UNSIGNED))
         o(0xc0b70f);  /* movzwl %al, %eax */
     vtop--;
-    in_call = 0;
+    call_used_nr_reg = 0;
 }
 
 
@@ -2386,22 +2452,31 @@ ST_FUNC void gen_vla_result(int addr) {
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-#ifdef TCC_TARGET_PE
-    /* alloca does more than just adjust %rsp on Windows */
-    vpush_global_sym(&func_old_type, TOK_alloca);
-    vswap(); /* Move alloca ref past allocation size */
-    gfunc_call(1);
-#else
-    int r;
-    r = gv(RC_INT); /* allocation size */
-    /* sub r,%rsp */
-    o(0x2b48);
-    o(0xe0 | REG_VALUE(r));
-    /* We align to 16 bytes rather than align */
-    /* and ~15, %rsp */
-    o(0xf0e48348);
-    vpop();
+    int use_call = 0;
+
+#if defined(CONFIG_TCC_BCHECK)
+    use_call = tcc_state->do_bounds_check;
 #endif
+#ifdef TCC_TARGET_PE	/* alloca does more than just adjust %rsp on Windows */
+    use_call = 1;
+#endif
+    if (use_call)
+    {
+        vpush_global_sym(&func_old_type, TOK_alloca);
+        vswap(); /* Move alloca ref past allocation size */
+        gfunc_call(1);
+    }
+    else {
+        int r;
+        r = gv(RC_INT); /* allocation size */
+        /* sub r,%rsp */
+        o(0x2b48);
+        o(0xe0 | REG_VALUE(r));
+        /* We align to 16 bytes rather than align */
+        /* and ~15, %rsp */
+        o(0xf0e48348);
+        vpop();
+    }
 }
 
 
