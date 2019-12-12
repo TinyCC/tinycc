@@ -35,6 +35,7 @@
 #endif
 
 #define BOUND_DEBUG
+#define BOUND_STATISTIC
 
 #ifdef BOUND_DEBUG
  #define dprintf(a...) if (print_calls) fprintf(a)
@@ -50,13 +51,22 @@
  || defined(__DragonFly__) \
  || defined(__OpenBSD__) \
  || defined(__NetBSD__) \
- || defined(__dietlibc__) \
- || defined(_WIN32)
+ || defined(__dietlibc__)
 #undef HAVE_MEMALIGN
 #define INIT_SEM()
 #define EXIT_SEM()
 #define WAIT_SEM()
 #define POST_SEM()
+#define HAS_ENVIRON 0
+#define MALLOC_REDIR    (0)
+#elif defined(_WIN32)
+#include <windows.h>
+#undef HAVE_MEMALIGN
+static CRITICAL_SECTION bounds_sem;
+#define INIT_SEM()  InitializeCriticalSection(&bounds_sem)
+#define EXIT_SEM()  DeleteCriticalSection(&bounds_sem)
+#define WAIT_SEM()  EnterCriticalSection(&bounds_sem)
+#define POST_SEM()  LeaveCriticalSection(&bounds_sem)
 #define HAS_ENVIRON 0
 #define MALLOC_REDIR    (0)
 #else
@@ -86,6 +96,7 @@ static unsigned char initial_pool[256];
 #define TCC_TYPE_CALLOC         (2)
 #define TCC_TYPE_REALLOC        (3)
 #define TCC_TYPE_MEMALIGN       (4)
+#define TCC_TYPE_STRDUP         (5)
 
 /* this pointer is generated when bound check is incorrect */
 #define INVALID_POINTER ((void *)(-2))
@@ -149,8 +160,44 @@ static alloca_list_type *alloca_list = NULL;
 static int inited = 0;
 static int print_calls = 0;
 static int print_heap = 0;
+static int print_statistic = 0;
 static int never_fatal = 0;
 static int no_checking = 0;
+
+#ifdef BOUND_STATISTIC
+static unsigned long bound_ptr_add_count;
+static unsigned long bound_ptr_indir1_count;
+static unsigned long bound_ptr_indir2_count;
+static unsigned long bound_ptr_indir4_count;
+static unsigned long bound_ptr_indir8_count;
+static unsigned long bound_ptr_indir12_count;
+static unsigned long bound_ptr_indir16_count;
+static unsigned long bound_local_new_count;
+static unsigned long bound_local_delete_count;
+static unsigned long bound_malloc_count;
+static unsigned long bound_calloc_count;
+static unsigned long bound_realloc_count;
+static unsigned long bound_free_count;
+static unsigned long bound_memalign_count;
+static unsigned long bound_mmap_count;
+static unsigned long bound_munmap_count;
+static unsigned long bound_alloca_count;
+static unsigned long bound_mempcy_count;
+static unsigned long bound_memcmp_count;
+static unsigned long bound_memmove_count;
+static unsigned long bound_memset_count;
+static unsigned long bound_strlen_count;
+static unsigned long bound_strcpy_count;
+static unsigned long bound_strncpy_count;
+static unsigned long bound_strcmp_count;
+static unsigned long bound_strncmp_count;
+static unsigned long bound_strcat_count;
+static unsigned long bound_strchr_count;
+static unsigned long bound_strdup_count;
+#define INCR_COUNT(x)    x++
+#else
+#define INCR_COUNT(x)
+#endif
 
 /* enable/disable checking. This can be used for signal handlers. */
 void __bound_checking (int no_check)
@@ -186,6 +233,7 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
             __FILE__, __FUNCTION__, p, (unsigned)offset);
 
     WAIT_SEM ();
+    INCR_COUNT(bound_ptr_add_count);
     if (tree) {
         tree = splay (addr, tree);
         addr -= tree->start;
@@ -223,6 +271,7 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)         \
     dprintf(stderr, "%s %s: %p 0x%x start\n",                               \
             __FILE__, __FUNCTION__, p, (unsigned)offset);                   \
     WAIT_SEM ();                                                            \
+    INCR_COUNT(bound_ptr_indir ## dsize ## _count);                         \
     if (tree) {                                                             \
         tree = splay (addr, tree);                                          \
         addr -= tree->start;                                                \
@@ -284,6 +333,7 @@ void FASTCALL __bound_local_new(void *p1)
         addr = p[0];
         if (addr == 0)
             break;
+        INCR_COUNT(bound_local_new_count);
         if (addr == 1) {
             dprintf(stderr, "%s, %s() alloca/vla used\n",
                     __FILE__, __FUNCTION__);
@@ -315,6 +365,7 @@ void FASTCALL __bound_local_delete(void *p1)
         addr = p[0];
         if (addr == 0)
             break;
+        INCR_COUNT(bound_local_delete_count);
         if (addr == 1) {
             while (alloca_list && alloca_list->fp == fp) {
                 alloca_list_type *next = alloca_list->next;
@@ -350,6 +401,7 @@ void __bound_init(void)
 
     print_calls = getenv ("TCC_BOUNDS_PRINT_CALLS") != NULL;
     print_heap = getenv ("TCC_BOUNDS_PRINT_HEAP") != NULL;
+    print_statistic = getenv ("TCC_BOUNDS_PRINT_STATISTIC") != NULL;
     never_fatal = getenv ("TCC_BOUNDS_NEVER_FATAL") != NULL;
 
     dprintf(stderr, "%s, %s() start\n", __FILE__, __FUNCTION__);
@@ -444,7 +496,7 @@ void __attribute__((destructor)) __bound_exit(void)
 {
     int i;
     static const char * const alloc_type[] = {
-        "", "malloc", "calloc", "realloc", "memalign"
+        "", "malloc", "calloc", "realloc", "memalign", "strdup"
     };
 
     dprintf(stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
@@ -488,6 +540,39 @@ void __attribute__((destructor)) __bound_exit(void)
         }
         EXIT_SEM ();
         inited = 0;
+#ifdef BOUND_STATISTIC
+        if (print_statistic) {
+            fprintf (stderr, "bound_ptr_add_count      %llu\n", bound_ptr_add_count);
+            fprintf (stderr, "bound_ptr_indir1_count   %llu\n", bound_ptr_indir1_count);
+            fprintf (stderr, "bound_ptr_indir2_count   %llu\n", bound_ptr_indir2_count);
+            fprintf (stderr, "bound_ptr_indir4_count   %llu\n", bound_ptr_indir4_count);
+            fprintf (stderr, "bound_ptr_indir8_count   %llu\n", bound_ptr_indir8_count);
+            fprintf (stderr, "bound_ptr_indir12_count  %llu\n", bound_ptr_indir12_count);
+            fprintf (stderr, "bound_ptr_indir16_count  %llu\n", bound_ptr_indir16_count);
+            fprintf (stderr, "bound_local_new_count    %llu\n", bound_local_new_count);
+            fprintf (stderr, "bound_local_delete_count %llu\n", bound_local_delete_count);
+            fprintf (stderr, "bound_malloc_count       %llu\n", bound_malloc_count);
+            fprintf (stderr, "bound_calloc_count       %llu\n", bound_calloc_count);
+            fprintf (stderr, "bound_realloc_count      %llu\n", bound_realloc_count);
+            fprintf (stderr, "bound_free_count         %llu\n", bound_free_count);
+            fprintf (stderr, "bound_memalign_count     %llu\n", bound_memalign_count);
+            fprintf (stderr, "bound_mmap_count         %llu\n", bound_mmap_count);
+            fprintf (stderr, "bound_munmap_count       %llu\n", bound_munmap_count);
+            fprintf (stderr, "bound_alloca_count       %llu\n", bound_alloca_count);
+            fprintf (stderr, "bound_mempcy_count       %llu\n", bound_mempcy_count);
+            fprintf (stderr, "bound_memcmp_count       %llu\n", bound_memcmp_count);
+            fprintf (stderr, "bound_memmove_count      %llu\n", bound_memmove_count);
+            fprintf (stderr, "bound_memset_count       %llu\n", bound_memset_count);
+            fprintf (stderr, "bound_strlen_count       %llu\n", bound_strlen_count);
+            fprintf (stderr, "bound_strcpy_count       %llu\n", bound_strcpy_count);
+            fprintf (stderr, "bound_strncpy_count      %llu\n", bound_strncpy_count);
+            fprintf (stderr, "bound_strcmp_count       %llu\n", bound_strcmp_count);
+            fprintf (stderr, "bound_strncmp_count      %llu\n", bound_strncmp_count);
+            fprintf (stderr, "bound_strcat_count       %llu\n", bound_strcat_count);
+            fprintf (stderr, "bound_strchr_count       %llu\n", bound_strchr_count);
+            fprintf (stderr, "bound_strdup_count       %llu\n", bound_strdup_count);
+        }
+#endif
     }
 }
 
@@ -516,6 +601,7 @@ void *__bound_malloc(size_t size, const void *caller)
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
     WAIT_SEM ();
+    INCR_COUNT(bound_malloc_count);
 #if MALLOC_REDIR
     ptr = malloc_redir (size);
 #else
@@ -544,6 +630,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
     void *ptr;
 
     WAIT_SEM ();
+    INCR_COUNT(bound_memalign_count);
 
 #ifndef HAVE_MEMALIGN
     if (align > 4) {
@@ -599,6 +686,7 @@ void __bound_free(void *ptr, const void *caller)
     dprintf(stderr, "%s, %s (%p)\n", __FILE__, __FUNCTION__, ptr);
 
     WAIT_SEM ();
+    INCR_COUNT(bound_free_count);
     tree = splay (addr, tree);
     if (tree->start == addr) {
         if (tree->is_invalid) {
@@ -645,6 +733,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         ptr = realloc (ptr, size);
 #endif
         WAIT_SEM ();
+        INCR_COUNT(bound_realloc_count);
         if (ptr) {
             tree = splay_insert ((size_t) ptr, size, tree);
             if (tree->start == (size_t) ptr) {
@@ -701,6 +790,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
     if (ptr) {
         memset (ptr, 0, size);
         WAIT_SEM ();
+        INCR_COUNT(bound_calloc_count);
         tree = splay_insert ((size_t) ptr, size, tree);
         if (tree->start == (size_t) ptr) {
             tree->type = TCC_TYPE_CALLOC;
@@ -721,6 +811,7 @@ void *__bound_mmap (void *start, size_t size, int prot,
     result = mmap (start, size, prot, flags, fd, offset);
     if (result) {
         WAIT_SEM ();
+        INCR_COUNT(bound_mmap_count);
         tree = splay_insert((size_t)result, size, tree);
         POST_SEM ();
     }
@@ -734,6 +825,7 @@ int __bound_munmap (void *start, size_t size)
     dprintf(stderr, "%s, %s (%p, 0x%x)\n",
             __FILE__, __FUNCTION__, start, (unsigned)size);
     WAIT_SEM ();
+    INCR_COUNT(bound_munmap_count);
     tree = splay_delete ((size_t) start, tree);
     POST_SEM ();
     result = munmap (start, size);
@@ -751,6 +843,7 @@ void __bound_new_region(void *p, size_t size)
     dprintf(stderr, "%s, %s (%p, 0x%x)\n",
             __FILE__, __FUNCTION__, p, (unsigned)size);
     WAIT_SEM ();
+    INCR_COUNT(bound_alloca_count);
     GET_CALLER_FP (fp);
     last = NULL;
     cur = alloca_list;
@@ -813,6 +906,7 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
 {
     void* p;
 
+    INCR_COUNT(bound_mempcy_count);
     __bound_check(dst, size);
     __bound_check(src, size);
     /* check also region overlap */
@@ -824,8 +918,17 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
     return p;
 }
 
+int __bound_memcmp(const void *s1, const void *s2, size_t size)
+{
+    INCR_COUNT(bound_memcmp_count);
+    __bound_check(s1, size);
+    __bound_check(s2, size);
+    return memcmp(s1, s2, size);
+}
+
 void *__bound_memmove(void *dst, const void *src, size_t size)
 {
+    INCR_COUNT(bound_memmove_count);
     __bound_check(dst, size);
     __bound_check(src, size);
     return memmove(dst, src, size);
@@ -833,25 +936,22 @@ void *__bound_memmove(void *dst, const void *src, size_t size)
 
 void *__bound_memset(void *dst, int c, size_t size)
 {
+    INCR_COUNT(bound_memset_count);
     __bound_check(dst, size);
     return memset(dst, c, size);
 }
 
-/* XXX: could be optimized */
 int __bound_strlen(const char *s)
 {
-    const char *p;
+    const char *p = s;
     size_t len;
 
-    len = 0;
-    for(;;) {
-        p = __bound_ptr_indir1((char *)s, len);
-        if (p == INVALID_POINTER)
-            bound_error("bad pointer in strlen()");
-        if (*p == '\0')
-            break;
-        len++;
-    }
+    INCR_COUNT(bound_strlen_count);
+    while (*p++);
+    len = (p - s) - 1;
+    p = __bound_ptr_indir1((char *)s, len);
+    if (p == INVALID_POINTER)
+        bound_error("bad pointer in strlen()");
     return len;
 }
 
@@ -860,9 +960,99 @@ char *__bound_strcpy(char *dst, const char *src)
     size_t len;
     void *p;
 
+    INCR_COUNT(bound_strcpy_count);
     len = __bound_strlen(src);
     p = __bound_memcpy(dst, src, len + 1);
     return p;
+}
+
+char *__bound_strncpy(char *dst, const char *src, size_t n)
+{
+    size_t len;
+    void *p;
+
+    INCR_COUNT(bound_strncpy_count);
+    __bound_check(dst, n);
+    __bound_check(src, n);
+    return strncpy (dst, src, n);
+}
+
+int __bound_strcmp(const char *s1, const char *s2)
+{
+    const unsigned char *u1 = (const unsigned char *) s1;
+    const unsigned char *u2 = (const unsigned char *) s2;
+
+    INCR_COUNT(bound_strcmp_count);
+    while (*u1 && *u1 == *u2) {
+        u1++;
+        u2++;
+    }
+    __bound_check(s1, ((const char *)u1 - s1) + 1);
+    __bound_check(s2, ((const char *)u2 - s2) + 1);
+    return (*u1 - *u2);
+}
+
+int __bound_strncmp(const char *s1, const char *s2, size_t n)
+{
+    INCR_COUNT(bound_strncmp_count);
+    __bound_check(s1, n);
+    __bound_check(s2, n);
+    return strncmp(s1, s2, n);
+}
+
+char *__bound_strcat(char *dest, const char *src)
+{
+    char *r = dest;
+    const char *s = src;
+
+    INCR_COUNT(bound_strcat_count);
+    while (*dest++);
+    dest--;
+    while ((*dest++ = *src++) != 0);
+    __bound_check(r, dest - r);
+    __bound_check(s, src - s);
+    return r;
+}
+
+char *__bound_strchr(const char *string, int ch)
+{
+    const unsigned char *s = (const unsigned char *) string;
+    unsigned char c = ch;
+
+    INCR_COUNT(bound_strchr_count);
+    while (*s) {
+        if (*s == c) {
+            break;
+        }
+        s++;
+    }
+    __bound_check(string, ((const char *)s - string) + 1);
+    return *s == c ? (char *) s : NULL;
+}
+
+char *__bound_strdup(const char *s)
+{
+    const char *p = s;
+    char *new;
+
+    INCR_COUNT(bound_strdup_count);
+    while (*p++);
+    __bound_check(s, p - s);
+#if MALLOC_REDIR
+    new = malloc_redir (p - s);
+#else
+    new = malloc (p - s);
+#endif
+    if (new) {
+        WAIT_SEM ();
+        tree = splay_insert((size_t)new, p - s, tree);
+        if (tree->start == (size_t) new) {
+            tree->type = TCC_TYPE_STRDUP;
+        }
+        memcpy (new, s, p - s);
+        POST_SEM ();
+    }
+    return new;
 }
 
 /*

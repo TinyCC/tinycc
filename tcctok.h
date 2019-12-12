@@ -314,8 +314,15 @@
 # endif
      DEF(TOK_mmap, "mmap")
      DEF(TOK_munmap, "munmap")
+     DEF(TOK_memcmp, "memcmp")
      DEF(TOK_strlen, "strlen")
      DEF(TOK_strcpy, "strcpy")
+     DEF(TOK_strncpy, "strncpy")
+     DEF(TOK_strcmp, "strcmp")
+     DEF(TOK_strncmp, "strncmp")
+     DEF(TOK_strcat, "strcat")
+     DEF(TOK_strchr, "strchr")
+     DEF(TOK_strdup, "strdup")
 #endif
 
 /* Tiny Assembler */

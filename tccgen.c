@@ -432,8 +432,15 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             case TOK_memcpy:
             case TOK_memmove:
             case TOK_memset:
+            case TOK_memcmp:
             case TOK_strlen:
             case TOK_strcpy:
+            case TOK_strncpy:
+            case TOK_strcmp:
+            case TOK_strncmp:
+            case TOK_strcat:
+            case TOK_strchr:
+            case TOK_strdup:
             case TOK_alloca:
             case TOK_mmap:
             case TOK_munmap:

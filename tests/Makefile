@@ -23,13 +23,12 @@ TESTS = \
  tests2-dir \
  pp-dir
 
-BTESTS = test1b test3b btest
+BTESTS = test1b test3b btest test4
 
-# test4 -- problem with -static
+# test4_static -- Not all relocation types are implemented yet.
 # asmtest / asmtest2 -- minor differences with gcc
-# btest -- works on i386 (including win32)
 
-# bounds-checking is supported only on i386
+# bounds-checking is supported on i386 and x86_64 on linux and windows
 ifeq ($(ARCH),i386)
  TESTS += $(BTESTS)
 endif
@@ -116,7 +115,7 @@ test3 test3b: tcctest.c test.ref
 	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out3
 	@diff -u test.ref test.out3 && echo "Auto Test3 OK"
 
-test%b : TCCFLAGS += -b
+test%b : TCCFLAGS += -b -ba
 
 # binary output test
 test4: tcctest.c test.ref
@@ -131,10 +130,12 @@ test4: tcctest.c test.ref
 	./tcctest1 > test1.out
 	@if diff -u test.ref test1.out ; then echo "Dynamic Auto Test OK"; fi
 # dynamic output + bound check
-	$(TCC) -b -o tcctest4 $<
+	$(TCC) -b -ba -o tcctest4 $<
 	./tcctest4 > test4.out
 	@if diff -u test.ref test4.out ; then echo "BCheck Auto Test OK"; fi
-# static output
+
+test4_static: tcctest.c test.ref
+# static output.
 	$(TCC) -static -o tcctest2 $<
 	./tcctest2 > test2.out
 	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
@@ -162,8 +163,7 @@ memtest:
 
 
 # memory and bound check auto test
-# 3 is profiling test
-BOUNDS_OK  = 1 4 8 10 14 16
+BOUNDS_OK  = 1 3 4 8 10 14 16
 BOUNDS_FAIL= 2 5 6 7 9 11 12 13 15 17
 
 btest: boundtest.c
@@ -171,7 +171,7 @@ btest: boundtest.c
 	@ulimit -c 0; \
 	for i in $(BOUNDS_OK); do \
 	   echo ; echo --- boundtest $$i ---; \
-	   if $(TCC) -b -run $< $$i ; then \
+	   if $(TCC) -b -ba -run $< $$i ; then \
 	       echo succeeded as expected; \
 	   else\
 	       echo Failed positive test $$i ; exit 1 ; \
@@ -179,7 +179,7 @@ btest: boundtest.c
 	done ;\
 	for i in $(BOUNDS_FAIL); do \
 	   echo ; echo --- boundtest $$i ---; \
-	   if $(TCC) -b -run $< $$i ; then \
+	   if $(TCC) -b -ba -run $< $$i ; then \
 	       echo Failed negative test $$i ; exit 1 ;\
 	   else\
 	       echo failed as expected; \

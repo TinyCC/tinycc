@@ -42,7 +42,7 @@ ifdef CONFIG_OSX
  XFLAGS += -D_ANSI_SOURCE
 endif
 
-XFLAGS += -g -Wno-deprecated-declarations
+XFLAGS += -g
 
 I386_O = libtcc1.o alloca86.o alloca86-bt.o
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o

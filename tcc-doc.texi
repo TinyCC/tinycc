@@ -356,12 +356,14 @@ memory allocations and array/pointer bounds. @option{-g} is implied. Note
 that the generated code is slower and bigger in this case.
 The bound checking code is not included in shared libaries. The main executable should always be compiled with the @option{-b}.
 
-There are three environment variables that can be used:
+There are four environment variables that can be used:
 @table @option
 @item TCC_BOUNDS_PRINT_CALLS
 Print bound checking calls. Can be used for debugging.
 @item TCC_BOUNDS_PRINT_HEAP
 Print heap objects that are not freed at exit of program.
+@item TCC_BOUNDS_PRINT_STATISTIC
+Print statistic information at exit of program.
 @item TCC_BOUNDS_NEVER_FATAL
 Try to continue in case of a bound checking error.
 @end table
@@ -915,7 +917,7 @@ Here are some examples of caught errors:
     int *tab;
     tab = malloc(20 * sizeof(int));
     for(i=0;i<21;i++) @{
-        sum += tab4[i];
+        sum += tab[i];
     @}
     free(tab);
 @}
@@ -928,7 +930,7 @@ Here are some examples of caught errors:
     tab = malloc(20 * sizeof(int));
     free(tab);
     for(i=0;i<20;i++) @{
-        sum += tab4[i];
+        sum += tab[i];
     @}
 @}
 @end example
