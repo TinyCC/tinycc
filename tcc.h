@@ -720,6 +720,7 @@ struct TCCState {
 #ifdef CONFIG_TCC_BCHECK
     /* compile with built-in memory and bounds checker */
     unsigned char do_bounds_check;
+    unsigned char do_bounds_check_addres;
 #endif
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/

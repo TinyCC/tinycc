@@ -368,6 +368,9 @@ Try to continue in case of a bound checking error.
 
 Note: @option{-b} is only available on i386 (linux and windows) and x86_64 (linux and windows) when using libtcc for the moment.
 
+@item -ba
+Generate address checking tests when using @option{-b}. This will be a lot slower but finds more errors.
+
 @item -bt N
 Display N callers in stack traces. This is useful with @option{-g} or
 @option{-b}.

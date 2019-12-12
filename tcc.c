@@ -59,6 +59,7 @@ static const char help[] =
     "  -g          generate runtime debug info\n"
 #ifdef CONFIG_TCC_BCHECK
     "  -b          compile with built-in memory and bounds checker (implies -g)\n"
+    "  -ba         Enable better addres checking with bounds checker\n"
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
     "  -bt N       show N callers in stack traces\n"
