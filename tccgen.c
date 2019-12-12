@@ -2509,7 +2509,7 @@ redo:
     */
             /* if evaluating constant expression, no code should be
                generated, so no bound check */
-            if (tcc_state->do_bounds_check && tcc_state->do_bounds_check_addres
+            if (tcc_state->do_bounds_check && tcc_state->do_bounds_check_address
                 && !const_wanted && !nocode_wanted) {
                 /* if bounded pointers, we generate a special code to
                    test bounds */

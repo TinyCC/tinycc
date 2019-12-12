@@ -1803,7 +1803,7 @@ reparse:
             s->do_debug = 1;
             break;
         case TCC_OPTION_ba:
-            s->do_bounds_check_addres = 1;
+            s->do_bounds_check_address = 1;
             break;
 #endif
         case TCC_OPTION_g:
