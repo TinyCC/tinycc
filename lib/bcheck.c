@@ -165,35 +165,35 @@ static int never_fatal = 0;
 static int no_checking = 0;
 
 #ifdef BOUND_STATISTIC
-static unsigned long bound_ptr_add_count;
-static unsigned long bound_ptr_indir1_count;
-static unsigned long bound_ptr_indir2_count;
-static unsigned long bound_ptr_indir4_count;
-static unsigned long bound_ptr_indir8_count;
-static unsigned long bound_ptr_indir12_count;
-static unsigned long bound_ptr_indir16_count;
-static unsigned long bound_local_new_count;
-static unsigned long bound_local_delete_count;
-static unsigned long bound_malloc_count;
-static unsigned long bound_calloc_count;
-static unsigned long bound_realloc_count;
-static unsigned long bound_free_count;
-static unsigned long bound_memalign_count;
-static unsigned long bound_mmap_count;
-static unsigned long bound_munmap_count;
-static unsigned long bound_alloca_count;
-static unsigned long bound_mempcy_count;
-static unsigned long bound_memcmp_count;
-static unsigned long bound_memmove_count;
-static unsigned long bound_memset_count;
-static unsigned long bound_strlen_count;
-static unsigned long bound_strcpy_count;
-static unsigned long bound_strncpy_count;
-static unsigned long bound_strcmp_count;
-static unsigned long bound_strncmp_count;
-static unsigned long bound_strcat_count;
-static unsigned long bound_strchr_count;
-static unsigned long bound_strdup_count;
+static unsigned long long bound_ptr_add_count;
+static unsigned long long bound_ptr_indir1_count;
+static unsigned long long bound_ptr_indir2_count;
+static unsigned long long bound_ptr_indir4_count;
+static unsigned long long bound_ptr_indir8_count;
+static unsigned long long bound_ptr_indir12_count;
+static unsigned long long bound_ptr_indir16_count;
+static unsigned long long bound_local_new_count;
+static unsigned long long bound_local_delete_count;
+static unsigned long long bound_malloc_count;
+static unsigned long long bound_calloc_count;
+static unsigned long long bound_realloc_count;
+static unsigned long long bound_free_count;
+static unsigned long long bound_memalign_count;
+static unsigned long long bound_mmap_count;
+static unsigned long long bound_munmap_count;
+static unsigned long long bound_alloca_count;
+static unsigned long long bound_mempcy_count;
+static unsigned long long bound_memcmp_count;
+static unsigned long long bound_memmove_count;
+static unsigned long long bound_memset_count;
+static unsigned long long bound_strlen_count;
+static unsigned long long bound_strcpy_count;
+static unsigned long long bound_strncpy_count;
+static unsigned long long bound_strcmp_count;
+static unsigned long long bound_strncmp_count;
+static unsigned long long bound_strcat_count;
+static unsigned long long bound_strchr_count;
+static unsigned long long bound_strdup_count;
 #define INCR_COUNT(x)    x++
 #else
 #define INCR_COUNT(x)
@@ -235,8 +235,12 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
     WAIT_SEM ();
     INCR_COUNT(bound_ptr_add_count);
     if (tree) {
-        tree = splay (addr, tree);
         addr -= tree->start;
+        if (addr >= tree->size) {
+            addr = (size_t)p;
+            tree = splay (addr, tree);
+            addr -= tree->start;
+        }
         if (addr >= tree->size) {
             addr = (size_t)p;
             tree = splay_end (addr, tree);
@@ -273,8 +277,12 @@ void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)         \
     WAIT_SEM ();                                                            \
     INCR_COUNT(bound_ptr_indir ## dsize ## _count);                         \
     if (tree) {                                                             \
-        tree = splay (addr, tree);                                          \
         addr -= tree->start;                                                \
+        if (addr >= tree->size) {                                           \
+            addr = (size_t)p;                                               \
+            tree = splay (addr, tree);                                      \
+            addr -= tree->start;                                            \
+        }                                                                   \
         if (addr >= tree->size) {                                           \
             addr = (size_t)p;                                               \
             tree = splay_end (addr, tree);                                  \
@@ -968,12 +976,14 @@ char *__bound_strcpy(char *dst, const char *src)
 
 char *__bound_strncpy(char *dst, const char *src, size_t n)
 {
-    size_t len;
-    void *p;
+    size_t len = n;
+    const char *p = src;
 
+    while (len-- && *p++);
+    len = p - src;
     INCR_COUNT(bound_strncpy_count);
-    __bound_check(dst, n);
-    __bound_check(src, n);
+    __bound_check(dst, len);
+    __bound_check(src, len);
     return strncpy (dst, src, n);
 }
 
@@ -994,10 +1004,23 @@ int __bound_strcmp(const char *s1, const char *s2)
 
 int __bound_strncmp(const char *s1, const char *s2, size_t n)
 {
+    const unsigned char *u1 = (const unsigned char *) s1;
+    const unsigned char *u2 = (const unsigned char *) s2;
+    int retval = 0;
+
     INCR_COUNT(bound_strncmp_count);
-    __bound_check(s1, n);
-    __bound_check(s2, n);
-    return strncmp(s1, s2, n);
+    do {
+        if ((ssize_t) --n == -1)
+            break;
+        else if (*u1 != *u2) {
+            retval = *u1 - *u2;
+            break;
+        }
+        u2++;
+    } while (*u1++);
+    __bound_check(s1, ((const char *)u1 - s1) + 1);
+    __bound_check(s2, ((const char *)u1 - s1) + 1);
+    return retval;
 }
 
 char *__bound_strcat(char *dest, const char *src)
