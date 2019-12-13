@@ -2630,7 +2630,7 @@ static inline void next_nomacro1(void)
                 }
 
                 /* add end of include file debug info */
-                if (tcc_state->do_debug) {
+                if (tcc_state->do_debug && strcmp (file->filename, "<command line>") != 0) {
                     put_stabd(tcc_state, N_EINCL, 0, 0);
                 }
                 /* pop include stack */

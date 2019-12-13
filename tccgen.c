@@ -245,7 +245,7 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 {
     if (!s1->do_debug)
         return;
-    if ((last_line_num != file->line_num || last_ind != ind)) {
+    if (ind && ((last_line_num != file->line_num || last_ind != ind))) {
         put_stabn(s1, N_SLINE, 0, file->line_num, ind - func_ind);
         last_ind = ind;
         last_line_num = file->line_num;
