@@ -1130,29 +1130,36 @@ ST_FUNC void gen_bounded_ptr_add(void)
 {
     /* save all temporary registers */
     save_regs(0);
-    /* trick to get line/file_name in code */
-    o(0xb8);
-    gen_le32 (file->line_num);
-    {
-        int i;
-        int len;
-        char *cp = file->filename;
-        while (*cp) cp++;
-        while (cp != file->filename && cp[-1] != '/') cp--;
-        len = strlen (cp);
-        while (len > 0) {
-            memcpy (&i, cp, 4);
-            o(0xb8);
-            gen_le32 (i);
-            cp += 4;
-            len -= 4;
-        }
-    }
     /* prepare fast i386 function call (args in eax and edx) */
     gv2(RC_EAX, RC_EDX);
     vtop -= 2;
+    /* add line, filename */
+    {
+        static addr_t offset;
+        static char last_filename[1024];
+        Sym *sym_data;
+
+        if (strcmp (last_filename, file->filename) != 0) {
+            void *ptr;
+            int len = strlen (file->filename) + 1;
+
+            offset = data_section->data_offset;
+            ptr = section_ptr_add(data_section, len);
+            memcpy (ptr, file->filename, len);
+            memcpy (last_filename, file->filename, len);
+        }
+        o(0xb9);   /* mov $xx,%ecx */
+        gen_le32 (0);
+        sym_data = get_sym_ref(&char_pointer_type, data_section,
+                               offset, data_section->data_offset);
+        greloca(cur_text_section, sym_data, ind - 4, R_386_32, 0);
+        o(0x51);   /* push %ecx */
+    }
+    o(0xb9);       /* mov $xx,%ecx */
+    gen_le32 (file->line_num);
     /* do a fast function call */
     gen_static_call(TOK___bound_ptr_add);
+    o(0x04c483);   /* add $4,%esp */
     /* returned pointer is in eax */
     vtop++;
     vtop->r = TREG_EAX | VT_BOUNDED;

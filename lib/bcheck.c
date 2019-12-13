@@ -221,7 +221,8 @@ static void bound_alloc_error(void)
 
 /* return '(p + offset)' for pointer arithmetic (a pointer can reach
    the end of a region in this case */
-void * FASTCALL __bound_ptr_add(void *p, size_t offset)
+void * FASTCALL __bound_ptr_add(void *p, size_t offset,
+                                size_t line, const char *filename)
 {
     size_t addr = (size_t)p;
 
@@ -229,8 +230,8 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
         return p + offset;
     }
 
-    dprintf(stderr, "%s %s: %p 0x%x\n",
-            __FILE__, __FUNCTION__, p, (unsigned)offset);
+    dprintf(stderr, "%s %s (%s:%u): %p 0x%x\n",
+            __FILE__, __FUNCTION__, filename, line, p, (unsigned)offset);
 
     WAIT_SEM ();
     INCR_COUNT(bound_ptr_add_count);
@@ -249,8 +250,8 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
         if (addr <= tree->size) {
             addr += offset;
             if (tree->is_invalid || addr > tree->size) {
-                fprintf(stderr,"%s %s: %p is outside of the region\n",
-                        __FILE__, __FUNCTION__, p + offset);
+                fprintf(stderr,"%s %s (%s:%u): %p is outside of the region\n",
+                        __FILE__, __FUNCTION__, filename, line, p + offset);
                 if (never_fatal == 0) {
                     POST_SEM ();
                     return INVALID_POINTER; /* return an invalid pointer */
@@ -264,44 +265,45 @@ void * FASTCALL __bound_ptr_add(void *p, size_t offset)
 
 /* return '(p + offset)' for pointer indirection (the resulting must
    be strictly inside the region */
-#define BOUND_PTR_INDIR(dsize)                                              \
-void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset)         \
-{                                                                           \
-    size_t addr = (size_t)p;                                                \
-                                                                            \
-    if (no_checking) {                                                      \
-        return p + offset;                                                  \
-    }                                                                       \
-    dprintf(stderr, "%s %s: %p 0x%x start\n",                               \
-            __FILE__, __FUNCTION__, p, (unsigned)offset);                   \
-    WAIT_SEM ();                                                            \
-    INCR_COUNT(bound_ptr_indir ## dsize ## _count);                         \
-    if (tree) {                                                             \
-        addr -= tree->start;                                                \
-        if (addr >= tree->size) {                                           \
-            addr = (size_t)p;                                               \
-            tree = splay (addr, tree);                                      \
-            addr -= tree->start;                                            \
-        }                                                                   \
-        if (addr >= tree->size) {                                           \
-            addr = (size_t)p;                                               \
-            tree = splay_end (addr, tree);                                  \
-            addr -= tree->start;                                            \
-        }                                                                   \
-        if (addr <= tree->size) {                                           \
-            addr += offset + dsize;                                         \
-            if (tree->is_invalid || addr > tree->size) {                    \
-                fprintf(stderr,"%s %s: %p is outside of the region\n",      \
-                    __FILE__, __FUNCTION__, p + offset);                    \
-                if (never_fatal == 0) {                                     \
-                    POST_SEM ();                                            \
-                    return INVALID_POINTER; /* return an invalid pointer */ \
-                }                                                           \
-            }                                                               \
-        }                                                                   \
-    }                                                                       \
-    POST_SEM ();                                                            \
-    return p + offset;                                                      \
+#define BOUND_PTR_INDIR(dsize)                                                 \
+void * FASTCALL __bound_ptr_indir ## dsize (void *p, size_t offset,            \
+                                            size_t line, const char *filename) \
+{                                                                              \
+    size_t addr = (size_t)p;                                                   \
+                                                                               \
+    if (no_checking) {                                                         \
+        return p + offset;                                                     \
+    }                                                                          \
+    dprintf(stderr, "%s %s (%s:%u): %p 0x%x start\n",                          \
+            __FILE__, __FUNCTION__, filename, line,  p, (unsigned)offset);     \
+    WAIT_SEM ();                                                               \
+    INCR_COUNT(bound_ptr_indir ## dsize ## _count);                            \
+    if (tree) {                                                                \
+        addr -= tree->start;                                                   \
+        if (addr >= tree->size) {                                              \
+            addr = (size_t)p;                                                  \
+            tree = splay (addr, tree);                                         \
+            addr -= tree->start;                                               \
+        }                                                                      \
+        if (addr >= tree->size) {                                              \
+            addr = (size_t)p;                                                  \
+            tree = splay_end (addr, tree);                                     \
+            addr -= tree->start;                                               \
+        }                                                                      \
+        if (addr <= tree->size) {                                              \
+            addr += offset + dsize;                                            \
+            if (tree->is_invalid || addr > tree->size) {                       \
+                fprintf(stderr,"%s %s (%s:%u): %p is outside of the region\n", \
+                    __FILE__, __FUNCTION__, filename, line, p + offset);       \
+                if (never_fatal == 0) {                                        \
+                    POST_SEM ();                                               \
+                    return INVALID_POINTER; /* return an invalid pointer */    \
+                }                                                              \
+            }                                                                  \
+        }                                                                      \
+    }                                                                          \
+    POST_SEM ();                                                               \
+    return p + offset;                                                         \
 }
 
 BOUND_PTR_INDIR(1)
@@ -540,7 +542,7 @@ void __attribute__((destructor)) __bound_exit(void)
         }
         while (tree) {
             if (print_heap && tree->type != 0) {
-                fprintf (stderr, "%s, %s() %s found size %ld\n",
+                fprintf (stderr, "%s, %s() %s found size %lu\n",
                          __FILE__, __FUNCTION__, alloc_type[tree->type],
                          (unsigned long) tree->size);
             }
@@ -621,7 +623,7 @@ void *__bound_malloc(size_t size, const void *caller)
 
     if (ptr) {
         tree = splay_insert ((size_t) ptr, size, tree);
-        if (tree->start == (size_t) ptr) {
+        if (tree && tree->start == (size_t) ptr) {
             tree->type = TCC_TYPE_MALLOC;
         }
     }
@@ -666,7 +668,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
         dprintf(stderr, "%s, %s (%p, 0x%x)\n",
                 __FILE__, __FUNCTION__, ptr, (unsigned)size);
         tree = splay_insert((size_t) ptr, size, tree);
-        if (tree->start == (size_t) ptr) {
+        if (tree && tree->start == (size_t) ptr) {
             tree->type = TCC_TYPE_MEMALIGN;
         }
     }
@@ -744,7 +746,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         INCR_COUNT(bound_realloc_count);
         if (ptr) {
             tree = splay_insert ((size_t) ptr, size, tree);
-            if (tree->start == (size_t) ptr) {
+            if (tree && tree->start == (size_t) ptr) {
                 tree->type = TCC_TYPE_REALLOC;
             }
         }
@@ -761,7 +763,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
 #endif
         if (ptr) {
             tree = splay_insert ((size_t) ptr, size, tree);
-            if (tree->start == (size_t) ptr) {
+            if (tree && tree->start == (size_t) ptr) {
                 tree->type = TCC_TYPE_REALLOC;
             }
         }
@@ -800,7 +802,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
         WAIT_SEM ();
         INCR_COUNT(bound_calloc_count);
         tree = splay_insert ((size_t) ptr, size, tree);
-        if (tree->start == (size_t) ptr) {
+        if (tree && tree->start == (size_t) ptr) {
             tree->type = TCC_TYPE_CALLOC;
         }
         POST_SEM ();
@@ -899,13 +901,13 @@ void __bound_new_region(void *p, size_t size)
 /* some useful checked functions */
 
 /* check that (p ... p + size - 1) lies inside 'p' region, if any */
-static void __bound_check(const void *p, size_t size)
+static void __bound_check(const void *p, size_t size, const char *function)
 {
     if (no_checking)
         return;
     if (size == 0)
         return;
-    p = __bound_ptr_add((void *)p, size);
+    p = __bound_ptr_add((void *)p, size, 0, function);
     if (p == INVALID_POINTER)
         bound_error("invalid pointer");
 }
@@ -915,8 +917,8 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
     void* p;
 
     INCR_COUNT(bound_mempcy_count);
-    __bound_check(dst, size);
-    __bound_check(src, size);
+    __bound_check(dst, size, "memcpy");
+    __bound_check(src, size, "memcpy");
     /* check also region overlap */
     if (no_checking == 0 && src >= dst && src < dst + size)
         bound_error("overlapping regions in memcpy()");
@@ -929,23 +931,23 @@ void *__bound_memcpy(void *dst, const void *src, size_t size)
 int __bound_memcmp(const void *s1, const void *s2, size_t size)
 {
     INCR_COUNT(bound_memcmp_count);
-    __bound_check(s1, size);
-    __bound_check(s2, size);
+    __bound_check(s1, size, "memcmp");
+    __bound_check(s2, size, "memcmp");
     return memcmp(s1, s2, size);
 }
 
 void *__bound_memmove(void *dst, const void *src, size_t size)
 {
     INCR_COUNT(bound_memmove_count);
-    __bound_check(dst, size);
-    __bound_check(src, size);
+    __bound_check(dst, size, "memmove");
+    __bound_check(src, size, "memmove");
     return memmove(dst, src, size);
 }
 
 void *__bound_memset(void *dst, int c, size_t size)
 {
     INCR_COUNT(bound_memset_count);
-    __bound_check(dst, size);
+    __bound_check(dst, size, "memset");
     return memset(dst, c, size);
 }
 
@@ -957,7 +959,7 @@ int __bound_strlen(const char *s)
     INCR_COUNT(bound_strlen_count);
     while (*p++);
     len = (p - s) - 1;
-    p = __bound_ptr_indir1((char *)s, len);
+    p = __bound_ptr_indir1((char *)s, len, 0, "strlen");
     if (p == INVALID_POINTER)
         bound_error("bad pointer in strlen()");
     return len;
@@ -982,8 +984,8 @@ char *__bound_strncpy(char *dst, const char *src, size_t n)
     while (len-- && *p++);
     len = p - src;
     INCR_COUNT(bound_strncpy_count);
-    __bound_check(dst, len);
-    __bound_check(src, len);
+    __bound_check(dst, len, "strncpy");
+    __bound_check(src, len, "strncpy");
     return strncpy (dst, src, n);
 }
 
@@ -997,8 +999,8 @@ int __bound_strcmp(const char *s1, const char *s2)
         u1++;
         u2++;
     }
-    __bound_check(s1, ((const char *)u1 - s1) + 1);
-    __bound_check(s2, ((const char *)u2 - s2) + 1);
+    __bound_check(s1, ((const char *)u1 - s1) + 1, "strcmp");
+    __bound_check(s2, ((const char *)u2 - s2) + 1, "strcmp");
     return (*u1 - *u2);
 }
 
@@ -1018,8 +1020,8 @@ int __bound_strncmp(const char *s1, const char *s2, size_t n)
         }
         u2++;
     } while (*u1++);
-    __bound_check(s1, ((const char *)u1 - s1) + 1);
-    __bound_check(s2, ((const char *)u1 - s1) + 1);
+    __bound_check(s1, ((const char *)u1 - s1) + 1, "strncmp");
+    __bound_check(s2, ((const char *)u1 - s1) + 1, "strncmp");
     return retval;
 }
 
@@ -1032,8 +1034,8 @@ char *__bound_strcat(char *dest, const char *src)
     while (*dest++);
     dest--;
     while ((*dest++ = *src++) != 0);
-    __bound_check(r, dest - r);
-    __bound_check(s, src - s);
+    __bound_check(r, dest - r, "strcat");
+    __bound_check(s, src - s, "strcat");
     return r;
 }
 
@@ -1049,7 +1051,7 @@ char *__bound_strchr(const char *string, int ch)
         }
         s++;
     }
-    __bound_check(string, ((const char *)s - string) + 1);
+    __bound_check(string, ((const char *)s - string) + 1, "strchr");
     return *s == c ? (char *) s : NULL;
 }
 
@@ -1060,7 +1062,7 @@ char *__bound_strdup(const char *s)
 
     INCR_COUNT(bound_strdup_count);
     while (*p++);
-    __bound_check(s, p - s);
+    __bound_check(s, p - s, "strdup");
 #if MALLOC_REDIR
     new = malloc_redir (p - s);
 #else
@@ -1069,7 +1071,7 @@ char *__bound_strdup(const char *s)
     if (new) {
         WAIT_SEM ();
         tree = splay_insert((size_t)new, p - s, tree);
-        if (tree->start == (size_t) new) {
+        if (tree && tree->start == (size_t) new) {
             tree->type = TCC_TYPE_STRDUP;
         }
         memcpy (new, s, p - s);
@@ -1261,22 +1263,26 @@ static Tree * splay_insert(size_t addr, size_t size, Tree * t)
         new = (Tree *) malloc (sizeof (Tree));
 #endif
     }
-    if (new == NULL) {bound_alloc_error();}
-    if (t == NULL) {
-        new->left = new->right = NULL;
-    } else if (compare(addr, t->start, t->size) < 0) {
-        new->left = t->left;
-        new->right = t;
-        t->left = NULL;
-    } else {
-        new->right = t->right;
-        new->left = t;
-        t->right = NULL;
+    if (new == NULL) {
+      bound_alloc_error();
     }
-    new->start = addr;
-    new->size = size;
-    new->type = TCC_TYPE_NONE;
-    new->is_invalid = 0;
+    else {
+        if (t == NULL) {
+            new->left = new->right = NULL;
+        } else if (compare(addr, t->start, t->size) < 0) {
+            new->left = t->left;
+            new->right = t;
+            t->left = NULL;
+        } else {
+            new->right = t->right;
+            new->left = t;
+            t->right = NULL;
+        }
+        new->start = addr;
+        new->size = size;
+        new->type = TCC_TYPE_NONE;
+        new->is_invalid = 0;
+    }
     return new;
 }
 

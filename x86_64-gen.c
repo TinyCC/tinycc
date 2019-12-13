@@ -767,27 +767,11 @@ ST_FUNC void gen_bounded_ptr_add(void)
 
     if (nested_call > 1) {
 #ifdef TCC_TARGET_PE
-        o(0x5152);   /* push %rcx/%rdx */
+        o(0x5152);       /* push %rdx/%rcx */
+        o(0x51415041);   /* push %r8/%r9 */
 #else
-        o(0x5657);   /* push %rdi/%rsi */
+        o(0x51525657);   /* push %rdi/%rsi/%rdx/%rcx */
 #endif
-    }
-    /* trick to get line/file_name in code */
-    o(0xb8);
-    gen_le32 (file->line_num);
-    {
-        int len;
-        char *cp = file->filename;
-        while (*cp) cp++;
-        while (cp != file->filename && cp[-1] != '/') cp--;
-        len = strlen (cp);
-        while (len > 0) {
-            memcpy (&i, cp, 4);
-            o(0xb8);
-            gen_le32 (i);
-            cp += 4;
-            len -= 4;
-        }
     }
     /* prepare fast x86_64 function call */
     gv(RC_RAX);
@@ -806,6 +790,38 @@ ST_FUNC void gen_bounded_ptr_add(void)
 #endif
     vtop--;
 
+    /* add line, filename */
+#ifdef TCC_TARGET_PE
+    o(0xc0c749);   /* mov $xx,%r8 */
+#else
+    o(0xba);       /* mov $xx,%edx */
+#endif
+    gen_le32 (file->line_num);
+    {
+        static addr_t offset;
+        static char last_filename[1024];
+        Sym *sym_data;
+
+        if (strcmp (last_filename, file->filename) != 0) {
+            void *ptr;
+            int len = strlen (file->filename) + 1;
+
+            offset = data_section->data_offset;
+            ptr = section_ptr_add(data_section, len);
+            memcpy (ptr, file->filename, len);
+            memcpy (last_filename, file->filename, len);
+        }
+#ifdef TCC_TARGET_PE
+        o(0xb949);   /* mov $xx,%r9 */
+#else
+        o(0xb948);   /* mov $xx,%rcx */
+#endif
+        gen_le64 (0);
+        sym_data = get_sym_ref(&char_pointer_type, data_section,
+                               offset, data_section->data_offset);
+        greloca(cur_text_section, sym_data, ind - 8, R_X86_64_64, 0);
+    }
+
 #ifdef TCC_TARGET_PE
     o(0x20ec8348); /* sub $20, %rsp */
 #endif
@@ -819,9 +835,10 @@ ST_FUNC void gen_bounded_ptr_add(void)
 
     if (nested_call > 1) {
 #ifdef TCC_TARGET_PE
-        o(0x5a59);   /* pop %rcx/%rdx */
+        o(0x58415941);   /* pop %r9/%r8 */
+        o(0x5a59);       /* pop %rcx/%rdx */
 #else
-        o(0x5f5e);   /* pop %rsi/%rdi */
+        o(0x5f5e5a59);   /* pop $rcx/%rdx/%rsi/%rdi */
 #endif
     }
     /* returned pointer is in rax */
