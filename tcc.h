@@ -1370,12 +1370,14 @@ ST_DATA int global_expr;  /* true if compound literals must be allocated globall
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
-ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
 ST_DATA const char *funcname;
 ST_DATA int g_debug;
 
 ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
+ST_FUNC void tcc_debug_bincl(TCCState *s1);
+ST_FUNC void tcc_debug_eincl(TCCState *s1);
+ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
 ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
 ST_FUNC void tcc_debug_line(TCCState *s1);
@@ -1489,7 +1491,6 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset, i
 ST_FUNC void put_stabs(TCCState *s1, const char *str, int type, int other, int desc, unsigned long value);
 ST_FUNC void put_stabs_r(TCCState *s1, const char *str, int type, int other, int desc, unsigned long value, Section *sec, int sym_index);
 ST_FUNC void put_stabn(TCCState *s1, int type, int other, int desc, int value);
-ST_FUNC void put_stabd(TCCState *s1, int type, int other, int desc);
 
 ST_FUNC void resolve_common_syms(TCCState *s1);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);

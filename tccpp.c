@@ -1862,8 +1862,7 @@ ST_FUNC void preprocess(int is_bof)
                     tcc_strdup(buf1));
             }
             /* add include file debug info */
-            if (s1->do_debug)
-                put_stabs(tcc_state, file->filename, N_BINCL, 0, 0, 0);
+            tcc_debug_bincl(tcc_state);
             tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
             ch = file->buf_ptr[0];
             goto the_end;
@@ -1961,7 +1960,7 @@ include_done:
             if (tok == TOK_STR) {
                 if (file->true_filename == file->filename)
                     file->true_filename = tcc_strdup(file->filename);
-                pstrcpy(file->filename, sizeof(file->filename), (char *)tokc.str.data);
+                tcc_debug_putfile(s1, (char *)tokc.str.data);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
                 break;
             else
@@ -1971,8 +1970,6 @@ include_done:
         if (file->fd > 0)
             total_lines += file->line_num - n;
         file->line_num = n;
-        if (s1->do_debug)
-            put_stabs(tcc_state, file->filename, N_BINCL, 0, 0, 0);
         break;
     case TOK_ERROR:
     case TOK_WARNING:
@@ -2629,9 +2626,7 @@ static inline void next_nomacro1(void)
                 }
 
                 /* add end of include file debug info */
-                if (tcc_state->do_debug && strcmp (file->filename, "<command line>") != 0) {
-                    put_stabd(tcc_state, N_EINCL, 0, 0);
-                }
+                tcc_debug_eincl(tcc_state);
                 /* pop include stack */
                 tcc_close();
                 s1->include_stack_ptr--;
@@ -3611,14 +3606,14 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     set_idnum('.', is_asm ? IS_ID : 0);
 
     cstr_new(&cstr);
-    if (is_asm)
-        cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
-    cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
     if (s1->cmdline_defs.size)
         cstr_cat(&cstr, s1->cmdline_defs.data, s1->cmdline_defs.size);
-    //printf("%s\n", (char*)s1->cmdline_defs.data);
+    cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
+    if (is_asm)
+        cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
     if (s1->cmdline_incl.size)
         cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
+    //printf("%s\n", (char*)cstr.data);
     *s1->include_stack_ptr++ = file;
     tcc_open_bf(s1, "<command line>", cstr.size);
     memcpy(file->buffer, cstr.data, cstr.size);

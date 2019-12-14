@@ -75,7 +75,7 @@ ST_DATA int global_expr;  /* true if compound literals must be allocated globall
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
 ST_DATA int func_vc;
-ST_DATA int last_line_num, last_ind, func_ind; /* debug last line number and pc */
+static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
 ST_DATA int g_debug;
 
@@ -219,8 +219,10 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
                     text_section->data_offset, text_section, section_sym);
         put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
-        last_ind = 0;
-        last_line_num = 0;
+        new_file = last_line_num = 0;
+        func_ind = -1;
+        /* we're currently 'including' the <command line> */
+        tcc_debug_bincl(s1);
     }
 
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
@@ -237,40 +239,52 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
         return;
     put_stabs_r(s1, NULL, N_SO, 0, 0,
         text_section->data_offset, text_section, section_sym);
+}
 
+static BufferedFile* put_new_file(TCCState *s1)
+{
+    BufferedFile *f = file;
+    /* use upper file if from inline ":asm:" */
+    if (f->filename[0] == ':')
+        f = f->prev;
+    if (f && new_file) {
+        put_stabs_r(s1, f->filename, N_SOL, 0, 0, ind, text_section, section_sym);
+        new_file = last_line_num = 0;
+    }
+    return f;
 }
 
 /* generate line number info */
 ST_FUNC void tcc_debug_line(TCCState *s1)
 {
-    if (!s1->do_debug)
+    BufferedFile *f;
+    if (!s1->do_debug || !(f = put_new_file(s1)))
         return;
-    if (ind && ((last_line_num != file->line_num || last_ind != ind))) {
-        put_stabn(s1, N_SLINE, 0, file->line_num, ind - func_ind);
-        last_ind = ind;
-        last_line_num = file->line_num;
+    if (last_line_num == f->line_num)
+        return;
+    if (text_section != cur_text_section)
+        return;
+    if (func_ind != -1) {
+        put_stabn(s1, N_SLINE, 0, f->line_num, ind - func_ind);
+    } else {
+        /* from tcc_assemble */
+        put_stabs_r(s1, NULL, N_SLINE, 0, f->line_num, ind, text_section, section_sym);
     }
+    last_line_num = f->line_num;
 }
 
 /* put function symbol */
 ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 {
     char buf[512];
-
-    if (!s1->do_debug)
+    BufferedFile *f;
+    if (!s1->do_debug || !(f = put_new_file(s1)))
         return;
-
-    /* stabs info */
     /* XXX: we put here a dummy type */
     snprintf(buf, sizeof(buf), "%s:%c1",
              funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
-    put_stabs_r(s1, buf, N_FUN, 0, file->line_num, 0,
-                cur_text_section, sym->c);
-    /* //gr gdb wants a line at the function */
-    put_stabn(s1, N_SLINE, 0, file->line_num, 0);
-
-    last_ind = 0;
-    last_line_num = 0;
+    put_stabs_r(s1, buf, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
+    tcc_debug_line(s1);
 }
 
 /* put function size */
@@ -278,7 +292,36 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 {
     if (!s1->do_debug)
         return;
+#if 0 // this seems to confuse gnu tools
     put_stabn(s1, N_FUN, 0, 0, size);
+#endif
+}
+
+/* put alternative filename */
+ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
+{
+    if (0 == strcmp(file->filename, filename))
+        return;
+    pstrcpy(file->filename, sizeof(file->filename), filename);
+    new_file = 1;
+}
+
+/* begin of #include */
+ST_FUNC void tcc_debug_bincl(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabs(s1, file->filename, N_BINCL, 0, 0, 0);
+    new_file = 1;
+}
+
+/* end of #include */
+ST_FUNC void tcc_debug_eincl(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabn(s1, N_EINCL, 0, 0, 0);
+    new_file = 1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -7708,8 +7751,7 @@ static void gen_inline_functions(TCCState *s)
                 /* the function was used or forced (and then not internal):
                    generate its code and convert it to a normal function */
                 fn->sym = NULL;
-                if (file)
-                    pstrcpy(file->filename, sizeof file->filename, fn->filename);
+                tcc_debug_putfile(s, fn->filename);
                 begin_macro(fn->func_str, 1);
                 next();
                 cur_text_section = text_section;

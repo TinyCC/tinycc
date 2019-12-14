@@ -28,19 +28,7 @@
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE
-# ifndef _WIN32
-#  include <signal.h>
-#  ifndef __OpenBSD__
-#   include <sys/ucontext.h>
-#  endif
-# else
-#  define ucontext_t CONTEXT
-# endif
-
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level);
-static void rt_error(ucontext_t *uc, const char *fmt, ...);
 static void set_exception_handler(void);
-
 #ifdef _WIN32
 static DWORD s1_for_run_idx;
 void set_s1_for_run(TCCState *s)
@@ -337,212 +325,314 @@ static void win64_del_function_table(void *p)
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
 
+#define INCLUDE_STACK_SIZE 32
+static int rt_vprintf(const char *fmt, va_list ap)
+{
+    int ret = vfprintf(stderr, fmt, ap);
+    fflush(stderr);
+    return ret;
+}
+
+static int rt_printf(const char *fmt, ...)
+{
+    va_list ap;
+    int r;
+    va_start(ap, fmt);
+    r = rt_vprintf(fmt, ap);
+    va_end(ap);
+    return r;
+}
+
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
 static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
 {
-    char func_name[128], last_func_name[128];
+    char func_name[128];
     addr_t func_addr, last_pc, pc;
     const char *incl_files[INCLUDE_STACK_SIZE];
-    int incl_index, len, last_line_num, i;
+    int incl_index, last_incl_index, len, last_line_num, i;
     const char *str, *p;
 
-    Stab_Sym *stab_sym = NULL, *stab_sym_end, *sym;
-    int stab_len = 0;
+    ElfW(Sym) *esym_start = NULL, *esym_end = NULL, *esym;
+    Stab_Sym *stab_sym = NULL, *stab_sym_end = NULL, *sym;
     char *stab_str = NULL;
-
-    if (stab_section) {
-        stab_len = stab_section->data_offset;
-        stab_sym = (Stab_Sym *)stab_section->data;
-        stab_str = (char *) stab_section->link->data;
-    }
+    char *elf_str = NULL;
 
     func_name[0] = '\0';
     func_addr = 0;
     incl_index = 0;
-    last_func_name[0] = '\0';
     last_pc = (addr_t)-1;
     last_line_num = 1;
+    last_incl_index = 0;
 
-    if (!stab_sym)
-        goto no_stabs;
+    if (stab_section) {
+        stab_sym = (Stab_Sym *)stab_section->data;
+        stab_sym_end = (Stab_Sym *)(stab_section->data + stab_section->data_offset);
+        stab_str = (char *) stab_section->link->data;
+    }
+    if (symtab_section) {
+        esym_start = (ElfW(Sym) *)(symtab_section->data);
+        esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
+        elf_str = symtab_section->link->data;
+    }
 
-    stab_sym_end = (Stab_Sym*)((char*)stab_sym + stab_len);
     for (sym = stab_sym + 1; sym < stab_sym_end; ++sym) {
+        str = stab_str + sym->n_strx;
+        pc = sym->n_value;
+
+        switch(sym->n_type) {
+        case N_SLINE:
+            if (func_addr)
+                goto rel_pc;
+        case N_SO:
+        case N_SOL:
+            goto abs_pc;
+        case N_FUN:
+            if (sym->n_strx == 0) /* end of function */
+                goto rel_pc;
+        abs_pc:
+            if (sizeof pc == 8)
+                /* Stab_Sym.n_value is only 32bits */
+                pc |= wanted_pc & 0xffffffff00000000ULL;
+            break;
+        rel_pc:
+            pc += func_addr;
+            break;
+        }
+
+        if (pc > wanted_pc && wanted_pc > last_pc)
+            goto found;
+
         switch(sym->n_type) {
             /* function start or end */
         case N_FUN:
-            if (sym->n_strx == 0) {
-                /* we test if between last line and end of function */
-                pc = sym->n_value + func_addr;
-                if (wanted_pc >= last_pc && wanted_pc < pc)
-                    goto found;
-                func_name[0] = '\0';
-                func_addr = 0;
-            } else {
-                str = stab_str + sym->n_strx;
-                p = strchr(str, ':');
-                if (!p) {
-                    pstrcpy(func_name, sizeof(func_name), str);
-                } else {
-                    len = p - str;
-                    if (len > sizeof(func_name) - 1)
-                        len = sizeof(func_name) - 1;
-                    memcpy(func_name, str, len);
-                    func_name[len] = '\0';
-                }
-                func_addr = sym->n_value;
-            }
+            if (sym->n_strx == 0)
+                goto reset_func;
+            p = strchr(str, ':');
+            if (0 == p || (len = p - str + 1, len > sizeof func_name))
+                len = sizeof func_name;
+            pstrcpy(func_name, len, str);
+            func_addr = pc;
             break;
             /* line number info */
         case N_SLINE:
-            pc = sym->n_value + func_addr;
-            if (wanted_pc >= last_pc && wanted_pc < pc)
-                goto found;
             last_pc = pc;
             last_line_num = sym->n_desc;
-            /* XXX: slow! */
-            strcpy(last_func_name, func_name);
+            last_incl_index = incl_index;
+            if (pc == wanted_pc)
+                goto found;
             break;
             /* include files */
         case N_BINCL:
-            str = stab_str + sym->n_strx;
-        add_incl:
-            if (incl_index < INCLUDE_STACK_SIZE) {
+            if (incl_index < INCLUDE_STACK_SIZE)
                 incl_files[incl_index++] = str;
-            }
             break;
         case N_EINCL:
             if (incl_index > 1)
                 incl_index--;
             break;
+            /* start/end of translation unit */
         case N_SO:
-            if (sym->n_strx == 0) {
-                incl_index = 0; /* end of translation unit */
-            } else {
-                str = stab_str + sym->n_strx;
+            incl_index = 0;
+            if (sym->n_strx) {
                 /* do not add path */
                 len = strlen(str);
                 if (len > 0 && str[len - 1] != '/')
-                    goto add_incl;
+                    incl_files[incl_index++] = str;
             }
+        reset_func:
+            func_name[0] = '\0';
+            func_addr = 0;
+            last_pc = (addr_t)-1;
+            break;
+            /* alternative file name (from #line or #include directives) */
+        case N_SOL:
+            if (incl_index)
+                incl_files[incl_index-1] = str;
             break;
         }
     }
 
-no_stabs:
-    /* second pass: we try symtab symbols (no line number info) */
-    incl_index = 0;
-    if (symtab_section)
-    {
-        ElfW(Sym) *sym, *sym_end;
-        int type;
-
-        sym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
-        for(sym = (ElfW(Sym) *)symtab_section->data + 1;
-            sym < sym_end;
-            sym++) {
-            type = ELFW(ST_TYPE)(sym->st_info);
-            if (type == STT_FUNC || type == STT_GNU_IFUNC) {
-                if (wanted_pc >= sym->st_value &&
-                    wanted_pc < sym->st_value + sym->st_size) {
-                    pstrcpy(last_func_name, sizeof(last_func_name),
-                            (char *) symtab_section->link->data + sym->st_name);
-                    func_addr = sym->st_value;
-                    goto found;
-                }
+    /* we try symtab symbols (no line number info) */
+    for (esym = esym_start + 1; esym < esym_end; ++esym) {
+        int type = ELFW(ST_TYPE)(esym->st_info);
+        if (type == STT_FUNC || type == STT_GNU_IFUNC) {
+            if (wanted_pc >= esym->st_value &&
+                wanted_pc < esym->st_value + esym->st_size) {
+                pstrcpy(func_name, sizeof(func_name),
+                    elf_str + esym->st_name);
+                func_addr = esym->st_value;
+                last_incl_index = 0;
+                goto found;
             }
         }
     }
     /* did not find any info: */
-    fprintf(stderr, "%s %p ???\n", msg, (void*)wanted_pc);
-    fflush(stderr);
+    rt_printf("%s %p ???", msg, (void*)wanted_pc);
     return 0;
+
  found:
-    i = incl_index;
+    i = last_incl_index;
     if (i > 0)
-        fprintf(stderr, "%s:%d: ", incl_files[--i], last_line_num);
-    fprintf(stderr, "%s %p", msg, (void*)wanted_pc);
-    if (last_func_name[0] != '\0')
-        fprintf(stderr, " %s()", last_func_name);
+        rt_printf("%s:%d: ", incl_files[--i], last_line_num);
+    rt_printf("%s %p", msg, (void*)wanted_pc);
+    if (func_name[0] != '\0')
+        rt_printf(" %s()", func_name);
     if (--i >= 0) {
-        fprintf(stderr, " (included from ");
+        rt_printf(" (included from ");
         for (;;) {
-            fprintf(stderr, "%s", incl_files[i]);
+            rt_printf("%s", incl_files[i]);
             if (--i < 0)
                 break;
-            fprintf(stderr, ", ");
+            rt_printf(", ");
         }
-        fprintf(stderr, ")");
+        rt_printf(")");
     }
-    fprintf(stderr, "\n");
-    fflush(stderr);
     return func_addr;
 }
 
+typedef struct rt_context {
+    addr_t ip, fp, sp, pc;
+} rt_context;
+
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level);
+
 /* emit a run time error at position 'pc' */
-static void rt_error(ucontext_t *uc, const char *fmt, ...)
+static void rt_error(rt_context *rc, const char *fmt, ...)
 {
     va_list ap;
     addr_t pc;
     int i;
-    TCCState *s1 = get_s1_for_run();
+    TCCState *s1;
 
-    fprintf(stderr, "Runtime error: ");
+    s1 = get_s1_for_run();
+    if (*fmt == ' ') {
+        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
+            fmt = *s1->rt_bound_error_msg;
+        else
+            ++fmt;
+    }
+
+    rt_printf("Runtime error: ");
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    rt_vprintf(fmt, ap);
     va_end(ap);
-    fprintf(stderr, "\n");
+    rt_printf("\n");
 
     if (!s1)
         return;
 
-    for(i=0;i<s1->rt_num_callers;i++) {
-        if (rt_get_caller_pc(&pc, uc, i) < 0)
+    for(i=0; i<s1->rt_num_callers; i++) {
+        if (rt_get_caller_pc(&pc, rc, i) < 0)
             break;
         pc = rt_printline(s1, pc, i ? "by" : "at");
+        rt_printf("\n");
         if (pc == (addr_t)s1->rt_prog_main && pc)
             break;
     }
 }
 
 /* ------------------------------------------------------------- */
-#ifndef _WIN32
 
+#ifndef _WIN32
+# include <signal.h>
+# ifndef __OpenBSD__
+#  include <sys/ucontext.h>
+# endif
+#else
+# define ucontext_t CONTEXT
+#endif
+
+/* translate from ucontext_t* to internal rt_context * */
+static void rt_getcontext(ucontext_t *uc, rt_context *rc)
+{
+#if defined _WIN64
+    rc->ip = uc->Rip;
+    rc->fp = uc->Rbp;
+    rc->sp = uc->Rsp;
+#elif defined _WIN32
+    rc->ip = uc->Eip;
+    rc->fp = uc->Ebp;
+    rc->sp = uc->Esp;
+#elif defined __i386__
+# if defined(__APPLE__)
+    rc->ip = uc->uc_mcontext->__ss.__eip;
+    rc->fp = uc->uc_mcontext->__ss.__ebp;
+# elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+    rc->ip = uc->uc_mcontext.mc_eip;
+    rc->fp = uc->uc_mcontext.mc_ebp;
+# elif defined(__dietlibc__)
+    rc->ip = uc->uc_mcontext.eip;
+    rc->fp = uc->uc_mcontext.ebp;
+# elif defined(__NetBSD__)
+    rc->ip = uc->uc_mcontext.__gregs[_REG_EIP];
+    rc->fp = uc->uc_mcontext.__gregs[_REG_EBP];
+# elif defined(__OpenBSD__)
+    rc->ip = uc->sc_eip;
+    rc->fp = uc->sc_ebp;
+# elif !defined REG_EIP && defined EIP /* fix for glibc 2.1 */
+    rc->ip = uc->uc_mcontext.gregs[EIP];
+    rc->fp = uc->uc_mcontext.gregs[EBP];
+# else
+    rc->ip = uc->uc_mcontext.gregs[REG_EIP];
+    rc->fp = uc->uc_mcontext.gregs[REG_EBP];
+# endif
+#elif defined(__x86_64__)
+# if defined(__APPLE__)
+    rc->ip = uc->uc_mcontext->__ss.__rip;
+    rc->fp = uc->uc_mcontext->__ss.__rbp;
+# elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+    rc->ip = uc->uc_mcontext.mc_rip;
+    rc->fp = uc->uc_mcontext.mc_rbp;
+# elif defined(__NetBSD__)
+    rc->ip = uc->uc_mcontext.__gregs[_REG_RIP];
+    rc->fp = uc->uc_mcontext.__gregs[_REG_RBP];
+# else
+    rc->ip = uc->uc_mcontext.gregs[REG_RIP];
+    rc->fp = uc->uc_mcontext.gregs[REG_RBP];
+# endif
+#elif defined(__arm__)
+    rc->ip = uc->uc_mcontext.arm_pc;
+    rc->fp = uc->uc_mcontext.arm_fp;
+    rc->sp = uc->uc_mcontext.arm_sp;
+#elif defined(__aarch64__)
+    rc->ip = uc->uc_mcontext.pc;
+    rc->fp = (addr_t *)uc->uc_mcontext.regs[29];
+#endif
+}
+
+/* ------------------------------------------------------------- */
+#ifndef _WIN32
 /* signal handler for fatal errors */
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
 {
-    ucontext_t *uc = puc;
-    TCCState *s1;
+    rt_context rc;
 
+    rt_getcontext(puc, &rc);
     switch(signum) {
     case SIGFPE:
         switch(siginf->si_code) {
         case FPE_INTDIV:
         case FPE_FLTDIV:
-            rt_error(uc, "division by zero");
+            rt_error(&rc, "division by zero");
             break;
         default:
-            rt_error(uc, "floating point exception");
+            rt_error(&rc, "floating point exception");
             break;
         }
         break;
     case SIGBUS:
     case SIGSEGV:
-        s1 = get_s1_for_run();
-        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
-            rt_error(uc, *s1->rt_bound_error_msg);
-        else
-            rt_error(uc, "dereferencing invalid pointer");
+        rt_error(&rc, " dereferencing invalid pointer");
         break;
     case SIGILL:
-        rt_error(uc, "illegal instruction");
+        rt_error(&rc, "illegal instruction");
         break;
     case SIGABRT:
-        rt_error(uc, "abort() called");
+        rt_error(&rc, "abort() called");
         break;
     default:
-        rt_error(uc, "caught signal %d", signum);
+        rt_error(&rc, "caught signal %d", signum);
         break;
     }
     exit(255);
@@ -568,202 +658,31 @@ static void set_exception_handler(void)
     sigaction(SIGABRT, &sigact, NULL);
 }
 
-/* ------------------------------------------------------------- */
-#ifdef __i386__
-
-/* fix for glibc 2.1 */
-#ifndef REG_EIP
-#define REG_EIP EIP
-#define REG_EBP EBP
-#endif
-
-/* return the PC at frame level 'level'. Return negative if not found */
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
-{
-    addr_t fp;
-    int i;
-
-    if (level == 0) {
-#if defined(__APPLE__)
-        *paddr = uc->uc_mcontext->__ss.__eip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-        *paddr = uc->uc_mcontext.mc_eip;
-#elif defined(__dietlibc__)
-        *paddr = uc->uc_mcontext.eip;
-#elif defined(__NetBSD__)
-        *paddr = uc->uc_mcontext.__gregs[_REG_EIP];
-#elif defined(__OpenBSD__)
-        *paddr = uc->sc_eip;
-#else
-        *paddr = uc->uc_mcontext.gregs[REG_EIP];
-#endif
-        return 0;
-    } else {
-#if defined(__APPLE__)
-        fp = uc->uc_mcontext->__ss.__ebp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-        fp = uc->uc_mcontext.mc_ebp;
-#elif defined(__dietlibc__)
-        fp = uc->uc_mcontext.ebp;
-#elif defined(__NetBSD__)
-        fp = uc->uc_mcontext.__gregs[_REG_EBP];
-#elif defined(__OpenBSD__)
-        *paddr = uc->sc_ebp;
-#else
-        fp = uc->uc_mcontext.gregs[REG_EBP];
-#endif
-        for(i=1;i<level;i++) {
-            /* XXX: check address validity with program info */
-            if (fp <= 0x1000 || fp >= 0xc0000000)
-                return -1;
-            fp = ((addr_t *)fp)[0];
-        }
-        *paddr = ((addr_t *)fp)[1];
-        return 0;
-    }
-}
-
-/* ------------------------------------------------------------- */
-#elif defined(__x86_64__)
-
-/* return the PC at frame level 'level'. Return negative if not found */
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
-{
-    addr_t fp;
-    int i;
-
-    if (level == 0) {
-        /* XXX: only support linux */
-#if defined(__APPLE__)
-        *paddr = uc->uc_mcontext->__ss.__rip;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-        *paddr = uc->uc_mcontext.mc_rip;
-#elif defined(__NetBSD__)
-        *paddr = uc->uc_mcontext.__gregs[_REG_RIP];
-#else
-        *paddr = uc->uc_mcontext.gregs[REG_RIP];
-#endif
-        return 0;
-    } else {
-#if defined(__APPLE__)
-        fp = uc->uc_mcontext->__ss.__rbp;
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
-        fp = uc->uc_mcontext.mc_rbp;
-#elif defined(__NetBSD__)
-        fp = uc->uc_mcontext.__gregs[_REG_RBP];
-#else
-        fp = uc->uc_mcontext.gregs[REG_RBP];
-#endif
-        for(i=1;i<level;i++) {
-            /* XXX: check address validity with program info */
-            if (fp <= 0x1000)
-                return -1;
-            fp = ((addr_t *)fp)[0];
-        }
-        *paddr = ((addr_t *)fp)[1];
-        return 0;
-    }
-}
-
-/* ------------------------------------------------------------- */
-#elif defined(__arm__)
-
-/* return the PC at frame level 'level'. Return negative if not found */
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
-{
-    addr_t fp, sp;
-    int i;
-
-    if (level == 0) {
-        /* XXX: only supports linux */
-#if defined(__linux__)
-        *paddr = uc->uc_mcontext.arm_pc;
-#else
-        return -1;
-#endif
-        return 0;
-    } else {
-#if defined(__linux__)
-        fp = uc->uc_mcontext.arm_fp;
-        sp = uc->uc_mcontext.arm_sp;
-        if (sp < 0x1000)
-            sp = 0x1000;
-#else
-        return -1;
-#endif
-        /* XXX: specific to tinycc stack frames */
-        if (fp < sp + 12 || fp & 3)
-            return -1;
-        for(i = 1; i < level; i++) {
-            sp = ((addr_t *)fp)[-2];
-            if (sp < fp || sp - fp > 16 || sp & 3)
-                return -1;
-            fp = ((addr_t *)fp)[-3];
-            if (fp <= sp || fp - sp < 12 || fp & 3)
-                return -1;
-        }
-        /* XXX: check address validity with program info */
-        *paddr = ((addr_t *)fp)[-1];
-        return 0;
-    }
-}
-
-/* ------------------------------------------------------------- */
-#elif defined(__aarch64__)
-
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
-{
-    if (level < 0)
-        return -1;
-    else if (level == 0) {
-        *paddr = uc->uc_mcontext.pc;
-        return 0;
-    }
-    else {
-        addr_t *fp = (addr_t *)uc->uc_mcontext.regs[29];
-        int i;
-        for (i = 1; i < level; i++)
-            fp = (addr_t *)fp[0];
-        *paddr = fp[1];
-        return 0;
-    }
-}
-
-/* ------------------------------------------------------------- */
-#else
-
-#warning add arch specific rt_get_caller_pc()
-static int rt_get_caller_pc(addr_t *paddr, ucontext_t *uc, int level)
-{
-    return -1;
-}
-
-#endif /* !__i386__ */
-
-/* ------------------------------------------------------------- */
 #else /* WIN32 */
-
+/* signal handler for fatal errors */
 static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 {
-    EXCEPTION_RECORD *er = ex_info->ExceptionRecord;
-    CONTEXT *uc = ex_info->ContextRecord;
-    TCCState *s1;
-    switch (er->ExceptionCode) {
+    rt_context rc;
+    unsigned code;
+
+    rt_getcontext(ex_info->ContextRecord, &rc);
+    switch (code = ex_info->ExceptionRecord->ExceptionCode) {
     case EXCEPTION_ACCESS_VIOLATION:
-        s1 = get_s1_for_run();
-        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
-            rt_error(uc, *s1->rt_bound_error_msg);
-        else
-	    rt_error(uc, "access violation");
+	rt_error(&rc, " access violation");
         break;
     case EXCEPTION_STACK_OVERFLOW:
-        rt_error(uc, "stack overflow");
+        rt_error(&rc, "stack overflow");
         break;
     case EXCEPTION_INT_DIVIDE_BY_ZERO:
-        rt_error(uc, "division by zero");
+        rt_error(&rc, "division by zero");
         break;
+    case EXCEPTION_BREAKPOINT:
+    case EXCEPTION_SINGLE_STEP:
+        rc.ip = *(addr_t*)rc.sp;
+        rt_error(&rc, "^breakpoint/single-step exception:");
+        return EXCEPTION_CONTINUE_SEARCH;
     default:
-        rt_error(uc, "exception caught");
+        rt_error(&rc, "caught exception %08x", code);
         break;
     }
     return EXCEPTION_EXECUTE_HANDLER;
@@ -775,33 +694,90 @@ static void set_exception_handler(void)
     SetUnhandledExceptionFilter(cpu_exception_handler);
 }
 
-/* return the PC at frame level 'level'. Return non zero if not found */
-static int rt_get_caller_pc(addr_t *paddr, CONTEXT *uc, int level)
-{
-    addr_t fp, pc;
-    int i;
-#ifdef _WIN64
-    pc = uc->Rip;
-    fp = uc->Rbp;
-#else
-    pc = uc->Eip;
-    fp = uc->Ebp;
 #endif
-    if (level > 0) {
-        for(i=1;i<level;i++) {
-	    /* XXX: check address validity with program info */
-	    if (fp <= 0x1000 || fp >= 0xc0000000)
-		return -1;
-	    fp = ((addr_t*)fp)[0];
-	}
-        pc = ((addr_t*)fp)[1];
+
+/* ------------------------------------------------------------- */
+/* return the PC at frame level 'level'. Return negative if not found */
+#if defined(__i386__) || defined(__x86_64__)
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
+{
+    addr_t ip, fp;
+    if (level == 0) {
+        ip = rc->ip;
+    } else {
+        ip = 0;
+        fp = rc->fp;
+        while (--level) {
+            /* XXX: check address validity with program info */
+            if (fp <= 0x1000)
+                break;
+            fp = ((addr_t *)fp)[0];
+        }
+        if (fp > 0x1000)
+            ip = ((addr_t *)fp)[1];
     }
-    *paddr = pc;
+    if (ip <= 0x1000)
+        return -1;
+    *paddr = ip;
     return 0;
 }
 
-#endif /* _WIN32 */
+#elif defined(__arm__)
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
+{
+    /* XXX: only supports linux */
+#if !defined(__linux__)
+    return -1;
+#else
+    if (level == 0) {
+        *paddr = rc->ip;
+    } else {
+        addr_t fp = rc->fp;
+        addr_t sp = rc->sp;
+        if (sp < 0x1000)
+            sp = 0x1000;
+        /* XXX: specific to tinycc stack frames */
+        if (fp < sp + 12 || fp & 3)
+            return -1;
+        while (--level) {
+            sp = ((addr_t *)fp)[-2];
+            if (sp < fp || sp - fp > 16 || sp & 3)
+                return -1;
+            fp = ((addr_t *)fp)[-3];
+            if (fp <= sp || fp - sp < 12 || fp & 3)
+                return -1;
+        }
+        /* XXX: check address validity with program info */
+        *paddr = ((addr_t *)fp)[-1];
+    }
+    return 0;
+#endif
+}
+
+#elif defined(__aarch64__)
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
+{
+   if (level == 0) {
+        *paddr = rc->ip;
+    } else {
+        addr_t *fp = rc->fp;
+        while (--level)
+            fp = (addr_t *)fp[0];
+        *paddr = fp[1];
+    }
+    return 0;
+}
+
+#else
+#warning add arch specific rt_get_caller_pc()
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
+{
+    return -1;
+}
+
+#endif
 #endif /* CONFIG_TCC_BACKTRACE */
+
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_STATIC
 

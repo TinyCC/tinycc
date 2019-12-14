@@ -92,6 +92,7 @@ ST_FUNC void tccelf_stab_new(TCCState *s)
     TCCState *s1 = s;
     stab_section = new_section(s, ".stab", SHT_PROGBITS, 0);
     stab_section->sh_entsize = sizeof(Stab_Sym);
+    stab_section->sh_addralign = 4;
     stab_section->link = new_section(s, ".stabstr", SHT_STRTAB, 0);
     put_elf_str(stab_section->link, "");
     /* put first entry */
@@ -809,11 +810,6 @@ ST_FUNC void put_stabs_r(TCCState *s1, const char *str, int type, int other, int
 ST_FUNC void put_stabn(TCCState *s1, int type, int other, int desc, int value)
 {
     put_stabs(s1, NULL, type, other, desc, value);
-}
-
-ST_FUNC void put_stabd(TCCState *s1, int type, int other, int desc)
-{
-    put_stabs(s1, NULL, type, other, desc, 0);
 }
 
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
@@ -2489,17 +2485,13 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     ElfW(Shdr) *shdr, *sh;
     int size, i, j, offset, offseti, nb_syms, sym_index, ret, seencompressed;
     char *strsec, *strtab;
+    int stab_index, stabstr_index;
     int *old_to_new_syms;
     char *sh_name, *name;
     SectionMergeInfo *sm_table, *sm;
     ElfW(Sym) *sym, *symtab;
     ElfW_Rel *rel;
     Section *s;
-
-    int stab_index;
-    int stabstr_index;
-
-    stab_index = stabstr_index = 0;
 
     lseek(fd, file_offset, SEEK_SET);
     if (tcc_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
@@ -2526,6 +2518,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     strtab = NULL;
     nb_syms = 0;
     seencompressed = 0;
+    stab_index = stabstr_index = 0;
+
     for(i = 1; i < ehdr.e_shnum; i++) {
         sh = &shdr[i];
         if (sh->sh_type == SHT_SYMTAB) {
@@ -2588,9 +2582,14 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                        it. */
                     sm_table[i].link_once = 1;
                     goto next;
-                } else {
-                    goto found;
                 }
+                if (stab_section) {
+                    if (s == stab_section)
+                        stab_index = i;
+                    if (s == stab_section->link)
+                        stabstr_index = i;
+                }
+                goto found;
             }
         }
         /* not found: create new section */
@@ -2605,26 +2604,11 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             tcc_error_noabort("invalid section type");
             goto fail;
         }
-
         /* align start of section */
-        offset = s->data_offset;
-
-        if (0 == strcmp(sh_name, ".stab")) {
-            stab_index = i;
-            goto no_align;
-        }
-        if (0 == strcmp(sh_name, ".stabstr")) {
-            stabstr_index = i;
-            goto no_align;
-        }
-
-        size = sh->sh_addralign - 1;
-        offset = (offset + size) & ~size;
+        s->data_offset += -s->data_offset & (sh->sh_addralign - 1);
         if (sh->sh_addralign > s->sh_addralign)
             s->sh_addralign = sh->sh_addralign;
-        s->data_offset = offset;
-    no_align:
-        sm_table[i].offset = offset;
+        sm_table[i].offset = s->data_offset;
         sm_table[i].s = s;
         /* concatenate sections */
         size = sh->sh_size;
@@ -2669,7 +2653,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             s1->sections[s->sh_info]->reloc = s;
         }
     }
-    sm = sm_table;
 
     /* resolve symbols */
     old_to_new_syms = tcc_mallocz(nb_syms * sizeof(int));
@@ -2729,7 +2712,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                     goto invalid_reloc;
                 sym_index = old_to_new_syms[sym_index];
                 /* ignore link_once in rel section. */
-                if (!sym_index && !sm->link_once
+                if (!sym_index && !sm_table[sh->sh_info].link_once
 #ifdef TCC_TARGET_ARM
                     && type != R_ARM_V4BX
 #elif defined TCC_TARGET_RISCV64
