@@ -597,7 +597,7 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
     rc->sp = uc->uc_mcontext.arm_sp;
 #elif defined(__aarch64__)
     rc->ip = uc->uc_mcontext.pc;
-    rc->fp = (addr_t *)uc->uc_mcontext.regs[29];
+    rc->fp = uc->uc_mcontext.regs[29];
 #endif
 }
 
@@ -760,7 +760,7 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
    if (level == 0) {
         *paddr = rc->ip;
     } else {
-        addr_t *fp = rc->fp;
+        addr_t *fp = (addr_t*)rc->fp;
         while (--level)
             fp = (addr_t *)fp[0];
         *paddr = fp[1];
