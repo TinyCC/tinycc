@@ -749,7 +749,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     s = tcc_mallocz(sizeof(TCCState));
     if (!s)
         return NULL;
+    WAIT_SEM();
     ++nb_states;
+    POST_SEM();
 
 #undef gnu_ext
 
@@ -958,8 +960,10 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 
     tcc_free(s1);
+    WAIT_SEM();
     if (0 == --nb_states)
         tcc_memcheck();
+    POST_SEM();
 }
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)

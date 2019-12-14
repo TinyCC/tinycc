@@ -105,13 +105,15 @@ void parse_args(TCCState *s)
             else if (a[1] == 'L')
                 tcc_add_library_path(s, a+2);
             else if (a[1] == 'D') {
-                char *eq = strchr(a+2, '=');
+                char *dup = strdup(a);
+                char *eq = strchr(dup+2, '=');
                 if (eq) {
                     *eq = 0;
-                    tcc_define_symbol(s, a+2, eq+1);
+                    tcc_define_symbol(s, dup+2, eq+1);
                     *eq = '=';
                 } else
-                  tcc_define_symbol(s, a+2, NULL);
+                  tcc_define_symbol(s, dup+2, NULL);
+                free(dup);
             }
         }
     }
