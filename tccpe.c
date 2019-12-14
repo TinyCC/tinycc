@@ -636,12 +636,14 @@ static int pe_write(struct pe_info *pe)
 
         switch (si->cls) {
             case sec_text:
-                pe_header.opthdr.BaseOfCode = addr;
+                if (!pe_header.opthdr.BaseOfCode)
+                    pe_header.opthdr.BaseOfCode = addr;
                 break;
 
             case sec_data:
 #ifndef TCC_TARGET_X86_64
-                pe_header.opthdr.BaseOfData = addr;
+                if (!pe_header.opthdr.BaseOfData)
+                    pe_header.opthdr.BaseOfData = addr;
 #endif
                 break;
 

@@ -64,7 +64,9 @@
 /* XXX: get rid of this ASAP (or maybe not) */
 ST_DATA struct TCCState *tcc_state;
 
+#ifdef MEM_DEBUG
 static int nb_states;
+#endif
 
 /********************************************************/
 #ifdef _WIN32
@@ -243,10 +245,6 @@ PUB_FUNC char *tcc_strdup(const char *str)
     ptr = tcc_malloc(strlen(str) + 1);
     strcpy(ptr, str);
     return ptr;
-}
-
-PUB_FUNC void tcc_memcheck(void)
-{
 }
 
 #else
@@ -631,6 +629,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
 
 ST_FUNC void tcc_close(void)
 {
+    TCCState *s1 = tcc_state;
     BufferedFile *bf = file;
     if (bf->fd > 0) {
         close(bf->fd);
@@ -668,14 +667,9 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
 /* compile the file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
 {
-    tccelf_begin_file(s1);
-
     /* Here we enter the code section where we use the global variables for
        parsing and code generation (tccpp.c, tccgen.c, <target>-gen.c).
        Other threads need to wait until we're done.
-
-       Alternatively we could of course pass TCCState *s1 everwhere
-       except that it would look extremly ugly.
 
        Alternatively we could use thread local storage for those global
        variables, which may or may not have advantages */
@@ -698,7 +692,9 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
         }
 
         is_asm = !!(filetype & (AFF_TYPE_ASM|AFF_TYPE_ASMPP));
+        tccelf_begin_file(s1);
         preprocess_start(s1, is_asm);
+        tccgen_init(s1);
         if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
             tcc_preprocess(s1);
         } else if (is_asm) {
@@ -712,13 +708,12 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
         }
     }
     s1->error_set_jmp_enabled = 0;
-    tccgen_finish(s1, 1);
+    tccgen_finish(s1);
     preprocess_end(s1);
-    tccgen_finish(s1, 2);
+    tccelf_end_file(s1);
 
     tcc_state = NULL;
     POST_SEM();
-    tccelf_end_file(s1);
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
@@ -749,9 +744,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     s = tcc_mallocz(sizeof(TCCState));
     if (!s)
         return NULL;
-    WAIT_SEM();
+#ifdef MEM_DEBUG
     ++nb_states;
-    POST_SEM();
+#endif
 
 #undef gnu_ext
 
@@ -960,10 +955,10 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 
     tcc_free(s1);
-    WAIT_SEM();
+#ifdef MEM_DEBUG
     if (0 == --nb_states)
         tcc_memcheck();
-    POST_SEM();
+#endif
 }
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
@@ -1824,7 +1819,7 @@ reparse:
             else if (*optarg == 't')
                 s->dflag = 16;
             else if (isnum(*optarg))
-                g_debug = atoi(optarg);
+                s->g_debug |= atoi(optarg);
             else
                 goto unsupported_option;
             break;
@@ -1925,7 +1920,7 @@ reparse:
             tcc_add_sysinclude_path(s, optarg);
             break;
         case TCC_OPTION_include:
-            cstr_printf(&s->cmdline_defs, "#include \"%s\"\n", optarg);
+            cstr_printf(&s->cmdline_incl, "#include \"%s\"\n", optarg);
             break;
         case TCC_OPTION_nostdinc:
             s->nostdinc = 1;
@@ -2077,7 +2072,7 @@ LIBTCCAPI void tcc_set_options(TCCState *s, const char *r)
     dynarray_reset(&argv, &argc);
 }
 
-PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time)
+PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
 {
     if (total_time < 1)
         total_time = 1;
@@ -2085,7 +2080,7 @@ PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time)
         total_bytes = 1;
     fprintf(stderr, "* %d idents, %d lines, %d bytes\n"
                     "* %0.3f s, %u lines/s, %0.1f MB/s\n",
-           tok_ident - TOK_IDENT, total_lines, total_bytes,
+           total_idents, total_lines, total_bytes,
            (double)total_time/1000,
            (unsigned)total_lines*1000/total_time,
            (double)total_bytes/1000/total_time);

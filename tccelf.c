@@ -3318,8 +3318,11 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
     if (!as_needed)
         s1->new_undef_sym = 0;
     t = ld_next(s1, filename, sizeof(filename));
-    if (t != '(')
-        expect("(");
+    if (t != '(') {
+        tcc_error_noabort("( expected");
+        ret = -1;
+        goto lib_parse_error;
+    }
     t = ld_next(s1, filename, sizeof(filename));
     for(;;) {
         libname[0] = '\0';
@@ -3408,8 +3411,10 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd)
                    !strcmp(cmd, "TARGET")) {
             /* ignore some commands */
             t = ld_next(s1, cmd, sizeof(cmd));
-            if (t != '(')
-                expect("(");
+            if (t != '(') {
+                tcc_error_noabort("( expected");
+                return -1;
+            }
             for(;;) {
                 t = ld_next(s1, filename, sizeof(filename));
                 if (t == LD_TOK_EOF) {

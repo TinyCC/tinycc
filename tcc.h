@@ -128,7 +128,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* #define PP_DEBUG */
 /* include file debug */
 /* #define INC_DEBUG */
-/* memory leak debug */
+/* memory leak debug (only for single threaded usage) */
 /* #define MEM_DEBUG */
 /* assembler debug */
 /* #define ASM_DEBUG */
@@ -889,6 +889,14 @@ struct TCCState {
 
     int fd, cc; /* used by tcc_load_ldscript */
 
+    /* benchmark info */
+    int total_idents;
+    int total_lines;
+    int total_bytes;
+
+    /* option -dnum (for general development purposes) */
+    int g_debug;
+
     /* used by main and tcc_parse_args only */
     struct filespec **files; /* files seen on command line */
     int nb_files; /* number thereof */
@@ -1192,7 +1200,6 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #define realloc(p, s) use_tcc_realloc(p, s)
 #undef strdup
 #define strdup(s) use_tcc_strdup(s)
-PUB_FUNC void tcc_memcheck(void);
 PUB_FUNC void _tcc_error_noabort(const char *fmt, ...);
 PUB_FUNC NORETURN void _tcc_error(const char *fmt, ...);
 PUB_FUNC void _tcc_warning(const char *fmt, ...);
@@ -1277,8 +1284,6 @@ ST_DATA int tok_flags;
 ST_DATA CString tokcstr; /* current parsed string, if any */
 
 /* display benchmark infos */
-ST_DATA int total_lines;
-ST_DATA int total_bytes;
 ST_DATA int tok_ident;
 ST_DATA TokenSym **table_ident;
 
@@ -1360,8 +1365,7 @@ ST_DATA Sym *local_label_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *define_stack;
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
-ST_DATA SValue __vstack[1+/*to make bcheck happy*/ VSTACK_SIZE], *vtop, *pvtop;
-#define vstack  (__vstack + 1)
+ST_DATA SValue *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
 
 ST_DATA int const_wanted; /* true if constant wanted */
@@ -1371,7 +1375,6 @@ ST_DATA CType func_vt; /* current function return type (used by return instructi
 ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA const char *funcname;
-ST_DATA int g_debug;
 
 ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
@@ -1382,8 +1385,9 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
 ST_FUNC void tcc_debug_line(TCCState *s1);
 
+ST_FUNC void tccgen_init(TCCState *s1);
 ST_FUNC int tccgen_compile(TCCState *s1);
-ST_FUNC void tccgen_finish(TCCState *s1, int f);
+ST_FUNC void tccgen_finish(TCCState *s1);
 ST_FUNC void check_vstack(void);
 
 ST_INLN int is_float(int t);
@@ -1750,6 +1754,10 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 #define tcc_error_noabort   TCC_SET_STATE(_tcc_error_noabort)
 #define tcc_error           TCC_SET_STATE(_tcc_error)
 #define tcc_warning         TCC_SET_STATE(_tcc_warning)
+
+#define total_idents        TCC_STATE_VAR(total_idents)
+#define total_lines         TCC_STATE_VAR(total_lines)
+#define total_bytes         TCC_STATE_VAR(total_bytes)
 
 PUB_FUNC void tcc_enter_state(TCCState *s1);
 

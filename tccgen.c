@@ -47,7 +47,9 @@ static int in_sizeof;
 static int in_generic;
 static int section_sym;
 
-ST_DATA SValue __vstack[1+VSTACK_SIZE], *vtop, *pvtop;
+ST_DATA SValue *vtop;
+static SValue _vstack[1 + VSTACK_SIZE];
+#define vstack (_vstack + 1)
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
@@ -77,7 +79,6 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
-ST_DATA int g_debug;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type, ptrdiff_type;
 
@@ -180,8 +181,8 @@ ST_FUNC void test_lvalue(void)
 
 ST_FUNC void check_vstack(void)
 {
-    if (pvtop != vtop)
-        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+    if (vtop != vstack - 1)
+        tcc_error("internal compiler error: vstack leak (%d)", vtop - vstack + 1);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -325,15 +326,11 @@ ST_FUNC void tcc_debug_eincl(TCCState *s1)
 }
 
 /* ------------------------------------------------------------------------- */
-ST_FUNC int tccgen_compile(TCCState *s1)
+/* initialize vstack and types.  This must be done also for tcc -E */
+ST_FUNC void tccgen_init(TCCState *s1)
 {
-    cur_text_section = NULL;
-    funcname = "";
-    anon_sym = SYM_FIRST_ANOM;
-    section_sym = 0;
-    const_wanted = 0;
-    nocode_wanted = 0x80000000;
-    local_scope = 0;
+    vtop = vstack - 1;
+    memset(vtop, 0, sizeof *vtop);
 
     /* define some often used types */
     int_type.t = VT_INT;
@@ -353,17 +350,25 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
     func_old_type.ref->f.func_call = FUNC_CDECL;
     func_old_type.ref->f.func_type = FUNC_OLD;
+}
+
+ST_FUNC int tccgen_compile(TCCState *s1)
+{
+    cur_text_section = NULL;
+    funcname = "";
+    anon_sym = SYM_FIRST_ANOM;
+    section_sym = 0;
+    const_wanted = 0;
+    nocode_wanted = 0x80000000;
+    local_scope = 0;
 
     tcc_debug_start(s1);
-
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
-
 #ifdef INC_DEBUG
     printf("%s: **** new file\n", file->filename);
 #endif
-
     parse_flags = PARSE_FLAG_PREPROCESS | PARSE_FLAG_TOK_NUM | PARSE_FLAG_TOK_STR;
     next();
     decl(VT_CONST);
@@ -374,19 +379,16 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     return 0;
 }
 
-ST_FUNC void tccgen_finish(TCCState *s1, int f)
+ST_FUNC void tccgen_finish(TCCState *s1)
 {
-    if (f == 1) {
-        free_inline_functions(s1);
-        sym_pop(&global_stack, NULL, 0);
-        sym_pop(&local_stack, NULL, 0);
-    }
-
-    if (f == 2) {
-        /* free sym_pools */
-        dynarray_reset(&sym_pools, &nb_sym_pools);
-        sym_free_first = NULL;
-    }
+    free_inline_functions(s1);
+    sym_pop(&global_stack, NULL, 0);
+    sym_pop(&local_stack, NULL, 0);
+    /* free preprocessor macros */
+    free_defines(NULL);
+    /* free sym_pools */
+    dynarray_reset(&sym_pools, &nb_sym_pools);
+    sym_free_first = NULL;
 }
 
 /* ------------------------------------------------------------------------- */

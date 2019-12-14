@@ -34,8 +34,6 @@ ST_DATA const int *macro_ptr;
 ST_DATA CString tokcstr; /* current parsed string, if any */
 
 /* display benchmark infos */
-ST_DATA int total_lines;
-ST_DATA int total_bytes;
 ST_DATA int tok_ident;
 ST_DATA TokenSym **table_ident;
 
@@ -604,7 +602,7 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
 
 /* return the current character, handling end of block if necessary
    (but not stray) */
-ST_FUNC int handle_eob(void)
+static int handle_eob(void)
 {
     BufferedFile *bf = file;
     int len;
@@ -637,7 +635,7 @@ ST_FUNC int handle_eob(void)
 }
 
 /* read next char from current input file and handle end of input buffer */
-ST_INLN void inp(void)
+static inline void inp(void)
 {
     ch = *(++(file->buf_ptr));
     /* end of buffer/file handling */
@@ -723,7 +721,7 @@ static int handle_stray1(uint8_t *p)
 /* input with '\[\r]\n' handling. Note that this function cannot
    handle other characters after '\', so you cannot call it inside
    strings or comments */
-ST_FUNC void minp(void)
+static void minp(void)
 {
     inp();
     if (ch == '\\') 
@@ -768,7 +766,7 @@ static uint8_t *parse_line_comment(uint8_t *p)
 }
 
 /* C comments */
-ST_FUNC uint8_t *parse_comment(uint8_t *p)
+static uint8_t *parse_comment(uint8_t *p)
 {
     int c;
 
@@ -3597,8 +3595,6 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     pp_counter = 0;
     pp_debug_tok = pp_debug_symv = 0;
     pp_once++;
-    pvtop = vtop = vstack - 1;
-    memset(vtop, 0, sizeof *vtop);
     s1->pack_stack[0] = 0;
     s1->pack_stack_ptr = s1->pack_stack;
 
@@ -3629,10 +3625,8 @@ ST_FUNC void preprocess_end(TCCState *s1)
     while (macro_stack)
         end_macro();
     macro_ptr = NULL;
-
     while (file)
         tcc_close();
-
     tccpp_delete(s1);
 }
 
@@ -3690,11 +3684,12 @@ ST_FUNC void tccpp_delete(TCCState *s)
 {
     int i, n;
 
-    free_defines(NULL);
     dynarray_reset(&s->cached_includes, &s->nb_cached_includes);
 
     /* free tokens */
     n = tok_ident - TOK_IDENT;
+    if (n > total_idents)
+        total_idents = n;
     for(i = 0; i < n; i++)
         tal_free(toksym_alloc, table_ident[i]);
     tcc_free(table_ident);

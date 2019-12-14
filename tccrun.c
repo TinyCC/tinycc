@@ -373,7 +373,7 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
     if (symtab_section) {
         esym_start = (ElfW(Sym) *)(symtab_section->data);
         esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
-        elf_str = symtab_section->link->data;
+        elf_str = (char *) symtab_section->link->data;
     }
 
     for (sym = stab_sym + 1; sym < stab_sym_end; ++sym) {
