@@ -1718,6 +1718,16 @@ ST_FUNC void gen_cvt_sxtw(void)
     o(0x93407c00 | r | r << 5); // sxtw x(r),w(r)
 }
 
+/* char/short to int conversion */
+ST_FUNC void gen_cvt_csti(int t)
+{
+    int r = intr(gv(RC_INT));
+    o(0x13001c00
+        | ((t & VT_BTYPE) == VT_SHORT) << 13
+        | (uint32_t)!!(t & VT_UNSIGNED) << 30
+        | r | r << 5); // [su]xt[bh] w(r),w(r)
+}
+
 ST_FUNC void gen_cvt_itof(int t)
 {
     if (t == VT_LDOUBLE) {

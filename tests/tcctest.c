@@ -16,6 +16,10 @@
 
 #endif
 
+#ifndef __TINYC__
+typedef __SIZE_TYPE__ uintptr_t;
+#endif
+
 #if defined(_WIN32)
 #define LONG_LONG_FORMAT "%lld"
 #define ULONG_LONG_FORMAT "%llu"
@@ -1163,7 +1167,7 @@ void struct_test()
     s->f3 = 1;
     printf("st2: %d %d %d\n",
            s->f1, s->f2, s->f3);
-    printf("str_addr=%x\n", (int)st1.str - (int)&st1.f1);
+    printf("str_addr=%x\n", (int)(uintptr_t)st1.str - (int)(uintptr_t)&st1.f1);
 
     /* align / size tests */
     printf("aligntest1 sizeof=%d alignof=%d\n",
@@ -1203,10 +1207,17 @@ void struct_test()
     printf("Large: offsetof(compound_head)=%d\n", (int)((char*)&ls.compound_head - (char*)&ls));
 }
 
+/* simulate char/short return value with undefined upper bits */
+static int __csf(int x) { return x; }
+static void *_csf = __csf;
+#define csf(t,n) ((t(*)(int))_csf)(n)
+
 /* XXX: depend on endianness */
 void char_short_test()
 {
     int var1, var2;
+    char var3;
+    long long var4;
 
     printf("char_short:\n");
 
@@ -1230,6 +1241,34 @@ void char_short_test()
     printf("var1=%x\n", var1);
     *(int *)&var1 = 0x08090a0b;
     printf("var1=%x\n", var1);
+
+    var1 = 0x778899aa;
+    var4 = 0x11223344aa998877ULL;
+    var1 = var3 = var1 + 1;
+    var4 = var3 = var4 + 1;
+    printf("promote char/short assign %d "LONG_LONG_FORMAT"\n", var1, var4);
+    var1 = 0x778899aa;
+    var4 = 0x11223344aa998877ULL;
+    printf("promote char/short assign VA %d %d\n", var3 = var1 + 1, var3 = var4 + 1);
+    printf("promote char/short cast VA %d %d\n", (char)(var1 + 1), (char)(var4 + 1));
+    var1 = csf(unsigned char,0x89898989);
+    var4 = csf(char,0xabababab);
+    printf("promote char/short funcret %d "LONG_LONG_FORMAT"\n", var1, var4);
+    printf("promote char/short fumcret VA %d %d %d %d\n",
+        csf(unsigned short,0xcdcdcdcd),
+        csf(short,0xefefefef),
+        csf(_Bool,0x33221100),
+        csf(_Bool,0x33221101));
+    var3 = -10;
+    var1 = (char)(unsigned char)(var3 + 1);
+    var4 = (char)(unsigned char)(var3 + 1);
+    printf("promote multicast (char)(unsigned char) %d "LONG_LONG_FORMAT"\n", var1, var4);
+    var4 = 0x11223344aa998877ULL;
+    var4 = (unsigned)(int)(var4 + 1);
+    printf("promote multicast (unsigned)(int) "LONG_LONG_FORMAT"\n", var4);
+    var4 = 0x11223344bbaa9988ULL;
+    var4 = (unsigned)(char)(var4 + 1);
+    printf("promote multicast (unsigned)(char) "LONG_LONG_FORMAT"\n", var4);
 }
 
 /******************/
@@ -1679,6 +1718,10 @@ void cast_test()
     printf("sizeof(-(char)'a') = %d\n", sizeof(-(char)'a'));
     printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
 
+#ifdef __TINYC__
+# pragma comment(option, "-w")
+#endif
+
     /* from pointer to integer types */
     printf("%d %d %ld %ld %lld %lld\n",
            (int)p, (unsigned int)p,
@@ -1688,6 +1731,10 @@ void cast_test()
     /* from integers to pointers */
     printf("%p %p %p %p\n",
            (void *)a, (void *)b, (void *)c, (void *)d);
+
+#ifdef __TINYC__
+# pragma comment(option, "-W")
+#endif
 
     /* int to int with sign set */
     printf("0x%lx\n", (unsigned long)(int)ul);
@@ -2347,7 +2394,7 @@ void funcptr_test()
 
     /* Check that we can align functions */
     func = aligned_function;
-    printf("aligned_function (should be zero): %d\n", ((int)func) & 15);
+    printf("aligned_function (should be zero): %d\n", ((int)(uintptr_t)func) & 15);
 }
 
 void lloptest(long long a, long long b)
@@ -2548,6 +2595,9 @@ void longlong_test(void)
     /* shortening followed by widening */
     unsigned long long u = 0x8000000000000001ULL;
     u = (unsigned)(u + 1);
+    printf("long long u=" ULONG_LONG_FORMAT "\n", u);
+    u = 0x11223344aa998877ULL;
+    u = (unsigned)(int)(u + 1);
     printf("long long u=" ULONG_LONG_FORMAT "\n", u);
 
     /* was a problem with missing save_regs in gen_opl on 32-bit platforms */
@@ -2896,10 +2946,6 @@ void c99_vla_test(int size1, int size2)
     printf("\n");
 #endif
 }
-
-#ifndef __TINYC__
-typedef __SIZE_TYPE__ uintptr_t;
-#endif
 
 void sizeof_test(void)
 {

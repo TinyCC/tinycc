@@ -926,9 +926,9 @@ struct filespec {
 #define VT_JMPI      0x0035  /* value is the consequence of jmp false (odd) */
 #define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
-#define VT_MUSTCAST  0x0400  /* value must be casted to be correct (used for
+#define VT_MUSTCAST  0x0C00  /* value must be casted to be correct (used for
                                 char/short stored in integer registers) */
-#define VT_MUSTBOUND 0x0800  /* bound checking must be done before
+#define VT_MUSTBOUND 0x4000  /* bound checking must be done before
                                 dereferencing value */
 #define VT_BOUNDED   0x8000  /* value is bounded. The address of the
                                 bounding function call point is in vc */
@@ -985,6 +985,11 @@ struct filespec {
 /* symbol was created by tccasm.c first */
 #define VT_ASM (VT_VOID | VT_UNSIGNED)
 #define IS_ASM_SYM(sym) (((sym)->type.t & (VT_BTYPE | VT_ASM)) == VT_ASM)
+
+/* general: set/get the pseudo-bitfield value for bit-mask M */
+#define BFVAL(M,N) ((unsigned)((M) & ~((M) << 1)) * (N))
+#define BFGET(X,M) (((X) & (M)) / BFVAL(M,1))
+#define BFSET(X,M,N) ((X) = ((X) & ~(M)) | BFVAL(M,N))
 
 /* token values */
 
@@ -1359,7 +1364,7 @@ ST_DATA Sym *local_stack;
 ST_DATA Sym *local_label_stack;
 ST_DATA Sym *global_label_stack;
 ST_DATA Sym *define_stack;
-ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
+ST_DATA CType int_type, func_old_type, char_pointer_type;
 ST_DATA SValue *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
 
@@ -1598,6 +1603,7 @@ ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
 ST_FUNC void gen_addr32(int r, Sym *sym, int c);
 ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
+ST_FUNC void gen_cvt_csti(int t);
 #endif
 
 #ifdef CONFIG_TCC_BCHECK
@@ -1612,6 +1618,8 @@ ST_FUNC void gen_opl(int op);
 #ifdef TCC_TARGET_PE
 ST_FUNC void gen_vla_result(int addr);
 #endif
+ST_FUNC void gen_cvt_sxtw(void);
+ST_FUNC void gen_cvt_csti(int t);
 #endif
 
 /* ------------ arm-gen.c ------------ */
@@ -1624,22 +1632,24 @@ ST_FUNC void arm_init(struct TCCState *s);
 
 /* ------------ arm64-gen.c ------------ */
 #ifdef TCC_TARGET_ARM64
-ST_FUNC void gen_cvt_sxtw(void);
 ST_FUNC void gen_opl(int op);
 ST_FUNC void gfunc_return(CType *func_type);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void gen_va_arg(CType *t);
 ST_FUNC void gen_clear_cache(void);
+ST_FUNC void gen_cvt_sxtw(void);
+ST_FUNC void gen_cvt_csti(int t);
 #endif
 
 /* ------------ riscv64-gen.c ------------ */
 #ifdef TCC_TARGET_RISCV64
-ST_FUNC void gen_cvt_sxtw(void);
 ST_FUNC void gen_opl(int op);
 //ST_FUNC void gfunc_return(CType *func_type);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void arch_transfer_ret_regs(int);
+ST_FUNC void gen_cvt_sxtw(void);
 #endif
+
 /* ------------ c67-gen.c ------------ */
 #ifdef TCC_TARGET_C67
 #endif

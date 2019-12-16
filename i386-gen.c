@@ -1048,6 +1048,19 @@ ST_FUNC void gen_cvt_ftof(int t)
     gv(RC_FLOAT);
 }
 
+/* char/short to int conversion */
+ST_FUNC void gen_cvt_csti(int t)
+{
+    int r, sz, xl;
+    r = gv(RC_INT);
+    sz = !(t & VT_UNSIGNED);
+    xl = (t & VT_BTYPE) == VT_SHORT;
+    o(0xc0b60f /* mov[sz] %a[xl], %eax */
+        | (sz << 3 | xl) << 8
+        | (r << 3 | r) << 16
+        );
+}
+
 /* computed goto support */
 ST_FUNC void ggoto(void)
 {

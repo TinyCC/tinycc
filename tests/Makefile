@@ -269,6 +269,7 @@ cross-test :
 	$(TOP)/arm-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
 	$(TOP)/arm-wince-tcc$(EXESUF) $(TCCFLAGS-win) -c $(TOPSRC)/examples/ex3.c && echo "ok"
 	$(TOP)/arm64-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
+	$(TOP)/riscv64-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
 	$(TOP)/c67-tcc$(EXESUF) $(TCCFLAGS-unx) -c $(TOPSRC)/examples/ex3.c && echo "ok"
 	$(TOP)/i386-win32-tcc$(EXESUF) $(TCCFLAGS-win) $(TOPSRC)/win32/examples/hello_win.c && echo "ok"
 	$(TOP)/x86_64-win32-tcc$(EXESUF) $(TCCFLAGS-win) $(TOPSRC)/win32/examples/hello_win.c && echo "ok"

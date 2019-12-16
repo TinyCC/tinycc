@@ -524,7 +524,7 @@ void load(int r, SValue *sv)
                 o(0xf024);
                 o(0xf02444dd); /* fldl -0x10(%rsp) */
             } else {
-                orex(1,r,v, 0x89);
+                orex(is64_type(ft), r, v, 0x89);
                 o(0xc0 + REG_VALUE(r) + REG_VALUE(v) * 8); /* mov v, r */
             }
         }
@@ -598,16 +598,13 @@ void store(int r, SValue *v)
         if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
             gen_modrm64(op64, r, v->r, v->sym, fc);
         } else if (fr != r) {
-            /* XXX: don't we really come here? */
-            abort();
+            orex(1, fr, r, op64);
             o(0xc0 + fr + r * 8); /* mov r, fr */
         }
     } else {
         if (fr == VT_CONST || fr == VT_LOCAL || (v->r & VT_LVAL)) {
             gen_modrm(r, v->r, v->sym, fc);
         } else if (fr != r) {
-            /* XXX: don't we really come here? */
-            abort();
             o(0xc0 + fr + r * 8); /* mov r, fr */
         }
     }
@@ -2246,6 +2243,29 @@ void gen_cvt_ftoi(int t)
     orex(size == 8, r, 0, 0x2c0f); /* cvttss2si or cvttsd2si */
     o(0xc0 + REG_VALUE(vtop->r) + REG_VALUE(r)*8);
     vtop->r = r;
+}
+
+// Generate sign extension from 32 to 64 bits:
+ST_FUNC void gen_cvt_sxtw(void)
+{
+    int r = gv(RC_INT);
+    /* x86_64 specific: movslq */
+    o(0x6348);
+    o(0xc0 + (REG_VALUE(r) << 3) + REG_VALUE(r));
+}
+
+/* char/short to int conversion */
+ST_FUNC void gen_cvt_csti(int t)
+{
+    int r, sz, xl, ll;
+    r = gv(RC_INT);
+    sz = !(t & VT_UNSIGNED);
+    xl = (t & VT_BTYPE) == VT_SHORT;
+    ll = (vtop->type.t & VT_BTYPE) == VT_LLONG;
+    orex(ll, r, 0, 0xc0b60f /* mov[sz] %a[xl], %eax */
+        | (sz << 3 | xl) << 8
+        | (REG_VALUE(r) << 3 | REG_VALUE(r)) << 16
+        );
 }
 
 /* computed goto support */

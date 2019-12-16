@@ -1965,7 +1965,8 @@ reparse:
             }
             break;
         case TCC_OPTION_W:
-            if (set_flag(s, options_W, optarg) < 0)
+            s->warn_none = 0;
+            if (optarg[0] && set_flag(s, options_W, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
