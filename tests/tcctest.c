@@ -1210,7 +1210,13 @@ void struct_test()
 /* simulate char/short return value with undefined upper bits */
 static int __csf(int x) { return x; }
 static void *_csf = __csf;
+#ifdef __TINYC__
 #define csf(t,n) ((t(*)(int))_csf)(n)
+#define csfb csf
+#else /* arm gcc maybe doesn't promote function return values */
+#define csf(t,n) (t) n
+#define csfb(t,n) (t) (n & 255)
+#endif
 
 /* XXX: depend on endianness */
 void char_short_test()
@@ -1252,13 +1258,13 @@ void char_short_test()
     printf("promote char/short assign VA %d %d\n", var3 = var1 + 1, var3 = var4 + 1);
     printf("promote char/short cast VA %d %d\n", (char)(var1 + 1), (char)(var4 + 1));
     var1 = csf(unsigned char,0x89898989);
-    var4 = csf(char,0xabababab);
+    var4 = csf(signed char,0xabababab);
     printf("promote char/short funcret %d "LONG_LONG_FORMAT"\n", var1, var4);
     printf("promote char/short fumcret VA %d %d %d %d\n",
         csf(unsigned short,0xcdcdcdcd),
         csf(short,0xefefefef),
-        csf(_Bool,0x33221100),
-        csf(_Bool,0x33221101));
+        csfb(_Bool,0x33221100),
+        csfb(_Bool,0x33221101));
     var3 = -10;
     var1 = (char)(unsigned char)(var3 + 1);
     var4 = (char)(unsigned char)(var3 + 1);

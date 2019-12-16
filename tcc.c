@@ -251,7 +251,7 @@ static unsigned getclock_ms(void)
 int main(int argc0, char **argv0)
 {
     TCCState *s, *s1;
-    int ret, opt, n = 0, t = 0;
+    int ret, opt, n = 0, t = 0, done;
     unsigned start_time = 0;
     const char *first_file;
     int argc; char **argv;
@@ -262,11 +262,11 @@ redo:
     s = s1 = tcc_new();
     opt = tcc_parse_args(s, &argc, &argv, 1);
 
-    if ((n | t) == 0) {
+    if (n == 0) {
         if (opt == OPT_HELP)
-            return fputs(help, stdout), 1;
+            return fputs(help, stdout), 0;
         if (opt == OPT_HELP2)
-            return fputs(help2, stdout), 1;
+            return fputs(help2, stdout), 0;
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)
@@ -287,8 +287,7 @@ redo:
             return 0;
         }
 
-        n = s->nb_files;
-        if (n == 0)
+        if (s->nb_files == 0)
             tcc_error("no input files\n");
 
         if (s->output_type == TCC_OUTPUT_PREPROCESS) {
@@ -300,13 +299,11 @@ redo:
         } else if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) {
             if (s->nb_libraries)
                 tcc_error("cannot specify libraries with -c");
-            if (n > 1 && s->outfile)
+            if (s->nb_files > 1 && s->outfile)
                 tcc_error("cannot specify output file with -c many files");
         } else {
-            if (s->option_pthread) {
+            if (s->option_pthread)
                 tcc_set_options(s, "-lpthread");
-		n = s->nb_files;
-	    }
         }
 
         if (s->do_bench)
@@ -320,12 +317,19 @@ redo:
     s->ppfp = ppfp;
 
     if ((s->output_type == TCC_OUTPUT_MEMORY
-      || s->output_type == TCC_OUTPUT_PREPROCESS) && (s->dflag & 16))
-        s->dflag |= t ? 32 : 0, s->run_test = ++t, n = s->nb_files;
+      || s->output_type == TCC_OUTPUT_PREPROCESS)
+        && (s->dflag & 16)) { /* -dt option */
+        if (t)
+            s->dflag |= 32;
+        s->run_test = ++t;
+        if (n)
+            --n;
+    }
 
     /* compile or add each files or library */
-    for (first_file = NULL, ret = 0;;) {
-        struct filespec *f = s->files[s->nb_files - n];
+    first_file = NULL, ret = 0;
+    do {
+        struct filespec *f = s->files[n];
         s->filetype = f->type;
         if (f->type & AFF_TYPE_LIB) {
             if (tcc_add_library_err(s, f->name) < 0)
@@ -338,10 +342,8 @@ redo:
             if (tcc_add_file(s, f->name) < 0)
                 ret = 1;
         }
-        if (--n == 0 || ret
-            || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))
-            break;
-    }
+        done = ret || ++n >= s->nb_files;
+    } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
 
     if (s->run_test) {
         t = 0;
@@ -362,10 +364,10 @@ redo:
         }
     }
 
-    if (s->do_bench && (n | t | ret) == 0)
+    if (s->do_bench && done && !(t | ret))
         tcc_print_stats(s, getclock_ms() - start_time);
     tcc_delete(s);
-    if (ret == 0 && n)
+    if (!done)
         goto redo; /* compile more files with -c */
     if (t)
         goto redo; /* run more tests with -dt -run */

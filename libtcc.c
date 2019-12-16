@@ -451,6 +451,15 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
                 c = p[1], p += 2;
                 if (c == 'B')
                     cstr_cat(&str, s->tcc_lib_path, -1);
+                if (c == 'f' && file) {
+                    /* substitute current file's dir */
+                    const char *f = file->true_filename;
+                    const char *b = tcc_basename(f);
+                    if (b > f)
+                        cstr_cat(&str, f, b - f - 1);
+                    else
+                        cstr_cat(&str, ".", 1);
+                }
             } else {
                 cstr_ccat(&str, c);
             }
@@ -839,6 +848,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 
 #ifdef TCC_TARGET_PE
     tcc_define_symbol(s, "_WIN32", NULL);
+    tcc_define_symbol(s, "__declspec(x)", "__attribute__((x))");
+    tcc_define_symbol(s, "__cdecl", "");
 # ifdef TCC_TARGET_X86_64
     tcc_define_symbol(s, "_WIN64", NULL);
 # endif
