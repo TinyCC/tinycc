@@ -59,7 +59,7 @@
 #define RC_F7      0x4000
 #endif
 #define RC_IRET    RC_R0  /* function return: integer register */
-#define RC_LRET    RC_R1  /* function return: second integer register */
+#define RC_IRE2    RC_R1  /* function return: second integer register */
 #define RC_FRET    RC_F0  /* function return: float register */
 
 /* pretty names for the registers */
@@ -89,7 +89,7 @@ enum {
 
 /* return registers for function */
 #define REG_IRET TREG_R0 /* single word int return register */
-#define REG_LRET TREG_R1 /* second word return register (for long long) */
+#define REG_IRE2 TREG_R1 /* second word return register (for long long) */
 #define REG_FRET TREG_F0 /* float return register */
 
 #ifdef TCC_ARM_EABI
@@ -1542,7 +1542,7 @@ void gen_opi(int op)
     case '%':
 #ifdef TCC_ARM_EABI
       func=TOK___aeabi_idivmod;
-      retreg=REG_LRET;
+      retreg=REG_IRE2;
 #else
       func=TOK___modsi3;
 #endif
@@ -1551,7 +1551,7 @@ void gen_opi(int op)
     case TOK_UMOD:
 #ifdef TCC_ARM_EABI
       func=TOK___aeabi_uidivmod;
-      retreg=REG_LRET;
+      retreg=REG_IRE2;
 #else
       func=TOK___umodsi3;
 #endif
@@ -1942,7 +1942,7 @@ void gen_opf(int op)
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-ST_FUNC void gen_cvt_itof1(int t)
+ST_FUNC void gen_cvt_itof(int t)
 {
   uint32_t r, r2;
   int bt;
@@ -2075,7 +2075,7 @@ void gen_cvt_ftoi(int t)
     gfunc_call(1);
     vpushi(0);
     if(t == VT_LLONG)
-      vtop->r2 = REG_LRET;
+      vtop->r2 = REG_IRE2;
     vtop->r = REG_IRET;
     return;
   }

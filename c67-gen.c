@@ -56,7 +56,7 @@
 #define RC_C67_B12    0x04000000
 #define RC_C67_B13    0x08000000
 #define RC_IRET    RC_C67_A4	/* function return: integer register */
-#define RC_LRET    RC_C67_A5	/* function return: second integer register */
+#define RC_IRE2    RC_C67_A5	/* function return: second integer register */
 #define RC_FRET    RC_C67_A4	/* function return: float register */
 
 /* pretty names for the registers */
@@ -89,7 +89,7 @@ enum {
 
 /* return registers for function */
 #define REG_IRET TREG_C67_A4	/* single word int return register */
-#define REG_LRET TREG_C67_A5	/* second word return register (for long long) */
+#define REG_IRE2 TREG_C67_A5    /* second word return register (for long long) */
 #define REG_FRET TREG_C67_A4	/* float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
@@ -2392,7 +2392,7 @@ void gen_opf(int op)
 		gfunc_call(2);
 		vpushi(0);
 		vtop->r = REG_FRET;
-		vtop->r2 = REG_LRET;
+		vtop->r2 = REG_IRE2;
 
 	    } else {
 		// must call intrinsic SP floating point divide

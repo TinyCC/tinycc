@@ -49,9 +49,9 @@
 #define RC_XMM6    0x40000
 #define RC_XMM7    0x80000
 #define RC_IRET    RC_RAX /* function return: integer register */
-#define RC_LRET    RC_RDX /* function return: second integer register */
+#define RC_IRE2    RC_RDX /* function return: second integer register */
 #define RC_FRET    RC_XMM0 /* function return: float register */
-#define RC_QRET    RC_XMM1 /* function return: second float register */
+#define RC_FRE2    RC_XMM1 /* function return: second float register */
 
 /* pretty names for the registers */
 enum {
@@ -86,9 +86,9 @@ enum {
 
 /* return registers for function */
 #define REG_IRET TREG_RAX /* single word int return register */
-#define REG_LRET TREG_RDX /* second word return register (for long long) */
+#define REG_IRE2 TREG_RDX /* second word return register (for long long) */
 #define REG_FRET TREG_XMM0 /* float return register */
-#define REG_QRET TREG_XMM1 /* second float return register */
+#define REG_FRE2 TREG_XMM1 /* second float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
 #define INVERT_FUNC_PARAMS

@@ -37,7 +37,7 @@
 #define RC_EBX     0x0040
 
 #define RC_IRET    RC_EAX /* function return: integer register */
-#define RC_LRET    RC_EDX /* function return: second integer register */
+#define RC_IRE2    RC_EDX /* function return: second integer register */
 #define RC_FRET    RC_ST0 /* function return: float register */
 
 /* pretty names for the registers */
@@ -52,7 +52,7 @@ enum {
 
 /* return registers for function */
 #define REG_IRET TREG_EAX /* single word int return register */
-#define REG_LRET TREG_EDX /* second word return register (for long long) */
+#define REG_IRE2 TREG_EDX /* second word return register (for long long) */
 #define REG_FRET TREG_ST0 /* float return register */
 
 /* defined if function parameters must be evaluated in reverse order */
@@ -1004,6 +1004,7 @@ ST_FUNC void gen_cvt_itof(int t)
         o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
+        vtop->r2 = VT_CONST;
     } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
                (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
@@ -1037,7 +1038,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
     vpushi(0);
     vtop->r = REG_IRET;
     if ((t & VT_BTYPE) == VT_LLONG)
-        vtop->r2 = REG_LRET;
+        vtop->r2 = REG_IRE2;
 }
 
 /* convert from one floating point type to another */

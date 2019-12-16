@@ -1521,10 +1521,6 @@ ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
 #ifndef TCC_TARGET_PE
 ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level);
 ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd);
-ST_FUNC uint8_t *parse_comment(uint8_t *p);
-ST_FUNC void minp(void);
-ST_INLN void inp(void);
-ST_FUNC int handle_eob(void);
 #endif
 
 /* ------------ xxx-link.c ------------ */
@@ -1566,13 +1562,11 @@ ST_FUNC int gjmp_append(int n, int t);
 ST_FUNC void gen_opi(int op);
 ST_FUNC void gen_opf(int op);
 ST_FUNC void gen_cvt_ftoi(int t);
+ST_FUNC void gen_cvt_itof(int t);
 ST_FUNC void gen_cvt_ftof(int t);
 ST_FUNC void ggoto(void);
 #ifndef TCC_TARGET_C67
 ST_FUNC void o(unsigned int c);
-#endif
-#ifndef TCC_TARGET_ARM
-ST_FUNC void gen_cvt_itof(int t);
 #endif
 ST_FUNC void gen_vla_sp_save(int addr);
 ST_FUNC void gen_vla_sp_restore(int addr);
@@ -1632,7 +1626,6 @@ ST_FUNC void gen_vla_result(int addr);
 PUB_FUNC const char *default_elfinterp(struct TCCState *s);
 #endif
 ST_FUNC void arm_init(struct TCCState *s);
-ST_FUNC void gen_cvt_itof1(int t);
 #endif
 
 /* ------------ arm64-gen.c ------------ */
