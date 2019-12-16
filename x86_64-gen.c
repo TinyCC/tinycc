@@ -678,16 +678,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     if (nocode_wanted)
         return;
 
-    size = 0;
-    /* XXX: put that code in generic part of tcc */
-    if (!is_float(vtop->type.t)) {
-        if (vtop->r & VT_LVAL_BYTE)
-            size = 1;
-        else if (vtop->r & VT_LVAL_SHORT)
-            size = 2;
-    }
-    if (!size)
-        size = type_size(&vtop->type, &align);
+    size = type_size(&vtop->type, &align);
     switch(size) {
     case  1: func = TOK___bound_ptr_indir1; break;
     case  2: func = TOK___bound_ptr_indir2; break;
@@ -981,7 +972,7 @@ void gfunc_prolog(Sym *func_sym)
                 gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             }
             sym_push(sym->v & ~SYM_FIELD, type,
-		     VT_LLOCAL | lvalue_type(type->t), addr);
+                     VT_LLOCAL | VT_LVAL, addr);
         } else {
             if (reg_param_index < REGN) {
                 /* save arguments passed by register */
@@ -995,7 +986,7 @@ void gfunc_prolog(Sym *func_sym)
                 }
             }
             sym_push(sym->v & ~SYM_FIELD, type,
-		     VT_LOCAL | lvalue_type(type->t), addr);
+		     VT_LOCAL | VT_LVAL, addr);
         }
         addr += 8;
         reg_param_index++;
@@ -1205,7 +1196,16 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
                     ret_t = VT_QLONG;
                 } else {
                     *reg_count = 1;
-                    ret_t = (size > 4) ? VT_LLONG : VT_INT;
+                    if (size > 4)
+                        ret_t = VT_LLONG;
+                    else if (size > 2)
+                        ret_t = VT_INT;
+                    else if (size > 1)
+                        ret_t = VT_SHORT;
+                    else
+                        ret_t = VT_BYTE;
+                    if ((ty->t & VT_BTYPE) == VT_STRUCT || (ty->t & VT_UNSIGNED))
+                        ret_t |= VT_UNSIGNED;
                 }
                 break;
                 
@@ -1321,7 +1321,7 @@ void gfunc_call(int nb_args)
       tcc_error("SSE disabled but floating point arguments passed");
 
     /* fetch cpu flag before generating any code */
-    if (vtop >= vstack && (vtop->r & VT_VALMASK) == VT_CMP)
+    if ((vtop->r & VT_VALMASK) == VT_CMP)
       gv(RC_INT);
 
     /* for struct arguments, we need to call memcpy and the function
@@ -1635,7 +1635,7 @@ void gfunc_prolog(Sym *func_sym)
 	default: break; /* nothing to be done for x86_64_mode_none */
         }
         sym_push(sym->v & ~SYM_FIELD, type,
-                 VT_LOCAL | lvalue_type(type->t), param_addr);
+                 VT_LOCAL | VT_LVAL, param_addr);
     }
 
 #ifdef CONFIG_TCC_BCHECK

@@ -1408,7 +1408,7 @@ ST_FUNC void save_reg_upstack(int r, int n)
                    p->c.i */
                 p->r = (p->r & ~(VT_VALMASK | VT_BOUNDED)) | VT_LLOCAL;
             } else {
-                p->r = lvalue_type(p->type.t) | VT_LOCAL;
+                p->r = VT_LVAL | VT_LOCAL;
             }
             p->r2 = VT_CONST;
             p->c.i = l;
@@ -1430,7 +1430,7 @@ ST_FUNC int get_reg_ex(int rc, int rc2)
             n=0;
             for(p = vstack; p <= vtop; p++) {
                 if ((p->r & VT_VALMASK) == r ||
-                    (p->r2 & VT_VALMASK) == r)
+                    p->r2 == r)
                     n++;
             }
             if (n <= 1)
@@ -1454,7 +1454,7 @@ ST_FUNC int get_reg(int rc)
                 return r;
             for(p=vstack;p<=vtop;p++) {
                 if ((p->r & VT_VALMASK) == r ||
-                    (p->r2 & VT_VALMASK) == r)
+                    p->r2 == r)
                     goto notfound;
             }
             return r;
@@ -1467,7 +1467,7 @@ ST_FUNC int get_reg(int rc)
        spill registers used in gen_opi()) */
     for(p=vstack;p<=vtop;p++) {
         /* look at second register (if long long) */
-        r = p->r2 & VT_VALMASK;
+        r = p->r2;
         if (r < VT_CONST && (reg_classes[r] & rc))
             goto save_found;
         r = p->r & VT_VALMASK;
@@ -1553,16 +1553,13 @@ ST_FUNC void gaddrof(void)
     vtop->r &= ~VT_LVAL;
     /* tricky: if saved lvalue, then we can go back to lvalue */
     if ((vtop->r & VT_VALMASK) == VT_LLOCAL)
-        vtop->r = (vtop->r & ~(VT_VALMASK | VT_LVAL_TYPE)) | VT_LOCAL | VT_LVAL;
-
-
+        vtop->r = (vtop->r & ~VT_VALMASK) | VT_LOCAL | VT_LVAL;
 }
 
 #ifdef CONFIG_TCC_BCHECK
 /* generate lvalue bound code */
 static void gbound(void)
 {
-    int lval_type;
     CType type1;
 
     vtop->r &= ~VT_MUSTBOUND;
@@ -1570,14 +1567,13 @@ static void gbound(void)
     if (vtop->r & VT_LVAL) {
         /* if not VT_BOUNDED value, then make one */
         if (!(vtop->r & VT_BOUNDED)) {
-            lval_type = vtop->r & (VT_LVAL_TYPE | VT_LVAL);
             /* must save type because we must set it to int to get pointer */
             type1 = vtop->type;
             vtop->type.t = VT_PTR;
             gaddrof();
             vpushi(0);
             gen_bounded_ptr_add();
-            vtop->r |= lval_type;
+            vtop->r |= VT_LVAL;
             vtop->type = type1;
         }
         /* then check for dereferencing */
@@ -1603,12 +1599,10 @@ static void incr_bf_adr(int o)
 {
     vtop->type = char_pointer_type;
     gaddrof();
-    vpushi(o);
+    vpushs(o);
     gen_op('+');
-    vtop->type.t = (vtop->type.t & ~(VT_BTYPE|VT_DEFSIGN))
-        | (VT_BYTE|VT_UNSIGNED);
-    vtop->r = (vtop->r & ~VT_LVAL_TYPE)
-        | (VT_LVAL_BYTE|VT_LVAL_UNSIGNED|VT_LVAL);
+    vtop->type.t = VT_BYTE | VT_UNSIGNED;
+    vtop->r |= VT_LVAL;
 }
 
 /* single-byte load mode for packed or otherwise unaligned bitfields */
@@ -1688,7 +1682,7 @@ static int adjust_bf(SValue *sv, int bit_pos, int bit_size)
     t = sv->type.ref->auxtype;
     if (t != -1 && t != VT_STRUCT) {
         sv->type.t = (sv->type.t & ~VT_BTYPE) | t;
-        sv->r = (sv->r & ~VT_LVAL_TYPE) | lvalue_type(sv->type.t);
+        sv->r |= VT_LVAL;
     }
     return t;
 }
@@ -1824,23 +1818,6 @@ ST_FUNC int gv(int rc)
                 vtop->r2 = r2;
             done:
                 vtop->type.t = original_type;
-            } else if ((vtop->r & VT_LVAL) && !is_float(vtop->type.t)) {
-                int t1, t;
-                /* lvalue of scalar type : need to use lvalue type
-                   because of possible cast */
-                t = vtop->type.t;
-                t1 = t;
-                /* compute memory access type */
-                if (vtop->r & VT_LVAL_BYTE)
-                    t = VT_BYTE;
-                else if (vtop->r & VT_LVAL_SHORT)
-                    t = VT_SHORT;
-                if (vtop->r & VT_LVAL_UNSIGNED)
-                    t |= VT_UNSIGNED;
-                vtop->type.t = t;
-                load(r, vtop);
-                /* restore wanted type */
-                vtop->type.t = t1;
             } else {
                 if (vtop->r == VT_CMP)
                     vset_VT_JMP();
@@ -2983,16 +2960,11 @@ static void gen_cast(CType *type)
                     }
 #endif
                 }
-                /* if lvalue and single word type, nothing to do because
-                   the lvalue already contains the real type size (see
-                   VT_LVAL_xxx constants) */
             }
+            if ((vtop->r & VT_LVAL)
+                && (dbt & VT_BTYPE) != (sbt & VT_BTYPE))
+                gv(RC_INT);
         }
-    } else if ((dbt & VT_BTYPE) == VT_PTR && !(vtop->r & VT_LVAL)) {
-        /* if we are casting between pointer types,
-           we must update the VT_LVAL_xxx size */
-        vtop->r = (vtop->r & ~VT_LVAL_TYPE)
-                  | (lvalue_type(type->ref->type.t) & VT_LVAL_TYPE);
     }
     vtop->type = *type;
     vtop->type.t &= ~ ( VT_CONSTANT | VT_VOLATILE | VT_ARRAY );
@@ -4850,23 +4822,6 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
     return ret;
 }
 
-/* compute the lvalue VT_LVAL_xxx needed to match type t. */
-ST_FUNC int lvalue_type(int t)
-{
-    int bt, r;
-    r = VT_LVAL;
-    bt = t & VT_BTYPE;
-    if (bt == VT_BYTE || bt == VT_BOOL)
-        r |= VT_LVAL_BYTE;
-    else if (bt == VT_SHORT)
-        r |= VT_LVAL_SHORT;
-    else
-        return r;
-    if (t & VT_UNSIGNED)
-        r |= VT_LVAL_UNSIGNED;
-    return r;
-}
-
 /* indirection with full error checking and bound check */
 ST_FUNC void indir(void)
 {
@@ -4879,9 +4834,9 @@ ST_FUNC void indir(void)
         gv(RC_INT);
     vtop->type = *pointed_type(&vtop->type);
     /* Arrays and functions are never lvalues */
-    if (!(vtop->type.t & VT_ARRAY) && !(vtop->type.t & VT_VLA)
+    if (!(vtop->type.t & (VT_ARRAY | VT_VLA))
         && (vtop->type.t & VT_BTYPE) != VT_FUNC) {
-        vtop->r |= lvalue_type(vtop->type.t);
+        vtop->r |= VT_LVAL;
         /* if bound checking, the referenced pointer must be checked */
 #ifdef CONFIG_TCC_BCHECK
         if (tcc_state->do_bounds_check)
@@ -5087,7 +5042,7 @@ ST_FUNC void unary(void)
                     r = VT_LOCAL;
                 /* all except arrays are lvalues */
                 if (!(type.t & VT_ARRAY))
-                    r |= lvalue_type(type.t);
+                    r |= VT_LVAL;
                 memset(&ad, 0, sizeof(AttributeDef));
                 decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
             } else {
@@ -5549,7 +5504,7 @@ special_math_val:
             vtop->type.t |= qualifiers;
             /* an array is never an lvalue */
             if (!(vtop->type.t & VT_ARRAY)) {
-                vtop->r |= lvalue_type(vtop->type.t);
+                vtop->r |= VT_LVAL;
 #ifdef CONFIG_TCC_BCHECK
                 /* if bound checking, the referenced pointer must be checked */
                 if (tcc_state->do_bounds_check && (vtop->r & VT_VALMASK) != VT_LOCAL)
@@ -7948,7 +7903,7 @@ found:
                         type.ref->f = ad.f;
                     } else if (!(type.t & VT_ARRAY)) {
                         /* not lvalue if array */
-                        r |= lvalue_type(type.t);
+                        r |= VT_LVAL;
                     }
                     has_init = (tok == '=');
                     if (has_init && (type.t & VT_VLA))

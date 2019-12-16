@@ -446,7 +446,7 @@ static void arm64_load_cmp(int r, SValue *sv);
 ST_FUNC void load(int r, SValue *sv)
 {
     int svtt = sv->type.t;
-    int svr = sv->r & ~VT_LVAL_TYPE;
+    int svr = sv->r;
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
@@ -546,7 +546,7 @@ ST_FUNC void load(int r, SValue *sv)
 ST_FUNC void store(int r, SValue *sv)
 {
     int svtt = sv->type.t;
-    int svr = sv->r & ~VT_LVAL_TYPE;
+    int svr = sv->r;
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
@@ -1039,7 +1039,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
                    a[i] < 32 ? 16 + (a[i] - 16) / 2 * 16 :
                    224 + ((a[i] - 32) >> 1 << 1));
         sym_push(sym->v & ~SYM_FIELD, &sym->type,
-                 (a[i] & 1 ? VT_LLOCAL : VT_LOCAL) | lvalue_type(sym->type.t),
+                 (a[i] & 1 ? VT_LLOCAL : VT_LOCAL) | VT_LVAL,
                  off);
 
         if (a[i] < 16) {
@@ -1126,7 +1126,7 @@ ST_FUNC void gen_va_arg(CType *t)
     gaddrof();
     r0 = intr(gv(RC_INT));
     r1 = get_reg(RC_INT);
-    vtop[0].r = r1 | lvalue_type(t->t);
+    vtop[0].r = r1 | VT_LVAL;
     r1 = intr(r1);
 
     if (!hfa) {

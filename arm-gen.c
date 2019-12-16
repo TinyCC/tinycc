@@ -1363,7 +1363,7 @@ from_stack:
       addr = (n + nf + sn) * 4;
       sn += size;
     }
-    sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | lvalue_type(type->t),
+    sym_push(sym->v & ~SYM_FIELD, type, VT_LOCAL | VT_LVAL,
              addr + 12);
   }
   last_itod_magic=0;

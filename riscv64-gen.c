@@ -681,7 +681,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
             }
         }
         sym_push(sym->v & ~SYM_FIELD, &sym->type,
-                 (byref ? VT_LLOCAL : VT_LOCAL) | lvalue_type(sym->type.t),
+                 (byref ? VT_LLOCAL : VT_LOCAL) | VT_LVAL,
                  param_addr);
     }
     func_va_list_ofs = addr;

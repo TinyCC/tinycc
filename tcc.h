@@ -932,11 +932,6 @@ struct filespec {
                                 dereferencing value */
 #define VT_BOUNDED   0x8000  /* value is bounded. The address of the
                                 bounding function call point is in vc */
-#define VT_LVAL_BYTE     0x1000  /* lvalue is a byte */
-#define VT_LVAL_SHORT    0x2000  /* lvalue is a short */
-#define VT_LVAL_UNSIGNED 0x4000  /* lvalue is unsigned */
-#define VT_LVAL_TYPE     (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED)
-
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */
 #define VT_VOID             0  /* void type */
@@ -1426,7 +1421,6 @@ ST_FUNC void vstore(void);
 ST_FUNC void inc(int post, int c);
 ST_FUNC void parse_mult_str (CString *astr, const char *msg);
 ST_FUNC void parse_asm_str(CString *astr);
-ST_FUNC int lvalue_type(int t);
 ST_FUNC void indir(void);
 ST_FUNC void unary(void);
 ST_FUNC void expr_prod(void);

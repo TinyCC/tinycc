@@ -587,7 +587,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
             addr += size;
         }
         sym_push(sym->v & ~SYM_FIELD, type,
-                 VT_LOCAL | lvalue_type(type->t), param_addr);
+                 VT_LOCAL | VT_LVAL, param_addr);
         param_index++;
     }
     func_ret_sub = 0;
@@ -1084,16 +1084,7 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     if (nocode_wanted)
         return;
 
-    size = 0;
-    /* XXX: put that code in generic part of tcc */
-    if (!is_float(vtop->type.t)) {
-        if (vtop->r & VT_LVAL_BYTE)
-            size = 1;
-        else if (vtop->r & VT_LVAL_SHORT)
-            size = 2;
-    }
-    if (!size)
-        size = type_size(&vtop->type, &align);
+    size = type_size(&vtop->type, &align);
     switch(size) {
     case  1: func = TOK___bound_ptr_indir1; break;
     case  2: func = TOK___bound_ptr_indir2; break;
