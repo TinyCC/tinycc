@@ -216,14 +216,15 @@ int x[3];
  || defined test_func_2 \
  || defined test_func_3 \
  || defined test_func_4 \
- || defined test_func_5
+ || defined test_func_5 \
+ || defined test_func_6
 #if defined test_func_1
 int hello(int);
 #elif defined test_func_4
 static int hello(int);
 #endif
 int main () {
-#if defined test_func_5
+#if defined test_func_6
     static
 #endif
     int hello(int);

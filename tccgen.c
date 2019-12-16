@@ -7859,6 +7859,8 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
             }
 #endif
             if ((type.t & VT_BTYPE) == VT_FUNC) {
+                if ((type.t & VT_STATIC) && (l == VT_LOCAL))
+                    tcc_error("function without file scope cannot be static");
                 /* if old style function prototype, we accept a
                    declaration list */
                 sym = type.ref;

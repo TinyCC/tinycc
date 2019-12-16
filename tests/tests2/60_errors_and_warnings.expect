@@ -111,14 +111,17 @@ hello: a = 123
 hello: a = 123
 
 [test_func_3]
-60_errors_and_warnings.c:241: warning: static storage ignored for redefinition of 'hello'
+60_errors_and_warnings.c:242: warning: static storage ignored for redefinition of 'hello'
 hello: a = 123
 
 [test_func_4]
 hello: a = 123
 
 [test_func_5]
-60_errors_and_warnings.c:241: error: incompatible types for redefinition of 'hello'
+60_errors_and_warnings.c:242: error: incompatible types for redefinition of 'hello'
+
+[test_func_6]
+60_errors_and_warnings.c:230: error: function without file scope cannot be static
 
 [test_var_1]
 main : 1 ; 1
@@ -131,6 +134,6 @@ main : 2 ; 2
 bar  : 3 ; 3
 
 [test_var_3]
-60_errors_and_warnings.c:273: error: incompatible types for redefinition of 'xxx'
+60_errors_and_warnings.c:274: error: incompatible types for redefinition of 'xxx'
 
 [test_var_4]
