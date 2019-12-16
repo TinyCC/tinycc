@@ -569,7 +569,7 @@ ST_FUNC void gfunc_call(int nb_args)
                 test_lvalue();
                 vpushv(vtop);
             }
-            vtop->type.t = loadt;
+            vtop->type.t = loadt | (vtop->type.t & VT_UNSIGNED);
             gv(r < 8 ? RC_R(r) : RC_F(r - 8));
             vtop->type = origtype;
 
@@ -588,7 +588,7 @@ ST_FUNC void gfunc_call(int nb_args)
                     loadt = (ii >> 16) & VT_BTYPE;
                 }
                 save_reg_upstack(r2, 1);
-                vtop->type.t = loadt;
+                vtop->type.t = loadt | (vtop->type.t & VT_UNSIGNED);
                 load(r2, vtop);
                 assert(r2 < VT_CONST);
                 vtop--;
