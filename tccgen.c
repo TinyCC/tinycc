@@ -5631,10 +5631,18 @@ special_math_val:
                 }
 
                 /* Promote char/short return values. This is matters only
-                   for calling function that were not compiled by TCC */
+                   for calling function that were not compiled by TCC and
+                   only on some architectures.  For those where it doesn't
+                   matter we expect things to be already promoted to int,
+                   but not larger.  */
                 t = s->type.t & VT_BTYPE;
-                if (t == VT_BYTE || t == VT_SHORT || t == VT_BOOL)
+                if (t == VT_BYTE || t == VT_SHORT || t == VT_BOOL) {
+#ifdef PROMOTE_RET
                     vtop->r |= BFVAL(VT_MUSTCAST, 1);
+#else
+                    vtop->type.t = VT_INT;
+#endif
+                }
             }
             if (s->f.func_noreturn)
                 CODE_OFF();

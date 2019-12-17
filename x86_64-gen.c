@@ -102,6 +102,9 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     16
 
+/* define if return values need to be extended explicitely
+   at caller side (for interfacing with non-TCC compilers) */
+#define PROMOTE_RET
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
