@@ -1216,7 +1216,7 @@ static void *_csf = __csf;
 void char_short_test()
 {
     int var1, var2;
-    char var3;
+    signed char var3;
     long long var4;
 
     printf("char_short:\n");
@@ -1224,7 +1224,7 @@ void char_short_test()
     var1 = 0x01020304;
     var2 = 0xfffefdfc;
     printf("s8=%d %d\n", 
-           *(char *)&var1, *(char *)&var2);
+           *(signed char *)&var1, *(signed char *)&var2);
     printf("u8=%d %d\n", 
            *(unsigned char *)&var1, *(unsigned char *)&var2);
     printf("s16=%d %d\n", 
@@ -1235,7 +1235,7 @@ void char_short_test()
            *(int *)&var1, *(int *)&var2);
     printf("u32=%d %d\n", 
            *(unsigned int *)&var1, *(unsigned int *)&var2);
-    *(char *)&var1 = 0x08;
+    *(signed char *)&var1 = 0x08;
     printf("var1=%x\n", var1);
     *(short *)&var1 = 0x0809;
     printf("var1=%x\n", var1);
@@ -1250,7 +1250,7 @@ void char_short_test()
     var1 = 0x778899aa;
     var4 = 0x11223344aa998877ULL;
     printf("promote char/short assign VA %d %d\n", var3 = var1 + 1, var3 = var4 + 1);
-    printf("promote char/short cast VA %d %d\n", (char)(var1 + 1), (char)(var4 + 1));
+    printf("promote char/short cast VA %d %d\n", (signed char)(var1 + 1), (signed char)(var4 + 1));
 #if !defined(__arm__)
     /* We can't really express GCC behaviour of return type promotion in
        the presence of undefined behaviour (like __csf is).  */
@@ -1264,14 +1264,14 @@ void char_short_test()
         csf(_Bool,0x33221101));
 #endif
     var3 = -10;
-    var1 = (char)(unsigned char)(var3 + 1);
-    var4 = (char)(unsigned char)(var3 + 1);
+    var1 = (signed char)(unsigned char)(var3 + 1);
+    var4 = (signed char)(unsigned char)(var3 + 1);
     printf("promote multicast (char)(unsigned char) %d "LONG_LONG_FORMAT"\n", var1, var4);
     var4 = 0x11223344aa998877ULL;
     var4 = (unsigned)(int)(var4 + 1);
     printf("promote multicast (unsigned)(int) "LONG_LONG_FORMAT"\n", var4);
     var4 = 0x11223344bbaa9988ULL;
-    var4 = (unsigned)(char)(var4 + 1);
+    var4 = (unsigned)(signed char)(var4 + 1);
     printf("promote multicast (unsigned)(char) "LONG_LONG_FORMAT"\n", var4);
 }
 
