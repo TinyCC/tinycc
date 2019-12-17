@@ -3321,6 +3321,9 @@ extern int bug_table[] __attribute__((section("__bug_table")));
 char * get_asm_string (void)
 {
 #ifdef __i386__
+  /* i386 is not currently tested because this code triggers a gcc
+     bug on some distributions. See
+     https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=946678 */
   char *str = "(not tested)";
 #else
   extern int some_symbol;
