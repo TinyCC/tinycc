@@ -3320,12 +3320,20 @@ void override_func2 (void)
 extern int bug_table[] __attribute__((section("__bug_table")));
 char * get_asm_string (void)
 {
-#ifdef __i386__
-  /* i386 is not currently tested because this code triggers a gcc
-     bug on some distributions. See
-     https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=946678 */
-  char *str = "(not tested)";
-#else
+  /* On i386 when -fPIC is enabled this would cause a compile error with GCC,
+     the problem being the "i" constraint used with a symbolic operand
+     resolving to a local label.  That check is overly zealous as the code
+     within the asm makes sure to use it only in PIC-possible contexts,
+     but all GCC versions behave like so.  We arrange for PIC to be disabled
+     for compiling tcctest.c in the Makefile.
+
+     Additionally the usage of 'c' in "%c0" in the template is actually wrong,
+     as that would expect an operand that is a condition code.  The operand
+     as is (a local label) is accepted by GCC in non-PIC mode, and on x86-64.
+     What the linux kernel really wanted is 'p' to disable the addition of '$'
+     to the printed operand (as in "$.LC0" where the template only wants the
+     bare operand ".LC0").  But the code below is what the linux kernel
+     happens to use and as such is the one we want to test.  */
   extern int some_symbol;
   asm volatile (".globl some_symbol\n"
 		"jmp .+6\n"
@@ -3340,7 +3348,6 @@ char * get_asm_string (void)
 		"2:\t.long 1b - 2b, %c0 - 2b\n"
 		".popsection\n" : : "i" ("A string"));
   char * str = ((char*)bug_table) + bug_table[1];
-#endif
   return str;
 }
 

@@ -64,6 +64,11 @@ ifeq ($(ARCH),arm)
 # of functions via bit masking comes out as 1.  Just disable thumb.
 test.ref: CFLAGS+=-marm
 endif
+ifeq ($(ARCH),i386)
+# tcctest.c:get_asm_string uses a construct that is checked too strictly
+# by GCC in 32bit mode when PIC is enabled.
+test.ref: CFLAGS+=-fno-PIC -fno-PIE
+endif
 
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
