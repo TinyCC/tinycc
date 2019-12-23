@@ -254,14 +254,14 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
         length = s->data_offset;
         ptr = (void*)s->sh_addr;
         if (s->sh_flags & SHF_EXECINSTR)
-            ptr = (char*)ptr - ptr_diff;
+            ptr = (char*)((addr_t)ptr - ptr_diff);
         if (NULL == s->data || s->sh_type == SHT_NOBITS)
             memset(ptr, 0, length);
         else
             memcpy(ptr, s->data, length);
         /* mark executable sections as executable in memory */
         if (s->sh_flags & SHF_EXECINSTR)
-            set_pages_executable(s1, (char*)ptr + ptr_diff, length);
+            set_pages_executable(s1, (char*)((addr_t)ptr + ptr_diff), length);
     }
 
 #ifdef _WIN64

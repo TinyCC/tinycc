@@ -522,17 +522,6 @@ void __attribute__((destructor)) __bound_exit(void)
         }
 #endif
     
-#if TREE_REUSE
-        while (tree_free_list) {
-            Tree *next = tree_free_list->left;
-#if MALLOC_REDIR
-            free_redir (tree_free_list);
-#else
-            free (tree_free_list);
-#endif
-            tree_free_list = next;
-        }
-#endif
         for (i = 0; i < FREE_REUSE_SIZE; i++) {
             if (free_reuse_list[i]) {
                 tree = splay_delete ((size_t) free_reuse_list[i], tree);
@@ -551,6 +540,17 @@ void __attribute__((destructor)) __bound_exit(void)
             }
             tree = splay_delete (tree->start, tree);
         }
+#if TREE_REUSE
+        while (tree_free_list) {
+            Tree *next = tree_free_list->left;
+#if MALLOC_REDIR
+            free_redir (tree_free_list);
+#else
+            free (tree_free_list);
+#endif
+            tree_free_list = next;
+        }
+#endif
         EXIT_SEM ();
         inited = 0;
 #ifdef BOUND_STATISTIC
