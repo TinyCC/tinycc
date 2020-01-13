@@ -67,7 +67,7 @@ static int gind(void) { CODE_ON(); return ind; }
 
 /* Set 'nocode_wanted' after unconditional jumps */
 static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
-static int gjmp_acs(int t) { t = gjmp(t); CODE_OFF(); return t; }
+static int gjmp_acs(int t) { if (!nocode_wanted) {t = gjmp(t); CODE_OFF(); } return t; }
 
 /* These are #undef'd at the end of this file */
 #define gjmp_addr gjmp_addr_acs
@@ -877,7 +877,7 @@ static void vcheck_cmp(void)
        again, so that the VT_CMP/VT_JMP value will be in vtop
        when code is unsuppressed again. */
 
-    if (vtop->r == VT_CMP && !nocode_wanted)
+    if (vtop->r == VT_CMP && !nocode_wanted && vtop->cmp_op > 1)
         gv(RC_INT);
 }
 
@@ -1043,7 +1043,11 @@ static void vset_VT_JMP(void)
     if (vtop->jtrue || vtop->jfalse) {
         /* we need to jump to 'mov $0,%R' or 'mov $1,%R' */
         int inv = op & (op < 2); /* small optimization */
-        vseti(VT_JMP+inv, gvtst(inv, 0));
+        int t = gvtst(inv, 0);
+        if (t) /* in case gvtst only needed to do a gsym */
+          vseti(VT_JMP+inv, t);
+        else
+          vpushi(inv);
     } else {
         /* otherwise convert flags (rsp. 0/1) to register */
         vtop->c.i = op;
@@ -1061,9 +1065,11 @@ static void gvtst_set(int inv, int t)
         gen_op(TOK_NE);
         if (vtop->r == VT_CMP) /* must be VT_CONST otherwise */
           ;
-        else if (vtop->r == VT_CONST)
-          vset_VT_CMP(vtop->c.i != 0);
-        else
+        else if (vtop->r == VT_CONST) {
+            if (!t)
+              return;
+            vset_VT_CMP(vtop->c.i != 0);
+        } else
           tcc_error("ICE");
     }
     p = inv ? &vtop->jfalse : &vtop->jtrue;
@@ -1075,18 +1081,21 @@ static void gvtst_set(int inv, int t)
  * Generate a test for any value (jump, comparison and integers) */
 static int gvtst(int inv, int t)
 {
-    int op, u, x;
-
+    int op, x, u;
     gvtst_set(inv, t);
-
-    t = vtop->jtrue, u = vtop->jfalse;
-    if (inv)
-        x = u, u = t, t = x;
-    op = vtop->cmp_op;
+    if (vtop->r != VT_CMP) {
+        t = u = x = 0;
+        op = vtop->c.i;
+    } else {
+        t = vtop->jtrue, u = vtop->jfalse;
+        if (inv)
+          x = u, u = t, t = x;
+        op = vtop->cmp_op;
+    }
 
     /* jump to the wanted target */
     if (op > 1)
-        t = gjmp_cond(op ^ inv, t);
+        t = gjmp_cond(op ^ inv, t), op = inv;//, op = 1;
     else if (op != inv)
         t = gjmp(t);
     /* resolve complementary jumps to here */
@@ -5681,17 +5690,35 @@ special_math_val:
     }
 }
 
+/* Assuming vtop is a value used in a conditional context
+   (i.e. compared with zero) return 0 if it's false, 1 if
+   true and -1 if it can't be statically determined.  */
+static int condition_3way(void)
+{
+    int c = -1;
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	(!(vtop->r & VT_SYM) || !vtop->sym->a.weak)) {
+	vdup();
+        gen_cast_s(VT_BOOL);
+	c = vtop->c.i;
+	vpop();
+    }
+    return c;
+}
+
 static int precedence(int tok)
 {
     switch (tok) {
-	case '|': return 1;
-	case '^': return 2;
-	case '&': return 3;
-	case TOK_EQ: case TOK_NE: return 4;
-relat: case TOK_ULT: case TOK_UGE: return 5;
-	case TOK_SHL: case TOK_SAR: return 6;
-	case '+': case '-': return 7;
-	case '*': case '/': case '%': return 8;
+        case TOK_LOR: return 1;
+        case TOK_LAND: return 2;
+	case '|': return 3;
+	case '^': return 4;
+	case '&': return 5;
+	case TOK_EQ: case TOK_NE: return 6;
+ relat: case TOK_ULT: case TOK_UGE: return 7;
+	case TOK_SHL: case TOK_SAR: return 8;
+	case '+': case '-': return 9;
+	case '*': case '/': case '%': return 10;
 	default:
 	    if (tok >= TOK_ULE && tok <= TOK_GT)
 	        goto relat;
@@ -5709,86 +5736,42 @@ ST_FUNC void init_prec(void)
 
 #define precedence(i) ((unsigned)i < 256 ? prec[i] : 0)
 
+static void expr_infix(int p);
+static void expr_landor(int p, int e_op, int i)
+{
+    int t = 0, f = 0;
+    save_regs(1);
+    do {
+        if (!f && condition_3way() == !i)
+            nocode_wanted++, f = 1;
+        t = gvtst(i, t);
+        next();
+        unary();
+        expr_infix(p);
+    } while (tok == e_op);
+    if (f) {
+        vpop();
+        vpushi(i ^ f);
+    }
+    gvtst_set(i, t);
+    nocode_wanted -= f;
+}
+
 static void expr_infix(int p)
 {
-    int t = tok, p2, p3;
+    int t = tok, p2;
     while ((p2 = precedence(t)) >= p) {
-	next();
-	unary();
-	while ((p3 = precedence(tok)) > p2) {
-	    expr_infix(p3);
-	}
-	gen_op(t);
-	t = tok;
-    }
-}
-
-static void expr_or(void)
-{
-    unary();
-    expr_infix(1);
-}
-
-static int condition_3way(void);
-
-static void expr_landor(void(*e_fn)(void), int e_op, int i)
-{
-    int t = 0, cc = 1, f = 0, c;
-    for(;;) {
-        c = f ? i : condition_3way();
-        if (c < 0) {
-	    save_regs(1), cc = 0;
-        } else if (c != i) {
-            nocode_wanted++, f = 1;
+        if (t == TOK_LOR || t == TOK_LAND) {
+            expr_landor(p2 + 1, t, t == TOK_LAND);
+        } else {
+            next();
+            unary();
+            if (precedence(tok) > p2)
+              expr_infix(p2 + 1);
+            gen_op(t);
         }
-        if (tok != e_op) {
-            if (cc || f) {
-                vpop();
-                vpushi(i ^ f);
-                gsym(t);
-                nocode_wanted -= f;
-            } else {
-                gvtst_set(i, t);
-            }
-	    break;
-        }
-        if (c < 0)
-            t = gvtst(i, t);
-        else
-            vpop();
-        next();
-        e_fn();
+        t = tok;
     }
-}
-
-static void expr_land(void)
-{
-    expr_or();
-    if (tok == TOK_LAND)
-        expr_landor(expr_or, TOK_LAND, 1);
-}
-
-static void expr_lor(void)
-{
-    expr_land();
-    if (tok == TOK_LOR)
-        expr_landor(expr_land, TOK_LOR, 0);
-}
-
-/* Assuming vtop is a value used in a conditional context
-   (i.e. compared with zero) return 0 if it's false, 1 if
-   true and -1 if it can't be statically determined.  */
-static int condition_3way(void)
-{
-    int c = -1;
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-	(!(vtop->r & VT_SYM) || !vtop->sym->a.weak)) {
-	vdup();
-        gen_cast_s(VT_BOOL);
-	c = vtop->c.i;
-	vpop();
-    }
-    return c;
 }
 
 static int is_cond_bool(SValue *sv)
@@ -5808,7 +5791,8 @@ static void expr_cond(void)
     CType type, type1, type2;
     int ncw_prev;
 
-    expr_lor();
+    unary();
+    expr_infix(1);
     if (tok == '?') {
         next();
 	c = condition_3way();

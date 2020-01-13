@@ -84,6 +84,7 @@ void scope_test();
 void scope_test2();
 void forward_test();
 void funcptr_test();
+void if_test();
 void loop_test();
 void switch_test();
 void goto_test();
@@ -513,6 +514,40 @@ void string_test()
     }
 }
 
+void if1t(int n, int a, int b, int c)
+{
+    if (a && b) printf("if1t: %d 1 %d %d\n", n, a, b);
+    if (a && !b) printf("if1t: %d 2 %d %d\n", n, a, b);
+    if (!a && b) printf("if1t: %d 3 %d %d\n", n, a, b);
+    if (!a && !b) printf("if1t: %d 4 %d %d\n", n, a, b);
+    if (a || b) printf("if1t: %d 5 %d %d\n", n, a, b);
+    if (a || !b) printf("if1t: %d 6 %d %d\n", n, a, b);
+    if (!a || b) printf("if1t: %d 7 %d %d\n", n, a, b);
+    if (!a || !b) printf("if1t: %d 8 %d %d\n", n, a, b);
+    if (a && b || c) printf("if1t: %d 9 %d %d %d\n", n, a, b, c);
+    if (a || b && c) printf("if1t: %d 10 %d %d %d\n", n, a, b, c);
+    if (a > b - 1 && c) printf("if1t: %d 11 %d %d %d\n", n, a, b, c);
+    if (a > b - 1 || c) printf("if1t: %d 12 %d %d %d\n", n, a, b, c);
+    if (a > 0 && 1) printf("if1t: %d 13 %d %d %d\n", n, a, b, c);
+    if (a > 0 || 0) printf("if1t: %d 14 %d %d %d\n", n, a, b, c);
+}
+
+void if2t(void)
+{
+    if (0 && 1 || printf("if2t:ok\n") || 1)
+      printf("if2t:ok2\n");
+    printf("if2t:ok3\n");
+}
+
+void if_test(void)
+{
+    if1t(1, 0, 0, 0);
+    if1t(2, 0, 3, 0);
+    if1t(3, 2, 0, 0);
+    if1t(4, 2, 3, 0);
+    if2t();
+}
+
 void loop_test()
 {
     int i;
@@ -728,6 +763,7 @@ int main(int argc, char **argv)
     scope_test2();
     forward_test();
     funcptr_test();
+    if_test();
     loop_test();
     switch_test();
     goto_test();
