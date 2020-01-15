@@ -53,6 +53,7 @@ static SValue _vstack[1 + VSTACK_SIZE];
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
+#define unevalmask 0xffff /* unevaluated subexpression */
 #define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
 #define STATIC_DATA_WANTED (nocode_wanted & 0xC0000000) /* only static data output */
 
@@ -2273,7 +2274,7 @@ static void gen_opic(int op)
         case TOK_UMOD:
             /* if division by zero, generate explicit division */
             if (l2 == 0) {
-                if (const_wanted)
+                if (const_wanted && !(nocode_wanted & unevalmask))
                     tcc_error("division by zero in constant");
                 goto general_case;
             }
@@ -5104,7 +5105,7 @@ ST_FUNC void unary(void)
             }
         } else if (tok == '{') {
 	    int saved_nocode_wanted = nocode_wanted;
-            if (const_wanted)
+            if (const_wanted && !(nocode_wanted & unevalmask))
                 tcc_error("expected constant");
             /* save all registers */
             save_regs(0);
@@ -6152,9 +6153,9 @@ ST_FUNC void gexpr(void)
 static void expr_const1(void)
 {
     const_wanted++;
-    nocode_wanted++;
+    nocode_wanted += unevalmask + 1;
     expr_cond();
-    nocode_wanted--;
+    nocode_wanted -= unevalmask + 1;
     const_wanted--;
 }
 

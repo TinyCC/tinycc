@@ -950,6 +950,8 @@ void expr2_test()
     printf("res= %d %d\n", a, b);
 }
 
+int const_len_ar[sizeof(1/0)]; /* div-by-zero, but in unevaluated context */
+
 void constant_expr_test()
 {
     int a;
@@ -958,6 +960,7 @@ void constant_expr_test()
     printf("%d\n", a * 16);
     printf("%d\n", a * 1);
     printf("%d\n", a + 0);
+    printf("%d\n", sizeof(const_len_ar));
 }
 
 int tab4[10];
@@ -1845,6 +1848,8 @@ arrtype2 sinit22 = {5,6,7};
 int sinit23[2] = { "astring" ? sizeof("astring") : -1,
 		   &sinit23 ? 42 : -1 };
 
+int sinit24 = 2 || 1 / 0; /* exception in constant but unevaluated context */
+
 extern int external_inited = 42;
 
 void init_test(void)
@@ -1959,6 +1964,7 @@ void init_test(void)
     printf("arrtype6: %d\n", sizeof(arrtype2));
 
     printf("sinit23= %d %d\n", sinit23[0], sinit23[1]);
+    printf("sinit24=%d\n", sinit24);
     printf("linit18= %d %d\n", linit18[0], linit18[1]);
 }
 
