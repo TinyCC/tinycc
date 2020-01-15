@@ -85,6 +85,23 @@ ST_FUNC void tccelf_bounds_new(TCCState *s)
     lbounds_section = new_section(s, ".lbounds",
                                   SHT_PROGBITS, SHF_ALLOC);
 }
+
+ST_FUNC void tcc_add_bcheck(TCCState *s1)
+{
+    addr_t *ptr;
+
+    if (0 == s1->do_bounds_check)
+        return;
+    ptr = section_ptr_add(bounds_section, sizeof(*ptr));
+    *ptr = 0;
+    set_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                bounds_section->sh_num, "__bounds_start");
+    /* pull bcheck.o from libtcc1.a */
+    set_elf_sym(symtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
+                SHN_UNDEF, "__bound_init");
+}
 #endif
 
 ST_FUNC void tccelf_stab_new(TCCState *s)
@@ -1288,7 +1305,7 @@ static int tcc_add_support(TCCState *s1, const char *filename)
 }
 #endif
 
-static void add_array (const char *section, TCCState *s1, Sym *sym)
+static void add_array (const char *section, TCCState *s1, Sym *sym, int sh_type)
 {
     Section *s;
     unsigned char *ptr;
@@ -1296,6 +1313,9 @@ static void add_array (const char *section, TCCState *s1, Sym *sym)
     s = find_section(s1, section);
     if (s) {
        s->sh_flags |= SHF_WRITE;
+#ifndef TCC_TARGET_PE
+       s->sh_type = sh_type;
+#endif
        ptr = section_ptr_add(s, PTR_SIZE);
        memset (ptr, 0, PTR_SIZE);
        put_elf_reloc (s1->symtab, s, ptr - s->data, R_DATA_PTR, sym->c);
@@ -1304,12 +1324,12 @@ static void add_array (const char *section, TCCState *s1, Sym *sym)
 
 ST_FUNC void add_init_array (TCCState *s1, Sym *sym)
 {
-    add_array (".init_array", s1, sym);
+    add_array (".init_array", s1, sym, SHT_INIT_ARRAY);
 }
 
 ST_FUNC void add_fini_array (TCCState *s1, Sym *sym)
 {
-    add_array (".fini_array", s1, sym);
+    add_array (".fini_array", s1, sym, SHT_FINI_ARRAY);
 }
 
 /* add tcc runtime libraries */
@@ -1336,7 +1356,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
             tcc_add_library_err(s1, "pthread");
             tcc_add_library_err(s1, "dl");
-            tcc_add_support(s1, "bcheck.o");
+            tcc_add_support(s1, TCC_LIBBCHECK);
         }
 #endif
         tcc_add_support(s1, TCC_LIBTCC1);
@@ -2040,6 +2060,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     Section *s;
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) shdr, *sh;
+    ElfW(Sym) *sym;
 
     file_type = s1->output_type;
     shnum = s1->nb_sections;
@@ -2110,6 +2131,10 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
     sort_syms(s1, symtab_section);
+    if (s1->dynsym)
+        for_each_elem(s1->dynsym, 0, sym, ElfW(Sym))
+            if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) 
+                s1->dynsym->sh_info++;
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[sec_order[i]];
         if (s->sh_type != SHT_NOBITS) {

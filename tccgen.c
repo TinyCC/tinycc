@@ -110,6 +110,16 @@ ST_DATA struct temp_local_variable {
 	short align;
 } arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
 short nb_temp_local_vars;
+#ifdef CONFIG_TCC_BCHECK
+static short call_nesting;
+static char used_location[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
+static int nb_bound_local_param;
+struct {
+    unsigned long data_offset;
+    int v;
+} *bound_local_param;
+ST_DATA addr_t func_bound_offset;
+#endif
 
 static struct scope {
     struct scope *prev;
@@ -1383,11 +1393,6 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     bt = VT_PTR;
                 sv.type.t = bt;
                 size = type_size(&sv.type, &align);
-#ifdef CONFIG_TCC_BCHECK
-                if (tcc_state->do_bounds_check)
-                    l = loc = (loc - size) & -align;
-                else
-#endif
                 l = get_temp_local_var(size,align);
                 sv.r = VT_LOCAL | VT_LVAL;
                 sv.c.i = l;
@@ -1496,7 +1501,11 @@ static int get_temp_local_var(int size,int align){
 	found=0;
 	for(i=0;i<nb_temp_local_vars;i++){
 		temp_var=&arr_temp_local_vars[i];
-		if(temp_var->size<size||align!=temp_var->align){
+		if(temp_var->size<size||align!=temp_var->align
+#ifdef CONFIG_TCC_BCHECK
+		   || (tcc_state->do_bounds_check && used_location[i])
+#endif
+		   ){
 			continue;
 		}
 		/*check if temp_var is free*/
@@ -1595,6 +1604,50 @@ ST_FUNC void gbound_args(int nb_args)
             gbound();
             vrott(i);
         }
+}
+
+ST_FUNC void save_temp_local(int nb_args)
+{
+    int i, j;
+
+    if (call_nesting++ == 0)
+        for (i = 1; i <= nb_args; ++i)
+            for (j = 0; j < nb_temp_local_vars; j++)
+                if (vtop[1 - i].c.i == arr_temp_local_vars[j].location) {
+                    used_location[j] = 1;
+                    break;
+                }
+}
+
+ST_FUNC void restore_temp_local()
+{
+    if (--call_nesting == 0)
+        memset (used_location, 0, sizeof (used_location));
+}
+
+static void add_bound_param(CType *type, int size, int v, int c)
+{
+    addr_t *bounds_ptr;
+    /* Add arrays/structs/unions because we always take address */
+    int taken = (type->t & VT_ARRAY)
+	        || (type->t & VT_BTYPE) == VT_STRUCT;
+
+    if (taken == 0) {
+	/* Add parameter to check */
+	nb_bound_local_param++;
+	bound_local_param =
+	    tcc_realloc (bound_local_param,
+			 nb_bound_local_param *
+			 sizeof (*bound_local_param));
+	bound_local_param[nb_bound_local_param-1].data_offset =
+	    lbounds_section->data_offset;
+	bound_local_param[nb_bound_local_param-1].v = v;
+    }
+    /* add local bound info */
+    bounds_ptr = section_ptr_add(lbounds_section,
+				 2 * sizeof(addr_t));
+    bounds_ptr[0] = c;
+    bounds_ptr[1] = taken ? size : ~size;
 }
 #endif
 
@@ -3418,6 +3471,7 @@ ST_FUNC void vstore(void)
 
             vswap();
             /* source */
+            vtop->r &= ~VT_MUSTBOUND;
             vpushv(vtop - 2);
             vtop->type.t = VT_PTR;
             gaddrof();
@@ -5083,6 +5137,23 @@ ST_FUNC void unary(void)
         if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
             !(vtop->type.t & VT_ARRAY))
             test_lvalue();
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check && vtop->sym) {
+	    int i;
+
+            /* Mark parameter as being used for address off */
+            for (i = 0; i < nb_bound_local_param; i++) {
+	        if (bound_local_param[i].v == vtop->sym->v) {
+		    addr_t *bounds_ptr =
+                        (addr_t *) (lbounds_section->data +
+                                    bound_local_param[i].data_offset);
+		    bounds_ptr[1] = ~bounds_ptr[1];
+		    bound_local_param[i].v = 0;
+		    break;
+		}
+	    }
+        }
+#endif
         mk_pointer(&vtop->type);
         gaddrof();
         break;
@@ -7435,8 +7506,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if ((r & VT_VALMASK) == VT_LOCAL) {
         sec = NULL;
 #ifdef CONFIG_TCC_BCHECK
-        if (bcheck && ((type->t & VT_ARRAY) ||
-                       (type->t & VT_BTYPE) == VT_STRUCT)) {
+        if (bcheck && v) {
+            /* add padding between stack variables */
             loc--;
         }
 #endif
@@ -7444,17 +7515,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         addr = loc;
 #ifdef CONFIG_TCC_BCHECK
         /* handles bounds */
-        /* XXX: currently, since we do only one pass, we cannot track
-           '&' operators, so we add only arrays/structs/unions */
-        if (bcheck && ((type->t & VT_ARRAY) ||
-                       (type->t & VT_BTYPE) == VT_STRUCT)) {
-            addr_t *bounds_ptr;
-            /* add padding between regions */
+        if (bcheck && v) {
+            add_bound_param (type, size, v, addr);
+            /* add padding between stack variables */
             loc--;
-            /* then add local bound info */
-            bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
-            bounds_ptr[0] = addr;
-            bounds_ptr[1] = size;
         }
 #endif
         if (v) {
@@ -7633,12 +7697,52 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(sym);
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check
+        && sym->type.ref->f.func_type != FUNC_ELLIPSIS) {
+        Sym *fpar;
+
+        /* Add function arguments in case & is used */
+        for (fpar = sym->type.ref->next; fpar; fpar = fpar->next) {
+            Sym *fsym = sym_find (fpar->v & ~SYM_FIELD);
+
+            if (fsym && (fsym->r & VT_VALMASK) == VT_LOCAL) {
+                int align;
+                int size = type_size(&fsym->type, &align);
+
+                if (size > 0)
+                    add_bound_param (&fsym->type, size, fsym->v, fsym->c);
+            }
+        }
+    }
+#endif
     local_scope = 0;
     rsym = 0;
     clear_temp_local_var_list();
     block(0);
     gsym(rsym);
     nocode_wanted = 0;
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check) {
+        addr_t o = func_bound_offset;
+
+        /* Remove parameters where address off is not used */
+        while (o != lbounds_section->data_offset) {
+            addr_t *bounds_ptr = (addr_t *) (lbounds_section->data + o);
+            if ((ssize_t) bounds_ptr[1] < 0) {
+                lbounds_section->data_offset -= 2 * sizeof (addr_t);
+                memmove(bounds_ptr, bounds_ptr + 2,
+                        lbounds_section->data_offset - o);
+            }
+            else {
+                o += 2 * sizeof (addr_t);
+            }
+        }
+        tcc_free (bound_local_param);
+        nb_bound_local_param = 0;
+        bound_local_param = NULL;
+    }
+#endif
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     /* reset local stack */

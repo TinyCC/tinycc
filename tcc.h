@@ -292,6 +292,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #ifndef TCC_LIBTCC1
 # define TCC_LIBTCC1 "libtcc1.a"
 #endif
+#ifndef TCC_LIBBCHECK
+# define TCC_LIBBCHECK "bcheck.o"
+#endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
 #if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
@@ -1375,6 +1378,9 @@ ST_DATA CType func_vt; /* current function return type (used by return instructi
 ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA const char *funcname;
+#ifdef CONFIG_TCC_BCHECK
+ST_DATA addr_t func_bound_offset;
+#endif
 
 ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
@@ -1440,6 +1446,8 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty);
 #endif
 #ifdef CONFIG_TCC_BCHECK
 ST_FUNC void gbound_args(int nb_args);
+ST_FUNC void save_temp_local(int nb_args);
+ST_FUNC void restore_temp_local(void);
 #endif
 
 /* ------------ tccelf.c ------------ */

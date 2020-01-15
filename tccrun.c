@@ -86,6 +86,7 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, prx);
     ptr_diff = (char*)prx - (char*)ptr;
+    close(fd);
 }
 #else
     ptr = tcc_malloc(size);
@@ -119,6 +120,17 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
+/* PE target overwrites runtime_main */
+#ifndef TCC_TARGET_PE
+    typedef void (*init_array_func)(int, char **, char **);
+    typedef void (*fini_array_func)(void);
+    init_array_func *__init_array_start;
+    init_array_func *__init_array_end;
+    fini_array_func *__fini_array_start;
+    fini_array_func *__fini_array_end;
+#endif
+    int i;
+    int ret;
     int (*prog_main)(int, char **);
 
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
@@ -140,31 +152,34 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
 
 #ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check) {
-        void (*bound_init)(void);
-        void (*bound_exit)(void);
-        void (*bounds_add_static_var)(size_t *p);
-        size_t *bounds_start;
-        int ret;
-
+    if (s1->do_bounds_check)
         /* set error function */
         s1->rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
-        /* XXX: use .init section so that it also work in binary ? */
-        bound_init = tcc_get_symbol_err(s1, "__bound_init");
-        bound_exit = tcc_get_symbol_err(s1, "__bound_exit");
-        bounds_add_static_var = tcc_get_symbol_err(s1, "__bounds_add_static_var");
-        bounds_start = tcc_get_symbol_err(s1, "__bounds_start");
+#endif
 
-        bound_init();
-        bounds_add_static_var (bounds_start);
+#ifndef TCC_TARGET_PE
+    __init_array_start = tcc_get_symbol_err(s1, "__init_array_start");
+    __init_array_end = tcc_get_symbol_err(s1, "__init_array_end");
+    __fini_array_start = tcc_get_symbol_err(s1, "__fini_array_start");
+    __fini_array_end = tcc_get_symbol_err(s1, "__fini_array_end");
 
-        ret = (*prog_main)(argc, argv);
-
-        bound_exit();
-        return ret;
+    if (__init_array_start && __init_array_end) {
+        i = 0;
+        while (&__init_array_start[i] != __init_array_end)
+            (*__init_array_start[i++])(argc, argv, environ);
     }
 #endif
-    return (*prog_main)(argc, argv);
+
+    ret = (*prog_main)(argc, argv);
+
+#ifndef TCC_TARGET_PE
+    if (__fini_array_start && __fini_array_end) {
+        i = 0;
+        while (&__fini_array_end[i] != __fini_array_start)
+            (*__fini_array_end[--i])();
+    }
+#endif
+    return ret;
 }
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
@@ -649,6 +664,9 @@ static void set_exception_handler(void)
     /* install TCC signal handlers to print debug info on fatal
        runtime errors */
     sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
+#ifdef SIGSTKSZ
+    sigact.sa_flags |= SA_ONSTACK;
+#endif
     sigact.sa_sigaction = sig_error;
     sigemptyset(&sigact.sa_mask);
     sigaction(SIGFPE, &sigact, NULL);
@@ -656,6 +674,18 @@ static void set_exception_handler(void)
     sigaction(SIGSEGV, &sigact, NULL);
     sigaction(SIGBUS, &sigact, NULL);
     sigaction(SIGABRT, &sigact, NULL);
+#ifdef SIGSTKSZ
+    /* This allows stack overflow to be reported instead of a SEGV */
+    {
+        stack_t ss;
+        static unsigned char stack[SIGSTKSZ] __attribute__((aligned(16)));
+
+        ss.ss_sp = stack;
+        ss.ss_size = SIGSTKSZ;
+        ss.ss_flags = 0;
+        sigaltstack(&ss, NULL);
+    }
+#endif
 }
 
 #else /* WIN32 */

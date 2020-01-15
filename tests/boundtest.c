@@ -230,6 +230,202 @@ int test17()
     return 0;
 }
 
+#define	CHECK(s)	if (strstr (__bound_error_msg, s) == 0) abort();
+
+extern void __bound_never_fatal (int neverfatal);
+extern const char *__bound_error_msg;
+
+static void init18(char *a, char *b)
+{
+    memset (a, 'a', 10);
+    a[3] = 0;
+    a[9] = 0;
+    memset (b, 'b', 10);
+    __bound_error_msg = "";
+}
+
+/* ok (catch all errors) */
+int test18()
+{
+    char pad1[10];
+    char a[10];
+    char pad2[10];
+    char b[10];
+    char pad3[10];
+
+    memset (pad1, 0, sizeof(pad1));
+    memset (pad2, 0, sizeof(pad2));
+    memset (pad3, 0, sizeof(pad3));
+
+    /* -2 in case TCC_BOUNDS_NEVER_FATAL is set */
+    __bound_never_fatal (-2);
+
+    /* memcpy */
+    init18(a,b);
+    memcpy(&a[1],&b[0],10);
+    CHECK("memcpy dest");
+    init18(a,b);
+    memcpy(&a[0],&b[1],10);
+    CHECK("memcpy src");
+    init18(a,b);
+    memcpy(&a[0],&a[3],4);
+    CHECK("overlapping regions");
+    init18(a,b);
+    memcpy(&a[3],&a[0],4);
+    CHECK("overlapping regions");
+
+    /* memcmp */
+    init18(a,b);
+    memcmp(&b[1],&b[0],10);
+    CHECK("memcmp s1");
+    init18(a,b);
+    memcmp(&b[0],&b[1],10);
+    CHECK("memcmp s2");
+
+    /* memmove */
+    init18(a,b);
+    memmove(&b[1],&b[0],10);
+    CHECK("memmove dest");
+    init18(a,b);
+    memmove(&b[0],&b[1],10);
+    CHECK("memmove src");
+
+    /* memset */
+    init18(a,b);
+    memset(&b[1],'b',10);
+    CHECK("memset");
+
+    /* strlen */
+    init18(a,b);
+    strlen(&b[0]);
+    CHECK("strlen");
+
+    /* strcpy */
+    init18(a,b);
+    strcpy(&a[7], &a[0]);
+    CHECK("strcpy dest");
+    init18(a,b);
+    strcpy(&a[0], &b[7]);
+    CHECK("strcpy src");
+    init18(a,b);
+    strcpy(&a[0], &a[1]);
+    CHECK("overlapping regions");
+    init18(a,b);
+    strcpy(&a[2], &a[0]);
+    CHECK("overlapping regions");
+
+    /* strncpy */
+    init18(a,b);
+    strncpy(&a[7], &a[0], 10);
+    CHECK("strncpy dest");
+    init18(a,b);
+    strncpy(&a[0], &b[7], 10);
+    CHECK("strncpy src");
+    init18(a,b);
+    strncpy(&a[0], &a[1], 10);
+    CHECK("overlapping regions");
+    strncpy(&a[2], &a[0], 10);
+    CHECK("overlapping regions");
+
+    /* strcmp */
+    init18(a,b);
+    strcmp(&b[2], &b[0]);
+    CHECK("strcmp s1");
+    init18(a,b);
+    strcmp(&b[0], &b[2]);
+    CHECK("strcmp s2");
+
+    /* strncmp */
+    init18(a,b);
+    strncmp(&b[5], &b[0], 10);
+    CHECK("strncmp s1");
+    init18(a,b);
+    strncmp(&b[0], &b[5], 10);
+    CHECK("strncmp s2");
+
+    /* strcat */
+    init18(a,b);
+    strcat(&a[7], &a[0]);
+    CHECK("strcat dest");
+    init18(a,b);
+    strcat(&a[0], &b[5]);
+    CHECK("strcat src");
+    init18(a,b);
+    strcat(&a[0], &a[4]);
+    CHECK("overlapping regions");
+    init18(a,b);
+    strcat(&a[3], &a[0]);
+    CHECK("overlapping regions");
+
+    /* strchr */
+    init18(a,b);
+    strchr(&b[0], 'a');
+    CHECK("strchr");
+
+    /* strdup */
+    init18(a,b);
+    free(strdup(&b[0]));
+    CHECK("strdup");
+
+    __bound_never_fatal (2);
+
+    /* memcpy */
+    init18(a,b);
+    memcpy(&a[0],&b[0],10);
+    init18(a,b);
+    memcpy(&a[0],&a[3],3);
+    init18(a,b);
+    memcpy(&a[3],&a[0],3);
+
+    /* memcmp */
+    init18(a,b);
+    memcmp(&b[0],&b[0],10);
+
+    /* memmove */
+    init18(a,b);
+    memmove(&b[0],&b[5],5);
+    init18(a,b);
+    memmove(&b[5],&b[0],5);
+
+    /* memset */
+    init18(a,b);
+    memset(&b[0],'b',10);
+
+    /* strlen */
+    init18(a,b);
+    strlen (&a[0]);
+
+    /* strcpy */
+    init18(a,b);
+    strcpy (&a[0], &a[7]);
+
+    /* strncpy */
+    init18(a,b);
+    strncpy (&a[0], &a[7], 4);
+
+    /* strcmp */
+    init18(a,b);
+    strcmp (&a[0], &a[4]);
+
+    /* strncmp */
+    init18(a,b);
+    strncmp (&a[0], &a[4], 10);
+
+    /* strcat */
+    init18(a,b);
+    strcat (&a[0], &a[7]);
+
+    /* strchr */
+    init18(a,b);
+    strchr (&a[0], 0);
+
+    /* strdup */
+    init18(a,b);
+    free (strdup (&a[0]));
+
+    return 0;
+}
+
 int (*table_test[])(void) = {
     test1,
     test2,
@@ -248,6 +444,7 @@ int (*table_test[])(void) = {
     test15,
     test16,
     test17,
+    test18,
 };
 
 int main(int argc, char **argv)

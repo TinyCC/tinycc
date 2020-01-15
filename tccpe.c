@@ -1897,7 +1897,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         const char **pp, *p;
 #ifdef TCC_IS_NATIVE
         if (s1->do_bounds_check)
-            tcc_add_support(s1, "bcheck.o");
+            tcc_add_support(s1, TCC_LIBBCHECK);
 #endif
         tcc_add_support(s1, TCC_LIBTCC1);
         for (pp = libs; 0 != (p = *pp); ++pp) {
