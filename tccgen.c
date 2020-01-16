@@ -1615,10 +1615,10 @@ static void add_local_bounds(Sym *s, Sym *e)
 #endif
 
 /* Wrapper around sym_pop, that potentially also registers local bounds.  */
-static void pop_local_syms(Sym **ptop, Sym *b, int keep)
+static void pop_local_syms(Sym **ptop, Sym *b, int keep, int ellipsis)
 {
 #ifdef CONFIG_TCC_BCHECK
-    if (!keep && tcc_state->do_bounds_check)
+    if (!ellipsis && !keep && tcc_state->do_bounds_check)
         add_local_bounds(*ptop, b);
 #endif
     sym_pop(ptop, b, keep);
@@ -6411,7 +6411,7 @@ void prev_scope(struct scope *o, int is_expr)
        tables, though.  sym_pop will do that.  */
 
     /* pop locally defined symbols */
-    pop_local_syms(&local_stack, o->lstk, is_expr);
+    pop_local_syms(&local_stack, o->lstk, is_expr, 0);
 
     cur_scope = o->prev;
     --local_scope;
@@ -7656,7 +7656,8 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     gsym(rsym);
     nocode_wanted = 0;
     /* reset local stack */
-    pop_local_syms(&local_stack, NULL, 0);
+    pop_local_syms(&local_stack, NULL, 0,
+                   sym->type.ref->f.func_type == FUNC_ELLIPSIS);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     local_scope = 0;
