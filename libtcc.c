@@ -805,6 +805,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__STDC_VERSION__", "199901L");
     tcc_define_symbol(s, "__STDC_HOSTED__", NULL);
 
+#if !defined(TCC_TARGET_PE)
+    /* glibc compatible macro (default for C99) */
+    tcc_define_symbol(s, "_ISOC99_SOURCE", "1");
+#endif
+
     /* target defines */
 #if defined(TCC_TARGET_I386)
     tcc_define_symbol(s, "__i386__", NULL);
@@ -1900,6 +1905,11 @@ reparse:
                      * encoding used is implementationdeﬁned.
                      */
                     tcc_define_symbol(s, "__STDC_UTF_32__", "1");
+                    /*
+                     * glibc compatible macro used when -std=c11 is used.
+                     * _ISOC99_SOURCE remains defined as does gcc.
+                     */
+                    tcc_define_symbol(s, "_ISOC11_SOURCE", "1");
 #endif /* !TCC_TARGET_PE */
                     s->cversion = 201112;
                 }
