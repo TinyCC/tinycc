@@ -637,6 +637,7 @@ static void gcall_or_jmp(int is_jmp)
 }
 
 #if defined(CONFIG_TCC_BCHECK)
+static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
 
 static void gen_bounds_call(int v)
@@ -783,10 +784,8 @@ void gfunc_call(int nb_args)
     int arg;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check) {
-        save_temp_local (nb_args);
+    if (tcc_state->do_bounds_check)
         gbound_args(nb_args);
-    }
 #endif
 
     args_size = (nb_args < REGN ? REGN : nb_args) * PTR_SIZE;
@@ -907,10 +906,6 @@ void gfunc_call(int nb_args)
 
     }
     vtop--;
-#ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
-        restore_temp_local ();
-#endif
 }
 
 
@@ -1276,10 +1271,8 @@ void gfunc_call(int nb_args)
     char _onstack[nb_args ? nb_args : 1], *onstack = _onstack;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check) {
-        save_temp_local (nb_args);
+    if (tcc_state->do_bounds_check)
         gbound_args(nb_args);
-    }
 #endif
 
     /* calculate the number of integer/float register arguments, remember
@@ -1460,10 +1453,6 @@ void gfunc_call(int nb_args)
     if (args_size)
         gadd_sp(args_size);
     vtop--;
-#ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
-        restore_temp_local ();
-#endif
 }
 
 #define FUNC_PROLOG_SIZE 11

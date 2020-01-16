@@ -474,9 +474,8 @@ struct SymAttr {
     dllexport   : 1,
     nodecorate  : 1,
     dllimport   : 1,
-    constructor : 1,
-    destructor  : 1,
-    unused      : 2;
+    addrtaken   : 1,
+    unused      : 3;
 };
 
 /* function attributes or temporary attributes for parsing */
@@ -620,6 +619,8 @@ typedef struct TokenString {
 typedef struct AttributeDef {
     struct SymAttr a;
     struct FuncAttr f;
+    unsigned short constructor:1;
+    unsigned short destructor:1;
     struct Section *section;
     Sym *cleanup_func;
     int alias_target; /* token */
@@ -1378,9 +1379,6 @@ ST_DATA CType func_vt; /* current function return type (used by return instructi
 ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
 ST_DATA const char *funcname;
-#ifdef CONFIG_TCC_BCHECK
-ST_DATA addr_t func_bound_offset;
-#endif
 
 ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
@@ -1446,8 +1444,6 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty);
 #endif
 #ifdef CONFIG_TCC_BCHECK
 ST_FUNC void gbound_args(int nb_args);
-ST_FUNC void save_temp_local(int nb_args);
-ST_FUNC void restore_temp_local(void);
 #endif
 
 /* ------------ tccelf.c ------------ */

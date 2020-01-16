@@ -95,6 +95,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 #ifdef CONFIG_TCC_BCHECK
+static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
 #endif
 
@@ -401,10 +402,8 @@ ST_FUNC void gfunc_call(int nb_args)
     Sym *func_sym;
     
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check) {
-        save_temp_local (nb_args);
+    if (tcc_state->do_bounds_check)
         gbound_args(nb_args);
-    }
 #endif
 
     args_size = 0;
@@ -486,10 +485,6 @@ ST_FUNC void gfunc_call(int nb_args)
     if (args_size && func_call != FUNC_STDCALL && func_call != FUNC_FASTCALLW)
         gadd_sp(args_size);
     vtop--;
-#ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
-        restore_temp_local ();
-#endif
 }
 
 #ifdef TCC_TARGET_PE
