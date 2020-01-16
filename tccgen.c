@@ -7655,10 +7655,10 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     block(0);
     gsym(rsym);
     nocode_wanted = 0;
-    gfunc_epilog();
-    cur_text_section->data_offset = ind;
     /* reset local stack */
     pop_local_syms(&local_stack, NULL, 0);
+    gfunc_epilog();
+    cur_text_section->data_offset = ind;
     local_scope = 0;
     label_pop(&global_label_stack, NULL, 0);
     sym_pop(&all_cleanups, NULL, 0);
