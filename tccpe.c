@@ -239,8 +239,6 @@ typedef struct _IMAGE_BASE_RELOCATION {
 #define IMAGE_SCN_MEM_EXECUTE               0x20000000
 #define IMAGE_SCN_MEM_READ                  0x40000000
 #define IMAGE_SCN_MEM_WRITE                 0x80000000
-#define IMAGE_SCN_TYPE_NOLOAD               0x00000002
-#define IMAGE_SCN_LNK_REMOVE                0x00000800
 
 #pragma pack(pop)
 
@@ -299,6 +297,7 @@ enum {
     sec_other ,
     sec_rsrc ,
     sec_stab ,
+    sec_stabstr ,
     sec_reloc ,
     sec_last
 };
@@ -318,12 +317,12 @@ static const DWORD pe_sec_flags[] = {
 #endif
 
 struct section_info {
-    int cls, ord;
+    int cls;
     char name[32];
     DWORD sh_addr;
     DWORD sh_size;
     DWORD pe_flags;
-    unsigned char *data;
+    Section *sec;
     DWORD data_size;
     IMAGE_SECTION_HEADER ish;
 };
@@ -359,7 +358,7 @@ struct pe_info {
     int subsystem;
     DWORD section_align;
     DWORD file_align;
-    struct section_info *sec_info;
+    struct section_info **sec_info;
     int sec_count;
     struct pe_import_info **imp_info;
     int imp_count;
@@ -432,12 +431,10 @@ static int dynarray_assoc(void **pp, int n, int key)
     return -1;
 }
 
-#if 0
-ST_FN DWORD umin(DWORD a, DWORD b)
+static DWORD umin(DWORD a, DWORD b)
 {
     return a < b ? a : b;
 }
-#endif
 
 static DWORD umax(DWORD a, DWORD b)
 {
@@ -467,26 +464,37 @@ static void pe_set_datadir(struct pe_header *hdr, int dir, DWORD addr, DWORD siz
     hdr->opthdr.DataDirectory[dir].Size = size;
 }
 
-static int pe_fwrite(void *data, unsigned len, FILE *fp, DWORD *psum)
+struct pe_file {
+    FILE *op;
+    DWORD sum;
+    unsigned pos;
+};
+
+static int pe_fwrite(void *data, int len, struct pe_file *pf)
 {
-    if (psum) {
-        DWORD sum = *psum;
-        WORD *p = data;
-        int i;
-        for (i = len; i > 0; i -= 2) {
-            sum += (i >= 2) ? *p++ : *(BYTE*)p;
-            sum = (sum + (sum >> 16)) & 0xFFFF;
-        }
-        *psum = sum;
+    WORD *p = data;
+    DWORD sum;
+    int ret, i;
+    pf->pos += (ret = fwrite(data, 1, len, pf->op));
+    sum = pf->sum;
+    for (i = len; i > 0; i -= 2) {
+        sum += (i >= 2) ? *p++ : *(BYTE*)p;
+        sum = (sum + (sum >> 16)) & 0xFFFF;
     }
-    return len == fwrite(data, 1, len, fp) ? 0 : -1;
+    pf->sum = sum;
+    return len == ret ? 0 : -1;
 }
 
-static void pe_fpad(FILE *fp, DWORD new_pos)
+static void pe_fpad(struct pe_file *pf, DWORD new_pos)
 {
-    DWORD pos = ftell(fp);
-    while (++pos <= new_pos)
-        fputc(0, fp);
+    char buf[256];
+    int n, diff = new_pos - pf->pos;
+    memset(buf, 0, sizeof buf);
+    while (diff > 0) {
+        diff -= n = umin(diff, sizeof buf);
+        fwrite(buf, n, 1, pf->op);
+    }
+    pf->pos = new_pos;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -598,14 +606,14 @@ static int pe_write(struct pe_info *pe)
     struct pe_header pe_header = pe_template;
 
     int i;
-    FILE *op;
-    DWORD file_offset, sum;
+    struct pe_file pf = {0};
+    DWORD file_offset;
     struct section_info *si;
     IMAGE_SECTION_HEADER *psh;
     TCCState *s1 = pe->s1;
 
-    op = fopen(pe->filename, "wb");
-    if (NULL == op) {
+    pf.op = fopen(pe->filename, "wb");
+    if (NULL == pf.op) {
         tcc_error_noabort("could not write '%s': %s", pe->filename, strerror(errno));
         return -1;
     }
@@ -624,7 +632,7 @@ static int pe_write(struct pe_info *pe)
         DWORD addr, size;
         const char *sh_name;
 
-        si = pe->sec_info + i;
+        si = pe->sec_info[i];
         sh_name = si->name;
         addr = si->sh_addr - pe->imagebase;
         size = si->sh_size;
@@ -663,20 +671,18 @@ static int pe_write(struct pe_info *pe)
                 break;
         }
 
-        if (pe->thunk == pe->s1->sections[si->ord]) {
-            if (pe->imp_size) {
-                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IMPORT,
-                    pe->imp_offs + addr, pe->imp_size);
-                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IAT,
-                    pe->iat_offs + addr, pe->iat_size);
-            }
-            if (pe->exp_size) {
-                pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_EXPORT,
-                    pe->exp_offs + addr, pe->exp_size);
-            }
+        if (pe->imp_size) {
+            pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IMPORT,
+                pe->imp_offs, pe->imp_size);
+            pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_IAT,
+                pe->iat_offs, pe->iat_size);
+        }
+        if (pe->exp_size) {
+            pe_set_datadir(&pe_header, IMAGE_DIRECTORY_ENTRY_EXPORT,
+                pe->exp_offs, pe->exp_size);
         }
 
-        strncpy((char*)psh->Name, sh_name, sizeof psh->Name);
+        memcpy(psh->Name, sh_name, umin(strlen(sh_name), sizeof psh->Name));
 
         psh->Characteristics = si->pe_flags;
         psh->VirtualAddress = addr;
@@ -707,25 +713,29 @@ static int pe_write(struct pe_info *pe)
         pe_header.filehdr.Characteristics = CHARACTERISTICS_DLL;
     pe_header.filehdr.Characteristics |= pe->s1->pe_characteristics;
 
-    sum = 0;
-    pe_fwrite(&pe_header, sizeof pe_header, op, &sum);
+    pe_fwrite(&pe_header, sizeof pe_header, &pf);
     for (i = 0; i < pe->sec_count; ++i)
-        pe_fwrite(&pe->sec_info[i].ish, sizeof(IMAGE_SECTION_HEADER), op, &sum);
-    pe_fpad(op, pe->sizeofheaders);
+        pe_fwrite(&pe->sec_info[i]->ish, sizeof(IMAGE_SECTION_HEADER), &pf);
+
+    file_offset = pe->sizeofheaders;
     for (i = 0; i < pe->sec_count; ++i) {
-        si = pe->sec_info + i;
-        psh = &si->ish;
-        if (si->data_size) {
-            pe_fwrite(si->data, si->data_size, op, &sum);
-            file_offset = psh->PointerToRawData + psh->SizeOfRawData;
-            pe_fpad(op, file_offset);
+        Section *s;
+        si = pe->sec_info[i];
+        for (s = si->sec; s; s = s->prev) {
+            pe_fpad(&pf, file_offset);
+            pe_fwrite(s->data, s->data_offset, &pf);
+            if (s->prev)
+                file_offset += s->prev->sh_addr - s->sh_addr;
         }
+        file_offset = si->ish.PointerToRawData + si->ish.SizeOfRawData;
+        pe_fpad(&pf, file_offset);
     }
 
-    pe_header.opthdr.CheckSum = sum + file_offset;
-    fseek(op, offsetof(struct pe_header, opthdr.CheckSum), SEEK_SET);
-    pe_fwrite(&pe_header.opthdr.CheckSum, sizeof pe_header.opthdr.CheckSum, op, NULL);
-    fclose (op);
+    pf.sum += file_offset;
+    fseek(pf.op, offsetof(struct pe_header, opthdr.CheckSum), SEEK_SET);
+    pe_fwrite(&pf.sum, sizeof (DWORD), &pf);
+
+    fclose (pf.op);
 #ifndef _WIN32
     chmod(pe->filename, 0777);
 #endif
@@ -796,15 +806,14 @@ static void pe_build_imports(struct pe_info *pe)
         return;
 
     pe_align_section(pe->thunk, 16);
-
-    pe->imp_offs = dll_ptr = pe->thunk->data_offset;
     pe->imp_size = (ndlls + 1) * sizeof(IMAGE_IMPORT_DESCRIPTOR);
-    pe->iat_offs = dll_ptr + pe->imp_size;
     pe->iat_size = (sym_cnt + ndlls) * sizeof(ADDR3264);
+    dll_ptr = pe->thunk->data_offset;
+    thk_ptr = dll_ptr + pe->imp_size;
+    ent_ptr = thk_ptr + pe->iat_size;
+    pe->imp_offs = dll_ptr + rva_base;
+    pe->iat_offs = thk_ptr + rva_base;
     section_ptr_add(pe->thunk, pe->imp_size + 2*pe->iat_size);
-
-    thk_ptr = pe->iat_offs;
-    ent_ptr = pe->iat_offs + pe->iat_size;
 
     for (i = 0; i < pe->imp_count; ++i) {
         IMAGE_IMPORT_DESCRIPTOR *hdr;
@@ -895,7 +904,7 @@ static void pe_build_exports(struct pe_info *pe)
 {
     ElfW(Sym) *sym;
     int sym_index, sym_end;
-    DWORD rva_base, func_o, name_o, ord_o, str_o;
+    DWORD rva_base, base_o, func_o, name_o, ord_o, str_o;
     IMAGE_EXPORT_DIRECTORY *hdr;
     int sym_count, ord;
     struct pe_sort_sym **sorted, *p;
@@ -937,13 +946,13 @@ static void pe_build_exports(struct pe_info *pe)
     pe_align_section(pe->thunk, 16);
     dllname = tcc_basename(pe->filename);
 
-    pe->exp_offs = pe->thunk->data_offset;
-    func_o = pe->exp_offs + sizeof(IMAGE_EXPORT_DIRECTORY);
+    base_o = pe->thunk->data_offset;
+    func_o = base_o + sizeof(IMAGE_EXPORT_DIRECTORY);
     name_o = func_o + sym_count * sizeof (DWORD);
     ord_o = name_o + sym_count * sizeof (DWORD);
     str_o = ord_o + sym_count * sizeof(WORD);
 
-    hdr = section_ptr_add(pe->thunk, str_o - pe->exp_offs);
+    hdr = section_ptr_add(pe->thunk, str_o - base_o);
     hdr->Characteristics        = 0;
     hdr->Base                   = 1;
     hdr->NumberOfFunctions      = sym_count;
@@ -985,7 +994,9 @@ static void pe_build_exports(struct pe_info *pe)
         if (op)
             fprintf(op, "%s\n", name);
     }
-    pe->exp_size = pe->thunk->data_offset - pe->exp_offs;
+
+    pe->exp_offs = base_o + rva_base;
+    pe->exp_size = pe->thunk->data_offset - base_o;
     dynarray_reset(&sorted, &sym_count);
     if (op)
         fclose(op);
@@ -994,18 +1005,19 @@ static void pe_build_exports(struct pe_info *pe)
 /* ------------------------------------------------------------- */
 static void pe_build_reloc (struct pe_info *pe)
 {
-    DWORD offset, block_ptr, addr;
+    DWORD offset, block_ptr, sh_addr, addr;
     int count, i;
     ElfW_Rel *rel, *rel_end;
     Section *s = NULL, *sr;
+    struct pe_reloc_header *hdr;
 
-    offset = addr = block_ptr = count = i = 0;
+    sh_addr = offset = block_ptr = count = i = 0;
     rel = rel_end = NULL;
 
     for(;;) {
         if (rel < rel_end) {
             int type = ELFW(R_TYPE)(rel->r_info);
-            addr = rel->r_offset + s->sh_addr;
+            addr = rel->r_offset + sh_addr;
             ++ rel;
             if (type != REL_TYPE_DIRECT)
                 continue;
@@ -1022,28 +1034,30 @@ static void pe_build_reloc (struct pe_info *pe)
             }
             -- rel;
 
-        } else if (i < pe->sec_count) {
-            sr = (s = pe->s1->sections[pe->sec_info[i++].ord])->reloc;
+        } else if (s) {
+            sr = s->reloc;
             if (sr) {
                 rel = (ElfW_Rel *)sr->data;
                 rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
+                sh_addr = s->sh_addr;
             }
+            s = s->prev;
             continue;
-        }
 
-        if (count) {
-            /* store the last block and ready for a new one */
-            struct pe_reloc_header *hdr;
-            if (count & 1) /* align for DWORDS */
-                section_ptr_add(pe->reloc, sizeof(WORD)), ++count;
-            hdr = (struct pe_reloc_header *)(pe->reloc->data + block_ptr);
-            hdr -> offset = offset - pe->imagebase;
-            hdr -> size = count * sizeof(WORD) + sizeof(struct pe_reloc_header);
-            count = 0;
-        }
+        } else if (i < pe->sec_count) {
+            s = pe->sec_info[i]->sec, ++i;
+            continue;
 
-        if (rel >= rel_end)
+        } else if (!count)
             break;
+
+        /* fill the last block and ready for a new one */
+        if (count & 1) /* align for DWORDS */
+            section_ptr_add(pe->reloc, sizeof(WORD)), ++count;
+        hdr = (struct pe_reloc_header *)(pe->reloc->data + block_ptr);
+        hdr -> offset = offset - pe->imagebase;
+        hdr -> size = count * sizeof(WORD) + sizeof(struct pe_reloc_header);
+        count = 0;
     }
 }
 
@@ -1072,13 +1086,14 @@ static int pe_section_class(Section *s)
             if (flags & SHF_WRITE)
                 return sec_bss;
         }
-        return sec_other;
     } else {
         if (0 == strcmp(name, ".reloc"))
             return sec_reloc;
-        if (0 == memcmp(name, ".stab", 5))
-            return sec_stab;
     }
+    if (0 == memcmp(name, ".stab", 5))
+        return name[5] ? sec_stabstr : sec_stab;
+    if (flags & SHF_ALLOC)
+        return sec_other;
     return -1;
 }
 
@@ -1092,47 +1107,62 @@ static int pe_assign_addresses (struct pe_info *pe)
 
     if (PE_DLL == pe->type)
         pe->reloc = new_section(pe->s1, ".reloc", SHT_PROGBITS, 0);
-
     // pe->thunk = new_section(pe->s1, ".iedat", SHT_PROGBITS, SHF_ALLOC);
 
     section_order = tcc_malloc(pe->s1->nb_sections * sizeof (int));
     for (o = k = 0 ; k < sec_last; ++k) {
         for (i = 1; i < pe->s1->nb_sections; ++i) {
             s = pe->s1->sections[i];
-            if (k == pe_section_class(s)) {
-                // printf("%s %d\n", s->name, k);
-                s->sh_addr = pe->imagebase;
+            if (k == pe_section_class(s))
                 section_order[o++] = i;
-            }
         }
     }
 
-    pe->sec_info = tcc_mallocz(o * sizeof (struct section_info));
+    si = NULL;
     addr = pe->imagebase + 1;
 
-    for (i = 0; i < o; ++i)
-    {
+    for (i = 0; i < o; ++i) {
         k = section_order[i];
         s = pe->s1->sections[k];
         c = pe_section_class(s);
-        si = &pe->sec_info[pe->sec_count];
+
+        if ((c == sec_stab || c == sec_stabstr) && 0 == pe->s1->do_debug)
+            continue;
 
 #ifdef PE_MERGE_DATA
-        if (c == sec_bss && pe->sec_count && si[-1].cls == sec_data) {
-            /* append .bss to .data */
-            s->sh_addr = addr = ((addr-1) | (s->sh_addralign-1)) + 1;
-            addr += s->data_offset;
-            si[-1].sh_size = addr - si[-1].sh_addr;
-            continue;
-        }
+        if (c == sec_bss)
+            c = sec_data;
 #endif
-        if (c == sec_stab && 0 == pe->s1->do_debug)
+        if (si && c == si->cls) {
+            /* merge with previous section */
+            s->sh_addr = addr = ((addr - 1) | (16 - 1)) + 1;
+        } else {
+            si = NULL;
+            s->sh_addr = addr = pe_virtual_align(pe, addr);
+        }
+
+        if (c == sec_data && NULL == pe->thunk)
+            pe->thunk = s;
+
+        if (s == pe->thunk) {
+            pe_build_imports(pe);
+            pe_build_exports(pe);
+        }
+        if (s == pe->reloc)
+            pe_build_reloc (pe);
+
+        if (0 == s->data_offset)
             continue;
+
+        if (si)
+            goto add_section;
+
+        si = tcc_mallocz(sizeof *si);
+        dynarray_add(&pe->sec_info, &pe->sec_count, si);
 
         strcpy(si->name, s->name);
         si->cls = c;
-        si->ord = k;
-        si->sh_addr = s->sh_addr = addr = pe_virtual_align(pe, addr);
+        si->sh_addr = addr;
 
         si->pe_flags = IMAGE_SCN_MEM_READ;
         if (s->sh_flags & SHF_EXECINSTR)
@@ -1143,48 +1173,35 @@ static int pe_assign_addresses (struct pe_info *pe)
             si->pe_flags |= IMAGE_SCN_CNT_INITIALIZED_DATA;
         if (s->sh_flags & SHF_WRITE)
             si->pe_flags |= IMAGE_SCN_MEM_WRITE;
-        if (0 == (s->sh_flags & SHF_ALLOC)) {
+        if (0 == (s->sh_flags & SHF_ALLOC))
             si->pe_flags |= IMAGE_SCN_MEM_DISCARDABLE;
-            if (c == sec_stab)
-                si->pe_flags |= 0x802; //IMAGE_SCN_TYPE_NOLOAD|IMAGE_SCN_LNK_REMOVE
+
+add_section:
+        addr += s->data_offset;
+        si->sh_size = addr - si->sh_addr;
+        if (s->sh_type != SHT_NOBITS) {
+            Section **ps = &si->sec;
+            while (*ps)
+                ps = &(*ps)->prev;
+            *ps = s, s->prev = NULL;
+            si->data_size = si->sh_size;
         }
-
-        if (c == sec_data && NULL == pe->thunk)
-            pe->thunk = s;
-
-        if (s == pe->thunk) {
-            pe_build_imports(pe);
-            pe_build_exports(pe);
-        }
-
-        if (c == sec_reloc)
-            pe_build_reloc (pe);
-
-        if (s->data_offset)
-        {
-            if (s->sh_type != SHT_NOBITS) {
-                si->data = s->data;
-                si->data_size = s->data_offset;
-            }
-
-            addr += s->data_offset;
-            si->sh_size = s->data_offset;
-            ++pe->sec_count;
-        }
-        //printf("%08x %05x %s %08x\n", si->sh_addr, si->sh_size, si->name, si->pe_flags);
+        //printf("%08x %05x %08x %s\n", si->sh_addr, si->sh_size, si->pe_flags, s->name);
     }
+    tcc_free(section_order);
 #if 0
     for (i = 1; i < pe->s1->nb_sections; ++i) {
         Section *s = pe->s1->sections[i];
         int type = s->sh_type;
         int flags = s->sh_flags;
-        printf("section %-16s %-10s %5x %s,%s,%s\n",
+        printf("section %-16s %-10s %08x %04x %s,%s,%s\n",
             s->name,
             type == SHT_PROGBITS ? "progbits" :
             type == SHT_NOBITS ? "nobits" :
             type == SHT_SYMTAB ? "symtab" :
             type == SHT_STRTAB ? "strtab" :
             type == SHT_RELX ? "rel" : "???",
+            s->sh_addr,
             s->data_offset,
             flags & SHF_ALLOC ? "alloc" : "",
             flags & SHF_WRITE ? "write" : "",
@@ -1193,8 +1210,6 @@ static int pe_assign_addresses (struct pe_info *pe)
     }
     pe->s1->verbose = 2;
 #endif
-
-    tcc_free(section_order);
     return 0;
 }
 
@@ -1860,8 +1875,6 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
     else
     if (TCC_OUTPUT_DLL == s1->output_type) {
         pe_type = PE_DLL;
-        /* need this for 'tccelf.c:relocate_section()' */
-        s1->output_type = TCC_OUTPUT_EXE;
     }
     else {
         pe_type = PE_EXE;
@@ -1881,24 +1894,34 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
     if (!s1->leading_underscore || strchr(start_symbol, '@'))
         ++start_symbol;
 
-    /* grab the startup code from libtcc1 */
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->do_backtrace) {
+#ifdef CONFIG_TCC_BCHECK
+        if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL)
+            tcc_add_support(s1, "bcheck.o");
+#endif
+        if (s1->output_type == TCC_OUTPUT_EXE)
+            tcc_add_support(s1, "bt-exe.o");
+        if (s1->output_type == TCC_OUTPUT_DLL)
+            tcc_add_support(s1, "bt-dll.o");
+        if (s1->output_type != TCC_OUTPUT_DLL)
+            tcc_add_support(s1, "bt-log.o");
+        if (s1->output_type != TCC_OUTPUT_MEMORY)
+            tcc_add_btstub(s1);
+    }
+#endif
+
+    /* grab the startup code from libtcc1.a */
 #ifdef TCC_IS_NATIVE
     if (TCC_OUTPUT_MEMORY != s1->output_type || s1->runtime_main)
 #endif
-    set_elf_sym(symtab_section,
-        0, 0,
-        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-        SHN_UNDEF, start_symbol);
+    set_global_sym(s1, start_symbol, NULL, 0);
 
     if (0 == s1->nostdlib) {
         static const char *libs[] = {
             "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
         const char **pp, *p;
-#ifdef TCC_IS_NATIVE
-        if (s1->do_bounds_check)
-            tcc_add_support(s1, TCC_LIBBCHECK);
-#endif
         tcc_add_support(s1, TCC_LIBTCC1);
         for (pp = libs; 0 != (p = *pp); ++pp) {
             if (*p)
@@ -1907,6 +1930,10 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
                 break;
         }
     }
+
+    /* need this for 'tccelf.c:relocate_section()' */
+    if (TCC_OUTPUT_DLL == s1->output_type)
+        s1->output_type = TCC_OUTPUT_EXE;
     if (TCC_OUTPUT_MEMORY == s1->output_type)
         pe_type = PE_RUN;
     pe->type = pe_type;
@@ -1970,7 +1997,10 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     pe.filename = filename;
     pe.s1 = s1;
 
-    tcc_add_runtime(s1);
+#ifdef CONFIG_TCC_BCHECK
+    tcc_add_bcheck(s1);
+#endif
+    tcc_add_pragma_libs(s1);
     pe_add_runtime(s1, &pe);
     resolve_common_syms(s1);
     pe_set_options(s1, &pe);
@@ -1995,7 +2025,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
             ret = -1;
         else
             ret = pe_write(&pe);
-        tcc_free(pe.sec_info);
+        dynarray_reset(&pe.sec_info, &pe.sec_count);
     } else {
 #ifdef TCC_IS_NATIVE
         pe.thunk = data_section;

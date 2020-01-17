@@ -1725,10 +1725,6 @@ void cast_test()
     printf("sizeof(-(char)'a') = %d\n", sizeof(-(char)'a'));
     printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
 
-#ifdef __TINYC__
-# pragma comment(option, "-w")
-#endif
-
     /* from pointer to integer types */
     printf("%d %d %ld %ld %lld %lld\n",
            (int)p, (unsigned int)p,
@@ -1738,10 +1734,6 @@ void cast_test()
     /* from integers to pointers */
     printf("%p %p %p %p\n",
            (void *)a, (void *)b, (void *)c, (void *)d);
-
-#ifdef __TINYC__
-# pragma comment(option, "-W")
-#endif
 
     /* int to int with sign set */
     printf("0x%lx\n", (unsigned long)(int)ul);
@@ -3406,7 +3398,7 @@ void clobber_r12(void)
 }
 #endif
 
-void test_high_clobbers(void)
+void test_high_clobbers_really(void)
 {
 #if defined __x86_64__ && !defined _WIN64
     register long val asm("r12");
@@ -3419,6 +3411,20 @@ void test_high_clobbers(void)
     clobber_r12();
     asm volatile("mov %%r12, %0" : "=r" (val2) : "r" (val): "memory");
     printf("asmhc: 0x%x\n", val2);
+#endif
+}
+
+void test_high_clobbers(void)
+{
+#if defined __x86_64__ && !defined _WIN64
+    long x1, x2;
+    asm volatile("mov %%r12,%0" :: "m" (x1)); /* save r12 */
+    test_high_clobbers_really();
+    asm volatile("mov %%r12,%0" :: "m" (x2)); /* new r12 */
+    asm volatile("mov %0,%%r12" :: "m" (x1)); /* restore r12 */
+    /* should be 0 but tcc doesn't save r12 automatically, which has
+       bad effects when gcc helds TCCState *s in r12 in tcc.c:main */
+    //printf("r12-clobber-diff: %lx\n", x2 - x1);
 #endif
 }
 

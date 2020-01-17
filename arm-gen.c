@@ -171,7 +171,7 @@ ST_FUNC void arm_init(struct TCCState *s)
 
     float_abi = s->float_abi;
 #ifndef TCC_ARM_HARDFLOAT
-    tcc_warning("soft float ABI currently not supported: default to softfp");
+# warning "soft float ABI currently not supported: default to softfp"
 #endif
 }
 #else

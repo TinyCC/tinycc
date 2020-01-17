@@ -20,6 +20,7 @@
 60_errors_and_warnings.c:26: error: redefinition of enumerator 'RED'
 
 [test_63_local_enumerator_redefinition]
+[returns 1]
 
 [test_61_undefined_enum]
 60_errors_and_warnings.c:46: error: unknown type size

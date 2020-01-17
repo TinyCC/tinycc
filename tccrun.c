@@ -23,27 +23,36 @@
 /* only native compiler supports -run */
 #ifdef TCC_IS_NATIVE
 
+#ifdef CONFIG_TCC_BACKTRACE
+typedef struct rt_context
+{
+    /* --> tccelf.c:tcc_add_btstub wants those below in that order: */
+    Stab_Sym *stab_sym, *stab_sym_end;
+    char *stab_str;
+    ElfW(Sym) *esym_start, *esym_end;
+    char *elf_str;
+    addr_t prog_base;
+    void *bounds_start;
+    struct rt_context *next;
+    /* <-- */
+    int num_callers;
+    addr_t ip, fp, sp;
+    void *top_func;
+    jmp_buf jmp_buf;
+    char do_jmp;
+} rt_context;
+
+static rt_context g_rtctxt;
+static void set_exception_handler(void);
+static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
+static void rt_exit(int code);
+#endif /* CONFIG_TCC_BACKTRACE */
+
+/* defined when included from lib/bt.c */
+#ifndef CONFIG_TCC_BACKTRACE_ONLY
+
 #ifndef _WIN32
 # include <sys/mman.h>
-#endif
-
-#ifdef CONFIG_TCC_BACKTRACE
-static void set_exception_handler(void);
-#ifdef _WIN32
-static DWORD s1_for_run_idx;
-void set_s1_for_run(TCCState *s)
-{
-    if (!s1_for_run_idx)
-        s1_for_run_idx = TlsAlloc();
-    TlsSetValue(s1_for_run_idx, s);
-}
-#define get_s1_for_run() ((TCCState*)TlsGetValue(s1_for_run_idx))
-#else
-/* XXX: add tls support for linux */
-static TCCState *s1_for_run;
-#define set_s1_for_run(s) (s1_for_run = s)
-#define get_s1_for_run() s1_for_run
-#endif
 #endif
 
 static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length);
@@ -113,72 +122,73 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 #endif
     }
     tcc_free(s1->runtime_mem);
-    if (get_s1_for_run() == s1)
-        set_s1_for_run(NULL);
+}
+
+static void run_cdtors(TCCState *s1, const char *start, const char *end)
+{
+    void **a = tcc_get_symbol(s1, start);
+    void **b = tcc_get_symbol(s1, end);
+    while (a != b)
+        ((void(*)(void))*a++)();
 }
 
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
-/* PE target overwrites runtime_main */
-#ifndef TCC_TARGET_PE
-    typedef void (*init_array_func)(int, char **, char **);
-    typedef void (*fini_array_func)(void);
-    init_array_func *__init_array_start;
-    init_array_func *__init_array_end;
-    fini_array_func *__fini_array_start;
-    fini_array_func *__fini_array_end;
+    int (*prog_main)(int, char **), ret;
+#ifdef CONFIG_TCC_BACKTRACE
+    rt_context *rc = &g_rtctxt;
 #endif
-    int i;
-    int ret;
-    int (*prog_main)(int, char **);
 
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && !find_elf_sym(s1->symtab, s1->runtime_main))
         return 0;
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->do_debug)
+        tcc_add_symbol(s1, "exit", rt_exit);
+#endif
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
     prog_main = tcc_get_symbol_err(s1, s1->runtime_main);
 
 #ifdef CONFIG_TCC_BACKTRACE
+    memset(rc, 0, sizeof *rc);
     if (s1->do_debug) {
+        void *p;
+        rc->stab_sym = (Stab_Sym *)stab_section->data;
+        rc->stab_sym_end = (Stab_Sym *)(stab_section->data + stab_section->data_offset);
+        rc->stab_str = (char *)stab_section->link->data;
+        rc->esym_start = (ElfW(Sym) *)(symtab_section->data);
+        rc->esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
+        rc->elf_str = (char *)symtab_section->link->data;
+        rc->top_func = tcc_get_symbol(s1, "main");
+        rc->num_callers = s1->rt_num_callers;
+        rc->do_jmp = 1;
+        if ((p = tcc_get_symbol(s1, "__rt_error")))
+            *(void**)p = _rt_error;
+#ifdef CONFIG_TCC_BCHECK
+        if (s1->do_bounds_check) {
+            if ((p = tcc_get_symbol(s1, "__bound_init")))
+                ((void(*)(void*))p)(bounds_section->data);
+        }
+#endif
         set_exception_handler();
-        s1->rt_prog_main = prog_main;
-        /* set global state pointer for exception handlers*/
-        set_s1_for_run(s1);
     }
 #endif
 
     errno = 0; /* clean errno value */
-
-#ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check)
-        /* set error function */
-        s1->rt_bound_error_msg = tcc_get_symbol_err(s1, "__bound_error_msg");
+    fflush(stdout);
+    fflush(stderr);
+    run_cdtors(s1, "__init_array_start", "__init_array_end");
+#ifdef CONFIG_TCC_BACKTRACE
+    if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
 #endif
-
-#ifndef TCC_TARGET_PE
-    __init_array_start = tcc_get_symbol_err(s1, "__init_array_start");
-    __init_array_end = tcc_get_symbol_err(s1, "__init_array_end");
-    __fini_array_start = tcc_get_symbol_err(s1, "__fini_array_start");
-    __fini_array_end = tcc_get_symbol_err(s1, "__fini_array_end");
-
-    if (__init_array_start && __init_array_end) {
-        i = 0;
-        while (&__init_array_start[i] != __init_array_end)
-            (*__init_array_start[i++])(argc, argv, environ);
+    {
+        ret = prog_main(argc, argv);
     }
-#endif
-
-    ret = (*prog_main)(argc, argv);
-
-#ifndef TCC_TARGET_PE
-    if (__fini_array_start && __fini_array_end) {
-        i = 0;
-        while (&__fini_array_end[i] != __fini_array_start)
-            (*__fini_array_end[--i])();
-    }
-#endif
+    run_cdtors(s1, "__fini_array_start", "__fini_array_end");
+    if ((s1->dflag & 16) && ret)
+        fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
     return ret;
 }
 
@@ -336,11 +346,10 @@ static void win64_del_function_table(void *p)
     }
 }
 #endif
-
+#endif //ndef CONFIG_TCC_BACKTRACE_ONLY
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
 
-#define INCLUDE_STACK_SIZE 32
 static int rt_vprintf(const char *fmt, va_list ap)
 {
     int ret = vfprintf(stderr, fmt, ap);
@@ -358,21 +367,22 @@ static int rt_printf(const char *fmt, ...)
     return r;
 }
 
+#define INCLUDE_STACK_SIZE 32
+
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
+static addr_t rt_printline (rt_context *rc, addr_t wanted_pc,
+    const char *msg, const char *skip)
 {
     char func_name[128];
     addr_t func_addr, last_pc, pc;
     const char *incl_files[INCLUDE_STACK_SIZE];
     int incl_index, last_incl_index, len, last_line_num, i;
     const char *str, *p;
+    ElfW(Sym) *esym;
+    Stab_Sym *sym;
 
-    ElfW(Sym) *esym_start = NULL, *esym_end = NULL, *esym;
-    Stab_Sym *stab_sym = NULL, *stab_sym_end = NULL, *sym;
-    char *stab_str = NULL;
-    char *elf_str = NULL;
-
+next:
     func_name[0] = '\0';
     func_addr = 0;
     incl_index = 0;
@@ -380,19 +390,8 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
     last_line_num = 1;
     last_incl_index = 0;
 
-    if (stab_section) {
-        stab_sym = (Stab_Sym *)stab_section->data;
-        stab_sym_end = (Stab_Sym *)(stab_section->data + stab_section->data_offset);
-        stab_str = (char *) stab_section->link->data;
-    }
-    if (symtab_section) {
-        esym_start = (ElfW(Sym) *)(symtab_section->data);
-        esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
-        elf_str = (char *) symtab_section->link->data;
-    }
-
-    for (sym = stab_sym + 1; sym < stab_sym_end; ++sym) {
-        str = stab_str + sym->n_strx;
+    for (sym = rc->stab_sym + 1; sym < rc->stab_sym_end; ++sym) {
+        str = rc->stab_str + sym->n_strx;
         pc = sym->n_value;
 
         switch(sym->n_type) {
@@ -406,16 +405,18 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
             if (sym->n_strx == 0) /* end of function */
                 goto rel_pc;
         abs_pc:
-            if (sizeof pc == 8)
+            if (sizeof sym->n_value < PTR_SIZE) {
                 /* Stab_Sym.n_value is only 32bits */
-                pc |= wanted_pc & 0xffffffff00000000ULL;
+                //fprintf(stderr, "pc = %p %p %p\n", pc, rc->prog_base, wanted_pc), fflush(stderr);
+                pc += rc->prog_base;
+            }
             break;
         rel_pc:
             pc += func_addr;
             break;
         }
 
-        if (pc > wanted_pc && wanted_pc > last_pc)
+        if (pc >= wanted_pc && wanted_pc >= last_pc)
             goto found;
 
         switch(sym->n_type) {
@@ -434,8 +435,6 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
             last_pc = pc;
             last_line_num = sym->n_desc;
             last_incl_index = incl_index;
-            if (pc == wanted_pc)
-                goto found;
             break;
             /* include files */
         case N_BINCL:
@@ -468,31 +467,38 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
         }
     }
 
+    func_name[0] = '\0';
+    func_addr = 0;
+    last_incl_index = 0;
+
     /* we try symtab symbols (no line number info) */
-    for (esym = esym_start + 1; esym < esym_end; ++esym) {
+    for (esym = rc->esym_start + 1; esym < rc->esym_end; ++esym) {
         int type = ELFW(ST_TYPE)(esym->st_info);
         if (type == STT_FUNC || type == STT_GNU_IFUNC) {
             if (wanted_pc >= esym->st_value &&
                 wanted_pc < esym->st_value + esym->st_size) {
                 pstrcpy(func_name, sizeof(func_name),
-                    elf_str + esym->st_name);
+                    rc->elf_str + esym->st_name);
                 func_addr = esym->st_value;
-                last_incl_index = 0;
                 goto found;
             }
         }
     }
-    /* did not find any info: */
-    rt_printf("%s %p ???", msg, (void*)wanted_pc);
-    return 0;
 
- found:
+    if ((rc = rc->next))
+        goto next;
+
+found:
     i = last_incl_index;
-    if (i > 0)
-        rt_printf("%s:%d: ", incl_files[--i], last_line_num);
-    rt_printf("%s %p", msg, (void*)wanted_pc);
-    if (func_name[0] != '\0')
-        rt_printf(" %s()", func_name);
+    if (i > 0) {
+        str = incl_files[--i];
+        if (skip[0] && strstr(str, skip))
+            return (addr_t)-1;
+        rt_printf("%s:%d: ", str, last_line_num);
+    } else
+        rt_printf("%08llx : ", (long long)wanted_pc);
+    rt_printf("%s %s", msg, func_name[0] ? func_name : "???");
+#if 0
     if (--i >= 0) {
         rt_printf(" (included from ");
         for (;;) {
@@ -503,48 +509,79 @@ static addr_t rt_printline(TCCState *s1, addr_t wanted_pc, const char *msg)
         }
         rt_printf(")");
     }
+#endif
     return func_addr;
 }
 
-typedef struct rt_context {
-    addr_t ip, fp, sp, pc;
-} rt_context;
-
 static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level);
 
+static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
+{
+    rt_context *rc = &g_rtctxt;
+    addr_t pc = 0;
+    char skip[100];
+    int i, level, ret, n;
+    const char *a, *b, *msg;
+
+    if (fp) {
+        /* we're called from tcc_backtrace. */
+        rc->fp = (addr_t)fp;
+        rc->ip = (addr_t)ip;
+        msg = "";
+    } else {
+        /* we're called from signal/exception handler */
+        msg = "RUNTIME ERROR: ";
+    }
+
+    skip[0] = 0;
+    /* If fmt is like "^file.c^..." then skip calls from 'file.c' */
+    if (fmt[0] == '^' && (b = strchr(a = fmt + 1, fmt[0]))) {
+        memcpy(skip, a, b - a), skip[b - a] = 0;
+        fmt = b + 1;
+    }
+
+    n = rc->num_callers ? rc->num_callers : 6;
+    for (i = level = 0; level < n; i++) {
+        ret = rt_get_caller_pc(&pc, rc, i);
+        a = "%s";
+        if (ret != -1) {
+            pc = rt_printline(rc, pc, level ? "by" : "at", skip);
+            if (pc == (addr_t)-1)
+                continue;
+            a = ": %s";
+        }
+        if (level == 0) {
+            rt_printf(a, msg);
+            rt_vprintf(fmt, ap);
+        } else if (ret == -1)
+            break;
+        rt_printf("\n");
+        if (ret == -1 || (pc == (addr_t)rc->top_func && pc))
+            break;
+        ++level;
+    }
+
+    rc->ip = rc->fp = 0;
+    return 0;
+}
+
 /* emit a run time error at position 'pc' */
-static void rt_error(rt_context *rc, const char *fmt, ...)
+static int rt_error(const char *fmt, ...)
 {
     va_list ap;
-    addr_t pc;
-    int i;
-    TCCState *s1;
-
-    s1 = get_s1_for_run();
-    if (*fmt == ' ') {
-        if (s1 && s1->rt_bound_error_msg && *s1->rt_bound_error_msg)
-            fmt = *s1->rt_bound_error_msg;
-        else
-            ++fmt;
-    }
-
-    rt_printf("Runtime error: ");
+    int ret;
     va_start(ap, fmt);
-    rt_vprintf(fmt, ap);
+    ret = _rt_error(0, 0, fmt, ap);
     va_end(ap);
-    rt_printf("\n");
+    return ret;
+}
 
-    if (!s1)
-        return;
-
-    for(i=0; i<s1->rt_num_callers; i++) {
-        if (rt_get_caller_pc(&pc, rc, i) < 0)
-            break;
-        pc = rt_printline(s1, pc, i ? "by" : "at");
-        rt_printf("\n");
-        if (pc == (addr_t)s1->rt_prog_main && pc)
-            break;
-    }
+static void rt_exit(int code)
+{
+    rt_context *rc = &g_rtctxt;
+    if (rc->do_jmp)
+        longjmp(rc->jmp_buf, code ? code : 256);
+    exit(code);
 }
 
 /* ------------------------------------------------------------- */
@@ -621,36 +658,36 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 /* signal handler for fatal errors */
 static void sig_error(int signum, siginfo_t *siginf, void *puc)
 {
-    rt_context rc;
+    rt_context *rc = &g_rtctxt;
+    rt_getcontext(puc, rc);
 
-    rt_getcontext(puc, &rc);
     switch(signum) {
     case SIGFPE:
         switch(siginf->si_code) {
         case FPE_INTDIV:
         case FPE_FLTDIV:
-            rt_error(&rc, "division by zero");
+            rt_error("division by zero");
             break;
         default:
-            rt_error(&rc, "floating point exception");
+            rt_error("floating point exception");
             break;
         }
         break;
     case SIGBUS:
     case SIGSEGV:
-        rt_error(&rc, " dereferencing invalid pointer");
+        rt_error("invalid memory access");
         break;
     case SIGILL:
-        rt_error(&rc, "illegal instruction");
+        rt_error("illegal instruction");
         break;
     case SIGABRT:
-        rt_error(&rc, "abort() called");
+        rt_error("abort() called");
         break;
     default:
-        rt_error(&rc, "caught signal %d", signum);
+        rt_error("caught signal %d", signum);
         break;
     }
-    exit(255);
+    rt_exit(255);
 }
 
 #ifndef SA_SIGINFO
@@ -664,7 +701,7 @@ static void set_exception_handler(void)
     /* install TCC signal handlers to print debug info on fatal
        runtime errors */
     sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
-#ifdef SIGSTKSZ
+#if 0//def SIGSTKSZ // this causes signals not to work at all on some (older) linuxes
     sigact.sa_flags |= SA_ONSTACK;
 #endif
     sigact.sa_sigaction = sig_error;
@@ -674,7 +711,7 @@ static void set_exception_handler(void)
     sigaction(SIGSEGV, &sigact, NULL);
     sigaction(SIGBUS, &sigact, NULL);
     sigaction(SIGABRT, &sigact, NULL);
-#ifdef SIGSTKSZ
+#if 0//def SIGSTKSZ
     /* This allows stack overflow to be reported instead of a SEGV */
     {
         stack_t ss;
@@ -689,32 +726,35 @@ static void set_exception_handler(void)
 }
 
 #else /* WIN32 */
+
 /* signal handler for fatal errors */
 static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 {
-    rt_context rc;
+    rt_context *rc = &g_rtctxt;
     unsigned code;
+    rt_getcontext(ex_info->ContextRecord, rc);
 
-    rt_getcontext(ex_info->ContextRecord, &rc);
     switch (code = ex_info->ExceptionRecord->ExceptionCode) {
     case EXCEPTION_ACCESS_VIOLATION:
-	rt_error(&rc, " access violation");
+	rt_error("invalid memory access");
         break;
     case EXCEPTION_STACK_OVERFLOW:
-        rt_error(&rc, "stack overflow");
+        rt_error("stack overflow");
         break;
     case EXCEPTION_INT_DIVIDE_BY_ZERO:
-        rt_error(&rc, "division by zero");
+        rt_error("division by zero");
         break;
     case EXCEPTION_BREAKPOINT:
     case EXCEPTION_SINGLE_STEP:
-        rc.ip = *(addr_t*)rc.sp;
-        rt_error(&rc, "^breakpoint/single-step exception:");
+        rc->ip = *(addr_t*)rc->sp;
+        rt_error("breakpoint/single-step exception:");
         return EXCEPTION_CONTINUE_SEARCH;
     default:
-        rt_error(&rc, "caught exception %08x", code);
+        rt_error("caught exception %08x", code);
         break;
     }
+    if (rc->do_jmp)
+        rt_exit(255);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -807,7 +847,6 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
 
 #endif
 #endif /* CONFIG_TCC_BACKTRACE */
-
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_STATIC
 

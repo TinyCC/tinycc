@@ -73,6 +73,7 @@ endif
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
 DUMPTCC = (set -x; $(TOP)/tcc -vv; ldd $(TOP)/tcc; exit 1)
+Q = # >/dev/null 2>&1
 
 all test :
 	$(MAKE) clean-s
@@ -88,7 +89,7 @@ hello-run: ../examples/ex1.c
 
 libtes%: libtcc_tes%$(EXESUF)
 	@echo ------------ $@ ------------
-	./libtcc_tes$*$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES)
+	./libtcc_tes$*$(EXESUF) $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES)
 
 libtcc_tes%$(EXESUF): libtcc_tes%.c $(LIBTCC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
@@ -105,22 +106,24 @@ test.ref: tcctest.c
 # auto test
 test1 test1b: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) -run $< > test.out1
-	@diff -u test.ref test.out1 && echo "Auto Test OK"
+	$(TCC) -w -run $< > test.out1 $Q
+	@diff -u test.ref test.out1 && echo "$(AUTO_TEST) OK"
 
 # iterated test2 (compile tcc then compile tcctest.c !)
 test2 test2b: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out2
-	@diff -u test.ref test.out2 && echo "Auto Test2 OK"
+	$(TCC) $(RUN_TCC) $(RUN_TCC) -w -run $< > test.out2 $Q
+	@diff -u test.ref test.out2 && echo "$(AUTO_TEST)2 OK"
 
 # iterated test3 (compile tcc then compile tcc then compile tcctest.c !)
 test3 test3b: tcctest.c test.ref
 	@echo ------------ $@ ------------
-	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -run $< > test.out3
-	@diff -u test.ref test.out3 && echo "Auto Test3 OK"
+	$(TCC) $(RUN_TCC) $(RUN_TCC) $(RUN_TCC) -w -run $< > test.out3 $Q
+	@diff -u test.ref test.out3 && echo "$(AUTO_TEST)3 OK"
 
-test%b : TCCFLAGS += -b
+AUTO_TEST = Auto Test
+test%b : TCCFLAGS += -b -bt1
+test%b : AUTO_TEST = Auto Bound-Test
 
 # binary output test
 test4: tcctest.c test.ref
@@ -129,21 +132,21 @@ test4: tcctest.c test.ref
 	$(TCC) -c -o tcctest3.o $<
 	$(TCC) -o tcctest3 tcctest3.o
 	./tcctest3 > test3.out
-	@if diff -u test.ref test3.out ; then echo "Object Auto Test OK"; fi
+	@if diff -u test.ref test3.out ; then echo "Object $(AUTO_TEST) OK"; fi
 # dynamic output
 	$(TCC) -o tcctest1 $<
 	./tcctest1 > test1.out
-	@if diff -u test.ref test1.out ; then echo "Dynamic Auto Test OK"; fi
+	@if diff -u test.ref test1.out ; then echo "Dynamic $(AUTO_TEST) OK"; fi
 # dynamic output + bound check
 	$(TCC) -b -o tcctest4 $<
 	./tcctest4 > test4.out
-	@if diff -u test.ref test4.out ; then echo "BCheck Auto Test OK"; fi
+	@if diff -u test.ref test4.out ; then echo "BCheck $(AUTO_TEST) OK"; fi
 
 test4_static: tcctest.c test.ref
 # static output.
 	$(TCC) -static -o tcctest2 $<
 	./tcctest2 > test2.out
-	@if diff -u test.ref test2.out ; then echo "Static Auto Test OK"; fi
+	@if diff -u test.ref test2.out ; then echo "Static $(AUTO_TEST) OK"; fi
 
 # use tcc to create libtcc.so/.dll and the tcc(.exe) frontend and run them
 dlltest:
@@ -164,32 +167,29 @@ memtest:
 	@echo ------------ $@ ------------
 	$(CC) $(CFLAGS) $(NATIVE_DEFINES) -DMEM_DEBUG=2 $(TOPSRC)/tcc.c $(LIBS) -o memtest-tcc$(EXESUF)
 	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) $(TOPSRC)/tcc.c $(LIBS)
-	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS) $(TOPSRC)/tests/tcctest.c
-
+	./memtest-tcc$(EXESUF) $(TCCFLAGS) $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS) -w $(TOPSRC)/tests/tcctest.c
 
 # memory and bound check auto test
-BOUNDS_OK  = 1 4 8 10 14 16 18
+BOUNDS_OK  = 1 4 8 10 14 16
 BOUNDS_FAIL= 2 5 6 7 9 11 12 13 15 17
 
 btest: boundtest.c
 	@echo ------------ $@ ------------
 	@for i in $(BOUNDS_OK); do \
-	   echo ; echo --- boundtest $$i ---; \
 	   if $(TCC) -b -run $< $$i ; then \
-	       echo succeeded as expected; \
+	       echo "- Test $$i succeeded as expected" ; \
 	   else\
-	       echo Failed positive test $$i ; exit 1 ; \
+	       echo "- Failed positive test $$i" ; exit 1 ; \
 	   fi ;\
 	done ;\
 	for i in $(BOUNDS_FAIL); do \
-	   echo ; echo --- boundtest $$i ---; \
-	   if $(TCC) -b -run $< $$i ; then \
-	       echo Failed negative test $$i ; exit 1 ;\
+	   if $(TCC) -b -bt1 -run $< $$i ; then \
+	       echo "- Failed negative test $$i" ; exit 1 ;\
 	   else\
-	       echo failed as expected; \
+	       echo "- Test $$i failed as expected" ; \
 	   fi ;\
 	done ;\
-	echo; echo Bound test OK
+	echo Bound test OK
 
 # speed test
 speedtest: ex2 ex3

@@ -109,9 +109,7 @@ ST_FUNC void expect(const char *msg)
 /* ------------------------------------------------------------------------- */
 /* Custom allocator for tiny objects */
 
-#ifndef __BOUNDS_CHECKING_ON
 #define USE_TAL
-#endif
 
 #ifndef USE_TAL
 #define tal_free(al, p) tcc_free(p)
@@ -250,7 +248,7 @@ static void *tal_realloc_impl(TinyAlloc **pal, void *p, unsigned size TAL_DEBUG_
 tail_call:
     is_own = (al->buffer <= (uint8_t *)p && (uint8_t *)p < al->buffer + al->size);
     if ((!p || is_own) && size <= al->limit) {
-        if (al->p + adj_size + sizeof(tal_header_t) < al->buffer + al->size) {
+        if (al->p - al->buffer + adj_size + sizeof(tal_header_t) < al->size) {
             header = (tal_header_t *)al->p;
             header->size = adj_size;
 #ifdef TAL_DEBUG
@@ -1958,7 +1956,11 @@ include_done:
             if (tok == TOK_STR) {
                 if (file->true_filename == file->filename)
                     file->true_filename = tcc_strdup(file->filename);
-                tcc_debug_putfile(s1, (char *)tokc.str.data);
+                /* prepend directory from real file */
+                pstrcpy(buf, sizeof buf, file->true_filename);
+                *tcc_basename(buf) = 0;
+                pstrcat(buf, sizeof buf, (char *)tokc.str.data);
+                tcc_debug_putfile(s1, buf);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
                 break;
             else
@@ -3529,9 +3531,6 @@ no_subst:
 /* return next token with macro substitution */
 ST_FUNC void next(void)
 {
-    /* generate line number info */
-    if (tcc_state->do_debug)
-        tcc_debug_line(tcc_state);
  redo:
     if (parse_flags & PARSE_FLAG_SPACES)
         next_nomacro_spc();
@@ -3607,6 +3606,8 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
     if (is_asm)
         cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
+    if (s1->output_type == TCC_OUTPUT_MEMORY)
+        cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
     if (s1->cmdline_incl.size)
         cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
     //printf("%s\n", (char*)cstr.data);
@@ -3657,7 +3658,7 @@ ST_FUNC void tccpp_new(TCCState *s)
     cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
     tok_str_new(&tokstr_buf);
     tok_str_realloc(&tokstr_buf, TOKSTR_MAX_SIZE);
-    
+
     tok_ident = TOK_IDENT;
     p = tcc_keywords;
     while (*p) {

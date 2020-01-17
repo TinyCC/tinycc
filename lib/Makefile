@@ -13,7 +13,7 @@ XCC = $(XTCC)
 XAR = $(XTCC) -ar
 XFLAGS-unx = -B$(TOPSRC)
 XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
-XFLAGS = $(XFLAGS$(XCFG))
+XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
 XCFG = $(or $(findstring -win,$T),-unx)
 
 # in order to use gcc, tyoe: make <target>-libtcc1-usegcc=yes
@@ -27,6 +27,8 @@ endif
 
 # only for native compiler
 $(X)BCHECK_O = bcheck.o
+$(X)BT_O = bt-exe.o bt-log.o
+$(X)B_O = bcheck.o bt-exe.o bt-log.o bt-dll.o
 
 ifeq ($(CONFIG_musl)$(CONFIG_uClibc),yes)
  BCHECK_O =
@@ -38,18 +40,18 @@ ifdef CONFIG_OSX
  XFLAGS += -D_ANSI_SOURCE
 endif
 
-I386_O = libtcc1.o alloca86.o alloca86-bt.o
-X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o
-ARM_O = libtcc1.o armeabi.o alloca-arm.o armflush.o
-ARM64_O = lib-arm64.o
-RISCV64_O = lib-arm64.o
+I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BT_O)
+X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BT_O)
+ARM_O = libtcc1.o armeabi.o alloca-arm.o armflush.o $(BT_O)
+ARM64_O = lib-arm64.o $(BT_O)
+RISCV64_O = lib-arm64.o $(BT_O)
 WIN_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o
 
 OBJ-i386 = $(I386_O) $(BCHECK_O) $(DSO_O)
 OBJ-x86_64 = $(X86_64_O) va_list.o $(BCHECK_O) $(DSO_O)
 OBJ-x86_64-osx = $(X86_64_O) va_list.o
-OBJ-i386-win32 = $(I386_O) chkstk.o bcheck.o $(WIN_O)
-OBJ-x86_64-win32 = $(X86_64_O) chkstk.o bcheck.o $(WIN_O)
+OBJ-i386-win32 = $(I386_O) chkstk.o $(B_O) $(WIN_O)
+OBJ-x86_64-win32 = $(X86_64_O) chkstk.o $(B_O) $(WIN_O)
 OBJ-arm64 = $(ARM64_O) $(DSO_O)
 OBJ-arm = $(ARM_O) $(DSO_O)
 OBJ-arm-fpa = $(ARM_O) $(DSO_O)
@@ -60,7 +62,7 @@ OBJ-arm-eabihf = $(ARM_O) $(DSO_O)
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
 OBJ-riscv64 = $(RISCV64_O) $(DSO_O)
 
-OBJ-extra = $(filter bcheck.o,$(OBJ-$T))
+OBJ-extra = $(filter $(B_O),$(OBJ-$T))
 OBJ-libtcc1 = $(addprefix $(X),$(filter-out $(OBJ-extra),$(OBJ-$T)))
 
 ALL = $(addprefix $(TOP)/,$(X)libtcc1.a $(OBJ-extra))
@@ -80,8 +82,10 @@ $(TOP)/%.o : %.c
 	$(XCC) -c $< -o $@ $(XFLAGS)
 
 $(TOP)/bcheck.o : XFLAGS += -g
+$(TOP)/bt-exe.o : $(TOP)/tccrun.c
 
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c
+
 clean :
 	rm -f *.a *.o $(ALL)

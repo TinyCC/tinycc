@@ -24,6 +24,7 @@ ifeq (,$(filter i386,$(ARCH)))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
+ SKIP += 112_backtrace.test
 endif
 ifeq (-$(findstring gcc,$(CC))-,--)
  SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
@@ -70,12 +71,11 @@ GEN-ALWAYS =
 # constructor/destructor
 108_constructor.test: NORUN = true
 
+112_backtrace.test: FLAGS += -dt -b
+112_backtrace.test: FILTER += -e 's;[0-9A-Fa-fx]\{8,\};........;g'
+
 # Filter source directory in warnings/errors (out-of-tree builds)
-FILTER = 2>&1 | sed 's,$(SRC)/,,g'
-# Filter some always-warning
-ifeq (-$(findstring arm,$(ARCH))-,-arm-)
-FILTER += 2>&1 | grep -v 'warning: soft float ABI currently not supported'
-endif
+FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
 
 all test tests2.all: $(filter-out $(SKIP),$(TESTS)) ;
 

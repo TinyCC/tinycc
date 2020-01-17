@@ -99,7 +99,7 @@ int _runtmain(int argc, /* as tcc passed in */ char **argv)
 #if defined __i386__ || defined __x86_64__
     _controlfp(_PC_53, _MCW_PC);
 #endif
-    return do_main(__argc, __targv, _tenviron);
+    return _tmain(__argc, __targv, _tenviron);
 }
 
 // =============================================

@@ -203,14 +203,11 @@ TF_TYPE(thread_test_complex, vn)
 
     sprintf(b, "%d", F(n));
 
-    argv[argc++] = "../tcc.c";
     for (i = 1; i < g_argc; ++i) argv[argc++] = g_argv[i];
 #if 0
     argv[argc++] = "-run";
-    argv[argc++] = "../tcc.c";
     for (i = 1; i < g_argc; ++i) argv[argc++] = g_argv[i];
 #endif
-    argv[argc++] = "-g";
     argv[argc++] = "-DFIB";
     argv[argc++] = "-run";
     argv[argc++] = __FILE__;
@@ -221,23 +218,24 @@ TF_TYPE(thread_test_complex, vn)
     sleep_ms(2);
     ret = tcc_add_file(s, argv[0]);
     sleep_ms(3);
-    if (ret >= 0)
-        tcc_run(s, argc, argv);
+    if (ret < 0)
+        exit(1);
+    tcc_run(s, argc, argv);
     tcc_delete(s);
     fflush(stdout);
     return 0;
 }
 
-void time_tcc(int n)
+void time_tcc(int n, const char *src)
 {
     TCCState *s;
     int ret;
     while (--n >= 0) {
         s = new_state(1);
-        ret = tcc_add_file(s, "../tcc.c");
+        ret = tcc_add_file(s, src);
         tcc_delete(s);
         if (ret < 0)
-            break;
+            exit(1);
     }
 }
 
@@ -259,6 +257,11 @@ int main(int argc, char **argv)
 
     g_argc = argc;
     g_argv = argv;
+
+    if (argc < 2) {
+        fprintf(stderr, "usage: libtcc_test_mt tcc.c <options>\n");
+        return 1;
+    }
 
 #if 1
     printf("----- libtest : mixed calls  -------\n"), fflush(stdout);
@@ -285,7 +288,7 @@ int main(int argc, char **argv)
 #if 1
     printf("----- compilation of tcc -----------\n"), fflush(stdout);
     t = getclock_ms();
-    time_tcc(10);
+    time_tcc(10, argv[1]);
     printf("(%u ms)\n", (getclock_ms() - t) / 10), fflush(stdout);
 #endif
     return 0;

@@ -1,0 +1,164 @@
+[test_backtrace_1]
+* main
+* f1()
+* f2()
+* f3()
+112_backtrace.c:9: at f3: RUNTIME ERROR: invalid memory access
+112_backtrace.c:14: by f2
+112_backtrace.c:19: by f1
+112_backtrace.c:24: by main
+[returns 255]
+
+[test_bcheck_1]
+* main
+* f1()
+112_backtrace.c:38: at f1: BCHECK: ........ is outside of the region
+112_backtrace.c:43: by main
+112_backtrace.c:38: at f1: BCHECK: invalid pointer ........, size 0x14 in memmove dest
+112_backtrace.c:43: by main
+[returns 255]
+
+[test_tcc_backtrace_2]
+* main
+* f1()
+112_backtrace.c:64: at f1: Hello from f1!
+112_backtrace.c:70: by main
+* f2()
+* exit f2
+[returns 34]
+
+[test_tcc_backtrace_3]
+* main
+[returns 1]
+
+[test_bcheck_100]
+112_backtrace.c:107: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:107: at main: BCHECK: invalid pointer ........, size 0xa in memcpy dest
+[returns 255]
+
+[test_bcheck_101]
+112_backtrace.c:109: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:109: at main: BCHECK: invalid pointer ........, size 0xa in memcpy src
+[returns 255]
+
+[test_bcheck_102]
+112_backtrace.c:111: at main: BCHECK: overlapping regions ........(0x4), ........(0x4) in memcpy
+[returns 255]
+
+[test_bcheck_103]
+112_backtrace.c:113: at main: BCHECK: overlapping regions ........(0x4), ........(0x4) in memcpy
+[returns 255]
+
+[test_bcheck_104]
+112_backtrace.c:115: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:115: at main: BCHECK: invalid pointer ........, size 0xa in memcmp s1
+[returns 255]
+
+[test_bcheck_105]
+112_backtrace.c:117: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:117: at main: BCHECK: invalid pointer ........, size 0xa in memcmp s2
+[returns 255]
+
+[test_bcheck_106]
+112_backtrace.c:119: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:119: at main: BCHECK: invalid pointer ........, size 0xa in memmove dest
+[returns 255]
+
+[test_bcheck_107]
+112_backtrace.c:121: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:121: at main: BCHECK: invalid pointer ........, size 0xa in memmove src
+[returns 255]
+
+[test_bcheck_108]
+112_backtrace.c:123: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:123: at main: BCHECK: invalid pointer ........, size 0xa in memset
+[returns 255]
+
+[test_bcheck_109]
+112_backtrace.c:125: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:125: at main: BCHECK: invalid pointer ........, size 0xb in strlen
+[returns 255]
+
+[test_bcheck_110]
+112_backtrace.c:127: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:127: at main: BCHECK: invalid pointer ........, size 0x4 in strcpy dest
+[returns 255]
+
+[test_bcheck_111]
+112_backtrace.c:129: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:129: at main: BCHECK: invalid pointer ........, size 0x4 in strcpy src
+[returns 255]
+
+[test_bcheck_112]
+112_backtrace.c:131: at main: BCHECK: overlapping regions ........(0x3), ........(0x3) in strcpy
+[returns 255]
+
+[test_bcheck_113]
+112_backtrace.c:133: at main: BCHECK: overlapping regions ........(0x4), ........(0x4) in strcpy
+[returns 255]
+
+[test_bcheck_114]
+112_backtrace.c:135: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:135: at main: BCHECK: invalid pointer ........, size 0x4 in strncpy dest
+[returns 255]
+
+[test_bcheck_115]
+112_backtrace.c:137: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:137: at main: BCHECK: invalid pointer ........, size 0x4 in strncpy src
+[returns 255]
+
+[test_bcheck_116]
+112_backtrace.c:139: at main: BCHECK: overlapping regions ........(0x3), ........(0x3) in strncpy
+[returns 255]
+
+[test_bcheck_117]
+112_backtrace.c:141: at main: BCHECK: overlapping regions ........(0x4), ........(0x4) in strncpy
+[returns 255]
+
+[test_bcheck_118]
+112_backtrace.c:143: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:143: at main: BCHECK: invalid pointer ........, size 0x9 in strcmp s1
+[returns 255]
+
+[test_bcheck_119]
+112_backtrace.c:145: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:145: at main: BCHECK: invalid pointer ........, size 0x9 in strcmp s2
+[returns 255]
+
+[test_bcheck_120]
+112_backtrace.c:147: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:147: at main: BCHECK: invalid pointer ........, size 0x6 in strncmp s1
+[returns 255]
+
+[test_bcheck_121]
+112_backtrace.c:149: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:149: at main: BCHECK: invalid pointer ........, size 0x6 in strncmp s2
+[returns 255]
+
+[test_bcheck_122]
+112_backtrace.c:151: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:151: at main: BCHECK: invalid pointer ........, size 0x6 in strcat dest
+[returns 255]
+
+[test_bcheck_123]
+112_backtrace.c:153: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:153: at main: BCHECK: invalid pointer ........, size 0x6 in strcat src
+[returns 255]
+
+[test_bcheck_124]
+112_backtrace.c:155: at main: BCHECK: overlapping regions ........(0x9), ........(0x6) in strcat
+[returns 255]
+
+[test_bcheck_125]
+112_backtrace.c:157: at main: BCHECK: overlapping regions ........(0x4), ........(0x4) in strcat
+[returns 255]
+
+[test_bcheck_126]
+112_backtrace.c:159: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:159: at main: BCHECK: invalid pointer ........, size 0xb in strchr
+[returns 255]
+
+[test_bcheck_127]
+112_backtrace.c:161: at main: BCHECK: ........ is outside of the region
+112_backtrace.c:161: at main: BCHECK: invalid pointer ........, size 0xb in strdup
+[returns 255]

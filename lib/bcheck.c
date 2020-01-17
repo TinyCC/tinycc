@@ -49,6 +49,12 @@
 #endif
 #define FASTCALL __attribute__((regparm(3)))
 
+#ifdef _WIN32
+# define DLL_EXPORT __declspec(dllexport)
+#else
+# define DLL_EXPORT
+#endif
+
 #if defined(__FreeBSD__) \
  || defined(__FreeBSD_kernel__) \
  || defined(__DragonFly__) \
@@ -162,16 +168,16 @@ void splay_printtree(Tree * t, int d);
 /* external interface */
 void __bound_checking (int no_check);
 void __bound_never_fatal (int no_check);
-void * __bound_ptr_add(void *p, size_t offset);
-void * __bound_ptr_indir1(void *p, size_t offset);
-void * __bound_ptr_indir2(void *p, size_t offset);
-void * __bound_ptr_indir4(void *p, size_t offset);
-void * __bound_ptr_indir8(void *p, size_t offset);
-void * __bound_ptr_indir12(void *p, size_t offset);
-void * __bound_ptr_indir16(void *p, size_t offset);
-void FASTCALL __bound_local_new(void *p1);
-void FASTCALL __bound_local_delete(void *p1);
-void __bound_init(void);
+DLL_EXPORT void * __bound_ptr_add(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir1(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir2(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir4(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir8(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir12(void *p, size_t offset);
+DLL_EXPORT void * __bound_ptr_indir16(void *p, size_t offset);
+DLL_EXPORT void FASTCALL __bound_local_new(void *p1);
+DLL_EXPORT void FASTCALL __bound_local_delete(void *p1);
+void __bound_init(size_t *);
 void __bound_main_arg(char **p);
 void __bound_exit(void);
 #if !defined(_WIN32)
@@ -179,34 +185,31 @@ void *__bound_mmap (void *start, size_t size, int prot, int flags, int fd,
                     off_t offset);
 int __bound_munmap (void *start, size_t size);
 #endif
-void __bound_new_region(void *p, size_t size);
-void *__bound_memcpy(void *dst, const void *src, size_t size);
-int __bound_memcmp(const void *s1, const void *s2, size_t size);
-void *__bound_memmove(void *dst, const void *src, size_t size);
-void *__bound_memset(void *dst, int c, size_t size);
-int __bound_strlen(const char *s);
-char *__bound_strcpy(char *dst, const char *src);
-char *__bound_strncpy(char *dst, const char *src, size_t n);
-int __bound_strcmp(const char *s1, const char *s2);
-int __bound_strncmp(const char *s1, const char *s2, size_t n);
-char *__bound_strcat(char *dest, const char *src);
-char *__bound_strchr(const char *string, int ch);
-char *__bound_strdup(const char *s);
+DLL_EXPORT void __bound_new_region(void *p, size_t size);
+DLL_EXPORT void *__bound_memcpy(void *dst, const void *src, size_t size);
+DLL_EXPORT int __bound_memcmp(const void *s1, const void *s2, size_t size);
+DLL_EXPORT void *__bound_memmove(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__bound_memset(void *dst, int c, size_t size);
+DLL_EXPORT int __bound_strlen(const char *s);
+DLL_EXPORT char *__bound_strcpy(char *dst, const char *src);
+DLL_EXPORT char *__bound_strncpy(char *dst, const char *src, size_t n);
+DLL_EXPORT int __bound_strcmp(const char *s1, const char *s2);
+DLL_EXPORT int __bound_strncmp(const char *s1, const char *s2, size_t n);
+DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
+DLL_EXPORT char *__bound_strchr(const char *string, int ch);
+DLL_EXPORT char *__bound_strdup(const char *s);
 
 #if !MALLOC_REDIR
-void *__bound_malloc(size_t size, const void *caller);
-void *__bound_memalign(size_t size, size_t align, const void *caller);
-void __bound_free(void *ptr, const void *caller);
-void *__bound_realloc(void *ptr, size_t size, const void *caller);
-void *__bound_calloc(size_t nmemb, size_t size);
+DLL_EXPORT void *__bound_malloc(size_t size, const void *caller);
+DLL_EXPORT void *__bound_memalign(size_t size, size_t align, const void *caller);
+DLL_EXPORT void __bound_free(void *ptr, const void *caller);
+DLL_EXPORT void *__bound_realloc(void *ptr, size_t size, const void *caller);
+DLL_EXPORT void *__bound_calloc(size_t nmemb, size_t size);
 #endif
 
 #define FREE_REUSE_SIZE (100)
 static unsigned int free_reuse_index;
 static void *free_reuse_list[FREE_REUSE_SIZE];
-
-/* error message, just for TCC */
-const char *__bound_error_msg;
 
 static Tree *tree = NULL;
 #define TREE_REUSE      (1)
@@ -296,14 +299,18 @@ void __bound_never_fatal (int neverfatal)
     fetch_and_add (&never_fatal, neverfatal);
 }
 
+int tcc_backtrace(const char *fmt, ...);
+
 /* print a bound error message */
-static void bound_error(const char *error)
-{
-    __bound_error_msg = error;
-    fprintf(stderr,"%s%s %s: %s\n", exec, __FILE__, __FUNCTION__, error);
-    if (never_fatal == 0)
-        *(void **)0 = 0; /* force a runtime error */
-}
+#define bound_warning(...) \
+    tcc_backtrace("^bcheck.c^BCHECK: " __VA_ARGS__)
+
+#define bound_error(...)            \
+    do {                            \
+        bound_warning(__VA_ARGS__); \
+        if (never_fatal == 0)       \
+            exit(255);              \
+    } while (0)
 
 static void bound_alloc_error(const char *s)
 {
@@ -315,20 +322,6 @@ static void bound_not_found_warning(const char *file, const char *function,
                                     void *ptr)
 {
     dprintf(stderr, "%s%s, %s(): Not found %p\n", exec, file, function, ptr);
-}
-
-static void bound_ptr_add_warning(const char *file, const char *function,
-                                  void *ptr)
-{
-    fprintf(stderr,"%s%s %s(): %p is outside of the region\n",
-            exec, file, function, ptr);
-}
-
-static void bound_ptr_indir_error(const char *file, const char *function,
-                                  void *ptr)
-{
-    fprintf(stderr,"%s%s %s(): %p is outside of the region\n",
-            exec, file, function, ptr);
 }
 
 /* return '(p + offset)' for pointer arithmetic (a pointer can reach
@@ -360,8 +353,7 @@ void * __bound_ptr_add(void *p, size_t offset)
         if (addr <= tree->size) {
             if (tree->is_invalid || addr + offset > tree->size) {
                 POST_SEM ();
-                if (print_warn_ptr_add)
-                    bound_ptr_add_warning (__FILE__, __FUNCTION__, p + offset);
+                bound_warning("%p is outside of the region", p + offset);
                 if (never_fatal <= 0)
                     return INVALID_POINTER; /* return an invalid pointer */
                 return p + offset;
@@ -407,8 +399,7 @@ void * __bound_ptr_indir ## dsize (void *p, size_t offset)                     \
         if (addr <= tree->size) {                                              \
             if (tree->is_invalid || addr + offset + dsize > tree->size) {      \
                 POST_SEM ();                                                   \
-                bound_ptr_indir_error (__FILE__, __FUNCTION__,                 \
-                                       p + offset);                            \
+                bound_warning("%p is outside of the region", p + offset); \
                 if (never_fatal <= 0)                                          \
                     return INVALID_POINTER; /* return an invalid pointer */    \
                 return p + offset;                                             \
@@ -460,8 +451,7 @@ void FASTCALL __bound_local_new(void *p1)
     WAIT_SEM ();
     while ((addr = p[0])) {
         INCR_COUNT(bound_local_new_count);
-        if (addr != 1)
-            tree = splay_insert(addr + fp, p[1], tree);
+        tree = splay_insert(addr + fp, p[1], tree);
         p += 2;
     }
     POST_SEM ();
@@ -498,7 +488,10 @@ void FASTCALL __bound_local_delete(void *p1)
     WAIT_SEM ();
     while ((addr = p[0])) {
         INCR_COUNT(bound_local_delete_count);
-        if (addr == 1) {
+        tree = splay_delete(addr + fp, tree);
+        p += 2;
+    }
+    {
             alloca_list_type *last = NULL;
             alloca_list_type *cur = alloca_list;
 
@@ -518,11 +511,8 @@ void FASTCALL __bound_local_delete(void *p1)
                      cur = cur->next;
                  }
             }
-        }
-        else
-            tree = splay_delete(addr + fp, tree);
-        p += 2;
     }
+
     POST_SEM ();
     while (free_list) {
         alloca_list_type *next = free_list->next;
@@ -607,14 +597,14 @@ void __bound_new_region(void *p, size_t size)
 #pragma GCC diagnostic pop
 #endif
 
-void __attribute__((constructor)) __bound_init(void)
+void __bound_init(size_t *p)
 {
-    extern size_t __bounds_start[];
-    size_t *p;
+    dprintf(stderr, "%s, %s(): start\n", __FILE__, __FUNCTION__);
 
-    if (inited)
-        return;
-
+    if (inited) {
+        WAIT_SEM();
+        goto add_bounds;
+    }
     inited = 1;
 
     print_warn_ptr_add = getenv ("TCC_BOUNDS_WARN_POINTER_ADD") != NULL;
@@ -622,8 +612,6 @@ void __attribute__((constructor)) __bound_init(void)
     print_heap = getenv ("TCC_BOUNDS_PRINT_HEAP") != NULL;
     print_statistic = getenv ("TCC_BOUNDS_PRINT_STATISTIC") != NULL;
     never_fatal = getenv ("TCC_BOUNDS_NEVER_FATAL") != NULL;
-
-    dprintf(stderr, "%s, %s(): start\n", __FILE__, __FUNCTION__);
 
     INIT_SEM ();
 
@@ -724,27 +712,26 @@ void __attribute__((constructor)) __bound_init(void)
     tree = splay_insert((size_t) (&errno), sizeof (int), tree);
 #endif
 
+add_bounds:
+    if (!p)
+        goto no_bounds;
+
     /* add all static bound check values */
-    p = __bounds_start;
     while (p[0] != 0) {
         tree = splay_insert(p[0], p[1], tree);
-        p += 2;
-    }
-    POST_SEM ();
 #if BOUND_DEBUG
-    if (print_calls) {
-        p = __bounds_start;
-        while (p[0] != 0) {
+        if (print_calls) {
             dprintf(stderr, "%s, %s(): static var %p 0x%lx\n",
                     __FILE__, __FUNCTION__,
                     (void *) p[0], (unsigned long) p[1]);
-            p += 2;
         }
-    }
 #endif
+        p += 2;
+    }
+no_bounds:
 
+    POST_SEM ();
     no_checking = 0;
-
     dprintf(stderr, "%s, %s(): end\n\n", __FILE__, __FUNCTION__);
 }
 
@@ -931,7 +918,7 @@ void *__bound_malloc(size_t size, const void *caller)
 #if MALLOC_REDIR
     /* This will catch the first dlsym call from __bound_init */
     if (malloc_redir == NULL) {
-        __bound_init ();
+        __bound_init (0);
         if (malloc_redir == NULL) {
             ptr = &initial_pool[pool_index];
             pool_index = (pool_index + size + 15) & ~15;
@@ -1113,7 +1100,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
 #if MALLOC_REDIR
     /* This will catch the first dlsym call from __bound_init */
     if (malloc_redir == NULL) {
-        __bound_init ();
+        __bound_init (0);
         if (malloc_redir == NULL) {
             ptr = &initial_pool[pool_index];
             pool_index = (pool_index + size + 15) & ~15;
@@ -1190,10 +1177,8 @@ static void __bound_check(const void *p, size_t size, const char *function)
 {
     if (no_checking == 0 && size != 0 &&
         __bound_ptr_add((void *)p, size) == INVALID_POINTER) {
-        static char line[100];
-        sprintf(line, "invalid pointer %p, size 0x%lx in %s",
+        bound_error("invalid pointer %p, size 0x%lx in %s",
                 p, (unsigned long)size, function);
-        bound_error(line);
     }
 }
 
@@ -1207,10 +1192,8 @@ static int check_overlap (const void *p1, size_t n1,
     if (no_checking == 0 && n1 != 0 && n2 !=0 &&
         ((p1 <= p2 && p1e > p2) ||     /* p1----p2====p1e----p2e */
          (p2 <= p1 && p2e > p1))) {    /* p2----p1====p2e----p1e */
-        static char line[100];
-        sprintf(line, "overlapping regions %p(0x%lx), %p(0x%lx) in %s",
+        bound_error("overlapping regions %p(0x%lx), %p(0x%lx) in %s",
                 p1, (unsigned long)n1, p2, (unsigned long)n2, function);
-        bound_error(line);
         return never_fatal < 0;
     }
     return 0;

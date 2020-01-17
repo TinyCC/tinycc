@@ -372,9 +372,12 @@ Try to continue in case of a bound checking error.
 
 Note: @option{-b} is only available on i386 (linux and windows) and x86_64 (linux and windows) for the moment.
 
-@item -bt N
-Display N callers in stack traces. This is useful with @option{-g} or
-@option{-b}.
+@item -bt[N]
+Display N callers in stack traces. This is useful with @option{-g} or @option{-b}.
+With executables, additional support for stack traces is included.
+
+A function @code{ int tcc_backtrace(const char *fmt, ...); } is provided
+to trigger a stack trace with a message on demand.
 
 @end table
 

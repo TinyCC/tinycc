@@ -103,7 +103,7 @@ ST_DATA struct switch_t {
     struct scope *scope;
 } *cur_switch; /* current switch */
 
-#define MAX_TEMP_LOCAL_VARIABLE_NUMBER 0x4
+#define MAX_TEMP_LOCAL_VARIABLE_NUMBER 8
 /*list of temporary local variables on the stack in current function. */
 ST_DATA struct temp_local_variable {
 	int location; //offset on stack. Svalue.c.i
@@ -375,11 +375,10 @@ static BufferedFile* put_new_file(TCCState *s1)
 ST_FUNC void tcc_debug_line(TCCState *s1)
 {
     BufferedFile *f;
-    if (!s1->do_debug || !(f = put_new_file(s1)))
-        return;
-    if (last_line_num == f->line_num)
-        return;
-    if (text_section != cur_text_section)
+    if (!s1->do_debug
+        || cur_text_section != text_section
+        || !(f = put_new_file(s1))
+        || last_line_num == f->line_num)
         return;
     if (func_ind != -1) {
         put_stabn(s1, N_SLINE, 0, f->line_num, ind - func_ind);
@@ -409,9 +408,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 {
     if (!s1->do_debug)
         return;
-#if 0 // this seems to confuse gnu tools
     put_stabn(s1, N_FUN, 0, 0, size);
-#endif
 }
 
 /* put alternative filename */
@@ -2592,7 +2589,6 @@ redo:
                     vswap();
                     gen_op('-');
                 }
-                vtop[-1].r &= ~VT_MUSTBOUND;
                 gen_bounded_ptr_add();
             } else
 #endif
@@ -3428,6 +3424,10 @@ ST_FUNC void vstore(void)
 
             /* destination */
             vswap();
+#ifdef CONFIG_TCC_BCHECK
+            if (vtop->r & VT_MUSTBOUND)
+                gbound(); /* check would be wrong after gaddrof() */
+#endif
             vtop->type.t = VT_PTR;
             gaddrof();
 
@@ -3444,8 +3444,11 @@ ST_FUNC void vstore(void)
 
             vswap();
             /* source */
-            vtop->r &= ~VT_MUSTBOUND;
             vpushv(vtop - 2);
+#ifdef CONFIG_TCC_BCHECK
+            if (vtop->r & VT_MUSTBOUND)
+                gbound();
+#endif
             vtop->type.t = VT_PTR;
             gaddrof();
             /* type size */
@@ -3662,11 +3665,11 @@ redo:
 	}
        case TOK_CONSTRUCTOR1:
        case TOK_CONSTRUCTOR2:
-            ad->constructor = 1;
+            ad->f.func_ctor = 1;
             break;
        case TOK_DESTRUCTOR1:
        case TOK_DESTRUCTOR2:
-            ad->destructor = 1;
+            ad->f.func_dtor = 1;
             break;
         case TOK_SECTION1:
         case TOK_SECTION2:
@@ -4958,6 +4961,10 @@ ST_FUNC void unary(void)
     Sym *s;
     AttributeDef ad;
 
+    /* generate line number info */
+    if (tcc_state->do_debug)
+        tcc_debug_line(tcc_state);
+
     sizeof_caller = in_sizeof;
     in_sizeof = 0;
     type.ref = NULL;
@@ -5522,7 +5529,7 @@ special_math_val:
                 vtop->r |= VT_LVAL;
 #ifdef CONFIG_TCC_BCHECK
                 /* if bound checking, the referenced pointer must be checked */
-                if (tcc_state->do_bounds_check && (vtop->r & VT_VALMASK) != VT_LOCAL)
+                if (tcc_state->do_bounds_check)
                     vtop->r |= VT_MUSTBOUND;
 #endif
             }
@@ -5538,15 +5545,6 @@ special_math_val:
             Sym *sa;
             int nb_args, ret_nregs, ret_align, regsize, variadic;
 
-#ifdef CONFIG_TCC_BCHECK
-           if (tcc_state->do_bounds_check && (vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
-               addr_t *bounds_ptr;
-
-               bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
-               bounds_ptr[0] = 1; /* marks alloca/vla used */
-               bounds_ptr[1] = 0;
-           }
-#endif
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
                 /* pointer test (no array accepted) */
@@ -6514,10 +6512,10 @@ again:
         }
 
         prev_scope(&o, is_expr);
-
-        if (0 == local_scope && !nocode_wanted)
+        if (local_scope)
+            next();
+        else if (!nocode_wanted)
             check_func_return();
-        next();
 
     } else if (t == TOK_RETURN) {
         b = (func_vt.t & VT_BTYPE) != VT_VOID;
@@ -7582,16 +7580,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         gen_vla_sp_save(addr);
         cur_scope->vla.loc = addr;
         cur_scope->vla.num++;
-#ifdef CONFIG_TCC_BCHECK
-        if (bcheck) {
-            addr_t *bounds_ptr;
-
-            bounds_ptr = section_ptr_add(lbounds_section, 2 * sizeof(addr_t));
-            bounds_ptr[0] = 1; /* marks alloca/vla used */
-            bounds_ptr[1] = 0;
-        }
-#endif
-
     } else if (has_init) {
 	size_t oldreloc_offset = 0;
 	if (sec && sec->reloc)
@@ -7617,7 +7605,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
 /* parse a function defined by symbol 'sym' and generate its code in
    'cur_text_section' */
-static void gen_function(Sym *sym, AttributeDef *ad)
+static void gen_function(Sym *sym)
 {
     /* Initialize VLA state */
     struct scope f = { 0 };
@@ -7632,17 +7620,12 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     }
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);
-
-    if (ad && ad->constructor) {
-        add_init_array (tcc_state, sym);
-    }
-    if (ad && ad->destructor) {
-        add_fini_array (tcc_state, sym);
-    }
-
+    if (sym->type.ref->f.func_ctor)
+        add_array (tcc_state, ".init_array", sym->c);
+    if (sym->type.ref->f.func_dtor)
+        add_array (tcc_state, ".fini_array", sym->c);
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
-
     /* put debug symbol */
     tcc_debug_funcstart(tcc_state, sym);
     /* push a dummy symbol to enable local sym storage */
@@ -7675,6 +7658,8 @@ static void gen_function(Sym *sym, AttributeDef *ad)
     ind = 0; /* for safety */
     nocode_wanted = 0x80000000;
     check_vstack();
+    /* do this after funcend debug info */
+    next();
 }
 
 static void gen_inline_functions(TCCState *s)
@@ -7698,7 +7683,7 @@ static void gen_inline_functions(TCCState *s)
                 begin_macro(fn->func_str, 1);
                 next();
                 cur_text_section = text_section;
-                gen_function(sym, NULL);
+                gen_function(sym);
                 end_macro();
 
                 inline_generated = 1;
@@ -7866,11 +7851,8 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                    the compilation unit only if they are used */
                 if (sym->type.t & VT_INLINE) {
                     struct InlineFunc *fn;
-                    const char *filename;
-                           
-                    filename = file ? file->filename : "";
-                    fn = tcc_malloc(sizeof *fn + strlen(filename));
-                    strcpy(fn->filename, filename);
+                    fn = tcc_malloc(sizeof *fn + strlen(file->filename));
+                    strcpy(fn->filename, file->filename);
                     fn->sym = sym;
 		    skip_or_save_block(&fn->func_str);
                     dynarray_add(&tcc_state->inline_fns,
@@ -7880,7 +7862,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     cur_text_section = ad.section;
                     if (!cur_text_section)
                         cur_text_section = text_section;
-                    gen_function(sym, &ad);
+                    gen_function(sym);
                 }
                 break;
             } else {
