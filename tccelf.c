@@ -1359,7 +1359,7 @@ static void set_local_sym(TCCState *s1, const char *name, Section *s, int offset
 ST_FUNC void tcc_add_btstub(TCCState *s1)
 {
     Section *s;
-    int n, o, b;
+    int n, o;
     CString cstr;
 
     s = data_section;
@@ -1372,11 +1372,11 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     /* prog_base */
     put_elf_reloc(s1->symtab, s, s->data_offset, R_DATA_PTR, 0);
     section_ptr_add(s, PTR_SIZE);
-    n = 2 * PTR_SIZE, b = 0;
+    n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         put_ptr(s1, bounds_section, 0);
-        n -= PTR_SIZE, b = 1;
+        n -= PTR_SIZE;
     }
 #endif
     section_ptr_add(s, n);
@@ -1386,8 +1386,8 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         " extern void __bt_init(),*__rt_info[],__bt_init_dll();"
         "__attribute__((constructor)) static void __bt_init_rt(){");
 #ifdef TCC_TARGET_PE
-        if (s1->output_type == TCC_OUTPUT_DLL)
-            cstr_printf(&cstr, "__bt_init_dll(%d);", b);
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        cstr_printf(&cstr, "__bt_init_dll(%d);", s1->do_bounds_check);
 #endif
     cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);

@@ -161,6 +161,9 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         rc->esym_start = (ElfW(Sym) *)(symtab_section->data);
         rc->esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
         rc->elf_str = (char *)symtab_section->link->data;
+#if PTR_SIZE == 8
+        rc->prog_base = text_section->sh_addr & 0xffffffff00000000ULL;
+#endif
         rc->top_func = tcc_get_symbol(s1, "main");
         rc->num_callers = s1->rt_num_callers;
         rc->do_jmp = 1;
@@ -405,11 +408,10 @@ next:
             if (sym->n_strx == 0) /* end of function */
                 goto rel_pc;
         abs_pc:
-            if (sizeof sym->n_value < PTR_SIZE) {
-                /* Stab_Sym.n_value is only 32bits */
-                //fprintf(stderr, "pc = %p %p %p\n", pc, rc->prog_base, wanted_pc), fflush(stderr);
-                pc += rc->prog_base;
-            }
+#if PTR_SIZE == 8
+            /* Stab_Sym.n_value is only 32bits */
+            pc += rc->prog_base;
+#endif
             break;
         rel_pc:
             pc += func_addr;

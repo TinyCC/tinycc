@@ -72,7 +72,7 @@ GEN-ALWAYS =
 108_constructor.test: NORUN = true
 
 112_backtrace.test: FLAGS += -dt -b
-112_backtrace.test: FILTER += -e 's;[0-9A-Fa-fx]\{8,\};........;g'
+112_backtrace.test: FILTER += -e 's;[0-9A-Fa-fx]\{8,\};........;g' -e 's;0x[0-9A-Fa-f]\+;0x?;g'
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

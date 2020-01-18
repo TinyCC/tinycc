@@ -150,9 +150,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # elif defined __arm__
 #  define TCC_TARGET_ARM
 #  define TCC_ARM_EABI
+#  define TCC_ARM_VFP
 #  define TCC_ARM_HARDFLOAT
 # elif defined __aarch64__
 #  define TCC_TARGET_ARM64
+# elif defined __riscv
+#  define TCC_TARGET_RISCV64
 # else
 #  define TCC_TARGET_I386
 # endif
