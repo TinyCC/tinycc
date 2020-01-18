@@ -1,4 +1,4 @@
-33_ternary_op.c:26: warning: pointer/integer mismatch
+33_ternary_op.c:26: warning: pointer/integer mismatch in conditional expression
 0
 1
 4
