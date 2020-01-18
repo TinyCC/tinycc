@@ -142,7 +142,7 @@
 
 [test_bcheck_123]
 112_backtrace.c:153: at main: BCHECK: ........ is outside of the region
-112_backtrace.c:153: at main: BCHECK: invalid pointer ........, size 0x? in strcat src
+112_backtrace.c:153: at main: BCHECK: invalid pointer ........, size 0x? in strcat dest
 [returns 255]
 
 [test_bcheck_124]

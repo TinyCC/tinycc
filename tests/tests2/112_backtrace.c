@@ -150,7 +150,7 @@ int main()
 #elif defined test_bcheck_122
     strcat(&a[7], &a[0]);
 #elif defined test_bcheck_123
-    strcat(&a[0], &b[5]);
+    strcat(&a[0], &b[3]);
 #elif defined test_bcheck_124
     strcat(&a[0], &a[4]);
 #elif defined test_bcheck_125
