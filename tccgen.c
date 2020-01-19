@@ -101,6 +101,8 @@ ST_DATA struct switch_t {
     int def_sym; /* default symbol */
     int *bsym;
     struct scope *scope;
+    struct switch_t *prev;
+    SValue sv;
 } *cur_switch; /* current switch */
 
 #define MAX_TEMP_LOCAL_VARIABLE_NUMBER 8
@@ -6447,6 +6449,7 @@ static void lblock(int *bsym, int *csym)
 static void block(int is_expr)
 {
     int a, b, c, d, e, t;
+    struct scope o;
     Sym *s;
 
     if (is_expr) {
@@ -6487,7 +6490,6 @@ again:
         gsym(a);
 
     } else if (t == '{') {
-        struct scope o;
         new_scope(&o);
 
         /* handle local labels declarations */
@@ -6545,10 +6547,10 @@ again:
         /* compute jump */
         if (!cur_scope->bsym)
             tcc_error("cannot break");
-        if (!cur_switch || cur_scope->bsym != cur_switch->bsym)
-            leave_scope(loop_scope);
-        else
+        if (cur_switch && cur_scope->bsym == cur_switch->bsym)
             leave_scope(cur_switch->scope);
+        else
+            leave_scope(loop_scope);
         *cur_scope->bsym = gjmp(*cur_scope->bsym);
         skip(';');
 
@@ -6561,7 +6563,6 @@ again:
         skip(';');
 
     } else if (t == TOK_FOR) {
-        struct scope o;
         new_scope(&o);
 
         skip('(');
@@ -6611,22 +6612,18 @@ again:
         gsym(a);
 
     } else if (t == TOK_SWITCH) {
-        struct switch_t *saved, sw;
-	SValue switchval;
+        struct switch_t *sw;
 
-        sw.p = NULL;
-        sw.n = 0;
-        sw.def_sym = 0;
-        sw.bsym = &a;
-        sw.scope = cur_scope;
-
-        saved = cur_switch;
-        cur_switch = &sw;
+        sw = tcc_mallocz(sizeof *sw);
+        sw->bsym = &a;
+        sw->scope = cur_scope;
+        sw->prev = cur_switch;
+        cur_switch = sw;
 
         skip('(');
         gexpr();
         skip(')');
-	switchval = *vtop--;
+        sw->sv = *vtop--; /* save switch value */
 
         a = 0;
         b = gjmp(0); /* jump to first case */
@@ -6635,28 +6632,29 @@ again:
         /* case lookup */
         gsym(b);
 
-        qsort(sw.p, sw.n, sizeof(void*), case_cmp);
-        for (b = 1; b < sw.n; b++)
-            if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
+        qsort(sw->p, sw->n, sizeof(void*), case_cmp);
+        for (b = 1; b < sw->n; b++)
+            if (sw->p[b - 1]->v2 >= sw->p[b]->v1)
                 tcc_error("duplicate case value");
 
         /* Our switch table sorting is signed, so the compared
            value needs to be as well when it's 64bit.  */
-        if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
-            switchval.type.t &= ~VT_UNSIGNED;
-        vpushv(&switchval);
+        vpushv(&sw->sv);
+        if ((vtop->type.t & VT_BTYPE) == VT_LLONG)
+            vtop->type.t &= ~VT_UNSIGNED;
         gv(RC_INT);
-        d = 0, gcase(sw.p, sw.n, &d);
+        d = 0, gcase(sw->p, sw->n, &d);
         vpop();
-        if (sw.def_sym)
-            gsym_addr(d, sw.def_sym);
+        if (sw->def_sym)
+            gsym_addr(d, sw->def_sym);
         else
             gsym(d);
         /* break label */
         gsym(a);
 
-        dynarray_reset(&sw.p, &sw.n);
-        cur_switch = saved;
+        dynarray_reset(&sw->p, &sw->n);
+        cur_switch = sw->prev;
+        tcc_free(sw);
 
     } else if (t == TOK_CASE) {
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));

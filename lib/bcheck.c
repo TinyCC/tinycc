@@ -353,7 +353,8 @@ void * __bound_ptr_add(void *p, size_t offset)
         if (addr <= tree->size) {
             if (tree->is_invalid || addr + offset > tree->size) {
                 POST_SEM ();
-                bound_warning("%p is outside of the region", p + offset);
+                if (print_warn_ptr_add)
+                    bound_warning("%p is outside of the region", p + offset);
                 if (never_fatal <= 0)
                     return INVALID_POINTER; /* return an invalid pointer */
                 return p + offset;

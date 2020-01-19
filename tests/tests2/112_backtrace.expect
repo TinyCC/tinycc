@@ -12,8 +12,6 @@
 [test_bcheck_1]
 * main
 * f1()
-112_backtrace.c:38: at f1: BCHECK: ........ is outside of the region
-112_backtrace.c:43: by main
 112_backtrace.c:38: at f1: BCHECK: invalid pointer ........, size 0x? in memmove dest
 112_backtrace.c:43: by main
 [returns 255]
@@ -32,12 +30,10 @@
 [returns 1]
 
 [test_bcheck_100]
-112_backtrace.c:107: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:107: at main: BCHECK: invalid pointer ........, size 0x? in memcpy dest
 [returns 255]
 
 [test_bcheck_101]
-112_backtrace.c:109: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:109: at main: BCHECK: invalid pointer ........, size 0x? in memcpy src
 [returns 255]
 
@@ -50,42 +46,34 @@
 [returns 255]
 
 [test_bcheck_104]
-112_backtrace.c:115: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:115: at main: BCHECK: invalid pointer ........, size 0x? in memcmp s1
 [returns 255]
 
 [test_bcheck_105]
-112_backtrace.c:117: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:117: at main: BCHECK: invalid pointer ........, size 0x? in memcmp s2
 [returns 255]
 
 [test_bcheck_106]
-112_backtrace.c:119: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:119: at main: BCHECK: invalid pointer ........, size 0x? in memmove dest
 [returns 255]
 
 [test_bcheck_107]
-112_backtrace.c:121: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:121: at main: BCHECK: invalid pointer ........, size 0x? in memmove src
 [returns 255]
 
 [test_bcheck_108]
-112_backtrace.c:123: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:123: at main: BCHECK: invalid pointer ........, size 0x? in memset
 [returns 255]
 
 [test_bcheck_109]
-112_backtrace.c:125: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:125: at main: BCHECK: invalid pointer ........, size 0x? in strlen
 [returns 255]
 
 [test_bcheck_110]
-112_backtrace.c:127: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:127: at main: BCHECK: invalid pointer ........, size 0x? in strcpy dest
 [returns 255]
 
 [test_bcheck_111]
-112_backtrace.c:129: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:129: at main: BCHECK: invalid pointer ........, size 0x? in strcpy src
 [returns 255]
 
@@ -98,12 +86,10 @@
 [returns 255]
 
 [test_bcheck_114]
-112_backtrace.c:135: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:135: at main: BCHECK: invalid pointer ........, size 0x? in strncpy dest
 [returns 255]
 
 [test_bcheck_115]
-112_backtrace.c:137: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:137: at main: BCHECK: invalid pointer ........, size 0x? in strncpy src
 [returns 255]
 
@@ -116,32 +102,26 @@
 [returns 255]
 
 [test_bcheck_118]
-112_backtrace.c:143: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:143: at main: BCHECK: invalid pointer ........, size 0x? in strcmp s1
 [returns 255]
 
 [test_bcheck_119]
-112_backtrace.c:145: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:145: at main: BCHECK: invalid pointer ........, size 0x? in strcmp s2
 [returns 255]
 
 [test_bcheck_120]
-112_backtrace.c:147: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:147: at main: BCHECK: invalid pointer ........, size 0x? in strncmp s1
 [returns 255]
 
 [test_bcheck_121]
-112_backtrace.c:149: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:149: at main: BCHECK: invalid pointer ........, size 0x? in strncmp s2
 [returns 255]
 
 [test_bcheck_122]
-112_backtrace.c:151: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:151: at main: BCHECK: invalid pointer ........, size 0x? in strcat dest
 [returns 255]
 
 [test_bcheck_123]
-112_backtrace.c:153: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:153: at main: BCHECK: invalid pointer ........, size 0x? in strcat dest
 [returns 255]
 
@@ -154,11 +134,9 @@
 [returns 255]
 
 [test_bcheck_126]
-112_backtrace.c:159: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:159: at main: BCHECK: invalid pointer ........, size 0x? in strchr
 [returns 255]
 
 [test_bcheck_127]
-112_backtrace.c:161: at main: BCHECK: ........ is outside of the region
 112_backtrace.c:161: at main: BCHECK: invalid pointer ........, size 0x? in strdup
 [returns 255]

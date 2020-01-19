@@ -1,0 +1,6 @@
+113_btdll.c:12: at f_1: hello from f_1() / 113_btdll.c:12
+113_btdll.c:37: by main
+113_btdll.c:20: at f_2: hello from f_2() / 113_btdll.c:20
+113_btdll.c:38: by main
+113_btdll.c:31: at f_main: hello from f_main() / 113_btdll.c:31
+113_btdll.c:39: by main

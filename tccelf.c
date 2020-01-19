@@ -1387,7 +1387,11 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         "__attribute__((constructor)) static void __bt_init_rt(){");
 #ifdef TCC_TARGET_PE
     if (s1->output_type == TCC_OUTPUT_DLL)
+#ifdef CONFIG_TCC_BCHECK
         cstr_printf(&cstr, "__bt_init_dll(%d);", s1->do_bounds_check);
+#else
+        cstr_printf(&cstr, "__bt_init_dll(0);");
+#endif
 #endif
     cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);

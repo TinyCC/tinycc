@@ -48,7 +48,7 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
 static void rt_exit(int code);
 #endif /* CONFIG_TCC_BACKTRACE */
 
-/* defined when included from lib/bt.c */
+/* defined when included from lib/bt-exe.c */
 #ifndef CONFIG_TCC_BACKTRACE_ONLY
 
 #ifndef _WIN32
@@ -412,14 +412,14 @@ next:
             /* Stab_Sym.n_value is only 32bits */
             pc += rc->prog_base;
 #endif
-            break;
+            goto check_pc;
         rel_pc:
             pc += func_addr;
+        check_pc:
+            if (pc >= wanted_pc && wanted_pc >= last_pc)
+                goto found;
             break;
         }
-
-        if (pc >= wanted_pc && wanted_pc >= last_pc)
-            goto found;
 
         switch(sym->n_type) {
             /* function start or end */

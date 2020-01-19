@@ -884,6 +884,9 @@ struct TCCState {
     const char *runtime_main;
     void **runtime_mem;
     int nb_runtime_mem;
+#endif
+
+#ifdef CONFIG_TCC_BACKTRACE
     int rt_num_callers;
 #endif
 

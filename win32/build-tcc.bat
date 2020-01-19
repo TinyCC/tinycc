@@ -163,7 +163,7 @@ copy>nul tcc-win32.txt doc
 .\tcc -m64 -c ../lib/alloca86_64-bt.S
 .\tcc -m64 -ar lib/libtcc1-64.a %O1% alloca86_64.o alloca86_64-bt.o
 @if errorlevel 1 goto :the_end
-.\tcc -m%T% -c ../lib/bcheck.c -o lib/bcheck.o
+.\tcc -m%T% -c ../lib/bcheck.c -o lib/bcheck.o -g
 .\tcc -m%T% -c ../lib/bt-exe.c -o lib/bt-exe.o
 .\tcc -m%T% -c ../lib/bt-log.c -o lib/bt-log.o
 .\tcc -m%T% -c ../lib/bt-dll.c -o lib/bt-dll.o

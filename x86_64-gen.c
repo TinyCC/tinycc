@@ -701,9 +701,56 @@ ST_FUNC void gen_bounded_ptr_deref(void)
     rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.i);
     rel->r_info = ELF64_R_INFO(sym->c, ELF64_R_TYPE(rel->r_info));
 }
+
+#ifdef TCC_TARGET_PE
+# define TREG_FASTCALL_1 TREG_RCX
+#else
+# define TREG_FASTCALL_1 TREG_RDI
+#endif
+
+static void gen_bounds_prolog(void)
+{
+    /* leave some room for bound checking code */
+    func_bound_offset = lbounds_section->data_offset;
+    func_bound_ind = ind;
+    o(0xb848 + TREG_FASTCALL_1 * 0x100); /*lbound section pointer */
+    gen_le64 (0);
+    oad(0xb8, 0); /* call to function */
+}
+
+static void gen_bounds_epilog(void)
+{
+    addr_t saved_ind;
+    addr_t *bounds_ptr;
+    Sym *sym_data;
+
+    /* add end of table info */
+    bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
+    *bounds_ptr = 0;
+
+    /* generate bound local allocation */
+    sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
+                           func_bound_offset, lbounds_section->data_offset);
+    saved_ind = ind;
+    ind = func_bound_ind;
+    greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
+    ind = ind + 10;
+    gen_bounds_call(TOK___bound_local_new);
+    ind = saved_ind;
+
+    /* generate bound check local freeing */
+    o(0x525051); /* save returned value, if any (+ scratch-space for windows) */
+    greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
+    o(0xb848 + TREG_FASTCALL_1 * 0x100); /* mov xxx, %rcx/di */
+    gen_le64 (0);
+    gen_bounds_call(TOK___bound_local_delete);
+    o(0x59585a); /* restore returned value, if any */
+}
 #endif
 
 #ifdef TCC_TARGET_PE
+
+static int func_scratch, func_alloca;
 
 #define REGN 4
 static const uint8_t arg_regs[REGN] = {
@@ -719,8 +766,6 @@ static int arg_prepare_reg(int idx) {
   else
       return arg_regs[idx];
 }
-
-static int func_scratch, func_alloca;
 
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
@@ -918,7 +963,6 @@ void gfunc_prolog(Sym *func_sym)
     int addr, reg_param_index, bt, size;
     Sym *sym;
     CType *type;
-    int n_arg = 0;
 
     func_ret_sub = 0;
     func_scratch = 32;
@@ -946,7 +990,6 @@ void gfunc_prolog(Sym *func_sym)
 
     /* define parameters */
     while ((sym = sym->next) != NULL) {
-        n_arg++;
         type = &sym->type;
         bt = type->t & VT_BTYPE;
         size = gfunc_arg_size(type);
@@ -983,23 +1026,8 @@ void gfunc_prolog(Sym *func_sym)
         reg_param_index++;
     }
 #ifdef CONFIG_TCC_BCHECK
-    /* leave some room for bound checking code */
-    if (tcc_state->do_bounds_check) {
-        func_bound_offset = lbounds_section->data_offset;
-        func_bound_ind = ind;
-        o(0xb848); /* lbound section pointer */
-        gen_le64 (0);
-        o(0xc18948);  /* mov  %rax,%rcx ## first arg in %rdi, this must be ptr */
-        o(0x20ec8348); /* sub $20, %rsp */
-        oad(0xb8, 0); /* call to function */
-        o(0x20c48348); /* add $20, %rsp */
-        if (n_arg >= 2 && strcmp (get_tok_str(func_sym->v, NULL), "main") == 0) {
-            o(0x184d8b48);  /* mov 0x18(%rbp),%rcx */
-            o(0x20ec8348); /* sub $20, %rsp */
-            gen_bounds_call(TOK___bound_main_arg);
-            o(0x20c48348); /* add $20, %rsp */
-        }
-    }
+    if (tcc_state->do_bounds_check)
+        gen_bounds_prolog();
 #endif
 }
 
@@ -1013,39 +1041,10 @@ void gfunc_epilog(void)
     loc = (loc & -16) - func_scratch;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check
-        && func_bound_offset != lbounds_section->data_offset)
-    {
-        addr_t saved_ind;
-        addr_t *bounds_ptr;
-        Sym *sym_data;
-
-        /* add end of table info */
-        bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
-        *bounds_ptr = 0;
-
-        /* generate bound local allocation */
-        sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
-                               func_bound_offset, lbounds_section->data_offset);
-        saved_ind = ind;
-        ind = func_bound_ind;
-        greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-        ind = ind + 10 + 3 + 4;
-        gen_bounds_call(TOK___bound_local_new);
-        ind = saved_ind;
-
-        /* generate bound check local freeing */
-        o(0x5250); /* save returned value, if any */
-        greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-        o(0xb848); /* mov xxx, %rax */
-        gen_le64 (0);
-        o(0xc18948);  /* mov %rax,%rcx # first arg in %rdi, this must be ptr */
-        o(0x20ec8348); /* sub $20, %rsp */
-        gen_bounds_call(TOK___bound_local_delete);
-        o(0x20c48348); /* add $20, %rsp */
-        o(0x585a); /* restore returned value, if any */
-    }
+    if (tcc_state->do_bounds_check)
+        gen_bounds_epilog();
 #endif
+
     o(0xc9); /* leave */
     if (func_ret_sub == 0) {
         o(0xc3); /* ret */
@@ -1469,7 +1468,6 @@ void gfunc_prolog(Sym *func_sym)
     X86_64_Mode mode;
     int i, addr, align, size, reg_count;
     int param_addr = 0, reg_param_index, sse_param_index;
-    int n_arg = 0;
     Sym *sym;
     CType *type;
 
@@ -1553,7 +1551,6 @@ void gfunc_prolog(Sym *func_sym)
     }
     /* define parameters */
     while ((sym = sym->next) != NULL) {
-        n_arg++;
         type = &sym->type;
         mode = classify_x86_64_arg(type, NULL, &size, &align, &reg_count);
         switch (mode) {
@@ -1606,19 +1603,8 @@ void gfunc_prolog(Sym *func_sym)
     }
 
 #ifdef CONFIG_TCC_BCHECK
-    /* leave some room for bound checking code */
-    if (tcc_state->do_bounds_check) {
-        func_bound_offset = lbounds_section->data_offset;
-        func_bound_ind = ind;
-        o(0xb848); /* lbound section pointer */
-        gen_le64 (0);
-        o(0xc78948);  /* mov  %rax,%rdi ## first arg in %rdi, this must be ptr */
-        oad(0xb8, 0); /* call to function */
-        if (n_arg >= 2 && strcmp (get_tok_str(func_sym->v, NULL), "main") == 0) {
-            o(0xf07d8b48);  /* mov -0x10(%rbp),%rdi */
-            gen_bounds_call(TOK___bound_main_arg);
-        }
-    }
+    if (tcc_state->do_bounds_check)
+        gen_bounds_prolog();
 #endif
 }
 
@@ -1628,36 +1614,8 @@ void gfunc_epilog(void)
     int v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check
-        && func_bound_offset != lbounds_section->data_offset)
-    {
-        addr_t saved_ind;
-        addr_t *bounds_ptr;
-        Sym *sym_data;
-
-        /* add end of table info */
-        bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
-        *bounds_ptr = 0;
-
-        /* generate bound local allocation */
-        sym_data = get_sym_ref(&char_pointer_type, lbounds_section, 
-                               func_bound_offset, lbounds_section->data_offset);
-        saved_ind = ind;
-        ind = func_bound_ind;
-        greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-        ind = ind + 10 + 3;
-        gen_bounds_call(TOK___bound_local_new);
-        ind = saved_ind;
-
-        /* generate bound check local freeing */
-        o(0x5250); /* save returned value, if any */
-        greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-        o(0xb848); /* mov xxx, %rax */
-        gen_le64 (0);
-        o(0xc78948);  /* mov %rax,%rdi # first arg in %rdi, this must be ptr */
-        gen_bounds_call(TOK___bound_local_delete);
-        o(0x585a); /* restore returned value, if any */
-    }
+    if (tcc_state->do_bounds_check)
+        gen_bounds_epilog();
 #endif
     o(0xc9); /* leave */
     if (func_ret_sub == 0) {
