@@ -558,9 +558,7 @@ version_add (TCCState *s1)
         return;
     versym_section = new_section(s1, ".gnu.version", SHT_GNU_versym, SHF_ALLOC);
     versym_section->sh_entsize = sizeof(ElfW(Half));
-    verneed_section = new_section(s1, ".gnu.version_r", SHT_GNU_verneed, SHF_ALLOC);
     versym_section->link = s1->dynsym;
-    verneed_section->link = s1->dynsym->link;
 
     /* add needed symbols */
     symtab = s1->dynsym;
@@ -580,43 +578,50 @@ version_add (TCCState *s1)
         } else
           versym[sym_index] = 0;
     }
-    /* generate verneed section */
-    for (i = nb_sym_versions; i-- > 0;) {
-        struct sym_version *sv = &sym_versions[i];
-        int n_same_libs = 0, prev;
-        size_t vnofs;
-        ElfW(Vernaux) *vna = 0;
-        if (sv->out_index < 1)
-          continue;
-        vnofs = section_add(verneed_section, sizeof(*vn), 1);
-        vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
-        vn->vn_version = 1;
-        vn->vn_file = put_elf_str(verneed_section->link, sv->lib);
-        vn->vn_aux = sizeof (*vn);
-        do {
-            prev = sv->prev_same_lib;
-            if (sv->out_index > 0) {
-                vna = section_ptr_add(verneed_section, sizeof(*vna));
-                vna->vna_hash = elf_hash ((const unsigned char *)sv->version);
-                vna->vna_flags = 0;
-                vna->vna_other = sv->out_index;
-                sv->out_index = -2;
-                vna->vna_name = put_elf_str(verneed_section->link, sv->version);
-                vna->vna_next = sizeof (*vna);
-                n_same_libs++;
-            }
-            if (prev >= 0)
-                sv = &sym_versions[prev];
-        } while(prev >= 0);
-        vna->vna_next = 0;
-        vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
-        vn->vn_cnt = n_same_libs;
-        vn->vn_next = sizeof(*vn) + n_same_libs * sizeof(*vna);
-        nb_entries++;
+    /* generate verneed section, but not when it will be empty.  Some
+       dynamic linkers look at their contents even when DTVERNEEDNUM and
+       section size is zero.  */
+    if (nb_versions > 2) {
+        verneed_section = new_section(s1, ".gnu.version_r",
+                                      SHT_GNU_verneed, SHF_ALLOC);
+        verneed_section->link = s1->dynsym->link;
+        for (i = nb_sym_versions; i-- > 0;) {
+            struct sym_version *sv = &sym_versions[i];
+            int n_same_libs = 0, prev;
+            size_t vnofs;
+            ElfW(Vernaux) *vna = 0;
+            if (sv->out_index < 1)
+              continue;
+            vnofs = section_add(verneed_section, sizeof(*vn), 1);
+            vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
+            vn->vn_version = 1;
+            vn->vn_file = put_elf_str(verneed_section->link, sv->lib);
+            vn->vn_aux = sizeof (*vn);
+            do {
+                prev = sv->prev_same_lib;
+                if (sv->out_index > 0) {
+                    vna = section_ptr_add(verneed_section, sizeof(*vna));
+                    vna->vna_hash = elf_hash ((const unsigned char *)sv->version);
+                    vna->vna_flags = 0;
+                    vna->vna_other = sv->out_index;
+                    sv->out_index = -2;
+                    vna->vna_name = put_elf_str(verneed_section->link, sv->version);
+                    vna->vna_next = sizeof (*vna);
+                    n_same_libs++;
+                }
+                if (prev >= 0)
+                  sv = &sym_versions[prev];
+            } while(prev >= 0);
+            vna->vna_next = 0;
+            vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
+            vn->vn_cnt = n_same_libs;
+            vn->vn_next = sizeof(*vn) + n_same_libs * sizeof(*vna);
+            nb_entries++;
+        }
+        if (vn)
+          vn->vn_next = 0;
+        verneed_section->sh_info = nb_entries;
     }
-    if (vn)
-      vn->vn_next = 0;
-    verneed_section->sh_info = nb_entries;
     dt_verneednum = nb_entries;
 }
 #endif
@@ -2045,10 +2050,11 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
 #endif
 #endif
-    if (versym_section) {
+    if (versym_section)
+        put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
+    if (verneed_section) {
         put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
         put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
-        put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
     }
     s = find_section_create (s1, ".preinit_array", 0);
     if (s && s->data_offset) {
