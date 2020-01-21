@@ -1434,7 +1434,6 @@ ST_FUNC void parse_mult_str (CString *astr, const char *msg);
 ST_FUNC void parse_asm_str(CString *astr);
 ST_FUNC void indir(void);
 ST_FUNC void unary(void);
-ST_FUNC void init_prec(void);
 ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_C67

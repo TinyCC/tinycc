@@ -3736,6 +3736,9 @@ void builtin_test(void)
     printf("res = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res = %d\n", __builtin_constant_p(constant_p_var));
     printf("res = %d\n", __builtin_constant_p(100000 / constant_p_var));
+    printf("res = %d\n", __builtin_constant_p(i && 0));
+    printf("res = %d\n", __builtin_constant_p(i && 1));
+    printf("res = %d\n", __builtin_constant_p(i && 0 ? i : 34));
     s = 1;
     ll = 2;
     i = __builtin_choose_expr (1 != 0, ll, s);

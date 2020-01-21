@@ -67,7 +67,7 @@ static int gind(void) { CODE_ON(); return ind; }
 
 /* Set 'nocode_wanted' after unconditional jumps */
 static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
-static int gjmp_acs(int t) { if (!nocode_wanted) {t = gjmp(t); CODE_OFF(); } return t; }
+static int gjmp_acs(int t) { t = gjmp(t); CODE_OFF(); return t; }
 
 /* These are #undef'd at the end of this file */
 #define gjmp_addr gjmp_addr_acs
@@ -123,6 +123,11 @@ static struct scope {
 } *cur_scope, *loop_scope, *root_scope;
 
 /********************************************************/
+#if 1
+#define precedence_parser
+static void init_prec(void);
+#endif
+/********************************************************/
 #ifndef CONFIG_TCC_ASM
 ST_FUNC void asm_instr(void)
 {
@@ -135,7 +140,6 @@ ST_FUNC void asm_global_instr(void)
 #endif
 
 /* ------------------------------------------------------------------------- */
-
 static void gen_cast(CType *type);
 static void gen_cast_s(int t);
 static inline CType *pointed_type(CType *type);
@@ -455,6 +459,9 @@ ST_FUNC void tccgen_init(TCCState *s1)
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
     func_old_type.ref->f.func_call = FUNC_CDECL;
     func_old_type.ref->f.func_type = FUNC_OLD;
+#ifdef precedence_parser
+    init_prec();
+#endif
 }
 
 ST_FUNC int tccgen_compile(TCCState *s1)
@@ -877,7 +884,7 @@ static void vcheck_cmp(void)
        again, so that the VT_CMP/VT_JMP value will be in vtop
        when code is unsuppressed again. */
 
-    if (vtop->r == VT_CMP && !nocode_wanted && vtop->cmp_op > 1)
+    if (vtop->r == VT_CMP && !nocode_wanted)
         gv(RC_INT);
 }
 
@@ -1040,14 +1047,11 @@ ST_FUNC void vset_VT_CMP(int op)
 static void vset_VT_JMP(void)
 {
     int op = vtop->cmp_op;
+
     if (vtop->jtrue || vtop->jfalse) {
         /* we need to jump to 'mov $0,%R' or 'mov $1,%R' */
         int inv = op & (op < 2); /* small optimization */
-        int t = gvtst(inv, 0);
-        if (t) /* in case gvtst only needed to do a gsym */
-          vseti(VT_JMP+inv, t);
-        else
-          vpushi(inv);
+        vseti(VT_JMP+inv, gvtst(inv, 0));
     } else {
         /* otherwise convert flags (rsp. 0/1) to register */
         vtop->c.i = op;
@@ -1060,18 +1064,14 @@ static void vset_VT_JMP(void)
 static void gvtst_set(int inv, int t)
 {
     int *p;
+
     if (vtop->r != VT_CMP) {
         vpushi(0);
         gen_op(TOK_NE);
-        if (vtop->r == VT_CMP) /* must be VT_CONST otherwise */
-          ;
-        else if (vtop->r == VT_CONST) {
-            if (!t)
-              return;
+        if (vtop->r != VT_CMP) /* must be VT_CONST then */
             vset_VT_CMP(vtop->c.i != 0);
-        } else
-          tcc_error("ICE");
     }
+
     p = inv ? &vtop->jfalse : &vtop->jtrue;
     *p = gjmp_append(*p, t);
 }
@@ -1082,20 +1082,16 @@ static void gvtst_set(int inv, int t)
 static int gvtst(int inv, int t)
 {
     int op, x, u;
+
     gvtst_set(inv, t);
-    if (vtop->r != VT_CMP) {
-        t = u = x = 0;
-        op = vtop->c.i;
-    } else {
-        t = vtop->jtrue, u = vtop->jfalse;
-        if (inv)
-          x = u, u = t, t = x;
-        op = vtop->cmp_op;
-    }
+    t = vtop->jtrue, u = vtop->jfalse;
+    if (inv)
+        x = u, u = t, t = x;
+    op = vtop->cmp_op;
 
     /* jump to the wanted target */
     if (op > 1)
-        t = gjmp_cond(op ^ inv, t), op = inv;//, op = 1;
+        t = gjmp_cond(op ^ inv, t);
     else if (op != inv)
         t = gjmp(t);
     /* resolve complementary jumps to here */
@@ -5690,21 +5686,119 @@ special_math_val:
     }
 }
 
-/* Assuming vtop is a value used in a conditional context
-   (i.e. compared with zero) return 0 if it's false, 1 if
-   true and -1 if it can't be statically determined.  */
-static int condition_3way(void)
+#ifndef precedence_parser /* original top-down parser */
+
+static void expr_prod(void)
 {
-    int c = -1;
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
-	(!(vtop->r & VT_SYM) || !vtop->sym->a.weak)) {
-	vdup();
-        gen_cast_s(VT_BOOL);
-	c = vtop->c.i;
-	vpop();
+    int t;
+
+    unary();
+    while ((t = tok) == '*' || t == '/' || t == '%') {
+        next();
+        unary();
+        gen_op(t);
     }
-    return c;
 }
+
+static void expr_sum(void)
+{
+    int t;
+
+    expr_prod();
+    while ((t = tok) == '+' || t == '-') {
+        next();
+        expr_prod();
+        gen_op(t);
+    }
+}
+
+static void expr_shift(void)
+{
+    int t;
+
+    expr_sum();
+    while ((t = tok) == TOK_SHL || t == TOK_SAR) {
+        next();
+        expr_sum();
+        gen_op(t);
+    }
+}
+
+static void expr_cmp(void)
+{
+    int t;
+
+    expr_shift();
+    while (((t = tok) >= TOK_ULE && t <= TOK_GT) ||
+           t == TOK_ULT || t == TOK_UGE) {
+        next();
+        expr_shift();
+        gen_op(t);
+    }
+}
+
+static void expr_cmpeq(void)
+{
+    int t;
+
+    expr_cmp();
+    while ((t = tok) == TOK_EQ || t == TOK_NE) {
+        next();
+        expr_cmp();
+        gen_op(t);
+    }
+}
+
+static void expr_and(void)
+{
+    expr_cmpeq();
+    while (tok == '&') {
+        next();
+        expr_cmpeq();
+        gen_op('&');
+    }
+}
+
+static void expr_xor(void)
+{
+    expr_and();
+    while (tok == '^') {
+        next();
+        expr_and();
+        gen_op('^');
+    }
+}
+
+static void expr_or(void)
+{
+    expr_xor();
+    while (tok == '|') {
+        next();
+        expr_xor();
+        gen_op('|');
+    }
+}
+
+static void expr_landor(int op);
+
+static void expr_land(void)
+{
+    expr_or();
+    if (tok == TOK_LAND)
+        expr_landor(tok);
+}
+
+static void expr_lor(void)
+{
+    expr_land();
+    if (tok == TOK_LOR)
+        expr_landor(tok);
+}
+
+# define expr_landor_next(op) op == TOK_LAND ? expr_or() : expr_land()
+#else /* defined precedence_parser */
+# define expr_landor_next(op) unary(), expr_infix(precedence(op) + 1)
+# define expr_lor() unary(), expr_infix(1)
 
 static int precedence(int tok)
 {
@@ -5725,44 +5819,23 @@ static int precedence(int tok)
 	    return 0;
     }
 }
-
 static unsigned char prec[256];
-ST_FUNC void init_prec(void)
+static void init_prec(void)
 {
     int i;
     for (i = 0; i < 256; i++)
 	prec[i] = precedence(i);
 }
-
 #define precedence(i) ((unsigned)i < 256 ? prec[i] : 0)
 
-static void expr_infix(int p);
-static void expr_landor(int p, int e_op, int i)
-{
-    int t = 0, f = 0;
-    save_regs(1);
-    do {
-        if (!f && condition_3way() == !i)
-            nocode_wanted++, f = 1;
-        t = gvtst(i, t);
-        next();
-        unary();
-        expr_infix(p);
-    } while (tok == e_op);
-    if (f) {
-        vpop();
-        vpushi(i ^ f);
-    }
-    gvtst_set(i, t);
-    nocode_wanted -= f;
-}
+static void expr_landor(int op);
 
 static void expr_infix(int p)
 {
     int t = tok, p2;
     while ((p2 = precedence(t)) >= p) {
         if (t == TOK_LOR || t == TOK_LAND) {
-            expr_landor(p2 + 1, t, t == TOK_LAND);
+            expr_landor(t);
         } else {
             next();
             unary();
@@ -5771,6 +5844,51 @@ static void expr_infix(int p)
             gen_op(t);
         }
         t = tok;
+    }
+}
+#endif
+
+/* Assuming vtop is a value used in a conditional context
+   (i.e. compared with zero) return 0 if it's false, 1 if
+   true and -1 if it can't be statically determined.  */
+static int condition_3way(void)
+{
+    int c = -1;
+    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	(!(vtop->r & VT_SYM) || !vtop->sym->a.weak)) {
+	vdup();
+        gen_cast_s(VT_BOOL);
+	c = vtop->c.i;
+	vpop();
+    }
+    return c;
+}
+
+static void expr_landor(int op)
+{
+    int t = 0, cc = 1, f = 0, i = op == TOK_LAND, c;
+    for(;;) {
+        c = f ? i : condition_3way();
+        if (c < 0)
+            save_regs(1), cc = 0;
+        else if (c != i)
+            nocode_wanted++, f = 1;
+        if (tok != op)
+            break;
+        if (c < 0)
+            t = gvtst(i, t);
+        else
+            vpop();
+        next();
+        expr_landor_next(op);
+    }
+    if (cc || f) {
+        vpop();
+        vpushi(i ^ f);
+        gsym(t);
+        nocode_wanted -= f;
+    } else {
+        gvtst_set(i, t);
     }
 }
 
@@ -5791,11 +5909,11 @@ static void expr_cond(void)
     CType type, type1, type2;
     int ncw_prev;
 
-    unary();
-    expr_infix(1);
+    expr_lor();
     if (tok == '?') {
         next();
 	c = condition_3way();
+        ncw_prev = nocode_wanted;
         g = (tok == ':' && gnu_ext);
         tt = 0;
         if (!g) {
@@ -5813,7 +5931,6 @@ static void expr_cond(void)
             tt = gvtst(0, 0);
         }
 
-        ncw_prev = nocode_wanted;
         if (1) {
             if (c == 0)
                 nocode_wanted++;
@@ -6013,12 +6130,11 @@ static void expr_eq(void)
     int t;
     
     expr_cond();
-    if (tok == '=' ||
-        (tok >= TOK_A_MOD && tok <= TOK_A_DIV) ||
-        tok == TOK_A_XOR || tok == TOK_A_OR ||
-        tok == TOK_A_SHL || tok == TOK_A_SAR) {
+    if ((t = tok) == '='
+        || (t >= TOK_A_MOD && t <= TOK_A_DIV)
+        || t == TOK_A_XOR || t == TOK_A_OR
+        || t == TOK_A_SHL || t == TOK_A_SAR) {
         test_lvalue();
-        t = tok;
         next();
         if (t == '=') {
             expr_eq();

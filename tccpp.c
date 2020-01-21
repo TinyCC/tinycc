@@ -3679,8 +3679,6 @@ ST_FUNC void tccpp_new(TCCState *s)
     define_push(TOK___DATE__, MACRO_OBJ, NULL, NULL);
     define_push(TOK___TIME__, MACRO_OBJ, NULL, NULL);
     define_push(TOK___COUNTER__, MACRO_OBJ, NULL, NULL);
-
-    init_prec();
 }
 
 ST_FUNC void tccpp_delete(TCCState *s)
