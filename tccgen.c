@@ -3664,7 +3664,13 @@ redo:
 	      tcc_warning("implicit declaration of function '%s'",
 			  get_tok_str(tok, &tokc));
 	      s = external_global_sym(tok, &func_old_type);
-	    }
+            }
+            else if ( (s->type.t & VT_BTYPE) == VT_FUNC ) {
+                ad->cleanup_func = s;
+            }
+            else {
+                tcc_error("'%s' is not declared as function", get_tok_str(tok, &tokc));
+            }
 	    ad->cleanup_func = s;
 	    next();
             skip(')');
