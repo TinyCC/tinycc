@@ -4306,7 +4306,10 @@ do_decl:
             }
             skip('}');
 	    parse_attribute(&ad);
-	    struct_layout(type, &ad);
+            if ( ad.cleanup_func ) {
+                tcc_warning("attribute '__cleanup__' ignored on type");
+            }
+            struct_layout(type, &ad);
         }
     }
 }
