@@ -1,6 +1,13 @@
-#include <stdio.h>
+extern int printf(const char*, ...);
 
-struct fred
+struct fred;
+
+void fred$(struct fred* this)
+{
+    printf("~fred()\n");
+}
+
+struct __attribute__((__cleanup__(fred$))) fred
 {
    int boris;
    int natasha;
@@ -8,7 +15,7 @@ struct fred
 
 int main()
 {
-   struct fred bloggs;
+    struct fred  __attribute__((__cleanup__(fred$))) bloggs;
 
    bloggs.boris = 12;
    bloggs.natasha = 34;
