@@ -53,7 +53,7 @@ for %%f in (*tcc.exe libtcc.dll lib\*.a) do call :del_file %%f
 for %%f in (..\config.h ..\config.texi) do call :del_file %%f
 for %%f in (include\*.h) do @if exist ..\%%f call :del_file %%f
 for %%f in (include\tcclib.h examples\libtcc_test.c) do call :del_file %%f
-for %%f in (*.o *.obj *.def *.pdb *.lib *.exp *.ilk) do call :del_file %%f
+for %%f in (lib\*.o *.o *.obj *.def *.pdb *.lib *.exp *.ilk) do call :del_file %%f
 %LOG% removing directories:
 for %%f in (doc libtcc) do call :del_dir %%f
 %LOG% done.
