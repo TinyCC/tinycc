@@ -1,3 +1,4 @@
+33_ternary_op.c:26: warning: pointer/integer mismatch
 0
 1
 4
@@ -8,3 +9,4 @@
 21
 24
 27
+152

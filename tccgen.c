@@ -3312,12 +3312,25 @@ static void type_to_str(char *buf, int buf_size,
  no_var: ;
 }
 
-static void cast_error(CType *st, CType *dt)
+static void type_incompatibility_error(CType* st, CType* dt, const char* fmt)
 {
     char buf1[256], buf2[256];
     type_to_str(buf1, sizeof(buf1), st, NULL);
     type_to_str(buf2, sizeof(buf2), dt, NULL);
-    tcc_error("cannot convert '%s' to '%s'", buf1, buf2);
+    tcc_error(fmt, buf1, buf2);
+}
+
+static void type_incompatibility_warning(CType* st, CType* dt, const char* fmt)
+{
+    char buf1[256], buf2[256];
+    type_to_str(buf1, sizeof(buf1), st, NULL);
+    type_to_str(buf2, sizeof(buf2), dt, NULL);
+    tcc_warning(fmt, buf1, buf2);
+}
+
+static void cast_error(CType *st, CType *dt)
+{
+    type_incompatibility_error(st, dt, "cannot convert '%s' to '%s'");
 }
 
 /* verify type compatibility to store vtop in 'dt' type */
@@ -5523,8 +5536,11 @@ special_math_val:
             test_lvalue();
             gaddrof();
             /* expect pointer on structure */
-            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
-                expect("struct or union");
+            if ( (vtop->type.t & VT_BTYPE) != VT_STRUCT ) {
+                char got[256];
+                type_to_str(got, sizeof got, &vtop->type, NULL);
+                tcc_error("expected struct or union but not '%s'", got);
+            }
             if (tok == TOK_CDOUBLE)
                 expect("field name");
             next();
@@ -6001,7 +6017,13 @@ static void expr_cond(void)
             /* cast operands to correct type according to ISOC rules */
             if (bt1 == VT_VOID || bt2 == VT_VOID) {
                 type.t = VT_VOID; /* NOTE: as an extension, we accept void on only one side */
-            } else if (is_float(bt1) || is_float(bt2)) {
+            } else if ( bt1 == VT_BOOL && bt2 == VT_BOOL ) {
+                type = type1;
+            } else if ( is_float(bt1) && is_integer_btype(bt2) ) {
+                type = type1;
+            } else if ( is_integer_btype(bt1) && is_float(bt2) ) {
+                type = type2;
+            } else if (is_float(bt1) && is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
                     type.t = VT_LDOUBLE;
 
@@ -6010,56 +6032,65 @@ static void expr_cond(void)
                 } else {
                     type.t = VT_FLOAT;
                 }
-            } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
+            } else if ((bt1 == VT_LLONG && is_integer_btype(bt2)) ||
+                       (bt2 == VT_LLONG && is_integer_btype(bt1))) {
                 /* cast to biggest op */
                 type.t = VT_LLONG | VT_LONG;
-                if (bt1 == VT_LLONG)
+                if ( bt1 == VT_LLONG )
                     type.t &= t1;
-                if (bt2 == VT_LLONG)
+                if ( bt2 == VT_LLONG )
                     type.t &= t2;
                 /* convert to unsigned if it does not fit in a long long */
                 if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
                     (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
-            } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
-                /* http://port70.net/~nsz/c/c99/n1256.html#6.5.15p6 */
-                /* If one is a null ptr constant the result type
-                   is the other.  */
-                if (is_null_pointer (vtop)) type = type1;
-                else if (is_null_pointer (&sv)) type = type2;
-                else if (bt1 != bt2)
-		    tcc_error("incompatible types in conditional expressions");
-		else {
-		    CType *pt1 = pointed_type(&type1);
-		    CType *pt2 = pointed_type(&type2);
-                    int pbt1 = pt1->t & VT_BTYPE;
-                    int pbt2 = pt2->t & VT_BTYPE;
-		    int newquals, copied = 0;
-		    /* pointers to void get preferred, otherwise the
-		       pointed to types minus qualifs should be compatible */
-                    type = (pbt1 == VT_VOID) ? type1 : type2;
-                    if (pbt1 != VT_VOID && pbt2 != VT_VOID) {
-                        if(!compare_types(pt1, pt2, 1/*unqualif*/))
-                            tcc_warning("pointer type mismatch in conditional expression\n");
-                    }
-                    /* combine qualifs */
-		    newquals = ((pt1->t | pt2->t) & (VT_CONSTANT | VT_VOLATILE));
-		    if ((~pointed_type(&type)->t & (VT_CONSTANT | VT_VOLATILE))
+            }
+            /* http://port70.net/~nsz/c/c99/n1256.html#6.5.15p6 */
+            /* If one is a null ptr constant the result type
+                is the other.  */
+            else if ( bt1 == VT_PTR && is_null_pointer(vtop) ) {
+                type = type1;
+            } else if ( is_null_pointer(&sv) && bt2 == VT_PTR ) {
+                type = type2;
+            }  else if ( bt1 == VT_PTR && is_integer_btype(bt2) ) {
+                type = type1;
+                tcc_warning("pointer/integer mismatch");
+            } else if ( is_integer_btype(bt1) && bt2 == VT_PTR ) {
+                type = type2;
+                tcc_warning("pointer/integer mismatch");
+            } else if ( bt1==VT_PTR && bt2 == VT_PTR ) {
+		CType *pt1 = pointed_type(&type1);
+		CType *pt2 = pointed_type(&type2);
+                int pbt1 = pt1->t & VT_BTYPE;
+                int pbt2 = pt2->t & VT_BTYPE;
+		int newquals, copied = 0;
+		/* pointers to void get preferred, otherwise the
+		   pointed to types minus qualifs should be compatible */
+                type = (pbt1 == VT_VOID) ? type1 : type2;
+                if (pbt1 != VT_VOID && pbt2 != VT_VOID && ! compare_types(pt1, pt2, 1/*unqualif*/) ) {
+                    type_incompatibility_warning(&type1, &type2, "incompatible pointer types");
+                    // result is void*
+                    type.t = VT_VOID;
+                    mk_pointer(&type);
+                }
+                /* combine qualifs */
+		newquals = ((pt1->t | pt2->t) & (VT_CONSTANT | VT_VOLATILE));
+		if ((~pointed_type(&type)->t & (VT_CONSTANT | VT_VOLATILE))
 			& newquals)
-		      {
+		{
 			/* copy the pointer target symbol */
 			type.ref = sym_push(SYM_FIELD, &type.ref->type,
 					    0, type.ref->c);
 			copied = 1;
 			pointed_type(&type)->t |= newquals;
-		      }
-                    /* pointers to incomplete arrays get converted to
-		       pointers to completed ones if possible */
-		    if (pt1->t & VT_ARRAY
+		}
+                /* pointers to incomplete arrays get converted to
+		   pointers to completed ones if possible */
+		if (pt1->t & VT_ARRAY
 			&& pt2->t & VT_ARRAY
 			&& pointed_type(&type)->ref->c < 0
 			&& (pt1->ref->c > 0 || pt2->ref->c > 0))
-		      {
+		{
 			if (!copied)
 			  type.ref = sym_push(SYM_FIELD, &type.ref->type,
 					      0, type.ref->c);
@@ -6068,19 +6099,25 @@ static void expr_cond(void)
 				     0, pointed_type(&type)->ref->c);
                         pointed_type(&type)->ref->c =
 			    0 < pt1->ref->c ? pt1->ref->c : pt2->ref->c;
-		      }
+		}
+            } else if (bt1 == VT_STRUCT && bt2 == VT_STRUCT) {
+                /* test structure compatibility */
+                if ( type1.ref != type2.ref ) {
+                    type_incompatibility_error(&type1, &type2,"different struct/union types '%s' vs. '%s'");
+                } else {
+                    type = bt1 == VT_STRUCT ? type1 : type2;
                 }
-            } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
-                /* XXX: test structure compatibility */
-                type = bt1 == VT_STRUCT ? type1 : type2;
-            } else {
+            } else if ( is_integer_btype(bt1) && is_integer_btype(bt2) ) {
                 /* integer operations */
                 type.t = VT_INT | (VT_LONG & (t1 | t2));
-                /* convert to unsigned if it does not fit in an integer */
+                /* convert to unsigned if one of both is unsigned */
                 if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
                     (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
                     type.t |= VT_UNSIGNED;
+            } else {
+                type_incompatibility_error(&type1, &type2, "type '%s' is incompatible to '%s'");
             }
+
             /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
                that `(expr ? a : b).mem` does not error  with "lvalue expected" */
             islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
