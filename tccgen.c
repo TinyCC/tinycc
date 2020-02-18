@@ -3678,7 +3678,7 @@ redo:
 			  get_tok_str(tok, &tokc));
 	      s = external_global_sym(tok, &func_old_type);
             }
-            else if ( (s->type.t & VT_BTYPE) == VT_FUNC ) {
+            else if ((s->type.t & VT_BTYPE) == VT_FUNC) {
                 ad->cleanup_func = s;
             }
             else {
@@ -4319,7 +4319,7 @@ do_decl:
             }
             skip('}');
 	    parse_attribute(&ad);
-            if ( ad.cleanup_func ) {
+            if (ad.cleanup_func) {
                 tcc_warning("attribute '__cleanup__' ignored on type");
             }
             struct_layout(type, &ad);
@@ -5536,7 +5536,7 @@ special_math_val:
             test_lvalue();
             gaddrof();
             /* expect pointer on structure */
-            if ( (vtop->type.t & VT_BTYPE) != VT_STRUCT ) {
+            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT) {
                 char got[256];
                 type_to_str(got, sizeof got, &vtop->type, NULL);
                 tcc_error("expected struct or union but not '%s'", got);
@@ -6017,11 +6017,11 @@ static void expr_cond(void)
             /* cast operands to correct type according to ISOC rules */
             if (bt1 == VT_VOID || bt2 == VT_VOID) {
                 type.t = VT_VOID; /* NOTE: as an extension, we accept void on only one side */
-            } else if ( bt1 == VT_BOOL && bt2 == VT_BOOL ) {
+            } else if (bt1 == VT_BOOL && bt2 == VT_BOOL) {
                 type = type1;
-            } else if ( is_float(bt1) && is_integer_btype(bt2) ) {
+            } else if (is_float(bt1) && is_integer_btype(bt2)) {
                 type = type1;
-            } else if ( is_integer_btype(bt1) && is_float(bt2) ) {
+            } else if (is_integer_btype(bt1) && is_float(bt2)) {
                 type = type2;
             } else if (is_float(bt1) && is_float(bt2)) {
                 if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
@@ -6036,9 +6036,9 @@ static void expr_cond(void)
                        (bt2 == VT_LLONG && is_integer_btype(bt1))) {
                 /* cast to biggest op */
                 type.t = VT_LLONG | VT_LONG;
-                if ( bt1 == VT_LLONG )
+                if (bt1 == VT_LLONG)
                     type.t &= t1;
-                if ( bt2 == VT_LLONG )
+                if (bt2 == VT_LLONG)
                     type.t &= t2;
                 /* convert to unsigned if it does not fit in a long long */
                 if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
@@ -6048,17 +6048,17 @@ static void expr_cond(void)
             /* http://port70.net/~nsz/c/c99/n1256.html#6.5.15p6 */
             /* If one is a null ptr constant the result type
                 is the other.  */
-            else if ( bt1 == VT_PTR && is_null_pointer(vtop) ) {
+            else if (bt1 == VT_PTR && is_null_pointer(vtop)) {
                 type = type1;
-            } else if ( is_null_pointer(&sv) && bt2 == VT_PTR ) {
+            } else if (is_null_pointer(&sv) && bt2 == VT_PTR) {
                 type = type2;
-            }  else if ( bt1 == VT_PTR && is_integer_btype(bt2) ) {
+            }  else if (bt1 == VT_PTR && is_integer_btype(bt2)) {
                 type = type1;
                 tcc_warning("pointer/integer mismatch");
-            } else if ( is_integer_btype(bt1) && bt2 == VT_PTR ) {
+            } else if (is_integer_btype(bt1) && bt2 == VT_PTR) {
                 type = type2;
                 tcc_warning("pointer/integer mismatch");
-            } else if ( bt1==VT_PTR && bt2 == VT_PTR ) {
+            } else if (bt1==VT_PTR && bt2 == VT_PTR) {
 		CType *pt1 = pointed_type(&type1);
 		CType *pt2 = pointed_type(&type2);
                 int pbt1 = pt1->t & VT_BTYPE;
@@ -6067,7 +6067,7 @@ static void expr_cond(void)
 		/* pointers to void get preferred, otherwise the
 		   pointed to types minus qualifs should be compatible */
                 type = (pbt1 == VT_VOID) ? type1 : type2;
-                if (pbt1 != VT_VOID && pbt2 != VT_VOID && ! compare_types(pt1, pt2, 1/*unqualif*/) ) {
+                if (pbt1 != VT_VOID && pbt2 != VT_VOID && ! compare_types(pt1, pt2, 1/*unqualif*/)) {
                     type_incompatibility_warning(&type1, &type2, "incompatible pointer types");
                     // result is void*
                     type.t = VT_VOID;
@@ -6102,12 +6102,12 @@ static void expr_cond(void)
 		}
             } else if (bt1 == VT_STRUCT && bt2 == VT_STRUCT) {
                 /* test structure compatibility */
-                if ( type1.ref != type2.ref ) {
+                if (type1.ref != type2.ref) {
                     type_incompatibility_error(&type1, &type2,"different struct/union types '%s' vs. '%s'");
                 } else {
                     type = bt1 == VT_STRUCT ? type1 : type2;
                 }
-            } else if ( is_integer_btype(bt1) && is_integer_btype(bt2) ) {
+            } else if (is_integer_btype(bt1) && is_integer_btype(bt2)) {
                 /* integer operations */
                 type.t = VT_INT | (VT_LONG & (t1 | t2));
                 /* convert to unsigned if one of both is unsigned */
