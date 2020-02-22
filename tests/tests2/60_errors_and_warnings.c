@@ -309,4 +309,14 @@ struct yyy y, *yy;
 struct zzz { int z; } z, *zz;
 
 /******************************************************************/
+#elif defined test_long_double_type_for_win32
+
+int main()
+{
+    double *a = 0;
+    long double *b = a;
+    int n = _Generic(*a, double:0, long double:1);
+}
+
+/******************************************************************/
 #endif

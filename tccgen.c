@@ -3244,7 +3244,8 @@ static void type_to_str(char *buf, int buf_size,
         goto add_tstr;
     case VT_DOUBLE:
         tstr = "double";
-        goto add_tstr;
+        if (!(t & VT_LONG))
+            goto add_tstr;
     case VT_LDOUBLE:
         tstr = "long double";
     add_tstr:
@@ -4589,7 +4590,7 @@ the_end:
         t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
 #ifdef TCC_TARGET_PE
     if (bt == VT_LDOUBLE)
-        t = (t & ~(VT_BTYPE|VT_LONG)) | VT_DOUBLE;
+        t = (t & ~(VT_BTYPE|VT_LONG)) | (VT_DOUBLE|VT_LONG);
 #endif
     type->t = t;
     return type_found;

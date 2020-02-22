@@ -147,3 +147,6 @@ bar  : 3 ; 3
 60_errors_and_warnings.c:286: error: incompatible types for redefinition of 'xxx'
 
 [test_var_4]
+
+[test_long_double_type_for_win32]
+60_errors_and_warnings.c:317: warning: assignment from incompatible pointer type
