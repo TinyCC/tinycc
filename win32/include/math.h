@@ -496,7 +496,7 @@ extern "C" {
     __asm__ (
       "fldl    %1\n"
       "frndint   \n"
-      "fstl    %0\n" : "=m" (retval) : "m" (x));
+      "fstpl    %0\n" : "=m" (retval) : "m" (x));
     return retval;
   }
 
@@ -506,18 +506,23 @@ extern "C" {
     __asm__ (
       "flds    %1\n"
       "frndint   \n"
-      "fsts    %0\n" : "=m" (retval) : "m" (x));
+      "fstps    %0\n" : "=m" (retval) : "m" (x));
     return retval;
   }
 
   __CRT_INLINE long double __cdecl rintl (long double x)
   {
+#ifdef _WIN32
+    //  on win32 'long double' is double internally
+    return rint(x);
+#else
     long double retval;
     __asm__ (
       "fldt    %1\n"
       "frndint   \n"
-      "fstt    %0\n" : "=m" (retval) : "m" (x));
+      "fstpt    %0\n" : "=m" (retval) : "m" (x));
     return retval;
+#endif
   }
 
   /* 7.12.9.5 */
@@ -591,7 +596,7 @@ extern "C" {
     __asm__ ("fldcw %0;" : : "m" (tmp_cw));
     __asm__ ("fldl  %1;"
              "frndint;"
-             "fstl  %0;" : "=m" (retval)  : "m" (_x)); /* round towards zero */
+             "fstpl  %0;" : "=m" (retval)  : "m" (_x)); /* round towards zero */
     __asm__ ("fldcw %0;" : : "m" (saved_cw) ); /* restore saved control word */
     return retval;
   }
