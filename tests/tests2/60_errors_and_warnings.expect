@@ -89,24 +89,27 @@
 60_errors_and_warnings.c:181: error: identifier expected
 
 [test_static_assert]
-60_errors_and_warnings.c:187: error: "ONE is not 1"
+60_errors_and_warnings.c:187: error: ONE is not 1
+
+[test_static_assert_2]
+60_errors_and_warnings.c:191: error: 0 is 0
 
 [test_void_array]
-60_errors_and_warnings.c:190: error: declaration of an array of incomplete type elements
+60_errors_and_warnings.c:194: error: declaration of an array of incomplete type elements
 
 [test_incomplete_enum_array]
-60_errors_and_warnings.c:193: error: declaration of an array of incomplete type elements
+60_errors_and_warnings.c:197: error: declaration of an array of incomplete type elements
 
 [test_incomplete_struct_array]
-60_errors_and_warnings.c:196: error: declaration of an array of incomplete type elements
+60_errors_and_warnings.c:200: error: declaration of an array of incomplete type elements
 
 [test_const_fun_array]
-60_errors_and_warnings.c:200: error: declaration of an array of functions
+60_errors_and_warnings.c:204: error: declaration of an array of functions
 
 [test_incomplete_array_array]
 
 [test_extern_array]
-60_errors_and_warnings.c:216: error: incompatible types for redefinition of 'x'
+60_errors_and_warnings.c:220: error: incompatible types for redefinition of 'x'
 
 [test_func_1]
 hello: a = 123
@@ -115,17 +118,17 @@ hello: a = 123
 hello: a = 123
 
 [test_func_3]
-60_errors_and_warnings.c:246: warning: static storage ignored for redefinition of 'hello'
+60_errors_and_warnings.c:250: warning: static storage ignored for redefinition of 'hello'
 hello: a = 123
 
 [test_func_4]
 hello: a = 123
 
 [test_func_5]
-60_errors_and_warnings.c:246: error: incompatible types for redefinition of 'hello'
+60_errors_and_warnings.c:250: error: incompatible types for redefinition of 'hello'
 
 [test_func_6]
-60_errors_and_warnings.c:234: error: function without file scope cannot be static
+60_errors_and_warnings.c:238: error: function without file scope cannot be static
 
 [test_var_1]
 main : 1 ; 1
@@ -138,6 +141,6 @@ main : 2 ; 2
 bar  : 3 ; 3
 
 [test_var_3]
-60_errors_and_warnings.c:278: error: incompatible types for redefinition of 'xxx'
+60_errors_and_warnings.c:282: error: incompatible types for redefinition of 'xxx'
 
 [test_var_4]
