@@ -7818,12 +7818,21 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 	    next();
 	    skip('(');
 	    c = expr_const();
+
+	    if (tok == ')') {
+		if (!c)
+		    tcc_error("_Static_assert fail");
+		next();
+		goto static_assert_out;
+	    }
+
 	    skip(',');
 	    parse_mult_str(&error_str, "string constant");
 	    if (c == 0)
 		tcc_error("%s", error_str.data);
 	    cstr_free(&error_str);
 	    skip(')');
+	  static_assert_out:
             skip(';');
 	    continue;
 	}

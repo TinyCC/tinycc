@@ -190,6 +190,10 @@ void * _Alignas(16) p1;
  _Static_assert(1, "1"" is 1");
  _Static_assert(0, "0"" is 0");
 
+#elif defined test_static_assert_c2x
+ _Static_assert(1);
+ _Static_assert(0);
+
 #elif defined test_void_array
  void t[3];
 
