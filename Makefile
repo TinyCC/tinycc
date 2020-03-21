@@ -47,7 +47,7 @@ else
  ifdef CONFIG_OSX
   NATIVE_TARGET = $(ARCH)-osx
   LDFLAGS += -flat_namespace -undefined warning
-  export MACOSX_DEPLOYMENT_TARGET := 10.2
+  export MACOSX_DEPLOYMENT_TARGET := 10.4
  endif
 endif
 
@@ -226,6 +226,9 @@ libtcc.so: $(LIBTCC_OBJ)
 libtcc.so: CFLAGS+=-fPIC
 libtcc.so: LDFLAGS+=-fPIC
 
+libtcc.dylib:
+	$(CC) -shared -o libtcc.dylib libtcc.o tccpp.o tccgen.o tccelf.o tccasm.o tccrun.o x86_64-gen.o x86_64-link.o i386-asm.o  -flat_namespace
+
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
@@ -366,7 +369,7 @@ testspp.%:
 
 clean:
 	rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
-	rm -f  *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS
+	rm -f  *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS *.dylib
 	@$(MAKE) -C lib $@
 	@$(MAKE) -C tests $@
 
