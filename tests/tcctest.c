@@ -2679,6 +2679,18 @@ void manyarg_test(void)
            42.0, 43.0, ld);
 }
 
+void*
+va_arg_with_struct_ptr(va_list ap) {
+        /*
+         * This was a BUG identified with FFTW-3.3.8 on arm64.
+         * The test case only checks it compiles on all supported
+         * architectures. This function is not currently called.
+         */
+        struct X { int _x; };
+        struct X *x = va_arg(ap, struct X *);
+        return x;
+}
+
 void vprintf1(const char *fmt, ...)
 {
     va_list ap, aq;
