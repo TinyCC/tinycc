@@ -230,6 +230,17 @@ void ret(void)
     printf("%.1Lf %.1Lf\n", fr_hfa34().a, fr_hfa34().d);
 }
 
+void*
+va_arg_with_struct_ptr(va_list ap) {
+        /*
+         * This was a BUG identified with FFTW-3.3.8 on arm64.
+         * The test case only checks it compiles.
+         */
+        struct X { int _x; };
+        struct X *x = va_arg(ap, struct X *);
+        return x;
+}
+
 int match(const char **s, const char *f)
 {
     const char *p = *s;
