@@ -205,8 +205,21 @@ extern "C" {
   __CRT_INLINE float frexpf(float _X,int *_Y) { return ((float)frexp((double)_X,_Y)); }
 
 #if !defined (__ia64__)
-  __CRT_INLINE float fabsf(float x) { return (float) fabs(x); }
-  __CRT_INLINE float ldexpf(float x, int expn) { return (float) ldexp(x, expn); }
+  __CRT_INLINE float __cdecl fabsf (float x)
+  {
+#ifdef _WIN64
+    *((int *) &x) &= 0x7fffffff;
+    return x;
+#else
+    float res;
+    __asm__ ("fabs;" : "=t" (res) : "0" (x));
+    return res;
+#endif	
+  }
+
+  __CRT_INLINE float __cdecl ldexpf (float x, int expn) { return (float) ldexp (x, expn); }
+#endif
+#if defined (_WIN32) && !defined(_WIN64)
   __CRT_INLINE float acosf(float x) { return (float) acos(x); }
   __CRT_INLINE float asinf(float x) { return (float) asin(x); }
   __CRT_INLINE float atanf(float x) { return (float) atan(x); }
@@ -377,6 +390,32 @@ extern "C" {
   extern double __cdecl logb (double);
   extern float __cdecl logbf (float);
   extern long double __cdecl logbl (long double);
+#ifndef _WIN32
+  __CRT_INLINE double __cdecl logb (double x)
+  {
+    double res;
+    __asm__ ("fxtract\n\t"
+      "fstp	%%st" : "=t" (res) : "0" (x));
+    return res;
+  }
+
+  __CRT_INLINE float __cdecl logbf (float x)
+  {
+    float res;
+    __asm__ ("fxtract\n\t"
+      "fstp	%%st" : "=t" (res) : "0" (x));
+    return res;
+  }
+
+  __CRT_INLINE long double __cdecl logbl (long double x)
+  {
+    long double res;
+    __asm__ ("fxtract\n\t"
+      "fstp	%%st" : "=t" (res) : "0" (x));
+    return res;
+  }
+#endif
+
   extern long double __cdecl modfl (long double, long double*);
 
   /* 7.12.6.13 */
