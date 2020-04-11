@@ -36,10 +36,6 @@ else
  DSO_O = dsohandle.o
 endif
 
-ifdef CONFIG_OSX
- XFLAGS += -D_ANSI_SOURCE
-endif
-
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BT_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BT_O)
 ARM_O = libtcc1.o armeabi.o alloca-arm.o armflush.o $(BT_O)

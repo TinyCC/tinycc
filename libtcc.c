@@ -927,6 +927,16 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* Some GCC builtins that are simple to express as macros.  */
     tcc_define_symbol(s, "__builtin_extract_return_addr(x)", "x");
 #endif /* ndef TCC_TARGET_PE */
+#ifdef TCC_TARGET_MACHO
+	/* emulate APPLE-GCC to make libc's headerfiles compile: */
+	tcc_define_symbol(s, "__APPLE__", "1");
+    tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
+    
+    /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
+    tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");
+    tcc_define_symbol(s, "_FORTIFY_SOURCE", "0");
+#endif /* ndef TCC_TARGET_MACHO */
+    tcc_define_symbol(s, "__builtin_va_list", "void *");
     return s;
 }
 
