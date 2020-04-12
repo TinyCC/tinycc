@@ -264,13 +264,13 @@ int main(int argc, char **argv)
     }
 
 #if 1
-    printf("----- libtest : mixed calls  -------\n"), fflush(stdout);
+    printf("mixed calls\n "), fflush(stdout);
     t = getclock_ms();
     state_test();
     printf("\n(%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("----- libtest : threads ------------\n"), fflush(stdout);
+    printf("threads\n "), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_simple, n);
@@ -278,7 +278,7 @@ int main(int argc, char **argv)
     printf("\n(%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("----- libtest : tcc in threads -----\n"), fflush(stdout);
+    printf("tcc in threads\n "), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_complex, n);
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
     printf("\n(%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("----- compilation of tcc -----------\n"), fflush(stdout);
+    printf("compiling tcc 10 times\n"), fflush(stdout);
     t = getclock_ms();
     time_tcc(10, argv[1]);
     printf("(%u ms)\n", (getclock_ms() - t) / 10), fflush(stdout);

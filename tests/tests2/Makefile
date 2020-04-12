@@ -93,7 +93,8 @@ GEN-ALWAYS =
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
 
-all test tests2.all: $(filter-out $(SKIP),$(TESTS)) ;
+all test tests2.all: $(filter-out $(SKIP),$(TESTS))
+	@$(MAKE) clean --no-print-directory -s
 
 %.test: %.c %.expect
 	@echo Test: $*...
@@ -140,5 +141,5 @@ MS-CC = cl
 $(sort $(GEN-ALWAYS) $(UPDATE)) : force
 force:
 
-clean tests2.clean :
+clean :
 	rm -f fred.txt *.output a.exe *.dll *.so *.def $(GEN-ALWAYS)

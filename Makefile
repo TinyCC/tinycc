@@ -8,9 +8,11 @@ ifndef TOP
  INCLUDED = no
 endif
 
-include $(TOP)/config.mak
+ifeq ($(findstring $(MAKECMDGOALS),clean distclean),)
+ include $(TOP)/config.mak
+endif
 
-ifeq (-$(CC)-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-gcc-4--)
+ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
  CFLAGS += -D_FORTIFY_SOURCE=0
 endif
 
@@ -60,6 +62,11 @@ ifdef CONFIG_OSX
  TCCFLAGS += -D_ANSI_SOURCE
 endif
 
+# cross compiler targets to build
+TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
+TCC_X += riscv64
+# TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
+
 CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
 LIBS_P = $(LIBS)
 LDFLAGS_P = $(LDFLAGS)
@@ -86,15 +93,10 @@ ifeq ($(INCLUDED),no)
 # running top Makefile
 
 PROGS = tcc$(EXESUF)
-TCCLIBS = $(LIBTCC1) $(LIBTCC) $(LIBTCCDEF)
+TCCLIBS = $(LIBTCCDEF) $(LIBTCC) $(LIBTCC1)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
-
-# cross compiler targets to build
-TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
-TCC_X += riscv64
-# TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
 
 # cross libtcc1.a targets to build
 LIBTCC1_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince
@@ -109,8 +111,8 @@ cross: $(LIBTCC1_CROSS) $(PROGS_CROSS)
 # build specific cross compiler & lib
 cross-%: %-tcc$(EXESUF) %-libtcc1.a ;
 
-install: ; @$(MAKE) --no-print-directory install$(CFGWIN)
-install-strip: ; @$(MAKE) --no-print-directory install$(CFGWIN) CONFIG_strip=yes
+install: ; @$(MAKE) --no-print-directory  install$(CFGWIN)
+install-strip: ; @$(MAKE) --no-print-directory  install$(CFGWIN) CONFIG_strip=yes
 uninstall: ; @$(MAKE) --no-print-directory uninstall$(CFGWIN)
 
 ifdef CONFIG_cross
@@ -193,35 +195,43 @@ TCC_FILES = $(X)tcc.o $(LIBTCC_OBJ)
 $(TCC_FILES) : DEFINES += -DONE_SOURCE=0
 endif
 
+ifeq ($(CONFIG_strip),no)
+CFLAGS += -g
+LDFLAGS += -g
+else
+CONFIG_strip = yes
+LDFLAGS += -s
+endif
+
 # target specific object rule
 $(X)%.o : %.c $(LIBTCC_INC)
-	$(CC) -o $@ -c $< $(DEFINES) $(CFLAGS)
+	$S$(CC) -o $@ -c $< $(DEFINES) $(CFLAGS)
 
 # additional dependencies
 $(X)tcc.o : tcctools.c
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)
-	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
+	$S$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
 %-tcc$(EXESUF): FORCE
 	@$(MAKE) --no-print-directory $@ CROSS_TARGET=$* ONE_SOURCE=$(or $(ONE_SOURCE),yes)
 
 $(CROSS_TARGET)-tcc$(EXESUF): $(TCC_FILES)
-	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS)
+	$S$(CC) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 # profiling version
 tcc_p$(EXESUF): $($T_FILES)
-	$(CC) -o $@ $< $(DEFINES) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
+	$S$(CC) -o $@ $< $(DEFINES) $(CFLAGS_P) $(LIBS_P) $(LDFLAGS_P)
 
 # static libtcc library
 libtcc.a: $(LIBTCC_OBJ)
-	$(AR) rcs $@ $^
+	$S$(AR) rcs $@ $^
 
 # dynamic libtcc library
 libtcc.so: $(LIBTCC_OBJ)
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
+	$S$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
 
 libtcc.so: CFLAGS+=-fPIC
 libtcc.so: LDFLAGS+=-fPIC
@@ -231,12 +241,12 @@ libtcc.dylib: $(LIBTCC_OBJ)
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$S$(CC) -shared -o $@ $^ $(LDFLAGS)
 libtcc.dll : DEFINES += -DLIBTCC_AS_DLL
 
 # import file for windows libtcc.dll
 libtcc.def : libtcc.dll tcc$(EXESUF)
-	$(XTCC) -impdef $< -o $@
+	$S$(XTCC) -impdef $< -o $@
 XTCC ?= ./tcc$(EXESUF)
 
 # TinyCC runtime libraries
@@ -250,18 +260,22 @@ libtcc1.a : tcc$(EXESUF) FORCE
 .PRECIOUS: %-libtcc1.a
 FORCE:
 
+run-if = $(if $(shell which $1),$S $1 $2)
+S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
+
 # --------------------------------------------------------------------------
 # documentation and man page
 tcc-doc.html: tcc-doc.texi
-	makeinfo --no-split --html --number-sections -o $@ $< || true
-
-tcc.1: tcc-doc.texi
-	$(TOPSRC)/texi2pod.pl $< tcc.pod \
-	&& pod2man --section=1 --center="Tiny C Compiler" --release="$(VERSION)" tcc.pod >tmp.1 \
-	&& mv tmp.1 $@ || rm -f tmp.1
+	$(call run-if,makeinfo,--no-split --html --number-sections -o $@ $<)
 
 tcc-doc.info: tcc-doc.texi
-	makeinfo $< || true
+	$(call run-if,makeinfo,$< || true)
+
+tcc.1 : tcc-doc.pod
+	$(call run-if,pod2man,--section=1 --center="Tiny C Compiler" \
+		--release="$(VERSION)" $< >$@ && rm -f $<)
+%.pod : %.texi
+	$(call run-if,perl,$(TOPSRC)/texi2pod.pl $< $@)
 
 # --------------------------------------------------------------------------
 # install
@@ -272,11 +286,13 @@ STRIP_yes = -s
 
 LIBTCC1_W = $(filter %-win32-libtcc1.a %-wince-libtcc1.a,$(LIBTCC1_CROSS))
 LIBTCC1_U = $(filter-out $(LIBTCC1_W),$(LIBTCC1_CROSS))
-IB = $(if $1,mkdir -p $2 && $(INSTALLBIN) $1 $2)
+IB = $(if $1,$(IM) mkdir -p $2 && $(INSTALLBIN) $1 $2)
 IBw = $(call IB,$(wildcard $1),$2)
-IF = $(if $1,mkdir -p $2 && $(INSTALL) $1 $2)
+IF = $(if $1,$(IM) mkdir -p $2 && $(INSTALL) $1 $2)
 IFw = $(call IF,$(wildcard $1),$2)
-IR = mkdir -p $2 && cp -r $1/. $2
+IR = $(IM) mkdir -p $2 && cp -r $1/. $2
+IM = $(info -> $2 : $1)@
+
 B_O = bcheck.o bt-exe.o bt-log.o bt-dll.o
 
 # install progs & libs
@@ -301,7 +317,7 @@ uninstall-unx:
 	@rm -fv "$(libdir)/libtcc.a" "$(libdir)/libtcc.so" "$(includedir)/libtcc.h"
 	@rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	@rm -fv "$(docdir)/tcc-doc.html"
-	rm -r "$(tccdir)"
+	@rm -frv "$(tccdir)"
 
 # install progs & libs on windows
 install-win:
@@ -320,17 +336,16 @@ ifneq "$(wildcard $(LIBTCC1_U))" ""
 endif
 
 # the msys-git shell works to configure && make except it does not have install
-ifeq "$(and $(CONFIG_WIN32),$(shell which install >/dev/null 2>&1 || echo no))" "no"
+ifeq ($(CONFIG_WIN32)-$(shell which install || echo no),yes-no)
 install-win : INSTALL = cp
 install-win : INSTALLBIN = cp
 endif
 
 # uninstall on windows
 uninstall-win:
-	@rm -fv $(foreach P,$(PROGS) $(PROGS_CROSS) libtcc.dll,"$(bindir)/$P")
-	@rm -fv $(foreach F,tcc-doc.html tcc-win32.txt,"$(docdir)/$F")
-	@rm -fv $(foreach F,libtcc.h libtcc.def libtcc.a,"$(libdir)/$F")
-	rm -r "$(tccdir)"
+	@rm -fv $(foreach P,libtcc.dll $(PROGS) *-tcc.exe,"$(bindir)/$P")
+	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P"/*)
+	@rm -frv $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P")
 
 # --------------------------------------------------------------------------
 # other stuff
@@ -343,8 +358,9 @@ ETAGS : ; etags $(TAGFILES)
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
 TCC-VERSION = tcc-$(VERSION)
+TCC-VERSION = tinycc-mob-$(shell git rev-parse --short=7 HEAD)
 tar:    tcc-doc.html
-	mkdir $(TCC-VERSION)
+	mkdir -p $(TCC-VERSION)
 	( cd $(TCC-VERSION) && git --git-dir ../.git checkout -f )
 	cp tcc-doc.html $(TCC-VERSION)
 	for f in tcc-win32.txt build-tcc.bat ; do \
@@ -359,22 +375,22 @@ config.mak:
 
 # run all tests
 test:
-	$(MAKE) -C tests
+	@$(MAKE) -C tests
 # run test(s) from tests2 subdir (see make help)
 tests2.%:
-	$(MAKE) -C tests/tests2 $@
+	@$(MAKE) -C tests/tests2 $@
 
 testspp.%:
-	$(MAKE) -C tests/pp $@
+	@$(MAKE) -C tests/pp $@
 
 clean:
-	rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
-	rm -f  *~ *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS *.dylib
-	@$(MAKE) -C lib $@
-	@$(MAKE) -C tests $@
+	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
+	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS *.dylib
+	@$(MAKE) -s -C lib $@
+	@$(MAKE) -s -C tests $@
 
 distclean: clean
-	rm -f config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
+	@rm -fv config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
 
 .PHONY: all clean test tar tags ETAGS distclean install uninstall FORCE
 
@@ -385,39 +401,37 @@ help:
 	@echo "make cross"
 	@echo "   build cross compilers (from one source)"
 	@echo ""
-	@echo "make ONE_SOURCE=yes / no"
-	@echo "   force building from one source / separate objects"
+	@echo "make ONE_SOURCE=no/yes SILENT=no/yes"
+	@echo "   force building from separate/one object(s), less/more silently"
 	@echo ""
 	@echo "make cross-TARGET"
-	@echo "   build one specific cross compiler for 'TARGET', as in"
-	@echo "   $(TCC_X)"
-	@echo ""
-	@echo "Custom configuration:"
-	@echo "   The makefile includes a file 'config-extra.mak' if it is present."
-	@echo "   This file may contain some custom configuration.  For example:"
-	@echo ""
-	@echo "      NATIVE_DEFINES += -D..."
-	@echo ""
-	@echo "   Or for example to configure the search paths for a cross-compiler"
-	@echo "   that expects the linux files in <tccdir>/i386-linux:"
-	@echo ""
-	@echo "      ROOT-i386 = {B}/i386-linux"
-	@echo "      CRT-i386  = {B}/i386-linux/usr/lib"
-	@echo "      LIB-i386  = {B}/i386-linux/lib:{B}/i386-linux/usr/lib"
-	@echo "      INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
-	@echo "      DEF-i386  += -D__linux__"
+	@echo "   build one specific cross compiler for 'TARGET'. Currently supported:"
+	@echo "      $(wordlist 1,6,$(TCC_X))"
+	@echo "      $(wordlist 7,99,$(TCC_X))"
 	@echo ""
 	@echo "make test"
 	@echo "   run all tests"
 	@echo ""
 	@echo "make tests2.all / make tests2.37 / make tests2.37+"
 	@echo "   run all/single test(s) from tests2, optionally update .expect"
+	@echo ""
 	@echo "make testspp.all / make testspp.17"
 	@echo "   run all/single test(s) from tests/pp"
 	@echo ""
 	@echo "Other supported make targets:"
-	@echo "   install install-strip tags ETAGS tar clean distclean help"
+	@echo "   install install-strip doc clean tags ETAGS tar distclean help"
 	@echo ""
+	@echo "Custom configuration:"
+	@echo "   The makefile includes a file 'config-extra.mak' if it is present."
+	@echo "   This file may contain some custom configuration.  For example:"
+	@echo "      NATIVE_DEFINES += -D..."
+	@echo "   Or for example to configure the search paths for a cross-compiler"
+	@echo "   that expects the linux files in <tccdir>/i386-linux:"
+	@echo "      ROOT-i386 = {B}/i386-linux"
+	@echo "      CRT-i386  = {B}/i386-linux/usr/lib"
+	@echo "      LIB-i386  = {B}/i386-linux/lib:{B}/i386-linux/usr/lib"
+	@echo "      INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
+	@echo "      DEF-i386  += -D__linux__"
 
 # --------------------------------------------------------------------------
 endif # ($(INCLUDED),no)

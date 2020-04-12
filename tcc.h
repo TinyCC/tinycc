@@ -46,6 +46,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 #ifdef _WIN32
+# define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */

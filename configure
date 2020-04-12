@@ -55,7 +55,7 @@ case $targetos in
     confvars="$confvars OSX"
     DLLSUF=".dylib"
     ;;
-  MINGW*|MSYS*|CYGWIN*)
+  Windows_NT|MINGW*|MSYS*|CYGWIN*)
     mingw32=yes
     ;;
   DragonFly|OpenBSD|FreeBSD|NetBSD)
@@ -135,6 +135,8 @@ for opt do
   ;;
   --strip-binaries) confvars="$confvars strip"
   ;;
+  --debug) confvars="$confvars strip=no"
+  ;;
   --with-libgcc) confvars="$confvars libgcc"
   ;;
   --with-selinux) confvars="$confvars selinux"
@@ -154,40 +156,9 @@ cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
 
-
-PPIF_TEMPLATE="
-int ppif(void) {
-#if %s
-    return 0;
-#else
-    PPIF_FALSE;
-#endif
-}
-"
-
-# Succeeds when preprocessor condition `#if $1` is true.
-# if $2 is not empty, prints to stderr `checking whether $2... <yes/no>`
-# Works also when $cc is a cross compiler to any foreign platform.
-# E.g. ppif "defined(__GNUC__) && (GCC_MAJOR >= 3)"
-#   or ppif "defined(_WIN32)" "target is Windows"
-ppif() {
-    [ -z "${2-}" ] || printf "checking whether %s... " "$2" >&2
-    printf "$PPIF_TEMPLATE" "$1" > ppif.c \
-    && $cc -o ppif.o -c ppif.c 2>/dev/null
-    ppif_rv=$?
-    rm ppif.c ppif.o 2>/dev/null
-    [ -z "${2-}" ] || { [ 0 = $ppif_rv ] && echo yes || echo no; } >&2
-    return $ppif_rv
-}
-
-
 if test -z "$cpu" ; then
     if test -n "$ARCH" ; then
         cpu="$ARCH"
-    elif ppif "defined(__x86_64__)"; then
-        cpu="x86_64"
-    elif ppif "defined(__i386__)"; then
-        cpu="i386"
     else
         cpu=`uname -m`
     fi
@@ -243,14 +214,14 @@ esac
 
 # Checking for CFLAGS
 if test -z "$CFLAGS"; then
-    CFLAGS="-Wall -g -O2"
+    CFLAGS="-Wall -O2"
 fi
 
 if test "$mingw32" = "yes" ; then
     if test "$source_path_used" = "no"; then
       source_path="."
     fi
-    if test "$cc" = gcc; then
+    if test "${cc%% *}" = "gcc"; then
       test -z "$LDFLAGS" && LDFLAGS="-static"
     fi
     test -z "$prefix" && prefix="C:/Program Files/tcc"
@@ -324,6 +295,7 @@ Advanced options (experts only):
   --extra-ldflags=         specify linker options []
   --cpu=CPU                CPU [$cpu]
   --strip-binaries         strip symbol tables from resulting binaries
+  --debug                  include debug info with resulting binaries
   --disable-static         make libtcc.so instead of libtcc.a
   --enable-static          make libtcc.a instead of libtcc.dll (win32)
   --disable-rpath          disable use of -rpath with the above
@@ -519,6 +491,10 @@ if test "$source_path_used" = "yes" ; then
 else
      echo 'TOPSRC=$(TOP)' >>config.mak
 fi
+cat >>$TMPH <<EOF
+#define GCC_MAJOR $gcc_major
+#define GCC_MINOR $gcc_minor
+EOF
 
 diff $TMPH config.h >/dev/null 2>&1
 if test $? -ne 0 ; then

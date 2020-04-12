@@ -2396,7 +2396,11 @@ int fib(int n)
         return fib(n-1) + fib(n-2);
 }
 
+#if __GNUC__ == 3
+# define aligned_function 0
+#else
 void __attribute__((aligned(16))) aligned_function(int i) {}
+#endif
 
 void funcptr_test()
 {
