@@ -3139,6 +3139,22 @@ void statement_expr_test(void)
 
     /* Test that we can give out addresses of local labels.  */
     consume_ulong(({ __label__ __here; __here: (unsigned long)&&__here; }));
+
+    /* Test interaction between local and global label stacks and the
+       need to defer popping symbol from them when within statement
+       expressions.  Note how the labels are both named LBL.  */
+    i = 0;
+    ({
+      {
+        __label__ LBL;
+       LBL: if (i++ == 0) goto LBL;
+      }
+      /* jump to a classical label out of an expr-stmt that had previously
+         overshadowed that classical label */
+      goto LBL;
+    });
+  LBL:
+    printf("stmtexpr: %d should be 2\n", i);
 }
 
 void local_label_test(void)

@@ -1402,9 +1402,12 @@ ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
             }
         }
         /* remove label */
-        table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
+        if (s->r != LABEL_GONE)
+            table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
         if (!keep)
             sym_free(s);
+        else
+            s->r = LABEL_GONE;
     }
     if (!keep)
         *ptop = slast;

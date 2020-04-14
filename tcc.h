@@ -575,6 +575,8 @@ typedef struct DLLReference {
 #define LABEL_DEFINED  0 /* label is defined */
 #define LABEL_FORWARD  1 /* label is forward defined */
 #define LABEL_DECLARED 2 /* label is declared but never used */
+#define LABEL_GONE     3 /* label isn't in scope, but not yet popped
+                            from local_label_stack (stmt exprs) */
 
 /* type_decl() types */
 #define TYPE_ABSTRACT  1 /* type without variable */
