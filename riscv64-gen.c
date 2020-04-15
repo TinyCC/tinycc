@@ -1176,9 +1176,9 @@ ST_FUNC void gen_cvt_ftof(int dt)
         rs = gv(RC_FLOAT);
         rd = get_reg(RC_FLOAT);
         if (dt == VT_DOUBLE)
-          EI(0x53, 7, freg(rd), freg(rs), 0x21 << 5); // fcvt.d.s RD, RS (dyn rm)
+          EI(0x53, 0, freg(rd), freg(rs), 0x21 << 5); // fcvt.d.s RD, RS (no rm)
         else
-          EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS
+          EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS (dyn rm)
         vtop->r = rd;
     }
 }
