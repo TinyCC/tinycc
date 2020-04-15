@@ -4,7 +4,24 @@
 #ifdef __x86_64__
 #ifndef _WIN64
 
+#ifndef __APPLE__
+//This should be in sync with the declaration on our lib/libtcc1.c
+/* GCC compatible definition of va_list. */
+typedef struct {
+    unsigned int gp_offset;
+    unsigned int fp_offset;
+    union {
+        unsigned int overflow_offset;
+        char *overflow_arg_area;
+    };
+    char *reg_save_area;
+} __va_list_struct;
+typedef __va_list_struct va_list[1];
+#else
+/* This is sometimes a void* on TCC, which makes it unlikely to
+   work with va_copy, but until we have something better ... */
 typedef __builtin_va_list va_list;
+#endif
 
 void __va_start(va_list ap, void *fp);
 void *__va_arg(va_list ap, int arg_type, int size, int align);

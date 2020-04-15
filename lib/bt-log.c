@@ -1,9 +1,9 @@
 /* ------------------------------------------------------------- */
 /* function to get a stack backtrace on demand with a message */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 
 int (*__rt_error)(void*, void*, const char *, va_list);
 
