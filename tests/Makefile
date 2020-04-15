@@ -29,6 +29,7 @@ BTESTS = btest test2b
 # asmtest / asmtest2 -- minor differences with gcc
 
 # bounds-checking is supported on i386 and x86_64 on linux and windows
+ifeq (-$(CONFIG_musl)-, --)
 ifeq ($(ARCH),i386)
  TESTS += $(BTESTS)
 endif
@@ -37,6 +38,7 @@ ifeq ($(ARCH),x86_64)
 endif
 ifdef CONFIG_WIN32
  TESTS += $(BTESTS)
+endif
 endif
 ifdef CONFIG_OSX # -run only
  TESTS := hello-run libtest tests2-dir pp-dir

@@ -26,6 +26,9 @@ ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
  SKIP += 112_backtrace.test 113_btdll.test
 endif
+ifeq (-$(CONFIG_musl)-,-yes-)
+ SKIP += 112_backtrace.test
+endif
 ifeq (-$(findstring gcc,$(CC))-,--)
  SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
 endif
