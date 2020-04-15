@@ -3,8 +3,6 @@
  */
 #include "config.h"
 
-#if GCC_MAJOR >= 3
-
 /* Unfortunately, gcc version < 3 does not handle that! */
 #define ALL_ISOC99
 
@@ -14,7 +12,11 @@
 /* gcc 2.95.3 does not handle correctly CR in strings or after strays */
 #define CORRECT_CR_HANDLING
 
-#endif
+/* __VA_ARGS__ and __func__ support */
+#define C99_MACROS
+
+/* deprecated and no longer supported in gcc 3.3 */
+//#define ACCEPT_CR_IN_STRINGS
 
 #ifndef __TINYC__
 typedef __SIZE_TYPE__ uintptr_t;
@@ -36,12 +38,6 @@ typedef __SIZE_TYPE__ uintptr_t;
 #define LONG_DOUBLE long double
 #define LONG_DOUBLE_LITERAL(x) x ## L
 #endif
-
-/* deprecated and no longer supported in gcc 3.3 */
-//#define ACCEPT_CR_IN_STRINGS
-
-/* __VA_ARGS__ and __func__ support */
-#define C99_MACROS
 
 /* test various include syntaxes */
 
@@ -2118,7 +2114,7 @@ void c99_bool_test(void)
 {
 #ifdef BOOL_ISOC99
     int a;
-    _Bool b;
+    _Bool b, b2;
 
     printf("bool_test:\n");
     printf("sizeof(_Bool) = %d\n", sizeof(_Bool));
@@ -2128,6 +2124,9 @@ void c99_bool_test(void)
     printf("b = %d\n", b);
     b++;
     printf("b = %d\n", b);
+    b2 = 0;
+    printf("sizeof(x ? _Bool : _Bool) = %d (should be sizeof int)\n",
+           sizeof((volatile)a ? b : b2));
 #endif
 }
 
