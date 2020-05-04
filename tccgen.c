@@ -161,7 +161,7 @@ static struct {
     {   VT_VOID, "void:t25=25", },
 };
 
-static int debug_next_type = sizeof(default_debug) / sizeof(default_debug[0]);
+static int debug_next_type;
 
 static struct debug_hash {
     int debug_type;
@@ -403,6 +403,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
         normalize_slashes(buf);
 #endif
         pstrcat(buf, sizeof(buf), "/");
+        debug_next_type = sizeof(default_debug) / sizeof(default_debug[0]);
         put_stabs_r(s1, buf, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
@@ -694,6 +695,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
     tcc_debug_stabn(N_RBRAC, size);
     tcc_debug_finish (debug_info_root);
     debug_info_root = NULL;
+    debug_info = NULL;
     cstr_free (&debug_str);
 }
 
