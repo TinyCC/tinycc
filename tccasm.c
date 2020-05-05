@@ -108,7 +108,7 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
                 if (sym && (!sym->c || elfsym(sym)->st_shndx == SHN_UNDEF))
                     sym = sym->prev_tok;
                 if (!sym)
-                    tcc_error("local label '%d' not found backward", n);
+                    tcc_error("local label '%d' not found backward", (int)n);
             } else {
                 /* forward */
                 if (!sym || (sym->c && elfsym(sym)->st_shndx != SHN_UNDEF)) {

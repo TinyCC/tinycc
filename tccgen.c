@@ -368,7 +368,8 @@ ST_FUNC void test_lvalue(void)
 ST_FUNC void check_vstack(void)
 {
     if (vtop != vstack - 1)
-        tcc_error("internal compiler error: vstack leak (%d)", vtop - vstack + 1);
+        tcc_error("internal compiler error: vstack leak (%d)",
+                  (int)(vtop - vstack + 1));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -8071,7 +8072,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 	    skip(',');
 	    parse_mult_str(&error_str, "string constant");
 	    if (c == 0)
-		tcc_error("%s", error_str.data);
+		tcc_error("%s", (char *)error_str.data);
 	    cstr_free(&error_str);
 	    skip(')');
 	  static_assert_out:
