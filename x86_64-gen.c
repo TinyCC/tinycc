@@ -991,8 +991,6 @@ void gfunc_prolog(Sym *func_sym)
 
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    func_vt = sym->type;
-    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
     size = gfunc_arg_size(&func_vt);
     if (!using_regs(size)) {
         gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
@@ -1032,7 +1030,7 @@ void gfunc_prolog(Sym *func_sym)
     }
 
     while (reg_param_index < REGN) {
-        if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
+        if (func_var) {
             gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             addr += 8;
         }
@@ -1491,7 +1489,7 @@ void gfunc_prolog(Sym *func_sym)
     func_sub_sp_offset = ind;
     func_ret_sub = 0;
 
-    if (sym->f.func_type == FUNC_ELLIPSIS) {
+    if (func_var) {
         int seen_reg_num, seen_sse_num, seen_stack_size;
         seen_reg_num = seen_sse_num = 0;
         /* frame pointer and return address */
@@ -1562,7 +1560,6 @@ void gfunc_prolog(Sym *func_sym)
 
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    func_vt = sym->type;
     mode = classify_x86_64_arg(&func_vt, NULL, &size, &align, &reg_count);
     if (mode == x86_64_mode_memory) {
         push_arg_reg(reg_param_index);

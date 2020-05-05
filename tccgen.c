@@ -122,7 +122,10 @@ static struct scope {
     Sym *lstk, *llstk;
 } *cur_scope, *loop_scope, *root_scope;
 
-static struct {
+/********************************************************/
+/* stab debug support */
+
+static const struct {
   int type;
   const char *name;
 } default_debug[] = {
@@ -183,8 +186,6 @@ static struct debug_info {
     } *sym;
     struct debug_info *child, *next, *last, *parent;
 } *debug_info, *debug_info_root;
-
-static CString debug_str;
 
 /********************************************************/
 #if 1
@@ -404,15 +405,19 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
         normalize_slashes(buf);
 #endif
         pstrcat(buf, sizeof(buf), "/");
-        debug_next_type = sizeof(default_debug) / sizeof(default_debug[0]);
         put_stabs_r(s1, buf, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         for (i = 0; i < sizeof (default_debug) / sizeof (default_debug[0]); i++)
             put_stabs(s1, default_debug[i].name, N_LSYM, 0, 0, 0);
+
         new_file = last_line_num = 0;
         func_ind = -1;
+        debug_next_type = sizeof(default_debug) / sizeof(default_debug[0]);
+        debug_hash = NULL;
+        n_debug_hash = 0;
+
         /* we're currently 'including' the <command line> */
         tcc_debug_bincl(s1);
     }
@@ -424,7 +429,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
                 SHN_ABS, file->filename);
 }
 
-static void tcc_debug_stabs (const char *str, int type, unsigned long value,
+static void tcc_debug_stabs (TCCState *s1, const char *str, int type, unsigned long value,
                              Section *sec, int sym_index)
 {
     struct debug_sym *s;
@@ -442,15 +447,13 @@ static void tcc_debug_stabs (const char *str, int type, unsigned long value,
         s->sym_index = sym_index;
     }
     else if (sec)
-        put_stabs_r (tcc_state, str, type, 0, 0, value, sec, sym_index);
+        put_stabs_r (s1, str, type, 0, 0, value, sec, sym_index);
     else
-        put_stabs (tcc_state, str, type, 0, 0, value);
+        put_stabs (s1, str, type, 0, 0, value);
 }
 
 static void tcc_debug_stabn(int type, int value)
 {
-    if (!tcc_state->do_debug)
-        return;
     if (type == N_LBRAC) {
         struct debug_info *info =
             (struct debug_info *) tcc_mallocz(sizeof (*info));
@@ -478,7 +481,7 @@ static void tcc_debug_stabn(int type, int value)
     }
 }
 
-static void tcc_get_debug_info(Sym *s, CString *result)
+static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
 {
     int type;
     int n = 0;
@@ -526,7 +529,7 @@ static void tcc_get_debug_info(Sym *s, CString *result)
                 cstr_printf (&str, "%s:",
                              (t->v & ~SYM_FIELD) >= SYM_FIRST_ANOM
                              ? "" : get_tok_str(t->v & ~SYM_FIELD, NULL));
-                tcc_get_debug_info (t, &str);
+                tcc_get_debug_info (s1, t, &str);
                 if (t->type.t & VT_BITFIELD) {
                     pos = t->c * 8 + BIT_POS(t->type.t);
                     size = BIT_SIZE(t->type.t);
@@ -538,7 +541,7 @@ static void tcc_get_debug_info(Sym *s, CString *result)
                 cstr_printf (&str, ",%d,%d;", pos, size);
             }
             cstr_printf (&str, ";");
-            tcc_debug_stabs(str.data, N_LSYM, 0, NULL, 0);
+            tcc_debug_stabs(s1, str.data, N_LSYM, 0, NULL, 0);
             cstr_free (&str);
         }
     }
@@ -556,11 +559,11 @@ static void tcc_get_debug_info(Sym *s, CString *result)
             cstr_printf (&str, "%s:",
                          (t->v & ~SYM_FIELD) >= SYM_FIRST_ANOM
                          ? "" : get_tok_str(t->v & ~SYM_FIELD, NULL));
-            cstr_printf (&str, e->type.t & VT_UNSIGNED ? "%llu," : "%lld,",
-                         t->enum_val);
+            cstr_printf (&str, e->type.t & VT_UNSIGNED ? "%u," : "%d,",
+                         (int)t->enum_val);
         }
         cstr_printf (&str, ";");
-        tcc_debug_stabs(str.data, N_LSYM, 0, NULL, 0);
+        tcc_debug_stabs(s1, str.data, N_LSYM, 0, NULL, 0);
         cstr_free (&str);
     }
     else {
@@ -592,7 +595,7 @@ static void tcc_get_debug_info(Sym *s, CString *result)
     cstr_printf (result, "%d", debug_type);
 }
 
-static void tcc_debug_finish (struct debug_info *cur)
+static void tcc_debug_finish (TCCState *s1, struct debug_info *cur)
 {
     while (cur) {
         int i;
@@ -602,33 +605,54 @@ static void tcc_debug_finish (struct debug_info *cur)
             struct debug_sym *s = &cur->sym[i];
 
             if (s->sec)
-                put_stabs_r(tcc_state, s->str, s->type, 0, 0, s->value,
+                put_stabs_r(s1, s->str, s->type, 0, 0, s->value,
                             s->sec, s->sym_index);
             else
-                put_stabs(tcc_state, s->str, s->type, 0, 0, s->value);
+                put_stabs(s1, s->str, s->type, 0, 0, s->value);
             tcc_free (s->str);
         }
         tcc_free (cur->sym);
-        put_stabn(tcc_state, N_LBRAC, 0, 0, cur->start);
-        tcc_debug_finish (cur->child);
-        put_stabn(tcc_state, N_RBRAC, 0, 0, cur->end);
+        put_stabn(s1, N_LBRAC, 0, 0, cur->start);
+        tcc_debug_finish (s1, cur->child);
+        put_stabn(s1, N_RBRAC, 0, 0, cur->end);
         tcc_free (cur);
         cur = next;
     }
 }
 
-static void tcc_add_debug_info(int param, Sym *s, Sym *e)
+static void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e)
 {
-    if (!tcc_state->do_debug)
-        return;
+    CString debug_str;
+    cstr_new (&debug_str);
     for (; s != e; s = s->prev) {
         if (!s->v || (s->r & VT_VALMASK) != VT_LOCAL)
             continue;
         cstr_reset (&debug_str);
         cstr_printf (&debug_str, "%s:%s", get_tok_str(s->v, NULL), param ? "p" : "");
-        tcc_get_debug_info(s, &debug_str);
-        tcc_debug_stabs(debug_str.data, param ? N_PSYM : N_LSYM, s->c, NULL, 0);
+        tcc_get_debug_info(s1, s, &debug_str);
+        tcc_debug_stabs(s1, debug_str.data, param ? N_PSYM : N_LSYM, s->c, NULL, 0);
     }
+    cstr_free (&debug_str);
+}
+
+static void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind)
+{
+    Section *s = s1->sections[sh_num];
+    CString str;
+
+    cstr_new (&str);
+    cstr_printf (&str, "%s:%c",
+        get_tok_str(sym->v, NULL),
+        sym_bind == STB_GLOBAL ? 'G' : local_scope ? 'V' : 'S'
+        );
+    tcc_get_debug_info(s1, sym, &str);
+    if (sym_bind == STB_GLOBAL)
+        tcc_debug_stabs(s1, str.data, N_GSYM, 0, NULL, 0);
+    else
+        tcc_debug_stabs(s1, str.data,
+            (sym->type.t & VT_STATIC) && data_section == s
+            ? N_STSYM : N_LCSYM, 0, s, sym->c);
+    cstr_free (&str);
 }
 
 /* put end of translation unit info */
@@ -639,8 +663,6 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
     put_stabs_r(s1, NULL, N_SO, 0, 0,
         text_section->data_offset, text_section, section_sym);
     tcc_free(debug_hash);
-    debug_hash = NULL;
-    n_debug_hash = 0;
 }
 
 static BufferedFile* put_new_file(TCCState *s1)
@@ -677,14 +699,21 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 /* put function symbol */
 ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 {
+    CString debug_str;
     BufferedFile *f;
-    if (!s1->do_debug || !(f = put_new_file(s1)))
+    if (!s1->do_debug)
         return;
+    debug_info_root = NULL;
+    debug_info = NULL;
     tcc_debug_stabn(N_LBRAC, ind - func_ind);
-    cstr_reset (&debug_str);
+    if (!(f = put_new_file(s1)))
+        return;
+    cstr_new (&debug_str);
     cstr_printf(&debug_str, "%s:%c", funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
-    tcc_get_debug_info(sym->type.ref, &debug_str);
+    tcc_get_debug_info(s1, sym->type.ref, &debug_str);
     put_stabs_r(s1, debug_str.data, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
+    cstr_free (&debug_str);
+
     tcc_debug_line(s1);
 }
 
@@ -694,10 +723,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
     if (!s1->do_debug)
         return;
     tcc_debug_stabn(N_RBRAC, size);
-    tcc_debug_finish (debug_info_root);
-    debug_info_root = NULL;
-    debug_info = NULL;
-    cstr_free (&debug_str);
+    tcc_debug_finish (s1, debug_info_root);
 }
 
 /* put alternative filename */
@@ -926,25 +952,12 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             name = get_tok_str(sym->asm_label, NULL);
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = put_elf_sym(symtab_section, value, size, info, other, sh_num, name);
-        if (tcc_state->do_debug && sym_type != STT_FUNC && sym->v < SYM_FIRST_ANOM) {
-            CString str;
 
-            cstr_new (&str);
-            cstr_printf (&str, "%s:%c", get_tok_str(sym->v, NULL),
-                         debug_info ? 'V' : sym_bind == STB_GLOBAL ? 'G' : 'S');
-            tcc_get_debug_info(sym, &str);
-            if (sym_bind == STB_GLOBAL)
-                tcc_debug_stabs(str.data, N_GSYM, 0, NULL, 0);
-            else
-                tcc_debug_stabs(str.data,
-                                (t & VT_STATIC) && data_section->sh_num == sh_num
-                                ? N_STSYM : N_LCSYM, 0,
-                                data_section->sh_num == sh_num ? data_section :
-                                bss_section->sh_num == sh_num ? bss_section :
-                                common_section->sh_num == sh_num ? common_section :
-                                text_section, sym->c);
-            cstr_free (&str);
-        }
+        if (tcc_state->do_debug
+            && sym_type != STT_FUNC
+            && sym->v < SYM_FIRST_ANOM)
+            tcc_debug_extern_sym(tcc_state, sym, sh_num, sym_bind);
+
     } else {
         esym = elfsym(sym);
         esym->st_value = value;
@@ -1920,13 +1933,14 @@ static void add_local_bounds(Sym *s, Sym *e)
 #endif
 
 /* Wrapper around sym_pop, that potentially also registers local bounds.  */
-static void pop_local_syms(int param, Sym **ptop, Sym *b, int keep, int ellipsis)
+static void pop_local_syms(Sym **ptop, Sym *b, int keep, int ellipsis)
 {
 #ifdef CONFIG_TCC_BCHECK
-    if (!ellipsis && !keep && tcc_state->do_bounds_check)
+    if (tcc_state->do_bounds_check && !ellipsis && !keep)
         add_local_bounds(*ptop, b);
 #endif
-    tcc_add_debug_info (param, *ptop, b);
+    if (tcc_state->do_debug)
+        tcc_add_debug_info (tcc_state, !local_scope, *ptop, b);
     sym_pop(ptop, b, keep);
 }
 
@@ -6717,7 +6731,9 @@ void new_scope(struct scope *o)
     o->llstk = local_label_stack;
 
     ++local_scope;
-    tcc_debug_stabn(N_LBRAC, ind - func_ind);
+
+    if (tcc_state->do_debug)
+        tcc_debug_stabn(N_LBRAC, ind - func_ind);
 }
 
 void prev_scope(struct scope *o, int is_expr)
@@ -6739,12 +6755,12 @@ void prev_scope(struct scope *o, int is_expr)
        tables, though.  sym_pop will do that.  */
 
     /* pop locally defined symbols */
-    pop_local_syms(0, &local_stack, o->lstk, is_expr, 0);
-
-    tcc_debug_stabn(N_RBRAC, ind - func_ind);
-
+    pop_local_syms(&local_stack, o->lstk, is_expr, 0);
     cur_scope = o->prev;
     --local_scope;
+
+    if (tcc_state->do_debug)
+        tcc_debug_stabn(N_RBRAC, ind - func_ind);
 }
 
 /* leave a scope via break/continue(/goto) */
@@ -7952,8 +7968,12 @@ static void gen_function(Sym *sym)
         add_array (tcc_state, ".init_array", sym->c);
     if (sym->type.ref->f.func_dtor)
         add_array (tcc_state, ".fini_array", sym->c);
+
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
+    func_vt = sym->type.ref->type;
+    func_var = sym->type.ref->f.func_type == FUNC_ELLIPSIS;
+
     /* put debug symbol */
     tcc_debug_funcstart(tcc_state, sym);
     /* push a dummy symbol to enable local sym storage */
@@ -7967,8 +7987,7 @@ static void gen_function(Sym *sym)
     gsym(rsym);
     nocode_wanted = 0;
     /* reset local stack */
-    pop_local_syms(1, &local_stack, NULL, 0,
-                   sym->type.ref->f.func_type == FUNC_ELLIPSIS);
+    pop_local_syms(&local_stack, NULL, 0, func_var);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     local_scope = 0;

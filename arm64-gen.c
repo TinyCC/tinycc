@@ -1010,8 +1010,6 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     CType **t;
     unsigned long *a;
 
-    // Why doesn't the caller (gen_function) set func_vt?
-    func_vt = func_type->ref->type;
     func_vc = 144; // offset of where x8 is stored
 
     for (sym = func_type->ref; sym; sym = sym->next)

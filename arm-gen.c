@@ -1278,8 +1278,6 @@ void gfunc_prolog(Sym *func_sym)
 #endif
 
   sym = func_type->ref;
-  func_vt = sym->type;
-  func_var = (func_type->ref->f.func_type == FUNC_ELLIPSIS);
 
   n = nf = 0;
   if ((func_vt.t & VT_BTYPE) == VT_STRUCT &&

@@ -1952,8 +1952,6 @@ void gfunc_prolog(Sym *func_sym)
     addr = 8;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    func_vt = sym->type;
-    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
 	func_vc = addr;
 	addr += 4;

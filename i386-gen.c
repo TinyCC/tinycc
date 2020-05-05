@@ -533,8 +533,6 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     func_sub_sp_offset = ind;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    func_vt = sym->type;
-    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
 #ifdef TCC_TARGET_PE
     size = type_size(&func_vt,&align);
     if (((func_vt.t & VT_BTYPE) == VT_STRUCT)
