@@ -588,7 +588,9 @@ ST_FUNC void gfunc_epilog(void)
     addr_t v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
+    if (tcc_state->do_bounds_check &&
+        (func_bound_offset != lbounds_section->data_offset ||
+         tcc_state->alloca_vla_used))
         gen_bounds_epilog();
 #endif
 

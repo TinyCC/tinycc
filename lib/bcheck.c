@@ -460,15 +460,9 @@ void FASTCALL __bound_local_new(void *p1)
     if (print_calls) {
         p = p1;
         while ((addr = p[0])) {
-            if (addr == 1) {
-                dprintf(stderr, "%s, %s(): alloca/vla used\n",
-                        __FILE__, __FUNCTION__);
-            }
-            else {
-                dprintf(stderr, "%s, %s(): %p 0x%lx\n",
-                        __FILE__, __FUNCTION__,
-                        (void *) (addr + fp), (unsigned long) p[1]);
-            }
+            dprintf(stderr, "%s, %s(): %p 0x%lx\n",
+                    __FILE__, __FUNCTION__,
+                    (void *) (addr + fp), (unsigned long) p[1]);
             p += 2;
         }
     }
@@ -903,7 +897,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                    void *(*start_routine) (void *), void *arg)
 {
     use_sem = 1;
-    dprintf (stderr, "%s, %s()n", __FILE__, __FUNCTION__);
+    dprintf (stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
     return pthread_create_redir(thread, attr, start_routine, arg);
 }
 #endif

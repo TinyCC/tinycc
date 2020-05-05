@@ -25,6 +25,7 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
  SKIP += 112_backtrace.test 113_btdll.test
+ SKIP += 114_bound_signal.test
 endif
 ifeq (-$(CONFIG_musl)-,-yes-)
  SKIP += 112_backtrace.test
@@ -37,6 +38,7 @@ ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
 endif
 ifneq (-$(CONFIG_WIN32)$(CONFIG_WIN64)-,--)
  SKIP += 106_pthread.test # No pthread support
+ SKIP += 114_bound_signal.test
 endif
 
 # Some tests might need arguments
@@ -85,6 +87,8 @@ GEN-ALWAYS =
     -bt $1 -shared -D DLL=1 -o a1$(DLLSUF) && $(TCC) \
     -bt $1 -shared -D DLL=2 -o a2$(DLLSUF) && $(TCC) \
     -bt a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=.
+
+114_bound_signal.test: FLAGS += -b
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

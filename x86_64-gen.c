@@ -1041,7 +1041,9 @@ void gfunc_epilog(void)
     loc = (loc & -16) - func_scratch;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
+    if (tcc_state->do_bounds_check &&
+        (func_bound_offset != lbounds_section->data_offset ||
+         tcc_state->alloca_vla_used))
         gen_bounds_epilog();
 #endif
 
@@ -1621,7 +1623,9 @@ void gfunc_epilog(void)
     int v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check)
+    if (tcc_state->do_bounds_check &&
+        (func_bound_offset != lbounds_section->data_offset ||
+         tcc_state->alloca_vla_used))
         gen_bounds_epilog();
 #endif
     o(0xc9); /* leave */
