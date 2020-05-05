@@ -146,6 +146,16 @@ ST_DATA const int reg_classes[NB_REGS] = {
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 
+#if defined(CONFIG_TCC_BCHECK)
+static addr_t func_bound_offset;
+static unsigned long func_bound_ind;
+static int func_bound_alloca_used;
+#endif
+
+#ifdef TCC_TARGET_PE
+static int func_scratch, func_alloca;
+#endif
+
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
 {
@@ -626,6 +636,10 @@ static void gcall_or_jmp(int is_jmp)
         greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32, (int)(vtop->c.i-4));
 #endif
         oad(0xe8 + is_jmp, 0); /* call/jmp im */
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check && vtop->sym->v == TOK_alloca)
+            func_bound_alloca_used = 1;
+#endif
     } else {
         /* otherwise, indirect call */
         r = TREG_R11;
@@ -637,8 +651,6 @@ static void gcall_or_jmp(int is_jmp)
 }
 
 #if defined(CONFIG_TCC_BCHECK)
-static addr_t func_bound_offset;
-static unsigned long func_bound_ind;
 
 static void gen_bounds_call(int v)
 {
@@ -713,6 +725,7 @@ static void gen_bounds_prolog(void)
     /* leave some room for bound checking code */
     func_bound_offset = lbounds_section->data_offset;
     func_bound_ind = ind;
+    func_bound_alloca_used = 0;
     o(0xb848 + TREG_FASTCALL_1 * 0x100); /*lbound section pointer */
     gen_le64 (0);
     oad(0xb8, 0); /* call to function */
@@ -723,6 +736,9 @@ static void gen_bounds_epilog(void)
     addr_t saved_ind;
     addr_t *bounds_ptr;
     Sym *sym_data;
+
+    if (func_bound_offset == lbounds_section->data_offset && !func_bound_alloca_used)
+        return;
 
     /* add end of table info */
     bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
@@ -749,8 +765,6 @@ static void gen_bounds_epilog(void)
 #endif
 
 #ifdef TCC_TARGET_PE
-
-static int func_scratch, func_alloca;
 
 #define REGN 4
 static const uint8_t arg_regs[REGN] = {
@@ -948,7 +962,6 @@ void gfunc_call(int nb_args)
         if (tcc_state->do_bounds_check)
             gen_bounds_call(TOK___bound_alloca_nr); /* new region */
 #endif
-
     }
     vtop--;
 }
@@ -1041,9 +1054,7 @@ void gfunc_epilog(void)
     loc = (loc & -16) - func_scratch;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check &&
-        (func_bound_offset != lbounds_section->data_offset ||
-         tcc_state->alloca_vla_used))
+    if (tcc_state->do_bounds_check)
         gen_bounds_epilog();
 #endif
 
@@ -1623,9 +1634,7 @@ void gfunc_epilog(void)
     int v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check &&
-        (func_bound_offset != lbounds_section->data_offset ||
-         tcc_state->alloca_vla_used))
+    if (tcc_state->do_bounds_check)
         gen_bounds_epilog();
 #endif
     o(0xc9); /* leave */

@@ -97,6 +97,7 @@ static int func_ret_sub;
 #ifdef CONFIG_TCC_BCHECK
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
+static int func_bound_alloca_used;
 static void gen_bounds_prolog(void);
 static void gen_bounds_epilog(void);
 #endif
@@ -357,6 +358,10 @@ static void gcall_or_jmp(int is_jmp)
         /* constant and relocation case */
         greloc(cur_text_section, vtop->sym, ind + 1, R_386_PC32);
         oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check && vtop->sym->v == TOK_alloca)
+            func_bound_alloca_used = 1;
+#endif
     } else {
         /* otherwise, indirect call */
         r = gv(RC_INT);
@@ -588,9 +593,7 @@ ST_FUNC void gfunc_epilog(void)
     addr_t v, saved_ind;
 
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check &&
-        (func_bound_offset != lbounds_section->data_offset ||
-         tcc_state->alloca_vla_used))
+    if (tcc_state->do_bounds_check)
         gen_bounds_epilog();
 #endif
 
@@ -1068,6 +1071,7 @@ static void gen_bounds_prolog(void)
     /* leave some room for bound checking code */
     func_bound_offset = lbounds_section->data_offset;
     func_bound_ind = ind;
+    func_bound_alloca_used = 0;
     oad(0xb8, 0); /* lbound section pointer */
     oad(0xb8, 0); /* call to function */
 }
@@ -1077,6 +1081,9 @@ static void gen_bounds_epilog(void)
     addr_t saved_ind;
     addr_t *bounds_ptr;
     Sym *sym_data;
+
+    if (func_bound_offset == lbounds_section->data_offset && !func_bound_alloca_used)
+        return;
 
     /* add end of table info */
     bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));

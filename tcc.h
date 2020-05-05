@@ -838,7 +838,6 @@ struct TCCState {
     /* bound check related sections */
     Section *bounds_section; /* contains global data bound description */
     Section *lbounds_section; /* contains local data bound description */
-    int alloca_vla_used;
 #endif
     /* symbol sections */
     Section *symtab_section;

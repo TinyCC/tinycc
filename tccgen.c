@@ -5914,11 +5914,6 @@ special_math_val:
             Sym *sa;
             int nb_args, ret_nregs, ret_align, regsize, variadic;
 
-#ifdef CONFIG_TCC_BCHECK
-            tcc_state->alloca_vla_used |= tcc_state->do_bounds_check &&
-                                          (vtop->r & VT_SYM) &&
-                                          vtop->sym->v == TOK_alloca;
-#endif
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
                 /* pointer test (no array accepted) */
@@ -7913,9 +7908,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         gen_vla_sp_save(addr);
         cur_scope->vla.loc = addr;
         cur_scope->vla.num++;
-#ifdef CONFIG_TCC_BCHECK
-        tcc_state->alloca_vla_used |= bcheck;
-#endif
     } else if (has_init) {
 	size_t oldreloc_offset = 0;
 	if (sec && sec->reloc)
@@ -7948,9 +7940,6 @@ static void gen_function(Sym *sym)
     cur_scope = root_scope = &f;
 
     nocode_wanted = 0;
-#ifdef CONFIG_TCC_BCHECK
-    tcc_state->alloca_vla_used = 0;
-#endif
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
 	size_t newoff = section_add(cur_text_section, 0,
