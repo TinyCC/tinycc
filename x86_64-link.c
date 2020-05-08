@@ -22,7 +22,7 @@
 
 #include "tcc.h"
 
-#ifndef ELF_OBJ_ONLY
+#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
 int code_reloc (int reloc_type)

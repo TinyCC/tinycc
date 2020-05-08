@@ -271,7 +271,7 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
         if (s->reloc)
             relocate_section(s1, s);
     }
-#ifndef TCC_TARGET_PE
+#if !defined(TCC_TARGET_PE) || defined(TCC_TARGET_MACHO)
     relocate_plt(s1);
 #endif
 

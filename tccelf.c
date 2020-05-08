@@ -1065,7 +1065,9 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #endif
     return count;
 }
+#endif
 
+#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
 static void build_got(TCCState *s1)
 {
     /* if no got, then create it */
@@ -1269,15 +1271,6 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 rel->r_info = ELFW(R_INFO)(attr->plt_sym, type);
         }
     }
-}
-
-/* put dynamic tag */
-static void put_dt(Section *dynamic, int dt, addr_t val)
-{
-    ElfW(Dyn) *dyn;
-    dyn = section_ptr_add(dynamic, sizeof(ElfW(Dyn)));
-    dyn->d_tag = dt;
-    dyn->d_un.d_val = val;
 }
 #endif
 
@@ -1978,6 +1971,15 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
 }
 
 #ifndef ELF_OBJ_ONLY
+/* put dynamic tag */
+static void put_dt(Section *dynamic, int dt, addr_t val)
+{
+    ElfW(Dyn) *dyn;
+    dyn = section_ptr_add(dynamic, sizeof(ElfW(Dyn)));
+    dyn->d_tag = dt;
+    dyn->d_un.d_val = val;
+}
+
 static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
                                  Section *dynamic)
 {

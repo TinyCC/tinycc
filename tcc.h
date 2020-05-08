@@ -882,6 +882,10 @@ struct TCCState {
 # define ELF_OBJ_ONLY
 #endif
 
+#ifdef TCC_TARGET_MACHO
+# define ELF_OBJ_ONLY
+#endif
+
 #ifndef ELF_OBJ_ONLY
     int nb_sym_versions;
     struct sym_version *sym_versions;
@@ -1524,7 +1528,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC void add_array(TCCState *s1, const char *sec, int c);
 
-#ifndef ELF_OBJ_ONLY
+#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
 ST_FUNC void build_got_entries(TCCState *s1);
 #endif
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
@@ -1556,7 +1560,7 @@ enum gotplt_entry {
     ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
 };
 
-#ifndef ELF_OBJ_ONLY
+#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC int gotplt_entry_type (int reloc_type);
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
