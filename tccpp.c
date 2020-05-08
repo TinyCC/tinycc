@@ -1450,6 +1450,7 @@ static int expr_preprocess(void)
     pp_expr = 1;
     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
         next(); /* do macro subst */
+      redo:
         if (tok == TOK_DEFINED) {
             next_nomacro();
             t = tok;
@@ -1467,10 +1468,26 @@ static int expr_preprocess(void)
             }
             tok = TOK_CINT;
             tokc.i = c;
-        } else if (tok >= TOK_IDENT) {
-            /* if undefined macro */
+        } else if (1 && tok == TOK___HAS_INCLUDE) {
+            next();  /* XXX check if correct to use expansion */
+            skip('(');
+            while (tok != ')' && tok != TOK_EOF)
+              next();
+            if (tok != ')')
+              expect("')'");
             tok = TOK_CINT;
             tokc.i = 0;
+        } else if (tok >= TOK_IDENT) {
+            /* if undefined macro, replace with zero, check for func-like */
+            t = tok;
+            tok = TOK_CINT;
+            tokc.i = 0;
+            tok_str_add_tok(str);
+            next();
+            if (tok == '(')
+                tcc_error("function-like macro '%s' is not defined",
+                          get_tok_str(t, NULL));
+            goto redo;
         }
         tok_str_add_tok(str);
     }
