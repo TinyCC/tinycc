@@ -17,6 +17,10 @@ XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
 XCFG = $(or $(findstring -win,$T),-unx)
 S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
 
+ifdef CONFIG_OSX
+  XFLAGS += -I`xcrun --show-sdk-path`/usr/include
+endif
+
 # in order to use gcc, type: make <target>-libtcc1-usegcc=yes
 arm-libtcc1-usegcc ?= no
 
