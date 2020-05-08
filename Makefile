@@ -49,7 +49,7 @@ else
  ifdef CONFIG_OSX
   NATIVE_TARGET = $(ARCH)-osx
   LDFLAGS += -flat_namespace -undefined warning
-  export MACOSX_DEPLOYMENT_TARGET := 10.4
+  export MACOSX_DEPLOYMENT_TARGET := 10.6
  endif
 endif
 
