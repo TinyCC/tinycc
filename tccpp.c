@@ -3430,8 +3430,6 @@ static int macro_subst_tok(
                       get_tok_str(s->v, 0));
             }
 
-            parse_flags = saved_parse_flags;
-
             /* now subst each arg */
             mstr = macro_arg_subst(nested_list, mstr, args);
             /* free memory */
@@ -3446,6 +3444,7 @@ static int macro_subst_tok(
                 sym_free(sa);
                 sa = sa1;
             }
+            parse_flags = saved_parse_flags;
         }
 
         sym_push2(nested_list, s->v, 0, 0);
@@ -3551,7 +3550,8 @@ ST_FUNC void next(void)
             /* end of macro or unget token string */
             end_macro();
             goto redo;
-        }
+        } else if (tok == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
+            tcc_error("stray '\\' in program");
     } else if (tok >= TOK_IDENT && (parse_flags & PARSE_FLAG_PREPROCESS)) {
         Sym *s;
         /* if reading from file, try to substitute macros */
@@ -3572,8 +3572,7 @@ ST_FUNC void next(void)
     } else if (tok == TOK_PPSTR) {
         if (parse_flags & PARSE_FLAG_TOK_STR)
             parse_string((char *)tokc.str.data, tokc.str.size - 1);
-    } else if (tok == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
-        tcc_error("stray '\\' in program");
+    }
 }
 
 /* push back current token and set current token to 'last_tok'. Only
@@ -3586,6 +3585,59 @@ ST_INLN void unget_tok(int last_tok)
     tok_str_add(str, 0);
     begin_macro(str, 1);
     tok = last_tok;
+}
+
+static void tcc_predefs(CString *cstr)
+{
+    cstr_cat(cstr,
+#if defined TCC_TARGET_X86_64
+#ifndef TCC_TARGET_PE
+    /* GCC compatible definition of va_list. This should be in sync
+       with the declaration in our lib/libtcc1.c */
+    "typedef struct{\n"
+    "unsigned gp_offset,fp_offset;\n"
+    "union{\n"
+    "unsigned overflow_offset;\n"
+    "char*overflow_arg_area;\n"
+    "};\n"
+    "char*reg_save_area;\n"
+    "}__builtin_va_list[1];\n"
+    "void*__va_arg(__builtin_va_list ap,int arg_type,int size,int align);\n"
+    "#define __builtin_va_start(ap,last) (*(ap)=*(__builtin_va_list)((char*)__builtin_frame_address(0)-24))\n"
+    "#define __builtin_va_arg(ap,t) (*(t*)(__va_arg(ap,__builtin_va_arg_types(t),sizeof(t),__alignof__(t))))\n"
+    "#define __builtin_va_copy(dest,src) (*(dest)=*(src))\n"
+#else /* TCC_TARGET_PE */
+    "typedef char*__builtin_va_list;\n"
+    "#define __builtin_va_arg(ap,t) ((sizeof(t)>8||(sizeof(t)&(sizeof(t)-1)))?**(t**)((ap+=8)-8):*(t*)((ap+=8)-8))\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+#endif
+#elif defined TCC_TARGET_ARM
+    "typedef char*__builtin_va_list;\n"
+    "#define _tcc_alignof(type) ((int)&((struct{char c;type x;}*)0)->x)\n"
+    "#define _tcc_align(addr,type) (((unsigned)addr+_tcc_alignof(type)-1)&~(_tcc_alignof(type)-1))\n"
+    "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
+    "#define __builtin_va_arg(ap,type) (ap=(void*)((_tcc_align(ap,type)+sizeof(type)+3)&~3),*(type*)(ap-((sizeof(type)+3)&~3)))\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+#elif defined TCC_TARGET_ARM64
+    "typedef struct{\n"
+    "void*__stack,*__gr_top,*__vr_top;\n"
+    "int __gr_offs,__vr_offs;\n"
+    "}__builtin_va_list;\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+#elif defined TCC_TARGET_RISCV64
+    "typedef char*__builtin_va_list;\n"
+    "#define __va_reg_size (__riscv_xlen>>3)\n"
+    "#define _tcc_align(addr,type) (((unsigned long)addr+__alignof__(type)-1)&-(__alignof__(type)))\n"
+    "#define __builtin_va_arg(ap,type) (*(sizeof(type)>(2*__va_reg_size)?*(type**)((ap+=__va_reg_size)-__va_reg_size):(ap=(va_list)(_tcc_align(ap,type)+(sizeof(type)+__va_reg_size-1)&-__va_reg_size),(type*)(ap-((sizeof(type)+__va_reg_size-1)&-__va_reg_size)))))\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+#else /* TCC_TARGET_I386 */
+    "typedef char*__builtin_va_list;\n"
+    "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
+    "#define __builtin_va_arg(ap,t) (*(t*)((ap+=(sizeof(t)+3)&~3)-((sizeof(t)+3)&~3)))\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+#endif
+    "#define __builtin_va_end(ap) (void)(ap)\n"
+    , -1);
 }
 
 ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
@@ -3616,7 +3668,7 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     if (s1->output_type == TCC_OUTPUT_MEMORY)
         cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
     if (!is_asm && s1->output_type != TCC_OUTPUT_PREPROCESS)
-        cstr_cat(&cstr, "#include \"tcc_predefs.h\"\n", -1);
+        tcc_predefs(&cstr);
     if (s1->cmdline_incl.size)
         cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
     //printf("%s\n", (char*)cstr.data);

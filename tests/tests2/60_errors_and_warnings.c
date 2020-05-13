@@ -328,5 +328,15 @@ int main()
 #elif defined test_stray_backslash
 #define x \a
 x
+
+#elif defined test_stray_backslash2
+int printf(const char*, ...);
+int main()
+{
+#define _S(x) #x
+#define S(x) _S(x)
+    printf("%sn\n", S(\\));
+}
+
 /******************************************************************/
 #endif

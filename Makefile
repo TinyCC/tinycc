@@ -344,7 +344,7 @@ endif
 
 # uninstall on windows
 uninstall-win:
-	@rm -fv $(foreach P,libtcc.dll $(PROGS) *-tcc.exe,"$(bindir)/$P")
+	@rm -fv $(foreach P,libtcc.dll $(PROGS) *-tcc.exe,"$(bindir)"/$P)
 	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P"/*)
 	@rm -frv $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P")
 

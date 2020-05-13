@@ -156,3 +156,6 @@ bar  : 3 ; 3
 
 [test_stray_backslash]
 60_errors_and_warnings.c:330: error: stray '\' in program
+
+[test_stray_backslash2]
+\n
