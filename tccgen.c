@@ -1507,6 +1507,12 @@ static void merge_funcattr(struct FuncAttr *fa, struct FuncAttr *fa1)
       fa->func_type = fa1->func_type;
     if (fa1->func_args && !fa->func_args)
       fa->func_args = fa1->func_args;
+    if (fa1->func_noreturn)
+      fa->func_noreturn = 1;
+    if (fa1->func_ctor)
+      fa->func_ctor = 1;
+    if (fa1->func_dtor)
+      fa->func_dtor = 1;
 }
 
 /* Merge attributes.  */
@@ -1563,9 +1569,11 @@ static void patch_type(Sym *sym, CType *type)
         }
 
         if (0 == (type->t & VT_EXTERN)) {
+            struct FuncAttr f = sym->type.ref->f;
             /* put complete type, use static from prototype */
             sym->type.t = (type->t & ~(VT_STATIC|VT_INLINE)) | static_proto;
             sym->type.ref = type->ref;
+            merge_funcattr(&sym->type.ref->f, &f);
         } else {
             sym->type.t &= ~VT_INLINE | static_proto;
         }
@@ -8201,9 +8209,13 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                         sym->type = int_type;
                 }
 
+                /* apply post-declaraton attributes */
+                merge_funcattr(&type.ref->f, &ad.f);
+
                 /* put function symbol */
                 type.t &= ~VT_EXTERN;
                 sym = external_sym(v, &type, 0, &ad);
+
                 /* static inline functions are just recorded as a kind
                    of macro. Their code will be emitted at the end of
                    the compilation unit only if they are used */

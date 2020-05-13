@@ -229,7 +229,7 @@ abitest-cc.exe: abitest.c $(LIBTCC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) -w
 
 abitest-tcc.exe: abitest.c libtcc.c
-	$(TCC) -o $@ $^ $(LIBS)
+	$(TCC) -o $@ $^ $(NATIVE_DEFINES) $(LIBS)
 
 abitest-% : abitest-%.exe
 	@echo ------------ $@ ------------

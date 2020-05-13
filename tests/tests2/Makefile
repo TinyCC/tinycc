@@ -36,9 +36,11 @@ endif
 ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
  SKIP += 95_bitfields%.test # type_align is different on 32bit-non-windows
 endif
-ifneq (-$(CONFIG_WIN32)$(CONFIG_WIN64)-,--)
+ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_pthread.test # No pthread support
- SKIP += 114_bound_signal.test
+endif
+ifneq (-$(CONFIG_WIN32)-$(findstring $(GCC_MAJOR),3 4)-,---)
+ SKIP += 114_bound_signal.test # not on windows or older linuxes
 endif
 
 # Some tests might need arguments
