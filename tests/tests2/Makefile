@@ -15,6 +15,8 @@ endif
 ifdef CONFIG_OSX
  SKIP += 40_stdio.test 42_function_pointer.test
  FLAGS += -w
+ SDK := `xcrun --show-sdk-path`
+ TCCFLAGS += -I$(SDK)/usr/include
 endif
 ifeq ($(ARCH),x86_64)
  SKIP += 73_arm64.test
