@@ -1421,6 +1421,7 @@ ST_FUNC void check_vstack(void);
 
 ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
+ST_FUNC int exact_log2p1(int i);
 ST_FUNC void test_lvalue(void);
 ST_FUNC void vpushi(int v);
 ST_FUNC ElfSym *elfsym(Sym *);
@@ -1729,6 +1730,10 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 #endif
 #define ST_ASM_SET 0x04
 
+/* ------------ tccmacho.c ----------------- */
+#ifdef TCC_TARGET_MACHO
+ST_FUNC int macho_output_file(TCCState * s1, const char *filename);
+#endif
 /* ------------ tccrun.c ----------------- */
 #ifdef TCC_IS_NATIVE
 #ifdef CONFIG_TCC_STATIC

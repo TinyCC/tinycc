@@ -2513,6 +2513,10 @@ LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename)
     if (s->output_type != TCC_OUTPUT_OBJ) {
         ret = pe_output_file(s, filename);
     } else
+#elif TCC_TARGET_MACHO
+    if (s->output_type != TCC_OUTPUT_OBJ) {
+        ret = macho_output_file(s, filename);
+    } else
 #endif
         ret = elf_output_file(s, filename);
     return ret;

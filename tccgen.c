@@ -4023,7 +4023,7 @@ ST_FUNC void parse_mult_str (CString *astr, const char *msg)
 
 /* If I is >= 1 and a power of two, returns log2(i)+1.
    If I is 0 returns 0.  */
-static int exact_log2p1(int i)
+ST_FUNC int exact_log2p1(int i)
 {
   int ret;
   if (!i)
