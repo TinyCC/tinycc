@@ -1096,8 +1096,12 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
                     ret = -1;
 #endif
             } else {
+#ifndef TCC_TARGET_MACHO
                 ret = tcc_load_dll(s1, fd, filename,
                                    (flags & AFF_REFERENCED_DLL) != 0);
+#else
+                ret = 0;
+#endif
             }
             break;
 #endif
@@ -1112,12 +1116,15 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         default:
 #ifdef TCC_TARGET_PE
             ret = pe_load_file(s1, filename, fd);
+#elif defined(TCC_TARGET_MACHO)
+            ret = -1;
 #else
             /* as GNU ld, consider it is an ld script if not recognized */
             ret = tcc_load_ldscript(s1, fd);
 #endif
             if (ret < 0)
-                tcc_error_noabort("unrecognized file type");
+                tcc_error_noabort("%s: unrecognized file type %d", filename,
+                                  obj_type);
             break;
         }
         close(fd);
