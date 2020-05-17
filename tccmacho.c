@@ -220,6 +220,7 @@ struct macho {
 };
 
 #define SHT_LINKEDIT (SHT_LOOS + 42)
+#define SHN_FROMDLL  (SHN_LOOS + 2)  /* Symbol is undefined, comes from a DLL */
 
 #define LC_REQ_DYLD 0x80000000
 #define LC_SYMTAB        0x2
@@ -371,8 +372,18 @@ static int check_symbols(TCCState *s1, struct macho *mo)
               mo->iundef = sym_index - 1;
             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
                 continue;
-            if (get_sym_attr(s1, elf_index, 0))
+            if (get_sym_attr(s1, elf_index, 0)) {
+                /* Mark the symbol as coming from a dylib so that
+                   relocate_syms doesn't complain.  Normally we would have
+                   checked that any dylib in fact exports this one, and listed
+                   those in s1->dynsymtab, which would cause us to enter this
+                   symbol into s1->dynsym, which is checked by relocate_syms.
+                   But for now we fake this and regard all undefined as
+                   coming from a dylib, and we don't use the dynsymtab/dynsym
+                   scheme.  */
+                sym->st_shndx = SHN_FROMDLL;
                 continue;
+            }
             tcc_error_noabort("undefined symbol '%s'", name);
             ret = -1;
         }
@@ -399,6 +410,8 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
                   ELFW(ST_TYPE)(sym->st_info), name);
     }
     if (sym->st_shndx == SHN_UNDEF)
+      tcc_error("should have been rewritten to SHN_FROMDLL");
+    else if (sym->st_shndx == SHN_FROMDLL)
       n.n_type = 0 /* N_UNDF */, n.n_sect = 0;
     else if (sym->st_shndx == SHN_ABS)
       n.n_type = 2 /* N_ABS */, n.n_sect = 0;
@@ -441,7 +454,7 @@ static int machosymcmp(const void *_a, const void *_b)
         - (ELFW(ST_BIND)(sa->st_info) == STB_LOCAL);
     if (r)
       return r;
-    r = (sb->st_shndx == SHN_UNDEF) - (sa->st_shndx == SHN_UNDEF);
+    r = (sa->st_shndx == SHN_UNDEF) - (sb->st_shndx == SHN_UNDEF);
     if (r)
       return r;
     if (ELFW(ST_BIND)(sa->st_info) != STB_LOCAL) {
