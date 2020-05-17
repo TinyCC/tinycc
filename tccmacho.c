@@ -321,7 +321,17 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                     attr->got_offset = s1->got->data_offset;
                     attr->plt_offset = 1; /* used as flag */
                     section_ptr_add(s1->got, PTR_SIZE);
-                    *pi = mo->e2msym[sym_index];
+                    if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
+                        if (sym->st_shndx == SHN_UNDEF)
+                          tcc_error("undefined local symbol???");
+                        *pi = 0x80000000; /* INDIRECT_SYMBOL_LOCAL */
+                        /* The pointer slot we generated must point to the
+                           symbol, whose address is only known after layout,
+                           so register a simply relocation for that.  */
+                        put_elf_reloc (s1->symtab, s1->got, attr->got_offset,
+                                       R_DATA_PTR, sym_index);
+                    } else
+                      *pi = mo->e2msym[sym_index];
                 }
             }
         }
