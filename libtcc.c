@@ -502,6 +502,12 @@ PUB_FUNC void tcc_enter_state(TCCState *s1)
     tcc_state = s1;
 }
 
+PUB_FUNC void tcc_exit_state(void)
+{
+    tcc_state = NULL;
+    POST_SEM();
+}
+
 static void error1(int mode, const char *fmt, va_list ap)
 {
     char buf[2048];
@@ -513,11 +519,9 @@ static void error1(int mode, const char *fmt, va_list ap)
         /* can happen only if called from tcc_malloc(): 'out of memory' */
         goto no_file;
 
-    if (!s1->error_set_jmp_enabled) {
+    if (s1 && !s1->error_set_jmp_enabled)
         /* tcc_state just was set by tcc_enter_state() */
-        tcc_state = NULL;
-        POST_SEM();
-    }
+        tcc_exit_state();
 
     if (mode == ERROR_WARN) {
         if (s1->warn_none)
@@ -684,8 +688,7 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
        Alternatively we could use thread local storage for those global
        variables, which may or may not have advantages */
 
-    WAIT_SEM();
-    tcc_state = s1;
+    tcc_enter_state(s1);
 
     if (setjmp(s1->error_jmp_buf) == 0) {
         int is_asm;
@@ -722,8 +725,7 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
     preprocess_end(s1);
     tccelf_end_file(s1);
 
-    tcc_state = NULL;
-    POST_SEM();
+    tcc_exit_state();
     return s1->nb_errors != 0 ? -1 : 0;
 }
 

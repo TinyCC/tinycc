@@ -1544,6 +1544,12 @@ ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
 
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, long offs);
 
+/* Browse each elem of type <type> in section <sec> starting at elem <startoff>
+   using variable <elem> */
+#define for_each_elem(sec, startoff, elem, type) \
+    for (elem = (type *) sec->data + startoff; \
+         elem < (type *) (sec->data + sec->data_offset); elem++)
+
 #ifndef TCC_TARGET_PE
 ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level);
 ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd);
@@ -1789,6 +1795,7 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 #define total_bytes         TCC_STATE_VAR(total_bytes)
 
 PUB_FUNC void tcc_enter_state(TCCState *s1);
+PUB_FUNC void tcc_exit_state(void);
 
 /********************************************************/
 #endif /* _TCC_H */
