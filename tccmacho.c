@@ -214,7 +214,9 @@ struct macho {
         int machosect;
     } sk_to_sect[sk_last];
     int *elfsectomacho;
-    Section *linkedit, *symtab, *strtab, *wdata;
+    int *e2msym;
+    Section *linkedit, *symtab, *strtab, *wdata, *indirsyms;
+    uint32_t ilocal, iextdef, iundef;
 };
 
 #define SHT_LINKEDIT (SHT_LOOS + 42)
@@ -289,24 +291,77 @@ static void * add_dylib(struct macho *mo, char *name)
     return add_lc(mo, lc);
 }
 
-static int check_symbols(TCCState *s1)
+static void check_relocs(TCCState *s1, struct macho *mo)
+{
+    Section *s;
+    ElfW_Rel *rel;
+    ElfW(Sym) *sym;
+    int i, type, gotplt_entry, sym_index;
+    struct sym_attr *attr;
+
+    s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    mo->indirsyms = new_section(s1, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->sh_type != SHT_RELX)
+            continue;
+        for_each_elem(s, 0, rel, ElfW_Rel) {
+            type = ELFW(R_TYPE)(rel->r_info);
+            gotplt_entry = gotplt_entry_type(type);
+            /* We generate a non-lazy pointer for used undefined symbols
+               and for defined symbols that must have a place for their
+               address due to codegen (i.e. a reloc requiring a got slot).  */
+            sym_index = ELFW(R_SYM)(rel->r_info);
+            sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            if (sym->st_shndx == SHN_UNDEF
+                || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
+                attr = get_sym_attr(s1, sym_index, 1);
+                if (!attr->plt_offset) {
+                    uint32_t *pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
+                    attr->got_offset = s1->got->data_offset;
+                    attr->plt_offset = 1; /* used as flag */
+                    section_ptr_add(s1->got, PTR_SIZE);
+                    *pi = mo->e2msym[sym_index];
+                }
+            }
+        }
+    }
+}
+
+static int check_symbols(TCCState *s1, struct macho *mo)
 {
     int sym_index, sym_end;
     int ret = 0;
 
+    mo->ilocal = mo->iextdef = mo->iundef = -1;
     sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
-        ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
+        int elf_index = ((struct nlist_64 *)mo->symtab->data + sym_index - 1)->n_value;
+        ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + elf_index;
         const char *name = (char*)symtab_section->link->data + sym->st_name;
         unsigned type = ELFW(ST_TYPE)(sym->st_info);
         unsigned bind = ELFW(ST_BIND)(sym->st_info);
         unsigned vis  = ELFW(ST_VISIBILITY)(sym->st_other);
 
-        printf("%4d: %09llx %4d %4d %4d %3d %s\n",
-               sym_index, sym->st_value,
+        printf("%4d (%4d): %09llx %4d %4d %4d %3d %s\n",
+               sym_index, elf_index, sym->st_value,
                type, bind, vis, sym->st_shndx, name);
-        if (sym->st_shndx == SHN_UNDEF) {
+        if (bind == STB_LOCAL) {
+            if (mo->ilocal == -1)
+              mo->ilocal = sym_index - 1;
+            if (mo->iextdef != -1 || mo->iundef != -1)
+              tcc_error("local syms after global ones");
+        } else if (sym->st_shndx != SHN_UNDEF) {
+            if (mo->iextdef == -1)
+              mo->iextdef = sym_index - 1;
+            if (mo->iundef != -1)
+              tcc_error("external defined symbol after undefined");
+        } else if (sym->st_shndx == SHN_UNDEF) {
+            if (mo->iundef == -1)
+              mo->iundef = sym_index - 1;
             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
+                continue;
+            if (get_sym_attr(s1, elf_index, 0))
                 continue;
             tcc_error_noabort("undefined symbol '%s'", name);
             ret = -1;
@@ -315,12 +370,11 @@ static int check_symbols(TCCState *s1)
     return ret;
 }
 
-static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn, ElfSym *sym)
+static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
 {
     struct nlist_64 n = *pn;
+    ElfSym *sym = (ElfW(Sym) *)symtab_section->data + pn->n_value;
     const char *name = (char*)symtab_section->link->data + sym->st_name;
-    if (sym != (ElfW(Sym) *)symtab_section->data + pn->n_value)
-      tcc_error("blaeh");
     switch(ELFW(ST_TYPE)(sym->st_info)) {
     case STT_NOTYPE:
     case STT_OBJECT:
@@ -361,9 +415,33 @@ static void convert_symbols(TCCState *s1, struct macho *mo)
 
     sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
-        ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
-        convert_symbol(s1, mo, pn + sym_index - 1, sym);
+        convert_symbol(s1, mo, pn + sym_index - 1);
     }
+}
+
+static int machosymcmp(const void *_a, const void *_b)
+{
+    TCCState *s1 = tcc_state;
+    int ea = ((struct nlist_64 *)_a)->n_value;
+    int eb = ((struct nlist_64 *)_b)->n_value;
+    ElfSym *sa = (ElfSym *)symtab_section->data + ea;
+    ElfSym *sb = (ElfSym *)symtab_section->data + eb;
+    int r;
+    r = (ELFW(ST_BIND)(sb->st_info) == STB_LOCAL)
+        - (ELFW(ST_BIND)(sa->st_info) == STB_LOCAL);
+    if (r)
+      return r;
+    r = (sb->st_shndx == SHN_UNDEF) - (sa->st_shndx == SHN_UNDEF);
+    if (r)
+      return r;
+    if (ELFW(ST_BIND)(sa->st_info) != STB_LOCAL) {
+        const char * na = (char*)symtab_section->link->data + sa->st_name;
+        const char * nb = (char*)symtab_section->link->data + sb->st_name;
+        r = strcmp(na, nb);
+        if (r)
+          return r;
+    }
+    return ea - eb;
 }
 
 static void create_symtab(TCCState *s1, struct macho *mo)
@@ -373,7 +451,7 @@ static void create_symtab(TCCState *s1, struct macho *mo)
 
     mo->symtab = new_section(s1, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->strtab = new_section(s1, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
-    put_elf_str(mo->strtab, " "); /* Mach-O start strtab with a space */
+    put_elf_str(mo->strtab, " "); /* Mach-O starts strtab with a space */
     sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
     pn = section_ptr_add(mo->symtab, sizeof(*pn) * (sym_end - 1));
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
@@ -381,6 +459,14 @@ static void create_symtab(TCCState *s1, struct macho *mo)
         const char *name = (char*)symtab_section->link->data + sym->st_name;
         pn[sym_index - 1].n_strx = put_elf_str(mo->strtab, name);
         pn[sym_index - 1].n_value = sym_index;
+    }
+    tcc_enter_state(s1);  /* qsort needs global state */
+    qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp);
+    tcc_exit_state();
+    mo->e2msym = tcc_malloc(sym_end * sizeof(*mo->e2msym));
+    mo->e2msym[0] = -1;
+    for (sym_index = 1; sym_index < sym_end; ++sym_index) {
+        mo->e2msym[pn[sym_index - 1].n_value] = sym_index - 1;
     }
 }
 
@@ -391,6 +477,7 @@ struct {
 } skinfo[sk_last] = {
     [sk_text] =         { 1, 0x80000400, "__text" },
     [sk_ro_data] =      { 1, 0, "__rodata" },
+    [sk_nl_ptr] =       { 2, 6, "__got" }, /* S_NON_LAZY_SYMBOL_POINTERS */
     [sk_rw_data] =      { 2, 0, "__data" },
     [sk_bss] =          { 2, 1, "__bss" },
     [sk_linkedit] =     { 3, 0, NULL },
@@ -453,8 +540,6 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     /* LINKEDIT can't be empty (XXX remove once we have symbol table) */
     section_ptr_add(mo->linkedit, 256);
 
-    create_symtab(s1, mo);
-
     /* dyld requires a writable segment, but ignores zero-sized segments
        for this, so force to have some data.  */
     mo->wdata = new_section(s1, " wdata", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
@@ -475,7 +560,9 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             case SHT_RELX:     sk = sk_discard; break;
             case SHT_LINKEDIT: sk = sk_linkedit; break;
             case SHT_PROGBITS:
-                if (flags & SHF_EXECINSTR)
+                if (s == s1->got)
+                  sk = sk_nl_ptr;
+                else if (flags & SHF_EXECINSTR)
                   sk = sk_text;
                 else if (flags & SHF_WRITE)
                   sk = sk_rw_data;
@@ -584,6 +671,15 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     symlc->nsyms = mo->symtab->data_offset / sizeof(struct nlist_64);
     symlc->stroff = mo->strtab->sh_offset;
     symlc->strsize = mo->strtab->data_offset;
+
+    dysymlc->iundefsym = mo->iundef == -1 ? symlc->nsyms : mo->iundef;
+    dysymlc->iextdefsym = mo->iextdef == -1 ? dysymlc->iundefsym : mo->iextdef;
+    dysymlc->ilocalsym = mo->ilocal == -1 ? dysymlc->iextdefsym : mo->ilocal;
+    dysymlc->nlocalsym = dysymlc->iextdefsym - dysymlc->ilocalsym;
+    dysymlc->nextdefsym = dysymlc->iundefsym - dysymlc->iextdefsym;
+    dysymlc->nundefsym = symlc->nsyms - dysymlc->iundefsym;
+    dysymlc->indirectsymoff = mo->indirsyms->sh_offset;
+    dysymlc->nindirectsyms = mo->indirsyms->data_offset / sizeof(uint32_t);
 }
 
 static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
@@ -659,7 +755,9 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         printf("<- %s\n", filename);
 
     resolve_common_syms(s1);
-    ret = check_symbols(s1);
+    create_symtab(s1, &mo);
+    check_relocs(s1, &mo);
+    ret = check_symbols(s1, &mo);
     if (!ret) {
         int i;
         Section *s;
