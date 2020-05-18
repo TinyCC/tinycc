@@ -215,7 +215,8 @@ struct macho {
     } sk_to_sect[sk_last];
     int *elfsectomacho;
     int *e2msym;
-    Section *linkedit, *symtab, *strtab, *wdata, *indirsyms;
+    Section *linkedit, *symtab, *strtab, *wdata, *indirsyms, *stubs;
+    int stubsym;
     uint32_t ilocal, iextdef, iundef;
 };
 
@@ -297,7 +298,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     Section *s;
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
-    int i, type, gotplt_entry, sym_index;
+    int i, type, gotplt_entry, sym_index, for_code;
     struct sym_attr *attr;
 
     s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
@@ -309,6 +310,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
+            for_code = code_reloc(type);
             /* We generate a non-lazy pointer for used undefined symbols
                and for defined symbols that must have a place for their
                address due to codegen (i.e. a reloc requiring a got slot).  */
@@ -317,10 +319,11 @@ static void check_relocs(TCCState *s1, struct macho *mo)
             if (sym->st_shndx == SHN_UNDEF
                 || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
                 attr = get_sym_attr(s1, sym_index, 1);
-                if (!attr->plt_offset) {
+                if (!attr->dyn_index) {
                     uint32_t *pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
                     attr->got_offset = s1->got->data_offset;
-                    attr->plt_offset = 1; /* used as flag */
+                    attr->plt_offset = -1;
+                    attr->dyn_index = 1; /* used as flag */
                     section_ptr_add(s1->got, PTR_SIZE);
                     if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
                         if (sym->st_shndx == SHN_UNDEF)
@@ -329,10 +332,24 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                         /* The pointer slot we generated must point to the
                            symbol, whose address is only known after layout,
                            so register a simply relocation for that.  */
-                        put_elf_reloc (s1->symtab, s1->got, attr->got_offset,
-                                       R_DATA_PTR, sym_index);
+                        put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
+                                      R_DATA_PTR, sym_index);
                     } else
                       *pi = mo->e2msym[sym_index];
+                }
+                if (for_code) {
+                    if (attr->plt_offset == -1) {
+                        uint8_t *jmp;
+                        attr->plt_offset = mo->stubs->data_offset;
+                        jmp = section_ptr_add(mo->stubs, 6);
+                        jmp[0] = 0xff;  /* jmpq *ofs(%rip) */
+                        jmp[1] = 0x25;
+                        put_elf_reloc(s1->symtab, mo->stubs,
+                                      attr->plt_offset + 2,
+                                      R_X86_64_GOTPCREL, sym_index);
+                    }
+                    rel->r_info = ELFW(R_INFO)(mo->stubsym, type);
+                    rel->r_addend += attr->plt_offset;
                 }
             }
         }
@@ -471,6 +488,13 @@ static void create_symtab(TCCState *s1, struct macho *mo)
 {
     int sym_index, sym_end;
     struct nlist_64 *pn;
+
+    /* Stub creation belongs to check_relocs, but we need to create
+       the symbol now, so its included in the sorting.  */
+    mo->stubs = new_section(s1, "__stubs", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    mo->stubsym = put_elf_sym(s1->symtab, 0, 0,
+                              ELFW(ST_INFO)(STB_LOCAL, STT_NOTYPE), 0,
+                              mo->stubs->sh_num, ".__stubs");
 
     mo->symtab = new_section(s1, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->strtab = new_section(s1, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
