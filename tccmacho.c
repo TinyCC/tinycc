@@ -810,7 +810,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         Section *s;
         collect_sections(s1, &mo);
         relocate_syms(s1, s1->symtab, 0);
-        mo.ep.entryoff = get_elf_sym_addr(s1, "main", 1) - mo.seg[1]->vmaddr;
+        mo.ep.entryoff = get_elf_sym_addr(s1, "_main", 1) - mo.seg[1]->vmaddr;
         if (s1->nb_errors)
           goto do_ret;
 

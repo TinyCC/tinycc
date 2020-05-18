@@ -777,7 +777,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     s->seg_size = 32;
 #endif
     /* enable this if you want symbols with leading underscore on windows: */
-#if 0 /* def TCC_TARGET_PE */
+#if defined TCC_TARGET_MACHO /* || defined TCC_TARGET_PE */
     s->leading_underscore = 1;
 #endif
     s->ppfp = stdout;

@@ -932,7 +932,13 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
+#ifdef TCC_TARGET_MACHO
+                /* The symbols in the symtables have a prepended '_'
+                   but dlsym() needs the undecorated name.  */
+                void *addr = dlsym(RTLD_DEFAULT, name + 1);
+#else
                 void *addr = dlsym(RTLD_DEFAULT, name);
+#endif
                 if (addr) {
                     sym->st_value = (addr_t) addr;
 #ifdef DEBUG_RELOC

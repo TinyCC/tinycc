@@ -140,7 +140,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     rt_context *rc = &g_rtctxt;
 #endif
 
-    s1->runtime_main = s1->nostdlib ? "_start" : "main";
+    s1->runtime_main = s1->nostdlib ? "_start" : s1->leading_underscore ? "_main" : "main";
     if ((s1->dflag & 16) && !find_elf_sym(s1->symtab, s1->runtime_main))
         return 0;
 #ifdef CONFIG_TCC_BACKTRACE
