@@ -188,6 +188,8 @@ enum skind {
     sk_uw_info,
     sk_nl_ptr,  // non-lazy pointers, aka GOT
     sk_la_ptr,  // lazy pointers
+    sk_init,
+    sk_fini,
     sk_rw_data,
     sk_bss,
     sk_linkedit,
@@ -523,11 +525,13 @@ struct {
     char *name;
 } skinfo[sk_last] = {
     [sk_text] =         { 1, 0x80000400, "__text" },
-    [sk_ro_data] =      { 1, 0, "__rodata" },
-    [sk_nl_ptr] =       { 2, 6, "__got" }, /* S_NON_LAZY_SYMBOL_POINTERS */
-    [sk_rw_data] =      { 2, 0, "__data" },
-    [sk_bss] =          { 2, 1, "__bss" },
-    [sk_linkedit] =     { 3, 0, NULL },
+    [sk_ro_data] =      { 1, 0x0, "__rodata" },
+    [sk_nl_ptr] =       { 2, 0x6, "__got" }, /* S_NON_LAZY_SYMBOL_POINTERS */
+    [sk_init] =         { 2, 0x9, "__mod_init_func" }, /* S_MOD_INIT_FUNC_POINTERS */
+    [sk_fini] =         { 2, 0xa, "__mod_term_func" }, /* S_MOD_TERM_FUNC_POINTERS */
+    [sk_rw_data] =      { 2, 0x0, "__data" },
+    [sk_bss] =          { 2, 0x1, "__bss" }, /* S_ZEROFILL */
+    [sk_linkedit] =     { 3, 0x0, NULL },
 };
 
 static void collect_sections(TCCState *s1, struct macho *mo)
@@ -601,6 +605,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
         if (flags & SHF_ALLOC) {
             switch (type) {
             default:           sk = sk_unknown; break;
+            case SHT_INIT_ARRAY: sk = sk_init; break;
+            case SHT_FINI_ARRAY: sk = sk_fini; break;
             case SHT_NOBITS:   sk = sk_bss; break;
             case SHT_SYMTAB:   sk = sk_discard; break;
             case SHT_STRTAB:   sk = sk_discard; break;
@@ -698,6 +704,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             type == SHT_NOBITS ? "nobits" :
             type == SHT_SYMTAB ? "symtab" :
             type == SHT_STRTAB ? "strtab" :
+            type == SHT_INIT_ARRAY ? "init" :
+            type == SHT_FINI_ARRAY ? "fini" :
             type == SHT_RELX ? "rel" : "???",
             s->sh_addr,
             (unsigned)s->data_offset,
