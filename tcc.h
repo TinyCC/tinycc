@@ -22,6 +22,7 @@
 #define _TCC_H
 
 #define _GNU_SOURCE
+#define _DARWIN_C_SOURCE
 #include "config.h"
 
 #include <stdarg.h>
@@ -217,6 +218,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
 #endif
 
+#ifndef CONFIG_USR_INCLUDE
+# define CONFIG_USR_INCLUDE "/usr/include"
+#endif
+
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
 
 /* system include paths */
@@ -227,7 +232,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         "{B}/include" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT CONFIG_USR_INCLUDE)
 # endif
 #endif
 

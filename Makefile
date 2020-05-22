@@ -58,9 +58,6 @@ TCCFLAGS-unx = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
 TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
 TCCFLAGS = $(TCCFLAGS$(CFGWIN))
 TCC = $(TOP)/tcc$(EXESUF) $(TCCFLAGS)
-ifdef CONFIG_OSX
- TCCFLAGS += -D_ANSI_SOURCE
-endif
 
 # cross compiler targets to build
 TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
