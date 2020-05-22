@@ -56,6 +56,9 @@
 #ifdef TCC_TARGET_PE
 #include "tccpe.c"
 #endif
+#ifdef TCC_TARGET_MACHO
+#include "tccmacho.c"
+#endif
 #endif /* ONE_SOURCE */
 
 #include "tcc.h"
@@ -944,6 +947,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__APPLE__", "1");
     tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
     tcc_define_symbol(s, "__APPLE_CC__", "1"); /* for <TargetConditionals.h> */
+    tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
 
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");

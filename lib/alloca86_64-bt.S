@@ -1,6 +1,11 @@
 /* ---------------------------------------------- */
 /* alloca86_64.S */
 
+#ifdef __APPLE__
+#define __bound_alloca ___bound_alloca
+#define __bound_alloca_nr ___bound_alloca_nr
+#endif
+
 .globl __bound_alloca
 __bound_alloca:
 
