@@ -17,6 +17,8 @@
  */
 #include "tcc.h"
 
+#define DEBUG_MACHO 0
+
 struct mach_header {
         uint32_t        magic;          /* mach magic number identifier */
         int             cputype;        /* cpu specifier */
@@ -373,9 +375,10 @@ static int check_symbols(TCCState *s1, struct macho *mo)
         unsigned bind = ELFW(ST_BIND)(sym->st_info);
         unsigned vis  = ELFW(ST_VISIBILITY)(sym->st_other);
 
-        printf("%4d (%4d): %09llx %4d %4d %4d %3d %s\n",
-               sym_index, elf_index, sym->st_value,
-               type, bind, vis, sym->st_shndx, name);
+        if (DEBUG_MACHO)
+          printf("%4d (%4d): %09llx %4d %4d %4d %3d %s\n",
+                 sym_index, elf_index, sym->st_value,
+                 type, bind, vis, sym->st_shndx, name);
         if (bind == STB_LOCAL) {
             if (mo->ilocal == -1)
               mo->ilocal = sym_index - 1;
@@ -680,14 +683,16 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
                 al = s->sh_addralign;
                 curaddr = (curaddr + al - 1) & -al;
-                tcc_warning("curaddr now 0x%llx", curaddr);
+                if (DEBUG_MACHO)
+                  printf("curaddr now 0x%llx\n", curaddr);
                 s->sh_addr = curaddr;
                 curaddr += s->sh_size;
                 if (s->sh_type != SHT_NOBITS) {
                     fileofs = (fileofs + al - 1) & -al;
                     s->sh_offset = fileofs;
                     fileofs += s->sh_size;
-                    tcc_warning("fileofs now %lld", fileofs);
+                    if (DEBUG_MACHO)
+                      printf("fileofs now %lld\n", fileofs);
                 }
                 if (sec)
                   mo->elfsectomacho[s->sh_num] = numsec;
@@ -695,27 +700,28 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             if (sec)
               sec->size = curaddr - sec->addr;
         }
-        for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
-          int type = s->sh_type;
-          int flags = s->sh_flags;
-          printf("%d section %-16s %-10s %09llx %04x %02d %s,%s,%s\n",
-            sk,
-            s->name,
-            type == SHT_PROGBITS ? "progbits" :
-            type == SHT_NOBITS ? "nobits" :
-            type == SHT_SYMTAB ? "symtab" :
-            type == SHT_STRTAB ? "strtab" :
-            type == SHT_INIT_ARRAY ? "init" :
-            type == SHT_FINI_ARRAY ? "fini" :
-            type == SHT_RELX ? "rel" : "???",
-            s->sh_addr,
-            (unsigned)s->data_offset,
-            s->sh_addralign,
-            flags & SHF_ALLOC ? "alloc" : "",
-            flags & SHF_WRITE ? "write" : "",
-            flags & SHF_EXECINSTR ? "exec" : ""
-            );
-        }
+        if (DEBUG_MACHO)
+          for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
+              int type = s->sh_type;
+              int flags = s->sh_flags;
+              printf("%d section %-16s %-10s %09llx %04x %02d %s,%s,%s\n",
+                     sk,
+                     s->name,
+                     type == SHT_PROGBITS ? "progbits" :
+                     type == SHT_NOBITS ? "nobits" :
+                     type == SHT_SYMTAB ? "symtab" :
+                     type == SHT_STRTAB ? "strtab" :
+                     type == SHT_INIT_ARRAY ? "init" :
+                     type == SHT_FINI_ARRAY ? "fini" :
+                     type == SHT_RELX ? "rel" : "???",
+                     s->sh_addr,
+                     (unsigned)s->data_offset,
+                     s->sh_addralign,
+                     flags & SHF_ALLOC ? "alloc" : "",
+                     flags & SHF_WRITE ? "write" : "",
+                     flags & SHF_EXECINSTR ? "exec" : ""
+                    );
+          }
     }
     if (seg) {
         seg->vmsize = curaddr - seg->vmaddr;
