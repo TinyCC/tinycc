@@ -132,6 +132,8 @@
      DEF(TOK_CONSTRUCTOR2, "__constructor__")
      DEF(TOK_DESTRUCTOR1, "destructor")
      DEF(TOK_DESTRUCTOR2, "__destructor__")
+     DEF(TOK_ALWAYS_INLINE1, "always_inline")
+     DEF(TOK_ALWAYS_INLINE2, "__always_inline__")
 
      DEF(TOK_MODE, "__mode__")
      DEF(TOK_MODE_QI, "__QI__")

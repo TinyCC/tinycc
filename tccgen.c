@@ -4075,13 +4075,17 @@ redo:
             skip(')');
 	    break;
 	}
-       case TOK_CONSTRUCTOR1:
-       case TOK_CONSTRUCTOR2:
+        case TOK_CONSTRUCTOR1:
+        case TOK_CONSTRUCTOR2:
             ad->f.func_ctor = 1;
             break;
-       case TOK_DESTRUCTOR1:
-       case TOK_DESTRUCTOR2:
+        case TOK_DESTRUCTOR1:
+        case TOK_DESTRUCTOR2:
             ad->f.func_dtor = 1;
+            break;
+        case TOK_ALWAYS_INLINE1:
+        case TOK_ALWAYS_INLINE2:
+            ad->f.func_alwinl = 1;
             break;
         case TOK_SECTION1:
         case TOK_SECTION2:
@@ -8225,6 +8229,16 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 sym = type.ref;
                 if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
                     decl0(VT_CMP, 0, sym);
+                if (sym->f.func_alwinl
+                    && ((type.t & (VT_EXTERN | VT_INLINE))
+                        == (VT_EXTERN | VT_INLINE))) {
+                    /* always_inline functions must be handled as if they
+                       don't generate multiple global defs, even if extern
+                       inline, i.e. GNU inline semantics for those.  Rewrite
+                       them into static inline.  */
+                    type.t &= ~VT_EXTERN;
+                    type.t |= VT_STATIC;
+                }
                 /* always compile 'extern inline' */
                 if (type.t & VT_EXTERN)
                     type.t &= ~VT_INLINE;

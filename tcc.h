@@ -494,7 +494,9 @@ struct FuncAttr {
     func_noreturn : 1, /* attribute((noreturn)) */
     func_ctor   : 1, /* attribute((constructor)) */
     func_dtor   : 1, /* attribute((destructor)) */
-    func_args   : 8; /* PE __stdcall args */
+    func_args   : 8, /* PE __stdcall args */
+    func_alwinl : 1, /* always_inline */
+    xxxx        :15;
 };
 
 /* symbol management */
