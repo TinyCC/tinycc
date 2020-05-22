@@ -129,6 +129,20 @@ static void wait_sem(void)
 }
 #define WAIT_SEM() wait_sem()
 #define POST_SEM() LeaveCriticalSection(&tcc_cr);
+#elif defined __APPLE__
+/* Half-compatible MacOS doesn't have non-shared (process local)
+   semaphores.  Use the dispatch framework for lightweight locks.  */
+#include <dispatch/dispatch.h>
+static int tcc_sem_init;
+static dispatch_semaphore_t tcc_sem;
+static void wait_sem(void)
+{
+    if (!tcc_sem_init)
+      tcc_sem = dispatch_semaphore_create(1), tcc_sem_init = 1;
+    dispatch_semaphore_wait(tcc_sem, DISPATCH_TIME_FOREVER);
+}
+#define WAIT_SEM() wait_sem()
+#define POST_SEM() dispatch_semaphore_signal(tcc_sem)
 #else
 #include <semaphore.h>
 static int tcc_sem_init;
