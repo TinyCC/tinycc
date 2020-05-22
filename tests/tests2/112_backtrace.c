@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 
 /* ------------------------------------------------------- */
 #else
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 char *strdup();
 int main()

@@ -14,6 +14,7 @@ ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
 endif
 ifdef CONFIG_OSX
  SKIP += 40_stdio.test 42_function_pointer.test
+ SKIP += 113_btdll.test # no shared lib support yet
  FLAGS += -w
  SDK := `xcrun --show-sdk-path`
  TCCFLAGS += -I$(SDK)/usr/include
@@ -88,7 +89,7 @@ GEN-ALWAYS =
 112_backtrace.test: FLAGS += -dt -b
 112_backtrace.test 113_btdll.test: FILTER += \
     -e 's;[0-9A-Fa-fx]\{5,\};........;g' \
-    -e 's;0x[0-9A-Fa-f]\+;0x?;g'
+    -e 's;0x[0-9A-Fa-f]\{1,\};0x?;g'
 
 # this test creates two DLLs and an EXE
 113_btdll.test: NORUN = true
