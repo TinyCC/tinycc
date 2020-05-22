@@ -419,6 +419,7 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
     case STT_NOTYPE:
     case STT_OBJECT:
     case STT_FUNC:
+    case STT_SECTION:
         n.n_type = 0xe;   /* default type is N_SECT */
         break;
     case STT_FILE:
@@ -609,7 +610,7 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             case SHT_FINI_ARRAY: sk = sk_fini; break;
             case SHT_NOBITS:   sk = sk_bss; break;
             case SHT_SYMTAB:   sk = sk_discard; break;
-            case SHT_STRTAB:   sk = sk_discard; break;
+            case SHT_STRTAB:   sk = s == stabstr_section ? sk_ro_data : sk_discard; break;
             case SHT_RELX:     sk = sk_discard; break;
             case SHT_LINKEDIT: sk = sk_linkedit; break;
             case SHT_PROGBITS:
@@ -809,6 +810,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     if (s1->verbose)
         printf("<- %s\n", filename);
 
+    tcc_add_runtime(s1);
     resolve_common_syms(s1);
     create_symtab(s1, &mo);
     check_relocs(s1, &mo);
