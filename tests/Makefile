@@ -45,8 +45,8 @@ ifeq ($(ARCH),riscv64)
  TESTS += $(BTESTS)
 endif
 endif
-ifdef CONFIG_OSX # -run only
- TESTS := hello-run libtest tests2-dir pp-dir
+ifdef CONFIG_OSX # some don't work yet
+ TESTS := $(filter-out memtest dlltest asm-c-connect-test, $(TESTS))
 endif
 ifeq (,$(filter arm64 i386 x86_64,$(ARCH)))
  TESTS := $(filter-out vla_test-run,$(TESTS))
