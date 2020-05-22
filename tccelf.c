@@ -481,13 +481,33 @@ ST_FUNC int find_elf_sym(Section *s, const char *name)
     return 0;
 }
 
-/* return elf symbol value, signal error if 'err' is nonzero */
-ST_FUNC addr_t get_elf_sym_addr(TCCState *s1, const char *name, int err)
+ST_FUNC int find_c_sym(TCCState *s1, const char *name)
+{
+    int ret;
+    CString cstr;
+    if (s1->leading_underscore) {
+        cstr_new(&cstr);
+        cstr_ccat(&cstr, '_');
+        cstr_cat(&cstr, name, 0);
+        name = cstr.data;
+    }
+    ret = find_elf_sym(s1->symtab, name);
+    if (s1->leading_underscore)
+      cstr_free(&cstr);
+    return ret;
+}
+
+/* return elf symbol value, signal error if 'err' is nonzero, decorate
+   name if FORC */
+ST_FUNC addr_t get_sym_addr(TCCState *s1, const char *name, int err, int forc)
 {
     int sym_index;
     ElfW(Sym) *sym;
 
-    sym_index = find_elf_sym(s1->symtab, name);
+    if (forc)
+      sym_index = find_c_sym(s1, name);
+    else
+      sym_index = find_elf_sym(s1->symtab, name);
     sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
@@ -524,7 +544,7 @@ ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
 /* return elf symbol value */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
 {
-    return (void*)(uintptr_t)get_elf_sym_addr(s, name, 0);
+    return (void*)(uintptr_t)get_sym_addr(s, name, 0, 1);
 }
 
 /* list elf symbol names and values */
@@ -538,7 +558,7 @@ LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
 /* return elf symbol value or error */
 ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
 {
-    return (void*)(uintptr_t)get_elf_sym_addr(s, name, 1);
+    return (void*)(uintptr_t)get_sym_addr(s, name, 1, 1);
 }
 #endif
 
@@ -2177,7 +2197,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     default:
     case TCC_OUTPUT_EXE:
         ehdr.e_type = ET_EXEC;
-        ehdr.e_entry = get_elf_sym_addr(s1, "_start", 1);
+        ehdr.e_entry = get_sym_addr(s1, "_start", 1, 0);
         break;
     case TCC_OUTPUT_DLL:
         ehdr.e_type = ET_DYN;

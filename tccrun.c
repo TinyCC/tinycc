@@ -126,8 +126,8 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 
 static void run_cdtors(TCCState *s1, const char *start, const char *end)
 {
-    void **a = tcc_get_symbol(s1, start);
-    void **b = tcc_get_symbol(s1, end);
+    void **a = (void **)get_sym_addr(s1, start, 0, 0);
+    void **b = (void **)get_sym_addr(s1, end, 0, 0);
     while (a != b)
         ((void(*)(void))*a++)();
 }
@@ -140,12 +140,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     rt_context *rc = &g_rtctxt;
 #endif
 
-    s1->runtime_main = s1->nostdlib ? "_start" : s1->leading_underscore ? "_main" : "main";
-    if ((s1->dflag & 16) && !find_elf_sym(s1->symtab, s1->runtime_main))
+    s1->runtime_main = s1->nostdlib ? "_start" : "main";
+    if ((s1->dflag & 16) && !find_c_sym(s1, s1->runtime_main))
         return 0;
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug)
-        tcc_add_symbol(s1, "exit", rt_exit);
+        tcc_add_symbol(s1, "_exit" + !s1->leading_underscore, rt_exit);
 #endif
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
@@ -182,6 +182,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
+    /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end");
 #ifdef CONFIG_TCC_BACKTRACE
     if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
