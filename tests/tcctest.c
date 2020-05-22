@@ -64,7 +64,13 @@ typedef __SIZE_TYPE__ uintptr_t;
 #define INC(name) <tests/name.h>
 #define funnyname 42test.h
 #define incdir tests/
+#ifdef __clang__
+/* clang's preprocessor is broken in this regard and adds spaces
+   to the tokens 'incdir' and 'funnyname' when expanding */
+#define incname <tests/42test.h>
+#else
 #define incname < incdir funnyname >
+#endif
 #define __stringify(x) #x
 #define stringify(x) __stringify(x)
 #include INC(42test)
@@ -411,10 +417,17 @@ comment
        comment.  */
     TEST2 /* the comment */ ();
 
-    printf("%s\n", get_basefile_from_header());
-    printf("%s\n", __BASE_FILE__);
-    printf("%s\n", get_file_from_header());
-    printf("%s\n", __FILE__);
+    printf("basefromheader %s\n", get_basefile_from_header());
+    printf("base %s\n", __BASE_FILE__);
+    {
+      /* Some compilers (clang) prepend './' to __FILE__ from included
+         files.  */
+      const char *fn = get_file_from_header();
+      if (fn[0] == '.' && fn[1] == '/')
+        fn += 2;
+      printf("filefromheader %s\n", fn);
+    }
+    printf("file %s\n", __FILE__);
 
     /* Check that funnily named include was in fact included */
     have_included_42test_h = 1;
@@ -3330,6 +3343,8 @@ static __inline__ void sigdelset1(unsigned int *set, int _sig)
 	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc", "flags");
 }
 
+#ifndef __APPLE__
+/* clang's inline asm is uncapable of 'xchgb %b0,%h0' */
 static __inline__ __const__ unsigned int swab32(unsigned int x)
 {
 	__asm__("xchgb %b0,%h0\n\t"	/* swap lower bytes	*/
@@ -3339,6 +3354,7 @@ static __inline__ __const__ unsigned int swab32(unsigned int x)
 		: "0" (x));
 	return x;
 }
+#endif
 
 static __inline__ unsigned long long mul64(unsigned int a, unsigned int b)
 {
@@ -3415,6 +3431,7 @@ void base_func(void)
   printf ("asmc: base\n");
 }
 
+#ifndef __APPLE__
 extern void override_func1 (void);
 extern void override_func2 (void);
 
@@ -3482,6 +3499,7 @@ void asm_local_label_diff (void)
 {
   printf ("asm_local_label_diff: %d %d\n", alld_stuff[0], alld_stuff[1]);
 }
+#endif
 
 /* This checks that static local variables are available from assembler.  */
 void asm_local_statics (void)
@@ -3630,8 +3648,10 @@ void test_asm_call(void)
      tested here).  */
   /* two pushes so stack remains aligned */
   asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi;"
-#if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__))
+#if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__)) && !defined(__APPLE__)
 		"call getenv@plt;"
+#elif defined(__APPLE__) && !defined(__TINYC__)
+                "call _getenv;"
 #else
 		"call getenv;"
 #endif
@@ -3656,21 +3676,31 @@ void asm_dot_test(void)
         case 1:
             asm(".text; lea S"RX",%eax; lea ."RX",%ecx; sub %ecx,%eax; S=.; jmp p0");
         case 2:
+#ifndef __APPLE__
+            /* clangs internal assembler is broken */
             asm(".text; jmp .+6; .int 123; mov .-4"RX",%eax; jmp p0");
+#else
+            asm(".text; mov $0, %eax; jmp p0");
+#endif
 	case 3:
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
             asm(".pushsection \".data\"; Y=.; .int 999; X=Y; .int 456; X=.-4; .popsection");
 #else
             asm(".data; Y=.; .int 999; X=Y; .int 456; X=.-4; .text");
 #endif
             asm(".text; mov X"RX",%eax; jmp p0");
         case 4:
+#ifdef __APPLE__
+            /* Bah!  Clang!  Doesn't want to redefine 'X'  */
+            asm(".text; mov $123,%eax; jmp p0");
+#else
 #ifndef _WIN32
             asm(".data; X=.; .int 789; Y=.; .int 999; .previous");
 #else
             asm(".data; X=.; .int 789; Y=.; .int 999; .text");
 #endif
             asm(".text; mov X"RX",%eax; X=Y; jmp p0");
+#endif
         case 0:
 	    asm(".text; p0=.; mov %%eax,%0;" : "=m"(r)); break;
 	}
@@ -3731,8 +3761,11 @@ void asm_test(void)
     __asm__("btsl %1,%0" : "=m"(set) : "Ir"(20) : "cc");
     printf("set=0x%x\n", set);
     val = 0x01020304;
+#ifndef __APPLE__
     printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));
+#endif
 #ifndef _WIN32
+#ifndef __APPLE__
     override_func1();
     override_func2();
     /* The base_func ref from the following inline asm should find
@@ -3741,13 +3774,17 @@ void asm_test(void)
     override_func3();
     printf("asmstr: %s\n", get_asm_string());
     asm_local_label_diff();
+#endif
     asm_local_statics();
 #endif
+#ifndef __APPLE__
+    /* clang can't deal with the type change */
     /* Check that we can also load structs of appropriate layout
        into registers.  */
     asm volatile("" : "=r" (asmret) : "0"(s2));
     if (asmret != s2.addr)
       printf("asmstr: failed\n");
+#endif
 #ifdef BOOL_ISOC99
     /* Check that the typesize correctly sets the register size to
        8 bit.  */
@@ -3809,14 +3846,19 @@ void builtin_test(void)
 /* space is needed because tcc preprocessor introduces a space between each token */
     COMPAT_TYPE(char * *, void *); 
 #endif
-    printf("res = %d\n", __builtin_constant_p(1));
-    printf("res = %d\n", __builtin_constant_p(1 + 2));
-    printf("res = %d\n", __builtin_constant_p(&constant_p_var));
-    printf("res = %d\n", __builtin_constant_p(constant_p_var));
-    printf("res = %d\n", __builtin_constant_p(100000 / constant_p_var));
-    printf("res = %d\n", __builtin_constant_p(i && 0));
-    printf("res = %d\n", __builtin_constant_p(i && 1));
-    printf("res = %d\n", __builtin_constant_p(i && 0 ? i : 34));
+    printf("res1 = %d\n", __builtin_constant_p(1));
+    printf("res2 = %d\n", __builtin_constant_p(1 + 2));
+    printf("res3 = %d\n", __builtin_constant_p(&constant_p_var));
+    printf("res4 = %d\n", __builtin_constant_p(constant_p_var));
+    printf("res5 = %d\n", __builtin_constant_p(100000 / constant_p_var));
+#ifndef __APPLE__
+    /* clang doesn't regard this as constant expression */
+    printf("res6 = %d\n", __builtin_constant_p(i && 0));
+#endif
+    printf("res7 = %d\n", __builtin_constant_p(i && 1));
+#ifndef __APPLE__
+    printf("res8 = %d\n", __builtin_constant_p(i && 0 ? i : 34));
+#endif
     s = 1;
     ll = 2;
     i = __builtin_choose_expr (1 != 0, ll, s);
@@ -3850,14 +3892,18 @@ extern int                     weak_asm_v1       asm("weak_asm_v1x") __attribute
 extern int __attribute((weak)) weak_asm_v2       asm("weak_asm_v2x")                    ;
 extern int __attribute((weak)) weak_asm_v3(void) asm("weak_asm_v3x") __attribute((weak));
 
+#ifndef __APPLE__
 static const size_t dummy = 0;
 extern __typeof(dummy) weak_dummy1 __attribute__((weak, alias("dummy")));
 extern __typeof(dummy) __attribute__((weak, alias("dummy"))) weak_dummy2;
 extern __attribute__((weak, alias("dummy"))) __typeof(dummy) weak_dummy3;
+#endif
 
 int some_lib_func(void);
 int dummy_impl_of_slf(void) { return 444; }
+#ifndef __APPLE__
 int some_lib_func(void) __attribute__((weak, alias("dummy_impl_of_slf")));
+#endif
 
 int weak_toolate() __attribute__((weak));
 int weak_toolate() { return 0; }
@@ -3881,7 +3927,9 @@ void __attribute__((weak)) weak_test(void)
 	printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
 	printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
 	printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
+#ifndef __APPLE__
 	printf("some_lib_func=%d\n", &some_lib_func ? some_lib_func() : 0);
+#endif
 }
 
 int __attribute__((weak)) weak_f2() { return 222; }
