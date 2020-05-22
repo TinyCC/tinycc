@@ -12,12 +12,12 @@ int (*__rt_error)(void*, void*, const char *, va_list);
 #endif
 
 __declspec(dllexport)
-void __bt_init(rt_context *p, int num_callers)
+void __bt_init(rt_context *p, int num_callers, int mode)
 {
     __attribute__((weak)) int main();
-    __attribute__((weak)) void __bound_init(void*);
+    __attribute__((weak)) void __bound_init(void*, int);
     struct rt_context *rc = &g_rtctxt;
-    //fprintf(stderr, "__bt_init %d %p %p\n", num_callers, p->stab_sym, p->bounds_start), fflush(stderr);
+    //fprintf(stderr, "__bt_init %d %p %p %d\n", num_callers, p->stab_sym, p->bounds_start, mode), fflush(stderr);
     if (num_callers) {
         memcpy(rc, p, offsetof(rt_context, next));
         rc->num_callers = num_callers - 1;
@@ -28,7 +28,7 @@ void __bt_init(rt_context *p, int num_callers)
         p->next = rc->next, rc->next = p;
     }
     if (__bound_init && p->bounds_start)
-        __bound_init(p->bounds_start);
+        __bound_init(p->bounds_start, mode);
 }
 
 /* copy a string and truncate it. */

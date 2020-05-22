@@ -172,7 +172,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check) {
             if ((p = tcc_get_symbol(s1, "__bound_init")))
-                ((void(*)(void*))p)(bounds_section->data);
+                ((void(*)(void*, int))p)(bounds_section->data, 1);
         }
 #endif
         set_exception_handler();

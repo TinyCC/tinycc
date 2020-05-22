@@ -1388,7 +1388,10 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     put_ptr(s1, stab_section->link, 0);
     section_ptr_add(s, 3 * PTR_SIZE);
     /* prog_base */
+#ifndef TCC_TARGET_MACHO
+    /* XXX this relocation is wrong, it uses sym-index 0 (local,undef) */
     put_elf_reloc(s1->symtab, s, s->data_offset, R_DATA_PTR, 0);
+#endif
     section_ptr_add(s, PTR_SIZE);
     n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
@@ -1411,11 +1414,11 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         cstr_printf(&cstr, "__bt_init_dll(0);");
 #endif
 #endif
-    cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
+    cstr_printf(&cstr, "__bt_init(__rt_info,%d, 0);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
     tcc_compile_string(s1, cstr.data);
     cstr_free(&cstr);
-    set_local_sym(s1, "__rt_info", s, o);
+    set_local_sym(s1, "___rt_info" + !s1->leading_underscore, s, o);
 }
 #endif
 

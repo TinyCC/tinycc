@@ -54,7 +54,7 @@ WIN_O = crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o
 
 OBJ-i386 = $(I386_O) $(BCHECK_O) $(DSO_O)
 OBJ-x86_64 = $(X86_64_O) va_list.o $(BCHECK_O) $(DSO_O)
-OBJ-x86_64-osx = $(X86_64_O) va_list.o
+OBJ-x86_64-osx = $(X86_64_O) va_list.o $(BCHECK_O)
 OBJ-i386-win32 = $(I386_O) chkstk.o $(B_O) $(WIN_O)
 OBJ-x86_64-win32 = $(X86_64_O) chkstk.o $(B_O) $(WIN_O)
 OBJ-arm64 = $(ARM64_O) $(BCHECK_O) $(DSO_O)

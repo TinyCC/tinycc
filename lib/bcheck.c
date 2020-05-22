@@ -27,6 +27,7 @@
  && !defined(__FreeBSD_kernel__) \
  && !defined(__DragonFly__) \
  && !defined(__OpenBSD__) \
+ && !defined(__APPLE__) \
  && !defined(__NetBSD__)
 #include <malloc.h>
 #endif
@@ -98,7 +99,14 @@ static CRITICAL_SECTION bounds_sem;
 #include <pthread.h>
 #include <dlfcn.h>
 #include <errno.h>
-#if 0
+#ifdef __APPLE__
+#include <dispatch/dispatch.h>
+static dispatch_semaphore_t bounds_sem;
+#define INIT_SEM()             bounds_sem = dispatch_semaphore_create(1)
+#define EXIT_SEM()             dispatch_release(*(dispatch_object_t*)&bounds_sem)
+#define WAIT_SEM()             if (use_sem) dispatch_semaphore_wait(bounds_sem, DISPATCH_TIME_FOREVER)
+#define POST_SEM()             if (use_sem) dispatch_semaphore_signal(bounds_sem)
+#elif 0
 #include <semaphore.h>
 static sem_t bounds_sem;
 #define INIT_SEM()             sem_init (&bounds_sem, 0, 1)
@@ -198,7 +206,7 @@ DLL_EXPORT void * __bound_ptr_indir12(void *p, size_t offset);
 DLL_EXPORT void * __bound_ptr_indir16(void *p, size_t offset);
 DLL_EXPORT void FASTCALL __bound_local_new(void *p1);
 DLL_EXPORT void FASTCALL __bound_local_delete(void *p1);
-void __bound_init(size_t *);
+void __bound_init(size_t *, int);
 void __bound_main_arg(char **p);
 void __bound_exit(void);
 #if !defined(_WIN32)
@@ -780,9 +788,10 @@ void __bound_siglongjmp(jmp_buf env, int val)
 #pragma GCC diagnostic pop
 #endif
 
-void __bound_init(size_t *p)
+void __bound_init(size_t *p, int mode)
 {
-    dprintf(stderr, "%s, %s(): start\n", __FILE__, __FUNCTION__);
+    dprintf(stderr, "%s, %s(): start %s\n", __FILE__, __FUNCTION__,
+            mode < 0 ? "lazy" : mode == 0 ? "normal use" : "for -run");
 
     if (inited) {
         WAIT_SEM();
@@ -800,9 +809,12 @@ void __bound_init(size_t *p)
 
 #if MALLOC_REDIR
     {
-        void *addr = RTLD_NEXT;
+        void *addr = mode > 0 ? RTLD_DEFAULT : RTLD_NEXT;
 
-        /* tcc -run required RTLD_DEFAULT. Normal usage requires RTLD_NEXT */
+        /* tcc -run required RTLD_DEFAULT. Normal usage requires RTLD_NEXT,
+           but using RTLD_NEXT with -run segfaults on MacOS in dyld as the
+           generated code segment isn't registered with dyld and hence the
+           caller image of dlsym isn't known to it */
         *(void **) (&malloc_redir) = dlsym (addr, "malloc");
         if (malloc_redir == NULL) {
             dprintf(stderr, "%s, %s(): use RTLD_DEFAULT\n",
@@ -877,6 +889,9 @@ void __bound_init(size_t *p)
     WAIT_SEM ();
 
 #if HAVE_CTYPE
+#ifdef __APPLE__
+#warning fill out for MacOS (see <_ctype.h> and <runetype.h>)
+#else
     /* XXX: Does not work if locale is changed */
     tree = splay_insert((size_t) __ctype_b_loc(),
                         sizeof (unsigned short *), tree);
@@ -890,6 +905,7 @@ void __bound_init(size_t *p)
                         sizeof (__int32_t *), tree);
     tree = splay_insert((size_t) (*__ctype_toupper_loc() - 128),
                         384 * sizeof (__int32_t), tree);
+#endif
 #endif
 #if HAVE_ERRNO
     tree = splay_insert((size_t) (&errno), sizeof (int), tree);
@@ -985,7 +1001,7 @@ void __attribute__((destructor)) __bound_exit(void)
     dprintf(stderr, "%s, %s():\n", __FILE__, __FUNCTION__);
 
     if (inited) {
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__APPLE__)
         if (print_heap) {
             extern void __libc_freeres (void);
             __libc_freeres ();
@@ -1097,7 +1113,7 @@ void *__bound_malloc(size_t size, const void *caller)
 #if MALLOC_REDIR
     /* This will catch the first dlsym call from __bound_init */
     if (malloc_redir == NULL) {
-        __bound_init (0);
+        __bound_init (0, -1);
         if (malloc_redir == NULL) {
             ptr = &initial_pool[pool_index];
             pool_index = (pool_index + size + 15) & ~15;
@@ -1259,7 +1275,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
 #if MALLOC_REDIR
     /* This will catch the first dlsym call from __bound_init */
     if (malloc_redir == NULL) {
-        __bound_init (0);
+        __bound_init (0, -1);
         if (malloc_redir == NULL) {
             ptr = &initial_pool[pool_index];
             pool_index = (pool_index + size + 15) & ~15;
