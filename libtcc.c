@@ -943,6 +943,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* emulate APPLE-GCC to make libc's headerfiles compile: */
     tcc_define_symbol(s, "__APPLE__", "1");
     tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
+    tcc_define_symbol(s, "__APPLE_CC__", "1"); /* for <TargetConditionals.h> */
 
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");

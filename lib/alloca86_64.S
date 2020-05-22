@@ -1,6 +1,9 @@
 /* ---------------------------------------------- */
 /* alloca86_64.S */
 
+#ifdef __APPLE__
+#define alloca _alloca
+#endif
 .globl alloca
 
 alloca:
