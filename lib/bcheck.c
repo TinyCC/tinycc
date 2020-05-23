@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <setjmp.h>
 
 #if !defined(__FreeBSD__) \
  && !defined(__FreeBSD_kernel__) \
@@ -32,6 +33,7 @@
 
 #if !defined(_WIN32)
 #include <unistd.h>
+#include <sys/syscall.h>
 #endif
 
 #define BOUND_DEBUG             (1)
@@ -158,6 +160,25 @@ typedef struct alloca_list_struct {
     struct alloca_list_struct *next;
 } alloca_list_type;
 
+#if defined(_WIN32)
+#define BOUND_TID_TYPE   DWORD
+#define BOUND_GET_TID    GetCurrentThreadId()
+#elif defined(__i386__) || defined(__x86_64__)
+#define BOUND_TID_TYPE   pid_t
+#define BOUND_GET_TID    syscall (SYS_gettid)
+#else
+#define BOUND_TID_TYPE   int
+#define BOUND_GET_TID    0
+#endif
+
+typedef struct jmp_list_struct {
+    void *penv;
+    size_t fp;
+    size_t end_fp;
+    BOUND_TID_TYPE tid;
+    struct jmp_list_struct *next;
+} jmp_list_type;
+
 #define BOUND_STATISTIC_SPLAY   (0)
 static Tree * splay (size_t addr, Tree *t);
 static Tree * splay_end (size_t addr, Tree *t);
@@ -186,6 +207,8 @@ void *__bound_mmap (void *start, size_t size, int prot, int flags, int fd,
 int __bound_munmap (void *start, size_t size);
 #endif
 DLL_EXPORT void __bound_new_region(void *p, size_t size);
+DLL_EXPORT void __bound_setjmp(jmp_buf env);
+DLL_EXPORT void __bound_longjmp(jmp_buf env, int val);
 DLL_EXPORT void *__bound_memcpy(void *dst, const void *src, size_t size);
 DLL_EXPORT int __bound_memcmp(const void *s1, const void *s2, size_t size);
 DLL_EXPORT void *__bound_memmove(void *dst, const void *src, size_t size);
@@ -199,7 +222,18 @@ DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
 DLL_EXPORT char *__bound_strchr(const char *string, int ch);
 DLL_EXPORT char *__bound_strdup(const char *s);
 
-#if !MALLOC_REDIR
+#if MALLOC_REDIR
+#define BOUND_MALLOC(a)          malloc_redir(a)
+#define BOUND_MEMALIGN(a,b)      memalign_redir(a,b)
+#define BOUND_FREE(a)            free_redir(a)
+#define BOUND_REALLOC(a,b)       realloc_redir(a,b)
+#define BOUND_CALLOC(a,b)        calloc_redir(a,b)
+#else
+#define BOUND_MALLOC(a)          malloc(a)
+#define BOUND_MEMALIGN(a,b)      memalign(a,b)
+#define BOUND_FREE(a)            free(a)
+#define BOUND_REALLOC(a,b)       realloc(a,b)
+#define BOUND_CALLOC(a,b)        calloc(a,b)
 DLL_EXPORT void *__bound_malloc(size_t size, const void *caller);
 DLL_EXPORT void *__bound_memalign(size_t size, size_t align, const void *caller);
 DLL_EXPORT void __bound_free(void *ptr, const void *caller);
@@ -217,6 +251,7 @@ static Tree *tree = NULL;
 static Tree *tree_free_list;
 #endif
 static alloca_list_type *alloca_list;
+static jmp_list_type *jmp_list;
 
 static unsigned char inited;
 static unsigned char print_warn_ptr_add;
@@ -246,6 +281,8 @@ static unsigned long long bound_memalign_count;
 static unsigned long long bound_mmap_count;
 static unsigned long long bound_munmap_count;
 static unsigned long long bound_alloca_count;
+static unsigned long long bound_setjmp_count;
+static unsigned long long bound_longjmp_count;
 static unsigned long long bound_mempcy_count;
 static unsigned long long bound_memcmp_count;
 static unsigned long long bound_memmove_count;
@@ -473,7 +510,8 @@ void FASTCALL __bound_local_new(void *p1)
 void FASTCALL __bound_local_delete(void *p1) 
 {
     size_t addr, fp, *p = p1;
-    alloca_list_type *free_list = NULL;
+    alloca_list_type *alloca_free_list = NULL;
+    jmp_list_type *jmp_free_list = NULL;
 
     if (no_checking)
          return;
@@ -487,39 +525,63 @@ void FASTCALL __bound_local_delete(void *p1)
         p += 2;
     }
     {
-            alloca_list_type *last = NULL;
-            alloca_list_type *cur = alloca_list;
+        alloca_list_type *last = NULL;
+        alloca_list_type *cur = alloca_list;
 
-            while (cur) {
-                if (cur->fp == fp) {
-                    if (last)
-                        last->next = cur->next;
-                    else
-                        alloca_list = cur->next;
-                    tree = splay_delete ((size_t) cur->p, tree);
-                    cur->next = free_list;
-                    free_list = cur;
-                    cur = last ? last->next : alloca_list;
-                 }
-                 else {
-                     last = cur;
-                     cur = cur->next;
-                 }
+        while (cur) {
+            if (cur->fp == fp) {
+                if (last)
+                    last->next = cur->next;
+                else
+                    alloca_list = cur->next;
+                tree = splay_delete ((size_t) cur->p, tree);
+                cur->next = alloca_free_list;
+                alloca_free_list = cur;
+                cur = last ? last->next : alloca_list;
+             }
+             else {
+                 last = cur;
+                 cur = cur->next;
+             }
+        }
+    }
+    {
+        jmp_list_type *last = NULL;
+        jmp_list_type *cur = jmp_list;
+
+        while (cur) {
+            if (cur->fp == fp) {
+                if (last)
+                    last->next = cur->next;
+                else
+                    jmp_list = cur->next;
+                cur->next = jmp_free_list;
+                jmp_free_list = cur;
+                cur = last ? last->next : jmp_list;
             }
+            else {
+                last = cur;
+                cur = cur->next;
+            }
+        }
     }
 
     POST_SEM ();
-    while (free_list) {
-        alloca_list_type *next = free_list->next;
+    while (alloca_free_list) {
+        alloca_list_type *next = alloca_free_list->next;
 
         dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
-               __FILE__, __FUNCTION__, free_list->p);
-#if MALLOC_REDIR
-        free_redir (free_list);
-#else
-        free (free_list);
-#endif
-        free_list = next;
+               __FILE__, __FUNCTION__, alloca_free_list->p);
+        BOUND_FREE (alloca_free_list);
+        alloca_free_list = next;
+    }
+    while (jmp_free_list) {
+        jmp_list_type *next = jmp_free_list->next;
+
+        dprintf(stderr, "%s, %s(): remove setjmp %p\n",
+               __FILE__, __FUNCTION__, jmp_free_list->penv);
+        BOUND_FREE (jmp_free_list);
+        jmp_free_list = next;
     }
 #if BOUND_DEBUG
     if (print_calls) {
@@ -547,11 +609,7 @@ void __bound_new_region(void *p, size_t size)
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, p, (unsigned long)size);
     GET_CALLER_FP (fp);
-#if MALLOC_REDIR
-    new = malloc_redir (sizeof (alloca_list_type));
-#else
-    new = malloc (sizeof (alloca_list_type));
-#endif
+    new = BOUND_MALLOC (sizeof (alloca_list_type));
     WAIT_SEM ();
     INCR_COUNT(bound_alloca_count);
     last = NULL;
@@ -580,12 +638,114 @@ void __bound_new_region(void *p, size_t size)
     if (cur) {
         dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
                 __FILE__, __FUNCTION__, cur->p);
-#if MALLOC_REDIR
-        free_redir (cur);
-#else
-        free (cur);
-#endif
+        BOUND_FREE (cur);
     }
+}
+
+void __bound_setjmp(jmp_buf env)
+{
+    jmp_list_type *jl;
+    void *e = (void *) env;
+
+    dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, e);
+    WAIT_SEM ();
+    INCR_COUNT(bound_setjmp_count);
+    jl = jmp_list;
+    while (jl) {
+        if (jl->penv == e)
+            break;
+        jl = jl->next;
+    }
+    if (jl == NULL) {
+        jl = BOUND_MALLOC (sizeof (jmp_list_type));
+        if (jl) {
+            jl->penv = e;
+            jl->next = jmp_list;
+            jmp_list = jl;
+        }
+    }
+    if (jl) {
+        size_t fp;
+
+        GET_CALLER_FP (fp);
+        jl->fp = fp;
+        jl->end_fp = (size_t)__builtin_frame_address(0);
+        jl->tid = BOUND_GET_TID;
+    }
+    POST_SEM ();
+}
+
+void __bound_longjmp(jmp_buf env, int val)
+{
+    jmp_list_type *jl;
+    void *e = (void *)env;
+    BOUND_TID_TYPE tid = BOUND_GET_TID;
+
+    dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, e);
+    WAIT_SEM();
+    INCR_COUNT(bound_longjmp_count);
+    jl = jmp_list;
+    while (jl) {
+        if (jl->penv == e && jl->tid == tid) {
+            size_t start_fp = (size_t)__builtin_frame_address(0);
+            size_t end_fp = jl->end_fp;
+            jmp_list_type *cur = jmp_list;
+            jmp_list_type *last = NULL;
+
+            while (cur->penv != e || cur->tid != tid) {
+                if (cur->tid == tid) {
+                    dprintf(stderr, "%s, %s(): remove setjmp %p\n",
+                            __FILE__, __FUNCTION__, cur->penv);
+                    if (last)
+                        last->next = cur->next;
+                    else
+                        jmp_list = cur->next;
+                    BOUND_FREE (cur);
+                    cur = last ? last->next : jmp_list;
+                }
+                else {
+                    last = cur;
+                    cur = cur->next;
+                }
+            }
+            for (;;) {
+                Tree *t = tree;
+                alloca_list_type *last;
+                alloca_list_type *cur;
+
+                while (t && (t->start < start_fp || t->start > end_fp))
+                    if (t->start < start_fp)
+                        t = t->right;
+                    else
+                        t = t->left;
+                if (t == NULL)
+                    break;
+                last = NULL;
+                cur = alloca_list;
+                while (cur) {
+                     if ((size_t) cur->p == t->start) {
+                         dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
+                                 __FILE__, __FUNCTION__, cur->p);
+                         if (last)
+                             last->next = cur->next;
+                         else
+                             alloca_list = cur->next;
+                         BOUND_FREE (cur);
+                         break;
+                     }
+                     last = cur;
+                     cur = cur->next;
+                }
+                dprintf(stderr, "%s, %s(): delete %p\n",
+                        __FILE__, __FUNCTION__, (void *) t->start);
+                tree = splay_delete(t->start, tree);
+            }
+            break;
+        }
+        jl = jl->next;
+    }
+    POST_SEM();
+    longjmp (env, val);
 }
 
 #if defined(__GNUC__) && (__GNUC__ >= 6)
@@ -811,21 +971,19 @@ void __attribute__((destructor)) __bound_exit(void)
             alloca_list_type *next = alloca_list->next;
 
             tree = splay_delete ((size_t) alloca_list->p, tree);
-#if MALLOC_REDIR
-            free_redir (alloca_list);
-#else
-            free (alloca_list);
-#endif
+            BOUND_FREE (alloca_list);
             alloca_list = next;
+        }
+        while (jmp_list) {
+           jmp_list_type *next  = jmp_list->next;
+
+           BOUND_FREE (jmp_list);
+           jmp_list = next;
         }
         for (i = 0; i < FREE_REUSE_SIZE; i++) {
             if (free_reuse_list[i]) {
                 tree = splay_delete ((size_t) free_reuse_list[i], tree);
-#if MALLOC_REDIR
-                free_redir (free_reuse_list[i]);
-#else
-                free (free_reuse_list[i]);
-#endif
+                BOUND_FREE (free_reuse_list[i]);
              }
         }
         while (tree) {
@@ -838,11 +996,7 @@ void __attribute__((destructor)) __bound_exit(void)
 #if TREE_REUSE
         while (tree_free_list) {
             Tree *next = tree_free_list->left;
-#if MALLOC_REDIR
-            free_redir (tree_free_list);
-#else
-            free (tree_free_list);
-#endif
+            BOUND_FREE (tree_free_list);
             tree_free_list = next;
         }
 #endif
@@ -868,6 +1022,8 @@ void __attribute__((destructor)) __bound_exit(void)
             fprintf (stderr, "bound_mmap_count         %llu\n", bound_mmap_count);
             fprintf (stderr, "bound_munmap_count       %llu\n", bound_munmap_count);
             fprintf (stderr, "bound_alloca_count       %llu\n", bound_alloca_count);
+            fprintf (stderr, "bound_setjmp_count       %llu\n", bound_setjmp_count);
+            fprintf (stderr, "bound_longjmp_count      %llu\n", bound_longjmp_count);
             fprintf (stderr, "bound_mempcy_count       %llu\n", bound_mempcy_count);
             fprintf (stderr, "bound_memcmp_count       %llu\n", bound_memcmp_count);
             fprintf (stderr, "bound_memmove_count      %llu\n", bound_memmove_count);
@@ -928,11 +1084,7 @@ void *__bound_malloc(size_t size, const void *caller)
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
-#if MALLOC_REDIR
-    ptr = malloc_redir (size + 1);
-#else
-    ptr = malloc(size + 1);
-#endif
+    ptr = BOUND_MALLOC (size + 1);
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, ptr, (unsigned long)size);
     
@@ -962,22 +1114,14 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
-#if MALLOC_REDIR
-    ptr = memalign_redir(size + 1, align);
-#else
-    ptr = memalign(size + 1, align);
-#endif
+    ptr = BOUND_MEMALIGN(size + 1, align);
 #else
     if (align > 4) {
         /* XXX: handle it ? */
         ptr = NULL;
     } else {
         /* we suppose that malloc aligns to at least four bytes */
-#if MALLOC_REDIR
-        ptr = malloc_redir(size + 1);
-#else
-        ptr = malloc(size + 1);
-#endif
+        ptr = BOUND_MALLOC(size + 1);
     }
 #endif
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
@@ -1035,11 +1179,7 @@ void __bound_free(void *ptr, const void *caller)
         ptr = p;
     }
     POST_SEM ();
-#if MALLOC_REDIR
-    free_redir (ptr);
-#else
-    free(ptr);
-#endif
+    BOUND_FREE (ptr);
 }
 
 #if MALLOC_REDIR
@@ -1059,11 +1199,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         return NULL;
     }
 
-#if MALLOC_REDIR
-    new_ptr = realloc_redir (ptr, size);
-#else
-    new_ptr = realloc (ptr, size);
-#endif
+    new_ptr = BOUND_REALLOC (ptr, size);
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, new_ptr, (unsigned long)size);
 
@@ -1108,11 +1244,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
         }
     }
 #endif
-#if MALLOC_REDIR
-    ptr = malloc_redir(size + 1);
-#else
-    ptr = malloc(size + 1);
-#endif
+    ptr = BOUND_MALLOC(size + 1);
     dprintf (stderr, "%s, %s(): %p, 0x%lx\n",
              __FILE__, __FUNCTION__, ptr, (unsigned long)size);
 
@@ -1377,11 +1509,7 @@ char *__bound_strdup(const char *s)
     INCR_COUNT(bound_strdup_count);
     while (*p++);
     __bound_check(s, p - s, "strdup");
-#if MALLOC_REDIR
-    new = malloc_redir ((p - s) + 1);
-#else
-    new = malloc ((p - s) + 1);
-#endif
+    new = BOUND_MALLOC ((p - s) + 1);
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, new, (unsigned long)(p -s));
     if (new) {
@@ -1574,11 +1702,7 @@ static Tree * splay_insert(size_t addr, size_t size, Tree * t)
     else
 #endif
     {
-#if MALLOC_REDIR
-        new = (Tree *) malloc_redir (sizeof (Tree));
-#else
-        new = (Tree *) malloc (sizeof (Tree));
-#endif
+        new = (Tree *) BOUND_MALLOC (sizeof (Tree));
     }
     if (new == NULL) {
         bound_alloc_error("not enough memory for bound checking code");
@@ -1626,11 +1750,7 @@ static Tree * splay_delete(size_t addr, Tree *t)
         t->left = tree_free_list;
         tree_free_list = t;
 #else
-#if MALLOC_REDIR
-        free_redir(t);
-#else
-        free(t);
-#endif
+        BOUND_FREE(t);
 #endif
         return x;
     } else {

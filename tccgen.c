@@ -909,6 +909,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             case TOK_alloca:
             case TOK_mmap:
             case TOK_munmap:
+            case TOK_longjmp:
                 strcpy(buf, "__bound_");
                 strcat(buf, name);
                 name = buf;
@@ -6010,6 +6011,19 @@ special_math_val:
             if (sa)
                 tcc_error("too few arguments to function");
             skip(')');
+#ifdef CONFIG_TCC_BCHECK
+            if (tcc_state->do_bounds_check &&
+                (nb_args == 1 || nb_args == 2) &&
+                (vtop[-nb_args].r & VT_SYM) &&
+                (vtop[-nb_args].sym->v == TOK_setjmp ||
+                 vtop[-nb_args].sym->v == TOK__setjmp)) {
+                vpush_global_sym(&func_old_type, TOK___bound_setjmp);
+                vpushv(vtop - nb_args);
+                if (nb_args == 2)
+                    vpushv(vtop - nb_args);
+                gfunc_call(nb_args);
+            }
+#endif
             gfunc_call(nb_args);
 
             if (ret_nregs < 0) {

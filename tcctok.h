@@ -305,6 +305,7 @@
      DEF(TOK___bound_main_arg, "__bound_main_arg")
      DEF(TOK___bound_local_new, "__bound_local_new")
      DEF(TOK___bound_local_delete, "__bound_local_delete")
+     DEF(TOK___bound_setjmp, "__bound_setjmp")
 # ifdef TCC_TARGET_PE
 #  ifdef TCC_TARGET_X86_64
      DEF(TOK___bound_alloca_nr, "__bound_alloca_nr")
@@ -326,6 +327,9 @@
      DEF(TOK_strcat, "strcat")
      DEF(TOK_strchr, "strchr")
      DEF(TOK_strdup, "strdup")
+     DEF(TOK_setjmp, "setjmp")
+     DEF(TOK__setjmp, "_setjmp")
+     DEF(TOK_longjmp, "longjmp")
 #endif
 
 /* Tiny Assembler */

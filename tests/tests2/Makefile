@@ -26,6 +26,8 @@ ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test
  SKIP += 112_backtrace.test 113_btdll.test
  SKIP += 114_bound_signal.test
+ SKIP += 115_bound_setjmp.test
+ SKIP += 116_bound_setjmp2.test
 endif
 ifeq (-$(CONFIG_musl)-,-yes-)
  SKIP += 112_backtrace.test
@@ -91,6 +93,8 @@ GEN-ALWAYS =
     -bt a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=.
 
 114_bound_signal.test: FLAGS += -b
+115_bound_setjmp.test: FLAGS += -b
+116_bound_setjmp2.test: FLAGS += -b
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
