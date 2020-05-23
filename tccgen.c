@@ -140,12 +140,13 @@ static const struct {
 #if LONG_SIZE == 4
     {   VT_LONG | VT_INT | VT_UNSIGNED, "long unsigned int:t5=r5;0;4294967295;", },
 #else
-    {   VT_LLONG | VT_LONG | VT_UNSIGNED, "long unsigned int:t5=r5;0;-1;", },
+    /* use octal instead of -1 so size_t works (-gstabs+ in gcc) */
+    {   VT_LLONG | VT_LONG | VT_UNSIGNED, "long unsigned int:t5=r5;0;01777777777777777777777;", },
 #endif
     {   VT_QLONG, "__int128:t6=r6;0;-1;", },
     {   VT_QLONG | VT_UNSIGNED, "__int128 unsigned:t7=r7;0;-1;", },
     {   VT_LLONG, "long long int:t8=r8;-9223372036854775808;9223372036854775807;", },
-    {   VT_LLONG | VT_UNSIGNED, "long long unsigned int:t9=r9;0;-1;", },
+    {   VT_LLONG | VT_UNSIGNED, "long long unsigned int:t9=r9;0;01777777777777777777777;", },
     {   VT_SHORT, "short int:t10=r10;-32768;32767;", },
     {   VT_SHORT | VT_UNSIGNED, "short unsigned int:t11=r11;0;65535;", },
     {   VT_BYTE | VT_DEFSIGN, "signed char:t12=r12;-128;127;", },
@@ -4424,6 +4425,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
 
         /* try to access the field using a different type */
         c0 = -1, s = align = 1;
+        t.t = VT_BYTE;
         for (;;) {
             px = f->c * 8 + bit_pos;
             cx = (px >> 3) & -align;

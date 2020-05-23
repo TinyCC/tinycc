@@ -261,7 +261,7 @@ tail_call:
             al->p += adj_size + sizeof(tal_header_t);
             if (is_own) {
                 header = (((tal_header_t *)p) - 1);
-                memcpy(ret, p, header->size);
+                if (p) memcpy(ret, p, header->size);
 #ifdef TAL_DEBUG
                 header->line_num = -header->line_num;
 #endif
@@ -280,7 +280,7 @@ tail_call:
             al->nb_allocs--;
             ret = tal_realloc(*pal, 0, size);
             header = (((tal_header_t *)p) - 1);
-            memcpy(ret, p, header->size);
+            if (p) memcpy(ret, p, header->size);
 #ifdef TAL_DEBUG
             header->line_num = -header->line_num;
 #endif
@@ -301,7 +301,7 @@ tail_call:
         al->nb_allocs--;
         ret = tcc_malloc(size);
         header = (((tal_header_t *)p) - 1);
-        memcpy(ret, p, header->size);
+        if (p) memcpy(ret, p, header->size);
 #ifdef TAL_DEBUG
         header->line_num = -header->line_num;
 #endif

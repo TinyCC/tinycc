@@ -758,12 +758,12 @@ static void gen_bounds_epilog(void)
     ind = saved_ind;
 
     /* generate bound check local freeing */
-    o(0x525051); /* save returned value, if any (+ scratch-space for windows) */
+    o(0x5250); /* save returned value, if any */
     greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
     o(0xb848 + TREG_FASTCALL_1 * 0x100); /* mov xxx, %rcx/di */
     gen_le64 (0);
     gen_bounds_call(TOK___bound_local_delete);
-    o(0x59585a); /* restore returned value, if any */
+    o(0x585a); /* restore returned value, if any */
 }
 #endif
 

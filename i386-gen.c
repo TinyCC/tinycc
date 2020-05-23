@@ -230,6 +230,7 @@ ST_FUNC void load(int r, SValue *sv)
             v1.type.t = VT_INT;
             v1.r = VT_LOCAL | VT_LVAL;
             v1.c.i = fc;
+            v1.sym = NULL;
             fr = r;
             if (!(reg_classes[fr] & RC_INT))
                 fr = get_reg(RC_INT);
@@ -923,6 +924,7 @@ ST_FUNC void gen_opf(int op)
                 v1.type.t = VT_INT;
                 v1.r = VT_LOCAL | VT_LVAL;
                 v1.c.i = fc;
+                v1.sym = NULL;
                 load(r, &v1);
                 fc = 0;
             }

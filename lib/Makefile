@@ -17,13 +17,17 @@ XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
 XCFG = $(or $(findstring -win,$T),-unx)
 S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
 
-# in order to use gcc, tyoe: make <target>-libtcc1-usegcc=yes
+# in order to use gcc, type: make <target>-libtcc1-usegcc=yes
 arm-libtcc1-usegcc ?= no
+
+# This makes bounds checking 40%..60% faster.
+#x86_64-libtcc1-usegcc=yes
+#i386-libtcc1-usegcc=yes
 
 ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XCC = $(CC)
  XAR = $(AR)
- XFLAGS = $(CFLAGS) -fPIC
+ XFLAGS = $(CFLAGS) -fPIC -gstabs -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable
 endif
 
 # only for native compiler
