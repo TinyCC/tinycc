@@ -46,7 +46,7 @@ ifeq ($(ARCH),riscv64)
 endif
 endif
 ifdef CONFIG_OSX # some don't work yet
- TESTS := $(filter-out memtest dlltest asm-c-connect-test, $(TESTS))
+ TESTS := $(filter-out memtest dlltest, $(TESTS))
 endif
 ifeq (,$(filter arm64 i386 x86_64,$(ARCH)))
  TESTS := $(filter-out vla_test-run,$(TESTS))

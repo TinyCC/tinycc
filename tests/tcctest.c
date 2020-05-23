@@ -3650,7 +3650,7 @@ void test_asm_call(void)
   asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi;"
 #if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__)) && !defined(__APPLE__)
 		"call getenv@plt;"
-#elif defined(__APPLE__) && !defined(__TINYC__)
+#elif defined(__APPLE__)
                 "call _getenv;"
 #else
 		"call getenv;"

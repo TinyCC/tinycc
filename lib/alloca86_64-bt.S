@@ -4,6 +4,7 @@
 #ifdef __APPLE__
 #define __bound_alloca ___bound_alloca
 #define __bound_alloca_nr ___bound_alloca_nr
+#define __bound_new_region ___bound_new_region
 #endif
 
 .globl __bound_alloca

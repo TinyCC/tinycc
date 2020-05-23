@@ -38,9 +38,39 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
 static Sym* asm_new_label(TCCState *s1, int label, int is_local);
 static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
+/* If a C name has an _ prepended then only asm labels that start
+   with _ are representable in C, by removing the first _.  ASM names
+   without _ at the beginning don't correspond to C names, but we use
+   the global C symbol table to track ASM names as well, so we need to
+   transform those into ones that don't conflict with a C name,
+   so prepend a '.' for them, but force the ELF asm name to be set.  */
+static int asm2cname(int v, int *addeddot)
+{
+    const char *name;
+    *addeddot = 0;
+    if (!tcc_state->leading_underscore)
+      return v;
+    name = get_tok_str(v, NULL);
+    if (!name)
+      return v;
+    if (name[0] == '_') {
+        v = tok_alloc(name + 1, strlen(name) - 1)->tok;
+    } else if (!strchr(name, '.')) {
+        int n = strlen(name) + 2;
+        char newname[n];
+        snprintf(newname, n, ".%s", name);
+        v = tok_alloc(newname, n - 1)->tok;
+        *addeddot = 1;
+    }
+    return v;
+}
+
 static Sym *asm_label_find(int v)
 {
-    Sym *sym = sym_find(v);
+    Sym *sym;
+    int addeddot;
+    v = asm2cname(v, &addeddot);
+    sym = sym_find(v);
     while (sym && sym->sym_scope && !(sym->type.t & VT_STATIC))
         sym = sym->prev_tok;
     return sym;
@@ -48,10 +78,14 @@ static Sym *asm_label_find(int v)
 
 static Sym *asm_label_push(int v)
 {
+    int addeddot, v2 = asm2cname(v, &addeddot);
     /* We always add VT_EXTERN, for sym definition that's tentative
        (for .set, removed for real defs), for mere references it's correct
        as is.  */
-    return global_identifier_push(v, VT_ASM | VT_EXTERN | VT_STATIC, 0);
+    Sym *sym = global_identifier_push(v2, VT_ASM | VT_EXTERN | VT_STATIC, 0);
+    if (addeddot)
+        sym->asm_label = v;
+    return sym;
 }
 
 /* Return a symbol we can use inside the assembler, having name NAME.
@@ -390,7 +424,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
         sym = asm_label_push(label);
     }
     if (!sym->c)
-      put_extern_sym2(sym, SHN_UNDEF, 0, 0, 0);
+      put_extern_sym2(sym, SHN_UNDEF, 0, 0, 1);
     esym = elfsym(sym);
     esym->st_shndx = sh_num;
     esym->st_value = value;

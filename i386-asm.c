@@ -1490,6 +1490,8 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 		   list when we still know the symbol.  */
 		get_asm_sym(tok_alloc(name, strlen(name))->tok, sv->sym);
 	    }
+            if (tcc_state->leading_underscore)
+              cstr_ccat(add_str, '_');
             cstr_cat(add_str, name, -1);
             if ((uint32_t)sv->c.i == 0)
                 goto no_offset;
