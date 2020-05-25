@@ -212,6 +212,9 @@ struct nlist_64 {
 #define N_EXT   0x1
 #define N_SECT  0xe
 
+#define N_WEAK_REF      0x0040
+#define N_WEAK_DEF      0x0080
+
 struct macho {
     struct mach_header_64 mh;
     int seg2lc[4], nseg;
@@ -383,9 +386,8 @@ static int check_symbols(TCCState *s1, struct macho *mo)
         } else if (sym->st_shndx == SHN_UNDEF) {
             if (mo->iundef == -1)
               mo->iundef = sym_index - 1;
-            if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
-                continue;
-            if (find_elf_sym(s1->dynsymtab_section, name)) {
+            if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK
+                || find_elf_sym(s1->dynsymtab_section, name)) {
                 /* Mark the symbol as coming from a dylib so that
                    relocate_syms doesn't complain.  Normally bind_exe_dynsyms
                    would do this check, and place the symbol into dynsym
@@ -421,7 +423,7 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
                   ELFW(ST_TYPE)(sym->st_info), name);
     }
     if (sym->st_shndx == SHN_UNDEF)
-      tcc_error("should have been rewritten to SHN_FROMDLL");
+      tcc_error("should have been rewritten to SHN_FROMDLL: %s", name);
     else if (sym->st_shndx == SHN_FROMDLL)
       n.n_type = N_UNDF, n.n_sect = 0;
     else if (sym->st_shndx == SHN_ABS)
@@ -436,7 +438,7 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
     if (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL)
       n.n_type |=  N_EXT;
     else if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
-      tcc_error("weak symbol %s unhandled", name);
+      n.n_desc |= N_WEAK_REF | (n.n_type != N_UNDF ? N_WEAK_DEF : 0);
     n.n_strx = pn->n_strx;
     n.n_value = sym->st_value;
     *pn = n;
@@ -762,7 +764,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
 {
     int fd, mode, file_type;
     FILE *fp;
-    int ret = -1;
+    int i, ret = -1;
     struct macho mo = {};
 
     file_type = s1->output_type;
@@ -807,6 +809,12 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     ret = 0;
 
  do_ret:
+    for (i = 0; i < mo.nlc; i++)
+      tcc_free(mo.lc[i]);
+    tcc_free(mo.lc);
+    tcc_free(mo.elfsectomacho);
+    tcc_free(mo.e2msym);
+
     fclose(fp);
     return ret;
 }
