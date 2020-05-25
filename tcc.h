@@ -1531,6 +1531,8 @@ ST_FUNC void resolve_common_syms(TCCState *s1);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
 ST_FUNC void relocate_section(TCCState *s1, Section *s);
 
+ST_FUNC ssize_t full_read(int fd, void *buf, size_t count);
+ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size);
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
@@ -1747,6 +1749,7 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 /* ------------ tccmacho.c ----------------- */
 #ifdef TCC_TARGET_MACHO
 ST_FUNC int macho_output_file(TCCState * s1, const char *filename);
+ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev);
 #endif
 /* ------------ tccrun.c ----------------- */
 #ifdef TCC_IS_NATIVE

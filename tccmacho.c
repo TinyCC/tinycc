@@ -18,6 +18,7 @@
 #include "tcc.h"
 
 #define DEBUG_MACHO 0
+#define dprintf if (DEBUG_MACHO) printf
 
 struct mach_header {
         uint32_t        magic;          /* mach magic number identifier */
@@ -231,7 +232,9 @@ struct macho {
 #define LC_SYMTAB        0x2
 #define LC_DYSYMTAB      0xb
 #define LC_LOAD_DYLIB    0xc
+#define LC_ID_DYLIB      0xd
 #define LC_LOAD_DYLINKER 0xe
+#define LC_REEXPORT_DYLIB (0x1f | LC_REQ_DYLD)
 #define LC_MAIN (0x28|LC_REQ_DYLD)
 
 /* Hack for now, 46_grep.c needs fopen, but due to aliasing games
@@ -375,10 +378,9 @@ static int check_symbols(TCCState *s1, struct macho *mo)
         unsigned bind = ELFW(ST_BIND)(sym->st_info);
         unsigned vis  = ELFW(ST_VISIBILITY)(sym->st_other);
 
-        if (DEBUG_MACHO)
-          printf("%4d (%4d): %09llx %4d %4d %4d %3d %s\n",
-                 sym_index, elf_index, sym->st_value,
-                 type, bind, vis, sym->st_shndx, name);
+        dprintf("%4d (%4d): %09llx %4d %4d %4d %3d %s\n",
+                sym_index, elf_index, sym->st_value,
+                type, bind, vis, sym->st_shndx, name);
         if (bind == STB_LOCAL) {
             if (mo->ilocal == -1)
               mo->ilocal = sym_index - 1;
@@ -394,15 +396,12 @@ static int check_symbols(TCCState *s1, struct macho *mo)
               mo->iundef = sym_index - 1;
             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
                 continue;
-            if (get_sym_attr(s1, elf_index, 0)) {
+            if (find_elf_sym(s1->dynsymtab_section, name)) {
                 /* Mark the symbol as coming from a dylib so that
-                   relocate_syms doesn't complain.  Normally we would have
-                   checked that any dylib in fact exports this one, and listed
-                   those in s1->dynsymtab, which would cause us to enter this
-                   symbol into s1->dynsym, which is checked by relocate_syms.
-                   But for now we fake this and regard all undefined as
-                   coming from a dylib, and we don't use the dynsymtab/dynsym
-                   scheme.  */
+                   relocate_syms doesn't complain.  Normally bind_exe_dynsyms
+                   would do this check, and place the symbol into dynsym
+                   which is checked by relocate_syms.  But Mach-O doesn't use
+                   bind_exe_dynsyms.  */
                 sym->st_shndx = SHN_FROMDLL;
                 continue;
             }
@@ -589,7 +588,11 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     dysymlc->cmdsize = sizeof(*dysymlc);
     add_lc(mo, dysymlc);
 
-    add_dylib(mo, "/usr/lib/libSystem.B.dylib");
+    for(i = 0; i < s1->nb_loaded_dlls; i++) {
+        DLLReference *dllref = s1->loaded_dlls[i];
+        if (dllref->level == 0)
+          add_dylib(mo, dllref->name);
+    }
 
     mo->linkedit = new_section(s1, "LINKEDIT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     /* LINKEDIT can't be empty (XXX remove once we have symbol table) */
@@ -683,16 +686,14 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
                 al = s->sh_addralign;
                 curaddr = (curaddr + al - 1) & -al;
-                if (DEBUG_MACHO)
-                  printf("curaddr now 0x%llx\n", curaddr);
+                dprintf("curaddr now 0x%llx\n", curaddr);
                 s->sh_addr = curaddr;
                 curaddr += s->sh_size;
                 if (s->sh_type != SHT_NOBITS) {
                     fileofs = (fileofs + al - 1) & -al;
                     s->sh_offset = fileofs;
                     fileofs += s->sh_size;
-                    if (DEBUG_MACHO)
-                      printf("fileofs now %lld\n", fileofs);
+                    dprintf("fileofs now %lld\n", fileofs);
                 }
                 if (sec)
                   mo->elfsectomacho[s->sh_num] = numsec;
@@ -799,7 +800,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     int fd, mode, file_type;
     FILE *fp;
     int ret = -1;
-    struct macho mo = {0,};
+    struct macho mo = {};
 
     file_type = s1->output_type;
     if (file_type == TCC_OUTPUT_OBJ)
@@ -844,4 +845,146 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
  do_ret:
     fclose(fp);
     return ret;
+}
+
+#define FAT_MAGIC       0xcafebabe
+#define FAT_CIGAM       0xbebafeca
+#define FAT_MAGIC_64    0xcafebabf
+#define FAT_CIGAM_64    0xbfbafeca
+
+struct fat_header {
+        uint32_t        magic;          /* FAT_MAGIC or FAT_MAGIC_64 */
+        uint32_t        nfat_arch;      /* number of structs that follow */
+};
+
+struct fat_arch {
+        int             cputype;        /* cpu specifier (int) */
+        int             cpusubtype;     /* machine specifier (int) */
+        uint32_t        offset;         /* file offset to this object file */
+        uint32_t        size;           /* size of this object file */
+        uint32_t        align;          /* alignment as a power of 2 */
+};
+
+#define SWAP(x) (swap ? ntohl(x) : (x))
+ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
+{
+    unsigned char buf[sizeof(struct mach_header_64)];
+    void *buf2;
+    uint32_t machofs = 0;
+    struct fat_header fh;
+    struct mach_header mh;
+    struct load_command *lc;
+    int i, swap = 0;
+    const char *soname = filename;
+    struct nlist_64 *symtab = 0;
+    uint32_t nsyms = 0;
+    char *strtab = 0;
+    uint32_t strsize = 0;
+    uint32_t iextdef = 0;
+    uint32_t nextdef = 0;
+    DLLReference *dllref;
+
+  again:
+    if (full_read(fd, buf, sizeof(buf)) != sizeof(buf))
+      return -1;
+    memcpy(&fh, buf, sizeof(fh));
+    if (fh.magic == FAT_MAGIC || fh.magic == FAT_CIGAM) {
+        struct fat_arch *fa = load_data(fd, sizeof(fh),
+                                        fh.nfat_arch * sizeof(*fa));
+        swap = fh.magic == FAT_CIGAM;
+        for (i = 0; i < SWAP(fh.nfat_arch); i++)
+          if (SWAP(fa[i].cputype) == 0x01000007 /* CPU_TYPE_X86_64 */
+              && SWAP(fa[i].cpusubtype) == 3)   /* CPU_SUBTYPE_X86_ALL */
+            break;
+        if (i == SWAP(fh.nfat_arch)) {
+            tcc_free(fa);
+            return -1;
+        }
+        machofs = SWAP(fa[i].offset);
+        tcc_free(fa);
+        lseek(fd, machofs, SEEK_SET);
+        goto again;
+    } else if (fh.magic == FAT_MAGIC_64 || fh.magic == FAT_CIGAM_64) {
+        tcc_warning("%s: Mach-O fat 64bit files of type 0x%x not handled",
+                    filename, fh.magic);
+        return -1;
+    }
+
+    memcpy(&mh, buf, sizeof(mh));
+    if (mh.magic != MH_MAGIC_64)
+      return -1;
+    dprintf("found Mach-O at %d\n", machofs);
+    buf2 = load_data(fd, machofs + sizeof(struct mach_header_64), mh.sizeofcmds);
+    for (i = 0, lc = buf2; i < mh.ncmds; i++) {
+        dprintf("lc %2d: 0x%08x\n", i, lc->cmd);
+        if (lc->cmd == LC_SYMTAB) {
+            struct symtab_command *sc = (struct symtab_command*)lc;
+            nsyms = sc->nsyms;
+            symtab = load_data(fd, machofs + sc->symoff, nsyms * sizeof(*symtab));
+            strsize = sc->strsize;
+            strtab = load_data(fd, machofs + sc->stroff, strsize);
+        } else if (lc->cmd == LC_ID_DYLIB) {
+            struct dylib_command *dc = (struct dylib_command*)lc;
+            soname = (char*)lc + dc->name;
+            dprintf(" ID_DYLIB %d 0x%x 0x%x %s\n",
+                    dc->timestamp, dc->current_version,
+                    dc->compatibility_version, soname);
+        } else if (lc->cmd == LC_REEXPORT_DYLIB) {
+            struct dylib_command *dc = (struct dylib_command*)lc;
+            char *name = (char*)lc + dc->name;
+            dprintf(" REEXPORT %s\n", name);
+            int subfd = open(name, O_RDONLY | O_BINARY);
+            if (subfd < 0)
+              tcc_warning("can't open %s (reexported from %s)", name, filename);
+            else {
+                /* Hopefully the REEXPORTs never form a cycle, we don't check
+                   for that!  */
+                macho_load_dll(s1, subfd, name, lev + 1);
+                close(subfd);
+            }
+        } else if (lc->cmd == LC_DYSYMTAB) {
+            struct dysymtab_command *dc = (struct dysymtab_command*)lc;
+            iextdef = dc->iextdefsym;
+            nextdef = dc->nextdefsym;
+        }
+        lc = (struct load_command*) ((char*)lc + lc->cmdsize);
+    }
+
+    /* if the dll is already loaded, do not load it */
+    for(i = 0; i < s1->nb_loaded_dlls; i++) {
+        dllref = s1->loaded_dlls[i];
+        if (!strcmp(soname, dllref->name)) {
+            /* but update level if needed */
+            if (lev < dllref->level)
+                dllref->level = lev;
+            goto the_end;
+        }
+    }
+    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
+    dllref->level = lev;
+    strcpy(dllref->name, soname);
+    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+
+    if (!nsyms || !nextdef)
+      tcc_warning("%s doesn't export any symbols?", filename);
+
+    //dprintf("symbols (all):\n");
+    dprintf("symbols (exported):\n");
+    dprintf("    n: typ sec   desc              value name\n");
+    //for (i = 0; i < nsyms; i++) {
+    for (i = iextdef; i < iextdef + nextdef; i++) {
+        struct nlist_64 *sym = symtab + i;
+        dprintf("%5d: %3d %3d 0x%04x 0x%016llx %s\n",
+                i, sym->n_type, sym->n_sect, sym->n_desc, sym->n_value,
+                strtab + sym->n_strx);
+        set_elf_sym(s1->dynsymtab_section, 0, 0,
+                    ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE),
+                    0, SHN_UNDEF, strtab + sym->n_strx);
+    }
+
+  the_end:
+    tcc_free(strtab);
+    tcc_free(symtab);
+    tcc_free(buf2);
+    return 0;
 }
