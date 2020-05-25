@@ -911,6 +911,9 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             case TOK_mmap:
             case TOK_munmap:
             case TOK_longjmp:
+#ifndef TCC_TARGET_PE
+            case TOK_siglongjmp:
+#endif
                 strcpy(buf, "__bound_");
                 strcat(buf, name);
                 name = buf;
@@ -6018,7 +6021,12 @@ special_math_val:
                 (nb_args == 1 || nb_args == 2) &&
                 (vtop[-nb_args].r & VT_SYM) &&
                 (vtop[-nb_args].sym->v == TOK_setjmp ||
-                 vtop[-nb_args].sym->v == TOK__setjmp)) {
+                 vtop[-nb_args].sym->v == TOK__setjmp
+#ifndef TCC_TARGET_PE
+                 || vtop[-nb_args].sym->v == TOK_sigsetjmp
+                 || vtop[-nb_args].sym->v == TOK___sigsetjmp
+#endif
+                )) {
                 vpush_global_sym(&func_old_type, TOK___bound_setjmp);
                 vpushv(vtop - nb_args);
                 if (nb_args == 2)

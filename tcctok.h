@@ -315,6 +315,10 @@
      DEF(TOK_realloc, "realloc")
      DEF(TOK_memalign, "memalign")
      DEF(TOK_calloc, "calloc")
+# else
+     DEF(TOK_sigsetjmp, "sigsetjmp")
+     DEF(TOK___sigsetjmp, "__sigsetjmp")
+     DEF(TOK_siglongjmp, "siglongjmp")
 # endif
      DEF(TOK_mmap, "mmap")
      DEF(TOK_munmap, "munmap")

@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <setjmp.h>
 
 static volatile int run = 1;
 static int dummy[10];
@@ -70,6 +71,8 @@ main (void)
     pthread_t id1, id2;
     struct sigaction act;
     struct timespec request;
+    sigjmp_buf sj;
+    sigset_t m;
 
     memset (&act, 0, sizeof (act));
     act.sa_handler = signal_handler;
@@ -90,5 +93,19 @@ main (void)
     pthread_join(id1, NULL);
     pthread_join(id2, NULL);
     sem_destroy (&sem);
+
+    sigemptyset (&m);
+    sigprocmask (SIG_SETMASK, &m, NULL);
+    if (sigsetjmp (sj, 0) == 0)
+    {
+        sigaddset (&m, SIGUSR1);
+        sigprocmask (SIG_SETMASK, &m, NULL);
+        siglongjmp (sj, 1);
+        printf ("failed");
+        return 1;
+    }
+    sigprocmask (SIG_SETMASK, NULL, &m);
+    if (!sigismember (&m, SIGUSR1))
+        printf ("failed");
     return 0;
 }

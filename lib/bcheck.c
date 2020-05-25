@@ -205,6 +205,7 @@ void __bound_exit(void);
 void *__bound_mmap (void *start, size_t size, int prot, int flags, int fd,
                     off_t offset);
 int __bound_munmap (void *start, size_t size);
+DLL_EXPORT void __bound_siglongjmp(jmp_buf env, int val);
 #endif
 DLL_EXPORT void __bound_new_region(void *p, size_t size);
 DLL_EXPORT void __bound_setjmp(jmp_buf env);
@@ -510,8 +511,6 @@ void FASTCALL __bound_local_new(void *p1)
 void FASTCALL __bound_local_delete(void *p1) 
 {
     size_t addr, fp, *p = p1;
-    alloca_list_type *alloca_free_list = NULL;
-    jmp_list_type *jmp_free_list = NULL;
 
     if (no_checking)
          return;
@@ -524,65 +523,51 @@ void FASTCALL __bound_local_delete(void *p1)
         tree = splay_delete(addr + fp, tree);
         p += 2;
     }
-    {
+    if (alloca_list) {
         alloca_list_type *last = NULL;
         alloca_list_type *cur = alloca_list;
 
-        while (cur) {
+        do {
             if (cur->fp == fp) {
                 if (last)
                     last->next = cur->next;
                 else
                     alloca_list = cur->next;
                 tree = splay_delete ((size_t) cur->p, tree);
-                cur->next = alloca_free_list;
-                alloca_free_list = cur;
+                dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
+                        __FILE__, __FUNCTION__, cur->p);
+                BOUND_FREE (cur);
                 cur = last ? last->next : alloca_list;
              }
              else {
                  last = cur;
                  cur = cur->next;
              }
-        }
+        } while (cur);
     }
-    {
+    if (jmp_list) {
         jmp_list_type *last = NULL;
         jmp_list_type *cur = jmp_list;
 
-        while (cur) {
+        do {
             if (cur->fp == fp) {
                 if (last)
                     last->next = cur->next;
                 else
                     jmp_list = cur->next;
-                cur->next = jmp_free_list;
-                jmp_free_list = cur;
+                dprintf(stderr, "%s, %s(): remove setjmp %p\n",
+                       __FILE__, __FUNCTION__, cur->penv);
+                BOUND_FREE (cur);
                 cur = last ? last->next : jmp_list;
             }
             else {
                 last = cur;
                 cur = cur->next;
             }
-        }
+        } while (cur);
     }
 
     POST_SEM ();
-    while (alloca_free_list) {
-        alloca_list_type *next = alloca_free_list->next;
-
-        dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
-               __FILE__, __FUNCTION__, alloca_free_list->p);
-        BOUND_FREE (alloca_free_list);
-        alloca_free_list = next;
-    }
-    while (jmp_free_list) {
-        jmp_list_type *next = jmp_free_list->next;
-
-        dprintf(stderr, "%s, %s(): remove setjmp %p\n",
-               __FILE__, __FUNCTION__, jmp_free_list->penv);
-        BOUND_FREE (jmp_free_list);
-        jmp_free_list = next;
-    }
 #if BOUND_DEBUG
     if (print_calls) {
         p = p1;
@@ -647,106 +632,127 @@ void __bound_setjmp(jmp_buf env)
     jmp_list_type *jl;
     void *e = (void *) env;
 
-    dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, e);
-    WAIT_SEM ();
-    INCR_COUNT(bound_setjmp_count);
-    jl = jmp_list;
-    while (jl) {
-        if (jl->penv == e)
-            break;
-        jl = jl->next;
-    }
-    if (jl == NULL) {
-        jl = BOUND_MALLOC (sizeof (jmp_list_type));
-        if (jl) {
-            jl->penv = e;
-            jl->next = jmp_list;
-            jmp_list = jl;
+    if (no_checking == 0) {
+        dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, e);
+        WAIT_SEM ();
+        INCR_COUNT(bound_setjmp_count);
+        jl = jmp_list;
+        while (jl) {
+            if (jl->penv == e)
+                break;
+            jl = jl->next;
         }
-    }
-    if (jl) {
-        size_t fp;
+        if (jl == NULL) {
+            jl = BOUND_MALLOC (sizeof (jmp_list_type));
+            if (jl) {
+                jl->penv = e;
+                jl->next = jmp_list;
+                jmp_list = jl;
+            }
+        }
+        if (jl) {
+            size_t fp;
 
-        GET_CALLER_FP (fp);
-        jl->fp = fp;
-        jl->end_fp = (size_t)__builtin_frame_address(0);
-        jl->tid = BOUND_GET_TID;
+            GET_CALLER_FP (fp);
+            jl->fp = fp;
+            jl->end_fp = (size_t)__builtin_frame_address(0);
+            jl->tid = BOUND_GET_TID;
+        }
+        POST_SEM ();
     }
-    POST_SEM ();
+}
+
+static void __bound_long_jump(jmp_buf env, int val, int sig, const char *func)
+{
+    jmp_list_type *jl;
+    void *e;
+    BOUND_TID_TYPE tid;
+
+    if (no_checking == 0) {
+        e = (void *)env;
+        tid = BOUND_GET_TID;
+        dprintf(stderr, "%s, %s(): %p\n", __FILE__, func, e);
+        WAIT_SEM();
+        INCR_COUNT(bound_longjmp_count);
+        jl = jmp_list;
+        while (jl) {
+            if (jl->penv == e && jl->tid == tid) {
+                size_t start_fp = (size_t)__builtin_frame_address(0);
+                size_t end_fp = jl->end_fp;
+                jmp_list_type *cur = jmp_list;
+                jmp_list_type *last = NULL;
+
+                while (cur->penv != e || cur->tid != tid) {
+                    if (cur->tid == tid) {
+                        dprintf(stderr, "%s, %s(): remove setjmp %p\n",
+                                __FILE__, func, cur->penv);
+                        if (last)
+                            last->next = cur->next;
+                        else
+                            jmp_list = cur->next;
+                        BOUND_FREE (cur);
+                        cur = last ? last->next : jmp_list;
+                    }
+                    else {
+                        last = cur;
+                        cur = cur->next;
+                    }
+                }
+                for (;;) {
+                    Tree *t = tree;
+                    alloca_list_type *last;
+                    alloca_list_type *cur;
+
+                    while (t && (t->start < start_fp || t->start > end_fp))
+                        if (t->start < start_fp)
+                            t = t->right;
+                        else
+                            t = t->left;
+                    if (t == NULL)
+                        break;
+                    last = NULL;
+                    cur = alloca_list;
+                    while (cur) {
+                         if ((size_t) cur->p == t->start) {
+                             dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
+                                     __FILE__, func, cur->p);
+                             if (last)
+                                 last->next = cur->next;
+                             else
+                                 alloca_list = cur->next;
+                             BOUND_FREE (cur);
+                             break;
+                         }
+                         last = cur;
+                         cur = cur->next;
+                    }
+                    dprintf(stderr, "%s, %s(): delete %p\n",
+                            __FILE__, func, (void *) t->start);
+                    tree = splay_delete(t->start, tree);
+                }
+                break;
+            }
+            jl = jl->next;
+        }
+        POST_SEM();
+    }
+#if !defined(_WIN32)
+    sig ? siglongjmp(env, val) :
+#endif
+    longjmp (env, val);
 }
 
 void __bound_longjmp(jmp_buf env, int val)
 {
-    jmp_list_type *jl;
-    void *e = (void *)env;
-    BOUND_TID_TYPE tid = BOUND_GET_TID;
-
-    dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, e);
-    WAIT_SEM();
-    INCR_COUNT(bound_longjmp_count);
-    jl = jmp_list;
-    while (jl) {
-        if (jl->penv == e && jl->tid == tid) {
-            size_t start_fp = (size_t)__builtin_frame_address(0);
-            size_t end_fp = jl->end_fp;
-            jmp_list_type *cur = jmp_list;
-            jmp_list_type *last = NULL;
-
-            while (cur->penv != e || cur->tid != tid) {
-                if (cur->tid == tid) {
-                    dprintf(stderr, "%s, %s(): remove setjmp %p\n",
-                            __FILE__, __FUNCTION__, cur->penv);
-                    if (last)
-                        last->next = cur->next;
-                    else
-                        jmp_list = cur->next;
-                    BOUND_FREE (cur);
-                    cur = last ? last->next : jmp_list;
-                }
-                else {
-                    last = cur;
-                    cur = cur->next;
-                }
-            }
-            for (;;) {
-                Tree *t = tree;
-                alloca_list_type *last;
-                alloca_list_type *cur;
-
-                while (t && (t->start < start_fp || t->start > end_fp))
-                    if (t->start < start_fp)
-                        t = t->right;
-                    else
-                        t = t->left;
-                if (t == NULL)
-                    break;
-                last = NULL;
-                cur = alloca_list;
-                while (cur) {
-                     if ((size_t) cur->p == t->start) {
-                         dprintf(stderr, "%s, %s(): remove alloca/vla %p\n",
-                                 __FILE__, __FUNCTION__, cur->p);
-                         if (last)
-                             last->next = cur->next;
-                         else
-                             alloca_list = cur->next;
-                         BOUND_FREE (cur);
-                         break;
-                     }
-                     last = cur;
-                     cur = cur->next;
-                }
-                dprintf(stderr, "%s, %s(): delete %p\n",
-                        __FILE__, __FUNCTION__, (void *) t->start);
-                tree = splay_delete(t->start, tree);
-            }
-            break;
-        }
-        jl = jl->next;
-    }
-    POST_SEM();
-    longjmp (env, val);
+    __bound_long_jump(env,val, 0, __FUNCTION__);
 }
+
+#if !defined(_WIN32)
+void __bound_siglongjmp(jmp_buf env, int val)
+{
+    __bound_long_jump(env,val, 1, __FUNCTION__);
+}
+#endif
 
 #if defined(__GNUC__) && (__GNUC__ >= 6)
 #pragma GCC diagnostic pop

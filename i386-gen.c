@@ -363,7 +363,12 @@ static void gcall_or_jmp(int is_jmp)
         if (tcc_state->do_bounds_check &&
             (vtop->sym->v == TOK_alloca ||
              vtop->sym->v == TOK_setjmp ||
-             vtop->sym->v == TOK__setjmp))
+             vtop->sym->v == TOK__setjmp
+#ifndef TCC_TARGET_PE
+             || vtop->sym->v == TOK_sigsetjmp
+             || vtop->sym->v == TOK___sigsetjmp
+#endif
+            ))
             func_bound_add_epilog = 1;
 #endif
     } else {
@@ -1092,15 +1097,18 @@ static void gen_bounds_epilog(void)
     bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
     *bounds_ptr = 0;
 
-    /* generate bound local allocation */
-    saved_ind = ind;
-    ind = func_bound_ind;
     sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
                            func_bound_offset, lbounds_section->data_offset);
-    greloc(cur_text_section, sym_data, ind + 1, R_386_32);
-    ind = ind + 5;
-    gen_static_call(TOK___bound_local_new);
-    ind = saved_ind;
+
+    /* generate bound local allocation */
+    if (func_bound_offset != lbounds_section->data_offset) {
+        saved_ind = ind;
+        ind = func_bound_ind;
+        greloc(cur_text_section, sym_data, ind + 1, R_386_32);
+        ind = ind + 5;
+        gen_static_call(TOK___bound_local_new);
+        ind = saved_ind;
+    }
 
     /* generate bound check local freeing */
     o(0x5250); /* save returned value, if any */
