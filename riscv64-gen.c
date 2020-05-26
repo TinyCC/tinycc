@@ -158,7 +158,7 @@ static int load_symofs(int r, SValue *sv, int forstore)
             sv->c.i = 0;
         } else {
             if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: large addend for global address (0x%llx)", sv->c.i);
+              tcc_error("unimp: large addend for global address (0x%llx)", (long long)sv->c.i);
             greloca(cur_text_section, sv->sym, ind,
                     R_RISCV_GOT_HI20, 0);
             doload = 1;
