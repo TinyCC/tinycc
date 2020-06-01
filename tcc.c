@@ -270,15 +270,11 @@ redo:
     if (n == 0) {
         if (opt == OPT_HELP) {
             fputs(help, stdout);
-            return 0;
+            if (!s->verbose)
+                return 0;
+            ++opt;
         }
         if (opt == OPT_HELP2) {
-            fputs(help2, stdout);
-            return 0;
-        }
-        if (opt == OPT_VERBOSE_HELP) {
-            /* simulate gcc -v --help */
-            fputs(help, stdout);
             fputs(help2, stdout);
             return 0;
         }
@@ -316,9 +312,6 @@ redo:
                 tcc_error("cannot specify libraries with -c");
             if (s->nb_files > 1 && s->outfile)
                 tcc_error("cannot specify output file with -c many files");
-        } else {
-            if (s->option_pthread)
-                tcc_set_options(s, "-lpthread");
         }
 
         if (s->do_bench)

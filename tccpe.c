@@ -1996,6 +1996,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     memset(&pe, 0, sizeof pe);
     pe.filename = filename;
     pe.s1 = s1;
+    s1->filetype = 0;
 
 #ifdef CONFIG_TCC_BCHECK
     tcc_add_bcheck(s1);

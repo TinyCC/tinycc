@@ -986,6 +986,27 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if (s->char_is_unsigned)
         tcc_define_symbol(s, "__CHAR_UNSIGNED__", NULL);
 
+    if (s->cversion == 201112) {
+        tcc_undefine_symbol(s, "__STDC_VERSION__");
+        tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
+        tcc_define_symbol(s, "__STDC_NO_ATOMICS__", NULL);
+        tcc_define_symbol(s, "__STDC_NO_COMPLEX__", NULL);
+        tcc_define_symbol(s, "__STDC_NO_THREADS__", NULL);
+#ifndef TCC_TARGET_PE
+        /* on Linux, this conflicts with a define introduced by
+           /usr/include/stdc-predef.h included by glibc libs
+        tcc_define_symbol(s, "__STDC_ISO_10646__", "201605L"); */
+        tcc_define_symbol(s, "__STDC_UTF_16__", NULL);
+        tcc_define_symbol(s, "__STDC_UTF_32__", NULL);
+#endif
+    }
+
+    if (s->optimize > 0)
+        tcc_define_symbol(s, "__OPTIMIZE__", NULL);
+
+    if (s->option_pthread)
+        tcc_define_symbol(s, "_REENTRANT", NULL);
+
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
@@ -1719,13 +1740,11 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
     const TCCOption *popt;
     const char *optarg, *r;
     const char *run = NULL;
-    int last_o = -1;
     int x;
     CString linker_arg; /* collect -Wl options */
     int tool = 0, arg_start = 0, noaction = optind;
     char **argv = *pargv;
     int argc = *pargc;
-    int help = 0; /* remember if -h/--help has been seen */
 
     cstr_new(&linker_arg);
 
@@ -1776,13 +1795,11 @@ reparse:
 
         switch(popt->index) {
         case TCC_OPTION_HELP:
-            /* help is requested, postpone return to check for -v */
-            help = OPT_HELP;
-            break;
+            x = OPT_HELP;
+            goto extra_action;
         case TCC_OPTION_HELP2:
-            /* help is requested, postpone return to check for -v */
-            help = OPT_HELP2;
-            break;
+            x = OPT_HELP2;
+            goto extra_action;
         case TCC_OPTION_I:
             tcc_add_include_path(s, optarg);
             break;
@@ -1804,7 +1821,6 @@ reparse:
             s->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
-            parse_option_D(s, "_REENTRANT");
             s->option_pthread = 1;
             break;
         case TCC_OPTION_bench:
@@ -1850,76 +1866,8 @@ reparse:
             s->static_link = 1;
             break;
         case TCC_OPTION_std:
-            if (*optarg == '=') {
-                if (strcmp(optarg, "=c11") == 0) {
-                    tcc_undefine_symbol(s, "__STDC_VERSION__");
-                    tcc_define_symbol(s, "__STDC_VERSION__", "201112L");
-                    /*
-                     * The integer constant 1, intended to indicate
-                     * that the implementation does not support atomic
-                     * types (including the _Atomic type qualiﬁer) and
-                     * the <stdatomic.h> header.
-                     */
-                    tcc_define_symbol(s, "__STDC_NO_ATOMICS__", "1");
-                    /*
-                     * The integer constant 1, intended to indicate
-                     * that the implementation does not support complex
-                     * types or the <complex.h> header.
-                     */
-                    tcc_define_symbol(s, "__STDC_NO_COMPLEX__", "1");
-                    /*
-                     * The integer constant 1, intended to indicate
-                     * that the implementation does not support the
-                     * <threads.h> header.
-                     */
-                    tcc_define_symbol(s, "__STDC_NO_THREADS__", "1");
-                    /*
-                     * __STDC_NO_VLA__, tcc supports VLA.
-                     * The integer constant 1, intended to indicate
-                     * that the implementation does not support
-                     * variable length arrays or variably modiﬁed
-                     * types.
-                     */
-#if !defined(TCC_TARGET_PE)
-                    /*
-                     * An integer constant of the form yyyymmL (for
-                     * example, 199712L). If this symbol is deﬁned,
-                     * then every character in the Unicode required
-                     * set, when stored in an object of type
-                     * wchar_t, has the same value as the short
-                     * identiﬁer of that character.
-                     */
-                    #if 0
-                    /* on Linux, this conflicts with a define introduced by
-                     * /usr/include/stdc-predef.h included by glibc libs;
-                     * clang doesn't define it at all so it's probably not necessary
-                     */
-                    tcc_define_symbol(s, "__STDC_ISO_10646__", "201605L");
-                    #endif
-                    /*
-                     * The integer constant 1, intended to indicate
-                     * that values of type char16_t are UTF−16
-                     * encoded. If some other encoding is used, the
-                     * macro shall not be deﬁned and the actual
-                     * encoding used is implementation deﬁned.
-                     */
-                    tcc_define_symbol(s, "__STDC_UTF_16__", "1");
-                    /*
-                     * The integer constant 1, intended to indicate
-                     * that values of type char32_t are UTF−32
-                     * encoded. If some other encoding is used, the
-                     * macro shall not be deﬁned and the actual
-                     * encoding used is implementationdeﬁned.
-                     */
-                    tcc_define_symbol(s, "__STDC_UTF_32__", "1");
-#endif /* !TCC_TARGET_PE */
-                    s->cversion = 201112;
-                }
-            }
-            /*
-             * silently ignore other values, a current purpose:
-             * allow to use a tcc as a reference compiler for "make test"
-             */
+            if (strcmp(optarg, "=c11") == 0)
+                s->cversion = 201112;
             break;
         case TCC_OPTION_shared:
             x = TCC_OUTPUT_DLL;
@@ -2039,7 +1987,7 @@ reparse:
             s->filetype = x | (s->filetype & ~AFF_TYPE_MASK);
             break;
         case TCC_OPTION_O:
-            last_o = atoi(optarg);
+            s->optimize = atoi(optarg);
             break;
         case TCC_OPTION_print_search_dirs:
             x = OPT_PRINT_DIRS;
@@ -2068,16 +2016,6 @@ unsupported_option:
             break;
         }
     }
-
-    if (help) {
-       if (s->verbose > 0)
-           return OPT_VERBOSE_HELP;
-       else
-           return help;
-    }
-
-    if (last_o > 0)
-        tcc_define_symbol(s, "__OPTIMIZE__", NULL);
     if (linker_arg.size) {
         r = linker_arg.data;
         goto arg_err;

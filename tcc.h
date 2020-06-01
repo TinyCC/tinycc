@@ -220,7 +220,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* system include paths */
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
-# ifdef TCC_TARGET_PE
+# if defined TCC_TARGET_PE || defined _WIN32
 #  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include"PATHSEP"{B}/include/winapi"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
@@ -697,12 +697,14 @@ struct TCCState {
     unsigned char rdynamic; /* if true, all symbols are exported */
     unsigned char symbolic; /* if true, resolve symbols in the current module first */
     unsigned char filetype; /* file type for compilation (NONE,C,ASM) */
+    unsigned char optimize; /* only to #define __OPTIMIZE__ */
+    unsigned char option_pthread; /* -pthread option */
+    unsigned char enable_new_dtags; /* -Wl,--enable-new-dtags */
     unsigned int  cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */
     char *rpath; /* as specified on the command line (-Wl,-rpath=) */
-    unsigned char enable_new_dtags; /* ditto, (-Wl,--enable-new-dtags) */
 
     /* output type, see TCC_OUTPUT_XXX */
     int output_type;
@@ -918,7 +920,6 @@ struct TCCState {
     unsigned char do_bench; /* option -bench */
     int gen_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
-    unsigned char option_pthread; /* -pthread option */
     int argc;
     char **argv;
 };
@@ -1285,7 +1286,6 @@ ST_FUNC char *normalize_slashes(char *path);
 #define OPT_PRINT_DIRS 4
 #define OPT_AR 5
 #define OPT_IMPDEF 6
-#define OPT_VERBOSE_HELP 7
 #define OPT_M32 32
 #define OPT_M64 64
 

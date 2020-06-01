@@ -236,8 +236,9 @@ libtcc.so: $(LIBTCC_OBJ)
 libtcc.so: CFLAGS+=-fPIC
 libtcc.so: LDFLAGS+=-fPIC
 
+# OSX dynamic libtcc library
 libtcc.dylib: $(LIBTCC_OBJ)
-	$(CC) -shared -o libtcc.dylib libtcc.o tccpp.o tccgen.o tccelf.o tccasm.o tccrun.o x86_64-gen.o x86_64-link.o i386-asm.o  -flat_namespace
+	$S$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
