@@ -273,7 +273,7 @@ redo:
             return 0;
         }
         if (opt == OPT_HELP2) {
-            fputs(help, stdout);
+            fputs(help2, stdout);
             return 0;
         }
         if (opt == OPT_VERBOSE_HELP) {

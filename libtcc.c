@@ -1723,6 +1723,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
     int tool = 0, arg_start = 0, noaction = optind;
     char **argv = *pargv;
     int argc = *pargc;
+    int help = 0; /* remember if -h/--help has been seen */
 
     cstr_new(&linker_arg);
 
@@ -1773,12 +1774,13 @@ reparse:
 
         switch(popt->index) {
         case TCC_OPTION_HELP:
-          if (s->verbose > 0)
-            return OPT_VERBOSE_HELP;
-          else
-            return OPT_HELP;
+            /* help is requested, postpone return to check for -v */
+            help = OPT_HELP;
+            break;
         case TCC_OPTION_HELP2:
-            return OPT_HELP2;
+            /* help is requested, postpone return to check for -v */
+            help = OPT_HELP2;
+            break;
         case TCC_OPTION_I:
             tcc_add_include_path(s, optarg);
             break;
@@ -2064,6 +2066,14 @@ unsupported_option:
             break;
         }
     }
+
+    if (help) {
+       if (s->verbose > 0)
+           return OPT_VERBOSE_HELP;
+       else
+           return help;
+    }
+
     if (last_o > 0)
         tcc_define_symbol(s, "__OPTIMIZE__", NULL);
     if (linker_arg.size) {
