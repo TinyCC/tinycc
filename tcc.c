@@ -268,10 +268,20 @@ redo:
     opt = tcc_parse_args(s, &argc, &argv, 1);
 
     if (n == 0) {
-        if (opt == OPT_HELP)
-            return fputs(help, stdout), 0;
-        if (opt == OPT_HELP2)
-            return fputs(help2, stdout), 0;
+        if (opt == OPT_HELP) {
+            fputs(help, stdout);
+            return 0;
+        }
+        if (opt == OPT_HELP2) {
+            fputs(help, stdout);
+            return 0;
+        }
+        if (opt == OPT_VERBOSE_HELP) {
+            /* simulate gcc -v --help */
+            fputs(help, stdout);
+            fputs(help2, stdout);
+            return 0;
+        }
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)

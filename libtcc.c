@@ -1773,6 +1773,9 @@ reparse:
 
         switch(popt->index) {
         case TCC_OPTION_HELP:
+          if (s->verbose > 0)
+            return OPT_VERBOSE_HELP;
+          else
             return OPT_HELP;
         case TCC_OPTION_HELP2:
             return OPT_HELP2;
