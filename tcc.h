@@ -1281,6 +1281,7 @@ ST_FUNC char *normalize_slashes(char *path);
 #define OPT_PRINT_DIRS 4
 #define OPT_AR 5
 #define OPT_IMPDEF 6
+#define OPT_VERBOSE_HELP 7
 #define OPT_M32 32
 #define OPT_M64 64
 
