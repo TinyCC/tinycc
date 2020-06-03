@@ -420,6 +420,9 @@ comment
     have_included_42test_h = 1;
     have_included_42test_h_second = 1;
     have_included_42test_h_third = 1;
+
+    /* Check that we don't complain about stray \ here */
+    printf("print a backslash: %s\n", stringify(\\));
 }
 
 

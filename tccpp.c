@@ -3511,8 +3511,6 @@ static void macro_subst(
             if (tok_str->len)
                 spc = is_space(t = tok_str->str[tok_str->lastlen]);
         } else {
-            if (t == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
-                tcc_error("stray '\\' in program");
 no_subst:
             if (!check_space(t, &spc))
                 tok_str_add2(tok_str, t, &cval);
@@ -3569,7 +3567,8 @@ ST_FUNC void next(void)
     } else if (tok == TOK_PPSTR) {
         if (parse_flags & PARSE_FLAG_TOK_STR)
             parse_string((char *)tokc.str.data, tokc.str.size - 1);
-    }
+    } else if (tok == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
+        tcc_error("stray '\\' in program");
 }
 
 /* push back current token and set current token to 'last_tok'. Only

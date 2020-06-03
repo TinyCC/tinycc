@@ -318,5 +318,8 @@ int main()
     int n = _Generic(*a, double:0, long double:1);
 }
 
+#elif defined test_stray_backslash
+#define x \a
+x
 /******************************************************************/
 #endif
