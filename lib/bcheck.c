@@ -163,7 +163,7 @@ typedef struct alloca_list_struct {
 #if defined(_WIN32)
 #define BOUND_TID_TYPE   DWORD
 #define BOUND_GET_TID    GetCurrentThreadId()
-#elif defined(__i386__) || defined(__x86_64__)
+#elif defined(__i386__) || defined(__x86_64__) || defined(__arm__) || defined(__aarch64__) || defined(__riscv)
 #define BOUND_TID_TYPE   pid_t
 #define BOUND_GET_TID    syscall (SYS_gettid)
 #else
@@ -222,6 +222,19 @@ DLL_EXPORT int __bound_strncmp(const char *s1, const char *s2, size_t n);
 DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
 DLL_EXPORT char *__bound_strchr(const char *string, int ch);
 DLL_EXPORT char *__bound_strdup(const char *s);
+
+#if defined(__arm__)
+DLL_EXPORT void *__bound___aeabi_memcpy(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__bound___aeabi_memmove(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__bound___aeabi_memmove4(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__bound___aeabi_memmove8(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__bound___aeabi_memset(void *dst, int c, size_t size);
+DLL_EXPORT void *__aeabi_memcpy(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__aeabi_memmove(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__aeabi_memmove4(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__aeabi_memmove8(void *dst, const void *src, size_t size);
+DLL_EXPORT void *__aeabi_memset(void *dst, int c, size_t size);
+#endif
 
 #if MALLOC_REDIR
 #define BOUND_MALLOC(a)          malloc_redir(a)
@@ -320,6 +333,15 @@ static void fetch_and_add(signed char* variable, signed char value)
         : // No input-only
         : "memory"
       );
+#elif defined __arm__
+      extern fetch_and_add_arm(signed char* variable, signed char value);
+      fetch_and_add_arm(variable, value);
+#elif defined __aarch64__
+      extern fetch_and_add_arm64(signed char* variable, signed char value);
+      fetch_and_add_arm64(variable, value);
+#elif defined __riscv
+      extern fetch_and_add_riscv64(signed char* variable, signed char value);
+      fetch_and_add_riscv64(variable, value);
 #else
       *variable += value;
 #endif
@@ -814,10 +836,10 @@ void __bound_init(size_t *p)
     {
         FILE *fp;
         unsigned char found;
-        unsigned long long start;
-        unsigned long long end;
-        unsigned long long ad =
-            (unsigned long long) __builtin_return_address(0);
+        unsigned long start;
+        unsigned long end;
+        unsigned long ad =
+            (unsigned long) __builtin_return_address(0);
         char line[1000];
 
         /* Display exec name. Usefull when a lot of code is compiled with tcc */
@@ -835,7 +857,7 @@ void __bound_init(size_t *p)
         fp = fopen ("/proc/self/maps", "r");
         if (fp) {
             while (fgets (line, sizeof(line), fp)) {
-                if (sscanf (line, "%Lx-%Lx", &start, &end) == 2 &&
+                if (sscanf (line, "%lx-%lx", &start, &end) == 2 &&
                             ad >= start && ad < end) {
                     found = 1;
                     break;
@@ -1099,7 +1121,7 @@ void *__bound_malloc(size_t size, const void *caller)
         INCR_COUNT(bound_malloc_count);
 
         if (ptr) {
-            tree = splay_insert ((size_t) ptr, size, tree);
+            tree = splay_insert ((size_t) ptr, size ? size : size + 1, tree);
             if (tree && tree->start == (size_t) ptr)
                 tree->type = TCC_TYPE_MALLOC;
         }
@@ -1138,7 +1160,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
         INCR_COUNT(bound_memalign_count);
 
         if (ptr) {
-            tree = splay_insert((size_t) ptr, size, tree);
+            tree = splay_insert((size_t) ptr, size ? size : size + 1, tree);
             if (tree && tree->start == (size_t) ptr)
                 tree->type = TCC_TYPE_MEMALIGN;
         }
@@ -1205,7 +1227,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         return NULL;
     }
 
-    new_ptr = BOUND_REALLOC (ptr, size);
+    new_ptr = BOUND_REALLOC (ptr, size + 1);
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, new_ptr, (unsigned long)size);
 
@@ -1216,7 +1238,7 @@ void *__bound_realloc(void *ptr, size_t size, const void *caller)
         if (ptr)
             tree = splay_delete ((size_t) ptr, tree);
         if (new_ptr) {
-            tree = splay_insert ((size_t) new_ptr, size, tree);
+            tree = splay_insert ((size_t) new_ptr, size ? size : size + 1, tree);
             if (tree && tree->start == (size_t) new_ptr)
                 tree->type = TCC_TYPE_REALLOC;
         }
@@ -1259,7 +1281,7 @@ void *__bound_calloc(size_t nmemb, size_t size)
         if (no_checking == 0) {
             WAIT_SEM ();
             INCR_COUNT(bound_calloc_count);
-            tree = splay_insert ((size_t) ptr, size, tree);
+            tree = splay_insert ((size_t) ptr, size ? size : size + 1, tree);
             if (tree && tree->start == (size_t) ptr)
                 tree->type = TCC_TYPE_CALLOC;
             POST_SEM ();
@@ -1386,6 +1408,59 @@ void *__bound_memset(void *s, int c, size_t n)
     __bound_check(s, n, "memset");
     return memset(s, c, n);
 }
+
+#if defined(__arm__)
+void *__bound___aeabi_memcpy(void *dest, const void *src, size_t n)
+{
+    dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
+            __FILE__, __FUNCTION__, dest, src, (unsigned long)n);
+    INCR_COUNT(bound_mempcy_count);
+    __bound_check(dest, n, "memcpy dest");
+    __bound_check(src, n, "memcpy src");
+    if (check_overlap(dest, n, src, n, "memcpy"))
+        return dest;
+    return __aeabi_memcpy(dest, src, n);
+}
+
+void *__bound___aeabi_memmove(void *dest, const void *src, size_t n)
+{
+    dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
+            __FILE__, __FUNCTION__, dest, src, (unsigned long)n);
+    INCR_COUNT(bound_memmove_count);
+    __bound_check(dest, n, "memmove dest");
+    __bound_check(src, n, "memmove src");
+    return __aeabi_memmove(dest, src, n);
+}
+
+void *__bound___aeabi_memmove4(void *dest, const void *src, size_t n)
+{
+    dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
+            __FILE__, __FUNCTION__, dest, src, (unsigned long)n);
+    INCR_COUNT(bound_memmove_count);
+    __bound_check(dest, n, "memmove dest");
+    __bound_check(src, n, "memmove src");
+    return __aeabi_memmove4(dest, src, n);
+}
+
+void *__bound___aeabi_memmove8(void *dest, const void *src, size_t n)
+{
+    dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
+            __FILE__, __FUNCTION__, dest, src, (unsigned long)n);
+    INCR_COUNT(bound_memmove_count);
+    __bound_check(dest, n, "memmove dest");
+    __bound_check(src, n, "memmove src");
+    return __aeabi_memmove8(dest, src, n);
+}
+
+void *__bound___aeabi_memset(void *s, int c, size_t n)
+{
+    dprintf(stderr, "%s, %s(): %p, %d, 0x%lx\n",
+            __FILE__, __FUNCTION__, s, c, (unsigned long)n);
+    INCR_COUNT(bound_memset_count);
+    __bound_check(s, n, "memset");
+    return __aeabi_memset(s, c, n);
+}
+#endif
 
 int __bound_strlen(const char *s)
 {

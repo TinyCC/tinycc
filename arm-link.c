@@ -155,7 +155,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         while (p < p_end) {
             if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
-            add32le(p + 12, x + s1->plt->data - p);
+            add32le(p + 12, x + (s1->plt->data - p));
             p += 16;
         }
     }

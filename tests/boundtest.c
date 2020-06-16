@@ -169,21 +169,34 @@ int test13(void)
     return strlen(tab);
 }
 
+#if defined __i386__ || defined __x86_64__
+#define allocf(x)
+#else
+#define alloca(x) malloc(x)
+#define allocf(x) free(x)
+#endif
+
 int test14(void)
 {
     char *p = alloca(TAB_SIZE);
+    size_t ret;
     memset(p, 'a', TAB_SIZE);
     p[TAB_SIZE-1] = 0;
-    return strlen(p);
+    ret = strlen(p);
+    allocf(p);
+    return ret;
 }
 
 /* error */
 int test15(void)
 {
     char *p = alloca(TAB_SIZE-1);
+    size_t ret;
     memset(p, 'a', TAB_SIZE);
     p[TAB_SIZE-1] = 0;
-    return strlen(p);
+    ret = strlen(p);
+    allocf(p);
+    return ret;
 }
 
 /* ok */
@@ -194,6 +207,7 @@ int test16()
 
     p = alloca(16);
     strcpy(p,"12345678901234");
+    allocf(p);
 
     /* Test alloca embedded in a larger expression */
     printf("alloca : %s : %s\n", p, strcpy(alloca(strlen(demo)+1),demo) );
@@ -209,6 +223,7 @@ int test17()
 
     p = alloca(16);
     strcpy(p,"12345678901234");
+    allocf(p);
 
     /* Test alloca embedded in a larger expression */
     printf("alloca : %s : %s\n", p, strcpy(alloca(strlen(demo)),demo) );

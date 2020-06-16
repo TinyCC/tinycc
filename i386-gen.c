@@ -1089,8 +1089,9 @@ static void gen_bounds_epilog(void)
     addr_t saved_ind;
     addr_t *bounds_ptr;
     Sym *sym_data;
+    int offset_modified = func_bound_offset != lbounds_section->data_offset;
 
-    if (func_bound_offset == lbounds_section->data_offset && !func_bound_add_epilog)
+    if (!offset_modified && !func_bound_add_epilog)
         return;
 
     /* add end of table info */
@@ -1101,7 +1102,7 @@ static void gen_bounds_epilog(void)
                            func_bound_offset, lbounds_section->data_offset);
 
     /* generate bound local allocation */
-    if (func_bound_offset != lbounds_section->data_offset) {
+    if (offset_modified) {
         saved_ind = ind;
         ind = func_bound_ind;
         greloc(cur_text_section, sym_data, ind + 1, R_386_32);

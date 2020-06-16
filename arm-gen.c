@@ -158,6 +158,12 @@ ST_DATA const int reg_classes[NB_REGS] = {
 static int func_sub_sp_offset, last_itod_magic;
 static int leaffunc;
 
+#if defined(CONFIG_TCC_BCHECK)
+static addr_t func_bound_offset;
+static unsigned long func_bound_ind;
+static int func_bound_add_epilog;
+#endif
+
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
 static CType float_type, double_type, func_float_type, func_double_type;
 ST_FUNC void arm_init(struct TCCState *s)
@@ -193,11 +199,17 @@ ST_FUNC void arm_init(struct TCCState *s)
 }
 #endif
 
+#define CHECK_R(r) ((r) >= TREG_R0 && (r) <= TREG_LR)
+
 static int two2mask(int a,int b) {
+  if (!CHECK_R(a) || !CHECK_R(b))
+    tcc_error("compiler error! registers %i,%i is not valid",a,b);
   return (reg_classes[a]|reg_classes[b])&~(RC_INT|RC_FLOAT);
 }
 
 static int regmask(int r) {
+  if (!CHECK_R(r))
+    tcc_error("compiler error! register %i is not valid",r);
   return reg_classes[r]&~(RC_INT|RC_FLOAT);
 }
 
@@ -751,6 +763,14 @@ static void gcall_or_jmp(int is_jmp)
 			greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
 			o(vtop->c.i);
 		}
+#ifdef CONFIG_TCC_BCHECK
+                if (tcc_state->do_bounds_check &&
+                    (vtop->sym->v == TOK_setjmp ||
+                     vtop->sym->v == TOK__setjmp ||
+                     vtop->sym->v == TOK_sigsetjmp ||
+                     vtop->sym->v == TOK___sigsetjmp))
+                    func_bound_add_epilog = 1;
+#endif
 	}else{
 		if(!is_jmp)
 			o(0xE28FE004); // add lr,pc,#4
@@ -759,12 +779,130 @@ static void gcall_or_jmp(int is_jmp)
 	}
   } else {
     /* otherwise, indirect call */
+#ifdef CONFIG_TCC_BCHECK
+    vtop->r &= ~VT_MUSTBOUND;
+#endif
     r = gv(RC_INT);
     if(!is_jmp)
       o(0xE1A0E00F);       // mov lr,pc
     o(0xE1A0F000|intr(r)); // mov pc,r
   }
 }
+
+#if defined(CONFIG_TCC_BCHECK)
+
+static void gen_bounds_call(int v)
+{
+    Sym *sym = external_global_sym(v, &func_old_type);
+
+    greloc(cur_text_section, sym, ind, R_ARM_PC24);
+    o(0xebfffffe);
+}
+
+/* generate a bounded pointer addition */
+ST_FUNC void gen_bounded_ptr_add(void)
+{
+    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
+    vrott(3);
+    gfunc_call(2);
+    vpushi(0);
+    /* returned pointer is in REG_IRET */
+    vtop->r = REG_IRET | VT_BOUNDED;
+    if (nocode_wanted)
+        return;
+    /* relocation offset of the bounding function call point */
+    vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel));
+}
+
+/* patch pointer addition in vtop so that pointer dereferencing is
+   also tested */
+ST_FUNC void gen_bounded_ptr_deref(void)
+{
+    addr_t func;
+    int size, align;
+    Elf32_Rel *rel;
+    Sym *sym;
+
+    if (nocode_wanted)
+        return;
+
+    size = type_size(&vtop->type, &align);
+    switch(size) {
+    case  1: func = TOK___bound_ptr_indir1; break;
+    case  2: func = TOK___bound_ptr_indir2; break;
+    case  4: func = TOK___bound_ptr_indir4; break;
+    case  8: func = TOK___bound_ptr_indir8; break;
+    case 12: func = TOK___bound_ptr_indir12; break;
+    case 16: func = TOK___bound_ptr_indir16; break;
+    default:
+        /* may happen with struct member access */
+        return;
+        //tcc_error("unhandled size when dereferencing bounded pointer");
+        //func = 0;
+        //break;
+    }
+    sym = external_global_sym(func, &func_old_type);
+    if (!sym->c)
+        put_extern_sym(sym, NULL, 0, 0);
+    /* patch relocation */
+    /* XXX: find a better solution ? */
+    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
+    rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
+}
+
+static void gen_bounds_prolog(void)
+{
+    /* leave some room for bound checking code */
+    func_bound_offset = lbounds_section->data_offset;
+    func_bound_ind = ind;
+    func_bound_add_epilog = 0;
+    o(0xe1a00000);  /* ld r0,lbounds_section->data_offset */
+    o(0xe1a00000);
+    o(0xe1a00000);
+    o(0xe1a00000);  /* call __bound_local_new */
+}
+
+static void gen_bounds_epilog(void)
+{
+    addr_t saved_ind;
+    addr_t *bounds_ptr;
+    Sym *sym_data;
+    int offset_modified = func_bound_offset != lbounds_section->data_offset;
+
+    if (!offset_modified && !func_bound_add_epilog)
+        return;
+
+    /* add end of table info */
+    bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
+    *bounds_ptr = 0;
+
+    sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
+                           func_bound_offset, lbounds_section->data_offset);
+
+    /* generate bound local allocation */
+    if (offset_modified) {
+        saved_ind = ind;
+        ind = func_bound_ind;
+        o(0xe59f0000);  /* ldr r0, [pc] */
+        o(0xea000000);  /* b $+4 */
+        greloc(cur_text_section, sym_data, ind, R_ARM_ABS32);
+        o(0x00000000);  /* lbounds_section->data_offset */
+        gen_bounds_call(TOK___bound_local_new);
+        ind = saved_ind;
+    }
+
+    /* generate bound check local freeing */
+    o(0xe92d0003);  /* push {r0,r1} */
+    o(0xed2d0b02);  /* vpush {d0} */
+    o(0xe59f0000);  /* ldr r0, [pc] */
+    o(0xea000000);  /* b $+4 */
+    greloc(cur_text_section, sym_data, ind, R_ARM_ABS32);
+    o(0x00000000);  /* lbounds_section->data_offset */
+    gen_bounds_call(TOK___bound_local_delete);
+    o(0xecbd0b02); /* vpop {d0} */
+    o(0xe8bd0003); /* pop {r0,r1} */
+}
+#endif
 
 static int unalias_ldbl(int btype)
 {
@@ -956,7 +1094,7 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
 
   ncrn = nsaa = 0;
   *todo = 0;
-  plan->pplans = tcc_malloc(nb_args * sizeof(*plan->pplans));
+  plan->pplans = nb_args ? tcc_malloc(nb_args * sizeof(*plan->pplans)) : NULL;
   memset(plan->clsplans, 0, sizeof(plan->clsplans));
   for(i = nb_args; i-- ;) {
     int j, start_vfpreg = 0;
@@ -1215,10 +1353,16 @@ void gfunc_call(int nb_args)
   int def_float_abi = float_abi;
   int todo;
   struct plan plan;
-
 #ifdef TCC_ARM_EABI
   int variadic;
+#endif
 
+#ifdef CONFIG_TCC_BCHECK
+  if (tcc_state->do_bounds_check)
+    gbound_args(nb_args);
+#endif
+
+#ifdef TCC_ARM_EABI
   if (float_abi == ARM_HARD_FLOAT) {
     variadic = (vtop[-nb_args].type.ref->f.func_type == FUNC_ELLIPSIS);
     if (variadic || floats_in_core_regs(&vtop[-nb_args]))
@@ -1367,6 +1511,10 @@ from_stack:
   last_itod_magic=0;
   leaffunc = 1;
   loc = 0;
+#ifdef CONFIG_TCC_BCHECK
+  if (tcc_state->do_bounds_check)
+    gen_bounds_prolog();
+#endif
 }
 
 /* generate function epilog */
@@ -1374,6 +1522,11 @@ void gfunc_epilog(void)
 {
   uint32_t x;
   int diff;
+
+#ifdef CONFIG_TCC_BCHECK
+  if (tcc_state->do_bounds_check)
+    gen_bounds_epilog();
+#endif
   /* Copy float return value to core register if base standard is used and
      float computation is made with VFP */
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
@@ -1582,10 +1735,10 @@ void gen_opi(int op)
       vswap();
       c=intr(gv(RC_INT));
       vswap();
-      opc=0xE0000000|(opc<<20)|(c<<16);
+      opc=0xE0000000|(opc<<20);
       if((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
 	uint32_t x;
-	x=stuff_const(opc|0x2000000,vtop->c.i);
+	x=stuff_const(opc|0x2000000|(c<<16),vtop->c.i);
 	if(x) {
 	  r=intr(vtop[-1].r=get_reg_ex(RC_INT,regmask(vtop[-1].r)));
 	  o(x|(r<<12));
@@ -1593,8 +1746,13 @@ void gen_opi(int op)
 	}
       }
       fr=intr(gv(RC_INT));
+      if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+        vswap();
+        c=intr(gv(RC_INT));
+        vswap();
+      }
       r=intr(vtop[-1].r=get_reg_ex(RC_INT,two2mask(vtop->r,vtop[-1].r)));
-      o(opc|(r<<12)|fr);
+      o(opc|(c<<16)|(r<<12)|fr);
 done:
       vtop--;
       if (op >= TOK_ULT && op <= TOK_GT)
@@ -1608,15 +1766,19 @@ done:
       vswap();
       r=intr(gv(RC_INT));
       vswap();
-      opc|=r;
       if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
 	fr=intr(vtop[-1].r=get_reg_ex(RC_INT,regmask(vtop[-1].r)));
 	c = vtop->c.i & 0x1f;
-	o(opc|(c<<7)|(fr<<12));
+	o(opc|r|(c<<7)|(fr<<12));
       } else {
         fr=intr(gv(RC_INT));
+        if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+          vswap();
+          r=intr(gv(RC_INT));
+          vswap();
+        }
 	c=intr(vtop[-1].r=get_reg_ex(RC_INT,two2mask(vtop->r,vtop[-1].r)));
-	o(opc|(c<<12)|(fr<<8)|0x10);
+	o(opc|r|(c<<12)|(fr<<8)|0x10);
       }
       vtop--;
       break;
@@ -1701,9 +1863,9 @@ void gen_opf(int op)
         vtop--;
         o(x|0x10000|(vfpr(gv(RC_FLOAT))<<12)); /* fcmp(e)X -> fcmp(e)zX */
       } else {
-        x|=vfpr(gv(RC_FLOAT));
-        vswap();
-        o(x|(vfpr(gv(RC_FLOAT))<<12));
+        gv2(RC_FLOAT,RC_FLOAT);
+        x|=vfpr(vtop[0].r);
+        o(x|(vfpr(vtop[-1].r) << 12));
         vtop--;
       }
       o(0xEEF1FA10); /* fmstat */
@@ -1726,6 +1888,12 @@ void gen_opf(int op)
     r2=gv(RC_FLOAT);
     x|=vfpr(r2)<<16;
     r|=regmask(r2);
+    if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+      vswap();
+      r=gv(RC_FLOAT);
+      vswap();
+      x=(x&~0xf)|vfpr(r);
+    }
   }
   vtop->r=get_reg_ex(RC_FLOAT,r);
   if(!fneg)
@@ -1808,6 +1976,11 @@ void gen_opf(int op)
 	r2=c2&0xf;
       } else {
 	r2=fpr(gv(RC_FLOAT));
+        if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+          vswap();
+          r=fpr(gv(RC_FLOAT));
+          vswap();
+        }
       }
       break;
     case '-':
@@ -1829,6 +2002,11 @@ void gen_opf(int op)
 	r=fpr(gv(RC_FLOAT));
 	vswap();
 	r2=fpr(gv(RC_FLOAT));
+        if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+          vswap();
+          r=fpr(gv(RC_FLOAT));
+          vswap();
+        }
       }
       break;
     case '*':
@@ -1841,8 +2019,14 @@ void gen_opf(int op)
       vswap();
       if(c2 && c2<=0xf)
 	r2=c2;
-      else
+      else {
 	r2=fpr(gv(RC_FLOAT));
+        if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+          vswap();
+          r=fpr(gv(RC_FLOAT));
+          vswap();
+        }
+      }
       x|=0x100000; // muf
       break;
     case '/':
@@ -1863,6 +2047,11 @@ void gen_opf(int op)
 	r=fpr(gv(RC_FLOAT));
 	vswap();
 	r2=fpr(gv(RC_FLOAT));
+        if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+          vswap();
+          r=fpr(gv(RC_FLOAT));
+          vswap();
+        }
       }
       break;
     default:
@@ -1915,6 +2104,11 @@ void gen_opf(int op)
 	  r2=c2&0xf;
 	} else {
 	  r2=fpr(gv(RC_FLOAT));
+          if ((vtop[-1].r & VT_VALMASK) >= VT_CONST) {
+            vswap();
+            r=fpr(gv(RC_FLOAT));
+            vswap();
+          }
 	}
         --vtop;
         vset_VT_CMP(op);

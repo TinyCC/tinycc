@@ -37,6 +37,7 @@ int code_reloc (int reloc_type)
         case R_AARCH64_ADD_ABS_LO12_NC:
         case R_AARCH64_ADR_GOT_PAGE:
         case R_AARCH64_LD64_GOT_LO12_NC:
+        case R_AARCH64_LDST64_ABS_LO12_NC:
         case R_AARCH64_GLOB_DAT:
         case R_AARCH64_COPY:
             return 0;
@@ -62,6 +63,7 @@ int gotplt_entry_type (int reloc_type)
         case R_AARCH64_MOVW_UABS_G3:
         case R_AARCH64_ADR_PREL_PG_HI21:
         case R_AARCH64_ADD_ABS_LO12_NC:
+        case R_AARCH64_LDST64_ABS_LO12_NC:
         case R_AARCH64_GLOB_DAT:
         case R_AARCH64_JUMP_SLOT:
         case R_AARCH64_COPY:
@@ -157,10 +159,10 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 
     switch(type) {
         case R_AARCH64_ABS64:
-            write64le(ptr, val);
+            add64le(ptr, val);
             return;
         case R_AARCH64_ABS32:
-            write32le(ptr, val);
+            add32le(ptr, val);
             return;
 	case R_AARCH64_PREL32:
 	    write32le(ptr, val - addr);
@@ -192,6 +194,10 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_AARCH64_ADD_ABS_LO12_NC:
             write32le(ptr, ((read32le(ptr) & 0xffc003ff) |
                             (val & 0xfff) << 10));
+            return;
+        case R_AARCH64_LDST64_ABS_LO12_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) |
+                            (val & 0xff8) << 7));
             return;
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:

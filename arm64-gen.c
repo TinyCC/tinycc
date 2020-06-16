@@ -81,6 +81,12 @@ ST_DATA const int reg_classes[NB_REGS] = {
   RC_FLOAT | RC_F(7)
 };
 
+#if defined(CONFIG_TCC_BCHECK)
+static addr_t func_bound_offset;
+static unsigned long func_bound_ind;
+static int func_bound_add_epilog;
+#endif
+
 #define IS_FREG(x) ((x) >= TREG_F(0))
 
 static uint32_t intr(int r)
@@ -454,7 +460,7 @@ static void arm64_load_cmp(int r, SValue *sv);
 ST_FUNC void load(int r, SValue *sv)
 {
     int svtt = sv->type.t;
-    int svr = sv->r;
+    int svr = sv->r & ~VT_BOUNDED;
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
@@ -554,7 +560,7 @@ ST_FUNC void load(int r, SValue *sv)
 ST_FUNC void store(int r, SValue *sv)
 {
     int svtt = sv->type.t;
-    int svr = sv->r;
+    int svr = sv->r & ~VT_BOUNDED;
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
@@ -594,10 +600,146 @@ static void arm64_gen_bl_or_b(int b)
         assert(!b);
 	greloca(cur_text_section, vtop->sym, ind, R_AARCH64_CALL26, 0);
 	o(0x94000000); // bl .
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check &&
+            (vtop->sym->v == TOK_setjmp ||
+             vtop->sym->v == TOK__setjmp ||
+             vtop->sym->v == TOK_sigsetjmp ||
+             vtop->sym->v == TOK___sigsetjmp))
+            func_bound_add_epilog = 1;
+#endif
     }
-    else
+    else {
+#ifdef CONFIG_TCC_BCHECK
+        vtop->r &= ~VT_MUSTBOUND;
+#endif
         o(0xd61f0000 | (uint32_t)!b << 21 | intr(gv(RC_R30)) << 5); // br/blr
+    }
 }
+
+#if defined(CONFIG_TCC_BCHECK)
+
+static void gen_bounds_call(int v)
+{
+    Sym *sym = external_global_sym(v, &func_old_type);
+
+    greloca(cur_text_section, sym, ind, R_AARCH64_CALL26, 0);
+    o(0x94000000); // bl
+}
+
+/* generate a bounded pointer addition */
+ST_FUNC void gen_bounded_ptr_add(void)
+{
+    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
+    vrott(3);
+    gfunc_call(2);
+    vpushi(0);
+    /* returned pointer is in REG_IRET */
+    vtop->r = REG_IRET | VT_BOUNDED;
+    if (nocode_wanted)
+        return;
+    /* relocation offset of the bounding function call point */
+    vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(ElfW(Rela)));
+}
+
+/* patch pointer addition in vtop so that pointer dereferencing is
+   also tested */
+ST_FUNC void gen_bounded_ptr_deref(void)
+{
+    addr_t func;
+    int size, align;
+    ElfW(Rela) *rel;
+    Sym *sym;
+
+    if (nocode_wanted)
+        return;
+
+    size = type_size(&vtop->type, &align);
+    switch(size) {
+    case  1: func = TOK___bound_ptr_indir1; break;
+    case  2: func = TOK___bound_ptr_indir2; break;
+    case  4: func = TOK___bound_ptr_indir4; break;
+    case  8: func = TOK___bound_ptr_indir8; break;
+    case 12: func = TOK___bound_ptr_indir12; break;
+    case 16: func = TOK___bound_ptr_indir16; break;
+    default:
+        /* may happen with struct member access */
+        return;
+        //tcc_error("unhandled size when dereferencing bounded pointer");
+        //func = 0;
+        //break;
+    }
+    sym = external_global_sym(func, &func_old_type);
+    if (!sym->c)
+        put_extern_sym(sym, NULL, 0, 0);
+    /* patch relocation */
+    /* XXX: find a better solution ? */
+    rel = (ElfW(Rela) *)(cur_text_section->reloc->data + vtop->c.i);
+    rel->r_info = ELF64_R_INFO(sym->c, ELF64_R_TYPE(rel->r_info));
+}
+
+static void gen_bounds_prolog(void)
+{
+    /* leave some room for bound checking code */
+    func_bound_offset = lbounds_section->data_offset;
+    func_bound_ind = ind;
+    func_bound_add_epilog = 0;
+    o(0xd503201f);  /* nop -> mov x0,#0,lsl #0, lbound section pointer */
+    o(0xd503201f);
+    o(0xd503201f);
+    o(0xd503201f);
+    o(0xd503201f);  /* nop -> call __bound_local_new */
+}
+
+static void gen_bounds_epilog(void)
+{
+    addr_t saved_ind;
+    addr_t *bounds_ptr;
+    Sym *sym_data;
+    int offset_modified = func_bound_offset != lbounds_section->data_offset;
+
+    if (!offset_modified && !func_bound_add_epilog)
+        return;
+
+    /* add end of table info */
+    bounds_ptr = section_ptr_add(lbounds_section, sizeof(addr_t));
+    *bounds_ptr = 0;
+
+    sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
+                           func_bound_offset, lbounds_section->data_offset);
+
+    /* generate bound local allocation */
+    if (offset_modified) {
+        saved_ind = ind;
+        ind = func_bound_ind;
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G0_NC, 0);
+        o(0xd2800000);  /* mov x0,#0,lsl #0, lbound section pointer */
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G1_NC, 0);
+        o(0xf2a00000);  /* movk x0,#0,lsl #16 */
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G2_NC, 0);
+        o(0xf2c00000);  /* movk x0,#0,lsl #32 */
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G3, 0);
+        o(0xf2e00000);  /* movk x0,#0,lsl #48 */
+        gen_bounds_call(TOK___bound_local_new);
+        ind = saved_ind;
+    }
+
+    /* generate bound check local freeing */
+    o(0xf81f0fe0); /* str x0, [sp, #-16]! */
+    o(0x3c9f0fe0); /* str q0, [sp, #-16]! */
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G0_NC, 0);
+    o(0xd2800000); // mov x0,#0,lsl #0
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G1_NC, 0);
+    o(0xf2a00000); // movk x0,#0,lsl #16
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G2_NC, 0);
+    o(0xf2c00000); // movk x0,#0,lsl #32
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_MOVW_UABS_G3, 0);
+    o(0xf2e00000); // movk x0,#0,lsl #48
+    gen_bounds_call(TOK___bound_local_delete);
+    o(0x3cc107e0); /* ldr q0, [sp], #16 */
+    o(0xf84107e0); /* ldr x0, [sp], #16 */
+}
+#endif
 
 static int arm64_hfa_aux(CType *type, int *fsize, int num)
 {
@@ -642,7 +784,7 @@ static int arm64_hfa_aux(CType *type, int *fsize, int num)
             return num;
         }
     }
-    else if (type->t & VT_ARRAY) {
+    else if ((type->t & VT_ARRAY) && ((type->t & VT_BTYPE) != VT_PTR)) {
         int num1;
         if (!type->ref->c)
             return num;
@@ -659,7 +801,8 @@ static int arm64_hfa_aux(CType *type, int *fsize, int num)
 
 static int arm64_hfa(CType *type, int *fsize)
 {
-    if ((type->t & VT_BTYPE) == VT_STRUCT || (type->t & VT_ARRAY)) {
+    if ((type->t & VT_BTYPE) == VT_STRUCT ||
+        ((type->t & VT_ARRAY) && ((type->t & VT_BTYPE) != VT_PTR))) {
         int sz = 0;
         int n = arm64_hfa_aux(type, &sz, 0);
         if (0 < n && n <= 4) {
@@ -839,6 +982,11 @@ ST_FUNC void gfunc_call(int nb_args)
     unsigned long stack;
     int i;
 
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gbound_args(nb_args);
+#endif
+
     return_type = &vtop[-nb_args].type.ref->type;
     if ((return_type->t & VT_BTYPE) == VT_STRUCT)
         --nb_args;
@@ -1014,8 +1162,8 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     for (sym = func_type->ref; sym; sym = sym->next)
         ++n;
-    t = tcc_malloc(n * sizeof(*t));
-    a = tcc_malloc(n * sizeof(*a));
+    t = n ? tcc_malloc(n * sizeof(*t)) : NULL;
+    a = n ? tcc_malloc(n * sizeof(*a)) : NULL;
 
     for (sym = func_type->ref; sym; sym = sym->next)
         t[i++] = &sym->type;
@@ -1076,6 +1224,10 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     o(0xd503201f); // nop
     o(0xd503201f); // nop
     loc = 0;
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gen_bounds_prolog();
+#endif
 }
 
 ST_FUNC void gen_va_start(void)
@@ -1246,6 +1398,11 @@ ST_FUNC void gfunc_return(CType *func_type)
 
 ST_FUNC void gfunc_epilog(void)
 {
+#ifdef CONFIG_TCC_BCHECK
+    if (tcc_state->do_bounds_check)
+        gen_bounds_epilog();
+#endif
+
     if (loc) {
         // Insert instructions to subtract size of stack frame from SP.
         unsigned char *ptr = cur_text_section->data + arm64_func_sub_sp_offset;

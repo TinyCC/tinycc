@@ -35,6 +35,15 @@ endif
 ifeq ($(ARCH),x86_64)
  TESTS += $(BTESTS)
 endif
+ifeq ($(ARCH),arm)
+ TESTS += $(BTESTS)
+endif
+ifeq ($(ARCH),arm64)
+ TESTS += $(BTESTS)
+endif
+ifeq ($(ARCH),riscv64)
+ TESTS += $(BTESTS)
+endif
 endif
 ifdef CONFIG_OSX # -run only
  TESTS := hello-run libtest tests2-dir pp-dir

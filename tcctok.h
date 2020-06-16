@@ -205,9 +205,9 @@
 #if defined TCC_TARGET_ARM
 # ifdef TCC_ARM_EABI
      DEF(TOK_memcpy, "__aeabi_memcpy")
-     DEF(TOK_memcpy4, "__aeabi_memcpy4")
-     DEF(TOK_memcpy8, "__aeabi_memcpy8")
      DEF(TOK_memmove, "__aeabi_memmove")
+     DEF(TOK_memmove4, "__aeabi_memmove4")
+     DEF(TOK_memmove8, "__aeabi_memmove8")
      DEF(TOK_memset, "__aeabi_memset")
      DEF(TOK___aeabi_ldivmod, "__aeabi_ldivmod")
      DEF(TOK___aeabi_uldivmod, "__aeabi_uldivmod")

@@ -370,7 +370,7 @@ Print statistic information at exit of program.
 Try to continue in case of a bound checking error.
 @end table
 
-Note: @option{-b} is only available on i386 (linux and windows) and x86_64 (linux and windows) for the moment.
+Note: @option{-b} is only available on i386 (linux and windows), x86_64 (linux and windows), arm, arm64 and riscv64 for the moment.
 
 @item -bt[N]
 Display N callers in stack traces. This is useful with @option{-g} or @option{-b}.

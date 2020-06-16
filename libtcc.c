@@ -34,6 +34,7 @@
 #elif defined(TCC_TARGET_ARM64)
 #include "arm64-gen.c"
 #include "arm64-link.c"
+#include "arm-asm.c"
 #elif defined(TCC_TARGET_C67)
 #include "c67-gen.c"
 #include "c67-link.c"
@@ -45,6 +46,7 @@
 #elif defined(TCC_TARGET_RISCV64)
 #include "riscv64-gen.c"
 #include "riscv64-link.c"
+#include "riscv64-asm.c"
 #else
 #error unknown target
 #endif

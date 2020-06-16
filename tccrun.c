@@ -648,10 +648,12 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 #elif defined(__arm__)
     rc->ip = uc->uc_mcontext.arm_pc;
     rc->fp = uc->uc_mcontext.arm_fp;
-    rc->sp = uc->uc_mcontext.arm_sp;
 #elif defined(__aarch64__)
     rc->ip = uc->uc_mcontext.pc;
     rc->fp = uc->uc_mcontext.regs[29];
+#elif defined(__riscv)
+    rc->ip = uc->uc_mcontext.__gregs[REG_PC];
+    rc->fp = uc->uc_mcontext.__gregs[REG_S0];
 #endif
 }
 
@@ -805,22 +807,9 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
         *paddr = rc->ip;
     } else {
         addr_t fp = rc->fp;
-        addr_t sp = rc->sp;
-        if (sp < 0x1000)
-            sp = 0x1000;
-        /* XXX: specific to tinycc stack frames */
-        if (fp < sp + 12 || fp & 3)
-            return -1;
-        while (--level) {
-            sp = ((addr_t *)fp)[-2];
-            if (sp < fp || sp - fp > 16 || sp & 3)
-                return -1;
-            fp = ((addr_t *)fp)[-3];
-            if (fp <= sp || fp - sp < 12 || fp & 3)
-                return -1;
-        }
-        /* XXX: check address validity with program info */
-        *paddr = ((addr_t *)fp)[-1];
+        while (--level)
+            fp = ((addr_t *)fp)[0];
+        *paddr = ((addr_t *)fp)[2];
     }
     return 0;
 #endif
@@ -829,13 +818,27 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
 #elif defined(__aarch64__)
 static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
 {
-   if (level == 0) {
+    if (level == 0) {
         *paddr = rc->ip;
     } else {
         addr_t *fp = (addr_t*)rc->fp;
         while (--level)
             fp = (addr_t *)fp[0];
         *paddr = fp[1];
+    }
+    return 0;
+}
+
+#elif defined(__riscv)
+static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
+{
+    if (level == 0) {
+        *paddr = rc->ip;
+    } else {
+        addr_t *fp = (addr_t*)rc->fp;
+        while (--level)
+            fp = (addr_t *)fp[-2];
+        *paddr = fp[-1];
     }
     return 0;
 }

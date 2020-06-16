@@ -3123,7 +3123,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
         ehdr.e_machine != EM_TCC_TARGET) {
-        tcc_error_noabort("bad architecture");
+        tcc_error_noabort("bad architecture: %s", filename);
         return -1;
     }
 

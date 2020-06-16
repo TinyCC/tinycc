@@ -886,6 +886,12 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             /* XXX: avoid doing that for statics ? */
             /* if bound checking is activated, we change some function
                names by adding the "__bound" prefix */
+#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
+            if (strcmp (name, "memcpy") == 0 ||
+                strcmp (name, "memmove") == 0 ||
+                strcmp (name, "memset") == 0)
+                goto add_bound;
+#endif
             switch(sym->v) {
 #ifdef TCC_TARGET_PE
             /* XXX: we rely only on malloc hooks */
@@ -897,6 +903,10 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
 #endif
             case TOK_memcpy:
             case TOK_memmove:
+#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
+            case TOK_memmove4:
+            case TOK_memmove8:
+#endif
             case TOK_memset:
             case TOK_memcmp:
             case TOK_strlen:
@@ -907,12 +917,17 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             case TOK_strcat:
             case TOK_strchr:
             case TOK_strdup:
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
             case TOK_alloca:
+#endif
             case TOK_mmap:
             case TOK_munmap:
             case TOK_longjmp:
 #ifndef TCC_TARGET_PE
             case TOK_siglongjmp:
+#endif
+#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
+add_bound:
 #endif
                 strcpy(buf, "__bound_");
                 strcat(buf, name);
@@ -3820,9 +3835,9 @@ ST_FUNC void vstore(void)
             /* address of memcpy() */
 #ifdef TCC_ARM_EABI
             if(!(align & 7))
-                vpush_global_sym(&func_old_type, TOK_memcpy8);
+                vpush_global_sym(&func_old_type, TOK_memmove8);
             else if(!(align & 3))
-                vpush_global_sym(&func_old_type, TOK_memcpy4);
+                vpush_global_sym(&func_old_type, TOK_memmove4);
             else
 #endif
             /* Use memmove, rather than memcpy, as dest and src may be same: */
@@ -5636,13 +5651,25 @@ ST_FUNC void unary(void)
             mk_pointer(&type);
             vset(&type, VT_LOCAL, 0);       /* local frame */
             while (level--) {
+#ifdef TCC_TARGET_RISCV64
+                vpushi(2*PTR_SIZE);
+                gen_op('-');
+#endif
                 mk_pointer(&vtop->type);
                 indir();                    /* -> parent frame */
             }
             if (tok1 == TOK_builtin_return_address) {
                 // assume return address is just above frame pointer on stack
+#ifdef TCC_TARGET_ARM
+                vpushi(2*PTR_SIZE);
+                gen_op('+');
+#elif defined TCC_TARGET_RISCV64
+                vpushi(PTR_SIZE);
+                gen_op('-');
+#else
                 vpushi(PTR_SIZE);
                 gen_op('+');
+#endif
                 mk_pointer(&vtop->type);
                 indir();
             }

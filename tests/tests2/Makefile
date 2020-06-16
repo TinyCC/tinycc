@@ -23,8 +23,11 @@ ifeq (,$(filter i386,$(ARCH)))
  SKIP += 98_al_ax_extend.test 99_fastcall.test
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
- SKIP += 85_asm-outside-function.test
- SKIP += 112_backtrace.test 113_btdll.test
+ SKIP += 85_asm-outside-function.test # x86 asm
+ SKIP += 113_btdll.test # dll support needed
+endif
+ifeq (,$(filter i386 x86_64 arm arm64 riscv64,$(ARCH)))
+ SKIP += 112_backtrace.test
  SKIP += 114_bound_signal.test
  SKIP += 115_bound_setjmp.test
  SKIP += 116_bound_setjmp2.test
@@ -82,7 +85,7 @@ GEN-ALWAYS =
 
 112_backtrace.test: FLAGS += -dt -b
 112_backtrace.test 113_btdll.test: FILTER += \
-    -e 's;[0-9A-Fa-fx]\{8,\};........;g' \
+    -e 's;[0-9A-Fa-fx]\{5,\};........;g' \
     -e 's;0x[0-9A-Fa-f]\+;0x?;g'
 
 # this test creates two DLLs and an EXE
