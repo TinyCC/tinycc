@@ -3064,7 +3064,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
         else if (bt1 != bt2) {
             /* accept comparison or cond-expr between pointer and integer
                with a warning */
-            if ((op == '?' || (op >= TOK_ULT && op <= TOK_LOR))
+            if ((op == '?' || TOK_ISCOND(op))
                 && (is_integer_btype(bt1) || is_integer_btype(bt2)))
               tcc_warning("pointer/integer mismatch in %s",
                           op == '?' ? "conditional expression" : "comparison");
@@ -3079,7 +3079,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
             int newquals, copied = 0;
             if (pbt1 != VT_VOID && pbt2 != VT_VOID
                 && !compare_types(pt1, pt2, 1/*unqualif*/)) {
-                if (op != '?' && (op < TOK_ULT || op > TOK_LOR))
+                if (op != '?' && !TOK_ISCOND(op))
                   ret = 0;
                 else
                   type_incompatibility_warning(type1, type2,
@@ -3120,7 +3120,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                   }
             }
         }
-        if (op >= TOK_ULT && op <= TOK_LOR)
+        if (TOK_ISCOND(op))
           type.t = VT_SIZE_T;
     } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
         if (op != '?' || !compare_types(type1, type2, 1))
@@ -3188,7 +3188,7 @@ redo:
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relational op: must be both pointers */
-        if (op >= TOK_ULT && op <= TOK_LOR)
+        if (TOK_ISCOND(op))
             goto std_op;
         /* if both pointers, then it must be the '-' op */
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
@@ -3256,7 +3256,7 @@ redo:
         /* floats can only be used for a few operations */
         if (is_float(combtype.t)
             && op != '+' && op != '-' && op != '*' && op != '/'
-            && (op < TOK_ULT || op > TOK_LOR))
+            && !TOK_ISCOND(op))
             tcc_error("invalid operands for binary operation");
         else if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL) {
             t = bt1 == VT_LLONG ? VT_LLONG : VT_INT;
@@ -3297,7 +3297,7 @@ redo:
             gen_opif(op);
         else
             gen_opic(op);
-        if (op >= TOK_ULT && op <= TOK_LOR) {
+        if (TOK_ISCOND(op)) {
             /* relational op: the result is an int */
             vtop->type.t = VT_INT;
         } else {
@@ -4065,13 +4065,8 @@ redo:
 	      tcc_warning("implicit declaration of function '%s'",
 			  get_tok_str(tok, &tokc));
 	      s = external_global_sym(tok, &func_old_type);
-            }
-            else if ((s->type.t & VT_BTYPE) == VT_FUNC) {
-                ad->cleanup_func = s;
-            }
-            else {
+            } else if ((s->type.t & VT_BTYPE) != VT_FUNC)
                 tcc_error("'%s' is not declared as function", get_tok_str(tok, &tokc));
-            }
 	    ad->cleanup_func = s;
 	    next();
             skip(')');
@@ -5937,11 +5932,8 @@ special_math_val:
             test_lvalue();
             gaddrof();
             /* expect pointer on structure */
-            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT) {
-                char got[256];
-                type_to_str(got, sizeof got, &vtop->type, NULL);
-                tcc_error("expected struct or union but not '%s'", got);
-            }
+            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
+                expect("struct or union");
             if (tok == TOK_CDOUBLE)
                 expect("field name");
             next();
@@ -6487,10 +6479,7 @@ static void expr_eq(void)
     int t;
     
     expr_cond();
-    if ((t = tok) == '='
-        || (t >= TOK_A_MOD && t <= TOK_A_DIV)
-        || t == TOK_A_XOR || t == TOK_A_OR
-        || t == TOK_A_SHL || t == TOK_A_SAR) {
+    if ((t = tok) == '=' || TOK_ASSIGN(t)) {
         test_lvalue();
         next();
         if (t == '=') {
@@ -6498,7 +6487,7 @@ static void expr_eq(void)
         } else {
             vdup();
             expr_eq();
-            gen_op(t & 0x7f);
+            gen_op(TOK_ASSIGN_OP(t));
         }
         vstore();
     }

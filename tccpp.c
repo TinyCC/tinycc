@@ -92,7 +92,7 @@ static const unsigned char tok_two_chars[] =
     0
 };
 
-static void next_nomacro_spc(void);
+static void next_nomacro(void);
 
 ST_FUNC void skip(int c)
 {
@@ -1230,7 +1230,7 @@ ST_FUNC void tok_str_add_tok(TokenString *s)
 }
 
 /* get a token from an integer array and increment pointer. */
-static inline void TOK_GET(int *t, const int **pp, CValue *cv)
+static inline void tok_get(int *t, const int **pp, CValue *cv)
 {
     const int *p = *pp;
     int n, *tab;
@@ -1292,6 +1292,18 @@ static inline void TOK_GET(int *t, const int **pp, CValue *cv)
     }
     *pp = p;
 }
+
+#if 0
+# define TOK_GET(t,p,c) tok_get(t,p,c)
+#else
+# define TOK_GET(t,p,c) do { \
+    int _t = **(p); \
+    if (TOK_HAS_VALUE(_t)) \
+        tok_get(t, p, c); \
+    else \
+        *(t) = _t, ++*(p); \
+    } while (0)
+#endif
 
 static int macro_is_equal(const int *a, const int *b)
 {
@@ -1493,7 +1505,8 @@ ST_FUNC void parse_define(void)
        character.  */
     parse_flags = ((parse_flags & ~PARSE_FLAG_ASM_FILE) | PARSE_FLAG_SPACES);
     /* '(' must be just after macro definition for MACRO_FUNC */
-    next_nomacro_spc();
+    next_nomacro();
+    parse_flags &= ~PARSE_FLAG_SPACES;
     if (tok == '(') {
         int dotid = set_idnum('.', 0);
         next_nomacro();
@@ -1521,7 +1534,8 @@ ST_FUNC void parse_define(void)
                 goto bad_list;
             next_nomacro();
         }
-        next_nomacro_spc();
+        parse_flags |= PARSE_FLAG_SPACES;
+        next_nomacro();
         t = MACRO_FUNC;
         set_idnum('.', dotid);
     }
@@ -1550,7 +1564,7 @@ ST_FUNC void parse_define(void)
         }
         tok_str_add2(&tokstr_buf, tok, &tokc);
     skip:
-        next_nomacro_spc();
+        next_nomacro();
     }
 
     parse_flags = saved_parse_flags;
@@ -2586,6 +2600,7 @@ static inline void next_nomacro1(void)
     case '\t':
         tok = c;
         p++;
+ maybe_space:
         if (parse_flags & PARSE_FLAG_SPACES)
             goto keep_tok_flags;
         while (isidnum_table[*p - CH_EOF] & IS_SPC)
@@ -2932,11 +2947,11 @@ maybe_newline:
             p = parse_comment(p);
             /* comments replaced by a blank */
             tok = ' ';
-            goto keep_tok_flags;
+            goto maybe_space;
         } else if (c == '/') {
             p = parse_line_comment(p);
             tok = ' ';
-            goto keep_tok_flags;
+            goto maybe_space;
         } else if (c == '=') {
             p++;
             tok = TOK_A_DIV;
@@ -2977,34 +2992,6 @@ keep_tok_flags:
     printf("token = %d %s\n", tok, get_tok_str(tok, &tokc));
 #endif
 }
-
-/* return next token without macro substitution. Can read input from
-   macro_ptr buffer */
-static void next_nomacro_spc(void)
-{
-    if (macro_ptr) {
-    redo:
-        tok = *macro_ptr;
-        if (tok) {
-            TOK_GET(&tok, &macro_ptr, &tokc);
-            if (tok == TOK_LINENUM) {
-                file->line_num = tokc.i;
-                goto redo;
-            }
-        }
-    } else {
-        next_nomacro1();
-    }
-    //printf("token = %s\n", get_tok_str(tok, &tokc));
-}
-
-ST_FUNC void next_nomacro(void)
-{
-    do {
-        next_nomacro_spc();
-    } while (tok < 256 && (isidnum_table[tok - CH_EOF] & IS_SPC));
-}
- 
 
 static void macro_subst(
     TokenString *tok_str,
@@ -3281,7 +3268,7 @@ static int next_argstream(Sym **nested_list, TokenString *ws_str)
 
         if (ws_str)
             return t;
-        next_nomacro_spc();
+        next_nomacro();
         return tok;
     }
 }
@@ -3372,7 +3359,7 @@ static int macro_subst_tok(
             }
 	    do {
 		next_nomacro(); /* eat '(' */
-	    } while (tok == TOK_PLCHLDR);
+	    } while (tok == TOK_PLCHLDR || is_space(tok));
 
             /* argument macro */
             args = NULL;
@@ -3533,29 +3520,59 @@ no_subst:
     }
 }
 
+/* return next token without macro substitution. Can read input from
+   macro_ptr buffer */
+static void next_nomacro(void)
+{
+    int t;
+    if (macro_ptr) {
+ redo:
+        t = *macro_ptr;
+        if (TOK_HAS_VALUE(t)) {
+            tok_get(&tok, &macro_ptr, &tokc);
+            if (t == TOK_LINENUM) {
+                file->line_num = tokc.i;
+                goto redo;
+            }
+        } else {
+            macro_ptr++;
+            if (t < TOK_IDENT) {
+                if (!(parse_flags & PARSE_FLAG_SPACES)
+                    && (isidnum_table[t - CH_EOF] & IS_SPC))
+                    goto redo;
+            }
+            tok = t;
+        }
+    } else {
+        next_nomacro1();
+    }
+}
+
 /* return next token with macro substitution */
 ST_FUNC void next(void)
 {
+    int t;
  redo:
-    if (parse_flags & PARSE_FLAG_SPACES)
-        next_nomacro_spc();
-    else
-        next_nomacro();
-
+    next_nomacro();
+    t = tok;
     if (macro_ptr) {
-        if (tok == TOK_NOSUBST || tok == TOK_PLCHLDR) {
-        /* discard preprocessor markers */
-            goto redo;
-        } else if (tok == 0) {
-            /* end of macro or unget token string */
-            end_macro();
-            goto redo;
-        } else if (tok == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
-            tcc_error("stray '\\' in program");
-    } else if (tok >= TOK_IDENT && (parse_flags & PARSE_FLAG_PREPROCESS)) {
-        Sym *s;
+        if (!TOK_HAS_VALUE(t)) {
+            if (t == TOK_NOSUBST || t == TOK_PLCHLDR) {
+                /* discard preprocessor markers */
+                goto redo;
+            } else if (t == 0) {
+                /* end of macro or unget token string */
+                end_macro();
+                goto redo;
+            } else if (t == '\\') {
+                if (!(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
+                    tcc_error("stray '\\' in program");
+            }
+            return;
+        }
+    } else if (t >= TOK_IDENT && (parse_flags & PARSE_FLAG_PREPROCESS)) {
         /* if reading from file, try to substitute macros */
-        s = define_find(tok);
+        Sym *s = define_find(t);
         if (s) {
             Sym *nested_list = NULL;
             tokstr_buf.len = 0;
@@ -3564,12 +3581,13 @@ ST_FUNC void next(void)
             begin_macro(&tokstr_buf, 0);
             goto redo;
         }
+        return;
     }
     /* convert preprocessor tokens into C tokens */
-    if (tok == TOK_PPNUM) {
+    if (t == TOK_PPNUM) {
         if  (parse_flags & PARSE_FLAG_TOK_NUM)
             parse_number((char *)tokc.str.data);
-    } else if (tok == TOK_PPSTR) {
+    } else if (t == TOK_PPSTR) {
         if (parse_flags & PARSE_FLAG_TOK_STR)
             parse_string((char *)tokc.str.data, tokc.str.size - 1);
     }

@@ -35,6 +35,7 @@
 #include <time.h>
 
 #ifndef _WIN32
+# define WIN32_LEAN_AND_MEAN 1
 # include <unistd.h>
 # include <sys/time.h>
 # ifndef CONFIG_TCC_STATIC
@@ -1009,6 +1010,9 @@ struct filespec {
 
 /* token values */
 
+/* conditional ops */
+#define TOK_LAND  0x90
+#define TOK_LOR   0x91
 /* warning: the following compare tokens depend on i386 asm code */
 #define TOK_ULT 0x92
 #define TOK_UGE 0x93
@@ -1023,62 +1027,65 @@ struct filespec {
 #define TOK_LE  0x9e
 #define TOK_GT  0x9f
 
-#define TOK_LAND  0xa0
-#define TOK_LOR   0xa1
-#define TOK_DEC   0xa2
-#define TOK_MID   0xa3 /* inc/dec, to void constant */
-#define TOK_INC   0xa4
-#define TOK_UDIV  0xb0 /* unsigned division */
-#define TOK_UMOD  0xb1 /* unsigned modulo */
-#define TOK_PDIV  0xb2 /* fast division with undefined rounding for pointers */
+#define TOK_ISCOND(t) (t >= TOK_LAND && t <= TOK_GT)
+
+#define TOK_DEC     0x80 /* -- */
+#define TOK_MID     0x81 /* inc/dec, to void constant */
+#define TOK_INC     0x82 /* ++ */
+#define TOK_UDIV    0x83 /* unsigned division */
+#define TOK_UMOD    0x84 /* unsigned modulo */
+#define TOK_PDIV    0x85 /* fast division with undefined rounding for pointers */
+#define TOK_UMULL   0x86 /* unsigned 32x32 -> 64 mul */
+#define TOK_ADDC1   0x87 /* add with carry generation */
+#define TOK_ADDC2   0x88 /* add with carry use */
+#define TOK_SUBC1   0x89 /* add with carry generation */
+#define TOK_SUBC2   0x8a /* add with carry use */
+#define TOK_SHL     '<' /* shift left */
+#define TOK_SAR     '>' /* signed shift right */
+#define TOK_SHR     0x8b /* unsigned shift right */
+
+#define TOK_ARROW   0xa0 /* -> */
+#define TOK_DOTS    0xa1 /* three dots */
+#define TOK_TWODOTS 0xa2 /* C++ token ? */
+#define TOK_TWOSHARPS 0xa3 /* ## preprocessing token */
+#define TOK_PLCHLDR 0xa4 /* placeholder token as defined in C99 */
+#define TOK_NOSUBST 0xa5 /* means following token has already been pp'd */
+#define TOK_PPJOIN  0xa6 /* A '##' in the right position to mean pasting */ 
+
+/* assignment operators */
+#define TOK_A_ADD   0xb0
+#define TOK_A_SUB   0xb1
+#define TOK_A_MUL   0xb2
+#define TOK_A_DIV   0xb3
+#define TOK_A_MOD   0xb4
+#define TOK_A_AND   0xb5
+#define TOK_A_OR    0xb6
+#define TOK_A_XOR   0xb7
+#define TOK_A_SHL   0xb8
+#define TOK_A_SAR   0xb9
+
+#define TOK_ASSIGN(t) (t >= TOK_A_ADD && t <= TOK_A_SAR)
+#define TOK_ASSIGN_OP(t) ("+-*/%&|^<>"[t - TOK_A_ADD])
 
 /* tokens that carry values (in additional token string space / tokc) --> */
-#define TOK_CCHAR   0xb3 /* char constant in tokc */
-#define TOK_LCHAR   0xb4
-#define TOK_CINT    0xb5 /* number in tokc */
-#define TOK_CUINT   0xb6 /* unsigned int constant */
-#define TOK_CLLONG  0xb7 /* long long constant */
-#define TOK_CULLONG 0xb8 /* unsigned long long constant */
-#define TOK_STR     0xb9 /* pointer to string in tokc */
-#define TOK_LSTR    0xba
-#define TOK_CFLOAT  0xbb /* float constant */
-#define TOK_CDOUBLE 0xbc /* double constant */
-#define TOK_CLDOUBLE 0xbd /* long double constant */
-#define TOK_PPNUM   0xbe /* preprocessor number */
-#define TOK_PPSTR   0xbf /* preprocessor string */
-#define TOK_LINENUM 0xc0 /* line number info */
-#define TOK_TWODOTS 0xa8 /* C++ token ? */
-/* <-- */
+#define TOK_CCHAR   0xc0 /* char constant in tokc */
+#define TOK_LCHAR   0xc1
+#define TOK_CINT    0xc2 /* number in tokc */
+#define TOK_CUINT   0xc3 /* unsigned int constant */
+#define TOK_CLLONG  0xc4 /* long long constant */
+#define TOK_CULLONG 0xc5 /* unsigned long long constant */
+#define TOK_CLONG   0xc6 /* long constant */
+#define TOK_CULONG  0xc7 /* unsigned long constant */
+#define TOK_STR     0xc8 /* pointer to string in tokc */
+#define TOK_LSTR    0xc9
+#define TOK_CFLOAT  0xca /* float constant */
+#define TOK_CDOUBLE 0xcb /* double constant */
+#define TOK_CLDOUBLE 0xcc /* long double constant */
+#define TOK_PPNUM   0xcd /* preprocessor number */
+#define TOK_PPSTR   0xce /* preprocessor string */
+#define TOK_LINENUM 0xcf /* line number info */
 
-#define TOK_UMULL    0xc2 /* unsigned 32x32 -> 64 mul */
-#define TOK_ADDC1    0xc3 /* add with carry generation */
-#define TOK_ADDC2    0xc4 /* add with carry use */
-#define TOK_SUBC1    0xc5 /* add with carry generation */
-#define TOK_SUBC2    0xc6 /* add with carry use */
-#define TOK_ARROW    0xc7
-#define TOK_DOTS     0xc8 /* three dots */
-#define TOK_SHR      0xc9 /* unsigned shift right */
-#define TOK_TWOSHARPS 0xca /* ## preprocessing token */
-#define TOK_PLCHLDR  0xcb /* placeholder token as defined in C99 */
-#define TOK_NOSUBST  0xcc /* means following token has already been pp'd */
-#define TOK_PPJOIN   0xcd /* A '##' in the right position to mean pasting */
-#define TOK_CLONG    0xce /* long constant */
-#define TOK_CULONG   0xcf /* unsigned long constant */
-
-#define TOK_SHL   0x01 /* shift left */
-#define TOK_SAR   0x02 /* signed shift right */
-
-/* assignment operators : normal operator or 0x80 */
-#define TOK_A_MOD 0xa5
-#define TOK_A_AND 0xa6
-#define TOK_A_MUL 0xaa
-#define TOK_A_ADD 0xab
-#define TOK_A_SUB 0xad
-#define TOK_A_DIV 0xaf
-#define TOK_A_XOR 0xde
-#define TOK_A_OR  0xfc
-#define TOK_A_SHL 0x81
-#define TOK_A_SAR 0x82
+#define TOK_HAS_VALUE(t) (t >= TOK_CCHAR && t <= TOK_LINENUM)
 
 #define TOK_EOF       (-1)  /* end of file */
 #define TOK_LINEFEED  10    /* line feed */
@@ -1346,7 +1353,6 @@ ST_FUNC Sym *label_push(Sym **ptop, int v, int flags);
 ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep);
 ST_FUNC void parse_define(void);
 ST_FUNC void preprocess(int is_bof);
-ST_FUNC void next_nomacro(void);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
 ST_FUNC void preprocess_start(TCCState *s1, int is_asm);
