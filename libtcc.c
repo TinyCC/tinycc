@@ -508,15 +508,13 @@ static void error1(int mode, const char *fmt, va_list ap)
     BufferedFile **pf, *f;
     TCCState *s1 = tcc_state;
 
-    /* 's1->error_set_jmp_enabled' means that we're called from
-        within the parser/generator and 'tcc_state' was already
-        set (i.e. not by the function above).
+    buf[0] = '\0';
+    if (s1 == NULL)
+        /* can happen only if called from tcc_malloc(): 'out of memory' */
+        goto no_file;
 
-        Otherwise, 's1 = NULL' means we're called because of severe
-        problems from tcc_malloc() which under normal conditions
-        should never happen. */
-
-    if (s1 && !s1->error_set_jmp_enabled) {
+    if (!s1->error_set_jmp_enabled) {
+        /* tcc_state just was set by tcc_enter_state() */
         tcc_state = NULL;
         POST_SEM();
     }
@@ -528,24 +526,25 @@ static void error1(int mode, const char *fmt, va_list ap)
             mode = ERROR_ERROR;
     }
 
-    buf[0] = '\0';
-    /* use upper file if inline ":asm:" or token ":paste:" */
-    for (f = file; f && f->filename[0] == ':'; f = f->prev)
-     ;
+    f = NULL;
+    if (s1->error_set_jmp_enabled) { /* we're called while parsing a file */
+        /* use upper file if inline ":asm:" or token ":paste:" */
+        for (f = file; f && f->filename[0] == ':'; f = f->prev)
+            ;
+    }
     if (f) {
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
             strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
-        if (s1->error_set_jmp_enabled) {
-            strcat_printf(buf, sizeof(buf), "%s:%d: ",
-                f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
-        } else {
-            strcat_printf(buf, sizeof(buf), "%s: ",
-                f->filename);
-        }
-    } else {
-        strcat_printf(buf, sizeof(buf), "tcc: ");
+        strcat_printf(buf, sizeof(buf), "%s:%d: ",
+            f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
+    } else if (s1->current_filename) {
+        strcat_printf(buf, sizeof(buf), "%s: ", s1->current_filename);
     }
+
+no_file:
+    if (0 == buf[0])
+        strcat_printf(buf, sizeof(buf), "tcc: ");
     if (mode == ERROR_WARN)
         strcat_printf(buf, sizeof(buf), "warning: ");
     else
@@ -1071,10 +1070,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         return -1;
     }
 
-    /* update target deps */
-    dynarray_add(&s1->target_deps, &s1->nb_target_deps,
-            tcc_strdup(filename));
-
+    s1->current_filename = filename;
     if (flags & AFF_TYPE_BIN) {
         ElfW(Ehdr) ehdr;
         int obj_type;
@@ -1126,8 +1122,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         }
         close(fd);
     } else {
+        /* update target deps */
+        dynarray_add(&s1->target_deps, &s1->nb_target_deps, tcc_strdup(filename));
         ret = tcc_compile(s1, flags, filename, fd);
     }
+    s1->current_filename = NULL;
     return ret;
 }
 

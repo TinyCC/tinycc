@@ -1808,7 +1808,7 @@ ST_FUNC void preprocess(int is_bof)
             tcc_error("#include recursion too deep");
         /* push current file on stack */
         *s1->include_stack_ptr++ = file;
-        i = tok == TOK_INCLUDE_NEXT ? file->include_next_index: 0;
+        i = tok == TOK_INCLUDE_NEXT ? file->include_next_index + 1 : 0;
         n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (; i < n; ++i) {
             char buf1[sizeof file->filename];
@@ -1851,14 +1851,19 @@ ST_FUNC void preprocess(int is_bof)
             if (tcc_open(s1, buf1) < 0)
                 continue;
 
-            file->include_next_index = i + 1;
+            file->include_next_index = i;
 #ifdef INC_DEBUG
             printf("%s: including %s\n", file->prev->filename, file->filename);
 #endif
             /* update target deps */
             if (s1->gen_deps) {
-                dynarray_add(&s1->target_deps, &s1->nb_target_deps,
-                    tcc_strdup(buf1));
+                BufferedFile *bf = file;
+                while (i == 1 && (bf = bf->prev))
+                    i = bf->include_next_index;
+                /* skip system include files */
+                if (n - i > s1->nb_sysinclude_paths)
+                    dynarray_add(&s1->target_deps, &s1->nb_target_deps,
+                        tcc_strdup(buf1));
             }
             /* add include file debug info */
             tcc_debug_bincl(tcc_state);
@@ -3866,8 +3871,10 @@ ST_FUNC int tcc_preprocess(TCCState *s1)
         s1->dflag &= ~1;
     }
 
-    token_seen = TOK_LINEFEED, spcs = 0;
-    pp_line(s1, file, 0);
+    token_seen = TOK_LINEFEED, spcs = 0, level = 0;
+    if (file->prev)
+        pp_line(s1, file->prev, level++);
+    pp_line(s1, file, level);
     for (;;) {
         iptr = s1->include_stack_ptr;
         next();

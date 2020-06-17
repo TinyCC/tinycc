@@ -911,6 +911,9 @@ struct TCCState {
     /* option -dnum (for general development purposes) */
     int g_debug;
 
+    /* for warnings/errors for object files*/
+    const char *current_filename;
+
     /* used by main and tcc_parse_args only */
     struct filespec **files; /* files seen on command line */
     int nb_files; /* number thereof */
