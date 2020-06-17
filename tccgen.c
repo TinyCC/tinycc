@@ -129,40 +129,42 @@ static const struct {
   int type;
   const char *name;
 } default_debug[] = {
-    {   VT_INT, "int:t1=r1;-2147483648;2147483647;", },
-    {   VT_BYTE, "char:t2=r2;0;127;", },
+    {   VT_INT, "int:t1=r1;-2147483648;2147483647;" },
+    {   VT_BYTE, "char:t2=r2;0;127;" },
 #if LONG_SIZE == 4
-    {   VT_LONG | VT_INT, "long int:t3=r3;-2147483648;2147483647;", },
+    {   VT_LONG | VT_INT, "long int:t3=r3;-2147483648;2147483647;" },
 #else
-    {   VT_LLONG | VT_LONG, "long int:t3=r3;-9223372036854775808;9223372036854775807;", },
+    {   VT_LLONG | VT_LONG, "long int:t3=r3;-9223372036854775808;9223372036854775807;" },
 #endif
-    {   VT_INT | VT_UNSIGNED, "unsigned int:t4=r4;0;4294967295;", },
+    {   VT_INT | VT_UNSIGNED, "unsigned int:t4=r4;0;037777777777;" },
 #if LONG_SIZE == 4
-    {   VT_LONG | VT_INT | VT_UNSIGNED, "long unsigned int:t5=r5;0;4294967295;", },
+    {   VT_LONG | VT_INT | VT_UNSIGNED, "long unsigned int:t5=r5;0;037777777777;" },
 #else
     /* use octal instead of -1 so size_t works (-gstabs+ in gcc) */
-    {   VT_LLONG | VT_LONG | VT_UNSIGNED, "long unsigned int:t5=r5;0;01777777777777777777777;", },
+    {   VT_LLONG | VT_LONG | VT_UNSIGNED, "long unsigned int:t5=r5;0;01777777777777777777777;" },
 #endif
-    {   VT_QLONG, "__int128:t6=r6;0;-1;", },
-    {   VT_QLONG | VT_UNSIGNED, "__int128 unsigned:t7=r7;0;-1;", },
-    {   VT_LLONG, "long long int:t8=r8;-9223372036854775808;9223372036854775807;", },
-    {   VT_LLONG | VT_UNSIGNED, "long long unsigned int:t9=r9;0;01777777777777777777777;", },
-    {   VT_SHORT, "short int:t10=r10;-32768;32767;", },
-    {   VT_SHORT | VT_UNSIGNED, "short unsigned int:t11=r11;0;65535;", },
-    {   VT_BYTE | VT_DEFSIGN, "signed char:t12=r12;-128;127;", },
-    {   VT_BYTE | VT_DEFSIGN | VT_UNSIGNED, "unsigned char:t13=r13;0;255;", },
-    {   VT_FLOAT, "float:t14=r1;4;0;", },
-    {   VT_DOUBLE, "double:t15=r1;8;0;", },
-    {   VT_LDOUBLE, "long double:t16=r1;16;0;", },
-    {   -1, "_Float32:t17=r1;4;0;", },
-    {   -1, "_Float64:t18=r1;8;0;", },
-    {   -1, "_Float128:t19=r1;16;0;", },
-    {   -1, "_Float32x:t20=r1;8;0;", },
-    {   -1, "_Float64x:t21=r1;16;0;", },
-    {   -1, "_Decimal32:t22=r1;4;0;", },
-    {   -1, "_Decimal64:t23=r1;8;0;", },
-    {   -1, "_Decimal128:t24=r1;16;0;", },
-    {   VT_VOID, "void:t25=25", },
+    {   VT_QLONG, "__int128:t6=r6;0;-1;" },
+    {   VT_QLONG | VT_UNSIGNED, "__int128 unsigned:t7=r7;0;-1;" },
+    {   VT_LLONG, "long long int:t8=r8;-9223372036854775808;9223372036854775807;" },
+    {   VT_LLONG | VT_UNSIGNED, "long long unsigned int:t9=r9;0;01777777777777777777777;" },
+    {   VT_SHORT, "short int:t10=r10;-32768;32767;" },
+    {   VT_SHORT | VT_UNSIGNED, "short unsigned int:t11=r11;0;65535;" },
+    {   VT_BYTE | VT_DEFSIGN, "signed char:t12=r12;-128;127;" },
+    {   VT_BYTE | VT_DEFSIGN | VT_UNSIGNED, "unsigned char:t13=r13;0;255;" },
+    {   VT_FLOAT, "float:t14=r1;4;0;" },
+    {   VT_DOUBLE, "double:t15=r1;8;0;" },
+    {   VT_LDOUBLE, "long double:t16=r1;16;0;" },
+    {   -1, "_Float32:t17=r1;4;0;" },
+    {   -1, "_Float64:t18=r1;8;0;" },
+    {   -1, "_Float128:t19=r1;16;0;" },
+    {   -1, "_Float32x:t20=r1;8;0;" },
+    {   -1, "_Float64x:t21=r1;16;0;" },
+    {   -1, "_Decimal32:t22=r1;4;0;" },
+    {   -1, "_Decimal64:t23=r1;8;0;" },
+    {   -1, "_Decimal128:t24=r1;16;0;" },
+    /* if default char is unsigned */
+    {   VT_BYTE | VT_UNSIGNED, "unsigned char:t25=r25;0;255;" },
+    {   VT_VOID, "void:t26=26" },
 };
 
 static int debug_next_type;
@@ -567,7 +569,7 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
         tcc_debug_stabs(s1, str.data, N_LSYM, 0, NULL, 0);
         cstr_free (&str);
     }
-    else {
+    else if ((type & VT_BTYPE) != VT_FUNC) {
         type &= ~VT_STRUCT_MASK;
         for (debug_type = 1;
              debug_type <= sizeof(default_debug) / sizeof(default_debug[0]);
@@ -589,6 +591,11 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
         else if (type == (VT_PTR | VT_ARRAY))
             cstr_printf (result, "%d=ar1;0;%d;",
                          ++debug_next_type, t->type.ref->c - 1);
+        else if (type == VT_FUNC) {
+            cstr_printf (result, "%d=f", ++debug_next_type);
+            tcc_get_debug_info (s1, t->type.ref, result);
+            return;
+        }
         else
             break;
         t = t->type.ref;
