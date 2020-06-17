@@ -1355,10 +1355,27 @@ ST_FUNC void gen_vla_sp_restore(int addr)
 
 ST_FUNC void gen_vla_alloc(CType *type, int align)
 {
-    int rr = ireg(gv(RC_INT));
+    int rr;
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        vpushv(vtop);
+#endif
+    rr = ireg(gv(RC_INT));
     EI(0x13, 0, rr, rr, 15);   // addi RR, RR, 15
     EI(0x13, 7, rr, rr, -16);  // andi, RR, RR, -16
     ER(0x33, 0, 2, 2, rr, 0x20); // sub sp, sp, rr
     vpop();
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check) {
+        vpushi(0);
+        vtop->r = TREG_R(0);
+        o(0x00010513); /* mv a0,sp */
+        vswap();
+        vpush_global_sym(&func_old_type, TOK___bound_new_region);
+        vrott(3);
+        gfunc_call(2);
+        func_bound_add_epilog = 1;
+    }
+#endif
 }
 #endif

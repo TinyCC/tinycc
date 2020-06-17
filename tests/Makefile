@@ -179,7 +179,7 @@ memtest:
 
 # memory and bound check auto test
 BOUNDS_OK  = 1 4 8 10 14 16
-BOUNDS_FAIL= 2 5 6 7 9 11 12 13 15 17
+BOUNDS_FAIL= 2 5 6 7 9 11 12 13 15 17 18
 
 btest: boundtest.c
 	@echo ------------ $@ ------------

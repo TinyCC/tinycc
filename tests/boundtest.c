@@ -231,6 +231,16 @@ int test17()
     return 0;
 }
 
+int test18(void)
+{
+    int i, sum = 0, n = TAB_SIZE;
+    int tab[n];
+    for(i=0;i<TAB_SIZE+1;i++) {
+        sum += tab[i];
+    }
+    return sum;
+}
+
 int (*table_test[])(void) = {
     test1,
     test2,
@@ -248,7 +258,8 @@ int (*table_test[])(void) = {
     test14,
     test15,
     test16,
-    test17
+    test17,
+    test18
 };
 
 int main(int argc, char **argv)

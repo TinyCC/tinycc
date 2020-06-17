@@ -2049,11 +2049,28 @@ ST_FUNC void gen_vla_sp_restore(int addr) {
 }
 
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-    uint32_t r = intr(gv(RC_INT));
+    uint32_t r;
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        vpushv(vtop);
+#endif
+    r = intr(gv(RC_INT));
     o(0x91003c00 | r | r << 5); // add x(r),x(r),#15
     o(0x927cec00 | r | r << 5); // bic x(r),x(r),#15
     o(0xcb2063ff | r << 16); // sub sp,sp,x(r)
     vpop();
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check) {
+        vpushi(0);
+        vtop->r = TREG_R(0);
+        o(0x910003e0 | vtop->r); // mov r0,sp
+        vswap();
+        vpush_global_sym(&func_old_type, TOK___bound_new_region);
+        vrott(3);
+        gfunc_call(2);
+        func_bound_add_epilog = 1;
+    }
+#endif
 }
 
 /* end of A64 code generator */

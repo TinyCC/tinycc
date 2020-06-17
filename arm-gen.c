@@ -2315,7 +2315,12 @@ ST_FUNC void gen_vla_sp_restore(int addr) {
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
-    int r = intr(gv(RC_INT));
+    int r;
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        vpushv(vtop);
+#endif
+    r = intr(gv(RC_INT));
     o(0xE04D0000|(r<<12)|r); /* sub r, sp, r */
 #ifdef TCC_ARM_EABI
     if (align < 8)
@@ -2328,6 +2333,18 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
         tcc_error("alignment is not a power of 2: %i", align);
     o(stuff_const(0xE3C0D000|(r<<16), align - 1)); /* bic sp, r, #align-1 */
     vpop();
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check) {
+        vpushi(0);
+        vtop->r = TREG_R0;
+        o(0xe1a0000d | (vtop->r << 12)); // mov r0,sp
+        vswap();
+        vpush_global_sym(&func_old_type, TOK___bound_new_region);
+        vrott(3);
+        gfunc_call(2);
+        func_bound_add_epilog = 1;
+    }
+#endif
 }
 
 /* end of ARM code generator */
