@@ -3,10 +3,14 @@
         .global fetch_and_add_riscv64
         .type   fetch_and_add_riscv64, %function
 fetch_and_add_riscv64:
-        .short 0x4705     #              li      a4,1
-        .int   0x0f50000f #              fence   iorw,ow
-        .int   0x04e527af #              amoadd.w.aq     a5,a4,(a0)
-        .int   0x0017851b #              addiw   a0,a5,1
-        .short 0x8082     #              ret
+#ifdef __TINYC__
+        .int   0x0f50000f
+        .int   0x004b5202f
+        .short 0x8082
+#else
+        fence iorw,ow
+        amoadd.w.aq zero,a1,0(a0)
+        ret
+#endif
 
         .size   fetch_and_add_riscv64, .-fetch_and_add_riscv64

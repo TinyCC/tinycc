@@ -273,8 +273,8 @@ static unsigned char print_calls;
 static unsigned char print_heap;
 static unsigned char print_statistic;
 static unsigned char no_strdup;
-static signed char never_fatal;
-static signed char no_checking = 1;
+static int never_fatal;
+static int no_checking = 1;
 static char exec[100];
 
 #if BOUND_STATISTIC
@@ -325,22 +325,22 @@ static unsigned long long bound_splay_delete;
 #endif
 
 /* currently only i386/x86_64 supported. Change for other platforms */
-static void fetch_and_add(signed char* variable, signed char value)
+static void fetch_and_add(int* variable, int value)
 {
 #if defined __i386__ || defined __x86_64__
-      __asm__ volatile("lock; addb %0, %1"
+      __asm__ volatile("lock; addl %0, %1"
         : "+r" (value), "+m" (*variable) // input+output
         : // No input-only
         : "memory"
       );
 #elif defined __arm__
-      extern fetch_and_add_arm(signed char* variable, signed char value);
+      extern void fetch_and_add_arm(int* variable, int value);
       fetch_and_add_arm(variable, value);
 #elif defined __aarch64__
-      extern fetch_and_add_arm64(signed char* variable, signed char value);
+      extern void fetch_and_add_arm64(int* variable, int value);
       fetch_and_add_arm64(variable, value);
 #elif defined __riscv
-      extern fetch_and_add_riscv64(signed char* variable, signed char value);
+      extern void fetch_and_add_riscv64(int* variable, int value);
       fetch_and_add_riscv64(variable, value);
 #else
       *variable += value;
