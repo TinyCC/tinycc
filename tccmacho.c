@@ -17,6 +17,20 @@
  */
 #include "tcc.h"
 
+/* In order to make life easy for us we are generating Mach-O files which
+   don't make use of some modern features, but which aren't entirely classic
+   either in that they do use some modern features.  We're also only
+   generating 64bit Mach-O files, and only native endian at that.
+
+   In particular we're generating executables that don't make use of
+   DYLD_INFO for dynamic linking info, as that requires us building a
+   trie of exported names.  We're simply using classic symbol tables which
+   are still supported by modern dyld.
+
+   But we do use LC_MAIN, which is a "modern" feature in order to not have
+   to setup our own crt code.  We're not using lazy linking, so even function
+   calls are resolved at startup.  */
+
 #define DEBUG_MACHO 0
 #define dprintf if (DEBUG_MACHO) printf
 
