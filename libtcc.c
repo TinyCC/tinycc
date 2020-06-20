@@ -740,9 +740,9 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
     s1->error_set_jmp_enabled = 0;
     tccgen_finish(s1);
     preprocess_end(s1);
-    tccelf_end_file(s1);
-
     tcc_exit_state();
+
+    tccelf_end_file(s1);
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
