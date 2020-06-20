@@ -467,6 +467,48 @@ int ret(a)
     return 0;
 }
 
+char str_ag1[] = "b";
+char str_ag2[] = { "b" };
+/*char str_bg1[] = ("cccc"); GCC accepts this with pedantic warning, TCC not */
+char str_ag3[] = { "ab"[1], 0 };
+char str_ag4[2] = { "b" };
+char str_x[2] = { "xy" "z"[2], 0 };
+char *str_ar[] = { "one", "two" };
+struct str_SS {unsigned char a[3], b; };
+struct str_SS str_sinit15 = { "r" };
+struct str_SS str_sinit16[] = { { "q" }, 2 };
+
+static void string_test2()
+{
+    char *p = "hello";
+    char a3[2] = { "p" };
+    char a4[2] = { "ab" "c"[2], 0 };
+    char *pa1 = "def" + 1;
+    char *pa2 = { "xyz" + 1 };
+    int i = 0;
+    struct str_SS ss = { { [0 ... 1] = 'a' }, 0 };
+    puts("string_test2");
+    puts(str_ag1);
+    puts(str_ag2);
+    /*puts(str_bg1);*/
+    puts(str_ag3);
+    puts(str_ag4);
+    puts(str_x);
+    puts(str_sinit15.a);
+    puts(str_sinit16[0].a);
+    puts(a3);
+    puts(a4);
+    puts(p);
+    puts("world");
+    printf("%s\n", "bla");
+    puts(str_ar[0]);
+    puts(str_ar[1]);
+    puts(ss.a);
+    puts(i >= 0 ? "one" : "two");
+    puts(pa1);
+    puts(pa2);
+}
+
 void ps(const char *s)
 {
     int c;
@@ -511,7 +553,9 @@ void string_test()
         num(b);
         b = b * 2;
     }
+    string_test2();
 }
+
 
 void if1t(int n, int a, int b, int c)
 {

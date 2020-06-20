@@ -449,8 +449,8 @@ typedef union CValue {
     float f;
     uint64_t i;
     struct {
-        int size;
         const void *data;
+        int size;
     } str;
     int tab[LDOUBLE_SIZE/4];
 } CValue;

@@ -81,6 +81,7 @@ ST_DATA int func_vc;
 static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
 ST_DATA CType int_type, func_old_type, char_pointer_type;
+static CString initstr;
 
 #if PTR_SIZE == 4
 #define VT_SIZE_T (VT_INT | VT_UNSIGNED)
@@ -779,6 +780,7 @@ ST_FUNC void tccgen_init(TCCState *s1)
 #ifdef precedence_parser
     init_prec();
 #endif
+    cstr_new(&initstr);
 }
 
 ST_FUNC int tccgen_compile(TCCState *s1)
@@ -810,6 +812,7 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 
 ST_FUNC void tccgen_finish(TCCState *s1)
 {
+    cstr_free(&initstr);
     free_inline_functions(s1);
     sym_pop(&global_stack, NULL, 0);
     sym_pop(&local_stack, NULL, 0);
@@ -3219,7 +3222,6 @@ redo:
                 gen_cast_s(VT_INT);
 #endif
             type1 = vtop[-1].type;
-            type1.t &= ~VT_ARRAY;
             if (vtop[-1].type.t & VT_VLA)
                 vla_runtime_pointed_size(&vtop[-1].type);
             else {
@@ -3249,6 +3251,7 @@ redo:
             {
                 gen_opic(op);
             }
+            type1.t &= ~VT_ARRAY;
             /* put again type if gen_opic() swaped operands */
             vtop->type = type1;
         }
@@ -7229,12 +7232,12 @@ static void parse_init_elem(int expr_type)
         /* NOTE: symbols are accepted, as well as lvalue for anon symbols
 	   (compound literals).  */
         if (((vtop->r & (VT_VALMASK | VT_LVAL)) != VT_CONST
-	     && ((vtop->r & (VT_SYM|VT_LVAL)) != (VT_SYM|VT_LVAL)
-		 || vtop->sym->v < SYM_FIRST_ANOM))
+             && ((vtop->r & (VT_SYM|VT_LVAL)) != (VT_SYM|VT_LVAL)
+                 || vtop->sym->v < SYM_FIRST_ANOM))
 #ifdef TCC_TARGET_PE
                  || ((vtop->r & VT_SYM) && vtop->sym->a.dllimport)
 #endif
-            )
+           )
             tcc_error("initializer element is not constant");
         break;
     case EXPR_ANY:
@@ -7442,7 +7445,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 	       anonymous one.  That is, there's no difference in vtop
 	       between '(void *){x}' and '&(void *){x}'.  Ignore
 	       pointer typed entities here.  Hopefully no real code
-	       will every use compound literals with scalar type.  */
+	       will ever use compound literals with scalar type.  */
 	    (vtop->type.t & VT_BTYPE) != VT_PTR) {
 	    /* These come from compound literals, memcpy stuff over.  */
 	    Section *ssec;
@@ -7450,7 +7453,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 	    ElfW_Rel *rel;
 	    esym = elfsym(vtop->sym);
 	    ssec = tcc_state->sections[esym->st_shndx];
-	    memmove (ptr, ssec->data + esym->st_value, size);
+	    memmove (ptr, ssec->data + esym->st_value + (int)vtop->c.i, size);
 	    if (ssec->reloc) {
 		/* We need to copy over all memory contents, and that
 		   includes relocations.  Use the fact that relocs are
@@ -7593,7 +7596,7 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
 static void decl_initializer(CType *type, Section *sec, unsigned long c, 
                              int flags)
 {
-    int len, n, no_oblock, nb, i;
+    int len, n, no_oblock, i;
     int size1, align1;
     Sym *s, *f;
     Sym indexsym;
@@ -7641,41 +7644,54 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
              (t1->t & VT_BTYPE) == VT_INT
 #endif
             ) || (tok == TOK_STR && (t1->t & VT_BTYPE) == VT_BYTE)) {
+            int nb;
 	    len = 0;
+            cstr_reset(&initstr);
+            if (size1 != (tok == TOK_STR ? 1 : sizeof(nwchar_t)))
+              tcc_error("unhandled string literal merging");
             while (tok == TOK_STR || tok == TOK_LSTR) {
-                int cstr_len, ch;
-
-                /* compute maximum number of chars wanted */
+                if (initstr.size)
+                  initstr.size -= size1;
                 if (tok == TOK_STR)
-                    cstr_len = tokc.str.size;
+                  len += tokc.str.size;
                 else
-                    cstr_len = tokc.str.size / sizeof(nwchar_t);
-                cstr_len--;
-                nb = cstr_len;
-                if (n >= 0 && nb > (n - len))
-                    nb = n - len;
-                if (!(flags & DIF_SIZE_ONLY)) {
-                    if (cstr_len > nb)
-                        tcc_warning("initializer-string for array is too long");
-                    /* in order to go faster for common case (char
-                       string in global variable, we handle it
-                       specifically */
-                    if (sec && tok == TOK_STR && size1 == 1) {
-                        if (!NODATA_WANTED)
-                            memcpy(sec->data + c + len, tokc.str.data, nb);
-                    } else {
-                        for(i=0;i<nb;i++) {
-                            if (tok == TOK_STR)
-                                ch = ((unsigned char *)tokc.str.data)[i];
-                            else
-                                ch = ((nwchar_t *)tokc.str.data)[i];
-			    vpushi(ch);
-                            init_putv(t1, sec, c + (len + i) * size1);
-                        }
+                  len += tokc.str.size / sizeof(nwchar_t);
+                len--;
+                cstr_cat(&initstr, tokc.str.data, tokc.str.size);
+                next();
+            }
+            if (tok != ')' && tok != '}' && tok != ',' && tok != ';'
+                && tok != TOK_EOF) {
+                /* Not a lone literal but part of a bigger expression.  */
+                unget_tok(size1 == 1 ? TOK_STR : TOK_LSTR);
+                tokc.str.size = initstr.size;
+                tokc.str.data = initstr.data;
+                indexsym.c = 0;
+                f = &indexsym;
+                goto do_init_list;
+            }
+            nb = len;
+            if (n >= 0 && len > n)
+              nb = n;
+            if (!(flags & DIF_SIZE_ONLY)) {
+                if (len > nb)
+                  tcc_warning("initializer-string for array is too long");
+                /* in order to go faster for common case (char
+                   string in global variable, we handle it
+                   specifically */
+                if (sec && size1 == 1) {
+                    if (!NODATA_WANTED)
+                      memcpy(sec->data + c, initstr.data, nb);
+                } else {
+                    for(i=0;i<nb;i++) {
+                        if (size1 == 1)
+                          ch = ((unsigned char *)initstr.data)[i];
+                        else
+                          ch = ((nwchar_t *)initstr.data)[i];
+                        vpushi(ch);
+                        init_putv(t1, sec, c + i * size1);
                     }
                 }
-                len += nb;
-                next();
             }
             /* only add trailing zero if enough storage (no
                warning in this case since it is standard) */
