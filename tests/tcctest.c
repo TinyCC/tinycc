@@ -480,12 +480,17 @@ int ret(a)
     return 0;
 }
 
+#if !defined(__TINYC__) && (__GNUC__ >= 8)
+/* Old GCCs don't regard "foo"[1] as constant, even in GNU dialect. */
+#define CONSTANTINDEXEDSTRLIT
+#endif
 char str_ag1[] = "b";
 char str_ag2[] = { "b" };
 /*char str_bg1[] = ("cccc"); GCC accepts this with pedantic warning, TCC not */
+#ifdef CONSTANTINDEXEDSTRLIT
 char str_ag3[] = { "ab"[1], 0 };
-char str_ag4[2] = { "b" };
 char str_x[2] = { "xy" "z"[2], 0 };
+#endif
 char *str_ar[] = { "one", "two" };
 struct str_SS {unsigned char a[3], b; };
 struct str_SS str_sinit15 = { "r" };
@@ -500,12 +505,15 @@ static void string_test2()
     char *pa2 = { "xyz" + 1 };
     int i = 0;
     struct str_SS ss = { { [0 ... 1] = 'a' }, 0 };
+#ifndef CONSTANTINDEXEDSTRLIT
+    char str_ag3[] = { "ab"[1], 0 };
+    char str_x[2] = { "xy" "z"[2], 0 };
+#endif
     puts("string_test2");
     puts(str_ag1);
     puts(str_ag2);
     /*puts(str_bg1);*/
     puts(str_ag3);
-    puts(str_ag4);
     puts(str_x);
     puts(str_sinit15.a);
     puts(str_sinit16[0].a);
