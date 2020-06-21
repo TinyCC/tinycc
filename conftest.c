@@ -65,7 +65,6 @@ int main(int argc, char *argv[])
             puts(*(unsigned char*)&foo == 0x67 ? "no" : "yes");
             break;
         }
-#ifdef __GNUC__
 #ifdef __clang__
         case 'm':
             printf("%d\n", __clang_minor__);
@@ -73,20 +72,19 @@ int main(int argc, char *argv[])
         case 'v':
             printf("%d\n", __clang_major__);
             break;
-#else
-        case 'm':
-            printf("%d\n", __GNUC_MINOR__);
-            break;
-        case 'v':
-            printf("%d\n", __GNUC__);
-            break;
-#endif
 #elif defined __TINYC__
         case 'v':
             puts("0");
             break;
         case 'm':
             printf("%d\n", __TINYC__);
+            break;
+#elif defined( __GNUC__) && defined(__GNUC_MINOR__)
+        case 'm':
+            printf("%d\n", __GNUC_MINOR__);
+            break;
+        case 'v':
+            printf("%d\n", __GNUC__);
             break;
 #else
         case 'm':
