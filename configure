@@ -55,6 +55,7 @@ case $targetos in
   Darwin)
     confvars="$confvars OSX"
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
+    cc="clang"
     DLLSUF=".dylib"
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)

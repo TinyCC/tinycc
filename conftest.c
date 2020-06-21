@@ -66,12 +66,21 @@ int main(int argc, char *argv[])
             break;
         }
 #ifdef __GNUC__
+#ifdef __clang__
+        case 'm':
+            printf("%d\n", __clang_minor__);
+            break;
+        case 'v':
+            printf("%d\n", __clang_major__);
+            break;
+#else
         case 'm':
             printf("%d\n", __GNUC_MINOR__);
             break;
         case 'v':
             printf("%d\n", __GNUC__);
             break;
+#endif
 #elif defined __TINYC__
         case 'v':
             puts("0");
