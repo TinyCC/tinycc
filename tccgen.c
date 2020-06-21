@@ -8229,6 +8229,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 sym = type.ref;
                 if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
                     decl0(VT_CMP, 0, sym);
+#ifdef TCC_TARGET_MACHO
                 if (sym->f.func_alwinl
                     && ((type.t & (VT_EXTERN | VT_INLINE))
                         == (VT_EXTERN | VT_INLINE))) {
@@ -8239,6 +8240,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     type.t &= ~VT_EXTERN;
                     type.t |= VT_STATIC;
                 }
+#endif
                 /* always compile 'extern inline' */
                 if (type.t & VT_EXTERN)
                     type.t &= ~VT_INLINE;
