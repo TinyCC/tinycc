@@ -24,8 +24,10 @@
 # define TRIPLET_OS "linux"
 #elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
 # define TRIPLET_OS "kfreebsd"
-#elif defined _WIN32
+#elif defined(_WIN32)
 # define TRIPLET_OS "win32"
+#elif defined(__APPLE__)
+# define TRIPLET_OS "darwin"
 #elif !defined (__GNU__)
 # define TRIPLET_OS "unknown"
 #endif
@@ -65,21 +67,22 @@ int main(int argc, char *argv[])
             puts(*(unsigned char*)&foo == 0x67 ? "no" : "yes");
             break;
         }
-#ifdef __clang__
+#if defined(__clang__)
         case 'm':
             printf("%d\n", __clang_minor__);
             break;
         case 'v':
             printf("%d\n", __clang_major__);
             break;
-#elif defined __TINYC__
+#elif defined(__TINYC__)
         case 'v':
             puts("0");
             break;
         case 'm':
             printf("%d\n", __TINYC__);
             break;
-#elif defined( __GNUC__) && defined(__GNUC_MINOR__)
+#elif defined(__GNUC__) && defined(__GNUC_MINOR__)
+        /* GNU comes last as other compilers may add 'GNU' compatibility */
         case 'm':
             printf("%d\n", __GNUC_MINOR__);
             break;
