@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
             puts("clang");
 #elif defined(__TINYC__)
             puts("tcc");
-#elif defiend(__GNUC__)
+#elif defined(__GNUC__)
             puts("gcc");
 #else
             puts("unknown");
