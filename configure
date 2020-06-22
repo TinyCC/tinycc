@@ -48,14 +48,16 @@ cpu=
 cpuver=
 gcc_major=0
 gcc_minor=0
+gcc_name="gcc"
 
 # OS specific
 targetos=`uname`
 case $targetos in
   Darwin)
     confvars="$confvars OSX"
+    cc=`which cc`
+    cc=`readlink $cc`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
-    cc="clang"
     DLLSUF=".dylib"
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
@@ -323,6 +325,7 @@ if test -z "$cross_prefix" ; then
   else
     gcc_major="$($CONFTEST version)"
     gcc_minor="$($CONFTEST minor)"
+    gcc_name="$($CONFTEST compiler)"
   fi
   bigendian="$($CONFTEST bigendian)"
   if test "$mingw32" = "no" ; then
