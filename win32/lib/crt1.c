@@ -34,8 +34,8 @@ int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int glob
 void __cdecl __set_app_type(int apptype);
 unsigned int __cdecl _controlfp(unsigned int new_value, unsigned int mask);
 extern int _tmain(int argc, _TCHAR * argv[], _TCHAR * env[]);
-extern void (*__init_array_start[]) (void);
-extern void (*__init_array_end[]) (void);
+extern void (*__init_array_start[]) (int argc, char **argv, char **envp);
+extern void (*__init_array_end[]) (int argc, char **argv, char **envp);
 extern void (*__fini_array_start[]) (void);
 extern void (*__fini_array_end[]) (void);
 
@@ -46,7 +46,11 @@ static int do_main (int argc, _TCHAR * argv[], _TCHAR * env[])
 
     i = 0;
     while (&__init_array_start[i] != __init_array_end) {
-        (*__init_array_start[i++])();
+#ifdef UNICODE
+        (*__init_array_start[i++])(0, NULL, NULL);
+#else
+        (*__init_array_start[i++])(argc, argv, env);
+#endif
     }
     retval = _tmain(__argc, __targv, _tenviron);
     i = 0;

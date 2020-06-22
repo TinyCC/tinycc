@@ -70,7 +70,6 @@
 #define WAIT_SEM()
 #define POST_SEM()
 #define HAVE_MEMALIGN          (0)
-#define HAS_ENVIRON            (0)
 #define MALLOC_REDIR           (0)
 #define HAVE_PTHREAD_CREATE    (0)
 #define HAVE_CTYPE             (0)
@@ -85,7 +84,6 @@ static CRITICAL_SECTION bounds_sem;
 #define WAIT_SEM()             EnterCriticalSection(&bounds_sem)
 #define POST_SEM()             LeaveCriticalSection(&bounds_sem)
 #define HAVE_MEMALIGN          (0)
-#define HAS_ENVIRON            (0)
 #define MALLOC_REDIR           (0)
 #define HAVE_PTHREAD_CREATE    (0)
 #define HAVE_CTYPE             (0)
@@ -123,7 +121,6 @@ static pthread_spinlock_t bounds_spin;
 #define POST_SEM()             if (use_sem) pthread_spin_unlock (&bounds_spin)
 #endif
 #define HAVE_MEMALIGN          (1)
-#define HAS_ENVIRON            (1)
 #define MALLOC_REDIR           (1)
 #define HAVE_PTHREAD_CREATE    (1)
 #define HAVE_CTYPE             (1)
@@ -207,7 +204,7 @@ DLL_EXPORT void * __bound_ptr_indir16(void *p, size_t offset);
 DLL_EXPORT void FASTCALL __bound_local_new(void *p1);
 DLL_EXPORT void FASTCALL __bound_local_delete(void *p1);
 void __bound_init(size_t *, int);
-void __bound_main_arg(char **p);
+void __bound_main_arg(int argc, char **argv, char **envp);
 void __bound_exit(void);
 #if !defined(_WIN32)
 void *__bound_mmap (void *start, size_t size, int prot, int flags, int fd,
@@ -934,61 +931,57 @@ no_bounds:
     dprintf(stderr, "%s, %s(): end\n\n", __FILE__, __FUNCTION__);
 }
 
-void __bound_main_arg(char **p)
-{
-    char *start = (char *) p;
-
-    WAIT_SEM ();
-    while (*p) {
-        tree = splay_insert((size_t) *p, strlen (*p) + 1, tree);
-        ++p;
-    }
-    tree = splay_insert((size_t) start, (char *) p - start, tree);
-    POST_SEM ();
-#if BOUND_DEBUG
-    if (print_calls) {
-        p = (char **) start;
-        while (*p) {
-            dprintf(stderr, "%s, %s(): %p 0x%lx\n",
-                    __FILE__, __FUNCTION__,
-                    *p, (unsigned long)(strlen (*p) + 1));
-            ++p;
-        }
-        dprintf(stderr, "%s, %s(): argv %p 0x%lx\n",
-                __FILE__, __FUNCTION__,
-                start, (unsigned long)((char *) p - start));
-    }
+void
+#if (defined(__GLIBC__) && (__GLIBC_MINOR__ >= 4)) || defined(_WIN32)
+__attribute__((constructor))
 #endif
-
-#if HAS_ENVIRON
-    {
-        extern char **environ;
+__bound_main_arg(int argc, char **argv, char **envp)
+{
+    __bound_init (0, -1);
+    if (argc && argv) {
+        int i;
 
         WAIT_SEM ();
-        p = environ;
-        start = (char *) p;
+        for (i = 0; i < argc; i++)
+            tree = splay_insert((size_t) argv[i], strlen (argv[i]) + 1, tree);
+        tree = splay_insert((size_t) argv, argc * sizeof(char *), tree);
+        POST_SEM ();
+#if BOUND_DEBUG
+        if (print_calls) {
+            for (i = 0; i < argc; i++)
+                dprintf(stderr, "%s, %s(): arg %p 0x%lx\n",
+                        __FILE__, __FUNCTION__,
+                        argv[i], (unsigned long)(strlen (argv[i]) + 1));
+            dprintf(stderr, "%s, %s(): argv %p 0x%lx\n",
+                    __FILE__, __FUNCTION__, argv, argc * sizeof(char *));
+        }
+#endif
+    }
+
+    if (envp && *envp) {
+        char **p = envp;
+
+        WAIT_SEM ();
         while (*p) {
             tree = splay_insert((size_t) *p, strlen (*p) + 1, tree);
             ++p;
         }
-        tree = splay_insert((size_t) start, (char *) p - start, tree);
+        tree = splay_insert((size_t) envp, p - envp, tree);
         POST_SEM ();
 #if BOUND_DEBUG
         if (print_calls) {
-            p = environ;
+            p = envp;
             while (*p) {
-                dprintf(stderr, "%s, %s(): %p 0x%lx\n",
+                dprintf(stderr, "%s, %s(): env %p 0x%lx\n",
                         __FILE__, __FUNCTION__,
                         *p, (unsigned long)(strlen (*p) + 1));
                 ++p;
             }
             dprintf(stderr, "%s, %s(): environ %p 0x%lx\n",
-                    __FILE__, __FUNCTION__,
-                    start, (unsigned long)((char *) p - start));
+                    __FILE__, __FUNCTION__, envp, p - envp);
         }
 #endif
     }
-#endif
 }
 
 void __attribute__((destructor)) __bound_exit(void)

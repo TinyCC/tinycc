@@ -124,18 +124,19 @@ ST_FUNC void tcc_run_free(TCCState *s1)
     tcc_free(s1->runtime_mem);
 }
 
-static void run_cdtors(TCCState *s1, const char *start, const char *end)
+static void run_cdtors(TCCState *s1, const char *start, const char *end,
+                       int argc, char **argv, char **envp)
 {
     void **a = (void **)get_sym_addr(s1, start, 0, 0);
     void **b = (void **)get_sym_addr(s1, end, 0, 0);
     while (a != b)
-        ((void(*)(void))*a++)();
+        ((void(*)(int, char **, char **))*a++)(argc, argv, envp);
 }
 
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
-    int (*prog_main)(int, char **), ret;
+    int (*prog_main)(int, char **, char **), ret;
 #ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc = &g_rtctxt;
 #endif
@@ -183,14 +184,14 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     fflush(stdout);
     fflush(stderr);
     /* These aren't C symbols, so don't need leading underscore handling.  */
-    run_cdtors(s1, "__init_array_start", "__init_array_end");
+    run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, environ);
 #ifdef CONFIG_TCC_BACKTRACE
     if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
 #endif
     {
-        ret = prog_main(argc, argv);
+        ret = prog_main(argc, argv, environ);
     }
-    run_cdtors(s1, "__fini_array_start", "__fini_array_end");
+    run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
     if ((s1->dflag & 16) && ret)
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
     return ret;
