@@ -8,6 +8,52 @@
 #include <errno.h>
 #include <setjmp.h>
 
+#if defined(__APPLE__)
+/*
+ * clock_nanosleep is missing on all macOS version, add emulation.
+ */
+
+/* scale factors */
+#define TIMING_GIGA   1000000000
+#define TIMER_ABSTIME 0 /* not used */
+
+/* timespec difference (monotonic) right - left */
+static inline void
+timespec_monodiff_rml(struct timespec *ts_out, const struct timespec *ts_in) {
+    /*
+     * out = in - out,
+     * where in > out
+     */
+    ts_out->tv_sec = ts_in->tv_sec - ts_out->tv_sec;
+    ts_out->tv_nsec = ts_in->tv_nsec - ts_out->tv_nsec;
+    if (ts_out->tv_sec < 0) {
+        ts_out->tv_sec = 0;
+        ts_out->tv_nsec = 0;
+    } else if (ts_out->tv_nsec < 0) {
+        if (ts_out->tv_sec == 0) {
+            ts_out->tv_sec = 0;
+            ts_out->tv_nsec = 0;
+        } else {
+          ts_out->tv_sec = ts_out->tv_sec - 1;
+          ts_out->tv_nsec = ts_out->tv_nsec + TIMING_GIGA;
+        }
+    }
+}
+
+static inline int
+clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *req, struct timespec *remain) {
+    struct timespec ts_delta;
+    int retval = clock_gettime(clock_id, &ts_delta);
+    (void)remain;
+    (void)flags;
+    if (retval == 0) {
+        timespec_monodiff_rml(&ts_delta, req);
+        retval = nanosleep(&ts_delta, NULL);
+    }
+    return retval;
+}
+#endif
+
 static volatile int run = 1;
 static int dummy[10];
 static sem_t sem;
