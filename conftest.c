@@ -98,7 +98,17 @@ int main(int argc, char *argv[])
         case 't':
             puts(TRIPLET);
             break;
-
+        case 'c':
+#if defined(__clang__)
+            puts("clang");
+#elif defined(__TINYC__)
+            puts("tcc");
+#elif defiend(__GNUC__)
+            puts("gcc");
+#else
+            puts("unknown");
+#endif
+            break;
         default:
             break;
     }
