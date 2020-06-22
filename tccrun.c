@@ -140,6 +140,11 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc = &g_rtctxt;
 #endif
+# if defined(__APPLE__)
+    char **envp = NULL;
+#else
+    char **envp = environ;
+#endif
 
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && !find_c_sym(s1, s1->runtime_main))
@@ -184,12 +189,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     fflush(stdout);
     fflush(stderr);
     /* These aren't C symbols, so don't need leading underscore handling.  */
-    run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, environ);
+    run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
 #ifdef CONFIG_TCC_BACKTRACE
     if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
 #endif
     {
-        ret = prog_main(argc, argv, environ);
+        ret = prog_main(argc, argv, envp);
     }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
     if ((s1->dflag & 16) && ret)
