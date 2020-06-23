@@ -948,7 +948,13 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
     tcc_define_symbol(s, "__APPLE_CC__", "1"); /* for <TargetConditionals.h> */
     tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
-
+    /* used by math.h */
+    tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
+    tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
+    tcc_define_symbol(s, "__builtin_huge_vall()", "1e5000L");
+    tcc_define_symbol(s, "__builtin_nanf(ignored_string)", "__nan()");
+    /* used by _fd_def.h */
+    tcc_define_symbol(s, "__builtin_bzero(p, ignored_size)", "bzero(p, sizeof(*(p)))");
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");
     tcc_define_symbol(s, "_FORTIFY_SOURCE", "0");
