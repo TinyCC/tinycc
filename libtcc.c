@@ -947,6 +947,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__APPLE__", "1");
     tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
     tcc_define_symbol(s, "__APPLE_CC__", "1"); /* for <TargetConditionals.h> */
+    tcc_define_symbol(s, "_DONT_USE_CTYPE_INLINE_", "1");
     tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
     /* used by math.h */
     tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
