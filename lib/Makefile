@@ -8,7 +8,11 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
 
+ifdef CONFIG_OSX
+XTCC ?= DYLD_LIBRARY_PATH=$(TOP) $(TOP)/$(X)tcc$(EXESUF)
+else
 XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
+endif
 XCC = $(XTCC)
 XAR = $(XTCC) -ar
 XFLAGS-unx = -B$(TOPSRC)
