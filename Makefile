@@ -48,7 +48,9 @@ else
  NATIVE_TARGET = $(ARCH)
  ifdef CONFIG_OSX
   NATIVE_TARGET = $(ARCH)-osx
-  LDFLAGS += -flat_namespace -undefined warning
+  ifneq ($(CC),tcc)
+    LDFLAGS += -flat_namespace -undefined warning
+  endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
  endif
 endif
@@ -224,7 +226,11 @@ tcc_p$(EXESUF): $($T_FILES)
 
 # static libtcc library
 libtcc.a: $(LIBTCC_OBJ)
+ifeq ($(CC),tcc)
+	$(CC) -ar rcs $@ $^
+else
 	$S$(AR) rcs $@ $^
+endif
 
 # dynamic libtcc library
 libtcc.so: $(LIBTCC_OBJ)
