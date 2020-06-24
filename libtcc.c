@@ -956,6 +956,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__builtin_nanf(ignored_string)", "__nan()");
     /* used by _fd_def.h */
     tcc_define_symbol(s, "__builtin_bzero(p, ignored_size)", "bzero(p, sizeof(*(p)))");
+    /* used by floats.h to implement FLT_ROUNDS C99 macro. 1 == to nearest */
+    tcc_define_symbol(s, "__builtin_flt_rounds()", "1");
+
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");
     tcc_define_symbol(s, "_FORTIFY_SOURCE", "0");
