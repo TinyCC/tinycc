@@ -887,7 +887,8 @@ void __bound_init(size_t *p, int mode)
 
 #if HAVE_CTYPE
 #ifdef __APPLE__
-#warning fill out for MacOS (see <_ctype.h> and <runetype.h>)
+    tree = splay_insert((size_t) &_DefaultRuneLocale,
+                        sizeof (_DefaultRuneLocale), tree);
 #else
     /* XXX: Does not work if locale is changed */
     tree = splay_insert((size_t) __ctype_b_loc(),
