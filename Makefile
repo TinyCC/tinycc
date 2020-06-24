@@ -199,7 +199,9 @@ CFLAGS += -g
 LDFLAGS += -g
 else
 CONFIG_strip = yes
+ifndef CONFIG_OSX
 LDFLAGS += -s
+endif
 endif
 
 # target specific object rule
