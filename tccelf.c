@@ -1418,7 +1418,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
     tcc_compile_string(s1, cstr.data);
     cstr_free(&cstr);
-    set_local_sym(s1, "___rt_info" + !s1->leading_underscore, s, o);
+    set_local_sym(s1, &"___rt_info"[!s1->leading_underscore], s, o);
 }
 #endif
 

@@ -1482,6 +1482,10 @@ void bool_test()
 extern int undefined_function(void);
 extern int defined_function(void);
 
+#ifdef __clang__
+int undefined_function(void) {}
+#endif
+
 static inline void refer_to_undefined(void)
 {
   undefined_function();
@@ -3259,7 +3263,7 @@ void local_label_test(void)
 }
 
 /* inline assembler test */
-#if defined(__i386__) || defined(__x86_64__)
+#if !defined(__APPLE__) && (defined(__i386__) || defined(__x86_64__))
 
 /* from linux kernel */
 static char * strncat1(char * dest,const char * src,size_t count)
@@ -3471,6 +3475,7 @@ char * get_asm_string (void)
      to the printed operand (as in "$.LC0" where the template only wants the
      bare operand ".LC0").  But the code below is what the linux kernel
      happens to use and as such is the one we want to test.  */
+#ifndef __clang__
   extern int some_symbol;
   asm volatile (".globl some_symbol\n"
 		"jmp .+6\n"
@@ -3486,6 +3491,9 @@ char * get_asm_string (void)
 		".popsection\n" : : "i" ("A string"));
   char * str = ((char*)bug_table) + bug_table[1];
   return str;
+#else
+  return (char *) "A string";
+#endif
 }
 
 /* This checks another constructs with local labels.  */
@@ -3684,23 +3692,23 @@ void asm_dot_test(void)
         case 1:
             asm(".text; lea S"RX",%eax; lea ."RX",%ecx; sub %ecx,%eax; S=.; jmp p0");
         case 2:
-#ifndef __APPLE__
+#ifndef __clang__
             /* clangs internal assembler is broken */
             asm(".text; jmp .+6; .int 123; mov .-4"RX",%eax; jmp p0");
 #else
-            asm(".text; mov $0, %eax; jmp p0");
+            asm(".text; mov $123, %eax; jmp p0");
 #endif
 	case 3:
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__clang__)
             asm(".pushsection \".data\"; Y=.; .int 999; X=Y; .int 456; X=.-4; .popsection");
 #else
             asm(".data; Y=.; .int 999; X=Y; .int 456; X=.-4; .text");
 #endif
             asm(".text; mov X"RX",%eax; jmp p0");
         case 4:
-#ifdef __APPLE__
+#ifdef __clang__
             /* Bah!  Clang!  Doesn't want to redefine 'X'  */
-            asm(".text; mov $123,%eax; jmp p0");
+            asm(".text; mov $789,%eax; jmp p0");
 #else
 #ifndef _WIN32
             asm(".data; X=.; .int 789; Y=.; .int 999; .previous");
@@ -3785,7 +3793,7 @@ void asm_test(void)
 #endif
     asm_local_statics();
 #endif
-#ifndef __APPLE__
+#ifndef __clang__
     /* clang can't deal with the type change */
     /* Check that we can also load structs of appropriate layout
        into registers.  */
@@ -3859,12 +3867,17 @@ void builtin_test(void)
     printf("res3 = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res4 = %d\n", __builtin_constant_p(constant_p_var));
     printf("res5 = %d\n", __builtin_constant_p(100000 / constant_p_var));
-#ifndef __APPLE__
+#ifdef __clang__
     /* clang doesn't regard this as constant expression */
+    printf("res6 = 1\n");
+#else
     printf("res6 = %d\n", __builtin_constant_p(i && 0));
 #endif
     printf("res7 = %d\n", __builtin_constant_p(i && 1));
-#ifndef __APPLE__
+#ifdef __clang__
+    /* clang doesn't regard this as constant expression */
+    printf("res8 = 1\n");
+#else
     printf("res8 = %d\n", __builtin_constant_p(i && 0 ? i : 34));
 #endif
     s = 1;
@@ -3900,7 +3913,7 @@ extern int                     weak_asm_v1       asm("weak_asm_v1x") __attribute
 extern int __attribute((weak)) weak_asm_v2       asm("weak_asm_v2x")                    ;
 extern int __attribute((weak)) weak_asm_v3(void) asm("weak_asm_v3x") __attribute((weak));
 
-#ifndef __APPLE__
+#ifndef __clang__
 static const size_t dummy = 0;
 extern __typeof(dummy) weak_dummy1 __attribute__((weak, alias("dummy")));
 extern __typeof(dummy) __attribute__((weak, alias("dummy"))) weak_dummy2;
@@ -3909,7 +3922,7 @@ extern __attribute__((weak, alias("dummy"))) __typeof(dummy) weak_dummy3;
 
 int some_lib_func(void);
 int dummy_impl_of_slf(void) { return 444; }
-#ifndef __APPLE__
+#ifndef __clang__
 int some_lib_func(void) __attribute__((weak, alias("dummy_impl_of_slf")));
 #endif
 
@@ -3935,7 +3948,9 @@ void __attribute__((weak)) weak_test(void)
 	printf("weak_asm_v1=%d\n",&weak_asm_v1 != NULL);
 	printf("weak_asm_v2=%d\n",&weak_asm_v2 != NULL);
 	printf("weak_asm_v3=%d\n",&weak_asm_v3 != NULL);
-#ifndef __APPLE__
+#ifdef __clang__
+	printf("some_lib_func=444\n");
+#else
 	printf("some_lib_func=%d\n", &some_lib_func ? some_lib_func() : 0);
 #endif
 }

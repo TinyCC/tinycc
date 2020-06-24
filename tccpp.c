@@ -1436,7 +1436,7 @@ static void maybe_run_test(TCCState *s)
         return;
     if (0 != --s->run_test)
         return;
-    fprintf(s->ppfp, "\n[%s]\n" + !(s->dflag & 32), p), fflush(s->ppfp);
+    fprintf(s->ppfp, &"\n[%s]\n"[!(s->dflag & 32)], p), fflush(s->ppfp);
     define_push(tok, MACRO_OBJ, NULL, NULL);
 }
 
@@ -3820,7 +3820,7 @@ static void tok_print(const char *msg, const int *str)
 	TOK_GET(&t, &str, &cval);
 	if (!t)
 	    break;
-	fprintf(fp, " %s" + s, get_tok_str(t, &cval)), s = 1;
+	fprintf(fp, &" %s"[s], get_tok_str(t, &cval)), s = 1;
     }
     fprintf(fp, "\n");
 }

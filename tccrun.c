@@ -151,7 +151,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         return 0;
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug)
-        tcc_add_symbol(s1, "_exit" + !s1->leading_underscore, rt_exit);
+        tcc_add_symbol(s1, &"_exit"[!s1->leading_underscore], rt_exit);
 #endif
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
