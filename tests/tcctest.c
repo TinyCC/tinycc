@@ -1831,9 +1831,9 @@ void cast_test()
 
     /* from pointer to integer types */
     printf("%d %d %ld %ld %lld %lld\n",
-           (int)p, (unsigned int)p,
+           (int)(long)p, (unsigned int)(long)p,
            (long)p, (unsigned long)p,
-           (long long)p, (unsigned long long)p);
+           (long long)(long)p, (unsigned long long)(long)p);
 
     /* from integers to pointers */
     printf("%p %p %p %p\n",
