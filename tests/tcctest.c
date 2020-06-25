@@ -3263,7 +3263,7 @@ void local_label_test(void)
 }
 
 /* inline assembler test */
-#if !defined(__APPLE__) && (defined(__i386__) || defined(__x86_64__))
+#if defined(__i386__) || defined(__x86_64__)
 
 /* from linux kernel */
 static char * strncat1(char * dest,const char * src,size_t count)
@@ -3685,6 +3685,7 @@ void test_asm_call(void)
 
 void asm_dot_test(void)
 {
+#ifndef __APPLE__
     int x;
     for (x = 1;; ++x) {
         int r = x;
@@ -3724,6 +3725,7 @@ void asm_dot_test(void)
             break;
         printf("asm_dot_test %d: %d\n", x, r);
     }
+#endif
 }
 
 void asm_test(void)
