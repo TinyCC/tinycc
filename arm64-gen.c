@@ -1080,7 +1080,7 @@ ST_FUNC void gfunc_call(int nb_args)
         else if (a[i] < 32) {
             // value in floating-point registers
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-                uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
+                    uint32_t j, sz, n = arm64_hfa(&vtop->type, (int *)&sz);
                 vtop->type.t = VT_PTR;
                 gaddrof();
                 gv(RC_R30);
@@ -1129,7 +1129,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
             }
             else if (a[0] == 16) {
-                uint32_t j, sz, n = arm64_hfa(return_type, &sz);
+                uint32_t j, sz, n = arm64_hfa(return_type, (int *)&sz);
                 for (j = 0; j < n; j++)
                     o(0x3d000100 |
                       (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
@@ -1205,7 +1205,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
         // HFAs of float and double need to be written differently:
         if (16 <= a[i] && a[i] < 32 && (sym->type.t & VT_BTYPE) == VT_STRUCT) {
-            uint32_t j, sz, k = arm64_hfa(&sym->type, &sz);
+            uint32_t j, sz, k = arm64_hfa(&sym->type, (int *)&sz);
             if (sz < 16)
                 for (j = 0; j < k; j++) {
                     o(0x3d0003e0 | -(sz & 8) << 27 | (sz & 4) << 29 |
@@ -1269,7 +1269,7 @@ ST_FUNC void gen_va_start(void)
 ST_FUNC void gen_va_arg(CType *t)
 {
     int align, size = type_size(t, &align);
-    int fsize, hfa = arm64_hfa(t, &fsize);
+    int fsize, hfa = arm64_hfa(t, (int *)&fsize);
     uint32_t r0, r1;
 
     if (is_float(t->t)) {
@@ -1379,7 +1379,7 @@ ST_FUNC void gfunc_return(CType *func_type)
     }
     case 16:
         if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
-          uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
+          uint32_t j, sz, n = arm64_hfa(&vtop->type, (int *)&sz);
           gaddrof();
           gv(RC_R(0));
           for (j = 0; j < n; j++)
