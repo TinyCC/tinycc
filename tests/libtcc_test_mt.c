@@ -105,6 +105,15 @@ void parse_args(TCCState *s)
             else if (a[1] == 'L')
                 tcc_add_library_path(s, a+2);
             else if (a[1] == 'D') {
+#if defined(__linux__) \
+  && defined(__STDC_VERSION__) \
+  && (__STDC_VERSION__ >= 201112L)
+                /*
+                 * gcc -std=c11 no longer declare strdup which fails with
+                 * coredump (at least on Linux x64).
+                 */
+                extern char* strdup(const char*);
+#endif
                 char *dup = strdup(a);
                 char *eq = strchr(dup+2, '=');
                 if (eq) {
