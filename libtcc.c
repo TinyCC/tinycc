@@ -751,12 +751,15 @@ LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
     return tcc_compile(s, s->filetype, str, -1);
 }
 
-/* define a preprocessor symbol. A value can also be provided with the '=' operator */
+/* define a preprocessor symbol. value can be NULL, sym can be "sym=val" */
 LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
 {
-    if (!value)
-        value = "1";
-    cstr_printf(&s1->cmdline_defs, "#define %s %s\n", sym, value);
+    const char *eq;
+    if (NULL == (eq = strchr(sym, '=')))
+        eq = strchr(sym, 0);
+    if (NULL == value)
+        value = *eq ? eq + 1 : "1";
+    cstr_printf(&s1->cmdline_defs, "#define %.*s %s\n", (int)(eq-sym), sym, value);
 }
 
 /* undefine a preprocessor symbol */
@@ -1713,16 +1716,6 @@ static const FlagDef options_m[] = {
     { 0, 0, NULL }
 };
 
-static void parse_option_D(TCCState *s1, const char *optarg)
-{
-    char *sym = tcc_strdup(optarg);
-    char *value = strchr(sym, '=');
-    if (value)
-        *value++ = '\0';
-    tcc_define_symbol(s1, sym, value);
-    tcc_free(sym);
-}
-
 static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
 {
     struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
@@ -1863,7 +1856,7 @@ reparse:
             tcc_add_include_path(s, optarg);
             break;
         case TCC_OPTION_D:
-            parse_option_D(s, optarg);
+            tcc_define_symbol(s, optarg, NULL);
             break;
         case TCC_OPTION_U:
             tcc_undefine_symbol(s, optarg);

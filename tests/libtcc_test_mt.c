@@ -104,26 +104,8 @@ void parse_args(TCCState *s)
                 tcc_add_include_path(s, a+2);
             else if (a[1] == 'L')
                 tcc_add_library_path(s, a+2);
-            else if (a[1] == 'D') {
-#if defined(__linux__) \
-  && defined(__STDC_VERSION__) \
-  && (__STDC_VERSION__ >= 201112L)
-                /*
-                 * gcc -std=c11 no longer declare strdup which fails with
-                 * coredump (at least on Linux x64).
-                 */
-                extern char* strdup(const char*);
-#endif
-                char *dup = strdup(a);
-                char *eq = strchr(dup+2, '=');
-                if (eq) {
-                    *eq = 0;
-                    tcc_define_symbol(s, dup+2, eq+1);
-                    *eq = '=';
-                } else
-                  tcc_define_symbol(s, dup+2, NULL);
-                free(dup);
-            }
+            else if (a[1] == 'D')
+                tcc_define_symbol(s, a+2, NULL);
         }
     }
 }
@@ -273,32 +255,32 @@ int main(int argc, char **argv)
     }
 
 #if 1
-    printf("mixed calls\n "), fflush(stdout);
+    printf("running fib with mixed calls\n "), fflush(stdout);
     t = getclock_ms();
     state_test();
-    printf("\n(%u ms)\n", getclock_ms() - t);
+    printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("threads\n "), fflush(stdout);
+    printf("running fib in threads\n "), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_simple, n);
     wait_threads(n);
-    printf("\n(%u ms)\n", getclock_ms() - t);
+    printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("tcc in threads\n "), fflush(stdout);
+    printf("running tcc.c in threads to run fib\n"), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_complex, n);
     wait_threads(n);
-    printf("\n(%u ms)\n", getclock_ms() - t);
+    printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("compiling tcc 10 times\n"), fflush(stdout);
+    printf("compiling tcc.c 10 times\n"), fflush(stdout);
     t = getclock_ms();
     time_tcc(10, argv[1]);
-    printf("(%u ms)\n", (getclock_ms() - t) / 10), fflush(stdout);
+    printf(" (%u ms)\n", getclock_ms() - t), fflush(stdout);
 #endif
     return 0;
 }

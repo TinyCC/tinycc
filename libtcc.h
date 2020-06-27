@@ -45,7 +45,7 @@ LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname);
 /* add in system include path */
 LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname);
 
-/* define preprocessor symbol 'sym'. Can put optional value */
+/* define preprocessor symbol 'sym'. value can be NULL, sym can be "sym=val" */
 LIBTCCAPI void tcc_define_symbol(TCCState *s, const char *sym, const char *value);
 
 /* undefine preprocess symbol 'sym' */
