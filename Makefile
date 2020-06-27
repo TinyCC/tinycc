@@ -25,13 +25,14 @@ CFLAGS += $(CPPFLAGS)
 VPATH = $(TOPSRC)
 
 ifdef CONFIG_WIN32
+ CFG = -win
  ifneq ($(CONFIG_static),yes)
   LIBTCC = libtcc$(DLLSUF)
   LIBTCCDEF = libtcc.def
  endif
- CFGWIN = -win
  NATIVE_TARGET = $(ARCH)-win$(if $(findstring arm,$(ARCH)),ce,32)
 else
+ CFG = -unx
  LIBS=-lm -lpthread
  ifneq ($(CONFIG_ldl),no)
   LIBS+=-ldl
@@ -44,21 +45,21 @@ else
    LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
   endif
  endif
- CFGWIN =-unx
  NATIVE_TARGET = $(ARCH)
  ifdef CONFIG_OSX
   NATIVE_TARGET = $(ARCH)-osx
-  ifneq ($(CC),tcc)
+  ifneq ($(CC_NAME),tcc)
     LDFLAGS += -flat_namespace -undefined warning
   endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
+  export DYLD_LIBRARY_PATH := $(CURDIR)/$(TOP)
  endif
 endif
 
 # run local version of tcc with local libraries and includes
 TCCFLAGS-unx = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
 TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
-TCCFLAGS = $(TCCFLAGS$(CFGWIN))
+TCCFLAGS = $(TCCFLAGS$(CFG))
 TCC = $(TOP)/tcc$(EXESUF) $(TCCFLAGS)
 
 # cross compiler targets to build
@@ -110,9 +111,9 @@ cross: $(LIBTCC1_CROSS) $(PROGS_CROSS)
 # build specific cross compiler & lib
 cross-%: %-tcc$(EXESUF) %-libtcc1.a ;
 
-install: ; @$(MAKE) --no-print-directory  install$(CFGWIN)
-install-strip: ; @$(MAKE) --no-print-directory  install$(CFGWIN) CONFIG_strip=yes
-uninstall: ; @$(MAKE) --no-print-directory uninstall$(CFGWIN)
+install: ; @$(MAKE) --no-print-directory  install$(CFG)
+install-strip: ; @$(MAKE) --no-print-directory  install$(CFG) CONFIG_strip=yes
+uninstall: ; @$(MAKE) --no-print-directory uninstall$(CFG)
 
 ifdef CONFIG_cross
 all : cross
@@ -228,11 +229,7 @@ tcc_p$(EXESUF): $($T_FILES)
 
 # static libtcc library
 libtcc.a: $(LIBTCC_OBJ)
-ifeq ($(CC),tcc)
-	$(CC) -ar rcs $@ $^
-else
 	$S$(AR) rcs $@ $^
-endif
 
 # dynamic libtcc library
 libtcc.so: $(LIBTCC_OBJ)

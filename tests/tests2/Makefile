@@ -43,9 +43,7 @@ ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
 endif
 ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_pthread.test # No pthread support
-endif
-ifneq (-$(CONFIG_WIN32)-$(findstring $(GCC_MAJOR),3 4)-,---)
- SKIP += 114_bound_signal.test # not on windows or older linuxes
+ SKIP += 114_bound_signal.test # No pthread support
 endif
 
 # Some tests might need arguments

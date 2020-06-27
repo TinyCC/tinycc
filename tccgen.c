@@ -4978,7 +4978,7 @@ the_end:
     bt = t & (VT_BTYPE|VT_LONG);
     if (bt == VT_LONG)
         t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
-#ifdef TCC_TARGET_PE
+#if defined TCC_TARGET_PE || (defined _WIN32 && defined _MSC_VER)
     if (bt == VT_LDOUBLE)
         t = (t & ~(VT_BTYPE|VT_LONG)) | (VT_DOUBLE|VT_LONG);
 #endif

@@ -57,8 +57,8 @@ static int asm2cname(int v, int *addeddot)
         v = tok_alloc(name + 1, strlen(name) - 1)->tok;
     } else if (!strchr(name, '.')) {
         int n = strlen(name) + 2;
-        char newname[n];
-        snprintf(newname, n, ".%s", name);
+        char newname[256];
+        snprintf(newname, sizeof newname, ".%s", name);
         v = tok_alloc(newname, n - 1)->tok;
         *addeddot = 1;
     }

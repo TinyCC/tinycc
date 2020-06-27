@@ -98,6 +98,7 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
+#ifndef TCC_TARGET_PE
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
     Section *plt = s1->plt;
@@ -160,6 +161,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
     }
 }
+#endif
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {

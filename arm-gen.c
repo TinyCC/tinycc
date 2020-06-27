@@ -943,8 +943,6 @@ struct avail_regs {
   int first_free_reg; /* next free register in the sequence, hole excluded */
 };
 
-#define AVAIL_REGS_INITIALIZER (struct avail_regs) { { 0, 0, 0}, 0, 0, 0 }
-
 /* Find suitable registers for a VFP Co-Processor Register Candidate (VFP CPRC
    param) according to the rules described in the procedure call standard for
    the ARM architecture (AAPCS). If found, the registers are assigned to this
@@ -1060,14 +1058,16 @@ struct param_plan {
 struct plan {
     struct param_plan *pplans; /* array of all the param plans */
     struct param_plan *clsplans[NB_CLASSES]; /* per class lists of param plans */
+    int nb_plans;
 };
 
-#define add_param_plan(plan,pplan,class)                        \
-    do {                                                        \
-        pplan.prev = plan->clsplans[class];                     \
-        plan->pplans[plan ## _nb] = pplan;                      \
-        plan->clsplans[class] = &plan->pplans[plan ## _nb++];   \
-    } while(0)
+static void add_param_plan(struct plan* plan, int cls, int start, int end, SValue *v)
+{
+    struct param_plan *p = &plan->pplans[plan->nb_plans++];
+    p->prev = plan->clsplans[cls];
+    plan->clsplans[cls] = p;
+    p->start = start, p->end = end, p->sval = v;
+}
 
 /* Assign parameters to registers and stack with alignment according to the
    rules in the procedure call standard for the ARM architecture (AAPCS).
@@ -1090,14 +1090,11 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
 {
   int i, size, align;
   int ncrn /* next core register number */, nsaa /* next stacked argument address*/;
-  int plan_nb = 0;
-  struct param_plan pplan;
-  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+  struct avail_regs avregs = {{0}};
 
   ncrn = nsaa = 0;
   *todo = 0;
-  plan->pplans = nb_args ? tcc_malloc(nb_args * sizeof(*plan->pplans)) : NULL;
-  memset(plan->clsplans, 0, sizeof(plan->clsplans));
+
   for(i = nb_args; i-- ;) {
     int j, start_vfpreg = 0;
     CType type = vtop[-i].type;
@@ -1120,11 +1117,8 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
           start_vfpreg = assign_vfpreg(&avregs, align, size);
           end_vfpreg = start_vfpreg + ((size - 1) >> 2);
           if (start_vfpreg >= 0) {
-            pplan = (struct param_plan) {start_vfpreg, end_vfpreg, &vtop[-i]};
-            if (is_hfa)
-              add_param_plan(plan, pplan, VFP_STRUCT_CLASS);
-            else
-              add_param_plan(plan, pplan, VFP_CLASS);
+            add_param_plan(plan, is_hfa ? VFP_STRUCT_CLASS : VFP_CLASS,
+                start_vfpreg, end_vfpreg, &vtop[-i]);
             continue;
           } else
             break;
@@ -1137,8 +1131,7 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
 	 * CORE_STRUCT_CLASS or the first of STACK_CLASS. */
         for (j = ncrn; j < 4 && j < ncrn + size / 4; j++)
           *todo|=(1<<j);
-        pplan = (struct param_plan) {ncrn, j, &vtop[-i]};
-        add_param_plan(plan, pplan, CORE_STRUCT_CLASS);
+        add_param_plan(plan, CORE_STRUCT_CLASS, ncrn, j, &vtop[-i]);
         ncrn += size/4;
         if (ncrn > 4)
           nsaa = (ncrn - 4) * 4;
@@ -1156,23 +1149,17 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
           if (ncrn == 4)
             break;
         }
-        pplan = (struct param_plan) {ncrn, ncrn, &vtop[-i]};
-        ncrn++;
-        if (is_long)
-          pplan.end = ncrn++;
-        add_param_plan(plan, pplan, CORE_CLASS);
+        add_param_plan(plan, CORE_CLASS, ncrn, ncrn + is_long, &vtop[-i]);
+        ncrn += 1 + is_long;
         continue;
       }
     }
     nsaa = (nsaa + (align - 1)) & ~(align - 1);
-    pplan = (struct param_plan) {nsaa, nsaa + size, &vtop[-i]};
-    add_param_plan(plan, pplan, STACK_CLASS);
+    add_param_plan(plan, STACK_CLASS, nsaa, nsaa + size, &vtop[-i]);
     nsaa += size; /* size already rounded up before */
   }
   return nsaa;
 }
-
-#undef add_param_plan
 
 /* Copy parameters to their final destination (core reg, VFP reg or stack) for
    function call.
@@ -1378,6 +1365,10 @@ void gfunc_call(int nb_args)
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gv(RC_INT);
 
+  memset(&plan, 0, sizeof plan);
+  if (nb_args)
+    plan.pplans = tcc_malloc(nb_args * sizeof(*plan.pplans));
+
   args_size = assign_regs(nb_args, float_abi, &plan, &todo);
 
 #ifdef TCC_ARM_EABI
@@ -1420,7 +1411,7 @@ void gfunc_prolog(Sym *func_sym)
   CType ret_type;
 
 #ifdef TCC_ARM_EABI
-  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+  struct avail_regs avregs = {{0}};
 #endif
 
   sym = func_type->ref;
@@ -1471,7 +1462,7 @@ void gfunc_prolog(Sym *func_sym)
 #ifdef TCC_ARM_EABI
   if (float_abi == ARM_HARD_FLOAT) {
     func_vc += nf * 4;
-    avregs = AVAIL_REGS_INITIALIZER;
+    memset(&avregs, 0, sizeof avregs);
   }
 #endif
   pn = struct_ret, sn = 0;

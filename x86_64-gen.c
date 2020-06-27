@@ -1289,11 +1289,11 @@ void gfunc_call(int nb_args)
 {
     X86_64_Mode mode;
     CType type;
-    int size, align, r, args_size, stack_adjust, i, reg_count;
+    int size, align, r, args_size, stack_adjust, i, reg_count, k;
     int nb_reg_args = 0;
     int nb_sse_args = 0;
     int sse_reg, gen_reg;
-    char _onstack[nb_args ? nb_args : 1], *onstack = _onstack;
+    char *onstack = tcc_malloc((nb_args + 1) * sizeof (char));
 
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check)
@@ -1339,9 +1339,9 @@ void gfunc_call(int nb_args)
     sse_reg = nb_sse_args;
     args_size = 0;
     stack_adjust &= 15;
-    for (i = 0; i < nb_args;) {
+    for (i = k = 0; i < nb_args;) {
 	mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
-	if (!onstack[i]) {
+	if (!onstack[i + k]) {
 	    ++i;
 	    continue;
 	}
@@ -1354,7 +1354,7 @@ void gfunc_call(int nb_args)
             args_size += 8;
 	    stack_adjust = 0;
         }
-	if (onstack[i] == 2)
+	if (onstack[i + k] == 2)
 	  stack_adjust = 1;
 
 	vrotb(i+1);
@@ -1404,8 +1404,10 @@ void gfunc_call(int nb_args)
 
 	vpop();
 	--nb_args;
-	onstack++;
+	k++;
     }
+
+    tcc_free(onstack);
 
     /* XXX This should be superfluous.  */
     save_regs(0); /* save used temporary registers */

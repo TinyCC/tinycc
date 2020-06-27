@@ -61,48 +61,57 @@ int main(int argc, char *argv[])
     _setmode(_fileno(stdout), _O_BINARY);  /* don't translate \n to \r\n */
 #endif
     switch(argc == 2 ? argv[1][0] : 0) {
-        case 'b':
+        case 'b'://igendian
         {
             volatile unsigned foo = 0x01234567;
             puts(*(unsigned char*)&foo == 0x67 ? "no" : "yes");
             break;
         }
 #if defined(__clang__)
-        case 'm':
+        case 'm'://inor
             printf("%d\n", __clang_minor__);
             break;
-        case 'v':
+        case 'v'://ersion
             printf("%d\n", __clang_major__);
             break;
 #elif defined(__TINYC__)
-        case 'v':
+        case 'v'://ersion
             puts("0");
             break;
-        case 'm':
+        case 'm'://inor
             printf("%d\n", __TINYC__);
+            break;
+#elif defined(_MSC_VER)
+        case 'v'://ersion
+            puts("0");
+            break;
+        case 'm'://inor
+            printf("%d\n", _MSC_VER);
             break;
 #elif defined(__GNUC__) && defined(__GNUC_MINOR__)
         /* GNU comes last as other compilers may add 'GNU' compatibility */
-        case 'm':
+        case 'm'://inor
             printf("%d\n", __GNUC_MINOR__);
             break;
-        case 'v':
+        case 'v'://ersion
             printf("%d\n", __GNUC__);
             break;
 #else
-        case 'm':
-        case 'v':
+        case 'm'://inor
+        case 'v'://ersion
             puts("0");
             break;
 #endif
-        case 't':
+        case 't'://riplet
             puts(TRIPLET);
             break;
-        case 'c':
+        case 'c'://ompiler
 #if defined(__clang__)
             puts("clang");
 #elif defined(__TINYC__)
             puts("tcc");
+#elif defined(_MSC_VER)
+            puts("msvc");
 #elif defined(__GNUC__)
             puts("gcc");
 #else

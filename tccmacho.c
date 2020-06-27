@@ -530,15 +530,20 @@ struct {
     uint32_t flags;
     char *name;
 } skinfo[sk_last] = {
-    [sk_text] =         { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
+    /*[sk_unknown] =*/  { 0 },
+    /*[sk_discard] =*/  { 0 },
+    /*[sk_text] =*/     { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
                              | S_ATTR_SOME_INSTRUCTIONS, "__text" },
-    [sk_ro_data] =      { 1, S_REGULAR, "__rodata" },
-    [sk_nl_ptr] =       { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
-    [sk_init] =         { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
-    [sk_fini] =         { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
-    [sk_rw_data] =      { 2, S_REGULAR, "__data" },
-    [sk_bss] =          { 2, S_ZEROFILL, "__bss" },
-    [sk_linkedit] =     { 3, S_REGULAR, NULL },
+    /*[sk_stubs] =*/    { 0 },
+    /*[sk_ro_data] =*/  { 1, S_REGULAR, "__rodata" },
+    /*[sk_uw_info] =*/  { 0 },
+    /*[sk_nl_ptr] =*/   { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
+    /*[sk_la_ptr] =*/   { 0 },
+    /*[sk_init] =*/     { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
+    /*[sk_fini] =*/     { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
+    /*[sk_rw_data] =*/  { 2, S_REGULAR, "__data" },
+    /*[sk_bss] =*/      { 2, S_ZEROFILL, "__bss" },
+    /*[sk_linkedit] =*/ { 3, S_REGULAR, NULL },
 };
 
 static void collect_sections(TCCState *s1, struct macho *mo)
@@ -663,7 +668,7 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             }
             if (sec)
               sec->align = al;
-            al = 1U << al;
+            al = 1ULL << al;
             if (al > 4096)
               tcc_warning("alignment > 4096"), sec->align = 12, al = 4096;
             curaddr = (curaddr + al - 1) & -al;
@@ -779,7 +784,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     int fd, mode, file_type;
     FILE *fp;
     int i, ret = -1;
-    struct macho mo = {};
+    struct macho mo = {0};
 
     file_type = s1->output_type;
     if (file_type == TCC_OUTPUT_OBJ)
@@ -912,8 +917,8 @@ ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
         {
             struct dylib_command *dc = (struct dylib_command*)lc;
             char *name = (char*)lc + dc->name;
-            dprintf(" REEXPORT %s\n", name);
             int subfd = open(name, O_RDONLY | O_BINARY);
+            dprintf(" REEXPORT %s\n", name);
             if (subfd < 0)
               tcc_warning("can't open %s (reexported from %s)", name, filename);
             else {

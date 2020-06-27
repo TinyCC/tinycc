@@ -578,7 +578,7 @@ static void reg_pass(CType *type, int *prc, int *fieldofs, int named)
 ST_FUNC void gfunc_call(int nb_args)
 {
     int i, align, size, areg[2];
-    int info[nb_args ? nb_args : 1];
+    int *info = tcc_malloc((nb_args + 1) * sizeof (int));
     int stack_adj = 0, tempspace = 0, stack_add, ofs, splitofs = 0;
     SValue *sv;
     Sym *sa;
@@ -775,6 +775,7 @@ ST_FUNC void gfunc_call(int nb_args)
         else
             EI(0x13, 0, 2, 2, stack_add);      // addi sp, sp, adj
    }
+   tcc_free(info);
 }
 
 static int func_sub_sp_offset, num_va_regs, func_va_list_ofs;

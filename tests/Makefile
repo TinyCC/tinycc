@@ -73,6 +73,9 @@ ifeq ($(ARCH),i386)
 # by GCC in 32bit mode when PIC is enabled.
 test.ref: CFLAGS+=-fno-PIC -fno-PIE
 endif
+ifeq ($(CC_NAME),msvc)
+test.ref abitest : CC = gcc
+endif
 
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d
@@ -302,7 +305,7 @@ clean:
 	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc
 	rm -f *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234]
 	rm -f asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
-	rm -f ex? tcc_g weaktest.*.txt *.def libtcc_test_mt
+	rm -f ex? tcc_g weaktest.*.txt *.def *.pdb *.obj libtcc_test_mt
 	@$(MAKE) -C tests2 $@
 	@$(MAKE) -C pp $@
 

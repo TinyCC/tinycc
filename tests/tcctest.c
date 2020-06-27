@@ -2,6 +2,10 @@
  * TCC auto test program
  */
 #include "config.h"
+#define CC_gcc 1
+#define CC_clang 2
+#define CC_tcc 3
+#define CC_msvc 4 /* cannot compile this file */
 
 /* Unfortunately, gcc version < 3 does not handle that! */
 #define ALL_ISOC99
@@ -1829,11 +1833,13 @@ void cast_test()
     printf("sizeof(-(char)'a') = %d\n", sizeof(-(char)'a'));
     printf("sizeof(~(char)'a') = %d\n", sizeof(-(char)'a'));
 
+#if CC_NAME != CC_clang /* doesn't like non-portable conversions */
     /* from pointer to integer types */
     printf("%d %d %ld %ld %lld %lld\n",
-           (int)(long)p, (unsigned int)(long)p,
+           (int)p, (unsigned int)p,
            (long)p, (unsigned long)p,
-           (long long)(long)p, (unsigned long long)(long)p);
+           (long long)p, (unsigned long long)p);
+#endif
 
     /* from integers to pointers */
     printf("%p %p %p %p\n",
