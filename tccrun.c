@@ -147,15 +147,15 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #endif
 
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
-    if ((s1->dflag & 16) && !find_c_sym(s1, s1->runtime_main))
+    if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, s1->runtime_main, 0, 1))
         return 0;
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug)
-        tcc_add_symbol(s1, &"_exit"[!s1->leading_underscore], rt_exit);
+        tcc_add_symbol(s1, "exit", rt_exit);
 #endif
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
-    prog_main = tcc_get_symbol_err(s1, s1->runtime_main);
+    prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
 
 #ifdef CONFIG_TCC_BACKTRACE
     memset(rc, 0, sizeof *rc);

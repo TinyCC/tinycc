@@ -1058,6 +1058,9 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if (s->option_pthread)
         tcc_define_symbol(s, "_REENTRANT", NULL);
 
+    if (s->leading_underscore)
+        tcc_define_symbol(s, "__leading_underscore", NULL);
+
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
@@ -1236,6 +1239,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
     return -1;
 }
 
+#ifndef TCC_TARGET_MACHO
 /* find and load a dll. Return non zero if not found */
 /* XXX: add '-rpath' option support ? */
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
@@ -1243,8 +1247,9 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
     return tcc_add_library_internal(s, "%s/%s", filename, flags,
         s->library_paths, s->nb_library_paths);
 }
+#endif
 
-#ifndef TCC_TARGET_PE
+#if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
 ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 {
     if (-1 == tcc_add_library_internal(s1, "%s/%s",
@@ -1300,9 +1305,13 @@ LIBTCCAPI int tcc_add_symbol(TCCState *s1, const char *name, const void *val)
        So it is handled here as if it were in a DLL. */
     pe_putimport(s1, 0, name, (uintptr_t)val);
 #else
-    set_elf_sym(symtab_section, (uintptr_t)val, 0,
-        ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0,
-        SHN_ABS, name);
+    char buf[256];
+    if (s1->leading_underscore) {
+        buf[0] = '_';
+        pstrcpy(buf + 1, sizeof(buf) - 1, name);
+        name = buf;
+    }
+    set_global_sym(s1, name, NULL, (addr_t)(uintptr_t)val); /* NULL: SHN_ABS */
 #endif
     return 0;
 }

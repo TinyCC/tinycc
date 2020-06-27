@@ -35,13 +35,19 @@
   REDIR(__bound_strchr) \
   REDIR(__bound_strdup)
 
+#ifdef __leading_underscore
+#define _(s) "_"#s
+#else
+#define _(s) #s
+#endif
+
 #define REDIR(s) void *s;
 static struct { REDIR_ALL } all_ptrs;
 #undef REDIR
 #define REDIR(s) #s"\0"
 static const char all_names[] = REDIR_ALL;
 #undef REDIR
-#define REDIR(s) __asm__(".global "#s";"#s": jmp *%0" : : "m" (all_ptrs.s) );
+#define REDIR(s) __asm__(".global " _(s) ";" _(s) ": jmp *%0" : : "m" (all_ptrs.s) );
 static void all_jmps() { REDIR_ALL }
 #undef REDIR
 

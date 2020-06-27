@@ -762,10 +762,10 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
     }
 
     for (sk = sk_unknown; sk < sk_last; sk++) {
-        struct segment_command_64 *seg;
+        //struct segment_command_64 *seg;
         if (!skinfo[sk].seg || !mo->sk_to_sect[sk].s)
           continue;
-        seg = get_segment(mo, skinfo[sk].seg);
+        /*seg =*/ get_segment(mo, skinfo[sk].seg);
         for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
             if (s->sh_type != SHT_NOBITS) {
                 while (fileofs < s->sh_offset)
@@ -811,7 +811,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         Section *s;
         collect_sections(s1, &mo);
         relocate_syms(s1, s1->symtab, 0);
-        mo.ep->entryoff = get_sym_addr(s1, "_main", 1, 0)
+        mo.ep->entryoff = get_sym_addr(s1, "main", 1, 1)
                             - get_segment(&mo, 1)->vmaddr;
         if (s1->nb_errors)
           goto do_ret;

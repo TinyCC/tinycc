@@ -8,7 +8,7 @@ asm (
 	"ret;"
 );
 
-#if 1
+#ifndef __leading_underscore
 #define us _us
 #define ss _ss
 #define uc _uc

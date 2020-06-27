@@ -1,8 +1,6 @@
 #include <stdio.h>
 
-#if defined _WIN32 && !defined __TINYC__
-# define _ "_"
-#elif defined __APPLE__
+#if (defined _WIN32 || defined __APPLE__) && (!defined __TINYC__ || defined __leading_underscore)
 # define _ "_"
 #else
 # define _

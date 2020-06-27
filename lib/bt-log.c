@@ -13,15 +13,6 @@ int (*__rt_error)(void*, void*, const char *, va_list);
 # define DLL_EXPORT
 #endif
 
-#if defined(__GNUC__) && (__GNUC__ >= 6)
-/*
- * At least gcc 6.2 complains when __builtin_frame_address is used with
- * nonzero argument.
- */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wframe-address"
-#endif
-
 DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
 {
     va_list ap;
@@ -44,7 +35,3 @@ DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
     }
     return ret;
 }
-
-#if defined(__GNUC__) && (__GNUC__ >= 6)
-#pragma GCC diagnostic pop
-#endif

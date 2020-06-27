@@ -481,40 +481,38 @@ ST_FUNC int find_elf_sym(Section *s, const char *name)
     return 0;
 }
 
-ST_FUNC int find_c_sym(TCCState *s1, const char *name)
-{
-    int ret;
-    CString cstr;
-    if (s1->leading_underscore) {
-        cstr_new(&cstr);
-        cstr_ccat(&cstr, '_');
-        cstr_cat(&cstr, name, 0);
-        name = cstr.data;
-    }
-    ret = find_elf_sym(s1->symtab, name);
-    if (s1->leading_underscore)
-      cstr_free(&cstr);
-    return ret;
-}
-
 /* return elf symbol value, signal error if 'err' is nonzero, decorate
    name if FORC */
 ST_FUNC addr_t get_sym_addr(TCCState *s1, const char *name, int err, int forc)
 {
     int sym_index;
     ElfW(Sym) *sym;
-
-    if (forc)
-      sym_index = find_c_sym(s1, name);
-    else
-      sym_index = find_elf_sym(s1->symtab, name);
+    char buf[256];
+    if (forc && s1->leading_underscore
+#ifdef TCC_TARGET_PE
+        /* win32-32bit stdcall symbols always have _ already */
+        && !strchr(name, '@')
+#endif
+        ) {
+        buf[0] = '_';
+        pstrcpy(buf + 1, sizeof(buf) - 1, name);
+        name = buf;
+    }
+    sym_index = find_elf_sym(s1->symtab, name);
     sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
             tcc_error("%s not defined", name);
-        return 0;
+        return (addr_t)-1;
     }
     return sym->st_value;
+}
+
+/* return elf symbol value */
+LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
+{
+    addr_t addr = get_sym_addr(s, name, 0, 1);
+    return addr == -1 ? NULL : (void*)(uintptr_t)addr;
 }
 
 /* list elf symbol names and values */
@@ -541,26 +539,12 @@ ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
     }
 }
 
-/* return elf symbol value */
-LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name)
-{
-    return (void*)(uintptr_t)get_sym_addr(s, name, 0, 1);
-}
-
 /* list elf symbol names and values */
 LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
     void (*symbol_cb)(void *ctx, const char *name, const void *val))
 {
     list_elf_symbols(s, ctx, symbol_cb);
 }
-
-#if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
-/* return elf symbol value or error */
-ST_FUNC void* tcc_get_symbol_err(TCCState *s, const char *name)
-{
-    return (void*)(uintptr_t)get_sym_addr(s, name, 1, 1);
-}
-#endif
 
 #ifndef ELF_OBJ_ONLY
 static void
@@ -1087,7 +1071,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 }
 #endif
 
-#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
+#if !defined(ELF_OBJ_ONLY) || (defined(TCC_TARGET_MACHO) && defined TCC_IS_NATIVE)
 static void build_got(TCCState *s1)
 {
     /* if no got, then create it */
@@ -1294,7 +1278,7 @@ ST_FUNC void build_got_entries(TCCState *s1)
 }
 #endif
 
-ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, long offs)
+ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs)
 {
     int shn = sec ? sec->sh_num : offs ? SHN_ABS : SHN_UNDEF;
     if (sec && offs == -1)
@@ -1306,7 +1290,7 @@ ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, long of
 static void add_init_array_defines(TCCState *s1, const char *section_name)
 {
     Section *s;
-    long end_offset;
+    addr_t end_offset;
     char buf[1024];
     s = find_section(s1, section_name);
     if (!s) {

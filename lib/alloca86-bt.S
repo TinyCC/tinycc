@@ -1,9 +1,14 @@
 /* ---------------------------------------------- */
 /* alloca86-bt.S */
 
-.globl __bound_alloca
+#ifdef __leading_underscore
+# define _(s) _##s
+#else
+# define _(s) s
+#endif
 
-__bound_alloca:
+.globl _(__bound_alloca)
+_(__bound_alloca):
     pop     %edx
     pop     %eax
     mov     %eax, %ecx
@@ -30,8 +35,8 @@ p5:
     push    %eax
     push    %ecx
     push    %eax
-    call   __bound_new_region
-    add    $8, %esp
+    call    _(__bound_new_region)
+    add     $8, %esp
     pop     %eax
     pop     %edx
 

@@ -34,29 +34,15 @@ int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int glob
 void __cdecl __set_app_type(int apptype);
 unsigned int __cdecl _controlfp(unsigned int new_value, unsigned int mask);
 extern int _tmain(int argc, _TCHAR * argv[], _TCHAR * env[]);
-extern void (*__init_array_start[]) (int argc, char **argv, char **envp);
-extern void (*__init_array_end[]) (int argc, char **argv, char **envp);
-extern void (*__fini_array_start[]) (void);
-extern void (*__fini_array_end[]) (void);
+
+#include "crtinit.c"
 
 static int do_main (int argc, _TCHAR * argv[], _TCHAR * env[])
 {
     int retval;
-    long i;
-
-    i = 0;
-    while (&__init_array_start[i] != __init_array_end) {
-#ifdef UNICODE
-        (*__init_array_start[i++])(0, NULL, NULL);
-#else
-        (*__init_array_start[i++])(argc, argv, env);
-#endif
-    }
+    run_ctors(argc, argv, env);
     retval = _tmain(__argc, __targv, _tenviron);
-    i = 0;
-    while (&__fini_array_end[i] != __fini_array_start) {
-        (*__fini_array_end[--i])();
-    }
+    run_dtors();
     return retval;
 }
 

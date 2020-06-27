@@ -5,7 +5,7 @@
 #define __fastcall __attribute((fastcall))
 #endif
 
-#if 1
+#ifndef __leading_underscore
 #define SYMBOL(x) _##x
 #else
 #define SYMBOL(x) x

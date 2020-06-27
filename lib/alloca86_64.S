@@ -1,12 +1,14 @@
 /* ---------------------------------------------- */
 /* alloca86_64.S */
 
-#ifdef __APPLE__
-#define alloca _alloca
+#ifdef __leading_underscore
+# define _(s) _##s
+#else
+# define _(s) s
 #endif
-.globl alloca
 
-alloca:
+.globl _(alloca)
+_(alloca):
     pop     %rdx
 #ifdef _WIN32
     mov     %rcx,%rax

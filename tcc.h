@@ -194,6 +194,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # endif
 #endif
 
+#if defined TCC_TARGET_PE || defined TCC_TARGET_MACHO
+# define ELF_OBJ_ONLY /* create elf .o but native executables */
+#endif
+
 /* ------------ path configuration ------------ */
 
 #ifndef CONFIG_SYSROOT
@@ -886,11 +890,6 @@ struct TCCState {
     int uw_sym;
     unsigned uw_offs;
 # endif
-# define ELF_OBJ_ONLY
-#endif
-
-#ifdef TCC_TARGET_MACHO
-# define ELF_OBJ_ONLY
 #endif
 
 #ifndef ELF_OBJ_ONLY
@@ -1281,11 +1280,12 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_BINTYPE_AR  3
 #define AFF_BINTYPE_C67 4
 
-
-#ifndef TCC_TARGET_PE
+#ifndef ELF_OBJ_ONLY
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 #endif
+#ifndef TCC_TARGET_MACHO
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
+#endif
 #ifdef CONFIG_TCC_BCHECK
 ST_FUNC void tcc_add_bcheck(TCCState *s1);
 #endif
@@ -1538,21 +1538,16 @@ ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC void add_array(TCCState *s1, const char *sec, int c);
 
-#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
+#if !defined(ELF_OBJ_ONLY) || (defined(TCC_TARGET_MACHO) && defined TCC_IS_NATIVE)
 ST_FUNC void build_got_entries(TCCState *s1);
 #endif
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC void squeeze_multi_relocs(Section *sec, size_t oldrelocoffset);
 
-ST_FUNC int find_c_sym(TCCState *, const char *name);
 ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err, int forc);
 ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
     void (*symbol_cb)(void *ctx, const char *name, const void *val));
-#if defined TCC_IS_NATIVE || defined TCC_TARGET_PE
-ST_FUNC void *tcc_get_symbol_err(TCCState *s, const char *name);
-#endif
-
-ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, long offs);
+ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs);
 
 /* Browse each elem of type <type> in section <sec> starting at elem <startoff>
    using variable <elem> */
@@ -1560,9 +1555,11 @@ ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, long of
     for (elem = (type *) sec->data + startoff; \
          elem < (type *) (sec->data + sec->data_offset); elem++)
 
-#ifndef TCC_TARGET_PE
+#ifndef ELF_OBJ_ONLY
 ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level);
 ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd);
+#endif
+#ifndef TCC_TARGET_PE
 ST_FUNC void tcc_add_runtime(TCCState *s1);
 #endif
 
@@ -1580,8 +1577,10 @@ enum gotplt_entry {
 #if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC int gotplt_entry_type (int reloc_type);
+#if !defined(TCC_TARGET_MACHO) || defined TCC_IS_NATIVE
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
 ST_FUNC void relocate_plt(TCCState *s1);
+#endif
 #endif
 ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 

@@ -23,13 +23,10 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
 #define _runtwinmain _runwinmain
 #endif
 
-extern void (*__init_array_start[]) (int argc, char **argv, char **envp);
-extern void (*__init_array_end[]) (int argc, char **argv, char **envp);
-extern void (*__fini_array_start[]) (void);
-extern void (*__fini_array_end[]) (void);
-
 typedef struct { int newmode; } _startupinfo;
 int __cdecl __tgetmainargs(int *pargc, _TCHAR ***pargv, _TCHAR ***penv, int globb, _startupinfo*);
+
+#include "crtinit.c"
 
 static int go_winmain(TCHAR *arg1)
 {
@@ -37,7 +34,6 @@ static int go_winmain(TCHAR *arg1)
     _TCHAR *szCmd, *p;
     int fShow;
     int retval;
-    int i;
 
     GetStartupInfo(&si);
     if (si.dwFlags & STARTF_USESHOWWINDOW)
@@ -55,19 +51,9 @@ static int go_winmain(TCHAR *arg1)
 #if defined __i386__ || defined __x86_64__
     _controlfp(0x10000, 0x30000);
 #endif
-    i = 0;
-    while (&__init_array_start[i] != __init_array_end) {
-#ifdef UNICODE
-        (*__init_array_start[i++])(0, NULL, NULL);
-#else
-        (*__init_array_start[i++])(__argc, __targv, _tenviron);
-#endif
-    }
+    run_ctors(__argc, __targv, _tenviron);
     retval = _tWinMain(GetModuleHandle(NULL), NULL, szCmd, fShow);
-    i = 0;
-    while (&__fini_array_end[i] != __fini_array_start) {
-        (*__fini_array_end[--i])();
-    }
+    run_dtors();
     return retval;
 }
 

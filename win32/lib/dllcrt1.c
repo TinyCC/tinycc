@@ -1,32 +1,18 @@
 //+---------------------------------------------------------------------------
 
+#include <tchar.h>
 #include <windows.h>
-
-extern void (*__init_array_start[]) (int argc, char **argv, char **envp);
-extern void (*__init_array_end[]) (int argc, char **argv, char **envp);
-extern void (*__fini_array_start[]) (void);
-extern void (*__fini_array_end[]) (void);
+#include "crtinit.c"
 
 BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved);
 
 BOOL WINAPI _dllstart(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 {
     BOOL bRet;
-    int i;
-
-    if (dwReason == DLL_PROCESS_ATTACH) { /* ignore DLL_THREAD_ATTACH */
-        i = 0;
-        while (&__init_array_start[i] != __init_array_end) {
-            (*__init_array_start[i++])(0, NULL, NULL);
-        }
-    }
-    if (dwReason == DLL_PROCESS_DETACH) { /* ignore  DLL_THREAD_DETACH */
-        i = 0;
-        while (&__fini_array_end[i] != __fini_array_start) {
-            (*__fini_array_end[--i])();
-        }
-    }
+    if (dwReason == DLL_PROCESS_ATTACH) /* ignore DLL_THREAD_ATTACH */
+        run_ctors(0, 0, 0);
     bRet = DllMain (hDll, dwReason, lpReserved);
+    if (dwReason == DLL_PROCESS_DETACH) /* ignore  DLL_THREAD_DETACH */
+        run_dtors();
     return bRet;
 }
-

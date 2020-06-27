@@ -1,8 +1,9 @@
-#ifdef __APPLE__
-#define _ "_"
+#ifdef __leading_underscore
+# define _ "_"
 #else
-#define _
+# define _
 #endif
+
 extern int printf (const char *, ...);
 extern void vide(void);
 __asm__(_"vide: ret");
