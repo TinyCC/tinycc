@@ -441,6 +441,9 @@ void load(int r, SValue *sv)
             b = 0xbf0f;   /* movswl */
         } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
             b = 0xb70f;   /* movzwl */
+        } else if ((ft & VT_TYPE) == (VT_VOID)) {
+            /* Can happen with zero size structs */
+            return;
         } else {
             assert(((ft & VT_BTYPE) == VT_INT)
                    || ((ft & VT_BTYPE) == VT_LLONG)

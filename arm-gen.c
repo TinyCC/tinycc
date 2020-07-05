@@ -925,10 +925,12 @@ static int is_hgen_float_aggr(CType *type)
     int btype, nb_fields = 0;
 
     ref = type->ref->next;
-    btype = unalias_ldbl(ref->type.t & VT_BTYPE);
-    if (btype == VT_FLOAT || btype == VT_DOUBLE) {
-      for(; ref && btype == unalias_ldbl(ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
-      return !ref && nb_fields <= 4;
+    if (ref) {
+      btype = unalias_ldbl(ref->type.t & VT_BTYPE);
+      if (btype == VT_FLOAT || btype == VT_DOUBLE) {
+        for(; ref && btype == unalias_ldbl(ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
+        return !ref && nb_fields <= 4;
+      }
     }
   }
   return 0;
@@ -1017,7 +1019,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
         ret->ref = NULL;
         ret->t = VT_DOUBLE;
         return (size + 7) >> 3;
-    } else if (size <= 4) {
+    } else if (size > 0 && size <= 4) {
         *ret_align = 4;
 	*regsize = 4;
         ret->ref = NULL;

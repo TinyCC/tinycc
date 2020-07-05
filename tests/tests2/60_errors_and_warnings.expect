@@ -159,3 +159,6 @@ bar  : 3 ; 3
 
 [test_stray_backslash2]
 \n
+
+[test_var_array]
+60_errors_and_warnings.c:345: warning: initializer-string for array is too long

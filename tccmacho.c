@@ -820,7 +820,6 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
 
         macho_write(s1, &mo, fp);
     }
-    ret = 0;
 
  do_ret:
     for (i = 0; i < mo.nlc; i++)

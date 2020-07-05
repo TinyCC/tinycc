@@ -339,4 +339,11 @@ int main()
 }
 
 /******************************************************************/
+#elif defined test_var_array
+
+static struct var_len { int i; const char str[]; } var_array[] =
+{ { 1, "abcdefghijklmnopqrstuvwxyz" },
+  { 2, "longlonglonglonglong" },
+  { 3, "tst3" } };
+
 #endif

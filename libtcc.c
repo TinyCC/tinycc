@@ -963,6 +963,24 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__FINITE_MATH_ONLY__", "1");
     tcc_define_symbol(s, "_FORTIFY_SOURCE", "0");
 #endif /* ndef TCC_TARGET_MACHO */
+
+    if (PTR_SIZE == 4) {
+        tcc_define_symbol(s, "__SIZEOF_LONG__", "4");
+        tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffL");
+    }
+    else {
+        tcc_define_symbol(s, "__SIZEOF_LONG__", "8");
+        tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffffffffffL");
+    }
+    tcc_define_symbol(s, "__SIZEOF_INT__", "4");
+    tcc_define_symbol(s, "__SIZEOF_LONG_LONG__", "8");
+    tcc_define_symbol(s, "__CHAR_BIT__", "8");
+    tcc_define_symbol(s, "__ORDER_LITTLE_ENDIAN__", "1234");
+    tcc_define_symbol(s, "__ORDER_BIG_ENDIAN__", "4321");
+    tcc_define_symbol(s, "__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+    tcc_define_symbol(s, "__INT_MAX__", "0x7fffffff");
+    tcc_define_symbol(s, "__LONG_LONG_MAX__", "0x7fffffffffffffffLL");
+    tcc_define_symbol(s, "__builtin_offsetof(type,field)", "((unsigned long) &((type *)0)->field)");
     return s;
 }
 

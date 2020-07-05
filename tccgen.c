@@ -5356,17 +5356,51 @@ static void parse_type(CType *type)
 static void parse_builtin_params(int nc, const char *args)
 {
     char c, sep = '(';
-    CType t;
+    CType type;
     if (nc)
         nocode_wanted++;
     next();
+    if (*args == 0)
+	skip(sep);
     while ((c = *args++)) {
 	skip(sep);
 	sep = ',';
 	switch (c) {
-	    case 'e': expr_eq(); continue;
-	    case 't': parse_type(&t); vpush(&t); continue;
-	    default: tcc_error("internal error"); break;
+	    case 'e': expr_eq();
+		      continue;
+	    case 't': parse_type(&type);
+		      vpush(&type);
+		      continue;
+	    case 'v':
+	    case 'V': expr_eq();
+                      type.t = VT_VOID;
+                      if (c == 'V') type.t |= VT_CONSTANT;
+                      type.ref = NULL;
+                      mk_pointer (&type);
+                      gen_assign_cast(&type);
+                      continue;
+	    case 's':
+	    case 'S': expr_eq();
+                      type.t = VT_BYTE;
+                      if (tcc_state->char_is_unsigned)
+                          type.t |= VT_UNSIGNED;
+                      if (c == 'S') type.t |= VT_CONSTANT;
+                      type.ref = NULL;
+                      mk_pointer (&type);
+                      gen_assign_cast(&type);
+                      continue;
+	    case 'i': expr_eq();
+                      type.t = VT_INT;
+                      type.ref = NULL;
+                      gen_assign_cast(&type);
+                      continue;
+	    case 'l': expr_eq();
+                      type.t = VT_SIZE_T;
+                      type.ref = NULL;
+                      gen_assign_cast(&type);
+                      continue;
+	    default:  tcc_error("internal error");
+		      break;
 	}
     }
     skip(')');
@@ -5746,6 +5780,197 @@ ST_FUNC void unary(void)
         break;
     }
 #endif
+    case TOK___builtin_abort:
+        vpush_global_sym(&func_old_type, TOK_abort);
+	parse_builtin_params(0, "");
+        gfunc_call(0);
+builtin_void_return:
+        vpushi(0);
+        type.t = VT_VOID;
+        type.ref = NULL;
+        vtop->type = type;
+        vtop->r = R_RET(type.t);
+        break;
+    case TOK___builtin_memcpy:
+        t = TOK_memcpy;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_memcpy;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "vVl");
+        gfunc_call(3);
+builtin_void_ptr_return:
+        vpushi(0);
+        type.t = VT_VOID;
+        type.ref = NULL;
+        mk_pointer (&type);
+        vtop->type = type;
+        vtop->r = R_RET(type.t);
+        break;
+    case TOK___builtin_memcmp:
+        t = TOK_memcmp;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_memcmp;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "VVl");
+        gfunc_call(3);
+builtin_int_return:
+        vpushi(0);
+        type.t = VT_INT;
+        type.ref = NULL;
+        vtop->type = type;
+        vtop->r = R_RET(type.t);
+        break;
+    case TOK___builtin_memmove:
+        t = TOK_memmove;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_memmove;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "vVl");
+        gfunc_call(3);
+        goto builtin_void_ptr_return;
+    case TOK___builtin_memset:
+        t = TOK_memset;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_memset;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "vil");
+        gfunc_call(3);
+        goto builtin_void_ptr_return;
+    case TOK___builtin_strlen:
+        t = TOK_strlen;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strlen;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "S");
+        gfunc_call(1);
+        vpushi(0);
+        type.t = VT_SIZE_T;
+        type.ref = NULL;
+        vtop->type = type;
+        vtop->r = R_RET(type.t);
+        break;
+    case TOK___builtin_strcpy:
+        t = TOK_strcpy;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strcpy;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "sS");
+        gfunc_call(2);
+builtin_string_ptr_return:
+        vpushi(0);
+        type.t = VT_BYTE;
+        if (tcc_state->char_is_unsigned)
+            type.t |= VT_UNSIGNED;
+        type.ref = NULL;
+        mk_pointer (&type);
+        vtop->type = type;
+        vtop->r = R_RET(type.t);
+        break;
+    case TOK___builtin_strncpy:
+        t = TOK_strncpy;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strncpy;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "sSl");
+        gfunc_call(3);
+        goto builtin_string_ptr_return;
+    case TOK___builtin_strcmp:
+        t = TOK_strcmp;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strcmp;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "SS");
+        gfunc_call(2);
+        goto builtin_int_return;
+    case TOK___builtin_strncmp:
+        t = TOK_strncmp;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strncmp;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "SSl");
+        gfunc_call(3);
+        goto builtin_int_return;
+    case TOK___builtin_strcat:
+        t = TOK_strcat;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strcat;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "sS");
+        gfunc_call(2);
+        goto builtin_string_ptr_return;
+    case TOK___builtin_strchr:
+        t = TOK_strchr;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strchr;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "Si");
+        gfunc_call(2);
+        goto builtin_string_ptr_return;
+    case TOK___builtin_strdup:
+        t = TOK_strdup;
+#ifdef CONFIG_TCC_BCHECK
+        if (tcc_state->do_bounds_check) t = TOK___bound_strdup;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "S");
+        gfunc_call(1);
+        goto builtin_string_ptr_return;
+    case TOK___builtin_malloc:
+        t = TOK_malloc;
+#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
+        if (tcc_state->do_bounds_check) t = TOK___bound_malloc;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "l");
+        gfunc_call(1);
+        goto builtin_void_ptr_return;
+    case TOK___builtin_realloc:
+        t = TOK_realloc;
+#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
+        if (tcc_state->do_bounds_check) t = TOK___bound_realloc;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "vl");
+        gfunc_call(2);
+        goto builtin_void_ptr_return;
+    case TOK___builtin_calloc:
+        t = TOK_calloc;
+#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
+        if (tcc_state->do_bounds_check) t = TOK___bound_calloc;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "ll");
+        gfunc_call(2);
+        goto builtin_void_ptr_return;
+    case TOK___builtin_free:
+        t = TOK_free;
+#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
+        if (tcc_state->do_bounds_check) t = TOK___bound_free;
+#endif
+        vpush_global_sym(&func_old_type, t);
+	parse_builtin_params(0, "v");
+        gfunc_call(1);
+        goto builtin_void_return;
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+    case TOK_alloca:
+    case TOK___builtin_alloca:
+        vpush_global_sym(&func_old_type, TOK_alloca);
+	parse_builtin_params(0, "l");
+        gfunc_call(1);
+        goto builtin_void_ptr_return;
+#endif
+
     /* pre operations */
     case TOK_INC:
     case TOK_DEC:
@@ -7678,6 +7903,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
             if (n >= 0 && len > n)
               nb = n;
             if (!(flags & DIF_SIZE_ONLY)) {
+                if (sec && !NODATA_WANTED &&
+                    (c + nb > sec->data_allocated))
+                  nb = sec->data_allocated - c;
                 if (len > nb)
                   tcc_warning("initializer-string for array is too long");
                 /* in order to go faster for common case (char
