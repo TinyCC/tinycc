@@ -161,7 +161,7 @@ static int leaffunc;
 #if defined(CONFIG_TCC_BCHECK)
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
-static int func_bound_add_epilog;
+ST_DATA int func_bound_add_epilog;
 #endif
 
 #if defined(TCC_ARM_EABI) && defined(TCC_ARM_VFP)
@@ -763,14 +763,6 @@ static void gcall_or_jmp(int is_jmp)
 			greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
 			o(vtop->c.i);
 		}
-#ifdef CONFIG_TCC_BCHECK
-                if (tcc_state->do_bounds_check &&
-                    (vtop->sym->v == TOK_setjmp ||
-                     vtop->sym->v == TOK__setjmp ||
-                     vtop->sym->v == TOK_sigsetjmp ||
-                     vtop->sym->v == TOK___sigsetjmp))
-                    func_bound_add_epilog = 1;
-#endif
 	}else{
 		if(!is_jmp)
 			o(0xE28FE004); // add lr,pc,#4

@@ -3625,10 +3625,13 @@ ST_INLN void unget_tok(int last_tok)
 static void tcc_predefs(CString *cstr)
 {
     cstr_cat(cstr,
+
+    //"#include <tcc_predefs.h>\n"
+
 #if defined TCC_TARGET_X86_64
 #ifndef TCC_TARGET_PE
-    /* GCC compatible definition of va_list. This should be in sync
-       with the declaration in our lib/libtcc1.c */
+    /* GCC compatible definition of va_list. */
+    /* This should be in sync with the declaration in our lib/libtcc1.c */
     "typedef struct{\n"
     "unsigned gp_offset,fp_offset;\n"
     "union{\n"
@@ -3644,7 +3647,6 @@ static void tcc_predefs(CString *cstr)
 #else /* TCC_TARGET_PE */
     "typedef char*__builtin_va_list;\n"
     "#define __builtin_va_arg(ap,t) ((sizeof(t)>8||(sizeof(t)&(sizeof(t)-1)))?**(t**)((ap+=8)-8):*(t*)((ap+=8)-8))\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
 #endif
 #elif defined TCC_TARGET_ARM
     "typedef char*__builtin_va_list;\n"
@@ -3652,26 +3654,69 @@ static void tcc_predefs(CString *cstr)
     "#define _tcc_align(addr,type) (((unsigned)addr+_tcc_alignof(type)-1)&~(_tcc_alignof(type)-1))\n"
     "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
     "#define __builtin_va_arg(ap,type) (ap=(void*)((_tcc_align(ap,type)+sizeof(type)+3)&~3),*(type*)(ap-((sizeof(type)+3)&~3)))\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
 #elif defined TCC_TARGET_ARM64
     "typedef struct{\n"
     "void*__stack,*__gr_top,*__vr_top;\n"
     "int __gr_offs,__vr_offs;\n"
     "}__builtin_va_list;\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
 #elif defined TCC_TARGET_RISCV64
     "typedef char*__builtin_va_list;\n"
     "#define __va_reg_size (__riscv_xlen>>3)\n"
     "#define _tcc_align(addr,type) (((unsigned long)addr+__alignof__(type)-1)&-(__alignof__(type)))\n"
     "#define __builtin_va_arg(ap,type) (*(sizeof(type)>(2*__va_reg_size)?*(type**)((ap+=__va_reg_size)-__va_reg_size):(ap=(va_list)(_tcc_align(ap,type)+(sizeof(type)+__va_reg_size-1)&-__va_reg_size),(type*)(ap-((sizeof(type)+__va_reg_size-1)&-__va_reg_size)))))\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
 #else /* TCC_TARGET_I386 */
     "typedef char*__builtin_va_list;\n"
     "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
     "#define __builtin_va_arg(ap,t) (*(t*)((ap+=(sizeof(t)+3)&~3)-((sizeof(t)+3)&~3)))\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
 #endif
     "#define __builtin_va_end(ap) (void)(ap)\n"
+    "#ifndef __builtin_va_copy\n"
+    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
+    "#endif\n"
+    /* TCC BBUILTIN AND BOUNDS ALIASES */
+    "#ifdef __BOUNDS_CHECKING_ON\n"
+    "#define __BUILTIN(ret,name,params) ret __builtin_##name params __attribute__((alias(\"__bound_\"#name)));\n"
+    "#define __BOUND(ret,name,params) ret name params __attribute__((alias(\"__bound_\"#name)));\n"
+    "#else\n"
+    "#define __BUILTIN(ret,name,params) ret __builtin_##name params __attribute__((alias(#name)));\n"
+    "#define __BOUND(ret,name,params)\n"
+    "#endif\n"
+    "#define __BOTH(ret,name,params) __BUILTIN(ret,name,params)__BOUND(ret,name,params)\n"
+    "__BOTH(void*,memcpy,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOTH(void*,memmove,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOTH(void*,memset,(void*,int,__SIZE_TYPE__))\n"
+    "__BOTH(int,memcmp,(const void*,const void*,__SIZE_TYPE__))\n"
+    "__BOTH(__SIZE_TYPE__,strlen,(const char*))\n"
+    "__BOTH(char*,strcpy,(char*,const char*))\n"
+    "__BOTH(char*,strncpy,(char*,const char*,__SIZE_TYPE__))\n"
+    "__BOTH(int,strcmp,(const char*,const char*))\n"
+    "__BOTH(int,strncmp,(const char*,const char*,__SIZE_TYPE__))\n"
+    "__BOTH(char*,strcat,(char*,const char*))\n"
+    "__BOTH(char*,strchr,(const char*,int))\n"
+    "__BOTH(char*,strdup,(const char*))\n"
+#ifdef TCC_TARGET_PE
+    "#define __MAYBE_REDIR __BOTH\n"
+#else  // HAVE MALLOC_REDIR
+    "#define __MAYBE_REDIR __BUILTIN\n"
+#endif
+    "__MAYBE_REDIR(void*,malloc,(__SIZE_TYPE__))\n"
+    "__MAYBE_REDIR(void*,realloc,(void*,__SIZE_TYPE__))\n"
+    "__MAYBE_REDIR(void*,calloc,(__SIZE_TYPE__,__SIZE_TYPE__))\n"
+    "__MAYBE_REDIR(void*,memalign,(__SIZE_TYPE__,__SIZE_TYPE__))\n"
+    "__MAYBE_REDIR(void,free,(void*))\n"
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
+    "__BOTH(void*,alloca,(__SIZE_TYPE__))\n"
+#endif
+    "__BUILTIN(void,abort,(void))\n"
+    "__BOUND(int,longjmp,())\n"
+#ifndef TCC_TARGET_PE
+    "__BOUND(void*,mmap,())\n"
+    "__BOUND(void*,munmap,())\n"
+#endif
+    "#undef __BUILTIN\n"
+    "#undef __BOUND\n"
+    "#undef __BOTH\n"
+    "#undef __MAYBE_REDIR\n"
     , -1);
 }
 

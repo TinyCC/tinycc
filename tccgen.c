@@ -80,7 +80,7 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
-ST_DATA CType int_type, func_old_type, char_pointer_type;
+ST_DATA CType int_type, func_old_type, char_type, char_pointer_type;
 static CString initstr;
 
 #if PTR_SIZE == 4
@@ -771,8 +771,13 @@ ST_FUNC void tccgen_init(TCCState *s1)
 
     /* define some often used types */
     int_type.t = VT_INT;
-    char_pointer_type.t = VT_BYTE;
+
+    char_type.t = VT_BYTE;
+    if (s1->char_is_unsigned)
+        char_type.t |= VT_UNSIGNED;
+    char_pointer_type = char_type;
     mk_pointer(&char_pointer_type);
+
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
     func_old_type.ref->f.func_call = FUNC_CDECL;
@@ -886,66 +891,9 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
     ElfSym *esym;
     const char *name;
     char buf1[256];
-#ifdef CONFIG_TCC_BCHECK
-    char buf[32];
-#endif
+
     if (!sym->c) {
         name = get_tok_str(sym->v, NULL);
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) {
-            /* XXX: avoid doing that for statics ? */
-            /* if bound checking is activated, we change some function
-               names by adding the "__bound" prefix */
-#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
-            if (strcmp (name, "memcpy") == 0 ||
-                strcmp (name, "memmove") == 0 ||
-                strcmp (name, "memset") == 0)
-                goto add_bound;
-#endif
-            switch(sym->v) {
-#ifdef TCC_TARGET_PE
-            /* XXX: we rely only on malloc hooks */
-            case TOK_malloc:
-            case TOK_free:
-            case TOK_realloc:
-            case TOK_memalign:
-            case TOK_calloc:
-#endif
-            case TOK_memcpy:
-            case TOK_memmove:
-#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
-            case TOK_memmove4:
-            case TOK_memmove8:
-#endif
-            case TOK_memset:
-            case TOK_memcmp:
-            case TOK_strlen:
-            case TOK_strcpy:
-            case TOK_strncpy:
-            case TOK_strcmp:
-            case TOK_strncmp:
-            case TOK_strcat:
-            case TOK_strchr:
-            case TOK_strdup:
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-            case TOK_alloca:
-#endif
-            case TOK_mmap:
-            case TOK_munmap:
-            case TOK_longjmp:
-#ifndef TCC_TARGET_PE
-            case TOK_siglongjmp:
-#endif
-#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
-add_bound:
-#endif
-                strcpy(buf, "__bound_");
-                strcat(buf, name);
-                name = buf;
-                break;
-            }
-        }
-#endif
         t = sym->type.t;
         if ((t & VT_BTYPE) == VT_FUNC) {
             sym_type = STT_FUNC;
@@ -959,6 +907,7 @@ add_bound:
         else
             sym_bind = STB_GLOBAL;
         other = 0;
+
 #ifdef TCC_TARGET_PE
         if (sym_type == STT_FUNC && sym->type.ref) {
             Sym *ref = sym->type.ref;
@@ -973,13 +922,20 @@ add_bound:
             }
         }
 #endif
+
+        if (sym->asm_label) {
+            name = get_tok_str(sym->asm_label & ~SYM_FIELD, NULL);
+            /* with SYM_FIELD it was __attribute__((alias("..."))) actually */
+            if (!(sym->asm_label & SYM_FIELD))
+                can_add_underscore = 0;
+        }
+
         if (tcc_state->leading_underscore && can_add_underscore) {
             buf1[0] = '_';
             pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
             name = buf1;
         }
-        if (sym->asm_label)
-            name = get_tok_str(sym->asm_label, NULL);
+
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = put_elf_sym(symtab_section, value, size, info, other, sh_num, name);
 
@@ -1553,8 +1509,6 @@ static void merge_attr(AttributeDef *ad, AttributeDef *ad1)
 
     if (ad1->section)
       ad->section = ad1->section;
-    if (ad1->alias_target)
-      ad->alias_target = ad1->alias_target;
     if (ad1->asm_label)
       ad->asm_label = ad1->asm_label;
     if (ad1->attr_mode)
@@ -1940,13 +1894,34 @@ static void gbound(void)
    args into registers */
 ST_FUNC void gbound_args(int nb_args)
 {
-    int i;
+    int i, v;
+    SValue *sv;
+
     for (i = 1; i <= nb_args; ++i)
         if (vtop[1 - i].r & VT_MUSTBOUND) {
             vrotb(i);
             gbound();
             vrott(i);
         }
+
+    sv = vtop - nb_args;
+    if (sv->r & VT_SYM) {
+        v = sv->sym->v;
+        if (v == TOK_setjmp
+          || v == TOK__setjmp
+#ifndef TCC_TARGET_PE
+          || v == TOK_sigsetjmp
+          || v == TOK___sigsetjmp
+#endif
+          ) {
+            vpush_global_sym(&func_old_type, TOK___bound_setjmp);
+            vpushv(sv + 1);
+            gfunc_call(1);
+            func_bound_add_epilog = 1;
+        }
+        if (v == TOK_alloca)
+            func_bound_add_epilog = 1;
+    }
 }
 
 /* Add bounds for local symbols from S to E (via ->prev) */
@@ -4099,8 +4074,8 @@ redo:
         case TOK_ALIAS2:
             skip('(');
 	    parse_mult_str(&astr, "alias(\"target\")");
-            ad->alias_target = /* save string as token, for later */
-              tok_alloc((char*)astr.data, astr.size-1)->tok;
+            ad->asm_label = /* save string as token, for later */
+                tok_alloc((char*)astr.data, astr.size-1)->tok | SYM_FIELD;
             skip(')');
 	    cstr_free(&astr);
             break;
@@ -5365,43 +5340,39 @@ static void parse_builtin_params(int nc, const char *args)
     while ((c = *args++)) {
 	skip(sep);
 	sep = ',';
+        if (c == 't') {
+            parse_type(&type);
+	    vpush(&type);
+	    continue;
+        }
+        expr_eq();
+        type.ref = NULL;
+        type.t = 0;
 	switch (c) {
-	    case 'e': expr_eq();
-		      continue;
-	    case 't': parse_type(&type);
-		      vpush(&type);
-		      continue;
+	    case 'e':
+		continue;
+	    case 'V':
+                type.t = VT_CONSTANT;
 	    case 'v':
-	    case 'V': expr_eq();
-                      type.t = VT_VOID;
-                      if (c == 'V') type.t |= VT_CONSTANT;
-                      type.ref = NULL;
-                      mk_pointer (&type);
-                      gen_assign_cast(&type);
-                      continue;
+                type.t |= VT_VOID;
+                mk_pointer (&type);
+                break;
+	    case 'S':
+                type.t = VT_CONSTANT;
 	    case 's':
-	    case 'S': expr_eq();
-                      type.t = VT_BYTE;
-                      if (tcc_state->char_is_unsigned)
-                          type.t |= VT_UNSIGNED;
-                      if (c == 'S') type.t |= VT_CONSTANT;
-                      type.ref = NULL;
-                      mk_pointer (&type);
-                      gen_assign_cast(&type);
-                      continue;
-	    case 'i': expr_eq();
-                      type.t = VT_INT;
-                      type.ref = NULL;
-                      gen_assign_cast(&type);
-                      continue;
-	    case 'l': expr_eq();
-                      type.t = VT_SIZE_T;
-                      type.ref = NULL;
-                      gen_assign_cast(&type);
-                      continue;
-	    default:  tcc_error("internal error");
-		      break;
+                type.t |= char_type.t;
+                mk_pointer (&type);
+                break;
+	    case 'i':
+                type.t = VT_INT;
+                break;
+	    case 'l':
+                type.t = VT_SIZE_T;
+                break;
+	    default:
+                tcc_error("internal error");
 	}
+        gen_assign_cast(&type);
     }
     skip(')');
     if (nc)
@@ -5780,196 +5751,6 @@ ST_FUNC void unary(void)
         break;
     }
 #endif
-    case TOK___builtin_abort:
-        vpush_global_sym(&func_old_type, TOK_abort);
-	parse_builtin_params(0, "");
-        gfunc_call(0);
-builtin_void_return:
-        vpushi(0);
-        type.t = VT_VOID;
-        type.ref = NULL;
-        vtop->type = type;
-        vtop->r = R_RET(type.t);
-        break;
-    case TOK___builtin_memcpy:
-        t = TOK_memcpy;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_memcpy;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "vVl");
-        gfunc_call(3);
-builtin_void_ptr_return:
-        vpushi(0);
-        type.t = VT_VOID;
-        type.ref = NULL;
-        mk_pointer (&type);
-        vtop->type = type;
-        vtop->r = R_RET(type.t);
-        break;
-    case TOK___builtin_memcmp:
-        t = TOK_memcmp;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_memcmp;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "VVl");
-        gfunc_call(3);
-builtin_int_return:
-        vpushi(0);
-        type.t = VT_INT;
-        type.ref = NULL;
-        vtop->type = type;
-        vtop->r = R_RET(type.t);
-        break;
-    case TOK___builtin_memmove:
-        t = TOK_memmove;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_memmove;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "vVl");
-        gfunc_call(3);
-        goto builtin_void_ptr_return;
-    case TOK___builtin_memset:
-        t = TOK_memset;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_memset;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "vil");
-        gfunc_call(3);
-        goto builtin_void_ptr_return;
-    case TOK___builtin_strlen:
-        t = TOK_strlen;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strlen;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "S");
-        gfunc_call(1);
-        vpushi(0);
-        type.t = VT_SIZE_T;
-        type.ref = NULL;
-        vtop->type = type;
-        vtop->r = R_RET(type.t);
-        break;
-    case TOK___builtin_strcpy:
-        t = TOK_strcpy;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strcpy;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "sS");
-        gfunc_call(2);
-builtin_string_ptr_return:
-        vpushi(0);
-        type.t = VT_BYTE;
-        if (tcc_state->char_is_unsigned)
-            type.t |= VT_UNSIGNED;
-        type.ref = NULL;
-        mk_pointer (&type);
-        vtop->type = type;
-        vtop->r = R_RET(type.t);
-        break;
-    case TOK___builtin_strncpy:
-        t = TOK_strncpy;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strncpy;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "sSl");
-        gfunc_call(3);
-        goto builtin_string_ptr_return;
-    case TOK___builtin_strcmp:
-        t = TOK_strcmp;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strcmp;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "SS");
-        gfunc_call(2);
-        goto builtin_int_return;
-    case TOK___builtin_strncmp:
-        t = TOK_strncmp;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strncmp;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "SSl");
-        gfunc_call(3);
-        goto builtin_int_return;
-    case TOK___builtin_strcat:
-        t = TOK_strcat;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strcat;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "sS");
-        gfunc_call(2);
-        goto builtin_string_ptr_return;
-    case TOK___builtin_strchr:
-        t = TOK_strchr;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strchr;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "Si");
-        gfunc_call(2);
-        goto builtin_string_ptr_return;
-    case TOK___builtin_strdup:
-        t = TOK_strdup;
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check) t = TOK___bound_strdup;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "S");
-        gfunc_call(1);
-        goto builtin_string_ptr_return;
-    case TOK___builtin_malloc:
-        t = TOK_malloc;
-#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
-        if (tcc_state->do_bounds_check) t = TOK___bound_malloc;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "l");
-        gfunc_call(1);
-        goto builtin_void_ptr_return;
-    case TOK___builtin_realloc:
-        t = TOK_realloc;
-#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
-        if (tcc_state->do_bounds_check) t = TOK___bound_realloc;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "vl");
-        gfunc_call(2);
-        goto builtin_void_ptr_return;
-    case TOK___builtin_calloc:
-        t = TOK_calloc;
-#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
-        if (tcc_state->do_bounds_check) t = TOK___bound_calloc;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "ll");
-        gfunc_call(2);
-        goto builtin_void_ptr_return;
-    case TOK___builtin_free:
-        t = TOK_free;
-#if defined(CONFIG_TCC_BCHECK) && defined(TCC_TARGET_PE)
-        if (tcc_state->do_bounds_check) t = TOK___bound_free;
-#endif
-        vpush_global_sym(&func_old_type, t);
-	parse_builtin_params(0, "v");
-        gfunc_call(1);
-        goto builtin_void_return;
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-    case TOK_alloca:
-    case TOK___builtin_alloca:
-        vpush_global_sym(&func_old_type, TOK_alloca);
-	parse_builtin_params(0, "l");
-        gfunc_call(1);
-        goto builtin_void_ptr_return;
-#endif
 
     /* pre operations */
     case TOK_INC:
@@ -6276,24 +6057,6 @@ special_math_val:
             if (sa)
                 tcc_error("too few arguments to function");
             skip(')');
-#ifdef CONFIG_TCC_BCHECK
-            if (tcc_state->do_bounds_check &&
-                (nb_args == 1 || nb_args == 2) &&
-                (vtop[-nb_args].r & VT_SYM) &&
-                (vtop[-nb_args].sym->v == TOK_setjmp ||
-                 vtop[-nb_args].sym->v == TOK__setjmp
-#ifndef TCC_TARGET_PE
-                 || vtop[-nb_args].sym->v == TOK_sigsetjmp
-                 || vtop[-nb_args].sym->v == TOK___sigsetjmp
-#endif
-                )) {
-                vpush_global_sym(&func_old_type, TOK___bound_setjmp);
-                vpushv(vtop - nb_args);
-                if (nb_args == 2)
-                    vpushv(vtop - nb_args);
-                gfunc_call(nb_args);
-            }
-#endif
             gfunc_call(nb_args);
 
             if (ret_nregs < 0) {
@@ -8602,15 +8365,6 @@ found:
                         /* external variable or function */
                         type.t |= VT_EXTERN;
                         sym = external_sym(v, &type, r, &ad);
-                        if (ad.alias_target) {
-                            ElfSym *esym;
-                            Sym *alias_target;
-                            alias_target = sym_find(ad.alias_target);
-                            esym = elfsym(alias_target);
-                            if (!esym)
-                                tcc_error("unsupported forward __alias__ attribute");
-                            put_extern_sym2(sym, esym->st_shndx, esym->st_value, esym->st_size, 0);
-                        }
                     } else {
                         if (type.t & VT_STATIC)
                             r |= VT_CONST;

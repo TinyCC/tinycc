@@ -967,14 +967,13 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "_FORTIFY_SOURCE", "0");
 #endif /* ndef TCC_TARGET_MACHO */
 
-    if (PTR_SIZE == 4) {
-        tcc_define_symbol(s, "__SIZEOF_LONG__", "4");
-        tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffL");
-    }
-    else {
-        tcc_define_symbol(s, "__SIZEOF_LONG__", "8");
-        tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffffffffffL");
-    }
+#if LONG_SIZE == 4
+    tcc_define_symbol(s, "__SIZEOF_LONG__", "4");
+    tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffL");
+#else
+    tcc_define_symbol(s, "__SIZEOF_LONG__", "8");
+    tcc_define_symbol(s, "__LONG_MAX__", "0x7fffffffffffffffL");
+#endif
     tcc_define_symbol(s, "__SIZEOF_INT__", "4");
     tcc_define_symbol(s, "__SIZEOF_LONG_LONG__", "8");
     tcc_define_symbol(s, "__CHAR_BIT__", "8");

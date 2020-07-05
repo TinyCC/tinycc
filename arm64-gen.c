@@ -84,7 +84,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 #if defined(CONFIG_TCC_BCHECK)
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
-static int func_bound_add_epilog;
+ST_DATA int func_bound_add_epilog;
 #endif
 
 #define IS_FREG(x) ((x) >= TREG_F(0))
@@ -606,14 +606,6 @@ static void arm64_gen_bl_or_b(int b)
 	greloca(cur_text_section, vtop->sym, ind,
                 b ? R_AARCH64_JUMP26 :  R_AARCH64_CALL26, 0);
 	o(0x14000000 | (uint32_t)!b << 31); // b/bl .
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check &&
-            (vtop->sym->v == TOK_setjmp ||
-             vtop->sym->v == TOK__setjmp ||
-             vtop->sym->v == TOK_sigsetjmp ||
-             vtop->sym->v == TOK___sigsetjmp))
-            func_bound_add_epilog = 1;
-#endif
     }
     else {
 #ifdef CONFIG_TCC_BCHECK

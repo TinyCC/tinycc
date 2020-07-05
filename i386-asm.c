@@ -1202,7 +1202,7 @@ ST_FUNC int asm_parse_regvar (int t)
 {
     const char *s;
     Operand op;
-    if (t < TOK_IDENT)
+    if (t < TOK_IDENT || (t & SYM_FIELD))
         return -1;
     s = table_ident[t - TOK_IDENT]->str;
     if (s[0] != '%')

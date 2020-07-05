@@ -643,7 +643,6 @@ typedef struct AttributeDef {
     struct FuncAttr f;
     struct Section *section;
     Sym *cleanup_func;
-    int alias_target; /* token */
     int asm_label; /* associated asm label */
     char attr_mode; /* __attribute__((__mode__(...))) */
 } AttributeDef;
@@ -1475,6 +1474,7 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty);
 #endif
 #ifdef CONFIG_TCC_BCHECK
 ST_FUNC void gbound_args(int nb_args);
+ST_DATA int func_bound_add_epilog;
 #endif
 
 /* ------------ tccelf.c ------------ */

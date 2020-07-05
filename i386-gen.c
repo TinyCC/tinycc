@@ -97,7 +97,7 @@ static int func_ret_sub;
 #ifdef CONFIG_TCC_BCHECK
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
-static int func_bound_add_epilog;
+ST_DATA int func_bound_add_epilog;
 static void gen_bounds_prolog(void);
 static void gen_bounds_epilog(void);
 #endif
@@ -359,18 +359,6 @@ static void gcall_or_jmp(int is_jmp)
         /* constant and relocation case */
         greloc(cur_text_section, vtop->sym, ind + 1, R_386_PC32);
         oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check &&
-            (vtop->sym->v == TOK_alloca ||
-             vtop->sym->v == TOK_setjmp ||
-             vtop->sym->v == TOK__setjmp
-#ifndef TCC_TARGET_PE
-             || vtop->sym->v == TOK_sigsetjmp
-             || vtop->sym->v == TOK___sigsetjmp
-#endif
-            ))
-            func_bound_add_epilog = 1;
-#endif
     } else {
         /* otherwise, indirect call */
         r = gv(RC_INT);
@@ -429,6 +417,16 @@ ST_FUNC void gfunc_call(int nb_args)
             /* align to stack align size */
             size = (size + 3) & ~3;
             /* allocate the necessary size on stack */
+#ifdef TCC_TARGET_PE
+            if (size >= 0x4096) {
+                o(0x5250);
+                oad(0x68, size);
+                vpush_global_sym(&func_old_type, TOK_alloca);
+                gcall_or_jmp(0);
+                vtop--;
+                o(0x58585a);
+            } else
+#endif
             oad(0xec81, size); /* sub $xxx, %esp */
             /* generate structure store */
             r = get_reg(RC_INT);

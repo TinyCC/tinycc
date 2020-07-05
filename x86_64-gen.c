@@ -149,7 +149,7 @@ static int func_ret_sub;
 #if defined(CONFIG_TCC_BCHECK)
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
-static int func_bound_add_epilog;
+ST_DATA int func_bound_add_epilog;
 #endif
 
 #ifdef TCC_TARGET_PE
@@ -639,18 +639,6 @@ static void gcall_or_jmp(int is_jmp)
         greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32, (int)(vtop->c.i-4));
 #endif
         oad(0xe8 + is_jmp, 0); /* call/jmp im */
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check &&
-            (vtop->sym->v == TOK_alloca ||
-             vtop->sym->v == TOK_setjmp ||
-             vtop->sym->v == TOK__setjmp
-#ifndef TCC_TARGET_PE
-             || vtop->sym->v == TOK_sigsetjmp
-             || vtop->sym->v == TOK___sigsetjmp
-#endif
-            ))
-            func_bound_add_epilog = 1;
-#endif
     } else {
         /* otherwise, indirect call */
         r = TREG_R11;

@@ -66,7 +66,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 #if defined(CONFIG_TCC_BCHECK)
 static addr_t func_bound_offset;
 static unsigned long func_bound_ind;
-static int func_bound_add_epilog;
+ST_DATA int func_bound_add_epilog;
 #endif
 
 static int ireg(int r)
@@ -387,14 +387,6 @@ static void gcall_or_jmp(int docall)
                 R_RISCV_CALL_PLT, (int)vtop->c.i);
         o(0x17 | (tr << 7));   // auipc TR, 0 %call(func)
         EI(0x67, 0, tr, tr, 0);// jalr  TR, r(TR)
-#ifdef CONFIG_TCC_BCHECK
-        if (tcc_state->do_bounds_check &&
-            (vtop->sym->v == TOK_setjmp ||
-             vtop->sym->v == TOK__setjmp ||
-             vtop->sym->v == TOK_sigsetjmp ||
-             vtop->sym->v == TOK___sigsetjmp))
-            func_bound_add_epilog = 1;
-#endif
     } else if (vtop->r < VT_CONST) {
         int r = ireg(vtop->r);
         EI(0x67, 0, tr, r, 0);      // jalr TR, 0(R)
