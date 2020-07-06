@@ -3720,8 +3720,9 @@ static void tcc_predefs(CString *cstr)
     , -1);
 }
 
-ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
+ST_FUNC void preprocess_start(TCCState *s1, int filetype)
 {
+    int is_asm = !!(filetype & (AFF_TYPE_ASM|AFF_TYPE_ASMPP));
     CString cstr;
 
     tccpp_new(s1);
@@ -3739,23 +3740,25 @@ ST_FUNC void preprocess_start(TCCState *s1, int is_asm)
     set_idnum('$', !is_asm && s1->dollars_in_identifiers ? IS_ID : 0);
     set_idnum('.', is_asm ? IS_ID : 0);
 
-    cstr_new(&cstr);
-    if (s1->cmdline_defs.size)
-        cstr_cat(&cstr, s1->cmdline_defs.data, s1->cmdline_defs.size);
-    cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
-    if (is_asm)
-        cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
-    if (s1->output_type == TCC_OUTPUT_MEMORY)
-        cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
-    if (!is_asm && s1->output_type != TCC_OUTPUT_PREPROCESS)
-        tcc_predefs(&cstr);
-    if (s1->cmdline_incl.size)
-        cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
-    //printf("%s\n", (char*)cstr.data);
-    *s1->include_stack_ptr++ = file;
-    tcc_open_bf(s1, "<command line>", cstr.size);
-    memcpy(file->buffer, cstr.data, cstr.size);
-    cstr_free(&cstr);
+    if (!(filetype & AFF_TYPE_ASM)) {
+        cstr_new(&cstr);
+        if (s1->cmdline_defs.size)
+          cstr_cat(&cstr, s1->cmdline_defs.data, s1->cmdline_defs.size);
+        cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
+        if (is_asm)
+          cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
+        if (s1->output_type == TCC_OUTPUT_MEMORY)
+          cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
+        if (!is_asm && s1->output_type != TCC_OUTPUT_PREPROCESS)
+          tcc_predefs(&cstr);
+        if (s1->cmdline_incl.size)
+          cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
+        //printf("%s\n", (char*)cstr.data);
+        *s1->include_stack_ptr++ = file;
+        tcc_open_bf(s1, "<command line>", cstr.size);
+        memcpy(file->buffer, cstr.data, cstr.size);
+        cstr_free(&cstr);
+    }
 
     parse_flags = is_asm ? PARSE_FLAG_ASM_FILE : 0;
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;

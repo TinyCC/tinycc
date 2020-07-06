@@ -708,7 +708,6 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
     tcc_enter_state(s1);
 
     if (setjmp(s1->error_jmp_buf) == 0) {
-        int is_asm;
         s1->error_set_jmp_enabled = 1;
         s1->nb_errors = 0;
 
@@ -721,13 +720,12 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
             file->fd = fd;
         }
 
-        is_asm = !!(filetype & (AFF_TYPE_ASM|AFF_TYPE_ASMPP));
         tccelf_begin_file(s1);
-        preprocess_start(s1, is_asm);
+        preprocess_start(s1, filetype);
         tccgen_init(s1);
         if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
             tcc_preprocess(s1);
-        } else if (is_asm) {
+        } else if (filetype & (AFF_TYPE_ASM | AFF_TYPE_ASMPP)) {
 #ifdef CONFIG_TCC_ASM
             tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
 #else
