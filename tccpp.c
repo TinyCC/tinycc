@@ -3707,6 +3707,13 @@ static void tcc_predefs(CString *cstr)
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
     "__BOTH(void*,alloca,(__SIZE_TYPE__))\n"
 #endif
+#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
+    "__BOUND(void*,__aeabi_memcpy,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOUND(void*,__aeabi_memmove,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOUND(void*,__aeabi_memmove4,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOUND(void*,__aeabi_memmove8,(void*,const void*,__SIZE_TYPE__))\n"
+    "__BOUND(void*,__aeabi_memset,(void*,int,__SIZE_TYPE__))\n"
+#endif
     "__BUILTIN(void,abort,(void))\n"
     "__BOUND(int,longjmp,())\n"
 #ifndef TCC_TARGET_PE
