@@ -980,7 +980,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
     tcc_define_symbol(s, "__INT_MAX__", "0x7fffffff");
     tcc_define_symbol(s, "__LONG_LONG_MAX__", "0x7fffffffffffffffLL");
-    tcc_define_symbol(s, "__builtin_offsetof(type,field)", "((unsigned long) &((type *)0)->field)");
+    tcc_define_symbol(s, "__builtin_offsetof(type,field)", "((__SIZE_TYPE__) &((type *)0)->field)");
     return s;
 }
 

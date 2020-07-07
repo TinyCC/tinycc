@@ -97,6 +97,8 @@ GEN-ALWAYS =
 115_bound_setjmp.test: FLAGS += -b
 116_bound_setjmp2.test: FLAGS += -b
 
+117_gcc_test.test: FLAGS += $(T2) && $(TCC) -b
+
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
 

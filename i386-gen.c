@@ -424,7 +424,8 @@ ST_FUNC void gfunc_call(int nb_args)
                 vpush_global_sym(&func_old_type, TOK_alloca);
                 gcall_or_jmp(0);
                 vtop--;
-                o(0x58585a);
+                o(0x585a58);
+                oad(0xec81, 8); /* sub $8, %esp */
             } else
 #endif
             oad(0xec81, size); /* sub $xxx, %esp */
