@@ -784,7 +784,9 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     int fd, mode, file_type;
     FILE *fp;
     int i, ret = -1;
-    struct macho mo = {0};
+    struct macho mo;
+
+    (void)memset(&mo, 0, sizeof(mo));
 
     file_type = s1->output_type;
     if (file_type == TCC_OUTPUT_OBJ)
