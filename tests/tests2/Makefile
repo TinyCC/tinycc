@@ -87,17 +87,16 @@ GEN-ALWAYS =
     -e 's;0x[0-9A-Fa-f]\{1,\};0x?;g'
 
 # this test creates two DLLs and an EXE
-113_btdll.test: NORUN = true
-113_btdll.test: FLAGS += \
-    -bt $1 -shared -D DLL=1 -o a1$(DLLSUF) && $(TCC) \
-    -bt $1 -shared -D DLL=2 -o a2$(DLLSUF) && $(TCC) \
-    -bt a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=.
+113_btdll.test: T1 = \
+    $(TCC) -bt $1 -shared -D DLL=1 -o a1$(DLLSUF) && \
+    $(TCC) -bt $1 -shared -D DLL=2 -o a2$(DLLSUF) && \
+    $(TCC) -bt $1 a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=. -o a.exe && \
+    ./a.exe
 
 114_bound_signal.test: FLAGS += -b
 115_bound_setjmp.test: FLAGS += -b
 116_bound_setjmp2.test: FLAGS += -b
-
-117_gcc_test.test: FLAGS += $(T2) && $(TCC) -b
+117_builtins.test: T1 = ( $(TCC) -run $1 && $(TCC) -b -run $1 )
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

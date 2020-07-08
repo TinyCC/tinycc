@@ -1,0 +1,5 @@
+tst_branch -- --
+tst_adr 5
+tst_compare: ok
+tst_pack: j.f = 5, i.f = 5
+schar to ushort cast: ffff0033
