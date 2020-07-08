@@ -419,14 +419,19 @@ ST_FUNC void gfunc_call(int nb_args)
             /* allocate the necessary size on stack */
 #ifdef TCC_TARGET_PE
             if (size >= 0x4096) {
-                o(0x5250);
-                oad(0x68, size);
-                vpush_global_sym(&func_old_type, TOK_alloca);
-                gcall_or_jmp(0);
-                vtop--;
-                o(0x585a58);
-                oad(0xec81, 8); /* sub $8, %esp */
-            } else
+                /* cannot call alloca with bound checking. Do stack probing. */
+                o(0x50);               // push %eax
+                oad(0xb8, size - 4);   // mov size-4,%eax
+                oad(0x3d, 4096);       // p1: cmp $4096,%eax
+                o(0x1476);             // jbe <p2>
+                oad(0x248485,-4096);   // test %eax,-4096(%esp)
+                oad(0xec81, 4096);     // sub $4096,%esp
+                oad(0x2d, 4096);       // sub $4096,%eax
+                o(0xe5eb);             // jmp <p1>
+                o(0xc429);             // p2: sub %eax,%esp
+                oad(0xc481, size - 4); // add size-4,%esp
+                o(0x58);               // pop %eax
+            }
 #endif
             oad(0xec81, size); /* sub $xxx, %esp */
             /* generate structure store */
