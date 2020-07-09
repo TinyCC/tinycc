@@ -45,7 +45,7 @@ else
     ifndef CONFIG_OSX
       LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
     else
-      LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)"
+      LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)" -Wl,-rpath,"@executable_path/$(TOP)/../lib"
       DYLIBVER += -current_version $(VERSION)
       DYLIBVER += -compatibility_version $(VERSION)
     endif
