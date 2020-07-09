@@ -46,6 +46,8 @@ else
       LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
     else
       LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)"
+      DYLIBVER += -current_version $(VERSION)
+      DYLIBVER += -compatibility_version $(VERSION)
     endif
   endif
  endif
@@ -243,7 +245,7 @@ libtcc.so: LDFLAGS+=-fPIC
 
 # OSX dynamic libtcc library
 libtcc.dylib: $(LIBTCC_OBJ)
-	$S$(CC) -shared -install_name @rpath/$@ -o $@ $^ $(LDFLAGS)
+	$S$(CC) -dynamiclib $(DYLIBVER) -install_name @rpath/$@ -o $@ $^ $(LDFLAGS) 
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
