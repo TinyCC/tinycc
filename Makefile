@@ -42,7 +42,11 @@ else
   LIBTCC=libtcc$(DLLSUF)
   export LD_LIBRARY_PATH := $(CURDIR)/$(TOP)
   ifneq ($(CONFIG_rpath),no)
-   LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
+    ifndef CONFIG_OSX
+      LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
+    else
+      LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)"
+    endif
   endif
  endif
  NATIVE_TARGET = $(ARCH)
@@ -52,7 +56,6 @@ else
     LDFLAGS += -flat_namespace -undefined warning
   endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
-  export DYLD_LIBRARY_PATH := $(CURDIR)/$(TOP)
  endif
 endif
 
@@ -240,7 +243,7 @@ libtcc.so: LDFLAGS+=-fPIC
 
 # OSX dynamic libtcc library
 libtcc.dylib: $(LIBTCC_OBJ)
-	$S$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$S$(CC) -shared -install_name @rpath/$@ -o $@ $^ $(LDFLAGS)
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
