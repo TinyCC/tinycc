@@ -45,7 +45,10 @@ else
     ifndef CONFIG_OSX
       LINK_LIBTCC += -Wl,-rpath,"$(libdir)"
     else
-      LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)" -Wl,-rpath,"@executable_path/$(TOP)/../lib"
+      # macOS doesn't support env-vars libdir out of the box - which we need for
+      # `make test' when libtcc.dylib is used (configure --disable-static), so
+      # we bake a relative path into the binary. $libdir is used after install.
+      LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)" -Wl,-rpath,"$(libdir)"
       DYLIBVER += -current_version $(VERSION)
       DYLIBVER += -compatibility_version $(VERSION)
     endif
