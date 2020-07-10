@@ -11,5 +11,6 @@ s-nail                 BSD Mail/POSIX mailx: send and receive Internet mail
 sqlite                 Embbedable SQL engine.
 st                     Simple Terminal.
 tcc                    Tiny CC which compiles itself.
+zlib                   Lossless data-compression library.
 
 (*) This list is ordered by name.
