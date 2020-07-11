@@ -5,12 +5,13 @@ Name                   Short Description
 ----                   -----------------
 bigz                   An infinite precision Z & Q library.
 gawk                   GNU awk.
-gmp                    Library for arbitrary precision arithmetic
+gmp                    Library for arbitrary precision arithmetic.
 gnumake                GNU makefile.
 mpfr                   Multiple-precision floating-point library.
+mpc                    Complex floating-point library with exact rounding.
 mpv                    A free, open source, and cross-platform media player.
-openlisp               ISLISP ISO/IEC 13816 Lisp interpreter and compiler
-s-nail                 BSD Mail/POSIX mailx: send and receive Internet mail
+openlisp               ISLISP ISO/IEC 13816 Lisp interpreter and compiler.
+s-nail                 BSD Mail/POSIX mailx: send and receive Internet mail.
 sqlite                 Embbedable SQL engine.
 st                     Simple Terminal.
 tcc                    Tiny CC which compiles itself.
