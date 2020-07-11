@@ -1622,7 +1622,8 @@ enum {
     TCC_OPTION_MF,
     TCC_OPTION_x,
     TCC_OPTION_ar,
-    TCC_OPTION_impdef
+    TCC_OPTION_impdef,
+    TCC_OPTION_C
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
@@ -1690,6 +1691,7 @@ static const TCCOption tcc_options[] = {
 #ifdef TCC_TARGET_PE
     { "impdef", TCC_OPTION_impdef, 0},
 #endif
+    { "C", TCC_OPTION_C, 0},
     { NULL, 0, 0 },
 };
 
@@ -2065,6 +2067,7 @@ reparse:
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:
         case TCC_OPTION_s:
+        case TCC_OPTION_C:
             /* ignored */
             break;
         default:
