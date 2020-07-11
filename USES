@@ -2,9 +2,12 @@ The following software are known to use or support tcc builds.
 Feel free to complete this list (*).
 
 Name                   Short Description
+----                   -----------------
 bigz                   An infinite precision Z & Q library.
 gawk                   GNU awk.
+gmp                    Library for arbitrary precision arithmetic
 gnumake                GNU makefile.
+mpfr                   Multiple-precision floating-point library.
 mpv                    A free, open source, and cross-platform media player.
 openlisp               ISLISP ISO/IEC 13816 Lisp interpreter and compiler
 s-nail                 BSD Mail/POSIX mailx: send and receive Internet mail
