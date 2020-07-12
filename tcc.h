@@ -1649,11 +1649,6 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 ST_FUNC void gen_cvt_csti(int t);
 #endif
 
-#ifdef CONFIG_TCC_BCHECK
-ST_FUNC void gen_bounded_ptr_add(void);
-ST_FUNC void gen_bounded_ptr_deref(void);
-#endif
-
 /* ------------ x86_64-gen.c ------------ */
 #ifdef TCC_TARGET_X86_64
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c);

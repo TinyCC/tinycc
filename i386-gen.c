@@ -1027,56 +1027,6 @@ ST_FUNC void ggoto(void)
 
 /* bound check support functions */
 #ifdef CONFIG_TCC_BCHECK
-/* generate a bounded pointer addition */
-ST_FUNC void gen_bounded_ptr_add(void)
-{
-    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
-    vrott(3);
-    gfunc_call(2);
-    vpushi(0);
-    /* returned pointer is in eax */
-    vtop->r = TREG_EAX | VT_BOUNDED;
-    if (nocode_wanted)
-        return;
-    /* relocation offset of the bounding function call point */
-    vtop->c.i = (cur_text_section->reloc->data_offset - sizeof(Elf32_Rel));
-}
-
-/* patch pointer addition in vtop so that pointer dereferencing is
-   also tested */
-ST_FUNC void gen_bounded_ptr_deref(void)
-{
-    addr_t func;
-    int  size, align;
-    Elf32_Rel *rel;
-    Sym *sym;
-
-    if (nocode_wanted)
-        return;
-
-    size = type_size(&vtop->type, &align);
-    switch(size) {
-    case  1: func = TOK___bound_ptr_indir1; break;
-    case  2: func = TOK___bound_ptr_indir2; break;
-    case  4: func = TOK___bound_ptr_indir4; break;
-    case  8: func = TOK___bound_ptr_indir8; break;
-    case 12: func = TOK___bound_ptr_indir12; break;
-    case 16: func = TOK___bound_ptr_indir16; break;
-    default:
-        /* may happen with struct member access */
-        return;
-        //tcc_error("unhandled size when dereferencing bounded pointer");
-        //func = 0;
-        //break;
-    }
-    sym = external_global_sym(func, &func_old_type);
-    if (!sym->c)
-        put_extern_sym(sym, NULL, 0, 0);
-    /* patch relocation */
-    /* XXX: find a better solution ? */
-    rel = (Elf32_Rel *)(cur_text_section->reloc->data + vtop->c.i);
-    rel->r_info = ELF32_R_INFO(sym->c, ELF32_R_TYPE(rel->r_info));
-}
 
 static void gen_bounds_prolog(void)
 {
