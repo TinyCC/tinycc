@@ -39,6 +39,22 @@
 #define LDBL_MAX 1.18973149535723176502e+4932L
 #define LDBL_MAX_10_EXP 4932
 
+#elif defined __aarch64__ || defined __riscv
+/*
+ * Use values from:
+ * gcc -dM -E -xc /dev/null | grep LDBL 
+ */
+
+#define LDBL_MANT_DIG 113
+#define LDBL_DIG 33
+#define LDBL_EPSILON 1.92592994438723585305597794258492732e-34L
+#define LDBL_MIN_EXP (-16381)
+#define LDBL_MIN 3.36210314311209350626267781732175260e-4932L
+#define LDBL_MIN_10_EXP (-4931)
+#define LDBL_MAX_EXP 16384
+#define LDBL_MAX 1.18973149535723176508575932662800702e+4932L
+#define LDBL_MAX_EXP 16384
+
 #else
 
 /* same as IEEE double */
