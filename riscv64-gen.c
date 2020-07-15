@@ -999,7 +999,7 @@ static void gen_opil(int op, int ll)
                     ++fc;
                 case TOK_LT:  func3 = 2; goto do_cop; // slti d, a, fc
                 case TOK_ULE:
-                    if (fc >= (1 << 11) - 1)
+                    if (fc >= (1 << 11) - 1 || fc == -1)
                       break;
                     ++fc;
                 case TOK_ULT: func3 = 3; goto do_cop; // sltiu d, a, fc

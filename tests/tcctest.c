@@ -463,6 +463,15 @@ void if2t(void)
     printf("if2t:ok3\n");
 }
 
+void if3t(void)
+{
+    volatile long long i = 1;
+    if (i <= 18446744073709551615ULL)
+      ;
+    else
+      printf ("if3t:wrong 1\n");
+}
+
 void if_test(void)
 {
     if1t(1, 0, 0, 0);
@@ -470,6 +479,7 @@ void if_test(void)
     if1t(3, 2, 0, 0);
     if1t(4, 2, 3, 0);
     if2t();
+    if3t();
 }
 
 void loop_test()
