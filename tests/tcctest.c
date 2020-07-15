@@ -2215,13 +2215,14 @@ double ftab1[3] = { 1.2, 3.4, -5.6 };
 void float_test(void)
 {
 #if !defined(__arm__) || defined(__ARM_PCS_VFP)
-    float fa, fb;
-    double da, db;
+    volatile float fa, fb;
+    volatile double da, db;
     int a;
     unsigned int b;
     static double nan2 = 0.0/0.0;
     static double inf1 = 1.0/0.0;
     static double inf2 = 1e5000;
+    volatile LONG_DOUBLE la;
 
     printf("sizeof(float) = %d\n", sizeof(float));
     printf("sizeof(double) = %d\n", sizeof(double));
@@ -2243,6 +2244,30 @@ void float_test(void)
     db = b;
     printf("db = %f\n", db);
     printf("nan != nan = %d, inf1 = %f, inf2 = %f\n", nan2 != nan2, inf1, inf2);
+    da = 0x0.88p-1022;  /* a subnormal */
+    la = da;
+    printf ("da subnormal = %a\n", da);
+    printf ("da subnormal = %.40g\n", da);
+    printf ("la subnormal = %La\n", la);
+    printf ("la subnormal = %.40Lg\n", la);
+    da /= 2;
+    la = da;
+    printf ("da/2 subnormal = %a\n", da);
+    printf ("da/2 subnormal = %.40g\n", da);
+    printf ("la/2 subnormal = %La\n", la);
+    printf ("la/2 subnormal = %.40Lg\n", la);
+    fa = 0x0.88p-126f;  /* a subnormal */
+    la = fa;
+    printf ("fa subnormal = %a\n", fa);
+    printf ("fa subnormal = %.40g\n", fa);
+    printf ("la subnormal = %La\n", la);
+    printf ("la subnormal = %.40Lg\n", la);
+    fa /= 2;
+    la = fa;
+    printf ("fa/2 subnormal = %a\n", fa);
+    printf ("fa/2 subnormal = %.40g\n", fa);
+    printf ("la/2 subnormal = %La\n", la);
+    printf ("la/2 subnormal = %.40Lg\n", la);
 #endif
 }
 

@@ -387,7 +387,12 @@ long double __extendsftf2(float f)
     else if (a << 1 >> 24 == 255)
         x.x1 = (0x7fff000000000000 | aa >> 31 << 63 | aa << 41 >> 16 |
                 (uint64_t)!!(a << 9) << 47);
-    else
+    else if (a << 1 >> 24 == 0) {
+        uint64_t adj = 0;
+        while (!(a << 1 >> 1 >> (23 - adj)))
+          adj++;
+        x.x1 = aa >> 31 << 63 | (16256 - adj + 1) << 48 | aa << adj << 41 >> 16;
+    } else
         x.x1 = (aa >> 31 << 63 | ((aa >> 23 & 255) + 16256) << 48 |
                 aa << 41 >> 16);
     memcpy(&fx, &x, 16);
@@ -406,7 +411,13 @@ long double __extenddftf2(double f)
     else if (a << 1 >> 53 == 2047)
         x.x1 = (0x7fff000000000000 | a >> 63 << 63 | a << 12 >> 16 |
                 (uint64_t)!!(a << 12) << 47);
-    else
+    else if (a << 1 >> 53 == 0) {
+        uint64_t adj = 0;
+        while (!(a << 1 >> 1 >> (52 - adj)))
+          adj++;
+        x.x0 <<= adj;
+        x.x1 = a >> 63 << 63 | (15360 - adj + 1) << 48 | a << adj << 12 >> 16;
+    } else
         x.x1 = a >> 63 << 63 | ((a >> 52 & 2047) + 15360) << 48 | a << 12 >> 16;
     memcpy(&fx, &x, 16);
     return fx;
