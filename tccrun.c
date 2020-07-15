@@ -843,8 +843,10 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
         *paddr = rc->ip;
     } else {
         addr_t *fp = (addr_t*)rc->fp;
-        while (--level)
+        while (--level && fp >= (addr_t*)0x1000)
             fp = (addr_t *)fp[-2];
+        if (fp < (addr_t*)0x1000)
+          return -1;
         *paddr = fp[-1];
     }
     return 0;
