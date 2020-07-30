@@ -3605,10 +3605,12 @@ again:
             }
             ss = ds, ds = 4, dbt = sbt;
         } else if (ss == 8) {
-            /* XXX some architectures (e.g. risc-v) would like it
-               better for this merely being a 32-to-64 sign or zero-
-               extension.  */
-            trunc = 32; /* zero upper 32 bits */
+            /* RISC-V keeps 32bit vals in registers sign-extended.
+               So here we need a sign-extension for signed types and
+               zero-extension. for unsigned types. */
+#if !defined(TCC_TARGET_RISCV64)
+            trunc = 32; /* zero upper 32 bits for non RISC-V targets */
+#endif
         } else {
             ss = 4;
         }

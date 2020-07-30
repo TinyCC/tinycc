@@ -117,6 +117,18 @@ void tst_builtin(void)
 #endif
 }
 
+int tst(void)
+{
+  long value = 3;
+  return -value;
+}
+
+void tst_compare(void)
+{
+  /* This failed on risc64 */
+  if (tst() > 0) printf ("error\n");
+}
+
 int
 main (void)
 {
@@ -131,4 +143,5 @@ main (void)
   tst_big(big);
   tst_adr(&sprintf);
   tst_builtin();
+  tst_compare();
 }
