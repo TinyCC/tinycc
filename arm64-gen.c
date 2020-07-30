@@ -283,6 +283,23 @@ static void arm64_spoff(int reg, uint64_t off)
     }
 }
 
+/* invert 0: return value to use for store/load */
+/* invert 1: return value to use for arm64_sym */
+static uint64_t arm64_check_offset(int invert, int sz_, uint64_t off)
+{
+    uint32_t sz = sz_;
+    if (!(off & ~((uint32_t)0xfff << sz)) ||
+        (off < 256 || -off <= 256))
+        return invert ? off : 0ul;
+    else if ((off & ((uint32_t)0xfff << sz)))
+        return invert ? off & ((uint32_t)0xfff << sz)
+		      : off & ~((uint32_t)0xfff << sz);
+    else if (off & 0x1ff)
+        return invert ? off & 0x1ff : off & ~0x1ff;
+    else
+        return invert ? 0ul : off;
+}
+
 static void arm64_ldrx(int sg, int sz_, int dst, int bas, uint64_t off)
 {
     uint32_t sz = sz_;
@@ -432,12 +449,28 @@ static void arm64_strv(int sz_, int dst, int bas, uint64_t off)
 
 static void arm64_sym(int r, Sym *sym, unsigned long addend)
 {
-    o(0x10000060 | r);            // adr xr,pc+12
-    o(0xf9400000 | r | (r << 5)); // ldr xr,[xr]
-    o(0x14000003);                // b + 8
-    greloca(cur_text_section, sym, ind, R_AARCH64_ABS64, addend);
-    o(0);
-    o(0);
+    greloca(cur_text_section, sym, ind, R_AARCH64_ADR_GOT_PAGE, 0);
+    o(0x90000000 | r);            // adrp xr, #sym
+    greloca(cur_text_section, sym, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
+    o(0xf9400000 | r | (r << 5)); // ld xr,[xr, #sym]
+    if (addend) {
+        // add xr, xr, #addend
+	if (addend & 0xffful)
+           o(0x91000000 | r | r << 5 | (addend & 0xfff) << 10);
+        if (addend > 0xffful) {
+            // add xr, xr, #addend, lsl #12
+	    if (addend & 0xfff000ul)
+                o(0x91400000 | r | r << 5 | ((addend >> 12) & 0xfff) << 10);
+            if (addend > 0xfffffful) {
+		/* very unlikely */
+		int t = r ? 0 : 1;
+		o(0xf81f0fe0 | t);            /* str xt, [sp, #-16]! */
+		arm64_movimm(t, addend & ~0xfffffful); // use xt for addent
+		o(0x91000000 | r | (t << 5)); /* add xr, xt, #0 */
+		o(0xf84107e0 | t);            /* ldr xt, [sp], #16 */
+	    }
+        }
+    }
 }
 
 static void arm64_load_cmp(int r, SValue *sv);
@@ -460,12 +493,14 @@ ST_FUNC void load(int r, SValue *sv)
     }
 
     if (svr == (VT_CONST | VT_LVAL)) {
-        arm64_sym(30, sv->sym, sv->c.i); // use x30 for address
+        arm64_sym(30, sv->sym, // use x30 for address
+	          arm64_check_offset(0, arm64_type_size(svtt), sv->c.i));
         if (IS_FREG(r))
-            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), sv->c.i));
         else
-            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                       intr(r), 30, 0);
+            arm64_ldrx(!(svtt&VT_UNSIGNED), arm64_type_size(svtt), intr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), sv->c.i));
         return;
     }
 
@@ -481,12 +516,14 @@ ST_FUNC void load(int r, SValue *sv)
     }
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
-        arm64_sym(30, sv->sym, svcul); // use x30 for address
+        arm64_sym(30, sv->sym, // use x30 for address
+		  arm64_check_offset(0, arm64_type_size(svtt), svcul));
         if (IS_FREG(r))
-            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
         else
-            arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                       intr(r), 30, 0);
+            arm64_ldrx(!(svtt&VT_UNSIGNED), arm64_type_size(svtt), intr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
         return;
     }
 
@@ -571,11 +608,14 @@ ST_FUNC void store(int r, SValue *sv)
     }
 
     if (svr == (VT_CONST | VT_LVAL)) {
-        arm64_sym(30, sv->sym, sv->c.i); // use x30 for address
+        arm64_sym(30, sv->sym, // use x30 for address
+		  arm64_check_offset(0, arm64_type_size(svtt), sv->c.i));
         if (IS_FREG(r))
-            arm64_strv(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_strv(arm64_type_size(svtt), fltr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), sv->c.i));
         else
-            arm64_strx(arm64_type_size(svtt), intr(r), 30, 0);
+            arm64_strx(arm64_type_size(svtt), intr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), sv->c.i));
         return;
     }
 
@@ -588,11 +628,14 @@ ST_FUNC void store(int r, SValue *sv)
     }
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
-        arm64_sym(30, sv->sym, svcul); // use x30 for address
+        arm64_sym(30, sv->sym, // use x30 for address
+		  arm64_check_offset(0, arm64_type_size(svtt), svcul));
         if (IS_FREG(r))
-            arm64_strv(arm64_type_size(svtt), fltr(r), 30, 0);
+            arm64_strv(arm64_type_size(svtt), fltr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
         else
-            arm64_strx(arm64_type_size(svtt), intr(r), 30, 0);
+            arm64_strx(arm64_type_size(svtt), intr(r), 30,
+		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
         return;
     }
 
@@ -634,8 +677,6 @@ static void gen_bounds_prolog(void)
     o(0xd503201f);  /* nop -> mov x0, lbound section pointer */
     o(0xd503201f);
     o(0xd503201f);
-    o(0xd503201f);
-    o(0xd503201f);
     o(0xd503201f);  /* nop -> call __bound_local_new */
 }
 
@@ -660,12 +701,10 @@ static void gen_bounds_epilog(void)
     if (offset_modified) {
         saved_ind = ind;
         ind = func_bound_ind;
-        o(0x10000060 | 0);            // adr x0,pc+12
-        o(0xf9400000 | 0 | (0 << 5)); // ldr x0,[x0]
-        o(0x14000003);                // b + 8
-        greloca(cur_text_section, sym_data, ind, R_AARCH64_ABS64, 0);
-        o(0);
-        o(0);
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
+        o(0x90000000 | 0);            // adrp x0, #sym_data
+        greloca(cur_text_section, sym_data, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
+        o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
         gen_bounds_call(TOK___bound_local_new);
         ind = saved_ind;
     }
@@ -673,12 +712,10 @@ static void gen_bounds_epilog(void)
     /* generate bound check local freeing */
     o(0xf81f0fe0); /* str x0, [sp, #-16]! */
     o(0x3c9f0fe0); /* str q0, [sp, #-16]! */
-    o(0x10000060 | 0);            // adr x0,pc+12
-    o(0xf9400000 | 0 | (0 << 5)); // ldr x0,[x0]
-    o(0x14000003);                // b + 8
-    greloca(cur_text_section, sym_data, ind, R_AARCH64_ABS64, 0);
-    o(0);
-    o(0);
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
+    o(0x90000000 | 0);            // adrp x0, #sym_data
+    greloca(cur_text_section, sym_data, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
+    o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
     gen_bounds_call(TOK___bound_local_delete);
     o(0x3cc107e0); /* ldr q0, [sp], #16 */
     o(0xf84107e0); /* ldr x0, [sp], #16 */
