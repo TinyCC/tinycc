@@ -1028,7 +1028,7 @@ static void relocate_rel(TCCState *s1, Section *sr)
 static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 {
     int count = 0;
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
     ElfW_Rel *rel;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
         int sym_index = ELFW(R_SYM)(rel->r_info);
@@ -1046,6 +1046,9 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_X86_64_32:
         case R_X86_64_32S:
         case R_X86_64_64:
+#elif defined(TCC_TARGET_ARM64)
+        case R_AARCH64_ABS32:
+        case R_AARCH64_ABS64:
 #endif
             count++;
             break;
@@ -1053,6 +1056,8 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_386_PC32:
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_PC32:
+#elif defined(TCC_TARGET_ARM64)
+        case R_AARCH64_PREL32:
 #endif
             if (get_sym_attr(s1, sym_index, 0)->dyn_index)
                 count++;
@@ -1553,7 +1558,7 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     if (0 == offset)
         return;
     section_reserve(s1->got, offset + PTR_SIZE);
-#ifdef TCC_TARGET_X86_64
+#if PTR_SIZE == 8
     write64le(s1->got->data + offset, sym->st_value);
 #else
     write32le(s1->got->data + offset, sym->st_value);
