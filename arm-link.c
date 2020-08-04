@@ -16,7 +16,7 @@
 #define ELF_PAGE_SIZE  0x1000
 
 #define PCRELATIVE_DLLPLT 1
-#define RELOCATE_DLLPLT 0
+#define RELOCATE_DLLPLT 1
 
 enum float_abi {
     ARM_SOFTFP_FLOAT,
@@ -107,8 +107,6 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
 
     /* when building a DLL, GOT entry accesses must be done relative to
        start of GOT (see x86_64 example above)  */
-    if (s1->output_type == TCC_OUTPUT_DLL)
-        tcc_error("DLLs unimplemented!");
 
     /* empty PLT: create PLT0 entry that push address of call site and
        jump to ld.so resolution routine (GOT + 8) */
@@ -127,13 +125,9 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
         write32le(p,   0x4778); /* bx pc */
         write32le(p+2, 0x46c0); /* nop   */
     }
-    p = section_ptr_add(plt, 16);
-    /* Jump to GOT entry where ld.so initially put address of PLT0 */
-    write32le(p,   0xe59fc004); /* ldr ip, [pc, #4] */
-    write32le(p+4, 0xe08fc00c); /* add ip, pc, ip */
-    write32le(p+8, 0xe59cf000); /* ldr pc, [ip] */
-    /* p + 12 contains offset to GOT entry once patched by relocate_plt */
-    write32le(p+12, got_offset);
+    p = section_ptr_add(plt, 12);
+    /* save GOT offset for relocate_plt */
+    write32le(p + 4, got_offset);
     return plt_offset;
 }
 
@@ -154,10 +148,13 @@ ST_FUNC void relocate_plt(TCCState *s1)
         write32le(s1->plt->data + 16, x - 16);
         p += 20;
         while (p < p_end) {
+	    unsigned off = x  + read32le(p + 4) + (s1->plt->data - p) + 4;
             if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
-            add32le(p + 12, x + (s1->plt->data - p));
-            p += 16;
+            write32le(p, 0xe28fc600 | ((off >> 20) & 0xff));     // add ip, pc, #0xNN00000
+            write32le(p + 4, 0xe28cca00 | ((off >> 12) & 0xff)); // add ip, ip, #0xNN000
+            write32le(p + 8, 0xe5bcf000 | (off & 0xfff));	 // ldr pc, [ip, #0xNNN]!
+            p += 12;
         }
     }
 }
@@ -166,7 +163,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     ElfW(Sym) *sym;
-    int sym_index;
+    int sym_index, esym_index;
 
     sym_index = ELFW(R_SYM)(rel->r_info);
     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
@@ -348,6 +345,18 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+                qrel->r_offset = rel->r_offset;
+                if (esym_index) {
+                    qrel->r_info = ELFW(R_INFO)(esym_index, R_ARM_ABS32);
+                    qrel++;
+                    return;
+                } else {
+                    qrel->r_info = ELFW(R_INFO)(0, R_ARM_RELATIVE);
+                    qrel++;
+                }
+            }
             *(int *)ptr += val;
             return;
         case R_ARM_REL32:

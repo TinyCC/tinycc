@@ -1028,7 +1028,8 @@ static void relocate_rel(TCCState *s1, Section *sr)
 static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 {
     int count = 0;
-#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
+#if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64) || \
+    defined(TCC_TARGET_ARM) || defined(TCC_TARGET_ARM64)
     ElfW_Rel *rel;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
         int sym_index = ELFW(R_SYM)(rel->r_info);
@@ -1046,6 +1047,8 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_X86_64_32:
         case R_X86_64_32S:
         case R_X86_64_64:
+#elif defined(TCC_TARGET_ARM)
+        case R_ARM_ABS32:
 #elif defined(TCC_TARGET_ARM64)
         case R_AARCH64_ABS32:
         case R_AARCH64_ABS64:
@@ -1779,7 +1782,11 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
         if ((s1->do_debug && s->sh_type != SHT_RELX) ||
             file_type == TCC_OUTPUT_OBJ ||
             (s->sh_flags & SHF_ALLOC) ||
-	    i == (s1->nb_sections - 1)) {
+	    i == (s1->nb_sections - 1)
+#ifdef TCC_TARGET_ARM
+            || s->sh_type == SHT_ARM_ATTRIBUTES
+#endif
+            ) {
             /* we output all sections if debug or object file */
             s->sh_size = s->data_offset;
         }
@@ -2339,6 +2346,42 @@ static void tidy_section_headers(TCCState *s1, int *sec_order)
 }
 #endif
 
+#ifdef TCC_TARGET_ARM
+static void create_arm_attribute_section(TCCState *s1)
+{
+   // Needed for DLL support.
+    static const unsigned char arm_attr[] = {
+        0x41,                            // 'A'
+        0x2c, 0x00, 0x00, 0x00,          // size 0x2c
+        'a', 'e', 'a', 'b', 'i', 0x00,   // "aeabi"
+        0x01, 0x22, 0x00, 0x00, 0x00,    // 'File Attributes', size 0x22
+        0x05, 0x36, 0x00,                // 'CPU_name', "6"
+        0x06, 0x06,                      // 'CPU_arch', 'v6'
+        0x08, 0x01,                      // 'ARM_ISA_use', 'Yes'
+        0x09, 0x01,                      // 'THUMB_ISA_use', 'Thumb-1'
+        0x0a, 0x02,                      // 'FP_arch', 'VFPv2'
+        0x12, 0x04,                      // 'ABI_PCS_wchar_t', 4
+        0x14, 0x01,                      // 'ABI_FP_denormal', 'Needed'
+        0x15, 0x01,                      // 'ABI_FP_exceptions', 'Needed'
+        0x17, 0x03,                      // 'ABI_FP_number_model', 'IEEE 754'
+        0x18, 0x01,                      // 'ABI_align_needed', '8-byte'
+        0x19, 0x01,                      // 'ABI_align_preserved', '8-byte, except leaf SP'
+        0x1a, 0x02,                      // 'ABI_enum_size', 'int'
+        0x1c, 0x01,                      // 'ABI_VFP_args', 'VFP registers'
+        0x22, 0x01                       // 'CPU_unaligned_access', 'v6'
+    };
+    Section *attr = new_section(s1, ".ARM.attributes", SHT_ARM_ATTRIBUTES, 0);
+    unsigned char *ptr = section_ptr_add(attr, sizeof(arm_attr));
+    attr->sh_addralign = 1;
+    memcpy(ptr, arm_attr, sizeof(arm_attr));
+    if (s1->float_abi != ARM_HARD_FLOAT) {
+        ptr[26] = 0x00; // 'FP_arch', 'No'
+        ptr[41] = 0x1e; // 'ABI_optimization_goals'
+        ptr[42] = 0x06; // 'Aggressive Debug'
+    }
+}
+#endif
+
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
@@ -2347,6 +2390,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
     struct dyn_inf dyninf = {0};
     ElfW(Phdr) *phdr;
     Section *strsec, *interp, *dynamic, *dynstr;
+
+#ifdef TCC_TARGET_ARM
+    create_arm_attribute_section (s1);
+#endif
 
     file_type = s1->output_type;
     s1->nb_errors = 0;
