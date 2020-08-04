@@ -101,9 +101,6 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     uint8_t *p;
     unsigned plt_offset;
 
-    if (s1->output_type == TCC_OUTPUT_DLL)
-        tcc_error("DLLs unimplemented!");
-
     if (plt->data_offset == 0)
         section_ptr_add(plt, 32);
     plt_offset = plt->data_offset;
@@ -168,7 +165,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
 {
     uint64_t off64;
     uint32_t off32;
-    int sym_index = ELFW(R_SYM)(rel->r_info);
+    int sym_index = ELFW(R_SYM)(rel->r_info), esym_index;
     ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
     switch(type) {
@@ -284,10 +281,33 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
 
     case R_RISCV_32:
+        if (s1->output_type == TCC_OUTPUT_DLL) {
+            /* XXX: this logic may depend on TCC's codegen
+               now TCC uses R_RISCV_RELATIVE even for a 64bit pointer */
+            qrel->r_offset = rel->r_offset;
+            qrel->r_info = ELFW(R_INFO)(0, R_RISCV_RELATIVE);
+            /* Use sign extension! */
+            qrel->r_addend = (int)read32le(ptr) + val;
+            qrel++;
+        }
         add32le(ptr, val);
         return;
-    case R_RISCV_JUMP_SLOT:
     case R_RISCV_64:
+        if (s1->output_type == TCC_OUTPUT_DLL) {
+            esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+            qrel->r_offset = rel->r_offset;
+            if (esym_index) {
+                qrel->r_info = ELFW(R_INFO)(esym_index, R_RISCV_64);
+                qrel->r_addend = rel->r_addend;
+                qrel++;
+                break;
+            } else {
+                qrel->r_info = ELFW(R_INFO)(0, R_RISCV_RELATIVE);
+                qrel->r_addend = read64le(ptr) + val;
+                qrel++;
+            }
+        }
+    case R_RISCV_JUMP_SLOT:
         add64le(ptr, val);
         return;
     case R_RISCV_ADD64:
