@@ -1794,6 +1794,13 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
             /* we output all sections if debug or object file */
             s->sh_size = s->data_offset;
         }
+#ifdef TCC_TARGET_ARM
+        /* XXX: Suppress stack unwinding section. */
+        if (s->sh_type == SHT_ARM_EXIDX) {
+            s->sh_flags = 0;
+            s->sh_size = 0;
+        }
+#endif
 	if (s->sh_size || (s->sh_flags & SHF_ALLOC))
             s->sh_name = put_elf_str(strsec, s->name);
     }
