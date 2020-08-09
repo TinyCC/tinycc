@@ -2093,7 +2093,7 @@ static int adjust_bf(SValue *sv, int bit_pos, int bit_size)
         return 0;
     t = sv->type.ref->auxtype;
     if (t != -1 && t != VT_STRUCT) {
-        sv->type.t = (sv->type.t & ~VT_BTYPE) | t;
+        sv->type.t = (sv->type.t & ~(VT_BTYPE | VT_LONG)) | t;
         sv->r |= VT_LVAL;
     }
     return t;

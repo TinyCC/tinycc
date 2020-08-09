@@ -34,6 +34,12 @@ bits as set : 000000000000003000002001000000FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 4 20
 
+---- TEST 7 - MS-BITFIELDS ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 0000000000000001 0000000000000000 ffffffffffffffff 0000000000000004 0000000000000005
+align/size  : 8 8
+
 
 
 ---- TEST 1 - MS-BITFIELDS - PACKED ----
@@ -71,6 +77,12 @@ bits in use : 00000000700000FFFFFFFFFFFFFF
 bits as set : 000000003000002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 1 14
+
+---- TEST 7 - MS-BITFIELDS - PACKED ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 0000000000000001 0000000000000000 ffffffffffffffff 0000000000000004 0000000000000005
+align/size  : 1 8
 
 
 
@@ -110,6 +122,12 @@ bits as set : 000000000000003000002001000000FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 4 20
 
+---- TEST 7 - MS-BITFIELDS - WITH ALIGN ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 0000000000000001 0000000000000000 ffffffffffffffff 0000000000000004 0000000000000005
+align/size  : 8 8
+
 
 
 ---- TEST 1 - MS-BITFIELDS - PACKED - WITH ALIGN ----
@@ -147,3 +165,9 @@ bits in use : 00000000700000FFFFFFFFFFFFFF
 bits as set : 000000003000002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 1 14
+
+---- TEST 7 - MS-BITFIELDS - PACKED - WITH ALIGN ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 0000000000000001 0000000000000000 ffffffffffffffff 0000000000000004 0000000000000005
+align/size  : 1 8

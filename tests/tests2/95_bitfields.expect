@@ -34,6 +34,12 @@ bits as set : 00000030002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 4 12
 
+---- TEST 7 ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 01 00 ffffffff 04 05
+align/size  : 8 8
+
 
 
 ---- TEST 1 - PACKED ----
@@ -71,6 +77,12 @@ bits in use : 007000FFFFFFFFFFFFFF
 bits as set : 0030002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 1 10
+
+---- TEST 7 - PACKED ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 01 00 ffffffff 04 05
+align/size  : 1 8
 
 
 
@@ -110,6 +122,12 @@ bits as set : 00000030002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 4 12
 
+---- TEST 7 - WITH ALIGN ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 01 00 ffffffff 04 05
+align/size  : 8 8
+
 
 
 ---- TEST 1 - PACKED - WITH ALIGN ----
@@ -147,3 +165,9 @@ bits in use : 007000FFFFFFFFFFFFFF
 bits as set : 0030002001FD00000004
 values      : 01 02 03 04 fffffffd
 align/size  : 1 10
+
+---- TEST 7 - PACKED - WITH ALIGN ----
+bits in use : 3FFFFFFFFFFF0000
+bits as set : 0026000100050000
+values      : 01 00 ffffffff 04 05
+align/size  : 1 8

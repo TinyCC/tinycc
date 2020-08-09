@@ -78,6 +78,22 @@
 }
 
 /* ----------------------------------------------------------------------- */
+#elif TEST == 7
+{
+    struct M P __s {
+        long int d : 16;
+        long int b : 16;
+        long int x : 16;
+        long int y : 1;
+        long int z : 2;
+        long int a : 11;
+        long int e : 1;
+        long int f : 1;
+    };
+    TEST_STRUCT(1,2,3,4,5);
+}
+
+/* ----------------------------------------------------------------------- */
 #elif defined PACK
 
 #if PACK
@@ -100,6 +116,8 @@ top = 0;
 #define TEST 5
 #include SELF
 #define TEST 6
+#include SELF
+#define TEST 7
 #include SELF
 
 #if PACK
