@@ -80,15 +80,20 @@
 /* ----------------------------------------------------------------------- */
 #elif TEST == 7
 {
+#ifdef _WIN32
+    typedef long long int ll;
+#else
+    typedef long int ll;
+#endif
     struct M P __s {
-        long int d : 16;
-        long int b : 16;
-        long int x : 16;
-        long int y : 1;
-        long int z : 2;
-        long int a : 11;
-        long int e : 1;
-        long int f : 1;
+        ll d : 16;
+        ll b : 16;
+        ll x : 16;
+        ll y : 1;
+        ll z : 2;
+        ll a : 11;
+        ll e : 1;
+        ll f : 1;
     };
     TEST_STRUCT(1,2,3,4,5);
 }
