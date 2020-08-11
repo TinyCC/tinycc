@@ -165,7 +165,9 @@ static const struct {
     {   -1, "_Decimal128:t24=r1;16;0;" },
     /* if default char is unsigned */
     {   VT_BYTE | VT_UNSIGNED, "unsigned char:t25=r25;0;255;" },
-    {   VT_VOID, "void:t26=26" },
+    /* boolean type */
+    {   VT_BOOL, "bool:t26=r26;0;255;" },
+    {   VT_VOID, "void:t27=27" },
 };
 
 static int debug_next_type;
