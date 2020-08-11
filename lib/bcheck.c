@@ -945,7 +945,7 @@ __bound_main_arg(int argc, char **argv, char **envp)
         WAIT_SEM ();
         for (i = 0; i < argc; i++)
             tree = splay_insert((size_t) argv[i], strlen (argv[i]) + 1, tree);
-        tree = splay_insert((size_t) argv, argc * sizeof(char *), tree);
+        tree = splay_insert((size_t) argv, (argc + 1) * sizeof(char *), tree);
         POST_SEM ();
 #if BOUND_DEBUG
         if (print_calls) {
@@ -954,7 +954,7 @@ __bound_main_arg(int argc, char **argv, char **envp)
                         __FILE__, __FUNCTION__,
                         argv[i], (unsigned long)(strlen (argv[i]) + 1));
             dprintf(stderr, "%s, %s(): argv %p 0x%lx\n",
-                    __FILE__, __FUNCTION__, argv, argc * sizeof(char *));
+                    __FILE__, __FUNCTION__, argv, (argc + 1) * sizeof(char *));
         }
 #endif
     }
@@ -967,7 +967,7 @@ __bound_main_arg(int argc, char **argv, char **envp)
             tree = splay_insert((size_t) *p, strlen (*p) + 1, tree);
             ++p;
         }
-        tree = splay_insert((size_t) envp, p - envp, tree);
+        tree = splay_insert((size_t) envp, (++p - envp) * sizeof(char *), tree);
         POST_SEM ();
 #if BOUND_DEBUG
         if (print_calls) {
@@ -979,7 +979,7 @@ __bound_main_arg(int argc, char **argv, char **envp)
                 ++p;
             }
             dprintf(stderr, "%s, %s(): environ %p 0x%lx\n",
-                    __FILE__, __FUNCTION__, envp, p - envp);
+                    __FILE__, __FUNCTION__, envp, (++p - envp) * sizeof(char *));
         }
 #endif
     }
