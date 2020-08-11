@@ -1871,9 +1871,15 @@ ST_FUNC void gaddrof(void)
 /* generate a bounded pointer addition */
 static void gen_bounded_ptr_add(void)
 {
+    int save = (vtop[-1].r & VT_VALMASK) == VT_LOCAL;
+    if (save) {
+      vpushv(&vtop[-1]);
+      vrott(3);
+    }
     vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
     vrott(3);
     gfunc_call(2);
+    vtop -= save;
     vpushi(0);
     /* returned pointer is in REG_IRET */
     vtop->r = REG_IRET | VT_BOUNDED;

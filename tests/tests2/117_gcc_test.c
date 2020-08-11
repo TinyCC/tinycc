@@ -129,6 +129,16 @@ void tst_compare(void)
   if (tst() > 0) printf ("error\n");
 }
 
+#pragma pack(1)
+struct S { int d:24; int f:14; } i, j;
+#pragma pack()
+
+void tst_pack (void)
+{
+  i.f = 5; j.f = 5;
+  if (j.f != i.f) printf("error\n");
+}
+
 int
 main (void)
 {
@@ -144,4 +154,5 @@ main (void)
   tst_adr(&sprintf);
   tst_builtin();
   tst_compare();
+  tst_pack();
 }
