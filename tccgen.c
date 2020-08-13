@@ -8085,13 +8085,15 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
-    unsigned char save_bcheck = tcc_state->do_bounds_check;
     /* Initialize VLA state */
     struct scope f = { 0 };
     cur_scope = root_scope = &f;
+#ifdef CONFIG_TCC_BCHECK
+    unsigned char save_bcheck = tcc_state->do_bounds_check;
 
     if (sym->type.ref->f.no_bcheck)
         tcc_state->do_bounds_check = 0;
+#endif
 
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
@@ -8145,7 +8147,9 @@ static void gen_function(Sym *sym)
     check_vstack();
     /* do this after funcend debug info */
     next();
+#ifdef CONFIG_TCC_BCHECK
     tcc_state->do_bounds_check = save_bcheck;
+#endif
 }
 
 static void gen_inline_functions(TCCState *s)
