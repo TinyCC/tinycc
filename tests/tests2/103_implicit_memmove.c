@@ -8,7 +8,7 @@ int foo (struct S *a, struct S *b)
   return 0;
 }
 
-void *memmove(void*,void*,long);
+void *memmove(void*,const void*,__SIZE_TYPE__);
 void foo2 (struct S *a, struct S *b)
 {
   memmove(a, b, sizeof *a);

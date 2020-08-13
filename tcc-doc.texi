@@ -951,34 +951,53 @@ Here are some examples of caught errors:
 
 Signal handlers are not compatible with bounds checking. The code
 below can be used to protect signal handlers.
-The call to __bound_checking(1) will disable bounds checking in the
-whole application.
+The @code{__attribute__((bound_no_checking))} will prevent all bound checking
+code generation. If a signal handler calls another function this
+function must also use @code{__attribute__((bound_no_checking))}.
 
-The BOUNDS_CHECKING_OFF and BOUNDS_CHECKING_ON can also be used to
+The fork() function call in a multi threaded application is also a problem.
+To solve this all bounds checking can be disabled by calling
+@code{__bound_checking(1)}. The call to @code{__bound_checking(1)} will disable bounds
+checking in the whole application.
+
+The @code{BOUNDS_CHECKING_OFF} and @code{BOUNDS_CHECKING_ON} can also be used to
 disable bounds checking for some code. This is not recommended.
 It is better to fix the code.
 
 @example
 
-#ifdef __BOUNDS_CHECKING_ON
+#if defined(__TINYC__) && __BOUNDS_CHECKING_ON
+#undef __attribute__
 extern void __bound_checking (int no_check);
 #define BOUNDS_CHECKING_OFF __bound_checking(1)
 #define BOUNDS_CHECKING_ON  __bound_checking(-1)
+#define BOUNDS_NO_CHECKING __attribute__((bound_no_checking))
 #else
 #define BOUNDS_CHECKING_OFF
 #define BOUNDS_CHECKING_ON
+#define BOUNDS_NO_CHECKING
 #endif
 
-void real_signal_handler(int sig, siginfo_t *info, void *ucontext)
+void signal_handler(int sig, void *info, void *ucontext) BOUNDS_NO_CHECKING
 @{
-    ...
+    ... signal handler code without generated bounds checking code.
 @}
 
-void signal_handler(int sig, void *info, void *ucontext)
+void run(const char *cmd)
 @{
-    BOUNDS_CHECKING_OFF;
-    real_signal_handler(sig, info, data);
-    BOUNDS_CHECKING_ON;
+    switch (fork()) @{
+    case 0:
+      BOUNDS_CHECKING_OFF;
+      ...
+      exec...
+      exit(1);
+    case -1: 
+      ...
+      break;
+    default:
+      ...
+      break;
+    @}
 @}
 
 @end example

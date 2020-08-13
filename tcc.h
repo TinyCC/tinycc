@@ -505,7 +505,8 @@ struct FuncAttr {
     func_dtor   : 1, /* attribute((destructor)) */
     func_args   : 8, /* PE __stdcall args */
     func_alwinl : 1, /* always_inline */
-    xxxx        :15;
+    no_bcheck   : 1, /* no bound checking */
+    xxxx        :14;
 };
 
 /* symbol management */

@@ -112,6 +112,12 @@ static sem_t bounds_sem;
 #define WAIT_SEM()             if (use_sem) while (sem_wait (&bounds_sem) < 0 \
                                                    && errno == EINTR)
 #define POST_SEM()             if (use_sem) sem_post (&bounds_sem)
+#elif 0
+static pthread_mutex_t bounds_mtx;
+#define INIT_SEM()             pthread_mutex_init (&bounds_mtx, NULL)
+#define EXIT_SEM()             pthread_mutex_destroy (&bounds_mtx)
+#define WAIT_SEM()             if (use_sem) pthread_mutex_lock (&bounds_mtx)
+#define POST_SEM()             if (use_sem) pthread_mutex_unlock (&bounds_mtx)
 #else
 static pthread_spinlock_t bounds_spin;
 /* about 25% faster then semaphore. */
@@ -618,6 +624,9 @@ void __bound_new_region(void *p, size_t size)
     alloca_list_type *cur;
     alloca_list_type *new;
 
+    if (no_checking)
+        return;
+
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, p, (unsigned long)size);
     GET_CALLER_FP (fp);
@@ -638,8 +647,7 @@ void __bound_new_region(void *p, size_t size)
         last = cur;
         cur = cur->next;
     }
-    if (no_checking == 0)
-        tree = splay_insert((size_t)p, size, tree);
+    tree = splay_insert((size_t)p, size, tree);
     if (new) {
         new->fp = fp;
         new->p = p;
@@ -1188,7 +1196,7 @@ void __bound_free(void *ptr, const void *caller)
     size_t addr = (size_t) ptr;
     void *p;
 
-    if (ptr == NULL || tree == NULL || no_checking
+    if (ptr == NULL || tree == NULL
 #if MALLOC_REDIR
         || ((unsigned char *) ptr >= &initial_pool[0] &&
             (unsigned char *) ptr < &initial_pool[sizeof(initial_pool)])
@@ -1198,25 +1206,27 @@ void __bound_free(void *ptr, const void *caller)
 
     dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, ptr);
 
-    WAIT_SEM ();
-    INCR_COUNT(bound_free_count);
-    tree = splay (addr, tree);
-    if (tree->start == addr) {
-        if (tree->is_invalid) {
-            POST_SEM ();
-            bound_error("freeing invalid region");
-            return;
+    if (no_checking == 0) {
+        WAIT_SEM ();
+        INCR_COUNT(bound_free_count);
+        tree = splay (addr, tree);
+        if (tree->start == addr) {
+            if (tree->is_invalid) {
+                POST_SEM ();
+                bound_error("freeing invalid region");
+                return;
+            }
+            tree->is_invalid = 1;
+            memset (ptr, 0x5a, tree->size);
+            p = free_reuse_list[free_reuse_index];
+            free_reuse_list[free_reuse_index] = ptr;
+            free_reuse_index = (free_reuse_index + 1) % FREE_REUSE_SIZE;
+            if (p)
+                tree = splay_delete((size_t)p, tree);
+            ptr = p;
         }
-        tree->is_invalid = 1;
-        memset (ptr, 0x5a, tree->size);
-        p = free_reuse_list[free_reuse_index];
-        free_reuse_list[free_reuse_index] = ptr;
-        free_reuse_index = (free_reuse_index + 1) % FREE_REUSE_SIZE;
-        if (p)
-            tree = splay_delete((size_t)p, tree);
-        ptr = p;
+        POST_SEM ();
     }
-    POST_SEM ();
     BOUND_FREE (ptr);
 }
 
@@ -1340,8 +1350,7 @@ int __bound_munmap (void *start, size_t size)
 /* check that (p ... p + size - 1) lies inside 'p' region, if any */
 static void __bound_check(const void *p, size_t size, const char *function)
 {
-    if (no_checking == 0 && size != 0 &&
-        __bound_ptr_add((void *)p, size) == INVALID_POINTER) {
+    if (size != 0 && __bound_ptr_add((void *)p, size) == INVALID_POINTER) {
         bound_error("invalid pointer %p, size 0x%lx in %s",
                 p, (unsigned long)size, function);
     }

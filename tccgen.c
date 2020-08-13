@@ -1501,6 +1501,8 @@ static void merge_funcattr(struct FuncAttr *fa, struct FuncAttr *fa1)
       fa->func_ctor = 1;
     if (fa1->func_dtor)
       fa->func_dtor = 1;
+    if (fa1->no_bcheck)
+      fa->no_bcheck = 1;
 }
 
 /* Merge attributes.  */
@@ -4121,6 +4123,10 @@ redo:
         case TOK_ALWAYS_INLINE1:
         case TOK_ALWAYS_INLINE2:
             ad->f.func_alwinl = 1;
+            break;
+        case TOK_NO_BOUND_CHECK1:
+        case TOK_NO_BOUND_CHECK2:
+            ad->f.no_bcheck = 1;
             break;
         case TOK_SECTION1:
         case TOK_SECTION2:
@@ -8079,9 +8085,13 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
    'cur_text_section' */
 static void gen_function(Sym *sym)
 {
+    unsigned char save_bcheck = tcc_state->do_bounds_check;
     /* Initialize VLA state */
     struct scope f = { 0 };
     cur_scope = root_scope = &f;
+
+    if (sym->type.ref->f.no_bcheck)
+        tcc_state->do_bounds_check = 0;
 
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
@@ -8135,6 +8145,7 @@ static void gen_function(Sym *sym)
     check_vstack();
     /* do this after funcend debug info */
     next();
+    tcc_state->do_bounds_check = save_bcheck;
 }
 
 static void gen_inline_functions(TCCState *s)
