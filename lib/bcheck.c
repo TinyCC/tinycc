@@ -198,7 +198,7 @@ static Tree * splay_delete(size_t addr, Tree *t);
 void splay_printtree(Tree * t, int d);
 
 /* external interface */
-void __bound_checking (int no_check);
+void __bounds_checking (int no_check);
 void __bound_never_fatal (int no_check);
 DLL_EXPORT void * __bound_ptr_add(void *p, size_t offset);
 DLL_EXPORT void * __bound_ptr_indir1(void *p, size_t offset);
@@ -359,7 +359,7 @@ static void fetch_and_add(int* variable, int value)
 }
 
 /* enable/disable checking. This can be used in signal handlers. */
-void __bound_checking (int no_check)
+void __bounds_checking (int no_check)
 {
     fetch_and_add (&no_checking, no_check);
 }

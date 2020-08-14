@@ -351,26 +351,8 @@ invalid pointer} instead of the laconic @code{Segmentation
 fault}.
 
 @item -b
-Generate additional support code to check
-memory allocations and array/pointer bounds. @option{-g} is implied. Note
-that the generated code is slower and bigger in this case.
-The bound checking code is not included in shared libraries. The main executable should always be compiled with the @option{-b}.
-
-There are five environment variables that can be used:
-@table @option
-@item TCC_BOUNDS_WARN_POINTER_ADD
-Print warning when pointer add creates an illegal pointer.
-@item TCC_BOUNDS_PRINT_CALLS
-Print bound checking calls. Can be used for debugging.
-@item TCC_BOUNDS_PRINT_HEAP
-Print heap objects that are not freed at exit of program.
-@item TCC_BOUNDS_PRINT_STATISTIC
-Print statistic information at exit of program.
-@item TCC_BOUNDS_NEVER_FATAL
-Try to continue in case of a bound checking error.
-@end table
-
-Note: @option{-b} is only available on i386 (linux and windows), x86_64 (linux and windows), arm, arm64 and riscv64 for the moment.
+Generate additional support code to check memory allocations and array/pointer
+bounds (@pxref{Bounds}). @option{-g} is implied.
 
 @item -bt[N]
 Display N callers in stack traces. This is useful with @option{-g} or @option{-b}.
@@ -686,8 +668,6 @@ are supported.
 @item Binary digits can be entered (@code{0b101} instead of
 @code{5}).
 
-@item @code{__BOUNDS_CHECKING_ON} is defined if bound checking is activated.
-
 @end itemize
 
 @node asm
@@ -881,16 +861,7 @@ GROUP ( /lib/libc.so.6 /usr/lib/libc_nonshared.a )
 @cindex bound checks
 @cindex memory checks
 
-This feature is activated with the @option{-b} (@pxref{Invoke}).
-
-Note that pointer size is @emph{unchanged} and that code generated
-with bound checks is @emph{fully compatible} with unchecked
-code. When a pointer comes from unchecked code, it is assumed to be
-valid. Even very obscure C code with casts should work correctly.
-
-For more information about the ideas behind this method, see
-@url{http://www.doc.ic.ac.uk/~phjk/BoundsChecking.html}.
-
+This feature is activated with the @option{-b} option (@pxref{Invoke}).
 Here are some examples of caught errors:
 
 @table @asis
@@ -946,41 +917,58 @@ Here are some examples of caught errors:
     free(tab);
 @}
 @end example
-
 @end table
 
-Signal handlers are not compatible with bounds checking. The code
-below can be used to protect signal handlers.
-The @code{__attribute__((bound_no_checking))} will prevent all bound checking
-code generation. If a signal handler calls another function this
-function must also use @code{__attribute__((bound_no_checking))}.
+TCC defines @code{__BOUNDS_CHECKING_ON} if activated.
 
-The fork() function call in a multi threaded application is also a problem.
-To solve this all bounds checking can be disabled by calling
-@code{__bound_checking(1)}. The call to @code{__bound_checking(1)} will disable bounds
-checking in the whole application.
+There are five environment variables that can be used to control the behavior:
+@itemize
+@item TCC_BOUNDS_WARN_POINTER_ADD
+- Print warning when pointer add creates an illegal pointer.
+@item TCC_BOUNDS_PRINT_CALLS
+- Print bound checking calls. Can be used for debugging.
+@item TCC_BOUNDS_PRINT_HEAP
+- Print heap objects that are not freed at exit of program.
+@item TCC_BOUNDS_PRINT_STATISTIC
+- Print statistic information at exit of program.
+@item TCC_BOUNDS_NEVER_FATAL
+- Try to continue in case of a bound checking error.
+@end itemize
 
-The @code{BOUNDS_CHECKING_OFF} and @code{BOUNDS_CHECKING_ON} can also be used to
-disable bounds checking for some code. This is not recommended.
-It is better to fix the code.
+Also, a function @code{__bounds_checking(x)} can be used to turn off/on bounds
+checking from usercode (see below).
+
+Notes:
+@itemize
+@item Only available on i386 (linux and windows), x86_64 (linux and windows),
+arm, arm64 and riscv64 for the moment.
+@item The generated code is slower and bigger.
+@item The bound checking code is not included in shared libraries. The main
+executable should always be compiled with the @option{-b}.
+@item Pointer size is @emph{unchanged} and code generated with bound checks is
+@emph{fully compatible} with unchecked code. When a pointer comes from
+unchecked code, it is assumed to be valid. Even very obscure C code with
+casts should work correctly.
+@item Signal handlers are not compatible with bounds checking. The fork()
+function call in a multi threaded application is also a problem.
+The code below can be used to solve this.
+@end itemize
 
 @example
-
-#if defined(__TINYC__) && __BOUNDS_CHECKING_ON
-#undef __attribute__
-extern void __bound_checking (int no_check);
-#define BOUNDS_CHECKING_OFF __bound_checking(1)
-#define BOUNDS_CHECKING_ON  __bound_checking(-1)
-#define BOUNDS_NO_CHECKING __attribute__((bound_no_checking))
+#ifdef __BOUNDS_CHECKING_ON
+extern void __bounds_checking (int x);
+# define BOUNDS_CHECKING_OFF __bounds_checking(1)
+# define BOUNDS_CHECKING_ON  __bounds_checking(-1)
 #else
-#define BOUNDS_CHECKING_OFF
-#define BOUNDS_CHECKING_ON
-#define BOUNDS_NO_CHECKING
+# define BOUNDS_CHECKING_OFF
+# define BOUNDS_CHECKING_ON
 #endif
 
-void signal_handler(int sig, void *info, void *ucontext) BOUNDS_NO_CHECKING
+void signal_handler(int sig, void *info, void *ucontext)
 @{
+    BOUNDS_CHECKING_OFF;
     ... signal handler code without generated bounds checking code.
+    BOUNDS_CHECKING_ON;
 @}
 
 void run(const char *cmd)
@@ -999,8 +987,10 @@ void run(const char *cmd)
       break;
     @}
 @}
-
 @end example
+
+For more information about the ideas behind this method, see
+@url{http://www.doc.ic.ac.uk/~phjk/BoundsChecking.html}.
 
 @node Libtcc
 @chapter The @code{libtcc} library
