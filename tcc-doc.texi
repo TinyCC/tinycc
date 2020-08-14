@@ -354,7 +354,7 @@ fault}.
 Generate additional support code to check
 memory allocations and array/pointer bounds. @option{-g} is implied. Note
 that the generated code is slower and bigger in this case.
-The bound checking code is not included in shared libaries. The main executable should always be compiled with the @option{-b}.
+The bound checking code is not included in shared libraries. The main executable should always be compiled with the @option{-b}.
 
 There are five environment variables that can be used:
 @table @option
