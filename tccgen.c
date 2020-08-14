@@ -4124,10 +4124,12 @@ redo:
         case TOK_ALWAYS_INLINE2:
             ad->f.func_alwinl = 1;
             break;
+#ifdef CONFIG_TCC_BCHECK
         case TOK_NO_BOUND_CHECK1:
         case TOK_NO_BOUND_CHECK2:
             ad->f.no_bcheck = 1;
             break;
+#endif
         case TOK_SECTION1:
         case TOK_SECTION2:
             skip('(');
@@ -5960,6 +5962,26 @@ special_math_val:
         if (t < TOK_UIDENT)
             expect("identifier");
         s = sym_find(t);
+#ifdef CONFIG_TCC_BCHECK
+        /* HACK to undo alias definition in tccpp.c
+           if function has no bound checking */
+        if (tcc_state->do_bounds_check == 0 && s &&
+            (s->type.t & VT_BTYPE) == VT_FUNC && (s->asm_label & SYM_FIELD)) {
+            const char *name = get_tok_str(s->asm_label & ~SYM_FIELD, NULL);
+
+            if (name && strncmp (name, "__bound_", strlen("__bound_")) == 0) {
+                char str[100];
+                int v = s->v;
+
+                sprintf (str, "!%s", name); /* illegal name */
+                t = tok_alloc(str, strlen(str))->tok;
+                s = sym_find(t);
+                if (s == NULL)
+                    s = external_global_sym(t, &func_old_type);
+                s->asm_label = v | SYM_FIELD; /* use old name as alias */
+            }
+        }
+#endif
         if (!s || IS_ASM_SYM(s)) {
             const char *name = get_tok_str(t, NULL);
             if (tok != '(')
@@ -8087,14 +8109,13 @@ static void gen_function(Sym *sym)
 {
     /* Initialize VLA state */
     struct scope f = { 0 };
-    cur_scope = root_scope = &f;
 #ifdef CONFIG_TCC_BCHECK
     unsigned char save_bcheck = tcc_state->do_bounds_check;
 
     if (sym->type.ref->f.no_bcheck)
         tcc_state->do_bounds_check = 0;
 #endif
-
+    cur_scope = root_scope = &f;
     nocode_wanted = 0;
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {

@@ -33,6 +33,8 @@ add (void) BOUNDS_NO_CHECKING
     for (i = 0; i < (sizeof(dummy)/sizeof(dummy[0])); i++) {
         dummy[i]++;
     }
+    /* Should not be translated into __bound_memset */
+    memset (&dummy[0], 0, sizeof(dummy));
 }
 
 static void *
@@ -68,6 +70,7 @@ main (void)
     struct sigaction act;
     sigjmp_buf sj;
     sigset_t m;
+    time_t end;
 
     memset (&act, 0, sizeof (act));
     act.sa_handler = signal_handler;
@@ -80,7 +83,9 @@ main (void)
     pthread_create(&id2, NULL, do_signal, NULL);
 
     printf ("start\n");
-    sleep(1);
+    /* sleep does not work !!! */
+    end = time(NULL) + 2;
+    while (time(NULL) < end) ;
     run = 0;
     printf ("end\n");
 
