@@ -6706,10 +6706,17 @@ static void check_func_return(void)
 /* ------------------------------------------------------------------------- */
 /* switch/case */
 
-static int case_cmp(const void *pa, const void *pb)
+static int case_cmpi(const void *pa, const void *pb)
 {
     int64_t a = (*(struct case_t**) pa)->v1;
     int64_t b = (*(struct case_t**) pb)->v1;
+    return a < b ? -1 : a > b;
+}
+
+static int case_cmpu(const void *pa, const void *pb)
+{
+    uint64_t a = (uint64_t)(*(struct case_t**) pa)->v1;
+    uint64_t b = (uint64_t)(*(struct case_t**) pb)->v1;
     return a < b ? -1 : a > b;
 }
 
@@ -7118,16 +7125,16 @@ again:
         /* case lookup */
         gsym(b);
 
-        qsort(sw->p, sw->n, sizeof(void*), case_cmp);
+        if (sw->sv.type.t & VT_UNSIGNED)
+            qsort(sw->p, sw->n, sizeof(void*), case_cmpu);
+        else
+            qsort(sw->p, sw->n, sizeof(void*), case_cmpi);
+
         for (b = 1; b < sw->n; b++)
             if (sw->p[b - 1]->v2 >= sw->p[b]->v1)
                 tcc_error("duplicate case value");
 
-        /* Our switch table sorting is signed, so the compared
-           value needs to be as well when it's 64bit.  */
         vpushv(&sw->sv);
-        if ((vtop->type.t & VT_BTYPE) == VT_LLONG)
-            vtop->type.t &= ~VT_UNSIGNED;
         gv(RC_INT);
         d = 0, gcase(sw->p, sw->n, &d);
         vpop();
@@ -7150,7 +7157,8 @@ again:
         if (gnu_ext && tok == TOK_DOTS) {
             next();
             cr->v2 = expr_const64();
-            if (cr->v2 < cr->v1)
+            if ((!(cur_switch->sv.type.t & VT_UNSIGNED) && cr->v2 < cr->v1)
+                || (cur_switch->sv.type.t & VT_UNSIGNED && (uint64_t)cr->v2 < (uint64_t)cr->v1))
                 tcc_warning("empty case range");
         }
         cr->sym = gind();
