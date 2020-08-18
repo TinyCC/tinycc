@@ -7131,7 +7131,9 @@ again:
             qsort(sw->p, sw->n, sizeof(void*), case_cmpi);
 
         for (b = 1; b < sw->n; b++)
-            if (sw->p[b - 1]->v2 >= sw->p[b]->v1)
+            if (sw->sv.type.t & VT_UNSIGNED
+                ? (uint64_t)sw->p[b - 1]->v2 >= (uint64_t)sw->p[b]->v1
+                : sw->p[b - 1]->v2 >= sw->p[b]->v1)
                 tcc_error("duplicate case value");
 
         vpushv(&sw->sv);
