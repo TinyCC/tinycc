@@ -139,6 +139,13 @@ void tst_pack (void)
   if (j.f != i.f) printf("error\n");
 }
 
+void tst_cast(void)
+{
+  signed char c = (signed char) 0xaaaaaaaa;
+  int r = (unsigned short) c ^ (signed char) 0x99999999;
+  if (r != 0xffff0033) printf ("%x\n", r);
+}
+
 int
 main (void)
 {
@@ -155,4 +162,5 @@ main (void)
   tst_builtin();
   tst_compare();
   tst_pack();
+  tst_cast();
 }

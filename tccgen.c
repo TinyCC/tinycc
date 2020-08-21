@@ -3573,6 +3573,11 @@ again:
             /* ss <= 4 here */
             if (ds <= 4) {
                 gv(RC_INT);
+		if (ds == 2 && (dbt & VT_UNSIGNED) &&
+                    ss == 1 && (sbt & VT_UNSIGNED) == 0) {
+		    vpushi(0xffff);
+		    gen_op('&');
+		}
                 goto done; /* no 64bit envolved */
             }
         }

@@ -1,14 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-void tst1(void)
-{
-  /* problem in gen_cast. Should mask unsigned types */
-  signed char c = (signed char) 0xffffffff;
-  int r = (unsigned short) c ^ (signed char) 0x99999999;
-  if (r != 0xffff0066) printf ("%x\n", r);
-}
-
 typedef struct{double x,y;}p;
 
 void tst2(int n,...)
@@ -69,7 +61,6 @@ int
 main(void)
 {
   p v = { 1, 2};
-  tst1();
   tst2(1, v);
   tst3();
 }
