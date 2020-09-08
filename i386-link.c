@@ -37,6 +37,10 @@ int code_reloc (int reloc_type)
 	case R_386_GOT32X:
 	case R_386_GLOB_DAT:
 	case R_386_COPY:
+	case R_386_TLS_GD:
+	case R_386_TLS_LDM:
+	case R_386_TLS_LDO_32:
+	case R_386_TLS_LE:
             return 0;
 
 	case R_386_PC16:
@@ -78,6 +82,10 @@ int gotplt_entry_type (int reloc_type)
 	case R_386_GOT32:
 	case R_386_GOT32X:
 	case R_386_PLT32:
+	case R_386_TLS_GD:
+	case R_386_TLS_LDM:
+	case R_386_TLS_LDO_32:
+	case R_386_TLS_LE:
             return ALWAYS_GOTPLT_ENTRY;
     }
     return -1;
@@ -227,6 +235,73 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             to the program .bss segment. Currently made like for ARM
             (to remove noise of default case). Is this true?
             */
+            return;
+        case R_386_TLS_GD:
+            {
+                static const unsigned char expect[] = {
+                    /* lea 0(,%ebx,1),%eax */
+                    0x8d, 0x04, 0x1d, 0x00, 0x00, 0x00, 0x00,
+                    /* call __tls_get_addr@PLT */
+                    0xe8, 0xfc, 0xff, 0xff, 0xff };
+                static const unsigned char replace[] = {
+                    /* mov %gs:0,%eax */
+                    0x65, 0xa1, 0x00, 0x00, 0x00, 0x00,
+                    /* sub 0,%eax */
+                    0x81, 0xe8, 0x00, 0x00, 0x00, 0x00 };
+
+                if (memcmp (ptr-3, expect, sizeof(expect)) == 0) {
+                    ElfW(Sym) *sym;
+                    Section *sec;
+                    int32_t x;
+
+                    memcpy(ptr-3, replace, sizeof(replace));
+                    rel[1].r_info = ELFW(R_INFO)(0, R_386_NONE);
+                    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                    sec = s1->sections[sym->st_shndx];
+                    x = sym->st_value - sec->sh_addr - sec->data_offset;
+                    add32le(ptr + 5, -x);
+                }
+                else
+                    tcc_error("unexpected R_386_TLS_GD pattern");
+            }
+            return;
+        case R_386_TLS_LDM:
+            {
+                static const unsigned char expect[] = {
+                    /* lea 0(%ebx),%eax */
+                    0x8d, 0x83, 0x00, 0x00, 0x00, 0x00,
+                    /* call __tls_get_addr@PLT */
+                    0xe8, 0xfc, 0xff, 0xff, 0xff };
+                static const unsigned char replace[] = {
+                    /* mov %gs:0,%eax */
+                    0x65, 0xa1, 0x00, 0x00, 0x00, 0x00,
+                    /* nop */
+                    0x90,
+                    /* lea 0(%esi,%eiz,1),%esi */
+                    0x8d, 0x74, 0x26, 0x00 };
+
+                if (memcmp (ptr-2, expect, sizeof(expect)) == 0) {
+                    memcpy(ptr-2, replace, sizeof(replace));
+                    rel[1].r_info = ELFW(R_INFO)(0, R_386_NONE);
+                }
+                else
+                    tcc_error("unexpected R_386_TLS_LDM pattern");
+            }
+            return;
+        case R_386_TLS_LDO_32:
+        case R_386_TLS_LE:
+            {
+                ElfW(Sym) *sym;
+                Section *sec;
+                int32_t x;
+
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                sec = s1->sections[sym->st_shndx];
+                x = val - sec->sh_addr - sec->data_offset;
+                add32le(ptr, x);
+            }
+            return;
+        case R_386_NONE:
             return;
         default:
             fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",

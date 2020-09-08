@@ -949,13 +949,24 @@ executable should always be compiled with the @option{-b}.
 @emph{fully compatible} with unchecked code. When a pointer comes from
 unchecked code, it is assumed to be valid. Even very obscure C code with
 casts should work correctly.
-@item Signal handlers are not compatible with bounds checking. The fork()
-function call in a multi threaded application is also a problem.
-The code below can be used to solve this.
+@item Signal handlers are not compatible with bounds checking. The
+bounds checking code disables checking in signal/sigaction handlers.
+The fork() function call in a multi threaded application is also a problem.
+The bound checking code fixes this for the child process.
+@item The reason that signals and fork have problems is that we use locking
+inside the bounds checking code.
+Inside a signal handler we can not use locks. Also in a multi threaded
+application after a fork the child process can have the lock set
+by another thread.
+@item The BOUNDS_CHECKING_OFF and BOUNDS_CHECKING_ON can also be used to
+disable bounds checking for some code.
+@item The __bounds_checking call adds a value to a thread local value.
+The value starts at 0. If the value is not 0 the code is not checked
+for bounds checking errors.
 @end itemize
 
 @example
-#ifdef __BOUNDS_CHECKING_ON
+#if defined(__TINYC__) && __BOUNDS_CHECKING_ON
 extern void __bounds_checking (int x);
 # define BOUNDS_CHECKING_OFF __bounds_checking(1)
 # define BOUNDS_CHECKING_ON  __bounds_checking(-1)
@@ -963,30 +974,6 @@ extern void __bounds_checking (int x);
 # define BOUNDS_CHECKING_OFF
 # define BOUNDS_CHECKING_ON
 #endif
-
-void signal_handler(int sig, void *info, void *ucontext)
-@{
-    BOUNDS_CHECKING_OFF;
-    ... signal handler code without generated bounds checking code.
-    BOUNDS_CHECKING_ON;
-@}
-
-void run(const char *cmd)
-@{
-    switch (fork()) @{
-    case 0:
-      BOUNDS_CHECKING_OFF;
-      ...
-      exec...
-      exit(1);
-    case -1: 
-      ...
-      break;
-    default:
-      ...
-      break;
-    @}
-@}
 @end example
 
 For more information about the ideas behind this method, see

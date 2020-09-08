@@ -8,39 +8,27 @@
 #include <errno.h>
 #include <setjmp.h>
 
-/* See tcc-doc.info */
-#if defined(__TINYC__) && __BOUNDS_CHECKING_ON
-#undef __attribute__
-extern void __bounds_checking (int no_check);
-#define BOUNDS_CHECKING_OFF __bounds_checking(1)
-#define BOUNDS_CHECKING_ON  __bounds_checking(-1)
-#else
-#define BOUNDS_CHECKING_OFF
-#define BOUNDS_CHECKING_ON
-#endif
-
 static volatile int run = 1;
-static int dummy[10];
 static sem_t sem;
 
 static void
-add (void)
+add (int n)
 {
     int i;
+    int arr[n];
 
-    BOUNDS_CHECKING_OFF;
-    for (i = 0; i < (sizeof(dummy)/sizeof(dummy[0])); i++) {
-        dummy[i]++;
+    for (i = 0; i < n; i++) {
+        arr[i]++;
     }
-    memset (&dummy[0], 0, sizeof(dummy));
-    BOUNDS_CHECKING_ON;
+    memset (&arr[0], 0, n * sizeof(int));
 }
 
 static void *
 high_load (void *unused)
 {
     while (run) {
-        add();
+        add(10);
+        add(20);
     }
     return NULL;
 }
@@ -57,10 +45,9 @@ do_signal (void *unused)
 
 static void signal_handler(int sig)
 {
-    BOUNDS_CHECKING_OFF;
-    add();
+    add(10);
+    add(20);
     sem_post (&sem);
-    BOUNDS_CHECKING_ON;
 }
 
 int
