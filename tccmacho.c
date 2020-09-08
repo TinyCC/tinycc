@@ -813,8 +813,12 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         Section *s;
         collect_sections(s1, &mo);
         relocate_syms(s1, s1->symtab, 0);
-        mo.ep->entryoff = get_sym_addr(s1, "main", 1, 1)
-                            - get_segment(&mo, 1)->vmaddr;
+				if (s1->output_type == TCC_OUTPUT_DLL) {
+					/* TODO: more handling for .dylib ? */
+				} else {
+					mo.ep->entryoff = get_sym_addr(s1, "main", 1, 1)
+						- get_segment(&mo, 1)->vmaddr;
+				}
         if (s1->nb_errors)
           goto do_ret;
 

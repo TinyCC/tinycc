@@ -1457,7 +1457,10 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
-        tcc_add_support(s1, TCC_LIBTCC1);
+        /* libtcc1 is not needed when tccrun mode */
+        if (s1->output_type != TCC_OUTPUT_MEMORY){
+            tcc_add_support(s1, TCC_LIBTCC1);
+        }
 #ifndef TCC_TARGET_MACHO
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
