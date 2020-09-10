@@ -541,13 +541,19 @@ unsigned long long __fixunssfdi (float a1)
 
     l = MANT(fl1.l);
     if (exp >= 41)
-	return (unsigned long long)-1;
+	    return (unsigned long long)-1;
     else if (exp >= 0)
-        return (unsigned long long)l << exp;
+	    if(SIGN(fl1.l))
+		    return (unsigned long long)-(l << exp);
+	    else
+		    return (unsigned long long)l << exp;
     else if (exp >= -23)
-        return l >> -exp;
+	    if(SIGN(fl1.l))
+		    return -(l >> -exp);
+	    else
+		    return l >> -exp;
     else
-        return 0;
+	    return 0;
 }
 
 long long __fixsfdi (float a1)
@@ -573,13 +579,19 @@ unsigned long long __fixunsdfdi (double a1)
     l = MANTD_LL(dl1);
 
     if (exp >= 12)
-	return (unsigned long long)-1;
+	    return (unsigned long long)-1;
     else if (exp >= 0)
-        return l << exp;
+	    if(SIGND(dl1))
+		    return -(l >> exp);
+	    else
+		    return l << exp;
     else if (exp >= -52)
-        return l >> -exp;
+	    if(SIGND(dl1))
+		    return -(l >> -exp);
+	    else
+		    return l >> -exp;
     else
-        return 0;
+	    return 0;
 }
 
 long long __fixdfdi (double a1)
@@ -608,7 +620,12 @@ unsigned long long __fixunsxfdi (long double a1)
     if (exp > 0)
 	return (unsigned long long)-1;
     else if (exp >= -63) 
-        return l >> -exp;
+    {
+	    if(SIGNLD(dl1))
+		    return -(l >> -exp);
+	    else
+		    return l >> -exp;
+    }
     else
         return 0;
 }
