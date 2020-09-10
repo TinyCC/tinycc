@@ -252,7 +252,7 @@ libtcc.dylib: $(LIBTCC_OBJ)
 
 # OSX libtcc.dylib (without rpath/ prefix)
 libtcc.osx: $(LIBTCC_OBJ)
-	$S$(CC) -shared -o libtcc.dylib $^ $(LDFLAGS) 
+	$S$(CC) -shared -install_name libtcc.dylib -o libtcc.dylib $^ $(LDFLAGS) 
 
 # windows dynamic libtcc library
 libtcc.dll : $(LIBTCC_OBJ)
