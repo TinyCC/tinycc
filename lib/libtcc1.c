@@ -530,7 +530,7 @@ unsigned long long __fixunssfdi (float a1)
 {
     register union float_long fl1;
     register int exp;
-    register unsigned long l;
+    register unsigned long long l;
 
     fl1.f = a1;
 
@@ -538,22 +538,19 @@ unsigned long long __fixunssfdi (float a1)
 	return (0);
 
     exp = EXP (fl1.l) - EXCESS - 24;
-
     l = MANT(fl1.l);
+
     if (exp >= 41)
-	    return (unsigned long long)-1;
+        return 1ULL << 63;
     else if (exp >= 0)
-	    if(SIGN(fl1.l))
-		    return (unsigned long long)-(l << exp);
-	    else
-		    return (unsigned long long)l << exp;
+        l <<= exp;
     else if (exp >= -23)
-	    if(SIGN(fl1.l))
-		    return -(l >> -exp);
-	    else
-		    return l >> -exp;
+        l >>= -exp;
     else
-	    return 0;
+	return 0;
+    if (SIGN(fl1.l))
+        l = (unsigned long long)-l;
+    return l;
 }
 
 long long __fixsfdi (float a1)
@@ -575,23 +572,19 @@ unsigned long long __fixunsdfdi (double a1)
 	return (0);
 
     exp = EXPD (dl1) - EXCESSD - 53;
-
     l = MANTD_LL(dl1);
 
     if (exp >= 12)
-	    return (unsigned long long)-1;
+        return 1ULL << 63; /* overflow result (like gcc, somewhat) */
     else if (exp >= 0)
-	    if(SIGND(dl1))
-		    return -(l >> exp);
-	    else
-		    return l << exp;
+        l <<= exp;
     else if (exp >= -52)
-	    if(SIGND(dl1))
-		    return -(l >> -exp);
-	    else
-		    return l >> -exp;
+        l >>= -exp;
     else
-	    return 0;
+        return 0;
+    if (SIGND(dl1))
+        l = (unsigned long long)-l;
+    return l;
 }
 
 long long __fixdfdi (double a1)
@@ -614,20 +607,15 @@ unsigned long long __fixunsxfdi (long double a1)
 	return (0);
 
     exp = EXPLD (dl1) - EXCESSLD - 64;
-
     l = dl1.l.lower;
-
     if (exp > 0)
-	return (unsigned long long)-1;
-    else if (exp >= -63) 
-    {
-	    if(SIGNLD(dl1))
-		    return -(l >> -exp);
-	    else
-		    return l >> -exp;
-    }
-    else
+	return 1ULL << 63;
+    if (exp < -63)
         return 0;
+    l >>= -exp;
+    if (SIGNLD(dl1))
+        l = (unsigned long long)-l;
+    return l;
 }
 
 long long __fixxfdi (long double a1)
