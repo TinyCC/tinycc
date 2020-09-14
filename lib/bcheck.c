@@ -1376,7 +1376,10 @@ pid_t fork(void)
 
     WAIT_SEM();
     retval = (*fork_redir)();
-    POST_SEM();
+    if (retval == 0)
+        INIT_SEM();
+    else
+        POST_SEM();
     return retval;
 }
 #endif
