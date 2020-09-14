@@ -169,7 +169,6 @@ static void (*free_redir) (void *);
 static void *(*realloc_redir) (void *, size_t);
 static unsigned int pool_index;
 static unsigned char __attribute__((aligned(16))) initial_pool[256];
-static unsigned char use_sem;
 #endif
 #if HAVE_MEMALIGN
 static void *(*memalign_redir) (size_t, size_t);
@@ -329,6 +328,7 @@ static unsigned char print_calls;
 static unsigned char print_heap;
 static unsigned char print_statistic;
 static unsigned char no_strdup;
+static unsigned char use_sem;
 static int never_fatal;
 #if HAVE_TLS_FUNC
 #if defined(_WIN32)
@@ -963,14 +963,14 @@ void __bound_init(size_t *p, int mode)
         dprintf(stderr, "%s, %s(): sigaction_redir %p\n",
                 __FILE__, __FUNCTION__, sigaction_redir);
         if (sigaction_redir == NULL)
-            bound_alloc_error ("Cannot sigaction signal");
+            bound_alloc_error ("Cannot redirect sigaction");
 #endif
 #if HAVE_FORK
         *(void **) (&fork_redir) = dlsym (addr, "fork");
         dprintf(stderr, "%s, %s(): fork_redir %p\n",
                 __FILE__, __FUNCTION__, fork_redir);
         if (fork_redir == NULL)
-            bound_alloc_error ("Cannot sigaction fork");
+            bound_alloc_error ("Cannot redirect fork");
 #endif
     }
 #endif
@@ -1372,12 +1372,11 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 #if HAVE_FORK
 pid_t fork(void)
 {
-    pid_t retval = (*fork_redir)();
+    pid_t retval;
 
-    if (retval == 0) {
-        TRY_SEM();
-        POST_SEM();
-    }
+    WAIT_SEM();
+    retval = (*fork_redir)();
+    POST_SEM();
     return retval;
 }
 #endif

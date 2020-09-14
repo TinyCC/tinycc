@@ -4,12 +4,15 @@
 #include <signal.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <setjmp.h>
 
 static volatile int run = 1;
 static sem_t sem;
+static sem_t sem_child;
 
 static void
 add (int n)
@@ -43,6 +46,29 @@ do_signal (void *unused)
     return NULL;
 }
 
+static void *
+do_fork (void *unused)
+{
+    pid_t pid;
+
+    while (run) {
+        switch ((pid = fork())) {
+        case 0:
+            add(1000);
+            add(2000);
+            exit(0);
+            break;
+        case -1:
+            return NULL;
+        default:
+            while (sem_wait(&sem_child) < 0 && errno == EINTR);
+            wait(NULL);
+            break;
+        }
+    }
+    return NULL;
+}
+
 static void signal_handler(int sig)
 {
     add(10);
@@ -50,11 +76,18 @@ static void signal_handler(int sig)
     sem_post (&sem);
 }
 
+static void child_handler(int sig)
+{
+    add(10);
+    add(20);
+    sem_post (&sem_child);
+}
+
 int
 main (void)
 {
     int i;
-    pthread_t id1, id2;
+    pthread_t id1, id2, id3;
     struct sigaction act;
     sigjmp_buf sj;
     sigset_t m;
@@ -65,21 +98,29 @@ main (void)
     act.sa_flags = 0;
     sigemptyset (&act.sa_mask);
     sigaction (SIGUSR1, &act, NULL);
+    act.sa_handler = child_handler;
+    sigaction (SIGCHLD, &act, NULL);
 
-    sem_init (&sem, 1, 0);
+    printf ("start\n"); fflush(stdout);
+
+    sem_init (&sem, 0, 0);
+    sem_init (&sem_child, 0, 0);
     pthread_create(&id1, NULL, high_load, NULL);
     pthread_create(&id2, NULL, do_signal, NULL);
+    pthread_create(&id3, NULL, do_fork, NULL);
 
-    printf ("start\n");
     /* sleep does not work !!! */
     end = time(NULL) + 2;
     while (time(NULL) < end) ;
     run = 0;
-    printf ("end\n");
+
+    printf ("end\n"); fflush(stdout);
 
     pthread_join(id1, NULL);
     pthread_join(id2, NULL);
+    pthread_join(id3, NULL);
     sem_destroy (&sem);
+    sem_destroy (&sem_child);
 
     sigemptyset (&m);
     sigprocmask (SIG_SETMASK, &m, NULL);
