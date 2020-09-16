@@ -1320,7 +1320,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 #ifndef TCC_TARGET_PE
 static int tcc_add_support(TCCState *s1, const char *filename)
 {
-    if(!filename || strlen(filename)==0) return 0;
+    if (!filename || strlen(filename)==0) return 0;
     char buf[1024];
     snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
     return tcc_add_file(s1, buf);
@@ -2348,7 +2348,7 @@ static void tidy_section_headers(TCCState *s1, int *sec_order)
     for_each_elem(symtab_section, 1, sym, ElfW(Sym))
 	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
 	    sym->st_shndx = backmap[sym->st_shndx];
-    if( !s1->static_link ) {
+    if ( !s1->static_link ) {
         for_each_elem(s1->dynsym, 1, sym, ElfW(Sym))
 	    if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
 	        sym->st_shndx = backmap[sym->st_shndx];
