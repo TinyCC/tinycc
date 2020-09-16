@@ -93,8 +93,10 @@ GEN-ALWAYS =
     $(TCC) -bt $1 a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=. -o a.exe && \
     ./a.exe
 
+ifndef CONFIG_OSX
 114_bound_signal.test: FLAGS += -b
 114_bound_signal.test: NORUN = true # tcc -run does not support fork and -b and SELINUX
+endif
 115_bound_setjmp.test: FLAGS += -b
 116_bound_setjmp2.test: FLAGS += -b
 117_builtins.test: T1 = ( $(TCC) -run $1 && $(TCC) -b -run $1 )
