@@ -1862,7 +1862,7 @@ static void tcc_add_support(TCCState *s1, const char *filename)
 
 static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
-    const char *start_symbol;
+    const char *start_symbol = NULL;
     int pe_type = 0;
     int unicode_entry = 0;
 
