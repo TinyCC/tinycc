@@ -1881,8 +1881,14 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         pe_type = PE_EXE;
         if (find_elf_sym(symtab_section, "wmain"))
             unicode_entry = PE_EXE;
+        else 
+            /* use main() directly when TCC1 is "" */
+            if (strlen(TCC_LIBTCC1)==0){
+                start_symbol = "_main";
+            }
     }
 
+    if(!start_symbol)
     start_symbol =
         TCC_OUTPUT_MEMORY == s1->output_type
         ? PE_GUI == pe_type ? (unicode_entry ? "__runwwinmain" : "__runwinmain")
@@ -2047,3 +2053,5 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 }
 
 /* ------------------------------------------------------------- */
+/* vim: set expandtab ts=4 sw=4 sts=4 tw=80 :*/
+
