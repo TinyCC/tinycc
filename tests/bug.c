@@ -1,13 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-void tst3(void)
-{
-  /* Should VT_SYM be checked for TOK_builtin_constant_p */
-  int r = __builtin_constant_p("c");
-  if (r == 0) printf("%d\n",r);
-}
-
 int compile_errors(void)
 {
 #if TEST == 1
@@ -45,5 +38,4 @@ int compile_errors(void)
 int
 main(void)
 {
-  tst3();
 }

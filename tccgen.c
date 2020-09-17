@@ -5701,7 +5701,8 @@ ST_FUNC void unary(void)
         break;
     case TOK_builtin_constant_p:
 	parse_builtin_params(1, "e");
-	n = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+	n = (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+            !((vtop->r & VT_SYM) && vtop->sym->a.addrtaken);
 	vtop--;
 	vpushi(n);
         break;

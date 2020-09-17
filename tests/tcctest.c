@@ -3681,6 +3681,8 @@ void asm_test(void)
 
 int constant_p_var;
 
+int func(void);
+
 void builtin_test(void)
 {
     short s;
@@ -3719,6 +3721,8 @@ void builtin_test(void)
 #else
     printf("res8 = %d\n", __builtin_constant_p(i && 0 ? i : 34));
 #endif
+    printf("res9 = %d\n", __builtin_constant_p("hi"));
+    printf("res10 = %d\n", __builtin_constant_p(func()));
     s = 1;
     ll = 2;
     i = __builtin_choose_expr (1 != 0, ll, s);
