@@ -1457,6 +1457,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
+        if ( strlen ( TCC_LIBTCC1 ) > 0 )
         tcc_add_support(s1, TCC_LIBTCC1);
 #ifndef TCC_TARGET_MACHO
         /* add crt end if not memory output */
