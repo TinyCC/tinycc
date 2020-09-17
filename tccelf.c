@@ -1320,8 +1320,8 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 #ifndef TCC_TARGET_PE
 static int tcc_add_support(TCCState *s1, const char *filename)
 {
-    if (!filename || strlen(filename)==0) return 0;
     char buf[1024];
+    if (!filename || strlen(filename)==0) return 0;
     snprintf(buf, sizeof(buf), "%s/%s", s1->tcc_lib_path, filename);
     return tcc_add_file(s1, buf);
 }
