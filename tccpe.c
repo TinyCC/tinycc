@@ -1855,48 +1855,41 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 
 static void tcc_add_support(TCCState *s1, const char *filename)
 {
-    if (!filename || strlen(filename)==0) return;
     if (tcc_add_dll(s1, filename, 0) < 0)
         tcc_error_noabort("%s not found", filename);
 }
 
 static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 {
-    const char *start_symbol = NULL;
-    int pe_type = 0;
-    int unicode_entry = 0;
+    const char *start_symbol;
+    int pe_type;
 
-    if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16")))
-        pe_type = PE_GUI;
-    else
-    if (find_elf_sym(symtab_section, PE_STDSYM("wWinMain","@16"))) {
-        pe_type = PE_GUI;
-        unicode_entry = PE_GUI;
-    }
-    else
     if (TCC_OUTPUT_DLL == s1->output_type) {
         pe_type = PE_DLL;
-    }
-    else {
-        pe_type = PE_EXE;
-        if (find_elf_sym(symtab_section, "wmain"))
-            unicode_entry = PE_EXE;
-        else 
-            /* use main() directly when TCC1 is "" */
-            if (strlen(TCC_LIBTCC1)==0){
-                start_symbol = "_main";
-            }
-    }
+        start_symbol = PE_STDSYM("__dllstart","@12");
+    } else {
+        const char *run_symbol;
+        if (find_elf_sym(symtab_section, PE_STDSYM("WinMain","@16"))) {
+            start_symbol = "__winstart";
+            run_symbol = "__runwinmain";
+            pe_type = PE_GUI;
+        } else if (find_elf_sym(symtab_section, PE_STDSYM("wWinMain","@16"))) {
+            start_symbol = "__wwinstart";
+            run_symbol = "__runwwinmain";
+            pe_type = PE_GUI;
+        } else if (find_elf_sym(symtab_section, "wmain")) {
+            start_symbol = "__wstart";
+            run_symbol = "__runwmain";
+            pe_type = PE_EXE;
+        } else {
+            start_symbol =  "__start";
+            run_symbol = "__runmain";
+            pe_type = PE_EXE;
 
-    if(!start_symbol)
-    start_symbol =
-        TCC_OUTPUT_MEMORY == s1->output_type
-        ? PE_GUI == pe_type ? (unicode_entry ? "__runwwinmain" : "__runwinmain")
-            : (unicode_entry ? "__runwmain" : "__runmain")
-        : PE_DLL == pe_type ? PE_STDSYM("__dllstart","@12")
-            : PE_GUI == pe_type ? (unicode_entry ? "__wwinstart": "__winstart")
-                : (unicode_entry ? "__wstart" : "__start")
-        ;
+        }
+        if (TCC_OUTPUT_MEMORY == s1->output_type)
+            start_symbol = run_symbol;
+    }
 
     pe->start_symbol = start_symbol + 1;
     if (!s1->leading_underscore || strchr(start_symbol, '@'))
@@ -2053,5 +2046,4 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 }
 
 /* ------------------------------------------------------------- */
-/* vim: set expandtab ts=4 sw=4 sts=4 tw=80 :*/
 
