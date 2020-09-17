@@ -23,6 +23,8 @@ typedef struct {
 } __builtin_va_list[1];
 */
 
+extern void *memcpy(void *dest, const void *src, unsigned long n);
+
 void *__va_arg(__builtin_va_list ap,
                int arg_type,
                int size, int align)
@@ -40,9 +42,15 @@ void *__va_arg(__builtin_va_list ap,
     case __va_float_reg:
         if (ap->fp_offset < 128 + 48) {
             ap->fp_offset += 16;
-            return ap->reg_save_area + ap->fp_offset - 16;
+            if (size == 8)
+                return ap->reg_save_area + ap->fp_offset - 16;
+            if (ap->fp_offset < 128 + 48) {
+                memcpy(ap->reg_save_area + ap->fp_offset - 8,
+                       ap->reg_save_area + ap->fp_offset, 8);
+                ap->fp_offset += 16;
+                return ap->reg_save_area + ap->fp_offset - 32;
+            }
         }
-        size = 8;
         goto use_overflow_area;
 
     case __va_stack:

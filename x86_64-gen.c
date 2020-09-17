@@ -1244,6 +1244,7 @@ void gfunc_call(int nb_args)
     stack_adjust = 0;
     for(i = nb_args - 1; i >= 0; i--) {
         mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
+        if (size == 0) continue;
         if (mode == x86_64_mode_sse && nb_sse_args + reg_count <= 8) {
             nb_sse_args += reg_count;
 	    onstack[i] = 0;
@@ -1278,21 +1279,23 @@ void gfunc_call(int nb_args)
     stack_adjust &= 15;
     for (i = k = 0; i < nb_args;) {
 	mode = classify_x86_64_arg(&vtop[-i].type, NULL, &size, &align, &reg_count);
-	if (!onstack[i + k]) {
-	    ++i;
-	    continue;
-	}
-        /* Possibly adjust stack to align SSE boundary.  We're processing
-	   args from right to left while allocating happens left to right
-	   (stack grows down), so the adjustment needs to happen _after_
-	   an argument that requires it.  */
-        if (stack_adjust) {
-	    o(0x50); /* push %rax; aka sub $8,%rsp */
-            args_size += 8;
-	    stack_adjust = 0;
+	if (size) {
+            if (!onstack[i + k]) {
+	        ++i;
+	        continue;
+	    }
+            /* Possibly adjust stack to align SSE boundary.  We're processing
+	       args from right to left while allocating happens left to right
+	       (stack grows down), so the adjustment needs to happen _after_
+	       an argument that requires it.  */
+            if (stack_adjust) {
+	        o(0x50); /* push %rax; aka sub $8,%rsp */
+                args_size += 8;
+	        stack_adjust = 0;
+            }
+	    if (onstack[i + k] == 2)
+	        stack_adjust = 1;
         }
-	if (onstack[i + k] == 2)
-	  stack_adjust = 1;
 
 	vrotb(i+1);
 
@@ -1357,6 +1360,7 @@ void gfunc_call(int nb_args)
     assert(sse_reg <= 8);
     for(i = 0; i < nb_args; i++) {
         mode = classify_x86_64_arg(&vtop->type, &type, &size, &align, &reg_count);
+        if (size == 0) continue;
         /* Alter stack entry type so that gv() knows how to treat it */
         vtop->type = type;
         if (mode == x86_64_mode_sse) {

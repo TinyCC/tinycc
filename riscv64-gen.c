@@ -552,7 +552,9 @@ ST_FUNC void gfunc_call(int nb_args)
         if (!sa && align == 2*XLEN && size <= 2*XLEN)
           areg[0] = (areg[0] + 1) & ~1;
         nregs = prc[0];
-        if ((prc[1] == RC_INT && areg[0] >= 8)
+        if (size == 0)
+            info[i] = 0;
+        else if ((prc[1] == RC_INT && areg[0] >= 8)
             || (prc[1] == RC_FLOAT && areg[1] >= 16)
             || (nregs == 2 && prc[1] == RC_FLOAT && prc[2] == RC_FLOAT
                 && areg[1] >= 15)
@@ -651,6 +653,8 @@ ST_FUNC void gfunc_call(int nb_args)
             vrotb(i+1);
             origtype = vtop->type;
             size = type_size(&vtop->type, &align);
+            if (size == 0)
+                goto done;
             loadt = vtop->type.t & VT_BTYPE;
             if (loadt == VT_STRUCT) {
                 loadt = (ii >> 12) & VT_BTYPE;
@@ -701,6 +705,7 @@ ST_FUNC void gfunc_call(int nb_args)
                 EI(0x13, 0, ireg(r2), ireg(vtop->r2), 0); // mv Ra+1, RR2
                 vtop->r2 = r2;
             }
+done:
             vrott(i+1);
         }
     }

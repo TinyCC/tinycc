@@ -1050,10 +1050,12 @@ ST_FUNC void gfunc_call(int nb_args)
             // value in general-purpose registers
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
                 int align, size = type_size(&vtop->type, &align);
-                vtop->type.t = VT_PTR;
-                gaddrof();
-                gv(RC_R(a[i] / 2));
-                arm64_ldrs(a[i] / 2, size);
+                if (size) {
+                    vtop->type.t = VT_PTR;
+                    gaddrof();
+                    gv(RC_R(a[i] / 2));
+                    arm64_ldrs(a[i] / 2, size);
+                }
             }
             else
                 gv(RC_R(a[i] / 2));
