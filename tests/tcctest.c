@@ -1737,6 +1737,16 @@ int sinit23[2] = { "astring" ? sizeof("astring") : -1,
 
 int sinit24 = 2 || 1 / 0; /* exception in constant but unevaluated context */
 
+/* bitfield init */
+struct bf_SS {unsigned int bit:1,bits31:31; };
+struct bf_SS bf_init = { .bit = 1 };
+struct bfn_SS {int a,b; struct bf_SS c; int d,e; };
+struct bfn_SS bfn_init = { .c.bit = 1 };
+struct bfa_SS {int a,b; struct bf_SS c[3]; int d,e; };
+struct bfa_SS bfa_init = { .c[1].bit = 1 };
+struct bf_SS bfaa_init[3] = { [1].bit = 1 };
+struct bf_SS bfaa_vinit[] = { [2].bit = 1 };
+
 extern int external_inited = 42;
 
 void init_test(void)
@@ -1756,6 +1766,11 @@ void init_test(void)
     int zero = 0;
     /* Addresses on non-weak symbols are non-zero, but not the access itself */
     int linit18[2] = {&zero ? 1 : -1, zero ? -1 : 1 };
+    struct bf_SS bf_finit = { .bit = 1 };
+    struct bfn_SS bfn_finit = { .c.bit = 1 };
+    struct bfa_SS bfa_finit = { .c[1].bit = 1 };
+    struct bf_SS bfaa_finit[3] = { [1].bit = 1 };
+    struct bf_SS bfaa_fvinit[] = { [2].bit = 1 };
     
     printf("sinit1=%d\n", sinit1);
     printf("sinit2=%d\n", sinit2);
@@ -1851,6 +1866,22 @@ void init_test(void)
     printf("sinit23= %d %d\n", sinit23[0], sinit23[1]);
     printf("sinit24=%d\n", sinit24);
     printf("linit18= %d %d\n", linit18[0], linit18[1]);
+    printf ("bf1: %u %u\n", bf_init.bit, bf_init.bits31);
+    printf ("bf2: %u %u\n", bf_finit.bit, bf_finit.bits31);
+    printf ("bf3: %u %u\n", bfn_init.c.bit, bfn_init.c.bits31);
+    printf ("bf4: %u %u\n", bfn_finit.c.bit, bfn_finit.c.bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf5[%d]: %u %u\n", i, bfa_init.c[i].bit, bfa_init.c[i].bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf6[%d]: %u %u\n", i, bfa_finit.c[i].bit, bfa_finit.c[i].bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf7[%d]: %u %u\n", i, bfaa_init[i].bit, bfaa_init[i].bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf8[%d]: %u %u\n", i, bfaa_finit[i].bit, bfaa_finit[i].bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf9[%d]: %u %u\n", i, bfaa_vinit[i].bit, bfaa_vinit[i].bits31);
+    for (i = 0; i < 3; i++)
+        printf ("bf10[%d]: %u %u\n", i, bfaa_fvinit[i].bit, bfaa_fvinit[i].bits31);
 }
 
 void switch_uc(unsigned char uc)

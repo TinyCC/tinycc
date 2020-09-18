@@ -7651,6 +7651,23 @@ static void init_putv(CType *type, Section *sec, unsigned long c)
     }
 }
 
+/* Check for bitfield in struct/union recursive */
+static int check_bf(Sym *f)
+{
+   while (f->next) {
+       f = f->next;
+       if ((f->type.t & VT_BITFIELD) ||
+           ((f->type.t & VT_BTYPE) == VT_STRUCT && check_bf(f->type.ref)))
+           return 1;
+       if (f->type.t & VT_ARRAY) {
+           Sym *r = f->type.ref;
+           if (((r->type.t & VT_BTYPE) == VT_STRUCT && check_bf(r->type.ref)))
+               return 1;
+       }
+    }
+    return 0;
+}
+
 /* 't' contains the type and storage info. 'c' is the offset of the
    object in section 'sec'. If 'sec' is NULL, it means stack based
    allocation. 'flags & DIF_FIRST' is true if array '{' must be read (multi
@@ -7687,6 +7704,11 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         n = s->c;
         t1 = pointed_type(type);
         size1 = type_size(t1, &align1);
+
+        if (!(flags & DIF_SIZE_ONLY) &&
+            (s->type.t & VT_BTYPE) == VT_STRUCT && check_bf (s->type.ref))
+            /* If there is a bitfield in array clear it */
+            init_putz(sec, c, size1 * n);
 
         no_oblock = 1;
         if (((flags & DIF_FIRST) && tok != TOK_LSTR && tok != TOK_STR) ||
@@ -7817,6 +7839,9 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
         s = type->ref;
         f = s->next;
         n = s->c;
+        if (!(flags & DIF_SIZE_ONLY) && check_bf (s))
+            /* If there is a bitfield in struct/union clear it */
+            init_putz(sec, c, n);
 	goto do_init_list;
     } else if (tok == '{') {
         if (flags & DIF_HAVE_ELEM)
