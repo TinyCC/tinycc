@@ -1923,8 +1923,8 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
         const char **pp, *p;
-        if ( strlen ( TCC_LIBTCC1 ) > 0 )
-        tcc_add_support(s1, TCC_LIBTCC1);
+        if (strlen(TCC_LIBTCC1) > 0)
+            tcc_add_support(s1, TCC_LIBTCC1);
         for (pp = libs; 0 != (p = *pp); ++pp) {
             if (*p)
                 tcc_add_library_err(s1, p);
