@@ -3225,8 +3225,16 @@ static __inline__ void sigdelset1(unsigned int *set, int _sig)
 	asm("btrl %1,%0" : "=m"(*set) : "Ir"(_sig - 1) : "cc", "flags");
 }
 
-#ifndef __APPLE__
+#ifdef __clang__
 /* clang's inline asm is uncapable of 'xchgb %b0,%h0' */
+static __inline__ __const__ unsigned int swab32(unsigned int x)
+{
+        return ((x >> 24) & 0xff) |
+               ((x >> 8) & 0xff00) |
+               ((x << 8) & 0xff0000) |
+               ((x << 24) & 0xff000000);
+}
+#else
 static __inline__ __const__ unsigned int swab32(unsigned int x)
 {
 	__asm__("xchgb %b0,%h0\n\t"	/* swap lower bytes	*/
@@ -3647,9 +3655,7 @@ void asm_test(void)
     __asm__("btsl %1,%0" : "=m"(set) : "Ir"(20) : "cc");
     printf("set=0x%x\n", set);
     val = 0x01020304;
-#ifndef __APPLE__
     printf("swab32(0x%08x) = 0x%0x\n", val, swab32(val));
-#endif
 #ifndef _WIN32
 #ifndef __APPLE__
     override_func1();
