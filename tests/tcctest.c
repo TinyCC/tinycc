@@ -2659,7 +2659,11 @@ struct myspace {
     short int profile;
 };
 struct myspace2 {
+#if CC_NAME == CC_clang /* clang7 doesn't support zero sized structs */
+    char a[1];
+#else
     char a[0];
+#endif
 };
 struct myspace3 {
     char a[1];
