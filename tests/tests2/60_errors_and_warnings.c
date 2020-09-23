@@ -346,4 +346,13 @@ static struct var_len { int i; const char str[]; } var_array[] =
   { 2, "longlonglonglonglong" },
   { 3, "tst3" } };
 
+#elif defined test_var_array2
+
+struct c1 { int a; int b[]; };
+struct c1 c1 = { 1, { 2, 3, 4 } };
+
+struct c2 { int c; struct c1 c1; };
+struct c2 c2 = { 1, { 2, { 3, 4, 5 }}};
+
+/******************************************************************/
 #endif

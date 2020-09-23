@@ -221,19 +221,66 @@ void sys_ni(void) { printf("ni\n"); }
 void sys_one(void) { printf("one\n"); }
 void sys_two(void) { printf("two\n"); }
 void sys_three(void) { printf("three\n"); }
+void sys_four(void) { printf("four\n"); }
 typedef void (*fptr)(void);
-const fptr table[3] = {
-    [0 ... 2] = &sys_ni,
-    [0] = sys_one,
-    [1] = sys_two,
-    [2] = sys_three,
-};
+
+#define array_size(a) (sizeof a / sizeof a[0])
 
 void test_multi_relocs(void)
 {
   int i;
-  for (i = 0; i < sizeof(table)/sizeof(table[0]); i++)
-    table[i]();
+
+  static const fptr tabl1[4] = {
+      [0 ... 3] = &sys_ni,
+      [0] = sys_one,
+      [1] = sys_two,
+      [2] = sys_three,
+      sys_four,
+      [1 ... 2] = &sys_ni,
+      [1] = 0,
+  };
+  for (i = 0; i < array_size(tabl1); i++)
+    if (tabl1[i])
+      tabl1[i]();
+    else
+      printf("(0)\n");
+
+  const fptr tabl2[4] = {
+      [0 ... 3] = &sys_ni,
+      [0] = sys_one,
+      [1] = sys_two,
+      [2] = sys_three,
+      sys_four,
+      [1 ... 2] = &sys_ni,
+      [1] = 0,
+  };
+  for (i = 0; i < array_size(tabl2); i++)
+    if (tabl2[i])
+      tabl2[i]();
+    else
+      printf("(0)\n");
+
+  int c = 0;
+  int dd[] = {
+    [0 ... 1] = ++c,
+    [2 ... 3] = ++c
+  };
+  for (i = 0; i < array_size(dd); i++)
+    printf(" %d", dd[i]);
+  printf("\n");
+
+  /* multi-dimensional flex array with range initializers */
+  static char m1[][2][3] = {[0 ... 2]={{3,4,5},{6,7,8}},{{9},10},"abc"};
+  char        m2[][2][3] = {[0 ... 2]={{3,4,5},{6,7,8}},{{9},10},"abc"};
+  int g, j, k;
+  for (g = 2; g-- > 0;) {
+    printf("mdfa %s: %d -", "locl\0glob" + g * 5, sizeof m1);
+    for (i = 0; i < array_size(m1); i++)
+    for (j = 0; j < array_size(m1[0]); j++)
+    for (k = 0; k < array_size(m1[0][0]); k++)
+      printf(" %d", (g ? m1:m2)[i][j][k]);
+    printf("\n");
+  }
 }
 
 void test_init_ranges(void) {

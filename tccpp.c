@@ -2586,7 +2586,7 @@ static void parse_number(const char *p)
         tokc.i = n;
     }
     if (ch)
-        tcc_error("invalid number\n");
+        tcc_error("invalid number");
 }
 
 
@@ -3674,20 +3674,20 @@ static void tcc_predefs(CString *cstr)
     "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
     "#endif\n"
     "#ifdef __leading_underscore\n"
-    "#define RENAME(X) __asm__(\"_\"X)\n"
+    "#define __RENAME(X) __asm__(\"_\"X)\n"
     "#else\n"
-    "#define RENAME(X) __asm__(X)\n"
+    "#define __RENAME(X) __asm__(X)\n"
     "#endif\n"
     /* TCC BBUILTIN AND BOUNDS ALIASES */
     "#ifdef __BOUNDS_CHECKING_ON\n"
-    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params RENAME(\"__bound_\"#name);\n"
-    "#define __BOUND(ret,name,params) ret name params RENAME(\"__bound_\"#name);\n"
+    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params __RENAME(\"__bound_\"#name);\n"
+    "#define __BOUND(ret,name,params) ret name params __RENAME(\"__bound_\"#name);\n"
     "#else\n"
-    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params RENAME(#name);\n"
+    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params __RENAME(#name);\n"
     "#define __BOUND(ret,name,params)\n"
     "#endif\n"
     "#define __BOTH(ret,name,params) __BUILTINBC(ret,name,params)__BOUND(ret,name,params)\n"
-    "#define __BUILTIN(ret,name,params) ret __builtin_##name params RENAME(#name);\n"
+    "#define __BUILTIN(ret,name,params) ret __builtin_##name params __RENAME(#name);\n"
     "__BOTH(void*,memcpy,(void*,const void*,__SIZE_TYPE__))\n"
     "__BOTH(void*,memmove,(void*,const void*,__SIZE_TYPE__))\n"
     "__BOTH(void*,memset,(void*,int,__SIZE_TYPE__))\n"
@@ -3731,6 +3731,7 @@ static void tcc_predefs(CString *cstr)
     "#undef __BOUND\n"
     "#undef __BOTH\n"
     "#undef __MAYBE_REDIR\n"
+    "#undef __RENAME\n"
     , -1);
 }
 

@@ -41,8 +41,16 @@ lssu2: 5 0 0 0 3 0 0 0
 flow: 9 8 7 6 0 0 0 0 0 0 0 0 0 0 0 0 6 5 4 3 0 0 0 0 0 0 0 0 0 0 0 0
 ls4: 1 2 3 4
 one
-two
-three
+(0)
+ni
+four
+one
+(0)
+ni
+four
+ 1 1 2 2
+mdfa glob: 30 - 3 4 5 6 7 8 3 4 5 6 7 8 3 4 5 6 7 8 9 0 0 10 0 0 97 98 99 0 0 0
+mdfa locl: 30 - 3 4 5 6 7 8 3 4 5 6 7 8 3 4 5 6 7 8 9 0 0 10 0 0 97 98 99 0 0 0
 sea_fill0: okay
 sea_fill1: okay
 sea_fill2: okay

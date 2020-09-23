@@ -161,4 +161,7 @@ bar  : 3 ; 3
 \n
 
 [test_var_array]
-60_errors_and_warnings.c:345: warning: initializer-string for array is too long
+60_errors_and_warnings.c:345: error: flexible array has zero size in this context
+
+[test_var_array2]
+60_errors_and_warnings.c:355: error: flexible array has zero size in this context
