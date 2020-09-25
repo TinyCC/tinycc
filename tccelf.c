@@ -202,6 +202,12 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
         }
     }
     tcc_free(tr);
+
+    /* record text/data/bss output for -bench info */
+    for (i = 0; i < 3; ++i) {
+        s = s1->sections[i + 1];
+        s1->total_output[i] += s->data_offset - s->sh_offset;
+    }
 }
 
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags)

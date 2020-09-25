@@ -918,6 +918,7 @@ struct TCCState {
     int total_idents;
     int total_lines;
     int total_bytes;
+    int total_output[3];
 
     /* option -dnum (for general development purposes) */
     int g_debug;
