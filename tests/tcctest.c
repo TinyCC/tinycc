@@ -1746,6 +1746,8 @@ struct bfa_SS {int a,b; struct bf_SS c[3]; int d,e; };
 struct bfa_SS bfa_init = { .c[1].bit = 1 };
 struct bf_SS bfaa_init[3] = { [1].bit = 1 };
 struct bf_SS bfaa_vinit[] = { [2].bit = 1 };
+struct b2_SS {long long int field : 52; long long int pad : 12; };
+struct b2_SS bf_init2 = {0xFFF000FFF000FLL, 0x123};
 
 extern int external_inited = 42;
 
@@ -1771,6 +1773,7 @@ void init_test(void)
     struct bfa_SS bfa_finit = { .c[1].bit = 1 };
     struct bf_SS bfaa_finit[3] = { [1].bit = 1 };
     struct bf_SS bfaa_fvinit[] = { [2].bit = 1 };
+    struct b2_SS bf_finit2 = {0xFFF000FFF000FLL, 0x123};
     
     printf("sinit1=%d\n", sinit1);
     printf("sinit2=%d\n", sinit2);

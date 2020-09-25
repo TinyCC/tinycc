@@ -7339,7 +7339,7 @@ static void init_putz(Section *sec, unsigned long c, int size)
    'al' contains the already initialized length of the
    current container (starting at c).  This returns the new length of that.  */
 static int decl_designator(CType *type, Section *sec, unsigned long c,
-                           Sym **cur_field, int flags, int al)
+                           Sym **cur_field, int flags, int al, int size)
 {
     Sym *s, *f;
     int index, index_last, align, l, nb_elems, elem_size;
@@ -7428,8 +7428,11 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
        ensures that it even works with designators) */
     if (!(flags & DIF_SIZE_ONLY)) {
         int zlen = c - (corig + al);
-        if (type->t & VT_BITFIELD) /* must include current field too */
+        if (type->t & VT_BITFIELD) { /* must include current field too */
             zlen += type_size(type, &align);
+            if (al + zlen > size)
+                zlen = size - al;
+        }
         if (zlen > 0)
 	    init_putz(sec, corig + al, zlen);
     }
@@ -7783,7 +7786,7 @@ static void decl_initializer(CType *type, Section *sec, unsigned long c,
           do_init_list:
 	    len = 0;
 	    while (tok != '}' || (flags & DIF_HAVE_ELEM)) {
-		len = decl_designator(type, sec, c, &f, flags, len);
+		len = decl_designator(type, sec, c, &f, flags, len, n*size1);
 		flags &= ~DIF_HAVE_ELEM;
 		if (type->t & VT_ARRAY) {
 		    ++indexsym.c;
