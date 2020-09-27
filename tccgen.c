@@ -496,7 +496,7 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
     CString str;
 
     for (;;) {
-        type = t->type.t & ~(VT_EXTERN | VT_STATIC | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR || type == (VT_PTR | VT_ARRAY))
@@ -586,7 +586,7 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
         cstr_printf (result, "%d=", ++debug_next_type);
     t = s;
     for (;;) {
-        type = t->type.t & ~(VT_EXTERN | VT_STATIC | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR)
@@ -663,6 +663,19 @@ static void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bin
         tcc_debug_stabs(s1, str.data,
             (sym->type.t & VT_STATIC) && data_section == s
             ? N_STSYM : N_LCSYM, 0, s, sym->c);
+    cstr_free (&str);
+}
+
+static void tcc_debug_typedef(TCCState *s1, Sym *sym)
+{
+    CString str;
+
+    cstr_new (&str);
+    cstr_printf (&str, "%s:t",
+                 (sym->v & ~SYM_FIELD) >= SYM_FIRST_ANOM
+                 ? "" : get_tok_str(sym->v & ~SYM_FIELD, NULL));
+    tcc_get_debug_info(s1, sym, &str);
+    tcc_debug_stabs(s1, str.data, N_LSYM, 0, NULL, 0);
     cstr_free (&str);
 }
 
@@ -8418,6 +8431,8 @@ found:
                     }
                     sym->a = ad.a;
                     sym->f = ad.f;
+                    if (tcc_state->do_debug)
+                        tcc_debug_typedef (tcc_state, sym);
 		} else if ((type.t & VT_BTYPE) == VT_VOID
 			   && !(type.t & VT_EXTERN)) {
 		    tcc_error("declaration of void object");
