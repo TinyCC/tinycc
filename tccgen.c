@@ -939,10 +939,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
 #endif
 
         if (sym->asm_label) {
-            name = get_tok_str(sym->asm_label & ~SYM_FIELD, NULL);
-            /* with SYM_FIELD it was __attribute__((alias("..."))) actually */
-            if (!(sym->asm_label & SYM_FIELD))
-                can_add_underscore = 0;
+            name = get_tok_str(sym->asm_label, NULL);
+            can_add_underscore = 0;
         }
 
         if (tcc_state->leading_underscore && can_add_underscore) {
@@ -1524,6 +1522,8 @@ static void merge_attr(AttributeDef *ad, AttributeDef *ad1)
 
     if (ad1->section)
       ad->section = ad1->section;
+    if (ad1->alias_target)
+      ad->alias_target = ad1->alias_target;
     if (ad1->asm_label)
       ad->asm_label = ad1->asm_label;
     if (ad1->attr_mode)
@@ -4147,8 +4147,8 @@ redo:
         case TOK_ALIAS2:
             skip('(');
 	    parse_mult_str(&astr, "alias(\"target\")");
-            ad->asm_label = /* save string as token, for later */
-                tok_alloc((char*)astr.data, astr.size-1)->tok | SYM_FIELD;
+            ad->alias_target = /* save string as token, for later */
+                tok_alloc((char*)astr.data, astr.size-1)->tok;
             skip(')');
 	    cstr_free(&astr);
             break;
@@ -8459,6 +8459,20 @@ found:
                         /* external variable or function */
                         type.t |= VT_EXTERN;
                         sym = external_sym(v, &type, r, &ad);
+                        if (ad.alias_target) {
+                            /* Aliases need to be emitted when their target
+                               symbol is emitted, even if perhaps unreferenced.
+                               We only support the case where the base is
+                               already defined, otherwise we would need
+                               deferring to emit the aliases until the end of
+                               the compile unit.  */
+                            Sym *alias_target = sym_find(ad.alias_target);
+                            ElfSym *esym = elfsym(alias_target);
+                            if (!esym)
+                                tcc_error("unsupported forward __alias__ attribute");
+                            put_extern_sym2(sym, esym->st_shndx,
+                                            esym->st_value, esym->st_size, 0);
+                        }
                     } else {
                         if (type.t & VT_STATIC)
                             r |= VT_CONST;

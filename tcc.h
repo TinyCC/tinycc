@@ -643,6 +643,7 @@ typedef struct AttributeDef {
     struct FuncAttr f;
     struct Section *section;
     Sym *cleanup_func;
+    int alias_target; /* token */
     int asm_label; /* associated asm label */
     char attr_mode; /* __attribute__((__mode__(...))) */
 } AttributeDef;
