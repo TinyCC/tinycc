@@ -235,6 +235,33 @@ void test_multi_relocs(void)
   for (i = 0; i < sizeof(table)/sizeof(table[0]); i++)
     table[i]();
 }
+
+void test_init_ranges(void) {
+    int i,c=0;
+    static void *gostring[] = {
+        [0 ... 31] = &&l_bad, [127] = &&l_bad,
+        [32 ... 126] = &&l_loop,
+        ['\\'] = &&l_esc, ['"'] = &&l_qdown,
+        [128 ... 191] = &&l_bad,
+        [192 ... 223] = &&l_utf8_2,
+        [224 ... 239] = &&l_utf8_3,
+        [240 ... 247] = &&l_utf8_4,
+        [248 ... 255] = &&l_bad
+    };
+
+    for (i = 0; i < 256; i++) {
+        goto *gostring[i];
+        l_bad: c++;
+        l_loop: c++;
+        l_esc: c++;
+        l_qdown: c++;
+        l_utf8_2: c++;
+        l_utf8_3: c++;
+        l_utf8_4: c++;
+    }
+    printf ("%d\n", c);
+}
+
 
 /* Following is from GCC gcc.c-torture/execute/20050613-1.c.  */
 
@@ -298,5 +325,6 @@ int main()
   test_compound_with_relocs();
   test_multi_relocs();
   test_zero_init();
+  test_init_ranges();
   return 0;
 }

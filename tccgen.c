@@ -7296,6 +7296,23 @@ static void skip_or_save_block(TokenString **str)
     }
 }
 
+static void get_init_string(TokenString **str, int has_init)
+{
+    if (has_init == 2) {
+        *str = tok_str_alloc();
+        /* only get strings */
+        while (tok == TOK_STR || tok == TOK_LSTR) {
+            tok_str_add_tok(*str);
+            next();
+        }
+        tok_str_add(*str, -1);
+        tok_str_add(*str, 0);
+    }
+    else
+        skip_or_save_block(str);
+    unget_tok(0);
+}
+
 #define EXPR_CONST 1
 #define EXPR_ANY   2
 
@@ -7361,6 +7378,7 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
     Sym *s, *f;
     int index, index_last, align, l, nb_elems, elem_size;
     unsigned long corig = c;
+    TokenString *init_str = NULL;
 
     elem_size = 0;
     nb_elems = 1;
@@ -7454,34 +7472,26 @@ static int decl_designator(CType *type, Section *sec, unsigned long c,
 	    init_putz(sec, corig + al, zlen);
     }
 
+    if (!(flags & DIF_SIZE_ONLY) && nb_elems > 1) {
+        get_init_string(&init_str, tok == TOK_STR || tok == TOK_LSTR ? 2 : 0);
+        begin_macro(init_str, 1);
+        next();
+    }
+
     decl_initializer(type, sec, c, flags & ~DIF_FIRST);
 
-    /* XXX: make it more general */
     if (!(flags & DIF_SIZE_ONLY) && nb_elems > 1) {
-        unsigned long c_end;
-        uint8_t *src, *dst;
         int i;
 
-        if (!sec) {
-	    vset(type, VT_LOCAL|VT_LVAL, c);
-	    for (i = 1; i < nb_elems; i++) {
-		vset(type, VT_LOCAL|VT_LVAL, c + elem_size * i);
-		vswap();
-		vstore();
-	    }
-	    vpop();
-        } else if (!NODATA_WANTED) {
-	    c_end = c + nb_elems * elem_size;
-	    if (c_end > sec->data_allocated)
-	        section_realloc(sec, c_end);
-	    src = sec->data + c;
-	    dst = src;
-	    for(i = 1; i < nb_elems; i++) {
-		dst += elem_size;
-		memcpy(dst, src, elem_size);
-	    }
-	}
+        for(i = 1; i < nb_elems; i++) {
+            macro_ptr = init_str->str;
+            next();
+            decl_initializer(type, sec, c + i * elem_size, flags & ~DIF_FIRST);
+        }
+        end_macro();
+        next();
     }
+
     c += nb_elems * type_size(type, &align);
     if (c - corig > al)
       al = c - corig;
@@ -7919,20 +7929,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
     if (size < 0 || (flexible_array && has_init)) {
         if (!has_init) 
             tcc_error("unknown type size");
-        /* get all init string */
-        if (has_init == 2) {
-	    init_str = tok_str_alloc();
-            /* only get strings */
-            while (tok == TOK_STR || tok == TOK_LSTR) {
-                tok_str_add_tok(init_str);
-                next();
-            }
-	    tok_str_add(init_str, -1);
-	    tok_str_add(init_str, 0);
-        } else {
-	    skip_or_save_block(&init_str);
-        }
-        unget_tok(0);
+        get_init_string(&init_str, has_init);
 
         /* compute size */
         begin_macro(init_str, 1);

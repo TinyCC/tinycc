@@ -774,13 +774,13 @@ ST_FUNC void squeeze_multi_relocs(Section *s, size_t oldrelocoffset)
        a simple insertion sort.  */
     for (a = oldrelocoffset + sizeof(*r); a < sr->data_offset; a += sizeof(*r)) {
 	ssize_t i = a - sizeof(*r);
-	addr = ((ElfW_Rel*)(sr->data + a))->r_offset;
+        ElfW_Rel tmp = *(ElfW_Rel*)(sr->data + a);
+	addr = tmp.r_offset;
 	for (; i >= (ssize_t)oldrelocoffset &&
 	       ((ElfW_Rel*)(sr->data + i))->r_offset > addr; i -= sizeof(*r)) {
-	    ElfW_Rel tmp = *(ElfW_Rel*)(sr->data + a);
-	    *(ElfW_Rel*)(sr->data + a) = *(ElfW_Rel*)(sr->data + i);
-	    *(ElfW_Rel*)(sr->data + i) = tmp;
+	    *(ElfW_Rel*)(sr->data + i + sizeof(*r)) = *(ElfW_Rel*)(sr->data + i);
 	}
+        *(ElfW_Rel*)(sr->data + i + sizeof(*r)) = tmp;
     }
 
     r = (ElfW_Rel*)(sr->data + oldrelocoffset);
