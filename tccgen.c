@@ -8472,7 +8472,7 @@ found:
                             if (!esym)
                                 tcc_error("unsupported forward __alias__ attribute");
                             put_extern_sym2(sym, esym->st_shndx,
-                                            esym->st_value, esym->st_size, 0);
+                                            esym->st_value, esym->st_size, 1);
                         }
                     } else {
                         if (type.t & VT_STATIC)

@@ -6,7 +6,11 @@ void target(void) {
 }
 
 void alias_for_target(void) __attribute__((alias("target")));
+#ifdef __leading_underscore
+void asm_for_target(void) __asm__("_target");
+#else
 void asm_for_target(void) __asm__("target");
+#endif
 
 /* This is not supposed to compile, alias targets must be defined in the
    same unit.  In TCC they even must be defined before the reference
