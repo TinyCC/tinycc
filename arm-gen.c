@@ -2255,6 +2255,10 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
         vpushv(vtop);
 #endif
     r = intr(gv(RC_INT));
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        o(0xe2800001 | (r<<16)|(r<<12)); /* add r,r,#1 */
+#endif
     o(0xE04D0000|(r<<12)|r); /* sub r, sp, r */
 #ifdef TCC_ARM_EABI
     if (align < 8)

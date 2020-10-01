@@ -2046,6 +2046,11 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
         vpushv(vtop);
 #endif
     r = intr(gv(RC_INT));
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        o(0x91004000 | r | r << 5); // add x(r),x(r),#15+1
+    else
+#endif
     o(0x91003c00 | r | r << 5); // add x(r),x(r),#15
     o(0x927cec00 | r | r << 5); // bic x(r),x(r),#15
     o(0xcb2063ff | r << 16); // sub sp,sp,x(r)

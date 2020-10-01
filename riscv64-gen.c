@@ -1327,6 +1327,11 @@ ST_FUNC void gen_vla_alloc(CType *type, int align)
         vpushv(vtop);
 #endif
     rr = ireg(gv(RC_INT));
+#if defined(CONFIG_TCC_BCHECK)
+    if (tcc_state->do_bounds_check)
+        EI(0x13, 0, rr, rr, 15+1);   // addi RR, RR, 15+1
+    else
+#endif
     EI(0x13, 0, rr, rr, 15);   // addi RR, RR, 15
     EI(0x13, 7, rr, rr, -16);  // andi, RR, RR, -16
     ER(0x33, 0, 2, 2, rr, 0x20); // sub sp, sp, rr

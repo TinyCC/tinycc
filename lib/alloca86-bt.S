@@ -12,7 +12,7 @@ _(__bound_alloca):
     pop     %edx
     pop     %eax
     mov     %eax, %ecx
-    add     $3,%eax
+    add     $3+1,%eax
     and     $-4,%eax
     jz      p6
 

@@ -413,7 +413,8 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
         pstrcat(buf, sizeof(buf), "/");
         put_stabs_r(s1, buf, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
-        put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
+        put_stabs_r(s1, file->prev ? file->prev->filename : file->filename,
+                    N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         for (i = 0; i < sizeof (default_debug) / sizeof (default_debug[0]); i++)
             put_stabs(s1, default_debug[i].name, N_LSYM, 0, 0, 0);
@@ -6100,6 +6101,9 @@ special_math_val:
                     /* pass it as 'int' to avoid structure arg passing
                        problems */
                     vseti(VT_LOCAL, loc);
+#ifdef CONFIG_TCC_BCHECK
+                    loc -= tcc_state->do_bounds_check != 0;
+#endif
                     ret.c = vtop->c;
                     if (ret_nregs < 0)
                       vtop--;

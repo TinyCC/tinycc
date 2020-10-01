@@ -212,6 +212,7 @@ struct tree_node {
 typedef struct alloca_list_struct {
     size_t fp;
     void *p;
+    size_t size;
     struct alloca_list_struct *next;
 } alloca_list_type;
 
@@ -728,12 +729,22 @@ void __bound_new_region(void *p, size_t size)
     last = NULL;
     cur = alloca_list;
     while (cur) {
-        if (cur->fp == fp && cur->p == p) {
+#if defined(__i386__) || (defined(__arm__) && !defined(TCC_ARM_EABI))
+        int align = 4;
+#elif defined(__arm__)
+        int align = 8;
+#else
+        int align = 16;
+#endif
+        void *cure = (void *)((char *)cur->p + ((cur->size + align) & -align));
+        void *pe = (void *)((char *)p + ((size + align) & -align));
+        if (cur->fp == fp && ((cur->p <= p && cure > p) ||
+                              (p <= cur->p && pe > cur->p))) {
             if (last)
                 last->next = cur->next;
             else
                 alloca_list = cur->next;
-            tree = splay_delete((size_t)p, tree);
+            tree = splay_delete((size_t)cur->p, tree);
             break;
         }
         last = cur;
@@ -743,6 +754,7 @@ void __bound_new_region(void *p, size_t size)
     if (new) {
         new->fp = fp;
         new->p = p;
+        new->size = size;
         new->next = alloca_list;
         alloca_list = new;
     }
