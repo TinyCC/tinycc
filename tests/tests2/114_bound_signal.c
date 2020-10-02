@@ -107,7 +107,9 @@ main (void)
     sem_init (&sem_child, 0, 0);
     pthread_create(&id1, NULL, high_load, NULL);
     pthread_create(&id2, NULL, do_signal, NULL);
+#if !defined(__arm__) && !defined(__APPLE__)
     pthread_create(&id3, NULL, do_fork, NULL);
+#endif
 
     /* sleep does not work !!! */
     end = time(NULL) + 2;
@@ -118,7 +120,9 @@ main (void)
 
     pthread_join(id1, NULL);
     pthread_join(id2, NULL);
+#if !defined(__arm__) && !defined(__APPLE__)
     pthread_join(id3, NULL);
+#endif
     sem_destroy (&sem);
     sem_destroy (&sem_child);
 
