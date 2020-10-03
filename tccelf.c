@@ -1002,25 +1002,12 @@ ST_FUNC void relocate_section(TCCState *s1, Section *s)
         tgt += rel->r_addend;
 #endif
         addr = s->sh_addr + rel->r_offset;
-        {
-#if !(defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM) || \
-      defined(TCC_TARGET_MACHO))
-            int dynindex;
-            if (s == data_section && sym->st_shndx == SHN_UNDEF &&
-                s1->dynsym &&
-                (dynindex = get_sym_attr(s1, sym_index, 0)->dyn_index)) {
-                rel->r_info = ELFW(R_INFO)(dynindex, type);
-	        *qrel++ = *rel;
-	    }
-            else
-#endif
-                relocate(s1, rel, type, ptr, addr, tgt);
-        }
+        relocate(s1, rel, type, ptr, addr, tgt);
     }
     /* if the relocation is allocated, we change its symbol table */
     if (sr->sh_flags & SHF_ALLOC) {
         sr->link = s1->dynsym;
-        if (qrel != (ElfW_Rel *)sr->data) {
+        if (s1->output_type == TCC_OUTPUT_DLL) {
             size_t r = (uint8_t*)qrel - sr->data;
             if (sizeof ((Stab_Sym*)0)->n_value < PTR_SIZE
                 && 0 == strcmp(s->name, ".stab"))
@@ -1261,12 +1248,6 @@ ST_FUNC void build_got_entries(TCCState *s1)
 			/* dynsym isn't set for -run :-/  */
 			dynindex = get_sym_attr(s1, sym_index, 0)->dyn_index;
 			esym = (ElfW(Sym) *)s1->dynsym->data + dynindex;
-#if !(defined(TCC_TARGET_I386) || defined(TCC_TARGET_ARM) || \
-      defined(TCC_TARGET_MACHO))
-			if (dynindex && s == data_section->reloc)
-			    s->sh_flags |= SHF_ALLOC;
-			else
-#endif
 			if (dynindex
 			    && (ELFW(ST_TYPE)(esym->st_info) == STT_FUNC
 				|| (ELFW(ST_TYPE)(esym->st_info) == STT_NOTYPE
