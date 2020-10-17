@@ -245,7 +245,8 @@ PUB_FUNC void *tcc_mallocz(unsigned long size)
 {
     void *ptr;
     ptr = tcc_malloc(size);
-    memset(ptr, 0, size);
+    if (size)
+        memset(ptr, 0, size);
     return ptr;
 }
 
