@@ -1061,7 +1061,7 @@ struct filespec {
 #define TOK_TWOSHARPS 0xa3 /* ## preprocessing token */
 #define TOK_PLCHLDR 0xa4 /* placeholder token as defined in C99 */
 #define TOK_NOSUBST 0xa5 /* means following token has already been pp'd */
-#define TOK_PPJOIN  0xa6 /* A '##' in the right position to mean pasting */ 
+#define TOK_PPJOIN  0xa6 /* A '##' in the right position to mean pasting */
 
 /* assignment operators */
 #define TOK_A_ADD   0xb0
@@ -1238,7 +1238,7 @@ PUB_FUNC void _tcc_error_noabort(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC NORETURN void _tcc_error(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC void _tcc_warning(const char *fmt, ...) PRINTF_LIKE(1,2);
 #define tcc_internal_error(msg) tcc_error("internal compiler error\n"\
-        "%s:%d: in %s(): " msg, __FILE__,__LINE__,__FUNCTION__)
+        "%s:%d: in %s(): " msg, __FILE__,__LINE__,__func__)
 
 /* other utilities */
 ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data);
