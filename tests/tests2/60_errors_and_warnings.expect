@@ -165,3 +165,12 @@ bar  : 3 ; 3
 
 [test_var_array2]
 60_errors_and_warnings.c:355: error: flexible array has zero size in this context
+
+[test_default_int_type]
+60_errors_and_warnings.c:359: warning: type defaults to int
+
+[test_invalid_global_stmtexpr]
+60_errors_and_warnings.c:363: error: statement expression outside of function
+
+[test_invalid_tokckill]
+60_errors_and_warnings.c:366: error: ';' expected (got "3")

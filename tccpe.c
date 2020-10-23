@@ -922,9 +922,7 @@ static void pe_build_exports(struct pe_info *pe)
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
         sym = (ElfW(Sym)*)symtab_section->data + sym_index;
         name = pe_export_name(pe->s1, sym);
-        if ((sym->st_other & ST_PE_EXPORT)
-            /* export only symbols from actually written sections */
-            && pe->s1->sections[sym->st_shndx]->sh_addr) {
+        if (sym->st_other & ST_PE_EXPORT) {
             p = tcc_malloc(sizeof *p);
             p->index = sym_index;
             p->name = name;

@@ -5591,7 +5591,9 @@ ST_FUNC void unary(void)
         } else if (tok == '{') {
 	    int saved_nocode_wanted = nocode_wanted;
             if (const_wanted && !(nocode_wanted & unevalmask))
-                tcc_error("expected constant");
+                expect("constant");
+            if (0 == local_scope)
+                tcc_error("statement expression outside of function");
             /* save all registers */
             save_regs(0);
             /* statement expression : we do not accept break/continue
@@ -6950,7 +6952,12 @@ static void block(int is_expr)
     }
 
 again:
-    t = tok, next();
+    t = tok;
+    /* If the token carries a value, next() might destroy it. Only with
+       invalid code such as f(){"123"4;} */
+    if (TOK_HAS_VALUE(t))
+        goto expr;
+    next();
 
     if (t == TOK_IF) {
         skip('(');
@@ -7253,6 +7260,7 @@ again:
             /* expression case */
             if (t != ';') {
                 unget_tok(t);
+    expr:
                 if (is_expr) {
                     vpop();
                     gexpr();
@@ -8281,7 +8289,7 @@ static void free_inline_functions(TCCState *s)
    if parsing old style parameter decl list (and FUNC_SYM is set then) */
 static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 {
-    int v, has_init, r;
+    int v, has_init, r, oldint;
     CType type, btype;
     Sym *sym;
     AttributeDef ad, adbase;
@@ -8312,6 +8320,8 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
             skip(';');
 	    continue;
 	}
+
+        oldint = 0;
         if (!parse_btype(&btype, &adbase)) {
             if (is_for_loop_init)
                 return 0;
@@ -8331,15 +8341,17 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                /* special test for old K&R protos without explicit int
                   type. Only accepted when defining global data */
                 btype.t = VT_INT;
+                oldint = 1;
             } else {
                 if (tok != TOK_EOF)
                     expect("declaration");
                 break;
             }
         }
+
         if (tok == ';') {
 	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
-		int v = btype.ref->v;
+		v = btype.ref->v;
 		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
         	    tcc_warning("unnamed struct/union that defines no instances");
                 next();
@@ -8350,6 +8362,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 continue;
             }
         }
+
         while (1) { /* iterate thru each declaration */
             type = btype;
 	    ad = adbase;
@@ -8384,6 +8397,9 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 /* always compile 'extern inline' */
                 if (type.t & VT_EXTERN)
                     type.t &= ~VT_INLINE;
+
+            } else if (oldint) {
+                tcc_warning("type defaults to int");
             }
 
             if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {

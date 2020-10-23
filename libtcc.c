@@ -221,6 +221,10 @@ PUB_FUNC char *tcc_fileextension (const char *name)
 /********************************************************/
 /* memory management */
 
+#undef free
+#undef malloc
+#undef realloc
+
 #ifndef MEM_DEBUG
 
 PUB_FUNC void tcc_free(void *ptr)
@@ -416,6 +420,10 @@ PUB_FUNC void tcc_memcheck(void)
     }
 }
 #endif /* MEM_DEBUG */
+
+#define free(p) use_tcc_free(p)
+#define malloc(s) use_tcc_malloc(s)
+#define realloc(p, s) use_tcc_realloc(p, s)
 
 /********************************************************/
 /* dynarrays */

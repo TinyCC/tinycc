@@ -124,7 +124,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 
-@if (%EXES_ONLY%)==(yes) goto :files-done
+@if (%EXES_ONLY%)==(yes) goto :files_done
 
 if not exist libtcc mkdir libtcc
 if not exist doc mkdir doc
@@ -174,7 +174,7 @@ echo>..\config.texi @set VERSION %VERSION%
 cmd /c makeinfo --html --no-split ../tcc-doc.texi -o doc/tcc-doc.html
 :doc-done
 
-:files-done
+:files_done
 for %%f in (*.o *.def) do @del %%f
 
 :copy-install
