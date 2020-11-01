@@ -421,10 +421,6 @@ PUB_FUNC void tcc_memcheck(void)
 }
 #endif /* MEM_DEBUG */
 
-#define free(p) use_tcc_free(p)
-#define malloc(s) use_tcc_malloc(s)
-#define realloc(p, s) use_tcc_realloc(p, s)
-
 /********************************************************/
 /* dynarrays */
 
