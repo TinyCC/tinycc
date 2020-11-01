@@ -221,10 +221,6 @@ PUB_FUNC char *tcc_fileextension (const char *name)
 /********************************************************/
 /* memory management */
 
-#undef free
-#undef malloc
-#undef realloc
-
 #ifndef MEM_DEBUG
 
 PUB_FUNC void tcc_free(void *ptr)
