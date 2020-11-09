@@ -1242,46 +1242,53 @@ void __attribute__((destructor)) __bound_exit(void)
 }
 
 #if HAVE_PTHREAD_CREATE
-#if HAVE_TLS_FUNC
 typedef struct {
     void *(*start_routine) (void *);
     void *arg;
+    sigset_t old_mask;
 } bound_thread_create_type;
 
 static void *bound_thread_create(void *bdata)
 {
     bound_thread_create_type *data = (bound_thread_create_type *) bdata;
     void *retval;
+#if HAVE_TLS_FUNC
     int *p = (int *) BOUND_MALLOC(sizeof(int));
   
     if (!p) bound_alloc_error("bound_thread_create malloc");
     *p = 0;
     pthread_setspecific(no_checking_key, p);
+#endif
+    pthread_sigmask(SIG_SETMASK, &data->old_mask, NULL);
     retval = data->start_routine(data->arg);
+#if HAVE_TLS_FUNC
     pthread_setspecific(no_checking_key, NULL);
     BOUND_FREE (p);
+#endif
     BOUND_FREE (data);
     return retval;
 }
-#endif
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                    void *(*start_routine) (void *), void *arg)
 {
+    int retval;
+    bound_thread_create_type *data;
+    sigset_t mask;
+    sigset_t old_mask;
+  
     use_sem = 1;
     dprintf (stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
-#if HAVE_TLS_FUNC
-    {
-        bound_thread_create_type *data;
-
-        data = (bound_thread_create_type *) BOUND_MALLOC(sizeof(bound_thread_create_type));
-        data->start_routine = start_routine;
-        data->arg = arg;
-        return pthread_create_redir(thread, attr, bound_thread_create, data);
-    }
-#else
-    return pthread_create_redir(thread, attr, start_routine, arg);
-#endif
+    sigfillset(&mask);
+    pthread_sigmask(SIG_SETMASK, &mask, &old_mask);
+    data = (bound_thread_create_type *) BOUND_MALLOC(sizeof(bound_thread_create_type));
+    if (!data) bound_alloc_error("bound_thread_create malloc");
+    data->start_routine = start_routine;
+    data->arg = arg;
+    data->old_mask = old_mask;
+    retval = pthread_create_redir(thread, attr, bound_thread_create, data);
+    pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
+    return retval;
 }
 #endif
 
