@@ -116,8 +116,6 @@ main (void)
     while (time(NULL) < end) ;
     run = 0;
 
-    printf ("end\n"); fflush(stdout);
-
     pthread_join(id1, NULL);
     pthread_join(id2, NULL);
 #if !defined(__APPLE__)
@@ -125,6 +123,8 @@ main (void)
 #endif
     sem_destroy (&sem);
     sem_destroy (&sem_child);
+
+    printf ("end\n"); fflush(stdout);
 
     sigemptyset (&m);
     sigprocmask (SIG_SETMASK, &m, NULL);
