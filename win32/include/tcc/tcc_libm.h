@@ -198,4 +198,69 @@ __CRT_INLINE long long __cdecl llroundl (long double x) {
   End of code based on MUSL
 *******************************************************************************/
 
+
+__CRT_INLINE double __cdecl cbrt(double x) {
+  return (1.0 - ((x < 0.0) << 1)) * pow(fabs(x), 1.0 / 3.0);
+}
+__CRT_INLINE float __cdecl cbrtf(float x) {
+  return (1.0f - ((x < 0.0f) << 1)) * (float) pow(fabs(x), 1.0 / 3.0);
+}
+
+__CRT_INLINE double __cdecl log2(double x) {
+  return log(x) * 1.4426950408889634073599246810019;
+}
+__CRT_INLINE float __cdecl log2f(float x) {
+  return logf(x) * 1.4426950408889634073599246810019f;
+}
+
+__CRT_INLINE double __cdecl exp2(double x) {
+  return exp(x * 0.69314718055994530941723212145818);
+}
+__CRT_INLINE float __cdecl exp2f(float x) {
+  return expf(x * 0.69314718055994530941723212145818f);
+}
+
+/* tgamma and lgamma: Lanczos approximation
+ * https://rosettacode.org/wiki/Gamma_function
+ * https://www.johndcook.com/blog/cpp_gamma
+ */
+__CRT_INLINE double __cdecl lgamma(double x);
+
+__CRT_INLINE double __cdecl tgamma(double x) {
+  double m = 1.0, t = 3.14159265358979323;
+  if (x == (int)x) {
+    for (int k = 2; k < x; ++k) m *= k;
+    return x > 0.0 ? m : (x == 0.0 ? INFINITY : NAN);
+  }
+  if (x < 0.5)
+    return t / (sin(t * x) * tgamma(1.0 - x));
+  if (x > 12.0)
+    return exp(lgamma(x));
+  static const double c[8] = {676.5203681218851, -1259.1392167224028,
+                              771.32342877765313, -176.61502916214059,
+                              12.507343278686905, -0.13857109526572012,
+                              9.9843695780195716e-6, 1.5056327351493116e-7};
+  m = 0.99999999999980993, t = x + (8 - 1.5);
+  for (int k = 0; k < 8; ++k) m += c[k] / (x + k);
+  return 2.50662827463100050 * pow(t, x - 0.5) * exp(-t) * m; /* sqrt(2pi) */
+}
+
+__CRT_INLINE double __cdecl lgamma(double x) {
+  if (x < 12.0)
+    return x <= 0.0 && x == (int)x ? INFINITY : log(fabs(tgamma(x)));
+  static const double c[7] = {1.0/12.0, -1.0/360.0, 1.0/1260.0, -1.0/1680.0,
+                              1.0/1188.0, -691.0/360360.0, 1.0/156.0};
+  double m = -3617.0/122400.0, z = 1.0 / (x * x);
+  for (int k = 6; k >= 0; --k) m = m * z + c[k];
+  return (x - 0.5) * log(x) - x + 0.918938533204672742 + m / x; /* log(2pi)/2 */
+}
+
+__CRT_INLINE float __cdecl tgammaf(float x) {
+  return tgamma(x);
+}
+
+__CRT_INLINE float __cdecl lgammaf(float x) {
+  return lgamma(x);
+}
+
 #endif /* _TCC_LIBM_H_ */

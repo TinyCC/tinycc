@@ -31,13 +31,16 @@ tcc-doc.html
 tcc-doc.info
 
 win32/doc
+win32/examples/libtcc_test.c
 win32/libtcc
 win32/lib/32
 win32/lib/64
 win32/include/float.h
+win32/include/stdalign.h
 win32/include/stdarg.h
 win32/include/stdbool.h
 win32/include/stddef.h
+win32/include/stdnoreturn.h
 win32/include/varargs.h
 win32/include/tcclib.h
 
