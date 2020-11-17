@@ -23,8 +23,13 @@
 #define SCHAR_MAX 127
 #define UCHAR_MAX 0xff
 
+#ifndef __CHAR_UNSIGNED__
 #define CHAR_MIN SCHAR_MIN
 #define CHAR_MAX SCHAR_MAX
+#else
+#define CHAR_MIN 0
+#define CHAR_MAX UCHAR_MAX
+#endif
 
 #define MB_LEN_MAX 5
 #define SHRT_MIN (-32768)
