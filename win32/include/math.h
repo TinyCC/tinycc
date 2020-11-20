@@ -197,105 +197,6 @@ extern "C" {
    int __cdecl _fpclassf(float _X);
 #endif
 
-#ifndef __cplusplus
-#define _hypotl(x,y) ((long double)_hypot((double)(x),(double)(y)))
-#define _matherrl _matherr
-  __CRT_INLINE long double _chgsignl(long double _Number) { return _chgsign((double)(_Number)); }
-  __CRT_INLINE long double _copysignl(long double _Number,long double _Sign) { return _copysign((double)(_Number),(double)(_Sign)); }
-  __CRT_INLINE float frexpf(float _X,int *_Y) { return ((float)frexp((double)_X,_Y)); }
-
-#if !defined (__ia64__)
-  __CRT_INLINE float __cdecl fabsf (float x)
-  {
-#ifdef _WIN64
-    *((int *) &x) &= 0x7fffffff;
-    return x;
-#else
-    float res;
-    __asm__ ("fabs;" : "=t" (res) : "0" (x));
-    return res;
-#endif	
-  }
-
-  __CRT_INLINE float __cdecl ldexpf (float x, int expn) { return (float) ldexp (x, expn); }
-#endif
-#if defined (_WIN32) && !defined(_WIN64)
-  __CRT_INLINE float acosf(float x) { return (float) acos(x); }
-  __CRT_INLINE float asinf(float x) { return (float) asin(x); }
-  __CRT_INLINE float atanf(float x) { return (float) atan(x); }
-  __CRT_INLINE float atan2f(float x, float y) { return (float) atan2(x, y); }
-  __CRT_INLINE float ceilf(float x) { return (float) ceil(x); }
-  __CRT_INLINE float cosf(float x) { return (float) cos(x); }
-  __CRT_INLINE float coshf(float x) { return (float) cosh(x); }
-  __CRT_INLINE float expf(float x) { return (float) exp(x); }
-  __CRT_INLINE float floorf(float x) { return (float) floor(x); }
-  __CRT_INLINE float fmodf(float x, float y) { return (float) fmod(x, y); }
-  __CRT_INLINE float logf(float x) { return (float) log(x); }
-  __CRT_INLINE float logbf(float x) { return (float) logb(x); }
-  __CRT_INLINE float log10f(float x) { return (float) log10(x); }
-  __CRT_INLINE float modff(float x, float *y) {
-    double di, df = modf(x, &di);
-    *y = (float) di; return (float) df;
-  }
-  __CRT_INLINE float powf(float x, float y) { return (float) pow(x, y); }
-  __CRT_INLINE float sinf(float x) { return (float) sin(x); }
-  __CRT_INLINE float sinhf(float x) { return (float) sinh(x); }
-  __CRT_INLINE float sqrtf(float x) { return (float) sqrt(x); }
-  __CRT_INLINE float tanf(float x) { return (float) tan(x); }
-  __CRT_INLINE float tanhf(float x) { return (float) tanh(x); }
-#endif
-#else
-  // cplusplus
-  __CRT_INLINE long double __cdecl fabsl (long double x)
-  {
-    long double res;
-    __asm__ ("fabs;" : "=t" (res) : "0" (x));
-    return res;
-  }
-  __CRT_INLINE long double modfl(long double _X,long double *_Y) {
-    double _Di,_Df = modf((double)_X,&_Di);
-    *_Y = (long double)_Di;
-    return (_Df);
-  }
-  __CRT_INLINE long double _chgsignl(long double _Number) { return _chgsign(static_cast<double>(_Number)); }
-  __CRT_INLINE long double _copysignl(long double _Number,long double _Sign) { return _copysign(static_cast<double>(_Number),static_cast<double>(_Sign)); }
-  __CRT_INLINE float frexpf(float _X,int *_Y) { return ((float)frexp((double)_X,_Y)); }
-#ifndef __ia64__
-  __CRT_INLINE float __cdecl fabsf (float x)
-  {
-    float res;
-    __asm__ ("fabs;" : "=t" (res) : "0" (x));
-    return res;
-  }
-  __CRT_INLINE float __cdecl ldexpf (float x, int expn) { return (float) ldexp (x, expn); }
-#ifndef __x86_64
-  __CRT_INLINE float acosf(float _X) { return ((float)acos((double)_X)); }
-  __CRT_INLINE float asinf(float _X) { return ((float)asin((double)_X)); }
-  __CRT_INLINE float atanf(float _X) { return ((float)atan((double)_X)); }
-  __CRT_INLINE float atan2f(float _X,float _Y) { return ((float)atan2((double)_X,(double)_Y)); }
-  __CRT_INLINE float ceilf(float _X) { return ((float)ceil((double)_X)); }
-  __CRT_INLINE float cosf(float _X) { return ((float)cos((double)_X)); }
-  __CRT_INLINE float coshf(float _X) { return ((float)cosh((double)_X)); }
-  __CRT_INLINE float expf(float _X) { return ((float)exp((double)_X)); }
-  __CRT_INLINE float floorf(float _X) { return ((float)floor((double)_X)); }
-  __CRT_INLINE float fmodf(float _X,float _Y) { return ((float)fmod((double)_X,(double)_Y)); }
-  __CRT_INLINE float logf(float _X) { return ((float)log((double)_X)); }
-  __CRT_INLINE float log10f(float _X) { return ((float)log10((double)_X)); }
-  __CRT_INLINE float modff(float _X,float *_Y) {
-    double _Di,_Df = modf((double)_X,&_Di);
-    *_Y = (float)_Di;
-    return ((float)_Df);
-  }
-  __CRT_INLINE float powf(float _X,float _Y) { return ((float)pow((double)_X,(double)_Y)); }
-  __CRT_INLINE float sinf(float _X) { return ((float)sin((double)_X)); }
-  __CRT_INLINE float sinhf(float _X) { return ((float)sinh((double)_X)); }
-  __CRT_INLINE float sqrtf(float _X) { return ((float)sqrt((double)_X)); }
-  __CRT_INLINE float tanf(float _X) { return ((float)tan((double)_X)); }
-  __CRT_INLINE float tanhf(float _X) { return ((float)tanh((double)_X)); }
-#endif
-#endif
-#endif
-
 #ifndef	NO_OLDNAMES
 #define matherr _matherr
 
@@ -339,10 +240,13 @@ extern "C" {
   extern int __cdecl __fpclassify (double);
   extern int __cdecl __fpclassifyl (long double);
 
-/* Implemented at tcc/tcc_libm.h */
+/* Implemented at tcc/tcc_libm.h
 #define fpclassify(x) (sizeof (x) == sizeof (float) ? __fpclassifyf (x)	  \
   : sizeof (x) == sizeof (double) ? __fpclassify (x) \
   : __fpclassifyl (x))
+*/
+#define fpclassify(x) \
+  _Generic(x, float: __fpclassifyf, double: __fpclassify, long double: __fpclassifyl)(x)
 
   /* 7.12.3.2 */
 #define isfinite(x) ((fpclassify(x) & FP_NAN) == 0)
@@ -364,10 +268,13 @@ extern "C" {
   extern int __cdecl __signbit (double);
   extern int __cdecl __signbitl (long double);
 
-/* Implemented at tcc/tcc_libm.h */
+/* Implemented at tcc/tcc_libm.h
 #define signbit(x) (sizeof (x) == sizeof (float) ? __signbitf (x)	\
   : sizeof (x) == sizeof (double) ? __signbit (x)	\
   : __signbitl (x))
+*/
+#define signbit(x) \
+  _Generic(x, float: __signbitf, double: __signbit, long double: signbitl)(x)
 
   extern double __cdecl exp2(double);
   extern float __cdecl exp2f(float);
@@ -390,31 +297,6 @@ extern "C" {
   extern double __cdecl logb (double);
   extern float __cdecl logbf (float);
   extern long double __cdecl logbl (long double);
-#ifndef _WIN32
-  __CRT_INLINE double __cdecl logb (double x)
-  {
-    double res;
-    __asm__ ("fxtract\n\t"
-      "fstp	%%st" : "=t" (res) : "0" (x));
-    return res;
-  }
-
-  __CRT_INLINE float __cdecl logbf (float x)
-  {
-    float res;
-    __asm__ ("fxtract\n\t"
-      "fstp	%%st" : "=t" (res) : "0" (x));
-    return res;
-  }
-
-  __CRT_INLINE long double __cdecl logbl (long double x)
-  {
-    long double res;
-    __asm__ ("fxtract\n\t"
-      "fstp	%%st" : "=t" (res) : "0" (x));
-    return res;
-  }
-#endif
 
   extern long double __cdecl modfl (long double, long double*);
 
@@ -433,8 +315,8 @@ extern "C" {
   extern float __cdecl cbrtf (float);
   extern long double __cdecl cbrtl (long double);
 
-  __CRT_INLINE float __cdecl hypotf (float x, float y)
-  { return (float) hypot (x, y);}
+  extern double __cdecl hypot (double, double);
+  extern float __cdecl hypotf (float, float);
   extern long double __cdecl hypotl (long double, long double);
 
   extern long double __cdecl powl (long double, long double);
@@ -490,116 +372,22 @@ extern "C" {
 
   /* 7.12.9.4 */
   /* round, using fpu control word settings */
-  __CRT_INLINE double __cdecl rint (double x)
-  {
-    double retval;
-    __asm__ (
-      "fldl    %1\n"
-      "frndint   \n"
-      "fstpl    %0\n" : "=m" (retval) : "m" (x));
-    return retval;
-  }
+  extern double __cdecl rint (double);
+  extern float __cdecl rintf (float);
+  extern long double __cdecl rintl (long double);
 
-  __CRT_INLINE float __cdecl rintf (float x)
-  {
-    float retval;
-    __asm__ (
-      "flds    %1\n"
-      "frndint   \n"
-      "fstps    %0\n" : "=m" (retval) : "m" (x));
-    return retval;
-  }
+  extern long __cdecl lrint (double);
+  extern long __cdecl lrintf (float);
+  extern long __cdecl lrintl (long double);
 
-  __CRT_INLINE long double __cdecl rintl (long double x)
-  {
-#ifdef _WIN32
-    //  on win32 'long double' is double internally
-    return rint(x);
-#else
-    long double retval;
-    __asm__ (
-      "fldt    %1\n"
-      "frndint   \n"
-      "fstpt    %0\n" : "=m" (retval) : "m" (x));
-    return retval;
-#endif
-  }
-
-  /* 7.12.9.5 */
-  __CRT_INLINE long __cdecl lrint (double x) 
-  {
-    long retval;  
-    __asm__ __volatile__                         \
-      ("fldl   %1\n"                             \
-       "fistpl %0"  : "=m" (retval) : "m" (x));  \
-      return retval;
-  }
-
-  __CRT_INLINE long __cdecl lrintf (float x) 
-  {
-    long retval;
-    __asm__ __volatile__                         \
-      ("flds   %1\n"                             \
-       "fistpl %0"  : "=m" (retval) : "m" (x));  \
-      return retval;
-  }
-
-  __CRT_INLINE long __cdecl lrintl (long double x) 
-  {
-    long retval;
-    __asm__ __volatile__                         \
-      ("fldt   %1\n"                             \
-       "fistpl %0"  : "=m" (retval) : "m" (x));  \
-      return retval;
-  }
-
-  __CRT_INLINE long long __cdecl llrint (double x) 
-  {
-    long long retval;
-    __asm__ __volatile__                         \
-      ("fldl    %1\n"                            \
-       "fistpll %0"  : "=m" (retval) : "m" (x)); \
-      return retval;
-  }
-
-  __CRT_INLINE long long __cdecl llrintf (float x) 
-  {
-    long long retval;
-    __asm__ __volatile__                         \
-      ("flds   %1\n"                             \
-       "fistpll %0"  : "=m" (retval) : "m" (x)); \
-      return retval;
-  }
-
-  __CRT_INLINE long long __cdecl llrintl (long double x) 
-  {
-    long long retval;
-    __asm__ __volatile__                         \
-      ("fldt    %1\n"                            \
-       "fistpll %0"  : "=m" (retval) : "m" (x)); \
-      return retval;
-  }
+  extern long long __cdecl llrint (double);
+  extern long long __cdecl llrintf (float);
+  extern long long __cdecl llrintl (long double);
 
   #define FE_TONEAREST	0x0000
   #define FE_DOWNWARD	0x0400
   #define FE_UPWARD	0x0800
   #define FE_TOWARDZERO	0x0c00
-
-  __CRT_INLINE double trunc (double _x)
-  {
-    double retval;
-    unsigned short saved_cw;
-    unsigned short tmp_cw;
-    __asm__ ("fnstcw %0;" : "=m" (saved_cw)); /* save FPU control word */
-    tmp_cw = (saved_cw & ~(FE_TONEAREST | FE_DOWNWARD | FE_UPWARD | FE_TOWARDZERO))
-	    | FE_TOWARDZERO;
-    __asm__ ("fldcw %0;" : : "m" (tmp_cw));
-    __asm__ ("fldl  %1;"
-             "frndint;"
-             "fstpl  %0;" : "=m" (retval)  : "m" (_x)); /* round towards zero */
-    __asm__ ("fldcw %0;" : : "m" (saved_cw) ); /* restore saved control word */
-    return retval;
-  }
 
   /* 7.12.9.6 */
   /* round away from zero, regardless of fpu control word settings */
@@ -685,70 +473,12 @@ extern "C" {
   extern long double __cdecl fmal (long double, long double, long double);
 
 
-#if 0 // gr: duplicate, see below
-  /* 7.12.14 */
-  /* 
-  *  With these functions, comparisons involving quiet NaNs set the FP
-  *  condition code to "unordered".  The IEEE floating-point spec
-  *  dictates that the result of floating-point comparisons should be
-  *  false whenever a NaN is involved, with the exception of the != op, 
-  *  which always returns true: yes, (NaN != NaN) is true).
-  */
-
-#if __GNUC__ >= 3
-
-#define isgreater(x, y) __builtin_isgreater(x, y)
-#define isgreaterequal(x, y) __builtin_isgreaterequal(x, y)
-#define isless(x, y) __builtin_isless(x, y)
-#define islessequal(x, y) __builtin_islessequal(x, y)
-#define islessgreater(x, y) __builtin_islessgreater(x, y)
-#define isunordered(x, y) __builtin_isunordered(x, y)
-
-#else
-  /*  helper  */
-  __CRT_INLINE int  __cdecl
-    __fp_unordered_compare (long double x, long double y){
-      unsigned short retval;
-      __asm__ ("fucom %%st(1);"
-	"fnstsw;": "=a" (retval) : "t" (x), "u" (y));
-      return retval;
-  }
-
-#define isgreater(x, y) ((__fp_unordered_compare(x, y) \
-  & 0x4500) == 0)
-#define isless(x, y) ((__fp_unordered_compare (y, x) \
-  & 0x4500) == 0)
-#define isgreaterequal(x, y) ((__fp_unordered_compare (x, y) \
-  & FP_INFINITE) == 0)
-#define islessequal(x, y) ((__fp_unordered_compare(y, x) \
-  & FP_INFINITE) == 0)
-#define islessgreater(x, y) ((__fp_unordered_compare(x, y) \
-  & FP_SUBNORMAL) == 0)
-#define isunordered(x, y) ((__fp_unordered_compare(x, y) \
-  & 0x4500) == 0x4500)
-
-#endif
-#endif //0
-
-
 #endif /* __STDC_VERSION__ >= 199901L */
 #endif /* __NO_ISOCEXT */
 
 #ifdef __cplusplus
 }
-extern "C++" {
-  template<class _Ty> inline _Ty _Pow_int(_Ty _X,int _Y) {
-    unsigned int _N;
-    if(_Y >= 0) _N = (unsigned int)_Y;
-    else _N = (unsigned int)(-_Y);
-    for(_Ty _Z = _Ty(1);;_X *= _X) {
-      if((_N & 1)!=0) _Z *= _X;
-      if((_N >>= 1)==0) return (_Y < 0 ? _Ty(1) / _Z : _Z); 
-    }
-  }
-}
 #endif
-
 #pragma pack(pop)
 
 /* 7.12.14 */
