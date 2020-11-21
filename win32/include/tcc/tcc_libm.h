@@ -252,12 +252,13 @@ __CRT_INLINE long double __cdecl scalbnl(long double x, int n) {
 }
 
 __CRT_INLINE double __cdecl scalbln(double x, long n) {
-  int m = n > INT_MAX ? INT_MAX : (n < INT_MIN ? INT_MIN : n);
-  return scalbn(x, m);
+  return scalbn(x, n);
 }
 __CRT_INLINE float __cdecl scalblnf(float x, long n) {
-  int m = n > INT_MAX ? INT_MAX : (n < INT_MIN ? INT_MIN : n);
-  return scalbn(x, m);
+  return scalbn(x, n);
+}
+__CRT_INLINE long double __cdecl scalblnl(long double x, long n) {
+  return scalbn(x, n);
 }
 
 
@@ -293,6 +294,9 @@ __CRT_INLINE float __cdecl rintf(float x) {
     "fstps    %0\n" : "=m" (retval) : "m" (x));
    return retval;
 }
+__CRT_INLINE long double __cdecl rintl (long double x) {
+  return rint(x);
+}
 
 
 /* 7.12.9.5 */
@@ -312,6 +316,11 @@ __CRT_INLINE long __cdecl lrintf(float x) {
   return retval;
 }
 
+__CRT_INLINE long __cdecl lrintl (long double x) {
+  return lrint(x);
+}
+
+
 __CRT_INLINE long long __cdecl llrint(double x) {
 long long retval;
   __asm__ __volatile__
@@ -328,48 +337,12 @@ __CRT_INLINE long long __cdecl llrintf(float x) {
   return retval;
 }
 
-/*
-  __CRT_INLINE long double __cdecl rintl (long double x) {
-    long double retval;
-    __asm__ (
-      "fldt    %1\n"
-      "frndint   \n"
-      "fstpt    %0\n" : "=m" (retval) : "m" (x));
-    return retval;
-  }
-  __CRT_INLINE long __cdecl lrintl (long double x) {
-    long retval;
-    __asm__ __volatile__
-      ("fldt   %1\n"
-       "fistpl %0"  : "=m" (retval) : "m" (x));
-      return retval;
-  }
-  __CRT_INLINE long long __cdecl llrintl (long double x) {
-    long long retval;
-    __asm__ __volatile__
-      ("fldt    %1\n"
-       "fistpll %0"  : "=m" (retval) : "m" (x));
-      return retval;
-  }
-  __CRT_INLINE float __cdecl fabsf (float x) {
-    float res;
-    __asm__ ("fabs;" : "=t" (res) : "0" (x));
-    return res;
-  }
-*/
-
-__CRT_INLINE long double __cdecl rintl(long double x) {
-  return rint(x);
-}
-__CRT_INLINE long __cdecl lrintl(long double x) {
-  return lrint(x);
-}
-__CRT_INLINE long long __cdecl llrintl(long double x) {
+__CRT_INLINE long long __cdecl llrintl (long double x) {
   return llrint(x);
 }
 
 
-__CRT_INLINE double trunc(double _x) {
+__CRT_INLINE double __cdecl trunc(double _x) {
   double retval;
   unsigned short saved_cw;
   unsigned short tmp_cw;
@@ -385,7 +358,7 @@ __CRT_INLINE double trunc(double _x) {
 }
 
 __CRT_INLINE float __cdecl truncf(float x) {
-  return (float) ((int) x);
+  return (float) ((intptr_t) x);
 }
 __CRT_INLINE long double __cdecl truncl(long double x) {
   return trunc(x);
@@ -498,13 +471,13 @@ __CRT_INLINE long double __cdecl expm1l(long double x) {
 
 
 __CRT_INLINE double __cdecl cbrt(double x) {
-  return (1 - ((x < 0.0) << 1)) * pow(fabs(x), 1/3.0);
+  return copysign(pow(fabs(x), 1/3.0), x);
 }
 __CRT_INLINE float __cdecl cbrtf(float x) {
-  return (1 - ((x < 0.0f) << 1)) * powf(fabsf((float) x), 1/3.0f);
+  return copysignf(pow(fabs(x), 1/3.0), x);
 }
 __CRT_INLINE long double __cdecl cbrtl(long double x) {
-  return (1 - ((x < 0.0) << 1)) * pow(fabs(x), 1/3.0);
+  return copysign(pow(fabs(x), 1/3.0), x);
 }
 
 
@@ -512,7 +485,7 @@ __CRT_INLINE double __cdecl log2(double x) {
   return log(x) * 1.4426950408889634073599246810019;
 }
 __CRT_INLINE float __cdecl log2f(float x) {
-  return logf(x) * 1.4426950408889634073599246810019f;
+  return log(x) * 1.4426950408889634073599246810019;
 }
 __CRT_INLINE long double __cdecl log2l(long double x) {
   return log(x) * 1.4426950408889634073599246810019;
@@ -523,7 +496,7 @@ __CRT_INLINE double __cdecl exp2(double x) {
   return exp(x * 0.69314718055994530941723212145818);
 }
 __CRT_INLINE float __cdecl exp2f(float x) {
-  return expf(x * 0.69314718055994530941723212145818f);
+  return exp(x * 0.69314718055994530941723212145818);
 }
 __CRT_INLINE long double __cdecl exp2l(long double x) {
   return exp(x * 0.69314718055994530941723212145818);
