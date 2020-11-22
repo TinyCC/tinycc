@@ -3721,10 +3721,10 @@ static void tcc_predefs(CString *cstr)
     "__BOUND(void*,__aeabi_memset,(void*,int,__SIZE_TYPE__))\n"
 #endif
     "__BUILTIN(void,abort,(void))\n"
-    "__BOUND(int,longjmp,())\n"
+    "__BOUND(void,longjmp,())\n"
 #ifndef TCC_TARGET_PE
     "__BOUND(void*,mmap,())\n"
-    "__BOUND(void*,munmap,())\n"
+    "__BOUND(int,munmap,())\n"
 #endif
     "#undef __BUILTINBC\n"
     "#undef __BUILTIN\n"

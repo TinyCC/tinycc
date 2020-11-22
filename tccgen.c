@@ -80,7 +80,7 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
-ST_DATA CType int_type, func_old_type, char_type, char_pointer_type;
+ST_DATA CType int_type, func_old_type, char_type, char_pointer_type, func_mem_move, void_type, void_ptr_type;
 static CString initstr;
 
 #if PTR_SIZE == 4
@@ -799,6 +799,14 @@ ST_FUNC void tccgen_init(TCCState *s1)
         char_type.t |= VT_UNSIGNED;
     char_pointer_type = char_type;
     mk_pointer(&char_pointer_type);
+
+    void_type.t = VT_VOID;
+    void_ptr_type = void_type;
+    mk_pointer(&void_ptr_type);
+    func_mem_move.t = VT_FUNC;
+    func_mem_move.ref = sym_push(SYM_FIELD, &void_ptr_type, 0, 0);
+    func_mem_move.ref->f.func_call = FUNC_CDECL;
+    func_mem_move.ref->f.func_type = FUNC_OLD;
 
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
@@ -3029,16 +3037,11 @@ static int is_compatible_func(CType *type1, CType *type2)
         && s1->f.func_type != FUNC_OLD
         && s2->f.func_type != FUNC_OLD)
         return 0;
-    /* we should check the function return type for FUNC_OLD too
-       but that causes problems with the internally used support
-       functions such as TOK_memmove */
-    if (s1->f.func_type == FUNC_OLD && !s1->next)
-        return 1;
-    if (s2->f.func_type == FUNC_OLD && !s2->next)
-        return 1;
     for (;;) {
         if (!is_compatible_unqualified_types(&s1->type, &s2->type))
             return 0;
+        if (s1->f.func_type == FUNC_OLD || s2->f.func_type == FUNC_OLD )
+            return 1;
         s1 = s1->next;
         s2 = s2->next;
         if (!s1)
@@ -3907,7 +3910,7 @@ ST_FUNC void vstore(void)
             else
 #endif
             /* Use memmove, rather than memcpy, as dest and src may be same: */
-            vpush_global_sym(&func_old_type, TOK_memmove);
+            vpush_global_sym(&func_mem_move, TOK_memmove);
 
             vswap();
             /* source */

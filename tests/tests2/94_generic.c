@@ -21,10 +21,12 @@ int b_f()
 }
 
 typedef int (*fptr)(int);
+typedef void (*vfptr)(int);
 int foo(int i)
 {
   return i;
 }
+void void_foo(int i) {}
 
 typedef int int_type1;
 
@@ -66,7 +68,9 @@ int main()
 				long long: "long long"));
 	i = _Generic(l, long: 1, int: 2);
 	printf("%d\n", i);
-	i = _Generic(foo, fptr: 3, int: 4);
+	i = _Generic(foo, fptr: 3, int: 4, vfptr: 5);
+	printf("%d\n", i);
+	i = _Generic(void_foo, fptr: 3, int: 4, vfptr: 5);
 	printf("%d\n", i);
 
 	(void)_Generic((int(*)[2]){0}, int(*)[2]:0, int(*)[4]:0); //shouldn't match twice
