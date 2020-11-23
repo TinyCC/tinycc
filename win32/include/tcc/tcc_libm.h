@@ -46,7 +46,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* fpclassify */
 
 __CRT_INLINE int __cdecl __fpclassify (double x) {
-  union {double f; uint64_t i;} u = {x};
+  union {double f; uint64_t i;} u = {.f = x};
   int e = u.i>>52 & 0x7ff;
   if (!e) return u.i<<1 ? FP_SUBNORMAL : FP_ZERO;
   if (e==0x7ff) return u.i<<12 ? FP_NAN : FP_INFINITE;
@@ -54,7 +54,7 @@ __CRT_INLINE int __cdecl __fpclassify (double x) {
 }
 
 __CRT_INLINE int __cdecl __fpclassifyf (float x) {
-  union {float f; uint32_t i;} u = {x};
+  union {float f; uint32_t i;} u = {.f = x};
   int e = u.i>>23 & 0xff;
   if (!e) return u.i<<1 ? FP_SUBNORMAL : FP_ZERO;
   if (e==0xff) return u.i<<9 ? FP_NAN : FP_INFINITE;
@@ -69,13 +69,13 @@ __CRT_INLINE int __cdecl __fpclassifyl (long double x) {
 /* signbit */
 
 __CRT_INLINE int __cdecl __signbit (double x) {
-  union {double d; uint64_t i;} y = { x };
-  return y.i>>63;
+  union {double f; uint64_t i;} u = {.f = x};
+  return u.i>>63;
 }
 
 __CRT_INLINE int __cdecl __signbitf (float x) {
-  union {float f; uint32_t i; } y = { x };
-  return y.i>>31;
+  union {float f; uint32_t i; } u = {.f = x};
+  return u.i>>31;
 }
 
 __CRT_INLINE int __cdecl __signbitl (long double x) {
@@ -128,7 +128,7 @@ __CRT_INLINE long double __cdecl fmaxl (long double x, long double y) {
 } while(0)
 
 __CRT_INLINE double __cdecl round (double x) {
-  union {double f; uint64_t i;} u = {x};
+  union {double f; uint64_t i;} u = {.f = x};
   int e = u.i >> 52 & 0x7ff;
   double y;
 
@@ -182,26 +182,26 @@ __CRT_INLINE long long __cdecl llroundl (long double x) {
 /* MUSL asinh, acosh, atanh */
 
 __CRT_INLINE double __cdecl asinh(double x) {
-  union {double f; uint64_t i;} u = {x};
+  union {double f; uint64_t i;} u = {.f = x};
   unsigned e = u.i >> 52 & 0x7ff, s = u.i >> 63;
   u.i &= -1ull / 2, x = u.f;
-  if (e >= 0x3ff + 26) x = log(x) + 0.69314718055994530941723212145818;
-  else if (e >= 0x3ff + 1) x = log(2*x + 1 / (sqrt(x*x + 1) + x));
+  if (e >= 0x3ff + 26) x = log(x) + 0.693147180559945309;
+  else if (e >= 0x3ff + 1) x = log(2*x + 1 / (sqrt(x*x + 1) + x)); /* |x|>=2 */
   else if (e >= 0x3ff - 26) x = log1p(x + x*x / (sqrt(x*x + 1) + 1));
   else TCCFP_FORCE_EVAL(x + 0x1p120f);
   return s ? -x : x;
 }
 
 __CRT_INLINE double __cdecl acosh(double x) {
-  union {double f; uint64_t i;} u = {x};
+  union {double f; uint64_t i;} u = {.f = x};
   unsigned e = u.i >> 52 & 0x7ff;
-  if (e < 0x3ff + 1) return log1p(x - 1 + sqrt((x - 1)*(x - 1) + 2*(x - 1)));
+  if (e < 0x3ff + 1) return --x, log1p(x + sqrt(x*x + 2*x)); /* |x|<2 */
   if (e < 0x3ff + 26) return log(2*x - 1 / (x + sqrt(x*x - 1)));
-  return log(x) + 0.69314718055994530941723212145818;
+  return log(x) + 0.693147180559945309;
 }
 
 __CRT_INLINE double __cdecl atanh(double x) {
-  union {double f; uint64_t i;} u = {x};
+  union {double f; uint64_t i;} u = {.f = x};
   unsigned e = u.i >> 52 & 0x7ff, s = u.i >> 63;
   u.i &= -1ull / 2, x = u.f;
   if (e < 0x3ff - 1) {
@@ -232,6 +232,18 @@ __CRT_INLINE double __cdecl scalbn(double x, int n) {
   return x * u.f;
 }
 
+/* MUSL nan */
+
+__CRT_INLINE double __cdecl nan(const char* s) {
+  return NAN;
+}
+__CRT_INLINE float __cdecl nanf(const char* s) {
+  return NAN;
+}
+__CRT_INLINE long double __cdecl nanl(const char* s) {
+  return NAN;
+}
+
 
 /*******************************************************************************
   End of code based on MUSL
@@ -240,7 +252,7 @@ __CRT_INLINE double __cdecl scalbn(double x, int n) {
 
 /* Following are math functions missing from msvcrt.dll, and not defined
  * in math.h or above. Functions still remaining:
- * remquo(), remainder(), fma(), nan(), erf(), erfc(), nearbyint().
+ * remquo(), remainder(), fma(), erf(), erfc(), nearbyint().
  * In <stdlib.h>: lldiv().
  */
 
@@ -381,12 +393,12 @@ __CRT_INLINE long double __cdecl nexttowardl(long double x, long double to) {
 
 
 __CRT_INLINE float __cdecl fabsf (float x) {
-  union {float f; uint32_t i;} u = {x};
-  u.i &= 0x7fffffff;
-  return u.f;
+  union {float f; uint32_t i;} u = {.f = x};
+  u.i &= 0x7fffffff; return u.f;
 }
 __CRT_INLINE long double __cdecl fabsl (long double x) {
-  return fabs(x);
+  union {double f; uint64_t i;} u = {.f = x};
+  u.i &= 0x7fffffffffffffff; return u.f;
 }
 
 
@@ -456,14 +468,12 @@ __CRT_INLINE long double __cdecl log1pl(long double x) {
 
 
 __CRT_INLINE double __cdecl expm1(double x) {
-  if (fabs(x) > 0.0024) return exp(x) - 1.0;
-  double u, v = x*x, t = x + 0.5*v + 0.1666666666666666667*(u = v*x);
-  return t + 0.04166666666666666667*u*x;
+  if (x > 0.0024 || x < -0.0024) return exp(x) - 1.0;
+  return x*(1.0 + 0.5*x*(1.0 + (1/3.0)*x*(1.0 + 0.25*x*(1.0 + 0.2*x))));
 }
 __CRT_INLINE float __cdecl expm1f(float x) {
-  if (fabsf(x) > 0.085f) return expf(x) - 1.0f;
-  float u, v = x*x, t = x + 0.5f*v + 0.1666666666666666667f*(u = v*x);
-  return t + 0.04166666666666666667f*u*x;
+  if (x > 0.085f || x < -0.085f) return expf(x) - 1.0f;
+  return x*(1.0f + 0.5f*x*(1.0f + (1/3.0f)*x*(1.0f + 0.25f*x)));
 }
 __CRT_INLINE long double __cdecl expm1l(long double x) {
   return expm1(x);
@@ -471,35 +481,35 @@ __CRT_INLINE long double __cdecl expm1l(long double x) {
 
 
 __CRT_INLINE double __cdecl cbrt(double x) {
-  return copysign(pow(fabs(x), 1/3.0), x);
+  return x < 0.0 ? -pow(-x, 1/3.0) : pow(x, 1/3.0);
 }
 __CRT_INLINE float __cdecl cbrtf(float x) {
-  return copysignf(pow(fabs(x), 1/3.0), x);
+  return x < 0.0f ? -pow(-x, 1/3.0) : pow(x, 1/3.0);
 }
 __CRT_INLINE long double __cdecl cbrtl(long double x) {
-  return copysign(pow(fabs(x), 1/3.0), x);
+  return cbrt(x);
 }
 
 
 __CRT_INLINE double __cdecl log2(double x) {
-  return log(x) * 1.4426950408889634073599246810019;
+  return log(x) * 1.442695040888963407;
 }
 __CRT_INLINE float __cdecl log2f(float x) {
-  return log(x) * 1.4426950408889634073599246810019;
+  return log(x) * 1.442695040888963407;
 }
 __CRT_INLINE long double __cdecl log2l(long double x) {
-  return log(x) * 1.4426950408889634073599246810019;
+  return log(x) * 1.442695040888963407;
 }
 
 
 __CRT_INLINE double __cdecl exp2(double x) {
-  return exp(x * 0.69314718055994530941723212145818);
+  return exp(x * 0.693147180559945309);
 }
 __CRT_INLINE float __cdecl exp2f(float x) {
-  return exp(x * 0.69314718055994530941723212145818);
+  return exp(x * 0.693147180559945309);
 }
 __CRT_INLINE long double __cdecl exp2l(long double x) {
-  return exp(x * 0.69314718055994530941723212145818);
+  return exp(x * 0.693147180559945309);
 }
 
 
@@ -535,11 +545,10 @@ __CRT_INLINE long double __cdecl fdiml(long double x, long double y) {
 
 __CRT_INLINE double __cdecl tgamma(double x) {
   double m = 1.0, t = 3.14159265358979323;
-  if (x > 172.0)
-    return INFINITY;
   if (x == floor(x)) {
-    for (int k = 2; k < x; ++k) m *= k;
-    return x > 0.0 ? m : (x == 0.0 ? INFINITY : NAN);
+    if (x == 0) return INFINITY;
+    if (x < 0) return NAN;
+    if (x < 26) { for (double k = 2; k < x; ++k) m *= k; return m; }
   }
   if (x < 0.5)
     return t / (sin(t*x)*tgamma(1.0 - x));
@@ -557,9 +566,11 @@ __CRT_INLINE double __cdecl tgamma(double x) {
 
 
 __CRT_INLINE double __cdecl lgamma(double x) {
-  if (x < 12.0)
-    return x > 0.0 || x != floor(x) ? log(fabs(tgamma(x))) : INFINITY;
-
+  if (x < 12.0) {
+    if (x <= 0.0 && x == floor(x)) return INFINITY;
+    x = tgamma(x);
+    return log(x < 0.0 ? -x : x);
+  }
   static const double c[7] = {1.0/12.0, -1.0/360.0, 1.0/1260.0, -1.0/1680.0,
                               1.0/1188.0, -691.0/360360.0, 1.0/156.0};
   double m = -3617.0/122400.0, t = 1.0 / (x*x);
