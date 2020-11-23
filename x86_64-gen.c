@@ -653,7 +653,7 @@ static void gcall_or_jmp(int is_jmp)
 
 static void gen_bounds_call(int v)
 {
-    Sym *sym = external_global_sym(v, &func_old_type);
+    Sym *sym = external_helper_sym(v);
     oad(0xe8, 0);
 #ifdef TCC_TARGET_PE
     greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
@@ -1022,7 +1022,7 @@ void gfunc_epilog(void)
     v = -loc;
 
     if (v >= 4096) {
-        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type);
+        Sym *sym = external_helper_sym(TOK___chkstk);
         oad(0xb8, v); /* mov stacksize, %eax */
         oad(0xe8, 0); /* call __chkstk, (does the stackframe too) */
         greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
@@ -2209,7 +2209,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 #endif
     if (use_call)
     {
-        vpush_global_sym(&func_old_type, TOK_alloca);
+        vpush_helper_func(TOK_alloca);
         vswap(); /* Move alloca ref past allocation size */
         gfunc_call(1);
     }

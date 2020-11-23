@@ -662,7 +662,7 @@ static void arm64_gen_bl_or_b(int b)
 
 static void gen_bounds_call(int v)
 {
-    Sym *sym = external_global_sym(v, &func_old_type);
+    Sym *sym = external_helper_sym(v);
 
     greloca(cur_text_section, sym, ind, R_AARCH64_CALL26, 0);
     o(0x94000000); // bl
@@ -1782,7 +1782,7 @@ ST_FUNC void gen_opf(int op)
         case TOK_GT: func = TOK___gttf2; cond = 13; break;
         default: assert(0); break;
         }
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(3);
         gfunc_call(2);
         vpushi(0);
@@ -1885,7 +1885,7 @@ ST_FUNC void gen_cvt_itof(int t)
         int func = (f & VT_BTYPE) == VT_LLONG ?
           (f & VT_UNSIGNED ? TOK___floatunditf : TOK___floatditf) :
           (f & VT_UNSIGNED ? TOK___floatunsitf : TOK___floatsitf);
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -1913,7 +1913,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
         int func = (t & VT_BTYPE) == VT_LLONG ?
           (t & VT_UNSIGNED ? TOK___fixunstfdi : TOK___fixtfdi) :
           (t & VT_UNSIGNED ? TOK___fixunstfsi : TOK___fixtfsi);
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -1947,7 +1947,7 @@ ST_FUNC void gen_cvt_ftof(int t)
         int func = (t == VT_LDOUBLE) ?
             (f == VT_FLOAT ? TOK___extendsftf2 : TOK___extenddftf2) :
             (t == VT_FLOAT ? TOK___trunctfsf2 : TOK___trunctfdf2);
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -2061,7 +2061,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
         vtop->r = TREG_R(0);
         o(0x910003e0 | vtop->r); // mov r0,sp
         vswap();
-        vpush_global_sym(&func_old_type, TOK___bound_new_region);
+        vpush_helper_func(TOK___bound_new_region);
         vrott(3);
         gfunc_call(2);
         func_bound_add_epilog = 1;

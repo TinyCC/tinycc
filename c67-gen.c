@@ -2254,7 +2254,7 @@ void gen_opi(int op)
       call_func:
 	vswap();
 	/* call generic idiv function */
-	vpush_global_sym(&func_old_type, t);
+	vpush_helper_func(t);
 	vrott(3);
 	gfunc_call(2);
 	vpushi(0);
@@ -2385,7 +2385,7 @@ void gen_opf(int op)
 		// must call intrinsic DP floating point divide
 		vswap();
 		/* call generic idiv function */
-		vpush_global_sym(&func_old_type, TOK__divd);
+		vpush_helper_func(TOK__divd);
 		vrott(3);
 		gfunc_call(2);
 		vpushi(0);
@@ -2396,7 +2396,7 @@ void gen_opf(int op)
 		// must call intrinsic SP floating point divide
 		vswap();
 		/* call generic idiv function */
-		vpush_global_sym(&func_old_type, TOK__divf);
+		vpush_helper_func(TOK__divf);
 		vrott(3);
 		gfunc_call(2);
 		vpushi(0);

@@ -402,7 +402,7 @@ static void gcall_or_jmp(int docall)
 
 static void gen_bounds_call(int v)
 {
-    Sym *sym = external_global_sym(v, &func_old_type);
+    Sym *sym = external_helper_sym(v);
 
     greloca(cur_text_section, sym, ind, R_RISCV_CALL_PLT, 0);
     o(0x17 | (1 << 7));   // auipc TR, 0 %call(func)
@@ -1125,7 +1125,7 @@ ST_FUNC void gen_opf(int op)
         case TOK_GT: func = TOK___gttf2; cond = 13; break;
         default: assert(0); break;
         }
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(3);
         gfunc_call(2);
         vpushi(0);
@@ -1213,7 +1213,7 @@ ST_FUNC void gen_cvt_itof(int t)
         int func = l ?
           (u ? TOK___floatunditf : TOK___floatditf) :
           (u ? TOK___floatunsitf : TOK___floatsitf);
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -1239,7 +1239,7 @@ ST_FUNC void gen_cvt_ftoi(int t)
         int func = l ?
           (u ? TOK___fixunstfdi : TOK___fixtfdi) :
           (u ? TOK___fixunstfsi : TOK___fixtfsi);
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -1281,7 +1281,7 @@ ST_FUNC void gen_cvt_ftof(int dt)
                 vtop->r2 = 1 + vtop->r;
             }
         }
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         gcall_or_jmp(1);
         vtop -= 2;
         vpushi(0);
@@ -1342,7 +1342,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align)
         vtop->r = TREG_R(0);
         o(0x00010513); /* mv a0,sp */
         vswap();
-        vpush_global_sym(&func_old_type, TOK___bound_new_region);
+        vpush_helper_func(TOK___bound_new_region);
         vrott(3);
         gfunc_call(2);
         func_bound_add_epilog = 1;

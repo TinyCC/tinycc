@@ -80,7 +80,7 @@ ST_DATA int func_var; /* true if current function is variadic (used by return in
 ST_DATA int func_vc;
 static int last_line_num, new_file, func_ind; /* debug info control */
 ST_DATA const char *funcname;
-ST_DATA CType int_type, func_old_type, char_type, char_pointer_type, func_mem_move, void_type, void_ptr_type;
+ST_DATA CType int_type, func_old_type, char_type, char_pointer_type;
 static CString initstr;
 
 #if PTR_SIZE == 4
@@ -800,14 +800,6 @@ ST_FUNC void tccgen_init(TCCState *s1)
     char_pointer_type = char_type;
     mk_pointer(&char_pointer_type);
 
-    void_type.t = VT_VOID;
-    void_ptr_type = void_type;
-    mk_pointer(&void_ptr_type);
-    func_mem_move.t = VT_FUNC;
-    func_mem_move.ref = sym_push(SYM_FIELD, &void_ptr_type, 0, 0);
-    func_mem_move.ref->f.func_call = FUNC_CDECL;
-    func_mem_move.ref->f.func_type = FUNC_OLD;
-
     func_old_type.t = VT_FUNC;
     func_old_type.ref = sym_push(SYM_FIELD, &int_type, 0, 0);
     func_old_type.ref->f.func_call = FUNC_CDECL;
@@ -1493,6 +1485,20 @@ ST_FUNC Sym *external_global_sym(int v, CType *type)
     return s;
 }
 
+/* create an external reference with no specific type similar to asm labels.
+   This avoids type conflicts if the symbol is used from C too */
+ST_FUNC Sym *external_helper_sym(int v)
+{
+    CType ct = { VT_ASM, NULL };
+    return external_global_sym(v, &ct);
+}
+
+/* push a reference to an helper function (such as memmove) */
+ST_FUNC void vpush_helper_func(int v)
+{
+    vpushsym(&func_old_type, external_helper_sym(v));
+}
+
 /* Merge symbol attributes.  */
 static void merge_symattr(struct SymAttr *sa, struct SymAttr *sa1)
 {
@@ -1679,12 +1685,6 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
     if (local_stack && (s->type.t & VT_BTYPE) != VT_FUNC)
         s = sym_copy(s, &local_stack);
     return s;
-}
-
-/* push a reference to global symbol v */
-ST_FUNC void vpush_global_sym(CType *type, int v)
-{
-    vpushsym(type, external_global_sym(v, type));
 }
 
 /* save registers up to (vtop - n) stack entry */
@@ -1904,7 +1904,7 @@ static void gen_bounded_ptr_add(void)
       vpushv(&vtop[-1]);
       vrott(3);
     }
-    vpush_global_sym(&func_old_type, TOK___bound_ptr_add);
+    vpush_helper_func(TOK___bound_ptr_add);
     vrott(3);
     gfunc_call(2);
     vtop -= save;
@@ -1941,7 +1941,7 @@ static void gen_bounded_ptr_deref(void)
         /* may happen with struct member access */
         return;
     }
-    sym = external_global_sym(func, &func_old_type);
+    sym = external_helper_sym(func);
     if (!sym->c)
         put_extern_sym(sym, NULL, 0, 0);
     /* patch relocation */
@@ -1998,7 +1998,7 @@ ST_FUNC void gbound_args(int nb_args)
           || v == TOK___sigsetjmp
 #endif
           ) {
-            vpush_global_sym(&func_old_type, TOK___bound_setjmp);
+            vpush_helper_func(TOK___bound_setjmp);
             vpushv(sv + 1);
             gfunc_call(1);
             func_bound_add_epilog = 1;
@@ -2415,7 +2415,7 @@ static void gen_opl(int op)
 #endif
     gen_func:
         /* call generic long long function */
-        vpush_global_sym(&func_old_type, func);
+        vpush_helper_func(func);
         vrott(3);
         gfunc_call(2);
         vpushi(0);
@@ -3379,13 +3379,13 @@ static void gen_cvt_itof1(int t)
         (VT_LLONG | VT_UNSIGNED)) {
 
         if (t == VT_FLOAT)
-            vpush_global_sym(&func_old_type, TOK___floatundisf);
+            vpush_helper_func(TOK___floatundisf);
 #if LDOUBLE_SIZE != 8
         else if (t == VT_LDOUBLE)
-            vpush_global_sym(&func_old_type, TOK___floatundixf);
+            vpush_helper_func(TOK___floatundixf);
 #endif
         else
-            vpush_global_sym(&func_old_type, TOK___floatundidf);
+            vpush_helper_func(TOK___floatundidf);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -3407,13 +3407,13 @@ static void gen_cvt_ftoi1(int t)
         /* not handled natively */
         st = vtop->type.t & VT_BTYPE;
         if (st == VT_FLOAT)
-            vpush_global_sym(&func_old_type, TOK___fixunssfdi);
+            vpush_helper_func(TOK___fixunssfdi);
 #if LDOUBLE_SIZE != 8
         else if (st == VT_LDOUBLE)
-            vpush_global_sym(&func_old_type, TOK___fixunsxfdi);
+            vpush_helper_func(TOK___fixunsxfdi);
 #endif
         else
-            vpush_global_sym(&func_old_type, TOK___fixunsdfdi);
+            vpush_helper_func(TOK___fixunsdfdi);
         vrott(2);
         gfunc_call(1);
         vpushi(0);
@@ -3904,13 +3904,13 @@ ST_FUNC void vstore(void)
             /* address of memcpy() */
 #ifdef TCC_ARM_EABI
             if(!(align & 7))
-                vpush_global_sym(&func_old_type, TOK_memmove8);
+                vpush_helper_func(TOK_memmove8);
             else if(!(align & 3))
-                vpush_global_sym(&func_old_type, TOK_memmove4);
+                vpush_helper_func(TOK_memmove4);
             else
 #endif
             /* Use memmove, rather than memcpy, as dest and src may be same: */
-            vpush_global_sym(&func_mem_move, TOK_memmove);
+            vpush_helper_func(TOK_memmove);
 
             vswap();
             /* source */
@@ -7363,7 +7363,7 @@ static void init_putz(init_params *p, unsigned long c, int size)
     if (p->sec) {
         /* nothing to do because globals are already set to zero */
     } else {
-        vpush_global_sym(&func_old_type, TOK_memset);
+        vpush_helper_func(TOK_memset);
         vseti(VT_LOCAL, c);
 #ifdef TCC_TARGET_ARM
         vpushs(size);

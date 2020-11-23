@@ -345,7 +345,7 @@ static void gen_static_call(int v)
 {
     Sym *sym;
 
-    sym = external_global_sym(v, &func_old_type);
+    sym = external_helper_sym(v);
     oad(0xe8, -4);
     greloc(cur_text_section, sym, ind-4, R_386_PC32);
 }
@@ -985,11 +985,11 @@ ST_FUNC void gen_cvt_ftoi(int t)
 {
     int bt = vtop->type.t & VT_BTYPE;
     if (bt == VT_FLOAT)
-        vpush_global_sym(&func_old_type, TOK___fixsfdi);
+        vpush_helper_func(TOK___fixsfdi);
     else if (bt == VT_LDOUBLE)
-        vpush_global_sym(&func_old_type, TOK___fixxfdi);
+        vpush_helper_func(TOK___fixxfdi);
     else
-        vpush_global_sym(&func_old_type, TOK___fixdfdi);
+        vpush_helper_func(TOK___fixdfdi);
     vswap();
     gfunc_call(1);
     vpushi(0);
@@ -1099,7 +1099,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 #endif
     if (use_call)
     {
-        vpush_global_sym(&func_old_type, TOK_alloca);
+        vpush_helper_func(TOK_alloca);
         vswap(); /* Move alloca ref past allocation size */
         gfunc_call(1);
     }
