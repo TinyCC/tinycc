@@ -166,7 +166,7 @@ static int load_symofs(int r, SValue *sv, int forstore)
             sv->c.i = 0;
         } else {
             if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: large addend for global address (0x%llx)", (long long)sv->c.i);
+              tcc_error("unimp: large addend for global address (0x%lx)", (long)sv->c.i);
             greloca(cur_text_section, sv->sym, ind,
                     R_RISCV_GOT_HI20, 0);
             doload = 1;
@@ -188,7 +188,7 @@ static int load_symofs(int r, SValue *sv, int forstore)
     } else if (v == VT_LOCAL || v == VT_LLOCAL) {
         rr = 8; // s0
         if (fc != sv->c.i)
-          tcc_error("unimp: store(giant local off) (0x%llx)", (long long)sv->c.i);
+          tcc_error("unimp: store(giant local off) (0x%lx)", (long)sv->c.i);
         if (((unsigned)fc + (1 << 11)) >> 12) {
             rr = is_ireg(r) ? ireg(r) : 5; // t0
             o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)

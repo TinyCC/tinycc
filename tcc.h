@@ -1011,7 +1011,8 @@ struct filespec {
 #define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
 
 /* symbol was created by tccasm.c first */
-#define VT_ASM (VT_VOID | VT_UNSIGNED)
+#define VT_ASM (VT_VOID | 1 << VT_STRUCT_SHIFT)
+#define VT_ASM_FUNC (VT_ASM | 2 << VT_STRUCT_SHIFT)
 #define IS_ASM_SYM(sym) (((sym)->type.t & (VT_BTYPE | VT_ASM)) == VT_ASM)
 
 /* general: set/get the pseudo-bitfield value for bit-mask M */
@@ -1251,15 +1252,6 @@ ST_FUNC void cstr_free(CString *cstr);
 ST_FUNC int cstr_printf(CString *cs, const char *fmt, ...) PRINTF_LIKE(2,3);
 ST_FUNC void cstr_reset(CString *cstr);
 
-ST_INLN void sym_free(Sym *sym);
-ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
-ST_FUNC Sym *sym_find2(Sym *s, int v);
-ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
-ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
-ST_INLN Sym *struct_find(int v);
-ST_INLN Sym *sym_find(int v);
-ST_FUNC Sym *global_identifier_push(int v, int t, int c);
-
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
@@ -1433,25 +1425,44 @@ ST_INLN int is_float(int t);
 ST_FUNC int ieee_finite(double d);
 ST_FUNC int exact_log2p1(int i);
 ST_FUNC void test_lvalue(void);
-ST_FUNC void vpushi(int v);
+
 ST_FUNC ElfSym *elfsym(Sym *);
 ST_FUNC void update_storage(Sym *sym);
+ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size, int can_add_underscore);
+ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
+#if PTR_SIZE == 4
+ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
+#endif
+ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
+
+ST_INLN void sym_free(Sym *sym);
+ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
+ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
+ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
+ST_FUNC Sym *sym_find2(Sym *s, int v);
+ST_INLN Sym *sym_find(int v);
+ST_INLN Sym *struct_find(int v);
+
+ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 ST_FUNC Sym *external_global_sym(int v, CType *type);
 ST_FUNC Sym *external_helper_sym(int v);
 ST_FUNC void vpush_helper_func(int v);
 ST_FUNC void vset(CType *type, int r, int v);
 ST_FUNC void vset_VT_CMP(int op);
+ST_FUNC void vpushi(int v);
+ST_FUNC void vpushv(SValue *v);
+ST_FUNC void vpushsym(CType *type, Sym *sym);
 ST_FUNC void vswap(void);
 ST_FUNC void vrote(SValue *e, int n);
 ST_FUNC void vrott(int n);
 ST_FUNC void vrotb(int n);
+ST_FUNC void vpop(void);
 #if PTR_SIZE == 4
 ST_FUNC void lexpand(void);
 #endif
 #ifdef TCC_TARGET_ARM
 ST_FUNC int get_reg_ex(int rc, int rc2);
 #endif
-ST_FUNC void vpushv(SValue *v);
 ST_FUNC void save_reg(int r);
 ST_FUNC void save_reg_upstack(int r, int n);
 ST_FUNC int get_reg(int rc);
@@ -1459,7 +1470,6 @@ ST_FUNC void save_regs(int n);
 ST_FUNC void gaddrof(void);
 ST_FUNC int gv(int rc);
 ST_FUNC void gv2(int rc1, int rc2);
-ST_FUNC void vpop(void);
 ST_FUNC void gen_op(int op);
 ST_FUNC int type_size(CType *type, int *a);
 ST_FUNC void mk_pointer(CType *type);
@@ -1512,13 +1522,6 @@ ST_FUNC size_t section_add(Section *sec, addr_t size, int align);
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
 ST_FUNC Section *find_section(TCCState *s1, const char *name);
 ST_FUNC Section *new_symtab(TCCState *s1, const char *symtab_name, int sh_type, int sh_flags, const char *strtab_name, const char *hash_name, int hash_sh_flags);
-
-ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size, int can_add_underscore);
-ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
-#if PTR_SIZE == 4
-ST_FUNC void greloc(Section *s, Sym *sym, unsigned long offset, int type);
-#endif
-ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);
 ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size, int info, int other, int shndx, const char *name);

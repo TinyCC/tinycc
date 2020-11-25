@@ -35,6 +35,7 @@
 # define REL_TYPE_DIRECT R_X86_64_64
 # define R_XXX_THUNKFIX R_X86_64_PC32
 # define R_XXX_RELATIVE R_X86_64_RELATIVE
+# define R_XXX_FUNCCALL R_X86_64_PC32
 # define IMAGE_FILE_MACHINE 0x8664
 # define RSRC_RELTYPE 3
 
@@ -44,6 +45,8 @@
 # define REL_TYPE_DIRECT R_ARM_ABS32
 # define R_XXX_THUNKFIX R_ARM_ABS32
 # define R_XXX_RELATIVE R_ARM_RELATIVE
+# define R_XXX_FUNCCALL R_ARM_PC24
+# define R_XXX_FUNCCALL2 R_ARM_ABS32
 # define IMAGE_FILE_MACHINE 0x01C0
 # define RSRC_RELTYPE 7 /* ??? (not tested) */
 
@@ -53,6 +56,7 @@
 # define REL_TYPE_DIRECT R_386_32
 # define R_XXX_THUNKFIX R_386_32
 # define R_XXX_RELATIVE R_386_RELATIVE
+# define R_XXX_FUNCCALL R_386_PC32
 # define IMAGE_FILE_MACHINE 0x014C
 # define RSRC_RELTYPE 7 /* DIR32NB */
 
@@ -1217,13 +1221,21 @@ static int pe_isafunc(TCCState *s1, int sym_index)
 {
     Section *sr = text_section->reloc;
     ElfW_Rel *rel, *rel_end;
-    Elf32_Word info = ELF32_R_INFO(sym_index, R_386_PC32);
+    ElfW(Addr)info = ELFW(R_INFO)(sym_index, R_XXX_FUNCCALL);
+#ifdef R_XXX_FUNCCALL2
+    ElfW(Addr)info2 = ELFW(R_INFO)(sym_index, R_XXX_FUNCCALL2);
+#endif
     if (!sr)
         return 0;
     rel_end = (ElfW_Rel *)(sr->data + sr->data_offset);
-    for (rel = (ElfW_Rel *)sr->data; rel < rel_end; rel++)
+    for (rel = (ElfW_Rel *)sr->data; rel < rel_end; rel++) {
         if (rel->r_info == info)
             return 1;
+#ifdef R_XXX_FUNCCALL2
+        if (rel->r_info == info2)
+            return 1;
+#endif
+    }
     return 0;
 }
 

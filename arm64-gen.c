@@ -587,7 +587,7 @@ ST_FUNC void load(int r, SValue *sv)
         return;
     }
 
-    printf("load(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcul);
+    printf("load(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcul);
     assert(0);
 }
 
@@ -639,7 +639,7 @@ ST_FUNC void store(int r, SValue *sv)
         return;
     }
 
-    printf("store(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcul);
+    printf("store(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcul);
     assert(0);
 }
 

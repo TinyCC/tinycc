@@ -116,7 +116,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         uint64_t got = s1->got->sh_addr;
         uint64_t off = (got >> 12) - (plt >> 12);
         if ((off + ((uint32_t)1 << 20)) >> 21)
-            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", off, got, plt);
+            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
         write32le(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
         write32le(p + 4, (0x90000010 | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
@@ -134,7 +134,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
             uint64_t addr = got + read64le(p);
             uint64_t off = (addr >> 12) - (pc >> 12);
             if ((off + ((uint32_t)1 << 20)) >> 21)
-                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", off, addr, pc);
+                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
             write32le(p, (0x90000010 | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
             write32le(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
@@ -239,7 +239,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 #endif
             if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc)
                 tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed"
-                          " (val=%lx, addr=%lx)", val, addr);
+                          " (val=%lx, addr=%lx)", (long)val, (long)addr);
             write32le(ptr, (0x14000000 |
                             (uint32_t)(type == R_AARCH64_CALL26) << 31 |
                             ((val - addr) >> 2 & 0x3ffffff)));

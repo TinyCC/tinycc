@@ -921,6 +921,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
             sym_type = STT_FUNC;
         } else if ((t & VT_BTYPE) == VT_VOID) {
             sym_type = STT_NOTYPE;
+            if ((t & (VT_BTYPE|VT_ASM_FUNC)) == VT_ASM_FUNC)
+                sym_type = STT_FUNC;
         } else {
             sym_type = STT_OBJECT;
         }
@@ -1440,7 +1442,7 @@ static void gen_test_zero(int op)
 
 /* ------------------------------------------------------------------------- */
 /* push a symbol value of TYPE */
-static inline void vpushsym(CType *type, Sym *sym)
+ST_FUNC void vpushsym(CType *type, Sym *sym)
 {
     CValue cval;
     cval.i = 0;
@@ -1489,7 +1491,7 @@ ST_FUNC Sym *external_global_sym(int v, CType *type)
    This avoids type conflicts if the symbol is used from C too */
 ST_FUNC Sym *external_helper_sym(int v)
 {
-    CType ct = { VT_ASM, NULL };
+    CType ct = { VT_ASM_FUNC, NULL };
     return external_global_sym(v, &ct);
 }
 
