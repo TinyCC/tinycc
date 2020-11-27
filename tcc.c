@@ -171,6 +171,8 @@ static const char version[] =
         " Darwin"
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
         " FreeBSD"
+#elif defined(__OpenBSD__)
+        " OpenBSD"
 #else
         " Linux"
 #endif

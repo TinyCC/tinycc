@@ -648,6 +648,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 # elif defined(__NetBSD__)
     rc->ip = uc->uc_mcontext.__gregs[_REG_RIP];
     rc->fp = uc->uc_mcontext.__gregs[_REG_RBP];
+# elif defined(__OpenBSD__)
+    rc->ip = uc->sc_rip;
+    rc->fp = uc->sc_rbp;
 # else
     rc->ip = uc->uc_mcontext.gregs[REG_RIP];
     rc->fp = uc->uc_mcontext.gregs[REG_RBP];
