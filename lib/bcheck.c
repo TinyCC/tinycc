@@ -219,6 +219,9 @@ typedef struct alloca_list_struct {
 #if defined(_WIN32)
 #define BOUND_TID_TYPE   DWORD
 #define BOUND_GET_TID    GetCurrentThreadId()
+#elif defined(__OpenBSD__)
+#define BOUND_TID_TYPE   int
+#define BOUND_GET_TID    0
 #elif defined(__i386__) || defined(__x86_64__) || defined(__arm__) || defined(__aarch64__) || defined(__riscv)
 #define BOUND_TID_TYPE   pid_t
 #define BOUND_GET_TID    syscall (SYS_gettid)
