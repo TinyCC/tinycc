@@ -366,4 +366,21 @@ n[sizeof({3;})]; // crashed in block() due to missing local scope
 f(){"12"3;} // second const token killed the value of the first
 
 /******************************************************************/
+#elif defined test_duplicate_member
+struct S {
+  int a, a;
+};
+#elif defined test_duplicate_member_anon
+struct S1 {
+  int b;
+  struct {
+    int b;
+  } c;
+};
+struct S2 {
+  int d;
+  struct {
+    int d;
+  };
+};
 #endif

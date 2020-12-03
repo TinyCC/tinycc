@@ -174,3 +174,9 @@ bar  : 3 ; 3
 
 [test_invalid_tokckill]
 60_errors_and_warnings.c:366: error: ';' expected (got "3")
+
+[test_duplicate_member]
+60_errors_and_warnings.c:372: error: duplicate member 'a'
+
+[test_duplicate_member_anon]
+60_errors_and_warnings.c:385: error: duplicate member 'd'

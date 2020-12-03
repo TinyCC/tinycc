@@ -432,6 +432,7 @@ typedef struct TokenSym {
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
     int tok; /* token number */
+    int cnt;
     int len;
     char str[1];
 } TokenSym;
