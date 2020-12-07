@@ -285,7 +285,11 @@ extern char **environ;
 #  if defined(TCC_MUSL)
 #   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-x86_64.so.1"
 #  else
-#   define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
+#   if defined(__OpenBSD__)
+#    define CONFIG_TCC_ELFINTERP "/usr/libexec/ld.so"
+#   else
+#    define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
+#   endif
 #  endif
 # elif defined(TCC_TARGET_RISCV64)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-riscv64-lp64d.so.1"

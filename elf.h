@@ -2908,6 +2908,8 @@ typedef Elf32_Addr Elf32_Conflict;
 
 #define R_X86_64_NUM		43
 
+/* x86-64 sh_type values.  */
+#define SHT_X86_64_UNWIND       0x70000001 /* Unwind information.  */
 
 /* AM33 relocations.  */
 #define R_MN10300_NONE		0	/* No reloc.  */

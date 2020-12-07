@@ -1413,7 +1413,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
             tcc_add_library_err(s1, "pthread");
+#if !defined(__OpenBSD__)
             tcc_add_library_err(s1, "dl");
+#endif
             tcc_add_support(s1, "bcheck.o");
         }
 #endif
@@ -1992,7 +1994,7 @@ static void put_dt(Section *dynamic, int dt, addr_t val)
 }
 
 static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
-                                 Section *dynamic)
+                                 Section *dynamic, Section *note)
 {
     ElfW(Phdr) *ph;
 
@@ -2017,6 +2019,19 @@ static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
         ph->p_memsz = interp->sh_size;
         ph->p_flags = PF_R;
         ph->p_align = interp->sh_addralign;
+    }
+
+    if (note) {
+        ph = &phdr[phnum - 2];
+
+        ph->p_type = PT_NOTE;
+        ph->p_offset = note->sh_offset;
+        ph->p_vaddr = note->sh_addr;
+        ph->p_paddr = ph->p_vaddr;
+        ph->p_filesz = note->sh_size;
+        ph->p_memsz = note->sh_size;
+        ph->p_flags = PF_R;
+        ph->p_align = note->sh_addralign;
     }
 
     /* if dynamic section, then add corresponding program header */
@@ -2051,6 +2066,13 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELA, dyninf->rel_addr);
     put_dt(dynamic, DT_RELASZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));
+#ifdef __OpenBSD__
+    put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
+    put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
+    put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
+    put_dt(dynamic, DT_PLTREL, DT_RELA);
+    put_dt(dynamic, DT_BIND_NOW, 1); /* Dirty hack */
+#endif
 #else
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
     put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
@@ -2372,6 +2394,25 @@ static void create_arm_attribute_section(TCCState *s1)
 }
 #endif
 
+#ifdef __OpenBSD__
+static Section *create_openbsd_note_section(TCCState *s1)
+{
+    Section *s = find_section (s1, ".note.openbsd.ident");
+
+    if (s->data_offset == 0) {
+        unsigned char *ptr = section_ptr_add(s, sizeof(ElfW(Nhdr)) + 8 + 4);
+        ElfW(Nhdr) *note = (ElfW(Nhdr) *) ptr;
+
+        s->sh_type = SHT_NOTE;
+        note->n_namesz = 8;
+        note->n_descsz = 4;
+        note->n_type = ELF_NOTE_OS_GNU;
+	strcpy (ptr + sizeof(ElfW(Nhdr)), "OpenBSD");
+    }
+    return s;
+}
+#endif
+
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
@@ -2379,13 +2420,18 @@ static int elf_output_file(TCCState *s1, const char *filename)
     int ret, phnum, shnum, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
     ElfW(Phdr) *phdr;
-    Section *strsec, *interp, *dynamic, *dynstr;
+    Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
+
+    file_type = s1->output_type;
 
 #ifdef TCC_TARGET_ARM
     create_arm_attribute_section (s1);
 #endif
+#ifdef __OpenBSD__
+    if (file_type != TCC_OUTPUT_OBJ)
+        note = create_openbsd_note_section (s1);
+#endif
 
-    file_type = s1->output_type;
     s1->nb_errors = 0;
     ret = -1;
     phdr = NULL;
@@ -2497,6 +2543,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
         phnum = i < s1->nb_sections ? 6 : 5;
     }
 
+    phnum += note != NULL;
+
     /* allocate program segment headers */
     phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
@@ -2515,7 +2563,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     /* Fill remaining program header and finalize relocation related to dynamic
        linking. */
     if (file_type != TCC_OUTPUT_OBJ) {
-        fill_unloadable_phdr(phdr, phnum, interp, dynamic);
+        fill_unloadable_phdr(phdr, phnum, interp, dynamic, note);
         if (dynamic) {
             ElfW(Sym) *sym;
             dynamic->data_offset = dyninf.data_offset;
@@ -2703,6 +2751,10 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         if (sh->sh_type != SHT_PROGBITS &&
 #ifdef TCC_ARM_EABI
             sh->sh_type != SHT_ARM_EXIDX &&
+#endif
+#ifdef __OpenBSD__
+            sh->sh_type != SHT_X86_64_UNWIND &&
+            sh->sh_type != SHT_NOTE &&
 #endif
             sh->sh_type != SHT_NOBITS &&
             sh->sh_type != SHT_PREINIT_ARRAY &&

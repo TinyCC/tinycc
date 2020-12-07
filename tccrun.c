@@ -88,8 +88,23 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     unlink(tmpfname);
     ftruncate(fd, size);
 
+#ifdef __OpenBSD__
+    { /* OpenBSD uses random 64 addresses that are far apart. This does not
+         work for the x86_64 target.
+         This might be a problem in the future for other targets. */
+	static char *prw = (char *) 0x100000000;
+        char *pex = prw + 0x40000000;
+
+        ptr = mmap (prw, size, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+        prx = mmap (pex, size, PROT_READ|PROT_EXEC, MAP_SHARED | MAP_FIXED, fd, 0);
+	tcc_enter_state (s1);
+	prw += 0x100000000;
+        tcc_exit_state();
+    }
+#else
     ptr = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     prx = mmap (NULL, size, PROT_READ|PROT_EXEC, MAP_SHARED, fd, 0);
+#endif
     if (ptr == MAP_FAILED || prx == MAP_FAILED)
 	tcc_error("tccrun: could not map memory");
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
