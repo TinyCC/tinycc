@@ -892,7 +892,15 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__NetBSD__", "__NetBSD__");
 # endif
 # if defined(__OpenBSD__)
-    tcc_define_symbol(s, "__OpenBSD__", "__OpenBSD__");
+    tcc_define_symbol(s, "__OpenBSD__", "1");
+    tcc_define_symbol(s, "_ANSI_LIBRARY_", "1");
+    tcc_define_symbol(s, "__GNUC__", "4");
+    tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
+    /* used by math.h */
+    tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
+    tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
+    tcc_define_symbol(s, "__builtin_huge_vall()", "1e5000L");
+    tcc_define_symbol(s, "__builtin_nanf(ignored_string)", "(0.0F/0.0F)");
 # endif
 #endif
 
