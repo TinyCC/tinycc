@@ -4321,38 +4321,19 @@ static Sym * find_field (CType *type, int v, int *cumofs)
     return s;
 }
 
-/*
- * c = 0: reset symbol counter
- * c = 1: increment symbol counter
- * c = 2: check symbol counter
- */
-
-static void check_fields (CType *type, int c)
+static void check_fields (CType *type, int check)
 {
     Sym *s = type->ref;
-    int v;
 
     while ((s = s->next) != NULL) {
-	if ((s->v & SYM_FIELD) &&
-	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
-	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
-	    check_fields (&s->type, c);
-	}
-	v = s->v & ~SYM_FIELD;
-	if (v < tok_ident)
-	    switch (c) {
-	    case 0:
-		table_ident[v - TOK_IDENT]->cnt = 0;
-		break;
-	    case 1:
-		table_ident[v - TOK_IDENT]->cnt++;
-		break;
-	    case 2:
-		if (table_ident[v - TOK_IDENT]->cnt != 1)
-		    tcc_error("duplicate member '%s'",
-			      get_tok_str(v, NULL));
-	        break;
-	}
+        int v = s->v & ~SYM_FIELD;
+        if (v < SYM_FIRST_ANOM) {
+            TokenSym *ts = table_ident[v - TOK_IDENT];
+            if (check && (ts->tok & SYM_FIELD))
+                tcc_error("duplicate member '%s'", get_tok_str(v, NULL));
+            ts->tok ^= SYM_FIELD;
+        } else if ((s->type.t & VT_BTYPE) == VT_STRUCT)
+            check_fields (&s->type, check);
     }
 }
 
@@ -4809,9 +4790,8 @@ do_decl:
             if (ad.cleanup_func) {
                 tcc_warning("attribute '__cleanup__' ignored on type");
             }
-	    check_fields(type, 0);
 	    check_fields(type, 1);
-	    check_fields(type, 2);
+	    check_fields(type, 0);
             struct_layout(type, &ad);
         }
     }

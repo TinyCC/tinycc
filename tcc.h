@@ -45,9 +45,6 @@
 /* XXX: need to define this to use them in non ISOC99 context */
 extern float strtof (const char *__nptr, char **__endptr);
 extern long double strtold (const char *__nptr, char **__endptr);
-# if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-extern char **environ;
-# endif
 #endif
 
 #ifdef _WIN32
@@ -436,7 +433,6 @@ typedef struct TokenSym {
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
     int tok; /* token number */
-    int cnt;
     int len;
     char str[1];
 } TokenSym;
@@ -885,6 +881,11 @@ struct TCCState {
     /* ptr to next reloc entry reused */
     ElfW_Rel *qrel;
 #   define qrel s1->qrel
+
+#ifdef TCC_TARGET_RISCV64
+    struct pcrel_hi { addr_t addr, val; } last_hi;
+#   define last_hi s1->last_hi
+#endif
 
 #ifdef TCC_TARGET_PE
     /* PE info */

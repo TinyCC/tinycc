@@ -155,11 +155,6 @@ ST_FUNC void relocate_plt(TCCState *s1)
     }
 }
 
-struct pcrel_hi {
-    addr_t addr, val;
-};
-static struct pcrel_hi last_hi;
-
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
               addr_t addr, addr_t val)
 {

@@ -63,6 +63,10 @@ static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
 #endif
 
+#ifndef PAGESIZE
+# define PAGESIZE 4096
+#endif
+
 /* ------------------------------------------------------------- */
 /* Do all relocations (needed before using tcc_get_symbol())
    Returns -1 on error. */
@@ -87,20 +91,19 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     int fd = mkstemp(tmpfname);
     unlink(tmpfname);
     ftruncate(fd, size);
-
 #ifdef __OpenBSD__
-    { /* OpenBSD uses random 64 addresses that are far apart. This does not
-         work for the x86_64 target.
-         This might be a problem in the future for other targets. */
-	static char *prw = (char *) 0x100000000;
-        char *pex = prw + 0x40000000;
-
-        ptr = mmap (prw, size, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
-        prx = mmap (pex, size, PROT_READ|PROT_EXEC, MAP_SHARED | MAP_FIXED, fd, 0);
-	tcc_enter_state (s1);
-	prw += 0x100000000;
-        tcc_exit_state();
+{
+    int offs;
+    size = (size + (PAGESIZE-1)) & ~(PAGESIZE-1);
+    offs = (size + (0x100000-1)) & ~(0x100000-1);
+    prx = NULL;
+    ptr = mmap(NULL, size + offs, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ptr != MAP_FAILED) {
+        /* mmap RX memory at a fixed distance */
+        munmap((char*)ptr + size, offs);
+        prx = mmap((char*)ptr + offs, size, PROT_READ|PROT_EXEC, MAP_SHARED|MAP_FIXED, fd, 0);
     }
+}
 #else
     ptr = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     prx = mmap (NULL, size, PROT_READ|PROT_EXEC, MAP_SHARED, fd, 0);
@@ -111,6 +114,7 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, prx);
     ptr_diff = (char*)prx - (char*)ptr;
     close(fd);
+    //printf("map %p %p %p\n", ptr, prx, (void*)ptr_diff);
 }
 #else
     ptr = tcc_malloc(size);
@@ -155,8 +159,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc = &g_rtctxt;
 #endif
-# if defined(__APPLE__) || defined(__FreeBSD__)
+
+#if defined(__APPLE__) || defined(__FreeBSD__)
     char **envp = NULL;
+#elif defined(__OpenBSD__)
+    extern char **environ;
+    char **envp = environ;
 #else
     char **envp = environ;
 #endif
@@ -333,9 +341,6 @@ static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length)
     void __clear_cache(void *beginning, void *end);
 # ifndef HAVE_SELINUX
     addr_t start, end;
-#  ifndef PAGESIZE
-#   define PAGESIZE 4096
-#  endif
     start = (addr_t)ptr & ~(PAGESIZE - 1);
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);

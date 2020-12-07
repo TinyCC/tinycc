@@ -57,9 +57,6 @@ endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  TESTS := $(filter-out dlltest asm-c-connect-test,$(TESTS))
 endif
-ifeq ($(TARGETOS),OpenBSD)
- TESTS := $(filter-out libtest_mt test3 dlltest asm-c-connect-test pp-dir btest test1b,$(TESTS))
-endif
 
 ifeq ($(OS),Windows_NT) # for libtcc_test to find libtcc.dll
  PATH := $(CURDIR)/$(TOP)$(if $(findstring ;,$(PATH)),;,:)$(PATH)
