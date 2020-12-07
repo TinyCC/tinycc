@@ -893,7 +893,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 # endif
 # if defined(__OpenBSD__)
     tcc_define_symbol(s, "__OpenBSD__", "1");
-    tcc_define_symbol(s, "_ANSI_LIBRARY_", "1");
+    tcc_define_symbol(s, "_ANSI_LIBRARY", "1");
     tcc_define_symbol(s, "__GNUC__", "4");
     tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
     /* used by math.h */
