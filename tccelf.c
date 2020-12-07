@@ -2133,6 +2133,9 @@ static int final_sections_reloc(TCCState *s1)
     if (s1->nb_errors != 0)
         return -1;
 
+    /* Some targets use static data between relocations (riscv64) */
+    tcc_enter_state (s1);
+
     /* relocate sections */
     /* XXX: ignore sections with allocated relocations ? */
     for(i = 1; i < s1->nb_sections; i++) {
@@ -2140,6 +2143,8 @@ static int final_sections_reloc(TCCState *s1)
         if (s->reloc && (s != s1->got || s1->static_link))
             relocate_section(s1, s);
     }
+
+    tcc_exit_state();
 
     /* relocate relocation entries if the relocation tables are
        allocated in the executable */
