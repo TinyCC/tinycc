@@ -45,6 +45,12 @@ ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_pthread.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
 endif
+ifeq ($(TARGETOS),OpenBSD)
+ SKIP += 106_pthread.test
+ SKIP += 113_btdll.test
+ SKIP += 114_bound_signal.test
+ SKIP += 116_bound_setjmp2.test
+endif
 
 # Some tests might need arguments
 ARGS =
