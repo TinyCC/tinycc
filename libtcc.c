@@ -937,8 +937,10 @@ LIBTCCAPI TCCState *tcc_new(void)
 #  ifdef __FreeBSD__
     /* define __GNUC__ to have some useful stuff from sys/cdefs.h
        that are unconditionally used in FreeBSDs other system headers :/ */
-    tcc_define_symbol(s, "__GNUC__", "2");
-    tcc_define_symbol(s, "__GNUC_MINOR__", "7");
+    tcc_define_symbol(s, "__GNUC__", "9");
+    tcc_define_symbol(s, "__GNUC_MINOR__", "3");
+    tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
+    tcc_define_symbol(s, "__amd64__", "1");
     tcc_define_symbol(s, "__builtin_alloca", "alloca");
 #  endif
 # else
