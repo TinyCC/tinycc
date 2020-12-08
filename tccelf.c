@@ -1431,10 +1431,14 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #endif
         if (strlen(TCC_LIBTCC1) > 0)
             tcc_add_support(s1, TCC_LIBTCC1);
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__FreeBSD__)
         /* add crt end if not memory output */
-	if (s1->output_type != TCC_OUTPUT_MEMORY)
+	if (s1->output_type != TCC_OUTPUT_MEMORY) {
 	    tcc_add_crt(s1, "crtend.o");
+#if defined(__FreeBSD__)
+            tcc_add_crt(s1, "crtn.o");
+#endif
+        }
 #elif !defined(TCC_TARGET_MACHO)
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
@@ -2066,7 +2070,7 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELA, dyninf->rel_addr);
     put_dt(dynamic, DT_RELASZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) || defined(__FreeBSD__)
     put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
     put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
     put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
@@ -2399,7 +2403,7 @@ static void create_arm_attribute_section(TCCState *s1)
 }
 #endif
 
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__)
 static Section *create_openbsd_note_section(TCCState *s1)
 {
     Section *s = find_section (s1, ".note.openbsd.ident");
@@ -2757,7 +2761,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 #ifdef TCC_ARM_EABI
             sh->sh_type != SHT_ARM_EXIDX &&
 #endif
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) || defined(__FreeBSD__)
             sh->sh_type != SHT_X86_64_UNWIND &&
             sh->sh_type != SHT_NOTE &&
 #endif

@@ -1105,6 +1105,11 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
         tcc_add_crt(s, "crtbegin.o");
+#elif defined(__FreeBSD__)
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crt1.o");
+        tcc_add_crt(s, "crti.o");
+        tcc_add_crt(s, "crtbegin.o");
 #elif !defined(TCC_TARGET_MACHO)
         /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
         if (output_type != TCC_OUTPUT_DLL)

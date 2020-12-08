@@ -155,7 +155,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc = &g_rtctxt;
 #endif
-# if defined(__APPLE__)
+# if defined(__APPLE__) || defined(__FreeBSD__)
     char **envp = NULL;
 #else
     char **envp = environ;
