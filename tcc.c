@@ -173,6 +173,8 @@ static const char version[] =
         " FreeBSD"
 #elif defined(__OpenBSD__)
         " OpenBSD"
+#elif defined(__NetBSD__)
+        " NetBSD"
 #else
         " Linux"
 #endif

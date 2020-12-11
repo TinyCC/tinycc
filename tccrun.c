@@ -162,7 +162,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
     char **envp = NULL;
-#elif defined(__OpenBSD__)
+#elif defined(__OpenBSD__) || defined(__NetBSD__)
     extern char **environ;
     char **envp = environ;
 #else

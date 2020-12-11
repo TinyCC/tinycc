@@ -889,7 +889,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);
 # endif
 # if defined(__NetBSD__)
-    tcc_define_symbol(s, "__NetBSD__", "__NetBSD__");
+    tcc_define_symbol(s, "__NetBSD__", "1");
+    tcc_define_symbol(s, "__GNUC__", "4");
+    tcc_define_symbol(s, "__GNUC_MINOR__", "0");
+    tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
+    tcc_define_symbol(s, "_Pragma(x)", "");
 # endif
 # if defined(__OpenBSD__)
     tcc_define_symbol(s, "__OpenBSD__", "1");
@@ -1108,6 +1112,11 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #elif defined(__FreeBSD__)
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
+        tcc_add_crt(s, "crti.o");
+        tcc_add_crt(s, "crtbegin.o");
+#elif defined(__NetBSD__)
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crt0.o");
         tcc_add_crt(s, "crti.o");
         tcc_add_crt(s, "crtbegin.o");
 #elif !defined(TCC_TARGET_MACHO)
