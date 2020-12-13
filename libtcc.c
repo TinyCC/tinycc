@@ -881,9 +881,13 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__linux", NULL);
 # endif
 # if defined(__FreeBSD__)
-    tcc_define_symbol(s, "__FreeBSD__", "__FreeBSD__");
+    tcc_define_symbol(s, "__FreeBSD__", "12");
     /* No 'Thread Storage Local' on FreeBSD with tcc */
     tcc_define_symbol(s, "__NO_TLS", NULL);
+#   if defined(__aarch64__)
+    /* FIXME, __int128_t is used by setjump */
+    tcc_define_symbol(s, "__int128_t", "struct { unsigned char _dummy[16]; }");
+#   endif
 # endif
 # if defined(__FreeBSD_kernel__)
     tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);

@@ -678,6 +678,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 #elif defined(__arm__)
     rc->ip = uc->uc_mcontext.arm_pc;
     rc->fp = uc->uc_mcontext.arm_fp;
+#elif defined(__aarch64__) && defined(__FreeBSD__)
+    rc->ip = uc->uc_mcontext.mc_gpregs.gp_elr; /* aka REG_PC */
+    rc->fp = uc->uc_mcontext.mc_gpregs.gp_x[29];
 #elif defined(__aarch64__)
     rc->ip = uc->uc_mcontext.pc;
     rc->fp = uc->uc_mcontext.regs[29];
