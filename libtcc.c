@@ -894,6 +894,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC_MINOR__", "0");
     tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
     tcc_define_symbol(s, "_Pragma(x)", "");
+    tcc_define_symbol(s, "__ELF__", "1");
 # endif
 # if defined(__OpenBSD__)
     tcc_define_symbol(s, "__OpenBSD__", "1");
