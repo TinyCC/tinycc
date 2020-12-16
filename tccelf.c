@@ -912,6 +912,14 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
                 void *addr = dlsym(RTLD_DEFAULT, name + 1);
 #else
                 void *addr = dlsym(RTLD_DEFAULT, name);
+#ifdef __OpenBSD__
+		if (addr == NULL) {
+		    int i;
+		    for (i = 0; i < s1->nb_dlopens; i++)
+                        if ((addr = dlsym(s1->dlopens[i], name)))
+			    break;
+		}
+#endif
 #endif
                 if (addr) {
                     sym->st_value = (addr_t) addr;
@@ -1413,7 +1421,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
             tcc_add_library_err(s1, "pthread");
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(__NetBSD__)
             tcc_add_library_err(s1, "dl");
 #endif
             tcc_add_support(s1, "bcheck.o");
@@ -1433,7 +1441,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
             tcc_add_support(s1, TCC_LIBTCC1);
 #if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
         /* add crt end if not memory output */
-	if (s1->output_type != TCC_OUTPUT_MEMORY) {
+	if (s1->output_type == TCC_OUTPUT_DLL)
+	    tcc_add_crt(s1, "crtendS.o");
+	else if (s1->output_type != TCC_OUTPUT_MEMORY) {
 	    tcc_add_crt(s1, "crtend.o");
 #if defined(__FreeBSD__) || defined(__NetBSD__)
             tcc_add_crt(s1, "crtn.o");

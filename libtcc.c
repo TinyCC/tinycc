@@ -1028,6 +1028,11 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
     dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
     dynarray_reset(&s1->argv, &s1->argc);
+#ifdef __OpenBSD__
+    tcc_free(s1->dlopens);
+    s1->dlopens = NULL;
+    s1->nb_dlopens = 0;
+#endif
 
     cstr_free(&s1->cmdline_defs);
     cstr_free(&s1->cmdline_incl);
@@ -1113,7 +1118,10 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #if defined(__OpenBSD__)
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
-        tcc_add_crt(s, "crtbegin.o");
+        if (output_type == TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crtbeginS.o");
+        else
+            tcc_add_crt(s, "crtbegin.o");
 #elif defined(__FreeBSD__)
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
@@ -1181,8 +1189,15 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
                 ret = 0;
 #ifdef TCC_IS_NATIVE
-                if (NULL == dlopen(filename, RTLD_GLOBAL | RTLD_LAZY))
-                    ret = -1;
+		{
+                    void *dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                    if (NULL == dl)
+                        ret = -1;
+#ifdef __OpenBSD__
+		    else
+			dynarray_add(&s1->dlopens, &s1->nb_dlopens, dl);
+#endif
+		}
 #endif
             } else {
 #ifndef TCC_TARGET_MACHO

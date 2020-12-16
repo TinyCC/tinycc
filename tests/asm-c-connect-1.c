@@ -19,7 +19,12 @@ static int __USED x1_c (void)
     return 1;
 }
 
+#if __i386__
 asm(".text;"_"x1: call "_"x1_c; ret");
+#else
+/* Keep stack aligned */
+asm(".text;"_"x1: sub $8,%rsp; call "_"x1_c; add $8,%rsp; ret");
+#endif
 
 void callx4(void);
 void callx5_again(void);

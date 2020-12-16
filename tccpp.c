@@ -3700,7 +3700,8 @@ static void tcc_predefs(CString *cstr)
     "__BOTH(char*,strcat,(char*,const char*))\n"
     "__BOTH(char*,strchr,(const char*,int))\n"
     "__BOTH(char*,strdup,(const char*))\n"
-#ifdef TCC_TARGET_PE
+#if defined(TCC_TARGET_PE) || defined(__OpenBSD__) || \
+    defined(__FreeBSD__) || defined(__NetBSD__)
     "#define __MAYBE_REDIR __BOTH\n"
 #else  // HAVE MALLOC_REDIR
     "#define __MAYBE_REDIR __BUILTIN\n"

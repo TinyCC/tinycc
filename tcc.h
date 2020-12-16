@@ -793,6 +793,12 @@ struct TCCState {
     char **crt_paths;
     int nb_crt_paths;
 
+#ifdef __OpenBSD__
+    /* track dlopen */
+    void **dlopens;
+    int nb_dlopens;
+#endif
+
     /* -D / -U options */
     CString cmdline_defs;
     /* -include options */
