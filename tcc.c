@@ -169,11 +169,11 @@ static const char version[] =
         " Windows"
 #elif defined(TCC_TARGET_MACHO)
         " Darwin"
-#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
         " FreeBSD"
-#elif defined(__OpenBSD__)
+#elif TARGETOS_OpenBSD
         " OpenBSD"
-#elif defined(__NetBSD__)
+#elif TARGETOS_NetBSD
         " NetBSD"
 #else
         " Linux"

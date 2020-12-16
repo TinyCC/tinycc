@@ -14,7 +14,6 @@ ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
 endif
 ifdef CONFIG_OSX
  SKIP += 40_stdio.test 42_function_pointer.test
- SKIP += 113_btdll.test # no shared lib support yet
 endif
 ifeq ($(ARCH),x86_64)
  SKIP += 73_arm64.test
@@ -24,16 +23,20 @@ ifeq (,$(filter i386,$(ARCH)))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test # x86 asm
- SKIP += 113_btdll.test # dll support needed
 endif
-ifeq (,$(filter i386 x86_64 arm arm64 riscv64,$(ARCH)))
+ifeq ($(CONFIG_backtrace),no)
  SKIP += 112_backtrace.test
+ SKIP += 113_btdll.test
+ CONFIG_bcheck = no # no bcheck without backtrace
+endif
+ifeq ($(CONFIG_bcheck),no)
  SKIP += 114_bound_signal.test
  SKIP += 115_bound_setjmp.test
  SKIP += 116_bound_setjmp2.test
+ SKIP += 117_builtins.test
 endif
-ifeq (-$(CONFIG_musl)-,-yes-)
- SKIP += 112_backtrace.test
+ifeq ($(CONFIG_dll),no)
+ SKIP += 113_btdll.test # no shared lib support yet
 endif
 ifeq (-$(findstring gcc,$(CC))-,--)
  SKIP += $(patsubst %.expect,%.test,$(GEN-ALWAYS))
@@ -44,12 +47,6 @@ endif
 ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_pthread.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
-endif
-ifeq ($(TARGETOS),OpenBSD)
- SKIP += 106_pthread.test
- SKIP += 113_btdll.test
- SKIP += 114_bound_signal.test
- SKIP += 116_bound_setjmp2.test
 endif
 
 # Some tests might need arguments
@@ -109,8 +106,10 @@ GEN-ALWAYS =
 115_bound_setjmp.test: FLAGS += -b
 116_bound_setjmp2.test: FLAGS += -b
 117_builtins.test: T1 = ( $(TCC) -run $1 && $(TCC) -b -run $1 )
+ifneq ($(CONFIG_bcheck),no)
 121_struct_return.test: FLAGS += -b
 122_vla_reuse.test: FLAGS += -b
+endif
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

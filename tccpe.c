@@ -1277,24 +1277,10 @@ static int pe_check_symbols(struct pe_info *pe)
                 unsigned long offset = is->thk_offset;
                 if (offset) {
                     /* got aliased symbol, like stricmp and _stricmp */
-
                 } else {
                     char buffer[100];
-                    WORD *p;
+                    unsigned char *p;
 
-                    offset = text_section->data_offset;
-                    /* add the 'jmp IAT[x]' instruction */
-#ifdef TCC_TARGET_ARM
-                    p = section_ptr_add(text_section, 8+4); // room for code and address
-                    (*(DWORD*)(p)) = 0xE59FC000; // arm code ldr ip, [pc] ; PC+8+0 = 0001xxxx
-                    (*(DWORD*)(p+2)) = 0xE59CF000; // arm code ldr pc, [ip]
-#else
-                    p = section_ptr_add(text_section, 8);
-                    *p = 0x25FF;
-#ifdef TCC_TARGET_X86_64
-                    *(DWORD*)(p+1) = (DWORD)-4;
-#endif
-#endif
                     /* add a helper symbol, will be patched later in
                        pe_build_imports */
                     sprintf(buffer, "IAT.%s", name);
@@ -1302,16 +1288,27 @@ static int pe_check_symbols(struct pe_info *pe)
                         symtab_section, 0, sizeof(DWORD),
                         ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
                         0, SHN_UNDEF, buffer);
+
+                    offset = text_section->data_offset;
+                    is->thk_offset = offset;
+
+                    /* add the 'jmp IAT[x]' instruction */
 #ifdef TCC_TARGET_ARM
+                    p = section_ptr_add(text_section, 8+4); // room for code and address
+                    write32le(p + 0, 0xE59FC000); // arm code ldr ip, [pc] ; PC+8+0 = 0001xxxx
+                    write32le(p + 4, 0xE59CF000); // arm code ldr pc, [ip]
                     put_elf_reloc(symtab_section, text_section,
                         offset + 8, R_XXX_THUNKFIX, is->iat_index); // offset to IAT position
 #else
+                    p = section_ptr_add(text_section, 8);
+                    write16le(p, 0x25FF);
+#ifdef TCC_TARGET_X86_64
+                    write32le(p + 2, (DWORD)-4);
+#endif
                     put_elf_reloc(symtab_section, text_section, 
                         offset + 2, R_XXX_THUNKFIX, is->iat_index);
 #endif
-                    is->thk_offset = offset;
                 }
-
                 /* tcc_realloc might have altered sym's address */
                 sym = (ElfW(Sym) *)symtab_section->data + sym_index;
 
@@ -1531,16 +1528,13 @@ ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t va
         );
 }
 
-static int add_dllref(TCCState *s1, const char *dllname)
+static int pe_add_dllref(TCCState *s1, const char *dllname)
 {
-    DLLReference *dllref;
     int i;
     for (i = 0; i < s1->nb_loaded_dlls; ++i)
         if (0 == strcmp(s1->loaded_dlls[i]->name, dllname))
             return i + 1;
-    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
-    strcpy(dllref->name, dllname);
-    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    tcc_add_dllref(s1, dllname);
     return s1->nb_loaded_dlls;
 }
 
@@ -1737,7 +1731,7 @@ static int pe_load_def(TCCState *s1, int fd)
             continue;
 
         case 2:
-            dllindex = add_dllref(s1, dllname);
+            dllindex = pe_add_dllref(s1, dllname);
             ++state;
             /* fall through */
         default:
@@ -1773,7 +1767,7 @@ static int pe_load_dll(TCCState *s1, const char *filename)
     if (ret) {
         return -1;
     } else if (p) {
-        index = add_dllref(s1, filename);
+        index = pe_add_dllref(s1, filename);
         for (q = p; *q; q += 1 + strlen(q))
             pe_putimport(s1, index, q, 0);
         tcc_free(p);
@@ -1782,7 +1776,7 @@ static int pe_load_dll(TCCState *s1, const char *filename)
 }
 
 /* ------------------------------------------------------------- */
-ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd)
+ST_FUNC int pe_load_file(struct TCCState *s1, int fd, const char *filename)
 {
     int ret = -1;
     char buf[10];

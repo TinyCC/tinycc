@@ -880,7 +880,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__linux__", NULL);
     tcc_define_symbol(s, "__linux", NULL);
 # endif
-# if defined(__FreeBSD__)
+# if TARGETOS_FreeBSD
     tcc_define_symbol(s, "__FreeBSD__", "12");
     /* No 'Thread Storage Local' on FreeBSD with tcc */
     tcc_define_symbol(s, "__NO_TLS", NULL);
@@ -889,10 +889,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__int128_t", "struct { unsigned char _dummy[16]; }");
 #   endif
 # endif
-# if defined(__FreeBSD_kernel__)
+# if TARGETOS_FreeBSD_kernel
     tcc_define_symbol(s, "__FreeBSD_kernel__", NULL);
 # endif
-# if defined(__NetBSD__)
+# if TARGETOS_NetBSD
     tcc_define_symbol(s, "__NetBSD__", "1");
     tcc_define_symbol(s, "__GNUC__", "4");
     tcc_define_symbol(s, "__GNUC_MINOR__", "0");
@@ -900,11 +900,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "_Pragma(x)", "");
     tcc_define_symbol(s, "__ELF__", "1");
 # endif
-# if defined(__OpenBSD__)
+# if TARGETOS_OpenBSD
     tcc_define_symbol(s, "__OpenBSD__", "1");
     tcc_define_symbol(s, "_ANSI_LIBRARY", "1");
     tcc_define_symbol(s, "__GNUC__", "4");
-    tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
     /* used by math.h */
     tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
     tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
@@ -940,17 +939,15 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* wint_t is unsigned int by default, but (signed) int on BSDs
        and unsigned short on windows.  Other OSes might have still
        other conventions, sigh.  */
-# if defined(__FreeBSD__) || defined (__FreeBSD_kernel__) \
-  || defined(__NetBSD__) || defined(__OpenBSD__)
+# if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel || TARGETOS_NetBSD || TARGETOS_OpenBSD
     tcc_define_symbol(s, "__WINT_TYPE__", "int");
-#  ifdef __FreeBSD__
+#  if TARGETOS_FreeBSD
     /* define __GNUC__ to have some useful stuff from sys/cdefs.h
        that are unconditionally used in FreeBSDs other system headers :/ */
     tcc_define_symbol(s, "__GNUC__", "9");
     tcc_define_symbol(s, "__GNUC_MINOR__", "3");
     tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
     tcc_define_symbol(s, "__amd64__", "1");
-    tcc_define_symbol(s, "__builtin_alloca", "alloca");
 #  endif
 # else
     tcc_define_symbol(s, "__WINT_TYPE__", "unsigned int");
@@ -969,7 +966,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC__", "4");   /* darwin emits warning on GCC<4 */
     tcc_define_symbol(s, "__APPLE_CC__", "1"); /* for <TargetConditionals.h> */
     tcc_define_symbol(s, "_DONT_USE_CTYPE_INLINE_", "1");
-    tcc_define_symbol(s, "__builtin_alloca", "alloca"); /* as we claim GNUC */
     /* used by math.h */
     tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
     tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
@@ -1028,12 +1024,6 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
     dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
     dynarray_reset(&s1->argv, &s1->argc);
-#ifdef __OpenBSD__
-    tcc_free(s1->dlopens);
-    s1->dlopens = NULL;
-    s1->nb_dlopens = 0;
-#endif
-
     cstr_free(&s1->cmdline_defs);
     cstr_free(&s1->cmdline_incl);
 #ifdef TCC_IS_NATIVE
@@ -1115,24 +1105,24 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     /* add libc crt1/crti objects */
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
-#if defined(__OpenBSD__)
+#if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
         if (output_type == TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
-#elif defined(__FreeBSD__)
+#elif TARGETOS_FreeBSD
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
         tcc_add_crt(s, "crti.o");
         tcc_add_crt(s, "crtbegin.o");
-#elif defined(__NetBSD__)
+#elif TARGETOS_NetBSD
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt0.o");
         tcc_add_crt(s, "crti.o");
         tcc_add_crt(s, "crtbegin.o");
-#elif !defined(TCC_TARGET_MACHO)
+#elif !TCC_TARGET_MACHO
         /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
@@ -1155,16 +1145,26 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
     return 0;
 }
 
+#if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
+ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
+{
+    DLLReference *ref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
+    strcpy(ref->name, dllname);
+    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, ref);
+    return ref;
+}
+#endif
+
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
-    int fd, ret;
+    int fd, ret = -1;
 
     /* open the file */
     fd = _tcc_open(s1, filename);
     if (fd < 0) {
         if (flags & AFF_PRINT_ERROR)
             tcc_error_noabort("file '%s' not found", filename);
-        return -1;
+        return ret;
     }
 
     s1->current_filename = filename;
@@ -1181,55 +1181,53 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #endif
 
         switch (obj_type) {
+
         case AFF_BINTYPE_REL:
             ret = tcc_load_object_file(s1, fd, 0);
             break;
-#ifndef TCC_TARGET_PE
-        case AFF_BINTYPE_DYN:
-            if (s1->output_type == TCC_OUTPUT_MEMORY) {
-                ret = 0;
-#ifdef TCC_IS_NATIVE
-		{
-                    void *dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
-                    if (NULL == dl)
-                        ret = -1;
-#ifdef __OpenBSD__
-		    else
-			dynarray_add(&s1->dlopens, &s1->nb_dlopens, dl);
-#endif
-		}
-#endif
-            } else {
-#ifndef TCC_TARGET_MACHO
-                ret = tcc_load_dll(s1, fd, filename,
-                                   (flags & AFF_REFERENCED_DLL) != 0);
-#else
-                ret = macho_load_dll(s1, fd, filename,
-                                     (flags & AFF_REFERENCED_DLL) != 0);
-#endif
-            }
-            break;
-#endif
+
         case AFF_BINTYPE_AR:
             ret = tcc_load_archive(s1, fd, !(flags & AFF_WHOLE_ARCHIVE));
             break;
+
+#ifdef TCC_TARGET_PE
+        default:
+            ret = pe_load_file(s1, fd, filename);
+#else
+        case AFF_BINTYPE_DYN:
+            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+#ifdef TCC_IS_NATIVE
+                void *dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                if (dl) {
+                    tcc_add_dllref(s1, filename)->handle = dl;
+                    ret = 0;
+                }
+#endif
+                break;
+            }
+#ifdef TCC_TARGET_MACHO
+            ret = macho_load_dll(s1, fd, filename,
+                                 (flags & AFF_REFERENCED_DLL) != 0);
+#else
+            ret = tcc_load_dll(s1, fd, filename,
+                               (flags & AFF_REFERENCED_DLL) != 0);
+#endif
+            break;
+
 #ifdef TCC_TARGET_COFF
         case AFF_BINTYPE_C67:
             ret = tcc_load_coff(s1, fd);
             break;
 #endif
         default:
-#ifdef TCC_TARGET_PE
-            ret = pe_load_file(s1, filename, fd);
-#elif defined(TCC_TARGET_MACHO)
-            ret = -1;
-#else
+#ifndef TCC_TARGET_MACHO
             /* as GNU ld, consider it is an ld script if not recognized */
             ret = tcc_load_ldscript(s1, fd);
 #endif
+
+#endif /* !TCC_TARGET_PE */
             if (ret < 0)
-                tcc_error_noabort("%s: unrecognized file type %d", filename,
-                                  obj_type);
+                tcc_error_noabort("%s: unrecognized file type", filename);
             break;
         }
         close(fd);

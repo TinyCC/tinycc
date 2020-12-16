@@ -184,13 +184,16 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # endif
 #endif
 
-#if defined TCC_IS_NATIVE && !defined CONFIG_TCCBOOT
-# define CONFIG_TCC_BACKTRACE
-# if (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || \
-      defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || \
-      defined TCC_TARGET_RISCV64) \
-  && !defined TCC_UCLIBC && !defined TCC_MUSL
-# define CONFIG_TCC_BCHECK /* enable bound checking code */
+#if !defined TCC_IS_NATIVE \
+    || (defined CONFIG_TCC_BACKTRACE && CONFIG_TCC_BACKTRACE==0)
+# undef CONFIG_TCC_BACKTRACE
+# undef CONFIG_TCC_BCHECK
+#else
+# define CONFIG_TCC_BACKTRACE 1
+# if defined CONFIG_TCC_BCHECK && CONFIG_TCC_BCHECK==0
+#  undef CONFIG_TCC_BCHECK
+# else
+#  define CONFIG_TCC_BCHECK 1 /* enable bound checking code */
 # endif
 #endif
 
@@ -254,9 +257,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* name of ELF interpreter */
 #ifndef CONFIG_TCC_ELFINTERP
-# if defined __FreeBSD__
+# if TARGETOS_FreeBSD
 #  define CONFIG_TCC_ELFINTERP "/libexec/ld-elf.so.1"
-# elif defined __FreeBSD_kernel__
+# elif TARGETOS_FreeBSD_kernel
 #  if defined(TCC_TARGET_X86_64)
 #   define CONFIG_TCC_ELFINTERP "/lib/ld-kfreebsd-x86-64.so.1"
 #  else
@@ -264,7 +267,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  endif
 # elif defined __DragonFly__
 #  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld-elf.so.2"
-# elif defined __NetBSD__
+# elif TARGETOS_NetBSD
 #  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld.elf_so"
 # elif defined __GNU__
 #  define CONFIG_TCC_ELFINTERP "/lib/ld.so"
@@ -282,7 +285,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  if defined(TCC_MUSL)
 #   define CONFIG_TCC_ELFINTERP "/lib/ld-musl-x86_64.so.1"
 #  else
-#   if defined(__OpenBSD__)
+#   if TARGETOS_OpenBSD
 #    define CONFIG_TCC_ELFINTERP "/usr/libexec/ld.so"
 #   else
 #    define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
@@ -792,12 +795,6 @@ struct TCCState {
     /* crt?.o object path */
     char **crt_paths;
     int nb_crt_paths;
-
-#ifdef __OpenBSD__
-    /* track dlopen */
-    void **dlopens;
-    int nb_dlopens;
-#endif
 
     /* -D / -U options */
     CString cmdline_defs;
@@ -1309,6 +1306,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv, int optind);
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path);
 #endif
+#if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
+ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname);
+#endif
 
 /* tcc_parse_args return codes: */
 #define OPT_HELP 1
@@ -1743,7 +1743,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 
 /* ------------ tccpe.c -------------- */
 #ifdef TCC_TARGET_PE
-ST_FUNC int pe_load_file(struct TCCState *s1, const char *filename, int fd);
+ST_FUNC int pe_load_file(struct TCCState *s1, int fd, const char *filename);
 ST_FUNC int pe_output_file(TCCState * s1, const char *filename);
 ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t value);
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64

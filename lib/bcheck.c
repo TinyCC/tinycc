@@ -161,6 +161,9 @@ static pthread_spinlock_t bounds_spin;
 #define HAVE_TLS_FUNC          (1)
 #define HAVE_TLS_VAR           (0)
 #endif
+#ifdef TCC_MUSL
+# undef HAVE_CTYPE
+#endif
 #endif
 
 #if MALLOC_REDIR
@@ -1150,7 +1153,7 @@ void __attribute__((destructor)) __bound_exit(void)
     dprintf(stderr, "%s, %s():\n", __FILE__, __FUNCTION__);
 
     if (inited) {
-#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__OpenBSD__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__OpenBSD__) && !defined TCC_MUSL
         if (print_heap) {
             extern void __libc_freeres (void);
             __libc_freeres ();

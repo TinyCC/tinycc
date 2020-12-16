@@ -91,27 +91,14 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     int fd = mkstemp(tmpfname);
     unlink(tmpfname);
     ftruncate(fd, size);
-#ifdef __OpenBSD__
-{
-    int offs;
+
     size = (size + (PAGESIZE-1)) & ~(PAGESIZE-1);
-    offs = (size + (0x100000-1)) & ~(0x100000-1);
-    prx = NULL;
-    ptr = mmap(NULL, size + offs, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    if (ptr != MAP_FAILED) {
-        /* mmap RX memory at a fixed distance */
-        munmap((char*)ptr + size, offs);
-        prx = mmap((char*)ptr + offs, size, PROT_READ|PROT_EXEC, MAP_SHARED|MAP_FIXED, fd, 0);
-    }
-}
-#else
-    ptr = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    prx = mmap (NULL, size, PROT_READ|PROT_EXEC, MAP_SHARED, fd, 0);
-#endif
+    ptr = mmap(NULL, size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    /* mmap RX memory at a fixed distance */
+    prx = mmap((char*)ptr + size, size, PROT_READ|PROT_EXEC, MAP_SHARED|MAP_FIXED, fd, 0);
     if (ptr == MAP_FAILED || prx == MAP_FAILED)
 	tcc_error("tccrun: could not map memory");
-    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
-    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, prx);
+    dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)(size*2));
     ptr_diff = (char*)prx - (char*)ptr;
     close(fd);
     //printf("map %p %p %p\n", ptr, prx, (void*)ptr_diff);
@@ -131,7 +118,6 @@ ST_FUNC void tcc_run_free(TCCState *s1)
     for (i = 0; i < s1->nb_runtime_mem; ++i) {
 #ifdef HAVE_SELINUX
         unsigned size = (unsigned)(addr_t)s1->runtime_mem[i++];
-        munmap(s1->runtime_mem[i++], size);
         munmap(s1->runtime_mem[i], size);
 #else
 #ifdef _WIN64

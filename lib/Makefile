@@ -30,16 +30,16 @@ ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XFLAGS = $(CFLAGS) -fPIC -gstabs -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable
 endif
 
+ifneq ($(CONFIG_backtrace),no)
 # only for native compiler
+ifneq ($(CONFIG_bcheck),no)
 $(X)BCHECK_O = bcheck.o
-$(X)BT_O = bt-exe.o bt-log.o
-$(X)B_O = bcheck.o bt-exe.o bt-log.o bt-dll.o
-
-ifeq ($(CONFIG_musl)$(CONFIG_uClibc),yes)
- BCHECK_O =
-else
- DSO_O = dsohandle.o
 endif
+$(X)BT_O = bt-exe.o bt-log.o
+$(X)B_O = $(BCHECK_O) bt-exe.o bt-log.o bt-dll.o
+endif
+
+DSO_O = dsohandle.o
 
 I386_O = libtcc1.o alloca86.o alloca86-bt.o $(BT_O)
 X86_64_O = libtcc1.o alloca86_64.o alloca86_64-bt.o $(BT_O)
@@ -82,7 +82,7 @@ $(X)%.o : %.S
 $(TOP)/%.o : %.c
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
-$(TOP)/bcheck.o : XFLAGS += -g
+$(TOP)/bcheck.o : XFLAGS += -g $(if (CONFIG_musl),-DTCC_MUSL)
 $(TOP)/bt-exe.o : $(TOP)/tccrun.c
 
 $(X)crt1w.o : crt1.c

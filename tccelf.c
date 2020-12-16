@@ -94,7 +94,7 @@ ST_FUNC void tccelf_stab_new(TCCState *s)
 #ifdef CONFIG_TCC_BACKTRACE
     /* include stab info with standalone backtrace support */
     if (s->do_backtrace && s->output_type != TCC_OUTPUT_MEMORY)
-        shf = SHF_ALLOC;
+        shf = SHF_ALLOC | SHF_WRITE; // SHF_WRITE needed for musl/SELINUX
 #endif
     stab_section = new_section(s, ".stab", SHT_PROGBITS, shf);
     stab_section->sh_entsize = sizeof(Stab_Sym);
@@ -906,20 +906,15 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
-#ifdef TCC_TARGET_MACHO
-                /* The symbols in the symtables have a prepended '_'
-                   but dlsym() needs the undecorated name.  */
-                void *addr = dlsym(RTLD_DEFAULT, name + 1);
-#else
-                void *addr = dlsym(RTLD_DEFAULT, name);
-#ifdef __OpenBSD__
+                /* dlsym() needs the undecorated name.  */
+                void *addr = dlsym(RTLD_DEFAULT, &name[s1->leading_underscore]);
+#if TARGETOS_OpenBSD
 		if (addr == NULL) {
 		    int i;
-		    for (i = 0; i < s1->nb_dlopens; i++)
-                        if ((addr = dlsym(s1->dlopens[i], name)))
+		    for (i = 0; i < s1->nb_loaded_dlls; i++)
+                        if ((addr = dlsym(s1->loaded_dlls[i]->handle, name)))
 			    break;
 		}
-#endif
 #endif
                 if (addr) {
                     sym->st_value = (addr_t) addr;
@@ -1421,7 +1416,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
             tcc_add_library_err(s1, "pthread");
-#if !defined(__OpenBSD__) && !defined(__NetBSD__)
+#if !TARGETOS_OpenBSD && !TARGETOS_NetBSD
             tcc_add_library_err(s1, "dl");
 #endif
             tcc_add_support(s1, "bcheck.o");
@@ -1439,13 +1434,13 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #endif
         if (strlen(TCC_LIBTCC1) > 0)
             tcc_add_support(s1, TCC_LIBTCC1);
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
         /* add crt end if not memory output */
 	if (s1->output_type == TCC_OUTPUT_DLL)
 	    tcc_add_crt(s1, "crtendS.o");
 	else if (s1->output_type != TCC_OUTPUT_MEMORY) {
 	    tcc_add_crt(s1, "crtend.o");
-#if defined(__FreeBSD__) || defined(__NetBSD__)
+#if TARGETOS_FreeBSD || TARGETOS_NetBSD
             tcc_add_crt(s1, "crtn.o");
 #endif
         }
@@ -1806,7 +1801,7 @@ struct dyn_inf {
     unsigned long data_offset;
     addr_t rel_addr;
     addr_t rel_size;
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
     addr_t bss_addr;
     addr_t bss_size;
 #endif
@@ -1818,23 +1813,26 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                            Section *interp, Section* strsec,
                            struct dyn_inf *dyninf, int *sec_order)
 {
-    int i, j, k, file_type, sh_order_index, file_offset;
-    unsigned long s_align;
-    long long tmp;
-    addr_t addr;
-    ElfW(Phdr) *ph;
+    int i, sh_order_index, file_offset;
     Section *s;
 
-    file_type = s1->output_type;
     sh_order_index = 1;
     file_offset = 0;
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
         file_offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
-    s_align = ELF_PAGE_SIZE;
-    if (s1->section_align)
-        s_align = s1->section_align;
 
-    if (phnum > 0) {
+#ifndef ELF_OBJ_ONLY
+    if (phnum > 0) { /* phnum is 0 for TCC_OUTPUT_OBJ */
+        unsigned long s_align;
+        long long tmp;
+        addr_t addr;
+        ElfW(Phdr) *ph;
+        int j, k, file_type = s1->output_type;
+
+        s_align = ELF_PAGE_SIZE;
+        if (s1->section_align)
+            s_align = s1->section_align;
+
         if (s1->has_text_addr) {
             int a_offset, p_offset;
             addr = s1->text_addr;
@@ -1863,7 +1861,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
 
         /* dynamic relocation table information, for .dynamic section */
         dyninf->rel_addr = dyninf->rel_size = 0;
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
         dyninf->bss_addr = dyninf->bss_size = 0;
 #endif
 
@@ -1934,7 +1932,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                     }
                     /* update dynamic relocation infos */
                     if (s->sh_type == SHT_RELX) {
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
                         if (!strcmp(strsec->data + s->sh_name, ".rel.got")) {
                             dyninf->rel_addr = addr;
                             dyninf->rel_size += s->sh_size; /* XXX only first rel. */
@@ -1979,6 +1977,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
             }
         }
     }
+#endif /* ELF_OBJ_ONLY */
 
     /* all other sections come after */
     for(i = 1; i < s1->nb_sections; i++) {
@@ -2080,7 +2079,7 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELA, dyninf->rel_addr);
     put_dt(dynamic, DT_RELASZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
     put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
     put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
     put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
@@ -2088,7 +2087,7 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_BIND_NOW, 1); /* Dirty hack */
 #endif
 #else
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
     put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
     put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
     put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
@@ -2200,8 +2199,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     ehdr.e_ident[4] = ELFCLASSW;
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
-#if !defined(TCC_TARGET_PE) && (defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
-    /* FIXME: should set only for freebsd _target_, but we exclude only PE target */
+#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
     ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
 #endif
 #ifdef TCC_TARGET_ARM
@@ -2408,7 +2406,7 @@ static void create_arm_attribute_section(TCCState *s1)
 }
 #endif
 
-#if defined(__OpenBSD__)
+#if TARGETOS_OpenBSD
 static Section *create_openbsd_note_section(TCCState *s1)
 {
     Section *s = find_section (s1, ".note.openbsd.ident");
@@ -2441,7 +2439,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 #ifdef TCC_TARGET_ARM
     create_arm_attribute_section (s1);
 #endif
-#ifdef __OpenBSD__
+#if TARGETOS_OpenBSD
     if (file_type != TCC_OUTPUT_OBJ)
         note = create_openbsd_note_section (s1);
 #endif
@@ -2766,7 +2764,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 #ifdef TCC_ARM_EABI
             sh->sh_type != SHT_ARM_EXIDX &&
 #endif
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
             sh->sh_type != SHT_X86_64_UNWIND &&
             sh->sh_type != SHT_NOTE &&
 #endif
@@ -3321,10 +3319,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         store_version(s1, &v, dynstr);
 
     /* add the dll and its level */
-    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
-    dllref->level = level;
-    strcpy(dllref->name, soname);
-    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    tcc_add_dllref(s1, soname)->level = level;
 
     /* add dynamic symbols in dynsym_section */
     for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {

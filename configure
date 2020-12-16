@@ -55,7 +55,7 @@ ar_set=
 targetos=`uname`
 case $targetos in
   Darwin)
-    confvars="$confvars OSX"
+    confvars="$confvars OSX dll=no"
     cc=`which cc`
     cc=`readlink $cc`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
@@ -63,9 +63,10 @@ case $targetos in
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
     mingw32=yes
+    targetos=WIN32
     ;;
   DragonFly|OpenBSD|FreeBSD|NetBSD)
-    confvars="$confvars ldl=no"
+    confvars="$confvars BSD ldl=no"
     ;;
   *)
     ;;
@@ -311,6 +312,7 @@ Advanced options (experts only):
   --elfinterp=...          specify elf interpreter
   --triplet=...            specify system library/include directory triplet
   --config-uClibc,-musl,-mingw32... enable system specific configurations
+  --config-bcheck=no/-backtrace=no  disable bounds checker/stack backtraces
 EOF
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1

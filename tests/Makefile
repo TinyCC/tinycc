@@ -23,29 +23,13 @@ TESTS = \
  tests2-dir \
  pp-dir
 
-BTESTS = btest test1b
 # test4_static -- Not all relocation types are implemented yet.
 # asmtest / asmtest2 -- minor differences with gcc
 
-# bounds-checking is supported on i386 and x86_64 on linux and windows
-ifeq (-$(CONFIG_musl)-, --)
-ifeq ($(ARCH),i386)
- TESTS += $(BTESTS)
+ifneq ($(CONFIG_bcheck),no)
+ TESTS += btest test1b
 endif
-ifeq ($(ARCH),x86_64)
- TESTS += $(BTESTS)
-endif
-ifeq ($(ARCH),arm)
- TESTS += $(BTESTS)
-endif
-ifeq ($(ARCH),arm64)
- TESTS += $(BTESTS)
-endif
-ifeq ($(ARCH),riscv64)
- TESTS += $(BTESTS)
-endif
-endif
-ifdef CONFIG_OSX # some don't work yet
+ifeq ($(CONFIG_dll),no)
  TESTS := $(filter-out dlltest, $(TESTS))
 endif
 ifeq (,$(filter arm64 i386 x86_64,$(ARCH)))
@@ -55,18 +39,14 @@ ifeq ($(CONFIG_arm_eabi),yes)
  TESTS := $(filter-out test3,$(TESTS))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
- TESTS := $(filter-out dlltest asm-c-connect-test,$(TESTS))
+ TESTS := $(filter-out asm-c-connect-test,$(TESTS))
 endif
-
 ifeq ($(OS),Windows_NT) # for libtcc_test to find libtcc.dll
  PATH := $(CURDIR)/$(TOP)$(if $(findstring ;,$(PATH)),;,:)$(PATH)
 endif
-
 ifdef CONFIG_OSX
 LIBS += $(LINK_LIBTCC)
 endif
-
-
 ifeq ($(ARCH),arm)
 # tcctest refers to the alignment of functions, and with thumb mode
 # the low bit of code addresses selects the mode, so the "alignment"

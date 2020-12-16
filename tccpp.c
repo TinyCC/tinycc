@@ -3700,8 +3700,7 @@ static void tcc_predefs(CString *cstr)
     "__BOTH(char*,strcat,(char*,const char*))\n"
     "__BOTH(char*,strchr,(const char*,int))\n"
     "__BOTH(char*,strdup,(const char*))\n"
-#if defined(TCC_TARGET_PE) || defined(__OpenBSD__) || \
-    defined(__FreeBSD__) || defined(__NetBSD__)
+#if TCC_TARGET_PE || TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
     "#define __MAYBE_REDIR __BOTH\n"
 #else  // HAVE MALLOC_REDIR
     "#define __MAYBE_REDIR __BUILTIN\n"
@@ -3713,6 +3712,8 @@ static void tcc_predefs(CString *cstr)
     "__MAYBE_REDIR(void,free,(void*))\n"
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
     "__BOTH(void*,alloca,(__SIZE_TYPE__))\n"
+#else
+    "__BUILTIN(void*,alloca,(__SIZE_TYPE__))\n"
 #endif
 #if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
     "__BOUND(void*,__aeabi_memcpy,(void*,const void*,__SIZE_TYPE__))\n"
