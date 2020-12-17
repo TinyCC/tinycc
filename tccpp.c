@@ -89,6 +89,7 @@ static const unsigned char tok_two_chars[] =
     '-','>', TOK_ARROW,
     '.','.', TOK_TWODOTS,
     '#','#', TOK_TWOSHARPS,
+    '#','#', TOK_PPJOIN,
     0
 };
 
@@ -388,17 +389,19 @@ ST_FUNC void cstr_reset(CString *cstr)
 ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
 {
     va_list v;
-    int len, size;
-
-    va_start(v, fmt);
-    len = vsnprintf(NULL, 0, fmt, v);
-    va_end(v);
-    size = cstr->size + len + 1;
-    if (size > cstr->size_allocated)
-        cstr_realloc(cstr, size);
-    va_start(v, fmt);
-    vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
-    va_end(v);
+    int len, size = 80;
+    for (;;) {
+        size += cstr->size;
+        if (size > cstr->size_allocated)
+            cstr_realloc(cstr, size);
+        size = cstr->size_allocated - cstr->size;
+        va_start(v, fmt);
+        len = vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
+        va_end(v);
+        if (len > 0 && len < size)
+            break;
+        size *= 2;
+    }
     cstr->size += len;
     return len;
 }
@@ -3622,119 +3625,108 @@ ST_INLN void unget_tok(int last_tok)
     tok = last_tok;
 }
 
-static void tcc_predefs(CString *cstr)
+static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
 {
-    cstr_cat(cstr,
+    int a,b,c;
 
-    //"#include <tcc_predefs.h>\n"
-
-#if defined TCC_TARGET_X86_64
-#ifndef TCC_TARGET_PE
-    /* GCC compatible definition of va_list. */
-    /* This should be in sync with the declaration in our lib/libtcc1.c */
-    "typedef struct{\n"
-    "unsigned gp_offset,fp_offset;\n"
-    "union{\n"
-    "unsigned overflow_offset;\n"
-    "char*overflow_arg_area;\n"
-    "};\n"
-    "char*reg_save_area;\n"
-    "}__builtin_va_list[1];\n"
-    "void*__va_arg(__builtin_va_list ap,int arg_type,int size,int align);\n"
-    "#define __builtin_va_start(ap,last) (*(ap)=*(__builtin_va_list)((char*)__builtin_frame_address(0)-24))\n"
-    "#define __builtin_va_arg(ap,t) (*(t*)(__va_arg(ap,__builtin_va_arg_types(t),sizeof(t),__alignof__(t))))\n"
-    "#define __builtin_va_copy(dest,src) (*(dest)=*(src))\n"
-#else /* TCC_TARGET_PE */
-    "typedef char*__builtin_va_list;\n"
-    "#define __builtin_va_arg(ap,t) ((sizeof(t)>8||(sizeof(t)&(sizeof(t)-1)))?**(t**)((ap+=8)-8):*(t*)((ap+=8)-8))\n"
-#endif
+    sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
+    cstr_printf(cs, "#define __TINYC__ %d\n", a*10000 + b*100 + c);
+    cstr_cat(cs,
+        /* target machine */
+#if defined TCC_TARGET_I386
+        "#define __i386__ 1\n"
+        "#define __i386 1\n"
+#elif defined TCC_TARGET_X86_64
+        "#define __x86_64__ 1\n"
+        "#define __amd64__ 1\n"
 #elif defined TCC_TARGET_ARM
-    "typedef char*__builtin_va_list;\n"
-    "#define _tcc_alignof(type) ((int)&((struct{char c;type x;}*)0)->x)\n"
-    "#define _tcc_align(addr,type) (((unsigned)addr+_tcc_alignof(type)-1)&~(_tcc_alignof(type)-1))\n"
-    "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
-    "#define __builtin_va_arg(ap,type) (ap=(void*)((_tcc_align(ap,type)+sizeof(type)+3)&~3),*(type*)(ap-((sizeof(type)+3)&~3)))\n"
+        "#define __ARM_ARCH_4__ 1\n"
+        "#define __arm_elf__ 1\n"
+        "#define __arm_elf 1\n"
+        "#define arm_elf 1\n"
+        "#define __arm__ 1\n"
+        "#define __arm 1\n"
+        "#define arm 1\n"
+        "#define __APCS_32__ 1\n"
+        "#define __ARMEL__ 1\n"
+# if defined TCC_ARM_EABI
+        "#define __ARM_EABI__ 1\n"
+# endif
 #elif defined TCC_TARGET_ARM64
-    "typedef struct{\n"
-    "void*__stack,*__gr_top,*__vr_top;\n"
-    "int __gr_offs,__vr_offs;\n"
-    "}__builtin_va_list;\n"
+        "#define __aarch64__ 1\n"
+#elif defined TCC_TARGET_C67
+        "#define __C67__ 1\n"
 #elif defined TCC_TARGET_RISCV64
-    "typedef char*__builtin_va_list;\n"
-    "#define __va_reg_size (__riscv_xlen>>3)\n"
-    "#define _tcc_align(addr,type) (((unsigned long)addr+__alignof__(type)-1)&-(__alignof__(type)))\n"
-    "#define __builtin_va_arg(ap,type) (*(sizeof(type)>(2*__va_reg_size)?*(type**)((ap+=__va_reg_size)-__va_reg_size):(ap=(va_list)(_tcc_align(ap,type)+(sizeof(type)+__va_reg_size-1)&-__va_reg_size),(type*)(ap-((sizeof(type)+__va_reg_size-1)&-__va_reg_size)))))\n"
-#else /* TCC_TARGET_I386 */
-    "typedef char*__builtin_va_list;\n"
-    "#define __builtin_va_start(ap,last) (ap=((char*)&(last))+((sizeof(last)+3)&~3))\n"
-    "#define __builtin_va_arg(ap,t) (*(t*)((ap+=(sizeof(t)+3)&~3)-((sizeof(t)+3)&~3)))\n"
+        "#define __riscv 1\n"
+        "#define __riscv_xlen 64\n"
+        "#define __riscv_flen 64\n"
+        "#define __riscv_div 1\n"
+        "#define __riscv_mul 1\n"
+        "#define __riscv_fdiv 1\n"
+        "#define __riscv_fsqrt 1\n"
+        "#define __riscv_float_abi_double 1\n"
 #endif
-    "#define __builtin_va_end(ap) (void)(ap)\n"
-    "#ifndef __builtin_va_copy\n"
-    "#define __builtin_va_copy(dest,src) (dest)=(src)\n"
-    "#endif\n"
-    "#ifdef __leading_underscore\n"
-    "#define __RENAME(X) __asm__(\"_\"X)\n"
-    "#else\n"
-    "#define __RENAME(X) __asm__(X)\n"
-    "#endif\n"
-    /* TCC BBUILTIN AND BOUNDS ALIASES */
-    "#ifdef __BOUNDS_CHECKING_ON\n"
-    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params __RENAME(\"__bound_\"#name);\n"
-    "#define __BOUND(ret,name,params) ret name params __RENAME(\"__bound_\"#name);\n"
-    "#else\n"
-    "#define __BUILTINBC(ret,name,params) ret __builtin_##name params __RENAME(#name);\n"
-    "#define __BOUND(ret,name,params)\n"
-    "#endif\n"
-    "#define __BOTH(ret,name,params) __BUILTINBC(ret,name,params)__BOUND(ret,name,params)\n"
-    "#define __BUILTIN(ret,name,params) ret __builtin_##name params __RENAME(#name);\n"
-    "__BOTH(void*,memcpy,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOTH(void*,memmove,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOTH(void*,memset,(void*,int,__SIZE_TYPE__))\n"
-    "__BOTH(int,memcmp,(const void*,const void*,__SIZE_TYPE__))\n"
-    "__BOTH(__SIZE_TYPE__,strlen,(const char*))\n"
-    "__BOTH(char*,strcpy,(char*,const char*))\n"
-    "__BOTH(char*,strncpy,(char*,const char*,__SIZE_TYPE__))\n"
-    "__BOTH(int,strcmp,(const char*,const char*))\n"
-    "__BOTH(int,strncmp,(const char*,const char*,__SIZE_TYPE__))\n"
-    "__BOTH(char*,strcat,(char*,const char*))\n"
-    "__BOTH(char*,strchr,(const char*,int))\n"
-    "__BOTH(char*,strdup,(const char*))\n"
-#if TCC_TARGET_PE || TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
-    "#define __MAYBE_REDIR __BOTH\n"
-#else  // HAVE MALLOC_REDIR
-    "#define __MAYBE_REDIR __BUILTIN\n"
+        , -1);
+#ifdef TCC_TARGET_ARM
+    if (s1->float_abi == ARM_HARD_FLOAT)
+      cstr_printf(cs, "#define __ARM_PCS_VFP 1\n");
 #endif
-    "__MAYBE_REDIR(void*,malloc,(__SIZE_TYPE__))\n"
-    "__MAYBE_REDIR(void*,realloc,(void*,__SIZE_TYPE__))\n"
-    "__MAYBE_REDIR(void*,calloc,(__SIZE_TYPE__,__SIZE_TYPE__))\n"
-    "__MAYBE_REDIR(void*,memalign,(__SIZE_TYPE__,__SIZE_TYPE__))\n"
-    "__MAYBE_REDIR(void,free,(void*))\n"
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-    "__BOTH(void*,alloca,(__SIZE_TYPE__))\n"
+    cstr_cat(cs,
+        /* target platform */
+#ifdef TCC_TARGET_PE
+        "#define _WIN32 1\n"
 #else
-    "__BUILTIN(void*,alloca,(__SIZE_TYPE__))\n"
+        "#define __unix__ 1\n"
+        "#define __unix 1\n"
+# if defined TCC_TARGET_MACHO
+        "#define __APPLE__ 1\n"
+# elif TARGETOS_FreeBSD
+        "#define __FreeBSD__ 12\n"
+# elif TARGETOS_FreeBSD_kernel
+        "#define __FreeBSD_kernel__ 1\n"
+# elif TARGETOS_NetBSD
+        "#define __NetBSD__ 1\n"
+# elif TARGETOS_OpenBSD
+        "#define __OpenBSD__ 1\n"
+# else
+        "#define __linux__ 1\n"
+        "#define __linux 1\n"
+# endif
 #endif
-#if defined(TCC_TARGET_ARM) && defined(TCC_ARM_EABI)
-    "__BOUND(void*,__aeabi_memcpy,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOUND(void*,__aeabi_memmove,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOUND(void*,__aeabi_memmove4,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOUND(void*,__aeabi_memmove8,(void*,const void*,__SIZE_TYPE__))\n"
-    "__BOUND(void*,__aeabi_memset,(void*,int,__SIZE_TYPE__))\n"
+        , -1);
+    if (is_asm)
+      cstr_printf(cs, "#define __ASSEMBLER__ 1\n");
+    if (s1->output_type == TCC_OUTPUT_PREPROCESS)
+      cstr_printf(cs, "#define __TCC_PP__ 1\n");
+    if (s1->output_type == TCC_OUTPUT_MEMORY)
+      cstr_printf(cs, "#define __TCC_RUN__ 1\n");
+    if (s1->char_is_unsigned)
+      cstr_printf(cs, "#define __CHAR_UNSIGNED__ 1\n");
+    if (s1->optimize > 0)
+      cstr_printf(cs, "#define __OPTIMIZE__ 1\n");
+    if (s1->option_pthread)
+      cstr_printf(cs, "#define _REENTRANT 1\n");
+    if (s1->leading_underscore)
+      cstr_printf(cs, "#define __leading_underscore 1\n");
+#ifdef CONFIG_TCC_BCHECK
+    if (s1->do_bounds_check)
+      cstr_printf(cs, "#define __BOUNDS_CHECKING_ON 1\n");
 #endif
-    "__BUILTIN(void,abort,(void))\n"
-    "__BOUND(void,longjmp,())\n"
-#ifndef TCC_TARGET_PE
-    "__BOUND(void*,mmap,())\n"
-    "__BOUND(int,munmap,())\n"
+    cstr_printf(cs, "#define __SIZEOF_POINTER__ %d\n", PTR_SIZE);
+    cstr_printf(cs, "#define __SIZEOF_LONG__ %d\n", LONG_SIZE);
+    if (!is_asm) {
+      cstr_printf(cs, "#define __STDC__ 1\n");
+      cstr_printf(cs, "#define __STDC_VERSION__ %dL\n", s1->cversion);
+      cstr_cat(cs,
+        /* load more predefs and __builtins */
+#if CONFIG_TCC_PREDEFS
+        #include "tccdefs_.h" /* include as strings */
+#else
+        "#include <tccdefs.h>\n" /* load at runtime */
 #endif
-    "#undef __BUILTINBC\n"
-    "#undef __BUILTIN\n"
-    "#undef __BOUND\n"
-    "#undef __BOTH\n"
-    "#undef __MAYBE_REDIR\n"
-    "#undef __RENAME\n"
-    , -1);
+        , -1);
+    }
+    cstr_printf(cs, "#define __BASE_FILE__ \"%s\"\n", file->filename);
 }
 
 ST_FUNC void preprocess_start(TCCState *s1, int filetype)
@@ -3759,15 +3751,9 @@ ST_FUNC void preprocess_start(TCCState *s1, int filetype)
 
     if (!(filetype & AFF_TYPE_ASM)) {
         cstr_new(&cstr);
+        tcc_predefs(s1, &cstr, is_asm);
         if (s1->cmdline_defs.size)
           cstr_cat(&cstr, s1->cmdline_defs.data, s1->cmdline_defs.size);
-        cstr_printf(&cstr, "#define __BASE_FILE__ \"%s\"\n", file->filename);
-        if (is_asm)
-          cstr_printf(&cstr, "#define __ASSEMBLER__ 1\n");
-        if (s1->output_type == TCC_OUTPUT_MEMORY)
-          cstr_printf(&cstr, "#define __TCC_RUN__ 1\n");
-        if (!is_asm && s1->output_type != TCC_OUTPUT_PREPROCESS)
-          tcc_predefs(&cstr);
         if (s1->cmdline_incl.size)
           cstr_cat(&cstr, s1->cmdline_incl.data, s1->cmdline_incl.size);
         //printf("%s\n", (char*)cstr.data);

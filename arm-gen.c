@@ -129,6 +129,12 @@ enum {
 
 #define CHAR_IS_UNSIGNED
 
+#ifdef TCC_ARM_HARDFLOAT
+# define ARM_FLOAT_ABI ARM_HARD_FLOAT
+#else
+# define ARM_FLOAT_ABI ARM_SOFTFP_FLOAT
+#endif
+
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/

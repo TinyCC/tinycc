@@ -40,7 +40,6 @@
 #include <time.h>
 
 #ifndef _WIN32
-# define WIN32_LEAN_AND_MEAN 1
 # include <unistd.h>
 # include <sys/time.h>
 # ifndef CONFIG_TCC_STATIC
@@ -52,7 +51,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 #ifdef _WIN32
-# define WIN32_LEAN_AND_MEAN
+# define WIN32_LEAN_AND_MEAN 1
 # include <windows.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */
@@ -65,8 +64,13 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifndef __GNUC__
 #  define strtold (long double)strtod
 #  define strtof (float)strtod
-#  define strtoll _strtoi64
-#  define strtoull _strtoui64
+#  ifdef _WIN64
+#   define strtoll _strtoi64
+#   define strtoull _strtoui64
+#  else
+#   define strtoll strtol
+#   define strtoull strtoul
+#  endif
 # endif
 # ifdef LIBTCC_AS_DLL
 #  define LIBTCCAPI __declspec(dllexport)
@@ -197,6 +201,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # endif
 #endif
 
+#if (TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD || TARGETOS_FreeBSD_kernel)
+# define TARGETOS_BSD 1
+#elif !(TCC_TARGET_PE || TCC_TARGET_MACHO)
+# define TARGETOS_Linux 1
+#endif
+
 #if defined TCC_TARGET_PE || defined TCC_TARGET_MACHO
 # define ELF_OBJ_ONLY /* create elf .o but native executables */
 #endif
@@ -265,7 +275,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  else
 #   define CONFIG_TCC_ELFINTERP "/lib/ld.so.1"
 #  endif
-# elif defined __DragonFly__
+# elif TARGETOS_DragonFly
 #  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld-elf.so.2"
 # elif TARGETOS_NetBSD
 #  define CONFIG_TCC_ELFINTERP "/usr/libexec/ld.elf_so"
@@ -340,7 +350,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 /* support using libtcc from threads */
-#define CONFIG_TCC_SEMLOCK
+#ifndef CONFIG_TCC_SEMLOCK
+# define CONFIG_TCC_SEMLOCK 1
+#endif
 
 #if ONE_SOURCE
 #define ST_INLN static inline

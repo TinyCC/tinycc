@@ -313,6 +313,7 @@ Advanced options (experts only):
   --triplet=...            specify system library/include directory triplet
   --config-uClibc,-musl,-mingw32... enable system specific configurations
   --config-bcheck=no/-backtrace=no  disable bounds checker/stack backtraces
+  --config-predefs=no      do not compile tccdefs.h, instead just include
 EOF
 #echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
@@ -447,22 +448,20 @@ DLLSUF=$DLLSUF
 EOF
 
 print_inc() {
-  if test -n "$2"; then
+  local v="$2"
+  if test -n "$v"; then
+    test "$3" = "num" || v="\"$v\""
     echo "#ifndef $1" >> $TMPH
-    echo "# define $1 \"$2\"" >> $TMPH
+    echo "# define $1 $v" >> $TMPH
     echo "#endif" >> $TMPH
   fi
 }
 
 print_mak() {
-  if test -n "$2"; then
-    echo "NATIVE_DEFINES+=-D$1=\"\\\"$2\\\"\"" >> config.mak
-  fi
-}
-
-print_mak_int() {
-  if test -n "$2"; then
-    echo "NATIVE_DEFINES+=-D$1=$2" >> config.mak
+  local v="$2"
+  if test -n "$v"; then
+    test "$3" = "num" || v="\"\\\"$v\\\"\""
+    echo "NATIVE_DEFINES+=-D$1=$v" >> config.mak
   fi
 }
 
@@ -477,7 +476,7 @@ print_mak CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
 print_mak CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
 print_mak CONFIG_LDDIR "$tcc_lddir"
 print_mak CONFIG_TRIPLET "$triplet"
-print_mak_int TCC_CPU_VERSION "$cpuver"
+print_mak TCC_CPU_VERSION "$cpuver" num
 
 if test "$cpu" = "aarch64" ; then
   echo "ARCH=arm64" >> config.mak
@@ -486,13 +485,16 @@ else
 fi
 echo "TARGETOS=$targetos" >> config.mak
 
+predefs="1"
 for v in $confvars ; do
+  test "$v" = "predefs=no" && predefs=""
   if test "${v%=*}" = "$v"; then
     echo "CONFIG_$v=yes" >> config.mak
   else
     echo "CONFIG_$v" >> config.mak
   fi
 done
+print_inc CONFIG_TCC_PREDEFS "$predefs" num
 
 version=`head $source_path/VERSION`
 echo "VERSION = $version" >> config.mak

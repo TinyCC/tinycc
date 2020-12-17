@@ -191,6 +191,8 @@ arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c arm-asm.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 riscv64_FILES = $(CORE_FILES) riscv64-gen.c riscv64-link.c riscv64-asm.c
 
+TCCDEFS_H$(subst yes,,$(CONFIG_predefs)) = tccdefs_.h
+
 # libtcc sources
 LIBTCC_SRC = $(filter-out tcc.c tcctools.c,$(filter %.c,$($T_FILES)))
 
@@ -199,11 +201,13 @@ LIBTCC_OBJ = $(X)libtcc.o
 LIBTCC_INC = $($T_FILES)
 TCC_FILES = $(X)tcc.o
 tcc.o : DEFINES += -DONE_SOURCE=0
+$(X)tcc.o $(X)libtcc.o  : $(TCCDEFS_H)
 else
 LIBTCC_OBJ = $(patsubst %.c,$(X)%.o,$(LIBTCC_SRC))
 LIBTCC_INC = $(filter %.h %-gen.c %-link.c,$($T_FILES))
 TCC_FILES = $(X)tcc.o $(LIBTCC_OBJ)
 $(TCC_FILES) : DEFINES += -DONE_SOURCE=0
+$(X)tccpp.o : $(TCCDEFS_H)
 endif
 
 ifeq ($(CONFIG_strip),no)
@@ -215,6 +219,10 @@ ifndef CONFIG_OSX
 LDFLAGS += -s
 endif
 endif
+
+# convert "include/tccdefs.h" to "tccdefs_.h"
+%_.h : include/%.h tests/misc/c2str.c
+	$S$(CC) -o c2str.exe $(filter %.c,$^) && ./c2str.exe $< $@
 
 # target specific object rule
 $(X)%.o : %.c $(LIBTCC_INC)
@@ -402,8 +410,8 @@ testspp.%:
 	@$(MAKE) -C tests/pp $@
 
 clean:
-	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod
-	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out tags TAGS *.dylib
+	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod tags ETAGS
+	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out *.dylib *_.h
 	@$(MAKE) -s -C lib $@
 	@$(MAKE) -s -C tests $@
 
