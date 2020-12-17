@@ -28,7 +28,8 @@ Features:
 Documentation:
 -------------
 
-1) Installation on a i386/x86_64/arm/aarch64 Linux/macOS/FreeBSD/OpenBSD host
+1) Installation on a i386/x86_64/arm/aarch64/riscv64
+   Linux/macOS/FreeBSD/OpenBSD hosts.
 
    ./configure
    make
