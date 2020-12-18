@@ -735,18 +735,25 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
     char buf[256];
     Section *sr;
     ElfW_Rel *rel;
+    int jmp_slot = type == R_JMP_SLOT;
 
-    sr = s->reloc;
+    sr = jmp_slot ? s->relocplt : s->reloc;
     if (!sr) {
         /* if no relocation section, create it */
-        snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);
+        if (jmp_slot)
+            snprintf(buf, sizeof(buf), RELPLT_SECTION_FMT);
+	else
+            snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);
         /* if the symtab is allocated, then we consider the relocation
            are also */
         sr = new_section(s->s1, buf, SHT_RELX, symtab->sh_flags);
         sr->sh_entsize = sizeof(ElfW_Rel);
         sr->link = symtab;
         sr->sh_info = s->sh_num;
-        s->reloc = sr;
+	if (jmp_slot)
+            s->relocplt = sr;
+	else
+            s->reloc = sr;
     }
     rel = section_ptr_add(sr, sizeof(ElfW_Rel));
     rel->r_offset = offset;
@@ -1164,7 +1171,7 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
 }
 
 /* build GOT and PLT entries */
-ST_FUNC void build_got_entries(TCCState *s1)
+static void build_got_entries_pass(TCCState *s1, int pass)
 {
     Section *s;
     ElfW_Rel *rel;
@@ -1235,6 +1242,8 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 (ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT ||
 		 ELFW(ST_BIND)(sym->st_info) == STB_LOCAL ||
 		 s1->output_type == TCC_OUTPUT_EXE)) {
+		if (pass == 0)
+		    continue;
                 rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
                 continue;
             }
@@ -1248,6 +1257,11 @@ ST_FUNC void build_got_entries(TCCState *s1)
             } else
                 reloc_type = R_GLOB_DAT;
 
+
+	    if ((pass == 0 && reloc_type == R_GLOB_DAT) ||
+		(pass == 1 && reloc_type == R_JMP_SLOT))
+		continue;
+
             if (!s1->got)
                 build_got(s1);
 
@@ -1260,6 +1274,16 @@ ST_FUNC void build_got_entries(TCCState *s1)
                 rel->r_info = ELFW(R_INFO)(attr->plt_sym, type);
         }
     }
+}
+
+ST_FUNC void build_got_entries(TCCState *s1)
+{
+    int i;
+
+    /* Two passes because R_JMP_SLOT should become first.
+       Some targets (arm, arm64) do not allow mixing R_JMP_SLOT and R_GLOB_DAT. */
+    for (i = 0; i < 2; i++)
+	build_got_entries_pass(s1, i);
 }
 #endif
 
@@ -1801,7 +1825,7 @@ struct dyn_inf {
     unsigned long data_offset;
     addr_t rel_addr;
     addr_t rel_size;
-#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
+#if PTR_SIZE == 4 && (TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel)
     addr_t bss_addr;
     addr_t bss_size;
 #endif
@@ -1861,11 +1885,13 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
 
         /* dynamic relocation table information, for .dynamic section */
         dyninf->rel_addr = dyninf->rel_size = 0;
-#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
+#if PTR_SIZE == 4 && (TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel)
         dyninf->bss_addr = dyninf->bss_size = 0;
 #endif
 
         for(j = 0; j < (phnum == 6 ? 3 : 2); j++) {
+	    Section *relocplt = s1->got ? s1->got->relocplt : NULL;
+
             ph->p_type = j == 2 ? PT_TLS : PT_LOAD;
             if (j == 0)
                 ph->p_flags = PF_R | PF_X;
@@ -1878,7 +1904,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                info about the layout. We do the following ordering: interp,
                symbol tables, relocations, progbits, nobits */
             /* XXX: do faster and simpler sorting */
-            for(k = 0; k < 5; k++) {
+            for(k = 0; k < 6; k++) {
                 for(i = 1; i < s1->nb_sections; i++) {
                     s = s1->sections[i];
                     /* compute if section should be included */
@@ -1905,13 +1931,15 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                         if (k != 1)
                             continue;
                     } else if (s->sh_type == SHT_RELX) {
-                        if (k != 2)
+                        if (k != 2 && s != relocplt)
+                            continue;
+                        else if (k != 3 && s == relocplt)
                             continue;
                     } else if (s->sh_type == SHT_NOBITS) {
-                        if (k != 4)
+                        if (k != 5)
                             continue;
                     } else {
-                        if (k != 3)
+                        if (k != 4)
                             continue;
                     }
                     sec_order[sh_order_index++] = i;
@@ -1931,8 +1959,8 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                         ph->p_paddr = ph->p_vaddr;
                     }
                     /* update dynamic relocation infos */
-                    if (s->sh_type == SHT_RELX) {
-#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
+                    if (s->sh_type == SHT_RELX && s != relocplt) {
+#if PTR_SIZE == 4 && (TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel)
                         if (!strcmp(strsec->data + s->sh_name, ".rel.got")) {
                             dyninf->rel_addr = addr;
                             dyninf->rel_size += s->sh_size; /* XXX only first rel. */
@@ -2079,16 +2107,17 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_RELA, dyninf->rel_addr);
     put_dt(dynamic, DT_RELASZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELAENT, sizeof(ElfW_Rel));
-#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
-    put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
-    put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
-    put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
-    put_dt(dynamic, DT_PLTREL, DT_RELA);
-    put_dt(dynamic, DT_BIND_NOW, 1); /* Dirty hack */
-#endif
+    if (s1->got && s1->got->relocplt) {
+        put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
+        put_dt(dynamic, DT_PLTRELSZ, s1->got->relocplt->data_offset);
+        put_dt(dynamic, DT_JMPREL, s1->got->relocplt->sh_addr);
+        put_dt(dynamic, DT_PLTREL, DT_RELA);
+    }
+    put_dt(dynamic, DT_RELACOUNT, 0);
 #else
-#if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
-    put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
+#if PTR_SIZE == 4 && (TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel)
+    if (s1->got)
+        put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
     put_dt(dynamic, DT_PLTRELSZ, dyninf->rel_size);
     put_dt(dynamic, DT_JMPREL, dyninf->rel_addr);
     put_dt(dynamic, DT_PLTREL, DT_REL);
@@ -2098,11 +2127,18 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     put_dt(dynamic, DT_REL, dyninf->rel_addr);
     put_dt(dynamic, DT_RELSZ, dyninf->rel_size);
     put_dt(dynamic, DT_RELENT, sizeof(ElfW_Rel));
+    if (s1->got && s1->got->relocplt) {
+        put_dt(dynamic, DT_PLTGOT, s1->got->sh_addr);
+        put_dt(dynamic, DT_PLTRELSZ, s1->got->relocplt->data_offset);
+        put_dt(dynamic, DT_JMPREL, s1->got->relocplt->sh_addr);
+        put_dt(dynamic, DT_PLTREL, DT_REL);
+    }
+    put_dt(dynamic, DT_RELCOUNT, 0);
 #endif
 #endif
-    if (versym_section)
+    if (versym_section && verneed_section) {
+	/* The dynamic linker can not handle VERSYM without VERNEED */
         put_dt(dynamic, DT_VERSYM, versym_section->sh_addr);
-    if (verneed_section) {
         put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
         put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
     }
@@ -2406,10 +2442,12 @@ static void create_arm_attribute_section(TCCState *s1)
 }
 #endif
 
-#if TARGETOS_OpenBSD
-static Section *create_openbsd_note_section(TCCState *s1)
+#if TARGETOS_OpenBSD || TARGETOS_NetBSD
+static Section *create_bsd_note_section(TCCState *s1,
+					const char *name,
+					const char *value)
 {
-    Section *s = find_section (s1, ".note.openbsd.ident");
+    Section *s = find_section (s1, name);
 
     if (s->data_offset == 0) {
         unsigned char *ptr = section_ptr_add(s, sizeof(ElfW(Nhdr)) + 8 + 4);
@@ -2419,7 +2457,7 @@ static Section *create_openbsd_note_section(TCCState *s1)
         note->n_namesz = 8;
         note->n_descsz = 4;
         note->n_type = ELF_NOTE_OS_GNU;
-	strcpy (ptr + sizeof(ElfW(Nhdr)), "OpenBSD");
+	strcpy (ptr + sizeof(ElfW(Nhdr)), value);
     }
     return s;
 }
@@ -2441,7 +2479,11 @@ static int elf_output_file(TCCState *s1, const char *filename)
 #endif
 #if TARGETOS_OpenBSD
     if (file_type != TCC_OUTPUT_OBJ)
-        note = create_openbsd_note_section (s1);
+        note = create_bsd_note_section (s1, ".note.openbsd.ident", "OpenBSD");
+#endif
+#if TARGETOS_NetBSD
+    if (file_type != TCC_OUTPUT_OBJ)
+        note = create_bsd_note_section (s1, ".note.netbsd.ident", "NetBSD");
 #endif
 
     s1->nb_errors = 0;
@@ -2814,8 +2856,13 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         sm_table[i].new_section = 1;
     found:
         if (sh->sh_type != s->sh_type) {
-            tcc_error_noabort("invalid section type");
-            goto fail;
+#if TARGETOS_OpenBSD
+            if (strcmp (s->name, ".eh_frame") || sh->sh_type != SHT_PROGBITS)
+#endif
+            {
+                tcc_error_noabort("invalid section type");
+                goto fail;
+	    }
         }
         /* align start of section */
         s->data_offset += -s->data_offset & (sh->sh_addralign - 1);

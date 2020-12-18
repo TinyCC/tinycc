@@ -397,6 +397,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ElfW_Rel ElfW(Rela)
 # define SHT_RELX SHT_RELA
 # define REL_SECTION_FMT ".rela%s"
+# define RELPLT_SECTION_FMT ".rel.plt"
 #else
 # define ELFCLASSW ELFCLASS32
 # define ElfW(type) Elf##32##_##type
@@ -404,6 +405,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ElfW_Rel ElfW(Rel)
 # define SHT_RELX SHT_REL
 # define REL_SECTION_FMT ".rel%s"
+# define RELPLT_SECTION_FMT ".rel.plt"
 #endif
 /* target address type */
 #define addr_t ElfW(Addr)
@@ -565,6 +567,7 @@ typedef struct Section {
     struct Section *reloc;   /* corresponding section for relocation, if any */
     struct Section *hash;    /* hash table for symbols */
     struct Section *prev;    /* previous section on section stack */
+    struct Section *relocplt;/* reloc with JMP_SLOTs */
     char name[1];           /* section name */
 } Section;
 

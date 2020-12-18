@@ -131,7 +131,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     /* The PLT slot refers to the relocation entry it needs via offset.
        The reloc entry is created below, so its offset is the current
        data_offset */
-    relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
+    relofs = s1->got->relocplt ? s1->got->relocplt->data_offset : 0;
 
     /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
     p = section_ptr_add(plt, 16);
@@ -140,7 +140,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     write32le(p + 2, got_offset);
     p[6] = 0x68; /* push $xxx */
     /* On x86-64, the relocation is referred to by _index_ */
-    write32le(p + 7, relofs / sizeof (ElfW_Rel));
+    write32le(p + 7, relofs / sizeof (ElfW_Rel) - 1);
     p[11] = 0xe9; /* jmp plt_start */
     write32le(p + 12, -(plt->data_offset));
     return plt_offset;
@@ -166,6 +166,20 @@ ST_FUNC void relocate_plt(TCCState *s1)
         while (p < p_end) {
             add32le(p + 2, x + (s1->plt->data - p));
             p += 16;
+        }
+    }
+
+    if (s1->got->relocplt) {
+	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+        ElfW_Rel *rel;
+        int x = s1->plt->sh_addr + 16 + 6;
+
+        p = s1->got->data;
+        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
+	    int sym_index = ELFW(R_SYM)(rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            write64le(p + rel->r_offset, mem ? sym->st_value : x);
+            x += 16;
         }
     }
 }

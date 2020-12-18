@@ -113,7 +113,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 
     if (p < p_end) {
         uint64_t plt = s1->plt->sh_addr;
-        uint64_t got = s1->got->sh_addr;
+        uint64_t got = s1->got->sh_addr + 16;
         uint64_t off = (got >> 12) - (plt >> 12);
         if ((off + ((uint32_t)1 << 20)) >> 21)
             tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
@@ -129,6 +129,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         write32le(p + 24, 0xd503201f); // nop
         write32le(p + 28, 0xd503201f); // nop
         p += 32;
+	got = s1->got->sh_addr;
         while (p < p_end) {
             uint64_t pc = plt + (p - s1->plt->data);
             uint64_t addr = got + read64le(p);
@@ -144,6 +145,18 @@ ST_FUNC void relocate_plt(TCCState *s1)
             write32le(p + 12, 0xd61f0220); // br x17
             p += 16;
         }
+    }
+
+    if (s1->got->relocplt) {
+	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+        ElfW_Rel *rel;
+
+        p = s1->got->data;
+        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
+	    int sym_index = ELFW(R_SYM)(rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            write64le(p + rel->r_offset, mem ? sym->st_value : s1->plt->sh_addr);
+	}
     }
 }
 

@@ -16,7 +16,7 @@
 #define ELF_PAGE_SIZE  0x1000
 
 #define PCRELATIVE_DLLPLT 0
-#define RELOCATE_DLLPLT 0
+#define RELOCATE_DLLPLT 1
 
 #else /* !TARGET_DEFS_ONLY */
 
@@ -121,7 +121,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     /* The PLT slot refers to the relocation entry it needs via offset.
        The reloc entry is created below, so its offset is the current
        data_offset */
-    relofs = s1->got->reloc ? s1->got->reloc->data_offset : 0;
+    relofs = s1->got->relocplt ? s1->got->relocplt->data_offset : 0;
 
     /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
     p = section_ptr_add(plt, 16);
@@ -129,7 +129,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     p[1] = modrm;
     write32le(p + 2, got_offset);
     p[6] = 0x68; /* push $xxx */
-    write32le(p + 7, relofs);
+    write32le(p + 7, relofs - sizeof (ElfW_Rel));
     p[11] = 0xe9; /* jmp plt_start */
     write32le(p + 12, -(plt->data_offset));
     return plt_offset;
@@ -147,13 +147,27 @@ ST_FUNC void relocate_plt(TCCState *s1)
     p = s1->plt->data;
     p_end = p + s1->plt->data_offset;
 
-    if (p < p_end) {
+    if (s1->output_type != TCC_OUTPUT_DLL && p < p_end) {
         add32le(p + 2, s1->got->sh_addr);
         add32le(p + 8, s1->got->sh_addr);
         p += 16;
         while (p < p_end) {
             add32le(p + 2, s1->got->sh_addr);
             p += 16;
+        }
+    }
+
+    if (s1->got->relocplt) {
+	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+        ElfW_Rel *rel;
+        int x = s1->plt->sh_addr + 16 + 6;
+
+        p = s1->got->data;
+        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
+	    int sym_index = ELFW(R_SYM)(rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            write32le(p + rel->r_offset, mem ? sym->st_value : x);
+            x += 16;
         }
     }
 }

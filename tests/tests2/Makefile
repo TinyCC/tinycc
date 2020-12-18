@@ -48,6 +48,10 @@ ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_pthread.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
 endif
+ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
+ SKIP += 106_pthread.test # no pthread_condattr_setpshared
+ SKIP += 114_bound_signal.test # libc problem signal/fork
+endif
 
 # Some tests might need arguments
 ARGS =

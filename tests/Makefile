@@ -61,6 +61,9 @@ endif
 ifeq ($(CC_NAME),msvc)
 test.ref abitest : CC = gcc
 endif
+ifeq ($(TARGETOS),OpenBSD)
+dlltest: CFLAGS+=-fno-stack-protector
+endif
 
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d

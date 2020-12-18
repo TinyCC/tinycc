@@ -1153,7 +1153,8 @@ void __attribute__((destructor)) __bound_exit(void)
     dprintf(stderr, "%s, %s():\n", __FILE__, __FUNCTION__);
 
     if (inited) {
-#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__OpenBSD__) && !defined TCC_MUSL
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined TCC_MUSL && \
+    !defined(__OpenBSD__) && !defined(__FreeBSD__) && !defined(__NetBSD__)
         if (print_heap) {
             extern void __libc_freeres (void);
             __libc_freeres ();

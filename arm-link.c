@@ -145,7 +145,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 
     if (p < p_end) {
         int x = s1->got->sh_addr - s1->plt->sh_addr - 12;
-        write32le(s1->plt->data + 16, x - 16);
+        write32le(s1->plt->data + 16, x - 4);
         p += 20;
         while (p < p_end) {
 	    unsigned off = x  + read32le(p + 4) + (s1->plt->data - p) + 4;
@@ -156,6 +156,18 @@ ST_FUNC void relocate_plt(TCCState *s1)
             write32le(p + 8, 0xe5bcf000 | (off & 0xfff));	 // ldr pc, [ip, #0xNNN]!
             p += 12;
         }
+    }
+
+    if (s1->got->relocplt) {
+	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+        ElfW_Rel *rel;
+
+        p = s1->got->data;
+        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
+	    int sym_index = ELFW(R_SYM)(rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            write32le(p + rel->r_offset, mem ? sym->st_value : s1->plt->sh_addr);
+	}
     }
 }
 #endif

@@ -153,6 +153,18 @@ ST_FUNC void relocate_plt(TCCState *s1)
             p += 16;
         }
     }
+
+    if (s1->got->relocplt) {
+	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+        ElfW_Rel *rel;
+
+        p = s1->got->data;
+        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
+	    int sym_index = ELFW(R_SYM)(rel->r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            write64le(p + rel->r_offset, mem ? sym->st_value + rel->r_addend : s1->plt->sh_addr);
+	}
+    }
 }
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
