@@ -45,11 +45,11 @@ ifeq (-$(CONFIG_WIN32)-$(CONFIG_i386)$(CONFIG_arm)-,--yes-)
  SKIP += 95_bitfields%.test # type_align is different on 32bit-non-windows
 endif
 ifeq (-$(CONFIG_WIN32)-,-yes-)
- SKIP += 106_pthread.test # No pthread support
+ SKIP += 106_versym.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
 endif
 ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
- SKIP += 106_pthread.test # no pthread_condattr_setpshared
+ SKIP += 106_versym.test # no pthread_condattr_setpshared
  SKIP += 114_bound_signal.test # libc problem signal/fork
 endif
 ifeq ($(TARGETOS),NetBSD)
@@ -91,8 +91,8 @@ GEN-ALWAYS =
 120_alias.test : NORUN = true
 
 # this test needs pthread
-106_pthread.test: FLAGS += -pthread
-106_pthread.test: NORUN = true
+106_versym.test: FLAGS += -pthread
+106_versym.test: NORUN = true
 
 # constructor/destructor
 108_constructor.test: NORUN = true
