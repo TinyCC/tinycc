@@ -28,6 +28,10 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+/* gnu headers use to #define __attribute__ to empty for non-gcc compilers */
+#ifdef __TINYC__
+# undef __attribute__
+#endif
 #include <string.h>
 #include <errno.h>
 #include <math.h>
@@ -108,10 +112,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define PRINTF_LIKE(x,y) __attribute__ ((format (printf, (x), (y))))
 #endif
 
-/* gnu headers use to #define __attribute__ to empty for non-gcc compilers */
-#ifdef __TINYC__
-# undef __attribute__
-#endif
 
 #ifdef _WIN32
 # define IS_DIRSEP(c) (c == '/' || c == '\\')
