@@ -1105,23 +1105,25 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     /* add libc crt1/crti objects */
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
-        if (output_type == TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbeginS.o");
-        else
-            tcc_add_crt(s, "crtbegin.o");
 #elif TARGETOS_FreeBSD
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
         tcc_add_crt(s, "crti.o");
-        tcc_add_crt(s, "crtbegin.o");
 #elif TARGETOS_NetBSD
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt0.o");
         tcc_add_crt(s, "crti.o");
-        tcc_add_crt(s, "crtbegin.o");
+#endif
+        if (s->static_link)
+            tcc_add_crt(s, "crtbeginT.o");
+        else if (output_type == TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crtbeginS.o");
+        else
+            tcc_add_crt(s, "crtbegin.o");
 #elif !TCC_TARGET_MACHO
         /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
         if (output_type != TCC_OUTPUT_DLL)

@@ -52,6 +52,10 @@ ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 106_pthread.test # no pthread_condattr_setpshared
  SKIP += 114_bound_signal.test # libc problem signal/fork
 endif
+ifeq ($(TARGETOS),NetBSD)
+  SKIP += 113_btdll.test # text relocations
+  SKIP += 115_bound_setjmp.test # longjmp renamed to __longjmp14
+endif
 
 # Some tests might need arguments
 ARGS =

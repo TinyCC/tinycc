@@ -64,6 +64,17 @@ endif
 ifeq ($(TARGETOS),OpenBSD)
 dlltest: CFLAGS+=-fno-stack-protector
 endif
+ifeq ($(TARGETOS),FreeBSD)
+  # test3 has dlsym problems
+  TESTS := $(filter-out test3,$(TESTS))
+  TESTS += test1
+endif
+ifeq ($(TARGETOS),NetBSD)
+  # test3 has dlsym problems
+  # dlltest does not allow text relocations
+  TESTS := $(filter-out test3 dlltest,$(TESTS))
+  TESTS += test1
+endif
 
 RUN_TCC = $(NATIVE_DEFINES) -run $(TOPSRC)/tcc.c $(TCCFLAGS)
 DISAS = objdump -d

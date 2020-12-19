@@ -915,7 +915,7 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
                 /* dlsym() needs the undecorated name.  */
                 void *addr = dlsym(RTLD_DEFAULT, &name[s1->leading_underscore]);
-#if TARGETOS_OpenBSD
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
 		if (addr == NULL) {
 		    int i;
 		    for (i = 0; i < s1->nb_loaded_dlls; i++)
@@ -1460,10 +1460,11 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
             tcc_add_support(s1, TCC_LIBTCC1);
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
         /* add crt end if not memory output */
-	if (s1->output_type == TCC_OUTPUT_DLL)
-	    tcc_add_crt(s1, "crtendS.o");
-	else if (s1->output_type != TCC_OUTPUT_MEMORY) {
-	    tcc_add_crt(s1, "crtend.o");
+	if (s1->output_type != TCC_OUTPUT_MEMORY) {
+	    if (s1->output_type == TCC_OUTPUT_DLL)
+	        tcc_add_crt(s1, "crtendS.o");
+	    else
+	        tcc_add_crt(s1, "crtend.o");
 #if TARGETOS_FreeBSD || TARGETOS_NetBSD
             tcc_add_crt(s1, "crtn.o");
 #endif
@@ -2856,8 +2857,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         sm_table[i].new_section = 1;
     found:
         if (sh->sh_type != s->sh_type) {
-#if TARGETOS_OpenBSD
-            if (strcmp (s->name, ".eh_frame") || sh->sh_type != SHT_PROGBITS)
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
+            if (strcmp (s->name, ".eh_frame"))
 #endif
             {
                 tcc_error_noabort("invalid section type");
