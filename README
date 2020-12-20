@@ -29,14 +29,14 @@ Documentation:
 -------------
 
 1) Installation on a i386/x86_64/arm/aarch64/riscv64
-   Linux/macOS/FreeBSD/OpenBSD hosts.
+   Linux/macOS/FreeBSD/NetBSD/OpenBSD hosts.
 
    ./configure
    make
    make test
    make install
 
-   Notes: For OpenBSD and FreeBSD, gmake should be used instead of make.
+   Notes: For FreeBSD, NetBSD and OpenBSD, gmake should be used instead of make.
    For Windows read tcc-win32.txt.
 
 makeinfo must be installed to compile the doc.  By default, tcc is
