@@ -955,6 +955,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC__", "9");
     tcc_define_symbol(s, "__GNUC_MINOR__", "3");
     tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
+    tcc_define_symbol(s, "__GNUC_STDC_INLINE__", "1");
     tcc_define_symbol(s, "__amd64__", "1");
 #  endif
 # else
