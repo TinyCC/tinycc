@@ -903,6 +903,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
     tcc_define_symbol(s, "_Pragma(x)", "");
     tcc_define_symbol(s, "__ELF__", "1");
+    tcc_define_symbol(s, "__amd64__", "1");
     tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
     tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
     tcc_define_symbol(s, "__builtin_huge_vall()", "1e5000L");
