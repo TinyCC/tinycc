@@ -884,6 +884,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__FreeBSD__", "12");
     /* No 'Thread Storage Local' on FreeBSD with tcc */
     tcc_define_symbol(s, "__NO_TLS", NULL);
+    tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
+    tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
+    tcc_define_symbol(s, "__builtin_huge_vall()", "1e5000L");
+    tcc_define_symbol(s, "__builtin_nanf(ignored_string)", "(0.0F/0.0F)");
 #   if defined(__aarch64__)
     /* FIXME, __int128_t is used by setjump */
     tcc_define_symbol(s, "__int128_t", "struct { unsigned char _dummy[16]; }");
@@ -899,6 +903,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__GNUC_PATCHLEVEL__", "0");
     tcc_define_symbol(s, "_Pragma(x)", "");
     tcc_define_symbol(s, "__ELF__", "1");
+    tcc_define_symbol(s, "__builtin_huge_val()", "1e500");
+    tcc_define_symbol(s, "__builtin_huge_valf()", "1e50f");
+    tcc_define_symbol(s, "__builtin_huge_vall()", "1e5000L");
+    tcc_define_symbol(s, "__builtin_nanf(ignored_string)", "(0.0F/0.0F)");
 # endif
 # if TARGETOS_OpenBSD
     tcc_define_symbol(s, "__OpenBSD__", "1");
