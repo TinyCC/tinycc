@@ -1,27 +1,43 @@
 /*  tccdefs.h
- *
- *  By using native platfórm macros this file may be included at runtime
- *  just as is.
- *
- *  If converted to C-strings and included in tccpp.c, these are trahslated
- *  to tcc target macros accordingly.
- */
+
+    Nothing is defined before this file except target machine, target os
+    and the few things related to option settings in tccpp.c:tcc_predefs().
+
+    This file is either included at runtime as is, or converted and
+    included as C-strings at compile-time (depending on CONFIG_TCC_PREDEFS).
+
+    Note that line indent matters:
+
+    - in lines starting at column 1, platform macros are replaced by
+      corresponding TCC target compile-time macros.  See conftest.c for
+      the list of platform macros supported in lines starting at column 1.
+
+    - only lines indented >= 4 are actually included into the executable,
+      check tccdefs_.h.
+*/
 
 #if __SIZEOF_POINTER__ == 4
     /* 32bit systems. */
     #define __SIZE_TYPE__ unsigned int
     #define __PTRDIFF_TYPE__ int
     #define __ILP32__ 1
+    #define __INT64_TYPE__ long long
 #elif __SIZEOF_LONG__ == 4
     /* 64bit Windows. */
     #define __SIZE_TYPE__ unsigned long long
     #define __PTRDIFF_TYPE__ long long
     #define __LLP64__ 1
+    #define __INT64_TYPE__ long long
 #else
     /* Other 64bit systems. */
     #define __SIZE_TYPE__ unsigned long
     #define __PTRDIFF_TYPE__ long
     #define __LP64__ 1
+# if defined __linux__
+    #define __INT64_TYPE__ long
+# else /* APPLE, BSD */
+    #define __INT64_TYPE__ long long
+# endif
 #endif
     #define __SIZEOF_INT__ 4
     #define __INT_MAX__ 0x7fffffff
@@ -58,15 +74,10 @@
     #endif
 
 #if defined _WIN32
-    //#define _WIN32 1
-# if __SIZEOF_POINTER__ == 8
-    #define _WIN64 1
-# endif
     #define __declspec(x) __attribute__((x))
     #define __cdecl
 
 #elif defined __FreeBSD__
-    //#define __FreeBSD__ 12
     #define __GNUC__ 9
     #define __GNUC_MINOR__ 3
     #define __GNUC_PATCHLEVEL__ 0
@@ -78,27 +89,22 @@
 # endif
 
 #elif defined __FreeBSD_kernel__
-    //#define __FreeBSD_kernel__ 1
 
 #elif defined __NetBSD__
-    //#define __NetBSD__ 1
     #define __GNUC__ 4
     #define __GNUC_MINOR__ 1
     #define __GNUC_PATCHLEVEL__ 0
     #define _Pragma(x)
     #define __ELF__ 1
-    #if defined(__aarch64__) && defined(__TINYC__) && !defined(_LOCORE)
-         /* avoids usage of __asm which is not yet supported by tcc */
-         #define _LOCORE
-    #endif
+#if defined __aarch64__
+    #define _LOCORE /* avoids usage of __asm */
+#endif
 
 #elif defined __OpenBSD__
-    //#define __OpenBSD__ 1
     #define __GNUC__ 4
     #define _ANSI_LIBRARY 1
 
 #elif defined __APPLE__
-    //#define __APPLE__ 1
     /* emulate APPLE-GCC to make libc's headerfiles compile: */
     #define __GNUC__ 4   /* darwin emits warning on GCC<4 */
     #define __APPLE_CC__ 1 /* for <TargetConditionals.h> */
@@ -108,8 +114,8 @@
     #define _FORTIFY_SOURCE 0
 
 #else
-    //#define __linux__ 1
-    //#define __linux 1
+    /* Linux */
+
 #endif
 
 #if !defined _WIN32

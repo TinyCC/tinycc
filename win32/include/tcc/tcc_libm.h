@@ -467,7 +467,7 @@ __CRT_INLINE long double __cdecl hypotl(long double x, long double y) { return h
 __CRT_INLINE long double __cdecl logl(long double x) { return log(x); }
 __CRT_INLINE long double __cdecl logbl(long double x) { return logb(x); }
 __CRT_INLINE long double __cdecl log10l(long double x) { return log10(x); }
-__CRT_INLINE long double __cdecl modfl(long double x, long double* y) { return modf(x, y); }
+__CRT_INLINE long double __cdecl modfl(long double x, long double* y) { double y1 = *y; x = modf(x, &y1); *y = y1; return x; }
 __CRT_INLINE long double __cdecl powl(long double x, long double y) { return pow(x, y); }
 __CRT_INLINE long double __cdecl sinhl(long double x) { return sinh(x); }
 __CRT_INLINE long double __cdecl sinl(long double x) { return sin(x); }

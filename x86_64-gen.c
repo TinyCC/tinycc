@@ -112,6 +112,11 @@ enum {
 #include "tcc.h"
 #include <assert.h>
 
+ST_DATA const char *target_machine_defs =
+    "__x86_64__\0"
+    "__amd64__\0"
+    ;
+
 ST_DATA const int reg_classes[NB_REGS] = {
     /* eax */ RC_INT | RC_RAX,
     /* ecx */ RC_INT | RC_RCX,

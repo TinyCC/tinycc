@@ -274,7 +274,7 @@ extern "C" {
   : __signbitl (x))
 */
 #define signbit(x) \
-  _Generic(x, float: __signbitf, double: __signbit, long double: signbitl)(x)
+  _Generic(x, float: __signbitf, double: __signbit, long double: __signbitl)(x)
 
   extern double __cdecl exp2(double);
   extern float __cdecl exp2f(float);

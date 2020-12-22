@@ -1840,8 +1840,6 @@ ST_FUNC void preprocess(int is_bof)
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
             tcc_error("#include recursion too deep");
-        /* push current file on stack */
-        *s1->include_stack_ptr++ = file;
         i = tok == TOK_INCLUDE_NEXT ? file->include_next_index + 1 : 0;
         n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
         for (; i < n; ++i) {
@@ -1884,7 +1882,8 @@ ST_FUNC void preprocess(int is_bof)
 
             if (tcc_open(s1, buf1) < 0)
                 continue;
-
+            /* push previous file on stack */
+            *s1->include_stack_ptr++ = file->prev;
             file->include_next_index = i;
 #ifdef INC_DEBUG
             printf("%s: including %s\n", file->prev->filename, file->filename);
@@ -1907,7 +1906,6 @@ ST_FUNC void preprocess(int is_bof)
         }
         tcc_error("include file '%s' not found", buf);
 include_done:
-        --s1->include_stack_ptr;
         break;
     case TOK_IFNDEF:
         c = 1;
@@ -3625,97 +3623,77 @@ ST_INLN void unget_tok(int last_tok)
     tok = last_tok;
 }
 
+/* ------------------------------------------------------------------------- */
+/* init preprocessor */
+
+static const char *target_os_defs =
+#ifdef TCC_TARGET_PE
+    "_WIN32\0"
+# if PTR_SIZE == 8
+    "_WIN64\0"
+# endif
+#else
+# if defined TCC_TARGET_MACHO
+    "__APPLE__\0"
+# elif TARGETOS_FreeBSD
+    "__FreeBSD__ 12\0"
+# elif TARGETOS_FreeBSD_kernel
+    "__FreeBSD_kernel__\0"
+# elif TARGETOS_NetBSD
+    "__NetBSD__\0"
+# elif TARGETOS_OpenBSD
+    "__OpenBSD__\0"
+# else
+    "__linux__\0"
+    "__linux\0"
+# endif
+    "__unix__\0"
+    "__unix\0"
+#endif
+    ;
+
+static void putdef(CString *cs, const char *p)
+{
+    cstr_printf(cs, "#define %s%s\n", p, &" 1"[!!strchr(p, ' ')*2]);
+}
+
 static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
 {
-    int a,b,c;
+    int a, b, c;
+    const char *defs[] = { target_machine_defs, target_os_defs, NULL };
+    const char *p;
 
     sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
     cstr_printf(cs, "#define __TINYC__ %d\n", a*10000 + b*100 + c);
-    cstr_cat(cs,
-        /* target machine */
-#if defined TCC_TARGET_I386
-        "#define __i386__ 1\n"
-        "#define __i386 1\n"
-#elif defined TCC_TARGET_X86_64
-        "#define __x86_64__ 1\n"
-        "#define __amd64__ 1\n"
-#elif defined TCC_TARGET_ARM
-        "#define __ARM_ARCH_4__ 1\n"
-        "#define __arm_elf__ 1\n"
-        "#define __arm_elf 1\n"
-        "#define arm_elf 1\n"
-        "#define __arm__ 1\n"
-        "#define __arm 1\n"
-        "#define arm 1\n"
-        "#define __APCS_32__ 1\n"
-        "#define __ARMEL__ 1\n"
-# if defined TCC_ARM_EABI
-        "#define __ARM_EABI__ 1\n"
-# endif
-#elif defined TCC_TARGET_ARM64
-        "#define __aarch64__ 1\n"
-#elif defined TCC_TARGET_C67
-        "#define __C67__ 1\n"
-#elif defined TCC_TARGET_RISCV64
-        "#define __riscv 1\n"
-        "#define __riscv_xlen 64\n"
-        "#define __riscv_flen 64\n"
-        "#define __riscv_div 1\n"
-        "#define __riscv_mul 1\n"
-        "#define __riscv_fdiv 1\n"
-        "#define __riscv_fsqrt 1\n"
-        "#define __riscv_float_abi_double 1\n"
-#endif
-        , -1);
+    for (a = 0; defs[a]; ++a)
+        for (p = defs[a]; *p; p = strchr(p, 0) + 1)
+            putdef(cs, p);
 #ifdef TCC_TARGET_ARM
     if (s1->float_abi == ARM_HARD_FLOAT)
-      cstr_printf(cs, "#define __ARM_PCS_VFP 1\n");
+      putdef(cs, "__ARM_PCS_VFP");
 #endif
-    cstr_cat(cs,
-        /* target platform */
-#ifdef TCC_TARGET_PE
-        "#define _WIN32 1\n"
-#else
-        "#define __unix__ 1\n"
-        "#define __unix 1\n"
-# if defined TCC_TARGET_MACHO
-        "#define __APPLE__ 1\n"
-# elif TARGETOS_FreeBSD
-        "#define __FreeBSD__ 12\n"
-# elif TARGETOS_FreeBSD_kernel
-        "#define __FreeBSD_kernel__ 1\n"
-# elif TARGETOS_NetBSD
-        "#define __NetBSD__ 1\n"
-# elif TARGETOS_OpenBSD
-        "#define __OpenBSD__ 1\n"
-# else
-        "#define __linux__ 1\n"
-        "#define __linux 1\n"
-# endif
-#endif
-        , -1);
     if (is_asm)
-      cstr_printf(cs, "#define __ASSEMBLER__ 1\n");
+      putdef(cs, "__ASSEMBLER__");
     if (s1->output_type == TCC_OUTPUT_PREPROCESS)
-      cstr_printf(cs, "#define __TCC_PP__ 1\n");
+      putdef(cs, "__TCC_PP__");
     if (s1->output_type == TCC_OUTPUT_MEMORY)
-      cstr_printf(cs, "#define __TCC_RUN__ 1\n");
+      putdef(cs, "__TCC_RUN__");
     if (s1->char_is_unsigned)
-      cstr_printf(cs, "#define __CHAR_UNSIGNED__ 1\n");
+      putdef(cs, "__CHAR_UNSIGNED__");
     if (s1->optimize > 0)
-      cstr_printf(cs, "#define __OPTIMIZE__ 1\n");
+      putdef(cs, "__OPTIMIZE__");
     if (s1->option_pthread)
-      cstr_printf(cs, "#define _REENTRANT 1\n");
+      putdef(cs, "_REENTRANT");
     if (s1->leading_underscore)
-      cstr_printf(cs, "#define __leading_underscore 1\n");
+      putdef(cs, "__leading_underscore");
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check)
-      cstr_printf(cs, "#define __BOUNDS_CHECKING_ON 1\n");
+      putdef(cs, "__BOUNDS_CHECKING_ON");
 #endif
     cstr_printf(cs, "#define __SIZEOF_POINTER__ %d\n", PTR_SIZE);
     cstr_printf(cs, "#define __SIZEOF_LONG__ %d\n", LONG_SIZE);
     if (!is_asm) {
-      cstr_printf(cs, "#define __STDC__ 1\n");
+      putdef(cs, "__STDC__");
       cstr_printf(cs, "#define __STDC_VERSION__ %dL\n", s1->cversion);
       cstr_cat(cs,
         /* load more predefs and __builtins */

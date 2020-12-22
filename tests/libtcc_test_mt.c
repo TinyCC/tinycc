@@ -269,7 +269,7 @@ int main(int argc, char **argv)
     printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("running tcc.c in threads to run fib\n"), fflush(stdout);
+    printf("running tcc.c in threads to run fib\n "), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_complex, n);

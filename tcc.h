@@ -211,6 +211,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ELF_OBJ_ONLY /* create elf .o but native executables */
 #endif
 
+/* No ten-byte long doubles on window except in cross-compilers made by GCC */
+#if defined TCC_TARGET_PE || (defined _WIN32 && !defined __GNUC__)
+# define TCC_USING_DOUBLE_FOR_LDOUBLE 1
+#endif
+
 /* ------------ path configuration ------------ */
 
 #ifndef CONFIG_SYSROOT
@@ -1620,7 +1625,7 @@ ST_FUNC void relocate_plt(TCCState *s1);
 ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 
 /* ------------ xxx-gen.c ------------ */
-
+ST_DATA const char *target_machine_defs;
 ST_DATA const int reg_classes[NB_REGS];
 
 ST_FUNC void gsym_addr(int t, int a);

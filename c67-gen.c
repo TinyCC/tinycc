@@ -114,8 +114,12 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
+ST_DATA const char *target_machine_defs =
+    "__C67__\0"
+    ;
+
 ST_DATA const int reg_classes[NB_REGS] = {
-    /* eax */ RC_INT | RC_FLOAT | RC_EAX, 
+    /* eax */ RC_INT | RC_FLOAT | RC_EAX,
     // only allow even regs for floats (allow for doubles)
     /* ecx */ RC_INT | RC_ECX,
     /* edx */ RC_INT | RC_INT_BSIDE | RC_FLOAT | RC_EDX,

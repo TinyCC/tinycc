@@ -36,6 +36,17 @@
 #include "tcc.h"
 #include <assert.h>
 
+ST_DATA const char *target_machine_defs =
+    "__riscv\0"
+    "__riscv_xlen 64\0"
+    "__riscv_flen 64\0"
+    "__riscv_div\0"
+    "__riscv_mul\0"
+    "__riscv_fdiv\0"
+    "__riscv_fsqrt\0"
+    "__riscv_float_abi_double\0"
+    ;
+
 #define XLEN 8
 
 #define TREG_RA 17

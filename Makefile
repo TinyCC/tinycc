@@ -221,8 +221,8 @@ endif
 endif
 
 # convert "include/tccdefs.h" to "tccdefs_.h"
-%_.h : include/%.h tests/misc/c2str.c
-	$S$(CC) -o c2str.exe $(filter %.c,$^) && ./c2str.exe $< $@
+%_.h : include/%.h conftest.c
+	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe && ./c2str.exe $< $@
 
 # target specific object rule
 $(X)%.o : %.c $(LIBTCC_INC)

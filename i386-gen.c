@@ -81,6 +81,11 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
+ST_DATA const char *target_machine_defs =
+    "__i386__\0"
+    "__i386\0"
+    ;
+
 /* define to 1/0 to [not] have EBX as 4th register */
 #define USE_EBX 0
 

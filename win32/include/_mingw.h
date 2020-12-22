@@ -80,7 +80,6 @@
 #define __stdcall __attribute__((__stdcall__))
 #define _X86_ 1
 #define _M_IX86 300 /* Visual Studio */
-#define WIN32 1
 #define _USE_32BIT_TIME_T
 #endif
 
@@ -160,5 +159,6 @@ typedef struct localeinfo_struct _locale_tstruct,*_locale_t;
 #define __MINGW_EXTENSION
 #define WINAPI_FAMILY_PARTITION(X) 1
 #define MINGW_HAS_SECURE_API
+#define WIN32 1
 
 #endif /* __MINGW_H */

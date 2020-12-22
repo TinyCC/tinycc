@@ -141,6 +141,21 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
+ST_DATA const char *target_machine_defs =
+    "__arm__\0"
+    "__arm\0"
+    "arm\0"
+    "__arm_elf__\0"
+    "__arm_elf\0"
+    "arm_elf\0"
+    "__ARM_ARCH_4__\0"
+    "__ARMEL__\0"
+    "__APCS_32__\0"
+#if defined TCC_ARM_EABI
+    "__ARM_EABI__\0"
+#endif
+    ;
+
 enum float_abi float_abi;
 
 ST_DATA const int reg_classes[NB_REGS] = {

@@ -160,7 +160,11 @@ static const struct {
     {   VT_BYTE | VT_DEFSIGN | VT_UNSIGNED, "unsigned char:t13=r13;0;255;" },
     {   VT_FLOAT, "float:t14=r1;4;0;" },
     {   VT_DOUBLE, "double:t15=r1;8;0;" },
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
+    {   VT_DOUBLE | VT_LONG, "long double:t16=r1;8;0;" },
+#else
     {   VT_LDOUBLE, "long double:t16=r1;16;0;" },
+#endif
     {   -1, "_Float32:t17=r1;4;0;" },
     {   -1, "_Float64:t18=r1;8;0;" },
     {   -1, "_Float128:t19=r1;16;0;" },
@@ -5061,7 +5065,7 @@ the_end:
     bt = t & (VT_BTYPE|VT_LONG);
     if (bt == VT_LONG)
         t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
-#if defined TCC_TARGET_PE || (defined _WIN32 && defined _MSC_VER)
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
     if (bt == VT_LDOUBLE)
         t = (t & ~(VT_BTYPE|VT_LONG)) | (VT_DOUBLE|VT_LONG);
 #endif
