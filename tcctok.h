@@ -309,6 +309,7 @@
      DEF(TOK___bound_local_new, "__bound_local_new")
      DEF(TOK___bound_local_delete, "__bound_local_delete")
      DEF(TOK___bound_setjmp, "__bound_setjmp")
+     DEF(TOK___bound_longjmp, "__bound_longjmp")
      DEF(TOK___bound_new_region, "__bound_new_region")
 # ifdef TCC_TARGET_PE
 #  ifdef TCC_TARGET_X86_64
@@ -321,6 +322,7 @@
 # endif
      DEF(TOK_setjmp, "setjmp")
      DEF(TOK__setjmp, "_setjmp")
+     DEF(TOK_longjmp, "longjmp")
 #endif
 
 /* Tiny Assembler */

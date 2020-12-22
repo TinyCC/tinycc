@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-#ifndef _WIN32
+#if !(defined( _WIN32) || (defined(__FreeBSD__) && defined(__i386__)))
 #define __fastcall __attribute((fastcall))
 #endif
 

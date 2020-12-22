@@ -51,10 +51,10 @@ endif
 ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 106_versym.test # no pthread_condattr_setpshared
  SKIP += 114_bound_signal.test # libc problem signal/fork
+ SKIP += 116_bound_setjmp2.test # No TLS_FUNC/TLS_VAR in bcheck.c
 endif
 ifeq ($(TARGETOS),NetBSD)
   SKIP += 113_btdll.test # text relocations
-  SKIP += 115_bound_setjmp.test # longjmp renamed to __longjmp14
 endif
 
 # Some tests might need arguments

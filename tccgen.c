@@ -2009,6 +2009,10 @@ ST_FUNC void gbound_args(int nb_args)
         if (v == TOK_alloca)
             func_bound_add_epilog = 1;
 #endif
+#if TARGETOS_NetBSD
+        if (v == TOK_longjmp) /* undo rename to __longjmp14 */
+            sv->sym->asm_label = TOK___bound_longjmp;
+#endif
     }
 }
 
