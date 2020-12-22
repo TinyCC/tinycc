@@ -72,7 +72,6 @@
     #define __GNUC_PATCHLEVEL__ 0
     #define __GNUC_STDC_INLINE__ 1
     #define __NO_TLS 1
-    #define __amd64__ 1
 # if __SIZEOF_POINTER__ == 8
     /* FIXME, __int128_t is used by setjump */
     #define __int128_t struct { unsigned char _dummy[16] __attribute((aligned(16))); }
@@ -232,7 +231,7 @@
     __BOUND(void*,__aeabi_memset,(void*,int,__SIZE_TYPE__))
 #endif
 
-#if defined __linux__ // HAVE MALLOC_REDIR
+#if defined __linux__ || defined __APPLE__ // HAVE MALLOC_REDIR
     #define __MAYBE_REDIR __BUILTIN
 #else
     #define __MAYBE_REDIR __BOTH
