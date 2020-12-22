@@ -41,6 +41,7 @@ int code_reloc (int reloc_type)
 	case R_ARM_GOTPC:
 	case R_ARM_GOTOFF:
 	case R_ARM_GOT32:
+	case R_ARM_GOT_PREL:
 	case R_ARM_COPY:
 	case R_ARM_GLOB_DAT:
 	case R_ARM_NONE:
@@ -93,6 +94,7 @@ int gotplt_entry_type (int reloc_type)
             return BUILD_GOT_ONLY;
 
 	case R_ARM_GOT32:
+	case R_ARM_GOT_PREL:
             return ALWAYS_GOTPLT_ENTRY;
     }
     return -1;
@@ -383,6 +385,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_ARM_GOT32:
             /* we load the got offset */
             *(int *)ptr += get_sym_attr(s1, sym_index, 0)->got_offset;
+            return;
+	case R_ARM_GOT_PREL:
+            /* we load the pc relative got offset */
+            *(int *)ptr += s1->got->sh_addr +
+			   get_sym_attr(s1, sym_index, 0)->got_offset -
+			   addr;
             return;
         case R_ARM_COPY:
             return;

@@ -2511,6 +2511,7 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_ARM_TLS_CALL		91
 #define R_ARM_TLS_DESCSEQ	92
 #define R_ARM_THM_TLS_CALL	93
+#define R_ARM_GOT_PREL		96
 #define R_ARM_GNU_VTENTRY	100
 #define R_ARM_GNU_VTINHERIT	101
 #define R_ARM_THM_PC11		102	/* thumb unconditional branch */
