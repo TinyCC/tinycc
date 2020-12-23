@@ -83,7 +83,7 @@
 #elif defined __NetBSD__
     //#define __NetBSD__ 1
     #define __GNUC__ 4
-    #define __GNUC_MINOR__ 0
+    #define __GNUC_MINOR__ 1
     #define __GNUC_PATCHLEVEL__ 0
     #define _Pragma(x)
     #define __ELF__ 1
