@@ -87,6 +87,10 @@
     #define __GNUC_PATCHLEVEL__ 0
     #define _Pragma(x)
     #define __ELF__ 1
+    #if defined(__aarch64__) && defined(__TINYC__) && !defined(_LOCORE)
+         /* avoids usage of __asm which is not yet supported by tcc */
+         #define _LOCORE
+    #endif
 
 #elif defined __OpenBSD__
     //#define __OpenBSD__ 1
