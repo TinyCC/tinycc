@@ -2781,8 +2781,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 #endif
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
             sh->sh_type != SHT_X86_64_UNWIND &&
-            sh->sh_type != SHT_NOTE &&
 #endif
+            sh->sh_type != SHT_NOTE &&
             sh->sh_type != SHT_NOBITS &&
             sh->sh_type != SHT_PREINIT_ARRAY &&
             sh->sh_type != SHT_INIT_ARRAY &&
