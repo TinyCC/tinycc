@@ -236,7 +236,13 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 	$S$(CC) -o $@ $^ $(LIBS) $(LDFLAGS) $(LINK_LIBTCC)
 
 # Cross Tiny C Compilers
-%-tcc$(EXESUF): FORCE
+# (the TCCDEFS_H dependency is only necessary for parallel makes,
+# ala 'make -j x86_64-tcc i386-tcc tcc', which would create multiple
+# c2str.exe and tccdefs_.h files in parallel, leading to access errors.
+# This forces it to be made only once.  Make normally tracks multiple paths
+# to the same goals and only remakes it once, but that doesn't work over
+# sub-makes like in this target)
+%-tcc$(EXESUF): $(TCCDEFS_H) FORCE
 	@$(MAKE) --no-print-directory $@ CROSS_TARGET=$* ONE_SOURCE=$(or $(ONE_SOURCE),yes)
 
 $(CROSS_TARGET)-tcc$(EXESUF): $(TCC_FILES)
