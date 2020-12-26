@@ -171,6 +171,25 @@ static void asm_nullary_opcode(int token)
     }
 }
 
+static void asm_unary_opcode(TCCState *s1, int token)
+{
+    Operand op;
+    parse_operand(s1, &op);
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_swieq:
+        if (op.type != OP_IM8)
+            expect("immediate 8-bit unsigned integer");
+        else {
+            /* Note: Dummy operand (ignored by processor): ARM ref documented 0...255, ARM instruction set documented 24 bit */
+            asm_emit_opcode(token, (0xf << 24) | op.e.v);
+        }
+        break;
+    default:
+        expect("unary instruction");
+    }
+}
+
 static void asm_block_data_transfer_opcode(TCCState *s1, int token)
 {
     uint32_t opcode;
@@ -247,6 +266,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_wfeeq:
     case TOK_ASM_wfieq:
         return asm_nullary_opcode(token);
+    case TOK_ASM_swieq:
+        return asm_unary_opcode(s1, token);
     default:
         expect("known instruction");
     }

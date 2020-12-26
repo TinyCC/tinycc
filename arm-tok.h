@@ -54,6 +54,7 @@
  DEF_ASM_CONDED(nop)
  DEF_ASM_CONDED(wfe)
  DEF_ASM_CONDED(wfi)
+ DEF_ASM_CONDED(swi)
 
  /* instruction macros */
 
