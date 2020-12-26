@@ -370,3 +370,6 @@
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #include "i386-tok.h"
 #endif
+#if defined TCC_TARGET_ARM
+#include "arm-tok.h"
+#endif
