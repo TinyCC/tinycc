@@ -190,6 +190,47 @@ static void asm_unary_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_binary_opcode(TCCState *s1, int token)
+{
+    Operand ops[2];
+    parse_operand(s1, &ops[0]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+    if (ops[0].type != OP_REG32) {
+        expect("(destination operand) register");
+        return;
+    }
+
+    if (ops[1].type != OP_REG32)
+        expect("(source operand) register");
+    else switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_clzeq:
+        asm_emit_opcode(token, 0x16f0f10 | (ops[0].reg << 12) | ops[1].reg);
+        break;
+    case TOK_ASM_sxtbeq:
+        /* TODO: optional ROR (8|16|24) */
+        asm_emit_opcode(token, 0x6af0070 | (ops[0].reg << 12) | ops[1].reg);
+        break;
+    case TOK_ASM_sxtheq:
+        /* TODO: optional ROR (8|16|24) */
+        asm_emit_opcode(token, 0x6bf0070 | (ops[0].reg << 12) | ops[1].reg);
+        break;
+    case TOK_ASM_uxtbeq:
+        /* TODO: optional ROR (8|16|24) */
+        asm_emit_opcode(token, 0x6ef0070 | (ops[0].reg << 12) | ops[1].reg);
+        break;
+    case TOK_ASM_uxtheq:
+        /* TODO: optional ROR (8|16|24) */
+        asm_emit_opcode(token, 0x6ff0070 | (ops[0].reg << 12) | ops[1].reg);
+        break;
+    default:
+        expect("binary instruction");
+    }
+}
+
 static void asm_block_data_transfer_opcode(TCCState *s1, int token)
 {
     uint32_t opcode;
@@ -268,6 +309,12 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         return asm_nullary_opcode(token);
     case TOK_ASM_swieq:
         return asm_unary_opcode(s1, token);
+    case TOK_ASM_clzeq:
+    case TOK_ASM_sxtbeq:
+    case TOK_ASM_sxtheq:
+    case TOK_ASM_uxtbeq:
+    case TOK_ASM_uxtheq:
+        return asm_binary_opcode(s1, token);
     default:
         expect("known instruction");
     }

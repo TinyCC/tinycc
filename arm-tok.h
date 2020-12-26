@@ -56,6 +56,16 @@
  DEF_ASM_CONDED(wfi)
  DEF_ASM_CONDED(swi)
 
+ /* misc */
+ DEF_ASM_CONDED(clz)
+
+ /* size conversion */
+
+ DEF_ASM_CONDED(sxtb)
+ DEF_ASM_CONDED(sxth)
+ DEF_ASM_CONDED(uxtb)
+ DEF_ASM_CONDED(uxth)
+
  /* instruction macros */
 
  DEF_ASM_CONDED(push)
