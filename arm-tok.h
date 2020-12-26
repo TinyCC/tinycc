@@ -54,3 +54,8 @@
  DEF_ASM_CONDED(nop)
  DEF_ASM_CONDED(wfe)
  DEF_ASM_CONDED(wfi)
+
+ /* instruction macros */
+
+ DEF_ASM_CONDED(push)
+ DEF_ASM_CONDED(pop)

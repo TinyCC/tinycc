@@ -171,6 +171,61 @@ static void asm_nullary_opcode(int token)
     }
 }
 
+static void asm_block_data_transfer_opcode(TCCState *s1, int token)
+{
+    uint32_t opcode;
+    int op0_exclam;
+    Operand ops[2];
+    int nb_ops = 1;
+    parse_operand(s1, &ops[0]);
+    if (tok == '!') {
+        op0_exclam = 1;
+        next(); // skip '!'
+    }
+    if (tok == ',') {
+        next(); // skip comma
+        parse_operand(s1, &ops[1]);
+        ++nb_ops;
+    }
+    if (nb_ops < 1) {
+        expect("at least one operand");
+        return;
+    } else if (ops[nb_ops - 1].type != OP_REGSET32) {
+        expect("(last operand) register list");
+        return;
+    }
+
+    // block data transfer: 1 0 0 P U S W L << 20 (general case):
+    // operands:
+    //   Rn: bits 19...16 base register
+    //   Register List: bits 15...0
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_pusheq: // TODO: Optimize 1-register case to: str ?, [sp, #-4]!
+        // Instruction: 1 I=0 P=1 U=0 S=0 W=1 L=0 << 20, op 1101
+        //   operands:
+        //      Rn: base register
+        //      Register List: bits 15...0
+        if (nb_ops != 1)
+            expect("exactly one operand");
+        else
+            asm_emit_opcode(token, (0x92d << 16) | ops[0].regset); // TODO: base register ?
+        break;
+    case TOK_ASM_popeq: // TODO: Optimize 1-register case to: ldr ?, [sp], #4
+        // Instruction: 1 I=0 P=0 U=1 S=0 W=0 L=1 << 20, op 1101
+        //   operands:
+        //      Rn: base register
+        //      Register List: bits 15...0
+        if (nb_ops != 1)
+            expect("exactly one operand");
+        else
+            asm_emit_opcode(token, (0x8bd << 16) | ops[0].regset); // TODO: base register ?
+        break;
+    default:
+        expect("block data transfer instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     while (token == TOK_LINEFEED) {
@@ -185,6 +240,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     }
 
     switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_pusheq:
+    case TOK_ASM_popeq:
+        return asm_block_data_transfer_opcode(s1, token);
     case TOK_ASM_nopeq:
     case TOK_ASM_wfeeq:
     case TOK_ASM_wfieq:
