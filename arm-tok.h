@@ -83,6 +83,11 @@
 
  /* load/store */
 
+ DEF_ASM_CONDED(ldr)
+ DEF_ASM_CONDED(ldrb)
+ DEF_ASM_CONDED(str)
+ DEF_ASM_CONDED(strb)
+
  DEF_ASM_CONDED(stmda)
  DEF_ASM_CONDED(ldmda)
  DEF_ASM_CONDED(stm)

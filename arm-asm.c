@@ -506,6 +506,123 @@ static void asm_long_multiplication_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_single_data_transfer_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    int exclam = 0;
+    int closed_bracket = 0;
+    int op2_minus = 0;
+    uint32_t opcode = 1 << 26;
+    // Note: ldr r0, [r4, #4]  ; simple offset: r0 = *(int*)(r4+4); r4 unchanged
+    // Note: ldr r0, [r4, #4]! ; pre-indexed:   r0 = *(int*)(r4+4); r4 = r4+4
+    // Note: ldr r0, [r4], #4  ; post-indexed:  r0 = *(int*)(r4+0); r4 = r4+4
+
+    parse_operand(s1, &ops[0]);
+    if (ops[0].type == OP_REG32)
+        opcode |= ENCODE_RD(ops[0].reg);
+    else {
+        expect("(destination operand) register");
+        return;
+    }
+    if (tok != ',')
+        expect("two arguments");
+    else
+        next(); // skip ','
+    if (tok != '[')
+        expect("'['");
+    else
+        next(); // skip '['
+
+    parse_operand(s1, &ops[1]);
+    if (ops[1].type == OP_REG32)
+        opcode |= ENCODE_RN(ops[1].reg);
+    else {
+        expect("(first source operand) register");
+        return;
+    }
+    if (tok == ']') {
+        next();
+        closed_bracket = 1;
+        // exclam = 1; // implicit in hardware; don't do it in software
+    }
+    if (tok != ',')
+        expect("','");
+    else
+        next(); // skip ','
+    if (tok == '-') {
+        op2_minus = 1;
+        next();
+    }
+    parse_operand(s1, &ops[2]);
+    if (!closed_bracket) {
+        if (tok != ']')
+            expect("']'");
+        else
+            next(); // skip ']'
+        opcode |= 1 << 24; // add offset before transfer
+        if (tok == '!') {
+            exclam = 1;
+            next(); // skip '!'
+        }
+    }
+
+    // single data transfer: 0 1 I P U B W L << 20 (general case):
+    // operands:
+    //    Rd: destination operand [ok]
+    //    Rn: first source operand [ok]
+    //    Operand2: bits 11...0 [ok]
+    // I: immediate operand? [ok]
+    // P: Pre/post indexing is PRE: Add offset before transfer [ok]
+    // U: Up/down is up? (*adds* offset to base) [ok]
+    // B: Byte/word is byte?  TODO
+    // W: Write address back into base? [ok]
+    // L: Load/store is load? [ok]
+    if (exclam)
+        opcode |= 1 << 21; // write offset back into register
+
+    if (ops[2].type == OP_IM32 || ops[2].type == OP_IM8 || ops[2].type == OP_IM8N) {
+        int v = ops[2].e.v;
+        if (op2_minus)
+            tcc_error("minus before '#' not supported for immediate values");
+        if (v >= 0) {
+            opcode |= 1 << 23; // up
+            if (v >= 0x1000)
+                tcc_error("offset out of range for '%s'", get_tok_str(token, NULL));
+            else
+                opcode |= v;
+        } else { // down
+            if (v <= -0x1000)
+                tcc_error("offset out of range for '%s'", get_tok_str(token, NULL));
+            else
+                opcode |= -v;
+        }
+    } else if (ops[2].type == OP_REG32) {
+        if (!op2_minus)
+            opcode |= 1 << 23; // up
+        opcode |= ENCODE_IMMEDIATE_FLAG; /* if set, it means it's NOT immediate */
+        opcode |= ops[2].reg;
+    } else
+        expect("register");
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_strbeq:
+        opcode |= 1 << 22; // B
+        /* fallthrough */
+    case TOK_ASM_streq:
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_ldrbeq:
+        opcode |= 1 << 22; // B
+        /* fallthrough */
+    case TOK_ASM_ldreq:
+        opcode |= 1 << 20; // L
+        asm_emit_opcode(token, opcode);
+        break;
+    default:
+        expect("data transfer instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     while (token == TOK_LINEFEED) {
@@ -545,6 +662,12 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_uxtbeq:
     case TOK_ASM_uxtheq:
         return asm_binary_opcode(s1, token);
+
+    case TOK_ASM_ldreq:
+    case TOK_ASM_ldrbeq:
+    case TOK_ASM_streq:
+    case TOK_ASM_strbeq:
+        return asm_single_data_transfer_opcode(s1, token);
 
     case TOK_ASM_muleq:
     case TOK_ASM_mulseq:
