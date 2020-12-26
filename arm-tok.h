@@ -103,3 +103,38 @@
 
  DEF_ASM_CONDED(push)
  DEF_ASM_CONDED(pop)
+
+ /* data processing instructions; order is important */
+
+ DEF_ASM_CONDED(and)
+ DEF_ASM_CONDED(ands)
+ DEF_ASM_CONDED(eor)
+ DEF_ASM_CONDED(eors)
+ DEF_ASM_CONDED(sub)
+ DEF_ASM_CONDED(subs)
+ DEF_ASM_CONDED(rsb)
+ DEF_ASM_CONDED(rsbs)
+ DEF_ASM_CONDED(add)
+ DEF_ASM_CONDED(adds)
+ DEF_ASM_CONDED(adc)
+ DEF_ASM_CONDED(adcs)
+ DEF_ASM_CONDED(sbc)
+ DEF_ASM_CONDED(sbcs)
+ DEF_ASM_CONDED(rsc)
+ DEF_ASM_CONDED(rscs)
+ DEF_ASM_CONDED(tst)
+ DEF_ASM_CONDED(tsts) // necessary here--but not useful to the user
+ DEF_ASM_CONDED(teq)
+ DEF_ASM_CONDED(teqs) // necessary here--but not useful to the user
+ DEF_ASM_CONDED(cmp)
+ DEF_ASM_CONDED(cmps) // necessary here--but not useful to the user
+ DEF_ASM_CONDED(cmn)
+ DEF_ASM_CONDED(cmns) // necessary here--but not useful to the user
+ DEF_ASM_CONDED(orr)
+ DEF_ASM_CONDED(orrs)
+ DEF_ASM_CONDED(mov)
+ DEF_ASM_CONDED(movs)
+ DEF_ASM_CONDED(bic)
+ DEF_ASM_CONDED(bics)
+ DEF_ASM_CONDED(mvn)
+ DEF_ASM_CONDED(mvns)

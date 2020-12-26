@@ -347,6 +347,137 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_data_processing_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    int nb_ops;
+
+    /* 16 entries per instruction for the different condition codes */
+    uint32_t opcode_idx = (ARM_INSTRUCTION_GROUP(token) - TOK_ASM_andeq) >> 4;
+
+    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
+        parse_operand(s1, &ops[nb_ops]);
+        if (tok != ',') {
+            ++nb_ops;
+            break;
+        }
+        next(); // skip ','
+    }
+    if (nb_ops < 2)
+        expect("at least two operands");
+    else if (nb_ops == 2) {
+        memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
+        memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+        nb_ops = 3;
+    }
+    if (nb_ops != 3) {
+        expect("two or three operands");
+        return;
+    } else {
+        uint32_t opcode = 0;
+        uint32_t operands = 0;
+
+        // data processing (general case):
+        // operands:
+        //   Rn: bits 19...16 (first operand)
+        //   Rd: bits 15...12 (destination)
+        //   Operand2: bits 11...0 (second operand);  depending on I that's either a register or an immediate
+        // operator:
+        //   bits 24...21: "OpCode"--see below
+
+        /* operations in the token list are ordered by opcode */
+        opcode = (opcode_idx >> 1) << 21; // drop "s"
+        if (ops[0].type != OP_REG32)
+            expect("(destination operand) register");
+        else if (opcode == 0xa << 21 || opcode == 0xb << 21 || opcode == 0x8 << 21 || opcode == 0x9 << 21 ) // cmp, cmn, tst, teq
+            operands |= ENCODE_SET_CONDITION_CODES; // force S set, otherwise it's a completely different instruction.
+        else
+            operands |= ENCODE_RD(ops[0].reg);
+        if (ops[1].type != OP_REG32)
+            expect("(first source operand) register");
+        else if (!(opcode == 0xd << 21 || opcode == 0xf << 21)) // not: mov, mvn (those have only one source operand)
+            operands |= ENCODE_RN(ops[1].reg);
+        switch (ops[2].type) {
+        case OP_REG32:
+            // TODO: Parse and encode shift.
+            operands |= ops[2].reg;
+            break;
+        case OP_IM8:
+            // TODO: Parse and encode rotation.
+            operands |= ENCODE_IMMEDIATE_FLAG;
+            operands |= ops[2].e.v;
+            break;
+        case OP_IM8N: // immediate negative value
+            // TODO: Parse and encode rotation.
+            operands |= ENCODE_IMMEDIATE_FLAG;
+            /* Instruction swapping:
+               0001 = EOR - Rd:= Op1 EOR Op2     -> difficult
+               0011 = RSB - Rd:= Op2 - Op1       -> difficult
+               0111 = RSC - Rd:= Op2 - Op1 + C   -> difficult
+               1000 = TST - CC on: Op1 AND Op2   -> difficult
+               1001 = TEQ - CC on: Op1 EOR Op2   -> difficult
+               1100 = ORR - Rd:= Op1 OR Op2      -> difficult
+            */
+            switch (opcode_idx >> 1) { // "OpCode" in ARM docs
+#if 0
+            case 0x0: // AND - Rd:= Op1 AND Op2
+                opcode = 0xe << 21; // BIC
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+            case 0x2: // SUB - Rd:= Op1 - Op2
+                opcode = 0x4 << 21; // ADD
+                operands |= (-ops[2].e.v) & 0xFF;
+                break;
+            case 0x4: // ADD - Rd:= Op1 + Op2
+                opcode = 0x2 << 21; // SUB
+                operands |= (-ops[2].e.v) & 0xFF;
+                break;
+            case 0x5: // ADC - Rd:= Op1 + Op2 + C
+                opcode = 0x6 << 21; // SBC
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+            case 0x6: // SBC - Rd:= Op1 - Op2 + C
+                opcode = 0x5 << 21; // ADC
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+#endif
+            case 0xa: // CMP - CC on: Op1 - Op2
+                opcode = 0xb << 21; // CMN
+                operands |= (-ops[2].e.v) & 0xFF;
+                break;
+            case 0xb: // CMN - CC on: Op1 + Op2
+                opcode = 0xa << 21; // CMP
+                operands |= (-ops[2].e.v) & 0xFF;
+                break;
+            // moveq r1, r3: 0x01a01003; mov Rd, Op2
+            case 0xd: // MOV - Rd:= Op2
+                opcode = 0xf << 21; // MVN
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+#if 0
+            case 0xe: // BIC - Rd:= Op1 AND NOT Op2
+                opcode = 0x0 << 21; // AND
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+#endif
+            case 0xf: // MVN - Rd:= NOT Op2
+                opcode = 0xd << 21; // MOV
+                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                break;
+            default:
+                tcc_error("cannot use '%s' with a negative immediate value", get_tok_str(token, NULL));
+            }
+            break;
+        default:
+            expect("(second source operand) register or immediate value");
+        }
+
+        /* S=0 and S=1 entries alternate one after another, in that order */
+        opcode |= (opcode_idx & 1) ? ENCODE_SET_CONDITION_CODES : 0;
+        asm_emit_opcode(token, opcode | operands);
+    }
+}
+
 static void asm_multiplication_opcode(TCCState *s1, int token)
 {
     Operand ops[4];
@@ -668,6 +799,40 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_streq:
     case TOK_ASM_strbeq:
         return asm_single_data_transfer_opcode(s1, token);
+
+    case TOK_ASM_andeq:
+    case TOK_ASM_eoreq:
+    case TOK_ASM_subeq:
+    case TOK_ASM_rsbeq:
+    case TOK_ASM_addeq:
+    case TOK_ASM_adceq:
+    case TOK_ASM_sbceq:
+    case TOK_ASM_rsceq:
+    case TOK_ASM_tsteq:
+    case TOK_ASM_teqeq:
+    case TOK_ASM_cmpeq:
+    case TOK_ASM_cmneq:
+    case TOK_ASM_orreq:
+    case TOK_ASM_moveq:
+    case TOK_ASM_biceq:
+    case TOK_ASM_mvneq:
+    case TOK_ASM_andseq:
+    case TOK_ASM_eorseq:
+    case TOK_ASM_subseq:
+    case TOK_ASM_rsbseq:
+    case TOK_ASM_addseq:
+    case TOK_ASM_adcseq:
+    case TOK_ASM_sbcseq:
+    case TOK_ASM_rscseq:
+//  case TOK_ASM_tstseq:
+//  case TOK_ASM_teqseq:
+//  case TOK_ASM_cmpseq:
+//  case TOK_ASM_cmnseq:
+    case TOK_ASM_orrseq:
+    case TOK_ASM_movseq:
+    case TOK_ASM_bicseq:
+    case TOK_ASM_mvnseq:
+        return asm_data_processing_opcode(s1, token);
 
     case TOK_ASM_muleq:
     case TOK_ASM_mulseq:
