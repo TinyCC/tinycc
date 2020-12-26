@@ -104,6 +104,13 @@
  DEF_ASM_CONDED(push)
  DEF_ASM_CONDED(pop)
 
+ /* branches */
+
+ DEF_ASM_CONDED(b)
+ DEF_ASM_CONDED(bl)
+ DEF_ASM_CONDED(bx)
+ DEF_ASM_CONDED(blx)
+
  /* data processing instructions; order is important */
 
  DEF_ASM_CONDED(and)
