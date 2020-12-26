@@ -83,6 +83,11 @@ static void asm_nullary_opcode(int token)
     case TOK_ASM_nopeq:
         asm_emit_opcode(token, 0xd << 21); // mov r0, r0
         break;
+    case TOK_ASM_wfeeq:
+        asm_emit_opcode(token, 0x320f002);
+    case TOK_ASM_wfieq:
+        asm_emit_opcode(token, 0x320f003);
+        break;
     default:
         expect("nullary instruction");
     }
@@ -103,6 +108,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_nopeq:
+    case TOK_ASM_wfeeq:
+    case TOK_ASM_wfieq:
         return asm_nullary_opcode(token);
     default:
         expect("known instruction");

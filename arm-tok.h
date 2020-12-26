@@ -52,3 +52,5 @@
 /* Note: add new tokens after nop (MUST always use DEF_ASM_CONDED) */
 
  DEF_ASM_CONDED(nop)
+ DEF_ASM_CONDED(wfe)
+ DEF_ASM_CONDED(wfi)
