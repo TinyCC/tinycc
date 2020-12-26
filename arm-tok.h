@@ -81,6 +81,19 @@
  DEF_ASM_CONDED(umlal)
  DEF_ASM_CONDED(umlals)
 
+ /* load/store */
+
+ DEF_ASM_CONDED(stmda)
+ DEF_ASM_CONDED(ldmda)
+ DEF_ASM_CONDED(stm)
+ DEF_ASM_CONDED(ldm)
+ DEF_ASM_CONDED(stmia)
+ DEF_ASM_CONDED(ldmia)
+ DEF_ASM_CONDED(stmdb)
+ DEF_ASM_CONDED(ldmdb)
+ DEF_ASM_CONDED(stmib)
+ DEF_ASM_CONDED(ldmib)
+
  /* instruction macros */
 
  DEF_ASM_CONDED(push)

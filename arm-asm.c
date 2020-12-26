@@ -231,6 +231,15 @@ static void asm_binary_opcode(TCCState *s1, int token)
     }
 }
 
+/* data processing and single data transfer instructions only */
+#define ENCODE_RN(register_index) ((register_index) << 16)
+#define ENCODE_RD(register_index) ((register_index) << 12)
+#define ENCODE_SET_CONDITION_CODES (1 << 20)
+
+/* Note: For data processing instructions, "1" means immediate.
+   Note: For single data transfer instructions, "0" means immediate. */
+#define ENCODE_IMMEDIATE_FLAG (1 << 25)
+
 static void asm_block_data_transfer_opcode(TCCState *s1, int token)
 {
     uint32_t opcode;
@@ -280,6 +289,58 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
             expect("exactly one operand");
         else
             asm_emit_opcode(token, (0x8bd << 16) | ops[0].regset); // TODO: base register ?
+        break;
+    case TOK_ASM_stmdaeq:
+    case TOK_ASM_ldmdaeq:
+    case TOK_ASM_stmeq:
+    case TOK_ASM_ldmeq:
+    case TOK_ASM_stmiaeq:
+    case TOK_ASM_ldmiaeq:
+    case TOK_ASM_stmdbeq:
+    case TOK_ASM_ldmdbeq:
+    case TOK_ASM_stmibeq:
+    case TOK_ASM_ldmibeq:
+        switch (ARM_INSTRUCTION_GROUP(token)) {
+        case TOK_ASM_stmdaeq: // post-decrement store
+            opcode = 0x82 << 20;
+            break;
+        case TOK_ASM_ldmdaeq: // post-decrement load
+            opcode = 0x83 << 20;
+            break;
+        case TOK_ASM_stmeq: // post-increment store
+        case TOK_ASM_stmiaeq: // post-increment store
+            opcode = 0x8a << 20;
+            break;
+        case TOK_ASM_ldmeq: // post-increment load
+        case TOK_ASM_ldmiaeq: // post-increment load
+            opcode = 0x8b << 20;
+            break;
+        case TOK_ASM_stmdbeq: // pre-decrement store
+            opcode = 0x92 << 20;
+            break;
+        case TOK_ASM_ldmdbeq: // pre-decrement load
+            opcode = 0x93 << 20;
+            break;
+        case TOK_ASM_stmibeq: // pre-increment store
+            opcode = 0x9a << 20;
+            break;
+        case TOK_ASM_ldmibeq: // pre-increment load
+            opcode = 0x9b << 20;
+            break;
+        default:
+            tcc_error("internal error: This place should not be reached (fallback in asm_block_data_transfer_opcode)");
+        }
+        // operands:
+        //    Rn: first operand
+        //    Register List: lower bits
+        if (nb_ops != 2)
+            expect("exactly two operands");
+        else if (ops[0].type != OP_REG32)
+            expect("(first operand) register");
+        else if (!op0_exclam)
+            tcc_error("first operand of '%s' should have an exclamation mark", get_tok_str(token, NULL));
+        else
+            asm_emit_opcode(token, opcode | ENCODE_RN(ops[0].reg) | ops[1].regset);
         break;
     default:
         expect("block data transfer instruction");
@@ -461,6 +522,16 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_pusheq:
     case TOK_ASM_popeq:
+    case TOK_ASM_stmdaeq:
+    case TOK_ASM_ldmdaeq:
+    case TOK_ASM_stmeq:
+    case TOK_ASM_ldmeq:
+    case TOK_ASM_stmiaeq:
+    case TOK_ASM_ldmiaeq:
+    case TOK_ASM_stmdbeq:
+    case TOK_ASM_ldmdbeq:
+    case TOK_ASM_stmibeq:
+    case TOK_ASM_ldmibeq:
         return asm_block_data_transfer_opcode(s1, token);
     case TOK_ASM_nopeq:
     case TOK_ASM_wfeeq:
