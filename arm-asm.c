@@ -286,6 +286,165 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_multiplication_opcode(TCCState *s1, int token)
+{
+    Operand ops[4];
+    int nb_ops = 0;
+    uint32_t opcode = 0x90;
+
+    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
+        parse_operand(s1, &ops[nb_ops]);
+        if (tok != ',') {
+            ++nb_ops;
+            break;
+        }
+        next(); // skip ','
+    }
+    if (nb_ops < 2)
+        expect("at least two operands");
+    else if (nb_ops == 2) {
+        switch (ARM_INSTRUCTION_GROUP(token)) {
+        case TOK_ASM_mulseq:
+        case TOK_ASM_muleq:
+            memcpy(&ops[2], &ops[0], sizeof(ops[1])); // ARM is actually like this!
+            break;
+        default:
+            memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
+            memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+        }
+        nb_ops = 3;
+    }
+
+    // multiply (special case):
+    // operands:
+    //   Rd: bits 19...16
+    //   Rm: bits 3...0
+    //   Rs: bits 11...8
+    //   Rn: bits 15...12
+
+    if (ops[0].type == OP_REG32)
+        opcode |= ops[0].reg << 16;
+    else
+        expect("(destination operand) register");
+    if (ops[1].type == OP_REG32)
+        opcode |= ops[1].reg;
+    else
+        expect("(first source operand) register");
+    if (ops[2].type == OP_REG32)
+        opcode |= ops[2].reg << 8;
+    else
+        expect("(second source operand) register");
+    if (nb_ops > 3) {
+        if (ops[3].type == OP_REG32)
+            opcode |= ops[3].reg << 12;
+        else
+            expect("(third source operand) register");
+    }
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_mulseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_muleq:
+        if (nb_ops != 3)
+            expect("three operands");
+        else {
+            asm_emit_opcode(token, opcode);
+        }
+        break;
+    case TOK_ASM_mlaseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_mlaeq:
+        if (nb_ops != 4)
+            expect("four operands");
+        else {
+            opcode |= 1 << 21; // Accumulate
+            asm_emit_opcode(token, opcode);
+        }
+        break;
+    default:
+        expect("known multiplication instruction");
+    }
+}
+
+static void asm_long_multiplication_opcode(TCCState *s1, int token)
+{
+    Operand ops[4];
+    int nb_ops = 0;
+    uint32_t opcode = 0x90 | (1 << 23);
+
+    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
+        parse_operand(s1, &ops[nb_ops]);
+        if (tok != ',') {
+            ++nb_ops;
+            break;
+        }
+        next(); // skip ','
+    }
+    if (nb_ops != 4) {
+        expect("four operands");
+        return;
+    }
+
+    // long multiply (special case):
+    // operands:
+    //   RdLo: bits 15...12
+    //   RdHi: bits 19...16
+    //   Rs: bits 11...8
+    //   Rm: bits 3...0
+
+    if (ops[0].type == OP_REG32)
+        opcode |= ops[0].reg << 12;
+    else
+        expect("(destination lo accumulator) register");
+    if (ops[1].type == OP_REG32)
+        opcode |= ops[1].reg << 16;
+    else
+        expect("(destination hi accumulator) register");
+    if (ops[2].type == OP_REG32)
+        opcode |= ops[2].reg;
+    else
+        expect("(first source operand) register");
+    if (ops[3].type == OP_REG32)
+        opcode |= ops[3].reg << 8;
+    else
+        expect("(second source operand) register");
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_smullseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_smulleq:
+        opcode |= 1 << 22; // signed
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_umullseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_umulleq:
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_smlalseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_smlaleq:
+        opcode |= 1 << 22; // signed
+        opcode |= 1 << 21; // Accumulate
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_umlalseq:
+        opcode |= 1 << 20; // Status
+        /* fallthrough */
+    case TOK_ASM_umlaleq:
+        opcode |= 1 << 21; // Accumulate
+        asm_emit_opcode(token, opcode);
+        break;
+    default:
+        expect("known long multiplication instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     while (token == TOK_LINEFEED) {
@@ -315,6 +474,22 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_uxtbeq:
     case TOK_ASM_uxtheq:
         return asm_binary_opcode(s1, token);
+
+    case TOK_ASM_muleq:
+    case TOK_ASM_mulseq:
+    case TOK_ASM_mlaeq:
+    case TOK_ASM_mlaseq:
+        return asm_multiplication_opcode(s1, token);
+
+    case TOK_ASM_smulleq:
+    case TOK_ASM_smullseq:
+    case TOK_ASM_umulleq:
+    case TOK_ASM_umullseq:
+    case TOK_ASM_smlaleq:
+    case TOK_ASM_smlalseq:
+    case TOK_ASM_umlaleq:
+    case TOK_ASM_umlalseq:
+        return asm_long_multiplication_opcode(s1, token);
     default:
         expect("known instruction");
     }

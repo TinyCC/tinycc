@@ -66,6 +66,21 @@
  DEF_ASM_CONDED(uxtb)
  DEF_ASM_CONDED(uxth)
 
+ /* multiplication */
+
+ DEF_ASM_CONDED(mul)
+ DEF_ASM_CONDED(muls)
+ DEF_ASM_CONDED(mla)
+ DEF_ASM_CONDED(mlas)
+ DEF_ASM_CONDED(smull)
+ DEF_ASM_CONDED(smulls)
+ DEF_ASM_CONDED(umull)
+ DEF_ASM_CONDED(umulls)
+ DEF_ASM_CONDED(smlal)
+ DEF_ASM_CONDED(smlals)
+ DEF_ASM_CONDED(umlal)
+ DEF_ASM_CONDED(umlals)
+
  /* instruction macros */
 
  DEF_ASM_CONDED(push)
