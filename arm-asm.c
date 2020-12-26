@@ -34,11 +34,6 @@ ST_FUNC void gen_le32(int c);
 #define USING_GLOBALS
 #include "tcc.h"
 
-static void asm_error(void)
-{
-    tcc_error("ARM asm not implemented.");
-}
-
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
 {
@@ -71,12 +66,12 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
-    asm_error();
+    tcc_error("internal error: asm_opcode not implemented");
 }
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
 {
-    asm_error();
+    tcc_error("internal error: subst_asm_operand not implemented");
 }
 
 /* generate prolog and epilog code for asm statement */
