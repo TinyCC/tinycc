@@ -27,3 +27,28 @@
  DEF_ASM(sp) /* alias for r13 */
  DEF_ASM(lr) /* alias for r14 */
  DEF_ASM(pc) /* alias for r15 */
+
+#define ARM_INSTRUCTION_GROUP(tok) ((((tok) - TOK_ASM_nopeq) & 0xFFFFFFF0) + TOK_ASM_nopeq)
+
+/* Note: condition code is 4 bits */
+#define DEF_ASM_CONDED(x) \
+  DEF(TOK_ASM_ ## x ## eq, #x "eq") \
+  DEF(TOK_ASM_ ## x ## ne, #x "ne") \
+  DEF(TOK_ASM_ ## x ## cs, #x "cs") \
+  DEF(TOK_ASM_ ## x ## cc, #x "cc") \
+  DEF(TOK_ASM_ ## x ## mi, #x "mi") \
+  DEF(TOK_ASM_ ## x ## pl, #x "pl") \
+  DEF(TOK_ASM_ ## x ## vs, #x "vs") \
+  DEF(TOK_ASM_ ## x ## vc, #x "vc") \
+  DEF(TOK_ASM_ ## x ## hi, #x "hi") \
+  DEF(TOK_ASM_ ## x ## ls, #x "ls") \
+  DEF(TOK_ASM_ ## x ## ge, #x "ge") \
+  DEF(TOK_ASM_ ## x ## lt, #x "lt") \
+  DEF(TOK_ASM_ ## x ## gt, #x "gt") \
+  DEF(TOK_ASM_ ## x ## le, #x "le") \
+  DEF(TOK_ASM_ ## x, #x) \
+  DEF(TOK_ASM_ ## x ## rsvd, #x "rsvd")
+
+/* Note: add new tokens after nop (MUST always use DEF_ASM_CONDED) */
+
+ DEF_ASM_CONDED(nop)

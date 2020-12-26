@@ -31,6 +31,7 @@ ST_FUNC void gen_le32(int c);
 /*************************************************************/
 #else
 /*************************************************************/
+
 #define USING_GLOBALS
 #include "tcc.h"
 
@@ -64,9 +65,48 @@ ST_FUNC void gen_expr32(ExprValue *pe)
     gen_le32(pe->v);
 }
 
-ST_FUNC void asm_opcode(TCCState *s1, int opcode)
+static uint32_t condition_code_of_token(int token) {
+    if (token < TOK_ASM_nopeq) {
+        expect("instruction");
+        return 0;
+    } else
+        return (token - TOK_ASM_nopeq) & 15;
+}
+
+static void asm_emit_opcode(int token, uint32_t opcode) {
+    gen_le32((condition_code_of_token(token) << 28) | opcode);
+}
+
+static void asm_nullary_opcode(int token)
 {
-    tcc_error("internal error: asm_opcode not implemented");
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_nopeq:
+        asm_emit_opcode(token, 0xd << 21); // mov r0, r0
+        break;
+    default:
+        expect("nullary instruction");
+    }
+}
+
+ST_FUNC void asm_opcode(TCCState *s1, int token)
+{
+    while (token == TOK_LINEFEED) {
+        next();
+        token = tok;
+    }
+    if (token == TOK_EOF)
+        return;
+    if (token < TOK_ASM_nopeq) {
+        expect("instruction");
+        return;
+    }
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_nopeq:
+        return asm_nullary_opcode(token);
+    default:
+        expect("known instruction");
+    }
 }
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
