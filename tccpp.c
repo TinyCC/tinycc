@@ -1009,8 +1009,13 @@ redo_start:
                     goto redo_start;
                 else if (parse_flags & PARSE_FLAG_ASM_FILE)
                     p = parse_line_comment(p - 1);
-            } else if (parse_flags & PARSE_FLAG_ASM_FILE)
+            }
+#if !defined(TCC_TARGET_ARM)
+            else if (parse_flags & PARSE_FLAG_ASM_FILE)
                 p = parse_line_comment(p - 1);
+#else
+            /* ARM assembly uses '#' for constants */
+#endif
             break;
 _default:
         default:
@@ -2703,10 +2708,13 @@ maybe_newline:
                 p++;
                 tok = TOK_TWOSHARPS;
             } else {
+#if !defined(TCC_TARGET_ARM)
                 if (parse_flags & PARSE_FLAG_ASM_FILE) {
                     p = parse_line_comment(p - 1);
                     goto redo_no_start;
-                } else {
+                } else
+#endif
+                {
                     tok = '#';
                 }
             }

@@ -35,6 +35,84 @@ ST_FUNC void gen_le32(int c);
 #define USING_GLOBALS
 #include "tcc.h"
 
+enum {
+    OPT_REG32,
+    OPT_REGSET32,
+    OPT_IM8,
+    OPT_IM8N,
+    OPT_IM32,
+};
+#define OP_REG32  (1 << OPT_REG32)
+#define OP_REG    (OP_REG32)
+#define OP_IM32   (1 << OPT_IM32)
+#define OP_IM8   (1 << OPT_IM8)
+#define OP_IM8N   (1 << OPT_IM8N)
+#define OP_REGSET32  (1 << OPT_REGSET32)
+
+typedef struct Operand {
+    uint32_t type;
+    union {
+        uint8_t reg;
+        uint16_t regset;
+        ExprValue e;
+    };
+} Operand;
+
+/* Parse a text containing operand and store the result in OP */
+static void parse_operand(TCCState *s1, Operand *op)
+{
+    ExprValue e;
+    int8_t reg;
+    uint16_t regset = 0;
+
+    op->type = 0;
+
+    if (tok == '{') { // regset literal
+        next(); // skip '{'
+        while (tok != '}' && tok != TOK_EOF) {
+            reg = asm_parse_regvar(tok);
+            if (reg == -1) {
+                expect("register");
+                return;
+            } else
+                next(); // skip register name
+
+            regset |= 1 << reg;
+            if (tok != ',')
+                break;
+            next(); // skip ','
+        }
+        if (tok != '}')
+            expect("'}'");
+        next(); // skip '}'
+        if (regset == 0) {
+            // ARM instructions don't support empty regset.
+            tcc_error("empty register list is not supported");
+        } else {
+            op->type = OP_REGSET32;
+            op->regset = regset;
+        }
+    } else if (tok == '#' || tok == '$') {
+        /* constant value */
+        next(); // skip '#' or '$'
+        asm_expr(s1, &e);
+        op->type = OP_IM32;
+        op->e = e;
+        if (!op->e.sym) {
+            if ((int) op->e.v < 0 && (int) op->e.v >= -255)
+                op->type = OP_IM8N;
+            else if (op->e.v == (uint8_t)op->e.v)
+                op->type = OP_IM8;
+        } else
+            expect("constant");
+    } else if ((reg = asm_parse_regvar(tok)) != -1) {
+        next(); // skip register name
+        op->type = OP_REG32;
+        op->reg = (uint8_t) reg;
+    } else
+        expect("operand");
+}
+
 /* XXX: make it faster ? */
 ST_FUNC void g(int c)
 {
