@@ -732,8 +732,8 @@ static void asm_multiplication_opcode(TCCState *s1, int token)
             memcpy(&ops[2], &ops[0], sizeof(ops[1])); // ARM is actually like this!
             break;
         default:
-            memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
-            memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+            expect("at least three operands");
+            return;
         }
         nb_ops = 3;
     }
