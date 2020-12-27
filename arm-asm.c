@@ -248,6 +248,14 @@ static void asm_binary_opcode(TCCState *s1, int token)
    Note: For single data transfer instructions, "0" means immediate. */
 #define ENCODE_IMMEDIATE_FLAG (1 << 25)
 
+#define ENCODE_BARREL_SHIFTER_SHIFT_BY_REGISTER (1 << 4)
+#define ENCODE_BARREL_SHIFTER_MODE_LSL (0 << 5)
+#define ENCODE_BARREL_SHIFTER_MODE_LSR (1 << 5)
+#define ENCODE_BARREL_SHIFTER_MODE_ASR (2 << 5)
+#define ENCODE_BARREL_SHIFTER_MODE_ROR (3 << 5)
+#define ENCODE_BARREL_SHIFTER_REGISTER(register_index) ((register_index) << 8)
+#define ENCODE_BARREL_SHIFTER_IMMEDIATE(value) ((value) << 7)
+
 static void asm_block_data_transfer_opcode(TCCState *s1, int token)
 {
     uint32_t opcode;
@@ -353,6 +361,52 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     default:
         expect("block data transfer instruction");
     }
+}
+
+static uint32_t asm_encode_rotation(Operand* rotation)
+{
+    uint64_t amount;
+    switch (rotation->type) {
+    case OP_REG32:
+        tcc_error("cannot rotate immediate value by register");
+        return 0;
+    case OP_IM8:
+        amount = rotation->e.v;
+        if (amount >= 0 && amount < 32 && (amount & 1) == 0)
+            return (amount >> 1) << 8;
+        else
+            tcc_error("rotating is only possible by a multiple of 2");
+        break;
+    default:
+        tcc_error("unknown rotation amount");
+        return 0;
+    }
+}
+
+static uint32_t asm_encode_shift(Operand* shift)
+{
+    uint64_t amount;
+    uint32_t operands = 0;
+    switch (shift->type) {
+    case OP_REG32:
+        if (shift->reg == 15)
+            tcc_error("r15 cannot be used as a shift count");
+        else {
+            operands = ENCODE_BARREL_SHIFTER_SHIFT_BY_REGISTER;
+            operands |= ENCODE_BARREL_SHIFTER_REGISTER(shift->reg);
+        }
+        break;
+    case OP_IM8:
+        amount = shift->e.v;
+        if (amount > 0 && amount < 32)
+            operands = ENCODE_BARREL_SHIFTER_IMMEDIATE(amount);
+        else
+            tcc_error("shift count out of range");
+        break;
+    default:
+        tcc_error("unknown shift amount");
+    }
+    return operands;
 }
 
 static void asm_data_processing_opcode(TCCState *s1, int token)
@@ -484,6 +538,102 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         opcode |= (opcode_idx & 1) ? ENCODE_SET_CONDITION_CODES : 0;
         asm_emit_opcode(token, opcode | operands);
     }
+}
+
+static void asm_shift_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    int nb_ops;
+    uint32_t opcode = 0xd << 21; // MOV
+    uint32_t operands = 0;
+
+    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
+        parse_operand(s1, &ops[nb_ops]);
+        if (tok != ',') {
+            ++nb_ops;
+            break;
+        }
+        next(); // skip ','
+    }
+    if (nb_ops < 2) {
+        expect("at least two operands");
+        return;
+    }
+
+    if (ops[0].type != OP_REG32)
+        expect("(destination operand) register");
+    else
+        operands |= ENCODE_RD(ops[0].reg);
+
+    if (nb_ops == 2) {
+        switch (ARM_INSTRUCTION_GROUP(token)) {
+        case TOK_ASM_rrxseq:
+            opcode |= ENCODE_SET_CONDITION_CODES;
+            /* fallthrough */
+        case TOK_ASM_rrxeq:
+            if (ops[1].type == OP_REG32) {
+                operands |= ops[1].reg;
+                operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
+                asm_emit_opcode(token, opcode | operands);
+            } else
+                tcc_error("(first source operand) register");
+            return;
+        default:
+            memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
+            memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+            nb_ops = 3;
+        }
+    }
+    if (nb_ops != 3) {
+        expect("two or three operands");
+        return;
+    }
+
+    switch (ops[1].type) {
+    case OP_REG32:
+        operands |= ops[1].reg;
+        break;
+    case OP_IM8:
+        operands |= ENCODE_IMMEDIATE_FLAG;
+        operands |= ops[1].e.v;
+        break;
+    }
+
+    if (operands & ENCODE_IMMEDIATE_FLAG)
+        operands |= asm_encode_rotation(&ops[2]);
+    else
+        operands |= asm_encode_shift(&ops[2]);
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_lslseq:
+        opcode |= ENCODE_SET_CONDITION_CODES;
+        /* fallthrough */
+    case TOK_ASM_lsleq:
+        operands |= ENCODE_BARREL_SHIFTER_MODE_LSL;
+        break;
+    case TOK_ASM_lsrseq:
+        opcode |= ENCODE_SET_CONDITION_CODES;
+        /* fallthrough */
+    case TOK_ASM_lsreq:
+        operands |= ENCODE_BARREL_SHIFTER_MODE_LSR;
+        break;
+    case TOK_ASM_asrseq:
+        opcode |= ENCODE_SET_CONDITION_CODES;
+        /* fallthrough */
+    case TOK_ASM_asreq:
+        operands |= ENCODE_BARREL_SHIFTER_MODE_ASR;
+        break;
+    case TOK_ASM_rorseq:
+        opcode |= ENCODE_SET_CONDITION_CODES;
+        /* fallthrough */
+    case TOK_ASM_roreq:
+        operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
+        break;
+    default:
+        expect("shift instruction");
+        return;
+    }
+    asm_emit_opcode(token, opcode | operands);
 }
 
 static void asm_multiplication_opcode(TCCState *s1, int token)
@@ -901,6 +1051,18 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_bicseq:
     case TOK_ASM_mvnseq:
         return asm_data_processing_opcode(s1, token);
+
+    case TOK_ASM_lsleq:
+    case TOK_ASM_lslseq:
+    case TOK_ASM_lsreq:
+    case TOK_ASM_lsrseq:
+    case TOK_ASM_asreq:
+    case TOK_ASM_asrseq:
+    case TOK_ASM_roreq:
+    case TOK_ASM_rorseq:
+    case TOK_ASM_rrxseq:
+    case TOK_ASM_rrxeq:
+        return asm_shift_opcode(s1, token);
 
     case TOK_ASM_muleq:
     case TOK_ASM_mulseq:
