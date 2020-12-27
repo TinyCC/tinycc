@@ -466,8 +466,9 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
     int nb_shift = 0;
     uint32_t operands = 0;
 
-    /* 16 entries per instruction for the different condition codes */
+    /* modulo 16 entries per instruction for the different condition codes */
     uint32_t opcode_idx = (ARM_INSTRUCTION_GROUP(token) - TOK_ASM_andeq) >> 4;
+    uint32_t opcode_nos = opcode_idx >> 1; // without "s"; "OpCode" in ARM docs
 
     for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ) {
         if (tok == TOK_ASM_asl || tok == TOK_ASM_lsl || tok == TOK_ASM_lsr || tok == TOK_ASM_asr || tok == TOK_ASM_ror || tok == TOK_ASM_rrx)
@@ -517,6 +518,11 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
         memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
         nb_ops = 3;
+    } else if (nb_ops == 3) {
+        if (opcode_nos == 0xd || opcode_nos == 0xf || opcode_nos == 0xa || opcode_nos == 0xb || opcode_nos == 0x8 || opcode_nos == 0x9) { // mov, mvn, cmp, cmn, tst, teq
+            tcc_error("'%s' cannot be used with three operands", get_tok_str(token, NULL));
+            return;
+        }
     }
     if (nb_ops != 3) {
         expect("two or three operands");
@@ -533,16 +539,16 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         //   bits 24...21: "OpCode"--see below
 
         /* operations in the token list are ordered by opcode */
-        opcode = (opcode_idx >> 1) << 21; // drop "s"
+        opcode = opcode_nos << 21; // drop "s"
         if (ops[0].type != OP_REG32)
             expect("(destination operand) register");
-        else if (opcode == 0xa << 21 || opcode == 0xb << 21 || opcode == 0x8 << 21 || opcode == 0x9 << 21 ) // cmp, cmn, tst, teq
+        else if (opcode_nos == 0xa || opcode_nos == 0xb || opcode_nos == 0x8 || opcode_nos == 0x9) // cmp, cmn, tst, teq
             operands |= ENCODE_SET_CONDITION_CODES; // force S set, otherwise it's a completely different instruction.
         else
             operands |= ENCODE_RD(ops[0].reg);
         if (ops[1].type != OP_REG32)
             expect("(first source operand) register");
-        else if (!(opcode == 0xd << 21 || opcode == 0xf << 21)) // not: mov, mvn (those have only one source operand)
+        else if (!(opcode_nos == 0xd || opcode_nos == 0xf)) // not: mov, mvn (those have only one source operand)
             operands |= ENCODE_RN(ops[1].reg);
         switch (ops[2].type) {
         case OP_REG32:
@@ -562,7 +568,7 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
                1001 = TEQ - CC on: Op1 EOR Op2   -> difficult
                1100 = ORR - Rd:= Op1 OR Op2      -> difficult
             */
-            switch (opcode_idx >> 1) { // "OpCode" in ARM docs
+            switch (opcode_nos) {
 #if 0
             case 0x0: // AND - Rd:= Op1 AND Op2
                 opcode = 0xe << 21; // BIC
