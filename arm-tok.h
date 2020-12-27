@@ -28,6 +28,10 @@
  DEF_ASM(lr) /* alias for r14 */
  DEF_ASM(pc) /* alias for r15 */
 
+ /* data processing directives */
+
+ DEF_ASM(asl)
+
 #define ARM_INSTRUCTION_GROUP(tok) ((((tok) - TOK_ASM_nopeq) & 0xFFFFFFF0) + TOK_ASM_nopeq)
 
 /* Note: condition code is 4 bits */

@@ -413,17 +413,54 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
     int nb_ops;
+    Operand shift = {};
+    int nb_shift = 0;
+    uint32_t operands = 0;
 
     /* 16 entries per instruction for the different condition codes */
     uint32_t opcode_idx = (ARM_INSTRUCTION_GROUP(token) - TOK_ASM_andeq) >> 4;
 
-    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
+    for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ) {
+        if (tok == TOK_ASM_asl || tok == TOK_ASM_lsl || tok == TOK_ASM_lsr || tok == TOK_ASM_asr || tok == TOK_ASM_ror || tok == TOK_ASM_rrx)
+            break;
         parse_operand(s1, &ops[nb_ops]);
-        if (tok != ',') {
-            ++nb_ops;
+        ++nb_ops;
+        if (tok != ',')
+            break;
+        next(); // skip ','
+    }
+    if (tok == ',')
+        next();
+    switch (tok) {
+    case TOK_ASM_asl:
+    case TOK_ASM_lsl:
+    case TOK_ASM_asr:
+    case TOK_ASM_lsr:
+    case TOK_ASM_ror:
+        switch (tok) {
+        case TOK_ASM_asl:
+            /* fallthrough */
+        case TOK_ASM_lsl:
+            operands |= ENCODE_BARREL_SHIFTER_MODE_LSL;
+            break;
+        case TOK_ASM_asr:
+            operands |= ENCODE_BARREL_SHIFTER_MODE_ASR;
+            break;
+        case TOK_ASM_lsr:
+            operands |= ENCODE_BARREL_SHIFTER_MODE_LSR;
+            break;
+        case TOK_ASM_ror:
+            operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
             break;
         }
-        next(); // skip ','
+        next();
+        parse_operand(s1, &shift);
+        nb_shift = 1;
+        break;
+    case TOK_ASM_rrx:
+        next();
+        operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
+        break;
     }
     if (nb_ops < 2)
         expect("at least two operands");
@@ -437,7 +474,6 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         return;
     } else {
         uint32_t opcode = 0;
-        uint32_t operands = 0;
 
         // data processing (general case):
         // operands:
@@ -461,16 +497,13 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
             operands |= ENCODE_RN(ops[1].reg);
         switch (ops[2].type) {
         case OP_REG32:
-            // TODO: Parse and encode shift.
             operands |= ops[2].reg;
             break;
         case OP_IM8:
-            // TODO: Parse and encode rotation.
             operands |= ENCODE_IMMEDIATE_FLAG;
             operands |= ops[2].e.v;
             break;
         case OP_IM8N: // immediate negative value
-            // TODO: Parse and encode rotation.
             operands |= ENCODE_IMMEDIATE_FLAG;
             /* Instruction swapping:
                0001 = EOR - Rd:= Op1 EOR Op2     -> difficult
@@ -532,6 +565,13 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
             break;
         default:
             expect("(second source operand) register or immediate value");
+        }
+
+        if (nb_shift) {
+            if (operands & ENCODE_IMMEDIATE_FLAG)
+                tcc_error("immediate rotation not implemented");
+            else
+                operands |= asm_encode_shift(&shift);
         }
 
         /* S=0 and S=1 entries alternate one after another, in that order */
