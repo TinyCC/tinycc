@@ -201,6 +201,9 @@ static void asm_unary_opcode(TCCState *s1, int token)
 static void asm_binary_opcode(TCCState *s1, int token)
 {
     Operand ops[2];
+    Operand rotation;
+    uint32_t encoded_rotation = 0;
+    uint64_t amount;
     parse_operand(s1, &ops[0]);
     if (tok == ',')
         next();
@@ -212,27 +215,55 @@ static void asm_binary_opcode(TCCState *s1, int token)
         return;
     }
 
-    if (ops[1].type != OP_REG32)
+    if (ops[1].type != OP_REG32) {
         expect("(source operand) register");
-    else switch (ARM_INSTRUCTION_GROUP(token)) {
+        return;
+    }
+
+    if (tok == ',') {
+        next(); // skip ','
+        if (tok == TOK_ASM_ror) {
+            next(); // skip 'ror'
+            parse_operand(s1, &rotation);
+            if (rotation.type != OP_IM8) {
+                expect("immediate value for rotation");
+                return;
+            } else {
+                amount = rotation.e.v;
+                switch (amount) {
+                case 8:
+                    encoded_rotation = 1 << 10;
+                    break;
+                case 16:
+                    encoded_rotation = 2 << 10;
+                    break;
+                case 24:
+                    encoded_rotation = 3 << 10;
+                    break;
+                default:
+                    expect("'8' or '16' or '24'");
+                    return;
+                }
+            }
+        }
+    }
+    switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_clzeq:
+        if (encoded_rotation)
+            tcc_error("clz does not support rotation");
         asm_emit_opcode(token, 0x16f0f10 | (ops[0].reg << 12) | ops[1].reg);
         break;
     case TOK_ASM_sxtbeq:
-        /* TODO: optional ROR (8|16|24) */
-        asm_emit_opcode(token, 0x6af0070 | (ops[0].reg << 12) | ops[1].reg);
+        asm_emit_opcode(token, 0x6af0070 | (ops[0].reg << 12) | ops[1].reg | encoded_rotation);
         break;
     case TOK_ASM_sxtheq:
-        /* TODO: optional ROR (8|16|24) */
-        asm_emit_opcode(token, 0x6bf0070 | (ops[0].reg << 12) | ops[1].reg);
+        asm_emit_opcode(token, 0x6bf0070 | (ops[0].reg << 12) | ops[1].reg | encoded_rotation);
         break;
     case TOK_ASM_uxtbeq:
-        /* TODO: optional ROR (8|16|24) */
-        asm_emit_opcode(token, 0x6ef0070 | (ops[0].reg << 12) | ops[1].reg);
+        asm_emit_opcode(token, 0x6ef0070 | (ops[0].reg << 12) | ops[1].reg | encoded_rotation);
         break;
     case TOK_ASM_uxtheq:
-        /* TODO: optional ROR (8|16|24) */
-        asm_emit_opcode(token, 0x6ff0070 | (ops[0].reg << 12) | ops[1].reg);
+        asm_emit_opcode(token, 0x6ff0070 | (ops[0].reg << 12) | ops[1].reg | encoded_rotation);
         break;
     default:
         expect("binary instruction");
