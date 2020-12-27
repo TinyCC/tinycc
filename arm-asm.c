@@ -222,6 +222,9 @@ static void asm_binary_opcode(TCCState *s1, int token)
         return;
     }
 
+    if (ops[0].reg == 13)
+        tcc_warning("Using 'sp' as operand with '%s' is deprecated by ARM", get_tok_str(token, NULL));
+
     if (ops[1].type != OP_REG32) {
         expect("(source operand) register");
         return;
@@ -231,6 +234,9 @@ static void asm_binary_opcode(TCCState *s1, int token)
         tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
         return;
     }
+
+    if (ops[1].reg == 13)
+        tcc_warning("Using 'sp' as operand with '%s' is deprecated by ARM", get_tok_str(token, NULL));
 
     if (tok == ',') {
         next(); // skip ','
