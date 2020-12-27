@@ -217,8 +217,18 @@ static void asm_binary_opcode(TCCState *s1, int token)
         return;
     }
 
+    if (ops[0].reg == 15) {
+        tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
+        return;
+    }
+
     if (ops[1].type != OP_REG32) {
         expect("(source operand) register");
+        return;
+    }
+
+    if (ops[1].reg == 15) {
+        tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
         return;
     }
 
