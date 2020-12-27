@@ -529,6 +529,13 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         return;
     } else {
         uint32_t opcode = 0;
+        if (nb_shift && shift.type == OP_REG32) {
+            if ((ops[0].type == OP_REG32 && ops[0].reg == 15) ||
+                (ops[1].type == OP_REG32 && ops[1].reg == 15)) {
+                tcc_error("Using the 'pc' register in data processing instructions that have a register-controlled shift is not implemented by ARM");
+                return;
+            }
+        }
 
         // data processing (general case):
         // operands:
@@ -655,9 +662,10 @@ static void asm_shift_opcode(TCCState *s1, int token)
         return;
     }
 
-    if (ops[0].type != OP_REG32)
+    if (ops[0].type != OP_REG32) {
         expect("(destination operand) register");
-    else
+        return;
+    } else
         operands |= ENCODE_RD(ops[0].reg);
 
     if (nb_ops == 2) {
@@ -692,6 +700,13 @@ static void asm_shift_opcode(TCCState *s1, int token)
         operands |= ENCODE_IMMEDIATE_FLAG;
         operands |= ops[1].e.v;
         break;
+    }
+
+    if (ops[2].type == OP_REG32) {
+        if ((ops[0].type == OP_REG32 && ops[0].reg == 15) ||
+            (ops[1].type == OP_REG32 && ops[1].reg == 15)) {
+            tcc_error("Using the 'pc' register in data processing instructions that have a register-controlled shift is not implemented by ARM");
+        }
     }
 
     if (operands & ENCODE_IMMEDIATE_FLAG)
