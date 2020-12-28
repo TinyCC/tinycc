@@ -226,7 +226,20 @@ static void asm_binary_opcode(TCCState *s1, int token)
         tcc_warning("Using 'sp' as operand with '%s' is deprecated by ARM", get_tok_str(token, NULL));
 
     if (ops[1].type != OP_REG32) {
-        expect("(source operand) register");
+        switch (ARM_INSTRUCTION_GROUP(token)) {
+        case TOK_ASM_movteq:
+            if (ops[1].type == OP_IM8 || ops[1].type == OP_IM8N || ops[1].type == OP_IM32) {
+                if (ops[1].e.v >= 0 && ops[1].e.v <= 0xFFFF) {
+                    uint16_t immediate_value = ops[1].e.v;
+                    asm_emit_opcode(token, 0x3400000 | (ops[0].reg << 12) | (immediate_value & 0xF000) << 4 | (immediate_value & 0xFFF));
+                } else
+                    expect("(source operand) immediate 16 bit value");
+            } else
+                expect("(source operand) immediate");
+            break;
+        default:
+            expect("(source operand) register");
+        }
         return;
     }
 
@@ -1120,6 +1133,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sxtheq:
     case TOK_ASM_uxtbeq:
     case TOK_ASM_uxtheq:
+    case TOK_ASM_movteq:
         return asm_binary_opcode(s1, token);
 
     case TOK_ASM_ldreq:
