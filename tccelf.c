@@ -1048,7 +1048,9 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 	{
 	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
-	    /* support __dso_handle in atexit() */
+            /* Hidden defined symbols can and must be resolved locally.
+               We're misusing a PLT32 reloc for this, as that's always
+               resolved to its address even in shared libs.  */
 	    if (sym->st_shndx != SHN_UNDEF &&
 		ELFW(ST_VISIBILITY)(sym->st_other) == STV_HIDDEN) {
                 rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PLT32);
