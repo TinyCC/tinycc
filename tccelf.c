@@ -2474,7 +2474,7 @@ static Section *create_bsd_note_section(TCCState *s1,
     Section *s = find_section (s1, name);
 
     if (s->data_offset == 0) {
-        unsigned char *ptr = section_ptr_add(s, sizeof(ElfW(Nhdr)) + 8 + 4);
+        char *ptr = section_ptr_add(s, sizeof(ElfW(Nhdr)) + 8 + 4);
         ElfW(Nhdr) *note = (ElfW(Nhdr) *) ptr;
 
         s->sh_type = SHT_NOTE;
@@ -2493,7 +2493,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
 {
     int i, ret, phnum, phfill, shnum, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
-    struct ro_inf roinf, *roinf_use = NULL;
+    struct ro_inf roinf;
+#if !TARGETOS_FreeBSD && !TARGETOS_NetBSD && !defined(__APPLE__) && !defined(_WIN32)
+    struct ro_inf *roinf_use = NULL;
+#endif
     ElfW(Phdr) *phdr;
     Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
 
