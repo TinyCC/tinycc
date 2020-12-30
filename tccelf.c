@@ -2740,6 +2740,7 @@ ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size)
 typedef struct SectionMergeInfo {
     Section *s;            /* corresponding existing section */
     unsigned long offset;  /* offset of the new section in the existing section */
+    unsigned long size;    /* size of the new section in the existing section */
     uint8_t new_section;       /* true if section 's' was added */
     uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
@@ -2779,7 +2780,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     ElfW(Sym) *sym, *symtab;
     ElfW_Rel *rel;
     Section *s;
-    unsigned int *used_offset;
 
     lseek(fd, file_offset, SEEK_SET);
     if (tcc_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
@@ -2795,7 +2795,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     shdr = load_data(fd, file_offset + ehdr.e_shoff,
                      sizeof(ElfW(Shdr)) * ehdr.e_shnum);
     sm_table = tcc_mallocz(sizeof(SectionMergeInfo) * ehdr.e_shnum);
-    used_offset = tcc_mallocz(sizeof(*used_offset) * s1->nb_sections);
 
     /* load section names */
     sh = &shdr[ehdr.e_shstrndx];
@@ -2892,8 +2891,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         s->sh_addralign = sh->sh_addralign;
         s->sh_entsize = sh->sh_entsize;
         sm_table[i].new_section = 1;
-	used_offset = tcc_realloc(used_offset, sizeof(*used_offset) * s1->nb_sections);
-	used_offset[j] = 0;
     found:
         if (sh->sh_type != s->sh_type) {
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
@@ -2908,8 +2905,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         s->data_offset += -s->data_offset & (sh->sh_addralign - 1);
         if (sh->sh_addralign > s->sh_addralign)
             s->sh_addralign = sh->sh_addralign;
-        sm_table[i].offset = used_offset[j] + s->data_offset;
-        used_offset[j] = sm_table[i].offset;
+        sm_table[i].offset = s->data_offset;
+        sm_table[i].size = sh->sh_size;
         sm_table[i].s = s;
         /* concatenate sections */
         size = sh->sh_size;
@@ -2998,11 +2995,14 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             continue;
         sh = &shdr[i];
         offset = sm_table[i].offset;
+        size = sm_table[i].size;
         switch(s->sh_type) {
         case SHT_RELX:
             /* take relocation offset information */
             offseti = sm_table[sh->sh_info].offset;
-            for_each_elem(s, (offset / sizeof(*rel)), rel, ElfW_Rel) {
+	    for (rel = (ElfW_Rel *) s->data + (offset / sizeof(*rel));
+		 rel < (ElfW_Rel *) s->data + ((offset + size) / sizeof(*rel));
+		 rel++) {
                 int type;
                 unsigned sym_index;
                 /* convert symbol index */
@@ -3054,7 +3054,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     tcc_free(strtab);
     tcc_free(old_to_new_syms);
     tcc_free(sm_table);
-    tcc_free(used_offset);
     tcc_free(strsec);
     tcc_free(shdr);
     return ret;
