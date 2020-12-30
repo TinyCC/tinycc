@@ -1957,8 +1957,11 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                         if (k != 6)
                             continue;
                     } else if (s == data_ro_section ||
+#ifdef CONFIG_TCC_BCHECK
 			       s == bounds_section ||
-			       s == lbounds_section) {
+			       s == lbounds_section ||
+#endif
+                               0) {
                         if (k != 4)
                             continue;
                     } else {
@@ -1988,8 +1991,11 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                         dyninf->rel_size = (addr - dyninf->rel_addr) + s->sh_size;
                     }
                     if (s == data_ro_section ||
+#ifdef CONFIG_TCC_BCHECK
 			s == bounds_section ||
-			s == lbounds_section) {
+			s == lbounds_section ||
+#endif
+                        0) {
                         if (roinf->sh_size == 0) {
                             roinf->sh_offset = s->sh_offset;
                             roinf->sh_addr = s->sh_addr;
