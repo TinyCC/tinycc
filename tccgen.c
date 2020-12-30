@@ -8120,8 +8120,10 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* allocate symbol in corresponding section */
         sec = ad->section;
         if (!sec) {
-            if (has_init)
-                sec = data_section;
+            if (type->t & VT_CONSTANT)
+		sec = data_ro_section;
+            else if (has_init)
+		sec = data_section;
             else if (tcc_state->nocommon)
                 sec = bss_section;
         }

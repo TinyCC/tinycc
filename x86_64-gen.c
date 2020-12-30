@@ -674,8 +674,8 @@ static void gen_bounds_prolog(void)
     func_bound_offset = lbounds_section->data_offset;
     func_bound_ind = ind;
     func_bound_add_epilog = 0;
-    o(0xb848 + TREG_FASTCALL_1 * 0x100); /*lbound section pointer */
-    gen_le64 (0);
+    o(0x0d8d48 + ((TREG_FASTCALL_1 == TREG_RDI) * 0x300000)); /*lbound section pointer */
+    gen_le32 (0);
     oad(0xb8, 0); /* call to function */
 }
 
@@ -700,17 +700,17 @@ static void gen_bounds_epilog(void)
     if (offset_modified) {
         saved_ind = ind;
         ind = func_bound_ind;
-        greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-        ind = ind + 10;
+        greloca(cur_text_section, sym_data, ind + 3, R_X86_64_PC32, -4);
+        ind = ind + 7;
         gen_bounds_call(TOK___bound_local_new);
         ind = saved_ind;
     }
 
     /* generate bound check local freeing */
     o(0x5250); /* save returned value, if any */
-    greloca(cur_text_section, sym_data, ind + 2, R_X86_64_64, 0);
-    o(0xb848 + TREG_FASTCALL_1 * 0x100); /* mov xxx, %rcx/di */
-    gen_le64 (0);
+    greloca(cur_text_section, sym_data, ind + 3, R_X86_64_PC32, -4);
+    o(0x0d8d48 + ((TREG_FASTCALL_1 == TREG_RDI) * 0x300000)); /* lea xxx(%rip), %rcx/rdi */
+    gen_le32 (0);
     gen_bounds_call(TOK___bound_local_delete);
     o(0x585a); /* restore returned value, if any */
 }

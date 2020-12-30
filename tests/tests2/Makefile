@@ -53,9 +53,6 @@ ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 114_bound_signal.test # libc problem signal/fork
  SKIP += 116_bound_setjmp2.test # No TLS_FUNC/TLS_VAR in bcheck.c
 endif
-ifeq ($(TARGETOS),NetBSD)
-  SKIP += 113_btdll.test # text relocations
-endif
 
 # Some tests might need arguments
 ARGS =

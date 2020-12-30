@@ -58,6 +58,8 @@ ST_FUNC void tccelf_new(TCCState *s)
     /* create standard sections */
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    /* create ro data section (make ro after relocation done with GNU_RELRO) */
+    data_ro_section = new_section(s, ".data.ro", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
@@ -79,11 +81,11 @@ ST_FUNC void tccelf_new(TCCState *s)
 ST_FUNC void tccelf_bounds_new(TCCState *s)
 {
     TCCState *s1 = s;
-    /* create bounds sections */
+    /* create bounds sections (make ro after relocation done with GNU_RELRO) */
     bounds_section = new_section(s, ".bounds",
-                                 SHT_PROGBITS, SHF_ALLOC);
+                                 SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     lbounds_section = new_section(s, ".lbounds",
-                                  SHT_PROGBITS, SHF_ALLOC);
+                                  SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
 }
 #endif
 
@@ -1043,6 +1045,16 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_386_PC32:
 #elif defined(TCC_TARGET_X86_64)
         case R_X86_64_PC32:
+	{
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+
+	    /* support __dso_handle in atexit() */
+	    if (sym->st_shndx != SHN_UNDEF &&
+		ELFW(ST_VISIBILITY)(sym->st_other) == STV_HIDDEN) {
+                rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PLT32);
+	        break;
+	    }
+	}
 #elif defined(TCC_TARGET_ARM64)
         case R_AARCH64_PREL32:
 #endif
@@ -1828,11 +1840,20 @@ struct dyn_inf {
     addr_t rel_size;
 };
 
+/* Info for GNU_RELRO */
+struct ro_inf {
+   addr_t sh_offset;
+   addr_t sh_addr;
+   addr_t sh_size;
+};
+
 /* Assign sections to segments and decide how are sections laid out when loaded
    in memory. This function also fills corresponding program headers. */
-static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
+static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
+			   int phnum, int phfill,
                            Section *interp, Section* strsec,
-                           struct dyn_inf *dyninf, int *sec_order)
+                           struct dyn_inf *dyninf, struct ro_inf *roinf,
+			   int *sec_order)
 {
     int i, sh_order_index, file_offset;
     Section *s;
@@ -1883,7 +1904,10 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
         /* dynamic relocation table information, for .dynamic section */
         dyninf->rel_addr = dyninf->rel_size = 0;
 
-        for(j = 0; j < (phnum == 6 ? 3 : 2); j++) {
+        /* read only segment mapping for GNU_RELRO */
+	roinf->sh_offset = roinf->sh_addr = roinf->sh_size = 0;
+
+        for(j = 0; j < phfill; j++) {
 	    Section *relocplt = s1->got ? s1->got->relocplt : NULL;
 
             ph->p_type = j == 2 ? PT_TLS : PT_LOAD;
@@ -1898,7 +1922,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                info about the layout. We do the following ordering: interp,
                symbol tables, relocations, progbits, nobits */
             /* XXX: do faster and simpler sorting */
-            for(k = 0; k < 6; k++) {
+            for(k = 0; k < 7; k++) {
                 for(i = 1; i < s1->nb_sections; i++) {
                     s = s1->sections[i];
                     /* compute if section should be included */
@@ -1930,12 +1954,17 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                         else if (k != 3 && s == relocplt)
                             continue;
                     } else if (s->sh_type == SHT_NOBITS) {
-                        if (k != 5)
+                        if (k != 6)
                             continue;
-                    } else {
+                    } else if (s == data_ro_section ||
+			       s == bounds_section ||
+			       s == lbounds_section) {
                         if (k != 4)
                             continue;
-                    }
+                    } else {
+                        if (k != 5)
+                            continue;
+		    }
                     sec_order[sh_order_index++] = i;
 
                     /* section matches: we align it and add its size */
@@ -1956,8 +1985,17 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr, int phnum,
                     if (s->sh_type == SHT_RELX && s != relocplt) {
                         if (dyninf->rel_size == 0)
                             dyninf->rel_addr = addr;
-                        dyninf->rel_size += s->sh_size;
+                        dyninf->rel_size = (addr - dyninf->rel_addr) + s->sh_size;
                     }
+                    if (s == data_ro_section ||
+			s == bounds_section ||
+			s == lbounds_section) {
+                        if (roinf->sh_size == 0) {
+                            roinf->sh_offset = s->sh_offset;
+                            roinf->sh_addr = s->sh_addr;
+			}
+                        roinf->sh_size = (addr - roinf->sh_addr) + s->sh_size;
+		    }
                     addr += s->sh_size;
                     if (s->sh_type != SHT_NOBITS)
                         file_offset += s->sh_size;
@@ -2018,7 +2056,7 @@ static void put_dt(Section *dynamic, int dt, addr_t val)
 }
 
 static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
-                                 Section *dynamic, Section *note)
+                                 Section *dynamic, Section *note, struct ro_inf *roinf)
 {
     ElfW(Phdr) *ph;
 
@@ -2046,7 +2084,7 @@ static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
     }
 
     if (note) {
-        ph = &phdr[phnum - 2];
+        ph = &phdr[phnum - 2 - (roinf != NULL)];
 
         ph->p_type = PT_NOTE;
         ph->p_offset = note->sh_offset;
@@ -2060,7 +2098,7 @@ static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
 
     /* if dynamic section, then add corresponding program header */
     if (dynamic) {
-        ph = &phdr[phnum - 1];
+        ph = &phdr[phnum - 1 - (roinf != NULL)];
 
         ph->p_type = PT_DYNAMIC;
         ph->p_offset = dynamic->sh_offset;
@@ -2070,6 +2108,19 @@ static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
         ph->p_memsz = dynamic->sh_size;
         ph->p_flags = PF_R | PF_W;
         ph->p_align = dynamic->sh_addralign;
+    }
+
+    if (roinf) {
+        ph = &phdr[phnum - 1];
+
+        ph->p_type = PT_GNU_RELRO;
+        ph->p_offset = roinf->sh_offset;
+        ph->p_vaddr = roinf->sh_addr;
+        ph->p_paddr = ph->p_vaddr;
+        ph->p_filesz = roinf->sh_size;
+        ph->p_memsz = roinf->sh_size;
+        ph->p_flags = PF_R;
+        ph->p_align = 1;
     }
 }
 
@@ -2440,8 +2491,9 @@ static Section *create_bsd_note_section(TCCState *s1,
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
 {
-    int ret, phnum, shnum, file_type, file_offset, *sec_order;
+    int i, ret, phnum, phfill, shnum, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
+    struct ro_inf roinf, *roinf_use = NULL;
     ElfW(Phdr) *phdr;
     Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
 
@@ -2489,6 +2541,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
             s1->dynsym = new_symtab(s1, ".dynsym", SHT_DYNSYM, SHF_ALLOC,
                                     ".dynstr",
                                     ".hash", SHF_ALLOC);
+	    /* Number of local symbols (readelf complains if not set) */
+	    s1->dynsym->sh_info = 1;
             dynstr = s1->dynsym->link;
             /* add dynamic section */
             dynamic = new_section(s1, ".dynamic", SHT_DYNAMIC,
@@ -2556,21 +2610,30 @@ static int elf_output_file(TCCState *s1, const char *filename)
     }
 #endif
 
+    for (i = 1; i < s1->nb_sections &&
+                !(s1->sections[i]->sh_flags & SHF_TLS); i++);
+    phfill = 2 + (i < s1->nb_sections);
+
     /* compute number of program headers */
     if (file_type == TCC_OUTPUT_OBJ)
-        phnum = 0;
+        phnum = phfill = 0;
     else if (file_type == TCC_OUTPUT_DLL)
         phnum = 3;
     else if (s1->static_link)
         phnum = 2;
     else {
-        int i;
-        for (i = 1; i < s1->nb_sections &&
-                    !(s1->sections[i]->sh_flags & SHF_TLS); i++);
-        phnum = i < s1->nb_sections ? 6 : 5;
+        phnum = 5 + (i < s1->nb_sections);
     }
 
     phnum += note != NULL;
+
+#if !TARGETOS_FreeBSD && !TARGETOS_NetBSD && !defined(__APPLE__) && !defined(_WIN32)
+    /* GNU_RELRO */
+    if (file_type != TCC_OUTPUT_OBJ) {
+	phnum++;
+        roinf_use = &roinf;
+    }
+#endif
 
     /* allocate program segment headers */
     phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
@@ -2583,14 +2646,14 @@ static int elf_output_file(TCCState *s1, const char *filename)
     sec_order[0] = 0;
 
     /* compute section to program header mapping */
-    file_offset = layout_sections(s1, phdr, phnum, interp, strsec, &dyninf,
-                                  sec_order);
+    file_offset = layout_sections(s1, phdr, phnum, phfill, interp, strsec,
+				  &dyninf, &roinf, sec_order);
 
 #ifndef ELF_OBJ_ONLY
     /* Fill remaining program header and finalize relocation related to dynamic
        linking. */
     if (file_type != TCC_OUTPUT_OBJ) {
-        fill_unloadable_phdr(phdr, phnum, interp, dynamic, note);
+        fill_unloadable_phdr(phdr, phnum, interp, dynamic, note, roinf_use);
         if (dynamic) {
             ElfW(Sym) *sym;
             dynamic->data_offset = dyninf.data_offset;
