@@ -2751,7 +2751,6 @@ ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size)
 typedef struct SectionMergeInfo {
     Section *s;            /* corresponding existing section */
     unsigned long offset;  /* offset of the new section in the existing section */
-    unsigned long size;    /* size of the new section in the existing section */
     uint8_t new_section;       /* true if section 's' was added */
     uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
@@ -2917,7 +2916,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         if (sh->sh_addralign > s->sh_addralign)
             s->sh_addralign = sh->sh_addralign;
         sm_table[i].offset = s->data_offset;
-        sm_table[i].size = sh->sh_size;
         sm_table[i].s = s;
         /* concatenate sections */
         size = sh->sh_size;
@@ -3006,7 +3004,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             continue;
         sh = &shdr[i];
         offset = sm_table[i].offset;
-        size = sm_table[i].size;
+        size = sh->sh_size;
         switch(s->sh_type) {
         case SHT_RELX:
             /* take relocation offset information */
