@@ -1242,7 +1242,78 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
 {
-    tcc_error("internal error: subst_asm_operand not implemented");
+    int r, reg, size, val;
+    char buf[64];
+
+    r = sv->r;
+    if ((r & VT_VALMASK) == VT_CONST) {
+        if (!(r & VT_LVAL) && modifier != 'c' && modifier != 'n' &&
+            modifier != 'P')
+            cstr_ccat(add_str, '#');
+        if (r & VT_SYM) {
+            const char *name = get_tok_str(sv->sym->v, NULL);
+            if (sv->sym->v >= SYM_FIRST_ANOM) {
+                /* In case of anonymous symbols ("L.42", used
+                   for static data labels) we can't find them
+                   in the C symbol table when later looking up
+                   this name.  So enter them now into the asm label
+                   list when we still know the symbol.  */
+                get_asm_sym(tok_alloc(name, strlen(name))->tok, sv->sym);
+            }
+            if (tcc_state->leading_underscore)
+                cstr_ccat(add_str, '_');
+            cstr_cat(add_str, name, -1);
+            if ((uint32_t) sv->c.i == 0)
+                goto no_offset;
+            cstr_ccat(add_str, '+');
+        }
+        val = sv->c.i;
+        if (modifier == 'n')
+            val = -val;
+        snprintf(buf, sizeof(buf), "%d", (int) sv->c.i);
+        cstr_cat(add_str, buf, -1);
+      no_offset:;
+    } else if ((r & VT_VALMASK) == VT_LOCAL) {
+        snprintf(buf, sizeof(buf), "[fp,#%d]", (int) sv->c.i);
+        cstr_cat(add_str, buf, -1);
+    } else if (r & VT_LVAL) {
+        reg = r & VT_VALMASK;
+        if (reg >= VT_CONST)
+            tcc_internal_error("");
+        snprintf(buf, sizeof(buf), "[%s]",
+                 get_tok_str(TOK_ASM_r0 + reg, NULL));
+        cstr_cat(add_str, buf, -1);
+    } else {
+        /* register case */
+        reg = r & VT_VALMASK;
+        if (reg >= VT_CONST)
+            tcc_internal_error("");
+
+        /* choose register operand size */
+        if ((sv->type.t & VT_BTYPE) == VT_BYTE ||
+            (sv->type.t & VT_BTYPE) == VT_BOOL)
+            size = 1;
+        else if ((sv->type.t & VT_BTYPE) == VT_SHORT)
+            size = 2;
+        else
+            size = 4;
+
+        if (modifier == 'b') {
+            size = 1;
+        } else if (modifier == 'w') {
+            size = 2;
+        } else if (modifier == 'k') {
+            size = 4;
+        }
+
+        switch (size) {
+        default:
+            reg = TOK_ASM_r0 + reg;
+            break;
+        }
+        snprintf(buf, sizeof(buf), "%s", get_tok_str(reg, NULL));
+        cstr_cat(add_str, buf, -1);
+    }
 }
 
 /* generate prolog and epilog code for asm statement */
