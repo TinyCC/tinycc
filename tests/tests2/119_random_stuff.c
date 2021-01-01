@@ -33,9 +33,7 @@ void tst_const_addr(void)
 {
   void *addr = mmap ((void *)0x20000000, 4096, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS, -1, 0);
   if (addr != (void *) -1) {
-#if !defined(__riscv)
     *(int *)0x20000000 += 42;
-#endif
     munmap (addr, 4096);
   }
 }

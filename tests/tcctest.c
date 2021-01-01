@@ -2799,14 +2799,12 @@ void stdarg_test(void)
     stdarg_for_struct(bob, bob2, bob3, bob4, bob, bob, bob.profile);
     stdarg_for_libc("stdarg_for_libc: %s %.2f %d\n", "string", 1.23, 456);
     stdarg_syntax(1, 17);
-#ifndef __riscv
     stdarg_double_struct(6,-1,pts[0],pts[1],pts[2],pts[3],pts[4],pts[5]);
     stdarg_double_struct(7,1,pts[0],-1.0,pts[1],pts[2],pts[3],pts[4],pts[5]);
     stdarg_double_struct(7,2,pts[0],pts[1],-1.0,pts[2],pts[3],pts[4],pts[5]);
     stdarg_double_struct(7,3,pts[0],pts[1],pts[2],-1.0,pts[3],pts[4],pts[5]);
     stdarg_double_struct(7,4,pts[0],pts[1],pts[2],pts[3],-1.0,pts[4],pts[5]);
     stdarg_double_struct(7,5,pts[0],pts[1],pts[2],pts[3],pts[4],-1.0,pts[5]);
-#endif
 }
 
 int reltab[3] = { 1, 2, 3 };
@@ -4038,7 +4036,7 @@ void builtin_frame_address_test(void)
     char *fp0 = __builtin_frame_address(0);
 
     printf("str: %s\n", str);
-#ifndef __riscv
+#ifndef __riscv // gcc dumps core. tcc, clang work
     bfa1(str-fp0);
 #endif
 #endif

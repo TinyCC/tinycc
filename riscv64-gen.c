@@ -211,6 +211,20 @@ static int load_symofs(int r, SValue *sv, int forstore)
     return rr;
 }
 
+static void load_large_constant(int rr, int fc, uint32_t pi)
+{
+    if (fc < 0)
+	pi++;
+    o(0x37 | (rr << 7) | (((pi + 0x800) & 0xfffff000))); // lui RR, up(up(fc))
+    EI(0x13, 0, rr, rr, (int)pi << 20 >> 20);   // addi RR, RR, lo(up(fc))
+    EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
+    EI(0x13, 0, rr, rr, (fc + (1 << 19)) >> 20);  // addi RR, RR, up(lo(fc))
+    EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
+    fc = fc << 12 >> 12;
+    EI(0x13, 0, rr, rr, fc >> 8);  // addi RR, RR, lo1(lo(fc))
+    EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
+}
+
 ST_FUNC void load(int r, SValue *sv)
 {
     int fr = sv->r;
@@ -242,7 +256,18 @@ ST_FUNC void load(int r, SValue *sv)
             EI(0x03, 3, rr, br, fc); // ld RR, fc(BR)
             br = rr;
             fc = 0;
-        } else {
+        } else if (v == VT_CONST) {
+            int64_t si = sv->c.i;
+            si >>= 32;
+            if (si != 0) {
+		load_large_constant(rr, fc, si);
+                fc &= 0xff;
+            } else {
+                o(0x37 | (rr << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
+                fc = fc << 20 >> 20;
+	    }
+            br = rr;
+	} else {
             tcc_error("unimp: load(non-local lval)");
         }
         EI(opcode, func3, rr, br, fc); // l[bhwd][u] / fl[wd] RR, fc(BR)
@@ -258,20 +283,9 @@ ST_FUNC void load(int r, SValue *sv)
           tcc_error("unimp: load(float)");
         if (fc != sv->c.i) {
             int64_t si = sv->c.i;
-            uint32_t pi;
             si >>= 32;
             if (si != 0) {
-                pi = si;
-                if (fc < 0)
-                  pi++;
-                o(0x37 | (rr << 7) | (((pi + 0x800) & 0xfffff000))); // lui RR, up(up(fc))
-                EI(0x13, 0, rr, rr, (int)pi << 20 >> 20);   // addi RR, RR, lo(up(fc))
-                EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
-                EI(0x13, 0, rr, rr, (fc + (1 << 19)) >> 20);  // addi RR, RR, up(lo(fc))
-                EI(0x13, 1, rr, rr, 12); // slli RR, RR, 12
-                fc = fc << 12 >> 12;
-                EI(0x13, 0, rr, rr, fc >> 8);  // addi RR, RR, lo1(lo(fc))
-                EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
+		load_large_constant(rr, fc, si);
                 fc &= 0xff;
                 rb = rr;
                 do32bit = 0;
@@ -381,6 +395,17 @@ ST_FUNC void store(int r, SValue *sv)
         /*if (((unsigned)fc + (1 << 11)) >> 12)
           tcc_error("unimp: store(large addend) (0x%x)", fc);*/
         fc = 0; // XXX support offsets regs
+    } else if (fr == VT_CONST) {
+        int64_t si = sv->c.i;
+        ptrreg = 8; // s0
+        si >>= 32;
+        if (si != 0) {
+	    load_large_constant(ptrreg, fc, si);
+            fc &= 0xff;
+        } else {
+            o(0x37 | (ptrreg << 7) | ((0x800 + fc) & 0xfffff000)); //lui RR, upper(fc)
+            fc = fc << 20 >> 20;
+	}
     } else
       tcc_error("implement me: %s(!local)", __FUNCTION__);
     ES(is_freg(r) ? 0x27 : 0x23,                          // fs... | s...
@@ -510,7 +535,7 @@ static void reg_pass_rec(CType *type, int *rc, int *fieldofs, int ofs)
       rc[0] = -1;
     else if (!rc[0] || rc[1] == RC_FLOAT || is_float(type->t)) {
       rc[++rc[0]] = is_float(type->t) ? RC_FLOAT : RC_INT;
-      fieldofs[rc[0]] = (ofs << 4) | (type->t & VT_BTYPE);
+      fieldofs[rc[0]] = (ofs << 4) | ((type->t & VT_BTYPE) == VT_PTR ? VT_LLONG : type->t & VT_BTYPE);
     } else
       rc[0] = -1;
 }
@@ -537,6 +562,7 @@ ST_FUNC void gfunc_call(int nb_args)
     Sym *sa;
 
 #ifdef CONFIG_TCC_BCHECK
+    int bc_save = tcc_state->do_bounds_check;
     if (tcc_state->do_bounds_check)
         gbound_args(nb_args);
 #endif
@@ -692,7 +718,14 @@ ST_FUNC void gfunc_call(int nb_args)
                 gaddrof();
                 vtop->type = char_pointer_type;
                 vpushi(ii >> 20);
+#ifdef CONFIG_TCC_BCHECK
+		if ((origtype.t & VT_BTYPE) == VT_STRUCT)
+                    tcc_state->do_bounds_check = 0;
+#endif
                 gen_op('+');
+#ifdef CONFIG_TCC_BCHECK
+		tcc_state->do_bounds_check = bc_save;
+#endif
                 indir();
                 vtop->type = origtype;
                 loadt = vtop->type.t & VT_BTYPE;
@@ -835,6 +868,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret,
         *regsize = size / nregs;
     }
     ret->t = fieldofs[1] & VT_BTYPE;
+    ret->ref = NULL;
     return nregs;
 }
 
