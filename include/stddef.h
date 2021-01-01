@@ -27,7 +27,6 @@ typedef signed __INT64_TYPE__ int64_t;
 typedef unsigned __INT64_TYPE__ uint64_t;
 #endif
 #endif
-#endif
 
 #ifndef NULL
 #define NULL ((void*)0)
