@@ -1330,11 +1330,297 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
     }
 }
 
+/* return the constraint priority (we allocate first the lowest
+   numbered constraints) */
+static inline int constraint_priority(const char *str)
+{
+    int priority, c, pr;
+
+    /* we take the lowest priority */
+    priority = 0;
+    for(;;) {
+        c = *str;
+        if (c == '\0')
+            break;
+        str++;
+        switch(c) {
+        case 'l': // in ARM mode, that's  an alias for 'r' [ARM].
+        case 'r': // register [general]
+        case 'p': // valid memory address for load,store [general]
+            pr = 3;
+            break;
+        case 'M': // integer constant for shifts [ARM]
+        case 'I': // integer valid for data processing instruction immediate
+        case 'J': // integer in range -4095...4095
+
+        case 'i': // immediate integer operand, including symbolic constants [general]
+        case 'm': // memory operand [general]
+        case 'g': // general-purpose-register, memory, immediate integer [general]
+            pr = 4;
+            break;
+        default:
+            tcc_error("unknown constraint '%c'", c);
+            pr = 0;
+        }
+        if (pr > priority)
+            priority = pr;
+    }
+    return priority;
+}
+
+static const char *skip_constraint_modifiers(const char *p)
+{
+    /* Constraint modifier:
+        =   Operand is written to by this instruction
+        +   Operand is both read and written to by this instruction
+        %   Instruction is commutative for this operand and the following operand.
+
+       Per-alternative constraint modifier:
+        &   Operand is clobbered before the instruction is done using the input operands
+    */
+    while (*p == '=' || *p == '&' || *p == '+' || *p == '%')
+        p++;
+    return p;
+}
+
+#define REG_OUT_MASK 0x01
+#define REG_IN_MASK  0x02
+
+#define is_reg_allocated(reg) (regs_allocated[reg] & reg_mask)
+
 ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     int nb_operands, int nb_outputs,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
 {
+    /* overall format: modifier, then ,-seperated list of alternatives; all operands for a single instruction must have the same number of alternatives */
+    /* TODO: Simple constraints
+        whitespace  ignored
+        o  memory operand that is offsetable
+        V  memory but not offsetable
+        <  memory operand with autodecrement addressing is allowed.  Restrictions apply.
+        >  memory operand with autoincrement addressing is allowed.  Restrictions apply.
+        n  immediate integer operand with a known numeric value
+        E  immediate floating operand (const_double) is allowed, but only if target=host
+        F  immediate floating operand (const_double or const_vector) is allowed
+        s  immediate integer operand whose value is not an explicit integer
+        X  any operand whatsoever
+        0...9 (postfix); (can also be more than 1 digit number);  an operand that matches the specified operand number is allowed
+    */
+
+    /* TODO: ARM constraints:
+        k the stack pointer register
+        G the floating-point constant 0.0
+        Q memory reference where the exact address is in a single register ("m" is preferable for asm statements)
+        R an item in the constant pool
+        S symbol in the text segment of the current file
+[       Uv memory reference suitable for VFP load/store insns (reg+constant offset)]
+[       Uy memory reference suitable for iWMMXt load/store instructions]
+        Uq memory reference suitable for the ARMv4 ldrsb instruction
+    */
+    ASMOperand *op;
+    int sorted_op[MAX_ASM_OPERANDS];
+    int i, j, k, p1, p2, tmp, reg, c, reg_mask;
+    const char *str;
+    uint8_t regs_allocated[NB_ASM_REGS];
+
+    /* init fields */
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        op->input_index = -1;
+        op->ref_index = -1;
+        op->reg = -1;
+        op->is_memory = 0;
+        op->is_rw = 0;
+    }
+    /* compute constraint priority and evaluate references to output
+       constraints if input constraints */
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        str = op->constraint;
+        str = skip_constraint_modifiers(str);
+        if (isnum(*str) || *str == '[') {
+            /* this is a reference to another constraint */
+            k = find_constraint(operands, nb_operands, str, NULL);
+            if ((unsigned) k >= i || i < nb_outputs)
+                tcc_error("invalid reference in constraint %d ('%s')",
+                          i, str);
+            op->ref_index = k;
+            if (operands[k].input_index >= 0)
+                tcc_error("cannot reference twice the same operand");
+            operands[k].input_index = i;
+            op->priority = 5;
+        } else if ((op->vt->r & VT_VALMASK) == VT_LOCAL
+                   && op->vt->sym
+                   && (reg = op->vt->sym->r & VT_VALMASK) < VT_CONST) {
+            op->priority = 1;
+            op->reg = reg;
+        } else {
+            op->priority = constraint_priority(str);
+        }
+    }
+
+    /* sort operands according to their priority */
+    for (i = 0; i < nb_operands; i++)
+        sorted_op[i] = i;
+    for (i = 0; i < nb_operands - 1; i++) {
+        for (j = i + 1; j < nb_operands; j++) {
+            p1 = operands[sorted_op[i]].priority;
+            p2 = operands[sorted_op[j]].priority;
+            if (p2 < p1) {
+                tmp = sorted_op[i];
+                sorted_op[i] = sorted_op[j];
+                sorted_op[j] = tmp;
+            }
+        }
+    }
+
+    for (i = 0; i < NB_ASM_REGS; i++) {
+        if (clobber_regs[i])
+            regs_allocated[i] = REG_IN_MASK | REG_OUT_MASK;
+        else
+            regs_allocated[i] = 0;
+    }
+    /* sp cannot be used */
+    regs_allocated[13] = REG_IN_MASK | REG_OUT_MASK;
+    /* fp cannot be used yet */
+    regs_allocated[11] = REG_IN_MASK | REG_OUT_MASK;
+
+    /* allocate registers and generate corresponding asm moves */
+    for (i = 0; i < nb_operands; i++) {
+        j = sorted_op[i];
+        op = &operands[j];
+        str = op->constraint;
+        /* no need to allocate references */
+        if (op->ref_index >= 0)
+            continue;
+        /* select if register is used for output, input or both */
+        if (op->input_index >= 0) {
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+        } else if (j < nb_outputs) {
+            reg_mask = REG_OUT_MASK;
+        } else {
+            reg_mask = REG_IN_MASK;
+        }
+        if (op->reg >= 0) {
+            if (is_reg_allocated(op->reg))
+                tcc_error
+                    ("asm regvar requests register that's taken already");
+            reg = op->reg;
+            goto reg_found;
+        }
+      try_next:
+        c = *str++;
+        switch (c) {
+        case '=': // Operand is written-to
+            goto try_next;
+        case '+': // Operand is both READ and written-to
+            op->is_rw = 1;
+            /* FALL THRU */
+        case '&': // Operand is clobbered before the instruction is done using the input operands
+            if (j >= nb_outputs)
+                tcc_error("'%c' modifier can only be applied to outputs",
+                          c);
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+            goto try_next;
+        case 'l': // In non-thumb mode, alias for 'r'--otherwise r0-r7 [ARM]
+        case 'r': // general-purpose register
+        case 'p': // loadable/storable address
+            /* any general register */
+            for (reg = 0; reg <= 8; reg++) {
+                if (!is_reg_allocated(reg))
+                    goto reg_found;
+            }
+            goto try_next;
+          reg_found:
+            /* now we can reload in the register */
+            op->is_llong = 0;
+            op->reg = reg;
+            regs_allocated[reg] |= reg_mask;
+            break;
+        case 'I': // integer that is valid as an data processing instruction immediate (0...255, rotated by a multiple of two)
+        case 'J': // integer in the range -4095 to 4095 [ARM]
+        case 'K': // integer that satisfies constraint I when inverted (one's complement)
+        case 'L': // integer that satisfies constraint I when inverted (two's complement)
+        case 'i': // immediate integer operand, including symbolic constants
+            if (!((op->vt->r & (VT_VALMASK | VT_LVAL)) == VT_CONST))
+                goto try_next;
+            break;
+        case 'M': // integer in the range 0 to 32
+            if (!
+                ((op->vt->r & (VT_VALMASK | VT_LVAL | VT_SYM)) ==
+                 VT_CONST))
+                goto try_next;
+            break;
+        case 'm': // memory operand
+        case 'g':
+            /* nothing special to do because the operand is already in
+               memory, except if the pointer itself is stored in a
+               memory variable (VT_LLOCAL case) */
+            /* XXX: fix constant case */
+            /* if it is a reference to a memory zone, it must lie
+               in a register, so we reserve the register in the
+               input registers and a load will be generated
+               later */
+            if (j < nb_outputs || c == 'm') {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL) {
+                    /* any general register */
+                    for (reg = 0; reg <= 8; reg++) {
+                        if (!(regs_allocated[reg] & REG_IN_MASK))
+                            goto reg_found1;
+                    }
+                    goto try_next;
+                  reg_found1:
+                    /* now we can reload in the register */
+                    regs_allocated[reg] |= REG_IN_MASK;
+                    op->reg = reg;
+                    op->is_memory = 1;
+                }
+            }
+            break;
+        default:
+            tcc_error("asm constraint %d ('%s') could not be satisfied",
+                      j, op->constraint);
+            break;
+        }
+        /* if a reference is present for that operand, we assign it too */
+        if (op->input_index >= 0) {
+            operands[op->input_index].reg = op->reg;
+            operands[op->input_index].is_llong = op->is_llong;
+        }
+    }
+
+    /* compute out_reg. It is used to store outputs registers to memory
+       locations references by pointers (VT_LLOCAL case) */
+    *pout_reg = -1;
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        if (op->reg >= 0 &&
+            (op->vt->r & VT_VALMASK) == VT_LLOCAL && !op->is_memory) {
+            for (reg = 0; reg <= 8; reg++) {
+                if (!(regs_allocated[reg] & REG_OUT_MASK))
+                    goto reg_found2;
+            }
+            tcc_error("could not find free output register for reloading");
+          reg_found2:
+            *pout_reg = reg;
+            break;
+        }
+    }
+
+    /* print sorted constraints */
+#ifdef ASM_DEBUG
+    for (i = 0; i < nb_operands; i++) {
+        j = sorted_op[i];
+        op = &operands[j];
+        printf("%%%d [%s]: \"%s\" r=0x%04x reg=%d\n",
+               j,
+               op->id ? get_tok_str(op->id, NULL) : "",
+               op->constraint, op->vt->r, op->reg);
+    }
+    if (*pout_reg >= 0)
+        printf("out_reg=%d\n", *pout_reg);
+#endif
 }
 
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
