@@ -47,6 +47,10 @@ struct sym_version {
 /* section is dynsymtab_section */
 #define SHF_DYNSYM 0x40000000
 
+#ifndef PAGESIZE
+# define PAGESIZE 4096
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void tccelf_new(TCCState *s)
@@ -1871,7 +1875,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
         long long tmp;
         addr_t addr;
         ElfW(Phdr) *ph;
-        int j, k, file_type = s1->output_type;
+        int j, k, f, file_type = s1->output_type;
 
         s_align = ELF_PAGE_SIZE;
         if (s1->section_align)
@@ -1924,6 +1928,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                info about the layout. We do the following ordering: interp,
                symbol tables, relocations, progbits, nobits */
             /* XXX: do faster and simpler sorting */
+	    f = -1;
             for(k = 0; k < 7; k++) {
                 for(i = 1; i < s1->nb_sections; i++) {
                     s = s1->sections[i];
@@ -1966,6 +1971,9 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                                0) {
                         if (k != 4)
                             continue;
+			/* Align next section on page size.
+			   This is needed to remap roinf section ro. */
+			f = 1;
                     } else {
                         if (k != 5)
                             continue;
@@ -1974,6 +1982,8 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
 
                     /* section matches: we align it and add its size */
                     tmp = addr;
+		    if (f-- == 0)
+			s->sh_addralign = PAGESIZE;
                     addr = (addr + s->sh_addralign - 1) &
                         ~(s->sh_addralign - 1);
                     file_offset += (int) ( addr - tmp );
