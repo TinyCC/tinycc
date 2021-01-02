@@ -20,9 +20,10 @@ typedef signed int int32_t;
 typedef unsigned char uint8_t;
 typedef unsigned short int uint16_t;
 typedef unsigned int uint32_t;
-#if defined(__LP64__) \
-  && !defined(__FreeBSD__) \
-  && !(defined(__NetBSD__) && defined(__aarch64__))
+#if defined(_WIN32)                                       \
+  || (defined(__LP64__)                                   \
+      && !defined(__FreeBSD__)                            \
+      && !(defined(__NetBSD__) && defined(__aarch64__)))
 typedef signed __INT64_TYPE__ int64_t;
 typedef unsigned __INT64_TYPE__ uint64_t;
 #endif
