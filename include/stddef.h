@@ -12,23 +12,6 @@ typedef __SIZE_TYPE__ uintptr_t;
 typedef union { long long __ll; long double __ld; } max_align_t;
 #endif
 
-#ifndef __int8_t_defined
-#define __int8_t_defined
-typedef signed char int8_t;
-typedef signed short int int16_t;
-typedef signed int int32_t;
-typedef unsigned char uint8_t;
-typedef unsigned short int uint16_t;
-typedef unsigned int uint32_t;
-#if defined(_WIN32)                                       \
-  || (defined(__LP64__)                                   \
-      && !defined(__FreeBSD__)                            \
-      && !(defined(__NetBSD__) && defined(__aarch64__)))
-typedef signed __INT64_TYPE__ int64_t;
-typedef unsigned __INT64_TYPE__ uint64_t;
-#endif
-#endif
-
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
