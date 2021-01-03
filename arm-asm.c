@@ -643,6 +643,7 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
                 immediate_value = ((immediate_value & 0x3FFFFFFF) << 2) | ((immediate_value & 0xC0000000) >> 30);
             }
             if (half_immediate_rotation >= 16) {
+                immediate_value = ops[2].e.v;
                 tcc_error("immediate value 0x%X cannot be encoded into ARM immediate", (unsigned) immediate_value);
                 return;
             }
