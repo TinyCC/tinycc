@@ -187,7 +187,7 @@ arm-fpa-ld_FILES  = $(arm_FILES)
 arm-vfp_FILES     = $(arm_FILES)
 arm-eabi_FILES    = $(arm_FILES)
 arm-eabihf_FILES  = $(arm_FILES)
-arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c arm-asm.c
+arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c arm64-asm.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 riscv64_FILES = $(CORE_FILES) riscv64-gen.c riscv64-link.c riscv64-asm.c
 
