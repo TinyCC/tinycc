@@ -433,26 +433,6 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
-static uint32_t asm_encode_rotation(Operand* rotation)
-{
-    uint64_t amount;
-    switch (rotation->type) {
-    case OP_REG32:
-        tcc_error("cannot rotate immediate value by register");
-        return 0;
-    case OP_IM8:
-        amount = rotation->e.v;
-        if (amount >= 0 && amount < 32 && (amount & 1) == 0)
-            return (amount >> 1) << 8;
-        else
-            tcc_error("rotating is only possible by a multiple of 2");
-        break;
-    default:
-        tcc_error("unknown rotation amount");
-        return 0;
-    }
-}
-
 static uint32_t asm_encode_shift(Operand* shift)
 {
     uint64_t amount;
@@ -690,6 +670,7 @@ static void asm_shift_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
     int nb_ops;
+    int definitely_neutral = 0;
     uint32_t opcode = 0xd << 21; // MOV
     uint32_t operands = 0;
 
@@ -736,6 +717,15 @@ static void asm_shift_opcode(TCCState *s1, int token)
         return;
     }
 
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_lslseq:
+    case TOK_ASM_lsrseq:
+    case TOK_ASM_asrseq:
+    case TOK_ASM_rorseq:
+        opcode |= ENCODE_SET_CONDITION_CODES;
+        break;
+    }
+
     switch (ops[1].type) {
     case OP_REG32:
         operands |= ops[1].reg;
@@ -746,40 +736,36 @@ static void asm_shift_opcode(TCCState *s1, int token)
         break;
     }
 
-    if (ops[2].type == OP_REG32) {
+    switch (ops[2].type) {
+    case OP_REG32:
         if ((ops[0].type == OP_REG32 && ops[0].reg == 15) ||
             (ops[1].type == OP_REG32 && ops[1].reg == 15)) {
             tcc_error("Using the 'pc' register in data processing instructions that have a register-controlled shift is not implemented by ARM");
         }
+        operands |= asm_encode_shift(&ops[2]);
+        break;
+    case OP_IM8:
+        if (ops[2].e.v)
+            operands |= asm_encode_shift(&ops[2]);
+        else
+            definitely_neutral = 1;
+        break;
     }
 
-    if (operands & ENCODE_IMMEDIATE_FLAG)
-        operands |= asm_encode_rotation(&ops[2]);
-    else
-        operands |= asm_encode_shift(&ops[2]);
-
-    switch (ARM_INSTRUCTION_GROUP(token)) {
+    if (!definitely_neutral) switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_lslseq:
-        opcode |= ENCODE_SET_CONDITION_CODES;
-        /* fallthrough */
     case TOK_ASM_lsleq:
         operands |= ENCODE_BARREL_SHIFTER_MODE_LSL;
         break;
     case TOK_ASM_lsrseq:
-        opcode |= ENCODE_SET_CONDITION_CODES;
-        /* fallthrough */
     case TOK_ASM_lsreq:
         operands |= ENCODE_BARREL_SHIFTER_MODE_LSR;
         break;
     case TOK_ASM_asrseq:
-        opcode |= ENCODE_SET_CONDITION_CODES;
-        /* fallthrough */
     case TOK_ASM_asreq:
         operands |= ENCODE_BARREL_SHIFTER_MODE_ASR;
         break;
     case TOK_ASM_rorseq:
-        opcode |= ENCODE_SET_CONDITION_CODES;
-        /* fallthrough */
     case TOK_ASM_roreq:
         operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
         break;
