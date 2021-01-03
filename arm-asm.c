@@ -550,6 +550,8 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
         return;
     } else {
         uint32_t opcode = 0;
+        uint32_t immediate_value;
+        uint8_t half_immediate_rotation;
         if (nb_shift && shift.type == OP_REG32) {
             if ((ops[0].type == OP_REG32 && ops[0].reg == 15) ||
                 (ops[1].type == OP_REG32 && ops[1].reg == 15)) {
@@ -583,11 +585,25 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
             operands |= ops[2].reg;
             break;
         case OP_IM8:
+        case OP_IM32:
             operands |= ENCODE_IMMEDIATE_FLAG;
-            operands |= ops[2].e.v;
-            break;
+            immediate_value = ops[2].e.v;
+            for (half_immediate_rotation = 0; half_immediate_rotation < 16; ++half_immediate_rotation) {
+                if (immediate_value >= 0x00 && immediate_value < 0x100)
+                    break;
+                // rotate left by two
+                immediate_value = ((immediate_value & 0x3FFFFFFF) << 2) | ((immediate_value & 0xC0000000) >> 30);
+            }
+            if (half_immediate_rotation >= 16) {
+                /* fallthrough */
+            } else {
+                operands |= immediate_value;
+                operands |= half_immediate_rotation << 8;
+                break;
+            }
         case OP_IM8N: // immediate negative value
             operands |= ENCODE_IMMEDIATE_FLAG;
+            immediate_value = ops[2].e.v;
             /* Instruction swapping:
                0001 = EOR - Rd:= Op1 EOR Op2     -> difficult
                0011 = RSB - Rd:= Op2 - Op1       -> difficult
@@ -597,54 +613,61 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
                1100 = ORR - Rd:= Op1 OR Op2      -> difficult
             */
             switch (opcode_nos) {
-#if 0
             case 0x0: // AND - Rd:= Op1 AND Op2
                 opcode = 0xe << 21; // BIC
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
             case 0x2: // SUB - Rd:= Op1 - Op2
                 opcode = 0x4 << 21; // ADD
-                operands |= (-ops[2].e.v) & 0xFF;
+                immediate_value = -immediate_value;
                 break;
             case 0x4: // ADD - Rd:= Op1 + Op2
                 opcode = 0x2 << 21; // SUB
-                operands |= (-ops[2].e.v) & 0xFF;
+                immediate_value = -immediate_value;
                 break;
             case 0x5: // ADC - Rd:= Op1 + Op2 + C
                 opcode = 0x6 << 21; // SBC
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
             case 0x6: // SBC - Rd:= Op1 - Op2 + C
                 opcode = 0x5 << 21; // ADC
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
-#endif
             case 0xa: // CMP - CC on: Op1 - Op2
                 opcode = 0xb << 21; // CMN
-                operands |= (-ops[2].e.v) & 0xFF;
+                immediate_value = -immediate_value;
                 break;
             case 0xb: // CMN - CC on: Op1 + Op2
                 opcode = 0xa << 21; // CMP
-                operands |= (-ops[2].e.v) & 0xFF;
+                immediate_value = -immediate_value;
                 break;
-            // moveq r1, r3: 0x01a01003; mov Rd, Op2
             case 0xd: // MOV - Rd:= Op2
                 opcode = 0xf << 21; // MVN
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
-#if 0
             case 0xe: // BIC - Rd:= Op1 AND NOT Op2
                 opcode = 0x0 << 21; // AND
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
-#endif
             case 0xf: // MVN - Rd:= NOT Op2
                 opcode = 0xd << 21; // MOV
-                operands |= (ops[2].e.v ^ 0xFF) & 0xFF;
+                immediate_value = ~immediate_value;
                 break;
             default:
                 tcc_error("cannot use '%s' with a negative immediate value", get_tok_str(token, NULL));
             }
+            for (half_immediate_rotation = 0; half_immediate_rotation < 16; ++half_immediate_rotation) {
+                if (immediate_value >= 0x00 && immediate_value < 0x100)
+                    break;
+                // rotate left by two
+                immediate_value = ((immediate_value & 0x3FFFFFFF) << 2) | ((immediate_value & 0xC0000000) >> 30);
+            }
+            if (half_immediate_rotation >= 16) {
+                tcc_error("immediate value 0x%X cannot be encoded into ARM immediate", (unsigned) immediate_value);
+                return;
+            }
+            operands |= immediate_value;
+            operands |= half_immediate_rotation << 8;
             break;
         default:
             expect("(second source operand) register or immediate value");
