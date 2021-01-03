@@ -228,10 +228,18 @@ static void asm_binary_opcode(TCCState *s1, int token)
     if (ops[1].type != OP_REG32) {
         switch (ARM_INSTRUCTION_GROUP(token)) {
         case TOK_ASM_movteq:
+        case TOK_ASM_movweq:
             if (ops[1].type == OP_IM8 || ops[1].type == OP_IM8N || ops[1].type == OP_IM32) {
                 if (ops[1].e.v >= 0 && ops[1].e.v <= 0xFFFF) {
                     uint16_t immediate_value = ops[1].e.v;
-                    asm_emit_opcode(token, 0x3400000 | (ops[0].reg << 12) | (immediate_value & 0xF000) << 4 | (immediate_value & 0xFFF));
+                    switch (ARM_INSTRUCTION_GROUP(token)) {
+                    case TOK_ASM_movteq:
+                        asm_emit_opcode(token, 0x3400000 | (ops[0].reg << 12) | (immediate_value & 0xF000) << 4 | (immediate_value & 0xFFF));
+                        break;
+                    case TOK_ASM_movweq:
+                        asm_emit_opcode(token, 0x3000000 | (ops[0].reg << 12) | (immediate_value & 0xF000) << 4 | (immediate_value & 0xFFF));
+                        break;
+                    }
                 } else
                     expect("(source operand) immediate 16 bit value");
             } else
@@ -1134,6 +1142,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_uxtbeq:
     case TOK_ASM_uxtheq:
     case TOK_ASM_movteq:
+    case TOK_ASM_movweq:
         return asm_binary_opcode(s1, token);
 
     case TOK_ASM_ldreq:

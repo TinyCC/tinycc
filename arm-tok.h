@@ -70,6 +70,7 @@
  DEF_ASM_CONDED(uxtb)
  DEF_ASM_CONDED(uxth)
  DEF_ASM_CONDED(movt)
+ DEF_ASM_CONDED(movw)
 
  /* multiplication */
 
