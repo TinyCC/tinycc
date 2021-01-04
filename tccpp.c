@@ -487,6 +487,12 @@ ST_FUNC TokenSym *tok_alloc(const char *str, int len)
     return tok_alloc_new(pts, str, len);
 }
 
+ST_FUNC int tok_alloc_const(const char *str)
+{
+    return tok_alloc(str, strlen(str))->tok;
+}
+
+
 /* XXX: buffer overflow */
 /* XXX: float tokens */
 ST_FUNC const char *get_tok_str(int v, CValue *cv)

@@ -2790,6 +2790,33 @@ static void gen_opic(int op)
     }
 }
 
+#if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
+# define gen_negf gen_opf
+#else
+/* XXX: implement in gen_opf() for other backends too */
+void gen_negf(int op)
+{
+    /* In IEEE negate(x) isn't subtract(0,x).  Without NaNs it's
+       subtract(-0, x), but with them it's really a sign flip
+       operation.  We implement this with bit manipulation and have
+       to do some type reinterpretation for this, which TCC can do
+       only via memory.  */
+
+    int align, size, bt;
+
+    size = type_size(&vtop->type, &align);
+    bt = vtop->type.t & VT_BTYPE;
+    save_reg(gv(RC_TYPE(bt)));
+    vdup();
+    incr_bf_adr(size - 1);
+    vdup();
+    vpushi(0x80); /* flip sign */
+    gen_op('^');
+    vstore();
+    vpop();
+}
+#endif
+
 /* generate a floating point operation with constant propagation */
 static void gen_opif(int op)
 {
@@ -2803,6 +2830,9 @@ static void gen_opif(int op)
 
     v1 = vtop - 1;
     v2 = vtop;
+    if (op == TOK_NEG)
+        v1 = v2;
+
     /* currently, we cannot do computations with forward symbols */
     c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
@@ -2817,29 +2847,43 @@ static void gen_opif(int op)
             f1 = v1->c.ld;
             f2 = v2->c.ld;
         }
-
         /* NOTE: we only do constant propagation if finite number (not
            NaN or infinity) (ANSI spec) */
-        if (!ieee_finite(f1) || !ieee_finite(f2))
+        if (!(ieee_finite(f1) || !ieee_finite(f2)) && !const_wanted)
             goto general_case;
-
         switch(op) {
         case '+': f1 += f2; break;
         case '-': f1 -= f2; break;
         case '*': f1 *= f2; break;
         case '/': 
             if (f2 == 0.0) {
+                union { float f; unsigned u; } x1, x2, y;
 		/* If not in initializer we need to potentially generate
 		   FP exceptions at runtime, otherwise we want to fold.  */
                 if (!const_wanted)
                     goto general_case;
+                /* the run-time result of 0.0/0.0 on x87, also of other compilers
+                   when used to compile the f1 /= f2 below, would be -nan */
+                x1.f = f1, x2.f = f2;
+                if (f1 == 0.0)
+                    y.u = 0x7fc00000; /* nan */
+                else
+                    y.u = 0x7f800000; /* infinity */
+                y.u |= (x1.u ^ x2.u) & 0x80000000; /* set sign */
+                f1 = y.f;
+                break;
             }
-            f1 /= f2; 
+            f1 /= f2;
             break;
+        case TOK_NEG:
+            f1 = -f1;
+            goto unary_result;
             /* XXX: also handles tests ? */
         default:
             goto general_case;
         }
+        vtop--;
+    unary_result:
         /* XXX: overflow test ? */
         if (v1->type.t == VT_FLOAT) {
             v1->c.f = f1;
@@ -2848,10 +2892,13 @@ static void gen_opif(int op)
         } else {
             v1->c.ld = f1;
         }
-        vtop--;
     } else {
     general_case:
-        gen_opf(op);
+        if (op == TOK_NEG) {
+            gen_negf(op);
+        } else {
+            gen_opf(op);
+        }
     }
 }
 
@@ -5878,44 +5925,8 @@ ST_FUNC void unary(void)
     case '-':
         next();
         unary();
-        t = vtop->type.t & VT_BTYPE;
-	if (is_float(t)) {
-            if ((vtop->r & VT_VALMASK) == VT_CONST) {
-                /* This is what gen_opif would do if we had a NEG operation.  */
-                if (t == VT_FLOAT)
-                  vtop->c.f = -vtop->c.f;
-                else if (t == VT_DOUBLE)
-                  vtop->c.d = -vtop->c.d;
-                else
-                  vtop->c.ld = -vtop->c.ld;
-            } else {
-                /* In IEEE negate(x) isn't subtract(0,x).  Without NaNs it's
-                   subtract(-0, x), but with them it's really a sign flip
-                   operation.  We implement this with bit manipulation and have
-                   to do some type reinterpretation for this, which TCC can do
-                   only via memory.  */
-                int align, size = type_size(&vtop->type, &align);
-                save_reg(gv(RC_TYPE(t)));
-                vdup();
-                gaddrof();
-                vtop->type = char_pointer_type;
-                /* Byte of sign bit.  For big endian, this would have to
-                   add zero always.  */
-#if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_I386)
-                /* sizeof long double is 12 or 16 here, but it's
-                   really the 80bit extended float format.  */
-                if (t == VT_LDOUBLE)
-                  size = 10;
-#endif
-                vpushi(size - 1);
-                gen_op('+');
-                indir();
-                vdup();
-                vpushi(0x80); /* flip sign */
-                gen_op('^');
-                vstore();
-                vpop();
-            }
+	if (is_float(vtop->type.t)) {
+            gen_opif(TOK_NEG);
 	} else {
             vpushi(0);
             vswap();

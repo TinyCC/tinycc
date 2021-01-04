@@ -2511,9 +2511,12 @@ static int elf_output_file(TCCState *s1, const char *filename)
 {
     int i, ret, phnum, phfill, shnum, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
-    struct ro_inf roinf, *roinf_use = &roinf;
+    struct ro_inf roinf;
     ElfW(Phdr) *phdr;
     Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
+#ifndef ELF_OBJ_ONLY
+    struct ro_inf *roinf_use = NULL;
+#endif
 
     file_type = s1->output_type;
 
@@ -2648,10 +2651,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
 #if !TARGETOS_FreeBSD && !TARGETOS_NetBSD && !defined(__APPLE__) && !defined(_WIN32)
     /* GNU_RELRO */
     if (file_type != TCC_OUTPUT_OBJ)
-	phnum++;
-    else
+	phnum++, roinf_use = &roinf;
 #endif
-        roinf_use = NULL;
 
     /* allocate program segment headers */
     phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));

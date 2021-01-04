@@ -423,26 +423,20 @@ ST_FUNC void gfunc_call(int nb_args)
             size = (size + 3) & ~3;
             /* allocate the necessary size on stack */
 #ifdef TCC_TARGET_PE
-            if (size >= 0x4096) {
-                /* cannot call alloca with bound checking. Do stack probing. */
-                o(0x50);               // push %eax
-                oad(0xb8, size - 4);   // mov size-4,%eax
-                oad(0x3d, 4096);       // p1: cmp $4096,%eax
-                o(0x1476);             // jbe <p2>
-                oad(0x248485,-4096);   // test %eax,-4096(%esp)
-                oad(0xec81, 4096);     // sub $4096,%esp
-                oad(0x2d, 4096);       // sub $4096,%eax
-                o(0xe5eb);             // jmp <p1>
-                o(0xc429);             // p2: sub %eax,%esp
-                oad(0xc481, size - 4); // add size-4,%esp
-                o(0x58);               // pop %eax
-            }
+            if (size >= 4096) {
+                r = get_reg(RC_EAX);
+                oad(0x68, size); // push size
+                /* cannot call normal 'alloca' with bound checking */
+                gen_static_call(tok_alloc_const("__alloca"));
+                gadd_sp(4);
+            } else
 #endif
-            oad(0xec81, size); /* sub $xxx, %esp */
-            /* generate structure store */
-            r = get_reg(RC_INT);
-            o(0x89); /* mov %esp, r */
-            o(0xe0 + r);
+            {
+                oad(0xec81, size); /* sub $xxx, %esp */
+                /* generate structure store */
+                r = get_reg(RC_INT);
+                o(0xe089 + (r << 8)); /* mov %esp, r */
+            }
             vset(&vtop->type, r | VT_LVAL, 0);
             vswap();
             vstore();
@@ -843,6 +837,12 @@ ST_FUNC void gen_opi(int op)
 ST_FUNC void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
+
+    if (op == TOK_NEG) { /* unary minus */
+        gv(RC_FLOAT);
+        o(0xe0d9); /* fchs */
+        return;
+    }
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {

@@ -1207,7 +1207,7 @@ ST_FUNC int asm_parse_regvar (int t)
     s = table_ident[t - TOK_IDENT]->str;
     if (s[0] != '%')
         return -1;
-    t = tok_alloc(s+1, strlen(s)-1)->tok;
+    t = tok_alloc_const(s + 1);
     unget_tok(t);
     unget_tok('%');
     parse_operand(tcc_state, &op);
@@ -1488,7 +1488,7 @@ ST_FUNC void subst_asm_operand(CString *add_str,
 		   in the C symbol table when later looking up
 		   this name.  So enter them now into the asm label
 		   list when we still know the symbol.  */
-		get_asm_sym(tok_alloc(name, strlen(name))->tok, sv->sym);
+		get_asm_sym(tok_alloc_const(name), sv->sym);
 	    }
             if (tcc_state->leading_underscore)
               cstr_ccat(add_str, '_');
@@ -1698,7 +1698,6 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 {
     int reg;
-    TokenSym *ts;
 #ifdef TCC_TARGET_X86_64
     unsigned int type;
 #endif
@@ -1707,8 +1706,7 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
         !strcmp(str, "cc") ||
 	!strcmp(str, "flags"))
         return;
-    ts = tok_alloc(str, strlen(str));
-    reg = ts->tok;
+    reg = tok_alloc_const(str);
     if (reg >= TOK_ASM_eax && reg <= TOK_ASM_edi) {
         reg -= TOK_ASM_eax;
     } else if (reg >= TOK_ASM_ax && reg <= TOK_ASM_di) {

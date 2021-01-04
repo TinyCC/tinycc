@@ -625,3 +625,9 @@ long long __fixxfdi (long double a1)
     return s ? ret : -ret;
 }
 #endif /* !ARM */
+
+#if defined __x86_64__
+/* float constants used for unary minus operation */
+const float __mzerosf = -0.0;
+const double __mzerodf = -0.0;
+#endif

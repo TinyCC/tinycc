@@ -1090,6 +1090,7 @@ struct filespec {
 #define TOK_SHL     '<' /* shift left */
 #define TOK_SAR     '>' /* signed shift right */
 #define TOK_SHR     0x8b /* unsigned shift right */
+#define TOK_NEG     TOK_MID /* unary minus operation (for floats) */
 
 #define TOK_ARROW   0xa0 /* -> */
 #define TOK_DOTS    0xa1 /* three dots */
@@ -1378,6 +1379,7 @@ ST_DATA TokenSym **table_ident;
 #define IS_NUM 4
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
+ST_FUNC int tok_alloc_const(const char *str);
 ST_FUNC const char *get_tok_str(int v, CValue *cv);
 ST_FUNC void begin_macro(TokenString *str, int alloc);
 ST_FUNC void end_macro(void);

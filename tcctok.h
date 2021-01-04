@@ -100,6 +100,8 @@
      DEF(TOK___NAN__, "__nan__")
      DEF(TOK___SNAN__, "__snan__")
      DEF(TOK___INF__, "__inf__")
+     DEF(TOK___mzerosf, "__mzerosf")
+     DEF(TOK___mzerodf, "__mzerodf")
 
 /* attribute identifiers */
 /* XXX: handle all tokens generically since speed is not critical */

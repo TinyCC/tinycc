@@ -1813,14 +1813,38 @@ void gen_opl(int op)
     gen_opi(op);
 }
 
+void vpush_const(int t, int v)
+{
+    CType ctype = { t | VT_CONSTANT, 0 };
+    vpushsym(&ctype, external_global_sym(v, &ctype));
+    vtop->r |= VT_LVAL;
+}
+
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
-    int float_type =
-        (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
+    int bt = vtop->type.t & VT_BTYPE;
+    int float_type = bt == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
+
+    if (op == TOK_NEG) { /* unary minus */
+        gv(float_type);
+        if (float_type == RC_ST0) {
+            o(0xe0d9); /* fchs */
+        } else {
+            /* -0.0, in libtcc1.c */
+            vpush_const(bt, bt == VT_FLOAT ? TOK___mzerosf : TOK___mzerodf);
+            gv(RC_FLOAT);
+            if (bt == VT_DOUBLE)
+                o(0x66);
+            /* xorp[sd] %xmm1, %xmm0 */
+            o(0xc0570f | (REG_VALUE(vtop[0].r) + REG_VALUE(vtop[-1].r)*8) << 16);
+            vtop--;
+        }
+        return;
+    }
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {

@@ -27,11 +27,8 @@ static Section *last_text_section; /* to handle .previous asm directive */
 ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 {
     char buf[64];
-    TokenSym *ts;
-
     snprintf(buf, sizeof(buf), "L..%u", n);
-    ts = tok_alloc(buf, strlen(buf));
-    return ts->tok;
+    return tok_alloc_const(buf);
 }
 
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
@@ -54,12 +51,11 @@ static int asm2cname(int v, int *addeddot)
     if (!name)
       return v;
     if (name[0] == '_') {
-        v = tok_alloc(name + 1, strlen(name) - 1)->tok;
+        v = tok_alloc_const(name + 1);
     } else if (!strchr(name, '.')) {
-        int n = strlen(name) + 2;
         char newname[256];
         snprintf(newname, sizeof newname, ".%s", name);
-        v = tok_alloc(newname, n - 1)->tok;
+        v = tok_alloc_const(newname);
         *addeddot = 1;
     }
     return v;
@@ -111,11 +107,10 @@ ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 
 static Sym* asm_section_sym(TCCState *s1, Section *sec)
 {
-    char buf[100];
-    int label = tok_alloc(buf,
-        snprintf(buf, sizeof buf, "L.%s", sec->name)
-        )->tok;
-    Sym *sym = asm_label_find(label);
+    char buf[100]; int label; Sym *sym;
+    snprintf(buf, sizeof buf, "L.%s", sec->name);
+    label = tok_alloc_const(buf);
+    sym = asm_label_find(label);
     return sym ? sym : asm_new_label1(s1, label, 1, sec->sh_num, 0);
 }
 
