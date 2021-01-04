@@ -992,15 +992,19 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         closed_bracket = 1;
         // exclam = 1; // implicit in hardware; don't do it in software
     }
-    if (tok != ',')
-        expect("','");
-    else
+    if (tok == ',') {
         next(); // skip ','
-    if (tok == '-') {
-        op2_minus = 1;
-        next();
+        if (tok == '-') {
+            op2_minus = 1;
+            next();
+        }
+        parse_operand(s1, &ops[2]);
+    } else {
+        // end of input expression in brackets--assume 0 offset
+        ops[2].type = OP_IM8;
+        ops[2].e.v = 0;
+        opcode |= 1 << 24; // add offset before transfer
     }
-    parse_operand(s1, &ops[2]);
     if (!closed_bracket) {
         if (tok != ']')
             expect("']'");
