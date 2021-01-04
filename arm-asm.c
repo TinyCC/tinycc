@@ -1058,9 +1058,9 @@ static uint32_t encbranchoffset(int pos, int addr, int fail)
 {
   addr-=pos+8;
   addr/=4;
-  if(addr>=0x1000000 || addr<-0x1000000) { // FIXME: Is that correct?
+  if(addr>=0x7fffff || addr<-0x800000) {
     if(fail)
-      tcc_error("function bigger than 32MB");
+      tcc_error("branch offset is too far");
     return 0;
   }
   return /*not 0x0A000000|*/(addr&0xffffff);
@@ -1070,26 +1070,30 @@ static void asm_branch_opcode(TCCState *s1, int token)
 {
     int jmp_disp = 0;
     Operand op;
-    parse_operand(s1, &op);
-    if (op.type == OP_IM32 || op.type == OP_IM8 || op.type == OP_IM8N) {
-        jmp_disp = encbranchoffset(ind, op.e.v, 0);
-        if (jmp_disp < -0x800000 || jmp_disp > 0x7fffff) {
-            tcc_error("branch is too far");
+    ExprValue e;
+    ElfSym *esym;
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_beq:
+    case TOK_ASM_bleq:
+        asm_expr(s1, &e);
+        esym = elfsym(e.sym);
+        if (!esym || esym->st_shndx != cur_text_section->sh_num) {
+            tcc_error("invalid branch target");
             return;
         }
+        jmp_disp = encbranchoffset(ind, e.v + esym->st_value, 1);
+        break;
+    default:
+        parse_operand(s1, &op);
+        break;
     }
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_beq:
-        if (op.type == OP_IM32 || op.type == OP_IM8 || op.type == OP_IM8N)
-            asm_emit_opcode(token, (0xa << 24) | (jmp_disp & 0xffffff));
-        else
-            expect("branch target");
+        asm_emit_opcode(token, (0xa << 24) | (jmp_disp & 0xffffff));
         break;
     case TOK_ASM_bleq:
-        if (op.type == OP_IM32 || op.type == OP_IM8 || op.type == OP_IM8N)
-            asm_emit_opcode(token, (0xb << 24) | (jmp_disp & 0xffffff));
-        else
-            expect("branch target");
+        asm_emit_opcode(token, (0xb << 24) | (jmp_disp & 0xffffff));
         break;
     case TOK_ASM_bxeq:
         if (op.type != OP_REG32)
