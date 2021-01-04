@@ -2227,6 +2227,12 @@ void prefix ## signed_zeros(void) \
   else\
     printf ("x != -y; this is wrong!\n");\
 }\
+void prefix ## nan(void)\
+{\
+    type nan = 0.0/0.0;\
+    type nnan = -nan; \
+    printf("nantest: " fmt " " fmt "\n", nan, nnan);\
+}\
 void prefix ## test(void)\
 {\
     printf("testing '%s'\n", #typename);\
@@ -2237,6 +2243,7 @@ void prefix ## test(void)\
     prefix ## fcast(-2334.6);\
     prefix ## call();\
     prefix ## signed_zeros();\
+    prefix ## nan();\
 }
 
 FTEST(f, float, float, "%f")

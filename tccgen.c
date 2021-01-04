@@ -5880,19 +5880,47 @@ ST_FUNC void unary(void)
         unary();
         t = vtop->type.t & VT_BTYPE;
 	if (is_float(t)) {
-            /* In IEEE negate(x) isn't subtract(0,x), but rather
-	       subtract(-0, x).  */
-	    vpush(&vtop->type);
-	    if (t == VT_FLOAT)
-	        vtop->c.f = -1.0 * 0.0;
-	    else if (t == VT_DOUBLE)
-	        vtop->c.d = -1.0 * 0.0;
-            else
-	        vtop->c.ld = -1.0 * 0.0;
-	} else
-	    vpushi(0);
-	vswap();
-	gen_op('-');
+            if ((vtop->r & VT_VALMASK) == VT_CONST) {
+                /* This is what gen_opif would do if we had a NEG operation.  */
+                if (t == VT_FLOAT)
+                  vtop->c.f = -vtop->c.f;
+                else if (t == VT_DOUBLE)
+                  vtop->c.d = -vtop->c.d;
+                else
+                  vtop->c.ld = -vtop->c.ld;
+            } else {
+                /* In IEEE negate(x) isn't subtract(0,x).  Without NaNs it's
+                   subtract(-0, x), but with them it's really a sign flip
+                   operation.  We implement this with bit manipulation and have
+                   to do some type reinterpretation for this, which TCC can do
+                   only via memory.  */
+                int align, size = type_size(&vtop->type, &align);
+                save_reg(gv(RC_TYPE(t)));
+                vdup();
+                gaddrof();
+                vtop->type = char_pointer_type;
+                /* Byte of sign bit.  For big endian, this would have to
+                   add zero always.  */
+#if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_I386)
+                /* sizeof long double is 12 or 16 here, but it's
+                   really the 80bit extended float format.  */
+                if (t == VT_LDOUBLE)
+                  size = 10;
+#endif
+                vpushi(size - 1);
+                gen_op('+');
+                indir();
+                vdup();
+                vpushi(0x80); /* flip sign */
+                gen_op('^');
+                vstore();
+                vpop();
+            }
+	} else {
+            vpushi(0);
+            vswap();
+            gen_op('-');
+        }
         break;
     case TOK_LAND:
         if (!gnu_ext)
