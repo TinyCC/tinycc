@@ -939,10 +939,11 @@ static void asm_long_multiplication_opcode(TCCState *s1, int token)
 static void asm_single_data_transfer_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
+    Operand strex_operand;
     int exclam = 0;
     int closed_bracket = 0;
     int op2_minus = 0;
-    uint32_t opcode = 1 << 26;
+    uint32_t opcode = 0;
     // Note: ldr r0, [r4, #4]  ; simple offset: r0 = *(int*)(r4+4); r4 unchanged
     // Note: ldr r0, [r4, #4]! ; pre-indexed:   r0 = *(int*)(r4+4); r4 = r4+4
     // Note: ldr r0, [r4], #4  ; post-indexed:  r0 = *(int*)(r4+0); r4 = r4+4
@@ -955,9 +956,25 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         return;
     }
     if (tok != ',')
-        expect("two arguments");
+        expect("at least two arguments");
     else
         next(); // skip ','
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_strexbeq:
+    case TOK_ASM_strexeq:
+        parse_operand(s1, &strex_operand);
+        if (strex_operand.type != OP_REG32) {
+            expect("register");
+            return;
+        }
+        if (tok != ',')
+            expect("at least three arguments");
+        else
+            next(); // skip ','
+        break;
+    }
+
     if (tok != '[')
         expect("'['");
     else
@@ -1039,6 +1056,7 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         opcode |= 1 << 22; // B
         /* fallthrough */
     case TOK_ASM_streq:
+        opcode |= 1 << 26; // Load/Store
         asm_emit_opcode(token, opcode);
         break;
     case TOK_ASM_ldrbeq:
@@ -1046,6 +1064,47 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         /* fallthrough */
     case TOK_ASM_ldreq:
         opcode |= 1 << 20; // L
+        opcode |= 1 << 26; // Load/Store
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_strexbeq:
+        opcode |= 1 << 22; // B
+        /* fallthrough */
+    case TOK_ASM_strexeq:
+        if (opcode & 0xFFF) {
+            tcc_error("offset not allowed with 'strex'");
+            return;
+        } else if (opcode & ENCODE_IMMEDIATE_FLAG) { // if set, it means it's NOT immediate
+            tcc_error("offset not allowed with 'strex'");
+            return;
+        }
+        if ((opcode & (1 << 24)) == 0) { // add offset after transfer
+            tcc_error("adding offset after transfer not allowed with 'strex'");
+            return;
+        }
+
+        opcode |= 0xf90;
+        opcode |= strex_operand.reg;
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_ldrexbeq:
+        opcode |= 1 << 22; // B
+        /* fallthrough */
+    case TOK_ASM_ldrexeq:
+        if (opcode & 0xFFF) {
+            tcc_error("offset not allowed with 'ldrex'");
+            return;
+        } else if (opcode & ENCODE_IMMEDIATE_FLAG) { // if set, it means it's NOT immediate
+            tcc_error("offset not allowed with 'ldrex'");
+            return;
+        }
+        if ((opcode & (1 << 24)) == 0) { // add offset after transfer
+            tcc_error("adding offset after transfer not allowed with 'ldrex'");
+            return;
+        }
+        opcode |= 1 << 20; // L
+        opcode |= 0x00f;
+        opcode |= 0xf90;
         asm_emit_opcode(token, opcode);
         break;
     default:
@@ -1163,6 +1222,10 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_ldrbeq:
     case TOK_ASM_streq:
     case TOK_ASM_strbeq:
+    case TOK_ASM_ldrexeq:
+    case TOK_ASM_ldrexbeq:
+    case TOK_ASM_strexeq:
+    case TOK_ASM_strexbeq:
         return asm_single_data_transfer_opcode(s1, token);
 
     case TOK_ASM_andeq:

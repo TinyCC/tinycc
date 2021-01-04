@@ -93,6 +93,10 @@
  DEF_ASM_CONDED(ldrb)
  DEF_ASM_CONDED(str)
  DEF_ASM_CONDED(strb)
+ DEF_ASM_CONDED(ldrex)
+ DEF_ASM_CONDED(ldrexb)
+ DEF_ASM_CONDED(strex)
+ DEF_ASM_CONDED(strexb)
 
  DEF_ASM_CONDED(stmda)
  DEF_ASM_CONDED(ldmda)
