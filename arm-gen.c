@@ -632,9 +632,24 @@ void load(int r, SValue *sv)
       if (fr & VT_SYM || !op) {
         o(0xE59F0000|(intr(r)<<12));
         o(0xEA000000);
-        if(fr & VT_SYM)
-	  greloc(cur_text_section, sv->sym, ind, R_ARM_ABS32);
-        o(sv->c.i);
+        if(fr & VT_SYM) {
+	  if (sv->sym->type.t & VT_STATIC) {
+	    greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
+            o(sv->c.i - 12);
+	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+	  }
+	  else {
+	    greloc(cur_text_section, sv->sym, ind, R_ARM_GOT_PREL);
+            o(-12);
+	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+	    o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16));  // ldr rx,[rx]
+	    if (sv->c.i)
+	      stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
+			         sv->c.i);
+	  }
+	}
+	else
+          o(sv->c.i);
       } else
         o(op);
       return;
@@ -643,9 +658,24 @@ void load(int r, SValue *sv)
       if (fr & VT_SYM || !op) {
 	o(0xE59F0000|(intr(r)<<12));
 	o(0xEA000000);
-	if(fr & VT_SYM) // needed ?
-	  greloc(cur_text_section, sv->sym, ind, R_ARM_ABS32);
-	o(sv->c.i);
+        if(fr & VT_SYM) {
+	  if (sv->sym->type.t & VT_STATIC) {
+	    greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
+            o(sv->c.i - 12);
+	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+	  }
+	  else {
+	    greloc(cur_text_section, sv->sym, ind, R_ARM_GOT_PREL);
+            o(-12);
+	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+	    o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16));  // ldr rx,[rx]
+	    if (sv->c.i)
+	      stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
+			         sv->c.i);
+	  }
+	}
+	else
+          o(sv->c.i);
 	o(0xE08B0000|(intr(r)<<12)|intr(r));
       } else
 	o(op);
@@ -771,25 +801,41 @@ static void gcall_or_jmp(int is_jmp)
   uint32_t x;
   if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
     /* constant case */
-	if(vtop->r & VT_SYM){
-		x=encbranch(ind,ind+vtop->c.i,0);
-		if(x) {
-		/* relocation case */
-		  greloc(cur_text_section, vtop->sym, ind, R_ARM_PC24);
-		  o(x|(is_jmp?0xE0000000:0xE1000000));
-		} else {
-			if(!is_jmp)
-				o(0xE28FE004); // add lr,pc,#4
-			o(0xE51FF004);   // ldr pc,[pc,#-4]
-			greloc(cur_text_section, vtop->sym, ind, R_ARM_ABS32);
-			o(vtop->c.i);
-		}
-	}else{
-		if(!is_jmp)
-			o(0xE28FE004); // add lr,pc,#4
-		o(0xE51FF004);   // ldr pc,[pc,#-4]
-		o(vtop->c.i);
+    if(vtop->r & VT_SYM){
+	x=encbranch(ind,ind+vtop->c.i,0);
+	if(x) {
+	    /* relocation case */
+	    greloc(cur_text_section, vtop->sym, ind, R_ARM_PC24);
+	    o(x|(is_jmp?0xE0000000:0xE1000000));
+	} else {
+	    r = TREG_LR;
+	    o(0xE59F0000|(intr(r)<<12)); // ldr r,[pc]
+	    o(0xEA000000); // b $+4
+	    if (vtop->sym->type.t & VT_STATIC) {
+	        greloc(cur_text_section, vtop->sym, ind, R_ARM_REL32);
+                o(vtop->c.i - 12);
+	        o(0xe080000f | (intr(r)<<12) | (intr(r)<<16)); // add rx,rx,pc
+	    }
+	    else {
+	        greloc(cur_text_section, vtop->sym, ind, R_ARM_GOT_PREL);
+	        o(-12);
+	        o(0xe080000f | (intr(r)<<12) | (intr(r)<<16)); // add r,r,pc
+	        o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16)); // ldr r,[r]
+	        if (vtop->c.i)
+		    stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
+				       vtop->c.i);
+	    }
+	    if(is_jmp)
+	        o(0xE1A0F000 | intr(r)); // mov pc, r
+	    else
+		o(0xe12fff30 | intr(r)); // blx r
 	}
+     }else{
+	if(!is_jmp)
+	    o(0xE28FE004); // add lr,pc,#4
+	o(0xE51FF004);   // ldr pc,[pc,#-4]
+	o(vtop->c.i);
+     }
   } else {
     /* otherwise, indirect call */
 #ifdef CONFIG_TCC_BCHECK
@@ -821,6 +867,7 @@ static void gen_bounds_prolog(void)
     o(0xe1a00000);  /* ld r0,lbounds_section->data_offset */
     o(0xe1a00000);
     o(0xe1a00000);
+    o(0xe1a00000);
     o(0xe1a00000);  /* call __bound_local_new */
 }
 
@@ -847,8 +894,9 @@ static void gen_bounds_epilog(void)
         ind = func_bound_ind;
         o(0xe59f0000);  /* ldr r0, [pc] */
         o(0xea000000);  /* b $+4 */
-        greloc(cur_text_section, sym_data, ind, R_ARM_ABS32);
-        o(0x00000000);  /* lbounds_section->data_offset */
+        greloc(cur_text_section, sym_data, ind, R_ARM_REL32);
+        o(-12);  /* lbounds_section->data_offset */
+	o(0xe080000f);  /* add r0,r0,pc */
         gen_bounds_call(TOK___bound_local_new);
         ind = saved_ind;
     }
@@ -858,8 +906,9 @@ static void gen_bounds_epilog(void)
     o(0xed2d0b02);  /* vpush {d0} */
     o(0xe59f0000);  /* ldr r0, [pc] */
     o(0xea000000);  /* b $+4 */
-    greloc(cur_text_section, sym_data, ind, R_ARM_ABS32);
-    o(0x00000000);  /* lbounds_section->data_offset */
+    greloc(cur_text_section, sym_data, ind, R_ARM_REL32);
+    o(-12);  /* lbounds_section->data_offset */
+    o(0xe080000f);  /* add r0,r0,pc */
     gen_bounds_call(TOK___bound_local_delete);
     o(0xecbd0b02); /* vpop {d0} */
     o(0xe8bd0003); /* pop {r0,r1} */
