@@ -2128,6 +2128,15 @@ float strtof(const char *nptr, char **endptr);
 LONG_DOUBLE strtold(const char *nptr, char **endptr);
 #endif
 
+#if CC_NAME == CC_clang
+/* In clang 0.0/0.0 is nan and not -nan.
+   Also some older clang version do v=-v
+   as v = -0 - v */
+static char enable_nan_test = 0;
+#else
+static char enable_nan_test = 1;
+#endif
+
 #define FTEST(prefix, typename, type, fmt)\
 void prefix ## cmp(type a, type b)\
 {\
@@ -2243,7 +2252,7 @@ void prefix ## test(void)\
     prefix ## fcast(-2334.6);\
     prefix ## call();\
     prefix ## signed_zeros();\
-    prefix ## nan();\
+    if (enable_nan_test) prefix ## nan();\
 }
 
 FTEST(f, float, float, "%f")
