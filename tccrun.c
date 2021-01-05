@@ -661,6 +661,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
     rc->ip = uc->uc_mcontext.gregs[REG_RIP];
     rc->fp = uc->uc_mcontext.gregs[REG_RBP];
 # endif
+#elif defined(__arm__) && defined(__NetBSD__)
+    rc->ip = uc->uc_mcontext.__gregs[_REG_PC];
+    rc->fp = uc->uc_mcontext.__gregs[_REG_FP];
 #elif defined(__arm__)
     rc->ip = uc->uc_mcontext.arm_pc;
     rc->fp = uc->uc_mcontext.arm_fp;
