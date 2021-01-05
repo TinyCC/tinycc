@@ -201,9 +201,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # endif
 #endif
 
-#if (TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD || TARGETOS_FreeBSD_kernel)
+#if defined TARGETOS_OpenBSD \
+    || defined TARGETOS_FreeBSD \
+    || defined TARGETOS_NetBSD \
+    || defined TARGETOS_FreeBSD_kernel
 # define TARGETOS_BSD 1
-#elif !(TCC_TARGET_PE || TCC_TARGET_MACHO)
+#elif !(defined TCC_TARGET_PE || defined TCC_TARGET_MACHO)
 # define TARGETOS_Linux 1
 #endif
 
