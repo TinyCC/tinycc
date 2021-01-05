@@ -102,11 +102,12 @@ do
 					echo "warning: '$s $args' did not work in tcc (see above)">&2
 				fi
 			else
+				rm -f "${tcc_object}"
 				echo "warning: '$s $args' did not work in tcc">&2
 			fi
 			ok=1
 		else # GNU as can't do it either--so we don't care
-			echo -n
+			rm -f "${as_object}"
 		fi
 		rm -f "${err}"
 	done
@@ -116,8 +117,9 @@ do
 		continue
 	fi
 done
+
 successful_count="$(ls -1 "${state}/ok-"* |wc -l)"
-total_count="$(ls -1 "${state}/tcc-"*.o |wc -l)"
+total_count="$(ls -1 "${state}/as-"*.o |wc -l)"
 rm -rf "${state}"
 echo "${successful_count} of ${total_count} tests succeeded.">&2
 if [ "${successful_count}" -eq "${total_count}" ]

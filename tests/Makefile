@@ -223,11 +223,16 @@ asmtest.ref: asmtest.S
 	$(CC) -Wa,-W -o asmtest.ref.o -c asmtest.S
 	objdump -D asmtest.ref.o > asmtest.ref
 
+ifeq ($(ARCH),arm)
+asmtest asmtest2:
+	(cd .. && tests/arm-asm-testsuite.sh)
+else
 asmtest asmtest2: asmtest.ref
 	@echo ------------ $@ ------------
 	$(TCC) $(MAYBE_RUN_TCC) -c asmtest.S
 	objdump -D asmtest.o > asmtest.out
 	@if diff -u --ignore-matching-lines="file format" asmtest.ref asmtest.out ; then echo "ASM Auto Test OK"; fi
+endif
 
 # test assembler with tcc compiled by itself
 asmtest2: MAYBE_RUN_TCC = $(RUN_TCC)
