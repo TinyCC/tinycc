@@ -225,7 +225,7 @@ asmtest.ref: asmtest.S
 
 ifeq ($(ARCH),arm)
 asmtest asmtest2:
-	(cd .. && tests/arm-asm-testsuite.sh)
+	TCC="${TCC}" ./arm-asm-testsuite.sh
 else
 asmtest asmtest2: asmtest.ref
 	@echo ------------ $@ ------------

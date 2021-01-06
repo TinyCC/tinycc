@@ -5,7 +5,7 @@ set -e
 # Note: "{r3}" is definitely different--but would complicate the assembler.
 
 state="`mktemp -d`"
-cat arm-tok.h |grep DEF_ASM_CONDED |grep -v '#define' |grep -v '/[*]' |sed -e 's;DEF_ASM_CONDED.\(.*\).$;\1;'| grep -v 'not useful' | while read s
+cat ../arm-tok.h |grep DEF_ASM_CONDED |grep -v '#define' |grep -v '/[*]' |sed -e 's;DEF_ASM_CONDED.\(.*\).$;\1;'| grep -v 'not useful' | while read s
 do
 	ok=0
 	for args in "r3, r4, r5, r6" \
@@ -92,7 +92,7 @@ do
 			"${CROSS_COMPILE}objdump" -S "${as_object}" |grep "^[ ]*0:" >"${expected}"
 
 			#echo '__asm__("'"$s ${args}"'");' > "${csource}"
-			if echo '__asm__("'"$s ${args}"'");'| ./tcc -o "${tcc_object}" -c -
+			if echo '__asm__("'"$s ${args}"'");'| ${TCC} -o "${tcc_object}" -c -
 			then
 				"${CROSS_COMPILE}objdump" -S "${tcc_object}" |grep "^[ ]*0:" >"${got}"
 				if diff -u "${got}" "${expected}"
