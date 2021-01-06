@@ -88,7 +88,7 @@ int gotplt_entry_type (int reloc_type)
 	case R_ARM_ABS32:
 	case R_ARM_REL32:
 	case R_ARM_V4BX:
-        case R_ARM_TARGET1:
+	case R_ARM_TARGET1:
             return AUTO_GOTPLT_ENTRY;
 
 	case R_ARM_GOTPC:
