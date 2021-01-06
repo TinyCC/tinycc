@@ -45,6 +45,7 @@ int code_reloc (int reloc_type)
 	case R_ARM_COPY:
 	case R_ARM_GLOB_DAT:
 	case R_ARM_NONE:
+	case R_ARM_TARGET1:
             return 0;
 
         case R_ARM_PC24:
@@ -87,6 +88,7 @@ int gotplt_entry_type (int reloc_type)
 	case R_ARM_ABS32:
 	case R_ARM_REL32:
 	case R_ARM_V4BX:
+        case R_ARM_TARGET1:
             return AUTO_GOTPLT_ENTRY;
 
 	case R_ARM_GOTPC:
@@ -359,11 +361,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:
+     // case R_ARM_TARGET1: /* ??? as seen on NetBSD - FIXME! */
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
-                    qrel->r_info = ELFW(R_INFO)(esym_index, R_ARM_ABS32);
+                    qrel->r_info = ELFW(R_INFO)(esym_index, type);
                     qrel++;
                     return;
                 } else {
