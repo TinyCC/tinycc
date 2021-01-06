@@ -536,6 +536,32 @@ static int negcc(int cc)
   return TOK_NE;
 }
 
+/* Load value into register r.
+   Use relative/got addressing to avoid setting DT_TEXTREL */
+static void load_value(SValue *sv, int fr, int r)
+{
+    o(0xE59F0000|(intr(r)<<12));
+    o(0xEA000000);
+    if(fr & VT_SYM) {
+	if (sv->sym->type.t & VT_STATIC) {
+            greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
+            o(sv->c.i - 12);
+            o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+        }
+        else {
+            greloc(cur_text_section, sv->sym, ind, R_ARM_GOT_PREL);
+            o(-12);
+            o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
+            o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16));  // ldr rx,[rx]
+            if (sv->c.i)
+              stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
+                                 sv->c.i);
+        }
+    }
+    else
+        o(sv->c.i);
+}
+
 /* load 'r' from value 'sv' */
 void load(int r, SValue *sv)
 {
@@ -629,53 +655,15 @@ void load(int r, SValue *sv)
   } else {
     if (v == VT_CONST) {
       op=stuff_const(0xE3A00000|(intr(r)<<12),sv->c.i);
-      if (fr & VT_SYM || !op) {
-        o(0xE59F0000|(intr(r)<<12));
-        o(0xEA000000);
-        if(fr & VT_SYM) {
-	  if (sv->sym->type.t & VT_STATIC) {
-	    greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
-            o(sv->c.i - 12);
-	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
-	  }
-	  else {
-	    greloc(cur_text_section, sv->sym, ind, R_ARM_GOT_PREL);
-            o(-12);
-	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
-	    o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16));  // ldr rx,[rx]
-	    if (sv->c.i)
-	      stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
-			         sv->c.i);
-	  }
-	}
-	else
-          o(sv->c.i);
-      } else
+      if (fr & VT_SYM || !op)
+	load_value(sv, fr, r);
+      else
         o(op);
       return;
     } else if (v == VT_LOCAL) {
       op=stuff_const(0xE28B0000|(intr(r)<<12),sv->c.i);
       if (fr & VT_SYM || !op) {
-	o(0xE59F0000|(intr(r)<<12));
-	o(0xEA000000);
-        if(fr & VT_SYM) {
-	  if (sv->sym->type.t & VT_STATIC) {
-	    greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
-            o(sv->c.i - 12);
-	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
-	  }
-	  else {
-	    greloc(cur_text_section, sv->sym, ind, R_ARM_GOT_PREL);
-            o(-12);
-	    o(0xe080000f | (intr(r)<<12) | (intr(r)<<16));  // add rx,rx,pc
-	    o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16));  // ldr rx,[rx]
-	    if (sv->c.i)
-	      stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
-			         sv->c.i);
-	  }
-	}
-	else
-          o(sv->c.i);
+	load_value(sv, fr, r);
 	o(0xE08B0000|(intr(r)<<12)|intr(r));
       } else
 	o(op);
@@ -809,22 +797,7 @@ static void gcall_or_jmp(int is_jmp)
 	    o(x|(is_jmp?0xE0000000:0xE1000000));
 	} else {
 	    r = TREG_LR;
-	    o(0xE59F0000|(intr(r)<<12)); // ldr r,[pc]
-	    o(0xEA000000); // b $+4
-	    if (vtop->sym->type.t & VT_STATIC) {
-	        greloc(cur_text_section, vtop->sym, ind, R_ARM_REL32);
-                o(vtop->c.i - 12);
-	        o(0xe080000f | (intr(r)<<12) | (intr(r)<<16)); // add rx,rx,pc
-	    }
-	    else {
-	        greloc(cur_text_section, vtop->sym, ind, R_ARM_GOT_PREL);
-	        o(-12);
-	        o(0xe080000f | (intr(r)<<12) | (intr(r)<<16)); // add r,r,pc
-	        o(0xe5900000 | (intr(r)<<12) | (intr(r)<<16)); // ldr r,[r]
-	        if (vtop->c.i)
-		    stuff_const_harder(0xe2800000 | (intr(r)<<12) | (intr(r)<<16),
-				       vtop->c.i);
-	    }
+	    load_value(vtop, vtop->r, r);
 	    if(is_jmp)
 	        o(0xE1A0F000 | intr(r)); // mov pc, r
 	    else
