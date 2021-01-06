@@ -89,12 +89,12 @@ do
 			cat "${err}"
 			rm -f "${err}"
 			total_count=`expr $total_count + 1`
-			objdump -S "${as_object}" |grep "^[ ]*0:" >"${expected}"
+			"${CROSS_COMPILE}objdump" -S "${as_object}" |grep "^[ ]*0:" >"${expected}"
 
 			#echo '__asm__("'"$s ${args}"'");' > "${csource}"
 			if echo '__asm__("'"$s ${args}"'");'| ./tcc -o "${tcc_object}" -c -
 			then
-				objdump -S "${tcc_object}" |grep "^[ ]*0:" >"${got}"
+				"${CROSS_COMPILE}objdump" -S "${tcc_object}" |grep "^[ ]*0:" >"${got}"
 				if diff -u "${got}" "${expected}"
 				then
 					touch "${state}/ok-$s $args"
