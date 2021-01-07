@@ -1116,6 +1116,142 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_misc_single_data_transfer_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    int exclam = 0;
+    int closed_bracket = 0;
+    int op2_minus = 0;
+    uint32_t opcode = (1 << 7) | (1 << 4);
+
+    /* Note:
+       The argument syntax is exactly the same as in arm_single_data_transfer_opcode, except that there's no STREX argument form.
+       The main difference between this function and asm_misc_single_data_transfer_opcode is that the immediate values here must be smaller.
+       Also, the combination (P=0, W=1) is unpredictable here.
+       The immediate flag has moved to bit index 22--and its meaning has flipped.
+       The immediate value itself has been split into two parts: one at bits 11...8, one at bits 3...0
+       bit 26 (Load/Store instruction) is unset here.
+       bits 7 and 4 are set here. */
+
+    // Here: 0 0 0 P U I W L << 20
+    // [compare single data transfer: 0 1 I P U B W L << 20]
+
+    parse_operand(s1, &ops[0]);
+    if (ops[0].type == OP_REG32)
+        opcode |= ENCODE_RD(ops[0].reg);
+    else {
+        expect("(destination operand) register");
+        return;
+    }
+    if (tok != ',')
+        expect("at least two arguments");
+    else
+        next(); // skip ','
+
+    if (tok != '[')
+        expect("'['");
+    else
+        next(); // skip '['
+
+    parse_operand(s1, &ops[1]);
+    if (ops[1].type == OP_REG32)
+        opcode |= ENCODE_RN(ops[1].reg);
+    else {
+        expect("(first source operand) register");
+        return;
+    }
+    if (tok == ']') {
+        next();
+        closed_bracket = 1;
+        // exclam = 1; // implicit in hardware; don't do it in software
+    }
+    if (tok == ',') {
+        next(); // skip ','
+        if (tok == '-') {
+            op2_minus = 1;
+            next();
+        }
+        parse_operand(s1, &ops[2]);
+    } else {
+        // end of input expression in brackets--assume 0 offset
+        ops[2].type = OP_IM8;
+        ops[2].e.v = 0;
+        opcode |= 1 << 24; // add offset before transfer
+    }
+    if (!closed_bracket) {
+        if (tok != ']')
+            expect("']'");
+        else
+            next(); // skip ']'
+        opcode |= 1 << 24; // add offset before transfer
+        if (tok == '!') {
+            exclam = 1;
+            next(); // skip '!'
+        }
+    }
+
+    if (exclam) {
+        if ((opcode & (1 << 24)) == 0) {
+            tcc_error("result of '%s' would be unpredictable here", get_tok_str(token, NULL));
+            return;
+        }
+        opcode |= 1 << 21; // write offset back into register
+    }
+
+    if (ops[2].type == OP_IM32 || ops[2].type == OP_IM8 || ops[2].type == OP_IM8N) {
+        int v = ops[2].e.v;
+        if (op2_minus)
+            tcc_error("minus before '#' not supported for immediate values");
+        if (v >= 0) {
+            opcode |= 1 << 23; // up
+            if (v >= 0x100)
+                tcc_error("offset out of range for '%s'", get_tok_str(token, NULL));
+            else {
+                // bits 11...8: immediate hi nibble
+                // bits 3...0: immediate lo nibble
+                opcode |= (v & 0xF0) << 4;
+                opcode |= v & 0xF;
+            }
+        } else { // down
+            if (v <= -0x100)
+                tcc_error("offset out of range for '%s'", get_tok_str(token, NULL));
+            else {
+                v = -v;
+                // bits 11...8: immediate hi nibble
+                // bits 3...0: immediate lo nibble
+                opcode |= (v & 0xF0) << 4;
+                opcode |= v & 0xF;
+            }
+        }
+        opcode |= 1 << 22; // not ENCODE_IMMEDIATE_FLAG;
+    } else if (ops[2].type == OP_REG32) {
+        if (!op2_minus)
+            opcode |= 1 << 23; // up
+        opcode |= ops[2].reg;
+    } else
+        expect("register");
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_ldrsheq:
+        opcode |= 1 << 5; // halfword, not byte
+        /* fallthrough */
+    case TOK_ASM_ldrsbeq:
+        opcode |= 1 << 6; // sign extend
+        opcode |= 1 << 20; // L
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_ldrheq:
+        opcode |= 1 << 5; // halfword, not byte
+        opcode |= 1 << 20; // L
+        asm_emit_opcode(token, opcode);
+        break;
+    case TOK_ASM_strheq:
+        opcode |= 1 << 5; // halfword, not byte
+        asm_emit_opcode(token, opcode);
+        break;
+    }
+}
+
 /* Note: almost dupe of encbranch in arm-gen.c */
 static uint32_t encbranchoffset(int pos, int addr, int fail)
 {
@@ -1231,6 +1367,12 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_strexeq:
     case TOK_ASM_strexbeq:
         return asm_single_data_transfer_opcode(s1, token);
+
+    case TOK_ASM_ldrheq:
+    case TOK_ASM_ldrsheq:
+    case TOK_ASM_ldrsbeq:
+    case TOK_ASM_strheq:
+       return asm_misc_single_data_transfer_opcode(s1, token);
 
     case TOK_ASM_andeq:
     case TOK_ASM_eoreq:

@@ -97,6 +97,10 @@
  DEF_ASM_CONDED(ldrexb)
  DEF_ASM_CONDED(strex)
  DEF_ASM_CONDED(strexb)
+ DEF_ASM_CONDED(ldrh)
+ DEF_ASM_CONDED(ldrsh)
+ DEF_ASM_CONDED(ldrsb)
+ DEF_ASM_CONDED(strh)
 
  DEF_ASM_CONDED(stmda)
  DEF_ASM_CONDED(ldmda)
