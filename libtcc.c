@@ -1093,6 +1093,77 @@ ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 }
 #endif
 
+/* OpenBSD only has suffixed .so files; e.g., libc.so.96.0 */
+/* So we must process that */
+#if defined TARGETOS_OpenBSD
+#include <dirent.h>
+ST_FUNC char *tcc_openbsd_library_soversion(TCCState *s, const char *libraryname)
+{
+    DIR *dirp;
+    struct dirent *dp;
+    const char *e;
+    char **libpaths, *t, *u, *v;
+    char soname[1024];
+    long long maj, min, tmaj, tmin;
+    int i;
+    static char soversion[1024];
+
+    snprintf(soname, sizeof(soname), "lib%s.so", libraryname);
+
+    libpaths = s->library_paths;
+    for (i = 0; i < s->nb_library_paths; ++i) {
+        if ((dirp = opendir(libpaths[i])) == NULL)
+            continue;
+
+        maj = -1;
+        min = -1;
+
+        while ((dp = readdir(dirp)) != NULL) {
+            if (!strncmp(dp->d_name, soname, strlen(soname))) {
+                t = tcc_strdup(dp->d_name);
+                u = strrchr(t, '.');
+                *u = '\0';
+
+                tmin = strtonum(u + 1, 0, LLONG_MAX, &e);
+                if (e != NULL) {
+                    tcc_free(t);
+                    t = NULL;
+                    continue;
+                }
+
+                v = strrchr(t, '.');
+                tmaj = strtonum(v + 1, 0, LLONG_MAX, &e);
+                if (e != NULL) {
+                    tcc_free(t);
+                    t = NULL;
+                    continue;
+                }
+
+		tcc_free(t);
+                t = NULL;
+
+                if (maj == tmaj) {
+                    if (min < tmin)
+                        min = tmin;
+                } else if (maj < tmaj) {
+                    maj = tmaj;
+                    min = tmin;
+                }
+            }
+        }
+	closedir(dirp);
+
+        if (maj == -1 || min == -1)
+            continue;
+
+	snprintf(soversion, sizeof(soversion), "%s/%s.%lld.%lld", libpaths[i],
+		 soname, maj, min);
+    }
+
+    return soversion;
+}
+#endif
+
 /* the library name is the same as the argument of the '-l' option */
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 {
@@ -1102,6 +1173,14 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 #elif defined TCC_TARGET_MACHO
     const char *libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;
+#elif defined TARGETOS_OpenBSD
+    const char *libs[] = { NULL, "%s/lib%s.a", NULL };
+    const char **pp;
+    if (s->static_link == 0) {
+      /* find exact versionned .so.x.y name as no symlink exists. */
+      libs[0] = tcc_openbsd_library_soversion(s, libraryname);
+    }
+    pp = s->static_link ? libs + 1 : libs;
 #else
     const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;
