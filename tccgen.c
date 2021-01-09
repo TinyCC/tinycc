@@ -7750,8 +7750,10 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
 		    *(long double*)ptr = vtop->c.ld;
                 else if (sizeof(double) == LDOUBLE_SIZE)
 		    *(double *)ptr = (double)vtop->c.ld;
+#ifndef TCC_CROSS_TEST
                 else
                     tcc_error("can't cross compile long double constants");
+#endif
 		break;
 #if PTR_SIZE != 8
 	    case VT_LLONG:

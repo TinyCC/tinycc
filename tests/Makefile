@@ -276,16 +276,33 @@ asm-c-connect-test: asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
 	./asm-c-connect-sep$(EXESUF) > asm-c-connect.out2 && cat asm-c-connect.out2
 	@diff -u asm-c-connect.out1 asm-c-connect.out2 || (echo "error"; exit 1)
 
-TCC_YY = $(foreach T,$(TCC_X),$(if $(wildcard $(TOP)/$T-tcc$(EXESUF)),$T))
-
-cross-test :
-	$(if $(strip $(TCC_YY)),\
-	    $(MAKE) $(foreach T,$(TCC_YY),cross-$T.test) --no-print-directory,:)
-
-cross-%.test :
+# quick sanity check for cross-compilers
+cross-test : tcctest.c examples/ex3.c
 	@echo ------------ $@ ------------
-	$(TOP)/$*-tcc$(EXESUF) -v $(TCCFLAGS-$(if $(findstring win,$*),win,unx))\
-	    -c $(TOPSRC)/examples/ex3.c
+	$(foreach T,$(CROSS-TGTS),$(call CROSS-COMPILE,$T))
+
+CROSS-TGTS = \
+ i386 \
+ i386-win32 \
+ x86_64 \
+ x86_64-win32 \
+ x86_64-osx \
+ x86_64-FreeBSD \
+ x86_64-NetBSD \
+ x86_64-OpenBSD \
+ arm-fpa \
+ arm-eabihf \
+ arm-wince \
+ arm64 \
+ riscv64 \
+ c67
+
+define CROSS-COMPILE
+ @echo " . $(1)"
+ $(TCC) $(DEF-$1) -DTCC_CROSS_TEST -run $(TOPSRC)/tcc.c \
+    -c $(if $(findstring c67,$1),$(filter %/ex3.c,$^),$<) -w $(TCCFLAGS)
+
+endef
 
 # targets for development
 %.bin: %.c tcc

@@ -191,14 +191,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #if !defined TCC_IS_NATIVE \
     || (defined CONFIG_TCC_BACKTRACE && CONFIG_TCC_BACKTRACE==0)
 # undef CONFIG_TCC_BACKTRACE
-# undef CONFIG_TCC_BCHECK
 #else
-# define CONFIG_TCC_BACKTRACE 1
-# if defined CONFIG_TCC_BCHECK && CONFIG_TCC_BCHECK==0
+# define CONFIG_TCC_BACKTRACE 1 /* enable builtin stack backtraces */
+#endif
+
+#if defined CONFIG_TCC_BCHECK && CONFIG_TCC_BCHECK==0
 #  undef CONFIG_TCC_BCHECK
-# else
+#else
 #  define CONFIG_TCC_BCHECK 1 /* enable bound checking code */
-# endif
 #endif
 
 #if defined TARGETOS_OpenBSD \

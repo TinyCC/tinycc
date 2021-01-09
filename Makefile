@@ -62,6 +62,9 @@ else
   endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
  endif
+ ifdef CONFIG_BSD
+  NATIVE_TARGET = $(ARCH)-$(TARGETOS)
+ endif
 endif
 
 # run local version of tcc with local libraries and includes
@@ -69,11 +72,6 @@ TCCFLAGS-unx = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
 TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
 TCCFLAGS = $(TCCFLAGS$(CFG))
 TCC = $(TOP)/tcc$(EXESUF) $(TCCFLAGS)
-
-# cross compiler targets to build
-TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
-TCC_X += riscv64
-# TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
 
 CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
 LIBS_P = $(LIBS)
@@ -99,6 +97,27 @@ NATIVE_DEFINES_no_$(CONFIG_bcheck) += -DCONFIG_TCC_BCHECK=0
 NATIVE_DEFINES_no_$(CONFIG_backtrace) += -DCONFIG_TCC_BACKTRACE=0
 NATIVE_DEFINES += $(NATIVE_DEFINES_yes) $(NATIVE_DEFINES_no_no)
 
+DEF-i386        = -DTCC_TARGET_I386
+DEF-i386-win32  = -DTCC_TARGET_I386 -DTCC_TARGET_PE
+DEF-x86_64      = -DTCC_TARGET_X86_64
+DEF-x86_64-win32= -DTCC_TARGET_X86_64 -DTCC_TARGET_PE
+DEF-x86_64-osx  = -DTCC_TARGET_X86_64 -DTCC_TARGET_MACHO
+DEF-arm-fpa     = -DTCC_TARGET_ARM
+DEF-arm-fpa-ld  = -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12
+DEF-arm-vfp     = -DTCC_TARGET_ARM -DTCC_ARM_VFP
+DEF-arm-eabi    = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI
+DEF-arm-eabihf  = $(DEF-arm-eabi) -DTCC_ARM_HARDFLOAT
+DEF-arm         = $(DEF-arm-eabihf)
+DEF-arm-wince   = $(DEF-arm-eabihf) -DTCC_TARGET_PE
+DEF-arm64       = -DTCC_TARGET_ARM64
+DEF-riscv64     = -DTCC_TARGET_RISCV64
+DEF-c67         = -DTCC_TARGET_C67 -w # disable warnigs
+DEF-x86_64-FreeBSD = $(DEF-x86_64) -DTARGETOS_FreeBSD
+DEF-x86_64-NetBSD  = $(DEF-x86_64) -DTARGETOS_NetBSD
+DEF-x86_64-OpenBSD = $(DEF-x86_64) -DTARGETOS_OpenBSD
+
+DEF-$(NATIVE_TARGET) = $(NATIVE_DEFINES)
+
 ifeq ($(INCLUDED),no)
 # --------------------------------------------------------------------------
 # running top Makefile
@@ -108,6 +127,11 @@ TCCLIBS = $(LIBTCCDEF) $(LIBTCC) $(LIBTCC1)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
 all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
+
+# cross compiler targets to build
+TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
+TCC_X += riscv64
+# TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
 
 # cross libtcc1.a targets to build
 LIBTCC1_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince
@@ -122,7 +146,7 @@ cross: $(LIBTCC1_CROSS) $(PROGS_CROSS)
 # build specific cross compiler & lib
 cross-%: %-tcc$(EXESUF) %-libtcc1.a ;
 
-install: ; @$(MAKE) --no-print-directory  install$(CFG) CONFIG_strip=no
+install: ; @$(MAKE) --no-print-directory  install$(CFG)
 install-strip: ; @$(MAKE) --no-print-directory  install$(CFG) CONFIG_strip=yes
 uninstall: ; @$(MAKE) --no-print-directory uninstall$(CFG)
 
@@ -134,23 +158,6 @@ endif
 
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
-
-DEF-i386        = -DTCC_TARGET_I386
-DEF-x86_64      = -DTCC_TARGET_X86_64
-DEF-i386-win32  = -DTCC_TARGET_PE -DTCC_TARGET_I386
-DEF-x86_64-win32= -DTCC_TARGET_PE -DTCC_TARGET_X86_64
-DEF-x86_64-osx  = -DTCC_TARGET_MACHO -DTCC_TARGET_X86_64
-DEF-arm-wince   = -DTCC_TARGET_PE -DTCC_TARGET_ARM -DTCC_ARM_EABI -DTCC_ARM_VFP -DTCC_ARM_HARDFLOAT
-DEF-arm64       = -DTCC_TARGET_ARM64
-DEF-c67         = -DTCC_TARGET_C67 -w # disable warnigs
-DEF-arm-fpa     = -DTCC_TARGET_ARM
-DEF-arm-fpa-ld  = -DTCC_TARGET_ARM -DLDOUBLE_SIZE=12
-DEF-arm-vfp     = -DTCC_TARGET_ARM -DTCC_ARM_VFP
-DEF-arm-eabi    = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI
-DEF-arm-eabihf  = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
-DEF-arm         = $(DEF-arm-eabihf)
-DEF-riscv64     = -DTCC_TARGET_RISCV64
-DEF-$(NATIVE_TARGET) = $(NATIVE_DEFINES)
 
 DEFINES += $(DEF-$T) $(DEF-all)
 DEFINES += $(if $(ROOT-$T),-DCONFIG_SYSROOT="\"$(ROOT-$T)\"")
@@ -214,7 +221,6 @@ ifeq ($(CONFIG_strip),no)
 CFLAGS += -g
 LDFLAGS += -g
 else
-CONFIG_strip = yes
 ifndef CONFIG_OSX
 LDFLAGS += -s
 endif
