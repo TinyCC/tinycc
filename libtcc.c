@@ -897,21 +897,31 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
+        if (output_type == TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crtbeginS.o");
+        else
+            tcc_add_crt(s, "crtbegin.o");
 #elif TARGETOS_FreeBSD
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
         tcc_add_crt(s, "crti.o");
-#elif TARGETOS_NetBSD
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt0.o");
-        tcc_add_crt(s, "crti.o");
-#endif
-        if (s->static_link && !TARGETOS_OpenBSD)
+        if (s->static_link)
             tcc_add_crt(s, "crtbeginT.o");
         else if (output_type == TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
+#elif TARGETOS_NetBSD
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crt0.o");
+        tcc_add_crt(s, "crti.o");
+        if (s->static_link)
+            tcc_add_crt(s, "crtbeginT.o");
+        else if (output_type == TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crtbeginS.o");
+        else
+            tcc_add_crt(s, "crtbegin.o");
+#endif
 #elif !TCC_TARGET_MACHO
         /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
         if (output_type != TCC_OUTPUT_DLL)
@@ -1174,13 +1184,15 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     const char *libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;
 #elif defined TARGETOS_OpenBSD
-    const char *libs[] = { NULL, "%s/lib%s.a", NULL };
-    const char **pp;
-    if (s->static_link == 0) {
-      /* find exact versionned .so.x.y name as no symlink exists. */
-      libs[0] = tcc_openbsd_library_soversion(s, libraryname);
-    }
-    pp = s->static_link ? libs + 1 : libs;
+    const char *libs[] = { s->static_link
+                           ? NULL
+                           /* find exact versionned .so.x.y name as no
+                              symlink exists on OpenBSD. */
+                           : tcc_openbsd_library_soversion(s, libraryname),
+                           "%s/lib%s.a",
+			   NULL
+    };
+    const char **pp = s->static_link ? libs + 1 : libs;
 #else
     const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
     const char **pp = s->static_link ? libs + 1 : libs;
