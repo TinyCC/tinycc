@@ -906,7 +906,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
             tcc_add_crt(s, "crt0.o");
         tcc_add_crt(s, "crti.o");
 #endif
-        if (s->static_link)
+        if (s->static_link && !TARGETOS_OpenBSD)
             tcc_add_crt(s, "crtbeginT.o");
         else if (output_type == TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crtbeginS.o");
