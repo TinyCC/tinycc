@@ -1462,6 +1462,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
             tcc_add_library_err(s1, "dl");
 #endif
             tcc_add_support(s1, "bcheck.o");
+	    if (s1->static_link)
+                tcc_add_library_err(s1, "c");
         }
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
@@ -1508,6 +1510,9 @@ static void tcc_add_linker_symbols(TCCState *s1)
     set_global_sym(s1, "_etext", text_section, -1);
     set_global_sym(s1, "_edata", data_section, -1);
     set_global_sym(s1, "_end", bss_section, -1);
+#if TARGETOS_OpenBSD
+    set_global_sym(s1, "__executable_start", NULL, ELF_START_ADDR);
+#endif
 #ifdef TCC_TARGET_RISCV64
     /* XXX should be .sdata+0x800, not .data+0x800 */
     set_global_sym(s1, "__global_pointer$", data_section, 0x800);
@@ -2641,7 +2646,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     else if (file_type == TCC_OUTPUT_DLL)
         phnum = 3;
     else if (s1->static_link)
-        phnum = 2;
+        phnum = 3;
     else {
         phnum = 5 + (i < s1->nb_sections);
     }
