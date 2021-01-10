@@ -192,7 +192,7 @@ case "$cpu" in
       armv6j|armv6l)
 	cpuver=6
       ;;
-      armv7a|armv7l)
+      armv7|armv7a|armv7l)
 	cpuver=7
       ;;
     esac
