@@ -664,6 +664,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 #elif defined(__arm__) && defined(__NetBSD__)
     rc->ip = uc->uc_mcontext.__gregs[_REG_PC];
     rc->fp = uc->uc_mcontext.__gregs[_REG_FP];
+#elif defined(__arm__) && defined(__OpenBSD__)
+    rc->ip = uc->sc_pc;
+    rc->fp = uc->sc_fpreg[29];
 #elif defined(__arm__)
     rc->ip = uc->uc_mcontext.arm_pc;
     rc->fp = uc->uc_mcontext.arm_fp;
@@ -673,6 +676,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 #elif defined(__aarch64__) && defined(__NetBSD__)
     rc->ip = uc->uc_mcontext.__gregs[_REG_PC];
     rc->fp = uc->uc_mcontext.__gregs[_REG_FP];
+#elif defined(__aarch64__) && defined(__OpenBSD__)
+    rc->ip = uc->sc_elr;
+    rc->fp = uc->sc_x[29];
 #elif defined(__aarch64__)
     rc->ip = uc->uc_mcontext.pc;
     rc->fp = uc->uc_mcontext.regs[29];
