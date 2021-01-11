@@ -379,7 +379,7 @@ static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
    returning via struct pointer. */
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
-#if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD
+#if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD || TARGETOS_OpenBSD
     int size, align;
     *ret_align = 1; // Never have to re-align return values for x86
     *regsize = 4;
@@ -495,7 +495,7 @@ ST_FUNC void gfunc_call(int nb_args)
             args_size -= 4;
         }
     }
-#if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD
+#if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD || TARGETOS_OpenBSD
     else if ((vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT)
         args_size -= 4;
 #endif
@@ -545,7 +545,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     func_sub_sp_offset = ind;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-#if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD
+#if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD || TARGETOS_OpenBSD
     size = type_size(&func_vt,&align);
     if (((func_vt.t & VT_BTYPE) == VT_STRUCT)
         && (size > 8 || (size & (size - 1)))) {
@@ -586,7 +586,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     /* pascal type call or fastcall ? */
     if (func_call == FUNC_STDCALL || func_call == FUNC_FASTCALLW)
         func_ret_sub = addr - 8;
-#if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD
+#if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD || TARGETOS_OpenBSD
     else if (func_vc)
         func_ret_sub = 4;
 #endif

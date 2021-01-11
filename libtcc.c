@@ -1477,6 +1477,11 @@ static int tcc_set_linker(TCCState *s, const char *option)
                 s->filetype |= AFF_WHOLE_ARCHIVE;
             else
                 s->filetype &= ~AFF_WHOLE_ARCHIVE;
+        } else if (ret = link_option(option, "z=", &p), ret) {
+            if (!strcmp(p, "notext"))
+	        ; /* ignore */
+	    else
+		goto err;
         } else if (p) {
             return 0;
         } else {

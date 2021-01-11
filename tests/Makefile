@@ -56,7 +56,7 @@ endif
 ifeq ($(ARCH),i386)
 # tcctest.c:get_asm_string uses a construct that is checked too strictly
 # by GCC in 32bit mode when PIC is enabled.
-test.ref: CFLAGS+=-fno-PIC -fno-PIE
+test.ref: CFLAGS+=-fno-PIC -fno-PIE -Wl,-z,notext
 endif
 ifeq ($(CC_NAME),msvc)
 test.ref abitest : CC = gcc
