@@ -1016,6 +1016,10 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         }
         parse_operand(s1, &ops[2]);
         if (ops[2].type == OP_REG32) {
+            if (ops[2].reg == 15) {
+                tcc_error("Using 'pc' for register offset in '%s' is not implemented by ARM", get_tok_str(token, NULL));
+                return;
+            }
             if (tok == ',') {
                 next();
                 opcode |= asm_parse_optional_shift(s1, &nb_shift, &shift);
