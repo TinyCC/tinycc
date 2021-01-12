@@ -1071,11 +1071,6 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
             break;
         }
     }
-    if (count) {
-        /* allocate the section */
-        sr->sh_flags |= SHF_ALLOC;
-        sr->sh_size = count * sizeof(ElfW_Rel);
-    }
 #endif
     return count;
 }
@@ -1566,29 +1561,8 @@ ST_FUNC void resolve_common_syms(TCCState *s1)
     tcc_add_linker_symbols(s1);
 }
 
-static void tcc_output_binary(TCCState *s1, FILE *f,
-                              const int *sec_order)
-{
-    Section *s;
-    int i, offset, size;
-
-    offset = 0;
-    for(i=1;i<s1->nb_sections;i++) {
-        s = s1->sections[sec_order[i]];
-        if (s->sh_type != SHT_NOBITS &&
-            (s->sh_flags & SHF_ALLOC)) {
-            while (offset < s->sh_offset) {
-                fputc(0, f);
-                offset++;
-            }
-            size = s->sh_size;
-            fwrite(s->data, 1, size, f);
-            offset += size;
-        }
-    }
-}
-
 #ifndef ELF_OBJ_ONLY
+
 ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
 {
     int sym_index = ELFW(R_SYM) (rel->r_info);
@@ -1791,43 +1765,40 @@ static void export_global_syms(TCCState *s1)
         }
     }
 }
-#endif
 
-/* Allocate strings for section names and decide if an unallocated section
-   should be output.
-   NOTE: the strsec section comes last, so its size is also correct ! */
-static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
+/* decide if an unallocated section should be output. */
+static int set_sec_sizes(TCCState *s1)
 {
     int i;
     Section *s;
     int textrel = 0;
+    int file_type = s1->output_type;
 
     /* Allocate strings for section names */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        /* when generating a DLL, we include relocations but we may
-           patch them */
-#ifndef ELF_OBJ_ONLY
-        if (file_type == TCC_OUTPUT_DLL &&
-            s->sh_type == SHT_RELX &&
-            !(s->sh_flags & SHF_ALLOC) &&
-            (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC) &&
-            prepare_dynamic_rel(s1, s)) {
-            if (!(s1->sections[s->sh_info]->sh_flags & SHF_WRITE))
-                textrel = 1;
-        } else
-#endif
-        if ((s1->do_debug && s->sh_type != SHT_RELX) ||
-            file_type == TCC_OUTPUT_OBJ ||
-            (s->sh_flags & SHF_ALLOC) ||
-	    i == (s1->nb_sections - 1)
+        if (s->sh_type == SHT_RELX && !(s->sh_flags & SHF_ALLOC)) {
+            /* when generating a DLL, we include relocations but
+               we may patch them */
+            if (file_type == TCC_OUTPUT_DLL
+                && (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC)) {
+                int count = prepare_dynamic_rel(s1, s);
+                if (count) {
+                    /* allocate the section */
+                    s->sh_flags |= SHF_ALLOC;
+                    s->sh_size = count * sizeof(ElfW_Rel);
+                    if (!(s1->sections[s->sh_info]->sh_flags & SHF_WRITE))
+                        textrel = 1;
+                }
+            }
+        } else if ((s->sh_flags & SHF_ALLOC)
 #ifdef TCC_TARGET_ARM
-            || s->sh_type == SHT_ARM_ATTRIBUTES
+                   || s->sh_type == SHT_ARM_ATTRIBUTES
 #endif
-            ) {
-            /* we output all sections if debug or object file */
+                   || s1->do_debug) {
             s->sh_size = s->data_offset;
         }
+
 #ifdef TCC_TARGET_ARM
         /* XXX: Suppress stack unwinding section. */
         if (s->sh_type == SHT_ARM_EXIDX) {
@@ -1835,12 +1806,11 @@ static int alloc_sec_names(TCCState *s1, int file_type, Section *strsec)
             s->sh_size = 0;
         }
 #endif
-	if (s->sh_size || (s->sh_flags & SHF_ALLOC))
-            s->sh_name = put_elf_str(strsec, s->name);
+
     }
-    strsec->sh_size = strsec->data_offset;
     return textrel;
 }
+
 
 /* Info to be copied in dynamic section */
 struct dyn_inf {
@@ -1858,23 +1828,29 @@ struct ro_inf {
    addr_t sh_size;
 };
 
+static void alloc_sec_names(
+    TCCState *s1, int is_obj
+    );
+
+static int layout_any_sections(
+    TCCState *s1, int file_offset, int *sec_order, int is_obj
+    );
+
 /* Assign sections to segments and decide how are sections laid out when loaded
    in memory. This function also fills corresponding program headers. */
 static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
 			   int phnum, int phfill,
-                           Section *interp, Section* strsec,
+                           Section *interp,
                            struct ro_inf *roinf, int *sec_order)
 {
-    int i, sh_order_index, file_offset;
+    int i, file_offset;
     Section *s;
 
-    sh_order_index = 1;
     file_offset = 0;
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
         file_offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
-#ifndef ELF_OBJ_ONLY
-    if (phnum > 0) { /* phnum is 0 for TCC_OUTPUT_OBJ */
+    {
         unsigned long s_align;
         long long tmp;
         addr_t addr;
@@ -1979,7 +1955,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                         if (k != 5)
                             continue;
 		    }
-                    sec_order[sh_order_index++] = i;
+                    *sec_order++ = i;
 
                     /* section matches: we align it and add its size */
                     tmp = addr;
@@ -2039,26 +2015,11 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
             }
         }
     }
-#endif /* ELF_OBJ_ONLY */
 
     /* all other sections come after */
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (phnum > 0 && (s->sh_flags & SHF_ALLOC))
-            continue;
-        sec_order[sh_order_index++] = i;
-
-        file_offset = (file_offset + s->sh_addralign - 1) &
-            ~(s->sh_addralign - 1);
-        s->sh_offset = file_offset;
-        if (s->sh_type != SHT_NOBITS)
-            file_offset += s->sh_size;
-    }
-
-    return file_offset;
+    return layout_any_sections(s1, file_offset, sec_order, 0);
 }
 
-#ifndef ELF_OBJ_ONLY
 /* put dynamic tag */
 static void put_dt(Section *dynamic, int dt, addr_t val)
 {
@@ -2269,7 +2230,8 @@ static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 	}
     }
 }
-#endif
+
+#endif /* ndef ELF_OBJ_ONLY */
 
 /* Create an ELF file on disk.
    This function handle ELF specific layout requirements */
@@ -2390,6 +2352,28 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     }
 }
 
+static void tcc_output_binary(TCCState *s1, FILE *f,
+                              const int *sec_order)
+{
+    Section *s;
+    int i, offset, size;
+
+    offset = 0;
+    for(i=1;i<s1->nb_sections;i++) {
+        s = s1->sections[sec_order[i]];
+        if (s->sh_type != SHT_NOBITS &&
+            (s->sh_flags & SHF_ALLOC)) {
+            while (offset < s->sh_offset) {
+                fputc(0, f);
+                offset++;
+            }
+            size = s->sh_size;
+            fwrite(s->data, 1, size, f);
+            offset += size;
+        }
+    }
+}
+
 /* Write an elf, coff or "binary" file */
 static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
                               ElfW(Phdr) *phdr, int file_offset, int *sec_order)
@@ -2472,7 +2456,6 @@ static void tidy_section_headers(TCCState *s1, int *sec_order)
     s1->nb_sections = nnew;
     tcc_free(backmap);
 }
-#endif
 
 #ifdef TCC_TARGET_ARM
 static void create_arm_attribute_section(TCCState *s1)
@@ -2539,33 +2522,30 @@ static int elf_output_file(TCCState *s1, const char *filename)
     struct dyn_inf dyninf = {0};
     struct ro_inf roinf;
     ElfW(Phdr) *phdr;
-    Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
-//#ifndef ELF_OBJ_ONLY
+    Section *interp, *dynamic, *dynstr, *note;
     struct ro_inf *roinf_use = NULL;
-//#endif
+    int textrel;
 
     file_type = s1->output_type;
-
-#ifdef TCC_TARGET_ARM
-    create_arm_attribute_section (s1);
-#endif
-#if TARGETOS_OpenBSD
-    if (file_type != TCC_OUTPUT_OBJ)
-        note = create_bsd_note_section (s1, ".note.openbsd.ident", "OpenBSD");
-#endif
-#if TARGETOS_NetBSD
-    if (file_type != TCC_OUTPUT_OBJ)
-        note = create_bsd_note_section (s1, ".note.netbsd.ident", "NetBSD");
-#endif
-
     s1->nb_errors = 0;
     ret = -1;
     phdr = NULL;
     sec_order = NULL;
-    interp = dynamic = dynstr = NULL; /* avoid warning */
+    interp = dynamic = dynstr = note = NULL;
 
-#ifndef ELF_OBJ_ONLY
-    if (file_type != TCC_OUTPUT_OBJ) {
+#ifdef TCC_TARGET_ARM
+    create_arm_attribute_section (s1);
+#endif
+
+#if TARGETOS_OpenBSD
+    note = create_bsd_note_section (s1, ".note.openbsd.ident", "OpenBSD");
+#endif
+
+#if TARGETOS_NetBSD
+    note = create_bsd_note_section (s1, ".note.netbsd.ident", "NetBSD");
+#endif
+
+    {
         /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
         tcc_add_runtime(s1);
 	resolve_common_syms(s1);
@@ -2612,17 +2592,11 @@ static int elf_output_file(TCCState *s1, const char *filename)
         build_got_entries(s1);
 	version_add (s1);
     }
-#endif
 
-    /* we add a section for symbols */
-    strsec = new_section(s1, ".shstrtab", SHT_STRTAB, 0);
-    put_elf_str(strsec, "");
+    textrel = set_sec_sizes(s1);
+    alloc_sec_names(s1, 0);
 
-    /* Allocate strings for section names */
-    ret = alloc_sec_names(s1, file_type, strsec);
-
-#ifndef ELF_OBJ_ONLY
-    if (dynamic) {
+    if (!s1->static_link) {
         int i;
         /* add a list of needed dlls */
         for(i = 0; i < s1->nb_loaded_dlls; i++) {
@@ -2640,7 +2614,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */
-            if (ret)
+            if (textrel)
                 put_dt(dynamic, DT_TEXTREL, 0);
         }
 
@@ -2655,16 +2629,13 @@ static int elf_output_file(TCCState *s1, const char *filename)
         dynamic->sh_size = dynamic->data_offset;
         dynstr->sh_size = dynstr->data_offset;
     }
-#endif
 
     for (i = 1; i < s1->nb_sections &&
                 !(s1->sections[i]->sh_flags & SHF_TLS); i++);
     phfill = 2 + (i < s1->nb_sections);
 
     /* compute number of program headers */
-    if (file_type == TCC_OUTPUT_OBJ)
-        phnum = phfill = 0;
-    else if (file_type == TCC_OUTPUT_DLL)
+    if (file_type == TCC_OUTPUT_DLL)
         phnum = 3;
     else if (s1->static_link)
         phnum = 3;
@@ -2673,31 +2644,25 @@ static int elf_output_file(TCCState *s1, const char *filename)
     }
 
     phnum += note != NULL;
-
-#if !TARGETOS_FreeBSD && !TARGETOS_NetBSD && !defined(__APPLE__) && !defined(_WIN32)
+#if !TARGETOS_FreeBSD && !TARGETOS_NetBSD
     /* GNU_RELRO */
-    if (file_type != TCC_OUTPUT_OBJ)
-	phnum++, roinf_use = &roinf;
+    phnum++, roinf_use = &roinf;
 #endif
 
     /* allocate program segment headers */
     phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
-
     /* compute number of sections */
     shnum = s1->nb_sections;
-
     /* this array is used to reorder sections in the output file */
     sec_order = tcc_malloc(sizeof(int) * shnum);
     sec_order[0] = 0;
 
     /* compute section to program header mapping */
-    file_offset = layout_sections(s1, phdr, phnum, phfill, interp, strsec,
-				  &roinf, sec_order);
+    file_offset = layout_sections(s1, phdr, phnum, phfill, interp, &roinf, sec_order + 1);
 
-#ifndef ELF_OBJ_ONLY
     /* Fill remaining program header and finalize relocation related to dynamic
        linking. */
-    if (file_type != TCC_OUTPUT_OBJ) {
+    {
         fill_unloadable_phdr(phdr, phnum, interp, dynamic, note, roinf_use);
         if (dynamic) {
             ElfW(Sym) *sym;
@@ -2735,32 +2700,85 @@ static int elf_output_file(TCCState *s1, const char *filename)
         else if (s1->got)
             fill_local_got_entries(s1);
     }
-#endif
-
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
     s1->nb_sections = shnum;
-    goto the_end;
+
  the_end:
     tcc_free(sec_order);
     tcc_free(phdr);
     return ret;
 }
+#endif /* ndef ELF_OBJ_ONLY */
+
+/* Allocate strings for section names */
+static void alloc_sec_names(TCCState *s1, int is_obj)
+{
+    int i;
+    Section *s, *strsec;
+
+    strsec = new_section(s1, ".shstrtab", SHT_STRTAB, 0);
+    put_elf_str(strsec, "");
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (is_obj)
+            s->sh_size = s->data_offset;
+	if (s->sh_size || (s->sh_flags & SHF_ALLOC))
+            s->sh_name = put_elf_str(strsec, s->name);
+    }
+    strsec->sh_size = strsec->data_offset;
+}
+
+static int layout_any_sections(TCCState *s1, int file_offset, int *sec_order, int is_obj)
+{
+    int i;
+    Section *s;
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (!is_obj && (s->sh_flags & SHF_ALLOC))
+            continue;
+        *sec_order++ = i;
+        file_offset = (file_offset + s->sh_addralign - 1) &
+            ~(s->sh_addralign - 1);
+        s->sh_offset = file_offset;
+        if (s->sh_type != SHT_NOBITS)
+            file_offset += s->sh_size;
+    }
+    return file_offset;
+}
+
+/* Output an elf .o file */
+static int elf_output_obj(TCCState *s1, const char *filename)
+{
+    int ret, file_offset;
+    int *sec_order;
+    s1->nb_errors = 0;
+
+    /* Allocate strings for section names */
+    alloc_sec_names(s1, 1);
+
+    /* this array is used to reorder sections in the output file */
+    sec_order = tcc_malloc(sizeof(int) * s1->nb_sections);
+    sec_order[0] = 0;
+    file_offset = layout_any_sections(s1, sizeof (ElfW(Ehdr)), sec_order + 1, 1);
+
+    /* Create the ELF file with name 'filename' */
+    ret = tcc_write_elf_file(s1, filename, 0, NULL, file_offset, sec_order);
+    tcc_free(sec_order);
+    return ret;
+}
 
 LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename)
 {
-    int ret;
+    if (s->output_type == TCC_OUTPUT_OBJ)
+        return elf_output_obj(s, filename);
 #ifdef TCC_TARGET_PE
-    if (s->output_type != TCC_OUTPUT_OBJ) {
-        ret = pe_output_file(s, filename);
-    } else
+    return  pe_output_file(s, filename);
 #elif TCC_TARGET_MACHO
-    if (s->output_type != TCC_OUTPUT_OBJ) {
-        ret = macho_output_file(s, filename);
-    } else
+    return macho_output_file(s, filename);
+#else
+    return elf_output_file(s, filename);
 #endif
-        ret = elf_output_file(s, filename);
-    return ret;
 }
 
 ST_FUNC ssize_t full_read(int fd, void *buf, size_t count) {
