@@ -1863,8 +1863,7 @@ struct ro_inf {
 static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
 			   int phnum, int phfill,
                            Section *interp, Section* strsec,
-                           struct dyn_inf *dyninf, struct ro_inf *roinf,
-			   int *sec_order)
+                           struct ro_inf *roinf, int *sec_order)
 {
     int i, sh_order_index, file_offset;
     Section *s;
@@ -1911,9 +1910,6 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
            they require section layout to be done first. */
         if (interp)
             ph += 2;
-
-        /* dynamic relocation table information, for .dynamic section */
-        dyninf->rel_addr = dyninf->rel_size = 0;
 
         /* read only segment mapping for GNU_RELRO */
 	roinf->sh_offset = roinf->sh_addr = roinf->sh_size = 0;
@@ -2000,12 +1996,6 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                         ph->p_offset = file_offset;
                         ph->p_vaddr = addr;
                         ph->p_paddr = ph->p_vaddr;
-                    }
-                    /* update dynamic relocation infos */
-                    if (s->sh_type == SHT_RELX && s != relocplt) {
-                        if (dyninf->rel_size == 0)
-                            dyninf->rel_addr = addr;
-                        dyninf->rel_size = (addr - dyninf->rel_addr) + s->sh_size;
                     }
                     if (s == data_ro_section ||
 #ifdef CONFIG_TCC_BCHECK
@@ -2247,6 +2237,32 @@ static int final_sections_reloc(TCCState *s1)
         }
     }
     return 0;
+}
+
+/* Remove gaps between RELX sections.
+   These gaps are a result of final_sections_reloc. Here some relocs are removed.
+   The gaps are then filled with 0 in tcc_output_elf. The 0 is intepreted as
+   R_...NONE reloc. This does work on most targets but on OpenBSD/arm64 this
+   is illegal. */
+static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
+{
+    int i;
+    Section *s;
+    Section *relocplt = s1->got ? s1->got->relocplt : NULL;
+
+    /* dynamic relocation table information, for .dynamic section */
+    dyninf->rel_addr = dyninf->rel_size = 0;
+
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+	if (s->sh_type == SHT_RELX && s != relocplt) {
+	    if (dyninf->rel_size == 0)
+		dyninf->rel_addr = s->sh_addr;
+	    else
+		s->sh_addr = dyninf->rel_addr + dyninf->rel_size;
+	    dyninf->rel_size += s->sh_size;
+	}
+    }
 }
 #endif
 
@@ -2671,7 +2687,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 
     /* compute section to program header mapping */
     file_offset = layout_sections(s1, phdr, phnum, phfill, interp, strsec,
-				  &dyninf, &roinf, sec_order);
+				  &roinf, sec_order);
 
 #ifndef ELF_OBJ_ONLY
     /* Fill remaining program header and finalize relocation related to dynamic
@@ -2680,8 +2696,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
         fill_unloadable_phdr(phdr, phnum, interp, dynamic, note, roinf_use);
         if (dynamic) {
             ElfW(Sym) *sym;
-            dynamic->data_offset = dyninf.data_offset;
-            fill_dynamic(s1, &dyninf);
 
             /* put in GOT the dynamic section address and relocate PLT */
             write32le(s1->got->data, dynamic->sh_addr);
@@ -2703,6 +2717,11 @@ static int elf_output_file(TCCState *s1, const char *filename)
         ret = final_sections_reloc(s1);
         if (ret)
             goto the_end;
+        if (dynamic) {
+	    update_reloc_sections (s1, &dyninf);
+            dynamic->data_offset = dyninf.data_offset;
+            fill_dynamic(s1, &dyninf);
+	}
 	tidy_section_headers(s1, sec_order);
 
         /* Perform relocation to GOT or PLT entries */
