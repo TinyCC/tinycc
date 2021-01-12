@@ -2247,6 +2247,7 @@ static int final_sections_reloc(TCCState *s1)
 static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 {
     int i;
+    unsigned long file_offset = 0;
     Section *s;
     Section *relocplt = s1->got ? s1->got->relocplt : NULL;
 
@@ -2255,11 +2256,15 @@ static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-	if (s->sh_type == SHT_RELX && s != relocplt) {
-	    if (dyninf->rel_size == 0)
+	if (s->sh_type == SHT_RELX && s->sh_size && s != relocplt) {
+	    if (dyninf->rel_size == 0) {
 		dyninf->rel_addr = s->sh_addr;
-	    else
+		file_offset = s->sh_offset;
+	    }
+	    else {
 		s->sh_addr = dyninf->rel_addr + dyninf->rel_size;
+		s->sh_offset = file_offset + dyninf->rel_size;
+	    }
 	    dyninf->rel_size += s->sh_size;
 	}
     }
