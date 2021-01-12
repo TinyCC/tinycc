@@ -165,6 +165,26 @@ static void asm_emit_opcode(int token, uint32_t opcode) {
     gen_le32((condition_code_of_token(token) << 28) | opcode);
 }
 
+static void asm_emit_coprocessor_opcode(uint32_t high_nibble, uint8_t cp_number, uint8_t cp_opcode, uint8_t cp_destination_register, uint8_t cp_n_operand_register, uint8_t cp_m_operand_register, uint8_t cp_opcode2, int inter_processor_transfer)
+{
+    uint32_t opcode = 0xe000000;
+    if (inter_processor_transfer)
+        opcode |= 1 << 4;
+    //assert(cp_opcode < 16);
+    opcode |= cp_opcode << 20;
+    //assert(cp_n_operand_register < 16);
+    opcode |= cp_n_operand_register << 16;
+    //assert(cp_destination_register < 16);
+    opcode |= cp_destination_register << 12;
+    //assert(cp_number < 16);
+    opcode |= cp_number << 8;
+    //assert(cp_information < 8);
+    opcode |= cp_opcode2 << 5;
+    //assert(cp_m_operand_register < 16);
+    opcode |= cp_m_operand_register;
+    gen_le32((high_nibble << 28) | opcode);
+}
+
 static void asm_nullary_opcode(int token)
 {
     switch (ARM_INSTRUCTION_GROUP(token)) {
@@ -307,6 +327,60 @@ static void asm_binary_opcode(TCCState *s1, int token)
     default:
         expect("binary instruction");
     }
+}
+
+static void asm_coprocessor_opcode(TCCState *s1, int token) {
+    uint8_t coprocessor;
+    Operand opcode1;
+    Operand opcode2;
+    uint8_t registers[3];
+    unsigned int i;
+
+    if (tok >= TOK_ASM_p0 && tok <= TOK_ASM_p15) {
+        coprocessor = tok - TOK_ASM_p0;
+        next();
+    } else {
+        expect("'p<number>'");
+        return;
+    }
+
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+
+    parse_operand(s1, &opcode1);
+    if (opcode1.type != OP_IM8 || opcode1.e.v > 15) {
+        tcc_error("opcode1 of instruction '%s' must be an immediate value between 0 and 15", get_tok_str(token, NULL));
+        return;
+    }
+
+    for (i = 0; i < 3; ++i) {
+        if (tok == ',')
+            next();
+        else
+            expect("','");
+        if (tok >= TOK_ASM_c0 && tok <= TOK_ASM_c15) {
+            registers[i] = tok - TOK_ASM_c0;
+            next();
+        } else {
+            expect("'c<number>");
+            return;
+        }
+    }
+    if (tok == ',') {
+        next();
+        parse_operand(s1, &opcode2);
+    } else {
+        opcode2.type = OP_IM8;
+        opcode2.e.v = 0;
+    }
+    if (opcode2.type != OP_IM8 || opcode2.e.v > 15) {
+        tcc_error("opcode2 of instruction '%s' must be an immediate value between 0 and 15", get_tok_str(token, NULL));
+        return;
+    }
+
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
 }
 
 /* data processing and single data transfer instructions only */
@@ -1468,6 +1542,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_umlaleq:
     case TOK_ASM_umlalseq:
         return asm_long_multiplication_opcode(s1, token);
+
+    case TOK_ASM_cdpeq:
+        return asm_coprocessor_opcode(s1, token);
     default:
         expect("known instruction");
     }

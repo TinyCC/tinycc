@@ -28,6 +28,44 @@
  DEF_ASM(lr) /* alias for r14 */
  DEF_ASM(pc) /* alias for r15 */
 
+ /* coprocessors */
+
+ DEF_ASM(p0)
+ DEF_ASM(p1)
+ DEF_ASM(p2)
+ DEF_ASM(p3)
+ DEF_ASM(p4)
+ DEF_ASM(p5)
+ DEF_ASM(p6)
+ DEF_ASM(p7)
+ DEF_ASM(p8)
+ DEF_ASM(p9)
+ DEF_ASM(p10)
+ DEF_ASM(p11)
+ DEF_ASM(p12)
+ DEF_ASM(p13)
+ DEF_ASM(p14)
+ DEF_ASM(p15)
+
+ /* coprocessor registers */
+
+ DEF_ASM(c0)
+ DEF_ASM(c1)
+ DEF_ASM(c2)
+ DEF_ASM(c3)
+ DEF_ASM(c4)
+ DEF_ASM(c5)
+ DEF_ASM(c6)
+ DEF_ASM(c7)
+ DEF_ASM(c8)
+ DEF_ASM(c9)
+ DEF_ASM(c10)
+ DEF_ASM(c11)
+ DEF_ASM(c12)
+ DEF_ASM(c13)
+ DEF_ASM(c14)
+ DEF_ASM(c15)
+
  /* data processing directives */
 
  DEF_ASM(asl)
@@ -170,3 +208,5 @@
  DEF_ASM_CONDED(rors)
  DEF_ASM_CONDED(rrx)
  DEF_ASM_CONDED(rrxs)
+
+ DEF_ASM_CONDED(cdp)
