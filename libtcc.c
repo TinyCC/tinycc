@@ -1111,7 +1111,7 @@ ST_FUNC char *tcc_openbsd_library_soversion(TCCState *s, const char *libraryname
 {
     DIR *dirp;
     struct dirent *dp;
-    const char *e;
+    char *e;
     char **libpaths, *t, *u, *v;
     char soname[1024];
     long long maj, min, tmaj, tmin;
@@ -1134,16 +1134,18 @@ ST_FUNC char *tcc_openbsd_library_soversion(TCCState *s, const char *libraryname
                 u = strrchr(t, '.');
                 *u = '\0';
 
-                tmin = strtonum(u + 1, 0, LLONG_MAX, &e);
-                if (e != NULL) {
+                tmin = strtoll(u + 1, &e, 10);
+
+                if (*e != 0) {
                     tcc_free(t);
                     t = NULL;
                     continue;
                 }
 
                 v = strrchr(t, '.');
-                tmaj = strtonum(v + 1, 0, LLONG_MAX, &e);
-                if (e != NULL) {
+                tmaj = strtoll(v + 1, &e, 10);
+
+                if (*e != 0) {
                     tcc_free(t);
                     t = NULL;
                     continue;

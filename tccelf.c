@@ -2540,9 +2540,9 @@ static int elf_output_file(TCCState *s1, const char *filename)
     struct ro_inf roinf;
     ElfW(Phdr) *phdr;
     Section *strsec, *interp, *dynamic, *dynstr, *note = NULL;
-#ifndef ELF_OBJ_ONLY
+//#ifndef ELF_OBJ_ONLY
     struct ro_inf *roinf_use = NULL;
-#endif
+//#endif
 
     file_type = s1->output_type;
 
