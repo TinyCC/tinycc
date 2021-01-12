@@ -433,6 +433,50 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+/* Parses shift directive and returns the parts that would have to be set in the opcode because of it.
+   Does not encode the actual shift amount.
+   It's not an error if there is no shift directive.
+
+   NB_SHIFT: will be set to 1 iff SHIFT is filled.  Note that for rrx, there's no need to fill SHIFT.
+   SHIFT: will be filled in with the shift operand to use, if any. */
+static uint32_t asm_parse_optional_shift(TCCState* s1, int* nb_shift, Operand* shift)
+{
+    uint32_t opcode = 0;
+    *nb_shift = 0;
+    switch (tok) {
+    case TOK_ASM_asl:
+    case TOK_ASM_lsl:
+    case TOK_ASM_asr:
+    case TOK_ASM_lsr:
+    case TOK_ASM_ror:
+        switch (tok) {
+        case TOK_ASM_asl:
+            /* fallthrough */
+        case TOK_ASM_lsl:
+            opcode = ENCODE_BARREL_SHIFTER_MODE_LSL;
+            break;
+        case TOK_ASM_asr:
+            opcode = ENCODE_BARREL_SHIFTER_MODE_ASR;
+            break;
+        case TOK_ASM_lsr:
+            opcode = ENCODE_BARREL_SHIFTER_MODE_LSR;
+            break;
+        case TOK_ASM_ror:
+            opcode = ENCODE_BARREL_SHIFTER_MODE_ROR;
+            break;
+        }
+        next();
+        parse_operand(s1, shift);
+        *nb_shift = 1;
+        break;
+    case TOK_ASM_rrx:
+        next();
+        opcode = ENCODE_BARREL_SHIFTER_MODE_ROR;
+        break;
+    }
+    return opcode;
+}
+
 static uint32_t asm_encode_shift(Operand* shift)
 {
     uint64_t amount;
@@ -482,37 +526,7 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
     }
     if (tok == ',')
         next();
-    switch (tok) {
-    case TOK_ASM_asl:
-    case TOK_ASM_lsl:
-    case TOK_ASM_asr:
-    case TOK_ASM_lsr:
-    case TOK_ASM_ror:
-        switch (tok) {
-        case TOK_ASM_asl:
-            /* fallthrough */
-        case TOK_ASM_lsl:
-            operands |= ENCODE_BARREL_SHIFTER_MODE_LSL;
-            break;
-        case TOK_ASM_asr:
-            operands |= ENCODE_BARREL_SHIFTER_MODE_ASR;
-            break;
-        case TOK_ASM_lsr:
-            operands |= ENCODE_BARREL_SHIFTER_MODE_LSR;
-            break;
-        case TOK_ASM_ror:
-            operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
-            break;
-        }
-        next();
-        parse_operand(s1, &shift);
-        nb_shift = 1;
-        break;
-    case TOK_ASM_rrx:
-        next();
-        operands |= ENCODE_BARREL_SHIFTER_MODE_ROR;
-        break;
-    }
+    operands |= asm_parse_optional_shift(s1, &nb_shift, &shift);
     if (nb_ops < 2)
         expect("at least two operands");
     else if (nb_ops == 2) {
@@ -940,6 +954,8 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
     Operand strex_operand;
+    Operand shift;
+    int nb_shift = 0;
     int exclam = 0;
     int closed_bracket = 0;
     int op2_minus = 0;
@@ -999,6 +1015,14 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
             next();
         }
         parse_operand(s1, &ops[2]);
+        if (ops[2].type == OP_REG32) {
+            if (tok == ',') {
+                next();
+                opcode |= asm_parse_optional_shift(s1, &nb_shift, &shift);
+                if (opcode == 0)
+                    expect("shift directive, or no comma");
+            }
+        }
     } else {
         // end of input expression in brackets--assume 0 offset
         ops[2].type = OP_IM8;
@@ -1061,6 +1085,8 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         /* fallthrough */
     case TOK_ASM_streq:
         opcode |= 1 << 26; // Load/Store
+        if (nb_shift)
+            opcode |= asm_encode_shift(&shift);
         asm_emit_opcode(token, opcode);
         break;
     case TOK_ASM_ldrbeq:
@@ -1069,14 +1095,16 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
     case TOK_ASM_ldreq:
         opcode |= 1 << 20; // L
         opcode |= 1 << 26; // Load/Store
+        if (nb_shift)
+            opcode |= asm_encode_shift(&shift);
         asm_emit_opcode(token, opcode);
         break;
     case TOK_ASM_strexbeq:
         opcode |= 1 << 22; // B
         /* fallthrough */
     case TOK_ASM_strexeq:
-        if (opcode & 0xFFF) {
-            tcc_error("offset not allowed with 'strex'");
+        if ((opcode & 0xFFF) || nb_shift) {
+            tcc_error("neither offset nor shift allowed with 'strex'");
             return;
         } else if (opcode & ENCODE_IMMEDIATE_FLAG) { // if set, it means it's NOT immediate
             tcc_error("offset not allowed with 'strex'");
@@ -1087,7 +1115,7 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
             return;
         }
 
-        opcode |= 0xf90;
+        opcode |= 0xf90; // Used to mean: barrel shifter is enabled, barrel shift register is r15, mode is LSL
         opcode |= strex_operand.reg;
         asm_emit_opcode(token, opcode);
         break;
@@ -1095,8 +1123,8 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         opcode |= 1 << 22; // B
         /* fallthrough */
     case TOK_ASM_ldrexeq:
-        if (opcode & 0xFFF) {
-            tcc_error("offset not allowed with 'ldrex'");
+        if ((opcode & 0xFFF) || nb_shift) {
+            tcc_error("neither offset nor shift allowed with 'ldrex'");
             return;
         } else if (opcode & ENCODE_IMMEDIATE_FLAG) { // if set, it means it's NOT immediate
             tcc_error("offset not allowed with 'ldrex'");
@@ -1108,7 +1136,7 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
         }
         opcode |= 1 << 20; // L
         opcode |= 0x00f;
-        opcode |= 0xf90;
+        opcode |= 0xf90; // Used to mean: barrel shifter is enabled, barrel shift register is r15, mode is LSL
         asm_emit_opcode(token, opcode);
         break;
     default:
