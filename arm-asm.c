@@ -155,7 +155,7 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 
 static uint32_t condition_code_of_token(int token) {
     if (token < TOK_ASM_nopeq) {
-        expect("instruction");
+        expect("condition-enabled instruction");
         return 0;
     } else
         return (token - TOK_ASM_nopeq) & 15;
@@ -335,6 +335,7 @@ static void asm_coprocessor_opcode(TCCState *s1, int token) {
     Operand opcode2;
     uint8_t registers[3];
     unsigned int i;
+    uint8_t high_nibble;
 
     if (tok >= TOK_ASM_p0 && tok <= TOK_ASM_p15) {
         coprocessor = tok - TOK_ASM_p0;
@@ -380,7 +381,11 @@ static void asm_coprocessor_opcode(TCCState *s1, int token) {
         return;
     }
 
-    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
+    if (token == TOK_ASM_cdp2)
+        high_nibble = 0xF;
+    else
+        high_nibble = condition_code_of_token(token);
+    asm_emit_coprocessor_opcode(high_nibble, coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
 }
 
 /* data processing and single data transfer instructions only */
@@ -1426,9 +1431,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     }
     if (token == TOK_EOF)
         return;
-    if (token < TOK_ASM_nopeq) {
-        expect("instruction");
-        return;
+    if (token < TOK_ASM_nopeq) { // no condition code
+        switch (token) {
+        case TOK_ASM_cdp2:
+            return asm_coprocessor_opcode(s1, token);
+        default:
+            expect("instruction");
+            return;
+        }
     }
 
     switch (ARM_INSTRUCTION_GROUP(token)) {

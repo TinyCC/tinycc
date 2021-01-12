@@ -70,6 +70,10 @@
 
  DEF_ASM(asl)
 
+ /* instructions that have no condition code */
+
+ DEF_ASM(cdp2)
+
 #define ARM_INSTRUCTION_GROUP(tok) ((((tok) - TOK_ASM_nopeq) & 0xFFFFFFF0) + TOK_ASM_nopeq)
 
 /* Note: condition code is 4 bits */

@@ -5,7 +5,7 @@ set -e
 # Note: "{r3}" is definitely different--but would complicate the assembler.
 
 state="`mktemp -d`"
-cat ../arm-tok.h |grep DEF_ASM_CONDED |grep -v '#define' |grep -v '/[*]' |sed -e 's;DEF_ASM_CONDED.\(.*\).$;\1;'| grep -v 'not useful' | while read s
+cat ../arm-tok.h |grep DEF_ASM |grep -v 'not useful' |grep -v '#define' |grep -v '/[*]' |sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;' | egrep -v '^((r|c|p)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
 do
 	ok=0
 	for args in "r3, r4, r5, r6" \
@@ -90,6 +90,7 @@ do
 	            "r4, #0xFFFFFF00" \
 	            "r2, #-4" \
 	            "p10, #7, c2, c0, c1, #4" \
+	            "p10, #7, r2, c0, c1, #4" \
 	            "#4" \
 	            "#-4" \
 	            ""
