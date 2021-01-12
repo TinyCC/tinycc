@@ -538,11 +538,11 @@ static int negcc(int cc)
 
 /* Load value into register r.
    Use relative/got addressing to avoid setting DT_TEXTREL */
-static void load_value(SValue *sv, int fr, int r)
+static void load_value(SValue *sv, int r)
 {
     o(0xE59F0000|(intr(r)<<12));
     o(0xEA000000);
-    if(fr & VT_SYM) {
+    if(sv->r & VT_SYM) {
 	if (sv->sym->type.t & VT_STATIC) {
             greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
             o(sv->c.i - 12);
@@ -656,14 +656,14 @@ void load(int r, SValue *sv)
     if (v == VT_CONST) {
       op=stuff_const(0xE3A00000|(intr(r)<<12),sv->c.i);
       if (fr & VT_SYM || !op)
-	load_value(sv, fr, r);
+	load_value(sv, r);
       else
         o(op);
       return;
     } else if (v == VT_LOCAL) {
       op=stuff_const(0xE28B0000|(intr(r)<<12),sv->c.i);
       if (fr & VT_SYM || !op) {
-	load_value(sv, fr, r);
+	load_value(sv, r);
 	o(0xE08B0000|(intr(r)<<12)|intr(r));
       } else
 	o(op);
@@ -797,7 +797,7 @@ static void gcall_or_jmp(int is_jmp)
 	    o(x|(is_jmp?0xE0000000:0xE1000000));
 	} else {
 	    r = TREG_LR;
-	    load_value(vtop, vtop->r, r);
+	    load_value(vtop, r);
 	    if(is_jmp)
 	        o(0xE1A0F000 | intr(r)); // mov pc, r
 	    else

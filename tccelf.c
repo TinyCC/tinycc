@@ -2243,7 +2243,7 @@ static int final_sections_reloc(TCCState *s1)
    These gaps are a result of final_sections_reloc. Here some relocs are removed.
    The gaps are then filled with 0 in tcc_output_elf. The 0 is intepreted as
    R_...NONE reloc. This does work on most targets but on OpenBSD/arm64 this
-   is illegal. */
+   is illegal. OpenBSD/arm64 does not support R_...NONE reloc. */
 static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 {
     int i;
@@ -2256,7 +2256,7 @@ static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-	if (s->sh_type == SHT_RELX && s->sh_size && s != relocplt) {
+	if (s->sh_type == SHT_RELX && s != relocplt) {
 	    if (dyninf->rel_size == 0) {
 		dyninf->rel_addr = s->sh_addr;
 		file_offset = s->sh_offset;

@@ -172,6 +172,7 @@ int test13(void)
 #if defined __i386__ || defined __x86_64__
 #define allocf(x)
 #else
+#undef alloca
 #define alloca(x) malloc(x)
 #define allocf(x) free(x)
 #endif
@@ -207,10 +208,10 @@ int test16()
 
     p = alloca(16);
     strcpy(p,"12345678901234");
-    allocf(p);
 
     /* Test alloca embedded in a larger expression */
     printf("alloca : %s : %s\n", p, strcpy(alloca(strlen(demo)+1),demo) );
+    allocf(p);
 
     return 0;
 }
@@ -223,10 +224,10 @@ int test17()
 
     p = alloca(16);
     strcpy(p,"12345678901234");
-    allocf(p);
 
     /* Test alloca embedded in a larger expression */
     printf("alloca : %s : %s\n", p, strcpy(alloca(strlen(demo)),demo) );
+    allocf(p);
 
     return 0;
 }
