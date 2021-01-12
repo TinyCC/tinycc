@@ -839,11 +839,11 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     return ret;
 }
 
-static uint32_t swap32(uint32_t x)
+static uint32_t macho_swap32(uint32_t x)
 {
   return (x >> 24) | (x << 24) | ((x >> 8) & 0xff00) | ((x & 0xff00) << 8);
 }
-#define SWAP(x) (swap ? swap32(x) : (x))
+#define SWAP(x) (swap ? macho_swap32(x) : (x))
 
 ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
 {
