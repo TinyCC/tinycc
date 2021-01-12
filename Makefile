@@ -62,9 +62,10 @@ else
   endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
  endif
- ifdef CONFIG_BSD
-  NATIVE_TARGET = $(ARCH)-$(TARGETOS)
- endif
+ # Unclear why the following ifdef was defined. Build fails on all *BSD
+ # ifdef CONFIG_BSD
+ #  NATIVE_TARGET = $(ARCH)-$(TARGETOS)
+ # endif
 endif
 
 # run local version of tcc with local libraries and includes
