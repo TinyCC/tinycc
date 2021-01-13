@@ -284,6 +284,7 @@ cross-test : tcctest.c examples/ex3.c
 CROSS-TGTS = \
  i386 \
  i386-win32 \
+ i386-OpenBSD \
  x86_64 \
  x86_64-win32 \
  x86_64-osx \
@@ -294,6 +295,9 @@ CROSS-TGTS = \
  arm-eabihf \
  arm-wince \
  arm64 \
+ arm64-FreeBSD \
+ arm64-NetBSD \
+ arm64-OpenBSD \
  riscv64 \
  c67
 
