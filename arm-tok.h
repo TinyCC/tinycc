@@ -155,6 +155,11 @@
  DEF_ASM_CONDED(stmib)
  DEF_ASM_CONDED(ldmib)
 
+ DEF_ASM_CONDED(ldc)
+ DEF_ASM_CONDED(ldcl)
+ DEF_ASM_CONDED(stc)
+ DEF_ASM_CONDED(stcl)
+
  /* instruction macros */
 
  DEF_ASM_CONDED(push)
