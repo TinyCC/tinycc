@@ -42,7 +42,7 @@ tcc_crtprefix=""
 tcc_elfinterp=""
 triplet=
 tcc_lddir=
-confvars=
+confvars="strip=no"
 suggest="yes"
 cpu=
 cpuver=
@@ -140,7 +140,7 @@ for opt do
   ;;
   --disable-rpath) confvars="$confvars rpath=no"
   ;;
-  --strip-binaries) confvars="$confvars strip"
+  --strip-binaries) echo deprecate, use 'make install-strip' to strip binaries
   ;;
   --debug) confvars="$confvars strip=no"
   ;;
@@ -158,18 +158,6 @@ for opt do
   ;;
   esac
 done
-
-# don't strip unless --strip-binaries is specified.
-# "make install-strip" still strips.
-case "$confvars" in
-  *strip*)
-  # strip is set (to yes) keep it.
-  ;;
-  *)
-  # strip is not set, set it to no => CONFIG_strip=no
-  confvars="$confvars strip=no"
-  ;;
-esac
 
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
