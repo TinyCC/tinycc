@@ -379,12 +379,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:
-     // case R_ARM_TARGET1: /* ??? as seen on NetBSD - FIXME! */
+        case R_ARM_TARGET1:
             if (s1->output_type == TCC_OUTPUT_DLL) {
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
-                    qrel->r_info = ELFW(R_INFO)(esym_index, type);
+                    qrel->r_info = ELFW(R_INFO)(esym_index, R_ARM_TARGET1);
                     qrel++;
                     return;
                 } else {
@@ -435,7 +435,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             /* do nothing */
             return;
         default:
-            fprintf(stderr,"FIXME: handle reloc type %x at %x [%p] to %x\n",
+            fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",
                 type, (unsigned)addr, ptr, (unsigned)val);
             return;
     }
