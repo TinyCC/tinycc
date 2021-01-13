@@ -46,6 +46,8 @@ int code_reloc (int reloc_type)
 	case R_ARM_GLOB_DAT:
 	case R_ARM_NONE:
 	case R_ARM_TARGET1:
+	case R_ARM_MOVT_PREL:
+	case R_ARM_MOVW_PREL_NC:
             return 0;
 
         case R_ARM_PC24:
@@ -89,6 +91,8 @@ int gotplt_entry_type (int reloc_type)
 	case R_ARM_REL32:
 	case R_ARM_V4BX:
 	case R_ARM_TARGET1:
+	case R_ARM_MOVT_PREL:
+	case R_ARM_MOVW_PREL_NC:
             return AUTO_GOTPLT_ENTRY;
 
 	case R_ARM_GOTPC:
@@ -330,6 +334,20 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     *(int *)ptr |= x;
                 else
                     *(int *)ptr += x;
+            }
+            return;
+        case R_ARM_MOVT_PREL:
+        case R_ARM_MOVW_PREL_NC:
+            {
+		int insn = *(int *)ptr;
+                int addend = ((insn >> 4) & 0xf000) | (insn & 0xfff);
+
+		addend = (addend ^ 0x8000) - 0x8000;
+		val += addend - addr;
+		if (type == R_ARM_MOVT_PREL)
+		    val >>= 16;
+		*(int *)ptr = (insn & 0xfff0f000) |
+			      ((val & 0xf000) << 4) | (val & 0xfff);
             }
             return;
         case R_ARM_THM_MOVT_ABS:

@@ -1387,6 +1387,8 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     CString cstr;
 
     s = data_section;
+    /* Align to PTR_SIZE */
+    section_ptr_add(s, -s->data_offset & (PTR_SIZE - 1));
     o = s->data_offset;
     /* create (part of) a struct rt_context (see tccrun.c) */
     put_ptr(s1, stab_section, 0);

@@ -289,7 +289,7 @@ DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
 DLL_EXPORT char *__bound_strchr(const char *string, int ch);
 DLL_EXPORT char *__bound_strdup(const char *s);
 
-#if defined(__arm__)
+#if defined(__arm__) && defined(TCC_ARM_EABI)
 DLL_EXPORT void *__bound___aeabi_memcpy(void *dst, const void *src, size_t size);
 DLL_EXPORT void *__bound___aeabi_memmove(void *dst, const void *src, size_t size);
 DLL_EXPORT void *__bound___aeabi_memmove4(void *dst, const void *src, size_t size);
@@ -1738,7 +1738,7 @@ void *__bound_memset(void *s, int c, size_t n)
     return memset(s, c, n);
 }
 
-#if defined(__arm__)
+#if defined(__arm__) && defined(TCC_ARM_EABI)
 void *__bound___aeabi_memcpy(void *dest, const void *src, size_t n)
 {
     dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
