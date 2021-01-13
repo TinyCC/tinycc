@@ -384,7 +384,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
-                    qrel->r_info = ELFW(R_INFO)(esym_index, R_ARM_TARGET1);
+                    qrel->r_info = ELFW(R_INFO)(esym_index, R_ARM_ABS32);
                     qrel++;
                     return;
                 } else {
