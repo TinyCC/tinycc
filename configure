@@ -159,6 +159,18 @@ for opt do
   esac
 done
 
+# don't strip unless --strip-binaries is specified.
+# "make install-strip" still strips.
+case $"conftest" in
+  *strip=*)
+  # strip is set (to yes) keep it.
+  ;;
+  *)
+  # strip is not set, set it to no => CONFIG_strip=no
+  confvars="$confvars strip=no"
+  ;;
+esac
+
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
 strip="${cross_prefix}${strip}"
