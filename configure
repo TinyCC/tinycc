@@ -161,8 +161,8 @@ done
 
 # don't strip unless --strip-binaries is specified.
 # "make install-strip" still strips.
-case $"conftest" in
-  *strip=*)
+case "$confvars" in
+  *strip*)
   # strip is set (to yes) keep it.
   ;;
   *)
