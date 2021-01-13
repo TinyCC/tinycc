@@ -336,6 +336,7 @@ static void asm_coprocessor_opcode(TCCState *s1, int token) {
     uint8_t registers[3];
     unsigned int i;
     uint8_t high_nibble;
+    uint8_t mrc = 0;
 
     if (tok >= TOK_ASM_p0 && tok <= TOK_ASM_p15) {
         coprocessor = tok - TOK_ASM_p0;
@@ -361,12 +362,22 @@ static void asm_coprocessor_opcode(TCCState *s1, int token) {
             next();
         else
             expect("','");
-        if (tok >= TOK_ASM_c0 && tok <= TOK_ASM_c15) {
-            registers[i] = tok - TOK_ASM_c0;
-            next();
+        if (i == 0 && token != TOK_ASM_cdp2 && (ARM_INSTRUCTION_GROUP(token) == TOK_ASM_mrceq || ARM_INSTRUCTION_GROUP(token) == TOK_ASM_mcreq)) {
+            if (tok >= TOK_ASM_r0 && tok <= TOK_ASM_r15) {
+                registers[i] = tok - TOK_ASM_r0;
+                next();
+            } else {
+                expect("'r<number>'");
+                return;
+            }
         } else {
-            expect("'c<number>");
-            return;
+            if (tok >= TOK_ASM_c0 && tok <= TOK_ASM_c15) {
+                registers[i] = tok - TOK_ASM_c0;
+                next();
+            } else {
+                expect("'c<number>'");
+                return;
+            }
         }
     }
     if (tok == ',') {
@@ -381,11 +392,32 @@ static void asm_coprocessor_opcode(TCCState *s1, int token) {
         return;
     }
 
-    if (token == TOK_ASM_cdp2)
+    if (token == TOK_ASM_cdp2) {
         high_nibble = 0xF;
-    else
+        asm_emit_coprocessor_opcode(high_nibble, coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
+        return;
+    } else
         high_nibble = condition_code_of_token(token);
-    asm_emit_coprocessor_opcode(high_nibble, coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_cdpeq:
+        asm_emit_coprocessor_opcode(high_nibble, coprocessor, opcode1.e.v, registers[0], registers[1], registers[2], opcode2.e.v, 0);
+        break;
+    case TOK_ASM_mrceq:
+        // opcode1 encoding changes! highest and lowest bit gone.
+        mrc = 1;
+        /* fallthrough */
+    case TOK_ASM_mcreq:
+        // opcode1 encoding changes! highest and lowest bit gone.
+        if (opcode1.e.v > 7) {
+            tcc_error("opcode1 of instruction '%s' must be an immediate value between 0 and 7", get_tok_str(token, NULL));
+            return;
+        }
+        asm_emit_coprocessor_opcode(high_nibble, coprocessor, (opcode1.e.v << 1) | mrc, registers[0], registers[1], registers[2], opcode2.e.v, 1);
+        break;
+    default:
+        expect("known instruction");
+    }
 }
 
 /* data processing and single data transfer instructions only */
@@ -1554,6 +1586,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         return asm_long_multiplication_opcode(s1, token);
 
     case TOK_ASM_cdpeq:
+    case TOK_ASM_mcreq:
+    case TOK_ASM_mrceq:
         return asm_coprocessor_opcode(s1, token);
     default:
         expect("known instruction");
