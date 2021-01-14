@@ -1411,7 +1411,22 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *s1, int token)
 
     // TODO: Support options.
 
-    switch (ARM_INSTRUCTION_GROUP(token)) {
+    if (token == TOK_ASM_ldc2 || token == TOK_ASM_stc2 || token == TOK_ASM_ldc2l || token == TOK_ASM_stc2l) {
+        switch (token) {
+        case TOK_ASM_ldc2l:
+            long_transfer = 1; // long transfer
+            /* fallthrough */
+        case TOK_ASM_ldc2:
+            asm_emit_coprocessor_data_transfer(0xF, coprocessor, coprocessor_destination_register, &ops[1], &ops[2], op2_minus, preincrement, exclam, long_transfer, 1);
+            break;
+        case TOK_ASM_stc2l:
+            long_transfer = 1; // long transfer
+            /* fallthrough */
+        case TOK_ASM_stc2:
+            asm_emit_coprocessor_data_transfer(0xF, coprocessor, coprocessor_destination_register, &ops[1], &ops[2], op2_minus, preincrement, exclam, long_transfer, 0);
+            break;
+        }
+    } else switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_stcleq:
         long_transfer = 1;
         /* fallthrough */
@@ -1636,6 +1651,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         switch (token) {
         case TOK_ASM_cdp2:
             return asm_coprocessor_opcode(s1, token);
+        case TOK_ASM_ldc2:
+        case TOK_ASM_ldc2l:
+        case TOK_ASM_stc2:
+        case TOK_ASM_stc2l:
+            return asm_coprocessor_data_transfer_opcode(s1, token);
         default:
             expect("instruction");
             return;

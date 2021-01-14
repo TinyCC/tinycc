@@ -73,6 +73,10 @@
  /* instructions that have no condition code */
 
  DEF_ASM(cdp2)
+ DEF_ASM(ldc2)
+ DEF_ASM(ldc2l)
+ DEF_ASM(stc2)
+ DEF_ASM(stc2l)
 
 #define ARM_INSTRUCTION_GROUP(tok) ((((tok) - TOK_ASM_nopeq) & 0xFFFFFFF0) + TOK_ASM_nopeq)
 
