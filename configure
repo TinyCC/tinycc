@@ -42,7 +42,7 @@ tcc_crtprefix=""
 tcc_elfinterp=""
 triplet=
 tcc_lddir=
-confvars="strip=no"
+confvars=
 suggest="yes"
 cpu=
 cpuver=

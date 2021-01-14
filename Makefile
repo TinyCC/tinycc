@@ -12,6 +12,8 @@ ifeq ($(findstring $(MAKECMDGOALS),clean distclean),)
  include $(TOP)/config.mak
 endif
 
+CONFIG_strip = no
+
 ifeq (-$(GCC_MAJOR)-$(findstring $(GCC_MINOR),56789)-,-4--)
  CFLAGS += -D_FORTIFY_SOURCE=0
 endif
