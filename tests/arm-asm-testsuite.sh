@@ -5,8 +5,14 @@ set -e
 # Note: "{r3}" is definitely different--but would complicate the assembler.
 
 state="`mktemp -d`"
-cat ../arm-tok.h |grep DEF_ASM |grep -v 'not useful' |grep -v '#define' |grep -v '/[*]' |sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;' | egrep -v '^((r|c|p)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
+cat ../arm-tok.h |grep DEF_ASM |grep -v 'not useful' |grep -v '#define' |grep -v '/[*]' |sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;' | egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
 do
+	# If VFP is disabled, skip VFP tests.
+	if [ "${s#v}" != "${s}" ] && ! grep -q "CONFIG_arm_vfp=yes" ../config.mak
+	then
+		echo "note: skipping VFP instruction: $s (because VFP is disabled)">&2
+		continue
+	fi
 	ok=0
 	for args in "r3, r4, r5, r6" \
 	            "r3, r4, r5" \
@@ -103,6 +109,12 @@ do
                     "p5, c2, [r3, #-4]" \
                     "p5, c2, [r3, #0x45]" \
                     "p5, c2, [r3, #-0x45]" \
+                    "s2, [r3]" \
+                    "s3, [r4]" \
+                    "s2, [r3, #4]" \
+                    "s2, [r3, #-4]" \
+                    "s2, [r3, #0x45]" \
+                    "s2, [r3, #-0x45]" \
 	            ""
 	do
 		#echo ".syntax unified" > a.s

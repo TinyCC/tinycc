@@ -1444,6 +1444,97 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+#if defined(TCC_ARM_VFP)
+#define CP_SINGLE_PRECISION_FLOAT 10
+#define CP_DOUBLE_PRECISION_FLOAT 11
+
+/* Read the VFP register referred to by T.
+   If OK, returns its number.
+   If not OK, returns -1. */
+static int asm_parse_vfp_regvar(int t, int double_precision)
+{
+    if (double_precision) {
+        if (t >= TOK_ASM_d0 && t <= TOK_ASM_d15)
+            return t - TOK_ASM_d0;
+    } else {
+        if (t >= TOK_ASM_s0 && t <= TOK_ASM_s31)
+            return t - TOK_ASM_s0;
+    }
+    return -1;
+}
+
+
+static void asm_floating_point_single_data_transfer_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    uint8_t coprocessor = 0;
+    uint8_t coprocessor_destination_register = 0;
+    int long_transfer = 0;
+    int reg;
+    // Note: vldr p1, c0, [r4, #4]  ; simple offset: r0 = *(int*)(r4+4); r4 unchanged
+    // Note: Not allowed: vldr p2, c0, [r4, #4]! ; pre-indexed:   r0 = *(int*)(r4+4); r4 = r4+4
+    // Note: Not allowed: vldr p3, c0, [r4], #4  ; post-indexed:  r0 = *(int*)(r4+0); r4 = r4+4
+
+    if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
+        coprocessor = CP_SINGLE_PRECISION_FLOAT;
+        coprocessor_destination_register = reg;
+        long_transfer = coprocessor_destination_register & 1;
+        coprocessor_destination_register >>= 1;
+        next();
+    } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
+        coprocessor = CP_DOUBLE_PRECISION_FLOAT;
+        coprocessor_destination_register = reg;
+        next();
+    } else {
+        expect("floating point register");
+        return;
+    }
+
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+
+    if (tok != '[')
+        expect("'['");
+    else
+        next(); // skip '['
+
+    parse_operand(s1, &ops[1]);
+    if (ops[1].type != OP_REG32) {
+        expect("(first source operand) register");
+        return;
+    }
+    if (tok == ',') {
+        next(); // skip ','
+        parse_operand(s1, &ops[2]);
+        if (ops[2].type != OP_IM8 && ops[2].type != OP_IM8N) {
+            expect("immediate offset");
+            return;
+        }
+    } else {
+        // end of input expression in brackets--assume 0 offset
+        ops[2].type = OP_IM8;
+        ops[2].e.v = 0;
+    }
+    if (tok != ']')
+        expect("']'");
+    else
+        next(); // skip ']'
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vldreq:
+        asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, coprocessor_destination_register, &ops[1], &ops[2], 0, 1, 0, long_transfer, 1);
+        break;
+    case TOK_ASM_vstreq:
+        asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, coprocessor_destination_register, &ops[1], &ops[2], 0, 1, 0, long_transfer, 0);
+        break;
+    default:
+        expect("floating point data transfer instruction");
+    }
+}
+#endif
+
 static void asm_misc_single_data_transfer_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
@@ -1784,6 +1875,12 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_stceq:
     case TOK_ASM_stcleq:
         return asm_coprocessor_data_transfer_opcode(s1, token);
+
+#if defined(TCC_ARM_VFP)
+    case TOK_ASM_vldreq:
+    case TOK_ASM_vstreq:
+        return asm_floating_point_single_data_transfer_opcode(s1, token);
+#endif
 
     default:
         expect("known instruction");
