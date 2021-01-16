@@ -108,6 +108,7 @@ DEF-arm-vfp        = -DTCC_TARGET_ARM -DTCC_ARM_VFP
 DEF-arm-eabi       = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI
 DEF-arm-eabihf     = $(DEF-arm-eabi) -DTCC_ARM_HARDFLOAT
 DEF-arm            = $(DEF-arm-eabihf)
+DEF-arm-NetBSD     = $(DEF-arm-eabihf) -DTARGETOS_FreeBSD
 DEF-arm-wince      = $(DEF-arm-eabihf) -DTCC_TARGET_PE
 DEF-arm64          = -DTCC_TARGET_ARM64
 DEF-arm64-FreeBSD  = $(DEF-arm64) -DTARGETOS_FreeBSD
