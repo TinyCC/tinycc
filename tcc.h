@@ -94,6 +94,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # undef CONFIG_TCC_STATIC
 #endif
 
+#ifndef PAGESIZE
+# ifdef _SC_PAGESIZE
+#   define PAGESIZE sysconf(_SC_PAGESIZE)
+# else
+#   define PAGESIZE 4096
+# endif
+#endif
+
 #ifndef O_BINARY
 # define O_BINARY 0
 #endif

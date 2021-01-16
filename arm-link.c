@@ -12,8 +12,8 @@
 
 #define R_NUM       R_ARM_NUM
 
-#define ELF_START_ADDR 0x00008000
-#define ELF_PAGE_SIZE  0x1000
+#define ELF_START_ADDR 0x00010000
+#define ELF_PAGE_SIZE  0x10000
 
 #define PCRELATIVE_DLLPLT 1
 #define RELOCATE_DLLPLT 1
@@ -133,7 +133,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
         write32le(p,   0x4778); /* bx pc */
         write32le(p+2, 0x46c0); /* nop   */
     }
-    p = section_ptr_add(plt, 12);
+    p = section_ptr_add(plt, 16);
     /* save GOT offset for relocate_plt */
     write32le(p + 4, got_offset);
     return plt_offset;
@@ -159,10 +159,11 @@ ST_FUNC void relocate_plt(TCCState *s1)
 	    unsigned off = x  + read32le(p + 4) + (s1->plt->data - p) + 4;
             if (read32le(p) == 0x46c04778) /* PLT Thumb stub present */
                 p += 4;
-            write32le(p, 0xe28fc600 | ((off >> 20) & 0xff));     // add ip, pc, #0xNN00000
-            write32le(p + 4, 0xe28cca00 | ((off >> 12) & 0xff)); // add ip, ip, #0xNN000
-            write32le(p + 8, 0xe5bcf000 | (off & 0xfff));	 // ldr pc, [ip, #0xNNN]!
-            p += 12;
+            write32le(p, 0xe28fc200 | ((off >> 28) & 0xf));      // add ip, pc, #0xN0000000
+            write32le(p + 4, 0xe28cc600 | ((off >> 20) & 0xff)); // add ip, pc, #0xNN00000
+            write32le(p + 8, 0xe28cca00 | ((off >> 12) & 0xff)); // add ip, ip, #0xNN000
+            write32le(p + 12, 0xe5bcf000 | (off & 0xfff));	 // ldr pc, [ip, #0xNNN]!
+            p += 16;
         }
     }
 
@@ -378,6 +379,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     tcc_error("can't relocate value at %x,%d",addr, type);
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
+            return;
         case R_ARM_ABS32:
         case R_ARM_TARGET1:
             if (s1->output_type == TCC_OUTPUT_DLL) {

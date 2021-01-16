@@ -63,10 +63,6 @@ static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
 #endif
 
-#ifndef PAGESIZE
-# define PAGESIZE 4096
-#endif
-
 /* ------------------------------------------------------------- */
 /* Do all relocations (needed before using tcc_get_symbol())
    Returns -1 on error. */
@@ -333,7 +329,10 @@ static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length)
     if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC))
         tcc_error("mprotect failed: did you mean to configure --with-selinux?");
 # endif
-# if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
+/* XXX: BSD sometimes dump core with bad system call */
+# if (defined(TCC_TARGET_ARM) && \
+      !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)) || \
+     defined(TCC_TARGET_ARM64)
     __clear_cache(ptr, (char *)ptr + length);
 # endif
 #endif
@@ -667,6 +666,9 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
 #elif defined(__arm__) && defined(__OpenBSD__)
     rc->ip = uc->sc_pc;
     rc->fp = uc->sc_fpreg[29];
+#elif defined(__arm__) && defined(__FreeBSD__)
+    rc->ip = uc->uc_mcontext.__gregs[_REG_PC];
+    rc->fp = uc->uc_mcontext.__gregs[_REG_FP];
 #elif defined(__arm__)
     rc->ip = uc->uc_mcontext.arm_pc;
     rc->fp = uc->uc_mcontext.arm_fp;
@@ -830,8 +832,9 @@ static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
 #elif defined(__arm__)
 static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level)
 {
-    /* XXX: only supports linux */
-#if !defined(__linux__)
+    /* XXX: only supports linux/bsd */
+#if !defined(__linux__) && \
+    !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
     return -1;
 #else
     if (level == 0) {

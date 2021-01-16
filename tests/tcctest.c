@@ -21,7 +21,9 @@
 typedef __SIZE_TYPE__ uintptr_t;
 #endif
 
-#if defined(_WIN32)
+#if defined(_WIN32) || \
+    (defined(__arm__) && \
+     (defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)))
 #define LONG_LONG_FORMAT "%lld"
 #define ULONG_LONG_FORMAT "%llu"
 #else

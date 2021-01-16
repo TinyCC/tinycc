@@ -47,10 +47,6 @@ struct sym_version {
 /* section is dynsymtab_section */
 #define SHF_DYNSYM 0x40000000
 
-#ifndef PAGESIZE
-# define PAGESIZE 4096
-#endif
-
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void tccelf_new(TCCState *s)
@@ -1036,6 +1032,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_X86_64_64:
 #elif defined(TCC_TARGET_ARM)
         case R_ARM_ABS32:
+        case R_ARM_TARGET1:
 #elif defined(TCC_TARGET_ARM64)
         case R_AARCH64_ABS32:
         case R_AARCH64_ABS64:
@@ -1451,6 +1448,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
             else
                 tcc_add_dll(s1, TCC_LIBGCC, 0);
         }
+#endif
+#if TCC_TARGET_ARM && TARGETOS_FreeBSD
+        tcc_add_library_err(s1, "gcc_s"); // unwind code
 #endif
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
