@@ -178,6 +178,16 @@ case "$cpu" in
   x86_64|amd64|x86-64)
     cpu="x86_64"
   ;;
+  evbarm)
+    case "`uname -p`" in
+      aarch64|arm64)
+        cpu="aarch64"
+        ;;
+      earmv*)
+        cpu="arm"
+        ;;
+    esac
+  ;;
   aarch64|arm64|evbarm)
     cpu="aarch64"
   ;;
@@ -351,6 +361,8 @@ if test -z "$cross_prefix" ; then
 	   confvars="$confvars arm_eabihf arm_vfp"
 	elif test "${triplet%eabi}" != "$triplet" ; then
 	   confvars="$confvars arm_eabi"
+	elif test "`uname`" = "NetBSD"; then
+	   confvars="$confvars arm_eabihf arm_vfp"
 	fi
 	if grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
 	   confvars="$confvars arm_vfp"
