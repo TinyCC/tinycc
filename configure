@@ -361,7 +361,7 @@ if test -z "$cross_prefix" ; then
 	   confvars="$confvars arm_eabihf arm_vfp"
 	elif test "${triplet%eabi}" != "$triplet" ; then
 	   confvars="$confvars arm_eabi"
-	elif test "`uname`" = "NetBSD"; then
+	elif test "$targetos" = "NetBSD"; then
 	   confvars="$confvars arm_eabihf arm_vfp"
 	fi
 	if grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
