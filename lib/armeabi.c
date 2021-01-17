@@ -499,3 +499,39 @@ void __aeabi_uidivmod(unsigned num, unsigned den)
 {
     uidiv_t_return(aeabi_uidivmod(num, den));
 }
+
+/* Some targets do not have all eabi calls (OpenBSD) */
+typedef __SIZE_TYPE__ size_t;
+extern void *memcpy(void *dest, const void *src, size_t n);
+extern void *memmove(void *dest, const void *src, size_t n);
+extern void *memset(void *s, int c, size_t n);
+
+void *
+__aeabi_memcpy (void *dest, const void *src, size_t n)
+{
+    return memcpy (dest, src, n);
+}
+
+void *
+__aeabi_memmove (void *dest, const void *src, size_t n)
+{
+    return memmove (dest, src, n);
+}
+
+void *
+__aeabi_memmove4 (void *dest, const void *src, size_t n)
+{
+    return memmove (dest, src, n);
+}
+
+void *
+__aeabi_memmove8 (void *dest, const void *src, size_t n)
+{
+    return memmove (dest, src, n);
+}
+
+void *
+__aeabi_memset (void *s, size_t n, int c)
+{
+    return memset (s, c, n);
+}

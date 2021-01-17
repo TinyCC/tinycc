@@ -665,7 +665,7 @@ static void rt_getcontext(ucontext_t *uc, rt_context *rc)
     rc->fp = uc->uc_mcontext.__gregs[_REG_FP];
 #elif defined(__arm__) && defined(__OpenBSD__)
     rc->ip = uc->sc_pc;
-    rc->fp = uc->sc_fpreg[29];
+    rc->fp = uc->sc_r11;
 #elif defined(__arm__) && defined(__FreeBSD__)
     rc->ip = uc->uc_mcontext.__gregs[_REG_PC];
     rc->fp = uc->uc_mcontext.__gregs[_REG_FP];

@@ -360,9 +360,11 @@ if test -z "$cross_prefix" ; then
 	if test "${triplet%eabihf}" != "$triplet" ; then
 	   confvars="$confvars arm_eabihf arm_vfp"
 	elif test "${triplet%eabi}" != "$triplet" ; then
-	   confvars="$confvars arm_eabi"
-	elif test "$targetos" = "NetBSD"; then
+	   confvars="$confvars arm_eabi arm_vfp"
+	elif test "${_triplet%eabihf}" != "$_triplet" ; then
 	   confvars="$confvars arm_eabihf arm_vfp"
+	elif test "${_triplet%eabi}" != "$_triplet" ; then
+	   confvars="$confvars arm_eabi arm_vfp"
 	fi
 	if grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
 	   confvars="$confvars arm_vfp"

@@ -198,7 +198,8 @@ ST_FUNC void arm_init(struct TCCState *s)
 
     float_abi = s->float_abi;
 #ifndef TCC_ARM_HARDFLOAT
-# warning "soft float ABI currently not supported: default to softfp"
+// XXX: Works on OpenBSD
+// # warning "soft float ABI currently not supported: default to softfp"
 #endif
 }
 #else
@@ -1203,7 +1204,10 @@ again:
             o(0xE28D0000|(intr(r)<<12)|padding); /* add r, sp, padding */
             vset(&vtop->type, r | VT_LVAL, 0);
             vswap();
+	    /* XXX: optimize. Save all register because memcpy can use them */
+	    o(0xED2D0A00|(0&1)<<22|(0>>1)<<12|16); /* vpush {s0-s15} */
             vstore(); /* memcpy to current sp + potential padding */
+	    o(0xECBD0A00|(0&1)<<22|(0>>1)<<12|16); /* vpop {s0-s15} */
 
             /* Homogeneous float aggregate are loaded to VFP registers
                immediately since there is no way of loading data in multiple
