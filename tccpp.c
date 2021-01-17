@@ -345,6 +345,31 @@ ST_INLN void cstr_ccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
+char *unicode_to_utf8 (char *b, uint32_t Uc)
+{
+    if (Uc<0x80) *b++=Uc;
+    else if (Uc<0x800) *b++=192+Uc/64, *b++=128+Uc%64;
+    else if (Uc-0xd800u<0x800) return b;
+    else if (Uc<0x10000) *b++=224+Uc/4096, *b++=128+Uc/64%64, *b++=128+Uc%64;
+    else if (Uc<0x110000) *b++=240+Uc/262144, *b++=128+Uc/4096%64, *b++=128+Uc/64%64, *b++=128+Uc%64;
+    return b;
+}
+
+/* add a unicode character expanded into utf8 */
+void cstr_u8cat(CString *cstr, int ch)
+{
+    unsigned char buf[4];
+    int size;
+    int add = (int)((unsigned char*)unicode_to_utf8(&buf[0],(uint32_t)ch) - &buf[0]);
+    unsigned char *p,*b=buf;
+    size = cstr->size + add;
+    if (size > cstr->size_allocated)
+        cstr_realloc(cstr, size);
+    for(p = (unsigned char*)cstr->data + (size - add); add; add--) *p++=*b++;
+    cstr->size = size;
+}
+
+
 ST_FUNC void cstr_cat(CString *cstr, const char *str, int len)
 {
     int size;
@@ -2100,12 +2125,13 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                 }
                 c = n;
                 goto add_char_nonext;
-            case 'x':
-            case 'u':
-            case 'U':
+            case 'x': { unsigned ucn_chars_nr = -1u; goto parse_hex_or_ucn;
+            case 'u': ucn_chars_nr = 4; goto parse_hex_or_ucn;
+            case 'U': ucn_chars_nr = 8; goto parse_hex_or_ucn;
+                parse_hex_or_ucn:;
                 p++;
                 n = 0;
-                for(;;) {
+                for(unsigned i=1;i<=ucn_chars_nr;i++) {
                     c = *p;
                     if (c >= 'a' && c <= 'f')
                         c = c - 'a' + 10;
@@ -2113,13 +2139,19 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                         c = c - 'A' + 10;
                     else if (isnum(c))
                         c = c - '0';
-                    else
+                    else{
+                        if (ucn_chars_nr!=-1)
+                            tcc_error("%u hex digits expected in universal-character-name\n", ucn_chars_nr);
                         break;
+                    }
                     n = n * 16 + c;
                     p++;
                 }
                 c = n;
-                goto add_char_nonext;
+                if(ucn_chars_nr==-1) goto add_char_nonext;
+                cstr_u8cat(outstr, c);
+                continue;
+             }
             case 'a':
                 c = '\a';
                 break;
