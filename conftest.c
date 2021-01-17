@@ -194,6 +194,10 @@ int main(int argc, char **argv)
 # define TRIPLET_OS "linux"
 #elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
 # define TRIPLET_OS "kfreebsd"
+#elif defined(__NetBSD__)
+# define TRIPLET_OS "netbsd"
+#elif defined(__OpenBSD__)
+# define TRIPLET_OS "openbsd"
 #elif defined(_WIN32)
 # define TRIPLET_OS "win32"
 #elif defined(__APPLE__)
