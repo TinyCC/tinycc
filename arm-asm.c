@@ -329,7 +329,7 @@ static void asm_binary_opcode(TCCState *s1, int token)
 static void asm_block_data_transfer_opcode(TCCState *s1, int token)
 {
     uint32_t opcode;
-    int op0_exclam;
+    int op0_exclam = 0;
     Operand ops[2];
     int nb_ops = 1;
     parse_operand(s1, &ops[0]);
@@ -388,30 +388,30 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
     case TOK_ASM_ldmibeq:
         switch (ARM_INSTRUCTION_GROUP(token)) {
         case TOK_ASM_stmdaeq: // post-decrement store
-            opcode = 0x82 << 20;
+            opcode = 0x80 << 20;
             break;
         case TOK_ASM_ldmdaeq: // post-decrement load
-            opcode = 0x83 << 20;
+            opcode = 0x81 << 20;
             break;
         case TOK_ASM_stmeq: // post-increment store
         case TOK_ASM_stmiaeq: // post-increment store
-            opcode = 0x8a << 20;
+            opcode = 0x88 << 20;
             break;
         case TOK_ASM_ldmeq: // post-increment load
         case TOK_ASM_ldmiaeq: // post-increment load
-            opcode = 0x8b << 20;
+            opcode = 0x89 << 20;
             break;
         case TOK_ASM_stmdbeq: // pre-decrement store
-            opcode = 0x92 << 20;
+            opcode = 0x90 << 20;
             break;
         case TOK_ASM_ldmdbeq: // pre-decrement load
-            opcode = 0x93 << 20;
+            opcode = 0x91 << 20;
             break;
         case TOK_ASM_stmibeq: // pre-increment store
-            opcode = 0x9a << 20;
+            opcode = 0x98 << 20;
             break;
         case TOK_ASM_ldmibeq: // pre-increment load
-            opcode = 0x9b << 20;
+            opcode = 0x99 << 20;
             break;
         default:
             tcc_error("internal error: This place should not be reached (fallback in asm_block_data_transfer_opcode)");
@@ -423,10 +423,11 @@ static void asm_block_data_transfer_opcode(TCCState *s1, int token)
             expect("exactly two operands");
         else if (ops[0].type != OP_REG32)
             expect("(first operand) register");
-        else if (!op0_exclam)
-            tcc_error("first operand of '%s' should have an exclamation mark", get_tok_str(token, NULL));
-        else
+        else {
+            if (op0_exclam)
+                opcode |= 1 << 21; // writeback
             asm_emit_opcode(token, opcode | ENCODE_RN(ops[0].reg) | ops[1].regset);
+        }
         break;
     default:
         expect("block data transfer instruction");
