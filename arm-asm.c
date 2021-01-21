@@ -623,7 +623,7 @@ static void asm_data_processing_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
     int nb_ops;
-    Operand shift = {};
+    Operand shift = {0};
     int nb_shift = 0;
     uint32_t operands = 0;
 
@@ -1741,12 +1741,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     if (token < TOK_ASM_nopeq) { // no condition code
         switch (token) {
         case TOK_ASM_cdp2:
-            return asm_coprocessor_opcode(s1, token);
+            asm_coprocessor_opcode(s1, token);
+            return;
         case TOK_ASM_ldc2:
         case TOK_ASM_ldc2l:
         case TOK_ASM_stc2:
         case TOK_ASM_stc2l:
-            return asm_coprocessor_data_transfer_opcode(s1, token);
+            asm_coprocessor_data_transfer_opcode(s1, token);
+            return;
         default:
             expect("instruction");
             return;
@@ -1766,18 +1768,22 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_ldmdbeq:
     case TOK_ASM_stmibeq:
     case TOK_ASM_ldmibeq:
-        return asm_block_data_transfer_opcode(s1, token);
+        asm_block_data_transfer_opcode(s1, token);
+        return;
     case TOK_ASM_nopeq:
     case TOK_ASM_wfeeq:
     case TOK_ASM_wfieq:
-        return asm_nullary_opcode(token);
+        asm_nullary_opcode(token);
+        return;
     case TOK_ASM_swieq:
-        return asm_unary_opcode(s1, token);
+        asm_unary_opcode(s1, token);
+        return;
     case TOK_ASM_beq:
     case TOK_ASM_bleq:
     case TOK_ASM_bxeq:
     case TOK_ASM_blxeq:
-        return asm_branch_opcode(s1, token);
+        asm_branch_opcode(s1, token);
+        return;
     case TOK_ASM_clzeq:
     case TOK_ASM_sxtbeq:
     case TOK_ASM_sxtheq:
@@ -1785,7 +1791,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_uxtheq:
     case TOK_ASM_movteq:
     case TOK_ASM_movweq:
-        return asm_binary_opcode(s1, token);
+        asm_binary_opcode(s1, token);
+        return;
 
     case TOK_ASM_ldreq:
     case TOK_ASM_ldrbeq:
@@ -1795,13 +1802,15 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_ldrexbeq:
     case TOK_ASM_strexeq:
     case TOK_ASM_strexbeq:
-        return asm_single_data_transfer_opcode(s1, token);
+        asm_single_data_transfer_opcode(s1, token);
+        return;
 
     case TOK_ASM_ldrheq:
     case TOK_ASM_ldrsheq:
     case TOK_ASM_ldrsbeq:
     case TOK_ASM_strheq:
-       return asm_misc_single_data_transfer_opcode(s1, token);
+       asm_misc_single_data_transfer_opcode(s1, token);
+       return;
 
     case TOK_ASM_andeq:
     case TOK_ASM_eoreq:
@@ -1835,7 +1844,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_movseq:
     case TOK_ASM_bicseq:
     case TOK_ASM_mvnseq:
-        return asm_data_processing_opcode(s1, token);
+        asm_data_processing_opcode(s1, token);
+        return;
 
     case TOK_ASM_lsleq:
     case TOK_ASM_lslseq:
@@ -1847,13 +1857,15 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_rorseq:
     case TOK_ASM_rrxseq:
     case TOK_ASM_rrxeq:
-        return asm_shift_opcode(s1, token);
+        asm_shift_opcode(s1, token);
+        return;
 
     case TOK_ASM_muleq:
     case TOK_ASM_mulseq:
     case TOK_ASM_mlaeq:
     case TOK_ASM_mlaseq:
-        return asm_multiplication_opcode(s1, token);
+        asm_multiplication_opcode(s1, token);
+        return;
 
     case TOK_ASM_smulleq:
     case TOK_ASM_smullseq:
@@ -1863,23 +1875,27 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_smlalseq:
     case TOK_ASM_umlaleq:
     case TOK_ASM_umlalseq:
-        return asm_long_multiplication_opcode(s1, token);
+        asm_long_multiplication_opcode(s1, token);
+        return;
 
     case TOK_ASM_cdpeq:
     case TOK_ASM_mcreq:
     case TOK_ASM_mrceq:
-        return asm_coprocessor_opcode(s1, token);
+        asm_coprocessor_opcode(s1, token);
+        return;
 
     case TOK_ASM_ldceq:
     case TOK_ASM_ldcleq:
     case TOK_ASM_stceq:
     case TOK_ASM_stcleq:
-        return asm_coprocessor_data_transfer_opcode(s1, token);
+        asm_coprocessor_data_transfer_opcode(s1, token);
+        return;
 
 #if defined(TCC_ARM_VFP)
     case TOK_ASM_vldreq:
     case TOK_ASM_vstreq:
-        return asm_floating_point_single_data_transfer_opcode(s1, token);
+        asm_floating_point_single_data_transfer_opcode(s1, token);
+        return;
 #endif
 
     default:
