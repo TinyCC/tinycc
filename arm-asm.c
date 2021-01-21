@@ -1534,6 +1534,119 @@ static void asm_floating_point_single_data_transfer_opcode(TCCState *s1, int tok
         expect("floating point data transfer instruction");
     }
 }
+
+static void asm_floating_point_block_data_transfer_opcode(TCCState *s1, int token)
+{
+    uint8_t coprocessor = 0;
+    int first_regset_register;
+    int last_regset_register;
+    uint8_t regset_item_count;
+    uint8_t extra_register_bit = 0;
+    int op0_exclam = 0;
+    int load = 0;
+    int preincrement = 0;
+    Operand ops[1];
+    Operand offset;
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vpusheq:
+    case TOK_ASM_vpopeq:
+        ops[0].type = OP_REG32;
+        ops[0].reg = 13; // sp
+        op0_exclam = 1;
+        break;
+    default:
+        parse_operand(s1, &ops[0]);
+        if (tok == '!') {
+            op0_exclam = 1;
+            next(); // skip '!'
+        }
+        if (tok == ',')
+            next(); // skip comma
+        else {
+            expect("','");
+            return;
+        }
+    }
+
+    if (tok != '{') {
+        expect("'{'");
+        return;
+    }
+    next(); // skip '{'
+    first_regset_register = asm_parse_vfp_regvar(tok, 1);
+    if ((first_regset_register = asm_parse_vfp_regvar(tok, 1)) != -1) {
+        coprocessor = CP_DOUBLE_PRECISION_FLOAT;
+        next();
+    } else if ((first_regset_register = asm_parse_vfp_regvar(tok, 0)) != -1) {
+        coprocessor = CP_SINGLE_PRECISION_FLOAT;
+        next();
+    } else {
+        expect("floating-point register");
+        return;
+    }
+
+    if (tok == '-') {
+        next();
+        if ((last_regset_register = asm_parse_vfp_regvar(tok, coprocessor == CP_DOUBLE_PRECISION_FLOAT)) != -1)
+            next();
+        else {
+            expect("floating-point register");
+            return;
+        }
+    } else
+        last_regset_register = first_regset_register;
+
+    if (last_regset_register < first_regset_register) {
+        tcc_error("registers will be processed in ascending order by hardware--but are not specified in ascending order here");
+        return;
+    }
+    if (tok != '}') {
+        expect("'}'");
+        return;
+    }
+    next(); // skip '}'
+
+    // Note: 0 (one down) is not implemented by us regardless.
+    regset_item_count = last_regset_register - first_regset_register + 1;
+    if (coprocessor == CP_DOUBLE_PRECISION_FLOAT)
+        regset_item_count <<= 1;
+    else {
+        extra_register_bit = first_regset_register & 1;
+        first_regset_register >>= 1;
+    }
+    offset.type = OP_IM8;
+    offset.e.v = regset_item_count << 2;
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vstmeq: // post-increment store
+    case TOK_ASM_vstmiaeq: // post-increment store
+        break;
+    case TOK_ASM_vpopeq:
+    case TOK_ASM_vldmeq: // post-increment load
+    case TOK_ASM_vldmiaeq: // post-increment load
+        load = 1;
+        break;
+    case TOK_ASM_vldmdbeq: // pre-decrement load
+        load = 1;
+        /* fallthrough */
+    case TOK_ASM_vpusheq:
+    case TOK_ASM_vstmdbeq: // pre-decrement store
+        offset.type = OP_IM8N;
+        offset.e.v = -offset.e.v;
+        preincrement = 1;
+        break;
+    default:
+        expect("floating point block data transfer instruction");
+        return;
+    }
+    if (ops[0].type != OP_REG32)
+        expect("(first operand) register");
+    else if (ops[0].reg == 15)
+        tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
+    else if (!op0_exclam && ARM_INSTRUCTION_GROUP(token) != TOK_ASM_vldmeq && ARM_INSTRUCTION_GROUP(token) != TOK_ASM_vldmiaeq && ARM_INSTRUCTION_GROUP(token) != TOK_ASM_vstmeq && ARM_INSTRUCTION_GROUP(token) != TOK_ASM_vstmiaeq)
+        tcc_error("first operand of '%s' should have an exclamation mark", get_tok_str(token, NULL));
+    else
+        asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, first_regset_register, &ops[0], &offset, 0, preincrement, op0_exclam, extra_register_bit, load);
+}
 #endif
 
 static void asm_misc_single_data_transfer_opcode(TCCState *s1, int token)
@@ -1897,6 +2010,17 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vldreq:
     case TOK_ASM_vstreq:
         asm_floating_point_single_data_transfer_opcode(s1, token);
+        return;
+
+    case TOK_ASM_vpusheq:
+    case TOK_ASM_vpopeq:
+    case TOK_ASM_vldmeq:
+    case TOK_ASM_vldmiaeq:
+    case TOK_ASM_vldmdbeq:
+    case TOK_ASM_vstmeq:
+    case TOK_ASM_vstmiaeq:
+    case TOK_ASM_vstmdbeq:
+        asm_floating_point_block_data_transfer_opcode(s1, token);
         return;
 #endif
 

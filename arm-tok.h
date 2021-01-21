@@ -285,3 +285,12 @@
 
  DEF_ASM_CONDED(vldr)
  DEF_ASM_CONDED(vstr)
+
+ DEF_ASM_CONDED(vpush)
+ DEF_ASM_CONDED(vpop)
+ DEF_ASM_CONDED(vldm)
+ DEF_ASM_CONDED(vldmia)
+ DEF_ASM_CONDED(vldmdb)
+ DEF_ASM_CONDED(vstm)
+ DEF_ASM_CONDED(vstmia)
+ DEF_ASM_CONDED(vstmdb)
