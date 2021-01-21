@@ -7,11 +7,16 @@ set -e
 state="`mktemp -d`"
 cat ../arm-tok.h |grep DEF_ASM |grep -v 'not useful' |grep -v '#define' |grep -v '/[*]' |sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;' | egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
 do
-	# If VFP is disabled, skip VFP tests.
-	if [ "${s#v}" != "${s}" ] && ! grep -q "CONFIG_arm_vfp=yes" ../config.mak
+	as_opts=""
+	if [ "${s#v}" != "${s}" ]
 	then
-		echo "note: skipping VFP instruction: $s (because VFP is disabled)">&2
-		continue
+		if grep -q "CONFIG_arm_vfp=yes" ../config.mak
+		then
+			as_opts="${as_opts} -mfpu=vfp"
+		else
+			echo "note: skipping VFP instruction: $s (because VFP is disabled)">&2
+			continue
+		fi
 	fi
 	ok=0
 	for args in "r3, r4, r5, r6" \
@@ -123,7 +128,7 @@ do
 		tcc_object="${state}/tcc-$s $args.o"
 		expected="${state}/expected-$s $args"
 		got="${state}/got-$s $args"
-		if echo "$s $args" | "${CROSS_COMPILE}as" -mlittle-endian -o "${as_object}" - 2>"${err}"
+		if echo "$s $args" | "${CROSS_COMPILE}as" -mlittle-endian ${as_opts} -o "${as_object}" - 2>"${err}"
 		then
 			cat "${err}"
 			rm -f "${err}"
