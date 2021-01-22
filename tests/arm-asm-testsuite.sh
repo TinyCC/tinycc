@@ -5,7 +5,16 @@ set -e
 # Note: "{r3}" is definitely different--but would complicate the assembler.
 
 state="`mktemp -d`"
-cat ../arm-tok.h |grep DEF_ASM |grep -v 'not useful' |grep -v '#define' |grep -v '/[*]' |sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;' | egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
+cat ../arm-tok.h | \
+  grep DEF_ASM | \
+  grep -v 'not useful' | \
+  grep -v '#define' | \
+  grep -v '/[*]' | \
+  grep -v 'DEF_ASM_CONDED_WITH_SUFFIX(x' | \
+  sed -e 's;^[ ]*DEF_ASM_CONDED_VFP_F32_F64[^(]*(\(.*\)).*$; DEF_ASM_CONDED(\1.f32)\
+ DEF_ASM_CONDED(\1.f64);g' | \
+  sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;g' | \
+  egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
 do
 	as_opts=""
 	if [ "${s#v}" != "${s}" ]
@@ -132,6 +141,12 @@ do
                     "{d4}" \
                     "{s4-s31}" \
                     "{s4}" \
+                    "s2, s3, s4" \
+                    "s2, s3" \
+                    "d2, d3, d4" \
+                    "d2, d3" \
+                    "s2, #0" \
+                    "d2, #0" \
 	            ""
 	do
 		#echo ".syntax unified" > a.s

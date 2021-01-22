@@ -1465,7 +1465,6 @@ static int asm_parse_vfp_regvar(int t, int double_precision)
     return -1;
 }
 
-
 static void asm_floating_point_single_data_transfer_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
@@ -1647,6 +1646,264 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *s1, int toke
         tcc_error("first operand of '%s' should have an exclamation mark", get_tok_str(token, NULL));
     else
         asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, first_regset_register, &ops[0], &offset, 0, preincrement, op0_exclam, extra_register_bit, load);
+}
+
+// Not standalone.
+static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s1, int token, uint8_t coprocessor, uint8_t CRd) {
+    uint8_t opcode1 = 0;
+    uint8_t opcode2 = 0;
+    uint8_t operands[3] = {0, 0, 0};
+    Operand operand;
+
+    operands[0] = CRd;
+
+    parse_operand(s1, &operand);
+    if (operand.type != OP_IM8 && operand.type != OP_IM8N) {
+        expect("Immediate value");
+        return;
+    }
+
+    opcode1 = 11; // "Other" instruction
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vcmpeq_f32:
+    case TOK_ASM_vcmpeq_f64:
+        opcode2 = 2;
+        operands[1] = 5;
+        if (operand.e.v) {
+            expect("Immediate value 0");
+            return;
+        }
+        break;
+    case TOK_ASM_vcmpeeq_f32:
+    case TOK_ASM_vcmpeeq_f64:
+        opcode2 = 6;
+        operands[1] = 5;
+        if (operand.e.v) {
+            expect("Immediate value 0");
+            return;
+        }
+        break;
+    default:
+        expect("known floating point with immediate instruction");
+        return;
+    }
+
+    if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
+        if (operands[0] & 1)
+            opcode1 |= 4;
+        operands[0] >>= 1;
+    }
+
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, operands[0], operands[1], operands[2], opcode2, 0);
+}
+
+static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
+    uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
+    uint8_t opcode1 = 0;
+    uint8_t opcode2 = 0; // (0 || 2) | register selection
+    uint8_t operands[3];
+    uint8_t nb_operands = 0;
+    int operand_1_register = 1;
+    int reg;
+
+/* TODO:
+   Instruction    opcode opcode2  Reason
+   =============================================================
+   -              1?00   ?1?      Undefined
+   VFNMS          1?01   ?0?      Must be unconditional
+   VFNMA          1?01   ?1?      Must be unconditional
+   VFMA           1?10   ?0?      Must be unconditional
+   VFMS           1?10   ?1?      Must be unconditional
+
+   VCVT*
+
+   VMOV Fd, Fm
+   VMOV Sn, Rd
+   VMOV Rd, Sn
+   VMOV Sn, Sm, Rd, Rn
+   VMOV Rd, Rn, Sn, Sm
+   VMOV Dm, Rd, Rn
+   VMOV Rd, Rn, Dm
+   VMOV Dn[0], Rd
+   VMOV Rd, Dn[0]
+   VMOV Dn[1], Rd
+   VMOV Rd, Dn[1]
+
+   VMSR <sysreg>, Rd
+   VMRS Rd, <sysreg>
+   VMRS APSR_nzcv, FPSCR
+*/
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vmlaeq_f64:
+    case TOK_ASM_vmlseq_f64:
+    case TOK_ASM_vnmlseq_f64:
+    case TOK_ASM_vnmlaeq_f64:
+    case TOK_ASM_vmuleq_f64:
+    case TOK_ASM_vnmuleq_f64:
+    case TOK_ASM_vaddeq_f64:
+    case TOK_ASM_vsubeq_f64:
+    case TOK_ASM_vdiveq_f64:
+    case TOK_ASM_vnegeq_f64:
+    case TOK_ASM_vabseq_f64:
+    case TOK_ASM_vsqrteq_f64:
+    case TOK_ASM_vcmpeq_f64:
+    case TOK_ASM_vcmpeeq_f64:
+        coprocessor = CP_DOUBLE_PRECISION_FLOAT;
+    }
+
+    for (nb_operands = 0; nb_operands < 3; ) {
+        if (nb_operands == 1 && (tok == '#' || tok == '$')) {
+            asm_floating_point_immediate_data_processing_opcode_tail(s1, token, coprocessor, operands[0]);
+            return;
+        }
+        if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
+            if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
+                operands[nb_operands] = reg;
+                next();
+            } else {
+                expect("'s<number>'");
+                return;
+            }
+        } else if (coprocessor == CP_DOUBLE_PRECISION_FLOAT) {
+            if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
+                operands[nb_operands] = reg;
+                next();
+            } else {
+                expect("'d<number>'");
+                return;
+            }
+        } else if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
+            coprocessor = CP_SINGLE_PRECISION_FLOAT;
+            operands[nb_operands] = reg;
+            next();
+        } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
+            coprocessor = CP_DOUBLE_PRECISION_FLOAT;
+            operands[nb_operands] = reg;
+            next();
+        } else
+            tcc_internal_error("unknown coprocessor");
+	++nb_operands;
+        if (tok == ',')
+            next();
+        else
+            break;
+    }
+
+    if (nb_operands == 2) { // implicit
+        operands[2] = operands[1];
+        operands[1] = operands[0];
+        nb_operands = 3;
+    }
+    if (nb_operands < 3) {
+        tcc_error("Not enough operands for '%s' (%u)", get_tok_str(token, NULL), nb_operands);
+        return;
+    }
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vmlaeq_f32:
+    case TOK_ASM_vmlaeq_f64:
+        opcode1 = 0;
+        opcode2 = 0;
+        break;
+    case TOK_ASM_vmlseq_f32:
+    case TOK_ASM_vmlseq_f64:
+        opcode1 = 0;
+        opcode2 = 2;
+        break;
+    case TOK_ASM_vnmlseq_f32:
+    case TOK_ASM_vnmlseq_f64:
+        opcode1 = 1;
+        opcode2 = 0;
+        break;
+    case TOK_ASM_vnmlaeq_f32:
+    case TOK_ASM_vnmlaeq_f64:
+        opcode1 = 1;
+        opcode2 = 2;
+        break;
+    case TOK_ASM_vmuleq_f32:
+    case TOK_ASM_vmuleq_f64:
+        opcode1 = 2;
+        opcode2 = 0;
+        break;
+    case TOK_ASM_vnmuleq_f32:
+    case TOK_ASM_vnmuleq_f64:
+        opcode1 = 2;
+        opcode2 = 2;
+        break;
+    case TOK_ASM_vaddeq_f32:
+    case TOK_ASM_vaddeq_f64:
+        opcode1 = 3;
+        opcode2 = 0;
+        break;
+    case TOK_ASM_vsubeq_f32:
+    case TOK_ASM_vsubeq_f64:
+        opcode1 = 3;
+        opcode2 = 2;
+        break;
+    case TOK_ASM_vdiveq_f32:
+    case TOK_ASM_vdiveq_f64:
+        opcode1 = 8;
+        opcode2 = 0;
+        break;
+    case TOK_ASM_vnegeq_f32:
+    case TOK_ASM_vnegeq_f64:
+        opcode1 = 11; // Other" instruction
+        opcode2 = 2;
+        operands[1] = 1;
+        operand_1_register = 0;
+        break;
+    case TOK_ASM_vabseq_f32:
+    case TOK_ASM_vabseq_f64:
+        opcode1 = 11; // "Other" instruction
+        opcode2 = 6;
+        operands[1] = 0;
+        operand_1_register = 0;
+        break;
+    case TOK_ASM_vsqrteq_f32:
+    case TOK_ASM_vsqrteq_f64:
+        opcode1 = 11; // "Other" instruction
+        opcode2 = 6;
+        operands[1] = 1;
+        operand_1_register = 0;
+        break;
+    case TOK_ASM_vcmpeq_f32:
+    case TOK_ASM_vcmpeq_f64:
+        opcode1 = 11; // "Other" instruction
+        opcode2 = 2;
+        operands[1] = 4;
+        operand_1_register = 0;
+        break;
+    case TOK_ASM_vcmpeeq_f32:
+    case TOK_ASM_vcmpeeq_f64:
+        opcode1 = 11; // "Other" instruction
+        opcode2 = 6;
+        operands[1] = 4;
+        operand_1_register = 0;
+        break;
+    // TODO: vcvt; vcvtr
+    default:
+        expect("known floating point instruction");
+        return;
+    }
+
+    if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
+        if (operands[2] & 1)
+            opcode2 |= 1;
+        operands[2] >>= 1;
+
+        if (operand_1_register) {
+            if (operands[1] & 1)
+                opcode2 |= 4;
+            operands[1] >>= 1;
+        }
+
+        if (operands[0] & 1)
+            opcode1 |= 4;
+        operands[0] >>= 1;
+    }
+
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, operands[0], operands[1], operands[2], opcode2, 0);
 }
 #endif
 
@@ -2011,6 +2268,37 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vldreq:
     case TOK_ASM_vstreq:
         asm_floating_point_single_data_transfer_opcode(s1, token);
+        return;
+
+    case TOK_ASM_vmlaeq_f32:
+    case TOK_ASM_vmlseq_f32:
+    case TOK_ASM_vnmlseq_f32:
+    case TOK_ASM_vnmlaeq_f32:
+    case TOK_ASM_vmuleq_f32:
+    case TOK_ASM_vnmuleq_f32:
+    case TOK_ASM_vaddeq_f32:
+    case TOK_ASM_vsubeq_f32:
+    case TOK_ASM_vdiveq_f32:
+    case TOK_ASM_vnegeq_f32:
+    case TOK_ASM_vabseq_f32:
+    case TOK_ASM_vsqrteq_f32:
+    case TOK_ASM_vcmpeq_f32:
+    case TOK_ASM_vcmpeeq_f32:
+    case TOK_ASM_vmlaeq_f64:
+    case TOK_ASM_vmlseq_f64:
+    case TOK_ASM_vnmlseq_f64:
+    case TOK_ASM_vnmlaeq_f64:
+    case TOK_ASM_vmuleq_f64:
+    case TOK_ASM_vnmuleq_f64:
+    case TOK_ASM_vaddeq_f64:
+    case TOK_ASM_vsubeq_f64:
+    case TOK_ASM_vdiveq_f64:
+    case TOK_ASM_vnegeq_f64:
+    case TOK_ASM_vabseq_f64:
+    case TOK_ASM_vsqrteq_f64:
+    case TOK_ASM_vcmpeq_f64:
+    case TOK_ASM_vcmpeeq_f64:
+        asm_floating_point_data_processing_opcode(s1, token);
         return;
 
     case TOK_ASM_vpusheq:
