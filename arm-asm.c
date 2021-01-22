@@ -1648,18 +1648,115 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *s1, int toke
         asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, first_regset_register, &ops[0], &offset, 0, preincrement, op0_exclam, extra_register_bit, load);
 }
 
+#define VMOV_FRACTIONAL_DIGITS 7
+#define VMOV_ONE 10000000 /* pow(10, VMOV_FRACTIONAL_DIGITS) */
+
+static uint32_t vmov_parse_fractional_part(const char* s)
+{
+    uint32_t result = 0;
+    int i;
+    for (i = 0; i < VMOV_FRACTIONAL_DIGITS; ++i) {
+        char c = *s;
+        result *= 10;
+        if (c >= '0' && c <= '9') {
+            result += (c - '0');
+            ++s;
+        }
+    }
+    if (*s)
+        expect("decimal numeral");
+    return result;
+}
+
+static int vmov_linear_approx_index(uint32_t beginning, uint32_t end, uint32_t value)
+{
+    int i;
+    uint32_t k;
+    uint32_t xvalue;
+
+    k = (end - beginning)/16;
+    for (xvalue = beginning, i = 0; i < 16; ++i, xvalue += k) {
+        if (value == xvalue)
+            return i;
+    }
+    //assert(0);
+    return -1;
+}
+
+static uint32_t vmov_parse_immediate_value() {
+    uint32_t value;
+    unsigned long integral_value;
+    const char *p;
+
+    if (tok != TOK_PPNUM) {
+        expect("immediate value");
+        return 0;
+    }
+    p = tokc.str.data;
+    errno = 0;
+    integral_value = strtoul(p, (char **)&p, 0);
+
+    if (errno || integral_value >= 32) {
+        tcc_error("invalid floating-point immediate value");
+        return 0;
+    }
+
+    value = (uint32_t) integral_value * VMOV_ONE;
+    if (*p == '.') {
+        ++p;
+        value += vmov_parse_fractional_part(p);
+    }
+    next();
+    return value;
+}
+
+static uint8_t vmov_encode_immediate_value(uint32_t value)
+{
+    uint32_t limit;
+    uint32_t end = 0;
+    uint32_t beginning = 0;
+    int r = -1;
+    int n;
+    int i;
+
+    limit = 32 * VMOV_ONE;
+    for (i = 0; i < 8; ++i) {
+        if (value < limit) {
+            end = limit;
+            limit >>= 1;
+            beginning = limit;
+            r = i;
+        } else
+            limit >>= 1;
+    }
+    if (r == -1 || value < beginning || value > end) {
+        tcc_error("invalid decimal number for vmov: %d", value);
+        return 0;
+    }
+    n = vmov_linear_approx_index(beginning, end, value);
+    return n | (((3 - r) & 0x7) << 4);
+}
+
 // Not standalone.
 static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s1, int token, uint8_t coprocessor, uint8_t CRd) {
     uint8_t opcode1 = 0;
     uint8_t opcode2 = 0;
     uint8_t operands[3] = {0, 0, 0};
-    Operand operand;
+    uint32_t immediate_value = 0;
+    int op_minus = 0;
+    uint8_t code;
 
     operands[0] = CRd;
 
-    parse_operand(s1, &operand);
-    if (operand.type != OP_IM8 && operand.type != OP_IM8N) {
-        expect("Immediate value");
+    if (tok == '#' || tok == '$') {
+        next();
+        if (tok == '-') {
+            op_minus = 1;
+            next();
+        }
+        immediate_value = vmov_parse_immediate_value();
+    } else {
+        expect("'#'");
         return;
     }
 
@@ -1669,7 +1766,7 @@ static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s
     case TOK_ASM_vcmpeq_f64:
         opcode2 = 2;
         operands[1] = 5;
-        if (operand.e.v) {
+        if (immediate_value) {
             expect("Immediate value 0");
             return;
         }
@@ -1678,10 +1775,21 @@ static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s
     case TOK_ASM_vcmpeeq_f64:
         opcode2 = 6;
         operands[1] = 5;
-        if (operand.e.v) {
+        if (immediate_value) {
             expect("Immediate value 0");
             return;
         }
+        break;
+    case TOK_ASM_vmoveq_f32:
+    case TOK_ASM_vmoveq_f64:
+        opcode2 = 0;
+        if (op_minus)
+            operands[1] = 0x8;
+        else
+            operands[1] = 0x0;
+        code = vmov_encode_immediate_value(immediate_value);
+        operands[1] |= code >> 4;
+        operands[2] = code & 0xF;
         break;
     default:
         expect("known floating point with immediate instruction");
@@ -1749,6 +1857,7 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     case TOK_ASM_vsqrteq_f64:
     case TOK_ASM_vcmpeq_f64:
     case TOK_ASM_vcmpeeq_f64:
+    case TOK_ASM_vmoveq_f64:
         coprocessor = CP_DOUBLE_PRECISION_FLOAT;
     }
 
@@ -1879,6 +1988,13 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
         opcode1 = 11; // "Other" instruction
         opcode2 = 6;
         operands[1] = 4;
+        operand_1_register = 0;
+        break;
+    case TOK_ASM_vmoveq_f32:
+    case TOK_ASM_vmoveq_f64:
+        opcode1 = 11; // "Other" instruction
+        opcode2 = 2;
+        operands[1] = 0;
         operand_1_register = 0;
         break;
     // TODO: vcvt; vcvtr
@@ -2284,6 +2400,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vsqrteq_f32:
     case TOK_ASM_vcmpeq_f32:
     case TOK_ASM_vcmpeeq_f32:
+    case TOK_ASM_vmoveq_f32:
     case TOK_ASM_vmlaeq_f64:
     case TOK_ASM_vmlseq_f64:
     case TOK_ASM_vnmlseq_f64:
@@ -2298,6 +2415,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vsqrteq_f64:
     case TOK_ASM_vcmpeq_f64:
     case TOK_ASM_vcmpeeq_f64:
+    case TOK_ASM_vmoveq_f64:
         asm_floating_point_data_processing_opcode(s1, token);
         return;
 
