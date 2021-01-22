@@ -1293,6 +1293,7 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
     }
 }
 
+// Note: Only call this using a VFP register if you know exactly what you are doing (i.e. cp_number is 10 or 11 and you are doing a vmov)
 static void asm_emit_coprocessor_data_transfer(uint32_t high_nibble, uint8_t cp_number, uint8_t CRd, const Operand* Rn, const Operand* offset, int offset_minus, int preincrement, int writeback, int long_transfer, int load) {
     uint32_t opcode = 0x0;
     opcode |= 1 << 26; // Load/Store
@@ -1306,12 +1307,14 @@ static void asm_emit_coprocessor_data_transfer(uint32_t high_nibble, uint8_t cp_
 
     opcode |= cp_number << 8;
 
+    //assert(CRd < 16);
     opcode |= ENCODE_RD(CRd);
 
     if (Rn->type != OP_REG32) {
         expect("register");
         return;
     }
+    //assert(Rn->reg < 16);
     opcode |= ENCODE_RN(Rn->reg);
     if (preincrement)
         opcode |= 1 << 24; // add offset before transfer
@@ -1344,6 +1347,9 @@ static void asm_emit_coprocessor_data_transfer(uint32_t high_nibble, uint8_t cp_
         opcode |= offset->reg;
         tcc_error("Using register offset to register address is not possible here");
         return;
+    } else if (offset->type == OP_VREG64) {
+        opcode |= 16;
+        opcode |= offset->reg;
     } else
         expect("immediate or register");
 
@@ -1419,6 +1425,9 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *s1, int token)
                 tcc_error("Using 'pc' for register offset in '%s' is not implemented by ARM", get_tok_str(token, NULL));
                 return;
             }
+        } else if (ops[2].type == OP_VREG64) {
+            tcc_error("'%s' does not support VFP register operand", get_tok_str(token, NULL));
+            return;
         }
     } else {
         // end of input expression in brackets--assume 0 offset
@@ -1816,12 +1825,77 @@ static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s
     asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, operands[0], operands[1], operands[2], opcode2, 0);
 }
 
+static void asm_floating_point_reg_arm_reg_transfer_opcode_tail(TCCState *s1, int token, int coprocessor, int nb_arm_regs, int nb_ops, Operand ops[3]) {
+    uint8_t opcode1 = 0;
+    uint8_t opcode2 = 0;
+    switch (coprocessor) {
+    case CP_SINGLE_PRECISION_FLOAT:
+        // "vmov.f32 r2, s3" or "vmov.f32 s3, r2"
+        if (nb_ops != 2 || nb_arm_regs != 1) {
+            tcc_error("vmov.f32 only implemented for one VFP register operand and one ARM register operands");
+            return;
+        }
+        if (ops[0].type != OP_REG32) { // determine mode: load or store
+            // need to swap operands 0 and 1
+            memcpy(&ops[2], &ops[1], sizeof(ops[2]));
+            memcpy(&ops[1], &ops[0], sizeof(ops[1]));
+            memcpy(&ops[0], &ops[2], sizeof(ops[0]));
+        } else
+            opcode1 |= 1;
+
+        if (ops[1].type == OP_VREG32) {
+            if (ops[1].reg & 1)
+                opcode2 |= 4;
+            ops[1].reg >>= 1;
+        }
+
+        if (ops[0].type == OP_VREG32) {
+            if (ops[0].reg & 1)
+                opcode1 |= 4;
+            ops[0].reg >>= 1;
+        }
+
+        asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, 0x10, opcode2, 0);
+        break;
+    case CP_DOUBLE_PRECISION_FLOAT:
+        if (nb_ops != 3 || nb_arm_regs != 2) {
+            tcc_error("vmov.f32 only implemented for one VFP register operand and two ARM register operands");
+            return;
+        }
+        // Determine whether it's a store into a VFP register (vmov "d1, r2, r3") rather than "vmov r2, r3, d1"
+        if (ops[0].type == OP_VREG64) {
+            if (ops[2].type == OP_REG32) {
+                Operand temp;
+                // need to rotate operand list to the left
+                memcpy(&temp, &ops[0], sizeof(temp));
+                memcpy(&ops[0], &ops[1], sizeof(ops[0]));
+                memcpy(&ops[1], &ops[2], sizeof(ops[1]));
+                memcpy(&ops[2], &temp, sizeof(ops[2]));
+            } else {
+                tcc_error("vmov.f64 only implemented for one VFP register operand and two ARM register operands");
+                return;
+            }
+        } else if (ops[0].type != OP_REG32 || ops[1].type != OP_REG32 || ops[2].type != OP_VREG64) {
+            tcc_error("vmov.f64 only implemented for one VFP register operand and two ARM register operands");
+            return;
+        } else {
+            opcode1 |= 1;
+        }
+        asm_emit_coprocessor_data_transfer(condition_code_of_token(token), coprocessor, ops[0].reg, &ops[1], &ops[2], 0, 0, 0, 1, opcode1);
+        break;
+    default:
+        tcc_internal_error("unknown coprocessor");
+    }
+}
+
 static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
     uint8_t opcode1 = 0;
     uint8_t opcode2 = 0; // (0 || 2) | register selection
     Operand ops[3];
     uint8_t nb_ops = 0;
+    int vmov = 0;
+    int nb_arm_regs = 0;
 
 /* TODO:
    Instruction    opcode opcode2  Reason
@@ -1835,12 +1909,8 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
    VCVT*
 
    VMOV Fd, Fm
-   VMOV Sn, Rd
-   VMOV Rd, Sn
    VMOV Sn, Sm, Rd, Rn
    VMOV Rd, Rn, Sn, Sm
-   VMOV Dm, Rd, Rn
-   VMOV Rd, Rn, Dm
    VMOV Dn[0], Rd
    VMOV Rd, Dn[0]
    VMOV Dn[1], Rd
@@ -1870,13 +1940,23 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
         coprocessor = CP_DOUBLE_PRECISION_FLOAT;
     }
 
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vmoveq_f32:
+    case TOK_ASM_vmoveq_f64:
+        vmov = 1;
+        break;
+    }
+
     for (nb_ops = 0; nb_ops < 3; ) {
+        // Note: Necessary because parse_operand can't parse decimal numerals.
         if (nb_ops == 1 && (tok == '#' || tok == '$')) {
             asm_floating_point_immediate_data_processing_opcode_tail(s1, token, coprocessor, ops[0].reg);
             return;
         }
         parse_operand(s1, &ops[nb_ops]);
-        if (ops[nb_ops].type == OP_VREG32) {
+        if (vmov && ops[nb_ops].type == OP_REG32) {
+            ++nb_arm_regs;
+        } else if (ops[nb_ops].type == OP_VREG32) {
             if (coprocessor != CP_SINGLE_PRECISION_FLOAT) {
                 expect("'s<number>'");
                 return;
@@ -1897,14 +1977,16 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
             break;
     }
 
-    if (nb_ops == 2) { // implicit
-        memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
-        memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
-        nb_ops = 3;
-    }
-    if (nb_ops < 3) {
-        tcc_error("Not enough operands for '%s' (%u)", get_tok_str(token, NULL), nb_ops);
-        return;
+    if (nb_arm_regs == 0) {
+        if (nb_ops == 2) { // implicit
+            memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
+            memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+            nb_ops = 3;
+        }
+        if (nb_ops < 3) {
+            tcc_error("Not enough operands for '%s' (%u)", get_tok_str(token, NULL), nb_ops);
+            return;
+        }
     }
 
     switch (ARM_INSTRUCTION_GROUP(token)) {
@@ -1990,11 +2072,15 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
         break;
     case TOK_ASM_vmoveq_f32:
     case TOK_ASM_vmoveq_f64:
-        // FIXME: Check for ARM registers--and allow only very little.
-        opcode1 = 11; // "Other" instruction
-        opcode2 = 2;
-        ops[1].type = OP_IM8;
-        ops[1].e.v = 0;
+        if (nb_arm_regs > 0) { // vmov.f32 r2, s3 or similar
+            asm_floating_point_reg_arm_reg_transfer_opcode_tail(s1, token, coprocessor, nb_arm_regs, nb_ops, ops);
+            return;
+        } else {
+            opcode1 = 11; // "Other" instruction
+            opcode2 = 2;
+            ops[1].type = OP_IM8;
+            ops[1].e.v = 0;
+        }
         break;
     // TODO: vcvt; vcvtr
     default:

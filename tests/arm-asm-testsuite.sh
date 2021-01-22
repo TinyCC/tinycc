@@ -151,6 +151,10 @@ do
                     "d3, #0.0" \
                     "s4, #-0.1796875" \
                     "d4, #0.1796875" \
+                    "r2, r3, d1" \
+                    "d1, r2, r3" \
+                    "s1, r2" \
+                    "r2, s1" \
 	            ""
 	do
 		#echo ".syntax unified" > a.s
@@ -212,6 +216,9 @@ else
 		then
 			case "${test}" in
 			"bl r3"|"b r3"|"mov r2, #0xEFFF"|"mov r4, #0x0201")
+				known_failure=" (known failure)"
+				;;
+			"vmov.f32 r2, r3, d1"|"vmov.f32 d1, r2, r3") # GNU as bug
 				known_failure=" (known failure)"
 				;;
 			*)
