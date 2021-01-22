@@ -41,9 +41,13 @@ enum {
     OPT_IM8,
     OPT_IM8N,
     OPT_IM32,
+    OPT_VREG32,
+    OPT_VREG64,
 };
 #define OP_REG32  (1 << OPT_REG32)
-#define OP_REG    (OP_REG32)
+#define OP_VREG32 (1 << OPT_VREG32)
+#define OP_VREG64 (1 << OPT_VREG64)
+#define OP_REG    (OP_REG32 | OP_VREG32 | OP_VREG64)
 #define OP_IM32   (1 << OPT_IM32)
 #define OP_IM8   (1 << OPT_IM8)
 #define OP_IM8N   (1 << OPT_IM8N)
@@ -57,6 +61,21 @@ typedef struct Operand {
         ExprValue e;
     };
 } Operand;
+
+/* Read the VFP register referred to by token T.
+   If OK, returns its number.
+   If not OK, returns -1. */
+static int asm_parse_vfp_regvar(int t, int double_precision)
+{
+    if (double_precision) {
+        if (t >= TOK_ASM_d0 && t <= TOK_ASM_d15)
+            return t - TOK_ASM_d0;
+    } else {
+        if (t >= TOK_ASM_s0 && t <= TOK_ASM_s31)
+            return t - TOK_ASM_s0;
+    }
+    return -1;
+}
 
 /* Parse a text containing operand and store the result in OP */
 static void parse_operand(TCCState *s1, Operand *op)
@@ -110,6 +129,14 @@ static void parse_operand(TCCState *s1, Operand *op)
     } else if ((reg = asm_parse_regvar(tok)) != -1) {
         next(); // skip register name
         op->type = OP_REG32;
+        op->reg = (uint8_t) reg;
+    } else if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
+        next(); // skip register name
+        op->type = OP_VREG32;
+        op->reg = (uint8_t) reg;
+    } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
+        next(); // skip register name
+        op->type = OP_VREG64;
         op->reg = (uint8_t) reg;
     } else
         expect("operand");
@@ -1450,41 +1477,25 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *s1, int token)
 #define CP_SINGLE_PRECISION_FLOAT 10
 #define CP_DOUBLE_PRECISION_FLOAT 11
 
-/* Read the VFP register referred to by T.
-   If OK, returns its number.
-   If not OK, returns -1. */
-static int asm_parse_vfp_regvar(int t, int double_precision)
-{
-    if (double_precision) {
-        if (t >= TOK_ASM_d0 && t <= TOK_ASM_d15)
-            return t - TOK_ASM_d0;
-    } else {
-        if (t >= TOK_ASM_s0 && t <= TOK_ASM_s31)
-            return t - TOK_ASM_s0;
-    }
-    return -1;
-}
-
 static void asm_floating_point_single_data_transfer_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
     uint8_t coprocessor = 0;
     uint8_t coprocessor_destination_register = 0;
     int long_transfer = 0;
-    int reg;
     // Note: vldr p1, c0, [r4, #4]  ; simple offset: r0 = *(int*)(r4+4); r4 unchanged
     // Note: Not allowed: vldr p2, c0, [r4, #4]! ; pre-indexed:   r0 = *(int*)(r4+4); r4 = r4+4
     // Note: Not allowed: vldr p3, c0, [r4], #4  ; post-indexed:  r0 = *(int*)(r4+0); r4 = r4+4
 
-    if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
+    parse_operand(s1, &ops[0]);
+    if (ops[0].type == OP_VREG32) {
         coprocessor = CP_SINGLE_PRECISION_FLOAT;
-        coprocessor_destination_register = reg;
+        coprocessor_destination_register = ops[0].reg;
         long_transfer = coprocessor_destination_register & 1;
         coprocessor_destination_register >>= 1;
-        next();
-    } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
+    } else if (ops[0].type == OP_VREG64) {
         coprocessor = CP_DOUBLE_PRECISION_FLOAT;
-        coprocessor_destination_register = reg;
+        coprocessor_destination_register = ops[0].reg;
         next();
     } else {
         expect("floating point register");
@@ -1809,10 +1820,8 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
     uint8_t opcode1 = 0;
     uint8_t opcode2 = 0; // (0 || 2) | register selection
-    uint8_t operands[3];
-    uint8_t nb_operands = 0;
-    int operand_1_register = 1;
-    int reg;
+    Operand ops[3];
+    uint8_t nb_ops = 0;
 
 /* TODO:
    Instruction    opcode opcode2  Reason
@@ -1861,51 +1870,40 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
         coprocessor = CP_DOUBLE_PRECISION_FLOAT;
     }
 
-    for (nb_operands = 0; nb_operands < 3; ) {
-        if (nb_operands == 1 && (tok == '#' || tok == '$')) {
-            asm_floating_point_immediate_data_processing_opcode_tail(s1, token, coprocessor, operands[0]);
+    for (nb_ops = 0; nb_ops < 3; ) {
+        if (nb_ops == 1 && (tok == '#' || tok == '$')) {
+            asm_floating_point_immediate_data_processing_opcode_tail(s1, token, coprocessor, ops[0].reg);
             return;
         }
-        if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
-            if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
-                operands[nb_operands] = reg;
-                next();
-            } else {
+        parse_operand(s1, &ops[nb_ops]);
+        if (ops[nb_ops].type == OP_VREG32) {
+            if (coprocessor != CP_SINGLE_PRECISION_FLOAT) {
                 expect("'s<number>'");
                 return;
             }
-        } else if (coprocessor == CP_DOUBLE_PRECISION_FLOAT) {
-            if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
-                operands[nb_operands] = reg;
-                next();
-            } else {
+        } else if (ops[nb_ops].type == OP_VREG64) {
+            if (coprocessor != CP_DOUBLE_PRECISION_FLOAT) {
                 expect("'d<number>'");
                 return;
             }
-        } else if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
-            coprocessor = CP_SINGLE_PRECISION_FLOAT;
-            operands[nb_operands] = reg;
-            next();
-        } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
-            coprocessor = CP_DOUBLE_PRECISION_FLOAT;
-            operands[nb_operands] = reg;
-            next();
-        } else
-            tcc_internal_error("unknown coprocessor");
-	++nb_operands;
+        } else {
+            expect("floating point register");
+            return;
+        }
+        ++nb_ops;
         if (tok == ',')
             next();
         else
             break;
     }
 
-    if (nb_operands == 2) { // implicit
-        operands[2] = operands[1];
-        operands[1] = operands[0];
-        nb_operands = 3;
+    if (nb_ops == 2) { // implicit
+        memcpy(&ops[2], &ops[1], sizeof(ops[1])); // move ops[2]
+        memcpy(&ops[1], &ops[0], sizeof(ops[0])); // ops[1] was implicit
+        nb_ops = 3;
     }
-    if (nb_operands < 3) {
-        tcc_error("Not enough operands for '%s' (%u)", get_tok_str(token, NULL), nb_operands);
+    if (nb_ops < 3) {
+        tcc_error("Not enough operands for '%s' (%u)", get_tok_str(token, NULL), nb_ops);
         return;
     }
 
@@ -1959,43 +1957,44 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     case TOK_ASM_vnegeq_f64:
         opcode1 = 11; // Other" instruction
         opcode2 = 2;
-        operands[1] = 1;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 1;
         break;
     case TOK_ASM_vabseq_f32:
     case TOK_ASM_vabseq_f64:
         opcode1 = 11; // "Other" instruction
         opcode2 = 6;
-        operands[1] = 0;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 0;
         break;
     case TOK_ASM_vsqrteq_f32:
     case TOK_ASM_vsqrteq_f64:
         opcode1 = 11; // "Other" instruction
         opcode2 = 6;
-        operands[1] = 1;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 1;
         break;
     case TOK_ASM_vcmpeq_f32:
     case TOK_ASM_vcmpeq_f64:
         opcode1 = 11; // "Other" instruction
         opcode2 = 2;
-        operands[1] = 4;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 4;
         break;
     case TOK_ASM_vcmpeeq_f32:
     case TOK_ASM_vcmpeeq_f64:
         opcode1 = 11; // "Other" instruction
         opcode2 = 6;
-        operands[1] = 4;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 4;
         break;
     case TOK_ASM_vmoveq_f32:
     case TOK_ASM_vmoveq_f64:
+        // FIXME: Check for ARM registers--and allow only very little.
         opcode1 = 11; // "Other" instruction
         opcode2 = 2;
-        operands[1] = 0;
-        operand_1_register = 0;
+        ops[1].type = OP_IM8;
+        ops[1].e.v = 0;
         break;
     // TODO: vcvt; vcvtr
     default:
@@ -2004,22 +2003,26 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     }
 
     if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
-        if (operands[2] & 1)
-            opcode2 |= 1;
-        operands[2] >>= 1;
-
-        if (operand_1_register) {
-            if (operands[1] & 1)
-                opcode2 |= 4;
-            operands[1] >>= 1;
+        if (ops[2].type == OP_VREG32) {
+            if (ops[2].reg & 1)
+                opcode2 |= 1;
+            ops[2].reg >>= 1;
         }
 
-        if (operands[0] & 1)
-            opcode1 |= 4;
-        operands[0] >>= 1;
+        if (ops[1].type == OP_VREG32) {
+            if (ops[1].reg & 1)
+                opcode2 |= 4;
+            ops[1].reg >>= 1;
+        }
+
+        if (ops[0].type == OP_VREG32) {
+            if (ops[0].reg & 1)
+                opcode1 |= 4;
+            ops[0].reg >>= 1;
+        }
     }
 
-    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, operands[0], operands[1], operands[2], opcode2, 0);
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, (ops[2].type == OP_IM8) ? ops[2].e.v : ops[2].reg, opcode2, 0);
 }
 #endif
 
