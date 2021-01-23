@@ -360,7 +360,7 @@ void cstr_u8cat(CString *cstr, int ch)
 {
     unsigned char buf[4];
     int size;
-    int add = (int)((unsigned char*)unicode_to_utf8(&buf[0],(uint32_t)ch) - &buf[0]);
+    int add = (int)((unsigned char*)unicode_to_utf8((char *)&buf[0],(uint32_t)ch) - &buf[0]);
     unsigned char *p,*b=buf;
     size = cstr->size + add;
     if (size > cstr->size_allocated)
@@ -2125,13 +2125,13 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                 }
                 c = n;
                 goto add_char_nonext;
-            case 'x': { unsigned ucn_chars_nr = -1u; goto parse_hex_or_ucn;
+            case 'x': { unsigned int i; unsigned ucn_chars_nr = -1u; goto parse_hex_or_ucn;
             case 'u': ucn_chars_nr = 4; goto parse_hex_or_ucn;
             case 'U': ucn_chars_nr = 8; goto parse_hex_or_ucn;
                 parse_hex_or_ucn:;
                 p++;
                 n = 0;
-                for(unsigned i=1;i<=ucn_chars_nr;i++) {
+                for(i=1;i<=ucn_chars_nr;i++) {
                     c = *p;
                     if (c >= 'a' && c <= 'f')
                         c = c - 'a' + 10;
