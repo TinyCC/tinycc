@@ -1023,6 +1023,19 @@ ST_FUNC void gen_cvt_csti(int t)
         );
 }
 
+/* increment tcov counter */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+   o(0x0583); /* addl $1, xxx */
+   greloc(cur_text_section, sv->sym, ind, R_386_32);
+   gen_le32(0);
+   o(1);
+   o(0x1583); /* addcl $0, xxx */
+   greloc(cur_text_section, sv->sym, ind, R_386_32);
+   gen_le32(4);
+   g(0);
+}
+
 /* computed goto support */
 ST_FUNC void ggoto(void)
 {

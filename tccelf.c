@@ -1354,16 +1354,6 @@ ST_FUNC void tcc_add_bcheck(TCCState *s1)
 }
 #endif
 
-#ifdef CONFIG_TCC_BACKTRACE
-static void put_ptr(TCCState *s1, Section *s, int offs)
-{
-    int c;
-    c = set_global_sym(s1, NULL, s, offs);
-    s = data_section;
-    put_elf_reloc (s1->symtab, s, s->data_offset, R_DATA_PTR, c);
-    section_ptr_add(s, PTR_SIZE);
-}
-
 /* set symbol to STB_LOCAL and resolve. The point is to not export it as
    a dynamic symbol to allow so's to have one each with a different value. */
 static void set_local_sym(TCCState *s1, const char *name, Section *s, int offset)
@@ -1375,6 +1365,16 @@ static void set_local_sym(TCCState *s1, const char *name, Section *s, int offset
         esym->st_value = offset;
         esym->st_shndx = s->sh_num;
     }
+}
+
+#ifdef CONFIG_TCC_BACKTRACE
+static void put_ptr(TCCState *s1, Section *s, int offs)
+{
+    int c;
+    c = set_global_sym(s1, NULL, s, offs);
+    s = data_section;
+    put_elf_reloc (s1->symtab, s, s->data_offset, R_DATA_PTR, c);
+    section_ptr_add(s, PTR_SIZE);
 }
 
 ST_FUNC void tcc_add_btstub(TCCState *s1)
@@ -1427,6 +1427,45 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
 }
 #endif
 
+static void tcc_tcov_add_file(TCCState *s1, const char *filename)
+{
+    CString cstr;
+    void *ptr;
+    char wd[1024];
+
+    if (tcov_section == NULL)
+        return;
+    section_ptr_add(tcov_section, 1);
+    write32le (tcov_section->data, tcov_section->data_offset);
+
+    getcwd (wd, sizeof(wd));
+    cstr_new (&cstr);
+    cstr_printf (&cstr, "%s/%s.tcov", wd, filename);
+    ptr = section_ptr_add(tcov_section, cstr.size + 1);
+    strncpy((char *)ptr, cstr.data, cstr.size);
+    unlink((char *)ptr);
+#ifdef _WIN32
+    normalize_slashes((char *)ptr);
+#endif
+    cstr_free (&cstr);
+}
+
+static void tcc_add_tcov(TCCState *s1)
+{
+    CString cstr;
+
+    cstr_new(&cstr);
+    cstr_printf(&cstr,
+        "extern char *__tcov_data[];"
+        "extern void __store_test_coverage ();"
+        "__attribute__((destructor)) static void __tcov_exit() {"
+        "__store_test_coverage(__tcov_data);"
+        "}");
+    tcc_compile_string(s1, cstr.data);
+    cstr_free(&cstr);
+    set_local_sym(s1, &"___tcov_data"[!s1->leading_underscore], tcov_section, 0);
+}
+
 #ifndef TCC_TARGET_PE
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
@@ -1440,6 +1479,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     if (!s1->nostdlib) {
         if (s1->option_pthread)
             tcc_add_library_err(s1, "pthread");
+        if (s1->test_coverage)
+            tcc_add_support(s1, "tcov.o");
         tcc_add_library_err(s1, "c");
 #ifdef TCC_LIBGCC
         if (!s1->static_link) {
@@ -1473,6 +1514,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
+        if (s1->test_coverage)
+            tcc_add_tcov(s1);
         if (strlen(TCC_LIBTCC1) > 0)
             tcc_add_support(s1, TCC_LIBTCC1);
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
@@ -2772,6 +2815,8 @@ static int elf_output_obj(TCCState *s1, const char *filename)
 
 LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename)
 {
+    if (s->test_coverage)
+        tcc_tcov_add_file(s, filename);
     if (s->output_type == TCC_OUTPUT_OBJ)
         return elf_output_obj(s, filename);
 #ifdef TCC_TARGET_PE

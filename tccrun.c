@@ -737,6 +737,7 @@ static void set_exception_handler(void)
     struct sigaction sigact;
     /* install TCC signal handlers to print debug info on fatal
        runtime errors */
+    sigemptyset (&sigact.sa_mask);
     sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
 #if 0//def SIGSTKSZ // this causes signals not to work at all on some (older) linuxes
     sigact.sa_flags |= SA_ONSTACK;

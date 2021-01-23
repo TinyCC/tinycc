@@ -1982,6 +1982,24 @@ ST_FUNC void gen_cvt_ftof(int t)
     }
 }
 
+/* increment tcov counter */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+    int r1, r2;
+
+    vpushv(sv);
+    vtop->r = r1 = get_reg(RC_INT);
+    r2 = get_reg(RC_INT);
+    greloca(cur_text_section, sv->sym, ind, R_AARCH64_ADR_GOT_PAGE, 0);
+    o(0x90000000 | r1);            // adrp r1, #sym
+    greloca(cur_text_section, sv->sym, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
+    o(0xf9400000 | r1 | (r1 << 5)); // ld xr,[xr, #sym]
+    o(0xf9400000 | (intr(r1)<<5) | intr(r2)); // ldr r2, [r1]
+    o(0x91000400 | (intr(r2)<<5) | intr(r2)); // add r2, r2, #1
+    o(0xf9000000 | (intr(r1)<<5) | intr(r2)); // str r2, [r1]
+    vpop();
+}
+
 ST_FUNC void ggoto(void)
 {
     arm64_gen_bl_or_b(1);

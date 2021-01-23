@@ -476,7 +476,7 @@ static void gen_bounds_epilog(void)
                            func_bound_offset, lbounds_section->data_offset);
 
     if (!label.v) {
-        label.v = tok_alloc(".LB0 ", 4)->tok;
+        label.v = tok_alloc(".LB0 ", 5)->tok;
         label.type.t = VT_VOID | VT_STATIC;
     }
     /* generate bound local allocation */
@@ -1346,6 +1346,37 @@ ST_FUNC void gen_cvt_ftof(int dt)
           EI(0x53, 7, freg(rd), freg(rs), (0x20 << 5) | 1); // fcvt.s.d RD, RS (dyn rm)
         vtop->r = rd;
     }
+}
+
+/* increment tcov counter */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+    int r1, r2;
+    static Sym label;
+
+    if (!label.v) {
+        label.v = tok_alloc(".T0 ", 4)->tok;
+        label.type.t = VT_VOID | VT_STATIC;
+    }
+    vpushv(sv);
+    vtop->r = r1 = get_reg(RC_INT);
+    r2 = get_reg(RC_INT);
+    r1 = ireg(r1);
+    r2 = ireg(r2);
+    greloca(cur_text_section, sv->sym, ind, R_RISCV_PCREL_HI20, 0);
+    label.c = 0; /* force new local ELF symbol */
+    put_extern_sym(&label, cur_text_section, ind, 0);
+    o(0x17 | (r1 << 7)); // auipc RR, 0 %pcrel_hi(sym)
+    greloca(cur_text_section, &label, ind, R_RISCV_PCREL_LO12_I, 0);
+    EI(0x03, 3, r2, r1, 0); // ld r2, x[r1]
+    EI(0x13, 0, r2, r2, 1); // addi r2, r2, #1
+    greloca(cur_text_section, sv->sym, ind, R_RISCV_PCREL_HI20, 0);
+    label.c = 0; /* force new local ELF symbol */
+    put_extern_sym(&label, cur_text_section, ind, 0);
+    o(0x17 | (r1 << 7)); // auipc RR, 0 %pcrel_hi(sym)
+    greloca(cur_text_section, &label, ind, R_RISCV_PCREL_LO12_S, 0);
+    ES(0x23, 3, r1, r2, 0); // sd r2, [r1]
+    vpop();
 }
 
 ST_FUNC void ggoto(void)

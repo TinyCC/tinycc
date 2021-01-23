@@ -238,6 +238,10 @@ behaves like an unnamed one.
 @item -fdollars-in-identifiers
 Allow dollar signs in identifiers
 
+@item -ftest-coverage
+Create code coverage code. After running the resulting code an executable.tcov
+or sofile.tcov file is generated with code coverage.
+
 @end table
 
 Warning options:

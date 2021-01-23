@@ -51,6 +51,10 @@ ST_DATA SValue *vtop;
 static SValue _vstack[1 + VSTACK_SIZE];
 #define vstack (_vstack + 1)
 
+static void tcc_tcov_block_begin(void);
+static void tcc_tcov_block_end(int line);
+static void tcc_tcov_check_line(int start);
+
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
 #define unevalmask 0xffff /* unevaluated subexpression */
@@ -63,7 +67,7 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 
 /* Clear 'nocode_wanted' at label if it was used */
 ST_FUNC void gsym(int t) { if (t) { gsym_addr(t, ind); CODE_ON(); }}
-static int gind(void) { CODE_ON(); return ind; }
+static int gind(void) { int t; CODE_ON(); t = ind; tcc_tcov_block_begin(); return t; }
 
 /* Set 'nocode_wanted' after unconditional jumps */
 static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
@@ -202,6 +206,16 @@ static struct debug_info {
     } *sym;
     struct debug_info *child, *next, *last, *parent;
 } *debug_info, *debug_info_root;
+
+static struct {
+    unsigned long offset;
+    unsigned long last_offset;
+    unsigned long last_file_name;
+    unsigned long last_func_name;
+    int ind;
+    int line;
+    Sym label;
+} tcov_data;
 
 /********************************************************/
 #if 1
@@ -700,6 +714,136 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
     tcc_free(debug_hash);
 }
 
+/* for section layout see lib/tcov.c */
+static void tcc_tcov_block_begin(void)
+{
+    SValue sv;
+    void *ptr;
+
+    tcc_tcov_block_end (0);
+    if (tcc_state->test_coverage == 0 || nocode_wanted)
+	return;
+
+    if (tcov_data.last_file_name == 0 ||
+	strcmp ((const char *)(tcov_section->data + tcov_data.last_file_name),
+		file->true_filename) != 0) {
+	char wd[1024];
+	CString cstr;
+
+	if (tcov_data.last_func_name)
+	    section_ptr_add(tcov_section, 1);
+	if (tcov_data.last_file_name)
+	    section_ptr_add(tcov_section, 1);
+	getcwd (wd, sizeof(wd));
+	tcov_data.last_file_name = tcov_section->data_offset + strlen(wd) + 1;
+	tcov_data.last_func_name = 0;
+	cstr_new (&cstr);
+	cstr_printf (&cstr, "%s/%s", wd, file->true_filename);
+	ptr = section_ptr_add(tcov_section, cstr.size + 1);
+	strncpy((char *)ptr, cstr.data, cstr.size);
+#ifdef _WIN32
+        normalize_slashes((char *)ptr);
+#endif
+	cstr_free (&cstr);
+    }
+    if (tcov_data.last_func_name == 0 ||
+	strcmp ((const char *)(tcov_section->data + tcov_data.last_func_name),
+		funcname) != 0) {
+	size_t len;
+
+	if (tcov_data.last_func_name)
+	    section_ptr_add(tcov_section, 1);
+	tcov_data.last_func_name = tcov_section->data_offset;
+	len = strlen (funcname);
+	ptr = section_ptr_add(tcov_section, len + 1);
+	strncpy((char *)ptr, funcname, len);
+	section_ptr_add(tcov_section, -tcov_section->data_offset & 7);
+	ptr = section_ptr_add(tcov_section, 8);
+	write64le (ptr, file->line_num);
+    }
+    if (ind == tcov_data.ind && tcov_data.line == file->line_num)
+        tcov_data.offset = tcov_data.last_offset;
+    else {
+        if (!tcov_data.label.v) {
+            tcov_data.label.v = tok_alloc(".TCOV ", 6)->tok;
+            tcov_data.label.type.t = VT_LLONG | VT_STATIC;
+        }
+        tcov_data.label.c = 0; /* force new local ELF symbol */
+        ptr = section_ptr_add(tcov_section, 16);
+        tcov_data.line = file->line_num;
+        write64le (ptr, (tcov_data.line << 8) | 0xff);
+        put_extern_sym(&tcov_data.label, tcov_section,
+		       ((unsigned char *)ptr - tcov_section->data) + 8, 0);
+        sv.type = tcov_data.label.type;
+        sv.r = VT_SYM | VT_LVAL | VT_CONST;
+        sv.r2 = VT_CONST;
+        sv.c.i = 0;
+        sv.sym = &tcov_data.label;
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || \
+    defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || \
+    defined TCC_TARGET_RISCV64
+        gen_increment_tcov (&sv);
+#else
+        vpushv(&sv);
+        inc(0, TOK_INC);
+        vpop();
+#endif
+        tcov_data.offset = (unsigned char *)ptr - tcov_section->data;
+        tcov_data.ind = ind;
+    }
+}
+
+static void tcc_tcov_block_end(int line)
+{
+    if (tcc_state->test_coverage == 0)
+	return;
+    if (tcov_data.offset) {
+	void *ptr = tcov_section->data + tcov_data.offset;
+	unsigned long long nline = line ? line : file->line_num;
+
+	write64le (ptr, (read64le (ptr) & 0xfffffffffull) | (nline << 36));
+	tcov_data.last_offset = tcov_data.offset;
+	tcov_data.offset = 0;
+    }
+}
+
+static void tcc_tcov_check_line(int start)
+{
+    if (tcc_state->test_coverage == 0)
+	return;
+    if (tcov_data.line != file->line_num) {
+        if ((tcov_data.line + 1) != file->line_num) {
+	    tcc_tcov_block_end (tcov_data.line);
+	    if (start)
+                tcc_tcov_block_begin ();
+	}
+	else
+	    tcov_data.line = file->line_num;
+    }
+}
+
+static void tcc_tcov_start(void)
+{
+    if (tcc_state->test_coverage == 0)
+	return;
+    memset (&tcov_data, 0, sizeof (tcov_data));
+    if (tcov_section == NULL) {
+        tcov_section = new_section(tcc_state, ".tcov", SHT_PROGBITS,
+				   SHF_ALLOC | SHF_WRITE);
+	section_ptr_add(tcov_section, 4); // pointer to executable name
+    }
+}
+
+static void tcc_tcov_end(void)
+{
+    if (tcc_state->test_coverage == 0)
+	return;
+    if (tcov_data.last_func_name)
+        section_ptr_add(tcov_section, 1);
+    if (tcov_data.last_file_name)
+        section_ptr_add(tcov_section, 1);
+}
+
 static BufferedFile* put_new_file(TCCState *s1)
 {
     BufferedFile *f = file;
@@ -825,6 +969,7 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     local_scope = 0;
 
     tcc_debug_start(s1);
+    tcc_tcov_start ();
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
@@ -838,6 +983,7 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     check_vstack();
     /* end of translation unit info */
     tcc_debug_end(s1);
+    tcc_tcov_end ();
     return 0;
 }
 
@@ -5548,6 +5694,7 @@ ST_FUNC void unary(void)
     /* generate line number info */
     if (tcc_state->do_debug)
         tcc_debug_line(tcc_state);
+    tcc_tcov_check_line (1);
 
     sizeof_caller = in_sizeof;
     in_sizeof = 0;
@@ -6267,8 +6414,10 @@ special_math_val:
 #endif
                 }
             }
-            if (s->f.func_noreturn)
+            if (s->f.func_noreturn) {
+	        tcc_tcov_block_end (tcov_data.line);
                 CODE_OFF();
+	    }
         } else {
             break;
         }
@@ -7029,6 +7178,8 @@ again:
         goto expr;
     next();
 
+    tcc_tcov_check_line (0);
+    tcc_tcov_block_begin ();
     if (t == TOK_IF) {
         skip('(');
         gexpr();
@@ -7109,6 +7260,7 @@ again:
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
             rsym = gjmp(rsym);
+	tcc_tcov_block_end (tcov_data.line);
         CODE_OFF();
 
     } else if (t == TOK_BREAK) {
@@ -7342,6 +7494,8 @@ again:
             }
         }
     }
+    tcc_tcov_check_line (0);
+    tcc_tcov_block_end (0);
 }
 
 /* This skips over a stream of tokens containing balanced {} and ()
@@ -7819,6 +7973,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
     /* generate line number info */
     if (!p->sec && tcc_state->do_debug)
         tcc_debug_line(tcc_state);
+    tcc_tcov_check_line (1);
 
     if (!(flags & DIF_HAVE_ELEM) && tok != '{' &&
 	/* In case of strings we have special handling for arrays, so

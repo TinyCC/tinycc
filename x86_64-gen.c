@@ -2200,6 +2200,15 @@ ST_FUNC void gen_cvt_csti(int t)
         );
 }
 
+/* increment tcov counter */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+   o(0x058348); /* addq $1, xxx(%rip) */
+   greloca(cur_text_section, sv->sym, ind, R_X86_64_PC32, -5);
+   gen_le32(0);
+   o(1);
+}
+
 /* computed goto support */
 void ggoto(void)
 {

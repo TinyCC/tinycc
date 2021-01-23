@@ -2277,6 +2277,29 @@ void gen_cvt_ftof(int t)
 #endif
 }
 
+/* increment tcov counter */
+ST_FUNC void gen_increment_tcov (SValue *sv)
+{
+  int r1, r2;
+
+  vpushv(sv);
+  vtop->r = r1 = get_reg(RC_INT);
+  r2 = get_reg(RC_INT);
+  o(0xE59F0000 | (intr(r1)<<12)); // ldr r1,[pc]
+  o(0xEA000000); // b $+4
+  greloc(cur_text_section, sv->sym, ind, R_ARM_REL32);
+  o(-12);
+  o(0xe080000f | (intr(r1)<<16) | (intr(r1)<<12)); // add r1,r1,pc
+  o(0xe5900000 | (intr(r1)<<16) | (intr(r2)<<12)); // ldr r2, [r1]
+  o(0xe2900001 | (intr(r2)<<16) | (intr(r2)<<12)); // adds r2, r2, #1
+  o(0xe5800000 | (intr(r1)<<16) | (intr(r2)<<12)); // str r2, [r1]
+  o(0xe2800004 | (intr(r1)<<16) | (intr(r1)<<12)); // add r1, r1, #4
+  o(0xe5900000 | (intr(r1)<<16) | (intr(r2)<<12)); // ldr r2, [r1]
+  o(0xe2a00000 | (intr(r2)<<16) | (intr(r2)<<12)); // adc r2, r2, #0
+  o(0xe5800000 | (intr(r1)<<16) | (intr(r2)<<12)); // str r2, [r1]
+  vpop();
+}
+
 /* computed goto support */
 void ggoto(void)
 {
