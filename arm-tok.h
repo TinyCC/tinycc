@@ -159,6 +159,7 @@
  DEF_ASM_CONDED(wfe)
  DEF_ASM_CONDED(wfi)
  DEF_ASM_CONDED(swi)
+ DEF_ASM_CONDED(svc)
 
  /* misc */
  DEF_ASM_CONDED(clz)

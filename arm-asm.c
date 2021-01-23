@@ -212,6 +212,7 @@ static void asm_unary_opcode(TCCState *s1, int token)
 
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_swieq:
+    case TOK_ASM_svceq:
         if (op.type != OP_IM8)
             expect("immediate 8-bit unsigned integer");
         else {
@@ -1776,6 +1777,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         asm_nullary_opcode(token);
         return;
     case TOK_ASM_swieq:
+    case TOK_ASM_svceq:
         asm_unary_opcode(s1, token);
         return;
     case TOK_ASM_beq:
