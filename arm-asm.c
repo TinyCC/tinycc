@@ -865,7 +865,8 @@ static void asm_shift_opcode(TCCState *s1, int token)
     case OP_IM8:
         operands |= ENCODE_IMMEDIATE_FLAG;
         operands |= ops[1].e.v;
-        break;
+        tcc_error("Using an immediate value as the source operand is not possible with '%s' instruction on ARM", get_tok_str(token, NULL));
+        return;
     }
 
     switch (ops[2].type) {
