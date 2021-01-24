@@ -29,7 +29,6 @@ sysroot=""
 cross_prefix=""
 cc="gcc"
 ar="ar"
-strip="strip"
 bigendian="no"
 mingw32="no"
 LIBSUF=".a"
@@ -44,12 +43,13 @@ triplet=
 tcc_lddir=
 confvars=
 suggest="yes"
-cpu=
-cpuver=
 gcc_major=0
 gcc_minor=0
 cc_name="gcc"
 ar_set=
+
+cpu=`uname -m`
+cpuver=
 
 # OS specific
 targetos=`uname`
@@ -140,9 +140,7 @@ for opt do
   ;;
   --disable-rpath) confvars="$confvars rpath=no"
   ;;
-  --strip-binaries) echo deprecate, use 'make install-strip' to strip binaries
-  ;;
-  --debug) confvars="$confvars strip=no"
+  --debug) confvars="$confvars debug"
   ;;
   --with-libgcc) confvars="$confvars libgcc"
   ;;
@@ -161,15 +159,6 @@ done
 
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
-strip="${cross_prefix}${strip}"
-
-if test -z "$cpu" ; then
-    if test -n "$ARCH" ; then
-        cpu="$ARCH"
-    else
-        cpu=`uname -m`
-    fi
-fi
 
 case "$cpu" in
   x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
@@ -181,7 +170,7 @@ case "$cpu" in
   evbarm)
     case "`uname -p`" in
       aarch64|arm64)
-        cpu="aarch64"
+        cpu="arm64"
         ;;
       earmv*)
         cpu="arm"
@@ -189,7 +178,7 @@ case "$cpu" in
     esac
   ;;
   aarch64|arm64|evbarm)
-    cpu="aarch64"
+    cpu="arm64"
   ;;
   arm*)
     case "$cpu" in
@@ -302,30 +291,33 @@ Standard options:
 Advanced options (experts only):
   --source-path=PATH       path of source code [$source_path]
   --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]
-  --sysroot=PREFIX         prepend PREFIX to library/include paths []
+  --sysroot=PREFIX         prepend PREFIX to library/include paths [$sysroot]
   --cc=CC                  use C compiler CC [$cc]
   --ar=AR                  create archives using AR [$ar]
   --extra-cflags=          specify compiler flags [$CFLAGS]
-  --extra-ldflags=         specify linker options []
+  --extra-ldflags=         specify linker options [$LDFLAGS]
   --cpu=CPU                CPU [$cpu]
-  --strip-binaries         strip symbol tables from resulting binaries
+
   --debug                  include debug info with resulting binaries
   --disable-static         make libtcc.so instead of libtcc.a
   --enable-static          make libtcc.a instead of libtcc.dll (win32)
-  --disable-rpath          disable use of -rpath with the above
+  --disable-rpath          disable use of -rpath with libtcc.so
   --with-libgcc            use libgcc_s.so.1 instead of libtcc1.a
-  --enable-cross           build cross compilers
-  --with-selinux           use mmap for executable memory (with tcc -run)
+  --with-selinux           use mmap for executable memory (tcc -run)
+  --enable-cross           build cross compilers (see also 'make help')
+
   --sysincludepaths=...    specify system include paths, colon separated
   --libpaths=...           specify system library paths, colon separated
   --crtprefix=...          specify locations of crt?.o, colon separated
   --elfinterp=...          specify elf interpreter
   --triplet=...            specify system library/include directory triplet
-  --config-uClibc,-musl,-mingw32... enable system specific configurations
-  --config-bcheck=no/-backtrace=no  disable bounds checker/stack backtraces
+
+  --config-uClibc,-musl    enable system specific configurations
+  --config-mingw32         build on windows using msys, busybox, etc.
+  --config-backtrace=no    disable stack backtraces (with -run or -bt)
+  --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
 EOF
-#echo "NOTE: The object files are build at the place where configure is launched"
 exit 1
 fi
 
@@ -349,7 +341,7 @@ if test -z "$cross_prefix" ; then
       fi
 
       if test -z "$triplet"; then
-        if test $cpu = "x86_64" -o $cpu = "aarch64" -o $cpu = "riscv64" ; then
+        if test $cpu = "x86_64" -o $cpu = "arm64" -o $cpu = "riscv64" ; then
           if test -f "/usr/lib64/crti.o" ; then
             tcc_lddir="lib64"
           fi
@@ -453,7 +445,6 @@ CC_NAME=$cc_name
 GCC_MAJOR=$gcc_major
 GCC_MINOR=$gcc_minor
 AR=$ar
-STRIP=$strip -s -R .comment -R .note
 CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 LIBSUF=$LIBSUF
@@ -492,11 +483,7 @@ print_mak CONFIG_LDDIR "$tcc_lddir"
 print_mak CONFIG_TRIPLET "$triplet"
 print_mak TCC_CPU_VERSION "$cpuver" num
 
-if test "$cpu" = "aarch64" ; then
-  echo "ARCH=arm64" >> config.mak
-else
-  echo "ARCH=$cpu" >> config.mak
-fi
+echo "ARCH=$cpu" >> config.mak
 echo "TARGETOS=$targetos" >> config.mak
 
 predefs="1"

@@ -764,7 +764,6 @@ struct TCCState {
     unsigned char leading_underscore;
     unsigned char ms_extensions; /* allow nested named struct w/o identifier behave like unnamed */
     unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
-    unsigned char test_coverage;  /* generate test coverage code */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
     /* warning switches */
@@ -782,6 +781,8 @@ struct TCCState {
     /* compile with built-in memory and bounds checker */
     unsigned char do_bounds_check;
 #endif
+    unsigned char test_coverage;  /* generate test coverage code */
+
 #ifdef TCC_TARGET_ARM
     enum float_abi float_abi; /* float ABI of the generated code*/
 #endif
@@ -1447,6 +1448,7 @@ ST_DATA Sym *define_stack;
 ST_DATA CType int_type, func_old_type, char_pointer_type;
 ST_DATA SValue *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
+ST_DATA char debug_modes;
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
@@ -1461,9 +1463,7 @@ ST_FUNC void tcc_debug_end(TCCState *s1);
 ST_FUNC void tcc_debug_bincl(TCCState *s1);
 ST_FUNC void tcc_debug_eincl(TCCState *s1);
 ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
-ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
-ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
-ST_FUNC void tcc_debug_line(TCCState *s1);
+ST_FUNC void tcc_add_tcov(TCCState *s1);
 
 ST_FUNC void tccgen_init(TCCState *s1);
 ST_FUNC int tccgen_compile(TCCState *s1);

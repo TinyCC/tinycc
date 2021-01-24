@@ -1419,7 +1419,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         cstr_printf(&cstr, "__bt_init_dll(0);");
 #endif
 #endif
-    cstr_printf(&cstr, "__bt_init(__rt_info,%d, 0);}",
+    cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
     tcc_compile_string(s1, cstr.data);
     cstr_free(&cstr);
@@ -1450,7 +1450,7 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
     cstr_free (&cstr);
 }
 
-static void tcc_add_tcov(TCCState *s1)
+ST_FUNC void tcc_add_tcov(TCCState *s1)
 {
     CString cstr;
 

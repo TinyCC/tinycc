@@ -273,20 +273,12 @@ PUB_FUNC char *tcc_strdup(const char *str)
 #define MEM_DEBUG_MAGIC2 0xFEEDDEB2
 #define MEM_DEBUG_MAGIC3 0xFEEDDEB3
 #define MEM_DEBUG_FILE_LEN 40
-#define MEM_DEBUG_OFF3 offsetof(mem_debug_header_t, magic3)
 #define MEM_DEBUG_CHECK3(header) \
-    ({unsigned magic3; \
-      memcpy(&magic3, (char*)header + MEM_DEBUG_OFF3 + header->size, \
-             sizeof (magic3)); \
-      magic3;})
-#define MEM_DEBUG_SET3(header) \
-    {unsigned magic3 = MEM_DEBUG_MAGIC3; \
-      memcpy((char*)header + MEM_DEBUG_OFF3 + header->size, &magic3, \
-             sizeof (magic3));}
+    ((mem_debug_header_t*)((char*)header + header->size))->magic3
 #define MEM_USER_PTR(header) \
-    ((char *)header + MEM_DEBUG_OFF3)
+    ((char *)header + offsetof(mem_debug_header_t, magic3))
 #define MEM_HEADER_PTR(ptr) \
-    (mem_debug_header_t *)((char*)ptr - MEM_DEBUG_OFF3)
+    (mem_debug_header_t *)((char*)ptr - offsetof(mem_debug_header_t, magic3))
 
 struct mem_debug_header {
     unsigned magic1;
@@ -296,7 +288,7 @@ struct mem_debug_header {
     int line_num;
     char file_name[MEM_DEBUG_FILE_LEN + 1];
     unsigned magic2;
-    ALIGNED(16) unsigned magic3;
+    ALIGNED(16) unsigned char magic3[4];
 };
 
 typedef struct mem_debug_header mem_debug_header_t;
@@ -310,7 +302,7 @@ static mem_debug_header_t *malloc_check(void *ptr, const char *msg)
     mem_debug_header_t * header = MEM_HEADER_PTR(ptr);
     if (header->magic1 != MEM_DEBUG_MAGIC1 ||
         header->magic2 != MEM_DEBUG_MAGIC2 ||
-        MEM_DEBUG_CHECK3(header) != MEM_DEBUG_MAGIC3 ||
+        read32le(MEM_DEBUG_CHECK3(header)) != MEM_DEBUG_MAGIC3 ||
         header->size == (unsigned)-1) {
         fprintf(stderr, "%s check failed\n", msg);
         if (header->magic1 == MEM_DEBUG_MAGIC1)
@@ -333,7 +325,7 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
     header->size = size;
-    MEM_DEBUG_SET3(header);
+    write32le(MEM_DEBUG_CHECK3(header), MEM_DEBUG_MAGIC3);
     header->line_num = line;
     ofs = strlen(file) - MEM_DEBUG_FILE_LEN;
     strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
@@ -390,7 +382,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     if (!header)
         _tcc_error("memory full (realloc)");
     header->size = size;
-    MEM_DEBUG_SET3(header);
+    write32le(MEM_DEBUG_CHECK3(header), MEM_DEBUG_MAGIC3);
     if (header->next)
         header->next->prev = header;
     if (header->prev)
@@ -901,7 +893,6 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     /* add libc crt1/crti objects */
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
         !s->nostdlib) {
-#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
@@ -929,9 +920,9 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
-#endif
-#elif !TCC_TARGET_MACHO
+#elif TCC_TARGET_MACHO
         /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
+#else
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
         tcc_add_crt(s, "crti.o");
@@ -963,9 +954,40 @@ ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
 }
 #endif
 
+/* OpenBSD: choose latest from libxxx.so.x.y versions */
+#if defined TARGETOS_OpenBSD && !defined _WIN32
+#include <glob.h>
+static int tcc_glob_so(TCCState *s1, const char *pattern, char *buf, int size)
+{
+    const char *star;
+    glob_t g;
+    char *p;
+    int i, v, v1, v2, v3;
+
+    star = strchr(pattern, '*');
+    if (!star || glob(pattern, 0, NULL, &g))
+        return -1;
+    for (v = -1, i = 0; i < g.gl_pathc; ++i) {
+        p = g.gl_pathv[i];
+        if (2 != sscanf(p + (star - pattern), "%d.%d.%d", &v1, &v2, &v3))
+            continue;
+        if ((v1 = v1 * 1000 + v2) > v)
+            v = v1, pstrcpy(buf, size, p);
+    }
+    globfree(&g);
+    return v;
+}
+#endif
+
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     int fd, ret = -1;
+
+#if defined TARGETOS_OpenBSD && !defined _WIN32
+    char buf[1024];
+    if (tcc_glob_so(s1, filename, buf, sizeof buf) >= 0)
+        filename = buf;
+#endif
 
     /* open the file */
     fd = _tcc_open(s1, filename);
@@ -1111,101 +1133,21 @@ ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 }
 #endif
 
-/* OpenBSD only has suffixed .so files; e.g., libc.so.96.0 */
-/* So we must process that */
-#if defined TARGETOS_OpenBSD && !defined _WIN32/* no dirent */
-#include <dirent.h>
-ST_FUNC char *tcc_openbsd_library_soversion(TCCState *s, const char *libraryname)
-{
-    DIR *dirp;
-    struct dirent *dp;
-    char *e;
-    char **libpaths, *t, *u, *v;
-    char soname[1024];
-    long long maj, min, tmaj, tmin;
-    int i;
-    static char soversion[1024];
-
-    snprintf(soname, sizeof(soname), "lib%s.so", libraryname);
-
-    libpaths = s->library_paths;
-    for (i = 0; i < s->nb_library_paths; ++i) {
-        if ((dirp = opendir(libpaths[i])) == NULL)
-            continue;
-
-        maj = -1;
-        min = -1;
-
-        while ((dp = readdir(dirp)) != NULL) {
-            if (!strncmp(dp->d_name, soname, strlen(soname))) {
-                t = tcc_strdup(dp->d_name);
-                u = strrchr(t, '.');
-                *u = '\0';
-
-                tmin = strtoll(u + 1, &e, 10);
-
-                if (*e != 0) {
-                    tcc_free(t);
-                    t = NULL;
-                    continue;
-                }
-
-                v = strrchr(t, '.');
-                tmaj = strtoll(v + 1, &e, 10);
-
-                if (*e != 0) {
-                    tcc_free(t);
-                    t = NULL;
-                    continue;
-                }
-
-		tcc_free(t);
-                t = NULL;
-
-                if (maj == tmaj) {
-                    if (min < tmin)
-                        min = tmin;
-                } else if (maj < tmaj) {
-                    maj = tmaj;
-                    min = tmin;
-                }
-            }
-        }
-	closedir(dirp);
-
-        if (maj == -1 || min == -1)
-            continue;
-
-	snprintf(soversion, sizeof(soversion), "%s/%s.%lld.%lld", libpaths[i],
-		 soname, maj, min);
-    }
-
-    return soversion;
-}
-#endif
-
 /* the library name is the same as the argument of the '-l' option */
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 {
 #if defined TCC_TARGET_PE
-    const char *libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
-    const char **pp = s->static_link ? libs + 4 : libs;
+    static const char * const libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
+    const char * const *pp = s->static_link ? libs + 4 : libs;
 #elif defined TCC_TARGET_MACHO
-    const char *libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
-    const char **pp = s->static_link ? libs + 1 : libs;
-#elif defined TARGETOS_OpenBSD && !defined _WIN32
-    const char *libs[] = { s->static_link
-                           ? NULL
-                           /* find exact versionned .so.x.y name as no
-                              symlink exists on OpenBSD. */
-                           : tcc_openbsd_library_soversion(s, libraryname),
-                           "%s/lib%s.a",
-			   NULL
-    };
-    const char **pp = s->static_link ? libs + 1 : libs;
+    static const char * const libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
+    const char * const *pp = s->static_link ? libs + 1 : libs;
+#elif defined TARGETOS_OpenBSD
+    static const char * const libs[] = { "%s/lib%s.so.*", "%s/lib%s.a", NULL };
+    const char * const *pp = s->static_link ? libs + 1 : libs;
 #else
-    const char *libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
-    const char **pp = s->static_link ? libs + 1 : libs;
+    static const char * const libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
+    const char * const *pp = s->static_link ? libs + 1 : libs;
 #endif
     int flags = s->filetype & AFF_WHOLE_ARCHIVE;
     while (*pp) {

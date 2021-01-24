@@ -100,8 +100,10 @@
      DEF(TOK___NAN__, "__nan__")
      DEF(TOK___SNAN__, "__snan__")
      DEF(TOK___INF__, "__inf__")
-     DEF(TOK___mzerosf, "__mzerosf")
-     DEF(TOK___mzerodf, "__mzerodf")
+#if defined TCC_TARGET_X86_64
+     DEF(TOK___mzerosf, "__mzerosf") /* -0.0 */
+     DEF(TOK___mzerodf, "__mzerodf") /* -0.0 */
+#endif
 
 /* attribute identifiers */
 /* XXX: handle all tokens generically since speed is not critical */

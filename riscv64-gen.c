@@ -166,10 +166,10 @@ ST_FUNC void gsym_addr(int t_, int a_)
 
 static int load_symofs(int r, SValue *sv, int forstore)
 {
-    static Sym label;
     int rr, doload = 0;
     int fc = sv->c.i, v = sv->r & VT_VALMASK;
     if (sv->r & VT_SYM) {
+        Sym label = {0};
         assert(v == VT_CONST);
         if (sv->sym->type.t & VT_STATIC) { // XXX do this per linker relax
             greloca(cur_text_section, sv->sym, ind,
@@ -182,11 +182,7 @@ static int load_symofs(int r, SValue *sv, int forstore)
                     R_RISCV_GOT_HI20, 0);
             doload = 1;
         }
-        if (!label.v) {
-            label.v = tok_alloc(".L0 ", 4)->tok;
-            label.type.t = VT_VOID | VT_STATIC;
-        }
-        label.c = 0; /* force new local ELF symbol */
+        label.type.t = VT_VOID | VT_STATIC;
         put_extern_sym(&label, cur_text_section, ind, 0);
         rr = is_ireg(r) ? ireg(r) : 5;
         o(0x17 | (rr << 7));   // auipc RR, 0 %pcrel_hi(sym)+addend
@@ -459,10 +455,11 @@ static void gen_bounds_prolog(void)
 
 static void gen_bounds_epilog(void)
 {
-    static Sym label;
     addr_t saved_ind;
     addr_t *bounds_ptr;
     Sym *sym_data;
+    Sym label = {0};
+
     int offset_modified = func_bound_offset != lbounds_section->data_offset;
 
     if (!offset_modified && !func_bound_add_epilog)
@@ -475,15 +472,11 @@ static void gen_bounds_epilog(void)
     sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
                            func_bound_offset, lbounds_section->data_offset);
 
-    if (!label.v) {
-        label.v = tok_alloc(".LB0 ", 5)->tok;
-        label.type.t = VT_VOID | VT_STATIC;
-    }
+    label.type.t = VT_VOID | VT_STATIC;
     /* generate bound local allocation */
     if (offset_modified) {
         saved_ind = ind;
         ind = func_bound_ind;
-        label.c = 0; /* force new local ELF symbol */
         put_extern_sym(&label, cur_text_section, ind, 0);
         greloca(cur_text_section, sym_data, ind, R_RISCV_GOT_HI20, 0);
         o(0x17 | (10 << 7));    // auipc a0, 0 %pcrel_hi(sym)+addend
@@ -491,12 +484,12 @@ static void gen_bounds_epilog(void)
         EI(0x03, 3, 10, 10, 0); // ld a0, 0(a0)
         gen_bounds_call(TOK___bound_local_new);
         ind = saved_ind;
+        label.c = 0; /* force new local ELF symbol */
     }
 
     /* generate bound check local freeing */
     o(0xe02a1101); /* addi sp,sp,-32  sd   a0,0(sp)   */
     o(0xa82ae42e); /* sd   a1,8(sp)   fsd  fa0,16(sp) */
-    label.c = 0; /* force new local ELF symbol */
     put_extern_sym(&label, cur_text_section, ind, 0);
     greloca(cur_text_section, sym_data, ind, R_RISCV_GOT_HI20, 0);
     o(0x17 | (10 << 7));    // auipc a0, 0 %pcrel_hi(sym)+addend
@@ -1352,19 +1345,15 @@ ST_FUNC void gen_cvt_ftof(int dt)
 ST_FUNC void gen_increment_tcov (SValue *sv)
 {
     int r1, r2;
-    static Sym label;
+    Sym label = {0};
+    label.type.t = VT_VOID | VT_STATIC;
 
-    if (!label.v) {
-        label.v = tok_alloc(".T0 ", 4)->tok;
-        label.type.t = VT_VOID | VT_STATIC;
-    }
     vpushv(sv);
     vtop->r = r1 = get_reg(RC_INT);
     r2 = get_reg(RC_INT);
     r1 = ireg(r1);
     r2 = ireg(r2);
     greloca(cur_text_section, sv->sym, ind, R_RISCV_PCREL_HI20, 0);
-    label.c = 0; /* force new local ELF symbol */
     put_extern_sym(&label, cur_text_section, ind, 0);
     o(0x17 | (r1 << 7)); // auipc RR, 0 %pcrel_hi(sym)
     greloca(cur_text_section, &label, ind, R_RISCV_PCREL_LO12_I, 0);

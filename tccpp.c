@@ -358,17 +358,10 @@ char *unicode_to_utf8 (char *b, uint32_t Uc)
 /* add a unicode character expanded into utf8 */
 void cstr_u8cat(CString *cstr, int ch)
 {
-    unsigned char buf[4];
-    int size;
-    int add = (int)((unsigned char*)unicode_to_utf8((char *)&buf[0],(uint32_t)ch) - &buf[0]);
-    unsigned char *p,*b=buf;
-    size = cstr->size + add;
-    if (size > cstr->size_allocated)
-        cstr_realloc(cstr, size);
-    for(p = (unsigned char*)cstr->data + (size - add); add; add--) *p++=*b++;
-    cstr->size = size;
+    char buf[4], *e;
+    e = unicode_to_utf8(buf, (uint32_t)ch);
+    cstr_cat(cstr, buf, e - buf);
 }
-
 
 ST_FUNC void cstr_cat(CString *cstr, const char *str, int len)
 {
@@ -617,6 +610,7 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
         }
         addv:
             *p++ = v;
+    case 0: /* nameless anonymous symbol */
             *p = '\0';
         } else if (v < tok_ident) {
             return table_ident[v - TOK_IDENT]->str;
@@ -2095,7 +2089,7 @@ include_done:
 /* evaluate escape codes in a string. */
 static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long)
 {
-    int c, n;
+    int c, n, i;
     const uint8_t *p;
 
     p = buf;
@@ -2125,13 +2119,13 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                 }
                 c = n;
                 goto add_char_nonext;
-            case 'x': { unsigned int i; unsigned ucn_chars_nr = -1u; goto parse_hex_or_ucn;
-            case 'u': ucn_chars_nr = 4; goto parse_hex_or_ucn;
-            case 'U': ucn_chars_nr = 8; goto parse_hex_or_ucn;
-                parse_hex_or_ucn:;
+            case 'x': i = 0; goto parse_hex_or_ucn;
+            case 'u': i = 4; goto parse_hex_or_ucn;
+            case 'U': i = 8; goto parse_hex_or_ucn;
+    parse_hex_or_ucn:
                 p++;
                 n = 0;
-                for(i=1;i<=ucn_chars_nr;i++) {
+                do {
                     c = *p;
                     if (c >= 'a' && c <= 'f')
                         c = c - 'a' + 10;
@@ -2139,19 +2133,17 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                         c = c - 'A' + 10;
                     else if (isnum(c))
                         c = c - '0';
-                    else{
-                        if (ucn_chars_nr!=-1)
-                            tcc_error("%u hex digits expected in universal-character-name\n", ucn_chars_nr);
-                        break;
+                    else if (i > 0)
+                        expect("more hex digits in universal-character-name");
+                    else {
+                        c = n;
+                        goto add_char_nonext;
                     }
                     n = n * 16 + c;
                     p++;
-                }
-                c = n;
-                if(ucn_chars_nr==-1) goto add_char_nonext;
-                cstr_u8cat(outstr, c);
+                } while (--i);
+                cstr_u8cat(outstr, n);
                 continue;
-             }
             case 'a':
                 c = '\a';
                 break;

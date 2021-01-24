@@ -46,14 +46,11 @@ static int local_scope;
 static int in_sizeof;
 static int in_generic;
 static int section_sym;
+ST_DATA char debug_modes;
 
 ST_DATA SValue *vtop;
 static SValue _vstack[1 + VSTACK_SIZE];
 #define vstack (_vstack + 1)
-
-static void tcc_tcov_block_begin(void);
-static void tcc_tcov_block_end(int line);
-static void tcc_tcov_check_line(int start);
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
@@ -65,9 +62,11 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 #define CODE_OFF() (nocode_wanted |= 0x20000000)
 #define CODE_ON() (nocode_wanted &= ~0x20000000)
 
+static void tcc_tcov_block_begin(void);
+
 /* Clear 'nocode_wanted' at label if it was used */
 ST_FUNC void gsym(int t) { if (t) { gsym_addr(t, ind); CODE_ON(); }}
-static int gind(void) { int t; CODE_ON(); t = ind; tcc_tcov_block_begin(); return t; }
+static int gind(void) { int t = ind; CODE_ON(); if (debug_modes) tcc_tcov_block_begin(); return t; }
 
 /* Set 'nocode_wanted' after unconditional jumps */
 static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
@@ -214,7 +213,6 @@ static struct {
     unsigned long last_func_name;
     int ind;
     int line;
-    Sym label;
 } tcov_data;
 
 /********************************************************/
@@ -460,6 +458,74 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
                 SHN_ABS, file->filename);
 }
 
+/* put end of translation unit info */
+ST_FUNC void tcc_debug_end(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabs_r(s1, NULL, N_SO, 0, 0,
+        text_section->data_offset, text_section, section_sym);
+    tcc_free(debug_hash);
+}
+
+static BufferedFile* put_new_file(TCCState *s1)
+{
+    BufferedFile *f = file;
+    /* use upper file if from inline ":asm:" */
+    if (f->filename[0] == ':')
+        f = f->prev;
+    if (f && new_file) {
+        put_stabs_r(s1, f->filename, N_SOL, 0, 0, ind, text_section, section_sym);
+        new_file = last_line_num = 0;
+    }
+    return f;
+}
+
+/* put alternative filename */
+ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
+{
+    if (0 == strcmp(file->filename, filename))
+        return;
+    pstrcpy(file->filename, sizeof(file->filename), filename);
+    new_file = 1;
+}
+
+/* begin of #include */
+ST_FUNC void tcc_debug_bincl(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabs(s1, file->filename, N_BINCL, 0, 0, 0);
+    new_file = 1;
+}
+
+/* end of #include */
+ST_FUNC void tcc_debug_eincl(TCCState *s1)
+{
+    if (!s1->do_debug)
+        return;
+    put_stabn(s1, N_EINCL, 0, 0, 0);
+    new_file = 1;
+}
+
+/* generate line number info */
+static void tcc_debug_line(TCCState *s1)
+{
+    BufferedFile *f;
+    if (!s1->do_debug
+        || cur_text_section != text_section
+        || !(f = put_new_file(s1))
+        || last_line_num == f->line_num)
+        return;
+    if (func_ind != -1) {
+        put_stabn(s1, N_SLINE, 0, f->line_num, ind - func_ind);
+    } else {
+        /* from tcc_assemble */
+        put_stabs_r(s1, NULL, N_SLINE, 0, f->line_num, ind, text_section, section_sym);
+    }
+    last_line_num = f->line_num;
+}
+
 static void tcc_debug_stabs (TCCState *s1, const char *str, int type, unsigned long value,
                              Section *sec, int sym_index)
 {
@@ -483,8 +549,10 @@ static void tcc_debug_stabs (TCCState *s1, const char *str, int type, unsigned l
         put_stabs (s1, str, type, 0, 0, value);
 }
 
-static void tcc_debug_stabn(int type, int value)
+static void tcc_debug_stabn(TCCState *s1, int type, int value)
 {
+    if (!s1->do_debug)
+        return;
     if (type == N_LBRAC) {
         struct debug_info *info =
             (struct debug_info *) tcc_mallocz(sizeof (*info));
@@ -659,6 +727,8 @@ static void tcc_debug_finish (TCCState *s1, struct debug_info *cur)
 static void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e)
 {
     CString debug_str;
+    if (!s1->do_debug)
+        return;
     cstr_new (&debug_str);
     for (; s != e; s = s->prev) {
         if (!s->v || (s->r & VT_VALMASK) != VT_LOCAL)
@@ -671,10 +741,47 @@ static void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e)
     cstr_free (&debug_str);
 }
 
-static void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind)
+/* put function symbol */
+static void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 {
-    Section *s = s1->sections[sh_num];
+    CString debug_str;
+    BufferedFile *f;
+    if (!s1->do_debug)
+        return;
+    debug_info_root = NULL;
+    debug_info = NULL;
+    tcc_debug_stabn(s1, N_LBRAC, ind - func_ind);
+    if (!(f = put_new_file(s1)))
+        return;
+    cstr_new (&debug_str);
+    cstr_printf(&debug_str, "%s:%c", funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
+    tcc_get_debug_info(s1, sym->type.ref, &debug_str);
+    put_stabs_r(s1, debug_str.data, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
+    cstr_free (&debug_str);
+
+    tcc_debug_line(s1);
+}
+
+/* put function size */
+static void tcc_debug_funcend(TCCState *s1, int size)
+{
+    if (!s1->do_debug)
+        return;
+    tcc_debug_stabn(s1, N_RBRAC, size);
+    tcc_debug_finish (s1, debug_info_root);
+}
+
+
+static void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind, int sym_type)
+{
+    Section *s;
     CString str;
+
+    if (!s1->do_debug)
+        return;
+    if (sym_type == STT_FUNC || sym->v >= SYM_FIRST_ANOM)
+        return;
+    s = s1->sections[sh_num];
 
     cstr_new (&str);
     cstr_printf (&str, "%s:%c",
@@ -695,6 +802,8 @@ static void tcc_debug_typedef(TCCState *s1, Sym *sym)
 {
     CString str;
 
+    if (!s1->do_debug)
+        return;
     cstr_new (&str);
     cstr_printf (&str, "%s:t",
                  (sym->v & ~SYM_FIELD) >= SYM_FIRST_ANOM
@@ -704,17 +813,11 @@ static void tcc_debug_typedef(TCCState *s1, Sym *sym)
     cstr_free (&str);
 }
 
-/* put end of translation unit info */
-ST_FUNC void tcc_debug_end(TCCState *s1)
-{
-    if (!s1->do_debug)
-        return;
-    put_stabs_r(s1, NULL, N_SO, 0, 0,
-        text_section->data_offset, text_section, section_sym);
-    tcc_free(debug_hash);
-}
-
+/* ------------------------------------------------------------------------- */
 /* for section layout see lib/tcov.c */
+
+static void tcc_tcov_block_end(int line);
+
 static void tcc_tcov_block_begin(void)
 {
     SValue sv;
@@ -764,21 +867,19 @@ static void tcc_tcov_block_begin(void)
     if (ind == tcov_data.ind && tcov_data.line == file->line_num)
         tcov_data.offset = tcov_data.last_offset;
     else {
-        if (!tcov_data.label.v) {
-            tcov_data.label.v = tok_alloc(".TCOV ", 6)->tok;
-            tcov_data.label.type.t = VT_LLONG | VT_STATIC;
-        }
-        tcov_data.label.c = 0; /* force new local ELF symbol */
+        Sym label = {0};
+        label.type.t = VT_LLONG | VT_STATIC;
+
         ptr = section_ptr_add(tcov_section, 16);
         tcov_data.line = file->line_num;
         write64le (ptr, (tcov_data.line << 8) | 0xff);
-        put_extern_sym(&tcov_data.label, tcov_section,
+        put_extern_sym(&label, tcov_section,
 		       ((unsigned char *)ptr - tcov_section->data) + 8, 0);
-        sv.type = tcov_data.label.type;
+        sv.type = label.type;
         sv.r = VT_SYM | VT_LVAL | VT_CONST;
         sv.r2 = VT_CONST;
         sv.c.i = 0;
-        sv.sym = &tcov_data.label;
+        sv.sym = &label;
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || \
     defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || \
     defined TCC_TARGET_RISCV64
@@ -844,94 +945,6 @@ static void tcc_tcov_end(void)
         section_ptr_add(tcov_section, 1);
 }
 
-static BufferedFile* put_new_file(TCCState *s1)
-{
-    BufferedFile *f = file;
-    /* use upper file if from inline ":asm:" */
-    if (f->filename[0] == ':')
-        f = f->prev;
-    if (f && new_file) {
-        put_stabs_r(s1, f->filename, N_SOL, 0, 0, ind, text_section, section_sym);
-        new_file = last_line_num = 0;
-    }
-    return f;
-}
-
-/* generate line number info */
-ST_FUNC void tcc_debug_line(TCCState *s1)
-{
-    BufferedFile *f;
-    if (!s1->do_debug
-        || cur_text_section != text_section
-        || !(f = put_new_file(s1))
-        || last_line_num == f->line_num)
-        return;
-    if (func_ind != -1) {
-        put_stabn(s1, N_SLINE, 0, f->line_num, ind - func_ind);
-    } else {
-        /* from tcc_assemble */
-        put_stabs_r(s1, NULL, N_SLINE, 0, f->line_num, ind, text_section, section_sym);
-    }
-    last_line_num = f->line_num;
-}
-
-/* put function symbol */
-ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
-{
-    CString debug_str;
-    BufferedFile *f;
-    if (!s1->do_debug)
-        return;
-    debug_info_root = NULL;
-    debug_info = NULL;
-    tcc_debug_stabn(N_LBRAC, ind - func_ind);
-    if (!(f = put_new_file(s1)))
-        return;
-    cstr_new (&debug_str);
-    cstr_printf(&debug_str, "%s:%c", funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
-    tcc_get_debug_info(s1, sym->type.ref, &debug_str);
-    put_stabs_r(s1, debug_str.data, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
-    cstr_free (&debug_str);
-
-    tcc_debug_line(s1);
-}
-
-/* put function size */
-ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
-{
-    if (!s1->do_debug)
-        return;
-    tcc_debug_stabn(N_RBRAC, size);
-    tcc_debug_finish (s1, debug_info_root);
-}
-
-/* put alternative filename */
-ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
-{
-    if (0 == strcmp(file->filename, filename))
-        return;
-    pstrcpy(file->filename, sizeof(file->filename), filename);
-    new_file = 1;
-}
-
-/* begin of #include */
-ST_FUNC void tcc_debug_bincl(TCCState *s1)
-{
-    if (!s1->do_debug)
-        return;
-    put_stabs(s1, file->filename, N_BINCL, 0, 0, 0);
-    new_file = 1;
-}
-
-/* end of #include */
-ST_FUNC void tcc_debug_eincl(TCCState *s1)
-{
-    if (!s1->do_debug)
-        return;
-    put_stabn(s1, N_EINCL, 0, 0, 0);
-    new_file = 1;
-}
-
 /* ------------------------------------------------------------------------- */
 /* initialize vstack and types.  This must be done also for tcc -E */
 ST_FUNC void tccgen_init(TCCState *s1)
@@ -967,6 +980,7 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     const_wanted = 0;
     nocode_wanted = 0x80000000;
     local_scope = 0;
+    debug_modes = s1->do_debug | s1->test_coverage << 1;
 
     tcc_debug_start(s1);
     tcc_tcov_start ();
@@ -1111,10 +1125,8 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
         info = ELFW(ST_INFO)(sym_bind, sym_type);
         sym->c = put_elf_sym(symtab_section, value, size, info, other, sh_num, name);
 
-        if (tcc_state->do_debug
-            && sym_type != STT_FUNC
-            && sym->v < SYM_FIRST_ANOM)
-            tcc_debug_extern_sym(tcc_state, sym, sh_num, sym_bind);
+        if (debug_modes)
+            tcc_debug_extern_sym(tcc_state, sym, sh_num, sym_bind, sym_type);
 
     } else {
         esym = elfsym(sym);
@@ -2188,15 +2200,15 @@ static void add_local_bounds(Sym *s, Sym *e)
 #endif
 
 /* Wrapper around sym_pop, that potentially also registers local bounds.  */
-static void pop_local_syms(Sym **ptop, Sym *b, int keep, int ellipsis)
+static void pop_local_syms(Sym *b, int keep)
 {
 #ifdef CONFIG_TCC_BCHECK
-    if (tcc_state->do_bounds_check && !ellipsis && !keep)
-        add_local_bounds(*ptop, b);
+    if (tcc_state->do_bounds_check && !keep && (local_scope || !func_var))
+        add_local_bounds(local_stack, b);
 #endif
-    if (tcc_state->do_debug)
-        tcc_add_debug_info (tcc_state, !local_scope, *ptop, b);
-    sym_pop(ptop, b, keep);
+    if (debug_modes)
+        tcc_add_debug_info (tcc_state, !local_scope, local_stack, b);
+    sym_pop(&local_stack, b, keep);
 }
 
 static void incr_bf_adr(int o)
@@ -2246,7 +2258,6 @@ static void load_packed_bf(CType *type, int bit_pos, int bit_size)
 static void store_packed_bf(int bit_pos, int bit_size)
 {
     int bits, n, o, m, c;
-
     c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     vswap(); // X B
     save_reg_upstack(vtop->r, 1);
@@ -4727,10 +4738,12 @@ static void struct_layout(CType *type, AttributeDef *ad)
             continue;
         bit_pos = BIT_POS(f->type.t);
         size = type_size(&f->type, &align);
-        if (c & 3) /* packed struct */
-	    goto single_byte;
-        if (bit_pos + bit_size <= size * 8 && f->c + size <= c &&
-	    (f->c & (align - 1)) == 0)
+
+        if (bit_pos + bit_size <= size * 8 && f->c + size <= c
+#ifdef TCC_TARGET_ARM
+            && !(f->c & (align - 1))
+#endif
+            )
             continue;
 
         /* try to access the field using a different type */
@@ -4756,7 +4769,11 @@ static void struct_layout(CType *type, AttributeDef *ad)
             c0 = cx;
         }
 
-        if (px + bit_size <= s * 8 && cx + s <= c) {
+        if (px + bit_size <= s * 8 && cx + s <= c
+#ifdef TCC_TARGET_ARM
+            && !(cx & (align - 1))
+#endif
+            ) {
             /* update offset and bit position */
             f->c = cx;
             bit_pos = px;
@@ -4771,7 +4788,6 @@ static void struct_layout(CType *type, AttributeDef *ad)
                 cx, s, align, px, bit_size);
 #endif
         } else {
-single_byte:
             /* fall back to load/store single-byte wise */
             f->auxtype = VT_STRUCT;
 #ifdef BF_DEBUG
@@ -5696,9 +5712,8 @@ ST_FUNC void unary(void)
     AttributeDef ad;
 
     /* generate line number info */
-    if (tcc_state->do_debug)
-        tcc_debug_line(tcc_state);
-    tcc_tcov_check_line (1);
+    if (debug_modes)
+        tcc_debug_line(tcc_state), tcc_tcov_check_line (1);
 
     sizeof_caller = in_sizeof;
     in_sizeof = 0;
@@ -6419,7 +6434,8 @@ special_math_val:
                 }
             }
             if (s->f.func_noreturn) {
-	        tcc_tcov_block_end (tcov_data.line);
+                if (debug_modes)
+	            tcc_tcov_block_end (tcov_data.line);
                 CODE_OFF();
 	    }
         } else {
@@ -6678,13 +6694,6 @@ static void expr_cond(void)
         if (!g)
           gexpr();
 
-        if (c < 0 && vtop->r == VT_CMP) {
-            t1 = gvtst(0, 0);
-            vpushi(0);
-            gvtst_set(0, t1);
-            gv(RC_INT);
-        }
-
         if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
           mk_pointer(&vtop->type);
         sv = *vtop; /* save value to handle it later */
@@ -6705,15 +6714,14 @@ static void expr_cond(void)
         expr_cond();
 
         if (c < 0 && is_cond_bool(vtop) && is_cond_bool(&sv)) {
-            if (sv.r == VT_CMP) {
-                t1 = sv.jtrue;
-                t2 = u;
-            } else {
-                t1 = gvtst(0, 0);
-                t2 = gjmp(0);
-                gsym(u);
-                vpushv(&sv);
-            }
+            /* optimize "if (f ? a > b : c || d) ..." for example, where normally
+               "a < b" and "c || d" would be forced to "(int)0/1" first, whereas
+               this code jumps directly to the if's then/else branches. */
+            t1 = gvtst(0, 0);
+            t2 = gjmp(0);
+            gsym(u);
+            vpushv(&sv);
+            /* combine jump targets of 2nd op with VT_CMP of 1st op */
             gvtst_set(0, t1);
             gvtst_set(1, t2);
             nocode_wanted = ncw_prev;
@@ -7099,11 +7107,10 @@ void new_scope(struct scope *o)
     /* record local declaration stack position */
     o->lstk = local_stack;
     o->llstk = local_label_stack;
-
     ++local_scope;
 
-    if (tcc_state->do_debug)
-        tcc_debug_stabn(N_LBRAC, ind - func_ind);
+    if (debug_modes)
+        tcc_debug_stabn(tcc_state, N_LBRAC, ind - func_ind);
 }
 
 void prev_scope(struct scope *o, int is_expr)
@@ -7125,12 +7132,12 @@ void prev_scope(struct scope *o, int is_expr)
        tables, though.  sym_pop will do that.  */
 
     /* pop locally defined symbols */
-    pop_local_syms(&local_stack, o->lstk, is_expr, 0);
+    pop_local_syms(o->lstk, is_expr);
     cur_scope = o->prev;
     --local_scope;
 
-    if (tcc_state->do_debug)
-        tcc_debug_stabn(N_RBRAC, ind - func_ind);
+    if (debug_modes)
+        tcc_debug_stabn(tcc_state, N_RBRAC, ind - func_ind);
 }
 
 /* leave a scope via break/continue(/goto) */
@@ -7182,8 +7189,9 @@ again:
         goto expr;
     next();
 
-    tcc_tcov_check_line (0);
-    tcc_tcov_block_begin ();
+    if (debug_modes)
+        tcc_tcov_check_line (0), tcc_tcov_block_begin ();
+
     if (t == TOK_IF) {
         skip('(');
         gexpr();
@@ -7264,7 +7272,8 @@ again:
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
             rsym = gjmp(rsym);
-	tcc_tcov_block_end (tcov_data.line);
+        if (debug_modes)
+	    tcc_tcov_block_end (tcov_data.line);
         CODE_OFF();
 
     } else if (t == TOK_BREAK) {
@@ -7498,8 +7507,9 @@ again:
             }
         }
     }
-    tcc_tcov_check_line (0);
-    tcc_tcov_block_end (0);
+
+    if (debug_modes)
+        tcc_tcov_check_line (0), tcc_tcov_block_end (0);
 }
 
 /* This skips over a stream of tokens containing balanced {} and ()
@@ -7779,6 +7789,7 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
     CType dtype;
     int size, align;
     Section *sec = p->sec;
+    uint64_t val;
 
     dtype = *type;
     dtype.t &= ~VT_CONSTANT; /* need to do that to avoid false warning */
@@ -7796,7 +7807,6 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
 
         if ((vtop->r & VT_SYM)
             && bt != VT_PTR
-            && bt != VT_FUNC
             && (bt != (PTR_SIZE == 8 ? VT_LLONG : VT_INT)
                 || (type->t & VT_BITFIELD))
             && !((vtop->r & VT_CONST) && vtop->sym->v >= SYM_FIRST_ANOM)
@@ -7809,6 +7819,7 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
         }
 
         ptr = sec->data + c;
+        val = vtop->c.i;
 
         /* XXX: make code faster ? */
 	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST) &&
@@ -7868,33 +7879,38 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                     n = 8 - bit_pos;
                     if (n > bit_size)
                         n = bit_size;
-                    v = vtop->c.i >> bits << bit_pos;
+                    v = val >> bits << bit_pos;
                     m = ((1 << n) - 1) << bit_pos;
                     *p = (*p & ~m) | (v & m);
                     bits += n, bit_size -= n, bit_pos = 0, ++p;
                 }
             } else
             switch(bt) {
-		/* XXX: when cross-compiling we assume that each type has the
-		   same representation on host and target, which is likely to
-		   be wrong in the case of long double */
 	    case VT_BOOL:
-		vtop->c.i = vtop->c.i != 0;
+		*(char *)ptr = val != 0;
+                break;
 	    case VT_BYTE:
-		*(char *)ptr = vtop->c.i;
+		*(char *)ptr = val;
 		break;
 	    case VT_SHORT:
-		*(short *)ptr = vtop->c.i;
+                write16le(ptr, val);
 		break;
 	    case VT_FLOAT:
-		*(float*)ptr = vtop->c.f;
+                write32le(ptr, val);
 		break;
 	    case VT_DOUBLE:
-		*(double *)ptr = vtop->c.d;
+                write64le(ptr, val);
 		break;
 	    case VT_LDOUBLE:
 #if defined TCC_IS_NATIVE_387
-                if (sizeof (long double) >= 10) /* zero pad ten-byte LD */
+                /* Host and target platform may be different but both have x87.
+                   On windows, tcc does not use VT_LDOUBLE, except when it is a
+                   cross compiler.  In this case a mingw gcc as host compiler
+                   comes here with 10-byte long doubles, while msvc or tcc won't.
+                   tcc itself can still translate by asm.
+                   In any case we avoid possibly random bytes 11 and 12.
+                */
+                if (sizeof (long double) >= 10)
                     memcpy(ptr, &vtop->c.ld, 10);
 #ifdef __TINYC__
                 else if (sizeof (long double) == sizeof (double))
@@ -7904,52 +7920,44 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                     ;
                 else
 #endif
+                /* For other platforms it should work natively, but may not work
+                   for cross compilers */
                 if (sizeof(long double) == LDOUBLE_SIZE)
-		    *(long double*)ptr = vtop->c.ld;
+                    memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
                 else if (sizeof(double) == LDOUBLE_SIZE)
-		    *(double *)ptr = (double)vtop->c.ld;
+                    memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
 #ifndef TCC_CROSS_TEST
                 else
                     tcc_error("can't cross compile long double constants");
 #endif
 		break;
-#if PTR_SIZE != 8
+
+#if PTR_SIZE == 8
+            /* intptr_t may need a reloc too, see tcctest.c:relocation_test() */
 	    case VT_LLONG:
-		*(long long *)ptr = vtop->c.i;
-		break;
-#else
-	    case VT_LLONG:
-#endif
 	    case VT_PTR:
-		{
-		    addr_t val = vtop->c.i;
-#if PTR_SIZE == 8
-		    if (vtop->r & VT_SYM)
-		      greloca(sec, vtop->sym, c, R_DATA_PTR, val);
-		    else
-		      *(addr_t *)ptr = val;
+	        if (vtop->r & VT_SYM)
+	          greloca(sec, vtop->sym, c, R_DATA_PTR, val);
+	        else
+	          write64le(ptr, val);
+	        break;
+            case VT_INT:
+                write32le(ptr, val);
+                break;
 #else
-		    if (vtop->r & VT_SYM)
-		      greloc(sec, vtop->sym, c, R_DATA_PTR);
-		    *(addr_t *)ptr = val;
+	    case VT_LLONG:
+                write64le(ptr, val);
+                break;
+            case VT_PTR:
+            case VT_INT:
+	        if (vtop->r & VT_SYM)
+	          greloc(sec, vtop->sym, c, R_DATA_PTR);
+	        write32le(ptr, val);
+	        break;
 #endif
-		    break;
-		}
 	    default:
-		{
-		    int val = vtop->c.i;
-#if PTR_SIZE == 8
-		    if (vtop->r & VT_SYM)
-		      greloca(sec, vtop->sym, c, R_DATA_PTR, val);
-		    else
-		      *(int *)ptr = val;
-#else
-		    if (vtop->r & VT_SYM)
-		      greloc(sec, vtop->sym, c, R_DATA_PTR);
-		    *(int *)ptr = val;
-#endif
-		    break;
-		}
+                //tcc_internal_error("unexpected type");
+                break;
 	    }
 	}
         vtop--;
@@ -7975,9 +7983,8 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
     CType *t1;
 
     /* generate line number info */
-    if (!p->sec && tcc_state->do_debug)
-        tcc_debug_line(tcc_state);
-    tcc_tcov_check_line (1);
+    if (debug_modes && !p->sec)
+        tcc_debug_line(tcc_state), tcc_tcov_check_line (1);
 
     if (!(flags & DIF_HAVE_ELEM) && tok != '{' &&
 	/* In case of strings we have special handling for arrays, so
@@ -8453,7 +8460,7 @@ static void gen_function(Sym *sym)
     gsym(rsym);
     nocode_wanted = 0;
     /* reset local stack */
-    pop_local_syms(&local_stack, NULL, 0, func_var);
+    pop_local_syms(NULL, 0);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     local_scope = 0;
@@ -8737,7 +8744,7 @@ found:
                     }
                     sym->a = ad.a;
                     sym->f = ad.f;
-                    if (tcc_state->do_debug)
+                    if (debug_modes)
                         tcc_debug_typedef (tcc_state, sym);
 		} else if ((type.t & VT_BTYPE) == VT_VOID
 			   && !(type.t & VT_EXTERN)) {
