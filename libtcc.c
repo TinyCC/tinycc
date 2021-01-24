@@ -273,12 +273,20 @@ PUB_FUNC char *tcc_strdup(const char *str)
 #define MEM_DEBUG_MAGIC2 0xFEEDDEB2
 #define MEM_DEBUG_MAGIC3 0xFEEDDEB3
 #define MEM_DEBUG_FILE_LEN 40
+#define MEM_DEBUG_OFF3 offsetof(mem_debug_header_t, magic3)
 #define MEM_DEBUG_CHECK3(header) \
-    ((mem_debug_header_t*)((char*)header + header->size))->magic3
+    ({unsigned magic3; \
+      memcpy(&magic3, (char*)header + MEM_DEBUG_OFF3 + header->size, \
+             sizeof (magic3)); \
+      magic3;})
+#define MEM_DEBUG_SET3(header) \
+    {unsigned magic3 = MEM_DEBUG_MAGIC3; \
+      memcpy((char*)header + MEM_DEBUG_OFF3 + header->size, &magic3, \
+             sizeof (magic3));}
 #define MEM_USER_PTR(header) \
-    ((char *)header + offsetof(mem_debug_header_t, magic3))
+    ((char *)header + MEM_DEBUG_OFF3)
 #define MEM_HEADER_PTR(ptr) \
-    (mem_debug_header_t *)((char*)ptr - offsetof(mem_debug_header_t, magic3))
+    (mem_debug_header_t *)((char*)ptr - MEM_DEBUG_OFF3)
 
 struct mem_debug_header {
     unsigned magic1;
@@ -325,7 +333,7 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
     header->size = size;
-    MEM_DEBUG_CHECK3(header) = MEM_DEBUG_MAGIC3;
+    MEM_DEBUG_SET3(header);
     header->line_num = line;
     ofs = strlen(file) - MEM_DEBUG_FILE_LEN;
     strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
@@ -382,7 +390,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     if (!header)
         _tcc_error("memory full (realloc)");
     header->size = size;
-    MEM_DEBUG_CHECK3(header) = MEM_DEBUG_MAGIC3;
+    MEM_DEBUG_SET3(header);
     if (header->next)
         header->next->prev = header;
     if (header->prev)

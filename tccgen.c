@@ -4727,7 +4727,10 @@ static void struct_layout(CType *type, AttributeDef *ad)
             continue;
         bit_pos = BIT_POS(f->type.t);
         size = type_size(&f->type, &align);
-        if (bit_pos + bit_size <= size * 8 && f->c + size <= c)
+        if (c & 3) /* packed struct */
+	    goto single_byte;
+        if (bit_pos + bit_size <= size * 8 && f->c + size <= c &&
+	    (f->c & (align - 1)) == 0)
             continue;
 
         /* try to access the field using a different type */
@@ -4768,6 +4771,7 @@ static void struct_layout(CType *type, AttributeDef *ad)
                 cx, s, align, px, bit_size);
 #endif
         } else {
+single_byte:
             /* fall back to load/store single-byte wise */
             f->auxtype = VT_STRUCT;
 #ifdef BF_DEBUG
@@ -8269,7 +8273,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #ifdef CONFIG_TCC_BCHECK
         if (bcheck && v) {
             /* add padding between stack variables for bound checking */
-            loc--;
+            loc -= align;
         }
 #endif
         loc = (loc - size) & -align;
@@ -8278,7 +8282,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 #ifdef CONFIG_TCC_BCHECK
         if (bcheck && v) {
             /* add padding between stack variables for bound checking */
-            loc--;
+            loc -= align;
         }
 #endif
         if (v) {
