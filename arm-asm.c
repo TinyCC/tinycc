@@ -127,31 +127,34 @@ static void parse_operand(TCCState *s1, Operand *op)
             op->type = OP_REGSET32;
             op->regset = regset;
         }
-    } else if (tok == '#' || tok == '$') {
-        /* constant value */
-        next(); // skip '#' or '$'
-        asm_expr(s1, &e);
-        op->type = OP_IM32;
-        op->e = e;
-        if (!op->e.sym) {
-            if ((int) op->e.v < 0 && (int) op->e.v >= -255)
-                op->type = OP_IM8N;
-            else if (op->e.v == (uint8_t)op->e.v)
-                op->type = OP_IM8;
-        } else
-            expect("constant");
+        return;
     } else if ((reg = asm_parse_regvar(tok)) != -1) {
         next(); // skip register name
         op->type = OP_REG32;
         op->reg = (uint8_t) reg;
+        return;
     } else if ((reg = asm_parse_vfp_regvar(tok, 0)) != -1) {
         next(); // skip register name
         op->type = OP_VREG32;
         op->reg = (uint8_t) reg;
+        return;
     } else if ((reg = asm_parse_vfp_regvar(tok, 1)) != -1) {
         next(); // skip register name
         op->type = OP_VREG64;
         op->reg = (uint8_t) reg;
+        return;
+    } else if (tok == '#' || tok == '$') {
+        /* constant value */
+        next(); // skip '#' or '$'
+    }
+    asm_expr(s1, &e);
+    op->type = OP_IM32;
+    op->e = e;
+    if (!op->e.sym) {
+        if ((int) op->e.v < 0 && (int) op->e.v >= -255)
+            op->type = OP_IM8N;
+        else if (op->e.v == (uint8_t)op->e.v)
+            op->type = OP_IM8;
     } else
         expect("operand");
 }
@@ -1784,15 +1787,12 @@ static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *s
 
     if (tok == '#' || tok == '$') {
         next();
-        if (tok == '-') {
-            op_minus = 1;
-            next();
-        }
-        immediate_value = vmov_parse_immediate_value();
-    } else {
-        expect("'#'");
-        return;
     }
+    if (tok == '-') {
+        op_minus = 1;
+        next();
+    }
+    immediate_value = vmov_parse_immediate_value();
 
     opcode1 = 11; // "Other" instruction
     switch (ARM_INSTRUCTION_GROUP(token)) {
@@ -1959,7 +1959,7 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
 
     for (nb_ops = 0; nb_ops < 3; ) {
         // Note: Necessary because parse_operand can't parse decimal numerals.
-        if (nb_ops == 1 && (tok == '#' || tok == '$')) {
+        if (nb_ops == 1 && (tok == '#' || tok == '$' || tok == TOK_PPNUM || tok == '-')) {
             asm_floating_point_immediate_data_processing_opcode_tail(s1, token, coprocessor, ops[0].reg);
             return;
         }
