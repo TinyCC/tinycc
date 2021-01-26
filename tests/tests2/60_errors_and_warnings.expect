@@ -186,3 +186,6 @@ bar  : 3 ; 3
 
 [test_conflicting_array_definition]
 60_errors_and_warnings.c:396: error: incompatible types for redefinition of 'array'
+
+[test_cast_from_void]
+60_errors_and_warnings.c:400: error: cannot convert 'void' to 'int'

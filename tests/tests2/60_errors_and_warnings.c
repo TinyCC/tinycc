@@ -394,4 +394,9 @@ struct S2 {
 #elif defined test_conflicting_array_definition
 extern int array[2];
 int array[] = { 1, 2, 3 };
+
+#elif defined test_cast_from_void
+void v() {}
+int f() { return v(); }
+
 #endif

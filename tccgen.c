@@ -3695,6 +3695,12 @@ again:
         df = is_float(dbt);
         dbt_bt = dbt & VT_BTYPE;
         sbt_bt = sbt & VT_BTYPE;
+        if (dbt_bt == VT_VOID)
+            goto done;
+        if (sbt_bt == VT_VOID) {
+error:
+            cast_error(&vtop->type, type);
+        }
 
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
 #if !defined TCC_IS_NATIVE && !defined TCC_IS_NATIVE_387
@@ -3791,11 +3797,9 @@ again:
 
         ds = btype_size(dbt_bt);
         ss = btype_size(sbt_bt);
-        if (ds == 0 || ss == 0) {
-            if (dbt_bt == VT_VOID)
-                goto done;
-            cast_error(&vtop->type, type);
-        }
+        if (ds == 0 || ss == 0)
+            goto error;
+
         if (IS_ENUM(type->t) && type->ref->c < 0)
             tcc_error("cast to incomplete type");
 
