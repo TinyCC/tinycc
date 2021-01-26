@@ -5160,6 +5160,20 @@ static int parse_btype(CType *type, AttributeDef *ad)
             goto basic_type2;
 
             /* type modifiers */
+        case TOK__Atomic:
+            next();
+            type->t = t;
+            parse_btype_qualify(type, VT_ATOMIC);
+            t = type->t;
+            if (tok == '(') {
+                parse_expr_type(&type1);
+                /* remove all storage modifiers except typedef */
+                type1.t &= ~(VT_STORAGE&~VT_TYPEDEF);
+                if (type1.ref)
+                    sym_to_attr(ad, type1.ref);
+                goto basic_type2;
+            }
+            break;
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
@@ -5515,6 +5529,9 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
     redo:
         next();
         switch(tok) {
+        case TOK__Atomic:
+            qualifiers |= VT_ATOMIC;
+            goto redo;
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
@@ -5708,6 +5725,117 @@ static void parse_builtin_params(int nc, const char *args)
     skip(')');
     if (nc)
         nocode_wanted--;
+}
+
+static void parse_memory_model(int mtok)
+{
+    next();
+
+    switch (mtok) {
+    case TOK___ATOMIC_RELAXED: vpushs(0); break;
+    case TOK___ATOMIC_CONSUME: vpushs(1); break;
+    case TOK___ATOMIC_ACQUIRE: vpushs(2); break;
+    case TOK___ATOMIC_RELEASE: vpushs(3); break;
+    case TOK___ATOMIC_ACQ_REL: vpushs(4); break;
+    case TOK___ATOMIC_SEQ_CST: vpushs(5); break;
+    }
+
+    vtop->type.t |= (VT_UNSIGNED | VT_MEMMODEL);
+}
+
+static void parse_atomic(int atok)
+{
+    size_t arg;
+    size_t argc;
+    int param;
+    char const *params;
+    CType *atom = NULL;
+
+    next();
+
+    /*
+     * a -- atomic
+     * A -- read-only atomic
+     * p -- pointer to memory
+     * P -- pointer to read-only memory
+     * v -- value
+     * m -- memory model
+     */
+    switch (atok) {
+    case TOK___atomic_init: params = "-a"; break;
+    case TOK___atomic_store: params = "-avm"; break;
+    case TOK___atomic_load: params = "am"; break;
+    case TOK___atomic_exchange: params = "avm"; break;
+    case TOK___atomic_compare_exchange_strong: params = "apvmm"; break;
+    case TOK___atomic_compare_exchange_weak: params = "apvmm"; break;
+    case TOK___atomic_fetch_add: params = "avm"; break;
+    case TOK___atomic_fetch_sub: params = "avm"; break;
+    case TOK___atomic_fetch_or: params = "avm"; break;
+    case TOK___atomic_fetch_xor: params = "avm"; break;
+    case TOK___atomic_fetch_and: params = "avm"; break;
+    }
+
+    argc = strlen(params);
+    if (params[0] == '-') {
+        ++params;
+        --argc;
+    }
+
+    skip('(');
+    for (arg = 0; arg < argc; ++arg) {
+        expr_eq();
+
+        param = params[arg];
+        switch (param) {
+        case 'a':
+        case 'A':
+            if (atom)
+                expect_arg("exactly one pointer to atomic", arg);
+            if ((vtop->type.t & VT_BTYPE) != VT_PTR)
+                expect_arg("pointer to atomic expected", arg);
+            atom = pointed_type(&vtop->type);
+            if (!(atom->t & VT_ATOMIC))
+                expect_arg("qualified pointer to atomic", arg);
+            if ((param == 'a') && (atom->t & VT_CONSTANT))
+                expect_arg("pointer to writable atomic", arg);
+            if (!is_integer_btype(atom->t & VT_BTYPE))
+                expect_arg("only atomic integers are supported", arg);
+            atom->t &= ~VT_ATOMIC;
+            break;
+
+        case 'p':
+            if (((vtop->type.t & VT_BTYPE) != VT_PTR)
+                || !is_compatible_unqualified_types(atom, pointed_type(&vtop->type)))
+                expect_arg("pointer to compatible type", arg);
+            break;
+
+        case 'v':
+            if (!is_integer_btype(vtop->type.t & VT_BTYPE))
+                expect_arg("only atomic integers are supported", arg);
+            break;
+
+        case 'm':
+            if ((vtop->type.t & VT_MEMMODEL) != VT_MEMMODEL)
+                expect_arg("memory model constant", arg);
+            vtop->type.t &= ~VT_MEMMODEL;
+            break;
+
+        default:
+            tcc_error("unknown parameter type");
+        }
+        if (tok == ')')
+            break;
+        skip(',');
+    }
+    if (arg < (argc - 1))
+        expect("more parameters");
+    if (arg > (argc - 1))
+        expect("less parameters");
+    skip(')');
+
+    for (arg = 0; arg < (argc - 1); ++arg)
+        vpop();
+    tcc_error("atomics are not supported yet");
 }
 
 ST_FUNC void unary(void)
@@ -6085,6 +6213,31 @@ ST_FUNC void unary(void)
         break;
     }
 #endif
+
+    /* memory models */
+    case TOK___ATOMIC_RELAXED:
+    case TOK___ATOMIC_CONSUME:
+    case TOK___ATOMIC_ACQUIRE:
+    case TOK___ATOMIC_RELEASE:
+    case TOK___ATOMIC_ACQ_REL:
+    case TOK___ATOMIC_SEQ_CST:
+        parse_memory_model(tok);
+        break;
+
+    /* atomic operations */
+    case TOK___atomic_init:
+    case TOK___atomic_store:
+    case TOK___atomic_load:
+    case TOK___atomic_exchange:
+    case TOK___atomic_compare_exchange_strong:
+    case TOK___atomic_compare_exchange_weak:
+    case TOK___atomic_fetch_add:
+    case TOK___atomic_fetch_sub:
+    case TOK___atomic_fetch_or:
+    case TOK___atomic_fetch_xor:
+    case TOK___atomic_fetch_and:
+        parse_atomic(tok);
+        break;
 
     /* pre operations */
     case TOK_INC:

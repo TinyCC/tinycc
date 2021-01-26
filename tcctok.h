@@ -17,6 +17,7 @@
      DEF(TOK_SWITCH, "switch")
      DEF(TOK_CASE, "case")
 
+     DEF(TOK__Atomic, "_Atomic")
      DEF(TOK_CONST1, "const")
      DEF(TOK_CONST2, "__const") /* gcc keyword */
      DEF(TOK_CONST3, "__const__") /* gcc keyword */
@@ -172,6 +173,27 @@
 #elif defined TCC_TARGET_RISCV64
      DEF(TOK_builtin_va_start, "__builtin_va_start")
 #endif
+
+/* memory models */
+     DEF(TOK___ATOMIC_RELAXED, "__ATOMIC_RELAXED")
+     DEF(TOK___ATOMIC_CONSUME, "__ATOMIC_CONSUME")
+     DEF(TOK___ATOMIC_ACQUIRE, "__ATOMIC_ACQUIRE")
+     DEF(TOK___ATOMIC_RELEASE, "__ATOMIC_RELEASE")
+     DEF(TOK___ATOMIC_ACQ_REL, "__ATOMIC_ACQ_REL")
+     DEF(TOK___ATOMIC_SEQ_CST, "__ATOMIC_SEQ_CST")
+
+/* atomic operations */
+     DEF(TOK___atomic_init, "__atomic_init")
+     DEF(TOK___atomic_store, "__atomic_store")
+     DEF(TOK___atomic_load, "__atomic_load")
+     DEF(TOK___atomic_exchange, "__atomic_exchange")
+     DEF(TOK___atomic_compare_exchange_strong, "__atomic_compare_exchange_strong")
+     DEF(TOK___atomic_compare_exchange_weak, "__atomic_compare_exchange_weak")
+     DEF(TOK___atomic_fetch_add, "__atomic_fetch_add")
+     DEF(TOK___atomic_fetch_sub, "__atomic_fetch_sub")
+     DEF(TOK___atomic_fetch_or, "__atomic_fetch_or")
+     DEF(TOK___atomic_fetch_xor, "__atomic_fetch_xor")
+     DEF(TOK___atomic_fetch_and, "__atomic_fetch_and")
 
 /* pragma */
      DEF(TOK_pack, "pack")

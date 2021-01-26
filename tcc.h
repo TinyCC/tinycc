@@ -1051,6 +1051,9 @@ struct filespec {
 #define IS_ENUM_VAL(t) ((t & VT_STRUCT_MASK) == VT_ENUM_VAL)
 #define IS_UNION(t) ((t & (VT_STRUCT_MASK|VT_BTYPE)) == VT_UNION)
 
+#define VT_ATOMIC   VT_VOLATILE
+#define VT_MEMMODEL (VT_STATIC | VT_ENUM_VAL | VT_TYPEDEF)
+
 /* type mask (except storage) */
 #define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
 #define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
@@ -1418,6 +1421,7 @@ ST_FUNC void tccpp_delete(TCCState *s);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
+ST_FUNC NORETURN void expect_arg(const char *msg, size_t arg);
 
 /* space excluding newline */
 static inline int is_space(int ch) {

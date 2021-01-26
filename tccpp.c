@@ -107,6 +107,11 @@ ST_FUNC void expect(const char *msg)
     tcc_error("%s expected", msg);
 }
 
+ST_FUNC void expect_arg(const char *msg, size_t arg)
+{
+    tcc_error("%s expected as arg #%zu", msg, arg);
+}
+
 /* ------------------------------------------------------------------------- */
 /* Custom allocator for tiny objects */
 
