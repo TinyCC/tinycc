@@ -182,18 +182,27 @@
      DEF(TOK___ATOMIC_ACQ_REL, "__ATOMIC_ACQ_REL")
      DEF(TOK___ATOMIC_SEQ_CST, "__ATOMIC_SEQ_CST")
 
+#define DEF_ATOMIC(id, str) \
+     DEF(id, str) \
+     DEF(id##_8, str "_8") \
+     DEF(id##_16, str "_16") \
+     DEF(id##_32, str "_32") \
+     DEF(id##_64, str "_64")
+
 /* atomic operations */
-     DEF(TOK___atomic_init, "__atomic_init")
-     DEF(TOK___atomic_store, "__atomic_store")
-     DEF(TOK___atomic_load, "__atomic_load")
-     DEF(TOK___atomic_exchange, "__atomic_exchange")
-     DEF(TOK___atomic_compare_exchange_strong, "__atomic_compare_exchange_strong")
-     DEF(TOK___atomic_compare_exchange_weak, "__atomic_compare_exchange_weak")
-     DEF(TOK___atomic_fetch_add, "__atomic_fetch_add")
-     DEF(TOK___atomic_fetch_sub, "__atomic_fetch_sub")
-     DEF(TOK___atomic_fetch_or, "__atomic_fetch_or")
-     DEF(TOK___atomic_fetch_xor, "__atomic_fetch_xor")
-     DEF(TOK___atomic_fetch_and, "__atomic_fetch_and")
+     DEF_ATOMIC(TOK___atomic_init, "__atomic_init")
+     DEF_ATOMIC(TOK___atomic_store, "__atomic_store")
+     DEF_ATOMIC(TOK___atomic_load, "__atomic_load")
+     DEF_ATOMIC(TOK___atomic_exchange, "__atomic_exchange")
+     DEF_ATOMIC(TOK___atomic_compare_exchange_strong, "__atomic_compare_exchange_strong")
+     DEF_ATOMIC(TOK___atomic_compare_exchange_weak, "__atomic_compare_exchange_weak")
+     DEF_ATOMIC(TOK___atomic_fetch_add, "__atomic_fetch_add")
+     DEF_ATOMIC(TOK___atomic_fetch_sub, "__atomic_fetch_sub")
+     DEF_ATOMIC(TOK___atomic_fetch_or, "__atomic_fetch_or")
+     DEF_ATOMIC(TOK___atomic_fetch_xor, "__atomic_fetch_xor")
+     DEF_ATOMIC(TOK___atomic_fetch_and, "__atomic_fetch_and")
+
+#undef DEF_ATOMIC
 
 /* pragma */
      DEF(TOK_pack, "pack")

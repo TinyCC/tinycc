@@ -5745,35 +5745,46 @@ static void parse_memory_model(int mtok)
 
 static void parse_atomic(int atok)
 {
+    size_t op;
     size_t arg;
     size_t argc;
-    int param;
-    char const *params;
     CType *atom = NULL;
+    char const *params = NULL;
+    static struct {
+        int const tok;
+        char const *const params;
+    } const ops[] = {
+        /*
+         * a -- atomic
+         * A -- read-only atomic
+         * p -- pointer to memory
+         * P -- pointer to read-only memory
+         * v -- value
+         * m -- memory model
+         */
+        {TOK___atomic_init, "-a"},
+        {TOK___atomic_store, "-avm"},
+        {TOK___atomic_load, "am"},
+        {TOK___atomic_exchange, "avm"},
+        {TOK___atomic_compare_exchange_strong, "apvmm"},
+        {TOK___atomic_compare_exchange_weak, "apvmm"},
+        {TOK___atomic_fetch_add, "avm"},
+        {TOK___atomic_fetch_sub, "avm"},
+        {TOK___atomic_fetch_or, "avm"},
+        {TOK___atomic_fetch_xor, "avm"},
+        {TOK___atomic_fetch_and, "avm"},
+    };
 
     next();
 
-    /*
-     * a -- atomic
-     * A -- read-only atomic
-     * p -- pointer to memory
-     * P -- pointer to read-only memory
-     * v -- value
-     * m -- memory model
-     */
-    switch (atok) {
-    case TOK___atomic_init: params = "-a"; break;
-    case TOK___atomic_store: params = "-avm"; break;
-    case TOK___atomic_load: params = "am"; break;
-    case TOK___atomic_exchange: params = "avm"; break;
-    case TOK___atomic_compare_exchange_strong: params = "apvmm"; break;
-    case TOK___atomic_compare_exchange_weak: params = "apvmm"; break;
-    case TOK___atomic_fetch_add: params = "avm"; break;
-    case TOK___atomic_fetch_sub: params = "avm"; break;
-    case TOK___atomic_fetch_or: params = "avm"; break;
-    case TOK___atomic_fetch_xor: params = "avm"; break;
-    case TOK___atomic_fetch_and: params = "avm"; break;
+    for (op = 0; op < (sizeof(ops) / sizeof(*ops)); ++op) {
+        if (ops[op].tok == atok) {
+            params = ops[op].params;
+            break;
+        }
     }
+    if (!params)
+        tcc_error("unknown atomic operation");
 
     argc = strlen(params);
     if (params[0] == '-') {
@@ -5781,12 +5792,14 @@ static void parse_atomic(int atok)
         --argc;
     }
 
+    vpushi(0);
+    vpushi(0); /* function address */
+
     skip('(');
     for (arg = 0; arg < argc; ++arg) {
         expr_eq();
 
-        param = params[arg];
-        switch (param) {
+        switch (params[arg]) {
         case 'a':
         case 'A':
             if (atom)
@@ -5796,11 +5809,20 @@ static void parse_atomic(int atok)
             atom = pointed_type(&vtop->type);
             if (!(atom->t & VT_ATOMIC))
                 expect_arg("qualified pointer to atomic", arg);
-            if ((param == 'a') && (atom->t & VT_CONSTANT))
+            if ((params[arg] == 'a') && (atom->t & VT_CONSTANT))
                 expect_arg("pointer to writable atomic", arg);
-            if (!is_integer_btype(atom->t & VT_BTYPE))
-                expect_arg("only atomic integers are supported", arg);
             atom->t &= ~VT_ATOMIC;
+            switch (btype_size(atom->t & VT_BTYPE)) {
+            case 1: atok += 1; break;
+            case 2: atok += 2; break;
+            case 4: atok += 3; break;
+            case 8: atok += 4; break;
+            default: tcc_error("only integer-sized types are supported");
+            }
+            vswap();
+            vpop();
+            vpush_helper_func(atok);
+            vswap();
             break;
 
         case 'p':
@@ -5811,7 +5833,7 @@ static void parse_atomic(int atok)
 
         case 'v':
             if (!is_integer_btype(vtop->type.t & VT_BTYPE))
-                expect_arg("only atomic integers are supported", arg);
+                expect_arg("integer type", arg);
             break;
 
         case 'm':
@@ -5833,9 +5855,7 @@ static void parse_atomic(int atok)
         expect("less parameters");
     skip(')');
 
-    for (arg = 0; arg < (argc - 1); ++arg)
-        vpop();
-    tcc_error("atomics are not supported yet");
+    gfunc_call(argc);
 }
 
 ST_FUNC void unary(void)
