@@ -18,11 +18,6 @@ void __bt_init(rt_context *p, int num_callers)
     __attribute__((weak)) void __bound_init(void*, int);
     struct rt_context *rc = &g_rtctxt;
     //fprintf(stderr, "__bt_init %d %p %p\n", num_callers, p->stab_sym, p->bounds_start), fflush(stderr);
-#ifdef __APPLE__
-    /* call __bound_init here due to redirection of sigaction */
-    if (__bound_init && p->bounds_start)
-        __bound_init(p->bounds_start, 0);
-#endif
     if (num_callers) {
         memcpy(rc, p, offsetof(rt_context, next));
         rc->num_callers = num_callers - 1;

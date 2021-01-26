@@ -38,6 +38,7 @@ endif
 $(X)BT_O = bt-exe.o bt-log.o
 $(X)B_O = $(BCHECK_O) bt-exe.o bt-log.o bt-dll.o
 endif
+$(X)BT_O += tcov.o
 
 DSO_O = dsohandle.o
 
@@ -64,7 +65,6 @@ OBJ-arm-wince = $(ARM_O) $(WIN_O)
 OBJ-riscv64 = $(RISCV64_O) $(BCHECK_O) $(DSO_O)
 
 OBJ-extra = $(filter $(B_O),$(OBJ-$T))
-OBJ-extra += tcov.o
 OBJ-libtcc1 = $(addprefix $(X),$(filter-out $(OBJ-extra),$(OBJ-$T)))
 
 ALL = $(addprefix $(TOP)/,$(X)libtcc1.a $(OBJ-extra))

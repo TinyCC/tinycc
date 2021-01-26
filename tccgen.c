@@ -2949,6 +2949,12 @@ static void gen_opic(int op)
 
 #if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
 # define gen_negf gen_opf
+#elif defined TCC_TARGET_ARM
+void gen_negf(int op)
+{
+    /* arm will detect 0-x and replace by vneg */
+    vpushi(0), vswap(), gen_op('-');
+}
 #else
 /* XXX: implement in gen_opf() for other backends too */
 void gen_negf(int op)

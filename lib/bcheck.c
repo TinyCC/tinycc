@@ -1367,6 +1367,10 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 
     dprintf (stderr, "%s, %s() %d %p %p\n", __FILE__, __FUNCTION__,
              signum, act, oldact);
+
+    if (sigaction_redir == NULL)
+        __bound_init(0,-1);
+
     if (act) {
         nact = *act;
         if (nact.sa_flags & SA_SIGINFO)

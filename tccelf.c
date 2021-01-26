@@ -1479,8 +1479,6 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     if (!s1->nostdlib) {
         if (s1->option_pthread)
             tcc_add_library_err(s1, "pthread");
-        if (s1->test_coverage)
-            tcc_add_support(s1, "tcov.o");
         tcc_add_library_err(s1, "c");
 #ifdef TCC_LIBGCC
         if (!s1->static_link) {

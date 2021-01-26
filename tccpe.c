@@ -1915,10 +1915,8 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             tcc_add_btstub(s1);
     }
 #endif
-    if (s1->test_coverage) {
-	tcc_add_support(s1, "tcov.o");
+    if (s1->test_coverage)
         tcc_add_tcov(s1);
-    }
 
     /* grab the startup code from libtcc1.a */
 #ifdef TCC_IS_NATIVE

@@ -108,6 +108,8 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
+#undef CONFIG_TCC_BCHECK
+
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/

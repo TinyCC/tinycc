@@ -58,7 +58,11 @@ ts1:;
         void *p = (void*)&main;
         char cc[] = "static string";
         double d = 8.0;
-        struct __attribute__((packed)) {
+        struct
+#ifndef __arm__
+        __attribute__((packed))
+#endif
+        {
             unsigned x : 12;
             unsigned char y : 7;
             unsigned z : 28, a: 4, b: 5;
