@@ -14,7 +14,7 @@ cat ../arm-tok.h | \
   sed -e 's;^[ ]*DEF_ASM_CONDED_VFP_F32_F64[^(]*(\(.*\)).*$; DEF_ASM_CONDED(\1.f32)\
  DEF_ASM_CONDED(\1.f64);g' | \
   sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;g' | \
-  egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl)$' | while read s
+  egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl|apsr_nzcv|fpsid|fpscr|fpexc)$' | while read s
 do
 	as_opts=""
 	if [ "${s#v}" != "${s}" ]
@@ -155,6 +155,13 @@ do
                     "d1, r2, r3" \
                     "s1, r2" \
                     "r2, s1" \
+                    "r2, fpexc" \
+                    "r2, fpscr" \
+                    "r2, fpsid" \
+                    "apsr_nzcv, fpscr" \
+                    "fpexc, r2" \
+                    "fpscr, r2" \
+                    "fpsid, r2" \
 	            ""
 	do
 		#echo ".syntax unified" > a.s

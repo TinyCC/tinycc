@@ -77,6 +77,20 @@ static int asm_parse_vfp_regvar(int t, int double_precision)
     return -1;
 }
 
+static int asm_parse_vfp_status_regvar(int t)
+{
+    switch (t) {
+    case TOK_ASM_fpsid:
+        return 0;
+    case TOK_ASM_fpscr:
+        return 1;
+    case TOK_ASM_fpexc:
+        return 8;
+    default:
+        return -1;
+    }
+}
+
 /* Parse a text containing operand and store the result in OP */
 static void parse_operand(TCCState *s1, Operand *op)
 {
@@ -1915,10 +1929,6 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
    VMOV Rd, Dn[0]
    VMOV Dn[1], Rd
    VMOV Rd, Dn[1]
-
-   VMSR <sysreg>, Rd
-   VMRS Rd, <sysreg>
-   VMRS APSR_nzcv, FPSCR
 */
 
     switch (ARM_INSTRUCTION_GROUP(token)) {
@@ -2110,6 +2120,68 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
 
     asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, (ops[2].type == OP_IM8) ? ops[2].e.v : ops[2].reg, opcode2, 0);
 }
+
+static void asm_floating_point_status_register_opcode(TCCState* s1, int token)
+{
+    uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
+    uint8_t opcode;
+    int vfp_sys_reg = -1;
+    Operand arm_operand;
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vmrseq:
+        opcode = 0xf;
+        if (tok == TOK_ASM_apsr_nzcv) {
+            arm_operand.type = OP_REG32;
+            arm_operand.reg = 15; // not PC
+            next(); // skip apsr_nzcv
+        } else {
+            parse_operand(s1, &arm_operand);
+            if (arm_operand.type == OP_REG32 && arm_operand.reg == 15) {
+                tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
+                return;
+            }
+        }
+
+        if (tok != ',')
+            expect("','");
+        else
+            next(); // skip ','
+        vfp_sys_reg = asm_parse_vfp_status_regvar(tok);
+        next(); // skip vfp sys reg
+        if (arm_operand.type == OP_REG32 && arm_operand.reg == 15 && vfp_sys_reg != 1) {
+            tcc_error("'%s' only supports the variant 'vmrs apsr_nzcv, fpscr' here", get_tok_str(token, NULL));
+            return;
+        }
+        break;
+    case TOK_ASM_vmsreq:
+        opcode = 0xe;
+        vfp_sys_reg = asm_parse_vfp_status_regvar(tok);
+        next(); // skip vfp sys reg
+        if (tok != ',')
+            expect("','");
+        else
+            next(); // skip ','
+        parse_operand(s1, &arm_operand);
+        if (arm_operand.type == OP_REG32 && arm_operand.reg == 15) {
+            tcc_error("'%s' does not support 'pc' as operand", get_tok_str(token, NULL));
+            return;
+        }
+        break;
+    default:
+        expect("floating point status register instruction");
+        return;
+    }
+    if (vfp_sys_reg == -1) {
+        expect("VFP system register");
+        return;
+    }
+    if (arm_operand.type != OP_REG32) {
+        expect("ARM register");
+        return;
+    }
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode, arm_operand.reg, vfp_sys_reg, 0x10, 0, 0);
+}
+
 #endif
 
 static void asm_misc_single_data_transfer_opcode(TCCState *s1, int token)
@@ -2517,6 +2589,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vstmiaeq:
     case TOK_ASM_vstmdbeq:
         asm_floating_point_block_data_transfer_opcode(s1, token);
+        return;
+
+    case TOK_ASM_vmsreq:
+    case TOK_ASM_vmrseq:
+        asm_floating_point_status_register_opcode(s1, token);
         return;
 #endif
 

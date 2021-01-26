@@ -120,6 +120,16 @@
  DEF_ASM(d14)
  DEF_ASM(d15)
 
+ /* VFP status registers */
+
+ DEF_ASM(fpsid)
+ DEF_ASM(fpscr)
+ DEF_ASM(fpexc)
+
+ /* VFP magical ARM register */
+
+ DEF_ASM(apsr_nzcv)
+
  /* data processing directives */
 
  DEF_ASM(asl)
@@ -333,3 +343,5 @@
  DEF_ASM_CONDED(vstm)
  DEF_ASM_CONDED(vstmia)
  DEF_ASM_CONDED(vstmdb)
+ DEF_ASM_CONDED(vmsr)
+ DEF_ASM_CONDED(vmrs)
