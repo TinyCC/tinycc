@@ -1438,9 +1438,13 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
     section_ptr_add(tcov_section, 1);
     write32le (tcov_section->data, tcov_section->data_offset);
 
-    getcwd (wd, sizeof(wd));
     cstr_new (&cstr);
-    cstr_printf (&cstr, "%s/%s.tcov", wd, filename);
+    if (filename[0] == '/')
+        cstr_printf (&cstr, "%s.tcov", filename);
+    else {
+        getcwd (wd, sizeof(wd));
+        cstr_printf (&cstr, "%s/%s.tcov", wd, filename);
+    }
     ptr = section_ptr_add(tcov_section, cstr.size + 1);
     strncpy((char *)ptr, cstr.data, cstr.size);
     unlink((char *)ptr);
@@ -1448,11 +1452,6 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
     normalize_slashes((char *)ptr);
 #endif
     cstr_free (&cstr);
-}
-
-ST_FUNC void tcc_add_tcov(TCCState *s1)
-{
-    CString cstr;
 
     cstr_new(&cstr);
     cstr_printf(&cstr,
@@ -1512,8 +1511,6 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
-        if (s1->test_coverage)
-            tcc_add_tcov(s1);
         if (strlen(TCC_LIBTCC1) > 0)
             tcc_add_support(s1, TCC_LIBTCC1);
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD

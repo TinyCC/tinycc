@@ -1467,7 +1467,6 @@ ST_FUNC void tcc_debug_end(TCCState *s1);
 ST_FUNC void tcc_debug_bincl(TCCState *s1);
 ST_FUNC void tcc_debug_eincl(TCCState *s1);
 ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
-ST_FUNC void tcc_add_tcov(TCCState *s1);
 
 ST_FUNC void tccgen_init(TCCState *s1);
 ST_FUNC int tccgen_compile(TCCState *s1);

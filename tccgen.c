@@ -208,7 +208,6 @@ static struct debug_info {
 
 static struct {
     unsigned long offset;
-    unsigned long last_offset;
     unsigned long last_file_name;
     unsigned long last_func_name;
     int ind;
@@ -822,6 +821,7 @@ static void tcc_tcov_block_begin(void)
 {
     SValue sv;
     void *ptr;
+    unsigned long last_offset = tcov_data.offset;
 
     tcc_tcov_block_end (0);
     if (tcc_state->test_coverage == 0 || nocode_wanted)
@@ -837,11 +837,17 @@ static void tcc_tcov_block_begin(void)
 	    section_ptr_add(tcov_section, 1);
 	if (tcov_data.last_file_name)
 	    section_ptr_add(tcov_section, 1);
-	getcwd (wd, sizeof(wd));
-	tcov_data.last_file_name = tcov_section->data_offset + strlen(wd) + 1;
 	tcov_data.last_func_name = 0;
 	cstr_new (&cstr);
-	cstr_printf (&cstr, "%s/%s", wd, file->true_filename);
+	if (file->true_filename[0] == '/') {
+	    tcov_data.last_file_name = tcov_section->data_offset;
+	    cstr_printf (&cstr, "%s", file->true_filename);
+	}
+	else {
+	    getcwd (wd, sizeof(wd));
+	    tcov_data.last_file_name = tcov_section->data_offset + strlen(wd) + 1;
+	    cstr_printf (&cstr, "%s/%s", wd, file->true_filename);
+	}
 	ptr = section_ptr_add(tcov_section, cstr.size + 1);
 	strncpy((char *)ptr, cstr.data, cstr.size);
 #ifdef _WIN32
@@ -865,7 +871,7 @@ static void tcc_tcov_block_begin(void)
 	write64le (ptr, file->line_num);
     }
     if (ind == tcov_data.ind && tcov_data.line == file->line_num)
-        tcov_data.offset = tcov_data.last_offset;
+        tcov_data.offset = last_offset;
     else {
         Sym label = {0};
         label.type.t = VT_LLONG | VT_STATIC;
@@ -903,7 +909,6 @@ static void tcc_tcov_block_end(int line)
 	unsigned long long nline = line ? line : file->line_num;
 
 	write64le (ptr, (read64le (ptr) & 0xfffffffffull) | (nline << 36));
-	tcov_data.last_offset = tcov_data.offset;
 	tcov_data.offset = 0;
     }
 }
@@ -5744,6 +5749,7 @@ static inline int is_memory_model(const SValue *sv)
      * Ideally we should check whether the model matches 1:1.
      * If it is possible, we should check by the name of the value.
      */
+int t = 0; // XXX: HACK
     return (((t & VT_BTYPE) == VT_INT) && (sv->c.i < 6));
 }
 
@@ -7576,6 +7582,7 @@ again:
                 || (cur_switch->sv.type.t & VT_UNSIGNED && (uint64_t)cr->v2 < (uint64_t)cr->v1))
                 tcc_warning("empty case range");
         }
+        tcov_data.ind = 0;
         cr->sym = gind();
         dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         skip(':');
@@ -7587,6 +7594,7 @@ again:
             expect("switch");
         if (cur_switch->def_sym)
             tcc_error("too many 'default'");
+        tcov_data.ind = 0;
         cur_switch->def_sym = gind();
         skip(':');
         is_expr = 0;

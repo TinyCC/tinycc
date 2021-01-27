@@ -1,6 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#ifndef _WIN32
+#include <unistd.h>
+#include <errno.h>
+#else
+#include <windows.h>
+#include <io.h>
+#endif
 
 /* section layout (all little endian):
    32bit offset to executable/so file name
@@ -37,6 +45,32 @@ typedef struct tcov_file {
     tcov_function *func;
     struct tcov_file *next;
 } tcov_file;
+
+static FILE *open_tcov_file (char *cov_filename)
+{
+    int fd;
+#ifndef _WIN32
+    struct flock lock;
+
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 0;
+    lock.l_len = 0; /* Until EOF.  */
+    lock.l_pid = getpid ();
+#endif
+    fd = open (cov_filename, O_RDWR | O_CREAT, 0666);
+    if (fd < 0)
+	return NULL;
+  
+#ifndef _WIN32
+    while (fcntl (fd, F_SETLKW, &lock) && errno == EINTR)
+        continue;
+#else
+    LockFile((HANDLE)_get_osfhandle(fd), 0, 0, 1, 0);
+#endif
+
+    return fdopen (fd, "r+");
+}
 
 static unsigned long long get_value(unsigned char *p, int size)
 {
@@ -176,11 +210,10 @@ static tcov_file *sort_test_coverage (unsigned char *p)
 }
 
 /* merge with previous tcov file */
-static void merge_test_coverage (tcov_file *file, char *cov_filename,
+static void merge_test_coverage (tcov_file *file, FILE *fp,
 				 unsigned int *pruns)
 {
     unsigned int runs;
-    FILE *fp = fopen (cov_filename, "r");
     char *p;
     char str[10000];
     
@@ -228,7 +261,6 @@ static void merge_test_coverage (tcov_file *file, char *cov_filename,
 	}
 	file = file->next;
     }
-    fclose (fp);
 }
 
 /* store tcov data in file */
@@ -247,13 +279,14 @@ void __store_test_coverage (unsigned char * p)
     tcov_file *nfile;
     tcov_function *func;
 
-    file = sort_test_coverage (p);
-    merge_test_coverage (file, cov_filename, &runs);
-    fp = fopen (cov_filename, "w");
+    fp = open_tcov_file (cov_filename);
     if (fp == NULL) {
 	fprintf (stderr, "Cannot create coverage file: %s\n", cov_filename);
 	return;
     }
+    file = sort_test_coverage (p);
+    merge_test_coverage (file, fp, &runs);
+    fseek (fp, 0, SEEK_SET);
     fprintf (fp, "        -:    0:Runs:%u\n", runs);
     files = 0;
     funcs = 0;
@@ -346,12 +379,11 @@ void __store_test_coverage (unsigned char * p)
 			lline = nlline;
 			j++;
 		    }
-		    else {
-			if (same_line)
-			     lline++;
+		    else
 			break;
-		    }
 		}
+		if (same_line)
+		     lline++;
 
 	        while (curline < fline)
 		    if (fgets(str, sizeof(str), src))
