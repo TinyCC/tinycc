@@ -5771,7 +5771,7 @@ static void parse_atomic(int atok)
          * v -- value
          * m -- memory model
          */
-        {TOK___c11_atomic_init, "-a"},
+        {TOK___c11_atomic_init, "-av"},
         {TOK___c11_atomic_store, "-avm"},
         {TOK___c11_atomic_load, "am"},
         {TOK___c11_atomic_exchange, "avm"},
