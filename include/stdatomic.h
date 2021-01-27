@@ -1,9 +1,19 @@
+/* This file is derived from clang's stdatomic.h */
+
+/*===---- stdatomic.h - Standard header for atomic types and operations -----===
+ *
+ * Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+ * See https://llvm.org/LICENSE.txt for license information.
+ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+ *
+ *===-----------------------------------------------------------------------===
+ */
+
+#ifndef _STDATOMIC_H
+#define _STDATOMIC_H
+
 #include <stddef.h>
 #include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* Memory ordering */
 typedef enum {
@@ -16,11 +26,7 @@ typedef enum {
 } memory_order;
 
 /* Atomic typedefs */
-#ifdef __cplusplus
-typedef _Atomic(bool) atomic_bool;
-#else
 typedef _Atomic(_Bool) atomic_bool;
-#endif
 typedef _Atomic(char) atomic_char;
 typedef _Atomic(signed char) atomic_schar;
 typedef _Atomic(unsigned char) atomic_uchar;
@@ -63,59 +69,57 @@ typedef struct {
     atomic_bool value;
 } atomic_flag;
 
-#define ATOMIC_FLAG_INIT { 0 }
+#define ATOMIC_FLAG_INIT {0}
 
 #define atomic_flag_test_and_set(object) \
-    __atomic_exchange(&(object)->value, 1, __ATOMIC_SEQ_CST)
+    __c11_atomic_exchange(&(object)->value, 1, __ATOMIC_SEQ_CST)
 #define atomic_flag_test_and_set_explicit(object, order) \
-    __atomic_exchange(&(object)->value, 1, order)
+    __c11_atomic_exchange(&(object)->value, 1, order)
 
 #define atomic_flag_clear(object) \
-    __atomic_store(&(object)->value, 0, __ATOMIC_SEQ_CST)
+    __c11_atomic_store(&(object)->value, 0, __ATOMIC_SEQ_CST)
 #define atomic_flag_clear_explicit(object, order) \
-    __atomic_store(&(object)->value, 0, order)
+    __c11_atomic_store(&(object)->value, 0, order)
 
 /* Generic routines */
 #define atomic_store(object, desired) \
-    __atomic_store(object, desired, __ATOMIC_SEQ_CST)
-#define atomic_store_explicit __atomic_store
+    __c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
+#define atomic_store_explicit __c11_atomic_store
 
 #define atomic_load(object) \
-    __atomic_load(object, __ATOMIC_SEQ_CST)
-#define atomic_load_explicit __atomic_load
+    __c11_atomic_load(object, __ATOMIC_SEQ_CST)
+#define atomic_load_explicit __c11_atomic_load
 
 #define atomic_exchange(object, desired) \
-    __atomic_exchange(object, desired, __ATOMIC_SEQ_CST)
-#define atomic_exchange_explicit __atomic_exchange
+    __c11_atomic_exchange(object, desired, __ATOMIC_SEQ_CST)
+#define atomic_exchange_explicit __c11_atomic_exchange
 
 #define atomic_compare_exchange_strong(object, expected, desired) \
-    __atomic_compare_exchange_strong(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
-#define atomic_compare_exchange_strong_explicit __atomic_compare_exchange_strong
+    __c11_atomic_compare_exchange_strong(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#define atomic_compare_exchange_strong_explicit __c11_atomic_compare_exchange_strong
 
 #define atomic_compare_exchange_weak(object, expected, desired) \
-    __atomic_compare_exchange_weak(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
-#define atomic_compare_exchange_weak_explicit __atomic_compare_exchange_weak
+    __c11_atomic_compare_exchange_weak(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#define atomic_compare_exchange_weak_explicit __c11_atomic_compare_exchange_weak
 
 #define atomic_fetch_add(object, operand) \
-    __atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_add_explicit __atomic_fetch_add
+    __c11_atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_add_explicit __c11_atomic_fetch_add
 
 #define atomic_fetch_sub(object, operand) \
-    __atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_sub_explicit __atomic_fetch_sub
+    __c11_atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_sub_explicit __c11_atomic_fetch_sub
 
 #define atomic_fetch_or(object, operand) \
-    __atomic_fetch_or(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_or_explicit __atomic_fetch_or
+    __c11_atomic_fetch_or(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_or_explicit __c11_atomic_fetch_or
 
 #define atomic_fetch_xor(object, operand) \
-    __atomic_fetch_xor(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_xor_explicit __atomic_fetch_xor
+    __c11_atomic_fetch_xor(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_xor_explicit __c11_atomic_fetch_xor
 
 #define atomic_fetch_and(object, operand) \
-    __atomic_fetch_and(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_and_explicit __atomic_fetch_and
+    __c11_atomic_fetch_and(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_and_explicit __c11_atomic_fetch_and
 
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
+#endif /* _STDATOMIC_H */
