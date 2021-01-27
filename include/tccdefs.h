@@ -78,6 +78,13 @@
 #endif
     #endif
 
+    #define __ATOMIC_RELAXED 0
+    #define __ATOMIC_CONSUME 1
+    #define __ATOMIC_ACQUIRE 2
+    #define __ATOMIC_RELEASE 3
+    #define __ATOMIC_ACQ_REL 4
+    #define __ATOMIC_SEQ_CST 5
+
 #if defined _WIN32
     #define __declspec(x) __attribute__((x))
     #define __cdecl
