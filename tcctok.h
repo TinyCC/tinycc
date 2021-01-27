@@ -174,14 +174,6 @@
      DEF(TOK_builtin_va_start, "__builtin_va_start")
 #endif
 
-/* memory models */
-     DEF(TOK___ATOMIC_RELAXED, "__ATOMIC_RELAXED")
-     DEF(TOK___ATOMIC_CONSUME, "__ATOMIC_CONSUME")
-     DEF(TOK___ATOMIC_ACQUIRE, "__ATOMIC_ACQUIRE")
-     DEF(TOK___ATOMIC_RELEASE, "__ATOMIC_RELEASE")
-     DEF(TOK___ATOMIC_ACQ_REL, "__ATOMIC_ACQ_REL")
-     DEF(TOK___ATOMIC_SEQ_CST, "__ATOMIC_SEQ_CST")
-
 #define DEF_ATOMIC(id, str) \
      DEF(id, str) \
      DEF(id##_8, str "_8") \
@@ -190,17 +182,17 @@
      DEF(id##_64, str "_64")
 
 /* atomic operations */
-     DEF_ATOMIC(TOK___atomic_init, "__atomic_init")
-     DEF_ATOMIC(TOK___atomic_store, "__atomic_store")
-     DEF_ATOMIC(TOK___atomic_load, "__atomic_load")
-     DEF_ATOMIC(TOK___atomic_exchange, "__atomic_exchange")
-     DEF_ATOMIC(TOK___atomic_compare_exchange_strong, "__atomic_compare_exchange_strong")
-     DEF_ATOMIC(TOK___atomic_compare_exchange_weak, "__atomic_compare_exchange_weak")
-     DEF_ATOMIC(TOK___atomic_fetch_add, "__atomic_fetch_add")
-     DEF_ATOMIC(TOK___atomic_fetch_sub, "__atomic_fetch_sub")
-     DEF_ATOMIC(TOK___atomic_fetch_or, "__atomic_fetch_or")
-     DEF_ATOMIC(TOK___atomic_fetch_xor, "__atomic_fetch_xor")
-     DEF_ATOMIC(TOK___atomic_fetch_and, "__atomic_fetch_and")
+     DEF_ATOMIC(TOK___c11_atomic_init, "__c11_atomic_init")
+     DEF_ATOMIC(TOK___c11_atomic_store, "__c11_atomic_store")
+     DEF_ATOMIC(TOK___c11_atomic_load, "__c11_atomic_load")
+     DEF_ATOMIC(TOK___c11_atomic_exchange, "__c11_atomic_exchange")
+     DEF_ATOMIC(TOK___c11_atomic_compare_exchange_strong, "__c11_atomic_compare_exchange_strong")
+     DEF_ATOMIC(TOK___c11_atomic_compare_exchange_weak, "__c11_atomic_compare_exchange_weak")
+     DEF_ATOMIC(TOK___c11_atomic_fetch_add, "__c11_atomic_fetch_add")
+     DEF_ATOMIC(TOK___c11_atomic_fetch_sub, "__c11_atomic_fetch_sub")
+     DEF_ATOMIC(TOK___c11_atomic_fetch_or, "__c11_atomic_fetch_or")
+     DEF_ATOMIC(TOK___c11_atomic_fetch_xor, "__c11_atomic_fetch_xor")
+     DEF_ATOMIC(TOK___c11_atomic_fetch_and, "__c11_atomic_fetch_and")
 
 #undef DEF_ATOMIC
 
