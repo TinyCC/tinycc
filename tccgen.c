@@ -5749,8 +5749,7 @@ static inline int is_memory_model(const SValue *sv)
      * Ideally we should check whether the model matches 1:1.
      * If it is possible, we should check by the name of the value.
      */
-int t = 0; // XXX: HACK
-    return (((t & VT_BTYPE) == VT_INT) && (sv->c.i < 6));
+    return (((sv->type.t & VT_BTYPE) == VT_INT) && (sv->c.i < 6));
 }
 
 static void parse_atomic(int atok)
