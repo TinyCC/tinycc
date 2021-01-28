@@ -423,7 +423,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ElfW_Rel ElfW(Rela)
 # define SHT_RELX SHT_RELA
 # define REL_SECTION_FMT ".rela%s"
-# define RELPLT_SECTION_FMT ".rela.plt"
 #else
 # define ELFCLASSW ELFCLASS32
 # define ElfW(type) Elf##32##_##type
@@ -431,7 +430,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ElfW_Rel ElfW(Rel)
 # define SHT_RELX SHT_REL
 # define REL_SECTION_FMT ".rel%s"
-# define RELPLT_SECTION_FMT ".rel.plt"
 #endif
 /* target address type */
 #define addr_t ElfW(Addr)
@@ -593,7 +591,6 @@ typedef struct Section {
     struct Section *reloc;   /* corresponding section for relocation, if any */
     struct Section *hash;    /* hash table for symbols */
     struct Section *prev;    /* previous section on section stack */
-    struct Section *relocplt;/* reloc with JMP_SLOTs */
     char name[1];           /* section name */
 } Section;
 
@@ -1588,7 +1585,7 @@ ST_FUNC void put_stabn(TCCState *s1, int type, int other, int desc, int value);
 
 ST_FUNC void resolve_common_syms(TCCState *s1);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
-ST_FUNC void relocate_section(TCCState *s1, Section *s);
+ST_FUNC void relocate_sections(TCCState *s1);
 
 ST_FUNC ssize_t full_read(int fd, void *buf, size_t count);
 ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size);

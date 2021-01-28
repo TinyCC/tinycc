@@ -277,15 +277,11 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
     s1->pe_imagebase = mem;
 #endif
 
-    /* relocate each section */
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[i];
-        if (s->reloc)
-            relocate_section(s1, s);
-    }
-#if !defined(TCC_TARGET_PE) || defined(TCC_TARGET_MACHO)
+    /* relocate sections */
+#ifndef TCC_TARGET_PE
     relocate_plt(s1);
 #endif
+    relocate_sections(s1);
 
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];

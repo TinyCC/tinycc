@@ -131,7 +131,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     /* The PLT slot refers to the relocation entry it needs via offset.
        The reloc entry is created below, so its offset is the current
        data_offset */
-    relofs = s1->got->relocplt ? s1->got->relocplt->data_offset : 0;
+    relofs = s1->plt->reloc ? s1->plt->reloc->data_offset : 0;
 
     /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
     p = section_ptr_add(plt, 16);
@@ -169,16 +169,12 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
     }
 
-    if (s1->got->relocplt) {
-	int mem = s1->output_type == TCC_OUTPUT_MEMORY;
+    if (s1->plt->reloc) {
         ElfW_Rel *rel;
         int x = s1->plt->sh_addr + 16 + 6;
-
         p = s1->got->data;
-        for_each_elem(s1->got->relocplt, 0, rel, ElfW_Rel) {
-	    int sym_index = ELFW(R_SYM)(rel->r_info);
-	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-            write64le(p + rel->r_offset, mem ? sym->st_value : x);
+        for_each_elem(s1->plt->reloc, 0, rel, ElfW_Rel) {
+            write64le(p + rel->r_offset, x);
             x += 16;
         }
     }

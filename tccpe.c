@@ -982,7 +982,7 @@ static void pe_build_exports(struct pe_info *pe)
     for (ord = 0; ord < sym_count; ++ord)
     {
         p = sorted[ord], sym_index = p->index, name = p->name;
-        /* insert actual address later in relocate_section() */
+        /* insert actual address later in relocate_sections() */
         put_elf_reloc(symtab_section, pe->thunk,
             func_o, R_XXX_RELATIVE, sym_index);
         *(DWORD*)(pe->thunk->data + name_o)
@@ -1937,7 +1937,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
         }
     }
 
-    /* need this for 'tccelf.c:relocate_section()' */
+    /* need this for 'tccelf.c:relocate_sections()' */
     if (TCC_OUTPUT_DLL == s1->output_type)
         s1->output_type = TCC_OUTPUT_EXE;
     if (TCC_OUTPUT_MEMORY == s1->output_type)
@@ -1996,7 +1996,6 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 {
     int ret;
     struct pe_info pe;
-    int i;
 
     memset(&pe, 0, sizeof pe);
     pe.filename = filename;
@@ -2018,12 +2017,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
         pe_assign_addresses(&pe);
         relocate_syms(s1, s1->symtab, 0);
         s1->pe_imagebase = pe.imagebase;
-        for (i = 1; i < s1->nb_sections; ++i) {
-            Section *s = s1->sections[i];
-            if (s->reloc) {
-                relocate_section(s1, s);
-            }
-        }
+        relocate_sections(s1);
         pe.start_addr = (DWORD)
             (get_sym_addr(s1, pe.start_symbol, 1, 1) - pe.imagebase);
         if (s1->nb_errors)
