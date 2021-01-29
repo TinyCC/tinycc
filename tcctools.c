@@ -515,10 +515,23 @@ int _dowildcard = 1;
 /* -------------------------------------------------------------- */
 /* generate xxx.d file */
 
+static char *escape_target_dep(const char *s) {
+    char *res = tcc_malloc(strlen(s) * 2 + 1);
+    int j;
+    for (j = 0; *s; s++, j++) {
+        if (is_space(*s)) {
+            res[j++] = '\\';
+        }
+        res[j] = *s;
+    }
+    res[j] = '\0';
+    return res;
+}
+
 ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename)
 {
     FILE *depout;
-    char buf[1024];
+    char buf[1024], *escaped_target;
     int i, k;
 
     if (!filename) {
@@ -540,7 +553,9 @@ ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename
         for (k = 0; k < i; ++k)
             if (0 == strcmp(s1->target_deps[i], s1->target_deps[k]))
                 goto next;
-        fprintf(depout, " \\\n  %s", s1->target_deps[i]);
+        escaped_target = escape_target_dep(s1->target_deps[i]);
+        fprintf(depout, " \\\n  %s", escaped_target);
+        tcc_free(escaped_target);
     next:;
     }
     fprintf(depout, "\n");
