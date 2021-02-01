@@ -36,7 +36,7 @@
 #include "tcc.h"
 #include <assert.h>
 
-ST_DATA const char *target_machine_defs =
+ST_DATA const char * const target_machine_defs =
     "__riscv\0"
     "__riscv_xlen 64\0"
     "__riscv_flen 64\0"

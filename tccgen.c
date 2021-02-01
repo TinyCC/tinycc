@@ -2356,7 +2356,7 @@ ST_FUNC int gv(int rc)
             (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
             /* CPUs usually cannot use float constants, so we store them
                generically in data segment */
-            init_params p = { data_section };
+            init_params p = { rodata_section };
             unsigned long offset;
             size = type_size(&vtop->type, &align);
             if (NODATA_WANTED)
@@ -3095,11 +3095,12 @@ static void type_to_str(char *buf, int buf_size,
         pstrcat(buf, buf_size, "typedef ");
     if (t & VT_INLINE)
         pstrcat(buf, buf_size, "inline ");
-    if (t & VT_VOLATILE)
-        pstrcat(buf, buf_size, "volatile ");
-    if (t & VT_CONSTANT)
-        pstrcat(buf, buf_size, "const ");
-
+    if (bt != VT_PTR) {
+        if (t & VT_VOLATILE)
+            pstrcat(buf, buf_size, "volatile ");
+        if (t & VT_CONSTANT)
+            pstrcat(buf, buf_size, "const ");
+    }
     if (((t & VT_DEFSIGN) && bt == VT_BYTE)
         || ((t & VT_UNSIGNED)
             && (bt == VT_SHORT || bt == VT_INT || bt == VT_LLONG)
@@ -5932,18 +5933,22 @@ ST_FUNC void unary(void)
         /* fall thru */
     case TOK___FUNC__:
         {
+            Section *sec;
             void *ptr;
             int len;
             /* special function name identifier */
             len = strlen(funcname) + 1;
             /* generate char[len] type */
             type.t = VT_BYTE;
+            if (tcc_state->warn_write_strings)
+                type.t |= VT_CONSTANT;
             mk_pointer(&type);
             type.t |= VT_ARRAY;
             type.ref->c = len;
-            vpush_ref(&type, data_section, data_section->data_offset, len);
+            sec = rodata_section;
+            vpush_ref(&type, sec, sec->data_offset, len);
             if (!NODATA_WANTED) {
-                ptr = section_ptr_add(data_section, len);
+                ptr = section_ptr_add(sec, len);
                 memcpy(ptr, funcname, len);
             }
             next();
@@ -5968,6 +5973,7 @@ ST_FUNC void unary(void)
         mk_pointer(&type);
         type.t |= VT_ARRAY;
         memset(&ad, 0, sizeof(AttributeDef));
+        ad.section = rodata_section;
         decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
         break;
     case '(':
@@ -8526,11 +8532,16 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* allocate symbol in corresponding section */
         sec = ad->section;
         if (!sec) {
-            if (type->t & VT_CONSTANT)
-		sec = data_ro_section;
-            else if (has_init)
+            CType *tp = type;
+            while ((tp->t & (VT_BTYPE|VT_ARRAY)) == (VT_PTR|VT_ARRAY))
+                tp = &tp->ref->type;
+            if (tp->t & VT_CONSTANT) {
+		sec = rodata_section;
+            } else if (has_init) {
 		sec = data_section;
-            else if (tcc_state->nocommon)
+                /*if (tcc_state->g_debug & 4)
+                    tcc_warning("rw data: %s", get_tok_str(v, 0));*/
+            } else if (tcc_state->nocommon)
                 sec = bss_section;
         }
 

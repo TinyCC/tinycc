@@ -3669,7 +3669,7 @@ ST_INLN void unget_tok(int last_tok)
 /* ------------------------------------------------------------------------- */
 /* init preprocessor */
 
-static const char *target_os_defs =
+static const char * const target_os_defs =
 #ifdef TCC_TARGET_PE
     "_WIN32\0"
 # if PTR_SIZE == 8

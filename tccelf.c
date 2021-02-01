@@ -58,8 +58,12 @@ ST_FUNC void tccelf_new(TCCState *s)
     /* create standard sections */
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+#ifdef TCC_TARGET_PE
+    rodata_section = new_section(s, ".rdata", SHT_PROGBITS, SHF_ALLOC);
+#else
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
-    data_ro_section = new_section(s, ".data.ro", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    rodata_section = new_section(s, ".data.ro", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+#endif
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
@@ -206,7 +210,7 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
     tcc_free(tr);
 
     /* record text/data/bss output for -bench info */
-    for (i = 0; i < 3; ++i) {
+    for (i = 0; i < 4; ++i) {
         s = s1->sections[i + 1];
         s1->total_output[i] += s->data_offset - s->sh_offset;
     }
@@ -1255,11 +1259,16 @@ redo:
 				    && ELFW(ST_TYPE)(sym->st_info) == STT_FUNC)))
 			    goto jmp_slot;
 		    }
-                } else if (!(sym->st_shndx == SHN_ABS
+                } else if (sym->st_shndx == SHN_ABS) {
+                    if (sym->st_value == 0) /* from tcc_add_btstub() */
+                        continue;
 #ifndef TCC_TARGET_ARM
-			&& PTR_SIZE == 8
+                    if (PTR_SIZE != 8)
+                        continue;
 #endif
-			))
+                    /* from tcc_add_symbol(): on 64 bit platforms these
+                       need to go through .got */
+                } else
                     continue;
             }
 
@@ -1314,7 +1323,7 @@ redo:
 
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs)
 {
-    int shn = sec ? sec->sh_num : offs ? SHN_ABS : SHN_UNDEF;
+    int shn = sec ? sec->sh_num : offs || !name ? SHN_ABS : SHN_UNDEF;
     if (sec && offs == -1)
         offs = sec->data_offset;
     return set_elf_sym(symtab_section, offs, 0,
@@ -1326,7 +1335,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
     Section *s;
     addr_t end_offset;
     char buf[1024];
-    s = find_section(s1, section_name);
+    s = find_section_create(s1, section_name, 0);
     if (!s) {
         end_offset = 0;
         s = data_section;
@@ -1407,12 +1416,8 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     put_ptr(s1, stab_section, -1);
     put_ptr(s1, stab_section->link, 0);
     section_ptr_add(s, 3 * PTR_SIZE);
-    /* prog_base */
-#ifndef TCC_TARGET_MACHO
-    /* XXX this relocation is wrong, it uses sym-index 0 (local,undef) */
-    put_elf_reloc(s1->symtab, s, s->data_offset, R_DATA_PTR, 0);
-#endif
-    section_ptr_add(s, PTR_SIZE);
+    /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
+    put_ptr(s1, NULL, 0);
     n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
@@ -1421,10 +1426,10 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     }
 #endif
     section_ptr_add(s, n);
-
     cstr_new(&cstr);
     cstr_printf(&cstr,
-        " extern void __bt_init(),*__rt_info[],__bt_init_dll();"
+        "extern void __bt_init(),__bt_init_dll();"
+        "static void *__rt_info[];"
         "__attribute__((constructor)) static void __bt_init_rt(){");
 #ifdef TCC_TARGET_PE
     if (s1->output_type == TCC_OUTPUT_DLL)
@@ -1526,8 +1531,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
-        if (strlen(TCC_LIBTCC1) > 0)
+        if (TCC_LIBTCC1[0])
             tcc_add_support(s1, TCC_LIBTCC1);
+
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
         /* add crt end if not memory output */
 	if (s1->output_type != TCC_OUTPUT_MEMORY) {
@@ -1568,7 +1574,9 @@ static void tcc_add_linker_symbols(TCCState *s1)
     set_global_sym(s1, "__global_pointer$", data_section, 0x800);
 #endif
     /* horrible new standard ldscript defines */
+#ifndef TCC_TARGET_PE
     add_init_array_defines(s1, ".preinit_array");
+#endif
     add_init_array_defines(s1, ".init_array");
     add_init_array_defines(s1, ".fini_array");
     /* add start and stop symbols for sections whose name can be
@@ -1996,12 +2004,12 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                     } else if (s->sh_type == SHT_NOBITS) {
                         if (k != 6)
                             continue;
-                    } else if (s == data_ro_section ||
+                    } else if ((s == rodata_section
 #ifdef CONFIG_TCC_BCHECK
-			       s == bounds_section ||
-			       s == lbounds_section ||
+		                || s == bounds_section
+                                || s == lbounds_section
 #endif
-                               0) {
+                                ) && (s->sh_flags & SHF_WRITE)) {
                         if (k != 4)
                             continue;
 			/* Align next section on page size.
@@ -2029,18 +2037,15 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                         ph->p_vaddr = addr;
                         ph->p_paddr = ph->p_vaddr;
                     }
-                    if (s == data_ro_section ||
-#ifdef CONFIG_TCC_BCHECK
-			s == bounds_section ||
-			s == lbounds_section ||
-#endif
-                        0) {
+
+                    if (k == 4) {
                         if (roinf->sh_size == 0) {
                             roinf->sh_offset = s->sh_offset;
                             roinf->sh_addr = s->sh_addr;
 			}
                         roinf->sh_size = (addr - roinf->sh_addr) + s->sh_size;
 		    }
+
                     addr += s->sh_size;
                     if (s->sh_type != SHT_NOBITS)
                         file_offset += s->sh_size;

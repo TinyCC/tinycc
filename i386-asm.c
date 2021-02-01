@@ -638,10 +638,12 @@ static void asm_rex(int width64, Operand *ops, int nb_ops, int *op_type,
 }
 #endif
 
+
 static void maybe_print_stats (void)
 {
-  static int already = 1;
-  if (!already)
+    static int already;
+
+    if (0 && !already)
     /* print stats about opcodes */
     {
         const struct ASMInstr *pa;
@@ -1604,12 +1606,12 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
        call-preserved registers, but currently it doesn't matter.  */
 #ifdef TCC_TARGET_X86_64
 #ifdef TCC_TARGET_PE
-    static uint8_t reg_saved[] = { 3, 6, 7, 12, 13, 14, 15 };
+    static const uint8_t reg_saved[] = { 3, 6, 7, 12, 13, 14, 15 };
 #else
-    static uint8_t reg_saved[] = { 3, 12, 13, 14, 15 };
+    static const uint8_t reg_saved[] = { 3, 12, 13, 14, 15 };
 #endif
 #else
-    static uint8_t reg_saved[] = { 3, 6, 7 };
+    static const uint8_t reg_saved[] = { 3, 6, 7 };
 #endif
 
     /* mark all used registers */

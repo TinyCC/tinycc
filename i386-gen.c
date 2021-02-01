@@ -81,7 +81,7 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
-ST_DATA const char *target_machine_defs =
+ST_DATA const char * const target_machine_defs =
     "__i386__\0"
     "__i386\0"
     ;
@@ -372,8 +372,8 @@ static void gcall_or_jmp(int is_jmp)
     }
 }
 
-static uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
-static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
+static const uint8_t fastcall_regs[3] = { TREG_EAX, TREG_EDX, TREG_ECX };
+static const uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 /* Return the number of registers needed to return the struct, or 0 if
    returning via struct pointer. */
@@ -479,7 +479,7 @@ ST_FUNC void gfunc_call(int nb_args)
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
         func_call == FUNC_FASTCALLW) {
         int fastcall_nb_regs;
-        uint8_t *fastcall_regs_ptr;
+        const uint8_t *fastcall_regs_ptr;
         if (func_call == FUNC_FASTCALLW) {
             fastcall_regs_ptr = fastcallw_regs;
             fastcall_nb_regs = 2;
@@ -519,7 +519,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     CType *func_type = &func_sym->type;
     int addr, align, size, func_call, fastcall_nb_regs;
     int param_index, param_addr;
-    uint8_t *fastcall_regs_ptr;
+    const uint8_t *fastcall_regs_ptr;
     Sym *sym;
     CType *type;
 

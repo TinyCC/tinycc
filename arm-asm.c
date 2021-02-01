@@ -2826,7 +2826,7 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
 
     // TODO: Check non-E ABI.
     // Note: Technically, r13 (sp) is also callee-saved--but that does not matter yet
-    static uint8_t reg_saved[] = { 4, 5, 6, 7, 8, 9 /* Note: sometimes special reg "sb" */ , 10, 11 };
+    static const uint8_t reg_saved[] = { 4, 5, 6, 7, 8, 9 /* Note: sometimes special reg "sb" */ , 10, 11 };
 
     /* mark all used registers */
     memcpy(regs_allocated, clobber_regs, sizeof(regs_allocated));

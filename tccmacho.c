@@ -259,7 +259,7 @@ static void * add_lc(struct macho *mo, uint32_t cmd, uint32_t cmdsize)
     return lc;
 }
 
-static struct segment_command_64 * add_segment(struct macho *mo, char *name)
+static struct segment_command_64 * add_segment(struct macho *mo, const char *name)
 {
     struct segment_command_64 *sc = add_lc(mo, LC_SEGMENT_64, sizeof(*sc));
     strncpy(sc->segname, name, 16);
@@ -272,7 +272,7 @@ static struct segment_command_64 * get_segment(struct macho *mo, int i)
     return (struct segment_command_64 *) (mo->lc[mo->seg2lc[i]]);
 }
 
-static int add_section(struct macho *mo, struct segment_command_64 **_seg, char *name)
+static int add_section(struct macho *mo, struct segment_command_64 **_seg, const char *name)
 {
     struct segment_command_64 *seg = *_seg;
     int ret = seg->nsects;
@@ -525,10 +525,10 @@ static void create_symtab(TCCState *s1, struct macho *mo)
     }
 }
 
-struct {
+const struct {
     int seg;
     uint32_t flags;
-    char *name;
+    const char *name;
 } skinfo[sk_last] = {
     /*[sk_unknown] =*/  { 0 },
     /*[sk_discard] =*/  { 0 },

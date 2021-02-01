@@ -116,7 +116,7 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
-ST_DATA const char *target_machine_defs =
+ST_DATA const char * const target_machine_defs =
     "__C67__\0"
     ;
 
@@ -371,7 +371,7 @@ int C67_map_D12(char *s)
 
 
 
-void C67_asm(char *s, int a, int b, int c)
+void C67_asm(const char *s, int a, int b, int c)
 {
     BOOL xpath;
 

@@ -141,7 +141,7 @@ enum {
 #define USING_GLOBALS
 #include "tcc.h"
 
-ST_DATA const char *target_machine_defs =
+ST_DATA const char * const target_machine_defs =
     "__arm__\0"
     "__arm\0"
     "arm\0"

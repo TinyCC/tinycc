@@ -20,8 +20,8 @@
 
 #include "tcc.h"
 
-#define PE_MERGE_DATA
-/* #define PE_PRINT_SECTIONS */
+#define PE_MERGE_DATA 1
+#define PE_PRINT_SECTIONS 0
 
 #ifndef _WIN32
 #define stricmp strcasecmp
@@ -294,6 +294,7 @@ struct pe_rsrc_reloc {
 
 enum {
     sec_text = 0,
+    sec_rdata ,
     sec_data ,
     sec_bss ,
     sec_idata ,
@@ -725,6 +726,8 @@ static int pe_write(struct pe_info *pe)
     for (i = 0; i < pe->sec_count; ++i) {
         Section *s;
         si = pe->sec_info[i];
+        if (!si->data_size)
+            continue;
         for (s = si->sec; s; s = s->prev) {
             pe_fpad(&pf, file_offset);
             pe_fwrite(s->data, s->data_offset, &pf);
@@ -1084,6 +1087,7 @@ static int pe_section_class(Section *s)
                 return sec_idata;
             if (0 == strcmp(name, ".pdata"))
                 return sec_pdata;
+            return sec_rdata;
         } else if (type == SHT_NOBITS) {
             if (flags & SHF_WRITE)
                 return sec_bss;
@@ -1106,6 +1110,7 @@ static int pe_assign_addresses (struct pe_info *pe)
     int *section_order;
     struct section_info *si;
     Section *s;
+    TCCState *s1 = pe->s1;
 
     if (PE_DLL == pe->type)
         pe->reloc = new_section(pe->s1, ".reloc", SHT_PROGBITS, 0);
@@ -1113,8 +1118,8 @@ static int pe_assign_addresses (struct pe_info *pe)
 
     section_order = tcc_malloc(pe->s1->nb_sections * sizeof (int));
     for (o = k = 0 ; k < sec_last; ++k) {
-        for (i = 1; i < pe->s1->nb_sections; ++i) {
-            s = pe->s1->sections[i];
+        for (i = 1; i < s1->nb_sections; ++i) {
+            s = s1->sections[i];
             if (k == pe_section_class(s))
                 section_order[o++] = i;
         }
@@ -1125,16 +1130,15 @@ static int pe_assign_addresses (struct pe_info *pe)
 
     for (i = 0; i < o; ++i) {
         k = section_order[i];
-        s = pe->s1->sections[k];
+        s = s1->sections[k];
         c = pe_section_class(s);
 
-        if ((c == sec_stab || c == sec_stabstr) && 0 == pe->s1->do_debug)
+        if ((c == sec_stab || c == sec_stabstr) && 0 == s1->do_debug)
             continue;
 
-#ifdef PE_MERGE_DATA
-        if (c == sec_bss)
+        if (PE_MERGE_DATA && c == sec_bss)
             c = sec_data;
-#endif
+
         if (si && c == si->cls) {
             /* merge with previous section */
             s->sh_addr = addr = ((addr - 1) | (16 - 1)) + 1;
@@ -1143,7 +1147,8 @@ static int pe_assign_addresses (struct pe_info *pe)
             s->sh_addr = addr = pe_virtual_align(pe, addr);
         }
 
-        if (c == sec_data && NULL == pe->thunk)
+        if (NULL == pe->thunk
+            && c == (data_section == rodata_section ? sec_data : sec_rdata))
             pe->thunk = s;
 
         if (s == pe->thunk) {
@@ -1192,8 +1197,8 @@ add_section:
     }
     tcc_free(section_order);
 #if 0
-    for (i = 1; i < pe->s1->nb_sections; ++i) {
-        Section *s = pe->s1->sections[i];
+    for (i = 1; i < s1->nb_sections; ++i) {
+        Section *s = s1->sections[i];
         int type = s->sh_type;
         int flags = s->sh_flags;
         printf("section %-16s %-10s %08x %04x %s,%s,%s\n",
@@ -1210,7 +1215,7 @@ add_section:
             flags & SHF_EXECINSTR ? "exec" : ""
             );
     }
-    pe->s1->verbose = 2;
+    s1->verbose = 2;
 #endif
     return 0;
 }
@@ -1345,7 +1350,7 @@ static int pe_check_symbols(struct pe_info *pe)
 }
 
 /*----------------------------------------------------------------------------*/
-#ifdef PE_PRINT_SECTIONS
+#if PE_PRINT_SECTIONS
 static void pe_print_section(FILE * f, Section * s)
 {
     /* just if you're curious */
@@ -1923,11 +1928,11 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
     set_global_sym(s1, start_symbol, NULL, 0);
 
     if (0 == s1->nostdlib) {
-        static const char *libs[] = {
+        static const char * const libs[] = {
             "msvcrt", "kernel32", "", "user32", "gdi32", NULL
         };
-        const char **pp, *p;
-        if (strlen(TCC_LIBTCC1) > 0)
+        const char * const *pp, *p;
+        if (TCC_LIBTCC1[0])
             tcc_add_support(s1, TCC_LIBTCC1);
         for (pp = libs; 0 != (p = *pp); ++pp) {
             if (*p)
@@ -2038,8 +2043,9 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 
     pe_free_imports(&pe);
 
-#ifdef PE_PRINT_SECTIONS
-    pe_print_sections(s1, "tcc.log");
+#if PE_PRINT_SECTIONS
+    if (s1->g_debug & 8)
+        pe_print_sections(s1, "tcc.log");
 #endif
     return ret;
 }

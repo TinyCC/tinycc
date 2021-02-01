@@ -1580,7 +1580,7 @@ static const TCCOption tcc_options[] = {
 static const FlagDef options_W[] = {
     { 0, 0, "all" },
     { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
-    { offsetof(TCCState, warn_write_strings), 0, "write-strings" },
+    { offsetof(TCCState, warn_write_strings), WD_ALL, "write-strings" },
     { offsetof(TCCState, warn_error), 0, "error" },
     { offsetof(TCCState, warn_gcc_compat), 0, "gcc-compat" },
     { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
@@ -1997,8 +1997,12 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
            (double)total_time/1000,
            (unsigned)total_lines*1000/total_time,
            (double)total_bytes/1000/total_time);
-    fprintf(stderr, "* text %d, data %d, bss %d bytes\n",
-           s1->total_output[0], s1->total_output[1], s1->total_output[2]);
+    fprintf(stderr, "* text %d, data.rw %d, data.ro %d, bss %d bytes\n",
+           s1->total_output[0],
+           s1->total_output[1],
+           s1->total_output[2],
+           s1->total_output[3]
+           );
 #ifdef MEM_DEBUG
     fprintf(stderr, "* %d bytes memory used\n", mem_max_size);
 #endif

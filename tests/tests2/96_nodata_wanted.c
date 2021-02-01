@@ -42,8 +42,8 @@ int main()
     __label__ ts0, te0, ts1, te1;
     int tl, dl;
 
-    static char ds0 = 0;
-    static char de0 = 0;
+    static const char ds0 = 0;
+    static const char de0 = 0;
     /* get reference size of empty jmp */
 ts0:;
     if (!SKIP) {}
@@ -52,7 +52,7 @@ te0:;
     tl = -(&&te0 - &&ts0);
 
     /* test data and code suppression */
-    static char ds1 = 0;
+    static const char ds1 = 0;
 ts1:;
     if (!SKIP) {
         void *p = (void*)&main;
@@ -75,7 +75,7 @@ ts1:;
             s.x, s.y, s.z, s.a, s.b);
     }
 te1:;
-    static char de1 = 0;
+    static const char de1 = 0;
 
     dl += &de1 - &ds1;
     tl += &&te1 - &&ts1;
