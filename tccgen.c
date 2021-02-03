@@ -120,7 +120,7 @@ short nb_temp_local_vars;
 
 static struct scope {
     struct scope *prev;
-    struct { int loc, num; } vla;
+    struct { int loc, locorig, num; } vla;
     struct { Sym *s; int n; } cl;
     int *bsym, *csym;
     Sym *lstk, *llstk;
@@ -7268,8 +7268,12 @@ static void vla_restore(int loc)
 
 static void vla_leave(struct scope *o)
 {
-    if (o->vla.num < cur_scope->vla.num)
-        vla_restore(o->vla.loc);
+    struct scope *c = cur_scope, *v = NULL;
+    for (; c != o && c; c = c->prev)
+      if (c->vla.num)
+        v = c;
+    if (v)
+      vla_restore(v->vla.locorig);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -7281,6 +7285,7 @@ void new_scope(struct scope *o)
     *o = *cur_scope;
     o->prev = cur_scope;
     cur_scope = o;
+    cur_scope->vla.num = 0;
 
     /* record local declaration stack position */
     o->lstk = local_stack;
@@ -7600,7 +7605,8 @@ again:
         goto block_after_label;
 
     } else if (t == TOK_GOTO) {
-        vla_restore(root_scope->vla.loc);
+        if (cur_scope->vla.num)
+          vla_restore(cur_scope->vla.locorig);
         if (tok == '*' && gnu_ext) {
             /* computed goto */
             next();
@@ -8566,11 +8572,14 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         if (NODATA_WANTED)
             goto no_alloc;
 
-        /* save current stack pointer */
-        if (root_scope->vla.loc == 0) {
-            struct scope *v = cur_scope;
-            gen_vla_sp_save(loc -= PTR_SIZE);
-            do v->vla.loc = loc; while ((v = v->prev));
+        /* save before-VLA stack pointer if needed */
+        if (cur_scope->vla.num == 0) {
+            if (cur_scope->prev && cur_scope->prev->vla.num) {
+                cur_scope->vla.locorig = cur_scope->prev->vla.loc;
+            } else {
+                gen_vla_sp_save(loc -= PTR_SIZE);
+                cur_scope->vla.locorig = loc;
+            }
         }
 
         vla_runtime_type_size(type, &a);

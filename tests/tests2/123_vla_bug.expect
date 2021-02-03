@@ -1,0 +1,5 @@
+default: i = 0
+reached 3
+after do_cmddefault: i = 2
+default: i = 3
+default: i = 4

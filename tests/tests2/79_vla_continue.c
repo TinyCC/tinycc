@@ -48,11 +48,14 @@ void test3()
   int count = 10;
   void *addr[count];
   while(count--) {
-    int a[f()];
+      int b[f()];
+      if (count >= 0) {
+          int a[f()];
 
-    addr[count] = a;
+          addr[count] = a;
 
-    continue;
+          continue;
+      }
   }
 
   if(addr[9] == addr[0]) {
