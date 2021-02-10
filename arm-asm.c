@@ -1215,7 +1215,7 @@ static void asm_single_data_transfer_opcode(TCCState *s1, int token)
     // I: immediate operand? [ok]
     // P: Pre/post indexing is PRE: Add offset before transfer [ok]
     // U: Up/down is up? (*adds* offset to base) [ok]
-    // B: Byte/word is byte?  TODO
+    // B: Byte/word is byte?  [ok]
     // W: Write address back into base? [ok]
     // L: Load/store is load? [ok]
     if (exclam)
