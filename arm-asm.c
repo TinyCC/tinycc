@@ -1902,6 +1902,127 @@ static void asm_floating_point_reg_arm_reg_transfer_opcode_tail(TCCState *s1, in
     }
 }
 
+static void asm_floating_point_vcvt_data_processing_opcode(TCCState *s1, int token) {
+    uint8_t coprocessor = 0;
+    Operand ops[3];
+    uint8_t opcode1 = 11;
+    uint8_t opcode2 = 2;
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vcvtreq_s32_f64:
+    case TOK_ASM_vcvtreq_u32_f64:
+    case TOK_ASM_vcvteq_s32_f64:
+    case TOK_ASM_vcvteq_u32_f64:
+    case TOK_ASM_vcvteq_f64_s32:
+    case TOK_ASM_vcvteq_f64_u32:
+    case TOK_ASM_vcvteq_f32_f64:
+       coprocessor = CP_DOUBLE_PRECISION_FLOAT;
+       break;
+    case TOK_ASM_vcvtreq_s32_f32:
+    case TOK_ASM_vcvtreq_u32_f32:
+    case TOK_ASM_vcvteq_s32_f32:
+    case TOK_ASM_vcvteq_u32_f32:
+    case TOK_ASM_vcvteq_f32_s32:
+    case TOK_ASM_vcvteq_f32_u32:
+    case TOK_ASM_vcvteq_f64_f32:
+       coprocessor = CP_SINGLE_PRECISION_FLOAT;
+       break;
+    default:
+       tcc_error("Unknown coprocessor for instruction '%s'", get_tok_str(token, NULL));
+       return;
+    }
+
+    parse_operand(s1, &ops[0]);
+    ops[1].type = OP_IM8;
+    ops[1].e.v = 8;
+    /* floating-point -> integer */
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vcvtreq_s32_f32:
+    case TOK_ASM_vcvtreq_s32_f64:
+    case TOK_ASM_vcvteq_s32_f32:
+    case TOK_ASM_vcvteq_s32_f64:
+        ops[1].e.v |= 1; // signed
+        /* fall through */
+    case TOK_ASM_vcvteq_u32_f32:
+    case TOK_ASM_vcvteq_u32_f64:
+    case TOK_ASM_vcvtreq_u32_f32:
+    case TOK_ASM_vcvtreq_u32_f64:
+        ops[1].e.v |= 4; // to_integer (opc2)
+        break;
+    /* floating-point size conversion */
+    case TOK_ASM_vcvteq_f64_f32:
+    case TOK_ASM_vcvteq_f32_f64:
+        ops[1].e.v = 7;
+        break;
+    }
+
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[2]);
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    /* floating-point -> integer */
+    case TOK_ASM_vcvteq_s32_f32:
+    case TOK_ASM_vcvteq_s32_f64:
+    case TOK_ASM_vcvteq_u32_f32:
+    case TOK_ASM_vcvteq_u32_f64:
+        opcode2 |= 4; // round_zero
+        break;
+
+    /* integer -> floating-point */
+    case TOK_ASM_vcvteq_f64_s32:
+    case TOK_ASM_vcvteq_f32_s32:
+        opcode2 |= 4; // signed--special
+        break;
+
+    /* floating-point size conversion */
+    case TOK_ASM_vcvteq_f64_f32:
+    case TOK_ASM_vcvteq_f32_f64:
+        opcode2 |= 4; // always set
+        break;
+    }
+
+    switch (ARM_INSTRUCTION_GROUP(token)) {
+    case TOK_ASM_vcvteq_f64_u32:
+    case TOK_ASM_vcvteq_f64_s32:
+    case TOK_ASM_vcvteq_f64_f32:
+        if (ops[0].type == OP_VREG64 && ops[2].type == OP_VREG32) {
+        } else {
+            expect("d<number>, s<number>");
+            return;
+        }
+        break;
+    default:
+        if (coprocessor == CP_SINGLE_PRECISION_FLOAT) {
+            if (ops[0].type == OP_VREG32 && ops[2].type == OP_VREG32) {
+            } else {
+                expect("s<number>, s<number>");
+                return;
+            }
+        } else if (coprocessor == CP_DOUBLE_PRECISION_FLOAT) {
+            if (ops[0].type == OP_VREG32 && ops[2].type == OP_VREG64) {
+            } else {
+                expect("s<number>, d<number>");
+                return;
+            }
+        }
+    }
+
+    if (ops[2].type == OP_VREG32) {
+        if (ops[2].reg & 1)
+            opcode2 |= 1;
+        ops[2].reg >>= 1;
+    }
+    if (ops[0].type == OP_VREG32) {
+        if (ops[0].reg & 1)
+            opcode1 |= 4;
+        ops[0].reg >>= 1;
+    }
+    asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, (ops[2].type == OP_IM8) ? ops[2].e.v : ops[2].reg, opcode2, 0);
+}
+
 static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
     uint8_t opcode1 = 0;
@@ -1919,8 +2040,6 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
    VFNMA          1?01   ?1?      Must be unconditional
    VFMA           1?10   ?0?      Must be unconditional
    VFMS           1?10   ?1?      Must be unconditional
-
-   VCVT*
 
    VMOV Fd, Fm
    VMOV Sn, Sm, Rd, Rn
@@ -2092,7 +2211,6 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
             ops[1].e.v = 0;
         }
         break;
-    // TODO: vcvt; vcvtr
     default:
         expect("known floating point instruction");
         return;
@@ -2578,6 +2696,23 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_vcmpeeq_f64:
     case TOK_ASM_vmoveq_f64:
         asm_floating_point_data_processing_opcode(s1, token);
+        return;
+
+    case TOK_ASM_vcvtreq_s32_f32:
+    case TOK_ASM_vcvtreq_s32_f64:
+    case TOK_ASM_vcvteq_s32_f32:
+    case TOK_ASM_vcvteq_s32_f64:
+    case TOK_ASM_vcvtreq_u32_f32:
+    case TOK_ASM_vcvtreq_u32_f64:
+    case TOK_ASM_vcvteq_u32_f32:
+    case TOK_ASM_vcvteq_u32_f64:
+    case TOK_ASM_vcvteq_f64_s32:
+    case TOK_ASM_vcvteq_f32_s32:
+    case TOK_ASM_vcvteq_f64_u32:
+    case TOK_ASM_vcvteq_f32_u32:
+    case TOK_ASM_vcvteq_f64_f32:
+    case TOK_ASM_vcvteq_f32_f64:
+        asm_floating_point_vcvt_data_processing_opcode(s1, token);
         return;
 
     case TOK_ASM_vpusheq:

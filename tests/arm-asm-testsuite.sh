@@ -13,7 +13,7 @@ cat ../arm-tok.h | \
   grep -v 'DEF_ASM_CONDED_WITH_SUFFIX(x' | \
   sed -e 's;^[ ]*DEF_ASM_CONDED_VFP_F32_F64[^(]*(\(.*\)).*$; DEF_ASM_CONDED(\1.f32)\
  DEF_ASM_CONDED(\1.f64);g' | \
-  sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;g' | \
+  sed -e 's;^[ ]*DEF_ASM[^(]*(\(.*\)).*$;\1;g' -e 's;, ;.;g' | \
   egrep -v '^((r|c|p|s|d)[0-9]+|fp|ip|sp|lr|pc|asl|apsr_nzcv|fpsid|fpscr|fpexc)$' | while read s
 do
 	as_opts=""
@@ -162,6 +162,8 @@ do
                     "fpexc, r2" \
                     "fpscr, r2" \
                     "fpsid, r2" \
+                    "s3, d4" \
+                    "d4, s3" \
 	            ""
 	do
 		#echo ".syntax unified" > a.s

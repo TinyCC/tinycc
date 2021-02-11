@@ -186,6 +186,24 @@
   DEF_ASM_CONDED_WITH_SUFFIX(x, f32) \
   DEF_ASM_CONDED_WITH_SUFFIX(x, f64)
 
+#define DEF_ASM_CONDED_WITH_TWO_SUFFIXES(x, y, z) \
+  DEF(TOK_ASM_ ## x ## eq ## _ ## y ## _ ## z, #x "eq." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## ne ## _ ## y ## _ ## z, #x "ne." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## cs ## _ ## y ## _ ## z, #x "cs." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## cc ## _ ## y ## _ ## z, #x "cc." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## mi ## _ ## y ## _ ## z, #x "mi." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## pl ## _ ## y ## _ ## z, #x "pl." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## vs ## _ ## y ## _ ## z, #x "vs." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## vc ## _ ## y ## _ ## z, #x "vc." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## hi ## _ ## y ## _ ## z, #x "hi." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## ls ## _ ## y ## _ ## z, #x "ls." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## ge ## _ ## y ## _ ## z, #x "ge." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## lt ## _ ## y ## _ ## z, #x "lt." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## gt ## _ ## y ## _ ## z, #x "gt." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## le ## _ ## y ## _ ## z, #x "le." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## _ ## y ## _ ## z, #x "." #y "." #z) \
+  DEF(TOK_ASM_ ## x ## rsvd ## _ ## y ## _ ## z, #x "rsvd." #y "." #z)
+
 /* Note: add new tokens after nop (MUST always use DEF_ASM_CONDED) */
 
  DEF_ASM_CONDED(nop)
@@ -334,6 +352,24 @@
  DEF_ASM_CONDED_VFP_F32_F64(vcmp)
  DEF_ASM_CONDED_VFP_F32_F64(vcmpe)
  DEF_ASM_CONDED_VFP_F32_F64(vmov)
+
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvtr, s32, f64)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvtr, s32, f32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvtr, u32, f64)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvtr, u32, f32)
+
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, s32, f64)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, s32, f32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, u32, f64)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, u32, f32)
+
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f64, s32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f32, s32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f64, u32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f32, u32)
+
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f64, f32)
+ DEF_ASM_CONDED_WITH_TWO_SUFFIXES(vcvt, f32, f64)
 
  DEF_ASM_CONDED(vpush)
  DEF_ASM_CONDED(vpop)
