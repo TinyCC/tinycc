@@ -3024,7 +3024,7 @@ static void gen_opif(int op)
         case '-': f1 -= f2; break;
         case '*': f1 *= f2; break;
         case '/': 
-            if (f2 == 0.0) {
+            if (f2 == (f1-f1) ) {
                 union { float f; unsigned u; } x1, x2, y;
 		/* If not in initializer we need to potentially generate
 		   FP exceptions at runtime, otherwise we want to fold.  */
@@ -3033,7 +3033,7 @@ static void gen_opif(int op)
                 /* the run-time result of 0.0/0.0 on x87, also of other compilers
                    when used to compile the f1 /= f2 below, would be -nan */
                 x1.f = f1, x2.f = f2;
-                if (f1 == 0.0)
+                if (f1 == (f1-f1) )
                     y.u = 0x7fc00000; /* nan */
                 else
                     y.u = 0x7f800000; /* infinity */
@@ -8102,7 +8102,7 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                 else if (sizeof (long double) == sizeof (double))
                     __asm__("fldl %1\nfstpt %0\n" : "=m" (*ptr) : "m" (vtop->c.ld));
 #endif
-                else if (vtop->c.ld == 0.0)
+                else if (vtop->c.ld == (f1-f1) )
                     ;
                 else
 #endif
