@@ -1918,6 +1918,7 @@ ST_FUNC void save_reg_upstack(int r, int n)
             } else {
                 p->r = VT_LVAL | VT_LOCAL;
             }
+            p->sym = NULL;
             p->r2 = VT_CONST;
             p->c.i = l;
         }
