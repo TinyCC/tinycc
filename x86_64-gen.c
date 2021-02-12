@@ -735,7 +735,7 @@ static int arg_prepare_reg(int idx) {
       /* idx=0: r10, idx=1: r11 */
       return idx + 10;
   else
-      return arg_regs[idx];
+      return idx >= 0 && idx < REGN ? arg_regs[idx] : 0;
 }
 
 /* Generate function call. The function address is pushed first, then
@@ -1221,7 +1221,7 @@ static int arg_prepare_reg(int idx) {
       /* idx=2: r10, idx=3: r11 */
       return idx + 8;
   else
-      return arg_regs[idx];
+      return idx >= 0 && idx < REGN ? arg_regs[idx] : 0;
 }
 
 /* Generate function call. The function address is pushed first, then
