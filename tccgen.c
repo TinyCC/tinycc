@@ -8034,10 +8034,10 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
 		   includes relocations.  Use the fact that relocs are
 		   created it order, so look from the end of relocs
 		   until we hit one before the copied region.  */
-		int num_relocs = ssec->reloc->data_offset / sizeof(*rel);
-		rel = (ElfW_Rel*)(ssec->reloc->data + ssec->reloc->data_offset);
-		while (num_relocs--) {
-		    rel--;
+                unsigned long relofs = ssec->reloc->data_offset;
+		while (relofs >= sizeof(*rel)) {
+                    relofs -= sizeof(*rel);
+                    rel = (ElfW_Rel*)(ssec->reloc->data + relofs);
 		    if (rel->r_offset >= esym->st_value + size)
 		      continue;
 		    if (rel->r_offset < esym->st_value)
