@@ -1817,7 +1817,7 @@ static Sym *sym_copy(Sym *s0, Sym **ps)
 static void sym_copy_ref(Sym *s, Sym **ps)
 {
     int bt = s->type.t & VT_BTYPE;
-    if (bt == VT_FUNC || bt == VT_PTR) {
+    if (bt == VT_FUNC || bt == VT_PTR || (bt == VT_STRUCT && s->sym_scope)) {
         Sym **sp = &s->type.ref;
         for (s = *sp, *sp = NULL; s; s = s->next) {
             Sym *s2 = sym_copy(s, ps);
