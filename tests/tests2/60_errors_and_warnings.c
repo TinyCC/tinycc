@@ -383,4 +383,9 @@ struct S2 {
     int d;
   };
 };
+
+/******************************************************************/
+#elif defined test_conflicting_array_definition
+extern int array[2];
+int array[] = { 1, 2, 3 };
 #endif

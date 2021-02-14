@@ -8437,6 +8437,18 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* prepare second initializer parsing */
         macro_ptr = init_str->str;
         next();
+
+        sym = sym_find(v);
+        /* If the base type itself was an array type of unspecified size
+           (like in 'int arr[] = {1};') when the array was already declared
+           (like in 'extern arr[10];') we want to use the originally declared
+           size and not deduce it from the initializer */
+        if(sym && sym->type.ref->c > 0) {
+            if(type->ref->c > sym->type.ref->c)
+                tcc_error("incompatible types for redefinition of '%s'",
+                          get_tok_str(sym->v, NULL));
+            type->ref->c = sym->type.ref->c;
+        }
         
         /* if still unknown size, error */
         size = type_size(type, &align);

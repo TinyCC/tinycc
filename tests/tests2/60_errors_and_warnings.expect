@@ -180,3 +180,6 @@ bar  : 3 ; 3
 
 [test_duplicate_member_anon]
 60_errors_and_warnings.c:385: error: duplicate member 'd'
+
+[test_conflicting_array_definition]
+60_errors_and_warnings.c:390: error: incompatible types for redefinition of 'array'
