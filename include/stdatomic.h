@@ -82,6 +82,9 @@ typedef struct {
     __c11_atomic_store(&(object)->value, 0, order)
 
 /* Generic routines */
+#define atomic_init(object, desired) \
+    __c11_atomic_init(object, desired)
+
 #define atomic_store(object, desired) \
     __c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
 #define atomic_store_explicit __c11_atomic_store
