@@ -174,25 +174,23 @@
      DEF(TOK_builtin_va_start, "__builtin_va_start")
 #endif
 
-#define DEF_ATOMIC(id, str) \
-     DEF(id, str) \
-     DEF(id##_8, str "_8") \
-     DEF(id##_16, str "_16") \
-     DEF(id##_32, str "_32") \
-     DEF(id##_64, str "_64")
-
 /* atomic operations */
-     DEF_ATOMIC(TOK___c11_atomic_init, "__c11_atomic_init")
-     DEF_ATOMIC(TOK___c11_atomic_store, "__c11_atomic_store")
-     DEF_ATOMIC(TOK___c11_atomic_load, "__c11_atomic_load")
-     DEF_ATOMIC(TOK___c11_atomic_exchange, "__c11_atomic_exchange")
-     DEF_ATOMIC(TOK___c11_atomic_compare_exchange_strong, "__c11_atomic_compare_exchange_strong")
-     DEF_ATOMIC(TOK___c11_atomic_compare_exchange_weak, "__c11_atomic_compare_exchange_weak")
-     DEF_ATOMIC(TOK___c11_atomic_fetch_add, "__c11_atomic_fetch_add")
-     DEF_ATOMIC(TOK___c11_atomic_fetch_sub, "__c11_atomic_fetch_sub")
-     DEF_ATOMIC(TOK___c11_atomic_fetch_or, "__c11_atomic_fetch_or")
-     DEF_ATOMIC(TOK___c11_atomic_fetch_xor, "__c11_atomic_fetch_xor")
-     DEF_ATOMIC(TOK___c11_atomic_fetch_and, "__c11_atomic_fetch_and")
+#define DEF_ATOMIC(ID) \
+     DEF(TOK_##__##ID, "__"#ID) \
+     DEF(TOK_##__##ID##_1, "__"#ID"_1") \
+     DEF(TOK_##__##ID##_2, "__"#ID"_2") \
+     DEF(TOK_##__##ID##_4, "__"#ID"_4") \
+     DEF(TOK_##__##ID##_8, "__"#ID"_8")
+
+     DEF_ATOMIC(atomic_store)
+     DEF_ATOMIC(atomic_load)
+     DEF_ATOMIC(atomic_exchange)
+     DEF_ATOMIC(atomic_compare_exchange)
+     DEF_ATOMIC(atomic_fetch_add)
+     DEF_ATOMIC(atomic_fetch_sub)
+     DEF_ATOMIC(atomic_fetch_or)
+     DEF_ATOMIC(atomic_fetch_xor)
+     DEF_ATOMIC(atomic_fetch_and)
 
 #undef DEF_ATOMIC
 

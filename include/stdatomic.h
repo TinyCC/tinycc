@@ -72,57 +72,59 @@ typedef struct {
 #define ATOMIC_FLAG_INIT {0}
 
 #define atomic_flag_test_and_set(object) \
-    __c11_atomic_exchange(&(object)->value, 1, __ATOMIC_SEQ_CST)
+    __atomic_exchange(&(object)->value, 1, __ATOMIC_SEQ_CST)
 #define atomic_flag_test_and_set_explicit(object, order) \
-    __c11_atomic_exchange(&(object)->value, 1, order)
+    __atomic_exchange(&(object)->value, 1, order)
 
 #define atomic_flag_clear(object) \
-    __c11_atomic_store(&(object)->value, 0, __ATOMIC_SEQ_CST)
+    __atomic_store(&(object)->value, 0, __ATOMIC_SEQ_CST)
 #define atomic_flag_clear_explicit(object, order) \
-    __c11_atomic_store(&(object)->value, 0, order)
+    __atomic_store(&(object)->value, 0, order)
 
 /* Generic routines */
 #define atomic_init(object, desired) \
-    __c11_atomic_init(object, desired)
+    __atomic_store(object, desired, __ATOMIC_RELAXED)
 
 #define atomic_store(object, desired) \
-    __c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
-#define atomic_store_explicit __c11_atomic_store
+    __atomic_store(object, desired, __ATOMIC_SEQ_CST)
+#define atomic_store_explicit __atomic_store
 
 #define atomic_load(object) \
-    __c11_atomic_load(object, __ATOMIC_SEQ_CST)
-#define atomic_load_explicit __c11_atomic_load
+    __atomic_load(object, __ATOMIC_SEQ_CST)
+#define atomic_load_explicit __atomic_load
 
 #define atomic_exchange(object, desired) \
-    __c11_atomic_exchange(object, desired, __ATOMIC_SEQ_CST)
-#define atomic_exchange_explicit __c11_atomic_exchange
+    __atomic_exchange(object, desired, __ATOMIC_SEQ_CST)
+#define atomic_exchange_explicit __atomic_exchange
 
 #define atomic_compare_exchange_strong(object, expected, desired) \
-    __c11_atomic_compare_exchange_strong(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
-#define atomic_compare_exchange_strong_explicit __c11_atomic_compare_exchange_strong
+    __atomic_compare_exchange(object, expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#define atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure) \
+    __atomic_compare_exchange(object, expected, desired, 0, success, failure)
 
 #define atomic_compare_exchange_weak(object, expected, desired) \
-    __c11_atomic_compare_exchange_weak(object, expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
-#define atomic_compare_exchange_weak_explicit __c11_atomic_compare_exchange_weak
+    __atomic_compare_exchange(object, expected, desired, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#define atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure) \
+    __atomic_compare_exchange(object, expected, desired, 1, success, failure)
 
 #define atomic_fetch_add(object, operand) \
-    __c11_atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_add_explicit __c11_atomic_fetch_add
+    __atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_add_explicit __atomic_fetch_add
 
 #define atomic_fetch_sub(object, operand) \
-    __c11_atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_sub_explicit __c11_atomic_fetch_sub
+    __atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_sub_explicit __atomic_fetch_sub
 
 #define atomic_fetch_or(object, operand) \
-    __c11_atomic_fetch_or(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_or_explicit __c11_atomic_fetch_or
+    __atomic_fetch_or(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_or_explicit __atomic_fetch_or
 
 #define atomic_fetch_xor(object, operand) \
-    __c11_atomic_fetch_xor(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_xor_explicit __c11_atomic_fetch_xor
+    __atomic_fetch_xor(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_xor_explicit __atomic_fetch_xor
 
 #define atomic_fetch_and(object, operand) \
-    __c11_atomic_fetch_and(object, operand, __ATOMIC_SEQ_CST)
-#define atomic_fetch_and_explicit __c11_atomic_fetch_and
+    __atomic_fetch_and(object, operand, __ATOMIC_SEQ_CST)
+#define atomic_fetch_and_explicit __atomic_fetch_and
 
 #endif /* _STDATOMIC_H */

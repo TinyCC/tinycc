@@ -5755,94 +5755,86 @@ static inline int is_memory_model(const SValue *sv)
      * Ideally we should check whether the model matches 1:1.
      * If it is possible, we should check by the name of the value.
      */
-    return (((sv->type.t & VT_BTYPE) == VT_INT) && (sv->c.i < 6));
+    return 1;
 }
+
+#define ATOMIC_ID(ATOK) \
+    (ATOK - TOK___atomic_store)
 
 static void parse_atomic(int atok)
 {
-    size_t op;
+    int mode;
     size_t arg;
-    size_t argc;
-    CType *atom = NULL;
-    char const *params = NULL;
-    static struct {
-        int const tok;
-        char const *const params;
-    } const ops[] = {
+    SValue *call;
+    CType atom = {};
+    static const char const *templates[] = {
         /*
-         * a -- atomic
-         * A -- read-only atomic
-         * p -- pointer to memory
-         * P -- pointer to read-only memory
-         * v -- value
-         * m -- memory model
+         * Each entry consists of callback and function template.
+         * The template represents argument types and return type.
+         *
+         * ? void (return-only)
+         * b bool
+         * a atomic
+         * A read-only atomic
+         * p pointer to memory
+         * v value
+         * m memory model
          */
-        {TOK___c11_atomic_init, "-av"},
-        {TOK___c11_atomic_store, "-avm"},
-        {TOK___c11_atomic_load, "am"},
-        {TOK___c11_atomic_exchange, "avm"},
-        {TOK___c11_atomic_compare_exchange_strong, "apvmm"},
-        {TOK___c11_atomic_compare_exchange_weak, "apvmm"},
-        {TOK___c11_atomic_fetch_add, "avm"},
-        {TOK___c11_atomic_fetch_sub, "avm"},
-        {TOK___c11_atomic_fetch_or, "avm"},
-        {TOK___c11_atomic_fetch_xor, "avm"},
-        {TOK___c11_atomic_fetch_and, "avm"},
+        [ATOMIC_ID(TOK___atomic_store)] = "avm?",
+        [ATOMIC_ID(TOK___atomic_load)] = "Amv",
+        [ATOMIC_ID(TOK___atomic_exchange)] = "avmv",
+        [ATOMIC_ID(TOK___atomic_compare_exchange)] = "apvbmmb",
+        [ATOMIC_ID(TOK___atomic_fetch_add)] = "avmv",
+        [ATOMIC_ID(TOK___atomic_fetch_sub)] = "avmv",
+        [ATOMIC_ID(TOK___atomic_fetch_or)] = "avmv",
+        [ATOMIC_ID(TOK___atomic_fetch_xor)] = "avmv",
+        [ATOMIC_ID(TOK___atomic_fetch_and)] = "avmv",
     };
+    const char *template = templates[ATOMIC_ID(atok)];
+    const size_t argc = (strlen(template) - 1);
 
     next();
 
-    for (op = 0; op < (sizeof(ops) / sizeof(*ops)); ++op) {
-        if (ops[op].tok == atok) {
-            params = ops[op].params;
-            break;
-        }
-    }
-    if (!params)
-        tcc_error("unknown atomic operation");
-
-    argc = strlen(params);
-    if (params[0] == '-') {
-        ++params;
-        --argc;
-    }
-
-    vpushi(0);
-    vpushi(0); /* function address */
+    vpush_helper_func(atok);
+    call = vtop;
 
     skip('(');
+    if ((*template != 'a') && (*template != 'A'))
+        expect_arg("pointer to atomic", 0);
     for (arg = 0; arg < argc; ++arg) {
         expr_eq();
 
-        switch (params[arg]) {
+        switch (template[arg]) {
+        case '?':
+            /* void makes sense only for return value. */
+            if (arg != (argc - 1))
+                tcc_error("illegal atomic built-in template");
+            break;
+
+        case 'b':
+            break;
+
         case 'a':
         case 'A':
-            if (atom)
-                expect_arg("exactly one pointer to atomic", arg);
             if ((vtop->type.t & VT_BTYPE) != VT_PTR)
-                expect_arg("pointer to atomic expected", arg);
-            atom = pointed_type(&vtop->type);
-            if (!(atom->t & VT_ATOMIC))
-                expect_arg("qualified pointer to atomic", arg);
-            if ((params[arg] == 'a') && (atom->t & VT_CONSTANT))
+                expect_arg("pointer to atomic value", arg);
+            memcpy(&atom, pointed_type(&vtop->type), sizeof(CType));
+            if (!(atom.t & VT_ATOMIC))
+                expect_arg("qualified pointer to atomic value", arg);
+            if ((template[arg] == 'a') && (atom.t & VT_CONSTANT))
                 expect_arg("pointer to writable atomic", arg);
-            atom->t &= ~VT_ATOMIC;
-            switch (btype_size(atom->t & VT_BTYPE)) {
-            case 1: atok += 1; break;
-            case 2: atok += 2; break;
-            case 4: atok += 3; break;
-            case 8: atok += 4; break;
+            switch (btype_size(atom.t & VT_BTYPE)) {
+            case 8: mode = 4; break;
+            case 4: mode = 3; break;
+            case 2: mode = 2; break;
+            case 1: mode = 1; break;
             default: tcc_error("only integer-sized types are supported");
             }
-            vswap();
-            vpop();
-            vpush_helper_func(atok);
-            vswap();
             break;
 
         case 'p':
             if (((vtop->type.t & VT_BTYPE) != VT_PTR)
-                || !is_compatible_unqualified_types(atom, pointed_type(&vtop->type)))
+                || !is_compatible_unqualified_types(&atom, pointed_type(&vtop->type)))
                 expect_arg("pointer to compatible type", arg);
             break;
 
@@ -5870,7 +5862,17 @@ static void parse_atomic(int atok)
         expect("less parameters");
     skip(')');
 
+    call->sym = external_helper_sym(atok + mode);
     gfunc_call(argc);
+    vpushi(0);
+
+    switch (template[argc]) {
+    case 'b': PUT_R_RET(vtop, VT_BOOL); break;
+    case 'v': PUT_R_RET(vtop, atom.t); break;
+    case 'p': PUT_R_RET(vtop, VT_SIZE_T); break;
+    case '?': PUT_R_RET(vtop, VT_VOID); break;
+    default: tcc_error("incorrect atomic template");
+    }
 }
 
 ST_FUNC void unary(void)
@@ -6255,17 +6257,15 @@ ST_FUNC void unary(void)
 #endif
 
     /* atomic operations */
-    case TOK___c11_atomic_init:
-    case TOK___c11_atomic_store:
-    case TOK___c11_atomic_load:
-    case TOK___c11_atomic_exchange:
-    case TOK___c11_atomic_compare_exchange_strong:
-    case TOK___c11_atomic_compare_exchange_weak:
-    case TOK___c11_atomic_fetch_add:
-    case TOK___c11_atomic_fetch_sub:
-    case TOK___c11_atomic_fetch_or:
-    case TOK___c11_atomic_fetch_xor:
-    case TOK___c11_atomic_fetch_and:
+    case TOK___atomic_store:
+    case TOK___atomic_load:
+    case TOK___atomic_exchange:
+    case TOK___atomic_compare_exchange:
+    case TOK___atomic_fetch_add:
+    case TOK___atomic_fetch_sub:
+    case TOK___atomic_fetch_or:
+    case TOK___atomic_fetch_xor:
+    case TOK___atomic_fetch_and:
         parse_atomic(tok);
         break;
 
