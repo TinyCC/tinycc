@@ -66,7 +66,11 @@ static FILE *open_tcov_file (char *cov_filename)
     while (fcntl (fd, F_SETLKW, &lock) && errno == EINTR)
         continue;
 #else
-    LockFile((HANDLE)_get_osfhandle(fd), 0, 0, 1, 0);
+    {
+        OVERLAPPED overlapped = { 0 };
+        LockFileEx((HANDLE)_get_osfhandle(fd), LOCKFILE_EXCLUSIVE_LOCK,
+		   0, 1, 0, &overlapped);
+    }
 #endif
 
     return fdopen (fd, "r+");
@@ -106,6 +110,7 @@ static int sort_line (const void *p, const void *q)
 static tcov_file *sort_test_coverage (unsigned char *p)
 {
     int i, j, k;
+    unsigned char *start = p;
     tcov_file *file = NULL;
     tcov_file *nfile;
 
@@ -148,7 +153,7 @@ static tcov_file *sort_test_coverage (unsigned char *p)
 	    tcov_function *func;
 
 	    p += strlen (function) + 1;
-	    p += -(size_t)p & 7;
+	    p += -(p - start) & 7;
 	    for (i = 0; i < nfile->n_func; i++) {
 		func = &nfile->func[i];
 		if (strcmp (func->function, function) == 0)
