@@ -8375,7 +8375,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
 
     Section *sec;
     Sym *flexible_array;
-    Sym *sym = NULL;
+    Sym *sym;
     int saved_nocode_wanted = nocode_wanted;
 #ifdef CONFIG_TCC_BCHECK
     int bcheck = tcc_state->do_bounds_check && !NODATA_WANTED;
@@ -8516,6 +8516,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             vset(type, r, addr);
         }
     } else {
+	sym = NULL;
         if (v && scope == VT_CONST) {
             /* see if the symbol was already defined */
             sym = sym_find(v);
