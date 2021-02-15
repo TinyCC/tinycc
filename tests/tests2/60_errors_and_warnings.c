@@ -354,6 +354,12 @@ struct c1 c1 = { 1, { 2, 3, 4 } };
 struct c2 { int c; struct c1 c1; };
 struct c2 c2 = { 1, { 2, { 3, 4, 5 }}};
 
+#elif defined test_var_array3
+/* similar to test_var_array2 but with string initializers */
+struct A { int a; char b[]; };
+struct A a = { 1, "1" };
+struct B { struct A a; };
+struct B b = { { 1, "1" } };
 /******************************************************************/
 #elif defined test_default_int_type
 n; // warn

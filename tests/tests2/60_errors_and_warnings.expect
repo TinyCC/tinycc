@@ -166,20 +166,23 @@ bar  : 3 ; 3
 [test_var_array2]
 60_errors_and_warnings.c:355: error: flexible array has zero size in this context
 
+[test_var_array3]
+60_errors_and_warnings.c:362: error: flexible array has zero size in this context
+
 [test_default_int_type]
-60_errors_and_warnings.c:359: warning: type defaults to int
+60_errors_and_warnings.c:365: warning: type defaults to int
 
 [test_invalid_global_stmtexpr]
-60_errors_and_warnings.c:363: error: statement expression outside of function
+60_errors_and_warnings.c:369: error: statement expression outside of function
 
 [test_invalid_tokckill]
-60_errors_and_warnings.c:366: error: ';' expected (got "3")
+60_errors_and_warnings.c:372: error: ';' expected (got "3")
 
 [test_duplicate_member]
-60_errors_and_warnings.c:372: error: duplicate member 'a'
+60_errors_and_warnings.c:378: error: duplicate member 'a'
 
 [test_duplicate_member_anon]
-60_errors_and_warnings.c:385: error: duplicate member 'd'
+60_errors_and_warnings.c:391: error: duplicate member 'd'
 
 [test_conflicting_array_definition]
-60_errors_and_warnings.c:390: error: incompatible types for redefinition of 'array'
+60_errors_and_warnings.c:396: error: incompatible types for redefinition of 'array'

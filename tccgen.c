@@ -8237,6 +8237,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
                 goto do_init_array;
             }
 
+            decl_design_flex(p, s, len);
             if (!(flags & DIF_SIZE_ONLY)) {
                 int nb = n;
                 if (len < nb)
@@ -8270,8 +8271,6 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
                         init_putv(p, t1, c + i * size1);
                     }
                 }
-            } else {
-                decl_design_flex(p, s, len);
             }
         } else {
 
