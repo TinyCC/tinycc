@@ -350,7 +350,7 @@ ST_INLN void cstr_ccat(CString *cstr, int ch)
     cstr->size = size;
 }
 
-char *unicode_to_utf8 (char *b, uint32_t Uc)
+ST_INLN char *unicode_to_utf8 (char *b, uint32_t Uc)
 {
     if (Uc<0x80) *b++=Uc;
     else if (Uc<0x800) *b++=192+Uc/64, *b++=128+Uc%64;
@@ -361,7 +361,7 @@ char *unicode_to_utf8 (char *b, uint32_t Uc)
 }
 
 /* add a unicode character expanded into utf8 */
-void cstr_u8cat(CString *cstr, int ch)
+ST_INLN void cstr_u8cat(CString *cstr, int ch)
 {
     char buf[4], *e;
     e = unicode_to_utf8(buf, (uint32_t)ch);
