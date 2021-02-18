@@ -8437,18 +8437,6 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         macro_ptr = init_str->str;
         next();
 
-        sym = sym_find(v);
-        /* If the base type itself was an array type of unspecified size
-           (like in 'int arr[] = {1};') when the array was already declared
-           (like in 'extern arr[10];') we want to use the originally declared
-           size and not deduce it from the initializer */
-        if(sym && sym->type.ref->c > 0) {
-            if(type->ref->c > sym->type.ref->c)
-                tcc_error("incompatible types for redefinition of '%s'",
-                          get_tok_str(sym->v, NULL));
-            type->ref->c = sym->type.ref->c;
-        }
-        
         /* if still unknown size, error */
         size = type_size(type, &align);
         if (size < 0) 
@@ -8520,6 +8508,14 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             /* see if the symbol was already defined */
             sym = sym_find(v);
             if (sym) {
+                if (p.flex_array_ref && (sym->type.t & type->t & VT_ARRAY)
+                    && sym->type.ref->c > type->ref->c) {
+                    /* flex array was already declared with explicit size
+                            extern int arr[10];
+                            int arr[] = { 1,2,3 }; */
+                    type->ref->c = sym->type.ref->c;
+                    size = type_size(type, &align);
+                }
                 patch_storage(sym, ad, type);
                 /* we accept several definitions of the same global variable. */
                 if (!has_init && sym->c && elfsym(sym)->st_shndx != SHN_UNDEF)
