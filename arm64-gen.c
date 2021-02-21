@@ -51,7 +51,12 @@
 #include <assert.h>
 
 ST_DATA const char * const target_machine_defs =
+#if defined(__APPLE__)
     "__aarch64__\0"
+    "__arm64__\0"
+#else
+    "__aarch64__\0"
+#endif
     ;
 
 ST_DATA const int reg_classes[NB_REGS] = {
