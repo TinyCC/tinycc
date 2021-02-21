@@ -110,6 +110,7 @@ DEF-arm            = $(DEF-arm-eabihf)
 DEF-arm-NetBSD     = $(DEF-arm-eabihf) -DTARGETOS_NetBSD
 DEF-arm-wince      = $(DEF-arm-eabihf) -DTCC_TARGET_PE
 DEF-arm64          = -DTCC_TARGET_ARM64
+DEF-arm64-osx      = $(DEF-arm64) -DTCC_TARGET_MACHO
 DEF-arm64-FreeBSD  = $(DEF-arm64) -DTARGETOS_FreeBSD
 DEF-arm64-NetBSD   = $(DEF-arm64) -DTARGETOS_NetBSD
 DEF-arm64-OpenBSD  = $(DEF-arm64) -DTARGETOS_OpenBSD
@@ -198,6 +199,7 @@ arm-vfp_FILES     = $(arm_FILES)
 arm-eabi_FILES    = $(arm_FILES)
 arm-eabihf_FILES  = $(arm_FILES)
 arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c arm64-asm.c
+arm64-osx_FILES = $(arm64_FILES) tccmacho.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 riscv64_FILES = $(CORE_FILES) riscv64-gen.c riscv64-link.c riscv64-asm.c
 
