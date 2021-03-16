@@ -5766,7 +5766,7 @@ static void parse_atomic(int atok)
     int mode;
     size_t arg;
     SValue *call;
-    CType atom = {};
+    CType atom = {0,0};
     static const char *const templates[] = {
         /*
          * Each entry consists of callback and function template.
