@@ -5767,7 +5767,7 @@ static void parse_atomic(int atok)
     size_t arg;
     SValue *call;
     CType atom = {};
-    static const char const *templates[] = {
+    static const char *const templates[] = {
         /*
          * Each entry consists of callback and function template.
          * The template represents argument types and return type.
@@ -5795,6 +5795,7 @@ static void parse_atomic(int atok)
 
     next();
 
+    mode = 0; /* pacify compiler */
     vpush_helper_func(atok);
     call = vtop;
 
