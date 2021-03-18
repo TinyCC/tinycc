@@ -5766,6 +5766,7 @@ static void parse_atomic(int atok)
     int mode;
     size_t arg;
     SValue *call;
+    CType rv;
     CType atom;
     static const char *const templates[] = {
         /*
@@ -5795,6 +5796,8 @@ static void parse_atomic(int atok)
 
     next();
 
+    memset(&rv, 0, sizeof(rv));
+    memset(&atom, 0, sizeof(atom));
     mode = 0; /* pacify compiler */
     vpush_helper_func(atok);
     call = vtop;
@@ -5824,7 +5827,7 @@ static void parse_atomic(int atok)
                 expect_arg("qualified pointer to atomic value", arg);
             if ((template[arg] == 'a') && (atom.t & VT_CONSTANT))
                 expect_arg("pointer to writable atomic", arg);
-            switch (btype_size(atom.t & VT_BTYPE)) {
+            switch (type_size(&atom, &(int){0})) {
             case 8: mode = 4; break;
             case 4: mode = 3; break;
             case 2: mode = 2; break;
@@ -5840,8 +5843,13 @@ static void parse_atomic(int atok)
             break;
 
         case 'v':
-            if (!is_integer_btype(vtop->type.t & VT_BTYPE))
-                expect_arg("integer type", arg);
+            if (atom.ref && is_integer_btype(vtop->type.t & VT_BTYPE)) {
+                if ((tok != TOK___atomic_store) &&
+                        (tok != TOK___atomic_load) &&
+                        (tok != TOK___atomic_exchange) &&
+                        (tok != TOK___atomic_compare_exchange))
+                    expect_arg("integer type", arg);
+            }
             break;
 
         case 'm':
@@ -5865,15 +5873,32 @@ static void parse_atomic(int atok)
 
     call->sym = external_helper_sym(atok + mode);
     gfunc_call(argc);
-    vpushi(0);
 
     switch (template[argc]) {
-    case 'b': PUT_R_RET(vtop, VT_BOOL); break;
-    case 'v': PUT_R_RET(vtop, atom.t); break;
-    case 'p': PUT_R_RET(vtop, VT_SIZE_T); break;
-    case '?': PUT_R_RET(vtop, VT_VOID); break;
-    default: tcc_error("incorrect atomic template");
+    case 'b':
+        vpushi(0);
+        PUT_R_RET(vtop, VT_BOOL);
+        break;
+
+    case 'p':
+        vpushs(0);
+        PUT_R_RET(vtop, VT_SIZE_T);
+        break;
+
+    case 'v':
+        vpush(&atom);
+        PUT_R_RET(vtop, atom.t);
+        break;
+
+    case '?':
+        vpushi(0);
+        PUT_R_RET(vtop, VT_VOID);
+        break;
+
+    default:
+        tcc_error("incorrect atomic template");
     }
+    vtop->r2 = VT_CONST;
 }
 
 ST_FUNC void unary(void)
