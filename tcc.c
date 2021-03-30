@@ -37,7 +37,7 @@ static const char help[] =
     "  -std=c11     Conform to the ISO 2011 C standard.\n"
     "  -Wwarning    set or reset (with 'no-' prefix) 'warning' (see tcc -hh)\n"
     "  -w           disable all warnings\n"
-    "  --version -v show version\n"
+    "  -v --version show version\n"
     "  -vv          show search paths or loaded files\n"
     "  -h -hh       show this, show more help\n"
     "  -bench       show compilation statistics\n"
@@ -70,16 +70,11 @@ static const char help[] =
     "  -nostdinc    do not use standard system include paths\n"
     "  -nostdlib    do not link with standard crt and libraries\n"
     "  -Bdir        set tcc's private include/library dir\n"
-    "  -M           just output makefile fragment with dependencies\n"
-    "  -MM          like -M but ignore system libs\n"
-    "  -MD          generate dependency file for make\n"
-    "  -MMD         like -MMD but ignore system libs\n"
+    "  -M[M]D       generate make dependency file [ignore system files]\n"
+    "  -M[M]        as above but no other output\n"
     "  -MF file     specify dependency file name\n"
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     "  -m32/64      defer to i386/x86_64 cross compiler\n"
-#endif
-#if defined(TCC_TARGET_MACHO) || defined(TCC_TARGET_X86_64)
-    "  -arch        set macos target achitecture (ignored, always x86_64)\n"
 #endif
     "Tools:\n"
     "  create library  : tcc -ar [rcsv] lib.a files\n"
@@ -103,7 +98,7 @@ static const char help2[] =
     "  -print-search-dirs            print search paths\n"
     "  -dt                           with -run/-E: auto-define 'test_...' macros\n"
     "Ignored options:\n"
-    "  --param  -pedantic  -pipe  -s  -traditional\n"
+    "  -arch -C --param -pedantic -pipe -s -traditional\n"
     "-W[no-]... warnings:\n"
     "  all                           turn on some (*) warnings\n"
     "  error[=warning]               stop after warning (any or specified)\n"

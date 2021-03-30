@@ -83,8 +83,17 @@ ST_FUNC char *normalize_slashes(char *path)
     return path;
 }
 
-/* NULL if this is tcc.exe, HINSTANCE if this is libtcc.dll */
+#if defined LIBTCC_AS_DLL && !defined CONFIG_TCCDIR
 static HMODULE tcc_module;
+BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
+{
+    if (DLL_PROCESS_ATTACH == dwReason)
+        tcc_module = hDll;
+    return TRUE;
+}
+#else
+#define tcc_module NULL /* NULL means executable itself */
+#endif
 
 #ifndef CONFIG_TCCDIR
 /* on win32, we suppose the lib and includes are at the location of 'tcc.exe' */
@@ -107,15 +116,6 @@ static void tcc_add_systemdir(TCCState *s)
     char buf[1000];
     GetSystemDirectory(buf, sizeof buf);
     tcc_add_library_path(s, normalize_slashes(buf));
-}
-#endif
-
-#ifdef LIBTCC_AS_DLL
-BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
-{
-    if (DLL_PROCESS_ATTACH == dwReason)
-        tcc_module = hDll;
-    return TRUE;
 }
 #endif
 #endif
@@ -232,6 +232,14 @@ PUB_FUNC char *tcc_fileextension (const char *name)
     char *b = tcc_basename(name);
     char *e = strrchr(b, '.');
     return e ? e : strchr(b, 0);
+}
+
+ST_FUNC char *tcc_load_text(int fd)
+{
+    int len = lseek(fd, 0, SEEK_END);
+    char *buf = load_data(fd, 0, len + 1);
+    buf[len] = 0;
+    return buf;
 }
 
 /********************************************************/
@@ -1431,6 +1439,7 @@ typedef struct TCCOption {
 } TCCOption;
 
 enum {
+    TCC_OPTION_ignored = 0,
     TCC_OPTION_HELP,
     TCC_OPTION_HELP2,
     TCC_OPTION_v,
@@ -1455,8 +1464,6 @@ enum {
     TCC_OPTION_soname,
     TCC_OPTION_o,
     TCC_OPTION_r,
-    TCC_OPTION_s,
-    TCC_OPTION_traditional,
     TCC_OPTION_Wl,
     TCC_OPTION_Wp,
     TCC_OPTION_W,
@@ -1471,12 +1478,9 @@ enum {
     TCC_OPTION_nostdlib,
     TCC_OPTION_print_search_dirs,
     TCC_OPTION_rdynamic,
-    TCC_OPTION_param,
-    TCC_OPTION_pedantic,
     TCC_OPTION_pthread,
     TCC_OPTION_run,
     TCC_OPTION_w,
-    TCC_OPTION_pipe,
     TCC_OPTION_E,
     TCC_OPTION_M,
     TCC_OPTION_MD,
@@ -1486,8 +1490,6 @@ enum {
     TCC_OPTION_x,
     TCC_OPTION_ar,
     TCC_OPTION_impdef,
-    TCC_OPTION_C,
-    TCC_OPTION_arch
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
@@ -1523,14 +1525,10 @@ static const TCCOption tcc_options[] = {
     { "shared", TCC_OPTION_shared, 0 },
     { "soname", TCC_OPTION_soname, TCC_OPTION_HAS_ARG },
     { "o", TCC_OPTION_o, TCC_OPTION_HAS_ARG },
-    { "-param", TCC_OPTION_param, TCC_OPTION_HAS_ARG },
-    { "pedantic", TCC_OPTION_pedantic, 0},
     { "pthread", TCC_OPTION_pthread, 0},
     { "run", TCC_OPTION_run, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "rdynamic", TCC_OPTION_rdynamic, 0 },
     { "r", TCC_OPTION_r, 0 },
-    { "s", TCC_OPTION_s, 0 },
-    { "traditional", TCC_OPTION_traditional, 0 },
     { "Wl,", TCC_OPTION_Wl, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "Wp,", TCC_OPTION_Wp, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "W", TCC_OPTION_W, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
@@ -1546,7 +1544,6 @@ static const TCCOption tcc_options[] = {
     { "nostdlib", TCC_OPTION_nostdlib, 0 },
     { "print-search-dirs", TCC_OPTION_print_search_dirs, 0 },
     { "w", TCC_OPTION_w, 0 },
-    { "pipe", TCC_OPTION_pipe, 0},
     { "E", TCC_OPTION_E, 0},
     { "M", TCC_OPTION_M, 0},
     { "MD", TCC_OPTION_MD, 0},
@@ -1558,10 +1555,14 @@ static const TCCOption tcc_options[] = {
 #ifdef TCC_TARGET_PE
     { "impdef", TCC_OPTION_impdef, 0},
 #endif
-#ifdef TCC_TARGET_MACHO
-    { "arch", TCC_OPTION_arch, TCC_OPTION_HAS_ARG },
-#endif
-    { "C", TCC_OPTION_C, 0},
+    /* ignored (silently, except after -Wunsupported) */
+    { "arch", 0, TCC_OPTION_HAS_ARG},
+    { "C", 0, 0 },
+    { "-param", 0, TCC_OPTION_HAS_ARG },
+    { "pedantic", 0, 0 },
+    { "pipe", 0, 0 },
+    { "s", 0, 0 },
+    { "traditional", 0, 0 },
     { NULL, 0, 0 },
 };
 
@@ -1675,14 +1676,6 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
         ++ret;
     }
     return ret;
-}
-
-ST_FUNC char *tcc_load_text(int fd)
-{
-    int len = lseek(fd, 0, SEEK_END);
-    char *buf = load_data(fd, 0, len + 1);
-    buf[len] = 0;
-    return buf;
 }
 
 /* read list file */
@@ -1990,27 +1983,6 @@ reparse:
             if (arg_start != noaction)
                 tcc_error("cannot parse %s here", r);
             tool = x;
-            break;
-#if defined(TCC_TARGET_MACHO)
-        case TCC_OPTION_arch:
-#if defined(TCC_TARGET_X86_64)
-            if (strcmp(optarg, "x86_64") == 0)
-                break; /* Ok, arch matches target */
-#endif
-#if defined(TCC_TARGET_ARM64)
-            if (strcmp(optarg, "arm64") == 0)
-                break; /* Ok, arch matches target */
-#endif
-            tcc_error("this compiler does not support %s", optarg);
-            /* ignored */
-            break;
-#endif
-        case TCC_OPTION_traditional:
-        case TCC_OPTION_pedantic:
-        case TCC_OPTION_pipe:
-        case TCC_OPTION_s:
-        case TCC_OPTION_C:
-            /* ignored */
             break;
         default:
 unsupported_option:

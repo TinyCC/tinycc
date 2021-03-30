@@ -49,6 +49,7 @@ endif
 ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_versym.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
+ SKIP += 117_builtins.test # win32 port doesn't define __builtins
  SKIP += 124_atomic_counter.test # No pthread support
 endif
 ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
