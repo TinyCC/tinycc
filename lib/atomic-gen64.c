@@ -1,8 +1,0 @@
-#include "atomic.h"
-
-ATOMIC_EXCHANGE(uint64_t, 8)
-ATOMIC_FETCH_ADD(uint64_t, 8)
-ATOMIC_FETCH_SUB(uint64_t, 8)
-ATOMIC_FETCH_AND(uint64_t, 8)
-ATOMIC_FETCH_OR(uint64_t, 8)
-ATOMIC_FETCH_XOR(uint64_t, 8)

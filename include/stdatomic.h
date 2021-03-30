@@ -15,6 +15,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define __ATOMIC_RELAXED 0
+#define __ATOMIC_CONSUME 1
+#define __ATOMIC_ACQUIRE 2
+#define __ATOMIC_RELEASE 3
+#define __ATOMIC_ACQ_REL 4
+#define __ATOMIC_SEQ_CST 5
+
 /* Memory ordering */
 typedef enum {
     memory_order_relaxed = __ATOMIC_RELAXED,

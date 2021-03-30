@@ -1,0 +1,33 @@
+[test_atomic_compare_exchange]
+1 99 77
+0 80 80
+
+[test_atomic_store]
+r = 12, i = 24
+
+[test_atomic_store_pointer]
+*p = 2
+
+[test_atomic_store_struct]
+1 2 3 4
+
+[test_atomic_error_1]
+125_atomic_misc.c:57: error: pointer expected
+
+[test_atomic_error_2]
+125_atomic_misc.c:64: error: integral or integer-sized pointer target type expected
+
+[test_atomic_error_3]
+125_atomic_misc.c:71: error: integral or integer-sized pointer target type expected
+
+[test_atomic_error_4]
+125_atomic_misc.c:79: error: pointer target type mismatch in argument 2
+
+[test_atomic_warn_1]
+125_atomic_misc.c:87: warning: assignment makes integer from pointer without a cast
+
+[test_atomic_warn_2]
+125_atomic_misc.c:97: warning: assignment from incompatible pointer type
+
+[test_atomic_warn_3]
+125_atomic_misc.c:105: warning: assignment of read-only location

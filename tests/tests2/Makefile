@@ -23,6 +23,8 @@ ifeq (,$(filter i386,$(ARCH)))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test # x86 asm
+ SKIP += 124_atomic_counter.test
+ SKIP += 125_atomic_misc.test # currently only x86 supported
 endif
 ifeq ($(CONFIG_backtrace),no)
  SKIP += 112_backtrace.test
@@ -47,6 +49,7 @@ endif
 ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 106_versym.test # No pthread support
  SKIP += 114_bound_signal.test # No pthread support
+ SKIP += 124_atomic_counter.test # No pthread support
 endif
 ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 106_versym.test # no pthread_condattr_setpshared
@@ -115,11 +118,7 @@ ifneq ($(CONFIG_bcheck),no)
 121_struct_return.test: FLAGS += -b
 122_vla_reuse.test: FLAGS += -b
 endif
-
-# this test needs pthread and is currently supported on x86 platforms
-ifneq (,$(filter i386 x86_64,$(ARCH)))
- SKIP += 124_atomic_counter.test
-endif
+125_atomic_misc.test: FLAGS += -dt
 124_atomic_counter.test: FLAGS += -pthread
 
 # Filter source directory in warnings/errors (out-of-tree builds)

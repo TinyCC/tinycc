@@ -849,7 +849,7 @@ static void tcc_tcov_block_begin(void)
 	    cstr_printf (&cstr, "%s/%s", wd, file->true_filename);
 	}
 	ptr = section_ptr_add(tcov_section, cstr.size + 1);
-	strncpy((char *)ptr, cstr.data, cstr.size);
+	strcpy((char *)ptr, cstr.data);
 #ifdef _WIN32
         normalize_slashes((char *)ptr);
 #endif
@@ -865,7 +865,7 @@ static void tcc_tcov_block_begin(void)
 	tcov_data.last_func_name = tcov_section->data_offset;
 	len = strlen (funcname);
 	ptr = section_ptr_add(tcov_section, len + 1);
-	strncpy((char *)ptr, funcname, len);
+	strcpy((char *)ptr, funcname);
 	section_ptr_add(tcov_section, -tcov_section->data_offset & 7);
 	ptr = section_ptr_add(tcov_section, 8);
 	write64le (ptr, file->line_num);
@@ -5738,36 +5738,11 @@ static void parse_builtin_params(int nc, const char *args)
         nocode_wanted--;
 }
 
-static inline int is_memory_model(const SValue *sv)
-{
-    /*
-     * FIXME
-     * The memory models should better be backed by an enumeration.
-     *
-     *    const int t = sv->type.t;
-     *
-     *    if (!IS_ENUM_VAL(t))
-     *        return 0;
-     *
-     *    if (!(t & VT_STATIC))
-     *        return 0;
-     *
-     * Ideally we should check whether the model matches 1:1.
-     * If it is possible, we should check by the name of the value.
-     */
-    return 1;
-}
-
-#define ATOMIC_ID(ATOK) \
-    (ATOK - TOK___atomic_store)
-
 static void parse_atomic(int atok)
 {
-    int mode;
-    size_t arg;
-    SValue *call;
-    CType rv;
-    CType atom;
+    int size, align, arg;
+    CType *atom, *atom_ptr, ct = {0};
+    char buf[40];
     static const char *const templates[] = {
         /*
          * Each entry consists of callback and function template.
@@ -5781,124 +5756,85 @@ static void parse_atomic(int atok)
          * v value
          * m memory model
          */
-        [ATOMIC_ID(TOK___atomic_store)] = "avm?",
-        [ATOMIC_ID(TOK___atomic_load)] = "Amv",
-        [ATOMIC_ID(TOK___atomic_exchange)] = "avmv",
-        [ATOMIC_ID(TOK___atomic_compare_exchange)] = "apvbmmb",
-        [ATOMIC_ID(TOK___atomic_fetch_add)] = "avmv",
-        [ATOMIC_ID(TOK___atomic_fetch_sub)] = "avmv",
-        [ATOMIC_ID(TOK___atomic_fetch_or)] = "avmv",
-        [ATOMIC_ID(TOK___atomic_fetch_xor)] = "avmv",
-        [ATOMIC_ID(TOK___atomic_fetch_and)] = "avmv",
+
+        /* keep in order of appearance in tcctok.h: */
+        /* __atomic_store */            "avm.?",
+        /* __atomic_load */             "Am.v",
+        /* __atomic_exchange */         "avm.v",
+        /* __atomic_compare_exchange */ "apvbmm.b",
+        /* __atomic_fetch_add */        "avm.v",
+        /* __atomic_fetch_sub */        "avm.v",
+        /* __atomic_fetch_or */         "avm.v",
+        /* __atomic_fetch_xor */        "avm.v",
+        /* __atomic_fetch_and */        "avm.v"
     };
-    const char *template = templates[ATOMIC_ID(atok)];
-    const size_t argc = (strlen(template) - 1);
+    const char *template = templates[(atok - TOK___atomic_store)];
 
+    atom = atom_ptr = NULL;
+    size = 0; /* pacify compiler */
     next();
-
-    memset(&rv, 0, sizeof(rv));
-    memset(&atom, 0, sizeof(atom));
-    mode = 0; /* pacify compiler */
-    vpush_helper_func(atok);
-    call = vtop;
-
     skip('(');
-    if ((*template != 'a') && (*template != 'A'))
-        expect_arg("pointer to atomic", 0);
-    for (arg = 0; arg < argc; ++arg) {
+    for (arg = 0;;) {
         expr_eq();
-
         switch (template[arg]) {
-        case '?':
-            /* void makes sense only for return value. */
-            if (arg != (argc - 1))
-                tcc_error("illegal atomic built-in template");
-            break;
-
-        case 'b':
-            break;
-
         case 'a':
         case 'A':
-            if ((vtop->type.t & VT_BTYPE) != VT_PTR)
-                expect_arg("pointer to atomic value", arg);
-            memcpy(&atom, pointed_type(&vtop->type), sizeof(CType));
-            if (!(atom.t & VT_ATOMIC))
-                expect_arg("qualified pointer to atomic value", arg);
-            if ((template[arg] == 'a') && (atom.t & VT_CONSTANT))
-                expect_arg("pointer to writable atomic", arg);
-            switch (type_size(&atom, &(int){0})) {
-            case 8: mode = 4; break;
-            case 4: mode = 3; break;
-            case 2: mode = 2; break;
-            case 1: mode = 1; break;
-            default: tcc_error("only integer-sized types are supported");
-            }
+            atom_ptr = &vtop->type;
+            if ((atom_ptr->t & VT_BTYPE) != VT_PTR)
+                expect("pointer");
+            atom = pointed_type(atom_ptr);
+            size = type_size(atom, &align);
+            if (size > 8
+                || (size & (size - 1))
+                || (atok > TOK___atomic_compare_exchange
+                    && (0 == btype_size(atom->t & VT_BTYPE)
+                        || (atom->t & VT_BTYPE) == VT_PTR)))
+                expect("integral or integer-sized pointer target type");
+            /* GCC does not care either: */
+            /* if (!(atom->t & VT_ATOMIC))
+                tcc_warning("pointer target declaration is missing '_Atomic'"); */
             break;
 
         case 'p':
-            if (((vtop->type.t & VT_BTYPE) != VT_PTR)
-                || !is_compatible_unqualified_types(&atom, pointed_type(&vtop->type)))
-                expect_arg("pointer to compatible type", arg);
+            if ((vtop->type.t & VT_BTYPE) != VT_PTR
+             || type_size(pointed_type(&vtop->type), &align) != size)
+                tcc_error("pointer target type mismatch in argument %d", arg + 1);
+            gen_assign_cast(atom_ptr);
             break;
-
         case 'v':
-            if (atom.ref && is_integer_btype(vtop->type.t & VT_BTYPE)) {
-                if ((tok != TOK___atomic_store) &&
-                        (tok != TOK___atomic_load) &&
-                        (tok != TOK___atomic_exchange) &&
-                        (tok != TOK___atomic_compare_exchange))
-                    expect_arg("integer type", arg);
-            }
+            gen_assign_cast(atom);
             break;
-
         case 'm':
-            if (!is_memory_model(vtop))
-                expect_arg("memory model", arg);
-            vtop->type.t &= ~VT_MEMMODEL;
+            gen_assign_cast(&int_type);
             break;
-
-        default:
-            tcc_error("unknown parameter type");
+        case 'b':
+            ct.t = VT_BOOL;
+            gen_assign_cast(&ct);
+            break;
         }
-        if (tok == ')')
+        if ('.' == template[++arg])
             break;
         skip(',');
     }
-    if (arg < (argc - 1))
-        expect("more parameters");
-    if (arg > (argc - 1))
-        expect("less parameters");
     skip(')');
 
-    call->sym = external_helper_sym(atok + mode);
-    gfunc_call(argc);
-
-    switch (template[argc]) {
+    ct.t = VT_VOID;
+    switch (template[arg + 1]) {
     case 'b':
-        vpushi(0);
-        PUT_R_RET(vtop, VT_BOOL);
+        ct.t = VT_BOOL;
         break;
-
-    case 'p':
-        vpushs(0);
-        PUT_R_RET(vtop, VT_SIZE_T);
-        break;
-
     case 'v':
-        vpush(&atom);
-        PUT_R_RET(vtop, atom.t);
+        ct = *atom;
         break;
-
-    case '?':
-        vpushi(0);
-        PUT_R_RET(vtop, VT_VOID);
-        break;
-
-    default:
-        tcc_error("incorrect atomic template");
     }
-    vtop->r2 = VT_CONST;
+
+    sprintf(buf, "%s_%d", get_tok_str(atok, 0), size);
+    vpush_helper_func(tok_alloc_const(buf));
+    vrott(arg + 1);
+    gfunc_call(arg);
+
+    vpush(&ct);
+    PUT_R_RET(vtop, ct.t);
 }
 
 ST_FUNC void unary(void)
