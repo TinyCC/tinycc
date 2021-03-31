@@ -27,7 +27,7 @@ VPATH = $(TOPSRC)
 TCC_GIT_HASH=$(shell git rev-parse > /dev/null 2>&1 && git rev-parse --short HEAD || echo no)
 
 ifneq ($(TCC_GIT_HASH),no)
- CFLAGS += -DTCC_GIT_HASH=\"$(TCC_GIT_HASH)\"
+ CFLAGS += -DTCC_GIT_HASH="\"$(TCC_GIT_HASH)\""
 endif
 
 ifdef CONFIG_WIN32
