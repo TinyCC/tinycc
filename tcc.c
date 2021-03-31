@@ -149,7 +149,13 @@ static const char help2[] =
     ;
 
 static const char version[] =
-    "tcc version "TCC_VERSION" ("
+    "tcc version "TCC_VERSION
+#ifdef TCC_GIT_HASH
+        " - " TCC_GIT_HASH
+#else
+        " - unknown hash"
+#endif
+    " ("
 #ifdef TCC_TARGET_I386
         "i386"
 #elif defined TCC_TARGET_X86_64
