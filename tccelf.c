@@ -1001,9 +1001,12 @@ ST_FUNC void relocate_sections(TCCState *s1)
         if (sr->sh_type != SHT_RELX)
             continue;
         s = s1->sections[sr->sh_info];
+#ifndef TCC_TARGET_MACHO
         if (s != s1->got
             || s1->static_link
-            || s1->output_type == TCC_OUTPUT_MEMORY) {
+            || s1->output_type == TCC_OUTPUT_MEMORY)
+#endif
+        {
             relocate_section(s1, s, sr);
         }
 #ifndef ELF_OBJ_ONLY
