@@ -116,6 +116,12 @@ ifneq ($(CONFIG_bcheck),no)
 122_vla_reuse.test: FLAGS += -b
 endif
 
+# this test needs pthread and is currently supported on x86 platforms
+ifneq (,$(filter i386 x86_64,$(ARCH)))
+ SKIP += 124_atomic_counter.test
+endif
+124_atomic_counter.test: FLAGS += -pthread
+
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
 
