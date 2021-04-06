@@ -691,8 +691,15 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 
 ST_FUNC int asm_parse_regvar (int t)
 {
-    tcc_error("RISCV64 asm not implemented.");
-    return -1;
+    if (t >= TOK_ASM_x0 && t <= TOK_ASM_pc) { /* register name */
+        switch (t) {
+            case TOK_ASM_pc:
+                return -1; // TODO: Figure out where it can be used after all
+            default:
+                return t - TOK_ASM_x0;
+        }
+    } else
+        return -1;
 }
 
 /*************************************************************/
