@@ -405,6 +405,104 @@ static void asm_data_processing_opcode(TCCState* s1, int token)
     }
 }
 
+/* caller: Add funct3 to opcode */
+static void asm_emit_s(int token, uint32_t opcode, const Operand* rs1, const Operand* rs2, const Operand* imm)
+{
+    if (rs1->type != OP_REG) {
+        tcc_error("'%s': Expected first source operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs2->type != OP_REG) {
+        tcc_error("'%s': Expected second source operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (imm->type != OP_IM12S) {
+        tcc_error("'%s': Expected third operand that is an immediate value between 0 and 0xfff", get_tok_str(token, NULL));
+        return;
+    }
+    {
+        uint16_t v = imm->e.v;
+        /* S-type instruction:
+	        31...25 imm[11:5]
+	        24...20 rs2
+	        19...15 rs1
+	        14...12 funct3
+	        11...7 imm[4:0]
+	        6...0 opcode
+        opcode always fixed pos. */
+        gen_le32(opcode | ENCODE_RS1(rs1->reg) | ENCODE_RS2(rs2->reg) | ((v & 0x1F) << 7) | ((v >> 5) << 25));
+    }
+}
+
+static void asm_data_transfer_opcode(TCCState* s1, int token)
+{
+    Operand ops[3];
+    parse_operand(s1, &ops[0]);
+    if (ops[0].type != OP_REG) {
+        expect("register");
+        return;
+    }
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+    if (ops[1].type != OP_REG) {
+        expect("register");
+        return;
+    }
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[2]);
+
+    switch (token) {
+    // Loads (RD,RS1,I); I-format
+
+    case TOK_ASM_lb:
+         asm_emit_i(token, (0x0 << 2) | 3, &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lh:
+         asm_emit_i(token, (0x0 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lw:
+         asm_emit_i(token, (0x0 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lbu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lhu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    // 64 bit
+    case TOK_ASM_ld:
+         asm_emit_i(token, (0x0 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lwu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (6 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+
+    // Stores (RS1,RS2,I); S-format
+
+    case TOK_ASM_sb:
+         asm_emit_s(token, (0x8 << 2) | 3 | (0 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+   case TOK_ASM_sh:
+         asm_emit_s(token, (0x8 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_sw:
+         asm_emit_s(token, (0x8 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_sd:
+         asm_emit_s(token, (0x8 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+
+    default:
+         expect("known data transfer instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     switch (token) {
@@ -476,6 +574,20 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sltu:
     case TOK_ASM_sltiu:
         asm_data_processing_opcode(s1, token);
+
+    case TOK_ASM_lb:
+    case TOK_ASM_lh:
+    case TOK_ASM_lw:
+    case TOK_ASM_lbu:
+    case TOK_ASM_lhu:
+    case TOK_ASM_ld:
+    case TOK_ASM_lwu:
+    case TOK_ASM_sb:
+    case TOK_ASM_sh:
+    case TOK_ASM_sw:
+    case TOK_ASM_sd:
+        asm_data_transfer_opcode(s1, token);
+        return;
 
     default:
         expect("known instruction");

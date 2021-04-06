@@ -82,6 +82,26 @@
 #define DEF_ASM_WITH_SUFFIX(x, y) \
   DEF(TOK_ASM_ ## x ## _ ## y, #x #y)
 
+/*   Loads */
+
+ DEF_ASM(lb)
+ DEF_ASM(lh)
+ DEF_ASM(lw)
+ DEF_ASM(lbu)
+ DEF_ASM(lhu)
+ DEF_ASM(ld)
+ DEF_ASM(lq)
+ DEF_ASM(lwu)
+ DEF_ASM(ldu)
+
+/* Stores */
+
+ DEF_ASM(sb)
+ DEF_ASM(sh)
+ DEF_ASM(sw)
+ DEF_ASM(sd)
+ DEF_ASM(sq)
+
 /* Shifts */
 
  DEF_ASM(sll)
