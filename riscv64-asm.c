@@ -221,6 +221,112 @@ static void asm_binary_opcode(TCCState* s1, int token)
     }
 }
 
+/* caller: Add funct3, funct7 into opcode */
+static void asm_emit_r(int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
+{
+    if (rd->type != OP_REG) {
+        tcc_error("'%s': Expected destination operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs1->type != OP_REG) {
+        tcc_error("'%s': Expected first source operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs2->type != OP_REG) {
+        tcc_error("'%s': Expected second source operand that is a register or immediate", get_tok_str(token, NULL));
+        return;
+    }
+    /* R-type instruction:
+	     31...25 funct7
+	     24...20 rs2
+	     19...15 rs1
+	     14...12 funct3
+	     11...7 rd
+	     6...0 opcode */
+    gen_le32(opcode | ENCODE_RD(rd->reg) | ENCODE_RS1(rs1->reg) | ENCODE_RS2(rs2->reg));
+}
+
+/* caller: Add funct3 into opcode */
+static void asm_emit_i(int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
+{
+    if (rd->type != OP_REG) {
+        tcc_error("'%s': Expected destination operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs1->type != OP_REG) {
+        tcc_error("'%s': Expected first source operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs2->type != OP_IM12S) {
+        tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 4095", get_tok_str(token, NULL));
+        return;
+    }
+    /* I-type instruction:
+	     31...20 imm[11:0]
+	     19...15 rs1
+	     14...12 funct3
+	     11...7 rd
+	     6...0 opcode */
+
+    gen_le32(opcode | ENCODE_RD(rd->reg) | ENCODE_RS1(rs1->reg) | (rs2->e.v << 20));
+}
+
+static void asm_shift_opcode(TCCState *s1, int token)
+{
+    Operand ops[3];
+    parse_operand(s1, &ops[0]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[2]);
+
+    switch (token) {
+    case TOK_ASM_sll:
+        asm_emit_r(token, (0xC << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_slli:
+        asm_emit_i(token, (4 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_srl:
+        asm_emit_r(token, (0xC << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_srli:
+        asm_emit_i(token, (0x4 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_sra:
+        asm_emit_r(token, (0xC << 2) | 3 | (5 << 12) | (32 << 25), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_srai:
+        asm_emit_i(token, (0x4 << 2) | 3 | (5 << 12) | (16 << 26), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_sllw:
+        asm_emit_r(token, (0xE << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_slliw:
+        asm_emit_i(token, (6 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_srlw:
+        asm_emit_r(token, (0xE << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_srliw:
+        asm_emit_i(token, (0x6 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_sraw:
+        asm_emit_r(token, (0xE << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    case TOK_ASM_sraiw:
+        asm_emit_i(token, (0x6 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+        return;
+    default:
+        expect("shift instruction");
+    }
+}
 
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
@@ -250,6 +356,27 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_lui:
     case TOK_ASM_auipc:
         asm_binary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_sll:
+    case TOK_ASM_slli:
+    case TOK_ASM_srl:
+    case TOK_ASM_srli:
+    case TOK_ASM_sra:
+    case TOK_ASM_srai:
+    case TOK_ASM_sllw:
+    case TOK_ASM_slld:
+    case TOK_ASM_slliw:
+    case TOK_ASM_sllid:
+    case TOK_ASM_srlw:
+    case TOK_ASM_srld:
+    case TOK_ASM_srliw:
+    case TOK_ASM_srlid:
+    case TOK_ASM_sraw:
+    case TOK_ASM_srad:
+    case TOK_ASM_sraiw:
+    case TOK_ASM_sraid:
+        asm_shift_opcode(s1, token);
         return;
 
     default:

@@ -82,6 +82,28 @@
 #define DEF_ASM_WITH_SUFFIX(x, y) \
   DEF(TOK_ASM_ ## x ## _ ## y, #x #y)
 
+/* Shifts */
+
+ DEF_ASM(sll)
+ DEF_ASM(slli)
+ DEF_ASM(srl)
+ DEF_ASM(srli)
+ DEF_ASM(sra)
+ DEF_ASM(srai)
+
+ DEF_ASM(sllw)
+ DEF_ASM(slld)
+ DEF_ASM(slliw)
+ DEF_ASM(sllid)
+ DEF_ASM(srlw)
+ DEF_ASM(srld)
+ DEF_ASM(srliw)
+ DEF_ASM(srlid)
+ DEF_ASM(sraw)
+ DEF_ASM(srad)
+ DEF_ASM(sraiw)
+ DEF_ASM(sraid)
+
 /* Arithmetic */
 
  DEF_ASM(lui)
