@@ -155,6 +155,15 @@
  DEF_ASM(sltu)
  DEF_ASM(sltiu)
 
+/* Branch */
+
+ DEF_ASM(beq)
+ DEF_ASM(bne)
+ DEF_ASM(blt)
+ DEF_ASM(bge)
+ DEF_ASM(bltu)
+ DEF_ASM(bgeu)
+
 /* Sync */
 
  DEF_ASM(fence)

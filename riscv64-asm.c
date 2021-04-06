@@ -503,6 +503,67 @@ static void asm_data_transfer_opcode(TCCState* s1, int token)
     }
 }
 
+static void asm_branch_opcode(TCCState* s1, int token)
+{
+    // Branch (RS1,RS2,IMM); SB-format
+    uint32_t opcode = (0x18 << 2) | 3;
+    uint32_t offset = 0;
+    Operand ops[3];
+    parse_operand(s1, &ops[0]);
+    if (ops[0].type != OP_REG) {
+        expect("register");
+        return;
+    }
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+    if (ops[1].type != OP_REG) {
+        expect("register");
+        return;
+    }
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[2]);
+
+    if (ops[2].type != OP_IM12S) {
+        tcc_error("'%s': Expected third operand that is an immediate value between 0 and 0xfff", get_tok_str(token, NULL));
+        return;
+    }
+    offset = ops[2].e.v;
+    if (offset & 1) {
+        tcc_error("'%s': Expected third operand that is an even immediate value", get_tok_str(token, NULL));
+        return;
+    }
+
+    switch (token) {
+    case TOK_ASM_beq:
+        opcode |= 0 << 12;
+        break;
+    case TOK_ASM_bne:
+        opcode |= 1 << 12;
+        break;
+    case TOK_ASM_blt:
+        opcode |= 4 << 12;
+        break;
+    case TOK_ASM_bge:
+        opcode |= 5 << 12;
+        break;
+    case TOK_ASM_bltu:
+        opcode |= 6 << 12;
+        break;
+    case TOK_ASM_bgeu:
+        opcode |= 7 << 12;
+        break;
+    default:
+        expect("known branch instruction");
+    }
+    asm_emit_opcode(opcode | ENCODE_RS1(ops[0].reg) | ENCODE_RS2(ops[1].reg) | (((offset >> 1) & 0xF) << 8) | (((offset >> 5) & 0x1f) << 25) | (((offset >> 11) & 1) << 7) | (((offset >> 12) & 1) << 31));
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     switch (token) {
@@ -587,6 +648,15 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sw:
     case TOK_ASM_sd:
         asm_data_transfer_opcode(s1, token);
+        return;
+
+    case TOK_ASM_beq:
+    case TOK_ASM_bne:
+    case TOK_ASM_blt:
+    case TOK_ASM_bge:
+    case TOK_ASM_bltu:
+    case TOK_ASM_bgeu:
+        asm_branch_opcode(s1, token);
         return;
 
     default:
