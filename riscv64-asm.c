@@ -40,8 +40,16 @@ ST_FUNC void gen_le16 (int i)
 
 ST_FUNC void gen_le32 (int i)
 {
-    gen_le16(i);
-    gen_le16(i>>16);
+    int ind1;
+    if (nocode_wanted)
+        return;
+    ind1 = ind + 4;
+    if (ind1 > cur_text_section->data_allocated)
+        section_realloc(cur_text_section, ind1);
+    cur_text_section->data[ind++] = i & 0xFF;
+    cur_text_section->data[ind++] = (i >> 8) & 0xFF;
+    cur_text_section->data[ind++] = (i >> 16) & 0xFF;
+    cur_text_section->data[ind++] = (i >> 24) & 0xFF;
 }
 
 ST_FUNC void gen_expr32(ExprValue *pe)
