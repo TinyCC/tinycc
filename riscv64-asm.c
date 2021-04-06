@@ -328,6 +328,83 @@ static void asm_shift_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_data_processing_opcode(TCCState* s1, int token)
+{
+    Operand ops[3];
+    parse_operand(s1, &ops[0]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[2]);
+
+    switch (token) {
+    // Arithmetic (RD,RS1,(RS2|IMM)); R-format, I-format or U-format
+
+    case TOK_ASM_add:
+         asm_emit_r(token, (0xC << 2) | 3, &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_addi:
+         asm_emit_i(token, (4 << 2) | 3, &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_sub:
+         asm_emit_r(token, (0xC << 2) | 3 | (32 << 25), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_addw:
+         asm_emit_r(token, (0xE << 2) | 3 | (0 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_addiw: // 64 bit
+         asm_emit_i(token, (0x6 << 2) | 3 | (0 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_subw:
+         asm_emit_r(token, (0xE << 2) | 3 | (0 << 12) | (32 << 25), &ops[0], &ops[1], &ops[2]);
+         return;
+
+    // Logical (RD,RS1,(RS2|IMM)); R-format or I-format
+
+    case TOK_ASM_xor:
+         asm_emit_r(token, (0xC << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_xori:
+         asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_or:
+         asm_emit_r(token, (0xC << 2) | 3 | (6 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_ori:
+         asm_emit_i(token, (0x4 << 2) | 3 | (6 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_and:
+         asm_emit_r(token, (0xC << 2) | 3 | (7 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_andi:
+         asm_emit_i(token, (0x4 << 2) | 3 | (7 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+
+    // Compare (RD,RS1,(RS2|IMM)); R-format or I-format
+
+    case TOK_ASM_slt:
+         asm_emit_r(token, (0xC << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_slti:
+         asm_emit_i(token, (0x4 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_sltu:
+         asm_emit_r(token, (0xC << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_sltiu:
+         asm_emit_i(token, (0x4 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    default:
+         expect("known data processing instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     switch (token) {
@@ -378,6 +455,27 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sraid:
         asm_shift_opcode(s1, token);
         return;
+
+    case TOK_ASM_add:
+    case TOK_ASM_addi:
+    case TOK_ASM_sub:
+    case TOK_ASM_addw:
+    case TOK_ASM_addd:
+    case TOK_ASM_addiw:
+    case TOK_ASM_addid:
+    case TOK_ASM_subw:
+    case TOK_ASM_subd:
+    case TOK_ASM_xor:
+    case TOK_ASM_xori:
+    case TOK_ASM_or:
+    case TOK_ASM_ori:
+    case TOK_ASM_and:
+    case TOK_ASM_andi:
+    case TOK_ASM_slt:
+    case TOK_ASM_slti:
+    case TOK_ASM_sltu:
+    case TOK_ASM_sltiu:
+        asm_data_processing_opcode(s1, token);
 
     default:
         expect("known instruction");

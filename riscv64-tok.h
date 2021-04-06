@@ -106,8 +106,34 @@
 
 /* Arithmetic */
 
+ DEF_ASM(add)
+ DEF_ASM(addi)
+ DEF_ASM(sub)
  DEF_ASM(lui)
  DEF_ASM(auipc)
+
+ DEF_ASM(addw)
+ DEF_ASM(addd)
+ DEF_ASM(addiw)
+ DEF_ASM(addid)
+ DEF_ASM(subw)
+ DEF_ASM(subd)
+
+/* Logical */
+
+ DEF_ASM(xor)
+ DEF_ASM(xori)
+ DEF_ASM(or)
+ DEF_ASM(ori)
+ DEF_ASM(and)
+ DEF_ASM(andi)
+
+/* Compare */
+
+ DEF_ASM(slt)
+ DEF_ASM(slti)
+ DEF_ASM(sltu)
+ DEF_ASM(sltiu)
 
 /* Sync */
 
