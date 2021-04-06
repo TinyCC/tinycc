@@ -179,6 +179,49 @@ static void asm_unary_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_emit_u(int token, uint32_t opcode, const Operand* rd, const Operand* rs2)
+{
+    if (rd->type != OP_REG) {
+        tcc_error("'%s': Expected destination operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs2->type != OP_IM12S && rs2->type != OP_IM32) {
+        tcc_error("'%s': Expected second source operand that is an immediate value", get_tok_str(token, NULL));
+        return;
+    } else if (rs2->e.v >= 0x100000) {
+        tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 0xfffff", get_tok_str(token, NULL));
+        return;
+    }
+    /* U-type instruction:
+	      31...12 imm[31:12]
+	      11...7 rd
+	      6...0 opcode */
+    gen_le32(opcode | ENCODE_RD(rd->reg) | (rs2->e.v << 12));
+}
+
+static void asm_binary_opcode(TCCState* s1, int token)
+{
+    Operand ops[2];
+    parse_operand(s1, &ops[0]);
+    if (tok == ',')
+        next();
+    else
+        expect("','");
+    parse_operand(s1, &ops[1]);
+
+    switch (token) {
+    case TOK_ASM_lui:
+        asm_emit_u(token, (0xD << 2) | 3, &ops[0], &ops[1]);
+        return;
+    case TOK_ASM_auipc:
+        asm_emit_u(token, (0x05 << 2) | 3, &ops[0], &ops[1]);
+        return;
+    default:
+        expect("binary instruction");
+    }
+}
+
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     switch (token) {
@@ -202,6 +245,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_rdinstret:
     case TOK_ASM_rdinstreth:
         asm_unary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_lui:
+    case TOK_ASM_auipc:
+        asm_binary_opcode(s1, token);
         return;
 
     default:

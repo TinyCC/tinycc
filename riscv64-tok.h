@@ -82,6 +82,11 @@
 #define DEF_ASM_WITH_SUFFIX(x, y) \
   DEF(TOK_ASM_ ## x ## _ ## y, #x #y)
 
+/* Arithmetic */
+
+ DEF_ASM(lui)
+ DEF_ASM(auipc)
+
 /* Sync */
 
  DEF_ASM(fence)
