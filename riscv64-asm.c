@@ -49,9 +49,70 @@ ST_FUNC void gen_expr32(ExprValue *pe)
     gen_le32(pe->v);
 }
 
-ST_FUNC void asm_opcode(TCCState *s1, int opcode)
+static void asm_emit_opcode(uint32_t opcode) {
+    gen_le32(opcode);
+}
+
+static void asm_nullary_opcode(TCCState *s1, int token)
 {
-    tcc_error("RISCV64 asm not implemented.");
+    switch (token) {
+    // Sync instructions
+
+    case TOK_ASM_fence: // I
+        asm_emit_opcode((0x3 << 2) | 3 | (0 << 12));
+        return;
+    case TOK_ASM_fence_i: // I
+        asm_emit_opcode((0x3 << 2) | 3| (1 << 12));
+        return;
+
+    // System calls
+
+    case TOK_ASM_scall: // I (pseudo)
+        asm_emit_opcode((0x1C << 2) | 3 | (0 << 12));
+        return;
+    case TOK_ASM_sbreak: // I (pseudo)
+        asm_emit_opcode((0x1C << 2) | 3 | (0 << 12) | (1 << 20));
+        return;
+
+    // Privileged Instructions
+
+    case TOK_ASM_ecall:
+        asm_emit_opcode((0x1C << 2) | 3 | (0 << 20));
+        return;
+    case TOK_ASM_ebreak:
+        asm_emit_opcode((0x1C << 2) | 3 | (1 << 20));
+        return;
+
+    // Other
+
+    case TOK_ASM_wfi:
+        asm_emit_opcode((0x1C << 2) | 3 | (0x105 << 20));
+        return;
+
+    default:
+        expect("nullary instruction");
+    }
+}
+
+ST_FUNC void asm_opcode(TCCState *s1, int token)
+{
+    switch (token) {
+    case TOK_ASM_fence:
+    case TOK_ASM_fence_i:
+    case TOK_ASM_scall:
+    case TOK_ASM_sbreak:
+    case TOK_ASM_ecall:
+    case TOK_ASM_ebreak:
+    case TOK_ASM_mrts:
+    case TOK_ASM_mrth:
+    case TOK_ASM_hrts:
+    case TOK_ASM_wfi:
+        asm_nullary_opcode(s1, token);
+        return;
+
+    default:
+        expect("known instruction");
+    }
 }
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)

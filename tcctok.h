@@ -391,3 +391,6 @@
 #if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
 #include "arm-tok.h"
 #endif
+#if defined TCC_TARGET_RISCV64
+#include "riscv64-tok.h"
+#endif
