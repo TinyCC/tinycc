@@ -94,6 +94,91 @@ static void asm_nullary_opcode(TCCState *s1, int token)
     }
 }
 
+enum {
+    OPT_REG,
+    OPT_IM12S,
+    OPT_IM32,
+};
+#define OP_REG    (1 << OPT_REG)
+#define OP_IM32   (1 << OPT_IM32)
+#define OP_IM12S   (1 << OPT_IM12S)
+
+typedef struct Operand {
+    uint32_t type;
+    union {
+        uint8_t reg;
+        uint16_t regset;
+        ExprValue e;
+    };
+} Operand;
+
+/* Parse a text containing operand and store the result in OP */
+static void parse_operand(TCCState *s1, Operand *op)
+{
+    ExprValue e;
+    int8_t reg;
+
+    op->type = 0;
+
+    if ((reg = asm_parse_regvar(tok)) != -1) {
+        next(); // skip register name
+        op->type = OP_REG;
+        op->reg = (uint8_t) reg;
+        return;
+    } else if (tok == '$') {
+        /* constant value */
+        next(); // skip '#' or '$'
+    }
+    asm_expr(s1, &e);
+    op->type = OP_IM32;
+    op->e = e;
+    if (!op->e.sym) {
+        if ((int) op->e.v >= -2048 && (int) op->e.v < 2048)
+            op->type = OP_IM12S;
+    } else
+        expect("operand");
+}
+
+#define ENCODE_RS1(register_index) ((register_index) << 15)
+#define ENCODE_RS2(register_index) ((register_index) << 20)
+#define ENCODE_RD(register_index) ((register_index) << 7)
+
+// Note: Those all map to CSR--so they are pseudo-instructions.
+static void asm_unary_opcode(TCCState *s1, int token)
+{
+    uint32_t opcode = (0x1C << 2) | 3 | (2 << 12);
+    Operand op;
+    parse_operand(s1, &op);
+    if (op.type != OP_REG) {
+        expect("register");
+        return;
+    }
+    opcode |= ENCODE_RD(op.reg);
+
+    switch (token) {
+    case TOK_ASM_rdcycle:
+        asm_emit_opcode(opcode | (0xC00 << 20));
+        return;
+    case TOK_ASM_rdcycleh:
+        asm_emit_opcode(opcode | (0xC80 << 20));
+        return;
+    case TOK_ASM_rdtime:
+        asm_emit_opcode(opcode | (0xC01 << 20) | ENCODE_RD(op.reg));
+        return;
+    case TOK_ASM_rdtimeh:
+        asm_emit_opcode(opcode | (0xC81 << 20) | ENCODE_RD(op.reg));
+        return;
+    case TOK_ASM_rdinstret:
+        asm_emit_opcode(opcode | (0xC02 << 20) | ENCODE_RD(op.reg));
+        return;
+    case TOK_ASM_rdinstreth:
+        asm_emit_opcode(opcode | (0xC82 << 20) | ENCODE_RD(op.reg));
+        return;
+    default:
+        expect("unary instruction");
+    }
+}
+
 ST_FUNC void asm_opcode(TCCState *s1, int token)
 {
     switch (token) {
@@ -108,6 +193,15 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_hrts:
     case TOK_ASM_wfi:
         asm_nullary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_rdcycle:
+    case TOK_ASM_rdcycleh:
+    case TOK_ASM_rdtime:
+    case TOK_ASM_rdtimeh:
+    case TOK_ASM_rdinstret:
+    case TOK_ASM_rdinstreth:
+        asm_unary_opcode(s1, token);
         return;
 
     default:

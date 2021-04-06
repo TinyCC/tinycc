@@ -92,6 +92,15 @@
  DEF_ASM(scall)
  DEF_ASM(sbreak)
 
+/* Counters */
+
+ DEF_ASM(rdcycle)
+ DEF_ASM(rdcycleh)
+ DEF_ASM(rdtime)
+ DEF_ASM(rdtimeh)
+ DEF_ASM(rdinstret)
+ DEF_ASM(rdinstreth)
+
 /* Privileged Instructions */
 
  DEF_ASM(ecall)
