@@ -1441,7 +1441,7 @@ static void push_arg_reg(int i) {
 void gfunc_prolog(Sym *func_sym)
 {
     CType *func_type = &func_sym->type;
-    X86_64_Mode mode;
+    X86_64_Mode mode, ret_mode;
     int i, addr, align, size, reg_count;
     int param_addr = 0, reg_param_index, sse_param_index;
     Sym *sym;
@@ -1453,10 +1453,12 @@ void gfunc_prolog(Sym *func_sym)
     ind += FUNC_PROLOG_SIZE;
     func_sub_sp_offset = ind;
     func_ret_sub = 0;
+    ret_mode = classify_x86_64_arg(&func_vt, NULL, &size, &align, &reg_count);
 
     if (func_var) {
         int seen_reg_num, seen_sse_num, seen_stack_size;
-        seen_reg_num = seen_sse_num = 0;
+        seen_reg_num = ret_mode == x86_64_mode_memory;
+        seen_sse_num = 0;
         /* frame pointer and return address */
         seen_stack_size = PTR_SIZE * 2;
         /* count the number of seen parameters */
@@ -1525,8 +1527,7 @@ void gfunc_prolog(Sym *func_sym)
 
     /* if the function returns a structure, then add an
        implicit pointer parameter */
-    mode = classify_x86_64_arg(&func_vt, NULL, &size, &align, &reg_count);
-    if (mode == x86_64_mode_memory) {
+    if (ret_mode == x86_64_mode_memory) {
         push_arg_reg(reg_param_index);
         func_vc = loc;
         reg_param_index++;

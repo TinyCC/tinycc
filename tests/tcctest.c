@@ -2692,8 +2692,11 @@ struct myspace3 {
 struct myspace4 {
     char a[2];
 };
+struct mytest {
+    void *foo, *bar, *baz;
+};
 
-void stdarg_for_struct(struct myspace bob, ...)
+struct mytest stdarg_for_struct(struct myspace bob, ...)
 {
     struct myspace george, bill;
     struct myspace2 alex1;
@@ -2713,6 +2716,7 @@ void stdarg_for_struct(struct myspace bob, ...)
            alex2.a[0], alex3.a[0], alex3.a[1],
            bob.profile, bill.profile, george.profile, validate);
     va_end(ap);
+    return (struct mytest) {};
 }
 
 void stdarg_for_libc(const char *fmt, ...)
