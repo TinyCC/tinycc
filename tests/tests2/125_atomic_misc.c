@@ -82,7 +82,7 @@ int main()
 #elif defined test_atomic_warn_1
 int main()
 {
-    int _Atomic i = 1;
+    size_t _Atomic i = 1;
     /* assignment to integer from pointer */
     atomic_store(&i, &i);
 }
