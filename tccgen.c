@@ -5835,6 +5835,13 @@ static void parse_atomic(int atok)
 
     vpush(&ct);
     PUT_R_RET(vtop, ct.t);
+    if (ct.t == VT_BOOL) {
+#ifdef PROMOTE_RET
+	vtop->r |= BFVAL(VT_MUSTCAST, 1);
+#else
+	vtop->type.t = VT_INT;
+#endif
+    }
 }
 
 ST_FUNC void unary(void)
