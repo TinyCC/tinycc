@@ -42,7 +42,8 @@
         *(volatile TYPE *)atom = value; \
     }
 
-#if defined(__GNUC__) 
+/* Some tcc targets set __GNUC__ */
+#if defined(__GNUC__) && !defined(__TINYC__)
 #define	ATOMIC_LOAD(t,a,b,c)              t b; __atomic_load((t *)a, (t *)&b, c)
 #define COMPARE_EXCHANGE(t,a,b,c,d,e,f)   __atomic_compare_exchange((t *)a,b,&c,d,e,f)
 #else
