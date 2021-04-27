@@ -46,6 +46,7 @@
  Thomas Preud'homme         YES                 arm-gen.c
  Timo VJ Lähde (Timppa)     ?                   tiny_libmaker.c
  TK                         ?                   tcccoff.c c67-gen.c
+ Tyge Løvset                YES                 tgmath.h, Windows tcc_libm.h math.h
  Urs Janssen                YES
  waddlesplash               YES
  Christian Jullien          YES                 Windows Cygwin build and tests
