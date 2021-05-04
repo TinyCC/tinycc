@@ -115,6 +115,9 @@ static int onetwothree = 123;
 
 #define MACRO_NOARGS()
 
+#define TEST_CALL(f, ...) f(__VA_ARGS__)
+#define TEST_CONST()      123
+
 #define AAA 3
 #undef AAA
 #define AAA 4
@@ -222,6 +225,8 @@ void macro_test(void)
 #endif
 
     MACRO_NOARGS();
+
+    printf("%d\n", TEST_CALL(TEST_CONST));
 
     /* not strictly preprocessor, but we test it there */
 #ifdef C99_MACROS

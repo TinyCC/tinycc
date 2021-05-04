@@ -3424,7 +3424,8 @@ static int macro_subst_tok(
             for(;;) {
                 do {
                     next_argstream(nested_list, NULL);
-                } while (is_space(tok) || TOK_LINEFEED == tok);
+                } while (tok == TOK_PLCHLDR || is_space(tok) ||
+			 TOK_LINEFEED == tok);
     empty_arg:
                 /* handle '()' case */
                 if (!args && !sa && tok == ')')
