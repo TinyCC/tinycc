@@ -8124,20 +8124,22 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 	   don't consume them as initializer value (which would commit them
 	   to some anonymous symbol).  */
 	tok != TOK_LSTR && tok != TOK_STR &&
-	!(flags & DIF_SIZE_ONLY)) {
+	(!(flags & DIF_SIZE_ONLY)
+            /* a struct may be initialized from a struct of same type, as in
+                    struct {int x,y;} a = {1,2}, b = {3,4}, c[] = {a,b};
+               In that case we need to parse the element in order to check
+               it for compatibility below */
+            || (type->t & VT_BTYPE) == VT_STRUCT)
+        ) {
+        int ncw_prev = nocode_wanted;
+        if ((flags & DIF_SIZE_ONLY) && !p->sec)
+            ++nocode_wanted;
 	parse_init_elem(!p->sec ? EXPR_ANY : EXPR_CONST);
+        nocode_wanted = ncw_prev;
         flags |= DIF_HAVE_ELEM;
     }
 
-    if ((flags & DIF_HAVE_ELEM) &&
-	!(type->t & VT_ARRAY) &&
-	/* Use i_c_parameter_t, to strip toplevel qualifiers.
-	   The source type might have VT_CONSTANT set, which is
-	   of course assignable to non-const elements.  */
-	is_compatible_unqualified_types(type, &vtop->type)) {
-        goto init_putv;
-
-    } else if (type->t & VT_ARRAY) {
+    if (type->t & VT_ARRAY) {
         no_oblock = 1;
         if (((flags & DIF_FIRST) && tok != TOK_LSTR && tok != TOK_STR) ||
             tok == '{') {
@@ -8258,6 +8260,14 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
         }
         if (!no_oblock)
             skip('}');
+
+    } else if ((flags & DIF_HAVE_ELEM)
+        /* Use i_c_parameter_t, to strip toplevel qualifiers.
+           The source type might have VT_CONSTANT set, which is
+           of course assignable to non-const elements.  */
+            && is_compatible_unqualified_types(type, &vtop->type)) {
+        goto one_elem;
+
     } else if ((type->t & VT_BTYPE) == VT_STRUCT) {
         no_oblock = 1;
         if ((flags & DIF_FIRST) || tok == '{') {
@@ -8269,13 +8279,15 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
         n = s->c;
         size1 = 1;
 	goto do_init_list;
+
     } else if (tok == '{') {
         if (flags & DIF_HAVE_ELEM)
           skip(';');
         next();
         decl_initializer(p, type, c, flags & ~DIF_HAVE_ELEM);
         skip('}');
-    } else if ((flags & DIF_SIZE_ONLY)) {
+
+    } else one_elem: if ((flags & DIF_SIZE_ONLY)) {
 	/* If we supported only ISO C we wouldn't have to accept calling
 	   this on anything than an array if DIF_SIZE_ONLY (and even then
 	   only on the outermost level, so no recursion would be needed),
@@ -8283,7 +8295,11 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 	   But GNU C supports it, so we need to recurse even into
 	   subfields of structs and arrays when DIF_SIZE_ONLY is set.  */
         /* just skip expression */
-        skip_or_save_block(NULL);
+        if (flags & DIF_HAVE_ELEM)
+            vpop();
+        else
+            skip_or_save_block(NULL);
+
     } else {
 	if (!(flags & DIF_HAVE_ELEM)) {
 	    /* This should happen only when we haven't parsed
@@ -8293,7 +8309,6 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 	      expect("string constant");
 	    parse_init_elem(!p->sec ? EXPR_ANY : EXPR_CONST);
 	}
-    init_putv:
         if (!p->sec && (flags & DIF_CLEAR) /* container was already zero'd */
             && (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST
             && vtop->c.i == 0
