@@ -122,6 +122,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 %CC% -o libtcc.dll -shared ..\libtcc.c %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
+CALL :libtcc1.a
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 
 @if (%EXES_ONLY%)==(yes) goto :files_done
@@ -137,6 +138,7 @@ copy>nul tcc-win32.txt doc
 .\tcc -impdef libtcc.dll -o libtcc\libtcc.def
 @if errorlevel 1 goto :the_end
 
+GOTO :tcc-doc.html
 :libtcc1.a
 @set O1=libtcc1.o crt1.o crt1w.o wincrt1.o wincrt1w.o dllcrt1.o dllmain.o chkstk.o
 .\tcc -m32 -c ../lib/libtcc1.c
@@ -167,6 +169,7 @@ copy>nul tcc-win32.txt doc
 .\tcc -m%T% -c ../lib/bt-exe.c -o lib/bt-exe.o
 .\tcc -m%T% -c ../lib/bt-log.c -o lib/bt-log.o
 .\tcc -m%T% -c ../lib/bt-dll.c -o lib/bt-dll.o
+GOTO :EOF
 
 :tcc-doc.html
 @if not (%DOC%)==(yes) goto :doc-done
