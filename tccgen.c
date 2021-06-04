@@ -8854,7 +8854,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 #endif
             if (tok == '{') {
                 if (l != VT_CONST)
-                    tcc_error("cannot use local functions");
+                    tcc_error("Nested definition of functions(){} is not supported by C programming language.");
                 if ((type.t & VT_BTYPE) != VT_FUNC)
                     expect("function definition");
 
