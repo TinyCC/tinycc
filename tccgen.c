@@ -3353,8 +3353,8 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                with a warning */
             if ((op == '?' || TOK_ISCOND(op))
                 && (is_integer_btype(bt1) || is_integer_btype(bt2)))
-              tcc_warning("pointer/integer mismatch in %s",
-                          op == '?' ? "conditional expression" : "comparison");
+              tcc_warning("pointer/integer type mismatch in %s",
+                          op == '?' ? "conditional expression" : "while comparing in a comparison expression");
             else if (op != '-' || !is_integer_btype(bt2))
               ret = 0;
             type = *(bt1 == VT_PTR ? type1 : type2);
