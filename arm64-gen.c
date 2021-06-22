@@ -1010,6 +1010,10 @@ ST_FUNC void gfunc_call(int nb_args)
 
     stack = (stack + 15) >> 4 << 4;
 
+    /* fetch cpu flag before generating any code */
+    if ((vtop->r & VT_VALMASK) == VT_CMP)
+      gv(RC_INT);
+
     if (stack >= 0x1000000) // 16Mb
         tcc_error("stack size too big %lu", stack);
     if (stack & 0xfff)

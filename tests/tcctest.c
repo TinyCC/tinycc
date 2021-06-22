@@ -4161,6 +4161,19 @@ void bounds_check1_test (void)
     pv(y);
 }
 
+/* This failed on arm64/riscv64 */
+void map_add(int a, int b, int c, int d, int e, int f, int g, int h, int i)
+{
+  printf ("%d %d %d %d %d %d %d %d %d\n", a, b, c, d, e, f, g, h, i);
+}
+
+void func_arg_test(void)
+{
+    int a = 0;
+    int b = 1;
+    map_add(0, 1, 2, 3, 4, 5, 6, 7, a && b);
+}
+
 /* gcc 2.95.3 does not handle correctly CR in strings or after strays */
 #define CORRECT_CR_HANDLING
 
@@ -4276,6 +4289,7 @@ int main(int argc, char **argv)
     RUN(volatile_test);
     RUN(attrib_test);
     RUN(bounds_check1_test);
+    RUN(func_arg_test);
 
     return 0;
 }

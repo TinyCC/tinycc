@@ -621,6 +621,11 @@ ST_FUNC void gfunc_call(int nb_args)
     stack_adj = (stack_adj + 15) & -16;
     tempspace = (tempspace + 15) & -16;
     stack_add = stack_adj + tempspace;
+
+    /* fetch cpu flag before generating any code */
+    if ((vtop->r & VT_VALMASK) == VT_CMP)
+      gv(RC_INT);
+
     if (stack_add) {
         if (stack_add >= 0x1000) {
             o(0x37 | (5 << 7) | (-stack_add & 0xfffff000)); //lui t0, upper(v)
