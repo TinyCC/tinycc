@@ -537,8 +537,11 @@ ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename
     if (s1->verbose)
         printf("<- %s\n", filename);
 
-    /* XXX return err codes instead of error() ? */
-    depout = fopen(filename, "w");
+    if(!strcmp(filename, "-"))
+        depout = fdopen(1, "w");
+    else
+        /* XXX return err codes instead of error() ? */
+        depout = fopen(filename, "w");
     if (!depout)
         tcc_error("could not open '%s'", filename);
     fprintf(depout, "%s:", target);
