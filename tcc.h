@@ -975,7 +975,9 @@ struct TCCState {
     char *outfile; /* output filename */
     unsigned char option_r; /* option -r */
     unsigned char do_bench; /* option -bench */
+    int just_deps; /* option -M  */
     int gen_deps; /* option -MD  */
+    int include_sys_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
     int argc;
     char **argv;

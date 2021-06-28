@@ -370,8 +370,18 @@ to trigger a stack trace with a message on demand.
 Misc options:
 
 @table @option
+
+@item -M
+Just output makefile fragment with dependencies
+
+@item -MM
+Like -M except mention only user header files, not system header files.
+
 @item -MD
 Generate makefile fragment with dependencies.
+
+@item -MMD
+Like -MD except mention only user header files, not system header files.
 
 @item -MF depfile
 Use @file{depfile} as output for -MD.

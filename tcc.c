@@ -70,7 +70,10 @@ static const char help[] =
     "  -nostdinc    do not use standard system include paths\n"
     "  -nostdlib    do not link with standard crt and libraries\n"
     "  -Bdir        set tcc's private include/library dir\n"
+    "  -M           just output makefile fragment with dependencies\n"
+    "  -MM          Like -M but ignore system libs\n"
     "  -MD          generate dependency file for make\n"
+    "  -MMD         Like -MMD but ignore system libs\n"
     "  -MF file     specify dependency file name\n"
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     "  -m32/64      defer to i386/x86_64 cross compiler\n"
@@ -250,7 +253,7 @@ static char *default_outputfile(TCCState *s, const char *first_file)
         strcpy(ext, ".exe");
     else
 #endif
-    if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r && *ext)
+    if ((s->just_deps || s->output_type == TCC_OUTPUT_OBJ) && !s->option_r && *ext)
         strcpy(ext, ".o");
     else
         strcpy(buf, "a.out");
@@ -380,7 +383,7 @@ redo:
         } else {
             if (!s->outfile)
                 s->outfile = default_outputfile(s, first_file);
-            if (tcc_output_file(s, s->outfile))
+            if (!s->just_deps && tcc_output_file(s, s->outfile))
                 ret = 1;
             else if (s->gen_deps)
                 gen_makedeps(s, s->outfile, s->deps_outfile);

@@ -1502,8 +1502,11 @@ enum {
     TCC_OPTION_w,
     TCC_OPTION_pipe,
     TCC_OPTION_E,
+    TCC_OPTION_M,
     TCC_OPTION_MD,
     TCC_OPTION_MF,
+    TCC_OPTION_MM,
+    TCC_OPTION_MMD,
     TCC_OPTION_x,
     TCC_OPTION_ar,
     TCC_OPTION_impdef,
@@ -1568,8 +1571,11 @@ static const TCCOption tcc_options[] = {
     { "w", TCC_OPTION_w, 0 },
     { "pipe", TCC_OPTION_pipe, 0},
     { "E", TCC_OPTION_E, 0},
+    { "M", TCC_OPTION_M, 0},
     { "MD", TCC_OPTION_MD, 0},
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
+    { "MM", TCC_OPTION_MM, 0},
+    { "MMD", TCC_OPTION_MMD, 0},
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
     { "ar", TCC_OPTION_ar, 0},
 #ifdef TCC_TARGET_PE
@@ -1906,8 +1912,20 @@ reparse:
         case TCC_OPTION_P:
             s->Pflag = atoi(optarg) + 1;
             break;
+        case TCC_OPTION_M:
+            s->include_sys_deps = 1;
+            // fall through
+        case TCC_OPTION_MM:
+            s->just_deps = 1;
+            if(!s->deps_outfile)
+                s->deps_outfile = tcc_strdup("-");
+            // fall through
+        case TCC_OPTION_MMD:
+            s->gen_deps = 1;
+            break;
         case TCC_OPTION_MD:
             s->gen_deps = 1;
+            s->include_sys_deps = 1;
             break;
         case TCC_OPTION_MF:
             s->deps_outfile = tcc_strdup(optarg);

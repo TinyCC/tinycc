@@ -1924,7 +1924,7 @@ ST_FUNC void preprocess(int is_bof)
                 while (i == 1 && (bf = bf->prev))
                     i = bf->include_next_index;
                 /* skip system include files */
-                if (n - i > s1->nb_sysinclude_paths)
+                if (s1->include_sys_deps || n - i > s1->nb_sysinclude_paths)
                     dynarray_add(&s1->target_deps, &s1->nb_target_deps,
                         tcc_strdup(buf1));
             }
