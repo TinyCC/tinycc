@@ -71,9 +71,9 @@ static const char help[] =
     "  -nostdlib    do not link with standard crt and libraries\n"
     "  -Bdir        set tcc's private include/library dir\n"
     "  -M           just output makefile fragment with dependencies\n"
-    "  -MM          Like -M but ignore system libs\n"
+    "  -MM          like -M but ignore system libs\n"
     "  -MD          generate dependency file for make\n"
-    "  -MMD         Like -MMD but ignore system libs\n"
+    "  -MMD         like -MMD but ignore system libs\n"
     "  -MF file     specify dependency file name\n"
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     "  -m32/64      defer to i386/x86_64 cross compiler\n"
