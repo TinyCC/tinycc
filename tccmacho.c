@@ -865,6 +865,29 @@ ST_FUNC int macho_add_dllref(TCCState* s1, int lev, const char* soname)
 #define tbd_parse_tramplespace if(*pos==' ') tbd_parse_trample
 #define tbd_parse_trample *pos++=0
 
+ST_FUNC const char* macho_tbd_soname(const char* filename) {
+    char* soname;
+    int fd = open(filename,O_RDONLY);
+    if (fd<0) return filename;
+    struct stat sb;
+    fstat(fd,&sb);
+    char* data = load_data(fd, 0, sb.st_size+1);
+    data[sb.st_size]=0;
+    char* pos = data;
+
+    if (!tbd_parse_movepast("install-name: ")) return filename;
+    tbd_parse_skipws;
+    tbd_parse_tramplequote;
+    soname = pos;
+    if (!tbd_parse_movetoany("\n \"'")) return filename;
+    tbd_parse_trample;
+    char* ret = tcc_mallocz(strlen(soname)+1);
+    strcpy(ret, soname);
+    // soname = strdup(soname);
+    tcc_free(data);
+    return ret;
+}
+
 ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
 {
     char* soname;

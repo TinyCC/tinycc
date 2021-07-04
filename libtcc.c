@@ -979,6 +979,10 @@ static int tcc_glob_so(TCCState *s1, const char *pattern, char *buf, int size)
 }
 #endif
 
+#ifdef TCC_TARGET_MACHO
+ST_FUNC const char* macho_tbd_soname(const char* filename);
+#endif
+
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     int fd, ret = -1;
@@ -1029,9 +1033,14 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         case AFF_BINTYPE_DYN:
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
-                void *dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                char* soname = filename;
+# ifdef TCC_TARGET_MACHO
+                if (!strcmp(tcc_fileextension(filename), ".tbd"))
+                    soname = macho_tbd_soname(filename);
+# endif
+                void* dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl) {
-                    tcc_add_dllref(s1, filename)->handle = dl;
+                    tcc_add_dllref(s1, soname)->handle = dl;
                     ret = 0;
                 }
 #endif
