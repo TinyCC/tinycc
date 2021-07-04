@@ -837,7 +837,78 @@ static uint32_t macho_swap32(uint32_t x)
 }
 #define SWAP(x) (swap ? macho_swap32(x) : (x))
 
-ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
+ST_FUNC int macho_add_dllref(TCCState* s1, int lev, const char* soname)
+{
+     /* if the dll is already loaded, do not load it */
+    DLLReference *dllref;
+    for(int i = 0; i < s1->nb_loaded_dlls; i++) {
+        dllref = s1->loaded_dlls[i];
+        if (!strcmp(soname, dllref->name)) {
+            /* but update level if needed */
+            if (lev < dllref->level)
+                dllref->level = lev;
+            return -1;
+        }
+    }
+    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
+    dllref->level = lev;
+    strcpy(dllref->name, soname);
+    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    return 0;
+}
+
+#define tbd_parse_movepast(s) \
+    (pos = (pos = strstr(pos, s)) ? pos + strlen(s) : NULL)
+#define tbd_parse_movetoany(cs) (pos = strpbrk(pos, cs))
+#define tbd_parse_skipws while (*pos && (*pos==' '||*pos=='\n')) ++pos
+#define tbd_parse_tramplequote if(*pos=='\''||*pos=='"') tbd_parse_trample
+#define tbd_parse_tramplespace if(*pos==' ') tbd_parse_trample
+#define tbd_parse_trample *pos++=0
+
+ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
+{
+    char* soname;
+
+    struct stat sb;
+    fstat(fd,&sb);
+    char* data = load_data(fd, 0, sb.st_size+1);
+    data[sb.st_size]=0;
+    char* pos = data;
+
+    if (!tbd_parse_movepast("install-name: ")) return -1;
+    tbd_parse_skipws;
+    tbd_parse_tramplequote;
+    soname = pos;
+    if (!tbd_parse_movetoany("\n \"'")) return -1;
+    tbd_parse_trample;
+    if (macho_add_dllref(s1, lev, soname) != 0) goto the_end;
+
+    while(pos) {
+        char* sym = NULL;
+        if (!tbd_parse_movepast("symbols: ")) break;
+        if (!tbd_parse_movepast("[")) break;
+        int cont = 1;
+        while (cont) {
+            tbd_parse_skipws;
+            tbd_parse_tramplequote;
+            sym = pos;
+            if (!tbd_parse_movetoany(",] \"'")) break;
+            tbd_parse_tramplequote;
+            tbd_parse_tramplespace;
+            tbd_parse_skipws;
+            if (*pos==0||*pos==']') cont=0;
+            tbd_parse_trample;
+            set_elf_sym(s1->dynsymtab_section, 0, 0,
+                ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0, SHN_UNDEF, sym);
+        }
+    }
+
+the_end:
+    tcc_free(data);
+    return 0;
+}
+
+ST_FUNC int macho_load_dylib(TCCState * s1, int fd, const char* filename, int lev)
 {
     unsigned char buf[sizeof(struct mach_header_64)];
     void *buf2;
@@ -853,7 +924,6 @@ ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
     uint32_t strsize = 0;
     uint32_t iextdef = 0;
     uint32_t nextdef = 0;
-    DLLReference *dllref;
 
   again:
     if (full_read(fd, buf, sizeof(buf)) != sizeof(buf))
@@ -934,20 +1004,8 @@ ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
         lc = (struct load_command*) ((char*)lc + lc->cmdsize);
     }
 
-    /* if the dll is already loaded, do not load it */
-    for(i = 0; i < s1->nb_loaded_dlls; i++) {
-        dllref = s1->loaded_dlls[i];
-        if (!strcmp(soname, dllref->name)) {
-            /* but update level if needed */
-            if (lev < dllref->level)
-                dllref->level = lev;
-            goto the_end;
-        }
-    }
-    dllref = tcc_mallocz(sizeof(DLLReference) + strlen(soname));
-    dllref->level = lev;
-    strcpy(dllref->name, soname);
-    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, dllref);
+    if (0 != macho_add_dllref(s1, lev, soname))
+        goto the_end;
 
     if (!nsyms || !nextdef)
       tcc_warning("%s doesn't export any symbols?", filename);
@@ -971,4 +1029,11 @@ ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev)
     tcc_free(symtab);
     tcc_free(buf2);
     return 0;
+}
+
+ST_FUNC int macho_load_dll(TCCState * s1, int fd, const char* filename, int lev)
+{
+    return strcmp(tcc_fileextension(filename), ".tbd") == 0
+           ? macho_load_tbd(s1, fd, filename, lev)
+           : macho_load_dylib(s1, fd, filename, lev);
 }

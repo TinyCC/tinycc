@@ -1006,7 +1006,9 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         lseek(fd, 0, SEEK_SET);
 
 #ifdef TCC_TARGET_MACHO
-        if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), ".dylib"))
+        if (0 == obj_type
+            && (0 == strcmp(tcc_fileextension(filename), ".dylib")
+            ||  0 == strcmp(tcc_fileextension(filename), ".tbd")))
             obj_type = AFF_BINTYPE_DYN;
 #endif
 
@@ -1142,8 +1144,8 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     static const char * const libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
     const char * const *pp = s->static_link ? libs + 4 : libs;
 #elif defined TCC_TARGET_MACHO
-    static const char * const libs[] = { "%s/lib%s.dylib", "%s/lib%s.a", NULL };
-    const char * const *pp = s->static_link ? libs + 1 : libs;
+    static const char * const libs[] = { "%s/lib%s.dylib", "%s/lib%s.tbd", "%s/lib%s.a", NULL };
+    const char * const *pp = s->static_link ? libs + 2 : libs;
 #elif defined TARGETOS_OpenBSD
     static const char * const libs[] = { "%s/lib%s.so.*", "%s/lib%s.a", NULL };
     const char * const *pp = s->static_link ? libs + 1 : libs;

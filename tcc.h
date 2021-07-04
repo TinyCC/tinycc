@@ -42,6 +42,7 @@
 #ifndef _WIN32
 # include <unistd.h>
 # include <sys/time.h>
+# include <sys/stat.h>
 # ifndef CONFIG_TCC_STATIC
 #  include <dlfcn.h>
 # endif
@@ -246,6 +247,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ALSO_TRIPLET(s) s
 #endif
 
+// FIXME: do this at runtime instead; check output of `xcode-select -p`. libxcselect provides this stuff
+#ifndef CONFIG_OSX_SDK1
+# define CONFIG_OSX_SDK1 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+# define CONFIG_OSX_SDK2 "/Applications/Xcode.app/Developer/SDKs/MacOSX.sdk"
+#endif
+
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
 # define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
@@ -274,10 +281,19 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifdef TCC_TARGET_PE
 #  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
-#  define CONFIG_TCC_LIBPATHS \
+#  ifdef TCC_TARGET_MACHO
+#   define CONFIG_TCC_LIBPATHS \
+        ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
+    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)\
+    ":" ALSO_TRIPLET(CONFIG_OSX_SDK1 "/usr/" CONFIG_LDDIR) \
+    ":" ALSO_TRIPLET(CONFIG_OSX_SDK2 "/usr/" CONFIG_LDDIR)
+#  else
+#   define CONFIG_TCC_LIBPATHS \
         ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
+#  endif
 # endif
 #endif
 
