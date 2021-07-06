@@ -1033,12 +1033,13 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         case AFF_BINTYPE_DYN:
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
-                char* soname = filename;
+                void* dl;
+                const char* soname = filename;
 # ifdef TCC_TARGET_MACHO
                 if (!strcmp(tcc_fileextension(filename), ".tbd"))
                     soname = macho_tbd_soname(filename);
 # endif
-                void* dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
+                dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl) {
                     tcc_add_dllref(s1, soname)->handle = dl;
                     ret = 0;

@@ -247,7 +247,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ALSO_TRIPLET(s) s
 #endif
 
-// FIXME: do this at runtime instead; check output of `xcode-select -p`. libxcselect provides this stuff
+/* FIXME: do this at runtime instead; check output of `xcode-select -p`. libxcselect provides this stuff */
 #ifndef CONFIG_OSX_SDK1
 # define CONFIG_OSX_SDK1 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
 # define CONFIG_OSX_SDK2 "/Applications/Xcode.app/Developer/SDKs/MacOSX.sdk"

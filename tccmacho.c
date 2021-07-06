@@ -841,7 +841,8 @@ ST_FUNC int macho_add_dllref(TCCState* s1, int lev, const char* soname)
 {
      /* if the dll is already loaded, do not load it */
     DLLReference *dllref;
-    for(int i = 0; i < s1->nb_loaded_dlls; i++) {
+    int i;
+    for(i = 0; i < s1->nb_loaded_dlls; i++) {
         dllref = s1->loaded_dlls[i];
         if (!strcmp(soname, dllref->name)) {
             /* but update level if needed */
@@ -866,14 +867,14 @@ ST_FUNC int macho_add_dllref(TCCState* s1, int lev, const char* soname)
 #define tbd_parse_trample *pos++=0
 
 ST_FUNC const char* macho_tbd_soname(const char* filename) {
-    char* soname;
+    char *soname, *data, *pos, *ret;
+    struct stat sb;
     int fd = open(filename,O_RDONLY);
     if (fd<0) return filename;
-    struct stat sb;
     fstat(fd,&sb);
-    char* data = load_data(fd, 0, sb.st_size+1);
+    data = load_data(fd, 0, sb.st_size+1);
     data[sb.st_size]=0;
-    char* pos = data;
+    pos = data;
 
     if (!tbd_parse_movepast("install-name: ")) return filename;
     tbd_parse_skipws;
@@ -881,7 +882,7 @@ ST_FUNC const char* macho_tbd_soname(const char* filename) {
     soname = pos;
     if (!tbd_parse_movetoany("\n \"'")) return filename;
     tbd_parse_trample;
-    char* ret = tcc_mallocz(strlen(soname)+1);
+    ret = tcc_mallocz(strlen(soname)+1);
     strcpy(ret, soname);
     // soname = strdup(soname);
     tcc_free(data);
@@ -890,13 +891,13 @@ ST_FUNC const char* macho_tbd_soname(const char* filename) {
 
 ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
 {
-    char* soname;
+    char *soname, *data, *pos;
 
     struct stat sb;
     fstat(fd,&sb);
-    char* data = load_data(fd, 0, sb.st_size+1);
+    data = load_data(fd, 0, sb.st_size+1);
     data[sb.st_size]=0;
-    char* pos = data;
+    pos = data;
 
     if (!tbd_parse_movepast("install-name: ")) return -1;
     tbd_parse_skipws;
@@ -908,9 +909,9 @@ ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
 
     while(pos) {
         char* sym = NULL;
+        int cont = 1;
         if (!tbd_parse_movepast("symbols: ")) break;
         if (!tbd_parse_movepast("[")) break;
-        int cont = 1;
         while (cont) {
             tbd_parse_skipws;
             tbd_parse_tramplequote;
