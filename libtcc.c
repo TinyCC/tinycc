@@ -855,6 +855,29 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 }
 
+/* Looks for the active developer SDK set by xcode-select (or the default
+   one set during installation.) */
+#define SZPAIR(s) s "", sizeof(s)-1
+ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
+{
+    char *sdkroot = NULL, *pos = NULL;
+    void* xcs = dlopen("libxcselect.dylib", RTLD_GLOBAL | RTLD_LAZY);
+    CString path = {};
+    int (*f)(unsigned int, char**) = dlsym(xcs, "xcselect_host_sdk_path");
+
+    if (f) f(1, &sdkroot);
+    if (!sdkroot) return -1;
+    pos = strstr(sdkroot,"SDKs/MacOSX");
+    if (!pos) return -1;
+    cstr_cat(&path, sdkroot, pos-sdkroot);
+    cstr_cat(&path, SZPAIR("SDKs/MacOSX.sdk/usr/lib\0") );
+    tcc_add_library_path(s, (char*)path.data);
+    cstr_free(&path);
+    tcc_free(sdkroot);
+    return 0;
+}
+#undef SZPAIR
+
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
@@ -881,7 +904,11 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     }
 
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
-
+#ifdef TCC_TARGET_MACHO
+    if (tcc_add_macos_sdkpath(s) != 0) {
+        tcc_add_library_path(s, CONFIG_OSX_SDK_FALLBACK);
+    }
+#endif
 #ifdef TCC_TARGET_PE
 # ifdef _WIN32
     if (!s->nostdlib && output_type != TCC_OUTPUT_OBJ)
