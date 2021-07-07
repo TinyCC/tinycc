@@ -866,18 +866,21 @@ ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
 #else
     char *sdkroot = NULL, *pos = NULL;
     void* xcs = dlopen("libxcselect.dylib", RTLD_GLOBAL | RTLD_LAZY);
-    CString path = {};
+    CString path;
     int (*f)(unsigned int, char**) = dlsym(xcs, "xcselect_host_sdk_path");
 
     if (f) f(1, &sdkroot);
     if (!sdkroot) return -1;
     pos = strstr(sdkroot,"SDKs/MacOSX");
     if (!pos) return -1;
+    cstr_new(&path);
     cstr_cat(&path, sdkroot, pos-sdkroot);
     cstr_cat(&path, SZPAIR("SDKs/MacOSX.sdk/usr/lib\0") );
     tcc_add_library_path(s, (char*)path.data);
     cstr_free(&path);
+#ifndef MEM_DEBUG /* FIXME: How to use free() instead of tcc_free() */
     tcc_free(sdkroot);
+#endif
     return 0;
 #endif
 }
@@ -1076,6 +1079,10 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
                     tcc_add_dllref(s1, soname)->handle = dl;
                     ret = 0;
                 }
+# ifdef TCC_TARGET_MACHO
+	        if (strcmp(filename, soname))
+		    tcc_free((void *)soname);
+#endif
 #endif
                 break;
             }
