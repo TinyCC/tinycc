@@ -860,6 +860,10 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #define SZPAIR(s) s "", sizeof(s)-1
 ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
 {
+#if defined(_WIN32)
+    (void)s;
+    return -1;
+#else
     char *sdkroot = NULL, *pos = NULL;
     void* xcs = dlopen("libxcselect.dylib", RTLD_GLOBAL | RTLD_LAZY);
     CString path = {};
@@ -875,6 +879,7 @@ ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
     cstr_free(&path);
     tcc_free(sdkroot);
     return 0;
+#endif
 }
 #undef SZPAIR
 
