@@ -8093,6 +8093,11 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                 else if (sizeof(double) == LDOUBLE_SIZE)
                     memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
 #ifndef TCC_CROSS_TEST
+#if defined(TCC_TARGET_MACHO) && defined(TCC_TARGET_X86_64)
+                /* Special case for Rosetta to handle --cpu=x86_64 on macOS */
+                else if (sizeof(double) == sizeof(long double))
+                    memcpy(ptr, &vtop->c.ld, sizeof(double));
+#endif
                 else
                     tcc_error("can't cross compile long double constants");
 #endif
