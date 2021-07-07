@@ -281,13 +281,15 @@ cross-test : tcctest.c examples/ex3.c
 	@echo ------------ $@ ------------
 	$(foreach T,$(CROSS-TGTS),$(call CROSS-COMPILE,$T))
 
+CROSS-MACOS= # x86_64-osx
+
 CROSS-TGTS = \
  i386 \
  i386-win32 \
  i386-OpenBSD \
  x86_64 \
  x86_64-win32 \
- x86_64-osx \
+ $(CROSS-MACOS) \
  x86_64-FreeBSD \
  x86_64-NetBSD \
  x86_64-OpenBSD \
