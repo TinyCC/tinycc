@@ -60,6 +60,15 @@ case $targetos in
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
     DLLSUF=".dylib"
+    case $cpu in
+      arm64)
+        # We cannot yet build a native arm64 version,
+        # Use x86_64 and count on Rosetta to make the job.
+        cpu=x86_64
+        CFLAGS="$CFLAGS -arch $cpu"
+        LDFLAGS="$LDFLAGS -arch $cpu"
+        ;;
+    esac
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
     mingw32=yes
