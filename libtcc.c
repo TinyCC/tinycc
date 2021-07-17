@@ -855,6 +855,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 }
 
+#ifdef TCC_TARGET_MACHO
 /* Looks for the active developer SDK set by xcode-select (or the default
    one set during installation.) */
 #define SZPAIR(s) s "", sizeof(s)-1
@@ -885,6 +886,7 @@ ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
 #endif
 }
 #undef SZPAIR
+#endif
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
