@@ -2465,7 +2465,7 @@ static void parse_number(const char *p)
                 tokc.f = (float)d;
             } else if (t == 'L') {
                 ch = *p++;
-#ifdef TCC_TARGET_PE
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
                 tok = TOK_CDOUBLE;
                 tokc.d = d;
 #else
@@ -2521,7 +2521,7 @@ static void parse_number(const char *p)
                 tokc.f = strtof(token_buf, NULL);
             } else if (t == 'L') {
                 ch = *p++;
-#ifdef TCC_TARGET_PE
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
                 tok = TOK_CDOUBLE;
                 tokc.d = strtod(token_buf, NULL);
 #else

@@ -855,53 +855,15 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
 }
 
-#ifdef TCC_TARGET_MACHO
-/* Looks for the active developer SDK set by xcode-select (or the default
-   one set during installation.) */
-#define SZPAIR(s) s "", sizeof(s)-1
-ST_FUNC int tcc_add_macos_sdkpath(TCCState* s)
-{
-#if defined(_WIN32)
-    (void)s;
-    return -1;
-#else
-    char *sdkroot = NULL, *pos = NULL;
-    void* xcs = dlopen("libxcselect.dylib", RTLD_GLOBAL | RTLD_LAZY);
-    CString path;
-    int (*f)(unsigned int, char**) = dlsym(xcs, "xcselect_host_sdk_path");
-
-    if (f) f(1, &sdkroot);
-    if (!sdkroot) return -1;
-    pos = strstr(sdkroot,"SDKs/MacOSX");
-    if (!pos) return -1;
-    cstr_new(&path);
-    cstr_cat(&path, sdkroot, pos-sdkroot);
-    cstr_cat(&path, SZPAIR("SDKs/MacOSX.sdk/usr/lib\0") );
-    tcc_add_library_path(s, (char*)path.data);
-    cstr_free(&path);
-#ifndef MEM_DEBUG /* FIXME: How to use free() instead of tcc_free() */
-    tcc_free(sdkroot);
-#endif
-    return 0;
-#endif
-}
-#undef SZPAIR
-#endif
-
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
     s->output_type = output_type;
-
-    /* always elf for objects */
-    if (output_type == TCC_OUTPUT_OBJ)
-        s->output_format = TCC_OUTPUT_FORMAT_ELF;
 
     if (!s->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
         tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
     }
-
 #ifdef CONFIG_TCC_BCHECK
     if (s->do_bounds_check) {
         /* if bound checking, then add corresponding sections */
@@ -912,18 +874,29 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         /* add debug sections */
         tccelf_stab_new(s);
     }
+    if (output_type == TCC_OUTPUT_OBJ) {
+        /* always elf for objects */
+        s->output_format = TCC_OUTPUT_FORMAT_ELF;
+        return 0;
+    }
 
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
-#ifdef TCC_TARGET_MACHO
-    if (tcc_add_macos_sdkpath(s) != 0) {
-        tcc_add_library_path(s, CONFIG_OSX_SDK_FALLBACK);
-    }
-#endif
+
 #ifdef TCC_TARGET_PE
 # ifdef _WIN32
-    if (!s->nostdlib && output_type != TCC_OUTPUT_OBJ)
-        tcc_add_systemdir(s);
+    /* allow linking with system dll's directly */
+    tcc_add_systemdir(s);
 # endif
+    /* target PE has its own startup code in libtcc1.a */
+    return 0;
+
+#elif defined TCC_TARGET_MACHO
+# ifdef TCC_IS_NATIVE
+    tcc_add_macos_sdkpath(s);
+# endif
+    /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
+    return 0;
+
 #else
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
@@ -957,16 +930,14 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
-#elif TCC_TARGET_MACHO
-        /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
 #else
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");
         tcc_add_crt(s, "crti.o");
 #endif
     }
-#endif
     return 0;
+#endif
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
@@ -981,7 +952,6 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
     return 0;
 }
 
-#if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
 ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
 {
     DLLReference *ref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
@@ -989,7 +959,6 @@ ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
     dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, ref);
     return ref;
 }
-#endif
 
 /* OpenBSD: choose latest from libxxx.so.x.y versions */
 #if defined TARGETOS_OpenBSD && !defined _WIN32
@@ -1014,10 +983,6 @@ static int tcc_glob_so(TCCState *s1, const char *pattern, char *buf, int size)
     globfree(&g);
     return v;
 }
-#endif
-
-#ifdef TCC_TARGET_MACHO
-ST_FUNC const char* macho_tbd_soname(const char* filename);
 #endif
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
@@ -1046,13 +1011,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         obj_type = tcc_object_type(fd, &ehdr);
         lseek(fd, 0, SEEK_SET);
 
-#ifdef TCC_TARGET_MACHO
-        if (0 == obj_type
-            && (0 == strcmp(tcc_fileextension(filename), ".dylib")
-            ||  0 == strcmp(tcc_fileextension(filename), ".tbd")))
-            obj_type = AFF_BINTYPE_DYN;
-#endif
-
         switch (obj_type) {
 
         case AFF_BINTYPE_REL:
@@ -1066,35 +1024,63 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #ifdef TCC_TARGET_PE
         default:
             ret = pe_load_file(s1, fd, filename);
-#else
+            goto check_success;
+
+#elif defined TCC_TARGET_MACHO
         case AFF_BINTYPE_DYN:
+        case_dyn_or_tbd:
             if (s1->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
                 void* dl;
                 const char* soname = filename;
-# ifdef TCC_TARGET_MACHO
-                if (!strcmp(tcc_fileextension(filename), ".tbd"))
+                if (obj_type != AFF_BINTYPE_DYN)
                     soname = macho_tbd_soname(filename);
-# endif
                 dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
-                if (dl) {
-                    tcc_add_dllref(s1, soname)->handle = dl;
-                    ret = 0;
-                }
-# ifdef TCC_TARGET_MACHO
-	        if (strcmp(filename, soname))
+                if (dl)
+                    tcc_add_dllref(s1, soname)->handle = dl, ret = 0;
+	        if (filename != soname)
 		    tcc_free((void *)soname);
 #endif
-#endif
-                break;
+            } else if (obj_type == AFF_BINTYPE_DYN) {
+                ret = macho_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
+            } else {
+                ret = macho_load_tbd(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
             }
-#ifdef TCC_TARGET_MACHO
-            ret = macho_load_dll(s1, fd, filename,
-                                 (flags & AFF_REFERENCED_DLL) != 0);
-#else
-            ret = tcc_load_dll(s1, fd, filename,
-                               (flags & AFF_REFERENCED_DLL) != 0);
+            break;
+        default:
+        {
+            const char *ext = tcc_fileextension(filename);
+            if (!strcmp(ext, ".tbd"))
+                goto case_dyn_or_tbd;
+            if (!strcmp(ext, ".dylib")) {
+                obj_type = AFF_BINTYPE_DYN;
+                goto case_dyn_or_tbd;
+            }
+            goto check_success;
+        }
+
+#else /* unix */
+        case AFF_BINTYPE_DYN:
+            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+#ifdef TCC_IS_NATIVE
+                void* dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+                if (dl)
+                    tcc_add_dllref(s1, filename)->handle = dl, ret = 0;
 #endif
+            } else
+                ret = tcc_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
+            break;
+
+        default:
+            /* as GNU ld, consider it is an ld script if not recognized */
+            ret = tcc_load_ldscript(s1, fd);
+            goto check_success;
+
+#endif /* pe / macos / unix */
+
+check_success:
+            if (ret < 0)
+                tcc_error_noabort("%s: unrecognized file type", filename);
             break;
 
 #ifdef TCC_TARGET_COFF
@@ -1102,16 +1088,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             ret = tcc_load_coff(s1, fd);
             break;
 #endif
-        default:
-#ifndef TCC_TARGET_MACHO
-            /* as GNU ld, consider it is an ld script if not recognized */
-            ret = tcc_load_ldscript(s1, fd);
-#endif
-
-#endif /* !TCC_TARGET_PE */
-            if (ret < 0)
-                tcc_error_noabort("%s: unrecognized file type", filename);
-            break;
         }
         close(fd);
     } else {
@@ -1708,13 +1684,20 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
     return ret;
 }
 
+ST_FUNC char *tcc_load_text(int fd)
+{
+    int len = lseek(fd, 0, SEEK_END);
+    char *buf = load_data(fd, 0, len + 1);
+    buf[len] = 0;
+    return buf;
+}
+
 /* read list file */
 static void args_parser_listfile(TCCState *s,
     const char *filename, int optind, int *pargc, char ***pargv)
 {
     TCCState *s1 = s;
     int fd, i;
-    size_t len;
     char *p;
     int argc = 0;
     char **argv = NULL;
@@ -1723,10 +1706,7 @@ static void args_parser_listfile(TCCState *s,
     if (fd < 0)
         tcc_error("listfile '%s' not found", filename);
 
-    len = lseek(fd, 0, SEEK_END);
-    p = tcc_malloc(len + 1), p[len] = 0;
-    lseek(fd, 0, SEEK_SET), read(fd, p, len), close(fd);
-
+    p = tcc_load_text(fd);
     for (i = 0; i < *pargc; ++i)
         if (i == optind)
             args_parser_make_argv(p, &argc, &argv);

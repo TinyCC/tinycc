@@ -47,28 +47,22 @@ gcc_major=0
 gcc_minor=0
 cc_name="gcc"
 ar_set=
-
-cpu=`uname -m`
+darwin=
+cpu=
 cpuver=
 
 # OS specific
+cpu_sys=`uname -m`
 targetos=`uname`
+
 case $targetos in
   Darwin)
+    darwin=yes
     confvars="$confvars OSX dll=no"
     cc=`which cc`
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
     DLLSUF=".dylib"
-    case $cpu in
-      arm64)
-        # We cannot yet build a native arm64 version,
-        # Use x86_64 and count on Rosetta to make the job.
-        cpu=x86_64
-        CFLAGS="$CFLAGS -arch $cpu"
-        LDFLAGS="$LDFLAGS -arch $cpu"
-        ;;
-    esac
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
     mingw32=yes
@@ -169,6 +163,18 @@ done
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
 
+# Checking for CFLAGS
+test -z "$CFLAGS" && CFLAGS="-Wall -O2"
+
+# on OSX M1 with --cpu=x86_64, build a tcc to run under rosetta entirely
+if test "$darwin" = "yes" -a "$cpu" = "x86_64" -a "$cpu_sys" = "arm64"; then
+    CFLAGS="$CFLAGS -arch $cpu"
+    LDFLAGS="$LDFLAGS -arch $cpu"
+fi
+
+# checking for cpu
+test -z "$cpu" && cpu="$cpu_sys"
+
 case "$cpu" in
   x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
     cpu="i386"
@@ -226,11 +232,6 @@ case "$cpu" in
     exit 1
   ;;
 esac
-
-# Checking for CFLAGS
-if test -z "$CFLAGS"; then
-    CFLAGS="-Wall -O2"
-fi
 
 if test "$mingw32" = "yes" ; then
     if test "$source_path_used" = "no"; then

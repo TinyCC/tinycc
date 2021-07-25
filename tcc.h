@@ -42,7 +42,6 @@
 #ifndef _WIN32
 # include <unistd.h>
 # include <sys/time.h>
-# include <sys/stat.h>
 # ifndef CONFIG_TCC_STATIC
 #  include <dlfcn.h>
 # endif
@@ -183,7 +182,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #endif
 
 /* only native compiler supports -run */
-#if defined _WIN32 == defined TCC_TARGET_PE
+#if defined _WIN32 == defined TCC_TARGET_PE \
+    && defined __APPLE__ == defined TCC_TARGET_MACHO
 # if defined __i386__ && defined TCC_TARGET_I386
 #  define TCC_IS_NATIVE
 # elif defined __x86_64__ && defined TCC_TARGET_X86_64
@@ -223,8 +223,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ELF_OBJ_ONLY /* create elf .o but native executables */
 #endif
 
-/* No ten-byte long doubles on window except in cross-compilers made by GCC */
-#if defined TCC_TARGET_PE || (defined _WIN32 && !defined __GNUC__)
+/* No ten-byte long doubles on window and macos except in
+   cross-compilers made by a mingw-GCC */
+#if defined TCC_TARGET_PE \
+    || (defined TCC_TARGET_MACHO && defined TCC_TARGET_X86_64) \
+    || (defined _WIN32 && !defined __GNUC__)
 # define TCC_USING_DOUBLE_FOR_LDOUBLE 1
 #endif
 
@@ -279,15 +282,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
         ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
-#  ifdef TCC_TARGET_MACHO
-#   define CONFIG_OSX_SDK1 \
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
-#   define CONFIG_OSX_SDK2 \
-        "/Applications/Xcode.app/Developer/SDKs/MacOSX.sdk"
-#   define CONFIG_OSX_SDK_FALLBACK \
-        ALSO_TRIPLET(CONFIG_OSX_SDK1 "/usr/" CONFIG_LDDIR) \
-    ":" ALSO_TRIPLET(CONFIG_OSX_SDK2 "/usr/" CONFIG_LDDIR)
-#  endif
 # endif
 #endif
 
@@ -1351,9 +1345,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv, int optind);
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path);
 #endif
-#if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
 ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname);
-#endif
+ST_FUNC char *tcc_load_text(int fd);
 
 /* tcc_parse_args return codes: */
 #define OPT_HELP 1
@@ -1814,6 +1807,11 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);
 #ifdef TCC_TARGET_MACHO
 ST_FUNC int macho_output_file(TCCState * s1, const char *filename);
 ST_FUNC int macho_load_dll(TCCState *s1, int fd, const char *filename, int lev);
+ST_FUNC int macho_load_tbd(TCCState *s1, int fd, const char *filename, int lev);
+#ifdef TCC_IS_NATIVE
+ST_FUNC void tcc_add_macos_sdkpath(TCCState* s);
+ST_FUNC const char* macho_tbd_soname(const char* filename);
+#endif
 #endif
 /* ------------ tccrun.c ----------------- */
 #ifdef TCC_IS_NATIVE

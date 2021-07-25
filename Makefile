@@ -139,7 +139,7 @@ TCC_X += riscv64
 
 # cross libtcc1.a targets to build
 LIBTCC1_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince
-LIBTCC1_X += riscv64
+LIBTCC1_X += riscv64 arm64-osx
 
 PROGS_CROSS = $(foreach X,$(TCC_X),$X-tcc$(EXESUF))
 LIBTCC1_CROSS = $(foreach X,$(LIBTCC1_X),$X-libtcc1.a)
