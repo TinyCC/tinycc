@@ -1230,8 +1230,9 @@ LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path)
     s->tcc_lib_path = tcc_strdup(path);
 }
 
-#define WD_ALL    0x0001 /* warning is activated when using -Wall */
-#define FD_INVERT 0x0002 /* invert value before storing */
+#define WD_ALL    (1u<<0) /* warning is activated when using -Wall */
+#define WD_ERROR  (1u<<1) /* can be used with -W[no-]error=X */
+#define FD_INVERT (1u<<2) /* invert value before storing */
 
 typedef struct FlagDef {
     uint16_t offset;
@@ -1272,6 +1273,49 @@ ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, const char *name)
                 p->flags & FD_INVERT ? !value : value;
             if (ret)
                 return 0;
+        } else {
+            ret = 0;
+        }
+    }
+    return ret;
+}
+
+ST_FUNC int set_W_flag(TCCState *s, const FlagDef *flags, const char *optarg)
+{
+    int value, ret;
+    const FlagDef *p;
+    const char *r, *sub;
+
+    value = 1;
+    r = optarg;
+    if (no_flag(&r))
+        value = 0;
+
+    if ((sub = strchr(r, '=')) != NULL) {
+        if (strncmp(r, "error", (uintptr_t)(sub - r)))
+           return -1;
+        r = ++sub;
+        if (value)
+           value = 1 | 2;
+    }
+
+    /* .offset for "all" is 0 */
+    for (ret = -1, p = flags; p->name; ++p) {
+        if (ret) {
+            if (strcmp(r, p->name))
+                continue;
+            if (sub != NULL && !(p->flags & WD_ERROR))
+                break;
+        } else {
+            if (0 == (p->flags & WD_ALL))
+                continue;
+        }
+        if (p->offset) {
+            *((unsigned char *)s + p->offset) = value;
+            if (ret) {
+               ret = 0;
+               break;
+            }
         } else {
             ret = 0;
         }
@@ -1469,7 +1513,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
             tcc_error("unsupported linker option '%s'", option);
         }
 
-        if (ignoring && s->warn_unsupported)
+        if (ignoring && NEED_WARNING(s, unsupported))
             tcc_warning("unsupported linker option '%s'", option);
 
         option = skip_linker_arg(&p);
@@ -1616,12 +1660,13 @@ static const TCCOption tcc_options[] = {
 
 static const FlagDef options_W[] = {
     { 0, 0, "all" },
-    { offsetof(TCCState, warn_unsupported), 0, "unsupported" },
-    { offsetof(TCCState, warn_write_strings), WD_ALL, "write-strings" },
     { offsetof(TCCState, warn_error), 0, "error" },
-    { offsetof(TCCState, warn_gcc_compat), 0, "gcc-compat" },
-    { offsetof(TCCState, warn_implicit_function_declaration), WD_ALL,
-      "implicit-function-declaration" },
+    { offsetof(TCCState, warn_unsupported), WD_ERROR, "unsupported" },
+    { offsetof(TCCState, warn_gcc_compat), WD_ERROR, "gcc-compat" },
+    { offsetof(TCCState, warn_write_strings), WD_ERROR | WD_ALL,
+      "write-strings" },
+    { offsetof(TCCState, warn_implicit_function_declaration),
+      WD_ERROR | WD_ALL, "implicit-function-declaration" },
     { 0, 0, NULL }
 };
 
@@ -1920,7 +1965,7 @@ reparse:
             break;
         case TCC_OPTION_W:
             s->warn_none = 0;
-            if (optarg[0] && set_flag(s, options_W, optarg) < 0)
+            if (optarg[0] && set_W_flag(s, options_W, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
@@ -2007,7 +2052,7 @@ reparse:
             break;
         default:
 unsupported_option:
-            if (s->warn_unsupported)
+            if (NEED_WARNING(s, unsupported))
                 tcc_warning("unsupported option '%s'", r);
             break;
         }

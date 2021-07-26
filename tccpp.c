@@ -1770,9 +1770,8 @@ static void pragma_parse(TCCState *s1)
             tcc_free(p);
         }
 
-    } else if (s1->warn_unsupported) {
+    } else if (NEED_WARNING(s1, unsupported))
         tcc_warning("#pragma %s is ignored", get_tok_str(tok, &tokc));
-    }
     return;
 
 pragma_err:

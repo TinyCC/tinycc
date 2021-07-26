@@ -4506,7 +4506,7 @@ redo:
             ad->a.dllimport = 1;
             break;
         default:
-            if (tcc_state->warn_unsupported)
+            if (NEED_WARNING(tcc_state, unsupported))
                 tcc_warning("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
             if (tok == '(') {
@@ -5915,7 +5915,7 @@ ST_FUNC void unary(void)
             len = strlen(funcname) + 1;
             /* generate char[len] type */
             type.t = VT_BYTE;
-            if (tcc_state->warn_write_strings)
+            if (NEED_WARNING(tcc_state, write_strings))
                 type.t |= VT_CONSTANT;
             mk_pointer(&type);
             type.t |= VT_ARRAY;
@@ -5942,7 +5942,7 @@ ST_FUNC void unary(void)
         if (tcc_state->char_is_unsigned)
             t = VT_BYTE | VT_UNSIGNED;
     str_init:
-        if (tcc_state->warn_write_strings)
+        if (NEED_WARNING(tcc_state, write_strings))
             t |= VT_CONSTANT;
         type.t = t;
         mk_pointer(&type);
@@ -6378,9 +6378,9 @@ special_math_val:
                 tcc_error("'%s' undeclared", name);
             /* for simple function calls, we tolerate undeclared
                external reference to int() function */
-            if (tcc_state->warn_implicit_function_declaration
+            if (NEED_WARNING(tcc_state, implicit_function_declaration)
 #ifdef TCC_TARGET_PE
-                /* people must be warned about using undeclared WINAPI functions
+                /* must warn about using undeclared WINAPI functions
                    (which usually start with uppercase letter) */
                 || (name[0] >= 'A' && name[0] <= 'Z')
 #endif

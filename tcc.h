@@ -767,13 +767,17 @@ struct TCCState {
     unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
-    /* warning switches */
-    unsigned char warn_write_strings;
-    unsigned char warn_unsupported;
-    unsigned char warn_error;
+    /* warning switches; but for first two, W[no-]error=X is supported */
+    /* XXX TCC_IS_WARN_OR_ERR(X,Y) used to drive W[[no-]error]=X */
     unsigned char warn_none;
-    unsigned char warn_implicit_function_declaration;
+    unsigned char warn_error;
+    unsigned char warn_unsupported;
     unsigned char warn_gcc_compat;
+    unsigned char warn_write_strings;
+    unsigned char warn_implicit_function_declaration;
+#define NEED_WARNING(SELF,SWITCH) \
+    ((SELF)->warn_ ## SWITCH \
+     ? (((SELF)->warn_ ## SWITCH & 2) ? (SELF)->warn_error = 1 : 1) : 0)
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;
