@@ -542,9 +542,9 @@ static void error1(int mode, const char *fmt, va_list ap)
         tcc_exit_state();
 
     if (mode == ERROR_WARN) {
-        if (s1->warn_none)
+        if (s1->warn_mask & WARN_DISABLED)
             return;
-        if (s1->warn_mask & (WARN_ERROR << WARN_ERROR_SHIFT))
+        if (s1->warn_mask & WARN_ERROR_MASK) /* XXX individual ignorance */
             mode = ERROR_ERROR;
     }
 
@@ -1976,12 +1976,12 @@ reparse:
             }
             break;
         case TCC_OPTION_W:
-            s->warn_none = 0;
+            s->warn_mask &= ~WARN_DISABLED;
             if (optarg[0] && set_W_flag(s, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
-            s->warn_none = 1;
+            s->warn_mask |= WARN_DISABLED;
             break;
         case TCC_OPTION_rdynamic:
             s->rdynamic = 1;
