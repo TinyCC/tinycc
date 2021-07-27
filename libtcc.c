@@ -544,7 +544,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     if (mode == ERROR_WARN) {
         if (s1->warn_none)
             return;
-        if (s1->warn_error)
+        if (s1->warn_mask & (WARN_ERROR << WARN_ERROR_SHIFT))
             mode = ERROR_ERROR;
     }
 
@@ -1288,7 +1288,7 @@ ST_FUNC int set_W_flag(TCCState *s, const char *optarg)
         char const *name;
     } const opts[] = {
         {WARN_ALL, 0, "all"},
-        {WARN_ERROR, 0, "error"},
+        {WARN_ERROR | (WARN_ERROR << WARN_ERROR_SHIFT), 0, "error"},
         {WARN_UNSUPPORTED, WD_ERROR, "unsupported"},
         {WARN_GCC_COMPAT, WD_ERROR, "gcc-compat"},
         {WARN_WRITE_STRINGS, WD_ERROR | WD_ALL, "write-strings"},

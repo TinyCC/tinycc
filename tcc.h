@@ -744,7 +744,7 @@ enum warn_option {
     WARN_GCC_COMPAT = 1u<<1,
     WARN_WRITE_STRINGS = 1u<<2,
     WARN_IMPLICIT_FUNCTION_DECLARATION = 1u<<3,
-    WARN_ERROR = 1u<<4,
+    WARN_ERROR = 1u<<4, /* Not really as such in warn area, here only "MAX" */
     WARN_ALL = WARN_ERROR - 1
 };
 enum {WARN_ERROR_SHIFT = 16u};
@@ -780,14 +780,13 @@ struct TCCState {
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
     unsigned char warn_none;
-    unsigned char warn_error;
     /* NEED_WARNING(SELF,X) used to drive W[[no-]error]=X */
     uint32_t warn_mask;
 #define NEED_WARNING(SELF,SWITCH) \
     (((SELF)->warn_mask & \
             (WARN_ ## SWITCH | (WARN_ ## SWITCH << WARN_ERROR_SHIFT))) \
      ? (((SELF)->warn_mask & (WARN_ ## SWITCH << WARN_ERROR_SHIFT)) \
-        ? (SELF)->warn_error = 1 : 1) : 0)
+        ? (SELF)->warn_mask |= (WARN_ERROR << WARN_ERROR_SHIFT), 1 : 1) : 0)
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;
