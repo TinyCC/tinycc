@@ -775,7 +775,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             else
                 pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
 
-            if (NEED_WARNING(s1, unsupported))
+            if (NEED_WARNING(s1, UNSUPPORTED))
                 tcc_warning("ignoring .file %s", filename);
 
             next();
@@ -793,7 +793,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             else
                 pstrcat(ident, sizeof(ident), get_tok_str(tok, NULL));
 
-            if (NEED_WARNING(s1, unsupported))
+            if (NEED_WARNING(s1, UNSUPPORTED))
                 tcc_warning("ignoring .ident %s", ident);
 
             next();
@@ -810,7 +810,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             }
 
             /* XXX .size name,label2-label1 */
-            if (NEED_WARNING(s1, unsupported))
+            if (NEED_WARNING(s1, UNSUPPORTED))
                 tcc_warning("ignoring .size %s,*", get_tok_str(tok, NULL));
 
             next();
@@ -840,7 +840,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             if (!strcmp(newtype, "function") || !strcmp(newtype, "STT_FUNC")) {
                 sym->type.t = (sym->type.t & ~VT_BTYPE) | VT_FUNC;
             }
-            else if (NEED_WARNING(s1, unsupported))
+            else if (NEED_WARNING(s1, UNSUPPORTED))
                 tcc_warning("change type of '%s' from 0x%x to '%s' ignored", 
                     get_tok_str(sym->v, NULL), sym->type.t, newtype);
 

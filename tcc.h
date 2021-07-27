@@ -737,6 +737,18 @@ struct sym_attr {
 #endif
 };
 
+/* 32-bit bit carrier, split in two halves: lower=warn, upper=error */
+enum warn_option {
+    WARN_NONE,
+    WARN_UNSUPPORTED = 1u<<0,
+    WARN_GCC_COMPAT = 1u<<1,
+    WARN_WRITE_STRINGS = 1u<<2,
+    WARN_IMPLICIT_FUNCTION_DECLARATION = 1u<<3,
+    WARN_ERROR = 1u<<4,
+    WARN_ALL = WARN_ERROR - 1
+};
+enum {WARN_ERROR_SHIFT = 16u};
+
 struct TCCState {
     unsigned char verbose; /* if true, display some information during compilation */
     unsigned char nostdinc; /* if true, no standard headers are added */
@@ -767,17 +779,15 @@ struct TCCState {
     unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
-    /* warning switches; but for first two, W[no-]error=X is supported */
-    /* XXX TCC_IS_WARN_OR_ERR(X,Y) used to drive W[[no-]error]=X */
     unsigned char warn_none;
     unsigned char warn_error;
-    unsigned char warn_unsupported;
-    unsigned char warn_gcc_compat;
-    unsigned char warn_write_strings;
-    unsigned char warn_implicit_function_declaration;
+    /* NEED_WARNING(SELF,X) used to drive W[[no-]error]=X */
+    uint32_t warn_mask;
 #define NEED_WARNING(SELF,SWITCH) \
-    ((SELF)->warn_ ## SWITCH \
-     ? (((SELF)->warn_ ## SWITCH & 2) ? (SELF)->warn_error = 1 : 1) : 0)
+    (((SELF)->warn_mask & \
+            (WARN_ ## SWITCH | (WARN_ ## SWITCH << WARN_ERROR_SHIFT))) \
+     ? (((SELF)->warn_mask & (WARN_ ## SWITCH << WARN_ERROR_SHIFT)) \
+        ? (SELF)->warn_error = 1 : 1) : 0)
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;

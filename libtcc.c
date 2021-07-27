@@ -786,7 +786,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     s->nocommon = 1;
     s->dollars_in_identifiers = 1; /*on by default like in gcc/clang*/
     s->cversion = 199901; /* default unless -std=c11 is supplied */
-    s->warn_implicit_function_declaration = 1;
+    s->warn_mask |= WARN_IMPLICIT_FUNCTION_DECLARATION;
     s->ms_extensions = 1;
 
 #ifdef CHAR_IS_UNSIGNED
@@ -1280,46 +1280,70 @@ ST_FUNC int set_flag(TCCState *s, const FlagDef *flags, const char *name)
     return ret;
 }
 
-ST_FUNC int set_W_flag(TCCState *s, const FlagDef *flags, const char *optarg)
+ST_FUNC int set_W_flag(TCCState *s, const char *optarg)
 {
-    int value, ret;
-    const FlagDef *p;
+    static struct a_W_flag{
+        uint32_t wbit;
+        uint32_t flags;
+        char const *name;
+    } const opts[] = {
+        {WARN_ALL, 0, "all"},
+        {WARN_ERROR, 0, "error"},
+        {WARN_UNSUPPORTED, WD_ERROR, "unsupported"},
+        {WARN_GCC_COMPAT, WD_ERROR, "gcc-compat"},
+        {WARN_WRITE_STRINGS, WD_ERROR | WD_ALL, "write-strings"},
+        {WARN_IMPLICIT_FUNCTION_DECLARATION, WD_ERROR | WD_ALL,
+            "implicit-function-declaration"}
+    }, *p;
+
+    int ret;
+    unsigned char mode;
     const char *r, *sub;
 
-    value = 1;
+    mode = 1;
     r = optarg;
     if (no_flag(&r))
-        value = 0;
+        mode = 0;
 
     if ((sub = strchr(r, '=')) != NULL) {
         if (strncmp(r, "error", (uintptr_t)(sub - r)))
            return -1;
         r = ++sub;
-        if (value)
-           value = 1 | 2;
+       mode |= 2;
     }
 
-    /* .offset for "all" is 0 */
-    for (ret = -1, p = flags; p->name; ++p) {
+    for (ret = -1, p = opts; p < &opts[countof(opts)]; ++p) {
         if (ret) {
             if (strcmp(r, p->name))
                 continue;
-            if (sub != NULL && !(p->flags & WD_ERROR))
+            if ((mode & 2) && !(p->flags & WD_ERROR))
                 break;
         } else {
             if (0 == (p->flags & WD_ALL))
                 continue;
         }
-        if (p->offset) {
-            *((unsigned char *)s + p->offset) = value;
-            if (ret) {
-               ret = 0;
-               break;
-            }
-        } else {
+
+        if (p->wbit == WARN_ALL) {
+            /* Start a loop over all the rest */
             ret = 0;
+            continue;
+        }
+
+        if (mode & 1) {
+            s->warn_mask |= p->wbit;
+            if (mode & 2)
+                s->warn_mask |= p->wbit << WARN_ERROR_SHIFT;
+        } else {
+            s->warn_mask &= ~(p->wbit << ((mode & 2) ? WARN_ERROR_SHIFT : 0));
+        }
+
+        /* Done if not in "all" mode */
+        if (ret) {
+           ret = 0;
+           break;
         }
     }
+
     return ret;
 }
 
@@ -1513,7 +1537,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
             tcc_error("unsupported linker option '%s'", option);
         }
 
-        if (ignoring && NEED_WARNING(s, unsupported))
+        if (ignoring && NEED_WARNING(s, UNSUPPORTED))
             tcc_warning("unsupported linker option '%s'", option);
 
         option = skip_linker_arg(&p);
@@ -1656,18 +1680,6 @@ static const TCCOption tcc_options[] = {
 #endif
     { "C", TCC_OPTION_C, 0},
     { NULL, 0, 0 },
-};
-
-static const FlagDef options_W[] = {
-    { 0, 0, "all" },
-    { offsetof(TCCState, warn_error), 0, "error" },
-    { offsetof(TCCState, warn_unsupported), WD_ERROR, "unsupported" },
-    { offsetof(TCCState, warn_gcc_compat), WD_ERROR, "gcc-compat" },
-    { offsetof(TCCState, warn_write_strings), WD_ERROR | WD_ALL,
-      "write-strings" },
-    { offsetof(TCCState, warn_implicit_function_declaration),
-      WD_ERROR | WD_ALL, "implicit-function-declaration" },
-    { 0, 0, NULL }
 };
 
 static const FlagDef options_f[] = {
@@ -1965,7 +1977,7 @@ reparse:
             break;
         case TCC_OPTION_W:
             s->warn_none = 0;
-            if (optarg[0] && set_W_flag(s, options_W, optarg) < 0)
+            if (optarg[0] && set_W_flag(s, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
@@ -2052,7 +2064,7 @@ reparse:
             break;
         default:
 unsupported_option:
-            if (NEED_WARNING(s, unsupported))
+            if (NEED_WARNING(s, UNSUPPORTED))
                 tcc_warning("unsupported option '%s'", r);
             break;
         }
