@@ -752,7 +752,7 @@ enum warn_option {
 };
 enum {
     WARN_ERROR_SHIFT = 16u,
-    WARN_ERROR_MASK = (WARN_ALL | WARN_ERROR) << WARN_ERROR_SHIFT
+    WARN_ERROR_MASK = (/*WARN_ALL |*/ WARN_ERROR) << WARN_ERROR_SHIFT
 };
 
 struct TCCState {
