@@ -877,7 +877,7 @@ ST_FUNC void tcc_add_macos_sdkpath(TCCState* s)
     if (sdkroot)
         pos = strstr(sdkroot,"SDKs/MacOSX");
     if (pos)
-        cstr_printf(&path, "%.*s.sdk/usr/lib", pos - sdkroot + 11, sdkroot);
+        cstr_printf(&path, "%.*s.sdk/usr/lib", (int)(pos - sdkroot + 11), sdkroot);
     /* must use free from libc directly */
 #pragma push_macro("free")
 #undef free
