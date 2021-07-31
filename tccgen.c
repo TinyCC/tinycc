@@ -4077,7 +4077,7 @@ static void verify_assign_cast(CType *dt)
             }
         }
         if (qualwarn)
-            tcc_warning("assignment discards qualifiers from pointer target type");
+            tcc_warning_c(warn_discarded_qualifiers)("assignment discards qualifiers from pointer target type");
         break;
     case VT_BYTE:
     case VT_SHORT:
@@ -4355,9 +4355,9 @@ redo:
 	    skip('(');
 	    s = sym_find(tok);
 	    if (!s) {
-	      tcc_warning("implicit declaration of function '%s'",
-			  get_tok_str(tok, &tokc));
-	      s = external_global_sym(tok, &func_old_type);
+	        tcc_warning_c(warn_implicit_function_declaration)(
+                    "implicit declaration of function '%s'", get_tok_str(tok, &tokc));
+	        s = external_global_sym(tok, &func_old_type);
             } else if ((s->type.t & VT_BTYPE) != VT_FUNC)
                 tcc_error("'%s' is not declared as function", get_tok_str(tok, &tokc));
 	    ad->cleanup_func = s;
@@ -4506,8 +4506,7 @@ redo:
             ad->a.dllimport = 1;
             break;
         default:
-            if (NEED_WARNING(tcc_state, UNSUPPORTED))
-                tcc_warning("'%s' attribute ignored", get_tok_str(t, NULL));
+            tcc_warning_c(warn_unsupported)("'%s' attribute ignored", get_tok_str(t, NULL));
             /* skip parameters */
             if (tok == '(') {
                 int parenthesis = 0;
@@ -5909,23 +5908,20 @@ ST_FUNC void unary(void)
     case TOK___FUNC__:
         {
             Section *sec;
-            void *ptr;
             int len;
             /* special function name identifier */
             len = strlen(funcname) + 1;
             /* generate char[len] type */
-            type.t = VT_BYTE;
-            if (NEED_WARNING(tcc_state, WRITE_STRINGS))
+            type.t = char_type.t;
+            if (tcc_state->warn_write_strings & WARN_ON)
                 type.t |= VT_CONSTANT;
             mk_pointer(&type);
             type.t |= VT_ARRAY;
             type.ref->c = len;
             sec = rodata_section;
             vpush_ref(&type, sec, sec->data_offset, len);
-            if (!NODATA_WANTED) {
-                ptr = section_ptr_add(sec, len);
-                memcpy(ptr, funcname, len);
-            }
+            if (!NODATA_WANTED)
+                memcpy(section_ptr_add(sec, len), funcname, len);
             next();
         }
         break;
@@ -5938,11 +5934,9 @@ ST_FUNC void unary(void)
         goto str_init;
     case TOK_STR:
         /* string parsing */
-        t = VT_BYTE;
-        if (tcc_state->char_is_unsigned)
-            t = VT_BYTE | VT_UNSIGNED;
+        t = char_type.t;
     str_init:
-        if (NEED_WARNING(tcc_state, WRITE_STRINGS))
+        if (tcc_state->warn_write_strings & WARN_ON)
             t |= VT_CONSTANT;
         type.t = t;
         mk_pointer(&type);
@@ -6378,14 +6372,8 @@ special_math_val:
                 tcc_error("'%s' undeclared", name);
             /* for simple function calls, we tolerate undeclared
                external reference to int() function */
-            if (NEED_WARNING(tcc_state, IMPLICIT_FUNCTION_DECLARATION)
-#ifdef TCC_TARGET_PE
-                /* must warn about using undeclared WINAPI functions
-                   (which usually start with uppercase letter) */
-                || (name[0] >= 'A' && name[0] <= 'Z')
-#endif
-            )
-                tcc_warning("implicit declaration of function '%s'", name);
+            tcc_warning_c(warn_implicit_function_declaration)(
+                "implicit declaration of function '%s'", name);
             s = external_global_sym(t, &func_old_type);
         }
 
@@ -7650,12 +7638,10 @@ again:
 
     block_after_label:
             vla_restore(cur_scope->vla.loc);
-            /* we accept this, but it is a mistake */
-            if (tok == '}') {
-                tcc_warning("deprecated use of label at end of compound statement");
-            } else {
+            if (tok != '}')
                 goto again;
-            }
+            /* we accept this, but it is a mistake */
+            tcc_warning_c(warn_all)("deprecated use of label at end of compound statement");
 
         } else {
             /* expression case */

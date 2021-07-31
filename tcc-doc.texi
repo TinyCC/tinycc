@@ -267,15 +267,12 @@ Make string constants be of type @code{const char *} instead of @code{char
 *}.
 
 @item -Werror
-Abort compilation if a warning is issued.
-Can be given an option to enable the specified warning
-and turn it into an error, for example @option{-Werror=unsupported}.
-Enabling general abortion and disabling specifics is not supported.
-Disabling specific abortions again does not disable the according warning.
+Abort compilation if a warning is issued. Can be given an option to enable
+the specified warning and turn it into an error, for example
+@option{-Werror=unsupported}.
 
 @item -Wall 
-Activate all warnings, except @option{-Werror}, @option{-Wunsupported} and
-@option{-Wwrite-strings}.
+Activate some useful warnings.
 
 @end table
 

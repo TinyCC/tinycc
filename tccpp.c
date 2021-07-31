@@ -1435,7 +1435,7 @@ ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
     for(s = *ptop; s != slast; s = s1) {
         s1 = s->prev;
         if (s->r == LABEL_DECLARED) {
-            tcc_warning("label '%s' declared but not used", get_tok_str(s->v, NULL));
+            tcc_warning_c(warn_all)("label '%s' declared but not used", get_tok_str(s->v, NULL));
         } else if (s->r == LABEL_FORWARD) {
                 tcc_error("label '%s' used but not defined",
                       get_tok_str(s->v, NULL));
@@ -1770,8 +1770,8 @@ static void pragma_parse(TCCState *s1)
             tcc_free(p);
         }
 
-    } else if (NEED_WARNING(s1, UNSUPPORTED))
-        tcc_warning("#pragma %s is ignored", get_tok_str(tok, &tokc));
+    } else
+        tcc_warning_c(warn_unsupported)("#pragma %s ignored", get_tok_str(tok, &tokc));
     return;
 
 pragma_err:
@@ -2293,7 +2293,7 @@ static void parse_string(const char *s, int len)
         if (n < 1)
             tcc_error("empty character constant");
         if (n > 1)
-            tcc_warning("multi-character character constant");
+            tcc_warning_c(warn_all)("multi-character character constant");
         for (c = i = 0; i < n; ++i) {
             if (is_long)
                 c = ((nwchar_t *)tokcstr.data)[i];

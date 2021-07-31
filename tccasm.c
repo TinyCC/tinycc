@@ -769,15 +769,11 @@ static void asm_parse_directive(TCCState *s1, int global)
 
             filename[0] = '\0';
             next();
-
             if (tok == TOK_STR)
                 pstrcat(filename, sizeof(filename), tokc.str.data);
             else
                 pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
-
-            if (NEED_WARNING(s1, UNSUPPORTED))
-                tcc_warning("ignoring .file %s", filename);
-
+            tcc_warning_c(warn_unsupported)("ignoring .file %s", filename);
             next();
         }
         break;
@@ -787,15 +783,11 @@ static void asm_parse_directive(TCCState *s1, int global)
 
             ident[0] = '\0';
             next();
-
             if (tok == TOK_STR)
                 pstrcat(ident, sizeof(ident), tokc.str.data);
             else
                 pstrcat(ident, sizeof(ident), get_tok_str(tok, NULL));
-
-            if (NEED_WARNING(s1, UNSUPPORTED))
-                tcc_warning("ignoring .ident %s", ident);
-
+            tcc_warning_c(warn_unsupported)("ignoring .ident %s", ident);
             next();
         }
         break;
@@ -808,11 +800,8 @@ static void asm_parse_directive(TCCState *s1, int global)
             if (!sym) {
                 tcc_error("label not found: %s", get_tok_str(tok, NULL));
             }
-
             /* XXX .size name,label2-label1 */
-            if (NEED_WARNING(s1, UNSUPPORTED))
-                tcc_warning("ignoring .size %s,*", get_tok_str(tok, NULL));
-
+            tcc_warning_c(warn_unsupported)("ignoring .size %s,*", get_tok_str(tok, NULL));
             next();
             skip(',');
             while (tok != TOK_LINEFEED && tok != ';' && tok != CH_EOF) {
@@ -839,9 +828,8 @@ static void asm_parse_directive(TCCState *s1, int global)
 
             if (!strcmp(newtype, "function") || !strcmp(newtype, "STT_FUNC")) {
                 sym->type.t = (sym->type.t & ~VT_BTYPE) | VT_FUNC;
-            }
-            else if (NEED_WARNING(s1, UNSUPPORTED))
-                tcc_warning("change type of '%s' from 0x%x to '%s' ignored", 
+            } else
+                tcc_warning_c(warn_unsupported)("change type of '%s' from 0x%x to '%s' ignored",
                     get_tok_str(sym->v, NULL), sym->type.t, newtype);
 
             next();

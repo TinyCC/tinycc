@@ -36,7 +36,7 @@ static const char help[] =
     "  -std=c99     Conform to the ISO 1999 C standard (default).\n"
     "  -std=c11     Conform to the ISO 2011 C standard.\n"
     "  -Wwarning    set or reset (with 'no-' prefix) 'warning' (see tcc -hh)\n"
-    "  -w           disable all warnings and their consequences\n"
+    "  -w           disable all warnings\n"
     "  --version -v show version\n"
     "  -vv          show search paths or loaded files\n"
     "  -h -hh       show this, show more help\n"
@@ -103,10 +103,11 @@ static const char help2[] =
     "  --param  -pedantic  -pipe  -s  -traditional\n"
     "-W[no-]... warnings:\n"
     "  all                           turn on some (*) warnings\n"
-    "  error[=(X)]                   error out after first warning (for X)\n"
-    "  unsupported                   warn for ignored options, pragmas,.. (X)\n"
-    "  write-strings                 strings are const (*,X)\n"
-    "  implicit-function-declaration warn for missing prototype (*,X)\n"
+    "  error[=warning]               stop after warning (any or specified)\n"
+    "  write-strings                 strings are const\n"
+    "  unsupported                   warn about ignored options, pragmas, etc.\n"
+    "  implicit-function-declaration warn for missing prototype (*)\n"
+    "  discarded-qualifiers          warn when const is dropped (*)\n"
     "-f[no-]... flags:\n"
     "  unsigned-char                 default char is unsigned\n"
     "  signed-char                   default char is signed\n"
@@ -317,7 +318,7 @@ redo:
         }
 
         if (s->nb_files == 0)
-            tcc_error("no input files\n");
+            tcc_error("no input files");
 
         if (s->output_type == TCC_OUTPUT_PREPROCESS) {
             if (s->outfile && 0!=strcmp("-",s->outfile)) {

@@ -737,24 +737,6 @@ struct sym_attr {
 #endif
 };
 
-/* 32-bit bit carrier, split in two halves: lower=warn, upper=error */
-enum warn_option {
-    WARN_NONE,
-    WARN_UNSUPPORTED = 1u<<0,
-    WARN_GCC_COMPAT = 1u<<1,
-    WARN_WRITE_STRINGS = 1u<<2,
-    WARN_IMPLICIT_FUNCTION_DECLARATION = 1u<<3,
-    /* _ERROR is in lower as "max", there is no warning for it */
-    WARN_ERROR = 1u<<4,
-    WARN_ALL = WARN_ERROR - 1,
-    /* Is neither in lower nor upper: disables warnings and errors (-w) */
-    WARN_DISABLED = WARN_ERROR << 1
-};
-enum {
-    WARN_ERROR_SHIFT = 16u,
-    WARN_ERROR_MASK = (/*WARN_ALL |*/ WARN_ERROR) << WARN_ERROR_SHIFT
-};
-
 struct TCCState {
     unsigned char verbose; /* if true, display some information during compilation */
     unsigned char nostdinc; /* if true, no standard headers are added */
@@ -785,13 +767,18 @@ struct TCCState {
     unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
 
-    /* NEED_WARNING(SELF,X) used to drive W[[no-]error]=X */
-    uint32_t warn_mask;
-#define NEED_WARNING(SELF,SWITCH) \
-    (((SELF)->warn_mask & \
-            (WARN_ ## SWITCH | (WARN_ ## SWITCH << WARN_ERROR_SHIFT))) \
-     ? (((SELF)->warn_mask & (WARN_ ## SWITCH << WARN_ERROR_SHIFT)) \
-        ? (SELF)->warn_mask |= (WARN_ERROR << WARN_ERROR_SHIFT), 1 : 1) : 0)
+    /* warning switches */
+    unsigned char warn_none;
+    unsigned char warn_all;
+    unsigned char warn_error;
+    unsigned char warn_write_strings;
+    unsigned char warn_unsupported;
+    unsigned char warn_implicit_function_declaration;
+    unsigned char warn_discarded_qualifiers;
+    #define WARN_ON  1 /* warning is on (-Woption) */
+    #define WARN_ERR 2 /* warning is an error (-Werror=option) */
+    #define WARN_NOE 4 /* warning is not an error (-Wno-error=option) */
+    unsigned char warn_num; /* temp var for tcc_warning_c() */
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;
@@ -1890,6 +1877,11 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 PUB_FUNC void tcc_enter_state(TCCState *s1);
 PUB_FUNC void tcc_exit_state(void);
 
+/* conditional warning depending on switch */
+#define tcc_warning_c(sw) TCC_SET_STATE((\
+    tcc_state->warn_num = offsetof(TCCState, sw) \
+    - offsetof(TCCState, warn_none), _tcc_warning))
+
 /********************************************************/
 #endif /* _TCC_H */
 
@@ -1903,6 +1895,4 @@ PUB_FUNC void tcc_exit_state(void);
 #else
 # define TCC_STATE_VAR(sym) s1->sym
 # define TCC_SET_STATE(fn) (tcc_enter_state(s1),fn)
-/* actually we could avoid the tcc_enter_state(s1) hack by using
-   __VA_ARGS__ except that some compiler doesn't support it. */
 #endif

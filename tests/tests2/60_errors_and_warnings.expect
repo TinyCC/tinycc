@@ -189,3 +189,17 @@ bar  : 3 ; 3
 
 [test_cast_from_void]
 60_errors_and_warnings.c:400: error: cannot convert 'void' to 'int'
+
+[test_switch_W1]
+60_errors_and_warnings.c:416: warning: implicit declaration of function 'fink'
+
+[test_switch_W2]
+60_errors_and_warnings.c:407: warning: unsupported option '-Wstuff'
+60_errors_and_warnings.c:418: warning: 'stuff' attribute ignored
+
+[test_switch_W3]
+60_errors_and_warnings.c:415: error: assignment discards qualifiers from pointer target type
+
+[test_switch_W4]
+60_errors_and_warnings.c:416: warning: implicit declaration of function 'fink'
+60_errors_and_warnings.c:418: error: 'stuff' attribute ignored
