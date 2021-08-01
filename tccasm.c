@@ -1298,4 +1298,21 @@ ST_FUNC void asm_global_instr(void)
     cstr_free(&astr);
     nocode_wanted = saved_nocode_wanted;
 }
+
+/********************************************************/
+#else
+ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
+{
+    tcc_error("asm not supported");
+}
+
+ST_FUNC void asm_instr(void)
+{
+    tcc_error("inline asm() not supported");
+}
+
+ST_FUNC void asm_global_instr(void)
+{
+    tcc_error("inline asm() not supported");
+}
 #endif /* CONFIG_TCC_ASM */

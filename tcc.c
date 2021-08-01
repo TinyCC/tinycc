@@ -154,10 +154,8 @@ static const char help2[] =
 
 static const char version[] =
     "tcc version "TCC_VERSION
-#ifdef TCC_GIT_HASH
-        " - " TCC_GIT_HASH
-#else
-        " - unknown hash"
+#ifdef TCC_GITHASH
+    " "TCC_GITHASH
 #endif
     " ("
 #ifdef TCC_TARGET_I386
@@ -276,7 +274,7 @@ int main(int argc0, char **argv0)
 {
     TCCState *s, *s1;
     int ret, opt, n = 0, t = 0, done;
-    unsigned start_time = 0;
+    unsigned start_time = 0, end_time = 0;
     const char *first_file;
     int argc; char **argv;
     FILE *ppfp = stdout;
@@ -372,6 +370,9 @@ redo:
         done = ret || ++n >= s->nb_files;
     } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
 
+    if (s->do_bench)
+        end_time = getclock_ms();
+
     if (s->run_test) {
         t = 0;
     } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
@@ -391,13 +392,15 @@ redo:
         }
     }
 
-    if (s->do_bench && done && !(t | ret))
-        tcc_print_stats(s, getclock_ms() - start_time);
+    if (done && 0 == t && 0 == ret && s->do_bench)
+        tcc_print_stats(s, end_time - start_time);
+
     tcc_delete(s);
     if (!done)
         goto redo; /* compile more files with -c */
     if (t)
         goto redo; /* run more tests with -dt -run */
+
     if (ppfp && ppfp != stdout)
         fclose(ppfp);
     return ret;

@@ -385,10 +385,8 @@ usage:
     ret = 0;
 
 the_end:
-    /* cannot free memory received from tcc_get_dllexports
-       if it came from a dll */
-    /* if (p)
-        tcc_free(p); */
+    if (p)
+        tcc_free(p);
     if (fp)
         fclose(fp);
     if (op)

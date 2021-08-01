@@ -1543,8 +1543,6 @@ static int pe_add_dllref(TCCState *s1, const char *dllname)
     return s1->nb_loaded_dlls;
 }
 
-/* ------------------------------------------------------------- */
-
 static int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 {
     lseek(fd, offset, SEEK_SET);
@@ -1553,11 +1551,10 @@ static int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 
 /* ------------------------------------------------------------- */
 
-PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
+static int get_dllexports(int fd, char **pp)
 {
     int l, i, n, n0, ret;
     char *p;
-    int fd;
 
     IMAGE_SECTION_HEADER ish;
     IMAGE_EXPORT_DIRECTORY ied;
@@ -1569,11 +1566,6 @@ PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
 
     n = n0 = 0;
     p = NULL;
-    ret = -1;
-
-    fd = open(filename, O_RDONLY | O_BINARY);
-    if (fd < 0)
-        goto the_end_1;
     ret = 1;
     if (!read_mem(fd, 0, &dh, sizeof dh))
         goto the_end;
@@ -1640,8 +1632,6 @@ found:
 the_end_0:
     ret = 0;
 the_end:
-    close(fd);
-the_end_1:
     *pp = p;
     return ret;
 }
@@ -1694,47 +1684,53 @@ quit:
 
 static char *trimfront(char *p)
 {
-    while (*p && (unsigned char)*p <= ' ')
+    while ((unsigned char)*p <= ' ' && *p && *p != '\n')
 	++p;
     return p;
 }
 
+/*
 static char *trimback(char *a, char *e)
 {
     while (e > a && (unsigned char)e[-1] <= ' ')
 	--e;
     *e = 0;;
     return a;
+}*/
+
+static char *get_token(char **s, char *f)
+{
+    char *p = *s, *e;
+    p = e = trimfront(p);
+    while ((unsigned char)*e > ' ')
+        ++e;
+    *s = trimfront(e);
+    *f = **s; *e = 0;
+    return p;
 }
 
-/* ------------------------------------------------------------- */
 static int pe_load_def(TCCState *s1, int fd)
 {
     int state = 0, ret = -1, dllindex = 0, ord;
-    char line[400], dllname[80], *p, *x;
-    FILE *fp;
+    char dllname[80], *buf, *line, *p, *x, next;
 
-    fp = fdopen(dup(fd), "rb");
-    while (fgets(line, sizeof line, fp))
-    {
-        p = trimfront(trimback(line, strchr(line, 0)));
-        if (0 == *p || ';' == *p)
-            continue;
-
+    buf = tcc_load_text(fd);
+    for (line = buf;; ++line)  {
+        p = get_token(&line, &next);
+        if (!(*p && *p != ';'))
+            goto skip;
         switch (state) {
         case 0:
-            if (0 != strnicmp(p, "LIBRARY", 7))
+            if (0 != stricmp(p, "LIBRARY") || next == '\n')
                 goto quit;
-            pstrcpy(dllname, sizeof dllname, trimfront(p+7));
+            pstrcpy(dllname, sizeof dllname, get_token(&line, &next));
             ++state;
-            continue;
-
+            break;
         case 1:
             if (0 != stricmp(p, "EXPORTS"))
                 goto quit;
             ++state;
-            continue;
-
+            break;
         case 2:
             dllindex = pe_add_dllref(s1, dllname);
             ++state;
@@ -1742,33 +1738,34 @@ static int pe_load_def(TCCState *s1, int fd)
         default:
             /* get ordinal and will store in sym->st_value */
             ord = 0;
-            x = strchr(p, ' ');
-            if (x) {
-                *x = 0, x = strrchr(x + 1, '@');
-                if (x) {
-                    char *d;
-                    ord = (int)strtol(x + 1, &d, 10);
-                    if (*d)
-                        ord = 0;
-                }
+            if (next == '@') {
+                x = get_token(&line, &next);
+                ord = (int)strtol(x + 1, &x, 10);
             }
+            //printf("token %s ; %s : %d\n", dllname, p, ord);
             pe_putimport(s1, dllindex, p, ord);
-            continue;
+            break;
         }
+skip:
+        while ((unsigned char)next > ' ')
+            get_token(&line, &next);
+        if (next != '\n')
+            break;
     }
     ret = 0;
 quit:
-    fclose(fp);
+    tcc_free(buf);
     return ret;
 }
 
 /* ------------------------------------------------------------- */
-static int pe_load_dll(TCCState *s1, const char *filename)
+
+static int pe_load_dll(TCCState *s1, int fd, const char *filename)
 {
     char *p, *q;
     int index, ret;
 
-    ret = tcc_get_dllexports(filename, &p);
+    ret = get_dllexports(fd, &p);
     if (ret) {
         return -1;
     } else if (p) {
@@ -1780,7 +1777,6 @@ static int pe_load_dll(TCCState *s1, const char *filename)
     return 0;
 }
 
-/* ------------------------------------------------------------- */
 ST_FUNC int pe_load_file(struct TCCState *s1, int fd, const char *filename)
 {
     int ret = -1;
@@ -1790,7 +1786,17 @@ ST_FUNC int pe_load_file(struct TCCState *s1, int fd, const char *filename)
     else if (pe_load_res(s1, fd) == 0)
         ret = 0;
     else if (read_mem(fd, 0, buf, 4) && 0 == memcmp(buf, "MZ", 2))
-        ret = pe_load_dll(s1, filename);
+        ret = pe_load_dll(s1, fd, filename);
+    return ret;
+}
+
+PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp)
+{
+    int ret, fd = open(filename, O_RDONLY | O_BINARY);
+    if (fd < 0)
+        return -1;
+    ret = get_dllexports(fd, pp);
+    close(fd);
     return ret;
 }
 

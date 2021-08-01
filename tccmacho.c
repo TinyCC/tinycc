@@ -517,7 +517,7 @@ static void create_symtab(TCCState *s1, struct macho *mo)
     }
     tcc_enter_state(s1);  /* qsort needs global state */
     qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp);
-    tcc_exit_state();
+    tcc_exit_state(s1);
     mo->e2msym = tcc_malloc(sym_end * sizeof(*mo->e2msym));
     mo->e2msym[0] = -1;
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {

@@ -220,9 +220,10 @@ TF_TYPE(thread_test_complex, vn)
 void time_tcc(int n, const char *src)
 {
     TCCState *s;
-    int ret;
-    while (--n >= 0) {
+    int ret, i = 0;
+    while (i++ < n) {
         s = new_state(1);
+        printf(" %d", i), fflush(stdout);
         ret = tcc_add_file(s, src);
         tcc_delete(s);
         if (ret < 0)
@@ -277,10 +278,10 @@ int main(int argc, char **argv)
     printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("compiling tcc.c 10 times\n"), fflush(stdout);
+    printf("compiling tcc.c 10 times\n "), fflush(stdout);
     t = getclock_ms();
     time_tcc(10, argv[1]);
-    printf(" (%u ms)\n", getclock_ms() - t), fflush(stdout);
+    printf("\n (%u ms)\n", getclock_ms() - t), fflush(stdout);
 #endif
     return 0;
 }

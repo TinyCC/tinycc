@@ -134,7 +134,7 @@ all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # cross compiler targets to build
 TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
-TCC_X += riscv64
+TCC_X += riscv64 arm64-osx
 # TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
 
 # cross libtcc1.a targets to build
@@ -222,10 +222,9 @@ $(TCC_FILES) : DEFINES += -DONE_SOURCE=0
 $(X)tccpp.o : $(TCCDEFS_H)
 endif
 
-TCC_GIT_HASH=$(shell git rev-parse > /dev/null 2>&1 && git rev-parse --short HEAD || echo no)
-ifneq ($(TCC_GIT_HASH),no)
-MODIFIED = $(shell git diff | grep -q +++ && echo "modified ")
-$(X)tcc.o : DEFINES +=  -DTCC_GIT_HASH="\"$(MODIFIED)$(TCC_GIT_HASH)\""
+GITHASH := $(shell git rev-parse >/dev/null 2>&1 && git rev-parse --short HEAD || echo no)
+ifneq ($(GITHASH),no)
+DEF_GITHASH := -DTCC_GITHASH="\"$(GITHASH)$(shell git diff --quiet || echo '-mod')\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
@@ -247,6 +246,7 @@ $(X)%.o : %.c $(LIBTCC_INC)
 
 # additional dependencies
 $(X)tcc.o : tcctools.c
+$(X)tcc.o : DEFINES += $(DEF_GITHASH)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)

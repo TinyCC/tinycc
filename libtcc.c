@@ -21,6 +21,7 @@
 #if !defined ONE_SOURCE || ONE_SOURCE
 #include "tccpp.c"
 #include "tccgen.c"
+#include "tccasm.c"
 #include "tccelf.c"
 #include "tccrun.c"
 #ifdef TCC_TARGET_I386
@@ -50,9 +51,6 @@
 #else
 #error unknown target
 #endif
-#ifdef CONFIG_TCC_ASM
-#include "tccasm.c"
-#endif
 #ifdef TCC_TARGET_PE
 #include "tccpe.c"
 #endif
@@ -68,6 +66,7 @@
 
 /* XXX: get rid of this ASAP (or maybe not) */
 ST_DATA struct TCCState *tcc_state;
+TCC_SEM(static tcc_compile_sem);
 
 #ifdef MEM_DEBUG
 static int nb_states;
@@ -84,19 +83,23 @@ ST_FUNC char *normalize_slashes(char *path)
     return path;
 }
 
+/* NULL if this is tcc.exe, HINSTANCE if this is libtcc.dll */
 static HMODULE tcc_module;
 
+#ifndef CONFIG_TCCDIR
 /* on win32, we suppose the lib and includes are at the location of 'tcc.exe' */
-static void tcc_set_lib_path_w32(TCCState *s)
+static inline char *config_tccdir_w32(char *path)
 {
-    char path[1024], *p;
-    GetModuleFileNameA(tcc_module, path, sizeof path);
+    char *p;
+    GetModuleFileName(tcc_module, path, MAX_PATH);
     p = tcc_basename(normalize_slashes(strlwr(path)));
     if (p > path)
         --p;
     *p = 0;
-    tcc_set_lib_path(s, path);
+    return path;
 }
+#define CONFIG_TCCDIR config_tccdir_w32(alloca(MAX_PATH))
+#endif
 
 #ifdef TCC_TARGET_PE
 static void tcc_add_systemdir(TCCState *s)
@@ -118,47 +121,60 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 #endif
 
 /********************************************************/
-#if CONFIG_TCC_SEMLOCK == 0
-#define WAIT_SEM()
-#define POST_SEM()
-#elif defined _WIN32
-static int tcc_sem_init;
-static CRITICAL_SECTION tcc_cr;
-static void wait_sem(void)
+#if CONFIG_TCC_SEMLOCK
+#if defined _WIN32
+ST_FUNC void wait_sem(TCCSem *p)
 {
-    if (!tcc_sem_init)
-        InitializeCriticalSection(&tcc_cr), tcc_sem_init = 1;
-    EnterCriticalSection(&tcc_cr);
+    if (!p->init)
+        InitializeCriticalSection(&p->cr), p->init = 1;
+    EnterCriticalSection(&p->cr);
 }
-#define WAIT_SEM() wait_sem()
-#define POST_SEM() LeaveCriticalSection(&tcc_cr);
+ST_FUNC void post_sem(TCCSem *p)
+{
+    LeaveCriticalSection(&p->cr);
+}
 #elif defined __APPLE__
 /* Half-compatible MacOS doesn't have non-shared (process local)
    semaphores.  Use the dispatch framework for lightweight locks.  */
-#include <dispatch/dispatch.h>
-static int tcc_sem_init;
-static dispatch_semaphore_t tcc_sem;
-static void wait_sem(void)
+ST_FUNC void wait_sem(TCCSem *p)
 {
-    if (!tcc_sem_init)
-      tcc_sem = dispatch_semaphore_create(1), tcc_sem_init = 1;
-    dispatch_semaphore_wait(tcc_sem, DISPATCH_TIME_FOREVER);
+    if (!p->init)
+        p->sem = dispatch_semaphore_create(1), p->init = 1;
+    dispatch_semaphore_wait(p->sem, DISPATCH_TIME_FOREVER);
 }
-#define WAIT_SEM() wait_sem()
-#define POST_SEM() dispatch_semaphore_signal(tcc_sem)
+ST_FUNC void post_sem(TCCSem *p)
+{
+    dispatch_semaphore_signal(p->sem);
+}
 #else
-#include <semaphore.h>
-static int tcc_sem_init;
-static sem_t tcc_sem;
-static void wait_sem(void)
+ST_FUNC void wait_sem(TCCSem *p)
 {
-    if (!tcc_sem_init)
-        sem_init(&tcc_sem, 0, 1), tcc_sem_init = 1;
-    while (sem_wait (&tcc_sem) < 0 && errno == EINTR);
+    if (!p->init)
+        sem_init(&p->sem, 0, 1), p->init = 1;
+    while (sem_wait(&p->sem) < 0 && errno == EINTR);
 }
-#define WAIT_SEM() wait_sem()
-#define POST_SEM() sem_post(&tcc_sem)
+ST_FUNC void post_sem(TCCSem *p)
+{
+    sem_post(&p->sem);
+}
 #endif
+#endif
+
+PUB_FUNC void tcc_enter_state(TCCState *s1)
+{
+    if (s1->error_set_jmp_enabled)
+        return;
+    WAIT_SEM(&tcc_compile_sem);
+    tcc_state = s1;
+}
+
+PUB_FUNC void tcc_exit_state(TCCState *s1)
+{
+    if (s1->error_set_jmp_enabled)
+        return;
+    tcc_state = NULL;
+    POST_SEM(&tcc_compile_sem);
+}
 
 /********************************************************/
 /* copy a string and truncate it. */
@@ -494,52 +510,29 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
 }
 
 /********************************************************/
+/* warning / error */
 
-static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
-{
-    int len;
-    len = strlen(buf);
-    vsnprintf(buf + len, buf_size - len, fmt, ap);
-}
+/* warn_... option bits */
+#define WARN_ON  1 /* warning is on (-Woption) */
+#define WARN_ERR 2 /* warning is an error (-Werror=option) */
+#define WARN_NOE 4 /* warning is not an error (-Wno-error=option) */
 
-static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    strcat_vprintf(buf, buf_size, fmt, ap);
-    va_end(ap);
-}
-
-PUB_FUNC void tcc_enter_state(TCCState *s1)
-{
-    WAIT_SEM();
-    tcc_state = s1;
-}
-
-PUB_FUNC void tcc_exit_state(void)
-{
-    tcc_state = NULL;
-    POST_SEM();
-}
-
-#define ERROR_WARN 0
-#define ERROR_NOABORT 1
-#define ERROR_ERROR 2
+/* error1() modes */
+enum { ERROR_WARN, ERROR_NOABORT, ERROR_ERROR };
 
 static void error1(int mode, const char *fmt, va_list ap)
 {
-    char buf[2048];
     BufferedFile **pf, *f;
     TCCState *s1 = tcc_state;
+    CString cs;
 
-    buf[0] = '\0';
+    cstr_new(&cs);
+
     if (s1 == NULL)
         /* can happen only if called from tcc_malloc(): 'out of memory' */
         goto no_file;
 
-    if (!s1->error_set_jmp_enabled)
-        /* tcc_state just was set by tcc_enter_state() */
-        tcc_exit_state();
+    tcc_exit_state(s1);
 
     if (mode == ERROR_WARN) {
         if (s1->warn_error)
@@ -567,33 +560,30 @@ static void error1(int mode, const char *fmt, va_list ap)
     }
     if (f) {
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
-            strcat_printf(buf, sizeof(buf), "In file included from %s:%d:\n",
+            cstr_printf(&cs, "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
-        strcat_printf(buf, sizeof(buf), "%s:%d: ",
+        cstr_printf(&cs, "%s:%d: ",
             f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
     } else if (s1->current_filename) {
-        strcat_printf(buf, sizeof(buf), "%s: ", s1->current_filename);
+        cstr_printf(&cs, "%s: ", s1->current_filename);
     }
 
 no_file:
-    if (0 == buf[0])
-        strcat_printf(buf, sizeof(buf), "tcc: ");
-    if (mode == ERROR_WARN)
-        strcat_printf(buf, sizeof(buf), "warning: ");
-    else
-        strcat_printf(buf, sizeof(buf), "error: ");
-    strcat_vprintf(buf, sizeof(buf), fmt, ap);
+    if (0 == cs.size)
+        cstr_printf(&cs, "tcc: ");
+    cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
+    cstr_vprintf(&cs, fmt, ap);
     if (!s1 || !s1->error_func) {
         /* default case: stderr */
         if (s1 && s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
-            /* print a newline during tcc -E */
-            printf("\n"), fflush(stdout);
+            printf("\n"); /* print a newline during tcc -E */
         fflush(stdout); /* flush -v output */
-        fprintf(stderr, "%s\n", buf);
+        fprintf(stderr, "%s\n", (char*)cs.data);
         fflush(stderr); /* print error/warning now (win32) */
     } else {
-        s1->error_func(s1->error_opaque, buf);
+        s1->error_func(s1->error_opaque, (char*)cs.data);
     }
+    cstr_free(&cs);
     if (s1) {
         if (mode != ERROR_WARN)
             s1->nb_errors++;
@@ -718,9 +708,9 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
        variables, which may or may not have advantages */
 
     tcc_enter_state(s1);
+    s1->error_set_jmp_enabled = 1;
 
     if (setjmp(s1->error_jmp_buf) == 0) {
-        s1->error_set_jmp_enabled = 1;
         s1->nb_errors = 0;
 
         if (fd == -1) {
@@ -738,19 +728,16 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
         if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
             tcc_preprocess(s1);
         } else if (filetype & (AFF_TYPE_ASM | AFF_TYPE_ASMPP)) {
-#ifdef CONFIG_TCC_ASM
             tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
-#else
-            tcc_error_noabort("asm not supported");
-#endif
         } else {
             tccgen_compile(s1);
         }
     }
-    s1->error_set_jmp_enabled = 0;
     tccgen_finish(s1);
     preprocess_end(s1);
-    tcc_exit_state();
+
+    s1->error_set_jmp_enabled = 0;
+    tcc_exit_state(s1);
 
     tccelf_end_file(s1);
     return s1->nb_errors != 0 ? -1 : 0;
@@ -821,11 +808,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 
     tccelf_new(s);
 
-#ifdef _WIN32
-    tcc_set_lib_path_w32(s);
-#else
     tcc_set_lib_path(s, CONFIG_TCCDIR);
-#endif
     return s;
 }
 

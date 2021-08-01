@@ -1,3 +1,4 @@
+/*********************************************************************/
 /* keywords */
      DEF(TOK_INT, "int")
      DEF(TOK_VOID, "void")
@@ -343,8 +344,17 @@
      DEF(TOK_longjmp, "longjmp")
 #endif
 
+
+/*********************************************************************/
 /* Tiny Assembler */
- DEF_ASMDIR(byte)              /* must be first directive */
+#define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
+#define DEF_ASMDIR(x) DEF(TOK_ASMDIR_ ## x, "." #x)
+#define TOK_ASM_int TOK_INT
+
+#define TOK_ASMDIR_FIRST TOK_ASMDIR_byte
+#define TOK_ASMDIR_LAST TOK_ASMDIR_section
+
+ DEF_ASMDIR(byte)       /* must be first directive */
  DEF_ASMDIR(word)
  DEF_ASMDIR(align)
  DEF_ASMDIR(balign)
@@ -383,14 +393,16 @@
  DEF_ASMDIR(short)
  DEF_ASMDIR(long)
  DEF_ASMDIR(int)
- DEF_ASMDIR(section)            /* must be last directive */
+ DEF_ASMDIR(section)    /* must be last directive */
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #include "i386-tok.h"
 #endif
+
 #if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
 #include "arm-tok.h"
 #endif
+
 #if defined TCC_TARGET_RISCV64
 #include "riscv64-tok.h"
 #endif

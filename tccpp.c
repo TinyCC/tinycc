@@ -404,7 +404,7 @@ ST_FUNC void cstr_reset(CString *cstr)
     cstr->size = 0;
 }
 
-ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
+ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap)
 {
     va_list v;
     int len, size = 80;
@@ -413,7 +413,7 @@ ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
         if (size > cstr->size_allocated)
             cstr_realloc(cstr, size);
         size = cstr->size_allocated - cstr->size;
-        va_start(v, fmt);
+        va_copy(v, ap);
         len = vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
         va_end(v);
         if (len > 0 && len < size)
@@ -421,6 +421,15 @@ ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
         size *= 2;
     }
     cstr->size += len;
+    return len;
+}
+
+ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
+{
+    va_list ap; int len;
+    va_start(ap, fmt);
+    len = cstr_vprintf(cstr, fmt, ap);
+    va_end(ap);
     return len;
 }
 

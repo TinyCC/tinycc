@@ -55,6 +55,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # include <windows.h>
 # include <io.h> /* open, close etc. */
 # include <direct.h> /* getcwd */
+# include <malloc.h> /* alloca */
 # ifdef __GNUC__
 #  include <stdint.h>
 # endif
@@ -91,6 +92,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #   define __x86_64__ 1
 #  endif
 # endif
+# ifndef va_copy
+#  define va_copy(a,b) a = b
+# endif
 # undef CONFIG_TCC_STATIC
 #endif
 
@@ -123,7 +127,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ALIGNED(x) __attribute__((aligned(x)))
 # define PRINTF_LIKE(x,y) __attribute__ ((format (printf, (x), (y))))
 #endif
-
 
 #ifdef _WIN32
 # define IS_DIRSEP(c) (c == '/' || c == '\\')
@@ -179,6 +182,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifdef _WIN32
 #  define TCC_TARGET_PE 1
 # endif
+# ifdef __APPLE__
+#  define TCC_TARGET_MACHO 1
+# endif
 #endif
 
 /* only native compiler supports -run */
@@ -226,7 +232,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* No ten-byte long doubles on window and macos except in
    cross-compilers made by a mingw-GCC */
 #if defined TCC_TARGET_PE \
-    || (defined TCC_TARGET_MACHO && defined TCC_TARGET_X86_64) \
+    || (defined TCC_TARGET_MACHO && defined TCC_TARGET_ARM64) \
     || (defined _WIN32 && !defined __GNUC__)
 # define TCC_USING_DOUBLE_FOR_LDOUBLE 1
 #endif
@@ -236,7 +242,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #ifndef CONFIG_SYSROOT
 # define CONFIG_SYSROOT ""
 #endif
-#ifndef CONFIG_TCCDIR
+#if !defined CONFIG_TCCDIR && !defined _WIN32
 # define CONFIG_TCCDIR "/usr/local/lib/tcc"
 #endif
 #ifndef CONFIG_LDDIR
@@ -751,15 +757,6 @@ struct TCCState {
     unsigned char enable_new_dtags; /* -Wl,--enable-new-dtags */
     unsigned int  cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
-    char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
-    char *soname; /* as specified on the command line (-soname) */
-    char *rpath; /* as specified on the command line (-Wl,-rpath=) */
-
-    /* output type, see TCC_OUTPUT_XXX */
-    int output_type;
-    /* output format, see TCC_OUTPUT_FORMAT_xxx */
-    int output_format;
-
     /* C language options */
     unsigned char char_is_unsigned;
     unsigned char leading_underscore;
@@ -776,9 +773,13 @@ struct TCCState {
     unsigned char warn_implicit_function_declaration;
     unsigned char warn_discarded_qualifiers;
     #define WARN_ON  1 /* warning is on (-Woption) */
-    #define WARN_ERR 2 /* warning is an error (-Werror=option) */
-    #define WARN_NOE 4 /* warning is not an error (-Wno-error=option) */
     unsigned char warn_num; /* temp var for tcc_warning_c() */
+
+    unsigned char option_r; /* option -r */
+    unsigned char do_bench; /* option -bench */
+    unsigned char just_deps; /* option -M  */
+    unsigned char gen_deps; /* option -MD  */
+    unsigned char include_sys_deps; /* option -MD  */
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;
@@ -789,30 +790,41 @@ struct TCCState {
 #endif
     unsigned char test_coverage;  /* generate test coverage code */
 
-#ifdef TCC_TARGET_ARM
-    enum float_abi float_abi; /* float ABI of the generated code*/
-#endif
-    int run_test; /* nth test to run with -dt -run */
-
-    addr_t text_addr; /* address of text section */
-    unsigned char has_text_addr;
-
-    unsigned section_align; /* section alignment */
-
     /* use GNU C extensions */
     unsigned char gnu_ext;
     /* use TinyCC extensions */
     unsigned char tcc_ext;
 
-    char *init_symbol; /* symbols to call at load-time (not used currently) */
-    char *fini_symbol; /* symbols to call at unload-time (not used currently) */
+    unsigned char dflag; /* -dX value */
+    unsigned char Pflag; /* -P switch (LINE_MACRO_OUTPUT_FORMAT) */
 
-#ifdef TCC_TARGET_I386
-    int seg_size; /* 32. Can be 16 with i386 assembler (.code16) */
-#endif
 #ifdef TCC_TARGET_X86_64
     unsigned char nosse; /* For -mno-sse support. */
 #endif
+#ifdef TCC_TARGET_ARM
+    unsigned char float_abi; /* float ABI of the generated code*/
+#endif
+
+    unsigned char has_text_addr;
+    addr_t text_addr; /* address of text section */
+    unsigned section_align; /* section alignment */
+#ifdef TCC_TARGET_I386
+    int seg_size; /* 32. Can be 16 with i386 assembler (.code16) */
+#endif
+
+    char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
+    char *soname; /* as specified on the command line (-soname) */
+    char *rpath; /* as specified on the command line (-Wl,-rpath=) */
+
+    char *init_symbol; /* symbols to call at load-time (not used currently) */
+    char *fini_symbol; /* symbols to call at unload-time (not used currently) */
+
+    /* output type, see TCC_OUTPUT_XXX */
+    int output_type;
+    /* output format, see TCC_OUTPUT_FORMAT_xxx */
+    int output_format;
+    /* nth test to run with -dt -run */
+    int run_test;
 
     /* array of all loaded dlls (including those referenced by loaded dlls) */
     DLLReference **loaded_dlls;
@@ -847,13 +859,6 @@ struct TCCState {
 
     /* output file for preprocessing (-E) */
     FILE *ppfp;
-    enum {
-	LINE_MACRO_OUTPUT_FORMAT_GCC,
-	LINE_MACRO_OUTPUT_FORMAT_NONE,
-	LINE_MACRO_OUTPUT_FORMAT_STD,
-    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
-    } Pflag; /* -P switch */
-    char dflag; /* -dX value */
 
     /* for -MD/-MF: collected dependencies for this compilation */
     char **target_deps;
@@ -922,11 +927,11 @@ struct TCCState {
     int nb_sym_attrs;
     /* ptr to next reloc entry reused */
     ElfW_Rel *qrel;
-#   define qrel s1->qrel
+    #define qrel s1->qrel
 
 #ifdef TCC_TARGET_RISCV64
     struct pcrel_hi { addr_t addr, val; } last_hi;
-#   define last_hi s1->last_hi
+    #define last_hi s1->last_hi
 #endif
 
 #ifdef TCC_TARGET_PE
@@ -963,8 +968,6 @@ struct TCCState {
     int rt_num_callers;
 #endif
 
-    int fd, cc; /* used by tcc_load_ldscript */
-
     /* benchmark info */
     int total_idents;
     int total_lines;
@@ -974,7 +977,10 @@ struct TCCState {
     /* option -dnum (for general development purposes) */
     int g_debug;
 
-    /* for warnings/errors for object files*/
+    /* used by tcc_load_ldscript */
+    int fd, cc;
+
+    /* for warnings/errors for object files */
     const char *current_filename;
 
     /* used by main and tcc_parse_args only */
@@ -982,11 +988,6 @@ struct TCCState {
     int nb_files; /* number thereof */
     int nb_libraries; /* number of libs thereof */
     char *outfile; /* output filename */
-    unsigned char option_r; /* option -r */
-    unsigned char do_bench; /* option -bench */
-    int just_deps; /* option -M  */
-    int gen_deps; /* option -MD  */
-    int include_sys_deps; /* option -MD  */
     char *deps_outfile; /* option -MF */
     int argc;
     char **argv;
@@ -1161,91 +1162,6 @@ struct filespec {
 /* all identifiers and strings have token above that */
 #define TOK_IDENT 256
 
-#define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
-#define TOK_ASM_int TOK_INT
-#define DEF_ASMDIR(x) DEF(TOK_ASMDIR_ ## x, "." #x)
-#define TOK_ASMDIR_FIRST TOK_ASMDIR_byte
-#define TOK_ASMDIR_LAST TOK_ASMDIR_section
-
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-/* only used for i386 asm opcodes definitions */
-#define DEF_BWL(x) \
- DEF(TOK_ASM_ ## x ## b, #x "b") \
- DEF(TOK_ASM_ ## x ## w, #x "w") \
- DEF(TOK_ASM_ ## x ## l, #x "l") \
- DEF(TOK_ASM_ ## x, #x)
-#define DEF_WL(x) \
- DEF(TOK_ASM_ ## x ## w, #x "w") \
- DEF(TOK_ASM_ ## x ## l, #x "l") \
- DEF(TOK_ASM_ ## x, #x)
-#ifdef TCC_TARGET_X86_64
-# define DEF_BWLQ(x) \
- DEF(TOK_ASM_ ## x ## b, #x "b") \
- DEF(TOK_ASM_ ## x ## w, #x "w") \
- DEF(TOK_ASM_ ## x ## l, #x "l") \
- DEF(TOK_ASM_ ## x ## q, #x "q") \
- DEF(TOK_ASM_ ## x, #x)
-# define DEF_WLQ(x) \
- DEF(TOK_ASM_ ## x ## w, #x "w") \
- DEF(TOK_ASM_ ## x ## l, #x "l") \
- DEF(TOK_ASM_ ## x ## q, #x "q") \
- DEF(TOK_ASM_ ## x, #x)
-# define DEF_BWLX DEF_BWLQ
-# define DEF_WLX DEF_WLQ
-/* number of sizes + 1 */
-# define NBWLX 5
-#else
-# define DEF_BWLX DEF_BWL
-# define DEF_WLX DEF_WL
-/* number of sizes + 1 */
-# define NBWLX 4
-#endif
-
-#define DEF_FP1(x) \
- DEF(TOK_ASM_ ## f ## x ## s, "f" #x "s") \
- DEF(TOK_ASM_ ## fi ## x ## l, "fi" #x "l") \
- DEF(TOK_ASM_ ## f ## x ## l, "f" #x "l") \
- DEF(TOK_ASM_ ## fi ## x ## s, "fi" #x "s")
-
-#define DEF_FP(x) \
- DEF(TOK_ASM_ ## f ## x, "f" #x ) \
- DEF(TOK_ASM_ ## f ## x ## p, "f" #x "p") \
- DEF_FP1(x)
-
-#define DEF_ASMTEST(x,suffix) \
- DEF_ASM(x ## o ## suffix) \
- DEF_ASM(x ## no ## suffix) \
- DEF_ASM(x ## b ## suffix) \
- DEF_ASM(x ## c ## suffix) \
- DEF_ASM(x ## nae ## suffix) \
- DEF_ASM(x ## nb ## suffix) \
- DEF_ASM(x ## nc ## suffix) \
- DEF_ASM(x ## ae ## suffix) \
- DEF_ASM(x ## e ## suffix) \
- DEF_ASM(x ## z ## suffix) \
- DEF_ASM(x ## ne ## suffix) \
- DEF_ASM(x ## nz ## suffix) \
- DEF_ASM(x ## be ## suffix) \
- DEF_ASM(x ## na ## suffix) \
- DEF_ASM(x ## nbe ## suffix) \
- DEF_ASM(x ## a ## suffix) \
- DEF_ASM(x ## s ## suffix) \
- DEF_ASM(x ## ns ## suffix) \
- DEF_ASM(x ## p ## suffix) \
- DEF_ASM(x ## pe ## suffix) \
- DEF_ASM(x ## np ## suffix) \
- DEF_ASM(x ## po ## suffix) \
- DEF_ASM(x ## l ## suffix) \
- DEF_ASM(x ## nge ## suffix) \
- DEF_ASM(x ## nl ## suffix) \
- DEF_ASM(x ## ge ## suffix) \
- DEF_ASM(x ## le ## suffix) \
- DEF_ASM(x ## ng ## suffix) \
- DEF_ASM(x ## nle ## suffix) \
- DEF_ASM(x ## g ## suffix)
-
-#endif /* defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 */
-
 enum tcc_token {
     TOK_LAST = TOK_IDENT - 1
 #define DEF(id, str) ,id
@@ -1306,6 +1222,7 @@ ST_FUNC void cstr_wccat(CString *cstr, int ch);
 ST_FUNC void cstr_new(CString *cstr);
 ST_FUNC void cstr_free(CString *cstr);
 ST_FUNC int cstr_printf(CString *cs, const char *fmt, ...) PRINTF_LIKE(2,3);
+ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap);
 ST_FUNC void cstr_reset(CString *cstr);
 
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
@@ -1396,6 +1313,13 @@ ST_DATA TokenSym **table_ident;
 #define IS_SPC 1
 #define IS_ID  2
 #define IS_NUM 4
+
+enum line_macro_output_format {
+    LINE_MACRO_OUTPUT_FORMAT_GCC,
+    LINE_MACRO_OUTPUT_FORMAT_NONE,
+    LINE_MACRO_OUTPUT_FORMAT_STD,
+    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
+};
 
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC int tok_alloc_const(const char *str);
@@ -1770,12 +1694,12 @@ ST_FUNC int tcc_load_coff(TCCState * s1, int fd);
 /* ------------ tccasm.c ------------ */
 ST_FUNC void asm_instr(void);
 ST_FUNC void asm_global_instr(void);
+ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
 #ifdef CONFIG_TCC_ASM
 ST_FUNC int find_constraint(ASMOperand *operands, int nb_operands, const char *name, const char **pp);
 ST_FUNC Sym* get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 ST_FUNC int asm_int_expr(TCCState *s1);
-ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
 /* ------------ i386-asm.c ------------ */
 ST_FUNC void gen_expr32(ExprValue *pe);
 #ifdef TCC_TARGET_X86_64
@@ -1845,6 +1769,28 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 #endif
 
 /********************************************************/
+#if CONFIG_TCC_SEMLOCK
+#if defined _WIN32
+typedef struct { int init; CRITICAL_SECTION cr; } TCCSem;
+#elif defined __APPLE__
+#include <dispatch/dispatch.h>
+typedef struct { int init; dispatch_semaphore_t sem; } TCCSem;
+#else
+#include <semaphore.h>
+typedef struct { int init; sem_t sem; } TCCSem;
+#endif
+ST_FUNC void wait_sem(TCCSem *p);
+ST_FUNC void post_sem(TCCSem *p);
+#define TCC_SEM(s) TCCSem s
+#define WAIT_SEM wait_sem
+#define POST_SEM post_sem
+#else
+#define TCC_SEM(s)
+#define WAIT_SEM(p)
+#define POST_SEM(p)
+#endif
+
+/********************************************************/
 #undef ST_DATA
 #if ONE_SOURCE
 #define ST_DATA static
@@ -1875,7 +1821,7 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 #define total_bytes         TCC_STATE_VAR(total_bytes)
 
 PUB_FUNC void tcc_enter_state(TCCState *s1);
-PUB_FUNC void tcc_exit_state(void);
+PUB_FUNC void tcc_exit_state(TCCState *s1);
 
 /* conditional warning depending on switch */
 #define tcc_warning_c(sw) TCC_SET_STATE((\

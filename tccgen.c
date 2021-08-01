@@ -97,7 +97,7 @@ static CString initstr;
 #define VT_PTRDIFF_T (VT_LONG | VT_LLONG)
 #endif
 
-ST_DATA struct switch_t {
+static struct switch_t {
     struct case_t {
         int64_t v1, v2;
 	int sym;
@@ -111,12 +111,12 @@ ST_DATA struct switch_t {
 
 #define MAX_TEMP_LOCAL_VARIABLE_NUMBER 8
 /*list of temporary local variables on the stack in current function. */
-ST_DATA struct temp_local_variable {
+static struct temp_local_variable {
 	int location; //offset on stack. Svalue.c.i
 	short size;
 	short align;
 } arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
-short nb_temp_local_vars;
+static int nb_temp_local_vars;
 
 static struct scope {
     struct scope *prev;
@@ -131,6 +131,11 @@ typedef struct {
     int local_offset;
     Sym *flex_array_ref;
 } init_params;
+
+#if 1
+#define precedence_parser
+static void init_prec(void);
+#endif
 
 /********************************************************/
 /* stab debug support */
@@ -215,23 +220,6 @@ static struct {
 } tcov_data;
 
 /********************************************************/
-#if 1
-#define precedence_parser
-static void init_prec(void);
-#endif
-/********************************************************/
-#ifndef CONFIG_TCC_ASM
-ST_FUNC void asm_instr(void)
-{
-    tcc_error("inline asm() not supported");
-}
-ST_FUNC void asm_global_instr(void)
-{
-    tcc_error("inline asm() not supported");
-}
-#endif
-
-/* ------------------------------------------------------------------------- */
 static void gen_cast(CType *type);
 static void gen_cast_s(int t);
 static inline CType *pointed_type(CType *type);
@@ -7247,7 +7235,7 @@ static void vla_leave(struct scope *o)
 /* ------------------------------------------------------------------------- */
 /* local scopes */
 
-void new_scope(struct scope *o)
+static void new_scope(struct scope *o)
 {
     /* copy and link previous scope */
     *o = *cur_scope;
@@ -7264,7 +7252,7 @@ void new_scope(struct scope *o)
         tcc_debug_stabn(tcc_state, N_LBRAC, ind - func_ind);
 }
 
-void prev_scope(struct scope *o, int is_expr)
+static void prev_scope(struct scope *o, int is_expr)
 {
     vla_leave(o->prev);
 
@@ -7292,7 +7280,7 @@ void prev_scope(struct scope *o, int is_expr)
 }
 
 /* leave a scope via break/continue(/goto) */
-void leave_scope(struct scope *o)
+static void leave_scope(struct scope *o)
 {
     if (!o)
         return;
