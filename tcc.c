@@ -78,6 +78,9 @@ static const char help[] =
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
     "  -m32/64      defer to i386/x86_64 cross compiler\n"
 #endif
+#if defined(TCC_TARGET_MACHO) || defined(TCC_TARGET_X86_64)
+    "  -arch        set macos target achitecture (ignored, always x86_64)\n"
+#endif
     "Tools:\n"
     "  create library  : tcc -ar [rcsv] lib.a files\n"
 #ifdef TCC_TARGET_PE
