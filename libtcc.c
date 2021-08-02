@@ -1558,9 +1558,9 @@ static const TCCOption tcc_options[] = {
 #ifdef TCC_TARGET_PE
     { "impdef", TCC_OPTION_impdef, 0},
 #endif
-//#ifdef TCC_TARGET_MACHO
+#ifdef TCC_TARGET_MACHO
     { "arch", TCC_OPTION_arch, TCC_OPTION_HAS_ARG },
-//#endif
+#endif
     { "C", TCC_OPTION_C, 0},
     { NULL, 0, 0 },
 };
@@ -1991,12 +1991,25 @@ reparse:
                 tcc_error("cannot parse %s here", r);
             tool = x;
             break;
+#if defined(TCC_TARGET_MACHO)
+        case TCC_OPTION_arch:
+#if defined(TCC_TARGET_X86_64)
+            if (strcmp(optarg, "x86_64") == 0)
+                break; /* Ok, arch matches target */
+#endif
+#if defined(TCC_TARGET_ARM64)
+            if (strcmp(optarg, "arm64") == 0)
+                break; /* Ok, arch matches target */
+#endif
+            tcc_error("this compiler does not support %s", optarg);
+            /* ignored */
+            break;
+#endif
         case TCC_OPTION_traditional:
         case TCC_OPTION_pedantic:
         case TCC_OPTION_pipe:
         case TCC_OPTION_s:
         case TCC_OPTION_C:
-        case TCC_OPTION_arch:
             /* ignored */
             break;
         default:
