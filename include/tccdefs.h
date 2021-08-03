@@ -123,8 +123,10 @@
 
 #endif
     /* Some derived integer types needed to get stdint.h to compile correctly on some platforms */
+#ifndef __NetBSD__
     #define __UINTPTR_TYPE__ unsigned __PTRDIFF_TYPE__
     #define __INTPTR_TYPE__ __PTRDIFF_TYPE__
+#endif
     #define __INT32_TYPE__ int
 
 #if !defined _WIN32
