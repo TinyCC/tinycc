@@ -1725,6 +1725,7 @@ static void pragma_parse(TCCState *s1)
         /* This may be:
            #pragma pack(1) // set
            #pragma pack() // reset to default
+           #pragma pack(push) // push current
            #pragma pack(push,1) // push & set
            #pragma pack(pop) // restore previous */
         next();
@@ -1743,8 +1744,10 @@ static void pragma_parse(TCCState *s1)
                     next();
                     if (s1->pack_stack_ptr >= s1->pack_stack + PACK_STACK_SIZE - 1)
                         goto stk_error;
-                    s1->pack_stack_ptr++;
-                    skip(',');
+                    val = *s1->pack_stack_ptr++;
+                    if (tok != ',')
+                        goto pack_set;
+                    next();
                 }
                 if (tok != TOK_CINT)
                     goto pragma_err;
@@ -1753,6 +1756,7 @@ static void pragma_parse(TCCState *s1)
                     goto pragma_err;
                 next();
             }
+        pack_set:
             *s1->pack_stack_ptr = val;
         }
         if (tok != ')')
