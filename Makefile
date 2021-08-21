@@ -224,7 +224,7 @@ endif
 
 GITHASH := $(shell git rev-parse >/dev/null 2>&1 && git rev-parse --short HEAD || echo no)
 ifneq ($(GITHASH),no)
-DEF_GITHASH := -DTCC_GITHASH="\"$(GITHASH)$(shell git diff --quiet || echo '-mod')\""
+DEF_GITHASH := -DTCC_GITHASH="\"$(shell git rev-parse --abbrev-ref HEAD):$(GITHASH)$(shell git diff --quiet || echo '-mod')\""
 endif
 
 ifeq ($(CONFIG_debug),yes)

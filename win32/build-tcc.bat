@@ -7,6 +7,14 @@ setlocal
 if (%1)==(-clean) goto :cleanup
 set CC=gcc
 set /p VERSION= < ..\VERSION
+git.exe --version 2>nul
+if not %ERRORLEVEL%==0 goto :git_done
+for /f %%b in ('git.exe rev-parse --abbrev-ref HEAD') do set GITHASH=%%b
+for /f %%h in ('git.exe rev-parse --short HEAD') do set GITHASH=%GITHASH%:%%h
+git.exe diff --quiet
+if %ERRORLEVEL%==1 set GITHASH=%GITHASH%-mod
+set DEF_GITHASH=-DTCC_GITHASH="""%GITHASH%"""
+:git_done
 set INST=
 set DOC=no
 set EXES_ONLY=no
@@ -74,7 +82,7 @@ set CMD=%CMD% %ARG%
 shift
 if not (%1)==() goto :c0
 echo on
-%CMD% -O1 -W2 -Zi -MT -GS- -nologo -link -opt:ref,icf
+%CMD% -O2 -W2 -Zi -MT -GS- -nologo %DEF_GITHASH% -link -opt:ref,icf
 @exit /B %ERRORLEVEL%
 
 @rem ------------------------------------------------------
@@ -86,7 +94,7 @@ set T=32
 if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
 if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
 :p2
-if "%CC:~-3%"=="gcc" set CC=%CC% -Os -s -static
+if "%CC:~-3%"=="gcc" set CC=%CC% -O2 -s -static %DEF_GITHASH%
 set D32=-DTCC_TARGET_PE -DTCC_TARGET_I386
 set D64=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
 set P32=i386-win32
