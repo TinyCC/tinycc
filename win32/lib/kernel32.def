@@ -287,9 +287,9 @@ GetMailslotInfo
 GetModuleFileNameA
 GetModuleFileNameW
 GetModuleHandleA
-GetModuleHandleW
 GetModuleHandleExA
 GetModuleHandleExW
+GetModuleHandleW
 GetNamedPipeHandleStateA
 GetNamedPipeHandleStateW
 GetNamedPipeInfo
@@ -695,6 +695,9 @@ UpdateResourceA
 UpdateResourceW
 VerLanguageNameA
 VerLanguageNameW
+VerSetConditionMask
+VerifyVersionInfoA
+VerifyVersionInfoW
 VirtualAlloc
 VirtualAllocEx
 VirtualFree
