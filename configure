@@ -87,35 +87,35 @@ fi
 for opt do
   eval opt=\"$opt\"
   case "$opt" in
-  --prefix=*) prefix=`echo $opt | cut -d '=' -f 2`
+  --prefix=*) prefix=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --exec-prefix=*) execprefix=`echo $opt | cut -d '=' -f 2`
+  --exec-prefix=*) execprefix=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --tccdir=*) tccdir=`echo $opt | cut -d '=' -f 2`
+  --tccdir=*) tccdir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --bindir=*) bindir=`echo $opt | cut -d '=' -f 2`
+  --bindir=*) bindir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --libdir=*) libdir=`echo $opt | cut -d '=' -f 2`
+  --libdir=*) libdir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --includedir=*) includedir=`echo $opt | cut -d '=' -f 2`
+  --includedir=*) includedir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --sharedir=*) sharedir=`echo $opt | cut -d '=' -f 2`
+  --sharedir=*) sharedir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --mandir=*) mandir=`echo $opt | cut -d '=' -f 2`
+  --mandir=*) mandir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --infodir=*) infodir=`echo $opt | cut -d '=' -f 2`
+  --infodir=*) infodir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --docdir=*) docdir=`echo $opt | cut -d '=' -f 2`
+  --docdir=*) docdir=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2`
+  --sysroot=*) sysroot=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --source-path=*) source_path=`echo $opt | cut -d '=' -f 2`
+  --source-path=*) source_path=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --cross-prefix=*) cross_prefix=`echo $opt | cut -d '=' -f 2`
+  --cross-prefix=*) cross_prefix=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --cc=*) cc=`echo $opt | cut -d '=' -f 2`
+  --cc=*) cc=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --ar=*) ar=`echo $opt | cut -d '=' -f 2` ; ar_set="yes"
+  --ar=*) ar=`echo $opt | cut -d '=' -f 2-` ; ar_set="yes"
   ;;
   --extra-cflags=*) CFLAGS="${opt#--extra-cflags=}"
   ;;
@@ -123,17 +123,17 @@ for opt do
   ;;
   --extra-libs=*) extralibs="${opt#--extra-libs=}"
   ;;
-  --sysincludepaths=*) tcc_sysincludepaths=`echo $opt | cut -d '=' -f 2`
+  --sysincludepaths=*) tcc_sysincludepaths=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --libpaths=*) tcc_libpaths=`echo $opt | cut -d '=' -f 2`
+  --libpaths=*) tcc_libpaths=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --crtprefix=*) tcc_crtprefix=`echo $opt | cut -d '=' -f 2`
+  --crtprefix=*) tcc_crtprefix=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --elfinterp=*) tcc_elfinterp=`echo $opt | cut -d '=' -f 2`
+  --elfinterp=*) tcc_elfinterp=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --triplet=*) triplet=`echo $opt | cut -d '=' -f 2`
+  --triplet=*) triplet=`echo $opt | cut -d '=' -f 2-`
   ;;
-  --cpu=*) cpu=`echo $opt | cut -d '=' -f 2`
+  --cpu=*) cpu=`echo $opt | cut -d '=' -f 2-`
   ;;
   --enable-cross) confvars="$confvars cross"
   ;;
