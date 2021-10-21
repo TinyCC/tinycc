@@ -105,9 +105,9 @@ int gotplt_entry_type (int reloc_type)
 }
 
 #if !defined(TCC_TARGET_MACHO) || defined TCC_IS_NATIVE
-ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+ST_FUNC unsigned create_plt_entry(TCCState *S, unsigned got_offset, struct sym_attr *attr)
 {
-    Section *plt = s1->plt;
+    Section *plt = S->plt;
     uint8_t *p;
     int modrm;
     unsigned plt_offset, relofs;
@@ -118,7 +118,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
        (GOT + PTR_SIZE) and jumps to ld.so resolution routine
        (GOT + 2 * PTR_SIZE) */
     if (plt->data_offset == 0) {
-        p = section_ptr_add(plt, 16);
+        p = section_ptr_add(S, plt, 16);
         p[0] = 0xff; /* pushl got + PTR_SIZE */
         p[1] = modrm + 0x10;
         write32le(p + 2, PTR_SIZE);
@@ -131,10 +131,10 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     /* The PLT slot refers to the relocation entry it needs via offset.
        The reloc entry is created below, so its offset is the current
        data_offset */
-    relofs = s1->plt->reloc ? s1->plt->reloc->data_offset : 0;
+    relofs = S->plt->reloc ? S->plt->reloc->data_offset : 0;
 
     /* Jump to GOT entry where ld.so initially put the address of ip + 4 */
-    p = section_ptr_add(plt, 16);
+    p = section_ptr_add(S, plt, 16);
     p[0] = 0xff; /* jmp *(got + x) */
     p[1] = modrm;
     write32le(p + 2, got_offset);
@@ -148,32 +148,32 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
 
 /* relocate the PLT: compute addresses and offsets in the PLT now that final
    address for PLT and GOT are known (see fill_program_header) */
-ST_FUNC void relocate_plt(TCCState *s1)
+ST_FUNC void relocate_plt(TCCState *S)
 {
     uint8_t *p, *p_end;
 
-    if (!s1->plt)
+    if (!S->plt)
       return;
 
-    p = s1->plt->data;
-    p_end = p + s1->plt->data_offset;
+    p = S->plt->data;
+    p_end = p + S->plt->data_offset;
 
     if (p < p_end) {
-        int x = s1->got->sh_addr - s1->plt->sh_addr - 6;
+        int x = S->got->sh_addr - S->plt->sh_addr - 6;
         add32le(p + 2, x);
         add32le(p + 8, x - 6);
         p += 16;
         while (p < p_end) {
-            add32le(p + 2, x + (s1->plt->data - p));
+            add32le(p + 2, x + (S->plt->data - p));
             p += 16;
         }
     }
 
-    if (s1->plt->reloc) {
+    if (S->plt->reloc) {
         ElfW_Rel *rel;
-        int x = s1->plt->sh_addr + 16 + 6;
-        p = s1->got->data;
-        for_each_elem(s1->plt->reloc, 0, rel, ElfW_Rel) {
+        int x = S->plt->sh_addr + 16 + 6;
+        p = S->got->data;
+        for_each_elem(S->plt->reloc, 0, rel, ElfW_Rel) {
             write64le(p + rel->r_offset, x);
             x += 16;
         }
@@ -182,7 +182,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 #endif
 #endif
 
-void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
+void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     int sym_index, esym_index;
 
@@ -190,8 +190,8 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 
     switch (type) {
         case R_X86_64_64:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+            if (S->output_type == TCC_OUTPUT_DLL) {
+                esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_64);
@@ -208,7 +208,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (S->output_type == TCC_OUTPUT_DLL) {
                 /* XXX: this logic may depend on TCC's codegen
                    now TCC uses R_X86_64_32 even for a 64bit pointer */
                 qrel->r_offset = rel->r_offset;
@@ -221,9 +221,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             break;
 
         case R_X86_64_PC32:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (S->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+                esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
@@ -243,20 +243,20 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             long long diff;
             diff = (long long)val - addr;
             if (diff < -2147483648LL || diff > 2147483647LL) {
-                tcc_error("internal error: relocation failed");
+                tcc_error(S, "internal error: relocation failed");
             }
             add32le(ptr, diff);
         }
             break;
 
         case R_X86_64_PLTOFF64:
-            add64le(ptr, val - s1->got->sh_addr + rel->r_addend);
+            add64le(ptr, val - S->got->sh_addr + rel->r_addend);
             break;
 
         case R_X86_64_PC64:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (S->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+                esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC64);
@@ -276,28 +276,28 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         case R_X86_64_GOTPCREL:
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
-            add32le(ptr, s1->got->sh_addr - addr +
-                         get_sym_attr(s1, sym_index, 0)->got_offset - 4);
+            add32le(ptr, S->got->sh_addr - addr +
+                         get_sym_attr(S, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
-            add32le(ptr, s1->got->sh_addr - addr + rel->r_addend);
+            add32le(ptr, S->got->sh_addr - addr + rel->r_addend);
             break;
         case R_X86_64_GOTPC64:
-            add64le(ptr, s1->got->sh_addr - addr + rel->r_addend);
+            add64le(ptr, S->got->sh_addr - addr + rel->r_addend);
             break;
         case R_X86_64_GOTTPOFF:
-            add32le(ptr, val - s1->got->sh_addr);
+            add32le(ptr, val - S->got->sh_addr);
             break;
         case R_X86_64_GOT32:
             /* we load the got offset */
-            add32le(ptr, get_sym_attr(s1, sym_index, 0)->got_offset);
+            add32le(ptr, get_sym_attr(S, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOT64:
             /* we load the got offset */
-            add64le(ptr, get_sym_attr(s1, sym_index, 0)->got_offset);
+            add64le(ptr, get_sym_attr(S, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOTOFF64:
-            add64le(ptr, val - s1->got->sh_addr);
+            add64le(ptr, val - S->got->sh_addr);
             break;
         case R_X86_64_TLSGD:
             {
@@ -320,12 +320,12 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     memcpy(ptr-4, replace, sizeof(replace));
                     rel[1].r_info = ELFW(R_INFO)(0, R_X86_64_NONE);
                     sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                    sec = s1->sections[sym->st_shndx];
+                    sec = S->sections[sym->st_shndx];
                     x = sym->st_value - sec->sh_addr - sec->data_offset;
                     add32le(ptr + 8, x);
                 }
                 else
-                    tcc_error("unexpected R_X86_64_TLSGD pattern");
+                    tcc_error(S, "unexpected R_X86_64_TLSGD pattern");
             }
             break;
         case R_X86_64_TLSLD:
@@ -345,7 +345,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     rel[1].r_info = ELFW(R_INFO)(0, R_X86_64_NONE);
                 }
                 else
-                    tcc_error("unexpected R_X86_64_TLSLD pattern");
+                    tcc_error(S, "unexpected R_X86_64_TLSLD pattern");
             }
             break;
         case R_X86_64_DTPOFF32:
@@ -356,7 +356,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 int32_t x;
 
                 sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-                sec = s1->sections[sym->st_shndx];
+                sec = S->sections[sym->st_shndx];
                 x = val - sec->sh_addr - sec->data_offset;
                 add32le(ptr, x);
             }
@@ -365,7 +365,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             break;
         case R_X86_64_RELATIVE:
 #ifdef TCC_TARGET_PE
-            add32le(ptr, val - s1->pe_imagebase);
+            add32le(ptr, val - S->pe_imagebase);
 #endif
             /* do nothing */
             break;

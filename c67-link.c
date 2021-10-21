@@ -65,23 +65,23 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
-ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+ST_FUNC unsigned create_plt_entry(TCCState *S, unsigned got_offset, struct sym_attr *attr)
 {
-    tcc_error("C67 got not implemented");
+    tcc_error(S, "C67 got not implemented");
     return 0;
 }
 
 /* relocate the PLT: compute addresses and offsets in the PLT now that final
    address for PLT and GOT are known (see fill_program_header) */
-ST_FUNC void relocate_plt(TCCState *s1)
+ST_FUNC void relocate_plt(TCCState *S)
 {
     uint8_t *p, *p_end;
 
-    if (!s1->plt)
+    if (!S->plt)
       return;
 
-    p = s1->plt->data;
-    p_end = p + s1->plt->data_offset;
+    p = S->plt->data;
+    p_end = p + S->plt->data_offset;
 
     if (p < p_end) {
         /* XXX: TODO */
@@ -91,7 +91,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
    }
 }
 
-void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
+void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     switch(type) {
         case R_C60_32:

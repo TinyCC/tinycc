@@ -65,7 +65,6 @@
 /* global variables */
 
 /* XXX: get rid of this ASAP (or maybe not) */
-ST_DATA struct TCCState *tcc_state;
 TCC_SEM(static tcc_compile_sem);
 
 #ifdef MEM_DEBUG
@@ -111,11 +110,11 @@ static inline char *config_tccdir_w32(char *path)
 #endif
 
 #ifdef TCC_TARGET_PE
-static void tcc_add_systemdir(TCCState *s)
+static void tcc_add_systemdir(TCCState *S)
 {
     char buf[1000];
     GetSystemDirectory(buf, sizeof buf);
-    tcc_add_library_path(s, normalize_slashes(buf));
+    tcc_add_library_path(S, normalize_slashes(buf));
 }
 #endif
 #endif
@@ -160,19 +159,19 @@ ST_FUNC void post_sem(TCCSem *p)
 #endif
 #endif
 
-PUB_FUNC void tcc_enter_state(TCCState *s1)
+PUB_FUNC void tcc_enter_state(TCCState *S)
 {
-    if (s1->error_set_jmp_enabled)
+    if (S->error_set_jmp_enabled)
         return;
     WAIT_SEM(&tcc_compile_sem);
-    tcc_state = s1;
+    /*S = S;*/
 }
 
-PUB_FUNC void tcc_exit_state(TCCState *s1)
+PUB_FUNC void tcc_exit_state(TCCState *S)
 {
-    if (s1->error_set_jmp_enabled)
+    if (S->error_set_jmp_enabled)
         return;
-    tcc_state = NULL;
+    S = NULL;
     POST_SEM(&tcc_compile_sem);
 }
 
@@ -234,10 +233,10 @@ PUB_FUNC char *tcc_fileextension (const char *name)
     return e ? e : strchr(b, 0);
 }
 
-ST_FUNC char *tcc_load_text(int fd)
+ST_FUNC char *tcc_load_text(TCCState* S, int fd)
 {
     int len = lseek(fd, 0, SEEK_END);
-    char *buf = load_data(fd, 0, len + 1);
+    char *buf = load_data(S, fd, 0, len + 1);
     buf[len] = 0;
     return buf;
 }
@@ -249,44 +248,69 @@ ST_FUNC char *tcc_load_text(int fd)
 #undef malloc
 #undef realloc
 
-#ifndef MEM_DEBUG
-
-PUB_FUNC void tcc_free(void *ptr)
+PUB_FUNC void tcc_free_base(void *ptr)
 {
     free(ptr);
 }
 
-PUB_FUNC void *tcc_malloc(unsigned long size)
+PUB_FUNC void *tcc_malloc_base(unsigned long size)
 {
     void *ptr;
     ptr = malloc(size);
-    if (!ptr && size)
-        _tcc_error("memory full (malloc)");
+    if (!ptr && size) {
+        printf("memory full (malloc)\n");
+        exit(1);
+    }
     return ptr;
 }
 
-PUB_FUNC void *tcc_mallocz(unsigned long size)
+PUB_FUNC void *tcc_mallocz_base(unsigned long size)
 {
     void *ptr;
-    ptr = tcc_malloc(size);
+    ptr = tcc_malloc_base(size);
     if (size)
         memset(ptr, 0, size);
     return ptr;
 }
 
-PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
+#ifndef MEM_DEBUG
+
+PUB_FUNC void tcc_free(TCCState* S, void *ptr)
+{
+    free(ptr);
+}
+
+PUB_FUNC void *tcc_malloc(TCCState* S, unsigned long size)
+{
+    void *ptr;
+    ptr = malloc(size);
+    if (!ptr && size)
+        _tcc_error(S, "memory full (malloc)");
+    return ptr;
+}
+
+PUB_FUNC void *tcc_mallocz(TCCState* S, unsigned long size)
+{
+    void *ptr;
+    ptr = tcc_malloc(S, size);
+    if (size)
+        memset(ptr, 0, size);
+    return ptr;
+}
+
+PUB_FUNC void *tcc_realloc(TCCState* S, void *ptr, unsigned long size)
 {
     void *ptr1;
     ptr1 = realloc(ptr, size);
     if (!ptr1 && size)
-        _tcc_error("memory full (realloc)");
+        _tcc_error(S, "memory full (realloc)");
     return ptr1;
 }
 
-PUB_FUNC char *tcc_strdup(const char *str)
+PUB_FUNC char *tcc_strdup(TCCState* S, const char *str)
 {
     char *ptr;
-    ptr = tcc_malloc(strlen(str) + 1);
+    ptr = tcc_malloc(S, strlen(str) + 1);
     strcpy(ptr, str);
     return ptr;
 }
@@ -337,14 +361,14 @@ static mem_debug_header_t *malloc_check(void *ptr, const char *msg)
     return header;
 }
 
-PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_malloc_debug(TCCState* S, unsigned long size, const char *file, int line)
 {
     int ofs;
     mem_debug_header_t *header;
 
     header = malloc(sizeof(mem_debug_header_t) + size);
     if (!header)
-        _tcc_error("memory full (malloc)");
+        _tcc_error(S, "memory full (malloc)");
 
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
@@ -368,7 +392,7 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     return MEM_USER_PTR(header);
 }
 
-PUB_FUNC void tcc_free_debug(void *ptr)
+PUB_FUNC void tcc_free_debug(TCCState* S, void *ptr)
 {
     mem_debug_header_t *header;
     if (!ptr)
@@ -385,26 +409,26 @@ PUB_FUNC void tcc_free_debug(void *ptr)
     free(header);
 }
 
-PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_mallocz_debug(TCCState* S, unsigned long size, const char *file, int line)
 {
     void *ptr;
-    ptr = tcc_malloc_debug(size,file,line);
+    ptr = tcc_malloc_debug(S, size,file,line);
     memset(ptr, 0, size);
     return ptr;
 }
 
-PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_realloc_debug(TCCState* S, void *ptr, unsigned long size, const char *file, int line)
 {
     mem_debug_header_t *header;
     int mem_debug_chain_update = 0;
     if (!ptr)
-        return tcc_malloc_debug(size, file, line);
+        return tcc_malloc_debug(S, size, file, line);
     header = malloc_check(ptr, "tcc_realloc");
     mem_cur_size -= header->size;
     mem_debug_chain_update = (header == mem_debug_chain);
     header = realloc(header, sizeof(mem_debug_header_t) + size);
     if (!header)
-        _tcc_error("memory full (realloc)");
+        _tcc_error(S, "memory full (realloc)");
     header->size = size;
     write32le(MEM_DEBUG_CHECK3(header), MEM_DEBUG_MAGIC3);
     if (header->next)
@@ -419,10 +443,10 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     return MEM_USER_PTR(header);
 }
 
-PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line)
+PUB_FUNC char *tcc_strdup_debug(TCCState* S, const char *str, const char *file, int line)
 {
     char *ptr;
-    ptr = tcc_malloc_debug(strlen(str) + 1, file, line);
+    ptr = tcc_malloc_debug(S, strlen(str) + 1, file, line);
     strcpy(ptr, str);
     return ptr;
 }
@@ -450,9 +474,65 @@ PUB_FUNC void tcc_memcheck(void)
 #define realloc(p, s) use_tcc_realloc(p, s)
 
 /********************************************************/
+/* virtual io */
+
+LIBTCCAPI void tcc_set_vio_module(TCCState *S, vio_module_t *vio_module){
+	S->vio_module = vio_module;
+	vio_module->S = S;
+}
+
+void vio_initialize(vio_fd *fd) {
+    fd->fd = -1;
+    fd->vio_udata = NULL;
+    fd->vio_module = NULL;
+}
+
+int vio_open(struct TCCState *S, vio_fd *fd, const char *fn, int oflag) {
+    int rc;
+    vio_initialize(fd);
+    fd->vio_module = S->vio_module;
+    if(S->vio_module && (S->vio_module->call_vio_open_flags & CALL_VIO_OPEN_FIRST)) {
+	rc =  S->vio_module->vio_open(fd, fn, oflag); 
+	if(rc >= 0) return rc;
+    }
+    
+    fd->fd = open(fn, oflag);
+    
+    if(fd->fd < 0 && S->vio_module && (S->vio_module->call_vio_open_flags & CALL_VIO_OPEN_LAST)) {
+	rc =  S->vio_module->vio_open(fd, fn, oflag); 
+	if(rc >= 0) return rc;
+    }
+    //printf("vio_open = %d %s\n", fd->fd, fn);
+    return fd->fd;
+}
+
+off_t vio_lseek(vio_fd fd, off_t offset, int whence) {
+    if(fd.vio_udata) {
+        return fd.vio_module->vio_lseek(fd, offset, whence);
+    }
+    return lseek(fd.fd, offset, whence);
+}
+
+size_t vio_read(vio_fd fd, void *buf, size_t bytes) {
+    if(fd.vio_udata) {
+	return fd.vio_module->vio_read(fd, buf, bytes);
+    }
+    return read(fd.fd, buf, bytes);
+}
+
+int vio_close(vio_fd *fd) {
+    int rc = 0;
+    if(fd->vio_udata){
+	fd->vio_module->vio_close(fd);
+    } else rc = close(fd->fd);
+    vio_initialize(fd);
+    return rc;
+}
+
+/********************************************************/
 /* dynarrays */
 
-ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)
+ST_FUNC void dynarray_add(TCCState* S, void *ptab, int *nb_ptr, void *data)
 {
     int nb, nb_alloc;
     void **pp;
@@ -465,54 +545,54 @@ ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)
             nb_alloc = 1;
         else
             nb_alloc = nb * 2;
-        pp = tcc_realloc(pp, nb_alloc * sizeof(void *));
+        pp = tcc_realloc(S, pp, nb_alloc * sizeof(void *));
         *(void***)ptab = pp;
     }
     pp[nb++] = data;
     *nb_ptr = nb;
 }
 
-ST_FUNC void dynarray_reset(void *pp, int *n)
+ST_FUNC void dynarray_reset(TCCState* S, void *pp, int *n)
 {
     void **p;
     for (p = *(void***)pp; *n; ++p, --*n)
         if (*p)
-            tcc_free(*p);
-    tcc_free(*(void**)pp);
+            tcc_free(S, *p);
+    tcc_free(S, *(void**)pp);
     *(void**)pp = NULL;
 }
 
-static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *in)
+static void tcc_split_path(TCCState *S, void *p_ary, int *p_nb_ary, const char *in)
 {
     const char *p;
     do {
         int c;
         CString str;
 
-        cstr_new(&str);
+        cstr_new(S, &str);
         for (p = in; c = *p, c != '\0' && c != PATHSEP[0]; ++p) {
             if (c == '{' && p[1] && p[2] == '}') {
                 c = p[1], p += 2;
                 if (c == 'B')
-                    cstr_cat(&str, s->tcc_lib_path, -1);
-                if (c == 'f' && file) {
+                    cstr_cat(S, &str, S->tcc_lib_path, -1);
+                if (c == 'f' && S->tccpp_file) {
                     /* substitute current file's dir */
-                    const char *f = file->true_filename;
+                    const char *f = S->tccpp_file->true_filename;
                     const char *b = tcc_basename(f);
                     if (b > f)
-                        cstr_cat(&str, f, b - f - 1);
+                        cstr_cat(S, &str, f, b - f - 1);
                     else
-                        cstr_cat(&str, ".", 1);
+                        cstr_cat(S, &str, ".", 1);
                 }
             } else {
-                cstr_ccat(&str, c);
+                cstr_ccat(S, &str, c);
             }
         }
         if (str.size) {
-            cstr_ccat(&str, '\0');
-            dynarray_add(p_ary, p_nb_ary, tcc_strdup(str.data));
+            cstr_ccat(S, &str, '\0');
+            dynarray_add(S, p_ary, p_nb_ary, tcc_strdup(S, str.data));
         }
-        cstr_free(&str);
+        cstr_free(S, &str);
         in = p+1;
     } while (*p);
 }
@@ -528,27 +608,26 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
 /* error1() modes */
 enum { ERROR_WARN, ERROR_NOABORT, ERROR_ERROR };
 
-static void error1(int mode, const char *fmt, va_list ap)
+static void error1(TCCState* S, int mode, const char *fmt, va_list ap)
 {
     BufferedFile **pf, *f;
-    TCCState *s1 = tcc_state;
     CString cs;
 
-    cstr_new(&cs);
+    cstr_new(S, &cs);
 
-    if (s1 == NULL)
+    if (S == NULL)
         /* can happen only if called from tcc_malloc(): 'out of memory' */
         goto no_file;
 
-    tcc_exit_state(s1);
+    tcc_exit_state(S);
 
     if (mode == ERROR_WARN) {
-        if (s1->warn_error)
+        if (S->warn_error)
             mode = ERROR_ERROR;
-        if (s1->warn_num) {
+        if (S->warn_num) {
             /* handle tcc_warning_c(warn_option)(fmt, ...) */
-            int wopt = *(&s1->warn_none + s1->warn_num);
-            s1->warn_num = 0;
+            int wopt = *(&S->warn_none + S->warn_num);
+            S->warn_num = 0;
             if (0 == (wopt & WARN_ON))
                 return;
             if (wopt & WARN_ERR)
@@ -556,102 +635,102 @@ static void error1(int mode, const char *fmt, va_list ap)
             if (wopt & WARN_NOE)
                 mode = ERROR_WARN;
         }
-        if (s1->warn_none)
+        if (S->warn_none)
             return;
     }
 
     f = NULL;
-    if (s1->error_set_jmp_enabled) { /* we're called while parsing a file */
+    if (S->error_set_jmp_enabled) { /* we're called while parsing a file */
         /* use upper file if inline ":asm:" or token ":paste:" */
-        for (f = file; f && f->filename[0] == ':'; f = f->prev)
+        for (f = S->tccpp_file; f && f->filename[0] == ':'; f = f->prev)
             ;
     }
     if (f) {
-        for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
-            cstr_printf(&cs, "In file included from %s:%d:\n",
+        for(pf = S->include_stack; pf < S->include_stack_ptr; pf++)
+            cstr_printf(S, &cs, "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
-        cstr_printf(&cs, "%s:%d: ",
-            f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
-    } else if (s1->current_filename) {
-        cstr_printf(&cs, "%s: ", s1->current_filename);
+        cstr_printf(S, &cs, "%s:%d: ",
+            f->filename, (*pf)->line_num - !!(S->tccpp_tok_flags & TOK_FLAG_BOL));
+    } else if (S->current_filename) {
+        cstr_printf(S, &cs, "%s: ", S->current_filename);
     }
 
 no_file:
     if (0 == cs.size)
-        cstr_printf(&cs, "tcc: ");
-    cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
-    cstr_vprintf(&cs, fmt, ap);
-    if (!s1 || !s1->error_func) {
+        cstr_printf(S, &cs, "tcc: ");
+    cstr_printf(S, &cs, mode == ERROR_WARN ? "warning: " : "error: ");
+    cstr_vprintf(S, &cs, fmt, ap);
+    if (!S || !S->error_func) {
         /* default case: stderr */
-        if (s1 && s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
+        if (S && S->output_type == TCC_OUTPUT_PREPROCESS && S->ppfp == stdout)
             printf("\n"); /* print a newline during tcc -E */
         fflush(stdout); /* flush -v output */
         fprintf(stderr, "%s\n", (char*)cs.data);
         fflush(stderr); /* print error/warning now (win32) */
     } else {
-        s1->error_func(s1->error_opaque, (char*)cs.data);
+        S->error_func(S->error_opaque, (char*)cs.data);
     }
-    cstr_free(&cs);
-    if (s1) {
+    cstr_free(S, &cs);
+    if (S) {
         if (mode != ERROR_WARN)
-            s1->nb_errors++;
+            S->nb_errors++;
         if (mode != ERROR_ERROR)
             return;
-        if (s1->error_set_jmp_enabled)
-            longjmp(s1->error_jmp_buf, 1);
+        if (S->error_set_jmp_enabled)
+            longjmp(S->error_jmp_buf, 1);
     }
     exit(1);
 }
 
-LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc error_func)
+LIBTCCAPI void tcc_set_error_func(TCCState *S, void *error_opaque, TCCErrorFunc error_func)
 {
-    s->error_opaque = error_opaque;
-    s->error_func = error_func;
+    S->error_opaque = error_opaque;
+    S->error_func = error_func;
 }
 
-LIBTCCAPI TCCErrorFunc tcc_get_error_func(TCCState *s)
+LIBTCCAPI TCCErrorFunc tcc_get_error_func(TCCState *S)
 {
-    return s->error_func;
+    return S->error_func;
 }
 
-LIBTCCAPI void *tcc_get_error_opaque(TCCState *s)
+LIBTCCAPI void *tcc_get_error_opaque(TCCState *S)
 {
-    return s->error_opaque;
+    return S->error_opaque;
 }
 
 /* error without aborting current compilation */
-PUB_FUNC void _tcc_error_noabort(const char *fmt, ...)
+PUB_FUNC void _tcc_error_noabort(TCCState* S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    error1(ERROR_NOABORT, fmt, ap);
+    error1(S, ERROR_NOABORT, fmt, ap);
     va_end(ap);
 }
 
-PUB_FUNC void _tcc_error(const char *fmt, ...)
+PUB_FUNC void _tcc_error(TCCState* S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    for (;;) error1(ERROR_ERROR, fmt, ap);
+    for (;;) error1(S, ERROR_ERROR, fmt, ap);
 }
 
-PUB_FUNC void _tcc_warning(const char *fmt, ...)
+PUB_FUNC void _tcc_warning(TCCState* S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    error1(ERROR_WARN, fmt, ap);
+    error1(S, ERROR_WARN, fmt, ap);
     va_end(ap);
 }
 
 /********************************************************/
 /* I/O layer */
 
-ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
+ST_FUNC void tcc_open_bf(TCCState *S, const char *filename, int initlen)
 {
     BufferedFile *bf;
     int buflen = initlen ? initlen : IO_BUF_SIZE;
 
-    bf = tcc_mallocz(sizeof(BufferedFile) + buflen);
+    bf = tcc_mallocz(S, sizeof(BufferedFile) + buflen);
     bf->buf_ptr = bf->buffer;
     bf->buf_end = bf->buffer + initlen;
     bf->buf_end[0] = CH_EOB; /* put eob symbol */
@@ -661,52 +740,51 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
 #endif
     bf->true_filename = bf->filename;
     bf->line_num = 1;
-    bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+    bf->ifdef_stack_ptr = S->ifdef_stack_ptr;
     bf->fd = -1;
-    bf->prev = file;
-    file = bf;
-    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+    bf->prev = S->tccpp_file;
+    S->tccpp_file = bf;
+    S->tccpp_tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
 }
 
-ST_FUNC void tcc_close(void)
+ST_FUNC void tcc_close(TCCState* S)
 {
-    TCCState *s1 = tcc_state;
-    BufferedFile *bf = file;
+    BufferedFile *bf = S->tccpp_file;
     if (bf->fd > 0) {
         close(bf->fd);
         total_lines += bf->line_num;
     }
     if (bf->true_filename != bf->filename)
-        tcc_free(bf->true_filename);
-    file = bf->prev;
-    tcc_free(bf);
+        tcc_free(S, bf->true_filename);
+    S->tccpp_file = bf->prev;
+    tcc_free(S, bf);
 }
 
-static int _tcc_open(TCCState *s1, const char *filename)
+static int _tcc_open(TCCState *S, const char *filename)
 {
     int fd;
     if (strcmp(filename, "-") == 0)
         fd = 0, filename = "<stdin>";
     else
         fd = open(filename, O_RDONLY | O_BINARY);
-    if ((s1->verbose == 2 && fd >= 0) || s1->verbose == 3)
+    if ((S->verbose == 2 && fd >= 0) || S->verbose == 3)
         printf("%s %*s%s\n", fd < 0 ? "nf":"->",
-               (int)(s1->include_stack_ptr - s1->include_stack), "", filename);
+               (int)(S->include_stack_ptr - S->include_stack), "", filename);
     return fd;
 }
 
-ST_FUNC int tcc_open(TCCState *s1, const char *filename)
+ST_FUNC int tcc_open(TCCState *S, const char *filename)
 {
-    int fd = _tcc_open(s1, filename);
+    int fd = _tcc_open(S, filename);
     if (fd < 0)
         return -1;
-    tcc_open_bf(s1, filename, 0);
-    file->fd = fd;
+    tcc_open_bf(S, filename, 0);
+    S->tccpp_file->fd = fd;
     return 0;
 }
 
 /* compile the file opened in 'file'. Return non zero if errors. */
-static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
+static int tcc_compile(TCCState *S, int filetype, const char *str, int fd)
 {
     /* Here we enter the code section where we use the global variables for
        parsing and code generation (tccpp.c, tccgen.c, <target>-gen.c).
@@ -715,62 +793,62 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
        Alternatively we could use thread local storage for those global
        variables, which may or may not have advantages */
 
-    tcc_enter_state(s1);
-    s1->error_set_jmp_enabled = 1;
+    tcc_enter_state(S);
+    S->error_set_jmp_enabled = 1;
 
-    if (setjmp(s1->error_jmp_buf) == 0) {
-        s1->nb_errors = 0;
+    if (setjmp(S->error_jmp_buf) == 0) {
+        S->nb_errors = 0;
 
         if (fd == -1) {
             int len = strlen(str);
-            tcc_open_bf(s1, "<string>", len);
-            memcpy(file->buffer, str, len);
+            tcc_open_bf(S, "<string>", len);
+            memcpy(S->tccpp_file->buffer, str, len);
         } else {
-            tcc_open_bf(s1, str, 0);
-            file->fd = fd;
+            tcc_open_bf(S, str, 0);
+            S->tccpp_file->fd = fd;
         }
 
-        tccelf_begin_file(s1);
-        preprocess_start(s1, filetype);
-        tccgen_init(s1);
-        if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
-            tcc_preprocess(s1);
+        tccelf_begin_file(S);
+        preprocess_start(S, filetype);
+        tccgen_init(S);
+        if (S->output_type == TCC_OUTPUT_PREPROCESS) {
+            tcc_preprocess(S);
         } else if (filetype & (AFF_TYPE_ASM | AFF_TYPE_ASMPP)) {
-            tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
+            tcc_assemble(S, !!(filetype & AFF_TYPE_ASMPP));
         } else {
-            tccgen_compile(s1);
+            tccgen_compile(S);
         }
     }
-    tccgen_finish(s1);
-    preprocess_end(s1);
+    tccgen_finish(S);
+    preprocess_end(S);
 
-    s1->error_set_jmp_enabled = 0;
-    tcc_exit_state(s1);
+    S->error_set_jmp_enabled = 0;
+    tcc_exit_state(S);
 
-    tccelf_end_file(s1);
-    return s1->nb_errors != 0 ? -1 : 0;
+    tccelf_end_file(S);
+    return S->nb_errors != 0 ? -1 : 0;
 }
 
-LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
+LIBTCCAPI int tcc_compile_string(TCCState *S, const char *str)
 {
-    return tcc_compile(s, s->filetype, str, -1);
+    return tcc_compile(S, S->filetype, str, -1);
 }
 
 /* define a preprocessor symbol. value can be NULL, sym can be "sym=val" */
-LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
+LIBTCCAPI void tcc_define_symbol(TCCState *S, const char *sym, const char *value)
 {
     const char *eq;
     if (NULL == (eq = strchr(sym, '=')))
         eq = strchr(sym, 0);
     if (NULL == value)
         value = *eq ? eq + 1 : "1";
-    cstr_printf(&s1->cmdline_defs, "#define %.*s %s\n", (int)(eq-sym), sym, value);
+    cstr_printf(S, &S->cmdline_defs, "#define %.*s %s\n", (int)(eq-sym), sym, value);
 }
 
 /* undefine a preprocessor symbol */
-LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
+LIBTCCAPI void tcc_undefine_symbol(TCCState *S, const char *sym)
 {
-    cstr_printf(&s1->cmdline_defs, "#undef %s\n", sym);
+    cstr_printf(S, &S->cmdline_defs, "#undef %s\n", sym);
 }
 
 
@@ -778,7 +856,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 {
     TCCState *s;
 
-    s = tcc_mallocz(sizeof(TCCState));
+    s = tcc_mallocz_base(sizeof(TCCState));
     if (!s)
         return NULL;
 #ifdef MEM_DEBUG
@@ -820,153 +898,153 @@ LIBTCCAPI TCCState *tcc_new(void)
     return s;
 }
 
-LIBTCCAPI void tcc_delete(TCCState *s1)
+LIBTCCAPI void tcc_delete(TCCState *S)
 {
     /* free sections */
-    tccelf_delete(s1);
+    tccelf_delete(S);
 
     /* free library paths */
-    dynarray_reset(&s1->library_paths, &s1->nb_library_paths);
-    dynarray_reset(&s1->crt_paths, &s1->nb_crt_paths);
+    dynarray_reset(S, &S->library_paths, &S->nb_library_paths);
+    dynarray_reset(S, &S->crt_paths, &S->nb_crt_paths);
 
     /* free include paths */
-    dynarray_reset(&s1->include_paths, &s1->nb_include_paths);
-    dynarray_reset(&s1->sysinclude_paths, &s1->nb_sysinclude_paths);
+    dynarray_reset(S, &S->include_paths, &S->nb_include_paths);
+    dynarray_reset(S, &S->sysinclude_paths, &S->nb_sysinclude_paths);
 
-    tcc_free(s1->tcc_lib_path);
-    tcc_free(s1->soname);
-    tcc_free(s1->rpath);
-    tcc_free(s1->init_symbol);
-    tcc_free(s1->fini_symbol);
-    tcc_free(s1->outfile);
-    tcc_free(s1->deps_outfile);
-    dynarray_reset(&s1->files, &s1->nb_files);
-    dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
-    dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
-    dynarray_reset(&s1->argv, &s1->argc);
-    cstr_free(&s1->cmdline_defs);
-    cstr_free(&s1->cmdline_incl);
+    tcc_free(S, S->tcc_lib_path);
+    tcc_free(S, S->soname);
+    tcc_free(S, S->rpath);
+    tcc_free(S, S->init_symbol);
+    tcc_free(S, S->fini_symbol);
+    tcc_free(S, S->outfile);
+    tcc_free(S, S->deps_outfile);
+    dynarray_reset(S, &S->files, &S->nb_files);
+    dynarray_reset(S, &S->target_deps, &S->nb_target_deps);
+    dynarray_reset(S, &S->pragma_libs, &S->nb_pragma_libs);
+    dynarray_reset(S, &S->argv, &S->argc);
+    cstr_free(S, &S->cmdline_defs);
+    cstr_free(S, &S->cmdline_incl);
 #ifdef TCC_IS_NATIVE
     /* free runtime memory */
-    tcc_run_free(s1);
+    tcc_run_free(S);
 #endif
 
-    tcc_free(s1);
+    tcc_free_base(S);
 #ifdef MEM_DEBUG
     if (0 == --nb_states)
         tcc_memcheck();
 #endif
 }
 
-LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
+LIBTCCAPI int tcc_set_output_type(TCCState *S, int output_type)
 {
-    s->output_type = output_type;
+    S->output_type = output_type;
 
-    if (!s->nostdinc) {
+    if (!S->nostdinc) {
         /* default include paths */
         /* -isystem paths have already been handled */
-        tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
+        tcc_add_sysinclude_path(S, CONFIG_TCC_SYSINCLUDEPATHS);
     }
 #ifdef CONFIG_TCC_BCHECK
-    if (s->do_bounds_check) {
+    if (S->do_bounds_check) {
         /* if bound checking, then add corresponding sections */
-        tccelf_bounds_new(s);
+        tccelf_bounds_new(S);
     }
 #endif
-    if (s->do_debug) {
+    if (S->do_debug) {
         /* add debug sections */
-        tccelf_stab_new(s);
+        tccelf_stab_new(S);
     }
     if (output_type == TCC_OUTPUT_OBJ) {
         /* always elf for objects */
-        s->output_format = TCC_OUTPUT_FORMAT_ELF;
+        S->output_format = TCC_OUTPUT_FORMAT_ELF;
         return 0;
     }
 
-    tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
+    tcc_add_library_path(S, CONFIG_TCC_LIBPATHS);
 
 #ifdef TCC_TARGET_PE
 # ifdef _WIN32
     /* allow linking with system dll's directly */
-    tcc_add_systemdir(s);
+    tcc_add_systemdir(S);
 # endif
     /* target PE has its own startup code in libtcc1.a */
     return 0;
 
 #elif defined TCC_TARGET_MACHO
 # ifdef TCC_IS_NATIVE
-    tcc_add_macos_sdkpath(s);
+    tcc_add_macos_sdkpath(S);
 # endif
     /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
     return 0;
 
 #else
     /* paths for crt objects */
-    tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
+    tcc_split_path(S, &S->crt_paths, &S->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
     /* add libc crt1/crti objects */
     if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
-        !s->nostdlib) {
+        !S->nostdlib) {
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
-	    tcc_add_crt(s, "crt0.o");
+	    tcc_add_crt(S, "crt0.o");
         if (output_type == TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbeginS.o");
+            tcc_add_crt(S, "crtbeginS.o");
         else
-            tcc_add_crt(s, "crtbegin.o");
+            tcc_add_crt(S, "crtbegin.o");
 #elif TARGETOS_FreeBSD
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt1.o");
-        tcc_add_crt(s, "crti.o");
-        if (s->static_link)
-            tcc_add_crt(s, "crtbeginT.o");
+            tcc_add_crt(S, "crt1.o");
+        tcc_add_crt(S, "crti.o");
+        if (S->static_link)
+            tcc_add_crt(S, "crtbeginT.o");
         else if (output_type == TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbeginS.o");
+            tcc_add_crt(S, "crtbeginS.o");
         else
-            tcc_add_crt(s, "crtbegin.o");
+            tcc_add_crt(S, "crtbegin.o");
 #elif TARGETOS_NetBSD
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt0.o");
-        tcc_add_crt(s, "crti.o");
-        if (s->static_link)
-            tcc_add_crt(s, "crtbeginT.o");
+            tcc_add_crt(S, "crt0.o");
+        tcc_add_crt(S, "crti.o");
+        if (S->static_link)
+            tcc_add_crt(S, "crtbeginT.o");
         else if (output_type == TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbeginS.o");
+            tcc_add_crt(S, "crtbeginS.o");
         else
-            tcc_add_crt(s, "crtbegin.o");
+            tcc_add_crt(S, "crtbegin.o");
 #else
         if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt1.o");
-        tcc_add_crt(s, "crti.o");
+            tcc_add_crt(S, "crt1.o");
+        tcc_add_crt(S, "crti.o");
 #endif
     }
     return 0;
 #endif
 }
 
-LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
+LIBTCCAPI int tcc_add_include_path(TCCState *S, const char *pathname)
 {
-    tcc_split_path(s, &s->include_paths, &s->nb_include_paths, pathname);
+    tcc_split_path(S, &S->include_paths, &S->nb_include_paths, pathname);
     return 0;
 }
 
-LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
+LIBTCCAPI int tcc_add_sysinclude_path(TCCState *S, const char *pathname)
 {
-    tcc_split_path(s, &s->sysinclude_paths, &s->nb_sysinclude_paths, pathname);
+    tcc_split_path(S, &S->sysinclude_paths, &S->nb_sysinclude_paths, pathname);
     return 0;
 }
 
-ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
+ST_FUNC DLLReference *tcc_add_dllref(TCCState *S, const char *dllname)
 {
-    DLLReference *ref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
+    DLLReference *ref = tcc_mallocz(S, sizeof(DLLReference) + strlen(dllname));
     strcpy(ref->name, dllname);
-    dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, ref);
+    dynarray_add(S, &S->loaded_dlls, &S->nb_loaded_dlls, ref);
     return ref;
 }
 
 /* OpenBSD: choose latest from libxxx.so.x.y versions */
 #if defined TARGETOS_OpenBSD && !defined _WIN32
 #include <glob.h>
-static int tcc_glob_so(TCCState *s1, const char *pattern, char *buf, int size)
+static int tcc_glob_so(TCCState *S, const char *pattern, char *buf, int size)
 {
     const char *star;
     glob_t g;
@@ -988,25 +1066,25 @@ static int tcc_glob_so(TCCState *s1, const char *pattern, char *buf, int size)
 }
 #endif
 
-ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
+ST_FUNC int tcc_add_file_internal(TCCState *S, const char *filename, int flags)
 {
     int fd, ret = -1;
 
 #if defined TARGETOS_OpenBSD && !defined _WIN32
     char buf[1024];
-    if (tcc_glob_so(s1, filename, buf, sizeof buf) >= 0)
+    if (tcc_glob_so(S, filename, buf, sizeof buf) >= 0)
         filename = buf;
 #endif
 
     /* open the file */
-    fd = _tcc_open(s1, filename);
+    fd = _tcc_open(S, filename);
     if (fd < 0) {
         if (flags & AFF_PRINT_ERROR)
-            tcc_error_noabort("file '%s' not found", filename);
+            tcc_error_noabort(S, "file '%s' not found", filename);
         return ret;
     }
 
-    s1->current_filename = filename;
+    S->current_filename = filename;
     if (flags & AFF_TYPE_BIN) {
         ElfW(Ehdr) ehdr;
         int obj_type;
@@ -1017,22 +1095,22 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         switch (obj_type) {
 
         case AFF_BINTYPE_REL:
-            ret = tcc_load_object_file(s1, fd, 0);
+            ret = tcc_load_object_file(S, fd, 0);
             break;
 
         case AFF_BINTYPE_AR:
-            ret = tcc_load_archive(s1, fd, !(flags & AFF_WHOLE_ARCHIVE));
+            ret = tcc_load_archive(S, fd, !(flags & AFF_WHOLE_ARCHIVE));
             break;
 
 #ifdef TCC_TARGET_PE
         default:
-            ret = pe_load_file(s1, fd, filename);
+            ret = pe_load_file(S, fd, filename);
             goto check_success;
 
 #elif defined TCC_TARGET_MACHO
         case AFF_BINTYPE_DYN:
         case_dyn_or_tbd:
-            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+            if (S->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
                 void* dl;
                 const char* soname = filename;
@@ -1040,14 +1118,14 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
                     soname = macho_tbd_soname(filename);
                 dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl)
-                    tcc_add_dllref(s1, soname)->handle = dl, ret = 0;
+                    tcc_add_dllref(S, soname)->handle = dl, ret = 0;
 	        if (filename != soname)
-		    tcc_free((void *)soname);
+		    tcc_free(S, (void *)soname);
 #endif
             } else if (obj_type == AFF_BINTYPE_DYN) {
-                ret = macho_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
+                ret = macho_load_dll(S, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
             } else {
-                ret = macho_load_tbd(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
+                ret = macho_load_tbd(S, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
             }
             break;
         default:
@@ -1064,47 +1142,47 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
 #else /* unix */
         case AFF_BINTYPE_DYN:
-            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+            if (S->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
                 void* dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl)
-                    tcc_add_dllref(s1, filename)->handle = dl, ret = 0;
+                    tcc_add_dllref(S, filename)->handle = dl, ret = 0;
 #endif
             } else
-                ret = tcc_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
+                ret = tcc_load_dll(S, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
             break;
 
         default:
             /* as GNU ld, consider it is an ld script if not recognized */
-            ret = tcc_load_ldscript(s1, fd);
+            ret = tcc_load_ldscript(S, fd);
             goto check_success;
 
 #endif /* pe / macos / unix */
 
 check_success:
             if (ret < 0)
-                tcc_error_noabort("%s: unrecognized file type", filename);
+                tcc_error_noabort(S, "%s: unrecognized file type", filename);
             break;
 
 #ifdef TCC_TARGET_COFF
         case AFF_BINTYPE_C67:
-            ret = tcc_load_coff(s1, fd);
+            ret = tcc_load_coff(S, fd);
             break;
 #endif
         }
         close(fd);
     } else {
         /* update target deps */
-        dynarray_add(&s1->target_deps, &s1->nb_target_deps, tcc_strdup(filename));
-        ret = tcc_compile(s1, flags, filename, fd);
+        dynarray_add(S, &S->target_deps, &S->nb_target_deps, tcc_strdup(S, filename));
+        ret = tcc_compile(S, flags, filename, fd);
     }
-    s1->current_filename = NULL;
+    S->current_filename = NULL;
     return ret;
 }
 
-LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
+LIBTCCAPI int tcc_add_file(TCCState *S, const char *filename)
 {
-    int filetype = s->filetype;
+    int filetype = S->filetype;
     if (0 == (filetype & AFF_TYPE_MASK)) {
         /* use a file extension to detect a filetype */
         const char *ext = tcc_fileextension(filename);
@@ -1124,16 +1202,16 @@ LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
             filetype = AFF_TYPE_C;
         }
     }
-    return tcc_add_file_internal(s, filename, filetype | AFF_PRINT_ERROR);
+    return tcc_add_file_internal(S, filename, filetype | AFF_PRINT_ERROR);
 }
 
-LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
+LIBTCCAPI int tcc_add_library_path(TCCState *S, const char *pathname)
 {
-    tcc_split_path(s, &s->library_paths, &s->nb_library_paths, pathname);
+    tcc_split_path(S, &S->library_paths, &S->nb_library_paths, pathname);
     return 0;
 }
 
-static int tcc_add_library_internal(TCCState *s, const char *fmt,
+static int tcc_add_library_internal(TCCState *S, const char *fmt,
     const char *filename, int flags, char **paths, int nb_paths)
 {
     char buf[1024];
@@ -1141,7 +1219,7 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
 
     for(i = 0; i < nb_paths; i++) {
         snprintf(buf, sizeof(buf), fmt, paths[i], filename);
-        if (tcc_add_file_internal(s, buf, flags | AFF_TYPE_BIN) == 0)
+        if (tcc_add_file_internal(S, buf, flags | AFF_TYPE_BIN) == 0)
             return 0;
     }
     return -1;
@@ -1150,87 +1228,87 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
 #ifndef TCC_TARGET_MACHO
 /* find and load a dll. Return non zero if not found */
 /* XXX: add '-rpath' option support ? */
-ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
+ST_FUNC int tcc_add_dll(TCCState *S, const char *filename, int flags)
 {
-    return tcc_add_library_internal(s, "%s/%s", filename, flags,
-        s->library_paths, s->nb_library_paths);
+    return tcc_add_library_internal(S, "%s/%s", filename, flags,
+        S->library_paths, S->nb_library_paths);
 }
 #endif
 
 #if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
-ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
+ST_FUNC int tcc_add_crt(TCCState *S, const char *filename)
 {
-    if (-1 == tcc_add_library_internal(s1, "%s/%s",
-        filename, 0, s1->crt_paths, s1->nb_crt_paths))
-        tcc_error_noabort("file '%s' not found", filename);
+    if (-1 == tcc_add_library_internal(S, "%s/%s",
+        filename, 0, S->crt_paths, S->nb_crt_paths))
+        tcc_error_noabort(S, "file '%s' not found", filename);
     return 0;
 }
 #endif
 
 /* the library name is the same as the argument of the '-l' option */
-LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
+LIBTCCAPI int tcc_add_library(TCCState *S, const char *libraryname)
 {
 #if defined TCC_TARGET_PE
     static const char * const libs[] = { "%s/%s.def", "%s/lib%s.def", "%s/%s.dll", "%s/lib%s.dll", "%s/lib%s.a", NULL };
-    const char * const *pp = s->static_link ? libs + 4 : libs;
+    const char * const *pp = S->static_link ? libs + 4 : libs;
 #elif defined TCC_TARGET_MACHO
     static const char * const libs[] = { "%s/lib%s.dylib", "%s/lib%s.tbd", "%s/lib%s.a", NULL };
-    const char * const *pp = s->static_link ? libs + 2 : libs;
+    const char * const *pp = S->static_link ? libs + 2 : libs;
 #elif defined TARGETOS_OpenBSD
     static const char * const libs[] = { "%s/lib%s.so.*", "%s/lib%s.a", NULL };
-    const char * const *pp = s->static_link ? libs + 1 : libs;
+    const char * const *pp = S->static_link ? libs + 1 : libs;
 #else
     static const char * const libs[] = { "%s/lib%s.so", "%s/lib%s.a", NULL };
-    const char * const *pp = s->static_link ? libs + 1 : libs;
+    const char * const *pp = S->static_link ? libs + 1 : libs;
 #endif
-    int flags = s->filetype & AFF_WHOLE_ARCHIVE;
+    int flags = S->filetype & AFF_WHOLE_ARCHIVE;
     while (*pp) {
-        if (0 == tcc_add_library_internal(s, *pp,
-            libraryname, flags, s->library_paths, s->nb_library_paths))
+        if (0 == tcc_add_library_internal(S, *pp,
+            libraryname, flags, S->library_paths, S->nb_library_paths))
             return 0;
         ++pp;
     }
     return -1;
 }
 
-PUB_FUNC int tcc_add_library_err(TCCState *s1, const char *libname)
+PUB_FUNC int tcc_add_library_err(TCCState *S, const char *libname)
 {
-    int ret = tcc_add_library(s1, libname);
+    int ret = tcc_add_library(S, libname);
     if (ret < 0)
-        tcc_error_noabort("library '%s' not found", libname);
+        tcc_error_noabort(S, "library '%s' not found", libname);
     return ret;
 }
 
 /* handle #pragma comment(lib,) */
-ST_FUNC void tcc_add_pragma_libs(TCCState *s1)
+ST_FUNC void tcc_add_pragma_libs(TCCState *S)
 {
     int i;
-    for (i = 0; i < s1->nb_pragma_libs; i++)
-        tcc_add_library_err(s1, s1->pragma_libs[i]);
+    for (i = 0; i < S->nb_pragma_libs; i++)
+        tcc_add_library_err(S, S->pragma_libs[i]);
 }
 
-LIBTCCAPI int tcc_add_symbol(TCCState *s1, const char *name, const void *val)
+LIBTCCAPI int tcc_add_symbol(TCCState *S, const char *name, const void *val)
 {
 #ifdef TCC_TARGET_PE
     /* On x86_64 'val' might not be reachable with a 32bit offset.
        So it is handled here as if it were in a DLL. */
-    pe_putimport(s1, 0, name, (uintptr_t)val);
+    pe_putimport(S, 0, name, (uintptr_t)val);
 #else
     char buf[256];
-    if (s1->leading_underscore) {
+    if (S->leading_underscore) {
         buf[0] = '_';
         pstrcpy(buf + 1, sizeof(buf) - 1, name);
         name = buf;
     }
-    set_global_sym(s1, name, NULL, (addr_t)(uintptr_t)val); /* NULL: SHN_ABS */
+    set_global_sym(S, name, NULL, (addr_t)(uintptr_t)val); /* NULL: SHN_ABS */
 #endif
     return 0;
 }
 
-LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path)
+LIBTCCAPI void tcc_set_lib_path(TCCState *S, const char *path)
 {
-    tcc_free(s->tcc_lib_path);
-    s->tcc_lib_path = tcc_strdup(path);
+    tcc_free(S, S->tcc_lib_path);
+    S->tcc_lib_path = tcc_strdup(S, path);
 }
 
 /********************************************************/
@@ -1310,7 +1388,7 @@ static const char *skip_linker_arg(const char **str)
     return s2;
 }
 
-static void copy_linker_arg(char **pp, const char *s, int sep)
+static void copy_linker_arg(TCCState* S, char **pp, const char *s, int sep)
 {
     const char *q = s;
     char *p = *pp;
@@ -1318,13 +1396,12 @@ static void copy_linker_arg(char **pp, const char *s, int sep)
     if (p && sep)
         p[l = strlen(p)] = sep, ++l;
     skip_linker_arg(&q);
-    pstrncpy(l + (*pp = tcc_realloc(p, q - s + l + 1)), s, q - s);
+    pstrncpy(l + (*pp = tcc_realloc(S, p, q - s + l + 1)), s, q - s);
 }
 
 /* set linker options */
-static int tcc_set_linker(TCCState *s, const char *option)
+static int tcc_set_linker(TCCState *S, const char *option)
 {
-    TCCState *s1 = s;
     while (*option) {
 
         const char *p = NULL;
@@ -1333,18 +1410,18 @@ static int tcc_set_linker(TCCState *s, const char *option)
         int ret;
 
         if (link_option(option, "Bsymbolic", &p)) {
-            s->symbolic = 1;
+            S->symbolic = 1;
         } else if (link_option(option, "nostdlib", &p)) {
-            s->nostdlib = 1;
+            S->nostdlib = 1;
         } else if (link_option(option, "fini=", &p)) {
-            copy_linker_arg(&s->fini_symbol, p, 0);
+            copy_linker_arg(S, &S->fini_symbol, p, 0);
             ignoring = 1;
         } else if (link_option(option, "image-base=", &p)
                 || link_option(option, "Ttext=", &p)) {
-            s->text_addr = strtoull(p, &end, 16);
-            s->has_text_addr = 1;
+            S->text_addr = strtoull(p, &end, 16);
+            S->has_text_addr = 1;
         } else if (link_option(option, "init=", &p)) {
-            copy_linker_arg(&s->init_symbol, p, 0);
+            copy_linker_arg(S, &S->init_symbol, p, 0);
             ignoring = 1;
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
@@ -1354,12 +1431,12 @@ static int tcc_set_linker(TCCState *s, const char *option)
 #else
             if (strstart("elf32-", &p)) {
 #endif
-                s->output_format = TCC_OUTPUT_FORMAT_ELF;
+                S->output_format = TCC_OUTPUT_FORMAT_ELF;
             } else if (!strcmp(p, "binary")) {
-                s->output_format = TCC_OUTPUT_FORMAT_BINARY;
+                S->output_format = TCC_OUTPUT_FORMAT_BINARY;
 #ifdef TCC_TARGET_COFF
             } else if (!strcmp(p, "coff")) {
-                s->output_format = TCC_OUTPUT_FORMAT_COFF;
+                S->output_format = TCC_OUTPUT_FORMAT_COFF;
 #endif
             } else
                 goto err;
@@ -1369,64 +1446,64 @@ static int tcc_set_linker(TCCState *s, const char *option)
         } else if (link_option(option, "O", &p)) {
             ignoring = 1;
         } else if (link_option(option, "export-all-symbols", &p)) {
-            s->rdynamic = 1;
+            S->rdynamic = 1;
         } else if (link_option(option, "export-dynamic", &p)) {
-            s->rdynamic = 1;
+            S->rdynamic = 1;
         } else if (link_option(option, "rpath=", &p)) {
-            copy_linker_arg(&s->rpath, p, ':');
+            copy_linker_arg(S, &S->rpath, p, ':');
         } else if (link_option(option, "enable-new-dtags", &p)) {
-            s->enable_new_dtags = 1;
+            S->enable_new_dtags = 1;
         } else if (link_option(option, "section-alignment=", &p)) {
-            s->section_align = strtoul(p, &end, 16);
+            S->section_align = strtoul(p, &end, 16);
         } else if (link_option(option, "soname=", &p)) {
-            copy_linker_arg(&s->soname, p, 0);
+            copy_linker_arg(S, &S->soname, p, 0);
 #ifdef TCC_TARGET_PE
         } else if (link_option(option, "large-address-aware", &p)) {
-            s->pe_characteristics |= 0x20;
+            S->pe_characteristics |= 0x20;
         } else if (link_option(option, "file-alignment=", &p)) {
-            s->pe_file_align = strtoul(p, &end, 16);
+            S->pe_file_align = strtoul(p, &end, 16);
         } else if (link_option(option, "stack=", &p)) {
-            s->pe_stack_size = strtoul(p, &end, 10);
+            S->pe_stack_size = strtoul(p, &end, 10);
         } else if (link_option(option, "subsystem=", &p)) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
             if (!strcmp(p, "native")) {
-                s->pe_subsystem = 1;
+                S->pe_subsystem = 1;
             } else if (!strcmp(p, "console")) {
-                s->pe_subsystem = 3;
+                S->pe_subsystem = 3;
             } else if (!strcmp(p, "gui") || !strcmp(p, "windows")) {
-                s->pe_subsystem = 2;
+                S->pe_subsystem = 2;
             } else if (!strcmp(p, "posix")) {
-                s->pe_subsystem = 7;
+                S->pe_subsystem = 7;
             } else if (!strcmp(p, "efiapp")) {
-                s->pe_subsystem = 10;
+                S->pe_subsystem = 10;
             } else if (!strcmp(p, "efiboot")) {
-                s->pe_subsystem = 11;
+                S->pe_subsystem = 11;
             } else if (!strcmp(p, "efiruntime")) {
-                s->pe_subsystem = 12;
+                S->pe_subsystem = 12;
             } else if (!strcmp(p, "efirom")) {
-                s->pe_subsystem = 13;
+                S->pe_subsystem = 13;
 #elif defined(TCC_TARGET_ARM)
             if (!strcmp(p, "wince")) {
-                s->pe_subsystem = 9;
+                S->pe_subsystem = 9;
 #endif
             } else
                 goto err;
 #endif
         } else if (ret = link_option(option, "?whole-archive", &p), ret) {
             if (ret > 0)
-                s->filetype |= AFF_WHOLE_ARCHIVE;
+                S->filetype |= AFF_WHOLE_ARCHIVE;
             else
-                s->filetype &= ~AFF_WHOLE_ARCHIVE;
+                S->filetype &= ~AFF_WHOLE_ARCHIVE;
         } else if (link_option(option, "z=", &p)) {
             ignoring = 1;
         } else if (p) {
             return 0;
         } else {
     err:
-            tcc_error("unsupported linker option '%s'", option);
+            tcc_error(S, "unsupported linker option '%s'", option);
         }
         if (ignoring)
-            tcc_warning_c(warn_unsupported)("unsupported linker option '%s'", option);
+            tcc_warning_c(warn_unsupported)(S, "unsupported linker option '%s'", option);
         option = skip_linker_arg(&p);
     }
     return 1;
@@ -1604,7 +1681,7 @@ static const FlagDef options_m[] = {
     { 0, 0, NULL }
 };
 
-static int set_flag(TCCState *s, const FlagDef *flags, const char *name)
+static int set_flag(TCCState *S, const FlagDef *flags, const char *name)
 {
     int value, mask, ret;
     const FlagDef *p;
@@ -1626,7 +1703,7 @@ static int set_flag(TCCState *s, const FlagDef *flags, const char *name)
                 continue;
         }
 
-        f = (unsigned char *)s + p->offset;
+        f = (unsigned char *)S + p->offset;
         *f = (*f & mask) | (value ^ !!(p->flags & FD_INVERT));
 
         if (ret) {
@@ -1638,15 +1715,15 @@ static int set_flag(TCCState *s, const FlagDef *flags, const char *name)
     return ret;
 }
 
-static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
+static void args_parser_add_file(TCCState *S, const char* filename, int filetype)
 {
-    struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
+    struct filespec *f = tcc_malloc(S, sizeof *f + strlen(filename));
     f->type = filetype;
     strcpy(f->name, filename);
-    dynarray_add(&s->files, &s->nb_files, f);
+    dynarray_add(S, &S->files, &S->nb_files, f);
 }
 
-static int args_parser_make_argv(const char *r, int *argc, char ***argv)
+static int args_parser_make_argv(TCCState* S, const char *r, int *argc, char ***argv)
 {
     int ret = 0, q, c;
     CString str;
@@ -1656,7 +1733,7 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
         if (c == 0)
             break;
         q = 0;
-        cstr_new(&str);
+        cstr_new(S, &str);
         while (c = (unsigned char)*r, c) {
             ++r;
             if (c == '\\' && (*r == '"' || *r == '\\')) {
@@ -1667,22 +1744,21 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
             } else if (q == 0 && c <= ' ') {
                 break;
             }
-            cstr_ccat(&str, c);
+            cstr_ccat(S, &str, c);
         }
-        cstr_ccat(&str, 0);
+        cstr_ccat(S, &str, 0);
         //printf("<%s>\n", str.data), fflush(stdout);
-        dynarray_add(argv, argc, tcc_strdup(str.data));
-        cstr_free(&str);
+        dynarray_add(S, argv, argc, tcc_strdup(S, str.data));
+        cstr_free(S, &str);
         ++ret;
     }
     return ret;
 }
 
 /* read list file */
-static void args_parser_listfile(TCCState *s,
+static void args_parser_listfile(TCCState *S,
     const char *filename, int optind, int *pargc, char ***pargv)
 {
-    TCCState *s1 = s;
     int fd, i;
     char *p;
     int argc = 0;
@@ -1690,23 +1766,22 @@ static void args_parser_listfile(TCCState *s,
 
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
-        tcc_error("listfile '%s' not found", filename);
+        tcc_error(S, "listfile '%s' not found", filename);
 
-    p = tcc_load_text(fd);
+    p = tcc_load_text(S, fd);
     for (i = 0; i < *pargc; ++i)
         if (i == optind)
-            args_parser_make_argv(p, &argc, &argv);
+            args_parser_make_argv(S, p, &argc, &argv);
         else
-            dynarray_add(&argv, &argc, tcc_strdup((*pargv)[i]));
+            dynarray_add(S, &argv, &argc, tcc_strdup(S, (*pargv)[i]));
 
-    tcc_free(p);
-    dynarray_reset(&s->argv, &s->argc);
-    *pargc = s->argc = argc, *pargv = s->argv = argv;
+    tcc_free(S, p);
+    dynarray_reset(S, &S->argv, &S->argc);
+    *pargc = S->argc = argc, *pargv = S->argv = argv;
 }
 
-PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
+PUB_FUNC int tcc_parse_args(TCCState *S, int *pargc, char ***pargv, int optind)
 {
-    TCCState *s1 = s;
     const TCCOption *popt;
     const char *optarg, *r;
     const char *run = NULL;
@@ -1716,26 +1791,26 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
     char **argv = *pargv;
     int argc = *pargc;
 
-    cstr_new(&linker_arg);
+    cstr_new(S, &linker_arg);
 
     while (optind < argc) {
         r = argv[optind];
         if (r[0] == '@' && r[1] != '\0') {
-            args_parser_listfile(s, r + 1, optind, &argc, &argv);
+            args_parser_listfile(S, r + 1, optind, &argc, &argv);
             continue;
         }
         optind++;
         if (tool) {
             if (r[0] == '-' && r[1] == 'v' && r[2] == 0)
-                ++s->verbose;
+                ++S->verbose;
             continue;
         }
 reparse:
         if (r[0] != '-' || r[1] == '\0') {
             if (r[0] != '@') /* allow "tcc file(s) -run @ args ..." */
-                args_parser_add_file(s, r, s->filetype);
+                args_parser_add_file(S, r, S->filetype);
             if (run) {
-                tcc_set_options(s, run);
+                tcc_set_options(S, run);
                 arg_start = optind - 1;
                 break;
             }
@@ -1747,7 +1822,7 @@ reparse:
             const char *p1 = popt->name;
             const char *r1 = r + 1;
             if (p1 == NULL)
-                tcc_error("invalid option -- '%s'", r);
+                tcc_error(S, "invalid option -- '%s'", r);
             if (!strstart(p1, &r1))
                 continue;
             optarg = r1;
@@ -1755,7 +1830,7 @@ reparse:
                 if (*r1 == '\0' && !(popt->flags & TCC_OPTION_NOSEP)) {
                     if (optind >= argc)
                 arg_err:
-                        tcc_error("argument to '%s' is missing", r);
+                        tcc_error(S, "argument to '%s' is missing", r);
                     optarg = argv[optind++];
                 }
             } else if (*r1 != '\0')
@@ -1771,132 +1846,132 @@ reparse:
             x = OPT_HELP2;
             goto extra_action;
         case TCC_OPTION_I:
-            tcc_add_include_path(s, optarg);
+            tcc_add_include_path(S, optarg);
             break;
         case TCC_OPTION_D:
-            tcc_define_symbol(s, optarg, NULL);
+            tcc_define_symbol(S, optarg, NULL);
             break;
         case TCC_OPTION_U:
-            tcc_undefine_symbol(s, optarg);
+            tcc_undefine_symbol(S, optarg);
             break;
         case TCC_OPTION_L:
-            tcc_add_library_path(s, optarg);
+            tcc_add_library_path(S, optarg);
             break;
         case TCC_OPTION_B:
             /* set tcc utilities path (mainly for tcc development) */
-            tcc_set_lib_path(s, optarg);
+            tcc_set_lib_path(S, optarg);
             break;
         case TCC_OPTION_l:
-            args_parser_add_file(s, optarg, AFF_TYPE_LIB | (s->filetype & ~AFF_TYPE_MASK));
-            s->nb_libraries++;
+            args_parser_add_file(S, optarg, AFF_TYPE_LIB | (S->filetype & ~AFF_TYPE_MASK));
+            S->nb_libraries++;
             break;
         case TCC_OPTION_pthread:
-            s->option_pthread = 1;
+            S->option_pthread = 1;
             break;
         case TCC_OPTION_bench:
-            s->do_bench = 1;
+            S->do_bench = 1;
             break;
 #ifdef CONFIG_TCC_BACKTRACE
         case TCC_OPTION_bt:
-            s->rt_num_callers = atoi(optarg);
-            s->do_backtrace = 1;
-            s->do_debug = 1;
+            S->rt_num_callers = atoi(optarg);
+            S->do_backtrace = 1;
+            S->do_debug = 1;
             break;
 #endif
 #ifdef CONFIG_TCC_BCHECK
         case TCC_OPTION_b:
-            s->do_bounds_check = 1;
-            s->do_backtrace = 1;
-            s->do_debug = 1;
+            S->do_bounds_check = 1;
+            S->do_backtrace = 1;
+            S->do_debug = 1;
             break;
 #endif
         case TCC_OPTION_g:
-            s->do_debug = 1;
+            S->do_debug = 1;
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;
         set_output_type:
-            if (s->output_type)
-                tcc_warning("-%s: overriding compiler action already specified", popt->name);
-            s->output_type = x;
+            if (S->output_type)
+                tcc_warning(S, "-%s: overriding compiler action already specified", popt->name);
+            S->output_type = x;
             break;
         case TCC_OPTION_d:
             if (*optarg == 'D')
-                s->dflag = 3;
+                S->dflag = TCC_OPTION_d_D;
             else if (*optarg == 'M')
-                s->dflag = 7;
+                S->dflag = TCC_OPTION_d_M;
             else if (*optarg == 't')
-                s->dflag = 16;
+                S->dflag = TCC_OPTION_d_t;
             else if (isnum(*optarg))
-                s->g_debug |= atoi(optarg);
+                S->g_debug |= atoi(optarg);
             else
                 goto unsupported_option;
             break;
         case TCC_OPTION_static:
-            s->static_link = 1;
+            S->static_link = 1;
             break;
         case TCC_OPTION_std:
             if (strcmp(optarg, "=c11") == 0)
-                s->cversion = 201112;
+                S->cversion = 201112;
             break;
         case TCC_OPTION_shared:
             x = TCC_OUTPUT_DLL;
             goto set_output_type;
         case TCC_OPTION_soname:
-            s->soname = tcc_strdup(optarg);
+            S->soname = tcc_strdup(S, optarg);
             break;
         case TCC_OPTION_o:
-            if (s->outfile) {
-                tcc_warning("multiple -o option");
-                tcc_free(s->outfile);
+            if (S->outfile) {
+                tcc_warning(S, "multiple -o option");
+                tcc_free(S, S->outfile);
             }
-            s->outfile = tcc_strdup(optarg);
+            S->outfile = tcc_strdup(S, optarg);
             break;
         case TCC_OPTION_r:
             /* generate a .o merging several output files */
-            s->option_r = 1;
+            S->option_r = 1;
             x = TCC_OUTPUT_OBJ;
             goto set_output_type;
         case TCC_OPTION_isystem:
-            tcc_add_sysinclude_path(s, optarg);
+            tcc_add_sysinclude_path(S, optarg);
             break;
         case TCC_OPTION_include:
-            cstr_printf(&s->cmdline_incl, "#include \"%s\"\n", optarg);
+            cstr_printf(S, &S->cmdline_incl, "#include \"%s\"\n", optarg);
             break;
         case TCC_OPTION_nostdinc:
-            s->nostdinc = 1;
+            S->nostdinc = 1;
             break;
         case TCC_OPTION_nostdlib:
-            s->nostdlib = 1;
+            S->nostdlib = 1;
             break;
         case TCC_OPTION_run:
 #ifndef TCC_IS_NATIVE
-            tcc_error("-run is not available in a cross compiler");
+            tcc_error(S, "-run is not available in a cross compiler");
 #endif
             run = optarg;
             x = TCC_OUTPUT_MEMORY;
             goto set_output_type;
         case TCC_OPTION_v:
-            do ++s->verbose; while (*optarg++ == 'v');
+            do ++S->verbose; while (*optarg++ == 'v');
             ++noaction;
             break;
         case TCC_OPTION_f:
-            if (set_flag(s, options_f, optarg) < 0)
+            if (set_flag(S, options_f, optarg) < 0)
                 goto unsupported_option;
             break;
 #ifdef TCC_TARGET_ARM
         case TCC_OPTION_mfloat_abi:
             /* tcc doesn't support soft float yet */
             if (!strcmp(optarg, "softfp")) {
-                s->float_abi = ARM_SOFTFP_FLOAT;
+                S->float_abi = ARM_SOFTFP_FLOAT;
             } else if (!strcmp(optarg, "hard"))
-                s->float_abi = ARM_HARD_FLOAT;
+                S->float_abi = ARM_HARD_FLOAT;
             else
-                tcc_error("unsupported float abi '%s'", optarg);
+                tcc_error(S, "unsupported float abi '%s'", optarg);
             break;
 #endif
         case TCC_OPTION_m:
-            if (set_flag(s, options_m, optarg) < 0) {
+            if (set_flag(S, options_m, optarg) < 0) {
                 if (x = atoi(optarg), x != 32 && x != 64)
                     goto unsupported_option;
                 if (PTR_SIZE != x/8)
@@ -1905,22 +1980,22 @@ reparse:
             }
             break;
         case TCC_OPTION_W:
-            s->warn_none = 0;
-            if (optarg[0] && set_flag(s, options_W, optarg) < 0)
+            S->warn_none = 0;
+            if (optarg[0] && set_flag(S, options_W, optarg) < 0)
                 goto unsupported_option;
             break;
         case TCC_OPTION_w:
-            s->warn_none = 1;
+            S->warn_none = 1;
             break;
         case TCC_OPTION_rdynamic:
-            s->rdynamic = 1;
+            S->rdynamic = 1;
             break;
         case TCC_OPTION_Wl:
             if (linker_arg.size)
-                --linker_arg.size, cstr_ccat(&linker_arg, ',');
-            cstr_cat(&linker_arg, optarg, 0);
-            if (tcc_set_linker(s, linker_arg.data))
-                cstr_free(&linker_arg);
+                --linker_arg.size, cstr_ccat(S, &linker_arg, ',');
+            cstr_cat(S, &linker_arg, optarg, 0);
+            if (tcc_set_linker(S, linker_arg.data))
+                cstr_free(S, &linker_arg);
             break;
         case TCC_OPTION_Wp:
             r = optarg;
@@ -1929,25 +2004,25 @@ reparse:
             x = TCC_OUTPUT_PREPROCESS;
             goto set_output_type;
         case TCC_OPTION_P:
-            s->Pflag = atoi(optarg) + 1;
+            S->Pflag = atoi(optarg) + 1;
             break;
         case TCC_OPTION_M:
-            s->include_sys_deps = 1;
+            S->include_sys_deps = 1;
             // fall through
         case TCC_OPTION_MM:
-            s->just_deps = 1;
-            if(!s->deps_outfile)
-                s->deps_outfile = tcc_strdup("-");
+            S->just_deps = 1;
+            if(!S->deps_outfile)
+                S->deps_outfile = tcc_strdup(S, "-");
             // fall through
         case TCC_OPTION_MMD:
-            s->gen_deps = 1;
+            S->gen_deps = 1;
             break;
         case TCC_OPTION_MD:
-            s->gen_deps = 1;
-            s->include_sys_deps = 1;
+            S->gen_deps = 1;
+            S->include_sys_deps = 1;
             break;
         case TCC_OPTION_MF:
-            s->deps_outfile = tcc_strdup(optarg);
+            S->deps_outfile = tcc_strdup(S, optarg);
             break;
         case TCC_OPTION_dumpversion:
             printf ("%s\n", TCC_VERSION);
@@ -1964,11 +2039,11 @@ reparse:
             else if (*optarg == 'n')
                 x = AFF_TYPE_NONE;
             else
-                tcc_warning("unsupported language '%s'", optarg);
-            s->filetype = x | (s->filetype & ~AFF_TYPE_MASK);
+                tcc_warning(S, "unsupported language '%s'", optarg);
+            S->filetype = x | (S->filetype & ~AFF_TYPE_MASK);
             break;
         case TCC_OPTION_O:
-            s->optimize = atoi(optarg);
+            S->optimize = atoi(optarg);
             break;
         case TCC_OPTION_print_search_dirs:
             x = OPT_PRINT_DIRS;
@@ -1981,12 +2056,12 @@ reparse:
         extra_action:
             arg_start = optind - 1;
             if (arg_start != noaction)
-                tcc_error("cannot parse %s here", r);
+                tcc_error(S, "cannot parse %s here", r);
             tool = x;
             break;
         default:
 unsupported_option:
-            tcc_warning_c(warn_unsupported)("unsupported option '%s'", r);
+            tcc_warning_c(warn_unsupported)(S, "unsupported option '%s'", r);
             break;
         }
     }
@@ -2000,23 +2075,23 @@ unsupported_option:
         return tool;
     if (optind != noaction)
         return 0;
-    if (s->verbose == 2)
+    if (S->verbose == 2)
         return OPT_PRINT_DIRS;
-    if (s->verbose)
+    if (S->verbose)
         return OPT_V;
     return OPT_HELP;
 }
 
-LIBTCCAPI void tcc_set_options(TCCState *s, const char *r)
+LIBTCCAPI void tcc_set_options(TCCState *S, const char *r)
 {
     char **argv = NULL;
     int argc = 0;
-    args_parser_make_argv(r, &argc, &argv);
-    tcc_parse_args(s, &argc, &argv, 0);
-    dynarray_reset(&argv, &argc);
+    args_parser_make_argv(S, r, &argc, &argv);
+    tcc_parse_args(S, &argc, &argv, 0);
+    dynarray_reset(S, &argv, &argc);
 }
 
-PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
+PUB_FUNC void tcc_print_stats(TCCState *S, unsigned total_time)
 {
     if (total_time < 1)
         total_time = 1;
@@ -2029,12 +2104,14 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
            (unsigned)total_lines*1000/total_time,
            (double)total_bytes/1000/total_time);
     fprintf(stderr, "* text %d, data.rw %d, data.ro %d, bss %d bytes\n",
-           s1->total_output[0],
-           s1->total_output[1],
-           s1->total_output[2],
-           s1->total_output[3]
+           S->total_output[0],
+           S->total_output[1],
+           S->total_output[2],
+           S->total_output[3]
            );
 #ifdef MEM_DEBUG
     fprintf(stderr, "* %d bytes memory used\n", mem_max_size);
 #endif
 }
+
+#include "tccqsort.c"

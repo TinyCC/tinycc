@@ -9,9 +9,9 @@
 #define CONFIG_TCC_ASM
 #define NB_ASM_REGS 16
 
-ST_FUNC void g(int c);
-ST_FUNC void gen_le16(int c);
-ST_FUNC void gen_le32(int c);
+ST_FUNC void g(TCCState* S, int c);
+ST_FUNC void gen_le16(TCCState* S, int c);
+ST_FUNC void gen_le32(TCCState* S, int c);
 
 /*************************************************************/
 #else
@@ -25,7 +25,7 @@ static void asm_error(void)
 }
 
 /* XXX: make it faster ? */
-ST_FUNC void g(int c)
+ST_FUNC void g(TCCState* S, int c)
 {
     int ind1;
     if (nocode_wanted)
@@ -37,24 +37,24 @@ ST_FUNC void g(int c)
     ind = ind1;
 }
 
-ST_FUNC void gen_le16 (int i)
+ST_FUNC void gen_le16 (TCCState* S, int i)
 {
-    g(i);
-    g(i>>8);
+    g(S, i);
+    g(S, i>>8);
 }
 
-ST_FUNC void gen_le32 (int i)
+ST_FUNC void gen_le32 (TCCState* S, int i)
 {
-    gen_le16(i);
-    gen_le16(i>>16);
+    gen_le16(S, i);
+    gen_le16(S, i>>16);
 }
 
-ST_FUNC void gen_expr32(ExprValue *pe)
+ST_FUNC void gen_expr32(TCCState* S, ExprValue *pe)
 {
-    gen_le32(pe->v);
+    gen_le32(S, pe->v);
 }
 
-ST_FUNC void asm_opcode(TCCState *s1, int opcode)
+ST_FUNC void asm_opcode(TCCState *S, int opcode)
 {
     asm_error();
 }

@@ -40,12 +40,12 @@ int FuncEntries[MAX_FUNCS];
 
 int OutputTheSection(Section * sect);
 short int GetCoffFlags(const char *s);
-void SortSymbolTable(TCCState *s1);
-Section *FindSection(TCCState * s1, const char *sname);
+void SortSymbolTable(TCCState *S);
+Section *FindSection(TCCState * S, const char *sname);
 
 int C67_main_entry_point;
 
-int FindCoffSymbolIndex(TCCState * s1, const char *func_name);
+int FindCoffSymbolIndex(TCCState * S, const char *func_name);
 int nb_syms;
 
 typedef struct {
@@ -74,7 +74,7 @@ typedef struct {
     unsigned short dummy4;
 } AUXEF;
 
-ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
+ST_FUNC int tcc_output_coff(TCCState *S, FILE *f)
 {
     Section *tcc_sect;
     SCNHDR *coff_sec;
@@ -87,12 +87,12 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 
     Coff_str_table = pCoff_str_table = NULL;
 
-    stext = FindSection(s1, ".text");
-    sdata = FindSection(s1, ".data");
-    sbss = FindSection(s1, ".bss");
+    stext = FindSection(S, ".text");
+    sdata = FindSection(S, ".data");
+    sbss = FindSection(S, ".bss");
 
     nb_syms = symtab_section->data_offset / sizeof(Elf32_Sym);
-    coff_nb_syms = FindCoffSymbolIndex(s1, "XXXXXXXXXX1");
+    coff_nb_syms = FindCoffSymbolIndex(S, "XXXXXXXXXX1");
 
     file_hdr.f_magic = COFF_C67_MAGIC;	/* magic number */
     file_hdr.f_timdat = 0;	/* time & date stamp */
@@ -116,9 +116,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 
     CoffTextSectionNo = -1;
 
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    NSectionsToOutput++;
@@ -149,9 +149,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     // for the raw data
 
 
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    // put raw data
@@ -163,9 +163,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     // now loop through and determine file pointer locations
     // for the relocation data
 
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    // put relocations data
@@ -179,14 +179,14 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     // now loop through and determine file pointer locations
     // for the line number data
 
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	coff_sec->s_nlnno = 0;
 	coff_sec->s_lnnoptr = 0;
 
-	if (s1->do_debug && tcc_sect == stext) {
+	if (S->do_debug && tcc_sect == stext) {
 	    // count how many line nos data
 
 	    // also find association between source file name and function
@@ -314,7 +314,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 
     file_hdr.f_symptr = file_pointer;	/* file pointer to symtab */
 
-    if (s1->do_debug)
+    if (S->do_debug)
 	file_hdr.f_nsyms = coff_nb_syms;	/* number of symtab entries */
     else
 	file_hdr.f_nsyms = 0;
@@ -328,9 +328,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     fwrite(&o_filehdr, sizeof(o_filehdr), 1, f);
 
     // write section headers
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    fwrite(coff_sec, sizeof(SCNHDR), 1, f);
@@ -338,9 +338,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     }
 
     // write raw data
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    fwrite(tcc_sect->data, tcc_sect->data_offset, 1, f);
@@ -348,9 +348,9 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     }
 
     // write relocation data
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
 	if (OutputTheSection(tcc_sect)) {
 	    // put relocations data
@@ -365,16 +365,16 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     // group the symbols in order of filename, func1, func2, etc
     // finally global symbols
 
-    if (s1->do_debug)
-	SortSymbolTable(s1);
+    if (S->do_debug)
+	SortSymbolTable(S);
 
     // write line no data
 
-    for (i = 1; i < s1->nb_sections; i++) {
+    for (i = 1; i < S->nb_sections; i++) {
 	coff_sec = &section_header[i];
-	tcc_sect = s1->sections[i];
+	tcc_sect = S->sections[i];
 
-	if (s1->do_debug && tcc_sect == stext) {
+	if (S->do_debug && tcc_sect == stext) {
 	    // count how many line nos data
 
 
@@ -437,7 +437,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 			// output a function begin
 
 			CoffLineNo.l_addr.l_symndx =
-			    FindCoffSymbolIndex(s1, func_name);
+			    FindCoffSymbolIndex(S, func_name);
 			CoffLineNo.l_lnno = 0;
 
 			fwrite(&CoffLineNo, 6, 1, f);
@@ -502,7 +502,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
     }
 
     // write symbol table
-    if (s1->do_debug) {
+    if (S->do_debug) {
 	int k;
 	struct syment csym;
 	AUXFUNC auxfunc;
@@ -514,7 +514,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 	int nstr;
 	int n = 0;
 
-	Coff_str_table = (char *) tcc_malloc(MAX_STR_TABLE);
+	Coff_str_table = (char *) tcc_malloc(S, MAX_STR_TABLE);
 	pCoff_str_table = Coff_str_table;
 	nstr = 0;
 
@@ -533,7 +533,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 	    } else {
 		if (pCoff_str_table - Coff_str_table + strlen(name) >
 		    MAX_STR_TABLE - 1)
-		    tcc_error("String table too large");
+		    tcc_error(S, "String table too large");
 
 		csym._n._n_n._n_zeroes = 0;
 		csym._n._n_n._n_offset =
@@ -563,7 +563,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 		}
 
 		if (k >= nFuncs) {
-		    tcc_error("debug info can't find function: %s", name);
+		    tcc_error(S, "debug info can't find function: %s", name);
 		}
 		// put a Function Name
 
@@ -669,7 +669,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 	}
     }
 
-    if (s1->do_debug) {
+    if (S->do_debug) {
 	// write string table
 
 	// first write the size
@@ -679,7 +679,7 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 	// then write the strings
 	fwrite(Coff_str_table, i, 1, f);
 
-	tcc_free(Coff_str_table);
+	tcc_free(S, Coff_str_table);
     }
 
     return 0;
@@ -690,13 +690,13 @@ ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f)
 // group the symbols in order of filename, func1, func2, etc
 // finally global symbols
 
-void SortSymbolTable(TCCState *s1)
+void SortSymbolTable(TCCState *S)
 {
     int i, j, k, n = 0;
     Elf32_Sym *p, *p2, *NewTable;
     char *name, *name2;
 
-    NewTable = (Elf32_Sym *) tcc_malloc(nb_syms * sizeof(Elf32_Sym));
+    NewTable = (Elf32_Sym *) tcc_malloc(S, nb_syms * sizeof(Elf32_Sym));
 
     p = (Elf32_Sym *) symtab_section->data;
 
@@ -730,7 +730,7 @@ void SortSymbolTable(TCCState *s1)
 		    }
 
 		    if (k >= nFuncs) {
-                        tcc_error("debug (sort) info can't find function: %s", name2);
+                        tcc_error(S, "debug (sort) info can't find function: %s", name2);
 		    }
 
 		    if (strcmp(AssociatedFile[k], name) == 0) {
@@ -757,7 +757,7 @@ void SortSymbolTable(TCCState *s1)
     }
 
     if (n != nb_syms)
-	tcc_error("Internal Compiler error, debug info");
+	tcc_error(S, "Internal Compiler error, debug info");
 
     // copy it all back
 
@@ -766,11 +766,11 @@ void SortSymbolTable(TCCState *s1)
 	*p++ = NewTable[i];
     }
 
-    tcc_free(NewTable);
+    tcc_free(S, NewTable);
 }
 
 
-int FindCoffSymbolIndex(TCCState *s1, const char *func_name)
+int FindCoffSymbolIndex(TCCState *S, const char *func_name)
 {
     int i, n = 0;
     Elf32_Sym *p;
@@ -842,23 +842,23 @@ short int GetCoffFlags(const char *s)
 	return 0;
 }
 
-Section *FindSection(TCCState * s1, const char *sname)
+Section *FindSection(TCCState * S, const char *sname)
 {
     Section *s;
     int i;
 
-    for (i = 1; i < s1->nb_sections; i++) {
-	s = s1->sections[i];
+    for (i = 1; i < S->nb_sections; i++) {
+	s = S->sections[i];
 
 	if (!strcmp(sname, s->name))
 	    return s;
     }
 
-    tcc_error("could not find section %s", sname);
+    tcc_error(S, "could not find section %s", sname);
     return 0;
 }
 
-ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
+ST_FUNC int tcc_load_coff(TCCState * S, int fd)
 {
 // tktk TokenSym *ts;
 
@@ -872,39 +872,39 @@ ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
 
     f = fdopen(fd, "rb");
     if (!f) {
-	tcc_error("Unable to open .out file for input");
+	tcc_error(S, "Unable to open .out file for input");
     }
 
     if (fread(&file_hdr, FILHSZ, 1, f) != 1)
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
     if (fread(&o_filehdr, sizeof(o_filehdr), 1, f) != 1)
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
     // first read the string table
 
     if (fseek(f, file_hdr.f_symptr + file_hdr.f_nsyms * SYMESZ, SEEK_SET))
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
     if (fread(&str_size, sizeof(int), 1, f) != 1)
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
 
-    Coff_str_table = (char *) tcc_malloc(str_size);
+    Coff_str_table = (char *) tcc_malloc(S, str_size);
 
     if (fread(Coff_str_table, str_size - 4, 1, f) != 1)
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
     // read/process all the symbols
 
     // seek back to symbols
 
     if (fseek(f, file_hdr.f_symptr, SEEK_SET))
-	tcc_error("error reading .out file for input");
+	tcc_error(S, "error reading .out file for input");
 
     for (i = 0; i < file_hdr.f_nsyms; i++) {
 	if (fread(&csym, SYMESZ, 1, f) != 1)
-	    tcc_error("error reading .out file for input");
+	    tcc_error(S, "error reading .out file for input");
 
 	if (csym._n._n_n._n_zeroes == 0) {
 	    name = Coff_str_table + csym._n._n_n._n_offset - 4;
@@ -933,13 +933,13 @@ ST_FUNC int tcc_load_coff(TCCState * s1, int fd)
 	    if (name[0] == '_' && strcmp(name, "_main") != 0)
 		name++;
 
-	    tcc_add_symbol(s1, name, (void*)(uintptr_t)csym.n_value);
+	    tcc_add_symbol(S, name, (void*)(uintptr_t)csym.n_value);
 	}
 	// skip any aux records
 
 	if (csym.n_numaux == 1) {
 	    if (fread(&csym, SYMESZ, 1, f) != 1)
-		tcc_error("error reading .out file for input");
+		tcc_error(S, "error reading .out file for input");
 	    i++;
 	}
     }

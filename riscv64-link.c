@@ -95,39 +95,39 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
-ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+ST_FUNC unsigned create_plt_entry(TCCState *S, unsigned got_offset, struct sym_attr *attr)
 {
-    Section *plt = s1->plt;
+    Section *plt = S->plt;
     uint8_t *p;
     unsigned plt_offset;
 
     if (plt->data_offset == 0)
-        section_ptr_add(plt, 32);
+        section_ptr_add(S, plt, 32);
     plt_offset = plt->data_offset;
 
-    p = section_ptr_add(plt, 16);
+    p = section_ptr_add(S, plt, 16);
     write64le(p, got_offset);
     return plt_offset;
 }
 
 /* relocate the PLT: compute addresses and offsets in the PLT now that final
    address for PLT and GOT are known (see fill_program_header) */
-ST_FUNC void relocate_plt(TCCState *s1)
+ST_FUNC void relocate_plt(TCCState *S)
 {
     uint8_t *p, *p_end;
 
-    if (!s1->plt)
+    if (!S->plt)
       return;
 
-    p = s1->plt->data;
-    p_end = p + s1->plt->data_offset;
+    p = S->plt->data;
+    p_end = p + S->plt->data_offset;
 
     if (p < p_end) {
-        uint64_t plt = s1->plt->sh_addr;
-        uint64_t got = s1->got->sh_addr;
+        uint64_t plt = S->plt->sh_addr;
+        uint64_t got = S->got->sh_addr;
         uint64_t off = (got - plt + 0x800) >> 12;
         if ((off + ((uint32_t)1 << 20)) >> 21)
-            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
+            tcc_error(S, "Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
         write32le(p, 0x397 | (off << 12)); // auipc t2, %pcrel_hi(got)
         write32le(p + 4, 0x41c30333); // sub t1, t1, t3
         write32le(p + 8, 0x0003be03   // ld t3, %pcrel_lo(got)(t2)
@@ -140,11 +140,11 @@ ST_FUNC void relocate_plt(TCCState *s1)
         write32le(p + 28, 0x000e0067); // jr t3
         p += 32;
         while (p < p_end) {
-            uint64_t pc = plt + (p - s1->plt->data);
+            uint64_t pc = plt + (p - S->plt->data);
             uint64_t addr = got + read64le(p);
             uint64_t off = (addr - pc + 0x800) >> 12;
             if ((off + ((uint32_t)1 << 20)) >> 21)
-                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
+                tcc_error(S, "Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
             write32le(p, 0xe17 | (off << 12)); // auipc t3, %pcrel_hi(func@got)
             write32le(p + 4, 0x000e3e03 // ld t3, %pcrel_lo(func@got)(t3)
                              | (((addr - pc) & 0xfff) << 20));
@@ -154,16 +154,16 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
     }
 
-    if (s1->plt->reloc) {
+    if (S->plt->reloc) {
         ElfW_Rel *rel;
-        p = s1->got->data;
-        for_each_elem(s1->plt->reloc, 0, rel, ElfW_Rel) {
-            write64le(p + rel->r_offset, s1->plt->sh_addr);
+        p = S->got->data;
+        for_each_elem(S->plt->reloc, 0, rel, ElfW_Rel) {
+            write64le(p + rel->r_offset, S->plt->sh_addr);
 	}
     }
 }
 
-void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
+void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr,
               addr_t addr, addr_t val)
 {
     uint64_t off64;
@@ -179,7 +179,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_BRANCH:
         off64 = val - addr;
         if ((off64 + (1 << 12)) & ~(uint64_t)0x1ffe)
-          tcc_error("R_RISCV_BRANCH relocation failed"
+          tcc_error(S, "R_RISCV_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64 >> 1;
         write32le(ptr, (read32le(ptr) & ~0xfe000f80)
@@ -191,7 +191,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_JAL:
         off64 = val - addr;
         if ((off64 + (1 << 21)) & ~(((uint64_t)1 << 22) - 2))
-          tcc_error("R_RISCV_JAL relocation failed"
+          tcc_error(S, "R_RISCV_JAL relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -213,7 +213,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
 #endif
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
-          tcc_error("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx sym=%s",
+          tcc_error(S, "R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx sym=%s",
                     (long)off64, (long)((int64_t)(off64 + ((uint64_t)1 << 20)) >> 21),
                     symtab_section->link->data + sym->st_name);
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -222,10 +222,10 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         last_hi.val = val;
         return;
     case R_RISCV_GOT_HI20:
-        val = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
+        val = S->got->sh_addr + get_sym_attr(S, sym_index, 0)->got_offset;
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
-          tcc_error("R_RISCV_GOT_HI20 relocation failed");
+          tcc_error(S, "R_RISCV_GOT_HI20 relocation failed");
         last_hi.addr = addr;
         last_hi.val = val;
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -236,7 +236,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         printf("PCREL_LO12_I: val=%lx addr=%lx\n", (long)val, (long)addr);
 #endif
         if (val != last_hi.addr)
-          tcc_error("unsupported hi/lo pcrel reloc scheme");
+          tcc_error(S, "unsupported hi/lo pcrel reloc scheme");
         val = last_hi.val;
         addr = last_hi.addr;
         write32le(ptr, (read32le(ptr) & 0xfffff)
@@ -244,7 +244,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
     case R_RISCV_PCREL_LO12_S:
         if (val != last_hi.addr)
-          tcc_error("unsupported hi/lo pcrel reloc scheme");
+          tcc_error(S, "unsupported hi/lo pcrel reloc scheme");
         val = last_hi.val;
         addr = last_hi.addr;
         off32 = val - addr;
@@ -256,7 +256,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_RVC_BRANCH:
         off64 = (val - addr);
         if ((off64 + (1 << 8)) & ~(uint64_t)0x1fe)
-          tcc_error("R_RISCV_RVC_BRANCH relocation failed"
+          tcc_error(S, "R_RISCV_RVC_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write16le(ptr, (read16le(ptr) & 0xe383)
@@ -269,7 +269,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_RVC_JUMP:
         off64 = (val - addr);
         if ((off64 + (1 << 11)) & ~(uint64_t)0xffe)
-          tcc_error("R_RISCV_RVC_BRANCH relocation failed"
+          tcc_error(S, "R_RISCV_RVC_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write16le(ptr, (read16le(ptr) & 0xe003)
@@ -284,7 +284,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
 
     case R_RISCV_32:
-        if (s1->output_type == TCC_OUTPUT_DLL) {
+        if (S->output_type == TCC_OUTPUT_DLL) {
             /* XXX: this logic may depend on TCC's codegen
                now TCC uses R_RISCV_RELATIVE even for a 64bit pointer */
             qrel->r_offset = rel->r_offset;
@@ -296,8 +296,8 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         add32le(ptr, val);
         return;
     case R_RISCV_64:
-        if (s1->output_type == TCC_OUTPUT_DLL) {
-            esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
+        if (S->output_type == TCC_OUTPUT_DLL) {
+            esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
             qrel->r_offset = rel->r_offset;
             if (esym_index) {
                 qrel->r_info = ELFW(R_INFO)(esym_index, R_RISCV_64);

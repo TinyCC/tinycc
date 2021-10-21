@@ -199,40 +199,40 @@ static void print_dirs(const char *msg, char **paths, int nb_paths)
         printf("  %s\n", paths[i]);
 }
 
-static void print_search_dirs(TCCState *s)
+static void print_search_dirs(TCCState *S)
 {
-    printf("install: %s\n", s->tcc_lib_path);
+    printf("install: %s\n", S->tcc_lib_path);
     /* print_dirs("programs", NULL, 0); */
-    print_dirs("include", s->sysinclude_paths, s->nb_sysinclude_paths);
-    print_dirs("libraries", s->library_paths, s->nb_library_paths);
+    print_dirs("include", S->sysinclude_paths, S->nb_sysinclude_paths);
+    print_dirs("libraries", S->library_paths, S->nb_library_paths);
 #ifdef TCC_TARGET_PE
-    printf("libtcc1:\n  %s/lib/"TCC_LIBTCC1"\n", s->tcc_lib_path);
+    printf("libtcc1:\n  %s/lib/"TCC_LIBTCC1"\n", S->tcc_lib_path);
 #else
-    printf("libtcc1:\n  %s/"TCC_LIBTCC1"\n", s->tcc_lib_path);
-    print_dirs("crt", s->crt_paths, s->nb_crt_paths);
-    printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
+    printf("libtcc1:\n  %s/"TCC_LIBTCC1"\n", S->tcc_lib_path);
+    print_dirs("crt", S->crt_paths, S->nb_crt_paths);
+    printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(S));
 #endif
 }
 
-static void set_environment(TCCState *s)
+static void set_environment(TCCState *S)
 {
     char * path;
 
     path = getenv("C_INCLUDE_PATH");
     if(path != NULL) {
-        tcc_add_sysinclude_path(s, path);
+        tcc_add_sysinclude_path(S, path);
     }
     path = getenv("CPATH");
     if(path != NULL) {
-        tcc_add_include_path(s, path);
+        tcc_add_include_path(S, path);
     }
     path = getenv("LIBRARY_PATH");
     if(path != NULL) {
-        tcc_add_library_path(s, path);
+        tcc_add_library_path(S, path);
     }
 }
 
-static char *default_outputfile(TCCState *s, const char *first_file)
+static char *default_outputfile(TCCState *S, const char *first_file)
 {
     char buf[1024];
     char *ext;
@@ -243,18 +243,18 @@ static char *default_outputfile(TCCState *s, const char *first_file)
     snprintf(buf, sizeof(buf), "%s", name);
     ext = tcc_fileextension(buf);
 #ifdef TCC_TARGET_PE
-    if (s->output_type == TCC_OUTPUT_DLL)
+    if (S->output_type == TCC_OUTPUT_DLL)
         strcpy(ext, ".dll");
     else
-    if (s->output_type == TCC_OUTPUT_EXE)
+    if (S->output_type == TCC_OUTPUT_EXE)
         strcpy(ext, ".exe");
     else
 #endif
-    if ((s->just_deps || s->output_type == TCC_OUTPUT_OBJ) && !s->option_r && *ext)
+    if ((S->just_deps || S->output_type == TCC_OUTPUT_OBJ) && !S->option_r && *ext)
         strcpy(ext, ".o");
     else
         strcpy(buf, "a.out");
-    return tcc_strdup(buf);
+    return tcc_strdup(S, buf);
 }
 
 static unsigned getclock_ms(void)
@@ -268,9 +268,101 @@ static unsigned getclock_ms(void)
 #endif
 }
 
+#ifdef WITH_ATTACHMENTS
+#include "tcc_attachments.h"
+#define ATTACH_PREFIX "/_attach_"
+
+static vio_module_t vio_module;
+
+typedef struct vio_memfile_t {
+    off_t size;
+    off_t pos;
+    const unsigned char *mem;
+} vio_memfile_t;
+
+static int vio_mem_open(vio_fd *fd, const char *fn, int oflag) {
+    //printf("%d:%s\n", fd->fd, fn);
+    if(fd->vio_module && strncmp(ATTACH_PREFIX, fn, sizeof(ATTACH_PREFIX)-1) == 0){
+        int i, count = sizeof(bin2c_filesAttached)/sizeof(bin2c_filesAttached_st);
+        for(i=0; i < count; ++i) {
+            //printf("%s:%s\n", fn, bin2c_filesAttached[i].file_name);
+            if(strcmp(fn, bin2c_filesAttached[i].file_name) == 0) {
+                vio_memfile_t *mf = (vio_memfile_t*)tcc_malloc(S, fd->vio_module->tcc_state);
+                mf->mem = bin2c_filesAttached[i].sym_name;
+                mf->size = bin2c_filesAttached[i].size;
+                mf->pos = 0;
+                fd->fd = 1;
+                fd->vio_udata = mf;
+		//printf("%d:%s\n", fd->fd, fn);
+                return fd->fd;
+            }
+        }
+    }
+    return -1;
+}
+
+static off_t vio_mem_lseek(vio_fd fd, off_t offset, int whence) {
+    if(fd.vio_udata) {
+        off_t loffset = 0;
+        vio_memfile_t *mf = (vio_memfile_t*)fd.vio_udata;
+        if (whence == SEEK_CUR)
+            loffset = mf->pos + offset;
+        else if (whence == SEEK_SET)
+            loffset = offset;
+        else if (whence == SEEK_END)
+            loffset = ((off_t)mf->size) + offset;
+
+        if (loffset < 0 && loffset > mf->size)
+            return -1;
+
+        mf->pos = loffset;
+
+        return mf->pos;
+    }
+    return lseek(fd.fd, offset, whence);
+}
+
+static size_t vio_mem_read(vio_fd fd, void *buf, size_t bytes) {
+    if(fd.vio_udata) {
+        vio_memfile_t *mf = (vio_memfile_t*)fd.vio_udata;
+        if( (mf->pos + bytes) > mf->size) {
+            long bc = mf->size - mf->pos;
+            if(bc > 0) {
+                memcpy(buf, mf->mem + mf->pos, bc);
+                mf->pos = mf->size;
+                return bc;
+            }
+            return 0;
+        }
+        memcpy(buf, mf->mem + mf->pos, bytes);
+        mf->pos += bytes;
+        return bytes;
+    }
+    return 0;
+}
+
+static int vio_mem_close(vio_fd *fd) {
+    if(fd->vio_udata){
+        tcc_free(S, fd->vio_udata);
+    }
+    return 0;
+}
+
+void set_vio_module(TCCState *S){
+    vio_module.user_data = NULL;
+    vio_module.call_vio_open_flags = CALL_VIO_OPEN_FIRST;
+    vio_module.vio_open = &vio_mem_open;
+    vio_module.vio_lseek = &vio_mem_lseek;
+    vio_module.vio_read = &vio_mem_read;
+    vio_module.vio_close = &vio_mem_close;
+    tcc_set_vio_module(s, &vio_module);
+}
+
+#endif
+
 int main(int argc0, char **argv0)
 {
-    TCCState *s, *s1;
+    TCCState *S, *s1;
     int ret, opt, n = 0, t = 0, done;
     unsigned start_time = 0, end_time = 0;
     const char *first_file;
@@ -279,13 +371,19 @@ int main(int argc0, char **argv0)
 
 redo:
     argc = argc0, argv = argv0;
-    s = s1 = tcc_new();
-    opt = tcc_parse_args(s, &argc, &argv, 1);
+    S = s1 = tcc_new();
+    opt = tcc_parse_args(S, &argc, &argv, 1);
+
+#ifdef WITH_ATTACHMENTS
+    tcc_set_lib_path(S, ATTACH_PREFIX);
+    tcc_add_include_path(S, ATTACH_PREFIX);
+    set_vio_module(S);
+#endif
 
     if (n == 0) {
         if (opt == OPT_HELP) {
             fputs(help, stdout);
-            if (!s->verbose)
+            if (!S->verbose)
                 return 0;
             ++opt;
         }
@@ -294,57 +392,57 @@ redo:
             return 0;
         }
         if (opt == OPT_M32 || opt == OPT_M64)
-            tcc_tool_cross(s, argv, opt); /* never returns */
-        if (s->verbose)
+            tcc_tool_cross(S, argv, opt); /* never returns */
+        if (S->verbose)
             printf(version);
         if (opt == OPT_AR)
-            return tcc_tool_ar(s, argc, argv);
+            return tcc_tool_ar(S, argc, argv);
 #ifdef TCC_TARGET_PE
         if (opt == OPT_IMPDEF)
-            return tcc_tool_impdef(s, argc, argv);
+            return tcc_tool_impdef(S, argc, argv);
 #endif
         if (opt == OPT_V)
             return 0;
         if (opt == OPT_PRINT_DIRS) {
             /* initialize search dirs */
-            set_environment(s);
-            tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
-            print_search_dirs(s);
+            set_environment(S);
+            tcc_set_output_type(S, TCC_OUTPUT_MEMORY);
+            print_search_dirs(S);
             return 0;
         }
 
-        if (s->nb_files == 0)
-            tcc_error("no input files");
+        if (S->nb_files == 0)
+            tcc_error(S, "no input files");
 
-        if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-            if (s->outfile && 0!=strcmp("-",s->outfile)) {
-                ppfp = fopen(s->outfile, "w");
+        if (S->output_type == TCC_OUTPUT_PREPROCESS) {
+            if (S->outfile && 0!=strcmp("-",S->outfile)) {
+                ppfp = fopen(S->outfile, "w");
                 if (!ppfp)
-                    tcc_error("could not write '%s'", s->outfile);
+                    tcc_error(S, "could not write '%s'", S->outfile);
             }
-        } else if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) {
-            if (s->nb_libraries)
-                tcc_error("cannot specify libraries with -c");
-            if (s->nb_files > 1 && s->outfile)
-                tcc_error("cannot specify output file with -c many files");
+        } else if (S->output_type == TCC_OUTPUT_OBJ && !S->option_r) {
+            if (S->nb_libraries)
+                tcc_error(S, "cannot specify libraries with -c");
+            if (S->nb_files > 1 && S->outfile)
+                tcc_error(S, "cannot specify output file with -c many files");
         }
 
-        if (s->do_bench)
+        if (S->do_bench)
             start_time = getclock_ms();
     }
 
-    set_environment(s);
-    if (s->output_type == 0)
-        s->output_type = TCC_OUTPUT_EXE;
-    tcc_set_output_type(s, s->output_type);
-    s->ppfp = ppfp;
+    set_environment(S);
+    if (S->output_type == 0)
+        S->output_type = TCC_OUTPUT_EXE;
+    tcc_set_output_type(S, S->output_type);
+    S->ppfp = ppfp;
 
-    if ((s->output_type == TCC_OUTPUT_MEMORY
-      || s->output_type == TCC_OUTPUT_PREPROCESS)
-        && (s->dflag & 16)) { /* -dt option */
+    if ((S->output_type == TCC_OUTPUT_MEMORY
+      || S->output_type == TCC_OUTPUT_PREPROCESS)
+        && (S->dflag & TCC_OPTION_d_t)) { /* -dt option */
         if (t)
-            s->dflag |= 32;
-        s->run_test = ++t;
+            S->dflag |= TCC_OPTION_d_32;
+        S->run_test = ++t;
         if (n)
             --n;
     }
@@ -352,48 +450,48 @@ redo:
     /* compile or add each files or library */
     first_file = NULL, ret = 0;
     do {
-        struct filespec *f = s->files[n];
-        s->filetype = f->type;
+        struct filespec *f = S->files[n];
+        S->filetype = f->type;
         if (f->type & AFF_TYPE_LIB) {
-            if (tcc_add_library_err(s, f->name) < 0)
+            if (tcc_add_library_err(S, f->name) < 0)
                 ret = 1;
         } else {
-            if (1 == s->verbose)
+            if (1 == S->verbose)
                 printf("-> %s\n", f->name);
             if (!first_file)
                 first_file = f->name;
-            if (tcc_add_file(s, f->name) < 0)
+            if (tcc_add_file(S, f->name) < 0)
                 ret = 1;
         }
-        done = ret || ++n >= s->nb_files;
-    } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
+        done = ret || ++n >= S->nb_files;
+    } while (!done && (S->output_type != TCC_OUTPUT_OBJ || S->option_r));
 
-    if (s->do_bench)
+    if (S->do_bench)
         end_time = getclock_ms();
 
-    if (s->run_test) {
+    if (S->run_test) {
         t = 0;
-    } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+    } else if (S->output_type == TCC_OUTPUT_PREPROCESS) {
         ;
     } else if (0 == ret) {
-        if (s->output_type == TCC_OUTPUT_MEMORY) {
+        if (S->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
-            ret = tcc_run(s, argc, argv);
+            ret = tcc_run(S, argc, argv);
 #endif
         } else {
-            if (!s->outfile)
-                s->outfile = default_outputfile(s, first_file);
-            if (!s->just_deps && tcc_output_file(s, s->outfile))
+            if (!S->outfile)
+                S->outfile = default_outputfile(S, first_file);
+            if (!S->just_deps && tcc_output_file(S, S->outfile))
                 ret = 1;
-            else if (s->gen_deps)
-                gen_makedeps(s, s->outfile, s->deps_outfile);
+            else if (S->gen_deps)
+                gen_makedeps(S, S->outfile, S->deps_outfile);
         }
     }
 
-    if (done && 0 == t && 0 == ret && s->do_bench)
-        tcc_print_stats(s, end_time - start_time);
+    if (done && 0 == t && 0 == ret && S->do_bench)
+        tcc_print_stats(S, end_time - start_time);
 
-    tcc_delete(s);
+    tcc_delete(S);
     if (!done)
         goto redo; /* compile more files with -c */
     if (t)
