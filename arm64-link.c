@@ -90,18 +90,18 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
-ST_FUNC unsigned create_plt_entry(TCCState *S, unsigned got_offset, struct sym_attr *attr)
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
-    Section *plt = S->plt;
+    Section *plt = s1->plt;
     uint8_t *p;
     unsigned plt_offset;
 
     if (plt->data_offset == 0) {
-        section_ptr_add(S, plt, 32);
+        section_ptr_add(plt, 32);
     }
     plt_offset = plt->data_offset;
 
-    p = section_ptr_add(S, plt, 16);
+    p = section_ptr_add(plt, 16);
     write32le(p, got_offset);
     write32le(p + 4, (uint64_t) got_offset >> 32);
     return plt_offset;
@@ -109,22 +109,22 @@ ST_FUNC unsigned create_plt_entry(TCCState *S, unsigned got_offset, struct sym_a
 
 /* relocate the PLT: compute addresses and offsets in the PLT now that final
    address for PLT and GOT are known (see fill_program_header) */
-ST_FUNC void relocate_plt(TCCState *S)
+ST_FUNC void relocate_plt(TCCState *s1)
 {
     uint8_t *p, *p_end;
 
-    if (!S->plt)
+    if (!s1->plt)
       return;
 
-    p = S->plt->data;
-    p_end = p + S->plt->data_offset;
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
 
     if (p < p_end) {
-        uint64_t plt = S->plt->sh_addr;
-        uint64_t got = S->got->sh_addr + 16;
+        uint64_t plt = s1->plt->sh_addr;
+        uint64_t got = s1->got->sh_addr + 16;
         uint64_t off = (got >> 12) - (plt >> 12);
         if ((off + ((uint32_t)1 << 20)) >> 21)
-            tcc_error(S, "Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
+            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
         write32le(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
         write32le(p + 4, (0x90000010 | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
@@ -137,13 +137,13 @@ ST_FUNC void relocate_plt(TCCState *S)
         write32le(p + 24, 0xd503201f); // nop
         write32le(p + 28, 0xd503201f); // nop
         p += 32;
-	got = S->got->sh_addr;
+	got = s1->got->sh_addr;
         while (p < p_end) {
-            uint64_t pc = plt + (p - S->plt->data);
+            uint64_t pc = plt + (p - s1->plt->data);
             uint64_t addr = got + read64le(p);
             uint64_t off = (addr >> 12) - (pc >> 12);
             if ((off + ((uint32_t)1 << 20)) >> 21)
-                tcc_error(S, "Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
+                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
             write32le(p, (0x90000010 | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
             write32le(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
@@ -155,16 +155,16 @@ ST_FUNC void relocate_plt(TCCState *S)
         }
     }
 
-    if (S->plt->reloc) {
+    if (s1->plt->reloc) {
         ElfW_Rel *rel;
-        p = S->got->data;
-        for_each_elem(S->plt->reloc, 0, rel, ElfW_Rel) {
-            write64le(p + rel->r_offset, S->plt->sh_addr);
+        p = s1->got->data;
+        for_each_elem(s1->plt->reloc, 0, rel, ElfW_Rel) {
+            write64le(p + rel->r_offset, s1->plt->sh_addr);
 	}
     }
 }
 
-void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
+void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     int sym_index = ELFW(R_SYM)(rel->r_info), esym_index;
 #ifdef DEBUG_RELOC
@@ -173,8 +173,8 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
 
     switch(type) {
         case R_AARCH64_ABS64:
-            if (S->output_type == TCC_OUTPUT_DLL) {
-                esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
+            if (s1->output_type == TCC_OUTPUT_DLL) {
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_AARCH64_ABS64);
@@ -190,7 +190,7 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
             add64le(ptr, val);
             return;
         case R_AARCH64_ABS32:
-            if (S->output_type == TCC_OUTPUT_DLL) {
+            if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* XXX: this logic may depend on TCC's codegen
                    now TCC uses R_AARCH64_RELATIVE even for a 64bit pointer */
                 qrel->r_offset = rel->r_offset;
@@ -202,9 +202,9 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
             add32le(ptr, val);
             return;
 	case R_AARCH64_PREL32:
-            if (S->output_type == TCC_OUTPUT_DLL) {
+            if (s1->output_type == TCC_OUTPUT_DLL) {
                 /* DLL relocation */
-                esym_index = get_sym_attr(S, sym_index, 0)->dyn_index;
+                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 if (esym_index) {
                     qrel->r_offset = rel->r_offset;
                     qrel->r_info = ELFW(R_INFO)(esym_index, R_AARCH64_PREL32);
@@ -235,7 +235,7 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
         case R_AARCH64_ADR_PREL_PG_HI21: {
             uint64_t off = (val >> 12) - (addr >> 12);
             if ((off + ((uint64_t)1 << 20)) >> 21)
-                tcc_error(S, "R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
+                tcc_error("R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
             write32le(ptr, ((read32le(ptr) & 0x9f00001f) |
                             (off & 0x1ffffc) << 3 | (off & 3) << 29));
             return;
@@ -268,7 +268,7 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
 		    (char *) symtab_section->link->data + sym->st_name);
 #endif
             if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc)
-                tcc_error(S, "R_AARCH64_(JUMP|CALL)26 relocation failed"
+                tcc_error("R_AARCH64_(JUMP|CALL)26 relocation failed"
                           " (val=%lx, addr=%lx)", (long)val, (long)addr);
             write32le(ptr, (0x14000000 |
                             (uint32_t)(type == R_AARCH64_CALL26) << 31 |
@@ -276,10 +276,10 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
             return;
         case R_AARCH64_ADR_GOT_PAGE: {
             uint64_t off =
-                (((S->got->sh_addr +
-                   get_sym_attr(S, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
+                (((s1->got->sh_addr +
+                   get_sym_attr(s1, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
             if ((off + ((uint64_t)1 << 20)) >> 21)
-                tcc_error(S, "R_AARCH64_ADR_GOT_PAGE relocation failed");
+                tcc_error("R_AARCH64_ADR_GOT_PAGE relocation failed");
             write32le(ptr, ((read32le(ptr) & 0x9f00001f) |
                             (off & 0x1ffffc) << 3 | (off & 3) << 29));
             return;
@@ -287,8 +287,8 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
         case R_AARCH64_LD64_GOT_LO12_NC:
             write32le(ptr,
                       ((read32le(ptr) & 0xfff803ff) |
-                       ((S->got->sh_addr +
-                         get_sym_attr(S, sym_index, 0)->got_offset) & 0xff8) << 7));
+                       ((s1->got->sh_addr +
+                         get_sym_attr(s1, sym_index, 0)->got_offset) & 0xff8) << 7));
             return;
         case R_AARCH64_COPY:
             return;
@@ -304,7 +304,7 @@ void relocate(TCCState *S, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t a
             return;
         case R_AARCH64_RELATIVE:
 #ifdef TCC_TARGET_PE
-            add32le(ptr, val - S->pe_imagebase);
+            add32le(ptr, val - s1->pe_imagebase);
 #endif
             /* do nothing */
             return;
