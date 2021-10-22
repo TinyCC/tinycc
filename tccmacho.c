@@ -249,7 +249,7 @@ struct macho {
 #define SHT_LINKEDIT (SHT_LOOS + 42)
 #define SHN_FROMDLL  (SHN_LOOS + 2)  /* Symbol is undefined, comes from a DLL */
 
-static void * add_lc(TCCState *S, struct macho *mo, uint32_t cmd, uint32_t cmdsize)
+static void * add_lc(TCCState* S, struct macho *mo, uint32_t cmd, uint32_t cmdsize)
 {
     struct load_command *lc = tcc_mallocz(S, cmdsize);
     lc->cmd = cmd;
@@ -259,7 +259,7 @@ static void * add_lc(TCCState *S, struct macho *mo, uint32_t cmd, uint32_t cmdsi
     return lc;
 }
 
-static struct segment_command_64 * add_segment(TCCState *S, struct macho *mo, const char *name)
+static struct segment_command_64 * add_segment(TCCState* S, struct macho *mo, const char *name)
 {
     struct segment_command_64 *sc = add_lc(S, mo, LC_SEGMENT_64, sizeof(*sc));
     strncpy(sc->segname, name, 16);
@@ -272,7 +272,7 @@ static struct segment_command_64 * get_segment(struct macho *mo, int i)
     return (struct segment_command_64 *) (mo->lc[mo->seg2lc[i]]);
 }
 
-static int add_section(TCCState *S, struct macho *mo, struct segment_command_64 **_seg, const char *name)
+static int add_section(TCCState* S, struct macho *mo, struct segment_command_64 **_seg, const char *name)
 {
     struct segment_command_64 *seg = *_seg;
     int ret = seg->nsects;
@@ -293,7 +293,7 @@ static struct section_64 *get_section(struct segment_command_64 *seg, int i)
     return (struct section_64*)((char*)seg + sizeof(*seg)) + i;
 }
 
-static void * add_dylib(TCCState *S, struct macho *mo, char *name)
+static void * add_dylib(TCCState* S, struct macho *mo, char *name)
 {
     struct dylib_command *lc;
     int sz = (sizeof(*lc) + strlen(name) + 1 + 7) & -8;
@@ -836,7 +836,7 @@ static uint32_t macho_swap32(uint32_t x)
 }
 #define SWAP(x) (swap ? macho_swap32(x) : (x))
 
-ST_FUNC int macho_add_dllref(TCCState *S, int lev, const char* soname)
+ST_FUNC int macho_add_dllref(TCCState* S, int lev, const char* soname)
 {
      /* if the dll is already loaded, do not load it */
     DLLReference *dllref;
@@ -865,7 +865,7 @@ ST_FUNC int macho_add_dllref(TCCState *S, int lev, const char* soname)
 #ifdef TCC_IS_NATIVE
 /* Looks for the active developer SDK set by xcode-select (or the default
    one set during installation.) */
-ST_FUNC void tcc_add_macos_sdkpath(TCCState *S)
+ST_FUNC void tcc_add_macos_sdkpath(TCCState* s)
 {
     char *sdkroot = NULL, *pos = NULL;
     void* xcs = dlopen("libxcselect.dylib", RTLD_GLOBAL | RTLD_LAZY);
@@ -912,7 +912,7 @@ the_end:
 }
 #endif /* TCC_IS_NATIVE */
 
-ST_FUNC int macho_load_tbd(TCCState *S, int fd, const char* filename, int lev)
+ST_FUNC int macho_load_tbd(TCCState* S, int fd, const char* filename, int lev)
 {
     char *soname, *data, *pos;
     int ret = -1;

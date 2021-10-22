@@ -24,9 +24,9 @@
 #define CONFIG_TCC_ASM
 #define NB_ASM_REGS 16
 
-ST_FUNC void g(TCCState *S, int c);
-ST_FUNC void gen_le16(TCCState *S, int c);
-ST_FUNC void gen_le32(TCCState *S, int c);
+ST_FUNC void g(TCCState* S, int c);
+ST_FUNC void gen_le16(TCCState* S, int c);
+ST_FUNC void gen_le32(TCCState* S, int c);
 
 /*************************************************************/
 #else
@@ -100,10 +100,10 @@ static void parse_operand(TCCState *S, Operand *op)
 
     op->type = 0;
 
-    if (S->tok == '{') { // regset literal
+    if (S->tccpp_tok == '{') { // regset literal
         next(S); // skip '{'
-        while (S->tok != '}' && S->tok != TOK_EOF) {
-            reg = asm_parse_regvar(S, S->tok);
+        while (S->tccpp_tok != '}' && S->tccpp_tok != TOK_EOF) {
+            reg = asm_parse_regvar(S, S->tccpp_tok);
             if (reg == -1) {
                 expect(S, "register");
                 return;
@@ -113,11 +113,11 @@ static void parse_operand(TCCState *S, Operand *op)
             if ((1 << reg) < regset)
                 tcc_warning(S, "registers will be processed in ascending order by hardware--but are not specified in ascending order here");
             regset |= 1 << reg;
-            if (S->tok != ',')
+            if (S->tccpp_tok != ',')
                 break;
             next(S); // skip ','
         }
-        if (S->tok != '}')
+        if (S->tccpp_tok != '}')
             expect(S, "'}'");
         next(S); // skip '}'
         if (regset == 0) {
@@ -128,22 +128,22 @@ static void parse_operand(TCCState *S, Operand *op)
             op->regset = regset;
         }
         return;
-    } else if ((reg = asm_parse_regvar(S, S->tok)) != -1) {
+    } else if ((reg = asm_parse_regvar(S, S->tccpp_tok)) != -1) {
         next(S); // skip register name
         op->type = OP_REG32;
         op->reg = (uint8_t) reg;
         return;
-    } else if ((reg = asm_parse_vfp_regvar(S->tok, 0)) != -1) {
+    } else if ((reg = asm_parse_vfp_regvar(S->tccpp_tok, 0)) != -1) {
         next(S); // skip register name
         op->type = OP_VREG32;
         op->reg = (uint8_t) reg;
         return;
-    } else if ((reg = asm_parse_vfp_regvar(S->tok, 1)) != -1) {
+    } else if ((reg = asm_parse_vfp_regvar(S->tccpp_tok, 1)) != -1) {
         next(S); // skip register name
         op->type = OP_VREG64;
         op->reg = (uint8_t) reg;
         return;
-    } else if (S->tok == '#' || S->tok == '$') {
+    } else if (S->tccpp_tok == '#' || S->tccpp_tok == '$') {
         /* constant value */
         next(S); // skip '#' or '$'
     }
@@ -160,44 +160,44 @@ static void parse_operand(TCCState *S, Operand *op)
 }
 
 /* XXX: make it faster ? */
-ST_FUNC void g(TCCState *S, int c)
+ST_FUNC void g(TCCState* S, int c)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return;
-    ind1 = S->ind + 1;
+    ind1 = S->tccgen_ind + 1;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind] = c;
-    S->ind = ind1;
+    cur_text_section->data[S->tccgen_ind] = c;
+    S->tccgen_ind = ind1;
 }
 
-ST_FUNC void gen_le16 (TCCState *S, int i)
+ST_FUNC void gen_le16 (TCCState* S, int i)
 {
     g(S, i);
     g(S, i>>8);
 }
 
-ST_FUNC void gen_le32 (TCCState *S, int i)
+ST_FUNC void gen_le32 (TCCState* S, int i)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return;
-    ind1 = S->ind + 4;
+    ind1 = S->tccgen_ind + 4;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind++] = i & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 8) & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 16) & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 24) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = i & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 8) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 16) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 24) & 0xFF;
 }
 
-ST_FUNC void gen_expr32(TCCState *S, ExprValue *pe)
+ST_FUNC void gen_expr32(TCCState* S, ExprValue *pe)
 {
     gen_le32(S, pe->v);
 }
 
-static uint32_t condition_code_of_token(TCCState *S, int token) {
+static uint32_t condition_code_of_token(TCCState* S, int token) {
     if (token < TOK_ASM_nopeq) {
         expect(S, "condition-enabled instruction");
         return 0;
@@ -205,15 +205,15 @@ static uint32_t condition_code_of_token(TCCState *S, int token) {
         return (token - TOK_ASM_nopeq) & 15;
 }
 
-static void asm_emit_opcode(TCCState *S, int token, uint32_t opcode) {
+static void asm_emit_opcode(TCCState* S, int token, uint32_t opcode) {
     gen_le32(S, (condition_code_of_token(S, token) << 28) | opcode);
 }
 
-static void asm_emit_unconditional_opcode(TCCState *S, uint32_t opcode) {
+static void asm_emit_unconditional_opcode(TCCState* S, uint32_t opcode) {
     gen_le32(S, opcode);
 }
 
-static void asm_emit_coprocessor_opcode(TCCState *S, uint32_t high_nibble, uint8_t cp_number, uint8_t cp_opcode, uint8_t cp_destination_register, uint8_t cp_n_operand_register, uint8_t cp_m_operand_register, uint8_t cp_opcode2, int inter_processor_transfer)
+static void asm_emit_coprocessor_opcode(TCCState* S, uint32_t high_nibble, uint8_t cp_number, uint8_t cp_opcode, uint8_t cp_destination_register, uint8_t cp_n_operand_register, uint8_t cp_m_operand_register, uint8_t cp_opcode2, int inter_processor_transfer)
 {
     uint32_t opcode = 0xe000000;
     if (inter_processor_transfer)
@@ -233,7 +233,7 @@ static void asm_emit_coprocessor_opcode(TCCState *S, uint32_t high_nibble, uint8
     asm_emit_unconditional_opcode(S, (high_nibble << 28) | opcode);
 }
 
-static void asm_nullary_opcode(TCCState *S, int token)
+static void asm_nullary_opcode(TCCState* S, int token)
 {
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_nopeq:
@@ -276,7 +276,7 @@ static void asm_binary_opcode(TCCState *S, int token)
     uint32_t encoded_rotation = 0;
     uint64_t amount;
     parse_operand(S, &ops[0]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -328,9 +328,9 @@ static void asm_binary_opcode(TCCState *S, int token)
     if (ops[1].reg == 13)
         tcc_warning(S, "Using 'sp' as operand with '%s' is deprecated by ARM", get_tok_str(S, token, NULL));
 
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip ','
-        if (S->tok == TOK_ASM_ror) {
+        if (S->tccpp_tok == TOK_ASM_ror) {
             next(S); // skip 'ror'
             parse_operand(S, &rotation);
             if (rotation.type != OP_IM8) {
@@ -387,15 +387,15 @@ static void asm_coprocessor_opcode(TCCState *S, int token) {
     uint8_t high_nibble;
     uint8_t mrc = 0;
 
-    if (S->tok >= TOK_ASM_p0 && S->tok <= TOK_ASM_p15) {
-        coprocessor = S->tok - TOK_ASM_p0;
+    if (S->tccpp_tok >= TOK_ASM_p0 && S->tccpp_tok <= TOK_ASM_p15) {
+        coprocessor = S->tccpp_tok - TOK_ASM_p0;
         next(S);
     } else {
         expect(S, "'p<number>'");
         return;
     }
 
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -407,21 +407,21 @@ static void asm_coprocessor_opcode(TCCState *S, int token) {
     }
 
     for (i = 0; i < 3; ++i) {
-        if (S->tok == ',')
+        if (S->tccpp_tok == ',')
             next(S);
         else
             expect(S, "','");
         if (i == 0 && token != TOK_ASM_cdp2 && (ARM_INSTRUCTION_GROUP(token) == TOK_ASM_mrceq || ARM_INSTRUCTION_GROUP(token) == TOK_ASM_mcreq)) {
-            if (S->tok >= TOK_ASM_r0 && S->tok <= TOK_ASM_r15) {
-                registers[i] = S->tok - TOK_ASM_r0;
+            if (S->tccpp_tok >= TOK_ASM_r0 && S->tccpp_tok <= TOK_ASM_r15) {
+                registers[i] = S->tccpp_tok - TOK_ASM_r0;
                 next(S);
             } else {
                 expect(S, "'r<number>'");
                 return;
             }
         } else {
-            if (S->tok >= TOK_ASM_c0 && S->tok <= TOK_ASM_c15) {
-                registers[i] = S->tok - TOK_ASM_c0;
+            if (S->tccpp_tok >= TOK_ASM_c0 && S->tccpp_tok <= TOK_ASM_c15) {
+                registers[i] = S->tccpp_tok - TOK_ASM_c0;
                 next(S);
             } else {
                 expect(S, "'c<number>'");
@@ -429,7 +429,7 @@ static void asm_coprocessor_opcode(TCCState *S, int token) {
             }
         }
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S);
         parse_operand(S, &opcode2);
     } else {
@@ -493,11 +493,11 @@ static void asm_block_data_transfer_opcode(TCCState *S, int token)
     Operand ops[2];
     int nb_ops = 1;
     parse_operand(S, &ops[0]);
-    if (S->tok == '!') {
+    if (S->tccpp_tok == '!') {
         op0_exclam = 1;
         next(S); // skip '!'
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip comma
         parse_operand(S, &ops[1]);
         ++nb_ops;
@@ -600,17 +600,17 @@ static void asm_block_data_transfer_opcode(TCCState *S, int token)
 
    NB_SHIFT: will be set to 1 iff SHIFT is filled.  Note that for rrx, there's no need to fill SHIFT.
    SHIFT: will be filled in with the shift operand to use, if any. */
-static uint32_t asm_parse_optional_shift(TCCState *S, int* nb_shift, Operand* shift)
+static uint32_t asm_parse_optional_shift(TCCState* S, int* nb_shift, Operand* shift)
 {
     uint32_t opcode = 0;
     *nb_shift = 0;
-    switch (S->tok) {
+    switch (S->tccpp_tok) {
     case TOK_ASM_asl:
     case TOK_ASM_lsl:
     case TOK_ASM_asr:
     case TOK_ASM_lsr:
     case TOK_ASM_ror:
-        switch (S->tok) {
+        switch (S->tccpp_tok) {
         case TOK_ASM_asl:
             /* fallthrough */
         case TOK_ASM_lsl:
@@ -677,15 +677,15 @@ static void asm_data_processing_opcode(TCCState *S, int token)
     uint32_t opcode_nos = opcode_idx >> 1; // without "s"; "OpCode" in ARM docs
 
     for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ) {
-        if (S->tok == TOK_ASM_asl || S->tok == TOK_ASM_lsl || S->tok == TOK_ASM_lsr || S->tok == TOK_ASM_asr || S->tok == TOK_ASM_ror || S->tok == TOK_ASM_rrx)
+        if (S->tccpp_tok == TOK_ASM_asl || S->tccpp_tok == TOK_ASM_lsl || S->tccpp_tok == TOK_ASM_lsr || S->tccpp_tok == TOK_ASM_asr || S->tccpp_tok == TOK_ASM_ror || S->tccpp_tok == TOK_ASM_rrx)
             break;
         parse_operand(S, &ops[nb_ops]);
         ++nb_ops;
-        if (S->tok != ',')
+        if (S->tccpp_tok != ',')
             break;
         next(S); // skip ','
     }
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     operands |= asm_parse_optional_shift(S, &nb_shift, &shift);
     if (nb_ops < 2)
@@ -852,7 +852,7 @@ static void asm_shift_opcode(TCCState *S, int token)
 
     for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
         parse_operand(S, &ops[nb_ops]);
-        if (S->tok != ',') {
+        if (S->tccpp_tok != ',') {
             ++nb_ops;
             break;
         }
@@ -961,7 +961,7 @@ static void asm_multiplication_opcode(TCCState *S, int token)
 
     for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
         parse_operand(S, &ops[nb_ops]);
-        if (S->tok != ',') {
+        if (S->tccpp_tok != ',') {
             ++nb_ops;
             break;
         }
@@ -1043,7 +1043,7 @@ static void asm_long_multiplication_opcode(TCCState *S, int token)
 
     for (nb_ops = 0; nb_ops < sizeof(ops)/sizeof(ops[0]); ++nb_ops) {
         parse_operand(S, &ops[nb_ops]);
-        if (S->tok != ',') {
+        if (S->tccpp_tok != ',') {
             ++nb_ops;
             break;
         }
@@ -1133,7 +1133,7 @@ static void asm_single_data_transfer_opcode(TCCState *S, int token)
         expect(S, "(destination operand) register");
         return;
     }
-    if (S->tok != ',')
+    if (S->tccpp_tok != ',')
         expect(S, "at least two arguments");
     else
         next(S); // skip ','
@@ -1146,14 +1146,14 @@ static void asm_single_data_transfer_opcode(TCCState *S, int token)
             expect(S, "register");
             return;
         }
-        if (S->tok != ',')
+        if (S->tccpp_tok != ',')
             expect(S, "at least three arguments");
         else
             next(S); // skip ','
         break;
     }
 
-    if (S->tok != '[')
+    if (S->tccpp_tok != '[')
         expect(S, "'['");
     else
         next(S); // skip '['
@@ -1165,14 +1165,14 @@ static void asm_single_data_transfer_opcode(TCCState *S, int token)
         expect(S, "(first source operand) register");
         return;
     }
-    if (S->tok == ']') {
+    if (S->tccpp_tok == ']') {
         next(S);
         closed_bracket = 1;
         // exclam = 1; // implicit in hardware; don't do it in software
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip ','
-        if (S->tok == '-') {
+        if (S->tccpp_tok == '-') {
             op2_minus = 1;
             next(S);
         }
@@ -1182,7 +1182,7 @@ static void asm_single_data_transfer_opcode(TCCState *S, int token)
                 tcc_error(S, "Using 'pc' for register offset in '%s' is not implemented by ARM", get_tok_str(S, token, NULL));
                 return;
             }
-            if (S->tok == ',') {
+            if (S->tccpp_tok == ',') {
                 next(S);
                 opcode |= asm_parse_optional_shift(S, &nb_shift, &shift);
                 if (opcode == 0)
@@ -1196,12 +1196,12 @@ static void asm_single_data_transfer_opcode(TCCState *S, int token)
         opcode |= 1 << 24; // add offset before transfer
     }
     if (!closed_bracket) {
-        if (S->tok != ']')
+        if (S->tccpp_tok != ']')
             expect(S, "']'");
         else
             next(S); // skip ']'
         opcode |= 1 << 24; // add offset before transfer
-        if (S->tok == '!') {
+        if (S->tccpp_tok == '!') {
             exclam = 1;
             next(S); // skip '!'
         }
@@ -1389,33 +1389,33 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *S, int token)
     // Note: ldc p2, c0, [r4, #4]! ; pre-indexed:   r0 = *(int*)(r4+4); r4 = r4+4
     // Note: ldc p3, c0, [r4], #4  ; post-indexed:  r0 = *(int*)(r4+0); r4 = r4+4
 
-    if (S->tok >= TOK_ASM_p0 && S->tok <= TOK_ASM_p15) {
-        coprocessor = S->tok - TOK_ASM_p0;
+    if (S->tccpp_tok >= TOK_ASM_p0 && S->tccpp_tok <= TOK_ASM_p15) {
+        coprocessor = S->tccpp_tok - TOK_ASM_p0;
         next(S);
     } else {
         expect(S, "'c<number>'");
         return;
     }
 
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
 
-    if (S->tok >= TOK_ASM_c0 && S->tok <= TOK_ASM_c15) {
-        coprocessor_destination_register = S->tok - TOK_ASM_c0;
+    if (S->tccpp_tok >= TOK_ASM_c0 && S->tccpp_tok <= TOK_ASM_c15) {
+        coprocessor_destination_register = S->tccpp_tok - TOK_ASM_c0;
         next(S);
     } else {
         expect(S, "'c<number>'");
         return;
     }
 
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
 
-    if (S->tok != '[')
+    if (S->tccpp_tok != '[')
         expect(S, "'['");
     else
         next(S); // skip '['
@@ -1425,14 +1425,14 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *S, int token)
         expect(S, "(first source operand) register");
         return;
     }
-    if (S->tok == ']') {
+    if (S->tccpp_tok == ']') {
         next(S);
         closed_bracket = 1;
         // exclam = 1; // implicit in hardware; don't do it in software
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip ','
-        if (S->tok == '-') {
+        if (S->tccpp_tok == '-') {
             op2_minus = 1;
             next(S);
         }
@@ -1453,12 +1453,12 @@ static void asm_coprocessor_data_transfer_opcode(TCCState *S, int token)
         preincrement = 1; // add offset before transfer
     }
     if (!closed_bracket) {
-        if (S->tok != ']')
+        if (S->tccpp_tok != ']')
             expect(S, "']'");
         else
             next(S); // skip ']'
         preincrement = 1; // add offset before transfer
-        if (S->tok == '!') {
+        if (S->tccpp_tok == '!') {
             exclam = 1;
             next(S); // skip '!'
         }
@@ -1528,12 +1528,12 @@ static void asm_floating_point_single_data_transfer_opcode(TCCState *S, int toke
         return;
     }
 
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
 
-    if (S->tok != '[')
+    if (S->tccpp_tok != '[')
         expect(S, "'['");
     else
         next(S); // skip '['
@@ -1543,7 +1543,7 @@ static void asm_floating_point_single_data_transfer_opcode(TCCState *S, int toke
         expect(S, "(first source operand) register");
         return;
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip ','
         parse_operand(S, &ops[2]);
         if (ops[2].type != OP_IM8 && ops[2].type != OP_IM8N) {
@@ -1555,7 +1555,7 @@ static void asm_floating_point_single_data_transfer_opcode(TCCState *S, int toke
         ops[2].type = OP_IM8;
         ops[2].e.v = 0;
     }
-    if (S->tok != ']')
+    if (S->tccpp_tok != ']')
         expect(S, "']'");
     else
         next(S); // skip ']'
@@ -1593,11 +1593,11 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *S, int token
         break;
     default:
         parse_operand(S, &ops[0]);
-        if (S->tok == '!') {
+        if (S->tccpp_tok == '!') {
             op0_exclam = 1;
             next(S); // skip '!'
         }
-        if (S->tok == ',')
+        if (S->tccpp_tok == ',')
             next(S); // skip comma
         else {
             expect(S, "','");
@@ -1605,16 +1605,16 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *S, int token
         }
     }
 
-    if (S->tok != '{') {
+    if (S->tccpp_tok != '{') {
         expect(S, "'{'");
         return;
     }
     next(S); // skip '{'
-    first_regset_register = asm_parse_vfp_regvar(S->tok, 1);
-    if ((first_regset_register = asm_parse_vfp_regvar(S->tok, 1)) != -1) {
+    first_regset_register = asm_parse_vfp_regvar(S->tccpp_tok, 1);
+    if ((first_regset_register = asm_parse_vfp_regvar(S->tccpp_tok, 1)) != -1) {
         coprocessor = CP_DOUBLE_PRECISION_FLOAT;
         next(S);
-    } else if ((first_regset_register = asm_parse_vfp_regvar(S->tok, 0)) != -1) {
+    } else if ((first_regset_register = asm_parse_vfp_regvar(S->tccpp_tok, 0)) != -1) {
         coprocessor = CP_SINGLE_PRECISION_FLOAT;
         next(S);
     } else {
@@ -1622,9 +1622,9 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *S, int token
         return;
     }
 
-    if (S->tok == '-') {
+    if (S->tccpp_tok == '-') {
         next(S);
-        if ((last_regset_register = asm_parse_vfp_regvar(S->tok, coprocessor == CP_DOUBLE_PRECISION_FLOAT)) != -1)
+        if ((last_regset_register = asm_parse_vfp_regvar(S->tccpp_tok, coprocessor == CP_DOUBLE_PRECISION_FLOAT)) != -1)
             next(S);
         else {
             expect(S, "floating-point register");
@@ -1637,7 +1637,7 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *S, int token
         tcc_error(S, "registers will be processed in ascending order by hardware--but are not specified in ascending order here");
         return;
     }
-    if (S->tok != '}') {
+    if (S->tccpp_tok != '}') {
         expect(S, "'}'");
         return;
     }
@@ -1688,7 +1688,7 @@ static void asm_floating_point_block_data_transfer_opcode(TCCState *S, int token
 #define VMOV_FRACTIONAL_DIGITS 7
 #define VMOV_ONE 10000000 /* pow(10, VMOV_FRACTIONAL_DIGITS) */
 
-static uint32_t vmov_parse_fractional_part(TCCState *S, const char* s)
+static uint32_t vmov_parse_fractional_part(TCCState* S, const char* s)
 {
     uint32_t result = 0;
     int i;
@@ -1720,16 +1720,16 @@ static int vmov_linear_approx_index(uint32_t beginning, uint32_t end, uint32_t v
     return -1;
 }
 
-static uint32_t vmov_parse_immediate_value(TCCState *S) {
+static uint32_t vmov_parse_immediate_value(TCCState* S) {
     uint32_t value;
     unsigned long integral_value;
     const char *p;
 
-    if (S->tok != TOK_PPNUM) {
+    if (S->tccpp_tok != TOK_PPNUM) {
         expect(S, "immediate value");
         return 0;
     }
-    p = S->tokc.str.data;
+    p = S->tccpp_tokc.str.data;
     errno = 0;
     integral_value = strtoul(p, (char **)&p, 0);
 
@@ -1747,7 +1747,7 @@ static uint32_t vmov_parse_immediate_value(TCCState *S) {
     return value;
 }
 
-static uint8_t vmov_encode_immediate_value(TCCState *S, uint32_t value)
+static uint8_t vmov_encode_immediate_value(TCCState* S, uint32_t value)
 {
     uint32_t limit;
     uint32_t end = 0;
@@ -1785,10 +1785,10 @@ static void asm_floating_point_immediate_data_processing_opcode_tail(TCCState *S
 
     operands[0] = CRd;
 
-    if (S->tok == '#' || S->tok == '$') {
+    if (S->tccpp_tok == '#' || S->tccpp_tok == '$') {
         next(S);
     }
-    if (S->tok == '-') {
+    if (S->tccpp_tok == '-') {
         op_minus = 1;
         next(S);
     }
@@ -1956,7 +1956,7 @@ static void asm_floating_point_vcvt_data_processing_opcode(TCCState *S, int toke
         break;
     }
 
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -2078,7 +2078,7 @@ static void asm_floating_point_data_processing_opcode(TCCState *S, int token) {
 
     for (nb_ops = 0; nb_ops < 3; ) {
         // Note: Necessary because parse_operand can't parse decimal numerals.
-        if (nb_ops == 1 && (S->tok == '#' || S->tok == '$' || S->tok == TOK_PPNUM || S->tok == '-')) {
+        if (nb_ops == 1 && (S->tccpp_tok == '#' || S->tccpp_tok == '$' || S->tccpp_tok == TOK_PPNUM || S->tccpp_tok == '-')) {
             asm_floating_point_immediate_data_processing_opcode_tail(S, token, coprocessor, ops[0].reg);
             return;
         }
@@ -2100,7 +2100,7 @@ static void asm_floating_point_data_processing_opcode(TCCState *S, int token) {
             return;
         }
         ++nb_ops;
-        if (S->tok == ',')
+        if (S->tccpp_tok == ',')
             next(S);
         else
             break;
@@ -2239,7 +2239,7 @@ static void asm_floating_point_data_processing_opcode(TCCState *S, int token) {
     asm_emit_coprocessor_opcode(S, condition_code_of_token(S, token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, (ops[2].type == OP_IM8) ? ops[2].e.v : ops[2].reg, opcode2, 0);
 }
 
-static void asm_floating_point_status_register_opcode(TCCState *S, int token)
+static void asm_floating_point_status_register_opcode(TCCState* S, int token)
 {
     uint8_t coprocessor = CP_SINGLE_PRECISION_FLOAT;
     uint8_t opcode;
@@ -2248,7 +2248,7 @@ static void asm_floating_point_status_register_opcode(TCCState *S, int token)
     switch (ARM_INSTRUCTION_GROUP(token)) {
     case TOK_ASM_vmrseq:
         opcode = 0xf;
-        if (S->tok == TOK_ASM_apsr_nzcv) {
+        if (S->tccpp_tok == TOK_ASM_apsr_nzcv) {
             arm_operand.type = OP_REG32;
             arm_operand.reg = 15; // not PC
             next(S); // skip apsr_nzcv
@@ -2260,11 +2260,11 @@ static void asm_floating_point_status_register_opcode(TCCState *S, int token)
             }
         }
 
-        if (S->tok != ',')
+        if (S->tccpp_tok != ',')
             expect(S, "','");
         else
             next(S); // skip ','
-        vfp_sys_reg = asm_parse_vfp_status_regvar(S->tok);
+        vfp_sys_reg = asm_parse_vfp_status_regvar(S->tccpp_tok);
         next(S); // skip vfp sys reg
         if (arm_operand.type == OP_REG32 && arm_operand.reg == 15 && vfp_sys_reg != 1) {
             tcc_error(S, "'%s' only supports the variant 'vmrs apsr_nzcv, fpscr' here", get_tok_str(S, token, NULL));
@@ -2273,9 +2273,9 @@ static void asm_floating_point_status_register_opcode(TCCState *S, int token)
         break;
     case TOK_ASM_vmsreq:
         opcode = 0xe;
-        vfp_sys_reg = asm_parse_vfp_status_regvar(S->tok);
+        vfp_sys_reg = asm_parse_vfp_status_regvar(S->tccpp_tok);
         next(S); // skip vfp sys reg
-        if (S->tok != ',')
+        if (S->tccpp_tok != ',')
             expect(S, "','");
         else
             next(S); // skip ','
@@ -2329,12 +2329,12 @@ static void asm_misc_single_data_transfer_opcode(TCCState *S, int token)
         expect(S, "(destination operand) register");
         return;
     }
-    if (S->tok != ',')
+    if (S->tccpp_tok != ',')
         expect(S, "at least two arguments");
     else
         next(S); // skip ','
 
-    if (S->tok != '[')
+    if (S->tccpp_tok != '[')
         expect(S, "'['");
     else
         next(S); // skip '['
@@ -2346,14 +2346,14 @@ static void asm_misc_single_data_transfer_opcode(TCCState *S, int token)
         expect(S, "(first source operand) register");
         return;
     }
-    if (S->tok == ']') {
+    if (S->tccpp_tok == ']') {
         next(S);
         closed_bracket = 1;
         // exclam = 1; // implicit in hardware; don't do it in software
     }
-    if (S->tok == ',') {
+    if (S->tccpp_tok == ',') {
         next(S); // skip ','
-        if (S->tok == '-') {
+        if (S->tccpp_tok == '-') {
             op2_minus = 1;
             next(S);
         }
@@ -2365,12 +2365,12 @@ static void asm_misc_single_data_transfer_opcode(TCCState *S, int token)
         opcode |= 1 << 24; // add offset before transfer
     }
     if (!closed_bracket) {
-        if (S->tok != ']')
+        if (S->tccpp_tok != ']')
             expect(S, "']'");
         else
             next(S); // skip ']'
         opcode |= 1 << 24; // add offset before transfer
-        if (S->tok == '!') {
+        if (S->tccpp_tok == '!') {
             exclam = 1;
             next(S); // skip '!'
         }
@@ -2439,7 +2439,7 @@ static void asm_misc_single_data_transfer_opcode(TCCState *S, int token)
 }
 
 /* Note: almost dupe of encbranch in arm-gen.c */
-static uint32_t encbranchoffset(TCCState *S, int pos, int addr, int fail)
+static uint32_t encbranchoffset(TCCState* S, int pos, int addr, int fail)
 {
   addr-=pos+8;
   addr/=4;
@@ -2467,7 +2467,7 @@ static void asm_branch_opcode(TCCState *S, int token)
             tcc_error(S, "invalid branch target");
             return;
         }
-        jmp_disp = encbranchoffset(S, S->ind, e.v + esym->st_value, 1);
+        jmp_disp = encbranchoffset(S, S->tccgen_ind, e.v + esym->st_value, 1);
         break;
     default:
         parse_operand(S, &op);
@@ -2501,7 +2501,7 @@ ST_FUNC void asm_opcode(TCCState *S, int token)
 {
     while (token == TOK_LINEFEED) {
         next(S);
-        token = S->tok;
+        token = S->tccpp_tok;
     }
     if (token == TOK_EOF)
         return;
@@ -2737,7 +2737,7 @@ ST_FUNC void asm_opcode(TCCState *S, int token)
     }
 }
 
-ST_FUNC void subst_asm_operand(TCCState *S, CString *add_str, SValue *sv, int modifier)
+ST_FUNC void subst_asm_operand(TCCState* S, CString *add_str, SValue *sv, int modifier)
 {
     int r, reg, size, val;
     char buf[64];
@@ -2814,7 +2814,7 @@ ST_FUNC void subst_asm_operand(TCCState *S, CString *add_str, SValue *sv, int mo
 }
 
 /* generate prolog and epilog code for asm statement */
-ST_FUNC void asm_gen_code(TCCState *S, ASMOperand *operands, int nb_operands,
+ST_FUNC void asm_gen_code(TCCState* S, ASMOperand *operands, int nb_operands,
                           int nb_outputs, int is_output,
                           uint8_t *clobber_regs,
                           int out_reg)
@@ -2900,7 +2900,7 @@ ST_FUNC void asm_gen_code(TCCState *S, ASMOperand *operands, int nb_operands,
 
 /* return the constraint priority (we allocate first the lowest
    numbered constraints) */
-static inline int constraint_priority(TCCState *S, const char *str)
+static inline int constraint_priority(TCCState* S, const char *str)
 {
     int priority, c, pr;
 
@@ -2956,7 +2956,7 @@ static const char *skip_constraint_modifiers(const char *p)
 
 #define is_reg_allocated(reg) (regs_allocated[reg] & reg_mask)
 
-ST_FUNC void asm_compute_constraints(TCCState *S, ASMOperand *operands,
+ST_FUNC void asm_compute_constraints(TCCState* S, ASMOperand *operands,
                                     int nb_operands, int nb_outputs,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
@@ -3191,7 +3191,7 @@ ST_FUNC void asm_compute_constraints(TCCState *S, ASMOperand *operands,
 #endif
 }
 
-ST_FUNC void asm_clobber(TCCState *S, uint8_t *clobber_regs, const char *str)
+ST_FUNC void asm_clobber(TCCState* S, uint8_t *clobber_regs, const char *str)
 {
     int reg;
     TokenSym *ts;

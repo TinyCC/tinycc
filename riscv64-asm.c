@@ -9,9 +9,9 @@
 #define CONFIG_TCC_ASM
 #define NB_ASM_REGS 32
 
-ST_FUNC void g(TCCState *S, int c);
-ST_FUNC void gen_le16(TCCState *S, int c);
-ST_FUNC void gen_le32(TCCState *S, int c);
+ST_FUNC void g(TCCState* S, int c);
+ST_FUNC void gen_le16(TCCState* S, int c);
+ST_FUNC void gen_le32(TCCState* S, int c);
 
 /*************************************************************/
 #else
@@ -20,44 +20,44 @@ ST_FUNC void gen_le32(TCCState *S, int c);
 #include "tcc.h"
 
 /* XXX: make it faster ? */
-ST_FUNC void g(TCCState *S, int c)
+ST_FUNC void g(TCCState* S, int c)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return;
-    ind1 = S->ind + 1;
+    ind1 = S->tccgen_ind + 1;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind] = c;
-    S->ind = ind1;
+    cur_text_section->data[S->tccgen_ind] = c;
+    S->tccgen_ind = ind1;
 }
 
-ST_FUNC void gen_le16 (TCCState *S, int i)
+ST_FUNC void gen_le16 (TCCState* S, int i)
 {
     g(S, i);
     g(S, i>>8);
 }
 
-ST_FUNC void gen_le32 (TCCState *S, int i)
+ST_FUNC void gen_le32 (TCCState* S, int i)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return;
-    ind1 = S->ind + 4;
+    ind1 = S->tccgen_ind + 4;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind++] = i & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 8) & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 16) & 0xFF;
-    cur_text_section->data[S->ind++] = (i >> 24) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = i & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 8) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 16) & 0xFF;
+    cur_text_section->data[S->tccgen_ind++] = (i >> 24) & 0xFF;
 }
 
-ST_FUNC void gen_expr32(TCCState *S, ExprValue *pe)
+ST_FUNC void gen_expr32(TCCState* S, ExprValue *pe)
 {
     gen_le32(S, pe->v);
 }
 
-static void asm_emit_opcode(TCCState *S, uint32_t opcode) {
+static void asm_emit_opcode(TCCState* S, uint32_t opcode) {
     gen_le32(S, opcode);
 }
 
@@ -128,12 +128,12 @@ static void parse_operand(TCCState *S, Operand *op)
 
     op->type = 0;
 
-    if ((reg = asm_parse_regvar(S, S->tok)) != -1) {
+    if ((reg = asm_parse_regvar(S, S->tccpp_tok)) != -1) {
         next(S); // skip register name
         op->type = OP_REG;
         op->reg = (uint8_t) reg;
         return;
-    } else if (S->tok == '$') {
+    } else if (S->tccpp_tok == '$') {
         /* constant value */
         next(S); // skip '#' or '$'
     }
@@ -207,11 +207,11 @@ static void asm_emit_u(TCCState *S, int token, uint32_t opcode, const Operand* r
     gen_le32(S, opcode | ENCODE_RD(rd->reg) | (rs2->e.v << 12));
 }
 
-static void asm_binary_opcode(TCCState *S, int token)
+static void asm_binary_opcode(TCCState* S, int token)
 {
     Operand ops[2];
     parse_operand(S, &ops[0]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -230,7 +230,7 @@ static void asm_binary_opcode(TCCState *S, int token)
 }
 
 /* caller: Add funct3, funct7 into opcode */
-static void asm_emit_r(TCCState *S, int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
+static void asm_emit_r(TCCState* S, int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
 {
     if (rd->type != OP_REG) {
         tcc_error(S, "'%s': Expected destination operand that is a register", get_tok_str(S, token, NULL));
@@ -255,7 +255,7 @@ static void asm_emit_r(TCCState *S, int token, uint32_t opcode, const Operand* r
 }
 
 /* caller: Add funct3 into opcode */
-static void asm_emit_i(TCCState *S, int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
+static void asm_emit_i(TCCState* S, int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2)
 {
     if (rd->type != OP_REG) {
         tcc_error(S, "'%s': Expected destination operand that is a register", get_tok_str(S, token, NULL));
@@ -283,12 +283,12 @@ static void asm_shift_opcode(TCCState *S, int token)
 {
     Operand ops[3];
     parse_operand(S, &ops[0]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
     parse_operand(S, &ops[1]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -336,16 +336,16 @@ static void asm_shift_opcode(TCCState *S, int token)
     }
 }
 
-static void asm_data_processing_opcode(TCCState *S, int token)
+static void asm_data_processing_opcode(TCCState* S, int token)
 {
     Operand ops[3];
     parse_operand(S, &ops[0]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
     parse_operand(S, &ops[1]);
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -414,7 +414,7 @@ static void asm_data_processing_opcode(TCCState *S, int token)
 }
 
 /* caller: Add funct3 to opcode */
-static void asm_emit_s(TCCState *S, int token, uint32_t opcode, const Operand* rs1, const Operand* rs2, const Operand* imm)
+static void asm_emit_s(TCCState* S, int token, uint32_t opcode, const Operand* rs1, const Operand* rs2, const Operand* imm)
 {
     if (rs1->type != OP_REG) {
         tcc_error(S, "'%s': Expected first source operand that is a register", get_tok_str(S, token, NULL));
@@ -442,7 +442,7 @@ static void asm_emit_s(TCCState *S, int token, uint32_t opcode, const Operand* r
     }
 }
 
-static void asm_data_transfer_opcode(TCCState *S, int token)
+static void asm_data_transfer_opcode(TCCState* S, int token)
 {
     Operand ops[3];
     parse_operand(S, &ops[0]);
@@ -450,7 +450,7 @@ static void asm_data_transfer_opcode(TCCState *S, int token)
         expect(S, "register");
         return;
     }
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -459,7 +459,7 @@ static void asm_data_transfer_opcode(TCCState *S, int token)
         expect(S, "register");
         return;
     }
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -511,7 +511,7 @@ static void asm_data_transfer_opcode(TCCState *S, int token)
     }
 }
 
-static void asm_branch_opcode(TCCState *S, int token)
+static void asm_branch_opcode(TCCState* S, int token)
 {
     // Branch (RS1,RS2,IMM); SB-format
     uint32_t opcode = (0x18 << 2) | 3;
@@ -522,7 +522,7 @@ static void asm_branch_opcode(TCCState *S, int token)
         expect(S, "register");
         return;
     }
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -531,7 +531,7 @@ static void asm_branch_opcode(TCCState *S, int token)
         expect(S, "register");
         return;
     }
-    if (S->tok == ',')
+    if (S->tccpp_tok == ',')
         next(S);
     else
         expect(S, "','");
@@ -709,7 +709,7 @@ ST_FUNC void asm_clobber(TCCState *S, uint8_t *clobber_regs, const char *str)
     clobber_regs[reg] = 1;
 }
 
-ST_FUNC int asm_parse_regvar (TCCState *S, int t)
+ST_FUNC int asm_parse_regvar (TCCState* S, int t)
 {
     if (t >= TOK_ASM_x0 && t <= TOK_ASM_pc) { /* register name */
         switch (t) {

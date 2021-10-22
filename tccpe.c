@@ -1492,7 +1492,7 @@ static void pe_print_sections(TCCState *S, const char *fname)
 /* helper function for load/store to insert one more indirection */
 
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
-ST_FUNC SValue *pe_getimport(TCCState *S, SValue *sv, SValue *v2)
+ST_FUNC SValue *pe_getimport(TCCState* S, SValue *sv, SValue *v2)
 {
     int r2;
     if ((sv->r & (VT_VALMASK|VT_SYM)) != (VT_CONST|VT_SYM) || (sv->r2 != VT_CONST))
@@ -1512,7 +1512,7 @@ ST_FUNC SValue *pe_getimport(TCCState *S, SValue *sv, SValue *v2)
         vpushv(S, v2);
         vpushi(S, sv->c.i);
         gen_opi(S, '+');
-        *v2 = *S->vtop--;
+        *v2 = *S->tccgen_vtop--;
     }
     v2->type.t = sv->type.t;
     v2->r |= sv->r & VT_LVAL;
@@ -1551,7 +1551,7 @@ static int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 
 /* ------------------------------------------------------------- */
 
-static int get_dllexports(TCCState *S, int fd, char **pp)
+static int get_dllexports(TCCState* S, int fd, char **pp)
 {
     int l, i, n, n0, ret;
     char *p;

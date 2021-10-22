@@ -9,9 +9,9 @@
 #define CONFIG_TCC_ASM
 #define NB_ASM_REGS 16
 
-ST_FUNC void g(TCCState *S, int c);
-ST_FUNC void gen_le16(TCCState *S, int c);
-ST_FUNC void gen_le32(TCCState *S, int c);
+ST_FUNC void g(TCCState* S, int c);
+ST_FUNC void gen_le16(TCCState* S, int c);
+ST_FUNC void gen_le32(TCCState* S, int c);
 
 /*************************************************************/
 #else
@@ -19,74 +19,74 @@ ST_FUNC void gen_le32(TCCState *S, int c);
 #define USING_GLOBALS
 #include "tcc.h"
 
-static void asm_error(TCCState *S)
+static void asm_error(void)
 {
-    tcc_error(S, "ARM asm not implemented.");
+    tcc_error("ARM asm not implemented.");
 }
 
 /* XXX: make it faster ? */
-ST_FUNC void g(TCCState *S, int c)
+ST_FUNC void g(TCCState* S, int c)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (nocode_wanted)
         return;
-    ind1 = S->ind + 1;
+    ind1 = ind + 1;
     if (ind1 > cur_text_section->data_allocated)
-        section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind] = c;
-    S->ind = ind1;
+        section_realloc(cur_text_section, ind1);
+    cur_text_section->data[ind] = c;
+    ind = ind1;
 }
 
-ST_FUNC void gen_le16 (TCCState *S, int i)
+ST_FUNC void gen_le16 (TCCState* S, int i)
 {
     g(S, i);
     g(S, i>>8);
 }
 
-ST_FUNC void gen_le32 (TCCState *S, int i)
+ST_FUNC void gen_le32 (TCCState* S, int i)
 {
     gen_le16(S, i);
     gen_le16(S, i>>16);
 }
 
-ST_FUNC void gen_expr32(TCCState *S, ExprValue *pe)
+ST_FUNC void gen_expr32(TCCState* S, ExprValue *pe)
 {
     gen_le32(S, pe->v);
 }
 
 ST_FUNC void asm_opcode(TCCState *S, int opcode)
 {
-    asm_error(S);
+    asm_error();
 }
 
-ST_FUNC void subst_asm_operand(TCCState *S, CString *add_str, SValue *sv, int modifier)
+ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
 {
-    asm_error(S);
+    asm_error();
 }
 
 /* generate prolog and epilog code for asm statement */
-ST_FUNC void asm_gen_code(TCCState *S, ASMOperand *operands, int nb_operands,
+ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          int nb_outputs, int is_output,
                          uint8_t *clobber_regs,
                          int out_reg)
 {
 }
 
-ST_FUNC void asm_compute_constraints(TCCState *S, ASMOperand *operands,
+ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     int nb_operands, int nb_outputs,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
 {
 }
 
-ST_FUNC void asm_clobber(TCCState *S, uint8_t *clobber_regs, const char *str)
+ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 {
-    asm_error(S);
+    asm_error();
 }
 
-ST_FUNC int asm_parse_regvar (TCCState *S, int t)
+ST_FUNC int asm_parse_regvar (int t)
 {
-    asm_error(S);
+    asm_error();
     return -1;
 }
 

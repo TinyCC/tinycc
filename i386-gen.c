@@ -100,24 +100,24 @@ ST_DATA const int reg_classes[NB_REGS] = {
 static unsigned long func_sub_sp_offset;
 static int func_ret_sub;
 #ifdef CONFIG_TCC_BCHECK
-static void gen_bounds_prolog(TCCState *S);
-static void gen_bounds_epilog(TCCState *S);
+static void gen_bounds_prolog(TCCState* S);
+static void gen_bounds_epilog(TCCState* S);
 #endif
 
 /* XXX: make it faster ? */
-ST_FUNC void g(TCCState *S, int c)
+ST_FUNC void g(TCCState* S, int c)
 {
     int ind1;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return;
-    ind1 = S->ind + 1;
+    ind1 = S->tccgen_ind + 1;
     if (ind1 > cur_text_section->data_allocated)
         section_realloc(S, cur_text_section, ind1);
-    cur_text_section->data[S->ind] = c;
-    S->ind = ind1;
+    cur_text_section->data[S->tccgen_ind] = c;
+    S->tccgen_ind = ind1;
 }
 
-ST_FUNC void o(TCCState *S, unsigned int c)
+ST_FUNC void o(TCCState* S, unsigned int c)
 {
     while (c) {
         g(S, c);
@@ -125,13 +125,13 @@ ST_FUNC void o(TCCState *S, unsigned int c)
     }
 }
 
-ST_FUNC void gen_le16(TCCState *S, int v)
+ST_FUNC void gen_le16(TCCState* S, int v)
 {
     g(S, v);
     g(S, v >> 8);
 }
 
-ST_FUNC void gen_le32(TCCState *S, int c)
+ST_FUNC void gen_le32(TCCState* S, int c)
 {
     g(S, c);
     g(S, c >> 8);
@@ -140,7 +140,7 @@ ST_FUNC void gen_le32(TCCState *S, int c)
 }
 
 /* output a symbol and patch all calls to it */
-ST_FUNC void gsym_addr(TCCState *S, int t, int a)
+ST_FUNC void gsym_addr(TCCState* S, int t, int a)
 {
     while (t) {
         unsigned char *ptr = cur_text_section->data + t;
@@ -151,18 +151,18 @@ ST_FUNC void gsym_addr(TCCState *S, int t, int a)
 }
 
 /* instruction + 4 bytes data. Return the address of the data */
-static int oad(TCCState *S, int c, int s)
+static int oad(TCCState* S, int c, int s)
 {
     int t;
-    if (S->nocode_wanted)
+    if (S->tccgen_nocode_wanted)
         return s;
     o(S, c);
-    t = S->ind;
+    t = S->tccgen_ind;
     gen_le32(S, s);
     return t;
 }
 
-ST_FUNC void gen_fill_nops(TCCState *S, int bytes)
+ST_FUNC void gen_fill_nops(TCCState* S, int bytes)
 {
     while (bytes--)
       g(S, 0x90);
@@ -172,23 +172,23 @@ ST_FUNC void gen_fill_nops(TCCState *S, int bytes)
 #define gjmp2(s, instr,lbl) oad(s, instr,lbl)
 
 /* output constant with relocation if 'r & VT_SYM' is true */
-ST_FUNC void gen_addr32(TCCState *S, int r, Sym *sym, int c)
+ST_FUNC void gen_addr32(TCCState* S, int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
-        greloc(S, cur_text_section, sym, S->ind, R_386_32);
+        greloc(S, cur_text_section, sym, S->tccgen_ind, R_386_32);
     gen_le32(S, c);
 }
 
-ST_FUNC void gen_addrpc32(TCCState *S, int r, Sym *sym, int c)
+ST_FUNC void gen_addrpc32(TCCState* S, int r, Sym *sym, int c)
 {
     if (r & VT_SYM)
-        greloc(S, cur_text_section, sym, S->ind, R_386_PC32);
+        greloc(S, cur_text_section, sym, S->tccgen_ind, R_386_PC32);
     gen_le32(S, c - 4);
 }
 
 /* generate a modrm reference. 'op_reg' contains the additional 3
    opcode bits */
-static void gen_modrm(TCCState *S, int op_reg, int r, Sym *sym, int c)
+static void gen_modrm(TCCState* S, int op_reg, int r, Sym *sym, int c)
 {
     op_reg = op_reg << 3;
     if ((r & VT_VALMASK) == VT_CONST) {
@@ -210,7 +210,7 @@ static void gen_modrm(TCCState *S, int op_reg, int r, Sym *sym, int c)
 }
 
 /* load 'r' from value 'sv' */
-ST_FUNC void load(TCCState *S, int r, SValue *sv)
+ST_FUNC void load(TCCState* S, int r, SValue *sv)
 {
     int v, t, ft, fc, fr;
     SValue v1;
@@ -290,7 +290,7 @@ ST_FUNC void load(TCCState *S, int r, SValue *sv)
 }
 
 /* store register 'r' in lvalue 'v' */
-ST_FUNC void store(TCCState *S, int r, SValue *v)
+ST_FUNC void store(TCCState* S, int r, SValue *v)
 {
     int fr, bt, ft, fc;
 
@@ -332,7 +332,7 @@ ST_FUNC void store(TCCState *S, int r, SValue *v)
     }
 }
 
-static void gadd_sp(TCCState *S, int val)
+static void gadd_sp(TCCState* S, int val)
 {
     if (val == (char)val) {
         o(S, 0xc483);
@@ -343,24 +343,24 @@ static void gadd_sp(TCCState *S, int val)
 }
 
 #if defined CONFIG_TCC_BCHECK || defined TCC_TARGET_PE
-static void gen_static_call(TCCState *S, int v)
+static void gen_static_call(TCCState* S, int v)
 {
     Sym *sym;
 
     sym = external_helper_sym(S, v);
     oad(S, 0xe8, -4);
-    greloc(S, cur_text_section, sym, S->ind-4, R_386_PC32);
+    greloc(S, cur_text_section, sym, S->tccgen_ind-4, R_386_PC32);
 }
 #endif
 
 /* 'is_jmp' is '1' if it is a jump */
-static void gcall_or_jmp(TCCState *S, int is_jmp)
+static void gcall_or_jmp(TCCState* S, int is_jmp)
 {
     int r;
-    if ((S->vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (S->vtop->r & VT_SYM)) {
+    if ((S->tccgen_vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (S->tccgen_vtop->r & VT_SYM)) {
         /* constant and relocation case */
-        greloc(S, cur_text_section, S->vtop->sym, S->ind + 1, R_386_PC32);
-        oad(S, 0xe8 + is_jmp, S->vtop->c.i - 4); /* call/jmp im */
+        greloc(S, cur_text_section, S->tccgen_vtop->sym, S->tccgen_ind + 1, R_386_PC32);
+        oad(S, 0xe8 + is_jmp, S->tccgen_vtop->c.i - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
         r = gv(S, RC_INT);
@@ -402,7 +402,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
-ST_FUNC void gfunc_call(TCCState *S, int nb_args)
+ST_FUNC void gfunc_call(TCCState* S, int nb_args)
 {
     int size, align, r, args_size, i, func_call;
     Sym *func_sym;
@@ -414,8 +414,8 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
 
     args_size = 0;
     for(i = 0;i < nb_args; i++) {
-        if ((S->vtop->type.t & VT_BTYPE) == VT_STRUCT) {
-            size = type_size(&S->vtop->type, &align);
+        if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_STRUCT) {
+            size = type_size(&S->tccgen_vtop->type, &align);
             /* align to stack align size */
             size = (size + 3) & ~3;
             /* allocate the necessary size on stack */
@@ -434,15 +434,15 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
                 r = get_reg(S, RC_INT);
                 o(S, 0xe089 + (r << 8)); /* mov %esp, r */
             }
-            vset(S, &S->vtop->type, r | VT_LVAL, 0);
+            vset(S, &S->tccgen_vtop->type, r | VT_LVAL, 0);
             vswap(S);
             vstore(S);
             args_size += size;
-        } else if (is_float(S->vtop->type.t)) {
+        } else if (is_float(S->tccgen_vtop->type.t)) {
             gv(S, RC_FLOAT); /* only one float register */
-            if ((S->vtop->type.t & VT_BTYPE) == VT_FLOAT)
+            if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_FLOAT)
                 size = 4;
-            else if ((S->vtop->type.t & VT_BTYPE) == VT_DOUBLE)
+            else if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_DOUBLE)
                 size = 8;
             else
                 size = 12;
@@ -458,19 +458,19 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
             /* simple type (currently always same size) */
             /* XXX: implicit cast ? */
             r = gv(S, RC_INT);
-            if ((S->vtop->type.t & VT_BTYPE) == VT_LLONG) {
+            if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_LLONG) {
                 size = 8;
-                o(S, 0x50 + S->vtop->r2); /* push r */
+                o(S, 0x50 + S->tccgen_vtop->r2); /* push r */
             } else {
                 size = 4;
             }
             o(S, 0x50 + r); /* push r */
             args_size += size;
         }
-        S->vtop--;
+        S->tccgen_vtop--;
     }
     save_regs(S, 0); /* save used temporary registers */
-    func_sym = S->vtop->type.ref;
+    func_sym = S->tccgen_vtop->type.ref;
     func_call = func_sym->f.func_call;
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
@@ -493,7 +493,7 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
         }
     }
 #if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD || TARGETOS_OpenBSD
-    else if ((S->vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT)
+    else if ((S->tccgen_vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT)
         args_size -= 4;
 #endif
 
@@ -501,7 +501,7 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
 
     if (args_size && func_call != FUNC_STDCALL && func_call != FUNC_FASTCALLW)
         gadd_sp(S, args_size);
-    S->vtop--;
+    S->tccgen_vtop--;
 }
 
 #ifdef TCC_TARGET_PE
@@ -511,7 +511,7 @@ ST_FUNC void gfunc_call(TCCState *S, int nb_args)
 #endif
 
 /* generate function prolog of type 't' */
-ST_FUNC void gfunc_prolog(TCCState *S, Sym *func_sym)
+ST_FUNC void gfunc_prolog(TCCState* S, Sym *func_sym)
 {
     CType *func_type = &func_sym->type;
     int addr, align, size, func_call, fastcall_nb_regs;
@@ -523,7 +523,7 @@ ST_FUNC void gfunc_prolog(TCCState *S, Sym *func_sym)
     sym = func_type->ref;
     func_call = sym->f.func_call;
     addr = 8;
-    S->loc = 0;
+    S->tccgen_loc = 0;
     S->tccgen_func_vc = 0;
 
     if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
@@ -538,8 +538,8 @@ ST_FUNC void gfunc_prolog(TCCState *S, Sym *func_sym)
     }
     param_index = 0;
 
-    S->ind += FUNC_PROLOG_SIZE;
-    func_sub_sp_offset = S->ind;
+    S->tccgen_ind += FUNC_PROLOG_SIZE;
+    func_sub_sp_offset = S->tccgen_ind;
     /* if the function returns a structure, then add an
        implicit pointer parameter */
 #if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD || TARGETOS_OpenBSD
@@ -567,10 +567,10 @@ ST_FUNC void gfunc_prolog(TCCState *S, Sym *func_sym)
 #endif
         if (param_index < fastcall_nb_regs) {
             /* save FASTCALL register */
-            S->loc -= 4;
+            S->tccgen_loc -= 4;
             o(S, 0x89);     /* movl */
-            gen_modrm(S, fastcall_regs_ptr[param_index], VT_LOCAL, NULL, S->loc);
-            param_addr = S->loc;
+            gen_modrm(S, fastcall_regs_ptr[param_index], VT_LOCAL, NULL, S->tccgen_loc);
+            param_addr = S->tccgen_loc;
         } else {
             param_addr = addr;
             addr += size;
@@ -595,7 +595,7 @@ ST_FUNC void gfunc_prolog(TCCState *S, Sym *func_sym)
 }
 
 /* generate function epilog */
-ST_FUNC void gfunc_epilog(TCCState *S)
+ST_FUNC void gfunc_epilog(TCCState* S)
 {
     addr_t v, saved_ind;
 
@@ -605,7 +605,7 @@ ST_FUNC void gfunc_epilog(TCCState *S)
 #endif
 
     /* align local size to word & save local variables */
-    v = (-S->loc + 3) & -4;
+    v = (-S->tccgen_loc + 3) & -4;
 
 #if USE_EBX
     o(S, 0x8b);
@@ -620,8 +620,8 @@ ST_FUNC void gfunc_epilog(TCCState *S)
         g(S, func_ret_sub);
         g(S, func_ret_sub >> 8);
     }
-    saved_ind = S->ind;
-    S->ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
+    saved_ind = S->tccgen_ind;
+    S->tccgen_ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
 #ifdef TCC_TARGET_PE
     if (v >= 4096) {
         oad(S, 0xb8, v); /* mov stacksize, %eax */
@@ -637,33 +637,33 @@ ST_FUNC void gfunc_epilog(TCCState *S)
 #endif
     }
     o(S, 0x53 * USE_EBX); /* push ebx */
-    S->ind = saved_ind;
+    S->tccgen_ind = saved_ind;
 }
 
 /* generate a jump to a label */
-ST_FUNC int gjmp(TCCState *S, int t)
+ST_FUNC int gjmp(TCCState* S, int t)
 {
     return gjmp2(S, 0xe9, t);
 }
 
 /* generate a jump to a fixed address */
-ST_FUNC void gjmp_addr(TCCState *S, int a)
+ST_FUNC void gjmp_addr(TCCState* S, int a)
 {
     int r;
-    r = a - S->ind - 2;
+    r = a - S->tccgen_ind - 2;
     if (r == (char)r) {
         g(S, 0xeb);
         g(S, r);
     } else {
-        oad(S, 0xe9, a - S->ind - 5);
+        oad(S, 0xe9, a - S->tccgen_ind - 5);
     }
 }
 
 #if 0
 /* generate a jump to a fixed address */
-ST_FUNC void gjmp_cond_addr(TCCState *S, int a, int op)
+ST_FUNC void gjmp_cond_addr(TCCState* S, int a, int op)
 {
-    int r = a - S->ind - 2;
+    int r = a - S->tccgen_ind - 2;
     if (r == (char)r)
         g(S, op - 32), g(r);
     else
@@ -671,7 +671,7 @@ ST_FUNC void gjmp_cond_addr(TCCState *S, int a, int op)
 }
 #endif
 
-ST_FUNC int gjmp_append(TCCState *S, int n, int t)
+ST_FUNC int gjmp_append(TCCState* S, int n, int t)
 {
     void *p;
     /* insert vtop->c jump list in t */
@@ -685,14 +685,14 @@ ST_FUNC int gjmp_append(TCCState *S, int n, int t)
     return t;
 }
 
-ST_FUNC int gjmp_cond(TCCState *S, int op, int t)
+ST_FUNC int gjmp_cond(TCCState* S, int op, int t)
 {
     g(S, 0x0f);
     t = gjmp2(S, op - 16, t);
     return t;
 }
 
-ST_FUNC void gen_opi(TCCState *S, int op)
+ST_FUNC void gen_opi(TCCState* S, int op)
 {
     int r, fr, opc, c;
 
@@ -701,12 +701,12 @@ ST_FUNC void gen_opi(TCCState *S, int op)
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        if ((S->vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+        if ((S->tccgen_vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
             vswap(S);
             r = gv(S, RC_INT);
             vswap(S);
-            c = S->vtop->c.i;
+            c = S->tccgen_vtop->c.i;
             if (c == (char)c) {
                 /* generate inc and dec for smaller code */
                 if ((c == 1 || c == -1) && (op == '+' || op == '-')) {
@@ -723,12 +723,12 @@ ST_FUNC void gen_opi(TCCState *S, int op)
             }
         } else {
             gv2(S, RC_INT, RC_INT);
-            r = S->vtop[-1].r;
-            fr = S->vtop[0].r;
+            r = S->tccgen_vtop[-1].r;
+            fr = S->tccgen_vtop[0].r;
             o(S, (opc << 3) | 0x01);
             o(S, 0xc0 + r + fr * 8); 
         }
-        S->vtop--;
+        S->tccgen_vtop--;
         if (op >= TOK_ULT && op <= TOK_GT)
             vset_VT_CMP(S, op);
         break;
@@ -753,9 +753,9 @@ ST_FUNC void gen_opi(TCCState *S, int op)
         goto gen_op8;
     case '*':
         gv2(S, RC_INT, RC_INT);
-        r = S->vtop[-1].r;
-        fr = S->vtop[0].r;
-        S->vtop--;
+        r = S->tccgen_vtop[-1].r;
+        fr = S->tccgen_vtop[0].r;
+        S->tccgen_vtop--;
         o(S, 0xaf0f); /* imul fr, r */
         o(S, 0xc0 + fr + r * 8);
         break;
@@ -769,23 +769,23 @@ ST_FUNC void gen_opi(TCCState *S, int op)
         opc = 7;
     gen_shift:
         opc = 0xc0 | (opc << 3);
-        if ((S->vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+        if ((S->tccgen_vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
             /* constant case */
             vswap(S);
             r = gv(S, RC_INT);
             vswap(S);
-            c = S->vtop->c.i & 0x1f;
+            c = S->tccgen_vtop->c.i & 0x1f;
             o(S, 0xc1); /* shl/shr/sar $xxx, r */
             o(S, opc | r);
             g(S, c);
         } else {
             /* we generate the shift in ecx */
             gv2(S, RC_INT, RC_ECX);
-            r = S->vtop[-1].r;
+            r = S->tccgen_vtop[-1].r;
             o(S, 0xd3); /* shl/shr/sar %cl, r */
             o(S, opc | r);
         }
-        S->vtop--;
+        S->tccgen_vtop--;
         break;
     case '/':
     case TOK_UDIV:
@@ -796,16 +796,16 @@ ST_FUNC void gen_opi(TCCState *S, int op)
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
         gv2(S, RC_EAX, RC_ECX);
-        r = S->vtop[-1].r;
-        fr = S->vtop[0].r;
-        S->vtop--;
+        r = S->tccgen_vtop[-1].r;
+        fr = S->tccgen_vtop[0].r;
+        S->tccgen_vtop--;
         save_reg(S, TREG_EDX);
         /* save EAX too if used otherwise */
         save_reg_upstack(S, TREG_EAX, 1);
         if (op == TOK_UMULL) {
             o(S, 0xf7); /* mul fr */
             o(S, 0xe0 + fr);
-            S->vtop->r2 = TREG_EDX;
+            S->tccgen_vtop->r2 = TREG_EDX;
             r = TREG_EAX;
         } else {
             if (op == TOK_UDIV || op == TOK_UMOD) {
@@ -820,7 +820,7 @@ ST_FUNC void gen_opi(TCCState *S, int op)
             else
                 r = TREG_EAX;
         }
-        S->vtop->r = r;
+        S->tccgen_vtop->r = r;
         break;
     default:
         opc = 7;
@@ -831,7 +831,7 @@ ST_FUNC void gen_opi(TCCState *S, int op)
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
-ST_FUNC void gen_opf(TCCState *S, int op)
+ST_FUNC void gen_opf(TCCState* S, int op)
 {
     int a, ft, fc, swapped, r;
 
@@ -842,17 +842,17 @@ ST_FUNC void gen_opf(TCCState *S, int op)
     }
 
     /* convert constants to memory references */
-    if ((S->vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+    if ((S->tccgen_vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         vswap(S);
         gv(S, RC_FLOAT);
         vswap(S);
     }
-    if ((S->vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST)
+    if ((S->tccgen_vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST)
         gv(S, RC_FLOAT);
 
     /* must put at least one value in the floating point register */
-    if ((S->vtop[-1].r & VT_LVAL) &&
-        (S->vtop[0].r & VT_LVAL)) {
+    if ((S->tccgen_vtop[-1].r & VT_LVAL) &&
+        (S->tccgen_vtop[0].r & VT_LVAL)) {
         vswap(S);
         gv(S, RC_FLOAT);
         vswap(S);
@@ -860,13 +860,13 @@ ST_FUNC void gen_opf(TCCState *S, int op)
     swapped = 0;
     /* swap the stack if needed so that t1 is the register and t2 is
        the memory reference */
-    if (S->vtop[-1].r & VT_LVAL) {
+    if (S->tccgen_vtop[-1].r & VT_LVAL) {
         vswap(S);
         swapped = 1;
     }
     if (op >= TOK_ULT && op <= TOK_GT) {
         /* load on stack second operand */
-        load(S, TREG_ST0, S->vtop);
+        load(S, TREG_ST0, S->tccgen_vtop);
         save_reg(S, TREG_EAX); /* eax is used by FP comparison code */
         if (op == TOK_GE || op == TOK_GT)
             swapped = !swapped;
@@ -893,12 +893,12 @@ ST_FUNC void gen_opf(TCCState *S, int op)
             o(S, 0x45c4f6); /* test $0x45, %ah */
             op = TOK_EQ;
         }
-        S->vtop--;
+        S->tccgen_vtop--;
         vset_VT_CMP(S, op);
     } else {
         /* no memory reference possible for long double operations */
-        if ((S->vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
-            load(S, TREG_ST0, S->vtop);
+        if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+            load(S, TREG_ST0, S->tccgen_vtop);
             swapped = !swapped;
         }
         
@@ -921,14 +921,14 @@ ST_FUNC void gen_opf(TCCState *S, int op)
                 a++;
             break;
         }
-        ft = S->vtop->type.t;
-        fc = S->vtop->c.i;
+        ft = S->tccgen_vtop->type.t;
+        fc = S->tccgen_vtop->c.i;
         if ((ft & VT_BTYPE) == VT_LDOUBLE) {
             o(S, 0xde); /* fxxxp %st, %st(1) */
             o(S, 0xc1 + (a << 3));
         } else {
             /* if saved lvalue, then we must reload it */
-            r = S->vtop->r;
+            r = S->tccgen_vtop->r;
             if ((r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
                 r = get_reg(S, RC_INT);
@@ -944,48 +944,48 @@ ST_FUNC void gen_opf(TCCState *S, int op)
                 o(S, 0xdc);
             else
                 o(S, 0xd8);
-            gen_modrm(S, a, r, S->vtop->sym, fc);
+            gen_modrm(S, a, r, S->tccgen_vtop->sym, fc);
         }
-        S->vtop--;
+        S->tccgen_vtop--;
     }
 }
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-ST_FUNC void gen_cvt_itof(TCCState *S, int t)
+ST_FUNC void gen_cvt_itof(TCCState* S, int t)
 {
     save_reg(S, TREG_ST0);
     gv(S, RC_INT);
-    if ((S->vtop->type.t & VT_BTYPE) == VT_LLONG) {
+    if ((S->tccgen_vtop->type.t & VT_BTYPE) == VT_LLONG) {
         /* signed long long to float/double/long double (unsigned case
            is handled generically) */
-        o(S, 0x50 + S->vtop->r2); /* push r2 */
-        o(S, 0x50 + (S->vtop->r & VT_VALMASK)); /* push r */
+        o(S, 0x50 + S->tccgen_vtop->r2); /* push r2 */
+        o(S, 0x50 + (S->tccgen_vtop->r & VT_VALMASK)); /* push r */
         o(S, 0x242cdf); /* fildll (%esp) */
         o(S, 0x08c483); /* add $8, %esp */
-        S->vtop->r2 = VT_CONST;
-    } else if ((S->vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
+        S->tccgen_vtop->r2 = VT_CONST;
+    } else if ((S->tccgen_vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) == 
                (VT_INT | VT_UNSIGNED)) {
         /* unsigned int to float/double/long double */
         o(S, 0x6a); /* push $0 */
         g(S, 0x00);
-        o(S, 0x50 + (S->vtop->r & VT_VALMASK)); /* push r */
+        o(S, 0x50 + (S->tccgen_vtop->r & VT_VALMASK)); /* push r */
         o(S, 0x242cdf); /* fildll (%esp) */
         o(S, 0x08c483); /* add $8, %esp */
     } else {
         /* int to float/double/long double */
-        o(S, 0x50 + (S->vtop->r & VT_VALMASK)); /* push r */
+        o(S, 0x50 + (S->tccgen_vtop->r & VT_VALMASK)); /* push r */
         o(S, 0x2404db); /* fildl (%esp) */
         o(S, 0x04c483); /* add $4, %esp */
     }
-    S->vtop->r2 = VT_CONST;
-    S->vtop->r = TREG_ST0;
+    S->tccgen_vtop->r2 = VT_CONST;
+    S->tccgen_vtop->r = TREG_ST0;
 }
 
 /* convert fp to int 't' type */
-ST_FUNC void gen_cvt_ftoi(TCCState *S, int t)
+ST_FUNC void gen_cvt_ftoi(TCCState* S, int t)
 {
-    int bt = S->vtop->type.t & VT_BTYPE;
+    int bt = S->tccgen_vtop->type.t & VT_BTYPE;
     if (bt == VT_FLOAT)
         vpush_helper_func(S, TOK___fixsfdi);
     else if (bt == VT_LDOUBLE)
@@ -995,20 +995,20 @@ ST_FUNC void gen_cvt_ftoi(TCCState *S, int t)
     vswap(S);
     gfunc_call(S, 1);
     vpushi(S, 0);
-    S->vtop->r = REG_IRET;
+    S->tccgen_vtop->r = REG_IRET;
     if ((t & VT_BTYPE) == VT_LLONG)
-        S->vtop->r2 = REG_IRE2;
+        S->tccgen_vtop->r2 = REG_IRE2;
 }
 
 /* convert from one floating point type to another */
-ST_FUNC void gen_cvt_ftof(TCCState *S, int t)
+ST_FUNC void gen_cvt_ftof(TCCState* S, int t)
 {
     /* all we have to do on i386 is to put the float in a register */
     gv(S, RC_FLOAT);
 }
 
 /* char/short to int conversion */
-ST_FUNC void gen_cvt_csti(TCCState *S, int t)
+ST_FUNC void gen_cvt_csti(TCCState* S, int t)
 {
     int r, sz, xl;
     r = gv(S, RC_INT);
@@ -1021,39 +1021,39 @@ ST_FUNC void gen_cvt_csti(TCCState *S, int t)
 }
 
 /* increment tcov counter */
-ST_FUNC void gen_increment_tcov (TCCState *S, SValue *sv)
+ST_FUNC void gen_increment_tcov (TCCState* S, SValue *sv)
 {
    o(S, 0x0583); /* addl $1, xxx */
-   greloc(S, cur_text_section, sv->sym, S->ind, R_386_32);
+   greloc(S, cur_text_section, sv->sym, S->tccgen_ind, R_386_32);
    gen_le32(S, 0);
    o(S, 1);
    o(S, 0x1583); /* addcl $0, xxx */
-   greloc(S, cur_text_section, sv->sym, S->ind, R_386_32);
+   greloc(S, cur_text_section, sv->sym, S->tccgen_ind, R_386_32);
    gen_le32(S, 4);
    g(S, 0);
 }
 
 /* computed goto support */
-ST_FUNC void ggoto(TCCState *S)
+ST_FUNC void ggoto(TCCState* S)
 {
     gcall_or_jmp(S, 1);
-    S->vtop--;
+    S->tccgen_vtop--;
 }
 
 /* bound check support functions */
 #ifdef CONFIG_TCC_BCHECK
 
-static void gen_bounds_prolog(TCCState *S)
+static void gen_bounds_prolog(TCCState* S)
 {
     /* leave some room for bound checking code */
     S->func_bound_offset = lbounds_section->data_offset;
-    S->func_bound_ind = S->ind;
+    S->func_bound_ind = S->tccgen_ind;
     S->func_bound_add_epilog = 0;
     oad(S, 0xb8, 0); /* lbound section pointer */
     oad(S, 0xb8, 0); /* call to function */
 }
 
-static void gen_bounds_epilog(TCCState *S)
+static void gen_bounds_epilog(TCCState* S)
 {
     addr_t saved_ind;
     addr_t *bounds_ptr;
@@ -1067,22 +1067,22 @@ static void gen_bounds_epilog(TCCState *S)
     bounds_ptr = section_ptr_add(S, lbounds_section, sizeof(addr_t));
     *bounds_ptr = 0;
 
-    sym_data = get_sym_ref(S, &S->char_pointer_type, lbounds_section,
+    sym_data = get_sym_ref(S, &S->tccgen_char_pointer_type, lbounds_section,
                            S->func_bound_offset, lbounds_section->data_offset);
 
     /* generate bound local allocation */
     if (offset_modified) {
-        saved_ind = S->ind;
-        S->ind = S->func_bound_ind;
-        greloc(S, cur_text_section, sym_data, S->ind + 1, R_386_32);
-        S->ind = S->ind + 5;
+        saved_ind = S->tccgen_ind;
+        S->tccgen_ind = S->func_bound_ind;
+        greloc(S, cur_text_section, sym_data, S->tccgen_ind + 1, R_386_32);
+        S->tccgen_ind = S->tccgen_ind + 5;
         gen_static_call(S, TOK___bound_local_new);
-        S->ind = saved_ind;
+        S->tccgen_ind = saved_ind;
     }
 
     /* generate bound check local freeing */
     o(S, 0x5250); /* save returned value, if any */
-    greloc(S, cur_text_section, sym_data, S->ind + 1, R_386_32);
+    greloc(S, cur_text_section, sym_data, S->tccgen_ind + 1, R_386_32);
     oad(S, 0xb8, 0); /* mov %eax, xxx */
     gen_static_call(S, TOK___bound_local_delete);
     o(S, 0x585a); /* restore returned value, if any */
@@ -1090,20 +1090,20 @@ static void gen_bounds_epilog(TCCState *S)
 #endif
 
 /* Save the stack pointer onto the stack */
-ST_FUNC void gen_vla_sp_save(TCCState *S, int addr) {
+ST_FUNC void gen_vla_sp_save(TCCState* S, int addr) {
     /* mov %esp,addr(%ebp)*/
     o(S, 0x89);
     gen_modrm(S, TREG_ESP, VT_LOCAL, NULL, addr);
 }
 
 /* Restore the SP from a location on the stack */
-ST_FUNC void gen_vla_sp_restore(TCCState *S, int addr) {
+ST_FUNC void gen_vla_sp_restore(TCCState* S, int addr) {
     o(S, 0x8b);
     gen_modrm(S, TREG_ESP, VT_LOCAL, NULL, addr);
 }
 
 /* Subtract from the stack pointer, and push the resulting value onto the stack */
-ST_FUNC void gen_vla_alloc(TCCState *S, CType *type, int align) {
+ST_FUNC void gen_vla_alloc(TCCState* S, CType *type, int align) {
     int use_call = 0;
 
 #if defined(CONFIG_TCC_BCHECK)
