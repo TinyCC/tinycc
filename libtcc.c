@@ -233,7 +233,7 @@ PUB_FUNC char *tcc_fileextension (const char *name)
     return e ? e : strchr(b, 0);
 }
 
-ST_FUNC char *tcc_load_text(TCCState* S, int fd)
+ST_FUNC char *tcc_load_text(TCCState *S, int fd)
 {
     int len = lseek(fd, 0, SEEK_END);
     char *buf = load_data(S, fd, 0, len + 1);
@@ -275,12 +275,12 @@ PUB_FUNC void *tcc_mallocz_base(unsigned long size)
 
 #ifndef MEM_DEBUG
 
-PUB_FUNC void tcc_free(TCCState* S, void *ptr)
+PUB_FUNC void tcc_free(TCCState *S, void *ptr)
 {
     free(ptr);
 }
 
-PUB_FUNC void *tcc_malloc(TCCState* S, unsigned long size)
+PUB_FUNC void *tcc_malloc(TCCState *S, unsigned long size)
 {
     void *ptr;
     ptr = malloc(size);
@@ -289,7 +289,7 @@ PUB_FUNC void *tcc_malloc(TCCState* S, unsigned long size)
     return ptr;
 }
 
-PUB_FUNC void *tcc_mallocz(TCCState* S, unsigned long size)
+PUB_FUNC void *tcc_mallocz(TCCState *S, unsigned long size)
 {
     void *ptr;
     ptr = tcc_malloc(S, size);
@@ -298,7 +298,7 @@ PUB_FUNC void *tcc_mallocz(TCCState* S, unsigned long size)
     return ptr;
 }
 
-PUB_FUNC void *tcc_realloc(TCCState* S, void *ptr, unsigned long size)
+PUB_FUNC void *tcc_realloc(TCCState *S, void *ptr, unsigned long size)
 {
     void *ptr1;
     ptr1 = realloc(ptr, size);
@@ -307,7 +307,7 @@ PUB_FUNC void *tcc_realloc(TCCState* S, void *ptr, unsigned long size)
     return ptr1;
 }
 
-PUB_FUNC char *tcc_strdup(TCCState* S, const char *str)
+PUB_FUNC char *tcc_strdup(TCCState *S, const char *str)
 {
     char *ptr;
     ptr = tcc_malloc(S, strlen(str) + 1);
@@ -361,7 +361,7 @@ static mem_debug_header_t *malloc_check(void *ptr, const char *msg)
     return header;
 }
 
-PUB_FUNC void *tcc_malloc_debug(TCCState* S, unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_malloc_debug(TCCState *S, unsigned long size, const char *file, int line)
 {
     int ofs;
     mem_debug_header_t *header;
@@ -392,7 +392,7 @@ PUB_FUNC void *tcc_malloc_debug(TCCState* S, unsigned long size, const char *fil
     return MEM_USER_PTR(header);
 }
 
-PUB_FUNC void tcc_free_debug(TCCState* S, void *ptr)
+PUB_FUNC void tcc_free_debug(TCCState *S, void *ptr)
 {
     mem_debug_header_t *header;
     if (!ptr)
@@ -409,7 +409,7 @@ PUB_FUNC void tcc_free_debug(TCCState* S, void *ptr)
     free(header);
 }
 
-PUB_FUNC void *tcc_mallocz_debug(TCCState* S, unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_mallocz_debug(TCCState *S, unsigned long size, const char *file, int line)
 {
     void *ptr;
     ptr = tcc_malloc_debug(S, size,file,line);
@@ -417,7 +417,7 @@ PUB_FUNC void *tcc_mallocz_debug(TCCState* S, unsigned long size, const char *fi
     return ptr;
 }
 
-PUB_FUNC void *tcc_realloc_debug(TCCState* S, void *ptr, unsigned long size, const char *file, int line)
+PUB_FUNC void *tcc_realloc_debug(TCCState *S, void *ptr, unsigned long size, const char *file, int line)
 {
     mem_debug_header_t *header;
     int mem_debug_chain_update = 0;
@@ -443,7 +443,7 @@ PUB_FUNC void *tcc_realloc_debug(TCCState* S, void *ptr, unsigned long size, con
     return MEM_USER_PTR(header);
 }
 
-PUB_FUNC char *tcc_strdup_debug(TCCState* S, const char *str, const char *file, int line)
+PUB_FUNC char *tcc_strdup_debug(TCCState *S, const char *str, const char *file, int line)
 {
     char *ptr;
     ptr = tcc_malloc_debug(S, strlen(str) + 1, file, line);
@@ -532,7 +532,7 @@ int vio_close(vio_fd *fd) {
 /********************************************************/
 /* dynarrays */
 
-ST_FUNC void dynarray_add(TCCState* S, void *ptab, int *nb_ptr, void *data)
+ST_FUNC void dynarray_add(TCCState *S, void *ptab, int *nb_ptr, void *data)
 {
     int nb, nb_alloc;
     void **pp;
@@ -552,7 +552,7 @@ ST_FUNC void dynarray_add(TCCState* S, void *ptab, int *nb_ptr, void *data)
     *nb_ptr = nb;
 }
 
-ST_FUNC void dynarray_reset(TCCState* S, void *pp, int *n)
+ST_FUNC void dynarray_reset(TCCState *S, void *pp, int *n)
 {
     void **p;
     for (p = *(void***)pp; *n; ++p, --*n)
@@ -608,7 +608,7 @@ static void tcc_split_path(TCCState *S, void *p_ary, int *p_nb_ary, const char *
 /* error1() modes */
 enum { ERROR_WARN, ERROR_NOABORT, ERROR_ERROR };
 
-static void error1(TCCState* S, int mode, const char *fmt, va_list ap)
+static void error1(TCCState *S, int mode, const char *fmt, va_list ap)
 {
     BufferedFile **pf, *f;
     CString cs;
@@ -650,7 +650,7 @@ static void error1(TCCState* S, int mode, const char *fmt, va_list ap)
             cstr_printf(S, &cs, "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num);
         cstr_printf(S, &cs, "%s:%d: ",
-            f->filename, (*pf)->line_num - !!(S->tccpp_tok_flags & TOK_FLAG_BOL));
+            f->filename, (*pf)->line_num - !!(S->tok_flags & TOK_FLAG_BOL));
     } else if (S->current_filename) {
         cstr_printf(S, &cs, "%s: ", S->current_filename);
     }
@@ -699,7 +699,7 @@ LIBTCCAPI void *tcc_get_error_opaque(TCCState *S)
 }
 
 /* error without aborting current compilation */
-PUB_FUNC void _tcc_error_noabort(TCCState* S, const char *fmt, ...)
+PUB_FUNC void _tcc_error_noabort(TCCState *S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -707,14 +707,14 @@ PUB_FUNC void _tcc_error_noabort(TCCState* S, const char *fmt, ...)
     va_end(ap);
 }
 
-PUB_FUNC void _tcc_error(TCCState* S, const char *fmt, ...)
+PUB_FUNC void _tcc_error(TCCState *S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     for (;;) error1(S, ERROR_ERROR, fmt, ap);
 }
 
-PUB_FUNC void _tcc_warning(TCCState* S, const char *fmt, ...)
+PUB_FUNC void _tcc_warning(TCCState *S, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -744,10 +744,10 @@ ST_FUNC void tcc_open_bf(TCCState *S, const char *filename, int initlen)
     bf->fd = -1;
     bf->prev = S->tccpp_file;
     S->tccpp_file = bf;
-    S->tccpp_tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+    S->tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
 }
 
-ST_FUNC void tcc_close(TCCState* S)
+ST_FUNC void tcc_close(TCCState *S)
 {
     BufferedFile *bf = S->tccpp_file;
     if (bf->fd > 0) {
@@ -1388,7 +1388,7 @@ static const char *skip_linker_arg(const char **str)
     return s2;
 }
 
-static void copy_linker_arg(TCCState* S, char **pp, const char *s, int sep)
+static void copy_linker_arg(TCCState *S, char **pp, const char *s, int sep)
 {
     const char *q = s;
     char *p = *pp;
@@ -1723,7 +1723,7 @@ static void args_parser_add_file(TCCState *S, const char* filename, int filetype
     dynarray_add(S, &S->files, &S->nb_files, f);
 }
 
-static int args_parser_make_argv(TCCState* S, const char *r, int *argc, char ***argv)
+static int args_parser_make_argv(TCCState *S, const char *r, int *argc, char ***argv)
 {
     int ret = 0, q, c;
     CString str;

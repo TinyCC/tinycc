@@ -107,7 +107,7 @@ ST_FUNC void tccelf_stab_new(TCCState *S)
     put_stabs(S, "", 0, 0, 0, 0);
 }
 
-static void free_section(TCCState* S, Section *s)
+static void free_section(TCCState *S, Section *s)
 {
     tcc_free(S, s->data);
 }
@@ -284,7 +284,7 @@ ST_FUNC Section *new_symtab(TCCState *S,
 }
 
 /* realloc section and set its content to zero */
-ST_FUNC void section_realloc(TCCState* S, Section *sec, unsigned long new_size)
+ST_FUNC void section_realloc(TCCState *S, Section *sec, unsigned long new_size)
 {
     unsigned long size;
     unsigned char *data;
@@ -302,7 +302,7 @@ ST_FUNC void section_realloc(TCCState* S, Section *sec, unsigned long new_size)
 
 /* reserve at least 'size' bytes aligned per 'align' in section
    'sec' from current offset, and return the aligned offset */
-ST_FUNC size_t section_add(TCCState* S, Section *sec, addr_t size, int align)
+ST_FUNC size_t section_add(TCCState *S, Section *sec, addr_t size, int align)
 {
     size_t offset, offset1;
 
@@ -318,7 +318,7 @@ ST_FUNC size_t section_add(TCCState* S, Section *sec, addr_t size, int align)
 
 /* reserve at least 'size' bytes in section 'sec' from
    sec->data_offset. */
-ST_FUNC void *section_ptr_add(TCCState* S, Section *sec, addr_t size)
+ST_FUNC void *section_ptr_add(TCCState *S, Section *sec, addr_t size)
 {
     size_t offset = section_add(S, sec, size, 1);
     return sec->data + offset;
@@ -326,7 +326,7 @@ ST_FUNC void *section_ptr_add(TCCState* S, Section *sec, addr_t size)
 
 #ifndef ELF_OBJ_ONLY
 /* reserve at least 'size' bytes from section start */
-static void section_reserve(TCCState* S, Section *sec, unsigned long size)
+static void section_reserve(TCCState *S, Section *sec, unsigned long size)
 {
     if (size > sec->data_allocated)
         section_realloc(S, sec, size);
@@ -357,7 +357,7 @@ ST_FUNC Section *find_section(TCCState *S, const char *name)
 
 /* ------------------------------------------------------------------------- */
 
-ST_FUNC int put_elf_str(TCCState* S, Section *s, const char *sym)
+ST_FUNC int put_elf_str(TCCState *S, Section *s, const char *sym)
 {
     int offset, len;
     char *ptr;
@@ -386,7 +386,7 @@ static unsigned long elf_hash(const unsigned char *name)
 
 /* rebuild hash table of section s */
 /* NOTE: we do factorize the hash table code to go faster */
-static void rebuild_hash(TCCState* S, Section *s, unsigned int nb_buckets)
+static void rebuild_hash(TCCState *S, Section *s, unsigned int nb_buckets)
 {
     ElfW(Sym) *sym;
     int *ptr, *hash, nb_syms, sym_index, h;
@@ -422,7 +422,7 @@ static void rebuild_hash(TCCState* S, Section *s, unsigned int nb_buckets)
 }
 
 /* return the symbol number */
-ST_FUNC int put_elf_sym(TCCState* S, Section *s, addr_t value, unsigned long size,
+ST_FUNC int put_elf_sym(TCCState *S, Section *s, addr_t value, unsigned long size,
     int info, int other, int shndx, const char *name)
 {
     int name_offset, sym_index;
@@ -2082,7 +2082,7 @@ static int layout_sections(TCCState *S, ElfW(Phdr) *phdr,
 }
 
 /* put dynamic tag */
-static void put_dt(TCCState* S, Section *dynamic, int dt, addr_t val)
+static void put_dt(TCCState *S, Section *dynamic, int dt, addr_t val)
 {
     ElfW(Dyn) *dyn;
     dyn = section_ptr_add(S, dynamic, sizeof(ElfW(Dyn)));
@@ -2827,7 +2827,7 @@ ST_FUNC ssize_t full_read(int fd, void *buf, size_t count) {
     }
 }
 
-ST_FUNC void *load_data(TCCState* S, int fd, unsigned long file_offset, unsigned long size)
+ST_FUNC void *load_data(TCCState *S, int fd, unsigned long file_offset, unsigned long size)
 {
     void *data;
 
