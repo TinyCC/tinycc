@@ -200,6 +200,9 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
                     (sym->st_info == 0x10
                     || sym->st_info == 0x11
                     || sym->st_info == 0x12
+                    || sym->st_info == 0x20
+                    || sym->st_info == 0x21
+                    || sym->st_info == 0x22
                     )) {
                     //printf("symtab: %2Xh %4Xh %2Xh %s\n", sym->st_info, sym->st_size, sym->st_shndx, strtab + sym->st_name);
                     istrlen = strlen(strtab + sym->st_name)+1;
