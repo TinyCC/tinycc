@@ -234,7 +234,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has
 static void decl(int l);
 static int decl0(int l, int is_for_loop_init, Sym *);
 static void expr_eq(void);
-static void vla_runtime_type_size(CType *type, int *a);
+static void vpush_type_size(CType *type, int *a);
 static int is_compatible_unqualified_types(CType *type1, CType *type2);
 static inline int64_t expr_const64(void);
 static void vpush64(int ty, unsigned long long v);
@@ -3173,7 +3173,7 @@ static void type_to_str(char *buf, int buf_size,
         goto no_var;
     case VT_PTR:
         s = type->ref;
-        if (t & VT_ARRAY) {
+        if (t & (VT_ARRAY|VT_VLA)) {
             if (varstr && '*' == *varstr)
                 snprintf(buf1, sizeof(buf1), "(%s)[%d]", varstr, s->c);
             else
@@ -3218,12 +3218,6 @@ static int pointed_size(CType *type)
 {
     int align;
     return type_size(pointed_type(type), &align);
-}
-
-static void vla_runtime_pointed_size(CType *type)
-{
-    int align;
-    vla_runtime_type_size(pointed_type(type), &align);
 }
 
 static inline int is_null_pointer(SValue *p)
@@ -3436,7 +3430,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
 /* generic gen_op: handles types problems */
 ST_FUNC void gen_op(int op)
 {
-    int u, t1, t2, bt1, bt2, t;
+    int t1, t2, bt1, bt2, t;
     CType type1, combtype;
 
 redo:
@@ -3463,17 +3457,14 @@ redo:
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relational op: must be both pointers */
+        int align;
         if (TOK_ISCOND(op))
             goto std_op;
         /* if both pointers, then it must be the '-' op */
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
             if (op != '-')
                 tcc_error("cannot use pointers here");
-            if (vtop[-1].type.t & VT_VLA) {
-                vla_runtime_pointed_size(&vtop[-1].type);
-            } else {
-                vpushi(pointed_size(&vtop[-1].type));
-            }
+            vpush_type_size(pointed_type(&vtop[-1].type), &align);
             vrott(3);
             gen_opic(op);
             vtop->type.t = VT_PTRDIFF_T;
@@ -3494,19 +3485,7 @@ redo:
                 gen_cast_s(VT_INT);
 #endif
             type1 = vtop[-1].type;
-            if (vtop[-1].type.ref->type.t & VT_VLA)
-                vla_runtime_pointed_size(&vtop[-1].type);
-            else {
-                u = pointed_size(&vtop[-1].type);
-                if (u < 0)
-                    tcc_error("unknown array element size");
-#if PTR_SIZE == 8
-                vpushll(u);
-#else
-                /* XXX: cast to int ? (long long case) */
-                vpushi(u);
-#endif
-            }
+            vpush_type_size(pointed_type(&vtop[-1].type), &align);
             gen_op('*');
 #ifdef CONFIG_TCC_BCHECK
             if (tcc_state->do_bounds_check && !const_wanted) {
@@ -3523,7 +3502,7 @@ redo:
             {
                 gen_opic(op);
             }
-            type1.t &= ~VT_ARRAY;
+            type1.t &= ~(VT_ARRAY|VT_VLA);
             /* put again type if gen_opic() swaped operands */
             vtop->type = type1;
         }
@@ -3957,13 +3936,16 @@ ST_FUNC int type_size(CType *type, int *a)
 
 /* push type size as known at runtime time on top of value stack. Put
    alignment at 'a' */
-ST_FUNC void vla_runtime_type_size(CType *type, int *a)
+static void vpush_type_size(CType *type, int *a)
 {
     if (type->t & VT_VLA) {
         type_size(&type->ref->type, a);
         vset(&int_type, VT_LOCAL|VT_LVAL, type->ref->c);
     } else {
-        vpushi(type_size(type, a));
+        int size = type_size(type, a);
+        if (size < 0)
+            tcc_error("unknown type size");
+        vpushi(size);
     }
 }
 
@@ -5501,7 +5483,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
             loc &= -align;
             n = loc;
 
-            vla_runtime_type_size(type, &align);
+            vpush_type_size(type, &align);
             gen_op('*');
             vset(&int_type, VT_LOCAL|VT_LVAL, n);
             vswap();
@@ -6050,24 +6032,18 @@ ST_FUNC void unary(void)
         next();
         in_sizeof++;
         expr_type(&type, unary); /* Perform a in_sizeof = 0; */
-        s = NULL;
-        if (vtop[1].r & VT_SYM)
-            s = vtop[1].sym; /* hack: accessing previous vtop */
-        size = type_size(&type, &align);
-        if (s && s->a.aligned)
-            align = 1 << (s->a.aligned - 1);
         if (t == TOK_SIZEOF) {
-            if (!(type.t & VT_VLA)) {
-                if (size < 0)
-                    tcc_error("sizeof applied to an incomplete type");
-                vpushs(size);
-            } else {
-                vla_runtime_type_size(&type, &align);
-            }
+            vpush_type_size(&type, &align);
+            gen_cast_s(VT_SIZE_T);
         } else {
+            type_size(&type, &align);
+            s = NULL;
+            if (vtop[1].r & VT_SYM)
+                s = vtop[1].sym; /* hack: accessing previous vtop */
+            if (s && s->a.aligned)
+                align = 1 << (s->a.aligned - 1);
             vpushs(align);
         }
-        vtop->type.t |= VT_UNSIGNED;
         break;
 
     case TOK_builtin_expect:
@@ -8566,7 +8542,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             }
         }
 
-        vla_runtime_type_size(type, &a);
+        vpush_type_size(type, &a);
         gen_vla_alloc(type, a);
 #if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
         /* on _WIN64, because of the function args scratch area, the

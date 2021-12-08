@@ -2980,12 +2980,20 @@ void c99_vla_test_2(int d, int h, int w)
     for (z=0; z<d; z++) {
         for (y=0; y<h; y++) {
             for (x=0; x<w; x++) {
-                printf("% 4i", arr[z][y][x]);
+                printf(" %2d", arr[z][y][x]);
             }
             puts("");
         }
         puts("");
     }
+    printf(" sizes : %d %d %d\n"
+           " pdiff : %d %d\n"
+           " tests : %d %d\n",
+        sizeof (*arr), sizeof (*arr)[0], sizeof (*arr)[0][0],
+        arr + 2 - arr, *arr + 3 - *arr,
+        0 == sizeof (*arr + 1) - sizeof arr,
+        0 == sizeof sizeof *arr - sizeof arr
+        );
     free (arr);
 }
 
