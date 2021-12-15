@@ -1134,7 +1134,7 @@ LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
 }
 
 static int tcc_add_library_internal(TCCState *s, const char *fmt,
-    const char *filename, int flags, char **paths, int nb_paths)
+    const char *filename, int flags, char **paths, int nb_paths, const char *rpath)
 {
     char buf[1024];
     int i;
@@ -1144,16 +1144,20 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
         if (tcc_add_file_internal(s, buf, flags | AFF_TYPE_BIN) == 0)
             return 0;
     }
+    if (rpath) {
+        snprintf(buf, sizeof(buf), fmt, rpath, filename);
+        if (tcc_add_file_internal(s, buf, flags | AFF_TYPE_BIN) == 0)
+            return 0;
+    }
     return -1;
 }
 
 #ifndef TCC_TARGET_MACHO
 /* find and load a dll. Return non zero if not found */
-/* XXX: add '-rpath' option support ? */
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
 {
     return tcc_add_library_internal(s, "%s/%s", filename, flags,
-        s->library_paths, s->nb_library_paths);
+        s->library_paths, s->nb_library_paths, s->rpath);
 }
 #endif
 
@@ -1161,7 +1165,7 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
 ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 {
     if (-1 == tcc_add_library_internal(s1, "%s/%s",
-        filename, 0, s1->crt_paths, s1->nb_crt_paths))
+        filename, 0, s1->crt_paths, s1->nb_crt_paths, NULL))
         tcc_error_noabort("file '%s' not found", filename);
     return 0;
 }
@@ -1186,7 +1190,7 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
     int flags = s->filetype & AFF_WHOLE_ARCHIVE;
     while (*pp) {
         if (0 == tcc_add_library_internal(s, *pp,
-            libraryname, flags, s->library_paths, s->nb_library_paths))
+            libraryname, flags, s->library_paths, s->nb_library_paths, NULL))
             return 0;
         ++pp;
     }
