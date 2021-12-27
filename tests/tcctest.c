@@ -3209,7 +3209,7 @@ return dest;
 
 static inline void * memcpy1(void * to, const void * from, size_t n)
 {
-long d0, d1, d2;
+size_t d0, d1, d2;
 __asm__ __volatile__(
 	"rep ; movsl\n\t"
 	"testb $2,%b4\n\t"
@@ -3220,14 +3220,14 @@ __asm__ __volatile__(
 	"movsb\n"
 	"2:"
 	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
-	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+	:"0" (n/4), "q" (n),"1" ((size_t) to),"2" ((size_t) from)
 	: "memory");
 return (to);
 }
 
 static inline void * memcpy2(void * to, const void * from, size_t n)
 {
-long d0, d1, d2;
+size_t d0, d1, d2;
 __asm__ __volatile__(
 	"rep movsl\n\t"  /* one-line rep prefix + string op */
 	"testb $2,%b4\n\t"
@@ -3238,7 +3238,7 @@ __asm__ __volatile__(
 	"movsb\n"
 	"2:"
 	: "=&c" (d0), "=&D" (d1), "=&S" (d2)
-	:"0" (n/4), "q" (n),"1" ((long) to),"2" ((long) from)
+	:"0" (n/4), "q" (n),"1" ((size_t) to),"2" ((size_t) from)
 	: "memory");
 return (to);
 }
