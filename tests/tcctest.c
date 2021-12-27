@@ -2915,7 +2915,6 @@ typedef int constant_negative_array_size_as_compile_time_assertion_idiom[(1 ? 2 
 
 void c99_vla_test_1(int size1, int size2)
 {
-#if defined __i386__ || defined __x86_64__
     int size = size1 * size2;
     int tab1[size][2], tab2[10][2];
     void *tab1_ptr, *tab2_ptr, *bad_ptr;
@@ -2961,12 +2960,39 @@ void c99_vla_test_1(int size1, int size2)
         printf("PASSED PASSED PASSED PASSED PASSED PASSED PASSED PASSED ");
     }
     printf("\n");
-#endif
+}
+
+void c99_vla_test_2(int d, int h, int w)
+{
+    int x, y, z;
+    int (*arr)[h][w] = malloc(sizeof(int) * d*h*w);
+    int c = 1;
+
+    printf("Test C99 VLA 6 (pointer)\n");
+
+    for (z=0; z<d; z++) {
+        for (y=0; y<h; y++) {
+            for (x=0; x<w; x++) {
+                arr[z][y][x] = c++;
+            }
+        }
+    }
+    for (z=0; z<d; z++) {
+        for (y=0; y<h; y++) {
+            for (x=0; x<w; x++) {
+                printf("% 4i", arr[z][y][x]);
+            }
+            puts("");
+        }
+        puts("");
+    }
+    free (arr);
 }
 
 void c99_vla_test(void)
 {
     c99_vla_test_1(5, 2);
+    c99_vla_test_2(3, 4, 5);
 }
 
 
