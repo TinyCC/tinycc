@@ -113,6 +113,7 @@
     /* emulate APPLE-GCC to make libc's headerfiles compile: */
     #define __GNUC__ 4   /* darwin emits warning on GCC<4 */
     #define __APPLE_CC__ 1 /* for <TargetConditionals.h> */
+    #define __LITTLE_ENDIAN__ 1
     #define _DONT_USE_CTYPE_INLINE_ 1
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     #define __FINITE_MATH_ONLY__ 1
