@@ -88,6 +88,7 @@
     #define __GNUC_PATCHLEVEL__ 0
     #define __GNUC_STDC_INLINE__ 1
     #define __NO_TLS 1
+    #define __RUNETYPE_INTERNAL 1
 # if __SIZEOF_POINTER__ == 8
     /* FIXME, __int128_t is used by setjump */
     #define __int128_t struct { unsigned char _dummy[16] __attribute((aligned(16))); }
