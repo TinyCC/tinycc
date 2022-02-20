@@ -226,10 +226,13 @@ typedef struct alloca_list_struct {
 #elif defined(__OpenBSD__)
 #define BOUND_TID_TYPE   pid_t
 #define BOUND_GET_TID    syscall (SYS_getthrid)
-#elif defined(__FreeBSD__) || defined(__NetBSD__)
+#elif defined(__FreeBSD__)
 #define BOUND_TID_TYPE   pid_t
-#define BOUND_GET_TID    0
-#elif defined(__i386__) || defined(__x86_64__) || defined(__arm__) || defined(__aarch64__) || defined(__riscv)
+#define BOUND_GET_TID    syscall (SYS_thr_self)
+#elif  defined(__NetBSD__)
+#define BOUND_TID_TYPE   pid_t
+#define BOUND_GET_TID    syscall (SYS__lwp_self)
+#elif defined(__linux__)
 #define BOUND_TID_TYPE   pid_t
 #define BOUND_GET_TID    syscall (SYS_gettid)
 #else

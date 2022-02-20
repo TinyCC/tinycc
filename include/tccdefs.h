@@ -92,6 +92,11 @@
 # if __SIZEOF_POINTER__ == 8
     /* FIXME, __int128_t is used by setjump */
     #define __int128_t struct { unsigned char _dummy[16] __attribute((aligned(16))); }
+    #define __SIZEOF_SIZE_T__ 8
+    #define __SIZEOF_PTRDIFF_T__ 8
+#else
+    #define __SIZEOF_SIZE_T__ 4
+    #define __SIZEOF_PTRDIFF_T__ 4
 # endif
 
 #elif defined __FreeBSD_kernel__
