@@ -221,23 +221,23 @@ typedef struct alloca_list_struct {
 } alloca_list_type;
 
 #if defined(_WIN32)
-#define BOUND_TID_TYPE   DWORD
-#define BOUND_GET_TID    GetCurrentThreadId()
+#define BOUND_TID_TYPE		DWORD
+#define BOUND_GET_TID(id)	id = GetCurrentThreadId()
 #elif defined(__OpenBSD__)
-#define BOUND_TID_TYPE   pid_t
-#define BOUND_GET_TID    syscall (SYS_getthrid)
+#define BOUND_TID_TYPE		pid_t
+#define BOUND_GET_TID(id)	id = syscall (SYS_getthrid)
 #elif defined(__FreeBSD__)
-#define BOUND_TID_TYPE   pid_t
-#define BOUND_GET_TID    syscall (SYS_thr_self)
+#define BOUND_TID_TYPE		pid_t
+#define BOUND_GET_TID(id)	syscall (SYS_thr_self, &id)
 #elif  defined(__NetBSD__)
-#define BOUND_TID_TYPE   pid_t
-#define BOUND_GET_TID    syscall (SYS__lwp_self)
+#define BOUND_TID_TYPE		pid_t
+#define BOUND_GET_TID(id)	id = syscall (SYS__lwp_self)
 #elif defined(__linux__)
-#define BOUND_TID_TYPE   pid_t
-#define BOUND_GET_TID    syscall (SYS_gettid)
+#define BOUND_TID_TYPE		pid_t
+#define BOUND_GET_TID(id)	id = syscall (SYS_gettid)
 #else
-#define BOUND_TID_TYPE   int
-#define BOUND_GET_TID    0
+#define BOUND_TID_TYPE		int
+#define BOUND_GET_TID(id)	0
 #endif
 
 typedef struct jmp_list_struct {
@@ -808,7 +808,7 @@ void __bound_setjmp(jmp_buf env)
             GET_CALLER_FP (fp);
             jl->fp = fp;
             jl->end_fp = (size_t)__builtin_frame_address(0);
-            jl->tid = BOUND_GET_TID;
+            BOUND_GET_TID(jl->tid);
         }
         POST_SEM ();
     }
@@ -822,7 +822,7 @@ static void __bound_long_jump(jmp_buf env, int val, int sig, const char *func)
 
     if (NO_CHECKING_GET() == 0) {
         e = (void *)env;
-        tid = BOUND_GET_TID;
+        BOUND_GET_TID(tid);
         dprintf(stderr, "%s, %s(): %p\n", __FILE__, func, e);
         WAIT_SEM();
         INCR_COUNT(bound_longjmp_count);
