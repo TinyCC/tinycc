@@ -795,11 +795,10 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         mode = 0777;
     unlink(filename);
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
-    if (fd < 0) {
+    if (fd < 0 || (fp = fdopen(fd, "wb")) == NULL) {
         tcc_error_noabort("could not write '%s: %s'", filename, strerror(errno));
         return -1;
     }
-    fp = fdopen(fd, "wb");
     if (s1->verbose)
         printf("<- %s\n", filename);
 
