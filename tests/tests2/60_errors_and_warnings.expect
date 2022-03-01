@@ -203,3 +203,16 @@ bar  : 3 ; 3
 [test_switch_W4]
 60_errors_and_warnings.c:416: warning: implicit declaration of function 'fink'
 60_errors_and_warnings.c:418: error: 'stuff' attribute ignored
+
+[test_invalid_funcparam_1]
+60_errors_and_warnings.c:421: error: redeclaration of 'a'
+
+[test_invalid_funcparam_2]
+60_errors_and_warnings.c:424: error: identifier expected
+
+[test_array_funcparam]
+arg[0] = "X"
+arg[1] = "Y"
+
+[test_return_from_statement_expr]
+[returns 78]

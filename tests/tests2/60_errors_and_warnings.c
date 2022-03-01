@@ -416,4 +416,30 @@ void func()
     fink();
 }
 __attribute__((stuff)) int fink() {return 0;}
+
+#elif defined test_invalid_funcparam_1
+void func(int a, int b, int a);
+
+#elif defined test_invalid_funcparam_2
+void func(int a, int if);
+
+#elif defined test_array_funcparam
+int amain(int argc, char *argv[static argc + 1])
+{
+    int i;
+    int printf(const char*, ...);
+    for (i = 0; i < argc; ++i)
+        printf("arg[%d] = \"%s\"\n", i, argv[i]);
+    return 0;
+}
+int main()
+{
+    return amain(2, (char *[]){ "X", "Y", 0 });
+}
+
+#elif defined test_return_from_statement_expr
+int f() { ({ return 78; }); }
+int main() { return f(); }
+
+/******************************************************************/
 #endif

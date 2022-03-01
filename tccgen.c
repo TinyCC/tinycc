@@ -5351,40 +5351,44 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
     if (tok == '(') {
         /* function type, or recursive declarator (return if so) */
         next();
-	if (td && !(td & TYPE_ABSTRACT))
+	if (TYPE_DIRECT == (td & (TYPE_DIRECT|TYPE_ABSTRACT)))
 	  return 0;
 	if (tok == ')')
 	  l = 0;
 	else if (parse_btype(&pt, &ad1))
 	  l = FUNC_NEW;
-	else if (td) {
+	else if (td & (TYPE_DIRECT|TYPE_ABSTRACT)) {
 	    merge_attr (ad, &ad1);
 	    return 0;
 	} else
 	  l = FUNC_OLD;
+
         first = NULL;
         plast = &first;
         arg_size = 0;
+        ++local_scope;
         if (l) {
             for(;;) {
                 /* read param name and compute offset */
                 if (l != FUNC_OLD) {
                     if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
                         break;
-                    type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
+                    type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT | TYPE_PARAM);
                     if ((pt.t & VT_BTYPE) == VT_VOID)
                         tcc_error("parameter declared as void");
+                    if (n == 0)
+                        n = SYM_FIELD;
                 } else {
                     n = tok;
-                    if (n < TOK_UIDENT)
-                        expect("identifier");
                     pt.t = VT_VOID; /* invalid type */
                     pt.ref = NULL;
                     next();
                 }
+                if (n < TOK_UIDENT)
+                    expect("identifier");
                 convert_parameter_type(&pt);
                 arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
-                s = sym_push(n | SYM_FIELD, &pt, 0, 0);
+                s = sym_push(n, &pt, 0, 0);
                 *plast = s;
                 plast = &s->next;
                 if (tok == ')')
@@ -5402,6 +5406,13 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
             /* if no parameters, then old type prototype */
             l = FUNC_OLD;
         skip(')');
+        /* remove parameter symbols from token table, keep on stack */
+        if (first) {
+            sym_pop(local_stack ? &local_stack : &global_stack, first->prev, 1);
+            for (s = first; s; s = s->next)
+                s->v |= SYM_FIELD;
+        }
+        --local_scope;
         /* NOTE: const is ignored in returned type as it has a special
            meaning in gcc / C++ */
         type->t &= ~VT_CONSTANT; 
@@ -5426,7 +5437,9 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	int saved_nocode_wanted = nocode_wanted;
         /* array definition */
         next();
-	while (1) {
+        n = -1;
+        t1 = 0;
+        if (td & TYPE_PARAM) while (1) {
 	    /* XXX The optional type-quals and static should only be accepted
 	       in parameter decls.  The '*' as well, and then even only
 	       in prototypes (not function defs).  */
@@ -5441,11 +5454,13 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	    default:
 		break;
 	    }
-	    break;
-	}
-        n = -1;
-        t1 = 0;
-        if (tok != ']') {
+            if (tok != ']') {
+	        nocode_wanted = 1;
+	        gexpr(), vpop();
+            }
+            break;
+
+	} else if (tok != ']') {
             if (!local_stack || (storage & VT_STATIC))
                 vpushi(expr_const());
             else {
@@ -5469,7 +5484,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
         }
         skip(']');
         /* parse next post type */
-        post_type(type, ad, storage, 0);
+        post_type(type, ad, storage, td & ~(TYPE_DIRECT|TYPE_ABSTRACT));
 
         if ((type->t & VT_BTYPE) == VT_FUNC)
             tcc_error("declaration of an array of functions");
@@ -5580,7 +5595,7 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
 	  expect("identifier");
 	*v = 0;
     }
-    post_type(post, ad, storage, 0);
+    post_type(post, ad, storage, td & ~(TYPE_DIRECT|TYPE_ABSTRACT));
     parse_attribute(ad);
     type->t |= storage;
     return ret;
@@ -5973,7 +5988,9 @@ ST_FUNC void unary(void)
 	       outside, so any reactivation of code emission (from labels
 	       or loop heads) can be disabled again after the end of it. */
             block(1);
-	    nocode_wanted = saved_nocode_wanted;
+            /* or'ing to keep however possible CODE_OFF() from e.g. "return 0;"
+               in the statement expression */
+	    nocode_wanted |= saved_nocode_wanted;
             skip(')');
         } else {
             gexpr();
