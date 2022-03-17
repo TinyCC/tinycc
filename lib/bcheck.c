@@ -237,7 +237,7 @@ typedef struct alloca_list_struct {
 #define BOUND_GET_TID(id)	id = syscall (SYS_gettid)
 #else
 #define BOUND_TID_TYPE		int
-#define BOUND_GET_TID(id)	0
+#define BOUND_GET_TID(id)	id = 0
 #endif
 
 typedef struct jmp_list_struct {
@@ -1451,7 +1451,7 @@ void *__bound_malloc(size_t size, const void *caller)
     dprintf(stderr, "%s, %s(): %p, 0x%lx\n",
             __FILE__, __FUNCTION__, ptr, (unsigned long)size);
     
-    if (NO_CHECKING_GET() == 0) {
+    if (inited && NO_CHECKING_GET() == 0) {
         WAIT_SEM ();
         INCR_COUNT(bound_malloc_count);
 
@@ -1523,7 +1523,7 @@ void __bound_free(void *ptr, const void *caller)
 
     dprintf(stderr, "%s, %s(): %p\n", __FILE__, __FUNCTION__, ptr);
 
-    if (NO_CHECKING_GET() == 0) {
+    if (inited && NO_CHECKING_GET() == 0) {
         WAIT_SEM ();
         INCR_COUNT(bound_free_count);
         tree = splay (addr, tree);
