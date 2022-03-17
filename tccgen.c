@@ -3945,7 +3945,11 @@ static void vpush_type_size(CType *type, int *a)
         int size = type_size(type, a);
         if (size < 0)
             tcc_error("unknown type size");
+#if PTR_SIZE == 8
+        vpushll(size);
+#else
         vpushi(size);
+#endif
     }
 }
 
