@@ -183,7 +183,8 @@ static int load_symofs(int r, SValue *sv, int forstore)
             doload = 1;
         }
         label.type.t = VT_VOID | VT_STATIC;
-        put_extern_sym(&label, cur_text_section, ind, 0);
+	if (!nocode_wanted)
+            put_extern_sym(&label, cur_text_section, ind, 0);
         rr = is_ireg(r) ? ireg(r) : 5;
         o(0x17 | (rr << 7));   // auipc RR, 0 %pcrel_hi(sym)+addend
         greloca(cur_text_section, &label, ind,
