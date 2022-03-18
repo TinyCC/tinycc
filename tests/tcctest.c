@@ -2997,10 +2997,45 @@ void c99_vla_test_2(int d, int h, int w)
     free (arr);
 }
 
+void c99_vla_test_3a (int arr[2][3][4])
+{
+    printf ("%d\n", arr[1][2][3]);
+}
+
+void c99_vla_test_3b(int s, int arr[s][3][4])
+{
+    printf ("%d\n", arr[1][2][3]);
+}
+
+void c99_vla_test_3c(int s, int arr[2][s][4])
+{
+    printf ("%d\n", arr[1][2][3]);
+}
+
+void c99_vla_test_3d(int s, int arr[2][3][s])
+{
+    printf ("%d\n", arr[1][2][3]);
+}
+
+void c99_vla_test_3(void)
+{
+    int a[2][3][4];
+
+    memset (a, 0, sizeof(a));
+    a[1][2][3] = 2;
+    c99_vla_test_3a(a);
+    c99_vla_test_3b(2, a);
+#if 0 // FIXME
+    c99_vla_test_3c(3, a);
+    c99_vla_test_3d(4, a);
+#endif
+}
+
 void c99_vla_test(void)
 {
     c99_vla_test_1(5, 2);
     c99_vla_test_2(3, 4, 5);
+    c99_vla_test_3();
 }
 
 

@@ -5442,7 +5442,8 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	    }
             if (tok != ']') {
 	        nocode_wanted = 1;
-	        gexpr(), vpop();
+	        gexpr();
+		goto check;
             }
             break;
 
@@ -5457,6 +5458,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 		nocode_wanted = 0;
 		gexpr();
 	    }
+check:
             if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
                 n = vtop->c.i;
                 if (n < 0)
