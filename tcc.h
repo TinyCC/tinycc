@@ -572,6 +572,7 @@ typedef struct Sym {
     };
     CType type; /* associated type */
     union {
+        int *vla_array_str; /* vla array code */
         struct Sym *next; /* next related symbol (for fields and anoms) */
         struct Sym *cleanupstate; /* in defined labels */
         int asm_label; /* associated asm label */

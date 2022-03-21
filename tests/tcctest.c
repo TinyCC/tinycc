@@ -3025,10 +3025,8 @@ void c99_vla_test_3(void)
     a[1][2][3] = 2;
     c99_vla_test_3a(a);
     c99_vla_test_3b(2, a);
-#if 0 // FIXME
     c99_vla_test_3c(3, a);
     c99_vla_test_3d(4, a);
-#endif
 }
 
 void c99_vla_test(void)
