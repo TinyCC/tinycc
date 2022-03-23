@@ -29,7 +29,8 @@ endif
 ifeq ($(CONFIG_backtrace),no)
  SKIP += 112_backtrace.test
  SKIP += 113_btdll.test
- CONFIG_bcheck = no # no bcheck without backtrace
+ CONFIG_bcheck = no
+# no bcheck without backtrace
 endif
 ifeq ($(CONFIG_bcheck),no)
  SKIP += 114_bound_signal.test
