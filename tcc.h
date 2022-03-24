@@ -645,6 +645,7 @@ typedef struct DLLReference {
 #define TYPE_ABSTRACT  1 /* type without variable */
 #define TYPE_DIRECT    2 /* type with variable */
 #define TYPE_PARAM     4 /* type declares function parameter */
+#define TYPE_NEST      8 /* nested call to post_type */
 
 #define IO_BUF_SIZE 8192
 

@@ -5498,7 +5498,7 @@ check:
         }
         skip(']');
         /* parse next post type */
-        post_type(type, ad, storage, td & ~(TYPE_DIRECT|TYPE_ABSTRACT));
+        post_type(type, ad, storage, (td & ~(TYPE_DIRECT|TYPE_ABSTRACT)) | TYPE_NEST);
 
         if ((type->t & VT_BTYPE) == VT_FUNC)
             tcc_error("declaration of an array of functions");
@@ -5509,17 +5509,21 @@ check:
         t1 |= type->t & VT_VLA;
 
         if (t1 & VT_VLA) {
-            if (n < 0)
-              tcc_error("need explicit inner array size in VLAs");
-            loc -= type_size(&int_type, &align);
-            loc &= -align;
-            n = loc;
+            if (n < 0) {
+		if  (td & TYPE_NEST)
+                    tcc_error("need explicit inner array size in VLAs");
+	    }
+	    else {
+                loc -= type_size(&int_type, &align);
+                loc &= -align;
+                n = loc;
 
-            vpush_type_size(type, &align);
-            gen_op('*');
-            vset(&int_type, VT_LOCAL|VT_LVAL, n);
-            vswap();
-            vstore();
+                vpush_type_size(type, &align);
+                gen_op('*');
+                vset(&int_type, VT_LOCAL|VT_LVAL, n);
+                vswap();
+                vstore();
+	    }
         }
         if (n != -1)
             vpop();
