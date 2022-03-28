@@ -725,7 +725,7 @@ static void gen_bounds_epilog(void)
     }
 
     /* generate bound check local freeing */
-    o(0xf81f0fe0); /* str x0, [sp, #-16]! */
+    o(0xa9be07e0); /* stp x0, x1, [sp, #-32]! */
     o(0x3c9f0fe0); /* str q0, [sp, #-16]! */
     greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
     o(0x90000000 | 0);            // adrp x0, #sym_data
@@ -733,7 +733,7 @@ static void gen_bounds_epilog(void)
     o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
     gen_bounds_call(TOK___bound_local_delete);
     o(0x3cc107e0); /* ldr q0, [sp], #16 */
-    o(0xf84107e0); /* ldr x0, [sp], #16 */
+    o(0xa8c207e0); /* ldp x0, x1, [sp], #32 */
 }
 #endif
 
