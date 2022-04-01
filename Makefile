@@ -404,6 +404,10 @@ tags : ; ctags $(TAGFILES)
 # cannot have both tags and TAGS on windows
 ETAGS : ; etags $(TAGFILES)
 
+# documentation
+doc: tcc-doc.html tcc-doc.info tcc.1
+
+
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
 TCC-VERSION = tcc-$(VERSION)
