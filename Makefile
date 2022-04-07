@@ -238,7 +238,7 @@ endif
 
 # convert "include/tccdefs.h" to "tccdefs_.h"
 %_.h : include/%.h conftest.c
-	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe && ./c2str.exe $< $@
+	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str$(EXESUF) && ./c2str$(EXESUF) $< $@
 
 # target specific object rule
 $(X)%.o : %.c $(LIBTCC_INC)
@@ -255,7 +255,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 # Cross Tiny C Compilers
 # (the TCCDEFS_H dependency is only necessary for parallel makes,
 # ala 'make -j x86_64-tcc i386-tcc tcc', which would create multiple
-# c2str.exe and tccdefs_.h files in parallel, leading to access errors.
+# c2str and tccdefs_.h files in parallel, leading to access errors.
 # This forces it to be made only once.  Make normally tracks multiple paths
 # to the same goals and only remakes it once, but that doesn't work over
 # sub-makes like in this target)
