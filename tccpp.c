@@ -3733,6 +3733,8 @@ static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
       putdef(cs, "__CHAR_UNSIGNED__");
     if (s1->optimize > 0)
       putdef(cs, "__OPTIMIZE__");
+    if (s1->optimize == 's')
+          putdef(cs, "__OPTIMIZE_SIZE__");
     if (s1->option_pthread)
       putdef(cs, "_REENTRANT");
     if (s1->leading_underscore)

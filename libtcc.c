@@ -1997,7 +1997,11 @@ reparse:
             s->filetype = x | (s->filetype & ~AFF_TYPE_MASK);
             break;
         case TCC_OPTION_O:
-            s->optimize = atoi(optarg);
+            /* Use "-O" as alias for "-O1". */
+            /* Other common used values: "-O0", "-O1", "-O2", "-O3" and "-Os" */
+            /* no failure with unsupported options */
+            x = *optarg;
+            s->optimize = isnum(x) ? atoi(optarg) : (x) ? x : 1;
             break;
         case TCC_OPTION_print_search_dirs:
             x = OPT_PRINT_DIRS;
