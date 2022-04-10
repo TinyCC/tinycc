@@ -1827,7 +1827,13 @@ reparse:
             break;
 #endif
         case TCC_OPTION_g:
-            s->do_debug = 1;
+            /* Use "-g" as alias for "-g1". Use "-g0" to disable debug */
+            /* Other common used values: "-g0", "-g1", "-g2" and "-g3" */
+            /* no failure with unsupported options */
+            if (isnum(*optarg))
+                s->do_debug = atoi(optarg);
+            else
+                s->do_debug = 1;
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;
