@@ -715,10 +715,18 @@ static void gen_bounds_epilog(void)
 
     /* generate bound check local freeing */
     o(0x5250); /* save returned value, if any */
+    o(0x20ec8348); /* sub $32,%rsp */
+    o(0x290f);     /* movaps %xmm0,0x10(%rsp) */
+    o(0x102444);
+    o(0x240c290f); /* movaps %xmm1,(%rsp) */
     greloca(cur_text_section, sym_data, ind + 3, R_X86_64_PC32, -4);
     o(0x0d8d48 + ((TREG_FASTCALL_1 == TREG_RDI) * 0x300000)); /* lea xxx(%rip), %rcx/rdi */
     gen_le32 (0);
     gen_bounds_call(TOK___bound_local_delete);
+    o(0x280f);     /* movaps 0x10(%rsp),%xmm0 */
+    o(0x102444);
+    o(0x240c280f); /* movaps (%rsp),%xmm1 */
+    o(0x20c48348); /* add $32,%rsp */
     o(0x585a); /* restore returned value, if any */
 }
 #endif
@@ -1317,7 +1325,14 @@ void gfunc_call(int nb_args)
 		o(0xe0 + REG_VALUE(r));
 		vset(&vtop->type, r | VT_LVAL, 0);
 		vswap();
+		/* keep stack aligned for (__bound_)memmove call */
+		o(0x10ec8348); /* sub $16,%rsp */
+		o(0xf0e48348); /* and $-16,%rsp */
+		orex(0,r,0,0x50 + REG_VALUE(r)); /* push r (last %rsp) */
+		o(0x08ec8348); /* sub $8,%rsp */
 		vstore();
+		o(0x08c48348); /* add $8,%rsp */
+		o(0x5c);       /* pop %rsp */
 		break;
 
 	    case VT_LDOUBLE:
