@@ -3897,6 +3897,7 @@ ST_FUNC int type_size(CType *type, int *a)
             return PTR_SIZE;
         }
     } else if (IS_ENUM(type->t) && type->ref->c < 0) {
+        *a = 0;
         return -1; /* incomplete enum */
     } else if (bt == VT_LDOUBLE) {
         *a = LDOUBLE_ALIGN;
