@@ -19,7 +19,9 @@ typedef union { long long __ll; long double __ld; } max_align_t;
 #undef offsetof
 #define offsetof(type, field) ((size_t)&((type *)0)->field)
 
+#if defined __i386__ || defined __x86_64__
 void *alloca(size_t size);
+#endif
 
 #endif
 
