@@ -249,6 +249,9 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
         }
             break;
 
+        case R_X86_64_COPY:
+	    break;
+
         case R_X86_64_PLTOFF64:
             add64le(ptr, val - s1->got->sh_addr + rel->r_addend);
             break;
@@ -368,6 +371,10 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             add32le(ptr, val - s1->pe_imagebase);
 #endif
             /* do nothing */
+            break;
+        default:
+            fprintf(stderr,"FIXME: handle reloc type %d at %x [%p] to %x\n",
+                type, (unsigned)addr, ptr, (unsigned)val);
             break;
     }
 }
