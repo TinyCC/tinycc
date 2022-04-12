@@ -8638,7 +8638,7 @@ static void func_vla_arg_code(Sym *arg)
     if (arg->type.ref)
         func_vla_arg_code(arg->type.ref);
 
-    if (arg->type.t & VT_VLA) {
+    if ((arg->type.t & VT_VLA) && arg->type.ref->vla_array_str) {
 	loc -= type_size(&int_type, &align);
 	loc &= -align;
 	arg->type.ref->c = loc;
