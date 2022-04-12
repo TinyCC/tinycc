@@ -77,6 +77,7 @@ static int asm_parse_vfp_regvar(int t, int double_precision)
     return -1;
 }
 
+__attribute__((unused))
 static int asm_parse_vfp_status_regvar(int t)
 {
     switch (t) {
