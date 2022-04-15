@@ -725,7 +725,7 @@ static void gen_bounds_epilog(void)
     }
 
     /* generate bound check local freeing */
-    o(0xa9be07e0); /* stp x0, x1, [sp, #-32]! */
+    o(0xa9bf07e0); /* stp x0, x1, [sp, #-16]! */
     o(0x3c9f0fe0); /* str q0, [sp, #-16]! */
     greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
     o(0x90000000 | 0);            // adrp x0, #sym_data
@@ -733,7 +733,7 @@ static void gen_bounds_epilog(void)
     o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
     gen_bounds_call(TOK___bound_local_delete);
     o(0x3cc107e0); /* ldr q0, [sp], #16 */
-    o(0xa8c207e0); /* ldp x0, x1, [sp], #32 */
+    o(0xa8c107e0); /* ldp x0, x1, [sp], #16 */
 }
 #endif
 
@@ -1164,6 +1164,9 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     Sym *sym;
     CType **t;
     unsigned long *a;
+    int use_x8 = 0;
+    int last_int = 0;
+    int last_float = 0;
 
     func_vc = 144; // offset of where x8 is stored
 
@@ -1177,16 +1180,42 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     arm64_func_va_list_stack = arm64_pcs(n - 1, t, a);
 
+    if (func_sym->type.ref->f.func_type == FUNC_ELLIPSIS) {
+        use_x8 = 1;
+        last_int = 4;
+        last_float = 4;
+    }
+    if (a && a[0] == 1)
+        use_x8 = 1;
+    for (i = 1, sym = func_type->ref->next; sym; i++, sym = sym->next) {
+        if (a[i] == 1)
+	    use_x8 = 1;
+        if (a[i] < 16) {
+            int last, align, size = type_size(&sym->type, &align);
+	    last = a[i] / 4 + 1 + (size - 1) / 8;
+	    last_int = last > last_int ? last : last_int;
+	}
+        else if (a[i] < 32) {
+            int last, hfa = arm64_hfa(&sym->type, 0);
+	    last = a[i] / 4 - 3 + (hfa ? hfa - 1 : 0);
+	    last_float = last > last_float ? last : last_float;
+	}
+    }
+
+    last_int = last_int > 4 ? 4 : last_int;
+    last_float = last_float > 4 ? 4 : last_float;
+
     o(0xa9b27bfd); // stp x29,x30,[sp,#-224]!
-    o(0xad0087e0); // stp q0,q1,[sp,#16]
-    o(0xad018fe2); // stp q2,q3,[sp,#48]
-    o(0xad0297e4); // stp q4,q5,[sp,#80]
-    o(0xad039fe6); // stp q6,q7,[sp,#112]
-    o(0xa90923e8); // stp x8,x8,[sp,#144]
-    o(0xa90a07e0); // stp x0,x1,[sp,#160]
-    o(0xa90b0fe2); // stp x2,x3,[sp,#176]
-    o(0xa90c17e4); // stp x4,x5,[sp,#192]
-    o(0xa90d1fe6); // stp x6,x7,[sp,#208]
+    for (i = 0; i < last_float; i++)
+        // stp q0,q1,[sp,#16], stp q2,q3,[sp,#48]
+        // stp q4,q5,[sp,#80], stp q6,q7,[sp,#112]
+        o(0xad0087e0 + i * 0x10000 + (i << 11) + (i << 1));
+    if (use_x8)
+        o(0xa90923e8); // stp x8,x8,[sp,#144]
+    for (i = 0; i < last_int; i++)
+        // stp x0,x1,[sp,#160], stp x2,x3,[sp,#176]
+        // stp x4,x5,[sp,#192], stp x6,x7,[sp,#208]
+        o(0xa90a07e0 + i * 0x10000 + (i << 11) + (i << 1));
 
     arm64_func_va_list_gr_offs = -64;
     arm64_func_va_list_vr_offs = -128;
