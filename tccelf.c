@@ -2322,11 +2322,17 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     default:
     case TCC_OUTPUT_EXE:
         ehdr.e_type = ET_EXEC;
-        ehdr.e_entry = get_sym_addr(s1, "_start", 1, 0);
+        ehdr.e_entry = get_sym_addr(s1,
+                                    s1->elf_entryname ?
+                                        s1->elf_entryname : "_start",
+                                    1, 0);
         break;
     case TCC_OUTPUT_DLL:
         ehdr.e_type = ET_DYN;
-        ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
+        ehdr.e_entry = s1->elf_entryname ?
+                            get_sym_addr(s1,s1->elf_entryname,1,0) :
+                            text_section->sh_addr;
+                            /* XXX: is it correct ? */
         break;
     case TCC_OUTPUT_OBJ:
         ehdr.e_type = ET_REL;

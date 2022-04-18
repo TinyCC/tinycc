@@ -961,6 +961,8 @@ struct TCCState {
     Section *verneed_section;
 #endif
 
+    char *elf_entryname;
+
 #ifdef TCC_IS_NATIVE
     const char *runtime_main;
     void **runtime_mem;

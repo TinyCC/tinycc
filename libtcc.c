@@ -1335,6 +1335,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             s->symbolic = 1;
         } else if (link_option(option, "nostdlib", &p)) {
             s->nostdlib = 1;
+        } else if (link_option(option, "e=", &p)) {
+            copy_linker_arg(&s->elf_entryname, p, 0);
         } else if (link_option(option, "fini=", &p)) {
             copy_linker_arg(&s->fini_symbol, p, 0);
             ignoring = 1;
