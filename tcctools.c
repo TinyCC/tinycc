@@ -61,7 +61,7 @@ static int contains_any(const char *s, const char *list) {
 }
 
 static int ar_usage(int ret) {
-    fprintf(stderr, "usage: tcc -ar [rcsv] lib file...\n");
+    fprintf(stderr, "usage: tcc -ar [rcsv] lib [file...]\n");
     fprintf(stderr, "create library ([abdioptxN] not supported).\n");
     return ret;
 }
@@ -115,8 +115,9 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
         }
     }
 
-    if (!i_obj)  // i_obj implies also i_lib. we require both.
+    if (!i_lib)  // i_obj implies also i_lib.
         ret = 1;
+    i_obj = i_obj ? i_obj : argc;  // An empty archive will be generated if no input file is given
 
     if (ret == 1)
         return ar_usage(ret);
@@ -242,6 +243,11 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
         hofs++, fpos = 1;
     // write header
     fwrite("!<arch>\n", 8, 1, fh);
+    // create an empty archive
+    if (!funccnt) {
+        ret = 0;
+        goto the_end;
+    }
     sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)));
     memcpy(&arhdr.ar_size, stmp, 10);
     fwrite(&arhdr, sizeof(arhdr), 1, fh);
