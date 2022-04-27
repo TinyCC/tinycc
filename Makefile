@@ -8,6 +8,12 @@ ifndef TOP
  INCLUDED = no
 endif
 
+# Uncomment the next two commands to allow debug this Makefile
+# When enabled, GNU make will no longer execute commands directly.
+# All build commands will be executed using the shell. This needs more time
+#OLD_SHELL := $(SHELL)
+#SHELL = $(info Building $* $(if $<, (from $<))$(if $?, ($? newer)))$(OLD_SHELL)
+
 ifeq ($(findstring $(MAKECMDGOALS),clean distclean),)
  include $(TOP)/config.mak
 endif
