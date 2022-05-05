@@ -1071,7 +1071,7 @@ static void gen_bounds_epilog(void)
     *bounds_ptr = 0;
 
     sym_data = get_sym_ref(&char_pointer_type, lbounds_section,
-                           func_bound_offset, lbounds_section->data_offset);
+                           func_bound_offset, PTR_SIZE);
 
     /* generate bound local allocation */
     if (offset_modified) {

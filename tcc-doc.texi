@@ -349,11 +349,14 @@ Turn on/off linking of all objects in archives.
 Debugger options:
 
 @table @option
-@item -g
-Generate run time debug information so that you get clear run time
+@item -g[x]
+Generate run time stab debug information so that you get clear run time
 error messages: @code{ test.c:68: in function 'test5()': dereferencing
 invalid pointer} instead of the laconic @code{Segmentation
 fault}.
+
+@item -gdwarf[-x]
+Generate run time dwarf debug information instead of stab debug information.
 
 @item -b
 Generate additional support code to check memory allocations and array/pointer

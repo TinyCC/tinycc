@@ -24,6 +24,7 @@ config*.h
 config*.mak
 config.texi
 conftest*
+c2str
 tags
 TAGS
 tcc.1

@@ -27,7 +27,7 @@ arm-libtcc1-usegcc ?= no
 ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XCC = $(CC)
  XAR = $(AR)
- XFLAGS = $(CFLAGS) -fPIC -gstabs -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable
+ XFLAGS = $(CFLAGS) -fPIC -gdwarf -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable
 endif
 
 ifneq ($(CONFIG_backtrace),no)

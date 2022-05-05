@@ -58,6 +58,9 @@ ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 114_bound_signal.test # libc problem signal/fork
  SKIP += 116_bound_setjmp2.test # No TLS_FUNC/TLS_VAR in bcheck.c
 endif
+ifneq (,$(filter Darwin,$(TARGETOS)))
+ SKIP += 126_bound_global.test # bt-exe.c problem on apple
+endif
 
 # Some tests might need arguments
 ARGS =
@@ -100,7 +103,7 @@ GEN-ALWAYS =
 108_constructor.test: NORUN = true
 
 112_backtrace.test: FLAGS += -dt -b
-112_backtrace.test 113_btdll.test: FILTER += \
+112_backtrace.test 113_btdll.test 126_bound_global.test: FILTER += \
     -e 's;[0-9A-Fa-fx]\{5,\};........;g' \
     -e 's;0x[0-9A-Fa-f]\{1,\};0x?;g'
 
@@ -122,6 +125,8 @@ ifneq ($(CONFIG_bcheck),no)
 endif
 125_atomic_misc.test: FLAGS += -dt
 124_atomic_counter.test: FLAGS += -pthread
+126_bound_global.test: FLAGS += -b
+126_bound_global.test: NORUN = true
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

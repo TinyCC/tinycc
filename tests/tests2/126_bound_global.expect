@@ -1,0 +1,2 @@
+126_bound_global.c:11: at main: BCHECK: ........ is outside of the region
+126_bound_global.c:11: at main: RUNTIME ERROR: invalid memory access

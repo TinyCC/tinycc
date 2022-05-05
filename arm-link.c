@@ -4,6 +4,7 @@
 
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32   R_ARM_ABS32
+#define R_DATA_32U  R_ARM_ABS32
 #define R_DATA_PTR  R_ARM_ABS32
 #define R_JMP_SLOT  R_ARM_JUMP_SLOT
 #define R_GLOB_DAT  R_ARM_GLOB_DAT

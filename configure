@@ -51,6 +51,7 @@ ar_set=
 darwin=
 cpu=
 cpuver=
+dwarf=
 
 # OS specific
 cpu_sys=`uname -m`
@@ -135,6 +136,8 @@ for opt do
   --triplet=*) triplet=`echo $opt | cut -d '=' -f 2-`
   ;;
   --cpu=*) cpu=`echo $opt | cut -d '=' -f 2-`
+  ;;
+  --dwarf=*) dwarf=`echo $opt | cut -d '=' -f 2-`
   ;;
   --enable-cross) confvars="$confvars cross"
   ;;
@@ -328,6 +331,7 @@ Advanced options (experts only):
   --config-backtrace=no    disable stack backtraces (with -run or -bt)
   --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
+  --dwarf=x                Use dwarf debug info instead of stabs (x=2..5)
 EOF
 exit 1
 fi
@@ -493,6 +497,7 @@ print_mak CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
 print_mak CONFIG_LDDIR "$tcc_lddir"
 print_mak CONFIG_TRIPLET "$triplet"
 print_mak TCC_CPU_VERSION "$cpuver" num
+print_mak CONFIG_DWARF "$dwarf"
 
 echo "ARCH=$cpu" >> config.mak
 echo "TARGETOS=$targetos" >> config.mak

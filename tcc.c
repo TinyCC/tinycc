@@ -58,7 +58,8 @@ static const char help[] =
     "  -soname      set name for shared library to be used at runtime\n"
     "  -Wl,-opt[=val]  set linker option (see tcc -hh)\n"
     "Debugger options:\n"
-    "  -g           generate runtime debug info\n"
+    "  -g[x]        generate stab runtime debug info\n"
+    "  -gdwarf[-x]  generate dwarf runtime debug info\n"
 #ifdef CONFIG_TCC_BCHECK
     "  -b           compile with built-in memory and bounds checker (implies -g)\n"
 #endif

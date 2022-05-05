@@ -1722,6 +1722,12 @@ static void args_parser_listfile(TCCState *s,
     *pargc = s->argc = argc, *pargv = s->argv = argv;
 }
 
+#ifdef CONFIG_DWARF
+#define	DWARF_VERSION	atoi(CONFIG_DWARF)
+#else
+#define	DWARF_VERSION	0
+#endif
+
 PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
 {
     TCCState *s1 = s;
@@ -1819,6 +1825,7 @@ reparse:
             s->rt_num_callers = atoi(optarg);
             s->do_backtrace = 1;
             s->do_debug = 1;
+	    s->dwarf = DWARF_VERSION;
             break;
 #endif
 #ifdef CONFIG_TCC_BCHECK
@@ -1826,16 +1833,22 @@ reparse:
             s->do_bounds_check = 1;
             s->do_backtrace = 1;
             s->do_debug = 1;
+	    s->dwarf = DWARF_VERSION;
             break;
 #endif
         case TCC_OPTION_g:
             /* Use "-g" as alias for "-g1". Use "-g0" to disable debug */
             /* Other common used values: "-g0", "-g1", "-g2" and "-g3" */
             /* no failure with unsupported options */
-            if (isnum(*optarg))
+            s->do_debug = 1;
+	    s->dwarf = DWARF_VERSION;
+	    if (*optarg == 'd') {
+		s->dwarf = 5;
+		if (!strncmp(optarg,"dwarf-",6))
+                    s->dwarf = atoi(optarg + 6);
+	    }
+            else if (isnum(*optarg))
                 s->do_debug = atoi(optarg);
-            else
-                s->do_debug = 1;
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;

@@ -47,6 +47,8 @@ struct sym_version {
 /* section is dynsymtab_section */
 #define SHF_DYNSYM 0x40000000
 
+#define	DWARF_DEBUG(s)	(!strncmp((s), ".debug_", sizeof(".debug_")-1))
+
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void tccelf_new(TCCState *s)
@@ -102,12 +104,39 @@ ST_FUNC void tccelf_stab_new(TCCState *s)
     if (s->do_backtrace && s->output_type != TCC_OUTPUT_MEMORY)
         shf = SHF_ALLOC | SHF_WRITE; // SHF_WRITE needed for musl/SELINUX
 #endif
-    stab_section = new_section(s, ".stab", SHT_PROGBITS, shf);
-    stab_section->sh_entsize = sizeof(Stab_Sym);
-    stab_section->sh_addralign = sizeof ((Stab_Sym*)0)->n_value;
-    stab_section->link = new_section(s, ".stabstr", SHT_STRTAB, shf);
-    /* put first entry */
-    put_stabs(s, "", 0, 0, 0, 0);
+    if (s->dwarf) {
+        dwarf_info_section =
+	    new_section(s, ".debug_info", SHT_PROGBITS, shf);
+        dwarf_abbrev_section =
+	    new_section(s, ".debug_abbrev", SHT_PROGBITS, shf);
+        dwarf_line_section =
+	    new_section(s, ".debug_line", SHT_PROGBITS, shf);
+        dwarf_aranges_section =
+	    new_section(s, ".debug_aranges", SHT_PROGBITS, shf);
+	shf |= SHF_MERGE | SHF_STRINGS;
+        dwarf_str_section =
+	    new_section(s, ".debug_str", SHT_PROGBITS, shf);
+	dwarf_str_section->sh_entsize = 1;
+	dwarf_info_section->sh_addralign =
+	dwarf_abbrev_section->sh_addralign =
+	dwarf_line_section->sh_addralign =
+	dwarf_aranges_section->sh_addralign =
+	dwarf_str_section->sh_addralign = 1;
+	if (s1->dwarf >= 5) {
+            dwarf_line_str_section =
+	        new_section(s, ".debug_line_str", SHT_PROGBITS, shf);
+	    dwarf_line_str_section->sh_entsize = 1;
+	    dwarf_line_str_section->sh_addralign = 1;
+	}
+    }
+    else {
+        stab_section = new_section(s, ".stab", SHT_PROGBITS, shf);
+        stab_section->sh_entsize = sizeof(Stab_Sym);
+        stab_section->sh_addralign = sizeof ((Stab_Sym*)0)->n_value;
+        stab_section->link = new_section(s, ".stabstr", SHT_STRTAB, shf);
+        /* put first entry */
+        put_stabs(s, "", 0, 0, 0, 0);
+    }
 }
 
 static void free_section(Section *s)
@@ -944,7 +973,10 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
                 sym->st_value = 0;
             else
                 tcc_error_noabort("undefined symbol '%s'", name);
-        } else if (sh_num < SHN_LORESERVE) {
+        } else if (sh_num < SHN_LORESERVE &&
+		   /* Debug dwarf relocations must be relative to start section.
+		      This only happens when backtrace is used. */
+		   (sym->st_name || !DWARF_DEBUG(s1->sections[sym->st_shndx]->name))) {
             /* add section base */
             sym->st_value += s1->sections[sym->st_shndx]->sh_addr;
         }
@@ -1330,7 +1362,7 @@ ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t 
     if (sec && offs == -1)
         offs = sec->data_offset;
     return set_elf_sym(symtab_section, offs, 0,
-        ELFW(ST_INFO)(name ? STB_GLOBAL : STB_LOCAL, STT_NOTYPE), 0, shn, name);
+        ELFW(ST_INFO)(name && !strstr(name, "__dwarf") ? STB_GLOBAL : STB_LOCAL, STT_NOTYPE), 0, shn, name);
 }
 
 static void add_init_array_defines(TCCState *s1, const char *section_name)
@@ -1395,10 +1427,10 @@ static void set_local_sym(TCCState *s1, const char *name, Section *s, int offset
 }
 
 #ifdef CONFIG_TCC_BACKTRACE
-static void put_ptr(TCCState *s1, Section *s, int offs)
+static void put_ptr(TCCState *s1, Section *s, int offs, const char *name)
 {
     int c;
-    c = set_global_sym(s1, NULL, s, offs);
+    c = set_global_sym(s1, name, s, offs);
     s = data_section;
     put_elf_reloc (s1->symtab, s, s->data_offset, R_DATA_PTR, c);
     section_ptr_add(s, PTR_SIZE);
@@ -1415,16 +1447,29 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     section_ptr_add(s, -s->data_offset & (PTR_SIZE - 1));
     o = s->data_offset;
     /* create (part of) a struct rt_context (see tccrun.c) */
-    put_ptr(s1, stab_section, 0);
-    put_ptr(s1, stab_section, -1);
-    put_ptr(s1, stab_section->link, 0);
+    if (s1->dwarf) {
+        put_ptr(s1, dwarf_line_section, 0, "__dwarf_line");
+        put_ptr(s1, dwarf_line_section, -1, "__dwarf_line_end");
+	if (s1->dwarf >= 5)
+            put_ptr(s1, dwarf_line_str_section, 0, "__dwarf_line_str");
+	else
+            put_ptr(s1, dwarf_str_section, 0, "__dwarf_str");
+	put_ptr(s1, text_section, 0, "__dwarf_text");
+    }
+    else {
+        put_ptr(s1, stab_section, 0, NULL);
+        put_ptr(s1, stab_section, -1, NULL);
+        put_ptr(s1, stab_section->link, 0, NULL);
+        section_ptr_add(s, PTR_SIZE);
+    }
+    /* skip esym_start/esym_end/elf_str (not loaded) */
     section_ptr_add(s, 3 * PTR_SIZE);
     /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
-    put_ptr(s1, NULL, 0);
+    put_ptr(s1, NULL, 0, NULL);
     n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
-        put_ptr(s1, bounds_section, 0);
+        put_ptr(s1, bounds_section, 0, NULL);
         n -= PTR_SIZE;
     }
 #endif
@@ -1849,6 +1894,8 @@ static int set_sec_sizes(TCCState *s1)
             /* when generating a DLL, we include relocations but
                we may patch them */
             if (file_type == TCC_OUTPUT_DLL
+		/* Do not include dwarf relocatable sections. */
+		&& !DWARF_DEBUG(s1->sections[s->sh_info]->name)
                 && (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC)) {
                 int count = prepare_dynamic_rel(s1, s);
                 if (count) {
@@ -2963,8 +3010,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
             strcmp(strsec + sh->sh_name, ".stabstr")
             )
             continue;
-	if (seencompressed
-	    && !strncmp(strsec + sh->sh_name, ".debug_", sizeof(".debug_")-1))
+	if (seencompressed && DWARF_DEBUG(strsec + sh->sh_name))
 	  continue;
 
 	sh = &shdr[i];
