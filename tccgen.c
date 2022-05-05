@@ -1742,8 +1742,8 @@ static void tcc_debug_funcstart(TCCState *s1, Sym *sym)
     tcc_debug_stabn(s1, N_LBRAC, ind - func_ind);
     if (!(f = put_new_file(s1)))
 	return;
-    tcc_debug_line(s1);
     if (s1->dwarf) {
+        tcc_debug_line(s1);
         dwarf_info.func = sym;
         dwarf_info.line = file->line_num;
 	if (s1->do_backtrace) {
@@ -1762,6 +1762,7 @@ static void tcc_debug_funcstart(TCCState *s1, Sym *sym)
         tcc_get_debug_info(s1, sym->type.ref, &debug_str);
         put_stabs_r(s1, debug_str.data, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
         cstr_free (&debug_str);
+        tcc_debug_line(s1);
     }
 }
 
