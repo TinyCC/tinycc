@@ -1426,6 +1426,19 @@ static void set_local_sym(TCCState *s1, const char *name, Section *s, int offset
     }
 }
 
+/* avoid generating debug/test_coverage code for stub functions */
+static void tcc_compile_string_no_debug(TCCState *s, const char *str)
+{
+    int save_do_debug = s->do_debug;
+    int save_test_coverage = s->test_coverage;
+
+    s->do_debug = 0;
+    s->test_coverage = 0;
+    tcc_compile_string(s, str);
+    s->do_debug = save_do_debug;
+    s->test_coverage = save_test_coverage;
+}
+
 #ifdef CONFIG_TCC_BACKTRACE
 static void put_ptr(TCCState *s1, Section *s, int offs, const char *name)
 {
@@ -1489,7 +1502,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
 #endif
     cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
-    tcc_compile_string(s1, cstr.data);
+    tcc_compile_string_no_debug(s1, cstr.data);
     cstr_free(&cstr);
     set_local_sym(s1, &"___rt_info"[!s1->leading_underscore], s, o);
 }
@@ -1528,7 +1541,7 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
         "__attribute__((destructor)) static void __tcov_exit() {"
         "__store_test_coverage(__tcov_data);"
         "}");
-    tcc_compile_string(s1, cstr.data);
+    tcc_compile_string_no_debug(s1, cstr.data);
     cstr_free(&cstr);
     set_local_sym(s1, &"___tcov_data"[!s1->leading_underscore], tcov_section, 0);
 }

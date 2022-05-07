@@ -29,6 +29,7 @@ void __bt_init(rt_context *p, int num_callers)
         __rt_error = _rt_error;
         set_exception_handler();
     } else {
+	p->num_callers = -1;
         p->next = rc->next, rc->next = p;
     }
 }

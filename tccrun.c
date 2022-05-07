@@ -754,14 +754,14 @@ next:
 		}
 	}
 	else {
-	    while ((i = DW_GETC(ln, end))) {
+	    while ((DW_GETC(ln, end))) {
 #if 0
 		if (++dir_size < DIR_TABLE_SIZE)
 		    dirs[dir_size - 1] = (char *)ln - 1;
 #endif
 		while (DW_GETC(ln, end)) {}
 	    }
-	    while ((i = DW_GETC(ln, end))) {
+	    while ((DW_GETC(ln, end))) {
 		if (++filename_size < FILE_TABLE_SIZE) {
 		    filename_table[filename_size - 1].name = (char *)ln - 1;
 		    while (DW_GETC(ln, end)) {}
@@ -776,6 +776,8 @@ next:
 		dwarf_read_uleb128(&ln, end); // size
 	    }
 	}
+	if (filename_size >= 2)
+	    filename = filename_table[1].name;
 	while (ln < end) {
 	    last_pc = pc;
 	    switch (DW_GETC(ln, end)) {
@@ -790,14 +792,27 @@ next:
 		    goto next_line;
 		case DW_LNE_set_address:
 #if PTR_SIZE == 4
-		    dwarf_read_32(&cp, end);
+		    pc = dwarf_read_32(&cp, end);
 #else
-		    dwarf_read_64(&cp, end);
+		    pc = dwarf_read_64(&cp, end);
 #endif
-		    pc = rc->dwarf_text;
+		    if (rc->num_callers < 0)
+		        pc = rc->dwarf_text; /* dll */
 		    opindex = 0;
 		    break;
 		case DW_LNE_define_file: /* deprecated */
+		    if (++filename_size < FILE_TABLE_SIZE) {
+		        filename_table[filename_size - 1].name = (char *)ln - 1;
+		        while (DW_GETC(ln, end)) {}
+		        filename_table[filename_size - 1].dir_entry =
+		            dwarf_read_uleb128(&ln, end);
+		    }
+		    else {
+		        while (DW_GETC(ln, end)) {}
+		        dwarf_read_uleb128(&ln, end);
+		    }
+		    dwarf_read_uleb128(&ln, end); // time
+		    dwarf_read_uleb128(&ln, end); // size
 		    break;
 		case DW_LNE_set_discriminator:
 		    dwarf_read_uleb128(&cp, end);
