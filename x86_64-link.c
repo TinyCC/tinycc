@@ -48,6 +48,8 @@ int code_reloc (int reloc_type)
         case R_X86_64_TLSLD:
         case R_X86_64_DTPOFF32:
         case R_X86_64_TPOFF32:
+        case R_X86_64_DTPOFF64:
+        case R_X86_64_TPOFF64:
             return 0;
 
         case R_X86_64_PC32:
@@ -96,6 +98,8 @@ int gotplt_entry_type (int reloc_type)
         case R_X86_64_TLSLD:
         case R_X86_64_DTPOFF32:
         case R_X86_64_TPOFF32:
+        case R_X86_64_DTPOFF64:
+        case R_X86_64_TPOFF64:
         case R_X86_64_REX_GOTPCRELX:
         case R_X86_64_PLT32:
         case R_X86_64_PLTOFF64:
@@ -363,6 +367,19 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                 sec = s1->sections[sym->st_shndx];
                 x = val - sec->sh_addr - sec->data_offset;
                 add32le(ptr, x);
+            }
+            break;
+        case R_X86_64_DTPOFF64:
+        case R_X86_64_TPOFF64:
+            {
+                ElfW(Sym) *sym;
+                Section *sec;
+                int32_t x;
+
+                sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+                sec = s1->sections[sym->st_shndx];
+                x = val - sec->sh_addr - sec->data_offset;
+                add64le(ptr, x);
             }
             break;
         case R_X86_64_NONE:

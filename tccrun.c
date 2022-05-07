@@ -634,33 +634,24 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
     return retval;
 }
 
-static unsigned int dwarf_read_32(unsigned char **ln, unsigned char *end)
-{
-    unsigned char *cp = *ln;
-    unsigned int retval = 0;
-
-    if ((cp + 4) < end) {
-	retval = read32le(cp);
-	cp += 4;
-    }
-    *ln = cp;
-    return retval;
-}
-
-#if PTR_SIZE == 8
-static unsigned long long dwarf_read_64(unsigned char **ln, unsigned char *end)
-{
-    unsigned char *cp = *ln;
-    unsigned long long retval = 0;
-
-    if ((cp + 8) < end) {
-	retval = read64le(cp);
-	cp += 8;
-    }
-    *ln = cp;
-    return retval;
-}
-#endif
+#define	dwarf_read_1(ln,end) \
+	DW_GETC((ln), (end))
+#define	dwarf_read_2(ln,end) \
+	((ln) + 2 < (end) ? (ln) += 2, read16le((ln) - 2) : 0)
+#define	dwarf_read_4(ln,end) \
+	((ln) + 4 < (end) ? (ln) += 4, read32le((ln) - 4) : 0)
+#define	dwarf_read_8(ln,end) \
+	((ln) + 8 < (end) ? (ln) += 8, read64le((ln) - 8) : 0)
+#define	dwarf_ignore_type(ln, end) /* timestamp/size/md5/... */ \
+	switch (entry_format[j].form) { \
+	case DW_FORM_data1: (ln) += 1; break; \
+	case DW_FORM_data2: (ln) += 2; break; \
+	case DW_FORM_data4: (ln) += 3; break; \
+	case DW_FORM_data8: (ln) += 8; break; \
+	case DW_FORM_data16: (ln) += 16; break; \
+	case DW_FORM_udata: dwarf_read_uleb128(&(ln), (end)); break; \
+	default: goto next_line; \
+	}
 
 static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     const char *msg, const char *skip)
@@ -678,7 +669,13 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     unsigned int opindex;
     unsigned int col;
     unsigned int i;
+    unsigned int j;
     unsigned int len;
+    unsigned int value;
+    struct {
+	unsigned int type;
+	unsigned int form;
+    } entry_format[256];
     unsigned int dir_size;
 #if 0
     char *dirs[DIR_TABLE_SIZE];
@@ -707,7 +704,7 @@ next:
         line = 1;
         filename = NULL;
         function = NULL;
-	size = dwarf_read_32(&ln, rc->dwarf_line_end);
+	size = dwarf_read_4(ln, rc->dwarf_line_end);
 	end = ln + size;
 	version = DW_GETC(ln, end);
  	version += DW_GETC(ln, end) << 8;
@@ -729,29 +726,58 @@ next:
 	ln += 12;
 	if (version >= 5) {
 	    col = DW_GETC(ln, end);
-	    for (i = 0; i < col * 2; i++)
-	        dwarf_read_uleb128(&ln, end);
+	    for (i = 0; i < col; i++) {
+	        entry_format[i].type = dwarf_read_uleb128(&ln, end);
+	        entry_format[i].form = dwarf_read_uleb128(&ln, end);
+	    }
 	    dir_size = dwarf_read_uleb128(&ln, end);
-	    for (i = 0; i < dir_size; i++)
+	    for (i = 0; i < dir_size; i++) {
+		for (j = 0; j < col; j++) {
+		    if (entry_format[j].type == DW_LNCT_path) {
+		        if (entry_format[j].form != DW_FORM_line_strp)
+			    goto next_line;
 #if 0
-		if (i < DIR_TABLE_SIZE)
-		    dirs[i] = (char *)rc->dwarf_line_str + dwarf_read_32(&ln, end);
-		else
+		        value = dwarf_read_4(ln, end);
+		        if (i < DIR_TABLE_SIZE)
+		            dirs[i] = (char *)rc->dwarf_line_str + value;
+#else
+			dwarf_read_4(ln, end);
 #endif
-		    dwarf_read_32(&ln, end);
+		    }
+		    else 
+			dwarf_ignore_type(ln, end);
+		}
+	    }
 	    col = DW_GETC(ln, end);
-	    for (i = 0; i < col * 2; i++)
-	        dwarf_read_uleb128(&ln, end);
+	    for (i = 0; i < col; i++) {
+	        entry_format[i].type = dwarf_read_uleb128(&ln, end);
+	        entry_format[i].form = dwarf_read_uleb128(&ln, end);
+	    }
 	    filename_size = dwarf_read_uleb128(&ln, end);
 	    for (i = 0; i < filename_size; i++)
-		if (i < FILE_TABLE_SIZE) {
-		    filename_table[i].name = (char *)rc->dwarf_line_str + dwarf_read_32(&ln, end);
-		    filename_table[i].dir_entry = dwarf_read_uleb128(&ln, end);
-	        }
-		else {
-		    dwarf_read_32(&ln, end);
-		    dwarf_read_uleb128(&ln, end);
-		}
+		for (j = 0; j < col; j++) {
+		    if (entry_format[j].type == DW_LNCT_path) {
+			if (entry_format[j].form != DW_FORM_line_strp)
+			    goto next_line;
+			value = dwarf_read_4(ln, end);
+		        if (i < FILE_TABLE_SIZE)
+		            filename_table[i].name =
+				(char *)rc->dwarf_line_str + value;
+	            }
+		    else if (entry_format[j].type == DW_LNCT_directory_index) {
+			switch (entry_format[j].form) {
+			case DW_FORM_data1: value = dwarf_read_1(ln, end); break;
+			case DW_FORM_data2: value = dwarf_read_2(ln, end); break;
+			case DW_FORM_data4: value = dwarf_read_4(ln, end); break;
+			case DW_FORM_udata: value = dwarf_read_uleb128(&ln, end); break;
+			default: goto next_line;
+			}
+		        if (i < FILE_TABLE_SIZE)
+		            filename_table[i].dir_entry = value;
+		    }
+		    else 
+			dwarf_ignore_type(ln, end);
+	    }
 	}
 	else {
 	    while ((DW_GETC(ln, end))) {
@@ -776,8 +802,8 @@ next:
 		dwarf_read_uleb128(&ln, end); // size
 	    }
 	}
-	if (filename_size >= 2)
-	    filename = filename_table[1].name;
+	if (filename_size >= 1)
+	    filename = filename_table[0].name;
 	while (ln < end) {
 	    last_pc = pc;
 	    switch (DW_GETC(ln, end)) {
@@ -792,9 +818,9 @@ next:
 		    goto next_line;
 		case DW_LNE_set_address:
 #if PTR_SIZE == 4
-		    pc = dwarf_read_32(&cp, end);
+		    pc = dwarf_read_4(cp, end);
 #else
-		    pc = dwarf_read_64(&cp, end);
+		    pc = dwarf_read_8(cp, end);
 #endif
 		    if (rc->num_callers < 0)
 		        pc = rc->dwarf_text; /* dll */

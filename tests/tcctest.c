@@ -78,6 +78,9 @@ typedef __SIZE_TYPE__ uintptr_t;
 #include incname
 #include stringify(funnyname)
 
+int puts(const char *s);
+void *alloca(size_t size);
+
 int fib(int n);
 void num(int n);
 void forward_ref(void);
@@ -3409,7 +3412,7 @@ void other_constraints_test(void)
 {
     unsigned long ret;
     int var;
-#ifndef _WIN64
+#if !defined(_WIN64) && CC_NAME != CC_clang
     __asm__ volatile ("mov %P1,%0" : "=r" (ret) : "p" (&var));
     printf ("oc1: %d\n", ret == (unsigned long)&var);
 #endif
