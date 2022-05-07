@@ -1380,7 +1380,7 @@ static void tcc_debug_fix_anon(CType *t)
     if ((t->t & VT_BTYPE) == VT_STRUCT && t->ref->c != -1)
 	for (i = 0; i < n_debug_anon_hash; i++)
 	    if (t->ref == debug_anon_hash[i].type) {
-		Sym sym = { .type = *t };
+		Sym sym = {0}; sym .type = *t ;
 
 		debug_type = tcc_get_dwarf_info(s1, &sym);
 		for (j = 0; j < debug_anon_hash[i].n_debug_type; j++)
@@ -1628,8 +1628,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	debug_type = tcc_debug_find(t, 1);
 	if (debug_type == -1) {
 	    int pos_sib, pos_type;
-	    CType ct = { VT_INT | (type & VT_UNSIGNED) , NULL };
-	    Sym sym = { .type = ct };
+	    Sym sym = {0}; sym  .type.t = VT_INT | (type & VT_UNSIGNED) ;
 	    
 	    pos_type = tcc_get_dwarf_info(s1, &sym);
 	    debug_type = tcc_debug_add(t, 1);
@@ -1705,8 +1704,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	}
         else if (type == (VT_PTR | VT_ARRAY)) {
 	    int sib_pos, sub_type;
-	    CType ct = { VT_INT | VT_UNSIGNED , NULL };
-	    Sym sym = { .type = ct };
+	    Sym sym = {0}; sym .type.t = VT_INT | VT_UNSIGNED ;
 
 	    sub_type = tcc_get_dwarf_info(s1, &sym);
 	    i = dwarf_info_section->data_offset;

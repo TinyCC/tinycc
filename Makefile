@@ -8,12 +8,6 @@ ifndef TOP
  INCLUDED = no
 endif
 
-# Uncomment the next two commands to allow debug this Makefile
-# When enabled, GNU make will no longer execute commands directly.
-# All build commands will be executed using the shell. This needs more time
-#OLD_SHELL := $(SHELL)
-#SHELL = $(info Building $* $(if $<, (from $<))$(if $?, ($? newer)))$(OLD_SHELL)
-
 ifeq ($(findstring $(MAKECMDGOALS),clean distclean),)
  include $(TOP)/config.mak
 endif
@@ -244,7 +238,7 @@ endif
 
 # convert "include/tccdefs.h" to "tccdefs_.h"
 %_.h : include/%.h conftest.c
-	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str$(EXESUF) && ./c2str$(EXESUF) $< $@
+	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe && ./c2str.exe $< $@
 
 # target specific object rule
 $(X)%.o : %.c $(LIBTCC_INC)
@@ -261,7 +255,7 @@ tcc$(EXESUF): tcc.o $(LIBTCC)
 # Cross Tiny C Compilers
 # (the TCCDEFS_H dependency is only necessary for parallel makes,
 # ala 'make -j x86_64-tcc i386-tcc tcc', which would create multiple
-# c2str and tccdefs_.h files in parallel, leading to access errors.
+# c2str.exe and tccdefs_.h files in parallel, leading to access errors.
 # This forces it to be made only once.  Make normally tracks multiple paths
 # to the same goals and only remakes it once, but that doesn't work over
 # sub-makes like in this target)
@@ -331,6 +325,8 @@ tcc.1 : tcc-doc.pod
 		--release="$(VERSION)" $< >$@ && rm -f $<)
 %.pod : %.texi
 	$(call run-if,perl,$(TOPSRC)/texi2pod.pl $< $@)
+
+doc : $(TCCDOCS)
 
 # --------------------------------------------------------------------------
 # install
@@ -410,10 +406,6 @@ tags : ; ctags $(TAGFILES)
 # cannot have both tags and TAGS on windows
 ETAGS : ; etags $(TAGFILES)
 
-# documentation
-doc: tcc-doc.html tcc-doc.info tcc.1
-
-
 # create release tarball from *current* git branch (including tcc-doc.html
 # and converting two files to CRLF)
 TCC-VERSION = tcc-$(VERSION)
@@ -443,15 +435,16 @@ testspp.%:
 	@$(MAKE) -C tests/pp $@
 
 clean:
-	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tcc.pod tags ETAGS
+	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tags ETAGS *.pod
 	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out *.dylib *_.h
 	@$(MAKE) -s -C lib $@
 	@$(MAKE) -s -C tests $@
 
 distclean: clean
-	@rm -fv config.h config.mak config.texi tcc.1 tcc-doc.info tcc-doc.html
+	@rm -fv config.h config.mak config.texi
+	@rm -fv $(TCCDOCS)
 
-.PHONY: all clean test tar tags ETAGS distclean install uninstall FORCE
+.PHONY: all clean test tar tags ETAGS doc distclean install uninstall FORCE
 
 help:
 	@echo "make"

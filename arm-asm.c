@@ -77,21 +77,6 @@ static int asm_parse_vfp_regvar(int t, int double_precision)
     return -1;
 }
 
-__attribute__((unused))
-static int asm_parse_vfp_status_regvar(int t)
-{
-    switch (t) {
-    case TOK_ASM_fpsid:
-        return 0;
-    case TOK_ASM_fpscr:
-        return 1;
-    case TOK_ASM_fpexc:
-        return 8;
-    default:
-        return -1;
-    }
-}
-
 /* Parse a text containing operand and store the result in OP */
 static void parse_operand(TCCState *s1, Operand *op)
 {
@@ -2238,6 +2223,20 @@ static void asm_floating_point_data_processing_opcode(TCCState *s1, int token) {
     }
 
     asm_emit_coprocessor_opcode(condition_code_of_token(token), coprocessor, opcode1, ops[0].reg, (ops[1].type == OP_IM8) ? ops[1].e.v : ops[1].reg, (ops[2].type == OP_IM8) ? ops[2].e.v : ops[2].reg, opcode2, 0);
+}
+
+static int asm_parse_vfp_status_regvar(int t)
+{
+    switch (t) {
+    case TOK_ASM_fpsid:
+        return 0;
+    case TOK_ASM_fpscr:
+        return 1;
+    case TOK_ASM_fpexc:
+        return 8;
+    default:
+        return -1;
+    }
 }
 
 static void asm_floating_point_status_register_opcode(TCCState* s1, int token)

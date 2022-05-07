@@ -833,6 +833,7 @@ again:
                 goto next;
 	    alltypes |= ops[i].type;
         }
+        (void)alltypes; /* maybe unused */
         /* all is matching ! */
         break;
     next: ;

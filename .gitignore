@@ -28,7 +28,7 @@ c2str
 tags
 TAGS
 tcc.1
-tcc.pod
+*.pod
 tcc-doc.html
 tcc-doc.info
 

@@ -258,9 +258,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX \
-        ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/lib"
+# define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
 #endif
 
 #ifndef CONFIG_USR_INCLUDE
@@ -277,8 +275,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         "{B}/include" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/include" \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr/local") "/include" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT CONFIG_USR_INCLUDE)
 # endif
 #endif
@@ -290,8 +286,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # else
 #  define CONFIG_TCC_LIBPATHS \
         ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/lib" \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr/local") "/lib" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
 # endif
@@ -826,7 +820,7 @@ struct TCCState {
     char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
     char *soname; /* as specified on the command line (-soname) */
     char *rpath; /* as specified on the command line (-Wl,-rpath=) */
-
+    char *elf_entryname; /* "_start" unless set */
     char *init_symbol; /* symbols to call at load-time (not used currently) */
     char *fini_symbol; /* symbols to call at unload-time (not used currently) */
 
@@ -974,8 +968,6 @@ struct TCCState {
     Section *versym_section;
     Section *verneed_section;
 #endif
-
-    char *elf_entryname;
 
 #ifdef TCC_IS_NATIVE
     const char *runtime_main;
@@ -1545,9 +1537,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC void add_array(TCCState *s1, const char *sec, int c);
 
-#if !defined(ELF_OBJ_ONLY) || (defined(TCC_TARGET_MACHO) && defined TCC_IS_NATIVE)
-ST_FUNC void build_got_entries(TCCState *s1);
-#endif
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err, int forc);
 ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
@@ -1570,6 +1559,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1);
 
 /* ------------ xxx-link.c ------------ */
 
+#if !defined ELF_OBJ_ONLY || defined TCC_TARGET_MACHO
+ST_FUNC int code_reloc (int reloc_type);
+ST_FUNC int gotplt_entry_type (int reloc_type);
 /* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
    that unknown relocation don't create a GOT or PLT entry */
 enum gotplt_entry {
@@ -1578,15 +1570,17 @@ enum gotplt_entry {
     AUTO_GOTPLT_ENTRY,	/* generate if sym is UNDEF */
     ALWAYS_GOTPLT_ENTRY	/* always generate (eg. PLTOFF relocs) */
 };
+#define NEED_RELOC_TYPE
 
-#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
-ST_FUNC int code_reloc (int reloc_type);
-ST_FUNC int gotplt_entry_type (int reloc_type);
-#if !defined(TCC_TARGET_MACHO) || defined TCC_IS_NATIVE
+#if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
 ST_FUNC void relocate_plt(TCCState *s1);
+ST_FUNC void build_got_entries(TCCState *s1); /* in tccelf.c */
+#define NEED_BUILD_GOT
+
 #endif
 #endif
+
 ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val);
 
 /* ------------ xxx-gen.c ------------ */

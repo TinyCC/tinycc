@@ -671,7 +671,7 @@ version_add (TCCState *s1)
     }
     dt_verneednum = nb_entries;
 }
-#endif
+#endif /* ndef ELF_OBJ_ONLY */
 
 /* add an elf symbol : check if it is already defined and patch
    it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
@@ -1121,7 +1121,7 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 }
 #endif
 
-#if !defined(ELF_OBJ_ONLY) || (defined(TCC_TARGET_MACHO) && defined TCC_IS_NATIVE)
+#ifdef NEED_BUILD_GOT
 static void build_got(TCCState *s1)
 {
     /* if no got, then create it */
@@ -1354,7 +1354,7 @@ redo:
         s1->plt->reloc->sh_info = s1->got->sh_num;
 
 }
-#endif
+#endif /* def NEED_BUILD_GOT */
 
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs)
 {
@@ -1506,7 +1506,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     cstr_free(&cstr);
     set_local_sym(s1, &"___rt_info"[!s1->leading_underscore], s, o);
 }
-#endif
+#endif /* def CONFIG_TCC_BACKTRACE */
 
 static void tcc_tcov_add_file(TCCState *s1, const char *filename)
 {
@@ -1615,7 +1615,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #endif
     }
 }
-#endif
+#endif /* ndef TCC_TARGET_PE */
 
 /* add various standard linker symbols (must be done after the
    sections are filled (for example after allocating common
@@ -1688,7 +1688,6 @@ ST_FUNC void resolve_common_syms(TCCState *s1)
 }
 
 #ifndef ELF_OBJ_ONLY
-
 ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
 {
     int sym_index = ELFW(R_SYM) (rel->r_info);
@@ -3771,7 +3770,7 @@ static int ld_add_file(TCCState *s1, const char filename[])
 
 static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
 {
-    char filename[1024], libname[1016];
+    char filename[1024], libname[1024];
     int t, group, nblibs = 0, ret = 0;
     char **libs = NULL;
 

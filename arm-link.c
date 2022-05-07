@@ -28,6 +28,7 @@ enum float_abi {
 
 #include "tcc.h"
 
+#ifdef NEED_RELOC_TYPE
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
 int code_reloc (int reloc_type)
@@ -107,7 +108,7 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
-#ifndef TCC_TARGET_PE
+#ifdef NEED_BUILD_GOT
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
     Section *plt = s1->plt;
@@ -176,6 +177,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
 	}
     }
 }
+#endif
 #endif
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)

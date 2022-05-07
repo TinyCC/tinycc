@@ -23,7 +23,7 @@
 
 #include "tcc.h"
 
-#if !defined(ELF_OBJ_ONLY) || defined(TCC_TARGET_MACHO)
+#ifdef NEED_RELOC_TYPE
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
 int code_reloc (int reloc_type)
@@ -109,7 +109,7 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
-#if !defined(TCC_TARGET_MACHO) || defined TCC_IS_NATIVE
+#ifdef NEED_BUILD_GOT
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
     Section *plt = s1->plt;
