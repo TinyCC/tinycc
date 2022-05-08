@@ -1471,35 +1471,23 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
 ST_FUNC void tcc_add_runtime(TCCState *s1)
 {
     s1->filetype = 0;
+
 #ifdef CONFIG_TCC_BCHECK
     tcc_add_bcheck(s1);
 #endif
     tcc_add_pragma_libs(s1);
+
     /* add libc */
     if (!s1->nostdlib) {
-        if (s1->option_pthread)
-            tcc_add_library_err(s1, "pthread");
-        tcc_add_library_err(s1, "c");
-#ifdef TCC_LIBGCC
-        if (!s1->static_link) {
-            if (TCC_LIBGCC[0] == '/')
-                tcc_add_file(s1, TCC_LIBGCC);
-            else
-                tcc_add_dll(s1, TCC_LIBGCC, 0);
-        }
-#endif
-#if TCC_TARGET_ARM && TARGETOS_FreeBSD
-        tcc_add_library_err(s1, "gcc_s"); // unwind code
-#endif
+        int lpthread = s1->option_pthread;
+
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
-            tcc_add_library_err(s1, "pthread");
-#if !TARGETOS_OpenBSD && !TARGETOS_NetBSD
-            tcc_add_library_err(s1, "dl");
-#endif
             tcc_add_support(s1, "bcheck.o");
-	    if (s1->static_link)
-                tcc_add_library_err(s1, "c");
+# if !(TARGETOS_OpenBSD || TARGETOS_NetBSD)
+            tcc_add_library_err(s1, "dl");
+# endif
+            lpthread = 1;
         }
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
@@ -1512,27 +1500,39 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
+        if (lpthread)
+            tcc_add_library_err(s1, "pthread");
+        tcc_add_library_err(s1, "c");
+#ifdef TCC_LIBGCC
+        if (!s1->static_link) {
+            if (TCC_LIBGCC[0] == '/')
+                tcc_add_file(s1, TCC_LIBGCC);
+            else
+                tcc_add_dll(s1, TCC_LIBGCC, 0);
+        }
+#endif
+#if defined TCC_TARGET_ARM && TARGETOS_FreeBSD
+        tcc_add_library_err(s1, "gcc_s"); // unwind code
+#endif
         if (TCC_LIBTCC1[0])
             tcc_add_support(s1, TCC_LIBTCC1);
 
-#if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
-#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
         /* add crt end if not memory output */
 	if (s1->output_type != TCC_OUTPUT_MEMORY) {
+#if defined TCC_TARGET_MACHO
+            /* nothing to do */
+#elif TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
 	    if (s1->output_type == TCC_OUTPUT_DLL)
 	        tcc_add_crt(s1, "crtendS.o");
 	    else
 	        tcc_add_crt(s1, "crtend.o");
-#if TARGETOS_FreeBSD || TARGETOS_NetBSD
+# if !TARGETOS_OpenBSD
+            tcc_add_crt(s1, "crtn.o");
+# endif
+#else
             tcc_add_crt(s1, "crtn.o");
 #endif
         }
-#elif !defined(TCC_TARGET_MACHO)
-        /* add crt end if not memory output */
-        if (s1->output_type != TCC_OUTPUT_MEMORY)
-            tcc_add_crt(s1, "crtn.o");
-#endif
-#endif
     }
 }
 #endif /* ndef TCC_TARGET_PE */
