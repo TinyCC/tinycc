@@ -262,7 +262,8 @@ static void * add_lc(struct macho *mo, uint32_t cmd, uint32_t cmdsize)
 static struct segment_command_64 * add_segment(struct macho *mo, const char *name)
 {
     struct segment_command_64 *sc = add_lc(mo, LC_SEGMENT_64, sizeof(*sc));
-    strncpy(sc->segname, name, 16);
+    strncpy(sc->segname, name, 16-1);
+    sc->segname[16-1] = '\0';
     mo->seg2lc[mo->nseg++] = mo->nlc - 1;
     return sc;
 }
@@ -282,7 +283,8 @@ static int add_section(struct macho *mo, struct segment_command_64 **_seg, const
     seg = tcc_realloc(seg, sizeof(*seg) + seg->nsects * sizeof(*sec));
     sec = (struct section_64*)((char*)seg + sizeof(*seg)) + ret;
     memset(sec, 0, sizeof(*sec));
-    strncpy(sec->sectname, name, 16);
+    strncpy(sec->sectname, name, 16-1);
+    sec->sectname[16-1] = '\0';
     strncpy(sec->segname, seg->segname, 16);
     *_seg = seg;
     return ret;
