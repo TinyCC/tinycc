@@ -276,7 +276,7 @@ static const unsigned char dwarf_abbrev_init[] = {
 #else
           DW_AT_high_pc, DW_FORM_data8,
 #endif
-          DW_AT_stmt_list, DW_FORM_data4,
+          DW_AT_stmt_list, DW_FORM_sec_offset,
           0, 0,
     DWARF_ABBREV_BASE_TYPE, DW_TAG_base_type, 0,
           DW_AT_byte_size, DW_FORM_udata,
@@ -289,24 +289,24 @@ static const unsigned char dwarf_abbrev_init[] = {
           DW_AT_decl_line, DW_FORM_udata,
           DW_AT_type, DW_FORM_ref4,
           DW_AT_external, DW_FORM_flag,
-          DW_AT_location, DW_FORM_block1,
+          DW_AT_location, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_VARIABLE_STATIC, DW_TAG_variable, 0,
           DW_AT_name, DW_FORM_strp,
           DW_AT_decl_file, DW_FORM_udata,
           DW_AT_decl_line, DW_FORM_udata,
           DW_AT_type, DW_FORM_ref4,
-          DW_AT_location, DW_FORM_block1,
+          DW_AT_location, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_VARIABLE_LOCAL, DW_TAG_variable, 0,
           DW_AT_name, DW_FORM_strp,
           DW_AT_type, DW_FORM_ref4,
-          DW_AT_location, DW_FORM_block1,
+          DW_AT_location, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_FORMAL_PARAMETER, DW_TAG_formal_parameter, 0,
           DW_AT_name, DW_FORM_strp,
           DW_AT_type, DW_FORM_ref4,
-          DW_AT_location, DW_FORM_block1,
+          DW_AT_location, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_POINTER, DW_TAG_pointer_type, 0,
           DW_AT_byte_size, DW_FORM_data1,
@@ -381,7 +381,7 @@ static const unsigned char dwarf_abbrev_init[] = {
           DW_AT_high_pc, DW_FORM_data8,
 #endif
           DW_AT_sibling, DW_FORM_ref4,
-	  DW_AT_frame_base, DW_FORM_block1,
+	  DW_AT_frame_base, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_SUBPROGRAM_STATIC, DW_TAG_subprogram, 1,
           DW_AT_name, DW_FORM_strp,
@@ -395,7 +395,7 @@ static const unsigned char dwarf_abbrev_init[] = {
           DW_AT_high_pc, DW_FORM_data8,
 #endif
           DW_AT_sibling, DW_FORM_ref4,
-	  DW_AT_frame_base, DW_FORM_block1,
+	  DW_AT_frame_base, DW_FORM_exprloc,
           0, 0,
     DWARF_ABBREV_LEXICAL_BLOCK, DW_TAG_lexical_block, 1,
           DW_AT_low_pc, DW_FORM_addr,
@@ -838,7 +838,6 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
 #ifdef _WIN32
         normalize_slashes(buf);
 #endif
-        pstrcat(buf, sizeof(buf), "/");
 
 	if (s1->dwarf) {
 	    int start_abbrev;
@@ -855,8 +854,19 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
 		    while (*ptr) {
 		        if (ptr[1] == DW_FORM_line_strp)
 			    ptr[1] = DW_FORM_strp;
+		        if (s1->dwarf < 4) {
+			    /* These are compatable for DW_TAG_compile_unit
+			       DW_AT_stmt_list. */
+			    if  (ptr[1] == DW_FORM_sec_offset)
+			         ptr[1] = DW_FORM_data4;
+			    /* This code uses only size < 0x80 so these are
+			       compatible. */
+			    if  (ptr[1] == DW_FORM_exprloc)
+			         ptr[1] = DW_FORM_block1;
+			}
 		        ptr += 2;
 		    }
+		    ptr += 2;
 		}
 	    }
 
@@ -949,6 +959,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
 	}
 	else {
             /* file info: full path + filename */
+            pstrcat(buf, sizeof(buf), "/");
             section_sym = put_elf_sym(symtab_section, 0, 0,
                                       ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
                                       text_section->sh_num, NULL);
@@ -1374,7 +1385,8 @@ static void tcc_debug_fix_anon(CType *t)
 		debug_type = tcc_get_dwarf_info(s1, &sym);
 		for (j = 0; j < debug_anon_hash[i].n_debug_type; j++)
 		    write32le(dwarf_info_section->data +
-			      debug_anon_hash[i].debug_type[j], debug_type);
+			      debug_anon_hash[i].debug_type[j],
+			      debug_type - dwarf_info.start);
 		tcc_free(debug_anon_hash[i].debug_type);
 		n_debug_anon_hash--;
 		for (; i < n_debug_anon_hash; i++)

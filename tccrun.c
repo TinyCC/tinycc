@@ -590,10 +590,27 @@ found:
 
 #define MAX_128	((8 * sizeof (long long) + 6) / 7)
 
-#define	DW_GETC(s,e)	((s) < (e) ? *(s)++ : 0)
-
 #define DIR_TABLE_SIZE	(64)
 #define FILE_TABLE_SIZE	(256)
+
+#define	dwarf_read_1(ln,end) \
+	((ln) < (end) ? *(ln)++ : 0)
+#define	dwarf_read_2(ln,end) \
+	((ln) + 2 < (end) ? (ln) += 2, read16le((ln) - 2) : 0)
+#define	dwarf_read_4(ln,end) \
+	((ln) + 4 < (end) ? (ln) += 4, read32le((ln) - 4) : 0)
+#define	dwarf_read_8(ln,end) \
+	((ln) + 8 < (end) ? (ln) += 8, read64le((ln) - 8) : 0)
+#define	dwarf_ignore_type(ln, end) /* timestamp/size/md5/... */ \
+	switch (entry_format[j].form) { \
+	case DW_FORM_data1: (ln) += 1; break; \
+	case DW_FORM_data2: (ln) += 2; break; \
+	case DW_FORM_data4: (ln) += 3; break; \
+	case DW_FORM_data8: (ln) += 8; break; \
+	case DW_FORM_data16: (ln) += 16; break; \
+	case DW_FORM_udata: dwarf_read_uleb128(&(ln), (end)); break; \
+	default: goto next_line; \
+	}
 
 static unsigned long long
 dwarf_read_uleb128(unsigned char **ln, unsigned char *end)
@@ -603,7 +620,7 @@ dwarf_read_uleb128(unsigned char **ln, unsigned char *end)
     int i;
 
     for (i = 0; i < MAX_128; i++) {
-	unsigned long long byte = DW_GETC(cp, end);
+	unsigned long long byte = dwarf_read_1(cp, end);
 
         retval |= (byte & 0x7f) << (i * 7);
 	if ((byte & 0x80) == 0)
@@ -621,7 +638,7 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
     int i;
 
     for (i = 0; i < MAX_128; i++) {
-	unsigned long long byte = DW_GETC(cp, end);
+	unsigned long long byte = dwarf_read_1(cp, end);
 
         retval |= (byte & 0x7f) << (i * 7);
 	if ((byte & 0x80) == 0) {
@@ -633,25 +650,6 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
     *ln = cp;
     return retval;
 }
-
-#define	dwarf_read_1(ln,end) \
-	DW_GETC((ln), (end))
-#define	dwarf_read_2(ln,end) \
-	((ln) + 2 < (end) ? (ln) += 2, read16le((ln) - 2) : 0)
-#define	dwarf_read_4(ln,end) \
-	((ln) + 4 < (end) ? (ln) += 4, read32le((ln) - 4) : 0)
-#define	dwarf_read_8(ln,end) \
-	((ln) + 8 < (end) ? (ln) += 8, read64le((ln) - 8) : 0)
-#define	dwarf_ignore_type(ln, end) /* timestamp/size/md5/... */ \
-	switch (entry_format[j].form) { \
-	case DW_FORM_data1: (ln) += 1; break; \
-	case DW_FORM_data2: (ln) += 2; break; \
-	case DW_FORM_data4: (ln) += 3; break; \
-	case DW_FORM_data8: (ln) += 8; break; \
-	case DW_FORM_data16: (ln) += 16; break; \
-	case DW_FORM_udata: dwarf_read_uleb128(&(ln), (end)); break; \
-	default: goto next_line; \
-	}
 
 static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     const char *msg, const char *skip)
@@ -706,26 +704,25 @@ next:
         function = NULL;
 	size = dwarf_read_4(ln, rc->dwarf_line_end);
 	end = ln + size;
-	version = DW_GETC(ln, end);
- 	version += DW_GETC(ln, end) << 8;
+	version = dwarf_read_2(ln, end);
 	if (version >= 5)
 	    ln += 6; // address size, segment selector, prologue Length
 	else
 	    ln += 4; // prologue Length
-	min_insn_length = DW_GETC(ln, end);
+	min_insn_length = dwarf_read_1(ln, end);
 	if (version >= 4)
-	    max_ops_per_insn = DW_GETC(ln, end);
+	    max_ops_per_insn = dwarf_read_1(ln, end);
 	else
 	    max_ops_per_insn = 1;
 	ln++; // Initial value of 'is_stmt'
-	line_base = DW_GETC(ln, end);
+	line_base = dwarf_read_1(ln, end);
 	line_base |= line_base >= 0x80 ? ~0xff : 0;
-	line_range = DW_GETC(ln, end);
-	opcode_base = DW_GETC(ln, end);
+	line_range = dwarf_read_1(ln, end);
+	opcode_base = dwarf_read_1(ln, end);
 	opindex = 0;
 	ln += 12;
 	if (version >= 5) {
-	    col = DW_GETC(ln, end);
+	    col = dwarf_read_1(ln, end);
 	    for (i = 0; i < col; i++) {
 	        entry_format[i].type = dwarf_read_uleb128(&ln, end);
 	        entry_format[i].form = dwarf_read_uleb128(&ln, end);
@@ -748,7 +745,7 @@ next:
 			dwarf_ignore_type(ln, end);
 		}
 	    }
-	    col = DW_GETC(ln, end);
+	    col = dwarf_read_1(ln, end);
 	    for (i = 0; i < col; i++) {
 	        entry_format[i].type = dwarf_read_uleb128(&ln, end);
 	        entry_format[i].form = dwarf_read_uleb128(&ln, end);
@@ -780,22 +777,22 @@ next:
 	    }
 	}
 	else {
-	    while ((DW_GETC(ln, end))) {
+	    while ((dwarf_read_1(ln, end))) {
 #if 0
 		if (++dir_size < DIR_TABLE_SIZE)
 		    dirs[dir_size - 1] = (char *)ln - 1;
 #endif
-		while (DW_GETC(ln, end)) {}
+		while (dwarf_read_1(ln, end)) {}
 	    }
-	    while ((DW_GETC(ln, end))) {
+	    while ((dwarf_read_1(ln, end))) {
 		if (++filename_size < FILE_TABLE_SIZE) {
 		    filename_table[filename_size - 1].name = (char *)ln - 1;
-		    while (DW_GETC(ln, end)) {}
+		    while (dwarf_read_1(ln, end)) {}
 		    filename_table[filename_size - 1].dir_entry =
 		        dwarf_read_uleb128(&ln, end);
 		}
 		else {
-		    while (DW_GETC(ln, end)) {}
+		    while (dwarf_read_1(ln, end)) {}
 		    dwarf_read_uleb128(&ln, end);
 		}
 		dwarf_read_uleb128(&ln, end); // time
@@ -806,14 +803,14 @@ next:
 	    filename = filename_table[0].name;
 	while (ln < end) {
 	    last_pc = pc;
-	    switch (DW_GETC(ln, end)) {
+	    switch (dwarf_read_1(ln, end)) {
 	    case 0:
 		len = dwarf_read_uleb128(&ln, end);
 		cp = ln;
 		ln += len;
 		if (len == 0)
 		    goto next_line;
-		switch (DW_GETC(cp, end)) {
+		switch (dwarf_read_1(cp, end)) {
 		case DW_LNE_end_sequence:
 		    goto next_line;
 		case DW_LNE_set_address:
@@ -829,19 +826,16 @@ next:
 		case DW_LNE_define_file: /* deprecated */
 		    if (++filename_size < FILE_TABLE_SIZE) {
 		        filename_table[filename_size - 1].name = (char *)ln - 1;
-		        while (DW_GETC(ln, end)) {}
+		        while (dwarf_read_1(ln, end)) {}
 		        filename_table[filename_size - 1].dir_entry =
 		            dwarf_read_uleb128(&ln, end);
 		    }
 		    else {
-		        while (DW_GETC(ln, end)) {}
+		        while (dwarf_read_1(ln, end)) {}
 		        dwarf_read_uleb128(&ln, end);
 		    }
 		    dwarf_read_uleb128(&ln, end); // time
 		    dwarf_read_uleb128(&ln, end); // size
-		    break;
-		case DW_LNE_set_discriminator:
-		    dwarf_read_uleb128(&cp, end);
 		    break;
 		case DW_LNE_hi_user - 1:
 		    function = (char *)cp;
@@ -893,8 +887,7 @@ next:
 		i = 0;
 		goto check_pc;
 	    case DW_LNS_fixed_advance_pc:
-		i = DW_GETC(ln, end);
-		i += DW_GETC(ln, end) << 8;
+		i = dwarf_read_2(ln, end);
 		pc += i;
 		opindex = 0;
 		i = 0;
