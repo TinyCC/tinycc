@@ -4,7 +4,6 @@
 
 /* relocation type for 32 bit data relocation */
 #define R_DATA_32   R_X86_64_32S
-#define R_DATA_32U  R_X86_64_32
 #define R_DATA_PTR  R_X86_64_64
 #define R_JMP_SLOT  R_X86_64_JUMP_SLOT
 #define R_GLOB_DAT  R_X86_64_GLOB_DAT

@@ -180,10 +180,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 	if (s1->dwarf) {
 	    rc->dwarf_line = dwarf_line_section->data;
 	    rc->dwarf_line_end = dwarf_line_section->data + dwarf_line_section->data_offset;
-	    rc->dwarf_line_str = dwarf_line_str_section->data;
+	    if (dwarf_line_str_section)
+		rc->dwarf_line_str = dwarf_line_str_section->data;
             rc->dwarf_text = text_section->sh_addr;
 	}
-	else {
+	else
+	{
             rc->stab_sym = (Stab_Sym *)stab_section->data;
             rc->stab_sym_end = (Stab_Sym *)(stab_section->data + stab_section->data_offset);
             rc->stab_str = (char *)stab_section->link->data;
@@ -443,6 +445,21 @@ static int rt_printf(const char *fmt, ...)
     return r;
 }
 
+static char *rt_elfsym(rt_context *rc, addr_t wanted_pc, addr_t *func_addr)
+{
+    ElfW(Sym) *esym;
+    for (esym = rc->esym_start + 1; esym < rc->esym_end; ++esym) {
+        int type = ELFW(ST_TYPE)(esym->st_info);
+        if ((type == STT_FUNC || type == STT_GNU_IFUNC)
+            && wanted_pc >= esym->st_value
+            && wanted_pc < esym->st_value + esym->st_size) {
+            *func_addr = esym->st_value;
+            return rc->elf_str + esym->st_name;
+        }
+    }
+    return NULL;
+}
+
 #define INCLUDE_STACK_SIZE 32
 
 /* print the position in the source file of PC value 'pc' by reading
@@ -455,7 +472,6 @@ static addr_t rt_printline (rt_context *rc, addr_t wanted_pc,
     const char *incl_files[INCLUDE_STACK_SIZE];
     int incl_index, last_incl_index, len, last_line_num, i;
     const char *str, *p;
-    ElfW(Sym) *esym;
     Stab_Sym *sym;
 
 next:
@@ -545,24 +561,14 @@ next:
     func_name[0] = '\0';
     func_addr = 0;
     last_incl_index = 0;
-
     /* we try symtab symbols (no line number info) */
-    for (esym = rc->esym_start + 1; esym < rc->esym_end; ++esym) {
-        int type = ELFW(ST_TYPE)(esym->st_info);
-        if (type == STT_FUNC || type == STT_GNU_IFUNC) {
-            if (wanted_pc >= esym->st_value &&
-                wanted_pc < esym->st_value + esym->st_size) {
-                pstrcpy(func_name, sizeof(func_name),
-                    rc->elf_str + esym->st_name);
-                func_addr = esym->st_value;
-                goto found;
-            }
-        }
+    p = rt_elfsym(rc, wanted_pc, &func_addr);
+    if (p) {
+        pstrcpy(func_name, sizeof func_name, p);
+        goto found;
     }
-
     if ((rc = rc->next))
         goto next;
-
 found:
     i = last_incl_index;
     if (i > 0) {
@@ -587,6 +593,9 @@ found:
 #endif
     return func_addr;
 }
+
+/* ------------------------------------------------------------- */
+/* rt_printline - dwarf version */
 
 #define MAX_128	((8 * sizeof (long long) + 6) / 7)
 
@@ -689,7 +698,6 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     int line;
     char *filename;
     char *function;
-    ElfW(Sym) *esym;
 
 next:
     ln = rc->dwarf_line;
@@ -698,7 +706,7 @@ next:
 	filename_size = 0;
         last_pc = 0;
         pc = 0;
-        func_addr = -1;
+        func_addr = 0;
         line = 1;
         filename = NULL;
         function = NULL;
@@ -922,25 +930,13 @@ next_line:
     }
 
     filename = NULL;
-    function = NULL;
-    func_addr = -1;
-
+    func_addr = 0;
     /* we try symtab symbols (no line number info) */
-    for (esym = rc->esym_start + 1; esym < rc->esym_end; ++esym) {
-        int type = ELFW(ST_TYPE)(esym->st_info);
-        if (type == STT_FUNC || type == STT_GNU_IFUNC) {
-            if (wanted_pc >= esym->st_value &&
-                wanted_pc < esym->st_value + esym->st_size) {
-                function = rc->elf_str + esym->st_name;
-                func_addr = esym->st_value;
-                goto found;
-            }
-        }
-    }
-
+    function = rt_elfsym(rc, wanted_pc, &func_addr);
+    if (function)
+        goto found;
     if ((rc = rc->next))
         goto next;
-
 found:
     if (filename) {
 	if (skip[0] && strstr(filename, skip))
@@ -952,6 +948,7 @@ found:
     rt_printf("%s %s", msg, function ? function : "???");
     return (addr_t)func_addr;
 }
+/* ------------------------------------------------------------- */
 
 static int rt_get_caller_pc(addr_t *paddr, rt_context *rc, int level);
 

@@ -899,10 +899,6 @@ struct TCCState {
     Section **priv_sections;
     int nb_priv_sections; /* number of private sections */
 
-    /* got & plt handling */
-    Section *got;
-    Section *plt;
-
     /* predefined sections */
     Section *text_section, *data_section, *rodata_section, *bss_section;
     Section *common_section;
@@ -912,10 +908,16 @@ struct TCCState {
     Section *bounds_section; /* contains global data bound description */
     Section *lbounds_section; /* contains local data bound description */
 #endif
-    /* test coverage */
-    Section *tcov_section;
-    /* symbol sections */
+    /* symbol section */
     Section *symtab_section;
+    /* temporary dynamic symbol sections (for dll loading) */
+    Section *dynsymtab_section;
+    /* exported dynamic symbol section */
+    Section *dynsym;
+    /* copy of the global symtab_section variable */
+    Section *symtab;
+    /* got & plt handling */
+    Section *got, *plt;
     /* debug sections */
     Section *stab_section;
     Section *dwarf_info_section;
@@ -924,15 +926,14 @@ struct TCCState {
     Section *dwarf_aranges_section;
     Section *dwarf_str_section;
     Section *dwarf_line_str_section;
+    int dwlo, dwhi; /* dwarf section range */
+    /* test coverage */
+    Section *tcov_section;
+    /* debug state */
+    struct _tccdbg *dState;
+
     /* Is there a new undefined sym since last new_undef_sym() */
     int new_undef_sym;
-
-    /* temporary dynamic symbol sections (for dll loading) */
-    Section *dynsymtab_section;
-    /* exported dynamic symbol section */
-    Section *dynsym;
-    /* copy of the global symtab_section variable */
-    Section *symtab;
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
     int nb_sym_attrs;
@@ -1400,13 +1401,8 @@ ST_DATA int global_expr;  /* true if compound literals must be allocated globall
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic */
 ST_DATA int func_vc;
+ST_DATA int func_ind;
 ST_DATA const char *funcname;
-
-ST_FUNC void tcc_debug_start(TCCState *s1);
-ST_FUNC void tcc_debug_end(TCCState *s1);
-ST_FUNC void tcc_debug_bincl(TCCState *s1);
-ST_FUNC void tcc_debug_eincl(TCCState *s1);
-ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
 
 ST_FUNC void tccgen_init(TCCState *s1);
 ST_FUNC int tccgen_compile(TCCState *s1);
@@ -1502,7 +1498,6 @@ typedef struct {
 
 ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
-ST_FUNC void tccelf_stab_new(TCCState *s);
 ST_FUNC void tccelf_begin_file(TCCState *s1);
 ST_FUNC void tccelf_end_file(TCCState *s1);
 #ifdef CONFIG_TCC_BCHECK
@@ -1521,10 +1516,6 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size, int info, 
 ST_FUNC int find_elf_sym(Section *s, const char *name);
 ST_FUNC void put_elf_reloc(Section *symtab, Section *s, unsigned long offset, int type, int symbol);
 ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset, int type, int symbol, addr_t addend);
-
-ST_FUNC void put_stabs(TCCState *s1, const char *str, int type, int other, int desc, unsigned long value);
-ST_FUNC void put_stabs_r(TCCState *s1, const char *str, int type, int other, int desc, unsigned long value, Section *sec, int sym_index);
-ST_FUNC void put_stabn(TCCState *s1, int type, int other, int desc, int value);
 
 ST_FUNC void resolve_common_syms(TCCState *s1);
 ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve);
@@ -1781,6 +1772,54 @@ ST_FUNC void tcc_tool_cross(TCCState *s, char **argv, int option);
 ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename);
 #endif
 
+/* ------------ tccdbg.c ------------ */
+
+ST_FUNC void tcc_debug_new(TCCState *s);
+
+ST_FUNC void tcc_debug_start(TCCState *s1);
+ST_FUNC void tcc_debug_end(TCCState *s1);
+ST_FUNC void tcc_debug_bincl(TCCState *s1);
+ST_FUNC void tcc_debug_eincl(TCCState *s1);
+ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
+
+ST_FUNC void tcc_debug_line(TCCState *s1);
+ST_FUNC void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e);
+ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
+ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
+ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind, int sym_type);
+ST_FUNC void tcc_debug_typedef(TCCState *s1, Sym *sym);
+ST_FUNC void tcc_debug_stabn(TCCState *s1, int type, int value);
+ST_FUNC void tcc_debug_fix_anon(TCCState *s1, CType *t);
+
+ST_FUNC void tcc_tcov_start(TCCState *s1);
+ST_FUNC void tcc_tcov_end(TCCState *s1);
+ST_FUNC void tcc_tcov_check_line(TCCState *s1, int start);
+ST_FUNC void tcc_tcov_block_end(TCCState *s1, int line);
+ST_FUNC void tcc_tcov_block_begin(TCCState *s1);
+ST_FUNC void tcc_tcov_reset_ind(TCCState *s1);
+
+#define stab_section            s1->stab_section
+#define stabstr_section         stab_section->link
+#define tcov_section            s1->tcov_section
+#define dwarf_info_section      s1->dwarf_info_section
+#define dwarf_abbrev_section    s1->dwarf_abbrev_section
+#define dwarf_line_section      s1->dwarf_line_section
+#define dwarf_aranges_section   s1->dwarf_aranges_section
+#define dwarf_str_section       s1->dwarf_str_section
+#define dwarf_line_str_section  s1->dwarf_line_str_section
+
+#ifndef DWARF_VERSION
+# define DWARF_VERSION 0
+#endif
+
+#if defined TCC_TARGET_PE
+# define R_DATA_32DW 'Z' /* fake code to avoid DLL relocs */
+#elif defined TCC_TARGET_X86_64
+# define R_DATA_32DW R_X86_64_32
+#else
+# define R_DATA_32DW R_DATA_32
+#endif
+
 /********************************************************/
 #if CONFIG_TCC_SEMLOCK
 #if defined _WIN32
@@ -1820,16 +1859,7 @@ ST_FUNC void post_sem(TCCSem *p);
 #define cur_text_section    TCC_STATE_VAR(cur_text_section)
 #define bounds_section      TCC_STATE_VAR(bounds_section)
 #define lbounds_section     TCC_STATE_VAR(lbounds_section)
-#define tcov_section        TCC_STATE_VAR(tcov_section)
 #define symtab_section      TCC_STATE_VAR(symtab_section)
-#define stab_section        TCC_STATE_VAR(stab_section)
-#define stabstr_section     stab_section->link
-#define dwarf_info_section  TCC_STATE_VAR(dwarf_info_section)
-#define dwarf_abbrev_section TCC_STATE_VAR(dwarf_abbrev_section)
-#define dwarf_line_section  TCC_STATE_VAR(dwarf_line_section)
-#define dwarf_aranges_section TCC_STATE_VAR(dwarf_aranges_section)
-#define dwarf_str_section   TCC_STATE_VAR(dwarf_str_section)
-#define dwarf_line_str_section TCC_STATE_VAR(dwarf_line_str_section)
 #define gnu_ext             TCC_STATE_VAR(gnu_ext)
 #define tcc_error_noabort   TCC_SET_STATE(_tcc_error_noabort)
 #define tcc_error           TCC_SET_STATE(_tcc_error)

@@ -3,6 +3,7 @@
    from tccrun.c into executables. */
 
 #define CONFIG_TCC_BACKTRACE_ONLY
+#define ONE_SOURCE 0
 #include "../tccrun.c"
 
 int (*__rt_error)(void*, void*, const char *, va_list);
@@ -35,7 +36,7 @@ void __bt_init(rt_context *p, int num_callers)
 }
 
 /* copy a string and truncate it. */
-static char *pstrcpy(char *buf, size_t buf_size, const char *s)
+ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s)
 {
     int l = strlen(s);
     if (l >= buf_size)

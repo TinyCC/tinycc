@@ -21,6 +21,7 @@
 #if !defined ONE_SOURCE || ONE_SOURCE
 #include "tccpp.c"
 #include "tccgen.c"
+#include "tccdbg.c"
 #include "tccasm.c"
 #include "tccelf.c"
 #include "tccrun.c"
@@ -851,7 +852,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     /* free runtime memory */
     tcc_run_free(s1);
 #endif
-
+    tcc_free(s1->dState);
     tcc_free(s1);
 #ifdef MEM_DEBUG
     if (0 == --nb_states)
@@ -876,7 +877,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #endif
     if (s->do_debug) {
         /* add debug sections */
-        tccelf_stab_new(s);
+        tcc_debug_new(s);
     }
     if (output_type == TCC_OUTPUT_OBJ) {
         /* always elf for objects */
@@ -1706,12 +1707,6 @@ static void args_parser_listfile(TCCState *s,
     *pargc = s->argc = argc, *pargv = s->argv = argv;
 }
 
-#ifdef CONFIG_DWARF
-#define	DWARF_VERSION	atoi(CONFIG_DWARF)
-#else
-#define	DWARF_VERSION	0
-#endif
-
 PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
 {
     TCCState *s1 = s;
@@ -1823,11 +1818,8 @@ reparse:
         case TCC_OPTION_g:
             s->do_debug = 1;
 	    s->dwarf = DWARF_VERSION;
-	    if (*optarg == 'd') {
-		s->dwarf = 5;
-		if (!strncmp(optarg,"dwarf-",6))
-                    s->dwarf = atoi(optarg + 6);
-	    }
+	    if (strstart("dwarf-", &optarg))
+                s->dwarf = atoi(optarg);
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;

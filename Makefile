@@ -183,7 +183,7 @@ endif
 # include custom configuration (see make help)
 -include config-extra.mak
 
-CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccelf.c tccasm.c tccrun.c
+CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccdbg.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
 i386_FILES = $(CORE_FILES) i386-gen.c i386-link.c i386-asm.c i386-asm.h i386-tok.h
 i386-win32_FILES = $(i386_FILES) tccpe.c
