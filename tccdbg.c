@@ -1266,7 +1266,7 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
     CString str;
 
     for (;;) {
-        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE | VT_VLA);
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR || type == (VT_PTR | VT_ARRAY))
@@ -1351,7 +1351,7 @@ static void tcc_get_debug_info(TCCState *s1, Sym *s, CString *result)
         cstr_printf (result, "%d=", ++debug_next_type);
     t = s;
     for (;;) {
-        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE | VT_VLA);
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR)
@@ -1381,7 +1381,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
     int retval;
 
     for (;;) {
-        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE | VT_VLA);
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR || type == (VT_PTR | VT_ARRAY))
@@ -1523,7 +1523,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
     retval = debug_type;
     t = s;
     for (;;) {
-        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE);
+        type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE) | VT_VLA;
         if ((type & VT_BTYPE) != VT_BYTE)
             type &= ~VT_DEFSIGN;
         if (type == VT_PTR) {
