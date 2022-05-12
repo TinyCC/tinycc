@@ -68,7 +68,7 @@ static const struct {
     /* if default char is unsigned */
     {   VT_BYTE | VT_UNSIGNED, 1, DW_ATE_unsigned_char, "unsigned char:t25=r25;0;255;" },
     /* boolean type */
-    {   VT_BOOL, 1, DW_ATE_unsigned_char, "bool:t26=r26;0;255;" },
+    {   VT_BOOL, 1, DW_ATE_boolean, "bool:t26=r26;0;255;" },
     {   VT_VOID, 1, DW_ATE_unsigned_char, "void:t27=27" },
 };
 
@@ -98,17 +98,18 @@ static const struct {
 #define	DWARF_ABBREV_ARRAY_TYPE			8
 #define	DWARF_ABBREV_SUBRANGE_TYPE		9
 #define	DWARF_ABBREV_TYPEDEF			10
-#define	DWARF_ABBREV_ENUMERATOR			11
-#define	DWARF_ABBREV_ENUMERATION_TYPE		12
-#define	DWARF_ABBREV_MEMBER			13
-#define	DWARF_ABBREV_MEMBER_BF			14
-#define	DWARF_ABBREV_STRUCTURE_TYPE		15
-#define	DWARF_ABBREV_UNION_TYPE			16
-#define	DWARF_ABBREV_SUBPROGRAM_EXTERNAL	17
-#define	DWARF_ABBREV_SUBPROGRAM_STATIC		18
-#define	DWARF_ABBREV_LEXICAL_BLOCK		19
-#define	DWARF_ABBREV_SUBROUTINE_TYPE		20
-#define	DWARF_ABBREV_FORMAL_PARAMETER2		21
+#define	DWARF_ABBREV_ENUMERATOR_SIGNED		11
+#define	DWARF_ABBREV_ENUMERATOR_UNSIGNED	12
+#define	DWARF_ABBREV_ENUMERATION_TYPE		13
+#define	DWARF_ABBREV_MEMBER			14
+#define	DWARF_ABBREV_MEMBER_BF			15
+#define	DWARF_ABBREV_STRUCTURE_TYPE		16
+#define	DWARF_ABBREV_UNION_TYPE			17
+#define	DWARF_ABBREV_SUBPROGRAM_EXTERNAL	18
+#define	DWARF_ABBREV_SUBPROGRAM_STATIC		19
+#define	DWARF_ABBREV_LEXICAL_BLOCK		20
+#define	DWARF_ABBREV_SUBROUTINE_TYPE		21
+#define	DWARF_ABBREV_FORMAL_PARAMETER2		22
 
 /* all entries should have been generated with dwarf_uleb128 except
    has_children. All values are currently below 128 so this currently
@@ -175,9 +176,13 @@ static const unsigned char dwarf_abbrev_init[] = {
           DW_AT_decl_line, DW_FORM_udata,
           DW_AT_type, DW_FORM_ref4,
           0, 0,
-    DWARF_ABBREV_ENUMERATOR, DW_TAG_enumerator, 0,
+    DWARF_ABBREV_ENUMERATOR_SIGNED, DW_TAG_enumerator, 0,
           DW_AT_name, DW_FORM_strp,
-          DW_AT_const_value, DW_FORM_data4,
+          DW_AT_const_value, DW_FORM_sdata,
+          0, 0,
+    DWARF_ABBREV_ENUMERATOR_UNSIGNED, DW_TAG_enumerator, 0,
+          DW_AT_name, DW_FORM_strp,
+          DW_AT_const_value, DW_FORM_udata,
           0, 0,
     DWARF_ABBREV_ENUMERATION_TYPE, DW_TAG_enumeration_type, 1,
           DW_AT_name, DW_FORM_strp,
@@ -1222,7 +1227,10 @@ ST_FUNC void tcc_debug_fix_anon(TCCState *s1, CType *t)
 	    if (t->ref == debug_anon_hash[i].type) {
 		Sym sym = {0}; sym .type = *t ;
 
+		/* Trick to not hash this struct */
+		debug_info = (struct _debug_info *) t;
 		debug_type = tcc_get_dwarf_info(s1, &sym);
+		debug_info = NULL;
 		for (j = 0; j < debug_anon_hash[i].n_debug_type; j++)
 		    write32le(dwarf_info_section->data +
 			      debug_anon_hash[i].debug_type[j],
@@ -1380,6 +1388,8 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
     int last_pos = -1;
     int retval;
 
+    if (new_file)
+        put_new_file(s1);
     for (;;) {
         type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE | VT_VLA);
         if ((type & VT_BTYPE) != VT_BYTE)
@@ -1467,7 +1477,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	debug_type = tcc_debug_find(s1, t, 1);
 	if (debug_type == -1) {
 	    int pos_sib, pos_type;
-	    Sym sym = {0}; sym  .type.t = VT_INT | (type & VT_UNSIGNED) ;
+	    Sym sym = {0}; sym.type.t = VT_INT | (type & VT_UNSIGNED);
 
 	    pos_type = tcc_get_dwarf_info(s1, &sym);
 	    debug_type = tcc_debug_add(s1, t, 1);
@@ -1486,11 +1496,16 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	    e = t;
             while (e->next) {
                 e = e->next;
-	        dwarf_data1(dwarf_info_section, DWARF_ABBREV_ENUMERATOR);
+	        dwarf_data1(dwarf_info_section,
+			type & VT_UNSIGNED ? DWARF_ABBREV_ENUMERATOR_UNSIGNED
+					   : DWARF_ABBREV_ENUMERATOR_SIGNED);
 	        dwarf_strp(dwarf_info_section,
                            (e->v & ~SYM_FIELD) >= SYM_FIRST_ANOM
                            ? "" : get_tok_str(e->v & ~SYM_FIELD, NULL));
-	        dwarf_data4(dwarf_info_section, e->enum_val);
+		if (type & VT_UNSIGNED)
+	            dwarf_uleb128(dwarf_info_section, e->enum_val);
+		else
+	            dwarf_sleb128(dwarf_info_section, e->enum_val);
             }
 	    dwarf_data1(dwarf_info_section, 0);
 	    write32le(dwarf_info_section->data + pos_sib,
@@ -1521,6 +1536,7 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	}
     }
     retval = debug_type;
+    e = NULL;
     t = s;
     for (;;) {
         type = t->type.t & ~(VT_STORAGE | VT_CONSTANT | VT_VOLATILE | VT_VLA);
@@ -1543,7 +1559,11 @@ static int tcc_get_dwarf_info(TCCState *s1, Sym *s)
 	}
         else if (type == (VT_PTR | VT_ARRAY)) {
 	    int sib_pos, sub_type;
-	    Sym sym = {0}; sym .type.t = VT_INT | VT_UNSIGNED ;
+#if LONG_SIZE == 4
+	    Sym sym = {0}; sym.type.t = VT_LONG | VT_INT | VT_UNSIGNED;
+#else
+	    Sym sym = {0}; sym.type.t = VT_LLONG | VT_LONG | VT_UNSIGNED;
+#endif
 
 	    sub_type = tcc_get_dwarf_info(s1, &sym);
 	    i = dwarf_info_section->data_offset;
@@ -1761,6 +1781,7 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 
     if (s1->dwarf) {
         tcc_debug_line(s1);
+	dwarf_line_op(s1, DW_LNS_copy);
         dwarf_info.func = sym;
         dwarf_info.line = file->line_num;
 	if (s1->do_backtrace) {
