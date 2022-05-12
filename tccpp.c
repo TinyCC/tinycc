@@ -352,6 +352,7 @@ ST_INLN char *unicode_to_utf8 (char *b, uint32_t Uc)
     else if (Uc-0xd800u<0x800) return b;
     else if (Uc<0x10000) *b++=224+Uc/4096, *b++=128+Uc/64%64, *b++=128+Uc%64;
     else if (Uc<0x110000) *b++=240+Uc/262144, *b++=128+Uc/4096%64, *b++=128+Uc/64%64, *b++=128+Uc%64;
+    else tcc_error("0x%x is not a valid universal character", Uc);
     return b;
 }
 

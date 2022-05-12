@@ -216,3 +216,6 @@ arg[1] = "Y"
 
 [test_return_from_statement_expr]
 [returns 78]
+
+[test_illegal_unicode]
+60_errors_and_warnings.c:448: error: 0xffffffff is not a valid universal character

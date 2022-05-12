@@ -442,4 +442,10 @@ int f() { ({ return 78; }); }
 int main() { return f(); }
 
 /******************************************************************/
+
+#elif defined test_illegal_unicode
+int main() {
+    char *str = "\Uffffffff";
+}
+
 #endif
