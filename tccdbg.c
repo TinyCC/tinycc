@@ -557,7 +557,7 @@ static void dwarf_file(TCCState *s1)
         for (i = 0; i < dwarf_line.dir_size; i++)
 	    if (strcmp(dwarf_line.dir_table[i], file->filename) == 0)
 		for (j = 1; j < dwarf_line.filename_size; j++)
-		    if (dwarf_line.filename_table[i].dir_entry == i &&
+		    if (dwarf_line.filename_table[j].dir_entry == i &&
 			strcmp(dwarf_line.filename_table[j].name,
 			filename) == 0) {
 			*undo = '/';

@@ -600,7 +600,7 @@ found:
 #define MAX_128	((8 * sizeof (long long) + 6) / 7)
 
 #define DIR_TABLE_SIZE	(64)
-#define FILE_TABLE_SIZE	(256)
+#define FILE_TABLE_SIZE	(512)
 
 #define	dwarf_read_1(ln,end) \
 	((ln) < (end) ? *(ln)++ : 0)
@@ -695,11 +695,13 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     addr_t last_pc;
     addr_t pc;
     addr_t func_addr;
+    addr_t offset_dll;
     int line;
     char *filename;
     char *function;
 
 next:
+    offset_dll = 0;
     ln = rc->dwarf_line;
     while (ln < rc->dwarf_line_end) {
 	dir_size = 0;
@@ -827,8 +829,12 @@ next:
 #else
 		    pc = dwarf_read_8(cp, end);
 #endif
-		    if (rc->num_callers < 0)
-		        pc = rc->dwarf_text; /* dll */
+		    if (rc->num_callers < 0) {
+			/* dll */
+			if (!offset_dll)
+			    offset_dll = pc;
+		        pc = rc->dwarf_text + (pc - offset_dll);
+		    }
 		    opindex = 0;
 		    break;
 		case DW_LNE_define_file: /* deprecated */
