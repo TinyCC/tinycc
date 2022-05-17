@@ -125,6 +125,13 @@
     #define __FINITE_MATH_ONLY__ 1
     #define _FORTIFY_SOURCE 0
 
+#elif defined __ANDROID__
+    #define  BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
+    #define  __PRETTY_FUNCTION__ __FUNCTION__
+    #define __has_builtin(x) 0
+    #define _Nonnull
+    #define _Nullable
+
 #else
     /* Linux */
 

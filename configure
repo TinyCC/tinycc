@@ -27,8 +27,7 @@ mandir=""
 infodir=""
 sysroot=""
 cross_prefix=""
-test -z "$CC" && CC="gcc"
-test -z "$cc" && cc="$CC"
+cc="gcc"
 ar="ar"
 bigendian="no"
 mingw32="no"
@@ -46,16 +45,20 @@ confvars=
 suggest="yes"
 gcc_major=0
 gcc_minor=0
-cc_name="$cc"
+cc_name="gcc"
 ar_set=
 darwin=
-cpu=
 cpuver=
 dwarf=
 
+# use CC from environment when set
+test -n "$CC" && cc="$CC"
+
 # OS specific
-cpu_sys=`uname -m`
+cpu=`uname -m`
+cpu_sys="$cpu"
 targetos=`uname`
+test "$(uname -o)" = "Android" && targetos=Android
 
 case $targetos in
   Darwin)
@@ -72,6 +75,20 @@ case $targetos in
     ;;
   DragonFly|OpenBSD|FreeBSD|NetBSD)
     confvars="$confvars BSD ldl=no"
+    ;;
+  Android)
+    confvars="$confvars Android pie new-dtags"
+    if test -n "$TERMUX_VERSION"; then
+      prefix="$PREFIX" # "/data/data/com.termux/files/usr"
+      sysroot="$PREFIX"
+      test "$cpu" = "aarch64" -o "$cpu" = "x86_64" && S="64" || S=""
+      tcc_sysincludepaths="{B}/include:{R}/include/\\\"CONFIG_TRIPLET\\\":{R}/include"
+      tcc_libpaths="{B}:{R}/lib:/system/lib${S}"
+      tcc_crtprefix="{R}/lib"
+      tcc_elfinterp="/system/bin/linker${S}"
+      use_triplet="yes"
+      tcc_switches="-Wl,-rpath=$sysroot/lib,-section-alignment=0x1000"
+    fi
     ;;
   *)
     ;;
@@ -153,6 +170,8 @@ for opt do
   ;;
   --with-selinux) confvars="$confvars selinux"
   ;;
+  --tcc-switches=*) tcc_switches=`echo $opt | cut -d '=' -f 2-`
+  ;;
   --config-mingw32*) mingw32=$(echo "$opt=yes" | cut -d '=' -f 2)
   ;;
   --config-*) confvars="$confvars ${opt#--config-}"; suggest="no"
@@ -175,9 +194,6 @@ if test "$darwin" = "yes" -a "$cpu" = "x86_64" -a "$cpu_sys" = "arm64"; then
     CFLAGS="$CFLAGS -arch $cpu"
     LDFLAGS="$LDFLAGS -arch $cpu"
 fi
-
-# checking for cpu
-test -z "$cpu" && cpu="$cpu_sys"
 
 case "$cpu" in
   x86|i386|i486|i586|i686|i86pc|BePC|i686-AT386)
@@ -325,6 +341,7 @@ Advanced options (experts only):
   --crtprefix=...          specify locations of crt?.o, colon separated
   --elfinterp=...          specify elf interpreter
   --triplet=...            specify system library/include directory triplet
+  --tcc-switches=...       specify implicit switches passed to tcc
 
   --config-uClibc,-musl    enable system specific configurations
   --config-mingw32         build on windows using msys, busybox, etc.
@@ -349,8 +366,8 @@ if test -z "$cross_prefix" ; then
   fi
   if test "$mingw32" = "no" ; then
 
-      if test -z "$triplet"; then
-        if test -n "$_triplet" -a -f "/usr/lib/$_triplet/crti.o" ; then
+      if test -z "$triplet" -a -n "$_triplet"; then
+        if test -f "/usr/lib/$_triplet/crti.o" -o -n "$use_triplet" ; then
           triplet="$_triplet"
         fi
       fi
@@ -372,8 +389,7 @@ if test -z "$cross_prefix" ; then
 	   confvars="$confvars arm_eabihf arm_vfp"
 	elif test "${_triplet%eabi}" != "$_triplet" ; then
 	   confvars="$confvars arm_eabi arm_vfp"
-	fi
-	if grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
+	elif grep -s -q "^Features.* \(vfp\|iwmmxt\) " /proc/cpuinfo ; then
 	   confvars="$confvars arm_vfp"
 	fi
       fi
@@ -496,6 +512,7 @@ print_mak CONFIG_TCC_SYSINCLUDEPATHS "$tcc_sysincludepaths"
 print_mak CONFIG_TCC_LIBPATHS "$tcc_libpaths"
 print_mak CONFIG_TCC_CRTPREFIX "$tcc_crtprefix"
 print_mak CONFIG_TCC_ELFINTERP "$tcc_elfinterp"
+print_mak CONFIG_TCC_SWITCHES "$tcc_switches"
 print_mak CONFIG_LDDIR "$tcc_lddir"
 print_mak CONFIG_TRIPLET "$triplet"
 print_mak TCC_CPU_VERSION "$cpuver" num

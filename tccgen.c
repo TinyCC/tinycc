@@ -8266,7 +8266,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                 sym = type.ref;
                 if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
                     decl0(VT_CMP, 0, sym);
-#ifdef TCC_TARGET_MACHO
+#if defined TCC_TARGET_MACHO || defined TARGETOS_ANDROID
                 if (sym->f.func_alwinl
                     && ((type.t & (VT_EXTERN | VT_INLINE))
                         == (VT_EXTERN | VT_INLINE))) {

@@ -390,7 +390,7 @@ static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned lon
         tcc_error("mprotect failed: did you mean to configure --with-selinux?");
 
 /* XXX: BSD sometimes dump core with bad system call */
-# if (TCC_TARGET_ARM && !TARGETOS_BSD) || TCC_TARGET_ARM64
+# if (defined TCC_TARGET_ARM && !TARGETOS_BSD) || defined TCC_TARGET_ARM64
     if (mode == 0 || mode == 3) {
         void __clear_cache(void *beginning, void *end);
         __clear_cache(ptr, (char *)ptr + length);

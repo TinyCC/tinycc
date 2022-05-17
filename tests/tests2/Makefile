@@ -9,7 +9,7 @@ TESTS = $(patsubst %.c,%.test,\
 
 # some tests do not pass on all platforms, remove them for now
 SKIP = 34_array_assignment.test # array assignment is not in C standard
-ifeq ($(CONFIG_arm_eabi),yes) # not ARM soft-float
+ifeq (-$(CONFIG_arm_eabi)-$(CONFIG_arm_vfp)-,-yes--)
  SKIP += 22_floating_point.test
 endif
 ifdef CONFIG_OSX
@@ -27,12 +27,12 @@ ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 125_atomic_misc.test # currently only x86 supported
 endif
 ifeq ($(CONFIG_backtrace),no)
- SKIP += 112_backtrace.test
  SKIP += 113_btdll.test
  CONFIG_bcheck = no
 # no bcheck without backtrace
 endif
 ifeq ($(CONFIG_bcheck),no)
+ SKIP += 112_backtrace.test
  SKIP += 114_bound_signal.test
  SKIP += 115_bound_setjmp.test
  SKIP += 116_bound_setjmp2.test

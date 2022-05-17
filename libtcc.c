@@ -496,6 +496,8 @@ static void tcc_split_path(TCCState *s, void *p_ary, int *p_nb_ary, const char *
                 c = p[1], p += 2;
                 if (c == 'B')
                     cstr_cat(&str, s->tcc_lib_path, -1);
+                if (c == 'R')
+                    cstr_cat(&str, CONFIG_SYSROOT, -1);
                 if (c == 'f' && file) {
                     /* substitute current file's dir */
                     const char *f = file->true_filename;
@@ -810,7 +812,9 @@ LIBTCCAPI TCCState *tcc_new(void)
 #ifdef TCC_TARGET_ARM
     s->float_abi = ARM_FLOAT_ABI;
 #endif
-
+#ifdef CONFIG_NEW_DTAGS
+    s->enable_new_dtags = 1;
+#endif
     s->ppfp = stdout;
     /* might be used in error() before preprocess_start() */
     s->include_stack_ptr = s->include_stack;
@@ -943,6 +947,11 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
+#elif defined TARGETOS_ANDROID
+        if (output_type != TCC_OUTPUT_DLL)
+            tcc_add_crt(s, "crtbegin_dynamic.o");
+        else
+            tcc_add_crt(s, "crtbegin_so.o");
 #else
         if (output_type != TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crt1.o");

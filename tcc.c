@@ -281,6 +281,9 @@ int main(int argc0, char **argv0)
 redo:
     argc = argc0, argv = argv0;
     s = s1 = tcc_new();
+#ifdef CONFIG_TCC_SWITCHES
+    tcc_set_options(s, CONFIG_TCC_SWITCHES);
+#endif
     opt = tcc_parse_args(s, &argc, &argv, 1);
 
     if (n == 0) {

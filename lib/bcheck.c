@@ -161,7 +161,7 @@ static pthread_spinlock_t bounds_spin;
 #define HAVE_TLS_FUNC          (1)
 #define HAVE_TLS_VAR           (0)
 #endif
-#ifdef TCC_MUSL
+#if defined TCC_MUSL || defined __ANDROID__
 # undef HAVE_CTYPE
 #endif
 #endif
@@ -1174,7 +1174,8 @@ void __attribute__((destructor)) __bound_exit(void)
 
     if (inited) {
 #if !defined(_WIN32) && !defined(__APPLE__) && !defined TCC_MUSL && \
-    !defined(__OpenBSD__) && !defined(__FreeBSD__) && !defined(__NetBSD__)
+    !defined(__OpenBSD__) && !defined(__FreeBSD__) && !defined(__NetBSD__) && \
+    !defined(__ANDROID__)
         if (print_heap) {
             extern void __libc_freeres (void);
             __libc_freeres ();

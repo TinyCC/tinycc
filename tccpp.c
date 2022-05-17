@@ -3713,6 +3713,9 @@ static const char * const target_os_defs =
 # else
     "__linux__\0"
     "__linux\0"
+#  if TARGETOS_ANDROID
+    "__ANDROID__\0"
+#  endif
 # endif
     "__unix__\0"
     "__unix\0"
@@ -3724,17 +3727,22 @@ static void putdef(CString *cs, const char *p)
     cstr_printf(cs, "#define %s%s\n", p, &" 1"[!!strchr(p, ' ')*2]);
 }
 
+static void putdefs(CString *cs, const char *p)
+{
+    while (*p)
+        putdef(cs, p), p = strchr(p, 0) + 1;
+}
+
 static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
 {
     int a, b, c;
-    const char *defs[] = { target_machine_defs, target_os_defs, NULL };
-    const char *p;
 
     sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
     cstr_printf(cs, "#define __TINYC__ %d\n", a*10000 + b*100 + c);
-    for (a = 0; defs[a]; ++a)
-        for (p = defs[a]; *p; p = strchr(p, 0) + 1)
-            putdef(cs, p);
+
+    putdefs(cs, target_machine_defs);
+    putdefs(cs, target_os_defs);
+
 #ifdef TCC_TARGET_ARM
     if (s1->float_abi == ARM_HARD_FLOAT)
       putdef(cs, "__ARM_PCS_VFP");

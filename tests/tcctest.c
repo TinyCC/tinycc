@@ -21,14 +21,19 @@
 typedef __SIZE_TYPE__ uintptr_t;
 #endif
 
-#if defined(_WIN32) || \
-    (defined(__arm__) && \
-     (defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)))
+#if defined(_WIN32) \
+    || (defined(__arm__) \
+        && (defined(__FreeBSD__) \
+         || defined(__OpenBSD__) \
+         || defined(__NetBSD__) \
+         || defined __ANDROID__))
 #define LONG_LONG_FORMAT "%lld"
 #define ULONG_LONG_FORMAT "%llu"
+#define XLONG_LONG_FORMAT "%llx"
 #else
 #define LONG_LONG_FORMAT "%Ld"
 #define ULONG_LONG_FORMAT "%Lu"
+#define XLONG_LONG_FORMAT "%Lx"
 #endif
 
 // MinGW has 80-bit rather than 64-bit long double which isn't compatible with TCC or MSVC
@@ -2265,7 +2270,7 @@ double ftab1[3] = { 1.2, 3.4, -5.6 };
 
 void float_test(void)
 {
-#if !defined(__arm__) || defined(__ARM_PCS_VFP)
+#if !defined(__arm__) || defined(__ARM_PCS_VFP) || defined __ANDROID__
     volatile float fa, fb;
     volatile double da, db;
     int a;
@@ -2531,7 +2536,7 @@ void longlong_test(void)
     b = 0x12345678;
     a = -1;
     c = a + b;
-    printf("%Lx\n", c);
+    printf(XLONG_LONG_FORMAT"\n", c);
 #endif
 
     /* long long reg spill test */

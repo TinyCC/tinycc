@@ -857,7 +857,7 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
 #if defined TCC_IS_NATIVE && !defined TCC_TARGET_PE
                 /* dlsym() needs the undecorated name.  */
                 void *addr = dlsym(RTLD_DEFAULT, &name[s1->leading_underscore]);
-#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
+#if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD || TARGETOS_ANDROID
 		if (addr == NULL) {
 		    int i;
 		    for (i = 0; i < s1->nb_loaded_dlls; i++)
@@ -1526,6 +1526,11 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 # if !TARGETOS_OpenBSD
             tcc_add_crt(s1, "crtn.o");
 # endif
+#elif TARGETOS_ANDROID
+	    if (s1->output_type == TCC_OUTPUT_DLL)
+                tcc_add_crt(s1, "crtend_so.o");
+            else
+                tcc_add_crt(s1, "crtend_android.o");
 #else
             tcc_add_crt(s1, "crtn.o");
 #endif
@@ -2272,22 +2277,15 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     ehdr.e_ident[4] = ELFCLASSW;
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
+
 #if TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
     ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
-#endif
-#ifdef TCC_TARGET_ARM
-#ifdef TCC_ARM_EABI
-    ehdr.e_ident[EI_OSABI] = 0;
-    ehdr.e_flags = EF_ARM_EABI_VER4;
-    if (file_type & (TCC_OUTPUT_EXE | TCC_OUTPUT_DLL))
-        ehdr.e_flags |= EF_ARM_HASENTRY;
-    if (s1->float_abi == ARM_HARD_FLOAT)
-        ehdr.e_flags |= EF_ARM_VFP_FLOAT;
-    else
-        ehdr.e_flags |= EF_ARM_SOFT_FLOAT;
-#else
+#elif defined TCC_TARGET_ARM && defined TCC_ARM_EABI
+    ehdr.e_flags = EF_ARM_EABI_VER5;
+    ehdr.e_flags |= s1->float_abi == ARM_HARD_FLOAT
+        ? EF_ARM_VFP_FLOAT : EF_ARM_SOFT_FLOAT;
+#elif defined TCC_TARGET_ARM
     ehdr.e_ident[EI_OSABI] = ELFOSABI_ARM;
-#endif
 #elif defined TCC_TARGET_RISCV64
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
 #endif
