@@ -547,7 +547,7 @@ LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
 static void
 version_add (TCCState *s1)
 {
-    int i;
+    int i, j;
     ElfW(Sym) *sym;
     ElfW(Verneed) *vn = NULL;
     Section *symtab;
@@ -593,6 +593,14 @@ version_add (TCCState *s1)
             ElfW(Vernaux) *vna = 0;
             if (sv->out_index < 1)
               continue;
+	    /* If present in verneed it should be in DT_NEEDED */
+	    for (j = 0; j < s1->nb_loaded_dlls; j++) {
+		DLLReference *dllref = s1->loaded_dlls[j];
+		if (!strcmp(sv->lib, dllref->name)) {
+		    dllref->level = 0;
+		    break;
+		}
+	    }
             vnofs = section_add(verneed_section, sizeof(*vn), 1);
             vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
             vn->vn_version = 1;
@@ -1137,7 +1145,7 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
             len = sizeof plt_name - 5;
         memcpy(plt_name, name, len);
         strcpy(plt_name + len, "@plt");
-        attr->plt_sym = put_elf_sym(s1->symtab, attr->plt_offset, sym->st_size,
+        attr->plt_sym = put_elf_sym(s1->symtab, attr->plt_offset, 0,
             ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0, s1->plt->sh_num, plt_name);
     } else {
         attr->got_offset = got_offset;
@@ -2526,6 +2534,14 @@ static Section *create_bsd_note_section(TCCState *s1,
 }
 #endif
 
+static void elf_patch_global_offset_size(TCCState *s1, Section *s)
+{
+    int sym_index;
+
+    if ((sym_index = find_elf_sym(s, "_GLOBAL_OFFSET_TABLE_")))
+	((ElfW(Sym) *)s->data)[sym_index].st_size = s1->got->data_offset;
+}
+
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
@@ -2589,7 +2605,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
             dynamic->link = dynstr;
             dynamic->sh_entsize = sizeof(ElfW(Dyn));
 
-            build_got(s1);
+            if (!s1->got)
+                build_got(s1);
 
             if (file_type == TCC_OUTPUT_EXE) {
                 bind_exe_dynsyms(s1);
@@ -2602,6 +2619,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
             }
         }
         build_got_entries(s1);
+	elf_patch_global_offset_size(s1, symtab_section);
+	elf_patch_global_offset_size(s1, s1->dynsym);
 	version_add (s1);
     }
 
@@ -3065,6 +3084,14 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                                 sym->st_info, sym->st_other,
                                 sym->st_shndx, name);
         old_to_new_syms[i] = sym_index;
+#ifndef ELF_OBJ_ONLY
+	/* Remove version symbol if new value present */
+	sym_index = find_elf_sym(s1->dynsymtab_section, name);
+	if (sym_index && sym_index < nb_sym_to_version &&
+	    sym->st_shndx != SHN_UNDEF &&
+	    ELFW(ST_BIND)(sym->st_info) != STB_LOCAL)
+	    sym_to_version[sym_index] = -1;
+#endif
     }
 
     /* third pass to patch relocation entries */

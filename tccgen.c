@@ -5328,7 +5328,7 @@ ST_FUNC void unary(void)
             type.t |= VT_ARRAY;
             type.ref->c = len;
             sec = rodata_section;
-            vpush_ref(&type, sec, sec->data_offset, len);
+            vpush_ref(&type, sec, sec->data_offset, NODATA_WANTED ? 0 : len);
             if (!NODATA_WANTED)
                 memcpy(section_ptr_add(sec, len), funcname, len);
             next();
