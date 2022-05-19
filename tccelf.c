@@ -1389,15 +1389,14 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
             put_ptr(s1, dwarf_line_str_section, 0);
 	else
             put_ptr(s1, dwarf_str_section, 0);
-	put_ptr(s1, text_section, 0);
     }
     else
     {
         put_ptr(s1, stab_section, 0);
         put_ptr(s1, stab_section, -1);
         put_ptr(s1, stab_section->link, 0);
-        section_ptr_add(s, PTR_SIZE);
     }
+    *(addr_t *)section_ptr_add(s, PTR_SIZE) = s1->dwarf;
     /* skip esym_start/esym_end/elf_str (not loaded) */
     section_ptr_add(s, 3 * PTR_SIZE);
     /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
@@ -1412,7 +1411,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     section_ptr_add(s, n);
     cstr_new(&cstr);
     cstr_printf(&cstr,
-        "extern void __bt_init(),__bt_init_dll();"
+        "extern void __bt_init(),__bt_exit(),__bt_init_dll();"
         "static void *__rt_info[];"
         "__attribute__((constructor)) static void __bt_init_rt(){");
 #ifdef TCC_TARGET_PE
@@ -1425,6 +1424,10 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
 #endif
     cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
         s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
+    /* In case dlcose is called by application */
+    cstr_printf(&cstr,
+        "__attribute__((destructor)) static void __bt_exit_rt(){"
+        "__bt_exit(__rt_info);}");
     tcc_compile_string_no_debug(s1, cstr.data);
     cstr_free(&cstr);
     set_local_sym(s1, &"___rt_info"[!s1->leading_underscore], s, o);

@@ -270,6 +270,7 @@ DLL_EXPORT void FASTCALL __bound_local_delete(void *p1);
 void __bound_init(size_t *, int);
 void __bound_main_arg(int argc, char **argv, char **envp);
 void __bound_exit(void);
+void __bound_exit_dll(size_t *);
 #if !defined(_WIN32)
 void *__bound_mmap (void *start, size_t size, int prot, int flags, int fd,
                     off_t offset);
@@ -1252,6 +1253,25 @@ void __attribute__((destructor)) __bound_exit(void)
             fprintf (stderr, "bound_splay_delete       %llu\n", bound_splay_delete);
 #endif
         }
+    }
+}
+
+void __bound_exit_dll(size_t *p)
+{
+    dprintf(stderr, "%s, %s()\n", __FILE__, __FUNCTION__);
+
+    if (p) {
+	while (p[0] != 0) {
+	    tree = splay_delete(p[0], tree);
+#if BOUND_DEBUG
+            if (print_calls) {
+                dprintf(stderr, "%s, %s(): remove static var %p 0x%lx\n",
+                        __FILE__, __FUNCTION__,
+                        (void *) p[0], (unsigned long) p[1]);
+            }
+#endif
+	    p += 2;
+	}
     }
 }
 

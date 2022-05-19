@@ -30,8 +30,24 @@ void __bt_init(rt_context *p, int num_callers)
         __rt_error = _rt_error;
         set_exception_handler();
     } else {
-	p->num_callers = -1;
         p->next = rc->next, rc->next = p;
+    }
+}
+
+__declspec(dllexport)
+void __bt_exit(rt_context *p)
+{
+    __attribute__((weak)) void __bound_exit_dll(void*);
+    struct rt_context *rc = &g_rtctxt;
+
+    if (__bound_exit_dll && p->bounds_start)
+	__bound_exit_dll(p->bounds_start);
+    while (rc) {
+        if (rc->next == p) {
+	    rc->next = rc->next->next;
+	    break;
+	}
+	rc = rc->next;
     }
 }
 
