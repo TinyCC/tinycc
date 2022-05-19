@@ -7,7 +7,6 @@
 #define REDIR_ALL \
   REDIR(__bt_init) \
   REDIR(__bt_exit) \
-  REDIR(__bound_exit_dll) \
   REDIR(tcc_backtrace) \
   \
   REDIR(__bound_ptr_add) \
