@@ -69,7 +69,14 @@ static const struct {
     {   VT_BYTE | VT_UNSIGNED, 1, DW_ATE_unsigned_char, "unsigned char:t25=r25;0;255;" },
     /* boolean type */
     {   VT_BOOL, 1, DW_ATE_boolean, "bool:t26=r26;0;255;" },
+#if LONG_SIZE == 4
     {   VT_VOID, 1, DW_ATE_unsigned_char, "void:t27=27" },
+#else 
+    /* bitfields use these */
+    {   VT_LONG | VT_INT, 8, DW_ATE_signed, "long int:t27=r27;-9223372036854775808;9223372036854775807;" },
+    {   VT_LONG | VT_INT | VT_UNSIGNED, 8, DW_ATE_unsigned, "long unsigned int:t28=r28;0;01777777777777777777777;" },
+    {   VT_VOID, 1, DW_ATE_unsigned_char, "void:t29=29" },
+#endif
 };
 
 #define	N_DEFAULT_DEBUG	(sizeof (default_debug) / sizeof (default_debug[0]))
@@ -584,17 +591,16 @@ static int dwarf_uleb128_size (unsigned long long value)
 
 static int dwarf_sleb128_size (long long value)
 {
-    int more;
     int size =  0;
+    long long end = value >> 63;
+    unsigned char last = end & 0x40;
+    unsigned char byte;
 
     do {
-        unsigned char byte = value & 0x7f;
-
-        value = (value >> 7) | ~(-1 >> 7);
-        more =!((((value == 0) && ((byte & 0x40) == 0))
-                || ((value == -1) && ((byte & 0x40) != 0))));
+        byte = value & 0x7f;
+        value >>= 7;
         size++;
-    } while (more);
+    } while (value != end || (byte & 0x40) != last);
     return size;
 }
 
@@ -604,25 +610,22 @@ static void dwarf_uleb128 (Section *s, unsigned long long value)
         unsigned char byte = value & 0x7f;
 
         value >>= 7;
-        if (value)
-            byte |= 0x80;
-        dwarf_data1(s, byte);
+        dwarf_data1(s, byte | (value ? 0x80 : 0));
     } while (value != 0);
 }
 
 static void dwarf_sleb128 (Section *s, long long value)
 {
     int more;
+    long long end = value >> 63;
+    unsigned char last = end & 0x40;
 
     do {
         unsigned char byte = value & 0x7f;
 
-        value = (value >> 7) | ~(-1 >> 7);
-        more =!((((value == 0) && ((byte & 0x40) == 0))
-                || ((value == -1) && ((byte & 0x40) != 0))));
-	if (more)
-            byte |= 0x80;
-        dwarf_data1(s, byte);
+        value >>= 7;
+	more = value != end || (byte & 0x40) != last;
+        dwarf_data1(s, byte | (0x80 * more));
     } while (more);
 }
 
@@ -632,25 +635,22 @@ static void dwarf_uleb128_op (TCCState *s1, unsigned long long value)
         unsigned char byte = value & 0x7f;
 
         value >>= 7;
-        if (value)
-            byte |= 0x80;
-        dwarf_line_op(s1, byte);
+        dwarf_line_op(s1, byte | (value ? 0x80 : 0));
     } while (value != 0);
 }
 
 static void dwarf_sleb128_op (TCCState *s1, long long value)
 {
     int more;
+    long long end = value >> 63;
+    unsigned char last = end & 0x40;
 
     do {
         unsigned char byte = value & 0x7f;
 
-        value = (value >> 7) | ~(-1 >> 7);
-        more =!((((value == 0) && ((byte & 0x40) == 0))
-                || ((value == -1) && ((byte & 0x40) != 0))));
-	if (more)
-            byte |= 0x80;
-        dwarf_line_op(s1, byte);
+        value >>= 7;
+        more = value != end || (byte & 0x40) != last;
+        dwarf_line_op(s1, byte | (0x80 * more));
     } while (more);
 }
 
