@@ -2541,7 +2541,7 @@ static void elf_patch_global_offset_size(TCCState *s1, Section *s)
 {
     int sym_index;
 
-    if ((sym_index = find_elf_sym(s, "_GLOBAL_OFFSET_TABLE_")))
+    if (s && (sym_index = find_elf_sym(s, "_GLOBAL_OFFSET_TABLE_")))
 	((ElfW(Sym) *)s->data)[sym_index].st_size = s1->got->data_offset;
 }
 
