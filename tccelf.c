@@ -47,6 +47,14 @@ struct sym_version {
 /* section is dynsymtab_section */
 #define SHF_DYNSYM 0x40000000
 
+#ifdef TCC_TARGET_PE
+static const int shf_RELRO = SHF_ALLOC;
+static const char rdata[] = ".rdata";
+#else
+static const int shf_RELRO = SHF_ALLOC | SHF_WRITE;
+static const char rdata[] = ".data.ro";
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC void tccelf_new(TCCState *s)
@@ -58,12 +66,8 @@ ST_FUNC void tccelf_new(TCCState *s)
     /* create standard sections */
     text_section = new_section(s, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     data_section = new_section(s, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-#ifdef TCC_TARGET_PE
-    rodata_section = new_section(s, ".rdata", SHT_PROGBITS, SHF_ALLOC);
-#else
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
-    rodata_section = new_section(s, ".data.ro", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-#endif
+    rodata_section = new_section(s, rdata, SHT_PROGBITS, shf_RELRO);
     bss_section = new_section(s, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
     common_section = new_section(s, ".common", SHT_NOBITS, SHF_PRIVATE);
     common_section->sh_num = SHN_COMMON;
@@ -86,10 +90,8 @@ ST_FUNC void tccelf_bounds_new(TCCState *s)
 {
     TCCState *s1 = s;
     /* create bounds sections (make ro after relocation done with GNU_RELRO) */
-    bounds_section = new_section(s, ".bounds",
-                                 SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-    lbounds_section = new_section(s, ".lbounds",
-                                  SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    bounds_section = new_section(s, ".bounds", SHT_PROGBITS, shf_RELRO);
+    lbounds_section = new_section(s, ".lbounds", SHT_PROGBITS, shf_RELRO);
 }
 #endif
 
@@ -1309,10 +1311,8 @@ ST_FUNC void add_array (TCCState *s1, const char *sec, int c)
 {
     Section *s;
     s = find_section(s1, sec);
-    s->sh_flags |= SHF_WRITE;
-#ifndef TCC_TARGET_PE
+    s->sh_flags = shf_RELRO;
     s->sh_type = sec[1] == 'i' ? SHT_INIT_ARRAY : SHT_FINI_ARRAY;
-#endif
     put_elf_reloc (s1->symtab, s, s->data_offset, R_DATA_PTR, c);
     section_ptr_add(s, PTR_SIZE);
 }
@@ -1554,9 +1554,7 @@ static void tcc_add_linker_symbols(TCCState *s1)
     set_global_sym(s1, "__global_pointer$", data_section, 0x800);
 #endif
     /* horrible new standard ldscript defines */
-#ifndef TCC_TARGET_PE
     add_init_array_defines(s1, ".preinit_array");
-#endif
     add_init_array_defines(s1, ".init_array");
     add_init_array_defines(s1, ".fini_array");
     /* add start and stop symbols for sections whose name can be
@@ -1849,59 +1847,172 @@ static int set_sec_sizes(TCCState *s1)
     return textrel;
 }
 
-
-/* Info to be copied in dynamic section */
+/* various data used under elf_output_file() */
 struct dyn_inf {
     Section *dynamic;
     Section *dynstr;
-    unsigned long data_offset;
-    addr_t rel_addr;
-    addr_t rel_size;
+    struct {
+        /* Info to be copied in dynamic section */
+        unsigned long data_offset;
+        addr_t rel_addr;
+        addr_t rel_size;
+    };
+
+    ElfW(Phdr) *phdr;
+    int phnum;
+    Section *interp;
+    Section *note;
+
+    /* read only segment mapping for GNU_RELRO */
+    Section _roinf, *roinf;
 };
 
-/* Info for GNU_RELRO */
-struct ro_inf {
-   addr_t sh_offset;
-   addr_t sh_addr;
-   addr_t sh_size;
-};
+/* Decide the layout of sections loaded in memory. This must be done before
+   program headers are filled since they contain info about the layout.
+   We do the following ordering: interp, symbol tables, relocations, progbits,
+   nobits */
+static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
+{
+    Section *s;
+    int i, j, k, f, f0, n;
+    int nb_sections = s1->nb_sections;
+    int *sec_cls = sec_order + nb_sections;
 
-static void alloc_sec_names(
-    TCCState *s1, int is_obj
-    );
+    for (i = 1; i < nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->sh_flags & SHF_ALLOC) {
+            j = 0x100;
+            if (s->sh_flags & SHF_WRITE)
+                j = 0x200;
+            if (s->sh_flags & SHF_TLS)
+                j += 0x200;
+        } else if (s->sh_name) {
+            j = 0x700;
+        } else {
+            j = 0x900; /* no sh_name: won't go to file */
+        }
+        if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_DYNSYM) {
+            k = 0x10;
+        } else if (s->sh_type == SHT_STRTAB && strcmp(s->name, ".stabstr")) {
+            k = 0x11;
+            if (i == nb_sections - 1) /* ".shstrtab" assumed to remain last */
+                k = 0xff;
+        } else if (s->sh_type == SHT_HASH) {
+            k = 0x12;
+        } else if (s->sh_type == SHT_RELX) {
+            k = 0x20;
+            if (s1->plt && s == s1->plt->reloc)
+                k = 0x21;
+        } else if (s->sh_type == SHT_PREINIT_ARRAY) {
+            k = 0x41;
+        } else if (s->sh_type == SHT_INIT_ARRAY) {
+            k = 0x42;
+        } else if (s->sh_type == SHT_FINI_ARRAY) {
+            k = 0x43;
+#ifdef CONFIG_TCC_BCHECK
+        } else if (s == bounds_section || s == lbounds_section) {
+            k = 0x44;
+#endif
+        } else if (s == rodata_section || 0 == strcmp(s->name, ".data.rel.ro")) {
+            k = 0x45;
+        } else if (s->sh_type == SHT_DYNAMIC) {
+            k = 0x46;
+        } else if (s == s1->got) {
+            k = 0x47; /* .got as RELRO needs BIND_NOW in DT_FLAGS */
+        } else {
+            k = 0x50;
+            if (s->sh_type == SHT_NOTE)
+                k = 0x60;
+            if (s->sh_flags & SHF_EXECINSTR)
+                k = 0x70;
+            if (s->sh_type == SHT_NOBITS)
+                k = 0x80;
+            if (s == interp)
+                k = 0x00;
+        }
+        k += j;
 
-static int layout_any_sections(
-    TCCState *s1, int file_offset, int *sec_order, int is_obj
-    );
+        for (n = i; n > 1 && k < (f = sec_cls[n - 1]); --n)
+            sec_cls[n] = f, sec_order[n] = sec_order[n - 1];
+        sec_cls[n] = k, sec_order[n] = i;
+    }
+    sec_order[0] = 0;
+
+    /* count PT_LOAD headers needed */
+    n = f0 = 0;
+    for (i = 1; i < nb_sections; i++) {
+        s = s1->sections[sec_order[i]];
+        k = sec_cls[i];
+        f = 0;
+        if (k < 0x700) {
+            f = s->sh_flags & (SHF_ALLOC|SHF_WRITE|SHF_EXECINSTR|SHF_TLS);
+            if ((k & 0xfff0) == 0x240) /* RELRO sections */
+                f |= 1<<4;
+            if (f != f0) /* start new header when flags changed or relro */
+                f0 = f, ++n, f |= 1<<8;
+        }
+        sec_cls[i] = f;
+        //printf("ph %d sec %02d : %3X %3X  %8.2X  %04X  %s\n", !!f * n, i, f, k, s->sh_type, s->sh_size, s->name);
+    }
+    return n;
+}
+
+static ElfW(Phdr) *fill_phdr(ElfW(Phdr) *ph, int type, Section *s)
+{
+    if (s) {
+        ph->p_offset = s->sh_offset;
+        ph->p_vaddr = s->sh_addr;
+        ph->p_filesz = s->sh_size;
+        ph->p_align = s->sh_addralign;
+    }
+    ph->p_type = type;
+    ph->p_flags = PF_R;
+    ph->p_paddr = ph->p_vaddr;
+    ph->p_memsz = ph->p_filesz;
+    return ph;
+}
 
 /* Assign sections to segments and decide how are sections laid out when loaded
    in memory. This function also fills corresponding program headers. */
-static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
-			   int phnum, int phfill,
-                           Section *interp,
-                           struct ro_inf *roinf, int *sec_order)
+static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
 {
-    int i, file_offset;
     Section *s;
+    addr_t addr, tmp, align, s_align, base;
+    ElfW(Phdr) *ph = NULL;
+    int i, f, n, phnum, phfill;
+    int file_offset;
+
+    /* compute number of program headers */
+    phnum = sort_sections(s1, sec_order, d->interp);
+    phfill = 0; /* set to 1 to have dll's with a PT_PHDR */
+    if (d->interp)
+        phfill = 2;
+    phnum += phfill;
+    if (d->note)
+        ++phnum;
+    if (d->dynamic)
+        ++phnum;
+    if (d->roinf)
+        ++phnum;
+    d->phnum = phnum;
+    d->phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
     file_offset = 0;
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
         file_offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
-    {
-        unsigned long s_align;
-        long long tmp;
-        addr_t addr;
-        ElfW(Phdr) *ph;
-        int j, k, f, file_type = s1->output_type;
+    s_align = ELF_PAGE_SIZE;
+    if (s1->section_align)
+        s_align = s1->section_align;
 
-        s_align = ELF_PAGE_SIZE;
-        if (s1->section_align)
-            s_align = s1->section_align;
+    addr = ELF_START_ADDR;
+    if (s1->output_type & TCC_OUTPUT_DYN)
+        addr = 0;
 
-        if (s1->has_text_addr) {
+    if (s1->has_text_addr) {
+        addr = s1->text_addr;
+        if (0) {
             int a_offset, p_offset;
-            addr = s1->text_addr;
             /* we ensure that (addr % ELF_PAGE_SIZE) == file_offset %
                ELF_PAGE_SIZE */
             a_offset = (int) (addr & (s_align - 1));
@@ -1909,161 +2020,108 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
             if (a_offset < p_offset)
                 a_offset += s_align;
             file_offset += (a_offset - p_offset);
-        } else {
-            if (file_type & TCC_OUTPUT_DYN)
-                addr = 0;
-            else
-                addr = ELF_START_ADDR;
-            /* compute address after headers */
-            addr += (file_offset & (s_align - 1));
+        }
+    }
+    base = addr;
+    /* compute address after headers */
+    addr = addr + (file_offset & (s_align - 1));
+
+    n = 0;
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[sec_order[i]];
+        f = sec_order[i + s1->nb_sections];
+        align = s->sh_addralign - 1;
+
+        if (f == 0) { /* no alloc */
+            file_offset = (file_offset + align) & ~align;
+            s->sh_offset = file_offset;
+            if (s->sh_type != SHT_NOBITS)
+                file_offset += s->sh_size;
+            continue;
         }
 
-        ph = &phdr[0];
-        /* Leave one program headers for the program interpreter and one for
-           the program header table itself if needed. These are done later as
-           they require section layout to be done first. */
-        if (interp)
-            ph += 2;
-
-        /* read only segment mapping for GNU_RELRO */
-	roinf->sh_offset = roinf->sh_addr = roinf->sh_size = 0;
-
-        for(j = 0; j < phfill; j++) {
-            ph->p_type = j == 2 ? PT_TLS : PT_LOAD;
-            if (j == 0)
-                ph->p_flags = PF_R | PF_X;
-            else
-                ph->p_flags = PF_R | PF_W;
-            ph->p_align = j == 2 ? 4 : s_align;
-
-            /* Decide the layout of sections loaded in memory. This must
-               be done before program headers are filled since they contain
-               info about the layout. We do the following ordering: interp,
-               symbol tables, relocations, progbits, nobits */
-            /* XXX: do faster and simpler sorting */
-	    f = -1;
-            for(k = 0; k < 10; k++) {
-                for(i = 1; i < s1->nb_sections; i++) {
-                    s = s1->sections[i];
-                    /* compute if section should be included */
-                    if (j == 0) {
-                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_TLS)) !=
-                            SHF_ALLOC)
-                            continue;
-                    } else if (j == 1) {
-                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_TLS)) !=
-                            (SHF_ALLOC | SHF_WRITE))
-                            continue;
-                    } else  {
-                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_TLS)) !=
-                            (SHF_ALLOC | SHF_WRITE | SHF_TLS))
-                            continue;
-                    }
-                    if (s == interp) {
-                        if (k != 0)
-                            continue;
-                    } else if ((s->sh_type == SHT_DYNSYM ||
-                                s->sh_type == SHT_STRTAB ||
-                                s->sh_type == SHT_HASH)
-                               && !strstr(s->name, ".stab"))  {
-                        if (k != 1)
-                            continue;
-                    } else if (s->sh_type == SHT_RELX) {
-                        if (s1->plt && s == s1->plt->reloc) {
-                            if (k != 3)
-                                continue;
-                        } else {
-                            if (k != 2)
-                                continue;
-                        }
-                    } else if ((s == rodata_section
-#ifdef CONFIG_TCC_BCHECK
-		                || s == bounds_section
-                                || s == lbounds_section
-#endif
-                                ) && (s->sh_flags & SHF_WRITE)) {
-                        if (k != 4)
-                            continue;
-			/* Align next section on page size.
-			   This is needed to remap roinf section ro. */
-			f = 1;
-
-                    } else if (s->sh_type == SHT_PREINIT_ARRAY) {
-                        if (k != 6)
-                            continue;
-                    } else if (s->sh_type == SHT_INIT_ARRAY) {
-                        if (k != 7)
-                            continue;
-                    } else if (s->sh_type == SHT_FINI_ARRAY) {
-                        if (k != 8)
-                            continue;
-                    } else if (s->sh_type == SHT_NOBITS) {
-                        if (k != 9)
-                            continue;
-                    } else {
-                        if (k != 5)
-                            continue;
-		    }
-                    *sec_order++ = i;
-
-                    /* section matches: we align it and add its size */
-                    tmp = addr;
-		    if (f-- == 0)
-			s->sh_addralign = PAGESIZE;
-                    addr = (addr + s->sh_addralign - 1) &
-                        ~(s->sh_addralign - 1);
-                    file_offset += (int) ( addr - tmp );
-                    s->sh_offset = file_offset;
-                    s->sh_addr = addr;
-
-                    /* update program header infos */
-                    if (ph->p_offset == 0) {
-                        ph->p_offset = file_offset;
-                        ph->p_vaddr = addr;
-                        ph->p_paddr = ph->p_vaddr;
-                    }
-
-                    if (k == 4) {
-                        if (roinf->sh_size == 0) {
-                            roinf->sh_offset = s->sh_offset;
-                            roinf->sh_addr = s->sh_addr;
-			}
-                        roinf->sh_size = (addr - roinf->sh_addr) + s->sh_size;
-		    }
-
-                    addr += s->sh_size;
-                    if (s->sh_type != SHT_NOBITS)
-                        file_offset += s->sh_size;
-                }
+        if ((f & 1<<8) && n) {
+            /* different rwx section flags */
+            if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
+                /* if in the middle of a page, w e duplicate the page in
+                   memory so that one copy is RX and the other is RW */
+                if ((addr & (s_align - 1)) != 0)
+                    addr += s_align;
+            } else {
+                align = s_align - 1;
             }
-	    if (j == 0) {
+        }
+
+        tmp = addr;
+        addr = (addr + align) & ~align;
+        file_offset += (int)(addr - tmp);
+        s->sh_offset = file_offset;
+        s->sh_addr = addr;
+
+        if (f & 1<<8) {
+            /* set new program header */
+            ph = &d->phdr[phfill + n];
+            ph->p_type = PT_LOAD;
+            ph->p_align = s_align;
+            ph->p_flags = PF_R;
+            if (f & SHF_WRITE)
+                ph->p_flags |= PF_W;
+            if (f & SHF_EXECINSTR)
+                ph->p_flags |= PF_X;
+            if (f & SHF_TLS) {
+                ph->p_type = PT_TLS;
+                ph->p_align = 4;
+            }
+            ph->p_offset = file_offset;
+            ph->p_vaddr = addr;
+            if (n == 0) {
 		/* Make the first PT_LOAD segment include the program
 		   headers itself (and the ELF header as well), it'll
 		   come out with same memory use but will make various
 		   tools like binutils strip work better.  */
-		ph->p_offset &= ~(ph->p_align - 1);
-		ph->p_vaddr &= ~(ph->p_align - 1);
-		ph->p_paddr &= ~(ph->p_align - 1);
-	    }
-            ph->p_filesz = file_offset - ph->p_offset;
-            ph->p_memsz = addr - ph->p_vaddr;
-            ph++;
-            if (j == 0) {
-                if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
-                    /* if in the middle of a page, we duplicate the page in
-                       memory so that one copy is RX and the other is RW */
-                    if ((addr & (s_align - 1)) != 0)
-                        addr += s_align;
-                } else {
-                    addr = (addr + s_align - 1) & ~(s_align - 1);
-                    file_offset = (file_offset + s_align - 1) & ~(s_align - 1);
-                }
+		ph->p_offset = 0;
+		ph->p_vaddr = base;
             }
+            ph->p_paddr = ph->p_vaddr;
+            ++n;
         }
+
+        if (f & 1<<4) {
+            Section *roinf = &d->_roinf;
+            if (roinf->sh_size == 0) {
+                roinf->sh_offset = s->sh_offset;
+                roinf->sh_addr = s->sh_addr;
+                roinf->sh_addralign = 1;
+	    }
+            roinf->sh_size = (addr - roinf->sh_addr) + s->sh_size;
+        }
+
+        addr += s->sh_size;
+        if (s->sh_type != SHT_NOBITS)
+            file_offset += s->sh_size;
+
+        ph->p_filesz = file_offset - ph->p_offset;
+        ph->p_memsz = addr - ph->p_vaddr;
     }
 
-    /* all other sections come after */
-    return layout_any_sections(s1, file_offset, sec_order, 0);
+    /* Fill other headers */
+    if (d->note)
+        fill_phdr(++ph, PT_NOTE, d->note);
+    if (d->dynamic)
+        fill_phdr(++ph, PT_DYNAMIC, d->dynamic)->p_flags |= PF_W;
+    if (d->roinf)
+        fill_phdr(++ph, PT_GNU_RELRO, d->roinf)->p_flags |= PF_W;
+    if (d->interp)
+        fill_phdr(&d->phdr[1], PT_INTERP, d->interp);
+    if (phfill) {
+        ph = &d->phdr[0];
+        ph->p_offset = sizeof(ElfW(Ehdr));
+        ph->p_vaddr = base + ph->p_offset;
+        ph->p_filesz = phnum * sizeof(ElfW(Phdr));
+        ph->p_align = 4;
+        fill_phdr(ph, PT_PHDR, NULL);
+    }
+    return file_offset;
 }
 
 /* put dynamic tag */
@@ -2073,75 +2131,6 @@ static void put_dt(Section *dynamic, int dt, addr_t val)
     dyn = section_ptr_add(dynamic, sizeof(ElfW(Dyn)));
     dyn->d_tag = dt;
     dyn->d_un.d_val = val;
-}
-
-static void fill_unloadable_phdr(ElfW(Phdr) *phdr, int phnum, Section *interp,
-                                 Section *dynamic, Section *note, struct ro_inf *roinf)
-{
-    ElfW(Phdr) *ph;
-
-    /* if interpreter, then add corresponding program header */
-    if (interp) {
-        ph = &phdr[0];
-
-        ph->p_type = PT_PHDR;
-        ph->p_offset = sizeof(ElfW(Ehdr));
-        ph->p_filesz = ph->p_memsz = phnum * sizeof(ElfW(Phdr));
-        ph->p_vaddr = interp->sh_addr - ph->p_filesz;
-        ph->p_paddr = ph->p_vaddr;
-        ph->p_flags = PF_R | PF_X;
-        ph->p_align = 4; /* interp->sh_addralign; */
-        ph++;
-
-        ph->p_type = PT_INTERP;
-        ph->p_offset = interp->sh_offset;
-        ph->p_vaddr = interp->sh_addr;
-        ph->p_paddr = ph->p_vaddr;
-        ph->p_filesz = interp->sh_size;
-        ph->p_memsz = interp->sh_size;
-        ph->p_flags = PF_R;
-        ph->p_align = interp->sh_addralign;
-    }
-
-    if (note) {
-        ph = &phdr[phnum - 2 - (roinf != NULL)];
-
-        ph->p_type = PT_NOTE;
-        ph->p_offset = note->sh_offset;
-        ph->p_vaddr = note->sh_addr;
-        ph->p_paddr = ph->p_vaddr;
-        ph->p_filesz = note->sh_size;
-        ph->p_memsz = note->sh_size;
-        ph->p_flags = PF_R;
-        ph->p_align = note->sh_addralign;
-    }
-
-    /* if dynamic section, then add corresponding program header */
-    if (dynamic) {
-        ph = &phdr[phnum - 1 - (roinf != NULL)];
-
-        ph->p_type = PT_DYNAMIC;
-        ph->p_offset = dynamic->sh_offset;
-        ph->p_vaddr = dynamic->sh_addr;
-        ph->p_paddr = ph->p_vaddr;
-        ph->p_filesz = dynamic->sh_size;
-        ph->p_memsz = dynamic->sh_size;
-        ph->p_flags = PF_R | PF_W;
-        ph->p_align = dynamic->sh_addralign;
-    }
-
-    if (roinf) {
-        ph = &phdr[phnum - 1];
-
-        ph->p_type = PT_GNU_RELRO;
-        ph->p_offset = roinf->sh_offset;
-        ph->p_vaddr = roinf->sh_addr;
-        ph->p_paddr = ph->p_vaddr;
-        ph->p_filesz = roinf->sh_size;
-        ph->p_memsz = roinf->sh_size;
-        ph->p_flags = PF_R;
-        ph->p_align = 1;
-    }
 }
 
 /* Fill the dynamic section with tags describing the address and size of
@@ -2245,6 +2234,7 @@ static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
     }
 }
 
+static int tidy_section_headers(TCCState *s1, int *sec_order);
 #endif /* ndef ELF_OBJ_ONLY */
 
 /* Create an ELF file on disk.
@@ -2266,6 +2256,9 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
         ehdr.e_phentsize = sizeof(ElfW(Phdr));
         ehdr.e_phnum = phnum;
         ehdr.e_phoff = sizeof(ElfW(Ehdr));
+#ifndef ELF_OBJ_ONLY
+        shnum = tidy_section_headers(s1, sec_order);
+#endif
     }
 
     /* align to 4 */
@@ -2328,8 +2321,8 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
     sort_syms(s1, symtab_section);
-    for(i = 1; i < s1->nb_sections; i++) {
-        s = s1->sections[sec_order[i]];
+    for(i = 1; i < shnum; i++) {
+        s = s1->sections[sec_order ? sec_order[i] : i];
         if (s->sh_type != SHT_NOBITS) {
             while (offset < s->sh_offset) {
                 fputc(0, f);
@@ -2348,7 +2341,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
         offset++;
     }
 
-    for(i = 0; i < s1->nb_sections; i++) {
+    for(i = 0; i < shnum; i++) {
         sh = &shdr;
         memset(sh, 0, sizeof(ElfW(Shdr)));
         s = s1->sections[i];
@@ -2429,7 +2422,7 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
 #ifndef ELF_OBJ_ONLY
 /* Sort section headers by assigned sh_addr, remove sections
    that we aren't going to output.  */
-static void tidy_section_headers(TCCState *s1, int *sec_order)
+static int tidy_section_headers(TCCState *s1, int *sec_order)
 {
     int i, nnew, l, *backmap;
     Section **snew, *s;
@@ -2469,8 +2462,8 @@ static void tidy_section_headers(TCCState *s1, int *sec_order)
 	sec_order[i] = i;
     tcc_free(s1->sections);
     s1->sections = snew;
-    s1->nb_sections = nnew;
     tcc_free(backmap);
+    return nnew;
 }
 
 #ifdef TCC_TARGET_ARM
@@ -2536,34 +2529,33 @@ static void alloc_sec_names(TCCState *s1, int is_obj);
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
 {
-    int i, ret, phnum, phfill, shnum, file_type, file_offset, *sec_order;
+    int i, ret, file_type, file_offset, *sec_order;
     struct dyn_inf dyninf = {0};
-    struct ro_inf roinf;
-    ElfW(Phdr) *phdr;
-    Section *interp, *dynamic, *dynstr, *note;
-    struct ro_inf *roinf_use = NULL;
+    Section *interp, *dynstr, *dynamic;
     int textrel, got_sym, dt_flags_1;
 
     file_type = s1->output_type;
     s1->nb_errors = 0;
     ret = -1;
-    phdr = NULL;
+    interp = dynstr = dynamic = NULL;
     sec_order = NULL;
-    interp = dynamic = dynstr = note = NULL;
+    dyninf.roinf = &dyninf._roinf;
 
 #ifdef TCC_TARGET_ARM
     create_arm_attribute_section (s1);
 #endif
 
 #if TARGETOS_OpenBSD
-    note = create_bsd_note_section (s1, ".note.openbsd.ident", "OpenBSD");
+    dyninf.note = create_bsd_note_section (s1, ".note.openbsd.ident", "OpenBSD");
 #endif
 
 #if TARGETOS_NetBSD
-    note = create_bsd_note_section (s1, ".note.netbsd.ident", "NetBSD");
+    dyninf.note = create_bsd_note_section (s1, ".note.netbsd.ident", "NetBSD");
 #endif
 
-    {
+#if TARGETOS_FreeBSD || TARGETOS_NetBSD
+    dyninf.roinf = NULL;
+#endif
         /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
         tcc_add_runtime(s1);
 	resolve_common_syms(s1);
@@ -2580,6 +2572,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 interp->sh_addralign = 1;
                 ptr = section_ptr_add(interp, 1 + strlen(elfint));
                 strcpy(ptr, elfint);
+                dyninf.interp = interp;
             }
 
             /* add dynamic symbol table */
@@ -2612,7 +2605,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
             build_got_entries(s1, 0);
         }
 	version_add (s1);
-    }
 
     textrel = set_sec_sizes(s1);
     alloc_sec_names(s1, 0);
@@ -2654,36 +2646,11 @@ static int elf_output_file(TCCState *s1, const char *filename)
         dynstr->sh_size = dynstr->data_offset;
     }
 
-    /* compute number of program headers */
-    phfill = 2;
-    for (i = 1; i < s1->nb_sections; i++)
-        if (s1->sections[i]->sh_flags & SHF_TLS)
-            phfill = 3;
-    phnum = 3;
-    if (interp)
-        phnum += phfill;
-    if (note)
-        phnum++;
-#if !TARGETOS_FreeBSD && !TARGETOS_NetBSD
-    /* GNU_RELRO */
-    phnum++, roinf_use = &roinf;
-#endif
-
-    /* allocate program segment headers */
-    phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
-    /* compute number of sections */
-    shnum = s1->nb_sections;
     /* this array is used to reorder sections in the output file */
-    sec_order = tcc_malloc(sizeof(int) * shnum);
-    sec_order[0] = 0;
-
+    sec_order = tcc_malloc(sizeof(int) * 2 * s1->nb_sections);
     /* compute section to program header mapping */
-    file_offset = layout_sections(s1, phdr, phnum, phfill, interp, &roinf, sec_order + 1);
+    file_offset = layout_sections(s1, sec_order, &dyninf);
 
-    /* Fill remaining program header and finalize relocation related to dynamic
-       linking. */
-    {
-        fill_unloadable_phdr(phdr, phnum, interp, dynamic, note, roinf_use);
         if (dynamic) {
             ElfW(Sym) *sym;
 
@@ -2705,7 +2672,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
         /* if building executable or DLL, then relocate each section
            except the GOT which is already relocated */
         relocate_syms(s1, s1->symtab, 0);
-        ret = -1;
         if (s1->nb_errors != 0)
             goto the_end;
         relocate_sections(s1);
@@ -2714,21 +2680,17 @@ static int elf_output_file(TCCState *s1, const char *filename)
             dynamic->data_offset = dyninf.data_offset;
             fill_dynamic(s1, &dyninf);
 	}
-	tidy_section_headers(s1, sec_order);
-
         /* Perform relocation to GOT or PLT entries */
         if (file_type == TCC_OUTPUT_EXE && s1->static_link)
             fill_got(s1);
         else if (s1->got)
             fill_local_got_entries(s1);
-    }
-    /* Create the ELF file with name 'filename' */
-    ret = tcc_write_elf_file(s1, filename, phnum, phdr, file_offset, sec_order);
-    s1->nb_sections = shnum;
 
+    /* Create the ELF file with name 'filename' */
+    ret = tcc_write_elf_file(s1, filename, dyninf.phnum, dyninf.phdr, file_offset, sec_order);
  the_end:
     tcc_free(sec_order);
-    tcc_free(phdr);
+    tcc_free(dyninf.phdr);
     return ret;
 }
 #endif /* ndef ELF_OBJ_ONLY */
@@ -2751,42 +2713,24 @@ static void alloc_sec_names(TCCState *s1, int is_obj)
     strsec->sh_size = strsec->data_offset;
 }
 
-static int layout_any_sections(TCCState *s1, int file_offset, int *sec_order, int is_obj)
+/* Output an elf .o file */
+static int elf_output_obj(TCCState *s1, const char *filename)
 {
-    int i;
     Section *s;
+    int i, ret, file_offset;
+    s1->nb_errors = 0;
+    /* Allocate strings for section names */
+    alloc_sec_names(s1, 1);
+    file_offset = sizeof (ElfW(Ehdr));
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (!is_obj && (s->sh_flags & SHF_ALLOC))
-            continue;
-        *sec_order++ = i;
-        file_offset = (file_offset + s->sh_addralign - 1) &
-            ~(s->sh_addralign - 1);
+        file_offset = (file_offset + 15) & -16;
         s->sh_offset = file_offset;
         if (s->sh_type != SHT_NOBITS)
             file_offset += s->sh_size;
     }
-    return file_offset;
-}
-
-/* Output an elf .o file */
-static int elf_output_obj(TCCState *s1, const char *filename)
-{
-    int ret, file_offset;
-    int *sec_order;
-    s1->nb_errors = 0;
-
-    /* Allocate strings for section names */
-    alloc_sec_names(s1, 1);
-
-    /* this array is used to reorder sections in the output file */
-    sec_order = tcc_malloc(sizeof(int) * s1->nb_sections);
-    sec_order[0] = 0;
-    file_offset = layout_any_sections(s1, sizeof (ElfW(Ehdr)), sec_order + 1, 1);
-
     /* Create the ELF file with name 'filename' */
-    ret = tcc_write_elf_file(s1, filename, 0, NULL, file_offset, sec_order);
-    tcc_free(sec_order);
+    ret = tcc_write_elf_file(s1, filename, 0, NULL, file_offset, NULL);
     return ret;
 }
 
