@@ -543,7 +543,7 @@ static void load_value(SValue *sv, int r)
 {
     o(0xE59F0000|(intr(r)<<12)); /* ldr r, [pc] */
     o(0xEA000000); /* b $+4 */
-#ifndef CONFIG_TCC_PIE
+#ifndef CONFIG_TCC_PIC
     if(sv->r & VT_SYM)
         greloc(cur_text_section, sv->sym, ind, R_ARM_ABS32);
     o(sv->c.i);

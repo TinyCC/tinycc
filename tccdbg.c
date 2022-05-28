@@ -392,9 +392,7 @@ ST_FUNC void tcc_debug_new(TCCState *s1)
 #ifdef CONFIG_TCC_BACKTRACE
     /* include stab info with standalone backtrace support */
     if (s1->do_backtrace
-        && (s1->output_type == TCC_OUTPUT_EXE
-         || s1->output_type == TCC_OUTPUT_DLL)
-         )
+        && (s1->output_type & (TCC_OUTPUT_EXE | TCC_OUTPUT_DLL)))
         shf = SHF_ALLOC | SHF_WRITE; // SHF_WRITE needed for musl/SELINUX
 #endif
     if (s1->dwarf) {

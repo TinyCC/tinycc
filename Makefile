@@ -91,6 +91,7 @@ NATIVE_DEFINES_$(CONFIG_arm64) += -DTCC_TARGET_ARM64
 NATIVE_DEFINES_$(CONFIG_riscv64) += -DTCC_TARGET_RISCV64
 NATIVE_DEFINES_$(CONFIG_BSD) += -DTARGETOS_$(TARGETOS)
 NATIVE_DEFINES_$(CONFIG_pie) += -DCONFIG_TCC_PIE
+NATIVE_DEFINES_$(CONFIG_pic) += -DCONFIG_TCC_PIC
 NATIVE_DEFINES_no_$(CONFIG_bcheck) += -DCONFIG_TCC_BCHECK=0
 NATIVE_DEFINES_no_$(CONFIG_backtrace) += -DCONFIG_TCC_BACKTRACE=0
 NATIVE_DEFINES += $(NATIVE_DEFINES_yes) $(NATIVE_DEFINES_no_no)
@@ -275,7 +276,7 @@ libtcc.a: $(LIBTCC_OBJ)
 
 # dynamic libtcc library
 libtcc.so: $(LIBTCC_OBJ)
-	$S$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDFLAGS)
+	$S$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LIBS) $(LDFLAGS)
 
 libtcc.so: CFLAGS+=-fPIC
 libtcc.so: LDFLAGS+=-fPIC

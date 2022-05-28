@@ -177,7 +177,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 
     switch(type) {
         case R_AARCH64_ABS64:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if ((s1->output_type & TCC_OUTPUT_DYN)) {
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {
@@ -194,7 +194,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             add64le(ptr, val);
             return;
         case R_AARCH64_ABS32:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (s1->output_type & TCC_OUTPUT_DYN) {
                 /* XXX: this logic may depend on TCC's codegen
                    now TCC uses R_AARCH64_RELATIVE even for a 64bit pointer */
                 qrel->r_offset = rel->r_offset;

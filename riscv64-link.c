@@ -284,7 +284,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
 
     case R_RISCV_32:
-        if (s1->output_type == TCC_OUTPUT_DLL) {
+        if (s1->output_type & TCC_OUTPUT_DYN) {
             /* XXX: this logic may depend on TCC's codegen
                now TCC uses R_RISCV_RELATIVE even for a 64bit pointer */
             qrel->r_offset = rel->r_offset;
@@ -296,7 +296,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         add32le(ptr, val);
         return;
     case R_RISCV_64:
-        if (s1->output_type == TCC_OUTPUT_DLL) {
+        if (s1->output_type & TCC_OUTPUT_DYN) {
             esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
             qrel->r_offset = rel->r_offset;
             if (esym_index) {

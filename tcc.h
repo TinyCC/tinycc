@@ -236,6 +236,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define TCC_USING_DOUBLE_FOR_LDOUBLE 1
 #endif
 
+#ifdef CONFIG_TCC_PIE
+# define CONFIG_TCC_PIC 1
+#endif
+
 /* ------------ path configuration ------------ */
 
 #ifndef CONFIG_SYSROOT
@@ -1485,6 +1489,7 @@ ST_DATA int func_bound_add_epilog;
 #define TCC_OUTPUT_FORMAT_ELF    0 /* default output format: ELF */
 #define TCC_OUTPUT_FORMAT_BINARY 1 /* binary image output */
 #define TCC_OUTPUT_FORMAT_COFF   2 /* COFF */
+#define TCC_OUTPUT_DYN           TCC_OUTPUT_DLL
 
 #define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
 

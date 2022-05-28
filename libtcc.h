@@ -65,11 +65,11 @@ LIBTCCAPI int tcc_compile_string(TCCState *s, const char *buf);
 
 /* set output type. MUST BE CALLED before any compilation */
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type);
-#define TCC_OUTPUT_MEMORY   1 /* output will be run in memory (default) */
+#define TCC_OUTPUT_MEMORY   1 /* output will be run in memory */
 #define TCC_OUTPUT_EXE      2 /* executable file */
-#define TCC_OUTPUT_DLL      3 /* dynamic library */
-#define TCC_OUTPUT_OBJ      4 /* object file */
-#define TCC_OUTPUT_PREPROCESS 5 /* only preprocess (used internally) */
+#define TCC_OUTPUT_DLL      4 /* dynamic library */
+#define TCC_OUTPUT_OBJ      3 /* object file */
+#define TCC_OUTPUT_PREPROCESS 5 /* only preprocess */
 
 /* equivalent to -Lpath option */
 LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname);

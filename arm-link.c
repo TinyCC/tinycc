@@ -380,7 +380,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
             return;
         case R_ARM_ABS32:
         case R_ARM_TARGET1:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (s1->output_type & TCC_OUTPUT_DYN) {
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {

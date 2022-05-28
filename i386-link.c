@@ -100,7 +100,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     unsigned plt_offset, relofs;
 
     /* on i386 if we build a DLL, we add a %ebx offset */
-    if (s1->output_type == TCC_OUTPUT_DLL)
+    if (s1->output_type & TCC_OUTPUT_DYN)
         modrm = 0xa3;
     else
         modrm = 0x25;
@@ -148,7 +148,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
     p = s1->plt->data;
     p_end = p + s1->plt->data_offset;
 
-    if (s1->output_type != TCC_OUTPUT_DLL && p < p_end) {
+    if (!(s1->output_type & TCC_OUTPUT_DYN) && p < p_end) {
         add32le(p + 2, s1->got->sh_addr);
         add32le(p + 8, s1->got->sh_addr);
         p += 16;
@@ -179,7 +179,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
 
     switch (type) {
         case R_386_32:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
+            if (s1->output_type & TCC_OUTPUT_DYN) {
                 esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
                 qrel->r_offset = rel->r_offset;
                 if (esym_index) {

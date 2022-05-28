@@ -928,12 +928,16 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
     /* if the relocation is allocated, we change its symbol table */
     if (sr->sh_flags & SHF_ALLOC) {
         sr->link = s1->dynsym;
-        if (s1->output_type == TCC_OUTPUT_DLL) {
+        if (s1->output_type & TCC_OUTPUT_DYN) {
             size_t r = (uint8_t*)qrel - sr->data;
             if (sizeof ((Stab_Sym*)0)->n_value < PTR_SIZE
                 && 0 == strcmp(s->name, ".stab"))
                 r = 0; /* cannot apply 64bit relocation to 32bit value */
             sr->data_offset = sr->sh_size = r;
+#ifdef CONFIG_TCC_PIE
+            if (r && 0 == (s->sh_flags & SHF_WRITE))
+                tcc_warning("%d relocations to ro-section %s", (unsigned)(r / sizeof *qrel), s->name);
+#endif
         }
     }
 #endif
@@ -1013,7 +1017,6 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
         case R_X86_64_PC32:
 	{
 	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-
             /* Hidden defined symbols can and must be resolved locally.
                We're misusing a PLT32 reloc for this, as that's always
                resolved to its address even in shared libs.  */
@@ -1026,6 +1029,8 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #elif defined(TCC_TARGET_ARM64)
         case R_AARCH64_PREL32:
 #endif
+            if (s1->output_type != TCC_OUTPUT_DLL)
+                break;
             if (get_sym_attr(s1, sym_index, 0)->dyn_index)
                 count++;
             break;
@@ -1188,7 +1193,8 @@ redo:
                 if (sym->st_shndx == SHN_UNDEF) {
                     ElfW(Sym) *esym;
 		    int dynindex;
-                    if (s1->output_type == TCC_OUTPUT_DLL && ! PCRELATIVE_DLLPLT)
+                    if (!PCRELATIVE_DLLPLT
+                        && (s1->output_type & TCC_OUTPUT_DYN))
                         continue;
 		    /* Relocations for UNDEF symbols would normally need
 		       to be transferred into the executable or shared object.
@@ -1228,7 +1234,7 @@ redo:
 		sym->st_shndx != SHN_UNDEF &&
                 (ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT ||
 		 ELFW(ST_BIND)(sym->st_info) == STB_LOCAL ||
-		 s1->output_type == TCC_OUTPUT_EXE)) {
+		 s1->output_type & TCC_OUTPUT_EXE)) {
 		if (pass != 0)
 		    continue;
                 rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
@@ -1483,7 +1489,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #endif
 #ifdef CONFIG_TCC_BACKTRACE
         if (s1->do_backtrace) {
-            if (s1->output_type == TCC_OUTPUT_EXE)
+            if (s1->output_type & TCC_OUTPUT_EXE)
                 tcc_add_support(s1, "bt-exe.o");
             if (s1->output_type != TCC_OUTPUT_DLL)
                 tcc_add_support(s1, "bt-log.o");
@@ -1513,7 +1519,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #if defined TCC_TARGET_MACHO
             /* nothing to do */
 #elif TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
-	    if (s1->output_type == TCC_OUTPUT_DLL)
+	    if (s1->output_type & TCC_OUTPUT_DYN)
 	        tcc_add_crt(s1, "crtendS.o");
 	    else
 	        tcc_add_crt(s1, "crtend.o");
@@ -1812,7 +1818,7 @@ static int set_sec_sizes(TCCState *s1)
         if (s->sh_type == SHT_RELX && !(s->sh_flags & SHF_ALLOC)) {
             /* when generating a DLL, we include relocations but
                we may patch them */
-            if (file_type == TCC_OUTPUT_DLL
+            if ((file_type & TCC_OUTPUT_DYN)
                 && (s1->sections[s->sh_info]->sh_flags & SHF_ALLOC)) {
                 int count = prepare_dynamic_rel(s1, s);
                 if (count) {
@@ -1820,7 +1826,7 @@ static int set_sec_sizes(TCCState *s1)
                     s->sh_flags |= SHF_ALLOC;
                     s->sh_size = count * sizeof(ElfW_Rel);
                     if (!(s1->sections[s->sh_info]->sh_flags & SHF_WRITE))
-                        textrel = 1;
+                        textrel += count;
                 }
             }
         } else if ((s->sh_flags & SHF_ALLOC)
@@ -1904,7 +1910,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                 a_offset += s_align;
             file_offset += (a_offset - p_offset);
         } else {
-            if (file_type == TCC_OUTPUT_DLL)
+            if (file_type & TCC_OUTPUT_DYN)
                 addr = 0;
             else
                 addr = ELF_START_ADDR;
@@ -1936,7 +1942,7 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                symbol tables, relocations, progbits, nobits */
             /* XXX: do faster and simpler sorting */
 	    f = -1;
-            for(k = 0; k < 7; k++) {
+            for(k = 0; k < 10; k++) {
                 for(i = 1; i < s1->nb_sections; i++) {
                     s = s1->sections[i];
                     /* compute if section should be included */
@@ -1970,9 +1976,6 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
                             if (k != 2)
                                 continue;
                         }
-                    } else if (s->sh_type == SHT_NOBITS) {
-                        if (k != 6)
-                            continue;
                     } else if ((s == rodata_section
 #ifdef CONFIG_TCC_BCHECK
 		                || s == bounds_section
@@ -1984,6 +1987,19 @@ static int layout_sections(TCCState *s1, ElfW(Phdr) *phdr,
 			/* Align next section on page size.
 			   This is needed to remap roinf section ro. */
 			f = 1;
+
+                    } else if (s->sh_type == SHT_PREINIT_ARRAY) {
+                        if (k != 6)
+                            continue;
+                    } else if (s->sh_type == SHT_INIT_ARRAY) {
+                        if (k != 7)
+                            continue;
+                    } else if (s->sh_type == SHT_FINI_ARRAY) {
+                        if (k != 8)
+                            continue;
+                    } else if (s->sh_type == SHT_NOBITS) {
+                        if (k != 9)
+                            continue;
                     } else {
                         if (k != 5)
                             continue;
@@ -2270,7 +2286,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
 #ifdef TCC_ARM_EABI
     ehdr.e_ident[EI_OSABI] = 0;
     ehdr.e_flags = EF_ARM_EABI_VER4;
-    if (file_type == TCC_OUTPUT_EXE || file_type == TCC_OUTPUT_DLL)
+    if (file_type & (TCC_OUTPUT_EXE | TCC_OUTPUT_DLL))
         ehdr.e_flags |= EF_ARM_HASENTRY;
     if (s1->float_abi == ARM_HARD_FLOAT)
         ehdr.e_flags |= EF_ARM_VFP_FLOAT;
@@ -2282,26 +2298,22 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
 #elif defined TCC_TARGET_RISCV64
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
 #endif
-    switch(file_type) {
-    default:
-    case TCC_OUTPUT_EXE:
-        ehdr.e_type = ET_EXEC;
-        ehdr.e_entry = get_sym_addr(s1,
-                                    s1->elf_entryname ?
-                                        s1->elf_entryname : "_start",
-                                    1, 0);
-        break;
-    case TCC_OUTPUT_DLL:
-        ehdr.e_type = ET_DYN;
-        ehdr.e_entry = s1->elf_entryname ?
-                            get_sym_addr(s1,s1->elf_entryname,1,0) :
-                            text_section->sh_addr;
-                            /* XXX: is it correct ? */
-        break;
-    case TCC_OUTPUT_OBJ:
+
+    if (file_type == TCC_OUTPUT_OBJ) {
         ehdr.e_type = ET_REL;
-        break;
+    } else {
+        if (file_type & TCC_OUTPUT_DYN)
+            ehdr.e_type = ET_DYN;
+        else
+            ehdr.e_type = ET_EXEC;
+        if (s1->elf_entryname)
+            ehdr.e_entry = get_sym_addr(s1, s1->elf_entryname, 1, 0);
+        else
+            ehdr.e_entry = get_sym_addr(s1, "_start", !!(file_type & TCC_OUTPUT_EXE), 0);
+        if (ehdr.e_entry == (addr_t)-1)
+            ehdr.e_entry = text_section->sh_addr;
     }
+
     ehdr.e_machine = EM_TCC_TARGET;
     ehdr.e_version = EV_CURRENT;
     ehdr.e_shoff = file_offset;
@@ -2530,7 +2542,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     ElfW(Phdr) *phdr;
     Section *interp, *dynamic, *dynstr, *note;
     struct ro_inf *roinf_use = NULL;
-    int textrel, got_sym;
+    int textrel, got_sym, dt_flags_1;
 
     file_type = s1->output_type;
     s1->nb_errors = 0;
@@ -2557,7 +2569,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 	resolve_common_syms(s1);
 
         if (!s1->static_link) {
-            if (file_type == TCC_OUTPUT_EXE) {
+            if (file_type & TCC_OUTPUT_EXE) {
                 char *ptr;
                 /* allow override the dynamic loader */
                 const char *elfint = getenv("LD_SO");
@@ -2590,7 +2602,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                     goto the_end;
             }
             build_got_entries(s1, got_sym);
-            if (file_type == TCC_OUTPUT_EXE) {
+            if (file_type & TCC_OUTPUT_EXE) {
                 bind_libs_dynsyms(s1);
             } else {
                 /* shared library case: simply export all global symbols */
@@ -2606,7 +2618,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
     alloc_sec_names(s1, 0);
 
     if (!s1->static_link) {
-        int i;
         /* add a list of needed dlls */
         for(i = 0; i < s1->nb_loaded_dlls; i++) {
             DLLReference *dllref = s1->loaded_dlls[i];
@@ -2618,15 +2629,19 @@ static int elf_output_file(TCCState *s1, const char *filename)
             put_dt(dynamic, s1->enable_new_dtags ? DT_RUNPATH : DT_RPATH,
                    put_elf_str(dynstr, s1->rpath));
 
-        if (file_type == TCC_OUTPUT_DLL) {
+        dt_flags_1 = DF_1_NOW;
+        if (file_type & TCC_OUTPUT_DYN) {
             if (s1->soname)
                 put_dt(dynamic, DT_SONAME, put_elf_str(dynstr, s1->soname));
             /* XXX: currently, since we do not handle PIC code, we
                must relocate the readonly segments */
             if (textrel)
                 put_dt(dynamic, DT_TEXTREL, 0);
+            if (file_type & TCC_OUTPUT_EXE)
+                dt_flags_1 = DF_1_NOW | DF_1_PIE;
         }
-
+        put_dt(dynamic, DT_FLAGS, DF_BIND_NOW);
+        put_dt(dynamic, DT_FLAGS_1, dt_flags_1);
         if (s1->symbolic)
             put_dt(dynamic, DT_SYMBOLIC, 0);
 
@@ -2639,20 +2654,16 @@ static int elf_output_file(TCCState *s1, const char *filename)
         dynstr->sh_size = dynstr->data_offset;
     }
 
-    for (i = 1; i < s1->nb_sections &&
-                !(s1->sections[i]->sh_flags & SHF_TLS); i++);
-    phfill = 2 + (i < s1->nb_sections);
-
     /* compute number of program headers */
-    if (file_type == TCC_OUTPUT_DLL)
-        phnum = 3;
-    else if (s1->static_link)
-        phnum = 3;
-    else {
-        phnum = 5 + (i < s1->nb_sections);
-    }
-
-    phnum += note != NULL;
+    phfill = 2;
+    for (i = 1; i < s1->nb_sections; i++)
+        if (s1->sections[i]->sh_flags & SHF_TLS)
+            phfill = 3;
+    phnum = 3;
+    if (interp)
+        phnum += phfill;
+    if (note)
+        phnum++;
 #if !TARGETOS_FreeBSD && !TARGETOS_NetBSD
     /* GNU_RELRO */
     phnum++, roinf_use = &roinf;
@@ -2679,7 +2690,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
             /* put in GOT the dynamic section address and relocate PLT */
             write32le(s1->got->data, dynamic->sh_addr);
             if (file_type == TCC_OUTPUT_EXE
-                || (RELOCATE_DLLPLT && file_type == TCC_OUTPUT_DLL))
+                || (RELOCATE_DLLPLT && (file_type & TCC_OUTPUT_DYN)))
                 relocate_plt(s1);
 
             /* relocate symbols in .dynsym now that final addresses are known */

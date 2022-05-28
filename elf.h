@@ -825,6 +825,7 @@ typedef struct
 #define	DF_1_SYMINTPOSE	0x00800000	/* Object has individual interposers.  */
 #define	DF_1_GLOBAUDIT	0x01000000	/* Global auditing required.  */
 #define	DF_1_SINGLETON	0x02000000	/* Singleton symbols are used.  */
+#define	DF_1_PIE	0x08000000
 
 /* Flags for the feature selection in DT_FEATURE_1.  */
 #define DTF_1_PARINIT	0x00000001

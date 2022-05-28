@@ -862,6 +862,10 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 {
+#ifdef CONFIG_TCC_PIE
+    if (output_type == TCC_OUTPUT_EXE)
+        output_type |= TCC_OUTPUT_DYN;
+#endif
     s->output_type = output_type;
 
     if (!s->nostdinc) {
@@ -869,6 +873,10 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         /* -isystem paths have already been handled */
         tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
     }
+
+    if (output_type == TCC_OUTPUT_PREPROCESS)
+        return 0;
+
 #ifdef CONFIG_TCC_BCHECK
     if (s->do_bounds_check) {
         /* if bound checking, then add corresponding sections */
@@ -905,13 +913,13 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #else
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
+
     /* add libc crt1/crti objects */
-    if ((output_type == TCC_OUTPUT_EXE || output_type == TCC_OUTPUT_DLL) &&
-        !s->nostdlib) {
+    if (output_type != TCC_OUTPUT_MEMORY && !s->nostdlib) {
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
-        if (output_type == TCC_OUTPUT_DLL)
+        if (output_type & TCC_OUTPUT_DYN)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
@@ -921,7 +929,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_crt(s, "crti.o");
         if (s->static_link)
             tcc_add_crt(s, "crtbeginT.o");
-        else if (output_type == TCC_OUTPUT_DLL)
+        else if (output_type & TCC_OUTPUT_DYN)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
@@ -931,7 +939,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_crt(s, "crti.o");
         if (s->static_link)
             tcc_add_crt(s, "crtbeginT.o");
-        else if (output_type == TCC_OUTPUT_DLL)
+        else if (output_type & TCC_OUTPUT_DYN)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");
