@@ -1039,15 +1039,15 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #endif
 
 #ifdef NEED_BUILD_GOT
-static void build_got(TCCState *s1)
+static int build_got(TCCState *s1)
 {
     /* if no got, then create it */
     s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     s1->got->sh_entsize = 4;
-    set_elf_sym(symtab_section, 0, 4, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
-                0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
     /* keep space for _DYNAMIC pointer and two dummy got entries */
     section_ptr_add(s1->got, 3 * PTR_SIZE);
+    return set_elf_sym(symtab_section, 0, 0, ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
+        0, s1->got->sh_num, "_GLOBAL_OFFSET_TABLE_");
 }
 
 /* Create a GOT and (for function call) a PLT entry corresponding to a symbol
@@ -1152,7 +1152,7 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
 /* build GOT and PLT entries */
 /* Two passes because R_JMP_SLOT should become first. Some targets
    (arm, arm64) do not allow mixing R_JMP_SLOT and R_GLOB_DAT. */
-ST_FUNC void build_got_entries(TCCState *s1)
+ST_FUNC void build_got_entries(TCCState *s1, int got_sym)
 {
     Section *s;
     ElfW_Rel *rel;
@@ -1160,7 +1160,6 @@ ST_FUNC void build_got_entries(TCCState *s1)
     int i, type, gotplt_entry, reloc_type, sym_index;
     struct sym_attr *attr;
     int pass = 0;
-
 redo:
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
@@ -1252,7 +1251,7 @@ redo:
             }
 
             if (!s1->got)
-                build_got(s1);
+                got_sym = build_got(s1);
 
             if (gotplt_entry == BUILD_GOT_ONLY)
                 continue;
@@ -1265,11 +1264,11 @@ redo:
     }
     if (++pass < 2)
         goto redo;
-
     /* .rel.plt refers to .got actually */
     if (s1->plt && s1->plt->reloc)
         s1->plt->reloc->sh_info = s1->got->sh_num;
-
+    if (got_sym) /* set size */
+        ((ElfW(Sym)*)symtab_section->data)[got_sym].st_size = s1->got->data_offset;
 }
 #endif /* def NEED_BUILD_GOT */
 
@@ -1681,8 +1680,7 @@ static void fill_local_got_entries(TCCState *s1)
 }
 
 /* Bind symbols of executable: resolve undefined symbols from exported symbols
-   in shared libraries and export non local defined symbols to shared libraries
-   if -rdynamic switch was given on command line */
+   in shared libraries */
 static void bind_exe_dynsyms(TCCState *s1)
 {
     const char *name;
@@ -1755,11 +1753,6 @@ static void bind_exe_dynsyms(TCCState *s1)
                     tcc_error_noabort("undefined symbol '%s'", name);
                 }
             }
-        } else if (s1->rdynamic && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
-            /* if -rdynamic option, then export all non local symbols */
-            name = (char *) symtab_section->link->data + sym->st_name;
-            set_elf_sym(s1->dynsym, sym->st_value, sym->st_size, sym->st_info,
-                        0, sym->st_shndx, name);
         }
     }
 }
@@ -1768,25 +1761,28 @@ static void bind_exe_dynsyms(TCCState *s1)
    are referenced by shared libraries. The reason is that the dynamic loader
    search symbol first in executable and then in libraries. Therefore a
    reference to a symbol already defined by a library can still be resolved by
-   a symbol in the executable. */
+   a symbol in the executable.   With -rdynamic, export all defined symbols */
 static void bind_libs_dynsyms(TCCState *s1)
 {
     const char *name;
-    int sym_index;
+    int dynsym_index;
     ElfW(Sym) *sym, *esym;
 
-    for_each_elem(s1->dynsymtab_section, 1, esym, ElfW(Sym)) {
-        name = (char *) s1->dynsymtab_section->link->data + esym->st_name;
-        sym_index = find_elf_sym(symtab_section, name);
-        sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-        if (sym_index && sym->st_shndx != SHN_UNDEF
+    for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
+        name = (char *)symtab_section->link->data + sym->st_name;
+        dynsym_index = find_elf_sym(s1->dynsymtab_section, name);
+        if (sym->st_shndx != SHN_UNDEF
             && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
-            set_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
-                sym->st_info, 0, sym->st_shndx, name);
-        } else if (esym->st_shndx == SHN_UNDEF) {
-            /* weak symbols can stay undefined */
-            if (ELFW(ST_BIND)(esym->st_info) != STB_WEAK)
-                tcc_warning("undefined dynamic symbol '%s'", name);
+            if (dynsym_index || s1->rdynamic)
+                set_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
+                            sym->st_info, 0, sym->st_shndx, name);
+        } else if (dynsym_index) {
+            esym = (ElfW(Sym) *)s1->dynsymtab_section->data + dynsym_index;
+            if (esym->st_shndx == SHN_UNDEF) {
+                /* weak symbols can stay undefined */
+                if (ELFW(ST_BIND)(esym->st_info) != STB_WEAK)
+                    tcc_warning("undefined dynamic symbol '%s'", name);
+            }
         }
     }
 }
@@ -1800,11 +1796,10 @@ static void export_global_syms(TCCState *s1)
     int dynindex, index;
     const char *name;
     ElfW(Sym) *sym;
-
     for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
         if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
 	    name = (char *) symtab_section->link->data + sym->st_name;
-	    dynindex = put_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
+	    dynindex = set_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
 				   sym->st_info, 0, sym->st_shndx, name);
 	    index = sym - (ElfW(Sym) *) symtab_section->data;
             get_sym_attr(s1, index, 1)->dyn_index = dynindex;
@@ -2532,13 +2527,7 @@ static Section *create_bsd_note_section(TCCState *s1,
 }
 #endif
 
-static void elf_patch_global_offset_size(TCCState *s1, Section *s)
-{
-    int sym_index;
-
-    if (s && (sym_index = find_elf_sym(s, "_GLOBAL_OFFSET_TABLE_")))
-	((ElfW(Sym) *)s->data)[sym_index].st_size = s1->got->data_offset;
-}
+static void alloc_sec_names(TCCState *s1, int is_obj);
 
 /* Output an elf, coff or binary file */
 /* XXX: suppress unneeded sections */
@@ -2550,7 +2539,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
     ElfW(Phdr) *phdr;
     Section *interp, *dynamic, *dynstr, *note;
     struct ro_inf *roinf_use = NULL;
-    int textrel;
+    int textrel, got_sym;
 
     file_type = s1->output_type;
     s1->nb_errors = 0;
@@ -2603,22 +2592,22 @@ static int elf_output_file(TCCState *s1, const char *filename)
             dynamic->link = dynstr;
             dynamic->sh_entsize = sizeof(ElfW(Dyn));
 
-            if (!s1->got)
-                build_got(s1);
-
+            got_sym = build_got(s1);
             if (file_type == TCC_OUTPUT_EXE) {
                 bind_exe_dynsyms(s1);
                 if (s1->nb_errors)
                     goto the_end;
+            }
+            build_got_entries(s1, got_sym);
+            if (file_type == TCC_OUTPUT_EXE) {
                 bind_libs_dynsyms(s1);
             } else {
                 /* shared library case: simply export all global symbols */
                 export_global_syms(s1);
             }
+        } else {
+            build_got_entries(s1, 0);
         }
-        build_got_entries(s1);
-	elf_patch_global_offset_size(s1, symtab_section);
-	elf_patch_global_offset_size(s1, s1->dynsym);
 	version_add (s1);
     }
 

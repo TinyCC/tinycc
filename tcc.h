@@ -1567,7 +1567,7 @@ enum gotplt_entry {
 #if !defined TCC_TARGET_MACHO || defined TCC_IS_NATIVE
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr);
 ST_FUNC void relocate_plt(TCCState *s1);
-ST_FUNC void build_got_entries(TCCState *s1); /* in tccelf.c */
+ST_FUNC void build_got_entries(TCCState *s1, int got_sym); /* in tccelf.c */
 #define NEED_BUILD_GOT
 
 #endif
