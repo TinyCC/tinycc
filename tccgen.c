@@ -509,11 +509,11 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num,
     update_storage(sym);
 }
 
-ST_FUNC void put_extern_sym(Sym *sym, Section *section,
-                           addr_t value, unsigned long size)
+ST_FUNC void put_extern_sym(Sym *sym, Section *s, addr_t value, unsigned long size)
 {
-    int sh_num = section ? section->sh_num : SHN_UNDEF;
-    put_extern_sym2(sym, sh_num, value, size, 1);
+    if (nocode_wanted && (NODATA_WANTED || (s && s == cur_text_section)))
+        return;
+    put_extern_sym2(sym, s ? s->sh_num : SHN_UNDEF, value, size, 1);
 }
 
 /* add a new relocation entry to symbol 'sym' in section 's' */
@@ -5333,7 +5333,7 @@ ST_FUNC void unary(void)
             type.t |= VT_ARRAY;
             type.ref->c = len;
             sec = rodata_section;
-            vpush_ref(&type, sec, sec->data_offset, NODATA_WANTED ? 0 : len);
+            vpush_ref(&type, sec, sec->data_offset, len);
             if (!NODATA_WANTED)
                 memcpy(section_ptr_add(sec, len), funcname, len);
             next();
