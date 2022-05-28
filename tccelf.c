@@ -547,7 +547,7 @@ LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
 static void
 version_add (TCCState *s1)
 {
-    int i, j;
+    int i;
     ElfW(Sym) *sym;
     ElfW(Verneed) *vn = NULL;
     Section *symtab;
@@ -594,14 +594,8 @@ version_add (TCCState *s1)
             ElfW(Vernaux) *vna = 0;
             if (sv->out_index < 1)
               continue;
-	    /* If present in verneed it should be in DT_NEEDED */
-	    for (j = 0; j < s1->nb_loaded_dlls; j++) {
-		DLLReference *dllref = s1->loaded_dlls[j];
-		if (!strcmp(sv->lib, dllref->name)) {
-		    dllref->level = 0;
-		    break;
-		}
-	    }
+            /* make sure that a DT_NEEDED tag is put */
+            tcc_add_dllref(s1, sv->lib, 0);
             vnofs = section_add(verneed_section, sizeof(*vn), 1);
             vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
             vn->vn_version = 1;
@@ -3425,14 +3419,13 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 {
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh, *sh1;
-    int i, j, nb_syms, nb_dts, sym_bind, ret;
+    int i, nb_syms, nb_dts, sym_bind, ret = -1;
     ElfW(Sym) *sym, *dynsym;
     ElfW(Dyn) *dt, *dynamic;
 
     char *dynstr;
     int sym_index;
     const char *name, *soname;
-    DLLReference *dllref;
     struct versym_info v;
 
     full_read(fd, &ehdr, sizeof(ehdr));
@@ -3482,36 +3475,23 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         }
     }
 
+    if (!dynamic)
+        goto the_end;
+
     /* compute the real library name */
     soname = tcc_basename(filename);
-
-    for(i = 0, dt = dynamic; i < nb_dts; i++, dt++) {
-        if (dt->d_tag == DT_SONAME) {
+    for(i = 0, dt = dynamic; i < nb_dts; i++, dt++)
+        if (dt->d_tag == DT_SONAME)
             soname = dynstr + dt->d_un.d_val;
-        } else if (dt->d_tag == DT_RPATH) {
-            tcc_add_library_path(s1, dynstr + dt->d_un.d_val);
-        }
-    }
 
     /* if the dll is already loaded, do not load it */
-    for(i = 0; i < s1->nb_loaded_dlls; i++) {
-        dllref = s1->loaded_dlls[i];
-        if (!strcmp(soname, dllref->name)) {
-            /* but update level if needed */
-            if (level < dllref->level)
-                dllref->level = level;
-            ret = 0;
-            goto the_end;
-        }
-    }
+    if (tcc_add_dllref(s1, soname, level)->found)
+        goto ret_success;
 
     if (v.nb_versyms != nb_syms)
         tcc_free (v.versym), v.versym = NULL;
     else
         store_version(s1, &v, dynstr);
-
-    /* add the dll and its level */
-    tcc_add_dllref(s1, soname)->level = level;
 
     /* add dynamic symbols in dynsym_section */
     for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {
@@ -3528,25 +3508,25 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         }
     }
 
+    for(i = 0, dt = dynamic; i < nb_dts; i++, dt++)
+        if (dt->d_tag == DT_RPATH)
+            tcc_add_library_path(s1, dynstr + dt->d_un.d_val);
+
     /* load all referenced DLLs */
     for(i = 0, dt = dynamic; i < nb_dts; i++, dt++) {
         switch(dt->d_tag) {
         case DT_NEEDED:
             name = dynstr + dt->d_un.d_val;
-            for(j = 0; j < s1->nb_loaded_dlls; j++) {
-                dllref = s1->loaded_dlls[j];
-                if (!strcmp(name, dllref->name))
-                    goto already_loaded;
-            }
+            if (tcc_add_dllref(s1, name, -1))
+                continue;
             if (tcc_add_dll(s1, name, AFF_REFERENCED_DLL) < 0) {
                 tcc_error_noabort("referenced dll '%s' not found", name);
-                ret = -1;
                 goto the_end;
             }
-        already_loaded:
-            break;
         }
     }
+
+ ret_success:
     ret = 0;
  the_end:
     tcc_free(dynstr);

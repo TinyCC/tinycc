@@ -609,6 +609,7 @@ typedef struct Section {
 typedef struct DLLReference {
     int level;
     void *handle;
+    unsigned char found, index;
     char name[1];
 } DLLReference;
 
@@ -1279,7 +1280,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv, int optind);
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path);
 #endif
-ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname);
+ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname, int level);
 ST_FUNC char *tcc_load_text(int fd);
 
 /* tcc_parse_args return codes: */

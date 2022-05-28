@@ -1533,16 +1533,6 @@ ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t va
         );
 }
 
-static int pe_add_dllref(TCCState *s1, const char *dllname)
-{
-    int i;
-    for (i = 0; i < s1->nb_loaded_dlls; ++i)
-        if (0 == strcmp(s1->loaded_dlls[i]->name, dllname))
-            return i + 1;
-    tcc_add_dllref(s1, dllname);
-    return s1->nb_loaded_dlls;
-}
-
 static int read_mem(int fd, unsigned offset, void *buffer, unsigned len)
 {
     lseek(fd, offset, SEEK_SET);
@@ -1732,7 +1722,7 @@ static int pe_load_def(TCCState *s1, int fd)
             ++state;
             break;
         case 2:
-            dllindex = pe_add_dllref(s1, dllname);
+            dllindex = tcc_add_dllref(s1, dllname, 0)->index;
             ++state;
             /* fall through */
         default:
@@ -1769,7 +1759,7 @@ static int pe_load_dll(TCCState *s1, int fd, const char *filename)
     if (ret) {
         return -1;
     } else if (p) {
-        index = pe_add_dllref(s1, filename);
+        index = tcc_add_dllref(s1, filename, 0)->index;
         for (q = p; *q; q += 1 + strlen(q))
             pe_putimport(s1, index, q, 0);
         tcc_free(p);

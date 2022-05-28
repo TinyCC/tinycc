@@ -835,25 +835,6 @@ static uint32_t macho_swap32(uint32_t x)
   return (x >> 24) | (x << 24) | ((x >> 8) & 0xff00) | ((x & 0xff00) << 8);
 }
 #define SWAP(x) (swap ? macho_swap32(x) : (x))
-
-ST_FUNC int macho_add_dllref(TCCState* s1, int lev, const char* soname)
-{
-     /* if the dll is already loaded, do not load it */
-    DLLReference *dllref;
-    int i;
-    for(i = 0; i < s1->nb_loaded_dlls; i++) {
-        dllref = s1->loaded_dlls[i];
-        if (!strcmp(soname, dllref->name)) {
-            /* but update level if needed */
-            if (lev < dllref->level)
-                dllref->level = lev;
-            return -1;
-        }
-    }
-    tcc_add_dllref(s1, soname)->level = lev;
-    return 0;
-}
-
 #define tbd_parse_movepast(s) \
     (pos = (pos = strstr(pos, s)) ? pos + strlen(s) : NULL)
 #define tbd_parse_movetoany(cs) (pos = strpbrk(pos, cs))
@@ -925,7 +906,8 @@ ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
     if (!tbd_parse_movetoany("\n \"'")) goto the_end;
     tbd_parse_trample;
     ret = 0;
-    if (macho_add_dllref(s1, lev, soname) != 0) goto the_end;
+    if (tcc_add_dllref(s1, soname, lev)->found)
+        goto the_end;
     while(pos) {
         char* sym = NULL;
         int cont = 1;
@@ -1047,7 +1029,7 @@ ST_FUNC int macho_load_dll(TCCState * s1, int fd, const char* filename, int lev)
         lc = (struct load_command*) ((char*)lc + lc->cmdsize);
     }
 
-    if (0 != macho_add_dllref(s1, lev, soname))
+    if (tcc_add_dllref(s1, soname, lev)->found)
         goto the_end;
 
     if (!nsyms || !nextdef)

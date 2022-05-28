@@ -957,11 +957,29 @@ LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
     return 0;
 }
 
-ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname)
+/* add/update a 'DLLReference', Just find if level == -1  */
+ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname, int level)
 {
-    DLLReference *ref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
+    DLLReference *ref = NULL;
+    int i;
+    for (i = 0; i < s1->nb_loaded_dlls; i++)
+        if (0 == strcmp(s1->loaded_dlls[i]->name, dllname)) {
+            ref = s1->loaded_dlls[i];
+            break;
+        }
+    if (level == -1)
+        return ref;
+    if (ref) {
+        if (level < ref->level)
+            ref->level = level;
+        ref->found = 1;
+        return ref;
+    }
+    ref = tcc_mallocz(sizeof(DLLReference) + strlen(dllname));
     strcpy(ref->name, dllname);
     dynarray_add(&s1->loaded_dlls, &s1->nb_loaded_dlls, ref);
+    ref->level = level;
+    ref->index = s1->nb_loaded_dlls;
     return ref;
 }
 
@@ -1042,7 +1060,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
                     soname = macho_tbd_soname(filename);
                 dl = dlopen(soname, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl)
-                    tcc_add_dllref(s1, soname)->handle = dl, ret = 0;
+                    tcc_add_dllref(s1, soname, 0)->handle = dl, ret = 0;
 	        if (filename != soname)
 		    tcc_free((void *)soname);
 #endif
@@ -1070,7 +1088,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #ifdef TCC_IS_NATIVE
                 void* dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
                 if (dl)
-                    tcc_add_dllref(s1, filename)->handle = dl, ret = 0;
+                    tcc_add_dllref(s1, filename, 0)->handle = dl, ret = 0;
 #endif
             } else
                 ret = tcc_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
