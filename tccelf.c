@@ -565,9 +565,11 @@ version_add (TCCState *s1)
     symtab = s1->dynsym;
     end_sym = symtab->data_offset / sizeof (ElfSym);
     versym = section_ptr_add(versym_section, end_sym * sizeof(ElfW(Half)));
-    for (sym_index = 0; sym_index < end_sym; ++sym_index) {
+    for (sym_index = 1; sym_index < end_sym; ++sym_index) {
         int dllindex, verndx;
         sym = &((ElfW(Sym) *)symtab->data)[sym_index];
+        if (sym->st_shndx != SHN_UNDEF)
+            continue; /* defined symbol doesn't need library version */
         name = (char *) symtab->link->data + sym->st_name;
         dllindex = find_elf_sym(s1->dynsymtab_section, name);
         verndx = (dllindex && dllindex < nb_sym_to_version)
@@ -576,8 +578,7 @@ version_add (TCCState *s1)
             if (!sym_versions[verndx].out_index)
               sym_versions[verndx].out_index = nb_versions++;
             versym[sym_index] = sym_versions[verndx].out_index;
-        } else
-          versym[sym_index] = 0;
+        }
     }
     /* generate verneed section, but not when it will be empty.  Some
        dynamic linkers look at their contents even when DTVERNEEDNUM and
@@ -3087,14 +3088,6 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                                 sym->st_info, sym->st_other,
                                 sym->st_shndx, name);
         old_to_new_syms[i] = sym_index;
-#ifndef ELF_OBJ_ONLY
-	/* Remove version symbol if new value present */
-	sym_index = find_elf_sym(s1->dynsymtab_section, name);
-	if (sym_index && sym_index < nb_sym_to_version &&
-	    sym->st_shndx != SHN_UNDEF &&
-	    ELFW(ST_BIND)(sym->st_info) != STB_LOCAL)
-	    sym_to_version[sym_index] = -1;
-#endif
     }
 
     /* third pass to patch relocation entries */
