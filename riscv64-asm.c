@@ -643,6 +643,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sltu:
     case TOK_ASM_sltiu:
         asm_data_processing_opcode(s1, token);
+	return;
 
     case TOK_ASM_lb:
     case TOK_ASM_lh:
@@ -712,9 +713,13 @@ ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
 ST_FUNC int asm_parse_regvar (int t)
 {
     if (t >= TOK_ASM_x0 && t <= TOK_ASM_pc) { /* register name */
+	if (t >= TOK_ASM_zero && t <= TOK_ASM_t6)
+	    return t - TOK_ASM_zero;
         switch (t) {
+            case TOK_ASM_s0:
+                return 8;
             case TOK_ASM_pc:
-                return -1; // TODO: Figure out where it can be used after all
+	        tcc_error("PC register not implemented.");
             default:
                 return t - TOK_ASM_x0;
         }

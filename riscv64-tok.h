@@ -41,7 +41,6 @@
 /* register macros */
 
  DEF_ASM(zero)
-/*
  DEF_ASM(ra)
  DEF_ASM(sp)
  DEF_ASM(gp)
@@ -75,7 +74,6 @@
  DEF_ASM(t6)
 
  DEF_ASM(s0) // = x8
-*/
 
  DEF_ASM(pc)
 
