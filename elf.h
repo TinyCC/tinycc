@@ -159,7 +159,12 @@ typedef struct
 #define ELFOSABI_TRU64		10	/* Compaq TRU64 UNIX.  */
 #define ELFOSABI_MODESTO	11	/* Novell Modesto.  */
 #define ELFOSABI_OPENBSD	12	/* OpenBSD.  */
-#define ELFOSABI_ARM_AEABI	64	/* ARM EABI */
+#define ELFOSABI_OPENVMS        13
+#define ELFOSABI_NSK            14      /* Hewlett-Packard Non-Stop Kernel.  */
+#define ELFOSABI_AROS           15      /* Amiga Research OS.  */
+#define ELFOSABI_FENIXOS        16      /* FenixOS.  */
+#define ELFOSABI_ARM_AEABI	64	/* ARM EABI.  */
+#define ELFOSABI_C6000_LINUX    65      /* Linux TMS320C6000.  */
 #define ELFOSABI_ARM		97	/* ARM */
 #define ELFOSABI_STANDALONE	255	/* Standalone (embedded) application */
 
