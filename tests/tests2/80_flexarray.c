@@ -15,6 +15,7 @@ int f1int (void) {
     struct wint q = {"bugs"};
     return !s[0];
 }
+int empty[] = {}; // GNU extension
 int main (void) {
    char s[9]="nonono";
    static struct wchar q = {"bugs", {'c'}};

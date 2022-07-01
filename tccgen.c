@@ -7660,6 +7660,10 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
             }
 
 	    len = 0;
+            /* GNU extension: if the initializer is empty for a flex array,
+               it's size is zero.  We won't enter the loop, so set the size
+               now.  */
+            decl_design_flex(p, s, len);
 	    while (tok != '}' || (flags & DIF_HAVE_ELEM)) {
 		len = decl_designator(p, type, c, &f, flags, len);
 		flags &= ~DIF_HAVE_ELEM;
