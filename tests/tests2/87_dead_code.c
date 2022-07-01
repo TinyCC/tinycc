@@ -56,6 +56,15 @@ static void dowhile(void)
   } while (check());
 }
 
+static void nondead_after_dead_return(void)
+{
+  /* This statement expr is not entered, and hence that fact that it
+     doesn't fall-through should not influence the surrounding code.  */
+  0 && ({ return; 0;});
+  printf ("nondead works\n");
+  return;
+}
+
 int main (void)
 {
   int i = 1;
@@ -150,6 +159,7 @@ enterloop3:
   }
 
   dowhile();
+  nondead_after_dead_return();
 
   return 0;
 }
