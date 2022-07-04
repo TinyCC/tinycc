@@ -557,11 +557,17 @@ void goto_test()
 {
     int i;
     static void *label_table[3] = { &&label1, &&label2, &&label3 };
+    struct {
+        int bla;
+        /* This needs to parse as typedef, not as label.  */
+        typedef_and_label : 32;
+    } y = {1};
 
     printf("\ngoto:\n");
     i = 0;
+    /* This is a normal decl.  */
+    typedef_and_label x;
     /* This needs to parse as label, not as start of decl.  */
- typedef_and_label x;
  typedef_and_label:
  s_loop:
     if (i >= 10) 

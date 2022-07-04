@@ -44,7 +44,6 @@ static int nb_sym_pools;
 static Sym *all_cleanups, *pending_gotos;
 static int local_scope;
 static int in_sizeof;
-static int in_generic;
 ST_DATA char debug_modes;
 
 ST_DATA SValue *vtop;
@@ -138,7 +137,7 @@ static void gen_cast(CType *type);
 static void gen_cast_s(int t);
 static inline CType *pointed_type(CType *type);
 static int is_compatible_types(CType *type1, CType *type2);
-static int parse_btype(CType *type, AttributeDef *ad);
+static int parse_btype(CType *type, AttributeDef *ad, int ignore_label);
 static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void init_putv(init_params *p, CType *type, unsigned long c);
@@ -4282,7 +4281,7 @@ do_decl:
             c = 0;
             flexible = 0;
             while (tok != '}') {
-                if (!parse_btype(&btype, &ad1)) {
+                if (!parse_btype(&btype, &ad1, 0)) {
 		    skip(';');
 		    continue;
 		}
@@ -4415,7 +4414,7 @@ static void parse_btype_qualify(CType *type, int qualifiers)
 /* return 0 if no type declaration. otherwise, return the basic type
    and skip it. 
  */
-static int parse_btype(CType *type, AttributeDef *ad)
+static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
 {
     int t, u, bt, st, type_found, typespec_found, g, n;
     Sym *s;
@@ -4469,7 +4468,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
               next();
               skip('(');
               memset(&ad1, 0, sizeof(AttributeDef));
-              if (parse_btype(&type1, &ad1)) {
+              if (parse_btype(&type1, &ad1, 0)) {
                   type_decl(&type1, &ad1, &n, TYPE_ABSTRACT);
                   if (ad1.a.aligned)
                     n = 1 << (ad1.a.aligned - 1);
@@ -4639,7 +4638,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
                 goto the_end;
 
             n = tok, next();
-            if (tok == ':' && !in_generic) {
+            if (tok == ':' && ignore_label) {
                 /* ignore if it's a label */
                 unget_tok(n);
                 goto the_end;
@@ -4730,7 +4729,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	  return 0;
 	if (tok == ')')
 	  l = 0;
-	else if (parse_btype(&pt, &ad1))
+	else if (parse_btype(&pt, &ad1, 0))
 	  l = FUNC_NEW;
 	else if (td & (TYPE_DIRECT|TYPE_ABSTRACT)) {
 	    merge_attr (ad, &ad1);
@@ -4774,7 +4773,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                     next();
                     break;
                 }
-		if (l == FUNC_NEW && !parse_btype(&pt, &ad1))
+		if (l == FUNC_NEW && !parse_btype(&pt, &ad1, 0))
 		    tcc_error("invalid type");
             }
         } else
@@ -5081,7 +5080,7 @@ static void parse_expr_type(CType *type)
     AttributeDef ad;
 
     skip('(');
-    if (parse_btype(type, &ad)) {
+    if (parse_btype(type, &ad, 0)) {
         type_decl(type, &ad, &n, TYPE_ABSTRACT);
     } else {
         expr_type(type, gexpr);
@@ -5094,7 +5093,7 @@ static void parse_type(CType *type)
     AttributeDef ad;
     int n;
 
-    if (!parse_btype(type, &ad)) {
+    if (!parse_btype(type, &ad, 0)) {
         expect("type");
     }
     type_decl(type, &ad, &n, TYPE_ABSTRACT);
@@ -5362,7 +5361,7 @@ ST_FUNC void unary(void)
     case '(':
         next();
         /* cast ? */
-        if (parse_btype(&type, &ad)) {
+        if (parse_btype(&type, &ad, 0)) {
             type_decl(&type, &ad, &n, TYPE_ABSTRACT);
             skip(')');
             /* check ISOC99 compound literal */
@@ -5719,10 +5718,7 @@ ST_FUNC void unary(void)
 		int itmp;
 	        CType cur_type;
 
-                in_generic++;
-		parse_btype(&cur_type, &ad_tmp);
-                in_generic--;
-
+		parse_btype(&cur_type, &ad_tmp, 0);
 		type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
 		if (compare_types(&controlling_type, &cur_type, 0)) {
 		    if (has_match) {
@@ -8206,7 +8202,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 	}
 
         oldint = 0;
-        if (!parse_btype(&btype, &adbase)) {
+        if (!parse_btype(&btype, &adbase, l == VT_LOCAL)) {
             if (is_for_loop_init)
                 return 0;
             /* skip redundant ';' if not in old parameter decl scope */
