@@ -682,7 +682,7 @@ static void maybe_print_stats (void)
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
     const ASMInstr *pa;
-    int i, modrm_index, modreg_index, reg, v, op1, seg_prefix, pc;
+    int i, modrm_index, modreg_index, reg, v, op1, seg_prefix, pc, p;
     int nb_ops, s;
     Operand ops[MAX_OPERANDS], *pop;
     int op_type[3]; /* decoded op type */
@@ -892,30 +892,6 @@ again:
     }
 
 #ifdef TCC_TARGET_X86_64
-    /* Generate addr32 prefix if needed */
-    for(i = 0; i < nb_ops; i++) {
-        if (ops[i].type & OP_EA32) {
-	    g(0x67);
-	    break;
-        }
-    }
-#endif
-    /* generate data16 prefix if needed */
-    p66 = 0;
-    if (s == 1)
-        p66 = 1;
-    else {
-	/* accepting mmx+sse in all operands --> needs 0x66 to
-	   switch to sse mode.  Accepting only sse in an operand --> is
-	   already SSE insn and needs 0x66/f2/f3 handling.  */
-        for (i = 0; i < nb_ops; i++)
-            if ((op_type[i] & (OP_MMX | OP_SSE)) == (OP_MMX | OP_SSE)
-	        && ops[i].type & OP_SSE)
-	        p66 = 1;
-    }
-    if (p66)
-        g(0x66);
-#ifdef TCC_TARGET_X86_64
     rex64 = 0;
     if (pa->instr_type & OPC_48)
         rex64 = 1;
@@ -947,8 +923,45 @@ again:
         g(0x9b);
     if (seg_prefix)
         g(seg_prefix);
+#ifdef TCC_TARGET_X86_64
+    /* Generate addr32 prefix if needed */
+    for(i = 0; i < nb_ops; i++) {
+        if (ops[i].type & OP_EA32) {
+	    g(0x67);
+	    break;
+        }
+    }
+#endif
+    /* generate data16 prefix if needed */
+    p66 = 0;
+    if (s == 1)
+        p66 = 1;
+    else {
+	/* accepting mmx+sse in all operands --> needs 0x66 to
+	   switch to sse mode.  Accepting only sse in an operand --> is
+	   already SSE insn and needs 0x66/f2/f3 handling.  */
+        for (i = 0; i < nb_ops; i++)
+            if ((op_type[i] & (OP_MMX | OP_SSE)) == (OP_MMX | OP_SSE)
+	        && ops[i].type & OP_SSE)
+	        p66 = 1;
+    }
+    if (p66)
+        g(0x66);
 
     v = pa->opcode;
+    p = v >> 8;  /* possibly prefix byte(s) */
+    switch (p) {
+        case 0: break;  /* no prefix */
+        case 0x48: break; /* REX, handled elsewhere */
+        case 0x66:
+        case 0x67:
+        case 0xf2:
+        case 0xf3: v = v & 0xff; g(p); break;
+        case 0xd4: case 0xd5: break; /* aam and aad, not prefix, but hardcoded immediate argument "10" */
+        case 0xd8: case 0xd9: case 0xda: case 0xdb: /* x87, no normal prefix */
+        case 0xdc: case 0xdd: case 0xde: case 0xdf: break;
+        default: tcc_error("bad prefix 0x%2x in opcode table", p); break;
+    }
     if (pa->instr_type & OPC_0F)
         v = ((v & ~0xff) << 8) | 0x0f00 | (v & 0xff);
     if ((v == 0x69 || v == 0x6b) && nb_ops == 2) {

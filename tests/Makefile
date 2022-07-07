@@ -220,7 +220,7 @@ ex%: $(TOPSRC)/examples/ex%.c
 
 # tiny assembler testing
 asmtest.ref: asmtest.S
-	$(CC) -Wa,-W -o asmtest.ref.o -c asmtest.S
+	$(CC) -Wa,-W -Wa,-mx86-used-note=no -o asmtest.ref.o -c asmtest.S
 	objdump -D asmtest.ref.o > asmtest.ref
 
 ifeq ($(ARCH),arm)

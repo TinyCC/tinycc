@@ -425,7 +425,7 @@ L3:
 
  fsubp %st(5)
  fsubp
- fsubp %st(1), %st
+ //fsubp %st(1), %st # not accepted by new GAS anymore
 
  fsubs 0x1000
  fisubs 0x1002
@@ -438,7 +438,7 @@ L3:
 
  fsubrp %st(5)
  fsubrp
- fsubrp %st(1), %st
+ //fsubrp %st(1), %st # not accepted by new GAS anymore
 
  fsubrs 0x1000
  fisubrs 0x1002
@@ -451,7 +451,7 @@ L3:
 
  fdivp %st(5)
  fdivp
- fdivp %st(1), %st
+ //fdivp %st(1), %st # not accepted by new GAS anymore
 
  fdivs 0x1000
  fidivs 0x1002
@@ -745,7 +745,14 @@ int $0x10
     bts %edx, 0x1000
     btsl $2, 0x1000
 
-        
+    popcnt %ax, %si
+    popcntw %ax, %si
+    popcnt 0x1000, %edx
+    popcntl 0x1000, %edx
+#ifdef __x86_64__
+    popcnt %rbx, %rdi
+    popcntq %rcx, %r8
+#endif
         
 #ifdef __i386__
     boundl %edx, 0x10000
@@ -768,8 +775,13 @@ int $0x10
 
     swapgs
 
-    str %rdx
-    str %r9
+    /* Newer gas assemble 'str %rdx' as 'str %edx', based on the observation
+       that the 16bit value of the task register is zero-extended into the
+       destination anyway, and hence storing into %edx is the same as storing
+       into %rdx.  TCC doesn't do that micro-optimization, hence just store
+       into the 32bit reg as well.  */
+    str %edx
+    str %r9d
 #endif
 
     lmsw 0x1000
