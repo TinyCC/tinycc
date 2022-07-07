@@ -23,12 +23,18 @@
 #ifdef CONFIG_TCC_ASM
 
 static Section *last_text_section; /* to handle .previous asm directive */
+static int asmgoto_n;
+
+static int asm_get_prefix_name(TCCState *s1, const char *prefix, unsigned int n)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s%u", prefix, n);
+    return tok_alloc_const(buf);
+}
 
 ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "L..%u", n);
-    return tok_alloc_const(buf);
+    return asm_get_prefix_name(s1, "L..", n);
 }
 
 static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
@@ -1077,7 +1083,7 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             modifier = 0;
             if (*str == 'c' || *str == 'n' ||
                 *str == 'b' || *str == 'w' || *str == 'h' || *str == 'k' ||
-		*str == 'q' ||
+		*str == 'q' || *str == 'l' ||
 		/* P in GCC would add "@PLT" to symbol refs in PIC mode,
 		   and make literal operands not be decorated with '$'.  */
 		*str == 'P')
@@ -1086,13 +1092,17 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             if (index < 0)
                 tcc_error("invalid operand reference after %%");
             op = &operands[index];
-            sv = *op->vt;
-            if (op->reg >= 0) {
-                sv.r = op->reg;
-                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL && op->is_memory)
-                    sv.r |= VT_LVAL;
+            if (modifier == 'l') {
+                cstr_cat(out_str, get_tok_str(op->is_label, NULL), -1);
+            } else {
+                sv = *op->vt;
+                if (op->reg >= 0) {
+                    sv.r = op->reg;
+                    if ((op->vt->r & VT_VALMASK) == VT_LLOCAL && op->is_memory)
+                      sv.r |= VT_LVAL;
+                }
+                subst_asm_operand(out_str, &sv, modifier);
             }
-            subst_asm_operand(out_str, &sv, modifier);
         } else {
         add_char:
             cstr_ccat(out_str, c);
@@ -1163,18 +1173,20 @@ ST_FUNC void asm_instr(void)
 {
     CString astr, astr1;
     ASMOperand operands[MAX_ASM_OPERANDS];
-    int nb_outputs, nb_operands, i, must_subst, out_reg;
+    int nb_outputs, nb_operands, i, must_subst, out_reg, nb_labels;
     uint8_t clobber_regs[NB_ASM_REGS];
     Section *sec;
 
     /* since we always generate the asm() instruction, we can ignore
        volatile */
-    if (tok == TOK_VOLATILE1 || tok == TOK_VOLATILE2 || tok == TOK_VOLATILE3) {
+    while (tok == TOK_VOLATILE1 || tok == TOK_VOLATILE2 || tok == TOK_VOLATILE3
+           || tok == TOK_GOTO) {
         next();
     }
     parse_asm_str(&astr);
     nb_operands = 0;
     nb_outputs = 0;
+    nb_labels = 0;
     must_subst = 0;
     memset(clobber_regs, 0, sizeof(clobber_regs));
     if (tok == ':') {
@@ -1193,6 +1205,8 @@ ST_FUNC void asm_instr(void)
                     /* XXX: handle registers */
                     next();
                     for(;;) {
+                        if (tok == ':')
+                          break;
                         if (tok != TOK_STR)
                             expect("string constant");
                         asm_clobber(clobber_regs, tokc.str.data);
@@ -1202,6 +1216,39 @@ ST_FUNC void asm_instr(void)
                         } else {
                             break;
                         }
+                    }
+                }
+                if (tok == ':') {
+                    /* goto labels */
+                    next();
+                    for (;;) {
+                        Sym *csym;
+                        int asmname;
+                        if (nb_operands + nb_labels >= MAX_ASM_OPERANDS)
+                          tcc_error("too many asm operands");
+                        if (tok < TOK_UIDENT)
+                          expect("label identifier");
+                        operands[nb_operands + nb_labels++].id = tok;
+
+                        csym = label_find(tok);
+                        if (!csym) {
+                            csym = label_push(&global_label_stack, tok,
+                                              LABEL_FORWARD);
+                        } else {
+                            if (csym->r == LABEL_DECLARED)
+                              csym->r = LABEL_FORWARD;
+                        }
+                        next();
+                        asmname = asm_get_prefix_name(tcc_state, "LG.",
+                                                      ++asmgoto_n);
+                        if (!csym->c)
+                          put_extern_sym2(csym, SHN_UNDEF, 0, 0, 1);
+                        get_asm_sym(asmname, csym);
+                        operands[nb_operands + nb_labels - 1].is_label = asmname;
+
+                        if (tok != ',')
+                          break;
+                        next();
                     }
                 }
             }
@@ -1226,7 +1273,7 @@ ST_FUNC void asm_instr(void)
     printf("asm: \"%s\"\n", (char *)astr.data);
 #endif
     if (must_subst) {
-        subst_asm_operands(operands, nb_operands, &astr1, &astr);
+        subst_asm_operands(operands, nb_operands + nb_labels, &astr1, &astr);
         cstr_free(&astr);
     } else {
         astr1 = astr;

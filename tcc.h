@@ -727,7 +727,7 @@ typedef struct ExprValue {
 
 #define MAX_ASM_OPERANDS 30
 typedef struct ASMOperand {
-    int id; /* GCC 3 optional identifier (0 if number only supported */
+    int id; /* GCC 3 optional identifier (0 if number only supported) */
     char *constraint;
     char asm_str[16]; /* computed asm string for operand */
     SValue *vt; /* C value of the expression */
@@ -738,6 +738,7 @@ typedef struct ASMOperand {
     int is_llong; /* true if double register value */
     int is_memory; /* true if memory operand */
     int is_rw;     /* for '+' modifier */
+    int is_label;  /* for asm goto */
 } ASMOperand;
 #endif
 

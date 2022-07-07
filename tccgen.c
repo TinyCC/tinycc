@@ -5677,7 +5677,7 @@ ST_FUNC void unary(void)
             if (s->r == LABEL_DECLARED)
                 s->r = LABEL_FORWARD;
         }
-        if (!s->type.t) {
+        if ((s->type.t & VT_BTYPE) != VT_PTR) {
             s->type.t = VT_VOID;
             mk_pointer(&s->type);
             s->type.t |= VT_STATIC;
