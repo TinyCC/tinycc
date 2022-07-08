@@ -7048,6 +7048,11 @@ again:
             s->cleanupstate = cur_scope->cl.s;
 
     block_after_label:
+              {
+                /* Accept attributes after labels (e.g. 'unused') */
+                AttributeDef ad_tmp;
+                parse_attribute(&ad_tmp);
+              }
             vla_restore(cur_scope->vla.loc);
             if (tok != '}')
                 goto again;

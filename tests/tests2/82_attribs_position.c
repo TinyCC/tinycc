@@ -30,6 +30,12 @@ int ATTR actual_function() {
   return 42;
 }
 
+int label_attribute (void)
+{
+lab1: __attribute__((__unused__));
+  return 0;
+}
+
 extern int printf (const char *, ...);
 static int globalvar;
 int main()
