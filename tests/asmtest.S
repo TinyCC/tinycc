@@ -632,10 +632,19 @@ int $0x10
     leave
     int3
     iret
+    iretw
+    iretl
+#ifdef __x86_64__
+    iretq
+#endif
     rsm
     hlt
     wait
     nop
+    vmcall
+    vmlaunch
+    vmresume
+    vmxoff
 
     /* XXX: handle prefixes */
 #if 0

@@ -30,12 +30,20 @@
      DEF_ASM_OP0(int3, 0xcc)
      DEF_ASM_OP0(into, 0xce)
      DEF_ASM_OP0(iret, 0xcf)
+     DEF_ASM_OP0(iretw, 0x66cf)
+     DEF_ASM_OP0(iretl, 0xcf)
+     DEF_ASM_OP0(iretq, 0x48cf)
      DEF_ASM_OP0(rsm, 0x0faa)
      DEF_ASM_OP0(hlt, 0xf4)
      DEF_ASM_OP0(wait, 0x9b)
      DEF_ASM_OP0(nop, 0x90)
      DEF_ASM_OP0(pause, 0xf390)
      DEF_ASM_OP0(xlat, 0xd7)
+
+    DEF_ASM_OP0L(vmcall, 0xc1, 0, OPC_0F01)
+    DEF_ASM_OP0L(vmlaunch, 0xc2, 0, OPC_0F01)
+    DEF_ASM_OP0L(vmresume, 0xc3, 0, OPC_0F01)
+    DEF_ASM_OP0L(vmxoff, 0xc4, 0, OPC_0F01)
 
      /* strings */
 ALT(DEF_ASM_OP0L(cmpsb, 0xa6, 0, OPC_BWLX))

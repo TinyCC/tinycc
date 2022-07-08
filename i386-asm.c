@@ -40,6 +40,8 @@
 #define OPC_ARITH      0x30 /* arithmetic opcodes */
 #define OPC_FARITH     0x40 /* FPU arithmetic opcodes */
 #define OPC_TEST       0x50 /* test opcodes */
+#define OPC_0F01       0x60 /* 0x0f01XX (group 7, XX is 2nd opcode,
+                               no operands and unstructured mod/rm) */
 #define OPCT_IS(v,i) (((v) & OPCT_MASK) == (i))
 
 #define OPC_0F        0x100 /* Is secondary map (0x0f prefix) */
@@ -1072,6 +1074,8 @@ again:
     }
     if (OPCT_IS(pa->instr_type, OPC_TEST))
         v += test_bits[opcode - pa->sym];
+    else if (OPCT_IS(pa->instr_type, OPC_0F01))
+        v |= 0x0f0100;
     op1 = v >> 16;
     if (op1)
         g(op1);
