@@ -1246,6 +1246,7 @@ void __attribute__((destructor)) __bound_exit(void)
             fprintf (stderr, "bound_strcat_count       %llu\n", bound_strcat_count);
             fprintf (stderr, "bound_strchr_count       %llu\n", bound_strchr_count);
             fprintf (stderr, "bound_strdup_count       %llu\n", bound_strdup_count);
+            fprintf (stderr, "bound_struct_copy_count  %llu\n", bound_struct_copy_count);
             fprintf (stderr, "bound_not_found          %llu\n", bound_not_found);
 #endif
 #if BOUND_STATISTIC_SPLAY
