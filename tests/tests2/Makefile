@@ -17,6 +17,7 @@ ifdef CONFIG_OSX
 endif
 ifeq ($(ARCH),x86_64)
  SKIP += 73_arm64.test
+ SKIP += 112_backtrace.test   # Here memory copy behaves differently
 endif
 ifeq (,$(filter i386,$(ARCH)))
  SKIP += 98_al_ax_extend.test 99_fastcall.test
