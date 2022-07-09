@@ -3474,9 +3474,38 @@ ST_FUNC void vstore(void)
     if (sbt == VT_STRUCT) {
         /* if structure, only generate pointer */
         /* structure assignment : generate memcpy */
-        /* XXX: optimize if small size */
             size = type_size(&vtop->type, &align);
 
+#ifdef TCC_TARGET_NATIVE_STRUCT_COPY
+            if (size <= (PTR_SIZE << 4)) {
+		    vswap();
+#ifdef CONFIG_TCC_BCHECK
+                    if (vtop->r & VT_MUSTBOUND)
+                        gbound();
+#endif
+                    vtop->type.t = VT_PTR;
+                    gaddrof();
+
+                    vpushv(vtop - 1);
+#ifdef CONFIG_TCC_BCHECK
+                    if (vtop->r & VT_MUSTBOUND)
+                        gbound();
+#endif
+                    vtop->type.t = VT_PTR;
+                    gaddrof();                  /* src dest src */
+#ifdef CONFIG_TCC_BCHECK
+                    if (tcc_state->do_bounds_check) {
+                        vpush_helper_func(TOK___bound_struct_copy);
+                        vpushv(vtop - 2);
+                        vpushv(vtop - 2);
+                        vpushi(size);
+                        gfunc_call(3);
+                    }
+#endif
+
+                    gen_struct_copy(size);
+            } else {
+#endif
             /* destination */
             vswap();
 #ifdef CONFIG_TCC_BCHECK
@@ -3510,7 +3539,9 @@ ST_FUNC void vstore(void)
             vpushi(size);
             gfunc_call(3);
         /* leave source on stack */
-
+#ifdef TCC_TARGET_NATIVE_STRUCT_COPY
+            }
+#endif
     } else if (ft & VT_BITFIELD) {
         /* bitfield store handling */
 

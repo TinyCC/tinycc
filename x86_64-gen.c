@@ -2282,6 +2282,56 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
     }
 }
 
+/*
+ * Assmuing the top part of the stack looks like below,
+ *  src dest src
+ */
+void gen_struct_copy(int size)
+{
+    save_reg(TREG_RSI);
+    load(TREG_RSI,vtop);
+    vtop->r = TREG_RSI;
+    vswap();                    /* dest src src */
+    save_reg(TREG_RDI);
+    load(TREG_RDI,vtop);
+    vtop->r = TREG_RDI;
+    /*  Not aligned by 8bytes   */
+    if (size & 0x04) {
+        o(0xa5);
+    }
+    if (size & 0x02) {
+        o(0xa566);
+    }
+    if (size & 0x01) {
+        o(0xa4);
+    }
+
+    size >>= 3;
+    if (!size)
+        goto done;
+    /*  Although this function is only called when the struct is smaller    */
+    /*  than 32 bytes(4 * PTR_SIZE),a common implementation is included     */
+    if (size <= 4 && size) {
+        switch (size) {
+            case 4: o(0xa548);
+            case 3: o(0xa548);
+            case 2: o(0xa548);
+            case 1: o(0xa548);
+        }
+    } else {
+        save_reg(TREG_RCX);
+        vpushi(size);
+        load(TREG_RCX,vtop);
+        vtop->r = TREG_RCX;
+        o(0xa548f3);
+        vpop();
+    }
+done:
+    vpop();
+    vpop();
+    return;
+}
+
 
 /* end of x86-64 code generator */
 /*************************************************************/

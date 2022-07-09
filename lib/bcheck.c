@@ -292,6 +292,7 @@ DLL_EXPORT int __bound_strncmp(const char *s1, const char *s2, size_t n);
 DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
 DLL_EXPORT char *__bound_strchr(const char *string, int ch);
 DLL_EXPORT char *__bound_strdup(const char *s);
+DLL_EXPORT void __bound_struct_copy(void *dst,void *src,size_t size);
 
 #if defined(__arm__) && defined(__ARM_EABI__)
 DLL_EXPORT void *__bound___aeabi_memcpy(void *dst, const void *src, size_t size);
@@ -424,6 +425,7 @@ static unsigned long long bound_strncmp_count;
 static unsigned long long bound_strcat_count;
 static unsigned long long bound_strchr_count;
 static unsigned long long bound_strdup_count;
+static unsigned long long bound_struct_copy_count;
 static unsigned long long bound_not_found;
 #define INCR_COUNT(x)          ++x
 #else
@@ -1763,6 +1765,16 @@ void *__bound_memset(void *s, int c, size_t n)
     INCR_COUNT(bound_memset_count);
     __bound_check(s, n, "memset");
     return memset(s, c, n);
+}
+
+void __bound_struct_copy(void *dst,void *src,size_t size)
+{
+    dprintf(stderr, "Copy struct from %p to %p,size %lx\n",
+            src,dst,size);
+    INCR_COUNT(bound_struct_copy_count);
+    __bound_check(dst,size,"struct copy destination");
+    __bound_check(src,size,"struct copy source");
+    return;
 }
 
 #if defined(__arm__) && defined(__ARM_EABI__)
