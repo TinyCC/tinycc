@@ -520,6 +520,10 @@ ALT(DEF_ASM_OP2(movhps, 0x0f17, 0, OPC_MODRM, OPT_SSE, OPT_EA | OPT_REG32 ))
     DEF_ASM_OP2(sqrtps, 0x0f51, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
     DEF_ASM_OP2(subps, 0x0f5c, 0, OPC_MODRM, OPT_EA | OPT_SSE, OPT_SSE )
 
+    /* movnti should only accept REG32 and REG64, we accept more */
+    DEF_ASM_OP2(movnti, 0x0fc3, 0, OPC_MODRM, OPT_REG, OPT_EA)
+    DEF_ASM_OP2(movntil, 0x0fc3, 0, OPC_MODRM, OPT_REG32, OPT_EA)
+    DEF_ASM_OP2(movntiq, 0x0fc3, 0, OPC_MODRM | OPC_48, OPT_REG64, OPT_EA)
     DEF_ASM_OP1(prefetchnta, 0x0f18, 0, OPC_MODRM, OPT_EA)
     DEF_ASM_OP1(prefetcht0, 0x0f18, 1, OPC_MODRM, OPT_EA)
     DEF_ASM_OP1(prefetcht1, 0x0f18, 2, OPC_MODRM, OPT_EA)

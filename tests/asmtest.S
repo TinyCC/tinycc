@@ -701,6 +701,10 @@ int $0x10
     fxsaveq (%r11)
     fxrstorq (%rcx)
     fxrstorq (%r10)
+    movnti %ebx, (%rdi)
+    movntil %ecx, (%rdi)
+    movnti %rax, (%rdi)
+    movntiq %r8, (%rdi)
 
 #endif
 
