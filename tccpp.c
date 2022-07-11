@@ -1189,6 +1189,7 @@ ST_FUNC void end_macro(void)
     macro_stack = str->prev;
     macro_ptr = str->prev_ptr;
     file->line_num = str->save_line_num;
+    str->len = 0; /* matters if str not alloced, may be tokstr_buf */
     if (str->alloc != 0) {
         if (str->alloc == 2)
             str->str = NULL; /* don't free */
