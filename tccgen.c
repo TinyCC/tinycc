@@ -62,7 +62,15 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 
 /* Clear 'nocode_wanted' at label if it was used */
 ST_FUNC void gsym(int t) { if (t) { gsym_addr(t, ind); CODE_ON(); }}
-static int gind(void) { int t = ind; CODE_ON(); if (debug_modes) tcc_tcov_block_begin(tcc_state); return t; }
+static int gind(int known_unreachable)
+{
+  int t = ind;
+  if (!known_unreachable)
+    CODE_ON();
+  if (debug_modes)
+    tcc_tcov_block_begin(tcc_state);
+  return t;
+}
 
 /* Set 'nocode_wanted' after unconditional jumps */
 static void gjmp_addr_acs(int t) { gjmp_addr(t); CODE_OFF(); }
@@ -99,6 +107,7 @@ static struct switch_t {
 	int sym;
     } **p; int n; /* list of case ranges */
     int def_sym; /* default symbol */
+    int nocode_wanted;
     int *bsym;
     struct scope *scope;
     struct switch_t *prev;
@@ -6769,7 +6778,7 @@ again:
         }
 
     } else if (t == TOK_WHILE) {
-        d = gind();
+        d = gind(0);
         skip('(');
         gexpr();
         skip(')');
@@ -6869,7 +6878,7 @@ again:
         }
         skip(';');
         a = b = 0;
-        c = d = gind();
+        c = d = gind(0);
         if (tok != ';') {
             gexpr();
             a = gvtst(1, 0);
@@ -6877,7 +6886,7 @@ again:
         skip(';');
         if (tok != ')') {
             e = gjmp(0);
-            d = gind();
+            d = gind(0);
             gexpr();
             vpop();
             gjmp_addr(c);
@@ -6892,7 +6901,7 @@ again:
 
     } else if (t == TOK_DO) {
         a = b = 0;
-        d = gind();
+        d = gind(0);
         lblock(&a, &b);
         gsym(b);
         skip(TOK_WHILE);
@@ -6911,6 +6920,7 @@ again:
         sw->bsym = &a;
         sw->scope = cur_scope;
         sw->prev = cur_switch;
+        sw->nocode_wanted = nocode_wanted;
         cur_switch = sw;
 
         skip('(');
@@ -6965,7 +6975,7 @@ again:
         }
         if (debug_modes)
             tcc_tcov_reset_ind(tcc_state);
-        cr->sym = gind();
+        cr->sym = gind(cur_switch->nocode_wanted);
         dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         skip(':');
         is_expr = 0;
@@ -6978,7 +6988,7 @@ again:
             tcc_error("too many 'default'");
         if (debug_modes)
             tcc_tcov_reset_ind(tcc_state);
-        cur_switch->def_sym = gind();
+        cur_switch->def_sym = gind(cur_switch->nocode_wanted);
         skip(':');
         is_expr = 0;
         goto block_after_label;
@@ -7044,7 +7054,7 @@ again:
             } else {
                 s = label_push(&global_label_stack, t, LABEL_DEFINED);
             }
-            s->jnext = gind();
+            s->jnext = gind(0);
             s->cleanupstate = cur_scope->cl.s;
 
     block_after_label:

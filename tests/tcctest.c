@@ -1418,6 +1418,13 @@ void optimize_out_test(void)
       undefined_function();
   }
 
+  if (0) {
+      switch (defined_function()) {
+          case 0: undefined_function(); break;
+          default: undefined_function(); break;
+      }
+  }
+
   /* Leave the "if(1)return; printf()" in this order and last in the function */
   if (1)
     return;
