@@ -944,19 +944,16 @@ static uint8_t *parse_pp_string(uint8_t *p,
                 }
             }
         } else if (c == '\n') {
-            file->line_num++;
-            goto add_char;
+            tcc_error("missing terminating %c character",sep);
         } else if (c == '\r') {
             PEEKC_EOB(c, p);
             if (c != '\n') {
                 if (str)
                     cstr_ccat(str, '\r');
             } else {
-                file->line_num++;
-                goto add_char;
+                tcc_error("missing terminating %c character",sep);
             }
         } else {
-        add_char:
             if (str)
                 cstr_ccat(str, c);
             p++;

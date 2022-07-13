@@ -4253,11 +4253,6 @@ void func_arg_test(void)
 /* gcc 2.95.3 does not handle correctly CR in strings or after strays */
 #define CORRECT_CR_HANDLING
 
-/* deprecated and no longer supported in gcc 3.3 */
-#ifdef __TINYC__
-# define ACCEPT_CR_IN_STRINGS
-#endif
-
 /* keep this as the last test because GCC messes up line-numbers
    with the ^L^K^M characters below */
 void whitespace_test(void)
@@ -4278,20 +4273,6 @@ ntf("aaa=%d\n", 3);
     pri\
 \
 ntf("min=%d\n", 4);
-
-#ifdef ACCEPT_CR_IN_STRINGS
-    printf("len1=%d\n", strlen("
-"));
-#ifdef CORRECT_CR_HANDLING
-    str = "
-";
-    printf("len1=%d str[0]=%d\n", strlen(str), str[0]);
-#endif
-    printf("len1=%d\n", strlen("a
-"));
-#else
-    printf("len1=1\nlen1=1 str[0]=10\nlen1=3\n");
-#endif /* ACCEPT_CR_IN_STRINGS */
 
 #ifdef __LINE__
     printf("__LINE__ defined\n");
