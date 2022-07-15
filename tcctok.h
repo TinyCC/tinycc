@@ -330,7 +330,6 @@
      DEF(TOK___bound_setjmp, "__bound_setjmp")
      DEF(TOK___bound_longjmp, "__bound_longjmp")
      DEF(TOK___bound_new_region, "__bound_new_region")
-     DEF(TOK___bound_struct_copy,"__bound_struct_copy")
 # ifdef TCC_TARGET_PE
 #  ifdef TCC_TARGET_X86_64
      DEF(TOK___bound_alloca_nr, "__bound_alloca_nr")

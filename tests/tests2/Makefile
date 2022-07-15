@@ -105,8 +105,7 @@ GEN-ALWAYS =
 112_backtrace.test: FLAGS += -dt -b
 112_backtrace.test 113_btdll.test 126_bound_global.test: FILTER += \
     -e 's;[0-9A-Fa-fx]\{5,\};........;g' \
-    -e 's;0x[0-9A-Fa-f]\{1,\};0x?;g' \
-    -e 's;struct copy destination;memmove dest;g' \
+    -e 's;0x[0-9A-Fa-f]\{1,\};0x?;g'
 
 # this test creates two DLLs and an EXE
 113_btdll.test: T1 = \

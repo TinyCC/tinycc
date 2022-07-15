@@ -35,6 +35,8 @@
 #define RC_RAX     0x0004
 #define RC_RCX     0x0008
 #define RC_RDX     0x0010
+#define RC_RSI     0x0020
+#define RC_RDI     0x0040
 #define RC_ST0     0x0080 /* only for long double */
 #define RC_R8      0x0100
 #define RC_R9      0x0200
@@ -105,6 +107,10 @@ enum {
 /* define if return values need to be extended explicitely
    at caller side (for interfacing with non-TCC compilers) */
 #define PROMOTE_RET
+
+#define TCC_TARGET_NATIVE_STRUCT_COPY
+ST_FUNC void gen_struct_copy(int size);
+
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
 /******************************************************/
@@ -124,8 +130,8 @@ ST_DATA const int reg_classes[NB_REGS] = {
     0,
     0,
     0,
-    0,
-    0,
+    RC_RSI,
+    RC_RDI,
     RC_R8,
     RC_R9,
     RC_R10,
@@ -2228,7 +2234,7 @@ ST_FUNC void gen_increment_tcov (SValue *sv)
 }
 
 /* computed goto support */
-void ggoto(void)
+ST_FUNC void ggoto(void)
 {
     gcall_or_jmp(1);
     vtop--;
@@ -2286,52 +2292,34 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
  * Assmuing the top part of the stack looks like below,
  *  src dest src
  */
-void gen_struct_copy(int size)
+ST_FUNC void gen_struct_copy(int size)
 {
-    save_reg(TREG_RSI);
-    load(TREG_RSI,vtop);
-    vtop->r = TREG_RSI;
-    vswap();                    /* dest src src */
-    save_reg(TREG_RDI);
-    load(TREG_RDI,vtop);
-    vtop->r = TREG_RDI;
-    /*  Not aligned by 8bytes   */
-    if (size & 0x04) {
-        o(0xa5);
-    }
-    if (size & 0x02) {
-        o(0xa566);
-    }
-    if (size & 0x01) {
-        o(0xa4);
-    }
-
-    size >>= 3;
-    if (!size)
-        goto done;
-    /*  Although this function is only called when the struct is smaller    */
-    /*  than 32 bytes(4 * PTR_SIZE),a common implementation is included     */
-    if (size <= 4 && size) {
-        switch (size) {
-            case 4: o(0xa548);
-            case 3: o(0xa548);
-            case 2: o(0xa548);
-            case 1: o(0xa548);
-        }
+    int n = size / PTR_SIZE;
+#ifdef TCC_TARGET_PE
+    o(0x5756); /* push rsi, rdi */
+#endif
+    gv2(RC_RDI, RC_RSI);
+    if (n <= 4) {
+        while (n)
+            o(0xa548), --n;
     } else {
-        save_reg(TREG_RCX);
-        vpushi(size);
-        load(TREG_RCX,vtop);
-        vtop->r = TREG_RCX;
+        vpushi(n);
+        gv(RC_RCX);
         o(0xa548f3);
         vpop();
     }
-done:
+    if (size & 0x04)
+        o(0xa5);
+    if (size & 0x02)
+        o(0xa566);
+    if (size & 0x01)
+        o(0xa4);
+#ifdef TCC_TARGET_PE
+    o(0x5e5f); /* pop rdi, rsi */
+#endif
     vpop();
     vpop();
-    return;
 }
-
 
 /* end of x86-64 code generator */
 /*************************************************************/

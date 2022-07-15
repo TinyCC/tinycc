@@ -21,6 +21,9 @@
 #define USING_GLOBALS
 #include "tcc.h"
 
+/* #define to 1 to enable (see parse_pp_string()) */
+#define ACCEPT_LF_IN_STRINGS 0
+
 /********************************************************/
 /* global variables */
 
@@ -944,16 +947,26 @@ static uint8_t *parse_pp_string(uint8_t *p,
                 }
             }
         } else if (c == '\n') {
-            tcc_error("missing terminating %c character",sep);
+        add_lf:
+            if (ACCEPT_LF_IN_STRINGS) {
+                file->line_num++;
+                goto add_char;
+            } else if (str) { /* not skipping */
+                goto unterminated_string;
+            } else {
+                tcc_warning("missing terminating %c character", sep);
+                return p;
+            }
         } else if (c == '\r') {
             PEEKC_EOB(c, p);
             if (c != '\n') {
                 if (str)
                     cstr_ccat(str, '\r');
             } else {
-                tcc_error("missing terminating %c character",sep);
+                goto add_lf;
             }
         } else {
+        add_char:
             if (str)
                 cstr_ccat(str, c);
             p++;
@@ -1006,6 +1019,7 @@ redo_start:
         case '\'':
             if (in_warn_or_error)
                 goto _default;
+            tok_flags &= ~TOK_FLAG_BOL;
             p = parse_pp_string(p, c, NULL);
             break;
         /* skip comments */

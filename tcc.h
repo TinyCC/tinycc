@@ -1644,8 +1644,6 @@ ST_FUNC void gen_increment_tcov (SValue *sv);
 
 /* ------------ x86_64-gen.c ------------ */
 #ifdef TCC_TARGET_X86_64
-#define TCC_TARGET_NATIVE_STRUCT_COPY
-ST_FUNC void gen_struct_copy(int size);
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c);
 ST_FUNC void gen_opl(int op);
 #ifdef TCC_TARGET_PE
@@ -1691,7 +1689,6 @@ ST_FUNC void gen_increment_tcov (SValue *sv);
 #endif
 
 /* ------------ tcccoff.c ------------ */
-
 #ifdef TCC_TARGET_COFF
 ST_FUNC int tcc_output_coff(TCCState *s1, FILE *f);
 ST_FUNC int tcc_load_coff(TCCState * s1, int fd);

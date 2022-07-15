@@ -3468,54 +3468,42 @@ ST_FUNC void vstore(void)
     ft = vtop[-1].type.t;
     sbt = vtop->type.t & VT_BTYPE;
     dbt = ft & VT_BTYPE;
-
     verify_assign_cast(&vtop[-1].type);
 
     if (sbt == VT_STRUCT) {
         /* if structure, only generate pointer */
         /* structure assignment : generate memcpy */
-            size = type_size(&vtop->type, &align);
+        size = type_size(&vtop->type, &align);
+        /* destination, keep on stack() as result */
+        vpushv(vtop - 1);
+#ifdef CONFIG_TCC_BCHECK
+        if (vtop->r & VT_MUSTBOUND)
+            gbound(); /* check would be wrong after gaddrof() */
+#endif
+        vtop->type.t = VT_PTR;
+        gaddrof();
+        /* source */
+        vswap();
+#ifdef CONFIG_TCC_BCHECK
+        if (vtop->r & VT_MUSTBOUND)
+            gbound();
+#endif
+        vtop->type.t = VT_PTR;
+        gaddrof();
 
 #ifdef TCC_TARGET_NATIVE_STRUCT_COPY
-            if (size <= (PTR_SIZE << 4)) {
-		    vswap();
+        if (1
 #ifdef CONFIG_TCC_BCHECK
-                    if (vtop->r & VT_MUSTBOUND)
-                        gbound();
+            && !tcc_state->do_bounds_check
 #endif
-                    vtop->type.t = VT_PTR;
-                    gaddrof();
-
-                    vpushv(vtop - 1);
-#ifdef CONFIG_TCC_BCHECK
-                    if (vtop->r & VT_MUSTBOUND)
-                        gbound();
+            ) {
+            gen_struct_copy(size);
+        } else
 #endif
-                    vtop->type.t = VT_PTR;
-                    gaddrof();                  /* src dest src */
-#ifdef CONFIG_TCC_BCHECK
-                    if (tcc_state->do_bounds_check) {
-                        vpush_helper_func(TOK___bound_struct_copy);
-                        vpushv(vtop - 2);
-                        vpushv(vtop - 2);
-                        vpushi(size);
-                        gfunc_call(3);
-                    }
-#endif
-
-                    gen_struct_copy(size);
-            } else {
-#endif
-            /* destination */
-            vswap();
-#ifdef CONFIG_TCC_BCHECK
-            if (vtop->r & VT_MUSTBOUND)
-                gbound(); /* check would be wrong after gaddrof() */
-#endif
-            vtop->type.t = VT_PTR;
-            gaddrof();
-
-            /* address of memcpy() */
+        {
+            /* type size */
+            vpushi(size);
+            /* Use memmove, rather than memcpy, as dest and src may be same: */
 #ifdef TCC_ARM_EABI
             if(!(align & 7))
                 vpush_helper_func(TOK_memmove8);
@@ -3523,25 +3511,11 @@ ST_FUNC void vstore(void)
                 vpush_helper_func(TOK_memmove4);
             else
 #endif
-            /* Use memmove, rather than memcpy, as dest and src may be same: */
             vpush_helper_func(TOK_memmove);
-
-            vswap();
-            /* source */
-            vpushv(vtop - 2);
-#ifdef CONFIG_TCC_BCHECK
-            if (vtop->r & VT_MUSTBOUND)
-                gbound();
-#endif
-            vtop->type.t = VT_PTR;
-            gaddrof();
-            /* type size */
-            vpushi(size);
+            vrott(4);
             gfunc_call(3);
-        /* leave source on stack */
-#ifdef TCC_TARGET_NATIVE_STRUCT_COPY
-            }
-#endif
+        }
+
     } else if (ft & VT_BITFIELD) {
         /* bitfield store handling */
 
