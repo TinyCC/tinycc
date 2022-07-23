@@ -3757,6 +3757,10 @@ static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
     if (s1->do_bounds_check)
       putdef(cs, "__BOUNDS_CHECKING_ON");
 #endif
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->do_backtrace)
+      putdef(cs, "__TCC_BACKTRACE_ENABLED__");
+#endif
     cstr_printf(cs, "#define __SIZEOF_POINTER__ %d\n", PTR_SIZE);
     cstr_printf(cs, "#define __SIZEOF_LONG__ %d\n", LONG_SIZE);
     if (!is_asm) {
