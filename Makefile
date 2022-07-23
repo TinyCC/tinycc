@@ -172,10 +172,10 @@ DEFINES += $(DEF-$(or $(findstring win,$T),unx))
 
 ifneq ($(X),)
 ifeq ($(CONFIG_WIN32),yes)
-DEF-win += -DTCC_LIBTCC1="\"$(X)libtcc1.a\""
-DEF-unx += -DTCC_LIBTCC1="\"lib/$(X)libtcc1.a\""
+DEF-win += -DCONFIG_TCC_CROSSPREFIX="\"$X\""
+DEF-unx += -DCONFIG_TCC_CROSSPREFIX="\"lib/$X\""
 else
-DEF-all += -DTCC_LIBTCC1="\"$(X)libtcc1.a\""
+DEF-all += -DCONFIG_TCC_CROSSPREFIX="\"$X\""
 DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
 endif
 endif

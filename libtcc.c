@@ -1167,14 +1167,24 @@ static int tcc_add_library_internal(TCCState *s, const char *fmt,
     return -1;
 }
 
-#ifndef TCC_TARGET_MACHO
 /* find and load a dll. Return non zero if not found */
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
 {
     return tcc_add_library_internal(s, "%s/%s", filename, flags,
         s->library_paths, s->nb_library_paths);
 }
+
+/* find [cross-]libtcc1.a and tcc helper objects in library path */
+ST_FUNC void tcc_add_support(TCCState *s1, const char *filename)
+{
+#ifdef CONFIG_TCC_CROSSPREFIX
+    char buf[100];
+    snprintf(buf, sizeof buf, "%s%s", CONFIG_TCC_CROSSPREFIX, filename);
+    filename = buf;
 #endif
+    if (tcc_add_dll(s1, filename, 0) < 0)
+        tcc_error_noabort("%s not found", filename);
+}
 
 #if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
 ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
