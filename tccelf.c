@@ -1951,8 +1951,14 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
         f = 0;
         if (k < 0x700) {
             f = s->sh_flags & (SHF_ALLOC|SHF_WRITE|SHF_EXECINSTR|SHF_TLS);
+#if TARGETOS_NetBSD
+	    /* NetBSD only supports 2 PT_LOAD sections.
+	       See: https://blog.netbsd.org/tnf/entry/the_first_report_on_lld */
+	    if ((f & SHF_WRITE) == 0) f |= SHF_EXECINSTR;
+#else
             if ((k & 0xfff0) == 0x240) /* RELRO sections */
                 f |= 1<<4;
+#endif
             if (f != f0) /* start new header when flags changed or relro */
                 f0 = f, ++n, f |= 1<<8;
         }
