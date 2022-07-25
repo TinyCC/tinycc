@@ -1069,7 +1069,7 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
     ElfW(Sym) *sym;
     struct sym_attr *attr;
     unsigned got_offset;
-    char plt_name[100];
+    char plt_name[200];
     int len;
     Section *s_rel;
 
