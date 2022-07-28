@@ -844,6 +844,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_free(s1->elf_entryname);
     tcc_free(s1->init_symbol);
     tcc_free(s1->fini_symbol);
+    tcc_free(s1->mapfile);
     tcc_free(s1->outfile);
     tcc_free(s1->deps_outfile);
     dynarray_reset(&s1->files, &s1->nb_files);
@@ -1394,6 +1395,9 @@ static int tcc_set_linker(TCCState *s, const char *option)
             s->has_text_addr = 1;
         } else if (link_option(option, "init=", &p)) {
             copy_linker_arg(&s->init_symbol, p, 0);
+            ignoring = 1;
+        } else if (link_option(option, "Map=", &p)) {
+            copy_linker_arg(&s->mapfile, p, 0);
             ignoring = 1;
         } else if (link_option(option, "oformat=", &p)) {
 #if defined(TCC_TARGET_PE)
