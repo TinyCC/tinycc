@@ -4477,7 +4477,7 @@ static int parse_btype(CType *type, AttributeDef *ad)
                     type_size(&type1, &n);
               } else {
                   n = expr_const();
-                  if (n < 0 || ((n > 1) & ((n & (n - 1)) != 0)))
+                  if (n < 0 || (n > 1 && (n & (n - 1)) != 0))
                     tcc_error("alignment must be a positive power of two");
               }
               skip(')');
