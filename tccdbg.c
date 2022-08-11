@@ -666,7 +666,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
                 ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
                 SHN_ABS, filename);
 
-    if (s1->do_debug) {
+    if (s1->dState) {
 
         new_file = last_line_num = 0;
         debug_next_type = N_DEFAULT_DEBUG;
@@ -835,7 +835,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
 /* put end of translation unit info */
 ST_FUNC void tcc_debug_end(TCCState *s1)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (s1->dwarf) {
 	int i, j;
@@ -992,7 +992,7 @@ ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
     if (0 == strcmp(file->filename, filename))
         return;
     pstrcpy(file->filename, sizeof(file->filename), filename);
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (s1->dwarf)
         dwarf_file(s1);
@@ -1002,7 +1002,7 @@ ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
 /* begin of #include */
 ST_FUNC void tcc_debug_bincl(TCCState *s1)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (s1->dwarf) {
 	int i, j;
@@ -1059,7 +1059,7 @@ ST_FUNC void tcc_debug_bincl(TCCState *s1)
 /* end of #include */
 ST_FUNC void tcc_debug_eincl(TCCState *s1)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (s1->dwarf)
         dwarf_file(s1);
@@ -1073,7 +1073,7 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 {
     BufferedFile *f;
 
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (cur_text_section != text_section)
         return;
@@ -1161,7 +1161,7 @@ static void tcc_debug_stabs (TCCState *s1, const char *str, int type, unsigned l
 
 ST_FUNC void tcc_debug_stabn(TCCState *s1, int type, int value)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (type == N_LBRAC) {
         struct _debug_info *info =
@@ -1234,7 +1234,7 @@ ST_FUNC void tcc_debug_fix_anon(TCCState *s1, CType *t)
 {
     int i, j, debug_type;
 
-    if (!s1->do_debug || !s1->dwarf || debug_info)
+    if (!s1->dState || !s1->dwarf || debug_info)
 	return;
     if ((t->t & VT_BTYPE) == VT_STRUCT && t->ref->c != -1)
 	for (i = 0; i < n_debug_anon_hash; i++)
@@ -1747,7 +1747,7 @@ static void tcc_debug_finish (TCCState *s1, struct _debug_info *cur)
 ST_FUNC void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e)
 {
     CString debug_str;
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     cstr_new (&debug_str);
     for (; s != e; s = s->prev) {
@@ -1777,7 +1777,7 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
     CString debug_str;
     BufferedFile *f;
 
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     debug_info_root = NULL;
     debug_info = NULL;
@@ -1816,7 +1816,7 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 /* put function size */
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     tcc_debug_line(s1);
     tcc_debug_stabn(s1, N_RBRAC, size);
@@ -1873,7 +1873,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 
 ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind, int sym_type)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (sym_type == STT_FUNC || sym->v >= SYM_FIRST_ANOM)
         return;
@@ -1925,7 +1925,7 @@ ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bi
 
 ST_FUNC void tcc_debug_typedef(TCCState *s1, Sym *sym)
 {
-    if (!s1->do_debug)
+    if (!s1->dState)
         return;
     if (s1->dwarf) {
 	int debug_type;
