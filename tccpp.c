@@ -2163,13 +2163,16 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                         c = c - '0';
                     else if (i > 0)
                         expect("more hex digits in universal-character-name");
-                    else {
-                        c = n;
-                        goto add_char_nonext;
-                    }
+                    else
+                        goto add_hex_or_ucn;
                     n = n * 16 + c;
                     p++;
                 } while (--i);
+		if (is_long) {
+    add_hex_or_ucn:
+                    c = n;
+		    goto add_char_nonext;
+		}
                 cstr_u8cat(outstr, n);
                 continue;
             case 'a':
