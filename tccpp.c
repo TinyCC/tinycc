@@ -1494,8 +1494,98 @@ static void maybe_run_test(TCCState *s)
     define_push(tok, MACRO_OBJ, NULL, NULL);
 }
 
+static int parse_include(char *buf, size_t size_buf, int last)
+{
+    int c;
+
+    skip_spaces();
+    if (ch == '<') {
+        c = '>';
+        goto read_name;
+    } else if (ch == '\"') {
+        char *q;
+
+        c = ch;
+    read_name:
+        inp();
+        q = buf;
+        while (ch != c && ch != '\n' && ch != CH_EOF) {
+            if ((q - buf) < size_buf - 1)
+                *q++ = ch;
+            if (ch == '\\') {
+                if (handle_stray_noerror() == 0)
+                    --q;
+            } else
+                inp();
+        }
+	if (ch != c)
+	    goto error;
+        *q = '\0';
+        minp();
+#if 0
+        /* eat all spaces and comments after include */
+        /* XXX: slightly incorrect */
+        while (ch1 != '\n' && ch1 != CH_EOF)
+            inp();
+#endif
+    } else {
+	int len;
+        /* computed #include : concatenate everything up to linefeed,
+	   the result must be one of the two accepted forms.
+	   Don't convert pp-tokens to tokens here.  */
+	parse_flags = (PARSE_FLAG_PREPROCESS
+		       | PARSE_FLAG_LINEFEED
+		       | (parse_flags & PARSE_FLAG_ASM_FILE));
+        next();
+        buf[0] = '\0';
+	while (tok != TOK_LINEFEED && tok != last) {
+	    pstrcat(buf, size_buf, get_tok_str(tok, &tokc));
+	    next();
+	}
+	len = strlen(buf);
+	if (tok == last)
+            unget_tok(0);
+	/* check syntax and remove '<>|""' */
+	if ((len < 2 || ((buf[0] != '"' || buf[len-1] != '"') &&
+			 (buf[0] != '<' || buf[len-1] != '>'))))
+error:
+	    tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
+	c = buf[len-1];
+	memmove(buf, buf + 1, len - 2);
+	buf[len - 2] = '\0';
+    }
+    return c;
+}
+
+static int get_include_file(TCCState *s1, int i, int c,
+			    char *buf, char *buf1, size_t size_buf1)
+{
+    const char *path;
+
+    if (i == 0) {
+	/* check absolute include path */
+       	if (!IS_ABSPATH(buf))
+	    return -1;
+        buf1[0] = 0;
+    } else if (i == 1) {
+	/* search in file's dir if "header.h" */
+        if (c != '\"')
+	    return -1;
+        path = file->true_filename;
+        pstrncpy(buf1, path, tcc_basename(path) - path);
+    } else {
+        /* search in all the include paths */
+        int j = i - 2, k = j - s1->nb_include_paths;
+        path = k < 0 ? s1->include_paths[j] : s1->sysinclude_paths[k];
+        pstrcpy(buf1, size_buf1, path);
+        pstrcat(buf1, size_buf1, "/");
+    }
+    pstrcat(buf1, size_buf1, buf);
+    return 0;
+}
+
 /* eval an expression for #if/#elif */
-static int expr_preprocess(void)
+static int expr_preprocess(TCCState *s1)
 {
     int c, t;
     TokenString *str;
@@ -1510,11 +1600,15 @@ static int expr_preprocess(void)
             t = tok;
             if (t == '(') 
                 next_nomacro();
-            if (tok < TOK_IDENT)
-                expect("identifier");
-            if (tcc_state->run_test)
-                maybe_run_test(tcc_state);
-            c = define_find(tok) != 0;
+	    if (tok == TOK___HAS_INCLUDE || tok == TOK___HAS_INCLUDE_NEXT)
+		c = 1;
+	    else {
+                if (tok < TOK_IDENT)
+                    expect("identifier");
+                if (tcc_state->run_test)
+                    maybe_run_test(tcc_state);
+                c = define_find(tok) != 0;
+	    }
             if (t == '(') {
                 next_nomacro();
                 if (tok != ')')
@@ -1522,15 +1616,34 @@ static int expr_preprocess(void)
             }
             tok = TOK_CINT;
             tokc.i = c;
-        } else if (1 && tok == TOK___HAS_INCLUDE) {
-            next();  /* XXX check if correct to use expansion */
-            skip('(');
-            while (tok != ')' && tok != TOK_EOF)
-              next();
+        } else if (tok == TOK___HAS_INCLUDE ||
+                   tok == TOK___HAS_INCLUDE_NEXT) {
+	    int c, n, i, fd, save_tok = tok;
+	    char buf[1024];
+
+            next_nomacro();
+	    if (tok != '(')
+		expect("(");
+	    ch = file->buf_ptr[0];
+            c = parse_include(buf, sizeof(buf), ')');
+	    next_nomacro();
             if (tok != ')')
-              expect("')'");
+                expect("')'");
             tok = TOK_CINT;
             tokc.i = 0;
+	    i = save_tok == TOK___HAS_INCLUDE_NEXT ? file->include_next_index + 1 : 0;
+	    n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
+	    for (; i < n; i++) {
+		char buf1[sizeof file->filename];
+
+		if (get_include_file(s1, i, c, buf, buf1, sizeof(buf1)))
+		    continue;
+                if ((fd = open(buf1, O_RDONLY | O_BINARY)) >= 0) {
+		    close(fd);
+                    tokc.i = 1;
+		    break;
+		}
+	    }
         } else if (tok >= TOK_IDENT) {
             /* if undefined macro, replace with zero, check for func-like */
             t = tok;
@@ -1842,55 +1955,8 @@ ST_FUNC void preprocess(int is_bof)
     case TOK_INCLUDE_NEXT:
         ch = file->buf_ptr[0];
         /* XXX: incorrect if comments : use next_nomacro with a special mode */
-        skip_spaces();
-        if (ch == '<') {
-            c = '>';
-            goto read_name;
-        } else if (ch == '\"') {
-            c = ch;
-        read_name:
-            inp();
-            q = buf;
-            while (ch != c && ch != '\n' && ch != CH_EOF) {
-                if ((q - buf) < sizeof(buf) - 1)
-                    *q++ = ch;
-                if (ch == '\\') {
-                    if (handle_stray_noerror() == 0)
-                        --q;
-                } else
-                    inp();
-            }
-            *q = '\0';
-            minp();
-#if 0
-            /* eat all spaces and comments after include */
-            /* XXX: slightly incorrect */
-            while (ch1 != '\n' && ch1 != CH_EOF)
-                inp();
-#endif
-        } else {
-	    int len;
-            /* computed #include : concatenate everything up to linefeed,
-	       the result must be one of the two accepted forms.
-	       Don't convert pp-tokens to tokens here.  */
-	    parse_flags = (PARSE_FLAG_PREPROCESS
-			   | PARSE_FLAG_LINEFEED
-			   | (parse_flags & PARSE_FLAG_ASM_FILE));
-            next();
-            buf[0] = '\0';
-	    while (tok != TOK_LINEFEED) {
-		pstrcat(buf, sizeof(buf), get_tok_str(tok, &tokc));
-		next();
-	    }
-	    len = strlen(buf);
-	    /* check syntax and remove '<>|""' */
-	    if ((len < 2 || ((buf[0] != '"' || buf[len-1] != '"') &&
-			     (buf[0] != '<' || buf[len-1] != '>'))))
-	        tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
-	    c = buf[len-1];
-	    memmove(buf, buf + 1, len - 2);
-	    buf[len - 2] = '\0';
-        }
+
+        c = parse_include(buf, sizeof(buf), 0);
 
         if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
             tcc_error("#include recursion too deep");
@@ -1899,31 +1965,9 @@ ST_FUNC void preprocess(int is_bof)
         for (; i < n; ++i) {
             char buf1[sizeof file->filename];
             CachedInclude *e;
-            const char *path;
 
-            if (i == 0) {
-                /* check absolute include path */
-                if (!IS_ABSPATH(buf))
-                    continue;
-                buf1[0] = 0;
-
-            } else if (i == 1) {
-                /* search in file's dir if "header.h" */
-                if (c != '\"')
-                    continue;
-                /* https://savannah.nongnu.org/bugs/index.php?50847 */
-                path = file->true_filename;
-                pstrncpy(buf1, path, tcc_basename(path) - path);
-
-            } else {
-                /* search in all the include paths */
-                int j = i - 2, k = j - s1->nb_include_paths;
-                path = k < 0 ? s1->include_paths[j] : s1->sysinclude_paths[k];
-                pstrcpy(buf1, sizeof(buf1), path);
-                pstrcat(buf1, sizeof(buf1), "/");
-            }
-
-            pstrcat(buf1, sizeof(buf1), buf);
+	    if (get_include_file(s1, i, c, buf, buf1, sizeof(buf1)))
+		continue;
             e = search_cached_include(s1, buf1, 0);
             if (e && (define_find(e->ifndef_macro) || e->once == pp_once)) {
                 /* no need to parse the include because the 'ifndef macro'
@@ -1965,7 +2009,7 @@ include_done:
         c = 1;
         goto do_ifdef;
     case TOK_IF:
-        c = expr_preprocess();
+        c = expr_preprocess(s1);
         goto do_if;
     case TOK_IFDEF:
         c = 0;
@@ -1981,7 +2025,10 @@ include_done:
                 file->ifndef_macro = tok;
             }
         }
-        c = (define_find(tok) != 0) ^ c;
+	if (tok == TOK___HAS_INCLUDE || tok == TOK___HAS_INCLUDE_NEXT)
+            c = 1 ^ c;
+	else
+            c = (define_find(tok) != 0) ^ c;
     do_if:
         if (s1->ifdef_stack_ptr >= s1->ifdef_stack + IFDEF_STACK_SIZE)
             tcc_error("memory full (ifdef)");
@@ -2004,7 +2051,7 @@ include_done:
         if (c == 1) {
             c = 0;
         } else {
-            c = expr_preprocess();
+            c = expr_preprocess(s1);
             s1->ifdef_stack_ptr[-1] = c;
         }
     test_else:
