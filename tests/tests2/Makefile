@@ -25,7 +25,7 @@ ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test # x86 asm
  SKIP += 124_atomic_counter.test
  SKIP += 125_atomic_misc.test # currently only x86 supported
- SKIP += 127_asm_goto.text    # hardcodes x86 asm
+ SKIP += 127_asm_goto.test    # hardcodes x86 asm
 endif
 ifeq ($(CONFIG_backtrace),no)
  SKIP += 113_btdll.test

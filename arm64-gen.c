@@ -487,7 +487,7 @@ static void arm64_load_cmp(int r, SValue *sv);
 ST_FUNC void load(int r, SValue *sv)
 {
     int svtt = sv->type.t;
-    int svr = sv->r & ~VT_BOUNDED;
+    int svr = sv->r & ~(VT_BOUNDED | VT_NONCONST);
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = (uint32_t)sv->c.i;
     svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
