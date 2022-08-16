@@ -2187,6 +2187,7 @@ static void gen_opic(int op)
     int t2 = v2->type.t & VT_BTYPE;
     int c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     int c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    int nonconst = (v1->r | v2->r) & VT_NONCONST;
     uint64_t l1 = c1 ? v1->c.i : 0;
     uint64_t l2 = c2 ? v2->c.i : 0;
     int shm = (t1 == VT_LLONG) ? 63 : 31;
@@ -2253,6 +2254,7 @@ static void gen_opic(int op)
         v1->c.i = l1;
         vtop--;
     } else {
+        nonconst = VT_NONCONST;
         /* if commutative ops, put c2 as constant */
         if (c1 && (op == '+' || op == '&' || op == '^' || 
                    op == '|' || op == '*' || op == TOK_EQ || op == TOK_NE)) {
@@ -2326,6 +2328,8 @@ static void gen_opic(int op)
                     gen_opi(op);
         }
     }
+    if (vtop->r == VT_CONST)
+      vtop->r |= nonconst;
 }
 
 #if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
@@ -2609,7 +2613,7 @@ static int pointed_size(CType *type)
 
 static inline int is_null_pointer(SValue *p)
 {
-    if ((p->r & (VT_VALMASK | VT_LVAL | VT_SYM)) != VT_CONST)
+    if ((p->r & (VT_VALMASK | VT_LVAL | VT_SYM | VT_NONCONST)) != VT_CONST)
         return 0;
     return ((p->type.t & VT_BTYPE) == VT_INT && (uint32_t)p->c.i == 0) ||
         ((p->type.t & VT_BTYPE) == VT_LLONG && p->c.i == 0) ||

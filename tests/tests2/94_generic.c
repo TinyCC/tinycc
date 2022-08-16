@@ -92,6 +92,9 @@ int main()
 
 	//void ptrs get chosen preferentially; qualifs still combine
 	_Generic( 0?(int volatile*)0: (void const*)1, void volatile const*: (void)0);
+        //but this is no null-ptr constant, so fallback to void-choice
+        i = 0;
+        _Generic( 1?(void*)(i*0LL):&i, void*:0);
 	//like gcc but not clang, don't treat (void* const as the null-ptr constant)
 	_Generic( 0?(int volatile*)0: (void const*)0, void volatile const*: (void)0);
 
