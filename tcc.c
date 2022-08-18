@@ -1,6 +1,6 @@
 /*
  *  TCC - Tiny C Compiler
- * 
+ *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -98,6 +98,15 @@ static const char help2[] =
     "  -dumpversion                  print version\n"
     "  -print-search-dirs            print search paths\n"
     "  -dt                           with -run/-E: auto-define 'test_...' macros\n"
+	"Optimization options:\n"
+	"  -Of                           functions\n"
+    "  -Oj                           jumps\n"
+    "  -Om                           multiplications and pointer division\n"
+    "  -Or                           registers\n"
+    "  -O -O2 -Ox                    all optimizations\n"
+    "  -O1                           all but -Oj (i.e. -Ofmr)\n"
+    "  -Os                           all but -Om (i.e. -Ofjr; also removes PE function alignment)\n"
+    "  -O0                           no optimizations (default)\n"
     "Ignored options:\n"
     "  -arch -C --param -pedantic -pipe -s -traditional\n"
     "-W[no-]... warnings:\n"
