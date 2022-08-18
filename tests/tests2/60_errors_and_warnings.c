@@ -448,4 +448,8 @@ int main() {
     char *str = "\Uffffffff";
 }
 
+#elif defined test_error_string
+#error \123\\
+456
+
 #endif

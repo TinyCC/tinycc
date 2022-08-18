@@ -7636,7 +7636,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 
             decl_design_flex(p, s, len);
             if (!(flags & DIF_SIZE_ONLY)) {
-                int nb = n;
+                int nb = n, ch;
                 if (len < nb)
                     nb = len;
                 if (len > nb)

@@ -4315,6 +4315,12 @@ ntf("min=%d\n", 4);
 #line 2222 "test"
     printf("__LINE__=%d __FILE__=%s\n", __LINE__, __FILE__);
 #endif
+
+    printf("\\
+"12\\
+063\\
+n 456\"\n");
+
 }
 
 #define RUN(test) puts("---- " #test " ----"), test(), puts("")

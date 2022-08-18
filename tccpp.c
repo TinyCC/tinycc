@@ -31,7 +31,7 @@ ST_DATA int tok_flags;
 ST_DATA int parse_flags;
 
 ST_DATA struct BufferedFile *file;
-ST_DATA int ch, tok;
+ST_DATA int tok;
 ST_DATA CValue tokc;
 ST_DATA const int *macro_ptr;
 ST_DATA CString tokcstr; /* current parsed string, if any */
@@ -639,6 +639,17 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     return cstr_buf.data;
 }
 
+static inline int check_space(int t, int *spc)
+{
+    if (t < 256 && (isidnum_table[t - CH_EOF] & IS_SPC)) {
+        if (*spc)
+            return 1;
+        *spc = 1;
+    } else
+        *spc = 0;
+    return 0;
+}
+
 /* return the current character, handling end of block if necessary
    (but not stray) */
 static int handle_eob(void)
@@ -674,132 +685,102 @@ static int handle_eob(void)
 }
 
 /* read next char from current input file and handle end of input buffer */
-static inline void inp(void)
+static int next_c(void)
 {
-    ch = *(++(file->buf_ptr));
+    int ch = *++file->buf_ptr;
     /* end of buffer/file handling */
-    if (ch == CH_EOB)
+    if (ch == CH_EOB && file->buf_ptr >= file->buf_end)
         ch = handle_eob();
+    return ch;
 }
 
-/* handle '\[\r]\n' */
-static int handle_stray_noerror(void)
+/* input with '\[\r]\n' handling. */
+static int handle_stray_noerror(int err)
 {
-    while (ch == '\\') {
-        inp();
+    int ch;
+    while ((ch = next_c()) == '\\') {
+        ch = next_c();
         if (ch == '\n') {
+    newl:
             file->line_num++;
-            inp();
-        } else if (ch == '\r') {
-            inp();
-            if (ch != '\n')
-                goto fail;
-            file->line_num++;
-            inp();
         } else {
-        fail:
-            return 1;
+            if (ch == '\r') {
+                ch = next_c();
+                if (ch == '\n')
+                    goto newl;
+                *--file->buf_ptr = '\r';
+            }
+            if (err)
+                tcc_error("stray '\\' in program");
+            /* may take advantage of 'BufferedFile.unget[4}' */
+            return *--file->buf_ptr = '\\';
         }
     }
-    return 0;
+    return ch;
 }
 
-static void handle_stray(void)
+#define ninp() handle_stray_noerror(0)
+
+/* handle '\\' in strings, comments and skipped regions */
+static int handle_bs(uint8_t **p)
 {
-    if (handle_stray_noerror())
-        tcc_error("stray '\\' in program");
+    int c;
+    file->buf_ptr = *p - 1;
+    c = ninp();
+    *p = file->buf_ptr;
+    return c;
 }
 
 /* skip the stray and handle the \\n case. Output an error if
    incorrect char after the stray */
-static int handle_stray1(uint8_t *p)
+static int handle_stray(uint8_t **p)
 {
     int c;
-
-    file->buf_ptr = p;
-    if (p >= file->buf_end) {
-        c = handle_eob();
-        if (c != '\\')
-            return c;
-        p = file->buf_ptr;
-    }
-    ch = *p;
-    if (handle_stray_noerror()) {
-        if (!(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
-            tcc_error("stray '\\' in program");
-        *--file->buf_ptr = '\\';
-    }
-    p = file->buf_ptr;
-    c = *p;
+    file->buf_ptr = *p - 1;
+    c = handle_stray_noerror(!(parse_flags & PARSE_FLAG_ACCEPT_STRAYS));
+    *p = file->buf_ptr;
     return c;
-}
-
-/* handle just the EOB case, but not stray */
-#define PEEKC_EOB(c, p)\
-{\
-    p++;\
-    c = *p;\
-    if (c == '\\') {\
-        file->buf_ptr = p;\
-        c = handle_eob();\
-        p = file->buf_ptr;\
-    }\
 }
 
 /* handle the complicated stray case */
 #define PEEKC(c, p)\
 {\
-    p++;\
-    c = *p;\
-    if (c == '\\') {\
-        c = handle_stray1(p);\
-        p = file->buf_ptr;\
-    }\
+    c = *++p;\
+    if (c == '\\')\
+        c = handle_stray(&p); \
 }
 
-/* input with '\[\r]\n' handling. Note that this function cannot
-   handle other characters after '\', so you cannot call it inside
-   strings or comments */
-static void minp(void)
+static int skip_spaces(void)
 {
-    inp();
-    if (ch == '\\') 
-        handle_stray();
+    int ch;
+    --file->buf_ptr;
+    do {
+        ch = ninp();
+    } while (isidnum_table[ch - CH_EOF] & IS_SPC);
+    return ch;
 }
 
 /* single line C++ comments */
 static uint8_t *parse_line_comment(uint8_t *p)
 {
     int c;
-
-    p++;
     for(;;) {
-        c = *p;
+        for (;;) {
+            c = *++p;
     redo:
-        if (c == '\n' || c == CH_EOF) {
-            break;
-        } else if (c == '\\') {
-            file->buf_ptr = p;
-            c = handle_eob();
-            p = file->buf_ptr;
-            if (c == '\\') {
-                PEEKC_EOB(c, p);
-                if (c == '\n') {
-                    file->line_num++;
-                    PEEKC_EOB(c, p);
-                } else if (c == '\r') {
-                    PEEKC_EOB(c, p);
-                    if (c == '\n') {
-                        file->line_num++;
-                        PEEKC_EOB(c, p);
-                    }
-                }
-            } else {
-                goto redo;
-            }
-        } else {
-            p++;
+            if (c == '\n' || c == '\\')
+                break;
+            c = *++p;
+            if (c == '\n' || c == '\\')
+                break;
         }
+        if (c == '\n')
+            break;
+        c = handle_bs(&p);
+        if (c == CH_EOF)
+            break;
+        if (c != '\\')
+            goto redo;
     }
     return p;
 }
@@ -808,144 +789,69 @@ static uint8_t *parse_line_comment(uint8_t *p)
 static uint8_t *parse_comment(uint8_t *p)
 {
     int c;
-
-    p++;
     for(;;) {
         /* fast skip loop */
         for(;;) {
-            c = *p;
+            c = *++p;
+        redo:
             if (c == '\n' || c == '*' || c == '\\')
                 break;
-            p++;
-            c = *p;
+            c = *++p;
             if (c == '\n' || c == '*' || c == '\\')
                 break;
-            p++;
         }
         /* now we can handle all the cases */
         if (c == '\n') {
             file->line_num++;
-            p++;
         } else if (c == '*') {
-            p++;
-            for(;;) {
-                c = *p;
-                if (c == '*') {
-                    p++;
-                } else if (c == '/') {
-                    goto end_of_comment;
-                } else if (c == '\\') {
-                    file->buf_ptr = p;
-                    c = handle_eob();
-                    p = file->buf_ptr;
-                    if (c == CH_EOF)
-                        tcc_error("unexpected end of file in comment");
-                    if (c == '\\') {
-                        /* skip '\[\r]\n', otherwise just skip the stray */
-                        while (c == '\\') {
-                            PEEKC_EOB(c, p);
-                            if (c == '\n') {
-                                file->line_num++;
-                                PEEKC_EOB(c, p);
-                            } else if (c == '\r') {
-                                PEEKC_EOB(c, p);
-                                if (c == '\n') {
-                                    file->line_num++;
-                                    PEEKC_EOB(c, p);
-                                }
-                            } else {
-                                goto after_star;
-                            }
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        after_star: ;
+            do {
+                c = *++p;
+            } while (c == '*');
+            if (c == '\\')
+                c = handle_bs(&p);
+            if (c == '/')
+                break;
+            goto check_eof;
         } else {
-            /* stray, eob or eof */
-            file->buf_ptr = p;
-            c = handle_eob();
-            p = file->buf_ptr;
-            if (c == CH_EOF) {
+            c = handle_bs(&p);
+        check_eof:
+            if (c == CH_EOF)
                 tcc_error("unexpected end of file in comment");
-            } else if (c == '\\') {
-                p++;
-            }
+            if (c != '\\')
+                goto redo;
         }
     }
- end_of_comment:
-    p++;
-    return p;
-}
-
-ST_FUNC int set_idnum(int c, int val)
-{
-    int prev = isidnum_table[c - CH_EOF];
-    isidnum_table[c - CH_EOF] = val;
-    return prev;
-}
-
-#define cinp minp
-
-static inline void skip_spaces(void)
-{
-    ch = file->buf_ptr[0];
-    while (isidnum_table[ch - CH_EOF] & IS_SPC)
-        cinp();
-}
-
-static inline int check_space(int t, int *spc) 
-{
-    if (t < 256 && (isidnum_table[t - CH_EOF] & IS_SPC)) {
-        if (*spc) 
-            return 1;
-        *spc = 1;
-    } else 
-        *spc = 0;
-    return 0;
+    return p + 1;
 }
 
 /* parse a string without interpreting escapes */
-static uint8_t *parse_pp_string(uint8_t *p,
-                                int sep, CString *str)
+static uint8_t *parse_pp_string(uint8_t *p, int sep, CString *str)
 {
     int c;
-    p++;
     for(;;) {
-        c = *p;
+        c = *++p;
+    redo:
         if (c == sep) {
             break;
         } else if (c == '\\') {
-            file->buf_ptr = p;
-            c = handle_eob();
-            p = file->buf_ptr;
+            c = handle_bs(&p);
             if (c == CH_EOF) {
-            unterminated_string:
+        unterminated_string:
                 /* XXX: indicate line number of start of string */
                 tcc_error("missing terminating %c character", sep);
             } else if (c == '\\') {
-                /* escape : just skip \[\r]\n */
-                PEEKC_EOB(c, p);
-                if (c == '\n') {
-                    file->line_num++;
-                    p++;
-                } else if (c == '\r') {
-                    PEEKC_EOB(c, p);
-                    if (c != '\n')
-                        expect("'\n' after '\r'");
-                    file->line_num++;
-                    p++;
-                } else if (c == CH_EOF) {
-                    goto unterminated_string;
-                } else {
-                    if (str) {
-                        cstr_ccat(str, '\\');
-                        cstr_ccat(str, c);
-                    }
-                    p++;
+                if (str)
+                    cstr_ccat(str, c);
+                c = *++p;
+                /* add char after '\\' unconditionally */
+                if (c == '\\') {
+                    c = handle_bs(&p);
+                    if (c == CH_EOF)
+                        goto unterminated_string;
                 }
+                goto add_char;
+            } else {
+                goto redo;
             }
         } else if (c == '\n') {
         add_lf:
@@ -955,22 +861,24 @@ static uint8_t *parse_pp_string(uint8_t *p,
             } else if (str) { /* not skipping */
                 goto unterminated_string;
             } else {
-                tcc_warning("missing terminating %c character", sep);
+                //tcc_warning("missing terminating %c character", sep);
                 return p;
             }
         } else if (c == '\r') {
-            PEEKC_EOB(c, p);
-            if (c != '\n') {
-                if (str)
-                    cstr_ccat(str, '\r');
-            } else {
+            c = *++p;
+            if (c == '\\')
+                c = handle_bs(&p);
+            if (c == '\n')
                 goto add_lf;
-            }
+            if (c == CH_EOF)
+                goto unterminated_string;
+            if (str)
+                cstr_ccat(str, '\r');
+            goto redo;
         } else {
         add_char:
             if (str)
                 cstr_ccat(str, c);
-            p++;
         }
     }
     p++;
@@ -1005,15 +913,11 @@ redo_start:
             p++;
             goto redo_start;
         case '\\':
-            file->buf_ptr = p;
-            c = handle_eob();
-            if (c == CH_EOF) {
+            c = handle_bs(&p);
+            if (c == CH_EOF)
                 expect("#endif");
-            } else if (c == '\\') {
-                ch = file->buf_ptr[0];
-                handle_stray_noerror();
-            }
-            p = file->buf_ptr;
+            if (c == '\\')
+                ++p;
             goto redo_no_start;
         /* skip strings */
         case '\"':
@@ -1027,13 +931,11 @@ redo_start:
         case '/':
             if (in_warn_or_error)
                 goto _default;
-            file->buf_ptr = p;
-            ch = *p;
-            minp();
-            p = file->buf_ptr;
-            if (ch == '*') {
+            ++p;
+            c = handle_bs(&p);
+            if (c == '*') {
                 p = parse_comment(p);
-            } else if (ch == '/') {
+            } else if (c == '/') {
                 p = parse_line_comment(p);
             }
             break;
@@ -1507,7 +1409,7 @@ static int parse_include(TCCState *s1, int do_next, int test)
     CachedInclude *e;
 
     cstr_new(&cs);
-    skip_spaces(), c = ch;
+    c = skip_spaces();
     if (c == '<' || c == '\"') {
         file->buf_ptr = parse_pp_string(file->buf_ptr, c == '<' ? '>' : c, &cs);
         next_nomacro();
@@ -2072,20 +1974,15 @@ ST_FUNC void preprocess(int is_bof)
         break;
     case TOK_ERROR:
     case TOK_WARNING:
-        c = tok;
-        skip_spaces();
         q = buf;
-        while (ch != '\n' && ch != CH_EOF) {
+        c = skip_spaces();
+        while (c != '\n' && c != CH_EOF) {
             if ((q - buf) < sizeof(buf) - 1)
-                *q++ = ch;
-            if (ch == '\\') {
-                if (handle_stray_noerror() == 0)
-                    --q;
-            } else
-                inp();
+                *q++ = c;
+            c = ninp();
         }
         *q = '\0';
-        if (c == TOK_ERROR)
+        if (tok == TOK_ERROR)
             tcc_error("#error %s", buf);
         else
             tcc_warning("#warning %s", buf);
@@ -2697,13 +2594,10 @@ static inline void next_nomacro1(void)
         goto redo_no_start;
     case '\\':
         /* first look if it is in fact an end of buffer */
-        c = handle_stray1(p);
-        p = file->buf_ptr;
+        c = handle_stray(&p);
         if (c == '\\')
             goto parse_simple;
-        if (c != CH_EOF)
-            goto redo_no_start;
-        {
+        if (c == CH_EOF) {
             TCCState *s1 = tcc_state;
             if ((parse_flags & PARSE_FLAG_LINEFEED)
                 && !(tok_flags & TOK_FLAG_EOF)) {
@@ -2742,6 +2636,8 @@ static inline void next_nomacro1(void)
                     tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
                 goto redo_no_start;
             }
+        } else {
+            goto redo_no_start;
         }
         break;
 
@@ -3326,30 +3222,30 @@ static int next_argstream(Sym **nested_list, TokenString *ws_str)
                 continue;
             }
         } else {
-            ch = handle_eob();
+            uint8_t *p = file->buf_ptr;
+            int ch = handle_bs(&p);
             if (ws_str) {
                 while (is_space(ch) || ch == '\n' || ch == '/') {
                     if (ch == '/') {
                         int c;
-                        uint8_t *p = file->buf_ptr;
                         PEEKC(c, p);
                         if (c == '*') {
-                            p = parse_comment(p);
-                            file->buf_ptr = p - 1;
+                            p = parse_comment(p) - 1;
                         } else if (c == '/') {
-                            p = parse_line_comment(p);
-                            file->buf_ptr = p - 1;
-                        } else
+                            p = parse_line_comment(p) - 1;
+                        } else {
                             break;
+                        }
                         ch = ' ';
                     }
                     if (ch == '\n')
                         file->line_num++;
                     if (!(ch == '\f' || ch == '\v' || ch == '\r'))
                         tok_str_add(ws_str, ch);
-                    cinp();
+                    PEEKC(ch, p);
                 }
             }
+            file->buf_ptr = p;
             t = ch;
         }
 
@@ -3836,6 +3732,13 @@ ST_FUNC void preprocess_end(TCCState *s1)
     while (file)
         tcc_close();
     tccpp_delete(s1);
+}
+
+ST_FUNC int set_idnum(int c, int val)
+{
+    int prev = isidnum_table[c - CH_EOF];
+    isidnum_table[c - CH_EOF] = val;
+    return prev;
 }
 
 ST_FUNC void tccpp_new(TCCState *s)

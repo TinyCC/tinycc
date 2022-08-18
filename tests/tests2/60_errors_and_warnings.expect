@@ -219,3 +219,6 @@ arg[1] = "Y"
 
 [test_illegal_unicode]
 60_errors_and_warnings.c:448: error: 0xffffffff is not a valid universal character
+
+[test_error_string]
+60_errors_and_warnings.c:453: error: #error \123\456

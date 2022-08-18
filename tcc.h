@@ -77,7 +77,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define LIBTCCAPI __declspec(dllexport)
 #  define PUB_FUNC LIBTCCAPI
 # endif
-# define inp next_inp /* inp is an intrinsic on msvc/mingw */
 # ifdef _MSC_VER
 #  pragma warning (disable : 4244)  // conversion from 'uint64_t' to 'int', possible loss of data
 #  pragma warning (disable : 4267)  // conversion from 'size_t' to 'int', possible loss of data
@@ -1303,7 +1302,7 @@ ST_FUNC char *tcc_load_text(int fd);
 /* ------------ tccpp.c ------------ */
 
 ST_DATA struct BufferedFile *file;
-ST_DATA int ch, tok;
+ST_DATA int tok;
 ST_DATA CValue tokc;
 ST_DATA const int *macro_ptr;
 ST_DATA int parse_flags;
