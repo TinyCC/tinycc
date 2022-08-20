@@ -187,7 +187,8 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
             ElfW_Rel *rel_end = (ElfW_Rel*)(sr->data + sr->data_offset);
             for (; rel < rel_end; ++rel) {
                 int n = ELFW(R_SYM)(rel->r_info) - first_sym;
-                //if (n < 0) tcc_error("internal: invalid symbol index in relocation");
+                if (n < 0) /* zero sym_index in reloc (can happen with asm) */
+                    continue;
                 rel->r_info = ELFW(R_INFO)(tr[n], ELFW(R_TYPE)(rel->r_info));
             }
         }
@@ -596,8 +597,14 @@ version_add (TCCState *s1)
             ElfW(Vernaux) *vna = 0;
             if (sv->out_index < 1)
               continue;
+
             /* make sure that a DT_NEEDED tag is put */
-            tcc_add_dllref(s1, sv->lib, 0);
+            /* abitest-tcc fails on older i386-linux with "ld-linux.so.2" DT_NEEDED
+               ret_int_test... Inconsistency detected by ld.so: dl-minimal.c: 148:
+               realloc: Assertion `ptr == alloc_last_block' failed! */
+            if (strcmp(sv->lib, "ld-linux.so.2"))
+                tcc_add_dllref(s1, sv->lib, 0);
+
             vnofs = section_add(verneed_section, sizeof(*vn), 1);
             vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
             vn->vn_version = 1;

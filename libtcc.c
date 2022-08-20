@@ -572,7 +572,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     if (f) {
         for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
             cstr_printf(&cs, "In file included from %s:%d:\n",
-                (*pf)->filename, (*pf)->line_num);
+                (*pf)->filename, (*pf)->line_num - 1);
         cstr_printf(&cs, "%s:%d: ",
             f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
     } else if (s1->current_filename) {
@@ -733,24 +733,25 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd)
             file->fd = fd;
         }
 
-        tccelf_begin_file(s1);
         preprocess_start(s1, filetype);
         tccgen_init(s1);
+
         if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
             tcc_preprocess(s1);
-        } else if (filetype & (AFF_TYPE_ASM | AFF_TYPE_ASMPP)) {
-            tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
         } else {
-            tccgen_compile(s1);
+            tccelf_begin_file(s1);
+            if (filetype & (AFF_TYPE_ASM | AFF_TYPE_ASMPP)) {
+                tcc_assemble(s1, !!(filetype & AFF_TYPE_ASMPP));
+            } else {
+                tccgen_compile(s1);
+            }
+            tccelf_end_file(s1);
         }
     }
     tccgen_finish(s1);
     preprocess_end(s1);
-
     s1->error_set_jmp_enabled = 0;
     tcc_exit_state(s1);
-
-    tccelf_end_file(s1);
     return s1->nb_errors != 0 ? -1 : 0;
 }
 
@@ -819,8 +820,6 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* might be used in error() before preprocess_start() */
     s->include_stack_ptr = s->include_stack;
 
-    tccelf_new(s);
-
     tcc_set_lib_path(s, CONFIG_TCCDIR);
     return s;
 }
@@ -879,19 +878,23 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         tcc_add_sysinclude_path(s, CONFIG_TCC_SYSINCLUDEPATHS);
     }
 
-    if (output_type == TCC_OUTPUT_PREPROCESS)
+    if (output_type == TCC_OUTPUT_PREPROCESS) {
+        s->do_debug = 0;
         return 0;
+    }
 
+    tccelf_new(s);
+    if (s->do_debug) {
+        /* add debug sections */
+        tcc_debug_new(s);
+    }
 #ifdef CONFIG_TCC_BCHECK
     if (s->do_bounds_check) {
         /* if bound checking, then add corresponding sections */
         tccelf_bounds_new(s);
     }
 #endif
-    if (s->do_debug) {
-        /* add debug sections */
-        tcc_debug_new(s);
-    }
+
     if (output_type == TCC_OUTPUT_OBJ) {
         /* always elf for objects */
         s->output_format = TCC_OUTPUT_FORMAT_ELF;
@@ -1195,11 +1198,9 @@ ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
 /* find [cross-]libtcc1.a and tcc helper objects in library path */
 ST_FUNC void tcc_add_support(TCCState *s1, const char *filename)
 {
-#ifdef CONFIG_TCC_CROSSPREFIX
     char buf[100];
-    snprintf(buf, sizeof buf, "%s%s", CONFIG_TCC_CROSSPREFIX, filename);
-    filename = buf;
-#endif
+    if (CONFIG_TCC_CROSSPREFIX[0])
+        filename = strcat(strcpy(buf, CONFIG_TCC_CROSSPREFIX), filename);
     if (tcc_add_dll(s1, filename, 0) < 0)
         tcc_error_noabort("%s not found", filename);
 }
@@ -1838,6 +1839,7 @@ reparse:
         case TCC_OPTION_B:
             /* set tcc utilities path (mainly for tcc development) */
             tcc_set_lib_path(s, optarg);
+            ++noaction;
             break;
         case TCC_OPTION_l:
             args_parser_add_file(s, optarg, AFF_TYPE_LIB | (s->filetype & ~AFF_TYPE_MASK));

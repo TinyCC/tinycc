@@ -3032,9 +3032,9 @@ void c99_vla_test_3d(int s, int arr[2][3][s])
     printf ("%d\n", arr[1][2][3]);
 }
 
-void c99_vla_test_3e(int s, int arr[][3][s])
+void c99_vla_test_3e(int s, int arr[][3][--s])
 {
-    printf ("%d\n", arr[1][2][3]);
+    printf ("%d %d\n", s, arr[1][2][3]);
 }
 
 void c99_vla_test_3(void)
@@ -3042,12 +3042,12 @@ void c99_vla_test_3(void)
     int a[2][3][4];
 
     memset (a, 0, sizeof(a));
-    a[1][2][3] = 2;
+    a[1][2][3] = 123;
     c99_vla_test_3a(a);
     c99_vla_test_3b(2, a);
     c99_vla_test_3c(3, a);
     c99_vla_test_3d(4, a);
-    c99_vla_test_3e(4, a);
+    c99_vla_test_3e(5, a);
 }
 
 void c99_vla_test(void)
