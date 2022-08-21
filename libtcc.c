@@ -924,7 +924,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
 #if TARGETOS_OpenBSD
         if (output_type != TCC_OUTPUT_DLL)
 	    tcc_add_crt(s, "crt0.o");
-        if (output_type & TCC_OUTPUT_DYN)
+        if (output_type == TCC_OUTPUT_DLL)
             tcc_add_crt(s, "crtbeginS.o");
         else
             tcc_add_crt(s, "crtbegin.o");

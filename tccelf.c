@@ -1518,14 +1518,17 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 	if (s1->output_type != TCC_OUTPUT_MEMORY) {
 #if defined TCC_TARGET_MACHO
             /* nothing to do */
-#elif TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
+#elif TARGETOS_FreeBSD || TARGETOS_NetBSD
 	    if (s1->output_type & TCC_OUTPUT_DYN)
 	        tcc_add_crt(s1, "crtendS.o");
 	    else
 	        tcc_add_crt(s1, "crtend.o");
-# if !TARGETOS_OpenBSD
             tcc_add_crt(s1, "crtn.o");
-# endif
+#elif TARGETOS_OpenBSD
+	    if (s1->output_type == TCC_OUTPUT_DLL)
+	        tcc_add_crt(s1, "crtendS.o");
+	    else
+	        tcc_add_crt(s1, "crtend.o");
 #elif TARGETOS_ANDROID
 	    if (s1->output_type == TCC_OUTPUT_DLL)
                 tcc_add_crt(s1, "crtend_so.o");
