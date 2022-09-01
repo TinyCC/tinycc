@@ -1867,9 +1867,10 @@ reparse:
 #endif
         case TCC_OPTION_g:
             s->do_debug = 1;
-	    s->dwarf = DWARF_VERSION;
-	    if (strstart("dwarf-", &optarg))
-                s->dwarf = atoi(optarg);
+            s->dwarf = DWARF_VERSION;
+
+            if (strstart("dwarf", &optarg))
+                s->dwarf = (*optarg) ? (0 - atoi(optarg)) : DEFAULT_DWARF_VERSION;
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;
