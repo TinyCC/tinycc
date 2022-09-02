@@ -58,7 +58,7 @@ test -n "$CC" && cc="$CC"
 cpu=`uname -m`
 cpu_sys="$cpu"
 targetos=`uname`
-test "$(uname -o)" = "Android" && targetos=Android
+test "$(uname -s)" = "Android" && targetos=Android
 
 case $targetos in
   Darwin)
