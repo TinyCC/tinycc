@@ -2633,7 +2633,8 @@ static inline void next_nomacro1(void)
                 s1->include_stack_ptr--;
                 p = file->buf_ptr;
                 if (p == file->buffer)
-                    tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
+                    tok_flags = TOK_FLAG_BOF;
+                tok_flags |= TOK_FLAG_BOL;
                 goto redo_no_start;
             }
         } else {
