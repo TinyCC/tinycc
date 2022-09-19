@@ -2979,6 +2979,7 @@ void c99_vla_test_2(int d, int h, int w)
     int x, y, z;
     int (*arr)[h][w] = malloc(sizeof(int) * d*h*w);
     int c = 1;
+    static int (*starr)[h][w];
 
     printf("Test C99 VLA 6 (pointer)\n");
 
@@ -2998,13 +2999,15 @@ void c99_vla_test_2(int d, int h, int w)
         }
         puts("");
     }
+    starr = &arr[1];
     printf(" sizes : %d %d %d\n"
            " pdiff : %d %d\n"
-           " tests : %d %d\n",
+           " tests : %d %d %d\n",
         sizeof (*arr), sizeof (*arr)[0], sizeof (*arr)[0][0],
         arr + 2 - arr, *arr + 3 - *arr,
         0 == sizeof (*arr + 1) - sizeof arr,
-        0 == sizeof sizeof *arr - sizeof arr
+        0 == sizeof sizeof *arr - sizeof arr,
+        starr[0][2][3] == arr[1][2][3]
         );
     free (arr);
 }

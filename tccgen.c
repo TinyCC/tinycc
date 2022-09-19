@@ -5018,7 +5018,8 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
 	  expect("identifier");
 	*v = 0;
     }
-    post_type(post, ad, storage, td & ~(TYPE_DIRECT|TYPE_ABSTRACT));
+    post_type(post, ad, post != ret ? 0 : storage,
+              td & ~(TYPE_DIRECT|TYPE_ABSTRACT));
     parse_attribute(ad);
     type->t |= storage;
     return ret;
@@ -5437,7 +5438,7 @@ ST_FUNC void unary(void)
            there and in function calls. */
         /* arrays can also be used although they are not lvalues */
         if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
-            !(vtop->type.t & VT_ARRAY))
+            !(vtop->type.t & (VT_ARRAY | VT_VLA)))
             test_lvalue();
         if (vtop->sym)
           vtop->sym->a.addrtaken = 1;
