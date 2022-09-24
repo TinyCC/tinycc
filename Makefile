@@ -171,6 +171,7 @@ DEFINES += $(if $(ROOT-$T),-DCONFIG_SYSROOT="\"$(ROOT-$T)\"")
 DEFINES += $(if $(CRT-$T),-DCONFIG_TCC_CRTPREFIX="\"$(CRT-$T)\"")
 DEFINES += $(if $(LIB-$T),-DCONFIG_TCC_LIBPATHS="\"$(LIB-$T)\"")
 DEFINES += $(if $(INC-$T),-DCONFIG_TCC_SYSINCLUDEPATHS="\"$(INC-$T)\"")
+DEFINES += $(if $(ELF-$T),-DCONFIG_TCC_ELFINTERP="\"$(ELF-$T)\"")
 DEFINES += $(DEF-$(or $(findstring win,$T),unx))
 
 ifneq ($(X),)
@@ -185,6 +186,19 @@ endif
 
 # include custom configuration (see make help)
 -include config-extra.mak
+
+ifneq ($(X),)
+# assume support files for cross-targets in "/usr/<triplet>" by default
+TRIPLET-i386 ?= i386-linux-gnu
+TRIPLET-x86_64 ?= x86_64-linux-gnu
+TRIPLET-arm ?= arm-linux-gnueabihf
+TRIPLET-arm64 ?= aarch64-linux-gnu
+TRIPLET-riscv64 ?= riscv64-linux-gnu
+TR = $(if $(TRIPLET-$T),$T,ignored)
+CRT-$(TR) ?= /usr/$(TRIPLET-$T)/lib
+LIB-$(TR) ?= {B}:/usr/$(TRIPLET-$T)/lib
+INC-$(TR) ?= {B}/include:/usr/$(TRIPLET-$T)/include
+endif
 
 CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccdbg.c tccelf.c tccasm.c tccrun.c
 CORE_FILES += tcc.h config.h libtcc.h tcctok.h
@@ -339,7 +353,7 @@ INSTALLBIN = install -m755 $(STRIP_$(CONFIG_strip))
 STRIP_yes = -s
 
 LIBTCC1_W = $(filter %-win32-libtcc1.a %-wince-libtcc1.a,$(LIBTCC1_CROSS))
-LIBTCC1_U = $(filter-out $(LIBTCC1_W),$(LIBTCC1_CROSS))
+LIBTCC1_U = $(filter-out $(LIBTCC1_W),$(wildcard *-libtcc1.a))
 IB = $(if $1,$(IM) mkdir -p $2 && $(INSTALLBIN) $1 $2)
 IBw = $(call IB,$(wildcard $1),$2)
 IF = $(if $1,$(IM) mkdir -p $2 && $(INSTALL) $1 $2)
@@ -351,7 +365,7 @@ B_O = bcheck.o bt-exe.o bt-log.o bt-dll.o
 
 # install progs & libs
 install-unx:
-	$(call IBw,$(PROGS) $(PROGS_CROSS),"$(bindir)")
+	$(call IBw,$(PROGS) *-tcc,"$(bindir)")
 	$(call IFw,$(LIBTCC1) $(B_O) $(LIBTCC1_U),"$(tccdir)")
 	$(call IF,$(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h,"$(tccdir)/include")
 	$(call $(if $(findstring .so,$(LIBTCC)),IBw,IFw),$(LIBTCC),"$(libdir)")
@@ -487,6 +501,8 @@ help:
 	@echo "      LIB-i386  = {B}/i386-linux/lib:{B}/i386-linux/usr/lib"
 	@echo "      INC-i386  = {B}/lib/include:{B}/i386-linux/usr/include"
 	@echo "      DEF-i386  += -D__linux__"
+	@echo "   Or to configure a cross compiler for system-files in /usr/<triplet>"
+	@echo "      TRIPLET-arm-eabi = arm-linux-gnueabi"
 
 # --------------------------------------------------------------------------
 endif # ($(INCLUDED),no)

@@ -260,9 +260,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX \
-        ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/lib"
+# define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
 #endif
 
 #ifndef CONFIG_USR_INCLUDE
@@ -279,8 +277,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
         "{B}/include" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/include" \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr/local") "/include" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT CONFIG_USR_INCLUDE)
 # endif
 #endif
@@ -293,8 +289,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_LIBPATHS \
         "{B}" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr") "/lib" \
-    ":" USE_TRIPLET(CONFIG_SYSROOT "/usr/local") "/lib" \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
     ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
 # endif
