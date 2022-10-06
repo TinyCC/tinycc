@@ -216,6 +216,7 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
         sec->sh_addralign = 2;
         break;
     case SHT_HASH:
+    case SHT_GNU_HASH:
     case SHT_REL:
     case SHT_RELA:
     case SHT_DYNSYM:
@@ -370,6 +371,16 @@ static unsigned long elf_hash(const unsigned char *name)
             h ^= g >> 24;
         h &= ~g;
     }
+    return h;
+}
+
+static unsigned long elf_gnu_hash (const unsigned char *name)
+{
+    unsigned long h = 5381;
+    unsigned char c;
+
+    while ((c = *name++))
+        h = h * 33 + c;
     return h;
 }
 
@@ -845,6 +856,186 @@ static void sort_syms(TCCState *s1, Section *s)
     }
 
     tcc_free(old_to_new_syms);
+}
+
+/* See: https://flapenguin.me/elf-dt-gnu-hash */
+
+#define	ELFCLASS_BITS (PTR_SIZE * 8)
+
+static void create_gnu_hash(TCCState *s1)
+{
+    int nb_syms, i, ndef, nbuckets, symoffset, bloom_size, bloom_shift;
+    ElfW(Sym) *p;
+    Section *gnu_hash;
+    Section *dynsym = s1->dynsym;
+    Elf32_Word *ptr;
+
+    if (dynsym == NULL)
+	return;
+
+    gnu_hash = new_section(s1, ".gnu.hash", SHT_GNU_HASH, SHF_ALLOC);
+    gnu_hash->link = dynsym->hash->link;
+
+    nb_syms = dynsym->data_offset / sizeof(ElfW(Sym));
+
+    /* count def symbols */
+    ndef = 0;
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nb_syms; i++, p++)
+        ndef += p->st_shndx != SHN_UNDEF;
+
+    /* calculate gnu hash sizes and fill header */
+    nbuckets = ndef / 4 + 1;
+    symoffset = nb_syms - ndef;
+    bloom_shift = PTR_SIZE == 8 ? 6 : 5;
+    bloom_size = 1; /* must be power of two */
+    while (ndef >= bloom_size * (1 << (bloom_shift - 3)))
+	bloom_size *= 2;
+    ptr = section_ptr_add(gnu_hash, 4 * 4 +
+				    PTR_SIZE * bloom_size +
+				    nbuckets * 4 +
+				    ndef * 4);
+    ptr[0] = nbuckets;
+    ptr[1] = symoffset;
+    ptr[2] = bloom_size;
+    ptr[3] = bloom_shift;
+}
+
+static void update_gnu_hash(TCCState *s1)
+{
+    int *old_to_new_syms;
+    ElfW(Sym) *new_syms;
+    int nb_syms, i, nbuckets, bloom_size, bloom_shift;
+    ElfW(Sym) *p, *q;
+    ElfW_Rel *rel;
+    Section *sr, *vs;
+    Section *gnu_hash;
+    Section *dynsym = s1->dynsym;
+    int type, sym_index;
+    Elf32_Word *ptr, *buckets, *chain, *hash;
+    unsigned int *nextbuck;
+    addr_t *bloom;
+    unsigned char *strtab;
+    struct { int first, last; } *buck;
+
+    if (dynsym == NULL)
+	return;
+
+    gnu_hash = find_section_create(s1, ".gnu.hash", 0);
+    if (gnu_hash == NULL)
+	return;
+
+    strtab = dynsym->link->data;
+    nb_syms = dynsym->data_offset / sizeof(ElfW(Sym));
+    new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
+    old_to_new_syms = tcc_malloc(nb_syms * sizeof(int));
+    hash = tcc_malloc(nb_syms * sizeof(Elf32_Word));
+    nextbuck = tcc_malloc(nb_syms * sizeof(int));
+
+    /* calculate hashes and copy undefs */
+    p = (ElfW(Sym) *)dynsym->data;
+    q = new_syms;
+    for(i = 0; i < nb_syms; i++, p++) {
+        if (p->st_shndx == SHN_UNDEF) {
+            old_to_new_syms[i] = q - new_syms;
+            *q++ = *p;
+        }
+	else
+	    hash[i] = elf_gnu_hash(strtab + p->st_name);
+    }
+
+    ptr = (Elf32_Word *) gnu_hash->data;
+    nbuckets = ptr[0];
+    bloom_size = ptr[2];
+    bloom_shift = ptr[3];
+    bloom = (addr_t *) (void *) &ptr[4];
+    buckets = (Elf32_Word*) (void *) &bloom[bloom_size];
+    chain = &buckets[nbuckets];
+    buck = tcc_malloc(nbuckets * sizeof(*buck));
+
+    if (gnu_hash->data_offset != 4 * 4 +
+				 PTR_SIZE * bloom_size +
+				 nbuckets * 4 +
+				 (nb_syms - (q - new_syms)) * 4)
+	tcc_error ("gnu_hash size incorrect");
+
+    /* find buckets */
+    for(i = 0; i < nbuckets; i++)
+	buck[i].first = -1;
+
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nb_syms; i++, p++)
+        if (p->st_shndx != SHN_UNDEF) {
+	    int bucket = hash[i] % nbuckets;
+
+	    if (buck[bucket].first == -1)
+		buck[bucket].first = buck[bucket].last = i;
+	    else {
+		nextbuck[buck[bucket].last] = i;
+		buck[bucket].last = i;
+	    }
+	}
+
+    /* fill buckets/chains/bloom and sort symbols */
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nbuckets; i++) {
+	int cur = buck[i].first;
+
+	if (cur != -1) {
+	    buckets[i] = q - new_syms;
+	    for (;;) {
+                old_to_new_syms[cur] = q - new_syms;
+                *q++ = p[cur];
+	        *chain++ = hash[cur] & ~1;
+		bloom[(hash[cur] / ELFCLASS_BITS) % bloom_size] |=
+		    (addr_t)1 << (hash[cur] % ELFCLASS_BITS) |
+		    (addr_t)1 << ((hash[cur] >> bloom_shift) % ELFCLASS_BITS);
+		if (cur == buck[i].last)
+		    break;
+		cur = nextbuck[cur];
+	    }
+	    chain[-1] |= 1;
+	}
+    }
+
+    memcpy(dynsym->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
+    tcc_free(new_syms);
+    tcc_free(hash);
+    tcc_free(buck);
+    tcc_free(nextbuck);
+
+    /* modify all the relocations */
+    for(i = 1; i < s1->nb_sections; i++) {
+        sr = s1->sections[i];
+        if (sr->sh_type == SHT_RELX && sr->link == dynsym) {
+            for_each_elem(sr, 0, rel, ElfW_Rel) {
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                type = ELFW(R_TYPE)(rel->r_info);
+                sym_index = old_to_new_syms[sym_index];
+                rel->r_info = ELFW(R_INFO)(sym_index, type);
+            }
+        }
+    }
+
+    /* modify the versions */
+    vs = find_section_create(s1, ".gnu.version", 0);
+    if (vs) {
+	ElfW(Half) *newver, *versym = (ElfW(Half) *)vs->data;
+
+	if (versym) {
+            newver = tcc_malloc(nb_syms * sizeof(*newver));
+	    for (i = 0; i < nb_syms; i++)
+	        newver[old_to_new_syms[i]] = versym[i];
+	    memcpy(vs->data, newver, nb_syms * sizeof(*newver));
+	    tcc_free(newver);
+	}
+    }
+
+    tcc_free(old_to_new_syms);
+
+    /* rebuild hash */
+    ptr = (Elf32_Word *) dynsym->hash->data;
+    rebuild_hash(dynsym, ptr[0]);
 }
 
 /* relocate symbol table, resolve undefined symbols if do_resolve is
@@ -1912,7 +2103,7 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
             k = 0x11;
             if (i == nb_sections - 1) /* ".shstrtab" assumed to remain last */
                 k = 0xff;
-        } else if (s->sh_type == SHT_HASH) {
+        } else if (s->sh_type == SHT_HASH || s->sh_type == SHT_GNU_HASH) {
             k = 0x12;
         } else if (s->sh_type == SHT_RELX) {
             k = 0x20;
@@ -2162,7 +2353,12 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
     Section *s;
 
     /* put dynamic section entries */
-    put_dt(dynamic, DT_HASH, s1->dynsym->hash->sh_addr);
+    s = find_section_create (s1, ".hash", 0);
+    if (s && s->sh_flags == SHF_ALLOC)
+        put_dt(dynamic, DT_HASH, s->sh_addr);
+    s = find_section_create (s1, ".gnu.hash", 0);
+    if (s && s->sh_flags == SHF_ALLOC)
+        put_dt(dynamic, DT_GNU_HASH, s->sh_addr);
     put_dt(dynamic, DT_STRTAB, dyninf->dynstr->sh_addr);
     put_dt(dynamic, DT_SYMTAB, s1->dynsym->sh_addr);
     put_dt(dynamic, DT_STRSZ, dyninf->dynstr->data_offset);
@@ -2335,6 +2531,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
     sort_syms(s1, symtab_section);
+    update_gnu_hash(s1);
     for(i = 1; i < shnum; i++) {
         s = s1->sections[sec_order ? sec_order[i] : i];
         if (s->sh_type != SHT_NOBITS) {
@@ -2615,6 +2812,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 /* shared library case: simply export all global symbols */
                 export_global_syms(s1);
             }
+	    create_gnu_hash(s1);
         } else {
             build_got_entries(s1, 0);
         }
