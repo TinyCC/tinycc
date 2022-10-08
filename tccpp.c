@@ -3236,6 +3236,7 @@ static int next_argstream(Sym **nested_list, TokenString *ws_str)
                         } else if (c == '/') {
                             p = parse_line_comment(p) - 1;
                         } else {
+                            *--p = ch;
                             break;
                         }
                         ch = ' ';

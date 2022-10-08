@@ -1039,6 +1039,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
         filename = buf;
 #endif
 
+    /* ignore binary files with -E */
+    if (s1->output_type == TCC_OUTPUT_PREPROCESS
+        && (flags & AFF_TYPE_BIN))
+        return 0;
+
     /* open the file */
     fd = _tcc_open(s1, filename);
     if (fd < 0) {
