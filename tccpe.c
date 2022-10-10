@@ -324,7 +324,7 @@ static const DWORD pe_sec_flags[] = {
 struct section_info {
     int cls;
     char name[32];
-    DWORD sh_addr;
+    ADDR3264 sh_addr;
     DWORD sh_size;
     DWORD pe_flags;
     Section *sec;
@@ -451,9 +451,9 @@ static DWORD pe_file_align(struct pe_info *pe, DWORD n)
     return (n + (pe->file_align - 1)) & ~(pe->file_align - 1);
 }
 
-static DWORD pe_virtual_align(struct pe_info *pe, DWORD n)
+static ADDR3264 pe_virtual_align(struct pe_info *pe, ADDR3264 n)
 {
-    return (n + (pe->section_align - 1)) & ~(pe->section_align - 1);
+    return (n + (pe->section_align - 1)) & ~(ADDR3264)(pe->section_align - 1);
 }
 
 static void pe_align_section(Section *s, int a)
@@ -1108,7 +1108,7 @@ static int pe_section_class(Section *s)
 static int pe_assign_addresses (struct pe_info *pe)
 {
     int i, k, n, c, nbs;
-    DWORD addr;
+    ADDR3264 addr;
     int *sec_order, *sec_cls;
     struct section_info *si;
     Section *s;
@@ -1198,7 +1198,7 @@ add_section:
         Section *s = s1->sections[sec_order[i]];
         int type = s->sh_type;
         int flags = s->sh_flags;
-        printf("section %-16s %-10s %08x %04x %s,%s,%s\n",
+        printf("section %-16s %-10s %p %04x %s,%s,%s\n",
             s->name,
             type == SHT_PROGBITS ? "progbits" :
             type == SHT_INIT_ARRAY ? "initarr" :
@@ -1207,7 +1207,7 @@ add_section:
             type == SHT_SYMTAB ? "symtab" :
             type == SHT_STRTAB ? "strtab" :
             type == SHT_RELX ? "rel" : "???",
-            (unsigned)s->sh_addr,
+            s->sh_addr,
             (unsigned)s->data_offset,
             flags & SHF_ALLOC ? "alloc" : "",
             flags & SHF_WRITE ? "write" : "",
@@ -1280,7 +1280,7 @@ static int pe_check_symbols(struct pe_info *pe)
             is = pe_add_import(pe, imp_sym);
 
             if (type == STT_FUNC) {
-                unsigned long offset = is->thk_offset;
+                unsigned offset = is->thk_offset;
                 if (offset) {
                     /* got aliased symbol, like stricmp and _stricmp */
                 } else {

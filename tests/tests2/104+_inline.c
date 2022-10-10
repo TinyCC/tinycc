@@ -1,7 +1,7 @@
 
 #define GOT(f) \
     __attribute__((weak)) void f(void); \
-    printf("%d %s\n", !!f, #f);
+    printf("%d %s\n", !!((__SIZE_TYPE__)f & ~0u), #f);
 
 int printf(const char*, ...);
 
