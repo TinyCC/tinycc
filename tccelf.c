@@ -796,6 +796,25 @@ ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
     return &s1->sym_attrs[index];
 }
 
+static void modify_reloctions_old_to_new(TCCState *s1, Section *s, int *old_to_new_syms)
+{
+    int i, type, sym_index;
+    Section *sr;
+    ElfW_Rel *rel;
+
+    for(i = 1; i < s1->nb_sections; i++) {
+        sr = s1->sections[i];
+        if (sr->sh_type == SHT_RELX && sr->link == s) {
+            for_each_elem(sr, 0, rel, ElfW_Rel) {
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                type = ELFW(R_TYPE)(rel->r_info);
+                sym_index = old_to_new_syms[sym_index];
+                rel->r_info = ELFW(R_INFO)(sym_index, type);
+            }
+        }
+    }
+}
+
 /* In an ELF file symbol table, the local symbols must appear below
    the global and weak ones. Since TCC cannot sort it while generating
    the code, we must do it after. All the relocation tables are also
@@ -806,9 +825,6 @@ static void sort_syms(TCCState *s1, Section *s)
     ElfW(Sym) *new_syms;
     int nb_syms, i;
     ElfW(Sym) *p, *q;
-    ElfW_Rel *rel;
-    Section *sr;
-    int type, sym_index;
 
     nb_syms = s->data_offset / sizeof(ElfW(Sym));
     new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
@@ -842,18 +858,7 @@ static void sort_syms(TCCState *s1, Section *s)
     memcpy(s->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
     tcc_free(new_syms);
 
-    /* now we modify all the relocations */
-    for(i = 1; i < s1->nb_sections; i++) {
-        sr = s1->sections[i];
-        if (sr->sh_type == SHT_RELX && sr->link == s) {
-            for_each_elem(sr, 0, rel, ElfW_Rel) {
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                type = ELFW(R_TYPE)(rel->r_info);
-                sym_index = old_to_new_syms[sym_index];
-                rel->r_info = ELFW(R_INFO)(sym_index, type);
-            }
-        }
-    }
+    modify_reloctions_old_to_new(s1, s, old_to_new_syms);
 
     tcc_free(old_to_new_syms);
 }
@@ -862,6 +867,7 @@ static void sort_syms(TCCState *s1, Section *s)
 
 #define	ELFCLASS_BITS (PTR_SIZE * 8)
 
+#ifndef ELF_OBJ_ONLY
 static void create_gnu_hash(TCCState *s1)
 {
     int nb_syms, i, ndef, nbuckets, symoffset, bloom_size, bloom_shift;
@@ -900,6 +906,7 @@ static void create_gnu_hash(TCCState *s1)
     ptr[2] = bloom_size;
     ptr[3] = bloom_shift;
 }
+#endif
 
 static void update_gnu_hash(TCCState *s1)
 {
@@ -907,11 +914,9 @@ static void update_gnu_hash(TCCState *s1)
     ElfW(Sym) *new_syms;
     int nb_syms, i, nbuckets, bloom_size, bloom_shift;
     ElfW(Sym) *p, *q;
-    ElfW_Rel *rel;
-    Section *sr, *vs;
+    Section *vs;
     Section *gnu_hash;
     Section *dynsym = s1->dynsym;
-    int type, sym_index;
     Elf32_Word *ptr, *buckets, *chain, *hash;
     unsigned int *nextbuck;
     addr_t *bloom;
@@ -1004,18 +1009,7 @@ static void update_gnu_hash(TCCState *s1)
     tcc_free(buck);
     tcc_free(nextbuck);
 
-    /* modify all the relocations */
-    for(i = 1; i < s1->nb_sections; i++) {
-        sr = s1->sections[i];
-        if (sr->sh_type == SHT_RELX && sr->link == dynsym) {
-            for_each_elem(sr, 0, rel, ElfW_Rel) {
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                type = ELFW(R_TYPE)(rel->r_info);
-                sym_index = old_to_new_syms[sym_index];
-                rel->r_info = ELFW(R_INFO)(sym_index, type);
-            }
-        }
-    }
+    modify_reloctions_old_to_new(s1, dynsym, old_to_new_syms);
 
     /* modify the versions */
     vs = find_section_create(s1, ".gnu.version", 0);
