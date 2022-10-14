@@ -130,8 +130,7 @@ static void init_putv(init_params *p, CType *type, unsigned long c);
 static void decl_initializer(init_params *p, CType *type, unsigned long c, int flags);
 static void block(int is_expr);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
-static void decl(int l);
-static int decl0(int l, int is_for_loop_init, Sym *);
+static int decl(int l);
 static void expr_eq(void);
 static void vpush_type_size(CType *type, int *a);
 static int is_compatible_unqualified_types(CType *type1, CType *type2);
@@ -6881,7 +6880,7 @@ again:
         skip('(');
         if (tok != ';') {
             /* c99 for-loop init decl? */
-            if (!decl0(VT_LOCAL, 1, NULL)) {
+            if (!decl(VT_JMP)) {
                 /* no, regular for-loop init expr */
                 gexpr();
                 vpop();
@@ -7795,7 +7794,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
    is put in the value stack. If 'has_init' is 2, a special parsing
    is done to handle string constants. */
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, 
-                                   int has_init, int v, int scope)
+                                   int has_init, int v, int global)
 {
     int size, align, addr;
     TokenString *init_str = NULL;
@@ -7932,7 +7931,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         }
     } else {
 	sym = NULL;
-        if (v && scope == VT_CONST) {
+        if (v && global) {
             /* see if the symbol was already defined */
             sym = sym_find(v);
             if (sym) {
@@ -8198,9 +8197,10 @@ static void free_inline_functions(TCCState *s)
     dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
 
-/* 'l' is VT_LOCAL or VT_CONST to define default storage type, or VT_CMP
-   if parsing old style parameter decl list (and FUNC_SYM is set then) */
-static int decl0(int l, int is_for_loop_init, Sym *func_sym)
+/* 'l' is VT_LOCAL or VT_CONST to define default storage type
+   or VT_CMP if parsing old style parameter list
+   or VT_JMP if parsing c99 for decl: for (int i = 0, ...) */
+static int decl(int l)
 {
     int v, has_init, r, oldint;
     CType type, btype;
@@ -8236,7 +8236,7 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
 
         oldint = 0;
         if (!parse_btype(&btype, &adbase, l == VT_LOCAL)) {
-            if (is_for_loop_init)
+            if (l == VT_JMP)
                 return 0;
             /* skip redundant ';' if not in old parameter decl scope */
             if (tok == ';' && l != VT_CMP) {
@@ -8288,13 +8288,15 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
             }
 #endif
             if ((type.t & VT_BTYPE) == VT_FUNC) {
-                if ((type.t & VT_STATIC) && (l == VT_LOCAL))
+                if ((type.t & VT_STATIC) && (l != VT_CONST))
                     tcc_error("function without file scope cannot be static");
                 /* if old style function prototype, we accept a
                    declaration list */
                 sym = type.ref;
-                if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
-                    decl0(VT_CMP, 0, sym);
+                if (sym->f.func_type == FUNC_OLD && l == VT_CONST) {
+                    func_vt = type;
+                    decl(VT_CMP);
+                }
 #if defined TCC_TARGET_MACHO || defined TARGETOS_ANDROID
                 if (sym->f.func_alwinl
                     && ((type.t & (VT_EXTERN | VT_INLINE))
@@ -8388,12 +8390,12 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
             } else {
 		if (l == VT_CMP) {
 		    /* find parameter in function parameter list */
-		    for (sym = func_sym->next; sym; sym = sym->next)
+		    for (sym = func_vt.ref->next; sym; sym = sym->next)
 			if ((sym->v & ~SYM_FIELD) == v)
 			    goto found;
 		    tcc_error("declaration for parameter '%s' but no such parameter",
 			      get_tok_str(v, NULL));
-found:
+                found:
 		    if (type.t & VT_STORAGE) /* 'register' is okay */
 		        tcc_error("storage class specified for '%s'",
 				  get_tok_str(v, NULL));
@@ -8460,20 +8462,20 @@ found:
                                             esym->st_value, esym->st_size, 1);
                         }
                     } else {
-                        if (type.t & VT_STATIC)
+                        if (l == VT_CONST || (type.t & VT_STATIC))
                             r |= VT_CONST;
                         else
-                            r |= l;
+                            r |= VT_LOCAL;
                         if (has_init)
                             next();
                         else if (l == VT_CONST)
                             /* uninitialized global variables may be overridden */
                             type.t |= VT_EXTERN;
-                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
+                        decl_initializer_alloc(&type, &ad, r, has_init, v, l == VT_CONST);
                     }
                 }
                 if (tok != ',') {
-                    if (is_for_loop_init)
+                    if (l == VT_JMP)
                         return 1;
                     skip(';');
                     break;
@@ -8483,11 +8485,6 @@ found:
         }
     }
     return 0;
-}
-
-static void decl(int l)
-{
-    decl0(l, 0, NULL);
 }
 
 /* ------------------------------------------------------------------------- */

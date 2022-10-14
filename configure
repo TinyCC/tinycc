@@ -357,7 +357,7 @@ fi
 
 if test -z "$cross_prefix" ; then
   CONFTEST=./conftest$EXESUF
-  if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
+  if ! $cc -o $CONFTEST $source_path/conftest.c ; then
     echo "configure: error: '$cc' failed to compile conftest.c."
   else
     cc_name="$($CONFTEST compiler)"
