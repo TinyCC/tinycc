@@ -1,0 +1,61 @@
+name: build and run tests
+on:
+  push:
+    branches: [ mob ]
+  pull_request:
+    branches: [ mob ]
+jobs:
+  build-release-linux-i686-amd64:
+    name: tinycc master linux/amd64
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install depedencies
+      run: sudo apt-get install -y
+        gcc
+    # see what's available in /usr/bin
+    - name: see what's available
+      run: ls -l /usr/bin
+    # build project amd64
+    - name: build amd64
+      run: |
+        ./configure
+        make
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test
+
+  build-release-osx-amd64:
+    name: tinycc master osx/amd64
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    # see what's available in /usr/bin
+    - name: see what's available
+      run: ls -l /usr/bin
+    # build project amd64
+    - name: build amd64
+      run: |
+        ./configure
+        make
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test
+
+  build-release-windows-amd64-on-windows:
+    name: tinycc master windows/amd64 on Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2 
+    - uses: msys2/setup-msys2@v2
+    # build project amd64
+    - name: build amd64
+      run: |
+        msys2 -c './configure'
+        make
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test
