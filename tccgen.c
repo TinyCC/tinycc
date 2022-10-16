@@ -5171,8 +5171,9 @@ static void parse_builtin_params(int nc, const char *args)
 
 static void parse_atomic(int atok)
 {
-    int size, align, arg;
+    int size, align, arg, t, save = 0;
     CType *atom, *atom_ptr, ct = {0};
+    SValue store;
     char buf[40];
     static const char *const templates[] = {
         /*
@@ -5185,19 +5186,28 @@ static void parse_atomic(int atok)
          * A read-only atomic
          * p pointer to memory
          * v value
+         * l load pointer
+         * s save pointer
          * m memory model
          */
 
         /* keep in order of appearance in tcctok.h: */
-        /* __atomic_store */            "avm.?",
-        /* __atomic_load */             "Am.v",
-        /* __atomic_exchange */         "avm.v",
-        /* __atomic_compare_exchange */ "apvbmm.b",
+        /* __atomic_store */            "alm.?",
+        /* __atomic_load */             "Asm.v",
+        /* __atomic_exchange */         "alsm.v",
+        /* __atomic_compare_exchange */ "aplbmm.b",
         /* __atomic_fetch_add */        "avm.v",
         /* __atomic_fetch_sub */        "avm.v",
         /* __atomic_fetch_or */         "avm.v",
         /* __atomic_fetch_xor */        "avm.v",
-        /* __atomic_fetch_and */        "avm.v"
+        /* __atomic_fetch_and */        "avm.v",
+        /* __atomic_fetch_nand */       "avm.v",
+        /* __atomic_and_fetch */        "avm.v",
+        /* __atomic_sub_fetch */        "avm.v",
+        /* __atomic_or_fetch */         "avm.v",
+        /* __atomic_xor_fetch */        "avm.v",
+        /* __atomic_and_fetch */        "avm.v",
+        /* __atomic_nand_fetch */       "avm.v"
     };
     const char *template = templates[(atok - TOK___atomic_store)];
 
@@ -5235,6 +5245,16 @@ static void parse_atomic(int atok)
         case 'v':
             gen_assign_cast(atom);
             break;
+        case 'l':
+            indir();
+            gen_assign_cast(atom);
+            break;
+        case 's':
+            save = 1;
+            indir();
+            store = *vtop;
+            vpop();
+            break;
         case 'm':
             gen_assign_cast(&int_type);
             break;
@@ -5261,17 +5281,25 @@ static void parse_atomic(int atok)
 
     sprintf(buf, "%s_%d", get_tok_str(atok, 0), size);
     vpush_helper_func(tok_alloc_const(buf));
-    vrott(arg + 1);
-    gfunc_call(arg);
+    vrott(arg - save + 1);
+    gfunc_call(arg - save);
 
     vpush(&ct);
     PUT_R_RET(vtop, ct.t);
-    if (ct.t == VT_BOOL) {
+    t = ct.t & VT_BTYPE;
+    if (t == VT_BYTE || t == VT_SHORT || t == VT_BOOL) {
 #ifdef PROMOTE_RET
-	vtop->r |= BFVAL(VT_MUSTCAST, 1);
+        vtop->r |= BFVAL(VT_MUSTCAST, 1);
 #else
-	vtop->type.t = VT_INT;
+        vtop->type.t = VT_INT;
 #endif
+    }
+    gen_cast(&ct);
+    if (save) {
+        vpush(&ct);
+        *vtop = store;
+        vswap();
+        vstore();
     }
 }
 
@@ -5660,6 +5688,13 @@ ST_FUNC void unary(void)
     case TOK___atomic_fetch_or:
     case TOK___atomic_fetch_xor:
     case TOK___atomic_fetch_and:
+    case TOK___atomic_fetch_nand:
+    case TOK___atomic_add_fetch:
+    case TOK___atomic_sub_fetch:
+    case TOK___atomic_or_fetch:
+    case TOK___atomic_xor_fetch:
+    case TOK___atomic_and_fetch:
+    case TOK___atomic_nand_fetch:
         parse_atomic(tok);
         break;
 

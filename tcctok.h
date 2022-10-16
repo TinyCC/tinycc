@@ -187,6 +187,13 @@
      DEF_ATOMIC(atomic_fetch_or)
      DEF_ATOMIC(atomic_fetch_xor)
      DEF_ATOMIC(atomic_fetch_and)
+     DEF_ATOMIC(atomic_fetch_nand)
+     DEF_ATOMIC(atomic_add_fetch)
+     DEF_ATOMIC(atomic_sub_fetch)
+     DEF_ATOMIC(atomic_or_fetch)
+     DEF_ATOMIC(atomic_xor_fetch)
+     DEF_ATOMIC(atomic_and_fetch)
+     DEF_ATOMIC(atomic_nand_fetch)
 
 /* pragma */
      DEF(TOK_pack, "pack")
