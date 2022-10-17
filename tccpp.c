@@ -3338,6 +3338,8 @@ static int macro_subst_tok(
                     for (i = 0; i < ws_str.len; i++)
                         tok_str_add(tok_str, ws_str.str[i]);
                 }
+		if (ws_str.len && ws_str.str[ws_str.len - 1] == '\n')
+		    tok_flags |= TOK_FLAG_BOL;
                 tok_str_free_str(ws_str.str);
                 return 0;
             } else {

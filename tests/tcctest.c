@@ -4273,11 +4273,14 @@ void func_arg_test(void)
 /* # define ACCEPT_LF_IN_STRINGS */
 #endif
 
+#define	tcc_test()
+
 /* keep this as the last test because GCC messes up line-numbers
    with the ^L^K^M characters below */
 void whitespace_test(void)
 {
     char *str;
+    int tcc_test = 1;
 
 #if 1
     pri\
@@ -4325,6 +4328,12 @@ ntf("min=%d\n", 4);
 "12\\
 063\\
 n 456\"\n");
+
+    printf ("%d\n",
+#if 1
+	    tcc_test
+#endif
+            );
 
 }
 
