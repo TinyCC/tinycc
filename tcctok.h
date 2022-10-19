@@ -45,6 +45,7 @@
      DEF(TOK_FLOAT, "float")
      DEF(TOK_DOUBLE, "double")
      DEF(TOK_BOOL, "_Bool")
+     DEF(TOK_COMPLEX, "_Complex")
      DEF(TOK_SHORT, "short")
      DEF(TOK_STRUCT, "struct")
      DEF(TOK_UNION, "union")

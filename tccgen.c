@@ -4533,6 +4533,8 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
         case TOK_BOOL:
             u = VT_BOOL;
             goto basic_type;
+        case TOK_COMPLEX:
+            tcc_error("_Complex is not yet supported");
         case TOK_FLOAT:
             u = VT_FLOAT;
             goto basic_type;
