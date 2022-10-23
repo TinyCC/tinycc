@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
-    - name: Install depedencies
+    - name: Install dependencies
       run: sudo apt-get install -y
         gcc
     # see what's available in /usr/bin
@@ -48,7 +48,7 @@ jobs:
     name: tinycc master windows/amd64 on Windows
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2 
+    - uses: actions/checkout@v2
     - uses: msys2/setup-msys2@v2
     # build project amd64
     - name: build amd64
