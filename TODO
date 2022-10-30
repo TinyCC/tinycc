@@ -33,7 +33,10 @@ Portability:
 
 Linking:
 
-- static linking (-static) does not work
+- static linking (-static) does sort of work
+	works with musl libc
+	glibc requires libc.so even when statically linked (very bad, but not
+	up to tcc)
 
 Bound checking:
 
