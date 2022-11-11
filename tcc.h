@@ -65,12 +65,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifndef __GNUC__
 #  define strtold (long double)strtod
 #  define strtof (float)strtod
-#  ifdef _WIN64
+#  ifndef strtoll
 #   define strtoll _strtoi64
+#  endif
+#  ifndef strtoull
 #   define strtoull _strtoui64
-#  else
-#   define strtoll strtol
-#   define strtoull strtoul
 #  endif
 # endif
 # ifdef LIBTCC_AS_DLL
