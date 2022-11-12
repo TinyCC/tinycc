@@ -117,7 +117,7 @@ void tst_strtoll_strtoull(void)
   }
 
   {
-    unsigned long long x = strtoll("0x100000000", NULL, 0);
+    unsigned long long x = strtoull("0x100000000", NULL, 0);
     x = (x >> shift);
     if (x != 1) {
       printf ("Windows: strtoull error\n");
