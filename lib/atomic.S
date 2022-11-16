@@ -5,6 +5,13 @@
  * __atomic_compare_exchange_4
  * __atomic_compare_exchange_8
  */
+
+#ifdef __leading_underscore
+# define _(s) _##s
+#else
+# define _(s) s
+#endif
+
 #if defined __arm__
 
 #ifndef __TINYC__
@@ -14,9 +21,9 @@
         .text
         .align  2
 
-        .global __atomic_compare_exchange_1
-        .type   __atomic_compare_exchange_1, %function
-__atomic_compare_exchange_1:
+        .global _(__atomic_compare_exchange_1)
+        .type   _(__atomic_compare_exchange_1), %function
+_(__atomic_compare_exchange_1):
 #ifdef __TINYC__
 	.int	0xe52de004
 	.int	0xe5d13000
@@ -50,11 +57,11 @@ __atomic_compare_exchange_1:
         strbne  ip, [r1]
         ldr     pc, [sp], #4
 #endif
-	.size   __atomic_compare_exchange_1, .-__atomic_compare_exchange_1
+	.size   _(__atomic_compare_exchange_1), .-_(__atomic_compare_exchange_1)
 
-        .global __atomic_compare_exchange_2
-        .type   __atomic_compare_exchange_2, %function
-__atomic_compare_exchange_2:
+        .global _(__atomic_compare_exchange_2)
+        .type   _(__atomic_compare_exchange_2), %function
+_(__atomic_compare_exchange_2):
 #ifdef __TINYC__
 	.int	0xe52de004
 	.int	0xe1d130b0
@@ -88,11 +95,11 @@ __atomic_compare_exchange_2:
         strhne  ip, [r1]
 	ldr     pc, [sp], #4
 #endif
-	.size   __atomic_compare_exchange_2, .-__atomic_compare_exchange_2
+	.size   _(__atomic_compare_exchange_2), .-_(__atomic_compare_exchange_2)
 
-        .global __atomic_compare_exchange_4
-        .type   __atomic_compare_exchange_4, %function
-__atomic_compare_exchange_4:
+        .global _(__atomic_compare_exchange_4)
+        .type   _(__atomic_compare_exchange_4), %function
+_(__atomic_compare_exchange_4):
 #ifdef __TINYC__
 	.int	0xe52de004
 	.int	0xe5913000
@@ -126,7 +133,7 @@ __atomic_compare_exchange_4:
         strne   ip, [r1]
         ldr     pc, [sp], #4
 #endif
-	.size   __atomic_compare_exchange_4, .-__atomic_compare_exchange_4
+	.size   _(__atomic_compare_exchange_4), .-_(__atomic_compare_exchange_4)
 
 /* ---------------------------------------------- */
 #elif defined __aarch64__
@@ -134,9 +141,9 @@ __atomic_compare_exchange_4:
         .text
         .align  2
 
-        .global __atomic_compare_exchange_1
-        .type   __atomic_compare_exchange_1, %function
-__atomic_compare_exchange_1:
+        .global _(__atomic_compare_exchange_1)
+        .type   _(__atomic_compare_exchange_1), %function
+_(__atomic_compare_exchange_1):
 #ifdef __TINYC__
 	.int	0xa9be7bfd
 	.int	0x910003fd
@@ -187,11 +194,11 @@ __atomic_compare_exchange_1:
         ldp     x29, x30, [sp], 32
         ret
 #endif
-        .size   __atomic_compare_exchange_1, .-__atomic_compare_exchange_1
+        .size   _(__atomic_compare_exchange_1), .-_(__atomic_compare_exchange_1)
 
-        .global __atomic_compare_exchange_2
-        .type   __atomic_compare_exchange_2, %function
-__atomic_compare_exchange_2:
+        .global _(__atomic_compare_exchange_2)
+        .type   _(__atomic_compare_exchange_2), %function
+_(__atomic_compare_exchange_2):
 #ifdef __TINYC__
 	.int	0xa9be7bfd
 	.int	0x910003fd
@@ -242,11 +249,11 @@ __atomic_compare_exchange_2:
         ldp     x29, x30, [sp], 32
         ret
 #endif
-        .size   __atomic_compare_exchange_2, .-__atomic_compare_exchange_2
+        .size   _(__atomic_compare_exchange_2), .-_(__atomic_compare_exchange_2)
 
-        .global __atomic_compare_exchange_4
-        .type   __atomic_compare_exchange_4, %function
-__atomic_compare_exchange_4:
+        .global _(__atomic_compare_exchange_4)
+        .type   _(__atomic_compare_exchange_4), %function
+_(__atomic_compare_exchange_4):
 #ifdef __TINYC__
 	.int	0xa9be7bfd
 	.int	0x910003fd
@@ -297,11 +304,11 @@ __atomic_compare_exchange_4:
         ldp     x29, x30, [sp], 32
         ret
 #endif
-        .size   __atomic_compare_exchange_4, .-__atomic_compare_exchange_4
+        .size   _(__atomic_compare_exchange_4), .-_(__atomic_compare_exchange_4)
 
-        .global __atomic_compare_exchange_8
-        .type   __atomic_compare_exchange_8, %function
-__atomic_compare_exchange_8:
+        .global _(__atomic_compare_exchange_8)
+        .type   _(__atomic_compare_exchange_8), %function
+_(__atomic_compare_exchange_8):
 #ifdef __TINYC__
 	.int	0xa9be7bfd
 	.int	0x910003fd
@@ -352,7 +359,7 @@ __atomic_compare_exchange_8:
         ldp     x29, x30, [sp], 32
         ret
 #endif
-        .size   __atomic_compare_exchange_8, .-__atomic_compare_exchange_8
+        .size   _(__atomic_compare_exchange_8), .-_(__atomic_compare_exchange_8)
 
 /* ---------------------------------------------- */
 #elif defined __riscv
@@ -360,9 +367,9 @@ __atomic_compare_exchange_8:
         .text
         .align  2
 
-        .global __atomic_compare_exchange_1
-        .type   __atomic_compare_exchange_1, %function
-__atomic_compare_exchange_1:
+        .global _(__atomic_compare_exchange_1)
+        .type   _(__atomic_compare_exchange_1), %function
+_(__atomic_compare_exchange_1):
 #ifdef __TINYC__
 	.short	0x1141
 	.short	0x86ba
@@ -443,11 +450,11 @@ __atomic_compare_exchange_1:
         addi    sp,sp,16
         jr      ra
 #endif
-        .size   __atomic_compare_exchange_1, .-__atomic_compare_exchange_1
+        .size   _(__atomic_compare_exchange_1), .-_(__atomic_compare_exchange_1)
 
-        .global __atomic_compare_exchange_2
-        .type   __atomic_compare_exchange_2, %function
-__atomic_compare_exchange_2:
+        .global _(__atomic_compare_exchange_2)
+        .type   _(__atomic_compare_exchange_2), %function
+_(__atomic_compare_exchange_2):
 #ifdef __TINYC__
 	.short	0x1141
 	.short	0x86ba
@@ -530,11 +537,11 @@ __atomic_compare_exchange_2:
         addi    sp,sp,16
         jr      ra
 #endif
-        .size   __atomic_compare_exchange_2, .-__atomic_compare_exchange_2
+        .size   _(__atomic_compare_exchange_2), .-_(__atomic_compare_exchange_2)
 
-        .global __atomic_compare_exchange_4
-        .type   __atomic_compare_exchange_4, %function
-__atomic_compare_exchange_4:
+        .global _(__atomic_compare_exchange_4)
+        .type   _(__atomic_compare_exchange_4), %function
+_(__atomic_compare_exchange_4):
 #ifdef __TINYC__
         .short 0x419c
         .int   0x0f50000f
@@ -565,11 +572,11 @@ __atomic_compare_exchange_4:
 	andi    a0,a0,1
         ret
 #endif
-        .size   __atomic_compare_exchange_4, .-__atomic_compare_exchange_4
+        .size   _(__atomic_compare_exchange_4), .-_(__atomic_compare_exchange_4)
 
-        .global __atomic_compare_exchange_8
-        .type   __atomic_compare_exchange_8, %function
-__atomic_compare_exchange_8:
+        .global _(__atomic_compare_exchange_8)
+        .type   _(__atomic_compare_exchange_8), %function
+_(__atomic_compare_exchange_8):
 #ifdef __TINYC__
         .short 0x619c
         .int   0x0f50000f
@@ -600,7 +607,7 @@ __atomic_compare_exchange_8:
 	andi    a0,a0,1
         ret
 #endif
-        .size   __atomic_compare_exchange_8, .-__atomic_compare_exchange_8
+        .size   _(__atomic_compare_exchange_8), .-_(__atomic_compare_exchange_8)
 
 /* ---------------------------------------------- */
 #endif

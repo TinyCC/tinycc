@@ -1487,7 +1487,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
     addr_t end_offset;
     char buf[1024];
     s = find_section_create(s1, section_name, 0);
-    if (!s) {
+    if (!s || !(s->sh_flags & SHF_ALLOC)) {
         end_offset = 0;
         s = data_section;
     } else {

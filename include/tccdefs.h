@@ -207,11 +207,18 @@
                            &~3), *(type *)(ap - ((sizeof(type)+3)&~3)))
 
 #elif defined __aarch64__
+#if defined __APPLE__
+    typedef struct {
+        void *__stack;
+    } __builtin_va_list;
+
+#else
     typedef struct {
         void *__stack, *__gr_top, *__vr_top;
         int   __gr_offs, __vr_offs;
     } __builtin_va_list;
 
+#endif
 #elif defined __riscv
     typedef char *__builtin_va_list;
     #define __va_reg_size (__riscv_xlen >> 3)

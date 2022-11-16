@@ -31,8 +31,27 @@
    to setup our own crt code.  We're not using lazy linking, so even function
    calls are resolved at startup.  */
 
+#if !defined TCC_TARGET_X86_64 && !defined TCC_TARGET_ARM64
+#error Platform not supported
+#endif
+
 #define DEBUG_MACHO 0
 #define dprintf if (DEBUG_MACHO) printf
+
+#define MH_EXECUTE              (0x2)
+#define MH_DYLDLINK             (0x4)
+#define MH_PIE                  (0x200000)
+
+#define CPU_SUBTYPE_LIB64       (0x80000000)
+#define CPU_SUBTYPE_X86_ALL     (3)
+#define CPU_SUBTYPE_ARM64_ALL   (0)
+
+#define CPU_ARCH_ABI64          (0x01000000)
+
+#define CPU_TYPE_X86            (7)
+#define CPU_TYPE_X86_64         (CPU_TYPE_X86 | CPU_ARCH_ABI64)
+#define CPU_TYPE_ARM            (12)
+#define CPU_TYPE_ARM64          (CPU_TYPE_ARM | CPU_ARCH_ABI64)
 
 struct fat_header {
     uint32_t        magic;          /* FAT_MAGIC or FAT_MAGIC_64 */
@@ -86,6 +105,7 @@ struct load_command {
 #define LC_LOAD_DYLINKER 0xe
 #define LC_SEGMENT_64    0x19
 #define LC_REEXPORT_DYLIB (0x1f | LC_REQ_DYLD)
+#define LC_DYLD_INFO_ONLY (0x22|LC_REQ_DYLD)
 #define LC_MAIN (0x28|LC_REQ_DYLD)
 
 typedef int vm_prot_t;
@@ -122,6 +142,8 @@ struct section_64 { /* for 64-bit architectures */
 #define S_REGULAR                       0x0
 #define S_ZEROFILL                      0x1
 #define S_NON_LAZY_SYMBOL_POINTERS      0x6
+#define S_LAZY_SYMBOL_POINTERS          0x7
+#define S_SYMBOL_STUBS                  0x8
 #define S_MOD_INIT_FUNC_POINTERS        0x9
 #define S_MOD_TERM_FUNC_POINTERS        0xa
 
@@ -187,6 +209,38 @@ struct dysymtab_command {
     uint32_t nlocrel;   /* number of local relocation entries */
 };
 
+#define BIND_OPCODE_DONE                                        0x00
+#define BIND_OPCODE_SET_DYLIB_SPECIAL_IMM                       0x30
+#define BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM               0x40
+#define BIND_OPCODE_SET_TYPE_IMM                                0x50
+#define BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB                 0x70
+#define BIND_OPCODE_DO_BIND                                     0x90
+
+#define BIND_TYPE_POINTER                                       1
+#define BIND_SPECIAL_DYLIB_FLAT_LOOKUP                          -2
+
+#define REBASE_OPCODE_DONE                                      0x00
+#define REBASE_OPCODE_SET_TYPE_IMM                              0x10
+#define REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB               0x20
+#define REBASE_OPCODE_DO_REBASE_IMM_TIMES                       0x50
+
+#define REBASE_TYPE_POINTER                                     1
+
+struct dyld_info_command {
+    uint32_t cmd;             /* LC_DYLD_INFO or LC_DYLD_INFO_ONLY */
+    uint32_t cmdsize;         /* sizeof(struct dyld_info_command) */
+    uint32_t rebase_off;      /* file offset to rebase info  */
+    uint32_t rebase_size;     /* size of rebase info   */
+    uint32_t bind_off;        /* file offset to binding info   */
+    uint32_t bind_size;       /* size of binding info  */
+    uint32_t weak_bind_off;   /* file offset to weak binding info   */
+    uint32_t weak_bind_size;  /* size of weak binding info  */
+    uint32_t lazy_bind_off;   /* file offset to lazy binding info */
+    uint32_t lazy_bind_size;  /* size of lazy binding infs */
+    uint32_t export_off;      /* file offset to lazy binding info */
+    uint32_t export_size;     /* size of lazy binding infs */
+};
+
 #define INDIRECT_SYMBOL_LOCAL   0x80000000
 
 struct entry_point_command {
@@ -201,6 +255,7 @@ enum skind {
     sk_discard,
     sk_text,
     sk_stubs,
+    sk_stub_helper,
     sk_ro_data,
     sk_uw_info,
     sk_nl_ptr,  // non-lazy pointers, aka GOT
@@ -208,6 +263,14 @@ enum skind {
     sk_init,
     sk_fini,
     sk_rw_data,
+    sk_stab,
+    sk_stab_str,
+    sk_debug_info,
+    sk_debug_abbrev,
+    sk_debug_line,
+    sk_debug_aranges,
+    sk_debug_str,
+    sk_debug_line_str,
     sk_bss,
     sk_linkedit,
     sk_last
@@ -241,9 +304,26 @@ struct macho {
     } sk_to_sect[sk_last];
     int *elfsectomacho;
     int *e2msym;
-    Section *symtab, *strtab, *wdata, *indirsyms, *stubs;
-    int stubsym;
+    Section *rebase, *binding, *lazy_binding, *exports;
+    Section *symtab, *strtab, *wdata, *indirsyms;
+    Section *stubs, *stub_helper, *la_symbol_ptr;
+    int nr_plt, n_got;
+    struct dyld_info_command *dyldinfo;
+    int stubsym, helpsym, lasym, dyld_private, dyld_stub_binder;
     uint32_t ilocal, iextdef, iundef;
+    int n_lazy_bind_rebase;    
+    struct lazy_bind_rebase {
+        int section;
+        int bind;
+        int bind_offset;
+        int la_symbol_offset;
+        ElfW_Rel rel;
+    } *lazy_bind_rebase;
+    int n_bind; 
+    struct bind {
+        int section;
+        ElfW_Rel rel;
+    } *bind;
 };
 
 #define SHT_LINKEDIT (SHT_LOOS + 42)
@@ -306,20 +386,165 @@ static void * add_dylib(struct macho *mo, char *name)
     return lc;
 }
 
+static void write_uleb128(Section *section, uint64_t value)
+{
+    do {
+        unsigned char byte = value & 0x7f;
+	uint8_t *ptr = section_ptr_add(section, 1);
+
+        value >>= 7;
+        *ptr = byte | (value ? 0x80 : 0);
+    } while (value != 0);
+}
+
+static void tcc_macho_add_destructor(TCCState *s1)
+{
+    int init_sym, mh_execute_header, at_exit_sym;
+    Section *s;
+    ElfW_Rel *rel;
+    uint8_t *ptr;
+
+    s = find_section(s1, ".fini_array");
+    if (s->data_offset == 0)
+        return; 
+    init_sym = put_elf_sym(s1->symtab, text_section->data_offset, 0,
+                           ELFW(ST_INFO)(STB_LOCAL, STT_FUNC), 0,
+                           text_section->sh_num, "___GLOBAL_init_65535");
+    mh_execute_header = put_elf_sym(s1->symtab, 0x100000000ll, 0,
+                      		    ELFW(ST_INFO)(STB_LOCAL, STT_OBJECT), 0,
+                      		    SHN_ABS, "__mh_execute_header");
+    at_exit_sym = put_elf_sym(s1->symtab, 0, 0,
+                              ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0,
+                              SHN_UNDEF, "___cxa_atexit");
+#ifdef TCC_TARGET_X86_64
+    ptr = section_ptr_add(text_section, 4);
+    ptr[0] = 0x55;  // pushq   %rbp
+    ptr[1] = 0x48;  // movq    %rsp, %rbp
+    ptr[2] = 0x89;
+    ptr[3] = 0xe5;
+    for_each_elem(s->reloc, 0, rel, ElfW_Rel) {
+        int sym_index = ELFW(R_SYM)(rel->r_info);
+
+        ptr = section_ptr_add(text_section, 26);
+        ptr[0] = 0x48;  // lea destructor(%rip),%rax
+        ptr[1] = 0x8d;
+        ptr[2] = 0x05;
+        put_elf_reloca(s1->symtab, text_section, 
+		       text_section->data_offset - 23,
+		       R_X86_64_PC32, sym_index, -4);
+        ptr[7] = 0x48;  // mov %rax,%rdi
+        ptr[8] = 0x89;
+        ptr[9] = 0xc7;
+	ptr[10] = 0x31; // xorl %ecx, %ecx
+	ptr[11] = 0xc9;
+	ptr[12] = 0x89; // movl %ecx, %esi
+	ptr[13] = 0xce;
+        ptr[14] = 0x48;  // lea mh_execute_header(%rip),%rdx
+        ptr[15] = 0x8d;
+        ptr[16] = 0x15;
+        put_elf_reloca(s1->symtab, text_section,
+		       text_section->data_offset - 9,
+		       R_X86_64_PC32, mh_execute_header, -4);
+	ptr[21] = 0xe8; // call __cxa_atexit
+        put_elf_reloca(s1->symtab, text_section,
+		       text_section->data_offset - 4,
+		       R_X86_64_PLT32, at_exit_sym, -4);
+    }
+    ptr = section_ptr_add(text_section, 2);
+    ptr[0] = 0x5d;  // pop   %rbp
+    ptr[1] = 0xc3;  // ret
+#elif defined TCC_TARGET_ARM64
+    ptr = section_ptr_add(text_section, 8);
+    write32le(ptr, 0xa9bf7bfd);     // stp     x29, x30, [sp, #-16]!
+    write32le(ptr + 4, 0x910003fd); // mov     x29, sp
+    for_each_elem(s->reloc, 0, rel, ElfW_Rel) {
+        int sym_index = ELFW(R_SYM)(rel->r_info);
+
+        ptr = section_ptr_add(text_section, 24);
+        put_elf_reloc(s1->symtab, text_section, 
+		      text_section->data_offset - 24,
+		      R_AARCH64_ADR_PREL_PG_HI21, sym_index);
+        write32le(ptr, 0x90000000);      // adrp x0, destructor@page
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 20,
+		      R_AARCH64_LDST8_ABS_LO12_NC, sym_index);
+        write32le(ptr + 4, 0x91000000);  // add x0,x0,destructor@pageoff
+        write32le(ptr + 8, 0xd2800001);  // mov x1, #0
+        put_elf_reloc(s1->symtab, text_section, 
+		      text_section->data_offset - 12,
+		      R_AARCH64_ADR_PREL_PG_HI21, mh_execute_header);
+        write32le(ptr + 12, 0x90000002);      // adrp x2, mh_execute_header@page
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 8,
+		      R_AARCH64_LDST8_ABS_LO12_NC, mh_execute_header);
+        write32le(ptr + 16, 0x91000042);  // add x2,x2,mh_execute_header@pageoff
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 4,
+		      R_AARCH64_CALL26, at_exit_sym);
+	write32le(ptr + 20, 0x94000000); // bl __cxa_atexit
+    }
+    ptr = section_ptr_add(text_section, 8);
+    write32le(ptr, 0xa8c17bfd);     // ldp     x29, x30, [sp], #16
+    write32le(ptr + 4, 0xd65f03c0); // ret
+#endif
+    s->reloc->data_offset = s->data_offset = 0;
+    s->sh_flags &= ~SHF_ALLOC;
+    add_array (s1, ".init_array", init_sym);
+}
+
 static void check_relocs(TCCState *s1, struct macho *mo)
 {
+    uint8_t *jmp;
     Section *s;
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, gotplt_entry, sym_index, for_code;
+    int sh_num, debug, bind_offset, la_symbol_offset;
+    uint32_t *pi, *goti;
     struct sym_attr *attr;
 
-    s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     mo->indirsyms = new_section(s1, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+
+#ifdef TCC_TARGET_X86_64
+    jmp = section_ptr_add(mo->stub_helper, 16);
+    jmp[0] = 0x4c;  /* leaq _dyld_private(%rip), %r11 */
+    jmp[1] = 0x8d;
+    jmp[2] = 0x1d;
+    put_elf_reloca(s1->symtab, mo->stub_helper, 3,
+		   R_X86_64_PC32, mo->dyld_private, -4);
+    jmp[7] = 0x41;  /* pushq %r11 */
+    jmp[8] = 0x53;
+    jmp[9] = 0xff;  /* jmpq    *dyld_stub_binder@GOT(%rip) */
+    jmp[10] = 0x25;
+    put_elf_reloca(s1->symtab, mo->stub_helper, 11,
+		   R_X86_64_GOTPCREL, mo->dyld_stub_binder, -4);
+    jmp[15] = 0x90; /* nop */
+#elif defined TCC_TARGET_ARM64
+    jmp = section_ptr_add(mo->stub_helper, 24);
+    put_elf_reloc(s1->symtab, mo->stub_helper, 0,
+		  R_AARCH64_ADR_PREL_PG_HI21, mo->dyld_private);
+    write32le(jmp, 0x90000011); // adrp x17, _dyld_private@page
+    put_elf_reloc(s1->symtab, mo->stub_helper, 4,
+		  R_AARCH64_LDST64_ABS_LO12_NC, mo->dyld_private);
+    write32le(jmp + 4, 0x91000231); // add x17,x17,_dyld_private@pageoff
+    write32le(jmp + 8, 0xa9bf47f0); // stp x16/x17, [sp, #-16]!
+    put_elf_reloc(s1->symtab, mo->stub_helper, 12,
+		  R_AARCH64_ADR_GOT_PAGE, mo->dyld_stub_binder);
+    write32le(jmp + 12, 0x90000010); // adrp x16, dyld_stub_binder@page
+    put_elf_reloc(s1->symtab, mo->stub_helper, 16,
+		  R_AARCH64_LD64_GOT_LO12_NC, mo->dyld_stub_binder);
+    write32le(jmp + 16, 0xf9400210); // ldr x16,[x16,dyld_stub_binder@pageoff]
+    write32le(jmp + 20, 0xd61f0200); // br x16
+#endif
+    
+    goti = NULL;
+    mo->nr_plt = mo->n_got = 0;
     for (i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if (s->sh_type != SHT_RELX)
             continue;
+	sh_num = s1->sections[s->sh_info]->sh_num;
+	debug = sh_num >= s1->dwlo && sh_num < s1->dwhi;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
@@ -329,44 +554,150 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                address due to codegen (i.e. a reloc requiring a got slot).  */
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-            if (sym->st_shndx == SHN_UNDEF
-                || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
+            if (!debug &&
+		(sym->st_shndx == SHN_UNDEF
+                 || gotplt_entry == ALWAYS_GOTPLT_ENTRY)) {
                 attr = get_sym_attr(s1, sym_index, 1);
                 if (!attr->dyn_index) {
-                    uint32_t *pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
                     attr->got_offset = s1->got->data_offset;
                     attr->plt_offset = -1;
                     attr->dyn_index = 1; /* used as flag */
-                    section_ptr_add(s1->got, PTR_SIZE);
+		    section_ptr_add(s1->got, PTR_SIZE);
+                    put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
+                                  R_DATA_PTR, sym_index);
+		    goti = tcc_realloc(goti, (mo->n_got + 1) * sizeof(*goti));
                     if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
                         if (sym->st_shndx == SHN_UNDEF)
-                          tcc_error("undefined local symbol???");
-                        *pi = INDIRECT_SYMBOL_LOCAL;
-                        /* The pointer slot we generated must point to the
-                           symbol, whose address is only known after layout,
-                           so register a simple relocation for that.  */
-                        put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
-                                      R_DATA_PTR, sym_index);
-                    } else
-                      *pi = mo->e2msym[sym_index];
+                          tcc_error("undefined local symbo: '%s'",
+				    (char *) symtab_section->link->data + sym->st_name);
+			goti[mo->n_got++] = INDIRECT_SYMBOL_LOCAL;
+                    } else {
+			goti[mo->n_got++] = mo->e2msym[sym_index];
+			if (sym->st_shndx == SHN_UNDEF
+#ifdef TCC_TARGET_X86_64
+			    && type == R_X86_64_GOTPCREL
+#elif defined TCC_TARGET_ARM64
+			    && type == R_AARCH64_ADR_GOT_PAGE
+#endif
+			    ) {
+			    mo->bind =
+			        tcc_realloc(mo->bind,
+					    (mo->n_bind + 1) *
+					    sizeof(struct bind));
+			    mo->bind[mo->n_bind].section = s1->got->reloc->sh_info;
+			    mo->bind[mo->n_bind].rel = *rel;
+                            mo->bind[mo->n_bind].rel.r_offset = attr->got_offset;
+			    mo->n_bind++;
+			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
+			}
+		    }
                 }
-                if (for_code) {
+                if (for_code && sym->st_shndx == SHN_UNDEF) {
                     if (attr->plt_offset == -1) {
-                        uint8_t *jmp;
+			pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
+			*pi = mo->e2msym[sym_index];
+			mo->nr_plt++;
                         attr->plt_offset = mo->stubs->data_offset;
+#ifdef TCC_TARGET_X86_64
+			if (type != R_X86_64_PLT32)
+			     continue;
+			/* __stubs */
                         jmp = section_ptr_add(mo->stubs, 6);
-                        jmp[0] = 0xff;  /* jmpq *ofs(%rip) */
+                        jmp[0] = 0xff;  /* jmpq *__la_symbol_ptr(%rip) */
                         jmp[1] = 0x25;
-                        put_elf_reloc(s1->symtab, mo->stubs,
-                                      attr->plt_offset + 2,
-                                      R_X86_64_GOTPCREL, sym_index);
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 4,
+                                       R_X86_64_PC32, mo->lasym,
+				       mo->la_symbol_ptr->data_offset - 4);
+
+			/* __stub_helper */
+			bind_offset = mo->stub_helper->data_offset + 1;
+                        jmp = section_ptr_add(mo->stub_helper, 10);
+                        jmp[0] = 0x68;  /* pushq $bind_offset */
+                        jmp[5] = 0xe9;  /* jmpq __stub_helper */
+                        write32le(jmp + 6, -mo->stub_helper->data_offset);
+
+			/* __la_symbol_ptr */
+			la_symbol_offset = mo->la_symbol_ptr->data_offset;
+                        put_elf_reloca(s1->symtab, mo->la_symbol_ptr,
+				       mo->la_symbol_ptr->data_offset,
+				       R_DATA_PTR, mo->helpsym,
+				       mo->stub_helper->data_offset - 10);
+			jmp = section_ptr_add(mo->la_symbol_ptr, PTR_SIZE);
+#elif defined TCC_TARGET_ARM64
+			if (type != R_AARCH64_CALL26)
+			     continue;
+			/* __stubs */
+                        jmp = section_ptr_add(mo->stubs, 12);
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 12,
+                                       R_AARCH64_ADR_PREL_PG_HI21, mo->lasym,
+				       mo->la_symbol_ptr->data_offset);
+                        write32le(jmp, // adrp x16, __la_symbol_ptr@page
+                                  0x90000010);
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 8,
+                                       R_AARCH64_LDST64_ABS_LO12_NC, mo->lasym,
+				       mo->la_symbol_ptr->data_offset);
+                        write32le(jmp + 4, // ldr x16,[x16, __la_symbol_ptr@pageoff]
+                                  0xf9400210);
+                        write32le(jmp + 8, // br x16
+                                  0xd61f0200);
+
+			/* __stub_helper */
+			bind_offset = mo->stub_helper->data_offset + 8;
+                        jmp = section_ptr_add(mo->stub_helper, 12);
+                        write32le(jmp + 0, // ldr  w16, l0
+                                  0x18000050);
+                        write32le(jmp + 4, // b stubHelperHeader
+                                  0x14000000 +
+				  ((-(mo->stub_helper->data_offset - 8) / 4) &
+				   0x3ffffff));
+                        write32le(jmp + 8, 0); // l0: .long bind_offset
+
+			/* __la_symbol_ptr */
+			la_symbol_offset = mo->la_symbol_ptr->data_offset;
+                        put_elf_reloca(s1->symtab, mo->la_symbol_ptr,
+				       mo->la_symbol_ptr->data_offset,
+				       R_DATA_PTR, mo->helpsym,
+				       mo->stub_helper->data_offset - 12);
+			jmp = section_ptr_add(mo->la_symbol_ptr, PTR_SIZE);
+#endif
+                        mo->lazy_bind_rebase =
+                            tcc_realloc(mo->lazy_bind_rebase,
+                                        (mo->n_lazy_bind_rebase + 1) *
+                                        sizeof(struct lazy_bind_rebase));
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].section =
+                            mo->stub_helper->reloc->sh_info;
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].bind = 1;
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].bind_offset = bind_offset;
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].la_symbol_offset = la_symbol_offset;
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].rel = *rel;
+                        mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].rel.r_offset =
+                            attr->plt_offset;
+                        mo->n_lazy_bind_rebase++;
                     }
                     rel->r_info = ELFW(R_INFO)(mo->stubsym, type);
                     rel->r_addend += attr->plt_offset;
                 }
             }
+            if (type == R_DATA_PTR) {
+                mo->lazy_bind_rebase =
+                    tcc_realloc(mo->lazy_bind_rebase,
+                                (mo->n_lazy_bind_rebase + 1) *
+                                sizeof(struct lazy_bind_rebase));
+                mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].section = s->sh_info;
+                mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].bind = 0;
+                mo->lazy_bind_rebase[mo->n_lazy_bind_rebase].rel = *rel;
+                mo->n_lazy_bind_rebase++;
+	    }
         }
     }
+    pi = section_ptr_add(mo->indirsyms, mo->n_got * sizeof(*pi));
+    memcpy(pi, goti, mo->n_got * sizeof(*pi));
+    pi = section_ptr_add(mo->indirsyms, mo->nr_plt * sizeof(*pi));
+    memcpy(pi, mo->indirsyms->data, mo->nr_plt * sizeof(*pi));
+    tcc_free(goti);
 }
 
 static int check_symbols(TCCState *s1, struct macho *mo)
@@ -444,9 +775,12 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
       n.n_type = N_ABS, n.n_sect = 0;
     else if (sym->st_shndx >= SHN_LORESERVE)
       tcc_error("unhandled ELF symbol section %d %s", sym->st_shndx, name);
-    else if (!mo->elfsectomacho[sym->st_shndx])
-      tcc_error("ELF section %d not mapped into Mach-O for symbol %s",
-                sym->st_shndx, name);
+    else if (!mo->elfsectomacho[sym->st_shndx]) {
+      int sh_num = s1->sections[sym->st_shndx]->sh_num;
+      if (sh_num < s1->dwlo || sh_num >= s1->dwhi) 
+        tcc_error("ELF section %d(%s) not mapped into Mach-O for symbol %s",
+                  sym->st_shndx, s1->sections[sym->st_shndx]->name, name);
+    }
     else
       n.n_sect = mo->elfsectomacho[sym->st_shndx];
     if (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL)
@@ -465,9 +799,9 @@ static void convert_symbols(TCCState *s1, struct macho *mo)
         convert_symbol(s1, mo, pn);
 }
 
-static int machosymcmp(const void *_a, const void *_b)
+static int machosymcmp(const void *_a, const void *_b, void *arg)
 {
-    TCCState *s1 = tcc_state;
+    TCCState *s1 = arg;
     int ea = ((struct nlist_64 *)_a)->n_value;
     int eb = ((struct nlist_64 *)_b)->n_value;
     ElfSym *sa = (ElfSym *)symtab_section->data + ea;
@@ -492,6 +826,37 @@ static int machosymcmp(const void *_a, const void *_b)
     return ea - eb;
 }
 
+/* cannot use qsort because code has to be reentrant */
+static void tcc_qsort (void  *base, size_t nel, size_t width,
+                       int (*comp)(const void *, const void *, void *), void *arg)
+{
+    size_t wnel, gap, wgap, i, j, k;
+    char *a, *b, tmp;
+
+    wnel = width * nel;
+    for (gap = 0; ++gap < nel;)
+        gap *= 3;
+    while ( gap /= 3 ) {
+        wgap = width * gap;
+        for (i = wgap; i < wnel; i += width) {
+            for (j = i - wgap; ;j -= wgap) {
+                a = j + (char *)base;
+                b = a + wgap;
+                if ( (*comp)(a, b, arg) <= 0 )
+                    break;
+                k = width;
+                do {
+                    tmp = *a;
+                    *a++ = *b;
+                    *b++ = tmp;
+                } while ( --k );
+                if (j < wgap)
+                    break;
+            }
+        }
+    }
+}
+
 static void create_symtab(TCCState *s1, struct macho *mo)
 {
     int sym_index, sym_end;
@@ -500,9 +865,30 @@ static void create_symtab(TCCState *s1, struct macho *mo)
     /* Stub creation belongs to check_relocs, but we need to create
        the symbol now, so its included in the sorting.  */
     mo->stubs = new_section(s1, "__stubs", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    mo->stub_helper = new_section(s1, "__stub_helper", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    mo->la_symbol_ptr = new_section(s1, "__la_symbol_ptr", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     mo->stubsym = put_elf_sym(s1->symtab, 0, 0,
                               ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
                               mo->stubs->sh_num, ".__stubs");
+    mo->helpsym = put_elf_sym(s1->symtab, 0, 0,
+                              ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                              mo->stub_helper->sh_num, ".__stub_helper");
+    mo->lasym = put_elf_sym(s1->symtab, 0, 0,
+                            ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                            mo->la_symbol_ptr->sh_num, ".__la_symbol_ptr");
+    section_ptr_add(data_section, -data_section->data_offset & (PTR_SIZE - 1));
+    mo->dyld_private = put_elf_sym(s1->symtab, data_section->data_offset, PTR_SIZE,
+                                   ELFW(ST_INFO)(STB_LOCAL, STT_OBJECT), 0,
+                                   data_section->sh_num, ".__dyld_private");
+    section_ptr_add(data_section, PTR_SIZE);
+    mo->dyld_stub_binder = put_elf_sym(s1->symtab, 0, 0,
+                		       ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 0,
+				       SHN_UNDEF, "dyld_stub_binder");
+    mo->rebase = new_section(s1, "REBASE", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->binding = new_section(s1, "BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->lazy_binding = new_section(s1, "LAZY_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->exports = new_section(s1, "EXPORT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 
     mo->symtab = new_section(s1, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->strtab = new_section(s1, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
@@ -515,9 +901,7 @@ static void create_symtab(TCCState *s1, struct macho *mo)
         pn[sym_index - 1].n_strx = put_elf_str(mo->strtab, name);
         pn[sym_index - 1].n_value = sym_index;
     }
-    tcc_enter_state(s1);  /* qsort needs global state */
-    qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp);
-    tcc_exit_state(s1);
+    tcc_qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp, s1);
     mo->e2msym = tcc_malloc(sym_end * sizeof(*mo->e2msym));
     mo->e2msym[0] = -1;
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
@@ -530,21 +914,120 @@ const struct {
     uint32_t flags;
     const char *name;
 } skinfo[sk_last] = {
-    /*[sk_unknown] =*/  { 0 },
-    /*[sk_discard] =*/  { 0 },
-    /*[sk_text] =*/     { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
-                             | S_ATTR_SOME_INSTRUCTIONS, "__text" },
-    /*[sk_stubs] =*/    { 0 },
-    /*[sk_ro_data] =*/  { 1, S_REGULAR, "__rodata" },
-    /*[sk_uw_info] =*/  { 0 },
-    /*[sk_nl_ptr] =*/   { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
-    /*[sk_la_ptr] =*/   { 0 },
-    /*[sk_init] =*/     { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
-    /*[sk_fini] =*/     { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
-    /*[sk_rw_data] =*/  { 2, S_REGULAR, "__data" },
-    /*[sk_bss] =*/      { 2, S_ZEROFILL, "__bss" },
-    /*[sk_linkedit] =*/ { 3, S_REGULAR, NULL },
+    /*[sk_unknown] =*/        { 0 },
+    /*[sk_discard] =*/        { 0 },
+    /*[sk_text] =*/           { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
+                                | S_ATTR_SOME_INSTRUCTIONS, "__text" },
+    /*[sk_stubs] =*/          { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_SYMBOL_STUBS
+                                   | S_ATTR_SOME_INSTRUCTIONS , "__stubs" },
+    /*[sk_stub_helper] =*/    { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
+                                   | S_ATTR_SOME_INSTRUCTIONS , "__stub_helper" },
+    /*[sk_ro_data] =*/        { 1, S_REGULAR, "__rodata" },
+    /*[sk_uw_info] =*/        { 0 },
+    /*[sk_nl_ptr] =*/           { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
+    /*[sk_la_ptr] =*/         { 2, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
+    /*[sk_init] =*/           { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
+    /*[sk_fini] =*/           { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
+    /*[sk_rw_data] =*/        { 2, S_REGULAR, "__data" },
+    /*[sk_stab] =*/           { 2, S_REGULAR, "__stab" },
+    /*[sk_stab_str] =*/       { 2, S_REGULAR, "__stab_str" },
+    /*[sk_debug_info] =*/     { 2, S_REGULAR, "__debug_info" },
+    /*[sk_debug_abbrev] =*/   { 2, S_REGULAR, "__debug_abbrev" },
+    /*[sk_debug_line] =*/     { 2, S_REGULAR, "__debug_line" },
+    /*[sk_debug_aranges] =*/  { 2, S_REGULAR, "__debug_aranges" },
+    /*[sk_debug_str] =*/      { 2, S_REGULAR, "__debug_str" },
+    /*[sk_debug_line_str] =*/ { 2, S_REGULAR, "__debug_line_str" },
+    /*[sk_bss] =*/            { 2, S_ZEROFILL, "__bss" },
+    /*[sk_linkedit] =*/       { 3, S_REGULAR, NULL },
 };
+
+static void set_segment_and_offset(struct macho *mo, addr_t addr,
+				   uint8_t *ptr, int opcode,
+				   Section *sec, addr_t offset)
+{
+    int i;
+    struct segment_command_64 *seg = NULL;
+
+    for (i = 1; i < mo->nseg - 1; i++) {
+	seg = get_segment(mo, i);
+	if (addr >= seg->vmaddr && addr < (seg->vmaddr + seg->vmsize))
+	    break;
+    }
+    *ptr = opcode | i;
+    write_uleb128(sec, offset - seg->vmaddr);
+}
+
+static void do_bind_rebase(TCCState *s1, struct macho *mo)
+{
+    int i;
+    uint8_t *ptr;
+    ElfW(Sym) *sym;
+    char *name;
+
+    for (i = 0; i < mo->n_lazy_bind_rebase; i++) {
+	int sym_index = ELFW(R_SYM)(mo->lazy_bind_rebase[i].rel.r_info);
+	Section *s = s1->sections[mo->lazy_bind_rebase[i].section];
+
+	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	name = (char *) symtab_section->link->data + sym->st_name;
+	if (mo->lazy_bind_rebase[i].bind) {
+	    write32le(mo->stub_helper->data +
+		      mo->lazy_bind_rebase[i].bind_offset,
+		      mo->lazy_binding->data_offset);
+	    ptr = section_ptr_add(mo->lazy_binding, 1);
+	    set_segment_and_offset(mo, mo->la_symbol_ptr->sh_addr, ptr,
+				   BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+				   mo->lazy_binding,
+				   mo->la_symbol_ptr->sh_addr +
+				   mo->lazy_bind_rebase[i].la_symbol_offset);
+	    ptr = section_ptr_add(mo->lazy_binding, 5 + strlen(name));
+	    *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+		     (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
+	    *ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
+	    strcpy(ptr, name);
+	    ptr += strlen(name) + 1;
+	    *ptr++ = BIND_OPCODE_DO_BIND;
+	    *ptr = BIND_OPCODE_DONE;
+	}
+	else {
+	    ptr = section_ptr_add(mo->rebase, 2);
+	    *ptr++ = REBASE_OPCODE_SET_TYPE_IMM | REBASE_TYPE_POINTER;
+	    set_segment_and_offset(mo, s->sh_addr, ptr,
+				   REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+				   mo->rebase,
+				   mo->lazy_bind_rebase[i].rel.r_offset +
+				   s->sh_addr);
+	    ptr = section_ptr_add(mo->rebase, 1);
+	    *ptr = REBASE_OPCODE_DO_REBASE_IMM_TIMES | 1;
+	}
+    }
+    for (i = 0; i < mo->n_bind; i++) {
+	int sym_index = ELFW(R_SYM)(mo->bind[i].rel.r_info);
+	Section *s = s1->sections[mo->bind[i].section];
+
+	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	name = (char *) symtab_section->link->data + sym->st_name;
+        ptr = section_ptr_add(mo->binding, 5 + strlen(name));
+        *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+	         (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
+        *ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
+        strcpy(ptr, name);
+        ptr += strlen(name) + 1;
+        *ptr++ = BIND_OPCODE_SET_TYPE_IMM | BIND_TYPE_POINTER;
+	    set_segment_and_offset(mo, s->sh_addr, ptr,
+				   BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+				   mo->binding,
+				   mo->bind[i].rel.r_offset + s->sh_addr);
+        ptr = section_ptr_add(mo->binding, 1);
+        *ptr++ = BIND_OPCODE_DO_BIND;
+    }
+    if (mo->rebase->data_offset) {
+        ptr = section_ptr_add(mo->rebase, 1);
+        *ptr = REBASE_OPCODE_DONE;
+    }
+    tcc_free(mo->lazy_bind_rebase);
+    tcc_free(mo->bind);
+}
 
 static void collect_sections(TCCState *s1, struct macho *mo)
 {
@@ -584,6 +1067,7 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     str = (char*)dyldlc + dyldlc->name;
     strcpy(str, "/usr/lib/dyld");
 
+    mo->dyldinfo = add_lc(mo, LC_DYLD_INFO_ONLY, sizeof(*mo->dyldinfo));
     symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
     dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
 
@@ -610,12 +1094,37 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             case SHT_FINI_ARRAY: sk = sk_fini; break;
             case SHT_NOBITS:   sk = sk_bss; break;
             case SHT_SYMTAB:   sk = sk_discard; break;
-            case SHT_STRTAB:   sk = s == stabstr_section ? sk_ro_data : sk_discard; break;
+            case SHT_STRTAB:
+		if (s == stabstr_section)
+		  sk = sk_stab_str;
+		else
+		  sk = sk_discard;
+		break;
             case SHT_RELX:     sk = sk_discard; break;
             case SHT_LINKEDIT: sk = sk_linkedit; break;
             case SHT_PROGBITS:
-                if (s == s1->got)
+                if (s == mo->stubs)
+                  sk = sk_stubs;
+                else if (s == mo->stub_helper)
+                  sk = sk_stub_helper;
+                else if (s == s1->got)
                   sk = sk_nl_ptr;
+                else if (s == mo->la_symbol_ptr)
+                  sk = sk_la_ptr;
+                else if (s == stab_section)
+                  sk = sk_stab;
+                else if (s == dwarf_info_section)
+                  sk = sk_debug_info;
+                else if (s == dwarf_abbrev_section)
+                  sk = sk_debug_abbrev;
+                else if (s == dwarf_line_section)
+                  sk = sk_debug_line;
+                else if (s == dwarf_aranges_section)
+                  sk = sk_debug_aranges;
+                else if (s == dwarf_str_section)
+                  sk = sk_debug_str;
+                else if (s == dwarf_line_str_section)
+                  sk = sk_debug_line_str;
                 else if (flags & SHF_EXECINSTR)
                   sk = sk_text;
                 else if (flags & SHF_WRITE)
@@ -637,9 +1146,14 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     mo->elfsectomacho = tcc_mallocz(sizeof(*mo->elfsectomacho) * s1->nb_sections);
     for (sk = sk_unknown; sk < sk_last; sk++) {
         struct section_64 *sec = NULL;
+#define SEG_PAGE_SIZE 16384
+	if (sk == sk_linkedit)
+	    do_bind_rebase(s1, mo);
         if (seg) {
-            seg->vmsize = curaddr - seg->vmaddr;
-            seg->filesize = fileofs - seg->fileoff;
+            seg->vmsize = (curaddr - seg->vmaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
+            seg->filesize = (fileofs - seg->fileoff + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
+            curaddr = seg->vmaddr + seg->vmsize;
+            fileofs = seg->fileoff + seg->filesize;
         }
         if (skinfo[sk].seg && mo->sk_to_sect[sk].s) {
             uint64_t al = 0;
@@ -652,6 +1166,16 @@ static void collect_sections(TCCState *s1, struct macho *mo)
                 mo->sk_to_sect[sk].machosect = si;
                 sec = get_section(seg, si);
                 sec->flags = skinfo[sk].flags;
+		if (sk == sk_stubs)
+#ifdef TCC_TARGET_X86_64
+	    	    sec->reserved2 = 6;
+#elif defined TCC_TARGET_ARM64
+	    	    sec->reserved2 = 12;
+#endif
+		if (sk == sk_nl_ptr)
+	    	    sec->reserved1 = mo->nr_plt;
+		if (sk == sk_la_ptr)
+	    	    sec->reserved1 = mo->nr_plt + mo->n_got;
             }
             if (seg->vmaddr == -1) {
                 curaddr = (curaddr + 4095) & -4096;
@@ -737,6 +1261,23 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     dysymlc->nundefsym = symlc->nsyms - dysymlc->iundefsym;
     dysymlc->indirectsymoff = mo->indirsyms->sh_offset;
     dysymlc->nindirectsyms = mo->indirsyms->data_offset / sizeof(uint32_t);
+
+    if (mo->rebase->data_offset) {
+        mo->dyldinfo->rebase_off = mo->rebase->sh_offset;
+        mo->dyldinfo->rebase_size = mo->rebase->data_offset;
+    }
+    if (mo->binding->data_offset) {
+        mo->dyldinfo->bind_off = mo->binding->sh_offset;
+        mo->dyldinfo->bind_size = mo->binding->data_offset;
+    }
+    if (mo->lazy_binding->data_offset) {
+        mo->dyldinfo->lazy_bind_off = mo->lazy_binding->sh_offset;
+        mo->dyldinfo->lazy_bind_size = mo->lazy_binding->data_offset;
+    }
+    if (mo->exports->data_offset) {
+        mo->dyldinfo->export_off = mo->exports->sh_offset;
+        mo->dyldinfo->export_size = mo->exports->data_offset;
+    }
 }
 
 static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
@@ -745,10 +1286,15 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
     uint64_t fileofs = 0;
     Section *s;
     mo->mh.mh.magic = MH_MAGIC_64;
-    mo->mh.mh.cputype = 0x1000007;    // x86_64
-    mo->mh.mh.cpusubtype = 0x80000003;// all | CPU_SUBTYPE_LIB64
-    mo->mh.mh.filetype = 2;           // MH_EXECUTE
-    mo->mh.mh.flags = 4;              // DYLDLINK
+#ifdef TCC_TARGET_X86_64
+    mo->mh.mh.cputype = CPU_TYPE_X86_64;
+    mo->mh.mh.cpusubtype = CPU_SUBTYPE_LIB64 | CPU_SUBTYPE_X86_ALL;
+#elif defined TCC_TARGET_ARM64
+    mo->mh.mh.cputype = CPU_TYPE_ARM64;
+    mo->mh.mh.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
+#endif
+    mo->mh.mh.filetype = MH_EXECUTE;
+    mo->mh.mh.flags = MH_DYLDLINK | MH_PIE;
     mo->mh.mh.ncmds = mo->nlc;
     mo->mh.mh.sizeofcmds = 0;
     for (i = 0; i < mo->nlc; i++)
@@ -803,6 +1349,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         printf("<- %s\n", filename);
 
     tcc_add_runtime(s1);
+    tcc_macho_add_destructor(s1);
     resolve_common_syms(s1);
     create_symtab(s1, &mo);
     check_relocs(s1, &mo);
@@ -959,8 +1506,13 @@ ST_FUNC int macho_load_dll(TCCState * s1, int fd, const char* filename, int lev)
                                         fh.nfat_arch * sizeof(*fa));
         swap = fh.magic == FAT_CIGAM;
         for (i = 0; i < SWAP(fh.nfat_arch); i++)
-          if (SWAP(fa[i].cputype) == 0x01000007 /* CPU_TYPE_X86_64 */
-              && SWAP(fa[i].cpusubtype) == 3)   /* CPU_SUBTYPE_X86_ALL */
+#ifdef TCC_TARGET_X86_64
+          if (SWAP(fa[i].cputype) == CPU_TYPE_X86_64
+              && SWAP(fa[i].cpusubtype) == CPU_SUBTYPE_X86_ALL)
+#elif defined TCC_TARGET_ARM64
+          if (SWAP(fa[i].cputype) == CPU_TYPE_ARM64
+              && SWAP(fa[i].cpusubtype) == CPU_SUBTYPE_ARM64_ALL)
+#endif
             break;
         if (i == SWAP(fh.nfat_arch)) {
             tcc_free(fa);

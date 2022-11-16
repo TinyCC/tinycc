@@ -3648,7 +3648,7 @@ void test_asm_dead_code(void)
 
 void test_asm_call(void)
 {
-#if defined __x86_64__ && !defined _WIN64
+#if defined __x86_64__ && !defined _WIN64  && !defined(__APPLE__)
   static char str[] = "PATH";
   char *s;
   /* This tests if a reference to an undefined symbol from an asm
@@ -3660,10 +3660,8 @@ void test_asm_call(void)
      tested here).  */
   /* two pushes so stack remains aligned */
   asm volatile ("push %%rdi; push %%rdi; mov %0, %%rdi;"
-#if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__)) && !defined(__APPLE__)
+#if 1 && !defined(__TINYC__) && (defined(__PIC__) || defined(__PIE__))
 		"call getenv@plt;"
-#elif defined(__APPLE__)
-                "call _getenv;"
 #else
 		"call getenv;"
 #endif
@@ -3892,7 +3890,7 @@ void builtin_test(void)
     //printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
 }
 
-#ifdef _WIN32
+#if defined _WIN32 || defined __APPLE__
 void weak_test(void) {}
 #else
 extern int __attribute__((weak)) weak_f1(void);
