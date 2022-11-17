@@ -2900,7 +2900,15 @@ int cmpfn();
 
 void old_style_function_test(void)
 {
+#if CC_NAME == CC_clang
+    /* recent clang versions (at least 15.0) raise an error:
+       incompatible pointer to integer conversion passing 'void *'
+       For the purpose of this test, pass 1 instead.
+     */
+    old_style_f(1, 2, 3.0);
+#else
     old_style_f((void *)1, 2, 3.0);
+#endif
     decl_func1(NULL);
     decl_func2(NULL);
 }
