@@ -80,17 +80,12 @@ typedef struct {
 #define ATOMIC_FLAG_INIT {0}
 
 #define atomic_flag_test_and_set_explicit(object, order)                  \
-    ({ bool ret, value = 1;                                               \
-       __atomic_exchange(&(object)->value, &value, &ret, order);          \
-       ret;                                                               \
-    })
+    __atomic_test_and_set((void *)(&((object)->value)), order)
 #define atomic_flag_test_and_set(object)                                  \
     atomic_flag_test_and_set_explicit(object, __ATOMIC_SEQ_CST)
 
 #define atomic_flag_clear_explicit(object, order)                         \
-    ({ bool value = 0;                                                    \
-       __atomic_store(&(object)->value, &value, order);                   \
-    })
+    __atomic_clear((bool *)(&((object)->value)), order)
 #define atomic_flag_clear(object) \
     atomic_flag_clear_explicit(object, __ATOMIC_SEQ_CST)
 

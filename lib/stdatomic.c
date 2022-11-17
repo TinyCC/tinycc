@@ -23,7 +23,7 @@ typedef __SIZE_TYPE__ size_t;
     { \
         TYPE rv; \
         TYPE cmp = *(TYPE *)ref; \
-        asm volatile( \
+        __asm__ volatile( \
             "lock cmpxchg" SUFFIX " %2,%1\n" \
             : "=a" (rv), "+m" (*(TYPE *)atom) \
             : "q" (xchg), "0" (cmp) \
@@ -115,16 +115,6 @@ ATOMIC_GEN(uint32_t, 4, "l")
 ATOMIC_GEN(uint64_t, 8, "q")
 #endif
 
-bool __atomic_test_and_set (volatile void *ptr, int memorder)
-{
-    return __atomic_exchange_1(ptr, 1, memorder);
-}
-
-void __atomic_clear (volatile void *ptr, int memorder)
-{
-    __atomic_store_1(ptr, 0, memorder);
-}
-
 void __atomic_signal_fence (int memorder)
 {
 }
@@ -132,15 +122,15 @@ void __atomic_signal_fence (int memorder)
 void __atomic_thread_fence (int memorder)
 {
 #if defined __i386__
-        asm volatile("lock orl $0, (%esp)");
+        __asm__ volatile("lock orl $0, (%esp)");
 #elif defined __x86_64__
-        asm volatile("lock orq $0, (%rsp)");
+        __asm__ volatile("lock orq $0, (%rsp)");
 #elif defined __arm__
-        asm volatile(".int 0xee070fba"); // mcr p15, 0, r0, c7, c10, 5
+        __asm__ volatile(".int 0xee070fba"); // mcr p15, 0, r0, c7, c10, 5
 #elif defined __aarch64__
-        asm volatile(".int 0xd5033bbf"); // dmb ish
+        __asm__ volatile(".int 0xd5033bbf"); // dmb ish
 #elif defined __riscv
-        asm volatile(".int 0x0ff0000f"); // fence iorw,iorw
+        __asm__ volatile(".int 0x0ff0000f"); // fence iorw,iorw
 #endif
 }
 

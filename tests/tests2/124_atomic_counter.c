@@ -14,10 +14,8 @@
             abort(); \
     } while (0)
 
-#ifndef __APPLE__
 #if defined __x86_64__ || defined __aarch64__ || defined __riscv
 #define HAS_64BITS
-#endif
 #endif
 
 typedef struct {

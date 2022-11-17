@@ -12,7 +12,49 @@
 # define _(s) s
 #endif
 
-#if defined __arm__
+#if defined __i386__
+        .text
+        .align  2
+
+        .global _(__atomic_test_and_set)
+        .type   _(__atomic_test_and_set), %function
+_(__atomic_test_and_set):
+        movl    4(%esp), %edx
+        movl    $1, %eax
+        xchgb   (%edx), %al
+        ret
+	.size   _(__atomic_test_and_set), .-_(__atomic_test_and_set)
+
+        .global _(__atomic_clear)
+        .type   _(__atomic_clear), %function
+_(__atomic_clear):
+        movl    4(%esp), %edx
+        xorl    %eax, %eax
+        xchgb   (%edx), %al
+        ret
+	.size   _(__atomic_clear), .-_(__atomic_clear)
+
+#elif defined __x86_64__
+        .text
+        .align  2
+
+        .global _(__atomic_test_and_set)
+        .type   _(__atomic_test_and_set), %function
+_(__atomic_test_and_set):
+        movl    $1, %eax
+        xchgb   (%rdi), %al
+        ret
+	.size   _(__atomic_test_and_set), .-_(__atomic_test_and_set)
+
+        .global _(__atomic_clear)
+        .type   _(__atomic_clear), %function
+_(__atomic_clear):
+        xorl    %eax, %eax
+        xchgb   (%rdi), %al
+        ret
+	.size   _(__atomic_clear), .-_(__atomic_clear)
+
+#elif defined __arm__
 
 #ifndef __TINYC__
 	.arch armv6k
@@ -20,6 +62,91 @@
 #endif
         .text
         .align  2
+
+        .global _(fetch_and_add_arm)
+        .type   _(fetch_and_add_arm), %function
+_(fetch_and_add_arm):
+        mcr     p15, #0, r0, c7, c10, #5
+.L0:
+        ldrex   r3, [r0]
+        add     r3, r3, r1
+        strex   r2, r3, [r0]
+        cmp     r2, #0
+        bne     .L0
+        mcr     p15, #0, r0, c7, c10, #5
+        bx      lr
+        .size   _(fetch_and_add_arm), .-_(fetch_and_add_arm)
+
+        .global _(__atomic_test_and_set)
+        .type   _(__atomic_test_and_set), %function
+_(__atomic_test_and_set):
+#ifdef __TINYC__
+	.int	0xe92d4030
+	.int	0xee070fba
+	.int	0xe5d03000
+	.int	0xe24dd014
+	.int	0xe1a05000
+	.int	0xe2533000
+	.int	0xe1a04001
+	.int	0x13a03001
+	.int	0xee070fba
+	.int	0xe5cd300f
+	.int	0xe3a03001
+	.int	0xe1a02003
+	.int	0xe28d100f
+	.int	0xe1a00005
+	.int	0xe58d4004
+	.int	0xe58d4000
+	.int	0xeb000009
+	.int	0xe3500000
+	.int	0x0afffff6
+	.int	0xe5dd000f
+	.int	0xe28dd014
+	.int	0xe8bd8030
+#else
+        push    {r4, r5, lr}
+        mcr     p15, 0, r0, c7, c10, 5
+        ldrb    r3, [r0]
+        sub     sp, sp, #20
+        mov     r5, r0
+        subs    r3, r3, #0
+        mov     r4, r1
+        movne   r3, #1
+        mcr     p15, 0, r0, c7, c10, 5
+        strb    r3, [sp, #15]
+.L20:
+        mov     r3, #1
+        mov     r2, r3
+        add     r1, sp, #15
+        mov     r0, r5
+        str     r4, [sp, #4]
+        str     r4, [sp]
+        bl      __atomic_compare_exchange_1
+        cmp     r0, #0
+        beq     .L20
+        ldrb    r0, [sp, #15]
+        add     sp, sp, #20
+        pop     {r4, r5, pc}
+#endif
+	.size   _(__atomic_test_and_set), .-_(__atomic_test_and_set)
+
+        .global _(__atomic_clear)
+        .type   _(__atomic_clear), %function
+_(__atomic_clear):
+#ifdef __TINYC__
+	.int	0xe3a03000
+	.int	0xee070fba
+	.int	0xe5c03000
+	.int	0xee070fba
+	.int	0xe12fff1e
+#else
+         mov     r3, #0
+         mcr     p15, 0, r0, c7, c10, 5
+         strb    r3, [r0]
+         mcr     p15, 0, r0, c7, c10, 5
+         bx      lr
+#endif
+	.size   _(__atomic_clear), .-_(__atomic_clear)
 
         .global _(__atomic_compare_exchange_1)
         .type   _(__atomic_compare_exchange_1), %function
@@ -140,6 +267,67 @@ _(__atomic_compare_exchange_4):
 
         .text
         .align  2
+
+        .global _(fetch_and_add_arm64)
+        .type   _(fetch_and_add_arm64), %function
+_(fetch_and_add_arm64):
+#ifdef __TINYC__
+        .int 0x885f7c02
+        .int 0x0b010042
+        .int 0x8803fc02
+        .int 0x35ffffa3
+        .int 0xd5033bbf
+        .int 0xd65f03c0
+#else
+        ldxr    w2, [x0]
+        add     w2, w2, w1
+        stlxr   w3, w2, [x0]
+        cbnz    w3, _(fetch_and_add_arm64)
+        dmb     ish
+        ret
+#endif
+        .size   _(fetch_and_add_arm64), .-_(fetch_and_add_arm64)
+
+        .global _(__atomic_test_and_set)
+        .type   _(__atomic_test_and_set), %function
+_(__atomic_test_and_set):
+#ifdef __TINYC__
+	.int	0xa9bf7bfd
+	.int	0xaa0003e1
+	.int	0x52800020
+	.int	0x910003fd
+	.int	0x2a0003f0
+	.int	0x085ffc20
+	.int	0x0811fc30
+	.int	0x35ffffd1
+	.int	0xa8c17bfd
+	.int	0xd65f03c0
+#else
+         stp     x29, x30, [sp, -16]!
+         mov     x1, x0
+         mov     w0, 1
+         mov     x29, sp
+         mov     w16, w0
+.L20:
+         ldaxrb  w0, [x1]
+         stlxrb  w17, w16, [x1]
+         cbnz    w17, .L20
+         ldp     x29, x30, [sp], 16
+	 ret
+#endif
+	.size   _(__atomic_test_and_set), .-_(__atomic_test_and_set)
+
+        .global _(__atomic_clear)
+        .type   _(__atomic_clear), %function
+_(__atomic_clear):
+#ifdef __TINYC__
+	.int	0x089ffc1f
+	.int	0xd65f03c0
+#else
+         stlrb   wzr, [x0]
+        ret
+#endif
+	.size   _(__atomic_clear), .-_(__atomic_clear)
 
         .global _(__atomic_compare_exchange_1)
         .type   _(__atomic_compare_exchange_1), %function
@@ -366,6 +554,63 @@ _(__atomic_compare_exchange_8):
 
         .text
         .align  2
+
+        .global _(fetch_and_add_riscv64)
+        .type   _(fetch_and_add_riscv64), %function
+_(fetch_and_add_riscv64):
+#ifdef __TINYC__
+        .int   0x0f50000f
+        .int   0x004b5202f
+        .short 0x8082
+#else
+        fence iorw,ow
+        amoadd.w.aq zero,a1,0(a0)
+        ret
+#endif
+        .size   _(fetch_and_add_riscv64), .-_(fetch_and_add_riscv64)
+
+        .global _(__atomic_test_and_set)
+        .type   _(__atomic_test_and_set), %function
+_(__atomic_test_and_set):
+#ifdef __TINYC__
+	.int	0x00357793
+	.int	0x0037979b
+	.short	0x4685
+	.short	0x9971
+	.int	0x00f696bb
+	.int	0x0f50000f
+	.int	0x44d5272f
+	.int	0x00f7553b
+	.int	0x0ff57513
+	.short	0x8082
+#else
+        andi    a5,a0,3
+        slliw   a5,a5,3
+        li      a3,1
+        andi    a0,a0,-4
+        sllw    a3,a3,a5
+        fence iorw,ow; amoor.w.aq a4,a3,0(a0)
+        srlw    a0,a4,a5
+        andi    a0,a0,0xff
+        ret
+#endif
+	.size   _(__atomic_test_and_set), .-_(__atomic_test_and_set)
+
+        .global _(__atomic_clear)
+        .type   _(__atomic_clear), %function
+_(__atomic_clear):
+#ifdef __TINYC__
+	.int	0x0ff0000f
+	.int	0x00050023
+	.int	0x0ff0000f
+	.short	0x8082
+#else
+        fence   iorw,iorw
+        sb      zero,0(a0)
+        fence   iorw,iorw
+        ret
+#endif
+	.size   _(__atomic_clear), .-_(__atomic_clear)
 
         .global _(__atomic_compare_exchange_1)
         .type   _(__atomic_compare_exchange_1), %function
