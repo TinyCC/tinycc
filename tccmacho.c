@@ -304,7 +304,7 @@ struct macho {
     } sk_to_sect[sk_last];
     int *elfsectomacho;
     int *e2msym;
-    Section *rebase, *binding, *lazy_binding, *exports;
+    Section *rebase, *binding, *weak_binding, *lazy_binding, *exports;
     Section *symtab, *strtab, *wdata, *indirsyms;
     Section *stubs, *stub_helper, *la_symbol_ptr;
     int nr_plt, n_got;
@@ -887,6 +887,7 @@ static void create_symtab(TCCState *s1, struct macho *mo)
 				       SHN_UNDEF, "dyld_stub_binder");
     mo->rebase = new_section(s1, "REBASE", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->binding = new_section(s1, "BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->weak_binding = new_section(s1, "WEAK_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->lazy_binding = new_section(s1, "LAZY_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->exports = new_section(s1, "EXPORT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 
@@ -1003,11 +1004,14 @@ static void do_bind_rebase(TCCState *s1, struct macho *mo)
     }
     for (i = 0; i < mo->n_bind; i++) {
 	int sym_index = ELFW(R_SYM)(mo->bind[i].rel.r_info);
+	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 	Section *s = s1->sections[mo->bind[i].section];
+	Section *binding = ELFW(ST_BIND)(sym->st_info) == STB_WEAK
+	    ? mo->weak_binding : mo->binding;
 
 	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 	name = (char *) symtab_section->link->data + sym->st_name;
-        ptr = section_ptr_add(mo->binding, 5 + strlen(name));
+        ptr = section_ptr_add(binding, 5 + strlen(name));
         *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
 	         (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
         *ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
@@ -1016,9 +1020,9 @@ static void do_bind_rebase(TCCState *s1, struct macho *mo)
         *ptr++ = BIND_OPCODE_SET_TYPE_IMM | BIND_TYPE_POINTER;
 	    set_segment_and_offset(mo, s->sh_addr, ptr,
 				   BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
-				   mo->binding,
+				   binding,
 				   mo->bind[i].rel.r_offset + s->sh_addr);
-        ptr = section_ptr_add(mo->binding, 1);
+        ptr = section_ptr_add(binding, 1);
         *ptr++ = BIND_OPCODE_DO_BIND;
     }
     if (mo->rebase->data_offset) {
@@ -1269,6 +1273,10 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     if (mo->binding->data_offset) {
         mo->dyldinfo->bind_off = mo->binding->sh_offset;
         mo->dyldinfo->bind_size = mo->binding->data_offset;
+    }
+    if (mo->weak_binding->data_offset) {
+        mo->dyldinfo->weak_bind_off = mo->weak_binding->sh_offset;
+        mo->dyldinfo->weak_bind_size = mo->weak_binding->data_offset;
     }
     if (mo->lazy_binding->data_offset) {
         mo->dyldinfo->lazy_bind_off = mo->lazy_binding->sh_offset;

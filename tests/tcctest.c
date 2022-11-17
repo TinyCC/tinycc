@@ -3898,7 +3898,7 @@ void builtin_test(void)
     //printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
 }
 
-#if defined _WIN32 || defined __APPLE__
+#if defined _WIN32
 void weak_test(void) {}
 #else
 extern int __attribute__((weak)) weak_f1(void);
