@@ -1004,13 +1004,13 @@ static void do_bind_rebase(TCCState *s1, struct macho *mo)
     }
     for (i = 0; i < mo->n_bind; i++) {
 	int sym_index = ELFW(R_SYM)(mo->bind[i].rel.r_info);
-	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 	Section *s = s1->sections[mo->bind[i].section];
-	Section *binding = ELFW(ST_BIND)(sym->st_info) == STB_WEAK
-	    ? mo->weak_binding : mo->binding;
+	Section *binding;
 
 	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 	name = (char *) symtab_section->link->data + sym->st_name;
+	binding = ELFW(ST_BIND)(sym->st_info) == STB_WEAK
+	    ? mo->weak_binding : mo->binding;
         ptr = section_ptr_add(binding, 5 + strlen(name));
         *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
 	         (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
