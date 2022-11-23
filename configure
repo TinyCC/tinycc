@@ -350,6 +350,7 @@ Advanced options (experts only):
   --config-backtrace=no    disable stack backtraces (with -run or -bt)
   --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
+  --config-new_macho       Use apple new macho object format
   --dwarf=x                Use dwarf debug info instead of stabs (x=2..5)
 EOF
 exit 1

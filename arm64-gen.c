@@ -1202,16 +1202,16 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     arm64_func_va_list_stack = arm64_pcs(variadic ? var_nb_arg : 0, n - 1, t, a);
 
+#if !defined(__APPLE__)
     if (variadic) {
         use_x8 = 1;
         last_int = 4;
         last_float = 4;
     }
+#endif
     if (a && a[0] == 1)
         use_x8 = 1;
     for (i = 1, sym = func_type->ref->next; sym; i++, sym = sym->next) {
-        if (a[i] == 1)
-	    use_x8 = 1;
         if (a[i] < 16) {
             int last, align, size = type_size(&sym->type, &align);
 	    last = a[i] / 4 + 1 + (size - 1) / 8;
