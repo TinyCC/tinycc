@@ -351,6 +351,7 @@ Advanced options (experts only):
   --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
   --config-new_macho       Use apple new macho object format
+  --config-codesign        Use codesign on apple to sign executables
   --dwarf=x                Use dwarf debug info instead of stabs (x=2..5)
 EOF
 exit 1

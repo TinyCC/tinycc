@@ -107,6 +107,8 @@ struct load_command {
 #define LC_REEXPORT_DYLIB (0x1f | LC_REQ_DYLD)
 #define LC_DYLD_INFO_ONLY (0x22|LC_REQ_DYLD)
 #define LC_MAIN (0x28|LC_REQ_DYLD)
+#define LC_SOURCE_VERSION 0x2A
+#define LC_BUILD_VERSION 0x32
 #define LC_DYLD_EXPORTS_TRIE (0x33 | LC_REQ_DYLD)
 #define LC_DYLD_CHAINED_FIXUPS (0x34 | LC_REQ_DYLD)
 
@@ -254,6 +256,24 @@ struct linkedit_data_command {
     uint32_t    cmdsize;        /* sizeof(struct linkedit_data_command) */
     uint32_t    dataoff;        /* file offset of data in __LINKEDIT segment */
     uint32_t    datasize;       /* file size of data in __LINKEDIT segment  */
+};
+
+#define PLATFORM_MACOS 1
+
+struct build_version_command {
+    uint32_t    cmd;            /* LC_BUILD_VERSION */
+    uint32_t    cmdsize;        /* sizeof(struct build_version_command) plus */
+                                /* ntools * sizeof(struct build_tool_version) */
+    uint32_t    platform;       /* platform */
+    uint32_t    minos;          /* X.Y.Z is encoded in nibbles xxxx.yy.zz */
+    uint32_t    sdk;            /* X.Y.Z is encoded in nibbles xxxx.yy.zz */
+    uint32_t    ntools;         /* number of tool entries following this */
+};
+
+struct source_version_command {
+    uint32_t  cmd;      /* LC_SOURCE_VERSION */
+    uint32_t  cmdsize;  /* 16 */
+    uint64_t  version;  /* A.B.C.D.E packed as a24.b10.c10.d10.e10 */
 };
 
 struct symtab_command {
@@ -492,7 +512,17 @@ static void * add_dylib(struct macho *mo, char *name)
     return lc;
 }
 
-#ifndef CONFIG_NEW_MACHO
+static int uleb128_size (unsigned long long value)
+{
+    int size =  0;
+
+    do {
+        value >>= 7;
+        size++;
+    } while (value != 0);
+    return size;
+}
+
 static void write_uleb128(Section *section, uint64_t value)
 {
     do {
@@ -503,7 +533,6 @@ static void write_uleb128(Section *section, uint64_t value)
         *ptr = byte | (value ? 0x80 : 0);
     } while (value != 0);
 }
-#endif
 
 static void tcc_macho_add_destructor(TCCState *s1)
 {
@@ -512,15 +541,15 @@ static void tcc_macho_add_destructor(TCCState *s1)
     ElfW_Rel *rel;
     uint8_t *ptr;
 
+    mh_execute_header = put_elf_sym(s1->symtab, -4096, 0,
+				    ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 0,
+				    text_section->sh_num, "__mh_execute_header");
     s = find_section(s1, ".fini_array");
     if (s->data_offset == 0)
         return; 
     init_sym = put_elf_sym(s1->symtab, text_section->data_offset, 0,
                            ELFW(ST_INFO)(STB_LOCAL, STT_FUNC), 0,
                            text_section->sh_num, "___GLOBAL_init_65535");
-    mh_execute_header = put_elf_sym(s1->symtab, 0x100000000ll, 0,
-                      		    ELFW(ST_INFO)(STB_LOCAL, STT_OBJECT), 0,
-                      		    SHN_ABS, "__mh_execute_header");
     at_exit_sym = put_elf_sym(s1->symtab, 0, 0,
                               ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0,
                               SHN_UNDEF, "___cxa_atexit");
@@ -674,11 +703,11 @@ static void check_relocs(TCCState *s1, struct macho *mo)
 			    attr->plt_offset = 0; // ignore next bind
 			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
 			}
-		        if (for_code)
+		        if (for_code && sym->st_shndx == SHN_UNDEF)
 			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
 		    }
                 }
-                if (for_code) {
+                if (for_code && sym->st_shndx == SHN_UNDEF) {
                     if (attr->plt_offset == -1) {
                         uint8_t *jmp;
 
@@ -1312,27 +1341,103 @@ static void bind_rebase(TCCState *s1, struct macho *mo)
 }
 #endif
 
-/* FIXME */
+struct trie {
+    const char *name;
+    int flag;
+    addr_t addr;
+    int offset_size;
+    int str_size;
+    int term_size;
+    int term_offset;
+};
+
+static int triecmp(const void *_a, const void *_b, void *arg)
+{
+    struct trie *a = (struct trie *) _a;
+    struct trie *b = (struct trie *) _b;
+
+    return strcmp(a->name, b->name);
+}
+
 static void export_trie(TCCState *s1, struct macho *mo)
 {
+    int i, j, n, m, offset;
+    uint8_t *ptr;
     int sym_index;
-    int sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));;
+    int sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
+    int n_trie = 0;
+    struct trie *trie = NULL;
+    addr_t vm_addr = get_segment(mo, 1)->vmaddr;
 
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
 	ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
 	const char *name = (char*)symtab_section->link->data + sym->st_name;
 
-	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE &&
-            ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL) {
+	if (sym->st_shndx == text_section->sh_num &&
+            (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL ||
+	     ELFW(ST_BIND)(sym->st_info) == STB_WEAK)) {
 	    int flag = EXPORT_SYMBOL_FLAGS_KIND_REGULAR;
+	    addr_t addr =
+		sym->st_value + s1->sections[sym->st_shndx]->sh_addr - vm_addr;
 
-	    if (sym->st_shndx == SHN_ABS)
-	    	flag = EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE;
 	    if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
 		flag |= EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION;
-	    dprintf ("%s %d %llx\n", name, flag, sym->st_value + s1->sections[sym->st_shndx]->sh_addr);
+	    dprintf ("%s %d %llx\n", name, flag, addr + vm_addr);
+	    trie = tcc_realloc(trie, (n_trie + 1) * sizeof(struct trie));
+	    trie[n_trie].name = name;
+	    trie[n_trie].flag = flag;
+	    trie[n_trie].addr = addr;
+	    trie[n_trie].offset_size = 1;
+	    trie[n_trie].str_size = strlen(name) + 1;
+	    trie[n_trie].term_size = uleb128_size(flag) + uleb128_size(addr);
+	    trie[n_trie].term_offset = 0;
+	    n_trie++;
 	}
     }
+    /* FIXME: generate tree */
+    if (n_trie > 255) {
+        tcc_warning("Fix trie code. n_trie(%d) > 255", n_trie);
+	n_trie = 255;
+    }
+    if (n_trie) {
+        tcc_qsort(trie, n_trie, sizeof(struct trie), triecmp, NULL);
+	offset = 1 + 1;
+	for (i = 0; i < n_trie; i++)
+	   offset += trie[i].str_size + trie[i].offset_size;
+	for (i = 0; i < n_trie; i++) {
+	    n = uleb128_size(offset);
+	    trie[i].term_offset = offset + n - 1;
+	    trie[i].offset_size = n;
+	    offset += 1 + trie[i].term_size + 1 + n - 1;
+	    if (n > 1)
+	        for (j = i - 1; j >= 0; j--) {
+		    trie[j].term_offset += n - 1;
+		    m = uleb128_size(trie[j].term_offset);
+		    if (m != trie[j].offset_size) {
+			n += m - trie[j].offset_size;
+			offset += m - trie[j].offset_size;
+			trie[j].offset_size = m;
+		    }
+		}
+	}
+        ptr = section_ptr_add(mo->exports, 2);
+        *ptr++ = 0;
+        *ptr = n_trie;
+	for (i = 0; i < n_trie; i++) {
+	    ptr = section_ptr_add(mo->exports, trie[i].str_size);
+	    memcpy(ptr, trie[i].name, trie[i].str_size);
+	    write_uleb128(mo->exports, trie[i].term_offset);
+	}
+	for (i = 0; i < n_trie; i++) {
+	    write_uleb128(mo->exports, trie[i].term_size);
+	    write_uleb128(mo->exports, trie[i].flag);
+	    write_uleb128(mo->exports, trie[i].addr);
+	    ptr = section_ptr_add(mo->exports, 1);
+	    *ptr = 0;
+	}
+	section_ptr_add(mo->exports, -mo->exports->data_offset & 7);
+    }
+    tcc_free(trie);
 }
 
 static void collect_sections(TCCState *s1, struct macho *mo)
@@ -1345,6 +1450,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     struct linkedit_data_command *chained_fixups_lc;
     struct linkedit_data_command *export_trie_lc;
 #endif
+    struct build_version_command *dyldbv;
+    struct source_version_command *dyldsv;
     struct dylinker_command *dyldlc;
     struct symtab_command *symlc;
     struct dysymtab_command *dysymlc;
@@ -1377,8 +1484,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     mo->dyldinfo = add_lc(mo, LC_DYLD_INFO_ONLY, sizeof(*mo->dyldinfo));
 #endif
 
-    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
-    mo->ep->entryoff = 4096;
+    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
+    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
 
     i = (sizeof(*dyldlc) + strlen("/usr/lib/dyld") + 1 + 7) &-8;
     dyldlc = add_lc(mo, LC_LOAD_DYLINKER, i);
@@ -1386,8 +1493,17 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     str = (char*)dyldlc + dyldlc->name;
     strcpy(str, "/usr/lib/dyld");
 
-    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
-    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
+    dyldbv = add_lc(mo, LC_BUILD_VERSION, sizeof(*dyldbv));
+    dyldbv->platform = PLATFORM_MACOS;
+    dyldbv->minos = (10 << 16) + (6 << 8);
+    dyldbv->sdk = (10 << 16) + (6 << 8);
+    dyldbv->ntools = 0;
+
+    dyldsv = add_lc(mo, LC_SOURCE_VERSION, sizeof(*dyldsv));
+    dyldsv->version = 0;
+
+    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
+    mo->ep->entryoff = 4096;
 
     for(i = 0; i < s1->nb_loaded_dlls; i++) {
         DLLReference *dllref = s1->loaded_dlls[i];
@@ -1710,7 +1826,9 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 	    sym_index = ELFW(R_SYM)(mo->bind_rebase[i].rel.r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 	    name = (char *) symtab_section->link->data + sym->st_name;
-	    tcc_error("Overlap bind/rebase %s:%s",
+	    tcc_error("Overlap %s/%s %s:%s",
+		      mo->bind_rebase[i].bind ? "bind" : "rebase",
+		      mo->bind_rebase[i + 1].bind ? "bind" : "rebase",
 		      s1->sections[mo->bind_rebase[i].section]->name, name);
 	}
     header = (struct dyld_chained_fixups_header *) data;
@@ -1832,7 +1950,7 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 	    import[bind_index].weak_import =
 		ELFW(ST_BIND)(sym->st_info) == STB_WEAK;
 	    name = (char *) symtab_section->link->data + sym->st_name;
-            strcpy(data, name);
+            strcpy((char *) data, name);
 	    data += strlen(name) + 1;
 	    bind_index++;
 	}
@@ -1893,6 +2011,17 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     tcc_free(mo.e2msym);
 
     fclose(fp);
+#ifdef CONFIG_CODESIGN
+    {
+	char command[1024];
+	int retval;
+
+	snprintf(command, sizeof(command), "codesign -f -s - %s", filename);
+	retval = system (command);
+	if (retval == -1 || !(WIFEXITED(retval) && WEXITSTATUS(retval) == 0))
+	    tcc_error ("command failed '%s'", command);
+    }
+#endif
     return ret;
 }
 
