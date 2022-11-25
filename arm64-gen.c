@@ -53,7 +53,7 @@
 #include <assert.h>
 
 ST_DATA const char * const target_machine_defs =
-#if defined(__APPLE__)
+#if defined(TCC_TARGET_MACHO)
     "__aarch64__\0"
     "__arm64__\0"
 #else
@@ -829,7 +829,7 @@ static unsigned long arm64_pcs_aux(int variadic, int n, CType **type, unsigned l
         else
             size = type_size(type[i], &align);
 
-#if defined(__APPLE__)
+#if defined(TCC_TARGET_MACHO)
         if (variadic && i == variadic) {
             nx = 8;
             nv = 8;
@@ -1202,7 +1202,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     arm64_func_va_list_stack = arm64_pcs(variadic ? var_nb_arg : 0, n - 1, t, a);
 
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
     if (variadic) {
         use_x8 = 1;
         last_int = 4;
@@ -1304,7 +1304,7 @@ ST_FUNC void gen_va_start(void)
         o(0x910383be); // add x30,x29,#224
     o(0xf900001e | r << 5); // str x30,[x(r)]
 
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
     if (arm64_func_va_list_gr_offs) {
         if (arm64_func_va_list_stack)
             o(0x910383be); // add x30,x29,#224
@@ -1345,7 +1345,7 @@ ST_FUNC void gen_va_arg(CType *t)
 
     if (!hfa) {
         uint32_t n = size > 16 ? 8 : (size + 7) & -8;
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
         o(0xb940181e | r0 << 5); // ldr w30,[x(r0),#24] // __gr_offs
         if (align == 16) {
             assert(0); // this path untested but needed for __uint128_t
@@ -1358,7 +1358,7 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
         o(0x9100001e | r1 << 5 | n << 10); // add x30,x(r1),#(n)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
         o(0x14000004); // b .+16
         o(0xb9001800 | r1 | r0 << 5); // str w(r1),[x(r0),#24] // __gr_offs
         o(0xf9400400 | r1 | r0 << 5); // ldr x(r1),[x(r0),#8] // __gr_top
@@ -1369,7 +1369,7 @@ ST_FUNC void gen_va_arg(CType *t)
     }
     else {
         uint32_t ssz = (size + 7) & -(uint32_t)8;
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
         uint32_t rsz = hfa << 4;
         uint32_t b1, b2;
         o(0xb9401c1e | r0 << 5); // ldr w30,[x(r0),#28] // __vr_offs
@@ -1383,7 +1383,7 @@ ST_FUNC void gen_va_arg(CType *t)
         }
         o(0x9100001e | r1 << 5 | ssz << 10); // add x30,x(r1),#(ssz)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
-#if !defined(__APPLE__)
+#if !defined(TCC_TARGET_MACHO)
         b2 = ind; o(0x14000000); // b lab2
         // lab1:
         write32le(cur_text_section->data + b1, 0x5400000d | (ind - b1) << 3);
