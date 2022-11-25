@@ -269,7 +269,9 @@
     __BOTH(int, strcmp, (const char*, const char*))
     __BOTH(int, strncmp, (const char*, const char*, __SIZE_TYPE__))
     __BOTH(char*, strcat, (char*, const char*))
+    __BOTH(char*, strncat, (char*, const char*, __SIZE_TYPE__))
     __BOTH(char*, strchr, (const char*, int))
+    __BOTH(char*, strrchr, (const char*, int))
     __BOTH(char*, strdup, (const char*))
 #if defined __ARM_EABI__
     __BOUND(void*,__aeabi_memcpy,(void*,const void*,__SIZE_TYPE__))

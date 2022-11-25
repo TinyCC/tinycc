@@ -292,7 +292,9 @@ DLL_EXPORT char *__bound_strncpy(char *dst, const char *src, size_t n);
 DLL_EXPORT int __bound_strcmp(const char *s1, const char *s2);
 DLL_EXPORT int __bound_strncmp(const char *s1, const char *s2, size_t n);
 DLL_EXPORT char *__bound_strcat(char *dest, const char *src);
+DLL_EXPORT char *__bound_strncat(char *dest, const char *src, size_t n);
 DLL_EXPORT char *__bound_strchr(const char *string, int ch);
+DLL_EXPORT char *__bound_strrchr(const char *string, int ch);
 DLL_EXPORT char *__bound_strdup(const char *s);
 
 #if defined(__arm__) && defined(__ARM_EABI__)
@@ -424,7 +426,9 @@ static unsigned long long bound_strncpy_count;
 static unsigned long long bound_strcmp_count;
 static unsigned long long bound_strncmp_count;
 static unsigned long long bound_strcat_count;
+static unsigned long long bound_strncat_count;
 static unsigned long long bound_strchr_count;
+static unsigned long long bound_strrchr_count;
 static unsigned long long bound_strdup_count;
 static unsigned long long bound_not_found;
 #define INCR_COUNT(x)          ++x
@@ -1259,7 +1263,9 @@ void __attribute__((destructor)) __bound_exit(void)
             fprintf (stderr, "bound_strcmp_count       %llu\n", bound_strcmp_count);
             fprintf (stderr, "bound_strncmp_count      %llu\n", bound_strncmp_count);
             fprintf (stderr, "bound_strcat_count       %llu\n", bound_strcat_count);
+            fprintf (stderr, "bound_strncat_count      %llu\n", bound_strncat_count);
             fprintf (stderr, "bound_strchr_count       %llu\n", bound_strchr_count);
+            fprintf (stderr, "bound_strrchr_count      %llu\n", bound_strrchr_count);
             fprintf (stderr, "bound_strdup_count       %llu\n", bound_strdup_count);
             fprintf (stderr, "bound_not_found          %llu\n", bound_not_found);
 #endif
@@ -1940,6 +1946,24 @@ char *__bound_strcat(char *dest, const char *src)
     return strcat(r, s);
 }
 
+char *__bound_strncat(char *dest, const char *src, size_t n)
+{
+    char *r = dest;
+    const char *s = src;
+    size_t len = n;
+
+    dprintf(stderr, "%s, %s(): %p, %p, 0x%lx\n",
+            __FILE__, __FUNCTION__, dest, src, (unsigned long)n);
+    INCR_COUNT(bound_strncat_count);
+    while (*dest++);
+    while (len-- && *src++);
+    __bound_check(r, (dest - r) + (src - s) - 1, "strncat dest");
+    __bound_check(s, src - s, "strncat src");
+    if (check_overlap(r, (dest - r) + (src - s) - 1, s, src - s, "strncat"))
+        return dest;
+    return strncat(r, s, n);
+}
+
 char *__bound_strchr(const char *s, int c)
 {
     const unsigned char *str = (const unsigned char *) s;
@@ -1954,6 +1978,24 @@ char *__bound_strchr(const char *s, int c)
         ++str;
     }
     __bound_check(s, ((const char *)str - s) + 1, "strchr");
+    return *str == ch ? (char *) str : NULL;
+}
+
+char *__bound_strrchr(const char *s, int c)
+{
+    const unsigned char *str = (const unsigned char *) s;
+    unsigned char ch = c;
+
+    dprintf(stderr, "%s, %s(): %p, %d\n",
+            __FILE__, __FUNCTION__, s, ch);
+    INCR_COUNT(bound_strrchr_count);
+    while (*str++);
+    __bound_check(s, (const char *)str - s, "strrchr");
+    while (str != (const unsigned char *)s) {
+        if (*--str == ch)
+            break;
+    }
+    __bound_check(s, (const char *)str - s, "strrchr");
     return *str == ch ? (char *) str : NULL;
 }
 
