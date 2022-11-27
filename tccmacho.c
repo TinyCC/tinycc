@@ -650,7 +650,6 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, gotplt_entry, sym_index, for_code;
-    int sh_num, debug;
     uint32_t *pi, *goti;
     struct sym_attr *attr;
 
@@ -659,12 +658,9 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     mo->nr_plt = mo->n_got = 0;
     for (i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (s->sh_type != SHT_RELX)
+        if (s->sh_type != SHT_RELX ||
+	    !strncmp(s1->sections[s->sh_info]->name, ".debug_", 7))
             continue;
-        sh_num = s1->sections[s->sh_info]->sh_num;
-        debug = sh_num >= s1->dwlo && sh_num < s1->dwhi;
-	if (debug)
-	    continue;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
@@ -765,7 +761,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, gotplt_entry, sym_index, for_code;
-    int sh_num, debug, bind_offset, la_symbol_offset;
+    int bind_offset, la_symbol_offset;
     uint32_t *pi, *goti;
     struct sym_attr *attr;
 
@@ -807,10 +803,9 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     mo->nr_plt = mo->n_got = 0;
     for (i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (s->sh_type != SHT_RELX)
+        if (s->sh_type != SHT_RELX ||
+	    !strncmp(s1->sections[s->sh_info]->name, ".debug_", 7))
             continue;
-	sh_num = s1->sections[s->sh_info]->sh_num;
-	debug = sh_num >= s1->dwlo && sh_num < s1->dwhi;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
@@ -820,9 +815,8 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                address due to codegen (i.e. a reloc requiring a got slot).  */
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-            if (!debug &&
-		(sym->st_shndx == SHN_UNDEF
-                 || gotplt_entry == ALWAYS_GOTPLT_ENTRY)) {
+            if (sym->st_shndx == SHN_UNDEF
+                || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
                 attr = get_sym_attr(s1, sym_index, 1);
                 if (!attr->dyn_index) {
                     attr->got_offset = s1->got->data_offset;
@@ -1041,8 +1035,7 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
     else if (sym->st_shndx >= SHN_LORESERVE)
       tcc_error("unhandled ELF symbol section %d %s", sym->st_shndx, name);
     else if (!mo->elfsectomacho[sym->st_shndx]) {
-      int sh_num = s1->sections[sym->st_shndx]->sh_num;
-      if (sh_num < s1->dwlo || sh_num >= s1->dwhi) 
+      if (strncmp(s1->sections[sym->st_shndx]->name, ".debug_", 7))
         tcc_error("ELF section %d(%s) not mapped into Mach-O for symbol %s",
                   sym->st_shndx, s1->sections[sym->st_shndx]->name, name);
     }
@@ -1341,32 +1334,139 @@ static void bind_rebase(TCCState *s1, struct macho *mo)
 }
 #endif
 
-struct trie {
+struct trie_info {
     const char *name;
     int flag;
     addr_t addr;
-    int offset_size;
     int str_size;
     int term_size;
-    int term_offset;
 };
+
+struct trie_node {
+    int start;
+    int end;
+    int index_start;
+    int index_end;
+    int n_child;
+    struct trie_node *child;
+};
+
+struct trie_seq {
+    int n_child;
+    struct trie_node *node;
+    int offset;
+    int nest_offset;
+};
+
+static void create_trie(struct trie_node *node,
+                        int from, int to, int index_start,
+                        int n_trie, struct trie_info *trie)
+{
+    int i;
+    int start, end, index_end;
+    char cur;
+    struct trie_node *child;
+
+    for (i = from; i < to; i = end) {
+        cur = trie[i].name[index_start];
+        start = i++;
+        for (; i < to; i++)
+            if (cur != trie[i].name[index_start])
+                break;
+        end = i;
+        if (start == end - 1 ||
+            (trie[start].name[index_start] &&
+             trie[start].name[index_start + 1] == 0))
+            index_end = trie[start].str_size - 1;
+        else {
+            index_end = index_start + 1;
+            for (;;) {
+                cur = trie[start].name[index_end];
+                for (i = start + 1; i < end; i++)
+                    if (cur != trie[i].name[index_end])
+                        break;
+                if (trie[start].name[index_end] &&
+                    trie[start].name[index_end + 1] == 0) {
+                    end = start + 1;
+                    index_end = trie[start].str_size - 1;
+                    break;
+                }
+                if (i != end)
+                    break;
+                index_end++;
+            }
+        }
+        node->child = tcc_realloc(node->child,
+                                  (node->n_child + 1) *
+                                  sizeof(struct trie_node));
+        child = &node->child[node->n_child];
+        child->start = start;
+        child->end = end;
+        child->index_start = index_start;
+        child->index_end = index_end;
+        child->n_child = 0;
+        child->child = NULL;
+        node->n_child++;
+        if (start != end - 1)
+            create_trie(child, start, end, index_end, n_trie, trie);
+    }
+}
+
+static int create_seq(int *offset, int *n_head, struct trie_seq **seq,
+                        struct trie_node *node,
+                        int n_trie, struct trie_info *trie)
+{
+    int i, nest_offset, last_head = *n_head, retval = *offset;
+    struct trie_seq *p_head;
+    struct trie_node *p_nest;
+
+    for (i = 0; i < node->n_child; i++) {
+        p_nest = &node->child[i];
+        *seq = tcc_realloc(*seq, (*n_head + 1) * sizeof(struct trie_seq));
+        p_head = &(*seq)[(*n_head)++];
+        p_head->n_child = i == 0 ? node->n_child : -1;
+        p_head->node = p_nest;
+        p_head->offset = *offset;
+        p_head->nest_offset = 0;
+        *offset += (i == 0 ? 1 + 1 : 0) +
+                   p_nest->index_end - p_nest->index_start + 1 + 3;
+    }
+    for (i = 0; i < node->n_child; i++) {
+        nest_offset =
+            create_seq(offset, n_head, seq, &node->child[i], n_trie, trie);
+        p_head = &(*seq)[last_head + i];
+        p_head->nest_offset = nest_offset;
+    }
+    return retval;
+}
+
+static void node_free(struct trie_node *node)
+{
+    int i;
+
+    for (i = 0; i < node->n_child; i++)
+	node_free(&node->child[i]);
+    tcc_free(node->child);
+}
 
 static int triecmp(const void *_a, const void *_b, void *arg)
 {
-    struct trie *a = (struct trie *) _a;
-    struct trie *b = (struct trie *) _b;
+    struct trie_info *a = (struct trie_info *) _a;
+    struct trie_info *b = (struct trie_info *) _b;
 
     return strcmp(a->name, b->name);
 }
 
 static void export_trie(TCCState *s1, struct macho *mo)
 {
-    int i, j, n, m, offset;
+    int i, size, offset = 0, save_offset;
     uint8_t *ptr;
     int sym_index;
     int sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
-    int n_trie = 0;
-    struct trie *trie = NULL;
+    int n_trie = 0, n_head = 0;
+    struct trie_info *trie = NULL, *p_trie;
+    struct trie_node node, *p_node;
+    struct trie_seq *seq = NULL;
     addr_t vm_addr = get_segment(mo, 1)->vmaddr;
 
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
@@ -1383,59 +1483,59 @@ static void export_trie(TCCState *s1, struct macho *mo)
 	    if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
 		flag |= EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION;
 	    dprintf ("%s %d %llx\n", name, flag, addr + vm_addr);
-	    trie = tcc_realloc(trie, (n_trie + 1) * sizeof(struct trie));
+	    trie = tcc_realloc(trie, (n_trie + 1) * sizeof(struct trie_info));
 	    trie[n_trie].name = name;
 	    trie[n_trie].flag = flag;
 	    trie[n_trie].addr = addr;
-	    trie[n_trie].offset_size = 1;
 	    trie[n_trie].str_size = strlen(name) + 1;
 	    trie[n_trie].term_size = uleb128_size(flag) + uleb128_size(addr);
-	    trie[n_trie].term_offset = 0;
 	    n_trie++;
 	}
     }
-    /* FIXME: generate tree */
-    if (n_trie > 255) {
-        tcc_warning("Fix trie code. n_trie(%d) > 255", n_trie);
-	n_trie = 255;
-    }
     if (n_trie) {
-        tcc_qsort(trie, n_trie, sizeof(struct trie), triecmp, NULL);
-	offset = 1 + 1;
-	for (i = 0; i < n_trie; i++)
-	   offset += trie[i].str_size + trie[i].offset_size;
-	for (i = 0; i < n_trie; i++) {
-	    n = uleb128_size(offset);
-	    trie[i].term_offset = offset + n - 1;
-	    trie[i].offset_size = n;
-	    offset += 1 + trie[i].term_size + 1 + n - 1;
-	    if (n > 1)
-	        for (j = i - 1; j >= 0; j--) {
-		    trie[j].term_offset += n - 1;
-		    m = uleb128_size(trie[j].term_offset);
-		    if (m != trie[j].offset_size) {
-			n += m - trie[j].offset_size;
-			offset += m - trie[j].offset_size;
-			trie[j].offset_size = m;
-		    }
-		}
-	}
-        ptr = section_ptr_add(mo->exports, 2);
-        *ptr++ = 0;
-        *ptr = n_trie;
-	for (i = 0; i < n_trie; i++) {
-	    ptr = section_ptr_add(mo->exports, trie[i].str_size);
-	    memcpy(ptr, trie[i].name, trie[i].str_size);
-	    write_uleb128(mo->exports, trie[i].term_offset);
-	}
-	for (i = 0; i < n_trie; i++) {
-	    write_uleb128(mo->exports, trie[i].term_size);
-	    write_uleb128(mo->exports, trie[i].flag);
-	    write_uleb128(mo->exports, trie[i].addr);
-	    ptr = section_ptr_add(mo->exports, 1);
-	    *ptr = 0;
-	}
-	section_ptr_add(mo->exports, -mo->exports->data_offset & 7);
+        tcc_qsort(trie, n_trie, sizeof(struct trie_info), triecmp, NULL);
+	memset(&node, 0, sizeof(node));
+        create_trie(&node, 0, n_trie, 0, n_trie, trie);
+	create_seq(&offset, &n_head, &seq, &node, n_trie, trie);
+        save_offset = offset;
+        for (i = 0; i < n_head; i++) {
+            p_node = seq[i].node;
+            if (p_node->n_child == 0) {
+                p_trie = &trie[p_node->start];
+                seq[i].nest_offset = offset;
+                offset += 1 + p_trie->term_size + 1;
+            }
+        }
+        for (i = 0; i < n_head; i++) {
+            p_node = seq[i].node;
+            p_trie = &trie[p_node->start];
+            if (seq[i].n_child >= 0) {
+                section_ptr_add(mo->exports, seq[i].offset - mo->exports->data_offset);
+                ptr = section_ptr_add(mo->exports, 2);
+                *ptr++ = 0;
+                *ptr = seq[i].n_child;
+            }
+            size = p_node->index_end - p_node->index_start;
+            ptr = section_ptr_add(mo->exports, size + 1);
+            memcpy(ptr, &p_trie->name[p_node->index_start], size);
+            ptr[size] = 0;
+            write_uleb128(mo->exports, seq[i].nest_offset);
+        }
+        section_ptr_add(mo->exports, save_offset - mo->exports->data_offset);
+        for (i = 0; i < n_head; i++) {
+            p_node = seq[i].node;
+            if (p_node->n_child == 0) {
+                p_trie = &trie[p_node->start];
+                write_uleb128(mo->exports, p_trie->term_size);
+                write_uleb128(mo->exports, p_trie->flag);
+                write_uleb128(mo->exports, p_trie->addr);
+                ptr = section_ptr_add(mo->exports, 1);
+                *ptr = 0;
+            }
+        }
+        section_ptr_add(mo->exports, -mo->exports->data_offset & 7);
+	node_free(&node);
+        tcc_free(seq);
     }
     tcc_free(trie);
 }
