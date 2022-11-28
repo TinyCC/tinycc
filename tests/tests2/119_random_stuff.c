@@ -126,6 +126,17 @@ void tst_strtoll_strtoull(void)
 #endif
 }
 
+struct {
+    int (*print)(const char *format, ...);
+} tst_indir = {
+    printf
+};
+
+void tst_indir_func(void)
+{
+    tst_indir.print("tst_indir_func %d\n", 10);
+}
+
 int
 main (void)
 {
@@ -144,4 +155,5 @@ main (void)
   tst_pack();
   tst_cast();
   tst_strtoll_strtoull();
+  tst_indir_func();
 }

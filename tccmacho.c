@@ -744,7 +744,8 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                 }
             }
 	    if (type == R_DATA_PTR)
-		bind_rebase_add(mo, 0, s->sh_info, rel, NULL);
+		bind_rebase_add(mo, sym->st_shndx == SHN_UNDEF ? 1 : 0,
+				s->sh_info, rel, NULL);
         }
     }
     pi = section_ptr_add(mo->indirsyms, mo->n_got * sizeof(*pi));
@@ -942,12 +943,22 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                 }
             }
             if (type == R_DATA_PTR) {
-                mo->s_rebase =
-                    tcc_realloc(mo->s_rebase, (mo->n_rebase + 1) *
-				sizeof(struct s_rebase));
-                mo->s_rebase[mo->n_rebase].section = s->sh_info;
-                mo->s_rebase[mo->n_rebase].rel = *rel;
-                mo->n_rebase++;
+		if (sym->st_shndx == SHN_UNDEF) {
+		    mo->bind = tcc_realloc(mo->bind,
+					   (mo->n_bind + 1) *
+					   sizeof(struct bind));
+		    mo->bind[mo->n_bind].section = s->sh_info;
+		    mo->bind[mo->n_bind].rel = *rel;
+		    mo->n_bind++;
+		}
+		else {
+                    mo->s_rebase =
+                        tcc_realloc(mo->s_rebase, (mo->n_rebase + 1) *
+				    sizeof(struct s_rebase));
+                    mo->s_rebase[mo->n_rebase].section = s->sh_info;
+                    mo->s_rebase[mo->n_rebase].rel = *rel;
+                    mo->n_rebase++;
+		}
 	    }
         }
     }
@@ -1278,11 +1289,8 @@ static void bind_rebase(TCCState *s1, struct macho *mo)
 	*ptr = BIND_OPCODE_DONE;
     }
     for (i = 0; i < mo->n_rebase; i++) {
-	int sym_index = ELFW(R_SYM)(mo->s_rebase[i].rel.r_info);
 	Section *s = s1->sections[mo->s_rebase[i].section];
 
-	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
-	name = (char *) symtab_section->link->data + sym->st_name;
 	ptr = section_ptr_add(mo->rebase, 2);
 	*ptr++ = REBASE_OPCODE_SET_TYPE_IMM | REBASE_TYPE_POINTER;
 	set_segment_and_offset(mo, s->sh_addr, ptr,
@@ -1412,30 +1420,30 @@ static void create_trie(struct trie_node *node,
     }
 }
 
-static int create_seq(int *offset, int *n_head, struct trie_seq **seq,
+static int create_seq(int *offset, int *n_seq, struct trie_seq **seq,
                         struct trie_node *node,
                         int n_trie, struct trie_info *trie)
 {
-    int i, nest_offset, last_head = *n_head, retval = *offset;
-    struct trie_seq *p_head;
+    int i, nest_offset, last_seq = *n_seq, retval = *offset;
+    struct trie_seq *p_seq;
     struct trie_node *p_nest;
 
     for (i = 0; i < node->n_child; i++) {
         p_nest = &node->child[i];
-        *seq = tcc_realloc(*seq, (*n_head + 1) * sizeof(struct trie_seq));
-        p_head = &(*seq)[(*n_head)++];
-        p_head->n_child = i == 0 ? node->n_child : -1;
-        p_head->node = p_nest;
-        p_head->offset = *offset;
-        p_head->nest_offset = 0;
+        *seq = tcc_realloc(*seq, (*n_seq + 1) * sizeof(struct trie_seq));
+        p_seq = &(*seq)[(*n_seq)++];
+        p_seq->n_child = i == 0 ? node->n_child : -1;
+        p_seq->node = p_nest;
+        p_seq->offset = *offset;
+        p_seq->nest_offset = 0;
         *offset += (i == 0 ? 1 + 1 : 0) +
                    p_nest->index_end - p_nest->index_start + 1 + 3;
     }
     for (i = 0; i < node->n_child; i++) {
         nest_offset =
-            create_seq(offset, n_head, seq, &node->child[i], n_trie, trie);
-        p_head = &(*seq)[last_head + i];
-        p_head->nest_offset = nest_offset;
+            create_seq(offset, n_seq, seq, &node->child[i], n_trie, trie);
+        p_seq = &(*seq)[last_seq + i];
+        p_seq->nest_offset = nest_offset;
     }
     return retval;
 }
@@ -1463,7 +1471,7 @@ static void export_trie(TCCState *s1, struct macho *mo)
     uint8_t *ptr;
     int sym_index;
     int sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
-    int n_trie = 0, n_head = 0;
+    int n_trie = 0, n_seq = 0;
     struct trie_info *trie = NULL, *p_trie;
     struct trie_node node, *p_node;
     struct trie_seq *seq = NULL;
@@ -1496,9 +1504,9 @@ static void export_trie(TCCState *s1, struct macho *mo)
         tcc_qsort(trie, n_trie, sizeof(struct trie_info), triecmp, NULL);
 	memset(&node, 0, sizeof(node));
         create_trie(&node, 0, n_trie, 0, n_trie, trie);
-	create_seq(&offset, &n_head, &seq, &node, n_trie, trie);
+	create_seq(&offset, &n_seq, &seq, &node, n_trie, trie);
         save_offset = offset;
-        for (i = 0; i < n_head; i++) {
+        for (i = 0; i < n_seq; i++) {
             p_node = seq[i].node;
             if (p_node->n_child == 0) {
                 p_trie = &trie[p_node->start];
@@ -1506,11 +1514,12 @@ static void export_trie(TCCState *s1, struct macho *mo)
                 offset += 1 + p_trie->term_size + 1;
             }
         }
-        for (i = 0; i < n_head; i++) {
+        for (i = 0; i < n_seq; i++) {
             p_node = seq[i].node;
             p_trie = &trie[p_node->start];
             if (seq[i].n_child >= 0) {
-                section_ptr_add(mo->exports, seq[i].offset - mo->exports->data_offset);
+                section_ptr_add(mo->exports,
+				seq[i].offset - mo->exports->data_offset);
                 ptr = section_ptr_add(mo->exports, 2);
                 *ptr++ = 0;
                 *ptr = seq[i].n_child;
@@ -1522,7 +1531,7 @@ static void export_trie(TCCState *s1, struct macho *mo)
             write_uleb128(mo->exports, seq[i].nest_offset);
         }
         section_ptr_add(mo->exports, save_offset - mo->exports->data_offset);
-        for (i = 0; i < n_head; i++) {
+        for (i = 0; i < n_seq; i++) {
             p_node = seq[i].node;
             if (p_node->n_child == 0) {
                 p_trie = &trie[p_node->start];
@@ -1909,7 +1918,6 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 {
     int i, j, k, bind_index, size, page_count, sym_index;
     const char *name;
-    ElfW_Rel rel;
     ElfW(Sym) *sym;
     unsigned char *data = mo->chained_fixups->data;
     struct segment_command_64 *seg;
@@ -1931,6 +1939,17 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 		      mo->bind_rebase[i + 1].bind ? "bind" : "rebase",
 		      s1->sections[mo->bind_rebase[i].section]->name, name);
 	}
+    for (i = 0; i < mo->n_bind_rebase; i++) {
+	addr_t r_offset = mo->bind_rebase[i].rel.r_offset;
+	if ((r_offset & 3) ||
+	    (r_offset & (SEG_PAGE_SIZE - 1)) >
+	    SEG_PAGE_SIZE - PTR_SIZE) {
+	    Section *s = s1->sections[mo->bind_rebase[i].section];
+
+	    tcc_error("Illegal rel_offset %s %lld",
+		      s->name, (long long)r_offset);
+	}
+    }
     header = (struct dyld_chained_fixups_header *) data;
     data += (sizeof(struct dyld_chained_fixups_header) + 7) & -8;
     header->starts_offset = data - mo->chained_fixups->data;
@@ -1966,29 +1985,26 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
         segment->max_valid_pointer = 0;
         segment->page_count = page_count;
 	// add bind/rebase
+	bind_index = 0;
+	k = 0;
 	for (j = 0; j < page_count; j++) {
-	    uint64_t start = seg->vmaddr + j * SEG_PAGE_SIZE;
-	    uint64_t end = start + SEG_PAGE_SIZE;
+	    addr_t start = seg->vmaddr + j * SEG_PAGE_SIZE;
+	    addr_t end = start + SEG_PAGE_SIZE;
 	    void *last;
 	    addr_t last_o = 0;
-	    uint64_t cur_o, cur;
+	    addr_t cur_o, cur;
 	    struct dyld_chained_ptr_64_rebase *rebase;
 	    struct dyld_chained_ptr_64_bind *bind;
-	    Section *s;
 
 	    segment->page_start[j] = DYLD_CHAINED_PTR_START_NONE;
-	    for (k = 0, bind_index = 0; k < mo->n_bind_rebase; k++) {
-		uint64_t addr;
+	    for (; k < mo->n_bind_rebase; k++) {
+	        Section *s = s1->sections[mo->bind_rebase[k].section];
+		addr_t r_offset = mo->bind_rebase[k].rel.r_offset;
+		addr_t addr = s->sh_addr + r_offset;
 
-		s = s1->sections[mo->bind_rebase[k].section];
-		rel = mo->bind_rebase[k].rel;
-		if ((rel.r_offset & 3) ||
-		    (rel.r_offset & (SEG_PAGE_SIZE - 1)) >
-		    SEG_PAGE_SIZE - PTR_SIZE)
-		    tcc_error("Illegal rel_offset %s %lld",
-			      s->name, (long long)rel.r_offset);
-		addr = s->sh_addr + rel.r_offset;
-		if (addr >= start && addr < end) {
+		if (addr >= end)
+		    break;
+		if (addr >= start) {
 		    cur_o = addr - start;
 	            if (mo->bind_rebase[k].bind) {
 		        if (segment->page_start[j] == DYLD_CHAINED_PTR_START_NONE)
@@ -1998,7 +2014,7 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 			    bind->next = (cur_o - last_o) / 4;
 		        }
 		        bind = (struct dyld_chained_ptr_64_bind *)
-				    (s->data + rel.r_offset);
+				    (s->data + r_offset);
 		        last = bind;
 		        last_o = cur_o;
 		        bind->ordinal = bind_index;
@@ -2015,10 +2031,10 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 			    rebase->next = (cur_o - last_o) / 4;
 		        }
 		        rebase = (struct dyld_chained_ptr_64_rebase *)
-				    (s->data + rel.r_offset);
+				    (s->data + r_offset);
 		        last = rebase;
 		        last_o = cur_o;
-		        cur = (*(uint64_t *) (s->data + rel.r_offset)) -
+		        cur = (*(uint64_t *) (s->data + r_offset)) -
 			      PTR_64_OFFSET;
 		        rebase->target = cur & PTR_64_MASK;
 		        rebase->high8 = cur >> (64 - 8);
