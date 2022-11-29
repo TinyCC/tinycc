@@ -44,6 +44,7 @@ static int nb_sym_pools;
 static Sym *all_cleanups, *pending_gotos;
 static int local_scope;
 static int in_sizeof;
+static int constant_p;
 ST_DATA char debug_modes;
 
 ST_DATA SValue *vtop;
@@ -5567,8 +5568,10 @@ ST_FUNC void unary(void)
 	}
         break;
     case TOK_builtin_constant_p:
+	constant_p = 1;
 	parse_builtin_params(1, "e");
-	n = (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+	n = constant_p &&
+	    (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
             !((vtop->r & VT_SYM) && vtop->sym->a.addrtaken);
 	vtop--;
 	vpushi(n);
@@ -6424,6 +6427,8 @@ ST_FUNC void gexpr(void)
         expr_eq();
         if (tok != ',')
             break;
+	constant_p &= (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
+                      !((vtop->r & VT_SYM) && vtop->sym->a.addrtaken);
         vpop();
         next();
     }
