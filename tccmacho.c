@@ -112,6 +112,8 @@ struct load_command {
 #define LC_DYLD_EXPORTS_TRIE (0x33 | LC_REQ_DYLD)
 #define LC_DYLD_CHAINED_FIXUPS (0x34 | LC_REQ_DYLD)
 
+#define SG_READ_ONLY    0x10 /* This segment is made read-only after fixups */
+
 typedef int vm_prot_t;
 
 struct segment_command_64 { /* for 64-bit architectures */
@@ -405,7 +407,7 @@ struct nlist_64 {
 
 struct macho {
     struct mach_header_64 mh;
-    int seg2lc[4], nseg;
+    int seg2lc[5], nseg;
     struct load_command **lc;
     struct entry_point_command *ep;
     int nlc;
@@ -1197,23 +1199,23 @@ const struct {
                                    | S_ATTR_SOME_INSTRUCTIONS , "__stubs" },
     /*[sk_stub_helper] =*/    { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
                                    | S_ATTR_SOME_INSTRUCTIONS , "__stub_helper" },
-    /*[sk_ro_data] =*/        { 1, S_REGULAR, "__rodata" },
+    /*[sk_ro_data] =*/        { 2, S_REGULAR, "__rodata" },
     /*[sk_uw_info] =*/        { 0 },
-    /*[sk_nl_ptr] =*/           { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
-    /*[sk_la_ptr] =*/         { 2, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
-    /*[sk_init] =*/           { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
-    /*[sk_fini] =*/           { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
-    /*[sk_rw_data] =*/        { 2, S_REGULAR, "__data" },
-    /*[sk_stab] =*/           { 2, S_REGULAR, "__stab" },
-    /*[sk_stab_str] =*/       { 2, S_REGULAR, "__stab_str" },
-    /*[sk_debug_info] =*/     { 2, S_REGULAR, "__debug_info" },
-    /*[sk_debug_abbrev] =*/   { 2, S_REGULAR, "__debug_abbrev" },
-    /*[sk_debug_line] =*/     { 2, S_REGULAR, "__debug_line" },
-    /*[sk_debug_aranges] =*/  { 2, S_REGULAR, "__debug_aranges" },
-    /*[sk_debug_str] =*/      { 2, S_REGULAR, "__debug_str" },
-    /*[sk_debug_line_str] =*/ { 2, S_REGULAR, "__debug_line_str" },
-    /*[sk_bss] =*/            { 2, S_ZEROFILL, "__bss" },
-    /*[sk_linkedit] =*/       { 3, S_REGULAR, NULL },
+    /*[sk_nl_ptr] =*/         { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
+    /*[sk_la_ptr] =*/         { 3, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
+    /*[sk_init] =*/           { 3, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
+    /*[sk_fini] =*/           { 3, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
+    /*[sk_rw_data] =*/        { 3, S_REGULAR, "__data" },
+    /*[sk_stab] =*/           { 3, S_REGULAR, "__stab" },
+    /*[sk_stab_str] =*/       { 3, S_REGULAR, "__stab_str" },
+    /*[sk_debug_info] =*/     { 3, S_REGULAR, "__debug_info" },
+    /*[sk_debug_abbrev] =*/   { 3, S_REGULAR, "__debug_abbrev" },
+    /*[sk_debug_line] =*/     { 3, S_REGULAR, "__debug_line" },
+    /*[sk_debug_aranges] =*/  { 3, S_REGULAR, "__debug_aranges" },
+    /*[sk_debug_str] =*/      { 3, S_REGULAR, "__debug_str" },
+    /*[sk_debug_line_str] =*/ { 3, S_REGULAR, "__debug_line_str" },
+    /*[sk_bss] =*/            { 3, S_ZEROFILL, "__bss" },
+    /*[sk_linkedit] =*/       { 4, S_REGULAR, NULL },
 };
 
 #ifdef CONFIG_NEW_MACHO
@@ -1571,17 +1573,23 @@ static void collect_sections(TCCState *s1, struct macho *mo)
 
     seg = add_segment(mo, "__TEXT");
     seg->vmaddr = (uint64_t)1 << 32;
-    seg->maxprot = 7;  // rwx
+    seg->maxprot = 5;  // r-x
     seg->initprot = 5; // r-x
+
+    seg = add_segment(mo, "__DATA_CONST");
+    seg->vmaddr = -1;
+    seg->maxprot = 3;  // rw-
+    seg->initprot = 3; // rw-
+    seg->flags = SG_READ_ONLY;
 
     seg = add_segment(mo, "__DATA");
     seg->vmaddr = -1;
-    seg->maxprot = 7;  // rwx
+    seg->maxprot = 3;  // rw-
     seg->initprot = 3; // rw-
 
     seg = add_segment(mo, "__LINKEDIT");
     seg->vmaddr = -1;
-    seg->maxprot = 7;  // rwx
+    seg->maxprot = 1;  // r--
     seg->initprot = 1; // r--
 
 #ifdef CONFIG_NEW_MACHO
@@ -1654,6 +1662,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
                 else if (s == mo->la_symbol_ptr)
                   sk = sk_la_ptr;
 #endif
+                else if (s == rodata_section)
+                  sk = sk_ro_data;
                 else if (s == s1->got)
                   sk = sk_nl_ptr;
                 else if (s == stab_section)
