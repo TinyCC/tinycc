@@ -420,7 +420,7 @@ ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap)
         va_copy(v, ap);
         len = vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
         va_end(v);
-        if (len > 0 && len < size)
+        if (len >= 0 && len < size)
             break;
         size *= 2;
     }

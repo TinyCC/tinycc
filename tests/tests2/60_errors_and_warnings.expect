@@ -100,22 +100,25 @@
 [test_static_assert_c2x]
 60_errors_and_warnings.c:202: error: _Static_assert fail
 
-[test_void_array]
-60_errors_and_warnings.c:205: error: declaration of an array of incomplete type elements
+[test_static_assert_empty_string]
+60_errors_and_warnings.c:205: error: 
 
-[test_incomplete_enum_array]
+[test_void_array]
 60_errors_and_warnings.c:208: error: declaration of an array of incomplete type elements
 
-[test_incomplete_struct_array]
+[test_incomplete_enum_array]
 60_errors_and_warnings.c:211: error: declaration of an array of incomplete type elements
 
+[test_incomplete_struct_array]
+60_errors_and_warnings.c:214: error: declaration of an array of incomplete type elements
+
 [test_const_fun_array]
-60_errors_and_warnings.c:215: error: declaration of an array of functions
+60_errors_and_warnings.c:218: error: declaration of an array of functions
 
 [test_incomplete_array_array]
 
 [test_extern_array]
-60_errors_and_warnings.c:231: error: incompatible types for redefinition of 'x'
+60_errors_and_warnings.c:234: error: incompatible types for redefinition of 'x'
 
 [test_func_1]
 hello: a = 123
@@ -124,17 +127,17 @@ hello: a = 123
 hello: a = 123
 
 [test_func_3]
-60_errors_and_warnings.c:261: warning: static storage ignored for redefinition of 'hello'
+60_errors_and_warnings.c:264: warning: static storage ignored for redefinition of 'hello'
 hello: a = 123
 
 [test_func_4]
 hello: a = 123
 
 [test_func_5]
-60_errors_and_warnings.c:261: error: incompatible types for redefinition of 'hello'
+60_errors_and_warnings.c:264: error: incompatible types for redefinition of 'hello'
 
 [test_func_6]
-60_errors_and_warnings.c:249: error: function without file scope cannot be static
+60_errors_and_warnings.c:252: error: function without file scope cannot be static
 
 [test_var_1]
 main : 1 ; 1
@@ -147,68 +150,68 @@ main : 2 ; 2
 bar  : 3 ; 3
 
 [test_var_3]
-60_errors_and_warnings.c:293: error: incompatible types for redefinition of 'xxx'
+60_errors_and_warnings.c:296: error: incompatible types for redefinition of 'xxx'
 
 [test_var_4]
 
 [test_long_double_type_for_win32]
-60_errors_and_warnings.c:324: warning: assignment from incompatible pointer type
+60_errors_and_warnings.c:327: warning: assignment from incompatible pointer type
 
 [test_stray_backslash]
-60_errors_and_warnings.c:330: error: stray '\' in program
+60_errors_and_warnings.c:333: error: stray '\' in program
 
 [test_stray_backslash2]
 \n
 
 [test_var_array]
-60_errors_and_warnings.c:345: error: flexible array has zero size in this context
+60_errors_and_warnings.c:348: error: flexible array has zero size in this context
 
 [test_var_array2]
-60_errors_and_warnings.c:355: error: flexible array has zero size in this context
+60_errors_and_warnings.c:358: error: flexible array has zero size in this context
 
 [test_var_array3]
-60_errors_and_warnings.c:362: error: flexible array has zero size in this context
+60_errors_and_warnings.c:365: error: flexible array has zero size in this context
 
 [test_default_int_type]
-60_errors_and_warnings.c:365: warning: type defaults to int
+60_errors_and_warnings.c:368: warning: type defaults to int
 
 [test_invalid_global_stmtexpr]
-60_errors_and_warnings.c:369: error: statement expression outside of function
+60_errors_and_warnings.c:372: error: statement expression outside of function
 
 [test_invalid_tokckill]
-60_errors_and_warnings.c:372: error: ';' expected (got "3")
+60_errors_and_warnings.c:375: error: ';' expected (got "3")
 
 [test_duplicate_member]
-60_errors_and_warnings.c:378: error: duplicate member 'a'
+60_errors_and_warnings.c:381: error: duplicate member 'a'
 
 [test_duplicate_member_anon]
-60_errors_and_warnings.c:391: error: duplicate member 'd'
+60_errors_and_warnings.c:394: error: duplicate member 'd'
 
 [test_conflicting_array_definition]
-60_errors_and_warnings.c:396: error: incompatible types for redefinition of 'array'
+60_errors_and_warnings.c:399: error: incompatible types for redefinition of 'array'
 
 [test_cast_from_void]
-60_errors_and_warnings.c:400: error: cannot convert 'void' to 'int'
+60_errors_and_warnings.c:403: error: cannot convert 'void' to 'int'
 
 [test_switch_W1]
-60_errors_and_warnings.c:416: warning: implicit declaration of function 'fink'
+60_errors_and_warnings.c:419: warning: implicit declaration of function 'fink'
 
 [test_switch_W2]
-60_errors_and_warnings.c:407: warning: unsupported option '-Wstuff'
-60_errors_and_warnings.c:418: warning: 'stuff' attribute ignored
+60_errors_and_warnings.c:410: warning: unsupported option '-Wstuff'
+60_errors_and_warnings.c:421: warning: 'stuff' attribute ignored
 
 [test_switch_W3]
-60_errors_and_warnings.c:415: error: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:418: error: assignment discards qualifiers from pointer target type
 
 [test_switch_W4]
-60_errors_and_warnings.c:416: warning: implicit declaration of function 'fink'
-60_errors_and_warnings.c:418: error: 'stuff' attribute ignored
+60_errors_and_warnings.c:419: warning: implicit declaration of function 'fink'
+60_errors_and_warnings.c:421: error: 'stuff' attribute ignored
 
 [test_invalid_funcparam_1]
-60_errors_and_warnings.c:421: error: redeclaration of 'a'
+60_errors_and_warnings.c:424: error: redeclaration of 'a'
 
 [test_invalid_funcparam_2]
-60_errors_and_warnings.c:424: error: identifier expected
+60_errors_and_warnings.c:427: error: identifier expected
 
 [test_array_funcparam]
 arg[0] = "X"
@@ -218,7 +221,7 @@ arg[1] = "Y"
 [returns 78]
 
 [test_illegal_unicode]
-60_errors_and_warnings.c:448: error: 0xffffffff is not a valid universal character
+60_errors_and_warnings.c:451: error: 0xffffffff is not a valid universal character
 
 [test_error_string]
-60_errors_and_warnings.c:453: error: #error \123\456
+60_errors_and_warnings.c:456: error: #error \123\456
