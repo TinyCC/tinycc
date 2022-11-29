@@ -54,6 +54,9 @@ static rt_context g_rtctxt;
 static void set_exception_handler(void);
 static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
 static void rt_exit(int code);
+static void init_atexit(void);
+static void run_atexit(void);
+static int rt_atexit(void (*function)(void));
 #endif /* CONFIG_TCC_BACKTRACE */
 
 /* defined when included from lib/bt-exe.c */
@@ -169,6 +172,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (s1->do_debug)
         tcc_add_symbol(s1, "exit", rt_exit);
 #endif
+    tcc_add_symbol(s1, "atexit", rt_atexit);
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
     prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
@@ -215,6 +219,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
+    init_atexit();
     /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
 #ifdef CONFIG_TCC_BACKTRACE
@@ -224,6 +229,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         ret = prog_main(argc, argv, envp);
     }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
+    run_atexit();
     if ((s1->dflag & 16) && ret)
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
     return ret;
@@ -1020,6 +1026,29 @@ static void rt_exit(int code)
     if (rc->do_jmp)
         longjmp(rc->jmp_buf, code ? code : 256);
     exit(code);
+}
+
+#define	NR_AT_EXIT	32
+
+static int nr_atexit = 0;
+static void (*at_exitfunc[NR_AT_EXIT])(void);
+
+static void init_atexit(void)
+{
+    nr_atexit = 0;
+}
+
+static void run_atexit(void)
+{
+    while (nr_atexit)
+	at_exitfunc[--nr_atexit]();
+}
+
+static int rt_atexit(void (*function)(void))
+{
+    if (nr_atexit < NR_AT_EXIT)
+	at_exitfunc[nr_atexit++] = function;
+    return 1;
 }
 
 /* ------------------------------------------------------------- */
