@@ -228,6 +228,8 @@ struct dyld_chained_ptr_64_bind
 
 #define S_ATTR_PURE_INSTRUCTIONS        0x80000000
 #define S_ATTR_SOME_INSTRUCTIONS        0x00000400
+#define S_ATTR_DEBUG             	0x02000000
+
 
 typedef uint32_t lc_str;
 
@@ -372,18 +374,18 @@ enum skind {
     sk_ro_data,
     sk_uw_info,
     sk_nl_ptr,  // non-lazy pointers, aka GOT
-    sk_la_ptr,  // lazy pointers
-    sk_init,
-    sk_fini,
-    sk_rw_data,
-    sk_stab,
-    sk_stab_str,
     sk_debug_info,
     sk_debug_abbrev,
     sk_debug_line,
     sk_debug_aranges,
     sk_debug_str,
     sk_debug_line_str,
+    sk_stab,
+    sk_stab_str,
+    sk_la_ptr,  // lazy pointers
+    sk_init,
+    sk_fini,
+    sk_rw_data,
     sk_bss,
     sk_linkedit,
     sk_last
@@ -407,7 +409,7 @@ struct nlist_64 {
 
 struct macho {
     struct mach_header_64 mh;
-    int seg2lc[5], nseg;
+    int seg2lc[6], nseg;
     struct load_command **lc;
     struct entry_point_command *ep;
     int nlc;
@@ -1202,20 +1204,20 @@ const struct {
     /*[sk_ro_data] =*/        { 2, S_REGULAR, "__rodata" },
     /*[sk_uw_info] =*/        { 0 },
     /*[sk_nl_ptr] =*/         { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
-    /*[sk_la_ptr] =*/         { 3, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
-    /*[sk_init] =*/           { 3, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
-    /*[sk_fini] =*/           { 3, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
-    /*[sk_rw_data] =*/        { 3, S_REGULAR, "__data" },
-    /*[sk_stab] =*/           { 3, S_REGULAR, "__stab" },
-    /*[sk_stab_str] =*/       { 3, S_REGULAR, "__stab_str" },
-    /*[sk_debug_info] =*/     { 3, S_REGULAR, "__debug_info" },
-    /*[sk_debug_abbrev] =*/   { 3, S_REGULAR, "__debug_abbrev" },
-    /*[sk_debug_line] =*/     { 3, S_REGULAR, "__debug_line" },
-    /*[sk_debug_aranges] =*/  { 3, S_REGULAR, "__debug_aranges" },
-    /*[sk_debug_str] =*/      { 3, S_REGULAR, "__debug_str" },
-    /*[sk_debug_line_str] =*/ { 3, S_REGULAR, "__debug_line_str" },
-    /*[sk_bss] =*/            { 3, S_ZEROFILL, "__bss" },
-    /*[sk_linkedit] =*/       { 4, S_REGULAR, NULL },
+    /*[sk_debug_info] =*/     { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_info" },
+    /*[sk_debug_abbrev] =*/   { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_abbrev" },
+    /*[sk_debug_line] =*/     { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_line" },
+    /*[sk_debug_aranges] =*/  { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_aranges" },
+    /*[sk_debug_str] =*/      { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_str" },
+    /*[sk_debug_line_str] =*/ { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_line_str" },
+    /*[sk_stab] =*/           { 4, S_REGULAR, "__stab" },
+    /*[sk_stab_str] =*/       { 4, S_REGULAR, "__stab_str" },
+    /*[sk_la_ptr] =*/         { 4, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
+    /*[sk_init] =*/           { 4, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
+    /*[sk_fini] =*/           { 4, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
+    /*[sk_rw_data] =*/        { 4, S_REGULAR, "__data" },
+    /*[sk_bss] =*/            { 4, S_ZEROFILL, "__bss" },
+    /*[sk_linkedit] =*/       { 5, S_REGULAR, NULL },
 };
 
 #ifdef CONFIG_NEW_MACHO
@@ -1285,7 +1287,7 @@ static void bind_rebase(TCCState *s1, struct macho *mo)
 	*ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
 		 (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
 	*ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
-	strcpy(ptr, name);
+	strcpy((char *)ptr, name);
 	ptr += strlen(name) + 1;
 	*ptr++ = BIND_OPCODE_DO_BIND;
 	*ptr = BIND_OPCODE_DONE;
@@ -1316,7 +1318,7 @@ static void bind_rebase(TCCState *s1, struct macho *mo)
         *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
 	         (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
         *ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
-        strcpy(ptr, name);
+        strcpy((char *)ptr, name);
         ptr += strlen(name) + 1;
         *ptr++ = BIND_OPCODE_SET_TYPE_IMM | BIND_TYPE_POINTER;
 	set_segment_and_offset(mo, s->sh_addr, ptr,
@@ -1582,6 +1584,11 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     seg->initprot = 3; // rw-
     seg->flags = SG_READ_ONLY;
 
+    seg = add_segment(mo, "__DWARF");
+    seg->vmaddr = -1;
+    seg->maxprot = 7;  // rwx
+    seg->initprot = 3; // rw-
+
     seg = add_segment(mo, "__DATA");
     seg->vmaddr = -1;
     seg->maxprot = 3;  // rw-
@@ -1591,6 +1598,10 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     seg->vmaddr = -1;
     seg->maxprot = 1;  // r--
     seg->initprot = 1; // r--
+
+    /* trick to avoid __DWARF vmaddr = -1 */
+    if (dwarf_info_section == NULL)
+	dwarf_info_section = new_section(s1, ".debug_info", SHT_PROGBITS, 0);
 
 #ifdef CONFIG_NEW_MACHO
     chained_fixups_lc = add_lc(mo, LC_DYLD_CHAINED_FIXUPS,
@@ -1638,7 +1649,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
         type = s->sh_type;
         flags = s->sh_flags;
         sk = sk_unknown;
-        if (flags & SHF_ALLOC) {
+	/* debug sections have sometimes no SHF_ALLOC */
+        if ((flags & SHF_ALLOC) || !strncmp(s->name, ".debug_", 7)) {
             switch (type) {
             default:           sk = sk_unknown; break;
             case SHT_INIT_ARRAY: sk = sk_init; break;
