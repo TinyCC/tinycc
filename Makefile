@@ -243,7 +243,12 @@ endif
 
 GITHASH := $(shell git rev-parse >/dev/null 2>&1 && git rev-parse --short HEAD || echo no)
 ifneq ($(GITHASH),no)
-DEF_GITHASH := -DTCC_GITHASH="\"$(shell git rev-parse --abbrev-ref HEAD):$(GITHASH)$(shell git diff --quiet || echo '-mod')\""
+DEF_GITHASH := -DTCC_GITHASH="\"$(shell git rev-parse --abbrev-ref HEAD):$(GITHASH)$(shell git diff --quiet || echo ' - modified')\""
+endif
+
+GITDATE := $(shell git log -1 >/dev/null 2>&1 && git log -1 --pretty='format:%cI' || echo no)
+ifneq ($(GITDATE),no)
+DEF_GITDATE := -DTCC_GITDATE="\"$(shell git log -1 --pretty='format:%cI')\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
@@ -265,7 +270,7 @@ $(X)%.o : %.c $(LIBTCC_INC)
 
 # additional dependencies
 $(X)tcc.o : tcctools.c
-$(X)tcc.o : DEFINES += $(DEF_GITHASH)
+$(X)tcc.o : DEFINES += $(DEF_GITHASH) $(DEF_GITDATE)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)

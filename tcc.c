@@ -156,6 +156,9 @@ static const char version[] =
 #ifdef TCC_GITHASH
     " "TCC_GITHASH
 #endif
+#ifdef TCC_GITDATE
+    " on "TCC_GITDATE
+#endif
     " ("
 #ifdef TCC_TARGET_I386
         "i386"
