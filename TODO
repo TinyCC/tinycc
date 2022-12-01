@@ -1,5 +1,8 @@
 TODO list:
 
+Releases:
+- release tcc on a regular basis (which interval? 3 months?)
+
 Bugs:
 
 - i386 fastcall is mostly wrong
