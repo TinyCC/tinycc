@@ -245,7 +245,7 @@ FROM_GIT := $(shell git rev-parse >/dev/null 2>&1 && echo yes || echo no)
 
 ifeq ($(FROM_GIT),yes)
 GITHASH:=$(shell git rev-parse --abbrev-ref HEAD):$(shell git rev-parse --short HEAD) $(shell git log -1 --pretty='format:%cI')
-GITLOCAL:=$(shell git diff --quiet && echo ' locally modified')
+GITLOCAL:=$(shell git diff --quiet || echo ' locally modified')
 DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)$(GITLOCAL)\""
 endif
 
