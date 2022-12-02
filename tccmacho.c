@@ -1714,10 +1714,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     for (sk = sk_unknown; sk < sk_last; sk++) {
         struct section_64 *sec = NULL;
         if (seg) {
-            seg->vmsize = (curaddr - seg->vmaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
-            seg->filesize = (fileofs - seg->fileoff + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
-            curaddr = seg->vmaddr + seg->vmsize;
-            fileofs = seg->fileoff + seg->filesize;
+            seg->vmsize = curaddr - seg->vmaddr;
+            seg->filesize = fileofs - seg->fileoff;
         }
 #ifdef CONFIG_NEW_MACHO
 	if (sk == sk_linkedit) {
@@ -1961,17 +1959,6 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 		      mo->bind_rebase[i + 1].bind ? "bind" : "rebase",
 		      s1->sections[mo->bind_rebase[i].section]->name, name);
 	}
-    for (i = 0; i < mo->n_bind_rebase; i++) {
-	addr_t r_offset = mo->bind_rebase[i].rel.r_offset;
-	if ((r_offset & 3) ||
-	    (r_offset & (SEG_PAGE_SIZE - 1)) >
-	    SEG_PAGE_SIZE - PTR_SIZE) {
-	    Section *s = s1->sections[mo->bind_rebase[i].section];
-
-	    tcc_error("Illegal rel_offset %s %lld",
-		      s->name, (long long)r_offset);
-	}
-    }
     header = (struct dyld_chained_fixups_header *) data;
     data += (sizeof(struct dyld_chained_fixups_header) + 7) & -8;
     header->starts_offset = data - mo->chained_fixups->data;
@@ -2024,6 +2011,10 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 		addr_t r_offset = mo->bind_rebase[k].rel.r_offset;
 		addr_t addr = s->sh_addr + r_offset;
 
+		if ((addr & 3) ||
+		    (addr & (SEG_PAGE_SIZE - 1)) > SEG_PAGE_SIZE - PTR_SIZE)
+		    tcc_error("Illegal rel_offset %s %lld",
+			      s->name, (long long)r_offset);
 		if (addr >= end)
 		    break;
 		if (addr >= start) {
