@@ -58,9 +58,6 @@ ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 114_bound_signal.test # libc problem signal/fork
  SKIP += 116_bound_setjmp2.test # No TLS_FUNC/TLS_VAR in bcheck.c
 endif
-ifneq (,$(filter Darwin,$(TARGETOS)))
- SKIP += 126_bound_global.test # bt-exe.c problem on apple
-endif
 
 # Some tests might need arguments
 ARGS =

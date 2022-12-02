@@ -246,6 +246,11 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         rc->elf_str = (char *)symtab_section->link->data;
 #if PTR_SIZE == 8
         rc->prog_base = text_section->sh_addr & 0xffffffff00000000ULL;
+#if defined TCC_TARGET_MACHO
+	if (s1->dwarf)
+	    rc->prog_base = (addr_t) -1;
+#else
+#endif
 #endif
         rc->top_func = tcc_get_symbol(s1, "main");
         rc->num_callers = s1->rt_num_callers;
@@ -752,6 +757,9 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     } filename_table[FILE_TABLE_SIZE];
     addr_t last_pc;
     addr_t pc;
+#if defined TCC_TARGET_MACHO
+    addr_t first_pc = 0;
+#endif
     addr_t func_addr;
     int line;
     char *filename;
@@ -910,6 +918,11 @@ check_pc:
 		        pc = dwarf_read_4(cp, end);
 #else
 		        pc = dwarf_read_8(cp, end);
+#endif
+#if defined TCC_TARGET_MACHO
+			if (first_pc == 0 && rc->prog_base != (addr_t) -1)
+			    first_pc += rc->prog_base - ((uint64_t)1 << 32);
+			pc += first_pc;
 #endif
 		        opindex = 0;
 		        break;

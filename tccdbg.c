@@ -971,6 +971,7 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
 	    tcc_free(dwarf_line.filename_table[i].name);
 	tcc_free(dwarf_line.filename_table);
 
+	dwarf_line_op(s1, DW_LNS_negate_stmt);
 	dwarf_line_op(s1, 0); // extended
 	dwarf_uleb128_op(s1, 1); // extended size
 	dwarf_line_op(s1, DW_LNE_end_sequence);
@@ -1827,7 +1828,9 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 
     if (s1->dwarf) {
         tcc_debug_line(s1);
+	dwarf_line_op(s1, DW_LNS_negate_stmt);
 	dwarf_line_op(s1, DW_LNS_copy);
+	dwarf_line_op(s1, DW_LNS_negate_stmt);
         dwarf_info.func = sym;
         dwarf_info.line = file->line_num;
 	if (s1->do_backtrace) {
@@ -1849,6 +1852,16 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
         put_stabs_r(s1, debug_str.data, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
         cstr_free (&debug_str);
         tcc_debug_line(s1);
+    }
+}
+
+ST_FUNC void tcc_debug_prolog_epilog(TCCState *s1, int value)
+{
+    if (!s1->do_debug)
+        return;
+    if (s1->dwarf) {
+	dwarf_line_op(s1, value == 0 ? DW_LNS_set_prologue_end
+				     : DW_LNS_set_epilogue_begin);
     }
 }
 

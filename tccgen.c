@@ -8165,6 +8165,7 @@ static void gen_function(Sym *sym)
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(sym);
+    tcc_debug_prolog_epilog(tcc_state, 0);
     local_scope = 0;
     rsym = 0;
     clear_temp_local_var_list();
@@ -8174,6 +8175,7 @@ static void gen_function(Sym *sym)
     nocode_wanted = 0;
     /* reset local stack */
     pop_local_syms(NULL, 0);
+    tcc_debug_prolog_epilog(tcc_state, 1);
     gfunc_epilog();
     cur_text_section->data_offset = ind;
     local_scope = 0;
