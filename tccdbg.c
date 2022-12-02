@@ -819,6 +819,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
                 dwarf_line.filename_table[0].name = tcc_strdup(undo + 1);
                 dwarf_line.filename_table[1].dir_entry = 1;
                 dwarf_line.filename_table[1].name = tcc_strdup(undo + 1);
+		*undo = '/';
 	    }
 	    else {
                 dwarf_line.filename_table[0].name = tcc_strdup(filename);
