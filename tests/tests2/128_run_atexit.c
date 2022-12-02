@@ -1,5 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
+int printf(const char *format, ...);
+int atexit(void (*function)(void));
+int on_exit(void (*function)(int, void *), void *arg);
+void exit(int status);
 
 void cleanup1(void)
 {
@@ -11,10 +13,40 @@ void cleanup2(void)
     printf ("cleanup2\n");
 }
 
-int main(int argc, char **argv)
+void cleanup3(int ret, void *arg)
+{
+    printf ("%d %s\n", ret, (char *) arg);
+}
+
+void cleanup4(int ret, void *arg)
+{
+    printf ("%d %s\n", ret, (char *) arg);
+}
+
+void __attribute__((destructor)) cleanup5(void)
+{
+    printf ("cleanup5\n");
+}
+
+void test(void)
 {
     atexit(cleanup1);
     atexit(cleanup2);
-    return 0;
+    on_exit(cleanup3, "cleanup3");
+    on_exit(cleanup4, "cleanup4");
+}
+
+#if defined test_128_return
+int main(int argc, char **argv)
+{
+    test();
+    return 1;
 } 
 
+#elif defined test_128_exit
+int main(int argc, char **argv)
+{
+    test();
+    exit(2);
+} 
+#endif

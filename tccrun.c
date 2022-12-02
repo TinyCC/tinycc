@@ -54,9 +54,6 @@ static rt_context g_rtctxt;
 static void set_exception_handler(void);
 static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
 static void rt_exit(int code);
-static void init_atexit(void);
-static void run_atexit(void);
-static int rt_atexit(void (*function)(void));
 #endif /* CONFIG_TCC_BACKTRACE */
 
 /* defined when included from lib/bt-exe.c */
@@ -148,6 +145,58 @@ static void run_cdtors(TCCState *s1, const char *start, const char *end,
         ((void(*)(int, char **, char **))*a++)(argc, argv, envp);
 }
 
+#define	NR_AT_EXIT	32
+
+static int exit_called = 0;
+static int nr_exit = 0;
+static void (*exitfunc[NR_AT_EXIT])(int, void *);
+static void *exitarg[NR_AT_EXIT];
+#ifndef CONFIG_TCC_BACKTRACE
+static jmp_buf run_jmp_buf;
+#endif
+
+static void init_exit(void)
+{
+    exit_called = 0;
+    nr_exit = 0;
+}
+
+static void call_exit(int ret)
+{
+    while (nr_exit--)
+	exitfunc[nr_exit](ret, exitarg[nr_exit]);
+}
+
+static int rt_atexit(void (*function)(void))
+{
+    if (nr_exit < NR_AT_EXIT) {
+	exitfunc[nr_exit] = (void (*)(int, void *))function;
+	exitarg[nr_exit++] = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+static int rt_on_exit(void (*function)(int, void *), void *arg)
+{
+    if (nr_exit < NR_AT_EXIT) {
+	exitfunc[nr_exit] = function;
+	exitarg[nr_exit++] = arg;
+        return 0;
+    }
+    return 1;
+}
+
+static void run_exit(int code)
+{
+    exit_called = 1;
+#ifdef CONFIG_TCC_BACKTRACE
+    longjmp(g_rtctxt.jmp_buf, code ? code : 256);
+#else
+    longjmp(run_jmp_buf, code ? code : 256);
+#endif
+}
+
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
@@ -168,11 +217,9 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, s1->runtime_main, 0, 1))
         return 0;
-#ifdef CONFIG_TCC_BACKTRACE
-    if (s1->do_debug)
-        tcc_add_symbol(s1, "exit", rt_exit);
-#endif
+    tcc_add_symbol(s1, "exit", run_exit);
     tcc_add_symbol(s1, "atexit", rt_atexit);
+    tcc_add_symbol(s1, "on_exit", rt_on_exit);
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
     prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
@@ -219,19 +266,23 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
-    init_atexit();
+    init_exit();
     /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
 #ifdef CONFIG_TCC_BACKTRACE
-    if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
+    if (!(ret = setjmp(rc->jmp_buf)))
+#else
+    if (!(ret = setjmp(run_jmp_buf)))
 #endif
     {
         ret = prog_main(argc, argv, envp);
     }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
-    run_atexit();
+    call_exit(ret);
     if ((s1->dflag & 16) && ret)
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
+    if ((s1->dflag & 16) == 0 && exit_called)
+	exit(ret);
     return ret;
 }
 
@@ -1026,29 +1077,6 @@ static void rt_exit(int code)
     if (rc->do_jmp)
         longjmp(rc->jmp_buf, code ? code : 256);
     exit(code);
-}
-
-#define	NR_AT_EXIT	32
-
-static int nr_atexit = 0;
-static void (*at_exitfunc[NR_AT_EXIT])(void);
-
-static void init_atexit(void)
-{
-    nr_atexit = 0;
-}
-
-static void run_atexit(void)
-{
-    while (nr_atexit)
-	at_exitfunc[--nr_atexit]();
-}
-
-static int rt_atexit(void (*function)(void))
-{
-    if (nr_atexit < NR_AT_EXIT)
-	at_exitfunc[nr_atexit++] = function;
-    return 1;
 }
 
 /* ------------------------------------------------------------- */

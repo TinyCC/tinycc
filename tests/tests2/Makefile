@@ -36,6 +36,7 @@ ifeq ($(CONFIG_bcheck),no)
  SKIP += 115_bound_setjmp.test
  SKIP += 116_bound_setjmp2.test
  SKIP += 117_builtins.test
+ SKIP += 126_bound_global.test
 endif
 ifeq ($(CONFIG_dll),no)
  SKIP += 113_btdll.test # no shared lib support yet
@@ -126,6 +127,7 @@ endif
 124_atomic_counter.test: FLAGS += -pthread
 126_bound_global.test: FLAGS += -b
 126_bound_global.test: NORUN = true
+128_run_atexit.test: FLAGS += -dt
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
