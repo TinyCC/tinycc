@@ -241,14 +241,12 @@ $(TCC_FILES) : DEFINES += -DONE_SOURCE=0
 $(X)tccpp.o : $(TCCDEFS_H)
 endif
 
-GITHASH := $(shell git rev-parse >/dev/null 2>&1 && git rev-parse --short HEAD || echo no)
-ifneq ($(GITHASH),no)
-DEF_GITHASH := -DTCC_GITHASH="\"$(shell git rev-parse --abbrev-ref HEAD):$(GITHASH)$(shell git diff --quiet || echo ' - modified')\""
-endif
+FROM_GIT := $(shell git rev-parse >/dev/null 2>&1 && echo yes || echo no)
 
-GITDATE := $(shell git log -1 >/dev/null 2>&1 && git log -1 --pretty='format:%cI' || echo no)
-ifneq ($(GITDATE),no)
-DEF_GITDATE := -DTCC_GITDATE="\"$(shell git log -1 --pretty='format:%cI')\""
+ifeq ($(FROM_GIT),yes)
+GITHASH:=$(shell git rev-parse --abbrev-ref HEAD):$(shell git rev-parse --short HEAD) $(shell git log -1 --pretty='format:%cI')
+GITHASH+=$(shell git diff --quiet || echo locally modified)
+DEF_GITHASH := -DTCC_GITHASH="\"$(GITHASH)\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
