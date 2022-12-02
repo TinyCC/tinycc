@@ -422,6 +422,7 @@ struct macho {
     Section *symtab, *strtab, *wdata, *indirsyms, *stubs, *exports;
     uint32_t ilocal, iextdef, iundef;
     int stubsym, n_got, nr_plt;
+    int segment[sk_last];
 #ifdef CONFIG_NEW_MACHO
     Section *chained_fixups;
     int n_bind;
@@ -1189,14 +1190,14 @@ static void create_symtab(TCCState *s1, struct macho *mo)
 }
 
 const struct {
-    int seg;
+    int seg_initial;
     uint32_t flags;
     const char *name;
 } skinfo[sk_last] = {
     /*[sk_unknown] =*/        { 0 },
     /*[sk_discard] =*/        { 0 },
     /*[sk_text] =*/           { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
-                                | S_ATTR_SOME_INSTRUCTIONS, "__text" },
+                                   | S_ATTR_SOME_INSTRUCTIONS, "__text" },
     /*[sk_stubs] =*/          { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_SYMBOL_STUBS
                                    | S_ATTR_SOME_INSTRUCTIONS , "__stubs" },
     /*[sk_stub_helper] =*/    { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
@@ -1570,6 +1571,9 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     struct dysymtab_command *dysymlc;
     char *str;
 
+    for (sk = sk_unknown; sk < sk_last; sk++)
+	mo->segment[sk] = skinfo[sk].seg_initial;
+
     seg = add_segment(mo, "__PAGEZERO");
     seg->vmsize = (uint64_t)1 << 32;
 
@@ -1584,10 +1588,16 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     seg->initprot = 3; // rw-
     seg->flags = SG_READ_ONLY;
 
-    seg = add_segment(mo, "__DWARF");
-    seg->vmaddr = -1;
-    seg->maxprot = 7;  // rwx
-    seg->initprot = 3; // rw-
+    if (dwarf_info_section) {
+        seg = add_segment(mo, "__DWARF");
+        seg->vmaddr = -1;
+        seg->maxprot = 7;  // rwx
+        seg->initprot = 3; // rw-
+    }
+    else
+        for (sk = sk_unknown; sk < sk_last; sk++)
+	    if (mo->segment[sk] >= 4)
+		mo->segment[sk]--;
 
     seg = add_segment(mo, "__DATA");
     seg->vmaddr = -1;
@@ -1598,10 +1608,6 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     seg->vmaddr = -1;
     seg->maxprot = 1;  // r--
     seg->initprot = 1; // r--
-
-    /* trick to avoid __DWARF vmaddr = -1 */
-    if (dwarf_info_section == NULL)
-	dwarf_info_section = new_section(s1, ".debug_info", SHT_PROGBITS, 0);
 
 #ifdef CONFIG_NEW_MACHO
     chained_fixups_lc = add_lc(mo, LC_DYLD_CHAINED_FIXUPS,
@@ -1714,15 +1720,8 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     for (sk = sk_unknown; sk < sk_last; sk++) {
         struct section_64 *sec = NULL;
         if (seg) {
-#ifdef CONFIG_NEW_MACHO
             seg->vmsize = curaddr - seg->vmaddr;
             seg->filesize = fileofs - seg->fileoff;
-#else
-            seg->vmsize = (curaddr - seg->vmaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
-            seg->filesize = (fileofs - seg->fileoff + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
-            curaddr = seg->vmaddr + seg->vmsize;
-            fileofs = seg->fileoff + seg->filesize;
-#endif
         }
 #ifdef CONFIG_NEW_MACHO
 	if (sk == sk_linkedit) {
@@ -1735,14 +1734,14 @@ static void collect_sections(TCCState *s1, struct macho *mo)
 	    export_trie(s1, mo);
 	}
 #endif
-        if (skinfo[sk].seg && mo->sk_to_sect[sk].s) {
+        if (mo->segment[sk] && mo->sk_to_sect[sk].s) {
             uint64_t al = 0;
             int si;
-            seg = get_segment(mo, skinfo[sk].seg);
+            seg = get_segment(mo, mo->segment[sk]);
             if (skinfo[sk].name) {
                 si = add_section(mo, &seg, skinfo[sk].name);
                 numsec++;
-                mo->lc[mo->seg2lc[skinfo[sk].seg]] = (struct load_command*)seg;
+                mo->lc[mo->seg2lc[mo->segment[sk]]] = (struct load_command*)seg;
                 mo->sk_to_sect[sk].machosect = si;
                 sec = get_section(seg, si);
                 sec->flags = skinfo[sk].flags;
@@ -1760,17 +1759,10 @@ static void collect_sections(TCCState *s1, struct macho *mo)
 #endif
             }
             if (seg->vmaddr == -1) {
-#ifdef CONFIG_NEW_MACHO
                 curaddr = (curaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
                 seg->vmaddr = curaddr;
                 fileofs = (fileofs + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
                 seg->fileoff = fileofs;
-#else
-                curaddr = (curaddr + 4095) & -4096;
-                seg->vmaddr = curaddr;
-                fileofs = (fileofs + 4095) & -4096;
-                seg->fileoff = fileofs;
-#endif
             }
 
             for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
@@ -1913,9 +1905,9 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
 
     for (sk = sk_unknown; sk < sk_last; sk++) {
         //struct segment_command_64 *seg;
-        if (!skinfo[sk].seg || !mo->sk_to_sect[sk].s)
+        if (!mo->segment[sk] || !mo->sk_to_sect[sk].s)
           continue;
-        /*seg =*/ get_segment(mo, skinfo[sk].seg);
+        /*seg =*/ get_segment(mo, mo->segment[sk]);
         for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
             if (s->sh_type != SHT_NOBITS) {
                 while (fileofs < s->sh_offset)
