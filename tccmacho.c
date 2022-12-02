@@ -1714,8 +1714,15 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     for (sk = sk_unknown; sk < sk_last; sk++) {
         struct section_64 *sec = NULL;
         if (seg) {
+#ifdef CONFIG_NEW_MACHO
             seg->vmsize = curaddr - seg->vmaddr;
             seg->filesize = fileofs - seg->fileoff;
+#else
+            seg->vmsize = (curaddr - seg->vmaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
+            seg->filesize = (fileofs - seg->fileoff + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
+            curaddr = seg->vmaddr + seg->vmsize;
+            fileofs = seg->fileoff + seg->filesize;
+#endif
         }
 #ifdef CONFIG_NEW_MACHO
 	if (sk == sk_linkedit) {
