@@ -38,6 +38,7 @@
      DEF(TOK_RESTRICT2, "__restrict")
      DEF(TOK_RESTRICT3, "__restrict__")
      DEF(TOK_EXTENSION, "__extension__") /* gcc keyword */
+     DEF(TOK_THREAD_LOCAL, "_Thread_local") /* C11 thread-local storage */
 
      DEF(TOK_GENERIC, "_Generic")
      DEF(TOK_STATIC_ASSERT, "_Static_assert")

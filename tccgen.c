@@ -4662,6 +4662,8 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
 	    if (type1.ref)
                 sym_to_attr(ad, type1.ref);
             goto basic_type2;
+        case TOK_THREAD_LOCAL:
+            tcc_error("_Thread_local is not implemented");
         default:
             if (typespec_found)
                 goto the_end;
