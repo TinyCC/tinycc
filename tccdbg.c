@@ -971,7 +971,6 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
 	    tcc_free(dwarf_line.filename_table[i].name);
 	tcc_free(dwarf_line.filename_table);
 
-	dwarf_line_op(s1, DW_LNS_negate_stmt);
 	dwarf_line_op(s1, 0); // extended
 	dwarf_uleb128_op(s1, 1); // extended size
 	dwarf_line_op(s1, DW_LNE_end_sequence);
@@ -1828,9 +1827,6 @@ ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 
     if (s1->dwarf) {
         tcc_debug_line(s1);
-	dwarf_line_op(s1, DW_LNS_negate_stmt);
-	dwarf_line_op(s1, DW_LNS_copy);
-	dwarf_line_op(s1, DW_LNS_negate_stmt);
         dwarf_info.func = sym;
         dwarf_info.line = file->line_num;
 	if (s1->do_backtrace) {
@@ -1868,9 +1864,15 @@ ST_FUNC void tcc_debug_prolog_epilog(TCCState *s1, int value)
 /* put function size */
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 {
+    /* lldb does not like function end and next function start at same pc */
+    int min_instr_len;
+
     if (!s1->do_debug)
         return;
+    min_instr_len = dwarf_line.last_pc == ind ? 0 : DWARF_MIN_INSTR_LEN;
+    ind -= min_instr_len;
     tcc_debug_line(s1);
+    ind += min_instr_len;
     tcc_debug_stabn(s1, N_RBRAC, size);
     if (s1->dwarf) {
         int func_sib = 0;
