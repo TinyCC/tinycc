@@ -409,7 +409,7 @@ struct nlist_64 {
 
 struct macho {
     struct mach_header_64 mh;
-    int seg2lc[6], nseg;
+    int *seg2lc, nseg;
     struct load_command **lc;
     struct entry_point_command *ep;
     int nlc;
@@ -474,6 +474,7 @@ static struct segment_command_64 * add_segment(struct macho *mo, const char *nam
 {
     struct segment_command_64 *sc = add_lc(mo, LC_SEGMENT_64, sizeof(*sc));
     strncpy(sc->segname, name, 16);
+    mo->seg2lc = tcc_realloc(mo->seg2lc, sizeof(*mo->seg2lc) * (mo->nseg + 1));
     mo->seg2lc[mo->nseg++] = mo->nlc - 1;
     return sc;
 }
@@ -1221,6 +1222,27 @@ const struct {
     /*[sk_linkedit] =*/       { 5, S_REGULAR, NULL },
 };
 
+#define	START	((uint64_t)1 << 32)
+
+const struct {
+    int used;
+    const char *name;
+    uint64_t vmaddr;
+    uint64_t vmsize;
+    vm_prot_t maxprot;
+    vm_prot_t initprot;
+    uint32_t flags;
+} all_segment[] = {
+    { 1, "__PAGEZERO",       0, START, 0, 0,            0 },
+    { 0, "__TEXT",       START,     0, 5, 5,            0 },
+    { 0, "__DATA_CONST",    -1,     0, 3, 3, SG_READ_ONLY },
+    { 0, "__DWARF",         -1,     0, 7, 3,            0 },
+    { 0, "__DATA",          -1,     0, 3, 3,            0 },
+    { 1, "__LINKEDIT",      -1,     0, 1, 1,            0 },
+};
+
+#define	N_SEGMENT	(sizeof(all_segment)/sizeof(all_segment[0]))
+
 #ifdef CONFIG_NEW_MACHO
 static void calc_fixup_size(TCCState *s1, struct macho *mo)
 {
@@ -1557,9 +1579,10 @@ static void export_trie(TCCState *s1, struct macho *mo)
 static void collect_sections(TCCState *s1, struct macho *mo)
 {
     int i, sk, numsec;
+    int used_segment[N_SEGMENT];
     uint64_t curaddr, fileofs;
     Section *s;
-    struct segment_command_64 *seg = NULL;
+    struct segment_command_64 *seg;
 #ifdef CONFIG_NEW_MACHO
     struct linkedit_data_command *chained_fixups_lc;
     struct linkedit_data_command *export_trie_lc;
@@ -1571,83 +1594,9 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     struct dysymtab_command *dysymlc;
     char *str;
 
-    for (sk = sk_unknown; sk < sk_last; sk++)
-	mo->segment[sk] = skinfo[sk].seg_initial;
+    for (i = 0; i < N_SEGMENT; i++)
+	used_segment[i] = all_segment[i].used;
 
-    seg = add_segment(mo, "__PAGEZERO");
-    seg->vmsize = (uint64_t)1 << 32;
-
-    seg = add_segment(mo, "__TEXT");
-    seg->vmaddr = (uint64_t)1 << 32;
-    seg->maxprot = 5;  // r-x
-    seg->initprot = 5; // r-x
-
-    seg = add_segment(mo, "__DATA_CONST");
-    seg->vmaddr = -1;
-    seg->maxprot = 3;  // rw-
-    seg->initprot = 3; // rw-
-    seg->flags = SG_READ_ONLY;
-
-    if (dwarf_info_section) {
-        seg = add_segment(mo, "__DWARF");
-        seg->vmaddr = -1;
-        seg->maxprot = 7;  // rwx
-        seg->initprot = 3; // rw-
-    }
-    else
-        for (sk = sk_unknown; sk < sk_last; sk++)
-	    if (mo->segment[sk] >= 4)
-		mo->segment[sk]--;
-
-    seg = add_segment(mo, "__DATA");
-    seg->vmaddr = -1;
-    seg->maxprot = 3;  // rw-
-    seg->initprot = 3; // rw-
-
-    seg = add_segment(mo, "__LINKEDIT");
-    seg->vmaddr = -1;
-    seg->maxprot = 1;  // r--
-    seg->initprot = 1; // r--
-
-#ifdef CONFIG_NEW_MACHO
-    chained_fixups_lc = add_lc(mo, LC_DYLD_CHAINED_FIXUPS,
-			       sizeof(struct linkedit_data_command));
-    export_trie_lc = add_lc(mo, LC_DYLD_EXPORTS_TRIE,
-			    sizeof(struct linkedit_data_command));
-#else
-    mo->dyldinfo = add_lc(mo, LC_DYLD_INFO_ONLY, sizeof(*mo->dyldinfo));
-#endif
-
-    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
-    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
-
-    i = (sizeof(*dyldlc) + strlen("/usr/lib/dyld") + 1 + 7) &-8;
-    dyldlc = add_lc(mo, LC_LOAD_DYLINKER, i);
-    dyldlc->name = sizeof(*dyldlc);
-    str = (char*)dyldlc + dyldlc->name;
-    strcpy(str, "/usr/lib/dyld");
-
-    dyldbv = add_lc(mo, LC_BUILD_VERSION, sizeof(*dyldbv));
-    dyldbv->platform = PLATFORM_MACOS;
-    dyldbv->minos = (10 << 16) + (6 << 8);
-    dyldbv->sdk = (10 << 16) + (6 << 8);
-    dyldbv->ntools = 0;
-
-    dyldsv = add_lc(mo, LC_SOURCE_VERSION, sizeof(*dyldsv));
-    dyldsv->version = 0;
-
-    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
-    mo->ep->entryoff = 4096;
-
-    for(i = 0; i < s1->nb_loaded_dlls; i++) {
-        DLLReference *dllref = s1->loaded_dlls[i];
-        if (dllref->level == 0)
-          add_dylib(mo, dllref->name);
-    }
-
-    /* dyld requires a writable segment with classic Mach-O, but it ignores
-       zero-sized segments for this, so force to have some data.  */
-    section_ptr_add(data_section, 1);
     memset (mo->sk_to_sect, 0, sizeof(mo->sk_to_sect));
     for (i = s1->nb_sections; i-- > 1;) {
         int type, flags;
@@ -1710,7 +1659,58 @@ static void collect_sections(TCCState *s1, struct macho *mo)
           sk = sk_discard;
         s->prev = mo->sk_to_sect[sk].s;
         mo->sk_to_sect[sk].s = s;
+	used_segment[skinfo[sk].seg_initial] = 1;
     }
+
+    for (i = 0; i < N_SEGMENT; i++)
+	if (used_segment[i]) {
+	    seg = add_segment(mo, all_segment[i].name);
+	    seg->vmaddr = all_segment[i].vmaddr;
+	    seg->vmsize = all_segment[i].vmsize;
+	    seg->maxprot = all_segment[i].maxprot;
+	    seg->initprot = all_segment[i].initprot;
+	    seg->flags = all_segment[i].flags;
+            for (sk = sk_unknown; sk < sk_last; sk++)
+		if (skinfo[sk].seg_initial == i)
+	            mo->segment[sk] = mo->nseg - 1;
+	}
+
+#ifdef CONFIG_NEW_MACHO
+    chained_fixups_lc = add_lc(mo, LC_DYLD_CHAINED_FIXUPS,
+			       sizeof(struct linkedit_data_command));
+    export_trie_lc = add_lc(mo, LC_DYLD_EXPORTS_TRIE,
+			    sizeof(struct linkedit_data_command));
+#else
+    mo->dyldinfo = add_lc(mo, LC_DYLD_INFO_ONLY, sizeof(*mo->dyldinfo));
+#endif
+
+    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
+    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
+
+    i = (sizeof(*dyldlc) + strlen("/usr/lib/dyld") + 1 + 7) &-8;
+    dyldlc = add_lc(mo, LC_LOAD_DYLINKER, i);
+    dyldlc->name = sizeof(*dyldlc);
+    str = (char*)dyldlc + dyldlc->name;
+    strcpy(str, "/usr/lib/dyld");
+
+    dyldbv = add_lc(mo, LC_BUILD_VERSION, sizeof(*dyldbv));
+    dyldbv->platform = PLATFORM_MACOS;
+    dyldbv->minos = (10 << 16) + (6 << 8);
+    dyldbv->sdk = (10 << 16) + (6 << 8);
+    dyldbv->ntools = 0;
+
+    dyldsv = add_lc(mo, LC_SOURCE_VERSION, sizeof(*dyldsv));
+    dyldsv->version = 0;
+
+    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
+    mo->ep->entryoff = 4096;
+
+    for(i = 0; i < s1->nb_loaded_dlls; i++) {
+        DLLReference *dllref = s1->loaded_dlls[i];
+        if (dllref->level == 0)
+          add_dylib(mo, dllref->name);
+    }
+
     fileofs = 4096;  /* leave space for mach-o headers */
     curaddr = get_segment(mo, 1)->vmaddr;
     curaddr += 4096;
@@ -2134,6 +2134,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
  do_ret:
     for (i = 0; i < mo.nlc; i++)
       tcc_free(mo.lc[i]);
+    tcc_free(mo.seg2lc);
     tcc_free(mo.lc);
     tcc_free(mo.elfsectomacho);
     tcc_free(mo.e2msym);
