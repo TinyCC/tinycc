@@ -147,31 +147,41 @@ static void run_cdtors(TCCState *s1, const char *start, const char *end,
 
 #define	NR_AT_EXIT	32
 
-static int exit_called = 0;
-static int nr_exit = 0;
-static void (*exitfunc[NR_AT_EXIT])(int, void *);
-static void *exitarg[NR_AT_EXIT];
+static struct exit_context {
+    int exit_called;
+    int nr_exit;
+    void (*exitfunc[NR_AT_EXIT])(int, void *);
+    void *exitarg[NR_AT_EXIT];
 #ifndef CONFIG_TCC_BACKTRACE
-static jmp_buf run_jmp_buf;
+    jmp_buf run_jmp_buf;
 #endif
+} g_exit_context;
 
 static void init_exit(void)
 {
-    exit_called = 0;
-    nr_exit = 0;
+    struct exit_context *e = &g_exit_context;
+
+    e->exit_called = 0;
+    e->nr_exit = 0;
 }
 
 static void call_exit(int ret)
 {
-    while (nr_exit--)
-	exitfunc[nr_exit](ret, exitarg[nr_exit]);
+    struct exit_context *e = &g_exit_context;
+
+    while (e->nr_exit) {
+	e->nr_exit--;
+	e->exitfunc[e->nr_exit](ret, e->exitarg[e->nr_exit]);
+    }
 }
 
 static int rt_atexit(void (*function)(void))
 {
-    if (nr_exit < NR_AT_EXIT) {
-	exitfunc[nr_exit] = (void (*)(int, void *))function;
-	exitarg[nr_exit++] = NULL;
+    struct exit_context *e = &g_exit_context;
+
+    if (e->nr_exit < NR_AT_EXIT) {
+	e->exitfunc[e->nr_exit] = (void (*)(int, void *))function;
+	e->exitarg[e->nr_exit++] = NULL;
         return 0;
     }
     return 1;
@@ -179,9 +189,11 @@ static int rt_atexit(void (*function)(void))
 
 static int rt_on_exit(void (*function)(int, void *), void *arg)
 {
-    if (nr_exit < NR_AT_EXIT) {
-	exitfunc[nr_exit] = function;
-	exitarg[nr_exit++] = arg;
+    struct exit_context *e = &g_exit_context;
+
+    if (e->nr_exit < NR_AT_EXIT) {
+	e->exitfunc[e->nr_exit] = function;
+	e->exitarg[e->nr_exit++] = arg;
         return 0;
     }
     return 1;
@@ -189,11 +201,13 @@ static int rt_on_exit(void (*function)(int, void *), void *arg)
 
 static void run_exit(int code)
 {
-    exit_called = 1;
+    struct exit_context *e = &g_exit_context;
+
+    e->exit_called = 1;
 #ifdef CONFIG_TCC_BACKTRACE
-    longjmp(g_rtctxt.jmp_buf, code ? code : 256);
+    longjmp((&g_rtctxt)->jmp_buf, code ? code : 256);
 #else
-    longjmp(run_jmp_buf, code ? code : 256);
+    longjmp(e->run_jmp_buf, code ? code : 256);
 #endif
 }
 
@@ -277,7 +291,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #ifdef CONFIG_TCC_BACKTRACE
     if (!(ret = setjmp(rc->jmp_buf)))
 #else
-    if (!(ret = setjmp(run_jmp_buf)))
+    if (!(ret = setjmp((&g_exit_context)->run_jmp_buf)))
 #endif
     {
         ret = prog_main(argc, argv, envp);
@@ -286,7 +300,7 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     call_exit(ret);
     if ((s1->dflag & 16) && ret)
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
-    if ((s1->dflag & 16) == 0 && exit_called)
+    if ((s1->dflag & 16) == 0 && (&g_exit_context)->exit_called)
 	exit(ret);
     return ret;
 }
