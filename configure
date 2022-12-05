@@ -65,12 +65,12 @@ fi
 case $targetos in
   Darwin)
     darwin=yes
-    confvars="$confvars OSX dll=no"
+    dwarf=4
+    confvars="$confvars OSX dll=no dwarf=$dwarf"
     cc=`which cc`
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
     DLLSUF=".dylib"
-    dwarf=4
     ;;
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
     mingw32=yes
