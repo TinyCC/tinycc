@@ -66,7 +66,7 @@ case $targetos in
   Darwin)
     darwin=yes
     dwarf=4
-    confvars="$confvars OSX dll=no dwarf=$dwarf"
+    confvars="$confvars macOS dll=no dwarf=$dwarf"
     cc=`which cc`
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
