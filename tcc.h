@@ -213,6 +213,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_BCHECK 1 /* enable bound checking code */
 #endif
 
+#if defined CONFIG_NEW_MACHO && CONFIG_NEW_MACHO==0
+#  undef CONFIG_NEW_MACHO
+#else
+#  define CONFIG_NEW_MACHO 1 /* enable new macho code */
+#endif
+
 #if defined TARGETOS_OpenBSD \
     || defined TARGETOS_FreeBSD \
     || defined TARGETOS_NetBSD \
