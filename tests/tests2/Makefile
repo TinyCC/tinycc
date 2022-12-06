@@ -12,12 +12,6 @@ SKIP = 34_array_assignment.test # array assignment is not in C standard
 ifeq (-$(CONFIG_arm_eabi)-$(CONFIG_arm_vfp)-,-yes--)
  SKIP += 22_floating_point.test
 endif
-ifdef CONFIG_OSX
- SKIP += 40_stdio.test 42_function_pointer.test
-endif
-ifeq ($(ARCH),x86_64)
- SKIP += 73_arm64.test
-endif
 ifeq (,$(filter i386,$(ARCH)))
  SKIP += 98_al_ax_extend.test 99_fastcall.test
 endif
