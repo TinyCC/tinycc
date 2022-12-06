@@ -32,9 +32,6 @@ endif
 ifeq ($(CONFIG_dll),no)
  TESTS := $(filter-out dlltest, $(TESTS))
 endif
-ifeq (,$(filter arm64 i386 x86_64,$(ARCH)))
- TESTS := $(filter-out vla_test-run,$(TESTS))
-endif
 ifeq (-$(CONFIG_arm_eabi)-$(CONFIG_arm_vfp)-,-yes--)
  TESTS := $(filter-out test3 test1b,$(TESTS))
 endif
