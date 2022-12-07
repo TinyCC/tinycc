@@ -288,6 +288,9 @@ int main(int argc, char **argv)
 
 #else
 #include <tcclib.h>
+
+unsigned int sleep(unsigned int seconds);
+
 int fib(n)
 {
     return (n <= 2) ? 1 : fib(n-1) + fib(n-2);
@@ -295,7 +298,8 @@ int fib(n)
 
 int main(int argc, char **argv)
 {
-    printf(" %d", fib(atoi(argv[1]), 2));
+    sleep(1);
+    printf(" %d", fib(atoi(argv[1])));
     return 0;
 }
 #endif

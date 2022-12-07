@@ -1,5 +1,8 @@
 TODO list:
 
+Releases:
+- release tcc on a regular basis (which interval? 3 months?)
+
 Bugs:
 
 - i386 fastcall is mostly wrong
@@ -33,7 +36,10 @@ Portability:
 
 Linking:
 
-- static linking (-static) does not work
+- static linking (-static) does sort of work
+	works with musl libc
+	glibc requires libc.so even when statically linked (very bad, but not
+	up to tcc)
 
 Bound checking:
 

@@ -156,8 +156,18 @@ int main()
 #elif defined test_bcheck_125
     strcat(&a[3], &a[0]);
 #elif defined test_bcheck_126
-    strchr(&b[0], 'a');
+    strncat(&a[7], &a[0], 3);
 #elif defined test_bcheck_127
+    strncat(&a[0], &b[3], 8);
+#elif defined test_bcheck_128
+    strncat(&a[0], &a[4], 3);
+#elif defined test_bcheck_129
+    strncat(&a[3], &a[0], 10);
+#elif defined test_bcheck_130
+    strchr(&b[0], 'a');
+#elif defined test_bcheck_131
+    strrchr(&b[0], 'a');
+#elif defined test_bcheck_132
     free(strdup(&b[0]));
 #endif
 }

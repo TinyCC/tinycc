@@ -134,9 +134,29 @@
 [returns 255]
 
 [test_bcheck_126]
-112_backtrace.c:159: at main: BCHECK: invalid pointer ........, size 0x? in strchr
+112_backtrace.c:159: at main: BCHECK: invalid pointer ........, size 0x? in strncat dest
 [returns 255]
 
 [test_bcheck_127]
-112_backtrace.c:161: at main: BCHECK: invalid pointer ........, size 0x? in strdup
+112_backtrace.c:161: at main: BCHECK: invalid pointer ........, size 0x? in strncat dest
+[returns 255]
+
+[test_bcheck_128]
+112_backtrace.c:163: at main: BCHECK: overlapping regions ........(0x?), ........(0x?) in strncat
+[returns 255]
+
+[test_bcheck_129]
+112_backtrace.c:165: at main: BCHECK: overlapping regions ........(0x?), ........(0x?) in strncat
+[returns 255]
+
+[test_bcheck_130]
+112_backtrace.c:167: at main: BCHECK: invalid pointer ........, size 0x? in strchr
+[returns 255]
+
+[test_bcheck_131]
+112_backtrace.c:169: at main: BCHECK: invalid pointer ........, size 0x? in strrchr
+[returns 255]
+
+[test_bcheck_132]
+112_backtrace.c:171: at main: BCHECK: invalid pointer ........, size 0x? in strdup
 [returns 255]

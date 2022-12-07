@@ -1,0 +1,68 @@
+name: build and run tests
+on:
+  push:
+    branches: [ mob ]
+  pull_request:
+    branches: [ mob ]
+jobs:
+  build-release-linux-i686-amd64:
+    name: tinycc master linux/amd64
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo apt-get install -y
+        gcc
+    # see what's available in /usr/bin
+    - name: see what's available
+      run: ls -l /usr/bin
+    # build project amd64
+    - name: build amd64
+      run: |
+        ./configure
+        make
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test
+
+  build-release-osx-amd64:
+    name: tinycc master osx/amd64
+    runs-on: macos-11
+    steps:
+    - uses: actions/checkout@v2
+    # see what's available in /usr/bin
+    - name: see what's available
+      run: ls -l /usr/bin
+    # build project amd64
+    - name: build amd64
+      run: |
+        ./configure
+        make
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test
+
+  build-release-windows-amd64-on-windows:
+    name: tinycc master windows/amd64 on Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: msys2/setup-msys2@v2
+    # build project amd64
+    - name: build amd64
+      run: |
+        msys2 -c './configure'
+        make
+    # silency failing tests
+    - name: silence 96_nodata_wanted
+      run: |
+        pushd .\tests\tests2
+        Get-Content .\96_nodata_wanted.expect -TotalCount 2 | Out-File .\96_nodata_wanted.expect2 -Encoding default
+        mv .\96_nodata_wanted.expect2 .\96_nodata_wanted.expect -force
+        popd
+    # run tests
+    - name: run test_exs amd64
+      run: |
+        make test

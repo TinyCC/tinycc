@@ -201,6 +201,9 @@ void * _Alignas(16) p1;
  _Static_assert(1);
  _Static_assert(0);
 
+#elif defined test_static_assert_empty_string
+ _Static_assert(0,"");
+
 #elif defined test_void_array
  void t[3];
 

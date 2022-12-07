@@ -1,0 +1,15 @@
+[test_128_return]
+cleanup5
+1 cleanup4
+1 cleanup3
+cleanup2
+cleanup1
+[returns 1]
+
+[test_128_exit]
+cleanup5
+2 cleanup4
+2 cleanup3
+cleanup2
+cleanup1
+[returns 2]

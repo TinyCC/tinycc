@@ -215,10 +215,8 @@ static void print_search_dirs(TCCState *s)
     /* print_dirs("programs", NULL, 0); */
     print_dirs("include", s->sysinclude_paths, s->nb_sysinclude_paths);
     print_dirs("libraries", s->library_paths, s->nb_library_paths);
-#ifdef TCC_TARGET_PE
-    printf("libtcc1:\n  %s/lib/"TCC_LIBTCC1"\n", s->tcc_lib_path);
-#else
-    printf("libtcc1:\n  %s/"TCC_LIBTCC1"\n", s->tcc_lib_path);
+    printf("libtcc1:\n  %s/%s\n", s->library_paths[0], CONFIG_TCC_CROSSPREFIX TCC_LIBTCC1);
+#if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
     print_dirs("crt", s->crt_paths, s->nb_crt_paths);
     printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
 #endif
@@ -290,7 +288,7 @@ int main(int argc0, char **argv0)
 redo:
     argc = argc0, argv = argv0;
     s = s1 = tcc_new();
-#ifdef CONFIG_TCC_SWITCHES
+#ifdef CONFIG_TCC_SWITCHES /* predefined options */
     tcc_set_options(s, CONFIG_TCC_SWITCHES);
 #endif
     opt = tcc_parse_args(s, &argc, &argv, 1);

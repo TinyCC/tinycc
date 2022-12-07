@@ -58,12 +58,15 @@ test -n "$CC" && cc="$CC"
 cpu=`uname -m`
 cpu_sys="$cpu"
 targetos=`uname`
-test "$(uname -o)" = "Android" && targetos=Android
+if test "$targetos" = "Linux" ; then
+  test "$(uname -o)" = "Android" && targetos=Android
+fi
 
 case $targetos in
   Darwin)
     darwin=yes
-    confvars="$confvars OSX dll=no"
+    dwarf=4
+    confvars="$confvars OSX dll=no dwarf=$dwarf"
     cc=`which cc`
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
@@ -348,6 +351,8 @@ Advanced options (experts only):
   --config-backtrace=no    disable stack backtraces (with -run or -bt)
   --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
+  --config-new_macho=no    Use apple old macho object format
+  --config-codesign        Use codesign on apple to sign executables
   --dwarf=x                Use dwarf debug info instead of stabs (x=2..5)
 EOF
 exit 1
@@ -355,7 +360,7 @@ fi
 
 if test -z "$cross_prefix" ; then
   CONFTEST=./conftest$EXESUF
-  if ! $cc -o $CONFTEST $source_path/conftest.c 2>/dev/null ; then
+  if ! $cc -o $CONFTEST $source_path/conftest.c ; then
     echo "configure: error: '$cc' failed to compile conftest.c."
   else
     cc_name="$($CONFTEST compiler)"

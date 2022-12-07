@@ -4,6 +4,7 @@ int main()
 {
    printf("including\n");
 #include "18_include.h"
+#define  test_missing_nl
    printf("done\n");
 
 #define  INC   "18_include.h"

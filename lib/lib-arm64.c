@@ -24,7 +24,7 @@ void *memcpy(void*,void*,__SIZE_TYPE__);
 #include <string.h>
 #endif
 
-#ifndef __riscv
+#if !defined __riscv && !defined __APPLE__
 void __clear_cache(void *beg, void *end)
 {
     __arm64_clear_cache(beg, end);

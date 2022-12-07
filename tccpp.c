@@ -420,7 +420,7 @@ ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap)
         va_copy(v, ap);
         len = vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
         va_end(v);
-        if (len > 0 && len < size)
+        if (len >= 0 && len < size)
             break;
         size *= 2;
     }
@@ -838,6 +838,7 @@ static uint8_t *parse_pp_string(uint8_t *p, int sep, CString *str)
             if (c == CH_EOF) {
         unterminated_string:
                 /* XXX: indicate line number of start of string */
+                tok_flags &= ~TOK_FLAG_BOL;
                 tcc_error("missing terminating %c character", sep);
             } else if (c == '\\') {
                 if (str)
@@ -2633,7 +2634,8 @@ static inline void next_nomacro1(void)
                 s1->include_stack_ptr--;
                 p = file->buf_ptr;
                 if (p == file->buffer)
-                    tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
+                    tok_flags = TOK_FLAG_BOF;
+                tok_flags |= TOK_FLAG_BOL;
                 goto redo_no_start;
             }
         } else {
@@ -3234,6 +3236,7 @@ static int next_argstream(Sym **nested_list, TokenString *ws_str)
                         } else if (c == '/') {
                             p = parse_line_comment(p) - 1;
                         } else {
+                            *--p = ch;
                             break;
                         }
                         ch = ' ';
@@ -3335,6 +3338,8 @@ static int macro_subst_tok(
                     for (i = 0; i < ws_str.len; i++)
                         tok_str_add(tok_str, ws_str.str[i]);
                 }
+		if (ws_str.len && ws_str.str[ws_str.len - 1] == '\n')
+		    tok_flags |= TOK_FLAG_BOL;
                 tok_str_free_str(ws_str.str);
                 return 0;
             } else {

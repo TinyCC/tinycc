@@ -31,8 +31,27 @@
    to setup our own crt code.  We're not using lazy linking, so even function
    calls are resolved at startup.  */
 
+#if !defined TCC_TARGET_X86_64 && !defined TCC_TARGET_ARM64
+#error Platform not supported
+#endif
+
 #define DEBUG_MACHO 0
 #define dprintf if (DEBUG_MACHO) printf
+
+#define MH_EXECUTE              (0x2)
+#define MH_DYLDLINK             (0x4)
+#define MH_PIE                  (0x200000)
+
+#define CPU_SUBTYPE_LIB64       (0x80000000)
+#define CPU_SUBTYPE_X86_ALL     (3)
+#define CPU_SUBTYPE_ARM64_ALL   (0)
+
+#define CPU_ARCH_ABI64          (0x01000000)
+
+#define CPU_TYPE_X86            (7)
+#define CPU_TYPE_X86_64         (CPU_TYPE_X86 | CPU_ARCH_ABI64)
+#define CPU_TYPE_ARM            (12)
+#define CPU_TYPE_ARM64          (CPU_TYPE_ARM | CPU_ARCH_ABI64)
 
 struct fat_header {
     uint32_t        magic;          /* FAT_MAGIC or FAT_MAGIC_64 */
@@ -86,7 +105,14 @@ struct load_command {
 #define LC_LOAD_DYLINKER 0xe
 #define LC_SEGMENT_64    0x19
 #define LC_REEXPORT_DYLIB (0x1f | LC_REQ_DYLD)
+#define LC_DYLD_INFO_ONLY (0x22|LC_REQ_DYLD)
 #define LC_MAIN (0x28|LC_REQ_DYLD)
+#define LC_SOURCE_VERSION 0x2A
+#define LC_BUILD_VERSION 0x32
+#define LC_DYLD_EXPORTS_TRIE (0x33 | LC_REQ_DYLD)
+#define LC_DYLD_CHAINED_FIXUPS (0x34 | LC_REQ_DYLD)
+
+#define SG_READ_ONLY    0x10 /* This segment is made read-only after fixups */
 
 typedef int vm_prot_t;
 
@@ -119,14 +145,91 @@ struct section_64 { /* for 64-bit architectures */
     uint32_t        reserved3;      /* reserved */
 };
 
+enum {
+    DYLD_CHAINED_IMPORT          = 1,
+};
+
+struct dyld_chained_fixups_header {
+    uint32_t    fixups_version; ///< 0
+    uint32_t    starts_offset;  ///< Offset of dyld_chained_starts_in_image.
+    uint32_t    imports_offset; ///< Offset of imports table in chain_data.
+    uint32_t    symbols_offset; ///< Offset of symbol strings in chain_data.
+    uint32_t    imports_count;  ///< Number of imported symbol names.
+    uint32_t    imports_format; ///< DYLD_CHAINED_IMPORT*
+    uint32_t    symbols_format; ///< 0 => uncompressed, 1 => zlib compressed
+};
+
+struct dyld_chained_starts_in_image
+{
+    uint32_t    seg_count;
+    uint32_t    seg_info_offset[1];  // each entry is offset into this struct for that segment
+    // followed by pool of dyld_chain_starts_in_segment data
+};
+
+enum {
+    DYLD_CHAINED_PTR_64                     =  2,    // target is vmaddr
+    DYLD_CHAINED_PTR_64_OFFSET              =  6,    // target is vm offset
+};
+
+enum {
+    DYLD_CHAINED_PTR_START_NONE   = 0xFFFF, // used in page_start[] to denote a page with no fixups
+};
+
+#define SEG_PAGE_SIZE 16384
+
+struct dyld_chained_starts_in_segment
+{
+    uint32_t    size;               // size of this (amount kernel needs to copy)
+    uint16_t    page_size;          // 0x1000 or 0x4000
+    uint16_t    pointer_format;     // DYLD_CHAINED_PTR_*
+    uint64_t    segment_offset;     // offset in memory to start of segment
+    uint32_t    max_valid_pointer;  // for 32-bit OS, any value beyond this is not a pointer
+    uint16_t    page_count;         // how many pages are in array
+    uint16_t    page_start[1];      // each entry is offset in each page of first element in chain
+                                    // or DYLD_CHAINED_PTR_START_NONE if no fixups on page
+};
+
+enum BindSpecialDylib {
+  BIND_SPECIAL_DYLIB_FLAT_LOOKUP = -2,
+};
+
+struct dyld_chained_import
+{
+    uint32_t    lib_ordinal :  8,
+                weak_import :  1,
+                name_offset : 23;
+};
+
+struct dyld_chained_ptr_64_rebase
+{
+    uint64_t    target    : 36,    // vmaddr, 64GB max image size
+                high8     :  8,    // top 8 bits set to this after slide added
+                reserved  :  7,    // all zeros
+                next      : 12,    // 4-byte stride
+                bind      :  1;    // == 0
+};
+
+struct dyld_chained_ptr_64_bind
+{
+    uint64_t    ordinal   : 24,
+                addend    :  8,   // 0 thru 255
+                reserved  : 19,   // all zeros
+                next      : 12,   // 4-byte stride
+                bind      :  1;   // == 1
+};
+
 #define S_REGULAR                       0x0
 #define S_ZEROFILL                      0x1
 #define S_NON_LAZY_SYMBOL_POINTERS      0x6
+#define S_LAZY_SYMBOL_POINTERS          0x7
+#define S_SYMBOL_STUBS                  0x8
 #define S_MOD_INIT_FUNC_POINTERS        0x9
 #define S_MOD_TERM_FUNC_POINTERS        0xa
 
 #define S_ATTR_PURE_INSTRUCTIONS        0x80000000
 #define S_ATTR_SOME_INSTRUCTIONS        0x00000400
+#define S_ATTR_DEBUG             	0x02000000
+
 
 typedef uint32_t lc_str;
 
@@ -145,6 +248,36 @@ struct dylinker_command {
                                        LC_DYLD_ENVIRONMENT */
     uint32_t        cmdsize;        /* includes pathname string */
     lc_str          name;           /* dynamic linker's path name */
+};
+
+struct linkedit_data_command {
+    uint32_t    cmd;            /* LC_CODE_SIGNATURE, LC_SEGMENT_SPLIT_INFO,
+                                   LC_FUNCTION_STARTS, LC_DATA_IN_CODE,
+                                   LC_DYLIB_CODE_SIGN_DRS,
+                                   LC_LINKER_OPTIMIZATION_HINT,
+                                   LC_DYLD_EXPORTS_TRIE, or
+                                   LC_DYLD_CHAINED_FIXUPS. */
+    uint32_t    cmdsize;        /* sizeof(struct linkedit_data_command) */
+    uint32_t    dataoff;        /* file offset of data in __LINKEDIT segment */
+    uint32_t    datasize;       /* file size of data in __LINKEDIT segment  */
+};
+
+#define PLATFORM_MACOS 1
+
+struct build_version_command {
+    uint32_t    cmd;            /* LC_BUILD_VERSION */
+    uint32_t    cmdsize;        /* sizeof(struct build_version_command) plus */
+                                /* ntools * sizeof(struct build_tool_version) */
+    uint32_t    platform;       /* platform */
+    uint32_t    minos;          /* X.Y.Z is encoded in nibbles xxxx.yy.zz */
+    uint32_t    sdk;            /* X.Y.Z is encoded in nibbles xxxx.yy.zz */
+    uint32_t    ntools;         /* number of tool entries following this */
+};
+
+struct source_version_command {
+    uint32_t  cmd;      /* LC_SOURCE_VERSION */
+    uint32_t  cmdsize;  /* 16 */
+    uint64_t  version;  /* A.B.C.D.E packed as a24.b10.c10.d10.e10 */
 };
 
 struct symtab_command {
@@ -187,6 +320,42 @@ struct dysymtab_command {
     uint32_t nlocrel;   /* number of local relocation entries */
 };
 
+#define BIND_OPCODE_DONE                                        0x00
+#define BIND_OPCODE_SET_DYLIB_SPECIAL_IMM                       0x30
+#define BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM               0x40
+#define BIND_OPCODE_SET_TYPE_IMM                                0x50
+#define BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB                 0x70
+#define BIND_OPCODE_DO_BIND                                     0x90
+
+#define BIND_TYPE_POINTER                                       1
+#define BIND_SPECIAL_DYLIB_FLAT_LOOKUP                          -2
+
+#define REBASE_OPCODE_DONE                                      0x00
+#define REBASE_OPCODE_SET_TYPE_IMM                              0x10
+#define REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB               0x20
+#define REBASE_OPCODE_DO_REBASE_IMM_TIMES                       0x50
+
+#define REBASE_TYPE_POINTER                                     1
+
+#define EXPORT_SYMBOL_FLAGS_KIND_REGULAR                        0x00
+#define EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE                       0x02
+#define EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION                     0x04
+
+struct dyld_info_command {
+    uint32_t cmd;             /* LC_DYLD_INFO or LC_DYLD_INFO_ONLY */
+    uint32_t cmdsize;         /* sizeof(struct dyld_info_command) */
+    uint32_t rebase_off;      /* file offset to rebase info  */
+    uint32_t rebase_size;     /* size of rebase info   */
+    uint32_t bind_off;        /* file offset to binding info   */
+    uint32_t bind_size;       /* size of binding info  */
+    uint32_t weak_bind_off;   /* file offset to weak binding info   */
+    uint32_t weak_bind_size;  /* size of weak binding info  */
+    uint32_t lazy_bind_off;   /* file offset to lazy binding info */
+    uint32_t lazy_bind_size;  /* size of lazy binding infs */
+    uint32_t export_off;      /* file offset to lazy binding info */
+    uint32_t export_size;     /* size of lazy binding infs */
+};
+
 #define INDIRECT_SYMBOL_LOCAL   0x80000000
 
 struct entry_point_command {
@@ -201,9 +370,18 @@ enum skind {
     sk_discard,
     sk_text,
     sk_stubs,
+    sk_stub_helper,
     sk_ro_data,
     sk_uw_info,
     sk_nl_ptr,  // non-lazy pointers, aka GOT
+    sk_debug_info,
+    sk_debug_abbrev,
+    sk_debug_line,
+    sk_debug_aranges,
+    sk_debug_str,
+    sk_debug_line_str,
+    sk_stab,
+    sk_stab_str,
     sk_la_ptr,  // lazy pointers
     sk_init,
     sk_fini,
@@ -231,7 +409,7 @@ struct nlist_64 {
 
 struct macho {
     struct mach_header_64 mh;
-    int seg2lc[4], nseg;
+    int *seg2lc, nseg;
     struct load_command **lc;
     struct entry_point_command *ep;
     int nlc;
@@ -241,9 +419,42 @@ struct macho {
     } sk_to_sect[sk_last];
     int *elfsectomacho;
     int *e2msym;
-    Section *symtab, *strtab, *wdata, *indirsyms, *stubs;
-    int stubsym;
+    Section *symtab, *strtab, *wdata, *indirsyms, *stubs, *exports;
     uint32_t ilocal, iextdef, iundef;
+    int stubsym, n_got, nr_plt;
+    int segment[sk_last];
+#ifdef CONFIG_NEW_MACHO
+    Section *chained_fixups;
+    int n_bind;
+    int n_bind_rebase;
+    struct bind_rebase {
+	int section;
+	int bind;
+	ElfW_Rel rel;
+    } *bind_rebase;
+#else
+    Section *rebase, *binding, *weak_binding, *lazy_binding;
+    Section *stub_helper, *la_symbol_ptr;
+    struct dyld_info_command *dyldinfo;
+    int helpsym, lasym, dyld_private, dyld_stub_binder;
+    int n_lazy_bind;    
+    struct s_lazy_bind {
+        int section;
+        int bind_offset;
+        int la_symbol_offset;
+        ElfW_Rel rel;
+    } *s_lazy_bind;
+    int n_rebase;    
+    struct s_rebase {
+        int section;
+        ElfW_Rel rel;
+    } *s_rebase;
+    int n_bind; 
+    struct bind {
+        int section;
+        ElfW_Rel rel;
+    } *bind;
+#endif
 };
 
 #define SHT_LINKEDIT (SHT_LOOS + 42)
@@ -263,6 +474,7 @@ static struct segment_command_64 * add_segment(struct macho *mo, const char *nam
 {
     struct segment_command_64 *sc = add_lc(mo, LC_SEGMENT_64, sizeof(*sc));
     strncpy(sc->segname, name, 16);
+    mo->seg2lc = tcc_realloc(mo->seg2lc, sizeof(*mo->seg2lc) * (mo->nseg + 1));
     mo->seg2lc[mo->nseg++] = mo->nlc - 1;
     return sc;
 }
@@ -306,19 +518,154 @@ static void * add_dylib(struct macho *mo, char *name)
     return lc;
 }
 
+static int uleb128_size (unsigned long long value)
+{
+    int size =  0;
+
+    do {
+        value >>= 7;
+        size++;
+    } while (value != 0);
+    return size;
+}
+
+static void write_uleb128(Section *section, uint64_t value)
+{
+    do {
+        unsigned char byte = value & 0x7f;
+	uint8_t *ptr = section_ptr_add(section, 1);
+
+        value >>= 7;
+        *ptr = byte | (value ? 0x80 : 0);
+    } while (value != 0);
+}
+
+static void tcc_macho_add_destructor(TCCState *s1)
+{
+    int init_sym, mh_execute_header, at_exit_sym;
+    Section *s;
+    ElfW_Rel *rel;
+    uint8_t *ptr;
+
+    mh_execute_header = put_elf_sym(s1->symtab, -4096, 0,
+				    ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 0,
+				    text_section->sh_num, "__mh_execute_header");
+    s = find_section(s1, ".fini_array");
+    if (s->data_offset == 0)
+        return; 
+    init_sym = put_elf_sym(s1->symtab, text_section->data_offset, 0,
+                           ELFW(ST_INFO)(STB_LOCAL, STT_FUNC), 0,
+                           text_section->sh_num, "___GLOBAL_init_65535");
+    at_exit_sym = put_elf_sym(s1->symtab, 0, 0,
+                              ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0,
+                              SHN_UNDEF, "___cxa_atexit");
+#ifdef TCC_TARGET_X86_64
+    ptr = section_ptr_add(text_section, 4);
+    ptr[0] = 0x55;  // pushq   %rbp
+    ptr[1] = 0x48;  // movq    %rsp, %rbp
+    ptr[2] = 0x89;
+    ptr[3] = 0xe5;
+    for_each_elem(s->reloc, 0, rel, ElfW_Rel) {
+        int sym_index = ELFW(R_SYM)(rel->r_info);
+
+        ptr = section_ptr_add(text_section, 26);
+        ptr[0] = 0x48;  // lea destructor(%rip),%rax
+        ptr[1] = 0x8d;
+        ptr[2] = 0x05;
+        put_elf_reloca(s1->symtab, text_section, 
+		       text_section->data_offset - 23,
+		       R_X86_64_PC32, sym_index, -4);
+        ptr[7] = 0x48;  // mov %rax,%rdi
+        ptr[8] = 0x89;
+        ptr[9] = 0xc7;
+	ptr[10] = 0x31; // xorl %ecx, %ecx
+	ptr[11] = 0xc9;
+	ptr[12] = 0x89; // movl %ecx, %esi
+	ptr[13] = 0xce;
+        ptr[14] = 0x48;  // lea mh_execute_header(%rip),%rdx
+        ptr[15] = 0x8d;
+        ptr[16] = 0x15;
+        put_elf_reloca(s1->symtab, text_section,
+		       text_section->data_offset - 9,
+		       R_X86_64_PC32, mh_execute_header, -4);
+	ptr[21] = 0xe8; // call __cxa_atexit
+        put_elf_reloca(s1->symtab, text_section,
+		       text_section->data_offset - 4,
+		       R_X86_64_PLT32, at_exit_sym, -4);
+    }
+    ptr = section_ptr_add(text_section, 2);
+    ptr[0] = 0x5d;  // pop   %rbp
+    ptr[1] = 0xc3;  // ret
+#elif defined TCC_TARGET_ARM64
+    ptr = section_ptr_add(text_section, 8);
+    write32le(ptr, 0xa9bf7bfd);     // stp     x29, x30, [sp, #-16]!
+    write32le(ptr + 4, 0x910003fd); // mov     x29, sp
+    for_each_elem(s->reloc, 0, rel, ElfW_Rel) {
+        int sym_index = ELFW(R_SYM)(rel->r_info);
+
+        ptr = section_ptr_add(text_section, 24);
+        put_elf_reloc(s1->symtab, text_section, 
+		      text_section->data_offset - 24,
+		      R_AARCH64_ADR_PREL_PG_HI21, sym_index);
+        write32le(ptr, 0x90000000);      // adrp x0, destructor@page
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 20,
+		      R_AARCH64_LDST8_ABS_LO12_NC, sym_index);
+        write32le(ptr + 4, 0x91000000);  // add x0,x0,destructor@pageoff
+        write32le(ptr + 8, 0xd2800001);  // mov x1, #0
+        put_elf_reloc(s1->symtab, text_section, 
+		      text_section->data_offset - 12,
+		      R_AARCH64_ADR_PREL_PG_HI21, mh_execute_header);
+        write32le(ptr + 12, 0x90000002);      // adrp x2, mh_execute_header@page
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 8,
+		      R_AARCH64_LDST8_ABS_LO12_NC, mh_execute_header);
+        write32le(ptr + 16, 0x91000042);  // add x2,x2,mh_execute_header@pageoff
+        put_elf_reloc(s1->symtab, text_section,
+		      text_section->data_offset - 4,
+		      R_AARCH64_CALL26, at_exit_sym);
+	write32le(ptr + 20, 0x94000000); // bl __cxa_atexit
+    }
+    ptr = section_ptr_add(text_section, 8);
+    write32le(ptr, 0xa8c17bfd);     // ldp     x29, x30, [sp], #16
+    write32le(ptr + 4, 0xd65f03c0); // ret
+#endif
+    s->reloc->data_offset = s->data_offset = 0;
+    s->sh_flags &= ~SHF_ALLOC;
+    add_array (s1, ".init_array", init_sym);
+}
+
+#ifdef CONFIG_NEW_MACHO
+static void bind_rebase_add(struct macho *mo, int bind, int sh_info,
+			    ElfW_Rel *rel, struct sym_attr *attr)
+{
+    mo->bind_rebase = tcc_realloc(mo->bind_rebase, (mo->n_bind_rebase + 1) *
+		                  sizeof(struct bind_rebase));
+    mo->bind_rebase[mo->n_bind_rebase].section = sh_info;
+    mo->bind_rebase[mo->n_bind_rebase].bind = bind;
+    mo->bind_rebase[mo->n_bind_rebase].rel = *rel;
+    if (attr)
+        mo->bind_rebase[mo->n_bind_rebase].rel.r_offset = attr->got_offset;
+    mo->n_bind_rebase++;
+    mo->n_bind += bind;
+}
+
 static void check_relocs(TCCState *s1, struct macho *mo)
 {
     Section *s;
     ElfW_Rel *rel;
     ElfW(Sym) *sym;
     int i, type, gotplt_entry, sym_index, for_code;
+    uint32_t *pi, *goti;
     struct sym_attr *attr;
 
-    s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     mo->indirsyms = new_section(s1, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    goti = NULL;
+    mo->nr_plt = mo->n_got = 0;
     for (i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if (s->sh_type != SHT_RELX)
+        if (s->sh_type != SHT_RELX ||
+	    !strncmp(s1->sections[s->sh_info]->name, ".debug_", 7))
             continue;
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
@@ -333,41 +680,301 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                 || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
                 attr = get_sym_attr(s1, sym_index, 1);
                 if (!attr->dyn_index) {
-                    uint32_t *pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
                     attr->got_offset = s1->got->data_offset;
                     attr->plt_offset = -1;
                     attr->dyn_index = 1; /* used as flag */
                     section_ptr_add(s1->got, PTR_SIZE);
+                    put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
+                                  R_DATA_PTR, sym_index);
+	 	    goti = tcc_realloc(goti, (mo->n_got + 1) * sizeof(*goti));
                     if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
                         if (sym->st_shndx == SHN_UNDEF)
-                          tcc_error("undefined local symbol???");
-                        *pi = INDIRECT_SYMBOL_LOCAL;
-                        /* The pointer slot we generated must point to the
-                           symbol, whose address is only known after layout,
-                           so register a simple relocation for that.  */
-                        put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
-                                      R_DATA_PTR, sym_index);
-                    } else
-                      *pi = mo->e2msym[sym_index];
+                          tcc_error("undefined local symbo: '%s'",
+				    (char *) symtab_section->link->data + sym->st_name);
+			goti[mo->n_got++] = INDIRECT_SYMBOL_LOCAL;
+                    } else {
+                        goti[mo->n_got++] = mo->e2msym[sym_index];
+                        if (sym->st_shndx == SHN_UNDEF
+#ifdef TCC_TARGET_X86_64
+                            && type == R_X86_64_GOTPCREL
+#elif defined TCC_TARGET_ARM64
+                            && type == R_AARCH64_ADR_GOT_PAGE
+#endif
+                            ) {
+			    bind_rebase_add(mo, 1, s1->got->reloc->sh_info, rel, attr);
+			    attr->plt_offset = 0; // ignore next bind
+			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
+			}
+		        if (for_code && sym->st_shndx == SHN_UNDEF)
+			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
+		    }
                 }
-                if (for_code) {
+                if (for_code && sym->st_shndx == SHN_UNDEF) {
                     if (attr->plt_offset == -1) {
                         uint8_t *jmp;
+
                         attr->plt_offset = mo->stubs->data_offset;
+#ifdef TCC_TARGET_X86_64
+                        if (type != R_X86_64_PLT32)
+                             continue;
                         jmp = section_ptr_add(mo->stubs, 6);
                         jmp[0] = 0xff;  /* jmpq *ofs(%rip) */
                         jmp[1] = 0x25;
                         put_elf_reloc(s1->symtab, mo->stubs,
                                       attr->plt_offset + 2,
                                       R_X86_64_GOTPCREL, sym_index);
+#elif defined TCC_TARGET_ARM64
+                        if (type != R_AARCH64_CALL26)
+                             continue;
+                        jmp = section_ptr_add(mo->stubs, 12);
+                        put_elf_reloc(s1->symtab, mo->stubs,
+                                      attr->plt_offset,
+                                      R_AARCH64_ADR_GOT_PAGE, sym_index);
+                        write32le(jmp, // adrp x16, #sym
+                                  0x90000010);
+                        put_elf_reloc(s1->symtab, mo->stubs,
+                                      attr->plt_offset + 4,
+                                      R_AARCH64_LD64_GOT_LO12_NC, sym_index);
+                        write32le(jmp + 4, // ld x16,[x16, #sym]
+                                  0xf9400210);
+                        write32le(jmp + 8, // br x16
+                                  0xd61f0200);
+#endif
+			bind_rebase_add(mo, 1, s1->got->reloc->sh_info, rel, attr);
+                        pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
+                        *pi = mo->e2msym[sym_index];
+                        mo->nr_plt++;
                     }
                     rel->r_info = ELFW(R_INFO)(mo->stubsym, type);
                     rel->r_addend += attr->plt_offset;
                 }
             }
+	    if (type == R_DATA_PTR)
+		bind_rebase_add(mo, sym->st_shndx == SHN_UNDEF ? 1 : 0,
+				s->sh_info, rel, NULL);
         }
     }
+    pi = section_ptr_add(mo->indirsyms, mo->n_got * sizeof(*pi));
+    memcpy(pi, goti, mo->n_got * sizeof(*pi));
+    tcc_free(goti);
 }
+
+#else
+
+static void check_relocs(TCCState *s1, struct macho *mo)
+{
+    uint8_t *jmp;
+    Section *s;
+    ElfW_Rel *rel;
+    ElfW(Sym) *sym;
+    int i, type, gotplt_entry, sym_index, for_code;
+    int bind_offset, la_symbol_offset;
+    uint32_t *pi, *goti;
+    struct sym_attr *attr;
+
+    mo->indirsyms = new_section(s1, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+
+#ifdef TCC_TARGET_X86_64
+    jmp = section_ptr_add(mo->stub_helper, 16);
+    jmp[0] = 0x4c;  /* leaq _dyld_private(%rip), %r11 */
+    jmp[1] = 0x8d;
+    jmp[2] = 0x1d;
+    put_elf_reloca(s1->symtab, mo->stub_helper, 3,
+		   R_X86_64_PC32, mo->dyld_private, -4);
+    jmp[7] = 0x41;  /* pushq %r11 */
+    jmp[8] = 0x53;
+    jmp[9] = 0xff;  /* jmpq    *dyld_stub_binder@GOT(%rip) */
+    jmp[10] = 0x25;
+    put_elf_reloca(s1->symtab, mo->stub_helper, 11,
+		   R_X86_64_GOTPCREL, mo->dyld_stub_binder, -4);
+    jmp[15] = 0x90; /* nop */
+#elif defined TCC_TARGET_ARM64
+    jmp = section_ptr_add(mo->stub_helper, 24);
+    put_elf_reloc(s1->symtab, mo->stub_helper, 0,
+		  R_AARCH64_ADR_PREL_PG_HI21, mo->dyld_private);
+    write32le(jmp, 0x90000011); // adrp x17, _dyld_private@page
+    put_elf_reloc(s1->symtab, mo->stub_helper, 4,
+		  R_AARCH64_LDST64_ABS_LO12_NC, mo->dyld_private);
+    write32le(jmp + 4, 0x91000231); // add x17,x17,_dyld_private@pageoff
+    write32le(jmp + 8, 0xa9bf47f0); // stp x16/x17, [sp, #-16]!
+    put_elf_reloc(s1->symtab, mo->stub_helper, 12,
+		  R_AARCH64_ADR_GOT_PAGE, mo->dyld_stub_binder);
+    write32le(jmp + 12, 0x90000010); // adrp x16, dyld_stub_binder@page
+    put_elf_reloc(s1->symtab, mo->stub_helper, 16,
+		  R_AARCH64_LD64_GOT_LO12_NC, mo->dyld_stub_binder);
+    write32le(jmp + 16, 0xf9400210); // ldr x16,[x16,dyld_stub_binder@pageoff]
+    write32le(jmp + 20, 0xd61f0200); // br x16
+#endif
+    
+    goti = NULL;
+    mo->nr_plt = mo->n_got = 0;
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->sh_type != SHT_RELX ||
+	    !strncmp(s1->sections[s->sh_info]->name, ".debug_", 7))
+            continue;
+        for_each_elem(s, 0, rel, ElfW_Rel) {
+            type = ELFW(R_TYPE)(rel->r_info);
+            gotplt_entry = gotplt_entry_type(type);
+            for_code = code_reloc(type);
+            /* We generate a non-lazy pointer for used undefined symbols
+               and for defined symbols that must have a place for their
+               address due to codegen (i.e. a reloc requiring a got slot).  */
+            sym_index = ELFW(R_SYM)(rel->r_info);
+            sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+            if (sym->st_shndx == SHN_UNDEF
+                || gotplt_entry == ALWAYS_GOTPLT_ENTRY) {
+                attr = get_sym_attr(s1, sym_index, 1);
+                if (!attr->dyn_index) {
+                    attr->got_offset = s1->got->data_offset;
+                    attr->plt_offset = -1;
+                    attr->dyn_index = 1; /* used as flag */
+		    section_ptr_add(s1->got, PTR_SIZE);
+                    put_elf_reloc(s1->symtab, s1->got, attr->got_offset,
+                                  R_DATA_PTR, sym_index);
+		    goti = tcc_realloc(goti, (mo->n_got + 1) * sizeof(*goti));
+                    if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL) {
+                        if (sym->st_shndx == SHN_UNDEF)
+                          tcc_error("undefined local symbo: '%s'",
+				    (char *) symtab_section->link->data + sym->st_name);
+			goti[mo->n_got++] = INDIRECT_SYMBOL_LOCAL;
+                    } else {
+			goti[mo->n_got++] = mo->e2msym[sym_index];
+			if (sym->st_shndx == SHN_UNDEF
+#ifdef TCC_TARGET_X86_64
+			    && type == R_X86_64_GOTPCREL
+#elif defined TCC_TARGET_ARM64
+			    && type == R_AARCH64_ADR_GOT_PAGE
+#endif
+			    ) {
+			    mo->bind =
+			        tcc_realloc(mo->bind,
+					    (mo->n_bind + 1) *
+					    sizeof(struct bind));
+			    mo->bind[mo->n_bind].section = s1->got->reloc->sh_info;
+			    mo->bind[mo->n_bind].rel = *rel;
+                            mo->bind[mo->n_bind].rel.r_offset = attr->got_offset;
+			    mo->n_bind++;
+			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
+			}
+		    }
+                }
+                if (for_code && sym->st_shndx == SHN_UNDEF) {
+                    if (attr->plt_offset == -1) {
+                        attr->plt_offset = mo->stubs->data_offset;
+#ifdef TCC_TARGET_X86_64
+			if (type != R_X86_64_PLT32)
+			     continue;
+			/* __stubs */
+                        jmp = section_ptr_add(mo->stubs, 6);
+                        jmp[0] = 0xff;  /* jmpq *__la_symbol_ptr(%rip) */
+                        jmp[1] = 0x25;
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 4,
+                                       R_X86_64_PC32, mo->lasym,
+				       mo->la_symbol_ptr->data_offset - 4);
+
+			/* __stub_helper */
+			bind_offset = mo->stub_helper->data_offset + 1;
+                        jmp = section_ptr_add(mo->stub_helper, 10);
+                        jmp[0] = 0x68;  /* pushq $bind_offset */
+                        jmp[5] = 0xe9;  /* jmpq __stub_helper */
+                        write32le(jmp + 6, -mo->stub_helper->data_offset);
+
+			/* __la_symbol_ptr */
+			la_symbol_offset = mo->la_symbol_ptr->data_offset;
+                        put_elf_reloca(s1->symtab, mo->la_symbol_ptr,
+				       mo->la_symbol_ptr->data_offset,
+				       R_DATA_PTR, mo->helpsym,
+				       mo->stub_helper->data_offset - 10);
+			section_ptr_add(mo->la_symbol_ptr, PTR_SIZE);
+#elif defined TCC_TARGET_ARM64
+			if (type != R_AARCH64_CALL26)
+			     continue;
+			/* __stubs */
+                        jmp = section_ptr_add(mo->stubs, 12);
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 12,
+                                       R_AARCH64_ADR_PREL_PG_HI21, mo->lasym,
+				       mo->la_symbol_ptr->data_offset);
+                        write32le(jmp, // adrp x16, __la_symbol_ptr@page
+                                  0x90000010);
+                        put_elf_reloca(s1->symtab, mo->stubs,
+                                       mo->stubs->data_offset - 8,
+                                       R_AARCH64_LDST64_ABS_LO12_NC, mo->lasym,
+				       mo->la_symbol_ptr->data_offset);
+                        write32le(jmp + 4, // ldr x16,[x16, __la_symbol_ptr@pageoff]
+                                  0xf9400210);
+                        write32le(jmp + 8, // br x16
+                                  0xd61f0200);
+
+			/* __stub_helper */
+			bind_offset = mo->stub_helper->data_offset + 8;
+                        jmp = section_ptr_add(mo->stub_helper, 12);
+                        write32le(jmp + 0, // ldr  w16, l0
+                                  0x18000050);
+                        write32le(jmp + 4, // b stubHelperHeader
+                                  0x14000000 +
+				  ((-(mo->stub_helper->data_offset - 8) / 4) &
+				   0x3ffffff));
+                        write32le(jmp + 8, 0); // l0: .long bind_offset
+
+			/* __la_symbol_ptr */
+			la_symbol_offset = mo->la_symbol_ptr->data_offset;
+                        put_elf_reloca(s1->symtab, mo->la_symbol_ptr,
+				       mo->la_symbol_ptr->data_offset,
+				       R_DATA_PTR, mo->helpsym,
+				       mo->stub_helper->data_offset - 12);
+			section_ptr_add(mo->la_symbol_ptr, PTR_SIZE);
+#endif
+                        mo->s_lazy_bind =
+                            tcc_realloc(mo->s_lazy_bind, (mo->n_lazy_bind + 1) *
+                                        sizeof(struct s_lazy_bind));
+                        mo->s_lazy_bind[mo->n_lazy_bind].section =
+                            mo->stub_helper->reloc->sh_info;
+                        mo->s_lazy_bind[mo->n_lazy_bind].bind_offset =
+			    bind_offset;
+                        mo->s_lazy_bind[mo->n_lazy_bind].la_symbol_offset =
+			    la_symbol_offset;
+                        mo->s_lazy_bind[mo->n_lazy_bind].rel = *rel;
+                        mo->s_lazy_bind[mo->n_lazy_bind].rel.r_offset =
+                            attr->plt_offset;
+                        mo->n_lazy_bind++;
+			pi = section_ptr_add(mo->indirsyms, sizeof(*pi));
+			*pi = mo->e2msym[sym_index];
+			mo->nr_plt++;
+                    }
+                    rel->r_info = ELFW(R_INFO)(mo->stubsym, type);
+                    rel->r_addend += attr->plt_offset;
+                }
+            }
+            if (type == R_DATA_PTR) {
+		if (sym->st_shndx == SHN_UNDEF) {
+		    mo->bind = tcc_realloc(mo->bind,
+					   (mo->n_bind + 1) *
+					   sizeof(struct bind));
+		    mo->bind[mo->n_bind].section = s->sh_info;
+		    mo->bind[mo->n_bind].rel = *rel;
+		    mo->n_bind++;
+		}
+		else {
+                    mo->s_rebase =
+                        tcc_realloc(mo->s_rebase, (mo->n_rebase + 1) *
+				    sizeof(struct s_rebase));
+                    mo->s_rebase[mo->n_rebase].section = s->sh_info;
+                    mo->s_rebase[mo->n_rebase].rel = *rel;
+                    mo->n_rebase++;
+		}
+	    }
+        }
+    }
+    pi = section_ptr_add(mo->indirsyms, mo->n_got * sizeof(*pi));
+    memcpy(pi, goti, mo->n_got * sizeof(*pi));
+    pi = section_ptr_add(mo->indirsyms, mo->nr_plt * sizeof(*pi));
+    memcpy(pi, mo->indirsyms->data, mo->nr_plt * sizeof(*pi));
+    tcc_free(goti);
+}
+#endif
 
 static int check_symbols(TCCState *s1, struct macho *mo)
 {
@@ -444,9 +1051,11 @@ static void convert_symbol(TCCState *s1, struct macho *mo, struct nlist_64 *pn)
       n.n_type = N_ABS, n.n_sect = 0;
     else if (sym->st_shndx >= SHN_LORESERVE)
       tcc_error("unhandled ELF symbol section %d %s", sym->st_shndx, name);
-    else if (!mo->elfsectomacho[sym->st_shndx])
-      tcc_error("ELF section %d not mapped into Mach-O for symbol %s",
-                sym->st_shndx, name);
+    else if (!mo->elfsectomacho[sym->st_shndx]) {
+      if (strncmp(s1->sections[sym->st_shndx]->name, ".debug_", 7))
+        tcc_error("ELF section %d(%s) not mapped into Mach-O for symbol %s",
+                  sym->st_shndx, s1->sections[sym->st_shndx]->name, name);
+    }
     else
       n.n_sect = mo->elfsectomacho[sym->st_shndx];
     if (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL)
@@ -465,9 +1074,9 @@ static void convert_symbols(TCCState *s1, struct macho *mo)
         convert_symbol(s1, mo, pn);
 }
 
-static int machosymcmp(const void *_a, const void *_b)
+static int machosymcmp(const void *_a, const void *_b, void *arg)
 {
-    TCCState *s1 = tcc_state;
+    TCCState *s1 = arg;
     int ea = ((struct nlist_64 *)_a)->n_value;
     int eb = ((struct nlist_64 *)_b)->n_value;
     ElfSym *sa = (ElfSym *)symtab_section->data + ea;
@@ -492,6 +1101,37 @@ static int machosymcmp(const void *_a, const void *_b)
     return ea - eb;
 }
 
+/* cannot use qsort because code has to be reentrant */
+static void tcc_qsort (void  *base, size_t nel, size_t width,
+                       int (*comp)(const void *, const void *, void *), void *arg)
+{
+    size_t wnel, gap, wgap, i, j, k;
+    char *a, *b, tmp;
+
+    wnel = width * nel;
+    for (gap = 0; ++gap < nel;)
+        gap *= 3;
+    while ( gap /= 3 ) {
+        wgap = width * gap;
+        for (i = wgap; i < wnel; i += width) {
+            for (j = i - wgap; ;j -= wgap) {
+                a = j + (char *)base;
+                b = a + wgap;
+                if ( (*comp)(a, b, arg) <= 0 )
+                    break;
+                k = width;
+                do {
+                    tmp = *a;
+                    *a++ = *b;
+                    *b++ = tmp;
+                } while ( --k );
+                if (j < wgap)
+                    break;
+            }
+        }
+    }
+}
+
 static void create_symtab(TCCState *s1, struct macho *mo)
 {
     int sym_index, sym_end;
@@ -500,9 +1140,36 @@ static void create_symtab(TCCState *s1, struct macho *mo)
     /* Stub creation belongs to check_relocs, but we need to create
        the symbol now, so its included in the sorting.  */
     mo->stubs = new_section(s1, "__stubs", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    s1->got = new_section(s1, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     mo->stubsym = put_elf_sym(s1->symtab, 0, 0,
                               ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
                               mo->stubs->sh_num, ".__stubs");
+#ifdef CONFIG_NEW_MACHO
+    mo->chained_fixups = new_section(s1, "CHAINED_FIXUPS",
+				     SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+#else
+    mo->stub_helper = new_section(s1, "__stub_helper", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    mo->la_symbol_ptr = new_section(s1, "__la_symbol_ptr", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    mo->helpsym = put_elf_sym(s1->symtab, 0, 0,
+                              ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                              mo->stub_helper->sh_num, ".__stub_helper");
+    mo->lasym = put_elf_sym(s1->symtab, 0, 0,
+                            ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+                            mo->la_symbol_ptr->sh_num, ".__la_symbol_ptr");
+    section_ptr_add(data_section, -data_section->data_offset & (PTR_SIZE - 1));
+    mo->dyld_private = put_elf_sym(s1->symtab, data_section->data_offset, PTR_SIZE,
+                                   ELFW(ST_INFO)(STB_LOCAL, STT_OBJECT), 0,
+                                   data_section->sh_num, ".__dyld_private");
+    section_ptr_add(data_section, PTR_SIZE);
+    mo->dyld_stub_binder = put_elf_sym(s1->symtab, 0, 0,
+                		       ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT), 0,
+				       SHN_UNDEF, "dyld_stub_binder");
+    mo->rebase = new_section(s1, "REBASE", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->binding = new_section(s1, "BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->weak_binding = new_section(s1, "WEAK_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->lazy_binding = new_section(s1, "LAZY_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+#endif
+    mo->exports = new_section(s1, "EXPORT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 
     mo->symtab = new_section(s1, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     mo->strtab = new_section(s1, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
@@ -515,9 +1182,7 @@ static void create_symtab(TCCState *s1, struct macho *mo)
         pn[sym_index - 1].n_strx = put_elf_str(mo->strtab, name);
         pn[sym_index - 1].n_value = sym_index;
     }
-    tcc_enter_state(s1);  /* qsort needs global state */
-    qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp);
-    tcc_exit_state(s1);
+    tcc_qsort(pn, sym_end - 1, sizeof(*pn), machosymcmp, s1);
     mo->e2msym = tcc_malloc(sym_end * sizeof(*mo->e2msym));
     mo->e2msym[0] = -1;
     for (sym_index = 1; sym_index < sym_end; ++sym_index) {
@@ -526,76 +1191,412 @@ static void create_symtab(TCCState *s1, struct macho *mo)
 }
 
 const struct {
-    int seg;
+    int seg_initial;
     uint32_t flags;
     const char *name;
 } skinfo[sk_last] = {
-    /*[sk_unknown] =*/  { 0 },
-    /*[sk_discard] =*/  { 0 },
-    /*[sk_text] =*/     { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
-                             | S_ATTR_SOME_INSTRUCTIONS, "__text" },
-    /*[sk_stubs] =*/    { 0 },
-    /*[sk_ro_data] =*/  { 1, S_REGULAR, "__rodata" },
-    /*[sk_uw_info] =*/  { 0 },
-    /*[sk_nl_ptr] =*/   { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
-    /*[sk_la_ptr] =*/   { 0 },
-    /*[sk_init] =*/     { 2, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
-    /*[sk_fini] =*/     { 2, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
-    /*[sk_rw_data] =*/  { 2, S_REGULAR, "__data" },
-    /*[sk_bss] =*/      { 2, S_ZEROFILL, "__bss" },
-    /*[sk_linkedit] =*/ { 3, S_REGULAR, NULL },
+    /*[sk_unknown] =*/        { 0 },
+    /*[sk_discard] =*/        { 0 },
+    /*[sk_text] =*/           { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
+                                   | S_ATTR_SOME_INSTRUCTIONS, "__text" },
+    /*[sk_stubs] =*/          { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_SYMBOL_STUBS
+                                   | S_ATTR_SOME_INSTRUCTIONS , "__stubs" },
+    /*[sk_stub_helper] =*/    { 1, S_REGULAR | S_ATTR_PURE_INSTRUCTIONS
+                                   | S_ATTR_SOME_INSTRUCTIONS , "__stub_helper" },
+    /*[sk_ro_data] =*/        { 2, S_REGULAR, "__rodata" },
+    /*[sk_uw_info] =*/        { 0 },
+    /*[sk_nl_ptr] =*/         { 2, S_NON_LAZY_SYMBOL_POINTERS, "__got" },
+    /*[sk_debug_info] =*/     { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_info" },
+    /*[sk_debug_abbrev] =*/   { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_abbrev" },
+    /*[sk_debug_line] =*/     { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_line" },
+    /*[sk_debug_aranges] =*/  { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_aranges" },
+    /*[sk_debug_str] =*/      { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_str" },
+    /*[sk_debug_line_str] =*/ { 3, S_REGULAR | S_ATTR_DEBUG, "__debug_line_str" },
+    /*[sk_stab] =*/           { 4, S_REGULAR, "__stab" },
+    /*[sk_stab_str] =*/       { 4, S_REGULAR, "__stab_str" },
+    /*[sk_la_ptr] =*/         { 4, S_LAZY_SYMBOL_POINTERS, "__la_symbol_ptr" },
+    /*[sk_init] =*/           { 4, S_MOD_INIT_FUNC_POINTERS, "__mod_init_func" },
+    /*[sk_fini] =*/           { 4, S_MOD_TERM_FUNC_POINTERS, "__mod_term_func" },
+    /*[sk_rw_data] =*/        { 4, S_REGULAR, "__data" },
+    /*[sk_bss] =*/            { 4, S_ZEROFILL, "__bss" },
+    /*[sk_linkedit] =*/       { 5, S_REGULAR, NULL },
 };
+
+#define	START	((uint64_t)1 << 32)
+
+const struct {
+    int used;
+    const char *name;
+    uint64_t vmaddr;
+    uint64_t vmsize;
+    vm_prot_t maxprot;
+    vm_prot_t initprot;
+    uint32_t flags;
+} all_segment[] = {
+    { 1, "__PAGEZERO",       0, START, 0, 0,            0 },
+    { 0, "__TEXT",       START,     0, 5, 5,            0 },
+    { 0, "__DATA_CONST",    -1,     0, 3, 3, SG_READ_ONLY },
+    { 0, "__DWARF",         -1,     0, 7, 3,            0 },
+    { 0, "__DATA",          -1,     0, 3, 3,            0 },
+    { 1, "__LINKEDIT",      -1,     0, 1, 1,            0 },
+};
+
+#define	N_SEGMENT	(sizeof(all_segment)/sizeof(all_segment[0]))
+
+#ifdef CONFIG_NEW_MACHO
+static void calc_fixup_size(TCCState *s1, struct macho *mo)
+{
+    int i, size;
+
+    size = (sizeof(struct dyld_chained_fixups_header) + 7) & -8;
+    size += (sizeof(struct dyld_chained_starts_in_image) + (mo->nseg - 1) * sizeof(uint32_t) + 7) & -8;
+    for (i = 1; i < mo->nseg - 1; i++) {
+	int page_count = (get_segment(mo, i)->vmsize + SEG_PAGE_SIZE - 1) / SEG_PAGE_SIZE;
+	size += (sizeof(struct dyld_chained_starts_in_segment) + (page_count - 1) * sizeof(uint16_t) + 7) & -8;
+    }
+    size += mo->n_bind * sizeof (struct dyld_chained_import) + 1;
+    for (i = 0; i < mo->n_bind_rebase; i++) {
+	if (mo->bind_rebase[i].bind) {
+	    int sym_index = ELFW(R_SYM)(mo->bind_rebase[i].rel.r_info);
+	    ElfW(Sym) *sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	    const char *name = (char *) symtab_section->link->data + sym->st_name;
+	    size += strlen(name) + 1;
+	}
+    }
+    size = (size + 7) & -8;
+    section_ptr_add(mo->chained_fixups, size);
+}
+
+#else
+
+static void set_segment_and_offset(struct macho *mo, addr_t addr,
+				   uint8_t *ptr, int opcode,
+				   Section *sec, addr_t offset)
+{
+    int i;
+    struct segment_command_64 *seg = NULL;
+
+    for (i = 1; i < mo->nseg - 1; i++) {
+	seg = get_segment(mo, i);
+	if (addr >= seg->vmaddr && addr < (seg->vmaddr + seg->vmsize))
+	    break;
+    }
+    *ptr = opcode | i;
+    write_uleb128(sec, offset - seg->vmaddr);
+}
+
+static void bind_rebase(TCCState *s1, struct macho *mo)
+{
+    int i;
+    uint8_t *ptr;
+    ElfW(Sym) *sym;
+    const char *name;
+
+    for (i = 0; i < mo->n_lazy_bind; i++) {
+	int sym_index = ELFW(R_SYM)(mo->s_lazy_bind[i].rel.r_info);
+
+	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	name = (char *) symtab_section->link->data + sym->st_name;
+	write32le(mo->stub_helper->data +
+		  mo->s_lazy_bind[i].bind_offset,
+		  mo->lazy_binding->data_offset);
+	ptr = section_ptr_add(mo->lazy_binding, 1);
+	set_segment_and_offset(mo, mo->la_symbol_ptr->sh_addr, ptr,
+			       BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+			       mo->lazy_binding,
+			       mo->s_lazy_bind[i].la_symbol_offset +
+			       mo->la_symbol_ptr->sh_addr);
+	ptr = section_ptr_add(mo->lazy_binding, 5 + strlen(name));
+	*ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+		 (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
+	*ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
+	strcpy((char *)ptr, name);
+	ptr += strlen(name) + 1;
+	*ptr++ = BIND_OPCODE_DO_BIND;
+	*ptr = BIND_OPCODE_DONE;
+    }
+    for (i = 0; i < mo->n_rebase; i++) {
+	Section *s = s1->sections[mo->s_rebase[i].section];
+
+	ptr = section_ptr_add(mo->rebase, 2);
+	*ptr++ = REBASE_OPCODE_SET_TYPE_IMM | REBASE_TYPE_POINTER;
+	set_segment_and_offset(mo, s->sh_addr, ptr,
+			       REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+			       mo->rebase,
+			       mo->s_rebase[i].rel.r_offset +
+			       s->sh_addr);
+	ptr = section_ptr_add(mo->rebase, 1);
+	*ptr = REBASE_OPCODE_DO_REBASE_IMM_TIMES | 1;
+    }
+    for (i = 0; i < mo->n_bind; i++) {
+	int sym_index = ELFW(R_SYM)(mo->bind[i].rel.r_info);
+	Section *s = s1->sections[mo->bind[i].section];
+	Section *binding;
+
+	sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	name = (char *) symtab_section->link->data + sym->st_name;
+	binding = ELFW(ST_BIND)(sym->st_info) == STB_WEAK
+	    ? mo->weak_binding : mo->binding;
+        ptr = section_ptr_add(binding, 5 + strlen(name));
+        *ptr++ = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM |
+	         (BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xf);
+        *ptr++ = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM | 0;
+        strcpy((char *)ptr, name);
+        ptr += strlen(name) + 1;
+        *ptr++ = BIND_OPCODE_SET_TYPE_IMM | BIND_TYPE_POINTER;
+	set_segment_and_offset(mo, s->sh_addr, ptr,
+			       BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB,
+			       binding,
+			       mo->bind[i].rel.r_offset + s->sh_addr);
+        ptr = section_ptr_add(binding, 1);
+        *ptr++ = BIND_OPCODE_DO_BIND;
+    }
+    if (mo->rebase->data_offset) {
+        ptr = section_ptr_add(mo->rebase, 1);
+        *ptr = REBASE_OPCODE_DONE;
+    }
+    if (mo->binding->data_offset) {
+        ptr = section_ptr_add(mo->binding, 1);
+        *ptr = BIND_OPCODE_DONE;
+    }
+    if (mo->weak_binding->data_offset) {
+        ptr = section_ptr_add(mo->weak_binding, 1);
+        *ptr = BIND_OPCODE_DONE;
+    }
+    tcc_free(mo->s_lazy_bind);
+    tcc_free(mo->s_rebase);
+    tcc_free(mo->bind);
+}
+#endif
+
+struct trie_info {
+    const char *name;
+    int flag;
+    addr_t addr;
+    int str_size;
+    int term_size;
+};
+
+struct trie_node {
+    int start;
+    int end;
+    int index_start;
+    int index_end;
+    int n_child;
+    struct trie_node *child;
+};
+
+struct trie_seq {
+    int n_child;
+    struct trie_node *node;
+    int offset;
+    int nest_offset;
+};
+
+static void create_trie(struct trie_node *node,
+                        int from, int to, int index_start,
+                        int n_trie, struct trie_info *trie)
+{
+    int i;
+    int start, end, index_end;
+    char cur;
+    struct trie_node *child;
+
+    for (i = from; i < to; i = end) {
+        cur = trie[i].name[index_start];
+        start = i++;
+        for (; i < to; i++)
+            if (cur != trie[i].name[index_start])
+                break;
+        end = i;
+        if (start == end - 1 ||
+            (trie[start].name[index_start] &&
+             trie[start].name[index_start + 1] == 0))
+            index_end = trie[start].str_size - 1;
+        else {
+            index_end = index_start + 1;
+            for (;;) {
+                cur = trie[start].name[index_end];
+                for (i = start + 1; i < end; i++)
+                    if (cur != trie[i].name[index_end])
+                        break;
+                if (trie[start].name[index_end] &&
+                    trie[start].name[index_end + 1] == 0) {
+                    end = start + 1;
+                    index_end = trie[start].str_size - 1;
+                    break;
+                }
+                if (i != end)
+                    break;
+                index_end++;
+            }
+        }
+        node->child = tcc_realloc(node->child,
+                                  (node->n_child + 1) *
+                                  sizeof(struct trie_node));
+        child = &node->child[node->n_child];
+        child->start = start;
+        child->end = end;
+        child->index_start = index_start;
+        child->index_end = index_end;
+        child->n_child = 0;
+        child->child = NULL;
+        node->n_child++;
+        if (start != end - 1)
+            create_trie(child, start, end, index_end, n_trie, trie);
+    }
+}
+
+static int create_seq(int *offset, int *n_seq, struct trie_seq **seq,
+                        struct trie_node *node,
+                        int n_trie, struct trie_info *trie)
+{
+    int i, nest_offset, last_seq = *n_seq, retval = *offset;
+    struct trie_seq *p_seq;
+    struct trie_node *p_nest;
+
+    for (i = 0; i < node->n_child; i++) {
+        p_nest = &node->child[i];
+        *seq = tcc_realloc(*seq, (*n_seq + 1) * sizeof(struct trie_seq));
+        p_seq = &(*seq)[(*n_seq)++];
+        p_seq->n_child = i == 0 ? node->n_child : -1;
+        p_seq->node = p_nest;
+        p_seq->offset = *offset;
+        p_seq->nest_offset = 0;
+        *offset += (i == 0 ? 1 + 1 : 0) +
+                   p_nest->index_end - p_nest->index_start + 1 + 3;
+    }
+    for (i = 0; i < node->n_child; i++) {
+        nest_offset =
+            create_seq(offset, n_seq, seq, &node->child[i], n_trie, trie);
+        p_seq = &(*seq)[last_seq + i];
+        p_seq->nest_offset = nest_offset;
+    }
+    return retval;
+}
+
+static void node_free(struct trie_node *node)
+{
+    int i;
+
+    for (i = 0; i < node->n_child; i++)
+	node_free(&node->child[i]);
+    tcc_free(node->child);
+}
+
+static int triecmp(const void *_a, const void *_b, void *arg)
+{
+    struct trie_info *a = (struct trie_info *) _a;
+    struct trie_info *b = (struct trie_info *) _b;
+
+    return strcmp(a->name, b->name);
+}
+
+static void export_trie(TCCState *s1, struct macho *mo)
+{
+    int i, size, offset = 0, save_offset;
+    uint8_t *ptr;
+    int sym_index;
+    int sym_end = symtab_section->data_offset / sizeof(ElfW(Sym));
+    int n_trie = 0, n_seq = 0;
+    struct trie_info *trie = NULL, *p_trie;
+    struct trie_node node, *p_node;
+    struct trie_seq *seq = NULL;
+    addr_t vm_addr = get_segment(mo, 1)->vmaddr;
+
+    for (sym_index = 1; sym_index < sym_end; ++sym_index) {
+	ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
+	const char *name = (char*)symtab_section->link->data + sym->st_name;
+
+	if (sym->st_shndx == text_section->sh_num &&
+            (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL ||
+	     ELFW(ST_BIND)(sym->st_info) == STB_WEAK)) {
+	    int flag = EXPORT_SYMBOL_FLAGS_KIND_REGULAR;
+	    addr_t addr =
+		sym->st_value + s1->sections[sym->st_shndx]->sh_addr - vm_addr;
+
+	    if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
+		flag |= EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION;
+	    dprintf ("%s %d %llx\n", name, flag, addr + vm_addr);
+	    trie = tcc_realloc(trie, (n_trie + 1) * sizeof(struct trie_info));
+	    trie[n_trie].name = name;
+	    trie[n_trie].flag = flag;
+	    trie[n_trie].addr = addr;
+	    trie[n_trie].str_size = strlen(name) + 1;
+	    trie[n_trie].term_size = uleb128_size(flag) + uleb128_size(addr);
+	    n_trie++;
+	}
+    }
+    if (n_trie) {
+        tcc_qsort(trie, n_trie, sizeof(struct trie_info), triecmp, NULL);
+	memset(&node, 0, sizeof(node));
+        create_trie(&node, 0, n_trie, 0, n_trie, trie);
+	create_seq(&offset, &n_seq, &seq, &node, n_trie, trie);
+        save_offset = offset;
+        for (i = 0; i < n_seq; i++) {
+            p_node = seq[i].node;
+            if (p_node->n_child == 0) {
+                p_trie = &trie[p_node->start];
+                seq[i].nest_offset = offset;
+                offset += 1 + p_trie->term_size + 1;
+            }
+        }
+        for (i = 0; i < n_seq; i++) {
+            p_node = seq[i].node;
+            p_trie = &trie[p_node->start];
+            if (seq[i].n_child >= 0) {
+                section_ptr_add(mo->exports,
+				seq[i].offset - mo->exports->data_offset);
+                ptr = section_ptr_add(mo->exports, 2);
+                *ptr++ = 0;
+                *ptr = seq[i].n_child;
+            }
+            size = p_node->index_end - p_node->index_start;
+            ptr = section_ptr_add(mo->exports, size + 1);
+            memcpy(ptr, &p_trie->name[p_node->index_start], size);
+            ptr[size] = 0;
+            write_uleb128(mo->exports, seq[i].nest_offset);
+        }
+        section_ptr_add(mo->exports, save_offset - mo->exports->data_offset);
+        for (i = 0; i < n_seq; i++) {
+            p_node = seq[i].node;
+            if (p_node->n_child == 0) {
+                p_trie = &trie[p_node->start];
+                write_uleb128(mo->exports, p_trie->term_size);
+                write_uleb128(mo->exports, p_trie->flag);
+                write_uleb128(mo->exports, p_trie->addr);
+                ptr = section_ptr_add(mo->exports, 1);
+                *ptr = 0;
+            }
+        }
+        section_ptr_add(mo->exports, -mo->exports->data_offset & 7);
+	node_free(&node);
+        tcc_free(seq);
+    }
+    tcc_free(trie);
+}
 
 static void collect_sections(TCCState *s1, struct macho *mo)
 {
     int i, sk, numsec;
+    int used_segment[N_SEGMENT];
     uint64_t curaddr, fileofs;
     Section *s;
-    struct segment_command_64 *seg = NULL;
+    struct segment_command_64 *seg;
+#ifdef CONFIG_NEW_MACHO
+    struct linkedit_data_command *chained_fixups_lc;
+    struct linkedit_data_command *export_trie_lc;
+#endif
+    struct build_version_command *dyldbv;
+    struct source_version_command *dyldsv;
     struct dylinker_command *dyldlc;
     struct symtab_command *symlc;
     struct dysymtab_command *dysymlc;
     char *str;
 
-    seg = add_segment(mo, "__PAGEZERO");
-    seg->vmsize = (uint64_t)1 << 32;
+    for (i = 0; i < N_SEGMENT; i++)
+	used_segment[i] = all_segment[i].used;
 
-    seg = add_segment(mo, "__TEXT");
-    seg->vmaddr = (uint64_t)1 << 32;
-    seg->maxprot = 7;  // rwx
-    seg->initprot = 5; // r-x
-
-    seg = add_segment(mo, "__DATA");
-    seg->vmaddr = -1;
-    seg->maxprot = 7;  // rwx
-    seg->initprot = 3; // rw-
-
-    seg = add_segment(mo, "__LINKEDIT");
-    seg->vmaddr = -1;
-    seg->maxprot = 7;  // rwx
-    seg->initprot = 1; // r--
-
-    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
-    mo->ep->entryoff = 4096;
-
-    i = (sizeof(*dyldlc) + strlen("/usr/lib/dyld") + 1 + 7) &-8;
-    dyldlc = add_lc(mo, LC_LOAD_DYLINKER, i);
-    dyldlc->name = sizeof(*dyldlc);
-    str = (char*)dyldlc + dyldlc->name;
-    strcpy(str, "/usr/lib/dyld");
-
-    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
-    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
-
-    for(i = 0; i < s1->nb_loaded_dlls; i++) {
-        DLLReference *dllref = s1->loaded_dlls[i];
-        if (dllref->level == 0)
-          add_dylib(mo, dllref->name);
-    }
-
-    /* dyld requires a writable segment with classic Mach-O, but it ignores
-       zero-sized segments for this, so force to have some data.  */
-    section_ptr_add(data_section, 1);
     memset (mo->sk_to_sect, 0, sizeof(mo->sk_to_sect));
     for (i = s1->nb_sections; i-- > 1;) {
         int type, flags;
@@ -603,19 +1604,49 @@ static void collect_sections(TCCState *s1, struct macho *mo)
         type = s->sh_type;
         flags = s->sh_flags;
         sk = sk_unknown;
-        if (flags & SHF_ALLOC) {
+	/* debug sections have sometimes no SHF_ALLOC */
+        if ((flags & SHF_ALLOC) || !strncmp(s->name, ".debug_", 7)) {
             switch (type) {
             default:           sk = sk_unknown; break;
             case SHT_INIT_ARRAY: sk = sk_init; break;
             case SHT_FINI_ARRAY: sk = sk_fini; break;
             case SHT_NOBITS:   sk = sk_bss; break;
             case SHT_SYMTAB:   sk = sk_discard; break;
-            case SHT_STRTAB:   sk = s == stabstr_section ? sk_ro_data : sk_discard; break;
+            case SHT_STRTAB:
+		if (s == stabstr_section)
+		  sk = sk_stab_str;
+		else
+		  sk = sk_discard;
+		break;
             case SHT_RELX:     sk = sk_discard; break;
             case SHT_LINKEDIT: sk = sk_linkedit; break;
             case SHT_PROGBITS:
-                if (s == s1->got)
+                if (s == mo->stubs)
+                  sk = sk_stubs;
+#ifndef CONFIG_NEW_MACHO
+                else if (s == mo->stub_helper)
+                  sk = sk_stub_helper;
+                else if (s == mo->la_symbol_ptr)
+                  sk = sk_la_ptr;
+#endif
+                else if (s == rodata_section)
+                  sk = sk_ro_data;
+                else if (s == s1->got)
                   sk = sk_nl_ptr;
+                else if (s == stab_section)
+                  sk = sk_stab;
+                else if (s == dwarf_info_section)
+                  sk = sk_debug_info;
+                else if (s == dwarf_abbrev_section)
+                  sk = sk_debug_abbrev;
+                else if (s == dwarf_line_section)
+                  sk = sk_debug_line;
+                else if (s == dwarf_aranges_section)
+                  sk = sk_debug_aranges;
+                else if (s == dwarf_str_section)
+                  sk = sk_debug_str;
+                else if (s == dwarf_line_str_section)
+                  sk = sk_debug_line_str;
                 else if (flags & SHF_EXECINSTR)
                   sk = sk_text;
                 else if (flags & SHF_WRITE)
@@ -628,7 +1659,58 @@ static void collect_sections(TCCState *s1, struct macho *mo)
           sk = sk_discard;
         s->prev = mo->sk_to_sect[sk].s;
         mo->sk_to_sect[sk].s = s;
+	used_segment[skinfo[sk].seg_initial] = 1;
     }
+
+    for (i = 0; i < N_SEGMENT; i++)
+	if (used_segment[i]) {
+	    seg = add_segment(mo, all_segment[i].name);
+	    seg->vmaddr = all_segment[i].vmaddr;
+	    seg->vmsize = all_segment[i].vmsize;
+	    seg->maxprot = all_segment[i].maxprot;
+	    seg->initprot = all_segment[i].initprot;
+	    seg->flags = all_segment[i].flags;
+            for (sk = sk_unknown; sk < sk_last; sk++)
+		if (skinfo[sk].seg_initial == i)
+	            mo->segment[sk] = mo->nseg - 1;
+	}
+
+#ifdef CONFIG_NEW_MACHO
+    chained_fixups_lc = add_lc(mo, LC_DYLD_CHAINED_FIXUPS,
+			       sizeof(struct linkedit_data_command));
+    export_trie_lc = add_lc(mo, LC_DYLD_EXPORTS_TRIE,
+			    sizeof(struct linkedit_data_command));
+#else
+    mo->dyldinfo = add_lc(mo, LC_DYLD_INFO_ONLY, sizeof(*mo->dyldinfo));
+#endif
+
+    symlc = add_lc(mo, LC_SYMTAB, sizeof(*symlc));
+    dysymlc = add_lc(mo, LC_DYSYMTAB, sizeof(*dysymlc));
+
+    i = (sizeof(*dyldlc) + strlen("/usr/lib/dyld") + 1 + 7) &-8;
+    dyldlc = add_lc(mo, LC_LOAD_DYLINKER, i);
+    dyldlc->name = sizeof(*dyldlc);
+    str = (char*)dyldlc + dyldlc->name;
+    strcpy(str, "/usr/lib/dyld");
+
+    dyldbv = add_lc(mo, LC_BUILD_VERSION, sizeof(*dyldbv));
+    dyldbv->platform = PLATFORM_MACOS;
+    dyldbv->minos = (10 << 16) + (6 << 8);
+    dyldbv->sdk = (10 << 16) + (6 << 8);
+    dyldbv->ntools = 0;
+
+    dyldsv = add_lc(mo, LC_SOURCE_VERSION, sizeof(*dyldsv));
+    dyldsv->version = 0;
+
+    mo->ep = add_lc(mo, LC_MAIN, sizeof(*mo->ep));
+    mo->ep->entryoff = 4096;
+
+    for(i = 0; i < s1->nb_loaded_dlls; i++) {
+        DLLReference *dllref = s1->loaded_dlls[i];
+        if (dllref->level == 0)
+          add_dylib(mo, dllref->name);
+    }
+
     fileofs = 4096;  /* leave space for mach-o headers */
     curaddr = get_segment(mo, 1)->vmaddr;
     curaddr += 4096;
@@ -641,22 +1723,45 @@ static void collect_sections(TCCState *s1, struct macho *mo)
             seg->vmsize = curaddr - seg->vmaddr;
             seg->filesize = fileofs - seg->fileoff;
         }
-        if (skinfo[sk].seg && mo->sk_to_sect[sk].s) {
+#ifdef CONFIG_NEW_MACHO
+	if (sk == sk_linkedit) {
+	    calc_fixup_size(s1, mo);
+	    export_trie(s1, mo);
+	}
+#else
+	if (sk == sk_linkedit) {
+	    bind_rebase(s1, mo);
+	    export_trie(s1, mo);
+	}
+#endif
+        if (mo->segment[sk] && mo->sk_to_sect[sk].s) {
             uint64_t al = 0;
             int si;
-            seg = get_segment(mo, skinfo[sk].seg);
+            seg = get_segment(mo, mo->segment[sk]);
             if (skinfo[sk].name) {
                 si = add_section(mo, &seg, skinfo[sk].name);
                 numsec++;
-                mo->lc[mo->seg2lc[skinfo[sk].seg]] = (struct load_command*)seg;
+                mo->lc[mo->seg2lc[mo->segment[sk]]] = (struct load_command*)seg;
                 mo->sk_to_sect[sk].machosect = si;
                 sec = get_section(seg, si);
                 sec->flags = skinfo[sk].flags;
+		if (sk == sk_stubs)
+#ifdef TCC_TARGET_X86_64
+	    	    sec->reserved2 = 6;
+#elif defined TCC_TARGET_ARM64
+	    	    sec->reserved2 = 12;
+#endif
+		if (sk == sk_nl_ptr)
+	    	    sec->reserved1 = mo->nr_plt;
+#ifndef CONFIG_NEW_MACHO
+		if (sk == sk_la_ptr)
+	    	    sec->reserved1 = mo->nr_plt + mo->n_got;
+#endif
             }
             if (seg->vmaddr == -1) {
-                curaddr = (curaddr + 4095) & -4096;
+                curaddr = (curaddr + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
                 seg->vmaddr = curaddr;
-                fileofs = (fileofs + 4095) & -4096;
+                fileofs = (fileofs + SEG_PAGE_SIZE - 1) & -SEG_PAGE_SIZE;
                 seg->fileoff = fileofs;
             }
 
@@ -737,6 +1842,38 @@ static void collect_sections(TCCState *s1, struct macho *mo)
     dysymlc->nundefsym = symlc->nsyms - dysymlc->iundefsym;
     dysymlc->indirectsymoff = mo->indirsyms->sh_offset;
     dysymlc->nindirectsyms = mo->indirsyms->data_offset / sizeof(uint32_t);
+
+#ifdef CONFIG_NEW_MACHO
+    if (mo->chained_fixups->data_offset) {
+        chained_fixups_lc->dataoff = mo->chained_fixups->sh_offset;
+        chained_fixups_lc->datasize = mo->chained_fixups->data_offset;
+    }
+    if (mo->exports->data_offset) {
+        export_trie_lc->dataoff = mo->exports->sh_offset;
+        export_trie_lc->datasize = mo->exports->data_offset;
+    }
+#else
+    if (mo->rebase->data_offset) {
+        mo->dyldinfo->rebase_off = mo->rebase->sh_offset;
+        mo->dyldinfo->rebase_size = mo->rebase->data_offset;
+    }
+    if (mo->binding->data_offset) {
+        mo->dyldinfo->bind_off = mo->binding->sh_offset;
+        mo->dyldinfo->bind_size = mo->binding->data_offset;
+    }
+    if (mo->weak_binding->data_offset) {
+        mo->dyldinfo->weak_bind_off = mo->weak_binding->sh_offset;
+        mo->dyldinfo->weak_bind_size = mo->weak_binding->data_offset;
+    }
+    if (mo->lazy_binding->data_offset) {
+        mo->dyldinfo->lazy_bind_off = mo->lazy_binding->sh_offset;
+        mo->dyldinfo->lazy_bind_size = mo->lazy_binding->data_offset;
+    }
+    if (mo->exports->data_offset) {
+        mo->dyldinfo->export_off = mo->exports->sh_offset;
+        mo->dyldinfo->export_size = mo->exports->data_offset;
+    }
+#endif
 }
 
 static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
@@ -745,10 +1882,15 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
     uint64_t fileofs = 0;
     Section *s;
     mo->mh.mh.magic = MH_MAGIC_64;
-    mo->mh.mh.cputype = 0x1000007;    // x86_64
-    mo->mh.mh.cpusubtype = 0x80000003;// all | CPU_SUBTYPE_LIB64
-    mo->mh.mh.filetype = 2;           // MH_EXECUTE
-    mo->mh.mh.flags = 4;              // DYLDLINK
+#ifdef TCC_TARGET_X86_64
+    mo->mh.mh.cputype = CPU_TYPE_X86_64;
+    mo->mh.mh.cpusubtype = CPU_SUBTYPE_LIB64 | CPU_SUBTYPE_X86_ALL;
+#elif defined TCC_TARGET_ARM64
+    mo->mh.mh.cputype = CPU_TYPE_ARM64;
+    mo->mh.mh.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
+#endif
+    mo->mh.mh.filetype = MH_EXECUTE;
+    mo->mh.mh.flags = MH_DYLDLINK | MH_PIE;
     mo->mh.mh.ncmds = mo->nlc;
     mo->mh.mh.sizeofcmds = 0;
     for (i = 0; i < mo->nlc; i++)
@@ -763,9 +1905,9 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
 
     for (sk = sk_unknown; sk < sk_last; sk++) {
         //struct segment_command_64 *seg;
-        if (!skinfo[sk].seg || !mo->sk_to_sect[sk].s)
+        if (!mo->segment[sk] || !mo->sk_to_sect[sk].s)
           continue;
-        /*seg =*/ get_segment(mo, skinfo[sk].seg);
+        /*seg =*/ get_segment(mo, mo->segment[sk]);
         for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
             if (s->sh_type != SHT_NOBITS) {
                 while (fileofs < s->sh_offset)
@@ -778,6 +1920,172 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
         }
     }
 }
+
+#ifdef CONFIG_NEW_MACHO
+static int bind_rebase_cmp(const void *_a, const void *_b, void *arg)
+{
+    TCCState *s1 = arg;
+    struct bind_rebase *a = (struct bind_rebase *) _a;
+    struct bind_rebase *b = (struct bind_rebase *) _b;
+    addr_t aa = s1->sections[a->section]->sh_addr + a->rel.r_offset;
+    addr_t ab = s1->sections[b->section]->sh_addr + b->rel.r_offset;
+
+    return aa > ab ? 1 : aa < ab ? -1 : 0;
+}
+
+ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
+{
+    int i, j, k, bind_index, size, page_count, sym_index;
+    const char *name;
+    ElfW(Sym) *sym;
+    unsigned char *data = mo->chained_fixups->data;
+    struct segment_command_64 *seg;
+    struct dyld_chained_fixups_header *header;
+    struct dyld_chained_starts_in_image *image;
+    struct dyld_chained_starts_in_segment *segment;
+    struct dyld_chained_import *import;
+
+    tcc_qsort(mo->bind_rebase, mo->n_bind_rebase, sizeof(struct bind_rebase),
+	      bind_rebase_cmp, s1);
+    for (i = 0; i < mo->n_bind_rebase - 1; i++)
+	if (mo->bind_rebase[i].section == mo->bind_rebase[i + 1].section &&
+	    mo->bind_rebase[i].rel.r_offset == mo->bind_rebase[i + 1].rel.r_offset) {
+	    sym_index = ELFW(R_SYM)(mo->bind_rebase[i].rel.r_info);
+            sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	    name = (char *) symtab_section->link->data + sym->st_name;
+	    tcc_error("Overlap %s/%s %s:%s",
+		      mo->bind_rebase[i].bind ? "bind" : "rebase",
+		      mo->bind_rebase[i + 1].bind ? "bind" : "rebase",
+		      s1->sections[mo->bind_rebase[i].section]->name, name);
+	}
+    header = (struct dyld_chained_fixups_header *) data;
+    data += (sizeof(struct dyld_chained_fixups_header) + 7) & -8;
+    header->starts_offset = data - mo->chained_fixups->data;
+    header->imports_count = mo->n_bind;
+    header->imports_format = DYLD_CHAINED_IMPORT;
+    header->symbols_format = 0;
+    size = sizeof(struct dyld_chained_starts_in_image) +
+	   (mo->nseg - 1) * sizeof(uint32_t);
+    image = (struct dyld_chained_starts_in_image *) data;
+    data += (size + 7) & -8;
+    image->seg_count = mo->nseg;
+    for (i = 1; i < mo->nseg - 1; i++) {
+        image->seg_info_offset[i] = (data - mo->chained_fixups->data) -
+				    header->starts_offset;
+	seg = get_segment(mo, i);
+	page_count = (seg->vmsize + SEG_PAGE_SIZE - 1) / SEG_PAGE_SIZE;
+	size = sizeof(struct dyld_chained_starts_in_segment) +
+		      (page_count - 1) * sizeof(uint16_t);
+        segment = (struct dyld_chained_starts_in_segment *) data;
+        data += (size + 7) & -8;
+        segment->size = size;
+        segment->page_size = SEG_PAGE_SIZE;
+#if 1
+#define	PTR_64_OFFSET 0
+#define	PTR_64_MASK   0x7FFFFFFFFFFULL
+        segment->pointer_format = DYLD_CHAINED_PTR_64;
+#else
+#define	PTR_64_OFFSET 0x100000000ULL
+#define	PTR_64_MASK   0xFFFFFFFFFFFFFFULL
+        segment->pointer_format = DYLD_CHAINED_PTR_64_OFFSET;
+#endif
+        segment->segment_offset = seg->fileoff;
+        segment->max_valid_pointer = 0;
+        segment->page_count = page_count;
+	// add bind/rebase
+	bind_index = 0;
+	k = 0;
+	for (j = 0; j < page_count; j++) {
+	    addr_t start = seg->vmaddr + j * SEG_PAGE_SIZE;
+	    addr_t end = start + SEG_PAGE_SIZE;
+	    void *last;
+	    addr_t last_o = 0;
+	    addr_t cur_o, cur;
+	    struct dyld_chained_ptr_64_rebase *rebase;
+	    struct dyld_chained_ptr_64_bind *bind;
+
+	    segment->page_start[j] = DYLD_CHAINED_PTR_START_NONE;
+	    for (; k < mo->n_bind_rebase; k++) {
+	        Section *s = s1->sections[mo->bind_rebase[k].section];
+		addr_t r_offset = mo->bind_rebase[k].rel.r_offset;
+		addr_t addr = s->sh_addr + r_offset;
+
+		if ((addr & 3) ||
+		    (addr & (SEG_PAGE_SIZE - 1)) > SEG_PAGE_SIZE - PTR_SIZE)
+		    tcc_error("Illegal rel_offset %s %lld",
+			      s->name, (long long)r_offset);
+		if (addr >= end)
+		    break;
+		if (addr >= start) {
+		    cur_o = addr - start;
+	            if (mo->bind_rebase[k].bind) {
+		        if (segment->page_start[j] == DYLD_CHAINED_PTR_START_NONE)
+			    segment->page_start[j] = cur_o;
+		        else {
+			    bind = (struct dyld_chained_ptr_64_bind *) last;
+			    bind->next = (cur_o - last_o) / 4;
+		        }
+		        bind = (struct dyld_chained_ptr_64_bind *)
+				    (s->data + r_offset);
+		        last = bind;
+		        last_o = cur_o;
+		        bind->ordinal = bind_index;
+		        bind->addend = 0;
+		        bind->reserved = 0;
+		        bind->next = 0;
+		        bind->bind = 1;
+		    }
+		    else {
+		        if (segment->page_start[j] == DYLD_CHAINED_PTR_START_NONE)
+			    segment->page_start[j] = cur_o;
+		        else {
+			    rebase = (struct dyld_chained_ptr_64_rebase *) last;
+			    rebase->next = (cur_o - last_o) / 4;
+		        }
+		        rebase = (struct dyld_chained_ptr_64_rebase *)
+				    (s->data + r_offset);
+		        last = rebase;
+		        last_o = cur_o;
+		        cur = (*(uint64_t *) (s->data + r_offset)) -
+			      PTR_64_OFFSET;
+		        rebase->target = cur & PTR_64_MASK;
+		        rebase->high8 = cur >> (64 - 8);
+			if (cur != ((uint64_t)rebase->high8 << (64 - 8)) + rebase->target)
+			    tcc_error("rebase error");
+		        rebase->reserved = 0;
+		        rebase->next = 0;
+		        rebase->bind = 0;
+		    }
+		}
+		bind_index += mo->bind_rebase[k].bind;
+	    }
+	}
+    }
+    // add imports
+    header->imports_offset = data - mo->chained_fixups->data;
+    import = (struct dyld_chained_import *) data;
+    data += mo->n_bind * sizeof (struct dyld_chained_import);
+    header->symbols_offset = data - mo->chained_fixups->data;
+    data++;
+    for (i = 0, bind_index = 0; i < mo->n_bind_rebase; i++) {
+	if (mo->bind_rebase[i].bind) {
+	    import[bind_index].lib_ordinal =
+		BIND_SPECIAL_DYLIB_FLAT_LOOKUP & 0xffu;
+	    import[bind_index].name_offset =
+		(data - mo->chained_fixups->data) - header->symbols_offset;
+	    sym_index = ELFW(R_SYM)(mo->bind_rebase[i].rel.r_info);
+	    sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
+	    import[bind_index].weak_import =
+		ELFW(ST_BIND)(sym->st_info) == STB_WEAK;
+	    name = (char *) symtab_section->link->data + sym->st_name;
+            strcpy((char *) data, name);
+	    data += strlen(name) + 1;
+	    bind_index++;
+	}
+    }
+    tcc_free(mo->bind_rebase);
+}
+#endif
 
 ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
 {
@@ -803,6 +2111,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         printf("<- %s\n", filename);
 
     tcc_add_runtime(s1);
+    tcc_macho_add_destructor(s1);
     resolve_common_syms(s1);
     create_symtab(s1, &mo);
     check_relocs(s1, &mo);
@@ -815,6 +2124,9 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
         if (s1->nb_errors)
           goto do_ret;
         relocate_sections(s1);
+#ifdef CONFIG_NEW_MACHO
+	bind_rebase_import(s1, &mo);
+#endif
         convert_symbols(s1, &mo);
         macho_write(s1, &mo, fp);
     }
@@ -822,11 +2134,23 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
  do_ret:
     for (i = 0; i < mo.nlc; i++)
       tcc_free(mo.lc[i]);
+    tcc_free(mo.seg2lc);
     tcc_free(mo.lc);
     tcc_free(mo.elfsectomacho);
     tcc_free(mo.e2msym);
 
     fclose(fp);
+#ifdef CONFIG_CODESIGN
+    {
+	char command[1024];
+	int retval;
+
+	snprintf(command, sizeof(command), "codesign -f -s - %s", filename);
+	retval = system (command);
+	if (retval == -1 || !(WIFEXITED(retval) && WEXITSTATUS(retval) == 0))
+	    tcc_error ("command failed '%s'", command);
+    }
+#endif
     return ret;
 }
 
@@ -959,8 +2283,13 @@ ST_FUNC int macho_load_dll(TCCState * s1, int fd, const char* filename, int lev)
                                         fh.nfat_arch * sizeof(*fa));
         swap = fh.magic == FAT_CIGAM;
         for (i = 0; i < SWAP(fh.nfat_arch); i++)
-          if (SWAP(fa[i].cputype) == 0x01000007 /* CPU_TYPE_X86_64 */
-              && SWAP(fa[i].cpusubtype) == 3)   /* CPU_SUBTYPE_X86_ALL */
+#ifdef TCC_TARGET_X86_64
+          if (SWAP(fa[i].cputype) == CPU_TYPE_X86_64
+              && SWAP(fa[i].cpusubtype) == CPU_SUBTYPE_X86_ALL)
+#elif defined TCC_TARGET_ARM64
+          if (SWAP(fa[i].cputype) == CPU_TYPE_ARM64
+              && SWAP(fa[i].cpusubtype) == CPU_SUBTYPE_ARM64_ALL)
+#endif
             break;
         if (i == SWAP(fh.nfat_arch)) {
             tcc_free(fa);

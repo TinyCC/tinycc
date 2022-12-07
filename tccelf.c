@@ -187,7 +187,8 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
             ElfW_Rel *rel_end = (ElfW_Rel*)(sr->data + sr->data_offset);
             for (; rel < rel_end; ++rel) {
                 int n = ELFW(R_SYM)(rel->r_info) - first_sym;
-                //if (n < 0) tcc_error("internal: invalid symbol index in relocation");
+                if (n < 0) /* zero sym_index in reloc (can happen with asm) */
+                    continue;
                 rel->r_info = ELFW(R_INFO)(tr[n], ELFW(R_TYPE)(rel->r_info));
             }
         }
@@ -215,6 +216,7 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
         sec->sh_addralign = 2;
         break;
     case SHT_HASH:
+    case SHT_GNU_HASH:
     case SHT_REL:
     case SHT_RELA:
     case SHT_DYNSYM:
@@ -323,7 +325,7 @@ static void section_reserve(Section *sec, unsigned long size)
 }
 #endif
 
-static Section *find_section_create (TCCState *s1, const char *name, int create)
+static Section *have_section(TCCState *s1, const char *name)
 {
     Section *sec;
     int i;
@@ -332,15 +334,18 @@ static Section *find_section_create (TCCState *s1, const char *name, int create)
         if (!strcmp(name, sec->name))
             return sec;
     }
-    /* sections are created as PROGBITS */
-    return create ? new_section(s1, name, SHT_PROGBITS, SHF_ALLOC) : NULL;
+    return NULL;
 }
 
 /* return a reference to a section, and create it if it does not
    exists */
 ST_FUNC Section *find_section(TCCState *s1, const char *name)
 {
-    return find_section_create (s1, name, 1);
+    Section *sec = have_section(s1, name);
+    if (sec)
+        return sec;
+    /* sections are created as PROGBITS */
+    return new_section(s1, name, SHT_PROGBITS, SHF_ALLOC);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -358,9 +363,9 @@ ST_FUNC int put_elf_str(Section *s, const char *sym)
 }
 
 /* elf symbol hashing function */
-static unsigned long elf_hash(const unsigned char *name)
+static ElfW(Word) elf_hash(const unsigned char *name)
 {
-    unsigned long h = 0, g;
+    ElfW(Word) h = 0, g;
 
     while (*name) {
         h = (h << 4) + *name++;
@@ -596,8 +601,14 @@ version_add (TCCState *s1)
             ElfW(Vernaux) *vna = 0;
             if (sv->out_index < 1)
               continue;
+
             /* make sure that a DT_NEEDED tag is put */
-            tcc_add_dllref(s1, sv->lib, 0);
+            /* abitest-tcc fails on older i386-linux with "ld-linux.so.2" DT_NEEDED
+               ret_int_test... Inconsistency detected by ld.so: dl-minimal.c: 148:
+               realloc: Assertion `ptr == alloc_last_block' failed! */
+            if (strcmp(sv->lib, "ld-linux.so.2"))
+                tcc_add_dllref(s1, sv->lib, 0);
+
             vnofs = section_add(verneed_section, sizeof(*vn), 1);
             vn = (ElfW(Verneed)*)(verneed_section->data + vnofs);
             vn->vn_version = 1;
@@ -778,6 +789,25 @@ ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
     return &s1->sym_attrs[index];
 }
 
+static void modify_reloctions_old_to_new(TCCState *s1, Section *s, int *old_to_new_syms)
+{
+    int i, type, sym_index;
+    Section *sr;
+    ElfW_Rel *rel;
+
+    for(i = 1; i < s1->nb_sections; i++) {
+        sr = s1->sections[i];
+        if (sr->sh_type == SHT_RELX && sr->link == s) {
+            for_each_elem(sr, 0, rel, ElfW_Rel) {
+                sym_index = ELFW(R_SYM)(rel->r_info);
+                type = ELFW(R_TYPE)(rel->r_info);
+                sym_index = old_to_new_syms[sym_index];
+                rel->r_info = ELFW(R_INFO)(sym_index, type);
+            }
+        }
+    }
+}
+
 /* In an ELF file symbol table, the local symbols must appear below
    the global and weak ones. Since TCC cannot sort it while generating
    the code, we must do it after. All the relocation tables are also
@@ -788,9 +818,6 @@ static void sort_syms(TCCState *s1, Section *s)
     ElfW(Sym) *new_syms;
     int nb_syms, i;
     ElfW(Sym) *p, *q;
-    ElfW_Rel *rel;
-    Section *sr;
-    int type, sym_index;
 
     nb_syms = s->data_offset / sizeof(ElfW(Sym));
     new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
@@ -824,21 +851,178 @@ static void sort_syms(TCCState *s1, Section *s)
     memcpy(s->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
     tcc_free(new_syms);
 
-    /* now we modify all the relocations */
-    for(i = 1; i < s1->nb_sections; i++) {
-        sr = s1->sections[i];
-        if (sr->sh_type == SHT_RELX && sr->link == s) {
-            for_each_elem(sr, 0, rel, ElfW_Rel) {
-                sym_index = ELFW(R_SYM)(rel->r_info);
-                type = ELFW(R_TYPE)(rel->r_info);
-                sym_index = old_to_new_syms[sym_index];
-                rel->r_info = ELFW(R_INFO)(sym_index, type);
-            }
-        }
-    }
+    modify_reloctions_old_to_new(s1, s, old_to_new_syms);
 
     tcc_free(old_to_new_syms);
 }
+
+#ifndef ELF_OBJ_ONLY
+/* See: https://flapenguin.me/elf-dt-gnu-hash */
+#define	ELFCLASS_BITS (PTR_SIZE * 8)
+
+static Section *create_gnu_hash(TCCState *s1)
+{
+    int nb_syms, i, ndef, nbuckets, symoffset, bloom_size, bloom_shift;
+    ElfW(Sym) *p;
+    Section *gnu_hash;
+    Section *dynsym = s1->dynsym;
+    Elf32_Word *ptr;
+
+    gnu_hash = new_section(s1, ".gnu.hash", SHT_GNU_HASH, SHF_ALLOC);
+    gnu_hash->link = dynsym->hash->link;
+
+    nb_syms = dynsym->data_offset / sizeof(ElfW(Sym));
+
+    /* count def symbols */
+    ndef = 0;
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nb_syms; i++, p++)
+        ndef += p->st_shndx != SHN_UNDEF;
+
+    /* calculate gnu hash sizes and fill header */
+    nbuckets = ndef / 4 + 1;
+    symoffset = nb_syms - ndef;
+    bloom_shift = PTR_SIZE == 8 ? 6 : 5;
+    bloom_size = 1; /* must be power of two */
+    while (ndef >= bloom_size * (1 << (bloom_shift - 3)))
+	bloom_size *= 2;
+    ptr = section_ptr_add(gnu_hash, 4 * 4 +
+				    PTR_SIZE * bloom_size +
+				    nbuckets * 4 +
+				    ndef * 4);
+    ptr[0] = nbuckets;
+    ptr[1] = symoffset;
+    ptr[2] = bloom_size;
+    ptr[3] = bloom_shift;
+    return gnu_hash;
+}
+
+static Elf32_Word elf_gnu_hash (const unsigned char *name)
+{
+    Elf32_Word h = 5381;
+    unsigned char c;
+
+    while ((c = *name++))
+        h = h * 33 + c;
+    return h;
+}
+
+static void update_gnu_hash(TCCState *s1, Section *gnu_hash)
+{
+    int *old_to_new_syms;
+    ElfW(Sym) *new_syms;
+    int nb_syms, i, nbuckets, bloom_size, bloom_shift;
+    ElfW(Sym) *p, *q;
+    Section *vs;
+    Section *dynsym = s1->dynsym;
+    Elf32_Word *ptr, *buckets, *chain, *hash;
+    unsigned int *nextbuck;
+    addr_t *bloom;
+    unsigned char *strtab;
+    struct { int first, last; } *buck;
+
+    strtab = dynsym->link->data;
+    nb_syms = dynsym->data_offset / sizeof(ElfW(Sym));
+    new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
+    old_to_new_syms = tcc_malloc(nb_syms * sizeof(int));
+    hash = tcc_malloc(nb_syms * sizeof(Elf32_Word));
+    nextbuck = tcc_malloc(nb_syms * sizeof(int));
+
+    /* calculate hashes and copy undefs */
+    p = (ElfW(Sym) *)dynsym->data;
+    q = new_syms;
+    for(i = 0; i < nb_syms; i++, p++) {
+        if (p->st_shndx == SHN_UNDEF) {
+            old_to_new_syms[i] = q - new_syms;
+            *q++ = *p;
+        }
+	else
+	    hash[i] = elf_gnu_hash(strtab + p->st_name);
+    }
+
+    ptr = (Elf32_Word *) gnu_hash->data;
+    nbuckets = ptr[0];
+    bloom_size = ptr[2];
+    bloom_shift = ptr[3];
+    bloom = (addr_t *) (void *) &ptr[4];
+    buckets = (Elf32_Word*) (void *) &bloom[bloom_size];
+    chain = &buckets[nbuckets];
+    buck = tcc_malloc(nbuckets * sizeof(*buck));
+
+    if (gnu_hash->data_offset != 4 * 4 +
+				 PTR_SIZE * bloom_size +
+				 nbuckets * 4 +
+				 (nb_syms - (q - new_syms)) * 4)
+	tcc_error ("gnu_hash size incorrect");
+
+    /* find buckets */
+    for(i = 0; i < nbuckets; i++)
+	buck[i].first = -1;
+
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nb_syms; i++, p++)
+        if (p->st_shndx != SHN_UNDEF) {
+	    int bucket = hash[i] % nbuckets;
+
+	    if (buck[bucket].first == -1)
+		buck[bucket].first = buck[bucket].last = i;
+	    else {
+		nextbuck[buck[bucket].last] = i;
+		buck[bucket].last = i;
+	    }
+	}
+
+    /* fill buckets/chains/bloom and sort symbols */
+    p = (ElfW(Sym) *)dynsym->data;
+    for(i = 0; i < nbuckets; i++) {
+	int cur = buck[i].first;
+
+	if (cur != -1) {
+	    buckets[i] = q - new_syms;
+	    for (;;) {
+                old_to_new_syms[cur] = q - new_syms;
+                *q++ = p[cur];
+	        *chain++ = hash[cur] & ~1;
+		bloom[(hash[cur] / ELFCLASS_BITS) % bloom_size] |=
+		    (addr_t)1 << (hash[cur] % ELFCLASS_BITS) |
+		    (addr_t)1 << ((hash[cur] >> bloom_shift) % ELFCLASS_BITS);
+		if (cur == buck[i].last)
+		    break;
+		cur = nextbuck[cur];
+	    }
+	    chain[-1] |= 1;
+	}
+    }
+
+    memcpy(dynsym->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
+    tcc_free(new_syms);
+    tcc_free(hash);
+    tcc_free(buck);
+    tcc_free(nextbuck);
+
+    modify_reloctions_old_to_new(s1, dynsym, old_to_new_syms);
+
+    /* modify the versions */
+    vs = versym_section;
+    if (vs) {
+	ElfW(Half) *newver, *versym = (ElfW(Half) *)vs->data;
+
+	if (1/*versym*/) {
+            newver = tcc_malloc(nb_syms * sizeof(*newver));
+	    for (i = 0; i < nb_syms; i++)
+	        newver[old_to_new_syms[i]] = versym[i];
+	    memcpy(vs->data, newver, nb_syms * sizeof(*newver));
+	    tcc_free(newver);
+	}
+    }
+
+    tcc_free(old_to_new_syms);
+
+    /* rebuild hash */
+    ptr = (Elf32_Word *) dynsym->hash->data;
+    rebuild_hash(dynsym, ptr[0]);
+}
+#endif /* ELF_OBJ_ONLY */
 
 /* relocate symbol table, resolve undefined symbols if do_resolve is
    true and output error if undefined symbol. */
@@ -851,6 +1035,8 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
     for_each_elem(symtab, 1, sym, ElfW(Sym)) {
         sh_num = sym->st_shndx;
         if (sh_num == SHN_UNDEF) {
+            if (do_resolve == 2) /* relocating dynsym */
+                continue;
             name = (char *) s1->symtab->link->data + sym->st_name;
             /* Use ld.so to resolve symbol for us (for tcc -run) */
             if (do_resolve) {
@@ -1294,8 +1480,8 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
     Section *s;
     addr_t end_offset;
     char buf[1024];
-    s = find_section_create(s1, section_name, 0);
-    if (!s) {
+    s = have_section(s1, section_name);
+    if (!s || !(s->sh_flags & SHF_ALLOC)) {
         end_offset = 0;
         s = data_section;
     } else {
@@ -1392,6 +1578,11 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     section_ptr_add(s, 3 * PTR_SIZE);
     /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
     put_ptr(s1, NULL, 0);
+#if defined TCC_TARGET_MACHO
+    /* adjust for __PAGEZERO */
+    write64le(data_section->data + data_section->data_offset - PTR_SIZE,
+	      (uint64_t)1 << 32);
+#endif
     n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
@@ -1518,14 +1709,17 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 	if (s1->output_type != TCC_OUTPUT_MEMORY) {
 #if defined TCC_TARGET_MACHO
             /* nothing to do */
-#elif TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
+#elif TARGETOS_FreeBSD || TARGETOS_NetBSD
 	    if (s1->output_type & TCC_OUTPUT_DYN)
 	        tcc_add_crt(s1, "crtendS.o");
 	    else
 	        tcc_add_crt(s1, "crtend.o");
-# if !TARGETOS_OpenBSD
             tcc_add_crt(s1, "crtn.o");
-# endif
+#elif TARGETOS_OpenBSD
+	    if (s1->output_type == TCC_OUTPUT_DLL)
+	        tcc_add_crt(s1, "crtendS.o");
+	    else
+	        tcc_add_crt(s1, "crtend.o");
 #elif TARGETOS_ANDROID
 	    if (s1->output_type == TCC_OUTPUT_DLL)
                 tcc_add_crt(s1, "crtend_so.o");
@@ -1867,6 +2061,7 @@ struct dyn_inf {
     int phnum;
     Section *interp;
     Section *note;
+    Section *gnu_hash;
 
     /* read only segment mapping for GNU_RELRO */
     Section _roinf, *roinf;
@@ -1902,7 +2097,7 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
             k = 0x11;
             if (i == nb_sections - 1) /* ".shstrtab" assumed to remain last */
                 k = 0xff;
-        } else if (s->sh_type == SHT_HASH) {
+        } else if (s->sh_type == SHT_HASH || s->sh_type == SHT_GNU_HASH) {
             k = 0x12;
         } else if (s->sh_type == SHT_RELX) {
             k = 0x20;
@@ -2153,6 +2348,7 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
 
     /* put dynamic section entries */
     put_dt(dynamic, DT_HASH, s1->dynsym->hash->sh_addr);
+    put_dt(dynamic, DT_GNU_HASH, dyninf->gnu_hash->sh_addr);
     put_dt(dynamic, DT_STRTAB, dyninf->dynstr->sh_addr);
     put_dt(dynamic, DT_SYMTAB, s1->dynsym->sh_addr);
     put_dt(dynamic, DT_STRSZ, dyninf->dynstr->data_offset);
@@ -2186,26 +2382,26 @@ static void fill_dynamic(TCCState *s1, struct dyn_inf *dyninf)
         put_dt(dynamic, DT_VERNEED, verneed_section->sh_addr);
         put_dt(dynamic, DT_VERNEEDNUM, dt_verneednum);
     }
-    s = find_section_create (s1, ".preinit_array", 0);
+    s = have_section(s1, ".preinit_array");
     if (s && s->data_offset) {
         put_dt(dynamic, DT_PREINIT_ARRAY, s->sh_addr);
         put_dt(dynamic, DT_PREINIT_ARRAYSZ, s->data_offset);
     }
-    s = find_section_create (s1, ".init_array", 0);
+    s = have_section(s1, ".init_array");
     if (s && s->data_offset) {
         put_dt(dynamic, DT_INIT_ARRAY, s->sh_addr);
         put_dt(dynamic, DT_INIT_ARRAYSZ, s->data_offset);
     }
-    s = find_section_create (s1, ".fini_array", 0);
+    s = have_section(s1, ".fini_array");
     if (s && s->data_offset) {
         put_dt(dynamic, DT_FINI_ARRAY, s->sh_addr);
         put_dt(dynamic, DT_FINI_ARRAYSZ, s->data_offset);
     }
-    s = find_section_create (s1, ".init", 0);
+    s = have_section(s1, ".init");
     if (s && s->data_offset) {
         put_dt(dynamic, DT_INIT, s->sh_addr);
     }
-    s = find_section_create (s1, ".fini", 0);
+    s = have_section(s1, ".fini");
     if (s && s->data_offset) {
         put_dt(dynamic, DT_FINI, s->sh_addr);
     }
@@ -2325,6 +2521,7 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
 
     sort_syms(s1, symtab_section);
+
     for(i = 1; i < shnum; i++) {
         s = s1->sections[sec_order ? sec_order[i] : i];
         if (s->sh_type != SHT_NOBITS) {
@@ -2605,6 +2802,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 /* shared library case: simply export all global symbols */
                 export_global_syms(s1);
             }
+	    dyninf.gnu_hash = create_gnu_hash(s1);
         } else {
             build_got_entries(s1, 0);
         }
@@ -2656,21 +2854,13 @@ static int elf_output_file(TCCState *s1, const char *filename)
     file_offset = layout_sections(s1, sec_order, &dyninf);
 
         if (dynamic) {
-            ElfW(Sym) *sym;
-
             /* put in GOT the dynamic section address and relocate PLT */
             write32le(s1->got->data, dynamic->sh_addr);
             if (file_type == TCC_OUTPUT_EXE
                 || (RELOCATE_DLLPLT && (file_type & TCC_OUTPUT_DYN)))
                 relocate_plt(s1);
-
             /* relocate symbols in .dynsym now that final addresses are known */
-            for_each_elem(s1->dynsym, 1, sym, ElfW(Sym)) {
-                if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
-                    /* do symbol relocation */
-                    sym->st_value += s1->sections[sym->st_shndx]->sh_addr;
-                }
-            }
+            relocate_syms(s1, s1->dynsym, 2);
         }
 
         /* if building executable or DLL, then relocate each section
@@ -2689,6 +2879,9 @@ static int elf_output_file(TCCState *s1, const char *filename)
             fill_got(s1);
         else if (s1->got)
             fill_local_got_entries(s1);
+
+    if (dyninf.gnu_hash)
+        update_gnu_hash(s1, dyninf.gnu_hash);
 
     /* Create the ELF file with name 'filename' */
     ret = tcc_write_elf_file(s1, filename, dyninf.phnum, dyninf.phdr, file_offset, sec_order);

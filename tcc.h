@@ -65,12 +65,11 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifndef __GNUC__
 #  define strtold (long double)strtod
 #  define strtof (float)strtod
-#  ifdef _WIN64
+#  ifndef strtoll
 #   define strtoll _strtoi64
+#  endif
+#  ifndef strtoull
 #   define strtoull _strtoui64
-#  else
-#   define strtoll strtol
-#   define strtoull strtoul
 #  endif
 # endif
 # ifdef LIBTCC_AS_DLL
@@ -214,6 +213,12 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_BCHECK 1 /* enable bound checking code */
 #endif
 
+#if defined CONFIG_NEW_MACHO && CONFIG_NEW_MACHO==0
+#  undef CONFIG_NEW_MACHO
+#else
+#  define CONFIG_NEW_MACHO 1 /* enable new macho code */
+#endif
+
 #if defined TARGETOS_OpenBSD \
     || defined TARGETOS_FreeBSD \
     || defined TARGETOS_NetBSD \
@@ -353,6 +358,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* (target specific) libtcc1.a */
 #ifndef TCC_LIBTCC1
 # define TCC_LIBTCC1 "libtcc1.a"
+#endif
+
+#ifndef CONFIG_TCC_CROSSPREFIX
+# define CONFIG_TCC_CROSSPREFIX ""
 #endif
 
 /* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
@@ -1792,6 +1801,7 @@ ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
 ST_FUNC void tcc_debug_line(TCCState *s1);
 ST_FUNC void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e);
 ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym);
+ST_FUNC void tcc_debug_prolog_epilog(TCCState *s1, int value);
 ST_FUNC void tcc_debug_funcend(TCCState *s1, int size);
 ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind, int sym_type);
 ST_FUNC void tcc_debug_typedef(TCCState *s1, Sym *sym);
@@ -1815,8 +1825,16 @@ ST_FUNC void tcc_tcov_reset_ind(TCCState *s1);
 #define dwarf_str_section       s1->dwarf_str_section
 #define dwarf_line_str_section  s1->dwarf_line_str_section
 
+/* default dwarf version for "-g". use 0 to emit stab debug infos */
 #ifndef DWARF_VERSION
 # define DWARF_VERSION 0
+#endif
+
+/* default dwarf version for "-gdwarf" */
+#ifdef TCC_TARGET_MACHO
+# define DEFAULT_DWARF_VERSION 2
+#else
+# define DEFAULT_DWARF_VERSION 5
 #endif
 
 #if defined TCC_TARGET_PE

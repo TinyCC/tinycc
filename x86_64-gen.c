@@ -1150,7 +1150,8 @@ static X86_64_Mode classify_x86_64_arg(CType *ty, CType *ret, int *psize, int *p
         size = type_size(ty, &align);
         *psize = (size + 7) & ~7;
         *palign = (align + 7) & ~7;
-    
+        *reg_count = 0; /* avoid compiler warning */
+
         if (size > 16) {
             mode = x86_64_mode_memory;
         } else {

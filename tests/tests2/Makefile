@@ -23,8 +23,6 @@ ifeq (,$(filter i386,$(ARCH)))
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test # x86 asm
- SKIP += 124_atomic_counter.test
- SKIP += 125_atomic_misc.test # currently only x86 supported
  SKIP += 127_asm_goto.test    # hardcodes x86 asm
 endif
 ifeq ($(CONFIG_backtrace),no)
@@ -38,6 +36,7 @@ ifeq ($(CONFIG_bcheck),no)
  SKIP += 115_bound_setjmp.test
  SKIP += 116_bound_setjmp2.test
  SKIP += 117_builtins.test
+ SKIP += 126_bound_global.test
 endif
 ifeq ($(CONFIG_dll),no)
  SKIP += 113_btdll.test # no shared lib support yet
@@ -58,9 +57,6 @@ ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 106_versym.test # no pthread_condattr_setpshared
  SKIP += 114_bound_signal.test # libc problem signal/fork
  SKIP += 116_bound_setjmp2.test # No TLS_FUNC/TLS_VAR in bcheck.c
-endif
-ifneq (,$(filter Darwin,$(TARGETOS)))
- SKIP += 126_bound_global.test # bt-exe.c problem on apple
 endif
 
 # Some tests might need arguments
@@ -128,6 +124,7 @@ endif
 124_atomic_counter.test: FLAGS += -pthread
 126_bound_global.test: FLAGS += -b
 126_bound_global.test: NORUN = true
+128_run_atexit.test: FLAGS += -dt
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'

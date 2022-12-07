@@ -145,6 +145,72 @@ static void run_cdtors(TCCState *s1, const char *start, const char *end,
         ((void(*)(int, char **, char **))*a++)(argc, argv, envp);
 }
 
+#define	NR_AT_EXIT	32
+
+static struct exit_context {
+    int exit_called;
+    int nr_exit;
+    void (*exitfunc[NR_AT_EXIT])(int, void *);
+    void *exitarg[NR_AT_EXIT];
+#ifndef CONFIG_TCC_BACKTRACE
+    jmp_buf run_jmp_buf;
+#endif
+} g_exit_context;
+
+static void init_exit(void)
+{
+    struct exit_context *e = &g_exit_context;
+
+    e->exit_called = 0;
+    e->nr_exit = 0;
+}
+
+static void call_exit(int ret)
+{
+    struct exit_context *e = &g_exit_context;
+
+    while (e->nr_exit) {
+	e->nr_exit--;
+	e->exitfunc[e->nr_exit](ret, e->exitarg[e->nr_exit]);
+    }
+}
+
+static int rt_atexit(void (*function)(void))
+{
+    struct exit_context *e = &g_exit_context;
+
+    if (e->nr_exit < NR_AT_EXIT) {
+	e->exitfunc[e->nr_exit] = (void (*)(int, void *))function;
+	e->exitarg[e->nr_exit++] = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+static int rt_on_exit(void (*function)(int, void *), void *arg)
+{
+    struct exit_context *e = &g_exit_context;
+
+    if (e->nr_exit < NR_AT_EXIT) {
+	e->exitfunc[e->nr_exit] = function;
+	e->exitarg[e->nr_exit++] = arg;
+        return 0;
+    }
+    return 1;
+}
+
+static void run_exit(int code)
+{
+    struct exit_context *e = &g_exit_context;
+
+    e->exit_called = 1;
+#ifdef CONFIG_TCC_BACKTRACE
+    longjmp((&g_rtctxt)->jmp_buf, code ? code : 256);
+#else
+    longjmp(e->run_jmp_buf, code ? code : 256);
+#endif
+}
+
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
@@ -165,10 +231,9 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, s1->runtime_main, 0, 1))
         return 0;
-#ifdef CONFIG_TCC_BACKTRACE
-    if (s1->do_debug)
-        tcc_add_symbol(s1, "exit", rt_exit);
-#endif
+    tcc_add_symbol(s1, "exit", run_exit);
+    tcc_add_symbol(s1, "atexit", rt_atexit);
+    tcc_add_symbol(s1, "on_exit", rt_on_exit);
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
     prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
@@ -195,6 +260,11 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         rc->elf_str = (char *)symtab_section->link->data;
 #if PTR_SIZE == 8
         rc->prog_base = text_section->sh_addr & 0xffffffff00000000ULL;
+#if defined TCC_TARGET_MACHO
+	if (s1->dwarf)
+	    rc->prog_base = (addr_t) -1;
+#else
+#endif
 #endif
         rc->top_func = tcc_get_symbol(s1, "main");
         rc->num_callers = s1->rt_num_callers;
@@ -215,17 +285,23 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
+    init_exit();
     /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
 #ifdef CONFIG_TCC_BACKTRACE
-    if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
+    if (!(ret = setjmp(rc->jmp_buf)))
+#else
+    if (!(ret = setjmp((&g_exit_context)->run_jmp_buf)))
 #endif
     {
         ret = prog_main(argc, argv, envp);
     }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
+    call_exit(ret);
     if ((s1->dflag & 16) && ret)
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
+    if ((s1->dflag & 16) == 0 && (&g_exit_context)->exit_called)
+	exit(ret);
     return ret;
 }
 
@@ -695,6 +771,9 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     } filename_table[FILE_TABLE_SIZE];
     addr_t last_pc;
     addr_t pc;
+#if defined TCC_TARGET_MACHO
+    addr_t first_pc = 0;
+#endif
     addr_t func_addr;
     int line;
     char *filename;
@@ -853,6 +932,11 @@ check_pc:
 		        pc = dwarf_read_4(cp, end);
 #else
 		        pc = dwarf_read_8(cp, end);
+#endif
+#if defined TCC_TARGET_MACHO
+			if (first_pc == 0 && rc->prog_base != (addr_t) -1)
+			    first_pc += rc->prog_base - ((uint64_t)1 << 32);
+			pc += first_pc;
 #endif
 		        opindex = 0;
 		        break;

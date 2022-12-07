@@ -160,7 +160,7 @@
     #define __builtin_huge_valf() 1e50f
     #define __builtin_huge_vall() 1e5000L
 # if defined __APPLE__
-    #define __builtin_nanf(ignored_string) __nan()
+    #define __builtin_nanf(ignored_string) (0.0F/0.0F)
     /* used by floats.h to implement FLT_ROUNDS C99 macro. 1 == to nearest */
     #define __builtin_flt_rounds() 1
     /* used by _fd_def.h */
@@ -207,11 +207,18 @@
                            &~3), *(type *)(ap - ((sizeof(type)+3)&~3)))
 
 #elif defined __aarch64__
+#if defined __APPLE__
+    typedef struct {
+        void *__stack;
+    } __builtin_va_list;
+
+#else
     typedef struct {
         void *__stack, *__gr_top, *__vr_top;
         int   __gr_offs, __vr_offs;
     } __builtin_va_list;
 
+#endif
 #elif defined __riscv
     typedef char *__builtin_va_list;
     #define __va_reg_size (__riscv_xlen >> 3)
@@ -262,7 +269,9 @@
     __BOTH(int, strcmp, (const char*, const char*))
     __BOTH(int, strncmp, (const char*, const char*, __SIZE_TYPE__))
     __BOTH(char*, strcat, (char*, const char*))
+    __BOTH(char*, strncat, (char*, const char*, __SIZE_TYPE__))
     __BOTH(char*, strchr, (const char*, int))
+    __BOTH(char*, strrchr, (const char*, int))
     __BOTH(char*, strdup, (const char*))
 #if defined __ARM_EABI__
     __BOUND(void*,__aeabi_memcpy,(void*,const void*,__SIZE_TYPE__))

@@ -38,7 +38,9 @@
 
 #define MAX_ALIGN 16
 
+#ifndef TCC_TARGET_MACHO
 #define CHAR_IS_UNSIGNED
+#endif
 
 /* define if return values need to be extended explicitely
    at caller side (for interfacing with non-TCC compilers) */
@@ -51,7 +53,7 @@
 #include <assert.h>
 
 ST_DATA const char * const target_machine_defs =
-#if defined(__APPLE__)
+#if defined(TCC_TARGET_MACHO)
     "__aarch64__\0"
     "__arm64__\0"
 #else
@@ -810,7 +812,7 @@ static int arm64_hfa(CType *type, unsigned *fsize)
     return 0;
 }
 
-static unsigned long arm64_pcs_aux(int n, CType **type, unsigned long *a)
+static unsigned long arm64_pcs_aux(int variadic, int n, CType **type, unsigned long *a)
 {
     int nx = 0; // next integer register
     int nv = 0; // next vector register
@@ -827,6 +829,12 @@ static unsigned long arm64_pcs_aux(int n, CType **type, unsigned long *a)
         else
             size = type_size(type[i], &align);
 
+#if defined(TCC_TARGET_MACHO)
+        if (variadic && i == variadic) {
+            nx = 8;
+            nv = 8;
+	}
+#endif
         if (hfa)
             // B.2
             ;
@@ -931,7 +939,7 @@ static unsigned long arm64_pcs_aux(int n, CType **type, unsigned long *a)
     return ns - 32;
 }
 
-static unsigned long arm64_pcs(int n, CType **type, unsigned long *a)
+static unsigned long arm64_pcs(int variadic, int n, CType **type, unsigned long *a)
 {
     unsigned long stack;
 
@@ -939,12 +947,12 @@ static unsigned long arm64_pcs(int n, CType **type, unsigned long *a)
     if ((type[0]->t & VT_BTYPE) == VT_VOID)
         a[0] = -1;
     else {
-        arm64_pcs_aux(1, type, a);
+        arm64_pcs_aux(0, 1, type, a);
         assert(a[0] == 0 || a[0] == 1 || a[0] == 16);
     }
 
     // Argument types:
-    stack = arm64_pcs_aux(n, type + 1, a + 1);
+    stack = arm64_pcs_aux(variadic, n, type + 1, a + 1);
 
     if (0) {
         int i;
@@ -970,6 +978,16 @@ static unsigned long arm64_pcs(int n, CType **type, unsigned long *a)
     return stack;
 }
 
+static int n_func_args(CType *type)
+{
+    int n_args = 0;
+    Sym *arg;
+
+    for (arg = type->ref->next; arg; arg = arg->next)
+        n_args++;
+    return n_args;
+}
+
 ST_FUNC void gfunc_call(int nb_args)
 {
     CType *return_type;
@@ -977,6 +995,8 @@ ST_FUNC void gfunc_call(int nb_args)
     unsigned long *a, *a1;
     unsigned long stack;
     int i;
+    int variadic = (vtop[-nb_args].type.ref->f.func_type == FUNC_ELLIPSIS);
+    int var_nb_arg = n_func_args(&vtop[-nb_args].type);
 
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check)
@@ -995,7 +1015,7 @@ ST_FUNC void gfunc_call(int nb_args)
     for (i = 0; i < nb_args; i++)
         t[nb_args - i] = &vtop[-i].type;
 
-    stack = arm64_pcs(nb_args, t, a);
+    stack = arm64_pcs(variadic ? var_nb_arg : 0, nb_args, t, a);
 
     // Allocate space for structs replaced by pointer:
     for (i = nb_args; i; i--)
@@ -1055,7 +1075,7 @@ ST_FUNC void gfunc_call(int nb_args)
             }
             else {
                 gv(RC_INT);
-                arm64_strx(arm64_type_size(vtop[0].type.t),
+                arm64_strx(3, // arm64_type_size(vtop[0].type.t),
                            intr(vtop[0].r), 31, a[i] - 32);
             }
         }
@@ -1167,6 +1187,8 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     int use_x8 = 0;
     int last_int = 0;
     int last_float = 0;
+    int variadic = func_sym->type.ref->f.func_type == FUNC_ELLIPSIS;
+    int var_nb_arg = n_func_args(&func_sym->type);
 
     func_vc = 144; // offset of where x8 is stored
 
@@ -1178,18 +1200,18 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     for (sym = func_type->ref; sym; sym = sym->next)
         t[i++] = &sym->type;
 
-    arm64_func_va_list_stack = arm64_pcs(n - 1, t, a);
+    arm64_func_va_list_stack = arm64_pcs(variadic ? var_nb_arg : 0, n - 1, t, a);
 
-    if (func_sym->type.ref->f.func_type == FUNC_ELLIPSIS) {
+#if !defined(TCC_TARGET_MACHO)
+    if (variadic) {
         use_x8 = 1;
         last_int = 4;
         last_float = 4;
     }
+#endif
     if (a && a[0] == 1)
         use_x8 = 1;
     for (i = 1, sym = func_type->ref->next; sym; i++, sym = sym->next) {
-        if (a[i] == 1)
-	    use_x8 = 1;
         if (a[i] < 16) {
             int last, align, size = type_size(&sym->type, &align);
 	    last = a[i] / 4 + 1 + (size - 1) / 8;
@@ -1282,6 +1304,7 @@ ST_FUNC void gen_va_start(void)
         o(0x910383be); // add x30,x29,#224
     o(0xf900001e | r << 5); // str x30,[x(r)]
 
+#if !defined(TCC_TARGET_MACHO)
     if (arm64_func_va_list_gr_offs) {
         if (arm64_func_va_list_stack)
             o(0x910383be); // add x30,x29,#224
@@ -1298,6 +1321,7 @@ ST_FUNC void gen_va_start(void)
 
     arm64_movimm(30, arm64_func_va_list_vr_offs);
     o(0xb9001c1e | r << 5); // str w30,[x(r),#28]
+#endif
 
     --vtop;
 }
@@ -1321,6 +1345,7 @@ ST_FUNC void gen_va_arg(CType *t)
 
     if (!hfa) {
         uint32_t n = size > 16 ? 8 : (size + 7) & -8;
+#if !defined(TCC_TARGET_MACHO)
         o(0xb940181e | r0 << 5); // ldr w30,[x(r0),#24] // __gr_offs
         if (align == 16) {
             assert(0); // this path untested but needed for __uint128_t
@@ -1329,23 +1354,28 @@ ST_FUNC void gen_va_arg(CType *t)
         }
         o(0x310003c0 | r1 | n << 10); // adds w(r1),w30,#(n)
         o(0x540000ad); // b.le .+20
+#endif
         o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
         o(0x9100001e | r1 << 5 | n << 10); // add x30,x(r1),#(n)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
+#if !defined(TCC_TARGET_MACHO)
         o(0x14000004); // b .+16
         o(0xb9001800 | r1 | r0 << 5); // str w(r1),[x(r0),#24] // __gr_offs
         o(0xf9400400 | r1 | r0 << 5); // ldr x(r1),[x(r0),#8] // __gr_top
         o(0x8b3ec000 | r1 | r1 << 5); // add x(r1),x(r1),w30,sxtw
+#endif
         if (size > 16)
             o(0xf9400000 | r1 | r1 << 5); // ldr x(r1),[x(r1)]
     }
     else {
-        uint32_t rsz = hfa << 4;
         uint32_t ssz = (size + 7) & -(uint32_t)8;
+#if !defined(TCC_TARGET_MACHO)
+        uint32_t rsz = hfa << 4;
         uint32_t b1, b2;
         o(0xb9401c1e | r0 << 5); // ldr w30,[x(r0),#28] // __vr_offs
         o(0x310003c0 | r1 | rsz << 10); // adds w(r1),w30,#(rsz)
         b1 = ind; o(0x5400000d); // b.le lab1
+#endif
         o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
         if (fsize == 16) {
             o(0x91003c00 | r1 | r1 << 5); // add x(r1),x(r1),#15
@@ -1353,6 +1383,7 @@ ST_FUNC void gen_va_arg(CType *t)
         }
         o(0x9100001e | r1 << 5 | ssz << 10); // add x30,x(r1),#(ssz)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
+#if !defined(TCC_TARGET_MACHO)
         b2 = ind; o(0x14000000); // b lab2
         // lab1:
         write32le(cur_text_section->data + b1, 0x5400000d | (ind - b1) << 3);
@@ -1376,6 +1407,7 @@ ST_FUNC void gen_va_arg(CType *t)
         }
         // lab2:
         write32le(cur_text_section->data + b2, 0x14000000 | (ind - b2) >> 2);
+#endif
     }
 }
 
@@ -1390,7 +1422,7 @@ ST_FUNC void gfunc_return(CType *func_type)
     CType *t = func_type;
     unsigned long a;
 
-    arm64_pcs(0, &t, &a);
+    arm64_pcs(0, 0, &t, &a);
     switch (a) {
     case -1:
         break;
