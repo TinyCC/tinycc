@@ -4202,6 +4202,8 @@ static void struct_layout(CType *type, AttributeDef *ad)
     }
 }
 
+static void do_Static_assert(void);
+
 /* enum/struct/union declaration. u is VT_ENUM/VT_STRUCT/VT_UNION */
 static void struct_decl(CType *type, int u)
 {
@@ -4311,6 +4313,10 @@ do_decl:
             c = 0;
             flexible = 0;
             while (tok != '}') {
+                if (tok == TOK_STATIC_ASSERT) {
+                    do_Static_assert();
+                    continue;
+                }
                 if (!parse_btype(&btype, &ad1, 0)) {
 		    skip(';');
 		    continue;
@@ -8243,6 +8249,31 @@ static void free_inline_functions(TCCState *s)
     dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
 
+static void do_Static_assert(void){
+    CString error_str;
+    int c;
+
+    next();
+    skip('(');
+    c = expr_const();
+
+    if (tok == ')') {
+    if (!c)
+        tcc_error("_Static_assert fail");
+    next();
+    goto static_assert_out;
+    }
+
+    skip(',');
+    parse_mult_str(&error_str, "string constant");
+    if (c == 0)
+    tcc_error("%s", (char *)error_str.data);
+    cstr_free(&error_str);
+    skip(')');
+  static_assert_out:
+        skip(';');
+}
+
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type
    or VT_CMP if parsing old style parameter list
    or VT_JMP if parsing c99 for decl: for (int i = 0, ...) */
@@ -8254,31 +8285,10 @@ static int decl(int l)
     AttributeDef ad, adbase;
 
     while (1) {
-	if (tok == TOK_STATIC_ASSERT) {
-	    CString error_str;
-	    int c;
-
-	    next();
-	    skip('(');
-	    c = expr_const();
-
-	    if (tok == ')') {
-		if (!c)
-		    tcc_error("_Static_assert fail");
-		next();
-		goto static_assert_out;
-	    }
-
-	    skip(',');
-	    parse_mult_str(&error_str, "string constant");
-	    if (c == 0)
-		tcc_error("%s", (char *)error_str.data);
-	    cstr_free(&error_str);
-	    skip(')');
-	  static_assert_out:
-            skip(';');
-	    continue;
-	}
+    if (tok == TOK_STATIC_ASSERT) {
+        do_Static_assert();
+        continue;
+    }
 
         oldint = 0;
         if (!parse_btype(&btype, &adbase, l == VT_LOCAL)) {

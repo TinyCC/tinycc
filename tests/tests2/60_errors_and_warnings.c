@@ -191,15 +191,15 @@ void * _Alignas(16) p1;
 
 #define ONE 0
  _Static_assert(ONE == 0, "don't show me this");
- _Static_assert(ONE == 1, "ONE is not 1");
+ struct x{ _Static_assert(ONE == 1, "ONE is not 1"); };
 
 #elif defined test_static_assert_2
  _Static_assert(1, "1"" is 1");
- _Static_assert(0, "0"" is 0");
+struct y {  _Static_assert(0, "0"" is 0"); };
 
 #elif defined test_static_assert_c2x
  _Static_assert(1);
- _Static_assert(0);
+struct z {  _Static_assert(0); }
 
 #elif defined test_static_assert_empty_string
  _Static_assert(0,"");
