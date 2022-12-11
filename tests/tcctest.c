@@ -3844,6 +3844,36 @@ int constant_p_var;
 
 int func(void);
 
+#if !defined _WIN32
+/* __builtin_clz and __builtin_ctz return random values for 0 */
+static void builtin_test_bits(unsigned long long x, int cnt[])
+{
+    cnt[0] += __builtin_ffs(x);
+    cnt[1] += __builtin_ffsl(x);
+    cnt[2] += __builtin_ffsll(x);
+
+    if ((unsigned int) x) cnt[3] += __builtin_clz(x);
+    if ((unsigned long) x) cnt[4] += __builtin_clzl(x);
+    if ((unsigned long long) x) cnt[5] += __builtin_clzll(x);
+
+    if ((unsigned int) x) cnt[6] += __builtin_ctz(x);
+    if ((unsigned long) x) cnt[7] += __builtin_ctzl(x);
+    if ((unsigned long long) x) cnt[8] += __builtin_ctzll(x);
+
+    cnt[9] += __builtin_clrsb(x);
+    cnt[10] += __builtin_clrsbl(x);
+    cnt[11] += __builtin_clrsbll(x);
+
+    cnt[12] += __builtin_popcount(x);
+    cnt[13] += __builtin_popcountl(x);
+    cnt[14] += __builtin_popcountll(x);
+
+    cnt[15] += __builtin_parity(x);
+    cnt[16] += __builtin_parityl(x);
+    cnt[17] += __builtin_parityll(x);
+}
+#endif
+
 void builtin_test(void)
 {
     short s;
@@ -3897,6 +3927,25 @@ void builtin_test(void)
     printf("bce: %d\n", i);
 
     //printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
+
+#if !defined _WIN32
+    {
+	int cnt[18];
+	unsigned long long r = 0;
+
+	memset(cnt, 0, sizeof(cnt));
+	builtin_test_bits(0, cnt);
+	builtin_test_bits(0xffffffffffffffffull, cnt);
+        for (i = 0; i < 64; i++)
+	    builtin_test_bits(1ull << i, cnt);
+        for (i = 0; i < 1000; i++) {
+	    r = 0x5851f42d4c957f2dull * r + 0x14057b7ef767814full;
+	    builtin_test_bits(r, cnt);
+	}
+	for (i = 0; i < 18; i++)
+	    printf ("%d %d\n", i, cnt[i]);
+    }
+#endif
 }
 
 #if defined _WIN32
