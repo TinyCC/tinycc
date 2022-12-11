@@ -1958,7 +1958,8 @@ ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bi
     }
     else
     {
-        Section *s = s1->sections[sh_num];
+        Section *s = sh_num == SHN_COMMON ? common_section
+					  : s1->sections[sh_num];
         CString str;
 
         cstr_new (&str);
