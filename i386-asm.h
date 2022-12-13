@@ -75,6 +75,9 @@ ALT(DEF_ASM_OP2(btcw, 0x0fba, 7, OPC_MODRM | OPC_WLX, OPT_IM8, OPT_REGW | OPT_EA
 
 ALT(DEF_ASM_OP2(popcntw, 0xf30fb8, 0, OPC_MODRM | OPC_WLX, OPT_REGW | OPT_EA, OPT_REGW))
 
+ALT(DEF_ASM_OP2(tzcntw, 0xf30fbc, 0, OPC_MODRM | OPC_WLX, OPT_REGW | OPT_EA, OPT_REGW))
+ALT(DEF_ASM_OP2(lzcntw, 0xf30fbd, 0, OPC_MODRM | OPC_WLX, OPT_REGW | OPT_EA, OPT_REGW))
+
      /* prefixes */
      DEF_ASM_OP0(wait, 0x9b)
      DEF_ASM_OP0(fwait, 0x9b)

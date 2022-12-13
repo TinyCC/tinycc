@@ -269,6 +269,8 @@
  DEF_WLX(btr)
  DEF_WLX(btc)
  DEF_WLX(popcnt)
+ DEF_WLX(tzcnt)
+ DEF_WLX(lzcnt)
 
  DEF_WLX(lar)
  DEF_WLX(lsl)

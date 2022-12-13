@@ -766,7 +766,29 @@ int $0x10
     popcnt %rbx, %rdi
     popcntq %rcx, %r8
 #endif
-        
+
+    lzcnt %cx, %ax
+    lzcntw %cx, %ax
+    lzcnt %edx, %ebx
+    lzcntl 8(%edi), %ecx
+#ifdef __x86_64__
+    lzcnt %rdi, %rdx
+    lzcntq %r12, %r15
+    lzcnt 0x40(%rcx), %r11
+    lzcntq (%r8), %rsi
+#endif
+
+    tzcnt %cx, %ax
+    tzcntw %cx, %ax
+    tzcnt %edx, %ebx
+    tzcntl -24(%edi), %ecx
+#ifdef __x86_64__
+    tzcnt %rbp, %rdx
+    tzcntq %rax, %r15
+    tzcnt -8(%rbp), %rcx
+    tzcntq (%r8), %r12
+#endif
+
 #ifdef __i386__
     boundl %edx, 0x10000
     boundw %bx, 0x1000
