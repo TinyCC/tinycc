@@ -772,7 +772,7 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     addr_t last_pc;
     addr_t pc;
 #if defined TCC_TARGET_MACHO
-    addr_t first_pc = 0;
+    addr_t first_pc;
 #endif
     addr_t func_addr;
     int line;
@@ -782,6 +782,9 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
 next:
     ln = rc->dwarf_line;
     while (ln < rc->dwarf_line_end) {
+#if defined TCC_TARGET_MACHO
+        first_pc = 0;
+#endif
 	dir_size = 0;
 	filename_size = 0;
         last_pc = 0;
@@ -935,7 +938,7 @@ check_pc:
 #endif
 #if defined TCC_TARGET_MACHO
 			if (first_pc == 0 && rc->prog_base != (addr_t) -1)
-			    first_pc += rc->prog_base - ((uint64_t)1 << 32);
+			    first_pc += rc->prog_base;
 			pc += first_pc;
 #endif
 		        opindex = 0;

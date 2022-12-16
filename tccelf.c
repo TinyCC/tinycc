@@ -1580,8 +1580,9 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     put_ptr(s1, NULL, 0);
 #if defined TCC_TARGET_MACHO
     /* adjust for __PAGEZERO */
-    write64le(data_section->data + data_section->data_offset - PTR_SIZE,
-	      (uint64_t)1 << 32);
+    if (s1->dwarf == 0 && s1->output_type == TCC_OUTPUT_EXE)
+        write64le(data_section->data + data_section->data_offset - PTR_SIZE,
+	          (uint64_t)1 << 32);
 #endif
     n = 2 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
