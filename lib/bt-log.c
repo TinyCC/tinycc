@@ -13,6 +13,12 @@ int (*__rt_error)(void*, void*, const char *, va_list);
 # define DLL_EXPORT
 #endif
 
+/* Needed when using ...libtcc1-usegcc=yes in lib/Makefile */
+#if (defined(__GNUC__) && (__GNUC__ >= 6)) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-address"
+#endif
+
 DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
 {
     va_list ap;
@@ -35,3 +41,7 @@ DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
     }
     return ret;
 }
+
+#if (defined(__GNUC__) && (__GNUC__ >= 6)) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif

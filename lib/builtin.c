@@ -1,3 +1,12 @@
+/* uses alias to allow building with gcc/clang */
+#ifdef __TINYC__
+#define	BUILTIN(x)	__builtin_##x
+#define	BUILTINN(x)	"__builtin_" # x
+#else
+#define	BUILTIN(x)	__tcc_builtin_##x
+#define	BUILTINN(x)	"__tcc_builtin_" # x
+#endif
+
 /* ---------------------------------------------- */
 /* This file implements:
  * __builtin_ffs
@@ -66,59 +75,90 @@ static const unsigned char table_2_64[] = {
 
 /* Returns one plus the index of the least significant 1-bit of x,
    or if x is zero, returns zero. */
-int __builtin_ffs (int x) { FFSI(x) }
+int BUILTIN(ffs) (int x) { FFSI(x) }
+int BUILTIN(ffsll) (long long x) { FFSL(x) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_ffsl (long x) { FFSI(x) }
+int BUILTIN(ffsl) (long x) __attribute__((alias(BUILTINN(ffs))));
 #else
-int __builtin_ffsl (long x) { FFSL(x) }
+int BUILTIN(ffsl) (long x) __attribute__((alias(BUILTINN(ffsll))));
 #endif
-int __builtin_ffsll (long long x) { FFSL(x) }
 
 /* Returns the number of leading 0-bits in x, starting at the most significant
    bit position. If x is 0, the result is undefined.  */
-int __builtin_clz (unsigned int x) { CLZI(x) }
+int BUILTIN(clz) (unsigned int x) { CLZI(x) }
+int BUILTIN(clzll) (unsigned long long x) { CLZL(x) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_clzl (unsigned long x) { CLZI(x) }
+int BUILTIN(clzl) (unsigned long x) __attribute__((alias(BUILTINN(clz))));
 #else
-int __builtin_clzl (unsigned long x) { CLZL(x) }
+int BUILTIN(clzl) (unsigned long x) __attribute__((alias(BUILTINN(clzll))));
 #endif
-int __builtin_clzll (unsigned long long x) { CLZL(x) }
 
 /* Returns the number of trailing 0-bits in x, starting at the least
    significant bit position. If x is 0, the result is undefined. */
-int __builtin_ctz (unsigned int x) { CTZI(x) }
+int BUILTIN(ctz) (unsigned int x) { CTZI(x) }
+int BUILTIN(ctzll) (unsigned long long x) { CTZL(x) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_ctzl (unsigned long x) { CTZI(x) }
+int BUILTIN(ctzl) (unsigned long x) __attribute__((alias(BUILTINN(ctz))));
 #else
-int __builtin_ctzl (unsigned long x) { CTZL(x) }
+int BUILTIN(ctzl) (unsigned long x) __attribute__((alias(BUILTINN(ctzll))));
 #endif
-int __builtin_ctzll (unsigned long long x) { CTZL(x) }
 
 /* Returns the number of leading redundant sign bits in x, i.e. the number
    of bits following the most significant bit that are identical to it.
    There are no special cases for 0 or other values. */
-int __builtin_clrsb (int x) { if (x < 0) x = ~x; x <<= 1; CLZI(x) }
+int BUILTIN(clrsb) (int x) { if (x < 0) x = ~x; x <<= 1; CLZI(x) }
+int BUILTIN(clrsbll) (long long x) { if (x < 0) x = ~x; x <<= 1; CLZL(x) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_clrsbl (long x) { if (x < 0) x = ~x; x <<= 1; CLZI(x) }
+int BUILTIN(clrsbl) (long x) __attribute__((alias(BUILTINN(clrsb))));
 #else
-int __builtin_clrsbl (long x) { if (x < 0) x = ~x; x <<= 1; CLZL(x) }
+int BUILTIN(clrsbl) (long x) __attribute__((alias(BUILTINN(clrsbll))));
 #endif
-int __builtin_clrsbll (long long x) { if (x < 0) x = ~x; x <<= 1; CLZL(x) }
 
 /* Returns the number of 1-bits in x.*/
-int __builtin_popcount (unsigned int x) { POPCOUNTI(x, 0x3f) }
+int BUILTIN(popcount) (unsigned int x) { POPCOUNTI(x, 0x3f) }
+int BUILTIN(popcountll) (unsigned long long x) { POPCOUNTL(x, 0x7f) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_popcountl (unsigned long x) { POPCOUNTI(x, 0x3f) }
+int BUILTIN(popcountl) (unsigned long x) __attribute__((alias(BUILTINN(popcount))));
 #else
-int __builtin_popcountl (unsigned long x) { POPCOUNTL(x, 0x7f) }
+int BUILTIN(popcountl ) (unsigned long x) __attribute__((alias(BUILTINN(popcountll))));
 #endif
-int __builtin_popcountll (unsigned long long x) { POPCOUNTL(x, 0x7f) }
 
 /* Returns the parity of x, i.e. the number of 1-bits in x modulo 2. */
-int __builtin_parity (unsigned int x) { POPCOUNTI(x, 0x01) }
+int BUILTIN(parity) (unsigned int x) { POPCOUNTI(x, 0x01) }
+int BUILTIN(parityll) (unsigned long long x) { POPCOUNTL(x, 0x01) }
 #if __SIZEOF_LONG__ == 4
-int __builtin_parityl (unsigned long x) { POPCOUNTI(x, 0x01) }
+int BUILTIN(parityl) (unsigned long x) __attribute__((alias(BUILTINN(parity))));
 #else
-int __builtin_parityl (unsigned long x) { POPCOUNTL(x, 0x01) }
+int BUILTIN(parityl) (unsigned long x) __attribute__((alias(BUILTINN(parityll))));
 #endif
-int __builtin_parityll (unsigned long long x) { POPCOUNTL(x, 0x01) }
+
+#ifndef __TINYC__
+#if defined(__GNUC__) && (__GNUC__ >= 6)
+/* gcc overrides alias from __builtin_ffs... to ffs.. so use assembly code */
+__asm__(".globl  __builtin_ffs");
+__asm__(".set __builtin_ffs,__tcc_builtin_ffs");
+__asm__(".globl  __builtin_ffsl");
+__asm__(".set __builtin_ffsl,__tcc_builtin_ffsl");
+__asm__(".globl  __builtin_ffsll");
+__asm__(".set __builtin_ffsll,__tcc_builtin_ffsll");
+#else
+int __builtin_ffs(int x) __attribute__((alias("__tcc_builtin_ffs")));
+int __builtin_ffsl(long x) __attribute__((alias("__tcc_builtin_ffsl")));
+int __builtin_ffsll(long long x) __attribute__((alias("__tcc_builtin_ffsll")));
+#endif
+int __builtin_clz(unsigned int x) __attribute__((alias("__tcc_builtin_clz")));
+int __builtin_clzl(unsigned long x) __attribute__((alias("__tcc_builtin_clzl")));
+int __builtin_clzll(unsigned long long x) __attribute__((alias("__tcc_builtin_clzll")));
+int __builtin_ctz(unsigned int x) __attribute__((alias("__tcc_builtin_ctz")));
+int __builtin_ctzl(unsigned long x) __attribute__((alias("__tcc_builtin_ctzl")));
+int __builtin_ctzll(unsigned long long x) __attribute__((alias("__tcc_builtin_ctzll")));
+int __builtin_clrsb(int x) __attribute__((alias("__tcc_builtin_clrsb")));
+int __builtin_clrsbl(long x) __attribute__((alias("__tcc_builtin_clrsbl")));
+int __builtin_clrsbll(long long x) __attribute__((alias("__tcc_builtin_clrsbll")));
+int __builtin_popcount(unsigned int x) __attribute__((alias("__tcc_builtin_popcount")));
+int __builtin_popcountl(unsigned long x) __attribute__((alias("__tcc_builtin_popcountl")));
+int __builtin_popcountll(unsigned long long x) __attribute__((alias("__tcc_builtin_popcountll")));
+int __builtin_parity(unsigned int x) __attribute__((alias("__tcc_builtin_parity")));
+int __builtin_parityl(unsigned long x) __attribute__((alias("__tcc_builtin_parityl")));
+int __builtin_parityll(unsigned long long x) __attribute__((alias("__tcc_builtin_parityll")));
+#endif

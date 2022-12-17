@@ -115,11 +115,18 @@ ATOMIC_GEN(uint32_t, 4, "l")
 ATOMIC_GEN(uint64_t, 8, "q")
 #endif
 
-void __atomic_signal_fence (int memorder)
+/* uses alias to allow building with gcc/clang */
+#ifdef __TINYC__
+#define ATOMIC(x)      __atomic_##x
+#else
+#define ATOMIC(x)      __tcc_atomic_##x
+#endif
+
+void ATOMIC(signal_fence) (int memorder)
 {
 }
 
-void __atomic_thread_fence (int memorder)
+void ATOMIC(thread_fence) (int memorder)
 {
 #if defined __i386__
         __asm__ volatile("lock orl $0, (%esp)");
@@ -134,7 +141,7 @@ void __atomic_thread_fence (int memorder)
 #endif
 }
 
-bool __atomic_is_lock_free(size_t size, void *ptr)
+bool ATOMIC(is_lock_free) (unsigned long size, const volatile void *ptr)
 {
     bool ret;
 
@@ -151,3 +158,9 @@ bool __atomic_is_lock_free(size_t size, void *ptr)
     }
     return ret;
 }
+
+#ifndef __TINYC__
+void __atomic_signal_fence(int memorder) __attribute__((alias("__tcc_atomic_signal_fence")));
+void __atomic_thread_fence(int memorder) __attribute__((alias("__tcc_atomic_thread_fence")));
+bool __atomic_is_lock_free(unsigned long size, const volatile void *ptr) __attribute__((alias("__tcc_atomic_is_lock_free")));
+#endif
