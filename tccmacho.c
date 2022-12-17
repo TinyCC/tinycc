@@ -2177,6 +2177,8 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
     check_relocs(s1, &mo);
     ret = check_symbols(s1, &mo);
     if (!ret) {
+	int save_output = s1->output_type;
+
         collect_sections(s1, &mo, filename);
         relocate_syms(s1, s1->symtab, 0);
 	if (s1->output_type == TCC_OUTPUT_EXE)
@@ -2184,7 +2186,10 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
                             -     get_segment(&mo, 1)->vmaddr;
         if (s1->nb_errors)
           goto do_ret;
+	// Macho uses bind/rebase instead of dynsym
+	s1->output_type = TCC_OUTPUT_EXE;
         relocate_sections(s1);
+	s1->output_type = save_output;
 #ifdef CONFIG_NEW_MACHO
 	bind_rebase_import(s1, &mo);
 #endif
