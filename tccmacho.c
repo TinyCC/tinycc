@@ -1529,7 +1529,7 @@ static void export_trie(TCCState *s1, struct macho *mo)
 	ElfW(Sym) *sym = (ElfW(Sym) *)symtab_section->data + sym_index;
 	const char *name = (char*)symtab_section->link->data + sym->st_name;
 
-	if (sym->st_shndx == text_section->sh_num &&
+	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE &&
             (ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL ||
 	     ELFW(ST_BIND)(sym->st_info) == STB_WEAK)) {
 	    int flag = EXPORT_SYMBOL_FLAGS_KIND_REGULAR;
@@ -1538,7 +1538,7 @@ static void export_trie(TCCState *s1, struct macho *mo)
 
 	    if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
 		flag |= EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION;
-	    dprintf ("%s %d %llx\n", name, flag, addr + vm_addr);
+	    dprintf ("%s %d %llx\n", name, flag, (long long)addr + vm_addr);
 	    trie = tcc_realloc(trie, (n_trie + 1) * sizeof(struct trie_info));
 	    trie[n_trie].name = name;
 	    trie[n_trie].flag = flag;
@@ -1769,7 +1769,7 @@ static void collect_sections(TCCState *s1, struct macho *mo, const char *filenam
     seg = NULL;
     numsec = 0;
     mo->elfsectomacho = tcc_mallocz(sizeof(*mo->elfsectomacho) * s1->nb_sections);
-    for (sk = sk_text; sk < sk_last; sk++) {
+    for (sk = sk_unknown; sk < sk_last; sk++) {
         struct section_64 *sec = NULL;
         if (seg) {
             seg->vmsize = curaddr - seg->vmaddr;
@@ -1786,7 +1786,8 @@ static void collect_sections(TCCState *s1, struct macho *mo, const char *filenam
 	    export_trie(s1, mo);
 	}
 #endif
-        if ((s1->output_type != TCC_OUTPUT_EXE || mo->segment[sk]) &&
+        if (skinfo[sk].seg_initial &&
+	    (s1->output_type != TCC_OUTPUT_EXE || mo->segment[sk]) &&
 	    mo->sk_to_sect[sk].s) {
             uint64_t al = 0;
             int si;
@@ -1838,14 +1839,14 @@ static void collect_sections(TCCState *s1, struct macho *mo, const char *filenam
             for (s = mo->sk_to_sect[sk].s; s; s = s->prev) {
                 al = s->sh_addralign;
                 curaddr = (curaddr + al - 1) & -al;
-                dprintf("curaddr now 0x%lx\n", (long)curaddr);
+                dprintf("%s: curaddr now 0x%lx\n", s->name, (long)curaddr);
                 s->sh_addr = curaddr;
                 curaddr += s->sh_size;
                 if (s->sh_type != SHT_NOBITS) {
                     fileofs = (fileofs + al - 1) & -al;
                     s->sh_offset = fileofs;
                     fileofs += s->sh_size;
-                    dprintf("fileofs now %ld\n", (long)fileofs);
+                    dprintf("%s: fileofs now %ld\n", s->name, (long)fileofs);
                 }
                 if (sec)
                   mo->elfsectomacho[s->sh_num] = numsec;
@@ -1964,7 +1965,8 @@ static void macho_write(TCCState *s1, struct macho *mo, FILE *fp)
 
     for (sk = sk_unknown; sk < sk_last; sk++) {
         //struct segment_command_64 *seg;
-        if ((s1->output_type == TCC_OUTPUT_EXE && !mo->segment[sk]) ||
+        if (skinfo[sk].seg_initial == 0 ||
+	    (s1->output_type == TCC_OUTPUT_EXE && !mo->segment[sk]) ||
 	    !mo->sk_to_sect[sk].s)
           continue;
         /*seg =*/ get_segment(mo, mo->segment[sk]);
@@ -2058,7 +2060,7 @@ ST_FUNC void bind_rebase_import(TCCState *s1, struct macho *mo)
 	for (j = 0; j < page_count; j++) {
 	    addr_t start = seg->vmaddr + j * SEG_PAGE_SIZE;
 	    addr_t end = start + SEG_PAGE_SIZE;
-	    void *last;
+	    void *last = NULL;
 	    addr_t last_o = 0;
 	    addr_t cur_o, cur;
 	    struct dyld_chained_ptr_64_rebase *rebase;
