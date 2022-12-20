@@ -975,6 +975,12 @@ struct TCCState {
 # endif
 #endif
 
+#if defined TCC_TARGET_MACHO
+    char *install_name;
+    uint32_t compatibility_version;
+    uint32_t current_version;
+#endif
+
 #ifndef ELF_OBJ_ONLY
     int nb_sym_versions;
     struct sym_version *sym_versions;

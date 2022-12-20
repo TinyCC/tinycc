@@ -429,7 +429,7 @@ struct macho {
     } sk_to_sect[sk_last];
     int *elfsectomacho;
     int *e2msym;
-    Section *symtab, *strtab, *wdata, *indirsyms, *stubs, *exports;
+    Section *symtab, *strtab, *indirsyms, *stubs, *exports;
     uint32_t ilocal, iextdef, iundef;
     int stubsym, n_got, nr_plt;
     int segment[sk_last];
@@ -1705,14 +1705,17 @@ static void collect_sections(TCCState *s1, struct macho *mo, const char *filenam
 	}
 
     if (s1->output_type != TCC_OUTPUT_EXE) {
-        i = (sizeof(*dylib) + strlen(filename) + 1 + 7) &-8;
+	const char *name = s1->install_name ? s1->install_name : filename;
+        i = (sizeof(*dylib) + strlen(name) + 1 + 7) &-8;
         dylib = add_lc(mo, LC_ID_DYLIB, i);
 	dylib->name = sizeof(*dylib);
 	dylib->timestamp = 1;
-	dylib->current_version = 1 << 16;
-	dylib->compatibility_version = 1 << 16;
+	dylib->current_version =
+	    s1->current_version ? s1->current_version : 1 << 16;
+	dylib->compatibility_version =
+	    s1->compatibility_version ? s1->compatibility_version : 1 << 16;
         str = (char*)dylib + dylib->name;
-        strcpy(str, filename);
+        strcpy(str, name);
     }
 
 #ifdef CONFIG_NEW_MACHO

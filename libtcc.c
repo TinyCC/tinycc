@@ -846,6 +846,9 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_free(s1->mapfile);
     tcc_free(s1->outfile);
     tcc_free(s1->deps_outfile);
+#if defined TCC_TARGET_MACHO
+    tcc_free(s1->install_name);
+#endif
     dynarray_reset(&s1->files, &s1->nb_files);
     dynarray_reset(&s1->target_deps, &s1->nb_target_deps);
     dynarray_reset(&s1->pragma_libs, &s1->nb_pragma_libs);
@@ -1374,6 +1377,14 @@ static void copy_linker_arg(char **pp, const char *s, int sep)
     pstrncpy(l + (*pp = tcc_realloc(p, q - s + l + 1)), s, q - s);
 }
 
+static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
+{
+    struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
+    f->type = filetype;
+    strcpy(f->name, filename);
+    dynarray_add(&s->files, &s->nb_files, f);
+}
+
 /* set linker options */
 static int tcc_set_linker(TCCState *s, const char *option)
 {
@@ -1471,6 +1482,16 @@ static int tcc_set_linker(TCCState *s, const char *option)
             } else
                 goto err;
 #endif
+#ifdef TCC_TARGET_MACHO
+        } else if (link_option(option, "all_load", &p)) {
+	    s->filetype |= AFF_WHOLE_ARCHIVE;
+        } else if (link_option(option, "force_load", &p)) {
+	    s->filetype |= AFF_WHOLE_ARCHIVE;
+            args_parser_add_file(s, p, AFF_TYPE_LIB | (s->filetype & ~AFF_TYPE_MASK));
+            s->nb_libraries++;
+        } else if (link_option(option, "single_module", &p)) {
+            ignoring = 1;
+#endif
         } else if (ret = link_option(option, "?whole-archive", &p), ret) {
             if (ret > 0)
                 s->filetype |= AFF_WHOLE_ARCHIVE;
@@ -1549,6 +1570,13 @@ enum {
     TCC_OPTION_x,
     TCC_OPTION_ar,
     TCC_OPTION_impdef,
+    TCC_OPTION_dynamiclib,
+    TCC_OPTION_flat_namespace,
+    TCC_OPTION_two_levelnamespace,
+    TCC_OPTION_undefined,
+    TCC_OPTION_install_name,
+    TCC_OPTION_compatibility_version ,
+    TCC_OPTION_current_version,
 };
 
 #define TCC_OPTION_HAS_ARG 0x0001
@@ -1576,7 +1604,14 @@ static const TCCOption tcc_options[] = {
     { "b", TCC_OPTION_b, 0 },
 #endif
     { "g", TCC_OPTION_g, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+#ifdef TCC_TARGET_MACHO
+    { "compatibility_version", TCC_OPTION_compatibility_version, TCC_OPTION_HAS_ARG },
+    { "current_version", TCC_OPTION_current_version, TCC_OPTION_HAS_ARG },
+#endif
     { "c", TCC_OPTION_c, 0 },
+#ifdef TCC_TARGET_MACHO
+    { "dynamiclib", TCC_OPTION_dynamiclib, 0 },
+#endif
     { "dumpversion", TCC_OPTION_dumpversion, 0},
     { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "static", TCC_OPTION_static, 0 },
@@ -1596,6 +1631,9 @@ static const TCCOption tcc_options[] = {
     { "mfloat-abi", TCC_OPTION_mfloat_abi, TCC_OPTION_HAS_ARG },
 #endif
     { "m", TCC_OPTION_m, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
+#ifdef TCC_TARGET_MACHO
+    { "flat_namespace", TCC_OPTION_flat_namespace, 0 },
+#endif
     { "f", TCC_OPTION_f, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "isystem", TCC_OPTION_isystem, TCC_OPTION_HAS_ARG },
     { "include", TCC_OPTION_include, TCC_OPTION_HAS_ARG },
@@ -1613,6 +1651,11 @@ static const TCCOption tcc_options[] = {
     { "ar", TCC_OPTION_ar, 0},
 #ifdef TCC_TARGET_PE
     { "impdef", TCC_OPTION_impdef, 0},
+#endif
+#ifdef TCC_TARGET_MACHO
+    { "install_name", TCC_OPTION_install_name, TCC_OPTION_HAS_ARG },
+    { "two_levelnamespace", TCC_OPTION_two_levelnamespace, 0 },
+    { "undefined", TCC_OPTION_undefined, TCC_OPTION_HAS_ARG },
 #endif
     /* ignored (silently, except after -Wunsupported) */
     { "arch", 0, TCC_OPTION_HAS_ARG},
@@ -1697,14 +1740,6 @@ static int set_flag(TCCState *s, const FlagDef *flags, const char *name)
     return ret;
 }
 
-static void args_parser_add_file(TCCState *s, const char* filename, int filetype)
-{
-    struct filespec *f = tcc_malloc(sizeof *f + strlen(filename));
-    f->type = filetype;
-    strcpy(f->name, filename);
-    dynarray_add(&s->files, &s->nb_files, f);
-}
-
 static int args_parser_make_argv(const char *r, int *argc, char ***argv)
 {
     int ret = 0, q, c;
@@ -1762,6 +1797,26 @@ static void args_parser_listfile(TCCState *s,
     dynarray_reset(&s->argv, &s->argc);
     *pargc = s->argc = argc, *pargv = s->argv = argv;
 }
+
+#if defined TCC_TARGET_MACHO
+static uint32_t parse_version(TCCState *s1, const char *version)
+{
+    uint32_t a = 0;
+    uint32_t b = 0;
+    uint32_t c = 0;
+    char* last;
+
+    a = strtoul(version, &last, 10);
+    if (*last == '.') {
+        b = strtoul(&last[1], &last, 10);
+        if (*last == '.')
+             c = strtoul(&last[1], &last, 10);
+    }
+    if (*last || a > 0xffff || b > 0xff || c > 0xff)
+        tcc_error("version a.b.c not correct: %s", version);
+    return (a << 16) | (b << 8) | c;
+}
+#endif
 
 PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
 {
@@ -2042,6 +2097,26 @@ reparse:
         case TCC_OPTION_impdef:
             x = OPT_IMPDEF;
             goto extra_action;
+#if defined TCC_TARGET_MACHO
+        case TCC_OPTION_dynamiclib:
+            x = TCC_OUTPUT_DLL;
+            goto set_output_type;
+        case TCC_OPTION_flat_namespace:
+	     break;
+        case TCC_OPTION_two_levelnamespace:
+	     break;
+        case TCC_OPTION_undefined:
+	     break;
+        case TCC_OPTION_install_name:
+	    s->install_name = tcc_strdup(optarg);
+            break;
+        case TCC_OPTION_compatibility_version:
+	    s->compatibility_version = parse_version(s, optarg);
+            break;
+        case TCC_OPTION_current_version:
+	    s->current_version = parse_version(s, optarg);;
+            break;
+#endif
         case TCC_OPTION_ar:
             x = OPT_AR;
         extra_action:
