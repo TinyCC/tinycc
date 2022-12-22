@@ -665,7 +665,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
     Section *s;
     ElfW_Rel *rel, save_rel;
     ElfW(Sym) *sym;
-    int i, type, gotplt_entry, sym_index, for_code;
+    int i, j, type, gotplt_entry, sym_index, for_code;
     uint32_t *pi, *goti;
     struct sym_attr *attr;
 
@@ -711,8 +711,8 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                             && type == R_AARCH64_ADR_GOT_PAGE
 #endif
                             ) {
+			    attr->plt_offset = -mo->n_bind_rebase - 1;
 			    bind_rebase_add(mo, 1, s1->got->reloc->sh_info, &save_rel, attr);
-			    attr->plt_offset = 0; // ignore next bind
 			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
 			}
 		        if (for_code && sym->st_shndx == SHN_UNDEF)
@@ -720,6 +720,11 @@ static void check_relocs(TCCState *s1, struct macho *mo)
 		    }
                 }
                 if (for_code && sym->st_shndx == SHN_UNDEF) {
+		    if ((int)attr->plt_offset < -1) {
+			/* remove above bind and replace with plt */
+			mo->bind_rebase[-attr->plt_offset - 1].bind = 2;
+			attr->plt_offset = -1;
+		    }
                     if (attr->plt_offset == -1) {
                         uint8_t *jmp;
 
@@ -764,6 +769,13 @@ static void check_relocs(TCCState *s1, struct macho *mo)
 				s->sh_info, &save_rel, NULL);
         }
     }
+    /* remove deleted binds */
+    for (i = 0, j = 0; i < mo->n_bind_rebase; i++)
+	if (mo->bind_rebase[i].bind == 2)
+	    mo->n_bind--;
+	else
+	    mo->bind_rebase[j++] = mo->bind_rebase[i];
+    mo->n_bind_rebase = j;
     pi = section_ptr_add(mo->indirsyms, mo->n_got * sizeof(*pi));
     memcpy(pi, goti, mo->n_got * sizeof(*pi));
     tcc_free(goti);
