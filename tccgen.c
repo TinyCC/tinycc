@@ -3920,21 +3920,34 @@ redo:
 static Sym * find_field (CType *type, int v, int *cumofs)
 {
     Sym *s = type->ref;
-    v |= SYM_FIELD;
+    int v1 = v | SYM_FIELD;
+
     while ((s = s->next) != NULL) {
-	if ((s->v & SYM_FIELD) &&
-	    (s->type.t & VT_BTYPE) == VT_STRUCT &&
-	    (s->v & ~SYM_FIELD) >= SYM_FIRST_ANOM) {
-	    Sym *ret = find_field (&s->type, v, cumofs);
-	    if (ret) {
+        if (s->v == v1) {
+            *cumofs += s->c;
+            return s;
+        }
+        if ((s->type.t & VT_BTYPE) == VT_STRUCT
+          && s->v >= (SYM_FIRST_ANOM | SYM_FIELD)) {
+            /* try to find field in anonymous sub-struct/union */
+            Sym *ret = find_field (&s->type, v1, cumofs);
+            if (ret) {
                 *cumofs += s->c;
-	        return ret;
+                return ret;
             }
-	}
-	if (s->v == v)
-	  break;
+        }
     }
-    return s;
+
+    if (!(v & SYM_FIELD)) { /* top-level call */
+        s = type->ref;
+        if (s->c < 0)
+            tcc_error("dereferencing incomplete type '%s'",
+                get_tok_str(s->v & ~SYM_STRUCT, 0));
+        else
+            tcc_error("field not found: %s",
+                get_tok_str(v, &tokc));
+    }
+    return NULL;
 }
 
 static void check_fields (CType *type, int check)
@@ -5895,11 +5908,9 @@ special_math_val:
             if (tok == TOK_CINT || tok == TOK_CUINT)
                 expect("field name");
 	    s = find_field(&vtop->type, tok, &cumofs);
-            if (!s)
-                tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, &tokc));
             /* add field offset to pointer */
             vtop->type = char_pointer_type; /* change type to 'char *' */
-            vpushi(cumofs + s->c);
+            vpushi(cumofs);
             gen_op('+');
             /* change type to field type, and set to lvalue */
             vtop->type = s->type;
@@ -7349,12 +7360,10 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
                 expect("struct/union type");
             cumofs = 0;
 	    f = find_field(type, l, &cumofs);
-            if (!f)
-                expect("field");
             if (cur_field)
                 *cur_field = f;
 	    type = &f->type;
-            c += cumofs + f->c;
+            c += cumofs;
         }
         cur_field = NULL;
     }
