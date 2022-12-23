@@ -711,7 +711,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                             && type == R_AARCH64_ADR_GOT_PAGE
 #endif
                             ) {
-			    attr->plt_offset = -mo->n_bind_rebase - 1;
+			    attr->plt_offset = -mo->n_bind_rebase - 2;
 			    bind_rebase_add(mo, 1, s1->got->reloc->sh_info, &save_rel, attr);
 			    s1->got->reloc->data_offset -= sizeof (ElfW_Rel);
 			}
@@ -722,7 +722,7 @@ static void check_relocs(TCCState *s1, struct macho *mo)
                 if (for_code && sym->st_shndx == SHN_UNDEF) {
 		    if ((int)attr->plt_offset < -1) {
 			/* remove above bind and replace with plt */
-			mo->bind_rebase[-attr->plt_offset - 1].bind = 2;
+			mo->bind_rebase[-attr->plt_offset - 2].bind = 2;
 			attr->plt_offset = -1;
 		    }
                     if (attr->plt_offset == -1) {
