@@ -1771,11 +1771,19 @@ static void collect_sections(TCCState *s1, struct macho *mo, const char *filenam
     }
 
     if (s1->rpath) {
-        i = (sizeof(*rpath) + strlen(s1->rpath) + 1 + 7) &-8;
-        rpath = add_lc(mo, LC_RPATH, i);
-        rpath->path = sizeof(*rpath);
-        str = (char*)rpath + rpath->path;
-        strcpy(str, s1->rpath);
+	char *path = s1->rpath, *end;
+	do {
+	    end = strchr(path, ':');
+	    if (!end)
+		end = strchr(path, 0);
+            i = (sizeof(*rpath) + (end - path) + 1 + 7) &-8;
+            rpath = add_lc(mo, LC_RPATH, i);
+            rpath->path = sizeof(*rpath);
+            str = (char*)rpath + rpath->path;
+            memcpy(str, path, end - path);
+	    str[end - path] = 0;
+	    path = end + 1;
+	} while (*end);
     }
 
     fileofs = 4096;  /* leave space for mach-o headers */
