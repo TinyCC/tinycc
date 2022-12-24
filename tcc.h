@@ -497,9 +497,10 @@ typedef int nwchar_t;
 
 typedef struct CString {
     int size; /* size in bytes */
-    void *data; /* either 'char *' or 'nwchar_t *' */
     int size_allocated;
+    void *data; /* either 'char *' or 'nwchar_t *' */
 } CString;
+_Static_assert(sizeof(CString) == 16, "CString should only require 16 bytes");
 
 /* type definition */
 typedef struct CType {
