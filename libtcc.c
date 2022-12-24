@@ -1450,6 +1450,8 @@ static int tcc_set_linker(TCCState *s, const char *option)
             s->section_align = strtoul(p, &end, 16);
         } else if (link_option(option, "soname=", &p)) {
             copy_linker_arg(&s->soname, p, 0);
+        } else if (link_option(option, "install_name=", &p)) {
+            copy_linker_arg(&s->soname, p, 0);
 #ifdef TCC_TARGET_PE
         } else if (link_option(option, "large-address-aware", &p)) {
             s->pe_characteristics |= 0x20;
