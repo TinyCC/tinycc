@@ -78,7 +78,7 @@ static const char help[] =
     "  -m32/64      defer to i386/x86_64 cross compiler\n"
 #endif
     "Tools:\n"
-    "  create library  : tcc -ar [rcsv] lib.a [files]\n"
+    "  create library  : tcc -ar [crstvx] lib [files]\n"
 #ifdef TCC_TARGET_PE
     "  create def file : tcc -impdef lib.dll [-v] [-o lib.def]\n"
 #endif

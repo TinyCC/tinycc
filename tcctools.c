@@ -61,7 +61,7 @@ static int contains_any(const char *s, const char *list) {
 }
 
 static int ar_usage(int ret) {
-    fprintf(stderr, "usage: tcc -ar [rcstxv] lib [file...]\n");
+    fprintf(stderr, "usage: tcc -ar [crstvx] lib [files]\n");
     fprintf(stderr, "create library ([abdiopN] not supported).\n");
     return ret;
 }
