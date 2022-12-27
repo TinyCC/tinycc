@@ -3002,7 +3002,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 {
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh;
-    int size, i, j, offset, offseti, nb_syms, sym_index, ret, seencompressed;
+    unsigned long size, offset, offseti;
+    int i, j, nb_syms, sym_index, ret, seencompressed;
     char *strsec, *strtab;
     int stab_index, stabstr_index;
     int *old_to_new_syms;
