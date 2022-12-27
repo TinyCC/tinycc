@@ -102,8 +102,8 @@ GEN-ALWAYS =
 113_btdll.test: T1 = \
     $(TCC) -bt $1 -shared -D DLL=1 -o a1$(DLLSUF) && \
     $(TCC) -bt $1 -shared -D DLL=2 -o a2$(DLLSUF) && \
-    $(TCC) -bt $1 a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=. -o a.exe && \
-    ./a.exe
+    $(TCC) -bt $1 a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=. -o $(basename $@).exe && \
+    ./$(basename $@).exe
 
 114_bound_signal.test: FLAGS += -b
 114_bound_signal.test: NORUN = true # tcc -run does not support fork and -b and SELINUX
@@ -131,7 +131,7 @@ all test tests2.all: $(filter-out $(SKIP),$(TESTS))
 	@$(call T1,$<) $(T3)
 
 T1 = $(TCC) $(FLAGS) $(T2) $(ARGS)
-T2 = $(if $(NORUN),$1 -o a.exe && ./a.exe,-run $1)
+T2 = $(if $(NORUN),$1 -o $(basename $@).exe && ./$(basename $@).exe,-run $1)
 T3 = $(FILTER) >$*.output 2>&1 || true \
      && diff -Nbu $(filter %.expect,$^) $*.output \
      && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
@@ -159,7 +159,7 @@ F2 = $1 UPDATE="$(patsubst %.test,%.expect,$1)"
 
 # using TCC for .expect if -dt in FLAGS
 GEN = $(if $(filter -dt -bt -b,$(FLAGS)),$(GEN-TCC),$(GEN-CC))
-GEN-CC = $(CC) -w -std=gnu99 $(FLAGS) $1 -o a.exe && ./a.exe $(ARGS)
+GEN-CC = $(CC) -w -std=gnu99 $(FLAGS) $1 -o $(basename $@).exe && ./$(basename $@).exe $(ARGS)
 GEN-TCC = $(T1)
 GEN-MSC = $(MS-CC) $1 && ./$(basename $@).exe
 MS-CC = cl
@@ -172,4 +172,4 @@ $(sort $(GEN-ALWAYS) $(UPDATE)) : force
 force:
 
 clean :
-	rm -f fred.txt *.output a.exe *.dll *.so *.def $(GEN-ALWAYS)
+	rm -f fred.txt *.output *.exe *.dll *.so *.def $(GEN-ALWAYS)
