@@ -70,11 +70,11 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
 {
     static const ArHdr arhdr_init = {
         "/               ",
-        "            ",
+        "0           ",
         "0     ",
         "0     ",
         "0       ",
-        "          ",
+        "0         ",
         ARFMAG
         };
 
@@ -308,7 +308,7 @@ finish:
         ret = 0;
         goto the_end;
     }
-    sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)));
+    sprintf(stmp, "%-10d", (int)(strpos + (funccnt+1) * sizeof(int)) + fpos);
     memcpy(&arhdr.ar_size, stmp, 10);
     fwrite(&arhdr, sizeof(arhdr), 1, fh);
     afpos[0] = le2belong(funccnt);
