@@ -197,7 +197,7 @@ finish:
 
     funcmax = 250;
     afpos = tcc_realloc(NULL, funcmax * sizeof *afpos); // 250 func
-    memcpy(&arhdro.ar_mode, "100666", 6);
+    memcpy(&arhdro.ar_mode, "100644", 6);
 
     // i_obj = first input object file
     while (i_obj < argc)
@@ -302,7 +302,7 @@ finish:
     if ((hofs & 1)) // align
         hofs++, fpos = 1;
     // write header
-    fwrite("!<arch>\n", 8, 1, fh);
+    fwrite(ARMAG, 8, 1, fh);
     // create an empty archive
     if (!funccnt) {
         ret = 0;

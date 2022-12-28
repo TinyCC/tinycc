@@ -1509,7 +1509,7 @@ ST_DATA int func_bound_add_epilog;
 #define TCC_OUTPUT_FORMAT_COFF   2 /* COFF */
 #define TCC_OUTPUT_DYN           TCC_OUTPUT_DLL
 
-#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
+#define ARMAG  "!<arch>\n"    /* For COFF and a.out archives */
 
 typedef struct {
     unsigned int n_strx;         /* index into string table of name */
