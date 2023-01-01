@@ -463,8 +463,8 @@ clean:
 	@$(MAKE) -s -C tests $@
 
 distclean: clean
-	@rm -fv config.h config.mak config.texi
-	@rm -fv $(TCCDOCS)
+	@rm -f config.h config.mak config.texi
+	@rm -f $(TCCDOCS)
 
 .PHONY: all clean test tar tags ETAGS doc distclean install uninstall FORCE
 
