@@ -571,12 +571,16 @@ static void dwarf_file(TCCState *s1)
     int i, j;
     char *filename;
 
+    if (!strcmp(file->filename, "<command line>")) {
+        dwarf_line.cur_file = 1;
+	return;
+    }
     filename = strrchr(file->filename, '/');
     if (filename == NULL) {
         for (i = 1; i < dwarf_line.filename_size; i++)
             if (dwarf_line.filename_table[i].dir_entry == 0 &&
 		strcmp(dwarf_line.filename_table[i].name,
-		file->filename) == 0) {
+		       file->filename) == 0) {
 		    dwarf_line.cur_file = i;
 	            return;
 		}
@@ -593,7 +597,7 @@ static void dwarf_file(TCCState *s1)
 		for (j = 1; j < dwarf_line.filename_size; j++)
 		    if (dwarf_line.filename_table[j].dir_entry == i &&
 			strcmp(dwarf_line.filename_table[j].name,
-			filename) == 0) {
+			       filename) == 0) {
 			*undo = '/';
 		        dwarf_line.cur_file = j;
 			return;
@@ -610,21 +614,15 @@ static void dwarf_file(TCCState *s1)
 	}
 	*undo = '/';
     }
-    for (j = 1; j < dwarf_line.filename_size; j++)
-        if (dwarf_line.filename_table[j].dir_entry == i &&
-            strcmp (dwarf_line.filename_table[j].name, filename) == 0)
-            break;
-    if (j == dwarf_line.filename_size) {
-        dwarf_line.filename_table =
-            (struct dwarf_filename_struct *)
-            tcc_realloc(dwarf_line.filename_table,
-                        (dwarf_line.filename_size + 1) *
-                        sizeof (struct dwarf_filename_struct));
-        dwarf_line.filename_table[dwarf_line.filename_size].dir_entry = i;
-        dwarf_line.filename_table[dwarf_line.filename_size++].name =
-            tcc_strdup(filename);
-	dwarf_line.cur_file = j;
-    }
+    dwarf_line.filename_table =
+        (struct dwarf_filename_struct *)
+        tcc_realloc(dwarf_line.filename_table,
+                    (dwarf_line.filename_size + 1) *
+                    sizeof (struct dwarf_filename_struct));
+    dwarf_line.filename_table[dwarf_line.filename_size].dir_entry = i;
+    dwarf_line.filename_table[dwarf_line.filename_size].name =
+        tcc_strdup(filename);
+    dwarf_line.cur_file = dwarf_line.filename_size++;
     return;
 }
 
@@ -1054,14 +1052,10 @@ ST_FUNC void tcc_debug_bincl(TCCState *s1)
 {
     if (!s1->do_debug)
         return;
-    if (s1->dwarf) {
-        if (strcmp(file->filename, "<command line>"))
-            dwarf_file(s1);
-    }
+    if (s1->dwarf)
+        dwarf_file(s1);
     else
-    {
         put_stabs(s1, file->filename, N_BINCL, 0, 0, 0);
-    }
     new_file = 1;
 }
 
@@ -1101,7 +1095,11 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 	if (dwarf_line.cur_file != dwarf_line.last_file) {
 	    dwarf_line.last_file = dwarf_line.cur_file;
 	    dwarf_line_op(s1, DW_LNS_set_file);
+#ifdef TCC_TARGET_MACHO
+	    dwarf_uleb128_op(s1, dwarf_line.cur_file + 1);
+#else
 	    dwarf_uleb128_op(s1, dwarf_line.cur_file);
+#endif
 	}
 	if (len_pc &&
 	    len_line >= DWARF_LINE_BASE && len_line <= (DWARF_OPCODE_BASE + DWARF_LINE_BASE) &&

@@ -975,6 +975,9 @@ check_pc:
 		    break;
 	        case DW_LNS_set_file:
 		    i = dwarf_read_uleb128(&ln, end);
+#ifdef TCC_TARGET_MACHO
+		    i--;
+#endif
 		    if (i < FILE_TABLE_SIZE && i < filename_size)
 		        filename = filename_table[i].name;
 		    break;
