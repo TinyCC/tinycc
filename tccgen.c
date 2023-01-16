@@ -5601,17 +5601,16 @@ ST_FUNC void unary(void)
     case TOK_builtin_return_address:
         {
             int tok1 = tok;
-            int level;
+            int64_t level;
             next();
             skip('(');
-            if (tok != TOK_CINT) {
+            level = expr_const64();
+            if (level < 0) {
                 tcc_error("%s only takes positive integers",
                           tok1 == TOK_builtin_return_address ?
                           "__builtin_return_address" :
                           "__builtin_frame_address");
             }
-            level = (uint32_t)tokc.i;
-            next();
             skip(')');
             type.t = VT_VOID;
             mk_pointer(&type);

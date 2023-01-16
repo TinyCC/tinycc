@@ -26,12 +26,6 @@ int compile_errors(void)
    l2: return 2;
   }
 #endif
-#if TEST == 4
-  {
-    /* Only integer allowed */
-     __builtin_return_address(0 + 1) != NULL;
-  }
-#endif
   return 0;
 }
 
