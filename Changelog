@@ -1,14 +1,18 @@
 version 0.9.28:
 
 User interface:
-
+- new tcc -ar x and t flags (herman ten brugge)
 
 Platforms:
 - new RISC-V (riscv64) target
 
 Features:
-- tcc -ar x and t flags
+- Improved support for C11
+- C11 _Static_assert support (matthias)
 
+Fixes:
+- fix preprocessor line (#line) directive (herman ten brugge)
+Many more! see also git shortlog release_0_9_27...HEAD
 
 Version 0.9.27:
 
