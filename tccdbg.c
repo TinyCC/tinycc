@@ -570,6 +570,7 @@ static void dwarf_file(TCCState *s1)
 {
     int i, j;
     char *filename;
+    int index_offset = s1->dwarf < 5;
 
     if (!strcmp(file->filename, "<command line>")) {
         dwarf_line.cur_file = 1;
@@ -581,10 +582,10 @@ static void dwarf_file(TCCState *s1)
             if (dwarf_line.filename_table[i].dir_entry == 0 &&
 		strcmp(dwarf_line.filename_table[i].name,
 		       file->filename) == 0) {
-		    dwarf_line.cur_file = i;
+		    dwarf_line.cur_file = i + index_offset;
 	            return;
 		}
-	i = 0;
+	i = -index_offset;
 	filename = file->filename;
     }
     else {
@@ -595,11 +596,12 @@ static void dwarf_file(TCCState *s1)
         for (i = 0; i < dwarf_line.dir_size; i++)
 	    if (strcmp(dwarf_line.dir_table[i], dir) == 0) {
 		for (j = 1; j < dwarf_line.filename_size; j++)
-		    if (dwarf_line.filename_table[j].dir_entry == i &&
+		    if (dwarf_line.filename_table[j].dir_entry - index_offset
+			== i &&
 			strcmp(dwarf_line.filename_table[j].name,
 			       filename) == 0) {
 			*undo = '/';
-		        dwarf_line.cur_file = j;
+		        dwarf_line.cur_file = j + index_offset;
 			return;
 		    }
 		break;
@@ -619,10 +621,11 @@ static void dwarf_file(TCCState *s1)
         tcc_realloc(dwarf_line.filename_table,
                     (dwarf_line.filename_size + 1) *
                     sizeof (struct dwarf_filename_struct));
-    dwarf_line.filename_table[dwarf_line.filename_size].dir_entry = i;
+    dwarf_line.filename_table[dwarf_line.filename_size].dir_entry =
+	i + index_offset;
     dwarf_line.filename_table[dwarf_line.filename_size].name =
         tcc_strdup(filename);
-    dwarf_line.cur_file = dwarf_line.filename_size++;
+    dwarf_line.cur_file = dwarf_line.filename_size++ + index_offset;
     return;
 }
 
@@ -1095,11 +1098,7 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 	if (dwarf_line.cur_file != dwarf_line.last_file) {
 	    dwarf_line.last_file = dwarf_line.cur_file;
 	    dwarf_line_op(s1, DW_LNS_set_file);
-#ifdef TCC_TARGET_MACHO
-	    dwarf_uleb128_op(s1, dwarf_line.cur_file + 1);
-#else
 	    dwarf_uleb128_op(s1, dwarf_line.cur_file);
-#endif
 	}
 	if (len_pc &&
 	    len_line >= DWARF_LINE_BASE && len_line <= (DWARF_OPCODE_BASE + DWARF_LINE_BASE) &&
