@@ -1005,7 +1005,7 @@ struct TCCState {
     int total_idents;
     int total_lines;
     int total_bytes;
-    int total_output[4];
+    unsigned int total_output[4];
 
     /* option -dnum (for general development purposes) */
     int g_debug;
