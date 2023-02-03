@@ -2171,7 +2171,7 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
            (double)total_time/1000,
            (unsigned)total_lines*1000/total_time,
            (double)total_bytes/1000/total_time);
-    fprintf(stderr, "* text %d, data.rw %d, data.ro %d, bss %d bytes\n",
+    fprintf(stderr, "* text %u, data.rw %u, data.ro %u, bss %u bytes\n",
            s1->total_output[0],
            s1->total_output[1],
            s1->total_output[2],
