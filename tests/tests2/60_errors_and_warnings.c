@@ -398,6 +398,14 @@ struct S2 {
 extern int array[2];
 int array[] = { 1, 2, 3 };
 
+#elif defined test_incompatible_local_redef
+void foo (void)
+{
+  typedef int localfunctype (int);
+  extern localfunctype func2;
+  typedef void localfunctype (int, int);
+}
+
 #elif defined test_cast_from_void
 void v() {}
 int f() { return v(); }

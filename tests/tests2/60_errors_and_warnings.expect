@@ -190,28 +190,31 @@ bar  : 3 ; 3
 [test_conflicting_array_definition]
 60_errors_and_warnings.c:399: error: incompatible types for redefinition of 'array'
 
+[test_incompatible_local_redef]
+60_errors_and_warnings.c:406: error: incompatible redefinition of 'localfunctype'
+
 [test_cast_from_void]
-60_errors_and_warnings.c:403: error: cannot convert 'void' to 'int'
+60_errors_and_warnings.c:411: error: cannot convert 'void' to 'int'
 
 [test_switch_W1]
-60_errors_and_warnings.c:419: warning: implicit declaration of function 'fink'
+60_errors_and_warnings.c:427: warning: implicit declaration of function 'fink'
 
 [test_switch_W2]
-60_errors_and_warnings.c:410: warning: unsupported option '-Wstuff'
-60_errors_and_warnings.c:421: warning: 'stuff' attribute ignored
+60_errors_and_warnings.c:418: warning: unsupported option '-Wstuff'
+60_errors_and_warnings.c:429: warning: 'stuff' attribute ignored
 
 [test_switch_W3]
-60_errors_and_warnings.c:418: error: assignment discards qualifiers from pointer target type
+60_errors_and_warnings.c:426: error: assignment discards qualifiers from pointer target type
 
 [test_switch_W4]
-60_errors_and_warnings.c:419: warning: implicit declaration of function 'fink'
-60_errors_and_warnings.c:421: error: 'stuff' attribute ignored
+60_errors_and_warnings.c:427: warning: implicit declaration of function 'fink'
+60_errors_and_warnings.c:429: error: 'stuff' attribute ignored
 
 [test_invalid_funcparam_1]
-60_errors_and_warnings.c:424: error: redeclaration of 'a'
+60_errors_and_warnings.c:432: error: redeclaration of 'a'
 
 [test_invalid_funcparam_2]
-60_errors_and_warnings.c:427: error: identifier expected
+60_errors_and_warnings.c:435: error: identifier expected
 
 [test_array_funcparam]
 arg[0] = "X"
@@ -221,7 +224,7 @@ arg[1] = "Y"
 [returns 78]
 
 [test_illegal_unicode]
-60_errors_and_warnings.c:451: error: 0xffffffff is not a valid universal character
+60_errors_and_warnings.c:459: error: 0xffffffff is not a valid universal character
 
 [test_error_string]
-60_errors_and_warnings.c:456: error: #error \123\456
+60_errors_and_warnings.c:464: error: #error \123\456

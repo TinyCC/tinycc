@@ -8482,7 +8482,8 @@ static int decl(int l)
                         sym = sym_push(v, &type, 0, 0);
                     }
                     sym->a = ad.a;
-                    sym->f = ad.f;
+                    if ((type.t & VT_BTYPE) == VT_FUNC)
+                      merge_funcattr(&sym->type.ref->f, &ad.f);
                     if (debug_modes)
                         tcc_debug_typedef (tcc_state, sym);
 		} else if ((type.t & VT_BTYPE) == VT_VOID
@@ -8493,7 +8494,7 @@ static int decl(int l)
                     if ((type.t & VT_BTYPE) == VT_FUNC) {
                         /* external function definition */
                         /* specific case for func_call attribute */
-                        type.ref->f = ad.f;
+                        merge_funcattr(&type.ref->f, &ad.f);
                     } else if (!(type.t & VT_ARRAY)) {
                         /* not lvalue if array */
                         r |= VT_LVAL;
