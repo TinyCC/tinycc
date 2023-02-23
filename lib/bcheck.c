@@ -225,7 +225,7 @@ typedef struct alloca_list_struct {
 #define BOUND_GET_TID(id)	id = GetCurrentThreadId()
 #elif defined(__OpenBSD__)
 #define BOUND_TID_TYPE		pid_t
-#define BOUND_GET_TID(id)	id = syscall (SYS_getthrid)
+#define BOUND_GET_TID(id)	id = getthrid()
 #elif defined(__FreeBSD__)
 #define BOUND_TID_TYPE		pid_t
 #define BOUND_GET_TID(id)	syscall (SYS_thr_self, &id)
