@@ -6832,6 +6832,7 @@ again:
         tcc_tcov_check_line (tcc_state, 0), tcc_tcov_block_begin (tcc_state);
 
     if (t == TOK_IF) {
+        //new_scope(&o);  //?? breaks tests2.122
         skip('(');
         gexpr();
         skip(')');
@@ -6846,8 +6847,10 @@ again:
         } else {
             gsym(a);
         }
+        //prev_scope(&o,0); //?? breaks tests2.122
 
     } else if (t == TOK_WHILE) {
+        new_scope(&o);
         d = gind();
         skip('(');
         gexpr();
@@ -6858,7 +6861,7 @@ again:
         gjmp_addr(d);
         gsym_addr(b, d);
         gsym(a);
-
+        prev_scope(&o,0);
     } else if (t == '{') {
         new_scope(&o);
 
@@ -6970,6 +6973,7 @@ again:
         prev_scope(&o, 0);
 
     } else if (t == TOK_DO) {
+        new_scope(&o);
         a = b = 0;
         d = gind();
         lblock(&a, &b);
@@ -6979,6 +6983,7 @@ again:
 	gexpr();
         skip(')');
         skip(';');
+        prev_scope(&o,0);
 	c = gvtst(0, 0);
 	gsym_addr(c, d);
         gsym(a);
@@ -6986,6 +6991,7 @@ again:
     } else if (t == TOK_SWITCH) {
         struct switch_t *sw;
 
+        new_scope(&o);
         sw = tcc_mallocz(sizeof *sw);
         sw->bsym = &a;
         sw->scope = cur_scope;
@@ -7031,6 +7037,7 @@ again:
         dynarray_reset(&sw->p, &sw->n);
         cur_switch = sw->prev;
         tcc_free(sw);
+        prev_scope(&o,0);
 
     } else if (t == TOK_CASE) {
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));
