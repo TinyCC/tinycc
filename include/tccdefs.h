@@ -309,12 +309,10 @@
     #undef __MAYBE_REDIR
     #undef __RENAME
 
-#if !defined _WIN32
     #define __BUILTIN_EXTERN(name,u) 		\
         int __builtin_##name(u int);		\
         int __builtin_##name##l(u long);	\
         int __builtin_##name##ll(u long long);
-
     __BUILTIN_EXTERN(ffs,)
     __BUILTIN_EXTERN(clz, unsigned)
     __BUILTIN_EXTERN(ctz, unsigned)
@@ -322,6 +320,5 @@
     __BUILTIN_EXTERN(popcount, unsigned)
     __BUILTIN_EXTERN(parity, unsigned)
     #undef __BUILTIN_EXTERN
-#endif
 
     #endif /* ndef __TCC_PP__ */

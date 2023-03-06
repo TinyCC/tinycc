@@ -577,17 +577,13 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
         break;
 
     case TOK_CFLOAT:
-        cstr_cat(&cstr_buf, "<float>", 0);
-        break;
+        return strcpy(p, "<float>");
     case TOK_CDOUBLE:
-	cstr_cat(&cstr_buf, "<double>", 0);
-	break;
+        return strcpy(p, "<double>");
     case TOK_CLDOUBLE:
-	cstr_cat(&cstr_buf, "<long double>", 0);
-	break;
+        return strcpy(p, "<long double>");
     case TOK_LINENUM:
-	cstr_cat(&cstr_buf, "<linenumber>", 0);
-	break;
+        return strcpy(p, "<linenumber");
 
     /* above tokens have value, the ones below don't */
     case TOK_LT:
@@ -604,6 +600,8 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
         return strcpy(p, ">>=");
     case TOK_EOF:
         return strcpy(p, "<eof>");
+    case 0: /* anonymous nameless symbols */
+        return strcpy(p, "<no name>");
     default:
         if (v < TOK_IDENT) {
             /* search in two bytes table */
@@ -617,13 +615,12 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
                 }
                 q += 3;
             }
-        if (v >= 127) {
-            sprintf(cstr_buf.data, "<%02x>", v);
-            return cstr_buf.data;
-        }
-        addv:
+            if (v >= 127 || (v < 32 && !is_space(v) && v != '\n')) {
+                sprintf(p, "<\\x%02x>", v);
+                break;
+            }
+    addv:
             *p++ = v;
-    case 0: /* nameless anonymous symbol */
             *p = '\0';
         } else if (v < tok_ident) {
             return table_ident[v - TOK_IDENT]->str;
@@ -1325,63 +1322,6 @@ ST_FUNC void free_defines(Sym *b)
         define_undef(top);
         sym_free(top);
     }
-}
-
-/* label lookup */
-ST_FUNC Sym *label_find(int v)
-{
-    v -= TOK_IDENT;
-    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
-        return NULL;
-    return table_ident[v]->sym_label;
-}
-
-ST_FUNC Sym *label_push(Sym **ptop, int v, int flags)
-{
-    Sym *s, **ps;
-    s = sym_push2(ptop, v, VT_STATIC, 0);
-    s->r = flags;
-    ps = &table_ident[v - TOK_IDENT]->sym_label;
-    if (ptop == &global_label_stack) {
-        /* modify the top most local identifier, so that
-           sym_identifier will point to 's' when popped */
-        while (*ps != NULL)
-            ps = &(*ps)->prev_tok;
-    }
-    s->prev_tok = *ps;
-    *ps = s;
-    return s;
-}
-
-/* pop labels until element last is reached. Look if any labels are
-   undefined. Define symbols if '&&label' was used. */
-ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
-{
-    Sym *s, *s1;
-    for(s = *ptop; s != slast; s = s1) {
-        s1 = s->prev;
-        if (s->r == LABEL_DECLARED) {
-            tcc_warning_c(warn_all)("label '%s' declared but not used", get_tok_str(s->v, NULL));
-        } else if (s->r == LABEL_FORWARD) {
-                tcc_error("label '%s' used but not defined",
-                      get_tok_str(s->v, NULL));
-        } else {
-            if (s->c) {
-                /* define corresponding symbol. A size of
-                   1 is put. */
-                put_extern_sym(s, cur_text_section, s->jnext, 1);
-            }
-        }
-        /* remove label */
-        if (s->r != LABEL_GONE)
-            table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
-        if (!keep)
-            sym_free(s);
-        else
-            s->r = LABEL_GONE;
-    }
-    if (!keep)
-        *ptop = slast;
 }
 
 /* fake the nth "#if defined test_..." for tcc -dt -run */

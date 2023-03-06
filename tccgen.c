@@ -751,6 +751,63 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep)
 	*ptop = b;
 }
 
+/* label lookup */
+ST_FUNC Sym *label_find(int v)
+{
+    v -= TOK_IDENT;
+    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+        return NULL;
+    return table_ident[v]->sym_label;
+}
+
+ST_FUNC Sym *label_push(Sym **ptop, int v, int flags)
+{
+    Sym *s, **ps;
+    s = sym_push2(ptop, v, VT_STATIC, 0);
+    s->r = flags;
+    ps = &table_ident[v - TOK_IDENT]->sym_label;
+    if (ptop == &global_label_stack) {
+        /* modify the top most local identifier, so that
+           sym_identifier will point to 's' when popped */
+        while (*ps != NULL)
+            ps = &(*ps)->prev_tok;
+    }
+    s->prev_tok = *ps;
+    *ps = s;
+    return s;
+}
+
+/* pop labels until element last is reached. Look if any labels are
+   undefined. Define symbols if '&&label' was used. */
+ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep)
+{
+    Sym *s, *s1;
+    for(s = *ptop; s != slast; s = s1) {
+        s1 = s->prev;
+        if (s->r == LABEL_DECLARED) {
+            tcc_warning_c(warn_all)("label '%s' declared but not used", get_tok_str(s->v, NULL));
+        } else if (s->r == LABEL_FORWARD) {
+                tcc_error("label '%s' used but not defined",
+                      get_tok_str(s->v, NULL));
+        } else {
+            if (s->c) {
+                /* define corresponding symbol. A size of
+                   1 is put. */
+                put_extern_sym(s, cur_text_section, s->jnext, 1);
+            }
+        }
+        /* remove label */
+        if (s->r != LABEL_GONE)
+            table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
+        if (!keep)
+            sym_free(s);
+        else
+            s->r = LABEL_GONE;
+    }
+    if (!keep)
+        *ptop = slast;
+}
+
 /* ------------------------------------------------------------------------- */
 static void vcheck_cmp(void)
 {
@@ -6762,9 +6819,6 @@ static void new_scope(struct scope *o)
     o->lstk = local_stack;
     o->llstk = local_label_stack;
     ++local_scope;
-
-    if (debug_modes)
-        tcc_debug_stabn(tcc_state, N_LBRAC, ind - func_ind);
 }
 
 static void prev_scope(struct scope *o, int is_expr)
@@ -6789,9 +6843,6 @@ static void prev_scope(struct scope *o, int is_expr)
     pop_local_syms(o->lstk, is_expr);
     cur_scope = o->prev;
     --local_scope;
-
-    if (debug_modes)
-        tcc_debug_stabn(tcc_state, N_RBRAC, ind - func_ind);
 }
 
 /* leave a scope via break/continue(/goto) */
@@ -6801,6 +6852,20 @@ static void leave_scope(struct scope *o)
         return;
     try_call_scope_cleanup(o->cl.s);
     vla_leave(o);
+}
+
+/* short versiona for scopes with 'if/do/while/switch' which can
+   declare only types (of struct/union/enum) */
+static void new_scope_s(struct scope *o)
+{
+    o->lstk = local_stack;
+    ++local_scope;
+}
+
+static void prev_scope_s(struct scope *o)
+{
+    sym_pop(&local_stack, o->lstk, 0);
+    --local_scope;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -6847,7 +6912,7 @@ again:
         tcc_tcov_check_line (tcc_state, 0), tcc_tcov_block_begin (tcc_state);
 
     if (t == TOK_IF) {
-        //new_scope(&o);  //?? breaks tests2.122
+        new_scope_s(&o);
         skip('(');
         gexpr();
         skip(')');
@@ -6862,10 +6927,10 @@ again:
         } else {
             gsym(a);
         }
-        //prev_scope(&o,0); //?? breaks tests2.122
+        prev_scope_s(&o);
 
     } else if (t == TOK_WHILE) {
-        new_scope(&o);
+        new_scope_s(&o);
         d = gind();
         skip('(');
         gexpr();
@@ -6876,8 +6941,11 @@ again:
         gjmp_addr(d);
         gsym_addr(b, d);
         gsym(a);
-        prev_scope(&o,0);
+        prev_scope_s(&o);
+
     } else if (t == '{') {
+        if (debug_modes)
+            tcc_debug_stabn(tcc_state, N_LBRAC, ind - func_ind);
         new_scope(&o);
 
         /* handle local labels declarations */
@@ -6902,6 +6970,8 @@ again:
         }
 
         prev_scope(&o, is_expr);
+        if (debug_modes)
+            tcc_debug_stabn(tcc_state, N_RBRAC, ind - func_ind);
         if (local_scope)
             next();
         else if (!nocode_wanted)
@@ -6988,7 +7058,7 @@ again:
         prev_scope(&o, 0);
 
     } else if (t == TOK_DO) {
-        new_scope(&o);
+        new_scope_s(&o);
         a = b = 0;
         d = gind();
         lblock(&a, &b);
@@ -6998,15 +7068,14 @@ again:
 	gexpr();
         skip(')');
         skip(';');
-        prev_scope(&o,0);
 	c = gvtst(0, 0);
 	gsym_addr(c, d);
         gsym(a);
+        prev_scope_s(&o);
 
     } else if (t == TOK_SWITCH) {
         struct switch_t *sw;
 
-        new_scope(&o);
         sw = tcc_mallocz(sizeof *sw);
         sw->bsym = &a;
         sw->scope = cur_scope;
@@ -7014,17 +7083,18 @@ again:
         sw->nocode_wanted = nocode_wanted;
         cur_switch = sw;
 
+        new_scope_s(&o);
         skip('(');
         gexpr();
         skip(')');
         sw->sv = *vtop--; /* save switch value */
-
         a = 0;
         b = gjmp(0); /* jump to first case */
         lblock(&a, NULL);
         a = gjmp(a); /* add implicit break */
         /* case lookup */
         gsym(b);
+        prev_scope_s(&o);
 
         if (sw->nocode_wanted)
             goto skip_switch;
@@ -7052,7 +7122,6 @@ again:
         dynarray_reset(&sw->p, &sw->n);
         cur_switch = sw->prev;
         tcc_free(sw);
-        prev_scope(&o,0);
 
     } else if (t == TOK_CASE) {
         struct case_t *cr = tcc_malloc(sizeof(struct case_t));
@@ -7085,8 +7154,7 @@ again:
         goto block_after_label;
 
     } else if (t == TOK_GOTO) {
-        if (cur_scope->vla.num)
-          vla_restore(cur_scope->vla.locorig);
+        vla_restore(cur_scope->vla.locorig);
         if (tok == '*' && gnu_ext) {
             /* computed goto */
             next();

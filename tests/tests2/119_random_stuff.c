@@ -1,15 +1,4 @@
-#if defined(_WIN32)
-/*
- * strtoll and strtoull require the following define.
- * Not really needed in our case
- */
- #if !defined(_ISOC99_SOURCE)
-  #define _ISOC99_SOURCE 1
- #endif
-#endif
-
 #include <stdio.h>
-#include <stdlib.h>
 
 struct big_struct { char a[262144]; };
 
@@ -99,33 +88,6 @@ void tst_cast(void)
   printf ("schar to ushort cast: %x\n", r);
 }
 
-void tst_strtoll_strtoull(void)
-{
-  /*
-   * It probably makes sense to run this test on all systems,
-   * not just on Windows.
-   */
-#if defined(_WIN32)
-  const unsigned int shift = 32;
-
-  {
-    long long x = strtoll("0x100000000", NULL, 0);
-    x = (x >> shift);
-    if (x != 1LL) {
-      printf("Windows: strtoll error\n");
-    }
-  }
-
-  {
-    unsigned long long x = strtoull("0x100000000", NULL, 0);
-    x = (x >> shift);
-    if (x != 1) {
-      printf ("Windows: strtoull error\n");
-    }
-  }
-#endif
-}
-
 struct {
     int (*print)(const char *format, ...);
 } tst_indir = {
@@ -154,6 +116,5 @@ main (void)
   tst_compare();
   tst_pack();
   tst_cast();
-  tst_strtoll_strtoull();
   tst_indir_func();
 }

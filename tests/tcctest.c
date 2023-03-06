@@ -2889,7 +2889,8 @@ void relocation_test(void)
     printf("*rel2=%d\n", *rel2);
     fptr();
 #ifdef __LP64__
-    printf("pa_symbol=0x%lx\n", __pa_symbol() >> 63);
+    // compare 'addend' displacement versus conventional arithmetics
+    printf("pa_symbol: %d\n", (long)&rel1 == __pa_symbol() - 0x80000000);
 #endif
 }
 
@@ -3857,10 +3858,11 @@ int constant_p_var;
 
 int func(void);
 
-#if !defined _WIN32
+
 /* __builtin_clz and __builtin_ctz return random values for 0 */
 static void builtin_test_bits(unsigned long long x, int cnt[])
 {
+#if GCC_MAJOR >= 4
     cnt[0] += __builtin_ffs(x);
     cnt[1] += __builtin_ffsl(x);
     cnt[2] += __builtin_ffsll(x);
@@ -3884,8 +3886,8 @@ static void builtin_test_bits(unsigned long long x, int cnt[])
     cnt[15] += __builtin_parity(x);
     cnt[16] += __builtin_parityl(x);
     cnt[17] += __builtin_parityll(x);
-}
 #endif
+}
 
 void builtin_test(void)
 {
@@ -3941,7 +3943,6 @@ void builtin_test(void)
 
     //printf("bera: %p\n", __builtin_extract_return_addr((void*)43));
 
-#if !defined _WIN32
     {
 	int cnt[18];
 	unsigned long long r = 0;
@@ -3958,7 +3959,6 @@ void builtin_test(void)
 	for (i = 0; i < 18; i++)
 	    printf ("%d %d\n", i, cnt[i]);
     }
-#endif
 }
 
 #if defined _WIN32

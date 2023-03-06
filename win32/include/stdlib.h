@@ -536,7 +536,7 @@ extern "C" {
 #endif
 #endif
 
-#if !defined __NO_ISOCEXT
+#if !defined __NO_ISOCEXT /* externs in static libmingwex.a */
 
   typedef struct { long long quot, rem; } lldiv_t;
 
@@ -544,18 +544,13 @@ extern "C" {
 
   __CRT_INLINE long long __cdecl llabs(long long _j) { return (_j >= 0 ? _j : -_j); }
 
-  /* stro[u]ll do not properly map in Windows; use macros as VC++ does */
- #if !defined(strtoll)
+ #ifdef __TINYC__ /* gr */
   #define strtoll _strtoi64
- #endif
- #if !defined(strtoull)
   #define strtoull _strtoui64
- #endif
-
-/*
+ #else
   long long  __cdecl strtoll(const char* __restrict__, char** __restrict, int);
   unsigned long long  __cdecl strtoull(const char* __restrict__, char** __restrict__, int);
-*/
+ #endif
 
   /* these are stubs for MS _i64 versions */
   long long  __cdecl atoll (const char *);

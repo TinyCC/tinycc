@@ -12,7 +12,7 @@ main (void)
     int x[n % 100 + 1];
     if (first == 0) {
         if (&x[0] != p[n % 100 + 1]) {
-            printf ("ERROR: %d %p $p\n", &x[0], p[n % 100 + 1]);
+            printf ("ERROR: %p %p\n", &x[0], p[n % 100 + 1]);
             return(1);
         }
     }

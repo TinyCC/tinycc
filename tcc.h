@@ -65,12 +65,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifndef __GNUC__
 #  define strtold (long double)strtod
 #  define strtof (float)strtod
-#  ifndef strtoll
-#   define strtoll _strtoi64
-#  endif
-#  ifndef strtoull
-#   define strtoull _strtoui64
-#  endif
+#  define strtoll _strtoi64
+#  define strtoull _strtoui64
 # endif
 # ifdef LIBTCC_AS_DLL
 #  define LIBTCCAPI __declspec(dllexport)
@@ -1372,9 +1368,6 @@ ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg);
 ST_FUNC void define_undef(Sym *s);
 ST_INLN Sym *define_find(int v);
 ST_FUNC void free_defines(Sym *b);
-ST_FUNC Sym *label_find(int v);
-ST_FUNC Sym *label_push(Sym **ptop, int v, int flags);
-ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep);
 ST_FUNC void parse_define(void);
 ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next(void);
@@ -1452,6 +1445,9 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
 ST_FUNC Sym *sym_find2(Sym *s, int v);
 ST_INLN Sym *sym_find(int v);
+ST_FUNC Sym *label_find(int v);
+ST_FUNC Sym *label_push(Sym **ptop, int v, int flags);
+ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep);
 ST_INLN Sym *struct_find(int v);
 
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
