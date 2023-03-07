@@ -44,6 +44,16 @@ void bla(void)
   get_args(!!__ret, sizeof(__ret));
 }
 
+int ext;
+
+void broken_jumpopt (int xxx)
+{
+  /* This was broken in 8227db3a2 by code suppression during suppressed
+     code :) */
+  ext = (xxx || 1) || ((xxx && 1) || 1);
+  printf("okay: %d %d\n", xxx, ext);
+}
+
 _Bool chk(unsigned long addr, unsigned long limit, unsigned long size)
 {
   _Bool ret;
@@ -65,5 +75,6 @@ int main()
   else
     printf("okay\n");
   bla();
+  broken_jumpopt(42);
   return 0;
 }

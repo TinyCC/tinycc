@@ -56,7 +56,7 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 #define unevalmask 0xffff /* unevaluated subexpression */
 #define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
 #define DATA_ONLY_WANTED 0x80000000 /* ON outside of functions and for static initializers */
-#define CODE_OFF() (nocode_wanted |= 0x20000000)
+#define CODE_OFF() if(!nocode_wanted)(nocode_wanted |= 0x20000000)
 #define CODE_ON() (nocode_wanted &= ~0x20000000)
 
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
