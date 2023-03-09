@@ -155,8 +155,8 @@ cross: $(LIBTCC1_CROSS) $(PROGS_CROSS)
 # build specific cross compiler & lib
 cross-%: %-tcc$(EXESUF) %-libtcc1.a ;
 
-install: ; @$(MAKE) --no-print-directory  install$(CFG)
-install-strip: ; @$(MAKE) --no-print-directory  install$(CFG) CONFIG_strip=yes
+install: all ; @$(MAKE) --no-print-directory  install$(CFG)
+install-strip: all ; @$(MAKE) --no-print-directory  install$(CFG) CONFIG_strip=yes
 uninstall: ; @$(MAKE) --no-print-directory uninstall$(CFG)
 
 ifdef CONFIG_cross
