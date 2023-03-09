@@ -39,6 +39,17 @@ static int getme(struct condstruct* s, int i)
     return i1 + i2 + i3 + i4;
 }
 
+int someglobal;
+
+void constantcond(void)
+{
+  /* This was broken by 8227db3a2, it saved/restored the CODE_OFF state
+     during the expression and that bled out to the outer one disabling
+     codegen for if-body.  */
+  if (( (someglobal ? 0 : 0) ? 8 : 9))
+    printf("okay\n");
+}
+
 int main()
 {
    int Count;
@@ -72,6 +83,8 @@ int main()
     //printf("'%c' <> '%c'\n", (0 ? a : d).x, (1 ? a : d).x);
     //0 ? a : 0.0;
    }
+
+   constantcond();
 
 
    return 0;

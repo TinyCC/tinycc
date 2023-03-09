@@ -6297,7 +6297,6 @@ static void expr_cond(void)
     int tt, u, r1, r2, rc, t1, t2, islv, c, g;
     SValue sv;
     CType type;
-    int ncw_prev;
 
     expr_lor();
     if (tok == '?') {
@@ -6320,7 +6319,6 @@ static void expr_cond(void)
             tt = gvtst(0, 0);
         }
 
-        ncw_prev = nocode_wanted;
         if (c == 0)
           nocode_wanted++;
         if (!g)
@@ -6339,7 +6337,8 @@ static void expr_cond(void)
         } else
           u = 0;
 
-        nocode_wanted = ncw_prev;
+        if (c == 0)
+          nocode_wanted--;
         if (c == 1)
           nocode_wanted++;
         skip(':');
@@ -6356,7 +6355,6 @@ static void expr_cond(void)
             /* combine jump targets of 2nd op with VT_CMP of 1st op */
             gvtst_set(0, t1);
             gvtst_set(1, t2);
-            nocode_wanted = ncw_prev;
             //  tcc_warning("two conditions expr_cond");
             return;
         }
@@ -6394,7 +6392,8 @@ static void expr_cond(void)
             tt = gjmp(0);
         }
         gsym(u);
-        nocode_wanted = ncw_prev;
+        if (c == 1)
+          nocode_wanted--;
 
         /* this is horrible, but we must also convert first
            operand */
