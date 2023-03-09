@@ -56,3 +56,4 @@ sea_fill1: okay
 sea_fill2: okay
 1438
 test_init_struct_from_struct: 1 2 3 4 - 1 2 3 4 - 3 4 5 6
+test_init_bf: 1 2 3

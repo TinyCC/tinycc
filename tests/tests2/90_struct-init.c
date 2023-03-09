@@ -371,6 +371,22 @@ void test_init_struct_from_struct(void)
         );
 }
 
+typedef struct {
+    unsigned int a;
+    unsigned int : 32;
+    unsigned int b;
+    unsigned long : 64;
+    unsigned int c;
+} tst_bf;
+
+tst_bf arr[] = { { 1, 2, 3 } };
+
+void
+test_init_bf(void)
+{
+    printf ("%s: %d %d %d\n", __FUNCTION__, arr[0].a, arr[0].b, arr[0].c);
+}
+
 
 int main()
 {
@@ -403,5 +419,6 @@ int main()
   test_zero_init();
   test_init_ranges();
   test_init_struct_from_struct();
+  test_init_bf();
   return 0;
 }
