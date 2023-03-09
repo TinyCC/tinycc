@@ -375,7 +375,7 @@ typedef struct {
     unsigned int a;
     unsigned int : 32;
     unsigned int b;
-    unsigned long : 64;
+    unsigned long long : 64;
     unsigned int c;
 } tst_bf;
 
