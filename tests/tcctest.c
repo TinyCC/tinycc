@@ -1265,6 +1265,10 @@ void bool_test()
     printf("exp=%d\n", f == (32 <= a && a <= 3));
     printf("r=%d\n", (t || f) + (t && f));
 
+    /* check that types of casted &&/|| are preserved (here the unsignedness) */
+    t = 1;
+    printf("type of bool: %d\n", (int) ( (~ ((unsigned int) (t && 1))) / 2) );
+
     /* test ? : cast */
     {
         int aspect_on;
