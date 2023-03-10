@@ -1269,6 +1269,7 @@ void bool_test()
     t = 1;
     printf("type of bool: %d\n", (int) ( (~ ((unsigned int) (t && 1))) / 2) );
 
+    printf("type of cond: %d\n", (~(t ? 0U : (unsigned int)0)) / 2 );
     /* test ? : cast */
     {
         int aspect_on;
