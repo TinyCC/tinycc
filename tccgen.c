@@ -1067,6 +1067,7 @@ static void merge_symattr(struct SymAttr *sa, struct SymAttr *sa1)
       sa->aligned = sa1->aligned;
     sa->packed |= sa1->packed;
     sa->weak |= sa1->weak;
+    sa->nodebug |= sa1->nodebug;
     if (sa1->visibility != STV_DEFAULT) {
 	int vis = sa->visibility;
 	if (vis == STV_DEFAULT
@@ -3822,6 +3823,10 @@ redo:
         case TOK_WEAK1:
         case TOK_WEAK2:
             ad->a.weak = 1;
+            break;
+        case TOK_NODEBUG1:
+        case TOK_NODEBUG2:
+            ad->a.nodebug = 1;
             break;
         case TOK_UNUSED1:
         case TOK_UNUSED2:

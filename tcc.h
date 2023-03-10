@@ -548,7 +548,8 @@ struct SymAttr {
     nodecorate  : 1,
     dllimport   : 1,
     addrtaken   : 1,
-    xxxx        : 3; /* not used */
+    nodebug     : 1,
+    xxxx        : 2; /* not used */
 };
 
 /* function attributes or temporary attributes for parsing */

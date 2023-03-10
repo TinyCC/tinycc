@@ -124,6 +124,8 @@
      DEF(TOK_ALIAS2, "__alias__")
      DEF(TOK_UNUSED1, "unused")
      DEF(TOK_UNUSED2, "__unused__")
+     DEF(TOK_NODEBUG1, "nodebug")
+     DEF(TOK_NODEBUG2, "__nodebug__")
      DEF(TOK_CDECL1, "cdecl")
      DEF(TOK_CDECL2, "__cdecl")
      DEF(TOK_CDECL3, "__cdecl__")
