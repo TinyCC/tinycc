@@ -1,4 +1,5 @@
-int printf(const char *format, ...);
+#include <stdio.h>
+
 int atexit(void (*function)(void));
 int on_exit(void (*function)(int, void *), void *arg);
 void exit(int status);
@@ -6,6 +7,7 @@ void exit(int status);
 void cleanup1(void)
 {
     printf ("cleanup1\n");
+    fflush(stdout);
 }
 
 void cleanup2(void)

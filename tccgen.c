@@ -56,8 +56,9 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 #define unevalmask 0xffff /* unevaluated subexpression */
 #define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
 #define DATA_ONLY_WANTED 0x80000000 /* ON outside of functions and for static initializers */
-#define CODE_OFF() if(!nocode_wanted)(nocode_wanted |= 0x20000000)
-#define CODE_ON() (nocode_wanted &= ~0x20000000)
+#define CODE_OFF_BIT 0x20000000
+#define CODE_OFF() if(!nocode_wanted)(nocode_wanted |= CODE_OFF_BIT)
+#define CODE_ON() (nocode_wanted &= ~CODE_OFF_BIT)
 
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
@@ -765,7 +766,13 @@ static void vcheck_cmp(void)
        again, so that the VT_CMP/VT_JMP value will be in vtop
        when code is unsuppressed again. */
 
-    if (vtop->r == VT_CMP && !nocode_wanted)
+    /* However if it's just automatic suppression via CODE_OFF/ON()
+       then it seems that we better let things work undisturbed.
+       How can it work at all under nocode_wanted?  Well, gv() will
+       actually clear it at the gsym() in load()/VT_JMP in the
+       generator backends */
+
+    if (vtop->r == VT_CMP && 0 == (nocode_wanted & ~CODE_OFF_BIT))
         gv(RC_INT);
 }
 
@@ -6263,7 +6270,7 @@ static int condition_3way(void)
 
 static void expr_landor(int op)
 {
-    int t = 0, cc = 1, f = 0, i = op == TOK_LAND, c, prev_ncw = nocode_wanted;
+    int t = 0, cc = 1, f = 0, i = op == TOK_LAND, c;
     for(;;) {
         c = f ? i : condition_3way();
         if (c < 0)
@@ -6286,7 +6293,6 @@ static void expr_landor(int op)
         nocode_wanted -= f;
     } else {
         gvtst_set(i, t);
-        nocode_wanted = prev_ncw;
     }
 }
 
