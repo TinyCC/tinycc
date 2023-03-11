@@ -934,7 +934,7 @@ static void vset_VT_JMP(void)
         /* we need to jump to 'mov $0,%R' or 'mov $1,%R' */
         int inv = op & (op < 2); /* small optimization */
         vseti(VT_JMP+inv, gvtst(inv, 0));
-        vtop->type.t = origt;
+        vtop->type.t |= origt & (VT_UNSIGNED | VT_DEFSIGN);
     } else {
         /* otherwise convert flags (rsp. 0/1) to register */
         vtop->c.i = op;

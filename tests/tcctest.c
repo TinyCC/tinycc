@@ -1220,6 +1220,13 @@ static unsigned int calc_vm_flags(unsigned int prot)
   return prot_bits;
 }
 
+enum cast_enum { FIRST, LAST };
+
+static void tst_cast(enum cast_enum ce)
+{
+    printf("%d\n", ce);
+}
+
 void bool_test()
 {
     int *s, a, b, t, f, i;
@@ -1268,6 +1275,7 @@ void bool_test()
     /* check that types of casted &&/|| are preserved (here the unsignedness) */
     t = 1;
     printf("type of bool: %d\n", (int) ( (~ ((unsigned int) (t && 1))) / 2) );
+    tst_cast(t >= 0 ? FIRST : LAST);
 
     printf("type of cond: %d\n", (~(t ? 0U : (unsigned int)0)) / 2 );
     /* test ? : cast */
