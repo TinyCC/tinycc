@@ -535,7 +535,6 @@ static char *rt_elfsym(rt_context *rc, addr_t wanted_pc, addr_t *func_addr)
     return NULL;
 }
 
-#define INCLUDE_STACK_SIZE 32
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
