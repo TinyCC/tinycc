@@ -6263,7 +6263,7 @@ static int condition_3way(void)
 
 static void expr_landor(int op)
 {
-    int t = 0, cc = 1, f = 0, i = op == TOK_LAND, c;
+    int t = 0, cc = 1, f = 0, i = op == TOK_LAND, c, prev_ncw = nocode_wanted;
     for(;;) {
         c = f ? i : condition_3way();
         if (c < 0)
@@ -6286,6 +6286,7 @@ static void expr_landor(int op)
         nocode_wanted -= f;
     } else {
         gvtst_set(i, t);
+        nocode_wanted = prev_ncw;
     }
 }
 
