@@ -468,7 +468,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 #define INCLUDE_STACK_SIZE  32
 #define IFDEF_STACK_SIZE    64
-#define VSTACK_SIZE         256
+#define VSTACK_SIZE         512
 #define STRING_MAX_SIZE     1024
 #define TOKSTR_MAX_SIZE     256
 #define PACK_STACK_SIZE     8
