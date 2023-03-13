@@ -25,7 +25,7 @@ void cleanup4(int ret, void *arg)
     printf ("%d %s\n", ret, (char *) arg);
 }
 
-void __attribute__((destructor)) cleanup5(void)
+void __attribute((destructor)) cleanup5(void)
 {
     printf ("cleanup5\n");
 }
