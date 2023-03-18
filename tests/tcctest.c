@@ -3875,9 +3875,12 @@ static void builtin_test_bits(unsigned long long x, int cnt[])
     if ((unsigned long) x) cnt[7] += __builtin_ctzl(x);
     if ((unsigned long long) x) cnt[8] += __builtin_ctzll(x);
 
+#if CC_NAME != CC_clang || GCC_MAJOR >= 11
+/* Apple clang 10 does not have __builtin_clrsb[l[l]] */
     cnt[9] += __builtin_clrsb(x);
     cnt[10] += __builtin_clrsbl(x);
     cnt[11] += __builtin_clrsbll(x);
+#endif
 
     cnt[12] += __builtin_popcount(x);
     cnt[13] += __builtin_popcountl(x);
