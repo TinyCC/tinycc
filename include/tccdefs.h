@@ -68,7 +68,11 @@
     #define __WINT_TYPE__ int
 #endif
 
-    #if __STDC_VERSION__ == 201112L
+    /* extension to generate different code on old cpu's (>20y ago) */
+    #define _unaligned
+    #define __unaligned
+
+    #if __STDC_VERSION__ >= 201112L
     # define __STDC_NO_ATOMICS__ 1
     # define __STDC_NO_COMPLEX__ 1
     # define __STDC_NO_THREADS__ 1
