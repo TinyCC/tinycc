@@ -1001,7 +1001,7 @@ struct TCCState {
     /* benchmark info */
     int total_idents;
     int total_lines;
-    int total_bytes;
+    unsigned int total_bytes;
     unsigned int total_output[4];
 
     /* option -dnum (for general development purposes) */
