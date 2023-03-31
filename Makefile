@@ -243,12 +243,10 @@ $(TCC_FILES) : DEFINES += -DONE_SOURCE=0
 $(X)tccpp.o : $(TCCDEFS_H)
 endif
 
-FROM_GIT := $(shell git rev-parse >/dev/null 2>&1 && echo yes || echo no)
-
-ifeq ($(FROM_GIT),yes)
-GITHASH:=$(shell git rev-parse --abbrev-ref HEAD):$(shell git rev-parse --short HEAD) $(shell git log -1 --pretty='format:%cI')
-GITLOCAL:=$(shell git diff --quiet || echo ' locally modified')
-DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)$(GITLOCAL)\""
+GITHASH:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo no)
+ifneq ($(GITHASH),no)
+GITHASH:=$(shell git log -1 --pretty='format:%cs $(GITHASH)@%h')$(shell git diff --quiet || echo '*')
+DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
@@ -270,7 +268,7 @@ $(X)%.o : %.c $(LIBTCC_INC)
 
 # additional dependencies
 $(X)tcc.o : tcctools.c
-$(X)tcc.o : DEFINES += $(DEF_GITHASH) $(DEF_GITDATE)
+$(X)tcc.o : DEFINES += $(DEF_GITHASH)
 
 # Host Tiny C Compiler
 tcc$(EXESUF): tcc.o $(LIBTCC)

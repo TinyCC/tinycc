@@ -3588,6 +3588,14 @@ static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
       putdef(cs, "__TCC_PP__");
     if (s1->output_type == TCC_OUTPUT_MEMORY)
       putdef(cs, "__TCC_RUN__");
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->do_backtrace)
+      putdef(cs, "__TCC_BACKTRACE__");
+#endif
+#ifdef CONFIG_TCC_BCHECK
+    if (s1->do_bounds_check)
+      putdef(cs, "__TCC_BCHECK__");
+#endif
     if (s1->char_is_unsigned)
       putdef(cs, "__CHAR_UNSIGNED__");
     if (s1->optimize > 0)
@@ -3596,14 +3604,6 @@ static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
       putdef(cs, "_REENTRANT");
     if (s1->leading_underscore)
       putdef(cs, "__leading_underscore");
-#ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check)
-      putdef(cs, "__BOUNDS_CHECKING_ON");
-#endif
-#ifdef CONFIG_TCC_BACKTRACE
-    if (s1->do_backtrace)
-      putdef(cs, "__TCC_BACKTRACE_ENABLED__");
-#endif
     cstr_printf(cs, "#define __SIZEOF_POINTER__ %d\n", PTR_SIZE);
     cstr_printf(cs, "#define __SIZEOF_LONG__ %d\n", LONG_SIZE);
     if (!is_asm) {

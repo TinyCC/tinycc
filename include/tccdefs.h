@@ -245,7 +245,7 @@
     # define __RENAME(X) __asm__(X)
     #endif
 
-    #ifdef __BOUNDS_CHECKING_ON
+    #ifdef __TCC_BCHECK__
     # define __BUILTINBC(ret,name,params) ret __builtin_##name params __RENAME("__bound_"#name);
     # define __BOUND(ret,name,params) ret name params __RENAME("__bound_"#name);
     #else

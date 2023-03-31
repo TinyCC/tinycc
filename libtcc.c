@@ -695,7 +695,7 @@ ST_FUNC void tcc_close(void)
     BufferedFile *bf = file;
     if (bf->fd > 0) {
         close(bf->fd);
-        total_lines += bf->line_num;
+        total_lines += bf->line_num - 1;
     }
     if (bf->true_filename != bf->filename)
         tcc_free(bf->true_filename);
@@ -1867,9 +1867,9 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
         }
 reparse:
         if (r[0] != '-' || r[1] == '\0') {
-            if (r[0] != '@') /* allow "tcc file(s) -run @ args ..." */
-                args_parser_add_file(s, r, s->filetype);
+            args_parser_add_file(s, r, s->filetype);
             if (run) {
+dorun:
                 if (tcc_set_options(s, run))
                     return -1;
                 arg_start = optind - 1;
@@ -1877,6 +1877,10 @@ reparse:
             }
             continue;
         }
+
+        /* allow "tcc files... -run -- args ..." */
+        if (r[1] == '-' && r[2] == '\0' && run)
+            goto dorun;
 
         /* find option in table */
         for(popt = tcc_options; ; ++popt) {

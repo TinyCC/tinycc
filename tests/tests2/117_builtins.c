@@ -11,7 +11,7 @@ main (void)
   char tmp[100];
   int r = 0;
 
-#if defined __BOUNDS_CHECKING_ON || defined BC_ON
+#if defined __TCC_BCHECK__
   printf("BOUNDS ON:\n");
 #else
   printf("BOUNDS OFF:\n");

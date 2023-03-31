@@ -3,7 +3,8 @@
    from tccrun.c into executables. */
 
 #define CONFIG_TCC_BACKTRACE_ONLY
-#define ONE_SOURCE 0
+#define ONE_SOURCE 1
+#define pstrcpy tcc_pstrcpy
 #include "../tccrun.c"
 
 int (*__rt_error)(void*, void*, const char *, va_list);

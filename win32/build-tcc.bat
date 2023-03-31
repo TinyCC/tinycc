@@ -7,14 +7,6 @@ setlocal
 if (%1)==(-clean) goto :cleanup
 set CC=gcc
 set /p VERSION= < ..\VERSION
-git.exe --version 2>nul
-if not %ERRORLEVEL%==0 goto :git_done
-for /f %%b in ('git.exe rev-parse --abbrev-ref HEAD') do set GITHASH=%%b
-for /f %%h in ('git.exe rev-parse --short HEAD') do set GITHASH=%GITHASH%:%%h
-git.exe diff --quiet
-if %ERRORLEVEL%==1 set GITHASH=%GITHASH%-mod
-set DEF_GITHASH=-DTCC_GITHASH="""%GITHASH%"""
-:git_done
 set INST=
 set DOC=no
 set EXES_ONLY=no
@@ -94,7 +86,7 @@ set T=32
 if %PROCESSOR_ARCHITECTURE%_==AMD64_ set T=64
 if %PROCESSOR_ARCHITEW6432%_==AMD64_ set T=64
 :p2
-if "%CC:~-3%"=="gcc" set CC=%CC% -O2 -s -static %DEF_GITHASH%
+if "%CC:~-3%"=="gcc" set CC=%CC% -O2 -s -static
 set D32=-DTCC_TARGET_PE -DTCC_TARGET_I386
 set D64=-DTCC_TARGET_PE -DTCC_TARGET_X86_64
 set P32=i386-win32
@@ -113,6 +105,15 @@ set TX=32
 goto :p3
 
 :p3
+git.exe --version 2>nul
+if not %ERRORLEVEL%==0 goto :git_done
+for /f %%b in ('git.exe rev-parse --abbrev-ref HEAD') do set GITHASH=%%b
+for /f %%b in ('git.exe log -1 "--pretty=format:%%cs_%GITHASH%@%%h"') do set GITHASH=%%b
+git.exe diff --quiet
+if %ERRORLEVEL%==1 set GITHASH=%GITHASH%*
+set DEF_GITHASH=-DTCC_GITHASH="""%GITHASH%"""
+:git_done
+
 @echo on
 
 :config.h
@@ -134,7 +135,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 @if _%LIBTCC_C%_==__ set LIBTCC_C=..\libtcc.c
 %CC% -o libtcc.dll -shared %LIBTCC_C% %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
-%CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
+%CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0" %DEF_GITHASH%
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 :compiler_done
 @if (%EXES_ONLY%)==(yes) goto :files_done
