@@ -29,3 +29,8 @@ __NORETURN
 #define X(...)
 #define Y(...)  1 __VA_ARGS__ 2
 Y(X X() ())
+
+#define DDD(A, B) D_ ## B ## _D_ ## A
+#define CCC(X, ...) DDD(X, ##__VA_ARGS__)
+/* must be D_B_D_A (not D_B _D_A) */
+CCC(A,B)

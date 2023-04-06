@@ -2985,7 +2985,6 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
         } else if (t >= TOK_IDENT) {
             s = sym_find2(args, t);
             if (s) {
-                int l0 = str.len;
                 st = s->d;
                 /* if '##' is present before or after, no arg substitution */
                 if (*macro_str == TOK_PPJOIN || t1 == TOK_PPJOIN) {
@@ -3017,15 +3016,16 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
 		    }
 		    st = s->next->d;
                 }
-                for(;;) {
+                if (*st <= 0) {
+                    /* expanded to empty string */
+                    tok_str_add(&str, TOK_PLCHLDR);
+                } else for (;;) {
                     int t2;
                     TOK_GET(&t2, &st, &cval);
                     if (t2 <= 0)
                         break;
                     tok_str_add2(&str, t2, &cval);
                 }
-                if (str.len == l0) /* expanded to empty string */
-                    tok_str_add(&str, TOK_PLCHLDR);
             } else {
                 tok_str_add(&str, t);
             }
