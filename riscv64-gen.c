@@ -627,10 +627,14 @@ ST_FUNC void gfunc_call(int nb_args)
     if ((vtop->r & VT_VALMASK) == VT_CMP)
       gv(RC_INT);
 
+
     if (stack_add) {
-        if (stack_add >= 0x1000) {
-            o(0x37 | (5 << 7) | (-stack_add & 0xfffff000)); //lui t0, upper(v)
-            EI(0x13, 0, 5, 5, -stack_add << 20 >> 20); // addi t0, t0, lo(v)
+        if (stack_add >= 0x800) {
+            unsigned int bit11 = (((unsigned int)-stack_add) >> 11) & 1;
+            o(0x37 | (5 << 7) |
+              ((-stack_add + (bit11 << 12)) & 0xfffff000)); //lui t0, upper(v)
+            EI(0x13, 0, 5, 5, ((-stack_add & 0xfff) - bit11 * (1 << 12)));
+                                                         // addi t0, t0, lo(v)
             ER(0x33, 0, 2, 2, 5, 0); // add sp, sp, t0
         }
         else
@@ -757,9 +761,12 @@ done:
     gcall_or_jmp(1);
     vtop -= nb_args + 1;
     if (stack_add) {
-        if (stack_add >= 0x1000) {
-            o(0x37 | (5 << 7) | (stack_add & 0xfffff000)); //lui t0, upper(v)
-            EI(0x13, 0, 5, 5, stack_add << 20 >> 20); // addi t0, t0, lo(v)
+        if (stack_add >= 0x800) {
+            unsigned int bit11 = ((unsigned int)stack_add >> 11) & 1;
+            o(0x37 | (5 << 7) |
+              ((stack_add + (bit11 << 12)) & 0xfffff000)); //lui t0, upper(v)
+            EI(0x13, 0, 5, 5, (stack_add & 0xfff) - bit11 * (1 << 12));
+                                                           // addi t0, t0, lo(v)
             ER(0x33, 0, 2, 2, 5, 0); // add sp, sp, t0
         }
         else
