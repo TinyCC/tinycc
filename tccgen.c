@@ -410,6 +410,7 @@ ST_FUNC void tccgen_finish(TCCState *s1)
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
+    global_label_stack = local_label_stack = NULL;
 }
 
 /* ------------------------------------------------------------------------- */
