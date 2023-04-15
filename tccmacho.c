@@ -35,6 +35,9 @@
 #error Platform not supported
 #endif
 
+/* XXX: this file uses tcc_error() to the effect of exit(1) */
+#undef _tcc_error
+
 #define DEBUG_MACHO 0
 #define dprintf if (DEBUG_MACHO) printf
 

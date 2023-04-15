@@ -63,7 +63,7 @@ static void rt_exit(int code);
 # include <sys/mman.h>
 #endif
 
-static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned long length);
+static int set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned long length);
 static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff);
 
 #ifdef _WIN64
@@ -100,16 +100,17 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     ptr = mmap(NULL, size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     /* mmap RX memory at a fixed distance */
     prx = mmap((char*)ptr + size, size, PROT_READ|PROT_EXEC, MAP_SHARED|MAP_FIXED, fd, 0);
-    if (ptr == MAP_FAILED || prx == MAP_FAILED)
-	tcc_error("tccrun: could not map memory");
-    ptr_diff = (char*)prx - (char*)ptr;
     close(fd);
+    if (ptr == MAP_FAILED || prx == MAP_FAILED)
+	return tcc_error_noabort("tccrun: could not map memory");
+    ptr_diff = (char*)prx - (char*)ptr;
     //printf("map %p %p %p\n", ptr, prx, (void*)ptr_diff);
 }
 #else
     ptr = tcc_malloc(size);
 #endif
-    tcc_relocate_ex(s1, ptr, ptr_diff); /* no more errors expected */
+    if (tcc_relocate_ex(s1, ptr, ptr_diff))
+        return -1;
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, (void*)(addr_t)size);
     dynarray_add(&s1->runtime_mem, &s1->nb_runtime_mem, ptr);
     return 0;
@@ -237,6 +238,8 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
     prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
+    if ((addr_t)-1 == (addr_t)prog_main)
+        return -1;
 
 #ifdef CONFIG_TCC_BACKTRACE
     memset(rc, 0, sizeof *rc);
@@ -409,8 +412,10 @@ redo:
 #if DEBUG_RUNMEN
             printf("protect %d %p %04x\n", f, (void*)addr, n);
 #endif
-            if (n)
-                set_pages_executable(s1, f, (void*)addr, n);
+            if (n) {
+                if (set_pages_executable(s1, f, (void*)addr, n))
+                    return -1;
+            }
         }
     }
 
@@ -440,7 +445,7 @@ redo:
 /* ------------------------------------------------------------- */
 /* allow to run code in memory */
 
-static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned long length)
+static int set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned long length)
 {
 #ifdef _WIN32
     static const unsigned char protect[] = {
@@ -450,7 +455,9 @@ static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned lon
         PAGE_EXECUTE_READWRITE
         };
     DWORD old;
-    VirtualProtect(ptr, length, protect[mode], &old);
+    if (!VirtualProtect(ptr, length, protect[mode], &old))
+        return -1;
+    return 0;
 #else
     static const unsigned char protect[] = {
         PROT_READ | PROT_EXEC,
@@ -463,8 +470,7 @@ static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned lon
     end = (addr_t)ptr + length;
     end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
     if (mprotect((void *)start, end - start, protect[mode]))
-        tcc_error("mprotect failed: did you mean to configure --with-selinux?");
-
+        return tcc_error_noabort("mprotect failed: did you mean to configure --with-selinux?");
 /* XXX: BSD sometimes dump core with bad system call */
 # if (defined TCC_TARGET_ARM && !TARGETOS_BSD) || defined TCC_TARGET_ARM64
     if (mode == 0 || mode == 3) {
@@ -472,7 +478,7 @@ static void set_pages_executable(TCCState *s1, int mode, void *ptr, unsigned lon
         __clear_cache(ptr, (char *)ptr + length);
     }
 # endif
-
+    return 0;
 #endif
 }
 

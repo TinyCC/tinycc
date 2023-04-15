@@ -490,9 +490,10 @@ the_end:
 
 #if !defined TCC_TARGET_I386 && !defined TCC_TARGET_X86_64
 
-ST_FUNC void tcc_tool_cross(TCCState *s1, char **argv, int option)
+ST_FUNC int tcc_tool_cross(TCCState *s1, char **argv, int option)
 {
-    tcc_error("-m%d not implemented.", option);
+    tcc_error_noabort("-m%d not implemented.", option);
+    return 1;
 }
 
 #else
@@ -539,7 +540,7 @@ static int execvp_win32(const char *prog, char **argv)
 #define execvp execvp_win32
 #endif /* _WIN32 */
 
-ST_FUNC void tcc_tool_cross(TCCState *s1, char **argv, int target)
+ST_FUNC int tcc_tool_cross(TCCState *s1, char **argv, int target)
 {
     char program[4096];
     char *a0 = argv[0];
@@ -558,7 +559,8 @@ ST_FUNC void tcc_tool_cross(TCCState *s1, char **argv, int target)
 
     if (strcmp(a0, program))
         execvp(argv[0] = program, argv);
-    tcc_error("could not run '%s'", program);
+    tcc_error_noabort("could not run '%s'", program);
+    return 1;
 }
 
 #endif /* TCC_TARGET_I386 && TCC_TARGET_X86_64 */
@@ -588,7 +590,7 @@ static char *escape_target_dep(const char *s) {
     return res;
 }
 
-ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename)
+ST_FUNC int gen_makedeps(TCCState *s1, const char *target, const char *filename)
 {
     FILE *depout;
     char buf[1024], *escaped_target;
@@ -601,16 +603,16 @@ ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename
         filename = buf;
     }
 
-    if (s1->verbose)
-        printf("<- %s\n", filename);
-
     if(!strcmp(filename, "-"))
         depout = fdopen(1, "w");
     else
         /* XXX return err codes instead of error() ? */
         depout = fopen(filename, "w");
     if (!depout)
-        tcc_error("could not open '%s'", filename);
+        return tcc_error_noabort("could not open '%s'", filename);
+    if (s1->verbose)
+        printf("<- %s\n", filename);
+
     fprintf(depout, "%s:", target);
     for (i = 0; i<s1->nb_target_deps; ++i) {
         for (k = 0; k < i; ++k)
@@ -623,6 +625,7 @@ ST_FUNC void gen_makedeps(TCCState *s1, const char *target, const char *filename
     }
     fprintf(depout, "\n");
     fclose(depout);
+    return 0;
 }
 
 /* -------------------------------------------------------------- */

@@ -67,7 +67,7 @@ int gotplt_entry_type (int reloc_type)
 
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
-    tcc_error("C67 got not implemented");
+    tcc_error_noabort("C67 got not implemented");
     return 0;
 }
 

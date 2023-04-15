@@ -250,6 +250,12 @@ ST_FUNC char *tcc_load_text(int fd)
 #undef malloc
 #undef realloc
 
+void mem_error(const char *msg)
+{
+    fprintf(stderr, "%s\n", msg);
+    exit (1);
+}
+
 #ifndef MEM_DEBUG
 
 PUB_FUNC void tcc_free(void *ptr)
@@ -262,7 +268,7 @@ PUB_FUNC void *tcc_malloc(unsigned long size)
     void *ptr;
     ptr = malloc(size);
     if (!ptr && size)
-        _tcc_error("memory full (malloc)");
+        mem_error("memory full (malloc)");
     return ptr;
 }
 
@@ -280,7 +286,7 @@ PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
     void *ptr1;
     ptr1 = realloc(ptr, size);
     if (!ptr1 && size)
-        _tcc_error("memory full (realloc)");
+        mem_error("memory full (realloc)");
     return ptr1;
 }
 
@@ -345,7 +351,7 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
 
     header = malloc(sizeof(mem_debug_header_t) + size);
     if (!header)
-        _tcc_error("memory full (malloc)");
+        mem_error("memory full (malloc)");
 
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
@@ -405,7 +411,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     mem_debug_chain_update = (header == mem_debug_chain);
     header = realloc(header, sizeof(mem_debug_header_t) + size);
     if (!header)
-        _tcc_error("memory full (realloc)");
+        mem_error("memory full (realloc)");
     header->size = size;
     write32le(MEM_DEBUG_CHECK3(header), MEM_DEBUG_MAGIC3);
     if (header->next)
@@ -537,12 +543,6 @@ static void error1(int mode, const char *fmt, va_list ap)
     TCCState *s1 = tcc_state;
     CString cs;
 
-    cstr_new(&cs);
-
-    if (s1 == NULL)
-        /* can happen only if called from tcc_malloc(): 'out of memory' */
-        goto no_file;
-
     tcc_exit_state(s1);
 
     if (mode == ERROR_WARN) {
@@ -563,6 +563,7 @@ static void error1(int mode, const char *fmt, va_list ap)
             return;
     }
 
+    cstr_new(&cs);
     f = NULL;
     if (s1->error_set_jmp_enabled) { /* we're called while parsing a file */
         /* use upper file if inline ":asm:" or token ":paste:" */
@@ -578,8 +579,6 @@ static void error1(int mode, const char *fmt, va_list ap)
     } else if (s1->current_filename) {
         cstr_printf(&cs, "%s: ", s1->current_filename);
     }
-
-no_file:
     if (0 == cs.size)
         cstr_printf(&cs, "tcc: ");
     cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
@@ -595,15 +594,10 @@ no_file:
         s1->error_func(s1->error_opaque, (char*)cs.data);
     }
     cstr_free(&cs);
-    if (s1) {
-        if (mode != ERROR_WARN)
-            s1->nb_errors++;
-        if (mode != ERROR_ERROR)
-            return;
-        if (s1->error_set_jmp_enabled)
-            longjmp(s1->error_jmp_buf, 1);
-    }
-    exit(1);
+    if (mode != ERROR_WARN)
+        s1->nb_errors++;
+    if (mode == ERROR_ERROR && s1->error_set_jmp_enabled)
+        longjmp(s1->error_jmp_buf, 1);
 }
 
 LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc error_func)
@@ -623,20 +617,24 @@ LIBTCCAPI void *tcc_get_error_opaque(TCCState *s)
 }
 
 /* error without aborting current compilation */
-PUB_FUNC void _tcc_error_noabort(const char *fmt, ...)
+PUB_FUNC int _tcc_error_noabort(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     error1(ERROR_NOABORT, fmt, ap);
     va_end(ap);
+    return -1;
 }
 
+#undef _tcc_error
 PUB_FUNC void _tcc_error(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    for (;;) error1(ERROR_ERROR, fmt, ap);
+    error1(ERROR_ERROR, fmt, ap);
+    exit(1);
 }
+#define _tcc_error use_tcc_error_noabort
 
 PUB_FUNC void _tcc_warning(const char *fmt, ...)
 {
@@ -645,6 +643,7 @@ PUB_FUNC void _tcc_warning(const char *fmt, ...)
     error1(ERROR_WARN, fmt, ap);
     va_end(ap);
 }
+
 
 /********************************************************/
 /* I/O layer */
@@ -855,6 +854,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     dynarray_reset(&s1->argv, &s1->argc);
     cstr_free(&s1->cmdline_defs);
     cstr_free(&s1->cmdline_incl);
+    cstr_free(&s1->linker_arg);
 #ifdef TCC_IS_NATIVE
     /* free runtime memory */
     tcc_run_free(s1);
@@ -1218,7 +1218,7 @@ ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 {
     if (-1 == tcc_add_library_internal(s1, "%s/%s",
         filename, 0, s1->crt_paths, s1->nb_crt_paths))
-        tcc_error_noabort("file '%s' not found", filename);
+        return tcc_error_noabort("file '%s' not found", filename);
     return 0;
 }
 #endif
@@ -1505,7 +1505,7 @@ static int tcc_set_linker(TCCState *s, const char *option)
             return 0;
         } else {
     err:
-            tcc_error("unsupported linker option '%s'", option);
+            return tcc_error_noabort("unsupported linker option '%s'", option);
         }
         if (ignoring)
             tcc_warning_c(warn_unsupported)("unsupported linker option '%s'", option);
@@ -1775,7 +1775,7 @@ static int args_parser_make_argv(const char *r, int *argc, char ***argv)
 }
 
 /* read list file */
-static void args_parser_listfile(TCCState *s,
+static int args_parser_listfile(TCCState *s,
     const char *filename, int optind, int *pargc, char ***pargv)
 {
     TCCState *s1 = s;
@@ -1786,7 +1786,7 @@ static void args_parser_listfile(TCCState *s,
 
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
-        tcc_error("listfile '%s' not found", filename);
+        return tcc_error_noabort("listfile '%s' not found", filename);
 
     p = tcc_load_text(fd);
     for (i = 0; i < *pargc; ++i)
@@ -1798,6 +1798,7 @@ static void args_parser_listfile(TCCState *s,
     tcc_free(p);
     dynarray_reset(&s->argv, &s->argc);
     *pargc = s->argc = argc, *pargv = s->argv = argv;
+    return 0;
 }
 
 #if defined TCC_TARGET_MACHO
@@ -1815,7 +1816,7 @@ static uint32_t parse_version(TCCState *s1, const char *version)
              c = strtoul(&last[1], &last, 10);
     }
     if (*last || a > 0xffff || b > 0xff || c > 0xff)
-        tcc_error("version a.b.c not correct: %s", version);
+        tcc_error_noabort("version a.b.c not correct: %s", version);
     return (a << 16) | (b << 8) | c;
 }
 #endif
@@ -1827,17 +1828,17 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv, int optind)
     const char *optarg, *r;
     const char *run = NULL;
     int x;
-    CString linker_arg; /* collect -Wl options */
     int tool = 0, arg_start = 0, noaction = optind;
     char **argv = *pargv;
     int argc = *pargc;
 
-    cstr_new(&linker_arg);
+    cstr_reset(&s->linker_arg);
 
     while (optind < argc) {
         r = argv[optind];
         if (r[0] == '@' && r[1] != '\0') {
-            args_parser_listfile(s, r + 1, optind, &argc, &argv);
+            if (args_parser_listfile(s, r + 1, optind, &argc, &argv))
+                return -1;
             continue;
         }
         optind++;
@@ -1851,7 +1852,8 @@ reparse:
             if (r[0] != '@') /* allow "tcc file(s) -run @ args ..." */
                 args_parser_add_file(s, r, s->filetype);
             if (run) {
-                tcc_set_options(s, run);
+                if (tcc_set_options(s, run))
+                    return -1;
                 arg_start = optind - 1;
                 break;
             }
@@ -1863,7 +1865,7 @@ reparse:
             const char *p1 = popt->name;
             const char *r1 = r + 1;
             if (p1 == NULL)
-                tcc_error("invalid option -- '%s'", r);
+                return tcc_error_noabort("invalid option -- '%s'", r);
             if (!strstart(p1, &r1))
                 continue;
             optarg = r1;
@@ -1871,7 +1873,7 @@ reparse:
                 if (*r1 == '\0' && !(popt->flags & TCC_OPTION_NOSEP)) {
                     if (optind >= argc)
                 arg_err:
-                        tcc_error("argument to '%s' is missing", r);
+                        return tcc_error_noabort("argument to '%s' is missing", r);
                     optarg = argv[optind++];
                 }
             } else if (*r1 != '\0')
@@ -1994,11 +1996,12 @@ reparse:
             break;
         case TCC_OPTION_run:
 #ifndef TCC_IS_NATIVE
-            tcc_error("-run is not available in a cross compiler");
-#endif
+            return tcc_error_noabort("-run is not available in a cross compiler");
+#else
             run = optarg;
             x = TCC_OUTPUT_MEMORY;
             goto set_output_type;
+#endif
         case TCC_OPTION_v:
             do ++s->verbose; while (*optarg++ == 'v');
             ++noaction;
@@ -2015,7 +2018,7 @@ reparse:
             } else if (!strcmp(optarg, "hard"))
                 s->float_abi = ARM_HARD_FLOAT;
             else
-                tcc_error("unsupported float abi '%s'", optarg);
+                return tcc_error_noabort("unsupported float abi '%s'", optarg);
             break;
 #endif
         case TCC_OPTION_m:
@@ -2039,11 +2042,14 @@ reparse:
             s->rdynamic = 1;
             break;
         case TCC_OPTION_Wl:
-            if (linker_arg.size)
-                --linker_arg.size, cstr_ccat(&linker_arg, ',');
-            cstr_cat(&linker_arg, optarg, 0);
-            if (tcc_set_linker(s, linker_arg.data))
-                cstr_free(&linker_arg);
+            if (s->linker_arg.size)
+                ((char*)s->linker_arg.data)[s->linker_arg.size - 1] = ',';
+            cstr_cat(&s->linker_arg, optarg, 0);
+            x = tcc_set_linker(s, s->linker_arg.data);
+            if (x)
+                cstr_reset(&s->linker_arg);
+            if (x < 0)
+                return -1;
             break;
         case TCC_OPTION_Wp:
             r = optarg;
@@ -2124,7 +2130,7 @@ reparse:
         extra_action:
             arg_start = optind - 1;
             if (arg_start != noaction)
-                tcc_error("cannot parse %s here", r);
+                return tcc_error_noabort("cannot parse %s here", r);
             tool = x;
             break;
         default:
@@ -2133,8 +2139,8 @@ unsupported_option:
             break;
         }
     }
-    if (linker_arg.size) {
-        r = linker_arg.data;
+    if (s->linker_arg.size) {
+        r = s->linker_arg.data;
         goto arg_err;
     }
     *pargc = argc - arg_start;
@@ -2150,13 +2156,14 @@ unsupported_option:
     return OPT_HELP;
 }
 
-LIBTCCAPI void tcc_set_options(TCCState *s, const char *r)
+LIBTCCAPI int tcc_set_options(TCCState *s, const char *r)
 {
     char **argv = NULL;
-    int argc = 0;
+    int argc = 0, ret;
     args_parser_make_argv(r, &argc, &argv);
-    tcc_parse_args(s, &argc, &argv, 0);
+    ret = tcc_parse_args(s, &argc, &argv, 0);
     dynarray_reset(&argv, &argc);
+    return ret < 0 ? ret : 0;
 }
 
 PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)

@@ -618,10 +618,8 @@ static int pe_write(struct pe_info *pe)
     TCCState *s1 = pe->s1;
 
     pf.op = fopen(pe->filename, "wb");
-    if (NULL == pf.op) {
-        tcc_error_noabort("could not write '%s': %s", pe->filename, strerror(errno));
-        return -1;
-    }
+    if (NULL == pf.op)
+        return tcc_error_noabort("could not write '%s': %s", pe->filename, strerror(errno));
 
     pe->sizeofheaders = pe_file_align(pe,
         sizeof (struct pe_header)
@@ -1337,9 +1335,8 @@ static int pe_check_symbols(struct pe_info *pe)
             if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK)
                 /* STB_WEAK undefined symbols are accepted */
                 continue;
-            tcc_error_noabort("undefined symbol '%s'%s", name,
+            ret = tcc_error_noabort("undefined symbol '%s'%s", name,
                 imp_sym < 0 ? ", missing __declspec(dllimport)?":"");
-            ret = -1;
 
         } else if (pe->s1->rdynamic
                    && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
@@ -1990,7 +1987,6 @@ static void pe_set_options(TCCState * s1, struct pe_info *pe)
 
 ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 {
-    int ret;
     struct pe_info pe;
 
     memset(&pe, 0, sizeof pe);
@@ -2005,9 +2001,9 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     pe_add_runtime(s1, &pe);
     resolve_common_syms(s1);
     pe_set_options(s1, &pe);
+    pe_check_symbols(&pe);
 
-    ret = pe_check_symbols(&pe);
-    if (ret)
+    if (s1->nb_errors)
         ;
     else if (filename) {
         pe_assign_addresses(&pe);
@@ -2016,10 +2012,8 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
         relocate_sections(s1);
         pe.start_addr = (DWORD)
             (get_sym_addr(s1, pe.start_symbol, 1, 1) - pe.imagebase);
-        if (s1->nb_errors)
-            ret = -1;
-        else
-            ret = pe_write(&pe);
+        if (0 == s1->nb_errors)
+            pe_write(&pe);
         dynarray_reset(&pe.sec_info, &pe.sec_count);
     } else {
 #ifdef TCC_IS_NATIVE
@@ -2031,15 +2025,12 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 #endif
 #endif
     }
-
     pe_free_imports(&pe);
-
 #if PE_PRINT_SECTIONS
     if (s1->g_debug & 8)
         pe_print_sections(s1, "tcc.log");
 #endif
-    return ret;
+    return s1->nb_errors ? -1 : 0;
 }
 
 /* ------------------------------------------------------------- */
-

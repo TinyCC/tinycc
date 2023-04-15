@@ -127,7 +127,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         uint64_t got = s1->got->sh_addr;
         uint64_t off = (got - plt + 0x800) >> 12;
         if ((off + ((uint32_t)1 << 20)) >> 21)
-            tcc_error("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
+            tcc_error_noabort("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
         write32le(p, 0x397 | (off << 12)); // auipc t2, %pcrel_hi(got)
         write32le(p + 4, 0x41c30333); // sub t1, t1, t3
         write32le(p + 8, 0x0003be03   // ld t3, %pcrel_lo(got)(t2)
@@ -144,7 +144,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
             uint64_t addr = got + read64le(p);
             uint64_t off = (addr - pc + 0x800) >> 12;
             if ((off + ((uint32_t)1 << 20)) >> 21)
-                tcc_error("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
+                tcc_error_noabort("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
             write32le(p, 0xe17 | (off << 12)); // auipc t3, %pcrel_hi(func@got)
             write32le(p + 4, 0x000e3e03 // ld t3, %pcrel_lo(func@got)(t3)
                              | (((addr - pc) & 0xfff) << 20));
@@ -179,7 +179,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_BRANCH:
         off64 = val - addr;
         if ((off64 + (1 << 12)) & ~(uint64_t)0x1ffe)
-          tcc_error("R_RISCV_BRANCH relocation failed"
+          tcc_error_noabort("R_RISCV_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64 >> 1;
         write32le(ptr, (read32le(ptr) & ~0xfe000f80)
@@ -191,7 +191,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_JAL:
         off64 = val - addr;
         if ((off64 + (1 << 21)) & ~(((uint64_t)1 << 22) - 2))
-          tcc_error("R_RISCV_JAL relocation failed"
+          tcc_error_noabort("R_RISCV_JAL relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -213,7 +213,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
 #endif
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
-          tcc_error("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx sym=%s",
+          tcc_error_noabort("R_RISCV_PCREL_HI20 relocation failed: off=%lx cond=%lx sym=%s",
                     (long)off64, (long)((int64_t)(off64 + ((uint64_t)1 << 20)) >> 21),
                     symtab_section->link->data + sym->st_name);
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -225,7 +225,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         val = s1->got->sh_addr + get_sym_attr(s1, sym_index, 0)->got_offset;
         off64 = (int64_t)(val - addr + 0x800) >> 12;
         if ((off64 + ((uint64_t)1 << 20)) >> 21)
-          tcc_error("R_RISCV_GOT_HI20 relocation failed");
+          tcc_error_noabort("R_RISCV_GOT_HI20 relocation failed");
         last_hi.addr = addr;
         last_hi.val = val;
         write32le(ptr, (read32le(ptr) & 0xfff)
@@ -236,7 +236,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         printf("PCREL_LO12_I: val=%lx addr=%lx\n", (long)val, (long)addr);
 #endif
         if (val != last_hi.addr)
-          tcc_error("unsupported hi/lo pcrel reloc scheme");
+          tcc_error_noabort("unsupported hi/lo pcrel reloc scheme");
         val = last_hi.val;
         addr = last_hi.addr;
         write32le(ptr, (read32le(ptr) & 0xfffff)
@@ -244,7 +244,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         return;
     case R_RISCV_PCREL_LO12_S:
         if (val != last_hi.addr)
-          tcc_error("unsupported hi/lo pcrel reloc scheme");
+          tcc_error_noabort("unsupported hi/lo pcrel reloc scheme");
         val = last_hi.val;
         addr = last_hi.addr;
         off32 = val - addr;
@@ -256,7 +256,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_RVC_BRANCH:
         off64 = (val - addr);
         if ((off64 + (1 << 8)) & ~(uint64_t)0x1fe)
-          tcc_error("R_RISCV_RVC_BRANCH relocation failed"
+          tcc_error_noabort("R_RISCV_RVC_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write16le(ptr, (read16le(ptr) & 0xe383)
@@ -269,7 +269,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_RVC_JUMP:
         off64 = (val - addr);
         if ((off64 + (1 << 11)) & ~(uint64_t)0xffe)
-          tcc_error("R_RISCV_RVC_BRANCH relocation failed"
+          tcc_error_noabort("R_RISCV_RVC_BRANCH relocation failed"
                     " (val=%lx, addr=%lx)", (long)val, (long)addr);
         off32 = off64;
         write16le(ptr, (read16le(ptr) & 0xe003)

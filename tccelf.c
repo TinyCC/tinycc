@@ -506,7 +506,7 @@ ST_FUNC addr_t get_sym_addr(TCCState *s1, const char *name, int err, int forc)
     sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
         if (err)
-            tcc_error("%s not defined", name);
+            tcc_error_noabort("%s not defined", name);
         return (addr_t)-1;
     }
     return sym->st_value;
@@ -759,7 +759,7 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
     rel->r_addend = addend;
 #endif
     if (SHT_RELX != SHT_RELA && addend)
-        tcc_error("non-zero addend on REL architecture");
+        tcc_error_noabort("non-zero addend on REL architecture");
 }
 
 ST_FUNC void put_elf_reloc(Section *symtab, Section *s, unsigned long offset,
@@ -953,7 +953,7 @@ static void update_gnu_hash(TCCState *s1, Section *gnu_hash)
 				 PTR_SIZE * bloom_size +
 				 nbuckets * 4 +
 				 (nb_syms - (q - new_syms)) * 4)
-	tcc_error ("gnu_hash size incorrect");
+	tcc_error_noabort ("gnu_hash size incorrect");
 
     /* find buckets */
     for(i = 0; i < nbuckets; i++)
@@ -1364,8 +1364,10 @@ redo:
         for_each_elem(s, 0, rel, ElfW_Rel) {
             type = ELFW(R_TYPE)(rel->r_info);
             gotplt_entry = gotplt_entry_type(type);
-            if (gotplt_entry == -1)
-                tcc_error ("Unknown relocation type for got: %d", type);
+            if (gotplt_entry == -1) {
+                tcc_error_noabort ("Unknown relocation type for got: %d", type);
+                continue;
+            }
             sym_index = ELFW(R_SYM)(rel->r_info);
             sym = &((ElfW(Sym) *)symtab_section->data)[sym_index];
 
@@ -1430,8 +1432,10 @@ redo:
             }
 #endif
             reloc_type = code_reloc(type);
-            if (reloc_type == -1)
-                tcc_error ("Unknown relocation type: %d", type);
+            if (reloc_type == -1) {
+                tcc_error_noabort ("Unknown relocation type: %d", type);
+                continue;
+            }
 
             if (reloc_type != 0) {
         jmp_slot:
@@ -1862,7 +1866,7 @@ static void fill_local_got_entries(TCCState *s1)
 	    struct sym_attr *attr = get_sym_attr(s1, sym_index, 0);
 	    unsigned offset = attr->got_offset;
 	    if (offset != rel->r_offset - s1->got->sh_addr)
-	      tcc_error_noabort("huh");
+	        tcc_error_noabort("fill_local_got_entries: huh?");
 	    rel->r_info = ELFW(R_INFO)(0, R_RELATIVE);
 #if SHT_RELX == SHT_RELA
 	    rel->r_addend = sym->st_value;
@@ -2448,7 +2452,7 @@ static int tidy_section_headers(TCCState *s1, int *sec_order);
 
 /* Create an ELF file on disk.
    This function handle ELF specific layout requirements */
-static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
+static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
                            int file_offset, int *sec_order)
 {
     int i, shnum, offset, size, file_type;
@@ -2507,6 +2511,8 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
             ehdr.e_entry = get_sym_addr(s1, "_start", !!(file_type & TCC_OUTPUT_EXE), 0);
         if (ehdr.e_entry == (addr_t)-1)
             ehdr.e_entry = text_section->sh_addr;
+        if (s1->nb_errors)
+            return -1;
     }
 
     ehdr.e_machine = EM_TCC_TARGET;
@@ -2563,9 +2569,10 @@ static void tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
         }
         fwrite(sh, 1, sizeof(ElfW(Shdr)), f);
     }
+    return 0;
 }
 
-static void tcc_output_binary(TCCState *s1, FILE *f,
+static int tcc_output_binary(TCCState *s1, FILE *f,
                               const int *sec_order)
 {
     Section *s;
@@ -2585,13 +2592,14 @@ static void tcc_output_binary(TCCState *s1, FILE *f,
             offset += size;
         }
     }
+    return 0;
 }
 
 /* Write an elf, coff or "binary" file */
 static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
                               ElfW(Phdr) *phdr, int file_offset, int *sec_order)
 {
-    int fd, mode, file_type;
+    int fd, mode, file_type, ret;
     FILE *f;
 
     file_type = s1->output_type;
@@ -2601,25 +2609,22 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
         mode = 0777;
     unlink(filename);
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
-    if (fd < 0 || (f = fdopen(fd, "wb")) == NULL) {
-        tcc_error_noabort("could not write '%s: %s'", filename, strerror(errno));
-        return -1;
-    }
+    if (fd < 0 || (f = fdopen(fd, "wb")) == NULL)
+        return tcc_error_noabort("could not write '%s: %s'", filename, strerror(errno));
     if (s1->verbose)
         printf("<- %s\n", filename);
-
 #ifdef TCC_TARGET_COFF
     if (s1->output_format == TCC_OUTPUT_FORMAT_COFF)
         tcc_output_coff(s1, f);
     else
 #endif
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
-        tcc_output_elf(s1, f, phnum, phdr, file_offset, sec_order);
+        ret = tcc_output_elf(s1, f, phnum, phdr, file_offset, sec_order);
     else
-        tcc_output_binary(s1, f, sec_order);
+        ret = tcc_output_binary(s1, f, sec_order);
     fclose(f);
 
-    return 0;
+    return ret;
 }
 
 #ifndef ELF_OBJ_ONLY
@@ -3016,13 +3021,12 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
 
     lseek(fd, file_offset, SEEK_SET);
     if (tcc_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
-        goto fail1;
+        goto invalid;
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
         ehdr.e_machine != EM_TCC_TARGET) {
-    fail1:
-        tcc_error_noabort("invalid object file");
-        return -1;
+invalid:
+        return tcc_error_noabort("invalid object file");
     }
     /* read sections */
     shdr = load_data(fd, file_offset + ehdr.e_shoff,
@@ -3040,14 +3044,13 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     nb_syms = 0;
     seencompressed = 0;
     stab_index = stabstr_index = 0;
+    ret = -1;
 
     for(i = 1; i < ehdr.e_shnum; i++) {
         sh = &shdr[i];
         if (sh->sh_type == SHT_SYMTAB) {
             if (symtab) {
                 tcc_error_noabort("object must contain only one symtab");
-            fail:
-                ret = -1;
                 goto the_end;
             }
             nb_syms = sh->sh_size / sizeof(ElfW(Sym));
@@ -3124,14 +3127,13 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
         s->sh_entsize = sh->sh_entsize;
         sm_table[i].new_section = 1;
     found:
-        if (sh->sh_type != s->sh_type) {
+        if (sh->sh_type != s->sh_type
 #if TARGETOS_OpenBSD || TARGETOS_FreeBSD || TARGETOS_NetBSD
-            if (strcmp (s->name, ".eh_frame"))
+            && strcmp (s->name, ".eh_frame")
 #endif
-            {
-                tcc_error_noabort("invalid section type");
-                goto fail;
-	    }
+            ) {
+            tcc_error_noabort("invalid section type");
+            goto the_end;
         }
         /* align start of section */
         s->data_offset += -s->data_offset & (sh->sh_addralign - 1);
@@ -3255,7 +3257,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
                 invalid_reloc:
                     tcc_error_noabort("Invalid relocation entry [%2d] '%s' @ %.8x",
                         i, strsec + sh->sh_name, (int)rel->r_offset);
-                    goto fail;
+                    goto the_end;
                 }
                 rel->r_info = ELFW(R_INFO)(sym_index, type);
                 /* offset the relocation offset */
@@ -3391,10 +3393,8 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
         len = read_ar_header(fd, file_offset, &hdr);
         if (len == 0)
             return 0;
-        if (len < 0) {
-            tcc_error_noabort("invalid archive");
-            return -1;
-        }
+        if (len < 0)
+            return tcc_error_noabort("invalid archive");
         file_offset += len;
         size = strtol(hdr.ar_size, NULL, 0);
         /* align to even */
@@ -3568,8 +3568,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
         ehdr.e_machine != EM_TCC_TARGET) {
-        tcc_error_noabort("bad architecture");
-        return -1;
+        return tcc_error_noabort("bad architecture");
     }
 
     /* read sections */
@@ -3655,7 +3654,7 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
             if (tcc_add_dllref(s1, name, -1))
                 continue;
             if (tcc_add_dll(s1, name, AFF_REFERENCED_DLL) < 0) {
-                tcc_error_noabort("referenced dll '%s' not found", name);
+                ret = tcc_error_noabort("referenced dll '%s' not found", name);
                 goto the_end;
             }
         }
@@ -3830,24 +3829,21 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
         s1->new_undef_sym = 0;
     t = ld_next(s1, filename, sizeof(filename));
     if (t != '(') {
-        tcc_error_noabort("( expected");
-        ret = -1;
+        ret = tcc_error_noabort("( expected");
         goto lib_parse_error;
     }
     t = ld_next(s1, filename, sizeof(filename));
     for(;;) {
         libname[0] = '\0';
         if (t == LD_TOK_EOF) {
-            tcc_error_noabort("unexpected end of file");
-            ret = -1;
+            ret = tcc_error_noabort("unexpected end of file");
             goto lib_parse_error;
         } else if (t == ')') {
             break;
         } else if (t == '-') {
             t = ld_next(s1, filename, sizeof(filename));
             if ((t != LD_TOK_NAME) || (filename[0] != 'l')) {
-                tcc_error_noabort("library name expected");
-                ret = -1;
+                ret = tcc_error_noabort("library name expected");
                 goto lib_parse_error;
             }
             pstrcpy(libname, sizeof libname, &filename[1]);
@@ -3857,8 +3853,7 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
                 snprintf(filename, sizeof filename, "lib%s.so", libname);
             }
         } else if (t != LD_TOK_NAME) {
-            tcc_error_noabort("filename expected");
-            ret = -1;
+            ret = tcc_error_noabort("filename expected");
             goto lib_parse_error;
         }
         if (!strcmp(filename, "AS_NEEDED")) {
@@ -3922,15 +3917,12 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd)
                    !strcmp(cmd, "TARGET")) {
             /* ignore some commands */
             t = ld_next(s1, cmd, sizeof(cmd));
-            if (t != '(') {
-                tcc_error_noabort("( expected");
-                return -1;
-            }
+            if (t != '(')
+                return tcc_error_noabort("( expected");
             for(;;) {
                 t = ld_next(s1, filename, sizeof(filename));
                 if (t == LD_TOK_EOF) {
-                    tcc_error_noabort("unexpected end of file");
-                    return -1;
+                    return tcc_error_noabort("unexpected end of file");
                 } else if (t == ')') {
                     break;
                 }

@@ -251,7 +251,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
               /* ignore overflow with undefined weak symbols */
               if (((ElfW(Sym)*)symtab_section->data)[sym_index].st_shndx != SHN_UNDEF)
 #endif
-                tcc_error("internal error: relocation failed");
+                tcc_error_noabort("internal error: relocation failed");
             }
             add32le(ptr, diff);
         }
@@ -336,7 +336,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     add32le(ptr + 8, x);
                 }
                 else
-                    tcc_error("unexpected R_X86_64_TLSGD pattern");
+                    tcc_error_noabort("unexpected R_X86_64_TLSGD pattern");
             }
             break;
         case R_X86_64_TLSLD:
@@ -356,7 +356,7 @@ void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t 
                     rel[1].r_info = ELFW(R_INFO)(0, R_X86_64_NONE);
                 }
                 else
-                    tcc_error("unexpected R_X86_64_TLSLD pattern");
+                    tcc_error_noabort("unexpected R_X86_64_TLSLD pattern");
             }
             break;
         case R_X86_64_DTPOFF32:

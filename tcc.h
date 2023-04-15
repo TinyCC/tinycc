@@ -1021,6 +1021,7 @@ struct TCCState {
     char *deps_outfile; /* option -MF */
     int argc;
     char **argv;
+    CString linker_arg; /* collect -Wl options */
 };
 
 struct filespec {
@@ -1239,7 +1240,7 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #define realloc(p, s) use_tcc_realloc(p, s)
 #undef strdup
 #define strdup(s) use_tcc_strdup(s)
-PUB_FUNC void _tcc_error_noabort(const char *fmt, ...) PRINTF_LIKE(1,2);
+PUB_FUNC int _tcc_error_noabort(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC NORETURN void _tcc_error(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC void _tcc_warning(const char *fmt, ...) PRINTF_LIKE(1,2);
 #define tcc_internal_error(msg) tcc_error("internal compiler error\n"\
@@ -1787,8 +1788,8 @@ ST_FUNC int tcc_tool_ar(TCCState *s, int argc, char **argv);
 #ifdef TCC_TARGET_PE
 ST_FUNC int tcc_tool_impdef(TCCState *s, int argc, char **argv);
 #endif
-ST_FUNC void tcc_tool_cross(TCCState *s, char **argv, int option);
-ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename);
+ST_FUNC int tcc_tool_cross(TCCState *s, char **argv, int option);
+ST_FUNC int gen_makedeps(TCCState *s, const char *target, const char *filename);
 #endif
 
 /* ------------ tccdbg.c ------------ */
@@ -1915,7 +1916,9 @@ PUB_FUNC void tcc_exit_state(TCCState *s1);
 # define TCC_STATE_VAR(sym) tcc_state->sym
 # define TCC_SET_STATE(fn) fn
 # undef USING_GLOBALS
+# undef _tcc_error
 #else
 # define TCC_STATE_VAR(sym) s1->sym
 # define TCC_SET_STATE(fn) (tcc_enter_state(s1),fn)
+# define _tcc_error use_tcc_error_noabort
 #endif

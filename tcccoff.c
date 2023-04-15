@@ -21,6 +21,9 @@
 
 #include "tcc.h"
 
+/* XXX: this file uses tcc_error() to the effect of exit(1) */
+#undef _tcc_error
+
 #define MAXNSCNS 255		/* MAXIMUM NUMBER OF SECTIONS         */
 #define MAX_STR_TABLE 1000000
 AOUTHDR o_filehdr;		/* OPTIONAL (A.OUT) FILE HEADER       */
