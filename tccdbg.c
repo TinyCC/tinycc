@@ -889,8 +889,12 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
 /* put end of translation unit info */
 ST_FUNC void tcc_debug_end(TCCState *s1)
 {
-    if (!s1->do_debug)
+    if (!s1->do_debug || debug_next_type == 0)
         return;
+
+    if (debug_info_root)
+        tcc_debug_funcend(s1, 0); /* free stuff in case of errors */
+
     if (s1->dwarf) {
 	int i, j;
 	int start_aranges;
@@ -1019,6 +1023,7 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
                     text_section->data_offset, text_section, section_sym);
     }
     tcc_free(debug_hash);
+    debug_next_type = 0;
 }
 
 static BufferedFile* put_new_file(TCCState *s1)
@@ -1920,6 +1925,7 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
     {
         tcc_debug_finish (s1, debug_info_root);
     }
+    debug_info_root = 0;
 }
 
 

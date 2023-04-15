@@ -401,6 +401,7 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 
 ST_FUNC void tccgen_finish(TCCState *s1)
 {
+    tcc_debug_end(s1); /* just in case of errors: free memory */
     cstr_free(&initstr);
     free_inline_functions(s1);
     sym_pop(&global_stack, NULL, 0);

@@ -69,10 +69,6 @@
 ST_DATA struct TCCState *tcc_state;
 TCC_SEM(static tcc_compile_sem);
 
-#ifdef MEM_DEBUG
-static int nb_states;
-#endif
-
 /********************************************************/
 #ifdef _WIN32
 ST_FUNC char *normalize_slashes(char *path)
@@ -324,9 +320,11 @@ struct mem_debug_header {
 
 typedef struct mem_debug_header mem_debug_header_t;
 
+TCC_SEM(static mem_sem);
 static mem_debug_header_t *mem_debug_chain;
 static unsigned mem_cur_size;
 static unsigned mem_max_size;
+static int nb_states;
 
 static mem_debug_header_t *malloc_check(void *ptr, const char *msg)
 {
@@ -362,15 +360,16 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
     header->file_name[MEM_DEBUG_FILE_LEN] = 0;
 
+    WAIT_SEM(&mem_sem);
     header->next = mem_debug_chain;
     header->prev = NULL;
     if (header->next)
         header->next->prev = header;
     mem_debug_chain = header;
-
     mem_cur_size += size;
     if (mem_cur_size > mem_max_size)
         mem_max_size = mem_cur_size;
+    POST_SEM(&mem_sem);
 
     return MEM_USER_PTR(header);
 }
@@ -381,6 +380,8 @@ PUB_FUNC void tcc_free_debug(void *ptr)
     if (!ptr)
         return;
     header = malloc_check(ptr, "tcc_free");
+
+    WAIT_SEM(&mem_sem);
     mem_cur_size -= header->size;
     header->size = (unsigned)-1;
     if (header->next)
@@ -389,6 +390,7 @@ PUB_FUNC void tcc_free_debug(void *ptr)
         header->prev->next = header->next;
     if (header == mem_debug_chain)
         mem_debug_chain = header->next;
+    POST_SEM(&mem_sem);
     free(header);
 }
 
@@ -407,6 +409,8 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     if (!ptr)
         return tcc_malloc_debug(size, file, line);
     header = malloc_check(ptr, "tcc_realloc");
+
+    WAIT_SEM(&mem_sem);
     mem_cur_size -= header->size;
     mem_debug_chain_update = (header == mem_debug_chain);
     header = realloc(header, sizeof(mem_debug_header_t) + size);
@@ -423,6 +427,8 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     mem_cur_size += size;
     if (mem_cur_size > mem_max_size)
         mem_max_size = mem_cur_size;
+    POST_SEM(&mem_sem);
+
     return MEM_USER_PTR(header);
 }
 
@@ -434,10 +440,13 @@ PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line)
     return ptr;
 }
 
-PUB_FUNC void tcc_memcheck(void)
+PUB_FUNC void tcc_memcheck(int d)
 {
-    if (mem_cur_size) {
+    WAIT_SEM(&mem_sem);
+    nb_states += d;
+    if (0 == nb_states && mem_cur_size) {
         mem_debug_header_t *header = mem_debug_chain;
+        fflush(stdout);
         fprintf(stderr, "MEM_DEBUG: mem_leak= %d bytes, mem_max_size= %d bytes\n",
             mem_cur_size, mem_max_size);
         while (header) {
@@ -445,10 +454,14 @@ PUB_FUNC void tcc_memcheck(void)
                 header->file_name, header->line_num, header->size);
             header = header->next;
         }
+        fflush(stderr);
+        mem_cur_size = 0;
+        mem_debug_chain = NULL;
 #if MEM_DEBUG-0 == 2
         exit(2);
 #endif
     }
+    POST_SEM(&mem_sem);
 }
 #endif /* MEM_DEBUG */
 
@@ -785,7 +798,7 @@ LIBTCCAPI TCCState *tcc_new(void)
     if (!s)
         return NULL;
 #ifdef MEM_DEBUG
-    ++nb_states;
+    tcc_memcheck(1);
 #endif
 
 #undef gnu_ext
@@ -862,8 +875,7 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     tcc_free(s1->dState);
     tcc_free(s1);
 #ifdef MEM_DEBUG
-    if (0 == --nb_states)
-        tcc_memcheck();
+    tcc_memcheck(-1);
 #endif
 }
 
