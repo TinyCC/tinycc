@@ -68,9 +68,11 @@
     #define __WINT_TYPE__ int
 #endif
 
+#if !defined _WIN32
     /* extension to generate different code on old cpu's (>20y ago) */
     #define _unaligned
     #define __unaligned
+#endif
 
     #if __STDC_VERSION__ >= 201112L
     # define __STDC_NO_ATOMICS__ 1
