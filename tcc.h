@@ -495,6 +495,7 @@ typedef struct CString {
     int size; /* size in bytes */
     int size_allocated;
     void *data; /* either 'char *' or 'nwchar_t *' */
+    struct CString *prev;
 } CString;
 
 /* type definition */
@@ -733,7 +734,7 @@ typedef struct ExprValue {
 #define MAX_ASM_OPERANDS 30
 typedef struct ASMOperand {
     int id; /* GCC 3 optional identifier (0 if number only supported) */
-    char *constraint;
+    char constraint[16];
     char asm_str[16]; /* computed asm string for operand */
     SValue *vt; /* C value of the expression */
     int ref_index; /* if >= 0, gives reference to a output constraint */
@@ -1208,6 +1209,8 @@ enum tcc_token {
 /* ------------ libtcc.c ------------ */
 
 ST_DATA struct TCCState *tcc_state;
+ST_DATA void** stk_data;
+ST_DATA int nb_stk_data;
 
 /* public functions currently used by the tcc main function */
 ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s);
@@ -1257,10 +1260,16 @@ ST_FUNC void cstr_free(CString *cstr);
 ST_FUNC int cstr_printf(CString *cs, const char *fmt, ...) PRINTF_LIKE(2,3);
 ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap);
 ST_FUNC void cstr_reset(CString *cstr);
-
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
+
+/* mark a memory pointer on stack for cleanup after errors */
+#define stk_push(p) dynarray_add(&stk_data, &nb_stk_data, p)
+#define stk_pop() (--nb_stk_data)
+/* mark CString on stack for cleanup errors */
+#define cstr_new_s(cstr) (cstr_new(cstr), stk_push(&(cstr)->data))
+#define cstr_free_s(cstr) (cstr_free(cstr), stk_pop())
 
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 /* flags: */
@@ -1483,8 +1492,8 @@ ST_FUNC int type_size(CType *type, int *a);
 ST_FUNC void mk_pointer(CType *type);
 ST_FUNC void vstore(void);
 ST_FUNC void inc(int post, int c);
-ST_FUNC void parse_mult_str (CString *astr, const char *msg);
-ST_FUNC void parse_asm_str(CString *astr);
+ST_FUNC CString* parse_mult_str(const char *msg);
+ST_FUNC CString* parse_asm_str(void);
 ST_FUNC void indir(void);
 ST_FUNC void unary(void);
 ST_FUNC void gexpr(void);

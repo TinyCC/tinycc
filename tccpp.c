@@ -45,7 +45,6 @@ ST_DATA TokenSym **table_ident;
 static TokenSym *hash_ident[TOK_HASH_SIZE];
 static char token_buf[STRING_MAX_SIZE + 1];
 static CString cstr_buf;
-static CString macro_equal_buf;
 static TokenString tokstr_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 static int pp_debug_tok, pp_debug_symv;
@@ -399,7 +398,6 @@ ST_FUNC void cstr_new(CString *cstr)
 ST_FUNC void cstr_free(CString *cstr)
 {
     tcc_free(cstr->data);
-    cstr_new(cstr);
 }
 
 /* reset string to empty */
@@ -1273,12 +1271,11 @@ static int macro_is_equal(const int *a, const int *b)
         return 1;
 
     while (*a && *b) {
-        /* first time preallocate macro_equal_buf, next time only reset position to start */
-        cstr_reset(&macro_equal_buf);
+        cstr_reset(&tokcstr);
         TOK_GET(&t, &a, &cv);
-        cstr_cat(&macro_equal_buf, get_tok_str(t, &cv), 0);
+        cstr_cat(&tokcstr, get_tok_str(t, &cv), 0);
         TOK_GET(&t, &b, &cv);
-        if (strcmp(macro_equal_buf.data, get_tok_str(t, &cv)))
+        if (strcmp(tokcstr.data, get_tok_str(t, &cv)))
             return 0;
     }
     return !(*a || *b);
@@ -1348,14 +1345,15 @@ search_cached_include(TCCState *s1, const char *filename, int add);
 static int parse_include(TCCState *s1, int do_next, int test)
 {
     int c, i;
-    CString cs;
     char name[1024], buf[1024], *p;
     CachedInclude *e;
 
-    cstr_new(&cs);
     c = skip_spaces();
     if (c == '<' || c == '\"') {
-        file->buf_ptr = parse_pp_string(file->buf_ptr, c == '<' ? '>' : c, &cs);
+        cstr_reset(&tokcstr);
+        file->buf_ptr = parse_pp_string(file->buf_ptr, c == '<' ? '>' : c, &tokcstr);
+        i = tokcstr.size;
+        pstrncpy(name, tokcstr.data, i >= sizeof name ? sizeof name - 1 : i);
         next_nomacro();
     } else {
         /* computed #include : concatenate tokens until result is one of
@@ -1363,24 +1361,22 @@ static int parse_include(TCCState *s1, int do_next, int test)
 	parse_flags = PARSE_FLAG_PREPROCESS
                     | PARSE_FLAG_LINEFEED
                     | (parse_flags & PARSE_FLAG_ASM_FILE);
+        name[0] = 0;
         for (;;) {
             next();
-            p = cs.data, i = cs.size - 1;
+            p = name, i = strlen(p) - 1;
             if (i > 0
                 && ((p[0] == '"' && p[i] == '"')
                  || (p[0] == '<' && p[i] == '>')))
                 break;
             if (tok == TOK_LINEFEED)
                 tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
-            cstr_cat(&cs, get_tok_str(tok, &tokc), -1);
+            pstrcat(name, sizeof name, get_tok_str(tok, &tokc));
 	}
         c = p[0];
         /* remove '<>|""' */
-        memmove(p, p + 1, cs.size -= 2);
+        memmove(p, p + 1, i - 1), p[i - 1] = 0;
     }
-    cstr_ccat(&cs, '\0');
-    pstrcpy(name, sizeof name, cs.data);
-    cstr_free(&cs);
 
     i = do_next ? file->include_next_index : -1;
     for (;;) {
@@ -2934,7 +2930,6 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
     Sym *s;
     CValue cval;
     TokenString str;
-    CString cstr;
 
     tok_str_new(&str);
     t0 = t1 = 0;
@@ -2949,8 +2944,8 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 goto bad_stringy;
             s = sym_find2(args, t);
             if (s) {
-                cstr_new(&cstr);
-                cstr_ccat(&cstr, '\"');
+                cstr_reset(&tokcstr);
+                cstr_ccat(&tokcstr, '\"');
                 st = s->d;
                 spc = 0;
                 while (*st >= 0) {
@@ -2961,24 +2956,23 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                         const char *s = get_tok_str(t, &cval);
                         while (*s) {
                             if (t == TOK_PPSTR && *s != '\'')
-                                add_char(&cstr, *s);
+                                add_char(&tokcstr, *s);
                             else
-                                cstr_ccat(&cstr, *s);
+                                cstr_ccat(&tokcstr, *s);
                             ++s;
                         }
                     }
                 }
-                cstr.size -= spc;
-                cstr_ccat(&cstr, '\"');
-                cstr_ccat(&cstr, '\0');
+                tokcstr.size -= spc;
+                cstr_ccat(&tokcstr, '\"');
+                cstr_ccat(&tokcstr, '\0');
 #ifdef PP_DEBUG
-                printf("\nstringize: <%s>\n", (char *)cstr.data);
+                printf("\nstringize: <%s>\n", (char *)tokcstr.data);
 #endif
                 /* add string */
-                cval.str.size = cstr.size;
-                cval.str.data = cstr.data;
+                cval.str.size = tokcstr.size;
+                cval.str.data = tokcstr.data;
                 tok_str_add2(&str, TOK_PPSTR, &cval);
-                cstr_free(&cstr);
             } else {
         bad_stringy:
                 expect("macro parameter after '#'");
@@ -3047,19 +3041,19 @@ static char const ab_month_name[12][4] =
 
 static int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
 {
-    CString cstr;
     int n, ret = 1;
 
-    cstr_new(&cstr);
+    cstr_reset(&tokcstr);
     if (t1 != TOK_PLCHLDR)
-        cstr_cat(&cstr, get_tok_str(t1, v1), -1);
-    n = cstr.size;
+        cstr_cat(&tokcstr, get_tok_str(t1, v1), -1);
+    n = tokcstr.size;
     if (t2 != TOK_PLCHLDR)
-        cstr_cat(&cstr, get_tok_str(t2, v2), -1);
-    cstr_ccat(&cstr, '\0');
+        cstr_cat(&tokcstr, get_tok_str(t2, v2), -1);
+    cstr_ccat(&tokcstr, '\0');
+    //printf("paste <%s>\n", (char*)tokcstr.data);
 
-    tcc_open_bf(tcc_state, ":paste:", cstr.size);
-    memcpy(file->buffer, cstr.data, cstr.size);
+    tcc_open_bf(tcc_state, ":paste:", tokcstr.size);
+    memcpy(file->buffer, tokcstr.data, tokcstr.size);
     tok_flags = 0;
     for (;;) {
         next_nomacro1();
@@ -3068,13 +3062,11 @@ static int paste_tokens(int t1, CValue *v1, int t2, CValue *v2)
         if (is_space(tok))
             continue;
         tcc_warning("pasting \"%.*s\" and \"%s\" does not give a valid"
-            " preprocessing token", n, (char *)cstr.data, (char*)cstr.data + n);
+            " preprocessing token", n, file->buffer, file->buffer + n);
         ret = 0;
         break;
     }
     tcc_close();
-    //printf("paste <%s>\n", (char*)cstr.data);
-    cstr_free(&cstr);
     return ret;
 }
 
@@ -3214,7 +3206,6 @@ static int macro_subst_tok(
     TokenString str;
     char *cstrval;
     CValue cval;
-    CString cstr;
     char buf[32];
 
     /* if symbol is a macro, prepare substitution */
@@ -3245,12 +3236,11 @@ static int macro_subst_tok(
     add_cstr:
         t1 = TOK_STR;
     add_cstr1:
-        cstr_new(&cstr);
-        cstr_cat(&cstr, cstrval, 0);
-        cval.str.size = cstr.size;
-        cval.str.data = cstr.data;
+        cstr_reset(&tokcstr);
+        cstr_cat(&tokcstr, cstrval, 0);
+        cval.str.size = tokcstr.size;
+        cval.str.data = tokcstr.data;
         tok_str_add2(tok_str, t1, &cval);
-        cstr_free(&cstr);
     } else if (s->d) {
         int saved_parse_flags = parse_flags;
 	int *joined_str = NULL;
@@ -3634,7 +3624,6 @@ static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
 ST_FUNC void preprocess_start(TCCState *s1, int filetype)
 {
     int is_asm = !!(filetype & (AFF_TYPE_ASM|AFF_TYPE_ASMPP));
-    CString cstr;
 
     tccpp_new(s1);
 
@@ -3652,6 +3641,7 @@ ST_FUNC void preprocess_start(TCCState *s1, int filetype)
     set_idnum('.', is_asm ? IS_ID : 0);
 
     if (!(filetype & AFF_TYPE_ASM)) {
+        CString cstr;
         cstr_new(&cstr);
         tcc_predefs(s1, &cstr, is_asm);
         if (s1->cmdline_defs.size)
@@ -3710,6 +3700,7 @@ ST_FUNC void tccpp_new(TCCState *s)
     memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
     memset(s->cached_includes_hash, 0, sizeof s->cached_includes_hash);
 
+    cstr_new(&tokcstr);
     cstr_new(&cstr_buf);
     cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
     tok_str_new(&tokstr_buf);
@@ -3755,7 +3746,6 @@ ST_FUNC void tccpp_delete(TCCState *s)
     /* free static buffers */
     cstr_free(&tokcstr);
     cstr_free(&cstr_buf);
-    cstr_free(&macro_equal_buf);
     tok_str_free_str(tokstr_buf.str);
 
     /* free allocators */

@@ -1064,15 +1064,12 @@ ST_FUNC int find_constraint(ASMOperand *operands, int nb_operands,
 }
 
 static void subst_asm_operands(ASMOperand *operands, int nb_operands, 
-                               CString *out_str, CString *in_str)
+                               CString *out_str, const char *str)
 {
     int c, index, modifier;
-    const char *str;
     ASMOperand *op;
     SValue sv;
 
-    cstr_new(out_str);
-    str = in_str->data;
     for(;;) {
         c = *str++;
         if (c == '%') {
@@ -1118,11 +1115,11 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
 {
     ASMOperand *op;
     int nb_operands;
+    char* astr;
 
     if (tok != ':') {
         nb_operands = *nb_operands_ptr;
         for(;;) {
-	    CString astr;
             if (nb_operands >= MAX_ASM_OPERANDS)
                 tcc_error("too many asm operands");
             op = &operands[nb_operands++];
@@ -1135,10 +1132,8 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
                 next();
                 skip(']');
             }
-	    parse_mult_str(&astr, "string constant");
-            op->constraint = tcc_malloc(astr.size);
-            strcpy(op->constraint, astr.data);
-	    cstr_free(&astr);
+	    astr = parse_mult_str("string constant")->data;
+            pstrcpy(op->constraint, sizeof op->constraint, astr);
             skip('(');
             gexpr();
             if (is_output) {
@@ -1171,7 +1166,8 @@ static void parse_asm_operands(ASMOperand *operands, int *nb_operands_ptr,
 /* parse the GCC asm() instruction */
 ST_FUNC void asm_instr(void)
 {
-    CString astr, astr1;
+    CString astr, *astr1;
+
     ASMOperand operands[MAX_ASM_OPERANDS];
     int nb_outputs, nb_operands, i, must_subst, out_reg, nb_labels;
     uint8_t clobber_regs[NB_ASM_REGS];
@@ -1183,7 +1179,11 @@ ST_FUNC void asm_instr(void)
            || tok == TOK_GOTO) {
         next();
     }
-    parse_asm_str(&astr);
+
+    astr1 = parse_asm_str();
+    cstr_new_s(&astr);
+    cstr_cat(&astr, astr1->data, astr1->size);
+
     nb_operands = 0;
     nb_outputs = 0;
     nb_labels = 0;
@@ -1273,13 +1273,14 @@ ST_FUNC void asm_instr(void)
     printf("asm: \"%s\"\n", (char *)astr.data);
 #endif
     if (must_subst) {
-        subst_asm_operands(operands, nb_operands + nb_labels, &astr1, &astr);
-        cstr_free(&astr);
-    } else {
-        astr1 = astr;
+        cstr_reset(astr1);
+        cstr_cat(astr1, astr.data, astr.size);
+        cstr_reset(&astr);
+        subst_asm_operands(operands, nb_operands + nb_labels, &astr, astr1->data);
     }
+
 #ifdef ASM_DEBUG
-    printf("subst_asm: \"%s\"\n", (char *)astr1.data);
+    printf("subst_asm: \"%s\"\n", (char *)astr.data);
 #endif
 
     /* generate loads */
@@ -1290,7 +1291,8 @@ ST_FUNC void asm_instr(void)
        bleed out to surrounding code.  */
     sec = cur_text_section;
     /* assemble the string with tcc internal assembler */
-    tcc_assemble_inline(tcc_state, astr1.data, astr1.size - 1, 0);
+    tcc_assemble_inline(tcc_state, astr.data, astr.size - 1, 0);
+    cstr_free_s(&astr);
     if (sec != cur_text_section) {
         tcc_warning("inline asm tries to change current section");
         use_section1(tcc_state, sec);
@@ -1305,23 +1307,20 @@ ST_FUNC void asm_instr(void)
     
     /* free everything */
     for(i=0;i<nb_operands;i++) {
-        ASMOperand *op;
-        op = &operands[i];
-        tcc_free(op->constraint);
         vpop();
     }
-    cstr_free(&astr1);
+
 }
 
 ST_FUNC void asm_global_instr(void)
 {
-    CString astr;
+    CString *astr;
     int saved_nocode_wanted = nocode_wanted;
 
     /* Global asm blocks are always emitted.  */
     nocode_wanted = 0;
     next();
-    parse_asm_str(&astr);
+    astr = parse_asm_str();
     skip(')');
     /* NOTE: we do not eat the ';' so that we can restore the current
        token after the assembler parsing */
@@ -1335,14 +1334,13 @@ ST_FUNC void asm_global_instr(void)
     ind = cur_text_section->data_offset;
 
     /* assemble the string with tcc internal assembler */
-    tcc_assemble_inline(tcc_state, astr.data, astr.size - 1, 1);
+    tcc_assemble_inline(tcc_state, astr->data, astr->size - 1, 1);
     
     cur_text_section->data_offset = ind;
 
     /* restore the current C token */
     next();
 
-    cstr_free(&astr);
     nocode_wanted = saved_nocode_wanted;
 }
 

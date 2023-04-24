@@ -68,6 +68,9 @@
 /* XXX: get rid of this ASAP (or maybe not) */
 ST_DATA struct TCCState *tcc_state;
 TCC_SEM(static tcc_compile_sem);
+/* an array of pointers to memory to be free'd after errors */
+ST_DATA void** stk_data;
+ST_DATA int nb_stk_data;
 
 /********************************************************/
 #ifdef _WIN32
@@ -609,8 +612,11 @@ static void error1(int mode, const char *fmt, va_list ap)
     cstr_free(&cs);
     if (mode != ERROR_WARN)
         s1->nb_errors++;
-    if (mode == ERROR_ERROR && s1->error_set_jmp_enabled)
+    if (mode == ERROR_ERROR && s1->error_set_jmp_enabled) {
+        while (nb_stk_data)
+            tcc_free(*(void**)stk_data[--nb_stk_data]);
         longjmp(s1->error_jmp_buf, 1);
+    }
 }
 
 LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc error_func)

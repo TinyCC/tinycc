@@ -402,7 +402,6 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 ST_FUNC void tccgen_finish(TCCState *s1)
 {
     tcc_debug_end(s1); /* just in case of errors: free memory */
-    cstr_free(&initstr);
     free_inline_functions(s1);
     sym_pop(&global_stack, NULL, 0);
     sym_pop(&local_stack, NULL, 0);
@@ -412,6 +411,8 @@ ST_FUNC void tccgen_finish(TCCState *s1)
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
     global_label_stack = local_label_stack = NULL;
+    cstr_free(&initstr);
+    dynarray_reset(&stk_data, &nb_stk_data);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -3756,18 +3757,19 @@ ST_FUNC void inc(int post, int c)
         vpop(); /* if post op, return saved value */
 }
 
-ST_FUNC void parse_mult_str (CString *astr, const char *msg)
+ST_FUNC CString* parse_mult_str (const char *msg)
 {
     /* read the string */
     if (tok != TOK_STR)
         expect(msg);
-    cstr_new(astr);
+    cstr_reset(&initstr);
     while (tok == TOK_STR) {
         /* XXX: add \0 handling too ? */
-        cstr_cat(astr, tokc.str.data, -1);
+        cstr_cat(&initstr, tokc.str.data, -1);
         next();
     }
-    cstr_ccat(astr, '\0');
+    cstr_ccat(&initstr, '\0');
+    return &initstr;
 }
 
 /* If I is >= 1 and a power of two, returns log2(i)+1.
@@ -3792,7 +3794,7 @@ ST_FUNC int exact_log2p1(int i)
 static void parse_attribute(AttributeDef *ad)
 {
     int t, n;
-    CString astr;
+    char *astr;
     
 redo:
     if (tok != TOK_ATTRIBUTE1 && tok != TOK_ATTRIBUTE2)
@@ -3839,37 +3841,33 @@ redo:
         case TOK_SECTION1:
         case TOK_SECTION2:
             skip('(');
-	    parse_mult_str(&astr, "section name");
-            ad->section = find_section(tcc_state, (char *)astr.data);
+	    astr = parse_mult_str("section name")->data;
+            ad->section = find_section(tcc_state, astr);
             skip(')');
-	    cstr_free(&astr);
             break;
         case TOK_ALIAS1:
         case TOK_ALIAS2:
             skip('(');
-	    parse_mult_str(&astr, "alias(\"target\")");
-            ad->alias_target = /* save string as token, for later */
-                tok_alloc((char*)astr.data, astr.size-1)->tok;
+	    astr = parse_mult_str("alias(\"target\")")->data;
+            /* save string as token, for later */
+            ad->alias_target = tok_alloc_const(astr);
             skip(')');
-	    cstr_free(&astr);
             break;
 	case TOK_VISIBILITY1:
 	case TOK_VISIBILITY2:
             skip('(');
-	    parse_mult_str(&astr,
-			   "visibility(\"default|hidden|internal|protected\")");
-	    if (!strcmp (astr.data, "default"))
+	    astr = parse_mult_str("visibility(\"default|hidden|internal|protected\")")->data;
+	    if (!strcmp (astr, "default"))
 	        ad->a.visibility = STV_DEFAULT;
-	    else if (!strcmp (astr.data, "hidden"))
+	    else if (!strcmp (astr, "hidden"))
 	        ad->a.visibility = STV_HIDDEN;
-	    else if (!strcmp (astr.data, "internal"))
+	    else if (!strcmp (astr, "internal"))
 	        ad->a.visibility = STV_INTERNAL;
-	    else if (!strcmp (astr.data, "protected"))
+	    else if (!strcmp (astr, "protected"))
 	        ad->a.visibility = STV_PROTECTED;
 	    else
                 expect("visibility(\"default|hidden|internal|protected\")");
             skip(')');
-	    cstr_free(&astr);
             break;
         case TOK_ALIGNED1:
         case TOK_ALIGNED2:
@@ -4818,26 +4816,25 @@ static inline void convert_parameter_type(CType *pt)
     }
 }
 
-ST_FUNC void parse_asm_str(CString *astr)
+ST_FUNC CString* parse_asm_str(void)
 {
     skip('(');
-    parse_mult_str(astr, "string constant");
+    return parse_mult_str("string constant");
 }
 
 /* Parse an asm label and return the token */
 static int asm_label_instr(void)
 {
     int v;
-    CString astr;
+    char *astr;
 
     next();
-    parse_asm_str(&astr);
+    astr = parse_asm_str()->data;
     skip(')');
 #ifdef ASM_DEBUG
-    printf("asm_alias: \"%s\"\n", (char *)astr.data);
+    printf("asm_alias: \"%s\"\n", astr);
 #endif
-    v = tok_alloc(astr.data, astr.size - 1)->tok;
-    cstr_free(&astr);
+    v = tok_alloc_const(astr);
     return v;
 }
 
@@ -8357,29 +8354,23 @@ static void free_inline_functions(TCCState *s)
     dynarray_reset(&s->inline_fns, &s->nb_inline_fns);
 }
 
-static void do_Static_assert(void){
-    CString error_str;
+static void do_Static_assert(void)
+{
     int c;
+    const char *msg;
 
     next();
     skip('(');
     c = expr_const();
-
-    if (tok == ')') {
-    if (!c)
-        tcc_error("_Static_assert fail");
-    next();
-    goto static_assert_out;
+    msg = "_Static_assert fail";
+    if (tok == ',') {
+        next();
+        msg = parse_mult_str("string constant")->data;
     }
-
-    skip(',');
-    parse_mult_str(&error_str, "string constant");
-    if (c == 0)
-    tcc_error("%s", (char *)error_str.data);
-    cstr_free(&error_str);
     skip(')');
-  static_assert_out:
-        skip(';');
+    if (c == 0)
+        tcc_error("%s", msg);
+    skip(';');
 }
 
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type
@@ -8393,10 +8384,11 @@ static int decl(int l)
     AttributeDef ad, adbase;
 
     while (1) {
-    if (tok == TOK_STATIC_ASSERT) {
-        do_Static_assert();
-        continue;
-    }
+
+        if (tok == TOK_STATIC_ASSERT) {
+            do_Static_assert();
+            continue;
+        }
 
         oldint = 0;
         if (!parse_btype(&btype, &adbase, l == VT_LOCAL)) {
