@@ -137,6 +137,11 @@ void __aeabi_ ## name(double_unsigned_struct val)                            \
     int exp, high_shift, sign;                                               \
     double_unsigned_struct ret;                                              \
                                                                              \
+    if ((val.high & ~0x80000000) == 0 && val.low == 0) {                     \
+        ret.low = ret.high = 0;                                              \
+        goto _ret_;                                                          \
+    }                                                                        \
+                                                                             \
     /* compute sign */                                                       \
     sign = val.high >> 31;                                                   \
                                                                              \
@@ -190,6 +195,7 @@ void __aeabi_ ## name(double_unsigned_struct val)                            \
             ret.low++;                                                       \
     }                                                                        \
                                                                              \
+_ret_:                                                                       \
     double_unsigned_struct_return(ret);                                      \
 }
 
@@ -313,7 +319,7 @@ void __aeabi_ ## name(unsigned long long v)                             \
             }                                                           \
         } else {                                                        \
             ret.high = ret.low = 0;                                     \
-            double_unsigned_struct_return(ret);                         \
+            goto _ret_;                                                 \
         }                                                               \
     }                                                                   \
                                                                         \
@@ -323,6 +329,7 @@ void __aeabi_ ## name(unsigned long long v)                             \
     /* fill sign bit */                                                 \
     ret.high |= sign << 31;                                             \
                                                                         \
+_ret_:                                                                  \
     double_unsigned_struct_return(ret);                                 \
 }
 

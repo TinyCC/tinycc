@@ -3147,7 +3147,10 @@ error:
 
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
 #if !defined TCC_IS_NATIVE && !defined TCC_IS_NATIVE_387
-        c &= (dbt != VT_LDOUBLE) | !!nocode_wanted;
+        /* don't try to convert to ldouble when cross-compiling
+           (except when it's '0' which is needed for arm:gen_negf()) */
+        if (dbt_bt == VT_LDOUBLE && !nocode_wanted && (sf || vtop->c.i != 0))
+            c = 0;
 #endif
         if (c) {
             /* constant case: we can do it now */
@@ -5449,7 +5452,11 @@ ST_FUNC void unary(void)
         t = VT_DOUBLE;
 	goto push_tokc;
     case TOK_CLDOUBLE:
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
+        t = VT_DOUBLE | VT_LONG;
+#else
         t = VT_LDOUBLE;
+#endif
 	goto push_tokc;
     case TOK_CLONG:
         t = (LONG_SIZE == 8 ? VT_LLONG : VT_INT) | VT_LONG;
@@ -7662,8 +7669,6 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                 else if (sizeof (long double) == sizeof (double))
                     __asm__("fldl %1\nfstpt %0\n" : "=m" (*ptr) : "m" (vtop->c.ld));
 #endif
-                else if (vtop->c.ld == 0.0)
-                    ;
                 else
 #endif
                 /* For other platforms it should work natively, but may not work
@@ -7671,7 +7676,9 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                 if (sizeof(long double) == LDOUBLE_SIZE)
                     memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
                 else if (sizeof(double) == LDOUBLE_SIZE)
-                    memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
+                    *(double*)ptr = (double)vtop->c.ld;
+                else if (0 == memcmp(ptr, &vtop->c.ld, LDOUBLE_SIZE))
+                    ; /* nothing to do for 0.0 */
 #ifndef TCC_CROSS_TEST
                 else
                     tcc_error("can't cross compile long double constants");

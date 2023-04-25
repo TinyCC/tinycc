@@ -18,7 +18,7 @@
 
 #if __SIZEOF_POINTER__ == 4
     /* 32bit systems. */
-#if defined TARGETOS_OpenBSD
+#if defined  __OpenBSD__
     #define __SIZE_TYPE__ unsigned long
     #define __PTRDIFF_TYPE__ long
 #else
@@ -66,12 +66,6 @@
 #else
     #define __WCHAR_TYPE__ int
     #define __WINT_TYPE__ int
-#endif
-
-#if !defined _WIN32
-    /* extension to generate different code on old cpu's (>20y ago) */
-    #define _unaligned
-    #define __unaligned
 #endif
 
     #if __STDC_VERSION__ >= 201112L
@@ -135,6 +129,7 @@
     #define  BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
     #define  __PRETTY_FUNCTION__ __FUNCTION__
     #define __has_builtin(x) 0
+    #define __has_feature(x) 0
     #define _Nonnull
     #define _Nullable
 

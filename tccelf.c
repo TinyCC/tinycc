@@ -2277,8 +2277,9 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
                 ph->p_flags |= PF_X;
             if (f & SHF_TLS) {
                 ph->p_type = PT_TLS;
-                ph->p_align = 4;
+                ph->p_align = align + 1;
             }
+
             ph->p_offset = file_offset;
             ph->p_vaddr = addr;
             if (n == 0) {
