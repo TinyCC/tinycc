@@ -2461,7 +2461,7 @@ void gen_negf(int op)
 /* generate a floating point operation with constant propagation */
 static void gen_opif(int op)
 {
-    int c1, c2;
+    int c1, c2, cast_int = 0;
     SValue *v1, *v2;
 #if defined _MSC_VER && defined __x86_64__
     /* avoid bad optimization with f1 -= f2 for f1:-0.0, f2:0.0 */
@@ -2519,6 +2519,26 @@ static void gen_opif(int op)
         case TOK_NEG:
             f1 = -f1;
             goto unary_result;
+        case TOK_EQ:
+            f1 = f1 == f2;
+	make_int:
+	    cast_int = 1;
+            break;
+        case TOK_NE:
+            f1 = f1 != f2;
+	    goto make_int;
+        case TOK_LT:
+            f1 = f1 < f2;
+	    goto make_int;
+        case TOK_GE:
+            f1 = f1 >= f2;
+	    goto make_int;
+        case TOK_LE:
+            f1 = f1 <= f2;
+	    goto make_int;
+        case TOK_GT:
+            f1 = f1 > f2;
+	    goto make_int;
             /* XXX: also handles tests ? */
         default:
             goto general_case;
@@ -2533,6 +2553,8 @@ static void gen_opif(int op)
         } else {
             v1->c.ld = f1;
         }
+	if (cast_int)
+	    gen_cast_s(VT_INT);
     } else {
     general_case:
         if (op == TOK_NEG) {
