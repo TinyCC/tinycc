@@ -99,12 +99,50 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 /* on win32, we suppose the lib and includes are at the location of 'tcc.exe' */
 static inline char *config_tccdir_w32(char *path)
 {
+    char temp[1024];
+    char try[1024];
     char *p;
+    int c;
     GetModuleFileName(tcc_module, path, MAX_PATH);
     p = tcc_basename(normalize_slashes(strlwr(path)));
     if (p > path)
         --p;
+
     *p = 0;
+
+    /*
+     * See if we are perhaps in a "bin/" subfolder of the
+     * installation path, in which case the real root of
+     * the installation is one level up. We can test this
+     * by looking for the 'include' folder.
+     */
+    strncpy(temp, path, sizeof(temp)-1);
+    strcat(temp, "/include");
+
+    if (_access(temp, 0) != 0) {
+        /* No 'include' folder found, so go up one level. */
+        strncpy(temp, path, sizeof(temp)-1);
+
+        for (c = 0; c < 4; c++) {
+                p = tcc_basename(temp);
+                if (p > temp) {
+                    --p;
+                    *p = '\0';
+                }
+
+                strncpy(try, temp, sizeof(try)-1);
+                strcat(try, "/include");
+
+                if (_access(try, 0) == 0) {
+                        if (p != NULL)
+                                p = '\0';
+                        path = tcc_malloc(strlen(temp)+1);
+                        strcpy(path, temp);
+                        break;
+                }
+        }
+    }
+
     return path;
 }
 #define CONFIG_TCCDIR config_tccdir_w32(alloca(MAX_PATH))
