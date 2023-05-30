@@ -123,6 +123,7 @@ static inline char *config_tccdir_w32(char *path)
         /* No 'include' folder found, so go up one level. */
         strncpy(temp, path, sizeof(temp)-1);
 
+        /* Try this for several "levels" up. */
         for (c = 0; c < 4; c++) {
                 p = tcc_basename(temp);
                 if (p > temp) {
@@ -136,7 +137,6 @@ static inline char *config_tccdir_w32(char *path)
                 if (_access(try, 0) == 0) {
                         if (p != NULL)
                                 p = '\0';
-                        path = tcc_malloc(strlen(temp)+1);
                         strcpy(path, temp);
                         break;
                 }
