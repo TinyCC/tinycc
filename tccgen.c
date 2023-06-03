@@ -2474,7 +2474,7 @@ void gen_negf(int op)
 /* generate a floating point operation with constant propagation */
 static void gen_opif(int op)
 {
-    int c1, c2, cast_int = 0;
+    int c1, c2, i, bt;
     SValue *v1, *v2;
 #if defined _MSC_VER && defined __x86_64__
     /* avoid bad optimization with f1 -= f2 for f1:-0.0, f2:0.0 */
@@ -2486,15 +2486,16 @@ static void gen_opif(int op)
     v2 = vtop;
     if (op == TOK_NEG)
         v1 = v2;
+    bt = v1->type.t & VT_BTYPE;
 
     /* currently, we cannot do computations with forward symbols */
     c1 = (v1->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     c2 = (v2->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
     if (c1 && c2) {
-        if (v1->type.t == VT_FLOAT) {
+        if (bt == VT_FLOAT) {
             f1 = v1->c.f;
             f2 = v2->c.f;
-        } else if (v1->type.t == VT_DOUBLE) {
+        } else if (bt == VT_DOUBLE) {
             f1 = v1->c.d;
             f2 = v2->c.d;
         } else {
@@ -2533,41 +2534,39 @@ static void gen_opif(int op)
             f1 = -f1;
             goto unary_result;
         case TOK_EQ:
-            f1 = f1 == f2;
+            i = f1 == f2;
 	make_int:
-	    cast_int = 1;
-            break;
+            vtop -= 2;
+            vpushi(i);
+            return;
         case TOK_NE:
-            f1 = f1 != f2;
+            i = f1 != f2;
 	    goto make_int;
         case TOK_LT:
-            f1 = f1 < f2;
+            i = f1 < f2;
 	    goto make_int;
         case TOK_GE:
-            f1 = f1 >= f2;
+            i = f1 >= f2;
 	    goto make_int;
         case TOK_LE:
-            f1 = f1 <= f2;
+            i = f1 <= f2;
 	    goto make_int;
         case TOK_GT:
-            f1 = f1 > f2;
+            i = f1 > f2;
 	    goto make_int;
-            /* XXX: also handles tests ? */
         default:
             goto general_case;
         }
         vtop--;
     unary_result:
         /* XXX: overflow test ? */
-        if (v1->type.t == VT_FLOAT) {
+        if (bt == VT_FLOAT) {
             v1->c.f = f1;
-        } else if (v1->type.t == VT_DOUBLE) {
+        } else if (bt == VT_DOUBLE) {
             v1->c.d = f1;
         } else {
             v1->c.ld = f1;
         }
-	if (cast_int)
-	    gen_cast_s(VT_INT);
     } else {
     general_case:
         if (op == TOK_NEG) {
@@ -4029,10 +4028,18 @@ static Sym * find_field (CType *type, int v, int *cumofs)
 {
     Sym *s = type->ref;
     int v1 = v | SYM_FIELD;
-
+    if (!(v & SYM_FIELD)) { /* top-level call */
+        if ((type->t & VT_BTYPE) != VT_STRUCT)
+            expect("struct or union");
+        if (v < TOK_UIDENT)
+            expect("field name");
+        if (s->c < 0)
+            tcc_error("dereferencing incomplete type '%s'",
+                get_tok_str(s->v & ~SYM_STRUCT, 0));
+    }
     while ((s = s->next) != NULL) {
         if (s->v == v1) {
-            *cumofs += s->c;
+            *cumofs = s->c;
             return s;
         }
         if ((s->type.t & VT_BTYPE) == VT_STRUCT
@@ -4045,17 +4052,9 @@ static Sym * find_field (CType *type, int v, int *cumofs)
             }
         }
     }
-
-    if (!(v & SYM_FIELD)) { /* top-level call */
-        s = type->ref;
-        if (s->c < 0)
-            tcc_error("dereferencing incomplete type '%s'",
-                get_tok_str(s->v & ~SYM_STRUCT, 0));
-        else
-            tcc_error("field not found: %s",
-                get_tok_str(v, &tokc));
-    }
-    return NULL;
+    if (!(v & SYM_FIELD))
+        tcc_error("field not found: %s", get_tok_str(v, NULL));
+    return s;
 }
 
 static void check_fields (CType *type, int check)
@@ -6003,21 +6002,15 @@ special_math_val:
         if (tok == TOK_INC || tok == TOK_DEC) {
             inc(1, tok);
             next();
-        } else if (tok == '.' || tok == TOK_ARROW || tok == TOK_CDOUBLE) {
-            int qualifiers, cumofs = 0;
+        } else if (tok == '.' || tok == TOK_ARROW) {
+            int qualifiers, cumofs;
             /* field */ 
             if (tok == TOK_ARROW) 
                 indir();
             qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
             test_lvalue();
             /* expect pointer on structure */
-            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
-                expect("struct or union");
-            if (tok == TOK_CDOUBLE)
-                expect("field name");
             next();
-            if (tok == TOK_CINT || tok == TOK_CUINT)
-                expect("field name");
 	    s = find_field(&vtop->type, tok, &cumofs);
             /* add field offset to pointer */
             gaddrof();
@@ -7494,9 +7487,6 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
             l = tok;
         struct_field:
             next();
-            if ((type->t & VT_BTYPE) != VT_STRUCT)
-                expect("struct/union type");
-            cumofs = 0;
 	    f = find_field(type, l, &cumofs);
             if (cur_field)
                 *cur_field = f;

@@ -284,7 +284,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* library search paths */
 #ifndef CONFIG_TCC_LIBPATHS
-# ifdef TCC_TARGET_PE
+# if defined TCC_TARGET_PE || defined _WIN32
 #  define CONFIG_TCC_LIBPATHS "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
@@ -496,7 +496,6 @@ typedef struct CString {
     int size; /* size in bytes */
     int size_allocated;
     void *data; /* either 'char *' or 'nwchar_t *' */
-    struct CString *prev;
 } CString;
 
 /* type definition */

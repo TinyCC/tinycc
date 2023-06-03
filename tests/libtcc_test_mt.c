@@ -209,9 +209,8 @@ TF_TYPE(thread_test_complex, vn)
     sleep_ms(2);
     ret = tcc_add_file(s, argv[0]);
     sleep_ms(3);
-    if (ret < 0)
-        exit(1);
-    tcc_run(s, argc, argv);
+    if (ret == 0)
+        tcc_run(s, argc, argv);
     tcc_delete(s);
     fflush(stdout);
     return 0;

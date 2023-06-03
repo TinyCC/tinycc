@@ -1880,7 +1880,7 @@ static void fill_local_got_entries(TCCState *s1)
 
 /* Bind symbols of executable: resolve undefined symbols from exported symbols
    in shared libraries */
-static void bind_exe_dynsyms(TCCState *s1)
+static void bind_exe_dynsyms(TCCState *s1, int is_PIE)
 {
     const char *name;
     int sym_index, index;
@@ -1895,6 +1895,8 @@ static void bind_exe_dynsyms(TCCState *s1)
             name = (char *) symtab_section->link->data + sym->st_name;
             sym_index = find_elf_sym(s1->dynsymtab_section, name);
             if (sym_index) {
+                if (is_PIE)
+                    continue;
                 esym = &((ElfW(Sym) *)s1->dynsymtab_section->data)[sym_index];
                 type = ELFW(ST_TYPE)(esym->st_info);
                 if ((type == STT_FUNC) || (type == STT_GNU_IFUNC)) {
@@ -1970,9 +1972,9 @@ static void bind_libs_dynsyms(TCCState *s1)
     for_each_elem(symtab_section, 1, sym, ElfW(Sym)) {
         name = (char *)symtab_section->link->data + sym->st_name;
         dynsym_index = find_elf_sym(s1->dynsymtab_section, name);
-        if (sym->st_shndx != SHN_UNDEF
-            && ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
-            if (dynsym_index || s1->rdynamic)
+        if (sym->st_shndx != SHN_UNDEF) {
+            if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL
+                && (dynsym_index || s1->rdynamic))
                 set_elf_sym(s1->dynsym, sym->st_value, sym->st_size,
                             sym->st_info, 0, sym->st_shndx, name);
         } else if (dynsym_index) {
@@ -2797,8 +2799,8 @@ static int elf_output_file(TCCState *s1, const char *filename)
             dynamic->sh_entsize = sizeof(ElfW(Dyn));
 
             got_sym = build_got(s1);
-            if (file_type == TCC_OUTPUT_EXE) {
-                bind_exe_dynsyms(s1);
+            if (file_type & TCC_OUTPUT_EXE) {
+                bind_exe_dynsyms(s1, file_type & TCC_OUTPUT_DYN);
                 if (s1->nb_errors)
                     goto the_end;
             }

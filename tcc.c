@@ -48,7 +48,6 @@ static const char help[] =
     "  -Dsym[=val]  define 'sym' with value 'val'\n"
     "  -Usym        undefine 'sym'\n"
     "  -E           preprocess only\n"
-    "  -C           keep comments (not yet implemented)\n"
     "Linker options:\n"
     "  -Ldir        add library path 'dir'\n"
     "  -llib        link with dynamic or static library 'lib'\n"
@@ -303,7 +302,7 @@ redo:
         if (opt == OPT_M32 || opt == OPT_M64)
             return tcc_tool_cross(s, argv, opt);
         if (s->verbose)
-            printf(version);
+            printf("%s", version);
         if (opt == OPT_AR)
             return tcc_tool_ar(s, argc, argv);
 #ifdef TCC_TARGET_PE
