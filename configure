@@ -67,7 +67,7 @@ case $targetos in
     darwin=yes
     dwarf=4
     confvars="$confvars OSX"
-    cc=`which cc`
+    cc=`command -v cc`
     cc=`readlink $cc || echo clang`
     tcc_usrinclude="`xcrun --show-sdk-path`/usr/include"
     DLLSUF=".dylib"
