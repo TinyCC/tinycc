@@ -1086,7 +1086,7 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 
     if (!s1->do_debug)
         return;
-    if (cur_text_section != text_section)
+    if (cur_text_section != text_section || nocode_wanted)
         return;
     f = put_new_file(s1);
     if (!f)

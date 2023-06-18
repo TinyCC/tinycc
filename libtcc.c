@@ -1976,9 +1976,12 @@ dorun:
         case TCC_OPTION_g:
             s->do_debug = 1;
             s->dwarf = DWARF_VERSION;
-
             if (strstart("dwarf", &optarg))
                 s->dwarf = (*optarg) ? (0 - atoi(optarg)) : DEFAULT_DWARF_VERSION;
+#ifdef TCC_TARGET_PE
+            else if (0 == strcmp(".pdb", optarg))
+                s->dwarf = 5, s->do_debug |= 16;
+#endif
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;

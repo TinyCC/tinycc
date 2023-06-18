@@ -5500,25 +5500,12 @@ ST_FUNC void unary(void)
             goto tok_identifier;
         /* fall thru */
     case TOK___FUNC__:
-        {
-            Section *sec;
-            int len;
-            /* special function name identifier */
-            len = strlen(funcname) + 1;
-            /* generate char[len] type */
-            type.t = char_type.t;
-            if (tcc_state->warn_write_strings & WARN_ON)
-                type.t |= VT_CONSTANT;
-            mk_pointer(&type);
-            type.t |= VT_ARRAY;
-            type.ref->c = len;
-            sec = rodata_section;
-            vpush_ref(&type, sec, sec->data_offset, len);
-            if (!NODATA_WANTED)
-                memcpy(section_ptr_add(sec, len), funcname, len);
-            next();
-        }
-        break;
+        tok = TOK_STR;
+        cstr_reset(&tokcstr);
+        cstr_cat(&tokcstr, funcname, 0);
+        tokc.str.size = tokcstr.size;
+        tokc.str.data = tokcstr.data;
+        goto case_TOK_STR;
     case TOK_LSTR:
 #ifdef TCC_TARGET_PE
         t = VT_SHORT | VT_UNSIGNED;
@@ -5527,6 +5514,7 @@ ST_FUNC void unary(void)
 #endif
         goto str_init;
     case TOK_STR:
+    case_TOK_STR:
         /* string parsing */
         t = char_type.t;
     str_init:
@@ -7767,7 +7755,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
     CType *t1;
 
     /* generate line number info */
-    if (debug_modes && !p->sec)
+    if (debug_modes && !(flags & DIF_SIZE_ONLY) && !p->sec)
         tcc_debug_line(tcc_state), tcc_tcov_check_line (tcc_state, 1);
 
     if (!(flags & DIF_HAVE_ELEM) && tok != '{' &&
@@ -8288,50 +8276,60 @@ static void gen_function(Sym *sym)
     struct scope f = { 0 };
     cur_scope = root_scope = &f;
     nocode_wanted = 0;
+
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
 	size_t newoff = section_add(cur_text_section, 0,
 				    1 << (sym->a.aligned - 1));
 	gen_fill_nops(newoff - ind);
     }
-    /* NOTE: we patch the symbol size later */
-    put_extern_sym(sym, cur_text_section, ind, 0);
-    if (sym->type.ref->f.func_ctor)
-        add_array (tcc_state, ".init_array", sym->c);
-    if (sym->type.ref->f.func_dtor)
-        add_array (tcc_state, ".fini_array", sym->c);
 
     funcname = get_tok_str(sym->v, NULL);
     func_ind = ind;
     func_vt = sym->type.ref->type;
     func_var = sym->type.ref->f.func_type == FUNC_ELLIPSIS;
 
+    /* NOTE: we patch the symbol size later */
+    put_extern_sym(sym, cur_text_section, ind, 0);
+
+    if (sym->type.ref->f.func_ctor)
+        add_array (tcc_state, ".init_array", sym->c);
+    if (sym->type.ref->f.func_dtor)
+        add_array (tcc_state, ".fini_array", sym->c);
+
     /* put debug symbol */
     tcc_debug_funcstart(tcc_state, sym);
+
     /* push a dummy symbol to enable local sym storage */
     sym_push2(&local_stack, SYM_FIELD, 0, 0);
     local_scope = 1; /* for function parameters */
     gfunc_prolog(sym);
     tcc_debug_prolog_epilog(tcc_state, 0);
+
     local_scope = 0;
     rsym = 0;
     clear_temp_local_var_list();
     func_vla_arg(sym);
     block(0);
     gsym(rsym);
+
     nocode_wanted = 0;
     /* reset local stack */
     pop_local_syms(NULL, 0);
     tcc_debug_prolog_epilog(tcc_state, 1);
     gfunc_epilog();
+
+    /* end of function */
+    tcc_debug_funcend(tcc_state, ind - func_ind);
+
+    /* patch symbol size */
+    elfsym(sym)->st_size = ind - func_ind;
+
     cur_text_section->data_offset = ind;
     local_scope = 0;
     label_pop(&global_label_stack, NULL, 0);
     sym_pop(&all_cleanups, NULL, 0);
-    /* patch symbol size */
-    elfsym(sym)->st_size = ind - func_ind;
-    /* end of function */
-    tcc_debug_funcend(tcc_state, ind - func_ind);
+
     /* It's better to crash than to generate wrong code */
     cur_text_section = NULL;
     funcname = ""; /* for safety */
@@ -8341,6 +8339,7 @@ static void gen_function(Sym *sym)
     func_ind = -1;
     nocode_wanted = DATA_ONLY_WANTED;
     check_vstack();
+
     /* do this after funcend debug info */
     next();
 }

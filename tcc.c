@@ -59,6 +59,9 @@ static const char help[] =
     "Debugger options:\n"
     "  -g           generate stab runtime debug info\n"
     "  -gdwarf[-x]  generate dwarf runtime debug info\n"
+#ifdef TCC_TARGET_PE
+    "  -g.pdb       create .pdb debug database\n"
+#endif
 #ifdef CONFIG_TCC_BCHECK
     "  -b           compile with built-in memory and bounds checker (implies -g)\n"
 #endif
