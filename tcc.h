@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #ifndef _WIN32
 # include <unistd.h>
@@ -716,6 +717,10 @@ typedef struct InlineFunc {
 /* include file cache, used to find files faster and also to eliminate
    inclusion if the include file is protected by #ifndef ... #endif */
 typedef struct CachedInclude {
+    struct stat st;
+#ifdef _WIN32
+    unsigned long long hash;
+#endif
     int ifndef_macro;
     int once;
     int hash_next; /* -1 if none */

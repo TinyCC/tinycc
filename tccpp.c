@@ -1607,38 +1607,88 @@ bad_twosharp:
     define_push(v, t, tok_str_dup(&tokstr_buf), first);
 }
 
+#ifdef _WIN32
+static unsigned long long calc_file_hash(const char *filename)
+{
+    unsigned long long hash = 14695981039346656037ull; // FNV_offset_basis;
+    FILE *fp = fopen (filename, "rb");
+
+    if (fp == NULL)
+	return 0;
+    for (;;) {
+        unsigned char temp[IO_BUF_SIZE];
+	int i, n = fread(temp, 1, sizeof(temp), fp);
+
+	if (n <= 0)
+	    break;
+	for (i = 0; i < n; i++)
+	    hash = hash * 1099511628211ull + temp[i]; // FNV_prime
+    }
+    fclose(fp);
+    if (hash == 0)
+	hash = 1;
+    return hash;
+}
+#endif
+
 static CachedInclude *search_cached_include(TCCState *s1, const char *filename, int add)
 {
-    const unsigned char *s;
-    unsigned int h;
+    unsigned int h = 0;
     CachedInclude *e;
     int i;
-
-    h = TOK_HASH_INIT;
-    s = (unsigned char *) filename;
-    while (*s) {
+    struct stat st;
 #ifdef _WIN32
-        h = TOK_HASH_FUNC(h, toup(*s));
-#else
-        h = TOK_HASH_FUNC(h, *s);
+    unsigned long long hash = 0;
 #endif
-        s++;
+
+    /* This is needed for #pragmae once
+     * We cannot use stat on windows because st_ino is not set correctly
+     * so we calculate a hash of file contents.
+     * This also works for hard/soft links as in gcc/clang.
+     */
+    memset (&st, 0, sizeof(st));
+    if (stat (filename, &st))
+	goto  skip;
+    h = st.st_size & (CACHED_INCLUDES_HASH_SIZE - 1);
+#ifdef _WIN32
+    /* Only calculate file hash if file size same. */
+    i = s1->cached_includes_hash[h];
+    for(;;) {
+        if (i == 0)
+            break;
+        e = s1->cached_includes[i - 1];
+	if (e->st.st_size == st.st_size) {
+	    if (e->hash == 0)
+	        e->hash = calc_file_hash(e->filename);
+	    hash = calc_file_hash(filename);
+	    break;
+	}
+        i = e->hash_next;
     }
-    h &= (CACHED_INCLUDES_HASH_SIZE - 1);
+#endif
 
     i = s1->cached_includes_hash[h];
     for(;;) {
         if (i == 0)
             break;
         e = s1->cached_includes[i - 1];
-        if (0 == PATHCMP(e->filename, filename))
+#ifdef _WIN32
+        if (e->st.st_size == st.st_size && e->hash == hash)
+#else
+        if (st.st_dev == e->st.st_dev && st.st_ino == e->st.st_ino)
+#endif
             return e;
         i = e->hash_next;
     }
+skip:
     if (!add)
         return NULL;
 
     e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
+    e->st = st;
+#ifdef _WIN32
+    e->hash = hash;
+#endif
     strcpy(e->filename, filename);
     e->ifndef_macro = e->once = 0;
     dynarray_add(&s1->cached_includes, &s1->nb_cached_includes, e);

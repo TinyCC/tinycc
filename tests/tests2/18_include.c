@@ -37,6 +37,10 @@ int main()
 #endif
 #endif
 
+#include "18_include2.h"
+#include "./18_include2.h"
+#include "../tests2/18_include2.h"
+
    return 0;
 }
 
