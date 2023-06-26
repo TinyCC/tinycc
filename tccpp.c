@@ -1611,20 +1611,20 @@ bad_twosharp:
 static unsigned long long calc_file_hash(const char *filename)
 {
     unsigned long long hash = 14695981039346656037ull; // FNV_offset_basis;
-    FILE *fp = fopen (filename, "rb");
+    int fd = open (filename, O_RDONLY | O_BINARY);
 
-    if (fp == NULL)
+    if (fd < 0)
 	return 0;
     for (;;) {
         unsigned char temp[IO_BUF_SIZE];
-	int i, n = fread(temp, 1, sizeof(temp), fp);
+	int i, n = read(fd, temp, sizeof(temp));
 
 	if (n <= 0)
 	    break;
 	for (i = 0; i < n; i++)
 	    hash = hash * 1099511628211ull ^ temp[i]; // FNV_prime
     }
-    fclose(fp);
+    close(fd);
     return hash ? hash : 1ull;
 }
 #endif
