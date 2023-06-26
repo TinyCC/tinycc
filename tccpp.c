@@ -1622,12 +1622,10 @@ static unsigned long long calc_file_hash(const char *filename)
 	if (n <= 0)
 	    break;
 	for (i = 0; i < n; i++)
-	    hash = hash * 1099511628211ull + temp[i]; // FNV_prime
+	    hash = hash * 1099511628211ull ^ temp[i]; // FNV_prime
     }
     fclose(fp);
-    if (hash == 0)
-	hash = 1;
-    return hash;
+    return hash ? hash : 1ull;
 }
 #endif
 
@@ -1658,10 +1656,14 @@ static CachedInclude *search_cached_include(TCCState *s1, const char *filename, 
             break;
         e = s1->cached_includes[i - 1];
 	if (e->st.st_size == st.st_size) {
+	    if (0 == PATHCMP(e->filename, filename)) {
+		hash = e->hash;
+		break;
+	    }
 	    if (e->hash == 0)
 	        e->hash = calc_file_hash(e->filename);
-	    hash = calc_file_hash(filename);
-	    break;
+	    if (hash == 0)
+	        hash = calc_file_hash(filename);
 	}
         i = e->hash_next;
     }
