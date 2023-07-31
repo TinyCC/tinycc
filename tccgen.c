@@ -1687,14 +1687,22 @@ static void pop_local_syms(Sym *b, int keep)
     sym_pop(&local_stack, b, keep);
 }
 
+/* increment an lvalue pointer */
+static void incr_offset(int offset)
+{
+    int t = vtop->type.t;
+    gaddrof(); /* remove VT_LVAL */
+    vtop->type.t = VT_PTRDIFF_T; /* set scalar type */
+    vpushs(offset);
+    gen_op('+');
+    vtop->r |= VT_LVAL;
+    vtop->type.t = t;
+}
+
 static void incr_bf_adr(int o)
 {
-    vtop->type = char_pointer_type;
-    gaddrof();
-    vpushs(o);
-    gen_op('+');
     vtop->type.t = VT_BYTE | VT_UNSIGNED;
-    vtop->r |= VT_LVAL;
+    incr_offset(o);
 }
 
 /* single-byte load mode for packed or otherwise unaligned bitfields */
@@ -1860,8 +1868,18 @@ ST_FUNC int gv(int rc)
         r2_ok = !rc2 || ((vtop->r2 < VT_CONST) && (reg_classes[vtop->r2] & rc2));
 
         if (!r_ok || !r2_ok) {
-            if (!r_ok)
-                r = get_reg(rc);
+
+            if (!r_ok) {
+                if (1 /* we can 'mov (r),r' in cases */
+                    && r < VT_CONST
+                    && (reg_classes[r] & rc)
+                    && !rc2
+                    )
+                    save_reg_upstack(r, 1);
+                else
+                    r = get_reg(rc);
+            }
+
             if (rc2) {
                 int load_type = (bt == VT_QFLOAT) ? VT_DOUBLE : VT_PTRDIFF_T;
                 int original_type = vtop->type.t;
@@ -1885,12 +1903,7 @@ ST_FUNC int gv(int rc)
                     vdup();
                     vtop[-1].r = r; /* save register value */
                     /* increment pointer to get second word */
-                    vtop->type.t = VT_PTRDIFF_T;
-                    gaddrof();
-                    vpushs(PTR_SIZE);
-                    gen_op('+');
-                    vtop->r |= VT_LVAL;
-                    vtop->type.t = load_type;
+                    incr_offset(PTR_SIZE);
                 } else {
                     /* move registers */
                     if (!r_ok)
@@ -3748,14 +3761,8 @@ ST_FUNC void vstore(void)
                 vtop[-1].type.t = load_type;
                 store(r, vtop - 1);
                 vswap();
-                /* convert to int to increment easily */
-                vtop->type.t = VT_PTRDIFF_T;
-                gaddrof();
-                vpushs(PTR_SIZE);
-                gen_op('+');
-                vtop->r |= VT_LVAL;
+                incr_offset(PTR_SIZE);
                 vswap();
-                vtop[-1].type.t = load_type;
                 /* XXX: it works because r2 is spilled last ! */
                 store(vtop->r2, vtop - 1);
             } else {
@@ -6003,7 +6010,6 @@ special_math_val:
                 indir();
             qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
             test_lvalue();
-            gaddrof();
             /* expect pointer on structure */
             if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
                 expect("struct or union");
@@ -6014,16 +6020,15 @@ special_math_val:
                 expect("field name");
 	    s = find_field(&vtop->type, tok, &cumofs);
             /* add field offset to pointer */
-            vtop->type = char_pointer_type; /* change type to 'char *' */
-            vpushi(cumofs);
-            gen_op('+');
+            incr_offset(cumofs);
             /* change type to field type, and set to lvalue */
             vtop->type = s->type;
             vtop->type.t |= qualifiers;
             /* an array is never an lvalue */
-            if (!(vtop->type.t & VT_ARRAY)) {
-                vtop->r |= VT_LVAL;
+            if (vtop->type.t & VT_ARRAY) {
+                vtop->r &= ~VT_LVAL;
 #ifdef CONFIG_TCC_BCHECK
+            } else {
                 /* if bound checking, the referenced pointer must be checked */
                 if (tcc_state->do_bounds_check)
                     vtop->r |= VT_MUSTBOUND;
@@ -6128,10 +6133,20 @@ special_math_val:
 #endif
             } else {
                 /* return value */
-                for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
+                n = ret_nregs;
+                while (n > 1) {
+                    int rc = reg_classes[ret.r] & ~(RC_INT | RC_FLOAT);
+                    /* We assume that when a structure is returned in multiple
+                       registers, their classes are consecutive values of the
+                       suite s(n) = 2^n */
+                    rc <<= --n;
+                    for (r = 0; r < NB_REGS; ++r)
+                        if (reg_classes[r] & rc)
+                            break;
                     vsetc(&ret.type, r, &ret.c);
-                    vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
                 }
+                vsetc(&ret.type, ret.r, &ret.c);
+                vtop->r2 = ret.r2;
 
                 /* handle packed struct return */
                 if (((s->type.t & VT_BTYPE) == VT_STRUCT) && ret_nregs) {
@@ -6140,9 +6155,9 @@ special_math_val:
                     size = type_size(&s->type, &align);
                     /* We're writing whole regs often, make sure there's enough
                        space.  Assume register size is power of 2.  */
-                    if (regsize > align)
-                      align = regsize;
-		    loc &= -align;
+                    size = (size + regsize - 1) & -regsize;
+                    if (ret_align > align)
+                        align = ret_align;
                     loc = (loc - size) & -align;
                     addr = loc;
                     offset = 0;
@@ -6619,11 +6634,12 @@ static void gfunc_return(CType *func_type)
             vstore();
         } else {
             /* returning structure packed into registers */
-            int size, addr, align, rc;
+            int size, addr, align, rc, n;
             size = type_size(func_type,&align);
-            if ((vtop->r != (VT_LOCAL | VT_LVAL) ||
-                 (vtop->c.i & (ret_align-1)))
-                && (align & (ret_align-1))) {
+            if ((align & (ret_align - 1))
+                && ((vtop->r & VT_VALMASK) < VT_CONST /* pointer to struct */
+                    || (vtop->c.i & (ret_align - 1))
+                    )) {
                 loc = (loc - size) & -ret_align;
                 addr = loc;
                 type = *func_type;
@@ -6635,22 +6651,19 @@ static void gfunc_return(CType *func_type)
             }
             vtop->type = ret_type;
             rc = RC_RET(ret_type.t);
-            if (ret_nregs == 1)
+            //printf("struct return: n:%d t:%02x rc:%02x\n", ret_nregs, ret_type.t, rc);
+            for (n = ret_nregs; --n > 0;) {
+                vdup();
                 gv(rc);
-            else {
-                for (;;) {
-                    vdup();
-                    gv(rc);
-                    vpop();
-                    if (--ret_nregs == 0)
-                      break;
-                    /* We assume that when a structure is returned in multiple
-                       registers, their classes are consecutive values of the
-                       suite s(n) = 2^n */
-                    rc <<= 1;
-                    vtop->c.i += regsize;
-                }
+                vswap();
+                incr_offset(regsize);
+                /* We assume that when a structure is returned in multiple
+                   registers, their classes are consecutive values of the
+                   suite s(n) = 2^n */
+                rc <<= 1;
             }
+            gv(rc);
+            vtop -= ret_nregs - 1;
         }
     } else {
         gv(RC_RET(func_type->t));

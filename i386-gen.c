@@ -31,10 +31,10 @@
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 #define RC_EAX     0x0004
-#define RC_ST0     0x0008 
+#define RC_EDX     0x0008
 #define RC_ECX     0x0010
-#define RC_EDX     0x0020
-#define RC_EBX     0x0040
+#define RC_EBX     0x0020
+#define RC_ST0     0x0040
 
 #define RC_IRET    RC_EAX /* function return: integer register */
 #define RC_IRE2    RC_EDX /* function return: second integer register */
@@ -380,14 +380,15 @@ static const uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
 #if defined(TCC_TARGET_PE) || TARGETOS_FreeBSD || TARGETOS_OpenBSD
-    int size, align;
+    int size, align, nregs;
     *ret_align = 1; // Never have to re-align return values for x86
     *regsize = 4;
     size = type_size(vt, &align);
     if (size > 8 || (size & (size - 1)))
         return 0;
+    nregs = 1;
     if (size == 8)
-        ret->t = VT_LLONG;
+        ret->t = VT_INT, nregs = 2;
     else if (size == 4)
         ret->t = VT_INT;
     else if (size == 2)
@@ -395,7 +396,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
     else
         ret->t = VT_BYTE;
     ret->ref = NULL;
-    return 1;
+    return nregs;
 #else
     *ret_align = 1; // Never have to re-align return values for x86
     return 0;

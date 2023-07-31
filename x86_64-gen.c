@@ -33,8 +33,8 @@
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 #define RC_RAX     0x0004
-#define RC_RCX     0x0008
-#define RC_RDX     0x0010
+#define RC_RDX     0x0008
+#define RC_RCX     0x0010
 #define RC_RSI     0x0020
 #define RC_RDI     0x0040
 #define RC_ST0     0x0080 /* only for long double */
@@ -1223,9 +1223,11 @@ ST_FUNC int classify_x86_64_va_arg(CType *ty)
 ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int *regsize)
 {
     int size, align, reg_count;
+    if (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) == x86_64_mode_memory)
+        return 0;
     *ret_align = 1; // Never have to re-align return values for x86-64
-    *regsize = 8;
-    return (classify_x86_64_arg(vt, ret, &size, &align, &reg_count) != x86_64_mode_memory);
+    *regsize = 8 * reg_count; /* the (virtual) regsize is 16 for VT_QLONG/QFLOAT */
+    return 1;
 }
 
 #define REGN 6
