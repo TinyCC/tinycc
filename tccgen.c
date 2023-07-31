@@ -6142,6 +6142,7 @@ special_math_val:
                        space.  Assume register size is power of 2.  */
                     if (regsize > align)
                       align = regsize;
+		    loc &= -align;
                     loc = (loc - size) & -align;
                     addr = loc;
                     offset = 0;
@@ -6622,7 +6623,7 @@ static void gfunc_return(CType *func_type)
             size = type_size(func_type,&align);
             if ((vtop->r != (VT_LOCAL | VT_LVAL) ||
                  (vtop->c.i & (ret_align-1)))
-                || (align & (ret_align-1))) {
+                && (align & (ret_align-1))) {
                 loc = (loc - size) & -ret_align;
                 addr = loc;
                 type = *func_type;
