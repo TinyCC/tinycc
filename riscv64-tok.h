@@ -1,7 +1,9 @@
 /* ------------------------------------------------------------------ */
 /* WARNING: relative order of tokens is important.                    */
 
-// See https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
+/*
+ * The specifications are available under https://riscv.org/technical/specifications/
+ */
 
 /* register */
 
@@ -87,28 +89,26 @@
  DEF_ASM(lw)
  DEF_ASM(lbu)
  DEF_ASM(lhu)
+ /* RV64 */
  DEF_ASM(ld)
- DEF_ASM(lq)
  DEF_ASM(lwu)
- DEF_ASM(ldu)
 
 /* Stores */
 
  DEF_ASM(sb)
  DEF_ASM(sh)
  DEF_ASM(sw)
+ /* RV64 */
  DEF_ASM(sd)
- DEF_ASM(sq)
 
 /* Shifts */
 
  DEF_ASM(sll)
- DEF_ASM(slli)
  DEF_ASM(srl)
- DEF_ASM(srli)
  DEF_ASM(sra)
- DEF_ASM(srai)
-
+ /* RV64 */
+ DEF_ASM(slli)
+ DEF_ASM(srli)
  DEF_ASM(sllw)
  DEF_ASM(slld)
  DEF_ASM(slliw)
@@ -117,6 +117,7 @@
  DEF_ASM(srld)
  DEF_ASM(srliw)
  DEF_ASM(srlid)
+ DEF_ASM(srai)
  DEF_ASM(sraw)
  DEF_ASM(srad)
  DEF_ASM(sraiw)
@@ -129,13 +130,10 @@
  DEF_ASM(sub)
  DEF_ASM(lui)
  DEF_ASM(auipc)
-
+ /* RV64 */
  DEF_ASM(addw)
- DEF_ASM(addd)
  DEF_ASM(addiw)
- DEF_ASM(addid)
  DEF_ASM(subw)
- DEF_ASM(subd)
 
 /* Logical */
 
@@ -162,15 +160,22 @@
  DEF_ASM(bltu)
  DEF_ASM(bgeu)
 
+/* Jump */
+
+ DEF_ASM(jal)
+ DEF_ASM(jalr)
+
 /* Sync */
 
  DEF_ASM(fence)
+ /* Zifencei extension */
  DEF_ASM_WITH_SUFFIX(fence, i)
 
 /* System call */
 
- DEF_ASM(scall)
- DEF_ASM(sbreak)
+ /* used to be called scall and sbreak */
+ DEF_ASM(ecall)
+ DEF_ASM(ebreak)
 
 /* Counters */
 
@@ -181,10 +186,107 @@
  DEF_ASM(rdinstret)
  DEF_ASM(rdinstreth)
 
-/* Privileged Instructions */
+/* no operation */
+ DEF_ASM(nop)
+ DEF_ASM_WITH_SUFFIX(c, nop)
 
- DEF_ASM(ecall)
- DEF_ASM(ebreak)
+/* “M” Standard Extension for Integer Multiplication and Division, V2.0 */
+ DEF_ASM(mul)
+ DEF_ASM(mulh)
+ DEF_ASM(mulhsu)
+ DEF_ASM(mulhu)
+ DEF_ASM(div)
+ DEF_ASM(divu)
+ DEF_ASM(rem)
+ DEF_ASM(remu)
+ /* RV64 */
+ DEF_ASM(mulw)
+ DEF_ASM(divw)
+ DEF_ASM(divuw)
+ DEF_ASM(remw)
+ DEF_ASM(remuw)
+
+/* "C" Extension for Compressed Instructions, V2.0 */
+/* Loads */
+ DEF_ASM_WITH_SUFFIX(c, li)
+ DEF_ASM_WITH_SUFFIX(c, lw)
+ DEF_ASM_WITH_SUFFIX(c, lwsp)
+ /* single float */
+ DEF_ASM_WITH_SUFFIX(c, flw)
+ DEF_ASM_WITH_SUFFIX(c, flwsp)
+ /* double float */
+ DEF_ASM_WITH_SUFFIX(c, fld)
+ DEF_ASM_WITH_SUFFIX(c, fldsp)
+ /* RV64 */
+ DEF_ASM_WITH_SUFFIX(c, ld)
+ DEF_ASM_WITH_SUFFIX(c, ldsp)
+
+/* Stores */
+
+ DEF_ASM_WITH_SUFFIX(c, sw)
+ DEF_ASM_WITH_SUFFIX(c, sd)
+ DEF_ASM_WITH_SUFFIX(c, swsp)
+ DEF_ASM_WITH_SUFFIX(c, sdsp)
+ /* single float */
+ DEF_ASM_WITH_SUFFIX(c, fsw)
+ DEF_ASM_WITH_SUFFIX(c, fswsp)
+ /* double float */
+ DEF_ASM_WITH_SUFFIX(c, fsd)
+ DEF_ASM_WITH_SUFFIX(c, fsdsp)
+
+/* Shifts */
+ DEF_ASM_WITH_SUFFIX(c, slli)
+ DEF_ASM_WITH_SUFFIX(c, slli64)
+ DEF_ASM_WITH_SUFFIX(c, srli)
+ DEF_ASM_WITH_SUFFIX(c, srli64)
+ DEF_ASM_WITH_SUFFIX(c, srai)
+ DEF_ASM_WITH_SUFFIX(c, srai64)
+
+/* Arithmetic */
+ DEF_ASM_WITH_SUFFIX(c, add)
+ DEF_ASM_WITH_SUFFIX(c, addi)
+ DEF_ASM_WITH_SUFFIX(c, addi16sp)
+ DEF_ASM_WITH_SUFFIX(c, addi4spn)
+ DEF_ASM_WITH_SUFFIX(c, lui)
+ DEF_ASM_WITH_SUFFIX(c, sub)
+ DEF_ASM_WITH_SUFFIX(c, mv)
+ /* RV64 */
+ DEF_ASM_WITH_SUFFIX(c, addw)
+ DEF_ASM_WITH_SUFFIX(c, addiw)
+ DEF_ASM_WITH_SUFFIX(c, subw)
+
+/* Logical */
+ DEF_ASM_WITH_SUFFIX(c, xor)
+ DEF_ASM_WITH_SUFFIX(c, or)
+ DEF_ASM_WITH_SUFFIX(c, and)
+ DEF_ASM_WITH_SUFFIX(c, andi)
+
+/* Branch */
+ DEF_ASM_WITH_SUFFIX(c, beqz)
+ DEF_ASM_WITH_SUFFIX(c, bnez)
+
+/* Jump */
+ DEF_ASM_WITH_SUFFIX(c, j)
+ DEF_ASM_WITH_SUFFIX(c, jr)
+ DEF_ASM_WITH_SUFFIX(c, jal)
+ DEF_ASM_WITH_SUFFIX(c, jalr)
+
+/* System call */
+ DEF_ASM_WITH_SUFFIX(c, ebreak)
+
+/* XXX F Extension: Single-Precision Floating Point */
+/* XXX D Extension: Double-Precision Floating Point */
+/* from the spec: Tables 16.5–16.7 list the RVC instructions. */
+
+/* “Zicsr”, Control and Status Register (CSR) Instructions, V2.0 */
+ DEF_ASM(csrrw)
+ DEF_ASM(csrrs)
+ DEF_ASM(csrrc)
+ DEF_ASM(csrrwi)
+ DEF_ASM(csrrsi)
+ DEF_ASM(csrrci)
+
+/* Privileged Instructions */
 
  DEF_ASM(mrts)
  DEF_ASM(mrth)
