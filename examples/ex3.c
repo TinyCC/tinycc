@@ -1,3 +1,4 @@
+#!/usr/local/bin/tcc -run
 #include <tcclib.h>
 
 int fib(n)
