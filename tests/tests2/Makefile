@@ -119,6 +119,7 @@ endif
 126_bound_global.test: FLAGS += -b
 126_bound_global.test: NORUN = true
 128_run_atexit.test: FLAGS += -dt
+132_bound_test.test: FLAGS += -b
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
