@@ -2047,6 +2047,7 @@ void gen_opf(int op)
                 assert(vtop->r & VT_LVAL);
                 gv(RC_FLOAT);
                 vswap();
+                fc = vtop->c.i; /* bcheck may have saved previous vtop[-1] */
             }
             
             if ((ft & VT_BTYPE) == VT_DOUBLE) {

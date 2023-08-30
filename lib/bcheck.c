@@ -41,7 +41,7 @@
 #define BOUND_STATISTIC         (1)
 
 #if BOUND_DEBUG
- #define dprintf(a...)         if (print_calls) { bounds_loc; fprintf(a); }
+ #define dprintf(a...)         if (print_calls) { bounds_loc(a); }
 #else
  #define dprintf(a...)
 #endif
@@ -446,7 +446,6 @@ static unsigned long long bound_splay_delete;
 #endif
 
 int tcc_backtrace(const char *fmt, ...);
-void tcc_location(const char *fmt);
 
 /* print a bound error message */
 #define bound_warning(...) \
@@ -463,10 +462,10 @@ void tcc_location(const char *fmt);
             exit(255);              \
     } while (0)
 
-#define bounds_loc \
+#define bounds_loc(fp, ...) \
     do {                            \
         WAIT_SEM (); \
-        tcc_location("^bcheck.c^"); \
+        tcc_backtrace("^bcheck.c^\001" __VA_ARGS__); \
         POST_SEM (); \
     } while (0)
 

@@ -23,9 +23,9 @@
 /* only native compiler supports -run */
 #ifdef TCC_IS_NATIVE
 
-#ifdef CONFIG_TCC_BACKTRACE
 typedef struct rt_context
 {
+#ifdef CONFIG_TCC_BACKTRACE
     /* --> tccelf.c:tcc_add_btstub wants those below in that order: */
     union {
 	struct {
@@ -46,15 +46,27 @@ typedef struct rt_context
     int num_callers;
     addr_t ip, fp, sp;
     void *top_func;
-    jmp_buf jmp_buf;
-    char do_jmp;
+#endif
+    jmp_buf jb;
+    int do_jmp;
+# define NR_AT_EXIT 32
+    int nr_exit;
+    void *exitfunc[NR_AT_EXIT];
+    void *exitarg[NR_AT_EXIT];
 } rt_context;
 
 static rt_context g_rtctxt;
+static void rt_exit(int code)
+{
+    rt_context *rc = &g_rtctxt;
+    if (rc->do_jmp)
+        longjmp(rc->jb, code ? code : 256);
+    exit(code);
+}
+
+#ifdef CONFIG_TCC_BACKTRACE
 static void set_exception_handler(void);
 static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
-static void _rt_location(void *fp, void *ip, const char *fmt);
-static void rt_exit(int code);
 #endif /* CONFIG_TCC_BACKTRACE */
 
 /* defined when included from lib/bt-exe.c */
@@ -147,79 +159,35 @@ static void run_cdtors(TCCState *s1, const char *start, const char *end,
         ((void(*)(int, char **, char **))*a++)(argc, argv, envp);
 }
 
-#define	NR_AT_EXIT	32
-
-static struct exit_context {
-    int exit_called;
-    int nr_exit;
-    void (*exitfunc[NR_AT_EXIT])(int, void *);
-    void *exitarg[NR_AT_EXIT];
-#ifndef CONFIG_TCC_BACKTRACE
-    jmp_buf run_jmp_buf;
-#endif
-} g_exit_context;
-
-static void init_exit(void)
+static void run_on_exit(int ret)
 {
-    struct exit_context *e = &g_exit_context;
-
-    e->exit_called = 0;
-    e->nr_exit = 0;
+    rt_context *rc = &g_rtctxt;
+    int n = rc->nr_exit;
+    while (n)
+	--n, ((void(*)(int,void*))rc->exitfunc[n])(ret, rc->exitarg[n]);
 }
 
-static void call_exit(int ret)
+static int rt_on_exit(void *function, void *arg)
 {
-    struct exit_context *e = &g_exit_context;
-
-    while (e->nr_exit) {
-	e->nr_exit--;
-	e->exitfunc[e->nr_exit](ret, e->exitarg[e->nr_exit]);
-    }
-}
-
-static int rt_atexit(void (*function)(void))
-{
-    struct exit_context *e = &g_exit_context;
-
-    if (e->nr_exit < NR_AT_EXIT) {
-	e->exitfunc[e->nr_exit] = (void (*)(int, void *))function;
-	e->exitarg[e->nr_exit++] = NULL;
+    rt_context *rc = &g_rtctxt;
+    if (rc->nr_exit < NR_AT_EXIT) {
+	rc->exitfunc[rc->nr_exit] = function;
+	rc->exitarg[rc->nr_exit++] = arg;
         return 0;
     }
     return 1;
 }
 
-static int rt_on_exit(void (*function)(int, void *), void *arg)
+static int rt_atexit(void *function)
 {
-    struct exit_context *e = &g_exit_context;
-
-    if (e->nr_exit < NR_AT_EXIT) {
-	e->exitfunc[e->nr_exit] = function;
-	e->exitarg[e->nr_exit++] = arg;
-        return 0;
-    }
-    return 1;
-}
-
-static void run_exit(int code)
-{
-    struct exit_context *e = &g_exit_context;
-
-    e->exit_called = 1;
-#ifdef CONFIG_TCC_BACKTRACE
-    longjmp((&g_rtctxt)->jmp_buf, code ? code : 256);
-#else
-    longjmp(e->run_jmp_buf, code ? code : 256);
-#endif
+    return rt_on_exit(function, NULL);
 }
 
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **, char **), ret;
-#ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc = &g_rtctxt;
-#endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
     char **envp = NULL;
@@ -233,17 +201,21 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     s1->runtime_main = s1->nostdlib ? "_start" : "main";
     if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, s1->runtime_main, 0, 1))
         return 0;
-    tcc_add_symbol(s1, "exit", run_exit);
+
+    tcc_add_symbol(s1, "exit", rt_exit);
     tcc_add_symbol(s1, "atexit", rt_atexit);
     tcc_add_symbol(s1, "on_exit", rt_on_exit);
     if (tcc_relocate(s1, TCC_RELOCATE_AUTO) < 0)
         return -1;
+
     prog_main = (void*)get_sym_addr(s1, s1->runtime_main, 1, 1);
     if ((addr_t)-1 == (addr_t)prog_main)
         return -1;
 
-#ifdef CONFIG_TCC_BACKTRACE
     memset(rc, 0, sizeof *rc);
+    rc->do_jmp = 1;
+
+#ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_debug) {
         void *p;
 	if (s1->dwarf) {
@@ -272,11 +244,8 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 #endif
         rc->top_func = tcc_get_symbol(s1, "main");
         rc->num_callers = s1->rt_num_callers;
-        rc->do_jmp = 1;
         if ((p = tcc_get_symbol(s1, "__rt_error")))
             *(void**)p = _rt_error;
-        if ((p = tcc_get_symbol(s1, "__rt_location")))
-            *(void**)p = _rt_location;
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check) {
             rc->bounds_start = (void*)bounds_section->sh_addr;
@@ -291,23 +260,15 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
-    init_exit();
+
     /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
-#ifdef CONFIG_TCC_BACKTRACE
-    if (!(ret = setjmp(rc->jmp_buf)))
-#else
-    if (!(ret = setjmp((&g_exit_context)->run_jmp_buf)))
-#endif
-    {
+    if (!(ret = setjmp(rc->jb)))
         ret = prog_main(argc, argv, envp);
-    }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
-    call_exit(ret);
-    if ((s1->dflag & 16) && ret)
+    run_on_exit(ret);
+    if (s1->dflag & 16 && ret) /* tcc -dt -run ... */
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
-    if ((s1->dflag & 16) == 0 && (&g_exit_context)->exit_called)
-	exit(ret);
     return ret;
 }
 
@@ -1044,7 +1005,7 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
     rt_context *rc = &g_rtctxt;
     addr_t pc = 0;
     char skip[100];
-    int i, level, ret, n;
+    int i, level, ret, n, one;
     const char *a, *b, *msg;
 
     if (fp) {
@@ -1063,6 +1024,10 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
         memcpy(skip, a, b - a), skip[b - a] = 0;
         fmt = b + 1;
     }
+    one = 0;
+    /* hack for bcheck.c:dprintf(): one level, no newline */
+    if (fmt[0] == '\001')
+        ++fmt, one = 1;
 
     n = rc->num_callers ? rc->num_callers : 6;
     for (i = level = 0; level < n; i++) {
@@ -1082,6 +1047,8 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
             rt_vprintf(fmt, ap);
         } else if (ret == -1)
             break;
+        if (one)
+            break;
         rt_printf("\n");
         if (ret == -1 || (pc == (addr_t)rc->top_func && pc))
             break;
@@ -1090,41 +1057,6 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
 
     rc->ip = rc->fp = 0;
     return 0;
-}
-
-static void _rt_location(void *fp, void *ip, const char *fmt)
-{
-    rt_context *rc = &g_rtctxt;
-    addr_t pc = 0;
-    char skip[100];
-    int i, ret;
-    const char *a, *b;
-
-    rc->fp = (addr_t)fp;
-    rc->ip = (addr_t)ip;
-
-    skip[0] = 0;
-    /* If fmt is like "^file.c^..." then skip calls from 'file.c' */
-    if (fmt[0] == '^' && (b = strchr(a = fmt + 1, fmt[0])))
-        memcpy(skip, a, b - a), skip[b - a] = 0;
-
-    for (i = 0; ; i++) {
-        ret = rt_get_caller_pc(&pc, rc, i);
-        a = "";
-        if (ret != -1) {
-            if (rc->dwarf)
-                pc = rt_printline_dwarf(rc, pc, "at", skip);
-            else
-                pc = rt_printline(rc, pc, "at", skip);
-            if (pc == (addr_t)-1)
-                continue;
-            a = ": ";
-        }
-        rt_printf(a);
-        break;
-    }
-
-    rc->ip = rc->fp = 0;
 }
 
 /* emit a run time error at position 'pc' */
@@ -1136,14 +1068,6 @@ static int rt_error(const char *fmt, ...)
     ret = _rt_error(0, 0, fmt, ap);
     va_end(ap);
     return ret;
-}
-
-static void rt_exit(int code)
-{
-    rt_context *rc = &g_rtctxt;
-    if (rc->do_jmp)
-        longjmp(rc->jmp_buf, code ? code : 256);
-    exit(code);
 }
 
 /* ------------------------------------------------------------- */

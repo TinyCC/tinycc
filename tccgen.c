@@ -6010,7 +6010,6 @@ special_math_val:
                 indir();
             qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
             test_lvalue();
-            gaddrof();
             /* expect pointer on structure */
             if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
                 expect("struct or union");
@@ -6021,6 +6020,7 @@ special_math_val:
                 expect("field name");
 	    s = find_field(&vtop->type, tok, &cumofs);
             /* add field offset to pointer */
+            gaddrof();
             vtop->type = char_pointer_type; /* change type to 'char *' */
             vpushi(cumofs);
             gen_op('+');
