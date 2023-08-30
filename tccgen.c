@@ -6010,6 +6010,7 @@ special_math_val:
                 indir();
             qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
             test_lvalue();
+            gaddrof();
             /* expect pointer on structure */
             if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
                 expect("struct or union");
@@ -6020,15 +6021,16 @@ special_math_val:
                 expect("field name");
 	    s = find_field(&vtop->type, tok, &cumofs);
             /* add field offset to pointer */
-            incr_offset(cumofs);
+            vtop->type = char_pointer_type; /* change type to 'char *' */
+            vpushi(cumofs);
+            gen_op('+');
             /* change type to field type, and set to lvalue */
             vtop->type = s->type;
             vtop->type.t |= qualifiers;
             /* an array is never an lvalue */
-            if (vtop->type.t & VT_ARRAY) {
-                vtop->r &= ~VT_LVAL;
+            if (!(vtop->type.t & VT_ARRAY)) {
+                vtop->r |= VT_LVAL;
 #ifdef CONFIG_TCC_BCHECK
-            } else {
                 /* if bound checking, the referenced pointer must be checked */
                 if (tcc_state->do_bounds_check)
                     vtop->r |= VT_MUSTBOUND;

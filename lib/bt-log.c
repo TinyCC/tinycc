@@ -6,6 +6,7 @@
 #include <string.h>
 
 int (*__rt_error)(void*, void*, const char *, va_list);
+void (*__rt_location)(void*, void*, const char *);
 
 #ifdef _WIN32
 # define DLL_EXPORT __declspec(dllexport)
@@ -40,6 +41,15 @@ DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
         fprintf(stderr, "\n"), fflush(stderr);
     }
     return ret;
+}
+
+DLL_EXPORT void tcc_location(const char *fmt)
+{
+    if (__rt_location) {
+        void *fp = __builtin_frame_address(1);
+        void *ip = __builtin_return_address(0);
+        __rt_location(fp, ip, fmt);
+    }
 }
 
 #if (defined(__GNUC__) && (__GNUC__ >= 6)) || defined(__clang__)

@@ -8,6 +8,7 @@
 #include "../tccrun.c"
 
 int (*__rt_error)(void*, void*, const char *, va_list);
+void (*__rt_location)(void*, void*, const char *);
 __attribute__((weak)) void __bound_checking_lock(void);
 __attribute__((weak)) void __bound_checking_unlock(void);
 
@@ -33,6 +34,7 @@ void __bt_init(rt_context *p, int num_callers)
         rc->num_callers = num_callers - 1;
         rc->top_func = main;
         __rt_error = _rt_error;
+        __rt_location = _rt_location;
         set_exception_handler();
     } else {
         p->next = rc->next, rc->next = p;

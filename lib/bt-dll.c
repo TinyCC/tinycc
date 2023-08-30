@@ -8,6 +8,7 @@
   REDIR(__bt_init) \
   REDIR(__bt_exit) \
   REDIR(tcc_backtrace) \
+  REDIR(tcc_location) \
   \
   REDIR(__bound_ptr_add) \
   REDIR(__bound_ptr_indir1) \

@@ -53,6 +53,7 @@ typedef struct rt_context
 static rt_context g_rtctxt;
 static void set_exception_handler(void);
 static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap);
+static void _rt_location(void *fp, void *ip, const char *fmt);
 static void rt_exit(int code);
 #endif /* CONFIG_TCC_BACKTRACE */
 
@@ -274,6 +275,8 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         rc->do_jmp = 1;
         if ((p = tcc_get_symbol(s1, "__rt_error")))
             *(void**)p = _rt_error;
+        if ((p = tcc_get_symbol(s1, "__rt_location")))
+            *(void**)p = _rt_location;
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check) {
             rc->bounds_start = (void*)bounds_section->sh_addr;
@@ -1087,6 +1090,41 @@ static int _rt_error(void *fp, void *ip, const char *fmt, va_list ap)
 
     rc->ip = rc->fp = 0;
     return 0;
+}
+
+static void _rt_location(void *fp, void *ip, const char *fmt)
+{
+    rt_context *rc = &g_rtctxt;
+    addr_t pc = 0;
+    char skip[100];
+    int i, ret;
+    const char *a, *b;
+
+    rc->fp = (addr_t)fp;
+    rc->ip = (addr_t)ip;
+
+    skip[0] = 0;
+    /* If fmt is like "^file.c^..." then skip calls from 'file.c' */
+    if (fmt[0] == '^' && (b = strchr(a = fmt + 1, fmt[0])))
+        memcpy(skip, a, b - a), skip[b - a] = 0;
+
+    for (i = 0; ; i++) {
+        ret = rt_get_caller_pc(&pc, rc, i);
+        a = "";
+        if (ret != -1) {
+            if (rc->dwarf)
+                pc = rt_printline_dwarf(rc, pc, "at", skip);
+            else
+                pc = rt_printline(rc, pc, "at", skip);
+            if (pc == (addr_t)-1)
+                continue;
+            a = ": ";
+        }
+        rt_printf(a);
+        break;
+    }
+
+    rc->ip = rc->fp = 0;
 }
 
 /* emit a run time error at position 'pc' */
