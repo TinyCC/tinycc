@@ -124,7 +124,7 @@ endif
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
 
-all test tests2.all: $(filter-out $(SKIP),$(TESTS))
+all test tests2.all testc2.all: $(filter-out $(SKIP),$(TESTS))
 	@$(MAKE) clean --no-print-directory -s
 
 %.test: %.c %.expect
@@ -138,15 +138,15 @@ T3 = $(FILTER) >$*.output 2>&1 || true \
      && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
 
 # run single test and update .expect file, e.g. "make tests2.37+"
-tests2.%+:
+tests2.%+ testc2.%+:
 	@$(MAKE) $(call F2,$(call F1,$*)) --no-print-directory
 
 # just run tcc to see the output, e.g. "make tests2.37-"
-tests2.%-:
+tests2.%- testc2.%-:
 	@$(MAKE) $(call F1,$*) T3= --no-print-directory
 
 # run single test, e.g. "make tests2.37"
-tests2.%:
+tests2.% testc2.%:
 	@$(MAKE) $(call F1,$*) --no-print-directory
 
 F1 = $(or $(filter $1_%,$(TESTS)),$1_???.test)

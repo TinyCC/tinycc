@@ -68,7 +68,11 @@ endif
 TCCFLAGS-unx = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
 TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
 TCCFLAGS = $(TCCFLAGS$(CFG))
+ifdef USE_TCC_C
+TCC = $(TOP)/tcc_c$(EXESUF) $(TCCFLAGS)
+else
 TCC = $(TOP)/tcc$(EXESUF) $(TCCFLAGS)
+endif
 
 CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
 LIBS_P = $(LIBS)
@@ -459,8 +463,21 @@ tests2.%:
 testspp.%:
 	@$(MAKE) -C tests/pp $@
 
+# run all tests with code coverage
+tcc_c$(EXESUF): $($T_FILES)
+	@${TCC} -o $@ -ftest-coverage $< $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
+testc: tcc_c$(EXESUF)
+	@rm -f tcc_c.tcov
+	@USE_TCC_C=yes $(MAKE) -C tests
+testc2.%: tcc_c$(EXESUF)
+	@rm -f tcc_c.tcov
+	@USE_TCC_C=yes $(MAKE) -C tests/tests2 $@
+testcpp.%: tcc_c$(EXESUF)
+	@rm -f tcc_c.tcov
+	@USE_TCC_C=yes $(MAKE) -C tests/pp $@
+
 clean:
-	@rm -f tcc$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tags ETAGS *.pod
+	@rm -f tcc$(EXESUF) tcc_c$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tags ETAGS *.pod
 	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out *.dylib *_.h
 	@$(MAKE) -s -C lib $@
 	@$(MAKE) -s -C tests $@
@@ -489,11 +506,15 @@ help:
 	@echo "make test"
 	@echo "   run all tests"
 	@echo ""
-	@echo "make tests2.all / make tests2.37 / make tests2.37+"
-	@echo "   run all/single test(s) from tests2, optionally update .expect"
+	@echo "make tests2.all / make tests2.37 / make tests2.37+ / make tests2.37-"
+	@echo "   run all/single test(s) from tests2, optionally update .expect, display"
 	@echo ""
 	@echo "make testspp.all / make testspp.17"
 	@echo "   run all/single test(s) from tests/pp"
+	@echo ""
+	@echo "make testc / testc2.all / testc2.37 / testc2.37+ / testc2.37-"
+	@echo "make testcpp.all / make testcpp.17"
+	@echo "   run tests with code coverage. After test(s) see tcc_c.tcov"
 	@echo ""
 	@echo "Other supported make targets:"
 	@echo "   install install-strip doc clean tags ETAGS tar distclean help"

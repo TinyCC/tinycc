@@ -399,6 +399,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 #ifdef TCC_PROFILE /* profile all functions */
 # define static
+# define inline
 #endif
 
 /* -------------------------------------------- */

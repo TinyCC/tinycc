@@ -16,6 +16,8 @@
 a.out
 tcc_g
 tcc
+tcc_c
+tcc_p
 *-tcc
 libtcc*.def
 
@@ -31,6 +33,7 @@ tcc.1
 *.pod
 tcc-doc.html
 tcc-doc.info
+tcc_c.tcov
 
 win32/doc
 win32/examples/libtcc_test.c

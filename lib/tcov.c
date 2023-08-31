@@ -340,9 +340,9 @@ void __store_test_coverage (unsigned char * p)
         for (i = 0; i < nfile->n_func; i++) {
 	    func = &nfile->func[i];
 	
-	    while (curline < func->first_line)
-		if (fgets(str, sizeof(str), src))
-		    fprintf (fp, "        -:%5u:%s", curline++, str);
+	    while (curline < func->first_line &&
+		   fgets(str, sizeof(str), src))
+		fprintf (fp, "        -:%5u:%s", curline++, str);
 	    blocks = 0;
 	    blocks_run = 0;
 	    for (j = 0; j < func->n_line; j++) {
@@ -390,9 +390,9 @@ void __store_test_coverage (unsigned char * p)
 		if (same_line)
 		     lline++;
 
-	        while (curline < fline)
-		    if (fgets(str, sizeof(str), src))
-		         fprintf (fp, "        -:%5u:%s", curline++, str);
+	        while (curline < fline &&
+		       fgets(str, sizeof(str), src))
+		     fprintf (fp, "        -:%5u:%s", curline++, str);
 		while (curline < lline &&
 		       fgets(str, sizeof(str), src)) {
 		    if (count == 0)
