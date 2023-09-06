@@ -30,12 +30,18 @@ ifdef CONFIG_WIN32
   LIBTCC = libtcc$(DLLSUF)
   LIBTCCDEF = libtcc.def
  endif
+ ifneq ($(CONFIG_debug),yes)
+  LDFLAGS += -s
+ endif
  NATIVE_TARGET = $(ARCH)-win$(if $(findstring arm,$(ARCH)),ce,32)
 else
  CFG = -unx
- LIBS=-lm -lpthread
+ LIBS+=-lm
  ifneq ($(CONFIG_ldl),no)
   LIBS+=-ldl
+ endif
+ ifneq ($(CONFIG_pthread),no)
+  LIBS+=-lpthread
  endif
  # make libtcc as static or dynamic library?
  ifeq ($(CONFIG_static),no)
@@ -68,11 +74,8 @@ endif
 TCCFLAGS-unx = -B$(TOP) -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP)
 TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TOP)
 TCCFLAGS = $(TCCFLAGS$(CFG))
-ifdef USE_TCC_C
-TCC = $(TOP)/tcc_c$(EXESUF) $(TCCFLAGS)
-else
-TCC = $(TOP)/tcc$(EXESUF) $(TCCFLAGS)
-endif
+TCC_LOCAL = $(TOP)/tcc$(EXESUF)
+TCC = $(TCC_LOCAL) $(TCCFLAGS)
 
 CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
 LIBS_P = $(LIBS)
@@ -181,11 +184,8 @@ DEFINES += $(if $(ELF-$T),-DCONFIG_TCC_ELFINTERP="\"$(ELF-$T)\"")
 DEFINES += $(DEF-$(or $(findstring win,$T),unx))
 
 ifneq ($(X),)
-ifeq ($(CONFIG_WIN32),yes)
-DEF-win += -DCONFIG_TCC_CROSSPREFIX="\"$X\""
-DEF-unx += -DCONFIG_TCC_CROSSPREFIX="\"lib/$X\""
-else
 DEF-all += -DCONFIG_TCC_CROSSPREFIX="\"$X\""
+ifneq ($(CONFIG_WIN32),yes)
 DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
 endif
 endif
@@ -249,17 +249,14 @@ endif
 
 GITHASH:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo no)
 ifneq ($(GITHASH),no)
-GITHASH:=$(shell git log -1 --pretty='format:%cs $(GITHASH)@%h')$(shell git diff --quiet || echo '*')
-DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)\""
+GITHASH:=$(shell git log -1 --date=short --pretty='format:%cd $(GITHASH)@%h')
+GITMODF:=$(shell git diff --quiet || echo '*')
+DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)$(GITMODF)\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
 CFLAGS += -g
 LDFLAGS += -g
-else
-ifndef CONFIG_OSX
-LDFLAGS += -s
-endif
 endif
 
 # convert "include/tccdefs.h" to "tccdefs_.h"
@@ -335,7 +332,11 @@ libtcc1.a : tcc$(EXESUF) FORCE
 .PRECIOUS: %-libtcc1.a
 FORCE:
 
-run-if = $(if $(shell command -v $1),$S $1 $2)
+# WHICH = which $1 2>/dev/null
+# some versions of gnu-make do not recognize 'command' as a shell builtin
+WHICH = sh -c 'command -v $1'
+
+run-if = $(if $(shell $(call WHICH,$1)),$S $1 $2)
 S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
 
 # --------------------------------------------------------------------------
@@ -348,7 +349,7 @@ tcc-doc.info: tcc-doc.texi
 
 tcc.1 : tcc-doc.pod
 	$(call run-if,pod2man,--section=1 --center="Tiny C Compiler" \
-		--release="$(VERSION)" $< >$@ && rm -f $<)
+		--release="$(VERSION)" $< >$@)
 %.pod : %.texi
 	$(call run-if,perl,$(TOPSRC)/texi2pod.pl $< $@)
 
@@ -392,8 +393,9 @@ endif
 
 # uninstall
 uninstall-unx:
-	@rm -fv $(foreach P,$(PROGS) $(PROGS_CROSS),"$(bindir)/$P")
-	@rm -fv "$(libdir)/libtcc.a" "$(libdir)/libtcc.so" "$(libdir)/libtcc.dylib" "$(includedir)/libtcc.h"
+	@rm -fv $(addprefix "$(bindir)/",$(PROGS) $(PROGS_CROSS))
+	@rm -fv $(addprefix "$(libdir)/", libtcc*.a libtcc*.so libtcc.dylib,$P)
+	@rm -fv $(addprefix "$(includedir)/", libtcc.h)
 	@rm -fv "$(mandir)/man1/tcc.1" "$(infodir)/tcc-doc.info"
 	@rm -fv "$(docdir)/tcc-doc.html"
 	@rm -frv "$(tccdir)"
@@ -415,17 +417,19 @@ ifneq "$(wildcard $(LIBTCC1_U))" ""
 	$(call IF,$(TOPSRC)/include/*.h $(TOPSRC)/tcclib.h,"$(tccdir)/lib/include")
 endif
 
-# the msys-git shell works to configure && make except it does not have install
-ifeq ($(CONFIG_WIN32)-$(shell command -v install || echo no),yes-no)
-install-win : INSTALL = cp
-install-win : INSTALLBIN = cp
-endif
-
 # uninstall on windows
 uninstall-win:
-	@rm -fv $(foreach P,libtcc.dll $(PROGS) *-tcc.exe,"$(bindir)"/$P)
-	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P"/*)
-	@rm -frv $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P")
+	@rm -fv $(addprefix "$(bindir)/", libtcc*.dll $(PROGS) *-tcc.exe)
+	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P/*")
+	@rm -frv $(addprefix "$(tccdir)/", doc examples include lib libtcc)
+
+# the msys-git shell works to configure && make except it does not have install
+ifeq ($(OS),Windows_NT)
+ifeq ($(shell $(call WHICH,install) || echo no),no)
+INSTALL = cp
+INSTALLBIN = cp
+endif
+endif
 
 # --------------------------------------------------------------------------
 # other stuff
@@ -459,66 +463,50 @@ test:
 # run test(s) from tests2 subdir (see make help)
 tests2.%:
 	@$(MAKE) -C tests/tests2 $@
-
+# run test(s) from testspp subdir (see make help)
 testspp.%:
 	@$(MAKE) -C tests/pp $@
-
-# run all tests with code coverage
+# run tests with code coverage
+tcov-tes% : tcc_c$(EXESUF)
+	@rm -f $<.tcov
+	@$(MAKE) --no-print-directory TCC_LOCAL=$(CURDIR)/$< tes$*
 tcc_c$(EXESUF): $($T_FILES)
-	@${TCC} -o $@ -ftest-coverage $< $(DEFINES) $(CFLAGS) $(LIBS) $(LDFLAGS)
-testc: tcc_c$(EXESUF)
-	@rm -f tcc_c.tcov
-	@USE_TCC_C=yes $(MAKE) -C tests
-testc2.%: tcc_c$(EXESUF)
-	@rm -f tcc_c.tcov
-	@USE_TCC_C=yes $(MAKE) -C tests/tests2 $@
-testcpp.%: tcc_c$(EXESUF)
-	@rm -f tcc_c.tcov
-	@USE_TCC_C=yes $(MAKE) -C tests/pp $@
+	$S$(TCC) tcc.c -o $@ -ftest-coverage $(DEFINES)
 
 clean:
-	@rm -f tcc$(EXESUF) tcc_c$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF) tags ETAGS *.pod
-	@rm -f *.o *.a *.so* *.out *.log lib*.def *.exe *.dll a.out *.dylib *_.h
+	@rm -f tcc$(EXESUF) tcc_c$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF)
+	@rm -f tags ETAGS *.o *.a *.so* *.out *.log lib*.def *.exe *.dll
+	@rm -f a.out *.dylib *_.h *.pod *.tcov
 	@$(MAKE) -s -C lib $@
 	@$(MAKE) -s -C tests $@
 
 distclean: clean
-	@rm -f config.h config.mak config.texi
-	@rm -f $(TCCDOCS)
+	@rm -vf config.h config.mak config.texi
+	@rm -vf $(TCCDOCS)
 
 .PHONY: all clean test tar tags ETAGS doc distclean install uninstall FORCE
 
 help:
 	@echo "make"
 	@echo "   build native compiler (from separate objects)"
-	@echo ""
 	@echo "make cross"
 	@echo "   build cross compilers (from one source)"
-	@echo ""
 	@echo "make ONE_SOURCE=no/yes SILENT=no/yes"
 	@echo "   force building from separate/one object(s), less/more silently"
-	@echo ""
 	@echo "make cross-TARGET"
 	@echo "   build one specific cross compiler for 'TARGET'. Currently supported:"
-	@echo "      $(wordlist 1,6,$(TCC_X))"
-	@echo "      $(wordlist 7,99,$(TCC_X))"
-	@echo ""
+	@echo "   $(wordlist 1,8,$(TCC_X))"
+	@echo "   $(wordlist 9,99,$(TCC_X))"
 	@echo "make test"
 	@echo "   run all tests"
-	@echo ""
-	@echo "make tests2.all / make tests2.37 / make tests2.37+ / make tests2.37-"
-	@echo "   run all/single test(s) from tests2, optionally update .expect, display"
-	@echo ""
+	@echo "make tests2.all / make tests2.37 / make tests2.37+"
+	@echo "   run all/single test(s) from tests2, optionally update .expect"
 	@echo "make testspp.all / make testspp.17"
 	@echo "   run all/single test(s) from tests/pp"
-	@echo ""
-	@echo "make testc / testc2.all / testc2.37 / testc2.37+ / testc2.37-"
-	@echo "make testcpp.all / make testcpp.17"
-	@echo "   run tests with code coverage. After test(s) see tcc_c.tcov"
-	@echo ""
+	@echo "make tcov-test / tcov-tests2... / tcov-testspp..."
+	@echo "   run tests as above with code coverage. After test(s) see tcc_c$(EXESUF).tcov"
 	@echo "Other supported make targets:"
 	@echo "   install install-strip doc clean tags ETAGS tar distclean help"
-	@echo ""
 	@echo "Custom configuration:"
 	@echo "   The makefile includes a file 'config-extra.mak' if it is present."
 	@echo "   This file may contain some custom configuration.  For example:"

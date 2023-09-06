@@ -7,6 +7,7 @@ bigz                   An infinite precision Z & Q library.
 gawk                   GNU awk.
 gmp                    Library for arbitrary precision arithmetic.
 gnumake                GNU makefile.
+gnu mes                using tinycc to bootstrap a system
 mpfr                   Multiple-precision floating-point library.
 mpc                    Complex floating-point library with exact rounding.
 mpv                    A free, open source, and cross-platform media player.
@@ -18,3 +19,50 @@ tcc                    Tiny CC which compiles itself.
 zlib                   Lossless data-compression library.
 
 (*) This list is ordered by name.
+
+
+
+Forks & Experiments
+-------------------
+
+arm-thumb target
+ by Erlend Sveen <erlend.sveen@hotmail.com>
+ https://git.erlendjs.no/erlendjs/tinycc.git
+
+riscv32 target
+ by Sam Ellicott <sellicott@cedarville.edu>
+ https://github.com/sellicott/tcc-riscv32.git
+
+Transputer target
+ by David Smith <agentdavo@mac.com>
+ https://github.com/agentdavo/tinycc-transputer
+
+tcc-65816 -  Tiny C Compiler for 65816 CPU (based on V0.9.23) from SNES-SDK
+ https://github.com/nArnoSNES/tcc-65816
+
+PE-UEFI arm64
+ by Andrei Warkentin <andrey.warkentin@gmail.com>
+ https://github.com/andreiw/tinycc/
+
+TCCLS - global register allocator (proof of concept)
+ by Sebastian Falbesoner <sebastian.falbesoner@gmail.com>
+ https://bitbucket.org/theStack/tccls_poc.git
+
+softfloat
+ by Giovanni Mascellani <gio@debian.org>
+ https://gitlab.com/giomasce/tinycc.git
+
+optimize 386
+ by Jason Hood <jadoxa@yahoo.com.au>
+
+tcctcl : tcl binding
+ https://code.google.com/archive/p/tcltcc/
+
+tcc4tcl : tcl binding
+ https://chiselapp.com/user/rkeene/repository/tcc4tcl/index
+
+lua-tcc : allows a Lua script to compile C code
+ https://github.com/javierguerragiraldez/lua-tcc
+
+tcclua : semi-high-level bindings for `libtcc`
+ https://github.com/nucular/tcclua/blob/master/tcc.lua

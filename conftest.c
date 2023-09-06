@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------- */
-#if C2STR
-
 /* with -D C2STR: convert tccdefs.h to C-strings */
+
+#if C2STR
 
 #include <stdio.h>
 #include <string.h>
@@ -166,14 +166,16 @@ int main(int argc, char **argv)
 }
 
 /* ----------------------------------------------------------------------- */
-#elif 1
-
 /* get some information from the host compiler for configure */
+
+#elif 1
 
 #include <stdio.h>
 
 #if defined(_WIN32)
 #include <fcntl.h>
+#include <io.h>
+int _CRT_glob = 0;
 #endif
 
 /* Define architecture */
@@ -231,10 +233,6 @@ int main(int argc, char **argv)
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_ABI
 #else
 # define TRIPLET TRIPLET_ARCH "-" TRIPLET_OS "-" TRIPLET_ABI
-#endif
-
-#if defined(_WIN32)
-int _CRT_glob = 0;
 #endif
 
 int main(int argc, char *argv[])

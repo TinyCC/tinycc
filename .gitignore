@@ -31,9 +31,9 @@ tags
 TAGS
 tcc.1
 *.pod
+*.tcov
 tcc-doc.html
 tcc-doc.info
-tcc_c.tcov
 
 win32/doc
 win32/examples/libtcc_test.c

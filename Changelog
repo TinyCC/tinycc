@@ -1,19 +1,26 @@
 version 0.9.28:
 
 User interface:
-- new tcc -ar x and t flags (herman ten brugge)
+- -b : bounds checker much improved (herman ten brugge)
+- -bt : support for standalone backtraces also (grischka)
+- -gdwarf : debug format (herman ten brugge)
+- -M, -MM, and -MMD (Arthur Williams)
+- -W[no-]error=<option> (Steffen Nurpmeso)
 
 Platforms:
-- new RISC-V (riscv64) target
-- native macOS support for x86_64/arm64 (Herman ten Brugge)
+- new RISC-V (riscv64) target (Michael Matz)
+- native macOS support for x86_64 (Michael Matz, Herman ten Brugge)
+- arm and riscv64 assemblers (Danny Milosavljevic)
+- Android support with position independent executables (grischka)
 
 Features:
-- Improved support for C11
-- C11 _Static_assert support (matthias)
+- _Static_assert() (matthias)
+- __attribute__ ((cleanup(func))) (matthias)
+- stdatomic (Dmitry Selyutin)
+- asm goto ("jmp %l[label]" : : : : label) (Michael Matz)
 
 Fixes:
-- fix preprocessor line (#line) directive (Herman ten Brugge)
-Many more! see also git shortlog release_0_9_27...HEAD
+- ... many, see git shortlog release_0_9_27...release_0_9_27
 
 Version 0.9.27:
 
