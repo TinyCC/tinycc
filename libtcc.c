@@ -1959,29 +1959,33 @@ dorun:
             break;
 #ifdef CONFIG_TCC_BACKTRACE
         case TCC_OPTION_bt:
-            s->rt_num_callers = atoi(optarg);
+            s->rt_num_callers = atoi(optarg); /* zero = default (6) */
+        enable_backtrace:
             s->do_backtrace = 1;
             s->do_debug = 1;
 	    s->dwarf = DWARF_VERSION;
             break;
-#endif
 #ifdef CONFIG_TCC_BCHECK
         case TCC_OPTION_b:
             s->do_bounds_check = 1;
-            s->do_backtrace = 1;
-            s->do_debug = 1;
-	    s->dwarf = DWARF_VERSION;
-            break;
+            goto enable_backtrace;
+#endif
 #endif
         case TCC_OPTION_g:
-            s->do_debug = 1;
+            s->do_debug = 2;
             s->dwarf = DWARF_VERSION;
-            if (strstart("dwarf", &optarg))
+            if (strstart("dwarf", &optarg)) {
                 s->dwarf = (*optarg) ? (0 - atoi(optarg)) : DEFAULT_DWARF_VERSION;
+            } else if (isnum(*optarg)) {
+                x = *optarg - '0';
+                /* -g0 = no info, -g1 = lines/functions only, -g2 = full info */
+                if (x <= 2)
+                    s->do_debug = x;
 #ifdef TCC_TARGET_PE
-            else if (0 == strcmp(".pdb", optarg))
+            } else if (0 == strcmp(".pdb", optarg)) {
                 s->dwarf = 5, s->do_debug |= 16;
 #endif
+            }
             break;
         case TCC_OPTION_c:
             x = TCC_OUTPUT_OBJ;

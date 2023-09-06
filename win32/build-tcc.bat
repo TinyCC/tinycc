@@ -156,7 +156,7 @@ call :makelib %T%
 @if errorlevel 1 goto :the_end
 @if exist %PX%-tcc.exe call :makelib %TX%
 @if errorlevel 1 goto :the_end
-.\tcc -m%T% -c ../lib/bcheck.c -o lib/bcheck.o -g
+.\tcc -m%T% -c ../lib/bcheck.c -o lib/bcheck.o -bt
 .\tcc -m%T% -c ../lib/bt-exe.c -o lib/bt-exe.o
 .\tcc -m%T% -c ../lib/bt-log.c -o lib/bt-log.o
 .\tcc -m%T% -c ../lib/bt-dll.c -o lib/bt-dll.o

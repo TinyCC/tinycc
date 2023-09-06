@@ -1245,8 +1245,9 @@ ST_FUNC void tcc_debug_fix_anon(TCCState *s1, CType *t)
 {
     int i, j, debug_type;
 
-    if (!s1->do_debug || !s1->dwarf || debug_info)
+    if (!(s1->do_debug & 2) || !s1->dwarf || debug_info)
 	return;
+
     if ((t->t & VT_BTYPE) == VT_STRUCT && t->ref->c != -1)
 	for (i = 0; i < n_debug_anon_hash; i++)
 	    if (t->ref == debug_anon_hash[i].type) {
@@ -1789,8 +1790,10 @@ static void tcc_debug_finish (TCCState *s1, struct _debug_info *cur)
 ST_FUNC void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e)
 {
     CString debug_str;
-    if (!s1->do_debug)
+
+    if (!(s1->do_debug & 2))
         return;
+
     cstr_new (&debug_str);
     for (; s != e; s = s->prev) {
         if (!s->v || (s->r & VT_VALMASK) != VT_LOCAL)
@@ -1931,8 +1934,9 @@ ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
 
 ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bind, int sym_type)
 {
-    if (!s1->do_debug)
+    if (!(s1->do_debug & 2))
         return;
+
     if (sym_type == STT_FUNC || sym->v >= SYM_FIRST_ANOM)
         return;
     if (s1->dwarf) {
@@ -1984,8 +1988,9 @@ ST_FUNC void tcc_debug_extern_sym(TCCState *s1, Sym *sym, int sh_num, int sym_bi
 
 ST_FUNC void tcc_debug_typedef(TCCState *s1, Sym *sym)
 {
-    if (!s1->do_debug)
+    if (!(s1->do_debug & 2))
         return;
+
     if (s1->dwarf) {
 	int debug_type;
 

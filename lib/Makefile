@@ -84,7 +84,7 @@ $(X)%.o : %.S
 $(TOP)/%.o : %.c
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
-$(TOP)/bcheck.o : XFLAGS += -g $(if $(CONFIG_musl),-DTCC_MUSL)
+$(TOP)/bcheck.o : XFLAGS += -bt $(if $(CONFIG_musl),-DTCC_MUSL)
 $(TOP)/bt-exe.o : $(TOP)/tccrun.c
 
 $(X)crt1w.o : crt1.c
