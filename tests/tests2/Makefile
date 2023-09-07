@@ -55,8 +55,10 @@ endif
 
 # Some tests might need arguments
 ARGS =
+ifneq (-$(CONFIG_WIN32)-,-yes-)
 22_floating_point.test: FLAGS += -lm
 24_math_library.test: FLAGS += -lm
+endif
 31_args.test : ARGS = arg1 arg2 arg3 arg4 arg5
 46_grep.test : ARGS = '[^* ]*[:a:d: ]+\:\*-/: $$' $(SRC)/46_grep.c
 
