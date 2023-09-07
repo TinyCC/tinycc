@@ -265,8 +265,8 @@ PUB_FUNC void tcc_free(void *ptr)
 PUB_FUNC void *tcc_malloc(unsigned long size)
 {
     void *ptr;
-    ptr = malloc(size);
-    if (!ptr && size)
+    ptr = malloc(size ? size : 1);
+    if (!ptr)
         mem_error("memory full (malloc)");
     return ptr;
 }
@@ -283,9 +283,15 @@ PUB_FUNC void *tcc_mallocz(unsigned long size)
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 {
     void *ptr1;
-    ptr1 = realloc(ptr, size);
-    if (!ptr1 && size)
-        mem_error("memory full (realloc)");
+    if (size == 0) {
+	free(ptr);
+	ptr1 = NULL;
+    }
+    else {
+        ptr1 = realloc(ptr, size);
+        if (!ptr1)
+            mem_error("memory full (realloc)");
+    }
     return ptr1;
 }
 
