@@ -134,7 +134,7 @@ typedef struct {
        __atomic_compare_exchange(ptr, expected, &tmp, 1, success, failure); \
     })
 #define atomic_compare_exchange_weak(object, expected, desired)           \
-    atomic_compare_exchange_weak_explicit (PTR, VAL, DES,                 \
+    atomic_compare_exchange_weak_explicit (object, expected, desired,     \
                                            __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 
 #define atomic_fetch_add(object, operand) \
