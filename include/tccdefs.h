@@ -145,9 +145,10 @@
     #define __INT32_TYPE__ int
 
 #if !defined _WIN32
-    /* glibc defines */
+    /* glibc defines. We do not support __USER_NAME_PREFIX__ */
     #define __REDIRECT(name, proto, alias) name proto __asm__ (#alias)
     #define __REDIRECT_NTH(name, proto, alias) name proto __asm__ (#alias) __THROW
+    #define __REDIRECT_NTHNL(name, proto, alias) name proto __asm__ (#alias) __THROWNL
 #endif
 
     /* skip __builtin... with -E */
