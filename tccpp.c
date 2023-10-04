@@ -98,8 +98,11 @@ static void next_nomacro(void);
 
 ST_FUNC void skip(int c)
 {
-    if (tok != c)
-        tcc_error("'%c' expected (got \"%s\")", c, get_tok_str(tok, &tokc));
+    if (tok != c) {
+        char tmp[40];
+        pstrcpy(tmp, sizeof tmp, get_tok_str(c, &tokc));
+        tcc_error("'%s' expected (got \"%s\")", tmp, get_tok_str(tok, &tokc));
+	}
     next();
 }
 
