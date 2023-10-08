@@ -8661,6 +8661,16 @@ static int decl(int l)
                         else if (l == VT_CONST)
                             /* uninitialized global variables may be overridden */
                             type.t |= VT_EXTERN;
+
+                        if (ad.alias_target && 1) {
+                            Sym *alias_target = sym_find(ad.alias_target);
+                            ElfSym *esym = elfsym(alias_target);
+                            if (!esym) tcc_error("unsupported forward __alias__ attribute");
+                            sym = external_sym(v, &type, r, &ad);
+                            put_extern_sym2(sym, esym->st_shndx,
+                                            esym->st_value, esym->st_size, 1);
+                        }
+
                         decl_initializer_alloc(&type, &ad, r, has_init, v, l == VT_CONST);
                     }
                 }
