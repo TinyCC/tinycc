@@ -176,6 +176,11 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
         if (sym->st_shndx == SHN_UNDEF
             && ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
             sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
+	/* An ELF relocatable file should have the types of its undefined global symbol set
+	   to STT_NOTYPE or it will confuse binutils bfd */
+        if (s1->output_format == TCC_OUTPUT_FORMAT_ELF && s1->output_type == TCC_OUTPUT_OBJ)
+            if (sym->st_shndx == SHN_UNDEF && ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL)
+                sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(STT_NOTYPE));
         tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
             sym->st_other, sym->st_shndx, (char*)s->link->data + sym->st_name);
     }
