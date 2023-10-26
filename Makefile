@@ -55,8 +55,8 @@ else
       # `make test' when libtcc.dylib is used (configure --disable-static), so
       # we bake a relative path into the binary. $libdir is used after install.
       LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)" -Wl,-rpath,"$(libdir)"
-      DYLIBVER += -current_version $(VERSION)
-      DYLIBVER += -compatibility_version $(VERSION)
+      DYLIBVER += -current_version $(MACOS_DYLIB_VERSION)
+      DYLIBVER += -compatibility_version $(MACOS_DYLIB_VERSION)
     endif
   endif
  endif
