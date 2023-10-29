@@ -81,7 +81,7 @@ all test :
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
-	$(TCC) $< -o hello$(EXESUF) && ./hello$(EXESUF) || $(DUMPTCC)
+	$(TCC) $< -o hello$(EXESUF) && $(CODESIGN) hello$(EXESUF) && ./hello$(EXESUF) || $(DUMPTCC)
 
 hello-run: ../examples/ex1.c
 	@echo ------------ $@ ------------
@@ -156,7 +156,9 @@ test4_static: tcctest.c test.ref
 dlltest:
 	@echo ------------ $@ ------------
 	$(TCC) $(NATIVE_DEFINES) -DLIBTCC_AS_DLL $(TOPSRC)/libtcc.c $(LIBS) -shared -o libtcc2$(DLLSUF)
+	$(CODESIGN) libtcc2$(DLLSUF)
 	$(TCC) $(NATIVE_DEFINES) -DONE_SOURCE=0 $(TOPSRC)/tcc.c libtcc2$(DLLSUF) $(LIBS) -Wl,-rpath=. -o tcc2$(EXESUF)
+	$(CODESIGN) tcc2$(EXESUF)
 	./tcc2$(EXESUF) $(TCCFLAGS) $(RUN_TCC) -run $(TOPSRC)/examples/ex1.c
 ifeq (,$(filter Darwin WIN32,$(TARGETOS)))
 	@echo ------------ $@ with PIC ------------
@@ -241,6 +243,7 @@ abitest-cc.exe: abitest.c $(LIBTCC)
 
 abitest-tcc.exe: abitest.c libtcc.c
 	$(TCC) -o $@ $^ $(NATIVE_DEFINES) $(LIBS)
+	$(CODESIGN) $@
 
 abitest-% : abitest-%.exe
 	@echo ------------ $@ ------------
@@ -253,6 +256,7 @@ endif
 
 vla_test$(EXESUF): vla_test.c
 	$(TCC) -o $@ $^
+	$(CODESIGN) $@
 
 vla_test-run: vla_test$(EXESUF)
 	@echo ------------ $@ ------------
