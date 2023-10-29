@@ -124,6 +124,7 @@
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     #define __FINITE_MATH_ONLY__ 1
     #define _FORTIFY_SOURCE 0
+    #define __has_builtin(x) 0
 
 #elif defined __ANDROID__
     #define  BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
