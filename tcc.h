@@ -796,6 +796,7 @@ struct TCCState {
     unsigned char just_deps; /* option -M  */
     unsigned char gen_deps; /* option -MD  */
     unsigned char include_sys_deps; /* option -MD  */
+    unsigned char gen_phony_deps; /* option -MP */
 
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;

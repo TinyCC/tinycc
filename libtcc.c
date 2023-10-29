@@ -1613,6 +1613,7 @@ enum {
     TCC_OPTION_MF,
     TCC_OPTION_MM,
     TCC_OPTION_MMD,
+    TCC_OPTION_MP,
     TCC_OPTION_x,
     TCC_OPTION_ar,
     TCC_OPTION_impdef,
@@ -1693,6 +1694,7 @@ static const TCCOption tcc_options[] = {
     { "MF", TCC_OPTION_MF, TCC_OPTION_HAS_ARG },
     { "MM", TCC_OPTION_MM, 0},
     { "MMD", TCC_OPTION_MMD, 0},
+    { "MP", TCC_OPTION_MP, 0},
     { "x", TCC_OPTION_x, TCC_OPTION_HAS_ARG },
     { "ar", TCC_OPTION_ar, 0},
 #ifdef TCC_TARGET_PE
@@ -2132,6 +2134,9 @@ dorun:
             break;
         case TCC_OPTION_MF:
             s->deps_outfile = tcc_strdup(optarg);
+            break;
+        case TCC_OPTION_MP:
+            s->gen_phony_deps = 1;
             break;
         case TCC_OPTION_dumpversion:
             printf ("%s\n", TCC_VERSION);

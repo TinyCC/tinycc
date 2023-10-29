@@ -624,6 +624,22 @@ ST_FUNC int gen_makedeps(TCCState *s1, const char *target, const char *filename)
     next:;
     }
     fprintf(depout, "\n");
+    if (s1->gen_phony_deps) {
+        /* Skip first file, which is the c file.
+         * This will still print any additional c files specified
+         * on command-line, but e.g. clang produces broken dependency
+         * files in this case as well, printing only dependencies for last
+         * file in command line. So ignore this case. */
+        for (i = 1; i<s1->nb_target_deps; ++i) {
+            for (k = 0; k < i; ++k)
+                if (0 == strcmp(s1->target_deps[i], s1->target_deps[k]))
+                    goto next2;
+            escaped_target = escape_target_dep(s1->target_deps[i]);
+            fprintf(depout, "%s:\n", escaped_target);
+            tcc_free(escaped_target);
+        next2:;
+        }
+    }
     fclose(depout);
     return 0;
 }
