@@ -78,6 +78,7 @@ typedef struct {
 } atomic_flag;
 
 #define ATOMIC_FLAG_INIT {0}
+#define ATOMIC_VAR_INIT(value) (value)
 
 #define atomic_flag_test_and_set_explicit(object, order)                  \
     __atomic_test_and_set((void *)(&((object)->value)), order)
