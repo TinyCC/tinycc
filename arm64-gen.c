@@ -53,12 +53,11 @@
 #include <assert.h>
 
 ST_DATA const char * const target_machine_defs =
+    "__aarch64__\0"
 #if defined(TCC_TARGET_MACHO)
-    "__aarch64__\0"
     "__arm64__\0"
-#else
-    "__aarch64__\0"
 #endif
+    "__AARCH64EL__\0"
     ;
 
 ST_DATA const int reg_classes[NB_REGS] = {
