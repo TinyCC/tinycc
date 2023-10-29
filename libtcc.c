@@ -1582,6 +1582,7 @@ enum {
     TCC_OPTION_ba,
     TCC_OPTION_g,
     TCC_OPTION_c,
+    TCC_OPTION_dumpmachine,
     TCC_OPTION_dumpversion,
     TCC_OPTION_d,
     TCC_OPTION_static,
@@ -1659,6 +1660,7 @@ static const TCCOption tcc_options[] = {
 #ifdef TCC_TARGET_MACHO
     { "dynamiclib", TCC_OPTION_dynamiclib, 0 },
 #endif
+    { "dumpmachine", TCC_OPTION_dumpmachine, 0},
     { "dumpversion", TCC_OPTION_dumpversion, 0},
     { "d", TCC_OPTION_d, TCC_OPTION_HAS_ARG | TCC_OPTION_NOSEP },
     { "static", TCC_OPTION_static, 0 },
@@ -2137,6 +2139,40 @@ dorun:
             break;
         case TCC_OPTION_MP:
             s->gen_phony_deps = 1;
+            break;
+        case TCC_OPTION_dumpmachine:
+            /* this is a best guess, please refine as necessary */
+            printf("%s",
+#ifdef TCC_TARGET_I386
+                   "i386-pc"
+#elif defined TCC_TARGET_X86_64
+                   "x86_64-pc"
+#elif defined TCC_TARGET_C67
+                   "c67"
+#elif defined TCC_TARGET_ARM
+                   "arm"
+#elif defined TCC_TARGET_ARM64
+                   "aarch64"
+#elif defined TCC_TARGET_RISCV64
+                   "riscv64"
+#endif
+                   "-"
+#ifdef TCC_TARGET_PE
+                   "mingw32"
+#elif defined(TCC_TARGET_MACHO)
+                   "apple-darwin"
+#elif TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
+                   "freebsd"
+#elif TARGETOS_OpenBSD
+                   "openbsd"
+#elif TARGETOS_NetBSD
+                   "netbsd"
+#else
+                   "linux-gnu"
+#endif
+                   "\n"
+                   );
+            exit(0);
             break;
         case TCC_OPTION_dumpversion:
             printf ("%s\n", TCC_VERSION);
