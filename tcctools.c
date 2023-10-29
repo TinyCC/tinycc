@@ -82,6 +82,7 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
     ArHdr arhdro = arhdr_init;
 
     FILE *fi, *fh = NULL, *fo = NULL;
+    const char *created_file = NULL; // must delete on error
     ElfW(Ehdr) *ehdr;
     ElfW(Shdr) *shdr;
     ElfW(Sym) *sym;
@@ -187,6 +188,7 @@ finish:
         fprintf(stderr, "tcc: ar: can't create file %s\n", argv[i_lib]);
         goto the_end;
     }
+    created_file = argv[i_lib];
 
     sprintf(tfile, "%s.tmp", argv[i_lib]);
     if ((fo = fopen(tfile, "wb+")) == NULL)
@@ -334,6 +336,8 @@ the_end:
         tcc_free(afpos);
     if (fh)
         fclose(fh);
+    if (created_file && ret != 0)
+        remove(created_file);
     if (fo)
         fclose(fo), remove(tfile);
     return ret;
