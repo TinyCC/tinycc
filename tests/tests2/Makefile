@@ -105,11 +105,8 @@ GEN-ALWAYS =
 # this test creates two DLLs and an EXE
 113_btdll.test: T1 = \
     $(TCC) -bt $1 -shared -D DLL=1 -o a1$(DLLSUF) && \
-    $(CODESIGN) a1$(DLLSUF) && \
     $(TCC) -bt $1 -shared -D DLL=2 -o a2$(DLLSUF) && \
-    $(CODESIGN) a2$(DLLSUF) && \
     $(TCC) -bt $1 a1$(DLLSUF) a2$(DLLSUF) -Wl,-rpath=. -o $(basename $@).exe && \
-    $(CODESIGN) $(basename $@).exe && \
     ./$(basename $@).exe
 
 114_bound_signal.test: FLAGS += -b
@@ -139,7 +136,7 @@ all test tests2.all: $(filter-out $(SKIP),$(TESTS))
 	@$(call T1,$<) $(T3)
 
 T1 = $(TCC) $(FLAGS) $(T2) $(ARGS)
-T2 = $(if $(NORUN),$1 -o $(basename $@).exe && $(CODESIGN) $(basename $@).exe && ./$(basename $@).exe,-run $1)
+T2 = $(if $(NORUN),$1 -o $(basename $@).exe && ./$(basename $@).exe,-run $1)
 T3 = $(FILTER) >$*.output 2>&1 || true \
      && diff -Nbu $(filter %.expect,$^) $*.output \
      && rm -f $*.output $(filter $*.expect,$(GEN-ALWAYS))
@@ -180,4 +177,4 @@ $(sort $(GEN-ALWAYS) $(UPDATE)) : force
 force:
 
 clean :
-	rm -f fred.txt *.output *.exe *.dll *.so *.dylib *.def $(GEN-ALWAYS)
+	rm -f fred.txt *.output *.exe *.dll *.so *.def $(GEN-ALWAYS)
