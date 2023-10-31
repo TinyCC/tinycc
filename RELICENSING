@@ -42,6 +42,7 @@
  mingodad                   YES
  Pip Cet                    YES
  Shinichiro Hamaji          YES                 x86_64-gen.c
+ Steffen Nurpmeso           YES
  Vincent Lefèvre            YES
  Thomas Preud'homme         YES                 arm-gen.c
  Timo VJ Lähde (Timppa)     ?                   tiny_libmaker.c
