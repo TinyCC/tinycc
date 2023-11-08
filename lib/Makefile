@@ -14,6 +14,7 @@ XAR = $(XTCC) -ar
 XFLAGS-unx = -B$(TOPSRC)
 XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
 XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
+BFLAGS = -bt
 XCFG = $(or $(findstring -win,$T),-unx)
 S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
 
@@ -28,6 +29,7 @@ ifeq "$($(T)-libtcc1-usegcc)" "yes"
  XCC = $(CC)
  XAR = $(AR)
  XFLAGS = $(CFLAGS) -fPIC -gdwarf -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable
+ BFLAGS = -g
 endif
 
 ifneq ($(CONFIG_backtrace),no)
@@ -84,7 +86,7 @@ $(X)%.o : %.S
 $(TOP)/%.o : %.c
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
-$(TOP)/bcheck.o : XFLAGS += -bt $(if $(CONFIG_musl),-DTCC_MUSL)
+$(TOP)/bcheck.o : XFLAGS += $(BFLAGS) $(if $(CONFIG_musl),-DTCC_MUSL)
 $(TOP)/bt-exe.o : $(TOP)/tccrun.c
 
 $(X)crt1w.o : crt1.c
