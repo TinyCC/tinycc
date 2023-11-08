@@ -2235,7 +2235,7 @@ ST_FUNC int macho_output_file(TCCState *s1, const char *filename)
 
     fclose(fp);
 #ifdef CONFIG_CODESIGN
-    {
+    if (!ret) {
 	char command[1024];
 	int retval;
 
