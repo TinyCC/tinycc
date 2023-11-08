@@ -1972,7 +1972,7 @@ dorun:
             s->rt_num_callers = atoi(optarg); /* zero = default (6) */
         enable_backtrace:
             s->do_backtrace = 1;
-            s->do_debug = 1;
+            s->do_debug = s->do_debug ? s->do_debug : 1;
 	    s->dwarf = DWARF_VERSION;
             break;
 #ifdef CONFIG_TCC_BCHECK
@@ -1989,8 +1989,7 @@ dorun:
             } else if (isnum(*optarg)) {
                 x = *optarg - '0';
                 /* -g0 = no info, -g1 = lines/functions only, -g2 = full info */
-                if (x <= 2)
-                    s->do_debug = x;
+                s->do_debug = x > 2 ? 2 : x == 0 && s->do_backtrace ? 1 : x;
 #ifdef TCC_TARGET_PE
             } else if (0 == strcmp(".pdb", optarg)) {
                 s->dwarf = 5, s->do_debug |= 16;
