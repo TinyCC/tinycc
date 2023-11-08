@@ -471,7 +471,7 @@ tcov-tes% : tcc_c$(EXESUF)
 	@rm -f $<.tcov
 	@$(MAKE) --no-print-directory TCC_LOCAL=$(CURDIR)/$< tes$*
 tcc_c$(EXESUF): $($T_FILES)
-	$S$(TCC) tcc.c -o $@ -ftest-coverage $(DEFINES)
+	$S$(TCC) tcc.c -o $@ -ftest-coverage $(DEFINES) $(LIBS)
 
 clean:
 	@rm -f tcc$(EXESUF) tcc_c$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF)
