@@ -3877,8 +3877,9 @@ static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)
             if (ret)
                 goto lib_parse_error;
         } else {
-            /* TODO: Implement AS_NEEDED support. Ignore it for now */
-            if (!as_needed) {
+            /* TODO: Implement AS_NEEDED support. */
+	    /*       DT_NEEDED is not used any more so ignore as_needed */
+            if (1 || !as_needed) {
                 ret = ld_add_file(s1, filename);
                 if (ret)
                     goto lib_parse_error;
