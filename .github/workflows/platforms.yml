@@ -1,0 +1,57 @@
+name: platforms - armv7, aarch64, riscv64, etc...
+
+on:
+  pull_request:
+    branches: [ mob ]
+  workflow_dispatch:
+
+jobs:
+  qemu:
+    name: cmake tcc - ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        #  - target: armhf
+        #    arch: armv7
+          - target: arm64
+            arch: aarch64
+          - target: riscv64
+            arch: riscv64
+    steps:
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro:  ubuntu_latest
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y autoconf automake libtool cmake build-essential
+          env: |
+            # Valgrind on arm will fail if the stack size is larger than 8MB.
+            # Set QEMUs stack size to 8MB since Github runners use 16MB default.
+            QEMU_STACK_SIZE: 8388608
+          run: |
+            mkdir build
+            cd build
+            case "${{ matrix.target }}" in
+                riscv64)
+                ln -s /usr/include/riscv64-linux-gnu/bits /usr/include
+                ln -s /usr/include/riscv64-linux-gnu/sys /usr/include
+                ;;
+                aarch64)
+                ln -s /usr/include/aarch64-linux-gnu/bits /usr/include
+                ln -s /usr/include/aarch64-linux-gnu/sys /usr/include
+                ;;
+                armhf)
+                ln -s /usr/include/arm-linux-gnueabihf/bits /usr/include
+                ln -s /usr/include/arm-linux-gnueabihf/sys /usr/include
+                ln -s /usr/include/arm-linux-gnueabihf/gnu /usr/include
+                ln -s /usr/include/arm-linux-gnueabihf/asm /usr/include
+                ;;
+            esac
+            cmake -DCMAKE_BUILD_TYPE=Debug ..
+            cmake --build .
+            ctest -C Debug
+            cat Testing/Temporary/LastTest.log

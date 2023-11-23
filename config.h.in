@@ -1,0 +1,16 @@
+#ifndef CONFIG_TCCDIR
+#define CONFIG_TCCDIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+#endif
+
+#ifndef TCC_VERSION
+#define TCC_VERSION "${TCC_VERSION}"
+#endif
+
+#cmakedefine CONFIG_WIN32
+#cmakedefine CONFIG_WIN64
+#cmakedefine CONFIG_TCC_VERSION
+#cmakedefine CONFIG_TCC_BCHECK
+#cmakedefine CONFIG_TCC_ASSERT
+#cmakedefine CONFIG_GCC_MINOR
+#cmakedefine CONFIG_GCC_MAJOR
+#cmakedefine CONFIG_CC_NAME

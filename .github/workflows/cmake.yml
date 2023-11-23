@@ -1,0 +1,92 @@
+name: cmake build and run ctest
+
+on:
+  pull_request:
+    branches: [ mob ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Windows (${{ matrix.arch }})
+    runs-on: windows-2019
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, Win32]
+    steps:
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - uses: actions/checkout@v3
+      - name: Configure & build
+        run: |
+            mkdir build
+            cd build
+            cmake .. -A ${{ matrix.arch }}
+            cmake --build . --config Debug
+      - name: Run ctest
+        shell: cmd
+        run: |
+            cd build
+            ctest -C Debug
+      - name: ctest log
+        run: |
+            cd build
+            cat Testing/Temporary/LastTest.log
+
+  build-macos:
+    name: macOS
+    runs-on: macos-11
+    steps:
+      - uses: actions/checkout@v3
+      - name: Find includes
+        run: |
+            gcc -v -xc++ /dev/null -fsyntax-only
+            sudo ln -s /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+      - name: Configure & build
+        run: |
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Debug ..
+            cmake --build .
+      - name: Run ctest
+        run: |
+            cd build
+            ctest -C Debug
+      - name: ctest log
+        run: |
+            cd build
+            cat Testing/Temporary/LastTest.log
+
+  build-linux:
+    name: Linux ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: amd64
+            flags: -m64
+        #  - target: x86
+        #    flags: -m32
+    steps:
+      - uses: actions/checkout@v3
+      - name: Prepare
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update -q -y
+          sudo apt-get install -y gcc-multilib g++-multilib valgrind libc6-dbg libc6-dbg:i386
+      - name: Configure & build
+        run: |
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS=${{ matrix.flags }} ..
+            cmake --build .
+      - name: Run ctest
+        run: |
+            cd build
+            ctest -C Debug
+      - name: ctest log
+        run: |
+            cd build
+            cat Testing/Temporary/LastTest.log
