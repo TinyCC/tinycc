@@ -162,7 +162,7 @@ find_package (Threads)
 ################################################################################
 # TCC compiler as library
 
-add_library(libtcc STATIC ${CODE_GENERATOR_SRCS})
+add_library(libtcc SHARED ${CODE_GENERATOR_SRCS})
 target_compile_definitions(libtcc
     PRIVATE ONE_SOURCE=0
     PUBLIC "${NATIVE_TARGET}="
@@ -239,7 +239,7 @@ elseif (UNIX)
                 CONFIG_TRIPLET=\"arm-linux-gnueabi\")
         endif()
     endif()
-    target_link_libraries(libtcc PRIVATE
+    target_link_libraries(libtcc PUBLIC
         dl ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
@@ -255,8 +255,12 @@ set_target_properties(libtcc PROPERTIES
 ################################################################################
 # TCC compiler as executable
 
+if(WIN32)
+    add_definitions(-DLIBTCC_AS_DLL -D_CRT_SECURE_NO_DEPRECATE)
+endif()
+
 add_executable(tcc ${TCC_DIR}/tcc.c)
-target_link_libraries(tcc PRIVATE libtcc)
+target_link_libraries(tcc PUBLIC libtcc)
 
 ################################################################################
 # Runtime Library (libtcc1-xx.a)
@@ -373,11 +377,11 @@ add_subdirectory(tests)
 if(WIN32)
   file(GLOB WIN32_DEFS win32/lib/*.def)
   install(FILES ${WIN32_DEFS} DESTINATION lib)
-  install(FILES tcclib.h DESTINATION include)
+  install(FILES tcclib.h libtcc.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION include)
   install(DIRECTORY win32/include/ DESTINATION include)
   install(FILES ${LIB_DIR}/libtcc1-${CMAKE_TARGET_ARCHITECTURES}.a DESTINATION lib)
-  install(FILES libtcc.h DESTINATION lib)
+  install(TARGETS libtcc DESTINATION lib)
 else()
   install(FILES libtcc.h tcclib.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION lib/tcc/include)
