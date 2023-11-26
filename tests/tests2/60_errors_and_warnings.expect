@@ -23,7 +23,7 @@
 [returns 1]
 
 [test_61_undefined_enum]
-60_errors_and_warnings.c:46: error: unknown type size
+60_errors_and_warnings.c:46: error: initialization of incomplete type
 
 [test_74_non_const_init]
 60_errors_and_warnings.c:49: error: initializer element is not constant
@@ -228,3 +228,6 @@ arg[1] = "Y"
 
 [test_error_string]
 60_errors_and_warnings.c:464: error: #error \123\456
+
+[test_error_incomplete_type]
+60_errors_and_warnings.c:472: error: initialization of incomplete type

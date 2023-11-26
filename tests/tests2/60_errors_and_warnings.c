@@ -463,4 +463,17 @@ int main() {
 #error \123\\
 456
 
+#elif defined test_error_incomplete_type
+struct A;
+void f(struct A *);
+
+int main()
+{
+    f(&(struct A){});
+}
+
+struct A {
+    int x;
+};
+
 #endif
