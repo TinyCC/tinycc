@@ -597,8 +597,9 @@ static char *escape_target_dep(const char *s) {
 ST_FUNC int gen_makedeps(TCCState *s1, const char *target, const char *filename)
 {
     FILE *depout;
-    char buf[1024], *escaped_target;
-    int i, k;
+    char buf[1024];
+    char **escaped_targets;
+    int i, k, num_targets;
 
     if (!filename) {
         /* compute filename automatically: dir/file.o -> dir/file.d */
@@ -617,33 +618,30 @@ ST_FUNC int gen_makedeps(TCCState *s1, const char *target, const char *filename)
     if (s1->verbose)
         printf("<- %s\n", filename);
 
-    fprintf(depout, "%s:", target);
+    escaped_targets = tcc_malloc(s1->nb_target_deps * sizeof(*escaped_targets));
+    num_targets = 0;
     for (i = 0; i<s1->nb_target_deps; ++i) {
         for (k = 0; k < i; ++k)
             if (0 == strcmp(s1->target_deps[i], s1->target_deps[k]))
                 goto next;
-        escaped_target = escape_target_dep(s1->target_deps[i]);
-        fprintf(depout, " \\\n  %s", escaped_target);
-        tcc_free(escaped_target);
+        escaped_targets[num_targets++] = escape_target_dep(s1->target_deps[i]);
     next:;
     }
+
+    fprintf(depout, "%s:", target);
+    for (i = 0; i < num_targets; ++i)
+        fprintf(depout, " \\\n  %s", escaped_targets[i]);
     fprintf(depout, "\n");
     if (s1->gen_phony_deps) {
         /* Skip first file, which is the c file.
-         * This will still print any additional c files specified
-         * on command-line, but e.g. clang produces broken dependency
-         * files in this case as well, printing only dependencies for last
-         * file in command line. So ignore this case. */
-        for (i = 1; i<s1->nb_target_deps; ++i) {
-            for (k = 0; k < i; ++k)
-                if (0 == strcmp(s1->target_deps[i], s1->target_deps[k]))
-                    goto next2;
-            escaped_target = escape_target_dep(s1->target_deps[i]);
-            fprintf(depout, "%s:\n", escaped_target);
-            tcc_free(escaped_target);
-        next2:;
-        }
+         * Only works for single file give on command-line,
+         * but other compilers have the same limitation */
+        for (i = 1; i < num_targets; ++i)
+            fprintf(depout, "%s:\n", escaped_targets[i]);
     }
+    for (i = 0; i < num_targets; ++i)
+        tcc_free(escaped_targets[i]);
+    tcc_free(escaped_targets);
     fclose(depout);
     return 0;
 }
