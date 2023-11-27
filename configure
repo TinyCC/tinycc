@@ -191,7 +191,7 @@ Advanced options (experts only):
   --config-bcheck=no       disable bounds checker (-b)
   --config-predefs=no      do not compile tccdefs.h, instead just include
   --config-new_macho=no|yes Force apple object format (autodetect osx <= 10)
-  --config-codesign        Use codesign on apple to sign executables
+  --config-codesign=no     do not use codesign on apple to sign executables
   --dwarf=x                Use dwarf debug info instead of stabs (x=2..5)
 
 Cross build options (experimental):
@@ -320,6 +320,7 @@ case $targetos in
   Darwin)
     dwarf=4
     confvars="$confvars OSX"
+    default_conf "codesign"
     DLLSUF=".dylib"
     if test -z "$build_cross"; then
       cc=`command -v cc`
