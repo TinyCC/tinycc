@@ -16,6 +16,7 @@ endif()
 message(STATUS "Installing to ${CMAKE_INSTALL_PREFIX}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_MODULE_PATH})
+set(CMAKE_INSTALL_CONFIG_NAME ${CMAKE_BUILD_TYPE})
 
 include(TargetArch)
 
@@ -353,7 +354,7 @@ foreach(LIB_SRCFILE ${LIB_SRCFILES})
     get_filename_component(LIB_SRCFILE_NOEXT ${LIB_SRCFILE} NAME_WE)
     add_custom_command(
         OUTPUT ${LIB_DIR}/${LIB_SRCFILE_NOEXT}.o
-        COMMAND tcc -s -DCONFIG_TCC_STATIC -fPIC -gdwarf -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable ${TCC_INCLUDE_DIRS}
+        COMMAND tcc -s -DCONFIG_TCC_STATIC -fPIC -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable ${TCC_INCLUDE_DIRS}
                     -L ${LIB_DIR}
                     -c ${LIB_SRCFILE}
                     -o ${LIB_DIR}/${LIB_SRCFILE_NOEXT}.o
@@ -362,6 +363,19 @@ foreach(LIB_SRCFILE ${LIB_SRCFILES})
         COMMENT "Compiling Runtime Library (${LIB_SRCFILE})")
     list(APPEND LIB_OBJFILES ${LIB_DIR}/${LIB_SRCFILE_NOEXT}.o)
 endforeach()
+
+#if(WIN32)
+#    add_custom_command(
+#        OUTPUT ${TCC_DIR}/win32/pthreads4w/pthread.o
+#        COMMAND tcc -s -Ox -DCONFIG_TCC_STATIC -fPIC -fno-omit-frame-pointer -Wno-unused-function -Wno-unused-variable -DHAVE_CONFIG_H -D_REENTRANT ${TCC_INCLUDE_DIRS}
+#                    -L ${LIB_DIR}
+#                    -c ${TCC_DIR}/win32/pthreads4w/pthread.c
+#                    -o ${TCC_DIR}/win32/pthreads4w/pthread.o
+#        MAIN_DEPENDENCY ${TCC_DIR}/win32/pthreads4w/pthread.c
+#        VERBATIM
+#        COMMENT "Compiling Runtime Library (${TCC_DIR}/win32/pthreads4w/pthread.c)")
+#    list(APPEND LIB_OBJFILES ${TCC_DIR}/win32/pthreads4w/pthread.o)
+#endif()
 
 # link all objects files to archive file
 add_custom_target(
