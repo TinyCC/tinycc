@@ -7996,6 +7996,11 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
        toplevel array or the last member of the toplevel struct */
 
     if (size < 0) {
+        // error out except for top-level incomplete arrays
+        // (arrays of incomplete types are handled in array parsing)
+        if (!(type->t & VT_ARRAY))
+            tcc_error("initialization of incomplete type");
+
         /* If the base type itself was an array type of unspecified size
            (like in 'typedef int arr[]; arr x = {1};') then we will
            overwrite the unknown size by the real one for this decl.

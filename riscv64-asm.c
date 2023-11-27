@@ -112,6 +112,7 @@ typedef struct Operand {
 } Operand;
 
 static void asm_emit_i(int token, uint32_t opcode, const Operand* rd, const Operand* rs1, const Operand* rs2);
+static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Operand* rs2);
 
 /* Parse a text containing operand and store the result in OP */
 static void parse_operand(TCCState *s1, Operand *op)
@@ -218,7 +219,7 @@ static void asm_binary_opcode(TCCState* s1, int token)
         asm_emit_u(token, (0x05 << 2) | 3, &ops[0], &ops[1]);
         return;
     case TOK_ASM_jal:
-        asm_emit_u(token, 0x6f, ops, ops + 1);
+        asm_emit_j(token, 0x6f, ops, ops + 1);
         return;
     default:
         expect("binary instruction");
@@ -273,6 +274,40 @@ static void asm_emit_i(int token, uint32_t opcode, const Operand* rd, const Oper
 	     6...0 opcode */
 
     gen_le32(opcode | ENCODE_RD(rd->reg) | ENCODE_RS1(rs1->reg) | (rs2->e.v << 20));
+}
+
+static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Operand* rs2)
+{
+    uint64_t imm;
+
+    if (rd->type != OP_REG) {
+        tcc_error("'%s': Expected destination operand that is a register", get_tok_str(token, NULL));
+        return;
+    }
+    if (rs2->type != OP_IM12S && rs2->type != OP_IM32) {
+        tcc_error("'%s': Expected second source operand that is an immediate value", get_tok_str(token, NULL));
+        return;
+    }
+
+    imm = rs2->e.v;
+
+    if (imm >= 0x100000) {
+        tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 0xfffff", get_tok_str(token, NULL));
+        return;
+    }
+
+    if (imm & 1) {
+        tcc_error("'%s': Expected second source operand that is an even immediate value", get_tok_str(token, NULL));
+        return;
+    }
+    /* J-type instruction:
+    31      imm[20]
+    30...21 imm[10:1]
+    20      imm[11]
+    19...12 imm[19:12]
+    11...7  rd
+    6...0   opcode */
+    gen_le32(opcode | ENCODE_RD(rd->reg) | (((imm >> 20) & 1) << 31) | (((imm >> 1) & 0x3ff) << 21) | (((imm >> 11) & 1) << 20) | (((imm >> 12) & 0xff) << 12));
 }
 
 static void asm_shift_opcode(TCCState *s1, int token)
@@ -571,6 +606,15 @@ static void asm_branch_opcode(TCCState* s1, int token)
     default:
         expect("known branch instruction");
     }
+    /* B-type instruction:
+    31      imm[12]
+    30...25 imm[10:5]
+    24...20 rs2
+    19...15 rs1
+    14...12 funct3
+    8...11  imm[4:1]
+    7       imm[11]
+    6...0   opcode */
     asm_emit_opcode(opcode | ENCODE_RS1(ops[0].reg) | ENCODE_RS2(ops[1].reg) | (((offset >> 1) & 0xF) << 8) | (((offset >> 5) & 0x1f) << 25) | (((offset >> 11) & 1) << 7) | (((offset >> 12) & 1) << 31));
 }
 
