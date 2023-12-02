@@ -291,8 +291,9 @@ static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Oper
 
     imm = rs2->e.v;
 
-    if (imm >= 0x100000) {
-        tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 0xfffff", get_tok_str(token, NULL));
+    /* even offsets in a +- 1 MiB range */
+    if (imm > 0x1ffffe) {
+        tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 0x1fffff", get_tok_str(token, NULL));
         return;
     }
 
