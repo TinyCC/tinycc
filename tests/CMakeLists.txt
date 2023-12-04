@@ -1,12 +1,16 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
+set(EXESUF)
 set(TCC_CFLAGS -s -r -w -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/include -B${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
+set(TCC_MATH_LDFLAGS)
+set(LIBTCC_LDFLAGS)
 if(WIN32)
-  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include)
+  set(TCC_CFLAGS ${TCC_CFLAGS} -I${CMAKE_SOURCE_DIR}/win32/include -I${CMAKE_SOURCE_DIR}/win32/include/winapi )
+  set(EXESUF .exe )
+  set(LIBTCC_LDFLAGS -Wl,-rpath=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Debug)
 else()
   set(TCC_MATH_LDFLAGS -lm)
-  set(LIBTCC_EXTRA_LIBS dl)
-  set(LIBTCC_LDFLAGS -ldl -lm -Wl,-rpath=${CMAKE_BINARY_DIR})
+  set(LIBTCC_LDFLAGS -ldl -Wl,-rpath=${CMAKE_BINARY_DIR})
 endif()
 
 if( ${CMAKE_TARGET_ARCHITECTURES} STREQUAL i386 )
@@ -178,7 +182,46 @@ elseif(APPLE)
     list(REMOVE_ITEM TESTS2 124_atomic_counter )
 endif()
 
+set(PP
+ 01
+ 02
+ 03
+ 04
+ 05
+ 06
+ 07
+ 08
+ 09
+ 10
+ 11
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ pp-counter
+)
+
+set(CFLAGS ${TCC_CFLAGS} ${TCC_MATH_LDFLAGS} ${LIBTCC_LDFLAGS})
+foreach(testpp ${PP})
+  add_test(NAME ${testpp} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pp
+           COMMAND tcc ${CFLAGS} -run -E ${testpp}.c  arg1 arg2 | ${DIFF} - ${testpp}.expect)
+endforeach()
+
 foreach(testfile ${TESTS2})
   add_test(NAME ${testfile} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests2
-           COMMAND tcc ${TCC_CFLAGS} ${TCC_MATH_LDFLAGS} -run ${testfile}.c - arg1 arg2 arg3 arg4 | ${DIFF} - ${testfile}.expect)
+           COMMAND tcc ${CFLAGS} -run ${testfile}.c - arg1 arg2 arg3 arg4 | ${DIFF} - ${testfile}.expect)
 endforeach()
+
+set( TEST_DIR ${CMAKE_SOURCE_DIR}/tests )
+add_custom_target(
+    tcctest ALL
+    COMMAND tcc ${TEST_DIR}/tcctest.c ${CFLAGS} -o ${CMAKE_BINARY_DIR}/tcctest${EXESUF}
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/tcctest${EXESUF}
+    SOURCES ${TEST_DIR}/tcctest.c )
+
+add_test(NAME tcctest COMMAND tcctest WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
