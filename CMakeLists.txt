@@ -9,10 +9,22 @@ include(CheckCCompilerFlag)
 include(GNUInstallDirs)
 message("Generated with config types: ${CMAKE_CONFIGURATION_TYPES}")
 
-set(CMAKE_CONFIGURATION_TYPES=Debug;Release)
+set(_fmt TGZ)
 if(WIN32)
-    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/TCC-BUILT" CACHE PATH "Install path prefix (default)" FORCE)
+  set(_fmt ZIP)
 endif()
+
+set(CPACK_GENERATOR ${_fmt})
+SET(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+SET(CPACK_DEB_COMPONENT_INSTALL ON)
+SET(CPACK_RPM_COMPONENT_INSTALL ON)
+SET(CPACK_NUGET_COMPONENT_INSTALL ON)
+SET(CPACK_WIX_COMPONENT_INSTALL ON)
+SET(CPACK_NSIS_MODIFY_PATH ON)
+SET(CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE 1)
+set(CPACK_VERBATIM_VARIABLES YES)
+
+set(CMAKE_CONFIGURATION_TYPES=Debug;Release)
 message(STATUS "Installing to ${CMAKE_INSTALL_PREFIX}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_MODULE_PATH})
@@ -27,8 +39,6 @@ message("Target architecture type: ${CMAKE_TARGET_ARCHITECTURES}")
 
 set(TCC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LIB_DIR ${CMAKE_CURRENT_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/TCC-BUILT")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
 
 enable_testing()
 set( CORE_FILES
@@ -113,6 +123,10 @@ configure_file(config.h.in ${TCC_DIR}/config.h)
 configure_file(config.texi.in config.texi)
 
 include_directories(${CMAKE_BINARY_DIR})
+
+set(CPACK_PACKAGE_VENDOR "https://github.com/TinyCC/tinycc")
+set(CPACK_PACKAGE_VERSION ${TCC_VERSION})
+include(CPack)
 
 # Set target and sources
 if( WIN32 AND NOT CYGWIN )
@@ -263,9 +277,13 @@ endif()
 
 add_executable(tcc ${TCC_DIR}/tcc.c)
 target_link_libraries(tcc PUBLIC libtcc)
+install(TARGETS libtcc DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS tcc RUNTIME)
 
 add_executable(c2str ${TCC_DIR}/conftest.c)
 target_compile_definitions(c2str PUBLIC C2STR)
+install(TARGETS c2str RUNTIME)
+
 add_dependencies(c2str libtcc)
 add_custom_command(
     OUTPUT ${TCC_DIR}/tccdefs_.h
@@ -393,6 +411,7 @@ add_custom_target(
     BYPRODUCTS ${LIB_DIR}/libtcc1-${CMAKE_TARGET_ARCHITECTURES}.a
     COMMENT "Linking Runtime Library"
     SOURCES ${LIB_SRCFILES})
+install(FILES ${LIB_DIR}/libtcc1-${CMAKE_TARGET_ARCHITECTURES}.a DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 # cross compiler targets and cross libtcc1.a to build
 if(WIN32 AND ${CMAKE_TARGET_ARCHITECTURES} STREQUAL x86_64)
@@ -454,6 +473,7 @@ foreach(X ${TCC_X})
     set(CROSS_TARGET ${CROSS_TARGET_${X}})
     add_executable(${tcc_cross} ${TCC_DIR}/tcc.c)
     target_compile_definitions(${tcc_cross} PUBLIC ${CROSS_TARGET})
+    install(TARGETS ${tcc_cross} RUNTIME)
 
     if(WIN32 AND
         (NOT ${X} STREQUAL arm-wince OR NOT ${X} STREQUAL i386-win32 OR NOT ${X} STREQUAL x86_64-win32))
@@ -503,6 +523,7 @@ foreach(X ${TCC_X})
         BYPRODUCTS ${LIB_DIR}/${X}-libtcc1.a
         COMMENT "Cross Linking Runtime Library - ${X}" )
     add_dependencies(${tcc_cross} libtcc)
+    install(FILES ${LIB_DIR}/${X}-libtcc1.a DESTINATION ${CMAKE_INSTALL_LIBDIR})
     set(CROSS_OBJFILES "")
 endforeach()
 
@@ -514,9 +535,6 @@ if(WIN32)
   install(FILES tcclib.h libtcc.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION include)
   install(DIRECTORY win32/include/ DESTINATION include)
-  install(TARGETS libtcc DESTINATION lib)
-  file(GLOB LIB_ARCHIVES build/lib/*.a)
-  install(FILES ${LIB_ARCHIVES} DESTINATION lib)
 else()
   install(FILES libtcc.h tcclib.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION lib/tcc/include)
