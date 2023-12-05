@@ -264,6 +264,13 @@ endif()
 add_executable(tcc ${TCC_DIR}/tcc.c)
 target_link_libraries(tcc PUBLIC libtcc)
 
+add_executable(c2str ${TCC_DIR}/conftest.c)
+target_compile_definitions(c2str PUBLIC C2STR)
+add_dependencies(c2str libtcc)
+add_custom_command(
+    OUTPUT ${TCC_DIR}/tccdefs_.h
+    COMMAND c2str ${TCC_DIR}/include/tccdefs.h tccdefs_.h)
+
 ################################################################################
 # Runtime Library (libtcc1-xx.a)
 
@@ -387,17 +394,15 @@ add_custom_target(
     COMMENT "Linking Runtime Library"
     SOURCES ${LIB_SRCFILES})
 
-add_executable(c2str ${TCC_DIR}/conftest.c)
-target_compile_definitions(c2str PUBLIC C2STR)
-add_custom_command(
-    OUTPUT ${TCC_DIR}/tccdefs_.h
-    COMMAND c2str ${TCC_DIR}/include/tccdefs.h tccdefs_.h)
-
 # cross compiler targets and cross libtcc1.a to build
 if(WIN32 AND ${CMAKE_TARGET_ARCHITECTURES} STREQUAL x86_64)
-    set(TCC_X i386-win32 i386)
+    set(TCC_X i386 x86_64 i386-win32 x86_64-osx arm arm64 riscv64 arm-wince arm64-osx)
 elseif(WIN32 AND ${CMAKE_TARGET_ARCHITECTURES} STREQUAL i386)
-    set(TCC_X i386)
+    set(TCC_X i386 arm)
+elseif(${CMAKE_TARGET_ARCHITECTURES} STREQUAL i386)
+    set(TCC_X i386-win32 arm)
+elseif(${CMAKE_TARGET_ARCHITECTURES} STREQUAL arm)
+    set(TCC_X i386 i386-win32)
 else()
     set(TCC_X i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 riscv64 arm-wince arm64-osx)
 endif()
@@ -445,14 +450,15 @@ set(CROSS_DEFINES -Wall -O2 -Wdeclaration-after-statement -fno-strict-aliasing
 
 foreach(X ${TCC_X})
     set(tcc_cross ${X}-tcc)
-    list(APPEND CROSS_SRCFILES ${OBJ-${X}})
-    list(APPEND CROSS_TARGET ${CROSS_TARGET_${X}})
+    set(CROSS_SRCFILES ${OBJ-${X}})
+    set(CROSS_TARGET ${CROSS_TARGET_${X}})
     add_executable(${tcc_cross} ${TCC_DIR}/tcc.c)
     target_compile_definitions(${tcc_cross} PUBLIC ${CROSS_TARGET})
 
-    if(WIN32 AND (${X} STREQUAL i386 OR ${X} STREQUAL x86_64))
-        list(REMOVE_ITEM CROSS_SRCFILES ${B_O})
-        list(REMOVE_ITEM CROSS_SRCFILES ${TCC_DIR}/lib/tcov.c )
+    if(WIN32 AND
+        (NOT ${X} STREQUAL arm-wince OR NOT ${X} STREQUAL i386-win32 OR NOT ${X} STREQUAL x86_64-win32))
+            list(REMOVE_ITEM CROSS_SRCFILES ${B_O})
+            list(REMOVE_ITEM CROSS_SRCFILES ${TCC_DIR}/lib/tcov.c )
     endif()
 
     # compile C files to object files
@@ -470,6 +476,7 @@ foreach(X ${TCC_X})
             VERBATIM
             COMMENT "Cross Compiling Runtime Library (${CROSS_SRCFILE}) for ${X}")
         list(APPEND CROSS_OBJFILES ${LIB_DIR}/${X}-${CROSS_SRCFILE_NOEXT}.o)
+        add_dependencies(${tcc_cross} libtcc)
     endforeach()
 
     #if(${X} STREQUAL i386-win32
@@ -495,39 +502,11 @@ foreach(X ${TCC_X})
         DEPENDS ${CROSS_OBJFILES}
         BYPRODUCTS ${LIB_DIR}/${X}-libtcc1.a
         COMMENT "Cross Linking Runtime Library - ${X}" )
+    add_dependencies(${tcc_cross} libtcc)
+    set(CROSS_OBJFILES "")
 endforeach()
 
 add_subdirectory(tests)
-
-if(WIN32 AND ${CMAKE_TARGET_ARCHITECTURES} STREQUAL x86_64)
-    set(tcc_cross x86_64-tcc)
-    set(CROSS_TARGET ${CROSS_TARGET_x86_64})
-    add_executable(${tcc_cross} ${TCC_DIR}/tcc.c)
-    target_compile_definitions(${tcc_cross} PUBLIC ${CROSS_TARGET})
-    list(REMOVE_ITEM OBJ-x86_64 ${B_O})
-    list(REMOVE_ITEM OBJ-x86_64 ${TCC_DIR}/lib/tcov.c )
-    foreach(CROSS_SRCFILE ${OBJ-x86_64})
-        get_filename_component(CROSS_SRCFILE_NOEXT ${CROSS_SRCFILE} NAME_WE)
-        add_custom_command(
-            OUTPUT ${LIB_DIR}/x86_64-${CROSS_SRCFILE_NOEXT}.o
-            COMMAND ${tcc_cross} -w ${CROSS_DEFINES} ${TCC_INCLUDE_DIRS}
-                -L ${LIB_DIR}
-                -c ${CROSS_SRCFILE}
-                -o ${LIB_DIR}/x86_64-${CROSS_SRCFILE_NOEXT}.o
-            MAIN_DEPENDENCY ${CROSS_SRCFILE}
-            DEPENDS ${tcc_cross}
-            VERBATIM
-            COMMENT "Cross Compiling Runtime Library (${CROSS_SRCFILE}) for x86_64")
-        list(APPEND CROSS_x86_64OBJFILES ${LIB_DIR}/x86_64-${CROSS_SRCFILE_NOEXT}.o)
-    endforeach()
-
-    add_custom_target(
-        x86_64_libarchive ALL
-        ${tcc_cross} -ar rcs ${LIB_DIR}/x86_64-libtcc1.a ${CROSS_x86_64OBJFILES}
-        DEPENDS ${CROSS_x86_64OBJFILES}
-        BYPRODUCTS ${LIB_DIR}/x86_64-libtcc1.a
-        COMMENT "Cross Linking Runtime Library - x86_64" )
-endif()
 
 if(WIN32)
   file(GLOB WIN32_DEFS win32/lib/*.def)
@@ -535,9 +514,9 @@ if(WIN32)
   install(FILES tcclib.h libtcc.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION include)
   install(DIRECTORY win32/include/ DESTINATION include)
-  file(GLOB LIB_ARCHIVES ${LIB_DIR}/*.a)
-  install(FILES ${LIB_ARCHIVES} DESTINATION lib)
   install(TARGETS libtcc DESTINATION lib)
+  file(GLOB LIB_ARCHIVES build/lib/*.a)
+  install(FILES ${LIB_ARCHIVES} DESTINATION lib)
 else()
   install(FILES libtcc.h tcclib.h DESTINATION include)
   install(DIRECTORY include/ DESTINATION lib/tcc/include)
