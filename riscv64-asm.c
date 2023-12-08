@@ -184,7 +184,7 @@ static void parse_operand(TCCState *s1, Operand *op)
     op->e = e;
     /* compare against unsigned 12-bit maximum */
     if (!op->e.sym) {
-        if (op->e.v < 0x2000)
+        if (op->e.v < 0x1000)
             op->type = OP_IM12S;
     } else
         expect("operand");
@@ -1176,18 +1176,13 @@ static void asm_emit_cj(int token, uint16_t opcode, const Operand *imm)
 {
     uint32_t offset;
 
-    if (imm->type != OP_IM12S && imm->type != OP_IM32) {
-        tcc_error("'%s': Expected source operand that is an immediate value", get_tok_str(token, NULL));
+    /* +-2 KiB range */
+    if (imm->type != OP_IM12S) {
+        tcc_error("'%s': Expected source operand that is a 12-bit immediate value", get_tok_str(token, NULL));
         return;
     }
 
     offset = imm->e.v;
-
-    /* +-2 KiB range; max. 0x7fe min. 0xffe (-0x7fe) */
-    if (offset > 0x1fff) {
-        tcc_error("'%s': Expected source operand that is an immediate value between 0 and 0x1fff", get_tok_str(token, NULL));
-        return;
-    }
 
     if (offset & 1) {
         tcc_error("'%s': Expected source operand that is an even immediate value", get_tok_str(token, NULL));
