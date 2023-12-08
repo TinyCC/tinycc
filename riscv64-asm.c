@@ -635,6 +635,47 @@ static void asm_ternary_opcode(TCCState *s1, int token)
          asm_emit_s(token, (0x8 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
          return;
 
+    /* M extension */
+    case TOK_ASM_div:
+        asm_emit_r(token, 0x33 | (4 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divu:
+        asm_emit_r(token, 0x33 | (5 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divuw:
+        asm_emit_r(token, 0x3b | (5 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divw:
+        asm_emit_r(token, 0x3b | (4 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mul:
+        asm_emit_r(token, 0x33 | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulh:
+        asm_emit_r(token, 0x33 | (1 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulhsu:
+        asm_emit_r(token, 0x33 | (2 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulhu:
+        asm_emit_r(token, 0x33 | (3 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulw:
+        asm_emit_r(token, 0x3b | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_rem:
+        asm_emit_r(token, 0x33 | (6 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remu:
+        asm_emit_r(token, 0x33 | (7 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remuw:
+        asm_emit_r(token, 0x3b | (7 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remw:
+        asm_emit_r(token, 0x3b | (6 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+
     /* C extension */
     /* register-based loads and stores (RD, RS1, IMM); CL-format */
     case TOK_ASM_c_fld:
@@ -803,6 +844,20 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sw:
     case TOK_ASM_xor:
     case TOK_ASM_xori:
+    /* M extension */
+    case TOK_ASM_div:
+    case TOK_ASM_divu:
+    case TOK_ASM_divuw:
+    case TOK_ASM_divw:
+    case TOK_ASM_mul:
+    case TOK_ASM_mulh:
+    case TOK_ASM_mulhsu:
+    case TOK_ASM_mulhu:
+    case TOK_ASM_mulw:
+    case TOK_ASM_rem:
+    case TOK_ASM_remu:
+    case TOK_ASM_remuw:
+    case TOK_ASM_remw:
         asm_ternary_opcode(s1, token);
         return;
 
