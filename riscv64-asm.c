@@ -676,6 +676,30 @@ static void asm_ternary_opcode(TCCState *s1, int token)
         asm_emit_r(token, 0x3b | (6 << 12) | (1 << 25), ops, ops + 1, ops + 2);
         return;
 
+    /* Zicsr extension; (rd, csr, rs/uimm) */
+    case TOK_ASM_csrrc:
+        asm_emit_i(token, 0x73 | (3 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrci:
+        /* using rs1 field for uimmm */
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (7 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrs:
+        asm_emit_i(token, 0x73 | (2 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrsi:
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (6 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrw:
+        asm_emit_i(token, 0x73 | (1 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrwi:
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (5 << 12), ops, ops + 2, ops + 1);
+        return;
+
     /* C extension */
     /* register-based loads and stores (RD, RS1, IMM); CL-format */
     case TOK_ASM_c_fld:
@@ -858,6 +882,13 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_remu:
     case TOK_ASM_remuw:
     case TOK_ASM_remw:
+    /* Zicsr extension */
+    case TOK_ASM_csrrc:
+    case TOK_ASM_csrrci:
+    case TOK_ASM_csrrs:
+    case TOK_ASM_csrrsi:
+    case TOK_ASM_csrrw:
+    case TOK_ASM_csrrwi:
         asm_ternary_opcode(s1, token);
         return;
 
