@@ -184,7 +184,7 @@ static void parse_operand(TCCState *s1, Operand *op)
     op->e = e;
     /* compare against unsigned 12-bit maximum */
     if (!op->e.sym) {
-        if (op->e.v < 0x2000)
+        if (op->e.v < 0x1000)
             op->type = OP_IM12S;
     } else
         expect("operand");
@@ -635,6 +635,71 @@ static void asm_ternary_opcode(TCCState *s1, int token)
          asm_emit_s(token, (0x8 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
          return;
 
+    /* M extension */
+    case TOK_ASM_div:
+        asm_emit_r(token, 0x33 | (4 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divu:
+        asm_emit_r(token, 0x33 | (5 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divuw:
+        asm_emit_r(token, 0x3b | (5 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_divw:
+        asm_emit_r(token, 0x3b | (4 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mul:
+        asm_emit_r(token, 0x33 | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulh:
+        asm_emit_r(token, 0x33 | (1 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulhsu:
+        asm_emit_r(token, 0x33 | (2 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulhu:
+        asm_emit_r(token, 0x33 | (3 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_mulw:
+        asm_emit_r(token, 0x3b | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_rem:
+        asm_emit_r(token, 0x33 | (6 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remu:
+        asm_emit_r(token, 0x33 | (7 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remuw:
+        asm_emit_r(token, 0x3b | (7 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_remw:
+        asm_emit_r(token, 0x3b | (6 << 12) | (1 << 25), ops, ops + 1, ops + 2);
+        return;
+
+    /* Zicsr extension; (rd, csr, rs/uimm) */
+    case TOK_ASM_csrrc:
+        asm_emit_i(token, 0x73 | (3 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrci:
+        /* using rs1 field for uimmm */
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (7 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrs:
+        asm_emit_i(token, 0x73 | (2 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrsi:
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (6 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrw:
+        asm_emit_i(token, 0x73 | (1 << 12), ops, ops + 2, ops + 1);
+        return;
+    case TOK_ASM_csrrwi:
+        ops[2].type = OP_REG;
+        asm_emit_i(token, 0x73 | (5 << 12), ops, ops + 2, ops + 1);
+        return;
+
     /* C extension */
     /* register-based loads and stores (RD, RS1, IMM); CL-format */
     case TOK_ASM_c_fld:
@@ -803,6 +868,27 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_sw:
     case TOK_ASM_xor:
     case TOK_ASM_xori:
+    /* M extension */
+    case TOK_ASM_div:
+    case TOK_ASM_divu:
+    case TOK_ASM_divuw:
+    case TOK_ASM_divw:
+    case TOK_ASM_mul:
+    case TOK_ASM_mulh:
+    case TOK_ASM_mulhsu:
+    case TOK_ASM_mulhu:
+    case TOK_ASM_mulw:
+    case TOK_ASM_rem:
+    case TOK_ASM_remu:
+    case TOK_ASM_remuw:
+    case TOK_ASM_remw:
+    /* Zicsr extension */
+    case TOK_ASM_csrrc:
+    case TOK_ASM_csrrci:
+    case TOK_ASM_csrrs:
+    case TOK_ASM_csrrsi:
+    case TOK_ASM_csrrw:
+    case TOK_ASM_csrrwi:
         asm_ternary_opcode(s1, token);
         return;
 
@@ -1121,18 +1207,13 @@ static void asm_emit_cj(int token, uint16_t opcode, const Operand *imm)
 {
     uint32_t offset;
 
-    if (imm->type != OP_IM12S && imm->type != OP_IM32) {
-        tcc_error("'%s': Expected source operand that is an immediate value", get_tok_str(token, NULL));
+    /* +-2 KiB range */
+    if (imm->type != OP_IM12S) {
+        tcc_error("'%s': Expected source operand that is a 12-bit immediate value", get_tok_str(token, NULL));
         return;
     }
 
     offset = imm->e.v;
-
-    /* +-2 KiB range; max. 0x7fe min. 0xffe (-0x7fe) */
-    if (offset > 0x1fff) {
-        tcc_error("'%s': Expected source operand that is an immediate value between 0 and 0x1fff", get_tok_str(token, NULL));
-        return;
-    }
 
     if (offset & 1) {
         tcc_error("'%s': Expected source operand that is an even immediate value", get_tok_str(token, NULL));
