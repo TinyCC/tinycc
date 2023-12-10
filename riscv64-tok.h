@@ -340,6 +340,29 @@
  DEF_ASM(csrrwi)
  DEF_ASM(csrrsi)
  DEF_ASM(csrrci)
+ /* registers */
+ DEF_ASM(cycle)
+ DEF_ASM(fcsr)
+ DEF_ASM(fflags)
+ DEF_ASM(frm)
+ DEF_ASM(instret)
+ DEF_ASM(time)
+ /* RV32I-only */
+ DEF_ASM(cycleh)
+ DEF_ASM(instreth)
+ DEF_ASM(timeh)
+ /* pseudo */
+ DEF_ASM(csrc)
+ DEF_ASM(csrci)
+ DEF_ASM(csrr)
+ DEF_ASM(csrs)
+ DEF_ASM(csrsi)
+ DEF_ASM(csrw)
+ DEF_ASM(csrwi)
+ DEF_ASM(frcsr)
+ DEF_ASM(frrm)
+ DEF_ASM(fscsr)
+ DEF_ASM(fsrm)
 
 /* Privileged Instructions */
 
