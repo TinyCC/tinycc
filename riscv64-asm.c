@@ -56,6 +56,7 @@ static void asm_emit_u(int token, uint32_t opcode, const Operand *rd, const Oper
 static void asm_gen_code(ASMOperand *operands, int nb_operands, int nb_outputs, int is_output, uint8_t *clobber_regs, int out_reg);
 static void asm_nullary_opcode(TCCState *s1, int token);
 static void asm_opcode(TCCState *s1, int token);
+static int asm_parse_csrvar(int t);
 static int asm_parse_regvar(int t);
 static void asm_ternary_opcode(TCCState *s1, int token);
 static void asm_unary_opcode(TCCState *s1, int token);
@@ -165,7 +166,7 @@ static void asm_nullary_opcode(TCCState *s1, int token)
 /* Parse a text containing operand and store the result in OP */
 static void parse_operand(TCCState *s1, Operand *op)
 {
-    ExprValue e;
+    ExprValue e = {0};
     int8_t reg;
 
     op->type = 0;
@@ -178,16 +179,20 @@ static void parse_operand(TCCState *s1, Operand *op)
     } else if (tok == '$') {
         /* constant value */
         next(); // skip '#' or '$'
+    } else if ((e.v = asm_parse_csrvar(tok)) != -1) {
+        next();
+    } else {
+        asm_expr(s1, &e);
     }
-    asm_expr(s1, &e);
     op->type = OP_IM32;
     op->e = e;
     /* compare against unsigned 12-bit maximum */
     if (!op->e.sym) {
         if (op->e.v < 0x1000)
             op->type = OP_IM12S;
-    } else
+    } else {
         expect("operand");
+    }
 }
 
 static void asm_unary_opcode(TCCState *s1, int token)
@@ -949,6 +954,32 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
     default:
         expect("known instruction");
+    }
+}
+
+static int asm_parse_csrvar(int t)
+{
+    switch (t) {
+    case TOK_ASM_cycle:
+        return 0xc00;
+    case TOK_ASM_fcsr:
+        return 3;
+    case TOK_ASM_fflags:
+        return 1;
+    case TOK_ASM_frm:
+        return 2;
+    case TOK_ASM_instret:
+        return 0xc02;
+    case TOK_ASM_time:
+        return 0xc01;
+    case TOK_ASM_cycleh:
+        return 0xc80;
+    case TOK_ASM_instreth:
+        return 0xc82;
+    case TOK_ASM_timeh:
+        return 0xc81;
+    default:
+        return -1;
     }
 }
 
