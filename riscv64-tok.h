@@ -244,10 +244,6 @@
  DEF_ASM(rdinstret)
  DEF_ASM(rdinstreth)
 
-/* no operation */
- DEF_ASM(nop)
- DEF_ASM_WITH_SUFFIX(c, nop)
-
 /* “M” Standard Extension for Integer Multiplication and Division, V2.0 */
  DEF_ASM(mul)
  DEF_ASM(mulh)
@@ -265,6 +261,7 @@
  DEF_ASM(remuw)
 
 /* "C" Extension for Compressed Instructions, V2.0 */
+ DEF_ASM_WITH_SUFFIX(c, nop)
 /* Loads */
  DEF_ASM_WITH_SUFFIX(c, li)
  DEF_ASM_WITH_SUFFIX(c, lw)
@@ -340,6 +337,31 @@
  DEF_ASM(csrrwi)
  DEF_ASM(csrrsi)
  DEF_ASM(csrrci)
+ /* registers */
+ DEF_ASM(cycle)
+ DEF_ASM(fcsr)
+ DEF_ASM(fflags)
+ DEF_ASM(frm)
+ DEF_ASM(instret)
+ DEF_ASM(time)
+ /* RV32I-only */
+ DEF_ASM(cycleh)
+ DEF_ASM(instreth)
+ DEF_ASM(timeh)
+ /* pseudo */
+ DEF_ASM(csrc)
+ DEF_ASM(csrci)
+ DEF_ASM(csrr)
+ DEF_ASM(csrs)
+ DEF_ASM(csrsi)
+ DEF_ASM(csrw)
+ DEF_ASM(csrwi)
+ DEF_ASM(frcsr)
+ DEF_ASM(frflags)
+ DEF_ASM(frrm)
+ DEF_ASM(fscsr)
+ DEF_ASM(fsflags)
+ DEF_ASM(fsrm)
 
 /* Privileged Instructions */
 
@@ -347,5 +369,44 @@
  DEF_ASM(mrth)
  DEF_ASM(hrts)
  DEF_ASM(wfi)
+
+/* pseudoinstructions */
+ DEF_ASM(beqz)
+ DEF_ASM(bgez)
+ DEF_ASM(bgt)
+ DEF_ASM(bgtu)
+ DEF_ASM(bgtz)
+ DEF_ASM(ble)
+ DEF_ASM(bleu)
+ DEF_ASM(blez)
+ DEF_ASM(bltz)
+ DEF_ASM(bnez)
+ DEF_ASM(call)
+ DEF_ASM_WITH_SUFFIX(fabs, d)
+ DEF_ASM_WITH_SUFFIX(fabs, s)
+ DEF_ASM(fld)
+ DEF_ASM(flw)
+ DEF_ASM_WITH_SUFFIX(fmv, d)
+ DEF_ASM_WITH_SUFFIX(fmv, s)
+ DEF_ASM_WITH_SUFFIX(fneg, d)
+ DEF_ASM_WITH_SUFFIX(fneg, s)
+ DEF_ASM(fsd)
+ DEF_ASM(fsw)
+ DEF_ASM(j)
+ DEF_ASM(la)
+ DEF_ASM(li)
+ DEF_ASM(lla)
+ DEF_ASM(mv)
+ DEF_ASM(neg)
+ DEF_ASM(negw)
+ DEF_ASM(nop)
+ DEF_ASM(not)
+ DEF_ASM(ret)
+ DEF_ASM(seqz)
+ DEF_ASM_WITH_SUFFIX(sext, w)
+ DEF_ASM(sgtz)
+ DEF_ASM(sltz)
+ DEF_ASM(snez)
+ DEF_ASM(tail)
 
 #undef DEF_ASM_WITH_SUFFIX
