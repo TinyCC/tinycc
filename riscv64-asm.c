@@ -44,8 +44,8 @@ typedef struct Operand {
 } Operand;
 
 static void asm_binary_opcode(TCCState* s1, int token);
-static void asm_clobber(uint8_t *clobber_regs, const char *str);
-static void asm_compute_constraints(ASMOperand *operands, int nb_operands, int nb_outputs, const uint8_t *clobber_regs, int *pout_reg);
+ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
+ST_FUNC void asm_compute_constraints(ASMOperand *operands, int nb_operands, int nb_outputs, const uint8_t *clobber_regs, int *pout_reg);
 static void asm_emit_b(int token, uint32_t opcode, const Operand *rs1, const Operand *rs2, const Operand *imm);
 static void asm_emit_i(int token, uint32_t opcode, const Operand *rd, const Operand *rs1, const Operand *rs2);
 static void asm_emit_j(int token, uint32_t opcode, const Operand *rd, const Operand *rs2);
@@ -53,16 +53,16 @@ static void asm_emit_opcode(uint32_t opcode);
 static void asm_emit_r(int token, uint32_t opcode, const Operand *rd, const Operand *rs1, const Operand *rs2);
 static void asm_emit_s(int token, uint32_t opcode, const Operand *rs1, const Operand *rs2, const Operand *imm);
 static void asm_emit_u(int token, uint32_t opcode, const Operand *rd, const Operand *rs2);
-static void asm_gen_code(ASMOperand *operands, int nb_operands, int nb_outputs, int is_output, uint8_t *clobber_regs, int out_reg);
+ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands, int nb_outputs, int is_output, uint8_t *clobber_regs, int out_reg);
 static void asm_nullary_opcode(TCCState *s1, int token);
-static void asm_opcode(TCCState *s1, int token);
+ST_FUNC void asm_opcode(TCCState *s1, int token);
 static int asm_parse_csrvar(int t);
-static int asm_parse_regvar(int t);
+ST_FUNC int asm_parse_regvar(int t);
 static void asm_ternary_opcode(TCCState *s1, int token);
 static void asm_unary_opcode(TCCState *s1, int token);
-static void gen_expr32(ExprValue *pe);
+ST_FUNC void gen_expr32(ExprValue *pe);
 static void parse_operand(TCCState *s1, Operand *op);
-static void subst_asm_operand(CString *add_str, SValue *sv, int modifier);
+ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier);
 /* C extension */
 static void asm_emit_ca(int token, uint16_t opcode, const Operand *rd, const Operand *rs2);
 static void asm_emit_cb(int token, uint16_t opcode, const Operand *rs1, const Operand *imm);
@@ -1125,7 +1125,7 @@ static void asm_emit_ca(int token, uint16_t opcode, const Operand *rd, const Ope
 static void asm_emit_cb(int token, uint16_t opcode, const Operand *rs1, const Operand *imm)
 {
     uint32_t offset;
-    uint8_t dst, src;
+    uint8_t src;
 
     if (rs1->type != OP_REG) {
         tcc_error("'%s': Expected source operand that is a register", get_tok_str(token, NULL));
