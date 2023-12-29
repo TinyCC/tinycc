@@ -3023,7 +3023,8 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 }
                 if (*st <= 0) {
                     /* expanded to empty string */
-                    tok_str_add(&str, TOK_PLCHLDR);
+		    if (str.len)
+                        tok_str_add(&str, TOK_PLCHLDR);
                 } else for (;;) {
                     int t2;
                     TOK_GET(&t2, &st, &cval);
