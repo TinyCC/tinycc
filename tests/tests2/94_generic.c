@@ -30,6 +30,12 @@ void void_foo(int i) {}
 
 typedef int int_type1;
 
+typedef int T[4];
+int f(T t)
+{
+	return _Generic(t, __typeof__( ((void)0, (T){0}) ) : 1 );
+}
+
 #define gen_sw(a) _Generic(a, const char *: 1, default: 8, int: 123);
 
 int main()
@@ -40,6 +46,7 @@ int main()
 	const int * const ptr;
 	const char *ti;
 	int_type1 i2;
+	T t;
 
 	i = _Generic(a, int: a_f, const int: b_f)();
 	printf("%d\n", i);
@@ -117,6 +124,8 @@ int main()
 	  (void)(sizeof(struct { int x:_Generic( 0?(int (*)[4])0 : ar, int (*)[4]:+1, int (*)[5]:(void)0); }));
 	  (void)(sizeof(struct { int x:_Generic( 0?(int (*)[5])0 : ar, int (*)[5]:+1, int (*)[4]:(void)0); }));
 	}
+
+	printf ("%d\n", f(t));
 
 	return 0;
 }
