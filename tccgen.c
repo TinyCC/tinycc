@@ -6545,19 +6545,14 @@ static void expr_eq(void)
 
 ST_FUNC void gexpr(void)
 {
-    int comma_found = 0;
-
-    while (1) {
-        expr_eq();
-	if (comma_found)
-	    convert_parameter_type (&vtop->type);
-        if (tok != ',')
-            break;
+    expr_eq();
+    while (tok == ',') {
 	constant_p &= (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
                       !((vtop->r & VT_SYM) && vtop->sym->a.addrtaken);
-	comma_found = 1;
         vpop();
         next();
+        expr_eq();
+	convert_parameter_type (&vtop->type);
     }
 }
 
