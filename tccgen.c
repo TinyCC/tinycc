@@ -7266,7 +7266,7 @@ again:
                 if (is_expr) {
                     vpop();
                     gexpr();
-                } else {
+                } else if (!decl(VT_JMP)) {
                     gexpr();
                     vpop();
                 }

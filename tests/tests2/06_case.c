@@ -14,7 +14,8 @@ int main()
             break;
 
          case 2:
-            printf("%d\n", 2);
+            int a = 2;
+            printf("%d\n", a);
             break;
 
          default:
