@@ -341,12 +341,18 @@ static struct recursive_macro { int rm_field; } G;
     WRAP((printf("rm_field = %d %d\n", rm_field, WRAP(rm_field))));
 }
 
-int op(a,b)
+#if !defined(__TINYC__) && (__GNUC__ >= 14)
+#define IMPLICIT_INT	int
+#else
+#define IMPLICIT_INT
+#endif
+
+int op(IMPLICIT_INT a, IMPLICIT_INT b)
 {
     return a / b;
 }
 
-int ret(a)
+int ret(IMPLICIT_INT a)
 {
     if (a == 2)
         return 1;
@@ -710,7 +716,7 @@ int tab2[3][2];
 
 int g;
 
-void f1(g)
+void f1(IMPLICIT_INT g)
 {
     printf("g1=%d\n", g);
 }
@@ -1507,17 +1513,17 @@ void compound_literal_test(void)
 
 /* K & R protos */
 
-kr_func1(a, b)
+IMPLICIT_INT kr_func1(IMPLICIT_INT a, IMPLICIT_INT b)
 {
     return a + b;
 }
 
-int kr_func2(a, b)
+int kr_func2(IMPLICIT_INT a, IMPLICIT_INT b)
 {
     return a + b;
 }
 
-kr_test()
+IMPLICIT_INT kr_test()
 {
     printf("func1=%d\n", kr_func1(3, 4));
     printf("func2=%d\n", kr_func2(3, 4));
@@ -2052,7 +2058,7 @@ void c99_bool_test(void)
     printf("b = %d\n", b);
     b2 = 0;
     printf("sizeof(x ? _Bool : _Bool) = %d (should be sizeof int)\n",
-           sizeof((volatile)a ? b : b2));
+           sizeof((volatile IMPLICIT_INT)a ? b : b2));
 #endif
 }
 
