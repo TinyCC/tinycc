@@ -39,7 +39,7 @@ DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
         va_start(ap, fmt);
         ret = vfprintf(stderr, fmt, ap);
         va_end(ap);
-        fprintf(stderr, nl), fflush(stderr);
+        fprintf(stderr, "%s", nl), fflush(stderr);
     }
     return ret;
 }

@@ -341,7 +341,7 @@ static struct recursive_macro { int rm_field; } G;
     WRAP((printf("rm_field = %d %d\n", rm_field, WRAP(rm_field))));
 }
 
-#if !defined(__TINYC__) && (__GNUC__ >= 14)
+#if !defined(__TINYC__) && (__GNUC__ >= 14 || __clang_major__ >= 15)
 #define IMPLICIT_INT	int
 #else
 #define IMPLICIT_INT
