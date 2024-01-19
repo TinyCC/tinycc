@@ -189,7 +189,7 @@ static void parse_operand(TCCState *s1, Operand *op)
     op->e = e;
     /* compare against unsigned 12-bit maximum */
     if (!op->e.sym) {
-        if (op->e.v < 0x1000)
+        if ((int) op->e.v >= -0x1000 && (int) op->e.v < 0x1000)
             op->type = OP_IM12S;
     } else if (op->e.sym->type.t & (VT_EXTERN | VT_STATIC)) {
         label.type.t = VT_VOID | VT_STATIC;
