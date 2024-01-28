@@ -139,7 +139,7 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
 static void parse_expr_type(CType *type);
 static void init_putv(init_params *p, CType *type, unsigned long c);
 static void decl_initializer(init_params *p, CType *type, unsigned long c, int flags);
-static void block(int is_expr);
+static void block(int is_expr, int allow_decl);
 static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
 static int decl(int l);
 static void expr_eq(void);
@@ -5566,7 +5566,7 @@ ST_FUNC void unary(void)
 	       as statement expressions can't ever be entered from the
 	       outside, so any reactivation of code emission (from labels
 	       or loop heads) can be disabled again after the end of it. */
-            block(1);
+            block(1, 0);
             /* If the statement expr can be entered, then we retain the current
                nocode_wanted state (from e.g. a 'return 0;' in the stmt-expr).
                If it can't be entered then the state is that from before the
@@ -6908,7 +6908,7 @@ static void lblock(int *bsym, int *csym)
         loop_scope = co;
     }
     co->bsym = bsym;
-    block(0);
+    block(0, 0);
     co->bsym = b;
     if (csym) {
         co->csym = c;
@@ -6916,7 +6916,7 @@ static void lblock(int *bsym, int *csym)
     }
 }
 
-static void block(int is_expr)
+static void block(int is_expr, int allow_decl)
 {
     int a, b, c, d, e, t;
     struct scope o;
@@ -6945,12 +6945,12 @@ again:
         gexpr();
         skip(')');
         a = gvtst(1, 0);
-        block(0);
+        block(0, 0);
         if (tok == TOK_ELSE) {
             d = gjmp(0);
             gsym(a);
             next();
-            block(0);
+            block(0, 0);
             gsym(d); /* patch else jmp */
         } else {
             gsym(a);
@@ -6993,7 +6993,7 @@ again:
             if (tok != '}') {
                 if (is_expr)
                     vpop();
-                block(is_expr);
+                block(is_expr, 1);
             }
         }
 
@@ -7253,6 +7253,9 @@ again:
             if (debug_modes)
                 tcc_tcov_reset_ind(tcc_state);
             vla_restore(cur_scope->vla.loc);
+            /* c23 declaration after label */
+            if (allow_decl && tok != ';')
+                decl(VT_LOCAL);
             if (tok != '}')
                 goto again;
             /* we accept this, but it is a mistake */
@@ -7266,7 +7269,7 @@ again:
                 if (is_expr) {
                     vpop();
                     gexpr();
-                } else if (!decl(VT_JMP)) {
+                } else {
                     gexpr();
                     vpop();
                 }
@@ -8313,7 +8316,7 @@ static void gen_function(Sym *sym)
     rsym = 0;
     clear_temp_local_var_list();
     func_vla_arg(sym);
-    block(0);
+    block(0, 0);
     gsym(rsym);
 
     nocode_wanted = 0;
