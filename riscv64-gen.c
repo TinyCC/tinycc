@@ -222,48 +222,6 @@ static void load_large_constant(int rr, int fc, uint32_t pi)
     EI(0x13, 1, rr, rr, 8); // slli RR, RR, 8
 }
 
-ST_FUNC int type_size_integral(CType *type, int *a){
-    int bt;
-    bt = type->t & VT_BTYPE;
-    switch (bt){
-        case VT_VOID:
-        case VT_BOOL:
-        case VT_BYTE:
-            *a = 1;
-            return 1;
-        case VT_SHORT:
-            *a = 2;
-            return 2;
-        case VT_LLONG:
-        case VT_DOUBLE:
-            *a = 8;
-            return 8;
-        case VT_PTR:
-        case VT_FUNC:
-            *a = PTR_SIZE;
-            return PTR_SIZE;
-        case VT_FLOAT:
-        case VT_INT:
-            *a = 4;
-            return 4;
-        case VT_LDOUBLE:
-            *a = LDOUBLE_ALIGN;
-            return LDOUBLE_SIZE;
-        case VT_QLONG:
-        case VT_QFLOAT:
-            *a = 8;
-            return 16;
-        case VT_ENUM:
-            *a = 4;
-            /* Enums might be incomplete, so don't just return '4' here.  */
-            return type->ref->c;
-        default:
-            /* VT_STRUCT and VT_UNION */
-            tcc_error("load/store with a non integral");
-            return type_size(type, a);
-    }
-}
-
 ST_FUNC void load(int r, SValue *sv)
 {
     int fr = sv->r;
@@ -274,7 +232,7 @@ ST_FUNC void load(int r, SValue *sv)
     int align, size;
     if (fr & VT_LVAL) {
         int func3, opcode = is_freg(r) ? 0x07 : 0x03, br;
-        size = type_size_integral(&sv->type, &align);
+        size = type_size(&sv->type, &align);
         assert (!is_freg(r) || bt == VT_FLOAT || bt == VT_DOUBLE);
         if (bt == VT_FUNC) /* XXX should be done in generic code */
           size = PTR_SIZE;
@@ -355,7 +313,7 @@ ST_FUNC void load(int r, SValue *sv)
           EI(0x13, 0, rr, ireg(v), 0); // addi RR, V, 0 == mv RR, V
         else {
             int func7 = is_ireg(r) ? 0x70 : 0x78;
-            size = type_size_integral(&sv->type, &align);
+            size = type_size(&sv->type, &align);
             if (size == 8)
               func7 |= 1;
             assert(size == 4 || size == 8);
@@ -415,7 +373,7 @@ ST_FUNC void store(int r, SValue *sv)
     int rr = is_ireg(r) ? ireg(r) : freg(r), ptrreg;
     int fc = sv->c.i;
     int bt = sv->type.t & VT_BTYPE;
-    int align, size = type_size_integral(&sv->type, &align);
+    int align, size = type_size(&sv->type, &align);
     assert(!is_float(bt) || is_freg(r) || bt == VT_LDOUBLE);
     /* long doubles are in two integer registers, but the load/store
        primitives only deal with one, so do as if it's one reg.  */
