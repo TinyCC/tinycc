@@ -15,6 +15,7 @@
 #define __ATOMIC_SEQ_CST 5
 typedef __SIZE_TYPE__ size_t;
 
+
 #if defined __i386__ || defined __x86_64__
 #define ATOMIC_COMPARE_EXCHANGE(TYPE, MODE, SUFFIX) \
     bool __atomic_compare_exchange_##MODE \
@@ -42,6 +43,7 @@ typedef __SIZE_TYPE__ size_t;
 #define ATOMIC_LOAD(TYPE, MODE) \
     TYPE __atomic_load_##MODE(const volatile void *atom, int memorder) \
     { \
+        thread_fence(__ATOMIC_ACQUIRE); \
         return *(volatile TYPE *)atom; \
     }
 
@@ -49,6 +51,7 @@ typedef __SIZE_TYPE__ size_t;
     void __atomic_store_##MODE(volatile void *atom, TYPE value, int memorder) \
     { \
         *(volatile TYPE *)atom = value; \
+        thread_fence(__ATOMIC_RELEASE); \
     }
 
 #define ATOMIC_GEN_OP(TYPE, MODE, NAME, OP, RET) \
