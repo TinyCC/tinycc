@@ -620,9 +620,9 @@ static void error1(int mode, const char *fmt, va_list ap)
             f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
     } else if (s1->current_filename) {
         cstr_printf(&cs, "%s: ", s1->current_filename);
-    }
-    if (0 == cs.size)
+    } else {
         cstr_printf(&cs, "tcc: ");
+    }
     cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
     cstr_vprintf(&cs, fmt, ap);
     if (!s1 || !s1->error_func) {
@@ -930,17 +930,8 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
         return 0;
     }
 
+    /* add sections */
     tccelf_new(s);
-    if (s->do_debug) {
-        /* add debug sections */
-        tcc_debug_new(s);
-    }
-#ifdef CONFIG_TCC_BCHECK
-    if (s->do_bounds_check) {
-        /* if bound checking, then add corresponding sections */
-        tccelf_bounds_new(s);
-    }
-#endif
 
     if (output_type == TCC_OUTPUT_OBJ) {
         /* always elf for objects */
@@ -951,66 +942,21 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     tcc_add_library_path(s, CONFIG_TCC_LIBPATHS);
 
 #ifdef TCC_TARGET_PE
-# ifdef _WIN32
+# ifdef TCC_IS_NATIVE
     /* allow linking with system dll's directly */
     tcc_add_systemdir(s);
 # endif
-    /* target PE has its own startup code in libtcc1.a */
-    return 0;
-
 #elif defined TCC_TARGET_MACHO
 # ifdef TCC_IS_NATIVE
     tcc_add_macos_sdkpath(s);
 # endif
-    /* Mach-O with LC_MAIN doesn't need any crt startup code.  */
-    return 0;
-
 #else
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
-
-    /* add libc crt1/crti objects */
-    if (output_type != TCC_OUTPUT_MEMORY && !s->nostdlib) {
-#if TARGETOS_OpenBSD
-        if (output_type != TCC_OUTPUT_DLL)
-	    tcc_add_crt(s, "crt0.o");
-        if (output_type == TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbeginS.o");
-        else
-            tcc_add_crt(s, "crtbegin.o");
-#elif TARGETOS_FreeBSD
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt1.o");
-        tcc_add_crt(s, "crti.o");
-        if (s->static_link)
-            tcc_add_crt(s, "crtbeginT.o");
-        else if (output_type & TCC_OUTPUT_DYN)
-            tcc_add_crt(s, "crtbeginS.o");
-        else
-            tcc_add_crt(s, "crtbegin.o");
-#elif TARGETOS_NetBSD
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt0.o");
-        tcc_add_crt(s, "crti.o");
-        if (s->static_link)
-            tcc_add_crt(s, "crtbeginT.o");
-        else if (output_type & TCC_OUTPUT_DYN)
-            tcc_add_crt(s, "crtbeginS.o");
-        else
-            tcc_add_crt(s, "crtbegin.o");
-#elif defined TARGETOS_ANDROID
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crtbegin_dynamic.o");
-        else
-            tcc_add_crt(s, "crtbegin_so.o");
-#else
-        if (output_type != TCC_OUTPUT_DLL)
-            tcc_add_crt(s, "crt1.o");
-        tcc_add_crt(s, "crti.o");
+    if (output_type != TCC_OUTPUT_MEMORY && !s->nostdlib)
+        tccelf_add_crtbegin(s);
 #endif
-    }
     return 0;
-#endif
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
@@ -1096,7 +1042,7 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
     if (fd < 0) {
         if (flags & AFF_PRINT_ERROR)
             tcc_error_noabort("file '%s' not found", filename);
-        return ret;
+        return FILE_NOT_FOUND;
     }
 
     s1->current_filename = filename;
@@ -1226,18 +1172,21 @@ LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *pathname)
     return 0;
 }
 
-static int tcc_add_library_internal(TCCState *s, const char *fmt,
+static int tcc_add_library_internal(TCCState *s1, const char *fmt,
     const char *filename, int flags, char **paths, int nb_paths)
 {
     char buf[1024];
-    int i;
+    int i, ret;
 
     for(i = 0; i < nb_paths; i++) {
         snprintf(buf, sizeof(buf), fmt, paths[i], filename);
-        if (tcc_add_file_internal(s, buf, flags | AFF_TYPE_BIN) == 0)
-            return 0;
+        ret = tcc_add_file_internal(s1, buf, (flags & ~AFF_PRINT_ERROR) | AFF_TYPE_BIN);
+        if (ret != FILE_NOT_FOUND)
+            return ret;
     }
-    return -1;
+    if (flags & AFF_PRINT_ERROR)
+        tcc_error_noabort("file '%s' not found", filename);
+    return FILE_NOT_FOUND;
 }
 
 /* find and load a dll. Return non zero if not found */
@@ -1253,17 +1202,14 @@ ST_FUNC void tcc_add_support(TCCState *s1, const char *filename)
     char buf[100];
     if (CONFIG_TCC_CROSSPREFIX[0])
         filename = strcat(strcpy(buf, CONFIG_TCC_CROSSPREFIX), filename);
-    if (tcc_add_dll(s1, filename, 0) < 0)
-        tcc_error_noabort("%s not found", filename);
+    tcc_add_dll(s1, filename, AFF_PRINT_ERROR);
 }
 
 #if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
 ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
 {
-    if (-1 == tcc_add_library_internal(s1, "%s/%s",
-        filename, 0, s1->crt_paths, s1->nb_crt_paths))
-        return tcc_error_noabort("file '%s' not found", filename);
-    return 0;
+    return tcc_add_library_internal(s1, "%s/%s",
+        filename, AFF_PRINT_ERROR, s1->crt_paths, s1->nb_crt_paths);
 }
 #endif
 
@@ -1285,18 +1231,19 @@ LIBTCCAPI int tcc_add_library(TCCState *s, const char *libraryname)
 #endif
     int flags = s->filetype & AFF_WHOLE_ARCHIVE;
     while (*pp) {
-        if (0 == tcc_add_library_internal(s, *pp,
-            libraryname, flags, s->library_paths, s->nb_library_paths))
-            return 0;
+        int ret = tcc_add_library_internal(s, *pp,
+            libraryname, flags, s->library_paths, s->nb_library_paths);
+        if (ret != FILE_NOT_FOUND)
+            return ret;
         ++pp;
     }
-    return -1;
+    return FILE_NOT_FOUND;
 }
 
 PUB_FUNC int tcc_add_library_err(TCCState *s1, const char *libname)
 {
     int ret = tcc_add_library(s1, libname);
-    if (ret < 0)
+    if (ret == FILE_NOT_FOUND)
         tcc_error_noabort("library '%s' not found", libname);
     return ret;
 }
@@ -1790,6 +1737,37 @@ static int set_flag(TCCState *s, const FlagDef *flags, const char *name)
     return ret;
 }
 
+static const char dumpmachine_str[] =
+/* this is a best guess, please refine as necessary */
+#ifdef TCC_TARGET_I386
+    "i386-pc"
+#elif defined TCC_TARGET_X86_64
+    "x86_64-pc"
+#elif defined TCC_TARGET_C67
+    "c67"
+#elif defined TCC_TARGET_ARM
+    "arm"
+#elif defined TCC_TARGET_ARM64
+    "aarch64"
+#elif defined TCC_TARGET_RISCV64
+    "riscv64"
+#endif
+    "-"
+#ifdef TCC_TARGET_PE
+    "mingw32"
+#elif defined(TCC_TARGET_MACHO)
+    "apple-darwin"
+#elif TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
+    "freebsd"
+#elif TARGETOS_OpenBSD
+    "openbsd"
+#elif TARGETOS_NetBSD
+    "netbsd"
+#else
+    "linux-gnu"
+#endif
+;
+
 static int args_parser_make_argv(const char *r, int *argc, char ***argv)
 {
     int ret = 0, q, c;
@@ -2140,43 +2118,11 @@ dorun:
             s->gen_phony_deps = 1;
             break;
         case TCC_OPTION_dumpmachine:
-            /* this is a best guess, please refine as necessary */
-            printf("%s",
-#ifdef TCC_TARGET_I386
-                   "i386-pc"
-#elif defined TCC_TARGET_X86_64
-                   "x86_64-pc"
-#elif defined TCC_TARGET_C67
-                   "c67"
-#elif defined TCC_TARGET_ARM
-                   "arm"
-#elif defined TCC_TARGET_ARM64
-                   "aarch64"
-#elif defined TCC_TARGET_RISCV64
-                   "riscv64"
-#endif
-                   "-"
-#ifdef TCC_TARGET_PE
-                   "mingw32"
-#elif defined(TCC_TARGET_MACHO)
-                   "apple-darwin"
-#elif TARGETOS_FreeBSD || TARGETOS_FreeBSD_kernel
-                   "freebsd"
-#elif TARGETOS_OpenBSD
-                   "openbsd"
-#elif TARGETOS_NetBSD
-                   "netbsd"
-#else
-                   "linux-gnu"
-#endif
-                   "\n"
-                   );
+            printf("%s\n", dumpmachine_str);
             exit(0);
-            break;
         case TCC_OPTION_dumpversion:
             printf ("%s\n", TCC_VERSION);
             exit(0);
-            break;
         case TCC_OPTION_x:
             x = 0;
             if (*optarg == 'c')

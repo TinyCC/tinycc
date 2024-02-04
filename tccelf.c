@@ -83,17 +83,21 @@ ST_FUNC void tccelf_new(TCCState *s)
                                       ".dynstrtab",
                                       ".dynhashtab", SHF_PRIVATE);
     get_sym_attr(s, 0, 1);
-}
+
+    if (s->do_debug) {
+        /* add debug sections */
+        tcc_debug_new(s);
+    }
 
 #ifdef CONFIG_TCC_BCHECK
-ST_FUNC void tccelf_bounds_new(TCCState *s)
-{
-    TCCState *s1 = s;
-    /* create bounds sections (make ro after relocation done with GNU_RELRO) */
-    bounds_section = new_section(s, ".bounds", SHT_PROGBITS, shf_RELRO);
-    lbounds_section = new_section(s, ".lbounds", SHT_PROGBITS, shf_RELRO);
-}
+    if (s->do_bounds_check) {
+        /* if bound checking, then add corresponding sections */
+        /* (make ro after relocation done with GNU_RELRO) */
+        bounds_section = new_section(s, ".bounds", SHT_PROGBITS, shf_RELRO);
+        lbounds_section = new_section(s, ".lbounds", SHT_PROGBITS, shf_RELRO);
+    }
 #endif
+}
 
 static void free_section(Section *s)
 {
@@ -173,16 +177,22 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
 
     for (i = 0; i < nb_syms; ++i) {
         ElfSym *sym = (ElfSym*)s->data + first_sym + i;
-        if (sym->st_shndx == SHN_UNDEF
-            && ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
-            sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
+
+        if (sym->st_shndx == SHN_UNDEF) {
+            int sym_bind = ELFW(ST_BIND)(sym->st_info);
+            int sym_type = ELFW(ST_TYPE)(sym->st_info);
+            if (sym_bind == STB_LOCAL)
+                sym_bind = STB_GLOBAL;
 #ifndef TCC_TARGET_PE
-	/* An ELF relocatable file should have the types of its undefined global symbol set
-	   to STT_NOTYPE or it will confuse binutils bfd */
-        if (s1->output_format == TCC_OUTPUT_FORMAT_ELF && s1->output_type == TCC_OUTPUT_OBJ)
-            if (sym->st_shndx == SHN_UNDEF && ELFW(ST_BIND)(sym->st_info) == STB_GLOBAL)
-                sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(STT_NOTYPE));
+            if (sym_bind == STB_GLOBAL && s1->output_type == TCC_OUTPUT_OBJ) {
+                /* undefined symbols with STT_FUNC are confusing gnu ld when
+                   linking statically to STT_GNU_IFUNC */
+                sym_type = STT_NOTYPE;
+            }
 #endif
+            sym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
+        }
+
         tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
             sym->st_other, sym->st_shndx, (char*)s->link->data + sym->st_name);
     }
@@ -1666,6 +1676,67 @@ static void tcc_tcov_add_file(TCCState *s1, const char *filename)
     set_local_sym(s1, &"___tcov_data"[!s1->leading_underscore], tcov_section, 0);
 }
 
+#if !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO
+/* add libc crt1/crti objects */
+ST_FUNC void tccelf_add_crtbegin(TCCState *s1)
+{
+#if TARGETOS_OpenBSD
+    if (s1->output_type != TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crt0.o");
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtbeginS.o");
+    else
+        tcc_add_crt(s1, "crtbegin.o");
+#elif TARGETOS_FreeBSD || TARGETOS_NetBSD
+    if (s1->output_type != TCC_OUTPUT_DLL)
+#if TARGETOS_FreeBSD
+        tcc_add_crt(s1, "crt1.o");
+#else
+        tcc_add_crt(s1, "crt0.o");
+#endif
+    tcc_add_crt(s1, "crti.o");
+    if (s1->static_link)
+        tcc_add_crt(s1, "crtbeginT.o");
+    else if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtbeginS.o");
+    else
+        tcc_add_crt(s1, "crtbegin.o");
+#elif TARGETOS_ANDROID
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtbegin_so.o");
+    else
+        tcc_add_crt(s1, "crtbegin_dynamic.o");
+#else
+    if (s1->output_type != TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crt1.o");
+    tcc_add_crt(s1, "crti.o");
+#endif
+}
+
+ST_FUNC void tccelf_add_crtend(TCCState *s1)
+{
+#if TARGETOS_OpenBSD
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtendS.o");
+    else
+        tcc_add_crt(s1, "crtend.o");
+#elif TARGETOS_FreeBSD || TARGETOS_NetBSD
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtendS.o");
+    else
+        tcc_add_crt(s1, "crtend.o");
+    tcc_add_crt(s1, "crtn.o");
+#elif TARGETOS_ANDROID
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_add_crt(s1, "crtend_so.o");
+    else
+        tcc_add_crt(s1, "crtend_android.o");
+#else
+    tcc_add_crt(s1, "crtn.o");
+#endif
+}
+#endif /* !defined TCC_TARGET_PE && !defined TCC_TARGET_MACHO */
+
 #ifndef TCC_TARGET_PE
 /* add tcc runtime libraries */
 ST_FUNC void tcc_add_runtime(TCCState *s1)
@@ -1708,7 +1779,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
             if (TCC_LIBGCC[0] == '/')
                 tcc_add_file(s1, TCC_LIBGCC);
             else
-                tcc_add_dll(s1, TCC_LIBGCC, 0);
+                tcc_add_dll(s1, TCC_LIBGCC, AFF_PRINT_ERROR);
         }
 #endif
 #if defined TCC_TARGET_ARM && TARGETOS_FreeBSD
@@ -1716,31 +1787,10 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #endif
         if (TCC_LIBTCC1[0])
             tcc_add_support(s1, TCC_LIBTCC1);
-
-        /* add crt end if not memory output */
-	if (s1->output_type != TCC_OUTPUT_MEMORY) {
-#if defined TCC_TARGET_MACHO
-            /* nothing to do */
-#elif TARGETOS_FreeBSD || TARGETOS_NetBSD
-	    if (s1->output_type & TCC_OUTPUT_DYN)
-	        tcc_add_crt(s1, "crtendS.o");
-	    else
-	        tcc_add_crt(s1, "crtend.o");
-            tcc_add_crt(s1, "crtn.o");
-#elif TARGETOS_OpenBSD
-	    if (s1->output_type == TCC_OUTPUT_DLL)
-	        tcc_add_crt(s1, "crtendS.o");
-	    else
-	        tcc_add_crt(s1, "crtend.o");
-#elif TARGETOS_ANDROID
-	    if (s1->output_type == TCC_OUTPUT_DLL)
-                tcc_add_crt(s1, "crtend_so.o");
-            else
-                tcc_add_crt(s1, "crtend_android.o");
-#else
-            tcc_add_crt(s1, "crtn.o");
+#ifndef TCC_TARGET_MACHO
+        if (s1->output_type != TCC_OUTPUT_MEMORY)
+            tccelf_add_crtend(s1);
 #endif
-        }
     }
 }
 #endif /* ndef TCC_TARGET_PE */
@@ -3834,7 +3884,7 @@ static int ld_add_file(TCCState *s1, const char filename[])
             return 0;
         filename = tcc_basename(filename);
     }
-    return tcc_add_dll(s1, filename, 0);
+    return tcc_add_dll(s1, filename, AFF_PRINT_ERROR);
 }
 
 static int ld_add_file_list(TCCState *s1, const char *cmd, int as_needed)

@@ -124,20 +124,16 @@
     /* avoids usage of GCC/clang specific builtins in libc-headerfiles: */
     #define __FINITE_MATH_ONLY__ 1
     #define _FORTIFY_SOURCE 0
-    #define __has_builtin(x) 0
+    //#define __has_builtin(x) 0
 
 #elif defined __ANDROID__
     #define  BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
-    #define  __PRETTY_FUNCTION__ __FUNCTION__
-    #define __has_builtin(x) 0
-    #define __has_feature(x) 0
-    #define _Nonnull
-    #define _Nullable
 
 #else
     /* Linux */
 
 #endif
+
     /* Some derived integer types needed to get stdint.h to compile correctly on some platforms */
 #ifndef __NetBSD__
     #define __UINTPTR_TYPE__ unsigned __PTRDIFF_TYPE__
@@ -151,6 +147,16 @@
     #define __REDIRECT_NTH(name, proto, alias) name proto __asm__ (#alias) __THROW
     #define __REDIRECT_NTHNL(name, proto, alias) name proto __asm__ (#alias) __THROWNL
 #endif
+
+    /* not implemented */
+    #define  __PRETTY_FUNCTION__ __FUNCTION__
+    #define __has_builtin(x) 0
+    #define __has_feature(x) 0
+    /* C23 Keywords */
+    #define _Nonnull
+    #define _Nullable
+    #define _Nullable_result
+    #define _Null_unspecified
 
     /* skip __builtin... with -E */
     #ifndef __TCC_PP__

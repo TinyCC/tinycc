@@ -263,8 +263,11 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 
     /* These aren't C symbols, so don't need leading underscore handling.  */
     run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
-    if (!(ret = setjmp(rc->jb)))
+    ret = setjmp(rc->jb);
+    if (0 == ret)
         ret = prog_main(argc, argv, envp);
+    else if (256 == ret)
+        ret = 0;
     run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
     run_on_exit(ret);
     if (s1->dflag & 16 && ret) /* tcc -dt -run ... */

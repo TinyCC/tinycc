@@ -1155,6 +1155,7 @@ struct filespec {
 #define TOK_PLCHLDR 0xa4 /* placeholder token as defined in C99 */
 #define TOK_NOSUBST 0xa5 /* means following token has already been pp'd */
 #define TOK_PPJOIN  0xa6 /* A '##' in the right position to mean pasting */
+#define TOK_SOTYPE  0xa7 /* alias of '(' for parsing sizeof (type) */
 
 /* assignment operators */
 #define TOK_A_ADD   0xb0
@@ -1290,6 +1291,9 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_BINTYPE_DYN 2
 #define AFF_BINTYPE_AR  3
 #define AFF_BINTYPE_C67 4
+
+/* return value of tcc_add_file_internal(): 0, -1, or FILE_NOT_FOUND */
+#define FILE_NOT_FOUND -2
 
 #ifndef ELF_OBJ_ONLY
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
@@ -1532,9 +1536,6 @@ ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
 ST_FUNC void tccelf_begin_file(TCCState *s1);
 ST_FUNC void tccelf_end_file(TCCState *s1);
-#ifdef CONFIG_TCC_BCHECK
-ST_FUNC void tccelf_bounds_new(TCCState *s);
-#endif
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
 ST_FUNC size_t section_add(Section *sec, addr_t size, int align);
@@ -1575,6 +1576,8 @@ ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t 
 #ifndef ELF_OBJ_ONLY
 ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level);
 ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd);
+ST_FUNC void tccelf_add_crtbegin(TCCState *s1);
+ST_FUNC void tccelf_add_crtend(TCCState *s1);
 #endif
 #ifndef TCC_TARGET_PE
 ST_FUNC void tcc_add_runtime(TCCState *s1);

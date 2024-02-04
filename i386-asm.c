@@ -515,7 +515,13 @@ static void gen_disp32(ExprValue *pe)
             sym->type.t = VT_FUNC;
             sym->type.ref = NULL;
         }
+#ifdef TCC_TARGET_X86_64
+        greloca(cur_text_section, sym, ind, R_X86_64_PLT32, pe->v - 4);
+        gen_le32(0);
+#else
         gen_addrpc32(VT_SYM, sym, pe->v);
+#endif
+
     }
 }
 

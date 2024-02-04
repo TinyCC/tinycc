@@ -1,5 +1,11 @@
 in target function
 in target function
 in target function
+g_int = 34
+alias_int = 34
+asm_int = 34
+in unit2:
 in target function
 in target function
+g_int = 34
+alias_int = 34

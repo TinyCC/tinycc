@@ -140,11 +140,6 @@ static int onetwothree = 123;
 #define B3 4
 #endif
 
-#ifdef __TINYC__
-/* We try to handle this syntax.  Make at least sure it doesn't segfault.  */
-char invalid_function_def()[] {return 0;}
-#endif
-
 #define __INT64_C(c)	c ## LL
 #define INT64_MIN	(-__INT64_C(9223372036854775807)-1)
 
@@ -341,18 +336,13 @@ static struct recursive_macro { int rm_field; } G;
     WRAP((printf("rm_field = %d %d\n", rm_field, WRAP(rm_field))));
 }
 
-#if !defined(__TINYC__) && (__GNUC__ >= 14 || __clang_major__ >= 15)
-#define IMPLICIT_INT	int
-#else
-#define IMPLICIT_INT
-#endif
-
-int op(IMPLICIT_INT a, IMPLICIT_INT b)
+#if __TINYC__
+int op(a, b)
 {
     return a / b;
 }
 
-int ret(IMPLICIT_INT a)
+int ret(a)
 {
     if (a == 2)
         return 1;
@@ -360,6 +350,7 @@ int ret(IMPLICIT_INT a)
         return 2;
     return 0;
 }
+#endif
 
 #if !defined(__TINYC__) && (__GNUC__ >= 8)
 /* Old GCCs don't regard "foo"[1] as constant, even in GNU dialect. */
@@ -716,7 +707,7 @@ int tab2[3][2];
 
 int g;
 
-void f1(IMPLICIT_INT g)
+void f1(int g)
 {
     printf("g1=%d\n", g);
 }
@@ -1511,24 +1502,34 @@ void compound_literal_test(void)
 #endif
 }
 
+
+#if __TINYC__
+
 /* K & R protos */
 
-IMPLICIT_INT kr_func1(IMPLICIT_INT a, IMPLICIT_INT b)
+kr_func1(a, b)
 {
     return a + b;
 }
 
-int kr_func2(IMPLICIT_INT a, IMPLICIT_INT b)
+int kr_func2(a, b)
 {
     return a + b;
 }
 
-IMPLICIT_INT kr_test()
+kr_test()
 {
     printf("func1=%d\n", kr_func1(3, 4));
     printf("func2=%d\n", kr_func2(3, 4));
     return 0;
 }
+
+/* We try to handle this syntax.  Make at least sure it doesn't segfault.  */
+char invalid_function_def()[] {return 0;}
+
+#else
+# define kr_test() printf("func1=7\nfunc2=7\n")
+#endif
 
 void num(int n)
 {
@@ -2058,7 +2059,7 @@ void c99_bool_test(void)
     printf("b = %d\n", b);
     b2 = 0;
     printf("sizeof(x ? _Bool : _Bool) = %d (should be sizeof int)\n",
-           sizeof((volatile IMPLICIT_INT)a ? b : b2));
+           sizeof ((volatile int)a ? b : b2));
 #endif
 }
 
@@ -3062,7 +3063,7 @@ void c99_vla_test_3d(int s, int arr[2][3][s])
 
 void c99_vla_test_3e(int s, int arr[][3][--s])
 {
-    printf ("%d %d\n", s, arr[1][2][3]);
+    printf ("%d %d %d\n", sizeof arr, s, arr[1][2][3]);
 }
 
 void c99_vla_test_3(void)
@@ -3145,6 +3146,10 @@ void sizeof_test(void)
     printf("sizeof(1 && 1) = %d\n", sizeof(1 && 1));
     printf("sizeof(t || 1) = %d\n", sizeof(t || 1));
     printf("sizeof(0 || 0) = %d\n", sizeof(0 || 0));
+
+    int arr[4], fn();
+    printf("sizeof(0, arr) = %d\n", sizeof(0, arr));
+    printf("sizeof(0, fn) = %d\n", sizeof(0, fn));
 }
 
 void typeof_test(void)
@@ -3915,30 +3920,29 @@ void builtin_test(void)
     COMPAT_TYPE(char *, unsigned char *);
     COMPAT_TYPE(char *, signed char *);
     COMPAT_TYPE(char *, char *);
-/* space is needed because tcc preprocessor introduces a space between each token */
-    COMPAT_TYPE(char * *, void *); 
+    COMPAT_TYPE(char **, void *);
 #endif
     printf("res1 = %d\n", __builtin_constant_p(1));
     printf("res2 = %d\n", __builtin_constant_p(1 + 2));
     printf("res3 = %d\n", __builtin_constant_p(&constant_p_var));
     printf("res4 = %d\n", __builtin_constant_p(constant_p_var));
     printf("res5 = %d\n", __builtin_constant_p(100000 / constant_p_var));
-#ifdef __clang__
-    /* clang doesn't regard this as constant expression */
-    printf("res6 = 1\n");
+    printf("res6 = %d\n", __builtin_constant_p(i && 1));
+    printf("res7 = %d\n", __builtin_constant_p("hi"));
+    printf("res8 = %d\n", __builtin_constant_p(func()));
+#ifndef __clang__
+    printf("res10 = %d\n", __builtin_constant_p(i && 0));
+    printf("res11 = %d\n", __builtin_constant_p(i * 0));
+    printf("res12 = %d\n", __builtin_constant_p(i && 0 ? i : 34));
+    printf("res13 = %d\n", __builtin_constant_p((1,7)));
 #else
-    printf("res6 = %d\n", __builtin_constant_p(i && 0));
+    /* clang doesn't regard these as constant expression */
+    printf("res10 = 1\n");
+    printf("res11 = 1\n");
+    printf("res12 = 1\n");
+    printf("res13 = 0\n");
 #endif
-    printf("res7 = %d\n", __builtin_constant_p(i && 1));
-#ifdef __clang__
-    /* clang doesn't regard this as constant expression */
-    printf("res8 = 1\n");
-#else
-    printf("res8 = %d\n", __builtin_constant_p(i && 0 ? i : 34));
-#endif
-    printf("res9 = %d\n", __builtin_constant_p("hi"));
-    printf("res10 = %d\n", __builtin_constant_p(func()));
-    printf("res11 = %d\n", __builtin_constant_p((i++, 7)));
+
     s = 1;
     ll = 2;
     i = __builtin_choose_expr (1 != 0, ll, s);

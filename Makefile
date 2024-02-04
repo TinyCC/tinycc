@@ -55,6 +55,8 @@ else
       # `make test' when libtcc.dylib is used (configure --disable-static), so
       # we bake a relative path into the binary. $libdir is used after install.
       LINK_LIBTCC += -Wl,-rpath,"@executable_path/$(TOP)" -Wl,-rpath,"$(libdir)"
+      # -current/compatibility_version must not contain letters.
+      MACOS_DYLIB_VERSION := $(firstword $(subst rc, ,$(VERSION)))
       DYLIBVER += -current_version $(MACOS_DYLIB_VERSION)
       DYLIBVER += -compatibility_version $(MACOS_DYLIB_VERSION)
     endif
@@ -193,7 +195,6 @@ endif
 # include custom configuration (see make help)
 -include config-extra.mak
 
-ifneq ($(X),)
 ifneq ($(T),$(NATIVE_TARGET))
 # assume support files for cross-targets in "/usr/<triplet>" by default
 TRIPLET-i386 ?= i686-linux-gnu
@@ -201,11 +202,12 @@ TRIPLET-x86_64 ?= x86_64-linux-gnu
 TRIPLET-arm ?= arm-linux-gnueabi
 TRIPLET-arm64 ?= aarch64-linux-gnu
 TRIPLET-riscv64 ?= riscv64-linux-gnu
+MARCH-i386 ?= i386-linux-gnu
+MARCH-$T ?= $(TRIPLET-$T)
 TR = $(if $(TRIPLET-$T),$T,ignored)
 CRT-$(TR) ?= /usr/$(TRIPLET-$T)/lib
-LIB-$(TR) ?= {B}:/usr/$(TRIPLET-$T)/lib
-INC-$(TR) ?= {B}/include:/usr/$(TRIPLET-$T)/include
-endif
+LIB-$(TR) ?= {B}:/usr/$(TRIPLET-$T)/lib:/usr/lib/$(MARCH-$T)
+INC-$(TR) ?= {B}/include:/usr/$(TRIPLET-$T)/include:/usr/include
 endif
 
 CORE_FILES = tcc.c tcctools.c libtcc.c tccpp.c tccgen.c tccdbg.c tccelf.c tccasm.c tccrun.c

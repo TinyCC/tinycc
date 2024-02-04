@@ -2960,8 +2960,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 spc = 0;
                 while (*st >= 0) {
                     TOK_GET(&t, &st, &cval);
-                    if (t != TOK_PLCHLDR
-                     && t != TOK_NOSUBST
+                    if (t != TOK_NOSUBST
                      && 0 == check_space(t, &spc)) {
                         const char *s = get_tok_str(t, &cval);
                         while (*s) {
@@ -3004,6 +3003,9 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                             str.len--;
                             goto add_var;
                         }
+                    } else {
+                        if (*st <= 0) /* expanded to empty string */
+                            tok_str_add(&str, TOK_PLCHLDR);
                     }
                 } else {
             add_var:
@@ -3021,11 +3023,7 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
 		    }
 		    st = s->next->d;
                 }
-                if (*st <= 0) {
-                    /* expanded to empty string */
-		    if (str.len)
-                        tok_str_add(&str, TOK_PLCHLDR);
-                } else for (;;) {
+                for (;;) {
                     int t2;
                     TOK_GET(&t2, &st, &cval);
                     if (t2 <= 0)
@@ -3135,7 +3133,8 @@ static inline int *macro_twosharps(const int *ptr0)
         } else {
             start_of_nosubsts = -1;
         }
-        tok_str_add2(&macro_str1, t, &cval);
+        if (t != TOK_PLCHLDR)
+            tok_str_add2(&macro_str1, t, &cval);
     }
     tok_str_add(&macro_str1, 0);
     //tok_print(" ###", macro_str1.str);
@@ -3154,7 +3153,7 @@ static int next_argstream(Sym **nested_list, TokenString *ws_str)
         if (macro_ptr) {
             p = macro_ptr, t = *p;
             if (ws_str) {
-                while (is_space(t) || TOK_LINEFEED == t || TOK_PLCHLDR == t)
+                while (is_space(t) || TOK_LINEFEED == t)
                     tok_str_add(ws_str, t), t = *++p;
             }
             if (t == 0) {
@@ -3289,7 +3288,7 @@ static int macro_subst_tok(
             }
 	    do {
 		next_nomacro(); /* eat '(' */
-	    } while (tok == TOK_PLCHLDR || is_space(tok));
+	    } while (is_space(tok));
 
             /* argument macro */
             args = NULL;
@@ -3298,8 +3297,7 @@ static int macro_subst_tok(
             for(;;) {
                 do {
                     next_argstream(nested_list, NULL);
-                } while (tok == TOK_PLCHLDR || is_space(tok) ||
-			 TOK_LINEFEED == tok);
+                } while (is_space(tok) || TOK_LINEFEED == tok);
     empty_arg:
                 /* handle '()' case */
                 if (!args && !sa && tok == ')')
@@ -3488,7 +3486,7 @@ ST_FUNC void next(void)
     t = tok;
     if (macro_ptr) {
         if (!TOK_HAS_VALUE(t)) {
-            if (t == TOK_NOSUBST || t == TOK_PLCHLDR) {
+            if (t == TOK_NOSUBST) {
                 /* discard preprocessor markers */
                 goto redo;
             } else if (t == 0) {

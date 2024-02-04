@@ -603,12 +603,6 @@ echo "VERSION = $version" >> config.mak
 echo "#define TCC_VERSION \"$version\"" >> $TMPH
 echo "@set VERSION $version" > config.texi
 
-if test "$targetos" = "Darwin"; then
-  # On macOS, -current_version and -compatibility_version must not contain letters.
-  macos_dylib_version=`echo $version | sed 's/[^0-9.]//g'`
-  echo "MACOS_DYLIB_VERSION = $macos_dylib_version" >> config.mak
-fi
-
 if test "$source_path_used" = "yes" ; then
     case $source_path in
        /*) echo "TOPSRC=$source_path";;

@@ -646,11 +646,7 @@ static void gcall_or_jmp(int is_jmp)
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST &&
 	((vtop->r & VT_SYM) && (vtop->c.i-4) == (int)(vtop->c.i-4))) {
         /* constant symbolic case -> simple relocation */
-#ifdef TCC_TARGET_PE
-        greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PC32, (int)(vtop->c.i-4));
-#else
         greloca(cur_text_section, vtop->sym, ind + 1, R_X86_64_PLT32, (int)(vtop->c.i-4));
-#endif
         oad(0xe8 + is_jmp, 0); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
@@ -668,11 +664,7 @@ static void gen_bounds_call(int v)
 {
     Sym *sym = external_helper_sym(v);
     oad(0xe8, 0);
-#ifdef TCC_TARGET_PE
-    greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
-#else
     greloca(cur_text_section, sym, ind-4, R_X86_64_PLT32, -4);
-#endif
 }
 
 #ifdef TCC_TARGET_PE
@@ -1046,7 +1038,7 @@ void gfunc_epilog(void)
         Sym *sym = external_helper_sym(TOK___chkstk);
         oad(0xb8, v); /* mov stacksize, %eax */
         oad(0xe8, 0); /* call __chkstk, (does the stackframe too) */
-        greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
+        greloca(cur_text_section, sym, ind-4, R_X86_64_PLT32, -4);
         o(0x90); /* fill for FUNC_PROLOG_SIZE = 11 bytes */
     } else {
         o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */

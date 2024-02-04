@@ -13,3 +13,18 @@
 X181 M_EMPTYI_P_C1()
 X182 M_EMPTYI_P_C1(x)
 X183 usefnlike()
+
+#define ABC(x) ABC : x
+#define A(a,b,c) a ## b ## c
+#define B(a,b,c) A(a,b,c)
+#define C(a,b,c) a b c
+B(
+    C(A,C(,,),),
+    C(B(,,),B,B(,,)),
+    C(B(,,),B(,,),C)
+    )/* */(a b c)
+
+#define TEST(x) TEST : x
+#define K(a,b) a ## b
+#define L(a,b) K( TE  a , b  ST )
+L(,)(t e s t)

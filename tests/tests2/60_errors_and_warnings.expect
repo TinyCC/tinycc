@@ -68,7 +68,7 @@
 60_errors_and_warnings.c:148: error: identifier expected
 
 [test_invalid_1]
-60_errors_and_warnings.c:153: error: identifier expected
+60_errors_and_warnings.c:153: error: expression expected before ','
 
 [test_invalid_2]
 60_errors_and_warnings.c:156: error: ';' expected (got "{")
