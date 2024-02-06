@@ -14,6 +14,13 @@ struct TCCState;
 typedef struct TCCState TCCState;
 
 typedef void (*TCCErrorFunc)(void *opaque, const char *msg);
+typedef void *(*TCCReallocFunc)(void *ptr, size_t size);
+
+/* to be used for all allocation (including tcc_new()), otherwise malloc(), realloc(), free() */
+LIBTCCAPI void tcc_set_realloc(TCCReallocFunc realloc);
+
+/* return current allocator */
+LIBTCCAPI TCCReallocFunc tcc_get_realloc();
 
 /* create a new TCC compilation context */
 LIBTCCAPI TCCState *tcc_new(void);

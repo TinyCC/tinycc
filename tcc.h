@@ -1221,13 +1221,14 @@ ST_FUNC char *pstrncpy(char *out, const char *in, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);
 PUB_FUNC char *tcc_fileextension (const char *name);
 
-#ifndef MEM_DEBUG
+/* all allocations - even MEM_DEBUG - use these */
 PUB_FUNC void tcc_free(void *ptr);
 PUB_FUNC void *tcc_malloc(unsigned long size);
 PUB_FUNC void *tcc_mallocz(unsigned long size);
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size);
 PUB_FUNC char *tcc_strdup(const char *str);
-#else
+
+#ifdef MEM_DEBUG
 #define tcc_free(ptr)           tcc_free_debug(ptr)
 #define tcc_malloc(size)        tcc_malloc_debug(size, __FILE__, __LINE__)
 #define tcc_mallocz(size)       tcc_mallocz_debug(size, __FILE__, __LINE__)

@@ -245,30 +245,68 @@ ST_FUNC char *tcc_load_text(int fd)
 /********************************************************/
 /* memory management */
 
+/* we'll need the actual versions for a minute */
 #undef free
-#undef malloc
 #undef realloc
 
-void mem_error(const char *msg)
+static void *default_reallocator(void *ptr, unsigned long size)
 {
-    fprintf(stderr, "%s\n", msg);
-    exit (1);
+    void *ptr1;
+    if (size == 0) {
+        free(ptr);
+        ptr1 = NULL;
+    }
+    else {
+        ptr1 = realloc(ptr, size);
+        if (!ptr1) {
+            fprintf(stderr, "memory full\n");
+            exit (1);
+        }
+    }
+    return ptr1;
 }
 
-#ifndef MEM_DEBUG
-
-PUB_FUNC void tcc_free(void *ptr)
+static void libc_free(void *ptr)
 {
     free(ptr);
 }
 
+#define free(p) use_tcc_free(p)
+#define realloc(p, s) use_tcc_realloc(p, s)
+
+/* global so that every tcc_alloc()/tcc_free() call doesn't need to be changed */
+static TCCReallocFunc reallocator = default_reallocator;
+
+LIBTCCAPI void tcc_set_realloc(TCCReallocFunc realloc)
+{
+    reallocator = realloc;
+}
+
+LIBTCCAPI TCCReallocFunc tcc_get_realloc()
+{
+    return reallocator;
+}
+
+/* in case MEM_DEBUG is #defined */
+#undef tcc_free
+#undef tcc_malloc
+#undef tcc_realloc
+#undef tcc_mallocz
+#undef tcc_strdup
+
+PUB_FUNC void tcc_free(void *ptr)
+{
+    reallocator(ptr, 0);
+}
+
 PUB_FUNC void *tcc_malloc(unsigned long size)
 {
-    void *ptr;
-    ptr = malloc(size ? size : 1);
-    if (!ptr)
-        mem_error("memory full (malloc)");
-    return ptr;
+    return reallocator(0, size);
+}
+
+PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
+{
+    return reallocator(ptr, size);
 }
 
 PUB_FUNC void *tcc_mallocz(unsigned long size)
@@ -280,21 +318,6 @@ PUB_FUNC void *tcc_mallocz(unsigned long size)
     return ptr;
 }
 
-PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
-{
-    void *ptr1;
-    if (size == 0) {
-	free(ptr);
-	ptr1 = NULL;
-    }
-    else {
-        ptr1 = realloc(ptr, size);
-        if (!ptr1)
-            mem_error("memory full (realloc)");
-    }
-    return ptr1;
-}
-
 PUB_FUNC char *tcc_strdup(const char *str)
 {
     char *ptr;
@@ -303,7 +326,7 @@ PUB_FUNC char *tcc_strdup(const char *str)
     return ptr;
 }
 
-#else
+#ifdef MEM_DEBUG
 
 #define MEM_DEBUG_MAGIC1 0xFEEDDEB1
 #define MEM_DEBUG_MAGIC2 0xFEEDDEB2
@@ -356,10 +379,7 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     int ofs;
     mem_debug_header_t *header;
 
-    header = malloc(sizeof(mem_debug_header_t) + size);
-    if (!header)
-        mem_error("memory full (malloc)");
-
+    header = tcc_malloc(sizeof(mem_debug_header_t) + size);
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
     header->size = size;
@@ -400,7 +420,7 @@ PUB_FUNC void tcc_free_debug(void *ptr)
     if (header == mem_debug_chain)
         mem_debug_chain = header->next;
     POST_SEM(&mem_sem);
-    free(header);
+    tcc_free(header);
 }
 
 PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line)
@@ -422,9 +442,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     WAIT_SEM(&mem_sem);
     mem_cur_size -= header->size;
     mem_debug_chain_update = (header == mem_debug_chain);
-    header = realloc(header, sizeof(mem_debug_header_t) + size);
-    if (!header)
-        mem_error("memory full (realloc)");
+    header = tcc_realloc(header, sizeof(mem_debug_header_t) + size);
     header->size = size;
     write32le(MEM_DEBUG_CHECK3(header), MEM_DEBUG_MAGIC3);
     if (header->next)
@@ -473,6 +491,13 @@ PUB_FUNC void tcc_memcheck(int d)
     POST_SEM(&mem_sem);
 }
 
+/* restore the debug versions */
+#define tcc_free(ptr)           tcc_free_debug(ptr)
+#define tcc_malloc(size)        tcc_malloc_debug(size, __FILE__, __LINE__)
+#define tcc_mallocz(size)       tcc_mallocz_debug(size, __FILE__, __LINE__)
+#define tcc_realloc(ptr,size)   tcc_realloc_debug(ptr, size, __FILE__, __LINE__)
+#define tcc_strdup(str)         tcc_strdup_debug(str, __FILE__, __LINE__)
+
 #endif /* MEM_DEBUG */
 
 #ifdef _WIN32
@@ -487,16 +512,12 @@ ST_FUNC int normalized_PATHCMP(const char *f1, const char *f2)
     if (!!(p1 = realpath(f1, NULL))) {
         if (!!(p2 = realpath(f2, NULL))) {
             ret = PATHCMP(p1, p2);
-            free(p2); /* using original free */
+            libc_free(p2); /* realpath() requirement */
         }
-        free(p1);
+        libc_free(p1);
     }
     return ret;
 }
-
-#define free(p) use_tcc_free(p)
-#define malloc(s) use_tcc_malloc(s)
-#define realloc(p, s) use_tcc_realloc(p, s)
 
 /********************************************************/
 /* dynarrays */
