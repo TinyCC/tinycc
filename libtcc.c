@@ -249,7 +249,7 @@ ST_FUNC char *tcc_load_text(int fd)
 #undef free
 #undef realloc
 
-static void *default_reallocator(void *ptr, unsigned long size)
+static void *default_reallocator(void *ptr, size_t size)
 {
     void *ptr1;
     if (size == 0) {
