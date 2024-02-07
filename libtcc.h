@@ -9,18 +9,15 @@
 extern "C" {
 #endif
 
-struct TCCState;
+/*****************************/
+/* set custom allocator for all allocations (optional) */
+
+typedef void *TCCReallocFunc(void *ptr, unsigned long size);
+LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *my_realloc);
+
+/*****************************/
 
 typedef struct TCCState TCCState;
-
-typedef void (*TCCErrorFunc)(void *opaque, const char *msg);
-typedef void *(*TCCReallocFunc)(void *ptr, size_t size);
-
-/* to be used for all allocation (including tcc_new()), otherwise malloc(), realloc(), free() */
-LIBTCCAPI void tcc_set_realloc(TCCReallocFunc realloc);
-
-/* return current allocator */
-LIBTCCAPI TCCReallocFunc tcc_get_realloc();
 
 /* create a new TCC compilation context */
 LIBTCCAPI TCCState *tcc_new(void);
@@ -31,14 +28,9 @@ LIBTCCAPI void tcc_delete(TCCState *s);
 /* set CONFIG_TCCDIR at runtime */
 LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path);
 
-/* set error/warning display callback */
-LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc error_func);
-
-/* return error/warning callback */
-LIBTCCAPI TCCErrorFunc tcc_get_error_func(TCCState *s);
-
-/* return error/warning callback opaque pointer */
-LIBTCCAPI void *tcc_get_error_opaque(TCCState *s);
+/* set error/warning callback (optional) */
+typedef void TCCErrorFunc(void *opaque, const char *msg);
+LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc *error_func);
 
 /* set options as from command line (multiple supported) */
 LIBTCCAPI int tcc_set_options(TCCState *s, const char *str);
@@ -66,6 +58,9 @@ LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename);
 
 /* compile a string containing a C source. Return -1 if error. */
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *buf);
+
+/* Tip: to have more specific errors/warnings from tcc_compile_string(),
+   you can prefix the string with "#line <num> \"<filename>\"\n" */
 
 /*****************************/
 /* linking commands */
@@ -96,18 +91,12 @@ LIBTCCAPI int tcc_output_file(TCCState *s, const char *filename);
 LIBTCCAPI int tcc_run(TCCState *s, int argc, char **argv);
 
 /* do all relocations (needed before using tcc_get_symbol()) */
-LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr);
-/* possible values for 'ptr':
-   - TCC_RELOCATE_AUTO : Allocate and manage memory internally
-   - NULL              : return required memory size for the step below
-   - memory address    : copy code to memory passed by the caller
-   returns -1 if error. */
-#define TCC_RELOCATE_AUTO (void*)1
+LIBTCCAPI int tcc_relocate(TCCState *s1);
 
 /* return symbol value or NULL if not found */
 LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name);
 
-/* return symbol value or NULL if not found */
+/* list all (global) symbols and their values via 'symbol_cb()' */
 LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
     void (*symbol_cb)(void *ctx, const char *name, const void *val));
 

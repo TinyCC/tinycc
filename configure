@@ -56,6 +56,7 @@ build_cross=
 # use CC/AR from environment when set
 test -n "$CC" && cc="$CC"
 test -n "$AR" && ar="$AR"
+test -n "CFLAGS" && CFLAGS="-Wall -O2"
 
 # find source path
 source_path=${0%configure}
@@ -399,14 +400,6 @@ if test "$mingw32" = "no"; then
   default infodir      "${sharedir}/info"
 fi
 
-# set default CFLAGS
-default CFLAGS "-Wall -O2"
-
-if test "$mingw32" = "yes" -a "$cc_name" = "gcc"; then
-  # avoid mingw dependencies such as 'libgcc_s_dw2-1.dll'
-  default LDFLAGS "-static"
-fi
-
 if test x"$show_help" = "xyes" ; then
     show_help
 fi
@@ -462,6 +455,11 @@ fi
 
 if test "$bigendian" = "yes" ; then
   confvars="$confvars BIGENDIAN"
+fi
+
+if test "$mingw32" = "yes" -a "$cc_name" = "gcc"; then
+  # avoid mingw dependencies such as 'libgcc_s_dw2-1.dll'
+  default LDFLAGS "-static"
 fi
 
 if test "$cpu" = "arm"; then

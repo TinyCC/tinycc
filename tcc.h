@@ -923,13 +923,11 @@ struct TCCState {
     Section *lbounds_section; /* contains local data bound description */
 #endif
     /* symbol section */
-    Section *symtab_section;
+    union { Section *symtab_section, *symtab; }; /* historical alias */
     /* temporary dynamic symbol sections (for dll loading) */
     Section *dynsymtab_section;
     /* exported dynamic symbol section */
     Section *dynsym;
-    /* copy of the global symtab_section variable */
-    Section *symtab;
     /* got & plt handling */
     Section *got, *plt;
     /* debug sections */
@@ -972,6 +970,8 @@ struct TCCState {
     int uw_sym;
     unsigned uw_offs;
 # endif
+#else
+    unsigned shf_RELRO; /* section flags for RELRO sections */
 #endif
 
 #if defined TCC_TARGET_MACHO
@@ -991,9 +991,12 @@ struct TCCState {
 #endif
 
 #ifdef TCC_IS_NATIVE
-    const char *runtime_main;
-    void **runtime_mem;
-    int nb_runtime_mem;
+    const char *run_main; /* entry for tcc_run() */
+    void *run_ptr; /* ptr to runtime_memory */
+    unsigned run_size; /* size of runtime_memory  */
+#ifdef _WIN64
+    void *run_function_table; /* unwind data */
+#endif
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE
@@ -1542,7 +1545,9 @@ ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
 ST_FUNC size_t section_add(Section *sec, addr_t size, int align);
 ST_FUNC void *section_ptr_add(Section *sec, addr_t size);
 ST_FUNC Section *find_section(TCCState *s1, const char *name);
+ST_FUNC void free_section(Section *s);
 ST_FUNC Section *new_symtab(TCCState *s1, const char *symtab_name, int sh_type, int sh_flags, const char *strtab_name, const char *hash_name, int hash_sh_flags);
+ST_FUNC void init_symtab(Section *s);
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);
 ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size, int info, int other, int shndx, const char *name);

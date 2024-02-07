@@ -6,8 +6,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
-
 #include "libtcc.h"
 
 void handle_error(void *opaque, const char *msg)
@@ -59,13 +57,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    assert(tcc_get_error_func(s) == NULL);
-    assert(tcc_get_error_opaque(s) == NULL);
-
+    /* set custom error/warning printer */
     tcc_set_error_func(s, stderr, handle_error);
-
-    assert(tcc_get_error_func(s) == handle_error);
-    assert(tcc_get_error_opaque(s) == stderr);
 
     /* if tcclib.h and libtcc1.a are not installed, where can we find them */
     for (i = 1; i < argc; ++i) {
@@ -92,7 +85,7 @@ int main(int argc, char **argv)
     tcc_add_symbol(s, "hello", hello);
 
     /* relocate the code */
-    if (tcc_relocate(s, TCC_RELOCATE_AUTO) < 0)
+    if (tcc_relocate(s) < 0)
         return 1;
 
     /* get entry symbol */

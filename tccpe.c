@@ -1349,7 +1349,7 @@ static int pe_check_symbols(struct pe_info *pe)
                     sprintf(buffer, "IAT.%s", name);
                     is->iat_index = put_elf_sym(
                         symtab_section, 0, sizeof(DWORD),
-                        ELFW(ST_INFO)(STB_GLOBAL, STT_OBJECT),
+                        ELFW(ST_INFO)(STB_LOCAL, STT_OBJECT),
                         0, SHN_UNDEF, buffer);
 
                     offset = text_section->data_offset;
@@ -1970,7 +1970,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 
     /* grab the startup code from libtcc1.a */
 #ifdef TCC_IS_NATIVE
-    if (TCC_OUTPUT_MEMORY != s1->output_type || s1->runtime_main)
+    if (TCC_OUTPUT_MEMORY != s1->output_type || s1->run_main)
 #endif
     set_global_sym(s1, start_symbol, NULL, 0);
 
@@ -2078,7 +2078,7 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 #ifdef TCC_IS_NATIVE
         pe.thunk = data_section;
         pe_build_imports(&pe);
-        s1->runtime_main = pe.start_symbol;
+        s1->run_main = pe.start_symbol;
 #ifdef TCC_TARGET_X86_64
         s1->uw_pdata = find_section(s1, ".pdata");
 #endif

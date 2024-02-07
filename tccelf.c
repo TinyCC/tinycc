@@ -48,10 +48,10 @@ struct sym_version {
 #define SHF_DYNSYM 0x40000000
 
 #ifdef TCC_TARGET_PE
-static const int shf_RELRO = SHF_ALLOC;
+#define shf_RELRO SHF_ALLOC
 static const char rdata[] = ".rdata";
 #else
-static const int shf_RELRO = SHF_ALLOC | SHF_WRITE;
+#define shf_RELRO s1->shf_RELRO
 static const char rdata[] = ".data.ro";
 #endif
 
@@ -60,6 +60,13 @@ static const char rdata[] = ".data.ro";
 ST_FUNC void tccelf_new(TCCState *s)
 {
     TCCState *s1 = s;
+
+#ifndef TCC_TARGET_PE
+    shf_RELRO = SHF_ALLOC;
+    if (s1->output_type != TCC_OUTPUT_MEMORY)
+        shf_RELRO |= SHF_WRITE; /* the ELF loader will set it to RO at runtime */
+#endif
+
     /* no section zero */
     dynarray_add(&s->sections, &s->nb_sections, NULL);
 
@@ -76,7 +83,6 @@ ST_FUNC void tccelf_new(TCCState *s)
     symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
                                 ".strtab",
                                 ".hashtab", SHF_PRIVATE);
-    s->symtab = symtab_section;
 
     /* private symbol table for dynamic symbols */
     s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE|SHF_DYNSYM,
@@ -99,9 +105,13 @@ ST_FUNC void tccelf_new(TCCState *s)
 #endif
 }
 
-static void free_section(Section *s)
+ST_FUNC void free_section(Section *s)
 {
+    if (!s)
+        return;
     tcc_free(s->data);
+    s->data = NULL;
+    s->data_allocated = s->data_offset = 0;
 }
 
 ST_FUNC void tccelf_delete(TCCState *s1)
@@ -127,6 +137,9 @@ ST_FUNC void tccelf_delete(TCCState *s1)
         free_section(s1->priv_sections[i]);
     dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
 
+    tcc_free(s1->sym_attrs);
+    symtab_section = NULL; /* for tccrun.c:rt_printline() */
+
     /* free any loaded DLLs */
 #ifdef TCC_IS_NATIVE
     for ( i = 0; i < s1->nb_loaded_dlls; i++) {
@@ -141,9 +154,6 @@ ST_FUNC void tccelf_delete(TCCState *s1)
 #endif
     /* free loaded dlls array */
     dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
-    tcc_free(s1->sym_attrs);
-
-    symtab_section = NULL; /* for tccrun.c:rt_printline() */
 }
 
 /* save section data state */
@@ -261,32 +271,32 @@ ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh
     return sec;
 }
 
+ST_FUNC void init_symtab(Section *s)
+{
+    int *ptr, nb_buckets = 1;
+    put_elf_str(s->link, "");
+    section_ptr_add(s, sizeof (ElfW(Sym)));
+    ptr = section_ptr_add(s->hash, (2 + nb_buckets + 1) * sizeof(int));
+    ptr[0] = nb_buckets;
+    ptr[1] = 1;
+    memset(ptr + 2, 0, (nb_buckets + 1) * sizeof(int));
+}
+
 ST_FUNC Section *new_symtab(TCCState *s1,
                            const char *symtab_name, int sh_type, int sh_flags,
                            const char *strtab_name,
                            const char *hash_name, int hash_sh_flags)
 {
     Section *symtab, *strtab, *hash;
-    int *ptr, nb_buckets;
-
     symtab = new_section(s1, symtab_name, sh_type, sh_flags);
     symtab->sh_entsize = sizeof(ElfW(Sym));
     strtab = new_section(s1, strtab_name, SHT_STRTAB, sh_flags);
-    put_elf_str(strtab, "");
     symtab->link = strtab;
-    put_elf_sym(symtab, 0, 0, 0, 0, 0, NULL);
-
-    nb_buckets = 1;
-
     hash = new_section(s1, hash_name, SHT_HASH, hash_sh_flags);
     hash->sh_entsize = sizeof(int);
     symtab->hash = hash;
     hash->link = symtab;
-
-    ptr = section_ptr_add(hash, (2 + nb_buckets + 1) * sizeof(int));
-    ptr[0] = nb_buckets;
-    ptr[1] = 1;
-    memset(ptr + 2, 0, (nb_buckets + 1) * sizeof(int));
+    init_symtab(symtab);
     return symtab;
 }
 

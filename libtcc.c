@@ -249,7 +249,7 @@ ST_FUNC char *tcc_load_text(int fd)
 #undef free
 #undef realloc
 
-static void *default_reallocator(void *ptr, size_t size)
+static void *default_reallocator(void *ptr, unsigned long size)
 {
     void *ptr1;
     if (size == 0) {
@@ -275,16 +275,11 @@ static void libc_free(void *ptr)
 #define realloc(p, s) use_tcc_realloc(p, s)
 
 /* global so that every tcc_alloc()/tcc_free() call doesn't need to be changed */
-static TCCReallocFunc reallocator = default_reallocator;
+static void *(*reallocator)(void*, unsigned long) = default_reallocator;
 
-LIBTCCAPI void tcc_set_realloc(TCCReallocFunc realloc)
+LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *realloc)
 {
     reallocator = realloc;
-}
-
-LIBTCCAPI TCCReallocFunc tcc_get_realloc()
-{
-    return reallocator;
 }
 
 /* in case MEM_DEBUG is #defined */
@@ -646,7 +641,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     }
     cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
     cstr_vprintf(&cs, fmt, ap);
-    if (!s1 || !s1->error_func) {
+    if (!s1->error_func) {
         /* default case: stderr */
         if (s1 && s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
             printf("\n"); /* print a newline during tcc -E */
@@ -666,20 +661,10 @@ static void error1(int mode, const char *fmt, va_list ap)
     }
 }
 
-LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc error_func)
+LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc *error_func)
 {
     s->error_opaque = error_opaque;
     s->error_func = error_func;
-}
-
-LIBTCCAPI TCCErrorFunc tcc_get_error_func(TCCState *s)
-{
-    return s->error_func;
-}
-
-LIBTCCAPI void *tcc_get_error_opaque(TCCState *s)
-{
-    return s->error_opaque;
 }
 
 /* error without aborting current compilation */
@@ -2245,6 +2230,15 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
            s1->total_output[3]
            );
 #ifdef MEM_DEBUG
-    fprintf(stderr, "# %d bytes memory used\n", mem_max_size);
+    fprintf(stderr, "# memory usage");
+#ifdef TCC_IS_NATIVE
+    if (s1->run_size) {
+        Section *s = s1->symtab;
+        int ms = s->data_offset + s->link->data_offset + s->hash->data_offset;
+        fprintf(stderr, ": %d to run, %d symbols, %d other,",
+            s1->run_size, ms, mem_cur_size - s1->run_size - ms);
+    }
+#endif
+    fprintf(stderr, " %d max (bytes)\n", mem_max_size);
 #endif
 }

@@ -714,9 +714,11 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
     char buf[512];
     char *filename;
 
+    /* we might currently #include the <command-line> */
+    filename = file->prev ? file->prev->filename : file->filename;
+
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
        symbols can be safely used */
-    filename = file->prev ? file->prev->filename : file->filename;
     put_elf_sym(symtab_section, 0, 0,
                 ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
                 SHN_ABS, filename);
