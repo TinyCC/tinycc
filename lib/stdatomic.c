@@ -15,55 +15,8 @@
 #define __ATOMIC_SEQ_CST 5
 typedef __SIZE_TYPE__ size_t;
 
-/* uses alias to allow building with gcc/clang */
-#ifdef __TINYC__
-#define ATOMIC(x)      __atomic_##x
-#else
-#define ATOMIC(x)      __tcc_atomic_##x
-#endif
-
-void ATOMIC(signal_fence) (int memorder)
-{
-}
-
-void ATOMIC(thread_fence) (int memorder)
-{
-#if defined __i386__
-        __asm__ volatile("lock orl $0, (%esp)");
-#elif defined __x86_64__
-        __asm__ volatile("lock orq $0, (%rsp)");
-#elif defined __arm__
-        __asm__ volatile(".int 0xee070fba"); // mcr p15, 0, r0, c7, c10, 5
-#elif defined __aarch64__
-        __asm__ volatile(".int 0xd5033bbf"); // dmb ish
-#elif defined __riscv
-        __asm__ volatile(".int 0x0ff0000f"); // fence iorw,iorw
-#endif
-}
-
-bool ATOMIC(is_lock_free) (unsigned long size, const volatile void *ptr)
-{
-    bool ret;
-
-    switch (size) {
-    case 1: ret = true; break;
-    case 2: ret = true; break;
-    case 4: ret = true; break;
-#if defined __x86_64__ || defined __aarch64__ || defined __riscv
-    case 8: ret = true; break;
-#else
-    case 8: ret = false; break;
-#endif
-    default: ret = false; break;
-    }
-    return ret;
-}
-
-#ifndef __TINYC__
-void __atomic_signal_fence(int memorder) __attribute__((alias("__tcc_atomic_signal_fence")));
-void __atomic_thread_fence(int memorder) __attribute__((alias("__tcc_atomic_thread_fence")));
-bool __atomic_is_lock_free(unsigned long size, const volatile void *ptr) __attribute__((alias("__tcc_atomic_is_lock_free")));
-#endif
+void __atomic_thread_fence(int memorder);
+#define MemoryBarrier(memorder) __atomic_thread_fence(memorder)
 
 #if defined __i386__ || defined __x86_64__
 #define ATOMIC_COMPARE_EXCHANGE(TYPE, MODE, SUFFIX) \
@@ -92,7 +45,7 @@ bool __atomic_is_lock_free(unsigned long size, const volatile void *ptr) __attri
 #define ATOMIC_LOAD(TYPE, MODE) \
     TYPE __atomic_load_##MODE(const volatile void *atom, int memorder) \
     { \
-        __atomic_thread_fence(__ATOMIC_ACQUIRE); \
+        MemoryBarrier(__ATOMIC_ACQUIRE); \
         return *(volatile TYPE *)atom; \
     }
 
@@ -100,7 +53,7 @@ bool __atomic_is_lock_free(unsigned long size, const volatile void *ptr) __attri
     void __atomic_store_##MODE(volatile void *atom, TYPE value, int memorder) \
     { \
         *(volatile TYPE *)atom = value; \
-        __atomic_thread_fence(__ATOMIC_RELEASE); \
+        MemoryBarrier(__ATOMIC_ACQ_REL); \
     }
 
 #define ATOMIC_GEN_OP(TYPE, MODE, NAME, OP, RET) \
@@ -165,4 +118,54 @@ ATOMIC_GEN(uint16_t, 2, "w")
 ATOMIC_GEN(uint32_t, 4, "l")
 #if defined __x86_64__ || defined __aarch64__ || defined __riscv
 ATOMIC_GEN(uint64_t, 8, "q")
+#endif
+
+/* uses alias to allow building with gcc/clang */
+#ifdef __TINYC__
+#define ATOMIC(x)      __atomic_##x
+#else
+#define ATOMIC(x)      __tcc_atomic_##x
+#endif
+
+void ATOMIC(signal_fence) (int memorder)
+{
+}
+
+void ATOMIC(thread_fence) (int memorder)
+{
+#if defined __i386__
+        __asm__ volatile("lock orl $0, (%esp)");
+#elif defined __x86_64__
+        __asm__ volatile("lock orq $0, (%rsp)");
+#elif defined __arm__
+        __asm__ volatile(".int 0xee070fba"); // mcr p15, 0, r0, c7, c10, 5
+#elif defined __aarch64__
+        __asm__ volatile(".int 0xd5033bbf"); // dmb ish
+#elif defined __riscv
+        __asm__ volatile(".int 0x0ff0000f"); // fence iorw,iorw
+#endif
+}
+
+bool ATOMIC(is_lock_free) (unsigned long size, const volatile void *ptr)
+{
+    bool ret;
+
+    switch (size) {
+    case 1: ret = true; break;
+    case 2: ret = true; break;
+    case 4: ret = true; break;
+#if defined __x86_64__ || defined __aarch64__ || defined __riscv
+    case 8: ret = true; break;
+#else
+    case 8: ret = false; break;
+#endif
+    default: ret = false; break;
+    }
+    return ret;
+}
+
+#ifndef __TINYC__
+void __atomic_signal_fence(int memorder) __attribute__((alias("__tcc_atomic_signal_fence")));
+void __atomic_thread_fence(int memorder) __attribute__((alias("__tcc_atomic_thread_fence")));
+bool __atomic_is_lock_free(unsigned long size, const volatile void *ptr) __attribute__((alias("__tcc_atomic_is_lock_free")));
 #endif
