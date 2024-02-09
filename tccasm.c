@@ -662,8 +662,7 @@ static void asm_parse_directive(TCCState *s1, int global)
                     tcc_error("we at end of file, .endr not found");
                 tok_str_add_tok(init_str);
             }
-            tok_str_add(init_str, -1);
-            tok_str_add(init_str, 0);
+            tok_str_add(init_str, TOK_EOF);
             begin_macro(init_str, 1);
             while (repeat-- > 0) {
                 tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS),

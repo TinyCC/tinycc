@@ -34,3 +34,8 @@ OK
 #else
 NOT OK
 #endif
+
+----- 5 ------
+line __LINE__
+#define __LINE__ # ## #
+line __LINE__

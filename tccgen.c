@@ -7325,10 +7325,8 @@ static void skip_or_save_block(TokenString **str)
 	      break;
 	}
     }
-    if (str) {
-	tok_str_add(*str, -1);
-	tok_str_add(*str, 0);
-    }
+    if (str)
+	tok_str_add(*str, TOK_EOF);
 }
 
 #define EXPR_CONST 1
@@ -8038,8 +8036,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 tok_str_add_tok(init_str);
                 next();
             }
-            tok_str_add(init_str, -1);
-            tok_str_add(init_str, 0);
+            tok_str_add(init_str, TOK_EOF);
         } else
             skip_or_save_block(&init_str);
         unget_tok(0);

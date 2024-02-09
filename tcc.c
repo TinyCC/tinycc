@@ -326,7 +326,7 @@ redo:
             tcc_error_noabort("no input files");
         } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
             if (s->outfile && 0!=strcmp("-",s->outfile)) {
-                ppfp = fopen(s->outfile, "w");
+                ppfp = fopen(s->outfile, "wb");
                 if (!ppfp)
                     tcc_error_noabort("could not write '%s'", s->outfile);
             }

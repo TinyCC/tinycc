@@ -583,10 +583,11 @@ typedef struct Sym {
     };
     CType type; /* associated type */
     union {
-        int *vla_array_str; /* vla array code */
         struct Sym *next; /* next related symbol (for fields and anoms) */
-        struct Sym *cleanupstate; /* in defined labels */
+        int *e; /* expanded token stream */
         int asm_label; /* associated asm label */
+        struct Sym *cleanupstate; /* in defined labels */
+        int *vla_array_str; /* vla array code */
     };
     struct Sym *prev; /* prev symbol in stack */
     struct Sym *prev_tok; /* previous symbol for this token */
@@ -645,6 +646,7 @@ typedef struct DLLReference {
 /* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
 #define MACRO_FUNC     1 /* function like macro */
+#define MACRO_JOIN     2 /* macro uses ## */
 
 /* field 'Sym.r' for C labels */
 #define LABEL_DEFINED  0 /* label is defined */
@@ -672,6 +674,7 @@ typedef struct BufferedFile {
     int ifndef_macro_saved; /* saved ifndef_macro */
     int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
     int include_next_index; /* next search path */
+    int prev_tok_flags; /* saved tok_flags */
     char filename[1024];    /* filename */
     char *true_filename; /* filename not modified by # line directive */
     unsigned char unget[4];
@@ -685,7 +688,7 @@ typedef struct BufferedFile {
 typedef struct TokenString {
     int *str;
     int len;
-    int lastlen;
+    int need_spc;
     int allocated_len;
     int last_line_num;
     int save_line_num;
@@ -1156,7 +1159,6 @@ struct filespec {
 #define TOK_TWODOTS 0xa2 /* C++ token ? */
 #define TOK_TWOSHARPS 0xa3 /* ## preprocessing token */
 #define TOK_PLCHLDR 0xa4 /* placeholder token as defined in C99 */
-#define TOK_NOSUBST 0xa5 /* means following token has already been pp'd */
 #define TOK_PPJOIN  0xa6 /* A '##' in the right position to mean pasting */
 #define TOK_SOTYPE  0xa7 /* alias of '(' for parsing sizeof (type) */
 
@@ -1345,11 +1347,11 @@ ST_DATA CString tokcstr; /* current parsed string, if any */
 /* display benchmark infos */
 ST_DATA int tok_ident;
 ST_DATA TokenSym **table_ident;
+ST_DATA int pp_expr;
 
 #define TOK_FLAG_BOL   0x0001 /* beginning of line before */
 #define TOK_FLAG_BOF   0x0002 /* beginning of file before */
 #define TOK_FLAG_ENDIF 0x0004 /* a endif was found matching starting #ifdef */
-#define TOK_FLAG_EOF   0x0008 /* end of file */
 
 #define PARSE_FLAG_PREPROCESS 0x0001 /* activate preprocessing */
 #define PARSE_FLAG_TOK_NUM    0x0002 /* return numbers instead of TOK_PPNUM */
@@ -1400,6 +1402,8 @@ ST_FUNC void tccpp_delete(TCCState *s);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
+ST_FUNC void pp_error(CString *cs);
+
 
 /* space excluding newline */
 static inline int is_space(int ch) {

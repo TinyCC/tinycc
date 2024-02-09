@@ -14,7 +14,7 @@ x D4(a, b) y
 x D4(a) y
 x D4() y
 
-#define GNU_COMMA(X,Y...) X,## Y
+#define GNU_COMMA(X,Y...) X,##Y
 
 x GNU_COMMA(A,B,C) y
 x GNU_COMMA(A,B) y
@@ -31,6 +31,6 @@ __NORETURN
 Y(X X() ())
 
 #define DDD(A, B) D_ ## B ## _D_ ## A
-#define CCC(X, ...) DDD(X, ##__VA_ARGS__)
+#define CCC(X, ...) DDD(X,## __VA_ARGS__)
 /* must be D_B_D_A (not D_B _D_A) */
 CCC(A,B)

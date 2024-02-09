@@ -231,3 +231,9 @@ arg[1] = "Y"
 
 [test_error_incomplete_type]
 60_errors_and_warnings.c:472: error: initialization of incomplete type
+
+[test_pp_error_1]
+60_errors_and_warnings.c:480: error: #if with no expression
+
+[test_pp_error_2]
+60_errors_and_warnings.c:483: error: bad preprocessor expression: #if 0 ( 1 , 2 )

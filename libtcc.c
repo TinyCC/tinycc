@@ -633,14 +633,17 @@ static void error1(int mode, const char *fmt, va_list ap)
             cstr_printf(&cs, "In file included from %s:%d:\n",
                 (*pf)->filename, (*pf)->line_num - 1);
         cstr_printf(&cs, "%s:%d: ",
-            f->filename, f->line_num - !!(tok_flags & TOK_FLAG_BOL));
+            f->filename, f->line_num - ((tok_flags & TOK_FLAG_BOL) && !macro_ptr));
     } else if (s1->current_filename) {
         cstr_printf(&cs, "%s: ", s1->current_filename);
     } else {
         cstr_printf(&cs, "tcc: ");
     }
     cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
-    cstr_vprintf(&cs, fmt, ap);
+    if (pp_expr > 1)
+        pp_error(&cs); /* special handler for preprocessor expression errors */
+    else
+        cstr_vprintf(&cs, fmt, ap);
     if (!s1->error_func) {
         /* default case: stderr */
         if (s1 && s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
@@ -717,6 +720,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     bf->fd = -1;
     bf->prev = file;
+    bf->prev_tok_flags = tok_flags;
     file = bf;
     tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
 }
@@ -732,6 +736,7 @@ ST_FUNC void tcc_close(void)
     if (bf->true_filename != bf->filename)
         tcc_free(bf->true_filename);
     file = bf->prev;
+    tok_flags = bf->prev_tok_flags;
     tcc_free(bf);
 }
 
