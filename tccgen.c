@@ -2983,6 +2983,7 @@ redo:
             if (op != '-')
                 tcc_error("cannot use pointers here");
             vpush_type_size(pointed_type(&vtop[-1].type), &align);
+            vtop->type.t &= ~VT_UNSIGNED;
             vrott(3);
             gen_opic(op);
             vtop->type.t = VT_PTRDIFF_T;

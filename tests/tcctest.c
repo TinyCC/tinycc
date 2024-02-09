@@ -885,7 +885,7 @@ int tab4[10];
 
 void expr_ptr_test()
 {
-    int *p, *q;
+    int arr[10], *p, *q;
     int i = -1;
 
     p = tab4;
@@ -938,6 +938,9 @@ void expr_ptr_test()
     i = ((long)p) >> 32;
     printf("largeptr: %p %d\n", p, i);
 #endif
+    p = &arr[0];
+    q = p + 3;
+    printf ("%d\n", (int)((p - q) / 3));
 }
 
 void expr_cmp_test()
