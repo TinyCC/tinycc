@@ -416,12 +416,15 @@ ST_FUNC void tcc_debug_new(TCCState *s1)
     int shf = 0;
     if (!s1->dState)
         s1->dState = tcc_mallocz(sizeof *s1->dState);
+
 #ifdef CONFIG_TCC_BACKTRACE
     /* include stab info with standalone backtrace support */
-    if (s1->do_backtrace
-        && (s1->output_type & (TCC_OUTPUT_EXE | TCC_OUTPUT_DLL)))
+    if (s1->do_debug && s1->output_type == TCC_OUTPUT_MEMORY)
+        s1->do_backtrace = 1;
+    if (s1->do_backtrace)
         shf = SHF_ALLOC | SHF_WRITE; // SHF_WRITE needed for musl/SELINUX
 #endif
+
     if (s1->dwarf) {
         s1->dwlo = s1->nb_sections;
         dwarf_info_section =

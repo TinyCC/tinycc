@@ -76,6 +76,8 @@ DUMPTCC = (set -x; $(TOP)/tcc -vv; ldd $(TOP)/tcc; exit 1)
 endif
 
 all test :
+	@echo ------------ version ------------
+	@$(TCC_LOCAL) -v
 	@$(MAKE) --no-print-directory -s clean
 	@$(MAKE) --no-print-directory -s -r $(TESTS)
 

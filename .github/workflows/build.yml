@@ -8,21 +8,21 @@ jobs:
   test-x86_64-linux:
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: make & test tcc
       run: ./configure && make && make test -k
 
   test-x86_64-osx:
     runs-on: macos-11
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: make & test tcc
       run: ./configure --config-codesign=no && make && make test -k
 
   test-x86_64-win32:
     runs-on: windows-2019
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: make & test tcc
       shell: cmd
       run: |
@@ -30,3 +30,51 @@ jobs:
         set MSYSTEM=MINGW64
         set CHERE_INVOKING=yes
         C:\msys64\usr\bin\bash -l -c "./configure && make && make test -k"
+
+  test-armv7-linux:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: armv7
+        distro: ubuntu20.04
+        githubToken: ${{ github.token }}
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y gcc make
+        run: |
+            echo "::endgroup::" && echo "::endgroup::" # missing in 'run-on-arch-action'
+            ./configure && make && make test -k
+
+  test-aarch64-linux:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: aarch64
+        distro: ubuntu20.04
+        githubToken: ${{ github.token }}
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y gcc make
+        run: |
+            echo "::endgroup::" && echo "::endgroup::" # missing in 'run-on-arch-action'
+            ./configure && make && make test -k
+
+  test-riscv64-linux:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: riscv64
+        distro: ubuntu20.04
+        githubToken: ${{ github.token }}
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y gcc make
+        run: |
+            echo "::endgroup::" && echo "::endgroup::" # missing in 'run-on-arch-action'
+            ./configure && make && make test -k

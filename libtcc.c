@@ -60,6 +60,7 @@
 #endif
 #endif /* ONE_SOURCE */
 
+#define TCC_SEM_IMPL 1
 #include "tcc.h"
 
 /********************************************************/
@@ -110,7 +111,7 @@ static inline char *config_tccdir_w32(char *path)
 #define CONFIG_TCCDIR config_tccdir_w32(alloca(MAX_PATH))
 #endif
 
-#ifdef TCC_TARGET_PE
+#ifdef TCC_IS_NATIVE
 static void tcc_add_systemdir(TCCState *s)
 {
     char buf[1000];
@@ -121,44 +122,6 @@ static void tcc_add_systemdir(TCCState *s)
 #endif
 
 /********************************************************/
-#if CONFIG_TCC_SEMLOCK
-#if defined _WIN32
-ST_FUNC void wait_sem(TCCSem *p)
-{
-    if (!p->init)
-        InitializeCriticalSection(&p->cr), p->init = 1;
-    EnterCriticalSection(&p->cr);
-}
-ST_FUNC void post_sem(TCCSem *p)
-{
-    LeaveCriticalSection(&p->cr);
-}
-#elif defined __APPLE__
-/* Half-compatible MacOS doesn't have non-shared (process local)
-   semaphores.  Use the dispatch framework for lightweight locks.  */
-ST_FUNC void wait_sem(TCCSem *p)
-{
-    if (!p->init)
-        p->sem = dispatch_semaphore_create(1), p->init = 1;
-    dispatch_semaphore_wait(p->sem, DISPATCH_TIME_FOREVER);
-}
-ST_FUNC void post_sem(TCCSem *p)
-{
-    dispatch_semaphore_signal(p->sem);
-}
-#else
-ST_FUNC void wait_sem(TCCSem *p)
-{
-    if (!p->init)
-        sem_init(&p->sem, 0, 1), p->init = 1;
-    while (sem_wait(&p->sem) < 0 && errno == EINTR);
-}
-ST_FUNC void post_sem(TCCSem *p)
-{
-    sem_post(&p->sem);
-}
-#endif
-#endif
 
 PUB_FUNC void tcc_enter_state(TCCState *s1)
 {
@@ -1959,6 +1922,7 @@ dorun:
 #ifdef CONFIG_TCC_BACKTRACE
         case TCC_OPTION_bt:
             s->rt_num_callers = atoi(optarg); /* zero = default (6) */
+            goto enable_backtrace;
         enable_backtrace:
             s->do_backtrace = 1;
             s->do_debug = s->do_debug ? s->do_debug : 1;

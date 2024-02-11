@@ -478,6 +478,10 @@ if test "$cpu" = "arm"; then
   fi
 fi
 
+if test -n "$dwarf"; then
+  confvars="$confvars dwarf=$dwarf"
+fi
+
 # a final configuration tuning
 if test "$cc_name" != "tcc"; then
   OPT1="-Wdeclaration-after-statement -fno-strict-aliasing"

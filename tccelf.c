@@ -139,21 +139,6 @@ ST_FUNC void tccelf_delete(TCCState *s1)
 
     tcc_free(s1->sym_attrs);
     symtab_section = NULL; /* for tccrun.c:rt_printline() */
-
-    /* free any loaded DLLs */
-#ifdef TCC_IS_NATIVE
-    for ( i = 0; i < s1->nb_loaded_dlls; i++) {
-        DLLReference *ref = s1->loaded_dlls[i];
-        if ( ref->handle )
-# ifdef _WIN32
-            FreeLibrary((HMODULE)ref->handle);
-# else
-            dlclose(ref->handle);
-# endif
-    }
-#endif
-    /* free loaded dlls array */
-    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
 }
 
 /* save section data state */
@@ -1582,14 +1567,15 @@ static void put_ptr(TCCState *s1, Section *s, int offs)
 ST_FUNC void tcc_add_btstub(TCCState *s1)
 {
     Section *s;
-    int n, o;
+    int n, o, *p;
     CString cstr;
+    const char *__rt_info = &"___rt_info"[!s1->leading_underscore];
 
     s = data_section;
     /* Align to PTR_SIZE */
     section_ptr_add(s, -s->data_offset & (PTR_SIZE - 1));
     o = s->data_offset;
-    /* create (part of) a struct rt_context (see tccrun.c) */
+    /* create a struct rt_context (see tccrun.c) */
     if (s1->dwarf) {
         put_ptr(s1, dwarf_line_section, 0);
         put_ptr(s1, dwarf_line_section, -1);
@@ -1604,18 +1590,23 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
         put_ptr(s1, stab_section, -1);
         put_ptr(s1, stab_section->link, 0);
     }
-    *(addr_t *)section_ptr_add(s, PTR_SIZE) = s1->dwarf;
+
     /* skip esym_start/esym_end/elf_str (not loaded) */
     section_ptr_add(s, 3 * PTR_SIZE);
-    /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
-    put_ptr(s1, NULL, 0);
+
+    if (s1->output_type == TCC_OUTPUT_MEMORY && 0 == s1->dwarf) {
+        put_ptr(s1, text_section, 0);
+    } else {
+        /* prog_base : local nameless symbol with offset 0 at SHN_ABS */
+        put_ptr(s1, NULL, 0);
 #if defined TCC_TARGET_MACHO
-    /* adjust for __PAGEZERO */
-    if (s1->dwarf == 0 && s1->output_type == TCC_OUTPUT_EXE)
-        write64le(data_section->data + data_section->data_offset - PTR_SIZE,
-	          (uint64_t)1 << 32);
+        /* adjust for __PAGEZERO */
+        if (s1->dwarf == 0 && s1->output_type == TCC_OUTPUT_EXE)
+            write64le(data_section->data + data_section->data_offset - PTR_SIZE,
+	              (uint64_t)1 << 32);
 #endif
-    n = 2 * PTR_SIZE;
+    }
+    n = 4 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         put_ptr(s1, bounds_section, 0);
@@ -1623,6 +1614,18 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     }
 #endif
     section_ptr_add(s, n);
+    p = section_ptr_add(s, 2 * sizeof (int));
+    p[0] = s1->rt_num_callers;
+    p[1] = s1->dwarf;
+
+    if (s->data_offset - o != 11 * PTR_SIZE + 2 * sizeof (int))
+        exit(99);
+
+    if (s1->output_type == TCC_OUTPUT_MEMORY) {
+        set_global_sym(s1, __rt_info, s, o);
+        return;
+    }
+
     cstr_new(&cstr);
     cstr_printf(&cstr,
         "extern void __bt_init(),__bt_exit(),__bt_init_dll();"
@@ -1637,14 +1640,14 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
 #endif
 #endif
     cstr_printf(&cstr, "__bt_init(__rt_info,%d);}",
-        s1->output_type == TCC_OUTPUT_DLL ? 0 : s1->rt_num_callers + 1);
+        s1->output_type != TCC_OUTPUT_DLL);
     /* In case dlcose is called by application */
     cstr_printf(&cstr,
         "__attribute__((destructor)) static void __bt_exit_rt(){"
         "__bt_exit(__rt_info);}");
     tcc_compile_string_no_debug(s1, cstr.data);
     cstr_free(&cstr);
-    set_local_sym(s1, &"___rt_info"[!s1->leading_underscore], s, o);
+    set_local_sym(s1, __rt_info, s, o);
 }
 #endif /* def CONFIG_TCC_BACKTRACE */
 
@@ -1777,8 +1780,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_support(s1, "bt-exe.o");
             if (s1->output_type != TCC_OUTPUT_DLL)
                 tcc_add_support(s1, "bt-log.o");
-            if (s1->output_type != TCC_OUTPUT_MEMORY)
-                tcc_add_btstub(s1);
+            tcc_add_btstub(s1);
+            lpthread = 1;
         }
 #endif
         if (lpthread)

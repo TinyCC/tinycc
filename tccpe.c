@@ -1963,8 +1963,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             tcc_add_support(s1, "bt-dll.o");
         if (s1->output_type != TCC_OUTPUT_DLL)
             tcc_add_support(s1, "bt-log.o");
-        if (s1->output_type != TCC_OUTPUT_MEMORY)
-            tcc_add_btstub(s1);
+        tcc_add_btstub(s1);
     }
 #endif
 

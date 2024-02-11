@@ -4,8 +4,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-
-int (*__rt_error)(void*, void*, const char *, va_list);
+#undef __attribute__
 
 #ifdef _WIN32
 # define DLL_EXPORT __declspec(dllexport)
@@ -19,16 +18,25 @@ int (*__rt_error)(void*, void*, const char *, va_list);
 #pragma GCC diagnostic ignored "-Wframe-address"
 #endif
 
+typedef struct rt_frame
+{
+    void *ip, *fp, *sp;
+} rt_frame;
+
+__attribute__((weak))
+int _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap);
+
 DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
 {
     va_list ap;
     int ret;
 
-    if (__rt_error) {
-        void *fp = __builtin_frame_address(1);
-        void *ip = __builtin_return_address(0);
+    if (_rt_error) {
+        rt_frame f;
+        f.fp = __builtin_frame_address(1);
+        f.ip = __builtin_return_address(0);
         va_start(ap, fmt);
-        ret = __rt_error(fp, ip, fmt, ap);
+        ret = _rt_error(&f, "", fmt, ap);
         va_end(ap);
     } else {
         const char *p, *nl = "\n";

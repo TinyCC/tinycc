@@ -1853,16 +1853,16 @@ ST_FUNC void tcc_tcov_reset_ind(TCCState *s1);
 #define dwarf_str_section       s1->dwarf_str_section
 #define dwarf_line_str_section  s1->dwarf_line_str_section
 
-/* default dwarf version for "-g". use 0 to emit stab debug infos */
-#ifndef DWARF_VERSION
-# define DWARF_VERSION 0
-#endif
-
 /* default dwarf version for "-gdwarf" */
 #ifdef TCC_TARGET_MACHO
 # define DEFAULT_DWARF_VERSION 2
 #else
 # define DEFAULT_DWARF_VERSION 5
+#endif
+
+/* default dwarf version for "-g". use 0 to emit stab debug infos */
+#ifndef DWARF_VERSION
+# define DWARF_VERSION 0 //DEFAULT_DWARF_VERSION
 #endif
 
 #if defined TCC_TARGET_PE
@@ -1945,4 +1945,42 @@ PUB_FUNC void tcc_exit_state(TCCState *s1);
 # define TCC_STATE_VAR(sym) s1->sym
 # define TCC_SET_STATE(fn) (tcc_enter_state(s1),fn)
 # define _tcc_error use_tcc_error_noabort
+#endif
+
+#if CONFIG_TCC_SEMLOCK && TCC_SEM_IMPL
+#undef TCC_SEM_IMPL
+#if defined _WIN32
+ST_FUNC void wait_sem(TCCSem *p)
+{
+    if (!p->init)
+        InitializeCriticalSection(&p->cr), p->init = 1;
+    EnterCriticalSection(&p->cr);
+}
+ST_FUNC void post_sem(TCCSem *p)
+{
+    LeaveCriticalSection(&p->cr);
+}
+#elif defined __APPLE__
+ST_FUNC void wait_sem(TCCSem *p)
+{
+    if (!p->init)
+        p->sem = dispatch_semaphore_create(1), p->init = 1;
+    dispatch_semaphore_wait(p->sem, DISPATCH_TIME_FOREVER);
+}
+ST_FUNC void post_sem(TCCSem *p)
+{
+    dispatch_semaphore_signal(p->sem);
+}
+#else
+ST_FUNC void wait_sem(TCCSem *p)
+{
+    if (!p->init)
+        sem_init(&p->sem, 0, 1), p->init = 1;
+    while (sem_wait(&p->sem) < 0 && errno == EINTR);
+}
+ST_INLN void post_sem(TCCSem *p)
+{
+    sem_post(&p->sem);
+}
+#endif
 #endif

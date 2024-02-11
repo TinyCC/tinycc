@@ -10,7 +10,7 @@ set /p VERSION= < ..\VERSION
 set TCCDIR=
 set BINDIR=
 set DOC=no
-set EXES_ONLY=no
+set XCC=no
 goto :a0
 :a2
 shift
@@ -27,7 +27,7 @@ if (%1)==(-v) set VERSION=%~2&& goto :a2
 if (%1)==(-i) set TCCDIR=%2&& goto :a2
 if (%1)==(-b) set BINDIR=%2&& goto :a2
 if (%1)==(-d) set DOC=yes&& goto :a3
-if (%1)==(-x) set EXES_ONLY=yes&& goto :a3
+if (%1)==(-x) set XCC=yes&& goto :a3
 if (%1)==() goto :p1
 :usage
 echo usage: build-tcc.bat [ options ... ]
@@ -39,7 +39,7 @@ echo   -v "version"         set tcc version
 echo   -i tccdir            install tcc into tccdir
 echo   -b bindir            but install tcc.exe and libtcc.dll into bindir
 echo   -d                   create tcc-doc.html too (needs makeinfo)
-echo   -x                   just create the executables
+echo   -x                   build the cross compiler too
 echo   -clean               delete all previously produced files and directories
 exit /B 1
 
@@ -144,6 +144,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 %CC% -o libtcc.dll -shared %LIBTCC_C% %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
+if not _%XCC%_==_yes_ goto :compiler_done
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
 :compiler_done
 @if (%EXES_ONLY%)==(yes) goto :files_done

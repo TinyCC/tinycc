@@ -5,61 +5,56 @@
 #define CONFIG_TCC_BACKTRACE_ONLY
 #define ONE_SOURCE 1
 #define pstrcpy tcc_pstrcpy
+#define TCC_SEM_IMPL 1
 #include "../tccrun.c"
-
-int (*__rt_error)(void*, void*, const char *, va_list);
-__attribute__((weak)) void __bound_checking_lock(void);
-__attribute__((weak)) void __bound_checking_unlock(void);
 
 #ifndef _WIN32
 # define __declspec(n)
 #endif
 
 __declspec(dllexport)
-void __bt_init(rt_context *p, int num_callers)
+void __bt_init(rt_context *p, int is_exe)
 {
     __attribute__((weak)) int main();
     __attribute__((weak)) void __bound_init(void*, int);
-    struct rt_context *rc = &g_rtctxt;
-    //fprintf(stderr, "__bt_init %d %p %p\n", num_callers, p->stab_sym, p->bounds_start), fflush(stderr);
+
+    WAIT_SEM(&rt_sem);
+    //fprintf(stderr, "__bt_init %d %p %p %p\n", is_exe, p, p->stab_sym, p->bounds_start), fflush(stderr);
+
     /* call __bound_init here due to redirection of sigaction */
     /* needed to add global symbols */
-    if (p->bounds_start) {
-	__bound_init(p->bounds_start, -1);
-        __bound_checking_lock();
-    }
-    if (num_callers) {
-        memcpy(rc, p, offsetof(rt_context, next));
-        rc->num_callers = num_callers - 1;
-        rc->top_func = main;
-        __rt_error = _rt_error;
-        set_exception_handler();
-    } else {
-        p->next = rc->next, rc->next = p;
-    }
     if (p->bounds_start)
-        __bound_checking_unlock();
+	__bound_init(p->bounds_start, -1);
+
+    /* add to chain */
+    p->next = g_rc, g_rc = p;
+    if (is_exe) {
+        /* we are the executable (not a dll) */
+        p->top_func = main;
+        set_exception_handler();
+    }
+    POST_SEM(&rt_sem);
 }
 
 __declspec(dllexport)
 void __bt_exit(rt_context *p)
 {
+    struct rt_context *rc, **pp;
     __attribute__((weak)) void __bound_exit_dll(void*);
-    struct rt_context *rc = &g_rtctxt;
 
-    if (p->bounds_start) {
-	__bound_exit_dll(p->bounds_start);
-        __bound_checking_lock();
-    }
-    while (rc) {
-        if (rc->next == p) {
-	    rc->next = rc->next->next;
-	    break;
-	}
-	rc = rc->next;
-    }
+    WAIT_SEM(&rt_sem);
+    //fprintf(stderr, "__bt_exit %d %p\n", !!p->top_func, p);
+
     if (p->bounds_start)
-        __bound_checking_unlock();
+	__bound_exit_dll(p->bounds_start);
+
+    /* remove from chain */
+    for (pp = &g_rc; rc = *pp, rc; pp = &rc->next)
+        if (rc == p) {
+            *pp = rc->next;
+            break;
+        }
+    POST_SEM(&rt_sem);
 }
 
 /* copy a string and truncate it. */
