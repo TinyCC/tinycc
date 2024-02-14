@@ -29,6 +29,9 @@ ifdef CONFIG_WIN32
  ifneq ($(CONFIG_static),yes)
   LIBTCC = libtcc$(DLLSUF)
   LIBTCCDEF = libtcc.def
+  -LTCC = $(bindir)/libtcc.dll
+ else
+  -LTCC = -ltcc -L$(libdir)
  endif
  ifneq ($(CONFIG_debug),yes)
   LDFLAGS += -s
@@ -70,6 +73,7 @@ else
   endif
   export MACOSX_DEPLOYMENT_TARGET := 10.6
  endif
+ -LTCC = -ltcc
 endif
 
 # run local version of tcc with local libraries and includes
@@ -78,6 +82,15 @@ TCCFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include -I$(TOPSRC) -I$(TOP) -L$(TO
 TCCFLAGS = $(TCCFLAGS$(CFG))
 TCC_LOCAL = $(TOP)/tcc$(EXESUF)
 TCC = $(TCC_LOCAL) $(TCCFLAGS)
+
+# run tests with the installed tcc instead
+ifdef TESTINSTALL
+  TCC_LOCAL = $(bindir)/tcc
+  TCCFLAGS-unx = -I..
+  TCCFLAGS-win = -I.. -B$(bindir)
+  LIBTCC =
+  LIBS += $(-LTCC)
+endif
 
 CFLAGS_P = $(CFLAGS) -pg -static -DCONFIG_TCC_STATIC -DTCC_PROFILE
 LIBS_P = $(LIBS)
@@ -373,7 +386,7 @@ IR = $(IM) mkdir -p $2 && cp -r $1/. $2
 IM = @echo "-> $2 : $1" ;
 BINCHECK = $(if $(wildcard $(PROGS) *-tcc$(EXESUF)),,@echo "Makefile: nothing found to install" && exit 1)
 
-B_O = bcheck.o bt-exe.o bt-log.o bt-dll.o
+B_O = runmain.o bt-exe.o bt-dll.o bcheck.o
 
 # install progs & libs
 install-unx:
@@ -411,7 +424,7 @@ install-win:
 	$(call IR,$(TOPSRC)/win32/include,"$(tccdir)/include")
 	$(call IR,$(TOPSRC)/win32/examples,"$(tccdir)/examples")
 	$(call IF,$(TOPSRC)/tests/libtcc_test.c,"$(tccdir)/examples")
-	$(call IFw,$(TOPSRC)/libtcc.h libtcc.def,"$(libdir)")
+	$(call IFw,$(TOPSRC)/libtcc.h libtcc.def libtcc.a,"$(libdir)")
 	$(call IFw,$(TOPSRC)/win32/tcc-win32.txt tcc-doc.html,"$(docdir)")
 ifneq "$(wildcard $(LIBTCC1_U))" ""
 	$(call IFw,$(LIBTCC1_U),"$(tccdir)/lib")
@@ -420,9 +433,9 @@ endif
 
 # uninstall on windows
 uninstall-win:
-	@rm -fv $(addprefix "$(bindir)/", libtcc*.dll $(PROGS) *-tcc.exe)
-	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)/$P/*")
-	@rm -frv $(addprefix "$(tccdir)/", doc examples include lib libtcc)
+	@rm -fv $(foreach P,libtcc*.dll $(PROGS) *-tcc.exe,"$(bindir)"/$P)
+	@rm -fr $(foreach P,doc examples include lib libtcc,"$(tccdir)"/$P/*)
+	@rm -frv $(foreach P,doc examples include lib libtcc,"$(tccdir)"/$P)
 
 # the msys-git shell works to configure && make except it does not have install
 ifeq ($(OS),Windows_NT)
@@ -473,6 +486,9 @@ tcov-tes% : tcc_c$(EXESUF)
 	@$(MAKE) --no-print-directory TCC_LOCAL=$(CURDIR)/$< tes$*
 tcc_c$(EXESUF): $($T_FILES)
 	$S$(TCC) tcc.c -o $@ -ftest-coverage $(DEFINES) $(LIBS)
+# test the installed tcc instead
+test-install: tccdefs_.h
+	@$(MAKE) -C tests TESTINSTALL=yes #_all
 
 clean:
 	@rm -f tcc$(EXESUF) tcc_c$(EXESUF) tcc_p$(EXESUF) *-tcc$(EXESUF)
@@ -506,6 +522,8 @@ help:
 	@echo "   run all/single test(s) from tests/pp"
 	@echo "make tcov-test / tcov-tests2... / tcov-testspp..."
 	@echo "   run tests as above with code coverage. After test(s) see tcc_c$(EXESUF).tcov"
+	@echo "make test-install"
+	@echo "   run tests with the installed tcc"
 	@echo "Other supported make targets:"
 	@echo "   install install-strip doc clean tags ETAGS tar distclean help"
 	@echo "Custom configuration:"

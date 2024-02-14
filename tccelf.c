@@ -1778,8 +1778,6 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         if (s1->do_backtrace) {
             if (s1->output_type & TCC_OUTPUT_EXE)
                 tcc_add_support(s1, "bt-exe.o");
-            if (s1->output_type != TCC_OUTPUT_DLL)
-                tcc_add_support(s1, "bt-log.o");
             tcc_add_btstub(s1);
             lpthread = 1;
         }

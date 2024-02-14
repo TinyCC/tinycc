@@ -26,14 +26,14 @@ void __bt_init(rt_context *p, int is_exe)
 	__bound_init(p->bounds_start, -1);
 
     /* add to chain */
-    WAIT_SEM(&rt_sem);
+    rt_wait_sem();
     p->next = g_rc, g_rc = p;
-    if (is_exe)
+    rt_post_sem();
+    if (is_exe) {
         /* we are the executable (not a dll) */
         p->top_func = main;
-    POST_SEM(&rt_sem);
-    if (is_exe)
         set_exception_handler();
+    }
 }
 
 __declspec(dllexport)
@@ -48,13 +48,13 @@ void __bt_exit(rt_context *p)
 	__bound_exit_dll(p->bounds_start);
 
     /* remove from chain */
-    WAIT_SEM(&rt_sem);
+    rt_wait_sem();
     for (pp = &g_rc; rc = *pp, rc; pp = &rc->next)
         if (rc == p) {
             *pp = rc->next;
             break;
         }
-    POST_SEM(&rt_sem);
+    rt_post_sem();
 }
 
 /* copy a string and truncate it. */

@@ -1,4 +1,5 @@
 [test_128_return]
+startup5
 cleanup5
 1 cleanup4
 1 cleanup3
@@ -7,6 +8,7 @@ cleanup1
 [returns 1]
 
 [test_128_exit]
+startup5
 cleanup5
 2 cleanup4
 2 cleanup3

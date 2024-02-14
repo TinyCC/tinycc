@@ -1000,6 +1000,10 @@ struct TCCState {
 #ifdef _WIN64
     void *run_function_table; /* unwind data */
 #endif
+    struct TCCState *next;
+    struct rt_context *rc; /* pointer to backtrace info block */
+    void *run_lj, *run_jb; /* sj/lj for tcc_setjmp()/tcc_run() */
+    void (*bt_func)(void *, const char*, int, const char*);
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE

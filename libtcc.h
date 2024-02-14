@@ -100,6 +100,17 @@ LIBTCCAPI void *tcc_get_symbol(TCCState *s, const char *name);
 LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
     void (*symbol_cb)(void *ctx, const char *name, const void *val));
 
+/* experimental/advanced section (see libtcc_test_mt.c for an example) */
+
+/* catch runtime exceptions (optionally limit backtraces at top_func),
+   when using tcc_set_options("-bt") and when not using tcc_run() */
+LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *longjmp, void *jmp_buf, void *top_func);
+#define tcc_setjmp(s1,jb,f) setjmp(_tcc_setjmp(s1, longjmp, jb, f))
+
+/* set custom error printer for runtime exceptions */
+typedef void TCCBtFunc(void *pc, const char *file, int line, const char* func);
+LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, TCCBtFunc*);
+
 #ifdef __cplusplus
 }
 #endif

@@ -26,7 +26,7 @@
 #ifdef CONFIG_TCC_BACKTRACE
 typedef struct rt_context
 {
-    /* --> tccelf.c:tcc_add_btstub wants those below in that order: */
+    /* tccelf.c:tcc_add_btstub() wants these in that order: */
     union {
 	struct {
 	    Stab_Sym *stab_sym;
@@ -42,54 +42,32 @@ typedef struct rt_context
     ElfW(Sym) *esym_start;
     ElfW(Sym) *esym_end;
     char *elf_str;
-
+    // 6
     addr_t prog_base;
     void *bounds_start;
     void *top_func;
     TCCState *s1;
     struct rt_context *next;
-
+    // 11
     int num_callers;
     int dwarf;
-    /* <-- */
 } rt_context; /* size = 11 * PTR_SIZE + 2 * sizeof (int) */
 
-typedef struct rt_frame
-{
+typedef struct rt_frame {
     addr_t ip, fp, sp;
 } rt_frame;
 
 /* linked list of rt_contexts */
 static rt_context *g_rc;
+static TCCState *g_s1;
 /* semaphore to protect it */
 TCC_SEM(static rt_sem);
 static int signal_set;
 static void set_exception_handler(void);
-
-#ifdef _WIN32
-#define	ATTR_WEAK
-#else
-#define	ATTR_WEAK	__attribute__((weak))
-#endif
-int ATTR_WEAK _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap);
-void ATTR_WEAK rt_wait_sem(void) { WAIT_SEM(&rt_sem); }
-void ATTR_WEAK rt_post_sem(void) { POST_SEM(&rt_sem); }
-#undef ATTR_WEAK
+static void rt_wait_sem(void) { WAIT_SEM(&rt_sem); }
+static void rt_post_sem(void) { POST_SEM(&rt_sem); }
+static int rt_get_caller_pc(addr_t *paddr, rt_frame *f, int level);
 #endif /* def CONFIG_TCC_BACKTRACE */
-
-/* handle exit/atexit for tcc_run() -- thread-unsafe */
-static jmp_buf rt_jb;
-static int rt_do_jmp;
-static int rt_nr_exit;
-static void *rt_exitfunc[32];
-static void *rt_exitarg[32];
-
-static void rt_exit(int code)
-{
-    if (rt_do_jmp)
-        longjmp(rt_jb, code ? code : 256);
-    exit(code);
-}
 
 /* ------------------------------------------------------------- */
 /* defined when included from lib/bt-exe.c */
@@ -101,7 +79,8 @@ static void rt_exit(int code)
 
 static int protect_pages(void *ptr, unsigned long length, int mode);
 static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff);
-
+static int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap);
+static void rt_longjmp(rt_frame *f, int code);
 #ifdef _WIN64
 static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
@@ -118,12 +97,9 @@ static void bt_link(TCCState *s1)
     rc = tcc_get_symbol(s1, "__rt_info");
     if (!rc)
         return;
-    rt_wait_sem();
-    rc->next = g_rc, g_rc = rc, rc->s1 = s1;
     rc->esym_start = (ElfW(Sym) *)(symtab_section->data);
     rc->esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
     rc->elf_str = (char *)symtab_section->link->data;
-    rc->top_func = tcc_get_symbol(s1, "main");
     if (PTR_SIZE == 8 && !s1->dwarf)
         rc->prog_base &= 0xffffffff00000000ULL;
 #ifdef CONFIG_TCC_BCHECK
@@ -132,7 +108,7 @@ static void bt_link(TCCState *s1)
             ((void(*)(void*,int))p)(rc->bounds_start, 1);
     }
 #endif
-    rt_post_sem();
+    rc->next = g_rc, g_rc = rc, rc->s1 = s1, s1->rc = rc;
     if (0 == signal_set)
         set_exception_handler(), signal_set = 1;
 #endif
@@ -142,14 +118,33 @@ static void bt_unlink(TCCState *s1)
 {
 #ifdef CONFIG_TCC_BACKTRACE
     rt_context *rc, **pp;
-    rt_wait_sem();
     for (pp = &g_rc; rc = *pp, rc; pp = &rc->next)
         if (rc->s1 == s1) {
             *pp = rc->next;
             break;
         }
-    rt_post_sem();
 #endif
+}
+
+static void st_link(TCCState *s1)
+{
+    rt_wait_sem();
+    s1->next = g_s1, g_s1 = s1;
+    bt_link(s1);
+    rt_post_sem();
+}
+
+static void st_unlink(TCCState *s1)
+{
+    TCCState *s2, **pp;
+    rt_wait_sem();
+    bt_unlink(s1);
+    for (pp = &g_s1; s2 = *pp, s2; pp = &s2->next)
+        if (s2 == s1) {
+            *pp = s2->next;
+            break;
+        }
+    rt_post_sem();
 }
 
 #if !_WIN32 && !__APPLE__
@@ -196,9 +191,8 @@ LIBTCCAPI int tcc_relocate(TCCState *s1)
         exit(tcc_error_noabort("'tcc_relocate()' twice is no longer supported"));
 
 #ifdef CONFIG_TCC_BACKTRACE
-    /* for bt-log.c (but not when 'tcc -bt -run tcc.c') */
-    if (s1->do_backtrace && !tcc_get_symbol(s1, "_rt_error"))
-        tcc_add_symbol(s1, "_rt_error", _rt_error);
+    if (s1->do_backtrace)
+        tcc_add_symbol(s1, "__rt_dump", __rt_dump); /* for bt-log.c */
 #endif
 
     size = tcc_relocate_ex(s1, NULL, 0);
@@ -209,7 +203,7 @@ LIBTCCAPI int tcc_relocate(TCCState *s1)
         return -1;
     ret = tcc_relocate_ex(s1, s1->run_ptr, ptr_diff);
     if (ret == 0)
-        bt_link(s1);
+        st_link(s1);
     return ret;
 }
 
@@ -231,12 +225,11 @@ ST_FUNC void tcc_run_free(TCCState *s1)
     }
     /* free loaded dlls array */
     dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
-
     /* unmap or unprotect and free memory */
     ptr = s1->run_ptr;
     if (NULL == ptr)
         return;
-    bt_unlink(s1);
+    st_unlink(s1);
     size = s1->run_size;
 #ifdef HAVE_SELINUX
     munmap(ptr, size * 2);
@@ -250,41 +243,25 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 #endif
 }
 
-static void run_cdtors(TCCState *s1, const char *start, const char *end,
-                       int argc, char **argv, char **envp)
+LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *p_longjmp, void *p_jmp_buf, void *func)
 {
-    void **a = (void **)get_sym_addr(s1, start, 0, 0);
-    void **b = (void **)get_sym_addr(s1, end, 0, 0);
-    while (a != b)
-        ((void(*)(int, char **, char **))*a++)(argc, argv, envp);
+    s1->run_lj = p_longjmp;
+    s1->run_jb = p_jmp_buf;
+    if (func && s1->rc)
+        s1->rc->top_func = func;
+    return p_jmp_buf;
 }
 
-static void run_on_exit(int ret)
+LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, TCCBtFunc *func)
 {
-    int n = rt_nr_exit;
-    while (n)
-	--n, ((void(*)(int,void*))rt_exitfunc[n])(ret, rt_exitarg[n]);
-}
-
-static int rt_on_exit(void *function, void *arg)
-{
-    if (rt_nr_exit < countof(rt_exitfunc)) {
-	rt_exitfunc[rt_nr_exit] = function;
-	rt_exitarg[rt_nr_exit++] = arg;
-        return 0;
-    }
-    return 1;
-}
-
-static int rt_atexit(void *function)
-{
-    return rt_on_exit(function, NULL);
+    s1->bt_func = func;
 }
 
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **, char **), ret;
+    jmp_buf main_jb;
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
     char **envp = NULL;
@@ -295,35 +272,29 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     char **envp = environ;
 #endif
 
-    s1->run_main = s1->nostdlib ? "_start" : "main";
-    if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, s1->run_main, 0, 1))
+    /* tcc -dt -run ... nothing to do if no main() */
+    if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, "main", 0, 1))
         return 0;
 
-    tcc_add_symbol(s1, "exit", rt_exit);
-    tcc_add_symbol(s1, "atexit", rt_atexit);
-    tcc_add_symbol(s1, "on_exit", rt_on_exit);
+    tcc_add_support(s1, "runmain.o");
+    tcc_add_symbol(s1, "__rt_longjmp", rt_longjmp);
+    s1->run_main = (s1->nostdlib ? "_start" : "_runmain");
     if (tcc_relocate(s1) < 0)
         return -1;
 
     prog_main = (void*)get_sym_addr(s1, s1->run_main, 1, 1);
     if ((addr_t)-1 == (addr_t)prog_main)
         return -1;
-
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
-    rt_do_jmp = 1;
-    rt_nr_exit = 0;
 
-    /* These aren't C symbols, so don't need leading underscore handling.  */
-    run_cdtors(s1, "__init_array_start", "__init_array_end", argc, argv, envp);
-    ret = setjmp(rt_jb);
+    ret = tcc_setjmp(s1, main_jb, tcc_get_symbol(s1, "main"));
     if (0 == ret)
         ret = prog_main(argc, argv, envp);
     else if (256 == ret)
         ret = 0;
-    run_cdtors(s1, "__fini_array_start", "__fini_array_end", 0, NULL, NULL);
-    run_on_exit(ret);
+
     if (s1->dflag & 16 && ret) /* tcc -dt -run ... */
         fprintf(s1->ppfp, "[returns %d]\n", ret), fflush(s1->ppfp);
     return ret;
@@ -385,7 +356,6 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff)
     addr_t mem, addr;
 
     if (NULL == ptr) {
-        s1->nb_errors = 0;
 #ifdef TCC_TARGET_PE
         pe_output_file(s1, NULL);
 #else
@@ -616,7 +586,7 @@ static char *rt_elfsym(rt_context *rc, addr_t wanted_pc, addr_t *func_addr)
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
 static addr_t rt_printline (rt_context *rc, addr_t wanted_pc,
-    const char *msg, const char *skip)
+    rt_context** prc, const char *msg, const char *skip)
 {
     char func_name[128];
     addr_t func_addr, last_pc, pc;
@@ -726,14 +696,21 @@ next:
 
 found:
     i = last_incl_index;
+    str = NULL;
     if (i > 0) {
         str = incl_files[--i];
         if (skip[0] && strstr(str, skip))
             return (addr_t)-1;
-        rt_printf("%s:%d: ", str, last_line_num);
-    } else
-        rt_printf("%08llx : ", (long long)wanted_pc);
-    rt_printf("%s %s", msg, func_name[0] ? func_name : "???");
+    }
+    if (rc && rc->s1 && rc->s1->bt_func) {
+        rc->s1->bt_func((void*)wanted_pc, str, last_line_num, func_name[0] ? func_name : NULL);
+    } else {
+        if (str)
+            rt_printf("%s:%d: ", str, last_line_num);
+        else
+            rt_printf("%08llx : ", (long long)wanted_pc);
+        rt_printf("%s %s", msg, func_name[0] ? func_name : "???");
+    }
 #if 0
     if (--i >= 0) {
         rt_printf(" (included from ");
@@ -746,6 +723,7 @@ found:
         rt_printf(")");
     }
 #endif
+    *prc = rc;
     return func_addr;
 }
 
@@ -816,7 +794,7 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
 }
 
 static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
-    const char *msg, const char *skip)
+    rt_context** prc, const char *msg, const char *skip)
 {
     unsigned char *ln;
     unsigned char *cp;
@@ -859,6 +837,7 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
 next:
     filename = NULL;
     func_addr = 0;
+    line = 0;
     if (NULL == rc)
         goto found;
 
@@ -1102,29 +1081,33 @@ next_line:
     goto next;
 
 found:
-    if (filename) {
-	if (skip[0] && strstr(filename, skip))
-	    return (addr_t)-1;
-	rt_printf("%s:%d: ", filename, line);
+    if (rc && rc->s1 && rc->s1->bt_func) {
+        rc->s1->bt_func((void*)wanted_pc, filename, line, function);
+    } else {
+        if (filename) {
+            if (skip[0] && strstr(filename, skip))
+                return (addr_t)-1;
+            rt_printf("%s:%d: ", filename, line);
+        }
+        else
+            rt_printf("0x%08llx : ", (long long)wanted_pc);
+        rt_printf("%s %s", msg, function ? function : "???");
     }
-    else
-	rt_printf("0x%08llx : ", (long long)wanted_pc);
-    rt_printf("%s %s", msg, function ? function : "???");
+    *prc = rc;
     return (addr_t)func_addr;
 }
 /* ------------------------------------------------------------- */
-
-static int rt_get_caller_pc(addr_t *paddr, rt_frame *f, int level);
-
-int _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap)
+#ifndef CONFIG_TCC_BACKTRACE_ONLY
+static
+#endif
+int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap)
 {
-    rt_context *rc;
+    rt_context *rc, *rd;
     addr_t pc = 0;
     char skip[100];
     int i, level, ret, n, one;
     const char *a, *b;
-    addr_t (*printline)(rt_context*, addr_t, const char*, const char*);
-    addr_t top_func = 0;
+    addr_t (*printline)(rt_context*, addr_t, rt_context**, const char*, const char*);
 
     skip[0] = 0;
     /* If fmt is like "^file.c^..." then skip calls from 'file.c' */
@@ -1145,27 +1128,28 @@ int _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap)
             printline = rt_printline_dwarf;
         if (rc->num_callers)
             n = rc->num_callers;
-        top_func = (addr_t)rc->top_func;
     }
-
     for (i = level = 0; level < n; i++) {
         ret = rt_get_caller_pc(&pc, f, i);
-        a = "%s";
         if (ret != -1) {
-            pc = printline(rc, pc, level ? "by" : "at", skip);
+            pc = printline(rc, pc, &rd, level ? "by" : "at", skip);
             if (pc == (addr_t)-1)
                 continue;
-            a = ": %s";
         }
         if (level == 0) {
-            rt_printf(a, msg);
+            if (rd && rd->s1 && rd->s1->bt_func)
+                break;
+            if (ret != -1)
+                rt_printf(": ");
+            if (msg)
+                rt_printf("%s: ", msg);
             rt_vprintf(fmt, ap);
         } else if (ret == -1)
             break;
         if (one)
             break;
         rt_printf("\n");
-        if (ret == -1 || (pc == top_func && pc))
+        if (ret == -1 || (rd && pc == (addr_t)rd->top_func && pc))
             break;
         ++level;
     }
@@ -1180,9 +1164,44 @@ static int rt_error(rt_frame *f, const char *fmt, ...)
     va_list ap;
     int ret;
     va_start(ap, fmt);
-    ret = _rt_error(f, "RUNTIME ERROR: ", fmt, ap);
+    ret = __rt_dump(f, "RUNTIME ERROR", fmt, ap);
     va_end(ap);
     return ret;
+}
+
+static TCCState *rt_find_state(rt_frame *f)
+{
+    TCCState *s;
+    int level;
+    addr_t pc;
+
+    rt_wait_sem();
+    for (s = g_s1; s; s = s->next) {
+        if (0 == s->run_lj)
+            continue;
+        for (level = 0; level < 8; ++level) {
+            if (rt_get_caller_pc(&pc, f, level) < 0)
+                break;
+            if (pc >= (addr_t)s->run_ptr
+             && pc < (addr_t)s->run_ptr + s->run_size)
+                goto found;
+        }
+    }
+found:
+    rt_post_sem();
+    //fprintf(stderr, "\nrt_state found %s %p %p\n", s ? "YES" : "NO", s, s->rc->top_func), fflush(stderr);
+    return s;
+}
+
+static void rt_longjmp(rt_frame *f, int code)
+{
+    TCCState *s = rt_find_state(f);
+    if (s && s->run_lj) {
+        if (code == 0)
+            code = 256;
+        ((void(*)(void*,int))s->run_lj)(s->run_jb, code);
+    }
+    exit(code);
 }
 
 /* ------------------------------------------------------------- */
@@ -1319,7 +1338,8 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
         rt_error(&f, "caught signal %d", signum);
         break;
     }
-    rt_exit(255);
+    set_exception_handler();
+    rt_longjmp(&f, 255);
 }
 
 #ifndef SA_SIGINFO
@@ -1333,7 +1353,7 @@ static void set_exception_handler(void)
     /* install TCC signal handlers to print debug info on fatal
        runtime errors */
     sigemptyset (&sigact.sa_mask);
-    sigact.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sigact.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_NODEFER;
 #if 0//def SIGSTKSZ // this causes signals not to work at all on some (older) linuxes
     sigact.sa_flags |= SA_ONSTACK;
 #endif
@@ -1365,7 +1385,6 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 {
     rt_frame f;
     unsigned code;
-
     rt_getcontext(ex_info->ContextRecord, &f);
 
     switch (code = ex_info->ExceptionRecord->ExceptionCode) {
@@ -1387,8 +1406,7 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
         rt_error(&f, "caught exception %08x", code);
         break;
     }
-    if (rt_do_jmp)
-        rt_exit(255);
+    rt_longjmp(&f, 255);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -1405,45 +1423,41 @@ static void set_exception_handler(void)
 #if defined(__i386__) || defined(__x86_64__)
 static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
 {
-    addr_t ip, fp;
-    if (level == 0) {
-        ip = rc->ip;
-    } else {
-        ip = 0;
-        fp = rc->fp;
-        while (--level) {
-            /* XXX: check address validity with program info */
-            if (fp <= 0x1000)
-                break;
-            fp = ((addr_t *)fp)[0];
-        }
-        if (fp > 0x1000)
-            ip = ((addr_t *)fp)[1];
-    }
-    if (ip <= 0x1000)
-        return -1;
-    *paddr = ip;
-    return 0;
-}
-
-#elif defined(__arm__)
-static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
-{
-    /* XXX: only supports linux/bsd */
-#if !defined(__linux__) && \
-    !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
-    return -1;
-#else
     if (level == 0) {
         *paddr = rc->ip;
     } else {
         addr_t fp = rc->fp;
-        while (--level)
+        while (1) {
+            if (fp < 0x1000)
+                return -1;
+            if (0 == --level)
+                break;
+            /* XXX: check address validity with program info */
             fp = ((addr_t *)fp)[0];
+        }
+        *paddr = ((addr_t *)fp)[1];
+    }
+    return 0;
+}
+
+/* XXX: only supports linux/bsd */
+#elif defined(__arm__) && !defined(_WIN32)
+static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
+{
+    if (level == 0) {
+        *paddr = rc->ip;
+    } else {
+        addr_t fp = rc->fp;
+        while (1) {
+            if (fp < 0x1000)
+                return -1;
+            if (0 == --level)
+                break;
+            fp = ((addr_t *)fp)[0];
+        }
         *paddr = ((addr_t *)fp)[2];
     }
     return 0;
-#endif
 }
 
 #elif defined(__aarch64__)
@@ -1452,10 +1466,15 @@ static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
     if (level == 0) {
         *paddr = rc->ip;
     } else {
-        addr_t *fp = (addr_t*)rc->fp;
-        while (--level)
-            fp = (addr_t *)fp[0];
-        *paddr = fp[1];
+        addr_t fp = rc->fp;
+        while (1) {
+            if (fp < 0x1000)
+                return -1;
+            if (0 == --level)
+                break;
+            fp = ((addr_t *)fp)[0];
+        }
+        *paddr = ((addr_t *)fp)[1];
     }
     return 0;
 }
@@ -1466,12 +1485,15 @@ static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
     if (level == 0) {
         *paddr = rc->ip;
     } else {
-        addr_t *fp = (addr_t*)rc->fp;
-        while (--level && fp >= (addr_t*)0x1000)
-            fp = (addr_t *)fp[-2];
-        if (fp < (addr_t*)0x1000)
-          return -1;
-        *paddr = fp[-1];
+        addr_t fp = rc->fp;
+        while (1) {
+            if (fp < 0x1000)
+                return -1;
+            if (0 == --level)
+                break;
+            fp = ((addr_t *)fp)[-2];
+        }
+        *paddr = ((addr_t *)fp)[-1];
     }
     return 0;
 }

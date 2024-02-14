@@ -14,23 +14,20 @@ TESTS = \
  libtest \
  libtest_mt \
  test3 \
- memtest \
- dlltest \
  abitest \
  asm-c-connect-test \
  vla_test-run \
- cross-test \
  tests2-dir \
- pp-dir
+ pp-dir \
+ memtest \
+ dlltest \
+ cross-test
 
 # test4_static -- Not all relocation types are implemented yet.
 # asmtest / asmtest2 -- minor differences with gcc
 
 ifneq ($(CONFIG_bcheck),no)
- TESTS += btest test1b
- ifndef CONFIG_WIN32
-  TESTS += tccb
- endif
+ TESTS += btest test1b tccb
 endif
 ifeq ($(CONFIG_dll),no)
  TESTS := $(filter-out dlltest, $(TESTS))
@@ -82,7 +79,9 @@ all test :
 	@echo ------------ version ------------
 	@$(TCC_LOCAL) -v
 	@$(MAKE) --no-print-directory -s clean
-	@$(MAKE) --no-print-directory -s -r $(TESTS)
+	@$(MAKE) --no-print-directory -s -r _all
+
+_all : $(TESTS)
 
 hello-exe: ../examples/ex1.c
 	@echo ------------ $@ ------------
@@ -199,14 +198,15 @@ btest: boundtest.c
 	       echo "Test $$i failed as expected" ; \
 	   fi ;\
 	done ;\
-	echo Bound test OK
+	echo Bound-Test OK
 
 tccb:
 	@echo ------------ $@ ------------
-	$(TCC) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o v1-tcc$(EXESUF)
-	mv v1-tcc$(EXESUF) v2-tcc$(EXESUF)
-	./v2-tcc$(EXESUF) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o v1-tcc$(EXESUF)
-	cmp -s v1-tcc$(EXESUF) v2-tcc$(EXESUF) && echo "Bound-Test tcc OK"
+	$(TCC) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o tccb1.exe
+	mv tccb1.exe tccb2.exe
+	./tccb2.exe -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o tccb1.exe
+	cmp -s tccb1.exe tccb2.exe && echo "Exe Bound-Rest OK"
+
 
 # speed test
 speedtest: ex2 ex3

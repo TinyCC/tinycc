@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
 #include "libtcc.h"
 
 #define M 20 /* number of states */
@@ -84,6 +85,8 @@ PROG(my_program)
 "\n"
 "int foo(int n)\n"
 "{\n"
+"    if (n >= N_CRASH && n < N_CRASH + 3)\n"
+"       *(void**)0 = 0;\n"
 "    printf(\" %d\", fib(n));\n"
 "    return 0;\n"
 "#  warning is this the correct file:line...\n"
@@ -110,6 +113,11 @@ void parse_args(TCCState *s)
     }
 }
 
+void bt_func(void *pc, const char *file, int line, const char *func)
+{
+    printf("  *** at %s:%d in '%s'\n", file, line, func);
+}
+
 TCCState *new_state(int w)
 {
     TCCState *s = tcc_new();
@@ -119,7 +127,14 @@ TCCState *new_state(int w)
     }
     tcc_set_error_func(s, stdout, handle_error);
     parse_args(s);
-    if (!w) tcc_set_options(s, "-w");
+    if (0 == (w & 1))
+        tcc_set_options(s, "-w");
+    if (w & 2) {
+        tcc_set_options(s, "-bt");
+        tcc_define_symbol(s, "N_CRASH", str(M/2));
+        tcc_set_backtrace_func(s, bt_func);
+    } else
+        tcc_define_symbol(s, "N_CRASH", "99");
     tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
     return s;
 }
@@ -139,23 +154,28 @@ void *reloc_state(TCCState *s, const char *entry)
 }
 
 /* work with several states at the same time */
-int state_test(void)
+int state_test(int w)
 {
     TCCState *s[M];
-    int (*func[M])(int);
+    int (*funcs[M])(int);
     int n;
+    jmp_buf jb;
 
     for (n = 0; n < M + 4; ++n) {
         unsigned a = n, b = n - 1, c = n - 2, d = n - 3, e = n - 4;
         if (a < M)
-            s[a] = new_state(0);
+            s[a] = new_state(w);
         if (b < M)
             if (tcc_compile_string(s[b], my_program) == -1)
                 break;
         if (c < M)
-            func[c] = reloc_state(s[c], "foo");
-        if (d < M && func[d])
-            func[d](F(d));
+            funcs[c] = reloc_state(s[c], "foo");
+        if (d < M && funcs[d]) {
+            if ((w & 2) && d == 8)
+                printf("\n");
+            if (0 == tcc_setjmp(s[d], jb, funcs[d]))
+                funcs[d](F(d));
+        }
         if (e < M)
             tcc_delete(s[e]);
     }
@@ -257,7 +277,13 @@ int main(int argc, char **argv)
 #if 1
     printf("running fib with mixed calls\n "), fflush(stdout);
     t = getclock_ms();
-    state_test();
+    state_test(0);
+    printf("\n (%u ms)\n", getclock_ms() - t);
+#endif
+#if 1
+    printf("producing some exceptions\n "), fflush(stdout);
+    t = getclock_ms();
+    state_test(2);
     printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1

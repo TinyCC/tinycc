@@ -4,6 +4,11 @@ int atexit(void (*function)(void));
 int on_exit(void (*function)(int, void *), void *arg);
 void exit(int status);
 
+void __attribute((constructor)) startup5(void)
+{
+    printf ("startup5\n");
+}
+
 void cleanup1(void)
 {
     printf ("cleanup1\n");

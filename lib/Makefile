@@ -67,7 +67,8 @@ OBJ-arm-eabihf = $(ARM_O) $(DSO_O)
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
 OBJ-riscv64 = $(RISCV64_O) $(BCHECK_O) $(DSO_O)
 
-OBJ-extra = $(filter $(B_O),$(OBJ-$T))
+OBJ-extra = $(filter-out bt-log.o,$(filter $(B_O),$(OBJ-$T)))
+OBJ-extra += runmain.o
 OBJ-libtcc1 = $(addprefix $(X),$(filter-out $(OBJ-extra),$(OBJ-$T)))
 
 ALL = $(addprefix $(TOP)/,$(X)libtcc1.a $(OBJ-extra))
