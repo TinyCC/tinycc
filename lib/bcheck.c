@@ -323,7 +323,7 @@ DLL_EXPORT void *__aeabi_memset(void *dst, int c, size_t size);
 #define BOUND_REALLOC(a,b)       realloc(a,b)
 #define BOUND_CALLOC(a,b)        calloc(a,b)
 DLL_EXPORT void *__bound_malloc(size_t size, const void *caller);
-DLL_EXPORT void *__bound_memalign(size_t size, size_t align, const void *caller);
+DLL_EXPORT void *__bound_memalign(size_t align, size_t size, const void *caller);
 DLL_EXPORT void __bound_free(void *ptr, const void *caller);
 DLL_EXPORT void *__bound_realloc(void *ptr, size_t size, const void *caller);
 DLL_EXPORT void *__bound_calloc(size_t nmemb, size_t size);
@@ -1519,9 +1519,9 @@ void *__bound_malloc(size_t size, const void *caller)
 }
 
 #if MALLOC_REDIR
-void *memalign(size_t size, size_t align)
+void *memalign(size_t align, size_t size)
 #else
-void *__bound_memalign(size_t size, size_t align, const void *caller)
+void *__bound_memalign(size_t align, size_t size, const void *caller)
 #endif
 {
     void *ptr;
@@ -1530,7 +1530,7 @@ void *__bound_memalign(size_t size, size_t align, const void *caller)
     /* we allocate one more byte to ensure the regions will be
        separated by at least one byte. With the glibc malloc, it may
        be in fact not necessary */
-    ptr = BOUND_MEMALIGN(size + 1, align);
+    ptr = BOUND_MEMALIGN(align, size + 1);
 #else
     if (align > 4) {
         /* XXX: handle it ? */
