@@ -18,7 +18,6 @@ void __bt_init(rt_context *p, int is_exe)
     __attribute__((weak)) int main();
     __attribute__((weak)) void __bound_init(void*, int);
 
-    WAIT_SEM(&rt_sem);
     //fprintf(stderr, "__bt_init %d %p %p %p\n", is_exe, p, p->stab_sym, p->bounds_start), fflush(stderr);
 
     /* call __bound_init here due to redirection of sigaction */
@@ -27,13 +26,14 @@ void __bt_init(rt_context *p, int is_exe)
 	__bound_init(p->bounds_start, -1);
 
     /* add to chain */
+    WAIT_SEM(&rt_sem);
     p->next = g_rc, g_rc = p;
-    if (is_exe) {
+    if (is_exe)
         /* we are the executable (not a dll) */
         p->top_func = main;
-        set_exception_handler();
-    }
     POST_SEM(&rt_sem);
+    if (is_exe)
+        set_exception_handler();
 }
 
 __declspec(dllexport)
@@ -42,13 +42,13 @@ void __bt_exit(rt_context *p)
     struct rt_context *rc, **pp;
     __attribute__((weak)) void __bound_exit_dll(void*);
 
-    WAIT_SEM(&rt_sem);
     //fprintf(stderr, "__bt_exit %d %p\n", !!p->top_func, p);
 
     if (p->bounds_start)
 	__bound_exit_dll(p->bounds_start);
 
     /* remove from chain */
+    WAIT_SEM(&rt_sem);
     for (pp = &g_rc; rc = *pp, rc; pp = &rc->next)
         if (rc == p) {
             *pp = rc->next;

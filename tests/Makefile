@@ -28,6 +28,9 @@ TESTS = \
 
 ifneq ($(CONFIG_bcheck),no)
  TESTS += btest test1b
+ ifndef CONFIG_WIN32
+  TESTS += tccb
+ endif
 endif
 ifeq ($(CONFIG_dll),no)
  TESTS := $(filter-out dlltest, $(TESTS))
@@ -198,6 +201,13 @@ btest: boundtest.c
 	done ;\
 	echo Bound test OK
 
+tccb:
+	@echo ------------ $@ ------------
+	$(TCC) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o v1-tcc$(EXESUF)
+	mv v1-tcc$(EXESUF) v2-tcc$(EXESUF)
+	./v2-tcc$(EXESUF) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o v1-tcc$(EXESUF)
+	cmp -s v1-tcc$(EXESUF) v2-tcc$(EXESUF) && echo "Bound-Test tcc OK"
+
 # speed test
 speedtest: ex2 ex3
 	@echo ------------ $@ ------------
@@ -260,7 +270,7 @@ vla_test-run: vla_test$(EXESUF)
 	@echo ------------ $@ ------------
 	./vla_test$(EXESUF)
 
-.PHONY: abitest vla_test
+.PHONY: abitest vla_test tccb
 
 asm-c-connect$(EXESUF): asm-c-connect-1.c asm-c-connect-2.c
 	$(TCC) -o $@ $^

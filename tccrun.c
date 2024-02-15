@@ -66,9 +66,15 @@ TCC_SEM(static rt_sem);
 static int signal_set;
 static void set_exception_handler(void);
 
-int _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap);
-void rt_wait_sem(void) { WAIT_SEM(&rt_sem); }
-void rt_post_sem(void) { POST_SEM(&rt_sem); }
+#ifdef _WIN32
+#define	ATTR_WEAK
+#else
+#define	ATTR_WEAK	__attribute__((weak))
+#endif
+int ATTR_WEAK _rt_error(rt_frame *f, const char *msg, const char *fmt, va_list ap);
+void ATTR_WEAK rt_wait_sem(void) { WAIT_SEM(&rt_sem); }
+void ATTR_WEAK rt_post_sem(void) { POST_SEM(&rt_sem); }
+#undef ATTR_WEAK
 #endif /* def CONFIG_TCC_BACKTRACE */
 
 /* handle exit/atexit for tcc_run() -- thread-unsafe */
