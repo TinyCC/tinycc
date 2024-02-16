@@ -1003,7 +1003,9 @@ struct TCCState {
     struct TCCState *next;
     struct rt_context *rc; /* pointer to backtrace info block */
     void *run_lj, *run_jb; /* sj/lj for tcc_setjmp()/tcc_run() */
-    void (*bt_func)(void *, const char*, int, const char*);
+    TCCBtFunc *bt_func;
+    void *bt_data;
+    int run_tid;
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE
@@ -1250,6 +1252,7 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
 PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #endif
 
+ST_FUNC void libc_free(void *ptr);
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)
 #define realloc(p, s) use_tcc_realloc(p, s)
@@ -1982,7 +1985,7 @@ ST_FUNC void wait_sem(TCCSem *p)
         sem_init(&p->sem, 0, 1), p->init = 1;
     while (sem_wait(&p->sem) < 0 && errno == EINTR);
 }
-ST_INLN void post_sem(TCCSem *p)
+ST_FUNC void post_sem(TCCSem *p)
 {
     sem_post(&p->sem);
 }

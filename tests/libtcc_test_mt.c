@@ -83,11 +83,13 @@ PROG(my_program)
 "        return add(fib(n-1),fib(n-2));\n"
 "}\n"
 "\n"
+"void bar(void) { *(void**)0 = 0; }\n"
+"\n"
 "int foo(int n)\n"
 "{\n"
-"    if (n >= N_CRASH && n < N_CRASH + 3)\n"
-"       *(void**)0 = 0;\n"
 "    printf(\" %d\", fib(n));\n"
+"    if (n >= N_CRASH && n < N_CRASH + 8)\n"
+"       bar();\n"
 "    return 0;\n"
 "#  warning is this the correct file:line...\n"
 "}\n";
@@ -113,9 +115,27 @@ void parse_args(TCCState *s)
     }
 }
 
-void bt_func(void *pc, const char *file, int line, const char *func)
+int backtrace_func(
+    void *ud,
+    void *pc,
+    const char *file,
+    int line,
+    const char *func,
+    const char *msg)
 {
-    printf("  *** at %s:%d in '%s'\n", file, line, func);
+#if 0
+    printf("\n  *** %p %s %s:%d in '%s'",
+        pc,
+        msg ? "at" : "by",
+        file ? file : "?",
+        line,
+        func ? func : "?");
+    return 1; // want more backtrace levels
+#else
+    //printf(" [%d]", *(int*)ud);
+    printf("!");
+    return 0; // cancel backtrace
+#endif
 }
 
 TCCState *new_state(int w)
@@ -132,9 +152,8 @@ TCCState *new_state(int w)
     if (w & 2) {
         tcc_set_options(s, "-bt");
         tcc_define_symbol(s, "N_CRASH", str(M/2));
-        tcc_set_backtrace_func(s, bt_func);
     } else
-        tcc_define_symbol(s, "N_CRASH", "99");
+        tcc_define_symbol(s, "N_CRASH", "-1000");
     tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
     return s;
 }
@@ -171,8 +190,7 @@ int state_test(int w)
         if (c < M)
             funcs[c] = reloc_state(s[c], "foo");
         if (d < M && funcs[d]) {
-            if ((w & 2) && d == 8)
-                printf("\n");
+            tcc_set_backtrace_func(s[d], &d, backtrace_func);
             if (0 == tcc_setjmp(s[d], jb, funcs[d]))
                 funcs[d](F(d));
         }
@@ -189,15 +207,19 @@ TF_TYPE(thread_test_simple, vn)
     int (*func)(int);
     int ret;
     int n = (size_t)vn;
+    jmp_buf jb;
 
-    s = new_state(0);
+    s = new_state(0); /* '2' for exceptions */
     sleep_ms(1);
     ret = tcc_compile_string(s, my_program);
     sleep_ms(1);
     if (ret >= 0) {
         func = reloc_state(s, "foo");
-        if (func)
-            func(F(n));
+        tcc_set_backtrace_func(s, &n, backtrace_func);
+        if (func) {
+            if (0 == tcc_setjmp(s, jb, func))
+                func(F(n));
+        }
     }
     tcc_delete(s);
     return 0;
@@ -281,18 +303,20 @@ int main(int argc, char **argv)
     printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
-    printf("producing some exceptions\n "), fflush(stdout);
+    printf("producing some exceptions (!)\n "), fflush(stdout);
     t = getclock_ms();
     state_test(2);
     printf("\n (%u ms)\n", getclock_ms() - t);
 #endif
 #if 1
+    //{ int i; for (i = 0; i < 100; ++i) { printf("(%d) ", i);
     printf("running fib in threads\n "), fflush(stdout);
     t = getclock_ms();
     for (n = 0; n < M; ++n)
         create_thread(thread_test_simple, n);
     wait_threads(n);
     printf("\n (%u ms)\n", getclock_ms() - t);
+        //}}
 #endif
 #if 1
     printf("running tcc.c in threads to run fib\n "), fflush(stdout);

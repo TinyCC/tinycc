@@ -229,7 +229,7 @@ static void *default_reallocator(void *ptr, unsigned long size)
     return ptr1;
 }
 
-static void libc_free(void *ptr)
+ST_FUNC void libc_free(void *ptr)
 {
     free(ptr);
 }

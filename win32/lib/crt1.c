@@ -70,7 +70,6 @@ void _tstart(void)
 // =============================================
 // for 'tcc -run ,,,'
 
-__attribute__((weak)) extern int __rt_nr_exit;
 __attribute__((weak)) extern int __run_on_exit();
 
 int _runtmain(int argc, /* as tcc passed in */ char **argv)
@@ -92,7 +91,6 @@ int _runtmain(int argc, /* as tcc passed in */ char **argv)
 #if defined __i386__ || defined __x86_64__
     _controlfp(_PC_53, _MCW_PC);
 #endif
-    __rt_nr_exit = 0;
     run_ctors(__argc, __targv, _tenviron);
     ret = _tmain(__argc, __targv, _tenviron);
     run_dtors();

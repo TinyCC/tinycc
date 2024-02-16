@@ -26,7 +26,9 @@ TESTS = \
 # test4_static -- Not all relocation types are implemented yet.
 # asmtest / asmtest2 -- minor differences with gcc
 
-ifneq ($(CONFIG_bcheck),no)
+ifeq ($(CONFIG_backtrace),no)
+ TESTS := $(filter-out libtest_mt, $(TESTS))
+else ifneq ($(CONFIG_bcheck),no)
  TESTS += btest test1b tccb
 endif
 ifeq ($(CONFIG_dll),no)

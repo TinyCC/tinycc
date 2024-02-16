@@ -1943,7 +1943,7 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             pe_type = PE_EXE;
 
         }
-        if (TCC_OUTPUT_MEMORY == s1->output_type)
+        if (TCC_OUTPUT_MEMORY == s1->output_type && !s1->nostdlib)
             start_symbol = run_symbol;
     }
 
@@ -1961,6 +1961,8 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
             tcc_add_support(s1, "bt-exe.o");
         if (s1->output_type == TCC_OUTPUT_DLL)
             tcc_add_support(s1, "bt-dll.o");
+        if (s1->output_type != TCC_OUTPUT_DLL)
+            tcc_add_support(s1, "bt-log.o");
         tcc_add_btstub(s1);
     }
 #endif

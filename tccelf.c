@@ -1606,7 +1606,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
 	              (uint64_t)1 << 32);
 #endif
     }
-    n = 4 * PTR_SIZE;
+    n = 3 * PTR_SIZE;
 #ifdef CONFIG_TCC_BCHECK
     if (s1->do_bounds_check) {
         put_ptr(s1, bounds_section, 0);
@@ -1617,9 +1617,7 @@ ST_FUNC void tcc_add_btstub(TCCState *s1)
     p = section_ptr_add(s, 2 * sizeof (int));
     p[0] = s1->rt_num_callers;
     p[1] = s1->dwarf;
-
-    if (s->data_offset - o != 11 * PTR_SIZE + 2 * sizeof (int))
-        exit(99);
+    // if (s->data_offset - o != 10*PTR_SIZE + 2*sizeof (int)) exit(99);
 
     if (s1->output_type == TCC_OUTPUT_MEMORY) {
         set_global_sym(s1, __rt_info, s, o);
@@ -1778,6 +1776,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
         if (s1->do_backtrace) {
             if (s1->output_type & TCC_OUTPUT_EXE)
                 tcc_add_support(s1, "bt-exe.o");
+            if (s1->output_type != TCC_OUTPUT_DLL)
+                tcc_add_support(s1, "bt-log.o");
             tcc_add_btstub(s1);
             lpthread = 1;
         }

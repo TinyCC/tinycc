@@ -23,19 +23,19 @@ typedef struct rt_frame {
 } rt_frame;
 
 __attribute__((weak))
-int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap);
+int _tcc_backtrace(rt_frame *f, const char *fmt, va_list ap);
 
 DLL_EXPORT int tcc_backtrace(const char *fmt, ...)
 {
     va_list ap;
     int ret;
 
-    if (__rt_dump) {
+    if (_tcc_backtrace) {
         rt_frame f;
         f.fp = __builtin_frame_address(1);
         f.ip = __builtin_return_address(0);
         va_start(ap, fmt);
-        ret = __rt_dump(&f, NULL, fmt, ap);
+        ret = _tcc_backtrace(&f, fmt, ap);
         va_end(ap);
     } else {
         const char *p, *nl = "\n";

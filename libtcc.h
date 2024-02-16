@@ -104,12 +104,12 @@ LIBTCCAPI void tcc_list_symbols(TCCState *s, void *ctx,
 
 /* catch runtime exceptions (optionally limit backtraces at top_func),
    when using tcc_set_options("-bt") and when not using tcc_run() */
-LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *longjmp, void *jmp_buf, void *top_func);
-#define tcc_setjmp(s1,jb,f) setjmp(_tcc_setjmp(s1, longjmp, jb, f))
+LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *jmp_buf, void *top_func, void *longjmp);
+#define tcc_setjmp(s1,jb,f) setjmp(_tcc_setjmp(s1, jb, f, longjmp))
 
-/* set custom error printer for runtime exceptions */
-typedef void TCCBtFunc(void *pc, const char *file, int line, const char* func);
-LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, TCCBtFunc*);
+/* custom error printer for runtime exceptions. Returning 0 stops backtrace */
+typedef int TCCBtFunc(void *udata, void *pc, const char *file, int line, const char* func, const char *msg);
+LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, void* userdata, TCCBtFunc*);
 
 #ifdef __cplusplus
 }

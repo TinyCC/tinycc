@@ -29,7 +29,7 @@ static void run_dtors(void)
 
 static void *rt_exitfunc[32];
 static void *rt_exitarg[32];
-int __rt_nr_exit;
+static int __rt_nr_exit;
 
 void __run_on_exit(int ret)
 {
@@ -59,16 +59,16 @@ typedef struct rt_frame {
     void *ip, *fp, *sp;
 } rt_frame;
 
-void __rt_longjmp(rt_frame *, int);
+void __rt_exit(rt_frame *, int);
 
 void exit(int code)
 {
     rt_frame f;
     run_dtors();
     __run_on_exit(code);
-    f.fp = __builtin_frame_address(1);
-    f.ip = __builtin_return_address(0);
-    __rt_longjmp(&f, code);
+    f.fp = 0;
+    f.ip = exit;
+    __rt_exit(&f, code);
 }
 
 #ifndef _WIN32
@@ -77,7 +77,6 @@ int main(int, char**, char**);
 int _runmain(int argc, char **argv, char **envp)
 {
     int ret;
-    __rt_nr_exit = 0;
     run_ctors(argc, argv, envp);
     ret = main(argc, argv, envp);
     run_dtors();

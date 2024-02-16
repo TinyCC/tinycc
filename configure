@@ -365,7 +365,7 @@ case $targetos in
     default tcc_libpaths "{B}:{R}/lib:/system/lib${S}"
     default tcc_crtprefix "{R}/lib"
     default tcc_elfinterp "/system/bin/linker${S}"
-    default tcc_switches "-Wl,-rpath=$sysroot/lib,-section-alignment=0x1000"
+    default tcc_switches "-Wl,-rpath=$sysroot/lib"
     ;;
   WIN32)
     mingw32="yes"

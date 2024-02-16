@@ -202,4 +202,5 @@ exit /B %ERRORLEVEL%
 .\tcc -B. -m%1 -c ../lib/bt-exe.c -o lib/%2bt-exe.o
 .\tcc -B. -m%1 -c ../lib/bt-log.c -o lib/%2bt-log.o
 .\tcc -B. -m%1 -c ../lib/bt-dll.c -o lib/%2bt-dll.o
+.\tcc -B. -m%1 -c ../lib/runmain.c -o lib/%2runmain.o
 exit /B %ERRORLEVEL%

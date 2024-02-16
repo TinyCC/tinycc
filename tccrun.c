@@ -24,6 +24,7 @@
 #ifdef TCC_IS_NATIVE
 
 #ifdef CONFIG_TCC_BACKTRACE
+/* runtime debug info block */
 typedef struct rt_context
 {
     /* tccelf.c:tcc_add_btstub() wants these in that order: */
@@ -42,32 +43,33 @@ typedef struct rt_context
     ElfW(Sym) *esym_start;
     ElfW(Sym) *esym_end;
     char *elf_str;
-    // 6
+    // 6 * PTR_SIZE
     addr_t prog_base;
     void *bounds_start;
     void *top_func;
-    TCCState *s1;
     struct rt_context *next;
-    // 11
+    // 10 * PTR_SIZE
     int num_callers;
     int dwarf;
-} rt_context; /* size = 11 * PTR_SIZE + 2 * sizeof (int) */
+} rt_context;
+
+/* linked list of rt_contexts */
+static rt_context *g_rc;
+static int signal_set;
+static void set_exception_handler(void);
+#endif /* def CONFIG_TCC_BACKTRACE */
 
 typedef struct rt_frame {
     addr_t ip, fp, sp;
 } rt_frame;
 
-/* linked list of rt_contexts */
-static rt_context *g_rc;
 static TCCState *g_s1;
 /* semaphore to protect it */
 TCC_SEM(static rt_sem);
-static int signal_set;
-static void set_exception_handler(void);
 static void rt_wait_sem(void) { WAIT_SEM(&rt_sem); }
 static void rt_post_sem(void) { POST_SEM(&rt_sem); }
 static int rt_get_caller_pc(addr_t *paddr, rt_frame *f, int level);
-#endif /* def CONFIG_TCC_BACKTRACE */
+static void rt_exit(rt_frame *f, int code);
 
 /* ------------------------------------------------------------- */
 /* defined when included from lib/bt-exe.c */
@@ -79,73 +81,26 @@ static int rt_get_caller_pc(addr_t *paddr, rt_frame *f, int level);
 
 static int protect_pages(void *ptr, unsigned long length, int mode);
 static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff);
-static int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap);
-static void rt_longjmp(rt_frame *f, int code);
+static void st_link(TCCState *s1);
+static void st_unlink(TCCState *s1);
+#ifdef CONFIG_TCC_BACKTRACE
+static int _tcc_backtrace(rt_frame *f, const char *fmt, va_list ap);
+#endif
 #ifdef _WIN64
 static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
 #endif
 
-static void bt_link(TCCState *s1)
-{
-#ifdef CONFIG_TCC_BACKTRACE
-    rt_context *rc;
-    void *p;
-
-    if (!s1->do_backtrace)
-        return;
-    rc = tcc_get_symbol(s1, "__rt_info");
-    if (!rc)
-        return;
-    rc->esym_start = (ElfW(Sym) *)(symtab_section->data);
-    rc->esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
-    rc->elf_str = (char *)symtab_section->link->data;
-    if (PTR_SIZE == 8 && !s1->dwarf)
-        rc->prog_base &= 0xffffffff00000000ULL;
-#ifdef CONFIG_TCC_BCHECK
-    if (s1->do_bounds_check) {
-        if ((p = tcc_get_symbol(s1, "__bound_init")))
-            ((void(*)(void*,int))p)(rc->bounds_start, 1);
-    }
+#ifdef __APPLE__
+# define CONFIG_RUNMEM_ALIGNED 0
+#else
+# ifndef CONFIG_RUNMEM_ALIGNED
+#  define CONFIG_RUNMEM_ALIGNED 1
+# endif
+# if CONFIG_RUNMEM_ALIGNED
+#  include <malloc.h> /* memalign() */
+# endif
 #endif
-    rc->next = g_rc, g_rc = rc, rc->s1 = s1, s1->rc = rc;
-    if (0 == signal_set)
-        set_exception_handler(), signal_set = 1;
-#endif
-}
-
-static void bt_unlink(TCCState *s1)
-{
-#ifdef CONFIG_TCC_BACKTRACE
-    rt_context *rc, **pp;
-    for (pp = &g_rc; rc = *pp, rc; pp = &rc->next)
-        if (rc->s1 == s1) {
-            *pp = rc->next;
-            break;
-        }
-#endif
-}
-
-static void st_link(TCCState *s1)
-{
-    rt_wait_sem();
-    s1->next = g_s1, g_s1 = s1;
-    bt_link(s1);
-    rt_post_sem();
-}
-
-static void st_unlink(TCCState *s1)
-{
-    TCCState *s2, **pp;
-    rt_wait_sem();
-    bt_unlink(s1);
-    for (pp = &g_s1; s2 = *pp, s2; pp = &s2->next)
-        if (s2 == s1) {
-            *pp = s2->next;
-            break;
-        }
-    rt_post_sem();
-}
 
 #if !_WIN32 && !__APPLE__
 //#define HAVE_SELINUX 1
@@ -172,7 +127,15 @@ static int rt_mem(TCCState *s1, int size)
     ptr_diff = (char*)prw - (char*)ptr; /* = size; */
     //printf("map %p %p %p\n", ptr, prw, (void*)ptr_diff);
 #else
-    ptr = tcc_malloc(size);
+# if !CONFIG_RUNMEM_ALIGNED
+    ptr = tcc_malloc(size += PAGESIZE);
+# elif _WIN32
+    ptr = _aligned_malloc(size, PAGESIZE);
+# else
+    ptr = memalign(PAGESIZE, size);
+# endif
+    if (NULL == ptr)
+	return tcc_error_noabort("tccrun: could not allocate memory");
 #endif
     s1->run_ptr = ptr;
     s1->run_size = size;
@@ -189,12 +152,10 @@ LIBTCCAPI int tcc_relocate(TCCState *s1)
 
     if (s1->run_ptr)
         exit(tcc_error_noabort("'tcc_relocate()' twice is no longer supported"));
-
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_backtrace)
-        tcc_add_symbol(s1, "__rt_dump", __rt_dump); /* for bt-log.c */
+        tcc_add_symbol(s1, "_tcc_backtrace", _tcc_backtrace); /* for bt-log.c */
 #endif
-
     size = tcc_relocate_ex(s1, NULL, 0);
     if (size < 0)
         return -1;
@@ -236,31 +197,24 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 #else
     /* unprotect memory to make it usable for malloc again */
     protect_pages(ptr, size, 2 /*rw*/);
-#ifdef _WIN64
+# ifdef _WIN64
     win64_del_function_table(s1->run_function_table);
-#endif
+# endif
+# if !CONFIG_RUNMEM_ALIGNED
     tcc_free(ptr);
+# elif _WIN32
+    _aligned_free(ptr);
+# else
+    libc_free(ptr);
+# endif
 #endif
-}
-
-LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *p_longjmp, void *p_jmp_buf, void *func)
-{
-    s1->run_lj = p_longjmp;
-    s1->run_jb = p_jmp_buf;
-    if (func && s1->rc)
-        s1->rc->top_func = func;
-    return p_jmp_buf;
-}
-
-LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, TCCBtFunc *func)
-{
-    s1->bt_func = func;
 }
 
 /* launch the compiled program with the given arguments */
 LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 {
     int (*prog_main)(int, char **, char **), ret;
+    const char *top_sym;
     jmp_buf main_jb;
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
@@ -276,20 +230,25 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if ((s1->dflag & 16) && (addr_t)-1 == get_sym_addr(s1, "main", 0, 1))
         return 0;
 
-    tcc_add_support(s1, "runmain.o");
-    tcc_add_symbol(s1, "__rt_longjmp", rt_longjmp);
-    s1->run_main = (s1->nostdlib ? "_start" : "_runmain");
+    tcc_add_symbol(s1, "__rt_exit", rt_exit);
+    if (s1->nostdlib) {
+        s1->run_main = top_sym = "_start";
+    } else {
+        tcc_add_support(s1, "runmain.o");
+        s1->run_main = "_runmain";
+        top_sym = "main";
+    }
     if (tcc_relocate(s1) < 0)
-        return -1;
+        return 1;
 
     prog_main = (void*)get_sym_addr(s1, s1->run_main, 1, 1);
     if ((addr_t)-1 == (addr_t)prog_main)
-        return -1;
+        return 1;
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
 
-    ret = tcc_setjmp(s1, main_jb, tcc_get_symbol(s1, "main"));
+    ret = tcc_setjmp(s1, main_jb, tcc_get_symbol(s1, top_sym));
     if (0 == ret)
         ret = prog_main(argc, argv, envp);
     else if (256 == ret)
@@ -344,8 +303,6 @@ static void cleanup_sections(TCCState *s1)
 # define CONFIG_RUNMEM_RO 1
 #endif
 
-#define DEBUG_RUNMEN 0
-
 /* relocate code. Return -1 on error, required size if ptr is NULL,
    otherwise copy code into buffer passed by the caller */
 static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff)
@@ -367,16 +324,17 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff)
 
     offset = copy = 0;
     mem = (addr_t)ptr;
-
-#if DEBUG_RUNMEN
-    if (mem)
-        fprintf(stderr, "X: <base>           %p  len %5x\n",
-            ptr, s1->run_size);
-#endif
-
 redo:
+    if (s1->verbose == 2 && copy) {
+        printf(&"-----------------------------------------------------\n"[PTR_SIZE*2 - 8]);
+        if (1 == copy)
+            printf("memory              %p  len %05x\n", ptr, s1->run_size);
+    }
     if (s1->nb_errors)
         return -1;
+    if (copy == 2)
+        return 0;
+
     for (k = 0; k < 3; ++k) { /* 0:rx, 1:ro, 2:rw sections */
         n = 0; addr = 0;
         for(i = 1; i < s1->nb_sections; i++) {
@@ -389,7 +347,9 @@ redo:
             length = s->data_offset;
 
             if (copy) { /* final step: copy section data to memory */
-                void *ptr;
+                if (s1->verbose == 2)
+                    printf("%d: %-16s %p  len %05x  align %04x\n",
+                        k, s->name, (void*)s->sh_addr, length, s->sh_addralign);
                 if (addr == 0)
                     addr = s->sh_addr;
                 n = (s->sh_addr - addr) + length;
@@ -407,28 +367,25 @@ redo:
                 continue;
             }
 
-            align = s->sh_addralign - 1;
+            align = s->sh_addralign;
             if (++n == 1) {
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
                 /* To avoid that x86 processors would reload cached instructions
                    each time when data is written in the near, we need to make
                    sure that code and data do not share the same 64 byte unit */
-                if (align < 63)
-                    align = 63;
+                if (align < 64)
+                    align = 64;
 #endif
                 /* start new page for different permissions */
                 if (CONFIG_RUNMEM_RO || k < 2)
-                    align = PAGESIZE - 1;
+                    align = PAGESIZE;
             }
+            s->sh_addralign = align;
+
             addr = k ? mem + ptr_diff : mem;
-            offset += -(addr + offset) & align;
+            offset += -(addr + offset) & (align - 1);
             s->sh_addr = mem ? addr + offset : 0;
             offset += length;
-#if DEBUG_RUNMEN
-            if (mem)
-                fprintf(stderr, "%d: %-16s %p  len %5x  align %04x\n",
-                    k, s->name, (void*)s->sh_addr, length, align + 1);
-#endif
         }
         if (copy) { /* set permissions */
             if (n == 0) /* no data  */
@@ -443,30 +400,25 @@ redo:
                     continue;
                 f = 3; /* change only SHF_EXECINSTR to rwx */
             }
-#if DEBUG_RUNMEN
-            fprintf(stderr, "protect        %3s  %p  len %5x\n",
-                &"rx\0r \0rw\0rwx"[f*3],
-                (void*)addr, (unsigned)((n + PAGESIZE-1) & ~(PAGESIZE-1)));
-#endif
+            n = (n + PAGESIZE-1) & ~(PAGESIZE-1);
+            if (s1->verbose == 2) {
+                printf("protect         %3s %p  len %05x\n",
+                    &"rx\0r \0rw\0rwx"[f*3], (void*)addr, (unsigned)n);
+            }
             if (protect_pages((void*)addr, n, f) < 0)
                 return tcc_error_noabort(
                     "mprotect failed (did you mean to configure --with-selinux?)");
         }
     }
 
-    if (0 == mem) {
-        offset = (offset + (PAGESIZE-1)) & ~(PAGESIZE-1);
-#ifndef HAVE_SELINUX
-        offset += PAGESIZE; /* extra space to align malloc memory start */
-#endif
-        return offset;
-    }
+    if (0 == mem)
+        return (offset + (PAGESIZE-1)) & ~(PAGESIZE-1);
 
-    if (copy) {
+    if (++copy == 2) {
         /* remove local symbols and free sections except symtab */
         cleanup_symbols(s1);
         cleanup_sections(s1);
-        return 0;
+        goto redo;
     }
 
     /* relocate symbols */
@@ -478,7 +430,6 @@ redo:
     relocate_plt(s1);
 #endif
     relocate_sections(s1);
-    copy = 1;
     goto redo;
 }
 
@@ -546,6 +497,152 @@ static void win64_del_function_table(void *p)
 }
 #endif
 
+static void bt_link(TCCState *s1)
+{
+#ifdef CONFIG_TCC_BACKTRACE
+    rt_context *rc;
+    void *p;
+
+    if (!s1->do_backtrace)
+        return;
+    rc = tcc_get_symbol(s1, "__rt_info");
+    if (!rc)
+        return;
+    rc->esym_start = (ElfW(Sym) *)(symtab_section->data);
+    rc->esym_end = (ElfW(Sym) *)(symtab_section->data + symtab_section->data_offset);
+    rc->elf_str = (char *)symtab_section->link->data;
+    if (PTR_SIZE == 8 && !s1->dwarf)
+        rc->prog_base &= 0xffffffff00000000ULL;
+#ifdef CONFIG_TCC_BCHECK
+    if (s1->do_bounds_check) {
+        if ((p = tcc_get_symbol(s1, "__bound_init")))
+            ((void(*)(void*,int))p)(rc->bounds_start, 1);
+    }
+#endif
+    rc->next = g_rc, g_rc = rc, s1->rc = rc;
+    if (0 == signal_set)
+        set_exception_handler(), signal_set = 1;
+#endif
+}
+
+static void st_link(TCCState *s1)
+{
+    rt_wait_sem();
+    s1->next = g_s1, g_s1 = s1;
+    bt_link(s1);
+    rt_post_sem();
+}
+
+/* remove 'el' from 'list' */
+static void ptr_unlink(void *list, void *e, unsigned next)
+{
+    void **pp, **nn, *p;
+    for (pp = list; !!(p = *pp); pp = nn) {
+        nn = (void*)((char*)p + next); /* nn = &p->next; */
+        if (p == e) {
+            *pp = *nn;
+            break;
+        }
+    }
+}
+
+static void st_unlink(TCCState *s1)
+{
+    rt_wait_sem();
+#ifdef CONFIG_TCC_BACKTRACE
+    ptr_unlink(&g_rc, s1->rc, offsetof(rt_context, next));
+#endif
+    ptr_unlink(&g_s1, s1, offsetof(TCCState, next));
+    rt_post_sem();
+}
+
+#ifdef _WIN32
+# define GETTID() GetCurrentThreadId()
+#elif defined __linux__
+# define GETTID() gettid()
+#elif 0
+# define GETTID() 1234 // threads not supported
+#endif
+
+LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *p_jmp_buf, void *func, void *p_longjmp)
+{
+#ifdef GETTID
+    int tid = GETTID();
+    TCCState *s;
+    rt_wait_sem();
+    for (s = g_s1; s; s = s->next)
+        if (s->run_tid == tid)
+            s->run_tid = -1;
+    s1->run_tid = (int)tid;
+    rt_post_sem();
+#endif
+    s1->run_lj = p_longjmp;
+    s1->run_jb = p_jmp_buf;
+#ifdef CONFIG_TCC_BACKTRACE
+    if (s1->rc)
+        s1->rc->top_func = func;
+#endif
+    return p_jmp_buf;
+}
+
+LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, void *data, TCCBtFunc *func)
+{
+    s1->bt_func = func;
+    s1->bt_data = data;
+}
+
+static TCCState *rt_find_state(rt_frame *f)
+{
+#ifdef GETTID
+    int tid = GETTID();
+    TCCState *s;
+    for (s = g_s1; s; s = s->next)
+        if (s->run_tid == tid)
+            break;
+    return s;
+#else
+    TCCState *s;
+    int level;
+    addr_t pc;
+
+    s = g_s1;
+    if (NULL == s || NULL == s->next) {
+        /* play it safe in the simple case when there is only one state */
+        return s;
+    }
+    for (level = 0; level < 8; ++level) {
+        if (rt_get_caller_pc(&pc, f, level) < 0)
+            break;
+        for (s = g_s1; s; s = s->next) {
+            if (pc >= (addr_t)s->run_ptr
+             && pc  < (addr_t)s->run_ptr + s->run_size)
+                return s;
+        }
+    }
+    return NULL;
+#endif
+}
+
+static void rt_exit(rt_frame *f, int code)
+{
+    TCCState *s;
+    rt_wait_sem();
+    s = rt_find_state(f);
+    rt_post_sem();
+    if (s && s->run_lj) {
+        if (code == 0)
+            code = 256;
+        ((void(*)(void*,int))s->run_lj)(s->run_jb, code);
+    }
+    exit(code);
+}
+
+/* ------------------------------------------------------------- */
+#else // if defined CONFIG_TCC_BACKTRACE_ONLY
+static void rt_exit(rt_frame *f, int code)
+{
+    exit(code);
+}
 #endif //ndef CONFIG_TCC_BACKTRACE_ONLY
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_BACKTRACE
@@ -582,11 +679,17 @@ static char *rt_elfsym(rt_context *rc, addr_t wanted_pc, addr_t *func_addr)
     return NULL;
 }
 
+typedef struct bt_info
+{
+    char file[100];
+    int line;
+    char func[100];
+    addr_t func_pc;
+} bt_info;
 
 /* print the position in the source file of PC value 'pc' by reading
    the stabs debug information */
-static addr_t rt_printline (rt_context *rc, addr_t wanted_pc,
-    rt_context** prc, const char *msg, const char *skip)
+static addr_t rt_printline (rt_context *rc, addr_t wanted_pc, bt_info *bi)
 {
     char func_name[128];
     addr_t func_addr, last_pc, pc;
@@ -595,15 +698,12 @@ static addr_t rt_printline (rt_context *rc, addr_t wanted_pc,
     const char *str, *p;
     Stab_Sym *sym;
 
-next:
     func_name[0] = '\0';
     func_addr = 0;
     incl_index = 0;
     last_pc = (addr_t)-1;
     last_line_num = 1;
     last_incl_index = 0;
-    if (NULL == rc)
-        goto found;
 
     for (sym = rc->stab_sym + 1; sym < rc->stab_sym_end; ++sym) {
         str = rc->stab_str + sym->n_strx;
@@ -680,50 +780,15 @@ next:
             break;
         }
     }
-
-    func_name[0] = '\0';
-    func_addr = 0;
-    last_incl_index = 0;
-
-    /* we try symtab symbols (no line number info) */
-    p = rt_elfsym(rc, wanted_pc, &func_addr);
-    if (p) {
-        pstrcpy(func_name, sizeof func_name, p);
-        goto found;
-    }
-    rc = rc->next;
-    goto next;
-
+    last_incl_index = 0, func_name[0] = 0, func_addr = 0;
 found:
     i = last_incl_index;
-    str = NULL;
     if (i > 0) {
-        str = incl_files[--i];
-        if (skip[0] && strstr(str, skip))
-            return (addr_t)-1;
+        pstrcpy(bi->file, sizeof bi->file, incl_files[--i]);
+        bi->line = last_line_num;
     }
-    if (rc && rc->s1 && rc->s1->bt_func) {
-        rc->s1->bt_func((void*)wanted_pc, str, last_line_num, func_name[0] ? func_name : NULL);
-    } else {
-        if (str)
-            rt_printf("%s:%d: ", str, last_line_num);
-        else
-            rt_printf("%08llx : ", (long long)wanted_pc);
-        rt_printf("%s %s", msg, func_name[0] ? func_name : "???");
-    }
-#if 0
-    if (--i >= 0) {
-        rt_printf(" (included from ");
-        for (;;) {
-            rt_printf("%s", incl_files[i]);
-            if (--i < 0)
-                break;
-            rt_printf(", ");
-        }
-        rt_printf(")");
-    }
-#endif
-    *prc = rc;
+    pstrcpy(bi->func, sizeof bi->func, func_name);
+    bi->func_pc = func_addr;
     return func_addr;
 }
 
@@ -793,8 +858,7 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
     return retval;
 }
 
-static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
-    rt_context** prc, const char *msg, const char *skip)
+static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc, bt_info *bi)
 {
     unsigned char *ln;
     unsigned char *cp;
@@ -834,12 +898,10 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc,
     char *filename;
     char *function;
 
-next:
     filename = NULL;
+    function = NULL;
     func_addr = 0;
     line = 0;
-    if (NULL == rc)
-        goto found;
 
     ln = rc->dwarf_line;
     while (ln < rc->dwarf_line_end) {
@@ -1070,44 +1132,28 @@ check_pc:
 next_line:
 	ln = end;
     }
-
-    filename = NULL;
-    func_addr = 0;
-    /* we try symtab symbols (no line number info) */
-    function = rt_elfsym(rc, wanted_pc, &func_addr);
-    if (function)
-        goto found;
-    rc = rc->next;
-    goto next;
-
+    filename = function = NULL, func_addr = 0;
 found:
-    if (rc && rc->s1 && rc->s1->bt_func) {
-        rc->s1->bt_func((void*)wanted_pc, filename, line, function);
-    } else {
-        if (filename) {
-            if (skip[0] && strstr(filename, skip))
-                return (addr_t)-1;
-            rt_printf("%s:%d: ", filename, line);
-        }
-        else
-            rt_printf("0x%08llx : ", (long long)wanted_pc);
-        rt_printf("%s %s", msg, function ? function : "???");
-    }
-    *prc = rc;
+    if (filename)
+        pstrcpy(bi->file, sizeof bi->file, filename), bi->line = line;
+    if (function)
+        pstrcpy(bi->func, sizeof bi->func, function);
+    bi->func_pc = func_addr;
     return (addr_t)func_addr;
 }
 /* ------------------------------------------------------------- */
 #ifndef CONFIG_TCC_BACKTRACE_ONLY
 static
 #endif
-int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap)
+int _tcc_backtrace(rt_frame *f, const char *fmt, va_list ap)
 {
-    rt_context *rc, *rd;
-    addr_t pc = 0;
-    char skip[100];
+    rt_context *rc, *rc2;
+    addr_t pc;
+    char skip[40], msg[200];
     int i, level, ret, n, one;
     const char *a, *b;
-    addr_t (*printline)(rt_context*, addr_t, rt_context**, const char*, const char*);
+    bt_info bi;
+    addr_t (*getinfo)(rt_context*, addr_t, bt_info*);
 
     skip[0] = 0;
     /* If fmt is like "^file.c^..." then skip calls from 'file.c' */
@@ -1119,41 +1165,73 @@ int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap)
     /* hack for bcheck.c:dprintf(): one level, no newline */
     if (fmt[0] == '\001')
         ++fmt, one = 1;
+    vsnprintf(msg, sizeof msg, fmt, ap);
 
     rt_wait_sem();
     rc = g_rc;
-    printline = rt_printline, n = 6;
+    getinfo = rt_printline, n = 6;
     if (rc) {
         if (rc->dwarf)
-            printline = rt_printline_dwarf;
+            getinfo = rt_printline_dwarf;
         if (rc->num_callers)
             n = rc->num_callers;
     }
+
     for (i = level = 0; level < n; i++) {
         ret = rt_get_caller_pc(&pc, f, i);
-        if (ret != -1) {
-            pc = printline(rc, pc, &rd, level ? "by" : "at", skip);
-            if (pc == (addr_t)-1)
-                continue;
-        }
-        if (level == 0) {
-            if (rd && rd->s1 && rd->s1->bt_func)
+        if (ret == -1)
+            break;
+        memset(&bi, 0, sizeof bi);
+        for (rc2 = rc; rc2; rc2 = rc2->next) {
+            if (getinfo(rc2, pc, &bi))
                 break;
-            if (ret != -1)
-                rt_printf(": ");
-            if (msg)
-                rt_printf("%s: ", msg);
-            rt_vprintf(fmt, ap);
-        } else if (ret == -1)
-            break;
-        if (one)
-            break;
+            /* we try symtab symbols (no line number info) */
+            if (!!(a = rt_elfsym(rc2, pc, &bi.func_pc))) {
+                pstrcpy(bi.func, sizeof bi.func, a);
+                break;
+            }
+        }
+        //fprintf(stderr, "%d rc %p %p\n", i, (void*)pcfunc, (void*)pc);
+        if (skip[0] && strstr(bi.file, skip))
+            continue;
+#ifndef CONFIG_TCC_BACKTRACE_ONLY
+        {
+            TCCState *s = rt_find_state(f);
+            if (s && s->bt_func) {
+                ret = s->bt_func(
+                    s->bt_data,
+                    (void*)pc,
+                    bi.file[0] ? bi.file : NULL,
+                    bi.line,
+                    bi.func[0] ? bi.func : NULL,
+                    level == 0 ? msg : NULL
+                    );
+                if (ret == 0)
+                    break;
+                goto check_break;
+            }
+        }
+#endif
+        if (bi.file[0]) {
+            rt_printf("%s:%d", bi.file, bi.line);
+        } else {
+            rt_printf("0x%08llx", (long long)pc);
+        }
+        rt_printf(": %s %s", level ? "by" : "at", bi.func[0] ? bi.func : "???");
+        if (level == 0) {
+            rt_printf(": %s", msg);
+            if (one)
+                break;
+        }
         rt_printf("\n");
-        if (ret == -1 || (rd && pc == (addr_t)rd->top_func && pc))
+
+    check_break:
+        if (rc2
+            && bi.func_pc
+            && bi.func_pc == (addr_t)rc2->top_func)
             break;
         ++level;
     }
-
     rt_post_sem();
     return 0;
 }
@@ -1161,47 +1239,12 @@ int __rt_dump(rt_frame *f, const char *msg, const char *fmt, va_list ap)
 /* emit a run time error at position 'pc' */
 static int rt_error(rt_frame *f, const char *fmt, ...)
 {
-    va_list ap;
-    int ret;
+    va_list ap; char msg[200]; int ret;
     va_start(ap, fmt);
-    ret = __rt_dump(f, "RUNTIME ERROR", fmt, ap);
+    snprintf(msg, sizeof msg, "RUNTIME ERROR: %s", fmt);
+    ret = _tcc_backtrace(f, msg, ap);
     va_end(ap);
     return ret;
-}
-
-static TCCState *rt_find_state(rt_frame *f)
-{
-    TCCState *s;
-    int level;
-    addr_t pc;
-
-    rt_wait_sem();
-    for (s = g_s1; s; s = s->next) {
-        if (0 == s->run_lj)
-            continue;
-        for (level = 0; level < 8; ++level) {
-            if (rt_get_caller_pc(&pc, f, level) < 0)
-                break;
-            if (pc >= (addr_t)s->run_ptr
-             && pc < (addr_t)s->run_ptr + s->run_size)
-                goto found;
-        }
-    }
-found:
-    rt_post_sem();
-    //fprintf(stderr, "\nrt_state found %s %p %p\n", s ? "YES" : "NO", s, s->rc->top_func), fflush(stderr);
-    return s;
-}
-
-static void rt_longjmp(rt_frame *f, int code)
-{
-    TCCState *s = rt_find_state(f);
-    if (s && s->run_lj) {
-        if (code == 0)
-            code = 256;
-        ((void(*)(void*,int))s->run_lj)(s->run_jb, code);
-    }
-    exit(code);
 }
 
 /* ------------------------------------------------------------- */
@@ -1338,8 +1381,13 @@ static void sig_error(int signum, siginfo_t *siginf, void *puc)
         rt_error(&f, "caught signal %d", signum);
         break;
     }
-    set_exception_handler();
-    rt_longjmp(&f, 255);
+    {
+        sigset_t s;
+        sigemptyset(&s);
+        sigaddset(&s, signum);
+        sigprocmask(SIG_UNBLOCK, &s, NULL);
+    }
+    rt_exit(&f, 255);
 }
 
 #ifndef SA_SIGINFO
@@ -1353,12 +1401,11 @@ static void set_exception_handler(void)
     /* install TCC signal handlers to print debug info on fatal
        runtime errors */
     sigemptyset (&sigact.sa_mask);
-    sigact.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_NODEFER;
+    sigact.sa_flags = SA_SIGINFO; //| SA_RESETHAND;
 #if 0//def SIGSTKSZ // this causes signals not to work at all on some (older) linuxes
     sigact.sa_flags |= SA_ONSTACK;
 #endif
     sigact.sa_sigaction = sig_error;
-    sigemptyset(&sigact.sa_mask);
     sigaction(SIGFPE, &sigact, NULL);
     sigaction(SIGILL, &sigact, NULL);
     sigaction(SIGSEGV, &sigact, NULL);
@@ -1406,7 +1453,7 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
         rt_error(&f, "caught exception %08x", code);
         break;
     }
-    rt_longjmp(&f, 255);
+    rt_exit(&f, 255);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -1506,6 +1553,14 @@ static int rt_get_caller_pc(addr_t *paddr, rt_frame *rc, int level)
 }
 
 #endif
+#else // for runmain.c:exit(); when CONFIG_TCC_BACKTRACE == 0 */
+static int rt_get_caller_pc(addr_t *paddr, rt_frame *f, int level)
+{
+    if (level)
+        return -1;
+    *paddr = f->ip;
+    return 0;
+}
 #endif /* CONFIG_TCC_BACKTRACE */
 /* ------------------------------------------------------------- */
 #ifdef CONFIG_TCC_STATIC
