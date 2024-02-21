@@ -127,15 +127,7 @@ static int rt_mem(TCCState *s1, int size)
     ptr_diff = (char*)prw - (char*)ptr; /* = size; */
     //printf("map %p %p %p\n", ptr, prw, (void*)ptr_diff);
 #else
-# if !CONFIG_RUNMEM_ALIGNED
-    ptr = tcc_malloc(size += PAGESIZE);
-# elif _WIN32
-    ptr = _aligned_malloc(size, PAGESIZE);
-# else
-    ptr = memalign(PAGESIZE, size);
-# endif
-    if (NULL == ptr)
-	return tcc_error_noabort("tccrun: could not allocate memory");
+    ptr = tcc_malloc(size += PAGESIZE); /* one extra page to align malloc memory */
 #endif
     s1->run_ptr = ptr;
     s1->run_size = size;
@@ -200,13 +192,7 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 # ifdef _WIN64
     win64_del_function_table(s1->run_function_table);
 # endif
-# if !CONFIG_RUNMEM_ALIGNED
     tcc_free(ptr);
-# elif _WIN32
-    _aligned_free(ptr);
-# else
-    libc_free(ptr);
-# endif
 #endif
 }
 
@@ -300,7 +286,7 @@ static void cleanup_sections(TCCState *s1)
 /* 0 = .text rwx  other rw */
 /* 1 = .text rx  .rdata r  .data/.bss rw */
 #ifndef CONFIG_RUNMEM_RO
-# define CONFIG_RUNMEM_RO 1
+# define CONFIG_RUNMEM_RO 0
 #endif
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
@@ -377,7 +363,7 @@ redo:
                     align = 64;
 #endif
                 /* start new page for different permissions */
-                if (CONFIG_RUNMEM_RO || k < 2)
+                if (CONFIG_RUNMEM_RO || k == 0)
                     align = PAGESIZE;
             }
             s->sh_addralign = align;
@@ -556,26 +542,8 @@ static void st_unlink(TCCState *s1)
     rt_post_sem();
 }
 
-#ifdef _WIN32
-# define GETTID() GetCurrentThreadId()
-#elif defined __linux__
-# define GETTID() gettid()
-#elif 0
-# define GETTID() 1234 // threads not supported
-#endif
-
 LIBTCCAPI void *_tcc_setjmp(TCCState *s1, void *p_jmp_buf, void *func, void *p_longjmp)
 {
-#ifdef GETTID
-    int tid = GETTID();
-    TCCState *s;
-    rt_wait_sem();
-    for (s = g_s1; s; s = s->next)
-        if (s->run_tid == tid)
-            s->run_tid = -1;
-    s1->run_tid = (int)tid;
-    rt_post_sem();
-#endif
     s1->run_lj = p_longjmp;
     s1->run_jb = p_jmp_buf;
 #ifdef CONFIG_TCC_BACKTRACE
@@ -593,14 +561,6 @@ LIBTCCAPI void tcc_set_backtrace_func(TCCState *s1, void *data, TCCBtFunc *func)
 
 static TCCState *rt_find_state(rt_frame *f)
 {
-#ifdef GETTID
-    int tid = GETTID();
-    TCCState *s;
-    for (s = g_s1; s; s = s->next)
-        if (s->run_tid == tid)
-            break;
-    return s;
-#else
     TCCState *s;
     int level;
     addr_t pc;
@@ -620,7 +580,6 @@ static TCCState *rt_find_state(rt_frame *f)
         }
     }
     return NULL;
-#endif
 }
 
 static void rt_exit(rt_frame *f, int code)

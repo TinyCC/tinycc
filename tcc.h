@@ -1005,7 +1005,6 @@ struct TCCState {
     void *run_lj, *run_jb; /* sj/lj for tcc_setjmp()/tcc_run() */
     TCCBtFunc *bt_func;
     void *bt_data;
-    int run_tid;
 #endif
 
 #ifdef CONFIG_TCC_BACKTRACE

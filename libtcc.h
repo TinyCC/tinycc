@@ -10,13 +10,11 @@ extern "C" {
 #endif
 
 /*****************************/
-/* set custom allocator for all allocations (optional) */
-
+/* set custom allocator for all allocations (optional), NULL for default. */
 typedef void *TCCReallocFunc(void *ptr, unsigned long size);
 LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *my_realloc);
 
 /*****************************/
-
 typedef struct TCCState TCCState;
 
 /* create a new TCC compilation context */

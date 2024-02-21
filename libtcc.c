@@ -242,7 +242,7 @@ static void *(*reallocator)(void*, unsigned long) = default_reallocator;
 
 LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *realloc)
 {
-    reallocator = realloc;
+    reallocator = realloc ? realloc : default_reallocator;
 }
 
 /* in case MEM_DEBUG is #defined */
