@@ -69,6 +69,7 @@ void exit(int code)
     f.fp = 0;
     f.ip = exit;
     __rt_exit(&f, code);
+    for (;;); // avoid noreturn warning
 }
 
 #ifndef _WIN32

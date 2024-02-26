@@ -91,17 +91,6 @@ static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
 #endif
 
-#ifdef __APPLE__
-# define CONFIG_RUNMEM_ALIGNED 0
-#else
-# ifndef CONFIG_RUNMEM_ALIGNED
-#  define CONFIG_RUNMEM_ALIGNED 1
-# endif
-# if CONFIG_RUNMEM_ALIGNED
-#  include <malloc.h> /* memalign() */
-# endif
-#endif
-
 #if !_WIN32 && !__APPLE__
 //#define HAVE_SELINUX 1
 #endif
@@ -286,7 +275,11 @@ static void cleanup_sections(TCCState *s1)
 /* 0 = .text rwx  other rw */
 /* 1 = .text rx  .rdata r  .data/.bss rw */
 #ifndef CONFIG_RUNMEM_RO
-# define CONFIG_RUNMEM_RO 0
+# ifdef _WIN32
+#   define CONFIG_RUNMEM_RO 0
+# else
+#   define CONFIG_RUNMEM_RO 1
+# endif
 #endif
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
@@ -1184,7 +1177,9 @@ int _tcc_backtrace(rt_frame *f, const char *fmt, va_list ap)
         }
         rt_printf("\n");
 
+#ifndef CONFIG_TCC_BACKTRACE_ONLY
     check_break:
+#endif
         if (rc2
             && bi.func_pc
             && bi.func_pc == (addr_t)rc2->top_func)
