@@ -166,7 +166,7 @@ ST_FUNC void gsym_addr(int t_, int a_)
 
 static int load_symofs(int r, SValue *sv, int forstore)
 {
-    int rr, doload = 0;
+    int rr, doload = 0, large_addend = 0;
     int fc = sv->c.i, v = sv->r & VT_VALMASK;
     if (sv->r & VT_SYM) {
         Sym label = {0};
@@ -176,8 +176,9 @@ static int load_symofs(int r, SValue *sv, int forstore)
                     R_RISCV_PCREL_HI20, sv->c.i);
             sv->c.i = 0;
         } else {
-            if (((unsigned)fc + (1 << 11)) >> 12)
-              tcc_error("unimp: large addend for global address (0x%lx)", (long)sv->c.i);
+            if (((unsigned)fc + (1 << 11)) >> 12){
+              large_addend = 1;
+            }
             greloca(cur_text_section, sv->sym, ind,
                     R_RISCV_GOT_HI20, 0);
             doload = 1;
@@ -192,6 +193,11 @@ static int load_symofs(int r, SValue *sv, int forstore)
                   ? R_RISCV_PCREL_LO12_I : R_RISCV_PCREL_LO12_S, 0);
         if (doload) {
             EI(0x03, 3, rr, rr, 0); // ld RR, 0(RR)
+            if (large_addend) {
+                o(0x37 | (5 << 7) | ((0x800 + fc) & 0xfffff000)); //lui t0, high(fc)
+                ER(0x33, 0, rr, rr, 5, 0); // add RR, RR, t0
+                sv->c.i = fc << 20 >> 20;
+            }
         }
     } else if (v == VT_LOCAL || v == VT_LLOCAL) {
         rr = 8; // s0
