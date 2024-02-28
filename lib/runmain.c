@@ -59,7 +59,7 @@ typedef struct rt_frame {
     void *ip, *fp, *sp;
 } rt_frame;
 
-void __rt_exit(rt_frame *, int);
+__attribute__((noreturn)) void __rt_exit(rt_frame *, int);
 
 void exit(int code)
 {
@@ -69,7 +69,6 @@ void exit(int code)
     f.fp = 0;
     f.ip = exit;
     __rt_exit(&f, code);
-    for (;;); // avoid noreturn warning
 }
 
 #ifndef _WIN32
