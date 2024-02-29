@@ -91,6 +91,19 @@ static void *win64_add_function_table(TCCState *s1);
 static void win64_del_function_table(void *);
 #endif
 
+#if !defined PAGESIZE
+# if defined _SC_PAGESIZE
+#  define PAGESIZE sysconf(_SC_PAGESIZE)
+# elif defined __APPLE__
+#  include <libkern/OSCacheControl.h>
+#  define PAGESIZE getpagesize()
+# else
+#  define PAGESIZE 4096
+# endif
+#endif
+
+#define PAGEALIGN(n) ((addr_t)n + (-(addr_t)n & (PAGESIZE-1)))
+
 #if !_WIN32 && !__APPLE__
 //#define HAVE_SELINUX 1
 #endif
@@ -116,7 +129,8 @@ static int rt_mem(TCCState *s1, int size)
     ptr_diff = (char*)prw - (char*)ptr; /* = size; */
     //printf("map %p %p %p\n", ptr, prw, (void*)ptr_diff);
 #else
-    ptr = tcc_malloc(size += PAGESIZE); /* one extra page to align malloc memory */
+    s1->run_mem = tcc_malloc(size + PAGESIZE); /* one extra page to align malloc memory */
+    ptr = (void*)PAGEALIGN(s1->run_mem);
 #endif
     s1->run_ptr = ptr;
     s1->run_size = size;
@@ -181,7 +195,7 @@ ST_FUNC void tcc_run_free(TCCState *s1)
 # ifdef _WIN64
     win64_del_function_table(s1->run_function_table);
 # endif
-    tcc_free(ptr);
+    tcc_free(s1->run_mem);
 #endif
 }
 
@@ -214,11 +228,11 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
         top_sym = "main";
     }
     if (tcc_relocate(s1) < 0)
-        return 1;
+        return -1;
 
     prog_main = (void*)get_sym_addr(s1, s1->run_main, 1, 1);
     if ((addr_t)-1 == (addr_t)prog_main)
-        return 1;
+        return -1;
     errno = 0; /* clean errno value */
     fflush(stdout);
     fflush(stderr);
@@ -274,12 +288,9 @@ static void cleanup_sections(TCCState *s1)
 /* ------------------------------------------------------------- */
 /* 0 = .text rwx  other rw */
 /* 1 = .text rx  .rdata r  .data/.bss rw */
+
 #ifndef CONFIG_RUNMEM_RO
-# ifdef _WIN32
-#   define CONFIG_RUNMEM_RO 0
-# else
-#   define CONFIG_RUNMEM_RO 1
-# endif
+# define CONFIG_RUNMEM_RO 0
 #endif
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
@@ -304,14 +315,11 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, unsigned ptr_diff)
     offset = copy = 0;
     mem = (addr_t)ptr;
 redo:
-    if (s1->verbose == 2 && copy) {
+    if (s1->verbose == 2 && copy)
         printf(&"-----------------------------------------------------\n"[PTR_SIZE*2 - 8]);
-        if (1 == copy)
-            printf("memory              %p  len %05x\n", ptr, s1->run_size);
-    }
     if (s1->nb_errors)
         return -1;
-    if (copy == 2)
+    if (copy == 3)
         return 0;
 
     for (k = 0; k < 3; ++k) { /* 0:rx, 1:ro, 2:rw sections */
@@ -324,14 +332,16 @@ redo:
             if (shf[k] != (s->sh_flags & (SHF_ALLOC|SHF_WRITE|SHF_EXECINSTR)))
                 continue;
             length = s->data_offset;
-
+            if (copy == 2) {
+                if (addr == 0)
+                    addr = s->sh_addr;
+                n = (s->sh_addr - addr) + length;
+                continue;
+            }
             if (copy) { /* final step: copy section data to memory */
                 if (s1->verbose == 2)
                     printf("%d: %-16s %p  len %05x  align %04x\n",
                         k, s->name, (void*)s->sh_addr, length, s->sh_addralign);
-                if (addr == 0)
-                    addr = s->sh_addr;
-                n = (s->sh_addr - addr) + length;
                 ptr = (void*)s->sh_addr;
                 if (k == 0)
                     ptr = (void*)(s->sh_addr + ptr_diff);
@@ -339,10 +349,6 @@ redo:
                     memset(ptr, 0, length);
                 else
                     memcpy(ptr, s->data, length);
-#ifdef _WIN64
-                if (s == s1->uw_pdata)
-                    s1->run_function_table = win64_add_function_table(s1);
-#endif
                 continue;
             }
 
@@ -360,13 +366,12 @@ redo:
                     align = PAGESIZE;
             }
             s->sh_addralign = align;
-
             addr = k ? mem + ptr_diff : mem;
             offset += -(addr + offset) & (align - 1);
             s->sh_addr = mem ? addr + offset : 0;
             offset += length;
         }
-        if (copy) { /* set permissions */
+        if (copy == 2) { /* set permissions */
             if (n == 0) /* no data  */
                 continue;
 #ifdef HAVE_SELINUX
@@ -379,10 +384,10 @@ redo:
                     continue;
                 f = 3; /* change only SHF_EXECINSTR to rwx */
             }
-            n = (n + PAGESIZE-1) & ~(PAGESIZE-1);
+            n = PAGEALIGN(n);
             if (s1->verbose == 2) {
                 printf("protect         %3s %p  len %05x\n",
-                    &"rx\0r \0rw\0rwx"[f*3], (void*)addr, (unsigned)n);
+                    &"rx\0ro\0rw\0rwx"[f*3], (void*)addr, (unsigned)n);
             }
             if (protect_pages((void*)addr, n, f) < 0)
                 return tcc_error_noabort(
@@ -391,9 +396,15 @@ redo:
     }
 
     if (0 == mem)
-        return (offset + (PAGESIZE-1)) & ~(PAGESIZE-1);
+        return PAGEALIGN(offset);
 
     if (++copy == 2) {
+        goto redo;
+    }
+    if (copy == 3) {
+#ifdef _WIN64
+        s1->run_function_table = win64_add_function_table(s1);
+#endif
         /* remove local symbols and free sections except symtab */
         cleanup_symbols(s1);
         cleanup_sections(s1);
@@ -427,7 +438,6 @@ static int protect_pages(void *ptr, unsigned long length, int mode)
     DWORD old;
     if (!VirtualProtect(ptr, length, protect[mode], &old))
         return -1;
-    return 0;
 #else
     static const unsigned char protect[] = {
         PROT_READ | PROT_EXEC,
@@ -435,11 +445,7 @@ static int protect_pages(void *ptr, unsigned long length, int mode)
         PROT_READ | PROT_WRITE,
         PROT_READ | PROT_WRITE | PROT_EXEC
         };
-    addr_t start, end;
-    start = (addr_t)ptr & ~(PAGESIZE - 1);
-    end = (addr_t)ptr + length;
-    end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
-    if (mprotect((void *)start, end - start, protect[mode]))
+    if (mprotect(ptr, length, protect[mode]))
         return -1;
 /* XXX: BSD sometimes dump core with bad system call */
 # if (defined TCC_TARGET_ARM && !TARGETOS_BSD) || defined TCC_TARGET_ARM64
@@ -448,8 +454,8 @@ static int protect_pages(void *ptr, unsigned long length, int mode)
         __clear_cache(ptr, (char *)ptr + length);
     }
 # endif
-    return 0;
 #endif
+    return 0;
 }
 
 #ifdef _WIN64

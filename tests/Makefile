@@ -207,7 +207,7 @@ tccb:
 	$(TCC) -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o tccb1.exe
 	mv tccb1.exe tccb2.exe
 	./tccb2.exe -b $(TOPSRC)/tcc.c $(TCCFLAGS) $(NATIVE_DEFINES) -o tccb1.exe
-	cmp -s tccb1.exe tccb2.exe && echo "Exe Bound-Rest OK"
+	cmp -s tccb1.exe tccb2.exe && echo "Exe Bound-Test OK"
 
 
 # speed test

@@ -359,20 +359,18 @@ redo:
     }
 
     /* compile or add each files or library */
-    first_file = NULL, ret = 0;
+    first_file = NULL;
     do {
         struct filespec *f = s->files[n];
         s->filetype = f->type;
         if (f->type & AFF_TYPE_LIB) {
-            if (tcc_add_library_err(s, f->name) < 0)
-                ret = 1;
+            ret = tcc_add_library_err(s, f->name);
         } else {
             if (1 == s->verbose)
                 printf("-> %s\n", f->name);
             if (!first_file)
                 first_file = f->name;
-            if (tcc_add_file(s, f->name) < 0)
-                ret = 1;
+            ret = tcc_add_file(s, f->name);
         }
         done = ret || ++n >= s->nb_files;
     } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
@@ -393,21 +391,24 @@ redo:
             if (!s->outfile)
                 s->outfile = default_outputfile(s, first_file);
             if (!s->just_deps && tcc_output_file(s, s->outfile))
-                ret = 1;
+                ;
             else if (s->gen_deps)
-                ret = gen_makedeps(s, s->outfile, s->deps_outfile);
+                gen_makedeps(s, s->outfile, s->deps_outfile);
         }
     }
 
-    if (done && 0 == t && 0 == ret && s->do_bench)
+    done = 1;
+    if (t)
+        done = 0; /* run more tests with -dt -run */
+    else if (s->nb_errors)
+        ret = 1;
+    else if (n < s->nb_files)
+        done = 0; /* compile more files with -c */
+    else if (s->do_bench)
         tcc_print_stats(s, end_time - start_time);
-
     tcc_delete(s);
     if (!done)
-        goto redo; /* compile more files with -c */
-    if (t)
-        goto redo; /* run more tests with -dt -run */
-
+        goto redo;
     if (ppfp && ppfp != stdout)
         fclose(ppfp);
     return ret;

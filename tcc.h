@@ -92,14 +92,6 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # undef CONFIG_TCC_STATIC
 #endif
 
-#ifndef PAGESIZE
-# ifdef _SC_PAGESIZE
-#   define PAGESIZE sysconf(_SC_PAGESIZE)
-# else
-#   define PAGESIZE 4096
-# endif
-#endif
-
 #ifndef O_BINARY
 # define O_BINARY 0
 #endif
@@ -995,7 +987,8 @@ struct TCCState {
 
 #ifdef TCC_IS_NATIVE
     const char *run_main; /* entry for tcc_run() */
-    void *run_ptr; /* ptr to runtime_memory */
+    void *run_mem; /* runtime_memory */
+    void *run_ptr; /* ptr to runtime_memory (aligned) */
     unsigned run_size; /* size of runtime_memory  */
 #ifdef _WIN64
     void *run_function_table; /* unwind data */
