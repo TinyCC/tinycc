@@ -487,7 +487,7 @@ ST_FUNC void gen_expr32(ExprValue *pe)
     if (pe->pcrel)
         /* If PC-relative, always set VT_SYM, even without symbol,
 	   so as to force a relocation to be emitted.  */
-	gen_addrpc32(VT_SYM, pe->sym, pe->v);
+	gen_addrpc32(VT_SYM, pe->sym, pe->v + (ind + 4));
     else
 	gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }

@@ -1204,6 +1204,8 @@ static void patch_type(Sym *sym, CType *type)
         /* stay static if both are static */
         sym->type.t = type->t & (sym->type.t | ~VT_STATIC);
         sym->type.ref = type->ref;
+        if ((type->t & VT_BTYPE) != VT_FUNC && !(type->t & VT_ARRAY))
+            sym->r |= VT_LVAL;
     }
 
     if (!is_compatible_types(&sym->type, type)) {
