@@ -289,8 +289,16 @@ static void cleanup_sections(TCCState *s1)
 /* 0 = .text rwx  other rw */
 /* 1 = .text rx  .rdata r  .data/.bss rw */
 
+/* Some targets implement secutiry options that do not allow write in
+   executable code. These targets need CONFIG_RUNMEM_RO=1.
+   The disadvantage of this is that it requires a little bit more memory. */
+
 #ifndef CONFIG_RUNMEM_RO
-# define CONFIG_RUNMEM_RO 0
+# ifdef __APPLE__
+#   define CONFIG_RUNMEM_RO 1
+# else
+#   define CONFIG_RUNMEM_RO 0
+#  endif
 #endif
 
 /* relocate code. Return -1 on error, required size if ptr is NULL,
