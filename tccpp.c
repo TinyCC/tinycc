@@ -127,7 +127,7 @@ ST_FUNC void expect(const char *msg)
 #define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size)
 #define TAL_DEBUG_PARAMS
 #else
-#define TAL_DEBUG 1
+#define TAL_DEBUG MEM_DEBUG
 //#define TAL_INFO 1 /* collect and dump allocators stats */
 #define tal_free(al, p) tal_free_impl(al, p, __FILE__, __LINE__)
 #define tal_realloc(al, p, size) tal_realloc_impl(&al, p, size, __FILE__, __LINE__)
@@ -189,7 +189,7 @@ tail_call:
             al->limit, al->size / 1024.0 / 1024.0, al->nb_peak, al->nb_total, al->nb_missed,
             (al->peak_p - al->buffer) * 100.0 / al->size);
 #endif
-#ifdef TAL_DEBUG
+#if TAL_DEBUG && TAL_DEBUG != 3 /* do not check TAL leaks with -DMEM_DEBUG=3 */
     if (al->nb_allocs > 0) {
         uint8_t *p;
         fprintf(stderr, "TAL_DEBUG: memory leak %d chunk(s) (limit= %d)\n",
@@ -203,7 +203,7 @@ tail_call:
             }
             p += header->size + sizeof(tal_header_t);
         }
-#if MEM_DEBUG-0 == 2
+#if TAL_DEBUG == 2
         exit(2);
 #endif
     }

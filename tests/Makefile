@@ -342,7 +342,7 @@ cache: tcc_g
 clean:
 	rm -f *~ *.o *.a *.bin *.i *.ref *.out *.out? *.out?b *.cc *.gcc
 	rm -f *-cc *-gcc *-tcc *.exe hello libtcc_test vla_test tcctest[1234]
-	rm -f asm-c-connect$(EXESUF) asm-c-connect-sep$(EXESUF)
+	rm -f asm-c-connect asm-c-connect-sep
 	rm -f ex? tcc_g weaktest.*.txt *.def *.pdb *.obj libtcc_test_mt
 	@$(MAKE) -C tests2 $@
 	@$(MAKE) -C pp $@

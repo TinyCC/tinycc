@@ -128,9 +128,9 @@ static int rt_mem(TCCState *s1, int size)
 	return tcc_error_noabort("tccrun: could not map memory");
     ptr_diff = (char*)prw - (char*)ptr; /* = size; */
     //printf("map %p %p %p\n", ptr, prw, (void*)ptr_diff);
+    size *= 2;
 #else
-    s1->run_mem = tcc_malloc(size + PAGESIZE); /* one extra page to align malloc memory */
-    ptr = (void*)PAGEALIGN(s1->run_mem);
+    ptr = tcc_malloc(size += PAGESIZE); /* one extra page to align malloc memory */
 #endif
     s1->run_ptr = ptr;
     s1->run_size = size;
@@ -188,14 +188,14 @@ ST_FUNC void tcc_run_free(TCCState *s1)
     st_unlink(s1);
     size = s1->run_size;
 #ifdef HAVE_SELINUX
-    munmap(ptr, size * 2);
+    munmap(ptr, size);
 #else
     /* unprotect memory to make it usable for malloc again */
-    protect_pages(ptr, size, 2 /*rw*/);
+    protect_pages((void*)PAGEALIGN(ptr), size - PAGESIZE, 2 /*rw*/);
 # ifdef _WIN64
     win64_del_function_table(s1->run_function_table);
 # endif
-    tcc_free(s1->run_mem);
+    tcc_free(ptr);
 #endif
 }
 
@@ -286,8 +286,9 @@ static void cleanup_sections(TCCState *s1)
 }
 
 /* ------------------------------------------------------------- */
-/* 0 = .text rwx  other rw */
-/* 1 = .text rx  .rdata r  .data/.bss rw */
+/* 0 = .text rwx  other rw (memory >= 2 pages a 4096 bytes) */
+/* 1 = .text rx   other rw (memory >= 3 pages) */
+/* 2 = .text rx  .rdata ro  .data/.bss rw (memory >= 4 pages) */
 
 /* Some targets implement secutiry options that do not allow write in
    executable code. These targets need CONFIG_RUNMEM_RO=1.
@@ -370,7 +371,7 @@ redo:
                     align = 64;
 #endif
                 /* start new page for different permissions */
-                if (CONFIG_RUNMEM_RO || k == 0)
+                if (k <= CONFIG_RUNMEM_RO)
                     align = PAGESIZE;
             }
             s->sh_addralign = align;
@@ -387,7 +388,7 @@ redo:
                 continue;
 #endif
             f = k;
-            if (CONFIG_RUNMEM_RO == 0) {
+            if (f >= CONFIG_RUNMEM_RO) {
                 if (f != 0)
                     continue;
                 f = 3; /* change only SHF_EXECINSTR to rwx */

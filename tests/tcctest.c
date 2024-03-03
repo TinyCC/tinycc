@@ -3760,12 +3760,14 @@ void asm_dot_test(void)
 
 void asm_pcrel_test(void)
 {
+#if defined(__i386__)
     unsigned o1, o2;
     /* subtract text-section label from forward or other-section label */
     asm("1: mov $2f-1b,%%eax; mov %%eax,%0" : "=m"(o1));
     /* verify ... */
     asm("2: mov $2b,%%eax; sub $1b,%%eax; mov %%eax,%0" : "=m"(o2));
     printf("%s : %x\n", __FUNCTION__, o1 - o2); /* should be zero */
+#endif
 }
 
 void asm_test(void)

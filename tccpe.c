@@ -732,7 +732,7 @@ static int pe_write(struct pe_info *pe)
 
         memcpy(psh->Name, sh_name, umin(strlen(sh_name), sizeof psh->Name));
         if (si->cls == sec_debug)
-            need_strtab += pe_put_long_secname(psh->Name, sh_name);
+            need_strtab += pe_put_long_secname((char*)psh->Name, sh_name);
 
         psh->Characteristics = si->pe_flags;
         psh->VirtualAddress = addr;

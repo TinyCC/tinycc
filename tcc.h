@@ -135,7 +135,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* include file debug */
 /* #define INC_DEBUG */
 /* memory leak debug (only for single threaded usage) */
-/* #define MEM_DEBUG */
+/* #define MEM_DEBUG 1,2,3 */
 /* assembler debug */
 /* #define ASM_DEBUG */
 
@@ -987,8 +987,7 @@ struct TCCState {
 
 #ifdef TCC_IS_NATIVE
     const char *run_main; /* entry for tcc_run() */
-    void *run_mem; /* runtime_memory */
-    void *run_ptr; /* ptr to runtime_memory (aligned) */
+    void *run_ptr; /* runtime_memory */
     unsigned run_size; /* size of runtime_memory  */
 #ifdef _WIN64
     void *run_function_table; /* unwind data */

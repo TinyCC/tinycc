@@ -2203,9 +2203,10 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
 #ifdef TCC_IS_NATIVE
     if (s1->run_size) {
         Section *s = s1->symtab;
-        int ms = s->data_offset + s->link->data_offset + s->hash->data_offset;
+        unsigned ms = s->data_offset + s->link->data_offset + s->hash->data_offset;
+        unsigned rs = s1->run_size;
         fprintf(stderr, ": %d to run, %d symbols, %d other,",
-            s1->run_size, ms, mem_cur_size - s1->run_size - ms);
+            rs, ms, mem_cur_size - rs - ms);
     }
 #endif
     fprintf(stderr, " %d max (bytes)\n", mem_max_size);
