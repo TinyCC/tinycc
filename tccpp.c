@@ -3547,11 +3547,7 @@ static void putdefs(CString *cs, const char *p)
 
 static void tcc_predefs(TCCState *s1, CString *cs, int is_asm)
 {
-    int a, b, c;
-
-    sscanf(TCC_VERSION, "%d.%d.%d", &a, &b, &c);
-    cstr_printf(cs, "#define __TINYC__ %d\n", a*10000 + b*100 + c);
-
+    cstr_printf(cs, "#define __TINYC__ 9%.2s\n", TCC_VERSION + 4);
     putdefs(cs, target_machine_defs);
     putdefs(cs, target_os_defs);
 
@@ -3742,7 +3738,10 @@ static void tok_print(const int *str, const char *msg, ...)
     va_list ap;
     int t, t0, s;
     CValue cval;
-    va_start(ap, msg), vfprintf(fp, msg, ap), va_end(ap);
+
+    va_start(ap, msg);
+    vfprintf(fp, msg, ap);
+    va_end(ap);
 
     s = t0 = 0;
     while (str) {

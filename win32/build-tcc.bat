@@ -137,6 +137,7 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 @if _%TCC_C%_==__ goto compiler_2parts
 @rem if TCC_C was defined then build only tcc.exe
 %CC% -o tcc.exe %TCC_C% %D%
+@if errorlevel 1 goto :the_end
 @goto :compiler_done
 
 :compiler_2parts
@@ -144,8 +145,10 @@ for %%f in (*tcc.exe *tcc.dll) do @del %%f
 %CC% -o libtcc.dll -shared %LIBTCC_C% %D% -DLIBTCC_AS_DLL
 @if errorlevel 1 goto :the_end
 %CC% -o tcc.exe ..\tcc.c libtcc.dll %D% -DONE_SOURCE"=0"
+@if errorlevel 1 goto :the_end
 if not _%XCC%_==_yes_ goto :compiler_done
 %CC% -o %PX%-tcc.exe ..\tcc.c %DX%
+@if errorlevel 1 goto :the_end
 :compiler_done
 @if (%EXES_ONLY%)==(yes) goto :files_done
 

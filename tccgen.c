@@ -157,6 +157,7 @@ static void gv_dup(void);
 static int get_temp_local_var(int size,int align);
 static void clear_temp_local_var_list();
 static void cast_error(CType *st, CType *dt);
+static void end_switch(void);
 
 /* ------------------------------------------------------------------------- */
 /* Automagical code suppression */
@@ -381,12 +382,10 @@ ST_FUNC void tccgen_init(TCCState *s1)
 
 ST_FUNC int tccgen_compile(TCCState *s1)
 {
-    cur_text_section = NULL;
     funcname = "";
     func_ind = -1;
     anon_sym = SYM_FIRST_ANOM;
     nocode_wanted = DATA_ONLY_WANTED; /* no code outside of functions */
-    local_scope = 0;
     debug_modes = (s1->do_debug ? 1 : 0) | s1->test_coverage << 1;
 
     tcc_debug_start(s1);
@@ -418,10 +417,19 @@ ST_FUNC void tccgen_finish(TCCState *s1)
     free_defines(NULL);
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
-    sym_free_first = NULL;
-    global_label_stack = local_label_stack = NULL;
     cstr_free(&initstr);
     dynarray_reset(&stk_data, &nb_stk_data);
+    while (cur_switch)
+        end_switch();
+    local_scope = 0;
+    loop_scope = NULL;
+    all_cleanups = NULL;
+    pending_gotos = NULL;
+    nb_temp_local_vars = 0;
+    global_label_stack = NULL;
+    local_label_stack = NULL;
+    cur_text_section = NULL;
+    sym_free_first = NULL;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -6754,6 +6762,14 @@ static void gcase(struct case_t **base, int len, int *bsym)
     *bsym = gjmp(*bsym);
 }
 
+static void end_switch(void)
+{
+    struct switch_t *sw = cur_switch;
+    dynarray_reset(&sw->p, &sw->n);
+    cur_switch = sw->prev;
+    tcc_free(sw);
+}
+
 /* ------------------------------------------------------------------------- */
 /* __attribute__((cleanup(fn))) */
 
@@ -7154,15 +7170,14 @@ again:
     skip_switch:
         /* break label */
         gsym(a);
-
-        dynarray_reset(&sw->p, &sw->n);
-        cur_switch = sw->prev;
-        tcc_free(sw);
+        end_switch();
 
     } else if (t == TOK_CASE) {
-        struct case_t *cr = tcc_malloc(sizeof(struct case_t));
+        struct case_t *cr;
         if (!cur_switch)
             expect("switch");
+        cr = tcc_malloc(sizeof(struct case_t));
+        dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         cr->v1 = cr->v2 = expr_const64();
         if (gnu_ext && tok == TOK_DOTS) {
             next();
@@ -7174,7 +7189,6 @@ again:
         /* case and default are unreachable from a switch under nocode_wanted */
         if (!cur_switch->nocode_wanted)
             cr->sym = gind();
-        dynarray_add(&cur_switch->p, &cur_switch->n, cr);
         skip(':');
         goto block_after_label;
 
@@ -8574,9 +8588,9 @@ static int decl(int l)
                     fn = tcc_malloc(sizeof *fn + strlen(file->filename));
                     strcpy(fn->filename, file->filename);
                     fn->sym = sym;
-		    skip_or_save_block(&fn->func_str);
                     dynarray_add(&tcc_state->inline_fns,
 				 &tcc_state->nb_inline_fns, fn);
+                    skip_or_save_block(&fn->func_str);
                 } else {
                     /* compute text section */
                     cur_text_section = ad.section;

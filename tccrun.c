@@ -179,8 +179,6 @@ ST_FUNC void tcc_run_free(TCCState *s1)
             dlclose(ref->handle);
 #endif
     }
-    /* free loaded dlls array */
-    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
     /* unmap or unprotect and free memory */
     ptr = s1->run_ptr;
     if (NULL == ptr)
@@ -854,7 +852,7 @@ static addr_t rt_printline_dwarf (rt_context *rc, addr_t wanted_pc, bt_info *bi)
     char *dirs[DIR_TABLE_SIZE];
 #endif
     unsigned int filename_size;
-    struct dwarf_filename_struct {
+    struct /*dwarf_filename_struct*/ {
         unsigned int dir_entry;
         char *name;
     } filename_table[FILE_TABLE_SIZE];

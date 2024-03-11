@@ -101,7 +101,7 @@ BOOL WINAPI DllMain (HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved)
 static inline char *config_tccdir_w32(char *path)
 {
     char *p;
-    GetModuleFileName(tcc_module, path, MAX_PATH);
+    GetModuleFileNameA(tcc_module, path, MAX_PATH);
     p = tcc_basename(normalize_slashes(strlwr(path)));
     if (p > path)
         --p;
@@ -115,7 +115,7 @@ static inline char *config_tccdir_w32(char *path)
 static void tcc_add_systemdir(TCCState *s)
 {
     char buf[1000];
-    GetSystemDirectory(buf, sizeof buf);
+    GetSystemDirectoryA(buf, sizeof buf);
     tcc_add_library_path(s, normalize_slashes(buf));
 }
 #endif
@@ -801,14 +801,11 @@ LIBTCCAPI TCCState *tcc_new(void)
     TCCState *s;
 
     s = tcc_mallocz(sizeof(TCCState));
-    if (!s)
-        return NULL;
 #ifdef MEM_DEBUG
     tcc_memcheck(1);
 #endif
 
 #undef gnu_ext
-
     s->gnu_ext = 1;
     s->tcc_ext = 1;
     s->nocommon = 1;
@@ -874,11 +871,13 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
     cstr_free(&s1->cmdline_defs);
     cstr_free(&s1->cmdline_incl);
     cstr_free(&s1->linker_arg);
+    tcc_free(s1->dState);
 #ifdef TCC_IS_NATIVE
     /* free runtime memory */
     tcc_run_free(s1);
 #endif
-    tcc_free(s1->dState);
+    /* free loaded dlls array */
+    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
     tcc_free(s1);
 #ifdef MEM_DEBUG
     tcc_memcheck(-1);
