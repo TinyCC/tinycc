@@ -7,7 +7,8 @@
 #ifdef TARGET_DEFS_ONLY
 
 #define CONFIG_TCC_ASM
-#define NB_ASM_REGS 32
+/* 32 general purpose + 32 floating point registers */
+#define NB_ASM_REGS 64
 
 ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
@@ -24,11 +25,15 @@ enum {
     OPT_IM12S,
     OPT_IM32,
 };
-#define C_ENCODE_RS1(register_index) ((register_index) << 7)
-#define C_ENCODE_RS2(register_index) ((register_index) << 2)
-#define ENCODE_RD(register_index) ((register_index) << 7)
-#define ENCODE_RS1(register_index) ((register_index) << 15)
-#define ENCODE_RS2(register_index) ((register_index) << 20)
+// Registers go from 0 to 31. We use next bit to choose general/float
+#define REG_FLOAT_MASK 0x20
+#define REG_IS_FLOAT(register_index) ((register_index) & REG_FLOAT_MASK)
+#define REG_VALUE(register_index)    ((register_index) & (REG_FLOAT_MASK-1))
+#define C_ENCODE_RS1(register_index) (REG_VALUE(register_index) << 7)
+#define C_ENCODE_RS2(register_index) (REG_VALUE(register_index) << 2)
+#define ENCODE_RD(register_index)  (REG_VALUE(register_index) << 7)
+#define ENCODE_RS1(register_index) (REG_VALUE(register_index) << 15)
+#define ENCODE_RS2(register_index) (REG_VALUE(register_index) << 20)
 #define NTH_BIT(b, n) ((b >> n) & 1)
 #define OP_IM12S (1 << OPT_IM12S)
 #define OP_IM32 (1 << OPT_IM32)
@@ -1334,7 +1339,84 @@ static int asm_parse_csrvar(int t)
 
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier)
 {
-    tcc_error("RISCV64 asm not implemented.");
+    int r, reg, val;
+    char buf[64];
+
+    r = sv->r;
+    if ((r & VT_VALMASK) == VT_CONST) {
+        if (!(r & VT_LVAL) && modifier != 'c' && modifier != 'n' &&
+            modifier != 'P') {
+            //cstr_ccat(add_str, '#');
+        }
+        if (r & VT_SYM) {
+            const char *name = get_tok_str(sv->sym->v, NULL);
+            if (sv->sym->v >= SYM_FIRST_ANOM) {
+                /* In case of anonymous symbols ("L.42", used
+                   for static data labels) we can't find them
+                   in the C symbol table when later looking up
+                   this name.  So enter them now into the asm label
+                   list when we still know the symbol.  */
+                get_asm_sym(tok_alloc(name, strlen(name))->tok, sv->sym);
+            }
+            if (tcc_state->leading_underscore)
+                cstr_ccat(add_str, '_');
+            cstr_cat(add_str, name, -1);
+            if ((uint32_t) sv->c.i == 0)
+                goto no_offset;
+            cstr_ccat(add_str, '+');
+        }
+        val = sv->c.i;
+        if (modifier == 'n')
+            val = -val;
+        if (modifier == 'z' && sv->c.i == 0) {
+            cstr_cat(add_str, "zero", -1);
+        } else {
+            snprintf(buf, sizeof(buf), "%d", (int) sv->c.i);
+            cstr_cat(add_str, buf, -1);
+        }
+      no_offset:;
+    } else if ((r & VT_VALMASK) == VT_LOCAL) {
+        snprintf(buf, sizeof(buf), "%d", (int) sv->c.i);
+        cstr_cat(add_str, buf, -1);
+    } else if (r & VT_LVAL) {
+        reg = r & VT_VALMASK;
+        if (reg >= VT_CONST)
+            tcc_internal_error("");
+        if ((sv->type.t & VT_BTYPE) == VT_FLOAT ||
+            (sv->type.t & VT_BTYPE) == VT_DOUBLE) {
+            /* floating point register */
+            reg = TOK_ASM_f0 + reg;
+        } else {
+            /* general purpose register */
+            reg = TOK_ASM_x0 + reg;
+        }
+        snprintf(buf, sizeof(buf), "%s", get_tok_str(reg, NULL));
+        cstr_cat(add_str, buf, -1);
+    } else {
+        /* register case */
+        reg = r & VT_VALMASK;
+        if (reg >= VT_CONST)
+            tcc_internal_error("");
+        if ((sv->type.t & VT_BTYPE) == VT_FLOAT ||
+            (sv->type.t & VT_BTYPE) == VT_DOUBLE) {
+            /* floating point register */
+            reg = TOK_ASM_f0 + reg;
+        } else {
+            /* general purpose register */
+            reg = TOK_ASM_x0 + reg;
+        }
+        snprintf(buf, sizeof(buf), "%s", get_tok_str(reg, NULL));
+        cstr_cat(add_str, buf, -1);
+    }
+}
+
+/* TCC does not use RISC-V register numbers internally, it uses 0-8 for
+ * integers and 8-16 for floats instead */
+static int tcc_ireg(int r){
+    return REG_VALUE(r) - 10;
+}
+static int tcc_freg(int r){
+    return REG_VALUE(r) - 10 + 8;
 }
 
 /* generate prolog and epilog code for asm statement */
@@ -1343,13 +1425,422 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                          uint8_t *clobber_regs,
                          int out_reg)
 {
+    uint8_t regs_allocated[NB_ASM_REGS];
+    ASMOperand *op;
+    int i, reg;
+
+    static const uint8_t reg_saved[] = {
+        // General purpose regs
+        8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+        // Float regs
+        40, 41, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59
+    };
+
+    /* mark all used registers */
+    memcpy(regs_allocated, clobber_regs, sizeof(regs_allocated));
+    for(i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        if (op->reg >= 0) {
+            regs_allocated[op->reg] = 1;
+        }
+    }
+
+    if(!is_output) {
+        /* generate reg save code */
+        for(i = 0; i < sizeof(reg_saved)/sizeof(reg_saved[0]); i++) {
+            reg = reg_saved[i];
+            if (regs_allocated[reg]) {
+                /* push */
+                /* addi sp, sp, -offset */
+                gen_le32((4 << 2) | 3 |
+                        ENCODE_RD(2) | ENCODE_RS1(2) | -8 << 20);
+                if (REG_IS_FLOAT(reg)){
+                    /* fsd reg, offset(sp) */
+                    gen_le32( 0x27 | (3 << 12) |
+                            ENCODE_RS2(reg) | ENCODE_RS1(2) );
+                } else {
+                    /* sd reg, offset(sp) */
+                    gen_le32((0x8 << 2) | 3 | (3 << 12) |
+                            ENCODE_RS2(reg) | ENCODE_RS1(2) );
+                }
+            }
+        }
+
+        /* generate load code */
+        for(i = 0; i < nb_operands; i++) {
+            op = &operands[i];
+            if (op->reg >= 0) {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL &&
+                    op->is_memory) {
+                    /* memory reference case (for both input and
+                       output cases) */
+                    SValue sv;
+                    sv = *op->vt;
+                    sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL | VT_LVAL;
+                    sv.type.t = VT_PTR;
+                    load(tcc_ireg(op->reg), &sv);
+                } else if (i >= nb_outputs || op->is_rw) {
+                    /* load value in register */
+                    if ((op->vt->type.t & VT_BTYPE) == VT_FLOAT ||
+                        (op->vt->type.t & VT_BTYPE) == VT_DOUBLE) {
+                        load(tcc_freg(op->reg), op->vt);
+                    } else {
+                        load(tcc_ireg(op->reg), op->vt);
+                    }
+                    if (op->is_llong) {
+                        tcc_error("long long not implemented");
+                    }
+                }
+            }
+        }
+    } else {
+        /* generate save code */
+        for(i = 0 ; i < nb_outputs; i++) {
+            op = &operands[i];
+            if (op->reg >= 0) {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL) {
+                    if (!op->is_memory) {
+                        SValue sv;
+                        sv = *op->vt;
+                        sv.r = (sv.r & ~VT_VALMASK) | VT_LOCAL;
+                        sv.type.t = VT_PTR;
+                        load(tcc_ireg(out_reg), &sv);
+
+                        sv = *op->vt;
+                        sv.r = (sv.r & ~VT_VALMASK) | out_reg;
+                        store(tcc_ireg(op->reg), &sv);
+                    }
+                } else {
+                    if ((op->vt->type.t & VT_BTYPE) == VT_FLOAT ||
+                        (op->vt->type.t & VT_BTYPE) == VT_DOUBLE) {
+                        store(tcc_freg(op->reg), op->vt);
+                    } else {
+                        store(tcc_ireg(op->reg), op->vt);
+                    }
+                    if (op->is_llong) {
+                        tcc_error("long long not implemented");
+                    }
+                }
+            }
+        }
+        /* generate reg restore code for floating point registers */
+        for(i = sizeof(reg_saved)/sizeof(reg_saved[0]) - 1; i >= 0; i--) {
+            reg = reg_saved[i];
+            if (regs_allocated[reg]) {
+                /* pop */
+                if (REG_IS_FLOAT(reg)){
+                    /* fld reg, offset(sp) */
+                    gen_le32(7 | (3 << 12) |
+                            ENCODE_RD(reg) | ENCODE_RS1(2) | 0);
+                } else {
+                    /* ld reg, offset(sp) */
+                    gen_le32(3 | (3 << 12) |
+                            ENCODE_RD(reg) | ENCODE_RS1(2) | 0);
+                }
+                /* addi sp, sp, offset */
+                gen_le32((4 << 2) | 3 |
+                        ENCODE_RD(2) | ENCODE_RS1(2) | 8 << 20);
+            }
+        }
+    }
 }
+
+/* return the constraint priority (we allocate first the lowest
+   numbered constraints) */
+static inline int constraint_priority(const char *str)
+{
+    // TODO: How is this chosen??
+    int priority, c, pr;
+
+    /* we take the lowest priority */
+    priority = 0;
+    for(;;) {
+        c = *str;
+        if (c == '\0')
+            break;
+        str++;
+        switch(c) {
+        case 'A': // address that is held in a general-purpose register.
+        case 'S': // constraint that matches an absolute symbolic address.
+        case 'f': // register [float]
+        case 'r': // register [general]
+        case 'p': // valid memory address for load,store [general]
+            pr = 3;
+            break;
+        case 'I': // 12 bit signed immedate
+        case 'i': // immediate integer operand, including symbolic constants [general]
+        case 'm': // memory operand [general]
+        case 'g': // general-purpose-register, memory, immediate integer [general]
+            pr = 4;
+            break;
+        case 'v':
+            tcc_error("unimp: vector constraints", c);
+            pr = 0;
+            break;
+        default:
+            tcc_error("unknown constraint '%c'", c);
+            pr = 0;
+        }
+        if (pr > priority)
+            priority = pr;
+    }
+    return priority;
+}
+
+static const char *skip_constraint_modifiers(const char *p)
+{
+    /* Constraint modifier:
+        =   Operand is written to by this instruction
+        +   Operand is both read and written to by this instruction
+        %   Instruction is commutative for this operand and the following operand.
+
+       Per-alternative constraint modifier:
+        &   Operand is clobbered before the instruction is done using the input operands
+    */
+    while (*p == '=' || *p == '&' || *p == '+' || *p == '%')
+        p++;
+    return p;
+}
+
+#define REG_OUT_MASK 0x01
+#define REG_IN_MASK  0x02
+
+#define is_reg_allocated(reg) (regs_allocated[reg] & reg_mask)
 
 ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                                     int nb_operands, int nb_outputs,
                                     const uint8_t *clobber_regs,
                                     int *pout_reg)
 {
+    /* TODO: Simple constraints
+        whitespace  ignored
+        o  memory operand that is offsetable
+        V  memory but not offsetable
+        <  memory operand with autodecrement addressing is allowed.  Restrictions apply.
+        >  memory operand with autoincrement addressing is allowed.  Restrictions apply.
+        n  immediate integer operand with a known numeric value
+        E  immediate floating operand (const_double) is allowed, but only if target=host
+        F  immediate floating operand (const_double or const_vector) is allowed
+        s  immediate integer operand whose value is not an explicit integer
+        X  any operand whatsoever
+        0...9 (postfix); (can also be more than 1 digit number);  an operand that matches the specified operand number is allowed
+    */
+
+    /* TODO: RISCV constraints
+        J   The integer 0.
+        K   A 5-bit unsigned immediate for CSR access instructions.
+        A   An address that is held in a general-purpose register.
+        S   A constraint that matches an absolute symbolic address.
+        vr  A vector register (if available)..
+        vd  A vector register, excluding v0 (if available).
+        vm  A vector register, only v0 (if available).
+    */
+    ASMOperand *op;
+    int sorted_op[MAX_ASM_OPERANDS];
+    int i, j, k, p1, p2, tmp, reg, c, reg_mask;
+    const char *str;
+    uint8_t regs_allocated[NB_ASM_REGS];
+
+    /* init fields */
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        op->input_index = -1;
+        op->ref_index = -1;
+        op->reg = -1;
+        op->is_memory = 0;
+        op->is_rw = 0;
+    }
+    /* compute constraint priority and evaluate references to output
+       constraints if input constraints */
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        str = op->constraint;
+        str = skip_constraint_modifiers(str);
+        if (isnum(*str) || *str == '[') {
+            /* this is a reference to another constraint */
+            k = find_constraint(operands, nb_operands, str, NULL);
+            if ((unsigned) k >= i || i < nb_outputs)
+                tcc_error("invalid reference in constraint %d ('%s')",
+                          i, str);
+            op->ref_index = k;
+            if (operands[k].input_index >= 0)
+                tcc_error("cannot reference twice the same operand");
+            operands[k].input_index = i;
+            op->priority = 5;
+        } else if ((op->vt->r & VT_VALMASK) == VT_LOCAL
+                   && op->vt->sym
+                   && (reg = op->vt->sym->r & VT_VALMASK) < VT_CONST) {
+            op->priority = 1;
+            op->reg = reg;
+        } else {
+            op->priority = constraint_priority(str);
+        }
+    }
+
+    /* sort operands according to their priority */
+    for (i = 0; i < nb_operands; i++)
+        sorted_op[i] = i;
+    for (i = 0; i < nb_operands - 1; i++) {
+        for (j = i + 1; j < nb_operands; j++) {
+            p1 = operands[sorted_op[i]].priority;
+            p2 = operands[sorted_op[j]].priority;
+            if (p2 < p1) {
+                tmp = sorted_op[i];
+                sorted_op[i] = sorted_op[j];
+                sorted_op[j] = tmp;
+            }
+        }
+    }
+
+    for (i = 0; i < NB_ASM_REGS; i++) {
+        if (clobber_regs[i])
+            regs_allocated[i] = REG_IN_MASK | REG_OUT_MASK;
+        else
+            regs_allocated[i] = 0;
+    }
+
+    /* allocate registers and generate corresponding asm moves */
+    for (i = 0; i < nb_operands; i++) {
+        j = sorted_op[i];
+        op = &operands[j];
+        str = op->constraint;
+        /* no need to allocate references */
+        if (op->ref_index >= 0)
+            continue;
+        /* select if register is used for output, input or both */
+        if (op->input_index >= 0) {
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+        } else if (j < nb_outputs) {
+            reg_mask = REG_OUT_MASK;
+        } else {
+            reg_mask = REG_IN_MASK;
+        }
+        if (op->reg >= 0) {
+            if (is_reg_allocated(op->reg))
+                tcc_error
+                    ("asm regvar requests register that's taken already");
+            reg = op->reg;
+            goto reg_found;
+        }
+      try_next:
+        c = *str++;
+        switch (c) {
+        case '=': // Operand is written-to
+            goto try_next;
+        case '+': // Operand is both READ and written-to
+            op->is_rw = 1;
+            /* FALL THRU */
+        case '&': // Operand is clobbered before the instruction is done using the input operands
+            if (j >= nb_outputs)
+                tcc_error("'%c' modifier can only be applied to outputs", c);
+            reg_mask = REG_IN_MASK | REG_OUT_MASK;
+            goto try_next;
+        case 'r': // general-purpose register
+        case 'p': // loadable/storable address
+            /* any general register */
+            /* From a0 to a7 */
+            for (reg = 10; reg <= 18; reg++) {
+                if (!is_reg_allocated(reg))
+                    goto reg_found;
+            }
+            goto try_next;
+          reg_found:
+            /* now we can reload in the register */
+            op->is_llong = 0;
+            op->reg = reg;
+            regs_allocated[reg] |= reg_mask;
+            break;
+        case 'f': // floating pont register
+            /* floating point register */
+            /* From fa0 to fa7 */
+            for (reg = 42; reg <= 50; reg++) {
+                if (!is_reg_allocated(reg))
+                    goto reg_found;
+            }
+            goto try_next;
+        case 'I': // I-Type 12 bit signed immediate
+        case 'i': // immediate integer operand, including symbolic constants
+            if (!((op->vt->r & (VT_VALMASK | VT_LVAL)) == VT_CONST))
+                goto try_next;
+            break;
+        case 'm': // memory operand
+        case 'g': // any register
+            /* nothing special to do because the operand is already in
+               memory, except if the pointer itself is stored in a
+               memory variable (VT_LLOCAL case) */
+            /* XXX: fix constant case */
+            /* if it is a reference to a memory zone, it must lie
+               in a register, so we reserve the register in the
+               input registers and a load will be generated
+               later */
+            if (j < nb_outputs || c == 'm') {
+                if ((op->vt->r & VT_VALMASK) == VT_LLOCAL) {
+                    /* any general register: from a0 to a7 */
+                    for (reg = 10; reg <= 18; reg++) {
+                        if (!(regs_allocated[reg] & REG_IN_MASK))
+                            goto reg_found1;
+                    }
+                    goto try_next;
+                  reg_found1:
+                    /* now we can reload in the register */
+                    regs_allocated[reg] |= REG_IN_MASK;
+                    op->reg = reg;
+                    op->is_memory = 1;
+                }
+            }
+            break;
+        default:
+            tcc_error("asm constraint %d ('%s') could not be satisfied",
+                      j, op->constraint);
+            break;
+        }
+        /* if a reference is present for that operand, we assign it too */
+        if (op->input_index >= 0) {
+            operands[op->input_index].reg = op->reg;
+            operands[op->input_index].is_llong = op->is_llong;
+        }
+    }
+
+    /* compute out_reg. It is used to store outputs registers to memory
+       locations references by pointers (VT_LLOCAL case) */
+    *pout_reg = -1;
+    for (i = 0; i < nb_operands; i++) {
+        op = &operands[i];
+        if (op->reg >= 0 &&
+            (op->vt->r & VT_VALMASK) == VT_LLOCAL && !op->is_memory) {
+            if (REG_IS_FLOAT(op->reg)){
+                /* From fa0 to fa7 */
+                for (reg = 42; reg <= 50; reg++) {
+                    if (!(regs_allocated[reg] & REG_OUT_MASK))
+                        goto reg_found2;
+                }
+            } else {
+                /* From a0 to a7 */
+                for (reg = 10; reg <= 18; reg++) {
+                    if (!(regs_allocated[reg] & REG_OUT_MASK))
+                        goto reg_found2;
+                }
+            }
+            tcc_error("could not find free output register for reloading");
+          reg_found2:
+            *pout_reg = reg;
+            break;
+        }
+    }
+
+    /* print sorted constraints */
+#ifdef ASM_DEBUG
+    for (i = 0; i < nb_operands; i++) {
+        j = sorted_op[i];
+        op = &operands[j];
+        printf("%%%d [%s]: \"%s\" r=0x%04x reg=%d\n",
+               j,
+               op->id ? get_tok_str(op->id, NULL) : "",
+               op->constraint, op->vt->r, op->reg);
+    }
+    if (*pout_reg >= 0)
+        printf("out_reg=%d\n", *pout_reg);
+#endif
 }
 
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str)
@@ -1379,13 +1870,13 @@ ST_FUNC int asm_parse_regvar (int t)
         return t - TOK_ASM_x0;
 
     if (t < TOK_ASM_zero)
-        return t - TOK_ASM_f0;
+        return t - TOK_ASM_f0 + 32; // Use higher 32 for floating point
 
     /* ABI mnemonic */
     if (t < TOK_ASM_ft0)
         return t - TOK_ASM_zero;
 
-    return t - TOK_ASM_ft0;
+    return t - TOK_ASM_ft0 + 32; // Use higher 32 for floating point
 }
 
 /*************************************************************/
