@@ -62,6 +62,7 @@ static void asm_ternary_opcode(TCCState *s1, int token);
 static void asm_unary_opcode(TCCState *s1, int token);
 ST_FUNC void gen_expr32(ExprValue *pe);
 static void parse_operand(TCCState *s1, Operand *op);
+static void parse_operands(TCCState *s1, Operand *ops, int count);
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier);
 /* C extension */
 static void asm_emit_ca(int token, uint16_t opcode, const Operand *rd, const Operand *rs2);
@@ -209,13 +210,26 @@ static void parse_operand(TCCState *s1, Operand *op)
     }
 }
 
+static void parse_operands(TCCState *s1, Operand* ops, int count){
+    int i;
+    for (i = 0; i < count; i++) {
+        if ( i != 0 ) {
+            if ( tok == ',')
+                next();
+            else
+                expect("','");
+        }
+        parse_operand(s1, &ops[i]);
+    }
+}
+
 static void asm_unary_opcode(TCCState *s1, int token)
 {
     uint32_t opcode = (0x1C << 2) | 3 | (2 << 12);
     Operand op;
     static const Operand nil = {.type = OP_REG};
 
-    parse_operand(s1, &op);
+    parse_operands(s1, &op, 1);
     /* Note: Those all map to CSR--so they are pseudo-instructions. */
     opcode |= ENCODE_RD(op.reg);
 
@@ -280,12 +294,7 @@ static void asm_emit_u(int token, uint32_t opcode, const Operand* rd, const Oper
 static void asm_binary_opcode(TCCState* s1, int token)
 {
     Operand ops[2];
-    parse_operand(s1, &ops[0]);
-    if (tok == ',')
-        next();
-    else
-        expect("','");
-    parse_operand(s1, &ops[1]);
+    parse_operands(s1, &ops[0], 2);
 
     switch (token) {
     case TOK_ASM_lui:
@@ -499,17 +508,7 @@ static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Oper
 static void asm_ternary_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
-    parse_operand(s1, &ops[0]);
-    if (tok == ',')
-        next();
-    else
-        expect("','");
-    parse_operand(s1, &ops[1]);
-    if (tok == ',')
-        next();
-    else
-        expect("','");
-    parse_operand(s1, &ops[2]);
+    parse_operands(s1, &ops[0], 3);
 
     switch (token) {
     case TOK_ASM_sll:
